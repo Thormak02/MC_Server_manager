@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Benutzerverwaltung</h1>
+
+<section class="card">
+    <h2>Benutzer anlegen</h2>
+    <form method="post" action="/users" class="grid grid-4">
+        <div>
+            <label for="username">Benutzername</label>
+            <input id="username" name="username" type="text" required>
+        </div>
+        <div>
+            <label for="password">Passwort</label>
+            <input id="password" name="password" type="password" minlength="8" required>
+        </div>
+        <div>
+            <label for="role">Rolle</label>
+            <select id="role" name="role" required>
+                {% for role in available_roles %}
+                <option value="{{ role }}">{{ role_labels.get(role, role) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="align-end">
+            <button type="submit">Anlegen</button>
+        </div>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Benutzerliste</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Benutzername</th>
+                <th>Rolle</th>
+                <th>Aktiv</th>
+                <th>Erstellt</th>
+                <th>Letzter Login</th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.id }}</td>
+                <td>{{ user.username }}</td>
+                <td>{{ role_labels.get(user.role, user.role) }}</td>
+                <td>{{ "Ja" if user.is_active else "Nein" }}</td>
+                <td>{{ user.created_at }}</td>
+                <td>{{ user.last_login_at or "-" }}</td>
+                <td>
+                    {% if user.is_active and user.role != "super_admin" %}
+                    <form method="post" action="/users/{{ user.id }}/deactivate" class="inline-form">
+                        <button type="submit" class="danger">Deaktivieren</button>
+                    </form>
+                    {% endif %}
+                    <form method="post" action="/users/{{ user.id }}/reset-password" class="inline-form">
+                        <input name="new_password" type="password" minlength="8" placeholder="Neues Passwort" required>
+                        <button type="submit">Passwort setzen</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Einstellungen</h1>
+
+<section class="card">
+    <h2>Java-Profil anlegen</h2>
+    <form method="post" action="/settings/java-profiles" class="grid grid-4">
+        <div>
+            <label for="name">Name</label>
+            <input id="name" name="name" type="text" required>
+        </div>
+        <div>
+            <label for="java_path">Java Pfad</label>
+            <input id="java_path" name="java_path" type="text" required placeholder="C:\Program Files\Java\...\bin\java.exe">
+        </div>
+        <div>
+            <label for="version_label">Version Label</label>
+            <input id="version_label" name="version_label" type="text" placeholder="Java 17">
+        </div>
+        <div>
+            <label for="description">Beschreibung</label>
+            <input id="description" name="description" type="text">
+        </div>
+        <div>
+            <label><input name="is_default" type="checkbox" value="true"> Als Standard setzen</label>
+        </div>
+        <div class="align-end">
+            <button type="submit">Anlegen</button>
+        </div>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Java-Profile</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Java Pfad</th>
+                <th>Version</th>
+                <th>Standard</th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for profile in profiles %}
+            <tr>
+                <td>{{ profile.name }}</td>
+                <td>{{ profile.java_path }}</td>
+                <td>{{ profile.version_label or "-" }}</td>
+                <td>{{ "Ja" if profile.is_default else "Nein" }}</td>
+                <td>
+                    {% if not profile.is_default %}
+                    <form method="post" action="/settings/java-profiles/{{ profile.id }}/default" class="inline-form">
+                        <button type="submit">Als Standard</button>
+                    </form>
+                    {% endif %}
+                    <form method="post" action="/settings/java-profiles/{{ profile.id }}/delete" class="inline-form">
+                        <button type="submit" class="danger">Loeschen</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5">Noch keine Java-Profile angelegt.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

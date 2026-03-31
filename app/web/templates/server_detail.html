@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Server: {{ server.name }}</h1>
+
+<section class="card">
+    <div class="inline-form">
+        <a class="button-like" href="/servers/{{ server.id }}/console">Konsole</a>
+        <a class="button-like" href="/servers/{{ server.id }}/logs">Logs</a>
+        <a class="button-like" href="/servers/{{ server.id }}/schedules">Scheduling</a>
+        {% if can_edit_files %}
+        <a class="button-like" href="/servers/{{ server.id }}/files">Dateien</a>
+        {% endif %}
+    </div>
+</section>
+
+<section class="card">
+    <div class="grid grid-3">
+        <div>
+            <strong>Status</strong>
+            <p>{{ server.status }}</p>
+        </div>
+        <div>
+            <strong>Servertyp</strong>
+            <p>{{ server.server_type }}</p>
+        </div>
+        <div>
+            <strong>Minecraft Version</strong>
+            <p>{{ server.mc_version }}</p>
+        </div>
+        <div>
+            <strong>Pfad</strong>
+            <p>{{ server.base_path }}</p>
+        </div>
+        <div>
+            <strong>Startmodus</strong>
+            <p>{{ server.start_mode }}</p>
+        </div>
+        <div>
+            <strong>Port</strong>
+            <p>{{ server.port or "-" }}</p>
+        </div>
+    </div>
+</section>
+
+{% if can_control %}
+<section class="card">
+    <h2>Aktionen</h2>
+    <form method="post" action="/servers/{{ server.id }}/start" class="inline-form">
+        <button type="submit">Start</button>
+    </form>
+    <form method="post" action="/servers/{{ server.id }}/stop" class="inline-form">
+        <button type="submit" class="danger">Stop</button>
+    </form>
+    <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
+        <button type="submit">Neustart</button>
+    </form>
+    <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
+        <input name="delay_seconds" type="number" min="0" placeholder="Delay sek">
+        <input name="warning_message" type="text" placeholder="Warnung, z.B. Restart in {seconds}s">
+        <button type="submit">Neustart geplant</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Servereinstellungen</h2>
+    <form method="post" action="/servers/{{ server.id }}/settings" class="grid grid-4">
+        <div>
+            <label for="java_profile_id">Java Profil</label>
+            <select id="java_profile_id" name="java_profile_id">
+                <option value="">-</option>
+                {% for profile in java_profiles %}
+                <option value="{{ profile.id }}" {% if server.java_profile_id == profile.id %}selected{% endif %}>
+                    {{ profile.name }}{% if profile.version_label %} ({{ profile.version_label }}){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="memory_min_mb">RAM min (MB)</label>
+            <input id="memory_min_mb" name="memory_min_mb" type="number" value="{{ server.memory_min_mb or '' }}">
+        </div>
+        <div>
+            <label for="memory_max_mb">RAM max (MB)</label>
+            <input id="memory_max_mb" name="memory_max_mb" type="number" value="{{ server.memory_max_mb or '' }}">
+        </div>
+        <div>
+            <label for="port">Port</label>
+            <input id="port" name="port" type="number" value="{{ server.port or '' }}">
+        </div>
+        <div>
+            <label for="start_mode">Startmodus</label>
+            <select id="start_mode" name="start_mode">
+                <option value="bat" {% if server.start_mode == "bat" %}selected{% endif %}>bat</option>
+                <option value="command" {% if server.start_mode == "command" %}selected{% endif %}>command</option>
+            </select>
+        </div>
+        <div>
+            <label for="start_bat_path">Start .bat Pfad</label>
+            <input id="start_bat_path" name="start_bat_path" type="text" value="{{ server.start_bat_path or '' }}">
+        </div>
+        <div>
+            <label for="start_command">Startbefehl</label>
+            <input id="start_command" name="start_command" type="text" value="{{ server.start_command or '' }}">
+        </div>
+        <div>
+            <label><input type="checkbox" name="auto_restart" value="true" {% if server.auto_restart %}checked{% endif %}> Auto-Restart</label>
+        </div>
+        <div class="align-end">
+            <button type="submit">Speichern</button>
+        </div>
+    </form>
+</section>
+{% endif %}
+{% endblock %}

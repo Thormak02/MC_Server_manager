@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dateien: {{ server.name }}</h1>
+
+<section class="card">
+    <div class="inline-form">
+        <a class="button-like" href="/servers/{{ server.id }}">Details</a>
+        <a class="button-like" href="/servers/{{ server.id }}/console">Konsole</a>
+        <a class="button-like" href="/servers/{{ server.id }}/logs">Logs</a>
+    </div>
+</section>
+
+<section class="grid grid-3">
+    <article class="card">
+        <h2>Verfuegbare Dateien</h2>
+        <div class="file-list">
+            {% for path in available_files %}
+            <div>
+                <a href="/servers/{{ server.id }}/files?file={{ path }}">{{ path }}</a>
+            </div>
+            {% else %}
+            <p class="muted">Keine editierbaren Dateien gefunden.</p>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="card" style="grid-column: span 2;">
+        <h2>Dateiinhalt</h2>
+        {% if file_content %}
+        <form method="post" action="/servers/{{ server.id }}/files/save" class="stack">
+            <input name="relative_path" type="hidden" value="{{ file_content.relative_path }}">
+            <label><strong>{{ file_content.relative_path }}</strong></label>
+            <textarea name="content" rows="26" class="code-area" {% if not can_edit %}readonly{% endif %}>{{ file_content.content }}</textarea>
+            {% if can_edit %}
+            <div>
+                <button type="submit">Speichern</button>
+            </div>
+            {% else %}
+            <p class="muted">Keine Schreibrechte fuer diese Serverdateien.</p>
+            {% endif %}
+        </form>
+        {% else %}
+        <p class="muted">Waehle links eine Datei aus.</p>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}

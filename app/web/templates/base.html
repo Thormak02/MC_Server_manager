@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title or "MC Server Manager" }}</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<header class="topbar">
+    <div class="brand">MC Server Manager</div>
+    {% if current_user %}
+    <nav>
+        <a href="/dashboard">Dashboard</a>
+        {% if current_user.role == "super_admin" %}
+        <a href="/servers/create">Server erstellen</a>
+        <a href="/users">Benutzer</a>
+        <a href="/servers/import">Server importieren</a>
+        <a href="/settings">Einstellungen</a>
+        <a href="/audit-logs">Audit Logs</a>
+        {% endif %}
+        <form method="post" action="/logout" class="inline-form">
+            <button type="submit">Logout</button>
+        </form>
+    </nav>
+    <div class="user-meta">
+        {{ current_user.username }} ({{ role_labels.get(current_user.role, current_user.role) }})
+    </div>
+    {% endif %}
+</header>
+
+<main class="container">
+    {% if flash %}
+    <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>
+    {% endif %}
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

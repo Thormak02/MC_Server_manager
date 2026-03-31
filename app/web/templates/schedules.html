@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Scheduling: {{ server.name }}</h1>
+
+<section class="card">
+    <h2>Neuen Job anlegen</h2>
+    {% if can_manage %}
+    <form method="post" action="/servers/{{ server.id }}/schedules" class="grid grid-4">
+        <div>
+            <label for="job_type">Job Typ</label>
+            <select id="job_type" name="job_type" required>
+                <option value="start">start</option>
+                <option value="stop">stop</option>
+                <option value="restart">restart</option>
+                <option value="command">command</option>
+            </select>
+        </div>
+        <div>
+            <label for="schedule_expression">Zeitplan</label>
+            <input id="schedule_expression" name="schedule_expression" type="text" required placeholder="0 4 * * * oder interval:300">
+        </div>
+        <div>
+            <label for="command">Command (nur bei job_type=command)</label>
+            <input id="command" name="command" type="text">
+        </div>
+        <div>
+            <label for="delay_seconds">Restart Delay (sek)</label>
+            <input id="delay_seconds" name="delay_seconds" type="number" min="0">
+        </div>
+        <div>
+            <label for="warning_message">Restart Warning</label>
+            <input id="warning_message" name="warning_message" type="text" placeholder="Server restartet in {seconds} Sekunden">
+        </div>
+        <div class="align-end">
+            <button type="submit">Job anlegen</button>
+        </div>
+    </form>
+    {% else %}
+    <p class="muted">Keine Rechte zum Bearbeiten der Schedules.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Jobs</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Typ</th>
+                <th>Zeitplan</th>
+                <th>Enabled</th>
+                <th>Last Run</th>
+                <th>Next Run</th>
+                <th>Payload</th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr>
+                <td>{{ job.id }}</td>
+                <td>{{ job.job_type }}</td>
+                <td>{{ job.schedule_expression }}</td>
+                <td>{{ "Ja" if job.is_enabled else "Nein" }}</td>
+                <td>{{ job.last_run_at or "-" }}</td>
+                <td>{{ job.next_run_at or "-" }}</td>
+                <td>{{ job.command_payload or "-" }}</td>
+                <td>
+                    {% if can_manage %}
+                    <form method="post" action="/servers/{{ server.id }}/schedules/{{ job.id }}/toggle" class="inline-form">
+                        <button type="submit">{{ "Deaktivieren" if job.is_enabled else "Aktivieren" }}</button>
+                    </form>
+                    <form method="post" action="/servers/{{ server.id }}/schedules/{{ job.id }}/run" class="inline-form">
+                        <button type="submit">Jetzt ausfuehren</button>
+                    </form>
+                    <form method="post" action="/servers/{{ server.id }}/schedules/{{ job.id }}/delete" class="inline-form">
+                        <button type="submit" class="danger">Loeschen</button>
+                    </form>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8">Noch keine Jobs vorhanden.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

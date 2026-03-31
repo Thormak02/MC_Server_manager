@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<section class="grid grid-3">
+    <article class="card">
+        <h2>Server gesamt</h2>
+        <p class="metric">{{ summary.total_servers }}</p>
+    </article>
+    <article class="card">
+        <h2>Server laufend</h2>
+        <p class="metric">{{ summary.running_servers }}</p>
+    </article>
+    <article class="card">
+        <h2>Benutzer gesamt</h2>
+        <p class="metric">
+            {% if summary.user_count is not none %}
+            {{ summary.user_count }}
+            {% else %}
+            -
+            {% endif %}
+        </p>
+    </article>
+</section>
+
+<section class="card">
+    <h2>Sichtbare Server</h2>
+    {% if servers %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Typ</th>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for server in servers %}
+            <tr>
+                <td><a href="/servers/{{ server.id }}">{{ server.name }}</a></td>
+                <td>{{ server.server_type }}</td>
+                <td>{{ server.mc_version }}</td>
+                <td>{{ server.status }}</td>
+                <td>
+                    {% if current_user.role != "view_only" %}
+                    <form method="post" action="/servers/{{ server.id }}/start" class="inline-form">
+                        <button type="submit">Start</button>
+                    </form>
+                    <form method="post" action="/servers/{{ server.id }}/stop" class="inline-form">
+                        <button type="submit" class="danger">Stop</button>
+                    </form>
+                    <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
+                        <button type="submit">Neustart</button>
+                    </form>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Noch keine sichtbaren Server vorhanden.</p>
+    {% endif %}
+</section>
+{% endblock %}

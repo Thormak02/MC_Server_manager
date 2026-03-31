@@ -1,0 +1,54 @@
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    app_name: str = "MC Server Manager"
+    debug: bool = False
+
+    secret_key: str = Field(
+        default="CHANGE_ME_IN_ENV",
+        description="Secret used to sign web sessions.",
+    )
+    session_cookie_name: str = "mcsm_session"
+    session_max_age_seconds: int = 60 * 60 * 12
+
+    data_dir: Path = Path("data")
+    database_url: str | None = None
+
+    initial_superadmin_username: str = "admin"
+    initial_superadmin_password: str = "admin123!"
+
+    scheduler_timezone: str = "Europe/Berlin"
+    ingame_restart_delay_seconds: int = 30
+    ingame_restart_warning_message: str = (
+        "Server restartet in {seconds} Sekunden aufgrund /restart."
+    )
+    provisioning_offline_mode: bool = False
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_prefix="MCSM_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    @property
+    def resolved_database_url(self) -> str:
+        if self.database_url:
+            return self.database_url
+        db_path = (self.data_dir / "mc_server_manager.db").resolve()
+        return f"sqlite:///{db_path}"
+
+    def ensure_data_dir(self) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    settings = Settings()
+    settings.ensure_data_dir()
+    return settings

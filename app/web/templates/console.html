@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Konsole: {{ server.name }}</h1>
+
+<section class="card">
+    <div class="inline-form">
+        <a class="button-like" href="/servers/{{ server.id }}">Details</a>
+        <a class="button-like" href="/servers/{{ server.id }}/logs">Logs</a>
+    </div>
+</section>
+
+<section class="card">
+    <div id="console-output" class="console-output">
+        {% for line in recent_lines %}
+        <div>{{ line }}</div>
+        {% endfor %}
+    </div>
+</section>
+
+{% if can_send_commands %}
+<section class="card">
+    <form method="post" action="/servers/{{ server.id }}/console/command" class="inline-form">
+        <input id="console-command" name="command" type="text" placeholder="Befehl, z.B. say Hallo" required>
+        <button type="submit">Senden</button>
+    </form>
+</section>
+{% endif %}
+
+<script>
+    window.MCSM_CONSOLE_SERVER_ID = {{ server.id }};
+</script>
+<script src="/static/js/console.js"></script>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Server erstellen</h1>
+
+<section class="card">
+    <form method="post" action="/servers/create" class="grid grid-4" id="create-server-form">
+        <div>
+            <label for="name">Servername</label>
+            <input id="name" name="name" type="text" required>
+        </div>
+        <div>
+            <label for="server_type">Servertyp</label>
+            <select id="server_type" name="server_type" required>
+                {% for type_name in server_types %}
+                <option value="{{ type_name }}" {% if selected_type == type_name %}selected{% endif %}>{{ type_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="mc_version">Minecraft Version</label>
+            <select id="mc_version" name="mc_version" required>
+                {% for version in versions %}
+                <option value="{{ version.id }}">{{ version.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="loader_version">Loader/Build (optional)</label>
+            <input id="loader_version" name="loader_version" type="text">
+        </div>
+        <div>
+            <label for="target_path">Zielordner</label>
+            <input id="target_path" name="target_path" type="text" required placeholder="D:\minecraft\my-server">
+        </div>
+        <div>
+            <label for="java_profile_id">Java Profil</label>
+            <select id="java_profile_id" name="java_profile_id">
+                <option value="">-</option>
+                {% for profile in java_profiles %}
+                <option value="{{ profile.id }}">{{ profile.name }}{% if profile.version_label %} ({{ profile.version_label }}){% endif %}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="memory_min_mb">RAM min (MB)</label>
+            <input id="memory_min_mb" name="memory_min_mb" type="number" min="256" value="2048" required>
+        </div>
+        <div>
+            <label for="memory_max_mb">RAM max (MB)</label>
+            <input id="memory_max_mb" name="memory_max_mb" type="number" min="256" value="4096" required>
+        </div>
+        <div>
+            <label for="port">Port (optional)</label>
+            <input id="port" name="port" type="number" min="1" max="65535">
+        </div>
+        <div class="align-end">
+            <button type="submit">Server erstellen</button>
+        </div>
+    </form>
+</section>
+
+<script>
+(function () {
+    const typeSelect = document.getElementById("server_type");
+    const versionSelect = document.getElementById("mc_version");
+    if (!typeSelect || !versionSelect) return;
+
+    async function reloadVersions() {
+        const serverType = typeSelect.value;
+        const url = "/servers/create/versions?server_type=" + encodeURIComponent(serverType);
+        try {
+            const response = await fetch(url, { credentials: "same-origin" });
+            if (!response.ok) return;
+            const payload = await response.json();
+            const versions = Array.isArray(payload.versions) ? payload.versions : [];
+            versionSelect.innerHTML = "";
+            for (const version of versions) {
+                const option = document.createElement("option");
+                option.value = version.id;
+                option.textContent = version.label || version.id;
+                versionSelect.appendChild(option);
+            }
+        } catch (_) {
+            // keep current options on failure
+        }
+    }
+
+    typeSelect.addEventListener("change", reloadVersions);
+})();
+</script>
+{% endblock %}

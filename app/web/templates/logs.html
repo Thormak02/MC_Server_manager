@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Logs: {{ server.name }}</h1>
+
+<section class="card">
+    <form method="get" action="/servers/{{ server.id }}/logs" class="grid grid-4">
+        <div>
+            <label for="file">Datei</label>
+            <select id="file" name="file">
+                <option value="">Aktuelle Sitzung (RAM)</option>
+                {% for filename in available_files %}
+                <option value="{{ filename }}" {% if selected_file == filename %}selected{% endif %}>
+                    {{ filename }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="q">Filter</label>
+            <input id="q" name="q" type="text" value="{{ query }}" placeholder="z.B. warn, error, player">
+        </div>
+        <div class="align-end">
+            <button type="submit">Anzeigen</button>
+        </div>
+    </form>
+</section>
+
+<section class="card">
+    <p class="muted">Quelle: {{ source_label }} | Zeilen: {{ lines|length }}</p>
+    <div class="console-output">
+        {% for line in lines %}
+        <div>{{ line }}</div>
+        {% else %}
+        <div class="muted">Keine Logeintraege vorhanden.</div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

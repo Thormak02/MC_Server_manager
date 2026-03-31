@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Server importieren</h1>
+
+<section class="card">
+    <h2>1. Ordner analysieren</h2>
+    <form method="post" action="/servers/import/analyze" class="grid grid-4">
+        <div>
+            <label for="base_path">Serverordner</label>
+            <input id="base_path" name="base_path" type="text" required value="{{ preview.base_path if preview else '' }}">
+        </div>
+        <div class="align-end">
+            <button type="submit">Analysieren</button>
+        </div>
+    </form>
+</section>
+
+{% if preview %}
+<section class="card">
+    <h2>2. Import bestaetigen</h2>
+    <form method="post" action="/servers/import/confirm" class="grid grid-4">
+        <div>
+            <label for="name">Servername</label>
+            <input id="name" name="name" type="text" value="{{ preview.name }}" required>
+        </div>
+        <div>
+            <label for="server_type">Servertyp</label>
+            <select id="server_type" name="server_type" required>
+                {% for type_name in ["vanilla", "paper", "spigot", "fabric", "forge"] %}
+                <option value="{{ type_name }}" {% if preview.server_type == type_name %}selected{% endif %}>
+                    {{ type_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="mc_version">Minecraft Version</label>
+            <input id="mc_version" name="mc_version" type="text" value="{{ preview.mc_version }}">
+        </div>
+        <div>
+            <label for="start_mode">Startmodus</label>
+            <select id="start_mode" name="start_mode" required>
+                <option value="bat" {% if preview.start_mode == "bat" %}selected{% endif %}>bat</option>
+                <option value="command" {% if preview.start_mode == "command" %}selected{% endif %}>command</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="base_path_confirm">Base Path</label>
+            <input id="base_path_confirm" name="base_path" type="text" value="{{ preview.base_path }}" required>
+        </div>
+        <div>
+            <label for="start_bat_path">Start .bat Pfad</label>
+            <input id="start_bat_path" name="start_bat_path" type="text" value="{{ preview.start_bat_path or '' }}">
+        </div>
+        <div>
+            <label for="start_command">Startbefehl</label>
+            <input id="start_command" name="start_command" type="text" value="{{ preview.start_command or '' }}">
+        </div>
+        <div class="align-end">
+            <button type="submit">Importieren</button>
+        </div>
+    </form>
+
+    {% if preview.notes %}
+    <h3>Erkennung</h3>
+    <ul>
+        {% for note in preview.notes %}
+        <li>{{ note }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

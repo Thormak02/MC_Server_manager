@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Audit Logs</h1>
+
+<section class="card">
+    <p class="muted">Letzte {{ entries|length }} Eintraege</p>
+    <table>
+        <thead>
+            <tr>
+                <th>Zeit</th>
+                <th>Action</th>
+                <th>User ID</th>
+                <th>Server ID</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in entries %}
+            <tr>
+                <td>{{ entry.created_at }}</td>
+                <td>{{ entry.action }}</td>
+                <td>{{ entry.user_id or "-" }}</td>
+                <td>{{ entry.server_id or "-" }}</td>
+                <td>{{ entry.details or "-" }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5">Noch keine Eintraege.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
