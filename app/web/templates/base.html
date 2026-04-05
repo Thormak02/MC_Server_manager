@@ -1,39 +1,59 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="light">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ page_title or "MC Server Manager" }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/app.css">
 </head>
-<body>
-<header class="topbar">
-    <div class="brand">MC Server Manager</div>
-    {% if current_user %}
-    <nav>
+<body class="{% if current_user %}layout-authenticated{% else %}layout-public{% endif %}">
+{% if current_user %}
+<aside class="sidebar" id="app-sidebar">
+    <div class="sidebar-head">
+        <div class="brand-mark">MSM</div>
+        <div class="brand-text">MC Server Manager</div>
+    </div>
+    <nav class="side-nav">
         <a href="/dashboard">Dashboard</a>
+        <a href="/resources">Ressourcen</a>
         {% if current_user.role == "super_admin" %}
         <a href="/servers/create">Server erstellen</a>
-        <a href="/users">Benutzer</a>
         <a href="/servers/import">Server importieren</a>
+        <a href="/users">Benutzer</a>
         <a href="/settings">Einstellungen</a>
         <a href="/audit-logs">Audit Logs</a>
         {% endif %}
-        <form method="post" action="/logout" class="inline-form">
-            <button type="submit">Logout</button>
-        </form>
     </nav>
-    <div class="user-meta">
-        {{ current_user.username }} ({{ role_labels.get(current_user.role, current_user.role) }})
+    <div class="side-footer">
+        <div class="user-meta">{{ current_user.username }}</div>
+        <div class="muted">{{ role_labels.get(current_user.role, current_user.role) }}</div>
+        <form method="post" action="/logout" class="stack">
+            <button type="submit" class="ghost">Logout</button>
+        </form>
     </div>
-    {% endif %}
-</header>
+</aside>
+{% endif %}
 
-<main class="container">
-    {% if flash %}
-    <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>
-    {% endif %}
-    {% block content %}{% endblock %}
-</main>
+<div class="main-shell">
+    <header class="topbar">
+        {% if current_user %}
+        <button type="button" id="sidebar-toggle" class="icon-btn" aria-label="Menue umschalten">☰</button>
+        {% endif %}
+        <h1 class="page-title">{{ page_title or "MC Server Manager" }}</h1>
+        <button type="button" id="theme-toggle" class="icon-btn" aria-label="Theme wechseln">◐</button>
+    </header>
+
+    <main class="container">
+        {% if flash %}
+        <div class="flash flash-{{ flash.kind }}">{{ flash.message }}</div>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+<script src="/static/js/app.js"></script>
 </body>
 </html>

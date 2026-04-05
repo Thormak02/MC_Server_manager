@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Ressourcenmonitor</h1>
+
+<section class="grid grid-3">
+    <article class="card">
+        <h2>CPU (Host)</h2>
+        <p class="metric">
+            {% if host_resources.cpu_percent is not none %}
+            {{ "%.1f"|format(host_resources.cpu_percent) }}%
+            {% else %}
+            -
+            {% endif %}
+        </p>
+    </article>
+    <article class="card">
+        <h2>RAM (Host)</h2>
+        <p class="metric">
+            {% if host_resources.memory_used_mb is not none and host_resources.memory_total_mb is not none %}
+            {{ "%.0f"|format(host_resources.memory_used_mb) }}/{{ "%.0f"|format(host_resources.memory_total_mb) }} MB
+            {% else %}
+            -
+            {% endif %}
+        </p>
+    </article>
+    <article class="card">
+        <h2>Logische CPUs</h2>
+        <p class="metric">{{ host_resources.cpu_logical or "-" }}</p>
+    </article>
+</section>
+
+<section class="card">
+    <h2>Serververbrauch</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Server</th>
+                <th>Status</th>
+                <th>Spieler</th>
+                <th>CPU %</th>
+                <th>RAM MB</th>
+                <th>RAM Anteil</th>
+                <th>PID</th>
+                <th>Uptime</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in entries %}
+            {% set usage = row.usage %}
+            <tr>
+                <td><a href="/servers/{{ row.server.id }}">{{ row.server.name }}</a></td>
+                <td>{{ row.server.status }}</td>
+                <td>{{ row.players_current if row.players_current is not none else 0 }}/{{ row.players_max if row.players_max is not none else "?" }}</td>
+                <td>{{ "%.1f"|format(usage.cpu_percent or 0.0) }}</td>
+                <td>{{ "%.1f"|format(usage.memory_mb or 0.0) }}</td>
+                <td>{{ "%.1f"|format(row.memory_share_percent or 0.0) }}%</td>
+                <td>{{ usage.pid or "-" }}</td>
+                <td>
+                    {% if usage.uptime_seconds %}
+                    {{ "%.0f"|format(usage.uptime_seconds) }}s
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8">Keine Server sichtbar.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}

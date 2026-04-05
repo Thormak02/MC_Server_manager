@@ -22,6 +22,10 @@ Phase 1 bis Phase 6 Basis fuer eine webbasierte Minecraft-Server-Verwaltung mit:
 - Server-Wizard fuer Vanilla, Paper, Spigot, Fabric und Forge
 - Provider-Prinzip mit austauschbaren `server_providers`
 - Optionaler Provisioning-Offline-Modus fuer Test/Setup ohne Download
+- Modernes UI mit Light/Dark Umschaltung und ausklappbarem Seitenmenue
+- Dashboard mit Spieleranzeige im Format `n/x` pro Server
+- Konfigeditor mit 2 Modi: Freitext und Assistent (Dropdown/strukturierte Felder)
+- Ressourcenmonitor mit Host- und Serververbrauch (CPU/RAM je Server)
 
 ## Start
 

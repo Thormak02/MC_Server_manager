@@ -71,3 +71,42 @@ def test_file_edit_roundtrip(client, tmp_path):
     assert write_response.status_code == 200
     assert "key=new" in write_response.text
     assert target_file.read_text(encoding="utf-8") == "key=new\n"
+
+
+def test_file_assistant_for_server_properties(client, tmp_path):
+    _login_admin(client)
+    server_dir = tmp_path / "assistant_srv"
+    server_dir.mkdir(parents=True)
+    (server_dir / "start.bat").write_text("@echo off\n", encoding="utf-8")
+    props = server_dir / "server.properties"
+    props.write_text("motd=Hello\npvp=true\nmax-players=20\n", encoding="utf-8")
+
+    server_location = _import_server(client, server_dir, name="Assistant Server")
+    match = re.search(r"/servers/(\d+)", server_location)
+    assert match
+    server_id = int(match.group(1))
+
+    read_response = client.get(
+        f"/servers/{server_id}/files",
+        params={"file": "server.properties", "mode": "assistant"},
+    )
+    assert read_response.status_code == 200
+    assert "Server Properties Assistent" in read_response.text
+
+    save_response = client.post(
+        f"/servers/{server_id}/files/assistant-save",
+        data={
+            "relative_path": "server.properties",
+            "motd": "New MOTD",
+            "pvp": "false",
+            "max-players": "42",
+            "extras_text": "allow-flight=true",
+        },
+        follow_redirects=True,
+    )
+    assert save_response.status_code == 200
+    content = props.read_text(encoding="utf-8")
+    assert "motd=New MOTD" in content
+    assert "pvp=false" in content
+    assert "max-players=42" in content
+    assert "allow-flight=true" in content

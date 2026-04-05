@@ -9,5 +9,6 @@ __all__ = [
     "log_service",
     "process_service",
     "provisioning_service",
+    "resource_service",
     "schedule_service",
 ]

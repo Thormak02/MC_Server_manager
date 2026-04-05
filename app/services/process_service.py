@@ -1,6 +1,6 @@
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event, RLock, Thread
@@ -14,11 +14,20 @@ from app.models.server import Server
 from app.services import audit_service
 from app.services.console_service import console_service
 
+try:
+    import psutil  # type: ignore[import-not-found]
+except Exception:  # pragma: no cover
+    psutil = None  # type: ignore[assignment]
+
 
 @dataclass
 class ManagedProcess:
     process: subprocess.Popen[str]
     log_file_path: str
+    started_at: datetime
+    max_players: int | None = None
+    players: set[str] = field(default_factory=set)
+    player_count_hint: int | None = None
 
 
 _PROCESS_REGISTRY: dict[int, ManagedProcess] = {}
@@ -31,6 +40,12 @@ _INGAME_RESTART_PATTERNS = [
     re.compile(r"issued server command:\s*/restart\b", re.IGNORECASE),
     re.compile(r"executed command:\s*/restart\b", re.IGNORECASE),
 ]
+_PLAYER_JOIN_PATTERN = re.compile(r"]:\s*(?P<name>.+?) joined the game", re.IGNORECASE)
+_PLAYER_LEFT_PATTERN = re.compile(r"]:\s*(?P<name>.+?) left the game", re.IGNORECASE)
+_PLAYER_LIST_PATTERN = re.compile(
+    r"There are\s+(?P<current>\d+)\s+of a max of\s+(?P<max>\d+)\s+players online",
+    re.IGNORECASE,
+)
 
 
 def _build_creation_flags() -> int:
@@ -40,6 +55,23 @@ def _build_creation_flags() -> int:
     if hasattr(subprocess, "CREATE_NO_WINDOW"):
         flags |= subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
     return flags
+
+
+def _read_max_players_from_server_properties(base_path: str) -> int | None:
+    properties = Path(base_path).expanduser().resolve() / "server.properties"
+    if not properties.exists() or not properties.is_file():
+        return None
+    try:
+        for raw in properties.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("max-players="):
+                value = line.split("=", 1)[1].strip()
+                return int(value)
+    except Exception:
+        return None
+    return None
 
 
 def _command_for_server(server: Server) -> list[str]:
@@ -104,6 +136,33 @@ def _looks_like_ingame_restart(line: str) -> bool:
     return False
 
 
+def _update_player_runtime(server_id: int, line: str) -> None:
+    with _PROCESS_LOCK:
+        runtime = _PROCESS_REGISTRY.get(server_id)
+        if runtime is None:
+            return
+
+        list_match = _PLAYER_LIST_PATTERN.search(line)
+        if list_match:
+            runtime.player_count_hint = int(list_match.group("current"))
+            runtime.max_players = int(list_match.group("max"))
+            return
+
+        join_match = _PLAYER_JOIN_PATTERN.search(line)
+        if join_match:
+            runtime.players.add(join_match.group("name"))
+            runtime.player_count_hint = max(
+                runtime.player_count_hint or 0,
+                len(runtime.players),
+            )
+            return
+
+        left_match = _PLAYER_LEFT_PATTERN.search(line)
+        if left_match:
+            runtime.players.discard(left_match.group("name"))
+            runtime.player_count_hint = len(runtime.players)
+
+
 def _stream_output(server_id: int, process: subprocess.Popen[str], log_file_path: Path) -> None:
     try:
         with log_file_path.open("a", encoding="utf-8", errors="ignore") as log_file:
@@ -115,6 +174,7 @@ def _stream_output(server_id: int, process: subprocess.Popen[str], log_file_path
                     log_file.write(line)
                     log_file.flush()
                     console_service.append_output(server_id, line)
+                    _update_player_runtime(server_id, line)
                     if _looks_like_ingame_restart(line):
                         request_restart_by_server_id(
                             server_id,
@@ -157,6 +217,52 @@ def refresh_runtime_states(db: Session, servers: list[Server]) -> None:
         db.commit()
 
 
+def get_player_counts(server: Server) -> tuple[int | None, int | None]:
+    with _PROCESS_LOCK:
+        runtime = _PROCESS_REGISTRY.get(server.id)
+        if runtime and runtime.process.poll() is None:
+            current = runtime.player_count_hint
+            if current is None:
+                current = len(runtime.players)
+            return current, runtime.max_players
+    return 0, _read_max_players_from_server_properties(server.base_path)
+
+
+def get_process_resource_usage(server_id: int) -> dict[str, float | int | None]:
+    with _PROCESS_LOCK:
+        managed = _PROCESS_REGISTRY.get(server_id)
+        if not managed or managed.process.poll() is not None:
+            return {
+                "running": False,
+                "pid": None,
+                "cpu_percent": 0.0,
+                "memory_mb": 0.0,
+                "uptime_seconds": None,
+            }
+        pid = managed.process.pid
+        started_at = managed.started_at
+
+    cpu_percent = 0.0
+    memory_mb = 0.0
+    if psutil is not None:
+        try:
+            proc = psutil.Process(pid)
+            cpu_percent = float(proc.cpu_percent(interval=None))
+            memory_mb = float(proc.memory_info().rss / (1024 * 1024))
+        except Exception:
+            cpu_percent = 0.0
+            memory_mb = 0.0
+
+    uptime = (datetime.now(timezone.utc) - started_at).total_seconds()
+    return {
+        "running": True,
+        "pid": pid,
+        "cpu_percent": cpu_percent,
+        "memory_mb": memory_mb,
+        "uptime_seconds": max(0.0, uptime),
+    }
+
+
 def start_server(db: Session, server: Server, initiated_by_user_id: int | None) -> tuple[bool, str]:
     if is_running(server.id):
         return False, "Server laeuft bereits."
@@ -188,6 +294,8 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
         _PROCESS_REGISTRY[server.id] = ManagedProcess(
             process=process,
             log_file_path=str(log_file_path),
+            started_at=datetime.now(timezone.utc),
+            max_players=_read_max_players_from_server_properties(server.base_path),
         )
 
     stream_thread = Thread(
