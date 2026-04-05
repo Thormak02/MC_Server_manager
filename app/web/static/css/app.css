@@ -128,9 +128,14 @@ a {
 
 .layout-authenticated.sidebar-collapsed .brand-text,
 .layout-authenticated.sidebar-collapsed .side-nav a,
-.layout-authenticated.sidebar-collapsed .side-footer {
+.layout-authenticated.sidebar-collapsed .side-footer,
+.layout-authenticated.sidebar-collapsed .side-nav .side-logout {
     opacity: 0;
     pointer-events: none;
+}
+
+.layout-authenticated.sidebar-collapsed .side-nav .side-logout {
+    display: none;
 }
 
 .layout-authenticated.sidebar-collapsed .side-nav {
@@ -241,6 +246,25 @@ button.ghost,
     border: 1px solid var(--border);
     background: var(--panel);
     color: var(--text);
+}
+
+.side-nav .side-logout {
+    margin: 0;
+}
+
+.side-nav .side-logout button {
+    width: 100%;
+    text-align: left;
+    padding: 0.6rem 0.7rem;
+    border-radius: 0.7rem;
+    font-weight: 700;
+    color: var(--muted);
+}
+
+.side-nav .side-logout button:hover {
+    color: var(--text);
+    border-color: var(--border);
+    background: var(--panel-soft);
 }
 
 .button-like {

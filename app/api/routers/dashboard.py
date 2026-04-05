@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -71,4 +71,45 @@ def resources_page(
             host_resources=get_host_resources(),
             entries=entries,
         ),
+    )
+
+
+@router.get("/api/resources", response_class=JSONResponse)
+def resources_live(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    current_user = get_current_user_from_session(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    entries = get_server_resource_entries(db, current_user)
+    payload_entries: list[dict[str, object]] = []
+    for row in entries:
+        server = row["server"]
+        usage = row["usage"]
+        payload_entries.append(
+            {
+                "server": {
+                    "id": server.id,
+                    "name": server.name,
+                    "status": server.status,
+                },
+                "players_current": row.get("players_current"),
+                "players_max": row.get("players_max"),
+                "memory_share_percent": row.get("memory_share_percent", 0.0),
+                "usage": {
+                    "cpu_percent": usage.get("cpu_percent"),
+                    "memory_mb": usage.get("memory_mb"),
+                    "pid": usage.get("pid"),
+                    "uptime_seconds": usage.get("uptime_seconds"),
+                },
+            }
+        )
+
+    return JSONResponse(
+        {
+            "host": get_host_resources(),
+            "entries": payload_entries,
+        }
     )
