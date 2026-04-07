@@ -1,31 +1,36 @@
-# MC Server Manager
+﻿# MC Server Manager
 
-Phase 1 bis Phase 6 Basis fuer eine webbasierte Minecraft-Server-Verwaltung mit:
+Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-Host.
 
-- Login via Benutzername + Passwort
-- Rollenmodell (`super_admin`, `admin`, `moderator`, `view_only`)
-- SQLite Datenbank (automatische Tabellen-Initialisierung)
-- Dashboard mit Sicht auf zugewiesene Server
-- Super-Admin Benutzerverwaltung (Anlegen, Deaktivieren, Passwort-Reset)
-- Import bestehender Serverordner mit Erkennung von Startdatei/Servertyp
-- Start, Stopp und Neustart von importierten Servern
-- Laufzeit-Statusverwaltung (`running`/`stopped`)
-- Live Konsole mit WebSocket-Streaming und Kommandoeingabe
-- Loganzeige (aktuelle Sitzung + gespeicherte Session-Logdateien)
-- Audit-Log Ansicht im Webinterface
-- Dateibearbeitung fuer freigegebene Textdateien im Serverordner
-- Java-Profile Verwaltung in den Einstellungen
-- Servereinstellungen (Java-Profil, RAM, Port, Startparameter, Auto-Restart)
-- Scheduling fuer Start/Stop/Restart/Command (Cron oder interval:<sekunden>)
+## Features (Phase 1-6)
+
+- Login mit Rollenmodell (`super_admin`, `admin`, `moderator`, `view_only`)
+- SQLite Datenbank mit Auto-Init
+- Dashboard mit Serverstatus und Spieleranzeige `n/x`
+- Benutzerverwaltung fuer Super Admins
+- Import vorhandener Serverordner (keine Struktur-Umstellung noetig)
+- Start, Stopp, Neustart inklusive Statusverwaltung
+- Live-Konsole via WebSocket (Senden/Empfangen)
+- Loganzeige (aktuelle Session + gespeicherte Logs)
+- Audit-Log Ansicht
+- Dateibearbeitung fuer freigegebene Textdateien
+- Konfigeditor mit 2 Modi: Freitext und Assistent (strukturierte Felder)
+- Java-Profile Verwaltung
+- Servereinstellungen (Java, RAM, Port, Startparameter)
+- Scheduling fuer Start/Stop/Restart/Command (Cron oder `interval:<sekunden>`)
 - Verzoegerter Neustart mit optionaler Warnmeldung (`{seconds}`)
 - Neustart auch ueber Konsolenkommando `/restart`
-- Server-Wizard fuer Vanilla, Paper, Spigot, Fabric und Forge
-- Provider-Prinzip mit austauschbaren `server_providers`
-- Optionaler Provisioning-Offline-Modus fuer Test/Setup ohne Download
-- Modernes UI mit Light/Dark Umschaltung und ausklappbarem Seitenmenue
-- Dashboard mit Spieleranzeige im Format `n/x` pro Server
-- Konfigeditor mit 2 Modi: Freitext und Assistent (Dropdown/strukturierte Felder)
-- Ressourcenmonitor mit Host- und Serververbrauch (CPU/RAM je Server)
+- Server-Wizard fuer Vanilla, Paper, Spigot, Fabric, Forge
+- Provider-Prinzip fuer spaetere Erweiterungen
+- Optionaler Provisioning-Offline-Modus
+- Ressourcenmonitor (Host + Server CPU/RAM, live aktualisiert)
+- Modernes UI mit Light/Dark Umschaltung und ausklappbarer Sidebar
+
+## Voraussetzungen
+
+- Windows 10/11
+- Python 3.10+ (empfohlen 3.11)
+- Java-Installationen fuer die Ziel-Server (als Java-Profile hinterlegen)
 
 ## Start
 
@@ -39,11 +44,34 @@ uvicorn app.main:app --reload
 
 Default URL: `http://127.0.0.1:8000`
 
+## Konfiguration (.env)
+
+Wichtige Variablen:
+
+- `MCSM_SECRET_KEY` Session-Secret
+- `MCSM_INITIAL_SUPERADMIN_USERNAME` / `MCSM_INITIAL_SUPERADMIN_PASSWORD`
+- `MCSM_SQLITE_PATH` Pfad zur DB (Default: `data/mcsm.sqlite3`)
+- `MCSM_SCHEDULER_TIMEZONE` Zeitzone (Default: `Europe/Berlin`)
+- `MCSM_RESTART_WARNING_TEMPLATE` Warntext, `{seconds}` wird ersetzt
+- `MCSM_RESTART_DEFAULT_DELAY_SECONDS` Standard-Delay fuer Neustartwarnungen
+- `MCSM_PROVISIONING_OFFLINE_MODE` `true` fuer Offline-Setup ohne Downloads
+
 ## Erstlogin
 
-Die Anwendung legt beim ersten Start automatisch einen Super Admin an:
+Beim ersten Start wird automatisch ein Super Admin angelegt:
 
 - Benutzername: Wert aus `MCSM_INITIAL_SUPERADMIN_USERNAME`
 - Passwort: Wert aus `MCSM_INITIAL_SUPERADMIN_PASSWORD`
 
-Wichtig: Werte vor Produktivbetrieb in `.env` anpassen.
+Vor Produktivbetrieb in `.env` aendern.
+
+## Pfade
+
+- `data/` enthaelt SQLite DB + Scheduler-State
+- `managed_servers/` enthaelt angelegte Serverinstanzen
+- Importierte Server werden nicht verschoben oder umgebaut
+
+## Hinweise
+
+- `.env` und Laufzeitdaten sind in `.gitignore` ausgeschlossen.
+- Live-Konsole und Ressourcenmonitor benoetigen laufende Serverprozesse fuer sinnvolle Werte.

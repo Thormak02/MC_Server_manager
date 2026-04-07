@@ -1,0 +1,77 @@
+﻿# MC Server Manager
+
+Web-based management software for multiple Minecraft servers on a Windows host.
+
+## Features (Phase 1-6)
+
+- Login with roles (`super_admin`, `admin`, `moderator`, `view_only`)
+- SQLite database with auto-init
+- Dashboard with server status and player count `n/x`
+- Super Admin user management
+- Import existing server folders (no restructuring required)
+- Start, stop, restart with runtime status tracking
+- Live console via WebSocket (send/receive)
+- Log view (current session + stored logs)
+- Audit log view
+- File editor for whitelisted text files
+- Config editor with 2 modes: raw text and assistant (structured fields)
+- Java profile management
+- Server settings (Java, RAM, port, start parameters)
+- Scheduling for start/stop/restart/command (cron or `interval:<seconds>`)
+- Delayed restart with optional warning message (`{seconds}`)
+- Restart via console command `/restart`
+- Server wizard for Vanilla, Paper, Spigot, Fabric, Forge
+- Provider pattern for future extensions
+- Optional provisioning offline mode
+- Resource monitor (host + per-server CPU/RAM, live updates)
+- Modern UI with light/dark toggle and collapsible sidebar
+
+## Requirements
+
+- Windows 10/11
+- Python 3.10+ (3.11 recommended)
+- Java installations for the target servers (configure as Java profiles)
+
+## Start
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+uvicorn app.main:app --reload
+```
+
+Default URL: `http://127.0.0.1:8000`
+
+## Configuration (.env)
+
+Key variables:
+
+- `MCSM_SECRET_KEY` session secret
+- `MCSM_INITIAL_SUPERADMIN_USERNAME` / `MCSM_INITIAL_SUPERADMIN_PASSWORD`
+- `MCSM_SQLITE_PATH` database path (default: `data/mcsm.sqlite3`)
+- `MCSM_SCHEDULER_TIMEZONE` timezone (default: `Europe/Berlin`)
+- `MCSM_RESTART_WARNING_TEMPLATE` warning text, `{seconds}` is replaced
+- `MCSM_RESTART_DEFAULT_DELAY_SECONDS` default delay for restart warnings
+- `MCSM_PROVISIONING_OFFLINE_MODE` `true` for offline setup without downloads
+
+## First Login
+
+On first start a Super Admin is created:
+
+- Username: value from `MCSM_INITIAL_SUPERADMIN_USERNAME`
+- Password: value from `MCSM_INITIAL_SUPERADMIN_PASSWORD`
+
+Change these in `.env` before production use.
+
+## Paths
+
+- `data/` contains SQLite DB + scheduler state
+- `managed_servers/` contains newly created server instances
+- Imported servers are not moved or restructured
+
+## Notes
+
+- `.env` and runtime data are excluded via `.gitignore`.
+- Live console and resource monitor require running server processes for meaningful values.
