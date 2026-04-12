@@ -28,6 +28,8 @@ class Settings(BaseSettings):
         "Server restartet in {seconds} Sekunden aufgrund /restart."
     )
     provisioning_offline_mode: bool = False
+    curseforge_api_key: str | None = None
+    modrinth_user_agent: str = "mc-server-manager/1.0"
 
     model_config = SettingsConfigDict(
         env_file=".env",

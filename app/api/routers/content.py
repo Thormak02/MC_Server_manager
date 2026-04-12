@@ -1,0 +1,217 @@
+﻿from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy.orm import Session
+
+from app.db.session import get_db
+from app.models.installed_content import InstalledContent
+from app.services import content_service
+from app.services.auth_service import get_current_user_from_session
+from app.services.server_service import can_control_server, can_view_server, get_server_by_id
+from app.web.routes.pages import build_context, push_flash, templates
+
+
+router = APIRouter(include_in_schema=False)
+
+
+def _ensure_user(request: Request, db: Session):
+    user = get_current_user_from_session(request, db)
+    if user is None:
+        return None
+    return user
+
+
+def _ensure_server_access(db: Session, user, server_id: int):
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_view_server(db, user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    return server
+
+
+@router.get("/servers/{server_id}/content", response_class=HTMLResponse)
+def server_content_page(request: Request, server_id: int, db: Session = Depends(get_db)):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+    server = _ensure_server_access(db, current_user, server_id)
+    installed = content_service.list_installed_content(db, server_id)
+    default_content_type = content_service._default_content_type(server)
+
+    return templates.TemplateResponse(
+        request,
+        "server_content.html",
+        build_context(
+            request,
+            current_user=current_user,
+            page_title=f"Mods & Inhalte: {server.name}",
+            server=server,
+            installed=installed,
+            default_content_type=default_content_type,
+            can_manage=can_control_server(db, current_user, server),
+        ),
+    )
+
+
+@router.get("/api/content/search", response_class=JSONResponse)
+def content_search(
+    request: Request,
+    provider: str,
+    query: str,
+    mc_version: str | None = None,
+    loader: str | None = None,
+    content_type: str = "mod",
+    db: Session = Depends(get_db),
+):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    provider = provider.strip().lower()
+    if provider == "modrinth":
+        try:
+            results = content_service.search_modrinth(query, mc_version, loader, content_type)
+        except Exception as exc:
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
+    elif provider == "curseforge":
+        try:
+            results = content_service.search_curseforge(query, mc_version, loader, content_type)
+        except ValueError as exc:
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
+    else:
+        raise HTTPException(status_code=400, detail="Unknown provider")
+
+    return JSONResponse({"results": results})
+
+
+@router.get("/api/content/modrinth/versions", response_class=JSONResponse)
+def modrinth_versions(
+    request: Request,
+    project_id: str,
+    mc_version: str | None = None,
+    loader: str | None = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    try:
+        versions = content_service.list_modrinth_versions(project_id, mc_version, loader)
+    except Exception as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    return JSONResponse({"versions": versions})
+
+
+@router.get("/api/content/curseforge/versions", response_class=JSONResponse)
+def curseforge_versions(
+    request: Request,
+    project_id: int,
+    mc_version: str | None = None,
+    loader: str | None = None,
+    content_type: str = "mod",
+    db: Session = Depends(get_db),
+):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    try:
+        versions = content_service.list_curseforge_versions(project_id, mc_version, loader, content_type)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    return JSONResponse({"versions": versions})
+
+
+@router.get("/api/servers/{server_id}/content", response_class=JSONResponse)
+def list_server_content(request: Request, server_id: int, db: Session = Depends(get_db)):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    server = _ensure_server_access(db, current_user, server_id)
+    items = content_service.list_installed_content(db, server.id)
+
+    payload = []
+    for item in items:
+        payload.append(
+            {
+                "id": item.id,
+                "provider_name": item.provider_name,
+                "content_type": item.content_type,
+                "name": item.name,
+                "version_label": item.version_label,
+                "file_name": item.file_name,
+                "installed_at": item.installed_at.isoformat() if item.installed_at else None,
+            }
+        )
+
+    return JSONResponse({"items": payload})
+
+
+@router.post("/api/servers/{server_id}/content/install", response_class=JSONResponse)
+async def install_content(request: Request, server_id: int, db: Session = Depends(get_db)):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    server = _ensure_server_access(db, current_user, server_id)
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    payload = await request.json()
+    provider = str(payload.get("provider", "")).strip().lower()
+    project_id = str(payload.get("project_id", "")).strip()
+    version_id = str(payload.get("version_id", "")).strip()
+    content_type = str(payload.get("content_type", "mod")).strip().lower()
+
+    if not project_id or not version_id:
+        raise HTTPException(status_code=400, detail="project_id und version_id erforderlich")
+
+    if provider == "modrinth":
+        entry = content_service.install_modrinth(
+            db,
+            server,
+            project_id,
+            version_id,
+            content_type,
+            current_user.id,
+        )
+    elif provider == "curseforge":
+        try:
+            entry = content_service.install_curseforge(
+                db,
+                server,
+                int(project_id),
+                int(version_id),
+                content_type,
+                current_user.id,
+            )
+        except ValueError as exc:
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
+    else:
+        raise HTTPException(status_code=400, detail="Unknown provider")
+
+    return JSONResponse(
+        {
+            "id": entry.id,
+            "name": entry.name,
+            "version_label": entry.version_label,
+            "file_name": entry.file_name,
+        }
+    )
+
+
+@router.delete("/api/servers/{server_id}/content/{content_id}", response_class=JSONResponse)
+def delete_content(request: Request, server_id: int, content_id: int, db: Session = Depends(get_db)):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    server = _ensure_server_access(db, current_user, server_id)
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    content = db.get(InstalledContent, content_id)
+    if content is None or content.server_id != server.id:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    content_service.delete_installed_content(db, server, content, current_user.id)
+    return JSONResponse({"status": "ok"})

@@ -1,0 +1,299 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<h1>Mods & Inhalte</h1>
+
+<section class="card">
+    <div class="inline-form">
+        <a class="button-like" href="/servers/{{ server.id }}">Server Details</a>
+        <a class="button-like" href="/servers/{{ server.id }}/console">Konsole</a>
+        <a class="button-like" href="/servers/{{ server.id }}/logs">Logs</a>
+    </div>
+</section>
+
+<section class="card">
+    <h2>Suche & Installation</h2>
+    {% if can_manage %}
+    <div class="grid grid-4" id="content-search">
+        <div>
+            <label for="provider">Provider</label>
+            <select id="provider">
+                <option value="modrinth">Modrinth</option>
+                <option value="curseforge">CurseForge</option>
+            </select>
+        </div>
+        <div>
+            <label for="content_type">Typ</label>
+            <select id="content_type">
+                <option value="mod" {% if default_content_type == "mod" %}selected{% endif %}>Mod</option>
+                <option value="plugin" {% if default_content_type == "plugin" %}selected{% endif %}>Plugin</option>
+            </select>
+        </div>
+        <div>
+            <label for="query">Suchbegriff</label>
+            <input id="query" type="text" placeholder="z.B. worldedit">
+        </div>
+        <div class="align-end">
+            <button id="search-btn" type="button">Suchen</button>
+        </div>
+        <div>
+            <label for="mc_version">MC Version</label>
+            <input id="mc_version" type="text" value="{{ server.mc_version }}">
+        </div>
+        <div>
+            <label for="loader">Loader/Typ</label>
+            <input id="loader" type="text" value="{% if server.server_type != 'vanilla' %}{{ server.server_type }}{% endif %}">
+        </div>
+    </div>
+    <div id="search-status" class="muted"></div>
+    <div id="search-results" class="stack"></div>
+    {% else %}
+    <p class="muted">Keine Berechtigung fuer Installationen.</p>
+    {% endif %}
+</section>
+
+<section class="card">
+    <h2>Installierte Inhalte</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Version</th>
+                <th>Provider</th>
+                <th>Datei</th>
+                <th>Typ</th>
+                <th>Aktion</th>
+            </tr>
+        </thead>
+        <tbody id="installed-body">
+            {% for item in installed %}
+            <tr data-content-id="{{ item.id }}">
+                <td>{{ item.name }}</td>
+                <td>{{ item.version_label or "-" }}</td>
+                <td>{{ item.provider_name }}</td>
+                <td>{{ item.file_name }}</td>
+                <td>{{ item.content_type }}</td>
+                <td>
+                    {% if can_manage %}
+                    <button class="ghost delete-content" type="button" data-content-id="{{ item.id }}">Loeschen</button>
+                    {% else %}-{% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6">Keine Inhalte installiert.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<script>
+(function () {
+    const serverId = {{ server.id }};
+    const providerSelect = document.getElementById("provider");
+    const contentTypeSelect = document.getElementById("content_type");
+    const queryInput = document.getElementById("query");
+    const mcVersionInput = document.getElementById("mc_version");
+    const loaderInput = document.getElementById("loader");
+    const searchBtn = document.getElementById("search-btn");
+    const searchStatus = document.getElementById("search-status");
+    const resultsEl = document.getElementById("search-results");
+    const installedBody = document.getElementById("installed-body");
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    async function fetchJson(url) {
+        const response = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || "Request failed");
+        }
+        return response.json();
+    }
+
+    async function search() {
+        if (!resultsEl) return;
+        const provider = providerSelect ? providerSelect.value : "modrinth";
+        const query = queryInput ? queryInput.value.trim() : "";
+        const mcVersion = mcVersionInput ? mcVersionInput.value.trim() : "";
+        const loader = loaderInput ? loaderInput.value.trim() : "";
+        const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
+        if (!query) return;
+
+        resultsEl.innerHTML = "";
+        if (searchStatus) searchStatus.textContent = "Suche ...";
+        const url =
+            "/api/content/search?" +
+            new URLSearchParams({
+                provider,
+                query,
+                mc_version: mcVersion,
+                loader,
+                content_type: contentType,
+            }).toString();
+
+        try {
+            const data = await fetchJson(url);
+            const results = Array.isArray(data.results) ? data.results : [];
+            if (!results.length) {
+                if (searchStatus) searchStatus.textContent = "Keine Treffer.";
+                return;
+            }
+            if (searchStatus) searchStatus.textContent = "";
+            resultsEl.innerHTML = results
+                .map((item) => {
+                    return `
+<div class="card" data-project-id="${item.id}" data-provider="${provider}">
+    <div class="grid grid-3">
+        <div>
+            <strong>${escapeHtml(item.title || "-")}</strong>
+            <p class="muted">${escapeHtml(item.description || "")}</p>
+        </div>
+        <div>
+            <label>Version</label>
+            <select class="version-select"><option value="">- Versionen laden -</option></select>
+            <button type="button" class="ghost load-versions">Versionen laden</button>
+        </div>
+        <div class="align-end">
+            <button type="button" class="install-btn">Installieren</button>
+        </div>
+    </div>
+</div>`;
+                })
+                .join("");
+        } catch (err) {
+            if (searchStatus) searchStatus.textContent = "Fehler bei der Suche.";
+        }
+    }
+
+    async function loadVersions(card) {
+        const projectId = card.dataset.projectId;
+        const provider = card.dataset.provider;
+        const mcVersion = mcVersionInput ? mcVersionInput.value.trim() : "";
+        const loader = loaderInput ? loaderInput.value.trim() : "";
+        const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
+        const select = card.querySelector(".version-select");
+        if (!select) return;
+        select.innerHTML = "<option value=\"\">Lade ...</option>";
+
+        let url = "";
+        if (provider === "modrinth") {
+            url =
+                "/api/content/modrinth/versions?" +
+                new URLSearchParams({ project_id: projectId, mc_version: mcVersion, loader }).toString();
+        } else {
+            url =
+                "/api/content/curseforge/versions?" +
+                new URLSearchParams({
+                    project_id: projectId,
+                    mc_version: mcVersion,
+                    loader,
+                    content_type: contentType,
+                }).toString();
+        }
+        try {
+            const data = await fetchJson(url);
+            const versions = Array.isArray(data.versions) ? data.versions : [];
+            select.innerHTML = "<option value=\"\">-</option>";
+            versions.forEach((ver) => {
+                const option = document.createElement("option");
+                option.value = ver.id;
+                option.textContent = ver.name || ver.version_number || ver.id;
+                select.appendChild(option);
+            });
+        } catch (_) {
+            select.innerHTML = "<option value=\"\">Fehler</option>";
+        }
+    }
+
+    async function install(card) {
+        const projectId = card.dataset.projectId;
+        const provider = card.dataset.provider;
+        const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
+        const select = card.querySelector(".version-select");
+        if (!select || !select.value) return;
+
+        try {
+            const response = await fetch(`/api/servers/${serverId}/content/install`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider,
+                    project_id: projectId,
+                    version_id: select.value,
+                    content_type: contentType,
+                }),
+            });
+            if (!response.ok) {
+                throw new Error();
+            }
+            const payload = await response.json();
+            if (installedBody) {
+                const placeholder = installedBody.querySelector("tr td[colspan]");
+                if (placeholder && placeholder.parentElement) {
+                    placeholder.parentElement.remove();
+                }
+                const row = document.createElement("tr");
+                row.dataset.contentId = payload.id;
+                row.innerHTML = `
+<td>${escapeHtml(payload.name || "-")}</td>
+<td>${escapeHtml(payload.version_label || "-")}</td>
+<td>${escapeHtml(provider)}</td>
+<td>${escapeHtml(payload.file_name || "-")}</td>
+<td>${escapeHtml(contentType)}</td>
+<td><button class="ghost delete-content" type="button" data-content-id="${payload.id}">Loeschen</button></td>`;
+                installedBody.appendChild(row);
+            }
+        } catch (_) {
+            alert("Installation fehlgeschlagen.");
+        }
+    }
+
+    async function deleteContent(contentId, row) {
+        try {
+            const response = await fetch(`/api/servers/${serverId}/content/${contentId}`, { method: "DELETE" });
+            if (!response.ok) throw new Error();
+            if (row) row.remove();
+        } catch (_) {
+            alert("Loeschen fehlgeschlagen.");
+        }
+    }
+
+    if (searchBtn) {
+        searchBtn.addEventListener("click", search);
+    }
+
+    if (resultsEl) {
+        resultsEl.addEventListener("click", function (event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const card = target.closest(".card");
+            if (!card) return;
+            if (target.classList.contains("load-versions")) {
+                loadVersions(card);
+            }
+            if (target.classList.contains("install-btn")) {
+                install(card);
+            }
+        });
+    }
+
+    if (installedBody) {
+        installedBody.addEventListener("click", function (event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (!target.classList.contains("delete-content")) return;
+            const row = target.closest("tr");
+            const contentId = target.dataset.contentId;
+            if (!contentId) return;
+            deleteContent(contentId, row);
+        });
+    }
+})();
+</script>
+{% endblock %}

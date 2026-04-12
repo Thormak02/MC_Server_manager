@@ -6,6 +6,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.installed_content import InstalledContent  # noqa: F401
 from app.models.java_profile import JavaProfile  # noqa: F401
 from app.models.scheduled_job import ScheduledJob  # noqa: F401
 from app.models.server import Server  # noqa: F401

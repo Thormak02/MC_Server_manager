@@ -12,4 +12,5 @@ __all__ = [
     "resource_service",
     "schedule_service",
     "template_service",
+    "content_service",
 ]

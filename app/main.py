@@ -6,6 +6,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.routers.auth import router as auth_router
 from app.api.routers.console import router as console_router
+from app.api.routers.content import router as content_router
 from app.api.routers.dashboard import router as dashboard_router
 from app.api.routers.files import router as files_router
 from app.api.routers.java_profiles import router as java_profiles_router
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(page_router)
     app.include_router(auth_router)
     app.include_router(console_router)
+    app.include_router(content_router)
     app.include_router(dashboard_router)
     app.include_router(files_router)
     app.include_router(java_profiles_router)

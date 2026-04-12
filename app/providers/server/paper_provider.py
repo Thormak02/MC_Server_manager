@@ -24,13 +24,21 @@ class PaperProvider(ServerProviderBase):
             pass
         return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version)]
 
-    def _resolve_download(self, mc_version: str) -> tuple[str, str]:
+    def _resolve_download(self, mc_version: str, requested_build: str | None = None) -> tuple[str, str]:
         builds_data = fetch_json(f"{self._api_base}/versions/{mc_version}/builds")
         builds = builds_data.get("builds", [])
         if not builds:
             raise ValueError(f"Keine Paper-Builds fuer {mc_version} gefunden.")
 
-        build = sorted(builds, key=lambda item: int(item.get("build", 0)))[-1]
+        if requested_build:
+            build = next(
+                (item for item in builds if str(item.get("build")) == str(requested_build)),
+                None,
+            )
+            if not build:
+                raise ValueError(f"Paper Build {requested_build} fuer {mc_version} nicht gefunden.")
+        else:
+            build = sorted(builds, key=lambda item: int(item.get("build", 0)))[-1]
         downloads = build.get("downloads", {})
         application = downloads.get("application")
         if not application:
@@ -52,10 +60,22 @@ class PaperProvider(ServerProviderBase):
                 notes=["Offline-Modus: Platzhalterdatei erstellt."],
             )
 
-        url, file_name = self._resolve_download(request.mc_version)
+        url, file_name = self._resolve_download(request.mc_version, request.loader_version)
         jar_path = target_dir / file_name
         download_file(url, jar_path)
         return ProvisionResult(server_jar_path=str(jar_path))
+
+    def list_loader_versions(self, mc_version: str) -> list[VersionInfo]:
+        try:
+            builds_data = fetch_json(f"{self._api_base}/versions/{mc_version}/builds")
+            builds = builds_data.get("builds", [])
+            versions = [
+                VersionInfo(id=str(item.get("build")), label=str(item.get("build")), stable=True)
+                for item in sorted(builds, key=lambda item: int(item.get("build", 0)), reverse=True)
+            ]
+            return versions
+        except Exception:
+            return []
 
     def generate_start_command(self, request: ProvisionServerRequest, jar_name: str) -> str:
         extra = ""
