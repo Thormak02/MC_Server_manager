@@ -1,0 +1,159 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<h1>Templates</h1>
+
+<section class="card">
+    <h2>Neues Template</h2>
+    <form method="post" action="/templates" class="grid grid-4" id="template-form">
+        <div>
+            <label for="name">Name</label>
+            <input id="name" name="name" type="text" required>
+        </div>
+        <div>
+            <label for="server_type">Servertyp</label>
+            <select id="server_type" name="server_type" required>
+                {% for type_name in server_types %}
+                <option value="{{ type_name }}" {% if selected_type == type_name %}selected{% endif %}>{{ type_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="mc_version">Minecraft Version</label>
+            <select id="mc_version" name="mc_version" required>
+                {% for version in versions %}
+                <option value="{{ version.id }}">{{ version.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="loader_version">Loader/Build (optional)</label>
+            <input id="loader_version" name="loader_version" type="text">
+        </div>
+        <div>
+            <label for="java_profile_id">Java Profil</label>
+            <select id="java_profile_id" name="java_profile_id">
+                <option value="">-</option>
+                {% for profile in java_profiles %}
+                <option value="{{ profile.id }}">{{ profile.name }}{% if profile.version_label %} ({{ profile.version_label }}){% endif %}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="memory_min_mb">RAM min (MB)</label>
+            <input id="memory_min_mb" name="memory_min_mb" type="number" min="256" placeholder="2048">
+        </div>
+        <div>
+            <label for="memory_max_mb">RAM max (MB)</label>
+            <input id="memory_max_mb" name="memory_max_mb" type="number" min="256" placeholder="4096">
+        </div>
+        <div>
+            <label for="port_min">Port min (optional)</label>
+            <input id="port_min" name="port_min" type="number" min="1" max="65535">
+        </div>
+        <div>
+            <label for="port_max">Port max (optional)</label>
+            <input id="port_max" name="port_max" type="number" min="1" max="65535">
+        </div>
+        <div>
+            <label for="start_parameters">Startparameter (optional)</label>
+            <input id="start_parameters" name="start_parameters" type="text" placeholder="-Dfile.encoding=UTF-8">
+        </div>
+        <div class="align-end">
+            <label class="stack">
+                <span>Standard-Template</span>
+                <input id="is_default" name="is_default" type="checkbox" value="1">
+            </label>
+        </div>
+        <div class="stack" style="grid-column: span 4;">
+            <label for="default_properties_json">Default Properties JSON (optional)</label>
+            <textarea id="default_properties_json" name="default_properties_json" rows="4" placeholder='{"max-players": 20}'></textarea>
+        </div>
+        <div class="align-end">
+            <button type="submit">Template speichern</button>
+        </div>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Vorhandene Templates</h2>
+    {% if templates %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Typ</th>
+                <th>Version</th>
+                <th>Java</th>
+                <th>RAM</th>
+                <th>Port</th>
+                <th>Standard</th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for tpl in templates %}
+            <tr>
+                <td>{{ tpl.name }}</td>
+                <td>{{ tpl.server_type }}</td>
+                <td>{{ tpl.mc_version }}</td>
+                <td>{% if tpl.java_profile %}{{ tpl.java_profile.name }}{% else %}-{% endif %}</td>
+                <td>
+                    {% if tpl.memory_min_mb or tpl.memory_max_mb %}
+                    {{ tpl.memory_min_mb or "?" }}/{{ tpl.memory_max_mb or "?" }} MB
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if tpl.port_min or tpl.port_max %}
+                    {{ tpl.port_min or "?" }}-{{ tpl.port_max or "?" }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>{{ "ja" if tpl.is_default else "nein" }}</td>
+                <td>
+                    <a class="button-like" href="/templates/{{ tpl.id }}">Bearbeiten</a>
+                    <form method="post" action="/templates/{{ tpl.id }}/delete" class="inline-form" onsubmit="return confirm('Template wirklich loeschen?')">
+                        <button type="submit" class="ghost">Loeschen</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">Noch keine Templates vorhanden.</p>
+    {% endif %}
+</section>
+
+<script>
+(function () {
+    const typeSelect = document.getElementById("server_type");
+    const versionSelect = document.getElementById("mc_version");
+    if (!typeSelect || !versionSelect) return;
+
+    async function reloadVersions() {
+        const serverType = typeSelect.value;
+        const url = "/servers/create/versions?server_type=" + encodeURIComponent(serverType);
+        try {
+            const response = await fetch(url, { credentials: "same-origin" });
+            if (!response.ok) return;
+            const payload = await response.json();
+            const versions = Array.isArray(payload.versions) ? payload.versions : [];
+            versionSelect.innerHTML = "";
+            for (const version of versions) {
+                const option = document.createElement("option");
+                option.value = version.id;
+                option.textContent = version.label || version.id;
+                versionSelect.appendChild(option);
+            }
+        } catch (_) {
+            // keep current options on failure
+        }
+    }
+
+    typeSelect.addEventListener("change", reloadVersions);
+})();
+</script>
+{% endblock %}

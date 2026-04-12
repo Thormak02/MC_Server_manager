@@ -12,6 +12,7 @@ from app.api.routers.java_profiles import router as java_profiles_router
 from app.api.routers.provisioning import router as provisioning_router
 from app.api.routers.schedules import router as schedules_router
 from app.api.routers.servers import router as servers_router
+from app.api.routers.server_templates import router as server_templates_router
 from app.api.routers.users import router as users_router
 from app.core.config import get_settings
 from app.db.init_db import init_db
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(provisioning_router)
     app.include_router(schedules_router)
     app.include_router(servers_router)
+    app.include_router(server_templates_router)
     app.include_router(users_router)
     app.include_router(console_ws_router)
 

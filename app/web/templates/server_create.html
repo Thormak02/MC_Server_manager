@@ -9,6 +9,27 @@
             <input id="name" name="name" type="text" required>
         </div>
         <div>
+            <label for="template_id">Template (optional)</label>
+            <select id="template_id" name="template_id">
+                <option value="">-</option>
+                {% for tpl in templates %}
+                <option value="{{ tpl.id }}"
+                        data-server-type="{{ tpl.server_type }}"
+                        data-mc-version="{{ tpl.mc_version }}"
+                        data-loader-version="{{ tpl.loader_version or '' }}"
+                        data-java-profile-id="{{ tpl.java_profile_id or '' }}"
+                        data-memory-min="{{ tpl.memory_min_mb or '' }}"
+                        data-memory-max="{{ tpl.memory_max_mb or '' }}"
+                        data-port-min="{{ tpl.port_min or '' }}"
+                        data-port-max="{{ tpl.port_max or '' }}"
+                        data-start-parameters="{{ tpl.start_parameters or '' }}"
+                        {% if default_template_id == tpl.id %}selected{% endif %}>
+                    {{ tpl.name }}{% if tpl.is_default %} (Standard){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
             <label for="server_type">Servertyp</label>
             <select id="server_type" name="server_type" required>
                 {% for type_name in server_types %}
@@ -43,15 +64,19 @@
         </div>
         <div>
             <label for="memory_min_mb">RAM min (MB)</label>
-            <input id="memory_min_mb" name="memory_min_mb" type="number" min="256" value="2048" required>
+            <input id="memory_min_mb" name="memory_min_mb" type="number" min="256" placeholder="2048">
         </div>
         <div>
             <label for="memory_max_mb">RAM max (MB)</label>
-            <input id="memory_max_mb" name="memory_max_mb" type="number" min="256" value="4096" required>
+            <input id="memory_max_mb" name="memory_max_mb" type="number" min="256" placeholder="4096">
         </div>
         <div>
             <label for="port">Port (optional)</label>
             <input id="port" name="port" type="number" min="1" max="65535">
+        </div>
+        <div>
+            <label for="start_parameters">Startparameter (optional)</label>
+            <input id="start_parameters" name="start_parameters" type="text" placeholder="-Dfile.encoding=UTF-8">
         </div>
         <div class="align-end">
             <button type="submit">Server erstellen</button>
@@ -63,9 +88,16 @@
 (function () {
     const typeSelect = document.getElementById("server_type");
     const versionSelect = document.getElementById("mc_version");
+    const templateSelect = document.getElementById("template_id");
+    const loaderInput = document.getElementById("loader_version");
+    const javaProfileSelect = document.getElementById("java_profile_id");
+    const memoryMin = document.getElementById("memory_min_mb");
+    const memoryMax = document.getElementById("memory_max_mb");
+    const portInput = document.getElementById("port");
+    const startParamsInput = document.getElementById("start_parameters");
     if (!typeSelect || !versionSelect) return;
 
-    async function reloadVersions() {
+    async function reloadVersions(selected) {
         const serverType = typeSelect.value;
         const url = "/servers/create/versions?server_type=" + encodeURIComponent(serverType);
         try {
@@ -78,6 +110,9 @@
                 const option = document.createElement("option");
                 option.value = version.id;
                 option.textContent = version.label || version.id;
+                if (selected && selected === version.id) {
+                    option.selected = true;
+                }
                 versionSelect.appendChild(option);
             }
         } catch (_) {
@@ -86,6 +121,51 @@
     }
 
     typeSelect.addEventListener("change", reloadVersions);
+
+    function applyTemplate() {
+        if (!templateSelect) return;
+        const option = templateSelect.options[templateSelect.selectedIndex];
+        if (!option || !option.value) return;
+
+        const serverType = option.dataset.serverType || "";
+        const mcVersion = option.dataset.mcVersion || "";
+        const loaderVersion = option.dataset.loaderVersion || "";
+        const javaProfileId = option.dataset.javaProfileId || "";
+        const memoryMinValue = option.dataset.memoryMin || "";
+        const memoryMaxValue = option.dataset.memoryMax || "";
+        const portValue = option.dataset.portMin || "";
+        const startParams = option.dataset.startParameters || "";
+
+        if (serverType) {
+            typeSelect.value = serverType;
+            reloadVersions(mcVersion);
+        }
+        if (loaderInput) {
+            loaderInput.value = loaderVersion;
+        }
+        if (javaProfileSelect) {
+            javaProfileSelect.value = javaProfileId;
+        }
+        if (memoryMin) {
+            memoryMin.value = memoryMinValue;
+        }
+        if (memoryMax) {
+            memoryMax.value = memoryMaxValue;
+        }
+        if (portInput && portValue) {
+            portInput.value = portValue;
+        }
+        if (startParamsInput) {
+            startParamsInput.value = startParams;
+        }
+    }
+
+    if (templateSelect) {
+        templateSelect.addEventListener("change", applyTemplate);
+        if (templateSelect.value) {
+            applyTemplate();
+        }
+    }
 })();
 </script>
 {% endblock %}

@@ -11,6 +11,7 @@ class ProvisionServerRequest(BaseModel):
     memory_min_mb: int = 2048
     memory_max_mb: int = 4096
     port: int | None = None
+    start_parameters: str | None = None
 
 
 class VersionInfo(BaseModel):

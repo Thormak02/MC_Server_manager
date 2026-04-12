@@ -16,3 +16,16 @@ ROLE_LABELS = {
 }
 
 DEFAULT_SERVER_STATUS = "stopped"
+
+SERVER_STATUSES = [
+    "stopped",
+    "offline",
+    "starting",
+    "running",
+    "stopping",
+    "restarting",
+    "crashed",
+    "error",
+    "backup_running",
+    "provisioning",
+]

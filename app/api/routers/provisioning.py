@@ -11,6 +11,7 @@ from app.services import audit_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.provisioning_service import ProvisioningService
 from app.services.java_profile_service import list_java_profiles
+from app.services import template_service
 from app.web.routes.pages import build_context, push_flash, templates
 
 
@@ -48,6 +49,8 @@ def create_server_page(
     server_types = provisioning_service.list_available_server_types()
     selected_type = server_types[0] if server_types else "vanilla"
     versions = provisioning_service.list_versions(selected_type)
+    templates_list = template_service.list_templates(db)
+    default_template = template_service.get_default_template(db, selected_type)
     return templates.TemplateResponse(
         request,
         "server_create.html",
@@ -59,6 +62,8 @@ def create_server_page(
             versions=versions,
             selected_type=selected_type,
             java_profiles=list_java_profiles(db),
+            templates=templates_list,
+            default_template_id=default_template.id if default_template else None,
         ),
     )
 
@@ -88,22 +93,52 @@ def create_server_action(
     memory_min_mb: Annotated[str, Form()] = "2048",
     memory_max_mb: Annotated[str, Form()] = "4096",
     port: Annotated[str | None, Form()] = None,
+    start_parameters: Annotated[str | None, Form()] = None,
+    template_id: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_super_admin(request, db)
     if current_user is None:
         return RedirectResponse(url="/login", status_code=303)
 
+    template = None
+    if template_id:
+        template = template_service.get_template(db, _to_optional_int(template_id) or 0)
+        if template is None:
+            push_flash(request, "Template nicht gefunden.", "error")
+            return RedirectResponse(url="/servers/create", status_code=303)
+
+    parsed_memory_min = _to_optional_int(memory_min_mb)
+    parsed_memory_max = _to_optional_int(memory_max_mb)
+    parsed_port = _to_optional_int(port)
+    parsed_java_profile = _to_optional_int(java_profile_id)
+
+    resolved_server_type = server_type.strip().lower() if server_type.strip() else (template.server_type if template else "")
+    resolved_version = mc_version.strip() if mc_version.strip() else (template.mc_version if template else "")
+
+    if not resolved_server_type or not resolved_version:
+        push_flash(request, "Servertyp und Version sind erforderlich.", "error")
+        return RedirectResponse(url="/servers/create", status_code=303)
+
     payload = ProvisionServerRequest(
         name=name.strip(),
-        server_type=server_type.strip().lower(),
-        mc_version=mc_version.strip(),
-        loader_version=(loader_version or "").strip() or None,
+        server_type=resolved_server_type,
+        mc_version=resolved_version,
+        loader_version=(loader_version or "").strip()
+        or (template.loader_version if template else None),
         target_path=target_path.strip(),
-        java_profile_id=_to_optional_int(java_profile_id),
-        memory_min_mb=int(memory_min_mb),
-        memory_max_mb=int(memory_max_mb),
-        port=_to_optional_int(port),
+        java_profile_id=parsed_java_profile
+        if parsed_java_profile is not None
+        else (template.java_profile_id if template else None),
+        memory_min_mb=parsed_memory_min
+        if parsed_memory_min is not None
+        else (template.memory_min_mb if template else 2048),
+        memory_max_mb=parsed_memory_max
+        if parsed_memory_max is not None
+        else (template.memory_max_mb if template else 4096),
+        port=parsed_port if parsed_port is not None else (template.port_min if template else None),
+        start_parameters=(start_parameters or "").strip()
+        or (template.start_parameters if template else None),
     )
 
     try:

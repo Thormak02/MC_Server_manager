@@ -116,10 +116,20 @@ def _mark_server_stopped(server_id: int, exit_code: int | None) -> None:
         server = db.get(Server, server_id)
         if not server:
             return
-        if server.status != "stopped":
+        if server.status == "stopping":
             server.status = "stopped"
-            db.add(server)
-            db.commit()
+        elif server.status == "restarting":
+            server.status = "restarting"
+        elif server.status in {"starting", "running"}:
+            server.status = "crashed"
+        elif server.status == "backup_running":
+            server.status = "stopped"
+        elif server.status == "provisioning":
+            server.status = "error"
+        else:
+            server.status = "stopped"
+        db.add(server)
+        db.commit()
         audit_service.log_action(
             db,
             action="server.process_exit",
@@ -204,11 +214,22 @@ def refresh_runtime_states(db: Session, servers: list[Server]) -> None:
     changed = False
     for server in servers:
         currently_running = is_running(server.id)
-        target_status = "running" if currently_running else "stopped"
-        if server.status != target_status:
-            server.status = target_status
-            db.add(server)
-            changed = True
+        if currently_running:
+            if server.status in {"stopping", "restarting"}:
+                continue
+            if server.status != "running":
+                server.status = "running"
+                db.add(server)
+                changed = True
+        else:
+            if server.status == "running":
+                server.status = "crashed"
+                db.add(server)
+                changed = True
+            elif server.status == "stopping":
+                server.status = "stopped"
+                db.add(server)
+                changed = True
 
         if not currently_running:
             _cleanup_process_registry(server.id)
@@ -274,21 +295,34 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
     try:
         command = _command_for_server(server)
     except ValueError as exc:
+        server.status = "error"
+        db.add(server)
+        db.commit()
         return False, str(exc)
 
+    server.status = "starting"
+    db.add(server)
+    db.commit()
+
     log_file_path = _create_session_log_file(server.id)
-    process = subprocess.Popen(
-        command,
-        cwd=str(base_path),
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        creationflags=_build_creation_flags(),
-        bufsize=1,
-    )
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=str(base_path),
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=_build_creation_flags(),
+            bufsize=1,
+        )
+    except Exception as exc:
+        server.status = "error"
+        db.add(server)
+        db.commit()
+        return False, f"Start fehlgeschlagen: {exc}"
 
     with _PROCESS_LOCK:
         _PROCESS_REGISTRY[server.id] = ManagedProcess(
@@ -466,6 +500,10 @@ def send_console_command(
             warning_message=get_settings().ingame_restart_warning_message,
             source="console_command",
         )
+    if normalized.lower() in {"/stop", "stop"} and server.status == "running":
+        server.status = "stopping"
+        db.add(server)
+        db.commit()
 
     with _PROCESS_LOCK:
         managed = _PROCESS_REGISTRY.get(server.id)
@@ -499,6 +537,7 @@ def stop_server(
     *,
     force: bool = False,
     graceful_timeout_seconds: float = 12.0,
+    for_restart: bool = False,
 ) -> tuple[bool, str]:
     _cancel_pending_restart(server.id)
 
@@ -506,7 +545,7 @@ def stop_server(
         managed = _PROCESS_REGISTRY.get(server.id)
 
     if not managed:
-        server.status = "stopped"
+        server.status = "restarting" if for_restart else "stopped"
         db.add(server)
         db.commit()
         return True, "Server war nicht aktiv."
@@ -514,10 +553,21 @@ def stop_server(
     process = managed.process
     if process.poll() is not None:
         _cleanup_process_registry(server.id)
-        server.status = "stopped"
+        server.status = "restarting" if for_restart else "stopped"
         db.add(server)
         db.commit()
         return True, "Server war bereits beendet."
+
+    if for_restart:
+        if server.status != "restarting":
+            server.status = "restarting"
+            db.add(server)
+            db.commit()
+    else:
+        if server.status != "stopping":
+            server.status = "stopping"
+            db.add(server)
+            db.commit()
 
     if not force and process.stdin:
         try:
@@ -535,7 +585,7 @@ def stop_server(
             process.kill()
 
     _cleanup_process_registry(server.id)
-    server.status = "stopped"
+    server.status = "restarting" if for_restart else "stopped"
     db.add(server)
     db.commit()
 
@@ -551,7 +601,10 @@ def stop_server(
 
 
 def restart_server(db: Session, server: Server, initiated_by_user_id: int | None) -> tuple[bool, str]:
-    stop_server(db, server, initiated_by_user_id, force=False)
+    server.status = "restarting"
+    db.add(server)
+    db.commit()
+    stop_server(db, server, initiated_by_user_id, force=False, for_restart=True)
     return start_server(db, server, initiated_by_user_id)
 
 

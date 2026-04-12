@@ -10,6 +10,7 @@ from app.models.java_profile import JavaProfile  # noqa: F401
 from app.models.scheduled_job import ScheduledJob  # noqa: F401
 from app.models.server import Server  # noqa: F401
 from app.models.server_permission import ServerPermission  # noqa: F401
+from app.models.server_template import ServerTemplate  # noqa: F401
 from app.models.user import User
 
 
@@ -42,5 +43,20 @@ def _seed_super_admin() -> None:
 
 def _normalize_runtime_states() -> None:
     with SessionLocal() as db:
-        db.execute(update(Server).where(Server.status == "running").values(status="stopped"))
+        db.execute(
+            update(Server)
+            .where(
+                Server.status.in_(
+                    [
+                        "running",
+                        "starting",
+                        "stopping",
+                        "restarting",
+                        "backup_running",
+                        "provisioning",
+                    ]
+                )
+            )
+            .values(status="stopped")
+        )
         db.commit()

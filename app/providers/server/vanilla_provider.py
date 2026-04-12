@@ -54,7 +54,10 @@ class VanillaProvider(ServerProviderBase):
         return ProvisionResult(server_jar_path=str(jar_path))
 
     def generate_start_command(self, request: ProvisionServerRequest, jar_name: str) -> str:
+        extra = ""
+        if request.start_parameters:
+            extra = f" {request.start_parameters.strip()}"
         return (
             f"java -Xms{request.memory_min_mb}M -Xmx{request.memory_max_mb}M "
-            f"-jar {jar_name} nogui"
+            f"-jar {jar_name} nogui{extra}"
         )
