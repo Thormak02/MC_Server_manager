@@ -1,7 +1,13 @@
 from pathlib import Path
 
 from app.providers.base.server_provider_base import ServerProviderBase
-from app.providers.server.common import download_file, fetch_json, offline_mode_enabled, write_placeholder_jar
+from app.providers.server.common import (
+    download_file,
+    fetch_json,
+    list_release_versions,
+    offline_mode_enabled,
+    write_placeholder_jar,
+)
 from app.schemas.provider import ProvisionResult, ProvisionServerRequest, VersionInfo
 
 
@@ -27,7 +33,13 @@ class ForgeProvider(ServerProviderBase):
                 versions.append(VersionInfo(id=mc_version, label=mc_version, stable=True))
             versions.sort(key=lambda item: item.id, reverse=True)
             if versions:
-                return versions[:25]
+                return versions
+        except Exception:
+            pass
+        try:
+            fallback = list_release_versions(minimum="1.7.10")
+            if fallback:
+                return [VersionInfo(id=item, label=item, stable=True) for item in fallback]
         except Exception:
             pass
         return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version, stable=True)]

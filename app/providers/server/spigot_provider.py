@@ -1,7 +1,12 @@
 from pathlib import Path
 
 from app.providers.base.server_provider_base import ServerProviderBase
-from app.providers.server.common import download_file, offline_mode_enabled, write_placeholder_jar
+from app.providers.server.common import (
+    download_file,
+    list_release_versions,
+    offline_mode_enabled,
+    write_placeholder_jar,
+)
 from app.schemas.provider import ProvisionResult, ProvisionServerRequest, VersionInfo
 
 
@@ -13,7 +18,16 @@ class SpigotProvider(ServerProviderBase):
     )
 
     def list_versions(self) -> list[VersionInfo]:
-        common = ["1.20.6", "1.20.4", "1.20.1", "1.19.4", "1.18.2"]
+        try:
+            versions = [
+                VersionInfo(id=item, label=item, stable=True)
+                for item in list_release_versions(minimum="1.7.10")
+            ]
+            if versions:
+                return versions
+        except Exception:
+            pass
+        common = ["1.20.6", "1.20.4", "1.20.1", "1.19.4", "1.18.2", "1.7.10"]
         return [VersionInfo(id=item, label=item, stable=True) for item in common]
 
     def provision(self, request: ProvisionServerRequest, target_dir: Path) -> ProvisionResult:

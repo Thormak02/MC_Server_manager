@@ -1,7 +1,13 @@
 from pathlib import Path
 
 from app.providers.base.server_provider_base import ServerProviderBase
-from app.providers.server.common import download_file, fetch_json, offline_mode_enabled, write_placeholder_jar
+from app.providers.server.common import (
+    download_file,
+    fetch_json,
+    list_release_versions,
+    offline_mode_enabled,
+    write_placeholder_jar,
+)
 from app.schemas.provider import ProvisionResult, ProvisionServerRequest, VersionInfo
 
 
@@ -12,17 +18,10 @@ class VanillaProvider(ServerProviderBase):
 
     def list_versions(self) -> list[VersionInfo]:
         try:
-            data = fetch_json(self._manifest_url)
-            versions = []
-            for item in data.get("versions", []):
-                if item.get("type") != "release":
-                    continue
-                version_id = item.get("id")
-                if not version_id:
-                    continue
-                versions.append(VersionInfo(id=version_id, label=version_id, stable=True))
-                if len(versions) >= 25:
-                    break
+            versions = [
+                VersionInfo(id=item, label=item, stable=True)
+                for item in list_release_versions(minimum="1.7.10")
+            ]
             if versions:
                 return versions
         except Exception:

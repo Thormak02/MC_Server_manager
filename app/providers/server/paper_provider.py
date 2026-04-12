@@ -16,7 +16,7 @@ class PaperProvider(ServerProviderBase):
             raw_versions = data.get("versions", [])
             versions = [
                 VersionInfo(id=str(version), label=str(version), stable=True)
-                for version in reversed(raw_versions[-25:])
+                for version in reversed(raw_versions)
             ]
             if versions:
                 return versions

@@ -1,7 +1,13 @@
 from pathlib import Path
 
 from app.providers.base.server_provider_base import ServerProviderBase
-from app.providers.server.common import download_file, fetch_json, offline_mode_enabled, write_placeholder_jar
+from app.providers.server.common import (
+    download_file,
+    fetch_json,
+    is_version_at_least,
+    offline_mode_enabled,
+    write_placeholder_jar,
+)
 from app.schemas.provider import ProvisionResult, ProvisionServerRequest, VersionInfo
 
 
@@ -18,6 +24,8 @@ class FabricProvider(ServerProviderBase):
                 version_id = item.get("version")
                 if not version_id:
                     continue
+                if not is_version_at_least(str(version_id), "1.7.10"):
+                    break
                 versions.append(
                     VersionInfo(
                         id=str(version_id),
@@ -25,8 +33,6 @@ class FabricProvider(ServerProviderBase):
                         stable=bool(item.get("stable", True)),
                     )
                 )
-                if len(versions) >= 25:
-                    break
             if versions:
                 return versions
         except Exception:
