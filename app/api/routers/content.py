@@ -1,5 +1,6 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -31,17 +32,19 @@ def _ensure_server_access(db: Session, user, server_id: int):
 
 @router.get("/servers/{server_id}/content", response_class=HTMLResponse)
 def server_content_page(request: Request, server_id: int, db: Session = Depends(get_db)):
-    current_user = _ensure_user(request, db)
-    if current_user is None:
-        return RedirectResponse(url="/login", status_code=303)
-    server = _ensure_server_access(db, current_user, server_id)
-    installed = content_service.list_installed_content(db, server_id)
-    default_content_type = content_service._default_content_type(server)
+    try:
+        current_user = _ensure_user(request, db)
+        if current_user is None:
+            return RedirectResponse(url="/login", status_code=303)
+        server = _ensure_server_access(db, current_user, server_id)
+        try:
+            installed = content_service.list_installed_content(db, server_id)
+        except SQLAlchemyError as exc:
+            installed = []
+            push_flash(request, f"Inhalte konnten nicht geladen werden: {exc}", "error")
+        default_content_type = content_service._default_content_type(server)
 
-    return templates.TemplateResponse(
-        request,
-        "server_content.html",
-        build_context(
+        context = build_context(
             request,
             current_user=current_user,
             page_title=f"Mods & Inhalte: {server.name}",
@@ -49,8 +52,15 @@ def server_content_page(request: Request, server_id: int, db: Session = Depends(
             installed=installed,
             default_content_type=default_content_type,
             can_manage=can_control_server(db, current_user, server),
-        ),
-    )
+        )
+        template = templates.get_template("server_content.html")
+        rendered = template.render(context)
+        return HTMLResponse(rendered)
+    except Exception as exc:  # pragma: no cover
+        return HTMLResponse(
+            f"<h1>Fehler beim Laden der Inhalte</h1><pre>{exc}</pre>",
+            status_code=500,
+        )
 
 
 @router.get("/api/content/search", response_class=JSONResponse)

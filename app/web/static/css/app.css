@@ -48,12 +48,11 @@ a {
 }
 
 .layout-authenticated {
-    display: grid;
-    grid-template-columns: 280px 1fr;
+    --sidebar-width: 280px;
 }
 
 .layout-authenticated.sidebar-collapsed {
-    grid-template-columns: 82px 1fr;
+    --sidebar-width: 82px;
 }
 
 .layout-public .main-shell {
@@ -61,8 +60,10 @@ a {
 }
 
 .sidebar {
-    position: sticky;
+    position: fixed;
+    left: 0;
     top: 0;
+    width: var(--sidebar-width, 280px);
     height: 100vh;
     background: color-mix(in srgb, var(--panel) 88%, black 12%);
     border-right: 1px solid var(--border);
@@ -144,6 +145,11 @@ a {
 
 .main-shell {
     min-width: 0;
+}
+
+.layout-authenticated .main-shell {
+    margin-left: var(--sidebar-width, 280px);
+    transition: margin-left 0.22s ease;
 }
 
 .topbar {
@@ -387,10 +393,6 @@ th {
 }
 
 @media (max-width: 980px) {
-    .layout-authenticated {
-        grid-template-columns: 1fr;
-    }
-
     .sidebar {
         position: fixed;
         left: 0;
@@ -409,5 +411,9 @@ th {
 
     .layout-authenticated.sidebar-collapsed .sidebar {
         transform: translateX(-100%);
+    }
+
+    .layout-authenticated .main-shell {
+        margin-left: 0;
     }
 }

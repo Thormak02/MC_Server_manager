@@ -23,7 +23,7 @@
             } catch (_) {}
         }
 
-        function applySidebarState(collapsed) {
+        function applySidebarState(collapsed, persist = true) {
             if (!hasSidebar) return;
             if (mediaMobile.matches) {
                 body.classList.toggle("sidebar-open", !collapsed);
@@ -32,9 +32,11 @@
                 body.classList.remove("sidebar-open");
                 body.classList.toggle("sidebar-collapsed", collapsed);
             }
-            try {
-                localStorage.setItem("mcsm.sidebar.collapsed", collapsed ? "1" : "0");
-            } catch (_) {}
+            if (persist) {
+                try {
+                    localStorage.setItem("mcsm.sidebar.collapsed", collapsed ? "1" : "0");
+                } catch (_) {}
+            }
         }
 
         let preferredTheme = "light";
@@ -55,7 +57,11 @@
             try {
                 collapsed = localStorage.getItem("mcsm.sidebar.collapsed") === "1";
             } catch (_) {}
-            applySidebarState(collapsed);
+            if (mediaMobile.matches) {
+                applySidebarState(true, false);
+            } else {
+                applySidebarState(collapsed);
+            }
 
             if (sidebarToggle) {
                 sidebarToggle.addEventListener("click", function () {
@@ -68,15 +74,35 @@
                 });
             }
 
+            const sideNav = document.querySelector(".side-nav");
+            if (sideNav) {
+                sideNav.addEventListener("click", function (event) {
+                    const target = event.target;
+                    if (!(target instanceof HTMLElement)) return;
+                    if (!target.closest("a")) return;
+                    if (mediaMobile.matches) {
+                        body.classList.remove("sidebar-open");
+                    }
+                });
+            }
+
             if (typeof mediaMobile.addEventListener === "function") {
                 mediaMobile.addEventListener("change", function () {
-                    const stored = body.classList.contains("sidebar-collapsed");
-                    applySidebarState(stored);
+                    if (mediaMobile.matches) {
+                        applySidebarState(true, false);
+                    } else {
+                        const stored = body.classList.contains("sidebar-collapsed");
+                        applySidebarState(stored);
+                    }
                 });
             } else if (typeof mediaMobile.addListener === "function") {
                 mediaMobile.addListener(function () {
-                    const stored = body.classList.contains("sidebar-collapsed");
-                    applySidebarState(stored);
+                    if (mediaMobile.matches) {
+                        applySidebarState(true, false);
+                    } else {
+                        const stored = body.classList.contains("sidebar-collapsed");
+                        applySidebarState(stored);
+                    }
                 });
             }
         }

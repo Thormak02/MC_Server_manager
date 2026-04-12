@@ -1,6 +1,7 @@
 from app.api.routers import (
     auth,
     console,
+    content,
     dashboard,
     files,
     java_profiles,
@@ -13,6 +14,7 @@ from app.api.routers import (
 __all__ = [
     "auth",
     "console",
+    "content",
     "dashboard",
     "files",
     "java_profiles",
