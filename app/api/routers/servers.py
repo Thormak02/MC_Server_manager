@@ -1,3 +1,5 @@
+from pathlib import Path
+import shutil
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -320,3 +322,66 @@ def update_server_settings_action(
     )
     push_flash(request, "Servereinstellungen gespeichert.", "success")
     return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
+
+@router.post("/servers/{server_id}/delete")
+def delete_server_action(
+    request: Request,
+    server_id: int,
+    confirm_name: Annotated[str, Form()],
+    confirm_delete: Annotated[str | None, Form()] = None,
+    keep_folder: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+    if current_user.role != UserRole.SUPER_ADMIN.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+
+    if confirm_name.strip() != server.name:
+        push_flash(request, "Servername stimmt nicht ueberein.", "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
+    if not _to_bool(confirm_delete):
+        push_flash(request, "Bitte die Bestaetigung aktivieren.", "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
+    if can_control_server(db, current_user, server):
+        stop_server(db, server, current_user.id, force=False)
+
+    delete_folder = not _to_bool(keep_folder)
+    if delete_folder:
+        base_path = Path(server.base_path).expanduser().resolve()
+        if base_path.exists():
+            if not base_path.is_dir():
+                push_flash(request, "Serverpfad ist kein Ordner. Abbruch.", "error")
+                return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+            if base_path.parent == base_path:
+                push_flash(request, "Serverpfad ist ungueltig. Abbruch.", "error")
+                return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+            try:
+                shutil.rmtree(base_path)
+            except Exception as exc:
+                push_flash(request, f"Ordner konnte nicht geloescht werden: {exc}", "error")
+                return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="server.delete",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"path={server.base_path} delete_folder={delete_folder}",
+    )
+    db.delete(server)
+    db.commit()
+
+    if delete_folder:
+        push_flash(request, "Server und Ordner wurden geloescht.", "success")
+    else:
+        push_flash(request, "Server wurde geloescht. Ordner wurde behalten.", "success")
+    return RedirectResponse(url="/dashboard", status_code=303)

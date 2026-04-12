@@ -112,4 +112,32 @@
     </form>
 </section>
 {% endif %}
+
+{% if current_user.role == "super_admin" %}
+<section class="card">
+    <h2>Server loeschen</h2>
+    <p class="muted">Diese Aktion loescht den Servereintrag. Standardmaessig wird der Ordner mit geloescht.</p>
+    <form method="post" action="/servers/{{ server.id }}/delete" class="grid grid-3">
+        <div>
+            <label for="confirm_name">Servername bestaetigen</label>
+            <input id="confirm_name" name="confirm_name" type="text" placeholder="{{ server.name }}" required>
+        </div>
+        <div>
+            <label class="stack">
+                <span>Ordner behalten</span>
+                <input id="keep_folder" name="keep_folder" type="checkbox" value="true">
+            </label>
+        </div>
+        <div class="align-end">
+            <label class="stack">
+                <span>Ich bestaetige das Loeschen</span>
+                <input id="confirm_delete" name="confirm_delete" type="checkbox" value="true" required>
+            </label>
+        </div>
+        <div class="align-end">
+            <button type="submit" class="danger">Server loeschen</button>
+        </div>
+    </form>
+</section>
+{% endif %}
 {% endblock %}
