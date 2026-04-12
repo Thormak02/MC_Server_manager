@@ -298,6 +298,24 @@ button.ghost,
     align-items: center;
 }
 
+.server-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.server-nav .button-like {
+    border-radius: 999px;
+    padding: 0.45rem 0.85rem;
+}
+
+.server-nav .button-like.active {
+    border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+    color: var(--accent-strong);
+    box-shadow: 0 6px 16px rgba(15, 127, 112, 0.15);
+}
+
 .muted {
     color: var(--muted);
 }

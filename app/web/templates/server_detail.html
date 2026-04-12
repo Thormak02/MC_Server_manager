@@ -2,17 +2,7 @@
 {% block content %}
 <h1>Server: {{ server.name }}</h1>
 
-<section class="card">
-    <div class="inline-form">
-        <a class="button-like" href="/servers/{{ server.id }}/console">Konsole</a>
-        <a class="button-like" href="/servers/{{ server.id }}/logs">Logs</a>
-        <a class="button-like" href="/servers/{{ server.id }}/schedules">Scheduling</a>
-        <a class="button-like" href="/servers/{{ server.id }}/content">Mods & Inhalte</a>
-        {% if can_edit_files %}
-        <a class="button-like" href="/servers/{{ server.id }}/files">Dateien</a>
-        {% endif %}
-    </div>
-</section>
+{% include "server_nav.html" %}
 
 <section class="card">
     <div class="grid grid-3">
