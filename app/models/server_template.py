@@ -1,4 +1,6 @@
-﻿from datetime import datetime
+﻿from __future__ import annotations
+
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
@@ -34,4 +36,4 @@ class ServerTemplate(Base):
         server_default=func.now(),
     )
 
-    java_profile: Mapped["JavaProfile" | None] = relationship("JavaProfile")
+    java_profile: Mapped["JavaProfile | None"] = relationship("JavaProfile")
