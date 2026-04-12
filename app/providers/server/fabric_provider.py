@@ -4,7 +4,7 @@ from app.providers.base.server_provider_base import ServerProviderBase
 from app.providers.server.common import (
     download_file,
     fetch_json,
-    is_version_at_least,
+    list_release_versions,
     offline_mode_enabled,
     write_placeholder_jar,
 )
@@ -18,26 +18,37 @@ class FabricProvider(ServerProviderBase):
 
     def list_versions(self) -> list[VersionInfo]:
         try:
-            data = fetch_json(f"{self._meta_base}/game")
-            versions = []
-            for item in data:
-                version_id = item.get("version")
-                if not version_id:
-                    continue
-                if not is_version_at_least(str(version_id), "1.7.10"):
-                    break
-                versions.append(
-                    VersionInfo(
-                        id=str(version_id),
-                        label=str(version_id),
-                        stable=bool(item.get("stable", True)),
-                    )
-                )
+            versions = [
+                VersionInfo(id=item, label=item, stable=True)
+                for item in list_release_versions(minimum="1.7.10")
+            ]
             if versions:
                 return versions
         except Exception:
             pass
         return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version, stable=True)]
+
+    def list_loader_versions(self, mc_version: str) -> list[VersionInfo]:
+        try:
+            data = fetch_json(f"{self._meta_base}/loader/{mc_version}")
+            versions: list[VersionInfo] = []
+            seen: set[str] = set()
+            for item in data:
+                loader = item.get("loader") or {}
+                version_id = str(loader.get("version") or "")
+                if not version_id or version_id in seen:
+                    continue
+                seen.add(version_id)
+                versions.append(
+                    VersionInfo(
+                        id=version_id,
+                        label=version_id,
+                        stable=bool(loader.get("stable", True)),
+                    )
+                )
+            return versions
+        except Exception:
+            return []
 
     def _latest_loader(self) -> str:
         loaders = fetch_json(f"{self._meta_base}/loader")

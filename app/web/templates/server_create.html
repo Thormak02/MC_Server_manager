@@ -45,9 +45,9 @@
                 {% endfor %}
             </select>
         </div>
-        <div>
+        <div id="loader_version_wrap" style="display: none;">
             <label for="loader_version">Loader/Build (optional)</label>
-            <input id="loader_version" name="loader_version" type="text">
+            <select id="loader_version" name="loader_version"></select>
         </div>
         <div>
             <label for="target_path">Zielordner</label>
@@ -89,7 +89,8 @@
     const typeSelect = document.getElementById("server_type");
     const versionSelect = document.getElementById("mc_version");
     const templateSelect = document.getElementById("template_id");
-    const loaderInput = document.getElementById("loader_version");
+    const loaderWrap = document.getElementById("loader_version_wrap");
+    const loaderSelect = document.getElementById("loader_version");
     const javaProfileSelect = document.getElementById("java_profile_id");
     const memoryMin = document.getElementById("memory_min_mb");
     const memoryMax = document.getElementById("memory_max_mb");
@@ -120,9 +121,78 @@
         }
     }
 
-    typeSelect.addEventListener("change", reloadVersions);
+    function setLoaderVisible(visible) {
+        if (!loaderWrap || !loaderSelect) return;
+        loaderWrap.style.display = visible ? "block" : "none";
+        if (!visible) {
+            loaderSelect.innerHTML = "";
+        }
+    }
 
-    function applyTemplate() {
+    async function reloadLoaderVersions(selected) {
+        if (!loaderSelect || !loaderWrap) return;
+        const serverType = typeSelect.value;
+        const mcVersion = versionSelect.value;
+        if (!serverType || !mcVersion) {
+            setLoaderVisible(false);
+            return;
+        }
+        const url =
+            "/servers/create/loader-versions?server_type=" +
+            encodeURIComponent(serverType) +
+            "&mc_version=" +
+            encodeURIComponent(mcVersion);
+        try {
+            const response = await fetch(url, { credentials: "same-origin" });
+            if (!response.ok) {
+                setLoaderVisible(false);
+                return;
+            }
+            const payload = await response.json();
+            const versions = Array.isArray(payload.versions) ? payload.versions : [];
+            if (!versions.length) {
+                setLoaderVisible(false);
+                return;
+            }
+            setLoaderVisible(true);
+            loaderSelect.innerHTML = "";
+            const empty = document.createElement("option");
+            empty.value = "";
+            empty.textContent = "-";
+            loaderSelect.appendChild(empty);
+
+            let hasSelected = false;
+            for (const version of versions) {
+                const option = document.createElement("option");
+                option.value = version.id;
+                option.textContent = version.label || version.id;
+                if (selected && selected === version.id) {
+                    option.selected = true;
+                    hasSelected = true;
+                }
+                loaderSelect.appendChild(option);
+            }
+            if (selected && !hasSelected) {
+                const option = document.createElement("option");
+                option.value = selected;
+                option.textContent = selected + " (custom)";
+                option.selected = true;
+                loaderSelect.appendChild(option);
+            }
+        } catch (_) {
+            setLoaderVisible(false);
+        }
+    }
+
+    typeSelect.addEventListener("change", async function () {
+        await reloadVersions();
+        await reloadLoaderVersions();
+    });
+    versionSelect.addEventListener("change", function () {
+        reloadLoaderVersions();
+    });
+
+    async function applyTemplate() {
         if (!templateSelect) return;
         const option = templateSelect.options[templateSelect.selectedIndex];
         if (!option || !option.value) return;
@@ -138,11 +208,14 @@
 
         if (serverType) {
             typeSelect.value = serverType;
-            reloadVersions(mcVersion);
+            await reloadVersions(mcVersion);
+        } else if (mcVersion) {
+            await reloadVersions(mcVersion);
         }
-        if (loaderInput) {
-            loaderInput.value = loaderVersion;
+        if (mcVersion && versionSelect) {
+            versionSelect.value = mcVersion;
         }
+        await reloadLoaderVersions(loaderVersion);
         if (javaProfileSelect) {
             javaProfileSelect.value = javaProfileId;
         }
@@ -166,6 +239,8 @@
             applyTemplate();
         }
     }
+
+    reloadLoaderVersions();
 })();
 </script>
 {% endblock %}

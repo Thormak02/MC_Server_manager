@@ -1,9 +1,12 @@
 from pathlib import Path
 
 from app.providers.base.server_provider_base import ServerProviderBase
+from xml.etree import ElementTree
+
 from app.providers.server.common import (
     download_file,
     fetch_json,
+    fetch_text,
     list_release_versions,
     offline_mode_enabled,
     write_placeholder_jar,
@@ -16,24 +19,24 @@ class ForgeProvider(ServerProviderBase):
     default_mc_version = "1.20.1"
     _promotions_url = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json"
     _maven_base = "https://maven.minecraftforge.net/net/minecraftforge/forge"
+    _maven_metadata = "https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml"
 
     def list_versions(self) -> list[VersionInfo]:
         try:
             data = fetch_json(self._promotions_url)
             promos = data.get("promos", {})
-            versions: list[VersionInfo] = []
-            seen: set[str] = set()
+            supported: set[str] = set()
             for key in promos:
-                if not key.endswith("-latest"):
-                    continue
-                mc_version = key.replace("-latest", "")
-                if mc_version in seen:
-                    continue
-                seen.add(mc_version)
-                versions.append(VersionInfo(id=mc_version, label=mc_version, stable=True))
-            versions.sort(key=lambda item: item.id, reverse=True)
-            if versions:
-                return versions
+                if key.endswith("-latest"):
+                    supported.add(key.replace("-latest", ""))
+
+            ordered_versions = [
+                VersionInfo(id=item, label=item, stable=True)
+                for item in list_release_versions(minimum="1.7.10")
+                if item in supported
+            ]
+            if ordered_versions:
+                return ordered_versions
         except Exception:
             pass
         try:
@@ -43,6 +46,38 @@ class ForgeProvider(ServerProviderBase):
         except Exception:
             pass
         return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version, stable=True)]
+
+    def list_loader_versions(self, mc_version: str) -> list[VersionInfo]:
+        try:
+            raw = fetch_text(self._maven_metadata)
+            root = ElementTree.fromstring(raw)
+            versions: list[str] = []
+            for elem in root.findall(".//version"):
+                value = (elem.text or "").strip()
+                if not value.startswith(f"{mc_version}-"):
+                    continue
+                loader_version = value.replace(f"{mc_version}-", "", 1)
+                if loader_version and loader_version not in versions:
+                    versions.append(loader_version)
+            if not versions:
+                return []
+
+            def parse_loader(value: str) -> tuple[int, ...]:
+                parts: list[int] = []
+                for part in value.replace("-", ".").split("."):
+                    try:
+                        parts.append(int(part))
+                    except Exception:
+                        parts.append(0)
+                return tuple(parts)
+
+            versions.sort(key=parse_loader, reverse=True)
+            return [
+                VersionInfo(id=version, label=version, stable=True)
+                for version in versions
+            ]
+        except Exception:
+            return []
 
     def _resolve_loader_version(self, mc_version: str, requested: str | None) -> str:
         if requested:

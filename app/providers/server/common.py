@@ -16,6 +16,12 @@ def fetch_json(url: str, timeout_seconds: float = 20.0) -> dict | list:
     return json.loads(payload)
 
 
+def fetch_text(url: str, timeout_seconds: float = 20.0) -> str:
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        return response.read().decode("utf-8")
+
+
 def _parse_version_tuple(version: str) -> tuple[int, ...]:
     parts: list[int] = []
     for item in version.split("."):

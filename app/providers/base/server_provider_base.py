@@ -12,6 +12,9 @@ class ServerProviderBase(ABC):
     def list_versions(self) -> list[VersionInfo]:
         raise NotImplementedError
 
+    def list_loader_versions(self, mc_version: str) -> list[VersionInfo]:
+        return []
+
     @abstractmethod
     def provision(self, request: ProvisionServerRequest, target_dir: Path) -> ProvisionResult:
         raise NotImplementedError

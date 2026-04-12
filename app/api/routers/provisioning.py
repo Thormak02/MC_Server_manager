@@ -81,6 +81,20 @@ def list_versions_endpoint(
     return JSONResponse({"versions": [version.model_dump() for version in versions]})
 
 
+@router.get("/servers/create/loader-versions")
+def list_loader_versions_endpoint(
+    request: Request,
+    server_type: str,
+    mc_version: str,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    versions = provisioning_service.list_loader_versions(server_type, mc_version)
+    return JSONResponse({"versions": [version.model_dump() for version in versions]})
+
+
 @router.post("/servers/create")
 def create_server_action(
     request: Request,

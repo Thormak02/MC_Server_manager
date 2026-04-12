@@ -30,6 +30,10 @@ class ProvisioningService:
         provider = self.get_provider(server_type)
         return provider.list_versions()
 
+    def list_loader_versions(self, server_type: str, mc_version: str) -> list[VersionInfo]:
+        provider = self.get_provider(server_type)
+        return provider.list_loader_versions(mc_version)
+
     def get_provider(self, server_type: str) -> ServerProviderBase:
         normalized = (server_type or "").strip().lower()
         provider = self.providers.get(normalized)
