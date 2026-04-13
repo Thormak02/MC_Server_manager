@@ -428,6 +428,14 @@ def get_player_counts(server: Server) -> tuple[int | None, int | None]:
     return 0, _read_max_players_from_server_properties(server.base_path)
 
 
+def get_online_player_names(server_id: int) -> list[str]:
+    with _PROCESS_LOCK:
+        runtime = _PROCESS_REGISTRY.get(server_id)
+        if runtime and runtime.process.poll() is None:
+            return sorted(runtime.players, key=lambda name: name.lower())
+    return []
+
+
 def get_process_resource_usage(server_id: int) -> dict[str, float | int | None]:
     with _PROCESS_LOCK:
         managed = _PROCESS_REGISTRY.get(server_id)

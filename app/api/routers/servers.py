@@ -17,6 +17,8 @@ from app.services import audit_service, backup_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.java_profile_service import list_java_profiles
 from app.services.process_service import (
+    get_online_player_names,
+    get_player_counts,
     queue_restart,
     refresh_runtime_states,
     start_server,
@@ -194,6 +196,8 @@ def server_detail_page(
 
     refresh_runtime_states(db, [server])
     db.refresh(server)
+    players_current, players_max = get_player_counts(server)
+    online_players = get_online_player_names(server.id)
 
     return templates.TemplateResponse(
         request,
@@ -206,7 +210,41 @@ def server_detail_page(
             can_control=can_control_server(db, current_user, server),
             can_edit_files=can_edit_server_files(db, current_user, server),
             java_profiles=list_java_profiles(db),
+            players_current=players_current,
+            players_max=players_max,
+            online_players=online_players,
         ),
+    )
+
+
+@router.get("/api/servers/{server_id}/players", response_class=JSONResponse)
+def server_players_live(
+    request: Request,
+    server_id: int,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_view_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    refresh_runtime_states(db, [server])
+    db.refresh(server)
+    players_current, players_max = get_player_counts(server)
+    online_players = get_online_player_names(server.id)
+    return JSONResponse(
+        {
+            "server_id": server.id,
+            "status": server.status,
+            "players_current": players_current if players_current is not None else 0,
+            "players_max": players_max,
+            "online_players": online_players,
+        }
     )
 
 

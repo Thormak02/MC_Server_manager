@@ -8,7 +8,7 @@
     <div class="grid grid-3">
         <div>
             <strong>Status</strong>
-            <p>{{ server.status }}</p>
+            <p id="server-status-value">{{ server.status }}</p>
         </div>
         <div>
             <strong>Servertyp</strong>
@@ -33,6 +33,23 @@
         <div>
             <strong>Port</strong>
             <p>{{ server.port or "-" }}</p>
+        </div>
+        <div>
+            <strong>Spieler aktiv</strong>
+            <p id="server-players-count">
+                {{ players_current if players_current is not none else 0 }}/{{ players_max if players_max is not none else "?" }}
+            </p>
+        </div>
+        <div style="grid-column: span 2;">
+            <strong>Online Spieler</strong>
+            <p id="server-players-empty" class="muted" {% if online_players %}style="display:none;"{% endif %}>
+                Keine Spieler online.
+            </p>
+            <div id="server-players-list" class="server-player-list">
+                {% for player_name in online_players %}
+                <span class="server-player-chip">{{ player_name }}</span>
+                {% endfor %}
+            </div>
         </div>
     </div>
 </section>
@@ -293,4 +310,66 @@
 })();
 </script>
 {% endif %}
+<script>
+(function () {
+    const playerCountEl = document.getElementById("server-players-count");
+    const playerListEl = document.getElementById("server-players-list");
+    const playerEmptyEl = document.getElementById("server-players-empty");
+    const statusEl = document.getElementById("server-status-value");
+    if (!playerCountEl || !playerListEl || !playerEmptyEl) return;
+
+    const endpoint = "/api/servers/{{ server.id }}/players";
+    const intervalMs = 5000;
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function renderPlayers(names) {
+        if (!Array.isArray(names) || names.length === 0) {
+            playerListEl.innerHTML = "";
+            playerEmptyEl.style.display = "block";
+            return;
+        }
+        playerEmptyEl.style.display = "none";
+        playerListEl.innerHTML = names
+            .map((name) => `<span class="server-player-chip">${escapeHtml(name)}</span>`)
+            .join("");
+    }
+
+    function updateFromPayload(payload) {
+        const current = payload.players_current ?? 0;
+        const max = payload.players_max ?? "?";
+        playerCountEl.textContent = `${current}/${max}`;
+        renderPlayers(payload.online_players || []);
+        if (statusEl && payload.status) {
+            statusEl.textContent = payload.status;
+        }
+    }
+
+    async function refresh() {
+        try {
+            const response = await fetch(endpoint, {
+                headers: { Accept: "application/json" },
+                cache: "no-store",
+                credentials: "same-origin",
+            });
+            if (!response.ok) return;
+            const payload = await response.json();
+            updateFromPayload(payload);
+        } catch (_) {}
+    }
+
+    refresh();
+    const intervalId = window.setInterval(refresh, intervalMs);
+    window.addEventListener("beforeunload", function () {
+        window.clearInterval(intervalId);
+    });
+})();
+</script>
 {% endblock %}
