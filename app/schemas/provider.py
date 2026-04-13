@@ -18,6 +18,7 @@ class VersionInfo(BaseModel):
     id: str
     label: str
     stable: bool = True
+    channel: str = "release"
 
 
 class ProvisionResult(BaseModel):

@@ -4,8 +4,10 @@ from app.providers.base.server_provider_base import ServerProviderBase
 from app.providers.server.common import (
     download_file,
     fetch_json,
-    list_release_versions,
+    list_minecraft_versions,
+    normalize_version_channel,
     offline_mode_enabled,
+    version_channel_from_manifest_type,
     write_placeholder_jar,
 )
 from app.schemas.provider import ProvisionResult, ProvisionServerRequest, VersionInfo
@@ -16,17 +18,30 @@ class VanillaProvider(ServerProviderBase):
     default_mc_version = "1.20.6"
     _manifest_url = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 
-    def list_versions(self) -> list[VersionInfo]:
+    def list_versions(self, channel: str = "release") -> list[VersionInfo]:
+        normalized_channel = normalize_version_channel(channel, default="release")
         try:
             versions = [
-                VersionInfo(id=item, label=item, stable=True)
-                for item in list_release_versions(minimum="1.7.10")
+                VersionInfo(
+                    id=item,
+                    label=item,
+                    stable=normalized_channel == "release",
+                    channel=normalized_channel if normalized_channel != "all" else "release",
+                )
+                for item in list_minecraft_versions(minimum="1.7.10", channel=normalized_channel)
             ]
             if versions:
                 return versions
         except Exception:
             pass
-        return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version)]
+        fallback_channel = version_channel_from_manifest_type("release")
+        return [
+            VersionInfo(
+                id=self.default_mc_version,
+                label=self.default_mc_version,
+                channel=fallback_channel,
+            )
+        ]
 
     def _resolve_server_jar_url(self, mc_version: str) -> str:
         data = fetch_json(self._manifest_url)

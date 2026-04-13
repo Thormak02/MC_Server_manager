@@ -57,6 +57,104 @@ def _build_creation_flags() -> int:
     return flags
 
 
+def _terminate_process_tree(
+    process: subprocess.Popen[str],
+    *,
+    timeout_seconds: float = 5.0,
+    force: bool = False,
+) -> None:
+    if process.poll() is not None:
+        return
+
+    if psutil is not None:
+        try:
+            root = psutil.Process(process.pid)
+            children = root.children(recursive=True)
+            if force:
+                for child in children:
+                    try:
+                        child.kill()
+                    except Exception:
+                        pass
+                try:
+                    root.kill()
+                except Exception:
+                    pass
+            else:
+                for child in children:
+                    try:
+                        child.terminate()
+                    except Exception:
+                        pass
+                try:
+                    root.terminate()
+                except Exception:
+                    pass
+
+            wait_targets = [*children, root]
+            _, alive = psutil.wait_procs(wait_targets, timeout=timeout_seconds)
+            if alive:
+                for proc in alive:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                psutil.wait_procs(alive, timeout=2.0)
+            return
+        except Exception:
+            pass
+
+    taskkill_cmd = ["taskkill", "/PID", str(process.pid), "/T"]
+    if force:
+        taskkill_cmd.append("/F")
+    try:
+        subprocess.run(
+            taskkill_cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            creationflags=_build_creation_flags(),
+            timeout=max(1.0, timeout_seconds + 1.0),
+        )
+    except Exception:
+        pass
+
+
+def _cmd_quote(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def _normalize_windows_path(value: str) -> str:
+    return value.replace("/", "\\")
+
+
+def _is_unc_path(path: Path | str) -> bool:
+    return _normalize_windows_path(str(path)).startswith("\\\\")
+
+
+def _escape_cmd_token(value: str) -> str:
+    escaped: list[str] = []
+    for ch in value:
+        if ch in {" ", "^", "&", "|", "<", ">", "(", ")"}:
+            escaped.append("^" + ch)
+        else:
+            escaped.append(ch)
+    return "".join(escaped)
+
+
+def _ensure_nogui(command: str) -> str:
+    if re.search(r"(?<!\S)nogui(?!\S)", command, flags=re.IGNORECASE):
+        return command
+    return f"{command.strip()} nogui".strip()
+
+
+def _resolve_start_bat_path(server: Server, base_path: Path) -> Path:
+    start_bat_path = Path(server.start_bat_path or str(base_path / "start.bat")).expanduser()
+    if not start_bat_path.is_absolute():
+        start_bat_path = base_path / start_bat_path
+    return start_bat_path.resolve()
+
+
 def _read_max_players_from_server_properties(base_path: str) -> int | None:
     properties = Path(base_path).expanduser().resolve() / "server.properties"
     if not properties.exists() or not properties.is_file():
@@ -74,17 +172,92 @@ def _read_max_players_from_server_properties(base_path: str) -> int | None:
     return None
 
 
-def _command_for_server(server: Server) -> list[str]:
+def _command_for_server(server: Server, base_path: Path) -> list[str]:
+    base_path_value = _normalize_windows_path(str(base_path))
+    use_pushd = _is_unc_path(base_path)
+    pushd_prefix = ""
+    if use_pushd:
+        pushd_prefix = f"pushd {_escape_cmd_token(base_path_value)} && "
+
     if server.start_mode == "command":
         if not server.start_command:
             raise ValueError("Startbefehl fehlt.")
-        return ["cmd", "/c", server.start_command]
+        command = _ensure_nogui(server.start_command.strip())
+        return ["cmd", "/d", "/c", pushd_prefix + command]
 
     if server.start_mode == "bat":
-        start_bat_path = server.start_bat_path or str(Path(server.base_path) / "start.bat")
-        return ["cmd", "/c", str(Path(start_bat_path))]
+        start_bat_path = _resolve_start_bat_path(server, base_path)
+        if not start_bat_path.exists():
+            raise ValueError(f"Startdatei nicht gefunden: {start_bat_path}")
+
+        try:
+            bat_target = _normalize_windows_path(str(start_bat_path.relative_to(base_path)))
+        except ValueError:
+            bat_target = _normalize_windows_path(str(start_bat_path))
+
+        bat_cmd = _escape_cmd_token(bat_target)
+        bat_cmd = _ensure_nogui(bat_cmd)
+        return ["cmd", "/d", "/c", pushd_prefix + bat_cmd]
 
     raise ValueError(f"Unbekannter Startmodus: {server.start_mode}")
+
+
+def _append_subprocess_output(server_id: int, text: str) -> None:
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line:
+            console_service.append_output(server_id, f"[forge-install] {line}")
+
+
+def _prepare_forge_runtime_if_needed(server: Server, base_path: Path) -> tuple[bool, str]:
+    if server.server_type != "forge" or server.start_mode != "bat":
+        return True, ""
+
+    start_bat_path = _resolve_start_bat_path(server, base_path)
+    if start_bat_path.exists():
+        return True, ""
+
+    install_script = (base_path / "install_forge.bat").resolve()
+    if not install_script.exists():
+        return False, f"Startdatei nicht gefunden: {start_bat_path}"
+
+    console_service.append_output(server.id, "Forge Installation wird vorbereitet ...")
+    use_pushd = _is_unc_path(base_path)
+    if use_pushd:
+        install_step = f"pushd {_escape_cmd_token(_normalize_windows_path(str(base_path)))} && call install_forge.bat"
+    else:
+        install_step = "call install_forge.bat"
+
+    install_command = [
+        "cmd",
+        "/d",
+        "/c",
+        install_step,
+    ]
+    try:
+        completed = subprocess.run(
+            install_command,
+            cwd=None if use_pushd else str(base_path),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+            creationflags=_build_creation_flags(),
+        )
+    except Exception as exc:
+        return False, f"Forge Installation fehlgeschlagen: {exc}"
+
+    _append_subprocess_output(server.id, completed.stdout or "")
+    if completed.returncode != 0:
+        return False, f"Forge Installation fehlgeschlagen (Exit-Code {completed.returncode})."
+
+    if not start_bat_path.exists():
+        return False, f"Forge Installation abgeschlossen, aber Startdatei fehlt weiterhin: {start_bat_path}"
+
+    console_service.append_output(server.id, "Forge Installation abgeschlossen.")
+    return True, ""
 
 
 def _server_log_dir(server_id: int) -> Path:
@@ -292,13 +465,22 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
     if not base_path.exists() or not base_path.is_dir():
         return False, "Serverordner existiert nicht."
 
+    prepared, prepare_message = _prepare_forge_runtime_if_needed(server, base_path)
+    if not prepared:
+        server.status = "error"
+        db.add(server)
+        db.commit()
+        return False, prepare_message
+
     try:
-        command = _command_for_server(server)
+        command = _command_for_server(server, base_path)
     except ValueError as exc:
         server.status = "error"
         db.add(server)
         db.commit()
         return False, str(exc)
+
+    use_pushd = _is_unc_path(base_path)
 
     server.status = "starting"
     db.add(server)
@@ -308,7 +490,7 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
     try:
         process = subprocess.Popen(
             command,
-            cwd=str(base_path),
+            cwd=None if use_pushd else str(base_path),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -578,11 +760,14 @@ def stop_server(
             pass
 
     if process.poll() is None:
+        _terminate_process_tree(process, timeout_seconds=5.0, force=False)
+    if process.poll() is None:
+        _terminate_process_tree(process, timeout_seconds=5.0, force=True)
+    if process.poll() is None:
         try:
-            process.terminate()
-            process.wait(timeout=5.0)
-        except Exception:
             process.kill()
+        except Exception:
+            pass
 
     _cleanup_process_registry(server.id)
     server.status = "restarting" if for_restart else "stopped"
@@ -606,6 +791,41 @@ def restart_server(db: Session, server: Server, initiated_by_user_id: int | None
     db.commit()
     stop_server(db, server, initiated_by_user_id, force=False, for_restart=True)
     return start_server(db, server, initiated_by_user_id)
+
+
+def shutdown_all_managed_processes(*, graceful_timeout_seconds: float = 3.0) -> None:
+    with _PROCESS_LOCK:
+        server_ids = list(_PROCESS_REGISTRY.keys())
+    if not server_ids:
+        return
+
+    for server_id in server_ids:
+        with SessionLocal() as db:
+            server = db.get(Server, server_id)
+            if server is None:
+                _cleanup_process_registry(server_id)
+                continue
+            try:
+                stop_server(
+                    db,
+                    server,
+                    initiated_by_user_id=None,
+                    force=False,
+                    graceful_timeout_seconds=graceful_timeout_seconds,
+                    for_restart=False,
+                )
+            except Exception:
+                try:
+                    stop_server(
+                        db,
+                        server,
+                        initiated_by_user_id=None,
+                        force=True,
+                        graceful_timeout_seconds=0.0,
+                        for_restart=False,
+                    )
+                except Exception:
+                    _cleanup_process_registry(server_id)
 
 
 def get_log_directory_for_server(server_id: int) -> Path:

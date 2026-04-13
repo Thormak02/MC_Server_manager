@@ -1,4 +1,5 @@
-﻿import json
+import json
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -15,12 +16,23 @@ from app.services import audit_service
 MODRINTH_BASE = "https://api.modrinth.com/v2"
 CURSEFORGE_BASE = "https://api.curseforge.com"
 MC_GAME_ID = 432
+_VALID_RELEASE_CHANNELS = {"all", "release", "beta", "alpha"}
 
 
-def _request_json(url: str, headers: dict[str, str] | None = None) -> dict:
+def _request_json(url: str, headers: dict[str, str] | None = None) -> dict | list:
     req = urllib.request.Request(url, headers=headers or {})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        message = f"HTTP {exc.code}: {exc.reason}"
+        try:
+            body = exc.read().decode("utf-8")
+            if body:
+                message = f"{message} - {body}"
+        except Exception:
+            pass
+        raise ValueError(message) from exc
 
 
 def _download_file(url: str, target: Path, headers: dict[str, str] | None = None) -> None:
@@ -37,9 +49,10 @@ def _modrinth_headers() -> dict[str, str]:
 
 def _curseforge_headers() -> dict[str, str]:
     settings = get_settings()
-    if not settings.curseforge_api_key:
-        raise ValueError("CurseForge API Key fehlt (MCSM_CURSEFORGE_API_KEY).")
-    return {"x-api-key": settings.curseforge_api_key}
+    api_key = (settings.curseforge_api_key or "").strip()
+    if not api_key or api_key.upper() in {"CHANGE_ME", "CHANGEME", "YOUR_KEY", "REPLACE_ME"}:
+        raise ValueError("CurseForge API Key fehlt oder ist Platzhalter (MCSM_CURSEFORGE_API_KEY).")
+    return {"x-api-key": api_key}
 
 
 def _target_dir(server: Server, content_type: str) -> Path:
@@ -55,7 +68,136 @@ def _default_content_type(server: Server) -> str:
     return "mod"
 
 
-def search_modrinth(query: str, mc_version: str | None, loader: str | None, content_type: str) -> list[dict]:
+def _normalize_release_channel(value: str | None) -> str:
+    normalized = (value or "all").strip().lower()
+    if normalized not in _VALID_RELEASE_CHANNELS:
+        return "all"
+    return normalized
+
+
+def _matches_release_channel(candidate: str | None, requested: str) -> bool:
+    if requested == "all":
+        return True
+    return (candidate or "release").strip().lower() == requested
+
+
+def _curseforge_release_channel(release_type: int | None) -> str:
+    mapping = {
+        1: "release",
+        2: "beta",
+        3: "alpha",
+    }
+    return mapping.get(int(release_type or 1), "release")
+
+
+def _safe_file_name(file_name: str) -> str:
+    sanitized = Path(file_name).name.strip()
+    if not sanitized:
+        raise ValueError("Ungueltiger Dateiname.")
+    return sanitized
+
+
+def _content_file_path(server: Server, content_type: str, file_name: str) -> Path:
+    return _target_dir(server, content_type) / _safe_file_name(file_name)
+
+
+def _delete_content_file(server: Server, content_type: str, file_name: str) -> None:
+    target = _content_file_path(server, content_type, file_name)
+    if not target.exists():
+        return
+    try:
+        target.unlink()
+    except OSError as exc:
+        reason = str(exc)
+        raise ValueError(
+            f"Datei konnte nicht geloescht werden: {target} ({reason}). "
+            "Bitte Server stoppen und erneut versuchen."
+        ) from exc
+
+
+def _remove_existing_project_entries(
+    db: Session,
+    server: Server,
+    *,
+    provider_name: str,
+    project_id: str,
+    content_type: str,
+) -> list[int]:
+    stmt = (
+        select(InstalledContent)
+        .where(InstalledContent.server_id == server.id)
+        .where(InstalledContent.provider_name == provider_name)
+        .where(InstalledContent.external_project_id == project_id)
+        .where(InstalledContent.content_type == content_type)
+    )
+    existing = list(db.scalars(stmt))
+    if not existing:
+        return []
+
+    removed_ids: list[int] = []
+    for entry in existing:
+        _delete_content_file(server, entry.content_type, entry.file_name)
+        removed_ids.append(entry.id)
+        db.delete(entry)
+    return removed_ids
+
+
+def _modrinth_project_has_channel_match(
+    project_id: str,
+    mc_version: str | None,
+    loader: str | None,
+    release_channel: str,
+) -> bool:
+    params: dict[str, str] = {}
+    if mc_version:
+        params["game_versions"] = json.dumps([mc_version])
+    if loader:
+        params["loaders"] = json.dumps([loader])
+    query = urllib.parse.urlencode(params)
+    url = f"{MODRINTH_BASE}/project/{project_id}/version"
+    if query:
+        url = f"{url}?{query}"
+    payload = _request_json(url, headers=_modrinth_headers())
+    if not isinstance(payload, list):
+        return False
+    for item in payload:
+        version_type = str(item.get("version_type") or "release").lower()
+        if _matches_release_channel(version_type, release_channel):
+            return True
+    return False
+
+
+def _curseforge_project_has_channel_match(
+    mod_id: int,
+    mc_version: str | None,
+    loader: str | None,
+    content_type: str,
+    release_channel: str,
+) -> bool:
+    params: dict[str, str] = {"pageSize": "30"}
+    if mc_version:
+        params["gameVersion"] = mc_version
+    loader_type = _curseforge_loader_type(loader, content_type)
+    if loader_type is not None:
+        params["modLoaderType"] = str(loader_type)
+    url = f"{CURSEFORGE_BASE}/v1/mods/{mod_id}/files?{urllib.parse.urlencode(params)}"
+    payload = _request_json(url, headers=_curseforge_headers())
+    files = payload.get("data", []) if isinstance(payload, dict) else []
+    for item in files:
+        channel = _curseforge_release_channel(item.get("releaseType"))
+        if _matches_release_channel(channel, release_channel):
+            return True
+    return False
+
+
+def search_modrinth(
+    query: str,
+    mc_version: str | None,
+    loader: str | None,
+    content_type: str,
+    release_channel: str = "all",
+) -> list[dict]:
+    release_channel = _normalize_release_channel(release_channel)
     facets: list[list[str]] = [[f"project_type:{content_type}"]]
     if mc_version:
         facets.append([f"versions:{mc_version}"])
@@ -69,10 +211,25 @@ def search_modrinth(query: str, mc_version: str | None, loader: str | None, cont
     url = f"{MODRINTH_BASE}/search?{urllib.parse.urlencode(params)}"
     payload = _request_json(url, headers=_modrinth_headers())
     results: list[dict] = []
-    for item in payload.get("hits", []):
+    hits = payload.get("hits", []) if isinstance(payload, dict) else []
+    for item in hits:
+        project_id = str(item.get("project_id") or "")
+        if not project_id:
+            continue
+        if release_channel != "all":
+            try:
+                if not _modrinth_project_has_channel_match(
+                    project_id,
+                    mc_version,
+                    loader,
+                    release_channel,
+                ):
+                    continue
+            except Exception:
+                continue
         results.append(
             {
-                "id": item.get("project_id"),
+                "id": project_id,
                 "title": item.get("title"),
                 "description": item.get("description"),
                 "downloads": item.get("downloads"),
@@ -83,7 +240,13 @@ def search_modrinth(query: str, mc_version: str | None, loader: str | None, cont
     return results
 
 
-def list_modrinth_versions(project_id: str, mc_version: str | None, loader: str | None) -> list[dict]:
+def list_modrinth_versions(
+    project_id: str,
+    mc_version: str | None,
+    loader: str | None,
+    release_channel: str = "all",
+) -> list[dict]:
+    release_channel = _normalize_release_channel(release_channel)
     params: dict[str, str] = {}
     if mc_version:
         params["game_versions"] = json.dumps([mc_version])
@@ -95,15 +258,21 @@ def list_modrinth_versions(project_id: str, mc_version: str | None, loader: str 
         url = f"{url}?{query}"
     payload = _request_json(url, headers=_modrinth_headers())
     versions: list[dict] = []
-    for item in payload:
+    items = payload if isinstance(payload, list) else []
+    for item in items:
+        channel = str(item.get("version_type") or "release").lower()
+        if not _matches_release_channel(channel, release_channel):
+            continue
         versions.append(
             {
                 "id": item.get("id"),
                 "name": item.get("name"),
                 "version_number": item.get("version_number"),
                 "date": item.get("date_published"),
+                "release_channel": channel,
             }
         )
+    versions.sort(key=lambda item: str(item.get("date") or ""), reverse=True)
     return versions
 
 
@@ -122,12 +291,23 @@ def install_modrinth(
         raise ValueError("Keine Dateien fuer diese Version gefunden.")
     primary = next((item for item in files if item.get("primary")), files[0])
     file_url = primary.get("url")
-    file_name = primary.get("filename")
+    file_name = _safe_file_name(str(primary.get("filename") or ""))
     if not file_url or not file_name:
         raise ValueError("Download-URL fehlt.")
 
-    target = _target_dir(server, content_type) / file_name
-    _download_file(file_url, target, headers=_modrinth_headers())
+    _remove_existing_project_entries(
+        db,
+        server,
+        provider_name="modrinth",
+        project_id=str(project_id),
+        content_type=content_type,
+    )
+
+    target = _content_file_path(server, content_type, file_name)
+    try:
+        _download_file(file_url, target, headers=_modrinth_headers())
+    except Exception as exc:
+        raise ValueError(f"Download fehlgeschlagen: {exc}") from exc
 
     project = _request_json(f"{MODRINTH_BASE}/project/{project_id}", headers=_modrinth_headers())
 
@@ -168,7 +348,14 @@ def _curseforge_loader_type(loader: str | None, content_type: str) -> int | None
     return None
 
 
-def search_curseforge(query: str, mc_version: str | None, loader: str | None, content_type: str) -> list[dict]:
+def search_curseforge(
+    query: str,
+    mc_version: str | None,
+    loader: str | None,
+    content_type: str,
+    release_channel: str = "all",
+) -> list[dict]:
+    release_channel = _normalize_release_channel(release_channel)
     params: dict[str, str] = {
         "gameId": str(MC_GAME_ID),
         "searchFilter": query,
@@ -186,10 +373,26 @@ def search_curseforge(query: str, mc_version: str | None, loader: str | None, co
     url = f"{CURSEFORGE_BASE}/v1/mods/search?{urllib.parse.urlencode(params)}"
     payload = _request_json(url, headers=_curseforge_headers())
     results: list[dict] = []
-    for item in payload.get("data", []):
+    data = payload.get("data", []) if isinstance(payload, dict) else []
+    for item in data:
+        mod_id = item.get("id")
+        if mod_id is None:
+            continue
+        if release_channel != "all":
+            try:
+                if not _curseforge_project_has_channel_match(
+                    int(mod_id),
+                    mc_version,
+                    loader,
+                    content_type,
+                    release_channel,
+                ):
+                    continue
+            except Exception:
+                continue
         results.append(
             {
-                "id": item.get("id"),
+                "id": mod_id,
                 "title": item.get("name"),
                 "description": item.get("summary"),
                 "downloads": item.get("downloadCount"),
@@ -200,7 +403,14 @@ def search_curseforge(query: str, mc_version: str | None, loader: str | None, co
     return results
 
 
-def list_curseforge_versions(mod_id: int, mc_version: str | None, loader: str | None, content_type: str) -> list[dict]:
+def list_curseforge_versions(
+    mod_id: int,
+    mc_version: str | None,
+    loader: str | None,
+    content_type: str,
+    release_channel: str = "all",
+) -> list[dict]:
+    release_channel = _normalize_release_channel(release_channel)
     params: dict[str, str] = {}
     if mc_version:
         params["gameVersion"] = mc_version
@@ -212,15 +422,21 @@ def list_curseforge_versions(mod_id: int, mc_version: str | None, loader: str | 
         url = f"{url}?{urllib.parse.urlencode(params)}"
     payload = _request_json(url, headers=_curseforge_headers())
     versions: list[dict] = []
-    for item in payload.get("data", []):
+    data = payload.get("data", []) if isinstance(payload, dict) else []
+    for item in data:
+        channel = _curseforge_release_channel(item.get("releaseType"))
+        if not _matches_release_channel(channel, release_channel):
+            continue
         versions.append(
             {
                 "id": item.get("id"),
                 "name": item.get("displayName") or item.get("fileName"),
                 "version_number": item.get("displayName") or item.get("fileName"),
                 "date": item.get("fileDate"),
+                "release_channel": channel,
             }
         )
+    versions.sort(key=lambda item: str(item.get("date") or ""), reverse=True)
     return versions
 
 
@@ -238,7 +454,7 @@ def install_curseforge(
     )
     data = file_payload.get("data", {})
     download_url = data.get("downloadUrl")
-    file_name = data.get("fileName")
+    file_name = _safe_file_name(str(data.get("fileName") or ""))
     if not download_url:
         url_payload = _request_json(
             f"{CURSEFORGE_BASE}/v1/mods/{mod_id}/files/{file_id}/download-url",
@@ -248,8 +464,19 @@ def install_curseforge(
     if not download_url or not file_name:
         raise ValueError("Download-URL fehlt.")
 
-    target = _target_dir(server, content_type) / file_name
-    _download_file(download_url, target, headers=_curseforge_headers())
+    _remove_existing_project_entries(
+        db,
+        server,
+        provider_name="curseforge",
+        project_id=str(mod_id),
+        content_type=content_type,
+    )
+
+    target = _content_file_path(server, content_type, file_name)
+    try:
+        _download_file(download_url, target, headers=_curseforge_headers())
+    except Exception as exc:
+        raise ValueError(f"Download fehlgeschlagen: {exc}") from exc
 
     mod_payload = _request_json(
         f"{CURSEFORGE_BASE}/v1/mods/{mod_id}",
@@ -282,18 +509,30 @@ def install_curseforge(
     return entry
 
 
-def list_installed_content(db: Session, server_id: int) -> list[InstalledContent]:
-    stmt = select(InstalledContent).where(InstalledContent.server_id == server_id)
-    return list(db.scalars(stmt))
+def list_installed_content(db: Session, server: Server) -> list[InstalledContent]:
+    stmt = select(InstalledContent).where(InstalledContent.server_id == server.id)
+    entries = list(db.scalars(stmt))
+    valid_entries: list[InstalledContent] = []
+    removed_any = False
+
+    # Selbstheilung fuer Altbestaende:
+    # Wenn ein Datei-Eintrag nicht mehr physisch existiert, wird der DB-Eintrag entfernt.
+    for entry in entries:
+        file_path = _content_file_path(server, entry.content_type, entry.file_name)
+        if file_path.exists():
+            valid_entries.append(entry)
+            continue
+        db.delete(entry)
+        removed_any = True
+
+    if removed_any:
+        db.commit()
+
+    return valid_entries
 
 
 def delete_installed_content(db: Session, server: Server, content: InstalledContent, user_id: int | None) -> None:
-    target = _target_dir(server, content.content_type) / content.file_name
-    if target.exists():
-        try:
-            target.unlink()
-        except Exception:
-            pass
+    _delete_content_file(server, content.content_type, content.file_name)
 
     db.execute(delete(InstalledContent).where(InstalledContent.id == content.id))
     db.commit()
@@ -305,3 +544,4 @@ def delete_installed_content(db: Session, server: Server, content: InstalledCont
         server_id=server.id,
         details=f"provider={content.provider_name} id={content.external_project_id}",
     )
+

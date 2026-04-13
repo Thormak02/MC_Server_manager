@@ -4,7 +4,8 @@ from app.providers.base.server_provider_base import ServerProviderBase
 from app.providers.server.common import (
     download_file,
     fetch_json,
-    list_release_versions,
+    list_minecraft_versions,
+    normalize_version_channel,
     offline_mode_enabled,
     write_placeholder_jar,
 )
@@ -16,19 +17,26 @@ class FabricProvider(ServerProviderBase):
     default_mc_version = "1.20.6"
     _meta_base = "https://meta.fabricmc.net/v2/versions"
 
-    def list_versions(self) -> list[VersionInfo]:
+    def list_versions(self, channel: str = "release") -> list[VersionInfo]:
+        normalized_channel = normalize_version_channel(channel, default="release")
         try:
             versions = [
-                VersionInfo(id=item, label=item, stable=True)
-                for item in list_release_versions(minimum="1.7.10")
+                VersionInfo(
+                    id=item,
+                    label=item,
+                    stable=normalized_channel == "release",
+                    channel=normalized_channel if normalized_channel != "all" else "release",
+                )
+                for item in list_minecraft_versions(minimum="1.7.10", channel=normalized_channel)
             ]
             if versions:
                 return versions
         except Exception:
             pass
-        return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version, stable=True)]
+        return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version, stable=True, channel="release")]
 
-    def list_loader_versions(self, mc_version: str) -> list[VersionInfo]:
+    def list_loader_versions(self, mc_version: str, channel: str = "all") -> list[VersionInfo]:
+        normalized_channel = normalize_version_channel(channel, default="all")
         try:
             data = fetch_json(f"{self._meta_base}/loader/{mc_version}")
             versions: list[VersionInfo] = []
@@ -39,11 +47,19 @@ class FabricProvider(ServerProviderBase):
                 if not version_id or version_id in seen:
                     continue
                 seen.add(version_id)
+                is_stable = bool(loader.get("stable", True))
+                entry_channel = "release" if is_stable else "beta"
+                if normalized_channel != "all":
+                    if normalized_channel == "release" and not is_stable:
+                        continue
+                    if normalized_channel in {"beta", "alpha"} and is_stable:
+                        continue
                 versions.append(
                     VersionInfo(
                         id=version_id,
                         label=version_id,
-                        stable=bool(loader.get("stable", True)),
+                        stable=is_stable,
+                        channel=entry_channel,
                     )
                 )
             return versions

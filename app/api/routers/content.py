@@ -38,7 +38,7 @@ def server_content_page(request: Request, server_id: int, db: Session = Depends(
             return RedirectResponse(url="/login", status_code=303)
         server = _ensure_server_access(db, current_user, server_id)
         try:
-            installed = content_service.list_installed_content(db, server_id)
+            installed = content_service.list_installed_content(db, server)
         except SQLAlchemyError as exc:
             installed = []
             push_flash(request, f"Inhalte konnten nicht geladen werden: {exc}", "error")
@@ -71,6 +71,7 @@ def content_search(
     mc_version: str | None = None,
     loader: str | None = None,
     content_type: str = "mod",
+    release_channel: str = "all",
     db: Session = Depends(get_db),
 ):
     current_user = _ensure_user(request, db)
@@ -80,12 +81,24 @@ def content_search(
     provider = provider.strip().lower()
     if provider == "modrinth":
         try:
-            results = content_service.search_modrinth(query, mc_version, loader, content_type)
+            results = content_service.search_modrinth(
+                query,
+                mc_version,
+                loader,
+                content_type,
+                release_channel,
+            )
         except Exception as exc:
             return JSONResponse(status_code=400, content={"detail": str(exc)})
     elif provider == "curseforge":
         try:
-            results = content_service.search_curseforge(query, mc_version, loader, content_type)
+            results = content_service.search_curseforge(
+                query,
+                mc_version,
+                loader,
+                content_type,
+                release_channel,
+            )
         except ValueError as exc:
             return JSONResponse(status_code=400, content={"detail": str(exc)})
     else:
@@ -100,6 +113,7 @@ def modrinth_versions(
     project_id: str,
     mc_version: str | None = None,
     loader: str | None = None,
+    release_channel: str = "all",
     db: Session = Depends(get_db),
 ):
     current_user = _ensure_user(request, db)
@@ -107,7 +121,12 @@ def modrinth_versions(
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
 
     try:
-        versions = content_service.list_modrinth_versions(project_id, mc_version, loader)
+        versions = content_service.list_modrinth_versions(
+            project_id,
+            mc_version,
+            loader,
+            release_channel,
+        )
     except Exception as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
     return JSONResponse({"versions": versions})
@@ -120,6 +139,7 @@ def curseforge_versions(
     mc_version: str | None = None,
     loader: str | None = None,
     content_type: str = "mod",
+    release_channel: str = "all",
     db: Session = Depends(get_db),
 ):
     current_user = _ensure_user(request, db)
@@ -127,7 +147,13 @@ def curseforge_versions(
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
 
     try:
-        versions = content_service.list_curseforge_versions(project_id, mc_version, loader, content_type)
+        versions = content_service.list_curseforge_versions(
+            project_id,
+            mc_version,
+            loader,
+            content_type,
+            release_channel,
+        )
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
     return JSONResponse({"versions": versions})
@@ -139,7 +165,7 @@ def list_server_content(request: Request, server_id: int, db: Session = Depends(
     if current_user is None:
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
     server = _ensure_server_access(db, current_user, server_id)
-    items = content_service.list_installed_content(db, server.id)
+    items = content_service.list_installed_content(db, server)
 
     payload = []
     for item in items:
@@ -148,6 +174,8 @@ def list_server_content(request: Request, server_id: int, db: Session = Depends(
                 "id": item.id,
                 "provider_name": item.provider_name,
                 "content_type": item.content_type,
+                "external_project_id": item.external_project_id,
+                "external_version_id": item.external_version_id,
                 "name": item.name,
                 "version_label": item.version_label,
                 "file_name": item.file_name,
@@ -177,14 +205,18 @@ async def install_content(request: Request, server_id: int, db: Session = Depend
         raise HTTPException(status_code=400, detail="project_id und version_id erforderlich")
 
     if provider == "modrinth":
-        entry = content_service.install_modrinth(
-            db,
-            server,
-            project_id,
-            version_id,
-            content_type,
-            current_user.id,
-        )
+        try:
+            entry = content_service.install_modrinth(
+                db,
+                server,
+                project_id,
+                version_id,
+                content_type,
+                current_user.id,
+            )
+        except ValueError as exc:
+            db.rollback()
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
     elif provider == "curseforge":
         try:
             entry = content_service.install_curseforge(
@@ -196,6 +228,7 @@ async def install_content(request: Request, server_id: int, db: Session = Depend
                 current_user.id,
             )
         except ValueError as exc:
+            db.rollback()
             return JSONResponse(status_code=400, content={"detail": str(exc)})
     else:
         raise HTTPException(status_code=400, detail="Unknown provider")
@@ -223,5 +256,9 @@ def delete_content(request: Request, server_id: int, content_id: int, db: Sessio
     if content is None or content.server_id != server.id:
         raise HTTPException(status_code=404, detail="Content not found")
 
-    content_service.delete_installed_content(db, server, content, current_user.id)
+    try:
+        content_service.delete_installed_content(db, server, content, current_user.id)
+    except ValueError as exc:
+        db.rollback()
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
     return JSONResponse({"status": "ok"})

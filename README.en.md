@@ -38,7 +38,8 @@ Web-based management software for multiple Minecraft servers on a Windows host.
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-copy .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# then edit .env (API keys, etc.)
 uvicorn app.main:app --reload
 ```
 
@@ -55,6 +56,7 @@ Key variables:
 - `MCSM_RESTART_WARNING_TEMPLATE` warning text, `{seconds}` is replaced
 - `MCSM_RESTART_DEFAULT_DELAY_SECONDS` default delay for restart warnings
 - `MCSM_PROVISIONING_OFFLINE_MODE` `true` for offline setup without downloads
+- `MCSM_DEFAULT_SERVER_ROOT` optional base directory for new servers (empty => desktop default)
 
 ## First Login
 
@@ -68,7 +70,8 @@ Change these in `.env` before production use.
 ## Paths
 
 - `data/` contains SQLite DB + scheduler state
-- `managed_servers/` contains newly created server instances
+- Default base folder for new servers is `Desktop\mc_servers` (unless changed via `.env` or Settings UI)
+- For automatic creation (no target path provided), each server gets its own subdirectory in that base folder
 - Imported servers are not moved or restructured
 
 ## Notes

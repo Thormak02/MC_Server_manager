@@ -10,19 +10,19 @@ class PaperProvider(ServerProviderBase):
     default_mc_version = "1.20.6"
     _api_base = "https://api.papermc.io/v2/projects/paper"
 
-    def list_versions(self) -> list[VersionInfo]:
+    def list_versions(self, channel: str = "release") -> list[VersionInfo]:
         try:
             data = fetch_json(self._api_base)
             raw_versions = data.get("versions", [])
             versions = [
-                VersionInfo(id=str(version), label=str(version), stable=True)
+                VersionInfo(id=str(version), label=str(version), stable=True, channel="release")
                 for version in reversed(raw_versions)
             ]
             if versions:
                 return versions
         except Exception:
             pass
-        return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version)]
+        return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version, stable=True, channel="release")]
 
     def _resolve_download(self, mc_version: str, requested_build: str | None = None) -> tuple[str, str]:
         builds_data = fetch_json(f"{self._api_base}/versions/{mc_version}/builds")
@@ -65,12 +65,12 @@ class PaperProvider(ServerProviderBase):
         download_file(url, jar_path)
         return ProvisionResult(server_jar_path=str(jar_path))
 
-    def list_loader_versions(self, mc_version: str) -> list[VersionInfo]:
+    def list_loader_versions(self, mc_version: str, channel: str = "all") -> list[VersionInfo]:
         try:
             builds_data = fetch_json(f"{self._api_base}/versions/{mc_version}/builds")
             builds = builds_data.get("builds", [])
             versions = [
-                VersionInfo(id=str(item.get("build")), label=str(item.get("build")), stable=True)
+                VersionInfo(id=str(item.get("build")), label=str(item.get("build")), stable=True, channel="release")
                 for item in sorted(builds, key=lambda item: int(item.get("build", 0)), reverse=True)
             ]
             return versions

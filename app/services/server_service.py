@@ -1,14 +1,21 @@
 import re
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.constants import DEFAULT_SERVER_STATUS, UserRole
+from app.models.installed_content import InstalledContent
+from app.models.scheduled_job import ScheduledJob
 from app.models.server import Server
 from app.models.server_permission import ServerPermission
 from app.models.user import User
 from app.schemas.server import ServerCreate, ServerImportConfirm
+
+
+_XMS_PATTERN = re.compile(r"(?i)-Xms\S+")
+_XMX_PATTERN = re.compile(r"(?i)-Xmx\S+")
+_JAVA_TOKEN_PATTERN = re.compile(r'(?i)("[^"]*java(?:\.exe)?"|java(?:\.exe)?)')
 
 
 def slugify(value: str) -> str:
@@ -118,13 +125,175 @@ def create_server(db: Session, data: ServerCreate) -> Server:
     db.add(server)
     db.commit()
     db.refresh(server)
+
+    # Safety cleanup for environments where old orphan rows existed and IDs get reused.
+    cleanup_changed = False
+    for table in (InstalledContent, ServerPermission, ScheduledJob):
+        result = db.execute(delete(table).where(table.server_id == server.id))
+        if (result.rowcount or 0) > 0:
+            cleanup_changed = True
+    if cleanup_changed:
+        db.commit()
+        db.refresh(server)
+
     return server
+
+
+def _memory_token(value_mb: int | None, kind: str) -> str | None:
+    if value_mb is None:
+        return None
+    if value_mb <= 0:
+        return None
+    return f"-X{kind}{value_mb}M"
+
+
+def _apply_memory_flags_to_command(
+    command: str,
+    memory_min_mb: int | None,
+    memory_max_mb: int | None,
+) -> str:
+    updated = _XMS_PATTERN.sub("", command)
+    updated = _XMX_PATTERN.sub("", updated)
+    updated = " ".join(updated.split())
+
+    tokens: list[str] = []
+    xms = _memory_token(memory_min_mb, "ms")
+    xmx = _memory_token(memory_max_mb, "mx")
+    if xms:
+        tokens.append(xms)
+    if xmx:
+        tokens.append(xmx)
+    if not tokens:
+        return updated
+
+    java_match = _JAVA_TOKEN_PATTERN.search(updated)
+    if not java_match:
+        return " ".join(tokens + [updated]).strip()
+
+    insert_pos = java_match.end()
+    before = updated[:insert_pos]
+    after = updated[insert_pos:].strip()
+    merged = f"{before} {' '.join(tokens)}"
+    if after:
+        merged = f"{merged} {after}"
+    return merged.strip()
+
+
+def _upsert_server_property(server: Server, key: str, value: str) -> str | None:
+    base_path = Path(server.base_path).expanduser().resolve()
+    if not base_path.exists() or not base_path.is_dir():
+        return f"Serverordner nicht gefunden: {base_path}"
+
+    properties_path = base_path / "server.properties"
+    lines: list[str] = []
+    if properties_path.exists():
+        lines = properties_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+
+    prefix = f"{key}="
+    replaced = False
+    output: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            output.append(f"{key}={value}")
+            replaced = True
+        else:
+            output.append(line)
+
+    if not replaced:
+        output.append(f"{key}={value}")
+
+    properties_path.write_text("\n".join(output).strip() + "\n", encoding="utf-8")
+    return None
+
+
+def _sync_forge_jvm_args(server: Server) -> str | None:
+    base_path = Path(server.base_path).expanduser().resolve()
+    args_path = base_path / "user_jvm_args.txt"
+    existing_lines: list[str] = []
+    if args_path.exists():
+        existing_lines = args_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+
+    output: list[str] = []
+    for line in existing_lines:
+        stripped = line.strip()
+        if stripped.lower().startswith("-xms") or stripped.lower().startswith("-xmx"):
+            continue
+        output.append(line)
+
+    xms = _memory_token(server.memory_min_mb, "ms")
+    xmx = _memory_token(server.memory_max_mb, "mx")
+    if xms:
+        output.append(xms)
+    if xmx:
+        output.append(xmx)
+
+    args_path.write_text("\n".join(output).strip() + "\n", encoding="utf-8")
+    return None
+
+
+def _sync_bat_start_memory(server: Server) -> str | None:
+    base_path = Path(server.base_path).expanduser().resolve()
+    bat_path = Path(server.start_bat_path or str(base_path / "start.bat")).expanduser()
+    if not bat_path.is_absolute():
+        bat_path = (base_path / bat_path).resolve()
+    else:
+        bat_path = bat_path.resolve()
+    if not bat_path.exists():
+        return f"Startdatei nicht gefunden: {bat_path}"
+
+    content = bat_path.read_text(encoding="utf-8", errors="ignore")
+    lines = content.splitlines()
+    changed = False
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped or stripped.upper().startswith("REM ") or stripped.startswith("::"):
+            continue
+        if "java" not in stripped.lower():
+            continue
+        new_line = _apply_memory_flags_to_command(line, server.memory_min_mb, server.memory_max_mb)
+        if new_line != line:
+            lines[idx] = new_line
+            changed = True
+        break
+
+    if changed:
+        bat_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+    return None
+
+
+def sync_server_settings_to_files(server: Server) -> list[str]:
+    warnings: list[str] = []
+
+    if server.port is not None:
+        warning = _upsert_server_property(server, "server-port", str(server.port))
+        if warning:
+            warnings.append(warning)
+
+    if server.server_type == "forge":
+        warning = _sync_forge_jvm_args(server)
+        if warning:
+            warnings.append(warning)
+    elif server.start_mode == "bat":
+        warning = _sync_bat_start_memory(server)
+        if warning:
+            warnings.append(warning)
+    elif server.start_mode == "command" and server.start_command:
+        server.start_command = _apply_memory_flags_to_command(
+            server.start_command,
+            server.memory_min_mb,
+            server.memory_max_mb,
+        )
+
+    return warnings
 
 
 def update_server_settings(
     db: Session,
     server: Server,
     *,
+    mc_version: str | None,
+    loader_version: str | None,
     java_profile_id: int | None,
     memory_min_mb: int | None,
     memory_max_mb: int | None,
@@ -133,7 +302,12 @@ def update_server_settings(
     start_mode: str | None,
     start_command: str | None,
     start_bat_path: str | None,
-) -> Server:
+) -> tuple[Server, list[str]]:
+    if mc_version is not None:
+        stripped_version = mc_version.strip()
+        if stripped_version:
+            server.mc_version = stripped_version
+    server.loader_version = (loader_version or "").strip() or None
     server.java_profile_id = java_profile_id
     server.memory_min_mb = memory_min_mb
     server.memory_max_mb = memory_max_mb
@@ -143,10 +317,13 @@ def update_server_settings(
         server.start_mode = start_mode
     server.start_command = start_command
     server.start_bat_path = start_bat_path
+
+    warnings = sync_server_settings_to_files(server)
+
     db.add(server)
     db.commit()
     db.refresh(server)
-    return server
+    return server, warnings
 
 
 def create_server_from_import(db: Session, data: ServerImportConfirm) -> Server:

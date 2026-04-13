@@ -1,3 +1,4 @@
+from app.models.app_setting import AppSetting
 from app.models.audit_log import AuditLog
 from app.models.installed_content import InstalledContent
 from app.models.java_profile import JavaProfile
@@ -14,4 +15,5 @@ __all__ = [
     "JavaProfile",
     "ServerTemplate",
     "InstalledContent",
+    "AppSetting",
 ]

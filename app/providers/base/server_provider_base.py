@@ -9,10 +9,10 @@ class ServerProviderBase(ABC):
     default_mc_version: str
 
     @abstractmethod
-    def list_versions(self) -> list[VersionInfo]:
+    def list_versions(self, channel: str = "release") -> list[VersionInfo]:
         raise NotImplementedError
 
-    def list_loader_versions(self, mc_version: str) -> list[VersionInfo]:
+    def list_loader_versions(self, mc_version: str, channel: str = "all") -> list[VersionInfo]:
         return []
 
     @abstractmethod

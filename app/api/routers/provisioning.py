@@ -12,6 +12,7 @@ from app.services.auth_service import get_current_user_from_session
 from app.services.provisioning_service import ProvisioningService
 from app.services.java_profile_service import list_java_profiles
 from app.services import template_service
+from app.services.app_setting_service import get_server_storage_root
 from app.web.routes.pages import build_context, push_flash, templates
 
 
@@ -51,6 +52,7 @@ def create_server_page(
     versions = provisioning_service.list_versions(selected_type)
     templates_list = template_service.list_templates(db)
     default_template = template_service.get_default_template(db, selected_type)
+    default_server_storage_root = str(get_server_storage_root(db))
     return templates.TemplateResponse(
         request,
         "server_create.html",
@@ -64,6 +66,7 @@ def create_server_page(
             java_profiles=list_java_profiles(db),
             templates=templates_list,
             default_template_id=default_template.id if default_template else None,
+            default_server_storage_root=default_server_storage_root,
         ),
     )
 
@@ -72,12 +75,13 @@ def create_server_page(
 def list_versions_endpoint(
     request: Request,
     server_type: str,
+    channel: str = "release",
     db: Session = Depends(get_db),
 ):
     current_user = _require_super_admin(request, db)
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    versions = provisioning_service.list_versions(server_type)
+    versions = provisioning_service.list_versions(server_type, channel=channel)
     return JSONResponse({"versions": [version.model_dump() for version in versions]})
 
 
@@ -86,12 +90,13 @@ def list_loader_versions_endpoint(
     request: Request,
     server_type: str,
     mc_version: str,
+    channel: str = "all",
     db: Session = Depends(get_db),
 ):
     current_user = _require_super_admin(request, db)
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    versions = provisioning_service.list_loader_versions(server_type, mc_version)
+    versions = provisioning_service.list_loader_versions(server_type, mc_version, channel=channel)
     return JSONResponse({"versions": [version.model_dump() for version in versions]})
 
 

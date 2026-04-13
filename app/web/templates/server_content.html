@@ -37,6 +37,15 @@
             <label for="loader">Loader/Typ</label>
             <input id="loader" type="text" value="{% if server.server_type != 'vanilla' %}{{ server.server_type }}{% endif %}">
         </div>
+        <div>
+            <label for="release_channel">Kanal</label>
+            <select id="release_channel">
+                <option value="all">Alle</option>
+                <option value="release">Release</option>
+                <option value="beta">Beta</option>
+                <option value="alpha">Alpha</option>
+            </select>
+        </div>
     </div>
     <div id="search-status" class="muted"></div>
     <div id="search-results" class="stack"></div>
@@ -60,9 +69,29 @@
         </thead>
         <tbody id="installed-body">
             {% for item in installed %}
-            <tr data-content-id="{{ item.id }}">
+            <tr
+                data-content-id="{{ item.id }}"
+                data-provider="{{ item.provider_name }}"
+                data-project-id="{{ item.external_project_id }}"
+                data-version-id="{{ item.external_version_id }}"
+                data-content-type="{{ item.content_type }}"
+            >
                 <td>{{ item.name }}</td>
-                <td>{{ item.version_label or "-" }}</td>
+                <td>
+                    {% if can_manage %}
+                    <div class="stack">
+                        <select class="installed-version-select">
+                            <option value="">- Versionen laden -</option>
+                        </select>
+                        <div class="inline-form">
+                            <button class="ghost apply-installed-version" type="button" data-content-id="{{ item.id }}">Version anwenden</button>
+                        </div>
+                        <span class="muted installed-version-label">{{ item.version_label or "-" }}</span>
+                    </div>
+                    {% else %}
+                    {{ item.version_label or "-" }}
+                    {% endif %}
+                </td>
                 <td>{{ item.provider_name }}</td>
                 <td>{{ item.file_name }}</td>
                 <td>{{ item.content_type }}</td>
@@ -87,6 +116,7 @@
     const queryInput = document.getElementById("query");
     const mcVersionInput = document.getElementById("mc_version");
     const loaderInput = document.getElementById("loader");
+    const releaseChannelSelect = document.getElementById("release_channel");
     const searchBtn = document.getElementById("search-btn");
     const searchStatus = document.getElementById("search-status");
     const resultsEl = document.getElementById("search-results");
@@ -101,11 +131,43 @@
             .replace(/'/g, "&#39;");
     }
 
+    function channelLabel(value) {
+        const normalized = String(value || "").toLowerCase();
+        if (normalized === "release") return "Release";
+        if (normalized === "beta") return "Beta";
+        if (normalized === "alpha") return "Alpha";
+        return "";
+    }
+
+    function buildInstalledVersionCell(item) {
+        return `
+<div class="stack">
+    <select class="installed-version-select">
+        <option value="">- Versionen laden -</option>
+    </select>
+    <div class="inline-form">
+        <button class="ghost apply-installed-version" type="button" data-content-id="${item.id}">Version anwenden</button>
+    </div>
+    <span class="muted installed-version-label">${escapeHtml(item.version_label || "-")}</span>
+</div>`;
+    }
+
     async function fetchJson(url) {
         const response = await fetch(url, { headers: { "Accept": "application/json" } });
         if (!response.ok) {
-            const text = await response.text();
-            throw new Error(text || "Request failed");
+            let message = "Request failed";
+            try {
+                const payload = await response.json();
+                if (payload && payload.detail) {
+                    message = payload.detail;
+                }
+            } catch (_) {
+                try {
+                    const text = await response.text();
+                    if (text) message = text;
+                } catch (_) {}
+            }
+            throw new Error(message);
         }
         return response.json();
     }
@@ -117,6 +179,7 @@
         const mcVersion = mcVersionInput ? mcVersionInput.value.trim() : "";
         const loader = loaderInput ? loaderInput.value.trim() : "";
         const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
+        const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
         if (!query) return;
 
         resultsEl.innerHTML = "";
@@ -129,6 +192,7 @@
                 mc_version: mcVersion,
                 loader,
                 content_type: contentType,
+                release_channel: releaseChannel,
             }).toString();
 
         try {
@@ -161,7 +225,10 @@
                 })
                 .join("");
         } catch (err) {
-            if (searchStatus) searchStatus.textContent = "Fehler bei der Suche.";
+            if (searchStatus) {
+                const message = err instanceof Error ? err.message : "Fehler bei der Suche.";
+                searchStatus.textContent = message || "Fehler bei der Suche.";
+            }
         }
     }
 
@@ -171,6 +238,7 @@
         const mcVersion = mcVersionInput ? mcVersionInput.value.trim() : "";
         const loader = loaderInput ? loaderInput.value.trim() : "";
         const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
+        const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
         const select = card.querySelector(".version-select");
         if (!select) return;
         select.innerHTML = "<option value=\"\">Lade ...</option>";
@@ -179,7 +247,12 @@
         if (provider === "modrinth") {
             url =
                 "/api/content/modrinth/versions?" +
-                new URLSearchParams({ project_id: projectId, mc_version: mcVersion, loader }).toString();
+                new URLSearchParams({
+                    project_id: projectId,
+                    mc_version: mcVersion,
+                    loader,
+                    release_channel: releaseChannel,
+                }).toString();
         } else {
             url =
                 "/api/content/curseforge/versions?" +
@@ -188,6 +261,7 @@
                     mc_version: mcVersion,
                     loader,
                     content_type: contentType,
+                    release_channel: releaseChannel,
                 }).toString();
         }
         try {
@@ -197,7 +271,8 @@
             versions.forEach((ver) => {
                 const option = document.createElement("option");
                 option.value = ver.id;
-                option.textContent = ver.name || ver.version_number || ver.id;
+                const suffix = channelLabel(ver.release_channel);
+                option.textContent = (ver.name || ver.version_number || ver.id) + (suffix ? ` [${suffix}]` : "");
                 select.appendChild(option);
             });
         } catch (_) {
@@ -224,42 +299,199 @@
                 }),
             });
             if (!response.ok) {
-                throw new Error();
+                let message = "Installation fehlgeschlagen.";
+                try {
+                    const payload = await response.json();
+                    if (payload && payload.detail) {
+                        message = payload.detail;
+                    }
+                } catch (_) {}
+                throw new Error(message);
             }
-            const payload = await response.json();
-            if (installedBody) {
-                const placeholder = installedBody.querySelector("tr td[colspan]");
-                if (placeholder && placeholder.parentElement) {
-                    placeholder.parentElement.remove();
+            await refreshInstalled();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Installation fehlgeschlagen.";
+            alert(message);
+        }
+    }
+
+    async function refreshInstalled() {
+        if (!installedBody) return;
+        try {
+            const payload = await fetchJson(`/api/servers/${serverId}/content`);
+            const items = Array.isArray(payload.items) ? payload.items : [];
+            if (!items.length) {
+                installedBody.innerHTML = "<tr><td colspan=\"6\">Keine Inhalte installiert.</td></tr>";
+                return;
+            }
+            const canManage = {{ "true" if can_manage else "false" }};
+            installedBody.innerHTML = items
+                .map((item) => {
+                    return `
+<tr data-content-id="${item.id}" data-provider="${escapeHtml(item.provider_name || "")}" data-project-id="${escapeHtml(item.external_project_id || "")}" data-version-id="${escapeHtml(item.external_version_id || "")}" data-content-type="${escapeHtml(item.content_type || "mod")}">
+    <td>${escapeHtml(item.name || "-")}</td>
+    <td>${canManage ? buildInstalledVersionCell(item) : escapeHtml(item.version_label || "-")}</td>
+    <td>${escapeHtml(item.provider_name || "-")}</td>
+    <td>${escapeHtml(item.file_name || "-")}</td>
+    <td>${escapeHtml(item.content_type || "-")}</td>
+    <td>${canManage ? `<button class="ghost delete-content" type="button" data-content-id="${item.id}">Loeschen</button>` : "-"}</td>
+</tr>`;
+                })
+                .join("");
+            await initializeInstalledVersionSelectors();
+        } catch (_) {
+            // keep existing table if reload fails
+        }
+    }
+
+    async function loadVersionsForInstalledRow(row) {
+        const provider = (row.dataset.provider || "").toLowerCase();
+        const projectId = (row.dataset.projectId || "").trim();
+        const contentType = (row.dataset.contentType || "mod").trim() || "mod";
+        const currentVersionId = (row.dataset.versionId || "").trim();
+        const select = row.querySelector(".installed-version-select");
+        if (!select || !provider || !projectId) return;
+
+        const mcVersion = mcVersionInput ? mcVersionInput.value.trim() : "";
+        const loader = loaderInput ? loaderInput.value.trim() : "";
+        const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
+
+        let url = "";
+        if (provider === "modrinth") {
+            url =
+                "/api/content/modrinth/versions?" +
+                new URLSearchParams({
+                    project_id: projectId,
+                    mc_version: mcVersion,
+                    loader,
+                    release_channel: releaseChannel,
+                }).toString();
+        } else if (provider === "curseforge") {
+            url =
+                "/api/content/curseforge/versions?" +
+                new URLSearchParams({
+                    project_id: projectId,
+                    mc_version: mcVersion,
+                    loader,
+                    content_type: contentType,
+                    release_channel: releaseChannel,
+                }).toString();
+        } else {
+            return;
+        }
+
+        select.innerHTML = "<option value=\"\">Lade ...</option>";
+        try {
+            const payload = await fetchJson(url);
+            const versions = Array.isArray(payload.versions) ? payload.versions : [];
+            if (!versions.length) {
+                select.innerHTML = "<option value=\"\">Keine Versionen</option>";
+                return;
+            }
+            select.innerHTML = "";
+            let hasCurrent = false;
+            versions.forEach((version) => {
+                const option = document.createElement("option");
+                option.value = String(version.id || "");
+                const suffix = channelLabel(version.release_channel);
+                option.textContent = (version.name || version.version_number || version.id || "-") + (suffix ? ` [${suffix}]` : "");
+                if (currentVersionId && option.value === currentVersionId) {
+                    option.selected = true;
+                    hasCurrent = true;
                 }
-                const row = document.createElement("tr");
-                row.dataset.contentId = payload.id;
-                row.innerHTML = `
-<td>${escapeHtml(payload.name || "-")}</td>
-<td>${escapeHtml(payload.version_label || "-")}</td>
-<td>${escapeHtml(provider)}</td>
-<td>${escapeHtml(payload.file_name || "-")}</td>
-<td>${escapeHtml(contentType)}</td>
-<td><button class="ghost delete-content" type="button" data-content-id="${payload.id}">Loeschen</button></td>`;
-                installedBody.appendChild(row);
+                select.appendChild(option);
+            });
+            if (currentVersionId && !hasCurrent) {
+                const custom = document.createElement("option");
+                custom.value = currentVersionId;
+                custom.textContent = `${currentVersionId} (aktuell)`;
+                custom.selected = true;
+                select.appendChild(custom);
             }
         } catch (_) {
-            alert("Installation fehlgeschlagen.");
+            select.innerHTML = "<option value=\"\">Fehler</option>";
+        }
+    }
+
+    async function initializeInstalledVersionSelectors() {
+        if (!installedBody) return;
+        const rows = Array.from(installedBody.querySelectorAll("tr[data-content-id]"));
+        for (const row of rows) {
+            await loadVersionsForInstalledRow(row);
+        }
+    }
+
+    async function applyInstalledVersion(row) {
+        const provider = (row.dataset.provider || "").toLowerCase();
+        const projectId = (row.dataset.projectId || "").trim();
+        const contentType = (row.dataset.contentType || "mod").trim() || "mod";
+        const select = row.querySelector(".installed-version-select");
+        if (!select || !projectId || !provider) return;
+        const versionId = (select.value || "").trim();
+        if (!versionId) {
+            alert("Bitte Version auswaehlen.");
+            return;
+        }
+        try {
+            const response = await fetch(`/api/servers/${serverId}/content/install`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider,
+                    project_id: projectId,
+                    version_id: versionId,
+                    content_type: contentType,
+                }),
+            });
+            if (!response.ok) {
+                let message = "Versionswechsel fehlgeschlagen.";
+                try {
+                    const payload = await response.json();
+                    if (payload && payload.detail) {
+                        message = payload.detail;
+                    }
+                } catch (_) {}
+                throw new Error(message);
+            }
+            await refreshInstalled();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Versionswechsel fehlgeschlagen.";
+            alert(message);
         }
     }
 
     async function deleteContent(contentId, row) {
         try {
             const response = await fetch(`/api/servers/${serverId}/content/${contentId}`, { method: "DELETE" });
-            if (!response.ok) throw new Error();
-            if (row) row.remove();
-        } catch (_) {
-            alert("Loeschen fehlgeschlagen.");
+            if (!response.ok) {
+                let message = "Loeschen fehlgeschlagen.";
+                try {
+                    const payload = await response.json();
+                    if (payload && payload.detail) {
+                        message = payload.detail;
+                    }
+                } catch (_) {}
+                throw new Error(message);
+            }
+            if (row) {
+                row.remove();
+            }
+            if (installedBody && !installedBody.querySelector("tr")) {
+                installedBody.innerHTML = "<tr><td colspan=\"6\">Keine Inhalte installiert.</td></tr>";
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Loeschen fehlgeschlagen.";
+            alert(message);
         }
     }
 
     if (searchBtn) {
         searchBtn.addEventListener("click", search);
+    }
+    if (releaseChannelSelect) {
+        releaseChannelSelect.addEventListener("change", function () {
+            initializeInstalledVersionSelectors();
+        });
     }
 
     if (resultsEl) {
@@ -281,13 +513,23 @@
         installedBody.addEventListener("click", function (event) {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
-            if (!target.classList.contains("delete-content")) return;
-            const row = target.closest("tr");
-            const contentId = target.dataset.contentId;
-            if (!contentId) return;
-            deleteContent(contentId, row);
+            if (target.classList.contains("apply-installed-version")) {
+                const row = target.closest("tr");
+                if (!row) return;
+                applyInstalledVersion(row);
+                return;
+            }
+            if (target.classList.contains("delete-content")) {
+                const row = target.closest("tr");
+                const contentId = target.dataset.contentId;
+                if (!contentId) return;
+                deleteContent(contentId, row);
+                return;
+            }
         });
     }
+
+    refreshInstalled();
 })();
 </script>
 {% endblock %}

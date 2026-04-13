@@ -45,13 +45,36 @@
                 {% endfor %}
             </select>
         </div>
+        <div>
+            <label for="version_channel">Versionen Filter</label>
+            <select id="version_channel">
+                <option value="release">Release</option>
+                <option value="beta">Beta/Snapshot</option>
+                <option value="alpha">Alpha</option>
+                <option value="all">Alle</option>
+            </select>
+        </div>
         <div id="loader_version_wrap" style="display: none;">
             <label for="loader_version">Loader/Build (optional)</label>
             <select id="loader_version" name="loader_version"></select>
         </div>
+        <div id="loader_channel_wrap" style="display: none;">
+            <label for="loader_channel">Loader Filter</label>
+            <select id="loader_channel">
+                <option value="all">Alle</option>
+                <option value="release">Release</option>
+                <option value="beta">Beta</option>
+                <option value="alpha">Alpha</option>
+            </select>
+        </div>
         <div>
-            <label for="target_path">Zielordner</label>
-            <input id="target_path" name="target_path" type="text" required placeholder="D:\minecraft\my-server">
+            <label for="target_path">Zielordner (optional)</label>
+            <input
+                id="target_path"
+                name="target_path"
+                type="text"
+                placeholder="Leer lassen fuer Standard: {{ default_server_storage_root }}\\<servername>"
+            >
         </div>
         <div>
             <label for="java_profile_id">Java Profil</label>
@@ -89,8 +112,11 @@
     const typeSelect = document.getElementById("server_type");
     const versionSelect = document.getElementById("mc_version");
     const templateSelect = document.getElementById("template_id");
+    const versionChannelSelect = document.getElementById("version_channel");
     const loaderWrap = document.getElementById("loader_version_wrap");
+    const loaderChannelWrap = document.getElementById("loader_channel_wrap");
     const loaderSelect = document.getElementById("loader_version");
+    const loaderChannelSelect = document.getElementById("loader_channel");
     const javaProfileSelect = document.getElementById("java_profile_id");
     const memoryMin = document.getElementById("memory_min_mb");
     const memoryMax = document.getElementById("memory_max_mb");
@@ -100,7 +126,12 @@
 
     async function reloadVersions(selected) {
         const serverType = typeSelect.value;
-        const url = "/servers/create/versions?server_type=" + encodeURIComponent(serverType);
+        const channel = versionChannelSelect ? versionChannelSelect.value : "release";
+        const url =
+            "/servers/create/versions?server_type=" +
+            encodeURIComponent(serverType) +
+            "&channel=" +
+            encodeURIComponent(channel);
         try {
             const response = await fetch(url, { credentials: "same-origin" });
             if (!response.ok) return;
@@ -124,6 +155,9 @@
     function setLoaderVisible(visible) {
         if (!loaderWrap || !loaderSelect) return;
         loaderWrap.style.display = visible ? "block" : "none";
+        if (loaderChannelWrap) {
+            loaderChannelWrap.style.display = visible ? "block" : "none";
+        }
         if (!visible) {
             loaderSelect.innerHTML = "";
         }
@@ -133,6 +167,7 @@
         if (!loaderSelect || !loaderWrap) return;
         const serverType = typeSelect.value;
         const mcVersion = versionSelect.value;
+        const loaderChannel = loaderChannelSelect ? loaderChannelSelect.value : "all";
         if (!serverType || !mcVersion) {
             setLoaderVisible(false);
             return;
@@ -141,7 +176,9 @@
             "/servers/create/loader-versions?server_type=" +
             encodeURIComponent(serverType) +
             "&mc_version=" +
-            encodeURIComponent(mcVersion);
+            encodeURIComponent(mcVersion) +
+            "&channel=" +
+            encodeURIComponent(loaderChannel);
         try {
             const response = await fetch(url, { credentials: "same-origin" });
             if (!response.ok) {
@@ -191,6 +228,17 @@
     versionSelect.addEventListener("change", function () {
         reloadLoaderVersions();
     });
+    if (versionChannelSelect) {
+        versionChannelSelect.addEventListener("change", async function () {
+            await reloadVersions();
+            await reloadLoaderVersions();
+        });
+    }
+    if (loaderChannelSelect) {
+        loaderChannelSelect.addEventListener("change", function () {
+            reloadLoaderVersions();
+        });
+    }
 
     async function applyTemplate() {
         if (!templateSelect) return;

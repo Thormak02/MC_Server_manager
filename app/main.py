@@ -18,6 +18,7 @@ from app.api.routers.users import router as users_router
 from app.core.config import get_settings
 from app.db.init_db import init_db
 from app.services.schedule_service import sync_all_jobs
+from app.services.process_service import shutdown_all_managed_processes
 from app.tasks.scheduler import shutdown_scheduler, start_scheduler
 from app.web.routes.pages import router as page_router
 from app.websocket.console_ws import router as console_ws_router
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     def on_shutdown() -> None:
+        shutdown_all_managed_processes()
         shutdown_scheduler()
 
     return app

@@ -7,7 +7,8 @@ from app.providers.server.common import (
     download_file,
     fetch_json,
     fetch_text,
-    list_release_versions,
+    list_minecraft_versions,
+    normalize_version_channel,
     offline_mode_enabled,
     write_placeholder_jar,
 )
@@ -21,7 +22,28 @@ class ForgeProvider(ServerProviderBase):
     _maven_base = "https://maven.minecraftforge.net/net/minecraftforge/forge"
     _maven_metadata = "https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml"
 
-    def list_versions(self) -> list[VersionInfo]:
+    @staticmethod
+    def _loader_channel(value: str) -> str:
+        lowered = value.lower()
+        if "alpha" in lowered:
+            return "alpha"
+        if "beta" in lowered or "pre" in lowered or "rc" in lowered:
+            return "beta"
+        return "release"
+
+    @staticmethod
+    def _loader_sort_key(value: str) -> tuple[int, ...]:
+        cleaned = value.replace("-", ".")
+        parts: list[int] = []
+        for part in cleaned.split("."):
+            token = "".join(ch for ch in part if ch.isdigit())
+            parts.append(int(token) if token else 0)
+        return tuple(parts)
+
+    def list_versions(self, channel: str = "release") -> list[VersionInfo]:
+        normalized_channel = normalize_version_channel(channel, default="release")
+        if normalized_channel in {"beta", "alpha"}:
+            return []
         try:
             data = fetch_json(self._promotions_url)
             promos = data.get("promos", {})
@@ -31,8 +53,13 @@ class ForgeProvider(ServerProviderBase):
                     supported.add(key.replace("-latest", ""))
 
             ordered_versions = [
-                VersionInfo(id=item, label=item, stable=True)
-                for item in list_release_versions(minimum="1.7.10")
+                VersionInfo(
+                    id=item,
+                    label=item,
+                    stable=True,
+                    channel="release",
+                )
+                for item in list_minecraft_versions(minimum="1.7.10", channel="release")
                 if item in supported
             ]
             if ordered_versions:
@@ -40,14 +67,23 @@ class ForgeProvider(ServerProviderBase):
         except Exception:
             pass
         try:
-            fallback = list_release_versions(minimum="1.7.10")
+            fallback = list_minecraft_versions(minimum="1.7.10", channel="release")
             if fallback:
-                return [VersionInfo(id=item, label=item, stable=True) for item in fallback]
+                return [
+                    VersionInfo(
+                        id=item,
+                        label=item,
+                        stable=True,
+                        channel="release",
+                    )
+                    for item in fallback
+                ]
         except Exception:
             pass
-        return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version, stable=True)]
+        return [VersionInfo(id=self.default_mc_version, label=self.default_mc_version, stable=True, channel="release")]
 
-    def list_loader_versions(self, mc_version: str) -> list[VersionInfo]:
+    def list_loader_versions(self, mc_version: str, channel: str = "all") -> list[VersionInfo]:
+        normalized_channel = normalize_version_channel(channel, default="all")
         try:
             raw = fetch_text(self._maven_metadata)
             root = ElementTree.fromstring(raw)
@@ -61,20 +97,16 @@ class ForgeProvider(ServerProviderBase):
                     versions.append(loader_version)
             if not versions:
                 return []
-
-            def parse_loader(value: str) -> tuple[int, ...]:
-                parts: list[int] = []
-                for part in value.replace("-", ".").split("."):
-                    try:
-                        parts.append(int(part))
-                    except Exception:
-                        parts.append(0)
-                return tuple(parts)
-
-            versions.sort(key=parse_loader, reverse=True)
+            versions.sort(key=self._loader_sort_key, reverse=True)
             return [
-                VersionInfo(id=version, label=version, stable=True)
+                VersionInfo(
+                    id=version,
+                    label=version,
+                    stable=self._loader_channel(version) == "release",
+                    channel=self._loader_channel(version),
+                )
                 for version in versions
+                if normalized_channel == "all" or self._loader_channel(version) == normalized_channel
             ]
         except Exception:
             return []
@@ -116,7 +148,9 @@ class ForgeProvider(ServerProviderBase):
             server_jar_path=str(jar_path),
             start_mode="bat",
             start_bat_path=str((target_dir / "run.bat").resolve()),
-            notes=["Forge Installer heruntergeladen. Fuehre install_forge.bat einmalig aus."],
+            notes=[
+                "Forge Installer heruntergeladen. Die Erstinstallation wird beim ersten Start automatisch ausgefuehrt."
+            ],
         )
 
     def generate_start_command(self, request: ProvisionServerRequest, jar_name: str) -> str:

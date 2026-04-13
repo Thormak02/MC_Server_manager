@@ -19,6 +19,10 @@
             <p>{{ server.mc_version }}</p>
         </div>
         <div>
+            <strong>Loader/Build</strong>
+            <p>{{ server.loader_version or "-" }}</p>
+        </div>
+        <div>
             <strong>Pfad</strong>
             <p>{{ server.base_path }}</p>
         </div>
@@ -55,6 +59,36 @@
 <section class="card">
     <h2>Servereinstellungen</h2>
     <form method="post" action="/servers/{{ server.id }}/settings" class="grid grid-4">
+        <div>
+            <label for="mc_version">Minecraft Version</label>
+            <select id="mc_version" name="mc_version">
+                <option value="{{ server.mc_version }}">{{ server.mc_version }}</option>
+            </select>
+        </div>
+        <div>
+            <label for="version_channel">Versionen Filter</label>
+            <select id="version_channel">
+                <option value="release">Release</option>
+                <option value="beta">Beta/Snapshot</option>
+                <option value="alpha">Alpha</option>
+                <option value="all">Alle</option>
+            </select>
+        </div>
+        <div id="loader_version_wrap">
+            <label for="loader_version">Loader/Build Version</label>
+            <select id="loader_version" name="loader_version">
+                <option value="{{ server.loader_version or '' }}">{{ server.loader_version or "-" }}</option>
+            </select>
+        </div>
+        <div id="loader_channel_wrap">
+            <label for="loader_channel">Loader Filter</label>
+            <select id="loader_channel">
+                <option value="all">Alle</option>
+                <option value="release">Release</option>
+                <option value="beta">Beta</option>
+                <option value="alpha">Alpha</option>
+            </select>
+        </div>
         <div>
             <label for="java_profile_id">Java Profil</label>
             <select id="java_profile_id" name="java_profile_id">
@@ -129,5 +163,134 @@
         </div>
     </form>
 </section>
+{% endif %}
+{% if can_control %}
+<script>
+(function () {
+    const serverId = {{ server.id }};
+    const mcSelect = document.getElementById("mc_version");
+    const loaderSelect = document.getElementById("loader_version");
+    const loaderWrap = document.getElementById("loader_version_wrap");
+    const loaderChannelWrap = document.getElementById("loader_channel_wrap");
+    const versionChannelSelect = document.getElementById("version_channel");
+    const loaderChannelSelect = document.getElementById("loader_channel");
+    if (!mcSelect || !versionChannelSelect || !loaderSelect) return;
+
+    const currentMc = "{{ server.mc_version }}";
+    const currentLoader = "{{ server.loader_version or '' }}";
+
+    function setLoaderVisible(visible) {
+        if (loaderWrap) loaderWrap.style.display = visible ? "block" : "none";
+        if (loaderChannelWrap) loaderChannelWrap.style.display = visible ? "block" : "none";
+        if (!visible) {
+            loaderSelect.innerHTML = "<option value=\"\">-</option>";
+        }
+    }
+
+    async function fetchJson(url) {
+        const response = await fetch(url, { credentials: "same-origin" });
+        if (!response.ok) throw new Error("Request failed");
+        return response.json();
+    }
+
+    async function loadMcVersions(preferredValue) {
+        const channel = versionChannelSelect.value || "release";
+        const url =
+            `/servers/${serverId}/version-options?channel=` + encodeURIComponent(channel);
+        try {
+            const payload = await fetchJson(url);
+            const versions = Array.isArray(payload.versions) ? payload.versions : [];
+            mcSelect.innerHTML = "";
+            let hasPreferred = false;
+            for (const version of versions) {
+                const option = document.createElement("option");
+                option.value = version.id;
+                option.textContent = version.label || version.id;
+                if (preferredValue && preferredValue === version.id) {
+                    option.selected = true;
+                    hasPreferred = true;
+                }
+                mcSelect.appendChild(option);
+            }
+            if (preferredValue && !hasPreferred) {
+                const custom = document.createElement("option");
+                custom.value = preferredValue;
+                custom.textContent = `${preferredValue} (custom)`;
+                custom.selected = true;
+                mcSelect.appendChild(custom);
+            }
+        } catch (_) {
+            mcSelect.innerHTML = `<option value="${preferredValue}">${preferredValue}</option>`;
+        }
+    }
+
+    async function loadLoaderVersions(preferredValue) {
+        const channel = loaderChannelSelect ? (loaderChannelSelect.value || "all") : "all";
+        const mcVersion = mcSelect.value;
+        if (!mcVersion) {
+            setLoaderVisible(false);
+            return;
+        }
+        const url =
+            `/servers/${serverId}/loader-version-options?mc_version=` +
+            encodeURIComponent(mcVersion) +
+            `&channel=` +
+            encodeURIComponent(channel);
+        try {
+            const payload = await fetchJson(url);
+            const versions = Array.isArray(payload.versions) ? payload.versions : [];
+            if (!versions.length) {
+                setLoaderVisible(false);
+                return;
+            }
+            setLoaderVisible(true);
+            loaderSelect.innerHTML = "<option value=\"\">-</option>";
+            let hasPreferred = false;
+            for (const version of versions) {
+                const option = document.createElement("option");
+                option.value = version.id;
+                option.textContent = version.label || version.id;
+                if (preferredValue && preferredValue === version.id) {
+                    option.selected = true;
+                    hasPreferred = true;
+                }
+                loaderSelect.appendChild(option);
+            }
+            if (preferredValue && !hasPreferred) {
+                const custom = document.createElement("option");
+                custom.value = preferredValue;
+                custom.textContent = `${preferredValue} (custom)`;
+                custom.selected = true;
+                loaderSelect.appendChild(custom);
+            }
+        } catch (_) {
+            if (preferredValue) {
+                setLoaderVisible(true);
+                loaderSelect.innerHTML = `<option value="${preferredValue}" selected>${preferredValue}</option>`;
+            } else {
+                setLoaderVisible(false);
+            }
+        }
+    }
+
+    versionChannelSelect.addEventListener("change", async function () {
+        const currentValue = mcSelect.value || currentMc;
+        await loadMcVersions(currentValue);
+        await loadLoaderVersions("");
+    });
+    mcSelect.addEventListener("change", function () {
+        loadLoaderVersions("");
+    });
+    if (loaderChannelSelect) {
+        loaderChannelSelect.addEventListener("change", function () {
+            loadLoaderVersions(loaderSelect.value || currentLoader);
+        });
+    }
+
+    loadMcVersions(currentMc).then(function () {
+        loadLoaderVersions(currentLoader);
+    });
+})();
+</script>
 {% endif %}
 {% endblock %}

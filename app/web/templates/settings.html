@@ -3,6 +3,27 @@
 <h1>Einstellungen</h1>
 
 <section class="card">
+    <h2>Server Speicherpfad</h2>
+    <p class="muted">
+        Aktuell: <strong>{{ server_storage_root }}</strong>
+        (Quelle: {{ "UI" if server_storage_source == "ui" else ("ENV" if server_storage_source == "env" else "Desktop-Standard") }})
+    </p>
+    <form method="post" action="/settings/server-storage" class="grid grid-4">
+        <div>
+            <label for="server_storage_root">Basisordner fuer neue Server</label>
+            <input id="server_storage_root" name="server_storage_root" type="text" value="{{ server_storage_root }}">
+        </div>
+        <div class="align-end">
+            <button type="submit">Speichern</button>
+        </div>
+    </form>
+    <form method="post" action="/settings/server-storage" class="inline-form" style="margin-top: 0.75rem;">
+        <input type="hidden" name="reset_to_default" value="true">
+        <button type="submit" class="ghost">Auf ENV/Desktop zuruecksetzen</button>
+    </form>
+</section>
+
+<section class="card">
     <h2>Java-Profil anlegen</h2>
     <form method="post" action="/settings/java-profiles" class="grid grid-4">
         <div>
