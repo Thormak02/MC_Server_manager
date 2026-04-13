@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.permissions import is_valid_role
 from app.core.security import hash_password
 from app.models.user import User
+from app.services.password_policy_service import validate_password
 
 
 def list_users(db: Session) -> list[User]:
@@ -29,8 +30,7 @@ def create_user(
     normalized_username = username.strip()
     if not normalized_username:
         raise ValueError("Username darf nicht leer sein.")
-    if len(password) < 8:
-        raise ValueError("Passwort muss mindestens 8 Zeichen haben.")
+    validate_password(password)
     if not is_valid_role(role):
         raise ValueError("Unbekannte Rolle.")
     if get_user_by_username(db, normalized_username):
@@ -57,9 +57,7 @@ def deactivate_user(db: Session, user: User) -> User:
 
 
 def reset_password(db: Session, user: User, new_password: str) -> User:
-    if len(new_password) < 8:
-        raise ValueError("Passwort muss mindestens 8 Zeichen haben.")
-
+    validate_password(new_password)
     user.password_hash = hash_password(new_password)
     db.add(user)
     db.commit()

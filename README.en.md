@@ -28,7 +28,11 @@ Web-based management software for multiple Minecraft servers on a Windows host.
 - Server wizard for Vanilla, Paper, Spigot, Fabric, Forge
 - Provider pattern for future extensions
 - Optional provisioning offline mode
+- Platform settings (enable/disable providers, Modrinth user-agent, CurseForge API key)
+- Security features: login rate limiting, lockout, session idle timeout, CSRF same-origin checks
+- Security events page + API
 - Resource monitor (host + per-server CPU/RAM, live updates)
+- System status page + API (host summary, disks, processes)
 - Modern UI with light/dark toggle and collapsible sidebar
 
 ## Requirements
@@ -57,12 +61,19 @@ Key variables:
 - `MCSM_SECRET_KEY` session secret
 - `MCSM_INITIAL_SUPERADMIN_USERNAME` / `MCSM_INITIAL_SUPERADMIN_PASSWORD`
 - `MCSM_SQLITE_PATH` database path (default: `data/mcsm.sqlite3`)
+- `MCSM_SESSION_IDLE_TIMEOUT_SECONDS` session idle timeout
+- `MCSM_CSRF_PROTECTION_ENABLED` same-origin protection for write requests
+- `MCSM_LOGIN_RATE_LIMIT_WINDOW_SECONDS` window for login rate limiting
+- `MCSM_LOGIN_RATE_LIMIT_MAX_ATTEMPTS` max failed attempts per window
+- `MCSM_LOGIN_LOCKOUT_SECONDS` lockout duration after too many failures
+- `MCSM_PASSWORD_MIN_LENGTH` / `MCSM_PASSWORD_REQUIRE_*` password rules
 - `MCSM_SCHEDULER_TIMEZONE` timezone (default: `Europe/Berlin`)
 - `MCSM_RESTART_WARNING_TEMPLATE` warning text, `{seconds}` is replaced
 - `MCSM_RESTART_DEFAULT_DELAY_SECONDS` default delay for restart warnings
 - `MCSM_PROVISIONING_OFFLINE_MODE` `true` for offline setup without downloads
 - `MCSM_DEFAULT_SERVER_ROOT` optional base directory for new servers (empty => desktop default)
 - `MCSM_DEFAULT_BACKUP_ROOT` optional base directory for backups
+- `MCSM_MODRINTH_ENABLED` / `MCSM_CURSEFORGE_ENABLED` global provider enable flags
 
 ## First Login
 
@@ -85,7 +96,7 @@ Change these in `.env` before production use.
 - `.env` and runtime data are excluded via `.gitignore`.
 - Live console and resource monitor require running server processes for meaningful values.
 
-## Phase 3-4 API Endpoints
+## Phase 3-5 API Endpoints
 
 - `POST /api/servers/{server_id}/files/upload` (multipart: `upload`, `target_dir`, `overwrite`)
 - `DELETE /api/servers/{server_id}/files?path=<relative>&recursive=true|false`
@@ -95,3 +106,8 @@ Change these in `.env` before production use.
 - `POST /api/servers/{server_id}/backups`
 - `DELETE /api/backups/{backup_id}`
 - `POST /api/backups/{backup_id}/restore`
+- `GET /api/security-events`
+- `GET /api/system/summary`
+- `GET /api/system/processes`
+- `GET /api/platform-settings`
+- `PATCH /api/platform-settings/{provider_name}`

@@ -15,6 +15,16 @@ class Settings(BaseSettings):
     )
     session_cookie_name: str = "mcsm_session"
     session_max_age_seconds: int = 60 * 60 * 12
+    session_idle_timeout_seconds: int = 60 * 30
+    csrf_protection_enabled: bool = True
+    security_log_ip: bool = True
+    login_rate_limit_window_seconds: int = 300
+    login_rate_limit_max_attempts: int = 8
+    login_lockout_seconds: int = 900
+    password_min_length: int = 10
+    password_require_uppercase: bool = True
+    password_require_lowercase: bool = True
+    password_require_digit: bool = True
 
     data_dir: Path = Path("data")
     database_url: str | None = None
@@ -30,6 +40,8 @@ class Settings(BaseSettings):
     provisioning_offline_mode: bool = False
     default_server_root: str | None = None
     default_backup_root: str | None = None
+    modrinth_enabled: bool = True
+    curseforge_enabled: bool = True
     curseforge_api_key: str | None = None
     modrinth_user_agent: str = "mc-server-manager/1.0"
 

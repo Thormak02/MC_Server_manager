@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services import audit_service
+from app.services import audit_service, security_service
 from app.services.auth_service import (
     authenticate_credentials,
     clear_session,
@@ -41,19 +41,53 @@ def login_action(
     password: Annotated[str, Form()],
     db: Session = Depends(get_db),
 ):
-    user = authenticate_credentials(db, username.strip(), password)
-
+    normalized_username = username.strip()
     client_host = request.client.host if request.client else "unknown"
+    allowed, reason = security_service.is_login_allowed(
+        db,
+        username=normalized_username,
+        ip_address=client_host,
+    )
+    if not allowed:
+        security_service.log_security_event(
+            db,
+            event_type="login_blocked",
+            username=normalized_username,
+            ip_address=client_host,
+            details=reason,
+        )
+        audit_service.log_action(
+            db,
+            action="auth.login_blocked_rate_limit",
+            details=f"username={normalized_username} ip={client_host}",
+        )
+        push_flash(request, reason or "Login aktuell blockiert.", "error")
+        return RedirectResponse(url="/login", status_code=303)
+
+    user = authenticate_credentials(db, normalized_username, password)
+
     if user is None:
+        security_service.record_login_failed(
+            db,
+            username=normalized_username,
+            ip_address=client_host,
+        )
         audit_service.log_action(
             db,
             action="auth.login_failed",
-            details=f"username={username.strip()} ip={client_host}",
+            details=f"username={normalized_username} ip={client_host}",
         )
         push_flash(request, "Ungueltige Login-Daten.", "error")
         return RedirectResponse(url="/login", status_code=303)
 
     if not user.is_active:
+        security_service.log_security_event(
+            db,
+            event_type="login_blocked_inactive",
+            user_id=user.id,
+            username=user.username,
+            ip_address=client_host,
+        )
         audit_service.log_action(
             db,
             action="auth.login_blocked_inactive",
@@ -65,6 +99,12 @@ def login_action(
 
     set_logged_in_session(request, user)
     touch_last_login(db, user)
+    security_service.record_login_success(
+        db,
+        user_id=user.id,
+        username=user.username,
+        ip_address=client_host,
+    )
     audit_service.log_action(
         db,
         action="auth.login_success",

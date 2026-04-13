@@ -8,8 +8,10 @@ from app.api.routers import (
     java_profiles,
     provisioning,
     schedules,
+    security_events,
     servers,
     server_templates,
+    system_status,
     users,
 )
 
@@ -23,7 +25,9 @@ __all__ = [
     "java_profiles",
     "provisioning",
     "schedules",
+    "security_events",
     "servers",
     "server_templates",
+    "system_status",
     "users",
 ]

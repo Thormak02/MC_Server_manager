@@ -11,7 +11,9 @@ from app.models.backup import Backup  # noqa: F401
 from app.models.installed_content import InstalledContent  # noqa: F401
 from app.models.java_profile import JavaProfile  # noqa: F401
 from app.models.job_history import JobHistory  # noqa: F401
+from app.models.platform_setting import PlatformSetting  # noqa: F401
 from app.models.restore_history import RestoreHistory  # noqa: F401
+from app.models.security_event import SecurityEvent  # noqa: F401
 from app.models.scheduled_job import ScheduledJob  # noqa: F401
 from app.models.server import Server  # noqa: F401
 from app.models.server_permission import ServerPermission  # noqa: F401

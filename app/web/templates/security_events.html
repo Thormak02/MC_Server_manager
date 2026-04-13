@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Security Events</h1>
+
+<section class="card">
+    <form method="get" action="/security-events" class="grid grid-4">
+        <div>
+            <label for="user_id">User ID</label>
+            <input id="user_id" name="user_id" type="number" value="{{ filter_user_id or '' }}">
+        </div>
+        <div>
+            <label for="username">Username</label>
+            <input id="username" name="username" type="text" value="{{ filter_username }}">
+        </div>
+        <div>
+            <label for="event_type">Event Type</label>
+            <input id="event_type" name="event_type" type="text" value="{{ filter_event_type }}">
+        </div>
+        <div>
+            <label for="ip_address">IP</label>
+            <input id="ip_address" name="ip_address" type="text" value="{{ filter_ip }}">
+        </div>
+        <div>
+            <label for="limit">Limit</label>
+            <input id="limit" name="limit" type="number" min="1" max="2000" value="{{ limit }}">
+        </div>
+        <div class="align-end">
+            <button type="submit">Filtern</button>
+        </div>
+    </form>
+</section>
+
+<section class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Zeit</th>
+                <th>Typ</th>
+                <th>User ID</th>
+                <th>Username</th>
+                <th>IP</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in entries %}
+            <tr>
+                <td>{{ entry.created_at or "-" }}</td>
+                <td>{{ entry.event_type }}</td>
+                <td>{{ entry.user_id or "-" }}</td>
+                <td>{{ entry.username or "-" }}</td>
+                <td>{{ entry.ip_address or "-" }}</td>
+                <td>{{ entry.details or "-" }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6">Keine Security Events vorhanden.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
+

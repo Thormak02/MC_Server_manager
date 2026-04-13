@@ -45,6 +45,37 @@
 </section>
 
 <section class="card">
+    <h2>Plattform Einstellungen</h2>
+    <div class="grid grid-4">
+        <form method="post" action="/settings/platform/modrinth" class="stack">
+            <h3>Modrinth</h3>
+            <label>
+                <input type="checkbox" name="enabled" value="true" {% if platform_settings.modrinth.enabled == "true" %}checked{% endif %}>
+                Provider aktiv
+            </label>
+            <label for="modrinth_user_agent">User-Agent</label>
+            <input id="modrinth_user_agent" name="user_agent" type="text" value="{{ platform_settings.modrinth.user_agent }}">
+            <button type="submit">Modrinth speichern</button>
+        </form>
+
+        <form method="post" action="/settings/platform/curseforge" class="stack">
+            <h3>CurseForge</h3>
+            <label>
+                <input type="checkbox" name="enabled" value="true" {% if platform_settings.curseforge.enabled == "true" %}checked{% endif %}>
+                Provider aktiv
+            </label>
+            <label for="curseforge_api_key">API Key (optional neu setzen)</label>
+            <input id="curseforge_api_key" name="api_key" type="text" placeholder="{% if platform_settings.curseforge.api_key %}Gesetzt{% else %}Leer{% endif %}">
+            <label>
+                <input type="checkbox" name="clear_api_key" value="true">
+                API Key zuruecksetzen (ENV/leer)
+            </label>
+            <button type="submit">CurseForge speichern</button>
+        </form>
+    </div>
+</section>
+
+<section class="card">
     <h2>Java-Profil anlegen</h2>
     <form method="post" action="/settings/java-profiles" class="grid grid-4">
         <div>

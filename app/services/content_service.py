@@ -7,10 +7,14 @@ from pathlib import Path
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.models.installed_content import InstalledContent
 from app.models.server import Server
 from app.services import audit_service
+from app.services.platform_settings_service import (
+    get_curseforge_api_key_runtime,
+    get_modrinth_user_agent_runtime,
+    is_provider_enabled_runtime,
+)
 
 
 MODRINTH_BASE = "https://api.modrinth.com/v2"
@@ -43,13 +47,15 @@ def _download_file(url: str, target: Path, headers: dict[str, str] | None = None
 
 
 def _modrinth_headers() -> dict[str, str]:
-    settings = get_settings()
-    return {"User-Agent": settings.modrinth_user_agent}
+    if not is_provider_enabled_runtime("modrinth"):
+        raise ValueError("Modrinth Provider ist deaktiviert.")
+    return {"User-Agent": get_modrinth_user_agent_runtime()}
 
 
 def _curseforge_headers() -> dict[str, str]:
-    settings = get_settings()
-    api_key = (settings.curseforge_api_key or "").strip()
+    if not is_provider_enabled_runtime("curseforge"):
+        raise ValueError("CurseForge Provider ist deaktiviert.")
+    api_key = get_curseforge_api_key_runtime()
     if not api_key or api_key.upper() in {"CHANGE_ME", "CHANGEME", "YOUR_KEY", "REPLACE_ME"}:
         raise ValueError("CurseForge API Key fehlt oder ist Platzhalter (MCSM_CURSEFORGE_API_KEY).")
     return {"x-api-key": api_key}

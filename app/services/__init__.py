@@ -13,4 +13,8 @@ __all__ = [
     "schedule_service",
     "template_service",
     "content_service",
+    "password_policy_service",
+    "platform_settings_service",
+    "security_service",
+    "system_service",
 ]

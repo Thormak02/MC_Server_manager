@@ -28,7 +28,11 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Server-Wizard fuer Vanilla, Paper, Spigot, Fabric, Forge
 - Provider-Prinzip fuer spaetere Erweiterungen
 - Optionaler Provisioning-Offline-Modus
+- Plattform-Einstellungen (Provider aktiv/deaktivieren, Modrinth User-Agent, CurseForge API Key)
+- Sicherheitsfunktionen: Login Rate-Limit, Lockout, Session-Idle-Timeout, CSRF Same-Origin Check
+- Security Events Ansicht + API
 - Ressourcenmonitor (Host + Server CPU/RAM, live aktualisiert)
+- Systemstatus Seite + API (Host Summary, Disks, Prozesse)
 - Modernes UI mit Light/Dark Umschaltung und ausklappbarer Sidebar
 
 ## Voraussetzungen
@@ -57,12 +61,19 @@ Wichtige Variablen:
 - `MCSM_SECRET_KEY` Session-Secret
 - `MCSM_INITIAL_SUPERADMIN_USERNAME` / `MCSM_INITIAL_SUPERADMIN_PASSWORD`
 - `MCSM_SQLITE_PATH` Pfad zur DB (Default: `data/mcsm.sqlite3`)
+- `MCSM_SESSION_IDLE_TIMEOUT_SECONDS` Idle-Timeout fuer Sessions
+- `MCSM_CSRF_PROTECTION_ENABLED` Same-Origin Schutz fuer Schreib-Requests
+- `MCSM_LOGIN_RATE_LIMIT_WINDOW_SECONDS` Zeitfenster fuer Login-Rate-Limit
+- `MCSM_LOGIN_RATE_LIMIT_MAX_ATTEMPTS` max. Fehlversuche pro Fenster
+- `MCSM_LOGIN_LOCKOUT_SECONDS` Sperrdauer nach zu vielen Fehlversuchen
+- `MCSM_PASSWORD_MIN_LENGTH` / `MCSM_PASSWORD_REQUIRE_*` Passwortregeln
 - `MCSM_SCHEDULER_TIMEZONE` Zeitzone (Default: `Europe/Berlin`)
 - `MCSM_RESTART_WARNING_TEMPLATE` Warntext, `{seconds}` wird ersetzt
 - `MCSM_RESTART_DEFAULT_DELAY_SECONDS` Standard-Delay fuer Neustartwarnungen
 - `MCSM_PROVISIONING_OFFLINE_MODE` `true` fuer Offline-Setup ohne Downloads
 - `MCSM_DEFAULT_SERVER_ROOT` Optionaler Basisordner fuer neue Server (leer => Desktop Standard)
 - `MCSM_DEFAULT_BACKUP_ROOT` Optionaler Basisordner fuer Backups
+- `MCSM_MODRINTH_ENABLED` / `MCSM_CURSEFORGE_ENABLED` Provider global aktivieren/deaktivieren
 
 ## Erstlogin
 
@@ -85,7 +96,7 @@ Vor Produktivbetrieb in `.env` aendern.
 - `.env` und Laufzeitdaten sind in `.gitignore` ausgeschlossen.
 - Live-Konsole und Ressourcenmonitor benoetigen laufende Serverprozesse fuer sinnvolle Werte.
 
-## Phase 3-4 API Endpunkte
+## Phase 3-5 API Endpunkte
 
 - `POST /api/servers/{server_id}/files/upload` (multipart: `upload`, `target_dir`, `overwrite`)
 - `DELETE /api/servers/{server_id}/files?path=<relativ>&recursive=true|false`
@@ -95,3 +106,8 @@ Vor Produktivbetrieb in `.env` aendern.
 - `POST /api/servers/{server_id}/backups`
 - `DELETE /api/backups/{backup_id}`
 - `POST /api/backups/{backup_id}/restore`
+- `GET /api/security-events`
+- `GET /api/system/summary`
+- `GET /api/system/processes`
+- `GET /api/platform-settings`
+- `PATCH /api/platform-settings/{provider_name}`

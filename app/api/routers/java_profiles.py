@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.constants import UserRole
@@ -25,6 +25,11 @@ from app.services.java_profile_service import (
     list_java_profiles,
     set_default_java_profile,
 )
+from app.services.platform_settings_service import (
+    get_provider_settings,
+    list_platform_settings,
+    update_provider_settings,
+)
 from app.web.routes.pages import build_context, push_flash, templates
 
 
@@ -38,6 +43,14 @@ def _require_super_admin(request: Request, db: Session):
     if user.role != UserRole.SUPER_ADMIN.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     return user
+
+
+def _to_bool(raw: str | bool | None) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return False
+    return raw.strip().lower() in {"1", "true", "on", "yes"}
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -54,6 +67,7 @@ def settings_page(
     server_storage_source = get_server_storage_source(db)
     backup_storage_root = str(get_backup_storage_root(db))
     backup_storage_source = get_backup_storage_source(db)
+    platform_settings = list_platform_settings(db, include_secrets=False)
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -66,6 +80,7 @@ def settings_page(
             server_storage_source=server_storage_source,
             backup_storage_root=backup_storage_root,
             backup_storage_source=backup_storage_source,
+            platform_settings=platform_settings,
         ),
     )
 
@@ -160,6 +175,99 @@ def update_backup_storage_action(
     )
     push_flash(request, f"Backup-Pfad gespeichert: {new_path}", "success")
     return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/platform/{provider_name}")
+def update_platform_settings_action(
+    request: Request,
+    provider_name: str,
+    enabled: Annotated[str | None, Form()] = None,
+    api_key: Annotated[str | None, Form()] = None,
+    clear_api_key: Annotated[str | None, Form()] = None,
+    user_agent: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    provider = (provider_name or "").strip().lower()
+    updates: dict[str, object] = {"enabled": _to_bool(enabled)}
+    if provider == "curseforge":
+        normalized_key = (api_key or "").strip()
+        if _to_bool(clear_api_key):
+            updates["api_key"] = ""
+        elif normalized_key:
+            updates["api_key"] = normalized_key
+    elif provider == "modrinth":
+        updates["user_agent"] = (user_agent or "").strip()
+    else:
+        push_flash(request, "Unbekannter Provider.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    try:
+        update_provider_settings(db, provider_name=provider, updates=updates)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="settings.platform_update",
+        user_id=current_user.id,
+        details=f"provider={provider}",
+    )
+    push_flash(request, f"Plattform-Einstellungen gespeichert ({provider}).", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.get("/api/platform-settings", response_class=JSONResponse)
+def api_platform_settings(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    return JSONResponse({"providers": list_platform_settings(db, include_secrets=False)})
+
+
+@router.patch("/api/platform-settings/{provider_name}", response_class=JSONResponse)
+async def api_update_platform_settings(
+    request: Request,
+    provider_name: str,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    if not isinstance(payload, dict):
+        return JSONResponse(status_code=400, content={"detail": "JSON body muss ein Objekt sein."})
+
+    if "enabled" in payload:
+        payload["enabled"] = _to_bool(payload.get("enabled"))
+
+    try:
+        updated = update_provider_settings(
+            db,
+            provider_name=provider_name,
+            updates=payload,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    audit_service.log_action(
+        db,
+        action="settings.platform_update",
+        user_id=current_user.id,
+        details=f"provider={provider_name}",
+    )
+    return JSONResponse({"provider": provider_name, "settings": updated})
 
 
 @router.post("/settings/java-profiles")
