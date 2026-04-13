@@ -120,6 +120,13 @@ a {
     background: var(--panel-soft);
 }
 
+.side-nav a.active {
+    color: var(--accent-strong);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+    box-shadow: 0 6px 14px rgba(15, 127, 112, 0.14);
+}
+
 .side-footer {
     border-top: 1px solid var(--border);
     padding-top: 0.75rem;
@@ -267,10 +274,16 @@ button.ghost,
     color: var(--muted);
 }
 
+.side-nav .side-logout button.logout-btn {
+    color: color-mix(in srgb, var(--danger) 75%, var(--text));
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+    background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+}
+
 .side-nav .side-logout button:hover {
-    color: var(--text);
-    border-color: var(--border);
-    background: var(--panel-soft);
+    color: color-mix(in srgb, var(--danger) 85%, var(--text));
+    border-color: color-mix(in srgb, var(--danger) 50%, var(--border));
+    background: color-mix(in srgb, var(--danger) 16%, var(--panel));
 }
 
 .button-like {

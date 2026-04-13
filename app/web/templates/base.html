@@ -7,30 +7,31 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ request.url_for('static', path='css/app.css') }}?v=5">
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/app.css') }}?v=6">
 </head>
 <body class="{% if current_user %}layout-authenticated{% else %}layout-public{% endif %}">
 {% if current_user %}
 <aside class="sidebar" id="app-sidebar">
+    {% set path = request.url.path %}
     <div class="sidebar-head">
         <div class="brand-mark">MSM</div>
         <div class="brand-text">MC Server Manager</div>
     </div>
     <nav class="side-nav">
-        <a href="/dashboard">Dashboard</a>
-        <a href="/resources">Ressourcen</a>
+        <a href="/dashboard" class="{% if path == '/dashboard' or (path.startswith('/servers/') and not path.startswith('/servers/create') and not path.startswith('/servers/import')) %}active{% endif %}">Dashboard</a>
+        <a href="/resources" class="{% if path.startswith('/resources') %}active{% endif %}">Ressourcen</a>
         {% if current_user.role == "super_admin" %}
-        <a href="/servers/create">Server erstellen</a>
-        <a href="/servers/import">Server importieren</a>
-        <a href="/templates">Templates</a>
-        <a href="/users">Benutzer</a>
-        <a href="/settings">Einstellungen</a>
-        <a href="/system-status">Systemstatus</a>
-        <a href="/audit-logs">Audit Logs</a>
-        <a href="/security-events">Security Events</a>
+        <a href="/servers/create" class="{% if path.startswith('/servers/create') %}active{% endif %}">Server erstellen</a>
+        <a href="/servers/import" class="{% if path.startswith('/servers/import') %}active{% endif %}">Server importieren</a>
+        <a href="/templates" class="{% if path.startswith('/templates') %}active{% endif %}">Templates</a>
+        <a href="/users" class="{% if path.startswith('/users') %}active{% endif %}">Benutzer</a>
+        <a href="/settings" class="{% if path.startswith('/settings') %}active{% endif %}">Einstellungen</a>
+        <a href="/system-status" class="{% if path.startswith('/system-status') %}active{% endif %}">Systemstatus</a>
+        <a href="/audit-logs" class="{% if path.startswith('/audit-logs') %}active{% endif %}">Audit Logs</a>
+        <a href="/security-events" class="{% if path.startswith('/security-events') %}active{% endif %}">Security Events</a>
         {% endif %}
         <form method="post" action="/logout" class="side-logout">
-            <button type="submit" class="ghost">Logout</button>
+            <button type="submit" class="ghost logout-btn">Logout</button>
         </form>
     </nav>
     <div class="side-footer">
