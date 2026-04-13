@@ -86,17 +86,32 @@ def _iter_backup_files(server_base: Path, scope: str) -> list[Path]:
     return paths
 
 
-def _write_zip(server_base: Path, files: list[Path], destination_zip: Path) -> int:
+def _write_zip(server_base: Path, files: list[Path], destination_zip: Path) -> tuple[int, int, int]:
     destination_zip.parent.mkdir(parents=True, exist_ok=True)
     size_bytes = 0
+    written_files = 0
+    skipped_files = 0
+    destination_zip_resolved = destination_zip.resolve()
     with zipfile.ZipFile(destination_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
         for file in files:
             if not file.exists() or not file.is_file():
                 continue
-            relative = file.relative_to(server_base).as_posix()
-            archive.write(file, arcname=relative)
-            size_bytes += file.stat().st_size
-    return size_bytes
+            try:
+                file_resolved = file.resolve()
+                if file_resolved == destination_zip_resolved:
+                    skipped_files += 1
+                    continue
+                relative = file.relative_to(server_base).as_posix()
+                archive.write(file_resolved, arcname=relative)
+                try:
+                    size_bytes += file_resolved.stat().st_size
+                except OSError:
+                    pass
+                written_files += 1
+            except (OSError, ValueError):
+                skipped_files += 1
+                continue
+    return size_bytes, written_files, skipped_files
 
 
 def list_backups_for_server(db: Session, server_id: int) -> list[Backup]:
@@ -171,9 +186,15 @@ def create_backup(
             stop_server(db, server, initiated_by_user_id, force=False)
 
         files = _iter_backup_files(base, scope)
+        # Falls Backup-Zielordner innerhalb des Serverordners liegt, Ziel-Dateien ausschliessen.
+        target_dir = zip_path.parent.resolve()
+        if target_dir.is_relative_to(base):
+            files = [f for f in files if not f.is_relative_to(target_dir)]
         if not files:
             raise ValueError("Keine Dateien fuer dieses Backup gefunden.")
-        size_bytes = _write_zip(base, files, zip_path)
+        size_bytes, written_files, skipped_files = _write_zip(base, files, zip_path)
+        if written_files <= 0:
+            raise ValueError("Keine lesbaren Dateien fuer dieses Backup gefunden.")
 
         backup.size_bytes = size_bytes
         backup.status = "success"
@@ -186,7 +207,10 @@ def create_backup(
             action="backup.create",
             user_id=initiated_by_user_id,
             server_id=server.id,
-            details=f"backup_id={backup.id} scope={scope} pre_action={action} size={size_bytes}",
+            details=(
+                f"backup_id={backup.id} scope={scope} pre_action={action} "
+                f"size={size_bytes} written={written_files} skipped={skipped_files}"
+            ),
         )
         return backup
     except Exception as exc:
