@@ -4,13 +4,55 @@
 
 {% include "server_nav.html" %}
 
+<section class="card">
+    <h2>Dateiaktionen</h2>
+    <div class="grid grid-4">
+        <form method="post" action="/servers/{{ server.id }}/files/upload" enctype="multipart/form-data" class="stack">
+            <label for="upload_target_dir">Upload Zielordner</label>
+            <input id="upload_target_dir" name="target_dir" type="text" placeholder="z.B. mods oder config" value=".">
+            <input name="upload" type="file" required {% if not can_edit %}disabled{% endif %}>
+            <label><input name="overwrite" type="checkbox" value="true" {% if not can_edit %}disabled{% endif %}> Existierende Datei ueberschreiben</label>
+            <button type="submit" {% if not can_edit %}disabled{% endif %}>Datei hochladen</button>
+        </form>
+
+        <form method="post" action="/servers/{{ server.id }}/files/create-text" class="stack">
+            <label for="create_text_path">Neue Textdatei</label>
+            <input id="create_text_path" name="relative_path" type="text" placeholder="z.B. config/mein-config.txt" {% if not can_edit %}readonly{% endif %}>
+            <input name="initial_content" type="text" placeholder="Optionaler Startinhalt" {% if not can_edit %}readonly{% endif %}>
+            <button type="submit" {% if not can_edit %}disabled{% endif %}>Textdatei erstellen</button>
+        </form>
+
+        <form method="post" action="/servers/{{ server.id }}/directories" class="stack">
+            <label for="create_dir_path">Neuer Ordner</label>
+            <input id="create_dir_path" name="relative_dir" type="text" placeholder="z.B. backups/manual" {% if not can_edit %}readonly{% endif %}>
+            <button type="submit" {% if not can_edit %}disabled{% endif %}>Ordner erstellen</button>
+        </form>
+
+        <form method="post" action="/servers/{{ server.id }}/files/delete" class="stack">
+            <label for="delete_path">Datei/Ordner loeschen</label>
+            <input id="delete_path" name="relative_path" type="text" value="{{ selected_file or '' }}" placeholder="Relativer Pfad" {% if not can_edit %}readonly{% endif %}>
+            <label><input name="recursive" type="checkbox" value="true" {% if not can_edit %}disabled{% endif %}> Rekursiv (nur fuer Ordner)</label>
+            <button type="submit" class="danger" {% if not can_edit %}disabled{% endif %}>Loeschen</button>
+        </form>
+
+        <form method="get" action="/servers/{{ server.id }}/files/download" class="stack">
+            <label for="download_path">Datei herunterladen</label>
+            <input id="download_path" name="path" type="text" value="{{ selected_file or '' }}" placeholder="Relativer Dateipfad">
+            <button type="submit">Download</button>
+        </form>
+    </div>
+    {% if not can_edit %}
+    <p class="muted">Nur Lesen: Dateioperationen sind fuer diesen Nutzer gesperrt.</p>
+    {% endif %}
+</section>
+
 <section class="grid grid-3">
     <article class="card">
         <h2>Verfuegbare Dateien</h2>
         <div class="file-list">
             {% for path in available_files %}
             <div>
-                <a href="/servers/{{ server.id }}/files?file={{ path }}">{{ path }}</a>
+                <a href="/servers/{{ server.id }}/files?file={{ path|urlencode }}">{{ path }}</a>
             </div>
             {% else %}
             <p class="muted">Keine editierbaren Dateien gefunden.</p>
@@ -22,8 +64,9 @@
         <h2>Dateiinhalt</h2>
         {% if file_content %}
         <div class="inline-form">
-            <a class="button-like" href="/servers/{{ server.id }}/files?file={{ file_content.relative_path }}&mode=assistant">Assistent</a>
-            <a class="button-like" href="/servers/{{ server.id }}/files?file={{ file_content.relative_path }}&mode=raw">Freitext</a>
+            <a class="button-like" href="/servers/{{ server.id }}/files/download?path={{ file_content.relative_path|urlencode }}">Download</a>
+            <a class="button-like" href="/servers/{{ server.id }}/files?file={{ file_content.relative_path|urlencode }}&mode=assistant">Assistent</a>
+            <a class="button-like" href="/servers/{{ server.id }}/files?file={{ file_content.relative_path|urlencode }}&mode=raw">Freitext</a>
         </div>
 
         {% if selected_mode == "assistant" and assistant_payload %}

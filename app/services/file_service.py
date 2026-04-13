@@ -1,4 +1,6 @@
 import json
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -72,22 +74,49 @@ def _is_inside_base(base: Path, target: Path) -> bool:
     return target == base or base in target.parents
 
 
-def validate_server_relative_path(server: Server, relative_path: str) -> Path:
-    base = _server_base_path(server)
-    if not base.exists() or not base.is_dir():
-        raise ValueError("Serverordner existiert nicht.")
-
+def _normalize_relative_path(relative_path: str) -> str:
     cleaned = (relative_path or "").strip().replace("\\", "/")
     if not cleaned:
         raise ValueError("Dateipfad fehlt.")
     if cleaned.startswith("/"):
         raise ValueError("Nur relative Pfade innerhalb des Serverordners sind erlaubt.")
+    if re.match(r"^[A-Za-z]:", cleaned):
+        raise ValueError("Absolute Windows-Pfade sind nicht erlaubt.")
+    return cleaned
 
+
+def resolve_server_path(
+    server: Server,
+    relative_path: str,
+    *,
+    must_exist: bool = True,
+    expect_file: bool | None = None,
+) -> Path:
+    base = _server_base_path(server)
+    if not base.exists() or not base.is_dir():
+        raise ValueError("Serverordner existiert nicht.")
+
+    cleaned = _normalize_relative_path(relative_path)
     resolved = (base / cleaned).resolve()
     if not _is_inside_base(base, resolved):
         raise ValueError("Dateizugriff ausserhalb des Serverordners ist nicht erlaubt.")
-    if not resolved.exists() or not resolved.is_file():
-        raise ValueError("Datei nicht gefunden.")
+
+    if must_exist and not resolved.exists():
+        raise ValueError("Datei oder Ordner nicht gefunden.")
+    if expect_file is True and resolved.exists() and not resolved.is_file():
+        raise ValueError("Es wurde eine Datei erwartet.")
+    if expect_file is False and resolved.exists() and not resolved.is_dir():
+        raise ValueError("Es wurde ein Ordner erwartet.")
+    return resolved
+
+
+def validate_server_relative_path(server: Server, relative_path: str) -> Path:
+    resolved = resolve_server_path(
+        server,
+        relative_path,
+        must_exist=True,
+        expect_file=True,
+    )
     if not _is_text_file(resolved):
         raise ValueError("Nur Textdateien koennen bearbeitet werden.")
     return resolved
@@ -134,6 +163,104 @@ def read_text_file(server: Server, relative_path: str) -> FileReadResponse:
 def write_text_file(server: Server, relative_path: str, content: str) -> None:
     resolved = validate_server_relative_path(server, relative_path)
     resolved.write_text(content, encoding="utf-8")
+
+
+def create_text_file(server: Server, relative_path: str, content: str = "") -> str:
+    target = resolve_server_path(
+        server,
+        relative_path,
+        must_exist=False,
+        expect_file=None,
+    )
+    if target.exists():
+        raise ValueError("Datei oder Ordner existiert bereits.")
+    if not _is_inside_base(_server_base_path(server), target):
+        raise ValueError("Dateizugriff ausserhalb des Serverordners ist nicht erlaubt.")
+    if not _is_text_file(target):
+        raise ValueError("Neue Datei muss eine Text-Endung haben.")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+    return target.relative_to(_server_base_path(server)).as_posix()
+
+
+def create_directory(server: Server, relative_dir: str) -> str:
+    target = resolve_server_path(
+        server,
+        relative_dir,
+        must_exist=False,
+        expect_file=None,
+    )
+    if target.exists() and not target.is_dir():
+        raise ValueError("Unter diesem Pfad existiert bereits eine Datei.")
+    target.mkdir(parents=True, exist_ok=True)
+    return target.relative_to(_server_base_path(server)).as_posix()
+
+
+def upload_file(
+    server: Server,
+    *,
+    target_dir: str,
+    original_filename: str,
+    content_bytes: bytes,
+    overwrite: bool = False,
+) -> str:
+    directory = resolve_server_path(
+        server,
+        target_dir,
+        must_exist=True,
+        expect_file=False,
+    )
+    safe_name = Path(original_filename or "").name.strip()
+    if not safe_name or safe_name in {".", ".."}:
+        raise ValueError("Ungueltiger Dateiname.")
+
+    target = (directory / safe_name).resolve()
+    if not _is_inside_base(_server_base_path(server), target):
+        raise ValueError("Dateizugriff ausserhalb des Serverordners ist nicht erlaubt.")
+    if target.exists() and target.is_dir():
+        raise ValueError("Unter diesem Namen existiert bereits ein Ordner.")
+    if target.exists() and not overwrite:
+        raise ValueError("Datei existiert bereits. Bitte erst loeschen oder ueberschreiben aktivieren.")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(content_bytes)
+    return target.relative_to(_server_base_path(server)).as_posix()
+
+
+def delete_path(server: Server, relative_path: str, *, recursive: bool = False) -> str:
+    target = resolve_server_path(
+        server,
+        relative_path,
+        must_exist=True,
+        expect_file=None,
+    )
+    base = _server_base_path(server)
+    if target == base:
+        raise ValueError("Der Server-Hauptordner darf nicht geloescht werden.")
+
+    if target.is_dir():
+        if recursive:
+            shutil.rmtree(target)
+        else:
+            try:
+                target.rmdir()
+            except OSError as exc:
+                raise ValueError(
+                    "Ordner ist nicht leer. Fuer nicht-leere Ordner rekursives Loeschen verwenden."
+                ) from exc
+    else:
+        target.unlink()
+
+    return target.relative_to(base).as_posix()
+
+
+def get_download_file(server: Server, relative_path: str) -> Path:
+    return resolve_server_path(
+        server,
+        relative_path,
+        must_exist=True,
+        expect_file=True,
+    )
 
 
 def _parse_properties(content: str) -> tuple[dict[str, str], list[str]]:

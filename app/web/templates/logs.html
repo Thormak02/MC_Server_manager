@@ -10,9 +10,9 @@
             <label for="file">Datei</label>
             <select id="file" name="file">
                 <option value="">Aktuelle Sitzung (RAM)</option>
-                {% for filename in available_files %}
-                <option value="{{ filename }}" {% if selected_file == filename %}selected{% endif %}>
-                    {{ filename }}
+                {% for entry in available_files %}
+                <option value="{{ entry.key }}" {% if selected_file == entry.key %}selected{% endif %}>
+                    {{ entry.label }}
                 </option>
                 {% endfor %}
             </select>
@@ -21,9 +21,26 @@
             <label for="q">Filter</label>
             <input id="q" name="q" type="text" value="{{ query }}" placeholder="z.B. warn, error, player">
         </div>
+        <div>
+            <label for="level">Level</label>
+            <select id="level" name="level">
+                <option value="all" {% if log_level == "all" %}selected{% endif %}>Alle</option>
+                <option value="warning" {% if log_level == "warning" %}selected{% endif %}>Warnungen</option>
+                <option value="error" {% if log_level == "error" %}selected{% endif %}>Fehler</option>
+            </select>
+        </div>
+        <div>
+            <label for="lines_limit">Zeilenlimit</label>
+            <input id="lines_limit" name="lines_limit" type="number" min="100" max="10000" value="{{ lines_limit }}">
+        </div>
         <div class="align-end">
             <button type="submit">Anzeigen</button>
         </div>
+        {% if selected_file %}
+        <div class="align-end">
+            <a class="button-like" href="/servers/{{ server.id }}/logs/download?file={{ selected_file|urlencode }}">Download Logdatei</a>
+        </div>
+        {% endif %}
     </form>
 </section>
 

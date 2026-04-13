@@ -12,9 +12,12 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Start, Stopp, Neustart inklusive Statusverwaltung
 - Live-Konsole via WebSocket (Senden/Empfangen)
 - Loganzeige (aktuelle Session + gespeicherte Logs)
+- Erweiterte Logansicht mit Level-Filter (Alle/Warnungen/Fehler), Zeilenlimit und Log-Download
 - Audit-Log Ansicht
+- Erweiterte Audit-Filter (Benutzer, Server, Action, Volltext, Zeitraum) + JSON API
 - Dateibearbeitung fuer freigegebene Textdateien
 - Konfigeditor mit 2 Modi: Freitext und Assistent (strukturierte Felder)
+- Datei-Upload/Download, Textdatei anlegen, Ordner anlegen, Datei/Ordner loeschen (mit Pfadschutz)
 - Java-Profile Verwaltung
 - Servereinstellungen (Java, RAM, Port, Startparameter)
 - Scheduling fuer Start/Stop/Restart/Command (Cron oder `interval:<sekunden>`)
@@ -78,3 +81,10 @@ Vor Produktivbetrieb in `.env` aendern.
 
 - `.env` und Laufzeitdaten sind in `.gitignore` ausgeschlossen.
 - Live-Konsole und Ressourcenmonitor benoetigen laufende Serverprozesse fuer sinnvolle Werte.
+
+## Phase 3 API Endpunkte
+
+- `POST /api/servers/{server_id}/files/upload` (multipart: `upload`, `target_dir`, `overwrite`)
+- `DELETE /api/servers/{server_id}/files?path=<relativ>&recursive=true|false`
+- `POST /api/servers/{server_id}/directories` (form: `relative_dir`)
+- `GET /api/audit-logs` (Filter: `user_id`, `server_id`, `action`, `q`, `date_from`, `date_to`, `limit`)

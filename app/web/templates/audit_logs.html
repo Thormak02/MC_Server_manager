@@ -3,14 +3,58 @@
 <h1>Audit Logs</h1>
 
 <section class="card">
+    <form method="get" action="/audit-logs" class="grid grid-4" style="margin-bottom: 1rem;">
+        <div>
+            <label for="user_id">Benutzer</label>
+            <select id="user_id" name="user_id">
+                <option value="">Alle</option>
+                {% for user in users %}
+                <option value="{{ user.id }}" {% if filter_user_id == user.id %}selected{% endif %}>{{ user.username }} ({{ user.id }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="server_id">Server</label>
+            <select id="server_id" name="server_id">
+                <option value="">Alle</option>
+                {% for server in servers %}
+                <option value="{{ server.id }}" {% if filter_server_id == server.id %}selected{% endif %}>{{ server.name }} ({{ server.id }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="action">Action</label>
+            <input id="action" name="action" type="text" value="{{ filter_action }}" placeholder="z.B. server.start">
+        </div>
+        <div>
+            <label for="q">Volltext</label>
+            <input id="q" name="q" type="text" value="{{ filter_query }}" placeholder="Suche in action/details">
+        </div>
+        <div>
+            <label for="date_from">Von (ISO)</label>
+            <input id="date_from" name="date_from" type="text" value="{{ filter_date_from }}" placeholder="YYYY-MM-DD">
+        </div>
+        <div>
+            <label for="date_to">Bis (ISO)</label>
+            <input id="date_to" name="date_to" type="text" value="{{ filter_date_to }}" placeholder="YYYY-MM-DD">
+        </div>
+        <div>
+            <label for="limit">Limit</label>
+            <input id="limit" name="limit" type="number" min="1" max="2000" value="{{ limit }}">
+        </div>
+        <div class="align-end">
+            <button type="submit">Filtern</button>
+        </div>
+    </form>
+
     <p class="muted">Letzte {{ entries|length }} Eintraege</p>
     <table>
         <thead>
             <tr>
                 <th>Zeit</th>
                 <th>Action</th>
-                <th>User ID</th>
-                <th>Server ID</th>
+                <th>Benutzer</th>
+                <th>Server</th>
                 <th>Details</th>
             </tr>
         </thead>
@@ -19,8 +63,8 @@
             <tr>
                 <td>{{ entry.created_at }}</td>
                 <td>{{ entry.action }}</td>
-                <td>{{ entry.user_id or "-" }}</td>
-                <td>{{ entry.server_id or "-" }}</td>
+                <td>{% if entry.user %}{{ entry.user.username }} ({{ entry.user_id }}){% else %}{{ entry.user_id or "-" }}{% endif %}</td>
+                <td>{% if entry.server_id %}{{ server_map.get(entry.server_id, "ID " ~ entry.server_id) }} ({{ entry.server_id }}){% else %}-{% endif %}</td>
                 <td>{{ entry.details or "-" }}</td>
             </tr>
             {% else %}

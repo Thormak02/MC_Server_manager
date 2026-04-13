@@ -12,9 +12,12 @@ Web-based management software for multiple Minecraft servers on a Windows host.
 - Start, stop, restart with runtime status tracking
 - Live console via WebSocket (send/receive)
 - Log view (current session + stored logs)
+- Extended log view with level filters (all/warnings/errors), line limit, and log download
 - Audit log view
+- Extended audit filters (user, server, action, full text, time range) + JSON API
 - File editor for whitelisted text files
 - Config editor with 2 modes: raw text and assistant (structured fields)
+- File upload/download, text file creation, directory creation, file/directory delete (path-protected)
 - Java profile management
 - Server settings (Java, RAM, port, start parameters)
 - Scheduling for start/stop/restart/command (cron or `interval:<seconds>`)
@@ -78,3 +81,10 @@ Change these in `.env` before production use.
 
 - `.env` and runtime data are excluded via `.gitignore`.
 - Live console and resource monitor require running server processes for meaningful values.
+
+## Phase 3 API Endpoints
+
+- `POST /api/servers/{server_id}/files/upload` (multipart: `upload`, `target_dir`, `overwrite`)
+- `DELETE /api/servers/{server_id}/files?path=<relative>&recursive=true|false`
+- `POST /api/servers/{server_id}/directories` (form: `relative_dir`)
+- `GET /api/audit-logs` (filters: `user_id`, `server_id`, `action`, `q`, `date_from`, `date_to`, `limit`)

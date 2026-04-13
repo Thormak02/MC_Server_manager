@@ -1,7 +1,8 @@
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -9,9 +10,14 @@ from app.services import audit_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.file_service import (
     build_content_from_assistant,
+    create_directory,
+    create_text_file,
+    delete_path,
     get_assistant_payload,
+    get_download_file,
     list_files,
     read_text_file,
+    upload_file as upload_server_file,
     write_text_file,
 )
 from app.services.server_service import can_edit_server_files, can_view_server, get_server_by_id
@@ -159,3 +165,294 @@ async def save_file_assistant_action(
         url=f"/servers/{server_id}/files?file={relative_path}&mode=assistant",
         status_code=303,
     )
+
+
+@router.get("/servers/{server_id}/files/download")
+def download_file_action(
+    request: Request,
+    server_id: int,
+    path: str,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_view_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    try:
+        target = get_download_file(server, path)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="server.file_download",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"path={Path(path).as_posix()}",
+    )
+    return FileResponse(path=str(target), filename=target.name, media_type="application/octet-stream")
+
+
+@router.post("/servers/{server_id}/files/upload")
+async def upload_file_action(
+    request: Request,
+    server_id: int,
+    upload: UploadFile = File(...),
+    target_dir: Annotated[str, Form()] = ".",
+    overwrite: Annotated[bool, Form()] = False,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_edit_server_files(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    filename = (upload.filename or "").strip()
+    if not filename:
+        push_flash(request, "Bitte eine Datei auswaehlen.", "error")
+        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+
+    try:
+        payload = await upload.read()
+        relative_path = upload_server_file(
+            server,
+            target_dir=(target_dir or ".").strip() or ".",
+            original_filename=filename,
+            content_bytes=payload,
+            overwrite=overwrite,
+        )
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="server.file_upload",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"path={relative_path} size={len(payload)}",
+    )
+    push_flash(request, f"Datei hochgeladen: {relative_path}", "success")
+    return RedirectResponse(url=f"/servers/{server_id}/files?file={relative_path}&mode=raw", status_code=303)
+
+
+@router.post("/servers/{server_id}/directories")
+def create_directory_action(
+    request: Request,
+    server_id: int,
+    relative_dir: Annotated[str, Form()],
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_edit_server_files(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    try:
+        created = create_directory(server, relative_dir)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="server.directory_create",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"path={created}",
+    )
+    push_flash(request, f"Ordner erstellt: {created}", "success")
+    return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+
+
+@router.post("/servers/{server_id}/files/create-text")
+def create_text_file_action(
+    request: Request,
+    server_id: int,
+    relative_path: Annotated[str, Form()],
+    initial_content: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_edit_server_files(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    try:
+        created = create_text_file(server, relative_path, initial_content or "")
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="server.file_create",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"path={created}",
+    )
+    push_flash(request, f"Textdatei erstellt: {created}", "success")
+    return RedirectResponse(url=f"/servers/{server_id}/files?file={created}&mode=raw", status_code=303)
+
+
+@router.post("/servers/{server_id}/files/delete")
+def delete_file_action(
+    request: Request,
+    server_id: int,
+    relative_path: Annotated[str, Form()],
+    recursive: Annotated[bool, Form()] = False,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_edit_server_files(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    try:
+        deleted = delete_path(server, relative_path, recursive=recursive)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="server.file_delete",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"path={deleted} recursive={recursive}",
+    )
+    push_flash(request, f"Geloescht: {deleted}", "success")
+    return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+
+
+@router.post("/api/servers/{server_id}/files/upload", response_class=JSONResponse)
+async def api_upload_file_action(
+    request: Request,
+    server_id: int,
+    upload: UploadFile = File(...),
+    target_dir: Annotated[str, Form()] = ".",
+    overwrite: Annotated[bool, Form()] = False,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        return JSONResponse(status_code=404, content={"detail": "Server not found"})
+    if not can_edit_server_files(db, current_user, server):
+        return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+
+    try:
+        payload = await upload.read()
+        relative_path = upload_server_file(
+            server,
+            target_dir=(target_dir or ".").strip() or ".",
+            original_filename=upload.filename or "",
+            content_bytes=payload,
+            overwrite=overwrite,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    audit_service.log_action(
+        db,
+        action="server.file_upload",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"path={relative_path} size={len(payload)}",
+    )
+    return JSONResponse({"status": "ok", "path": relative_path, "size": len(payload)})
+
+
+@router.delete("/api/servers/{server_id}/files", response_class=JSONResponse)
+def api_delete_file_action(
+    request: Request,
+    server_id: int,
+    path: str = Query(...),
+    recursive: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        return JSONResponse(status_code=404, content={"detail": "Server not found"})
+    if not can_edit_server_files(db, current_user, server):
+        return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+
+    try:
+        deleted = delete_path(server, path, recursive=recursive)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    audit_service.log_action(
+        db,
+        action="server.file_delete",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"path={deleted} recursive={recursive}",
+    )
+    return JSONResponse({"status": "ok", "path": deleted})
+
+
+@router.post("/api/servers/{server_id}/directories", response_class=JSONResponse)
+def api_create_directory_action(
+    request: Request,
+    server_id: int,
+    relative_dir: Annotated[str, Form()],
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        return JSONResponse(status_code=404, content={"detail": "Server not found"})
+    if not can_edit_server_files(db, current_user, server):
+        return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+
+    try:
+        created = create_directory(server, relative_dir)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    audit_service.log_action(
+        db,
+        action="server.directory_create",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"path={created}",
+    )
+    return JSONResponse({"status": "ok", "path": created})
