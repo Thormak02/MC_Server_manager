@@ -12,6 +12,7 @@ from app.providers.server.vanilla_provider import VanillaProvider
 from app.schemas.provider import ProvisionServerRequest, VersionInfo
 from app.schemas.server import ServerCreate
 from app.services.app_setting_service import get_server_storage_root
+from app.services.java_runtime_service import choose_best_java_profile
 from app.services.server_service import create_server, sync_server_settings_to_files
 from app.services.server_service import slugify
 
@@ -54,6 +55,14 @@ class ProvisioningService:
         target_dir.mkdir(parents=True, exist_ok=True)
 
         provision_result = provider.provision(data, target_dir)
+        notes = list(provision_result.notes)
+
+        java_profile_id = data.java_profile_id
+        if java_profile_id is None:
+            auto_profile = choose_best_java_profile(db, mc_version=data.mc_version)
+            if auto_profile is not None:
+                java_profile_id = auto_profile.id
+                notes.append(f"Java-Profil automatisch zugewiesen: {auto_profile.name}")
 
         server_jar_name = None
         if provision_result.server_jar_path:
@@ -87,7 +96,7 @@ class ProvisioningService:
                 start_mode=provision_result.start_mode,
                 start_command=start_command if provision_result.start_mode == "command" else None,
                 start_bat_path=start_bat_path if provision_result.start_mode == "bat" else None,
-                java_profile_id=data.java_profile_id,
+                java_profile_id=java_profile_id,
                 memory_min_mb=data.memory_min_mb,
                 memory_max_mb=data.memory_max_mb,
                 port=data.port,
@@ -97,7 +106,7 @@ class ProvisioningService:
         db.add(server)
         db.commit()
         db.refresh(server)
-        return server, provision_result.notes
+        return server, notes
 
     def resolve_target_directory(self, db: Session, *, server_name: str, target_path: str | None) -> Path:
         requested = (target_path or "").strip()

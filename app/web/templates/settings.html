@@ -76,6 +76,44 @@
 </section>
 
 <section class="card">
+    <h2>Java automatisch erkennen</h2>
+    <p class="muted">
+        Der Manager scannt den Host nach vorhandenen Java-Installationen und legt/aktualisiert passende Java-Profile.
+    </p>
+    <form method="post" action="/settings/java-profiles/discover" class="inline-form">
+        <button type="submit">Java auf Host erkennen</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>Java ueber Manager installieren (winget)</h2>
+    <p class="muted">
+        Optional: Installiert Temurin JDK ueber `winget` (erfordert winget und ggf. Adminrechte).
+    </p>
+    <form method="post" action="/settings/java-profiles/install" class="grid grid-4">
+        <div>
+            <label for="major_version">Java Version</label>
+            <select id="major_version" name="major_version">
+                <option value="8">8</option>
+                <option value="11">11</option>
+                <option value="17">17</option>
+                <option value="21" selected>21</option>
+                <option value="23">23</option>
+            </select>
+        </div>
+        <div>
+            <label for="distribution">Distribution</label>
+            <select id="distribution" name="distribution">
+                <option value="temurin" selected>Temurin</option>
+            </select>
+        </div>
+        <div class="align-end">
+            <button type="submit">Java installieren</button>
+        </div>
+    </form>
+</section>
+
+<section class="card">
     <h2>Java-Profil anlegen</h2>
     <form method="post" action="/settings/java-profiles" class="grid grid-4">
         <div>

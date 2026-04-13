@@ -10,6 +10,7 @@ from app.models.scheduled_job import ScheduledJob
 from app.models.server import Server
 from app.models.server_permission import ServerPermission
 from app.models.user import User
+from app.services.java_runtime_service import choose_best_java_profile
 from app.schemas.server import ServerCreate, ServerImportConfirm
 
 
@@ -105,6 +106,11 @@ def can_edit_server_files(db: Session, user: User, server: Server) -> bool:
 def create_server(db: Session, data: ServerCreate) -> Server:
     base_path = str(Path(data.base_path).resolve())
     unique_name = _generate_unique_name(db, data.name)
+    java_profile_id = data.java_profile_id
+    if java_profile_id is None:
+        auto_profile = choose_best_java_profile(db, mc_version=data.mc_version)
+        if auto_profile is not None:
+            java_profile_id = auto_profile.id
     server = Server(
         name=unique_name,
         slug=_generate_unique_slug(db, unique_name),
@@ -115,7 +121,7 @@ def create_server(db: Session, data: ServerCreate) -> Server:
         start_mode=data.start_mode,
         start_command=data.start_command,
         start_bat_path=data.start_bat_path,
-        java_profile_id=data.java_profile_id,
+        java_profile_id=java_profile_id,
         memory_min_mb=data.memory_min_mb,
         memory_max_mb=data.memory_max_mb,
         port=data.port,
@@ -309,6 +315,15 @@ def update_server_settings(
             server.mc_version = stripped_version
     server.loader_version = (loader_version or "").strip() or None
     server.java_profile_id = java_profile_id
+    if server.java_profile_id is None:
+        auto_profile = choose_best_java_profile(db, mc_version=server.mc_version)
+        if auto_profile is not None:
+            server.java_profile_id = auto_profile.id
+            warnings = [f"Java-Profil automatisch gesetzt: {auto_profile.name}"]
+        else:
+            warnings = []
+    else:
+        warnings = []
     server.memory_min_mb = memory_min_mb
     server.memory_max_mb = memory_max_mb
     server.port = port
@@ -318,7 +333,7 @@ def update_server_settings(
     server.start_command = start_command
     server.start_bat_path = start_bat_path
 
-    warnings = sync_server_settings_to_files(server)
+    warnings.extend(sync_server_settings_to_files(server))
 
     db.add(server)
     db.commit()

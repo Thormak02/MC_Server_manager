@@ -79,7 +79,7 @@
         <div>
             <label for="java_profile_id">Java Profil</label>
             <select id="java_profile_id" name="java_profile_id">
-                <option value="">-</option>
+                <option value="">Automatisch (kompatibel)</option>
                 {% for profile in java_profiles %}
                 <option value="{{ profile.id }}">{{ profile.name }}{% if profile.version_label %} ({{ profile.version_label }}){% endif %}</option>
                 {% endfor %}

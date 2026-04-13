@@ -25,6 +25,10 @@ from app.services.java_profile_service import (
     list_java_profiles,
     set_default_java_profile,
 )
+from app.services.java_runtime_service import (
+    install_java_with_winget,
+    sync_detected_java_profiles,
+)
 from app.services.platform_settings_service import (
     get_provider_settings,
     list_platform_settings,
@@ -306,6 +310,79 @@ def create_java_profile_action(
         details=f"profile={profile.name}",
     )
     push_flash(request, f"Java-Profil '{profile.name}' angelegt.", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/java-profiles/discover")
+def discover_java_profiles_action(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        detected, created, updated = sync_detected_java_profiles(db, force=True)
+    except Exception as exc:
+        push_flash(request, f"Java-Erkennung fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="java_profile.discover",
+        user_id=current_user.id,
+        details=f"detected={detected} created={created} updated={updated}",
+    )
+    push_flash(
+        request,
+        f"Java-Erkennung abgeschlossen: gefunden={detected}, neu={created}, aktualisiert={updated}",
+        "success",
+    )
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/java-profiles/install")
+def install_java_action(
+    request: Request,
+    major_version: Annotated[str, Form()] = "21",
+    distribution: Annotated[str, Form()] = "temurin",
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        major = int((major_version or "").strip())
+    except ValueError:
+        push_flash(request, "Ungueltige Java-Version.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    ok, message = install_java_with_winget(
+        major_version=major,
+        distribution=(distribution or "temurin").strip().lower(),
+    )
+    if not ok:
+        push_flash(request, message, "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    try:
+        detected, created, updated = sync_detected_java_profiles(db, force=True)
+    except Exception:
+        detected, created, updated = 0, 0, 0
+
+    audit_service.log_action(
+        db,
+        action="java_profile.install",
+        user_id=current_user.id,
+        details=f"major={major} distribution={distribution} detected={detected} created={created} updated={updated}",
+    )
+    push_flash(
+        request,
+        f"{message} Erkennung: gefunden={detected}, neu={created}, aktualisiert={updated}",
+        "success",
+    )
     return RedirectResponse(url="/settings", status_code=303)
 
 

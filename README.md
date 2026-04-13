@@ -19,6 +19,8 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Konfigeditor mit 2 Modi: Freitext und Assistent (strukturierte Felder)
 - Datei-Upload/Download, Textdatei anlegen, Ordner anlegen, Datei/Ordner loeschen (mit Pfadschutz)
 - Java-Profile Verwaltung
+- Automatische Java-Erkennung auf dem Host (inkl. Versions-Label) und Auto-Zuordnung pro Serverversion
+- Optionale Java-Installation ueber Manager via `winget` (Temurin)
 - Servereinstellungen (Java, RAM, Port, Startparameter)
 - Scheduling fuer Start/Stop/Restart/Command (Cron oder `interval:<sekunden>`)
 - Backup Scheduling (Job-Typ `backup`) inklusive Job-Historie
@@ -40,6 +42,7 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Windows 10/11
 - Python 3.10+ (empfohlen 3.11)
 - Java-Installationen fuer die Ziel-Server (als Java-Profile hinterlegen)
+- Optional fuer Java-Installation im Manager: `winget`
 
 ## Start
 

@@ -23,6 +23,7 @@ from app.services.app_setting_service import (
     ensure_backup_storage_initialized,
     ensure_server_storage_initialized,
 )
+from app.services.java_runtime_service import sync_detected_java_profiles
 
 
 def init_db() -> None:
@@ -94,3 +95,8 @@ def _ensure_server_storage_root() -> None:
     with SessionLocal() as db:
         ensure_server_storage_initialized(db)
         ensure_backup_storage_initialized(db)
+        try:
+            sync_detected_java_profiles(db, force=True)
+        except Exception:
+            # Auto-Erkennung darf den App-Start nicht blockieren.
+            pass

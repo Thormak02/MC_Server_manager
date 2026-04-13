@@ -19,6 +19,8 @@ Web-based management software for multiple Minecraft servers on a Windows host.
 - Config editor with 2 modes: raw text and assistant (structured fields)
 - File upload/download, text file creation, directory creation, file/directory delete (path-protected)
 - Java profile management
+- Automatic Java detection on the host (with version labels) and auto-assignment per server version
+- Optional Java installation via manager using `winget` (Temurin)
 - Server settings (Java, RAM, port, start parameters)
 - Scheduling for start/stop/restart/command (cron or `interval:<seconds>`)
 - Backup scheduling (job type `backup`) including job history
@@ -40,6 +42,7 @@ Web-based management software for multiple Minecraft servers on a Windows host.
 - Windows 10/11
 - Python 3.10+ (3.11 recommended)
 - Java installations for the target servers (configure as Java profiles)
+- Optional for Java install in manager: `winget`
 
 ## Start
 

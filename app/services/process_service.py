@@ -13,6 +13,7 @@ from app.db.session import SessionLocal
 from app.models.server import Server
 from app.services import audit_service
 from app.services.console_service import console_service
+from app.services.java_runtime_service import prepare_server_java_runtime
 
 try:
     import psutil  # type: ignore[import-not-found]
@@ -209,7 +210,11 @@ def _append_subprocess_output(server_id: int, text: str) -> None:
             console_service.append_output(server_id, f"[forge-install] {line}")
 
 
-def _prepare_forge_runtime_if_needed(server: Server, base_path: Path) -> tuple[bool, str]:
+def _prepare_forge_runtime_if_needed(
+    server: Server,
+    base_path: Path,
+    runtime_env: dict[str, str] | None,
+) -> tuple[bool, str]:
     if server.server_type != "forge" or server.start_mode != "bat":
         return True, ""
 
@@ -238,6 +243,7 @@ def _prepare_forge_runtime_if_needed(server: Server, base_path: Path) -> tuple[b
         completed = subprocess.run(
             install_command,
             cwd=None if use_pushd else str(base_path),
+            env=runtime_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -461,11 +467,21 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
     if is_running(server.id):
         return False, "Server laeuft bereits."
 
+    java_ok, java_message, runtime_env = prepare_server_java_runtime(db, server)
+    if not java_ok:
+        server.status = "error"
+        db.add(server)
+        db.commit()
+        return False, java_message
+    java_message_clean = (java_message or "").strip()
+    if java_message_clean:
+        console_service.append_output(server.id, java_message)
+
     base_path = Path(server.base_path).expanduser().resolve()
     if not base_path.exists() or not base_path.is_dir():
         return False, "Serverordner existiert nicht."
 
-    prepared, prepare_message = _prepare_forge_runtime_if_needed(server, base_path)
+    prepared, prepare_message = _prepare_forge_runtime_if_needed(server, base_path, runtime_env)
     if not prepared:
         server.status = "error"
         db.add(server)
@@ -491,6 +507,7 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
         process = subprocess.Popen(
             command,
             cwd=None if use_pushd else str(base_path),
+            env=runtime_env,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -534,7 +551,10 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
         details=f"pid={process.pid}",
     )
     console_service.append_output(server.id, "Serverprozess gestartet.")
-    return True, "Server gestartet."
+    message = "Server gestartet."
+    if java_message_clean:
+        message = f"{message} {java_message_clean}"
+    return True, message
 
 
 def _send_server_message(server: Server, message: str) -> None:
