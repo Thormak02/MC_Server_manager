@@ -2,22 +2,28 @@
 {% block content %}
 <h1>Systemstatus</h1>
 
-<section class="grid grid-4">
+<section
+    id="system-status-live"
+    data-summary-endpoint="/api/system/summary"
+    data-process-endpoint="/api/system/processes"
+    data-interval="5000"
+    data-limit="{{ process_limit }}"
+    class="grid grid-4">
     <article class="card">
         <h2>CPU Host</h2>
-        <p class="metric">{{ "%.1f"|format(summary.host.cpu_percent or 0.0) }}%</p>
+        <p class="metric" id="system-host-cpu">{{ "%.1f"|format(summary.host.cpu_percent or 0.0) }}%</p>
     </article>
     <article class="card">
         <h2>RAM Host</h2>
-        <p class="metric">{{ "%.1f"|format(summary.host.memory_percent or 0.0) }}%</p>
+        <p class="metric" id="system-host-ram">{{ "%.1f"|format(summary.host.memory_percent or 0.0) }}%</p>
     </article>
     <article class="card">
         <h2>Managed Server</h2>
-        <p class="metric">{{ summary.managed_running }}/{{ summary.managed_total }}</p>
+        <p class="metric"><span id="system-managed-running">{{ summary.managed_running }}</span>/<span id="system-managed-total">{{ summary.managed_total }}</span></p>
     </article>
     <article class="card">
         <h2>Generiert</h2>
-        <p class="metric" style="font-size: 1rem;">{{ summary.generated_at }}</p>
+        <p class="metric" id="system-generated-at" style="font-size: 1rem;">{{ summary.generated_at }}</p>
     </article>
 </section>
 
@@ -35,7 +41,7 @@
                 <th>Auslastung</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="system-disks-body">
             {% for disk in summary.disks %}
             <tr>
                 <td>{{ disk.device }}</td>
@@ -66,7 +72,7 @@
                 <th>Uptime</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="system-managed-body">
             {% for row in managed %}
             <tr>
                 <td><a href="/servers/{{ row.server_id }}">{{ row.server_name }}</a></td>
@@ -101,7 +107,7 @@
                 <th>RAM</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="system-host-body">
             {% for proc in processes %}
             <tr>
                 <td>{{ proc.pid }}</td>
@@ -117,4 +123,3 @@
     </table>
 </section>
 {% endblock %}
-

@@ -2,18 +2,18 @@
 {% block content %}
 <h1>Dashboard</h1>
 
-<section class="grid grid-4">
+<section class="grid grid-4" id="dashboard-live" data-endpoint="/api/resources" data-interval="5000">
     <article class="card">
         <h2>Server gesamt</h2>
-        <p class="metric">{{ summary.total_servers }}</p>
+        <p class="metric" id="dashboard-total-servers">{{ summary.total_servers }}</p>
     </article>
     <article class="card">
         <h2>Server laufend</h2>
-        <p class="metric">{{ summary.running_servers }}</p>
+        <p class="metric" id="dashboard-running-servers">{{ summary.running_servers }}</p>
     </article>
     <article class="card">
         <h2>CPU Host</h2>
-        <p class="metric">
+        <p class="metric" id="dashboard-host-cpu">
             {% if host_resources.cpu_percent is not none %}
             {{ "%.1f"|format(host_resources.cpu_percent) }}%
             {% else %}
@@ -23,7 +23,7 @@
     </article>
     <article class="card">
         <h2>RAM Host</h2>
-        <p class="metric">
+        <p class="metric" id="dashboard-host-ram">
             {% if host_resources.memory_percent is not none %}
             {{ "%.1f"|format(host_resources.memory_percent) }}%
             {% else %}
@@ -53,18 +53,18 @@
             {% for server in servers %}
             {% set runtime = server_runtime.get(server.id, {}) %}
             {% set usage = runtime.get("usage", {}) %}
-            <tr>
+            <tr data-server-id="{{ server.id }}">
                 <td><a href="/servers/{{ server.id }}">{{ server.name }}</a></td>
                 <td>{{ server.server_type }}</td>
                 <td>{{ server.mc_version }}</td>
-                <td>{{ server.status }}</td>
-                <td>
+                <td id="dashboard-status-{{ server.id }}">{{ server.status }}</td>
+                <td id="dashboard-players-{{ server.id }}">
                     {% set current = runtime.get("players_current") %}
                     {% set max_players = runtime.get("players_max") %}
                     {{ current if current is not none else 0 }}/{{ max_players if max_players is not none else "?" }}
                 </td>
-                <td>{{ "%.1f"|format(usage.get("cpu_percent", 0.0) or 0.0) }}%</td>
-                <td>{{ "%.1f"|format(usage.get("memory_mb", 0.0) or 0.0) }} MB</td>
+                <td id="dashboard-cpu-{{ server.id }}">{{ "%.1f"|format(usage.get("cpu_percent", 0.0) or 0.0) }}%</td>
+                <td id="dashboard-ram-{{ server.id }}">{{ "%.1f"|format(usage.get("memory_mb", 0.0) or 0.0) }} MB</td>
                 <td>
                     {% if current_user.role != "view_only" %}
                     <form method="post" action="/servers/{{ server.id }}/start" class="inline-form">

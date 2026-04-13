@@ -19,7 +19,6 @@
     </div>
     <nav class="side-nav">
         <a href="/dashboard" class="{% if path == '/dashboard' or (path.startswith('/servers/') and not path.startswith('/servers/create') and not path.startswith('/servers/import')) %}active{% endif %}">Dashboard</a>
-        <a href="/resources" class="{% if path.startswith('/resources') %}active{% endif %}">Ressourcen</a>
         {% if current_user.role == "super_admin" %}
         <a href="/servers/create" class="{% if path.startswith('/servers/create') %}active{% endif %}">Server erstellen</a>
         <a href="/servers/import" class="{% if path.startswith('/servers/import') %}active{% endif %}">Server importieren</a>
@@ -58,6 +57,6 @@
     </main>
 </div>
 
-<script src="{{ request.url_for('static', path='js/app.js') }}?v=5" defer></script>
+<script src="{{ request.url_for('static', path='js/app.js') }}?v=7" defer></script>
 </body>
 </html>

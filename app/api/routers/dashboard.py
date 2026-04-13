@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.core.constants import UserRole
 from app.db.session import get_db
 from app.services.auth_service import get_current_user_from_session
 from app.services.process_service import get_player_counts, get_process_resource_usage, refresh_runtime_states
@@ -60,18 +61,9 @@ def resources_page(
     if current_user is None:
         return RedirectResponse(url="/login", status_code=303)
 
-    entries = get_server_resource_entries(db, current_user)
-    return templates.TemplateResponse(
-        request,
-        "resources.html",
-        build_context(
-            request,
-            current_user=current_user,
-            page_title="Ressourcenmonitor",
-            host_resources=get_host_resources(),
-            entries=entries,
-        ),
-    )
+    if current_user.role == UserRole.SUPER_ADMIN.value:
+        return RedirectResponse(url="/system-status", status_code=303)
+    return RedirectResponse(url="/dashboard", status_code=303)
 
 
 @router.get("/api/resources", response_class=JSONResponse)
@@ -83,6 +75,8 @@ def resources_live(
     if current_user is None:
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
 
+    visible_servers = list_servers_for_user(db, current_user)
+    refresh_runtime_states(db, visible_servers)
     entries = get_server_resource_entries(db, current_user)
     payload_entries: list[dict[str, object]] = []
     for row in entries:
@@ -99,6 +93,7 @@ def resources_live(
                 "players_max": row.get("players_max"),
                 "memory_share_percent": row.get("memory_share_percent", 0.0),
                 "usage": {
+                    "running": usage.get("running"),
                     "cpu_percent": usage.get("cpu_percent"),
                     "memory_mb": usage.get("memory_mb"),
                     "pid": usage.get("pid"),

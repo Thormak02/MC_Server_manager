@@ -224,7 +224,270 @@
             });
         }
 
+        function initDashboardLive() {
+            const container = document.getElementById("dashboard-live");
+            if (!container) return;
+
+            const endpoint = container.dataset.endpoint || "/api/resources";
+            const interval = parseInt(container.dataset.interval || "5000", 10);
+            const hostCpu = document.getElementById("dashboard-host-cpu");
+            const hostRam = document.getElementById("dashboard-host-ram");
+            const totalServers = document.getElementById("dashboard-total-servers");
+            const runningServers = document.getElementById("dashboard-running-servers");
+
+            function formatNumber(value, digits) {
+                if (value === null || value === undefined || Number.isNaN(value)) {
+                    return "-";
+                }
+                return Number(value).toFixed(digits);
+            }
+
+            function updateHost(host) {
+                if (hostCpu) {
+                    hostCpu.textContent =
+                        host.cpu_percent === null || host.cpu_percent === undefined
+                            ? "-"
+                            : `${formatNumber(host.cpu_percent, 1)}%`;
+                }
+                if (hostRam) {
+                    hostRam.textContent =
+                        host.memory_percent === null || host.memory_percent === undefined
+                            ? "-"
+                            : `${formatNumber(host.memory_percent, 1)}%`;
+                }
+            }
+
+            function updateServers(entries) {
+                if (!Array.isArray(entries)) return;
+
+                if (totalServers) {
+                    totalServers.textContent = String(entries.length);
+                }
+
+                let runningCount = 0;
+                entries.forEach((entry) => {
+                    const server = entry.server || {};
+                    const usage = entry.usage || {};
+                    const serverId = server.id;
+                    if (!serverId) return;
+
+                    const status = String(server.status || "-");
+                    if (status === "running" || usage.running === true) {
+                        runningCount += 1;
+                    }
+
+                    const statusEl = document.getElementById(`dashboard-status-${serverId}`);
+                    const playersEl = document.getElementById(`dashboard-players-${serverId}`);
+                    const cpuEl = document.getElementById(`dashboard-cpu-${serverId}`);
+                    const ramEl = document.getElementById(`dashboard-ram-${serverId}`);
+
+                    if (statusEl) statusEl.textContent = status;
+                    if (playersEl) {
+                        const playersCurrent =
+                            entry.players_current === null || entry.players_current === undefined
+                                ? 0
+                                : entry.players_current;
+                        const playersMax =
+                            entry.players_max === null || entry.players_max === undefined
+                                ? "?"
+                                : entry.players_max;
+                        playersEl.textContent = `${playersCurrent}/${playersMax}`;
+                    }
+                    if (cpuEl) {
+                        cpuEl.textContent = `${formatNumber(usage.cpu_percent || 0, 1)}%`;
+                    }
+                    if (ramEl) {
+                        ramEl.textContent = `${formatNumber(usage.memory_mb || 0, 1)} MB`;
+                    }
+                });
+
+                if (runningServers) {
+                    runningServers.textContent = String(runningCount);
+                }
+            }
+
+            async function refresh() {
+                try {
+                    const response = await fetch(endpoint, {
+                        headers: { Accept: "application/json" },
+                        cache: "no-store",
+                    });
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    updateHost(data.host || {});
+                    updateServers(data.entries || []);
+                } catch (_) {}
+            }
+
+            refresh();
+            const intervalId = window.setInterval(refresh, Number.isFinite(interval) ? interval : 5000);
+            window.addEventListener("beforeunload", function () {
+                window.clearInterval(intervalId);
+            });
+        }
+
+        function initSystemStatusLive() {
+            const container = document.getElementById("system-status-live");
+            if (!container) return;
+
+            const summaryEndpoint = container.dataset.summaryEndpoint || "/api/system/summary";
+            const processesEndpoint = container.dataset.processEndpoint || "/api/system/processes";
+            const interval = parseInt(container.dataset.interval || "5000", 10);
+            const limit = parseInt(container.dataset.limit || "50", 10);
+
+            const hostCpu = document.getElementById("system-host-cpu");
+            const hostRam = document.getElementById("system-host-ram");
+            const managedRunning = document.getElementById("system-managed-running");
+            const managedTotal = document.getElementById("system-managed-total");
+            const generatedAt = document.getElementById("system-generated-at");
+            const disksBody = document.getElementById("system-disks-body");
+            const managedBody = document.getElementById("system-managed-body");
+            const hostBody = document.getElementById("system-host-body");
+
+            function escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/\"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
+            function formatNumber(value, digits) {
+                if (value === null || value === undefined || Number.isNaN(value)) {
+                    return "-";
+                }
+                return Number(value).toFixed(digits);
+            }
+
+            function updateSummary(summary) {
+                if (!summary) return;
+                const host = summary.host || {};
+                if (hostCpu) {
+                    hostCpu.textContent =
+                        host.cpu_percent === null || host.cpu_percent === undefined
+                            ? "-"
+                            : `${formatNumber(host.cpu_percent, 1)}%`;
+                }
+                if (hostRam) {
+                    hostRam.textContent =
+                        host.memory_percent === null || host.memory_percent === undefined
+                            ? "-"
+                            : `${formatNumber(host.memory_percent, 1)}%`;
+                }
+                if (managedRunning) managedRunning.textContent = String(summary.managed_running ?? 0);
+                if (managedTotal) managedTotal.textContent = String(summary.managed_total ?? 0);
+                if (generatedAt) generatedAt.textContent = summary.generated_at || "-";
+
+                if (disksBody) {
+                    const disks = Array.isArray(summary.disks) ? summary.disks : [];
+                    if (disks.length === 0) {
+                        disksBody.innerHTML = '<tr><td colspan="7">Keine Datentraegerinfos verfuegbar.</td></tr>';
+                    } else {
+                        disksBody.innerHTML = disks
+                            .map((disk) => {
+                                return `
+<tr>
+    <td>${escapeHtml(disk.device || "-")}</td>
+    <td>${escapeHtml(disk.mountpoint || "-")}</td>
+    <td>${escapeHtml(disk.fstype || "-")}</td>
+    <td>${formatNumber(disk.total_gb, 2)} GB</td>
+    <td>${formatNumber(disk.used_gb, 2)} GB</td>
+    <td>${formatNumber(disk.free_gb, 2)} GB</td>
+    <td>${formatNumber(disk.percent, 1)}%</td>
+</tr>`;
+                            })
+                            .join("");
+                    }
+                }
+            }
+
+            function formatUptime(seconds) {
+                if (seconds === null || seconds === undefined || Number.isNaN(seconds)) {
+                    return "-";
+                }
+                const mins = Math.floor(Number(seconds) / 60);
+                return `${mins} min`;
+            }
+
+            function updateProcesses(data) {
+                if (!data) return;
+
+                if (managedBody) {
+                    const managed = Array.isArray(data.managed) ? data.managed : [];
+                    if (managed.length === 0) {
+                        managedBody.innerHTML = '<tr><td colspan="6">Keine managed Prozesse.</td></tr>';
+                    } else {
+                        managedBody.innerHTML = managed
+                            .map((row) => {
+                                return `
+<tr>
+    <td><a href="/servers/${row.server_id}">${escapeHtml(row.server_name || "-")}</a></td>
+    <td>${escapeHtml(row.status || "-")}</td>
+    <td>${row.pid || "-"}</td>
+    <td>${formatNumber(row.cpu_percent || 0, 1)}%</td>
+    <td>${formatNumber(row.memory_mb || 0, 1)} MB</td>
+    <td>${formatUptime(row.uptime_seconds)}</td>
+</tr>`;
+                            })
+                            .join("");
+                    }
+                }
+
+                if (hostBody) {
+                    const host = Array.isArray(data.host) ? data.host : [];
+                    if (host.length === 0) {
+                        hostBody.innerHTML = '<tr><td colspan="5">Keine Prozessdaten verfuegbar.</td></tr>';
+                    } else {
+                        hostBody.innerHTML = host
+                            .map((proc) => {
+                                return `
+<tr>
+    <td>${proc.pid || "-"}</td>
+    <td>${escapeHtml(proc.name || "-")}</td>
+    <td>${escapeHtml(proc.username || "-")}</td>
+    <td>${formatNumber(proc.cpu_percent || 0, 1)}%</td>
+    <td>${formatNumber(proc.memory_mb || 0, 1)} MB</td>
+</tr>`;
+                            })
+                            .join("");
+                    }
+                }
+            }
+
+            async function refresh() {
+                try {
+                    const [summaryResp, processResp] = await Promise.all([
+                        fetch(summaryEndpoint, {
+                            headers: { Accept: "application/json" },
+                            cache: "no-store",
+                        }),
+                        fetch(`${processesEndpoint}?limit=${encodeURIComponent(Number.isFinite(limit) ? limit : 50)}`, {
+                            headers: { Accept: "application/json" },
+                            cache: "no-store",
+                        }),
+                    ]);
+                    if (summaryResp.ok) {
+                        const summary = await summaryResp.json();
+                        updateSummary(summary);
+                    }
+                    if (processResp.ok) {
+                        const processes = await processResp.json();
+                        updateProcesses(processes);
+                    }
+                } catch (_) {}
+            }
+
+            refresh();
+            const intervalId = window.setInterval(refresh, Number.isFinite(interval) ? interval : 5000);
+            window.addEventListener("beforeunload", function () {
+                window.clearInterval(intervalId);
+            });
+        }
+
+        initDashboardLive();
         initResourcesLive();
+        initSystemStatusLive();
     }
 
     if (document.readyState === "loading") {
