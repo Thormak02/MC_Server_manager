@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
@@ -29,7 +30,20 @@ def _scheduler_job_id(job_id: int) -> str:
 
 def _parse_trigger(schedule_expression: str):
     normalized = schedule_expression.strip()
-    if normalized.lower().startswith("interval:"):
+    lowered = normalized.lower()
+    if lowered.startswith("once:"):
+        raw_value = normalized.split(":", 1)[1].strip()
+        if not raw_value:
+            raise ValueError("Einmaliger Termin braucht ein Datum/Uhrzeit (YYYY-MM-DDTHH:MM).")
+        try:
+            run_at = datetime.fromisoformat(raw_value)
+        except ValueError as exc:
+            raise ValueError(
+                "Ungueltiges once-Datum. Erwartet: once:YYYY-MM-DDTHH:MM"
+            ) from exc
+        return DateTrigger(run_date=run_at)
+
+    if lowered.startswith("interval:"):
         raw_value = normalized.split(":", 1)[1].strip()
         seconds = int(raw_value)
         if seconds <= 0:
@@ -40,7 +54,8 @@ def _parse_trigger(schedule_expression: str):
         return CronTrigger.from_crontab(normalized)
     except ValueError as exc:
         raise ValueError(
-            "Ungueltiger Zeitplan. Erlaubt: 5-feld Cron (z.B. '0 4 * * *') oder interval:<sekunden>."
+            "Ungueltiger Zeitplan. Erlaubt: once:YYYY-MM-DDTHH:MM, "
+            "5-feld Cron (z.B. '0 4 * * *') oder interval:<sekunden>."
         ) from exc
 
 
@@ -170,6 +185,8 @@ def _run_job_by_id(job_id: int) -> None:
         _execute_job(db, job)
         scheduler_job = get_scheduler().get_job(_scheduler_job_id(job.id))
         job.next_run_at = scheduler_job.next_run_time if scheduler_job else None
+        if job.schedule_expression.strip().lower().startswith("once:") and job.next_run_at is None:
+            job.is_enabled = False
         db.add(job)
         db.commit()
 

@@ -5,6 +5,46 @@
 {% include "server_nav.html" %}
 
 <section class="card">
+    <div class="calendar-header">
+        <h2>Kalender</h2>
+        <div class="inline-form">
+            <a class="button-like" href="/servers/{{ server.id }}/schedules?year={{ schedule_calendar.prev_year }}&month={{ schedule_calendar.prev_month }}">&#8592;</a>
+            <strong>{{ schedule_calendar.month_label }}</strong>
+            <a class="button-like" href="/servers/{{ server.id }}/schedules?year={{ schedule_calendar.next_year }}&month={{ schedule_calendar.next_month }}">&#8594;</a>
+        </div>
+    </div>
+    <div class="calendar-grid calendar-weekdays">
+        {% for label in schedule_calendar.weekday_labels %}
+        <div class="calendar-weekday">{{ label }}</div>
+        {% endfor %}
+    </div>
+    <div class="calendar-grid">
+        {% for week in schedule_calendar.weeks %}
+            {% for day in week %}
+            <button
+                type="button"
+                class="calendar-day{% if not day.in_month %} is-outside{% endif %}{% if day.is_today %} is-today{% endif %}"
+                data-date="{{ day.iso_date }}"
+                {% if not can_manage %}disabled{% endif %}
+                title="Datum uebernehmen">
+                <span class="calendar-day-number">{{ day.day_number }}</span>
+                {% if day.events %}
+                <span class="calendar-events">
+                    {% for event in day.events %}
+                    <span class="calendar-event">{{ event.time }} {{ event.job_type }}</span>
+                    {% endfor %}
+                    {% if day.more_count > 0 %}
+                    <span class="calendar-event">+{{ day.more_count }} weitere</span>
+                    {% endif %}
+                </span>
+                {% endif %}
+            </button>
+            {% endfor %}
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card">
     <h2>Neuen Job anlegen</h2>
     {% if can_manage %}
     <form method="post" action="/servers/{{ server.id }}/schedules" class="grid grid-4">
@@ -19,8 +59,45 @@
             </select>
         </div>
         <div>
+            <label for="schedule_mode">Planungsmodus</label>
+            <select id="schedule_mode" name="schedule_mode">
+                <option value="once">Einmalig</option>
+                <option value="daily">Taeglich</option>
+                <option value="weekly">Woechentlich</option>
+                <option value="monthly">Monatlich</option>
+                <option value="interval">Intervall</option>
+                <option value="advanced">Advanced (Cron/Raw)</option>
+            </select>
+        </div>
+        <div id="field-planner-date">
+            <label for="planner_date">Datum</label>
+            <input id="planner_date" name="planner_date" type="date" value="{{ schedule_defaults.date }}">
+        </div>
+        <div id="field-planner-time">
+            <label for="planner_time">Uhrzeit</label>
+            <input id="planner_time" name="planner_time" type="time" value="{{ schedule_defaults.time }}">
+        </div>
+        <div id="field-weekday">
+            <label for="weekday">Wochentag (optional)</label>
+            <select id="weekday" name="weekday">
+                <option value="">Aus Datum ableiten</option>
+                {% for item in weekday_options %}
+                <option value="{{ item.value }}">{{ item.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div id="field-day-of-month">
+            <label for="day_of_month">Tag im Monat</label>
+            <input id="day_of_month" name="day_of_month" type="number" min="1" max="31" placeholder="z.B. 15">
+        </div>
+        <div id="field-interval-minutes">
+            <label for="interval_minutes">Intervall (Minuten)</label>
+            <input id="interval_minutes" name="interval_minutes" type="number" min="1" placeholder="z.B. 60">
+        </div>
+        <div>
             <label for="schedule_expression">Zeitplan</label>
-            <input id="schedule_expression" name="schedule_expression" type="text" required placeholder="0 4 * * * oder interval:300">
+            <input id="schedule_expression" name="schedule_expression" type="text" placeholder="0 4 * * * oder interval:300 oder once:2026-04-14T20:00">
+            <p class="muted">Nur im Advanced-Modus erforderlich.</p>
         </div>
         <div id="field-command">
             <label for="command">Command (nur bei job_type=command)</label>
@@ -148,6 +225,7 @@
 <script>
 (function () {
     const typeSelect = document.getElementById("job_type");
+    const modeSelect = document.getElementById("schedule_mode");
     if (!typeSelect) return;
     const fieldCommand = document.getElementById("field-command");
     const fieldDelay = document.getElementById("field-delay");
@@ -155,6 +233,17 @@
     const fieldBackupScope = document.getElementById("field-backup-scope");
     const fieldPreAction = document.getElementById("field-pre-action");
     const fieldBackupName = document.getElementById("field-backup-name");
+    const fieldScheduleExpression = document.getElementById("schedule_expression")?.closest("div");
+    const fieldPlannerDate = document.getElementById("field-planner-date");
+    const fieldPlannerTime = document.getElementById("field-planner-time");
+    const fieldWeekday = document.getElementById("field-weekday");
+    const fieldDayOfMonth = document.getElementById("field-day-of-month");
+    const fieldIntervalMinutes = document.getElementById("field-interval-minutes");
+    const plannerDateInput = document.getElementById("planner_date");
+    const plannerTimeInput = document.getElementById("planner_time");
+    const weekdayInput = document.getElementById("weekday");
+    const intervalInput = document.getElementById("interval_minutes");
+    const expressionInput = document.getElementById("schedule_expression");
 
     function setVisible(el, visible) {
         if (!el) return;
@@ -171,8 +260,54 @@
         setVisible(fieldBackupName, type === "backup");
     }
 
+    function setRequired(inputEl, required) {
+        if (!inputEl) return;
+        inputEl.required = required;
+    }
+
+    function updateModeFields() {
+        const mode = modeSelect ? modeSelect.value : "once";
+        const isAdvanced = mode === "advanced";
+        const isInterval = mode === "interval";
+        const hasDateTime = !isAdvanced && !isInterval;
+        setVisible(fieldScheduleExpression, isAdvanced);
+        setVisible(fieldPlannerDate, hasDateTime);
+        setVisible(fieldPlannerTime, hasDateTime);
+        setVisible(fieldWeekday, mode === "weekly");
+        setVisible(fieldDayOfMonth, mode === "monthly");
+        setVisible(fieldIntervalMinutes, isInterval);
+
+        setRequired(expressionInput, isAdvanced);
+        setRequired(plannerDateInput, hasDateTime);
+        setRequired(plannerTimeInput, hasDateTime);
+        setRequired(intervalInput, isInterval);
+    }
+
+    function applyDateFromCalendar(dateValue) {
+        if (!plannerDateInput || !dateValue) return;
+        plannerDateInput.value = dateValue;
+        if (modeSelect && modeSelect.value === "weekly" && weekdayInput) {
+            const jsDate = new Date(`${dateValue}T00:00:00`);
+            if (!Number.isNaN(jsDate.getTime())) {
+                weekdayInput.value = String(jsDate.getDay());
+            }
+        }
+    }
+
     typeSelect.addEventListener("change", updateVisibleFields);
+    if (modeSelect) {
+        modeSelect.addEventListener("change", updateModeFields);
+    }
+
+    document.querySelectorAll(".calendar-day[data-date]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            const dateValue = button.getAttribute("data-date");
+            applyDateFromCalendar(dateValue);
+        });
+    });
+
     updateVisibleFields();
+    updateModeFields();
 })();
 </script>
 {% endblock %}
