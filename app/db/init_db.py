@@ -7,14 +7,20 @@ from app.db.base import Base
 from app.db.session import SessionLocal, engine
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.app_setting import AppSetting  # noqa: F401
+from app.models.backup import Backup  # noqa: F401
 from app.models.installed_content import InstalledContent  # noqa: F401
 from app.models.java_profile import JavaProfile  # noqa: F401
+from app.models.job_history import JobHistory  # noqa: F401
+from app.models.restore_history import RestoreHistory  # noqa: F401
 from app.models.scheduled_job import ScheduledJob  # noqa: F401
 from app.models.server import Server  # noqa: F401
 from app.models.server_permission import ServerPermission  # noqa: F401
 from app.models.server_template import ServerTemplate  # noqa: F401
 from app.models.user import User
-from app.services.app_setting_service import ensure_server_storage_initialized
+from app.services.app_setting_service import (
+    ensure_backup_storage_initialized,
+    ensure_server_storage_initialized,
+)
 
 
 def init_db() -> None:
@@ -70,12 +76,19 @@ def _normalize_runtime_states() -> None:
 def _cleanup_orphaned_server_relations() -> None:
     with SessionLocal() as db:
         server_ids = select(Server.id)
+        job_ids = select(ScheduledJob.id)
+        backup_ids = select(Backup.id)
         db.execute(delete(InstalledContent).where(~InstalledContent.server_id.in_(server_ids)))
         db.execute(delete(ServerPermission).where(~ServerPermission.server_id.in_(server_ids)))
         db.execute(delete(ScheduledJob).where(~ScheduledJob.server_id.in_(server_ids)))
+        db.execute(delete(Backup).where(~Backup.server_id.in_(server_ids)))
+        db.execute(delete(RestoreHistory).where(~RestoreHistory.server_id.in_(server_ids)))
+        db.execute(delete(RestoreHistory).where(~RestoreHistory.backup_id.in_(backup_ids)))
+        db.execute(delete(JobHistory).where(~JobHistory.scheduled_job_id.in_(job_ids)))
         db.commit()
 
 
 def _ensure_server_storage_root() -> None:
     with SessionLocal() as db:
         ensure_server_storage_initialized(db)
+        ensure_backup_storage_initialized(db)

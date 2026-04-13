@@ -15,23 +15,44 @@
                 <option value="stop">stop</option>
                 <option value="restart">restart</option>
                 <option value="command">command</option>
+                <option value="backup">backup</option>
             </select>
         </div>
         <div>
             <label for="schedule_expression">Zeitplan</label>
             <input id="schedule_expression" name="schedule_expression" type="text" required placeholder="0 4 * * * oder interval:300">
         </div>
-        <div>
+        <div id="field-command">
             <label for="command">Command (nur bei job_type=command)</label>
             <input id="command" name="command" type="text">
         </div>
-        <div>
+        <div id="field-delay">
             <label for="delay_seconds">Restart Delay (sek)</label>
             <input id="delay_seconds" name="delay_seconds" type="number" min="0">
         </div>
-        <div>
+        <div id="field-warning">
             <label for="warning_message">Restart Warning</label>
             <input id="warning_message" name="warning_message" type="text" placeholder="Server restartet in {seconds} Sekunden">
+        </div>
+        <div id="field-backup-scope">
+            <label for="backup_scope">Backup Scope</label>
+            <select id="backup_scope" name="backup_scope">
+                <option value="full">full</option>
+                <option value="world">world</option>
+                <option value="config">config</option>
+            </select>
+        </div>
+        <div id="field-pre-action">
+            <label for="pre_action">Voraktion</label>
+            <select id="pre_action" name="pre_action">
+                <option value="none">none</option>
+                <option value="save_all">save_all</option>
+                <option value="stop_start">stop_start</option>
+            </select>
+        </div>
+        <div id="field-backup-name">
+            <label for="backup_name">Backup Name (optional)</label>
+            <input id="backup_name" name="backup_name" type="text" placeholder="z.B. nightly-main">
         </div>
         <div class="align-end">
             <button type="submit">Job anlegen</button>
@@ -91,4 +112,67 @@
         </tbody>
     </table>
 </section>
+
+<section class="card">
+    <h2>Job Historie</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Job ID</th>
+                <th>Typ</th>
+                <th>Start</th>
+                <th>Ende</th>
+                <th>Status</th>
+                <th>Nachricht</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in history %}
+            <tr>
+                <td>{{ row.scheduled_job_id }}</td>
+                <td>{{ job_types.get(row.scheduled_job_id, "-") }}</td>
+                <td>{{ row.started_at or "-" }}</td>
+                <td>{{ row.finished_at or "-" }}</td>
+                <td>{{ row.status }}</td>
+                <td>{{ row.message or "-" }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6">Noch keine Historieneintraege vorhanden.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<script>
+(function () {
+    const typeSelect = document.getElementById("job_type");
+    if (!typeSelect) return;
+    const fieldCommand = document.getElementById("field-command");
+    const fieldDelay = document.getElementById("field-delay");
+    const fieldWarning = document.getElementById("field-warning");
+    const fieldBackupScope = document.getElementById("field-backup-scope");
+    const fieldPreAction = document.getElementById("field-pre-action");
+    const fieldBackupName = document.getElementById("field-backup-name");
+
+    function setVisible(el, visible) {
+        if (!el) return;
+        el.style.display = visible ? "block" : "none";
+    }
+
+    function updateVisibleFields() {
+        const type = typeSelect.value;
+        setVisible(fieldCommand, type === "command");
+        setVisible(fieldDelay, type === "restart");
+        setVisible(fieldWarning, type === "restart");
+        setVisible(fieldBackupScope, type === "backup");
+        setVisible(fieldPreAction, type === "backup");
+        setVisible(fieldBackupName, type === "backup");
+    }
+
+    typeSelect.addEventListener("change", updateVisibleFields);
+    updateVisibleFields();
+})();
+</script>
 {% endblock %}

@@ -13,7 +13,7 @@ from app.models.installed_content import InstalledContent
 from app.models.scheduled_job import ScheduledJob
 from app.models.server_permission import ServerPermission
 from app.schemas.server import ServerImportConfirm
-from app.services import audit_service
+from app.services import audit_service, backup_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.java_profile_service import list_java_profiles
 from app.services.process_service import (
@@ -485,6 +485,9 @@ def delete_server_action(
         server_id=server.id,
         details=f"path={server.base_path} delete_folder={delete_folder}",
     )
+
+    for backup in backup_service.list_backups_for_server(db, server.id):
+        backup_service.delete_backup(db, backup=backup, initiated_by_user_id=current_user.id)
 
     db.execute(delete(InstalledContent).where(InstalledContent.server_id == server.id))
     db.execute(delete(ServerPermission).where(ServerPermission.server_id == server.id))

@@ -10,9 +10,13 @@ from app.schemas.java_profile import JavaProfileCreate
 from app.services import audit_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.app_setting_service import (
+    clear_backup_storage_override,
     clear_server_storage_override,
+    get_backup_storage_root,
+    get_backup_storage_source,
     get_server_storage_root,
     get_server_storage_source,
+    set_backup_storage_root,
     set_server_storage_root,
 )
 from app.services.java_profile_service import (
@@ -48,6 +52,8 @@ def settings_page(
     profiles = list_java_profiles(db)
     server_storage_root = str(get_server_storage_root(db))
     server_storage_source = get_server_storage_source(db)
+    backup_storage_root = str(get_backup_storage_root(db))
+    backup_storage_source = get_backup_storage_source(db)
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -58,6 +64,8 @@ def settings_page(
             profiles=profiles,
             server_storage_root=server_storage_root,
             server_storage_source=server_storage_source,
+            backup_storage_root=backup_storage_root,
+            backup_storage_source=backup_storage_source,
         ),
     )
 
@@ -105,6 +113,52 @@ def update_server_storage_action(
         details=f"path={new_path}",
     )
     push_flash(request, f"Server-Standardpfad gespeichert: {new_path}", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/backup-storage")
+def update_backup_storage_action(
+    request: Request,
+    backup_storage_root: Annotated[str | None, Form()] = None,
+    reset_to_default: Annotated[bool, Form()] = False,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        if reset_to_default:
+            new_path = clear_backup_storage_override(db)
+            source = get_backup_storage_source(db)
+            push_flash(
+                request,
+                f"Backup-Pfad zurueckgesetzt: {new_path} (Quelle: {source})",
+                "success",
+            )
+            audit_service.log_action(
+                db,
+                action="settings.backup_storage_reset",
+                user_id=current_user.id,
+                details=f"path={new_path}",
+            )
+            return RedirectResponse(url="/settings", status_code=303)
+
+        raw = (backup_storage_root or "").strip()
+        if not raw:
+            raise ValueError("Bitte einen gueltigen Pfad angeben oder Zuruecksetzen nutzen.")
+        new_path = set_backup_storage_root(db, raw)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="settings.backup_storage_update",
+        user_id=current_user.id,
+        details=f"path={new_path}",
+    )
+    push_flash(request, f"Backup-Pfad gespeichert: {new_path}", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
 

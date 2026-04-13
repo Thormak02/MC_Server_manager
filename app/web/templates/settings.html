@@ -24,6 +24,27 @@
 </section>
 
 <section class="card">
+    <h2>Backup Speicherpfad</h2>
+    <p class="muted">
+        Aktuell: <strong>{{ backup_storage_root }}</strong>
+        (Quelle: {{ "UI" if backup_storage_source == "ui" else ("ENV" if backup_storage_source == "env" else "Standard data/backups") }})
+    </p>
+    <form method="post" action="/settings/backup-storage" class="grid grid-4">
+        <div>
+            <label for="backup_storage_root">Basisordner fuer Backups</label>
+            <input id="backup_storage_root" name="backup_storage_root" type="text" value="{{ backup_storage_root }}">
+        </div>
+        <div class="align-end">
+            <button type="submit">Speichern</button>
+        </div>
+    </form>
+    <form method="post" action="/settings/backup-storage" class="inline-form" style="margin-top: 0.75rem;">
+        <input type="hidden" name="reset_to_default" value="true">
+        <button type="submit" class="ghost">Auf ENV/Standard zuruecksetzen</button>
+    </form>
+</section>
+
+<section class="card">
     <h2>Java-Profil anlegen</h2>
     <form method="post" action="/settings/java-profiles" class="grid grid-4">
         <div>

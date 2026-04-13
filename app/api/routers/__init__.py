@@ -1,5 +1,6 @@
 from app.api.routers import (
     auth,
+    backups,
     console,
     content,
     dashboard,
@@ -8,11 +9,13 @@ from app.api.routers import (
     provisioning,
     schedules,
     servers,
+    server_templates,
     users,
 )
 
 __all__ = [
     "auth",
+    "backups",
     "console",
     "content",
     "dashboard",
@@ -21,5 +24,6 @@ __all__ = [
     "provisioning",
     "schedules",
     "servers",
+    "server_templates",
     "users",
 ]

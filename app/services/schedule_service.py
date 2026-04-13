@@ -3,13 +3,14 @@ from datetime import datetime, timezone
 
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
+from app.models.job_history import JobHistory
 from app.models.scheduled_job import ScheduledJob
 from app.models.server import Server
-from app.services import audit_service
+from app.services import audit_service, backup_service
 from app.services.process_service import (
     queue_restart,
     send_console_command,
@@ -17,6 +18,9 @@ from app.services.process_service import (
     stop_server,
 )
 from app.tasks.scheduler import get_scheduler
+
+
+_ALLOWED_JOB_TYPES = {"start", "stop", "restart", "command", "backup"}
 
 
 def _scheduler_job_id(job_id: int) -> str:
@@ -57,6 +61,18 @@ def list_jobs_for_server(db: Session, server_id: int) -> list[ScheduledJob]:
             .order_by(ScheduledJob.id.asc())
         ).all()
     )
+
+
+def list_job_history_for_server(db: Session, server_id: int, *, limit: int = 120) -> list[JobHistory]:
+    safe_limit = max(1, min(limit, 1000))
+    stmt = (
+        select(JobHistory)
+        .join(ScheduledJob, ScheduledJob.id == JobHistory.scheduled_job_id)
+        .where(ScheduledJob.server_id == server_id)
+        .order_by(desc(JobHistory.started_at))
+        .limit(safe_limit)
+    )
+    return list(db.scalars(stmt).all())
 
 
 def _sync_single_job(db: Session, job: ScheduledJob) -> None:
@@ -102,10 +118,13 @@ def create_job(
     command_payload: dict[str, object] | None = None,
     is_enabled: bool = True,
 ) -> ScheduledJob:
+    normalized_job_type = job_type.strip().lower()
+    if normalized_job_type not in _ALLOWED_JOB_TYPES:
+        raise ValueError(f"Ungueltiger Job-Typ: {job_type}")
     _parse_trigger(schedule_expression)
     job = ScheduledJob(
         server_id=server_id,
-        job_type=job_type.strip().lower(),
+        job_type=normalized_job_type,
         schedule_expression=schedule_expression.strip(),
         command_payload=json.dumps(command_payload or {}, ensure_ascii=False),
         is_enabled=is_enabled,
@@ -155,6 +174,32 @@ def _run_job_by_id(job_id: int) -> None:
         db.commit()
 
 
+def _record_job_history_start(db: Session, job: ScheduledJob) -> JobHistory:
+    row = JobHistory(
+        scheduled_job_id=job.id,
+        started_at=datetime.now(timezone.utc),
+        status="running",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def _record_job_history_finish(
+    db: Session,
+    row: JobHistory,
+    *,
+    status: str,
+    message: str,
+) -> None:
+    row.finished_at = datetime.now(timezone.utc)
+    row.status = status
+    row.message = message
+    db.add(row)
+    db.commit()
+
+
 def _execute_job(db: Session, job: ScheduledJob) -> tuple[bool, str]:
     server = db.get(Server, job.server_id)
     if server is None:
@@ -162,30 +207,53 @@ def _execute_job(db: Session, job: ScheduledJob) -> tuple[bool, str]:
 
     payload = _job_payload(job)
     job_type = job.job_type.lower()
+    history = _record_job_history_start(db, job)
 
-    if job_type == "start":
-        ok, message = start_server(db, server, initiated_by_user_id=None)
-    elif job_type == "stop":
-        ok, message = stop_server(db, server, initiated_by_user_id=None, force=False)
-    elif job_type == "restart":
-        ok, message = queue_restart(
-            db,
-            server,
-            initiated_by_user_id=None,
-            delay_seconds=int(payload.get("delay_seconds", 0) or 0),
-            warning_message=str(payload.get("warning_message", "") or ""),
-            source="scheduled_job",
-        )
-    elif job_type == "command":
-        command = str(payload.get("command", "") or "")
-        ok, message = send_console_command(db, server, command, initiated_by_user_id=None)
-    else:
-        ok, message = False, f"Unbekannter Job-Typ: {job.job_type}"
+    try:
+        if job_type == "start":
+            ok, message = start_server(db, server, initiated_by_user_id=None)
+        elif job_type == "stop":
+            ok, message = stop_server(db, server, initiated_by_user_id=None, force=False)
+        elif job_type == "restart":
+            ok, message = queue_restart(
+                db,
+                server,
+                initiated_by_user_id=None,
+                delay_seconds=int(payload.get("delay_seconds", 0) or 0),
+                warning_message=str(payload.get("warning_message", "") or ""),
+                source="scheduled_job",
+            )
+        elif job_type == "command":
+            command = str(payload.get("command", "") or "")
+            ok, message = send_console_command(db, server, command, initiated_by_user_id=None)
+        elif job_type == "backup":
+            scope = str(payload.get("backup_scope", "full") or "full")
+            pre_action = str(payload.get("pre_action", "none") or "none")
+            backup = backup_service.create_backup(
+                db,
+                server=server,
+                initiated_by_user_id=None,
+                backup_scope=scope,
+                pre_action=pre_action,
+                backup_type="scheduled",
+                custom_name=str(payload.get("backup_name", "") or "") or None,
+            )
+            ok, message = True, f"Backup erstellt: {backup.backup_name}"
+        else:
+            ok, message = False, f"Unbekannter Job-Typ: {job.job_type}"
+    except Exception as exc:
+        ok, message = False, str(exc)
 
     job.last_run_at = datetime.now(timezone.utc)
     db.add(job)
     db.commit()
 
+    _record_job_history_finish(
+        db,
+        history,
+        status="success" if ok else "error",
+        message=message,
+    )
     audit_service.log_action(
         db,
         action="scheduled_job.execute",

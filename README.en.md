@@ -21,8 +21,10 @@ Web-based management software for multiple Minecraft servers on a Windows host.
 - Java profile management
 - Server settings (Java, RAM, port, start parameters)
 - Scheduling for start/stop/restart/command (cron or `interval:<seconds>`)
+- Backup scheduling (job type `backup`) including job history
 - Delayed restart with optional warning message (`{seconds}`)
 - Restart via console command `/restart`
+- Backups & restore (manual creation, download, deletion, restore, restore history)
 - Server wizard for Vanilla, Paper, Spigot, Fabric, Forge
 - Provider pattern for future extensions
 - Optional provisioning offline mode
@@ -60,6 +62,7 @@ Key variables:
 - `MCSM_RESTART_DEFAULT_DELAY_SECONDS` default delay for restart warnings
 - `MCSM_PROVISIONING_OFFLINE_MODE` `true` for offline setup without downloads
 - `MCSM_DEFAULT_SERVER_ROOT` optional base directory for new servers (empty => desktop default)
+- `MCSM_DEFAULT_BACKUP_ROOT` optional base directory for backups
 
 ## First Login
 
@@ -82,9 +85,13 @@ Change these in `.env` before production use.
 - `.env` and runtime data are excluded via `.gitignore`.
 - Live console and resource monitor require running server processes for meaningful values.
 
-## Phase 3 API Endpoints
+## Phase 3-4 API Endpoints
 
 - `POST /api/servers/{server_id}/files/upload` (multipart: `upload`, `target_dir`, `overwrite`)
 - `DELETE /api/servers/{server_id}/files?path=<relative>&recursive=true|false`
 - `POST /api/servers/{server_id}/directories` (form: `relative_dir`)
 - `GET /api/audit-logs` (filters: `user_id`, `server_id`, `action`, `q`, `date_from`, `date_to`, `limit`)
+- `GET /api/servers/{server_id}/backups`
+- `POST /api/servers/{server_id}/backups`
+- `DELETE /api/backups/{backup_id}`
+- `POST /api/backups/{backup_id}/restore`

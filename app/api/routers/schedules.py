@@ -10,6 +10,7 @@ from app.services.schedule_service import (
     create_job,
     delete_job,
     get_job,
+    list_job_history_for_server,
     list_jobs_for_server,
     run_job_now,
     set_job_enabled,
@@ -26,6 +27,18 @@ def _require_user(request: Request, db: Session):
     if user is None:
         return None
     return user
+
+
+def _parse_optional_int(raw: str | None, *, field_name: str) -> int | None:
+    if raw is None:
+        return None
+    stripped = raw.strip()
+    if not stripped:
+        return None
+    try:
+        return int(stripped)
+    except ValueError as exc:
+        raise ValueError(f"Ungueltiger Integer fuer {field_name}.") from exc
 
 
 @router.get("/servers/{server_id}/schedules", response_class=HTMLResponse)
@@ -45,6 +58,8 @@ def schedules_page(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     jobs = list_jobs_for_server(db, server_id)
+    history = list_job_history_for_server(db, server_id)
+    job_types = {job.id: job.job_type for job in jobs}
     return templates.TemplateResponse(
         request,
         "schedules.html",
@@ -54,6 +69,8 @@ def schedules_page(
             page_title=f"Scheduling: {server.name}",
             server=server,
             jobs=jobs,
+            history=history,
+            job_types=job_types,
             can_manage=can_control_server(db, current_user, server),
         ),
     )
@@ -68,6 +85,9 @@ def create_schedule_action(
     command: Annotated[str | None, Form()] = None,
     delay_seconds: Annotated[str | None, Form()] = None,
     warning_message: Annotated[str | None, Form()] = None,
+    backup_scope: Annotated[str | None, Form()] = None,
+    pre_action: Annotated[str | None, Form()] = None,
+    backup_name: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_user(request, db)
@@ -80,19 +100,33 @@ def create_schedule_action(
     if not can_control_server(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
+    normalized_type = (job_type or "").strip().lower()
     payload: dict[str, object] = {}
     if command and command.strip():
         payload["command"] = command.strip()
-    if delay_seconds and delay_seconds.strip():
-        payload["delay_seconds"] = int(delay_seconds.strip())
+    try:
+        parsed_delay = _parse_optional_int(delay_seconds, field_name="delay_seconds")
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}/schedules", status_code=303)
+    if parsed_delay is not None:
+        payload["delay_seconds"] = parsed_delay
     if warning_message and warning_message.strip():
         payload["warning_message"] = warning_message.strip()
+    if normalized_type == "backup":
+        payload["backup_scope"] = (backup_scope or "full").strip().lower() or "full"
+        payload["pre_action"] = (pre_action or "none").strip().lower() or "none"
+        if backup_name and backup_name.strip():
+            payload["backup_name"] = backup_name.strip()
+    if normalized_type == "command" and not payload.get("command"):
+        push_flash(request, "Bei job_type=command ist ein Command erforderlich.", "error")
+        return RedirectResponse(url=f"/servers/{server_id}/schedules", status_code=303)
 
     try:
         create_job(
             db,
             server_id=server.id,
-            job_type=job_type,
+            job_type=normalized_type,
             schedule_expression=schedule_expression,
             command_payload=payload,
             is_enabled=True,

@@ -21,8 +21,10 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Java-Profile Verwaltung
 - Servereinstellungen (Java, RAM, Port, Startparameter)
 - Scheduling fuer Start/Stop/Restart/Command (Cron oder `interval:<sekunden>`)
+- Backup Scheduling (Job-Typ `backup`) inklusive Job-Historie
 - Verzoegerter Neustart mit optionaler Warnmeldung (`{seconds}`)
 - Neustart auch ueber Konsolenkommando `/restart`
+- Backups & Restore (manuell, Download, Loeschen, Wiederherstellung, Restore-Historie)
 - Server-Wizard fuer Vanilla, Paper, Spigot, Fabric, Forge
 - Provider-Prinzip fuer spaetere Erweiterungen
 - Optionaler Provisioning-Offline-Modus
@@ -60,6 +62,7 @@ Wichtige Variablen:
 - `MCSM_RESTART_DEFAULT_DELAY_SECONDS` Standard-Delay fuer Neustartwarnungen
 - `MCSM_PROVISIONING_OFFLINE_MODE` `true` fuer Offline-Setup ohne Downloads
 - `MCSM_DEFAULT_SERVER_ROOT` Optionaler Basisordner fuer neue Server (leer => Desktop Standard)
+- `MCSM_DEFAULT_BACKUP_ROOT` Optionaler Basisordner fuer Backups
 
 ## Erstlogin
 
@@ -82,9 +85,13 @@ Vor Produktivbetrieb in `.env` aendern.
 - `.env` und Laufzeitdaten sind in `.gitignore` ausgeschlossen.
 - Live-Konsole und Ressourcenmonitor benoetigen laufende Serverprozesse fuer sinnvolle Werte.
 
-## Phase 3 API Endpunkte
+## Phase 3-4 API Endpunkte
 
 - `POST /api/servers/{server_id}/files/upload` (multipart: `upload`, `target_dir`, `overwrite`)
 - `DELETE /api/servers/{server_id}/files?path=<relativ>&recursive=true|false`
 - `POST /api/servers/{server_id}/directories` (form: `relative_dir`)
 - `GET /api/audit-logs` (Filter: `user_id`, `server_id`, `action`, `q`, `date_from`, `date_to`, `limit`)
+- `GET /api/servers/{server_id}/backups`
+- `POST /api/servers/{server_id}/backups`
+- `DELETE /api/backups/{backup_id}`
+- `POST /api/backups/{backup_id}/restore`

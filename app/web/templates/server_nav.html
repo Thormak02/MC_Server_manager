@@ -3,6 +3,7 @@
 {% set console_path = "/servers/" ~ server.id ~ "/console" %}
 {% set logs_path = "/servers/" ~ server.id ~ "/logs" %}
 {% set schedules_path = "/servers/" ~ server.id ~ "/schedules" %}
+{% set backups_path = "/servers/" ~ server.id ~ "/backups" %}
 {% set content_path = "/servers/" ~ server.id ~ "/content" %}
 {% set files_path = "/servers/" ~ server.id ~ "/files" %}
 
@@ -12,6 +13,7 @@
         <a class="button-like {% if current_path == console_path %}active{% endif %}" href="{{ console_path }}" {% if current_path == console_path %}aria-current="page"{% endif %}>Konsole</a>
         <a class="button-like {% if current_path == logs_path %}active{% endif %}" href="{{ logs_path }}" {% if current_path == logs_path %}aria-current="page"{% endif %}>Logs</a>
         <a class="button-like {% if current_path == schedules_path %}active{% endif %}" href="{{ schedules_path }}" {% if current_path == schedules_path %}aria-current="page"{% endif %}>Scheduling</a>
+        <a class="button-like {% if current_path == backups_path %}active{% endif %}" href="{{ backups_path }}" {% if current_path == backups_path %}aria-current="page"{% endif %}>Backups</a>
         <a class="button-like {% if current_path == content_path %}active{% endif %}" href="{{ content_path }}" {% if current_path == content_path %}aria-current="page"{% endif %}>Mods & Inhalte</a>
         <a class="button-like {% if current_path == files_path %}active{% endif %}" href="{{ files_path }}" {% if current_path == files_path %}aria-current="page"{% endif %}>Dateien</a>
     </div>

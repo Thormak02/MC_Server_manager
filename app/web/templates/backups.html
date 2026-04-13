@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Backups: {{ server.name }}</h1>
+
+{% include "server_nav.html" %}
+
+{% if can_manage %}
+<section class="card">
+    <h2>Backup erstellen</h2>
+    <form method="post" action="/servers/{{ server.id }}/backups/create" class="grid grid-4">
+        <div>
+            <label for="backup_scope">Scope</label>
+            <select id="backup_scope" name="backup_scope">
+                <option value="full">full</option>
+                <option value="world">world</option>
+                <option value="config">config</option>
+            </select>
+        </div>
+        <div>
+            <label for="pre_action">Voraktion</label>
+            <select id="pre_action" name="pre_action">
+                <option value="none">none</option>
+                <option value="save_all">save_all</option>
+                <option value="stop_start">stop_start</option>
+            </select>
+        </div>
+        <div>
+            <label for="backup_name">Backup Name (optional)</label>
+            <input id="backup_name" name="backup_name" type="text" placeholder="z.B. pre-update">
+        </div>
+        <div class="align-end">
+            <button type="submit">Backup starten</button>
+        </div>
+    </form>
+</section>
+{% endif %}
+
+<section class="card">
+    <h2>Verfuegbare Backups</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Typ</th>
+                <th>Status</th>
+                <th>Groesse</th>
+                <th>Zeitpunkt</th>
+                <th>Aktionen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in backups %}
+            <tr>
+                <td>{{ item.id }}</td>
+                <td>{{ item.backup_name }}</td>
+                <td>{{ item.backup_type }}</td>
+                <td>{{ item.status }}</td>
+                <td>
+                    {% if item.size_bytes %}
+                    {{ (item.size_bytes / 1048576)|round(2) }} MB
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>{{ item.created_at or "-" }}</td>
+                <td>
+                    <a class="button-like" href="/servers/{{ server.id }}/backups/{{ item.id }}/download">Download</a>
+                    {% if can_manage %}
+                    <form method="post" action="/servers/{{ server.id }}/backups/{{ item.id }}/restore" class="stack" style="margin-top: 0.5rem;">
+                        <input type="hidden" name="stop_if_running" value="true">
+                        <label><input name="confirm_restore" type="checkbox" value="true" required> Restore bestaetigen</label>
+                        <label><input name="start_after_restore" type="checkbox" value="true"> Danach starten</label>
+                        <input name="notes" type="text" placeholder="Optionaler Hinweis">
+                        <button type="submit" class="ghost">Restore</button>
+                    </form>
+                    <form method="post" action="/servers/{{ server.id }}/backups/{{ item.id }}/delete" class="inline-form" style="margin-top: 0.45rem;">
+                        <button type="submit" class="danger">Loeschen</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7">Noch keine Backups vorhanden.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section class="card">
+    <h2>Restore Historie</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Backup ID</th>
+                <th>Status</th>
+                <th>Zeitpunkt</th>
+                <th>Benutzer</th>
+                <th>Notiz</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in restore_history %}
+            <tr>
+                <td>{{ row.id }}</td>
+                <td>{{ row.backup_id }}</td>
+                <td>{{ row.status }}</td>
+                <td>{{ row.restored_at or "-" }}</td>
+                <td>{{ row.restored_by_user_id or "-" }}</td>
+                <td>{{ row.notes or "-" }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6">Noch keine Restore-Vorgaenge.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
+
