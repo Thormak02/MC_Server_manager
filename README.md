@@ -33,8 +33,14 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Plattform-Einstellungen (Provider aktiv/deaktivieren, Modrinth User-Agent, CurseForge API Key)
 - Sicherheitsfunktionen: Login Rate-Limit, Lockout, Session-Idle-Timeout, CSRF Same-Origin Check
 - Security Events Ansicht + API
-- Ressourcenmonitor (Host + Server CPU/RAM, live aktualisiert)
 - Systemstatus Seite + API (Host Summary, Disks, Prozesse)
+- Modpack-Import (Preview + Execute) aus:
+  - lokalem Archiv (`.zip` / `.mrpack`)
+  - Modrinth (Referenz/Version-ID)
+  - CurseForge (Projekt-ID/Datei-ID)
+- Modpack-Suche im Import-Dialog (Modrinth/CurseForge) mit Versionsauswahl
+- Modpack-Import erstellt immer einen neuen Server (Super Admin)
+- Import-Protokollierung ueber Audit-Log (`modpack.import_preview`, `modpack.import_execute`)
 - Modernes UI mit Light/Dark Umschaltung und ausklappbarer Sidebar
 
 ## Voraussetzungen
@@ -42,7 +48,7 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Windows 10/11
 - Python 3.10+ (empfohlen 3.11)
 - Java-Installationen fuer die Ziel-Server (als Java-Profile hinterlegen)
-- Optional fuer Java-Installation im Manager: `winget`
+- Optional fuer Java-Installation im Manager: `winget`![alt text](image.png)
 
 ## Start
 
@@ -99,7 +105,7 @@ Vor Produktivbetrieb in `.env` aendern.
 - `.env` und Laufzeitdaten sind in `.gitignore` ausgeschlossen.
 - Live-Konsole und Ressourcenmonitor benoetigen laufende Serverprozesse fuer sinnvolle Werte.
 
-## Phase 3-5 API Endpunkte
+## Phase 3-6 API Endpunkte
 
 - `POST /api/servers/{server_id}/files/upload` (multipart: `upload`, `target_dir`, `overwrite`)
 - `DELETE /api/servers/{server_id}/files?path=<relativ>&recursive=true|false`
@@ -114,3 +120,5 @@ Vor Produktivbetrieb in `.env` aendern.
 - `GET /api/system/processes`
 - `GET /api/platform-settings`
 - `PATCH /api/platform-settings/{provider_name}`
+- `POST /api/modpacks/import-preview` (multipart/form-data)
+- `POST /api/modpacks/import-execute` (form-data)

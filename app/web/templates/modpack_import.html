@@ -1,0 +1,633 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Modpack importieren</h1>
+
+<section class="card">
+    <p class="muted">Der Import erstellt immer einen neuen Server aus dem gewaehlten Modpack.</p>
+    <div id="modpack-import" class="stack">
+        <div class="grid grid-4">
+            <div>
+                <label for="mp_source">Quelle</label>
+                <select id="mp_source">
+                    <option value="local_archive">Lokales Archiv (.zip/.mrpack)</option>
+                    <option value="modrinth">Modrinth</option>
+                    <option value="curseforge">CurseForge</option>
+                </select>
+            </div>
+            <div class="mp-source-group" data-mp-source="local_archive" style="grid-column: span 2;">
+                <label for="mp_archive">Archivdatei</label>
+                <input id="mp_archive" type="file" accept=".zip,.mrpack">
+            </div>
+            <div class="mp-source-group" data-mp-source="modrinth" style="display:none; grid-column: span 2;">
+                <label for="mp_modrinth_reference">Modrinth Referenz (URL/Slug)</label>
+                <input id="mp_modrinth_reference" type="text" placeholder="z.B. simply-optimized oder https://modrinth.com/...">
+            </div>
+            <div class="mp-source-group" data-mp-source="modrinth" style="display:none;">
+                <label for="mp_modrinth_version_id">Version-ID (optional)</label>
+                <input id="mp_modrinth_version_id" type="text" placeholder="z.B. AbCdEfGh">
+            </div>
+            <div class="mp-source-group" data-mp-source="curseforge" style="display:none;">
+                <label for="mp_curseforge_project_id">CurseForge Projekt-ID</label>
+                <input id="mp_curseforge_project_id" type="number" min="1" placeholder="z.B. 123456">
+            </div>
+            <div class="mp-source-group" data-mp-source="curseforge" style="display:none;">
+                <label for="mp_curseforge_file_id">CurseForge Datei-ID</label>
+                <input id="mp_curseforge_file_id" type="number" min="1" placeholder="z.B. 9876543">
+            </div>
+            <div class="mp-source-group" data-mp-source="curseforge" style="display:none; grid-column: span 2;">
+                <label for="mp_curseforge_reference">oder CurseForge URL (optional)</label>
+                <input id="mp_curseforge_reference" type="text" placeholder="https://www.curseforge.com/.../files/...">
+            </div>
+        </div>
+
+        <div id="mp_search_wrap" class="card" style="display:none;">
+            <h2 style="margin-top:0;">Modpack Suche</h2>
+            <div class="grid grid-4">
+                <div>
+                    <label for="mp_search_query">Suchbegriff</label>
+                    <input id="mp_search_query" type="text" placeholder="z.B. Better Minecraft">
+                </div>
+                <div>
+                    <label for="mp_search_mc_version">MC Version (optional)</label>
+                    <input id="mp_search_mc_version" type="text" placeholder="z.B. 1.20.1">
+                </div>
+                <div>
+                    <label for="mp_search_loader">Loader (optional)</label>
+                    <input id="mp_search_loader" type="text" placeholder="forge, fabric, quilt ...">
+                </div>
+                <div>
+                    <label for="mp_search_release_channel">Kanal</label>
+                    <select id="mp_search_release_channel">
+                        <option value="all">Alle</option>
+                        <option value="release">Release</option>
+                        <option value="beta">Beta</option>
+                        <option value="alpha">Alpha</option>
+                    </select>
+                </div>
+            </div>
+            <div class="inline-form" style="margin-top:0.8rem;">
+                <button id="mp_search_btn" type="button">Modpacks suchen</button>
+                <span id="mp_search_status" class="muted"></span>
+            </div>
+            <div id="mp_search_results" class="stack"></div>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-top:0;">Neuer Server</h2>
+            <div class="grid grid-4">
+                <div>
+                    <label for="mp_new_server_name">Servername</label>
+                    <input id="mp_new_server_name" type="text" placeholder="z.B. Modpack Server">
+                </div>
+                <div style="grid-column: span 2;">
+                    <label for="mp_new_server_path">Zielordner (optional)</label>
+                    <input id="mp_new_server_path" type="text" placeholder="leer = {{ default_server_storage_root }}\\server-name">
+                </div>
+                <div>
+                    <label for="mp_server_type">Servertyp</label>
+                    <select id="mp_server_type">
+                        <option value="vanilla">vanilla</option>
+                        <option value="paper">paper</option>
+                        <option value="spigot">spigot</option>
+                        <option value="fabric">fabric</option>
+                        <option value="forge">forge</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="mp_mc_version">Minecraft Version</label>
+                    <input id="mp_mc_version" type="text" placeholder="z.B. 1.21.1">
+                </div>
+                <div>
+                    <label for="mp_loader_version">Loader/Build Version</label>
+                    <input id="mp_loader_version" type="text" placeholder="z.B. 51.0.33">
+                </div>
+                <div>
+                    <label for="mp_java_profile_id">Java Profil</label>
+                    <select id="mp_java_profile_id">
+                        <option value="">Automatisch (kompatibel)</option>
+                        {% for profile in java_profiles %}
+                        <option value="{{ profile.id }}">{{ profile.name }}{% if profile.version_label %} ({{ profile.version_label }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="mp_memory_min_mb">RAM min (MB)</label>
+                    <input id="mp_memory_min_mb" type="number" min="256" step="256" value="2048">
+                </div>
+                <div>
+                    <label for="mp_memory_max_mb">RAM max (MB)</label>
+                    <input id="mp_memory_max_mb" type="number" min="256" step="256" value="4096">
+                </div>
+                <div>
+                    <label for="mp_port">Port (optional)</label>
+                    <input id="mp_port" type="number" min="1" max="65535">
+                </div>
+                <div style="grid-column: span 2;">
+                    <label for="mp_start_parameters">Startparameter (optional)</label>
+                    <input id="mp_start_parameters" type="text" placeholder="-Dfile.encoding=UTF-8">
+                </div>
+            </div>
+        </div>
+
+        <div class="inline-form">
+            <button id="mp_preview_btn" type="button">Import pruefen</button>
+            <button id="mp_execute_btn" type="button" class="ghost" disabled>Server aus Modpack erstellen</button>
+            <span id="mp_status" class="muted"></span>
+        </div>
+
+        <div id="mp_preview_wrap" class="card" style="display:none;">
+            <h3 style="margin-top:0;">Import Preview</h3>
+            <p id="mp_preview_meta" class="muted"></p>
+            <div id="mp_preview_warnings" class="muted"></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Pfad</th>
+                        <th>Provider</th>
+                        <th>Typ</th>
+                    </tr>
+                </thead>
+                <tbody id="mp_preview_body">
+                    <tr><td colspan="4">Noch kein Preview.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<script>
+(function () {
+    const modpackRoot = document.getElementById("modpack-import");
+    const modpackSourceSelect = document.getElementById("mp_source");
+    const modpackPreviewBtn = document.getElementById("mp_preview_btn");
+    const modpackExecuteBtn = document.getElementById("mp_execute_btn");
+    const modpackStatus = document.getElementById("mp_status");
+    const modpackPreviewWrap = document.getElementById("mp_preview_wrap");
+    const modpackPreviewMeta = document.getElementById("mp_preview_meta");
+    const modpackPreviewWarnings = document.getElementById("mp_preview_warnings");
+    const modpackPreviewBody = document.getElementById("mp_preview_body");
+
+    const modpackSearchWrap = document.getElementById("mp_search_wrap");
+    const modpackSearchInput = document.getElementById("mp_search_query");
+    const modpackSearchMcVersionInput = document.getElementById("mp_search_mc_version");
+    const modpackSearchLoaderInput = document.getElementById("mp_search_loader");
+    const modpackSearchChannelSelect = document.getElementById("mp_search_release_channel");
+    const modpackSearchBtn = document.getElementById("mp_search_btn");
+    const modpackSearchStatus = document.getElementById("mp_search_status");
+    const modpackSearchResults = document.getElementById("mp_search_results");
+
+    const newServerNameInput = document.getElementById("mp_new_server_name");
+    const newServerPathInput = document.getElementById("mp_new_server_path");
+    const serverTypeSelect = document.getElementById("mp_server_type");
+    const mcVersionInput = document.getElementById("mp_mc_version");
+    const loaderVersionInput = document.getElementById("mp_loader_version");
+    const javaProfileSelect = document.getElementById("mp_java_profile_id");
+    const memoryMinInput = document.getElementById("mp_memory_min_mb");
+    const memoryMaxInput = document.getElementById("mp_memory_max_mb");
+    const portInput = document.getElementById("mp_port");
+    const startParametersInput = document.getElementById("mp_start_parameters");
+
+    let modpackPreviewToken = "";
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function channelLabel(value) {
+        const normalized = String(value || "").toLowerCase();
+        if (normalized === "release") return "Release";
+        if (normalized === "beta") return "Beta";
+        if (normalized === "alpha") return "Alpha";
+        return "";
+    }
+
+    async function fetchJson(url) {
+        const response = await fetch(url, { headers: { "Accept": "application/json" } });
+        if (!response.ok) {
+            let message = "Request failed";
+            try {
+                const payload = await response.json();
+                if (payload && payload.detail) {
+                    message = payload.detail;
+                }
+            } catch (_) {
+                try {
+                    const text = await response.text();
+                    if (text) message = text;
+                } catch (_) {}
+            }
+            throw new Error(message);
+        }
+        return response.json();
+    }
+
+    function setModpackStatus(message) {
+        if (!modpackStatus) return;
+        modpackStatus.textContent = message || "";
+    }
+
+    function setModpackSearchStatus(message) {
+        if (!modpackSearchStatus) return;
+        modpackSearchStatus.textContent = message || "";
+    }
+
+    function toggleModpackSourceGroups() {
+        if (!modpackRoot || !modpackSourceSelect) return;
+        const source = modpackSourceSelect.value;
+        const groups = modpackRoot.querySelectorAll(".mp-source-group");
+        groups.forEach((group) => {
+            if (!(group instanceof HTMLElement)) return;
+            const matches = group.dataset.mpSource === source;
+            group.style.display = matches ? "block" : "none";
+        });
+        if (modpackSearchWrap instanceof HTMLElement) {
+            modpackSearchWrap.style.display = source === "local_archive" ? "none" : "block";
+        }
+    }
+
+    function buildModpackPreviewFormData() {
+        const formData = new FormData();
+        const source = modpackSourceSelect ? modpackSourceSelect.value : "local_archive";
+        formData.append("source", source);
+
+        if (source === "local_archive") {
+            const input = document.getElementById("mp_archive");
+            if (input instanceof HTMLInputElement && input.files && input.files[0]) {
+                formData.append("archive_file", input.files[0]);
+            }
+        } else if (source === "modrinth") {
+            const refInput = document.getElementById("mp_modrinth_reference");
+            const versionInput = document.getElementById("mp_modrinth_version_id");
+            if (refInput instanceof HTMLInputElement && refInput.value.trim()) {
+                formData.append("modrinth_reference", refInput.value.trim());
+            }
+            if (versionInput instanceof HTMLInputElement && versionInput.value.trim()) {
+                formData.append("modrinth_version_id", versionInput.value.trim());
+            }
+        } else if (source === "curseforge") {
+            const projectInput = document.getElementById("mp_curseforge_project_id");
+            const fileInput = document.getElementById("mp_curseforge_file_id");
+            const refInput = document.getElementById("mp_curseforge_reference");
+            if (projectInput instanceof HTMLInputElement && projectInput.value.trim()) {
+                formData.append("curseforge_project_id", projectInput.value.trim());
+            }
+            if (fileInput instanceof HTMLInputElement && fileInput.value.trim()) {
+                formData.append("curseforge_file_id", fileInput.value.trim());
+            }
+            if (refInput instanceof HTMLInputElement && refInput.value.trim()) {
+                formData.append("curseforge_reference", refInput.value.trim());
+            }
+        }
+        return formData;
+    }
+
+    function applyPreviewDefaults(data) {
+        if (newServerNameInput instanceof HTMLInputElement && !newServerNameInput.value.trim()) {
+            newServerNameInput.value = data.pack_name || "Modpack Server";
+        }
+        if (serverTypeSelect instanceof HTMLSelectElement && data.recommended_server_type) {
+            const desiredType = String(data.recommended_server_type).toLowerCase();
+            const option = Array.from(serverTypeSelect.options).find((item) => item.value === desiredType);
+            if (option) serverTypeSelect.value = desiredType;
+        }
+        if (mcVersionInput instanceof HTMLInputElement && data.mc_version && !mcVersionInput.value.trim()) {
+            mcVersionInput.value = data.mc_version;
+        }
+        if (loaderVersionInput instanceof HTMLInputElement && data.loader_version && !loaderVersionInput.value.trim()) {
+            loaderVersionInput.value = data.loader_version;
+        }
+    }
+
+    function renderModpackPreview(data) {
+        if (!modpackPreviewWrap || !modpackPreviewBody) return;
+        modpackPreviewWrap.style.display = "block";
+        if (modpackPreviewMeta) {
+            const pack = data.pack_name || "-";
+            const version = data.pack_version ? ` ${data.pack_version}` : "";
+            const mc = data.mc_version || "-";
+            const loader = data.loader || "-";
+            const loaderVersion = data.loader_version || "-";
+            const overrides = data.override_file_count || 0;
+            const entries = data.entry_count || 0;
+            modpackPreviewMeta.textContent = `${pack}${version} | MC ${mc} | Loader ${loader} (${loaderVersion}) | Dateien ${entries} | Overrides ${overrides}`;
+        }
+        if (modpackPreviewWarnings) {
+            const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+            if (warnings.length) {
+                modpackPreviewWarnings.innerHTML = warnings
+                    .map((warning) => `<div class="flash flash-info">${escapeHtml(warning)}</div>`)
+                    .join("");
+            } else {
+                modpackPreviewWarnings.innerHTML = "<span class=\"muted\">Keine Warnungen.</span>";
+            }
+        }
+        const entries = Array.isArray(data.entries) ? data.entries : [];
+        if (!entries.length) {
+            modpackPreviewBody.innerHTML = "<tr><td colspan=\"4\">Keine installierbaren Modpack-Dateien gefunden.</td></tr>";
+            return;
+        }
+        modpackPreviewBody.innerHTML = entries
+            .map((entry) => {
+                return `
+<tr>
+    <td>${escapeHtml(entry.name || "-")}</td>
+    <td>${escapeHtml(entry.path || "-")}</td>
+    <td>${escapeHtml(entry.provider_name || "-")}</td>
+    <td>${escapeHtml(entry.content_type || "-")}</td>
+</tr>`;
+            })
+            .join("");
+    }
+
+    function renderModpackSearchResults(provider, results) {
+        if (!modpackSearchResults) return;
+        if (!Array.isArray(results) || !results.length) {
+            modpackSearchResults.innerHTML = "<p class=\"muted\">Keine Treffer.</p>";
+            return;
+        }
+        modpackSearchResults.innerHTML = results
+            .map((item) => {
+                const title = item.title || "-";
+                const description = item.description || "";
+                return `
+<div class="card mp-search-card" data-provider="${escapeHtml(provider)}" data-project-id="${escapeHtml(item.id)}" data-title="${escapeHtml(title)}">
+    <div class="grid grid-3">
+        <div>
+            <strong>${escapeHtml(title)}</strong>
+            <p class="muted">${escapeHtml(description)}</p>
+        </div>
+        <div>
+            <label>Version</label>
+            <select class="mp-version-select"><option value="">- Versionen laden -</option></select>
+            <button type="button" class="ghost mp-load-versions">Versionen laden</button>
+        </div>
+        <div class="align-end">
+            <button type="button" class="mp-apply-version">Auswahl uebernehmen</button>
+        </div>
+    </div>
+</div>`;
+            })
+            .join("");
+    }
+
+    async function searchModpacks() {
+        const source = modpackSourceSelect ? modpackSourceSelect.value : "local_archive";
+        if (source === "local_archive") {
+            setModpackSearchStatus("Suche nur fuer Modrinth/CurseForge verfuegbar.");
+            return;
+        }
+        const query = modpackSearchInput instanceof HTMLInputElement ? modpackSearchInput.value.trim() : "";
+        const mcVersion = modpackSearchMcVersionInput instanceof HTMLInputElement ? modpackSearchMcVersionInput.value.trim() : "";
+        const loader = modpackSearchLoaderInput instanceof HTMLInputElement ? modpackSearchLoaderInput.value.trim() : "";
+        const releaseChannel = modpackSearchChannelSelect instanceof HTMLSelectElement ? modpackSearchChannelSelect.value : "all";
+        if (!query) {
+            setModpackSearchStatus("Bitte Suchbegriff eingeben.");
+            return;
+        }
+        setModpackSearchStatus("Suche laeuft ...");
+        if (modpackSearchResults) modpackSearchResults.innerHTML = "";
+        try {
+            const params = new URLSearchParams({
+                provider: source,
+                query,
+                content_type: "modpack",
+                release_channel: releaseChannel,
+            });
+            if (mcVersion) params.set("mc_version", mcVersion);
+            if (loader) params.set("loader", loader);
+            const data = await fetchJson(`/api/content/search?${params.toString()}`);
+            renderModpackSearchResults(source, Array.isArray(data.results) ? data.results : []);
+            setModpackSearchStatus("");
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Suche fehlgeschlagen.";
+            setModpackSearchStatus(message);
+        }
+    }
+
+    async function loadSearchCardVersions(card) {
+        const provider = (card.dataset.provider || "").toLowerCase();
+        const projectId = (card.dataset.projectId || "").trim();
+        const select = card.querySelector(".mp-version-select");
+        if (!provider || !projectId || !(select instanceof HTMLSelectElement)) return;
+
+        const mcVersion = modpackSearchMcVersionInput instanceof HTMLInputElement ? modpackSearchMcVersionInput.value.trim() : "";
+        const loader = modpackSearchLoaderInput instanceof HTMLInputElement ? modpackSearchLoaderInput.value.trim() : "";
+        const releaseChannel = modpackSearchChannelSelect instanceof HTMLSelectElement ? modpackSearchChannelSelect.value : "all";
+
+        let url = "";
+        if (provider === "modrinth") {
+            const params = new URLSearchParams({
+                project_id: projectId,
+                release_channel: releaseChannel,
+            });
+            if (mcVersion) params.set("mc_version", mcVersion);
+            if (loader) params.set("loader", loader);
+            url = `/api/content/modrinth/versions?${params.toString()}`;
+        } else if (provider === "curseforge") {
+            const params = new URLSearchParams({
+                project_id: projectId,
+                content_type: "modpack",
+                release_channel: releaseChannel,
+            });
+            if (mcVersion) params.set("mc_version", mcVersion);
+            if (loader) params.set("loader", loader);
+            url = `/api/content/curseforge/versions?${params.toString()}`;
+        } else {
+            return;
+        }
+
+        select.innerHTML = "<option value=\"\">Lade ...</option>";
+        try {
+            const data = await fetchJson(url);
+            const versions = Array.isArray(data.versions) ? data.versions : [];
+            if (!versions.length) {
+                select.innerHTML = "<option value=\"\">Keine Versionen</option>";
+                return;
+            }
+            select.innerHTML = "<option value=\"\">- Version waehlen -</option>";
+            versions.forEach((item) => {
+                const option = document.createElement("option");
+                option.value = String(item.id || "");
+                const suffix = channelLabel(item.release_channel);
+                option.textContent = (item.name || item.version_number || item.id || "-") + (suffix ? ` [${suffix}]` : "");
+                select.appendChild(option);
+            });
+        } catch (_) {
+            select.innerHTML = "<option value=\"\">Fehler</option>";
+        }
+    }
+
+    function applySelectedSearchVersion(card) {
+        const provider = (card.dataset.provider || "").toLowerCase();
+        const projectId = (card.dataset.projectId || "").trim();
+        const title = (card.dataset.title || "").trim();
+        const select = card.querySelector(".mp-version-select");
+        if (!projectId || !(select instanceof HTMLSelectElement) || !select.value) {
+            setModpackSearchStatus("Bitte zuerst eine Version waehlen.");
+            return;
+        }
+        const versionId = select.value.trim();
+        if (!versionId) {
+            setModpackSearchStatus("Bitte zuerst eine Version waehlen.");
+            return;
+        }
+
+        if (provider === "modrinth") {
+            const refInput = document.getElementById("mp_modrinth_reference");
+            const versionInput = document.getElementById("mp_modrinth_version_id");
+            if (refInput instanceof HTMLInputElement) refInput.value = projectId;
+            if (versionInput instanceof HTMLInputElement) versionInput.value = versionId;
+        } else if (provider === "curseforge") {
+            const projectInput = document.getElementById("mp_curseforge_project_id");
+            const fileInput = document.getElementById("mp_curseforge_file_id");
+            if (projectInput instanceof HTMLInputElement) projectInput.value = projectId;
+            if (fileInput instanceof HTMLInputElement) fileInput.value = versionId;
+        }
+
+        if (newServerNameInput instanceof HTMLInputElement && !newServerNameInput.value.trim() && title) {
+            newServerNameInput.value = title;
+        }
+        setModpackSearchStatus("Modpack-Auswahl uebernommen. Jetzt 'Import pruefen' klicken.");
+    }
+
+    async function previewModpack() {
+        if (!modpackPreviewBtn) return;
+        setModpackStatus("Import-Preview laeuft ...");
+        modpackPreviewBtn.disabled = true;
+        if (modpackExecuteBtn) modpackExecuteBtn.disabled = true;
+        modpackPreviewToken = "";
+
+        const formData = buildModpackPreviewFormData();
+        try {
+            const response = await fetch("/api/modpacks/import-preview", {
+                method: "POST",
+                body: formData,
+            });
+            if (!response.ok) {
+                let message = "Preview fehlgeschlagen.";
+                try {
+                    const payload = await response.json();
+                    if (payload && payload.detail) message = payload.detail;
+                } catch (_) {}
+                throw new Error(message);
+            }
+            const data = await response.json();
+            modpackPreviewToken = data.token || "";
+            renderModpackPreview(data);
+            applyPreviewDefaults(data);
+            if (modpackExecuteBtn) modpackExecuteBtn.disabled = !modpackPreviewToken;
+            setModpackStatus("Preview erfolgreich geladen.");
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Preview fehlgeschlagen.";
+            setModpackStatus(message);
+        } finally {
+            modpackPreviewBtn.disabled = false;
+        }
+    }
+
+    async function executeModpackImport() {
+        if (!modpackPreviewToken) {
+            setModpackStatus("Bitte zuerst ein Preview erstellen.");
+            return;
+        }
+        if (!(newServerNameInput instanceof HTMLInputElement) || !newServerNameInput.value.trim()) {
+            setModpackStatus("Bitte einen Servernamen angeben.");
+            return;
+        }
+        if (!(mcVersionInput instanceof HTMLInputElement) || !mcVersionInput.value.trim()) {
+            setModpackStatus("Bitte eine Minecraft-Version angeben.");
+            return;
+        }
+        if (modpackExecuteBtn) modpackExecuteBtn.disabled = true;
+        setModpackStatus("Import wird ausgefuehrt ...");
+
+        const formData = new FormData();
+        formData.append("preview_token", modpackPreviewToken);
+        formData.append("new_server_name", newServerNameInput.value.trim());
+        if (newServerPathInput instanceof HTMLInputElement && newServerPathInput.value.trim()) {
+            formData.append("new_server_path", newServerPathInput.value.trim());
+        }
+        if (serverTypeSelect instanceof HTMLSelectElement && serverTypeSelect.value.trim()) {
+            formData.append("server_type", serverTypeSelect.value.trim());
+        }
+        if (mcVersionInput instanceof HTMLInputElement && mcVersionInput.value.trim()) {
+            formData.append("mc_version", mcVersionInput.value.trim());
+        }
+        if (loaderVersionInput instanceof HTMLInputElement && loaderVersionInput.value.trim()) {
+            formData.append("loader_version", loaderVersionInput.value.trim());
+        }
+        if (javaProfileSelect instanceof HTMLSelectElement && javaProfileSelect.value.trim()) {
+            formData.append("java_profile_id", javaProfileSelect.value.trim());
+        }
+        if (memoryMinInput instanceof HTMLInputElement && memoryMinInput.value.trim()) {
+            formData.append("memory_min_mb", memoryMinInput.value.trim());
+        }
+        if (memoryMaxInput instanceof HTMLInputElement && memoryMaxInput.value.trim()) {
+            formData.append("memory_max_mb", memoryMaxInput.value.trim());
+        }
+        if (portInput instanceof HTMLInputElement && portInput.value.trim()) {
+            formData.append("port", portInput.value.trim());
+        }
+        if (startParametersInput instanceof HTMLInputElement && startParametersInput.value.trim()) {
+            formData.append("start_parameters", startParametersInput.value.trim());
+        }
+
+        try {
+            const response = await fetch("/api/modpacks/import-execute", {
+                method: "POST",
+                body: formData,
+            });
+            if (!response.ok) {
+                let message = "Import fehlgeschlagen.";
+                try {
+                    const payload = await response.json();
+                    if (payload && payload.detail) message = payload.detail;
+                } catch (_) {}
+                throw new Error(message);
+            }
+            const payload = await response.json();
+            window.location.href = `/servers/${payload.server_id}`;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Import fehlgeschlagen.";
+            setModpackStatus(message);
+            if (modpackExecuteBtn) modpackExecuteBtn.disabled = false;
+        }
+    }
+
+    if (modpackSourceSelect) {
+        modpackSourceSelect.addEventListener("change", toggleModpackSourceGroups);
+        toggleModpackSourceGroups();
+    }
+    if (modpackSearchBtn) {
+        modpackSearchBtn.addEventListener("click", searchModpacks);
+    }
+    if (modpackSearchResults) {
+        modpackSearchResults.addEventListener("click", function (event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const card = target.closest(".mp-search-card");
+            if (!card) return;
+            if (target.classList.contains("mp-load-versions")) {
+                loadSearchCardVersions(card);
+                return;
+            }
+            if (target.classList.contains("mp-apply-version")) {
+                applySelectedSearchVersion(card);
+            }
+        });
+    }
+    if (modpackPreviewBtn) {
+        modpackPreviewBtn.addEventListener("click", previewModpack);
+    }
+    if (modpackExecuteBtn) {
+        modpackExecuteBtn.addEventListener("click", executeModpackImport);
+    }
+})();
+</script>
+{% endblock %}

@@ -1,4 +1,6 @@
 import json
+import math
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -21,6 +23,7 @@ MODRINTH_BASE = "https://api.modrinth.com/v2"
 CURSEFORGE_BASE = "https://api.curseforge.com"
 MC_GAME_ID = 432
 _VALID_RELEASE_CHANNELS = {"all", "release", "beta", "alpha"}
+_SEARCH_STOPWORDS = {"a", "an", "and", "for", "of", "the", "to", "with"}
 
 
 def _request_json(url: str, headers: dict[str, str] | None = None) -> dict | list:
@@ -94,6 +97,113 @@ def _curseforge_release_channel(release_type: int | None) -> str:
         3: "alpha",
     }
     return mapping.get(int(release_type or 1), "release")
+
+
+def _normalize_search_text(value: str | None) -> str:
+    cleaned = re.sub(r"[^a-z0-9]+", " ", (value or "").lower())
+    return " ".join(cleaned.split())
+
+
+def _tokenize_search_text(value: str | None) -> list[str]:
+    normalized = _normalize_search_text(value)
+    if not normalized:
+        return []
+    return [token for token in normalized.split(" ") if token]
+
+
+def _build_curseforge_query_variants(query: str) -> list[str]:
+    base = (query or "").strip()
+    if not base:
+        return []
+
+    variants: list[str] = [base]
+    words = [part for part in re.split(r"[\s\-_]+", base) if part]
+    if len(words) > 1:
+        acronym_parts: list[str] = []
+        for word in words:
+            cleaned = re.sub(r"[^a-z0-9]+", "", word.lower())
+            if not cleaned:
+                continue
+            if cleaned.isdigit():
+                acronym_parts.append(cleaned)
+            else:
+                acronym_parts.append(cleaned[:1])
+        acronym = "".join(acronym_parts)
+        if len(acronym) >= 3:
+            variants.append(acronym)
+
+    compact = re.sub(r"[^a-z0-9]+", "", base.lower())
+    if len(compact) >= 3:
+        variants.append(compact)
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for variant in variants:
+        normalized = variant.strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(variant)
+    return deduped[:3]
+
+
+def _score_curseforge_item(
+    item: dict,
+    *,
+    query: str,
+    query_tokens: list[str],
+    variant_index: int,
+) -> float:
+    title = str(item.get("name") or "")
+    slug = str(item.get("slug") or "")
+    summary = str(item.get("summary") or "")
+
+    title_norm = _normalize_search_text(title)
+    slug_norm = _normalize_search_text(slug)
+    query_norm = _normalize_search_text(query)
+
+    score = 0.0
+    if query_norm and title_norm == query_norm:
+        score += 12000
+    elif query_norm and title_norm.startswith(query_norm):
+        score += 8000
+    elif query_norm and query_norm in title_norm:
+        score += 5000
+
+    if query_norm and slug_norm == query_norm:
+        score += 7000
+    elif query_norm and query_norm in slug_norm:
+        score += 3500
+
+    summary_norm = _normalize_search_text(summary)
+    title_tokens = set(_tokenize_search_text(title))
+    slug_tokens = set(_tokenize_search_text(slug))
+    summary_tokens = set(_tokenize_search_text(summary))
+
+    for token in query_tokens:
+        if token in title_tokens:
+            score += 850
+        elif token in slug_tokens:
+            score += 500
+        elif token in summary_tokens:
+            score += 90
+
+    if query_tokens and all(token in (title_norm + " " + slug_norm) for token in query_tokens):
+        score += 2500
+
+    if variant_index == 0:
+        score += 400
+    elif variant_index == 1:
+        score += 150
+
+    try:
+        downloads = float(item.get("downloadCount") or 0.0)
+    except (TypeError, ValueError):
+        downloads = 0.0
+    if downloads > 0:
+        score += min(300.0, math.log10(downloads + 1.0) * 45.0)
+
+    return score
 
 
 def _safe_file_name(file_name: str) -> str:
@@ -343,6 +453,8 @@ def install_modrinth(
 
 
 def _curseforge_loader_type(loader: str | None, content_type: str) -> int | None:
+    if content_type == "modpack":
+        return None
     if content_type == "plugin":
         mapping = {"paper": 2, "spigot": 3, "bukkit": 2}
         if loader in mapping:
@@ -362,32 +474,70 @@ def search_curseforge(
     release_channel: str = "all",
 ) -> list[dict]:
     release_channel = _normalize_release_channel(release_channel)
-    params: dict[str, str] = {
+    query_variants = _build_curseforge_query_variants(query)
+    if not query_variants:
+        return []
+
+    page_size = 50
+    max_pages_per_variant = 4
+
+    base_params: dict[str, str] = {
         "gameId": str(MC_GAME_ID),
-        "searchFilter": query,
-        "pageSize": "20",
+        "pageSize": str(page_size),
     }
     if mc_version:
-        params["gameVersion"] = mc_version
+        base_params["gameVersion"] = mc_version
     loader_type = _curseforge_loader_type(loader, content_type)
     if loader_type is not None:
-        params["modLoaderType"] = str(loader_type)
+        base_params["modLoaderType"] = str(loader_type)
     if content_type == "plugin":
-        params["classId"] = "5"
+        base_params["classId"] = "5"
+    elif content_type == "modpack":
+        base_params["classId"] = "4471"
     else:
-        params["classId"] = "6"
-    url = f"{CURSEFORGE_BASE}/v1/mods/search?{urllib.parse.urlencode(params)}"
-    payload = _request_json(url, headers=_curseforge_headers())
+        base_params["classId"] = "6"
+
+    query_tokens = [
+        token for token in _tokenize_search_text(query) if token not in _SEARCH_STOPWORDS
+    ]
+    scored_by_id: dict[int, tuple[float, dict]] = {}
+
+    for variant_index, variant in enumerate(query_variants):
+        for page in range(max_pages_per_variant):
+            params = dict(base_params)
+            params["searchFilter"] = variant
+            params["index"] = str(page * page_size)
+            url = f"{CURSEFORGE_BASE}/v1/mods/search?{urllib.parse.urlencode(params)}"
+            payload = _request_json(url, headers=_curseforge_headers())
+            data = payload.get("data", []) if isinstance(payload, dict) else []
+            if not data:
+                break
+            for item in data:
+                mod_id_raw = item.get("id")
+                try:
+                    mod_id = int(mod_id_raw)
+                except (TypeError, ValueError):
+                    continue
+                score = _score_curseforge_item(
+                    item,
+                    query=query,
+                    query_tokens=query_tokens,
+                    variant_index=variant_index,
+                )
+                existing = scored_by_id.get(mod_id)
+                if existing is None or score > existing[0]:
+                    scored_by_id[mod_id] = (score, item)
+            if len(data) < page_size:
+                break
+
+    sorted_items = sorted(scored_by_id.items(), key=lambda entry: entry[1][0], reverse=True)
     results: list[dict] = []
-    data = payload.get("data", []) if isinstance(payload, dict) else []
-    for item in data:
-        mod_id = item.get("id")
-        if mod_id is None:
-            continue
+
+    for mod_id, (_, item) in sorted_items:
         if release_channel != "all":
             try:
                 if not _curseforge_project_has_channel_match(
-                    int(mod_id),
+                    mod_id,
                     mc_version,
                     loader,
                     content_type,
@@ -406,6 +556,8 @@ def search_curseforge(
                 "provider": "curseforge",
             }
         )
+        if len(results) >= 40:
+            break
     return results
 
 

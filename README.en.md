@@ -33,8 +33,14 @@ Web-based management software for multiple Minecraft servers on a Windows host.
 - Platform settings (enable/disable providers, Modrinth user-agent, CurseForge API key)
 - Security features: login rate limiting, lockout, session idle timeout, CSRF same-origin checks
 - Security events page + API
-- Resource monitor (host + per-server CPU/RAM, live updates)
 - System status page + API (host summary, disks, processes)
+- Modpack import (preview + execute) from:
+  - local archive (`.zip` / `.mrpack`)
+  - Modrinth (reference/version id)
+  - CurseForge (project id/file id)
+- Modpack search in the import page (Modrinth/CurseForge) with version selection
+- Modpack import always creates a new server (Super Admin)
+- Import protocol logging via audit log (`modpack.import_preview`, `modpack.import_execute`)
 - Modern UI with light/dark toggle and collapsible sidebar
 
 ## Requirements
@@ -99,7 +105,7 @@ Change these in `.env` before production use.
 - `.env` and runtime data are excluded via `.gitignore`.
 - Live console and resource monitor require running server processes for meaningful values.
 
-## Phase 3-5 API Endpoints
+## Phase 3-6 API Endpoints
 
 - `POST /api/servers/{server_id}/files/upload` (multipart: `upload`, `target_dir`, `overwrite`)
 - `DELETE /api/servers/{server_id}/files?path=<relative>&recursive=true|false`
@@ -114,3 +120,5 @@ Change these in `.env` before production use.
 - `GET /api/system/processes`
 - `GET /api/platform-settings`
 - `PATCH /api/platform-settings/{provider_name}`
+- `POST /api/modpacks/import-preview` (multipart/form-data)
+- `POST /api/modpacks/import-execute` (form-data)

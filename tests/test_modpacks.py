@@ -1,0 +1,133 @@
+import io
+import json
+import zipfile
+
+
+def _csrf_headers(path: str) -> dict[str, str]:
+    return {"referer": f"http://testserver{path}"}
+
+
+def _login_admin(client):
+    response = client.post(
+        "/login",
+        data={"username": "admin", "password": "admin123!"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+
+
+def _build_local_mrpack(mc_version: str = "1.21", loader_version: str = "51.0.33") -> bytes:
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, mode="w", compression=zipfile.ZIP_DEFLATED) as zipped:
+        index = {
+            "formatVersion": 1,
+            "game": "minecraft",
+            "versionId": "1.0.0",
+            "name": "Phase6 Test Pack",
+            "dependencies": {"minecraft": mc_version, "forge": loader_version},
+            "files": [],
+        }
+        zipped.writestr("modrinth.index.json", json.dumps(index))
+        zipped.writestr("overrides/config/phase6-test.txt", "hello-phase6")
+    return payload.getvalue()
+
+
+def test_modpack_import_preview_and_execute_creates_new_server(client, tmp_path):
+    _login_admin(client)
+
+    archive_bytes = _build_local_mrpack()
+    preview_response = client.post(
+        "/api/modpacks/import-preview",
+        data={"source": "local_archive"},
+        files={"archive_file": ("pack.mrpack", archive_bytes, "application/zip")},
+        headers=_csrf_headers("/modpacks/import"),
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["pack_name"] == "Phase6 Test Pack"
+    assert preview_payload["recommended_server_type"] == "forge"
+    token = preview_payload["token"]
+    assert token
+
+    new_server_dir = tmp_path / "created_by_modpack"
+    execute_response = client.post(
+        "/api/modpacks/import-execute",
+        data={
+            "preview_token": token,
+            "new_server_name": "Created By Modpack",
+            "new_server_path": str(new_server_dir),
+            "port": "25570",
+        },
+        headers=_csrf_headers("/modpacks/import"),
+    )
+    assert execute_response.status_code == 200
+    execute_payload = execute_response.json()
+    assert execute_payload["created_server"] is True
+    assert execute_payload["server_id"] > 0
+    assert execute_payload["server_name"] == "Created By Modpack"
+    assert (new_server_dir / "eula.txt").exists()
+    assert (new_server_dir / "config" / "phase6-test.txt").exists()
+
+
+def test_modpack_import_page_requires_super_admin(client):
+    response = client.get("/modpacks/import", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+def test_modpack_import_page_renders_for_super_admin(client):
+    _login_admin(client)
+    response = client.get("/modpacks/import")
+    assert response.status_code == 200
+    assert "Modpack Suche" in response.text
+
+
+def test_modpack_search_endpoints_accept_modpack_content_type(client, monkeypatch):
+    _login_admin(client)
+
+    from app.api.routers import content as content_router
+
+    def fake_search_modrinth(query, mc_version, loader, content_type, release_channel):
+        assert query == "better"
+        assert content_type == "modpack"
+        return [
+            {
+                "id": "better-pack",
+                "title": "Better Pack",
+                "description": "Test pack",
+                "provider": "modrinth",
+            }
+        ]
+
+    def fake_curseforge_versions(mod_id, mc_version, loader, content_type, release_channel):
+        assert mod_id == 123
+        assert content_type == "modpack"
+        return [{"id": 999, "name": "Pack v1", "release_channel": "release"}]
+
+    monkeypatch.setattr(content_router.content_service, "search_modrinth", fake_search_modrinth)
+    monkeypatch.setattr(content_router.content_service, "list_curseforge_versions", fake_curseforge_versions)
+
+    search_response = client.get(
+        "/api/content/search",
+        params={
+            "provider": "modrinth",
+            "query": "better",
+            "content_type": "modpack",
+        },
+        headers=_csrf_headers("/modpacks/import"),
+    )
+    assert search_response.status_code == 200
+    search_payload = search_response.json()
+    assert search_payload["results"][0]["id"] == "better-pack"
+
+    versions_response = client.get(
+        "/api/content/curseforge/versions",
+        params={
+            "project_id": 123,
+            "content_type": "modpack",
+        },
+        headers=_csrf_headers("/modpacks/import"),
+    )
+    assert versions_response.status_code == 200
+    versions_payload = versions_response.json()
+    assert versions_payload["versions"][0]["id"] == 999

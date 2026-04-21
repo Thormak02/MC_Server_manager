@@ -17,6 +17,7 @@ def client(tmp_path, monkeypatch):
         "Server restartet in {seconds} Sekunden durch /restart.",
     )
     monkeypatch.setenv("MCSM_PROVISIONING_OFFLINE_MODE", "true")
+    monkeypatch.setenv("MCSM_CSRF_PROTECTION_ENABLED", "false")
 
     import app.core.config as config
 

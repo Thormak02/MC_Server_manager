@@ -13,6 +13,7 @@ __all__ = [
     "schedule_service",
     "template_service",
     "content_service",
+    "modpack_service",
     "password_policy_service",
     "java_runtime_service",
     "platform_settings_service",

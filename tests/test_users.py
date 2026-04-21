@@ -20,7 +20,7 @@ def test_super_admin_can_create_user(client):
         "/users",
         data={
             "username": "mod_user",
-            "password": "securepass123",
+            "password": "Securepass123",
             "role": "moderator",
         },
         follow_redirects=True,

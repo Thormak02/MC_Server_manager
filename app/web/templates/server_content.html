@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block content %}
 <h1>Mods & Inhalte</h1>
 
@@ -6,6 +6,9 @@
 
 <section class="card">
     <h2>Suche & Installation</h2>
+    {% if current_user.role == "super_admin" %}
+    <p class="muted">Modpacks werden ueber <a href="/modpacks/import">Modpack importieren</a> als neuer Server importiert.</p>
+    {% endif %}
     {% if can_manage %}
     <div class="grid grid-4" id="content-search">
         <div>
