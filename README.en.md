@@ -27,7 +27,7 @@ Web-based management software for multiple Minecraft servers on a Windows host.
 - Delayed restart with optional warning message (`{seconds}`)
 - Restart via console command `/restart`
 - Backups & restore (manual creation, download, deletion, restore, restore history)
-- Server wizard for Vanilla, Paper, Spigot, Fabric, Forge
+- Server wizard for Vanilla, Paper, Spigot, Fabric, Forge, NeoForge
 - Provider pattern for future extensions
 - Optional provisioning offline mode
 - Platform settings (enable/disable providers, Modrinth user-agent, CurseForge API key)

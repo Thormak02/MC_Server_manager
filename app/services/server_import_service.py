@@ -45,6 +45,8 @@ def detect_server_type(root_path: Path) -> str:
         return "spigot"
     if any("fabric" in name for name in jar_names):
         return "fabric"
+    if any("neoforge" in name for name in jar_names):
+        return "neoforge"
     if any("forge" in name for name in jar_names):
         return "forge"
     return "vanilla"

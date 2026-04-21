@@ -30,7 +30,7 @@ _MODRINTH_VERSION_URL_RE = re.compile(
     re.IGNORECASE,
 )
 _VALID_IMPORT_SOURCES = {"local_archive", "modrinth", "curseforge"}
-_SUPPORTED_SERVER_TYPES = {"vanilla", "paper", "spigot", "fabric", "forge"}
+_SUPPORTED_SERVER_TYPES = {"vanilla", "paper", "spigot", "fabric", "forge", "neoforge"}
 _MAX_PREVIEW_AGE_SECONDS = 24 * 60 * 60
 
 
@@ -87,8 +87,8 @@ def _recommended_server_type(loader: str | None) -> str:
     normalized = (loader or "").strip().lower()
     if normalized in _SUPPORTED_SERVER_TYPES:
         return normalized
-    if normalized in {"quilt", "neoforge"}:
-        return "fabric" if normalized == "quilt" else "forge"
+    if normalized == "quilt":
+        return "fabric"
     return "vanilla"
 
 

@@ -276,7 +276,7 @@ def sync_server_settings_to_files(server: Server) -> list[str]:
         if warning:
             warnings.append(warning)
 
-    if server.server_type == "forge":
+    if server.server_type in {"forge", "neoforge"}:
         warning = _sync_forge_jvm_args(server)
         if warning:
             warnings.append(warning)

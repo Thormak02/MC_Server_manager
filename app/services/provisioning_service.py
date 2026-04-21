@@ -6,6 +6,7 @@ from app.models.server import Server
 from app.providers.base.server_provider_base import ServerProviderBase
 from app.providers.server.fabric_provider import FabricProvider
 from app.providers.server.forge_provider import ForgeProvider
+from app.providers.server.neoforge_provider import NeoForgeProvider
 from app.providers.server.paper_provider import PaperProvider
 from app.providers.server.spigot_provider import SpigotProvider
 from app.providers.server.vanilla_provider import VanillaProvider
@@ -25,6 +26,7 @@ class ProvisioningService:
             "spigot": SpigotProvider(),
             "fabric": FabricProvider(),
             "forge": ForgeProvider(),
+            "neoforge": NeoForgeProvider(),
         }
 
     def list_available_server_types(self) -> list[str]:

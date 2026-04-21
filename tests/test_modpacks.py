@@ -32,6 +32,21 @@ def _build_local_mrpack(mc_version: str = "1.21", loader_version: str = "51.0.33
     return payload.getvalue()
 
 
+def _build_local_neoforge_mrpack(mc_version: str = "1.21.1", loader_version: str = "21.1.200") -> bytes:
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, mode="w", compression=zipfile.ZIP_DEFLATED) as zipped:
+        index = {
+            "formatVersion": 1,
+            "game": "minecraft",
+            "versionId": "1.0.0",
+            "name": "NeoForge Test Pack",
+            "dependencies": {"minecraft": mc_version, "neoforge": loader_version},
+            "files": [],
+        }
+        zipped.writestr("modrinth.index.json", json.dumps(index))
+    return payload.getvalue()
+
+
 def test_modpack_import_preview_and_execute_creates_new_server(client, tmp_path):
     _login_admin(client)
 
@@ -67,6 +82,23 @@ def test_modpack_import_preview_and_execute_creates_new_server(client, tmp_path)
     assert execute_payload["server_name"] == "Created By Modpack"
     assert (new_server_dir / "eula.txt").exists()
     assert (new_server_dir / "config" / "phase6-test.txt").exists()
+
+
+def test_modpack_preview_recommends_neoforge_for_neoforge_loader(client):
+    _login_admin(client)
+
+    archive_bytes = _build_local_neoforge_mrpack()
+    response = client.post(
+        "/api/modpacks/import-preview",
+        data={"source": "local_archive"},
+        files={"archive_file": ("neo-pack.mrpack", archive_bytes, "application/zip")},
+        headers=_csrf_headers("/modpacks/import"),
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["pack_name"] == "NeoForge Test Pack"
+    assert payload["recommended_server_type"] == "neoforge"
+    assert payload["loader"] == "neoforge"
 
 
 def test_modpack_import_page_requires_super_admin(client):

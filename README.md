@@ -27,7 +27,7 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Verzoegerter Neustart mit optionaler Warnmeldung (`{seconds}`)
 - Neustart auch ueber Konsolenkommando `/restart`
 - Backups & Restore (manuell, Download, Loeschen, Wiederherstellung, Restore-Historie)
-- Server-Wizard fuer Vanilla, Paper, Spigot, Fabric, Forge
+- Server-Wizard fuer Vanilla, Paper, Spigot, Fabric, Forge, NeoForge
 - Provider-Prinzip fuer spaetere Erweiterungen
 - Optionaler Provisioning-Offline-Modus
 - Plattform-Einstellungen (Provider aktiv/deaktivieren, Modrinth User-Agent, CurseForge API Key)

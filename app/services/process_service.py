@@ -203,35 +203,40 @@ def _command_for_server(server: Server, base_path: Path) -> list[str]:
     raise ValueError(f"Unbekannter Startmodus: {server.start_mode}")
 
 
-def _append_subprocess_output(server_id: int, text: str) -> None:
+def _append_subprocess_output(server_id: int, text: str, *, tag: str) -> None:
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if line:
-            console_service.append_output(server_id, f"[forge-install] {line}")
+            console_service.append_output(server_id, f"[{tag}] {line}")
 
 
-def _prepare_forge_runtime_if_needed(
+def _prepare_loader_runtime_if_needed(
     server: Server,
     base_path: Path,
     runtime_env: dict[str, str] | None,
 ) -> tuple[bool, str]:
-    if server.server_type != "forge" or server.start_mode != "bat":
+    if server.server_type not in {"forge", "neoforge"} or server.start_mode != "bat":
         return True, ""
 
     start_bat_path = _resolve_start_bat_path(server, base_path)
     if start_bat_path.exists():
         return True, ""
 
-    install_script = (base_path / "install_forge.bat").resolve()
+    is_neoforge = server.server_type == "neoforge"
+    install_script_name = "install_neoforge.bat" if is_neoforge else "install_forge.bat"
+    display_name = "NeoForge" if is_neoforge else "Forge"
+    install_tag = "neoforge-install" if is_neoforge else "forge-install"
+
+    install_script = (base_path / install_script_name).resolve()
     if not install_script.exists():
         return False, f"Startdatei nicht gefunden: {start_bat_path}"
 
-    console_service.append_output(server.id, "Forge Installation wird vorbereitet ...")
+    console_service.append_output(server.id, f"{display_name} Installation wird vorbereitet ...")
     use_pushd = _is_unc_path(base_path)
     if use_pushd:
-        install_step = f"pushd {_escape_cmd_token(_normalize_windows_path(str(base_path)))} && call install_forge.bat"
+        install_step = f"pushd {_escape_cmd_token(_normalize_windows_path(str(base_path)))} && call {install_script_name}"
     else:
-        install_step = "call install_forge.bat"
+        install_step = f"call {install_script_name}"
 
     install_command = [
         "cmd",
@@ -253,16 +258,16 @@ def _prepare_forge_runtime_if_needed(
             creationflags=_build_creation_flags(),
         )
     except Exception as exc:
-        return False, f"Forge Installation fehlgeschlagen: {exc}"
+        return False, f"{display_name} Installation fehlgeschlagen: {exc}"
 
-    _append_subprocess_output(server.id, completed.stdout or "")
+    _append_subprocess_output(server.id, completed.stdout or "", tag=install_tag)
     if completed.returncode != 0:
-        return False, f"Forge Installation fehlgeschlagen (Exit-Code {completed.returncode})."
+        return False, f"{display_name} Installation fehlgeschlagen (Exit-Code {completed.returncode})."
 
     if not start_bat_path.exists():
-        return False, f"Forge Installation abgeschlossen, aber Startdatei fehlt weiterhin: {start_bat_path}"
+        return False, f"{display_name} Installation abgeschlossen, aber Startdatei fehlt weiterhin: {start_bat_path}"
 
-    console_service.append_output(server.id, "Forge Installation abgeschlossen.")
+    console_service.append_output(server.id, f"{display_name} Installation abgeschlossen.")
     return True, ""
 
 
@@ -489,7 +494,7 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
     if not base_path.exists() or not base_path.is_dir():
         return False, "Serverordner existiert nicht."
 
-    prepared, prepare_message = _prepare_forge_runtime_if_needed(server, base_path, runtime_env)
+    prepared, prepare_message = _prepare_loader_runtime_if_needed(server, base_path, runtime_env)
     if not prepared:
         server.status = "error"
         db.add(server)
