@@ -29,16 +29,26 @@
             <label for="query">Suchbegriff</label>
             <input id="query" type="text" placeholder="z.B. worldedit">
         </div>
+        <div>
+            <label for="sort_by">Sortierung</label>
+            <select id="sort_by">
+                <option value="relevance">Relevanz</option>
+                <option value="downloads">Downloads</option>
+                <option value="popularity">Beliebtheit</option>
+                <option value="updated">Zuletzt aktualisiert</option>
+                <option value="newest">Neueste</option>
+            </select>
+        </div>
         <div class="align-end">
             <button id="search-btn" type="button">Suchen</button>
         </div>
         <div>
-            <label for="mc_version">MC Version</label>
-            <input id="mc_version" type="text" value="{{ server.mc_version }}">
+            <label>MC Version (optional)</label>
+            <div id="mc-version-filter"></div>
         </div>
         <div>
-            <label for="loader">Loader/Typ</label>
-            <input id="loader" type="text" value="{% if server.server_type != 'vanilla' %}{{ server.server_type }}{% endif %}">
+            <label>Loader/Typ (optional)</label>
+            <div id="loader-filter"></div>
         </div>
         <div>
             <label for="release_channel">Kanal</label>
@@ -49,9 +59,16 @@
                 <option value="alpha">Alpha</option>
             </select>
         </div>
+        <div style="grid-column: span 2;">
+            <label>Kategorien</label>
+            <div id="categories-filter"></div>
+        </div>
     </div>
     <div id="search-status" class="muted"></div>
-    <div id="search-results" class="stack"></div>
+    <div id="search-results-scroll" class="search-results-scroll">
+        <div id="search-results" class="stack"><p class="muted">Noch keine Treffer geladen.</p></div>
+        <div id="search-more-status" class="muted"></div>
+    </div>
     {% else %}
     <p class="muted">Keine Berechtigung fuer Installationen.</p>
     {% endif %}
@@ -114,16 +131,293 @@
 <script>
 (function () {
     const serverId = {{ server.id }};
+    const defaults = {
+        mcVersion: {{ (server.mc_version or "") | tojson }},
+        loader: {{ (server.server_type if server.server_type != "vanilla" else "") | tojson }},
+    };
     const providerSelect = document.getElementById("provider");
     const contentTypeSelect = document.getElementById("content_type");
     const queryInput = document.getElementById("query");
-    const mcVersionInput = document.getElementById("mc_version");
-    const loaderInput = document.getElementById("loader");
+    const sortBySelect = document.getElementById("sort_by");
     const releaseChannelSelect = document.getElementById("release_channel");
     const searchBtn = document.getElementById("search-btn");
     const searchStatus = document.getElementById("search-status");
+    const searchMoreStatus = document.getElementById("search-more-status");
+    const searchResultsScroll = document.getElementById("search-results-scroll");
     const resultsEl = document.getElementById("search-results");
     const installedBody = document.getElementById("installed-body");
+    const canManage = {{ "true" if can_manage else "false" }};
+    const mcVersionFilter = createMultiSelect("mc-version-filter", "Versionen auswaehlen");
+    const loaderFilter = createMultiSelect("loader-filter", "Loader auswaehlen");
+    const categoriesFilter = createMultiSelect("categories-filter", "Kategorien auswaehlen");
+    let searchTimer = null;
+    let searchNonce = 0;
+    let defaultSelectionsApplied = false;
+    const searchState = {
+        offset: 0,
+        limit: 20,
+        total: 0,
+        hasMore: false,
+        loading: false,
+        paramsKey: "",
+    };
+
+    function createMultiSelect(containerId, placeholder) {
+        const host = document.getElementById(containerId);
+        if (!host) {
+            return {
+                setOptions() {},
+                getValues() { return []; },
+                setValues() {},
+                onChange() {},
+            };
+        }
+
+        host.className = "multi-select";
+        host.innerHTML = `
+<button type="button" class="multi-select-toggle">
+    <span class="multi-select-toggle-label">${escapeHtml(placeholder)}</span>
+    <span class="multi-select-caret">v</span>
+</button>
+<div class="multi-select-panel" hidden>
+    <input type="text" class="multi-select-search" placeholder="Filtern ...">
+    <div class="multi-select-actions">
+        <button type="button" class="ghost multi-select-action" data-action="all">Alle</button>
+        <button type="button" class="ghost multi-select-action" data-action="none">Keine</button>
+    </div>
+    <div class="multi-select-options"></div>
+</div>
+<div class="multi-select-chips"></div>`;
+
+        const toggle = host.querySelector(".multi-select-toggle");
+        const toggleLabel = host.querySelector(".multi-select-toggle-label");
+        const panel = host.querySelector(".multi-select-panel");
+        const search = host.querySelector(".multi-select-search");
+        const optionsWrap = host.querySelector(".multi-select-options");
+        const chipsWrap = host.querySelector(".multi-select-chips");
+        const selected = new Set();
+        let options = [];
+        let listeners = [];
+
+        function closePanel() {
+            if (!panel || !toggle) return;
+            panel.hidden = true;
+            toggle.setAttribute("aria-expanded", "false");
+            host.classList.remove("is-open");
+        }
+
+        function openPanel() {
+            if (!panel || !toggle) return;
+            document.querySelectorAll(".multi-select").forEach((root) => {
+                if (!(root instanceof HTMLElement) || root === host) return;
+                const otherPanel = root.querySelector(".multi-select-panel");
+                const otherToggle = root.querySelector(".multi-select-toggle");
+                if (otherPanel instanceof HTMLElement) {
+                    otherPanel.hidden = true;
+                }
+                if (otherToggle instanceof HTMLElement) {
+                    otherToggle.setAttribute("aria-expanded", "false");
+                }
+                root.classList.remove("is-open");
+            });
+            panel.hidden = false;
+            toggle.setAttribute("aria-expanded", "true");
+            host.classList.add("is-open");
+            if (search instanceof HTMLInputElement) {
+                window.setTimeout(() => search.focus(), 0);
+            }
+        }
+
+        function emitChange() {
+            listeners.forEach((listener) => {
+                try {
+                    listener(getValues());
+                } catch (_) {}
+            });
+        }
+
+        function updateLabel() {
+            if (!toggleLabel) return;
+            const labels = options
+                .filter((entry) => selected.has(entry.value))
+                .map((entry) => entry.label);
+            if (!labels.length) {
+                toggleLabel.textContent = placeholder;
+                return;
+            }
+            if (labels.length <= 2) {
+                toggleLabel.textContent = labels.join(", ");
+                return;
+            }
+            toggleLabel.textContent = `${labels.length} ausgewaehlt`;
+        }
+
+        function renderChips() {
+            if (!chipsWrap) return;
+            const chosen = options.filter((entry) => selected.has(entry.value));
+            if (!chosen.length) {
+                chipsWrap.innerHTML = "";
+                return;
+            }
+            chipsWrap.innerHTML = chosen
+                .map((entry) => {
+                    return `<button type="button" class="multi-select-chip" data-chip="${escapeHtml(entry.value)}">${escapeHtml(entry.label)} x</button>`;
+                })
+                .join("");
+        }
+
+        function renderOptions() {
+            if (!optionsWrap) return;
+            const filterText = search instanceof HTMLInputElement ? search.value.trim().toLowerCase() : "";
+            const visible = options.filter((entry) => {
+                if (!filterText) return true;
+                return entry.label.toLowerCase().includes(filterText) || entry.value.toLowerCase().includes(filterText);
+            });
+            if (!visible.length) {
+                optionsWrap.innerHTML = `<div class="muted">Keine Treffer</div>`;
+                return;
+            }
+            optionsWrap.innerHTML = visible
+                .map((entry) => {
+                    const checked = selected.has(entry.value) ? "checked" : "";
+                    return `
+<label class="multi-select-option">
+    <input type="checkbox" value="${escapeHtml(entry.value)}" ${checked}>
+    <span>${escapeHtml(entry.label)}</span>
+</label>`;
+                })
+                .join("");
+        }
+
+        function setOptions(nextOptions) {
+            const normalized = Array.isArray(nextOptions) ? nextOptions : [];
+            const deduped = [];
+            const seen = new Set();
+            normalized.forEach((entry) => {
+                const value = String(entry.value || "").trim();
+                if (!value || seen.has(value)) return;
+                seen.add(value);
+                const label = String(entry.label || value).trim() || value;
+                deduped.push({ value, label });
+            });
+            options = deduped;
+            Array.from(selected).forEach((value) => {
+                if (!seen.has(value)) selected.delete(value);
+            });
+            renderOptions();
+            renderChips();
+            updateLabel();
+        }
+
+        function getValues() {
+            return Array.from(selected);
+        }
+
+        function setValues(values) {
+            const incoming = new Set((Array.isArray(values) ? values : []).map((item) => String(item).trim()).filter(Boolean));
+            selected.clear();
+            options.forEach((entry) => {
+                if (incoming.has(entry.value)) selected.add(entry.value);
+            });
+            renderOptions();
+            renderChips();
+            updateLabel();
+        }
+
+        if (toggle && panel) {
+            toggle.setAttribute("aria-expanded", "false");
+            toggle.addEventListener("click", function (event) {
+                event.stopPropagation();
+                if (panel.hidden) {
+                    openPanel();
+                } else {
+                    closePanel();
+                }
+            });
+        }
+
+        if (search instanceof HTMLInputElement) {
+            search.addEventListener("input", renderOptions);
+        }
+
+        if (optionsWrap) {
+            optionsWrap.addEventListener("change", function (event) {
+                const target = event.target;
+                if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") return;
+                const value = target.value;
+                if (target.checked) {
+                    selected.add(value);
+                } else {
+                    selected.delete(value);
+                }
+                renderOptions();
+                renderChips();
+                updateLabel();
+                emitChange();
+            });
+        }
+
+        host.addEventListener("click", function (event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const chip = target.closest(".multi-select-chip");
+            if (chip) {
+                const value = chip.getAttribute("data-chip") || "";
+                selected.delete(value);
+                renderOptions();
+                renderChips();
+                updateLabel();
+                emitChange();
+                return;
+            }
+            const actionButton = target.closest(".multi-select-action");
+            if (!actionButton) return;
+            const action = actionButton.getAttribute("data-action");
+            if (action === "all") {
+                const filterText = search instanceof HTMLInputElement ? search.value.trim().toLowerCase() : "";
+                options.forEach((entry) => {
+                    if (!filterText || entry.label.toLowerCase().includes(filterText) || entry.value.toLowerCase().includes(filterText)) {
+                        selected.add(entry.value);
+                    }
+                });
+            } else if (action === "none") {
+                const filterText = search instanceof HTMLInputElement ? search.value.trim().toLowerCase() : "";
+                if (!filterText) {
+                    selected.clear();
+                } else {
+                    options.forEach((entry) => {
+                        if (entry.label.toLowerCase().includes(filterText) || entry.value.toLowerCase().includes(filterText)) {
+                            selected.delete(entry.value);
+                        }
+                    });
+                }
+            }
+            renderOptions();
+            renderChips();
+            updateLabel();
+            emitChange();
+        });
+
+        document.addEventListener("click", function (event) {
+            if (!(event.target instanceof Node)) return;
+            if (host.contains(event.target)) return;
+            closePanel();
+        });
+
+        host.addEventListener("keydown", function (event) {
+            if (event.key !== "Escape") return;
+            closePanel();
+        });
+
+        return {
+            setOptions,
+            getValues,
+            setValues,
+            onChange(callback) {
+                if (typeof callback === "function") listeners.push(callback);
+            },
+        };
+    }
 
     function escapeHtml(value) {
         return String(value)
@@ -132,6 +426,22 @@
             .replace(/>/g, "&gt;")
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    }
+
+    function formatCompactNumber(value) {
+        const num = Number(value || 0);
+        if (!Number.isFinite(num) || num <= 0) return "0";
+        if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(1)}B`;
+        if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+        if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+        return String(Math.round(num));
+    }
+
+    function formatDateLabel(value) {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleDateString("de-DE");
     }
 
     function channelLabel(value) {
@@ -175,46 +485,187 @@
         return response.json();
     }
 
-    async function search() {
-        if (!resultsEl) return;
+    function buildSearchParams() {
         const provider = providerSelect ? providerSelect.value : "modrinth";
         const query = queryInput ? queryInput.value.trim() : "";
-        const mcVersion = mcVersionInput ? mcVersionInput.value.trim() : "";
-        const loader = loaderInput ? loaderInput.value.trim() : "";
+        const mcVersions = mcVersionFilter.getValues();
+        const loaders = loaderFilter.getValues();
         const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
         const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
-        if (!query) return;
+        const sortBy = sortBySelect ? sortBySelect.value : "relevance";
+        const categories = categoriesFilter.getValues();
+        return {
+            provider,
+            query,
+            mcVersions,
+            loaders,
+            contentType,
+            releaseChannel,
+            sortBy,
+            categories,
+        };
+    }
 
-        resultsEl.innerHTML = "";
-        if (searchStatus) searchStatus.textContent = "Suche ...";
-        const url =
-            "/api/content/search?" +
-            new URLSearchParams({
-                provider,
-                query,
-                mc_version: mcVersion,
-                loader,
-                content_type: contentType,
-                release_channel: releaseChannel,
-            }).toString();
+    function scheduleSearch(delayMs) {
+        if (!resultsEl) return;
+        if (searchTimer) {
+            window.clearTimeout(searchTimer);
+        }
+        searchTimer = window.setTimeout(() => {
+            search();
+        }, delayMs);
+    }
+
+    async function loadFilterOptions() {
+        const provider = providerSelect ? providerSelect.value : "modrinth";
+        const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
+        try {
+            const data = await fetchJson(
+                "/api/content/filter-options?" +
+                    new URLSearchParams({
+                        provider,
+                        content_type: contentType,
+                    }).toString()
+            );
+            const categories = Array.isArray(data.categories) ? data.categories : [];
+            const mcVersions = Array.isArray(data.mc_versions) ? data.mc_versions : [];
+            const loaders = Array.isArray(data.loaders) ? data.loaders : [];
+
+            categoriesFilter.setOptions(
+                categories.map((category) => ({
+                    value: String(category.id || ""),
+                    label: String(category.label || category.id || "-"),
+                }))
+            );
+            mcVersionFilter.setOptions(
+                mcVersions.map((value) => ({
+                    value: String(value),
+                    label: String(value),
+                }))
+            );
+            loaderFilter.setOptions(
+                loaders.map((value) => ({
+                    value: String(value),
+                    label: String(value),
+                }))
+            );
+
+            if (!defaultSelectionsApplied) {
+                if (defaults.mcVersion) {
+                    mcVersionFilter.setValues([defaults.mcVersion]);
+                }
+                if (defaults.loader) {
+                    loaderFilter.setValues([defaults.loader]);
+                }
+                defaultSelectionsApplied = true;
+            }
+        } catch (_) {
+            categoriesFilter.setOptions([]);
+            mcVersionFilter.setOptions([]);
+            loaderFilter.setOptions([]);
+        }
+    }
+
+    function buildSearchKey(params) {
+        return JSON.stringify({
+            provider: params.provider,
+            query: params.query,
+            mcVersions: params.mcVersions,
+            loaders: params.loaders,
+            contentType: params.contentType,
+            releaseChannel: params.releaseChannel,
+            sortBy: params.sortBy,
+            categories: params.categories,
+        });
+    }
+
+    async function search(reset) {
+        if (!resultsEl) return;
+        const params = buildSearchParams();
+        const key = buildSearchKey(params);
+        if (reset) {
+            searchState.offset = 0;
+            searchState.total = 0;
+            searchState.hasMore = false;
+            searchState.paramsKey = key;
+            resultsEl.innerHTML = "";
+            if (searchMoreStatus) searchMoreStatus.textContent = "";
+        } else if (key !== searchState.paramsKey) {
+            return;
+        }
+        if (searchState.loading) {
+            return;
+        }
+        const requestId = ++searchNonce;
+        searchState.loading = true;
+
+        if (searchStatus && reset) searchStatus.textContent = "Suche ...";
+        const urlParams = new URLSearchParams({
+            provider: params.provider,
+            query: params.query,
+            mc_version: params.mcVersions.join(","),
+            loader: params.loaders.join(","),
+            content_type: params.contentType,
+            release_channel: params.releaseChannel,
+            sort_by: params.sortBy,
+            categories: params.categories.join(","),
+            offset: String(searchState.offset),
+            limit: String(searchState.limit),
+        });
+        const url = "/api/content/search?" + urlParams.toString();
 
         try {
             const data = await fetchJson(url);
+            if (requestId !== searchNonce) return;
             const results = Array.isArray(data.results) ? data.results : [];
-            if (!results.length) {
+            const total = Number(data.total || 0);
+            searchState.total = Number.isFinite(total) ? total : 0;
+            if (!results.length && reset) {
                 if (searchStatus) searchStatus.textContent = "Keine Treffer.";
+                if (searchMoreStatus) searchMoreStatus.textContent = "";
                 return;
             }
-            if (searchStatus) searchStatus.textContent = "";
-            resultsEl.innerHTML = results
+            if (searchStatus) {
+                const shown = searchState.offset + results.length;
+                if (searchState.total > 0) {
+                    searchStatus.textContent = `${shown}/${searchState.total} Treffer`;
+                } else {
+                    searchStatus.textContent = `${shown} Treffer`;
+                }
+            }
+            const markup = results
                 .map((item) => {
+                    const icon = item.icon_url
+                        ? `<img src="${escapeHtml(item.icon_url)}" alt="" class="search-result-icon">`
+                        : `<div class="search-result-icon search-result-icon-placeholder">${escapeHtml((item.title || "?").slice(0, 1))}</div>`;
+                    const title = item.project_url
+                        ? `<a href="${escapeHtml(item.project_url)}" target="_blank" rel="noopener noreferrer" class="search-project-link">${escapeHtml(item.title || "-")}</a>`
+                        : `<span>${escapeHtml(item.title || "-")}</span>`;
+                    const categories = Array.isArray(item.categories) ? item.categories.slice(0, 5) : [];
+                    const categoryMarkup = categories.length
+                        ? `<div class="search-result-tags">${categories
+                              .map((label) => `<span class="search-result-tag">${escapeHtml(label)}</span>`)
+                              .join("")}</div>`
+                        : "";
                     return `
-<div class="card" data-project-id="${item.id}" data-provider="${provider}">
-    <div class="grid grid-3">
-        <div>
-            <strong>${escapeHtml(item.title || "-")}</strong>
+<div class="card search-result-card" data-project-id="${escapeHtml(item.id)}" data-provider="${escapeHtml(params.provider)}">
+    <div class="search-result-main">
+        ${icon}
+        <div class="stack">
+            <div class="search-result-title-row">
+                <strong>${title}</strong>
+            </div>
             <p class="muted">${escapeHtml(item.description || "")}</p>
+            <div class="muted search-result-meta">
+                <span>Downloads: ${escapeHtml(formatCompactNumber(item.downloads))}</span>
+                <span>Beliebtheit: ${escapeHtml(formatCompactNumber(item.followers))}</span>
+                <span>Update: ${escapeHtml(formatDateLabel(item.updated_at))}</span>
+                <span>Autor: ${escapeHtml(item.author || "-")}</span>
+            </div>
+            ${categoryMarkup}
         </div>
+    </div>
+    <div class="grid grid-3">
         <div>
             <label>Version</label>
             <select class="version-select"><option value="">- Versionen laden -</option></select>
@@ -227,19 +678,32 @@
 </div>`;
                 })
                 .join("");
+            if (reset) {
+                resultsEl.innerHTML = markup;
+            } else {
+                resultsEl.insertAdjacentHTML("beforeend", markup);
+            }
+            searchState.offset += results.length;
+            searchState.hasMore = Boolean(data.has_more);
+            if (searchMoreStatus) {
+                searchMoreStatus.textContent = searchState.hasMore ? "Nach unten scrollen, um mehr zu laden ..." : "Ende der Treffer.";
+            }
         } catch (err) {
             if (searchStatus) {
                 const message = err instanceof Error ? err.message : "Fehler bei der Suche.";
                 searchStatus.textContent = message || "Fehler bei der Suche.";
             }
+            if (searchMoreStatus) searchMoreStatus.textContent = "";
+        } finally {
+            searchState.loading = false;
         }
     }
 
     async function loadVersions(card) {
         const projectId = card.dataset.projectId;
         const provider = card.dataset.provider;
-        const mcVersion = mcVersionInput ? mcVersionInput.value.trim() : "";
-        const loader = loaderInput ? loaderInput.value.trim() : "";
+        const mcVersion = mcVersionFilter.getValues().join(",");
+        const loader = loaderFilter.getValues().join(",");
         const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
         const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
         const select = card.querySelector(".version-select");
@@ -355,8 +819,8 @@
         const select = row.querySelector(".installed-version-select");
         if (!select || !provider || !projectId) return;
 
-        const mcVersion = mcVersionInput ? mcVersionInput.value.trim() : "";
-        const loader = loaderInput ? loaderInput.value.trim() : "";
+        const mcVersion = mcVersionFilter.getValues().join(",");
+        const loader = loaderFilter.getValues().join(",");
         const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
 
         let url = "";
@@ -489,11 +953,48 @@
     }
 
     if (searchBtn) {
-        searchBtn.addEventListener("click", search);
+        searchBtn.addEventListener("click", function () {
+            search(true);
+        });
+    }
+    if (queryInput) {
+        queryInput.addEventListener("input", function () {
+            scheduleSearch(280);
+        });
+    }
+    if (sortBySelect) {
+        sortBySelect.addEventListener("change", function () {
+            scheduleSearch(80);
+        });
+    }
+    mcVersionFilter.onChange(function () { scheduleSearch(80); });
+    loaderFilter.onChange(function () { scheduleSearch(80); });
+    categoriesFilter.onChange(function () { scheduleSearch(80); });
+    if (providerSelect) {
+        providerSelect.addEventListener("change", async function () {
+            await loadFilterOptions();
+            scheduleSearch(80);
+        });
+    }
+    if (contentTypeSelect) {
+        contentTypeSelect.addEventListener("change", async function () {
+            await loadFilterOptions();
+            scheduleSearch(80);
+        });
     }
     if (releaseChannelSelect) {
         releaseChannelSelect.addEventListener("change", function () {
             initializeInstalledVersionSelectors();
+            scheduleSearch(80);
+        });
+    }
+    if (searchResultsScroll) {
+        searchResultsScroll.addEventListener("scroll", function () {
+            if (!searchState.hasMore || searchState.loading) return;
+            const threshold = 120;
+            const nearBottom = searchResultsScroll.scrollTop + searchResultsScroll.clientHeight >= searchResultsScroll.scrollHeight - threshold;
+            if (!nearBottom) return;
+            search(false);
         });
     }
 
@@ -501,7 +1002,7 @@
         resultsEl.addEventListener("click", function (event) {
             const target = event.target;
             if (!(target instanceof HTMLElement)) return;
-            const card = target.closest(".card");
+            const card = target.closest(".search-result-card");
             if (!card) return;
             if (target.classList.contains("load-versions")) {
                 loadVersions(card);
@@ -532,6 +1033,9 @@
         });
     }
 
+    loadFilterOptions().then(function () {
+        search(true);
+    });
     refreshInstalled();
 })();
 </script>

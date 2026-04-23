@@ -48,12 +48,12 @@
                     <input id="mp_search_query" type="text" placeholder="z.B. Better Minecraft">
                 </div>
                 <div>
-                    <label for="mp_search_mc_version">MC Version (optional)</label>
-                    <input id="mp_search_mc_version" type="text" placeholder="z.B. 1.20.1">
+                    <label>MC Version (optional)</label>
+                    <div id="mp_search_mc_version_filter"></div>
                 </div>
                 <div>
-                    <label for="mp_search_loader">Loader (optional)</label>
-                    <input id="mp_search_loader" type="text" placeholder="forge, neoforge, fabric, quilt ...">
+                    <label>Loader (optional)</label>
+                    <div id="mp_search_loader_filter"></div>
                 </div>
                 <div>
                     <label for="mp_search_release_channel">Kanal</label>
@@ -64,12 +64,29 @@
                         <option value="alpha">Alpha</option>
                     </select>
                 </div>
+                <div>
+                    <label for="mp_search_sort_by">Sortierung</label>
+                    <select id="mp_search_sort_by">
+                        <option value="relevance">Relevanz</option>
+                        <option value="downloads">Downloads</option>
+                        <option value="popularity">Beliebtheit</option>
+                        <option value="updated">Zuletzt aktualisiert</option>
+                        <option value="newest">Neueste</option>
+                    </select>
+                </div>
+                <div style="grid-column: span 2;">
+                    <label>Kategorien</label>
+                    <div id="mp_search_categories_filter"></div>
+                </div>
             </div>
             <div class="inline-form" style="margin-top:0.8rem;">
                 <button id="mp_search_btn" type="button">Modpacks suchen</button>
                 <span id="mp_search_status" class="muted"></span>
             </div>
-            <div id="mp_search_results" class="stack"></div>
+            <div id="mp_search_results_scroll" class="search-results-scroll">
+                <div id="mp_search_results" class="stack"><p class="muted">Noch keine Treffer geladen.</p></div>
+                <div id="mp_search_more_status" class="muted"></div>
+            </div>
         </div>
 
         <div class="card">
@@ -140,19 +157,6 @@
             <h3 style="margin-top:0;">Import Preview</h3>
             <p id="mp_preview_meta" class="muted"></p>
             <div id="mp_preview_warnings" class="muted"></div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Pfad</th>
-                        <th>Provider</th>
-                        <th>Typ</th>
-                    </tr>
-                </thead>
-                <tbody id="mp_preview_body">
-                    <tr><td colspan="4">Noch kein Preview.</td></tr>
-                </tbody>
-            </table>
         </div>
     </div>
 </section>
@@ -167,16 +171,19 @@
     const modpackPreviewWrap = document.getElementById("mp_preview_wrap");
     const modpackPreviewMeta = document.getElementById("mp_preview_meta");
     const modpackPreviewWarnings = document.getElementById("mp_preview_warnings");
-    const modpackPreviewBody = document.getElementById("mp_preview_body");
 
     const modpackSearchWrap = document.getElementById("mp_search_wrap");
     const modpackSearchInput = document.getElementById("mp_search_query");
-    const modpackSearchMcVersionInput = document.getElementById("mp_search_mc_version");
-    const modpackSearchLoaderInput = document.getElementById("mp_search_loader");
     const modpackSearchChannelSelect = document.getElementById("mp_search_release_channel");
+    const modpackSearchSortSelect = document.getElementById("mp_search_sort_by");
     const modpackSearchBtn = document.getElementById("mp_search_btn");
     const modpackSearchStatus = document.getElementById("mp_search_status");
     const modpackSearchResults = document.getElementById("mp_search_results");
+    const modpackSearchResultsScroll = document.getElementById("mp_search_results_scroll");
+    const modpackSearchMoreStatus = document.getElementById("mp_search_more_status");
+    const modpackSearchMcVersionFilter = createMultiSelect("mp_search_mc_version_filter", "Versionen auswaehlen");
+    const modpackSearchLoaderFilter = createMultiSelect("mp_search_loader_filter", "Loader auswaehlen");
+    const modpackSearchCategoriesFilter = createMultiSelect("mp_search_categories_filter", "Kategorien auswaehlen");
 
     const newServerNameInput = document.getElementById("mp_new_server_name");
     const newServerPathInput = document.getElementById("mp_new_server_path");
@@ -190,6 +197,260 @@
     const startParametersInput = document.getElementById("mp_start_parameters");
 
     let modpackPreviewToken = "";
+    let modpackSearchTimer = null;
+    let modpackSearchNonce = 0;
+    const modpackSearchState = {
+        offset: 0,
+        limit: 20,
+        total: 0,
+        hasMore: false,
+        loading: false,
+        paramsKey: "",
+    };
+
+    function createMultiSelect(containerId, placeholder) {
+        const host = document.getElementById(containerId);
+        if (!host) {
+            return {
+                setOptions() {},
+                getValues() { return []; },
+                onChange() {},
+            };
+        }
+
+        host.className = "multi-select";
+        host.innerHTML = `
+<button type="button" class="multi-select-toggle">
+    <span class="multi-select-toggle-label">${escapeHtml(placeholder)}</span>
+    <span class="multi-select-caret">v</span>
+</button>
+<div class="multi-select-panel" hidden>
+    <input type="text" class="multi-select-search" placeholder="Filtern ...">
+    <div class="multi-select-actions">
+        <button type="button" class="ghost multi-select-action" data-action="all">Alle</button>
+        <button type="button" class="ghost multi-select-action" data-action="none">Keine</button>
+    </div>
+    <div class="multi-select-options"></div>
+</div>
+<div class="multi-select-chips"></div>`;
+
+        const toggle = host.querySelector(".multi-select-toggle");
+        const toggleLabel = host.querySelector(".multi-select-toggle-label");
+        const panel = host.querySelector(".multi-select-panel");
+        const search = host.querySelector(".multi-select-search");
+        const optionsWrap = host.querySelector(".multi-select-options");
+        const chipsWrap = host.querySelector(".multi-select-chips");
+        const selected = new Set();
+        let options = [];
+        const listeners = [];
+
+        function closePanel() {
+            if (!panel || !toggle) return;
+            panel.hidden = true;
+            toggle.setAttribute("aria-expanded", "false");
+            host.classList.remove("is-open");
+        }
+
+        function openPanel() {
+            if (!panel || !toggle) return;
+            document.querySelectorAll(".multi-select").forEach((root) => {
+                if (!(root instanceof HTMLElement) || root === host) return;
+                const otherPanel = root.querySelector(".multi-select-panel");
+                const otherToggle = root.querySelector(".multi-select-toggle");
+                if (otherPanel instanceof HTMLElement) {
+                    otherPanel.hidden = true;
+                }
+                if (otherToggle instanceof HTMLElement) {
+                    otherToggle.setAttribute("aria-expanded", "false");
+                }
+                root.classList.remove("is-open");
+            });
+            panel.hidden = false;
+            toggle.setAttribute("aria-expanded", "true");
+            host.classList.add("is-open");
+            if (search instanceof HTMLInputElement) {
+                window.setTimeout(() => search.focus(), 0);
+            }
+        }
+
+        function emitChange() {
+            listeners.forEach((listener) => {
+                try {
+                    listener(getValues());
+                } catch (_) {}
+            });
+        }
+
+        function updateLabel() {
+            if (!toggleLabel) return;
+            const labels = options
+                .filter((entry) => selected.has(entry.value))
+                .map((entry) => entry.label);
+            if (!labels.length) {
+                toggleLabel.textContent = placeholder;
+                return;
+            }
+            if (labels.length <= 2) {
+                toggleLabel.textContent = labels.join(", ");
+                return;
+            }
+            toggleLabel.textContent = `${labels.length} ausgewaehlt`;
+        }
+
+        function renderChips() {
+            if (!chipsWrap) return;
+            const chosen = options.filter((entry) => selected.has(entry.value));
+            if (!chosen.length) {
+                chipsWrap.innerHTML = "";
+                return;
+            }
+            chipsWrap.innerHTML = chosen
+                .map((entry) => {
+                    return `<button type="button" class="multi-select-chip" data-chip="${escapeHtml(entry.value)}">${escapeHtml(entry.label)} x</button>`;
+                })
+                .join("");
+        }
+
+        function renderOptions() {
+            if (!optionsWrap) return;
+            const filterText = search instanceof HTMLInputElement ? search.value.trim().toLowerCase() : "";
+            const visible = options.filter((entry) => {
+                if (!filterText) return true;
+                return entry.label.toLowerCase().includes(filterText) || entry.value.toLowerCase().includes(filterText);
+            });
+            if (!visible.length) {
+                optionsWrap.innerHTML = `<div class="muted">Keine Treffer</div>`;
+                return;
+            }
+            optionsWrap.innerHTML = visible
+                .map((entry) => {
+                    const checked = selected.has(entry.value) ? "checked" : "";
+                    return `
+<label class="multi-select-option">
+    <input type="checkbox" value="${escapeHtml(entry.value)}" ${checked}>
+    <span>${escapeHtml(entry.label)}</span>
+</label>`;
+                })
+                .join("");
+        }
+
+        function setOptions(nextOptions) {
+            const normalized = Array.isArray(nextOptions) ? nextOptions : [];
+            const deduped = [];
+            const seen = new Set();
+            normalized.forEach((entry) => {
+                const value = String(entry.value || "").trim();
+                if (!value || seen.has(value)) return;
+                seen.add(value);
+                const label = String(entry.label || value).trim() || value;
+                deduped.push({ value, label });
+            });
+            options = deduped;
+            Array.from(selected).forEach((value) => {
+                if (!seen.has(value)) selected.delete(value);
+            });
+            renderOptions();
+            renderChips();
+            updateLabel();
+        }
+
+        function getValues() {
+            return Array.from(selected);
+        }
+
+        if (toggle && panel) {
+            toggle.setAttribute("aria-expanded", "false");
+            toggle.addEventListener("click", function (event) {
+                event.stopPropagation();
+                if (panel.hidden) {
+                    openPanel();
+                } else {
+                    closePanel();
+                }
+            });
+        }
+
+        if (search instanceof HTMLInputElement) {
+            search.addEventListener("input", renderOptions);
+        }
+
+        if (optionsWrap) {
+            optionsWrap.addEventListener("change", function (event) {
+                const target = event.target;
+                if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") return;
+                const value = target.value;
+                if (target.checked) {
+                    selected.add(value);
+                } else {
+                    selected.delete(value);
+                }
+                renderOptions();
+                renderChips();
+                updateLabel();
+                emitChange();
+            });
+        }
+
+        host.addEventListener("click", function (event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const chip = target.closest(".multi-select-chip");
+            if (chip) {
+                const value = chip.getAttribute("data-chip") || "";
+                selected.delete(value);
+                renderOptions();
+                renderChips();
+                updateLabel();
+                emitChange();
+                return;
+            }
+            const actionButton = target.closest(".multi-select-action");
+            if (!actionButton) return;
+            const action = actionButton.getAttribute("data-action");
+            if (action === "all") {
+                const filterText = search instanceof HTMLInputElement ? search.value.trim().toLowerCase() : "";
+                options.forEach((entry) => {
+                    if (!filterText || entry.label.toLowerCase().includes(filterText) || entry.value.toLowerCase().includes(filterText)) {
+                        selected.add(entry.value);
+                    }
+                });
+            } else if (action === "none") {
+                const filterText = search instanceof HTMLInputElement ? search.value.trim().toLowerCase() : "";
+                if (!filterText) {
+                    selected.clear();
+                } else {
+                    options.forEach((entry) => {
+                        if (entry.label.toLowerCase().includes(filterText) || entry.value.toLowerCase().includes(filterText)) {
+                            selected.delete(entry.value);
+                        }
+                    });
+                }
+            }
+            renderOptions();
+            renderChips();
+            updateLabel();
+            emitChange();
+        });
+
+        document.addEventListener("click", function (event) {
+            if (!(event.target instanceof Node)) return;
+            if (host.contains(event.target)) return;
+            closePanel();
+        });
+
+        host.addEventListener("keydown", function (event) {
+            if (event.key !== "Escape") return;
+            closePanel();
+        });
+
+        return {
+            setOptions,
+            getValues,
+            onChange(callback) {
+                if (typeof callback === "function") listeners.push(callback);
+            },
+        };
+    }
 
     function escapeHtml(value) {
         return String(value)
@@ -198,6 +459,22 @@
             .replace(/>/g, "&gt;")
             .replace(/\"/g, "&quot;")
             .replace(/'/g, "&#39;");
+    }
+
+    function formatCompactNumber(value) {
+        const num = Number(value || 0);
+        if (!Number.isFinite(num) || num <= 0) return "0";
+        if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(1)}B`;
+        if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+        if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+        return String(Math.round(num));
+    }
+
+    function formatDateLabel(value) {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value);
+        return date.toLocaleDateString("de-DE");
     }
 
     function channelLabel(value) {
@@ -238,6 +515,70 @@
         modpackSearchStatus.textContent = message || "";
     }
 
+    function scheduleModpackSearch(delayMs) {
+        if (modpackSearchTimer) {
+            window.clearTimeout(modpackSearchTimer);
+        }
+        modpackSearchTimer = window.setTimeout(() => {
+            searchModpacks(true);
+        }, delayMs);
+    }
+
+    function clearModpackSearchView() {
+        if (modpackSearchResults) modpackSearchResults.innerHTML = "";
+        if (modpackSearchStatus) modpackSearchStatus.textContent = "";
+        if (modpackSearchMoreStatus) modpackSearchMoreStatus.textContent = "";
+        modpackSearchState.offset = 0;
+        modpackSearchState.total = 0;
+        modpackSearchState.hasMore = false;
+        modpackSearchState.loading = false;
+        modpackSearchState.paramsKey = "";
+    }
+
+    async function loadModpackFilterOptions() {
+        const source = modpackSourceSelect ? modpackSourceSelect.value : "local_archive";
+        if (source === "local_archive") {
+            modpackSearchCategoriesFilter.setOptions([]);
+            modpackSearchMcVersionFilter.setOptions([]);
+            modpackSearchLoaderFilter.setOptions([]);
+            return;
+        }
+        try {
+            const data = await fetchJson(
+                "/api/content/filter-options?" +
+                    new URLSearchParams({
+                        provider: source,
+                        content_type: "modpack",
+                    }).toString()
+            );
+            const categories = Array.isArray(data.categories) ? data.categories : [];
+            const mcVersions = Array.isArray(data.mc_versions) ? data.mc_versions : [];
+            const loaders = Array.isArray(data.loaders) ? data.loaders : [];
+            modpackSearchCategoriesFilter.setOptions(
+                categories.map((category) => ({
+                    value: String(category.id || ""),
+                    label: String(category.label || category.id || "-"),
+                }))
+            );
+            modpackSearchMcVersionFilter.setOptions(
+                mcVersions.map((value) => ({
+                    value: String(value || ""),
+                    label: String(value || ""),
+                }))
+            );
+            modpackSearchLoaderFilter.setOptions(
+                loaders.map((value) => ({
+                    value: String(value || ""),
+                    label: String(value || ""),
+                }))
+            );
+        } catch (_) {
+            modpackSearchCategoriesFilter.setOptions([]);
+            modpackSearchMcVersionFilter.setOptions([]);
+            modpackSearchLoaderFilter.setOptions([]);
+        }
+    }
+
     function toggleModpackSourceGroups() {
         if (!modpackRoot || !modpackSourceSelect) return;
         const source = modpackSourceSelect.value;
@@ -250,6 +591,10 @@
         if (modpackSearchWrap instanceof HTMLElement) {
             modpackSearchWrap.style.display = source === "local_archive" ? "none" : "block";
         }
+        clearModpackSearchView();
+        loadModpackFilterOptions().then(() => {
+            if (source !== "local_archive") scheduleModpackSearch(80);
+        });
     }
 
     function buildModpackPreviewFormData() {
@@ -306,63 +651,80 @@
     }
 
     function renderModpackPreview(data) {
-        if (!modpackPreviewWrap || !modpackPreviewBody) return;
+        if (!modpackPreviewWrap || !modpackPreviewWarnings) return;
         modpackPreviewWrap.style.display = "block";
         if (modpackPreviewMeta) {
-            const pack = data.pack_name || "-";
-            const version = data.pack_version ? ` ${data.pack_version}` : "";
-            const mc = data.mc_version || "-";
-            const loader = data.loader || "-";
-            const loaderVersion = data.loader_version || "-";
-            const overrides = data.override_file_count || 0;
-            const entries = data.entry_count || 0;
-            modpackPreviewMeta.textContent = `${pack}${version} | MC ${mc} | Loader ${loader} (${loaderVersion}) | Dateien ${entries} | Overrides ${overrides}`;
+            modpackPreviewMeta.textContent = "";
         }
-        if (modpackPreviewWarnings) {
-            const warnings = Array.isArray(data.warnings) ? data.warnings : [];
-            if (warnings.length) {
-                modpackPreviewWarnings.innerHTML = warnings
-                    .map((warning) => `<div class="flash flash-info">${escapeHtml(warning)}</div>`)
-                    .join("");
-            } else {
-                modpackPreviewWarnings.innerHTML = "<span class=\"muted\">Keine Warnungen.</span>";
-            }
-        }
-        const entries = Array.isArray(data.entries) ? data.entries : [];
-        if (!entries.length) {
-            modpackPreviewBody.innerHTML = "<tr><td colspan=\"4\">Keine installierbaren Modpack-Dateien gefunden.</td></tr>";
+        const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+        if (!warnings.length) {
+            modpackPreviewWarnings.innerHTML = "<div class=\"flash flash-success\">Keine Warnungen.</div>";
             return;
         }
-        modpackPreviewBody.innerHTML = entries
-            .map((entry) => {
-                return `
-<tr>
-    <td>${escapeHtml(entry.name || "-")}</td>
-    <td>${escapeHtml(entry.path || "-")}</td>
-    <td>${escapeHtml(entry.provider_name || "-")}</td>
-    <td>${escapeHtml(entry.content_type || "-")}</td>
-</tr>`;
-            })
+        modpackPreviewWarnings.innerHTML = warnings
+            .map((warning) => `<div class="flash flash-error">${escapeHtml(warning)}</div>`)
             .join("");
     }
 
-    function renderModpackSearchResults(provider, results) {
+    function buildSearchParams() {
+        return {
+            source: modpackSourceSelect ? modpackSourceSelect.value : "local_archive",
+            query: modpackSearchInput instanceof HTMLInputElement ? modpackSearchInput.value.trim() : "",
+            releaseChannel: modpackSearchChannelSelect instanceof HTMLSelectElement ? modpackSearchChannelSelect.value : "all",
+            sortBy: modpackSearchSortSelect instanceof HTMLSelectElement ? modpackSearchSortSelect.value : "relevance",
+            mcVersions: modpackSearchMcVersionFilter.getValues(),
+            loaders: modpackSearchLoaderFilter.getValues(),
+            categories: modpackSearchCategoriesFilter.getValues(),
+        };
+    }
+
+    function buildSearchKey(params) {
+        return JSON.stringify(params);
+    }
+
+    function renderSearchCards(provider, results, append) {
         if (!modpackSearchResults) return;
+        if (!append) {
+            modpackSearchResults.innerHTML = "";
+        }
         if (!Array.isArray(results) || !results.length) {
-            modpackSearchResults.innerHTML = "<p class=\"muted\">Keine Treffer.</p>";
+            if (!append) {
+                modpackSearchResults.innerHTML = "<p class=\"muted\">Keine Treffer.</p>";
+            }
             return;
         }
-        modpackSearchResults.innerHTML = results
+        const markup = results
             .map((item) => {
                 const title = item.title || "-";
-                const description = item.description || "";
+                const icon = item.icon_url
+                    ? `<img src="${escapeHtml(item.icon_url)}" alt="" class="search-result-icon">`
+                    : `<div class="search-result-icon search-result-icon-placeholder">${escapeHtml(title.slice(0, 1) || "?")}</div>`;
+                const titleMarkup = item.project_url
+                    ? `<a class="search-project-link" href="${escapeHtml(item.project_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a>`
+                    : `<span>${escapeHtml(title)}</span>`;
+                const categories = Array.isArray(item.categories) ? item.categories.slice(0, 6) : [];
+                const categoryMarkup = categories.length
+                    ? `<div class="search-result-tags">${categories.map((label) => `<span class="search-result-tag">${escapeHtml(label)}</span>`).join("")}</div>`
+                    : "";
                 return `
 <div class="card mp-search-card" data-provider="${escapeHtml(provider)}" data-project-id="${escapeHtml(item.id)}" data-title="${escapeHtml(title)}">
-    <div class="grid grid-3">
-        <div>
-            <strong>${escapeHtml(title)}</strong>
-            <p class="muted">${escapeHtml(description)}</p>
+    <div class="search-result-main">
+        ${icon}
+        <div class="stack">
+            <div class="search-result-title-row">
+                <strong>${titleMarkup}</strong>
+            </div>
+            <p class="muted">${escapeHtml(item.description || "")}</p>
+            <div class="muted search-result-meta">
+                <span>Downloads: ${escapeHtml(formatCompactNumber(item.downloads))}</span>
+                <span>Beliebtheit: ${escapeHtml(formatCompactNumber(item.followers))}</span>
+                <span>Update: ${escapeHtml(formatDateLabel(item.updated_at))}</span>
+                <span>Autor: ${escapeHtml(item.author || "-")}</span>
+            </div>
+            ${categoryMarkup}
         </div>
+    </div>
+    <div class="grid grid-3">
         <div>
             <label>Version</label>
             <select class="mp-version-select"><option value="">- Versionen laden -</option></select>
@@ -375,39 +737,79 @@
 </div>`;
             })
             .join("");
+        if (append) {
+            modpackSearchResults.insertAdjacentHTML("beforeend", markup);
+        } else {
+            modpackSearchResults.innerHTML = markup;
+        }
     }
 
-    async function searchModpacks() {
-        const source = modpackSourceSelect ? modpackSourceSelect.value : "local_archive";
+    async function searchModpacks(reset) {
+        const searchParams = buildSearchParams();
+        const source = searchParams.source;
         if (source === "local_archive") {
             setModpackSearchStatus("Suche nur fuer Modrinth/CurseForge verfuegbar.");
             return;
         }
-        const query = modpackSearchInput instanceof HTMLInputElement ? modpackSearchInput.value.trim() : "";
-        const mcVersion = modpackSearchMcVersionInput instanceof HTMLInputElement ? modpackSearchMcVersionInput.value.trim() : "";
-        const loader = modpackSearchLoaderInput instanceof HTMLInputElement ? modpackSearchLoaderInput.value.trim() : "";
-        const releaseChannel = modpackSearchChannelSelect instanceof HTMLSelectElement ? modpackSearchChannelSelect.value : "all";
-        if (!query) {
-            setModpackSearchStatus("Bitte Suchbegriff eingeben.");
+
+        const paramsKey = buildSearchKey(searchParams);
+        if (reset) {
+            modpackSearchState.offset = 0;
+            modpackSearchState.total = 0;
+            modpackSearchState.hasMore = false;
+            modpackSearchState.paramsKey = paramsKey;
+            if (modpackSearchResults) modpackSearchResults.innerHTML = "";
+            if (modpackSearchMoreStatus) modpackSearchMoreStatus.textContent = "";
+        } else if (paramsKey !== modpackSearchState.paramsKey) {
             return;
         }
-        setModpackSearchStatus("Suche laeuft ...");
-        if (modpackSearchResults) modpackSearchResults.innerHTML = "";
+
+        if (modpackSearchState.loading) {
+            return;
+        }
+
+        const requestId = ++modpackSearchNonce;
+        modpackSearchState.loading = true;
+        if (reset) {
+            setModpackSearchStatus("Suche laeuft ...");
+        }
         try {
-            const params = new URLSearchParams({
+            const queryParams = new URLSearchParams({
                 provider: source,
-                query,
+                query: searchParams.query,
                 content_type: "modpack",
-                release_channel: releaseChannel,
+                release_channel: searchParams.releaseChannel,
+                sort_by: searchParams.sortBy,
+                categories: searchParams.categories.join(","),
+                mc_version: searchParams.mcVersions.join(","),
+                loader: searchParams.loaders.join(","),
+                offset: String(modpackSearchState.offset),
+                limit: String(modpackSearchState.limit),
             });
-            if (mcVersion) params.set("mc_version", mcVersion);
-            if (loader) params.set("loader", loader);
-            const data = await fetchJson(`/api/content/search?${params.toString()}`);
-            renderModpackSearchResults(source, Array.isArray(data.results) ? data.results : []);
-            setModpackSearchStatus("");
+            const data = await fetchJson(`/api/content/search?${queryParams.toString()}`);
+            if (requestId !== modpackSearchNonce) return;
+            const results = Array.isArray(data.results) ? data.results : [];
+            const total = Number(data.total || 0);
+            modpackSearchState.total = Number.isFinite(total) ? total : 0;
+            renderSearchCards(source, results, !reset);
+            modpackSearchState.offset += results.length;
+            modpackSearchState.hasMore = Boolean(data.has_more);
+
+            const shown = modpackSearchState.offset;
+            if (modpackSearchState.total > 0) {
+                setModpackSearchStatus(`${shown}/${modpackSearchState.total} Treffer`);
+            } else {
+                setModpackSearchStatus(`${shown} Treffer`);
+            }
+            if (modpackSearchMoreStatus) {
+                modpackSearchMoreStatus.textContent = modpackSearchState.hasMore ? "Nach unten scrollen, um mehr zu laden ..." : "Ende der Treffer.";
+            }
         } catch (err) {
             const message = err instanceof Error ? err.message : "Suche fehlgeschlagen.";
             setModpackSearchStatus(message);
+            if (modpackSearchMoreStatus) modpackSearchMoreStatus.textContent = "";
+        } finally {
+            modpackSearchState.loading = false;
         }
     }
 
@@ -417,27 +819,27 @@
         const select = card.querySelector(".mp-version-select");
         if (!provider || !projectId || !(select instanceof HTMLSelectElement)) return;
 
-        const mcVersion = modpackSearchMcVersionInput instanceof HTMLInputElement ? modpackSearchMcVersionInput.value.trim() : "";
-        const loader = modpackSearchLoaderInput instanceof HTMLInputElement ? modpackSearchLoaderInput.value.trim() : "";
+        const mcVersion = modpackSearchMcVersionFilter.getValues().join(",");
+        const loader = modpackSearchLoaderFilter.getValues().join(",");
         const releaseChannel = modpackSearchChannelSelect instanceof HTMLSelectElement ? modpackSearchChannelSelect.value : "all";
 
         let url = "";
         if (provider === "modrinth") {
             const params = new URLSearchParams({
                 project_id: projectId,
+                mc_version: mcVersion,
+                loader,
                 release_channel: releaseChannel,
             });
-            if (mcVersion) params.set("mc_version", mcVersion);
-            if (loader) params.set("loader", loader);
             url = `/api/content/modrinth/versions?${params.toString()}`;
         } else if (provider === "curseforge") {
             const params = new URLSearchParams({
                 project_id: projectId,
+                mc_version: mcVersion,
+                loader,
                 content_type: "modpack",
                 release_channel: releaseChannel,
             });
-            if (mcVersion) params.set("mc_version", mcVersion);
-            if (loader) params.set("loader", loader);
             url = `/api/content/curseforge/versions?${params.toString()}`;
         } else {
             return;
@@ -606,7 +1008,44 @@
         toggleModpackSourceGroups();
     }
     if (modpackSearchBtn) {
-        modpackSearchBtn.addEventListener("click", searchModpacks);
+        modpackSearchBtn.addEventListener("click", function () {
+            searchModpacks(true);
+        });
+    }
+    if (modpackSearchInput) {
+        modpackSearchInput.addEventListener("input", function () {
+            scheduleModpackSearch(280);
+        });
+    }
+    if (modpackSearchChannelSelect) {
+        modpackSearchChannelSelect.addEventListener("change", function () {
+            scheduleModpackSearch(80);
+        });
+    }
+    if (modpackSearchSortSelect) {
+        modpackSearchSortSelect.addEventListener("change", function () {
+            scheduleModpackSearch(80);
+        });
+    }
+    modpackSearchMcVersionFilter.onChange(function () {
+        scheduleModpackSearch(80);
+    });
+    modpackSearchLoaderFilter.onChange(function () {
+        scheduleModpackSearch(80);
+    });
+    modpackSearchCategoriesFilter.onChange(function () {
+        scheduleModpackSearch(80);
+    });
+    if (modpackSearchResultsScroll) {
+        modpackSearchResultsScroll.addEventListener("scroll", function () {
+            if (modpackSearchState.loading || !modpackSearchState.hasMore) return;
+            const threshold = 120;
+            const nearBottom =
+                modpackSearchResultsScroll.scrollTop + modpackSearchResultsScroll.clientHeight >=
+                modpackSearchResultsScroll.scrollHeight - threshold;
+            if (!nearBottom) return;
+            searchModpacks(false);
+        });
     }
     if (modpackSearchResults) {
         modpackSearchResults.addEventListener("click", function (event) {
@@ -629,6 +1068,8 @@
     if (modpackExecuteBtn) {
         modpackExecuteBtn.addEventListener("click", executeModpackImport);
     }
+
+    loadModpackFilterOptions();
 })();
 </script>
 {% endblock %}

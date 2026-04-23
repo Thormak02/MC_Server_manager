@@ -347,6 +347,195 @@ button.ghost,
     background: color-mix(in srgb, var(--accent) 10%, var(--panel));
 }
 
+.search-result-main {
+    display: grid;
+    grid-template-columns: 72px 1fr;
+    gap: 0.9rem;
+    margin-bottom: 0.7rem;
+    align-items: start;
+}
+
+.search-result-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 0.7rem;
+    border: 1px solid var(--border);
+    object-fit: cover;
+    background: var(--panel-soft);
+}
+
+.search-result-icon-placeholder {
+    display: grid;
+    place-items: center;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--muted);
+}
+
+.search-result-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+}
+
+.search-result-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    font-size: 0.88rem;
+}
+
+.search-result-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.search-result-tag {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.08rem 0.5rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    background: var(--panel-soft);
+}
+
+.search-project-link {
+    text-decoration: none;
+    color: inherit;
+}
+
+.search-project-link:hover {
+    color: var(--accent-strong);
+    text-decoration: underline;
+}
+
+.search-results-scroll {
+    margin-top: 0.65rem;
+    min-height: 7.5rem;
+    max-height: min(62vh, 980px);
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    padding: 0.72rem;
+}
+
+.search-results-scroll .stack {
+    align-content: start;
+}
+
+.multi-select {
+    position: relative;
+    min-width: 0;
+    z-index: 1;
+}
+
+.multi-select.is-open {
+    z-index: 50;
+}
+
+.multi-select-toggle {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 0.65rem;
+    padding: 0.58rem 0.68rem;
+    background: var(--panel);
+    color: var(--text);
+    font-weight: 500;
+}
+
+.multi-select-toggle:hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.multi-select-caret {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.multi-select-panel {
+    position: absolute;
+    top: calc(100% + 0.28rem);
+    left: 0;
+    right: 0;
+    z-index: 35;
+    border: 1px solid var(--border);
+    border-radius: 0.82rem;
+    background: color-mix(in srgb, var(--panel) 96%, transparent);
+    box-shadow: var(--shadow);
+    padding: 0.62rem;
+    display: grid;
+    gap: 0.48rem;
+}
+
+.multi-select-panel[hidden] {
+    display: none !important;
+}
+
+.multi-select-search {
+    width: 100%;
+}
+
+.multi-select-actions {
+    display: inline-flex;
+    gap: 0.42rem;
+}
+
+.multi-select-action {
+    padding: 0.34rem 0.6rem;
+    border-radius: 0.58rem;
+}
+
+.multi-select-options {
+    max-height: 220px;
+    overflow-y: auto;
+    display: grid;
+    gap: 0.28rem;
+}
+
+.multi-select-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 0.58rem;
+    padding: 0.34rem 0.48rem;
+    background: color-mix(in srgb, var(--panel-soft) 72%, transparent);
+}
+
+.multi-select-option input[type="checkbox"] {
+    margin: 0;
+}
+
+.multi-select-chips {
+    display: none;
+}
+
+.multi-select-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    border-radius: 999px;
+    padding: 0.18rem 0.58rem;
+    background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+    color: var(--accent-strong);
+    font-size: 0.82rem;
+}
+
+.multi-select-chip:hover {
+    border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+    background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
 .muted {
     color: var(--muted);
 }

@@ -1,6 +1,7 @@
 import json
 import math
 import re
+from difflib import SequenceMatcher
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -24,6 +25,122 @@ CURSEFORGE_BASE = "https://api.curseforge.com"
 MC_GAME_ID = 432
 _VALID_RELEASE_CHANNELS = {"all", "release", "beta", "alpha"}
 _SEARCH_STOPWORDS = {"a", "an", "and", "for", "of", "the", "to", "with"}
+_VALID_SORT_OPTIONS = {"relevance", "downloads", "popularity", "updated", "newest"}
+_SEARCH_RESULT_CAP = 200
+_CURSEFORGE_CLASS_IDS = {
+    "mod": 6,
+    "plugin": 5,
+    "modpack": 4471,
+}
+_LOADER_ALIASES = {
+    "forge": "forge",
+    "neo-forge": "neoforge",
+    "neo_forge": "neoforge",
+    "neo forge": "neoforge",
+    "neoforge": "neoforge",
+    "fabric": "fabric",
+    "fabric-loader": "fabric",
+    "quilt": "quilt",
+    "quilt-loader": "quilt",
+    "paper": "paper",
+    "papermc": "paper",
+    "spigot": "spigot",
+    "bukkit": "bukkit",
+}
+
+
+def _modrinth_project_types_for_content_type(content_type: str | None) -> list[str]:
+    normalized = (content_type or "mod").strip().lower()
+    if normalized == "plugin":
+        # Modrinth uses both values in the ecosystem.
+        return ["plugin", "minecraft_java_server"]
+    if normalized == "modpack":
+        return ["modpack"]
+    return ["mod"]
+
+
+def _normalize_sort_by(value: str | None) -> str:
+    normalized = (value or "relevance").strip().lower()
+    if normalized not in _VALID_SORT_OPTIONS:
+        return "relevance"
+    return normalized
+
+
+def _normalize_categories(values: list[str] | None) -> list[str]:
+    if not values:
+        return []
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for raw in values:
+        token = str(raw or "").strip()
+        if not token:
+            continue
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(token)
+    return normalized
+
+
+def _normalize_loader(value: str | None) -> str | None:
+    token = (value or "").strip().lower()
+    if not token:
+        return None
+    token = re.sub(r"\s+", " ", token)
+    alias = _LOADER_ALIASES.get(token)
+    if alias:
+        return alias
+
+    # CurseForge returns many versioned loader names, e.g. "forge-1.20.1-47.2.0".
+    # For filtering we need the canonical loader family.
+    normalized = token.replace("_", "-").replace(" ", "-")
+    if normalized.startswith("neoforge") or normalized.startswith("neo-forge"):
+        return "neoforge"
+    if normalized.startswith("forge"):
+        return "forge"
+    if normalized.startswith("fabric"):
+        return "fabric"
+    if normalized.startswith("quilt"):
+        return "quilt"
+    if normalized.startswith("paper"):
+        return "paper"
+    if normalized.startswith("spigot"):
+        return "spigot"
+    if normalized.startswith("bukkit"):
+        return "bukkit"
+    return token
+
+
+def _normalize_loader_list(value: str | None) -> list[str]:
+    return _normalize_filter_values(value, normalize_loader=True)
+
+
+def _normalize_mc_version_list(value: str | None) -> list[str]:
+    return _normalize_filter_values(value, normalize_loader=False)
+
+
+def _normalize_filter_values(value: str | None, *, normalize_loader: bool = False) -> list[str]:
+    if not value:
+        return []
+    tokens = re.split(r"[,\n;]+", str(value))
+    seen: set[str] = set()
+    result: list[str] = []
+    for raw in tokens:
+        token = str(raw or "").strip()
+        if not token:
+            continue
+        if normalize_loader:
+            normalized_loader = _normalize_loader(token)
+            if not normalized_loader:
+                continue
+            token = normalized_loader
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(token)
+    return result
 
 
 def _request_json(url: str, headers: dict[str, str] | None = None) -> dict | list:
@@ -104,6 +221,10 @@ def _normalize_search_text(value: str | None) -> str:
     return " ".join(cleaned.split())
 
 
+def _compact_search_text(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
 def _tokenize_search_text(value: str | None) -> list[str]:
     normalized = _normalize_search_text(value)
     if not normalized:
@@ -118,6 +239,13 @@ def _build_curseforge_query_variants(query: str) -> list[str]:
 
     variants: list[str] = [base]
     words = [part for part in re.split(r"[\s\-_]+", base) if part]
+    significant_words = [
+        word for word in words if _normalize_search_text(word) not in _SEARCH_STOPWORDS
+    ]
+
+    if len(significant_words) > 1:
+        variants.append(" ".join(significant_words))
+
     if len(words) > 1:
         acronym_parts: list[str] = []
         for word in words:
@@ -135,6 +263,13 @@ def _build_curseforge_query_variants(query: str) -> list[str]:
     compact = re.sub(r"[^a-z0-9]+", "", base.lower())
     if len(compact) >= 3:
         variants.append(compact)
+        tokenized_compact = re.sub(r"([a-z]+)([0-9]+)$", r"\1 \2", compact)
+        if tokenized_compact != compact:
+            variants.append(tokenized_compact)
+
+    significant_compact = re.sub(r"[^a-z0-9]+", "", "".join(significant_words).lower())
+    if len(significant_compact) >= 3:
+        variants.append(significant_compact)
 
     deduped: list[str] = []
     seen: set[str] = set()
@@ -144,7 +279,7 @@ def _build_curseforge_query_variants(query: str) -> list[str]:
             continue
         seen.add(normalized)
         deduped.append(variant)
-    return deduped[:3]
+    return deduped[:6]
 
 
 def _score_curseforge_item(
@@ -152,6 +287,8 @@ def _score_curseforge_item(
     *,
     query: str,
     query_tokens: list[str],
+    base_query: str,
+    base_query_tokens: list[str],
     variant_index: int,
 ) -> float:
     title = str(item.get("name") or "")
@@ -161,6 +298,11 @@ def _score_curseforge_item(
     title_norm = _normalize_search_text(title)
     slug_norm = _normalize_search_text(slug)
     query_norm = _normalize_search_text(query)
+    base_query_norm = _normalize_search_text(base_query)
+    title_compact = _compact_search_text(title)
+    slug_compact = _compact_search_text(slug)
+    query_compact = _compact_search_text(query)
+    base_query_compact = _compact_search_text(base_query)
 
     score = 0.0
     if query_norm and title_norm == query_norm:
@@ -175,21 +317,71 @@ def _score_curseforge_item(
     elif query_norm and query_norm in slug_norm:
         score += 3500
 
+    if query_compact and title_compact == query_compact:
+        score += 9000
+    elif query_compact and title_compact.startswith(query_compact):
+        score += 6500
+    elif query_compact and query_compact in title_compact:
+        score += 4200
+
+    if query_compact and slug_compact == query_compact:
+        score += 5200
+    elif query_compact and query_compact in slug_compact:
+        score += 3000
+
+    if base_query_compact and title_compact == base_query_compact:
+        score += 2200
+    elif base_query_compact and base_query_compact in title_compact:
+        score += 1300
+
+    if base_query_norm and title_norm == base_query_norm:
+        score += 1800
+    elif base_query_norm and base_query_norm in title_norm:
+        score += 900
+
     summary_norm = _normalize_search_text(summary)
     title_tokens = set(_tokenize_search_text(title))
     slug_tokens = set(_tokenize_search_text(slug))
     summary_tokens = set(_tokenize_search_text(summary))
 
+    token_hits = 0
     for token in query_tokens:
         if token in title_tokens:
             score += 850
+            token_hits += 1
         elif token in slug_tokens:
             score += 500
+            token_hits += 1
         elif token in summary_tokens:
             score += 90
+            token_hits += 1
+        elif token and token in title_compact:
+            score += 220
+            token_hits += 1
+        elif token and token in slug_compact:
+            score += 130
+            token_hits += 1
+
+    for token in base_query_tokens:
+        if token in title_tokens:
+            score += 220
+        elif token in slug_tokens:
+            score += 140
 
     if query_tokens and all(token in (title_norm + " " + slug_norm) for token in query_tokens):
         score += 2500
+
+    if (query_tokens or base_query_tokens) and token_hits == 0 and not (
+        query_compact and query_compact in (title_compact + slug_compact)
+    ):
+        score -= 1200
+
+    if query_compact:
+        score += SequenceMatcher(None, query_compact, title_compact).ratio() * 1800.0
+        score += SequenceMatcher(None, query_compact, slug_compact).ratio() * 1000.0
+
+    if base_query_compact and base_query_compact != query_compact:
+        score += SequenceMatcher(None, base_query_compact, title_compact).ratio() * 700.0
 
     if variant_index == 0:
         score += 400
@@ -260,15 +452,15 @@ def _remove_existing_project_entries(
 
 def _modrinth_project_has_channel_match(
     project_id: str,
-    mc_version: str | None,
-    loader: str | None,
+    mc_versions: list[str],
+    loaders: list[str],
     release_channel: str,
 ) -> bool:
     params: dict[str, str] = {}
-    if mc_version:
-        params["game_versions"] = json.dumps([mc_version])
-    if loader:
-        params["loaders"] = json.dumps([loader])
+    if mc_versions:
+        params["game_versions"] = json.dumps(mc_versions)
+    if loaders:
+        params["loaders"] = json.dumps(loaders)
     query = urllib.parse.urlencode(params)
     url = f"{MODRINTH_BASE}/project/{project_id}/version"
     if query:
@@ -290,6 +482,7 @@ def _curseforge_project_has_channel_match(
     content_type: str,
     release_channel: str,
 ) -> bool:
+    loader = _normalize_loader(loader)
     params: dict[str, str] = {"pageSize": "30"}
     if mc_version:
         params["gameVersion"] = mc_version
@@ -312,18 +505,36 @@ def search_modrinth(
     loader: str | None,
     content_type: str,
     release_channel: str = "all",
+    sort_by: str = "relevance",
+    categories: list[str] | None = None,
 ) -> list[dict]:
     release_channel = _normalize_release_channel(release_channel)
-    facets: list[list[str]] = [[f"project_type:{content_type}"]]
-    if mc_version:
-        facets.append([f"versions:{mc_version}"])
-    if loader:
-        facets.append([f"categories:{loader}"])
-    params = {
-        "query": query,
-        "limit": 20,
-        "facets": json.dumps(facets),
+    sort_by = _normalize_sort_by(sort_by)
+    mc_versions = _normalize_mc_version_list(mc_version)
+    loaders = _normalize_loader_list(loader)
+    category_tokens = _normalize_categories(categories)
+    project_types = _modrinth_project_types_for_content_type(content_type)
+    facets: list[list[str]] = [[f"project_type:{project_type}" for project_type in project_types]]
+    if mc_versions:
+        facets.append([f"versions:{version}" for version in mc_versions])
+    if loaders:
+        facets.append([f"categories:{item}" for item in loaders])
+    if category_tokens:
+        facets.append([f"categories:{token}" for token in category_tokens])
+    index_mapping = {
+        "relevance": "relevance",
+        "downloads": "downloads",
+        "popularity": "follows",
+        "newest": "newest",
+        "updated": "updated",
     }
+    params = {
+        "limit": 30,
+        "facets": json.dumps(facets),
+        "index": index_mapping.get(sort_by, "relevance"),
+    }
+    if query.strip():
+        params["query"] = query.strip()
     url = f"{MODRINTH_BASE}/search?{urllib.parse.urlencode(params)}"
     payload = _request_json(url, headers=_modrinth_headers())
     results: list[dict] = []
@@ -336,8 +547,8 @@ def search_modrinth(
             try:
                 if not _modrinth_project_has_channel_match(
                     project_id,
-                    mc_version,
-                    loader,
+                    mc_versions,
+                    loaders,
                     release_channel,
                 ):
                     continue
@@ -349,7 +560,12 @@ def search_modrinth(
                 "title": item.get("title"),
                 "description": item.get("description"),
                 "downloads": item.get("downloads"),
+                "followers": item.get("follows"),
                 "icon_url": item.get("icon_url"),
+                "updated_at": item.get("date_modified"),
+                "author": item.get("author"),
+                "categories": item.get("categories") or [],
+                "project_url": f"https://modrinth.com/{content_type}/{item.get('slug') or project_id}",
                 "provider": "modrinth",
             }
         )
@@ -363,11 +579,13 @@ def list_modrinth_versions(
     release_channel: str = "all",
 ) -> list[dict]:
     release_channel = _normalize_release_channel(release_channel)
+    mc_versions = _normalize_mc_version_list(mc_version)
+    loaders = _normalize_loader_list(loader)
     params: dict[str, str] = {}
-    if mc_version:
-        params["game_versions"] = json.dumps([mc_version])
-    if loader:
-        params["loaders"] = json.dumps([loader])
+    if mc_versions:
+        params["game_versions"] = json.dumps(mc_versions)
+    if loaders:
+        params["loaders"] = json.dumps(loaders)
     query = urllib.parse.urlencode(params)
     url = f"{MODRINTH_BASE}/project/{project_id}/version"
     if query:
@@ -453,8 +671,10 @@ def install_modrinth(
 
 
 def _curseforge_loader_type(loader: str | None, content_type: str) -> int | None:
+    loader = _normalize_loader(loader)
     if content_type == "modpack":
-        return None
+        mapping = {"forge": 1, "fabric": 4, "quilt": 5, "neoforge": 6}
+        return mapping.get(loader)
     if content_type == "plugin":
         mapping = {"paper": 2, "spigot": 3, "bukkit": 2}
         if loader in mapping:
@@ -466,97 +686,387 @@ def _curseforge_loader_type(loader: str | None, content_type: str) -> int | None
     return None
 
 
+def _curseforge_class_id(content_type: str) -> int:
+    normalized = (content_type or "mod").strip().lower()
+    return _CURSEFORGE_CLASS_IDS.get(normalized, _CURSEFORGE_CLASS_IDS["mod"])
+
+
+def _curseforge_sort_field(sort_by: str, *, has_query: bool) -> int | None:
+    normalized = _normalize_sort_by(sort_by)
+    if normalized == "relevance" and has_query:
+        return None
+    mapping = {
+        "relevance": 2,
+        "popularity": 2,
+        "updated": 3,
+        "newest": 3,
+        "downloads": 6,
+    }
+    return mapping.get(normalized, 2)
+
+
+def list_modrinth_categories(content_type: str) -> list[dict]:
+    allowed_project_types = set(_modrinth_project_types_for_content_type(content_type))
+    payload = _request_json(f"{MODRINTH_BASE}/tag/category", headers=_modrinth_headers())
+    categories: list[dict] = []
+    items = payload if isinstance(payload, list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        project_type = str(item.get("project_type") or "").strip().lower()
+        if project_type not in allowed_project_types:
+            continue
+        slug = str(item.get("name") or "").strip()
+        if not slug:
+            continue
+        display_label = str(item.get("display_name") or slug).strip()
+        if not display_label:
+            continue
+        label = display_label.replace("_", " ").replace("-", " ").strip()
+        if label == label.lower():
+            label = label.title()
+        categories.append(
+            {
+                "id": slug,
+                "label": label,
+                "provider": "modrinth",
+            }
+        )
+    categories.sort(key=lambda item: str(item.get("label") or "").lower())
+    return categories
+
+
+def list_curseforge_categories(content_type: str) -> list[dict]:
+    class_id = _curseforge_class_id(content_type)
+    params = {
+        "gameId": str(MC_GAME_ID),
+        "classId": str(class_id),
+    }
+    url = f"{CURSEFORGE_BASE}/v1/categories?{urllib.parse.urlencode(params)}"
+    payload = _request_json(url, headers=_curseforge_headers())
+    data = payload.get("data", []) if isinstance(payload, dict) else []
+    categories: list[dict] = []
+    seen_ids: set[int] = set()
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        try:
+            category_id = int(item.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name or category_id <= 0:
+            continue
+        if category_id in seen_ids:
+            continue
+        seen_ids.add(category_id)
+        categories.append(
+            {
+                "id": str(category_id),
+                "label": name,
+                "provider": "curseforge",
+            }
+        )
+    categories.sort(key=lambda item: str(item.get("label") or "").lower())
+    return categories
+
+
+def list_modrinth_game_versions() -> list[str]:
+    payload = _request_json(f"{MODRINTH_BASE}/tag/game_version", headers=_modrinth_headers())
+    values: list[str] = []
+    items = payload if isinstance(payload, list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        version = str(item.get("version") or "").strip()
+        version_type = str(item.get("version_type") or "").strip().lower()
+        if not version:
+            continue
+        # Fuer die UI primär stabile Versionen.
+        if version_type and version_type not in {"release", "old_beta", "old_alpha"}:
+            continue
+        values.append(version)
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        deduped.append(value)
+    return deduped[:300]
+
+
+def list_modrinth_loader_types() -> list[str]:
+    payload = _request_json(f"{MODRINTH_BASE}/tag/loader", headers=_modrinth_headers())
+    values: list[str] = []
+    items = payload if isinstance(payload, list) else []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        loader = str(item.get("name") or "").strip().lower()
+        normalized = _normalize_loader(loader)
+        if normalized:
+            values.append(normalized)
+    preferred_order = ["forge", "neoforge", "fabric", "quilt", "paper", "spigot", "bukkit"]
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in preferred_order:
+        if item in values and item not in seen:
+            seen.add(item)
+            deduped.append(item)
+    for item in values:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
+
+
+def list_curseforge_game_versions() -> list[str]:
+    payload = _request_json(f"{CURSEFORGE_BASE}/v1/minecraft/version", headers=_curseforge_headers())
+    data = payload.get("data", []) if isinstance(payload, dict) else []
+    values: list[str] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        version = str(item.get("versionString") or "").strip()
+        if not version:
+            continue
+        values.append(version)
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        deduped.append(value)
+    return deduped[:300]
+
+
+def list_curseforge_loader_types(content_type: str) -> list[str]:
+    normalized_content_type = (content_type or "mod").strip().lower()
+    if normalized_content_type == "plugin":
+        return ["paper", "spigot", "bukkit"]
+
+    payload = _request_json(f"{CURSEFORGE_BASE}/v1/minecraft/modloader", headers=_curseforge_headers())
+    data = payload.get("data", []) if isinstance(payload, dict) else []
+    values: list[str] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip().lower()
+        normalized = _normalize_loader(name)
+        if normalized:
+            values.append(normalized)
+    # CurseForge can return many version-specific names and, depending on endpoint behavior,
+    # sometimes only a subset. Keep canonical loader families always selectable.
+    preferred_order = ["forge", "neoforge", "fabric", "quilt", "paper", "spigot", "bukkit"]
+    required_families = ["forge", "neoforge", "fabric", "quilt"]
+    for required in required_families:
+        if required not in values:
+            values.append(required)
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for item in preferred_order:
+        if item in values and item not in seen:
+            seen.add(item)
+            deduped.append(item)
+    for item in values:
+        if item in seen:
+            continue
+        seen.add(item)
+        deduped.append(item)
+    return deduped
+
+
 def search_curseforge(
     query: str,
     mc_version: str | None,
     loader: str | None,
     content_type: str,
     release_channel: str = "all",
+    sort_by: str = "relevance",
+    categories: list[str] | None = None,
 ) -> list[dict]:
     release_channel = _normalize_release_channel(release_channel)
-    query_variants = _build_curseforge_query_variants(query)
-    if not query_variants:
-        return []
+    sort_by = _normalize_sort_by(sort_by)
+    mc_versions = _normalize_mc_version_list(mc_version)
+    loaders = _normalize_loader_list(loader)
+    category_tokens = _normalize_categories(categories)
+    has_query = bool(query.strip())
+    query_variants = _build_curseforge_query_variants(query) if has_query else [""]
 
     page_size = 50
-    max_pages_per_variant = 4
-
+    if has_query and sort_by == "relevance":
+        max_pages_per_variant = 8 if len(query.strip()) >= 6 else 6
+    else:
+        max_pages_per_variant = 2
     base_params: dict[str, str] = {
         "gameId": str(MC_GAME_ID),
         "pageSize": str(page_size),
     }
-    if mc_version:
-        base_params["gameVersion"] = mc_version
-    loader_type = _curseforge_loader_type(loader, content_type)
-    if loader_type is not None:
-        base_params["modLoaderType"] = str(loader_type)
-    if content_type == "plugin":
-        base_params["classId"] = "5"
-    elif content_type == "modpack":
-        base_params["classId"] = "4471"
-    else:
-        base_params["classId"] = "6"
+    base_params["classId"] = str(_curseforge_class_id(content_type))
+    sort_field = _curseforge_sort_field(sort_by, has_query=has_query)
+    if sort_field is not None:
+        base_params["sortField"] = str(sort_field)
+        base_params["sortOrder"] = "desc"
+
+    category_ids: list[int | None] = [None]
+    parsed_categories: list[int] = []
+    for token in category_tokens:
+        try:
+            parsed_categories.append(int(token))
+        except ValueError:
+            continue
+    if parsed_categories:
+        category_ids = parsed_categories
+
+    mc_candidates: list[str | None] = [None]
+    if mc_versions:
+        mc_candidates = mc_versions[:4]
+
+    loader_candidates: list[str | None] = [None]
+    if loaders:
+        loader_candidates = loaders[:4]
 
     query_tokens = [
         token for token in _tokenize_search_text(query) if token not in _SEARCH_STOPWORDS
     ]
     scored_by_id: dict[int, tuple[float, dict]] = {}
+    ordered_items: list[dict] = []
+    seen_ordered_ids: set[int] = set()
 
-    for variant_index, variant in enumerate(query_variants):
-        for page in range(max_pages_per_variant):
-            params = dict(base_params)
-            params["searchFilter"] = variant
-            params["index"] = str(page * page_size)
-            url = f"{CURSEFORGE_BASE}/v1/mods/search?{urllib.parse.urlencode(params)}"
-            payload = _request_json(url, headers=_curseforge_headers())
-            data = payload.get("data", []) if isinstance(payload, dict) else []
-            if not data:
-                break
-            for item in data:
-                mod_id_raw = item.get("id")
-                try:
-                    mod_id = int(mod_id_raw)
-                except (TypeError, ValueError):
-                    continue
-                score = _score_curseforge_item(
-                    item,
-                    query=query,
-                    query_tokens=query_tokens,
-                    variant_index=variant_index,
-                )
-                existing = scored_by_id.get(mod_id)
-                if existing is None or score > existing[0]:
-                    scored_by_id[mod_id] = (score, item)
-            if len(data) < page_size:
-                break
+    for category_id in category_ids:
+        for mc_candidate in mc_candidates:
+            for loader_candidate in loader_candidates:
+                loader_type = _curseforge_loader_type(loader_candidate, content_type)
+                for variant_index, variant in enumerate(query_variants):
+                    variant_tokens = [
+                        token for token in _tokenize_search_text(variant) if token not in _SEARCH_STOPWORDS
+                    ]
+                    pages_for_variant = max_pages_per_variant
+                    if has_query and sort_by == "relevance" and variant_index > 0:
+                        pages_for_variant = max(2, max_pages_per_variant - 2)
+                    for page in range(pages_for_variant):
+                        params = dict(base_params)
+                        if mc_candidate:
+                            params["gameVersion"] = mc_candidate
+                        if loader_type is not None:
+                            params["modLoaderType"] = str(loader_type)
+                        if has_query and variant:
+                            params["searchFilter"] = variant
+                        if category_id is not None:
+                            params["categoryId"] = str(category_id)
+                        params["index"] = str(page * page_size)
+                        url = f"{CURSEFORGE_BASE}/v1/mods/search?{urllib.parse.urlencode(params)}"
+                        payload = _request_json(url, headers=_curseforge_headers())
+                        data = payload.get("data", []) if isinstance(payload, dict) else []
+                        if not data:
+                            break
+                        for item in data:
+                            mod_id_raw = item.get("id")
+                            try:
+                                mod_id = int(mod_id_raw)
+                            except (TypeError, ValueError):
+                                continue
 
-    sorted_items = sorted(scored_by_id.items(), key=lambda entry: entry[1][0], reverse=True)
+                            if has_query and sort_by == "relevance":
+                                score = _score_curseforge_item(
+                                    item,
+                                    query=variant or query,
+                                    query_tokens=variant_tokens or query_tokens,
+                                    base_query=query,
+                                    base_query_tokens=query_tokens,
+                                    variant_index=variant_index,
+                                )
+                                existing = scored_by_id.get(mod_id)
+                                if existing is None or score > existing[0]:
+                                    scored_by_id[mod_id] = (score, item)
+                                continue
+
+                            if mod_id in seen_ordered_ids:
+                                continue
+                            seen_ordered_ids.add(mod_id)
+                            ordered_items.append(item)
+                        if len(data) < page_size and not (has_query and sort_by == "relevance"):
+                            break
+
     results: list[dict] = []
 
-    for mod_id, (_, item) in sorted_items:
+    def _build_project_url(mod_id: int, item: dict) -> str:
+        links = item.get("links") or {}
+        if isinstance(links, dict):
+            website = str(links.get("websiteUrl") or "").strip()
+            if website:
+                return website
+        slug = str(item.get("slug") or "").strip()
+        if content_type == "plugin":
+            base = "https://www.curseforge.com/minecraft/bukkit-plugins"
+        elif content_type == "modpack":
+            base = "https://www.curseforge.com/minecraft/modpacks"
+        else:
+            base = "https://www.curseforge.com/minecraft/mc-mods"
+        if slug:
+            return f"{base}/{slug}"
+        return f"{base}/{mod_id}"
+
+    if has_query and sort_by == "relevance":
+        candidates = [item for _, (_, item) in sorted(scored_by_id.items(), key=lambda entry: entry[1][0], reverse=True)]
+    else:
+        candidates = ordered_items
+
+    release_check_mc = mc_versions[0] if len(mc_versions) == 1 else None
+    release_check_loader = loaders[0] if len(loaders) == 1 else None
+
+    for item in candidates:
+        try:
+            mod_id = int(item.get("id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if mod_id <= 0:
+            continue
         if release_channel != "all":
             try:
                 if not _curseforge_project_has_channel_match(
                     mod_id,
-                    mc_version,
-                    loader,
+                    release_check_mc,
+                    release_check_loader,
                     content_type,
                     release_channel,
                 ):
                     continue
             except Exception:
                 continue
+        authors: list[str] = []
+        for author in item.get("authors") or []:
+            if not isinstance(author, dict):
+                continue
+            name = str(author.get("name") or "").strip()
+            if name:
+                authors.append(name)
+        category_labels: list[str] = []
+        for category in item.get("categories") or []:
+            if not isinstance(category, dict):
+                continue
+            label = str(category.get("name") or "").strip()
+            if label:
+                category_labels.append(label)
         results.append(
             {
                 "id": mod_id,
                 "title": item.get("name"),
                 "description": item.get("summary"),
                 "downloads": item.get("downloadCount"),
-                "icon_url": (item.get("logo") or {}).get("url"),
+                "followers": item.get("thumbsUpCount"),
+                "icon_url": (item.get("logo") or {}).get("thumbnailUrl") or (item.get("logo") or {}).get("url"),
+                "updated_at": item.get("dateModified"),
+                "author": ", ".join(authors),
+                "categories": category_labels,
+                "project_url": _build_project_url(mod_id, item),
                 "provider": "curseforge",
             }
         )
-        if len(results) >= 40:
+        if len(results) >= _SEARCH_RESULT_CAP:
             break
     return results
 
@@ -569,31 +1079,47 @@ def list_curseforge_versions(
     release_channel: str = "all",
 ) -> list[dict]:
     release_channel = _normalize_release_channel(release_channel)
-    params: dict[str, str] = {}
-    if mc_version:
-        params["gameVersion"] = mc_version
-    loader_type = _curseforge_loader_type(loader, content_type)
-    if loader_type is not None:
-        params["modLoaderType"] = str(loader_type)
-    url = f"{CURSEFORGE_BASE}/v1/mods/{mod_id}/files"
-    if params:
-        url = f"{url}?{urllib.parse.urlencode(params)}"
-    payload = _request_json(url, headers=_curseforge_headers())
+    mc_versions = _normalize_mc_version_list(mc_version)
+    loaders = _normalize_loader_list(loader)
+    mc_candidates: list[str | None] = [None]
+    if mc_versions:
+        mc_candidates = mc_versions[:4]
+    loader_candidates: list[str | None] = [None]
+    if loaders:
+        loader_candidates = loaders[:4]
+
     versions: list[dict] = []
-    data = payload.get("data", []) if isinstance(payload, dict) else []
-    for item in data:
-        channel = _curseforge_release_channel(item.get("releaseType"))
-        if not _matches_release_channel(channel, release_channel):
-            continue
-        versions.append(
-            {
-                "id": item.get("id"),
-                "name": item.get("displayName") or item.get("fileName"),
-                "version_number": item.get("displayName") or item.get("fileName"),
-                "date": item.get("fileDate"),
-                "release_channel": channel,
-            }
-        )
+    seen_ids: set[str] = set()
+    for mc_candidate in mc_candidates:
+        for loader_candidate in loader_candidates:
+            params: dict[str, str] = {}
+            if mc_candidate:
+                params["gameVersion"] = mc_candidate
+            loader_type = _curseforge_loader_type(loader_candidate, content_type)
+            if loader_type is not None:
+                params["modLoaderType"] = str(loader_type)
+            url = f"{CURSEFORGE_BASE}/v1/mods/{mod_id}/files"
+            if params:
+                url = f"{url}?{urllib.parse.urlencode(params)}"
+            payload = _request_json(url, headers=_curseforge_headers())
+            data = payload.get("data", []) if isinstance(payload, dict) else []
+            for item in data:
+                channel = _curseforge_release_channel(item.get("releaseType"))
+                if not _matches_release_channel(channel, release_channel):
+                    continue
+                version_id = str(item.get("id") or "")
+                if version_id in seen_ids:
+                    continue
+                seen_ids.add(version_id)
+                versions.append(
+                    {
+                        "id": item.get("id"),
+                        "name": item.get("displayName") or item.get("fileName"),
+                        "version_number": item.get("displayName") or item.get("fileName"),
+                        "date": item.get("fileDate"),
+                        "release_channel": channel,
+                    }
+                )
     versions.sort(key=lambda item: str(item.get("date") or ""), reverse=True)
     return versions
 

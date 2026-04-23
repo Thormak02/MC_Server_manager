@@ -30,6 +30,19 @@ def _ensure_server_access(db: Session, user, server_id: int):
     return server
 
 
+def _parse_categories(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    tokens = [token.strip() for token in str(raw).split(",")]
+    return [token for token in tokens if token]
+
+
+def _normalize_paging(offset: int, limit: int) -> tuple[int, int]:
+    normalized_offset = max(0, int(offset))
+    normalized_limit = max(1, min(int(limit), 50))
+    return normalized_offset, normalized_limit
+
+
 @router.get("/servers/{server_id}/content", response_class=HTMLResponse)
 def server_content_page(request: Request, server_id: int, db: Session = Depends(get_db)):
     try:
@@ -67,11 +80,15 @@ def server_content_page(request: Request, server_id: int, db: Session = Depends(
 def content_search(
     request: Request,
     provider: str,
-    query: str,
+    query: str = "",
     mc_version: str | None = None,
     loader: str | None = None,
     content_type: str = "mod",
     release_channel: str = "all",
+    sort_by: str = "relevance",
+    categories: str | None = None,
+    offset: int = 0,
+    limit: int = 20,
     db: Session = Depends(get_db),
 ):
     current_user = _ensure_user(request, db)
@@ -79,6 +96,7 @@ def content_search(
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
 
     provider = provider.strip().lower()
+    offset, limit = _normalize_paging(offset, limit)
     if provider == "modrinth":
         try:
             results = content_service.search_modrinth(
@@ -87,6 +105,8 @@ def content_search(
                 loader,
                 content_type,
                 release_channel,
+                sort_by,
+                _parse_categories(categories),
             )
         except Exception as exc:
             return JSONResponse(status_code=400, content={"detail": str(exc)})
@@ -98,13 +118,85 @@ def content_search(
                 loader,
                 content_type,
                 release_channel,
+                sort_by,
+                _parse_categories(categories),
             )
         except ValueError as exc:
             return JSONResponse(status_code=400, content={"detail": str(exc)})
     else:
         raise HTTPException(status_code=400, detail="Unknown provider")
 
-    return JSONResponse({"results": results})
+    total = len(results)
+    page = results[offset : offset + limit]
+    has_more = offset + len(page) < total
+    return JSONResponse(
+        {
+            "results": page,
+            "offset": offset,
+            "limit": limit,
+            "total": total,
+            "has_more": has_more,
+        }
+    )
+
+
+@router.get("/api/content/categories", response_class=JSONResponse)
+def content_categories(
+    request: Request,
+    provider: str,
+    content_type: str = "mod",
+    db: Session = Depends(get_db),
+):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    normalized_provider = provider.strip().lower()
+    try:
+        if normalized_provider == "modrinth":
+            categories = content_service.list_modrinth_categories(content_type)
+        elif normalized_provider == "curseforge":
+            categories = content_service.list_curseforge_categories(content_type)
+        else:
+            return JSONResponse(status_code=400, content={"detail": "Unknown provider"})
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    return JSONResponse({"categories": categories})
+
+
+@router.get("/api/content/filter-options", response_class=JSONResponse)
+def content_filter_options(
+    request: Request,
+    provider: str,
+    content_type: str = "mod",
+    db: Session = Depends(get_db),
+):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    normalized_provider = provider.strip().lower()
+    try:
+        if normalized_provider == "modrinth":
+            categories = content_service.list_modrinth_categories(content_type)
+            mc_versions = content_service.list_modrinth_game_versions()
+            loaders = content_service.list_modrinth_loader_types()
+        elif normalized_provider == "curseforge":
+            categories = content_service.list_curseforge_categories(content_type)
+            mc_versions = content_service.list_curseforge_game_versions()
+            loaders = content_service.list_curseforge_loader_types(content_type)
+        else:
+            return JSONResponse(status_code=400, content={"detail": "Unknown provider"})
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    return JSONResponse(
+        {
+            "categories": categories,
+            "mc_versions": mc_versions,
+            "loaders": loaders,
+        }
+    )
 
 
 @router.get("/api/content/modrinth/versions", response_class=JSONResponse)

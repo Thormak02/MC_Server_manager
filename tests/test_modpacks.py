@@ -119,7 +119,15 @@ def test_modpack_search_endpoints_accept_modpack_content_type(client, monkeypatc
 
     from app.api.routers import content as content_router
 
-    def fake_search_modrinth(query, mc_version, loader, content_type, release_channel):
+    def fake_search_modrinth(
+        query,
+        mc_version,
+        loader,
+        content_type,
+        release_channel,
+        sort_by="relevance",
+        categories=None,
+    ):
         assert query == "better"
         assert content_type == "modpack"
         return [
