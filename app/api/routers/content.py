@@ -369,6 +369,7 @@ async def install_content(request: Request, server_id: int, db: Session = Depend
     if not project_id or not version_id:
         raise HTTPException(status_code=400, detail="project_id und version_id erforderlich")
 
+    auto_installed: list[InstalledContent] = []
     if provider == "modrinth":
         try:
             entry = content_service.install_modrinth(
@@ -378,6 +379,7 @@ async def install_content(request: Request, server_id: int, db: Session = Depend
                 version_id,
                 content_type,
                 current_user.id,
+                _auto_installed=auto_installed,
             )
         except ValueError as exc:
             db.rollback()
@@ -391,6 +393,7 @@ async def install_content(request: Request, server_id: int, db: Session = Depend
                 int(version_id),
                 content_type,
                 current_user.id,
+                _auto_installed=auto_installed,
             )
         except ValueError as exc:
             db.rollback()
@@ -404,6 +407,16 @@ async def install_content(request: Request, server_id: int, db: Session = Depend
             "name": entry.name,
             "version_label": entry.version_label,
             "file_name": entry.file_name,
+            "auto_installed": [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "version_label": item.version_label,
+                    "file_name": item.file_name,
+                    "provider_name": item.provider_name,
+                }
+                for item in auto_installed
+            ],
         }
     )
 

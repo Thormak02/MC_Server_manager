@@ -32,6 +32,8 @@ _CURSEFORGE_CLASS_IDS = {
     "plugin": 5,
     "modpack": 4471,
 }
+_CURSEFORGE_REQUIRED_RELATION_TYPES = {3, 6}
+_MAX_DEPENDENCY_DEPTH = 24
 _LOADER_ALIASES = {
     "forge": "forge",
     "neo-forge": "neoforge",
@@ -543,6 +545,96 @@ def _remove_existing_project_entries(
     return removed_ids
 
 
+def _find_installed_entry(
+    db: Session,
+    server: Server,
+    *,
+    provider_name: str,
+    project_id: str,
+    content_type: str,
+) -> InstalledContent | None:
+    stmt = (
+        select(InstalledContent)
+        .where(InstalledContent.server_id == server.id)
+        .where(InstalledContent.provider_name == provider_name)
+        .where(InstalledContent.external_project_id == project_id)
+        .where(InstalledContent.content_type == content_type)
+        .order_by(InstalledContent.id.desc())
+    )
+    return db.scalars(stmt).first()
+
+
+def _modrinth_required_dependencies(payload: dict) -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in payload.get("dependencies") or []:
+        if not isinstance(item, dict):
+            continue
+        dep_type = str(item.get("dependency_type") or "").strip().lower()
+        if dep_type != "required":
+            continue
+        dep_project_id = str(item.get("project_id") or "").strip()
+        dep_version_id = str(item.get("version_id") or "").strip()
+        if not dep_project_id and not dep_version_id:
+            continue
+        key = (dep_project_id, dep_version_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(
+            {
+                "project_id": dep_project_id,
+                "version_id": dep_version_id,
+            }
+        )
+    return result
+
+
+def _curseforge_required_dependencies(file_data: dict) -> list[dict[str, int | None]]:
+    result: list[dict[str, int | None]] = []
+    seen: set[tuple[int, int | None]] = set()
+    for item in file_data.get("dependencies") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            relation_type = int(item.get("relationType") or 0)
+        except (TypeError, ValueError):
+            continue
+        if relation_type not in _CURSEFORGE_REQUIRED_RELATION_TYPES:
+            continue
+        try:
+            mod_id = int(item.get("modId") or 0)
+        except (TypeError, ValueError):
+            continue
+        if mod_id <= 0:
+            continue
+
+        file_id_value = (
+            item.get("fileId")
+            or item.get("dependencyFileId")
+            or item.get("modFileId")
+        )
+        dep_file_id: int | None
+        try:
+            dep_file_id = int(file_id_value) if file_id_value is not None else None
+        except (TypeError, ValueError):
+            dep_file_id = None
+        if dep_file_id is not None and dep_file_id <= 0:
+            dep_file_id = None
+
+        key = (mod_id, dep_file_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(
+            {
+                "mod_id": mod_id,
+                "file_id": dep_file_id,
+            }
+        )
+    return result
+
+
 def _modrinth_project_has_channel_match(
     project_id: str,
     mc_versions: list[str],
@@ -710,76 +802,177 @@ def install_modrinth(
     version_id: str,
     content_type: str,
     user_id: int | None,
+    _processing: set[tuple[str, str]] | None = None,
+    _dependency_depth: int = 0,
+    _is_dependency: bool = False,
+    _auto_installed: list[InstalledContent] | None = None,
 ) -> InstalledContent:
-    url = f"{MODRINTH_BASE}/version/{version_id}"
-    payload = _request_json(url, headers=_modrinth_headers())
-    version_loaders = {
-        loader
-        for loader in (
-            _normalize_loader(str(entry or "")) for entry in (payload.get("loaders") or [])
+    normalized_project_id = str(project_id).strip()
+    normalized_version_id = str(version_id).strip()
+    if not normalized_project_id or not normalized_version_id:
+        raise ValueError("project_id und version_id erforderlich.")
+    if _dependency_depth > _MAX_DEPENDENCY_DEPTH:
+        raise ValueError("Abhaengigkeitskette zu tief. Bitte manuell pruefen.")
+
+    processing = _processing if _processing is not None else set()
+    stack_key = ("modrinth", normalized_project_id)
+    if stack_key in processing:
+        existing_entry = _find_installed_entry(
+            db,
+            server,
+            provider_name="modrinth",
+            project_id=normalized_project_id,
+            content_type=content_type,
         )
-        if loader
-    }
-    version_mc_versions = {
-        str(entry).strip()
-        for entry in (payload.get("game_versions") or [])
-        if str(entry).strip()
-    }
-    _raise_if_incompatible_with_server(
-        server,
-        content_type,
-        provider_name="Modrinth",
-        available_loaders=version_loaders,
-        available_mc_versions=version_mc_versions,
-    )
-    files = payload.get("files", [])
-    if not files:
-        raise ValueError("Keine Dateien fuer diese Version gefunden.")
-    primary = next((item for item in files if item.get("primary")), files[0])
-    file_url = primary.get("url")
-    file_name = _safe_file_name(str(primary.get("filename") or ""))
-    if not file_url or not file_name:
-        raise ValueError("Download-URL fehlt.")
+        if existing_entry is not None:
+            return existing_entry
+        raise ValueError(f"Abhaengigkeitszyklus erkannt (Modrinth: {normalized_project_id}).")
 
-    _remove_existing_project_entries(
-        db,
-        server,
-        provider_name="modrinth",
-        project_id=str(project_id),
-        content_type=content_type,
-    )
-
-    target = _content_file_path(server, content_type, file_name)
+    processing.add(stack_key)
     try:
-        _download_file(file_url, target, headers=_modrinth_headers())
-    except Exception as exc:
-        raise ValueError(f"Download fehlgeschlagen: {exc}") from exc
+        url = f"{MODRINTH_BASE}/version/{normalized_version_id}"
+        payload = _request_json(url, headers=_modrinth_headers())
 
-    project = _request_json(f"{MODRINTH_BASE}/project/{project_id}", headers=_modrinth_headers())
+        payload_project_id = str(payload.get("project_id") or "").strip()
+        if payload_project_id:
+            normalized_project_id = payload_project_id
 
-    entry = InstalledContent(
-        server_id=server.id,
-        provider_name="modrinth",
-        content_type=content_type,
-        external_project_id=str(project_id),
-        external_version_id=str(version_id),
-        name=project.get("title") or project_id,
-        version_label=payload.get("version_number"),
-        file_name=file_name,
-        installed_by_user_id=user_id,
-    )
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
+        if content_type == "mod":
+            dependencies = _modrinth_required_dependencies(payload if isinstance(payload, dict) else {})
+            expected_loader = _expected_server_loader(server, content_type)
+            expected_mc_version = _expected_server_mc_version(server)
+            for dependency in dependencies:
+                dep_project_id = str(dependency.get("project_id") or "").strip()
+                dep_version_id = str(dependency.get("version_id") or "").strip()
 
-    audit_service.log_action(
-        db,
-        action="content.install",
-        user_id=user_id,
-        server_id=server.id,
-        details=f"provider=modrinth project={project_id} version={version_id}",
-    )
-    return entry
+                if dep_version_id and not dep_project_id:
+                    dep_payload = _request_json(
+                        f"{MODRINTH_BASE}/version/{dep_version_id}",
+                        headers=_modrinth_headers(),
+                    )
+                    dep_project_id = str(dep_payload.get("project_id") or "").strip()
+                if not dep_project_id:
+                    continue
+
+                existing_dep = _find_installed_entry(
+                    db,
+                    server,
+                    provider_name="modrinth",
+                    project_id=dep_project_id,
+                    content_type=content_type,
+                )
+                if existing_dep is not None and (
+                    not dep_version_id or str(existing_dep.external_version_id) == dep_version_id
+                ):
+                    continue
+
+                if not dep_version_id:
+                    dep_versions = list_modrinth_versions(
+                        dep_project_id,
+                        expected_mc_version,
+                        expected_loader,
+                        release_channel="all",
+                    )
+                    if not dep_versions:
+                        raise ValueError(
+                            f"Abhaengigkeit konnte nicht aufgeloest werden (Modrinth: {dep_project_id})."
+                        )
+                    dep_version_id = str(dep_versions[0].get("id") or "").strip()
+                    if not dep_version_id:
+                        raise ValueError(
+                            f"Abhaengigkeit ohne installierbare Version (Modrinth: {dep_project_id})."
+                        )
+
+                install_modrinth(
+                    db,
+                    server,
+                    dep_project_id,
+                    dep_version_id,
+                    content_type,
+                    user_id,
+                    _processing=processing,
+                    _dependency_depth=_dependency_depth + 1,
+                    _is_dependency=True,
+                    _auto_installed=_auto_installed,
+                )
+
+        version_loaders = {
+            loader
+            for loader in (
+                _normalize_loader(str(entry or "")) for entry in (payload.get("loaders") or [])
+            )
+            if loader
+        }
+        version_mc_versions = {
+            str(entry).strip()
+            for entry in (payload.get("game_versions") or [])
+            if str(entry).strip()
+        }
+        _raise_if_incompatible_with_server(
+            server,
+            content_type,
+            provider_name="Modrinth",
+            available_loaders=version_loaders,
+            available_mc_versions=version_mc_versions,
+        )
+        files = payload.get("files", [])
+        if not files:
+            raise ValueError("Keine Dateien fuer diese Version gefunden.")
+        primary = next((item for item in files if item.get("primary")), files[0])
+        file_url = primary.get("url")
+        file_name = _safe_file_name(str(primary.get("filename") or ""))
+        if not file_url or not file_name:
+            raise ValueError("Download-URL fehlt.")
+
+        _remove_existing_project_entries(
+            db,
+            server,
+            provider_name="modrinth",
+            project_id=normalized_project_id,
+            content_type=content_type,
+        )
+
+        target = _content_file_path(server, content_type, file_name)
+        try:
+            _download_file(file_url, target, headers=_modrinth_headers())
+        except Exception as exc:
+            raise ValueError(f"Download fehlgeschlagen: {exc}") from exc
+
+        project = _request_json(
+            f"{MODRINTH_BASE}/project/{normalized_project_id}",
+            headers=_modrinth_headers(),
+        )
+
+        entry = InstalledContent(
+            server_id=server.id,
+            provider_name="modrinth",
+            content_type=content_type,
+            external_project_id=normalized_project_id,
+            external_version_id=normalized_version_id,
+            name=project.get("title") or normalized_project_id,
+            version_label=payload.get("version_number"),
+            file_name=file_name,
+            installed_by_user_id=user_id,
+        )
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+
+        audit_service.log_action(
+            db,
+            action="content.install",
+            user_id=user_id,
+            server_id=server.id,
+            details=(
+                f"provider=modrinth project={normalized_project_id} "
+                f"version={normalized_version_id} dependency={int(_is_dependency)}"
+            ),
+        )
+        if _is_dependency and _auto_installed is not None:
+            _auto_installed.append(entry)
+        return entry
+    finally:
+        processing.discard(stack_key)
 
 
 def _curseforge_loader_type(loader: str | None, content_type: str) -> int | None:
@@ -1243,90 +1436,198 @@ def install_curseforge(
     file_id: int,
     content_type: str,
     user_id: int | None,
+    _processing: set[tuple[str, str]] | None = None,
+    _dependency_depth: int = 0,
+    _is_dependency: bool = False,
+    _auto_installed: list[InstalledContent] | None = None,
 ) -> InstalledContent:
-    file_payload = _request_json(
-        f"{CURSEFORGE_BASE}/v1/mods/{mod_id}/files/{file_id}",
-        headers=_curseforge_headers(),
-    )
-    data = file_payload.get("data", {})
-    raw_game_versions = [
-        str(entry).strip()
-        for entry in (data.get("gameVersions") or [])
-        if str(entry).strip()
-    ]
-    available_loaders = {
-        normalized
-        for normalized in (
-            _normalize_loader(entry) for entry in raw_game_versions
+    try:
+        normalized_mod_id = int(mod_id)
+        normalized_file_id = int(file_id)
+    except (TypeError, ValueError):
+        raise ValueError("mod_id und file_id muessen numerisch sein.")
+    if normalized_mod_id <= 0 or normalized_file_id <= 0:
+        raise ValueError("mod_id und file_id muessen > 0 sein.")
+    if _dependency_depth > _MAX_DEPENDENCY_DEPTH:
+        raise ValueError("Abhaengigkeitskette zu tief. Bitte manuell pruefen.")
+
+    processing = _processing if _processing is not None else set()
+    stack_key = ("curseforge", str(normalized_mod_id))
+    if stack_key in processing:
+        existing_entry = _find_installed_entry(
+            db,
+            server,
+            provider_name="curseforge",
+            project_id=str(normalized_mod_id),
+            content_type=content_type,
         )
-        if normalized in {"forge", "neoforge", "fabric", "quilt", "paper", "spigot", "bukkit"}
-    }
-    available_mc_versions = {
-        entry
-        for entry in raw_game_versions
-        if re.match(r"^\d+\.\d+(\.\d+)?([a-zA-Z0-9._-]*)?$", entry)
-    }
-    _raise_if_incompatible_with_server(
-        server,
-        content_type,
-        provider_name="CurseForge",
-        available_loaders=available_loaders,
-        available_mc_versions=available_mc_versions,
-    )
-    download_url = data.get("downloadUrl")
-    file_name = _safe_file_name(str(data.get("fileName") or ""))
-    if not download_url:
-        url_payload = _request_json(
-            f"{CURSEFORGE_BASE}/v1/mods/{mod_id}/files/{file_id}/download-url",
+        if existing_entry is not None:
+            return existing_entry
+        raise ValueError(f"Abhaengigkeitszyklus erkannt (CurseForge: {normalized_mod_id}).")
+
+    processing.add(stack_key)
+    try:
+        file_payload = _request_json(
+            f"{CURSEFORGE_BASE}/v1/mods/{normalized_mod_id}/files/{normalized_file_id}",
             headers=_curseforge_headers(),
         )
-        download_url = (url_payload.get("data") or {}).get("url")
-    if not download_url or not file_name:
-        raise ValueError("Download-URL fehlt.")
+        data = file_payload.get("data", {})
+        if not isinstance(data, dict):
+            raise ValueError("Ungueltige CurseForge Dateidaten.")
 
-    _remove_existing_project_entries(
-        db,
-        server,
-        provider_name="curseforge",
-        project_id=str(mod_id),
-        content_type=content_type,
-    )
+        if content_type == "mod":
+            dependencies = _curseforge_required_dependencies(data)
+            expected_loader = _expected_server_loader(server, content_type)
+            expected_mc_version = _expected_server_mc_version(server)
+            for dependency in dependencies:
+                dep_mod_id_raw = dependency.get("mod_id")
+                dep_file_id_raw = dependency.get("file_id")
+                try:
+                    dep_mod_id = int(dep_mod_id_raw or 0)
+                except (TypeError, ValueError):
+                    continue
+                dep_file_id: int | None
+                try:
+                    dep_file_id = int(dep_file_id_raw) if dep_file_id_raw is not None else None
+                except (TypeError, ValueError):
+                    dep_file_id = None
+                if dep_mod_id <= 0:
+                    continue
+                if dep_file_id is not None and dep_file_id <= 0:
+                    dep_file_id = None
 
-    target = _content_file_path(server, content_type, file_name)
-    try:
-        _download_file(download_url, target, headers=_curseforge_headers())
-    except Exception as exc:
-        raise ValueError(f"Download fehlgeschlagen: {exc}") from exc
+                existing_dep = _find_installed_entry(
+                    db,
+                    server,
+                    provider_name="curseforge",
+                    project_id=str(dep_mod_id),
+                    content_type=content_type,
+                )
+                if existing_dep is not None and (
+                    dep_file_id is None or str(existing_dep.external_version_id) == str(dep_file_id)
+                ):
+                    continue
 
-    mod_payload = _request_json(
-        f"{CURSEFORGE_BASE}/v1/mods/{mod_id}",
-        headers=_curseforge_headers(),
-    )
-    mod_data = mod_payload.get("data", {})
+                if dep_file_id is None:
+                    dep_versions = list_curseforge_versions(
+                        dep_mod_id,
+                        expected_mc_version,
+                        expected_loader,
+                        content_type,
+                        release_channel="all",
+                    )
+                    if not dep_versions:
+                        raise ValueError(
+                            f"Abhaengigkeit konnte nicht aufgeloest werden (CurseForge: {dep_mod_id})."
+                        )
+                    try:
+                        dep_file_id = int(dep_versions[0].get("id") or 0)
+                    except (TypeError, ValueError):
+                        dep_file_id = 0
+                    if dep_file_id <= 0:
+                        raise ValueError(
+                            f"Abhaengigkeit ohne installierbare Version (CurseForge: {dep_mod_id})."
+                        )
 
-    entry = InstalledContent(
-        server_id=server.id,
-        provider_name="curseforge",
-        content_type=content_type,
-        external_project_id=str(mod_id),
-        external_version_id=str(file_id),
-        name=mod_data.get("name") or str(mod_id),
-        version_label=data.get("displayName") or data.get("fileName"),
-        file_name=file_name,
-        installed_by_user_id=user_id,
-    )
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
+                install_curseforge(
+                    db,
+                    server,
+                    dep_mod_id,
+                    dep_file_id,
+                    content_type,
+                    user_id,
+                    _processing=processing,
+                    _dependency_depth=_dependency_depth + 1,
+                    _is_dependency=True,
+                    _auto_installed=_auto_installed,
+                )
 
-    audit_service.log_action(
-        db,
-        action="content.install",
-        user_id=user_id,
-        server_id=server.id,
-        details=f"provider=curseforge project={mod_id} file={file_id}",
-    )
-    return entry
+        raw_game_versions = [
+            str(entry).strip()
+            for entry in (data.get("gameVersions") or [])
+            if str(entry).strip()
+        ]
+        available_loaders = {
+            normalized
+            for normalized in (
+                _normalize_loader(entry) for entry in raw_game_versions
+            )
+            if normalized in {"forge", "neoforge", "fabric", "quilt", "paper", "spigot", "bukkit"}
+        }
+        available_mc_versions = {
+            entry
+            for entry in raw_game_versions
+            if re.match(r"^\d+\.\d+(\.\d+)?([a-zA-Z0-9._-]*)?$", entry)
+        }
+        _raise_if_incompatible_with_server(
+            server,
+            content_type,
+            provider_name="CurseForge",
+            available_loaders=available_loaders,
+            available_mc_versions=available_mc_versions,
+        )
+
+        download_url = data.get("downloadUrl")
+        file_name = _safe_file_name(str(data.get("fileName") or ""))
+        if not download_url:
+            url_payload = _request_json(
+                f"{CURSEFORGE_BASE}/v1/mods/{normalized_mod_id}/files/{normalized_file_id}/download-url",
+                headers=_curseforge_headers(),
+            )
+            download_url = (url_payload.get("data") or {}).get("url")
+        if not download_url or not file_name:
+            raise ValueError("Download-URL fehlt.")
+
+        _remove_existing_project_entries(
+            db,
+            server,
+            provider_name="curseforge",
+            project_id=str(normalized_mod_id),
+            content_type=content_type,
+        )
+
+        target = _content_file_path(server, content_type, file_name)
+        try:
+            _download_file(download_url, target, headers=_curseforge_headers())
+        except Exception as exc:
+            raise ValueError(f"Download fehlgeschlagen: {exc}") from exc
+
+        mod_payload = _request_json(
+            f"{CURSEFORGE_BASE}/v1/mods/{normalized_mod_id}",
+            headers=_curseforge_headers(),
+        )
+        mod_data = mod_payload.get("data", {})
+
+        entry = InstalledContent(
+            server_id=server.id,
+            provider_name="curseforge",
+            content_type=content_type,
+            external_project_id=str(normalized_mod_id),
+            external_version_id=str(normalized_file_id),
+            name=mod_data.get("name") or str(normalized_mod_id),
+            version_label=data.get("displayName") or data.get("fileName"),
+            file_name=file_name,
+            installed_by_user_id=user_id,
+        )
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+
+        audit_service.log_action(
+            db,
+            action="content.install",
+            user_id=user_id,
+            server_id=server.id,
+            details=(
+                f"provider=curseforge project={normalized_mod_id} file={normalized_file_id} "
+                f"dependency={int(_is_dependency)}"
+            ),
+        )
+        if _is_dependency and _auto_installed is not None:
+            _auto_installed.append(entry)
+        return entry
+    finally:
+        processing.discard(stack_key)
 
 
 def list_installed_content(db: Session, server: Server) -> list[InstalledContent]:

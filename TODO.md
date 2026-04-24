@@ -62,19 +62,25 @@
 
 
 
-bitte die Kategorien als Dropdown mit Checkbox Auswahl, Kategorien sollen auch wieder abwählbar sein, bei modrinth ist es falsch (siehe screenshot). die projektseite soll man mit klick auf den namen aufrufen, also per Hyperlink und nicht per Feld daneben. die seite soll sich immer im neuen tab öffnen. bei der suche soll es die Option beim runterscrollen mehr Inhalte zu laden, dafür muss die Inhalte liste mit den suchergebnissen separat / unabhängig von dem rest scrollen lassen. Import Preview reicht anzuzeigen, dass es keine Warnungen gibt, oder nur die Fehler sollte es welche geben, so ist es zu viel kryptischer bloat, wenn alle mods usw. aufgelistet werden (siehe bild). 
+~~bitte die Kategorien als Dropdown mit Checkbox Auswahl, Kategorien sollen auch wieder abwählbar sein, bei modrinth ist es falsch (siehe screenshot). die projektseite soll man mit klick auf den namen aufrufen, also per Hyperlink und nicht per Feld daneben. die seite soll sich immer im neuen tab öffnen. bei der suche soll es die Option beim runterscrollen mehr Inhalte zu laden, dafür muss die Inhalte liste mit den suchergebnissen separat / unabhängig von dem rest scrollen lassen. Import Preview reicht anzuzeigen, dass es keine Warnungen gibt, oder nur die Fehler sollte es welche geben, so ist es zu viel kryptischer bloat, wenn alle mods usw. aufgelistet werden (siehe bild).~~
 
-MC Version (optional) nd Loader (optional) lieber auch als Dropdown Auswahl, wie bei Kategorien auch mit mehrfach Auswahl und Checkbox und abwählbar.
-
-
+~~MC Version (optional) nd Loader (optional) lieber auch als Dropdown Auswahl, wie bei Kategorien auch mit mehrfach Auswahl und Checkbox und abwählbar.~~
 
 
 
-es sollte nur eines benötigt werden, also modpack code, zip oder url. eins sollte reichen, es tut nicht not, dass alle drei mandatory fields sind.
-
-curseforge modpack Import über modpack code / Export zip (weiter ausarbeiten)
 
 
+~~es sollte bei curseforge modpack import nur eines benötigt werden, also modpack code, zip oder url. eins sollte reichen, es tut nicht not, dass alle drei mandatory fields sind.~~
+
+
+
+<b>~~curseforge modpack Import über modpack code / Export zip (weiter ausarbeiten)?~~</b>
+
+
+
+
+
+~~curseforge soll als Standard ausgewählt sein, nicht modrinth~~
 
 
 
@@ -95,6 +101,11 @@ in Details sollen op, banns, whitelist oben als eigener reiter sein, nicht unter
 
 
 es soll möglich sein, die minecraft Version eines bestehenden Servers zu ändern um zb. updates durchzuführen.
+
+
+
+
+~~da man den modloader nicht ändern kann, reicht es, wenn die modsuche ebenfalls auf den jeweiligen modloader beschränkt ist und nur zu dem Server passende mods angezeigt werden und installiert werden können.~~
 
 
 
@@ -120,7 +131,7 @@ für Plugins wird noch bukkti Unterstützung benötigt.
 
 
 
-mod dependicies automatisch mit installieren, wenn eine mod installiert wird
+~~mod dependicies sollen automatisch mit installiert werden, wenn eine mod installiert wird~~
 
 
 
@@ -143,40 +154,4 @@ updates push auf dev pc zu auto (oder manuell) download / update auf server pc
 
 
 localisation (englisch)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
