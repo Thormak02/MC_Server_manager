@@ -136,8 +136,34 @@ def _extract_modrinth_ids_from_url(url: str) -> tuple[str | None, str | None]:
     parsed = urllib.parse.urlparse(url)
     match = _MODRINTH_VERSION_URL_RE.search(parsed.path)
     if not match:
-        return None, None
+        parts = [part for part in parsed.path.split("/") if part]
+        if not parts:
+            return None, None
+        lower_parts = [part.lower() for part in parts]
+
+        project_id: str | None = None
+        version_id: str | None = None
+
+        if "version" in lower_parts:
+            index = lower_parts.index("version")
+            if index + 1 < len(parts):
+                version_id = parts[index + 1]
+            if index - 1 >= 0:
+                parent = parts[index - 1]
+                parent_lower = parent.lower()
+                if parent_lower not in {"project", "mod", "modpack", "plugin", "resourcepack", "shader", "datapack"}:
+                    project_id = parent
+
+        if not project_id and len(parts) >= 2:
+            if lower_parts[0] in {"project", "mod", "modpack", "plugin", "resourcepack", "shader", "datapack"}:
+                project_id = parts[1]
+
+        return project_id, version_id
     return match.group("project"), match.group("version")
+
+
+def _is_http_404_error(exc: Exception) -> bool:
+    return "HTTP 404" in str(exc).upper()
 
 
 def _count_files_under_roots(zip_file: zipfile.ZipFile, roots: Iterable[str]) -> int:
@@ -329,34 +355,51 @@ def _download_modrinth_archive(preview_archive_path: Path, reference: str | None
     version_id = (explicit_version_id or "").strip()
     source_ref = (reference or "").strip() or None
     if source_ref and "modrinth.com" in source_ref.lower():
-        parsed = urllib.parse.urlparse(source_ref)
-        parts = [part for part in parsed.path.split("/") if part]
-        if "version" in (part.lower() for part in parts):
-            version_id = parts[-1]
-        elif parts:
-            source_ref = parts[-1]
+        parsed_project_id, parsed_version_id = _extract_modrinth_ids_from_url(source_ref)
+        if parsed_version_id and not version_id:
+            version_id = parsed_version_id
+        if parsed_project_id:
+            source_ref = parsed_project_id
 
-    if version_id:
-        version_payload = content_service._request_json(
-            f"{content_service.MODRINTH_BASE}/version/{version_id}",
+    def _load_version_payload(resolved_version_id: str) -> dict:
+        payload = content_service._request_json(
+            f"{content_service.MODRINTH_BASE}/version/{resolved_version_id}",
             headers=content_service._modrinth_headers(),
         )
+        if not isinstance(payload, dict):
+            raise ValueError("Ungueltige Antwort von Modrinth (Version).")
+        return payload
+
+    if version_id:
+        version_payload = _load_version_payload(version_id)
     else:
         project_ref = (source_ref or "").strip()
         if not project_ref:
             raise ValueError("Modrinth Referenz oder Version-ID ist erforderlich.")
-        versions_payload = content_service._request_json(
-            f"{content_service.MODRINTH_BASE}/project/{project_ref}/version",
-            headers=content_service._modrinth_headers(),
-        )
-        versions = versions_payload if isinstance(versions_payload, list) else []
-        if not versions:
-            raise ValueError("Keine Modrinth-Versionen fuer dieses Projekt gefunden.")
-        versions.sort(key=lambda item: str(item.get("date_published") or ""), reverse=True)
-        version_payload = versions[0]
-        version_id = str(version_payload.get("id") or "").strip()
-        if not version_id:
-            raise ValueError("Modrinth Version-ID konnte nicht ermittelt werden.")
+        try:
+            versions_payload = content_service._request_json(
+                f"{content_service.MODRINTH_BASE}/project/{project_ref}/version",
+                headers=content_service._modrinth_headers(),
+            )
+            versions = versions_payload if isinstance(versions_payload, list) else []
+            if not versions:
+                raise ValueError("Keine Modrinth-Versionen fuer dieses Projekt gefunden.")
+            versions.sort(key=lambda item: str(item.get("date_published") or ""), reverse=True)
+            version_payload = versions[0]
+            version_id = str(version_payload.get("id") or "").strip()
+            if not version_id:
+                raise ValueError("Modrinth Version-ID konnte nicht ermittelt werden.")
+        except ValueError as exc:
+            # Fallback: einzelne Referenz kann auch direkt eine Version-ID sein.
+            if not _is_http_404_error(exc):
+                raise
+            try:
+                version_payload = _load_version_payload(project_ref)
+                version_id = project_ref
+            except ValueError as version_exc:
+                raise ValueError(
+                    "Modrinth Referenz konnte weder als Projekt noch als Version-ID aufgeloest werden."
+                ) from version_exc
 
     files = version_payload.get("files") or []
     if not isinstance(files, list) or not files:
@@ -375,10 +418,43 @@ def _parse_curseforge_reference(reference: str | None) -> tuple[int | None, int 
     raw = (reference or "").strip()
     if not raw:
         return None, None
+    lowered = raw.lower()
     numbers = [int(match) for match in re.findall(r"\d+", raw)]
-    if len(numbers) < 2:
+    if len(numbers) >= 2:
+        return numbers[-2], numbers[-1]
+    if len(numbers) == 1:
+        single = numbers[0]
+        if "/projects/" in lowered or "project-id" in lowered or "projectid" in lowered:
+            return single, None
+        if "/files/" in lowered or "file-id" in lowered or "fileid" in lowered:
+            return None, single
+        # Ohne klare URL-Hinweise ist eine einzelne Zahl meist die Datei-ID.
+        return None, single
+    if len(numbers) < 1:
         return None, None
-    return numbers[-2], numbers[-1]
+    return None, None
+
+
+def _pick_curseforge_latest_file(files: list[dict]) -> dict | None:
+    best: dict | None = None
+    best_key: tuple[int, str, int] | None = None
+    channel_weight = {1: 3, 2: 2, 3: 1}
+
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        file_id = int(item.get("id") or 0)
+        if file_id <= 0:
+            continue
+        release_type = int(item.get("releaseType") or 3)
+        weight = channel_weight.get(release_type, 0)
+        file_date = str(item.get("fileDate") or "")
+        key = (weight, file_date, file_id)
+        if best is None or (best_key is not None and key > best_key):
+            best = item
+            best_key = key
+
+    return best
 
 
 def _download_curseforge_archive(
@@ -391,28 +467,71 @@ def _download_curseforge_archive(
     ref_project_id, ref_file_id = _parse_curseforge_reference(reference)
     resolved_project_id = int(project_id or 0) or int(ref_project_id or 0)
     resolved_file_id = int(file_id or 0) or int(ref_file_id or 0)
-    if resolved_project_id <= 0 or resolved_file_id <= 0:
-        raise ValueError("CurseForge braucht Projekt-ID und Datei-ID.")
+    if resolved_project_id <= 0 and resolved_file_id <= 0:
+        raise ValueError("CurseForge: Projekt-ID, Datei-ID oder URL ist erforderlich.")
 
-    file_payload = content_service._request_json(
-        f"{content_service.CURSEFORGE_BASE}/v1/mods/{resolved_project_id}/files/{resolved_file_id}",
-        headers=content_service._curseforge_headers(),
-    )
-    data = file_payload.get("data") if isinstance(file_payload, dict) else {}
-    if not isinstance(data, dict):
-        data = {}
-    download_url = str(data.get("downloadUrl") or "").strip()
+    headers = content_service._curseforge_headers()
+    resolved_file_payload: dict[str, object] = {}
+
+    if resolved_file_id > 0 and resolved_project_id <= 0:
+        file_payload = content_service._request_json(
+            f"{content_service.CURSEFORGE_BASE}/v1/mods/files/{resolved_file_id}",
+            headers=headers,
+        )
+        data = file_payload.get("data") if isinstance(file_payload, dict) else {}
+        resolved_file_payload = data if isinstance(data, dict) else {}
+        resolved_project_id = int(resolved_file_payload.get("modId") or 0)
+        if resolved_project_id <= 0:
+            raise ValueError("CurseForge Projekt-ID konnte aus Datei-ID nicht ermittelt werden.")
+    elif resolved_project_id > 0 and resolved_file_id <= 0:
+        files_payload = content_service._request_json(
+            f"{content_service.CURSEFORGE_BASE}/v1/mods/{resolved_project_id}/files?pageSize=50&index=0",
+            headers=headers,
+        )
+        files_data = files_payload.get("data") if isinstance(files_payload, dict) else []
+        files = files_data if isinstance(files_data, list) else []
+        latest = _pick_curseforge_latest_file(files)
+        if latest is None:
+            raise ValueError("Keine CurseForge Dateien fuer das Projekt gefunden.")
+        resolved_file_payload = latest
+        resolved_file_id = int(latest.get("id") or 0)
+        if resolved_file_id <= 0:
+            raise ValueError("CurseForge Datei-ID konnte nicht ermittelt werden.")
+    else:
+        try:
+            file_payload = content_service._request_json(
+                f"{content_service.CURSEFORGE_BASE}/v1/mods/{resolved_project_id}/files/{resolved_file_id}",
+                headers=headers,
+            )
+            data = file_payload.get("data") if isinstance(file_payload, dict) else {}
+            resolved_file_payload = data if isinstance(data, dict) else {}
+        except ValueError:
+            # Fallback fuer Referenzen, die nur eine Datei-ID liefern.
+            file_payload = content_service._request_json(
+                f"{content_service.CURSEFORGE_BASE}/v1/mods/files/{resolved_file_id}",
+                headers=headers,
+            )
+            data = file_payload.get("data") if isinstance(file_payload, dict) else {}
+            resolved_file_payload = data if isinstance(data, dict) else {}
+            payload_project_id = int(resolved_file_payload.get("modId") or 0)
+            if payload_project_id > 0:
+                resolved_project_id = payload_project_id
+
+    if resolved_project_id <= 0 or resolved_file_id <= 0:
+        raise ValueError("CurseForge Projekt-/Datei-ID konnte nicht aufgeloest werden.")
+
+    download_url = str(resolved_file_payload.get("downloadUrl") or "").strip()
     if not download_url:
         url_payload = content_service._request_json(
             f"{content_service.CURSEFORGE_BASE}/v1/mods/{resolved_project_id}/files/{resolved_file_id}/download-url",
-            headers=content_service._curseforge_headers(),
+            headers=headers,
         )
         data2 = url_payload.get("data") if isinstance(url_payload, dict) else {}
         if isinstance(data2, dict):
             download_url = str(data2.get("url") or "").strip()
     if not download_url:
         raise ValueError("CurseForge Download-URL konnte nicht ermittelt werden.")
-    content_service._download_file(download_url, preview_archive_path, headers=content_service._curseforge_headers())
+    content_service._download_file(download_url, preview_archive_path, headers=headers)
     return resolved_project_id, resolved_file_id
 
 

@@ -171,3 +171,116 @@ def test_modpack_search_endpoints_accept_modpack_content_type(client, monkeypatc
     assert versions_response.status_code == 200
     versions_payload = versions_response.json()
     assert versions_payload["versions"][0]["id"] == 999
+
+
+def test_modrinth_download_archive_accepts_single_reference_version_id(monkeypatch, tmp_path):
+    from app.services import modpack_service
+
+    archive_target = tmp_path / "modrinth-pack.mrpack"
+    captured: dict[str, str] = {}
+
+    def fake_request_json(url, headers=None):
+        if "/project/AbCdEfGh/version" in url:
+            raise ValueError("HTTP 404: Not Found")
+        if "/version/AbCdEfGh" in url:
+            return {
+                "id": "AbCdEfGh",
+                "files": [{"url": "https://example.invalid/modrinth-pack.mrpack", "primary": True}],
+            }
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    def fake_download_file(url, target, headers=None):
+        captured["url"] = url
+        target.write_bytes(b"modrinth-pack")
+
+    monkeypatch.setattr(modpack_service.content_service, "_modrinth_headers", lambda: {})
+    monkeypatch.setattr(modpack_service.content_service, "_request_json", fake_request_json)
+    monkeypatch.setattr(modpack_service.content_service, "_download_file", fake_download_file)
+
+    version_id = modpack_service._download_modrinth_archive(
+        archive_target,
+        reference="AbCdEfGh",
+        explicit_version_id=None,
+    )
+    assert version_id == "AbCdEfGh"
+    assert captured["url"] == "https://example.invalid/modrinth-pack.mrpack"
+    assert archive_target.read_bytes() == b"modrinth-pack"
+
+
+def test_curseforge_download_archive_accepts_file_id_only(monkeypatch, tmp_path):
+    from app.services import modpack_service
+
+    archive_target = tmp_path / "curseforge-pack.zip"
+    captured: dict[str, str] = {}
+
+    def fake_request_json(url, headers=None):
+        if "/v1/mods/files/9876543" in url:
+            return {
+                "data": {
+                    "id": 9876543,
+                    "modId": 123456,
+                    "downloadUrl": "https://example.invalid/curseforge-pack.zip",
+                }
+            }
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    def fake_download_file(url, target, headers=None):
+        captured["url"] = url
+        target.write_bytes(b"curseforge-pack")
+
+    monkeypatch.setattr(modpack_service.content_service, "_curseforge_headers", lambda: {})
+    monkeypatch.setattr(modpack_service.content_service, "_request_json", fake_request_json)
+    monkeypatch.setattr(modpack_service.content_service, "_download_file", fake_download_file)
+
+    project_id, file_id = modpack_service._download_curseforge_archive(
+        archive_target,
+        project_id=None,
+        file_id=9876543,
+        reference=None,
+    )
+    assert project_id == 123456
+    assert file_id == 9876543
+    assert captured["url"] == "https://example.invalid/curseforge-pack.zip"
+    assert archive_target.read_bytes() == b"curseforge-pack"
+
+
+def test_curseforge_download_archive_accepts_project_id_only(monkeypatch, tmp_path):
+    from app.services import modpack_service
+
+    archive_target = tmp_path / "curseforge-project-only.zip"
+    captured: dict[str, str] = {}
+
+    def fake_request_json(url, headers=None):
+        if "/v1/mods/123456/files?pageSize=50&index=0" in url:
+            return {
+                "data": [
+                    {"id": 101, "releaseType": 3, "fileDate": "2026-01-01T00:00:00Z"},
+                    {"id": 102, "releaseType": 1, "fileDate": "2025-12-31T23:59:59Z"},
+                    {
+                        "id": 103,
+                        "releaseType": 1,
+                        "fileDate": "2026-02-01T12:00:00Z",
+                        "downloadUrl": "https://example.invalid/curseforge-latest.zip",
+                    },
+                ]
+            }
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    def fake_download_file(url, target, headers=None):
+        captured["url"] = url
+        target.write_bytes(b"curseforge-project")
+
+    monkeypatch.setattr(modpack_service.content_service, "_curseforge_headers", lambda: {})
+    monkeypatch.setattr(modpack_service.content_service, "_request_json", fake_request_json)
+    monkeypatch.setattr(modpack_service.content_service, "_download_file", fake_download_file)
+
+    project_id, file_id = modpack_service._download_curseforge_archive(
+        archive_target,
+        project_id=123456,
+        file_id=None,
+        reference=None,
+    )
+    assert project_id == 123456
+    assert file_id == 103
+    assert captured["url"] == "https://example.invalid/curseforge-latest.zip"
+    assert archive_target.read_bytes() == b"curseforge-project"

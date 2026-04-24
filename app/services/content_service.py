@@ -194,6 +194,99 @@ def _default_content_type(server: Server) -> str:
     return "mod"
 
 
+def _expected_server_loader(server: Server, content_type: str | None = None) -> str | None:
+    normalized = _normalize_loader(server.server_type)
+    if not normalized:
+        return None
+
+    normalized_content_type = (content_type or "").strip().lower()
+    if normalized_content_type == "mod":
+        if normalized in {"forge", "neoforge", "fabric", "quilt"}:
+            return normalized
+        return None
+    if normalized_content_type == "plugin":
+        if normalized in {"paper", "spigot", "bukkit"}:
+            return normalized
+        return None
+    if normalized_content_type == "modpack":
+        if normalized in {"forge", "neoforge", "fabric", "quilt"}:
+            return normalized
+        return None
+
+    if normalized in {"forge", "neoforge", "fabric", "quilt", "paper", "spigot", "bukkit"}:
+        return normalized
+    return None
+
+
+def _expected_server_mc_version(server: Server) -> str | None:
+    value = str(server.mc_version or "").strip()
+    if not value or value.lower() == "unknown":
+        return None
+    return value
+
+
+def _is_loader_compatible(expected_loader: str, available_loaders: set[str]) -> bool:
+    if not expected_loader:
+        return True
+    if not available_loaders:
+        return False
+
+    if expected_loader == "paper":
+        return bool(available_loaders.intersection({"paper", "spigot", "bukkit"}))
+    if expected_loader == "spigot":
+        return bool(available_loaders.intersection({"spigot", "bukkit"}))
+    if expected_loader == "bukkit":
+        return "bukkit" in available_loaders
+    return expected_loader in available_loaders
+
+
+def _is_mc_version_compatible(expected_mc_version: str, available_mc_versions: set[str]) -> bool:
+    if not expected_mc_version:
+        return True
+    if not available_mc_versions:
+        return False
+    if expected_mc_version in available_mc_versions:
+        return True
+    for candidate in available_mc_versions:
+        if candidate.startswith(expected_mc_version + "."):
+            return True
+        if expected_mc_version.startswith(candidate + "."):
+            return True
+    return False
+
+
+def _raise_if_incompatible_with_server(
+    server: Server,
+    content_type: str,
+    *,
+    provider_name: str,
+    available_loaders: set[str],
+    available_mc_versions: set[str],
+) -> None:
+    normalized_content_type = (content_type or "").strip().lower()
+    expected_loader = _expected_server_loader(server, content_type)
+    expected_mc_version = _expected_server_mc_version(server)
+
+    if normalized_content_type in {"mod", "modpack"} and not expected_loader:
+        raise ValueError(
+            "Dieser Servertyp unterstuetzt keine Mod-Installation ueber den Manager."
+        )
+
+    if expected_loader and not _is_loader_compatible(expected_loader, available_loaders):
+        supported = ", ".join(sorted(available_loaders)) if available_loaders else "unbekannt"
+        raise ValueError(
+            f"Inkompatibel fuer diesen Server-Loader ({expected_loader}). "
+            f"Unterstuetzte Loader laut {provider_name}: {supported}."
+        )
+
+    if expected_mc_version and not _is_mc_version_compatible(expected_mc_version, available_mc_versions):
+        supported_versions = ", ".join(sorted(available_mc_versions)) if available_mc_versions else "unbekannt"
+        raise ValueError(
+            f"Inkompatibel fuer Minecraft {expected_mc_version}. "
+            f"Unterstuetzte Versionen laut {provider_name}: {supported_versions}."
+        )
+
+
 def _normalize_release_channel(value: str | None) -> str:
     normalized = (value or "all").strip().lower()
     if normalized not in _VALID_RELEASE_CHANNELS:
@@ -620,6 +713,25 @@ def install_modrinth(
 ) -> InstalledContent:
     url = f"{MODRINTH_BASE}/version/{version_id}"
     payload = _request_json(url, headers=_modrinth_headers())
+    version_loaders = {
+        loader
+        for loader in (
+            _normalize_loader(str(entry or "")) for entry in (payload.get("loaders") or [])
+        )
+        if loader
+    }
+    version_mc_versions = {
+        str(entry).strip()
+        for entry in (payload.get("game_versions") or [])
+        if str(entry).strip()
+    }
+    _raise_if_incompatible_with_server(
+        server,
+        content_type,
+        provider_name="Modrinth",
+        available_loaders=version_loaders,
+        available_mc_versions=version_mc_versions,
+    )
     files = payload.get("files", [])
     if not files:
         raise ValueError("Keine Dateien fuer diese Version gefunden.")
@@ -1137,6 +1249,30 @@ def install_curseforge(
         headers=_curseforge_headers(),
     )
     data = file_payload.get("data", {})
+    raw_game_versions = [
+        str(entry).strip()
+        for entry in (data.get("gameVersions") or [])
+        if str(entry).strip()
+    ]
+    available_loaders = {
+        normalized
+        for normalized in (
+            _normalize_loader(entry) for entry in raw_game_versions
+        )
+        if normalized in {"forge", "neoforge", "fabric", "quilt", "paper", "spigot", "bukkit"}
+    }
+    available_mc_versions = {
+        entry
+        for entry in raw_game_versions
+        if re.match(r"^\d+\.\d+(\.\d+)?([a-zA-Z0-9._-]*)?$", entry)
+    }
+    _raise_if_incompatible_with_server(
+        server,
+        content_type,
+        provider_name="CurseForge",
+        available_loaders=available_loaders,
+        available_mc_versions=available_mc_versions,
+    )
     download_url = data.get("downloadUrl")
     file_name = _safe_file_name(str(data.get("fileName") or ""))
     if not download_url:

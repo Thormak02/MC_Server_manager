@@ -14,8 +14,8 @@
         <div>
             <label for="provider">Provider</label>
             <select id="provider">
+                <option value="curseforge" selected>CurseForge</option>
                 <option value="modrinth">Modrinth</option>
-                <option value="curseforge">CurseForge</option>
             </select>
         </div>
         <div>
@@ -135,6 +135,8 @@
         mcVersion: {{ (server.mc_version or "") | tojson }},
         loader: {{ (server.server_type if server.server_type != "vanilla" else "") | tojson }},
     };
+    const lockedMcVersion = (defaults.mcVersion || "").trim();
+    const lockedLoader = (defaults.loader || "").trim();
     const providerSelect = document.getElementById("provider");
     const contentTypeSelect = document.getElementById("content_type");
     const queryInput = document.getElementById("query");
@@ -486,10 +488,10 @@
     }
 
     function buildSearchParams() {
-        const provider = providerSelect ? providerSelect.value : "modrinth";
+        const provider = providerSelect ? providerSelect.value : "curseforge";
         const query = queryInput ? queryInput.value.trim() : "";
-        const mcVersions = mcVersionFilter.getValues();
-        const loaders = loaderFilter.getValues();
+        const mcVersions = lockedMcVersion ? [lockedMcVersion] : mcVersionFilter.getValues();
+        const loaders = lockedLoader ? [lockedLoader] : loaderFilter.getValues();
         const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
         const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
         const sortBy = sortBySelect ? sortBySelect.value : "relevance";
@@ -517,7 +519,7 @@
     }
 
     async function loadFilterOptions() {
-        const provider = providerSelect ? providerSelect.value : "modrinth";
+        const provider = providerSelect ? providerSelect.value : "curseforge";
         const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
         try {
             const data = await fetchJson(
@@ -525,6 +527,7 @@
                     new URLSearchParams({
                         provider,
                         content_type: contentType,
+                        server_id: String(serverId),
                     }).toString()
             );
             const categories = Array.isArray(data.categories) ? data.categories : [];
@@ -538,25 +541,29 @@
                 }))
             );
             mcVersionFilter.setOptions(
-                mcVersions.map((value) => ({
+                (lockedMcVersion ? [lockedMcVersion] : mcVersions).map((value) => ({
                     value: String(value),
                     label: String(value),
                 }))
             );
             loaderFilter.setOptions(
-                loaders.map((value) => ({
+                (lockedLoader ? [lockedLoader] : loaders).map((value) => ({
                     value: String(value),
                     label: String(value),
                 }))
             );
 
+            if (lockedMcVersion) {
+                mcVersionFilter.setValues([lockedMcVersion]);
+            } else if (!defaultSelectionsApplied && defaults.mcVersion) {
+                mcVersionFilter.setValues([defaults.mcVersion]);
+            }
+            if (lockedLoader) {
+                loaderFilter.setValues([lockedLoader]);
+            } else if (!defaultSelectionsApplied && defaults.loader) {
+                loaderFilter.setValues([defaults.loader]);
+            }
             if (!defaultSelectionsApplied) {
-                if (defaults.mcVersion) {
-                    mcVersionFilter.setValues([defaults.mcVersion]);
-                }
-                if (defaults.loader) {
-                    loaderFilter.setValues([defaults.loader]);
-                }
                 defaultSelectionsApplied = true;
             }
         } catch (_) {
@@ -602,6 +609,7 @@
         if (searchStatus && reset) searchStatus.textContent = "Suche ...";
         const urlParams = new URLSearchParams({
             provider: params.provider,
+            server_id: String(serverId),
             query: params.query,
             mc_version: params.mcVersions.join(","),
             loader: params.loaders.join(","),
@@ -702,8 +710,9 @@
     async function loadVersions(card) {
         const projectId = card.dataset.projectId;
         const provider = card.dataset.provider;
-        const mcVersion = mcVersionFilter.getValues().join(",");
-        const loader = loaderFilter.getValues().join(",");
+        const searchParams = buildSearchParams();
+        const mcVersion = searchParams.mcVersions.join(",");
+        const loader = searchParams.loaders.join(",");
         const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
         const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
         const select = card.querySelector(".version-select");
@@ -716,6 +725,7 @@
                 "/api/content/modrinth/versions?" +
                 new URLSearchParams({
                     project_id: projectId,
+                    server_id: String(serverId),
                     mc_version: mcVersion,
                     loader,
                     release_channel: releaseChannel,
@@ -725,6 +735,7 @@
                 "/api/content/curseforge/versions?" +
                 new URLSearchParams({
                     project_id: projectId,
+                    server_id: String(serverId),
                     mc_version: mcVersion,
                     loader,
                     content_type: contentType,
@@ -819,8 +830,9 @@
         const select = row.querySelector(".installed-version-select");
         if (!select || !provider || !projectId) return;
 
-        const mcVersion = mcVersionFilter.getValues().join(",");
-        const loader = loaderFilter.getValues().join(",");
+        const searchParams = buildSearchParams();
+        const mcVersion = searchParams.mcVersions.join(",");
+        const loader = searchParams.loaders.join(",");
         const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
 
         let url = "";
@@ -829,6 +841,7 @@
                 "/api/content/modrinth/versions?" +
                 new URLSearchParams({
                     project_id: projectId,
+                    server_id: String(serverId),
                     mc_version: mcVersion,
                     loader,
                     release_channel: releaseChannel,
@@ -838,6 +851,7 @@
                 "/api/content/curseforge/versions?" +
                 new URLSearchParams({
                     project_id: projectId,
+                    server_id: String(serverId),
                     mc_version: mcVersion,
                     loader,
                     content_type: contentType,

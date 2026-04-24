@@ -43,6 +43,23 @@ def _normalize_paging(offset: int, limit: int) -> tuple[int, int]:
     return normalized_offset, normalized_limit
 
 
+def _empty_search_payload(offset: int, limit: int) -> dict:
+    return {
+        "results": [],
+        "offset": offset,
+        "limit": limit,
+        "total": 0,
+        "has_more": False,
+    }
+
+
+def _is_content_type_supported_for_server(server, content_type: str) -> bool:
+    normalized_content_type = (content_type or "").strip().lower()
+    if normalized_content_type not in {"mod", "plugin", "modpack"}:
+        return True
+    return content_service._expected_server_loader(server, normalized_content_type) is not None
+
+
 @router.get("/servers/{server_id}/content", response_class=HTMLResponse)
 def server_content_page(request: Request, server_id: int, db: Session = Depends(get_db)):
     try:
@@ -81,6 +98,7 @@ def content_search(
     request: Request,
     provider: str,
     query: str = "",
+    server_id: int | None = None,
     mc_version: str | None = None,
     loader: str | None = None,
     content_type: str = "mod",
@@ -97,6 +115,17 @@ def content_search(
 
     provider = provider.strip().lower()
     offset, limit = _normalize_paging(offset, limit)
+    if server_id is not None:
+        server = _ensure_server_access(db, current_user, server_id)
+        if not _is_content_type_supported_for_server(server, content_type):
+            return JSONResponse(_empty_search_payload(offset, limit))
+        server_loader = content_service._expected_server_loader(server, content_type)
+        if server_loader:
+            loader = server_loader
+        server_mc_version = content_service._expected_server_mc_version(server)
+        if server_mc_version:
+            mc_version = server_mc_version
+
     if provider == "modrinth":
         try:
             results = content_service.search_modrinth(
@@ -169,6 +198,7 @@ def content_filter_options(
     request: Request,
     provider: str,
     content_type: str = "mod",
+    server_id: int | None = None,
     db: Session = Depends(get_db),
 ):
     current_user = _ensure_user(request, db)
@@ -176,6 +206,9 @@ def content_filter_options(
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
 
     normalized_provider = provider.strip().lower()
+    server = None
+    if server_id is not None:
+        server = _ensure_server_access(db, current_user, server_id)
     try:
         if normalized_provider == "modrinth":
             categories = content_service.list_modrinth_categories(content_type)
@@ -190,6 +223,22 @@ def content_filter_options(
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
 
+    if server is not None:
+        if not _is_content_type_supported_for_server(server, content_type):
+            return JSONResponse(
+                {
+                    "categories": [],
+                    "mc_versions": [],
+                    "loaders": [],
+                }
+            )
+        server_loader = content_service._expected_server_loader(server, content_type)
+        if server_loader:
+            loaders = [server_loader]
+        server_mc_version = content_service._expected_server_mc_version(server)
+        if server_mc_version:
+            mc_versions = [server_mc_version]
+
     return JSONResponse(
         {
             "categories": categories,
@@ -203,6 +252,7 @@ def content_filter_options(
 def modrinth_versions(
     request: Request,
     project_id: str,
+    server_id: int | None = None,
     mc_version: str | None = None,
     loader: str | None = None,
     release_channel: str = "all",
@@ -211,6 +261,17 @@ def modrinth_versions(
     current_user = _ensure_user(request, db)
     if current_user is None:
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    if server_id is not None:
+        server = _ensure_server_access(db, current_user, server_id)
+        if not _is_content_type_supported_for_server(server, "mod"):
+            return JSONResponse({"versions": []})
+        server_loader = content_service._expected_server_loader(server, "mod")
+        if server_loader:
+            loader = server_loader
+        server_mc_version = content_service._expected_server_mc_version(server)
+        if server_mc_version:
+            mc_version = server_mc_version
 
     try:
         versions = content_service.list_modrinth_versions(
@@ -228,6 +289,7 @@ def modrinth_versions(
 def curseforge_versions(
     request: Request,
     project_id: int,
+    server_id: int | None = None,
     mc_version: str | None = None,
     loader: str | None = None,
     content_type: str = "mod",
@@ -237,6 +299,17 @@ def curseforge_versions(
     current_user = _ensure_user(request, db)
     if current_user is None:
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    if server_id is not None:
+        server = _ensure_server_access(db, current_user, server_id)
+        if not _is_content_type_supported_for_server(server, content_type):
+            return JSONResponse({"versions": []})
+        server_loader = content_service._expected_server_loader(server, content_type)
+        if server_loader:
+            loader = server_loader
+        server_mc_version = content_service._expected_server_mc_version(server)
+        if server_mc_version:
+            mc_version = server_mc_version
 
     try:
         versions = content_service.list_curseforge_versions(
