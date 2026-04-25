@@ -10,11 +10,12 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Iterable
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.installed_content import InstalledContent
+from app.models.pending_modpack_install import PendingModpackInstall
 from app.models.server import Server
 from app.schemas.modpack import (
     ModpackExecuteResponse,
@@ -166,6 +167,69 @@ def _is_http_404_error(exc: Exception) -> bool:
     return "HTTP 404" in str(exc).upper()
 
 
+def _is_curseforge_distribution_blocked_error(message: str) -> bool:
+    normalized = message.lower()
+    return (
+        "allowmoddistribution=false" in normalized
+        or "download per curseforge api" in normalized
+    )
+
+
+def _looks_like_server_pack_name(value: str) -> bool:
+    normalized = value.strip().lower()
+    if not normalized:
+        return False
+    markers = ("server", "serverpack", "server-pack", "serverfiles", "server-files")
+    return any(marker in normalized for marker in markers)
+
+
+def _pick_modrinth_archive_file(files: list[dict], *, prefer_server_pack: bool) -> tuple[dict | None, bool]:
+    candidates = [item for item in files if isinstance(item, dict)]
+    if not candidates:
+        return None, False
+
+    if prefer_server_pack:
+        for item in candidates:
+            file_name = str(item.get("filename") or item.get("name") or "").strip()
+            if _looks_like_server_pack_name(file_name):
+                return item, True
+
+    primary = next((item for item in candidates if bool(item.get("primary"))), candidates[0])
+    file_name = str(primary.get("filename") or primary.get("name") or "").strip()
+    return primary, _looks_like_server_pack_name(file_name)
+
+
+def _modrinth_version_has_server_pack(version_payload: dict) -> bool:
+    if not isinstance(version_payload, dict):
+        return False
+    files = version_payload.get("files")
+    if isinstance(files, list):
+        for item in files:
+            if not isinstance(item, dict):
+                continue
+            file_name = str(item.get("filename") or item.get("name") or "").strip()
+            if _looks_like_server_pack_name(file_name):
+                return True
+    version_name = str(version_payload.get("name") or version_payload.get("version_number") or "").strip()
+    return _looks_like_server_pack_name(version_name)
+
+
+def _is_modrinth_client_only_entry(file_item: dict) -> bool:
+    if not isinstance(file_item, dict):
+        return False
+    env = file_item.get("env")
+    if not isinstance(env, dict):
+        return False
+    server = str(env.get("server") or "").strip().lower()
+    return server == "unsupported"
+
+
+def _is_curseforge_server_pack_file(file_payload: dict[str, object]) -> bool:
+    if not isinstance(file_payload, dict):
+        return False
+    return bool(file_payload.get("isServerPack"))
+
+
 def _count_files_under_roots(zip_file: zipfile.ZipFile, roots: Iterable[str]) -> int:
     prefixes = [f"{root.strip('/').replace('\\', '/')}/" for root in roots if root.strip("/")]
     if not prefixes:
@@ -180,7 +244,14 @@ def _count_files_under_roots(zip_file: zipfile.ZipFile, roots: Iterable[str]) ->
     return count
 
 
-def _parse_modrinth_archive(token: str, archive_path: Path, source: str, source_ref: str | None) -> ModpackPreviewSnapshot:
+def _parse_modrinth_archive(
+    token: str,
+    archive_path: Path,
+    source: str,
+    source_ref: str | None,
+    *,
+    client_filter_fallback: bool = False,
+) -> ModpackPreviewSnapshot:
     warnings: list[str] = []
     with zipfile.ZipFile(archive_path, "r") as zipped:
         try:
@@ -215,6 +286,9 @@ def _parse_modrinth_archive(token: str, archive_path: Path, source: str, source_
             normalized_path = safe_path.as_posix().lower()
             if not (normalized_path.startswith("mods/") or normalized_path.startswith("plugins/")):
                 continue
+            if client_filter_fallback and _is_modrinth_client_only_entry(file_item):
+                warnings.append(f"Client-only Datei uebersprungen: {safe_path.as_posix()}")
+                continue
 
             downloads = file_item.get("downloads") or []
             if not isinstance(downloads, list):
@@ -238,6 +312,7 @@ def _parse_modrinth_archive(token: str, archive_path: Path, source: str, source_
                     path=safe_path.as_posix(),
                     provider_name="modrinth",
                     content_type="plugin" if normalized_path.startswith("plugins/") else "mod",
+                    required=True,
                     project_id=project_id,
                     version_id=version_id,
                     download_url=download_url,
@@ -261,11 +336,19 @@ def _parse_modrinth_archive(token: str, archive_path: Path, source: str, source_
             entries=entries,
             override_roots=override_roots,
             override_file_count=override_file_count,
+            client_filter_fallback=client_filter_fallback,
             warnings=warnings,
         )
 
 
-def _parse_curseforge_archive(token: str, archive_path: Path, source: str, source_ref: str | None) -> ModpackPreviewSnapshot:
+def _parse_curseforge_archive(
+    token: str,
+    archive_path: Path,
+    source: str,
+    source_ref: str | None,
+    *,
+    client_filter_fallback: bool = False,
+) -> ModpackPreviewSnapshot:
     warnings: list[str] = []
     with zipfile.ZipFile(archive_path, "r") as zipped:
         try:
@@ -310,6 +393,7 @@ def _parse_curseforge_archive(token: str, archive_path: Path, source: str, sourc
                     path=f"mods/{project_id}-{file_id}.jar",
                     provider_name="curseforge",
                     content_type="mod",
+                    required=bool(file_item.get("required", True)),
                     project_id=str(project_id),
                     version_id=str(file_id),
                 )
@@ -333,11 +417,19 @@ def _parse_curseforge_archive(token: str, archive_path: Path, source: str, sourc
             entries=entries,
             override_roots=override_roots,
             override_file_count=override_file_count,
+            client_filter_fallback=client_filter_fallback,
             warnings=warnings,
         )
 
 
-def _parse_archive(token: str, archive_path: Path, source: str, source_ref: str | None) -> ModpackPreviewSnapshot:
+def _parse_archive(
+    token: str,
+    archive_path: Path,
+    source: str,
+    source_ref: str | None,
+    *,
+    client_filter_fallback: bool = False,
+) -> ModpackPreviewSnapshot:
     try:
         with zipfile.ZipFile(archive_path, "r") as zipped:
             names = {name.replace("\\", "/") for name in zipped.namelist()}
@@ -345,13 +437,31 @@ def _parse_archive(token: str, archive_path: Path, source: str, source_ref: str 
         raise ValueError("Ungueltiges Archiv. Bitte ZIP/MRPACK verwenden.") from exc
 
     if "modrinth.index.json" in names:
-        return _parse_modrinth_archive(token, archive_path, source, source_ref)
+        return _parse_modrinth_archive(
+            token,
+            archive_path,
+            source,
+            source_ref,
+            client_filter_fallback=client_filter_fallback,
+        )
     if "manifest.json" in names:
-        return _parse_curseforge_archive(token, archive_path, source, source_ref)
+        return _parse_curseforge_archive(
+            token,
+            archive_path,
+            source,
+            source_ref,
+            client_filter_fallback=client_filter_fallback,
+        )
     raise ValueError("Archiv enthaelt weder modrinth.index.json noch manifest.json.")
 
 
-def _download_modrinth_archive(preview_archive_path: Path, reference: str | None, explicit_version_id: str | None) -> str:
+def _download_modrinth_archive(
+    preview_archive_path: Path,
+    reference: str | None,
+    explicit_version_id: str | None,
+    *,
+    decision: dict[str, object] | None = None,
+) -> str:
     version_id = (explicit_version_id or "").strip()
     source_ref = (reference or "").strip() or None
     if source_ref and "modrinth.com" in source_ref.lower():
@@ -370,6 +480,7 @@ def _download_modrinth_archive(preview_archive_path: Path, reference: str | None
             raise ValueError("Ungueltige Antwort von Modrinth (Version).")
         return payload
 
+    selected_server_pack = False
     if version_id:
         version_payload = _load_version_payload(version_id)
     else:
@@ -385,7 +496,12 @@ def _download_modrinth_archive(preview_archive_path: Path, reference: str | None
             if not versions:
                 raise ValueError("Keine Modrinth-Versionen fuer dieses Projekt gefunden.")
             versions.sort(key=lambda item: str(item.get("date_published") or ""), reverse=True)
-            version_payload = versions[0]
+            server_versions = [item for item in versions if _modrinth_version_has_server_pack(item)]
+            if server_versions:
+                version_payload = server_versions[0]
+                selected_server_pack = True
+            else:
+                version_payload = versions[0]
             version_id = str(version_payload.get("id") or "").strip()
             if not version_id:
                 raise ValueError("Modrinth Version-ID konnte nicht ermittelt werden.")
@@ -404,13 +520,17 @@ def _download_modrinth_archive(preview_archive_path: Path, reference: str | None
     files = version_payload.get("files") or []
     if not isinstance(files, list) or not files:
         raise ValueError("Die Modrinth-Version enthaelt keine herunterladbare Datei.")
-    primary = next((item for item in files if isinstance(item, dict) and item.get("primary")), files[0])
-    if not isinstance(primary, dict):
+    selected_file, file_is_server = _pick_modrinth_archive_file(files, prefer_server_pack=True)
+    if not isinstance(selected_file, dict):
         raise ValueError("Modrinth Archivdatei konnte nicht gelesen werden.")
-    download_url = str(primary.get("url") or "").strip()
+    selected_server_pack = selected_server_pack or file_is_server
+    download_url = str(selected_file.get("url") or "").strip()
     if not download_url:
         raise ValueError("Download-URL fuer Modrinth Modpack fehlt.")
     content_service._download_file(download_url, preview_archive_path, headers=content_service._modrinth_headers())
+    if decision is not None:
+        decision["server_pack_selected"] = bool(selected_server_pack)
+        decision["client_filter_fallback"] = not bool(selected_server_pack)
     return version_id
 
 
@@ -435,9 +555,9 @@ def _parse_curseforge_reference(reference: str | None) -> tuple[int | None, int 
     return None, None
 
 
-def _pick_curseforge_latest_file(files: list[dict]) -> dict | None:
+def _pick_curseforge_latest_file(files: list[dict], *, prefer_server_pack: bool = False) -> tuple[dict | None, bool]:
     best: dict | None = None
-    best_key: tuple[int, str, int] | None = None
+    best_key: tuple[int, int, str, int] | None = None
     channel_weight = {1: 3, 2: 2, 3: 1}
 
     for item in files:
@@ -448,13 +568,16 @@ def _pick_curseforge_latest_file(files: list[dict]) -> dict | None:
             continue
         release_type = int(item.get("releaseType") or 3)
         weight = channel_weight.get(release_type, 0)
+        server_weight = 1 if bool(item.get("isServerPack")) else 0
+        if not prefer_server_pack:
+            server_weight = 0
         file_date = str(item.get("fileDate") or "")
-        key = (weight, file_date, file_id)
+        key = (server_weight, weight, file_date, file_id)
         if best is None or (best_key is not None and key > best_key):
             best = item
             best_key = key
 
-    return best
+    return best, bool(best and best.get("isServerPack"))
 
 
 def _download_curseforge_archive(
@@ -463,6 +586,7 @@ def _download_curseforge_archive(
     project_id: int | None,
     file_id: int | None,
     reference: str | None,
+    decision: dict[str, object] | None = None,
 ) -> tuple[int, int]:
     ref_project_id, ref_file_id = _parse_curseforge_reference(reference)
     resolved_project_id = int(project_id or 0) or int(ref_project_id or 0)
@@ -472,6 +596,7 @@ def _download_curseforge_archive(
 
     headers = content_service._curseforge_headers()
     resolved_file_payload: dict[str, object] = {}
+    selected_server_pack = False
 
     if resolved_file_id > 0 and resolved_project_id <= 0:
         file_payload = content_service._request_json(
@@ -490,7 +615,7 @@ def _download_curseforge_archive(
         )
         files_data = files_payload.get("data") if isinstance(files_payload, dict) else []
         files = files_data if isinstance(files_data, list) else []
-        latest = _pick_curseforge_latest_file(files)
+        latest, selected_server_pack = _pick_curseforge_latest_file(files, prefer_server_pack=True)
         if latest is None:
             raise ValueError("Keine CurseForge Dateien fuer das Projekt gefunden.")
         resolved_file_payload = latest
@@ -520,6 +645,19 @@ def _download_curseforge_archive(
     if resolved_project_id <= 0 or resolved_file_id <= 0:
         raise ValueError("CurseForge Projekt-/Datei-ID konnte nicht aufgeloest werden.")
 
+    selected_server_pack = selected_server_pack or _is_curseforge_server_pack_file(resolved_file_payload)
+    server_pack_file_id = int(resolved_file_payload.get("serverPackFileId") or 0)
+    if not selected_server_pack and server_pack_file_id > 0:
+        server_payload = content_service._request_json(
+            f"{content_service.CURSEFORGE_BASE}/v1/mods/{resolved_project_id}/files/{server_pack_file_id}",
+            headers=headers,
+        )
+        server_data = server_payload.get("data") if isinstance(server_payload, dict) else {}
+        if isinstance(server_data, dict) and int(server_data.get("id") or 0) > 0:
+            resolved_file_payload = server_data
+            resolved_file_id = int(server_data.get("id") or 0)
+            selected_server_pack = _is_curseforge_server_pack_file(server_data) or True
+
     download_url = str(resolved_file_payload.get("downloadUrl") or "").strip()
     if not download_url:
         url_payload = content_service._request_json(
@@ -532,6 +670,9 @@ def _download_curseforge_archive(
     if not download_url:
         raise ValueError("CurseForge Download-URL konnte nicht ermittelt werden.")
     content_service._download_file(download_url, preview_archive_path, headers=headers)
+    if decision is not None:
+        decision["server_pack_selected"] = bool(selected_server_pack)
+        decision["client_filter_fallback"] = not bool(selected_server_pack)
     return resolved_project_id, resolved_file_id
 
 
@@ -581,6 +722,7 @@ def create_preview(
     preview_archive = _archive_file(token)
 
     source_ref: str | None = None
+    client_filter_fallback = False
     try:
         if normalized_source == "local_archive":
             if not local_archive_bytes:
@@ -588,22 +730,38 @@ def create_preview(
             preview_archive.write_bytes(local_archive_bytes)
             source_ref = (local_archive_name or "local_archive").strip() or "local_archive"
         elif normalized_source == "modrinth":
+            modrinth_decision: dict[str, object] = {}
             resolved_version_id = _download_modrinth_archive(
                 preview_archive,
                 reference=modrinth_reference,
                 explicit_version_id=modrinth_version_id,
+                decision=modrinth_decision,
             )
             source_ref = resolved_version_id
+            client_filter_fallback = bool(modrinth_decision.get("client_filter_fallback"))
         else:
+            curseforge_decision: dict[str, object] = {}
             project_id, file_id = _download_curseforge_archive(
                 preview_archive,
                 project_id=curseforge_project_id,
                 file_id=curseforge_file_id,
                 reference=curseforge_reference,
+                decision=curseforge_decision,
             )
             source_ref = f"{project_id}:{file_id}"
+            client_filter_fallback = bool(curseforge_decision.get("client_filter_fallback"))
 
-        snapshot = _parse_archive(token, preview_archive, normalized_source, source_ref)
+        snapshot = _parse_archive(
+            token,
+            preview_archive,
+            normalized_source,
+            source_ref,
+            client_filter_fallback=client_filter_fallback,
+        )
+        if client_filter_fallback:
+            snapshot.warnings.append(
+                "Kein dediziertes Server-Modpack gefunden; Fallback auf Client-Pack mit Client-only-Filter."
+            )
         _write_snapshot(snapshot)
         return _snapshot_to_response(snapshot)
     except Exception:
@@ -630,6 +788,126 @@ def discard_preview(token: str) -> None:
     if not normalized:
         return
     shutil.rmtree(_token_dir(normalized), ignore_errors=True)
+
+
+def get_pending_install(db: Session, server_id: int) -> PendingModpackInstall | None:
+    return db.scalar(
+        select(PendingModpackInstall).where(PendingModpackInstall.server_id == int(server_id))
+    )
+
+
+def queue_pending_install(
+    db: Session,
+    *,
+    server: Server,
+    snapshot: ModpackPreviewSnapshot,
+    requested_by_user_id: int | None,
+) -> PendingModpackInstall:
+    pending = get_pending_install(db, server.id)
+    previous_token: str | None = None
+    if pending is None:
+        pending = PendingModpackInstall(
+            server_id=server.id,
+            preview_token=snapshot.token,
+            pack_name=snapshot.pack_name,
+            requested_by_user_id=requested_by_user_id,
+            last_error=None,
+        )
+    else:
+        previous_token = pending.preview_token
+        pending.preview_token = snapshot.token
+        pending.pack_name = snapshot.pack_name
+        pending.requested_by_user_id = requested_by_user_id
+        pending.last_error = None
+    db.add(pending)
+    db.commit()
+    db.refresh(pending)
+    if previous_token and previous_token != snapshot.token:
+        discard_preview(previous_token)
+    audit_service.log_action(
+        db,
+        action="modpack.install_queued",
+        user_id=requested_by_user_id,
+        server_id=server.id,
+        details=f"pack={snapshot.pack_name} token={snapshot.token}",
+    )
+    return pending
+
+
+def delete_pending_install_for_server(
+    db: Session,
+    server_id: int,
+    *,
+    discard_preview_archive: bool = True,
+) -> str | None:
+    pending = get_pending_install(db, server_id)
+    if pending is None:
+        return None
+    token = pending.preview_token
+    db.delete(pending)
+    db.commit()
+    if discard_preview_archive:
+        discard_preview(token)
+    return token
+
+
+def run_pending_install_for_server(
+    db: Session,
+    *,
+    server: Server,
+    initiated_by_user_id: int | None,
+) -> ModpackExecuteResponse | None:
+    pending = get_pending_install(db, server.id)
+    if pending is None:
+        return None
+
+    try:
+        snapshot = load_preview(pending.preview_token)
+    except Exception as exc:
+        pending.last_error = str(exc)
+        db.add(pending)
+        db.commit()
+        raise ValueError(f"Modpack-Preview nicht mehr verfuegbar: {exc}") from exc
+
+    try:
+        # Wiederholte Versuche sollen deterministisch bleiben.
+        _reset_server_content_before_install(db, server)
+        result = execute_preview(
+            db,
+            snapshot=snapshot,
+            server=server,
+            initiated_by_user_id=initiated_by_user_id,
+            created_server=False,
+            notes=["Modpack wurde beim ersten Start installiert."],
+        )
+    except Exception as exc:
+        pending.last_error = str(exc)
+        db.add(pending)
+        db.commit()
+        raise
+
+    token = pending.preview_token
+    db.delete(pending)
+    db.commit()
+    discard_preview(token)
+    return result
+
+
+def _reset_server_content_before_install(db: Session, server: Server) -> None:
+    base_path = Path(server.base_path).expanduser().resolve()
+    if not base_path.exists() or not base_path.is_dir():
+        return
+
+    for subdir in ("mods", "plugins"):
+        target = (base_path / subdir).resolve()
+        if base_path not in [target, *target.parents]:
+            continue
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+        target.mkdir(parents=True, exist_ok=True)
+
+    db.execute(delete(InstalledContent).where(InstalledContent.server_id == server.id))
+    db.commit()
 
 
 def _download_direct_entry(entry: ModpackImportEntry, target_file: Path) -> None:
@@ -741,6 +1019,7 @@ def execute_preview(
     installed_count = 0
 
     for entry in snapshot.entries:
+        is_required = bool(entry.required)
         try:
             if (
                 entry.provider_name == "modrinth"
@@ -763,6 +1042,7 @@ def execute_preview(
                 and entry.project_id
                 and entry.version_id
             ):
+                apply_client_filter = bool(snapshot.client_filter_fallback or snapshot.pack_format == "curseforge")
                 content_service.install_curseforge(
                     db,
                     server,
@@ -770,6 +1050,10 @@ def execute_preview(
                     int(entry.version_id),
                     entry.content_type,
                     initiated_by_user_id,
+                    resolve_dependencies=True,
+                    enforce_compatibility=False,
+                    keep_existing_dependency_version=True,
+                    client_filter_fallback=apply_client_filter,
                 )
                 installed_count += 1
                 continue
@@ -789,7 +1073,38 @@ def execute_preview(
             )
             installed_count += 1
         except Exception as exc:
-            warnings.append(f"{entry.name}: {exc}")
+            message = str(exc or "")
+            if (
+                entry.provider_name == "curseforge"
+                and "Nicht serverrelevanter CurseForge-Inhalt" in message
+            ):
+                warnings.append(
+                    f"Eintrag uebersprungen ({entry.name}): nicht serverrelevant ({message})."
+                )
+                continue
+            if (
+                snapshot.client_filter_fallback
+                and entry.provider_name == "curseforge"
+                and "Client-only CurseForge-Inhalt" in message
+            ):
+                warnings.append(
+                    f"Eintrag uebersprungen ({entry.name}): client-only Mod im Fallback ({message})."
+                )
+                continue
+            if (
+                entry.provider_name == "curseforge"
+                and _is_curseforge_distribution_blocked_error(message)
+            ):
+                warnings.append(
+                    "Eintrag uebersprungen "
+                    f"({entry.name}): CurseForge erlaubt keinen API-Download "
+                    "(allowModDistribution=false). Falls noetig, Mod manuell "
+                    "aus dem Modpack/Projekt beziehen."
+                )
+                continue
+            if is_required:
+                raise ValueError(f"Pflicht-Eintrag fehlgeschlagen ({entry.name}): {exc}") from exc
+            warnings.append(f"Optionaler Eintrag fehlgeschlagen ({entry.name}): {exc}")
 
     overrides_copied, override_warnings = _apply_overrides(
         snapshot=snapshot,

@@ -13,7 +13,7 @@ from app.models.installed_content import InstalledContent
 from app.models.scheduled_job import ScheduledJob
 from app.models.server_permission import ServerPermission
 from app.schemas.server import ServerImportConfirm
-from app.services import audit_service, backup_service
+from app.services import audit_service, backup_service, modpack_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.java_profile_service import list_java_profiles
 from app.services.process_service import (
@@ -55,6 +55,25 @@ def _to_bool(raw: str | None) -> bool:
         return False
     normalized = raw.strip().lower()
     return normalized in {"1", "true", "on", "yes"}
+
+
+def _normalize_confirm_name(raw: str | None) -> str:
+    if raw is None:
+        return ""
+    cleaned = raw.replace("\u00a0", " ").replace("\u200b", " ")
+    return " ".join(cleaned.strip().split())
+
+
+def _matches_confirm_name(confirm_name: str | None, server_name: str) -> bool:
+    expected = _normalize_confirm_name(server_name).casefold()
+    provided = _normalize_confirm_name(confirm_name).casefold()
+    if provided == expected:
+        return True
+    if ":" in provided:
+        _, tail = provided.split(":", 1)
+        if tail.strip() == expected:
+            return True
+    return False
 
 
 def _require_logged_in(request: Request, db: Session):
@@ -489,7 +508,7 @@ def delete_server_action(
     if server is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
 
-    if confirm_name.strip() != server.name:
+    if not _matches_confirm_name(confirm_name, server.name):
         push_flash(request, "Servername stimmt nicht ueberein.", "error")
         return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
 
@@ -526,6 +545,12 @@ def delete_server_action(
 
     for backup in backup_service.list_backups_for_server(db, server.id):
         backup_service.delete_backup(db, backup=backup, initiated_by_user_id=current_user.id)
+
+    modpack_service.delete_pending_install_for_server(
+        db,
+        server.id,
+        discard_preview_archive=True,
+    )
 
     db.execute(delete(InstalledContent).where(InstalledContent.server_id == server.id))
     db.execute(delete(ServerPermission).where(ServerPermission.server_id == server.id))

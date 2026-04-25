@@ -33,6 +33,21 @@ _CURSEFORGE_CLASS_IDS = {
     "modpack": 4471,
 }
 _CURSEFORGE_REQUIRED_RELATION_TYPES = {3, 6}
+_CURSEFORGE_CLIENT_ONLY_FALLBACK_KEYS = {
+    "drippyloadingscreen",
+    "fancymenu",
+    "iris",
+    "euphoriapatcher",
+    "borderlesswindow",
+    "darkmodeeverywhere",
+    "notenoughrecipebook",
+    "keybindspurger",
+    "keybindbundles",
+    "controlling",
+    "configured",
+    "searchables",
+    "mousetweaks",
+}
 _MAX_DEPENDENCY_DEPTH = 24
 _LOADER_ALIASES = {
     "forge": "forge",
@@ -143,6 +158,22 @@ def _normalize_filter_values(value: str | None, *, normalize_loader: bool = Fals
         seen.add(key)
         result.append(token)
     return result
+
+
+def _normalized_lookup_key(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _is_known_client_only_curseforge_mod(mod_data: dict[str, object]) -> bool:
+    candidates = [
+        str(mod_data.get("slug") or "").strip(),
+        str(mod_data.get("name") or "").strip(),
+    ]
+    for candidate in candidates:
+        key = _normalized_lookup_key(candidate)
+        if key and key in _CURSEFORGE_CLIENT_ONLY_FALLBACK_KEYS:
+            return True
+    return False
 
 
 def _request_json(url: str, headers: dict[str, str] | None = None) -> dict | list:
@@ -1436,6 +1467,10 @@ def install_curseforge(
     file_id: int,
     content_type: str,
     user_id: int | None,
+    resolve_dependencies: bool = True,
+    enforce_compatibility: bool = True,
+    keep_existing_dependency_version: bool = False,
+    client_filter_fallback: bool = False,
     _processing: set[tuple[str, str]] | None = None,
     _dependency_depth: int = 0,
     _is_dependency: bool = False,
@@ -1467,6 +1502,24 @@ def install_curseforge(
 
     processing.add(stack_key)
     try:
+        mod_payload = _request_json(
+            f"{CURSEFORGE_BASE}/v1/mods/{normalized_mod_id}",
+            headers=_curseforge_headers(),
+        )
+        mod_data = mod_payload.get("data", {}) if isinstance(mod_payload, dict) else {}
+        project_class_id = int(mod_data.get("classId") or 0) if isinstance(mod_data, dict) else 0
+        if content_type == "mod" and project_class_id != _CURSEFORGE_CLASS_IDS["mod"]:
+            raise ValueError(
+                f"Nicht serverrelevanter CurseForge-Inhalt (classId={project_class_id})."
+            )
+        if (
+            client_filter_fallback
+            and content_type == "mod"
+            and isinstance(mod_data, dict)
+            and _is_known_client_only_curseforge_mod(mod_data)
+        ):
+            raise ValueError("Client-only CurseForge-Inhalt (bekanntes Client-Mod).")
+
         file_payload = _request_json(
             f"{CURSEFORGE_BASE}/v1/mods/{normalized_mod_id}/files/{normalized_file_id}",
             headers=_curseforge_headers(),
@@ -1475,7 +1528,7 @@ def install_curseforge(
         if not isinstance(data, dict):
             raise ValueError("Ungueltige CurseForge Dateidaten.")
 
-        if content_type == "mod":
+        if content_type == "mod" and resolve_dependencies:
             dependencies = _curseforge_required_dependencies(data)
             expected_loader = _expected_server_loader(server, content_type)
             expected_mc_version = _expected_server_mc_version(server)
@@ -1503,6 +1556,8 @@ def install_curseforge(
                     project_id=str(dep_mod_id),
                     content_type=content_type,
                 )
+                if existing_dep is not None and keep_existing_dependency_version:
+                    continue
                 if existing_dep is not None and (
                     dep_file_id is None or str(existing_dep.external_version_id) == str(dep_file_id)
                 ):
@@ -1536,6 +1591,10 @@ def install_curseforge(
                     dep_file_id,
                     content_type,
                     user_id,
+                    resolve_dependencies=True,
+                    enforce_compatibility=enforce_compatibility,
+                    keep_existing_dependency_version=keep_existing_dependency_version,
+                    client_filter_fallback=client_filter_fallback,
                     _processing=processing,
                     _dependency_depth=_dependency_depth + 1,
                     _is_dependency=True,
@@ -1547,6 +1606,13 @@ def install_curseforge(
             for entry in (data.get("gameVersions") or [])
             if str(entry).strip()
         ]
+        game_version_tokens = {entry.lower() for entry in raw_game_versions}
+        if (
+            content_type == "mod"
+            and "client" in game_version_tokens
+            and "server" not in game_version_tokens
+        ):
+            raise ValueError("Client-only CurseForge-Inhalt (nur Client-Distribution).")
         available_loaders = {
             normalized
             for normalized in (
@@ -1559,22 +1625,35 @@ def install_curseforge(
             for entry in raw_game_versions
             if re.match(r"^\d+\.\d+(\.\d+)?([a-zA-Z0-9._-]*)?$", entry)
         }
-        _raise_if_incompatible_with_server(
-            server,
-            content_type,
-            provider_name="CurseForge",
-            available_loaders=available_loaders,
-            available_mc_versions=available_mc_versions,
-        )
+        if enforce_compatibility:
+            _raise_if_incompatible_with_server(
+                server,
+                content_type,
+                provider_name="CurseForge",
+                available_loaders=available_loaders,
+                available_mc_versions=available_mc_versions,
+            )
 
         download_url = data.get("downloadUrl")
         file_name = _safe_file_name(str(data.get("fileName") or ""))
         if not download_url:
-            url_payload = _request_json(
-                f"{CURSEFORGE_BASE}/v1/mods/{normalized_mod_id}/files/{normalized_file_id}/download-url",
-                headers=_curseforge_headers(),
-            )
-            download_url = (url_payload.get("data") or {}).get("url")
+            try:
+                url_payload = _request_json(
+                    f"{CURSEFORGE_BASE}/v1/mods/{normalized_mod_id}/files/{normalized_file_id}/download-url",
+                    headers=_curseforge_headers(),
+                )
+                download_url = (url_payload.get("data") or {}).get("url")
+            except ValueError as exc:
+                if "HTTP 403" in str(exc):
+                    if isinstance(mod_data, dict) and mod_data.get("allowModDistribution") is False:
+                        raise ValueError(
+                            "Download per CurseForge API fuer dieses Projekt nicht erlaubt "
+                            "(allowModDistribution=false)."
+                        ) from exc
+                    raise ValueError(
+                        "Download-URL von CurseForge ist nicht per API verfuegbar (HTTP 403)."
+                    ) from exc
+                raise
         if not download_url or not file_name:
             raise ValueError("Download-URL fehlt.")
 
@@ -1591,12 +1670,6 @@ def install_curseforge(
             _download_file(download_url, target, headers=_curseforge_headers())
         except Exception as exc:
             raise ValueError(f"Download fehlgeschlagen: {exc}") from exc
-
-        mod_payload = _request_json(
-            f"{CURSEFORGE_BASE}/v1/mods/{normalized_mod_id}",
-            headers=_curseforge_headers(),
-        )
-        mod_data = mod_payload.get("data", {})
 
         entry = InstalledContent(
             server_id=server.id,

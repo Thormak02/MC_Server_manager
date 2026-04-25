@@ -47,6 +47,54 @@ _PLAYER_LIST_PATTERN = re.compile(
     r"There are\s+(?P<current>\d+)\s+of a max of\s+(?P<max>\d+)\s+players online",
     re.IGNORECASE,
 )
+_CLIENT_ONLY_MOD_KEYS = {
+    "drippyloadingscreen",
+    "fancymenu",
+    "iris",
+    "euphoriapatcher",
+    "borderlesswindow",
+    "darkmodeeverywhere",
+    "notenoughrecipebook",
+    "keybindspurger",
+    "keybindbundles",
+    "controlling",
+    "configured",
+    "searchables",
+    "mousetweaks",
+}
+
+
+def _normalize_mod_file_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def _quarantine_known_client_only_mods(base_path: Path) -> list[str]:
+    mods_dir = (base_path / "mods").resolve()
+    if not mods_dir.exists() or not mods_dir.is_dir():
+        return []
+
+    quarantined_dir = (mods_dir / "_disabled_client_only").resolve()
+    if mods_dir not in [quarantined_dir, *quarantined_dir.parents]:
+        return []
+    quarantined_dir.mkdir(parents=True, exist_ok=True)
+
+    moved: list[str] = []
+    for jar_path in mods_dir.glob("*.jar"):
+        key = _normalize_mod_file_key(jar_path.stem)
+        if not any(token in key for token in _CLIENT_ONLY_MOD_KEYS):
+            continue
+        target = (quarantined_dir / jar_path.name).resolve()
+        if quarantined_dir not in [target, *target.parents]:
+            continue
+        if target.exists():
+            suffix = datetime.now().strftime("%Y%m%d%H%M%S")
+            target = (quarantined_dir / f"{jar_path.stem}-{suffix}{jar_path.suffix}").resolve()
+        try:
+            jar_path.replace(target)
+            moved.append(jar_path.name)
+        except Exception:
+            continue
+    return moved
 
 
 def _build_creation_flags() -> int:
@@ -480,6 +528,39 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
     if is_running(server.id):
         return False, "Server laeuft bereits."
 
+    # Modpack-Imports werden beim ersten Start installiert.
+    from app.services import modpack_service
+
+    pending_install = modpack_service.get_pending_install(db, server.id)
+    if pending_install is not None:
+        console_service.append_output(
+            server.id,
+            f"Modpack-Installation wird vor dem Start ausgefuehrt: {pending_install.pack_name}",
+        )
+        try:
+            install_result = modpack_service.run_pending_install_for_server(
+                db,
+                server=server,
+                initiated_by_user_id=initiated_by_user_id,
+            )
+            if install_result is not None:
+                console_service.append_output(
+                    server.id,
+                    (
+                        "Modpack-Installation abgeschlossen "
+                        f"({install_result.installed_count} Inhalte, {install_result.overrides_copied} Overrides)."
+                    ),
+                )
+                for warning in install_result.warnings:
+                    console_service.append_output(server.id, f"[modpack-warn] {warning}")
+        except Exception as exc:
+            server.status = "error"
+            db.add(server)
+            db.commit()
+            message = f"Modpack-Installation vor dem Start fehlgeschlagen: {exc}"
+            console_service.append_output(server.id, message)
+            return False, message
+
     java_ok, java_message, runtime_env = prepare_server_java_runtime(db, server)
     if not java_ok:
         server.status = "error"
@@ -493,6 +574,19 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
     base_path = Path(server.base_path).expanduser().resolve()
     if not base_path.exists() or not base_path.is_dir():
         return False, "Serverordner existiert nicht."
+
+    quarantined_mods = _quarantine_known_client_only_mods(base_path)
+    if quarantined_mods:
+        moved_list = ", ".join(quarantined_mods[:8])
+        if len(quarantined_mods) > 8:
+            moved_list = f"{moved_list}, +{len(quarantined_mods) - 8} weitere"
+        console_service.append_output(
+            server.id,
+            (
+                "Bekannte Client-only Mods wurden vor dem Start deaktiviert: "
+                f"{moved_list} (mods/_disabled_client_only)."
+            ),
+        )
 
     prepared, prepare_message = _prepare_loader_runtime_if_needed(server, base_path, runtime_env)
     if not prepared:

@@ -8,6 +8,7 @@ class ModpackImportEntry(BaseModel):
     path: str
     provider_name: str
     content_type: str = "mod"
+    required: bool = True
     project_id: str | None = None
     version_id: str | None = None
     download_url: str | None = None
@@ -27,6 +28,7 @@ class ModpackPreviewSnapshot(BaseModel):
     entries: list[ModpackImportEntry] = Field(default_factory=list)
     override_roots: list[str] = Field(default_factory=list)
     override_file_count: int = 0
+    client_filter_fallback: bool = False
     warnings: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

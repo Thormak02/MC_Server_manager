@@ -4,6 +4,7 @@ from app.models.audit_log import AuditLog
 from app.models.installed_content import InstalledContent
 from app.models.java_profile import JavaProfile
 from app.models.job_history import JobHistory
+from app.models.pending_modpack_install import PendingModpackInstall
 from app.models.platform_setting import PlatformSetting
 from app.models.restore_history import RestoreHistory
 from app.models.security_event import SecurityEvent
@@ -24,6 +25,7 @@ __all__ = [
     "Backup",
     "RestoreHistory",
     "JobHistory",
+    "PendingModpackInstall",
     "PlatformSetting",
     "SecurityEvent",
 ]

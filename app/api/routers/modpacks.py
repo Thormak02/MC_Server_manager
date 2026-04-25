@@ -1,11 +1,20 @@
+import shutil
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.core.constants import UserRole
 from app.db.session import get_db
+from app.models.installed_content import InstalledContent
+from app.models.scheduled_job import ScheduledJob
+from app.models.server import Server
+from app.models.server_permission import ServerPermission
+from app.models.pending_modpack_install import PendingModpackInstall
+from app.schemas.modpack import ModpackExecuteResponse
 from app.schemas.provider import ProvisionServerRequest
 from app.services import audit_service, modpack_service
 from app.services.auth_service import get_current_user_from_session
@@ -41,6 +50,45 @@ def _require_user(request: Request, db: Session):
 def _require_super_admin(user) -> None:
     if user.role != UserRole.SUPER_ADMIN.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nur Super Admin erlaubt.")
+
+
+def _rollback_failed_modpack_server(
+    db: Session,
+    *,
+    server: Server | None,
+    user_id: int | None,
+    reason: str,
+) -> None:
+    if server is None:
+        return
+    server_id = server.id
+    server_path = str(server.base_path or "").strip()
+    try:
+        if server_path:
+            base_path = Path(server_path).expanduser().resolve()
+            if base_path.exists() and base_path.is_dir():
+                shutil.rmtree(base_path, ignore_errors=True)
+    except Exception:
+        # Best-effort rollback: DB cleanup still proceeds.
+        pass
+
+    db.execute(delete(InstalledContent).where(InstalledContent.server_id == server_id))
+    db.execute(delete(ServerPermission).where(ServerPermission.server_id == server_id))
+    db.execute(delete(ScheduledJob).where(ScheduledJob.server_id == server_id))
+    pending = db.query(PendingModpackInstall).filter(PendingModpackInstall.server_id == server_id).first()
+    if pending is not None:
+        modpack_service.discard_preview(pending.preview_token)
+    db.execute(delete(PendingModpackInstall).where(PendingModpackInstall.server_id == server_id))
+    db.delete(server)
+    db.commit()
+
+    audit_service.log_action(
+        db,
+        action="modpack.import_rollback",
+        user_id=user_id,
+        server_id=server_id,
+        details=f"reason={reason}",
+    )
 
 
 @router.get("/modpacks/import", response_class=HTMLResponse)
@@ -128,6 +176,7 @@ def modpack_import_execute(
 ):
     current_user = _require_user(request, db)
     _require_super_admin(current_user)
+    created_server: Server | None = None
     try:
         snapshot = modpack_service.load_preview(preview_token)
     except ValueError as exc:
@@ -169,24 +218,43 @@ def modpack_import_execute(
     notes: list[str] = []
     try:
         server, provision_notes = provisioning_service.create_server_instance(db, provision_request)
+        created_server = server
     except Exception as exc:
         return JSONResponse(status_code=400, content={"detail": f"Servererstellung fehlgeschlagen: {exc}"})
     notes.extend(provision_notes)
 
     try:
-        result = modpack_service.execute_preview(
+        modpack_service.queue_pending_install(
             db,
-            snapshot=snapshot,
             server=server,
-            initiated_by_user_id=current_user.id,
-            created_server=True,
-            notes=notes,
+            snapshot=snapshot,
+            requested_by_user_id=current_user.id,
         )
     except ValueError as exc:
+        _rollback_failed_modpack_server(
+            db,
+            server=created_server,
+            user_id=current_user.id,
+            reason=str(exc),
+        )
         return JSONResponse(status_code=400, content={"detail": str(exc)})
     except Exception as exc:
-        return JSONResponse(status_code=500, content={"detail": f"Import fehlgeschlagen: {exc}"})
-    finally:
-        modpack_service.discard_preview(preview_token)
+        _rollback_failed_modpack_server(
+            db,
+            server=created_server,
+            user_id=current_user.id,
+            reason=f"unexpected:{exc}",
+        )
+        return JSONResponse(status_code=500, content={"detail": f"Import-Vorbereitung fehlgeschlagen: {exc}"})
 
+    notes.append("Modpack wird beim ersten Serverstart automatisch installiert.")
+    result = ModpackExecuteResponse(
+        server_id=server.id,
+        server_name=server.name,
+        created_server=True,
+        installed_count=0,
+        overrides_copied=0,
+        warnings=list(snapshot.warnings),
+        notes=notes,
+    )
     return JSONResponse(result.model_dump())
