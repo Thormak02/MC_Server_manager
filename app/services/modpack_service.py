@@ -539,20 +539,105 @@ def _parse_curseforge_reference(reference: str | None) -> tuple[int | None, int 
     if not raw:
         return None, None
     lowered = raw.lower()
+    explicit_project_hint = "/projects/" in lowered or "project-id" in lowered or "projectid" in lowered
+    explicit_file_hint = "/files/" in lowered or "file-id" in lowered or "fileid" in lowered
+    if re.search(r"[a-z]", lowered) and not explicit_project_hint and not explicit_file_hint:
+        return None, None
     numbers = [int(match) for match in re.findall(r"\d+", raw)]
     if len(numbers) >= 2:
         return numbers[-2], numbers[-1]
     if len(numbers) == 1:
         single = numbers[0]
-        if "/projects/" in lowered or "project-id" in lowered or "projectid" in lowered:
+        if explicit_project_hint:
             return single, None
-        if "/files/" in lowered or "file-id" in lowered or "fileid" in lowered:
+        if explicit_file_hint:
             return None, single
         # Ohne klare URL-Hinweise ist eine einzelne Zahl meist die Datei-ID.
         return None, single
     if len(numbers) < 1:
         return None, None
     return None, None
+
+
+def _looks_like_http_url(value: str | None) -> bool:
+    raw = (value or "").strip()
+    if not raw:
+        return False
+    parsed = urllib.parse.urlparse(raw)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _extract_curseforge_shared_profile_code(reference: str | None) -> str | None:
+    raw = (reference or "").strip()
+    if not raw:
+        return None
+
+    def _normalize_candidate(value: str) -> str:
+        cleaned = (value or "").strip().strip("/").strip()
+        cleaned = cleaned.strip(".,;:()[]{}<>\"'")
+        return cleaned
+
+    def _is_valid_code(value: str) -> bool:
+        if not value:
+            return False
+        if value.isdigit():
+            return False
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{4,63}", value):
+            return False
+        return bool(re.search(r"[A-Za-z]", value))
+
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.scheme in {"http", "https", "curseforge"}:
+        query_params = urllib.parse.parse_qs(parsed.query)
+        for key in ("code", "profileCode", "profile_code", "shareCode", "share_code"):
+            values = query_params.get(key) or query_params.get(key.lower()) or []
+            for value in values:
+                candidate = _normalize_candidate(str(value))
+                if _is_valid_code(candidate):
+                    return candidate
+
+        path_parts = [part for part in parsed.path.split("/") if part]
+        lower_parts = [part.lower() for part in path_parts]
+        if "shared-profile" in lower_parts:
+            idx = lower_parts.index("shared-profile")
+            if idx + 1 < len(path_parts):
+                candidate = _normalize_candidate(path_parts[idx + 1])
+                if _is_valid_code(candidate):
+                    return candidate
+
+        for part in reversed(path_parts):
+            candidate = _normalize_candidate(part)
+            if _is_valid_code(candidate):
+                return candidate
+        return None
+
+    candidate = _normalize_candidate(raw)
+    if _is_valid_code(candidate):
+        return candidate
+    return None
+
+
+def _download_curseforge_shared_profile_archive(preview_archive_path: Path, profile_code: str) -> str:
+    normalized_code = (profile_code or "").strip()
+    if not normalized_code:
+        raise ValueError("CurseForge Profilcode fehlt.")
+    url = f"{content_service.CURSEFORGE_BASE}/v1/shared-profile/{urllib.parse.quote(normalized_code)}"
+    try:
+        content_service._download_file(url, preview_archive_path)
+    except Exception as exc:
+        raise ValueError(f"CurseForge Profilcode konnte nicht heruntergeladen werden: {exc}") from exc
+    return normalized_code
+
+
+def _download_direct_archive_url(preview_archive_path: Path, reference_url: str) -> str:
+    normalized = (reference_url or "").strip()
+    if not _looks_like_http_url(normalized):
+        raise ValueError("Direktlink ist ungueltig.")
+    try:
+        content_service._download_file(normalized, preview_archive_path)
+    except Exception as exc:
+        raise ValueError(f"Download per Direktlink fehlgeschlagen: {exc}") from exc
+    return normalized
 
 
 def _pick_curseforge_latest_file(files: list[dict], *, prefer_server_pack: bool = False) -> tuple[dict | None, bool]:
@@ -740,16 +825,35 @@ def create_preview(
             source_ref = resolved_version_id
             client_filter_fallback = bool(modrinth_decision.get("client_filter_fallback"))
         else:
-            curseforge_decision: dict[str, object] = {}
-            project_id, file_id = _download_curseforge_archive(
-                preview_archive,
-                project_id=curseforge_project_id,
-                file_id=curseforge_file_id,
-                reference=curseforge_reference,
-                decision=curseforge_decision,
-            )
-            source_ref = f"{project_id}:{file_id}"
-            client_filter_fallback = bool(curseforge_decision.get("client_filter_fallback"))
+            has_explicit_ids = bool(int(curseforge_project_id or 0) > 0 or int(curseforge_file_id or 0) > 0)
+            ref_project_id, ref_file_id = _parse_curseforge_reference(curseforge_reference)
+            has_reference_ids = bool(int(ref_project_id or 0) > 0 or int(ref_file_id or 0) > 0)
+
+            if not has_explicit_ids and not has_reference_ids:
+                shared_code = _extract_curseforge_shared_profile_code(curseforge_reference)
+                if shared_code:
+                    resolved_code = _download_curseforge_shared_profile_archive(preview_archive, shared_code)
+                    source_ref = f"shared:{resolved_code}"
+                    client_filter_fallback = True
+                elif _looks_like_http_url(curseforge_reference):
+                    resolved_url = _download_direct_archive_url(preview_archive, str(curseforge_reference or ""))
+                    source_ref = f"url:{resolved_url}"
+                    client_filter_fallback = True
+                else:
+                    raise ValueError(
+                        "CurseForge: Bitte Projekt-ID/Datei-ID, Share-Link oder Import-Code angeben."
+                    )
+            else:
+                curseforge_decision: dict[str, object] = {}
+                project_id, file_id = _download_curseforge_archive(
+                    preview_archive,
+                    project_id=curseforge_project_id,
+                    file_id=curseforge_file_id,
+                    reference=curseforge_reference,
+                    decision=curseforge_decision,
+                )
+                source_ref = f"{project_id}:{file_id}"
+                client_filter_fallback = bool(curseforge_decision.get("client_filter_fallback"))
 
         snapshot = _parse_archive(
             token,

@@ -305,6 +305,56 @@ def test_modrinth_download_archive_prefers_server_pack_when_available(monkeypatc
     assert archive_target.read_bytes() == b"modrinth-server-pack"
 
 
+def test_parse_curseforge_reference_does_not_treat_profile_code_as_file_id():
+    from app.services import modpack_service
+
+    project_id, file_id = modpack_service._parse_curseforge_reference("2VcBaQ-J")
+    assert project_id is None
+    assert file_id is None
+
+
+def test_create_preview_accepts_curseforge_profile_code(monkeypatch):
+    from app.services import modpack_service
+
+    archive_bytes = _build_local_curseforge_pack()
+    captured: dict[str, str] = {}
+
+    def fake_download_file(url, target, headers=None):
+        captured["url"] = url
+        target.write_bytes(archive_bytes)
+
+    monkeypatch.setattr(modpack_service.content_service, "_download_file", fake_download_file)
+
+    preview = modpack_service.create_preview(
+        source="curseforge",
+        curseforge_reference="u0aAKxeg",
+    )
+    assert preview.source_ref == "shared:u0aAKxeg"
+    assert "/v1/shared-profile/u0aAKxeg" in captured["url"]
+    assert any("fallback" in warning.lower() for warning in preview.warnings)
+
+
+def test_create_preview_accepts_curseforge_direct_link(monkeypatch):
+    from app.services import modpack_service
+
+    archive_bytes = _build_local_curseforge_pack()
+    captured: dict[str, str] = {}
+
+    def fake_download_file(url, target, headers=None):
+        captured["url"] = url
+        target.write_bytes(archive_bytes)
+
+    monkeypatch.setattr(modpack_service.content_service, "_download_file", fake_download_file)
+
+    preview = modpack_service.create_preview(
+        source="curseforge",
+        curseforge_reference="https://example.invalid/my-custom-pack.zip",
+    )
+    assert preview.source_ref == "url:https://example.invalid/my-custom-pack.zip"
+    assert captured["url"] == "https://example.invalid/my-custom-pack.zip"
+    assert any("fallback" in warning.lower() for warning in preview.warnings)
+
+
 def test_curseforge_download_archive_accepts_file_id_only(monkeypatch, tmp_path):
     from app.services import modpack_service
 
