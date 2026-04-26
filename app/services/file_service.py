@@ -443,17 +443,31 @@ def _utc_now_label() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %z")
 
 
-def _build_access_entry(schema_key: str, identity: str) -> dict[str, Any]:
+def _normalize_op_level(value: int | str | None) -> int:
+    raw = str(value if value is not None else "").strip()
+    if not raw:
+        return 4
+    try:
+        parsed = int(raw)
+    except ValueError as exc:
+        raise ValueError("OP-Level muss eine Zahl zwischen 1 und 4 sein.") from exc
+    if parsed < 1 or parsed > 4:
+        raise ValueError("OP-Level muss zwischen 1 und 4 liegen.")
+    return parsed
+
+
+def _build_access_entry(schema_key: str, identity: str, *, op_level: int | str | None = None) -> dict[str, Any]:
     normalized = schema_key.strip().lower()
     if normalized == "whitelist":
         name = _normalize_player_name(identity)
         return {"uuid": _resolve_player_uuid(name), "name": name}
     if normalized == "ops":
         name = _normalize_player_name(identity)
+        resolved_level = _normalize_op_level(op_level)
         return {
             "uuid": _resolve_player_uuid(name),
             "name": name,
-            "level": 4,
+            "level": resolved_level,
             "bypassesPlayerLimit": True,
         }
     if normalized == "banned_players":
@@ -499,14 +513,20 @@ def list_access_entries(server: Server, list_key: str) -> list[dict[str, Any]]:
     return _read_json_list_file(server, file_name)
 
 
-def add_access_entry(server: Server, list_key: str, identity: str) -> list[dict[str, Any]]:
+def add_access_entry(
+    server: Server,
+    list_key: str,
+    identity: str,
+    *,
+    op_level: int | str | None = None,
+) -> list[dict[str, Any]]:
     schema = _get_access_schema(list_key)
     normalized_key = (list_key or "").strip().lower()
     identity_field = str(schema["identity_field"])
     file_name = str(schema["file"])
 
     entries = _read_json_list_file(server, file_name)
-    entry = _build_access_entry(normalized_key, identity)
+    entry = _build_access_entry(normalized_key, identity, op_level=op_level)
     desired_identity = str(entry.get(identity_field) or "").strip()
     if not desired_identity:
         raise ValueError("Eintrag ist ungueltig.")
@@ -554,6 +574,31 @@ def remove_access_entry(server: Server, list_key: str, identity: str) -> list[di
         raise ValueError("Eintrag nicht gefunden.")
     _write_json_list_file(server, file_name, filtered)
     return filtered
+
+
+def update_op_level(server: Server, identity: str, op_level: int | str | None) -> list[dict[str, Any]]:
+    name = _normalize_player_name(identity)
+    resolved_level = _normalize_op_level(op_level)
+    file_name = str(_ACCESS_LIST_SCHEMAS["ops"]["file"])
+    entries = _read_json_list_file(server, file_name)
+
+    updated = False
+    result: list[dict[str, Any]] = []
+    for item in entries:
+        entry = dict(item)
+        existing_name = str(entry.get("name") or "").strip()
+        if existing_name.casefold() == name.casefold():
+            entry["level"] = resolved_level
+            if not isinstance(entry.get("bypassesPlayerLimit"), bool):
+                entry["bypassesPlayerLimit"] = True
+            updated = True
+        result.append(entry)
+
+    if not updated:
+        raise ValueError("OP-Eintrag nicht gefunden.")
+
+    _write_json_list_file(server, file_name, result)
+    return result
 
 
 def get_whitelist_enabled(server: Server) -> bool:

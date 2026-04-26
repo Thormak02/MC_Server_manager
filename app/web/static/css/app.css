@@ -342,6 +342,89 @@ input[type="range"].ram-slider:focus-visible {
     align-items: center;
 }
 
+.whitelist-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-bottom: 0.65rem;
+}
+
+.whitelist-head {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.65rem;
+}
+
+.whitelist-head h2 {
+    margin: 0;
+}
+
+.whitelist-switch-form {
+    margin-right: 0;
+}
+
+.whitelist-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    line-height: 0;
+}
+
+.whitelist-switch input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+
+.whitelist-switch-track {
+    position: relative;
+    width: 76px;
+    height: 40px;
+    border-radius: 999px;
+    border: 2px solid color-mix(in srgb, var(--text) 60%, var(--border));
+    background: color-mix(in srgb, var(--text) 18%, var(--panel));
+    display: block;
+    transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.whitelist-switch-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1px solid color-mix(in srgb, var(--text) 22%, var(--border));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+    transition: transform 0.16s ease, background 0.16s ease;
+}
+
+.whitelist-switch input[type="checkbox"]:focus-visible + .whitelist-switch-track {
+    outline: 2px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+    outline-offset: 3px;
+}
+
+.whitelist-switch input[type="checkbox"]:checked + .whitelist-switch-track {
+    background: color-mix(in srgb, var(--accent) 75%, #ffffff);
+    border-color: color-mix(in srgb, var(--accent) 90%, var(--border));
+}
+
+.whitelist-switch input[type="checkbox"]:checked + .whitelist-switch-track .whitelist-switch-thumb {
+    transform: translateX(36px);
+    background: #ffffff;
+}
+
+.whitelist-switch input[type="checkbox"]:disabled + .whitelist-switch-track {
+    opacity: 0.55;
+}
+
 .server-nav {
     display: flex;
     flex-wrap: wrap;

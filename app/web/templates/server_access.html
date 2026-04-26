@@ -20,29 +20,38 @@
 
 {% if selected_tab == "whitelist" %}
 <section class="card">
-    <h2>Whitelist</h2>
-    <form id="whitelist-toggle-form" method="post" action="/servers/{{ server.id }}/access/whitelist-toggle" class="inline-form">
-        <input type="hidden" id="whitelist-enabled-value" name="enabled" value="{{ 'true' if whitelist_enabled else 'false' }}">
-        <label for="whitelist-enabled-toggle"><strong>Whitelist aktivieren</strong></label>
-        <input id="whitelist-enabled-toggle" type="checkbox" {% if whitelist_enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
-        <span class="muted">{{ "Aktiv" if whitelist_enabled else "Inaktiv" }}</span>
-    </form>
+    <div class="whitelist-head">
+        <h2>Whitelist</h2>
+        <form id="whitelist-switch-form" method="post" action="/servers/{{ server.id }}/access/whitelist-toggle" class="inline-form whitelist-switch-form">
+            <input type="hidden" id="whitelist-enabled-value" name="enabled" value="{{ 'true' if whitelist_enabled else 'false' }}">
+            <label class="whitelist-switch" for="whitelist-enabled-toggle" aria-label="Whitelist umschalten">
+                <input id="whitelist-enabled-toggle" type="checkbox" {% if whitelist_enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+                <span class="whitelist-switch-track">
+                    <span class="whitelist-switch-thumb"></span>
+                </span>
+            </label>
+        </form>
+    </div>
 
-    <form method="post" action="/servers/{{ server.id }}/access/entry-add" class="inline-form">
-        <input type="hidden" name="list_key" value="whitelist">
-        <input type="text" name="identity" placeholder="Spielername" required {% if not can_edit %}readonly{% endif %}>
-        <button type="submit" {% if not can_edit %}disabled{% endif %}>Zur Whitelist hinzufuegen</button>
-    </form>
+    <div class="inline-form whitelist-controls">
+        <form method="post" action="/servers/{{ server.id }}/access/entry-add" class="inline-form">
+            <input type="hidden" name="list_key" value="whitelist">
+            <input type="text" name="identity" placeholder="Spielername" required {% if not can_edit %}readonly{% endif %}>
+            <button type="submit" {% if not can_edit %}disabled{% endif %}>Zur Whitelist hinzufuegen</button>
+        </form>
+    </div>
 
     <div class="stack">
         {% for entry in whitelist_entries %}
-        <form method="post" action="/servers/{{ server.id }}/access/entry-remove" class="inline-form">
-            <input type="hidden" name="list_key" value="whitelist">
-            <input type="hidden" name="identity" value="{{ entry.name or '' }}">
+        <div class="inline-form">
             <span>{{ entry.name or "-" }}</span>
             <span class="muted">{{ entry.uuid or "-" }}</span>
-            <button type="submit" class="danger" {% if not can_edit %}disabled{% endif %}>Entfernen</button>
-        </form>
+            <form method="post" action="/servers/{{ server.id }}/access/entry-remove" class="inline-form">
+                <input type="hidden" name="list_key" value="whitelist">
+                <input type="hidden" name="identity" value="{{ entry.name or '' }}">
+                <button type="submit" class="danger" {% if not can_edit %}disabled{% endif %}>Entfernen</button>
+            </form>
+        </div>
         {% else %}
         <p class="muted">Keine Whitelist-Eintraege.</p>
         {% endfor %}
@@ -54,19 +63,42 @@
     <form method="post" action="/servers/{{ server.id }}/access/entry-add" class="inline-form">
         <input type="hidden" name="list_key" value="ops">
         <input type="text" name="identity" placeholder="Spielername" required {% if not can_edit %}readonly{% endif %}>
+        <label for="op_level_add" class="muted">Level</label>
+        <select id="op_level_add" name="op_level" {% if not can_edit %}disabled{% endif %}>
+            {% for level in [1, 2, 3, 4] %}
+            <option value="{{ level }}" {% if level == 4 %}selected{% endif %}>{{ level }}</option>
+            {% endfor %}
+        </select>
         <button type="submit" {% if not can_edit %}disabled{% endif %}>Als OP eintragen</button>
     </form>
 
     <div class="stack">
         {% for entry in ops_entries %}
-        <form method="post" action="/servers/{{ server.id }}/access/entry-remove" class="inline-form">
-            <input type="hidden" name="list_key" value="ops">
-            <input type="hidden" name="identity" value="{{ entry.name or '' }}">
+        <div class="inline-form">
             <span>{{ entry.name or "-" }}</span>
             <span class="muted">UUID: {{ entry.uuid or "-" }}</span>
-            <span class="muted">Level: {{ entry.level if entry.level is not none else "-" }}</span>
-            <button type="submit" class="danger" {% if not can_edit %}disabled{% endif %}>Entfernen</button>
-        </form>
+            <form method="post" action="/servers/{{ server.id }}/access/op-level-update" class="inline-form op-level-form">
+                <input type="hidden" name="identity" value="{{ entry.name or '' }}">
+                <label class="muted" for="op_level_{{ loop.index }}">Level</label>
+                <select
+                    id="op_level_{{ loop.index }}"
+                    name="op_level"
+                    class="op-level-select"
+                    {% if not can_edit %}disabled{% endif %}
+                >
+                    {% for level in [1, 2, 3, 4] %}
+                    <option value="{{ level }}" {% if (entry.level if entry.level is not none else 4) == level %}selected{% endif %}>
+                        {{ level }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </form>
+            <form method="post" action="/servers/{{ server.id }}/access/entry-remove" class="inline-form">
+                <input type="hidden" name="list_key" value="ops">
+                <input type="hidden" name="identity" value="{{ entry.name or '' }}">
+                <button type="submit" class="danger" {% if not can_edit %}disabled{% endif %}>Entfernen</button>
+            </form>
+        </div>
         {% else %}
         <p class="muted">Keine OP-Eintraege.</p>
         {% endfor %}
@@ -124,15 +156,30 @@
 
 <script>
 (function () {
-    const toggle = document.getElementById("whitelist-enabled-toggle");
-    const hidden = document.getElementById("whitelist-enabled-value");
-    const form = document.getElementById("whitelist-toggle-form");
-    if (!toggle || !hidden || !form) return;
-    toggle.addEventListener("change", function () {
-        hidden.value = toggle.checked ? "true" : "false";
-        form.submit();
+    const whitelistToggle = document.getElementById("whitelist-enabled-toggle");
+    const whitelistHidden = document.getElementById("whitelist-enabled-value");
+    const whitelistForm = document.getElementById("whitelist-switch-form");
+    if (
+        whitelistToggle instanceof HTMLInputElement &&
+        whitelistHidden instanceof HTMLInputElement &&
+        whitelistForm instanceof HTMLFormElement
+    ) {
+        whitelistToggle.addEventListener("change", function () {
+            whitelistHidden.value = whitelistToggle.checked ? "true" : "false";
+            whitelistForm.submit();
+        });
+    }
+
+    const levelSelects = document.querySelectorAll(".op-level-select");
+    levelSelects.forEach(function (select) {
+        if (!(select instanceof HTMLSelectElement)) return;
+        select.addEventListener("change", function () {
+            const form = select.closest("form");
+            if (form instanceof HTMLFormElement) {
+                form.submit();
+            }
+        });
     });
 })();
 </script>
 {% endblock %}
-

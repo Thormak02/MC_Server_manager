@@ -149,15 +149,25 @@ def test_access_lists_support_empty_files_and_whitelist_toggle(client, tmp_path,
 
     add_op = client.post(
         f"/servers/{server_id}/access/entry-add",
-        data={"list_key": "ops", "identity": "AdminOne"},
+        data={"list_key": "ops", "identity": "AdminOne", "op_level": "2"},
         follow_redirects=True,
     )
     assert add_op.status_code == 200
     ops_data = json.loads((server_dir / "ops.json").read_text(encoding="utf-8"))
     assert len(ops_data) == 1
     assert ops_data[0]["name"] == "AdminOne"
-    assert ops_data[0]["level"] == 4
+    assert ops_data[0]["level"] == 2
     assert ops_data[0]["bypassesPlayerLimit"] is True
+
+    update_op_level_response = client.post(
+        f"/servers/{server_id}/access/op-level-update",
+        data={"identity": "AdminOne", "op_level": "4"},
+        follow_redirects=True,
+    )
+    assert update_op_level_response.status_code == 200
+    ops_data_after_update = json.loads((server_dir / "ops.json").read_text(encoding="utf-8"))
+    assert ops_data_after_update[0]["name"] == "AdminOne"
+    assert ops_data_after_update[0]["level"] == 4
 
     add_ban = client.post(
         f"/servers/{server_id}/access/entry-add",

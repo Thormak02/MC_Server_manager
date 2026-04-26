@@ -23,6 +23,7 @@ from app.services.file_service import (
     read_text_file,
     remove_access_entry,
     set_whitelist_enabled,
+    update_op_level,
     upload_file as upload_server_file,
     write_text_file,
 )
@@ -158,6 +159,7 @@ def access_add_entry_action(
     server_id: int,
     list_key: Annotated[str, Form()],
     identity: Annotated[str, Form()],
+    op_level: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_user(request, db)
@@ -172,7 +174,7 @@ def access_add_entry_action(
 
     tab = _normalize_access_tab(list_key)
     try:
-        add_access_entry(server, tab, identity)
+        add_access_entry(server, tab, identity, op_level=op_level if tab == "ops" else None)
     except ValueError as exc:
         push_flash(request, str(exc), "error")
         return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
@@ -182,10 +184,49 @@ def access_add_entry_action(
         action="server.access_entry_add",
         user_id=current_user.id,
         server_id=server.id,
-        details=f"list={tab} identity={identity.strip()}",
+        details=(
+            f"list={tab} identity={identity.strip()} level={str(op_level).strip()}"
+            if tab == "ops" and op_level is not None
+            else f"list={tab} identity={identity.strip()}"
+        ),
     )
     push_flash(request, "Eintrag hinzugefuegt.", "success")
     return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
+
+
+@router.post("/servers/{server_id}/access/op-level-update")
+def access_update_op_level_action(
+    request: Request,
+    server_id: int,
+    identity: Annotated[str, Form()],
+    op_level: Annotated[str, Form()],
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_edit_server_files(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    try:
+        update_op_level(server, identity, op_level)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}/access?tab=ops", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="server.op_level_update",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"identity={identity.strip()} level={op_level.strip()}",
+    )
+    push_flash(request, "OP-Level aktualisiert.", "success")
+    return RedirectResponse(url=f"/servers/{server_id}/access?tab=ops", status_code=303)
 
 
 @router.post("/servers/{server_id}/access/entry-remove")
