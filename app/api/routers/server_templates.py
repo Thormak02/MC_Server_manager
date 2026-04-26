@@ -9,6 +9,7 @@ from app.db.session import get_db
 from app.services import template_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.java_profile_service import list_java_profiles
+from app.services.memory_settings_service import validate_memory_bounds
 from app.services.provisioning_service import ProvisioningService
 from app.web.routes.pages import build_context, push_flash, templates
 
@@ -49,14 +50,18 @@ def _form_payload(
     default_properties_json: str | None,
     is_default: str | None,
 ) -> dict[str, object]:
+    parsed_memory_min_mb, parsed_memory_max_mb = validate_memory_bounds(
+        _to_optional_int(memory_min_mb),
+        _to_optional_int(memory_max_mb),
+    )
     return {
         "name": name.strip(),
         "server_type": server_type.strip().lower(),
         "mc_version": mc_version.strip(),
         "loader_version": (loader_version or "").strip() or None,
         "java_profile_id": _to_optional_int(java_profile_id),
-        "memory_min_mb": _to_optional_int(memory_min_mb),
-        "memory_max_mb": _to_optional_int(memory_max_mb),
+        "memory_min_mb": parsed_memory_min_mb,
+        "memory_max_mb": parsed_memory_max_mb,
         "port_min": _to_optional_int(port_min),
         "port_max": _to_optional_int(port_max),
         "start_parameters": (start_parameters or "").strip() or None,

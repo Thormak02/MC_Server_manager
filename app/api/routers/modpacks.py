@@ -20,6 +20,7 @@ from app.schemas.provider import ProvisionServerRequest
 from app.services import audit_service, modpack_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.java_profile_service import list_java_profiles
+from app.services.memory_settings_service import validate_memory_bounds
 from app.services.provisioning_service import ProvisioningService
 from app.services.app_setting_service import get_server_storage_root
 from app.web.routes.pages import build_context, templates
@@ -188,6 +189,10 @@ def modpack_import_execute(
         resolved_java_profile_id = _to_optional_int(java_profile_id)
         resolved_memory_min_mb = _to_optional_int(memory_min_mb) or 2048
         resolved_memory_max_mb = _to_optional_int(memory_max_mb) or 4096
+        resolved_memory_min_mb, resolved_memory_max_mb = validate_memory_bounds(
+            resolved_memory_min_mb,
+            resolved_memory_max_mb,
+        )
         resolved_port = _to_optional_int(port)
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})

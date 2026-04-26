@@ -17,6 +17,7 @@ from app.schemas.server import ServerImportConfirm
 from app.services import audit_service, backup_service, content_service, modpack_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.java_profile_service import list_java_profiles
+from app.services.memory_settings_service import validate_memory_bounds
 from app.services.process_service import (
     get_online_player_names,
     get_player_counts,
@@ -182,20 +183,28 @@ def server_import_confirm(
     if current_user.role != UserRole.SUPER_ADMIN.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-    payload = ServerImportConfirm(
-        name=name.strip(),
-        base_path=base_path.strip(),
-        server_type=server_type.strip().lower(),
-        mc_version=mc_version.strip() or "unknown",
-        start_mode=start_mode.strip().lower(),
-        start_command=(start_command or "").strip() or None,
-        start_bat_path=(start_bat_path or "").strip() or None,
-        loader_version=(loader_version or "").strip() or None,
-        java_profile_id=_to_optional_int(java_profile_id),
-        memory_min_mb=_to_optional_int(memory_min_mb),
-        memory_max_mb=_to_optional_int(memory_max_mb),
-        port=_to_optional_int(port),
-    )
+    try:
+        parsed_memory_min_mb, parsed_memory_max_mb = validate_memory_bounds(
+            _to_optional_int(memory_min_mb),
+            _to_optional_int(memory_max_mb),
+        )
+        payload = ServerImportConfirm(
+            name=name.strip(),
+            base_path=base_path.strip(),
+            server_type=server_type.strip().lower(),
+            mc_version=mc_version.strip() or "unknown",
+            start_mode=start_mode.strip().lower(),
+            start_command=(start_command or "").strip() or None,
+            start_bat_path=(start_bat_path or "").strip() or None,
+            loader_version=(loader_version or "").strip() or None,
+            java_profile_id=_to_optional_int(java_profile_id),
+            memory_min_mb=parsed_memory_min_mb,
+            memory_max_mb=parsed_memory_max_mb,
+            port=_to_optional_int(port),
+        )
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url="/servers/import", status_code=303)
 
     try:
         server = import_server(db, payload)
@@ -590,14 +599,23 @@ def update_server_settings_action(
             push_flash(request, lock_reason, "error")
             return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
 
+    try:
+        parsed_memory_min_mb, parsed_memory_max_mb = validate_memory_bounds(
+            _to_optional_int(memory_min_mb),
+            _to_optional_int(memory_max_mb),
+        )
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
     _, sync_warnings = update_server_settings(
         db,
         server,
         mc_version=target_mc_version,
         loader_version=target_loader_version,
         java_profile_id=_to_optional_int(java_profile_id),
-        memory_min_mb=_to_optional_int(memory_min_mb),
-        memory_max_mb=_to_optional_int(memory_max_mb),
+        memory_min_mb=parsed_memory_min_mb,
+        memory_max_mb=parsed_memory_max_mb,
         port=_to_optional_int(port),
         auto_restart=_to_bool(auto_restart),
         start_mode=(start_mode or "").strip().lower() or None,

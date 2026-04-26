@@ -5,6 +5,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.models.server_template import ServerTemplate
+from app.services.memory_settings_service import validate_memory_bounds
 
 
 def list_templates(db: Session, server_type: str | None = None) -> list[ServerTemplate]:
@@ -40,14 +41,18 @@ def _unset_default_for_type(db: Session, server_type: str, template_id: int | No
 
 def create_template(db: Session, payload: dict[str, Any]) -> ServerTemplate:
     default_properties_json = _validate_properties(payload.get("default_properties_json"))
+    memory_min_mb, memory_max_mb = validate_memory_bounds(
+        payload.get("memory_min_mb"),
+        payload.get("memory_max_mb"),
+    )
     template = ServerTemplate(
         name=payload["name"],
         server_type=payload["server_type"],
         mc_version=payload["mc_version"],
         loader_version=payload.get("loader_version") or None,
         java_profile_id=payload.get("java_profile_id"),
-        memory_min_mb=payload.get("memory_min_mb"),
-        memory_max_mb=payload.get("memory_max_mb"),
+        memory_min_mb=memory_min_mb,
+        memory_max_mb=memory_max_mb,
         port_min=payload.get("port_min"),
         port_max=payload.get("port_max"),
         start_parameters=payload.get("start_parameters") or None,
@@ -66,14 +71,18 @@ def create_template(db: Session, payload: dict[str, Any]) -> ServerTemplate:
 
 def update_template(db: Session, template: ServerTemplate, payload: dict[str, Any]) -> ServerTemplate:
     default_properties_json = _validate_properties(payload.get("default_properties_json"))
+    memory_min_mb, memory_max_mb = validate_memory_bounds(
+        payload.get("memory_min_mb"),
+        payload.get("memory_max_mb"),
+    )
 
     template.name = payload["name"]
     template.server_type = payload["server_type"]
     template.mc_version = payload["mc_version"]
     template.loader_version = payload.get("loader_version") or None
     template.java_profile_id = payload.get("java_profile_id")
-    template.memory_min_mb = payload.get("memory_min_mb")
-    template.memory_max_mb = payload.get("memory_max_mb")
+    template.memory_min_mb = memory_min_mb
+    template.memory_max_mb = memory_max_mb
     template.port_min = payload.get("port_min")
     template.port_max = payload.get("port_max")
     template.start_parameters = payload.get("start_parameters") or None

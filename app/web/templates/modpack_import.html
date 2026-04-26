@@ -130,11 +130,39 @@
                 </div>
                 <div>
                     <label for="mp_memory_min_mb">RAM min (MB)</label>
-                    <input id="mp_memory_min_mb" type="number" min="256" step="256" value="2048">
+                    <div class="ram-slider-field">
+                        <div class="ram-slider-head">
+                            <strong>Min</strong>
+                            <span id="mp_memory_min_label" class="muted"></span>
+                        </div>
+                        <input
+                            id="mp_memory_min_mb"
+                            class="ram-slider"
+                            type="range"
+                            min="512"
+                            max="65536"
+                            step="512"
+                            value="2048"
+                        >
+                    </div>
                 </div>
                 <div>
                     <label for="mp_memory_max_mb">RAM max (MB)</label>
-                    <input id="mp_memory_max_mb" type="number" min="256" step="256" value="4096">
+                    <div class="ram-slider-field">
+                        <div class="ram-slider-head">
+                            <strong>Max</strong>
+                            <span id="mp_memory_max_label" class="muted"></span>
+                        </div>
+                        <input
+                            id="mp_memory_max_mb"
+                            class="ram-slider"
+                            type="range"
+                            min="512"
+                            max="65536"
+                            step="512"
+                            value="4096"
+                        >
+                    </div>
                 </div>
                 <div>
                     <label for="mp_port">Port (optional)</label>
@@ -193,8 +221,59 @@
     const javaProfileSelect = document.getElementById("mp_java_profile_id");
     const memoryMinInput = document.getElementById("mp_memory_min_mb");
     const memoryMaxInput = document.getElementById("mp_memory_max_mb");
+    const memoryMinLabel = document.getElementById("mp_memory_min_label");
+    const memoryMaxLabel = document.getElementById("mp_memory_max_label");
     const portInput = document.getElementById("mp_port");
     const startParametersInput = document.getElementById("mp_start_parameters");
+    const RAM_MIN_MB = 512;
+    const RAM_MAX_MB = 65536;
+    const RAM_STEP_MB = 512;
+
+    function clampRam(rawValue, fallback) {
+        const parsed = Number.parseInt(String(rawValue || "").trim(), 10);
+        const base = Number.isFinite(parsed) ? parsed : fallback;
+        const rounded = Math.round(base / RAM_STEP_MB) * RAM_STEP_MB;
+        return Math.min(RAM_MAX_MB, Math.max(RAM_MIN_MB, rounded));
+    }
+
+    function formatRam(valueMb) {
+        const gb = valueMb / 1024;
+        const gbLabel = Number.isInteger(gb) ? String(gb) : gb.toFixed(1);
+        return `${gbLabel} GB (${valueMb} MB)`;
+    }
+
+    function syncMemoryInputs(changed) {
+        if (!(memoryMinInput instanceof HTMLInputElement) || !(memoryMaxInput instanceof HTMLInputElement)) {
+            return;
+        }
+        let minValue = clampRam(memoryMinInput.value, 2048);
+        let maxValue = clampRam(memoryMaxInput.value, 4096);
+        if (changed === "min" && minValue > maxValue) {
+            maxValue = minValue;
+        } else if (changed === "max" && maxValue < minValue) {
+            minValue = maxValue;
+        } else if (minValue > maxValue) {
+            maxValue = minValue;
+        }
+        memoryMinInput.value = String(minValue);
+        memoryMaxInput.value = String(maxValue);
+        if (memoryMinLabel instanceof HTMLElement) {
+            memoryMinLabel.textContent = formatRam(minValue);
+        }
+        if (memoryMaxLabel instanceof HTMLElement) {
+            memoryMaxLabel.textContent = formatRam(maxValue);
+        }
+    }
+
+    if (memoryMinInput instanceof HTMLInputElement && memoryMaxInput instanceof HTMLInputElement) {
+        memoryMinInput.addEventListener("input", function () {
+            syncMemoryInputs("min");
+        });
+        memoryMaxInput.addEventListener("input", function () {
+            syncMemoryInputs("max");
+        });
+        syncMemoryInputs();
+    }
 
     let modpackPreviewToken = "";
     let modpackSearchTimer = null;

@@ -11,6 +11,7 @@ from app.services import audit_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.provisioning_service import ProvisioningService
 from app.services.java_profile_service import list_java_profiles
+from app.services.memory_settings_service import validate_memory_bounds
 from app.services import template_service
 from app.services.app_setting_service import get_server_storage_root
 from app.web.routes.pages import build_context, push_flash, templates
@@ -134,9 +135,23 @@ def create_server_action(
 
     resolved_server_type = server_type.strip().lower() if server_type.strip() else (template.server_type if template else "")
     resolved_version = mc_version.strip() if mc_version.strip() else (template.mc_version if template else "")
+    resolved_memory_min = (
+        parsed_memory_min if parsed_memory_min is not None else (template.memory_min_mb if template else 2048)
+    )
+    resolved_memory_max = (
+        parsed_memory_max if parsed_memory_max is not None else (template.memory_max_mb if template else 4096)
+    )
 
     if not resolved_server_type or not resolved_version:
         push_flash(request, "Servertyp und Version sind erforderlich.", "error")
+        return RedirectResponse(url="/servers/create", status_code=303)
+    try:
+        resolved_memory_min, resolved_memory_max = validate_memory_bounds(
+            resolved_memory_min,
+            resolved_memory_max,
+        )
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
         return RedirectResponse(url="/servers/create", status_code=303)
 
     payload = ProvisionServerRequest(
@@ -149,12 +164,8 @@ def create_server_action(
         java_profile_id=parsed_java_profile
         if parsed_java_profile is not None
         else (template.java_profile_id if template else None),
-        memory_min_mb=parsed_memory_min
-        if parsed_memory_min is not None
-        else (template.memory_min_mb if template else 2048),
-        memory_max_mb=parsed_memory_max
-        if parsed_memory_max is not None
-        else (template.memory_max_mb if template else 4096),
+        memory_min_mb=resolved_memory_min if resolved_memory_min is not None else 2048,
+        memory_max_mb=resolved_memory_max if resolved_memory_max is not None else 4096,
         port=parsed_port if parsed_port is not None else (template.port_min if template else None),
         start_parameters=(start_parameters or "").strip()
         or (template.start_parameters if template else None),

@@ -11,6 +11,7 @@ from app.models.server import Server
 from app.models.server_permission import ServerPermission
 from app.models.user import User
 from app.services.java_runtime_service import choose_best_java_profile
+from app.services.memory_settings_service import validate_memory_bounds
 from app.schemas.server import ServerCreate, ServerImportConfirm
 
 
@@ -106,6 +107,7 @@ def can_edit_server_files(db: Session, user: User, server: Server) -> bool:
 def create_server(db: Session, data: ServerCreate) -> Server:
     base_path = str(Path(data.base_path).resolve())
     unique_name = _generate_unique_name(db, data.name)
+    memory_min_mb, memory_max_mb = validate_memory_bounds(data.memory_min_mb, data.memory_max_mb)
     java_profile_id = data.java_profile_id
     if java_profile_id is None:
         auto_profile = choose_best_java_profile(db, mc_version=data.mc_version)
@@ -122,8 +124,8 @@ def create_server(db: Session, data: ServerCreate) -> Server:
         start_command=data.start_command,
         start_bat_path=data.start_bat_path,
         java_profile_id=java_profile_id,
-        memory_min_mb=data.memory_min_mb,
-        memory_max_mb=data.memory_max_mb,
+        memory_min_mb=memory_min_mb,
+        memory_max_mb=memory_max_mb,
         port=data.port,
         status=DEFAULT_SERVER_STATUS,
         auto_restart=False,
@@ -313,6 +315,7 @@ def update_server_settings(
         stripped_version = mc_version.strip()
         if stripped_version:
             server.mc_version = stripped_version
+    memory_min_mb, memory_max_mb = validate_memory_bounds(memory_min_mb, memory_max_mb)
     server.loader_version = (loader_version or "").strip() or None
     server.java_profile_id = java_profile_id
     if server.java_profile_id is None:

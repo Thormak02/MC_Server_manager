@@ -87,11 +87,41 @@
         </div>
         <div>
             <label for="memory_min_mb">RAM min (MB)</label>
-            <input id="memory_min_mb" name="memory_min_mb" type="number" min="256" placeholder="2048">
+            <div class="ram-slider-field">
+                <div class="ram-slider-head">
+                    <strong>Min</strong>
+                    <span id="memory_min_label" class="muted"></span>
+                </div>
+                <input
+                    id="memory_min_mb"
+                    name="memory_min_mb"
+                    class="ram-slider"
+                    type="range"
+                    min="512"
+                    max="65536"
+                    step="512"
+                    value="2048"
+                >
+            </div>
         </div>
         <div>
             <label for="memory_max_mb">RAM max (MB)</label>
-            <input id="memory_max_mb" name="memory_max_mb" type="number" min="256" placeholder="4096">
+            <div class="ram-slider-field">
+                <div class="ram-slider-head">
+                    <strong>Max</strong>
+                    <span id="memory_max_label" class="muted"></span>
+                </div>
+                <input
+                    id="memory_max_mb"
+                    name="memory_max_mb"
+                    class="ram-slider"
+                    type="range"
+                    min="512"
+                    max="65536"
+                    step="512"
+                    value="4096"
+                >
+            </div>
         </div>
         <div>
             <label for="port">Port (optional)</label>
@@ -120,8 +150,68 @@
     const javaProfileSelect = document.getElementById("java_profile_id");
     const memoryMin = document.getElementById("memory_min_mb");
     const memoryMax = document.getElementById("memory_max_mb");
+    const memoryMinLabel = document.getElementById("memory_min_label");
+    const memoryMaxLabel = document.getElementById("memory_max_label");
     const portInput = document.getElementById("port");
     const startParamsInput = document.getElementById("start_parameters");
+    const RAM_MIN_MB = 512;
+    const RAM_MAX_MB = 65536;
+    const RAM_STEP_MB = 512;
+
+    function clampRam(rawValue, fallback) {
+        const parsed = Number.parseInt(String(rawValue || "").trim(), 10);
+        const base = Number.isFinite(parsed) ? parsed : fallback;
+        const rounded = Math.round(base / RAM_STEP_MB) * RAM_STEP_MB;
+        return Math.min(RAM_MAX_MB, Math.max(RAM_MIN_MB, rounded));
+    }
+
+    function formatRam(valueMb) {
+        const gb = valueMb / 1024;
+        const gbLabel = Number.isInteger(gb) ? String(gb) : gb.toFixed(1);
+        return `${gbLabel} GB (${valueMb} MB)`;
+    }
+
+    function syncMemoryInputs(changed) {
+        if (!memoryMin || !memoryMax) return;
+        let minValue = clampRam(memoryMin.value, 2048);
+        let maxValue = clampRam(memoryMax.value, 4096);
+        if (changed === "min" && minValue > maxValue) {
+            maxValue = minValue;
+        } else if (changed === "max" && maxValue < minValue) {
+            minValue = maxValue;
+        } else if (minValue > maxValue) {
+            maxValue = minValue;
+        }
+        memoryMin.value = String(minValue);
+        memoryMax.value = String(maxValue);
+        if (memoryMinLabel) {
+            memoryMinLabel.textContent = formatRam(minValue);
+        }
+        if (memoryMaxLabel) {
+            memoryMaxLabel.textContent = formatRam(maxValue);
+        }
+    }
+
+    function setMemoryInputs(minRaw, maxRaw) {
+        if (!memoryMin || !memoryMax) return;
+        const minText = String(minRaw || "").trim();
+        const maxText = String(maxRaw || "").trim();
+        const nextMin = minText ? clampRam(minText, 2048) : 2048;
+        const nextMax = maxText ? clampRam(maxText, 4096) : 4096;
+        memoryMin.value = String(nextMin);
+        memoryMax.value = String(nextMax);
+        syncMemoryInputs();
+    }
+
+    if (memoryMin && memoryMax) {
+        memoryMin.addEventListener("input", function () {
+            syncMemoryInputs("min");
+        });
+        memoryMax.addEventListener("input", function () {
+            syncMemoryInputs("max");
+        });
+        syncMemoryInputs();
+    }
     if (!typeSelect || !versionSelect) return;
 
     async function reloadVersions(selected) {
@@ -267,12 +357,7 @@
         if (javaProfileSelect) {
             javaProfileSelect.value = javaProfileId;
         }
-        if (memoryMin) {
-            memoryMin.value = memoryMinValue;
-        }
-        if (memoryMax) {
-            memoryMax.value = memoryMaxValue;
-        }
+        setMemoryInputs(memoryMinValue, memoryMaxValue);
         if (portInput && portValue) {
             portInput.value = portValue;
         }

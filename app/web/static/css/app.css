@@ -261,6 +261,37 @@ button.ghost,
     color: var(--text);
 }
 
+.ram-slider-field {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.ram-slider-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    font-size: 0.9rem;
+}
+
+.ram-slider-head strong {
+    font-size: 0.84rem;
+}
+
+input[type="range"].ram-slider {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    accent-color: var(--accent);
+}
+
+input[type="range"].ram-slider:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+    outline-offset: 0.2rem;
+    border-radius: 0.3rem;
+}
+
 .side-nav .side-logout {
     margin: 0;
 }
