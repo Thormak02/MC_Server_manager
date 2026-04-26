@@ -1,6 +1,7 @@
 import json
 import math
 import re
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 import urllib.error
 import urllib.parse
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.installed_content import InstalledContent
 from app.models.server import Server
+from app.providers.server.common import list_minecraft_versions
 from app.services import audit_service
 from app.services.platform_settings_service import (
     get_curseforge_api_key_runtime,
@@ -22,6 +24,7 @@ from app.services.platform_settings_service import (
 
 MODRINTH_BASE = "https://api.modrinth.com/v2"
 CURSEFORGE_BASE = "https://api.curseforge.com"
+SPIGET_BASE = "https://api.spiget.org/v2"
 MC_GAME_ID = 432
 _VALID_RELEASE_CHANNELS = {"all", "release", "beta", "alpha"}
 _SEARCH_STOPWORDS = {"a", "an", "and", "for", "of", "the", "to", "with"}
@@ -214,6 +217,10 @@ def _curseforge_headers() -> dict[str, str]:
     return {"x-api-key": api_key}
 
 
+def _spiget_headers() -> dict[str, str]:
+    return {"User-Agent": "mc-server-manager/1.0"}
+
+
 def _target_dir(server: Server, content_type: str) -> Path:
     folder = "mods"
     if content_type == "plugin":
@@ -222,7 +229,7 @@ def _target_dir(server: Server, content_type: str) -> Path:
 
 
 def _default_content_type(server: Server) -> str:
-    if server.server_type in {"paper", "spigot"}:
+    if server.server_type in {"paper", "spigot", "bukkit"}:
         return "plugin"
     return "mod"
 
@@ -345,6 +352,31 @@ def _curseforge_release_channel(release_type: int | None) -> str:
 def _normalize_search_text(value: str | None) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", " ", (value or "").lower())
     return " ".join(cleaned.split())
+
+
+def _epoch_seconds_to_iso(value: object) -> str | None:
+    try:
+        seconds = int(float(value))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if seconds <= 0:
+        return None
+    return datetime.fromtimestamp(seconds, tz=timezone.utc).isoformat()
+
+
+def _build_spiget_project_url(item: dict) -> str:
+    resource_id = str(item.get("id") or "").strip()
+    file_url = str((item.get("file") or {}).get("url") or "").strip()
+    slug = ""
+    if file_url.startswith("resources/"):
+        match = re.match(r"^resources/([^/?]+)\.", file_url)
+        if match:
+            slug = str(match.group(1) or "").strip()
+    if slug and resource_id:
+        return f"https://www.spigotmc.org/resources/{slug}.{resource_id}/"
+    if resource_id:
+        return f"https://www.spigotmc.org/resources/{resource_id}/"
+    return "https://www.spigotmc.org/resources/"
 
 
 def _compact_search_text(value: str | None) -> str:
@@ -1215,6 +1247,211 @@ def list_curseforge_loader_types(content_type: str) -> list[str]:
     return deduped
 
 
+def list_bukkit_categories(content_type: str) -> list[dict]:
+    if (content_type or "mod").strip().lower() != "plugin":
+        return []
+    payload = _request_json(f"{SPIGET_BASE}/categories?size=200&page=1&sort=name", headers=_spiget_headers())
+    data = payload if isinstance(payload, list) else []
+    categories: list[dict] = []
+    seen: set[str] = set()
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        category_id = str(item.get("id") or "").strip()
+        category_name = str(item.get("name") or "").strip()
+        if not category_id or not category_name:
+            continue
+        if category_id in seen:
+            continue
+        seen.add(category_id)
+        categories.append(
+            {
+                "id": category_id,
+                "label": category_name,
+                "provider": "bukkit",
+            }
+        )
+    categories.sort(key=lambda entry: str(entry.get("label") or "").lower())
+    return categories
+
+
+def list_bukkit_game_versions() -> list[str]:
+    try:
+        return list_minecraft_versions(minimum="1.7.10", channel="release", limit=300)
+    except Exception:
+        return []
+
+
+def list_bukkit_loader_types(content_type: str) -> list[str]:
+    if (content_type or "mod").strip().lower() != "plugin":
+        return []
+    return ["paper", "spigot", "bukkit"]
+
+
+def _spiget_sort(sort_by: str) -> str:
+    normalized = _normalize_sort_by(sort_by)
+    mapping = {
+        "relevance": "-downloads",
+        "downloads": "-downloads",
+        "popularity": "-likes",
+        "updated": "-updateDate",
+        "newest": "-releaseDate",
+    }
+    return mapping.get(normalized, "-downloads")
+
+
+def search_bukkit(
+    query: str,
+    mc_version: str | None,
+    loader: str | None,
+    content_type: str,
+    release_channel: str = "all",
+    sort_by: str = "relevance",
+    categories: list[str] | None = None,
+) -> list[dict]:
+    normalized_content_type = (content_type or "mod").strip().lower()
+    if normalized_content_type != "plugin":
+        return []
+    release_channel = _normalize_release_channel(release_channel)
+    if release_channel not in {"all", "release"}:
+        return []
+
+    mc_versions = _normalize_mc_version_list(mc_version)
+    expected_mc_version = mc_versions[0] if mc_versions else ""
+    category_tokens = {token for token in _normalize_categories(categories)}
+    sort_value = _spiget_sort(sort_by)
+
+    query_value = str(query or "").strip()
+    if query_value:
+        search_target = urllib.parse.quote(query_value, safe="")
+        url = f"{SPIGET_BASE}/search/resources/{search_target}?size=200&page=1&sort={urllib.parse.quote(sort_value)}"
+    else:
+        url = f"{SPIGET_BASE}/resources/free?size=200&page=1&sort={urllib.parse.quote(sort_value)}"
+    payload = _request_json(url, headers=_spiget_headers())
+    items = payload if isinstance(payload, list) else []
+    category_name_by_id: dict[str, str] = {}
+    try:
+        categories_payload = _request_json(
+            f"{SPIGET_BASE}/categories?size=200&page=1&sort=name",
+            headers=_spiget_headers(),
+        )
+        for category in (categories_payload if isinstance(categories_payload, list) else []):
+            if not isinstance(category, dict):
+                continue
+            category_id = str(category.get("id") or "").strip()
+            category_name = str(category.get("name") or "").strip()
+            if category_id and category_name:
+                category_name_by_id[category_id] = category_name
+    except Exception:
+        category_name_by_id = {}
+
+    results: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        resource_id = str(item.get("id") or "").strip()
+        if not resource_id:
+            continue
+        if bool(item.get("premium")):
+            continue
+        if bool(item.get("external")):
+            continue
+
+        item_category_id = str((item.get("category") or {}).get("id") or "").strip()
+        if category_tokens and (not item_category_id or item_category_id not in category_tokens):
+            continue
+
+        tested_versions = {
+            str(version).strip()
+            for version in (item.get("testedVersions") or [])
+            if str(version).strip()
+        }
+        if expected_mc_version and tested_versions and not _is_mc_version_compatible(expected_mc_version, tested_versions):
+            continue
+
+        resource_name = str(item.get("name") or "").strip()
+        icon_url = str((item.get("icon") or {}).get("url") or "").strip()
+        if icon_url and not icon_url.startswith("http"):
+            icon_url = f"https://www.spigotmc.org/{icon_url.lstrip('/')}"
+
+        author_id = str((item.get("author") or {}).get("id") or "").strip()
+        contributors = str(item.get("contributors") or "").strip()
+        author_label = contributors or (f"Author #{author_id}" if author_id else "-")
+
+        results.append(
+            {
+                "id": resource_id,
+                "title": resource_name or f"Resource {resource_id}",
+                "description": str(item.get("tag") or "").strip(),
+                "downloads": item.get("downloads"),
+                "followers": item.get("likes"),
+                "icon_url": icon_url or None,
+                "updated_at": _epoch_seconds_to_iso(item.get("updateDate")),
+                "author": author_label,
+                "categories": (
+                    [category_name_by_id.get(item_category_id, f"Category {item_category_id}")]
+                    if item_category_id
+                    else []
+                ),
+                "project_url": _build_spiget_project_url(item),
+                "provider": "bukkit",
+            }
+        )
+        if len(results) >= _SEARCH_RESULT_CAP:
+            break
+
+    return results
+
+
+def list_bukkit_versions(
+    resource_id: int,
+    mc_version: str | None,
+    loader: str | None,
+    release_channel: str = "all",
+) -> list[dict]:
+    del loader  # Bukkit/Spigot resources are plugin-only in this provider.
+    normalized_channel = _normalize_release_channel(release_channel)
+    if normalized_channel not in {"all", "release"}:
+        return []
+
+    expected_mc = str(mc_version or "").strip()
+    detail_payload = _request_json(f"{SPIGET_BASE}/resources/{int(resource_id)}", headers=_spiget_headers())
+    if not isinstance(detail_payload, dict):
+        return []
+    tested_versions = {
+        str(version).strip()
+        for version in (detail_payload.get("testedVersions") or [])
+        if str(version).strip()
+    }
+    if expected_mc and tested_versions and not _is_mc_version_compatible(expected_mc, tested_versions):
+        return []
+
+    payload = _request_json(
+        f"{SPIGET_BASE}/resources/{int(resource_id)}/versions?size=100&page=1&sort=-id",
+        headers=_spiget_headers(),
+    )
+    items = payload if isinstance(payload, list) else []
+    versions: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        version_id = str(item.get("id") or "").strip()
+        if not version_id:
+            continue
+        name = str(item.get("name") or "").strip() or version_id
+        versions.append(
+            {
+                "id": version_id,
+                "name": name,
+                "version_number": name,
+                "date": _epoch_seconds_to_iso(item.get("releaseDate")),
+                "release_channel": "release",
+            }
+        )
+    versions.sort(key=lambda entry: str(entry.get("date") or ""), reverse=True)
+    return versions
+
+
 def search_curseforge(
     query: str,
     mc_version: str | None,
@@ -1703,6 +1940,107 @@ def install_curseforge(
         processing.discard(stack_key)
 
 
+def install_bukkit(
+    db: Session,
+    server: Server,
+    resource_id: int,
+    version_id: int,
+    content_type: str,
+    user_id: int | None,
+) -> InstalledContent:
+    normalized_content_type = (content_type or "mod").strip().lower()
+    if normalized_content_type != "plugin":
+        raise ValueError("Bukkit-Provider unterstuetzt nur Plugins.")
+
+    try:
+        normalized_resource_id = int(resource_id)
+        normalized_version_id = int(version_id)
+    except (TypeError, ValueError):
+        raise ValueError("resource_id und version_id muessen numerisch sein.")
+    if normalized_resource_id <= 0 or normalized_version_id <= 0:
+        raise ValueError("resource_id und version_id muessen > 0 sein.")
+
+    resource_payload = _request_json(
+        f"{SPIGET_BASE}/resources/{normalized_resource_id}",
+        headers=_spiget_headers(),
+    )
+    if not isinstance(resource_payload, dict):
+        raise ValueError("Ungueltige Bukkit Ressourcendaten.")
+    if bool(resource_payload.get("premium")):
+        raise ValueError("Premium-Plugins werden ueber Bukkit nicht unterstuetzt.")
+    if bool(resource_payload.get("external")):
+        raise ValueError("Extern gehostete Bukkit-Plugins werden nicht unterstuetzt.")
+
+    tested_versions = {
+        str(version).strip()
+        for version in (resource_payload.get("testedVersions") or [])
+        if str(version).strip()
+    }
+    _raise_if_incompatible_with_server(
+        server,
+        normalized_content_type,
+        provider_name="Bukkit",
+        available_loaders={"paper", "spigot", "bukkit"},
+        available_mc_versions=tested_versions,
+    )
+
+    version_payload = _request_json(
+        f"{SPIGET_BASE}/resources/{normalized_resource_id}/versions/{normalized_version_id}",
+        headers=_spiget_headers(),
+    )
+    if not isinstance(version_payload, dict):
+        raise ValueError("Ungueltige Bukkit Versionsdaten.")
+
+    download_url = f"{SPIGET_BASE}/resources/{normalized_resource_id}/versions/{normalized_version_id}/download"
+    resource_name = str(resource_payload.get("name") or normalized_resource_id).strip()
+    version_name = str(version_payload.get("name") or normalized_version_id).strip()
+    suggested_name = f"{resource_name}-{version_name}.jar"
+    file_name = _safe_file_name(suggested_name)
+    if not file_name.lower().endswith(".jar"):
+        file_name = f"{file_name}.jar"
+
+    _remove_existing_project_entries(
+        db,
+        server,
+        provider_name="bukkit",
+        project_id=str(normalized_resource_id),
+        content_type=normalized_content_type,
+    )
+
+    target = _content_file_path(server, normalized_content_type, file_name)
+    try:
+        _download_file(download_url, target, headers=_spiget_headers())
+    except Exception as exc:
+        raise ValueError(f"Download fehlgeschlagen: {exc}") from exc
+
+    entry = InstalledContent(
+        server_id=server.id,
+        provider_name="bukkit",
+        content_type=normalized_content_type,
+        external_project_id=str(normalized_resource_id),
+        external_version_id=str(normalized_version_id),
+        name=resource_name or str(normalized_resource_id),
+        version_label=version_name or str(normalized_version_id),
+        file_name=file_name,
+        installed_by_user_id=user_id,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    audit_service.log_action(
+        db,
+        action="content.install",
+        user_id=user_id,
+        server_id=server.id,
+        details=(
+            f"provider=bukkit project={normalized_resource_id} "
+            f"version={normalized_version_id}"
+        ),
+    )
+    return entry
+
+
 def list_installed_content(db: Session, server: Server) -> list[InstalledContent]:
     stmt = select(InstalledContent).where(InstalledContent.server_id == server.id)
     entries = list(db.scalars(stmt))
@@ -1848,6 +2186,52 @@ def auto_update_plugins_for_server_version(
                     user_id,
                     resolve_dependencies=False,
                     enforce_compatibility=True,
+                )
+                notes.append(
+                    f"Plugin aktualisiert: {updated_entry.name} -> {latest_label}."
+                )
+                continue
+
+            if provider == "bukkit":
+                if not project_id.isdigit():
+                    warnings.append(
+                        f"Plugin uebersprungen ({display_name}): ungueltige Bukkit Resource-ID."
+                    )
+                    continue
+                versions = list_bukkit_versions(
+                    int(project_id),
+                    expected_mc_version,
+                    expected_loader,
+                    release_channel=release_channel,
+                )
+                if not versions and release_channel != "all":
+                    versions = list_bukkit_versions(
+                        int(project_id),
+                        expected_mc_version,
+                        expected_loader,
+                        release_channel="all",
+                    )
+                latest = versions[0] if versions else None
+                latest_version_id = str((latest or {}).get("id") or "").strip()
+                latest_label = str(
+                    (latest or {}).get("name")
+                    or (latest or {}).get("version_number")
+                    or latest_version_id
+                ).strip() or latest_version_id
+                if not latest_version_id or latest_version_id == current_version_id:
+                    continue
+                if not latest_version_id.isdigit():
+                    warnings.append(
+                        f"Plugin uebersprungen ({display_name}): ungueltige Bukkit Versions-ID."
+                    )
+                    continue
+                updated_entry = install_bukkit(
+                    db,
+                    server,
+                    int(project_id),
+                    int(latest_version_id),
+                    "plugin",
+                    user_id,
                 )
                 notes.append(
                     f"Plugin aktualisiert: {updated_entry.name} -> {latest_label}."

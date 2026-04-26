@@ -16,6 +16,7 @@
             <select id="provider">
                 <option value="curseforge" selected>CurseForge</option>
                 <option value="modrinth">Modrinth</option>
+                <option value="bukkit">Bukkit (Spiget)</option>
             </select>
         </div>
         <div>
@@ -730,6 +731,17 @@
                     loader,
                     release_channel: releaseChannel,
                 }).toString();
+        } else if (provider === "bukkit") {
+            url =
+                "/api/content/bukkit/versions?" +
+                new URLSearchParams({
+                    project_id: projectId,
+                    server_id: String(serverId),
+                    mc_version: mcVersion,
+                    loader,
+                    content_type: contentType,
+                    release_channel: releaseChannel,
+                }).toString();
         } else {
             url =
                 "/api/content/curseforge/versions?" +
@@ -844,6 +856,17 @@
                     server_id: String(serverId),
                     mc_version: mcVersion,
                     loader,
+                    release_channel: releaseChannel,
+                }).toString();
+        } else if (provider === "bukkit") {
+            url =
+                "/api/content/bukkit/versions?" +
+                new URLSearchParams({
+                    project_id: projectId,
+                    server_id: String(serverId),
+                    mc_version: mcVersion,
+                    loader,
+                    content_type: contentType,
                     release_channel: releaseChannel,
                 }).toString();
         } else if (provider === "curseforge") {

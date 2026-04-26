@@ -152,6 +152,19 @@ def content_search(
             )
         except ValueError as exc:
             return JSONResponse(status_code=400, content={"detail": str(exc)})
+    elif provider == "bukkit":
+        try:
+            results = content_service.search_bukkit(
+                query,
+                mc_version,
+                loader,
+                content_type,
+                release_channel,
+                sort_by,
+                _parse_categories(categories),
+            )
+        except ValueError as exc:
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
     else:
         raise HTTPException(status_code=400, detail="Unknown provider")
 
@@ -186,6 +199,8 @@ def content_categories(
             categories = content_service.list_modrinth_categories(content_type)
         elif normalized_provider == "curseforge":
             categories = content_service.list_curseforge_categories(content_type)
+        elif normalized_provider == "bukkit":
+            categories = content_service.list_bukkit_categories(content_type)
         else:
             return JSONResponse(status_code=400, content={"detail": "Unknown provider"})
     except ValueError as exc:
@@ -218,6 +233,10 @@ def content_filter_options(
             categories = content_service.list_curseforge_categories(content_type)
             mc_versions = content_service.list_curseforge_game_versions()
             loaders = content_service.list_curseforge_loader_types(content_type)
+        elif normalized_provider == "bukkit":
+            categories = content_service.list_bukkit_categories(content_type)
+            mc_versions = content_service.list_bukkit_game_versions()
+            loaders = content_service.list_bukkit_loader_types(content_type)
         else:
             return JSONResponse(status_code=400, content={"detail": "Unknown provider"})
     except ValueError as exc:
@@ -324,6 +343,44 @@ def curseforge_versions(
     return JSONResponse({"versions": versions})
 
 
+@router.get("/api/content/bukkit/versions", response_class=JSONResponse)
+def bukkit_versions(
+    request: Request,
+    project_id: int,
+    server_id: int | None = None,
+    mc_version: str | None = None,
+    loader: str | None = None,
+    content_type: str = "plugin",
+    release_channel: str = "all",
+    db: Session = Depends(get_db),
+):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    if server_id is not None:
+        server = _ensure_server_access(db, current_user, server_id)
+        if not _is_content_type_supported_for_server(server, content_type):
+            return JSONResponse({"versions": []})
+        server_loader = content_service._expected_server_loader(server, content_type)
+        if server_loader:
+            loader = server_loader
+        server_mc_version = content_service._expected_server_mc_version(server)
+        if server_mc_version:
+            mc_version = server_mc_version
+
+    try:
+        versions = content_service.list_bukkit_versions(
+            project_id,
+            mc_version,
+            loader,
+            release_channel,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    return JSONResponse({"versions": versions})
+
+
 @router.get("/api/servers/{server_id}/content", response_class=JSONResponse)
 def list_server_content(request: Request, server_id: int, db: Session = Depends(get_db)):
     current_user = _ensure_user(request, db)
@@ -394,6 +451,19 @@ async def install_content(request: Request, server_id: int, db: Session = Depend
                 content_type,
                 current_user.id,
                 _auto_installed=auto_installed,
+            )
+        except ValueError as exc:
+            db.rollback()
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
+    elif provider == "bukkit":
+        try:
+            entry = content_service.install_bukkit(
+                db,
+                server,
+                int(project_id),
+                int(version_id),
+                content_type,
+                current_user.id,
             )
         except ValueError as exc:
             db.rollback()

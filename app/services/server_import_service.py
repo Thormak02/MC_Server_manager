@@ -43,6 +43,8 @@ def detect_server_type(root_path: Path) -> str:
         return "paper"
     if any("spigot" in name for name in jar_names):
         return "spigot"
+    if any("craftbukkit" in name or "bukkit" in name for name in jar_names):
+        return "bukkit"
     if any("fabric" in name for name in jar_names):
         return "fabric"
     if any("neoforge" in name for name in jar_names):

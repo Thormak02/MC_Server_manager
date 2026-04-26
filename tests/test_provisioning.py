@@ -20,7 +20,7 @@ def test_server_create_page_available(client):
 
 def test_create_all_provider_types_offline(client, tmp_path):
     _login_admin(client)
-    server_types = ["vanilla", "paper", "spigot", "fabric", "forge", "neoforge"]
+    server_types = ["vanilla", "paper", "spigot", "bukkit", "fabric", "forge", "neoforge"]
 
     for index, server_type in enumerate(server_types, start=1):
         target = tmp_path / f"{server_type}_srv"

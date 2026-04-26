@@ -65,6 +65,23 @@ def test_import_analysis_detects_basic_files(client, tmp_path):
     assert "start.bat" in response.text
 
 
+def test_import_analysis_detects_bukkit_type(client, tmp_path):
+    _login_admin(client)
+    server_dir = tmp_path / "bukkit_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    (server_dir / "craftbukkit-1.20.1.jar").write_text("", encoding="utf-8")
+
+    response = client.post(
+        "/servers/import/analyze",
+        data={"base_path": str(server_dir)},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "bukkit" in response.text
+    assert "start.bat" in response.text
+
+
 def test_start_and_stop_imported_server(client, tmp_path):
     _login_admin(client)
     server_dir = tmp_path / "runtime_srv"

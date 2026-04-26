@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.server import Server
 from app.providers.base.server_provider_base import ServerProviderBase
+from app.providers.server.bukkit_provider import BukkitProvider
 from app.providers.server.fabric_provider import FabricProvider
 from app.providers.server.forge_provider import ForgeProvider
 from app.providers.server.neoforge_provider import NeoForgeProvider
@@ -24,6 +25,7 @@ class ProvisioningService:
             "vanilla": VanillaProvider(),
             "paper": PaperProvider(),
             "spigot": SpigotProvider(),
+            "bukkit": BukkitProvider(),
             "fabric": FabricProvider(),
             "forge": ForgeProvider(),
             "neoforge": NeoForgeProvider(),

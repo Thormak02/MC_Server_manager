@@ -40,7 +40,7 @@ from app.web.routes.pages import build_context, push_flash, templates
 
 router = APIRouter(include_in_schema=False)
 provisioning_service = ProvisioningService()
-_RUNTIME_VERSION_CHANGE_TYPES = {"vanilla", "paper", "spigot"}
+_RUNTIME_VERSION_CHANGE_TYPES = {"vanilla", "paper", "spigot", "bukkit"}
 
 
 def _to_optional_int(raw: str | None) -> int | None:
@@ -95,7 +95,7 @@ def _redirect_to_referer(request: Request, fallback: str = "/dashboard") -> Redi
 def _runtime_version_change_block_reason(db: Session, server) -> str | None:
     if (server.server_type or "").strip().lower() not in _RUNTIME_VERSION_CHANGE_TYPES:
         return (
-            "Minecraft-Version kann nur bei Vanilla/Plugin-Servern (vanilla, paper, spigot) "
+            "Minecraft-Version kann nur bei Vanilla/Plugin-Servern (vanilla, paper, spigot, bukkit) "
             "geaendert werden."
         )
     modpack_state = modpack_service.get_server_modpack_state(db, server.id)

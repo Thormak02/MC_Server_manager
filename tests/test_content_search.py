@@ -192,6 +192,90 @@ def test_list_curseforge_loader_types_keeps_core_loader_families_available(monke
     assert "quilt" in loaders
 
 
+def test_search_bukkit_plugins_works_without_curseforge_key(monkeypatch):
+    def fake_request_json(url: str, headers=None):
+        if "/search/resources/" in url:
+            return [
+                {
+                    "id": 42,
+                    "name": "Example Bukkit Plugin",
+                    "tag": "test plugin",
+                    "downloads": 12345,
+                    "likes": 99,
+                    "icon": {"url": "data/resource_icons/42.jpg"},
+                    "author": {"id": 7},
+                    "contributors": "",
+                    "category": {"id": 15},
+                    "testedVersions": ["1.21", "1.21.1"],
+                    "external": False,
+                    "premium": False,
+                    "file": {"url": "resources/example-bukkit-plugin.42/download?version=2"},
+                    "updateDate": 1710000000,
+                },
+                {
+                    "id": 99,
+                    "name": "External Plugin",
+                    "tag": "external",
+                    "downloads": 10,
+                    "likes": 1,
+                    "author": {"id": 8},
+                    "contributors": "",
+                    "category": {"id": 15},
+                    "testedVersions": ["1.21.1"],
+                    "external": True,
+                    "premium": False,
+                    "file": {"url": "resources/external.99/download?version=1"},
+                },
+            ]
+        return []
+
+    monkeypatch.setattr(content_service, "_request_json", fake_request_json)
+    monkeypatch.setattr(content_service, "_curseforge_headers", lambda: (_ for _ in ()).throw(RuntimeError("must not be called")))
+
+    results = content_service.search_bukkit(
+        query="example",
+        mc_version="1.21.1",
+        loader="paper",
+        content_type="plugin",
+        release_channel="release",
+    )
+
+    assert len(results) == 1
+    assert results[0]["id"] == "42"
+    assert results[0]["provider"] == "bukkit"
+    assert "spigotmc.org/resources/example-bukkit-plugin.42" in str(results[0]["project_url"])
+
+
+def test_list_bukkit_versions_respects_mc_compatibility(monkeypatch):
+    def fake_request_json(url: str, headers=None):
+        if "/resources/42/versions" in url:
+            return [
+                {"id": 1001, "name": "v1", "releaseDate": 1710000000},
+                {"id": 1000, "name": "v0", "releaseDate": 1700000000},
+            ]
+        if "/resources/42" in url:
+            return {
+                "id": 42,
+                "testedVersions": ["1.20", "1.20.1"],
+            }
+        return {}
+
+    monkeypatch.setattr(content_service, "_request_json", fake_request_json)
+
+    incompatible = content_service.list_bukkit_versions(42, "1.21.1", "paper")
+    compatible = content_service.list_bukkit_versions(42, "1.20.1", "paper")
+
+    assert incompatible == []
+    assert len(compatible) == 2
+    assert compatible[0]["id"] == "1001"
+
+
+def test_default_content_type_for_bukkit_servers_is_plugin():
+    server = SimpleNamespace(server_type="bukkit")
+    assert content_service._default_content_type(server) == "plugin"
+    assert content_service._expected_server_loader(server, "plugin") == "bukkit"
+
+
 def test_auto_update_plugins_for_server_version_updates_when_available(monkeypatch):
     server = SimpleNamespace(id=1, mc_version="1.21.1", server_type="paper")
     db = object()
