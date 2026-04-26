@@ -574,6 +574,43 @@ input[type="range"].ram-slider:focus-visible {
     align-content: start;
 }
 
+.scroll-pane {
+    margin-top: 0.45rem;
+    min-height: 7.5rem;
+    max-height: min(62vh, 980px);
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 0.9rem;
+    background: color-mix(in srgb, var(--panel) 92%, transparent);
+    padding: 0.72rem;
+}
+
+.scroll-pane table {
+    margin: 0;
+}
+
+.scroll-pane thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: color-mix(in srgb, var(--panel-soft) 82%, var(--panel));
+}
+
+.editor-scroll-pane {
+    padding: 0.65rem;
+}
+
+.editor-scroll-pane .code-area {
+    min-height: 320px;
+}
+
+.scroll-pane-console {
+    margin-top: 0;
+    border: none;
+    background: transparent;
+    padding: 0;
+}
+
 .multi-select {
     position: relative;
     min-width: 0;

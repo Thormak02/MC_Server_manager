@@ -85,35 +85,36 @@
             <input type="hidden" name="__assistant_json_base" value="{{ assistant_payload.assistant_json_base }}">
             {% endif %}
             <p><strong>{{ assistant_payload.title }}</strong></p>
-
-            {% if assistant_payload.mode == "json_text" %}
-            <label for="extras_text">JSON Inhalt</label>
-            <textarea id="extras_text" name="extras_text" rows="24" class="code-area" {% if not can_edit %}readonly{% endif %}>{{ assistant_payload.extras_text }}</textarea>
-            {% else %}
-            <div class="assistant-grid">
-                {% for field in assistant_payload.fields %}
-                <div class="stack">
-                    <label for="field_{{ field.key }}">{{ field.label }}</label>
-                    {% if field.kind == "select" %}
-                    <select id="field_{{ field.key }}" name="{{ field.key }}" {% if not can_edit %}disabled{% endif %}>
-                        {% for option in field.options %}
-                        <option value="{{ option }}" {% if field.value == option %}selected{% endif %}>{{ option }}</option>
-                        {% endfor %}
-                    </select>
-                    {% elif field.kind == "number" %}
-                    <input id="field_{{ field.key }}" name="{{ field.key }}" type="number" value="{{ field.value }}" placeholder="{{ field.placeholder or '' }}" {% if not can_edit %}readonly{% endif %}>
-                    {% else %}
-                    <input id="field_{{ field.key }}" name="{{ field.key }}" type="text" value="{{ field.value }}" placeholder="{{ field.placeholder or '' }}" {% if not can_edit %}readonly{% endif %}>
-                    {% endif %}
+            <div class="scroll-pane editor-scroll-pane">
+                {% if assistant_payload.mode == "json_text" %}
+                <label for="extras_text">JSON Inhalt</label>
+                <textarea id="extras_text" name="extras_text" rows="24" class="code-area" {% if not can_edit %}readonly{% endif %}>{{ assistant_payload.extras_text }}</textarea>
+                {% else %}
+                <div class="assistant-grid">
+                    {% for field in assistant_payload.fields %}
+                    <div class="stack">
+                        <label for="field_{{ field.key }}">{{ field.label }}</label>
+                        {% if field.kind == "select" %}
+                        <select id="field_{{ field.key }}" name="{{ field.key }}" {% if not can_edit %}disabled{% endif %}>
+                            {% for option in field.options %}
+                            <option value="{{ option }}" {% if field.value == option %}selected{% endif %}>{{ option }}</option>
+                            {% endfor %}
+                        </select>
+                        {% elif field.kind == "number" %}
+                        <input id="field_{{ field.key }}" name="{{ field.key }}" type="number" value="{{ field.value }}" placeholder="{{ field.placeholder or '' }}" {% if not can_edit %}readonly{% endif %}>
+                        {% else %}
+                        <input id="field_{{ field.key }}" name="{{ field.key }}" type="text" value="{{ field.value }}" placeholder="{{ field.placeholder or '' }}" {% if not can_edit %}readonly{% endif %}>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
-            </div>
 
-            {% if assistant_payload.mode == "server_properties" %}
-            <label for="extras_text">Weitere Key=Value Zeilen (Freitext)</label>
-            <textarea id="extras_text" name="extras_text" rows="8" class="code-area" {% if not can_edit %}readonly{% endif %}>{{ assistant_payload.extras_text }}</textarea>
-            {% endif %}
-            {% endif %}
+                {% if assistant_payload.mode == "server_properties" %}
+                <label for="extras_text">Weitere Key=Value Zeilen (Freitext)</label>
+                <textarea id="extras_text" name="extras_text" rows="8" class="code-area" {% if not can_edit %}readonly{% endif %}>{{ assistant_payload.extras_text }}</textarea>
+                {% endif %}
+                {% endif %}
+            </div>
 
             {% if can_edit %}
             <div><button type="submit">Assistent speichern</button></div>
@@ -125,7 +126,9 @@
         <form method="post" action="/servers/{{ server.id }}/files/save" class="stack">
             <input name="relative_path" type="hidden" value="{{ file_content.relative_path }}">
             <label><strong>{{ file_content.relative_path }}</strong></label>
-            <textarea name="content" rows="26" class="code-area" {% if not can_edit %}readonly{% endif %}>{{ file_content.content }}</textarea>
+            <div class="scroll-pane editor-scroll-pane">
+                <textarea name="content" rows="26" class="code-area" {% if not can_edit %}readonly{% endif %}>{{ file_content.content }}</textarea>
+            </div>
             {% if can_edit %}
             <div><button type="submit">Freitext speichern</button></div>
             {% else %}

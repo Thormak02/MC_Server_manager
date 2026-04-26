@@ -77,56 +77,58 @@
 
 <section class="card">
     <h2>Installierte Inhalte</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Version</th>
-                <th>Provider</th>
-                <th>Datei</th>
-                <th>Typ</th>
-                <th>Aktion</th>
-            </tr>
-        </thead>
-        <tbody id="installed-body">
-            {% for item in installed %}
-            <tr
-                data-content-id="{{ item.id }}"
-                data-provider="{{ item.provider_name }}"
-                data-project-id="{{ item.external_project_id }}"
-                data-version-id="{{ item.external_version_id }}"
-                data-content-type="{{ item.content_type }}"
-            >
-                <td>{{ item.name }}</td>
-                <td>
-                    {% if can_manage %}
-                    <div class="stack">
-                        <select class="installed-version-select">
-                            <option value="">- Versionen laden -</option>
-                        </select>
-                        <div class="inline-form">
-                            <button class="ghost apply-installed-version" type="button" data-content-id="{{ item.id }}">Version anwenden</button>
+    <div class="scroll-pane">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Version</th>
+                    <th>Provider</th>
+                    <th>Datei</th>
+                    <th>Typ</th>
+                    <th>Aktion</th>
+                </tr>
+            </thead>
+            <tbody id="installed-body">
+                {% for item in installed %}
+                <tr
+                    data-content-id="{{ item.id }}"
+                    data-provider="{{ item.provider_name }}"
+                    data-project-id="{{ item.external_project_id }}"
+                    data-version-id="{{ item.external_version_id }}"
+                    data-content-type="{{ item.content_type }}"
+                >
+                    <td>{{ item.name }}</td>
+                    <td>
+                        {% if can_manage %}
+                        <div class="stack">
+                            <select class="installed-version-select">
+                                <option value="">- Versionen laden -</option>
+                            </select>
+                            <div class="inline-form">
+                                <button class="ghost apply-installed-version" type="button" data-content-id="{{ item.id }}">Version anwenden</button>
+                            </div>
+                            <span class="muted installed-version-label">{{ item.version_label or "-" }}</span>
                         </div>
-                        <span class="muted installed-version-label">{{ item.version_label or "-" }}</span>
-                    </div>
-                    {% else %}
-                    {{ item.version_label or "-" }}
-                    {% endif %}
-                </td>
-                <td>{{ item.provider_name }}</td>
-                <td>{{ item.file_name }}</td>
-                <td>{{ item.content_type }}</td>
-                <td>
-                    {% if can_manage %}
-                    <button class="ghost delete-content" type="button" data-content-id="{{ item.id }}">Loeschen</button>
-                    {% else %}-{% endif %}
-                </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="6">Keine Inhalte installiert.</td></tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                        {% else %}
+                        {{ item.version_label or "-" }}
+                        {% endif %}
+                    </td>
+                    <td>{{ item.provider_name }}</td>
+                    <td>{{ item.file_name }}</td>
+                    <td>{{ item.content_type }}</td>
+                    <td>
+                        {% if can_manage %}
+                        <button class="ghost delete-content" type="button" data-content-id="{{ item.id }}">Loeschen</button>
+                        {% else %}-{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6">Keine Inhalte installiert.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </section>
 
 <script>

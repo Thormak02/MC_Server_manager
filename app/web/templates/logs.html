@@ -46,7 +46,7 @@
 
 <section class="card">
     <p class="muted">Quelle: {{ source_label }} | Zeilen: {{ lines|length }}</p>
-    <div class="console-output">
+    <div class="console-output scroll-pane scroll-pane-console">
         {% for line in lines %}
         <div>{{ line }}</div>
         {% else %}
