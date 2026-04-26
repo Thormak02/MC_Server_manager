@@ -235,6 +235,15 @@
             const totalServers = document.getElementById("dashboard-total-servers");
             const runningServers = document.getElementById("dashboard-running-servers");
 
+            function escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/\"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
             function formatNumber(value, digits) {
                 if (value === null || value === undefined || Number.isNaN(value)) {
                     return "-";
@@ -272,7 +281,8 @@
                     if (!serverId) return;
 
                     const status = String(server.status || "-");
-                    if (status === "running" || usage.running === true) {
+                    const isOnline = status === "running" || usage.running === true;
+                    if (isOnline) {
                         runningCount += 1;
                     }
 
@@ -281,7 +291,13 @@
                     const cpuEl = document.getElementById(`dashboard-cpu-${serverId}`);
                     const ramEl = document.getElementById(`dashboard-ram-${serverId}`);
 
-                    if (statusEl) statusEl.textContent = status;
+                    if (statusEl) {
+                        statusEl.dataset.online = isOnline ? "true" : "false";
+                        statusEl.innerHTML = `
+<span class="status-dot ${isOnline ? "status-dot-online" : "status-dot-offline"}" aria-hidden="true"></span>
+<span class="dashboard-status-label">${escapeHtml(status)}</span>
+`;
+                    }
                     if (playersEl) {
                         const playersCurrent =
                             entry.players_current === null || entry.players_current === undefined
@@ -292,6 +308,14 @@
                                 ? "?"
                                 : entry.players_max;
                         playersEl.textContent = `${playersCurrent}/${playersMax}`;
+                        const onlinePlayers = Array.isArray(entry.online_players)
+                            ? entry.online_players.map((name) => String(name).trim()).filter((name) => name.length > 0)
+                            : [];
+                        if (onlinePlayers.length > 0) {
+                            playersEl.setAttribute("title", onlinePlayers.join(", "));
+                        } else {
+                            playersEl.removeAttribute("title");
+                        }
                     }
                     if (cpuEl) {
                         cpuEl.textContent = `${formatNumber(usage.cpu_percent || 0, 1)}%`;

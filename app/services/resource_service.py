@@ -3,7 +3,11 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.models.user import User
-from app.services.process_service import get_player_counts, get_process_resource_usage
+from app.services.process_service import (
+    get_online_player_names,
+    get_player_counts,
+    get_process_resource_usage,
+)
 from app.services.server_service import list_servers_for_user
 
 try:
@@ -51,6 +55,7 @@ def get_server_resource_entries(db: Session, user: User) -> list[dict[str, Any]]
                 "usage": usage,
                 "players_current": players_current,
                 "players_max": players_max,
+                "online_players": get_online_player_names(server.id),
                 "memory_share_percent": mem_share,
             }
         )

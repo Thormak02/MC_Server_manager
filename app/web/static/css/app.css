@@ -347,6 +347,38 @@ button.ghost,
     background: color-mix(in srgb, var(--accent) 10%, var(--panel));
 }
 
+.status-dot {
+    display: inline-block;
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    margin-right: 0.45rem;
+    vertical-align: middle;
+    border: 1px solid color-mix(in srgb, var(--text) 12%, var(--border));
+}
+
+.status-dot-online {
+    background: #22b16e;
+}
+
+.status-dot-offline {
+    background: #d64a58;
+}
+
+.dashboard-status-cell {
+    white-space: nowrap;
+}
+
+.dashboard-status-label {
+    vertical-align: middle;
+}
+
+.dashboard-players-cell[title] {
+    cursor: help;
+    text-decoration: underline dotted color-mix(in srgb, var(--accent) 50%, var(--border));
+    text-underline-offset: 0.14em;
+}
+
 .search-result-main {
     display: grid;
     grid-template-columns: 72px 1fr;

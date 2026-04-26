@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session
 from app.core.constants import UserRole
 from app.db.session import get_db
 from app.services.auth_service import get_current_user_from_session
-from app.services.process_service import get_player_counts, get_process_resource_usage, refresh_runtime_states
+from app.services.process_service import (
+    get_online_player_names,
+    get_player_counts,
+    get_process_resource_usage,
+    refresh_runtime_states,
+)
 from app.services.resource_service import get_host_resources, get_server_resource_entries
 from app.services.server_service import get_dashboard_summary, list_servers_for_user
 from app.web.routes.pages import build_context, templates
@@ -34,6 +39,7 @@ def dashboard_page(
         server_runtime[server.id] = {
             "players_current": players_current,
             "players_max": players_max,
+            "online_players": get_online_player_names(server.id),
             "usage": usage,
         }
 
@@ -91,6 +97,7 @@ def resources_live(
                 },
                 "players_current": row.get("players_current"),
                 "players_max": row.get("players_max"),
+                "online_players": row.get("online_players") or [],
                 "memory_share_percent": row.get("memory_share_percent", 0.0),
                 "usage": {
                     "running": usage.get("running"),

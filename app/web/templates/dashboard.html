@@ -53,12 +53,23 @@
             {% for server in servers %}
             {% set runtime = server_runtime.get(server.id, {}) %}
             {% set usage = runtime.get("usage", {}) %}
+            {% set online_players = runtime.get("online_players", []) %}
+            {% set status_online = server.status == "running" %}
             <tr data-server-id="{{ server.id }}">
                 <td><a href="/servers/{{ server.id }}">{{ server.name }}</a></td>
                 <td>{{ server.server_type }}</td>
                 <td>{{ server.mc_version }}</td>
-                <td id="dashboard-status-{{ server.id }}">{{ server.status }}</td>
-                <td id="dashboard-players-{{ server.id }}">
+                <td id="dashboard-status-{{ server.id }}" class="dashboard-status-cell" data-online="{{ 'true' if status_online else 'false' }}">
+                    <span class="status-dot {{ 'status-dot-online' if status_online else 'status-dot-offline' }}" aria-hidden="true"></span>
+                    <span class="dashboard-status-label">{{ server.status }}</span>
+                </td>
+                <td
+                    id="dashboard-players-{{ server.id }}"
+                    class="dashboard-players-cell"
+                    {% if online_players %}
+                    title="{{ online_players|join(', ') }}"
+                    {% endif %}
+                >
                     {% set current = runtime.get("players_current") %}
                     {% set max_players = runtime.get("players_max") %}
                     {{ current if current is not none else 0 }}/{{ max_players if max_players is not none else "?" }}
