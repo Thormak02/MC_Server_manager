@@ -1739,3 +1739,126 @@ def delete_installed_content(db: Session, server: Server, content: InstalledCont
         details=f"provider={content.provider_name} id={content.external_project_id}",
     )
 
+
+def auto_update_plugins_for_server_version(
+    db: Session,
+    server: Server,
+    user_id: int | None,
+    *,
+    release_channel: str = "release",
+) -> tuple[list[str], list[str]]:
+    expected_mc_version = _expected_server_mc_version(server)
+    expected_loader = _expected_server_loader(server, "plugin")
+    if not expected_mc_version or not expected_loader:
+        return [], []
+
+    installed_items = list_installed_content(db, server)
+    plugin_items = [item for item in installed_items if (item.content_type or "").strip().lower() == "plugin"]
+    if not plugin_items:
+        return [], []
+
+    notes: list[str] = []
+    warnings: list[str] = []
+    for item in plugin_items:
+        provider = (item.provider_name or "").strip().lower()
+        project_id = str(item.external_project_id or "").strip()
+        current_version_id = str(item.external_version_id or "").strip()
+        display_name = item.name or project_id or "plugin"
+        try:
+            if provider == "modrinth":
+                if not project_id:
+                    warnings.append(f"Plugin uebersprungen ({display_name}): Modrinth Projekt-ID fehlt.")
+                    continue
+                versions = list_modrinth_versions(
+                    project_id,
+                    expected_mc_version,
+                    expected_loader,
+                    release_channel=release_channel,
+                )
+                if not versions and release_channel != "all":
+                    versions = list_modrinth_versions(
+                        project_id,
+                        expected_mc_version,
+                        expected_loader,
+                        release_channel="all",
+                    )
+                latest = versions[0] if versions else None
+                latest_version_id = str((latest or {}).get("id") or "").strip()
+                latest_label = str(
+                    (latest or {}).get("name")
+                    or (latest or {}).get("version_number")
+                    or latest_version_id
+                ).strip() or latest_version_id
+                if not latest_version_id or latest_version_id == current_version_id:
+                    continue
+                updated_entry = install_modrinth(
+                    db,
+                    server,
+                    project_id,
+                    latest_version_id,
+                    "plugin",
+                    user_id,
+                )
+                notes.append(
+                    f"Plugin aktualisiert: {updated_entry.name} -> {latest_label}."
+                )
+                continue
+
+            if provider == "curseforge":
+                if not project_id.isdigit():
+                    warnings.append(
+                        f"Plugin uebersprungen ({display_name}): ungueltige CurseForge Projekt-ID."
+                    )
+                    continue
+                versions = list_curseforge_versions(
+                    int(project_id),
+                    expected_mc_version,
+                    expected_loader,
+                    "plugin",
+                    release_channel=release_channel,
+                )
+                if not versions and release_channel != "all":
+                    versions = list_curseforge_versions(
+                        int(project_id),
+                        expected_mc_version,
+                        expected_loader,
+                        "plugin",
+                        release_channel="all",
+                    )
+                latest = versions[0] if versions else None
+                latest_version_id = str((latest or {}).get("id") or "").strip()
+                latest_label = str(
+                    (latest or {}).get("name")
+                    or (latest or {}).get("version_number")
+                    or latest_version_id
+                ).strip() or latest_version_id
+                if not latest_version_id or latest_version_id == current_version_id:
+                    continue
+                if not latest_version_id.isdigit():
+                    warnings.append(
+                        f"Plugin uebersprungen ({display_name}): ungueltige CurseForge Datei-ID."
+                    )
+                    continue
+                updated_entry = install_curseforge(
+                    db,
+                    server,
+                    int(project_id),
+                    int(latest_version_id),
+                    "plugin",
+                    user_id,
+                    resolve_dependencies=False,
+                    enforce_compatibility=True,
+                )
+                notes.append(
+                    f"Plugin aktualisiert: {updated_entry.name} -> {latest_label}."
+                )
+                continue
+
+            warnings.append(
+                f"Plugin uebersprungen ({display_name}): Provider '{item.provider_name}' wird nicht unterstuetzt."
+            )
+        except Exception as exc:
+            warnings.append(f"Plugin-Update fehlgeschlagen ({display_name}): {exc}")
+
+    return notes, warnings
+

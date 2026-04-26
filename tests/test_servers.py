@@ -29,6 +29,25 @@ def _import_server(client, server_dir, *, name="Imported Server"):
     return response.headers["location"]
 
 
+def _import_server_with_type(client, server_dir, *, name, server_type, mc_version="1.20.1"):
+    response = client.post(
+        "/servers/import/confirm",
+        data={
+            "name": name,
+            "base_path": str(server_dir),
+            "server_type": server_type,
+            "mc_version": mc_version,
+            "start_mode": "bat",
+            "start_bat_path": str(server_dir / "start.bat"),
+            "start_command": "",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"].startswith("/servers/")
+    return response.headers["location"]
+
+
 def test_import_analysis_detects_basic_files(client, tmp_path):
     _login_admin(client)
     server_dir = tmp_path / "paper_srv"
@@ -245,6 +264,141 @@ def test_modpack_update_api_endpoints(client, tmp_path, monkeypatch):
     assert apply_payload["queued"] is True
     assert apply_payload["applied"] is True
     assert apply_payload["install_result"]["installed_count"] == 3
+
+
+def test_version_change_blocked_for_modded_server(client, tmp_path):
+    _login_admin(client)
+    server_dir = tmp_path / "forge_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server_with_type(
+        client,
+        server_dir,
+        name="Forge Server",
+        server_type="forge",
+        mc_version="1.20.1",
+    )
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    response = client.post(
+        f"/servers/{server_id}/settings",
+        data={"mc_version": "1.21.1"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/servers/{server_id}"
+
+    version_options = client.get(f"/servers/{server_id}/version-options")
+    assert version_options.status_code == 200
+    options_payload = version_options.json()
+    assert options_payload["versions"] == []
+    assert "locked_reason" in options_payload
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        assert server.mc_version == "1.20.1"
+
+
+def test_version_change_blocked_for_modpack_server(client, tmp_path):
+    _login_admin(client)
+    server_dir = tmp_path / "paper_modpack_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server_with_type(
+        client,
+        server_dir,
+        name="Paper Modpack Server",
+        server_type="paper",
+        mc_version="1.20.1",
+    )
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.models.server_modpack_state import ServerModpackState
+
+    with SessionLocal() as db:
+        db.add(
+            ServerModpackState(
+                server_id=server_id,
+                source="modrinth",
+                pack_name="Example Pack",
+                source_ref="example",
+                upstream_project_id="example",
+            )
+        )
+        db.commit()
+
+    response = client.post(
+        f"/servers/{server_id}/settings",
+        data={"mc_version": "1.21.1"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/servers/{server_id}"
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        assert server.mc_version == "1.20.1"
+
+
+def test_version_change_allowed_for_plugin_server(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_dir = tmp_path / "paper_update_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server_with_type(
+        client,
+        server_dir,
+        name="Paper Update Server",
+        server_type="paper",
+        mc_version="1.20.1",
+    )
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    from app.api.routers import servers as servers_router
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    called: list[tuple[str, str | None]] = []
+    plugin_update_called: list[tuple[int, str]] = []
+
+    def fake_reprovision(server, *, mc_version, loader_version):
+        called.append((mc_version, loader_version))
+        return ["ok"]
+
+    monkeypatch.setattr(
+        servers_router.provisioning_service,
+        "reprovision_existing_server",
+        fake_reprovision,
+    )
+    monkeypatch.setattr(
+        servers_router.content_service,
+        "auto_update_plugins_for_server_version",
+        lambda db, server, user_id, release_channel="release": (
+            plugin_update_called.append((server.id, release_channel)) or (["plugins updated"], [])
+        ),
+    )
+
+    response = client.post(
+        f"/servers/{server_id}/settings",
+        data={"mc_version": "1.21.1"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/servers/{server_id}"
+    assert called == [("1.21.1", None)]
+    assert plugin_update_called == [(server_id, "release")]
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        assert server.mc_version == "1.21.1"
 
 
 def test_delete_server_accepts_server_prefix_in_confirm_name(client, tmp_path):

@@ -1,4 +1,5 @@
 import urllib.parse
+from types import SimpleNamespace
 
 from app.services import content_service
 
@@ -189,3 +190,54 @@ def test_list_curseforge_loader_types_keeps_core_loader_families_available(monke
     assert "neoforge" in loaders
     assert "fabric" in loaders
     assert "quilt" in loaders
+
+
+def test_auto_update_plugins_for_server_version_updates_when_available(monkeypatch):
+    server = SimpleNamespace(id=1, mc_version="1.21.1", server_type="paper")
+    db = object()
+
+    installed_entries = [
+        SimpleNamespace(
+            content_type="plugin",
+            provider_name="modrinth",
+            external_project_id="project-modrinth",
+            external_version_id="old-modrinth",
+            name="Plugin One",
+        ),
+        SimpleNamespace(
+            content_type="plugin",
+            provider_name="curseforge",
+            external_project_id="12345",
+            external_version_id="100",
+            name="Plugin Two",
+        ),
+    ]
+
+    monkeypatch.setattr(content_service, "list_installed_content", lambda *_args, **_kwargs: installed_entries)
+    monkeypatch.setattr(
+        content_service,
+        "list_modrinth_versions",
+        lambda *args, **kwargs: [{"id": "new-modrinth", "name": "Plugin One v2"}],
+    )
+    monkeypatch.setattr(
+        content_service,
+        "list_curseforge_versions",
+        lambda *args, **kwargs: [{"id": 200, "name": "Plugin Two v2"}],
+    )
+    monkeypatch.setattr(
+        content_service,
+        "install_modrinth",
+        lambda *args, **kwargs: SimpleNamespace(name="Plugin One"),
+    )
+    monkeypatch.setattr(
+        content_service,
+        "install_curseforge",
+        lambda *args, **kwargs: SimpleNamespace(name="Plugin Two"),
+    )
+
+    notes, warnings = content_service.auto_update_plugins_for_server_version(db, server, user_id=1)
+
+    assert len(notes) == 2
+    assert any("Plugin One" in note for note in notes)
+    assert any("Plugin Two" in note for note in notes)
+    assert warnings == []

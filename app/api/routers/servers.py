@@ -14,7 +14,7 @@ from app.models.scheduled_job import ScheduledJob
 from app.models.server_permission import ServerPermission
 from app.models.server_modpack_state import ServerModpackState
 from app.schemas.server import ServerImportConfirm
-from app.services import audit_service, backup_service, modpack_service
+from app.services import audit_service, backup_service, content_service, modpack_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.java_profile_service import list_java_profiles
 from app.services.process_service import (
@@ -40,6 +40,7 @@ from app.web.routes.pages import build_context, push_flash, templates
 
 router = APIRouter(include_in_schema=False)
 provisioning_service = ProvisioningService()
+_RUNTIME_VERSION_CHANGE_TYPES = {"vanilla", "paper", "spigot"}
 
 
 def _to_optional_int(raw: str | None) -> int | None:
@@ -89,6 +90,21 @@ def _redirect_to_referer(request: Request, fallback: str = "/dashboard") -> Redi
     if referer and referer.startswith(("http://", "https://")):
         return RedirectResponse(url=referer, status_code=303)
     return RedirectResponse(url=fallback, status_code=303)
+
+
+def _runtime_version_change_block_reason(db: Session, server) -> str | None:
+    if (server.server_type or "").strip().lower() not in _RUNTIME_VERSION_CHANGE_TYPES:
+        return (
+            "Minecraft-Version kann nur bei Vanilla/Plugin-Servern (vanilla, paper, spigot) "
+            "geaendert werden."
+        )
+    modpack_state = modpack_service.get_server_modpack_state(db, server.id)
+    if modpack_state is not None:
+        return (
+            "Minecraft-Version ist fuer Modpack-Server gesperrt. "
+            "Bitte Modpack-Update verwenden."
+        )
+    return None
 
 
 @router.get("/servers/import", response_class=HTMLResponse)
@@ -218,6 +234,7 @@ def server_detail_page(
     db.refresh(server)
     players_current, players_max = get_player_counts(server)
     online_players = get_online_player_names(server.id)
+    version_change_block_reason = _runtime_version_change_block_reason(db, server)
 
     return templates.TemplateResponse(
         request,
@@ -233,6 +250,8 @@ def server_detail_page(
             players_current=players_current,
             players_max=players_max,
             online_players=online_players,
+            can_change_mc_version=version_change_block_reason is None,
+            version_change_block_reason=version_change_block_reason,
         ),
     )
 
@@ -414,6 +433,9 @@ def server_version_options(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
     if not can_control_server(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    lock_reason = _runtime_version_change_block_reason(db, server)
+    if lock_reason is not None:
+        return JSONResponse({"versions": [], "locked_reason": lock_reason})
 
     versions = provisioning_service.list_versions(server.server_type, channel=channel)
     return JSONResponse({"versions": [version.model_dump() for version in versions]})
@@ -436,6 +458,9 @@ def server_loader_version_options(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
     if not can_control_server(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    lock_reason = _runtime_version_change_block_reason(db, server)
+    if lock_reason is not None:
+        return JSONResponse({"versions": [], "locked_reason": lock_reason})
 
     versions = provisioning_service.list_loader_versions(server.server_type, mc_version, channel=channel)
     return JSONResponse({"versions": [version.model_dump() for version in versions]})
@@ -559,6 +584,11 @@ def update_server_settings_action(
             "error",
         )
         return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+    if version_changed:
+        lock_reason = _runtime_version_change_block_reason(db, server)
+        if lock_reason is not None:
+            push_flash(request, lock_reason, "error")
+            return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
 
     _, sync_warnings = update_server_settings(
         db,
@@ -586,6 +616,14 @@ def update_server_settings_action(
             db.add(server)
             db.commit()
             db.refresh(server)
+            plugin_notes, plugin_warnings = content_service.auto_update_plugins_for_server_version(
+                db,
+                server,
+                current_user.id,
+                release_channel="release",
+            )
+            reprovision_notes.extend(plugin_notes)
+            sync_warnings.extend(plugin_warnings)
         except Exception as exc:
             db.rollback()
             push_flash(

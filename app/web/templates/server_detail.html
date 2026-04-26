@@ -78,13 +78,13 @@
     <form method="post" action="/servers/{{ server.id }}/settings" class="grid grid-4">
         <div>
             <label for="mc_version">Minecraft Version</label>
-            <select id="mc_version" name="mc_version">
+            <select id="mc_version" name="mc_version" {% if not can_change_mc_version %}disabled{% endif %}>
                 <option value="{{ server.mc_version }}">{{ server.mc_version }}</option>
             </select>
         </div>
         <div>
             <label for="version_channel">Versionen Filter</label>
-            <select id="version_channel">
+            <select id="version_channel" {% if not can_change_mc_version %}disabled{% endif %}>
                 <option value="release">Release</option>
                 <option value="beta">Beta/Snapshot</option>
                 <option value="alpha">Alpha</option>
@@ -93,19 +93,24 @@
         </div>
         <div id="loader_version_wrap">
             <label for="loader_version">Loader/Build Version</label>
-            <select id="loader_version" name="loader_version">
+            <select id="loader_version" name="loader_version" {% if not can_change_mc_version %}disabled{% endif %}>
                 <option value="{{ server.loader_version or '' }}">{{ server.loader_version or "-" }}</option>
             </select>
         </div>
         <div id="loader_channel_wrap">
             <label for="loader_channel">Loader Filter</label>
-            <select id="loader_channel">
+            <select id="loader_channel" {% if not can_change_mc_version %}disabled{% endif %}>
                 <option value="all">Alle</option>
                 <option value="release">Release</option>
                 <option value="beta">Beta</option>
                 <option value="alpha">Alpha</option>
             </select>
         </div>
+        {% if not can_change_mc_version and version_change_block_reason %}
+        <div style="grid-column: span 4;">
+            <p class="muted">{{ version_change_block_reason }}</p>
+        </div>
+        {% endif %}
         <div>
             <label for="java_profile_id">Java Profil</label>
             <select id="java_profile_id" name="java_profile_id">
@@ -229,6 +234,7 @@
 <script>
 (function () {
     const serverId = {{ server.id }};
+    const canChangeMcVersion = {{ "true" if can_change_mc_version else "false" }};
     const mcSelect = document.getElementById("mc_version");
     const loaderSelect = document.getElementById("loader_version");
     const loaderWrap = document.getElementById("loader_version_wrap");
@@ -239,6 +245,11 @@
 
     const currentMc = "{{ server.mc_version }}";
     const currentLoader = "{{ server.loader_version or '' }}";
+
+    if (!canChangeMcVersion) {
+        setLoaderVisible(Boolean(currentLoader));
+        return;
+    }
 
     function setLoaderVisible(visible) {
         if (loaderWrap) loaderWrap.style.display = visible ? "block" : "none";
