@@ -113,6 +113,7 @@ def test_modpack_import_preview_and_execute_creates_new_server(client, tmp_path)
 
     from app.db.session import SessionLocal
     from app.models.pending_modpack_install import PendingModpackInstall
+    from app.models.server_modpack_state import ServerModpackState
 
     with SessionLocal() as db:
         pending = (
@@ -122,6 +123,14 @@ def test_modpack_import_preview_and_execute_creates_new_server(client, tmp_path)
         )
         assert pending is not None
         assert pending.pack_name == "Phase6 Test Pack"
+        state = (
+            db.query(ServerModpackState)
+            .filter(ServerModpackState.server_id == int(execute_payload["server_id"]))
+            .first()
+        )
+        assert state is not None
+        assert state.pack_name == "Phase6 Test Pack"
+        assert state.pending_version_id is None
 
 
 def test_modpack_preview_recommends_neoforge_for_neoforge_loader(client):
@@ -568,6 +577,80 @@ def test_modpack_execute_processes_optional_curseforge_entries(client, monkeypat
         assert result.warnings == []
 
     assert called == [(101, 1001), (202, 2002)]
+
+
+def test_run_pending_install_updates_server_modpack_state(client, tmp_path):
+    _login_admin(client)
+
+    from app.db.session import SessionLocal
+    from app.models.pending_modpack_install import PendingModpackInstall
+    from app.models.server import Server
+    from app.models.server_modpack_state import ServerModpackState
+    from app.services import modpack_service
+
+    archive_bytes = _build_local_mrpack()
+    preview_response = client.post(
+        "/api/modpacks/import-preview",
+        data={"source": "local_archive"},
+        files={"archive_file": ("pack.mrpack", archive_bytes, "application/zip")},
+        headers=_csrf_headers("/modpacks/import"),
+    )
+    assert preview_response.status_code == 200
+    token = preview_response.json()["token"]
+
+    new_server_dir = tmp_path / "state_update_server"
+    execute_response = client.post(
+        "/api/modpacks/import-execute",
+        data={
+            "preview_token": token,
+            "new_server_name": "State Update Server",
+            "new_server_path": str(new_server_dir),
+        },
+        headers=_csrf_headers("/modpacks/import"),
+    )
+    assert execute_response.status_code == 200
+    server_id = int(execute_response.json()["server_id"])
+
+    with SessionLocal() as db:
+        pending = (
+            db.query(PendingModpackInstall)
+            .filter(PendingModpackInstall.server_id == server_id)
+            .first()
+        )
+        assert pending is not None
+
+        snapshot = modpack_service.load_preview(pending.preview_token)
+        snapshot.source = "modrinth"
+        snapshot.source_ref = "version-2"
+        snapshot.upstream_project_id = "project-abc"
+        snapshot.upstream_version_id = "version-2"
+        snapshot.upstream_reference = "project-abc"
+        modpack_service._write_snapshot(snapshot)
+
+        server = db.get(Server, server_id)
+        assert server is not None
+        modpack_service.upsert_server_modpack_state_from_snapshot(
+            db,
+            server=server,
+            snapshot=snapshot,
+            set_pending=True,
+        )
+        result = modpack_service.run_pending_install_for_server(
+            db,
+            server=server,
+            initiated_by_user_id=1,
+        )
+        assert result is not None
+
+        state = (
+            db.query(ServerModpackState)
+            .filter(ServerModpackState.server_id == server_id)
+            .first()
+        )
+        assert state is not None
+        assert state.current_version_id == "version-2"
+        assert state.pending_version_id is None
+        assert state.last_check_error is None
 
 
 def test_modpack_execute_aborts_on_required_entry_failure(client, monkeypatch, tmp_path):

@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.installed_content import InstalledContent
 from app.models.scheduled_job import ScheduledJob
 from app.models.server_permission import ServerPermission
+from app.models.server_modpack_state import ServerModpackState
 from app.schemas.server import ServerImportConfirm
 from app.services import audit_service, backup_service, modpack_service
 from app.services.auth_service import get_current_user_from_session
@@ -265,6 +266,136 @@ def server_players_live(
             "online_players": online_players,
         }
     )
+
+
+@router.get("/api/servers/{server_id}/modpack/state", response_class=JSONResponse)
+def server_modpack_state(
+    request: Request,
+    server_id: int,
+    include_latest: bool = False,
+    release_channel: str = "all",
+    db: Session = Depends(get_db),
+):
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    payload = modpack_service.build_modpack_state_payload(
+        db,
+        server=server,
+        include_latest=include_latest,
+        release_channel=release_channel,
+    )
+    return JSONResponse(payload)
+
+
+@router.get("/api/servers/{server_id}/modpack/versions", response_class=JSONResponse)
+def server_modpack_versions(
+    request: Request,
+    server_id: int,
+    release_channel: str = "all",
+    db: Session = Depends(get_db),
+):
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    state = modpack_service.get_server_modpack_state(db, server.id)
+    if state is None:
+        return JSONResponse(status_code=404, content={"detail": "Kein Modpack fuer diesen Server hinterlegt."})
+    try:
+        versions = modpack_service.list_modpack_update_versions(
+            server=server,
+            state=state,
+            release_channel=release_channel,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"detail": f"Versionsabfrage fehlgeschlagen: {exc}"})
+
+    return JSONResponse({"versions": versions})
+
+
+@router.post("/api/servers/{server_id}/modpack/update", response_class=JSONResponse)
+def server_modpack_update(
+    request: Request,
+    server_id: int,
+    target_version_id: Annotated[str | None, Form()] = None,
+    reference_override: Annotated[str | None, Form()] = None,
+    apply_now: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    apply_immediately = _to_bool(apply_now)
+    if apply_immediately and server.status in {"starting", "running", "stopping", "restarting", "backup_running", "provisioning"}:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": "Sofortiges Update ist nur im gestoppten Zustand moeglich."},
+        )
+
+    try:
+        preview = modpack_service.queue_modpack_update_for_server(
+            db,
+            server=server,
+            requested_by_user_id=current_user.id,
+            target_version_id=(target_version_id or "").strip() or None,
+            reference_override=(reference_override or "").strip() or None,
+        )
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except Exception as exc:
+        return JSONResponse(status_code=500, content={"detail": f"Update konnte nicht vorbereitet werden: {exc}"})
+
+    payload: dict[str, object] = {
+        "queued": True,
+        "applied": False,
+        "preview_token": preview.token,
+        "pack_name": preview.pack_name,
+    }
+
+    if apply_immediately:
+        try:
+            install_result = modpack_service.run_pending_install_for_server(
+                db,
+                server=server,
+                initiated_by_user_id=current_user.id,
+            )
+        except ValueError as exc:
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
+        except Exception as exc:
+            return JSONResponse(status_code=500, content={"detail": f"Update-Installation fehlgeschlagen: {exc}"})
+        if install_result is not None:
+            payload["applied"] = True
+            payload["install_result"] = install_result.model_dump()
+
+    payload["modpack_state"] = modpack_service.build_modpack_state_payload(
+        db,
+        server=server,
+        include_latest=False,
+    )
+    return JSONResponse(payload)
 
 
 @router.get("/servers/{server_id}/version-options")
@@ -553,6 +684,7 @@ def delete_server_action(
     )
 
     db.execute(delete(InstalledContent).where(InstalledContent.server_id == server.id))
+    db.execute(delete(ServerModpackState).where(ServerModpackState.server_id == server.id))
     db.execute(delete(ServerPermission).where(ServerPermission.server_id == server.id))
     db.execute(delete(ScheduledJob).where(ScheduledJob.server_id == server.id))
     db.delete(server)

@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.models.installed_content import InstalledContent
 from app.models.pending_modpack_install import PendingModpackInstall
 from app.models.server import Server
+from app.models.server_modpack_state import ServerModpackState
 from app.schemas.modpack import (
     ModpackExecuteResponse,
     ModpackImportEntry,
@@ -481,6 +482,7 @@ def _download_modrinth_archive(
         return payload
 
     selected_server_pack = False
+    project_id_hint: str | None = None
     if version_id:
         version_payload = _load_version_payload(version_id)
     else:
@@ -503,6 +505,7 @@ def _download_modrinth_archive(
             else:
                 version_payload = versions[0]
             version_id = str(version_payload.get("id") or "").strip()
+            project_id_hint = str(version_payload.get("project_id") or project_ref or "").strip() or None
             if not version_id:
                 raise ValueError("Modrinth Version-ID konnte nicht ermittelt werden.")
         except ValueError as exc:
@@ -512,6 +515,7 @@ def _download_modrinth_archive(
             try:
                 version_payload = _load_version_payload(project_ref)
                 version_id = project_ref
+                project_id_hint = str(version_payload.get("project_id") or "").strip() or None
             except ValueError as version_exc:
                 raise ValueError(
                     "Modrinth Referenz konnte weder als Projekt noch als Version-ID aufgeloest werden."
@@ -531,6 +535,9 @@ def _download_modrinth_archive(
     if decision is not None:
         decision["server_pack_selected"] = bool(selected_server_pack)
         decision["client_filter_fallback"] = not bool(selected_server_pack)
+        decision["upstream_project_id"] = project_id_hint or str(version_payload.get("project_id") or "").strip() or None
+        decision["upstream_version_id"] = version_id
+        decision["upstream_reference"] = source_ref
     return version_id
 
 
@@ -758,6 +765,9 @@ def _download_curseforge_archive(
     if decision is not None:
         decision["server_pack_selected"] = bool(selected_server_pack)
         decision["client_filter_fallback"] = not bool(selected_server_pack)
+        decision["upstream_project_id"] = str(resolved_project_id)
+        decision["upstream_version_id"] = str(resolved_file_id)
+        decision["upstream_reference"] = reference
     return resolved_project_id, resolved_file_id
 
 
@@ -808,12 +818,16 @@ def create_preview(
 
     source_ref: str | None = None
     client_filter_fallback = False
+    upstream_project_id: str | None = None
+    upstream_version_id: str | None = None
+    upstream_reference: str | None = None
     try:
         if normalized_source == "local_archive":
             if not local_archive_bytes:
                 raise ValueError("Bitte eine lokale ZIP/MRPACK-Datei hochladen.")
             preview_archive.write_bytes(local_archive_bytes)
             source_ref = (local_archive_name or "local_archive").strip() or "local_archive"
+            upstream_reference = source_ref
         elif normalized_source == "modrinth":
             modrinth_decision: dict[str, object] = {}
             resolved_version_id = _download_modrinth_archive(
@@ -824,6 +838,9 @@ def create_preview(
             )
             source_ref = resolved_version_id
             client_filter_fallback = bool(modrinth_decision.get("client_filter_fallback"))
+            upstream_project_id = str(modrinth_decision.get("upstream_project_id") or "").strip() or None
+            upstream_version_id = str(modrinth_decision.get("upstream_version_id") or "").strip() or source_ref
+            upstream_reference = str(modrinth_decision.get("upstream_reference") or modrinth_reference or "").strip() or None
         else:
             has_explicit_ids = bool(int(curseforge_project_id or 0) > 0 or int(curseforge_file_id or 0) > 0)
             ref_project_id, ref_file_id = _parse_curseforge_reference(curseforge_reference)
@@ -835,10 +852,12 @@ def create_preview(
                     resolved_code = _download_curseforge_shared_profile_archive(preview_archive, shared_code)
                     source_ref = f"shared:{resolved_code}"
                     client_filter_fallback = True
+                    upstream_reference = resolved_code
                 elif _looks_like_http_url(curseforge_reference):
                     resolved_url = _download_direct_archive_url(preview_archive, str(curseforge_reference or ""))
                     source_ref = f"url:{resolved_url}"
                     client_filter_fallback = True
+                    upstream_reference = resolved_url
                 else:
                     raise ValueError(
                         "CurseForge: Bitte Projekt-ID/Datei-ID, Share-Link oder Import-Code angeben."
@@ -854,6 +873,9 @@ def create_preview(
                 )
                 source_ref = f"{project_id}:{file_id}"
                 client_filter_fallback = bool(curseforge_decision.get("client_filter_fallback"))
+                upstream_project_id = str(curseforge_decision.get("upstream_project_id") or "").strip() or str(project_id)
+                upstream_version_id = str(curseforge_decision.get("upstream_version_id") or "").strip() or str(file_id)
+                upstream_reference = str(curseforge_decision.get("upstream_reference") or curseforge_reference or "").strip() or None
 
         snapshot = _parse_archive(
             token,
@@ -862,6 +884,9 @@ def create_preview(
             source_ref,
             client_filter_fallback=client_filter_fallback,
         )
+        snapshot.upstream_project_id = upstream_project_id
+        snapshot.upstream_version_id = upstream_version_id
+        snapshot.upstream_reference = upstream_reference
         if client_filter_fallback:
             snapshot.warnings.append(
                 "Kein dediziertes Server-Modpack gefunden; Fallback auf Client-Pack mit Client-only-Filter."
@@ -892,6 +917,253 @@ def discard_preview(token: str) -> None:
     if not normalized:
         return
     shutil.rmtree(_token_dir(normalized), ignore_errors=True)
+
+
+def get_server_modpack_state(db: Session, server_id: int) -> ServerModpackState | None:
+    return db.scalar(
+        select(ServerModpackState).where(ServerModpackState.server_id == int(server_id))
+    )
+
+
+def _parse_curseforge_source_ref_ids(value: str | None) -> tuple[str | None, str | None]:
+    raw = (value or "").strip()
+    if not raw:
+        return None, None
+    if ":" not in raw:
+        return None, None
+    left, right = raw.split(":", 1)
+    project_id = left.strip()
+    version_id = right.strip()
+    if project_id.isdigit() and version_id.isdigit():
+        return project_id, version_id
+    return None, None
+
+
+def _snapshot_upstream_identity(snapshot: ModpackPreviewSnapshot) -> tuple[str | None, str | None, str | None]:
+    upstream_project_id = (snapshot.upstream_project_id or "").strip() or None
+    upstream_version_id = (snapshot.upstream_version_id or "").strip() or None
+    upstream_reference = (snapshot.upstream_reference or snapshot.source_ref or "").strip() or None
+
+    if snapshot.source == "curseforge" and not upstream_project_id:
+        project_id, version_id = _parse_curseforge_source_ref_ids(snapshot.source_ref)
+        upstream_project_id = upstream_project_id or project_id
+        upstream_version_id = upstream_version_id or version_id
+    if snapshot.source == "modrinth" and not upstream_version_id:
+        upstream_version_id = (snapshot.source_ref or "").strip() or None
+
+    return upstream_project_id, upstream_version_id, upstream_reference
+
+
+def upsert_server_modpack_state_from_snapshot(
+    db: Session,
+    *,
+    server: Server,
+    snapshot: ModpackPreviewSnapshot,
+    set_pending: bool,
+) -> ServerModpackState:
+    state = get_server_modpack_state(db, server.id)
+    if state is None:
+        state = ServerModpackState(server_id=server.id, source=snapshot.source)
+
+    upstream_project_id, upstream_version_id, upstream_reference = _snapshot_upstream_identity(snapshot)
+    state.source = snapshot.source
+    state.pack_name = snapshot.pack_name
+    state.pack_version = snapshot.pack_version
+    state.source_ref = upstream_reference
+    state.upstream_project_id = upstream_project_id
+    if set_pending:
+        state.pending_version_id = upstream_version_id
+    state.last_check_error = None
+
+    db.add(state)
+    db.commit()
+    db.refresh(state)
+    return state
+
+
+def _set_server_modpack_state_error(
+    db: Session,
+    *,
+    server_id: int,
+    message: str,
+) -> None:
+    state = get_server_modpack_state(db, server_id)
+    if state is None:
+        return
+    state.last_check_error = message
+    db.add(state)
+    db.commit()
+
+
+def _modpack_versions_for_state(
+    *,
+    server: Server,
+    state: ServerModpackState,
+    release_channel: str = "all",
+) -> list[dict]:
+    source = (state.source or "").strip().lower()
+    project_id = (state.upstream_project_id or "").strip()
+    if source == "modrinth":
+        if not project_id:
+            raise ValueError("Modrinth-Projektreferenz fehlt. Bitte Referenz manuell setzen.")
+        loader = server.server_type if server.server_type != "vanilla" else None
+        return content_service.list_modrinth_versions(
+            project_id=project_id,
+            mc_version=server.mc_version,
+            loader=loader,
+            release_channel=release_channel,
+        )
+    if source == "curseforge":
+        if not project_id or not project_id.isdigit():
+            raise ValueError("CurseForge Projekt-ID fehlt. Bitte Referenz/Code manuell setzen.")
+        loader = server.server_type if server.server_type != "vanilla" else None
+        return content_service.list_curseforge_versions(
+            int(project_id),
+            server.mc_version,
+            loader,
+            "modpack",
+            release_channel=release_channel,
+        )
+    raise ValueError("Diese Modpack-Quelle unterstuetzt keine Versionsabfrage.")
+
+
+def build_modpack_state_payload(
+    db: Session,
+    *,
+    server: Server,
+    include_latest: bool = False,
+    release_channel: str = "all",
+) -> dict[str, object]:
+    state = get_server_modpack_state(db, server.id)
+    pending = get_pending_install(db, server.id)
+    if state is None:
+        return {
+            "has_modpack": False,
+            "pending_install": pending is not None,
+            "pending_pack_name": pending.pack_name if pending else None,
+        }
+
+    payload: dict[str, object] = {
+        "has_modpack": True,
+        "source": state.source,
+        "pack_name": state.pack_name,
+        "pack_version": state.pack_version,
+        "source_ref": state.source_ref,
+        "project_id": state.upstream_project_id,
+        "current_version_id": state.current_version_id,
+        "pending_version_id": state.pending_version_id,
+        "pending_install": pending is not None,
+        "pending_pack_name": pending.pack_name if pending else None,
+        "last_known_version_id": state.last_known_version_id,
+        "last_known_version_label": state.last_known_version_label,
+        "last_check_error": state.last_check_error,
+        "can_check_updates": state.source in {"modrinth", "curseforge"} and bool(state.upstream_project_id),
+    }
+
+    if not include_latest:
+        return payload
+
+    try:
+        versions = _modpack_versions_for_state(server=server, state=state, release_channel=release_channel)
+        latest = versions[0] if versions else None
+        if latest:
+            latest_id = str(latest.get("id") or "").strip() or None
+            latest_label = str(
+                latest.get("name") or latest.get("version_number") or latest.get("id") or ""
+            ).strip() or latest_id
+            payload["latest_version_id"] = latest_id
+            payload["latest_version_label"] = latest_label
+            payload["update_available"] = bool(
+                latest_id and state.current_version_id and str(state.current_version_id) != latest_id
+            )
+            state.last_known_version_id = latest_id
+            state.last_known_version_label = latest_label
+            state.last_check_error = None
+            db.add(state)
+            db.commit()
+        else:
+            payload["latest_version_id"] = None
+            payload["latest_version_label"] = None
+            payload["update_available"] = False
+    except Exception as exc:
+        message = str(exc)
+        payload["latest_version_id"] = None
+        payload["latest_version_label"] = None
+        payload["update_available"] = False
+        payload["latest_error"] = message
+        state.last_check_error = message
+        db.add(state)
+        db.commit()
+
+    return payload
+
+
+def list_modpack_update_versions(
+    *,
+    server: Server,
+    state: ServerModpackState,
+    release_channel: str = "all",
+) -> list[dict]:
+    return _modpack_versions_for_state(server=server, state=state, release_channel=release_channel)
+
+
+def queue_modpack_update_for_server(
+    db: Session,
+    *,
+    server: Server,
+    requested_by_user_id: int | None,
+    target_version_id: str | None = None,
+    reference_override: str | None = None,
+) -> ModpackPreviewResponse:
+    state = get_server_modpack_state(db, server.id)
+    if state is None:
+        raise ValueError("Dieser Server hat keine gespeicherten Modpack-Metadaten.")
+
+    source = (state.source or "").strip().lower()
+    normalized_target = (target_version_id or "").strip() or None
+    normalized_reference = (reference_override or "").strip() or None
+
+    if source == "modrinth":
+        modrinth_reference = normalized_reference or (state.upstream_project_id or "").strip() or (state.source_ref or "").strip()
+        if not modrinth_reference:
+            raise ValueError("Modrinth Referenz fehlt. Bitte Projekt-ID/Slug oder URL angeben.")
+        preview = create_preview(
+            source="modrinth",
+            modrinth_reference=modrinth_reference,
+            modrinth_version_id=normalized_target,
+        )
+    elif source == "curseforge":
+        project_raw = (state.upstream_project_id or "").strip()
+        project_id = int(project_raw) if project_raw.isdigit() else None
+        file_id = int(normalized_target) if normalized_target and normalized_target.isdigit() else None
+        if normalized_target and file_id is None:
+            raise ValueError("Fuer CurseForge muss die Zielversion eine numerische Datei-ID sein.")
+
+        if normalized_reference:
+            preview = create_preview(
+                source="curseforge",
+                curseforge_reference=normalized_reference,
+                curseforge_project_id=project_id,
+                curseforge_file_id=file_id,
+            )
+        elif project_id is not None:
+            preview = create_preview(
+                source="curseforge",
+                curseforge_project_id=project_id,
+                curseforge_file_id=file_id,
+            )
+        else:
+            raise ValueError("CurseForge Projekt-ID fehlt. Bitte Referenz/Code/Link angeben.")
+    else:
+        raise ValueError("Updates werden fuer diese Modpack-Quelle nicht unterstuetzt.")
+
+    queue_pending_install(
+        db,
+        server=server,
+        snapshot=load_preview(preview.token),
+        requested_by_user_id=requested_by_user_id,
+    )
+    return preview
 
 
 def get_pending_install(db: Session, server_id: int) -> PendingModpackInstall | None:
@@ -928,6 +1200,12 @@ def queue_pending_install(
     db.refresh(pending)
     if previous_token and previous_token != snapshot.token:
         discard_preview(previous_token)
+    upsert_server_modpack_state_from_snapshot(
+        db,
+        server=server,
+        snapshot=snapshot,
+        set_pending=True,
+    )
     audit_service.log_action(
         db,
         action="modpack.install_queued",
@@ -971,6 +1249,11 @@ def run_pending_install_for_server(
         pending.last_error = str(exc)
         db.add(pending)
         db.commit()
+        _set_server_modpack_state_error(
+            db,
+            server_id=server.id,
+            message=str(exc),
+        )
         raise ValueError(f"Modpack-Preview nicht mehr verfuegbar: {exc}") from exc
 
     try:
@@ -988,12 +1271,31 @@ def run_pending_install_for_server(
         pending.last_error = str(exc)
         db.add(pending)
         db.commit()
+        _set_server_modpack_state_error(
+            db,
+            server_id=server.id,
+            message=str(exc),
+        )
         raise
 
     token = pending.preview_token
     db.delete(pending)
     db.commit()
     discard_preview(token)
+
+    state = upsert_server_modpack_state_from_snapshot(
+        db,
+        server=server,
+        snapshot=snapshot,
+        set_pending=False,
+    )
+    _, upstream_version_id, _ = _snapshot_upstream_identity(snapshot)
+    if upstream_version_id:
+        state.current_version_id = upstream_version_id
+    state.pending_version_id = None
+    state.last_check_error = None
+    db.add(state)
+    db.commit()
     return result
 
 

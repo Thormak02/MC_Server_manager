@@ -17,6 +17,7 @@ from app.models.restore_history import RestoreHistory  # noqa: F401
 from app.models.security_event import SecurityEvent  # noqa: F401
 from app.models.scheduled_job import ScheduledJob  # noqa: F401
 from app.models.server import Server  # noqa: F401
+from app.models.server_modpack_state import ServerModpackState  # noqa: F401
 from app.models.server_permission import ServerPermission  # noqa: F401
 from app.models.server_template import ServerTemplate  # noqa: F401
 from app.models.user import User
@@ -90,6 +91,7 @@ def _cleanup_orphaned_server_relations() -> None:
         db.execute(delete(RestoreHistory).where(~RestoreHistory.backup_id.in_(backup_ids)))
         db.execute(delete(JobHistory).where(~JobHistory.scheduled_job_id.in_(job_ids)))
         db.execute(delete(PendingModpackInstall).where(~PendingModpackInstall.server_id.in_(server_ids)))
+        db.execute(delete(ServerModpackState).where(~ServerModpackState.server_id.in_(server_ids)))
         db.commit()
 
 

@@ -152,6 +152,50 @@
         </div>
     </form>
 </section>
+
+<section class="card" id="modpack-update" data-server-id="{{ server.id }}">
+    <h2>Modpack Update</h2>
+    <p id="modpack-update-summary" class="muted">Lade Modpack-Status ...</p>
+    <div class="grid grid-4">
+        <div>
+            <label for="modpack-update-release-channel">Release-Kanal</label>
+            <select id="modpack-update-release-channel">
+                <option value="all">Alle</option>
+                <option value="release">Release</option>
+                <option value="beta">Beta</option>
+                <option value="alpha">Alpha</option>
+            </select>
+        </div>
+        <div>
+            <label for="modpack-update-version">Zielversion</label>
+            <select id="modpack-update-version">
+                <option value="">Neueste verfuegbare</option>
+            </select>
+        </div>
+        <div style="grid-column: span 2;">
+            <label for="modpack-update-reference">Referenz ueberschreiben (optional)</label>
+            <input
+                id="modpack-update-reference"
+                type="text"
+                placeholder="z.B. CurseForge-Code/-Link oder Modrinth-Projekt"
+            >
+        </div>
+        <div style="grid-column: span 2;">
+            <label>
+                <input id="modpack-update-apply-now" type="checkbox" value="true">
+                Direkt anwenden (nur bei gestopptem Server)
+            </label>
+        </div>
+        <div class="align-end">
+            <button id="modpack-update-check" type="button">Update pruefen</button>
+        </div>
+        <div class="align-end">
+            <button id="modpack-update-apply" type="button">Update planen/ausfuehren</button>
+        </div>
+    </div>
+    <p id="modpack-update-status" class="muted"></p>
+    <div id="modpack-update-warnings" class="stack"></div>
+</section>
 {% endif %}
 
 {% if current_user.role == "super_admin" %}
@@ -307,6 +351,226 @@
     loadMcVersions(currentMc).then(function () {
         loadLoaderVersions(currentLoader);
     });
+})();
+</script>
+<script>
+(function () {
+    const root = document.getElementById("modpack-update");
+    if (!root) return;
+
+    const serverId = Number(root.getAttribute("data-server-id") || "0");
+    const summaryEl = document.getElementById("modpack-update-summary");
+    const statusEl = document.getElementById("modpack-update-status");
+    const warningsEl = document.getElementById("modpack-update-warnings");
+    const releaseChannelEl = document.getElementById("modpack-update-release-channel");
+    const versionEl = document.getElementById("modpack-update-version");
+    const referenceEl = document.getElementById("modpack-update-reference");
+    const applyNowEl = document.getElementById("modpack-update-apply-now");
+    const checkBtn = document.getElementById("modpack-update-check");
+    const applyBtn = document.getElementById("modpack-update-apply");
+    if (!serverId || !statusEl || !summaryEl || !releaseChannelEl || !versionEl || !referenceEl || !applyNowEl || !checkBtn || !applyBtn || !warningsEl) {
+        return;
+    }
+
+    let currentState = null;
+
+    function setStatus(message) {
+        statusEl.textContent = message || "";
+    }
+
+    function escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function setWarnings(list) {
+        const warnings = Array.isArray(list) ? list : [];
+        if (!warnings.length) {
+            warningsEl.innerHTML = "";
+            return;
+        }
+        warningsEl.innerHTML = warnings
+            .map((warning) => `<div class="flash flash-error">${escapeHtml(warning)}</div>`)
+            .join("");
+    }
+
+    function setControlsDisabled(disabled) {
+        checkBtn.disabled = disabled;
+        applyBtn.disabled = disabled;
+        releaseChannelEl.disabled = disabled;
+        referenceEl.disabled = disabled;
+        applyNowEl.disabled = disabled;
+    }
+
+    function channelLabel(channel) {
+        const value = String(channel || "").toLowerCase();
+        if (value === "release") return "release";
+        if (value === "beta") return "beta";
+        if (value === "alpha") return "alpha";
+        return "";
+    }
+
+    async function fetchJson(url, options) {
+        const response = await fetch(url, Object.assign({ credentials: "same-origin" }, options || {}));
+        if (!response.ok) {
+            let detail = "Anfrage fehlgeschlagen.";
+            try {
+                const payload = await response.json();
+                if (payload && payload.detail) detail = String(payload.detail);
+            } catch (_) {}
+            throw new Error(detail);
+        }
+        return response.json();
+    }
+
+    function renderState(state) {
+        currentState = state;
+        if (!state || !state.has_modpack) {
+            summaryEl.textContent = "Kein Modpack fuer diesen Server hinterlegt.";
+            versionEl.disabled = true;
+            applyBtn.disabled = true;
+            checkBtn.disabled = true;
+            return;
+        }
+
+        const source = String(state.source || "-");
+        const currentVersion = String(state.current_version_id || "-");
+        const pendingVersion = String(state.pending_version_id || "-");
+        const latestVersion = String(state.latest_version_id || state.last_known_version_id || "-");
+        const updateAvailable = state.update_available ? "ja" : "nein";
+        const pendingInstall = state.pending_install ? "ja" : "nein";
+        summaryEl.textContent =
+            `Quelle: ${source} | Aktuell: ${currentVersion} | Pending: ${pendingVersion} | ` +
+            `Neueste: ${latestVersion} | Update verfuegbar: ${updateAvailable} | Pending-Install: ${pendingInstall}`;
+
+        applyBtn.disabled = false;
+        checkBtn.disabled = false;
+        if (!state.can_check_updates) {
+            versionEl.disabled = true;
+            checkBtn.textContent = "Automatische Pruefung nicht verfuegbar";
+        } else {
+            versionEl.disabled = false;
+            checkBtn.textContent = "Update pruefen";
+        }
+    }
+
+    async function loadState(includeLatest) {
+        const channel = releaseChannelEl.value || "all";
+        const params = new URLSearchParams({
+            include_latest: includeLatest ? "true" : "false",
+            release_channel: channel,
+        });
+        const payload = await fetchJson(`/api/servers/${serverId}/modpack/state?${params.toString()}`);
+        renderState(payload);
+        if (payload && payload.last_check_error) {
+            setStatus(`Hinweis: ${payload.last_check_error}`);
+        }
+        return payload;
+    }
+
+    async function loadVersions() {
+        const channel = releaseChannelEl.value || "all";
+        const selectedBefore = versionEl.value;
+        versionEl.innerHTML = "<option value=\"\">Neueste verfuegbare</option>";
+        if (!currentState || !currentState.can_check_updates) {
+            versionEl.disabled = true;
+            return;
+        }
+
+        const params = new URLSearchParams({ release_channel: channel });
+        const payload = await fetchJson(`/api/servers/${serverId}/modpack/versions?${params.toString()}`);
+        const versions = Array.isArray(payload.versions) ? payload.versions : [];
+        versions.forEach((item) => {
+            const versionId = String(item.id || "").trim();
+            if (!versionId) return;
+            const label = String(item.name || item.version_number || versionId).trim() || versionId;
+            const channelSuffix = channelLabel(item.release_channel);
+            const option = document.createElement("option");
+            option.value = versionId;
+            option.textContent = channelSuffix ? `${label} [${channelSuffix}]` : label;
+            if (selectedBefore && selectedBefore === versionId) {
+                option.selected = true;
+            }
+            versionEl.appendChild(option);
+        });
+        versionEl.disabled = false;
+    }
+
+    async function refreshAll() {
+        setWarnings([]);
+        setStatus("Modpack-Infos werden geladen ...");
+        setControlsDisabled(true);
+        try {
+            await loadState(true);
+            await loadVersions();
+            setStatus("Modpack-Infos aktualisiert.");
+        } catch (err) {
+            setStatus(err instanceof Error ? err.message : "Modpack-Infos konnten nicht geladen werden.");
+        } finally {
+            setControlsDisabled(false);
+            if (currentState && !currentState.has_modpack) {
+                applyBtn.disabled = true;
+                checkBtn.disabled = true;
+            }
+        }
+    }
+
+    async function applyUpdate() {
+        if (!currentState || !currentState.has_modpack) {
+            setStatus("Kein Modpack hinterlegt.");
+            return;
+        }
+        setWarnings([]);
+        setStatus("Update wird vorbereitet ...");
+        setControlsDisabled(true);
+        try {
+            const formData = new FormData();
+            if (versionEl.value.trim()) {
+                formData.append("target_version_id", versionEl.value.trim());
+            }
+            if (referenceEl.value.trim()) {
+                formData.append("reference_override", referenceEl.value.trim());
+            }
+            if (applyNowEl.checked) {
+                formData.append("apply_now", "true");
+            }
+            const payload = await fetchJson(`/api/servers/${serverId}/modpack/update`, {
+                method: "POST",
+                body: formData,
+            });
+            if (payload.applied && payload.install_result) {
+                const result = payload.install_result;
+                setStatus(
+                    `Update installiert: ${result.installed_count || 0} Inhalte, ${result.overrides_copied || 0} Overrides.`
+                );
+                setWarnings(Array.isArray(result.warnings) ? result.warnings : []);
+            } else {
+                setStatus("Update eingeplant. Es wird beim naechsten Start installiert.");
+            }
+            await loadState(true);
+            await loadVersions();
+        } catch (err) {
+            setStatus(err instanceof Error ? err.message : "Update fehlgeschlagen.");
+        } finally {
+            setControlsDisabled(false);
+            if (currentState && !currentState.has_modpack) {
+                applyBtn.disabled = true;
+                checkBtn.disabled = true;
+            }
+        }
+    }
+
+    checkBtn.addEventListener("click", refreshAll);
+    applyBtn.addEventListener("click", applyUpdate);
+    releaseChannelEl.addEventListener("change", function () {
+        refreshAll();
+    });
+
+    refreshAll();
 })();
 </script>
 {% endif %}

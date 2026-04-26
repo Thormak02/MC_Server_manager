@@ -18,6 +18,9 @@ class ModpackPreviewSnapshot(BaseModel):
     token: str
     source: str
     source_ref: str | None = None
+    upstream_project_id: str | None = None
+    upstream_version_id: str | None = None
+    upstream_reference: str | None = None
     pack_format: str
     pack_name: str
     pack_version: str | None = None

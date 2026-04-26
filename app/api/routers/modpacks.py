@@ -14,6 +14,7 @@ from app.models.scheduled_job import ScheduledJob
 from app.models.server import Server
 from app.models.server_permission import ServerPermission
 from app.models.pending_modpack_install import PendingModpackInstall
+from app.models.server_modpack_state import ServerModpackState
 from app.schemas.modpack import ModpackExecuteResponse
 from app.schemas.provider import ProvisionServerRequest
 from app.services import audit_service, modpack_service
@@ -73,6 +74,7 @@ def _rollback_failed_modpack_server(
         pass
 
     db.execute(delete(InstalledContent).where(InstalledContent.server_id == server_id))
+    db.execute(delete(ServerModpackState).where(ServerModpackState.server_id == server_id))
     db.execute(delete(ServerPermission).where(ServerPermission.server_id == server_id))
     db.execute(delete(ScheduledJob).where(ScheduledJob.server_id == server_id))
     pending = db.query(PendingModpackInstall).filter(PendingModpackInstall.server_id == server_id).first()
