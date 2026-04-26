@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>OP/Bans/Whitelist: {{ server.name }}</h1>
+
+{% include "server_nav.html" %}
+
+<section class="card">
+    <div class="inline-form">
+        {% for option in tab_options %}
+        <a
+            class="button-like {% if selected_tab == option.key %}active{% endif %}"
+            href="/servers/{{ server.id }}/access?tab={{ option.key }}"
+            {% if selected_tab == option.key %}aria-current="page"{% endif %}
+        >
+            {{ option.label }}
+        </a>
+        {% endfor %}
+    </div>
+</section>
+
+{% if selected_tab == "whitelist" %}
+<section class="card">
+    <h2>Whitelist</h2>
+    <form id="whitelist-toggle-form" method="post" action="/servers/{{ server.id }}/access/whitelist-toggle" class="inline-form">
+        <input type="hidden" id="whitelist-enabled-value" name="enabled" value="{{ 'true' if whitelist_enabled else 'false' }}">
+        <label for="whitelist-enabled-toggle"><strong>Whitelist aktivieren</strong></label>
+        <input id="whitelist-enabled-toggle" type="checkbox" {% if whitelist_enabled %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+        <span class="muted">{{ "Aktiv" if whitelist_enabled else "Inaktiv" }}</span>
+    </form>
+
+    <form method="post" action="/servers/{{ server.id }}/access/entry-add" class="inline-form">
+        <input type="hidden" name="list_key" value="whitelist">
+        <input type="text" name="identity" placeholder="Spielername" required {% if not can_edit %}readonly{% endif %}>
+        <button type="submit" {% if not can_edit %}disabled{% endif %}>Zur Whitelist hinzufuegen</button>
+    </form>
+
+    <div class="stack">
+        {% for entry in whitelist_entries %}
+        <form method="post" action="/servers/{{ server.id }}/access/entry-remove" class="inline-form">
+            <input type="hidden" name="list_key" value="whitelist">
+            <input type="hidden" name="identity" value="{{ entry.name or '' }}">
+            <span>{{ entry.name or "-" }}</span>
+            <span class="muted">{{ entry.uuid or "-" }}</span>
+            <button type="submit" class="danger" {% if not can_edit %}disabled{% endif %}>Entfernen</button>
+        </form>
+        {% else %}
+        <p class="muted">Keine Whitelist-Eintraege.</p>
+        {% endfor %}
+    </div>
+</section>
+{% elif selected_tab == "ops" %}
+<section class="card">
+    <h2>OPs</h2>
+    <form method="post" action="/servers/{{ server.id }}/access/entry-add" class="inline-form">
+        <input type="hidden" name="list_key" value="ops">
+        <input type="text" name="identity" placeholder="Spielername" required {% if not can_edit %}readonly{% endif %}>
+        <button type="submit" {% if not can_edit %}disabled{% endif %}>Als OP eintragen</button>
+    </form>
+
+    <div class="stack">
+        {% for entry in ops_entries %}
+        <form method="post" action="/servers/{{ server.id }}/access/entry-remove" class="inline-form">
+            <input type="hidden" name="list_key" value="ops">
+            <input type="hidden" name="identity" value="{{ entry.name or '' }}">
+            <span>{{ entry.name or "-" }}</span>
+            <span class="muted">UUID: {{ entry.uuid or "-" }}</span>
+            <span class="muted">Level: {{ entry.level if entry.level is not none else "-" }}</span>
+            <button type="submit" class="danger" {% if not can_edit %}disabled{% endif %}>Entfernen</button>
+        </form>
+        {% else %}
+        <p class="muted">Keine OP-Eintraege.</p>
+        {% endfor %}
+    </div>
+</section>
+{% elif selected_tab == "banned_players" %}
+<section class="card">
+    <h2>Bans (Spieler)</h2>
+    <form method="post" action="/servers/{{ server.id }}/access/entry-add" class="inline-form">
+        <input type="hidden" name="list_key" value="banned_players">
+        <input type="text" name="identity" placeholder="Spielername" required {% if not can_edit %}readonly{% endif %}>
+        <button type="submit" {% if not can_edit %}disabled{% endif %}>Spieler bannen</button>
+    </form>
+
+    <div class="stack">
+        {% for entry in banned_players_entries %}
+        <form method="post" action="/servers/{{ server.id }}/access/entry-remove" class="inline-form">
+            <input type="hidden" name="list_key" value="banned_players">
+            <input type="hidden" name="identity" value="{{ entry.name or '' }}">
+            <span>{{ entry.name or "-" }}</span>
+            <span class="muted">Grund: {{ entry.reason or "-" }}</span>
+            <span class="muted">Ablauf: {{ entry.expires or "-" }}</span>
+            <button type="submit" class="danger" {% if not can_edit %}disabled{% endif %}>Entfernen</button>
+        </form>
+        {% else %}
+        <p class="muted">Keine gebannten Spieler.</p>
+        {% endfor %}
+    </div>
+</section>
+{% elif selected_tab == "banned_ips" %}
+<section class="card">
+    <h2>Bans (IP)</h2>
+    <form method="post" action="/servers/{{ server.id }}/access/entry-add" class="inline-form">
+        <input type="hidden" name="list_key" value="banned_ips">
+        <input type="text" name="identity" placeholder="IP Adresse" required {% if not can_edit %}readonly{% endif %}>
+        <button type="submit" {% if not can_edit %}disabled{% endif %}>IP bannen</button>
+    </form>
+
+    <div class="stack">
+        {% for entry in banned_ips_entries %}
+        <form method="post" action="/servers/{{ server.id }}/access/entry-remove" class="inline-form">
+            <input type="hidden" name="list_key" value="banned_ips">
+            <input type="hidden" name="identity" value="{{ entry.ip or '' }}">
+            <span>{{ entry.ip or "-" }}</span>
+            <span class="muted">Grund: {{ entry.reason or "-" }}</span>
+            <span class="muted">Ablauf: {{ entry.expires or "-" }}</span>
+            <button type="submit" class="danger" {% if not can_edit %}disabled{% endif %}>Entfernen</button>
+        </form>
+        {% else %}
+        <p class="muted">Keine gebannten IPs.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<script>
+(function () {
+    const toggle = document.getElementById("whitelist-enabled-toggle");
+    const hidden = document.getElementById("whitelist-enabled-value");
+    const form = document.getElementById("whitelist-toggle-form");
+    if (!toggle || !hidden || !form) return;
+    toggle.addEventListener("change", function () {
+        hidden.value = toggle.checked ? "true" : "false";
+        form.submit();
+    });
+})();
+</script>
+{% endblock %}
+

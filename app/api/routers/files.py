@@ -9,14 +9,20 @@ from app.db.session import get_db
 from app.services import audit_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.file_service import (
+    add_access_entry,
     build_content_from_assistant,
     create_directory,
     create_text_file,
     delete_path,
+    get_access_schema_key_label,
     get_assistant_payload,
     get_download_file,
+    get_whitelist_enabled,
     list_files,
+    list_access_entries,
     read_text_file,
+    remove_access_entry,
+    set_whitelist_enabled,
     upload_file as upload_server_file,
     write_text_file,
 )
@@ -32,6 +38,14 @@ def _require_user(request: Request, db: Session):
     if user is None:
         return None
     return user
+
+
+def _normalize_access_tab(value: str | None) -> str:
+    allowed = {"whitelist", "ops", "banned_players", "banned_ips"}
+    normalized = (value or "").strip().lower()
+    if normalized in allowed:
+        return normalized
+    return "whitelist"
 
 
 @router.get("/servers/{server_id}/files", response_class=HTMLResponse)
@@ -86,6 +100,162 @@ def files_page(
             can_edit=can_edit_server_files(db, current_user, server),
         ),
     )
+
+
+@router.get("/servers/{server_id}/access", response_class=HTMLResponse)
+def access_page(
+    request: Request,
+    server_id: int,
+    tab: str | None = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_view_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    selected_tab = _normalize_access_tab(tab)
+    whitelist_entries: list[dict] = []
+    ops_entries: list[dict] = []
+    banned_players_entries: list[dict] = []
+    banned_ips_entries: list[dict] = []
+    try:
+        whitelist_entries = list_access_entries(server, "whitelist")
+        ops_entries = list_access_entries(server, "ops")
+        banned_players_entries = list_access_entries(server, "banned_players")
+        banned_ips_entries = list_access_entries(server, "banned_ips")
+    except ValueError as exc:
+        push_flash(request, f"Zugriffsdaten konnten nicht gelesen werden: {exc}", "error")
+
+    return templates.TemplateResponse(
+        request,
+        "server_access.html",
+        build_context(
+            request,
+            current_user=current_user,
+            page_title=f"OP/Bans/Whitelist: {server.name}",
+            server=server,
+            can_edit=can_edit_server_files(db, current_user, server),
+            selected_tab=selected_tab,
+            tab_options=get_access_schema_key_label(),
+            whitelist_enabled=get_whitelist_enabled(server),
+            whitelist_entries=whitelist_entries,
+            ops_entries=ops_entries,
+            banned_players_entries=banned_players_entries,
+            banned_ips_entries=banned_ips_entries,
+        ),
+    )
+
+
+@router.post("/servers/{server_id}/access/entry-add")
+def access_add_entry_action(
+    request: Request,
+    server_id: int,
+    list_key: Annotated[str, Form()],
+    identity: Annotated[str, Form()],
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_edit_server_files(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    tab = _normalize_access_tab(list_key)
+    try:
+        add_access_entry(server, tab, identity)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="server.access_entry_add",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"list={tab} identity={identity.strip()}",
+    )
+    push_flash(request, "Eintrag hinzugefuegt.", "success")
+    return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
+
+
+@router.post("/servers/{server_id}/access/entry-remove")
+def access_remove_entry_action(
+    request: Request,
+    server_id: int,
+    list_key: Annotated[str, Form()],
+    identity: Annotated[str, Form()],
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_edit_server_files(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    tab = _normalize_access_tab(list_key)
+    try:
+        remove_access_entry(server, tab, identity)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="server.access_entry_remove",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"list={tab} identity={identity.strip()}",
+    )
+    push_flash(request, "Eintrag entfernt.", "success")
+    return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
+
+
+@router.post("/servers/{server_id}/access/whitelist-toggle")
+def access_whitelist_toggle_action(
+    request: Request,
+    server_id: int,
+    enabled: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_edit_server_files(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    target_state = str(enabled or "").strip().lower() in {"1", "true", "on", "yes"}
+    set_whitelist_enabled(server, target_state)
+    audit_service.log_action(
+        db,
+        action="server.whitelist_toggle",
+        user_id=current_user.id,
+        server_id=server.id,
+        details=f"enabled={target_state}",
+    )
+    push_flash(
+        request,
+        "Whitelist aktiviert." if target_state else "Whitelist deaktiviert.",
+        "success",
+    )
+    return RedirectResponse(url=f"/servers/{server_id}/access?tab=whitelist", status_code=303)
 
 
 @router.post("/servers/{server_id}/files/save")

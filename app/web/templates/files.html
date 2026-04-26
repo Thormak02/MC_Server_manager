@@ -72,6 +72,18 @@
         {% if selected_mode == "assistant" and assistant_payload %}
         <form method="post" action="/servers/{{ server.id }}/files/assistant-save" class="stack">
             <input type="hidden" name="relative_path" value="{{ file_content.relative_path }}">
+            {% if assistant_payload.field_keys_json %}
+            <input type="hidden" name="__assistant_field_keys" value="{{ assistant_payload.field_keys_json }}">
+            {% endif %}
+            {% if assistant_payload.existing_keys_json %}
+            <input type="hidden" name="__assistant_existing_keys" value="{{ assistant_payload.existing_keys_json }}">
+            {% endif %}
+            {% if assistant_payload.assistant_json_meta %}
+            <input type="hidden" name="__assistant_json_meta" value="{{ assistant_payload.assistant_json_meta }}">
+            {% endif %}
+            {% if assistant_payload.assistant_json_base %}
+            <input type="hidden" name="__assistant_json_base" value="{{ assistant_payload.assistant_json_base }}">
+            {% endif %}
             <p><strong>{{ assistant_payload.title }}</strong></p>
 
             {% if assistant_payload.mode == "json_text" %}

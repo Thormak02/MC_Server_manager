@@ -6,6 +6,7 @@
 {% set backups_path = "/servers/" ~ server.id ~ "/backups" %}
 {% set content_path = "/servers/" ~ server.id ~ "/content" %}
 {% set files_path = "/servers/" ~ server.id ~ "/files" %}
+{% set access_path = "/servers/" ~ server.id ~ "/access" %}
 
 <section class="card">
     <div class="inline-form server-nav">
@@ -15,6 +16,7 @@
         <a class="button-like {% if current_path == schedules_path %}active{% endif %}" href="{{ schedules_path }}" {% if current_path == schedules_path %}aria-current="page"{% endif %}>Scheduling</a>
         <a class="button-like {% if current_path == backups_path %}active{% endif %}" href="{{ backups_path }}" {% if current_path == backups_path %}aria-current="page"{% endif %}>Backups</a>
         <a class="button-like {% if current_path == content_path %}active{% endif %}" href="{{ content_path }}" {% if current_path == content_path %}aria-current="page"{% endif %}>Mods & Inhalte</a>
+        <a class="button-like {% if current_path == access_path %}active{% endif %}" href="{{ access_path }}" {% if current_path == access_path %}aria-current="page"{% endif %}>OP/Bans/Whitelist</a>
         <a class="button-like {% if current_path == files_path %}active{% endif %}" href="{{ files_path }}" {% if current_path == files_path %}aria-current="page"{% endif %}>Dateien</a>
     </div>
 </section>
