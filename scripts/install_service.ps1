@@ -95,5 +95,12 @@ if ($LASTEXITCODE -ne 0) {
     throw "Failed to install Windows service via pywin32."
 }
 
+$serviceParamsRegPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName\Parameters"
+if (Test-Path -LiteralPath $serviceParamsRegPath) {
+    $pythonPathValue = "$repoRoot;$repoRoot\scripts;" + (Join-Path $venvRoot "Lib\site-packages")
+    New-ItemProperty -Path $serviceParamsRegPath -Name "PythonPath" -Value $pythonPathValue -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $serviceParamsRegPath -Name "PythonClass" -Value "windows_service.McServerManagerService" -PropertyType String -Force | Out-Null
+}
+
 Start-Service -Name $ServiceName
 Write-Host "Service '$ServiceName' installed and started."
