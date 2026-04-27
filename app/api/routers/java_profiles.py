@@ -34,6 +34,7 @@ from app.services.platform_settings_service import (
     list_platform_settings,
     update_provider_settings,
 )
+from app.services.update_service import get_manager_update_status, trigger_manager_update
 from app.web.routes.pages import build_context, push_flash, templates
 
 
@@ -72,6 +73,7 @@ def settings_page(
     backup_storage_root = str(get_backup_storage_root(db))
     backup_storage_source = get_backup_storage_source(db)
     platform_settings = list_platform_settings(db, include_secrets=False)
+    manager_update_status = get_manager_update_status(fetch_remote=False)
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -85,6 +87,7 @@ def settings_page(
             backup_storage_root=backup_storage_root,
             backup_storage_source=backup_storage_source,
             platform_settings=platform_settings,
+            manager_update_status=manager_update_status,
         ),
     )
 
@@ -222,6 +225,53 @@ def update_platform_settings_action(
         details=f"provider={provider}",
     )
     push_flash(request, f"Plattform-Einstellungen gespeichert ({provider}).", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/manager-update/check")
+def check_manager_update_action(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    status_info = get_manager_update_status(fetch_remote=True)
+    if status_info.ok:
+        kind = "success" if not status_info.has_update else "info"
+    else:
+        kind = "error"
+    push_flash(request, status_info.message, kind)
+    audit_service.log_action(
+        db,
+        action="settings.manager_update_check",
+        user_id=current_user.id,
+        details=(
+            f"ok={status_info.ok} branch={status_info.branch} "
+            f"ahead={status_info.ahead_count} behind={status_info.behind_count} dirty={status_info.dirty}"
+        ),
+    )
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/manager-update/apply")
+def apply_manager_update_action(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    ok, message = trigger_manager_update()
+    push_flash(request, message, "success" if ok else "error")
+    audit_service.log_action(
+        db,
+        action="settings.manager_update_apply",
+        user_id=current_user.id,
+        details=f"ok={ok} message={message}",
+    )
     return RedirectResponse(url="/settings", status_code=303)
 
 

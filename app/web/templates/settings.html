@@ -86,6 +86,28 @@
 </section>
 
 <section class="card">
+    <h2>Manager Update</h2>
+    <p class="muted">
+        Branch: <strong>{{ manager_update_status.branch }}</strong>,
+        lokal: <code>{{ manager_update_status.local_commit_short }}</code>,
+        remote: <code>{{ manager_update_status.remote_commit_short }}</code>,
+        ahead: {{ manager_update_status.ahead_count }},
+        behind: {{ manager_update_status.behind_count }},
+        Working Tree: {{ "dirty" if manager_update_status.dirty else "clean" }}
+    </p>
+    <p class="muted">{{ manager_update_status.message }}</p>
+    <div class="inline-form">
+        <form method="post" action="/settings/manager-update/check" class="inline-form">
+            <button type="submit">Update checken</button>
+        </form>
+        <form method="post" action="/settings/manager-update/apply" class="inline-form">
+            <button type="submit" {% if not manager_update_status.can_apply %}disabled{% endif %}>Update durchfuehren</button>
+        </form>
+    </div>
+    <p class="muted">Hinweis: Beim Update kann die Weboberflaeche kurzzeitig nicht erreichbar sein.</p>
+</section>
+
+<section class="card">
     <h2>Java ueber Manager installieren (winget)</h2>
     <p class="muted">
         Optional: Installiert Temurin JDK ueber `winget` (erfordert winget und ggf. Adminrechte).
