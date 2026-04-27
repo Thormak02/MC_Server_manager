@@ -26,6 +26,7 @@ $serviceScript = Join-Path $repoRoot "scripts\windows_service.py"
 $dataDir = Join-Path $repoRoot "data"
 $runtimeConfigPath = Join-Path $dataDir "service_config.json"
 $serviceMetaPath = Join-Path $dataDir "service_meta.json"
+$venvRoot = Join-Path $repoRoot ".venv"
 
 if (-not (Test-Path -LiteralPath $venvPython)) {
     throw "Virtualenv python not found: '$venvPython'. Run setup first."
@@ -39,6 +40,22 @@ Set-Location -LiteralPath $repoRoot
 & $venvPython -m pip install -r requirements.txt
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to install Python requirements."
+}
+
+$pywin32PostInstall = Join-Path $venvRoot "Lib\site-packages\pywin32_postinstall.py"
+if (Test-Path -LiteralPath $pywin32PostInstall) {
+    & $venvPython $pywin32PostInstall -install
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to run pywin32 post-install."
+    }
+}
+
+$pywin32System32Dir = Join-Path $venvRoot "Lib\site-packages\pywin32_system32"
+$pywinDlls = @("pywintypes*.dll", "pythoncom*.dll")
+foreach ($pattern in $pywinDlls) {
+    foreach ($source in (Get-ChildItem -LiteralPath $pywin32System32Dir -Filter $pattern -File -ErrorAction SilentlyContinue)) {
+        Copy-Item -LiteralPath $source.FullName -Destination (Join-Path $venvRoot $source.Name) -Force
+    }
 }
 
 if (-not (Test-Path -LiteralPath $dataDir)) {
