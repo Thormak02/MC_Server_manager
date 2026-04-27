@@ -86,6 +86,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install_service.ps1 -ServiceN
 ```
 
 This runs the app as a persistent service and starts automatically after reboot.
+If an older/broken `mc-server-manager` already exists:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_service.ps1 -ServiceName mc-server-manager -Port 8000 -Reinstall
+```
 
 ### 3) Install a self-hosted GitHub Runner on the server PC
 

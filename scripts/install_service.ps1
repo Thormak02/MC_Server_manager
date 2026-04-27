@@ -2,8 +2,10 @@
 param(
     [string]$ServiceName = "mc-server-manager",
     [string]$DisplayName = "MC Server Manager",
+    [string]$Description = "Minecraft Server Manager (FastAPI/uvicorn)",
     [string]$ListenHost = "0.0.0.0",
-    [int]$Port = 8000
+    [int]$Port = 8000,
+    [switch]$Reinstall
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,25 +20,63 @@ if (-not (Test-IsAdministrator)) {
     throw "Run this script in an elevated PowerShell session (Administrator)."
 }
 
-if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
-    throw "Service '$ServiceName' already exists."
-}
-
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
-$runScript = Join-Path $repoRoot "scripts\run_prod.ps1"
+$venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
+$serviceScript = Join-Path $repoRoot "scripts\windows_service.py"
+$dataDir = Join-Path $repoRoot "data"
+$runtimeConfigPath = Join-Path $dataDir "service_config.json"
+$serviceMetaPath = Join-Path $dataDir "service_meta.json"
 
-if (-not (Test-Path -LiteralPath $runScript)) {
-    throw "Start script not found: '$runScript'."
+if (-not (Test-Path -LiteralPath $venvPython)) {
+    throw "Virtualenv python not found: '$venvPython'. Run setup first."
 }
 
-$binaryPath = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$runScript`" -ListenHost `"$ListenHost`" -Port $Port"
+if (-not (Test-Path -LiteralPath $serviceScript)) {
+    throw "Service script not found: '$serviceScript'."
+}
 
-New-Service `
-    -Name $ServiceName `
-    -DisplayName $DisplayName `
-    -Description "Minecraft Server Manager (FastAPI/uvicorn)" `
-    -BinaryPathName $binaryPath `
-    -StartupType Automatic
+Set-Location -LiteralPath $repoRoot
+& $venvPython -m pip install -r requirements.txt
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to install Python requirements."
+}
+
+if (-not (Test-Path -LiteralPath $dataDir)) {
+    New-Item -ItemType Directory -Path $dataDir | Out-Null
+}
+
+$runtimeConfig = [ordered]@{
+    listen_host = $ListenHost
+    port = $Port
+}
+$runtimeConfig | ConvertTo-Json | Set-Content -LiteralPath $runtimeConfigPath -Encoding UTF8
+
+$serviceMeta = [ordered]@{
+    service_name = $ServiceName
+    display_name = $DisplayName
+    description = $Description
+}
+$serviceMeta | ConvertTo-Json | Set-Content -LiteralPath $serviceMetaPath -Encoding UTF8
+
+$existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($null -ne $existing) {
+    if (-not $Reinstall) {
+        throw "Service '$ServiceName' already exists. Run again with -Reinstall to replace it."
+    }
+
+    if ($existing.Status -ne "Stopped") {
+        Stop-Service -Name $ServiceName -Force
+        (Get-Service -Name $ServiceName).WaitForStatus("Stopped", [TimeSpan]::FromSeconds(90))
+    }
+
+    & sc.exe delete $ServiceName | Out-Null
+    Start-Sleep -Seconds 2
+}
+
+& $venvPython $serviceScript --startup auto install
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to install Windows service via pywin32."
+}
 
 Start-Service -Name $ServiceName
 Write-Host "Service '$ServiceName' installed and started."
