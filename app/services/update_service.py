@@ -199,3 +199,57 @@ def trigger_manager_update() -> tuple[bool, str]:
             "Der notwendige Neustart wird automatisch ausgefuehrt."
         ),
     )
+
+
+def trigger_manager_restart() -> tuple[bool, str]:
+    repo_path = _repo_root()
+    restart_script = repo_path / "scripts" / "restart_manager.ps1"
+    if not restart_script.exists():
+        return False, f"Restart-Skript fehlt: {restart_script}"
+
+    service_name = _read_service_name_from_meta(repo_path)
+    startup_task_name = "mc-server-manager-startup"
+    restart_log_path = repo_path / "data" / "logs" / "manager-restart.log"
+    restart_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    command = [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(restart_script),
+        "-RepoPath",
+        str(repo_path),
+        "-ServiceName",
+        service_name,
+        "-StartupTaskName",
+        startup_task_name,
+    ]
+
+    creationflags = 0
+    for name in ("CREATE_NEW_PROCESS_GROUP", "DETACHED_PROCESS", "CREATE_NO_WINDOW"):
+        creationflags |= int(getattr(subprocess, name, 0))
+
+    try:
+        with restart_log_path.open("ab") as log_handle:
+            subprocess.Popen(
+                command,
+                cwd=str(repo_path),
+                stdin=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                close_fds=True,
+                creationflags=creationflags,
+            )
+    except Exception as exc:
+        return False, f"Neustart-Prozess konnte nicht gestartet werden: {exc}"
+
+    return (
+        True,
+        (
+            "Neustart wurde gestartet. Details unter "
+            f"'{restart_log_path.as_posix()}'. "
+            "Die Anwendung kann kurzzeitig nicht erreichbar sein."
+        ),
+    )

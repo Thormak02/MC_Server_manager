@@ -34,7 +34,11 @@ from app.services.platform_settings_service import (
     list_platform_settings,
     update_provider_settings,
 )
-from app.services.update_service import get_manager_update_status, trigger_manager_update
+from app.services.update_service import (
+    get_manager_update_status,
+    trigger_manager_restart,
+    trigger_manager_update,
+)
 from app.web.routes.pages import build_context, push_flash, templates
 
 
@@ -269,6 +273,26 @@ def apply_manager_update_action(
     audit_service.log_action(
         db,
         action="settings.manager_update_apply",
+        user_id=current_user.id,
+        details=f"ok={ok} message={message}",
+    )
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/manager/restart")
+def restart_manager_action(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    ok, message = trigger_manager_restart()
+    push_flash(request, message, "success" if ok else "error")
+    audit_service.log_action(
+        db,
+        action="settings.manager_restart",
         user_id=current_user.id,
         details=f"ok={ok} message={message}",
     )

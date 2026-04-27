@@ -103,6 +103,9 @@
         <form method="post" action="/settings/manager-update/apply" class="inline-form">
             <button type="submit" {% if not manager_update_status.can_apply %}disabled{% endif %}>Update durchfuehren</button>
         </form>
+        <form method="post" action="/settings/manager/restart" class="inline-form">
+            <button type="submit">Anwendung neu starten</button>
+        </form>
     </div>
     <p class="muted">Hinweis: Beim Update kann die Weboberflaeche kurzzeitig nicht erreichbar sein.</p>
 </section>
