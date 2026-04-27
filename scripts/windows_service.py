@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import threading
+import traceback
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +17,7 @@ import win32serviceutil
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_META_PATH = REPO_ROOT / "data" / "service_meta.json"
 SERVICE_CONFIG_PATH = REPO_ROOT / "data" / "service_config.json"
+SERVICE_LOG_PATH = REPO_ROOT / "data" / "service_runtime.log"
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -33,6 +36,15 @@ def _load_service_meta() -> dict[str, str]:
         "display_name": str(data.get("display_name", "MC Server Manager")),
         "description": str(data.get("description", "Minecraft Server Manager (FastAPI/uvicorn)")),
     }
+
+
+def _append_runtime_log(message: str) -> None:
+    try:
+        SERVICE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with SERVICE_LOG_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(message.rstrip() + "\n")
+    except Exception:
+        pass
 
 
 def _load_runtime_config() -> dict[str, Any]:
@@ -67,18 +79,37 @@ class McServerManagerService(win32serviceutil.ServiceFramework):
         win32event.SetEvent(self.stop_event)
 
     def SvcDoRun(self):
-        servicemanager.LogInfoMsg(f"{self._svc_name_} service is starting")
+        _append_runtime_log(f"{self._svc_name_}: service is starting")
+        try:
+            servicemanager.LogInfoMsg(f"{self._svc_name_} service is starting")
+        except Exception:
+            pass
         try:
             self._run()
         except Exception as exc:
-            servicemanager.LogErrorMsg(f"{self._svc_name_} crashed: {exc}")
+            _append_runtime_log(f"{self._svc_name_}: crashed: {exc}")
+            _append_runtime_log(traceback.format_exc())
+            try:
+                servicemanager.LogErrorMsg(f"{self._svc_name_} crashed: {exc}")
+            except Exception:
+                pass
             raise
         finally:
-            servicemanager.LogInfoMsg(f"{self._svc_name_} service has stopped")
+            _append_runtime_log(f"{self._svc_name_}: service has stopped")
+            try:
+                servicemanager.LogInfoMsg(f"{self._svc_name_} service has stopped")
+            except Exception:
+                pass
 
     def _run(self):
         os.chdir(REPO_ROOT)
+        repo_root_text = str(REPO_ROOT)
+        if repo_root_text not in sys.path:
+            sys.path.insert(0, repo_root_text)
         runtime_config = _load_runtime_config()
+        _append_runtime_log(
+            f"{self._svc_name_}: runtime config host={runtime_config['listen_host']} port={runtime_config['port']}"
+        )
 
         from app.main import app
 
