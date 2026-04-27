@@ -13,11 +13,60 @@ $ErrorActionPreference = "Stop"
 function Invoke-Git {
     param([string[]]$Arguments)
 
-    Write-Host "git $($Arguments -join ' ')"
+    Write-Output "git $($Arguments -join ' ')"
     & git @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Git command failed: git $($Arguments -join ' ')"
     }
+}
+
+function Invoke-StartupTaskRestart {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoPath,
+        [Parameter(Mandatory = $true)]
+        [string]$TaskName
+    )
+
+    $helperScriptPath = Join-Path $RepoPath "scripts\restart_startup_task.ps1"
+    if (-not (Test-Path -LiteralPath $helperScriptPath)) {
+        throw "Restart helper script not found: '$helperScriptPath'."
+    }
+
+    $helperTaskName = "$TaskName-update-restart"
+    $existingHelper = Get-ScheduledTask -TaskName $helperTaskName -ErrorAction SilentlyContinue
+    if ($null -ne $existingHelper) {
+        Unregister-ScheduledTask -TaskName $helperTaskName -Confirm:$false -ErrorAction SilentlyContinue
+    }
+
+    $windowsPowerShell = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
+    $helperArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", "`"$helperScriptPath`"",
+        "-StartupTaskName", "`"$TaskName`"",
+        "-SelfTaskName", "`"$helperTaskName`""
+    ) -join " "
+
+    $action = New-ScheduledTaskAction -Execute $windowsPowerShell -Argument $helperArgs -WorkingDirectory $RepoPath
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
+    $settings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+    Register-ScheduledTask `
+        -TaskName $helperTaskName `
+        -Action $action `
+        -Trigger $trigger `
+        -Settings $settings `
+        -Principal $principal `
+        -Force | Out-Null
+
+    Start-ScheduledTask -TaskName $helperTaskName
+    Write-Output "Scheduled task restart helper '$helperTaskName' for '$TaskName'."
 }
 
 $resolvedRepoPath = (Resolve-Path -LiteralPath $RepoPath).Path
@@ -30,7 +79,7 @@ $startupTask = $null
 if (-not [string]::IsNullOrWhiteSpace($ServiceName)) {
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($null -ne $service -and $service.Status -ne "Stopped") {
-        Write-Host "Stopping service '$ServiceName'..."
+        Write-Output "Stopping service '$ServiceName'..."
         Stop-Service -Name $ServiceName -Force
         (Get-Service -Name $ServiceName).WaitForStatus("Stopped", [TimeSpan]::FromSeconds(90))
     }
@@ -39,7 +88,7 @@ if (-not [string]::IsNullOrWhiteSpace($ServiceName)) {
 if ($null -eq $service -and -not [string]::IsNullOrWhiteSpace($StartupTaskName)) {
     $startupTask = Get-ScheduledTask -TaskName $StartupTaskName -ErrorAction SilentlyContinue
     if ($null -ne $startupTask) {
-        Write-Host "Startup task '$StartupTaskName' detected. Deploy runs without pre-stop in task mode."
+        Write-Output "Startup task '$StartupTaskName' detected."
     }
     else {
         Write-Warning "Service '$ServiceName' and startup task '$StartupTaskName' not found. Deployment continues without restart target."
@@ -54,7 +103,7 @@ try {
 
     $venvPython = Join-Path $resolvedRepoPath ".venv\Scripts\python.exe"
     if (-not (Test-Path -LiteralPath $venvPython)) {
-        Write-Host "Creating virtual environment with '$PythonExe'..."
+        Write-Output "Creating virtual environment with '$PythonExe'..."
         & $PythonExe -m venv .venv
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to create virtual environment with '$PythonExe'."
@@ -90,24 +139,12 @@ finally {
 }
 
 if ($null -ne $service) {
-    Write-Host "Starting service '$ServiceName'..."
+    Write-Output "Starting service '$ServiceName'..."
     Start-Service -Name $ServiceName
     (Get-Service -Name $ServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(90))
 }
 elseif ($null -ne $startupTask) {
-    try {
-        $taskInfo = Get-ScheduledTaskInfo -TaskName $StartupTaskName -ErrorAction Stop
-        if ($taskInfo.State -ne "Running") {
-            Write-Host "Starting startup task '$StartupTaskName'..."
-            Start-ScheduledTask -TaskName $StartupTaskName
-        }
-        else {
-            Write-Host "Startup task '$StartupTaskName' is already running. New code is present; restart task/server to load it."
-        }
-    }
-    catch {
-        Write-Warning "Could not query/start startup task '$StartupTaskName': $($_.Exception.Message)"
-    }
+    Invoke-StartupTaskRestart -RepoPath $resolvedRepoPath -TaskName $StartupTaskName
 }
 
-Write-Host "Deployment completed successfully."
+Write-Output "Deployment completed successfully."

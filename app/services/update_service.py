@@ -196,7 +196,6 @@ def trigger_manager_update() -> tuple[bool, str]:
         (
             "Update wurde gestartet. Details unter "
             f"'{update_log_path.as_posix()}'. "
-            "Im Startup-Task-Modus ist ggf. ein Task-/Server-Neustart noetig, "
-            "damit der neue Code aktiv wird."
+            "Der notwendige Neustart wird automatisch ausgefuehrt."
         ),
     )
