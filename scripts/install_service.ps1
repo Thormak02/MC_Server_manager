@@ -111,12 +111,37 @@ if ($null -ne $existing) {
     }
 
     & sc.exe delete $ServiceName | Out-Null
-    Start-Sleep -Seconds 2
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to delete existing service '$ServiceName'."
+    }
+
+    $deleted = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        Start-Sleep -Seconds 1
+        $stillExisting = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        if ($null -eq $stillExisting) {
+            $deleted = $true
+            break
+        }
+    }
+    if (-not $deleted) {
+        throw "Service '$ServiceName' could not be fully removed. Close Services.msc/Event Viewer handles and try again."
+    }
 }
 
 & $venvPython $serviceScript --startup auto install
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to install Windows service via pywin32."
+}
+
+$serviceConfig = & sc.exe qc $ServiceName
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to query installed service '$ServiceName'."
+}
+
+$expectedBinaryPath = ('"' + (Join-Path $venvRoot "pythonservice.exe") + '"')
+if (($serviceConfig -join "`n") -notmatch [Regex]::Escape($expectedBinaryPath)) {
+    throw "Installed service binary path is not pywin32 pythonservice.exe. Another wrapper still owns '$ServiceName'."
 }
 
 $serviceRegRoot = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName"
