@@ -15,7 +15,14 @@ if (-not [string]::IsNullOrWhiteSpace($ServiceName)) {
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 }
 
-if ($null -ne $service) {
+$startupTask = $null
+if (-not [string]::IsNullOrWhiteSpace($StartupTaskName)) {
+    $startupTask = Get-ScheduledTask -TaskName $StartupTaskName -ErrorAction SilentlyContinue
+}
+
+$useStartupTask = $null -ne $startupTask
+
+if (-not $useStartupTask -and $null -ne $service) {
     if ($service.Status -ne "Stopped") {
         Write-Output "Stopping service '$ServiceName'..."
         Stop-Service -Name $ServiceName -Force
@@ -28,12 +35,7 @@ if ($null -ne $service) {
     exit 0
 }
 
-$startupTask = $null
-if (-not [string]::IsNullOrWhiteSpace($StartupTaskName)) {
-    $startupTask = Get-ScheduledTask -TaskName $StartupTaskName -ErrorAction SilentlyContinue
-}
-
-if ($null -eq $startupTask) {
+if (-not $useStartupTask) {
     throw "Neither service '$ServiceName' nor startup task '$StartupTaskName' found."
 }
 

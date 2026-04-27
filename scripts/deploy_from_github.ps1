@@ -78,21 +78,25 @@ $service = $null
 $startupTask = $null
 if (-not [string]::IsNullOrWhiteSpace($ServiceName)) {
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if ($null -ne $service -and $service.Status -ne "Stopped") {
+}
+if (-not [string]::IsNullOrWhiteSpace($StartupTaskName)) {
+    $startupTask = Get-ScheduledTask -TaskName $StartupTaskName -ErrorAction SilentlyContinue
+}
+
+$useStartupTask = $null -ne $startupTask
+
+if ($useStartupTask) {
+    Write-Output "Startup task '$StartupTaskName' detected and preferred for runtime restart."
+}
+elseif ($null -ne $service) {
+    if ($service.Status -ne "Stopped") {
         Write-Output "Stopping service '$ServiceName'..."
         Stop-Service -Name $ServiceName -Force
         (Get-Service -Name $ServiceName).WaitForStatus("Stopped", [TimeSpan]::FromSeconds(90))
     }
 }
-
-if ($null -eq $service -and -not [string]::IsNullOrWhiteSpace($StartupTaskName)) {
-    $startupTask = Get-ScheduledTask -TaskName $StartupTaskName -ErrorAction SilentlyContinue
-    if ($null -ne $startupTask) {
-        Write-Output "Startup task '$StartupTaskName' detected."
-    }
-    else {
-        Write-Warning "Service '$ServiceName' and startup task '$StartupTaskName' not found. Deployment continues without restart target."
-    }
+else {
+    Write-Warning "Service '$ServiceName' and startup task '$StartupTaskName' not found. Deployment continues without restart target."
 }
 
 Push-Location -LiteralPath $resolvedRepoPath
@@ -138,13 +142,13 @@ finally {
     Pop-Location
 }
 
-if ($null -ne $service) {
+if ($useStartupTask) {
+    Invoke-StartupTaskRestart -RepoPath $resolvedRepoPath -TaskName $StartupTaskName
+}
+elseif ($null -ne $service) {
     Write-Output "Starting service '$ServiceName'..."
     Start-Service -Name $ServiceName
     (Get-Service -Name $ServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(90))
-}
-elseif ($null -ne $startupTask) {
-    Invoke-StartupTaskRestart -RepoPath $resolvedRepoPath -TaskName $StartupTaskName
 }
 
 Write-Output "Deployment completed successfully."

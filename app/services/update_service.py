@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -42,6 +43,15 @@ def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
         errors="replace",
         check=False,
     )
+
+
+def _powershell_executable() -> str:
+    windows_dir = os.environ.get("WINDIR")
+    if windows_dir:
+        candidate = Path(windows_dir) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"
+        if candidate.exists():
+            return str(candidate)
+    return "powershell"
 
 
 def _read_service_name_from_meta(repo_path: Path) -> str:
@@ -155,7 +165,7 @@ def trigger_manager_update() -> tuple[bool, str]:
     update_log_path = repo_path / "data" / "logs" / "manager-update.log"
     update_log_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
-        "powershell",
+        _powershell_executable(),
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
@@ -174,7 +184,7 @@ def trigger_manager_update() -> tuple[bool, str]:
     ]
 
     creationflags = 0
-    for name in ("CREATE_NEW_PROCESS_GROUP", "DETACHED_PROCESS", "CREATE_NO_WINDOW"):
+    for name in ("CREATE_NEW_PROCESS_GROUP", "CREATE_NO_WINDOW"):
         creationflags |= int(getattr(subprocess, name, 0))
 
     try:
@@ -185,7 +195,7 @@ def trigger_manager_update() -> tuple[bool, str]:
                 stdin=subprocess.DEVNULL,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
-                close_fds=True,
+                close_fds=False,
                 creationflags=creationflags,
             )
     except Exception as exc:
@@ -213,7 +223,7 @@ def trigger_manager_restart() -> tuple[bool, str]:
     restart_log_path.parent.mkdir(parents=True, exist_ok=True)
 
     command = [
-        "powershell",
+        _powershell_executable(),
         "-NoProfile",
         "-ExecutionPolicy",
         "Bypass",
@@ -228,7 +238,7 @@ def trigger_manager_restart() -> tuple[bool, str]:
     ]
 
     creationflags = 0
-    for name in ("CREATE_NEW_PROCESS_GROUP", "DETACHED_PROCESS", "CREATE_NO_WINDOW"):
+    for name in ("CREATE_NEW_PROCESS_GROUP", "CREATE_NO_WINDOW"):
         creationflags |= int(getattr(subprocess, name, 0))
 
     try:
@@ -239,7 +249,7 @@ def trigger_manager_restart() -> tuple[bool, str]:
                 stdin=subprocess.DEVNULL,
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
-                close_fds=True,
+                close_fds=False,
                 creationflags=creationflags,
             )
     except Exception as exc:
