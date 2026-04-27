@@ -4,6 +4,7 @@ param(
     [string]$RepoPath,
     [string]$Branch = "main",
     [string]$ServiceName = "mc-server-manager",
+    [string]$StartupTaskName = "mc-server-manager-startup",
     [string]$PythonExe = "python"
 )
 
@@ -25,15 +26,33 @@ if (-not (Test-Path -LiteralPath (Join-Path $resolvedRepoPath ".git"))) {
 }
 
 $service = $null
+$startupTask = $null
 if (-not [string]::IsNullOrWhiteSpace($ServiceName)) {
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-    if ($null -eq $service) {
-        Write-Warning "Service '$ServiceName' not found. Deployment will continue without restart."
-    }
-    elseif ($service.Status -ne "Stopped") {
+    if ($null -ne $service -and $service.Status -ne "Stopped") {
         Write-Host "Stopping service '$ServiceName'..."
         Stop-Service -Name $ServiceName -Force
         (Get-Service -Name $ServiceName).WaitForStatus("Stopped", [TimeSpan]::FromSeconds(90))
+    }
+}
+
+if ($null -eq $service -and -not [string]::IsNullOrWhiteSpace($StartupTaskName)) {
+    $startupTask = Get-ScheduledTask -TaskName $StartupTaskName -ErrorAction SilentlyContinue
+    if ($null -ne $startupTask) {
+        try {
+            $taskInfo = Get-ScheduledTaskInfo -TaskName $StartupTaskName -ErrorAction Stop
+            if ($taskInfo.State -eq "Running") {
+                Write-Host "Stopping startup task '$StartupTaskName'..."
+                Stop-ScheduledTask -TaskName $StartupTaskName -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+            }
+        }
+        catch {
+            Write-Warning "Could not inspect startup task '$StartupTaskName': $($_.Exception.Message)"
+        }
+    }
+    else {
+        Write-Warning "Service '$ServiceName' and startup task '$StartupTaskName' not found. Deployment continues without restart target."
     }
 }
 
@@ -84,6 +103,10 @@ if ($null -ne $service) {
     Write-Host "Starting service '$ServiceName'..."
     Start-Service -Name $ServiceName
     (Get-Service -Name $ServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(90))
+}
+elseif ($null -ne $startupTask) {
+    Write-Host "Starting startup task '$StartupTaskName'..."
+    Start-ScheduledTask -TaskName $StartupTaskName
 }
 
 Write-Host "Deployment completed successfully."
