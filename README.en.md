@@ -107,8 +107,7 @@ Check status/logs:
 ```powershell
 Get-ScheduledTask -TaskName mc-server-manager-startup
 Get-ScheduledTaskInfo -TaskName mc-server-manager-startup
-Get-Content .\data\logs\startup-task.out.log -Tail 200
-Get-Content .\data\logs\startup-task.err.log -Tail 200
+Test-NetConnection -ComputerName 127.0.0.1 -Port 8000
 ```
 
 ### 3) Install a self-hosted GitHub Runner on the server PC

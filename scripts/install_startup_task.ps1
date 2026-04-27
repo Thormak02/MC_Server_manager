@@ -22,7 +22,6 @@ $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 $runScript = Join-Path $repoRoot "scripts\run_prod.ps1"
 $venvPython = Join-Path $repoRoot ".venv\Scripts\python.exe"
 $windowsPowerShell = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
-$logsDir = Join-Path $repoRoot "data\logs"
 
 if (-not (Test-Path -LiteralPath $runScript)) {
     throw "Run script not found: '$runScript'."
@@ -32,9 +31,6 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
 }
 if (-not (Test-Path -LiteralPath $windowsPowerShell)) {
     throw "PowerShell executable not found: '$windowsPowerShell'."
-}
-if (-not (Test-Path -LiteralPath $logsDir)) {
-    New-Item -ItemType Directory -Path $logsDir -Force | Out-Null
 }
 
 if ($RemoveBrokenService) {
@@ -47,13 +43,12 @@ if ($RemoveBrokenService) {
     }
 }
 
-$stdoutLog = Join-Path $logsDir "startup-task.out.log"
-$stderrLog = Join-Path $logsDir "startup-task.err.log"
 $actionArgs = @(
     "-NoProfile",
     "-ExecutionPolicy", "Bypass",
-    "-Command",
-    "& `"$runScript`" -ListenHost `"$ListenHost`" -Port $Port 1>> `"$stdoutLog`" 2>> `"$stderrLog`""
+    "-File", "`"$runScript`"",
+    "-ListenHost", "`"$ListenHost`"",
+    "-Port", "$Port"
 ) -join " "
 
 $action = New-ScheduledTaskAction -Execute $windowsPowerShell -Argument $actionArgs -WorkingDirectory $repoRoot
