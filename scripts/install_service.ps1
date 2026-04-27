@@ -51,7 +51,7 @@ if (Test-Path -LiteralPath $pywin32PostInstall) {
 }
 
 $pywin32System32Dir = Join-Path $venvRoot "Lib\site-packages\pywin32_system32"
-$pywinDlls = @("pywintypes*.dll", "pythoncom*.dll")
+$pywinDlls = @("pywintypes*.dll", "pythoncom*.dll", "servicemanager*.pyd")
 foreach ($pattern in $pywinDlls) {
     foreach ($source in (Get-ChildItem -LiteralPath $pywin32System32Dir -Filter $pattern -File -ErrorAction SilentlyContinue)) {
         Copy-Item -LiteralPath $source.FullName -Destination (Join-Path $venvRoot $source.Name) -Force
@@ -162,6 +162,9 @@ foreach ($entry in $venvSysPath) {
     if (-not [string]::IsNullOrWhiteSpace($entry)) {
         $pythonPathParts += [string]$entry
     }
+}
+if (Test-Path -LiteralPath $pywin32System32Dir) {
+    $pythonPathParts += $pywin32System32Dir
 }
 $pythonPathValue = ($pythonPathParts | Select-Object -Unique) -join ";"
 $pythonClassValue = "windows_service.McServerManagerService"
