@@ -69,7 +69,10 @@ foreach ($pattern in $pywinDlls) {
 foreach ($source in (Get-ChildItem -LiteralPath $pywin32Win32Dir -Filter "servicemanager*.pyd" -File -ErrorAction SilentlyContinue)) {
     Copy-Item -LiteralPath $source.FullName -Destination (Join-Path $venvRoot $source.Name) -Force
 }
-Copy-Item -LiteralPath $serviceManagerModulePath -Destination (Join-Path $venvRoot ([System.IO.Path]::GetFileName($serviceManagerModulePath))) -Force
+$serviceManagerDestPath = Join-Path $venvRoot ([System.IO.Path]::GetFileName($serviceManagerModulePath))
+if ([System.IO.Path]::GetFullPath($serviceManagerModulePath) -ne [System.IO.Path]::GetFullPath($serviceManagerDestPath)) {
+    Copy-Item -LiteralPath $serviceManagerModulePath -Destination $serviceManagerDestPath -Force
+}
 
 # Ensure CPython runtime DLLs are available for LocalSystem service startup.
 $pyRuntimeInfoRaw = & $venvPython -c "import json, sys, pathlib; print(json.dumps({'base_prefix': str(pathlib.Path(sys.base_prefix)), 'exe_dir': str(pathlib.Path(sys.executable).resolve().parent), 'major': sys.version_info.major, 'minor': sys.version_info.minor}))"

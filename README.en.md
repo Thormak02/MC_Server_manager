@@ -92,6 +92,25 @@ If an older/broken `mc-server-manager` already exists:
 powershell -ExecutionPolicy Bypass -File .\scripts\install_service.ps1 -ServiceName mc-server-manager -Port 8000 -Reinstall
 ```
 
+### Alternative (recommended if Windows service fails): Startup task before login
+
+If the pywin32 service fails on your host (for example `ModuleNotFoundError: servicemanager`), use a scheduled task under `SYSTEM`.
+It starts at boot (before user login) and runs the manager on port `8000`.
+
+```powershell
+cd C:\mc_server_manager\mc_server_manager
+powershell -ExecutionPolicy Bypass -File .\scripts\install_startup_task.ps1 -TaskName mc-server-manager-startup -Port 8000 -ListenHost 0.0.0.0 -RemoveBrokenService
+```
+
+Check status/logs:
+
+```powershell
+Get-ScheduledTask -TaskName mc-server-manager-startup
+Get-ScheduledTaskInfo -TaskName mc-server-manager-startup
+Get-Content .\data\logs\startup-task.out.log -Tail 200
+Get-Content .\data\logs\startup-task.err.log -Tail 200
+```
+
 ### 3) Install a self-hosted GitHub Runner on the server PC
 
 In GitHub, open `Settings -> Actions -> Runners`, add a Windows self-hosted runner for this repository, and run it as a Windows service.
