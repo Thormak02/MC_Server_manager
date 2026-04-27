@@ -164,7 +164,7 @@ foreach ($entry in $venvSysPath) {
     }
 }
 $pythonPathValue = ($pythonPathParts | Select-Object -Unique) -join ";"
-$pythonClassValue = "scripts.windows_service.McServerManagerService"
+$pythonClassValue = "windows_service.McServerManagerService"
 
 New-ItemProperty -Path $serviceParamsRegPath -Name "PythonPath" -Value $pythonPathValue -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $serviceParamsRegPath -Name "PythonClass" -Value $pythonClassValue -PropertyType String -Force | Out-Null
