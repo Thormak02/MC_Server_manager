@@ -1,0 +1,61 @@
+name: Deploy To Windows Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-windows-server
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on:
+      - self-hosted
+      - windows
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to server path
+        shell: powershell
+        env:
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          DEPLOY_BRANCH: ${{ vars.DEPLOY_BRANCH }}
+          DEPLOY_SERVICE_NAME: ${{ vars.DEPLOY_SERVICE_NAME }}
+          DEPLOY_PYTHON_EXE: ${{ vars.DEPLOY_PYTHON_EXE }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:DEPLOY_PATH)) {
+            throw "Repository variable DEPLOY_PATH is required (example: C:\mc_server_manager\mc_server_manager)."
+          }
+
+          $script = Join-Path "${{ github.workspace }}" "scripts\deploy_from_github.ps1"
+          if (-not (Test-Path -LiteralPath $script)) {
+            throw "Deployment script not found: $script"
+          }
+
+          $branch = if ([string]::IsNullOrWhiteSpace($env:DEPLOY_BRANCH)) {
+            "${{ github.ref_name }}"
+          } else {
+            $env:DEPLOY_BRANCH
+          }
+
+          $serviceName = if ([string]::IsNullOrWhiteSpace($env:DEPLOY_SERVICE_NAME)) {
+            "mc-server-manager"
+          } else {
+            $env:DEPLOY_SERVICE_NAME
+          }
+
+          $pythonExe = if ([string]::IsNullOrWhiteSpace($env:DEPLOY_PYTHON_EXE)) {
+            "python"
+          } else {
+            $env:DEPLOY_PYTHON_EXE
+          }
+
+          & $script `
+            -RepoPath $env:DEPLOY_PATH `
+            -Branch $branch `
+            -ServiceName $serviceName `
+            -PythonExe $pythonExe

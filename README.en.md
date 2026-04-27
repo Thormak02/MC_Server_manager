@@ -63,6 +63,55 @@ uvicorn app.main:app --reload
 
 Default URL: `http://127.0.0.1:8000`
 
+## Production Deployment on a Dedicated Windows Server (Auto-Update via GitHub)
+
+Goal: a push to `main` in GitHub should automatically update the server PC.
+
+### 1) One-time setup on the server PC
+
+```powershell
+git clone <YOUR_REPO_URL> C:\mc_server_manager\mc_server_manager
+cd C:\mc_server_manager\mc_server_manager
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# then edit .env
+```
+
+### 2) Install Windows service (run in elevated PowerShell)
+
+```powershell
+cd C:\mc_server_manager\mc_server_manager
+powershell -ExecutionPolicy Bypass -File .\scripts\install_service.ps1 -ServiceName mc-server-manager -Port 8000
+```
+
+This runs the app as a persistent service and starts automatically after reboot.
+
+### 3) Install a self-hosted GitHub Runner on the server PC
+
+In GitHub, open `Settings -> Actions -> Runners`, add a Windows self-hosted runner for this repository, and run it as a Windows service.
+
+Important: the runner service account must be allowed to stop/start the `mc-server-manager` service (or run as local admin).
+
+### 4) Configure repository variables in GitHub
+
+In `Settings -> Secrets and variables -> Actions -> Variables`:
+
+- `DEPLOY_PATH` = `C:\mc_server_manager\mc_server_manager` (required)
+- `DEPLOY_BRANCH` = `main` (optional, default = triggering branch)
+- `DEPLOY_SERVICE_NAME` = `mc-server-manager` (optional)
+- `DEPLOY_PYTHON_EXE` = `python` or full path to `python.exe` (optional)
+
+### 5) Workflow
+
+The file `.github/workflows/deploy-windows-server.yml` deploys automatically on every push to `main`:
+
+- `git pull --ff-only`
+- `pip install -r requirements.txt` inside `.venv`
+- service restart
+
+Manual runs are also available via `workflow_dispatch`.
+
 ## Configuration (.env)
 
 Key variables:
