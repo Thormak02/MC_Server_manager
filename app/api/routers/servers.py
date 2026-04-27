@@ -244,6 +244,7 @@ def server_detail_page(
     players_current, players_max = get_player_counts(server)
     online_players = get_online_player_names(server.id)
     version_change_block_reason = _runtime_version_change_block_reason(db, server)
+    has_modpack_update = modpack_service.get_server_modpack_state(db, server.id) is not None
 
     return templates.TemplateResponse(
         request,
@@ -261,6 +262,7 @@ def server_detail_page(
             online_players=online_players,
             can_change_mc_version=version_change_block_reason is None,
             version_change_block_reason=version_change_block_reason,
+            has_modpack_update=has_modpack_update,
         ),
     )
 

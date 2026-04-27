@@ -190,6 +190,7 @@
     </form>
 </section>
 
+{% if has_modpack_update %}
 <section class="card" id="modpack-update" data-server-id="{{ server.id }}">
     <h2>Modpack Update</h2>
     <p id="modpack-update-summary" class="muted">Lade Modpack-Status ...</p>
@@ -233,6 +234,7 @@
     <p id="modpack-update-status" class="muted"></p>
     <div id="modpack-update-warnings" class="stack"></div>
 </section>
+{% endif %}
 {% endif %}
 
 {% if current_user.role == "super_admin" %}
