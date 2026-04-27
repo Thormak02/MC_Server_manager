@@ -74,7 +74,7 @@
 
 
 
-<b>~~curseforge modpack Import über modpack code / Export zip (weiter ausarbeiten)?~~</b>
+~~curseforge modpack Import über modpack code / Export zip (weiter ausarbeiten)?~~
 
 
 
@@ -86,21 +86,29 @@
 
 
 
-bitte überprüfe nochmal beide pflichtenhefte, ob alle anforderungen umgesetzt wurden.
-
-(hier copy paste beide pflichtenhefte)
+~~modpack Version soll änderbar sein (darauf achten, dass alte Inhalte korrekt gelöscht werden und korrekt durch neue ersetzt werden) um auf updates zu prüfen und diese durchzuführen~~
 
 
 
 
 
-in Details sollen op, banns, whitelist oben als eigener reiter sein, nicht unter Dateien. außerdem mit Assistent, wo man nur den namen eingeben muss. soll auch funktionieren, wenn die jeweilige Datei leer ist. unter whitelist reiter soll diese auch aktivierbar und deaktivierbar sein, am besten mit einem switch / toggle button. in den config Dateien sollen wirklich alle Felder per Assistent eingegeben werden, nicht nur einige wenige (siehe bild) es sollen alle einstellungen automatisch erkannt werden.
+**<i>~~bitte überprüfe nochmal beide pflichtenhefte, ob alle anforderungen umgesetzt wurden.~~</i>**
+
+**<i>~~(hier copy paste beide pflichtenhefte)~~</i>**
 
 
 
 
 
-es soll möglich sein, die minecraft Version eines bestehenden Servers zu ändern um zb. updates durchzuführen.
+~~in Details sollen op, banns, whitelist oben als eigener reiter sein, nicht nur (aber auch) unter Dateien. außerdem mit Assistent, wo man nur den namen eingeben muss. soll auch funktionieren, wenn die jeweilige Datei leer ist (das jeweilige Schema muss bei einem eintrag korrekt angelegt werden). unter whitelist reiter soll diese auch aktivierbar und deaktivierbar sein, am besten mit einem switch / toggle button. in den config Dateien sollen wirklich alle Felder per Assistent eingegeben werden können (sofern in assistent ansicht), nicht nur einige wenige (wie aktuell) es sollen alle einstellungen automatisch erkannt werden.~~
+
+
+
+
+
+~~es soll möglich sein, die minecraft Version eines bestehenden Servers zu ändern, um zb. updates durchzuführen.~~
+
+~~dies soll nur für vanilla / plugin server funktionieren. nicht für modded / modpacks~~
 
 
 
@@ -113,7 +121,7 @@ es soll möglich sein, die minecraft Version eines bestehenden Servers zu änder
 
 
 
-wenn eine neue minecraft Version released wird soll diese automatisch im Manager verfügbar sein, ohne sie manuell hinzufügen zu müssen. ist dies eventuell bereits umgesetzt?
+~~wenn eine neue minecraft Version released wird soll diese automatisch im Manager verfügbar sein, ohne sie manuell hinzufügen zu müssen. ist dies eventuell bereits umgesetzt? selbes auch für modloader wie zb. forge.~~
 
 
 
@@ -121,13 +129,21 @@ wenn eine neue minecraft Version released wird soll diese automatisch im Manager
 
 
 
-bitte prüfe nochmal alle seiten im gui, es gibt noch einige visuelle Bugs / es sind noch einige Felder verrutscht.
+~~bitte prüfe nochmal alle seiten im gui, es gibt noch einige visuelle Bugs / es sind noch einige Felder verrutscht.~~
+
+
+
+~~Das UI bitte auch generell aufräumen, proportionen, positionen usw.~~ 
+
+~~die suche soll als hauptfunktion präsenter sein und nich wie ein weiterer filter nur nebensächlich wirken.~~
 
 
 
 
 
-für Plugins wird noch bukkti Unterstützung benötigt.
+
+
+~~für Plugins wird noch bukkti Unterstützung benötigt.~~
 
 
 
@@ -137,15 +153,31 @@ für Plugins wird noch bukkti Unterstützung benötigt.
 
 
 
-ram min max als slider
+~~die ram einstellung soll nicht mehr über ein freitext eingabe feld funktionieren, sondern als min max slider mit sinnvollen inkrementen mit maximal 64 GB~~
+
+
+
+~~es ist gestartet, aber bei klick auf update check folgender Fehler:~~
+
+~~Fetch fehlgeschlagen: fatal: 'origin' does not appear to be a git repository fatal: Could not read from remote repository. Please make sure you have the correct access rights and the repository exists.~~
 
 
 
 
 
-updates push auf dev pc zu auto (oder manuell) download / update auf server pc
+~~updates push auf dev pc zu auto (oder manuell) download / update auf server pc~~
 
 
+
+
+
+wenn bei port nichts eingetragen wurde automatisch einen freien festlegen
+
+
+
+
+
+templates nicht nur für server erstellung, auch für datein wie server.properties
 
 
 
@@ -154,4 +186,11 @@ updates push auf dev pc zu auto (oder manuell) download / update auf server pc
 
 
 localisation (englisch)
+
+
+löschbestätigung als popup
+
+
+
+Lobby Server
 
