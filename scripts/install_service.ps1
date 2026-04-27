@@ -58,6 +58,30 @@ foreach ($pattern in $pywinDlls) {
     }
 }
 
+# Ensure CPython runtime DLLs are available for LocalSystem service startup.
+$pyRuntimeInfoRaw = & $venvPython -c "import json, sys, pathlib; print(json.dumps({'base_prefix': str(pathlib.Path(sys.base_prefix)), 'exe_dir': str(pathlib.Path(sys.executable).resolve().parent), 'major': sys.version_info.major, 'minor': sys.version_info.minor}))"
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($pyRuntimeInfoRaw)) {
+    throw "Failed to read Python runtime info."
+}
+$pyRuntimeInfo = $pyRuntimeInfoRaw | ConvertFrom-Json
+$pythonDllName = "python$($pyRuntimeInfo.major)$($pyRuntimeInfo.minor).dll"
+$runtimeCandidates = @(
+    (Join-Path $pyRuntimeInfo.base_prefix $pythonDllName),
+    (Join-Path $pyRuntimeInfo.base_prefix "python3.dll"),
+    (Join-Path $pyRuntimeInfo.base_prefix "vcruntime140.dll"),
+    (Join-Path $pyRuntimeInfo.base_prefix "vcruntime140_1.dll"),
+    (Join-Path $pyRuntimeInfo.exe_dir $pythonDllName),
+    (Join-Path $pyRuntimeInfo.exe_dir "python3.dll"),
+    (Join-Path $pyRuntimeInfo.exe_dir "vcruntime140.dll"),
+    (Join-Path $pyRuntimeInfo.exe_dir "vcruntime140_1.dll")
+) | Select-Object -Unique
+foreach ($candidate in $runtimeCandidates) {
+    if (Test-Path -LiteralPath $candidate) {
+        $destination = Join-Path $venvRoot ([System.IO.Path]::GetFileName($candidate))
+        Copy-Item -LiteralPath $candidate -Destination $destination -Force
+    }
+}
+
 if (-not (Test-Path -LiteralPath $dataDir)) {
     New-Item -ItemType Directory -Path $dataDir | Out-Null
 }
@@ -102,8 +126,20 @@ if (-not (Test-Path -LiteralPath $serviceRegRoot)) {
 $serviceParamsRegPath = Join-Path $serviceRegRoot "Parameters"
 New-Item -Path $serviceParamsRegPath -Force | Out-Null
 
-$pythonPathValue = "$repoRoot;$repoRoot\scripts;" + (Join-Path $venvRoot "Lib\site-packages")
-$pythonClassValue = "windows_service.McServerManagerService"
+$venvSysPathRaw = & $venvPython -c "import json, sys; print(json.dumps([p for p in sys.path if p]))"
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($venvSysPathRaw)) {
+    throw "Failed to read virtualenv sys.path."
+}
+
+$venvSysPath = $venvSysPathRaw | ConvertFrom-Json
+$pythonPathParts = @($repoRoot, (Join-Path $repoRoot "scripts"))
+foreach ($entry in $venvSysPath) {
+    if (-not [string]::IsNullOrWhiteSpace($entry)) {
+        $pythonPathParts += [string]$entry
+    }
+}
+$pythonPathValue = ($pythonPathParts | Select-Object -Unique) -join ";"
+$pythonClassValue = "scripts.windows_service.McServerManagerService"
 
 New-ItemProperty -Path $serviceParamsRegPath -Name "PythonPath" -Value $pythonPathValue -PropertyType String -Force | Out-Null
 New-ItemProperty -Path $serviceParamsRegPath -Name "PythonClass" -Value $pythonClassValue -PropertyType String -Force | Out-Null
