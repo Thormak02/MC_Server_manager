@@ -1,6 +1,7 @@
 import json
 import math
 import re
+import ssl
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 import urllib.error
@@ -11,6 +12,7 @@ from pathlib import Path
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.installed_content import InstalledContent
 from app.models.server import Server
 from app.providers.server.common import list_minecraft_versions
@@ -182,7 +184,7 @@ def _is_known_client_only_curseforge_mod(mod_data: dict[str, object]) -> bool:
 def _request_json(url: str, headers: dict[str, str] | None = None) -> dict | list:
     req = urllib.request.Request(url, headers=headers or {})
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30, context=_tls_context()) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         message = f"HTTP {exc.code}: {exc.reason}"
@@ -203,8 +205,28 @@ def _request_json(url: str, headers: dict[str, str] | None = None) -> dict | lis
 def _download_file(url: str, target: Path, headers: dict[str, str] | None = None) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(url, headers=headers or {})
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=60, context=_tls_context()) as resp:
         target.write_bytes(resp.read())
+
+
+def _tls_context() -> ssl.SSLContext:
+    settings = get_settings()
+    if settings.tls_skip_verify:
+        return ssl._create_unverified_context()
+
+    bundle = str(settings.tls_ca_bundle_path or "").strip()
+    if bundle:
+        bundle_path = Path(bundle).expanduser().resolve()
+        if not bundle_path.exists() or not bundle_path.is_file():
+            raise ValueError(f"TLS CA Bundle nicht gefunden: {bundle_path}")
+        return ssl.create_default_context(cafile=str(bundle_path))
+
+    try:
+        import certifi  # type: ignore
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
 
 
 def _modrinth_headers() -> dict[str, str]:

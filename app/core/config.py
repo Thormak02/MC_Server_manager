@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     curseforge_enabled: bool = True
     curseforge_api_key: str | None = None
     modrinth_user_agent: str = "mc-server-manager/1.0"
+    tls_ca_bundle_path: str | None = None
+    tls_skip_verify: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

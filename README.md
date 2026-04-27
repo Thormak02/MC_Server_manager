@@ -155,6 +155,8 @@ Wichtige Variablen:
 - `MCSM_DEFAULT_SERVER_ROOT` Optionaler Basisordner fuer neue Server (leer => Desktop Standard)
 - `MCSM_DEFAULT_BACKUP_ROOT` Optionaler Basisordner fuer Backups
 - `MCSM_MODRINTH_ENABLED` / `MCSM_CURSEFORGE_ENABLED` Provider global aktivieren/deaktivieren
+- `MCSM_TLS_CA_BUNDLE_PATH` Optionales PEM-Bundle fuer eigene/Firmen-Root-CAs
+- `MCSM_TLS_SKIP_VERIFY` Notfall-/Debug-Schalter zum Abschalten der TLS-Pruefung (nicht empfohlen)
 
 ## Erstlogin
 

@@ -155,6 +155,8 @@ Key variables:
 - `MCSM_DEFAULT_SERVER_ROOT` optional base directory for new servers (empty => desktop default)
 - `MCSM_DEFAULT_BACKUP_ROOT` optional base directory for backups
 - `MCSM_MODRINTH_ENABLED` / `MCSM_CURSEFORGE_ENABLED` global provider enable flags
+- `MCSM_TLS_CA_BUNDLE_PATH` optional PEM bundle for custom/company root CAs
+- `MCSM_TLS_SKIP_VERIFY` emergency/debug switch to bypass TLS verification (not recommended)
 
 ## First Login
 
