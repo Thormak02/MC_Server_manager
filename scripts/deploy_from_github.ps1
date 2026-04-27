@@ -39,17 +39,7 @@ if (-not [string]::IsNullOrWhiteSpace($ServiceName)) {
 if ($null -eq $service -and -not [string]::IsNullOrWhiteSpace($StartupTaskName)) {
     $startupTask = Get-ScheduledTask -TaskName $StartupTaskName -ErrorAction SilentlyContinue
     if ($null -ne $startupTask) {
-        try {
-            $taskInfo = Get-ScheduledTaskInfo -TaskName $StartupTaskName -ErrorAction Stop
-            if ($taskInfo.State -eq "Running") {
-                Write-Host "Stopping startup task '$StartupTaskName'..."
-                Stop-ScheduledTask -TaskName $StartupTaskName -ErrorAction SilentlyContinue
-                Start-Sleep -Seconds 2
-            }
-        }
-        catch {
-            Write-Warning "Could not inspect startup task '$StartupTaskName': $($_.Exception.Message)"
-        }
+        Write-Host "Startup task '$StartupTaskName' detected. Deploy runs without pre-stop in task mode."
     }
     else {
         Write-Warning "Service '$ServiceName' and startup task '$StartupTaskName' not found. Deployment continues without restart target."
@@ -105,8 +95,19 @@ if ($null -ne $service) {
     (Get-Service -Name $ServiceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(90))
 }
 elseif ($null -ne $startupTask) {
-    Write-Host "Starting startup task '$StartupTaskName'..."
-    Start-ScheduledTask -TaskName $StartupTaskName
+    try {
+        $taskInfo = Get-ScheduledTaskInfo -TaskName $StartupTaskName -ErrorAction Stop
+        if ($taskInfo.State -ne "Running") {
+            Write-Host "Starting startup task '$StartupTaskName'..."
+            Start-ScheduledTask -TaskName $StartupTaskName
+        }
+        else {
+            Write-Host "Startup task '$StartupTaskName' is already running. New code is present; restart task/server to load it."
+        }
+    }
+    catch {
+        Write-Warning "Could not query/start startup task '$StartupTaskName': $($_.Exception.Message)"
+    }
 }
 
 Write-Host "Deployment completed successfully."

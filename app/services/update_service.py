@@ -151,6 +151,9 @@ def trigger_manager_update() -> tuple[bool, str]:
         return False, f"Deploy-Skript fehlt: {deploy_script}"
 
     service_name = _read_service_name_from_meta(repo_path)
+    startup_task_name = "mc-server-manager-startup"
+    update_log_path = repo_path / "data" / "logs" / "manager-update.log"
+    update_log_path.parent.mkdir(parents=True, exist_ok=True)
     command = [
         "powershell",
         "-NoProfile",
@@ -164,6 +167,8 @@ def trigger_manager_update() -> tuple[bool, str]:
         status.branch,
         "-ServiceName",
         service_name,
+        "-StartupTaskName",
+        startup_task_name,
         "-PythonExe",
         "python",
     ]
@@ -173,19 +178,25 @@ def trigger_manager_update() -> tuple[bool, str]:
         creationflags |= int(getattr(subprocess, name, 0))
 
     try:
-        subprocess.Popen(
-            command,
-            cwd=str(repo_path),
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-            creationflags=creationflags,
-        )
+        with update_log_path.open("ab") as log_handle:
+            subprocess.Popen(
+                command,
+                cwd=str(repo_path),
+                stdin=subprocess.DEVNULL,
+                stdout=log_handle,
+                stderr=subprocess.STDOUT,
+                close_fds=True,
+                creationflags=creationflags,
+            )
     except Exception as exc:
         return False, f"Update-Prozess konnte nicht gestartet werden: {exc}"
 
     return (
         True,
-        "Update wurde gestartet. Die Anwendung kann waehrenddessen kurzzeitig nicht erreichbar sein.",
+        (
+            "Update wurde gestartet. Details unter "
+            f"'{update_log_path.as_posix()}'. "
+            "Im Startup-Task-Modus ist ggf. ein Task-/Server-Neustart noetig, "
+            "damit der neue Code aktiv wird."
+        ),
     )
