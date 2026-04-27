@@ -5,7 +5,7 @@
 <section class="card">
     <p class="muted">Der Import erstellt immer einen neuen Server aus dem gewaehlten Modpack.</p>
     <div id="modpack-import" class="stack">
-        <div class="grid grid-4">
+        <div class="grid grid-4 settings-grid">
             <div>
                 <label for="mp_source">Quelle</label>
                 <select id="mp_source">
@@ -42,46 +42,52 @@
 
         <div id="mp_search_wrap" class="card" style="display:none;">
             <h2 style="margin-top:0;">Modpack Suche</h2>
-            <div class="grid grid-4">
-                <div>
-                    <label for="mp_search_query">Suchbegriff</label>
-                    <input id="mp_search_query" type="text" placeholder="z.B. Better Minecraft">
+            <div class="search-focus-panel stack">
+                <div class="search-primary-row">
+                    <div>
+                        <label for="mp_search_query">Suchbegriff</label>
+                        <input id="mp_search_query" type="text" placeholder="z.B. Better Minecraft, ATM, Skyblock">
+                    </div>
+                    <div class="align-end">
+                        <button id="mp_search_btn" type="button">Modpacks suchen</button>
+                    </div>
                 </div>
-                <div>
-                    <label>MC Version (optional)</label>
-                    <div id="mp_search_mc_version_filter"></div>
+                <div class="grid grid-4 search-secondary-grid">
+                    <div>
+                        <label>MC Version (optional)</label>
+                        <div id="mp_search_mc_version_filter"></div>
+                    </div>
+                    <div>
+                        <label>Loader (optional)</label>
+                        <div id="mp_search_loader_filter"></div>
+                    </div>
+                    <div>
+                        <label for="mp_search_release_channel">Kanal</label>
+                        <select id="mp_search_release_channel">
+                            <option value="all">Alle</option>
+                            <option value="release">Release</option>
+                            <option value="beta">Beta</option>
+                            <option value="alpha">Alpha</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="mp_search_sort_by">Sortierung</label>
+                        <select id="mp_search_sort_by">
+                            <option value="relevance">Relevanz</option>
+                            <option value="downloads">Downloads</option>
+                            <option value="popularity">Beliebtheit</option>
+                            <option value="updated">Zuletzt aktualisiert</option>
+                            <option value="newest">Neueste</option>
+                        </select>
+                    </div>
+                    <div class="field-span-2">
+                        <label>Kategorien</label>
+                        <div id="mp_search_categories_filter"></div>
+                    </div>
                 </div>
-                <div>
-                    <label>Loader (optional)</label>
-                    <div id="mp_search_loader_filter"></div>
+                <div class="search-status-row">
+                    <span id="mp_search_status" class="muted"></span>
                 </div>
-                <div>
-                    <label for="mp_search_release_channel">Kanal</label>
-                    <select id="mp_search_release_channel">
-                        <option value="all">Alle</option>
-                        <option value="release">Release</option>
-                        <option value="beta">Beta</option>
-                        <option value="alpha">Alpha</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="mp_search_sort_by">Sortierung</label>
-                    <select id="mp_search_sort_by">
-                        <option value="relevance">Relevanz</option>
-                        <option value="downloads">Downloads</option>
-                        <option value="popularity">Beliebtheit</option>
-                        <option value="updated">Zuletzt aktualisiert</option>
-                        <option value="newest">Neueste</option>
-                    </select>
-                </div>
-                <div style="grid-column: span 2;">
-                    <label>Kategorien</label>
-                    <div id="mp_search_categories_filter"></div>
-                </div>
-            </div>
-            <div class="inline-form" style="margin-top:0.8rem;">
-                <button id="mp_search_btn" type="button">Modpacks suchen</button>
-                <span id="mp_search_status" class="muted"></span>
             </div>
             <div id="mp_search_results_scroll" class="search-results-scroll">
                 <div id="mp_search_results" class="stack"><p class="muted">Noch keine Treffer geladen.</p></div>
@@ -91,7 +97,7 @@
 
         <div class="card">
             <h2 style="margin-top:0;">Neuer Server</h2>
-            <div class="grid grid-4">
+            <div class="grid grid-4 settings-grid">
                 <div>
                     <label for="mp_new_server_name">Servername</label>
                     <input id="mp_new_server_name" type="text" placeholder="z.B. Modpack Server">

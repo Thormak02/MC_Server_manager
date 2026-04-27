@@ -57,25 +57,27 @@
 {% if can_control %}
 <section class="card">
     <h2>Aktionen</h2>
-    <form method="post" action="/servers/{{ server.id }}/start" class="inline-form">
-        <button type="submit">Start</button>
-    </form>
-    <form method="post" action="/servers/{{ server.id }}/stop" class="inline-form">
-        <button type="submit" class="danger">Stop</button>
-    </form>
-    <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
-        <button type="submit">Neustart</button>
-    </form>
-    <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
-        <input name="delay_seconds" type="number" min="0" placeholder="Delay sek">
-        <input name="warning_message" type="text" placeholder="Warnung, z.B. Restart in {seconds}s">
-        <button type="submit">Neustart geplant</button>
-    </form>
+    <div class="inline-form">
+        <form method="post" action="/servers/{{ server.id }}/start" class="inline-form">
+            <button type="submit">Start</button>
+        </form>
+        <form method="post" action="/servers/{{ server.id }}/stop" class="inline-form">
+            <button type="submit" class="danger">Stop</button>
+        </form>
+        <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
+            <button type="submit">Neustart</button>
+        </form>
+        <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
+            <input name="delay_seconds" type="number" min="0" placeholder="Delay sek">
+            <input name="warning_message" type="text" placeholder="Warnung, z.B. Restart in {seconds}s">
+            <button type="submit">Neustart geplant</button>
+        </form>
+    </div>
 </section>
 
 <section class="card">
     <h2>Servereinstellungen</h2>
-    <form method="post" action="/servers/{{ server.id }}/settings" class="grid grid-4">
+    <form method="post" action="/servers/{{ server.id }}/settings" class="grid grid-4 settings-grid">
         <div>
             <label for="mc_version">Minecraft Version</label>
             <select id="mc_version" name="mc_version" {% if not can_change_mc_version %}disabled{% endif %}>
@@ -111,7 +113,7 @@
             <p class="muted">{{ version_change_block_reason }}</p>
         </div>
         {% endif %}
-        <div>
+        <div class="field-span-2">
             <label for="java_profile_id">Java Profil</label>
             <select id="java_profile_id" name="java_profile_id">
                 <option value="">Automatisch (kompatibel)</option>
@@ -171,11 +173,11 @@
                 <option value="command" {% if server.start_mode == "command" %}selected{% endif %}>command</option>
             </select>
         </div>
-        <div>
+        <div class="field-span-2">
             <label for="start_bat_path">Start .bat Pfad</label>
             <input id="start_bat_path" name="start_bat_path" type="text" value="{{ server.start_bat_path or '' }}">
         </div>
-        <div>
+        <div class="field-span-2">
             <label for="start_command">Startbefehl</label>
             <input id="start_command" name="start_command" type="text" value="{{ server.start_command or '' }}">
         </div>
@@ -191,7 +193,7 @@
 <section class="card" id="modpack-update" data-server-id="{{ server.id }}">
     <h2>Modpack Update</h2>
     <p id="modpack-update-summary" class="muted">Lade Modpack-Status ...</p>
-    <div class="grid grid-4">
+    <div class="grid grid-4 settings-grid">
         <div>
             <label for="modpack-update-release-channel">Release-Kanal</label>
             <select id="modpack-update-release-channel">

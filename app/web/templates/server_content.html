@@ -10,62 +10,68 @@
     <p class="muted">Modpacks werden ueber <a href="/modpacks/import">Modpack importieren</a> als neuer Server importiert.</p>
     {% endif %}
     {% if can_manage %}
-    <div class="grid grid-4" id="content-search">
-        <div>
-            <label for="provider">Provider</label>
-            <select id="provider">
-                <option value="curseforge" selected>CurseForge</option>
-                <option value="modrinth">Modrinth</option>
-                <option value="bukkit">Bukkit (Spiget)</option>
-            </select>
+    <div id="content-search" class="search-focus-panel stack">
+        <div class="search-primary-row">
+            <div>
+                <label for="query">Suchbegriff</label>
+                <input id="query" type="text" placeholder="z.B. worldedit, sodium, worldedit">
+            </div>
+            <div class="align-end">
+                <button id="search-btn" type="button">Suchen</button>
+            </div>
         </div>
-        <div>
-            <label for="content_type">Typ</label>
-            <select id="content_type">
-                <option value="mod" {% if default_content_type == "mod" %}selected{% endif %}>Mod</option>
-                <option value="plugin" {% if default_content_type == "plugin" %}selected{% endif %}>Plugin</option>
-            </select>
+        <div class="grid grid-4 search-secondary-grid">
+            <div>
+                <label for="provider">Provider</label>
+                <select id="provider">
+                    <option value="curseforge" selected>CurseForge</option>
+                    <option value="modrinth">Modrinth</option>
+                    <option value="bukkit">Bukkit (Spiget)</option>
+                </select>
+            </div>
+            <div>
+                <label for="content_type">Typ</label>
+                <select id="content_type">
+                    <option value="mod" {% if default_content_type == "mod" %}selected{% endif %}>Mod</option>
+                    <option value="plugin" {% if default_content_type == "plugin" %}selected{% endif %}>Plugin</option>
+                </select>
+            </div>
+            <div>
+                <label for="sort_by">Sortierung</label>
+                <select id="sort_by">
+                    <option value="relevance">Relevanz</option>
+                    <option value="downloads">Downloads</option>
+                    <option value="popularity">Beliebtheit</option>
+                    <option value="updated">Zuletzt aktualisiert</option>
+                    <option value="newest">Neueste</option>
+                </select>
+            </div>
+            <div>
+                <label for="release_channel">Kanal</label>
+                <select id="release_channel">
+                    <option value="all">Alle</option>
+                    <option value="release">Release</option>
+                    <option value="beta">Beta</option>
+                    <option value="alpha">Alpha</option>
+                </select>
+            </div>
+            <div>
+                <label>MC Version (optional)</label>
+                <div id="mc-version-filter"></div>
+            </div>
+            <div>
+                <label>Loader/Typ (optional)</label>
+                <div id="loader-filter"></div>
+            </div>
+            <div class="field-span-2">
+                <label>Kategorien</label>
+                <div id="categories-filter"></div>
+            </div>
         </div>
-        <div>
-            <label for="query">Suchbegriff</label>
-            <input id="query" type="text" placeholder="z.B. worldedit">
-        </div>
-        <div>
-            <label for="sort_by">Sortierung</label>
-            <select id="sort_by">
-                <option value="relevance">Relevanz</option>
-                <option value="downloads">Downloads</option>
-                <option value="popularity">Beliebtheit</option>
-                <option value="updated">Zuletzt aktualisiert</option>
-                <option value="newest">Neueste</option>
-            </select>
-        </div>
-        <div class="align-end">
-            <button id="search-btn" type="button">Suchen</button>
-        </div>
-        <div>
-            <label>MC Version (optional)</label>
-            <div id="mc-version-filter"></div>
-        </div>
-        <div>
-            <label>Loader/Typ (optional)</label>
-            <div id="loader-filter"></div>
-        </div>
-        <div>
-            <label for="release_channel">Kanal</label>
-            <select id="release_channel">
-                <option value="all">Alle</option>
-                <option value="release">Release</option>
-                <option value="beta">Beta</option>
-                <option value="alpha">Alpha</option>
-            </select>
-        </div>
-        <div style="grid-column: span 2;">
-            <label>Kategorien</label>
-            <div id="categories-filter"></div>
+        <div class="search-status-row">
+            <span id="search-status" class="muted"></span>
         </div>
     </div>
-    <div id="search-status" class="muted"></div>
     <div id="search-results-scroll" class="search-results-scroll">
         <div id="search-results" class="stack"><p class="muted">Noch keine Treffer geladen.</p></div>
         <div id="search-more-status" class="muted"></div>

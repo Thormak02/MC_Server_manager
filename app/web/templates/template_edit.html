@@ -3,7 +3,7 @@
 <h1>Template bearbeiten</h1>
 
 <section class="card">
-    <form method="post" action="/templates/{{ template.id }}" class="grid grid-4" id="template-edit-form">
+    <form method="post" action="/templates/{{ template.id }}" class="grid grid-4 settings-grid" id="template-edit-form">
         <div>
             <label for="name">Name</label>
             <input id="name" name="name" type="text" required value="{{ template.name }}">
