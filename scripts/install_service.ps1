@@ -2,7 +2,7 @@
 param(
     [string]$ServiceName = "mc-server-manager",
     [string]$DisplayName = "MC Server Manager",
-    [string]$Host = "0.0.0.0",
+    [string]$ListenHost = "0.0.0.0",
     [int]$Port = 8000
 )
 
@@ -29,7 +29,7 @@ if (-not (Test-Path -LiteralPath $runScript)) {
     throw "Start script not found: '$runScript'."
 }
 
-$binaryPath = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$runScript`" -Host `"$Host`" -Port $Port"
+$binaryPath = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$runScript`" -ListenHost `"$ListenHost`" -Port $Port"
 
 New-Service `
     -Name $ServiceName `

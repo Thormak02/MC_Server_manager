@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$Host = "0.0.0.0",
+    [string]$ListenHost = "0.0.0.0",
     [int]$Port = 8000
 )
 
@@ -16,7 +16,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
 Set-Location -LiteralPath $repoRoot
 $env:PYTHONUNBUFFERED = "1"
 
-& $venvPython -m uvicorn app.main:app --host $Host --port $Port
+& $venvPython -m uvicorn app.main:app --host $ListenHost --port $Port
 if ($LASTEXITCODE -ne 0) {
     throw "uvicorn exited with code $LASTEXITCODE."
 }

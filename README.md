@@ -70,7 +70,7 @@ Ziel: Push auf `main` in GitHub soll den Server-PC automatisch aktualisieren.
 ### 1) Einmaliges Setup auf dem Server-PC
 
 ```powershell
-git clone <DEIN_REPO_URL> C:\mc_server_manager\mc_server_manager
+git clone https://github.com/Thormak02/MC_Server_manager.git C:\mc_server_manager\mc_server_manager
 cd C:\mc_server_manager\mc_server_manager
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
