@@ -193,6 +193,11 @@ def _request_json(url: str, headers: dict[str, str] | None = None) -> dict | lis
         except Exception:
             pass
         raise ValueError(message) from exc
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        raise ValueError(f"Netzwerkfehler: {reason}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError("Ungueltige API-Antwort (kein JSON).") from exc
 
 
 def _download_file(url: str, target: Path, headers: dict[str, str] | None = None) -> None:

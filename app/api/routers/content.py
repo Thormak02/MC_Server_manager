@@ -152,6 +152,11 @@ def content_search(
             )
         except ValueError as exc:
             return JSONResponse(status_code=400, content={"detail": str(exc)})
+        except Exception as exc:
+            return JSONResponse(
+                status_code=502,
+                content={"detail": f"CurseForge Suche fehlgeschlagen: {exc}"},
+            )
     elif provider == "bukkit":
         try:
             results = content_service.search_bukkit(
@@ -241,6 +246,11 @@ def content_filter_options(
             return JSONResponse(status_code=400, content={"detail": "Unknown provider"})
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except Exception as exc:
+        return JSONResponse(
+            status_code=502,
+            content={"detail": f"Filter-Optionen konnten nicht geladen werden: {exc}"},
+        )
 
     if server is not None:
         if not _is_content_type_supported_for_server(server, content_type):
@@ -340,6 +350,11 @@ def curseforge_versions(
         )
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except Exception as exc:
+        return JSONResponse(
+            status_code=502,
+            content={"detail": f"CurseForge Versionsliste fehlgeschlagen: {exc}"},
+        )
     return JSONResponse({"versions": versions})
 
 
