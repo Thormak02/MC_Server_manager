@@ -51,11 +51,18 @@ if (Test-Path -LiteralPath $pywin32PostInstall) {
 }
 
 $pywin32System32Dir = Join-Path $venvRoot "Lib\site-packages\pywin32_system32"
+$pywin32Win32Dir = Join-Path $venvRoot "Lib\site-packages\win32"
+$pywin32Win32LibDir = Join-Path $pywin32Win32Dir "lib"
+$pywin32PythonWinDir = Join-Path $venvRoot "Lib\site-packages\Pythonwin"
 $pywinDlls = @("pywintypes*.dll", "pythoncom*.dll", "servicemanager*.pyd")
 foreach ($pattern in $pywinDlls) {
     foreach ($source in (Get-ChildItem -LiteralPath $pywin32System32Dir -Filter $pattern -File -ErrorAction SilentlyContinue)) {
         Copy-Item -LiteralPath $source.FullName -Destination (Join-Path $venvRoot $source.Name) -Force
     }
+}
+
+foreach ($source in (Get-ChildItem -LiteralPath $pywin32Win32Dir -Filter "servicemanager*.pyd" -File -ErrorAction SilentlyContinue)) {
+    Copy-Item -LiteralPath $source.FullName -Destination (Join-Path $venvRoot $source.Name) -Force
 }
 
 # Ensure CPython runtime DLLs are available for LocalSystem service startup.
@@ -165,6 +172,15 @@ foreach ($entry in $venvSysPath) {
 }
 if (Test-Path -LiteralPath $pywin32System32Dir) {
     $pythonPathParts += $pywin32System32Dir
+}
+if (Test-Path -LiteralPath $pywin32Win32Dir) {
+    $pythonPathParts += $pywin32Win32Dir
+}
+if (Test-Path -LiteralPath $pywin32Win32LibDir) {
+    $pythonPathParts += $pywin32Win32LibDir
+}
+if (Test-Path -LiteralPath $pywin32PythonWinDir) {
+    $pythonPathParts += $pywin32PythonWinDir
 }
 $pythonPathValue = ($pythonPathParts | Select-Object -Unique) -join ";"
 $pythonClassValue = "windows_service.McServerManagerService"
