@@ -50,6 +50,11 @@ if (Test-Path -LiteralPath $pywin32PostInstall) {
     }
 }
 
+$serviceManagerModulePath = & $venvPython -c "import pathlib, servicemanager; print(pathlib.Path(servicemanager.__file__).resolve())"
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($serviceManagerModulePath)) {
+    throw "Failed to import pywin32 module 'servicemanager' in virtualenv."
+}
+
 $pywin32System32Dir = Join-Path $venvRoot "Lib\site-packages\pywin32_system32"
 $pywin32Win32Dir = Join-Path $venvRoot "Lib\site-packages\win32"
 $pywin32Win32LibDir = Join-Path $pywin32Win32Dir "lib"
@@ -64,6 +69,7 @@ foreach ($pattern in $pywinDlls) {
 foreach ($source in (Get-ChildItem -LiteralPath $pywin32Win32Dir -Filter "servicemanager*.pyd" -File -ErrorAction SilentlyContinue)) {
     Copy-Item -LiteralPath $source.FullName -Destination (Join-Path $venvRoot $source.Name) -Force
 }
+Copy-Item -LiteralPath $serviceManagerModulePath -Destination (Join-Path $venvRoot ([System.IO.Path]::GetFileName($serviceManagerModulePath))) -Force
 
 # Ensure CPython runtime DLLs are available for LocalSystem service startup.
 $pyRuntimeInfoRaw = & $venvPython -c "import json, sys, pathlib; print(json.dumps({'base_prefix': str(pathlib.Path(sys.base_prefix)), 'exe_dir': str(pathlib.Path(sys.executable).resolve().parent), 'major': sys.version_info.major, 'minor': sys.version_info.minor}))"
