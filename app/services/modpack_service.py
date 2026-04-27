@@ -1116,13 +1116,58 @@ def queue_modpack_update_for_server(
     reference_override: str | None = None,
 ) -> ModpackPreviewResponse:
     state = get_server_modpack_state(db, server.id)
-    if state is None:
-        raise ValueError("Dieser Server hat keine gespeicherten Modpack-Metadaten.")
-
-    source = (state.source or "").strip().lower()
     normalized_target = (target_version_id or "").strip() or None
     normalized_reference = (reference_override or "").strip() or None
 
+    def _queue_preview(preview: ModpackPreviewResponse) -> ModpackPreviewResponse:
+        queue_pending_install(
+            db,
+            server=server,
+            snapshot=load_preview(preview.token),
+            requested_by_user_id=requested_by_user_id,
+        )
+        return preview
+
+    if state is None:
+        if not normalized_reference:
+            raise ValueError(
+                "Dieser Server hat keine gespeicherten Modpack-Metadaten. "
+                "Bitte Referenz (CurseForge/Modrinth) angeben."
+            )
+
+        fallback_errors: list[str] = []
+        try:
+            return _queue_preview(
+                create_preview(
+                    source="modrinth",
+                    modrinth_reference=normalized_reference,
+                    modrinth_version_id=normalized_target,
+                )
+            )
+        except Exception as exc:
+            fallback_errors.append(f"Modrinth: {exc}")
+
+        file_id = int(normalized_target) if normalized_target and normalized_target.isdigit() else None
+        if normalized_target and file_id is None:
+            fallback_errors.append("CurseForge: Zielversion muss numerische Datei-ID sein.")
+        else:
+            try:
+                return _queue_preview(
+                    create_preview(
+                        source="curseforge",
+                        curseforge_reference=normalized_reference,
+                        curseforge_file_id=file_id,
+                    )
+                )
+            except Exception as exc:
+                fallback_errors.append(f"CurseForge: {exc}")
+
+        raise ValueError(
+            "Modpack-Referenz konnte nicht aufgeloest werden. "
+            + " | ".join(fallback_errors)
+        )
+
+    source = (state.source or "").strip().lower()
     if source == "modrinth":
         modrinth_reference = normalized_reference or (state.upstream_project_id or "").strip() or (state.source_ref or "").strip()
         if not modrinth_reference:
@@ -1157,13 +1202,7 @@ def queue_modpack_update_for_server(
     else:
         raise ValueError("Updates werden fuer diese Modpack-Quelle nicht unterstuetzt.")
 
-    queue_pending_install(
-        db,
-        server=server,
-        snapshot=load_preview(preview.token),
-        requested_by_user_id=requested_by_user_id,
-    )
-    return preview
+    return _queue_preview(preview)
 
 
 def get_pending_install(db: Session, server_id: int) -> PendingModpackInstall | None:

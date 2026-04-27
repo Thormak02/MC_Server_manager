@@ -42,6 +42,7 @@ from app.web.routes.pages import build_context, push_flash, templates
 router = APIRouter(include_in_schema=False)
 provisioning_service = ProvisioningService()
 _RUNTIME_VERSION_CHANGE_TYPES = {"vanilla", "paper", "spigot", "bukkit"}
+_MODPACK_UPDATE_CANDIDATE_TYPES = {"forge", "neoforge", "fabric", "quilt"}
 
 
 def _to_optional_int(raw: str | None) -> int | None:
@@ -244,7 +245,14 @@ def server_detail_page(
     players_current, players_max = get_player_counts(server)
     online_players = get_online_player_names(server.id)
     version_change_block_reason = _runtime_version_change_block_reason(db, server)
-    has_modpack_update = modpack_service.get_server_modpack_state(db, server.id) is not None
+    has_modpack_state = modpack_service.get_server_modpack_state(db, server.id) is not None
+    has_pending_modpack_install = modpack_service.get_pending_install(db, server.id) is not None
+    normalized_server_type = (server.server_type or "").strip().lower()
+    has_modpack_update = (
+        has_modpack_state
+        or has_pending_modpack_install
+        or normalized_server_type in _MODPACK_UPDATE_CANDIDATE_TYPES
+    )
 
     return templates.TemplateResponse(
         request,
