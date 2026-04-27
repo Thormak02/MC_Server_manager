@@ -8,11 +8,14 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-import servicemanager
-import uvicorn
 import win32event
 import win32service
 import win32serviceutil
+
+try:
+    import servicemanager
+except Exception:  # pragma: no cover
+    servicemanager = None  # type: ignore[assignment]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SERVICE_META_PATH = REPO_ROOT / "data" / "service_meta.json"
@@ -47,6 +50,24 @@ def _append_runtime_log(message: str) -> None:
         pass
 
 
+def _log_service_manager_info(message: str) -> None:
+    if servicemanager is None:
+        return
+    try:
+        servicemanager.LogInfoMsg(message)
+    except Exception:
+        pass
+
+
+def _log_service_manager_error(message: str) -> None:
+    if servicemanager is None:
+        return
+    try:
+        servicemanager.LogErrorMsg(message)
+    except Exception:
+        pass
+
+
 def _load_runtime_config() -> dict[str, Any]:
     data = _load_json(SERVICE_CONFIG_PATH)
     listen_host = str(data.get("listen_host", "0.0.0.0"))
@@ -69,7 +90,7 @@ class McServerManagerService(win32serviceutil.ServiceFramework):
     def __init__(self, args):
         super().__init__(args)
         self.stop_event = win32event.CreateEvent(None, 0, 0, None)
-        self.server: uvicorn.Server | None = None
+        self.server: Any = None
         self.server_thread: threading.Thread | None = None
 
     def SvcStop(self):
@@ -80,26 +101,17 @@ class McServerManagerService(win32serviceutil.ServiceFramework):
 
     def SvcDoRun(self):
         _append_runtime_log(f"{self._svc_name_}: service is starting")
-        try:
-            servicemanager.LogInfoMsg(f"{self._svc_name_} service is starting")
-        except Exception:
-            pass
+        _log_service_manager_info(f"{self._svc_name_} service is starting")
         try:
             self._run()
         except Exception as exc:
             _append_runtime_log(f"{self._svc_name_}: crashed: {exc}")
             _append_runtime_log(traceback.format_exc())
-            try:
-                servicemanager.LogErrorMsg(f"{self._svc_name_} crashed: {exc}")
-            except Exception:
-                pass
+            _log_service_manager_error(f"{self._svc_name_} crashed: {exc}")
             raise
         finally:
             _append_runtime_log(f"{self._svc_name_}: service has stopped")
-            try:
-                servicemanager.LogInfoMsg(f"{self._svc_name_} service has stopped")
-            except Exception:
-                pass
+            _log_service_manager_info(f"{self._svc_name_} service has stopped")
 
     def _run(self):
         os.chdir(REPO_ROOT)
@@ -111,6 +123,7 @@ class McServerManagerService(win32serviceutil.ServiceFramework):
             f"{self._svc_name_}: runtime config host={runtime_config['listen_host']} port={runtime_config['port']}"
         )
 
+        import uvicorn
         from app.main import app
 
         uvicorn_config = uvicorn.Config(
