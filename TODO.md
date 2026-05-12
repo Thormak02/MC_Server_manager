@@ -216,5 +216,5 @@ alle Server so einstellbar sein, sodass sie mit start des Managers starten
 
 
 
-modpack Version im Dashboard anzeigen
+modpack Version im Dashboard anzeigen, wie mc version
 

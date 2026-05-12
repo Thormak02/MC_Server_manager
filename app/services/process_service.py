@@ -27,6 +27,7 @@ class ManagedProcess:
     process: subprocess.Popen[str]
     log_file_path: str
     started_at: datetime
+    ready: bool = False
     max_players: int | None = None
     players: set[str] = field(default_factory=set)
     player_count_hint: int | None = None
@@ -52,6 +53,7 @@ _PLAYER_LIST_PATTERN = re.compile(
     r"There are\s+(?P<current>\d+)\s+of a max of\s+(?P<max>\d+)\s+players online",
     re.IGNORECASE,
 )
+_SERVER_READY_TEXT = 'for help, type "help"'
 _CLIENT_ONLY_MOD_KEYS = {
     "drippyloadingscreen",
     "fancymenu",
@@ -518,6 +520,44 @@ def _looks_like_ingame_restart(line: str) -> bool:
     return False
 
 
+def _line_indicates_server_ready(line: str) -> bool:
+    text = line.strip().lower()
+    if not text:
+        return False
+    if " done (" not in text:
+        return False
+    return _SERVER_READY_TEXT in text
+
+
+def _mark_server_running(server_id: int) -> None:
+    with _PROCESS_LOCK:
+        runtime = _PROCESS_REGISTRY.get(server_id)
+        if runtime is None or runtime.process.poll() is not None:
+            return
+        if runtime.ready:
+            return
+        runtime.ready = True
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        if server is None:
+            return
+        if server.status in {"stopping", "restarting"}:
+            return
+        if server.status != "running":
+            server.status = "running"
+            db.add(server)
+            db.commit()
+
+    _set_start_progress(
+        server_id,
+        active=False,
+        stage="running",
+        message="Server laeuft.",
+        percent=100,
+    )
+
+
 def _update_player_runtime(server_id: int, line: str) -> None:
     with _PROCESS_LOCK:
         runtime = _PROCESS_REGISTRY.get(server_id)
@@ -557,6 +597,8 @@ def _stream_output(server_id: int, process: subprocess.Popen[str], log_file_path
                     log_file.flush()
                     console_service.append_output(server_id, line)
                     _update_player_runtime(server_id, line)
+                    if _line_indicates_server_ready(line):
+                        _mark_server_running(server_id)
                     if _looks_like_ingame_restart(line):
                         request_restart_by_server_id(
                             server_id,
@@ -586,8 +628,15 @@ def refresh_runtime_states(db: Session, servers: list[Server]) -> None:
     changed = False
     for server in servers:
         currently_running = is_running(server.id)
+        with _PROCESS_LOCK:
+            runtime = _PROCESS_REGISTRY.get(server.id)
+            runtime_ready = bool(
+                runtime is not None and runtime.process.poll() is None and runtime.ready
+            )
         if currently_running:
             if server.status in {"stopping", "restarting"}:
+                continue
+            if server.status == "starting" and not runtime_ready:
                 continue
             if server.status != "running":
                 server.status = "running"
@@ -679,6 +728,15 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
             reset_installer_counters=True,
         )
         if is_running(server.id):
+            if server.status == "starting":
+                _set_start_progress(
+                    server.id,
+                    active=True,
+                    stage="starting",
+                    message="Server startet bereits.",
+                    percent=97,
+                )
+                return False, "Server startet bereits."
             _set_start_progress(
                 server.id,
                 active=False,
@@ -882,10 +940,6 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
         )
         stream_thread.start()
 
-        server.status = "running"
-        db.add(server)
-        db.commit()
-
         audit_service.log_action(
             db,
             action="server.start",
@@ -893,16 +947,16 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
             server_id=server.id,
             details=f"pid={process.pid}",
         )
-        console_service.append_output(server.id, "Serverprozess gestartet.")
-        message = "Server gestartet."
+        console_service.append_output(server.id, "Serverprozess gestartet, warte auf Initialisierung ...")
+        message = "Serverprozess gestartet, Initialisierung laeuft."
         if java_message_clean:
             message = f"{message} {java_message_clean}"
         _set_start_progress(
             server.id,
-            active=False,
-            stage="running",
+            active=True,
+            stage="starting",
             message=message,
-            percent=100,
+            percent=97,
         )
         return True, message
     finally:
