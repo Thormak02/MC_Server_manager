@@ -1,5 +1,6 @@
 import re
 import subprocess
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -175,6 +176,10 @@ def _cmd_quote(value: str) -> str:
 
 def _normalize_windows_path(value: str) -> str:
     return value.replace("/", "\\")
+
+
+def _normalize_windows_path_lower(value: str) -> str:
+    return _normalize_windows_path(value).lower()
 
 
 def _is_unc_path(path: Path | str) -> bool:
@@ -909,6 +914,59 @@ def stop_server(
     )
     console_service.append_output(server.id, "Serverprozess gestoppt.")
     return True, "Server gestoppt."
+
+
+def terminate_processes_for_server_path(base_path: Path | str) -> int:
+    if psutil is None:
+        return 0
+
+    target = _normalize_windows_path_lower(str(Path(base_path).expanduser().resolve())).rstrip("\\")
+    if not target:
+        return 0
+
+    def _is_related_path(value: str) -> bool:
+        normalized = _normalize_windows_path_lower(value).rstrip("\\")
+        return normalized == target or normalized.startswith(f"{target}\\")
+
+    def _is_related_cmdline(tokens: list[str]) -> bool:
+        if not tokens:
+            return False
+        joined = _normalize_windows_path_lower(" ".join(tokens))
+        return target in joined
+
+    terminated = 0
+    for proc in psutil.process_iter(["pid", "cmdline", "cwd"]):
+        try:
+            if int(proc.info.get("pid") or 0) == os.getpid():
+                continue
+            cwd_raw = str(proc.info.get("cwd") or "").strip()
+            cmdline_tokens = [str(item) for item in (proc.info.get("cmdline") or []) if str(item).strip()]
+            if not _is_related_path(cwd_raw) and not _is_related_cmdline(cmdline_tokens):
+                continue
+
+            children = proc.children(recursive=True)
+            for child in children:
+                try:
+                    child.terminate()
+                except Exception:
+                    pass
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+
+            _, alive = psutil.wait_procs([*children, proc], timeout=2.5)
+            for stuck in alive:
+                try:
+                    stuck.kill()
+                except Exception:
+                    pass
+            if alive:
+                psutil.wait_procs(alive, timeout=1.5)
+            terminated += 1
+        except Exception:
+            continue
+    return terminated
 
 
 def restart_server(db: Session, server: Server, initiated_by_user_id: int | None) -> tuple[bool, str]:
