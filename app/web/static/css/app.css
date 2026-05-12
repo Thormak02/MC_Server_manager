@@ -555,6 +555,48 @@ input[type="range"].ram-slider:focus-visible {
     background: color-mix(in srgb, var(--accent) 10%, var(--panel));
 }
 
+.start-progress-panel {
+    margin-top: 0.9rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    border-radius: 0.8rem;
+    padding: 0.75rem;
+    background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+
+.start-progress-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    margin-bottom: 0.45rem;
+}
+
+.start-progress-track {
+    width: 100%;
+    height: 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel-soft) 80%, var(--panel));
+    overflow: hidden;
+}
+
+.start-progress-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #ffe39b));
+    transition: width 0.4s ease;
+}
+
+.start-progress-bar.indeterminate {
+    animation: start-progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes start-progress-indeterminate {
+    0% { margin-left: -35%; }
+    100% { margin-left: 100%; }
+}
+
 .status-dot {
     display: inline-block;
     width: 0.65rem;

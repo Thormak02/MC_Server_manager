@@ -73,6 +73,16 @@
             <button type="submit">Neustart geplant</button>
         </form>
     </div>
+    <div id="start-progress-panel" class="start-progress-panel" hidden>
+        <div class="start-progress-head">
+            <strong id="start-progress-title">Startvorgang</strong>
+            <span id="start-progress-percent" class="muted">-</span>
+        </div>
+        <div class="start-progress-track">
+            <div id="start-progress-bar" class="start-progress-bar" style="width:0%;"></div>
+        </div>
+        <p id="start-progress-message" class="muted">Warte auf Startinformationen ...</p>
+    </div>
 </section>
 
 <section class="card">
@@ -265,6 +275,80 @@
 </section>
 {% endif %}
 {% if can_control %}
+<script>
+(function () {
+    const panel = document.getElementById("start-progress-panel");
+    const titleEl = document.getElementById("start-progress-title");
+    const percentEl = document.getElementById("start-progress-percent");
+    const barEl = document.getElementById("start-progress-bar");
+    const messageEl = document.getElementById("start-progress-message");
+    if (!panel || !titleEl || !percentEl || !barEl || !messageEl) return;
+
+    const endpoint = "/api/servers/{{ server.id }}/start-progress";
+    const statusEl = document.getElementById("server-status-value");
+    const intervalMs = 2500;
+
+    function stageLabel(stage) {
+        const value = String(stage || "").toLowerCase();
+        if (value === "modpack_install") return "Modpack-Installation";
+        if (value === "java_check") return "Java-Pruefung";
+        if (value === "loader_install") return "Loader-Installation";
+        if (value === "launch") return "Serverstart";
+        if (value === "running") return "Server laeuft";
+        if (value === "error") return "Startfehler";
+        if (value === "stopped") return "Gestoppt";
+        return "Startvorgang";
+    }
+
+    function render(payload) {
+        const active = Boolean(payload && payload.active);
+        const stage = payload && payload.stage ? String(payload.stage) : "";
+        const message = payload && payload.message ? String(payload.message) : "";
+        const serverStatus = payload && payload.server_status ? String(payload.server_status) : "";
+        const rawPercent = payload && typeof payload.percent === "number" ? payload.percent : null;
+
+        const shouldShow = active || stage === "error" || serverStatus === "starting";
+        panel.hidden = !shouldShow;
+        if (!shouldShow) return;
+
+        titleEl.textContent = stageLabel(stage);
+        messageEl.textContent = message || "Startvorgang laeuft ...";
+
+        if (rawPercent === null || Number.isNaN(rawPercent)) {
+            percentEl.textContent = "laeuft ...";
+            barEl.classList.add("indeterminate");
+            barEl.style.width = "35%";
+        } else {
+            const percent = Math.max(0, Math.min(100, Math.round(rawPercent)));
+            percentEl.textContent = `${percent}%`;
+            barEl.classList.remove("indeterminate");
+            barEl.style.width = `${percent}%`;
+        }
+    }
+
+    async function refresh() {
+        try {
+            const response = await fetch(endpoint, {
+                headers: { Accept: "application/json" },
+                cache: "no-store",
+                credentials: "same-origin",
+            });
+            if (!response.ok) return;
+            const payload = await response.json();
+            render(payload);
+            if (statusEl && payload.server_status) {
+                statusEl.textContent = payload.server_status;
+            }
+        } catch (_) {}
+    }
+
+    refresh();
+    const intervalId = window.setInterval(refresh, intervalMs);
+    window.addEventListener("beforeunload", function () {
+        window.clearInterval(intervalId);
+    });
+})();
+</script>
 <script>
 (function () {
     const memoryMin = document.getElementById("memory_min_mb");

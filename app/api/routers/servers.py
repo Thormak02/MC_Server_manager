@@ -20,6 +20,7 @@ from app.services.auth_service import get_current_user_from_session
 from app.services.java_profile_service import list_java_profiles
 from app.services.memory_settings_service import validate_memory_bounds
 from app.services.process_service import (
+    get_start_progress,
     get_online_player_names,
     get_player_counts,
     queue_restart,
@@ -306,6 +307,28 @@ def server_players_live(
             "online_players": online_players,
         }
     )
+
+
+@router.get("/api/servers/{server_id}/start-progress", response_class=JSONResponse)
+def server_start_progress(
+    request: Request,
+    server_id: int,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_view_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    payload = get_start_progress(server.id)
+    payload["server_id"] = server.id
+    payload["server_status"] = server.status
+    return JSONResponse(payload)
 
 
 @router.get("/api/servers/{server_id}/modpack/state", response_class=JSONResponse)

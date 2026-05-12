@@ -39,6 +39,8 @@ _PENDING_RESTARTS: dict[int, Event] = {}
 _RESTART_LOCK = RLock()
 _START_SLOTS: set[int] = set()
 _START_LOCK = RLock()
+_START_PROGRESS: dict[int, dict[str, object]] = {}
+_START_PROGRESS_LOCK = RLock()
 
 _INGAME_RESTART_PATTERNS = [
     re.compile(r"issued server command:\s*/restart\b", re.IGNORECASE),
@@ -65,6 +67,100 @@ _CLIENT_ONLY_MOD_KEYS = {
     "searchables",
     "mousetweaks",
 }
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _set_start_progress(
+    server_id: int,
+    *,
+    active: bool | None = None,
+    stage: str | None = None,
+    message: str | None = None,
+    percent: int | None = None,
+    reset_installer_counters: bool = False,
+) -> dict[str, object]:
+    with _START_PROGRESS_LOCK:
+        payload = dict(_START_PROGRESS.get(server_id) or {})
+        payload.setdefault("active", False)
+        payload.setdefault("stage", "")
+        payload.setdefault("message", "")
+        payload.setdefault("percent", None)
+        payload.setdefault("installer_total", 0)
+        payload.setdefault("installer_done", 0)
+        if active is not None:
+            payload["active"] = bool(active)
+        if stage is not None:
+            payload["stage"] = str(stage)
+        if message is not None:
+            payload["message"] = str(message)
+        if percent is not None:
+            payload["percent"] = max(0, min(100, int(percent)))
+        if reset_installer_counters:
+            payload["installer_total"] = 0
+            payload["installer_done"] = 0
+        payload["updated_at"] = _now_iso()
+        _START_PROGRESS[server_id] = payload
+        return dict(payload)
+
+
+def get_start_progress(server_id: int) -> dict[str, object]:
+    with _START_PROGRESS_LOCK:
+        payload = dict(_START_PROGRESS.get(server_id) or {})
+    if not payload:
+        return {
+            "active": False,
+            "stage": "",
+            "message": "",
+            "percent": None,
+            "installer_total": 0,
+            "installer_done": 0,
+            "updated_at": _now_iso(),
+        }
+    payload.setdefault("active", False)
+    payload.setdefault("stage", "")
+    payload.setdefault("message", "")
+    payload.setdefault("percent", None)
+    payload.setdefault("installer_total", 0)
+    payload.setdefault("installer_done", 0)
+    payload.setdefault("updated_at", _now_iso())
+    return payload
+
+
+def _consume_start_progress_output(server_id: int, *, tag: str, line: str) -> None:
+    normalized_tag = (tag or "").strip().lower()
+    if normalized_tag not in {"neoforge-install", "forge-install"}:
+        return
+    if not line:
+        return
+
+    with _START_PROGRESS_LOCK:
+        payload = dict(_START_PROGRESS.get(server_id) or {})
+        payload.setdefault("active", True)
+        payload["stage"] = "loader_install"
+        payload.setdefault("installer_total", 0)
+        payload.setdefault("installer_done", 0)
+        payload.setdefault("percent", 25)
+
+        if "Considering library " in line:
+            payload["installer_total"] = int(payload.get("installer_total") or 0) + 1
+        if (
+            "Download completed: Checksum validated." in line
+            or "exists. Checksum valid." in line
+        ):
+            payload["installer_done"] = int(payload.get("installer_done") or 0) + 1
+
+        total = int(payload.get("installer_total") or 0)
+        done = int(payload.get("installer_done") or 0)
+        if total > 0:
+            estimated = max(25, min(95, int((done / total) * 95)))
+            payload["percent"] = max(int(payload.get("percent") or 0), estimated)
+
+        payload["message"] = line
+        payload["updated_at"] = _now_iso()
+        _START_PROGRESS[server_id] = payload
 
 
 def _normalize_mod_file_key(value: str) -> str:
@@ -262,6 +358,7 @@ def _append_subprocess_output(server_id: int, text: str, *, tag: str) -> None:
         line = raw_line.strip()
         if line:
             console_service.append_output(server_id, f"[{tag}] {line}")
+            _consume_start_progress_output(server_id, tag=tag, line=line)
 
 
 def _prepare_loader_runtime_if_needed(
@@ -285,6 +382,14 @@ def _prepare_loader_runtime_if_needed(
     if not install_script.exists():
         return False, f"Startdatei nicht gefunden: {start_bat_path}"
 
+    _set_start_progress(
+        server.id,
+        active=True,
+        stage="loader_install",
+        message=f"{display_name} Installation wird vorbereitet ...",
+        percent=45,
+        reset_installer_counters=True,
+    )
     console_service.append_output(server.id, f"{display_name} Installation wird vorbereitet ...")
     use_pushd = _is_unc_path(base_path)
     if use_pushd:
@@ -343,6 +448,13 @@ def _prepare_loader_runtime_if_needed(
     if not start_bat_path.exists():
         return False, f"{display_name} Installation abgeschlossen, aber Startdatei fehlt weiterhin: {start_bat_path}"
 
+    _set_start_progress(
+        server.id,
+        active=True,
+        stage="loader_install",
+        message=f"{display_name} Installation abgeschlossen.",
+        percent=94,
+    )
     console_service.append_output(server.id, f"{display_name} Installation abgeschlossen.")
     return True, ""
 
@@ -558,9 +670,31 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
             return False, "Startvorgang laeuft bereits."
         _START_SLOTS.add(server.id)
     try:
+        _set_start_progress(
+            server.id,
+            active=True,
+            stage="starting",
+            message="Startvorgang initialisiert ...",
+            percent=5,
+            reset_installer_counters=True,
+        )
         if is_running(server.id):
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="running",
+                message="Server laeuft bereits.",
+                percent=100,
+            )
             return False, "Server laeuft bereits."
         if server.status in {"starting", "restarting", "provisioning", "backup_running"}:
+            _set_start_progress(
+                server.id,
+                active=True,
+                stage="starting",
+                message="Server ist gerade in einem Start-/Wartungsvorgang.",
+                percent=10,
+            )
             return False, "Server ist gerade in einem Start-/Wartungsvorgang."
 
         server.status = "starting"
@@ -572,6 +706,13 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
 
         pending_install = modpack_service.get_pending_install(db, server.id)
         if pending_install is not None:
+            _set_start_progress(
+                server.id,
+                active=True,
+                stage="modpack_install",
+                message=f"Modpack wird installiert: {pending_install.pack_name}",
+                percent=15,
+            )
             console_service.append_output(
                 server.id,
                 f"Modpack-Installation wird vor dem Start ausgefuehrt: {pending_install.pack_name}",
@@ -592,19 +733,45 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
                     )
                     for warning in install_result.warnings:
                         console_service.append_output(server.id, f"[modpack-warn] {warning}")
+                _set_start_progress(
+                    server.id,
+                    active=True,
+                    stage="modpack_install",
+                    message="Modpack-Installation abgeschlossen.",
+                    percent=35,
+                )
             except Exception as exc:
                 server.status = "error"
                 db.add(server)
                 db.commit()
                 message = f"Modpack-Installation vor dem Start fehlgeschlagen: {exc}"
                 console_service.append_output(server.id, message)
+                _set_start_progress(
+                    server.id,
+                    active=False,
+                    stage="error",
+                    message=message,
+                )
                 return False, message
 
+        _set_start_progress(
+            server.id,
+            active=True,
+            stage="java_check",
+            message="Java-Laufzeit wird vorbereitet ...",
+            percent=40,
+        )
         java_ok, java_message, runtime_env = prepare_server_java_runtime(db, server)
         if not java_ok:
             server.status = "error"
             db.add(server)
             db.commit()
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="error",
+                message=java_message,
+            )
             return False, java_message
         java_message_clean = (java_message or "").strip()
         if java_message_clean:
@@ -615,6 +782,12 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
             server.status = "error"
             db.add(server)
             db.commit()
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="error",
+                message="Serverordner existiert nicht.",
+            )
             return False, "Serverordner existiert nicht."
 
         quarantined_mods = _quarantine_known_client_only_mods(base_path)
@@ -635,14 +808,33 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
             server.status = "error"
             db.add(server)
             db.commit()
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="error",
+                message=prepare_message,
+            )
             return False, prepare_message
 
+        _set_start_progress(
+            server.id,
+            active=True,
+            stage="launch",
+            message="Startbefehl wird vorbereitet ...",
+            percent=96,
+        )
         try:
             command = _command_for_server(server, base_path)
         except ValueError as exc:
             server.status = "error"
             db.add(server)
             db.commit()
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="error",
+                message=str(exc),
+            )
             return False, str(exc)
 
         use_pushd = _is_unc_path(base_path)
@@ -666,6 +858,12 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
             server.status = "error"
             db.add(server)
             db.commit()
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="error",
+                message=f"Start fehlgeschlagen: {exc}",
+            )
             return False, f"Start fehlgeschlagen: {exc}"
 
         with _PROCESS_LOCK:
@@ -699,6 +897,13 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
         message = "Server gestartet."
         if java_message_clean:
             message = f"{message} {java_message_clean}"
+        _set_start_progress(
+            server.id,
+            active=False,
+            stage="running",
+            message=message,
+            percent=100,
+        )
         return True, message
     finally:
         with _START_LOCK:
@@ -950,6 +1155,12 @@ def stop_server(
         details=f"force={force} at={datetime.now(timezone.utc).isoformat()}",
     )
     console_service.append_output(server.id, "Serverprozess gestoppt.")
+    _set_start_progress(
+        server.id,
+        active=False,
+        stage="stopped",
+        message="Server gestoppt.",
+    )
     return True, "Server gestoppt."
 
 

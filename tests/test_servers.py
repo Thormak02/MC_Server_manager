@@ -520,3 +520,36 @@ def test_delete_server_retries_folder_removal_on_transient_error(client, tmp_pat
     assert delete_response.headers["location"] == "/dashboard"
     assert calls["rmtree"] == 3
     assert calls["terminate"] == 1
+
+
+def test_start_progress_endpoint_returns_payload(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_dir = tmp_path / "start_progress_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server(client, server_dir, name="Start Progress Server")
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    from app.api.routers import servers as servers_router
+
+    monkeypatch.setattr(
+        servers_router,
+        "get_start_progress",
+        lambda _server_id: {
+            "active": True,
+            "stage": "loader_install",
+            "message": "Installer laeuft",
+            "percent": 62,
+            "installer_total": 100,
+            "installer_done": 65,
+            "updated_at": "2026-05-12T16:00:00+00:00",
+        },
+    )
+
+    response = client.get(f"/api/servers/{server_id}/start-progress")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["active"] is True
+    assert payload["stage"] == "loader_install"
+    assert payload["percent"] == 62
+    assert payload["server_status"] in {"stopped", "starting", "running", "error", "crashed", "restarting", "stopping"}
