@@ -6,7 +6,7 @@
     <h2>Server Speicherpfad</h2>
     <p class="muted">
         Aktuell: <strong>{{ server_storage_root }}</strong>
-        (Quelle: {{ "UI" if server_storage_source == "ui" else ("ENV" if server_storage_source == "env" else "Desktop-Standard") }})
+        (Quelle: {{ "UI" if server_storage_source == "ui" else ("ENV" if server_storage_source == "env" else "Standard") }})
     </p>
     <form method="post" action="/settings/server-storage" class="grid grid-4">
         <div>

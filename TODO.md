@@ -113,6 +113,7 @@
 
 
 
+
 ~~da man den modloader nicht ändern kann, reicht es, wenn die modsuche ebenfalls auf den jeweiligen modloader beschränkt ist und nur zu dem Server passende mods angezeigt werden und installiert werden können.~~
 
 
@@ -133,7 +134,7 @@
 
 
 
-~~Das UI bitte auch generell aufräumen, proportionen, positionen usw.~~ 
+~~Das UI bitte auch generell aufräumen, proportionen, positionen usw.~~
 
 ~~die suche soll als hauptfunktion präsenter sein und nich wie ein weiterer filter nur nebensächlich wirken.~~
 
@@ -188,9 +189,32 @@ templates nicht nur für server erstellung, auch für datein wie server.properti
 localisation (englisch)
 
 
+
 löschbestätigung als popup
 
 
 
 Lobby Server
+
+
+
+
+
+mehrere verwaltungsumgebungen, die voneinander getrennt sind, server 1, 2 und 3 in umgebung A und server 4, 5 und 6 in umgebung B
+
+
+
+
+
+ein button um alle mods auf aktuellste Version zu updaten
+
+
+
+
+
+alle Server so einstellbar sein, sodass sie mit start des Managers starten
+
+
+
+modpack Version im Dashboard anzeigen
 

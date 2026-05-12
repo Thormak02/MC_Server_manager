@@ -70,7 +70,7 @@ Goal: a push to `main` in GitHub should automatically update the server PC.
 ### 1) One-time setup on the server PC
 
 ```powershell
-git clone <YOUR_REPO_URL> C:\mc_server_manager\mc_server_manager
+git clone <YOUR_REPO_URL> C:\mc_server_manag
 cd C:\mc_server_manager\mc_server_manager
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
@@ -152,7 +152,7 @@ Key variables:
 - `MCSM_RESTART_WARNING_TEMPLATE` warning text, `{seconds}` is replaced
 - `MCSM_RESTART_DEFAULT_DELAY_SECONDS` default delay for restart warnings
 - `MCSM_PROVISIONING_OFFLINE_MODE` `true` for offline setup without downloads
-- `MCSM_DEFAULT_SERVER_ROOT` optional base directory for new servers (empty => desktop default)
+- `MCSM_DEFAULT_SERVER_ROOT` optional base directory for new servers (empty => default path)
 - `MCSM_DEFAULT_BACKUP_ROOT` optional base directory for backups
 - `MCSM_MODRINTH_ENABLED` / `MCSM_CURSEFORGE_ENABLED` global provider enable flags
 - `MCSM_TLS_CA_BUNDLE_PATH` optional PEM bundle for custom/company root CAs
@@ -171,6 +171,7 @@ Change these in `.env` before production use.
 
 - `data/` contains SQLite DB + scheduler state
 - Default base folder for new servers is `Desktop\mc_servers` (unless changed via `.env` or Settings UI)
+- If the app runs as a Windows service account (e.g. `LocalSystem`), default falls back to `<repo>\managed_servers`
 - For automatic creation (no target path provided), each server gets its own subdirectory in that base folder
 - Imported servers are not moved or restructured
 

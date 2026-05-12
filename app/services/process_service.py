@@ -245,8 +245,7 @@ def _command_for_server(server: Server, base_path: Path) -> list[str]:
             bat_target = _normalize_windows_path(str(start_bat_path))
 
         bat_cmd = _escape_cmd_token(bat_target)
-        bat_cmd = _ensure_nogui(bat_cmd)
-        return ["cmd", "/d", "/c", pushd_prefix + bat_cmd]
+        return ["cmd", "/d", "/c", pushd_prefix + f"call {bat_cmd}"]
 
     raise ValueError(f"Unbekannter Startmodus: {server.start_mode}")
 

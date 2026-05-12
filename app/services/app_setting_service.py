@@ -15,8 +15,23 @@ def _normalize_path(raw_value: str) -> Path:
     return Path(raw_value).expanduser().resolve()
 
 
+def _repository_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _looks_like_service_profile(home_path: Path) -> bool:
+    normalized = str(home_path).replace("/", "\\").lower()
+    return (
+        "\\windows\\system32\\config\\systemprofile" in normalized
+        or "\\windows\\serviceprofiles\\" in normalized
+    )
+
+
 def _default_desktop_storage_path() -> Path:
-    return (Path.home() / "Desktop" / "mc_servers").resolve()
+    home_path = Path.home().expanduser().resolve()
+    if _looks_like_service_profile(home_path):
+        return (_repository_root() / "managed_servers").resolve()
+    return (home_path / "Desktop" / "mc_servers").resolve()
 
 
 def _default_backup_storage_path() -> Path:

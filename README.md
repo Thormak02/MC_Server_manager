@@ -152,7 +152,7 @@ Wichtige Variablen:
 - `MCSM_RESTART_WARNING_TEMPLATE` Warntext, `{seconds}` wird ersetzt
 - `MCSM_RESTART_DEFAULT_DELAY_SECONDS` Standard-Delay fuer Neustartwarnungen
 - `MCSM_PROVISIONING_OFFLINE_MODE` `true` fuer Offline-Setup ohne Downloads
-- `MCSM_DEFAULT_SERVER_ROOT` Optionaler Basisordner fuer neue Server (leer => Desktop Standard)
+- `MCSM_DEFAULT_SERVER_ROOT` Optionaler Basisordner fuer neue Server (leer => Standardpfad)
 - `MCSM_DEFAULT_BACKUP_ROOT` Optionaler Basisordner fuer Backups
 - `MCSM_MODRINTH_ENABLED` / `MCSM_CURSEFORGE_ENABLED` Provider global aktivieren/deaktivieren
 - `MCSM_TLS_CA_BUNDLE_PATH` Optionales PEM-Bundle fuer eigene/Firmen-Root-CAs
@@ -171,6 +171,7 @@ Vor Produktivbetrieb in `.env` aendern.
 
 - `data/` enthaelt SQLite DB + Scheduler-State
 - Standard fuer neue Server ist `Desktop\mc_servers` (wenn nicht ueber `.env` oder Einstellungen geaendert)
+- Bei Betrieb unter Windows-Service-Accounts (z. B. `LocalSystem`) faellt der Standard auf `<repo>\managed_servers` zurueck
 - Bei automatischer Erstellung (ohne Zielpfad) bekommt jeder Server einen eigenen Unterordner im Basisordner
 - Importierte Server werden nicht verschoben oder umgebaut
 

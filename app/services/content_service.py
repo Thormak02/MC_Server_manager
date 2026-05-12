@@ -600,6 +600,9 @@ def _delete_content_file(server: Server, content_type: str, file_name: str) -> N
         return
     try:
         target.unlink()
+    except FileNotFoundError:
+        # Race-safe: file disappeared between exists() and unlink().
+        return
     except OSError as exc:
         reason = str(exc)
         raise ValueError(
