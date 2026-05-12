@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import subprocess
 
 
 def _login_admin(client):
@@ -440,3 +441,82 @@ def test_delete_server_accepts_server_prefix_in_confirm_name(client, tmp_path):
 
     detail_after_delete = client.get(server_location, follow_redirects=False)
     assert detail_after_delete.status_code == 404
+
+
+def test_prepare_neoforge_runtime_retries_after_failed_installer(monkeypatch, tmp_path):
+    from app.services import process_service
+
+    base_path = tmp_path / "neoforge_retry"
+    base_path.mkdir()
+    (base_path / "install_neoforge.bat").write_text("@echo off\necho installing\n", encoding="utf-8")
+    start_bat = base_path / "run.bat"
+    server = SimpleNamespace(
+        id=99,
+        server_type="neoforge",
+        start_mode="bat",
+        start_bat_path=str(start_bat),
+    )
+
+    calls = {"count": 0}
+
+    def fake_run(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return subprocess.CompletedProcess(args=args[0], returncode=1, stdout="Read timed out")
+        start_bat.write_text("@echo off\necho run\n", encoding="utf-8")
+        return subprocess.CompletedProcess(args=args[0], returncode=0, stdout="ok")
+
+    monkeypatch.setattr(process_service.subprocess, "run", fake_run)
+
+    ok, message = process_service._prepare_loader_runtime_if_needed(server, base_path, runtime_env=None)
+    assert ok is True
+    assert message == ""
+    assert calls["count"] == 2
+
+
+def test_delete_server_retries_folder_removal_on_transient_error(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_name = "Retry Delete Server"
+    server_dir = tmp_path / "delete_retry_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+
+    server_location = _import_server(client, server_dir, name=server_name)
+
+    from app.api.routers import servers as servers_router
+
+    calls = {"rmtree": 0, "terminate": 0}
+
+    monkeypatch.setattr(
+        servers_router,
+        "stop_server",
+        lambda db, server, initiated_by_user_id, force=False: (True, "ok"),
+    )
+    monkeypatch.setattr(
+        servers_router,
+        "terminate_processes_for_server_path",
+        lambda path: calls.__setitem__("terminate", calls["terminate"] + 1) or 0,
+    )
+
+    original_rmtree = servers_router.shutil.rmtree
+
+    def flaky_rmtree(path):
+        calls["rmtree"] += 1
+        if calls["rmtree"] < 3:
+            raise OSError("[WinError 32] locked")
+        return original_rmtree(path)
+
+    monkeypatch.setattr(servers_router.shutil, "rmtree", flaky_rmtree)
+
+    delete_response = client.post(
+        f"{server_location}/delete",
+        data={
+            "confirm_name": server_name,
+            "confirm_delete": "true",
+        },
+        follow_redirects=False,
+    )
+    assert delete_response.status_code == 303
+    assert delete_response.headers["location"] == "/dashboard"
+    assert calls["rmtree"] == 3
+    assert calls["terminate"] == 1

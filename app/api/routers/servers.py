@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+from time import sleep
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
@@ -25,6 +26,7 @@ from app.services.process_service import (
     refresh_runtime_states,
     start_server,
     stop_server,
+    terminate_processes_for_server_path,
 )
 from app.services.server_import_service import analyze_directory, import_server
 from app.services.server_service import (
@@ -727,7 +729,20 @@ def delete_server_action(
                 push_flash(request, "Serverpfad ist ungueltig. Abbruch.", "error")
                 return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
             try:
-                shutil.rmtree(base_path)
+                # Sicherstellen, dass keine Altprozesse mehr Dateien im Serverordner sperren.
+                stop_server(db, server, current_user.id, force=True)
+                terminate_processes_for_server_path(base_path)
+                last_exc: Exception | None = None
+                for _ in range(3):
+                    try:
+                        shutil.rmtree(base_path)
+                        last_exc = None
+                        break
+                    except Exception as exc:
+                        last_exc = exc
+                        sleep(1)
+                if last_exc is not None:
+                    raise last_exc
             except Exception as exc:
                 push_flash(request, f"Ordner konnte nicht geloescht werden: {exc}", "error")
                 return RedirectResponse(url=f"/servers/{server_id}", status_code=303)

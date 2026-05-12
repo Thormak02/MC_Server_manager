@@ -37,6 +37,8 @@ _PROCESS_LOCK = RLock()
 
 _PENDING_RESTARTS: dict[int, Event] = {}
 _RESTART_LOCK = RLock()
+_START_SLOTS: set[int] = set()
+_START_LOCK = RLock()
 
 _INGAME_RESTART_PATTERNS = [
     re.compile(r"issued server command:\s*/restart\b", re.IGNORECASE),
@@ -290,32 +292,54 @@ def _prepare_loader_runtime_if_needed(
     else:
         install_step = f"call {install_script_name}"
 
-    install_command = [
-        "cmd",
-        "/d",
-        "/c",
-        install_step,
-    ]
-    try:
-        completed = subprocess.run(
-            install_command,
-            cwd=None if use_pushd else str(base_path),
-            env=runtime_env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,
-            creationflags=_build_creation_flags(),
-        )
-    except Exception as exc:
-        return False, f"{display_name} Installation fehlgeschlagen: {exc}"
+    install_command = ["cmd", "/d", "/c", install_step]
+    max_attempts = 3
+    last_returncode: int | None = None
+    for attempt in range(1, max_attempts + 1):
+        if attempt > 1:
+            console_service.append_output(
+                server.id,
+                f"{display_name} Installation: erneuter Versuch {attempt}/{max_attempts} ...",
+            )
+        try:
+            completed = subprocess.run(
+                install_command,
+                cwd=None if use_pushd else str(base_path),
+                env=runtime_env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=900,
+                creationflags=_build_creation_flags(),
+            )
+        except subprocess.TimeoutExpired as exc:
+            _append_subprocess_output(server.id, exc.stdout or "", tag=install_tag)
+            last_returncode = None
+            if attempt < max_attempts:
+                sleep(min(8, attempt * 2))
+                continue
+            return False, f"{display_name} Installation fehlgeschlagen: Timeout nach 900 Sekunden."
+        except Exception as exc:
+            if attempt < max_attempts:
+                console_service.append_output(
+                    server.id,
+                    f"{display_name} Installation fehlgeschlagen ({exc}); erneuter Versuch folgt.",
+                )
+                sleep(min(8, attempt * 2))
+                continue
+            return False, f"{display_name} Installation fehlgeschlagen: {exc}"
 
-    _append_subprocess_output(server.id, completed.stdout or "", tag=install_tag)
-    if completed.returncode != 0:
-        return False, f"{display_name} Installation fehlgeschlagen (Exit-Code {completed.returncode})."
+        _append_subprocess_output(server.id, completed.stdout or "", tag=install_tag)
+        last_returncode = completed.returncode
+        if completed.returncode == 0 and start_bat_path.exists():
+            break
+        if attempt < max_attempts:
+            sleep(min(8, attempt * 2))
 
+    if last_returncode != 0:
+        return False, f"{display_name} Installation fehlgeschlagen (Exit-Code {last_returncode})."
     if not start_bat_path.exists():
         return False, f"{display_name} Installation abgeschlossen, aber Startdatei fehlt weiterhin: {start_bat_path}"
 
@@ -529,143 +553,156 @@ def get_process_resource_usage(server_id: int) -> dict[str, float | int | None]:
 
 
 def start_server(db: Session, server: Server, initiated_by_user_id: int | None) -> tuple[bool, str]:
-    if is_running(server.id):
-        return False, "Server laeuft bereits."
+    with _START_LOCK:
+        if server.id in _START_SLOTS:
+            return False, "Startvorgang laeuft bereits."
+        _START_SLOTS.add(server.id)
+    try:
+        if is_running(server.id):
+            return False, "Server laeuft bereits."
+        if server.status in {"starting", "restarting", "provisioning", "backup_running"}:
+            return False, "Server ist gerade in einem Start-/Wartungsvorgang."
 
-    # Modpack-Imports werden beim ersten Start installiert.
-    from app.services import modpack_service
+        server.status = "starting"
+        db.add(server)
+        db.commit()
 
-    pending_install = modpack_service.get_pending_install(db, server.id)
-    if pending_install is not None:
-        console_service.append_output(
-            server.id,
-            f"Modpack-Installation wird vor dem Start ausgefuehrt: {pending_install.pack_name}",
-        )
-        try:
-            install_result = modpack_service.run_pending_install_for_server(
-                db,
-                server=server,
-                initiated_by_user_id=initiated_by_user_id,
+        # Modpack-Imports werden beim ersten Start installiert.
+        from app.services import modpack_service
+
+        pending_install = modpack_service.get_pending_install(db, server.id)
+        if pending_install is not None:
+            console_service.append_output(
+                server.id,
+                f"Modpack-Installation wird vor dem Start ausgefuehrt: {pending_install.pack_name}",
             )
-            if install_result is not None:
-                console_service.append_output(
-                    server.id,
-                    (
-                        "Modpack-Installation abgeschlossen "
-                        f"({install_result.installed_count} Inhalte, {install_result.overrides_copied} Overrides)."
-                    ),
+            try:
+                install_result = modpack_service.run_pending_install_for_server(
+                    db,
+                    server=server,
+                    initiated_by_user_id=initiated_by_user_id,
                 )
-                for warning in install_result.warnings:
-                    console_service.append_output(server.id, f"[modpack-warn] {warning}")
+                if install_result is not None:
+                    console_service.append_output(
+                        server.id,
+                        (
+                            "Modpack-Installation abgeschlossen "
+                            f"({install_result.installed_count} Inhalte, {install_result.overrides_copied} Overrides)."
+                        ),
+                    )
+                    for warning in install_result.warnings:
+                        console_service.append_output(server.id, f"[modpack-warn] {warning}")
+            except Exception as exc:
+                server.status = "error"
+                db.add(server)
+                db.commit()
+                message = f"Modpack-Installation vor dem Start fehlgeschlagen: {exc}"
+                console_service.append_output(server.id, message)
+                return False, message
+
+        java_ok, java_message, runtime_env = prepare_server_java_runtime(db, server)
+        if not java_ok:
+            server.status = "error"
+            db.add(server)
+            db.commit()
+            return False, java_message
+        java_message_clean = (java_message or "").strip()
+        if java_message_clean:
+            console_service.append_output(server.id, java_message)
+
+        base_path = Path(server.base_path).expanduser().resolve()
+        if not base_path.exists() or not base_path.is_dir():
+            server.status = "error"
+            db.add(server)
+            db.commit()
+            return False, "Serverordner existiert nicht."
+
+        quarantined_mods = _quarantine_known_client_only_mods(base_path)
+        if quarantined_mods:
+            moved_list = ", ".join(quarantined_mods[:8])
+            if len(quarantined_mods) > 8:
+                moved_list = f"{moved_list}, +{len(quarantined_mods) - 8} weitere"
+            console_service.append_output(
+                server.id,
+                (
+                    "Bekannte Client-only Mods wurden vor dem Start deaktiviert: "
+                    f"{moved_list} (mods/_disabled_client_only)."
+                ),
+            )
+
+        prepared, prepare_message = _prepare_loader_runtime_if_needed(server, base_path, runtime_env)
+        if not prepared:
+            server.status = "error"
+            db.add(server)
+            db.commit()
+            return False, prepare_message
+
+        try:
+            command = _command_for_server(server, base_path)
+        except ValueError as exc:
+            server.status = "error"
+            db.add(server)
+            db.commit()
+            return False, str(exc)
+
+        use_pushd = _is_unc_path(base_path)
+
+        log_file_path = _create_session_log_file(server.id)
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=None if use_pushd else str(base_path),
+                env=runtime_env,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=_build_creation_flags(),
+                bufsize=1,
+            )
         except Exception as exc:
             server.status = "error"
             db.add(server)
             db.commit()
-            message = f"Modpack-Installation vor dem Start fehlgeschlagen: {exc}"
-            console_service.append_output(server.id, message)
-            return False, message
+            return False, f"Start fehlgeschlagen: {exc}"
 
-    java_ok, java_message, runtime_env = prepare_server_java_runtime(db, server)
-    if not java_ok:
-        server.status = "error"
-        db.add(server)
-        db.commit()
-        return False, java_message
-    java_message_clean = (java_message or "").strip()
-    if java_message_clean:
-        console_service.append_output(server.id, java_message)
+        with _PROCESS_LOCK:
+            _PROCESS_REGISTRY[server.id] = ManagedProcess(
+                process=process,
+                log_file_path=str(log_file_path),
+                started_at=datetime.now(timezone.utc),
+                max_players=_read_max_players_from_server_properties(server.base_path),
+            )
 
-    base_path = Path(server.base_path).expanduser().resolve()
-    if not base_path.exists() or not base_path.is_dir():
-        return False, "Serverordner existiert nicht."
-
-    quarantined_mods = _quarantine_known_client_only_mods(base_path)
-    if quarantined_mods:
-        moved_list = ", ".join(quarantined_mods[:8])
-        if len(quarantined_mods) > 8:
-            moved_list = f"{moved_list}, +{len(quarantined_mods) - 8} weitere"
-        console_service.append_output(
-            server.id,
-            (
-                "Bekannte Client-only Mods wurden vor dem Start deaktiviert: "
-                f"{moved_list} (mods/_disabled_client_only)."
-            ),
+        stream_thread = Thread(
+            target=_stream_output,
+            args=(server.id, process, log_file_path),
+            daemon=True,
+            name=f"server-{server.id}-stdout",
         )
+        stream_thread.start()
 
-    prepared, prepare_message = _prepare_loader_runtime_if_needed(server, base_path, runtime_env)
-    if not prepared:
-        server.status = "error"
+        server.status = "running"
         db.add(server)
         db.commit()
-        return False, prepare_message
 
-    try:
-        command = _command_for_server(server, base_path)
-    except ValueError as exc:
-        server.status = "error"
-        db.add(server)
-        db.commit()
-        return False, str(exc)
-
-    use_pushd = _is_unc_path(base_path)
-
-    server.status = "starting"
-    db.add(server)
-    db.commit()
-
-    log_file_path = _create_session_log_file(server.id)
-    try:
-        process = subprocess.Popen(
-            command,
-            cwd=None if use_pushd else str(base_path),
-            env=runtime_env,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            creationflags=_build_creation_flags(),
-            bufsize=1,
+        audit_service.log_action(
+            db,
+            action="server.start",
+            user_id=initiated_by_user_id,
+            server_id=server.id,
+            details=f"pid={process.pid}",
         )
-    except Exception as exc:
-        server.status = "error"
-        db.add(server)
-        db.commit()
-        return False, f"Start fehlgeschlagen: {exc}"
-
-    with _PROCESS_LOCK:
-        _PROCESS_REGISTRY[server.id] = ManagedProcess(
-            process=process,
-            log_file_path=str(log_file_path),
-            started_at=datetime.now(timezone.utc),
-            max_players=_read_max_players_from_server_properties(server.base_path),
-        )
-
-    stream_thread = Thread(
-        target=_stream_output,
-        args=(server.id, process, log_file_path),
-        daemon=True,
-        name=f"server-{server.id}-stdout",
-    )
-    stream_thread.start()
-
-    server.status = "running"
-    db.add(server)
-    db.commit()
-
-    audit_service.log_action(
-        db,
-        action="server.start",
-        user_id=initiated_by_user_id,
-        server_id=server.id,
-        details=f"pid={process.pid}",
-    )
-    console_service.append_output(server.id, "Serverprozess gestartet.")
-    message = "Server gestartet."
-    if java_message_clean:
-        message = f"{message} {java_message_clean}"
-    return True, message
+        console_service.append_output(server.id, "Serverprozess gestartet.")
+        message = "Server gestartet."
+        if java_message_clean:
+            message = f"{message} {java_message_clean}"
+        return True, message
+    finally:
+        with _START_LOCK:
+            _START_SLOTS.discard(server.id)
 
 
 def _send_server_message(server: Server, message: str) -> None:
