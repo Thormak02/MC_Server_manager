@@ -33,6 +33,7 @@ class Server(Base):
     port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default=DEFAULT_SERVER_STATUS)
     auto_restart: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_start_with_manager: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -129,6 +129,7 @@ def create_server(db: Session, data: ServerCreate) -> Server:
         port=data.port,
         status=DEFAULT_SERVER_STATUS,
         auto_restart=False,
+        auto_start_with_manager=False,
     )
     db.add(server)
     db.commit()
@@ -307,6 +308,7 @@ def update_server_settings(
     memory_max_mb: int | None,
     port: int | None,
     auto_restart: bool,
+    auto_start_with_manager: bool,
     start_mode: str | None,
     start_command: str | None,
     start_bat_path: str | None,
@@ -331,6 +333,7 @@ def update_server_settings(
     server.memory_max_mb = memory_max_mb
     server.port = port
     server.auto_restart = auto_restart
+    server.auto_start_with_manager = auto_start_with_manager
     if start_mode:
         server.start_mode = start_mode
     server.start_command = start_command

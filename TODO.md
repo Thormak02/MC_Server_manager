@@ -172,7 +172,7 @@
 
 
 
-wenn bei port nichts eingetragen wurde automatisch einen freien festlegen
+wenn bei port nichts eingetragen wurde automatisch einen freien festlegen, nicht einfach nur Standard port, nicht 5000 da läuft der Manager, sondern ein port, der noch nicht belegt ist.
 
 
 
@@ -216,5 +216,9 @@ alle Server so einstellbar sein, sodass sie mit start des Managers starten
 
 
 
-modpack Version im Dashboard anzeigen, wie mc version
+modpack Version im Dashboard anzeigen, wie mc Version
+
+
+
+spielerzahl auch bei Servereinstellungen anpassen können
 

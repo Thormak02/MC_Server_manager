@@ -7,6 +7,7 @@ from pathlib import Path
 from threading import Event, RLock, Thread
 from time import sleep
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -657,6 +658,40 @@ def refresh_runtime_states(db: Session, servers: list[Server]) -> None:
 
     if changed:
         db.commit()
+
+
+def _autostart_servers_worker() -> None:
+    with SessionLocal() as db:
+        server_ids = list(
+            db.scalars(
+                select(Server.id)
+                .where(Server.auto_start_with_manager.is_(True))
+                .order_by(Server.name.asc())
+            ).all()
+        )
+
+    for server_id in server_ids:
+        with SessionLocal() as db:
+            server = db.get(Server, server_id)
+            if server is None:
+                continue
+            ok, message = start_server(db, server, initiated_by_user_id=None)
+            audit_service.log_action(
+                db,
+                action="server.autostart_on_manager_start",
+                user_id=None,
+                server_id=server.id,
+                details=f"ok={ok} message={message}",
+            )
+
+
+def start_servers_marked_for_manager_startup() -> None:
+    worker = Thread(
+        target=_autostart_servers_worker,
+        daemon=True,
+        name="manager-server-autostart",
+    )
+    worker.start()
 
 
 def get_player_counts(server: Server) -> tuple[int | None, int | None]:

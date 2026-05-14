@@ -23,6 +23,7 @@ class ServerUpdate(BaseModel):
     memory_max_mb: int | None = None
     port: int | None = None
     auto_restart: bool | None = None
+    auto_start_with_manager: bool | None = None
 
 
 class ServerImportPreview(BaseModel):

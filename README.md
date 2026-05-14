@@ -22,6 +22,7 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Automatische Java-Erkennung auf dem Host (inkl. Versions-Label) und Auto-Zuordnung pro Serverversion
 - Optionale Java-Installation ueber Manager via `winget` (Temurin)
 - Servereinstellungen (Java, RAM, Port, Startparameter)
+- Pro-Server Auto-Start beim Manager-Start
 - Scheduling fuer Start/Stop/Restart/Command (Cron oder `interval:<sekunden>`)
 - Backup Scheduling (Job-Typ `backup`) inklusive Job-Historie
 - Verzoegerter Neustart mit optionaler Warnmeldung (`{seconds}`)

@@ -1,4 +1,4 @@
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, inspect, select, text, update
 
 from app.core.config import get_settings
 from app.core.constants import UserRole
@@ -32,6 +32,7 @@ def init_db() -> None:
     settings = get_settings()
     settings.ensure_data_dir()
     Base.metadata.create_all(bind=engine)
+    _ensure_server_schema()
     _normalize_runtime_states()
     _cleanup_orphaned_server_relations()
     _seed_super_admin()
@@ -55,6 +56,25 @@ def _seed_super_admin() -> None:
         )
         db.add(user)
         db.commit()
+
+
+def _ensure_server_schema() -> None:
+    inspector = inspect(engine)
+    try:
+        columns = {column["name"] for column in inspector.get_columns("servers")}
+    except Exception:
+        return
+
+    if "auto_start_with_manager" in columns:
+        return
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE servers "
+                "ADD COLUMN auto_start_with_manager BOOLEAN NOT NULL DEFAULT 0"
+            )
+        )
 
 
 def _normalize_runtime_states() -> None:
