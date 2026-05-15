@@ -8,6 +8,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+import hashlib
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
@@ -581,6 +582,79 @@ def _score_curseforge_item(
         score += min(300.0, math.log10(downloads + 1.0) * 45.0)
 
     return score
+
+
+def _truncate_with_hash(value: str, max_len: int) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return "local"
+    if len(normalized) <= max_len:
+        return normalized
+    digest = hashlib.sha1(normalized.encode("utf-8", errors="ignore")).hexdigest()[:8]
+    keep = max(1, max_len - len(digest) - 1)
+    return f"{normalized[:keep]}-{digest}"
+
+
+def _local_version_from_file_name(file_name: str) -> str | None:
+    stem = Path(file_name).stem
+    match = re.search(r"(?:^|[\W_])v?(\d+\.\d+(?:\.\d+)?(?:[a-z0-9._-]*)?)$", stem, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return None
+
+
+def _sync_local_content_entries(db: Session, server: Server) -> bool:
+    base_path = Path(server.base_path).expanduser().resolve()
+    if not base_path.exists() or not base_path.is_dir():
+        return False
+
+    folders = [("mod", base_path / "mods"), ("plugin", base_path / "plugins")]
+    tracked_by_type: dict[str, set[str]] = {"mod": set(), "plugin": set()}
+    stmt = select(InstalledContent).where(InstalledContent.server_id == server.id)
+    existing_entries = list(db.scalars(stmt))
+    for entry in existing_entries:
+        content_type = (entry.content_type or "").strip().lower()
+        if content_type not in tracked_by_type:
+            continue
+        tracked_by_type[content_type].add((entry.file_name or "").strip().lower())
+
+    changed = False
+    for content_type, folder in folders:
+        if not folder.exists() or not folder.is_dir():
+            continue
+        for file_path in sorted(folder.iterdir()):
+            if not file_path.is_file():
+                continue
+            file_name = file_path.name
+            if file_path.suffix.lower() not in {".jar", ".zip"}:
+                continue
+            if len(file_name) > 256:
+                continue
+            lowered_name = file_name.lower()
+            if lowered_name in tracked_by_type[content_type]:
+                continue
+
+            local_name = Path(file_name).stem or file_name
+            local_version = _local_version_from_file_name(file_name)
+            entry = InstalledContent(
+                server_id=server.id,
+                provider_name="local",
+                content_type=content_type,
+                external_project_id=_truncate_with_hash(file_name, 128),
+                external_version_id=_truncate_with_hash(local_version or "local", 128),
+                name=_truncate_with_hash(local_name, 256),
+                version_label=_truncate_with_hash(local_version, 128) if local_version else None,
+                file_name=file_name,
+                installed_by_user_id=None,
+            )
+            db.add(entry)
+            tracked_by_type[content_type].add(lowered_name)
+            changed = True
+
+    if changed:
+        db.commit()
+
+    return changed
 
 
 def _safe_file_name(file_name: str) -> str:
@@ -2072,6 +2146,8 @@ def install_bukkit(
 
 
 def list_installed_content(db: Session, server: Server) -> list[InstalledContent]:
+    _sync_local_content_entries(db, server)
+
     stmt = select(InstalledContent).where(InstalledContent.server_id == server.id)
     entries = list(db.scalars(stmt))
     valid_entries: list[InstalledContent] = []

@@ -35,6 +35,9 @@ class ServerImportPreview(BaseModel):
     start_mode: str = "bat"
     start_command: str | None = None
     start_bat_path: str | None = None
+    memory_min_mb: int | None = None
+    memory_max_mb: int | None = None
+    port: int | None = None
     notes: list[str] = Field(default_factory=list)
 
 

@@ -57,6 +57,39 @@
             <label for="start_command">Startbefehl</label>
             <input id="start_command" name="start_command" type="text" value="{{ preview.start_command or '' }}">
         </div>
+        <div>
+            <label for="port">Port (optional)</label>
+            <input
+                id="port"
+                name="port"
+                type="number"
+                min="1"
+                max="65535"
+                value="{{ preview.port if preview.port is not none else '' }}"
+            >
+        </div>
+        <div>
+            <label for="memory_min_mb">RAM min MB (optional)</label>
+            <input
+                id="memory_min_mb"
+                name="memory_min_mb"
+                type="number"
+                min="512"
+                step="512"
+                value="{{ preview.memory_min_mb if preview.memory_min_mb is not none else '' }}"
+            >
+        </div>
+        <div>
+            <label for="memory_max_mb">RAM max MB (optional)</label>
+            <input
+                id="memory_max_mb"
+                name="memory_max_mb"
+                type="number"
+                min="512"
+                step="512"
+                value="{{ preview.memory_max_mb if preview.memory_max_mb is not none else '' }}"
+            >
+        </div>
         <div class="align-end">
             <button type="submit">Importieren</button>
         </div>

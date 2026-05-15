@@ -83,6 +83,113 @@ def test_import_analysis_detects_bukkit_type(client, tmp_path):
     assert "start.bat" in response.text
 
 
+def test_import_analysis_detects_mc_version_from_logs_when_jar_name_has_no_version(client, tmp_path):
+    _login_admin(client)
+    server_dir = tmp_path / "spigot_logs_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\njava -jar spigot.jar nogui\n", encoding="utf-8")
+    (server_dir / "spigot.jar").write_text("", encoding="utf-8")
+    (server_dir / "logs").mkdir()
+    (server_dir / "logs" / "latest.log").write_text(
+        "[12:00:00 INFO]: Starting minecraft server version 1.21.1\n",
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        "/servers/import/analyze",
+        data={"base_path": str(server_dir)},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert 'name="mc_version"' in response.text
+    assert 'value="1.21.1"' in response.text
+
+
+def test_import_analysis_detects_port_and_ram_from_files(client, tmp_path):
+    _login_admin(client)
+    server_dir = tmp_path / "settings_detect_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text(
+        "@echo off\njava -Xms2G -Xmx6G -jar paper.jar nogui\n",
+        encoding="utf-8",
+    )
+    (server_dir / "server.properties").write_text(
+        "motd=Test\nserver-port=25570\n",
+        encoding="utf-8",
+    )
+
+    response = client.post(
+        "/servers/import/analyze",
+        data={"base_path": str(server_dir)},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert 'id="port"' in response.text
+    assert 'value="25570"' in response.text
+    assert 'id="memory_min_mb"' in response.text
+    assert 'value="2048"' in response.text
+    assert 'id="memory_max_mb"' in response.text
+    assert 'value="6144"' in response.text
+
+
+def test_imported_mod_files_are_listed_as_local_content(client, tmp_path):
+    _login_admin(client)
+    server_dir = tmp_path / "import_mod_content_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    mods_dir = server_dir / "mods"
+    mods_dir.mkdir()
+    (mods_dir / "sodium-1.21.1.jar").write_text("", encoding="utf-8")
+    (mods_dir / "jei-1.21.1.jar").write_text("", encoding="utf-8")
+
+    server_location = _import_server_with_type(
+        client,
+        server_dir,
+        name="Imported Local Mods",
+        server_type="forge",
+        mc_version="1.21.1",
+    )
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    first_response = client.get(f"/api/servers/{server_id}/content")
+    assert first_response.status_code == 200
+    first_items = first_response.json()["items"]
+    assert len(first_items) == 2
+    assert all(item["provider_name"] == "local" for item in first_items)
+    assert all(item["content_type"] == "mod" for item in first_items)
+
+    second_response = client.get(f"/api/servers/{server_id}/content")
+    assert second_response.status_code == 200
+    second_items = second_response.json()["items"]
+    assert len(second_items) == 2
+
+
+def test_imported_plugin_files_are_listed_as_local_content(client, tmp_path):
+    _login_admin(client)
+    server_dir = tmp_path / "import_plugin_content_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    plugins_dir = server_dir / "plugins"
+    plugins_dir.mkdir()
+    (plugins_dir / "EssentialsX-2.21.0.jar").write_text("", encoding="utf-8")
+
+    server_location = _import_server_with_type(
+        client,
+        server_dir,
+        name="Imported Local Plugins",
+        server_type="spigot",
+        mc_version="1.21.1",
+    )
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    response = client.get(f"/api/servers/{server_id}/content")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["provider_name"] == "local"
+    assert items[0]["content_type"] == "plugin"
+
+
 def test_start_and_stop_imported_server(client, tmp_path):
     _login_admin(client)
     server_dir = tmp_path / "runtime_srv"
