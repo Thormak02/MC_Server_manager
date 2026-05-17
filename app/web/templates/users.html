@@ -46,20 +46,31 @@
             <tr>
                 <td>{{ user.id }}</td>
                 <td>{{ user.username }}</td>
-                <td>{{ role_labels.get(user.role, user.role) }}</td>
+                <td>
+                    <form method="post" action="/users/{{ user.id }}/role" class="inline-form">
+                        <select name="role" aria-label="Rolle fuer {{ user.username }}">
+                            {% for role in available_roles %}
+                            <option value="{{ role }}" {% if user.role == role %}selected{% endif %}>
+                                {{ role_labels.get(role, role) }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit">Rolle setzen</button>
+                    </form>
+                </td>
                 <td>{{ "Ja" if user.is_active else "Nein" }}</td>
                 <td>{{ user.created_at }}</td>
                 <td>{{ user.last_login_at or "-" }}</td>
                 <td>
-                    {% if user.is_active and user.role != "super_admin" %}
-                    <form method="post" action="/users/{{ user.id }}/deactivate" class="inline-form">
-                        <button type="submit" class="danger">Deaktivieren</button>
-                    </form>
-                    {% endif %}
                     <form method="post" action="/users/{{ user.id }}/reset-password" class="inline-form">
                         <input name="new_password" type="password" minlength="8" placeholder="Neues Passwort" required>
                         <button type="submit">Passwort setzen</button>
                     </form>
+                    {% if user.id != current_user.id %}
+                    <form method="post" action="/users/{{ user.id }}/delete" class="inline-form">
+                        <button type="submit" class="danger">Entfernen</button>
+                    </form>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}

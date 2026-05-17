@@ -103,6 +103,17 @@ def deactivate_user_action(
     if target_user.id == current_user.id:
         push_flash(request, "Der eigene Benutzer kann nicht deaktiviert werden.", "error")
         return RedirectResponse(url="/users", status_code=303)
+    if (
+        target_user.role == UserRole.SUPER_ADMIN.value
+        and target_user.is_active
+        and user_service.count_active_super_admins(db) <= 1
+    ):
+        push_flash(
+            request,
+            "Der letzte aktive Super Admin kann nicht deaktiviert werden.",
+            "error",
+        )
+        return RedirectResponse(url="/users", status_code=303)
 
     user_service.deactivate_user(db, target_user)
     audit_service.log_action(
@@ -112,6 +123,96 @@ def deactivate_user_action(
         details=f"target_user={target_user.username}",
     )
     push_flash(request, f"Benutzer '{target_user.username}' deaktiviert.", "success")
+    return RedirectResponse(url="/users", status_code=303)
+
+
+@router.post("/users/{user_id}/role")
+def update_role_action(
+    request: Request,
+    user_id: int,
+    role: Annotated[str, Form()],
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    target_user = user_service.get_user_by_id(db, user_id)
+    if target_user is None:
+        push_flash(request, "Benutzer nicht gefunden.", "error")
+        return RedirectResponse(url="/users", status_code=303)
+
+    if (
+        target_user.role == UserRole.SUPER_ADMIN.value
+        and role != UserRole.SUPER_ADMIN.value
+        and target_user.is_active
+        and user_service.count_active_super_admins(db) <= 1
+    ):
+        push_flash(
+            request,
+            "Der letzte aktive Super Admin darf nicht herabgestuft werden.",
+            "error",
+        )
+        return RedirectResponse(url="/users", status_code=303)
+
+    try:
+        user_service.update_role(db, target_user, role)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url="/users", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="users.update_role",
+        user_id=current_user.id,
+        details=f"target_user={target_user.username} role={target_user.role}",
+    )
+    push_flash(
+        request,
+        f"Rolle von '{target_user.username}' auf '{target_user.role}' gesetzt.",
+        "success",
+    )
+    return RedirectResponse(url="/users", status_code=303)
+
+
+@router.post("/users/{user_id}/delete")
+def delete_user_action(
+    request: Request,
+    user_id: int,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    target_user = user_service.get_user_by_id(db, user_id)
+    if target_user is None:
+        push_flash(request, "Benutzer nicht gefunden.", "error")
+        return RedirectResponse(url="/users", status_code=303)
+    if target_user.id == current_user.id:
+        push_flash(request, "Der eigene Benutzer kann nicht geloescht werden.", "error")
+        return RedirectResponse(url="/users", status_code=303)
+    if (
+        target_user.role == UserRole.SUPER_ADMIN.value
+        and target_user.is_active
+        and user_service.count_active_super_admins(db) <= 1
+    ):
+        push_flash(
+            request,
+            "Der letzte aktive Super Admin kann nicht geloescht werden.",
+            "error",
+        )
+        return RedirectResponse(url="/users", status_code=303)
+
+    deleted_username = target_user.username
+    user_service.delete_user(db, target_user)
+    audit_service.log_action(
+        db,
+        action="users.delete",
+        user_id=current_user.id,
+        details=f"target_user={deleted_username}",
+    )
+    push_flash(request, f"Benutzer '{deleted_username}' geloescht.", "success")
     return RedirectResponse(url="/users", status_code=303)
 
 

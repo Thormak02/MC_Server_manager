@@ -1,6 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.constants import UserRole
 from app.core.permissions import is_valid_role
 from app.core.security import hash_password
 from app.models.user import User
@@ -54,6 +55,33 @@ def deactivate_user(db: Session, user: User) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def count_active_super_admins(db: Session) -> int:
+    return int(
+        db.scalar(
+            select(func.count(User.id)).where(
+                User.role == UserRole.SUPER_ADMIN.value,
+                User.is_active.is_(True),
+            )
+        )
+        or 0
+    )
+
+
+def update_role(db: Session, user: User, role: str) -> User:
+    if not is_valid_role(role):
+        raise ValueError("Unbekannte Rolle.")
+    user.role = role
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def delete_user(db: Session, user: User) -> None:
+    db.delete(user)
+    db.commit()
 
 
 def reset_password(db: Session, user: User, new_password: str) -> User:
