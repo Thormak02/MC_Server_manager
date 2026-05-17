@@ -660,3 +660,59 @@ def test_start_progress_endpoint_returns_payload(client, tmp_path, monkeypatch):
     assert payload["stage"] == "loader_install"
     assert payload["percent"] == 62
     assert payload["server_status"] in {"stopped", "starting", "running", "error", "crashed", "restarting", "stopping"}
+
+
+def test_start_server_detects_already_running_external_process(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_dir = tmp_path / "external_running_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server(client, server_dir, name="External Running Server")
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import process_service
+
+    monkeypatch.setattr(
+        process_service,
+        "find_process_ids_for_server_path",
+        lambda _base_path: [4242],
+    )
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        ok, message = process_service.start_server(db, server, initiated_by_user_id=1)
+        assert ok is False
+        assert "ausserhalb des Managers" in message
+        db.refresh(server)
+        assert server.status == "running"
+
+
+def test_stop_server_terminates_external_process_when_registry_missing(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_dir = tmp_path / "external_stop_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server(client, server_dir, name="External Stop Server")
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import process_service
+
+    monkeypatch.setattr(
+        process_service,
+        "terminate_processes_for_server_path",
+        lambda _base_path: 2,
+    )
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        ok, message = process_service.stop_server(db, server, initiated_by_user_id=1, force=False)
+        assert ok is True
+        assert "Externer Serverprozess gestoppt" in message
+        db.refresh(server)
+        assert server.status == "stopped"

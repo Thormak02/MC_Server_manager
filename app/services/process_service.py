@@ -283,6 +283,62 @@ def _normalize_windows_path_lower(value: str) -> str:
     return _normalize_windows_path(value).lower()
 
 
+def _normalized_server_path_key(base_path: Path | str) -> str:
+    try:
+        resolved = Path(base_path).expanduser().resolve()
+    except Exception:
+        resolved = Path(base_path).expanduser()
+    return _normalize_windows_path_lower(str(resolved)).rstrip("\\")
+
+
+def _process_matches_server_path(proc: object, target_path: str) -> bool:
+    if not target_path:
+        return False
+    try:
+        info = getattr(proc, "info", {}) or {}
+        cwd_raw = str(info.get("cwd") or "").strip()
+        cmdline_tokens = [
+            str(item)
+            for item in (info.get("cmdline") or [])
+            if str(item).strip()
+        ]
+    except Exception:
+        return False
+
+    if cwd_raw:
+        normalized_cwd = _normalize_windows_path_lower(cwd_raw).rstrip("\\")
+        if normalized_cwd == target_path or normalized_cwd.startswith(f"{target_path}\\"):
+            return True
+
+    if cmdline_tokens:
+        joined = _normalize_windows_path_lower(" ".join(cmdline_tokens))
+        if target_path in joined:
+            return True
+    return False
+
+
+def find_process_ids_for_server_path(base_path: Path | str) -> list[int]:
+    if psutil is None:
+        return []
+
+    target = _normalized_server_path_key(base_path)
+    if not target:
+        return []
+
+    own_pid = os.getpid()
+    matches: list[int] = []
+    for proc in psutil.process_iter(["pid", "cmdline", "cwd"]):
+        try:
+            pid = int(proc.info.get("pid") or 0)
+            if pid <= 0 or pid == own_pid:
+                continue
+            if _process_matches_server_path(proc, target):
+                matches.append(pid)
+        except Exception:
+            continue
+    return matches
+
+
 def _is_unc_path(path: Path | str) -> bool:
     return _normalize_windows_path(str(path)).startswith("\\\\")
 
@@ -629,12 +685,15 @@ def refresh_runtime_states(db: Session, servers: list[Server]) -> None:
     changed = False
     for server in servers:
         currently_running = is_running(server.id)
+        external_running = False
+        if not currently_running:
+            external_running = bool(find_process_ids_for_server_path(server.base_path))
         with _PROCESS_LOCK:
             runtime = _PROCESS_REGISTRY.get(server.id)
             runtime_ready = bool(
                 runtime is not None and runtime.process.poll() is None and runtime.ready
             )
-        if currently_running:
+        if currently_running or external_running:
             if server.status in {"stopping", "restarting"}:
                 continue
             if server.status == "starting" and not runtime_ready:
@@ -658,6 +717,13 @@ def refresh_runtime_states(db: Session, servers: list[Server]) -> None:
 
     if changed:
         db.commit()
+
+
+def reconcile_runtime_states_on_manager_startup() -> None:
+    with SessionLocal() as db:
+        servers = list(db.scalars(select(Server).order_by(Server.name.asc())).all())
+        if servers:
+            refresh_runtime_states(db, servers)
 
 
 def _autostart_servers_worker() -> None:
@@ -790,6 +856,41 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
             )
             return False, "Server ist gerade in einem Start-/Wartungsvorgang."
 
+        base_path = Path(server.base_path).expanduser().resolve()
+        if not base_path.exists() or not base_path.is_dir():
+            server.status = "error"
+            db.add(server)
+            db.commit()
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="error",
+                message="Serverordner existiert nicht.",
+            )
+            return False, "Serverordner existiert nicht."
+
+        external_pids = find_process_ids_for_server_path(base_path)
+        if external_pids:
+            server.status = "running"
+            db.add(server)
+            db.commit()
+            pid_preview = ", ".join(str(pid) for pid in external_pids[:3])
+            if len(external_pids) > 3:
+                pid_preview = f"{pid_preview}, +{len(external_pids) - 3} weitere"
+            message = (
+                "Serverprozess laeuft bereits ausserhalb des Managers "
+                f"(PID: {pid_preview})."
+            )
+            console_service.append_output(server.id, message)
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="running",
+                message=message,
+                percent=100,
+            )
+            return False, message
+
         server.status = "starting"
         db.add(server)
         db.commit()
@@ -869,19 +970,6 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
         java_message_clean = (java_message or "").strip()
         if java_message_clean:
             console_service.append_output(server.id, java_message)
-
-        base_path = Path(server.base_path).expanduser().resolve()
-        if not base_path.exists() or not base_path.is_dir():
-            server.status = "error"
-            db.add(server)
-            db.commit()
-            _set_start_progress(
-                server.id,
-                active=False,
-                stage="error",
-                message="Serverordner existiert nicht.",
-            )
-            return False, "Serverordner existiert nicht."
 
         quarantined_mods = _quarantine_known_client_only_mods(base_path)
         if quarantined_mods:
@@ -1189,9 +1277,27 @@ def stop_server(
         managed = _PROCESS_REGISTRY.get(server.id)
 
     if not managed:
+        terminated = terminate_processes_for_server_path(server.base_path)
         server.status = "restarting" if for_restart else "stopped"
         db.add(server)
         db.commit()
+        if terminated > 0:
+            audit_service.log_action(
+                db,
+                action="server.stop_external",
+                user_id=initiated_by_user_id,
+                server_id=server.id,
+                details=f"terminated_processes={terminated}",
+            )
+            message = f"Externer Serverprozess gestoppt ({terminated} Prozess(e))."
+            console_service.append_output(server.id, message)
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="stopped",
+                message="Server gestoppt.",
+            )
+            return True, message
         return True, "Server war nicht aktiv."
 
     process = managed.process

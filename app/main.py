@@ -24,6 +24,7 @@ from app.db.init_db import init_db
 from app.middleware.csrf import CSRFSameOriginMiddleware
 from app.services.schedule_service import sync_all_jobs
 from app.services.process_service import (
+    reconcile_runtime_states_on_manager_startup,
     shutdown_all_managed_processes,
     start_servers_marked_for_manager_startup,
 )
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def on_startup() -> None:
         init_db()
+        reconcile_runtime_states_on_manager_startup()
         start_scheduler()
         sync_all_jobs()
         start_servers_marked_for_manager_startup()
