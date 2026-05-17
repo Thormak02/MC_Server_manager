@@ -81,7 +81,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     def on_shutdown() -> None:
-        shutdown_all_managed_processes()
+        shutdown_all_managed_processes(preserve_for_restart=True)
         shutdown_scheduler()
 
     return app

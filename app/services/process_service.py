@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import Event, RLock, Thread
 from time import sleep
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -70,6 +70,7 @@ _CLIENT_ONLY_MOD_KEYS = {
     "searchables",
     "mousetweaks",
 }
+_MANAGER_RESTART_ACTIVE_STATUSES = {"running", "starting", "restarting", "stopping"}
 
 
 def _now_iso() -> str:
@@ -731,7 +732,12 @@ def _autostart_servers_worker() -> None:
         server_ids = list(
             db.scalars(
                 select(Server.id)
-                .where(Server.auto_start_with_manager.is_(True))
+                .where(
+                    or_(
+                        Server.auto_start_with_manager.is_(True),
+                        Server.status.in_(_MANAGER_RESTART_ACTIVE_STATUSES),
+                    )
+                )
                 .order_by(Server.name.asc())
             ).all()
         )
@@ -741,13 +747,25 @@ def _autostart_servers_worker() -> None:
             server = db.get(Server, server_id)
             if server is None:
                 continue
+            was_active_before_restart = server.status in _MANAGER_RESTART_ACTIVE_STATUSES
+            terminated = 0
+            if was_active_before_restart:
+                terminated = terminate_processes_for_server_path(server.base_path)
+                _cleanup_process_registry(server.id)
+                server.status = "stopped"
+                db.add(server)
+                db.commit()
             ok, message = start_server(db, server, initiated_by_user_id=None)
             audit_service.log_action(
                 db,
                 action="server.autostart_on_manager_start",
                 user_id=None,
                 server_id=server.id,
-                details=f"ok={ok} message={message}",
+                details=(
+                    f"ok={ok} message={message} "
+                    f"was_active_before_restart={was_active_before_restart} "
+                    f"terminated_processes={terminated}"
+                ),
             )
 
 
@@ -1420,7 +1438,11 @@ def restart_server(db: Session, server: Server, initiated_by_user_id: int | None
     return start_server(db, server, initiated_by_user_id)
 
 
-def shutdown_all_managed_processes(*, graceful_timeout_seconds: float = 3.0) -> None:
+def shutdown_all_managed_processes(
+    *,
+    graceful_timeout_seconds: float = 3.0,
+    preserve_for_restart: bool = False,
+) -> None:
     with _PROCESS_LOCK:
         server_ids = list(_PROCESS_REGISTRY.keys())
     if not server_ids:
@@ -1439,7 +1461,7 @@ def shutdown_all_managed_processes(*, graceful_timeout_seconds: float = 3.0) -> 
                     initiated_by_user_id=None,
                     force=False,
                     graceful_timeout_seconds=graceful_timeout_seconds,
-                    for_restart=False,
+                    for_restart=preserve_for_restart,
                 )
             except Exception:
                 try:
@@ -1449,7 +1471,7 @@ def shutdown_all_managed_processes(*, graceful_timeout_seconds: float = 3.0) -> 
                         initiated_by_user_id=None,
                         force=True,
                         graceful_timeout_seconds=0.0,
-                        for_restart=False,
+                        for_restart=preserve_for_restart,
                     )
                 except Exception:
                     _cleanup_process_registry(server_id)

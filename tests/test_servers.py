@@ -716,3 +716,83 @@ def test_stop_server_terminates_external_process_when_registry_missing(client, t
         assert "Externer Serverprozess gestoppt" in message
         db.refresh(server)
         assert server.status == "stopped"
+
+
+def test_autostart_worker_restarts_servers_marked_active_before_manager_restart(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_dir = tmp_path / "restart_active_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server(client, server_dir, name="Restart Active Server")
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    import importlib
+    import app.services.process_service as process_service_module
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    process_service = importlib.reload(process_service_module)
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        server.status = "running"
+        server.auto_start_with_manager = False
+        db.add(server)
+        db.commit()
+
+    calls = {"terminate": 0, "start": 0}
+
+    monkeypatch.setattr(
+        process_service,
+        "terminate_processes_for_server_path",
+        lambda _base_path: calls.__setitem__("terminate", calls["terminate"] + 1) or 1,
+    )
+    monkeypatch.setattr(process_service, "_cleanup_process_registry", lambda _server_id: None)
+
+    def fake_start_server(db, server, initiated_by_user_id):
+        calls["start"] += 1
+        server.status = "running"
+        db.add(server)
+        db.commit()
+        return True, "started"
+
+    monkeypatch.setattr(process_service, "start_server", fake_start_server)
+    process_service._autostart_servers_worker()
+
+    assert calls["terminate"] == 1
+    assert calls["start"] == 1
+
+
+def test_shutdown_all_managed_processes_preserves_restart_status_when_requested(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_dir = tmp_path / "shutdown_restart_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server(client, server_dir, name="Shutdown Restart Server")
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    import importlib
+    import app.services.process_service as process_service_module
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    process_service = importlib.reload(process_service_module)
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        server.status = "running"
+        db.add(server)
+        db.commit()
+
+    class _DeadProcess:
+        def poll(self):
+            return 0
+
+    process_service._PROCESS_REGISTRY[server_id] = SimpleNamespace(process=_DeadProcess())
+
+    process_service.shutdown_all_managed_processes(preserve_for_restart=True)
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        assert server.status == "restarting"
