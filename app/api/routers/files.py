@@ -27,6 +27,7 @@ from app.services.file_service import (
     upload_file as upload_server_file,
     write_text_file,
 )
+from app.services.process_service import send_console_command
 from app.services.server_service import can_edit_server_files, can_view_server, get_server_by_id
 from app.web.routes.pages import build_context, push_flash, templates
 
@@ -47,6 +48,42 @@ def _normalize_access_tab(value: str | None) -> str:
     if normalized in allowed:
         return normalized
     return "whitelist"
+
+
+def _build_access_runtime_command(*, list_key: str, identity: str, action: str) -> str | None:
+    normalized_identity = (identity or "").strip()
+    if not normalized_identity:
+        return None
+
+    normalized_key = (list_key or "").strip().lower()
+    normalized_action = (action or "").strip().lower()
+    if normalized_action not in {"add", "remove"}:
+        return None
+
+    if normalized_key == "whitelist":
+        return f"whitelist {'add' if normalized_action == 'add' else 'remove'} {normalized_identity}"
+    if normalized_key == "ops":
+        return f"{'op' if normalized_action == 'add' else 'deop'} {normalized_identity}"
+    if normalized_key == "banned_players":
+        return f"{'ban' if normalized_action == 'add' else 'pardon'} {normalized_identity}"
+    if normalized_key == "banned_ips":
+        return f"{'ban-ip' if normalized_action == 'add' else 'pardon-ip'} {normalized_identity}"
+    return None
+
+
+def _try_send_runtime_command(
+    request: Request,
+    *,
+    db: Session,
+    server,
+    command: str | None,
+    user_id: int,
+) -> None:
+    if not command:
+        return
+    ok, message = send_console_command(db, server, command, user_id)
+    if not ok:
+        push_flash(request, f"Live-Anwendung uebersprungen: {message}", "info")
 
 
 @router.get("/servers/{server_id}/files", response_class=HTMLResponse)
@@ -179,6 +216,14 @@ def access_add_entry_action(
         push_flash(request, str(exc), "error")
         return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
 
+    _try_send_runtime_command(
+        request,
+        db=db,
+        server=server,
+        command=_build_access_runtime_command(list_key=tab, identity=identity, action="add"),
+        user_id=current_user.id,
+    )
+
     audit_service.log_action(
         db,
         action="server.access_entry_add",
@@ -254,6 +299,14 @@ def access_remove_entry_action(
         push_flash(request, str(exc), "error")
         return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
 
+    _try_send_runtime_command(
+        request,
+        db=db,
+        server=server,
+        command=_build_access_runtime_command(list_key=tab, identity=identity, action="remove"),
+        user_id=current_user.id,
+    )
+
     audit_service.log_action(
         db,
         action="server.access_entry_remove",
@@ -284,6 +337,13 @@ def access_whitelist_toggle_action(
 
     target_state = str(enabled or "").strip().lower() in {"1", "true", "on", "yes"}
     set_whitelist_enabled(server, target_state)
+    _try_send_runtime_command(
+        request,
+        db=db,
+        server=server,
+        command=f"whitelist {'on' if target_state else 'off'}",
+        user_id=current_user.id,
+    )
     audit_service.log_action(
         db,
         action="server.whitelist_toggle",

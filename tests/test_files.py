@@ -190,6 +190,88 @@ def test_access_lists_support_empty_files_and_whitelist_toggle(client, tmp_path,
     assert "white-list=true" in props_content
 
 
+def test_access_list_actions_send_runtime_commands(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_dir = tmp_path / "access_runtime_srv"
+    server_dir.mkdir(parents=True)
+    (server_dir / "start.bat").write_text("@echo off\n", encoding="utf-8")
+    (server_dir / "whitelist.json").write_text("[]\n", encoding="utf-8")
+    (server_dir / "ops.json").write_text("[]\n", encoding="utf-8")
+    (server_dir / "banned-players.json").write_text("[]\n", encoding="utf-8")
+    (server_dir / "banned-ips.json").write_text("[]\n", encoding="utf-8")
+
+    from app.api.routers import files as files_router
+    from app.services import file_service
+
+    sent_commands: list[str] = []
+
+    def _fake_send_console_command(_db, _server, command, _initiated_by_user_id):
+        sent_commands.append(command)
+        return True, "Befehl gesendet."
+
+    monkeypatch.setattr(file_service, "_lookup_mojang_uuid", lambda _name: None)
+    monkeypatch.setattr(files_router, "send_console_command", _fake_send_console_command)
+
+    server_location = _import_server(client, server_dir, name="Access Runtime Server")
+    match = re.search(r"/servers/(\d+)", server_location)
+    assert match
+    server_id = int(match.group(1))
+
+    add_payloads = [
+        {"list_key": "whitelist", "identity": "PlayerOne"},
+        {"list_key": "ops", "identity": "AdminOne", "op_level": "2"},
+        {"list_key": "banned_players", "identity": "BadOne"},
+        {"list_key": "banned_ips", "identity": "10.0.0.8"},
+    ]
+    for payload in add_payloads:
+        response = client.post(
+            f"/servers/{server_id}/access/entry-add",
+            data=payload,
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+    remove_payloads = [
+        {"list_key": "whitelist", "identity": "PlayerOne"},
+        {"list_key": "ops", "identity": "AdminOne"},
+        {"list_key": "banned_players", "identity": "BadOne"},
+        {"list_key": "banned_ips", "identity": "10.0.0.8"},
+    ]
+    for payload in remove_payloads:
+        response = client.post(
+            f"/servers/{server_id}/access/entry-remove",
+            data=payload,
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+
+    enable_response = client.post(
+        f"/servers/{server_id}/access/whitelist-toggle",
+        data={"enabled": "true"},
+        follow_redirects=True,
+    )
+    assert enable_response.status_code == 200
+    disable_response = client.post(
+        f"/servers/{server_id}/access/whitelist-toggle",
+        data={"enabled": "false"},
+        follow_redirects=True,
+    )
+    assert disable_response.status_code == 200
+
+    assert sent_commands == [
+        "whitelist add PlayerOne",
+        "op AdminOne",
+        "ban BadOne",
+        "ban-ip 10.0.0.8",
+        "whitelist remove PlayerOne",
+        "deop AdminOne",
+        "pardon BadOne",
+        "pardon-ip 10.0.0.8",
+        "whitelist on",
+        "whitelist off",
+    ]
+
+
 def test_assistant_detects_dynamic_server_properties_and_json_fields():
     from app.services.file_service import build_content_from_assistant, get_assistant_payload
 
