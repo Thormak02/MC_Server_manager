@@ -531,9 +531,19 @@ def _create_session_log_file(server_id: int) -> Path:
     return _server_log_dir(server_id) / f"session-{timestamp}.log"
 
 
-def _cleanup_process_registry(server_id: int) -> None:
+def _cleanup_process_registry(
+    server_id: int,
+    *,
+    expected_process: subprocess.Popen[str] | None = None,
+) -> bool:
     with _PROCESS_LOCK:
+        managed = _PROCESS_REGISTRY.get(server_id)
+        if managed is None:
+            return False
+        if expected_process is not None and managed.process is not expected_process:
+            return False
         _PROCESS_REGISTRY.pop(server_id, None)
+        return True
 
 
 def _cancel_pending_restart(server_id: int) -> None:
@@ -670,8 +680,12 @@ def _stream_output(server_id: int, process: subprocess.Popen[str], log_file_path
             exit_code = process.wait(timeout=1.0)
         except Exception:
             exit_code = process.poll()
-        _cleanup_process_registry(server_id)
-        _mark_server_stopped(server_id, exit_code)
+        removed_current_process = _cleanup_process_registry(
+            server_id,
+            expected_process=process,
+        )
+        if removed_current_process:
+            _mark_server_stopped(server_id, exit_code)
 
 
 def is_running(server_id: int) -> bool:
@@ -832,7 +846,13 @@ def get_process_resource_usage(server_id: int) -> dict[str, float | int | None]:
     }
 
 
-def start_server(db: Session, server: Server, initiated_by_user_id: int | None) -> tuple[bool, str]:
+def start_server(
+    db: Session,
+    server: Server,
+    initiated_by_user_id: int | None,
+    *,
+    allow_restarting: bool = False,
+) -> tuple[bool, str]:
     with _START_LOCK:
         if server.id in _START_SLOTS:
             return False, "Startvorgang laeuft bereits."
@@ -864,7 +884,10 @@ def start_server(db: Session, server: Server, initiated_by_user_id: int | None) 
                 percent=100,
             )
             return False, "Server laeuft bereits."
-        if server.status in {"starting", "restarting", "provisioning", "backup_running"}:
+        blocked_statuses = {"starting", "provisioning", "backup_running"}
+        if server.status in blocked_statuses or (
+            server.status == "restarting" and not allow_restarting
+        ):
             _set_start_progress(
                 server.id,
                 active=True,
@@ -1434,8 +1457,22 @@ def restart_server(db: Session, server: Server, initiated_by_user_id: int | None
     server.status = "restarting"
     db.add(server)
     db.commit()
-    stop_server(db, server, initiated_by_user_id, force=False, for_restart=True)
-    return start_server(db, server, initiated_by_user_id)
+    stopped, message = stop_server(
+        db,
+        server,
+        initiated_by_user_id,
+        force=False,
+        for_restart=True,
+    )
+    if not stopped:
+        return False, message
+    db.refresh(server)
+    return start_server(
+        db,
+        server,
+        initiated_by_user_id,
+        allow_restarting=True,
+    )
 
 
 def shutdown_all_managed_processes(

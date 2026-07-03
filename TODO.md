@@ -190,7 +190,7 @@ localisation (englisch)
 
 
 
-löschbestätigung als popup
+Server löschbestätigung als popup
 
 
 
@@ -221,4 +221,30 @@ modpack Version im Dashboard anzeigen, wie mc Version
 
 
 spielerzahl auch bei Servereinstellungen anpassen können
+
+
+
+
+
+auf Sicherheitslücken prüfen
+
+
+
+backup auf nas als netzwerklaufwerk
+
+
+
+
+
+Plugins funktionieren nicht ganz, nochmal schauen, was genau
+
+
+
+schedule Kalender funktioniert nicht, nochmal prüfen, was genau nicht geht
+
+
+
+
+
+~~Neustart geht nicht~~
 

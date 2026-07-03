@@ -718,6 +718,143 @@ def test_stop_server_terminates_external_process_when_registry_missing(client, t
         assert server.status == "stopped"
 
 
+def test_start_server_allows_restarting_only_for_internal_restart(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_dir = tmp_path / "restart_start_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server(client, server_dir, name="Restart Start Server")
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import modpack_service, process_service
+
+    class _FakeProcess:
+        pid = 4242
+        stdin = None
+        stdout = None
+
+        def poll(self):
+            return None
+
+    class _NoopThread:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def start(self):
+            pass
+
+    fake_process = _FakeProcess()
+    monkeypatch.setattr(process_service, "find_process_ids_for_server_path", lambda _path: [])
+    monkeypatch.setattr(
+        process_service,
+        "prepare_server_java_runtime",
+        lambda db, server: (True, "", None),
+    )
+    monkeypatch.setattr(modpack_service, "get_pending_install", lambda db, server_id: None)
+    monkeypatch.setattr(process_service.subprocess, "Popen", lambda *args, **kwargs: fake_process)
+    monkeypatch.setattr(process_service, "Thread", _NoopThread)
+    monkeypatch.setattr(
+        process_service,
+        "_create_session_log_file",
+        lambda _server_id: tmp_path / "restart-session.log",
+    )
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        server.status = "restarting"
+        db.add(server)
+        db.commit()
+
+        ok, message = process_service.start_server(db, server, initiated_by_user_id=1)
+        assert ok is False
+        assert "Start-/Wartungsvorgang" in message
+
+        ok, message = process_service.start_server(
+            db,
+            server,
+            initiated_by_user_id=1,
+            allow_restarting=True,
+        )
+        assert ok is True
+        assert "Initialisierung laeuft" in message
+        db.refresh(server)
+        assert server.status == "starting"
+
+    process_service._PROCESS_REGISTRY.pop(server_id, None)
+
+
+def test_restart_server_starts_after_successful_stop(client, tmp_path, monkeypatch):
+    _login_admin(client)
+    server_dir = tmp_path / "restart_orchestration_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hello\n", encoding="utf-8")
+    server_location = _import_server(client, server_dir, name="Restart Orchestration Server")
+    server_id = int(server_location.rsplit("/", 1)[-1])
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import process_service
+
+    calls = {"stop": 0, "start": 0}
+
+    def fake_stop_server(db, server, initiated_by_user_id, *, force, for_restart):
+        calls["stop"] += 1
+        assert force is False
+        assert for_restart is True
+        assert server.status == "restarting"
+        return True, "stopped"
+
+    def fake_start_server(db, server, initiated_by_user_id, *, allow_restarting=False):
+        calls["start"] += 1
+        assert allow_restarting is True
+        assert server.status == "restarting"
+        server.status = "starting"
+        db.add(server)
+        db.commit()
+        return True, "started"
+
+    monkeypatch.setattr(process_service, "stop_server", fake_stop_server)
+    monkeypatch.setattr(process_service, "start_server", fake_start_server)
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+        server.status = "running"
+        db.add(server)
+        db.commit()
+
+        ok, message = process_service.restart_server(db, server, initiated_by_user_id=1)
+        assert ok is True
+        assert message == "started"
+        assert calls == {"stop": 1, "start": 1}
+
+
+def test_old_output_thread_cannot_remove_replacement_process():
+    from app.services import process_service
+
+    server_id = 987654
+    old_process = SimpleNamespace()
+    replacement_process = SimpleNamespace()
+    process_service._PROCESS_REGISTRY[server_id] = SimpleNamespace(process=replacement_process)
+
+    removed = process_service._cleanup_process_registry(
+        server_id,
+        expected_process=old_process,
+    )
+    assert removed is False
+    assert process_service._PROCESS_REGISTRY[server_id].process is replacement_process
+
+    removed = process_service._cleanup_process_registry(
+        server_id,
+        expected_process=replacement_process,
+    )
+    assert removed is True
+    assert server_id not in process_service._PROCESS_REGISTRY
+
+
 def test_autostart_worker_restarts_servers_marked_active_before_manager_restart(client, tmp_path, monkeypatch):
     _login_admin(client)
     server_dir = tmp_path / "restart_active_srv"
