@@ -6,11 +6,15 @@
 
 <section class="card">
     <div class="calendar-header">
-        <h2>Kalender</h2>
-        <div class="inline-form">
-            <a class="button-like" href="/servers/{{ server.id }}/schedules?year={{ schedule_calendar.prev_year }}&month={{ schedule_calendar.prev_month }}">&#8592;</a>
-            <strong>{{ schedule_calendar.month_label }}</strong>
-            <a class="button-like" href="/servers/{{ server.id }}/schedules?year={{ schedule_calendar.next_year }}&month={{ schedule_calendar.next_month }}">&#8594;</a>
+        <div>
+            <h2>Kalender</h2>
+            <p class="muted calendar-hint">Zeigt die naechsten geplanten Ausfuehrungen. {% if can_manage %}Klick auf einen Tag uebernimmt das Datum ins Formular.{% endif %}</p>
+        </div>
+        <div class="calendar-nav">
+            <a class="calendar-nav-btn" title="Vorheriger Monat" href="/servers/{{ server.id }}/schedules?year={{ schedule_calendar.prev_year }}&month={{ schedule_calendar.prev_month }}">&#8592;</a>
+            <strong class="calendar-month">{{ schedule_calendar.month_label }}</strong>
+            <a class="calendar-nav-btn" title="Naechster Monat" href="/servers/{{ server.id }}/schedules?year={{ schedule_calendar.next_year }}&month={{ schedule_calendar.next_month }}">&#8594;</a>
+            <a class="calendar-nav-today" href="/servers/{{ server.id }}/schedules">Heute</a>
         </div>
     </div>
     <div class="calendar-grid calendar-weekdays">
@@ -21,24 +25,39 @@
     <div class="calendar-grid">
         {% for week in schedule_calendar.weeks %}
             {% for day in week %}
+            {% if can_manage %}
             <button
                 type="button"
-                class="calendar-day{% if not day.in_month %} is-outside{% endif %}{% if day.is_today %} is-today{% endif %}"
+                class="calendar-day{% if not day.in_month %} is-outside{% endif %}{% if day.is_today %} is-today{% endif %}{% if day.events %} has-events{% endif %}"
                 data-date="{{ day.iso_date }}"
-                {% if not can_manage %}disabled{% endif %}
-                title="Datum uebernehmen">
+                title="Datum ins Formular uebernehmen">
                 <span class="calendar-day-number">{{ day.day_number }}</span>
                 {% if day.events %}
                 <span class="calendar-events">
                     {% for event in day.events %}
-                    <span class="calendar-event">{{ event.time }} {{ event.job_type }}</span>
+                    <span class="calendar-event" data-type="{{ event.job_type }}">{{ event.time }} {{ event.job_type }}</span>
                     {% endfor %}
                     {% if day.more_count > 0 %}
-                    <span class="calendar-event">+{{ day.more_count }} weitere</span>
+                    <span class="calendar-event is-more">+{{ day.more_count }} weitere</span>
                     {% endif %}
                 </span>
                 {% endif %}
             </button>
+            {% else %}
+            <div class="calendar-day is-static{% if not day.in_month %} is-outside{% endif %}{% if day.is_today %} is-today{% endif %}{% if day.events %} has-events{% endif %}">
+                <span class="calendar-day-number">{{ day.day_number }}</span>
+                {% if day.events %}
+                <span class="calendar-events">
+                    {% for event in day.events %}
+                    <span class="calendar-event" data-type="{{ event.job_type }}">{{ event.time }} {{ event.job_type }}</span>
+                    {% endfor %}
+                    {% if day.more_count > 0 %}
+                    <span class="calendar-event is-more">+{{ day.more_count }} weitere</span>
+                    {% endif %}
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
             {% endfor %}
         {% endfor %}
     </div>

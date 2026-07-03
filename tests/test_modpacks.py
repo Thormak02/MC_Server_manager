@@ -532,6 +532,7 @@ def test_modpack_execute_processes_optional_curseforge_entries(client, monkeypat
         assert kwargs.get("enforce_compatibility") is False
         assert kwargs.get("keep_existing_dependency_version") is True
         assert kwargs.get("client_filter_fallback") is True
+        assert kwargs.get("dependency_resolution_optional") is True
         return None
 
     monkeypatch.setattr(modpack_service.content_service, "install_curseforge", fake_install_curseforge)
@@ -577,6 +578,87 @@ def test_modpack_execute_processes_optional_curseforge_entries(client, monkeypat
         assert result.warnings == []
 
     assert called == [(101, 1001), (202, 2002)]
+
+
+def test_install_curseforge_optional_dependency_failure_is_not_fatal(
+    client, monkeypatch, tmp_path
+):
+    import pytest
+
+    _login_admin(client)
+
+    from app.services import content_service
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    # Eine vollstaendige Server-Zeile ueber den Modpack-Import erzeugen.
+    # (import-execute verzoegert die eigentliche Installation -> kein Fake noetig.)
+    archive_bytes = _build_local_curseforge_pack(
+        files=[{"projectID": 101, "fileID": 1001, "required": True}]
+    )
+    token = client.post(
+        "/api/modpacks/import-preview",
+        data={"source": "local_archive"},
+        files={"archive_file": ("curse-pack.zip", archive_bytes, "application/zip")},
+        headers=_csrf_headers("/modpacks/import"),
+    ).json()["token"]
+    server_id = int(
+        client.post(
+            "/api/modpacks/import-execute",
+            data={
+                "preview_token": token,
+                "new_server_name": "Dep Fail Server",
+                "new_server_path": str(tmp_path / "depfail"),
+            },
+            headers=_csrf_headers("/modpacks/import"),
+        ).json()["server_id"]
+    )
+
+    # HTTP-Schicht faken: Haupt-Mod ok, Pflicht-Dependency 426558 nicht
+    # standalone aufloesbar (list_curseforge_versions -> []).
+    def fake_request_json(url, headers=None, **kwargs):
+        if "/files/" in url:
+            return {
+                "data": {
+                    "gameVersions": ["1.21.1", "NeoForge"],
+                    "downloadUrl": "http://example/mod.jar",
+                    "fileName": "themod.jar",
+                    "displayName": "The Mod 1.0",
+                }
+            }
+        return {"data": {"classId": 6, "name": "The Mod", "allowModDistribution": True}}
+
+    monkeypatch.setattr(content_service, "_request_json", fake_request_json)
+    monkeypatch.setattr(
+        content_service,
+        "_curseforge_required_dependencies",
+        lambda data: [{"mod_id": 426558, "file_id": None}],
+    )
+    monkeypatch.setattr(content_service, "list_curseforge_versions", lambda *a, **k: [])
+    monkeypatch.setattr(content_service, "_download_file", lambda *a, **k: None)
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server is not None
+
+        # optional=True -> Dependency-Fehler nicht fatal, Haupt-Mod installiert.
+        entry = content_service.install_curseforge(
+            db, server, 556448, 999, "mod", 1,
+            resolve_dependencies=True,
+            enforce_compatibility=False,
+            dependency_resolution_optional=True,
+        )
+        assert entry is not None
+        assert entry.external_project_id == "556448"
+
+        # optional=False -> harter Fehler wie zuvor (Regressionsschutz).
+        with pytest.raises(ValueError, match="426558"):
+            content_service.install_curseforge(
+                db, server, 556449, 999, "mod", 1,
+                resolve_dependencies=True,
+                enforce_compatibility=False,
+                dependency_resolution_optional=False,
+            )
 
 
 def test_run_pending_install_updates_server_modpack_state(client, tmp_path):

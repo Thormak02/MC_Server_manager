@@ -1499,6 +1499,7 @@ def execute_preview(
                     enforce_compatibility=False,
                     keep_existing_dependency_version=True,
                     client_filter_fallback=apply_client_filter,
+                    dependency_resolution_optional=True,
                 )
                 installed_count += 1
                 continue

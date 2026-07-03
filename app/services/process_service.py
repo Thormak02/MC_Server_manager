@@ -741,9 +741,31 @@ def reconcile_runtime_states_on_manager_startup() -> None:
             refresh_runtime_states(db, servers)
 
 
-def _autostart_servers_worker() -> None:
+def capture_manager_restart_candidate_ids() -> set[int]:
+    """IDs der Server, die beim Manager-Neustart als aktiv galten.
+
+    Muss VOR ``reconcile_runtime_states_on_manager_startup`` aufgerufen werden:
+    reconcile setzt abgestuerzte Prozesse auf ``crashed``/``stopped``, wodurch
+    die Information "lief vor dem Neustart" sonst verloren ginge und diese
+    Server nach einem Reboot nicht wieder hochkaemen.
+    """
     with SessionLocal() as db:
-        server_ids = list(
+        return set(
+            db.scalars(
+                select(Server.id).where(
+                    Server.status.in_(_MANAGER_RESTART_ACTIVE_STATUSES)
+                )
+            ).all()
+        )
+
+
+def _autostart_servers_worker(previously_active_ids: set[int] | None = None) -> None:
+    # Server, die vor dem Neustart aktiv waren, aber deren Prozess waehrend der
+    # Downtime gestorben ist (reconcile hat sie auf crashed/stopped gesetzt),
+    # kommen ueber previously_active_ids trotzdem wieder hoch (siehe A2).
+    resume_ids = set(previously_active_ids or set())
+    with SessionLocal() as db:
+        db_ids = list(
             db.scalars(
                 select(Server.id)
                 .where(
@@ -756,36 +778,61 @@ def _autostart_servers_worker() -> None:
             ).all()
         )
 
+    server_ids = list(dict.fromkeys([*db_ids, *sorted(resume_ids)]))
+
     for server_id in server_ids:
-        with SessionLocal() as db:
-            server = db.get(Server, server_id)
-            if server is None:
-                continue
-            was_active_before_restart = server.status in _MANAGER_RESTART_ACTIVE_STATUSES
-            terminated = 0
-            if was_active_before_restart:
-                terminated = terminate_processes_for_server_path(server.base_path)
-                _cleanup_process_registry(server.id)
-                server.status = "stopped"
-                db.add(server)
-                db.commit()
-            ok, message = start_server(db, server, initiated_by_user_id=None)
-            audit_service.log_action(
-                db,
-                action="server.autostart_on_manager_start",
-                user_id=None,
-                server_id=server.id,
-                details=(
-                    f"ok={ok} message={message} "
-                    f"was_active_before_restart={was_active_before_restart} "
-                    f"terminated_processes={terminated}"
-                ),
-            )
+        # A1: ein fehlschlagender Server darf die uebrigen nicht blockieren.
+        try:
+            with SessionLocal() as db:
+                server = db.get(Server, server_id)
+                if server is None:
+                    continue
+                was_active_before_restart = (
+                    server.status in _MANAGER_RESTART_ACTIVE_STATUSES
+                    or server_id in resume_ids
+                )
+                terminated = 0
+                if was_active_before_restart:
+                    # Verwaisten Prozess des vorherigen Manager-Laufs beenden,
+                    # damit der Server sauber unter Manager-Kontrolle (stdin/
+                    # Konsole) neu startet.
+                    terminated = terminate_processes_for_server_path(server.base_path)
+                    _cleanup_process_registry(server.id)
+                    server.status = "stopped"
+                    db.add(server)
+                    db.commit()
+                ok, message = start_server(db, server, initiated_by_user_id=None)
+                audit_service.log_action(
+                    db,
+                    action="server.autostart_on_manager_start",
+                    user_id=None,
+                    server_id=server.id,
+                    details=(
+                        f"ok={ok} message={message} "
+                        f"was_active_before_restart={was_active_before_restart} "
+                        f"terminated_processes={terminated}"
+                    ),
+                )
+        except Exception as exc:  # noqa: BLE001 - Robustheit ueber Genauigkeit
+            try:
+                with SessionLocal() as db:
+                    audit_service.log_action(
+                        db,
+                        action="server.autostart_on_manager_start",
+                        user_id=None,
+                        server_id=server_id,
+                        details=f"ok=False error={exc!r}",
+                    )
+            except Exception:
+                pass
 
 
-def start_servers_marked_for_manager_startup() -> None:
+def start_servers_marked_for_manager_startup(
+    previously_active_ids: set[int] | None = None,
+) -> None:
     worker = Thread(
         target=_autostart_servers_worker,
+        args=(previously_active_ids,),
         daemon=True,
         name="manager-server-autostart",
     )

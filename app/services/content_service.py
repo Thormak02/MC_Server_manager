@@ -1812,6 +1812,7 @@ def install_curseforge(
     enforce_compatibility: bool = True,
     keep_existing_dependency_version: bool = False,
     client_filter_fallback: bool = False,
+    dependency_resolution_optional: bool = False,
     _processing: set[tuple[str, str]] | None = None,
     _dependency_depth: int = 0,
     _is_dependency: bool = False,
@@ -1904,43 +1905,53 @@ def install_curseforge(
                 ):
                     continue
 
-                if dep_file_id is None:
-                    dep_versions = list_curseforge_versions(
-                        dep_mod_id,
-                        expected_mc_version,
-                        expected_loader,
-                        content_type,
-                        release_channel="all",
-                    )
-                    if not dep_versions:
-                        raise ValueError(
-                            f"Abhaengigkeit konnte nicht aufgeloest werden (CurseForge: {dep_mod_id})."
+                try:
+                    if dep_file_id is None:
+                        dep_versions = list_curseforge_versions(
+                            dep_mod_id,
+                            expected_mc_version,
+                            expected_loader,
+                            content_type,
+                            release_channel="all",
                         )
-                    try:
-                        dep_file_id = int(dep_versions[0].get("id") or 0)
-                    except (TypeError, ValueError):
-                        dep_file_id = 0
-                    if dep_file_id <= 0:
-                        raise ValueError(
-                            f"Abhaengigkeit ohne installierbare Version (CurseForge: {dep_mod_id})."
-                        )
+                        if not dep_versions:
+                            raise ValueError(
+                                f"Abhaengigkeit konnte nicht aufgeloest werden (CurseForge: {dep_mod_id})."
+                            )
+                        try:
+                            dep_file_id = int(dep_versions[0].get("id") or 0)
+                        except (TypeError, ValueError):
+                            dep_file_id = 0
+                        if dep_file_id <= 0:
+                            raise ValueError(
+                                f"Abhaengigkeit ohne installierbare Version (CurseForge: {dep_mod_id})."
+                            )
 
-                install_curseforge(
-                    db,
-                    server,
-                    dep_mod_id,
-                    dep_file_id,
-                    content_type,
-                    user_id,
-                    resolve_dependencies=True,
-                    enforce_compatibility=enforce_compatibility,
-                    keep_existing_dependency_version=keep_existing_dependency_version,
-                    client_filter_fallback=client_filter_fallback,
-                    _processing=processing,
-                    _dependency_depth=_dependency_depth + 1,
-                    _is_dependency=True,
-                    _auto_installed=_auto_installed,
-                )
+                    install_curseforge(
+                        db,
+                        server,
+                        dep_mod_id,
+                        dep_file_id,
+                        content_type,
+                        user_id,
+                        resolve_dependencies=True,
+                        enforce_compatibility=enforce_compatibility,
+                        keep_existing_dependency_version=keep_existing_dependency_version,
+                        client_filter_fallback=client_filter_fallback,
+                        dependency_resolution_optional=dependency_resolution_optional,
+                        _processing=processing,
+                        _dependency_depth=_dependency_depth + 1,
+                        _is_dependency=True,
+                        _auto_installed=_auto_installed,
+                    )
+                except Exception:
+                    if not dependency_resolution_optional:
+                        raise
+                    # Modpack-Kontext: Abhaengigkeiten sind bereits als eigene
+                    # Manifest-Eintraege gepinnt oder via JarJar im Parent-Jar
+                    # eingebettet. Eine nicht standalone aufloesbare/installier-
+                    # bare Dependency darf den Pflicht-Mod nicht scheitern lassen.
+                    continue
 
         raw_game_versions = [
             str(entry).strip()

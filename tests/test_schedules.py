@@ -52,6 +52,35 @@ def test_create_schedule_job(client, tmp_path):
     assert "restart" in create_response.text
 
 
+def test_calendar_shows_recurring_job_on_every_day(client, tmp_path):
+    _login_admin(client)
+    server_dir = tmp_path / "calendar_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\n", encoding="utf-8")
+    server_id = _import_server(client, server_dir)
+
+    # Taeglicher Restart um 04:00 -> muss an jedem Tag des Monats erscheinen,
+    # nicht nur an einem einzelnen (next_run_at).
+    client.post(
+        f"/servers/{server_id}/schedules",
+        data={
+            "job_type": "restart",
+            "schedule_mode": "daily",
+            "planner_time": "04:00",
+            "planner_date": "2026-07-15",
+        },
+        follow_redirects=True,
+    )
+
+    page = client.get(
+        f"/servers/{server_id}/schedules?year=2026&month=7"
+    ).text
+    pill_count = page.count('class="calendar-event"')
+    # Juli hat 31 Tage; ein einzelner next_run_at wuerde nur 1 Pill rendern.
+    assert pill_count >= 28, f"nur {pill_count} Kalender-Events gerendert"
+    assert 'data-type="restart"' in page
+
+
 def test_manual_restart_with_delay_and_warning(client, tmp_path):
     _login_admin(client)
     server_dir = tmp_path / "restart_srv"

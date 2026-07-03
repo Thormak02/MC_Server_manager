@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.services.auth_service import get_current_user_from_session
 from app.services.schedule_service import (
+    _scheduler_job_id,
     create_job,
     delete_job,
     get_job,
@@ -18,6 +19,7 @@ from app.services.schedule_service import (
     set_job_enabled,
 )
 from app.services.server_service import can_control_server, can_view_server, get_server_by_id
+from app.tasks.scheduler import get_scheduler
 from app.web.routes.pages import build_context, push_flash, templates
 
 
@@ -148,6 +150,60 @@ def _parse_calendar_month(request: Request) -> tuple[int, int]:
     return year, month
 
 
+def _localize(tz, naive_dt: datetime) -> datetime:
+    """Naive datetime in die Scheduler-Zeitzone heben (pytz oder zoneinfo)."""
+    localize = getattr(tz, "localize", None)
+    if callable(localize):
+        try:
+            return localize(naive_dt)
+        except Exception:
+            return naive_dt.replace(tzinfo=tz)
+    return naive_dt.replace(tzinfo=tz)
+
+
+def _start_of_next_day(dt: datetime) -> datetime:
+    nd = (dt + timedelta(days=1)).date()
+    return datetime(nd.year, nd.month, nd.day, tzinfo=dt.tzinfo)
+
+
+def _collect_fire_times(
+    trigger,
+    window_start: datetime,
+    window_end: datetime,
+    *,
+    per_day_cap: int = 6,
+    hard_cap: int = 1500,
+) -> dict[date, list[datetime]]:
+    """Alle Feuerzeitpunkte eines Triggers im Fenster, pro Tag gebuendelt.
+
+    Pro Tag werden hoechstens ``per_day_cap`` Zeitpunkte gesammelt; danach
+    wird zum Folgetag gesprungen, damit hochfrequente Intervalle den Kalender
+    nicht sprengen. ``hard_cap`` begrenzt die Gesamtiteration als Notbremse.
+    """
+    per_day: dict[date, list[datetime]] = {}
+    prev: datetime | None = None
+    now = window_start
+    iterations = 0
+    while iterations < hard_cap:
+        iterations += 1
+        try:
+            fire = trigger.get_next_fire_time(prev, now)
+        except Exception:
+            break
+        if fire is None or fire > window_end:
+            break
+        bucket = per_day.setdefault(fire.date(), [])
+        if len(bucket) < per_day_cap:
+            bucket.append(fire)
+            prev = fire
+            now = fire + timedelta(microseconds=1)
+        else:
+            # Tag ist voll -> zum Anfang des Folgetags springen.
+            prev = None
+            now = _start_of_next_day(fire)
+    return per_day
+
+
 def _build_calendar_view(
     jobs: list,
     *,
@@ -157,31 +213,54 @@ def _build_calendar_view(
     first_day = date(year, month, 1)
     prev_day = first_day - timedelta(days=1)
     next_month_first = (first_day.replace(day=28) + timedelta(days=4)).replace(day=1)
-    events_by_day: dict[str, list[dict[str, object]]] = {}
-
-    for job in jobs:
-        run_at = getattr(job, "next_run_at", None)
-        if run_at is None:
-            continue
-        local_dt = run_at.astimezone() if getattr(run_at, "tzinfo", None) else run_at
-        if local_dt.year != year or local_dt.month != month:
-            continue
-        day_key = local_dt.date().isoformat()
-        events_by_day.setdefault(day_key, []).append(
-            {
-                "time": local_dt.strftime("%H:%M"),
-                "job_type": getattr(job, "job_type", "-"),
-                "job_id": getattr(job, "id", 0),
-            }
-        )
-
-    for events in events_by_day.values():
-        events.sort(key=lambda item: str(item["time"]))
 
     cal = pycalendar.Calendar(firstweekday=0)  # Monday
+    month_weeks = cal.monthdatescalendar(year, month)
+    grid_start_date = month_weeks[0][0]
+    grid_end_date = month_weeks[-1][-1]
+
+    scheduler = get_scheduler()
+    tz = getattr(scheduler, "timezone", None)
+    events_by_day: dict[str, list[dict[str, object]]] = {}
+
+    if tz is not None:
+        window_start = _localize(
+            tz, datetime(grid_start_date.year, grid_start_date.month, grid_start_date.day)
+        )
+        window_end = _localize(
+            tz,
+            datetime(grid_end_date.year, grid_end_date.month, grid_end_date.day)
+            + timedelta(days=1),
+        ) - timedelta(microseconds=1)
+
+        for job in jobs:
+            if not getattr(job, "is_enabled", False):
+                continue
+            scheduler_job = scheduler.get_job(_scheduler_job_id(job.id))
+            if scheduler_job is None or scheduler_job.trigger is None:
+                continue
+            per_day = _collect_fire_times(scheduler_job.trigger, window_start, window_end)
+            for day, fires in per_day.items():
+                day_key = day.isoformat()
+                target = events_by_day.setdefault(day_key, [])
+                for fire in fires:
+                    target.append(
+                        {
+                            "time": fire.strftime("%H:%M"),
+                            "job_type": getattr(job, "job_type", "-"),
+                            "job_id": getattr(job, "id", 0),
+                            "_sort": fire,
+                        }
+                    )
+
+    for events in events_by_day.values():
+        events.sort(key=lambda item: item["_sort"])
+        for item in events:
+            item.pop("_sort", None)
+
     weeks: list[list[dict[str, object]]] = []
     today = datetime.now().date()
-    for week in cal.monthdatescalendar(year, month):
+    for week in month_weeks:
         cells: list[dict[str, object]] = []
         for day in week:
             day_key = day.isoformat()

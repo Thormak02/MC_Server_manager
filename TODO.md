@@ -240,7 +240,7 @@ Plugins funktionieren nicht ganz, nochmal schauen, was genau
 
 
 
-schedule Kalender funktioniert nicht, nochmal prüfen, was genau nicht geht
+~~schedule Kalender funktioniert nicht, nochmal prüfen, was genau nicht geht~~
 
 
 
