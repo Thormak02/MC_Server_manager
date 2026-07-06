@@ -34,6 +34,13 @@ class Server(Base):
     status: Mapped[str] = mapped_column(String(32), default=DEFAULT_SERVER_STATUS)
     auto_restart: Mapped[bool] = mapped_column(Boolean, default=False)
     auto_start_with_manager: Mapped[bool] = mapped_column(Boolean, default=False)
+    # On-Demand-/Sleep-Modus: Server schlaeft bei 0 Spielern und wird vom
+    # Sleep-Proxy beim Verbindungsversuch geweckt. sleep_internal_port ist der
+    # Port, auf dem der echte MC-Server laeuft, waehrend der Proxy den
+    # oeffentlichen `port` belegt.
+    sleep_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    sleep_delay_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    sleep_internal_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

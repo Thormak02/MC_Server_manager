@@ -271,11 +271,23 @@ def _sync_bat_start_memory(server: Server) -> str | None:
     return None
 
 
+def effective_server_port(server: Server) -> int | None:
+    """Port, auf dem der echte MC-Server laeuft.
+
+    Im Sleep-Modus belegt der Proxy den oeffentlichen ``port``, der echte
+    Server laeuft auf ``sleep_internal_port``. Sonst der normale Port.
+    """
+    if server.sleep_enabled and server.sleep_internal_port:
+        return int(server.sleep_internal_port)
+    return server.port
+
+
 def sync_server_settings_to_files(server: Server) -> list[str]:
     warnings: list[str] = []
 
-    if server.port is not None:
-        warning = _upsert_server_property(server, "server-port", str(server.port))
+    internal_port = effective_server_port(server)
+    if internal_port is not None:
+        warning = _upsert_server_property(server, "server-port", str(internal_port))
         if warning:
             warnings.append(warning)
 
@@ -312,6 +324,8 @@ def update_server_settings(
     start_mode: str | None,
     start_command: str | None,
     start_bat_path: str | None,
+    sleep_enabled: bool = False,
+    sleep_delay_seconds: int | None = None,
 ) -> tuple[Server, list[str]]:
     if mc_version is not None:
         stripped_version = mc_version.strip()
@@ -339,11 +353,49 @@ def update_server_settings(
     server.start_command = start_command
     server.start_bat_path = start_bat_path
 
+    server.sleep_enabled = bool(sleep_enabled)
+    if sleep_delay_seconds is not None:
+        server.sleep_delay_seconds = max(0, int(sleep_delay_seconds))
+    if server.sleep_enabled:
+        # Interner Port fuer den echten Server hinter dem Proxy sicherstellen.
+        from app.services import sleep_proxy_service
+
+        if not server.port:
+            warnings.append(
+                "Sleep-Modus benoetigt einen festen Port - bitte Port setzen."
+            )
+            server.sleep_enabled = False
+        elif (
+            not server.sleep_internal_port
+            or server.sleep_internal_port == server.port
+        ):
+            preferred = server.port + 1 if server.port < 65535 else None
+            server.sleep_internal_port = sleep_proxy_service.find_free_port(preferred)
+        if server.sleep_enabled and server.status in {
+            "running",
+            "starting",
+            "restarting",
+        }:
+            warnings.append(
+                "Sleep-Modus aktiviert: bitte den Server neu starten, damit er "
+                "auf den internen Port wechselt und der Proxy den oeffentlichen "
+                "Port uebernehmen kann."
+            )
+
     warnings.extend(sync_server_settings_to_files(server))
 
     db.add(server)
     db.commit()
     db.refresh(server)
+
+    # Proxy-Zustand an die neue Einstellung angleichen (Start/Stop des Listeners).
+    try:
+        from app.services import sleep_proxy_service
+
+        sleep_proxy_service.reconcile_proxies()
+    except Exception:  # noqa: BLE001 - UI-Update darf daran nicht scheitern
+        pass
+
     return server, warnings
 
 

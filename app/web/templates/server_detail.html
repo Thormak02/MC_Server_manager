@@ -197,6 +197,15 @@
         <div>
             <label><input type="checkbox" name="auto_start_with_manager" value="true" {% if server.auto_start_with_manager %}checked{% endif %}> Auto-Start mit Manager</label>
         </div>
+        <div>
+            <label><input type="checkbox" name="sleep_enabled" value="true" {% if server.sleep_enabled %}checked{% endif %}> Sleep-Modus (On-Demand)</label>
+            <p class="muted">Server schl&auml;ft bei 0 Spielern und wird beim Beitritt automatisch geweckt. Ben&ouml;tigt einen festen Port.</p>
+        </div>
+        <div>
+            <label for="sleep_delay_seconds">Sleep-Verz&ouml;gerung (Sek.)</label>
+            <input id="sleep_delay_seconds" name="sleep_delay_seconds" type="number" min="0" value="{{ server.sleep_delay_seconds if server.sleep_delay_seconds is not none else 300 }}">
+            <p class="muted">Wartezeit nach dem letzten Disconnect bis zum Herunterfahren.</p>
+        </div>
         <div class="align-end">
             <button type="submit">Speichern</button>
         </div>

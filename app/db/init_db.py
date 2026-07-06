@@ -65,16 +65,35 @@ def _ensure_server_schema() -> None:
     except Exception:
         return
 
-    if "auto_start_with_manager" in columns:
+    migrations = [
+        (
+            "auto_start_with_manager",
+            "ALTER TABLE servers "
+            "ADD COLUMN auto_start_with_manager BOOLEAN NOT NULL DEFAULT 0",
+        ),
+        (
+            "sleep_enabled",
+            "ALTER TABLE servers "
+            "ADD COLUMN sleep_enabled BOOLEAN NOT NULL DEFAULT 0",
+        ),
+        (
+            "sleep_delay_seconds",
+            "ALTER TABLE servers "
+            "ADD COLUMN sleep_delay_seconds INTEGER NOT NULL DEFAULT 300",
+        ),
+        (
+            "sleep_internal_port",
+            "ALTER TABLE servers ADD COLUMN sleep_internal_port INTEGER",
+        ),
+    ]
+
+    pending = [(name, sql) for name, sql in migrations if name not in columns]
+    if not pending:
         return
 
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                "ALTER TABLE servers "
-                "ADD COLUMN auto_start_with_manager BOOLEAN NOT NULL DEFAULT 0"
-            )
-        )
+        for _name, sql in pending:
+            conn.execute(text(sql))
 
 
 def _normalize_runtime_states() -> None:

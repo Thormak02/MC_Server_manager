@@ -696,6 +696,16 @@ def is_running(server_id: int) -> bool:
         return managed.process.poll() is None
 
 
+def is_server_ready(server_id: int) -> bool:
+    """True, wenn der Serverprozess laeuft UND die Bereitschaftsmeldung
+    ('Done') gesehen wurde (Welt geladen, Logins moeglich)."""
+    with _PROCESS_LOCK:
+        managed = _PROCESS_REGISTRY.get(server_id)
+        if not managed:
+            return False
+        return managed.process.poll() is None and managed.ready
+
+
 def refresh_runtime_states(db: Session, servers: list[Server]) -> None:
     changed = False
     for server in servers:

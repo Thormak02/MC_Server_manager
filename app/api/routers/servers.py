@@ -595,6 +595,8 @@ def update_server_settings_action(
     port: Annotated[str | None, Form()] = None,
     auto_restart: Annotated[str | None, Form()] = None,
     auto_start_with_manager: Annotated[str | None, Form()] = None,
+    sleep_enabled: Annotated[str | None, Form()] = None,
+    sleep_delay_seconds: Annotated[str | None, Form()] = None,
     start_mode: Annotated[str | None, Form()] = None,
     start_command: Annotated[str | None, Form()] = None,
     start_bat_path: Annotated[str | None, Form()] = None,
@@ -655,6 +657,8 @@ def update_server_settings_action(
         port=_to_optional_int(port),
         auto_restart=_to_bool(auto_restart),
         auto_start_with_manager=_to_bool(auto_start_with_manager),
+        sleep_enabled=_to_bool(sleep_enabled),
+        sleep_delay_seconds=_to_optional_int(sleep_delay_seconds),
         start_mode=(start_mode or "").strip().lower() or None,
         start_command=(start_command or "").strip() or None,
         start_bat_path=(start_bat_path or "").strip() or None,
@@ -795,6 +799,11 @@ def delete_server_action(
     db.execute(delete(ScheduledJob).where(ScheduledJob.server_id == server.id))
     db.delete(server)
     db.commit()
+
+    # Eventuell laufenden Sleep-Proxy dieses Servers stoppen (Port freigeben).
+    from app.services import sleep_proxy_service
+
+    sleep_proxy_service.stop_proxy(server_id)
 
     if delete_folder:
         push_flash(request, "Server und Ordner wurden geloescht.", "success")
