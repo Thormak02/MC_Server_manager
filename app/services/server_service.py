@@ -105,6 +105,8 @@ def can_edit_server_files(db: Session, user: User, server: Server) -> bool:
 
 
 def create_server(db: Session, data: ServerCreate) -> Server:
+    from app.services import port_service
+
     base_path = str(Path(data.base_path).resolve())
     unique_name = _generate_unique_name(db, data.name)
     memory_min_mb, memory_max_mb = validate_memory_bounds(data.memory_min_mb, data.memory_max_mb)
@@ -113,6 +115,15 @@ def create_server(db: Session, data: ServerCreate) -> Server:
         auto_profile = choose_best_java_profile(db, mc_version=data.mc_version)
         if auto_profile is not None:
             java_profile_id = auto_profile.id
+
+    # Kein Port angegeben -> host-weit freien Port aus dem Bereich vergeben.
+    assigned_port = data.port
+    if assigned_port is None:
+        try:
+            assigned_port = port_service.allocate_server_port(db)
+        except ValueError:
+            assigned_port = None
+
     server = Server(
         name=unique_name,
         slug=_generate_unique_slug(db, unique_name),
@@ -126,7 +137,7 @@ def create_server(db: Session, data: ServerCreate) -> Server:
         java_profile_id=java_profile_id,
         memory_min_mb=memory_min_mb,
         memory_max_mb=memory_max_mb,
-        port=data.port,
+        port=assigned_port,
         status=DEFAULT_SERVER_STATUS,
         auto_restart=False,
         auto_start_with_manager=False,
@@ -358,7 +369,7 @@ def update_server_settings(
         server.sleep_delay_seconds = max(0, int(sleep_delay_seconds))
     if server.sleep_enabled:
         # Interner Port fuer den echten Server hinter dem Proxy sicherstellen.
-        from app.services import sleep_proxy_service
+        from app.services import port_service
 
         if not server.port:
             warnings.append(
@@ -370,7 +381,16 @@ def update_server_settings(
             or server.sleep_internal_port == server.port
         ):
             preferred = server.port + 1 if server.port < 65535 else None
-            server.sleep_internal_port = sleep_proxy_service.find_free_port(preferred)
+            try:
+                server.sleep_internal_port = port_service.allocate_server_port(
+                    db,
+                    preferred=preferred,
+                    exclude={server.port},
+                    exclude_server_id=server.id,
+                )
+            except ValueError as exc:
+                warnings.append(str(exc))
+                server.sleep_enabled = False
         if server.sleep_enabled and server.status in {
             "running",
             "starting",

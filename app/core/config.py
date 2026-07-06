@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     provisioning_offline_mode: bool = False
     default_server_root: str | None = None
     default_backup_root: str | None = None
+    # Bereich, aus dem freie Server-Ports automatisch vergeben werden, wenn bei
+    # der Erstellung kein Port angegeben wird. Standard: Minecraft-Konvention
+    # (25565+), fern von ueblichen Diensten und dem Manager-Port.
+    server_port_range_start: int = 25565
+    server_port_range_end: int = 25999
     modrinth_enabled: bool = True
     curseforge_enabled: bool = True
     curseforge_api_key: str | None = None
