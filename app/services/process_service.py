@@ -718,6 +718,10 @@ def refresh_runtime_states(db: Session, servers: list[Server]) -> None:
                 db.add(server)
                 changed = True
         else:
+            # "starting" wird hier bewusst NICHT als crashed markiert: waehrend
+            # des Startfensters ist der Prozess kurz noch nicht sichtbar. Der
+            # tatsaechliche Absturz wird ueber _mark_server_stopped (Ausgabe-
+            # Thread) erkannt.
             if server.status == "running":
                 server.status = "crashed"
                 db.add(server)
@@ -741,31 +745,13 @@ def reconcile_runtime_states_on_manager_startup() -> None:
             refresh_runtime_states(db, servers)
 
 
-def capture_manager_restart_candidate_ids() -> set[int]:
-    """IDs der Server, die beim Manager-Neustart als aktiv galten.
-
-    Muss VOR ``reconcile_runtime_states_on_manager_startup`` aufgerufen werden:
-    reconcile setzt abgestuerzte Prozesse auf ``crashed``/``stopped``, wodurch
-    die Information "lief vor dem Neustart" sonst verloren ginge und diese
-    Server nach einem Reboot nicht wieder hochkaemen.
-    """
+def _autostart_servers_worker() -> None:
+    # Kandidaten: Server mit Auto-Start ODER solche, die nach reconcile noch als
+    # aktiv gelten (laufende Waisen-Prozesse eines vorherigen Manager-Laufs).
+    # Nach einem Reboot bleiben nicht-auto-start-Server bewusst gestoppt -
+    # das respektiert die auto_start_with_manager-Einstellung des Nutzers.
     with SessionLocal() as db:
-        return set(
-            db.scalars(
-                select(Server.id).where(
-                    Server.status.in_(_MANAGER_RESTART_ACTIVE_STATUSES)
-                )
-            ).all()
-        )
-
-
-def _autostart_servers_worker(previously_active_ids: set[int] | None = None) -> None:
-    # Server, die vor dem Neustart aktiv waren, aber deren Prozess waehrend der
-    # Downtime gestorben ist (reconcile hat sie auf crashed/stopped gesetzt),
-    # kommen ueber previously_active_ids trotzdem wieder hoch (siehe A2).
-    resume_ids = set(previously_active_ids or set())
-    with SessionLocal() as db:
-        db_ids = list(
+        server_ids = list(
             db.scalars(
                 select(Server.id)
                 .where(
@@ -778,8 +764,6 @@ def _autostart_servers_worker(previously_active_ids: set[int] | None = None) -> 
             ).all()
         )
 
-    server_ids = list(dict.fromkeys([*db_ids, *sorted(resume_ids)]))
-
     for server_id in server_ids:
         # A1: ein fehlschlagender Server darf die uebrigen nicht blockieren.
         try:
@@ -789,7 +773,6 @@ def _autostart_servers_worker(previously_active_ids: set[int] | None = None) -> 
                     continue
                 was_active_before_restart = (
                     server.status in _MANAGER_RESTART_ACTIVE_STATUSES
-                    or server_id in resume_ids
                 )
                 terminated = 0
                 if was_active_before_restart:
@@ -827,12 +810,9 @@ def _autostart_servers_worker(previously_active_ids: set[int] | None = None) -> 
                 pass
 
 
-def start_servers_marked_for_manager_startup(
-    previously_active_ids: set[int] | None = None,
-) -> None:
+def start_servers_marked_for_manager_startup() -> None:
     worker = Thread(
         target=_autostart_servers_worker,
-        args=(previously_active_ids,),
         daemon=True,
         name="manager-server-autostart",
     )

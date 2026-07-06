@@ -68,6 +68,32 @@ def _read_service_name_from_meta(repo_path: Path) -> str:
     return raw or "mc-server-manager"
 
 
+def _resolve_remote(repo_path: Path, branch: str) -> str | None:
+    """Den zu nutzenden Git-Remote bestimmen.
+
+    Der Server-PC klont per ``git clone`` -> Remote heisst ``origin``. Auf
+    Entwicklungsrechnern kann der Remote anders heissen (hier z.B.
+    ``MC_Server_manager``). Statt ``origin`` hart zu verdrahten, wird der
+    Upstream-Remote des Branches bzw. der erste vorhandene Remote verwendet.
+    """
+    upstream = _run_git(
+        ["config", "--get", f"branch.{branch}.remote"], cwd=repo_path
+    )
+    configured = (upstream.stdout or "").strip()
+    if configured:
+        return configured
+
+    remotes_result = _run_git(["remote"], cwd=repo_path)
+    remotes = [
+        line.strip()
+        for line in (remotes_result.stdout or "").splitlines()
+        if line.strip()
+    ]
+    if "origin" in remotes:
+        return "origin"
+    return remotes[0] if remotes else None
+
+
 def get_manager_update_status(*, fetch_remote: bool) -> ManagerUpdateStatus:
     repo_path = _repo_root()
     if not (repo_path / ".git").exists():
@@ -80,8 +106,16 @@ def get_manager_update_status(*, fetch_remote: bool) -> ManagerUpdateStatus:
         return ManagerUpdateStatus(ok=False, message="Branch konnte nicht ermittelt werden.")
     branch = (branch_result.stdout or "").strip() or "main"
 
+    remote = _resolve_remote(repo_path, branch)
+    if not remote:
+        return ManagerUpdateStatus(
+            ok=False,
+            message="Kein Git-Remote konfiguriert.",
+            branch=branch,
+        )
+
     if fetch_remote:
-        fetch_result = _run_git(["fetch", "origin", branch], cwd=repo_path)
+        fetch_result = _run_git(["fetch", remote, branch], cwd=repo_path)
         if fetch_result.returncode != 0:
             return ManagerUpdateStatus(
                 ok=False,
@@ -94,7 +128,7 @@ def get_manager_update_status(*, fetch_remote: bool) -> ManagerUpdateStatus:
         return ManagerUpdateStatus(ok=False, message="Lokaler Commit konnte nicht ermittelt werden.", branch=branch)
     local_commit_short = (local_result.stdout or "").strip() or "-"
 
-    remote_ref = f"origin/{branch}"
+    remote_ref = f"{remote}/{branch}"
     remote_result = _run_git(["rev-parse", "--short", remote_ref], cwd=repo_path)
     if remote_result.returncode != 0:
         return ManagerUpdateStatus(

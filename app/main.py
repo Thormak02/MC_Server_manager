@@ -25,7 +25,6 @@ from app.db.init_db import init_db
 from app.middleware.csrf import CSRFSameOriginMiddleware
 from app.services.schedule_service import sync_all_jobs
 from app.services.process_service import (
-    capture_manager_restart_candidate_ids,
     reconcile_runtime_states_on_manager_startup,
     shutdown_all_managed_processes,
     start_servers_marked_for_manager_startup,
@@ -39,12 +38,10 @@ from app.websocket.console_ws import router as console_ws_router
 async def lifespan(app: FastAPI):
     # Startup
     init_db()
-    # Vor reconcile erfassen, welche Server aktiv waren (siehe A2):
-    previously_active_ids = capture_manager_restart_candidate_ids()
     reconcile_runtime_states_on_manager_startup()
     start_scheduler()
     sync_all_jobs()
-    start_servers_marked_for_manager_startup(previously_active_ids)
+    start_servers_marked_for_manager_startup()
     try:
         yield
     finally:
