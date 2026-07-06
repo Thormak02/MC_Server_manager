@@ -281,6 +281,10 @@
                     if (!serverId) return;
 
                     const status = String(server.status || "-");
+                    const displayStatus = String(server.display_status || status);
+                    const statusColor = String(
+                        server.status_color || (status === "running" ? "online" : "offline")
+                    );
                     const isOnline = status === "running" || usage.running === true;
                     if (isOnline) {
                         runningCount += 1;
@@ -294,8 +298,8 @@
                     if (statusEl) {
                         statusEl.dataset.online = isOnline ? "true" : "false";
                         statusEl.innerHTML = `
-<span class="status-dot ${isOnline ? "status-dot-online" : "status-dot-offline"}" aria-hidden="true"></span>
-<span class="dashboard-status-label">${escapeHtml(status)}</span>
+<span class="status-dot status-dot-${escapeHtml(statusColor)}" aria-hidden="true"></span>
+<span class="dashboard-status-label">${escapeHtml(displayStatus)}</span>
 `;
                     }
                     if (playersEl) {

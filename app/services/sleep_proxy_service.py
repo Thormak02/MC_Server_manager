@@ -43,6 +43,9 @@ class _ProxyListener:
 
 _PROXIES: dict[int, _ProxyListener] = {}
 _PROXY_LOCK = RLock()
+# Server-IDs, deren Bind zuletzt fehlschlug -> nur einmal je Episode loggen
+# (der Idle-Monitor ruft reconcile alle 15s auf, das wuerde sonst spammen).
+_BIND_FAILED: set[int] = set()
 
 # server_id -> monotonic-Zeitpunkt, seit dem der Server leer ist (0 Spieler).
 _EMPTY_SINCE: dict[int, float] = {}
@@ -90,18 +93,25 @@ def start_proxy(server_id: int, public_port: int, internal_port: int) -> bool:
             _stop_locked(server_id)
 
         try:
+            # Bewusst OHNE SO_REUSEADDR: sonst wuerde der Proxy unter Windows
+            # den oeffentlichen Port auch dann binden, wenn der Server noch
+            # darauf laeuft (Port-Hijacking -> Split-Zustand). Ohne REUSEADDR
+            # bindet er nur, wenn der Port wirklich frei ist.
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(("0.0.0.0", public_port))
             sock.listen(64)
         except OSError as exc:
-            _log(
-                server_id,
-                "sleep_proxy.bind_failed",
-                f"public_port={public_port} error={exc!r}",
-            )
+            if server_id not in _BIND_FAILED:
+                _log(
+                    server_id,
+                    "sleep_proxy.bind_failed",
+                    f"public_port={public_port} error={exc!r} "
+                    "(Server noch auf diesem Port? Neustart noetig.)",
+                )
+                _BIND_FAILED.add(server_id)
             return False
 
+        _BIND_FAILED.discard(server_id)
         listener = _ProxyListener(
             server_id=server_id,
             public_port=public_port,
@@ -375,6 +385,12 @@ def _idle_monitor_loop() -> None:
 
 def _idle_tick() -> None:
     now = monotonic()
+    # Selbstheilung: sicherstellen, dass fuer jeden Sleep-Server ein Proxy auf
+    # dem oeffentlichen Port laeuft. Wurde Sleep z.B. an einem laufenden Server
+    # aktiviert, war der Port zunaechst belegt; sobald er frei ist (nach Stop/
+    # Neustart), bindet der Proxy hier automatisch nach.
+    reconcile_proxies()
+
     with SessionLocal() as db:
         servers = list(
             db.scalars(select(Server).where(Server.sleep_enabled.is_(True))).all()
@@ -399,6 +415,9 @@ def _idle_tick() -> None:
                     "sleep_proxy.idle_shutdown",
                     f"after={delay}s",
                 )
+                # Direkt nach dem Herunterfahren den Proxy binden, damit der
+                # Server sofort wieder geweckt werden kann (kein 15s-Fenster).
+                reconcile_proxies()
 
 
 def _mark_empty(server_id: int, now: float) -> float:

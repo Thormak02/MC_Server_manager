@@ -55,13 +55,14 @@
             {% set usage = runtime.get("usage", {}) %}
             {% set online_players = runtime.get("online_players", []) %}
             {% set status_online = server.status == "running" %}
+            {% set status_view = server_status_view(server) %}
             <tr data-server-id="{{ server.id }}">
                 <td><a href="/servers/{{ server.id }}">{{ server.name }}</a></td>
                 <td>{{ server.server_type }}</td>
                 <td>{{ server.mc_version }}</td>
                 <td id="dashboard-status-{{ server.id }}" class="dashboard-status-cell" data-online="{{ 'true' if status_online else 'false' }}">
-                    <span class="status-dot {{ 'status-dot-online' if status_online else 'status-dot-offline' }}" aria-hidden="true"></span>
-                    <span class="dashboard-status-label">{{ server.status }}</span>
+                    <span class="status-dot status-dot-{{ status_view.color }}" aria-hidden="true"></span>
+                    <span class="dashboard-status-label">{{ status_view.status }}</span>
                 </td>
                 <td
                     id="dashboard-players-{{ server.id }}"

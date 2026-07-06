@@ -12,7 +12,11 @@ from app.services.process_service import (
     refresh_runtime_states,
 )
 from app.services.resource_service import get_host_resources, get_server_resource_entries
-from app.services.server_service import get_dashboard_summary, list_servers_for_user
+from app.services.server_service import (
+    get_dashboard_summary,
+    list_servers_for_user,
+    server_status_view,
+)
 from app.web.routes.pages import build_context, templates
 
 
@@ -94,6 +98,8 @@ def resources_live(
                     "id": server.id,
                     "name": server.name,
                     "status": server.status,
+                    "display_status": server_status_view(server)["status"],
+                    "status_color": server_status_view(server)["color"],
                 },
                 "players_current": row.get("players_current"),
                 "players_max": row.get("players_max"),

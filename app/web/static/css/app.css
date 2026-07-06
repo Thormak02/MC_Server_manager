@@ -615,6 +615,14 @@ input[type="range"].ram-slider:focus-visible {
     background: #d64a58;
 }
 
+.status-dot-pending {
+    background: #e0a032;
+}
+
+.status-dot-sleeping {
+    background: #9b5de5;
+}
+
 .dashboard-status-cell {
     white-space: nowrap;
 }

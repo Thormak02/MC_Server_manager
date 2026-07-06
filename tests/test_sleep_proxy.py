@@ -34,6 +34,73 @@ def test_sleeping_status_response(monkeypatch):
         sp.stop_proxy(9991)
 
 
+def test_server_status_view_maps_sleeping_and_colors():
+    from types import SimpleNamespace as S
+
+    from app.services.server_service import server_status_view
+
+    assert server_status_view(S(status="running", sleep_enabled=True)) == {
+        "status": "running",
+        "color": "online",
+    }
+    # Sleep-Server im Zustand stopped -> "sleeping" / lila.
+    assert server_status_view(S(status="stopped", sleep_enabled=True)) == {
+        "status": "sleeping",
+        "color": "sleeping",
+    }
+    assert server_status_view(S(status="stopped", sleep_enabled=False)) == {
+        "status": "stopped",
+        "color": "offline",
+    }
+    assert server_status_view(S(status="starting", sleep_enabled=False))["color"] == "pending"
+    # Ein Absturz wird nicht als "sleeping" maskiert.
+    assert server_status_view(S(status="crashed", sleep_enabled=True))["color"] == "offline"
+
+
+def test_reconcile_starts_and_stops_proxy(client, monkeypatch):
+    # Reloadetes Modul aus sys.modules verwenden (conftest reloadet es je Test).
+    import app.services.sleep_proxy_service as sp_live
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    monkeypatch.setattr(sp_live, "_log", lambda *a, **k: None)
+
+    pub = sp_live.find_free_port()
+    internal = sp_live.find_free_port()
+    while internal == pub:
+        internal = sp_live.find_free_port()
+
+    with SessionLocal() as db:
+        srv = Server(
+            name="sleepy-rc",
+            slug="sleepy-rc",
+            server_type="paper",
+            mc_version="1.20.1",
+            base_path="C:/tmp/sleepy-rc",
+            port=pub,
+            sleep_enabled=True,
+            sleep_internal_port=internal,
+        )
+        db.add(srv)
+        db.commit()
+        sid = srv.id
+
+    try:
+        sp_live.reconcile_proxies()
+        assert sid in sp_live._PROXIES  # Proxy laeuft fuer Sleep-Server
+
+        with SessionLocal() as db:
+            srv = db.get(Server, sid)
+            srv.sleep_enabled = False
+            db.add(srv)
+            db.commit()
+
+        sp_live.reconcile_proxies()
+        assert sid not in sp_live._PROXIES  # nach Deaktivierung gestoppt
+    finally:
+        sp_live.stop_proxy(sid)
+
+
 def test_forward_when_running(monkeypatch):
     monkeypatch.setattr(sp, "_log", lambda *a, **k: None)
     monkeypatch.setattr(sp.process_service, "is_running", lambda sid: True)

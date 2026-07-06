@@ -14,6 +14,16 @@ templates = Jinja2Templates(
 )
 
 
+def _server_status_view(server: object) -> dict[str, str]:
+    from app.services.server_service import server_status_view
+
+    return server_status_view(server)
+
+
+# In Templates verfuegbar: {{ server_status_view(server).color }} etc.
+templates.env.globals["server_status_view"] = _server_status_view
+
+
 def push_flash(request: Request, message: str, kind: str = "info") -> None:
     request.session["_flash"] = {"message": message, "kind": kind}
 

@@ -282,6 +282,33 @@ def _sync_bat_start_memory(server: Server) -> str | None:
     return None
 
 
+_PENDING_STATUSES = {
+    "starting",
+    "restarting",
+    "stopping",
+    "backup_running",
+    "provisioning",
+}
+
+
+def server_status_view(server: Server) -> dict[str, str]:
+    """Anzeige-Status + Farb-Key fuer die UI.
+
+    color: online (gruen), pending (orange), sleeping (lila), offline (rot).
+    Ein Sleep-Server im Zustand 'stopped' wird als 'sleeping' angezeigt.
+    """
+    status = server.status or "stopped"
+    if status == "running":
+        return {"status": "running", "color": "online"}
+    if status in _PENDING_STATUSES:
+        return {"status": status, "color": "pending"}
+    if getattr(server, "sleep_enabled", False) and status == "stopped":
+        return {"status": "sleeping", "color": "sleeping"}
+    if status in {"crashed", "error"}:
+        return {"status": status, "color": "offline"}
+    return {"status": status, "color": "offline"}
+
+
 def effective_server_port(server: Server) -> int | None:
     """Port, auf dem der echte MC-Server laeuft.
 
