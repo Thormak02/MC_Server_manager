@@ -172,7 +172,7 @@
 
 
 
-wenn bei port nichts eingetragen wurde automatisch einen freien festlegen, nicht einfach nur Standard port, nicht 5000 da läuft der Manager, sondern ein port, der noch nicht belegt ist.
+~~wenn bei port nichts eingetragen wurde automatisch einen freien festlegen, nicht einfach nur Standard port, nicht 5000 da läuft der Manager, sondern ein port, der noch nicht belegt ist.~~
 
 
 
@@ -186,7 +186,7 @@ templates nicht nur für server erstellung, auch für datein wie server.properti
 
 
 
-localisation (englisch)
+localisation (englisch), später
 
 
 
@@ -194,7 +194,8 @@ Server löschbestätigung als popup
 
 
 
-Lobby Server
+Lobby Server unter selben port wie manager, von hier aus soll man auch server starten können.
+welt ist eine struktur, die sich automatisch pro server erweitert. ist das möglich?
 
 
 
@@ -248,3 +249,90 @@ Plugins funktionieren nicht ganz, nochmal schauen, was genau
 
 ~~Neustart geht nicht~~
 
+Thormak2002 UUID: 69f230e1-af2c-4d0e-9885-93d66595a855 immer standardmäßig als level 4 operator festlegen
+
+
+~~es soll einstellbar sein, dass wen kein spieler auf dem server ist, das der server dann in einen standby geht, es vergeht keine zeit, keine ticks, keine geladenen chunks, der server soll also praktisch komplett heruntergefahren sein, bis sich wieder ein spieler verbinden möchte. also spieler login: Server startet - spieler disconnect und kein weiterer spieler auf server: server shutdown / sleep. das ganz muss wie gesagt togglebar sein und nur explizit auf wunsch eingestellt werden können. shutdown nach letztem disconnect soll je server verzögerbar sein, also zb. erst nach 5 minuten shutdown~~
+
+KI Ideen:
+
+Monitoring & Alarme
+
+Verlaufs-Metriken: CPU/RAM/Spielerzahl/TPS als Zeitreihe speichern und als Graphen anzeigen (Trends statt nur Live-Werte).
+
+TPS/MSPT-Überwachung (Tick-Performance) mit Lag-Warnung; automatischer Performance-Report bei anhaltendem Lag.
+
+Crash-Analyse: neuesten crash-report automatisch erfassen, Kernfehler extrahieren und im UI anzeigen.
+
+Benachrichtigungen (Discord/Webhook/E-Mail/eigene push nachrichgt auf handy) bei Crash, Start/Stopp, Fehler-Häufung, Backup-Ergebnis.
+
+
+Spieler & Community
+
+Spieler-Statistiken: Spielzeit, Sessions, erste/letzte Anmeldung, aktivste Spieler (Historie) (Server spezifisch, sowie übergreifend).
+
+Schnellaktionen pro Spieler im UI: kicken, anschreiben, Gamemode/Teleport; Skin/Avatar in der Online-Liste.
+
+
+Welten & Inhalte
+
+Welten-Manager: mehrere Welten je Server, umschalten, einzelne Welt sichern/hoch-/runterladen, Seed anzeigen. später evtl.
+
+Datapack-Verwaltung (installieren/aktivieren/deaktivieren), analog zu Mods.
+
+Resourcepack-Hosting: Server-Resourcepack automatisch bereitstellen und resource-pack-URL setzen, ebenfalls über api, analog zu mods.
+
+Chunk-Vorgenerierung (z.B. via Chunky) zur Lag-Reduktion eher nein, wenn nur on demand.
+
+
+Backups (erweitert)
+
+Inkrementelle Backups (nur geänderte Dateien) + Aufbewahrungsregeln (N täglich / M wöchentlich).
+
+Off-site/Cloud-Backup (S3/Backblaze) zusätzlich zur lokalen Sicherung.
+
+Integritätsprüfung (Checksummen) + Diff-Ansicht zwischen zwei Backups.
+
+
+Automatisierung
+
+Regel-Engine (event-getrieben): „wenn Log-Muster X → Befehl/Neustart/Benachrichtigung" (z.B. Auto-Neustart bei OutOfMemory, Auto-Kick bei Spam).
+
+Ankündigungs-Scheduler: geplante Broadcasts / rotierende MOTD.
+
+Aikar's-Flags-Preset: optimierte JVM/GC-Flags je RAM automatisch setzen.
+
+
+Sicherheit & Zugriff
+
+2FA (TOTP) für den Manager-Login. eher nein, wenn nur später
+
+API-Tokens + dokumentierte REST-API für externe Automatisierung. sowieso nur über .env
+
+RCON-Unterstützung (echtes Protokoll) als robuster Konsolenkanal, auch für extern gestartete Server.
+
+Tunnel-Integration (playit.gg/ngrok) bzw. UPnP-Portöffnung, um ohne Portfreigabe erreichbar zu sein. lieber über eigene ionos domain "thormakmc.de"
+
+
+KI-gestützte Funktionen nur ondemand, local ai ohne externe api?
+
+KI-Log-/Crash-Analyse: Fehlerursache erklären + konkrete Lösungsvorschläge (welche Mod, welcher Fix).
+
+KI-Konfigurationsassistent: server.properties/JVM anhand Ziel (RAM, Spielerzahl, Modpack) optimieren.
+
+KI-Chat-Moderation: In-Game-Chat auf Toxizität/Spam prüfen, automatische Warnungen.
+
+KI-Changelog-Zusammenfassung vor einem Mod-Update („Was ändert sich, gibt es Breaking Changes?").
+
+Natürlichsprachliche Steuerung: „starte alle Vanilla-Server", „sichere Server X" → Aktionen.
+
+
+Komfort/UX
+
+Server-Tags/Gruppen + Favoriten, Sortierung/Filter im Dashboard.
+
+Globale Suche über Server/Dateien/Logs.
+
+PWA / mobil-optimierte Ansicht.
+
+Onboarding-Assistent beim ersten Start.

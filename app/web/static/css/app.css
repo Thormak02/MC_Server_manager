@@ -365,6 +365,50 @@ input[type="range"].ram-slider:focus-visible {
     background: var(--danger);
 }
 
+.modal {
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    padding: 0;
+    max-width: min(32rem, 92vw);
+    width: 100%;
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.modal::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-body {
+    display: grid;
+    gap: 0.9rem;
+    padding: 1.4rem;
+}
+
+.modal-title {
+    margin: 0;
+}
+
+.modal-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 0.3rem;
+}
+
+.modal-actions .button-like {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
 .align-end {
     display: flex;
     align-items: end;

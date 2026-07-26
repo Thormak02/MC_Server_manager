@@ -262,29 +262,53 @@
 {% if current_user.role == "super_admin" %}
 <section class="card">
     <h2>Server loeschen</h2>
-    <p class="muted">Diese Aktion loescht den Servereintrag. Standardmaessig wird der Ordner mit geloescht.</p>
-    <form method="post" action="/servers/{{ server.id }}/delete" class="grid grid-3">
+    <p class="muted">Loescht den Servereintrag und standardmaessig auch den Serverordner. Diese Aktion kann nicht rueckgaengig gemacht werden.</p>
+    <button type="button" class="danger" id="open-delete-modal" data-server-name="{{ server.name }}">Server loeschen &hellip;</button>
+</section>
+
+<dialog id="delete-server-modal" class="modal">
+    <form method="post" action="/servers/{{ server.id }}/delete" class="modal-body">
+        <h2 class="modal-title">Server wirklich loeschen?</h2>
+        <p class="muted">Der Server <strong>{{ server.name }}</strong> wird geloescht. Zum Bestaetigen bitte den Servernamen eintippen.</p>
+        <input type="hidden" name="confirm_delete" value="true">
         <div>
             <label for="confirm_name">Servername bestaetigen</label>
-            <input id="confirm_name" name="confirm_name" type="text" placeholder="{{ server.name }}" required>
+            <input id="confirm_name" name="confirm_name" type="text" autocomplete="off" placeholder="{{ server.name }}" required>
         </div>
-        <div>
-            <label class="stack">
-                <span>Ordner behalten</span>
-                <input id="keep_folder" name="keep_folder" type="checkbox" value="true">
-            </label>
-        </div>
-        <div class="align-end">
-            <label class="stack">
-                <span>Ich bestaetige das Loeschen</span>
-                <input id="confirm_delete" name="confirm_delete" type="checkbox" value="true" required>
-            </label>
-        </div>
-        <div class="align-end">
-            <button type="submit" class="danger">Server loeschen</button>
+        <label class="modal-check">
+            <input id="keep_folder" name="keep_folder" type="checkbox" value="true">
+            <span>Serverordner behalten (nur den Datenbank-Eintrag loeschen)</span>
+        </label>
+        <div class="modal-actions">
+            <button type="button" class="button-like" id="cancel-delete-modal">Abbrechen</button>
+            <button type="submit" class="danger" id="confirm-delete-btn" disabled>Endgueltig loeschen</button>
         </div>
     </form>
-</section>
+</dialog>
+
+<script>
+(function () {
+    const openBtn = document.getElementById("open-delete-modal");
+    const modal = document.getElementById("delete-server-modal");
+    if (!openBtn || !modal || typeof modal.showModal !== "function") return;
+    const cancelBtn = document.getElementById("cancel-delete-modal");
+    const confirmInput = document.getElementById("confirm_name");
+    const confirmBtn = document.getElementById("confirm-delete-btn");
+    const expected = (openBtn.dataset.serverName || "").trim();
+
+    function sync() {
+        confirmBtn.disabled = !(expected.length > 0 && confirmInput.value.trim() === expected);
+    }
+    openBtn.addEventListener("click", function () {
+        confirmInput.value = "";
+        sync();
+        modal.showModal();
+        confirmInput.focus();
+    });
+    cancelBtn.addEventListener("click", function () { modal.close(); });
+    confirmInput.addEventListener("input", sync);
+})();
+</script>
 {% endif %}
 {% if can_control %}
 <script>
