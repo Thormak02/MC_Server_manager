@@ -2195,6 +2195,154 @@ def delete_installed_content(db: Session, server: Server, content: InstalledCont
     )
 
 
+def bulk_update_installed_content(
+    db: Session,
+    server: Server,
+    user_id: int | None,
+    *,
+    release_channel: str = "release",
+    content_types: set[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Installierte Mods/Plugins auf die neueste zum Server passende Version
+    bringen.
+
+    - Aktualisiert nur, was tatsaechlich neuer ist (skip, wenn schon aktuell).
+    - Abhaengigkeiten werden bei Mods automatisch mitinstalliert.
+    - Ein fehlschlagender Eintrag bricht die uebrigen nicht ab.
+    - Manuell hochgeladene Inhalte (ohne Provider/Projekt-ID) werden mit Hinweis
+      uebersprungen.
+
+    Rueckgabe: (notes, warnings).
+    """
+    allowed_types = {
+        t.strip().lower() for t in (content_types or {"mod", "plugin"})
+    }
+    expected_mc_version = _expected_server_mc_version(server)
+
+    target_items = [
+        item
+        for item in list_installed_content(db, server)
+        if (item.content_type or "").strip().lower() in allowed_types
+    ]
+
+    notes: list[str] = []
+    warnings: list[str] = []
+    for item in target_items:
+        content_type = (item.content_type or "").strip().lower()
+        provider = (item.provider_name or "").strip().lower()
+        project_id = str(item.external_project_id or "").strip()
+        current_version_id = str(item.external_version_id or "").strip()
+        display_name = item.name or project_id or content_type
+        expected_loader = _expected_server_loader(server, content_type)
+        if not expected_mc_version or not expected_loader:
+            warnings.append(
+                f"Uebersprungen ({display_name}): MC-Version/Loader unbekannt."
+            )
+            continue
+
+        try:
+            if provider == "modrinth":
+                if not project_id:
+                    warnings.append(
+                        f"Uebersprungen ({display_name}): Modrinth Projekt-ID fehlt."
+                    )
+                    continue
+                versions = list_modrinth_versions(
+                    project_id, expected_mc_version, expected_loader,
+                    release_channel=release_channel,
+                )
+                if not versions and release_channel != "all":
+                    versions = list_modrinth_versions(
+                        project_id, expected_mc_version, expected_loader,
+                        release_channel="all",
+                    )
+            elif provider == "curseforge":
+                if not project_id.isdigit():
+                    warnings.append(
+                        f"Uebersprungen ({display_name}): ungueltige CurseForge Projekt-ID."
+                    )
+                    continue
+                versions = list_curseforge_versions(
+                    int(project_id), expected_mc_version, expected_loader,
+                    content_type, release_channel=release_channel,
+                )
+                if not versions and release_channel != "all":
+                    versions = list_curseforge_versions(
+                        int(project_id), expected_mc_version, expected_loader,
+                        content_type, release_channel="all",
+                    )
+            elif provider == "bukkit":
+                if content_type != "plugin":
+                    warnings.append(
+                        f"Uebersprungen ({display_name}): Bukkit unterstuetzt nur Plugins."
+                    )
+                    continue
+                if not project_id.isdigit():
+                    warnings.append(
+                        f"Uebersprungen ({display_name}): ungueltige Bukkit Resource-ID."
+                    )
+                    continue
+                versions = list_bukkit_versions(
+                    int(project_id), expected_mc_version, expected_loader,
+                    release_channel=release_channel,
+                )
+                if not versions and release_channel != "all":
+                    versions = list_bukkit_versions(
+                        int(project_id), expected_mc_version, expected_loader,
+                        release_channel="all",
+                    )
+            else:
+                warnings.append(
+                    f"Uebersprungen ({display_name}): Provider "
+                    f"'{item.provider_name}' nicht unterstuetzt "
+                    "(evtl. manuell hochgeladen)."
+                )
+                continue
+
+            latest = versions[0] if versions else None
+            latest_version_id = str((latest or {}).get("id") or "").strip()
+            latest_label = str(
+                (latest or {}).get("name")
+                or (latest or {}).get("version_number")
+                or latest_version_id
+            ).strip() or latest_version_id
+            if not latest_version_id or latest_version_id == current_version_id:
+                continue
+
+            if provider == "modrinth":
+                updated = install_modrinth(
+                    db, server, project_id, latest_version_id, content_type,
+                    user_id,
+                )
+            elif provider == "curseforge":
+                if not latest_version_id.isdigit():
+                    warnings.append(
+                        f"Uebersprungen ({display_name}): ungueltige CurseForge Datei-ID."
+                    )
+                    continue
+                updated = install_curseforge(
+                    db, server, int(project_id), int(latest_version_id),
+                    content_type, user_id,
+                    resolve_dependencies=(content_type == "mod"),
+                    enforce_compatibility=True,
+                )
+            else:  # bukkit
+                if not latest_version_id.isdigit():
+                    warnings.append(
+                        f"Uebersprungen ({display_name}): ungueltige Bukkit Versions-ID."
+                    )
+                    continue
+                updated = install_bukkit(
+                    db, server, int(project_id), int(latest_version_id),
+                    content_type, user_id,
+                )
+            notes.append(f"Aktualisiert: {updated.name} -> {latest_label}.")
+        except Exception as exc:
+            warnings.append(f"Update fehlgeschlagen ({display_name}): {exc}")
+
+    return notes, warnings
+
+
 def auto_update_plugins_for_server_version(
     db: Session,
     server: Server,

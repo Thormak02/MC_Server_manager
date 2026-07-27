@@ -82,7 +82,18 @@
 </section>
 
 <section class="card">
-    <h2>Installierte Inhalte</h2>
+    <div class="calendar-header">
+        <h2>Installierte Inhalte</h2>
+        {% if can_manage %}
+        <div class="inline-form">
+            <button type="button" id="update-all-btn" data-modpack="{{ 'true' if is_modpack_server else 'false' }}">Alle auf neueste Version aktualisieren</button>
+        </div>
+        {% endif %}
+    </div>
+    {% if can_manage and is_modpack_server %}
+    <p class="muted">&#9888; Dieser Server wurde aus einem Modpack erstellt. Ein Bulk-Update kann das Modpack zerbrechen (spezifische Versionen). Nutze dafuer besser die Modpack-Versionsaktualisierung.</p>
+    {% endif %}
+    <p id="update-all-status" class="muted"></p>
     <div class="scroll-pane">
         <table>
             <thead>
@@ -693,8 +704,9 @@
             <select class="version-select"><option value="">- Versionen laden -</option></select>
             <button type="button" class="ghost load-versions">Versionen laden</button>
         </div>
-        <div class="align-end">
-            <button type="button" class="install-btn">Installieren</button>
+        <div class="align-end inline-form">
+            <button type="button" class="install-latest-btn">Neueste installieren</button>
+            <button type="button" class="ghost install-btn">Version installieren</button>
         </div>
     </div>
 </div>`;
@@ -721,7 +733,7 @@
         }
     }
 
-    async function loadVersions(card) {
+    function versionsUrlForCard(card) {
         const projectId = card.dataset.projectId;
         const provider = card.dataset.provider;
         const searchParams = buildSearchParams();
@@ -729,46 +741,29 @@
         const loader = searchParams.loaders.join(",");
         const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
         const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
+        const base = {
+            project_id: projectId,
+            server_id: String(serverId),
+            mc_version: mcVersion,
+            loader,
+            release_channel: releaseChannel,
+        };
+        if (provider === "modrinth") {
+            return "/api/content/modrinth/versions?" + new URLSearchParams(base).toString();
+        }
+        const endpoint = provider === "bukkit" ? "bukkit" : "curseforge";
+        return (
+            `/api/content/${endpoint}/versions?` +
+            new URLSearchParams({ ...base, content_type: contentType }).toString()
+        );
+    }
+
+    async function loadVersions(card) {
         const select = card.querySelector(".version-select");
         if (!select) return;
         select.innerHTML = "<option value=\"\">Lade ...</option>";
-
-        let url = "";
-        if (provider === "modrinth") {
-            url =
-                "/api/content/modrinth/versions?" +
-                new URLSearchParams({
-                    project_id: projectId,
-                    server_id: String(serverId),
-                    mc_version: mcVersion,
-                    loader,
-                    release_channel: releaseChannel,
-                }).toString();
-        } else if (provider === "bukkit") {
-            url =
-                "/api/content/bukkit/versions?" +
-                new URLSearchParams({
-                    project_id: projectId,
-                    server_id: String(serverId),
-                    mc_version: mcVersion,
-                    loader,
-                    content_type: contentType,
-                    release_channel: releaseChannel,
-                }).toString();
-        } else {
-            url =
-                "/api/content/curseforge/versions?" +
-                new URLSearchParams({
-                    project_id: projectId,
-                    server_id: String(serverId),
-                    mc_version: mcVersion,
-                    loader,
-                    content_type: contentType,
-                    release_channel: releaseChannel,
-                }).toString();
-        }
         try {
-            const data = await fetchJson(url);
+            const data = await fetchJson(versionsUrlForCard(card));
             const versions = Array.isArray(data.versions) ? data.versions : [];
             select.innerHTML = "<option value=\"\">-</option>";
             versions.forEach((ver) => {
@@ -778,8 +773,48 @@
                 option.textContent = (ver.name || ver.version_number || ver.id) + (suffix ? ` [${suffix}]` : "");
                 select.appendChild(option);
             });
+            // Neueste Version vorbelegen (Liste ist neueste-zuerst sortiert).
+            if (versions.length) {
+                select.value = String(versions[0].id);
+            }
         } catch (_) {
             select.innerHTML = "<option value=\"\">Fehler</option>";
+        }
+    }
+
+    async function installLatest(card) {
+        const projectId = card.dataset.projectId;
+        const provider = card.dataset.provider;
+        const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
+        try {
+            const data = await fetchJson(versionsUrlForCard(card));
+            const versions = Array.isArray(data.versions) ? data.versions : [];
+            if (!versions.length) {
+                alert("Keine passende Version gefunden.");
+                return;
+            }
+            const latestId = versions[0].id;
+            const response = await fetch(`/api/servers/${serverId}/content/install`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    provider,
+                    project_id: projectId,
+                    version_id: String(latestId),
+                    content_type: contentType,
+                }),
+            });
+            if (!response.ok) {
+                let message = "Installation fehlgeschlagen.";
+                try {
+                    const payload = await response.json();
+                    if (payload && payload.detail) message = payload.detail;
+                } catch (_) {}
+                throw new Error(message);
+            }
+            await refreshInstalled();
+        } catch (err) {
+            alert(err instanceof Error ? err.message : "Installation fehlgeschlagen.");
         }
     }
 
@@ -1002,6 +1037,59 @@
         }
     }
 
+    async function updateAllContent(btn) {
+        const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "release";
+        const isModpack = btn && btn.dataset.modpack === "true";
+        let confirmMsg =
+            "Alle installierten Mods/Plugins auf die neueste passende Version" +
+            ` (Kanal: ${releaseChannel}) aktualisieren?`;
+        if (isModpack) {
+            confirmMsg =
+                "ACHTUNG: Dieser Server stammt aus einem Modpack – ein Bulk-Update " +
+                "kann das Pack zerbrechen.\n\n" + confirmMsg;
+        }
+        if (!window.confirm(confirmMsg)) return;
+
+        const statusEl = document.getElementById("update-all-status");
+        if (statusEl) statusEl.textContent = "Aktualisiere ...";
+        if (btn) btn.disabled = true;
+        try {
+            const response = await fetch(`/api/servers/${serverId}/content/update-all`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ release_channel: releaseChannel }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error((payload && payload.detail) || "Update fehlgeschlagen.");
+            }
+            const updated = payload.updated || 0;
+            const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+            let msg = `${updated} aktualisiert.`;
+            if (warnings.length) msg += ` ${warnings.length} Hinweis(e) – Details per Maus-Hover.`;
+            if (statusEl) {
+                statusEl.textContent = msg;
+                if (warnings.length) statusEl.title = warnings.join("\n");
+                else statusEl.removeAttribute("title");
+            }
+            await refreshInstalled();
+        } catch (err) {
+            if (statusEl) {
+                statusEl.textContent =
+                    err instanceof Error ? err.message : "Update fehlgeschlagen.";
+            }
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    const updateAllBtn = document.getElementById("update-all-btn");
+    if (updateAllBtn) {
+        updateAllBtn.addEventListener("click", function () {
+            updateAllContent(updateAllBtn);
+        });
+    }
+
     if (searchBtn) {
         searchBtn.addEventListener("click", function () {
             search(true);
@@ -1056,6 +1144,9 @@
             if (!card) return;
             if (target.classList.contains("load-versions")) {
                 loadVersions(card);
+            }
+            if (target.classList.contains("install-latest-btn")) {
+                installLatest(card);
             }
             if (target.classList.contains("install-btn")) {
                 install(card);

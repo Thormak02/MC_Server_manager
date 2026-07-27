@@ -1,10 +1,12 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.installed_content import InstalledContent
+from app.models.server_modpack_state import ServerModpackState
 from app.services import content_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.server_service import can_control_server, can_view_server, get_server_by_id
@@ -73,6 +75,11 @@ def server_content_page(request: Request, server_id: int, db: Session = Depends(
             installed = []
             push_flash(request, f"Inhalte konnten nicht geladen werden: {exc}", "error")
         default_content_type = content_service._default_content_type(server)
+        is_modpack_server = db.scalar(
+            select(ServerModpackState.id).where(
+                ServerModpackState.server_id == server.id
+            )
+        ) is not None
 
         context = build_context(
             request,
@@ -82,6 +89,7 @@ def server_content_page(request: Request, server_id: int, db: Session = Depends(
             installed=installed,
             default_content_type=default_content_type,
             can_manage=can_control_server(db, current_user, server),
+            is_modpack_server=is_modpack_server,
         )
         template = templates.get_template("server_content.html")
         rendered = template.render(context)
@@ -503,6 +511,46 @@ async def install_content(request: Request, server_id: int, db: Session = Depend
                 for item in auto_installed
             ],
         }
+    )
+
+
+@router.post(
+    "/api/servers/{server_id}/content/update-all",
+    response_class=JSONResponse,
+)
+async def update_all_content(
+    request: Request, server_id: int, db: Session = Depends(get_db)
+):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    server = _ensure_server_access(db, current_user, server_id)
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    release_channel = (
+        str((payload or {}).get("release_channel") or "release").strip().lower()
+        or "release"
+    )
+
+    try:
+        notes, warnings = content_service.bulk_update_installed_content(
+            db,
+            server,
+            current_user.id,
+            release_channel=release_channel,
+            content_types={"mod", "plugin"},
+        )
+    except Exception as exc:
+        db.rollback()
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    return JSONResponse(
+        {"updated": len(notes), "notes": notes, "warnings": warnings}
     )
 
 
