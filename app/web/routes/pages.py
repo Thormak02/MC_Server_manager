@@ -20,8 +20,15 @@ def _server_status_view(server: object) -> dict[str, str]:
     return server_status_view(server)
 
 
+def _sleep_delay_parts(seconds: object) -> dict[str, object]:
+    from app.services.server_service import split_sleep_delay_seconds
+
+    return split_sleep_delay_seconds(seconds)
+
+
 # In Templates verfuegbar: {{ server_status_view(server).color }} etc.
 templates.env.globals["server_status_view"] = _server_status_view
+templates.env.globals["sleep_delay_parts"] = _sleep_delay_parts
 
 
 def push_flash(request: Request, message: str, kind: str = "info") -> None:

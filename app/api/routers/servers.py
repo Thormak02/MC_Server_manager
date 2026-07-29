@@ -35,6 +35,7 @@ from app.services.server_service import (
     can_control_server,
     can_view_server,
     get_server_by_id,
+    sleep_delay_to_seconds,
     sync_server_settings_to_files,
     update_server_settings,
 )
@@ -597,6 +598,8 @@ def update_server_settings_action(
     auto_start_with_manager: Annotated[str | None, Form()] = None,
     sleep_enabled: Annotated[str | None, Form()] = None,
     sleep_delay_seconds: Annotated[str | None, Form()] = None,
+    sleep_delay_value: Annotated[str | None, Form()] = None,
+    sleep_delay_unit: Annotated[str | None, Form()] = None,
     start_mode: Annotated[str | None, Form()] = None,
     start_command: Annotated[str | None, Form()] = None,
     start_bat_path: Annotated[str | None, Form()] = None,
@@ -658,7 +661,13 @@ def update_server_settings_action(
         auto_restart=_to_bool(auto_restart),
         auto_start_with_manager=_to_bool(auto_start_with_manager),
         sleep_enabled=_to_bool(sleep_enabled),
-        sleep_delay_seconds=_to_optional_int(sleep_delay_seconds),
+        sleep_delay_seconds=(
+            sleep_delay_to_seconds(
+                _to_optional_int(sleep_delay_value), sleep_delay_unit
+            )
+            if _to_optional_int(sleep_delay_value) is not None
+            else _to_optional_int(sleep_delay_seconds)
+        ),
         start_mode=(start_mode or "").strip().lower() or None,
         start_command=(start_command or "").strip() or None,
         start_bat_path=(start_bat_path or "").strip() or None,

@@ -202,8 +202,17 @@
             <p class="muted">Server schl&auml;ft bei 0 Spielern und wird beim Beitritt automatisch geweckt. Ben&ouml;tigt einen festen Port.</p>
         </div>
         <div>
-            <label for="sleep_delay_seconds">Sleep-Verz&ouml;gerung (Sek.)</label>
-            <input id="sleep_delay_seconds" name="sleep_delay_seconds" type="number" min="0" value="{{ server.sleep_delay_seconds if server.sleep_delay_seconds is not none else 300 }}">
+            <label for="sleep_delay_value">Sleep-Verz&ouml;gerung</label>
+            {% set sd = sleep_delay_parts(server.sleep_delay_seconds) %}
+            <div class="inline-form">
+                <input id="sleep_delay_value" name="sleep_delay_value" type="number" min="0" value="{{ sd.value }}">
+                <select name="sleep_delay_unit">
+                    <option value="seconds" {% if sd.unit == 'seconds' %}selected{% endif %}>Sekunden</option>
+                    <option value="minutes" {% if sd.unit == 'minutes' %}selected{% endif %}>Minuten</option>
+                    <option value="hours" {% if sd.unit == 'hours' %}selected{% endif %}>Stunden</option>
+                    <option value="days" {% if sd.unit == 'days' %}selected{% endif %}>Tage</option>
+                </select>
+            </div>
             <p class="muted">Wartezeit nach dem letzten Disconnect bis zum Herunterfahren.</p>
         </div>
         <div class="align-end">

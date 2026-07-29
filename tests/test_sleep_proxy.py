@@ -57,6 +57,26 @@ def test_server_status_view_maps_sleeping_and_colors():
     assert server_status_view(S(status="crashed", sleep_enabled=True))["color"] == "offline"
 
 
+def test_sleep_delay_split_and_roundtrip():
+    from app.services.server_service import (
+        sleep_delay_to_seconds,
+        split_sleep_delay_seconds,
+    )
+
+    assert split_sleep_delay_seconds(300) == {"value": 5, "unit": "minutes"}
+    assert split_sleep_delay_seconds(3600) == {"value": 1, "unit": "hours"}
+    assert split_sleep_delay_seconds(86400) == {"value": 1, "unit": "days"}
+    assert split_sleep_delay_seconds(90) == {"value": 90, "unit": "seconds"}
+    assert split_sleep_delay_seconds(0) == {"value": 0, "unit": "seconds"}
+
+    for seconds in (0, 45, 300, 3600, 5400, 86400, 172800):
+        parts = split_sleep_delay_seconds(seconds)
+        assert sleep_delay_to_seconds(parts["value"], parts["unit"]) == seconds
+
+    assert sleep_delay_to_seconds(2, "days") == 172800
+    assert sleep_delay_to_seconds(None, "days") is None
+
+
 def test_reconcile_starts_and_stops_proxy(client, monkeypatch):
     # Reloadetes Modul aus sys.modules verwenden (conftest reloadet es je Test).
     import app.services.sleep_proxy_service as sp_live

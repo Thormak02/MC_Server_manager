@@ -190,12 +190,12 @@ localisation (englisch), später
 
 
 
-Server löschbestätigung als popup
+~~Server löschbestätigung als popup~~
 
 
 
 Lobby Server unter selben port wie manager, von hier aus soll man auch server starten können.
-welt ist eine struktur, die sich automatisch pro server erweitert. ist das möglich?
+welt ist eine struktur, die sich automatisch pro server erweitert. ist das möglich? siehe docs/lobby_gateway_plan.md
 
 
 
@@ -207,13 +207,13 @@ mehrere verwaltungsumgebungen, die voneinander getrennt sind, server 1, 2 und 3 
 
 
 
-ein button um alle mods auf aktuellste Version zu updaten
+~~ein button um alle mods auf aktuellste Version zu updaten (im mods bereich, auch für plugins usw.), außerdem beim download automatisch aktuellste version ausgewählt. abhängigkeiten werden automatisch mit installiert. nicht für modpacks, wo oft eine spezifische version gefordert ist.~~
 
 
 
 
 
-alle Server so einstellbar sein, sodass sie mit start des Managers starten
+~~alle Server so einstellbar sein, sodass sie mit start des Managers starten~~
 
 
 
@@ -227,7 +227,7 @@ spielerzahl auch bei Servereinstellungen anpassen können
 
 
 
-auf Sicherheitslücken prüfen
+~~auf Sicherheitslücken prüfen~~
 
 
 
@@ -253,6 +253,9 @@ Thormak2002 UUID: 69f230e1-af2c-4d0e-9885-93d66595a855 immer standardmäßig als
 
 
 ~~es soll einstellbar sein, dass wen kein spieler auf dem server ist, das der server dann in einen standby geht, es vergeht keine zeit, keine ticks, keine geladenen chunks, der server soll also praktisch komplett heruntergefahren sein, bis sich wieder ein spieler verbinden möchte. also spieler login: Server startet - spieler disconnect und kein weiterer spieler auf server: server shutdown / sleep. das ganz muss wie gesagt togglebar sein und nur explizit auf wunsch eingestellt werden können. shutdown nach letztem disconnect soll je server verzögerbar sein, also zb. erst nach 5 minuten shutdown~~
+
+
+ Sleep-Verzögerung (Sek.) nicht nur in sek, sondern zb. auch minuten, stunden, tage auswählbar
 
 KI Ideen:
 

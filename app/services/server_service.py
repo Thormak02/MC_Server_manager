@@ -309,6 +309,38 @@ def server_status_view(server: Server) -> dict[str, str]:
     return {"status": status, "color": "offline"}
 
 
+_SLEEP_DELAY_UNITS: list[tuple[str, int]] = [
+    ("days", 86400),
+    ("hours", 3600),
+    ("minutes", 60),
+    ("seconds", 1),
+]
+
+
+def split_sleep_delay_seconds(seconds: int | None) -> dict[str, object]:
+    """Sekunden in die groesste glatt teilbare Einheit zerlegen.
+
+    z.B. 300 -> {value: 5, unit: "minutes"}, 86400 -> {value: 1, unit: "days"}.
+    Fuer die UI, damit die Verzoegerung in Sek/Min/Std/Tage angezeigt wird.
+    """
+    total = int(seconds) if seconds else 0
+    if total <= 0:
+        return {"value": 0, "unit": "seconds"}
+    for unit, mult in _SLEEP_DELAY_UNITS:
+        if total % mult == 0:
+            return {"value": total // mult, "unit": unit}
+    return {"value": total, "unit": "seconds"}
+
+
+def sleep_delay_to_seconds(value: int | None, unit: str | None) -> int | None:
+    """Wert + Einheit (seconds/minutes/hours/days) in Sekunden umrechnen."""
+    if value is None:
+        return None
+    multipliers = {mult_unit: mult for mult_unit, mult in _SLEEP_DELAY_UNITS}
+    mult = multipliers.get((unit or "seconds").strip().lower(), 1)
+    return max(0, int(value)) * mult
+
+
 def effective_server_port(server: Server) -> int | None:
     """Port, auf dem der echte MC-Server laeuft.
 
