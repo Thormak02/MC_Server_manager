@@ -57,7 +57,7 @@
 {% if can_control %}
 <section class="card">
     <h2>Aktionen</h2>
-    <div class="inline-form">
+    <div class="inline-form action-buttons">
         <form method="post" action="/servers/{{ server.id }}/start" class="inline-form">
             <button type="submit">Start</button>
         </form>
@@ -67,12 +67,20 @@
         <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
             <button type="submit">Neustart</button>
         </form>
-        <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
-            <input name="delay_seconds" type="number" min="0" placeholder="Delay sek">
-            <input name="warning_message" type="text" placeholder="Warnung, z.B. Restart in {seconds}s">
-            <button type="submit">Neustart geplant</button>
-        </form>
     </div>
+    <form method="post" action="/servers/{{ server.id }}/restart" class="grid settings-grid scheduled-restart">
+        <div>
+            <label for="restart-delay">Verz&ouml;gerung (Sek.)</label>
+            <input id="restart-delay" name="delay_seconds" type="number" min="0" placeholder="z.B. 30">
+        </div>
+        <div>
+            <label for="restart-warning">Warnmeldung</label>
+            <input id="restart-warning" name="warning_message" type="text" placeholder="Restart in {seconds}s">
+        </div>
+        <div class="align-end">
+            <button type="submit" class="ghost">Neustart planen</button>
+        </div>
+    </form>
     <div id="start-progress-panel" class="start-progress-panel" hidden>
         <div class="start-progress-head">
             <strong id="start-progress-title">Startvorgang</strong>
@@ -87,135 +95,148 @@
 
 <section class="card">
     <h2>Servereinstellungen</h2>
-    <form method="post" action="/servers/{{ server.id }}/settings" class="grid grid-4 settings-grid">
-        <div>
-            <label for="mc_version">Minecraft Version</label>
-            <select id="mc_version" name="mc_version" {% if not can_change_mc_version %}disabled{% endif %}>
-                <option value="{{ server.mc_version }}">{{ server.mc_version }}</option>
-            </select>
-        </div>
-        <div>
-            <label for="version_channel">Versionen Filter</label>
-            <select id="version_channel" {% if not can_change_mc_version %}disabled{% endif %}>
-                <option value="release">Release</option>
-                <option value="beta">Beta/Snapshot</option>
-                <option value="alpha">Alpha</option>
-                <option value="all">Alle</option>
-            </select>
-        </div>
-        <div id="loader_version_wrap">
-            <label for="loader_version">Loader/Build Version</label>
-            <select id="loader_version" name="loader_version" {% if not can_change_mc_version %}disabled{% endif %}>
-                <option value="{{ server.loader_version or '' }}">{{ server.loader_version or "-" }}</option>
-            </select>
-        </div>
-        <div id="loader_channel_wrap">
-            <label for="loader_channel">Loader Filter</label>
-            <select id="loader_channel" {% if not can_change_mc_version %}disabled{% endif %}>
-                <option value="all">Alle</option>
-                <option value="release">Release</option>
-                <option value="beta">Beta</option>
-                <option value="alpha">Alpha</option>
-            </select>
-        </div>
-        {% if not can_change_mc_version and version_change_block_reason %}
-        <div style="grid-column: span 4;">
-            <p class="muted">{{ version_change_block_reason }}</p>
-        </div>
-        {% endif %}
-        <div class="field-span-2">
-            <label for="java_profile_id">Java Profil</label>
-            <select id="java_profile_id" name="java_profile_id">
-                <option value="">Automatisch (kompatibel)</option>
-                {% for profile in java_profiles %}
-                <option value="{{ profile.id }}" {% if server.java_profile_id == profile.id %}selected{% endif %}>
-                    {{ profile.name }}{% if profile.version_label %} ({{ profile.version_label }}){% endif %}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div>
-            <label for="memory_min_mb">RAM min (MB)</label>
-            <div class="ram-slider-field">
-                <div class="ram-slider-head">
-                    <strong>Min</strong>
-                    <span id="memory_min_label" class="muted"></span>
+    <form method="post" action="/servers/{{ server.id }}/settings" class="settings-form">
+
+        <div class="settings-section">
+            <h3>Version</h3>
+            <div class="grid settings-grid">
+                <div>
+                    <label for="mc_version">Minecraft Version</label>
+                    <select id="mc_version" name="mc_version" {% if not can_change_mc_version %}disabled{% endif %}>
+                        <option value="{{ server.mc_version }}">{{ server.mc_version }}</option>
+                    </select>
                 </div>
-                <input
-                    id="memory_min_mb"
-                    name="memory_min_mb"
-                    class="ram-slider"
-                    type="range"
-                    min="512"
-                    max="65536"
-                    step="512"
-                    value="{{ server.memory_min_mb or 2048 }}"
-                >
-            </div>
-        </div>
-        <div>
-            <label for="memory_max_mb">RAM max (MB)</label>
-            <div class="ram-slider-field">
-                <div class="ram-slider-head">
-                    <strong>Max</strong>
-                    <span id="memory_max_label" class="muted"></span>
+                <div>
+                    <label for="version_channel">Versionen Filter</label>
+                    <select id="version_channel" {% if not can_change_mc_version %}disabled{% endif %}>
+                        <option value="release">Release</option>
+                        <option value="beta">Beta/Snapshot</option>
+                        <option value="alpha">Alpha</option>
+                        <option value="all">Alle</option>
+                    </select>
                 </div>
-                <input
-                    id="memory_max_mb"
-                    name="memory_max_mb"
-                    class="ram-slider"
-                    type="range"
-                    min="512"
-                    max="65536"
-                    step="512"
-                    value="{{ server.memory_max_mb or 4096 }}"
-                >
+                <div id="loader_version_wrap">
+                    <label for="loader_version">Loader/Build Version</label>
+                    <select id="loader_version" name="loader_version" {% if not can_change_mc_version %}disabled{% endif %}>
+                        <option value="{{ server.loader_version or '' }}">{{ server.loader_version or "-" }}</option>
+                    </select>
+                </div>
+                <div id="loader_channel_wrap">
+                    <label for="loader_channel">Loader Filter</label>
+                    <select id="loader_channel" {% if not can_change_mc_version %}disabled{% endif %}>
+                        <option value="all">Alle</option>
+                        <option value="release">Release</option>
+                        <option value="beta">Beta</option>
+                        <option value="alpha">Alpha</option>
+                    </select>
+                </div>
+                {% if not can_change_mc_version and version_change_block_reason %}
+                <div class="field-full">
+                    <p class="muted">{{ version_change_block_reason }}</p>
+                </div>
+                {% endif %}
             </div>
         </div>
-        <div>
-            <label for="port">Port</label>
-            <input id="port" name="port" type="number" value="{{ server.port or '' }}">
-        </div>
-        <div>
-            <label for="start_mode">Startmodus</label>
-            <select id="start_mode" name="start_mode">
-                <option value="bat" {% if server.start_mode == "bat" %}selected{% endif %}>bat</option>
-                <option value="command" {% if server.start_mode == "command" %}selected{% endif %}>command</option>
-            </select>
-        </div>
-        <div class="field-span-2">
-            <label for="start_bat_path">Start .bat Pfad</label>
-            <input id="start_bat_path" name="start_bat_path" type="text" value="{{ server.start_bat_path or '' }}">
-        </div>
-        <div class="field-span-2">
-            <label for="start_command">Startbefehl</label>
-            <input id="start_command" name="start_command" type="text" value="{{ server.start_command or '' }}">
-        </div>
-        <div>
-            <label><input type="checkbox" name="auto_restart" value="true" {% if server.auto_restart %}checked{% endif %}> Auto-Restart</label>
-        </div>
-        <div>
-            <label><input type="checkbox" name="auto_start_with_manager" value="true" {% if server.auto_start_with_manager %}checked{% endif %}> Auto-Start mit Manager</label>
-        </div>
-        <div>
-            <label><input type="checkbox" name="sleep_enabled" value="true" {% if server.sleep_enabled %}checked{% endif %}> Sleep-Modus (On-Demand)</label>
-            <p class="muted">Server schl&auml;ft bei 0 Spielern und wird beim Beitritt automatisch geweckt. Ben&ouml;tigt einen festen Port.</p>
-        </div>
-        <div>
-            <label for="sleep_delay_value">Sleep-Verz&ouml;gerung</label>
-            {% set sd = sleep_delay_parts(server.sleep_delay_seconds) %}
-            <div class="inline-form">
-                <input id="sleep_delay_value" name="sleep_delay_value" type="number" min="0" value="{{ sd.value }}">
-                <select name="sleep_delay_unit">
-                    <option value="seconds" {% if sd.unit == 'seconds' %}selected{% endif %}>Sekunden</option>
-                    <option value="minutes" {% if sd.unit == 'minutes' %}selected{% endif %}>Minuten</option>
-                    <option value="hours" {% if sd.unit == 'hours' %}selected{% endif %}>Stunden</option>
-                    <option value="days" {% if sd.unit == 'days' %}selected{% endif %}>Tage</option>
-                </select>
+
+        <div class="settings-section">
+            <h3>Java &amp; Arbeitsspeicher</h3>
+            <div class="grid settings-grid">
+                <div class="field-span-2">
+                    <label for="java_profile_id">Java Profil</label>
+                    <select id="java_profile_id" name="java_profile_id">
+                        <option value="">Automatisch (kompatibel)</option>
+                        {% for profile in java_profiles %}
+                        <option value="{{ profile.id }}" {% if server.java_profile_id == profile.id %}selected{% endif %}>
+                            {{ profile.name }}{% if profile.version_label %} ({{ profile.version_label }}){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="memory_min_mb">RAM min (MB)</label>
+                    <div class="ram-slider-field">
+                        <div class="ram-slider-head">
+                            <strong>Min</strong>
+                            <span id="memory_min_label" class="muted"></span>
+                        </div>
+                        <input id="memory_min_mb" name="memory_min_mb" class="ram-slider" type="range" min="512" max="65536" step="512" value="{{ server.memory_min_mb or 2048 }}">
+                    </div>
+                </div>
+                <div>
+                    <label for="memory_max_mb">RAM max (MB)</label>
+                    <div class="ram-slider-field">
+                        <div class="ram-slider-head">
+                            <strong>Max</strong>
+                            <span id="memory_max_label" class="muted"></span>
+                        </div>
+                        <input id="memory_max_mb" name="memory_max_mb" class="ram-slider" type="range" min="512" max="65536" step="512" value="{{ server.memory_max_mb or 4096 }}">
+                    </div>
+                </div>
             </div>
-            <p class="muted">Wartezeit nach dem letzten Disconnect bis zum Herunterfahren.</p>
         </div>
-        <div class="align-end">
+
+        <div class="settings-section">
+            <h3>Netzwerk &amp; Start</h3>
+            <div class="grid settings-grid">
+                <div>
+                    <label for="port">Port</label>
+                    <input id="port" name="port" type="number" value="{{ server.port or '' }}">
+                </div>
+                <div>
+                    <label for="start_mode">Startmodus</label>
+                    <select id="start_mode" name="start_mode">
+                        <option value="bat" {% if server.start_mode == "bat" %}selected{% endif %}>bat</option>
+                        <option value="command" {% if server.start_mode == "command" %}selected{% endif %}>command</option>
+                    </select>
+                </div>
+                <div class="field-span-2">
+                    <label for="start_bat_path">Start .bat Pfad</label>
+                    <input id="start_bat_path" name="start_bat_path" type="text" value="{{ server.start_bat_path or '' }}">
+                </div>
+                <div class="field-full">
+                    <label for="start_command">Startbefehl</label>
+                    <input id="start_command" name="start_command" type="text" value="{{ server.start_command or '' }}">
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Automatik &amp; Sleep</h3>
+            <div class="grid settings-grid">
+                <div>
+                    <div class="toggle-field">
+                        <label><input type="checkbox" name="auto_restart" value="true" {% if server.auto_restart %}checked{% endif %}> Auto-Restart</label>
+                    </div>
+                </div>
+                <div>
+                    <div class="toggle-field">
+                        <label><input type="checkbox" name="auto_start_with_manager" value="true" {% if server.auto_start_with_manager %}checked{% endif %}> Auto-Start mit Manager</label>
+                    </div>
+                </div>
+                <div>
+                    <div class="toggle-field">
+                        <label><input type="checkbox" name="sleep_enabled" value="true" {% if server.sleep_enabled %}checked{% endif %}> Sleep-Modus (On-Demand)</label>
+                    </div>
+                    <p class="muted">Server schl&auml;ft bei 0 Spielern und wird beim Beitritt automatisch geweckt. Ben&ouml;tigt einen festen Port.</p>
+                </div>
+                <div>
+                    <label for="sleep_delay_value">Sleep-Verz&ouml;gerung</label>
+                    {% set sd = sleep_delay_parts(server.sleep_delay_seconds) %}
+                    <div class="inline-form">
+                        <input id="sleep_delay_value" name="sleep_delay_value" type="number" min="0" value="{{ sd.value }}">
+                        <select name="sleep_delay_unit">
+                            <option value="seconds" {% if sd.unit == 'seconds' %}selected{% endif %}>Sekunden</option>
+                            <option value="minutes" {% if sd.unit == 'minutes' %}selected{% endif %}>Minuten</option>
+                            <option value="hours" {% if sd.unit == 'hours' %}selected{% endif %}>Stunden</option>
+                            <option value="days" {% if sd.unit == 'days' %}selected{% endif %}>Tage</option>
+                        </select>
+                    </div>
+                    <p class="muted">Wartezeit nach dem letzten Disconnect bis zum Herunterfahren.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-actions">
             <button type="submit">Speichern</button>
         </div>
     </form>
