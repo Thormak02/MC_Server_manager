@@ -37,6 +37,8 @@ _CURSEFORGE_CLASS_IDS = {
     "mod": 6,
     "plugin": 5,
     "modpack": 4471,
+    "datapack": 6945,
+    "resourcepack": 12,
 }
 _CURSEFORGE_REQUIRED_RELATION_TYPES = {3, 6}
 _CURSEFORGE_CLIENT_ONLY_FALLBACK_KEYS = {
@@ -79,6 +81,10 @@ def _modrinth_project_types_for_content_type(content_type: str | None) -> list[s
         return ["plugin", "minecraft_java_server"]
     if normalized == "modpack":
         return ["modpack"]
+    if normalized == "datapack":
+        return ["datapack"]
+    if normalized == "resourcepack":
+        return ["resourcepack"]
     return ["mod"]
 
 
@@ -249,11 +255,34 @@ def _spiget_headers() -> dict[str, str]:
     return {"User-Agent": "mc-server-manager/1.0"}
 
 
+def _server_level_name(server: Server) -> str:
+    """Weltname aus server.properties (`level-name`), Default `world`."""
+    props = Path(server.base_path) / "server.properties"
+    try:
+        for line in props.read_text(encoding="utf-8", errors="ignore").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("level-name") and "=" in stripped:
+                value = stripped.split("=", 1)[1].strip()
+                if value:
+                    return _safe_file_name(value)
+    except OSError:
+        pass
+    return "world"
+
+
 def _target_dir(server: Server, content_type: str) -> Path:
-    folder = "mods"
-    if content_type == "plugin":
-        folder = "plugins"
-    return Path(server.base_path) / folder
+    base = Path(server.base_path)
+    normalized = (content_type or "").strip().lower()
+    if normalized == "plugin":
+        return base / "plugins"
+    if normalized == "datapack":
+        # Datapacks liegen im Welt-Ordner.
+        return base / _server_level_name(server) / "datapacks"
+    if normalized == "resourcepack":
+        # Resource Packs werden ueber server.properties gesetzt, nicht als
+        # Datei abgelegt; dieser Ordner dient nur evtl. lokalen Downloads.
+        return base / "resourcepacks"
+    return base / "mods"
 
 
 def _default_content_type(server: Server) -> str:
@@ -279,6 +308,9 @@ def _expected_server_loader(server: Server, content_type: str | None = None) -> 
     if normalized_content_type == "modpack":
         if normalized in {"forge", "neoforge", "fabric", "quilt"}:
             return normalized
+        return None
+    if normalized_content_type in {"datapack", "resourcepack"}:
+        # Datapacks/Resource Packs sind loader-unabhaengig.
         return None
 
     if normalized in {"forge", "neoforge", "fabric", "quilt", "paper", "spigot", "bukkit"}:
@@ -1147,11 +1179,11 @@ def _curseforge_loader_type(loader: str | None, content_type: str) -> int | None
     if content_type == "modpack":
         mapping = {"forge": 1, "fabric": 4, "quilt": 5, "neoforge": 6}
         return mapping.get(loader)
-    if content_type == "plugin":
-        mapping = {"paper": 2, "spigot": 3, "bukkit": 2}
-        if loader in mapping:
-            return mapping[loader]
-        return 2
+    if content_type in {"plugin", "datapack", "resourcepack"}:
+        # Bukkit-Plugins (5), Data Packs (6945) und Resource Packs (12) kennen
+        # keinen modLoaderType. Ein Loader-Filter wuerde ALLE Ergebnisse
+        # herausfiltern -> daher hier keinen Loader-Filter setzen.
+        return None
     mapping = {"forge": 1, "fabric": 4, "quilt": 5, "neoforge": 6}
     if loader in mapping:
         return mapping[loader]
@@ -2167,6 +2199,10 @@ def list_installed_content(db: Session, server: Server) -> list[InstalledContent
     # Selbstheilung fuer Altbestaende:
     # Wenn ein Datei-Eintrag nicht mehr physisch existiert, wird der DB-Eintrag entfernt.
     for entry in entries:
+        if (entry.content_type or "").strip().lower() == "resourcepack":
+            # Resource Packs liegen nicht als Datei vor (server.properties).
+            valid_entries.append(entry)
+            continue
         file_path = _content_file_path(server, entry.content_type, entry.file_name)
         if file_path.exists():
             valid_entries.append(entry)
@@ -2180,8 +2216,200 @@ def list_installed_content(db: Session, server: Server) -> list[InstalledContent
     return valid_entries
 
 
+def _download_sha1(url: str, headers: dict[str, str] | None = None) -> str:
+    import os
+    import tempfile
+
+    fd, tmp_name = tempfile.mkstemp(suffix=".rp")
+    os.close(fd)
+    tmp = Path(tmp_name)
+    try:
+        _download_file(url, tmp, headers=headers)
+        digest = hashlib.sha1()
+        with tmp.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
+def set_server_resource_pack(
+    db: Session,
+    server: Server,
+    provider: str,
+    project_id: str,
+    version_id: str,
+    user_id: int | None,
+    *,
+    require: bool = False,
+) -> InstalledContent:
+    """Ein Resource/Texture Pack als Server-Resource-Pack setzen.
+
+    Resource Packs werden am Server nicht als Datei abgelegt, sondern ueber
+    server.properties (`resource-pack` URL + `resource-pack-sha1`) gesetzt.
+    Es gibt genau einen aktiven Server-Resource-Pack.
+    """
+    provider = (provider or "").strip().lower()
+    url = ""
+    sha1 = ""
+    name = str(project_id)
+    version_label = str(version_id)
+
+    if provider == "modrinth":
+        version_payload = _request_json(
+            f"{MODRINTH_BASE}/version/{version_id}", headers=_modrinth_headers()
+        )
+        files = version_payload.get("files") or []
+        primary = next(
+            (f for f in files if isinstance(f, dict) and f.get("primary")),
+            files[0] if files and isinstance(files[0], dict) else None,
+        )
+        if not isinstance(primary, dict):
+            raise ValueError("Keine Datei fuer diese Version gefunden.")
+        url = str(primary.get("url") or "")
+        sha1 = str((primary.get("hashes") or {}).get("sha1") or "")
+        version_label = str(
+            version_payload.get("version_number")
+            or version_payload.get("name")
+            or version_id
+        )
+        try:
+            proj = _request_json(
+                f"{MODRINTH_BASE}/project/{project_id}", headers=_modrinth_headers()
+            )
+            name = str(proj.get("title") or project_id)
+        except Exception:
+            pass
+    elif provider == "curseforge":
+        file_payload = _request_json(
+            f"{CURSEFORGE_BASE}/v1/mods/{int(project_id)}/files/{int(version_id)}",
+            headers=_curseforge_headers(),
+        )
+        data = file_payload.get("data") or {}
+        url = str(data.get("downloadUrl") or "")
+        if not url:
+            up = _request_json(
+                f"{CURSEFORGE_BASE}/v1/mods/{int(project_id)}/files/{int(version_id)}/download-url",
+                headers=_curseforge_headers(),
+            )
+            up_data = up.get("data")
+            url = up_data if isinstance(up_data, str) else str((up_data or {}).get("url") or "")
+        for entry_hash in (data.get("hashes") or []):
+            if isinstance(entry_hash, dict) and int(entry_hash.get("algo") or 0) == 1:
+                sha1 = str(entry_hash.get("value") or "")
+        version_label = str(data.get("displayName") or data.get("fileName") or version_id)
+        try:
+            mod = _request_json(
+                f"{CURSEFORGE_BASE}/v1/mods/{int(project_id)}", headers=_curseforge_headers()
+            )
+            name = str((mod.get("data") or {}).get("name") or project_id)
+        except Exception:
+            pass
+    else:
+        raise ValueError(
+            "Resource Packs werden nur ueber Modrinth/CurseForge unterstuetzt."
+        )
+
+    if not url:
+        raise ValueError("Download-URL fuer das Resource Pack nicht verfuegbar.")
+    if not sha1:
+        headers = _curseforge_headers() if provider == "curseforge" else _modrinth_headers()
+        sha1 = _download_sha1(url, headers=headers)
+
+    return apply_server_resource_pack(
+        db,
+        server,
+        url=url,
+        sha1=sha1,
+        provider=provider,
+        project_id=str(project_id),
+        version_id=str(version_id),
+        name=name,
+        version_label=version_label,
+        user_id=user_id,
+        require=require,
+    )
+
+
+def public_resource_pack_url(file_name: str) -> str | None:
+    """Oeffentliche URL fuer ein selbst-gehostetes Resource Pack (oder None)."""
+    base = (get_settings().public_base_url or "").strip().rstrip("/")
+    if not base:
+        return None
+    return f"{base}/resourcepacks/{file_name}"
+
+
+def apply_server_resource_pack(
+    db: Session,
+    server: Server,
+    *,
+    url: str,
+    sha1: str,
+    provider: str,
+    project_id: str,
+    version_id: str,
+    name: str,
+    version_label: str,
+    user_id: int | None,
+    require: bool = False,
+) -> InstalledContent:
+    """server.properties setzen (resource-pack + sha1) und Eintrag fuehren.
+
+    Es gibt genau einen aktiven Server-Resource-Pack.
+    """
+    from app.services import server_service
+
+    for key, value in (
+        ("resource-pack", url),
+        ("resource-pack-sha1", sha1),
+        ("require-resource-pack", "true" if require else "false"),
+    ):
+        server_service._upsert_server_property(server, key, value)
+
+    db.execute(
+        delete(InstalledContent).where(
+            InstalledContent.server_id == server.id,
+            InstalledContent.content_type == "resourcepack",
+        )
+    )
+    entry = InstalledContent(
+        server_id=server.id,
+        provider_name=provider,
+        content_type="resourcepack",
+        external_project_id=str(project_id),
+        external_version_id=str(version_id),
+        name=name or "Resource Pack",
+        version_label=version_label,
+        file_name="",
+        installed_by_user_id=user_id,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    audit_service.log_action(
+        db,
+        action="content.set_resource_pack",
+        user_id=user_id,
+        server_id=server.id,
+        details=f"provider={provider} project={project_id} version={version_id}",
+    )
+    return entry
+
+
 def delete_installed_content(db: Session, server: Server, content: InstalledContent, user_id: int | None) -> None:
-    _delete_content_file(server, content.content_type, content.file_name)
+    if (content.content_type or "").strip().lower() == "resourcepack":
+        # Resource Pack: server.properties leeren statt Datei loeschen.
+        from app.services import server_service
+
+        for key in ("resource-pack", "resource-pack-sha1"):
+            server_service._upsert_server_property(server, key, "")
+        server_service._upsert_server_property(server, "require-resource-pack", "false")
+    else:
+        _delete_content_file(server, content.content_type, content.file_name)
 
     db.execute(delete(InstalledContent).where(InstalledContent.id == content.id))
     db.commit()

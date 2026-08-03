@@ -449,6 +449,25 @@ async def install_content(request: Request, server_id: int, db: Session = Depend
     if not project_id or not version_id:
         raise HTTPException(status_code=400, detail="project_id und version_id erforderlich")
 
+    if content_type == "resourcepack":
+        # Resource/Texture Packs werden ueber server.properties gesetzt.
+        try:
+            entry = content_service.set_server_resource_pack(
+                db, server, provider, project_id, version_id, current_user.id
+            )
+        except ValueError as exc:
+            db.rollback()
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
+        return JSONResponse(
+            {
+                "id": entry.id,
+                "name": entry.name,
+                "version_label": entry.version_label,
+                "file_name": entry.file_name,
+                "auto_installed": [],
+            }
+        )
+
     auto_installed: list[InstalledContent] = []
     if provider == "modrinth":
         try:
@@ -536,6 +555,12 @@ async def update_all_content(
         str((payload or {}).get("release_channel") or "release").strip().lower()
         or "release"
     )
+    requested_type = str((payload or {}).get("content_type") or "").strip().lower()
+    # Resource Packs (server.properties) werden nicht per Bulk aktualisiert.
+    if requested_type in {"mod", "plugin", "datapack"}:
+        content_types = {requested_type}
+    else:
+        content_types = {"mod", "plugin"}
 
     try:
         notes, warnings = content_service.bulk_update_installed_content(
@@ -543,7 +568,7 @@ async def update_all_content(
             server,
             current_user.id,
             release_channel=release_channel,
-            content_types={"mod", "plugin"},
+            content_types=content_types,
         )
     except Exception as exc:
         db.rollback()
@@ -551,6 +576,83 @@ async def update_all_content(
 
     return JSONResponse(
         {"updated": len(notes), "notes": notes, "warnings": warnings}
+    )
+
+
+@router.get(
+    "/api/servers/{server_id}/vanillatweaks/categories",
+    response_class=JSONResponse,
+)
+def vanillatweaks_categories(
+    request: Request,
+    server_id: int,
+    type: str = "datapacks",
+    db: Session = Depends(get_db),
+):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    server = _ensure_server_access(db, current_user, server_id)
+
+    from app.services import vanillatweaks_service as vt
+
+    version = vt.map_vt_version(server.mc_version)
+    try:
+        categories = vt.list_categories(type, version)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except Exception as exc:
+        return JSONResponse(
+            status_code=502,
+            content={"detail": f"Vanilla Tweaks nicht erreichbar: {exc}"},
+        )
+    return JSONResponse({"version": version, "categories": categories})
+
+
+@router.post(
+    "/api/servers/{server_id}/vanillatweaks/install",
+    response_class=JSONResponse,
+)
+async def vanillatweaks_install(
+    request: Request, server_id: int, db: Session = Depends(get_db)
+):
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    server = _ensure_server_access(db, current_user, server_id)
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    pack_type = str((payload or {}).get("type") or "datapacks").strip().lower()
+    selection = (payload or {}).get("packs") or {}
+    if not isinstance(selection, dict) or not selection:
+        raise HTTPException(status_code=400, detail="Keine Packs ausgewaehlt")
+
+    from app.services import vanillatweaks_service as vt
+
+    try:
+        if pack_type == "resourcepacks":
+            entry = vt.install_resourcepack(db, server, selection, current_user.id)
+            return JSONResponse(
+                {"installed": 1, "notes": [entry.name], "warnings": []}
+            )
+        notes, warnings = vt.install_datapacks(
+            db, server, pack_type, selection, current_user.id
+        )
+    except ValueError as exc:
+        db.rollback()
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except Exception as exc:
+        db.rollback()
+        return JSONResponse(
+            status_code=502, content={"detail": f"Vanilla Tweaks Fehler: {exc}"}
+        )
+    return JSONResponse(
+        {"installed": len(notes), "notes": notes, "warnings": warnings}
     )
 
 

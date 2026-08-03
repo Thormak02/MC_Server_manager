@@ -244,7 +244,7 @@ Plugins funktionieren nicht ganz, nochmal schauen, was genau
 ~~schedule Kalender funktioniert nicht, nochmal prüfen, was genau nicht geht~~
 
 
-
+Spielerkopf als icon bei namen in onlineliste, op, white und bannliste usw. anzeigen
 
 
 ~~Neustart geht nicht~~
@@ -256,6 +256,8 @@ Thormak2002 UUID: 69f230e1-af2c-4d0e-9885-93d66595a855 immer standardmäßig als
 
 
  ~~Sleep-Verzögerung (Sek.) nicht nur in sek, sondern zb. auch minuten, stunden, tage auswählbar~~
+
+manueller sleep button innerhalb des dashboards neben start, stopp und neustart, sowie in der detail ansicht
 
 KI Ideen:
 

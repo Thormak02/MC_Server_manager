@@ -74,6 +74,16 @@ def create_app() -> FastAPI:
     static_dir = Path(__file__).resolve().parent / "web" / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+    # Oeffentlich (ohne Login) ausgelieferte, selbst-gehostete Resource Packs.
+    # Clients laden hierueber den ueber server.properties gesetzten Pack.
+    resourcepacks_dir = settings.data_dir / "resourcepacks"
+    resourcepacks_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/resourcepacks",
+        StaticFiles(directory=str(resourcepacks_dir)),
+        name="resourcepacks",
+    )
+
     app.include_router(page_router)
     app.include_router(auth_router)
     app.include_router(backups_router)

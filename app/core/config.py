@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     provisioning_offline_mode: bool = False
     default_server_root: str | None = None
     default_backup_root: str | None = None
+    # Oeffentliche Basis-URL des Managers, unter der Clients selbst-gehostete
+    # Resource Packs herunterladen (z.B. http://thormakmc.ddns.net:8000).
+    # Bei Domain-Wechsel nur hier anpassen.
+    public_base_url: str | None = None
     # Bereich, aus dem freie Server-Ports automatisch vergeben werden, wenn bei
     # der Erstellung kein Port angegeben wird. Standard: Minecraft-Konvention
     # (25565+), fern von ueblichen Diensten und dem Manager-Port.

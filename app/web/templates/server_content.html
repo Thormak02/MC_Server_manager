@@ -4,6 +4,13 @@
 
 {% include "server_nav.html" %}
 
+<div class="content-type-tabs" id="content-type-tabs">
+    <button type="button" class="content-type-tab" data-type="mod">Mods</button>
+    <button type="button" class="content-type-tab" data-type="plugin">Plugins</button>
+    <button type="button" class="content-type-tab" data-type="datapack">Datapacks</button>
+    <button type="button" class="content-type-tab" data-type="resourcepack">Texturepacks</button>
+</div>
+
 <section class="card">
     <h2>Suche & Installation</h2>
     {% if current_user.role == "super_admin" %}
@@ -29,13 +36,12 @@
                     <option value="bukkit">Bukkit (Spiget)</option>
                 </select>
             </div>
-            <div>
-                <label for="content_type">Typ</label>
-                <select id="content_type">
-                    <option value="mod" {% if default_content_type == "mod" %}selected{% endif %}>Mod</option>
-                    <option value="plugin" {% if default_content_type == "plugin" %}selected{% endif %}>Plugin</option>
-                </select>
-            </div>
+            <select id="content_type" hidden>
+                <option value="mod" {% if default_content_type == "mod" %}selected{% endif %}>Mod</option>
+                <option value="plugin" {% if default_content_type == "plugin" %}selected{% endif %}>Plugin</option>
+                <option value="datapack">Datapack</option>
+                <option value="resourcepack">Texturepack</option>
+            </select>
             <div>
                 <label for="sort_by">Sortierung</label>
                 <select id="sort_by">
@@ -81,6 +87,23 @@
     {% endif %}
 </section>
 
+{% if can_manage %}
+<section class="card" id="vanillatweaks-panel" hidden>
+    <h2>Vanilla Tweaks</h2>
+    <p class="muted">Kategorien auswaehlen und generieren &ndash; landet als Datapack im Welt-Ordner (aktiv nach <code>/reload</code> bzw. Neustart).</p>
+    <div class="inline-form">
+        <select id="vt-type">
+            <option value="datapacks">Datapacks</option>
+            <option value="craftingtweaks">Crafting Tweaks</option>
+        </select>
+        <button type="button" id="vt-load" class="ghost">Kategorien laden</button>
+        <button type="button" id="vt-install">Auswahl generieren &amp; installieren</button>
+        <span id="vt-status" class="muted"></span>
+    </div>
+    <div id="vt-categories" class="vt-categories"></div>
+</section>
+{% endif %}
+
 <section class="card">
     <div class="calendar-header">
         <h2>Installierte Inhalte</h2>
@@ -115,7 +138,16 @@
                     data-version-id="{{ item.external_version_id }}"
                     data-content-type="{{ item.content_type }}"
                 >
-                    <td>{{ item.name }}</td>
+                    <td>
+                        <div class="installed-name">
+                            {% if item.icon_url %}
+                            <img class="content-icon" src="{{ item.icon_url }}" alt="" loading="lazy">
+                            {% else %}
+                            <span class="content-icon content-icon-placeholder">{{ (item.name or "?")[:1] }}</span>
+                            {% endif %}
+                            <span>{{ item.name }}</span>
+                        </div>
+                    </td>
                     <td>
                         {% if can_manage %}
                         <div class="stack">
@@ -141,11 +173,12 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="6">Keine Inhalte installiert.</td></tr>
+                <tr class="installed-empty-all"><td colspan="6">Keine Inhalte installiert.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    <p id="installed-empty-hint" class="muted" hidden>Keine Inhalte dieses Typs installiert.</p>
 </section>
 
 <script>
@@ -159,6 +192,7 @@
     const lockedLoader = (defaults.loader || "").trim();
     const providerSelect = document.getElementById("provider");
     const contentTypeSelect = document.getElementById("content_type");
+    let activeContentType = contentTypeSelect ? contentTypeSelect.value : "mod";
     const queryInput = document.getElementById("query");
     const sortBySelect = document.getElementById("sort_by");
     const releaseChannelSelect = document.getElementById("release_channel");
@@ -637,7 +671,9 @@
             server_id: String(serverId),
             query: params.query,
             mc_version: params.mcVersions.join(","),
-            loader: params.loaders.join(","),
+            loader: (params.contentType === "datapack" || params.contentType === "resourcepack")
+                ? ""
+                : params.loaders.join(","),
             content_type: params.contentType,
             release_channel: params.releaseChannel,
             sort_by: params.sortBy,
@@ -741,11 +777,13 @@
         const loader = searchParams.loaders.join(",");
         const contentType = contentTypeSelect ? contentTypeSelect.value : "mod";
         const releaseChannel = releaseChannelSelect ? releaseChannelSelect.value : "all";
+        const effectiveLoader =
+            contentType === "datapack" || contentType === "resourcepack" ? "" : loader;
         const base = {
             project_id: projectId,
             server_id: String(serverId),
             mc_version: mcVersion,
-            loader,
+            loader: effectiveLoader,
             release_channel: releaseChannel,
         };
         if (provider === "modrinth") {
@@ -859,7 +897,8 @@
             const payload = await fetchJson(`/api/servers/${serverId}/content`);
             const items = Array.isArray(payload.items) ? payload.items : [];
             if (!items.length) {
-                installedBody.innerHTML = "<tr><td colspan=\"6\">Keine Inhalte installiert.</td></tr>";
+                installedBody.innerHTML = "<tr class=\"installed-empty-all\"><td colspan=\"6\">Keine Inhalte installiert.</td></tr>";
+                filterInstalledRows(activeContentType);
                 return;
             }
             const canManage = {{ "true" if can_manage else "false" }};
@@ -867,7 +906,14 @@
                 .map((item) => {
                     return `
 <tr data-content-id="${item.id}" data-provider="${escapeHtml(item.provider_name || "")}" data-project-id="${escapeHtml(item.external_project_id || "")}" data-version-id="${escapeHtml(item.external_version_id || "")}" data-content-type="${escapeHtml(item.content_type || "mod")}">
-    <td>${escapeHtml(item.name || "-")}</td>
+    <td>
+        <div class="installed-name">
+            ${item.icon_url
+                ? `<img class="content-icon" src="${escapeHtml(item.icon_url)}" alt="" loading="lazy">`
+                : `<span class="content-icon content-icon-placeholder">${escapeHtml((item.name || "?").slice(0, 1))}</span>`}
+            <span>${escapeHtml(item.name || "-")}</span>
+        </div>
+    </td>
     <td>${canManage ? buildInstalledVersionCell(item) : escapeHtml(item.version_label || "-")}</td>
     <td>${escapeHtml(item.provider_name || "-")}</td>
     <td>${escapeHtml(item.file_name || "-")}</td>
@@ -877,6 +923,7 @@
                 })
                 .join("");
             await initializeInstalledVersionSelectors();
+            filterInstalledRows(activeContentType);
         } catch (_) {
             // keep existing table if reload fails
         }
@@ -1057,7 +1104,10 @@
             const response = await fetch(`/api/servers/${serverId}/content/update-all`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ release_channel: releaseChannel }),
+                body: JSON.stringify({
+                    release_channel: releaseChannel,
+                    content_type: activeContentType,
+                }),
             });
             const payload = await response.json().catch(() => ({}));
             if (!response.ok) {
@@ -1174,6 +1224,181 @@
         });
     }
 
+    const contentTabs = document.getElementById("content-type-tabs");
+    const emptyHint = document.getElementById("installed-empty-hint");
+    const loaderFilterEl = document.getElementById("loader-filter");
+    const loaderFilterBlock = loaderFilterEl ? loaderFilterEl.closest("div") : null;
+
+    function filterInstalledRows(type) {
+        if (!installedBody) return;
+        let visible = 0;
+        installedBody.querySelectorAll("tr[data-content-type]").forEach(function (row) {
+            const match = (row.dataset.contentType || "mod") === type;
+            row.style.display = match ? "" : "none";
+            if (match) visible += 1;
+        });
+        const emptyAll = installedBody.querySelector(".installed-empty-all");
+        if (emptyAll) emptyAll.style.display = "none";
+        if (emptyHint) emptyHint.hidden = visible !== 0;
+    }
+
+    function updateActiveTab(type) {
+        if (!contentTabs) return;
+        contentTabs.querySelectorAll(".content-type-tab").forEach(function (btn) {
+            btn.classList.toggle("active", btn.dataset.type === type);
+        });
+    }
+
+    function applyTypeVisibility(type) {
+        // Loader-Filter ist nur fuer Mods/Plugins sinnvoll.
+        if (loaderFilterBlock) {
+            loaderFilterBlock.style.display =
+                type === "datapack" || type === "resourcepack" ? "none" : "";
+        }
+        // Bulk-Update passt nicht fuer Resource Packs (server.properties).
+        const updateAllBtn = document.getElementById("update-all-btn");
+        if (updateAllBtn) {
+            updateAllBtn.style.display = type === "resourcepack" ? "none" : "";
+        }
+        // Vanilla-Tweaks-Panel auf Datapacks- und Texturepacks-Tab.
+        const vtPanel = document.getElementById("vanillatweaks-panel");
+        if (vtPanel) {
+            const show = type === "datapack" || type === "resourcepack";
+            vtPanel.hidden = !show;
+            if (show) {
+                vtConfigureForTab(type);
+            }
+        }
+    }
+
+    async function setActiveContentType(type) {
+        activeContentType = type;
+        if (contentTypeSelect) contentTypeSelect.value = type;
+        updateActiveTab(type);
+        applyTypeVisibility(type);
+        filterInstalledRows(type);
+        await loadFilterOptions();
+        search(true);
+    }
+
+    // --- Vanilla Tweaks ---
+    const vtType = document.getElementById("vt-type");
+    const vtStatus = document.getElementById("vt-status");
+    const vtCategoriesEl = document.getElementById("vt-categories");
+    const vtLoadBtn = document.getElementById("vt-load");
+    const vtInstallBtn = document.getElementById("vt-install");
+    const vtPanelEl = document.getElementById("vanillatweaks-panel");
+
+    function vtConfigureForTab(type) {
+        if (!vtType) return;
+        const options =
+            type === "resourcepack"
+                ? [["resourcepacks", "Resource Packs"]]
+                : [["datapacks", "Datapacks"], ["craftingtweaks", "Crafting Tweaks"]];
+        vtType.innerHTML = options
+            .map(function (o) {
+                return `<option value="${o[0]}">${o[1]}</option>`;
+            })
+            .join("");
+        if (vtPanelEl) vtPanelEl.dataset.loaded = "";
+        vtLoadCategories();
+    }
+
+    async function vtLoadCategories() {
+        if (!vtCategoriesEl || !vtType) return;
+        vtCategoriesEl.innerHTML = "<p class=\"muted\">Lade Kategorien ...</p>";
+        try {
+            const data = await fetchJson(
+                `/api/servers/${serverId}/vanillatweaks/categories?type=${encodeURIComponent(vtType.value)}`
+            );
+            const categories = Array.isArray(data.categories) ? data.categories : [];
+            if (!categories.length) {
+                vtCategoriesEl.innerHTML = `<p class="muted">Keine Kategorien fuer Version ${escapeHtml(String(data.version || "?"))}.</p>`;
+                return;
+            }
+            vtCategoriesEl.innerHTML = categories
+                .map((cat) => {
+                    const catName = String(cat.category || "");
+                    const packs = Array.isArray(cat.packs) ? cat.packs : [];
+                    const items = packs
+                        .map((p) => {
+                            const name = escapeHtml(String(p.name || ""));
+                            const display = escapeHtml(String(p.display || p.name || ""));
+                            const desc = escapeHtml(String(p.description || ""));
+                            return `<label class="vt-pack" title="${desc}"><input type="checkbox" data-category="${escapeHtml(catName)}" data-name="${name}"> ${display}</label>`;
+                        })
+                        .join("");
+                    return `<div class="vt-category"><h3>${escapeHtml(catName)}</h3><div class="vt-pack-list">${items}</div></div>`;
+                })
+                .join("");
+            if (vtPanelEl) vtPanelEl.dataset.loaded = "1";
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : "Laden fehlgeschlagen";
+            vtCategoriesEl.innerHTML = `<p class="muted">Fehler: ${escapeHtml(msg)}</p>`;
+        }
+    }
+
+    function vtCollectSelection() {
+        const selection = {};
+        if (!vtCategoriesEl) return selection;
+        vtCategoriesEl.querySelectorAll("input[type=checkbox]:checked").forEach(function (cb) {
+            const cat = cb.dataset.category;
+            const name = cb.dataset.name;
+            if (!cat || !name) return;
+            (selection[cat] = selection[cat] || []).push(name);
+        });
+        return selection;
+    }
+
+    async function vtInstall() {
+        const selection = vtCollectSelection();
+        if (!Object.keys(selection).length) {
+            if (vtStatus) vtStatus.textContent = "Nichts ausgewaehlt.";
+            return;
+        }
+        if (vtStatus) vtStatus.textContent = "Generiere & installiere ...";
+        if (vtInstallBtn) vtInstallBtn.disabled = true;
+        try {
+            const response = await fetch(`/api/servers/${serverId}/vanillatweaks/install`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    type: vtType ? vtType.value : "datapacks",
+                    packs: selection,
+                }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error((payload && payload.detail) || "Fehlgeschlagen.");
+            if (vtStatus) {
+                vtStatus.textContent =
+                    vtType && vtType.value === "resourcepacks"
+                        ? "Resource Pack gesetzt (server.properties). Neustart empfohlen."
+                        : `${payload.installed || 0} Datapack(s) installiert – /reload bzw. Neustart noetig.`;
+            }
+            await refreshInstalled();
+        } catch (err) {
+            if (vtStatus) vtStatus.textContent = err instanceof Error ? err.message : "Fehlgeschlagen.";
+        } finally {
+            if (vtInstallBtn) vtInstallBtn.disabled = false;
+        }
+    }
+
+    if (vtLoadBtn) vtLoadBtn.addEventListener("click", vtLoadCategories);
+    if (vtInstallBtn) vtInstallBtn.addEventListener("click", vtInstall);
+    if (vtType) vtType.addEventListener("change", vtLoadCategories);
+
+    if (contentTabs) {
+        contentTabs.addEventListener("click", function (event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            const btn = target.closest(".content-type-tab");
+            if (!btn || !btn.dataset.type) return;
+            setActiveContentType(btn.dataset.type);
+        });
+    }
+
+    updateActiveTab(activeContentType);
+    applyTypeVisibility(activeContentType);
     loadFilterOptions().then(function () {
         search(true);
     });
