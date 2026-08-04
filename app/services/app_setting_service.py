@@ -9,6 +9,7 @@ from app.models.app_setting import AppSetting
 
 SERVER_STORAGE_ROOT_KEY = "server_storage_root"
 BACKUP_STORAGE_ROOT_KEY = "backup_storage_root"
+PUBLIC_BASE_URL_KEY = "public_base_url"
 
 
 def _normalize_path(raw_value: str) -> Path:
@@ -210,3 +211,69 @@ def clear_backup_storage_override(db: Session) -> Path:
         key=BACKUP_STORAGE_ROOT_KEY,
         resolver=get_backup_storage_root,
     )
+
+
+# --- Oeffentliche Basis-URL / Zieldomain (fuer Resource-Pack-Hosting etc.) ---
+
+
+def _normalize_public_base_url(raw_value: str) -> str:
+    """Trimmen, abschliessende Slashes entfernen, Schema pruefen."""
+    value = (raw_value or "").strip().rstrip("/")
+    if not value:
+        return ""
+    lowered = value.lower()
+    if not (lowered.startswith("http://") or lowered.startswith("https://")):
+        raise ValueError("Die URL muss mit http:// oder https:// beginnen.")
+    return value
+
+
+def get_public_base_url(db: Session) -> str:
+    """UI-Override > ENV (MCSM_PUBLIC_BASE_URL) > leer."""
+    row = _get_setting_row(db, PUBLIC_BASE_URL_KEY)
+    if row and row.value.strip():
+        return row.value.strip().rstrip("/")
+    env_raw = (get_settings().public_base_url or "").strip()
+    return env_raw.rstrip("/")
+
+
+def get_public_base_url_source(db: Session) -> str:
+    row = _get_setting_row(db, PUBLIC_BASE_URL_KEY)
+    if row and row.value.strip():
+        return "ui"
+    if (get_settings().public_base_url or "").strip():
+        return "env"
+    return "default"
+
+
+def set_public_base_url(db: Session, url_value: str) -> str:
+    normalized = _normalize_public_base_url(url_value)
+    if not normalized:
+        raise ValueError("Bitte eine gueltige URL angeben oder Zuruecksetzen nutzen.")
+    row = _get_setting_row(db, PUBLIC_BASE_URL_KEY)
+    if row is None:
+        row = AppSetting(key=PUBLIC_BASE_URL_KEY, value=normalized)
+    else:
+        row.value = normalized
+    db.add(row)
+    db.commit()
+    return normalized
+
+
+def clear_public_base_url_override(db: Session) -> str:
+    row = _get_setting_row(db, PUBLIC_BASE_URL_KEY)
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return get_public_base_url(db)
+
+
+def get_public_base_url_runtime() -> str:
+    """Laufzeit-Getter mit eigener Session (fuer Services ohne Request-Session).
+
+    SessionLocal wird bewusst erst zur Laufzeit importiert, damit nach einem
+    Reload von ``app.db.session`` (z.B. in Tests) die frische Factory genutzt wird.
+    """
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_public_base_url(db)

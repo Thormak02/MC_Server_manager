@@ -259,6 +259,9 @@ Thormak2002 UUID: 69f230e1-af2c-4d0e-9885-93d66595a855 immer standardmäßig als
 
 manueller sleep button innerhalb des dashboards neben start, stopp und neustart, sowie in der detail ansicht
 
+
+bei manuellem backup: fortschrittsbalken, statt langes laden des tabs
+
 KI Ideen:
 
 Monitoring & Alarme

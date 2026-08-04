@@ -11,12 +11,16 @@ from app.services import audit_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.app_setting_service import (
     clear_backup_storage_override,
+    clear_public_base_url_override,
     clear_server_storage_override,
     get_backup_storage_root,
     get_backup_storage_source,
+    get_public_base_url,
+    get_public_base_url_source,
     get_server_storage_root,
     get_server_storage_source,
     set_backup_storage_root,
+    set_public_base_url,
     set_server_storage_root,
 )
 from app.services.java_profile_service import (
@@ -76,6 +80,8 @@ def settings_page(
     server_storage_source = get_server_storage_source(db)
     backup_storage_root = str(get_backup_storage_root(db))
     backup_storage_source = get_backup_storage_source(db)
+    public_base_url = get_public_base_url(db)
+    public_base_url_source = get_public_base_url_source(db)
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
     return templates.TemplateResponse(
@@ -90,6 +96,8 @@ def settings_page(
             server_storage_source=server_storage_source,
             backup_storage_root=backup_storage_root,
             backup_storage_source=backup_storage_source,
+            public_base_url=public_base_url,
+            public_base_url_source=public_base_url_source,
             platform_settings=platform_settings,
             manager_update_status=manager_update_status,
         ),
@@ -185,6 +193,49 @@ def update_backup_storage_action(
         details=f"path={new_path}",
     )
     push_flash(request, f"Backup-Pfad gespeichert: {new_path}", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/public-url")
+def update_public_url_action(
+    request: Request,
+    public_base_url: Annotated[str | None, Form()] = None,
+    reset_to_default: Annotated[bool, Form()] = False,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        if reset_to_default:
+            new_url = clear_public_base_url_override(db)
+            source = get_public_base_url_source(db)
+            push_flash(
+                request,
+                f"Oeffentliche URL zurueckgesetzt: {new_url or '(leer)'} (Quelle: {source})",
+                "success",
+            )
+            audit_service.log_action(
+                db,
+                action="settings.public_url_reset",
+                user_id=current_user.id,
+                details=f"url={new_url}",
+            )
+            return RedirectResponse(url="/settings", status_code=303)
+
+        new_url = set_public_base_url(db, public_base_url or "")
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    audit_service.log_action(
+        db,
+        action="settings.public_url_update",
+        user_id=current_user.id,
+        details=f"url={new_url}",
+    )
+    push_flash(request, f"Oeffentliche URL gespeichert: {new_url}", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
 

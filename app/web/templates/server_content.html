@@ -90,7 +90,7 @@
 {% if can_manage %}
 <section class="card" id="vanillatweaks-panel" hidden>
     <h2>Vanilla Tweaks</h2>
-    <p class="muted">Kategorien auswaehlen und generieren &ndash; landet als Datapack im Welt-Ordner (aktiv nach <code>/reload</code> bzw. Neustart).</p>
+    <p class="muted" id="vt-intro">Kategorien auswaehlen und generieren &ndash; landet als Datapack im Welt-Ordner (aktiv nach <code>/reload</code> bzw. Neustart).</p>
     <div class="inline-form">
         <select id="vt-type">
             <option value="datapacks">Datapacks</option>
@@ -100,6 +100,7 @@
         <button type="button" id="vt-install">Auswahl generieren &amp; installieren</button>
         <span id="vt-status" class="muted"></span>
     </div>
+    <p id="vt-conflicts" class="vt-conflicts" hidden></p>
     <div id="vt-categories" class="vt-categories"></div>
 </section>
 {% endif %}
@@ -787,7 +788,10 @@
             release_channel: releaseChannel,
         };
         if (provider === "modrinth") {
-            return "/api/content/modrinth/versions?" + new URLSearchParams(base).toString();
+            return (
+                "/api/content/modrinth/versions?" +
+                new URLSearchParams({ ...base, content_type: contentType }).toString()
+            );
         }
         const endpoint = provider === "bukkit" ? "bukkit" : "curseforge";
         return (
@@ -950,7 +954,8 @@
                     project_id: projectId,
                     server_id: String(serverId),
                     mc_version: mcVersion,
-                    loader,
+                    loader: (contentType === "datapack" || contentType === "resourcepack") ? "" : loader,
+                    content_type: contentType,
                     release_channel: releaseChannel,
                 }).toString();
         } else if (provider === "bukkit") {
@@ -1288,6 +1293,17 @@
     const vtLoadBtn = document.getElementById("vt-load");
     const vtInstallBtn = document.getElementById("vt-install");
     const vtPanelEl = document.getElementById("vanillatweaks-panel");
+    const vtConflictsEl = document.getElementById("vt-conflicts");
+    let vtVersion = "";
+    let vtPackMeta = {};
+
+    function vtPreviewUrl(name, previewExtension) {
+        if (!vtVersion || !previewExtension) return "";
+        return (
+            "https://vanillatweaks.net/assets/resources/previews/resourcepacks/" +
+            `${encodeURIComponent(vtVersion)}/${encodeURIComponent(String(name))}.${encodeURIComponent(String(previewExtension))}`
+        );
+    }
 
     function vtConfigureForTab(type) {
         if (!vtType) return;
@@ -1300,6 +1316,13 @@
                 return `<option value="${o[0]}">${o[1]}</option>`;
             })
             .join("");
+        const vtIntro = document.getElementById("vt-intro");
+        if (vtIntro) {
+            vtIntro.innerHTML =
+                type === "resourcepack"
+                    ? "Auswaehlen und generieren &ndash; wird vom Manager gehostet und als Server-Resource-Pack (server.properties) gesetzt. Benoetigt eine gesetzte oeffentliche URL (Einstellungen)."
+                    : "Kategorien auswaehlen und generieren &ndash; landet als Datapack im Welt-Ordner (aktiv nach <code>/reload</code> bzw. Neustart).";
+        }
         if (vtPanelEl) vtPanelEl.dataset.loaded = "";
         vtLoadCategories();
     }
@@ -1307,31 +1330,66 @@
     async function vtLoadCategories() {
         if (!vtCategoriesEl || !vtType) return;
         vtCategoriesEl.innerHTML = "<p class=\"muted\">Lade Kategorien ...</p>";
+        vtPackMeta = {};
+        if (vtConflictsEl) {
+            vtConflictsEl.hidden = true;
+            vtConflictsEl.textContent = "";
+        }
+        // Konflikt-Sperre zuruecksetzen (falls vorheriger Zustand gesperrt hatte).
+        if (vtInstallBtn) vtInstallBtn.disabled = false;
         try {
             const data = await fetchJson(
                 `/api/servers/${serverId}/vanillatweaks/categories?type=${encodeURIComponent(vtType.value)}`
             );
+            vtVersion = String(data.version || "");
             const categories = Array.isArray(data.categories) ? data.categories : [];
+            const isResourcePack = vtType.value === "resourcepacks";
             if (!categories.length) {
-                vtCategoriesEl.innerHTML = `<p class="muted">Keine Kategorien fuer Version ${escapeHtml(String(data.version || "?"))}.</p>`;
+                vtCategoriesEl.innerHTML = `<p class="muted">Keine Kategorien fuer Version ${escapeHtml(vtVersion || "?")}.</p>`;
                 return;
             }
+            // Metadaten (Anzeigename + Inkompatibilitaeten) global sammeln.
+            categories.forEach((cat) => {
+                (Array.isArray(cat.packs) ? cat.packs : []).forEach((p) => {
+                    const name = String(p.name || "");
+                    if (!name) return;
+                    vtPackMeta[name] = {
+                        display: String(p.display || p.name || ""),
+                        incompatible: Array.isArray(p.incompatible) ? p.incompatible.map(String) : [],
+                    };
+                });
+            });
             vtCategoriesEl.innerHTML = categories
                 .map((cat) => {
                     const catName = String(cat.category || "");
                     const packs = Array.isArray(cat.packs) ? cat.packs : [];
                     const items = packs
                         .map((p) => {
-                            const name = escapeHtml(String(p.name || ""));
+                            const name = String(p.name || "");
                             const display = escapeHtml(String(p.display || p.name || ""));
                             const desc = escapeHtml(String(p.description || ""));
-                            return `<label class="vt-pack" title="${desc}"><input type="checkbox" data-category="${escapeHtml(catName)}" data-name="${name}"> ${display}</label>`;
+                            const video = String(p.video || "");
+                            const preview = isResourcePack ? vtPreviewUrl(name, p.previewExtension) : "";
+                            const thumb = preview
+                                ? `<a href="${escapeHtml(preview)}" target="_blank" rel="noopener noreferrer" class="vt-pack-thumb"><img src="${escapeHtml(preview)}" alt="" loading="lazy"></a>`
+                                : "";
+                            const videoLink = video
+                                ? `<a href="${escapeHtml(video)}" target="_blank" rel="noopener noreferrer" class="vt-pack-video">&#9654; Video / Details</a>`
+                                : "";
+                            return `
+<div class="vt-pack-card" data-name="${escapeHtml(name)}" title="${desc}">
+    ${thumb}
+    <label class="vt-pack"><input type="checkbox" data-category="${escapeHtml(catName)}" data-name="${escapeHtml(name)}"> <span class="vt-pack-title">${display}</span></label>
+    ${desc ? `<span class="vt-pack-desc muted">${desc}</span>` : ""}
+    ${videoLink}
+</div>`;
                         })
                         .join("");
                     return `<div class="vt-category"><h3>${escapeHtml(catName)}</h3><div class="vt-pack-list">${items}</div></div>`;
                 })
                 .join("");
             if (vtPanelEl) vtPanelEl.dataset.loaded = "1";
+            vtValidateSelection();
         } catch (err) {
             const msg = err instanceof Error ? err.message : "Laden fehlgeschlagen";
             vtCategoriesEl.innerHTML = `<p class="muted">Fehler: ${escapeHtml(msg)}</p>`;
@@ -1350,10 +1408,66 @@
         return selection;
     }
 
+    function vtCheckedNames() {
+        const names = [];
+        if (!vtCategoriesEl) return names;
+        vtCategoriesEl.querySelectorAll("input[type=checkbox]:checked").forEach(function (cb) {
+            if (cb.dataset.name) names.push(cb.dataset.name);
+        });
+        return names;
+    }
+
+    // Prueft die aktuelle Auswahl auf inkompatible Pack-Kombinationen.
+    // Markiert Konflikte, zeigt einen Hinweis und sperrt den Install-Button.
+    function vtValidateSelection() {
+        const checked = vtCheckedNames();
+        const checkedSet = new Set(checked);
+        const conflictNames = new Set();
+        const pairs = [];
+        const seenPair = new Set();
+        checked.forEach((name) => {
+            const meta = vtPackMeta[name];
+            if (!meta) return;
+            meta.incompatible.forEach((other) => {
+                if (!checkedSet.has(other)) return;
+                const key = [name, other].sort().join("||");
+                if (seenPair.has(key)) return;
+                seenPair.add(key);
+                conflictNames.add(name);
+                conflictNames.add(other);
+                pairs.push([name, other]);
+            });
+        });
+        if (vtCategoriesEl) {
+            vtCategoriesEl.querySelectorAll(".vt-pack-card").forEach(function (card) {
+                card.classList.toggle("vt-conflict", conflictNames.has(card.dataset.name || ""));
+            });
+        }
+        if (vtConflictsEl) {
+            if (pairs.length) {
+                const label = (n) => (vtPackMeta[n] ? vtPackMeta[n].display : n);
+                const list = pairs
+                    .map((p) => `${escapeHtml(label(p[0]))} ↔ ${escapeHtml(label(p[1]))}`)
+                    .join(", ");
+                vtConflictsEl.innerHTML = `&#9888; Inkompatible Auswahl: ${list}. Bitte je nur eines der genannten Packs auswaehlen.`;
+                vtConflictsEl.hidden = false;
+            } else {
+                vtConflictsEl.hidden = true;
+                vtConflictsEl.textContent = "";
+            }
+        }
+        if (vtInstallBtn) vtInstallBtn.disabled = pairs.length > 0;
+        return pairs;
+    }
+
     async function vtInstall() {
         const selection = vtCollectSelection();
         if (!Object.keys(selection).length) {
             if (vtStatus) vtStatus.textContent = "Nichts ausgewaehlt.";
+            return;
+        }
+        if (vtValidateSelection().length) {
+            if (vtStatus) vtStatus.textContent = "Inkompatible Auswahl – bitte oben korrigieren.";
             return;
         }
         if (vtStatus) vtStatus.textContent = "Generiere & installiere ...";
@@ -1386,6 +1500,13 @@
     if (vtLoadBtn) vtLoadBtn.addEventListener("click", vtLoadCategories);
     if (vtInstallBtn) vtInstallBtn.addEventListener("click", vtInstall);
     if (vtType) vtType.addEventListener("change", vtLoadCategories);
+    if (vtCategoriesEl) {
+        vtCategoriesEl.addEventListener("change", function (event) {
+            if (event.target instanceof HTMLInputElement && event.target.type === "checkbox") {
+                vtValidateSelection();
+            }
+        });
+    }
 
     if (contentTabs) {
         contentTabs.addEventListener("click", function (event) {

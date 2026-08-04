@@ -2,8 +2,10 @@
 
 Ablauf: Kategorien laden -> Auswahl -> Generieren (POST) -> ZIP holen.
 Datapacks und Crafting Tweaks landen als Datapacks im Welt-Ordner
-`<server>/<level-name>/datapacks/`. Resource Packs (brauchen Hosting) und
-Share-Code-Aufloesung sind hier noch nicht umgesetzt.
+`<server>/<level-name>/datapacks/`. Resource Packs werden vom Manager selbst
+gehostet (data/resourcepacks/) und ueber server.properties als
+Server-Resource-Pack gesetzt (benoetigt eine oeffentliche Basis-URL).
+Die Share-Code-Aufloesung ist hier noch nicht umgesetzt.
 
 Verifizierte Endpunkte:
 - Kategorien: GET /assets/resources/json/{version}/{dp|ct|rp}categories.json
@@ -196,12 +198,14 @@ def install_resourcepack(
     """
     import hashlib
 
+    from app.services.app_setting_service import get_public_base_url_runtime
+
     settings = get_settings()
-    base = (settings.public_base_url or "").strip().rstrip("/")
+    base = (get_public_base_url_runtime() or "").strip().rstrip("/")
     if not base:
         raise ValueError(
-            "Oeffentliche Manager-URL fehlt (MCSM_PUBLIC_BASE_URL), "
-            "wird zum Hosten des Resource Packs benoetigt."
+            "Oeffentliche Manager-URL fehlt (unter Einstellungen setzen oder "
+            "MCSM_PUBLIC_BASE_URL), wird zum Hosten des Resource Packs benoetigt."
         )
 
     version = map_vt_version(server.mc_version)

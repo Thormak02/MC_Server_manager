@@ -292,6 +292,7 @@ def modrinth_versions(
     server_id: int | None = None,
     mc_version: str | None = None,
     loader: str | None = None,
+    content_type: str = "mod",
     release_channel: str = "all",
     db: Session = Depends(get_db),
 ):
@@ -301,9 +302,9 @@ def modrinth_versions(
 
     if server_id is not None:
         server = _ensure_server_access(db, current_user, server_id)
-        if not _is_content_type_supported_for_server(server, "mod"):
+        if not _is_content_type_supported_for_server(server, content_type):
             return JSONResponse({"versions": []})
-        server_loader = content_service._expected_server_loader(server, "mod")
+        server_loader = content_service._expected_server_loader(server, content_type)
         if server_loader:
             loader = server_loader
         server_mc_version = content_service._expected_server_mc_version(server)

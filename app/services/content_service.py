@@ -2292,10 +2292,19 @@ def set_server_resource_pack(
         data = file_payload.get("data") or {}
         url = str(data.get("downloadUrl") or "")
         if not url:
-            up = _request_json(
-                f"{CURSEFORGE_BASE}/v1/mods/{int(project_id)}/files/{int(version_id)}/download-url",
-                headers=_curseforge_headers(),
-            )
+            try:
+                up = _request_json(
+                    f"{CURSEFORGE_BASE}/v1/mods/{int(project_id)}/files/{int(version_id)}/download-url",
+                    headers=_curseforge_headers(),
+                )
+            except ValueError as exc:
+                if "HTTP 403" in str(exc):
+                    raise ValueError(
+                        "CurseForge erlaubt fuer dieses Resource Pack keinen Download "
+                        "ueber die API (HTTP 403). Bitte ein Modrinth-Pack verwenden "
+                        "oder die Resource-Pack-URL manuell in server.properties setzen."
+                    ) from exc
+                raise
             up_data = up.get("data")
             url = up_data if isinstance(up_data, str) else str((up_data or {}).get("url") or "")
         for entry_hash in (data.get("hashes") or []):
@@ -2337,7 +2346,9 @@ def set_server_resource_pack(
 
 def public_resource_pack_url(file_name: str) -> str | None:
     """Oeffentliche URL fuer ein selbst-gehostetes Resource Pack (oder None)."""
-    base = (get_settings().public_base_url or "").strip().rstrip("/")
+    from app.services.app_setting_service import get_public_base_url_runtime
+
+    base = (get_public_base_url_runtime() or "").strip().rstrip("/")
     if not base:
         return None
     return f"{base}/resourcepacks/{file_name}"
