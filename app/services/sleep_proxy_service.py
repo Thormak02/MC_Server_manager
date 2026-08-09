@@ -173,6 +173,40 @@ def reconcile_proxies() -> None:
             start_proxy(server_id, public_port, internal_port)
 
 
+def sleep_server(
+    db, server: Server, initiated_by_user_id: int | None
+) -> tuple[bool, str]:
+    """Server manuell in den Sleep-/On-Demand-Zustand versetzen.
+
+    Faehrt den Server herunter und bindet danach sofort den Wake-Proxy auf dem
+    oeffentlichen Port (identisch zum automatischen Idle-Shutdown), damit der
+    naechste Beitritt den Server wieder weckt.
+    """
+    if not getattr(server, "sleep_enabled", False):
+        return False, "Sleep-Modus (On-Demand) ist fuer diesen Server nicht aktiviert."
+
+    status = (server.status or "stopped").strip().lower()
+    if status == "stopped":
+        # Bereits aus -> nur sicherstellen, dass der Proxy laeuft.
+        reconcile_proxies()
+        return True, "Server schlaeft bereits (On-Demand aktiv)."
+
+    ok, message = process_service.stop_server(db, server, initiated_by_user_id)
+    if not ok:
+        return ok, message
+
+    # Direkt binden, damit kein 15s-Fenster ohne Wake-Proxy entsteht.
+    reconcile_proxies()
+    audit_service.log_action(
+        db,
+        action="server.sleep",
+        user_id=initiated_by_user_id,
+        server_id=server.id,
+        details="manual sleep",
+    )
+    return True, "Server schlaeft jetzt – Aufwecken automatisch beim naechsten Beitritt."
+
+
 def shutdown_all() -> None:
     _IDLE_STOP.set()
     with _PROXY_LOCK:

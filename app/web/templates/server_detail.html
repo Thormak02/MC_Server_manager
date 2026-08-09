@@ -67,6 +67,11 @@
         <form method="post" action="/servers/{{ server.id }}/restart" class="inline-form">
             <button type="submit">Neustart</button>
         </form>
+        {% if server.sleep_enabled %}
+        <form method="post" action="/servers/{{ server.id }}/sleep" class="inline-form">
+            <button type="submit" class="sleep-btn">Schlafen</button>
+        </form>
+        {% endif %}
     </div>
     <form method="post" action="/servers/{{ server.id }}/restart" class="grid settings-grid scheduled-restart">
         <div>

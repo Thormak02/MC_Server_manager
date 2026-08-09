@@ -584,6 +584,29 @@ def restart_server_action(
     return _redirect_to_referer(request, fallback=f"/servers/{server_id}")
 
 
+@router.post("/servers/{server_id}/sleep")
+def sleep_server_action(
+    request: Request,
+    server_id: int,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    from app.services import sleep_proxy_service
+
+    ok, message = sleep_proxy_service.sleep_server(db, server, current_user.id)
+    push_flash(request, message, "success" if ok else "error")
+    return _redirect_to_referer(request, fallback=f"/servers/{server_id}")
+
+
 @router.post("/servers/{server_id}/settings")
 def update_server_settings_action(
     request: Request,

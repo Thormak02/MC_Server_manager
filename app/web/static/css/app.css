@@ -365,6 +365,20 @@ input[type="range"].ram-slider:focus-visible {
     background: var(--danger);
 }
 
+button.sleep-btn,
+.sleep-btn {
+    border: 1px solid color-mix(in srgb, #9b5de5 45%, var(--border));
+    background: color-mix(in srgb, #9b5de5 14%, var(--panel));
+    color: color-mix(in srgb, #9b5de5 82%, var(--text));
+    font-weight: 700;
+}
+
+button.sleep-btn:hover,
+.sleep-btn:hover {
+    border-color: color-mix(in srgb, #9b5de5 60%, var(--border));
+    background: color-mix(in srgb, #9b5de5 20%, var(--panel));
+}
+
 .modal {
     border: 1px solid var(--border);
     border-radius: 1rem;
