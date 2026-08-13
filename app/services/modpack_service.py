@@ -7,6 +7,7 @@ import shutil
 import time
 import urllib.parse
 import zipfile
+from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import Iterable
 
@@ -423,6 +424,197 @@ def _parse_curseforge_archive(
         )
 
 
+# --------------------------------------------------------------------------- #
+# Prebuilt Server-Packs (z.B. CurseForge/ServerPackCreator-Format)
+# --------------------------------------------------------------------------- #
+# Diese Archive enthalten KEINE manifest.json/modrinth.index.json, sondern ein
+# fertiges Server-Verzeichnis (mods/, config/, world/, Start-Skripte). Der Import
+# uebernimmt den Inhalt 1:1; Loader/Version werden aus variables.txt bzw. den
+# Jar-Namen erkannt.
+_SERVER_PACK_CONTENT_DIRS = {
+    "mods",
+    "config",
+    "defaultconfigs",
+    "kubejs",
+    "scripts",
+    "world",
+    "resourcepacks",
+    "shaderpacks",
+    "libraries",
+}
+_SERVER_PACK_MARKER_FILES = {
+    "variables.txt",
+    "server.properties",
+    "start.sh",
+    "start.bat",
+    "start.ps1",
+    "run.sh",
+    "run.bat",
+    "startserver.bat",
+    "serverstart.bat",
+    "serverstart.sh",
+}
+_LOADER_JAR_RE = re.compile(r"^(neoforge|forge|fabric|quilt)[-_].*\.jar$", re.IGNORECASE)
+
+
+def _normalize_server_pack_loader(value: str | None) -> str | None:
+    normalized = (value or "").strip().lower()
+    if not normalized:
+        return None
+    if normalized.startswith("neoforge") or normalized.startswith("neo-forge"):
+        return "neoforge"
+    if normalized.startswith("forge"):
+        return "forge"
+    if normalized.startswith("legacyfabric") or normalized.startswith("fabric"):
+        return "fabric"
+    if normalized.startswith("quilt"):
+        return "quilt"
+    return None
+
+
+def _looks_like_server_pack(names: Iterable[str]) -> bool:
+    lowered = [str(name).replace("\\", "/").lower() for name in names]
+    for norm in lowered:
+        base = norm.rsplit("/", 1)[-1]
+        if base in _SERVER_PACK_MARKER_FILES:
+            return True
+        if _LOADER_JAR_RE.match(base):
+            return True
+        if ("/" + norm).find("/mods/") >= 0 and norm.endswith(".jar"):
+            return True
+    return False
+
+
+def _server_pack_base_prefix(names: Iterable[str]) -> str:
+    """Einzelnen Wrapper-Ordner erkennen (z.B. ``Pack/mods/...``) und zurueckgeben.
+
+    Liegt der Inhalt direkt im Archiv-Root, wird ``""`` zurueckgegeben.
+    """
+    tops: set[str] = set()
+    has_root_file = False
+    for raw in names:
+        norm = str(raw).replace("\\", "/").strip("/")
+        if not norm:
+            continue
+        parts = norm.split("/")
+        tops.add(parts[0])
+        if len(parts) == 1 and not str(raw).endswith("/"):
+            has_root_file = True
+    if any(top.lower() in _SERVER_PACK_CONTENT_DIRS for top in tops):
+        return ""
+    if any(top.lower() in _SERVER_PACK_MARKER_FILES for top in tops):
+        return ""
+    if len(tops) == 1 and not has_root_file:
+        return f"{next(iter(tops))}/"
+    return ""
+
+
+def _read_server_pack_variables(zipped: zipfile.ZipFile, names: Iterable[str]) -> dict[str, str]:
+    member = next(
+        (
+            name
+            for name in names
+            if str(name).replace("\\", "/").rsplit("/", 1)[-1].lower() == "variables.txt"
+        ),
+        None,
+    )
+    if not member:
+        return {}
+    try:
+        text = zipped.read(member).decode("utf-8", "ignore")
+    except (KeyError, OSError):
+        return {}
+    values: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        values[key.strip().upper()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def _detect_server_pack_metadata(
+    zipped: zipfile.ZipFile, names: list[str]
+) -> tuple[str | None, str | None, str | None]:
+    variables = _read_server_pack_variables(zipped, names)
+    mc_version = (variables.get("MINECRAFT_VERSION") or "").strip() or None
+    loader = _normalize_server_pack_loader(variables.get("MODLOADER"))
+    loader_version = (variables.get("MODLOADER_VERSION") or "").strip() or None
+
+    if not loader:
+        for raw in names:
+            match = _LOADER_JAR_RE.match(str(raw).replace("\\", "/").rsplit("/", 1)[-1])
+            if match:
+                loader = _normalize_server_pack_loader(match.group(1))
+                break
+
+    if not mc_version:
+        jar_names = " ".join(
+            str(raw).replace("\\", "/").rsplit("/", 1)[-1]
+            for raw in names
+            if str(raw).lower().endswith(".jar")
+        )
+        tokens = re.findall(r"1\.\d+(?:\.\d+)?", jar_names)
+        if tokens:
+            mc_version = Counter(tokens).most_common(1)[0][0]
+
+    return mc_version, loader, loader_version
+
+
+def _parse_server_pack_archive(
+    token: str,
+    archive_path: Path,
+    source: str,
+    source_ref: str | None,
+) -> ModpackPreviewSnapshot:
+    warnings: list[str] = []
+    with zipfile.ZipFile(archive_path, "r") as zipped:
+        names = list(zipped.namelist())
+        base_prefix = _server_pack_base_prefix(names)
+        mc_version, loader, loader_version = _detect_server_pack_metadata(zipped, names)
+
+        file_count = 0
+        for info in zipped.infolist():
+            if info.is_dir():
+                continue
+            normalized = info.filename.replace("\\", "/")
+            if base_prefix and not normalized.startswith(base_prefix):
+                continue
+            file_count += 1
+
+    warnings.append(
+        "Dediziertes Server-Pack erkannt: enthaelt fertige Mods/Konfiguration. "
+        "Der Inhalt wird 1:1 uebernommen; einzelne Mods werden nicht separat verwaltet."
+    )
+    if not mc_version:
+        warnings.append(
+            "Minecraft-Version nicht automatisch erkannt – bitte im Formular setzen."
+        )
+    if not loader:
+        warnings.append(
+            "Modloader nicht automatisch erkannt – bitte Servertyp im Formular waehlen."
+        )
+
+    return ModpackPreviewSnapshot(
+        token=token,
+        source=source,
+        source_ref=source_ref,
+        pack_format="server_pack",
+        pack_name="Server-Pack",
+        pack_version=None,
+        mc_version=mc_version,
+        loader=loader,
+        loader_version=loader_version,
+        recommended_server_type=_recommended_server_type(loader),
+        entries=[],
+        override_roots=[base_prefix.rstrip("/")] if base_prefix else [],
+        override_file_count=file_count,
+        client_filter_fallback=False,
+        warnings=warnings,
+    )
+
+
 def _parse_archive(
     token: str,
     archive_path: Path,
@@ -453,6 +645,9 @@ def _parse_archive(
             source_ref,
             client_filter_fallback=client_filter_fallback,
         )
+    if _looks_like_server_pack(names):
+        # Fertiges Server-Pack ohne Manifest -> Inhalt direkt uebernehmen.
+        return _parse_server_pack_archive(token, archive_path, source, source_ref)
     raise ValueError("Archiv enthaelt weder modrinth.index.json noch manifest.json.")
 
 
@@ -1409,11 +1604,52 @@ def _apply_overrides(
 ) -> tuple[int, list[str]]:
     warnings: list[str] = []
     copied = 0
+    base_path = Path(server.base_path).expanduser().resolve()
+
+    if snapshot.pack_format == "server_pack":
+        # Fertiges Server-Pack: gesamten Archiv-Inhalt (ggf. unter einem einzelnen
+        # Wrapper-Ordner) 1:1 in den Serverordner uebernehmen.
+        base = (
+            snapshot.override_roots[0].strip("/").replace("\\", "/")
+            if snapshot.override_roots
+            else ""
+        )
+        base_prefix = f"{base}/" if base else ""
+        with zipfile.ZipFile(archive_path, "r") as zipped:
+            for info in zipped.infolist():
+                if info.is_dir():
+                    continue
+                normalized = info.filename.replace("\\", "/")
+                if base_prefix:
+                    if not normalized.startswith(base_prefix):
+                        continue
+                    relative_payload_path = normalized[len(base_prefix) :]
+                else:
+                    relative_payload_path = normalized
+                if not relative_payload_path:
+                    continue
+                try:
+                    safe_relative = _safe_relative_path(relative_payload_path)
+                except ValueError:
+                    warnings.append(f"Override-Pfad uebersprungen: {relative_payload_path}")
+                    continue
+                target = (base_path / safe_relative).resolve()
+                if base_path not in [target, *target.parents]:
+                    warnings.append(
+                        f"Unsicherer Override-Pfad uebersprungen: {relative_payload_path}"
+                    )
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zipped.open(info, "r") as source_fp:
+                    with target.open("wb") as target_fp:
+                        shutil.copyfileobj(source_fp, target_fp)
+                copied += 1
+        return copied, warnings
+
     roots = [root.strip("/").replace("\\", "/") for root in snapshot.override_roots if root.strip("/")]
     if not roots:
         return 0, warnings
 
-    base_path = Path(server.base_path).expanduser().resolve()
     with zipfile.ZipFile(archive_path, "r") as zipped:
         for info in zipped.infolist():
             if info.is_dir():
