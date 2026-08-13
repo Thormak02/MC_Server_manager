@@ -99,6 +99,50 @@ def test_server_pack_metadata_fallback_without_variables(tmp_path):
     assert snap.loader == "forge"  # aus forge-*.jar abgeleitet
 
 
+def test_server_pack_variables_with_bom_are_parsed(tmp_path):
+    """variables.txt mit UTF-8-BOM (Windows-Editor) darf den ersten Schluessel
+    (MINECRAFT_VERSION) nicht verlieren."""
+    from app.services import modpack_service as mps
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr(
+            "variables.txt",
+            "﻿MINECRAFT_VERSION=1.20.1\r\nMODLOADER=NeoForge\r\nMODLOADER_VERSION=21.1.66\r\n",
+        )
+        z.writestr("mods/SomeMod-1.20.1.jar", "JAR")
+    archive = tmp_path / "bom.zip"
+    archive.write_bytes(buf.getvalue())
+
+    snap = mps._parse_archive("tok", archive, "curseforge", "x")
+    assert snap.mc_version == "1.20.1"
+    assert snap.loader == "neoforge"
+    assert snap.loader_version == "21.1.66"
+
+
+def test_server_pack_mc_version_ignores_loader_version_tokens(tmp_path):
+    """Ohne variables.txt darf die MC-Version NICHT aus Loader-/Library-Jars
+    (z.B. neoforge-21.1.66) geraten werden."""
+    from app.services import modpack_service as mps
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr(
+            "libraries/net/neoforged/neoforge/21.1.66/neoforge-21.1.66-universal.jar",
+            "JAR",
+        )
+        z.writestr("mods/Create-1.20.1-forge.jar", "JAR")
+        z.writestr("mods/JEI-1.20.1-15.2.0.27.jar", "JAR")
+        z.writestr("start.sh", "#!/bin/sh\n")
+    archive = tmp_path / "neo.zip"
+    archive.write_bytes(buf.getvalue())
+
+    snap = mps._parse_archive("tok", archive, "curseforge", "x")
+    assert snap.pack_format == "server_pack"
+    assert snap.loader == "neoforge"
+    assert snap.mc_version == "1.20.1"  # nicht 1.1.66 aus neoforge-21.1.66
+
+
 def test_plain_zip_without_modpack_markers_still_raises(tmp_path):
     from app.services import modpack_service as mps
 

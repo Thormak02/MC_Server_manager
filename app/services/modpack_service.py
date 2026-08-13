@@ -521,7 +521,9 @@ def _read_server_pack_variables(zipped: zipfile.ZipFile, names: Iterable[str]) -
     if not member:
         return {}
     try:
-        text = zipped.read(member).decode("utf-8", "ignore")
+        # utf-8-sig entfernt ein evtl. vorhandenes BOM (Windows-Editoren), sonst
+        # bekaeme der erste Schluessel (MINECRAFT_VERSION) ein fuehrendes U+FEFF.
+        text = zipped.read(member).decode("utf-8-sig", "ignore")
     except (KeyError, OSError):
         return {}
     values: dict[str, str] = {}
@@ -550,12 +552,22 @@ def _detect_server_pack_metadata(
                 break
 
     if not mc_version:
-        jar_names = " ".join(
-            str(raw).replace("\\", "/").rsplit("/", 1)[-1]
-            for raw in names
-            if str(raw).lower().endswith(".jar")
-        )
-        tokens = re.findall(r"1\.\d+(?:\.\d+)?", jar_names)
+        # Nur echte Mod-Jars beruecksichtigen (Loader-/Library-Jars tragen ihre
+        # eigene Version, z.B. neoforge-21.1.66 -> darf NICHT als MC 1.1.66 zaehlen).
+        mod_jar_names: list[str] = []
+        for raw in names:
+            lowered = str(raw).replace("\\", "/").lower()
+            if not lowered.endswith(".jar"):
+                continue
+            if ("/" + lowered).find("/mods/") < 0:
+                continue
+            base = str(raw).replace("\\", "/").rsplit("/", 1)[-1]
+            if _LOADER_JAR_RE.match(base):
+                continue
+            mod_jar_names.append(base)
+        # Nur eigenstaendige 1.x(.y)-Tokens: das vorangestellte (?<!\d) verhindert
+        # Treffer INNERHALB laengerer Versionen (21.1.66, guava-31.1, ...).
+        tokens = re.findall(r"(?<!\d)1\.\d{1,2}(?:\.\d{1,2})?", " ".join(mod_jar_names))
         if tokens:
             mc_version = Counter(tokens).most_common(1)[0][0]
 
