@@ -421,6 +421,52 @@ def _append_subprocess_output(server_id: int, text: str, *, tag: str) -> None:
             _consume_start_progress_output(server_id, tag=tag, line=line)
 
 
+def _generate_legacy_forge_run_bat(
+    server: Server, base_path: Path, run_bat_path: Path
+) -> bool:
+    """Fuer altes Forge (<1.17) erzeugt ``--installServer`` KEIN ``run.bat``,
+    sondern eine ``forge-<mc>-<loader>-universal.jar`` (bzw. bei 1.13-1.16 eine
+    ``forge-<mc>-<loader>.jar``). Daraus generieren wir ein ``run.bat`` mit
+    literalen Speicher-Flags (Java 8 kennt kein ``@argfile``), damit der Manager
+    den Server wie gewohnt ueber die Startdatei starten kann.
+
+    Rueckgabe: ``True`` wenn ein run.bat erzeugt wurde.
+    """
+    candidates = [
+        path
+        for path in sorted(base_path.glob("forge-*.jar"))
+        if "installer" not in path.name.lower()
+    ]
+    universal = [path for path in candidates if path.name.lower().endswith("-universal.jar")]
+    forge_jar = universal[0] if universal else (candidates[0] if candidates else None)
+    if forge_jar is None:
+        return False
+
+    memory = ""
+    try:
+        xms = max(0, int(server.memory_min_mb or 0))
+    except (TypeError, ValueError):
+        xms = 0
+    try:
+        xmx = max(0, int(server.memory_max_mb or 0))
+    except (TypeError, ValueError):
+        xmx = 0
+    if xms:
+        memory += f"-Xms{xms}M "
+    if xmx:
+        memory += f"-Xmx{xmx}M "
+
+    run_bat_path.write_text(
+        "@echo off\n" f"java {memory}-jar {forge_jar.name} nogui %*\n",
+        encoding="utf-8",
+    )
+    console_service.append_output(
+        server.id,
+        f"Legacy-Forge erkannt – Startdatei run.bat fuer {forge_jar.name} erzeugt.",
+    )
+    return True
+
+
 def _prepare_loader_runtime_if_needed(
     server: Server,
     base_path: Path,
@@ -498,6 +544,9 @@ def _prepare_loader_runtime_if_needed(
 
         _append_subprocess_output(server.id, completed.stdout or "", tag=install_tag)
         last_returncode = completed.returncode
+        if completed.returncode == 0 and not start_bat_path.exists() and not is_neoforge:
+            # Altes Forge (<1.17) liefert kein run.bat -> aus der Server-Jar erzeugen.
+            _generate_legacy_forge_run_bat(server, base_path, start_bat_path)
         if completed.returncode == 0 and start_bat_path.exists():
             break
         if attempt < max_attempts:

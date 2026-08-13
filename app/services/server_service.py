@@ -252,6 +252,40 @@ def _sync_forge_jvm_args(server: Server) -> str | None:
     return None
 
 
+def _sync_legacy_forge_run_bat_memory(server: Server) -> str | None:
+    """Speicher-Flags in einem generierten Legacy-Forge ``run.bat`` aktualisieren.
+
+    Modernes Forge (>=1.17) bezieht den Speicher aus ``user_jvm_args.txt`` und
+    hat KEINE ``-Xmx`` im run.bat – solche run.bat werden nicht angefasst.
+    """
+    base_path = Path(server.base_path).expanduser().resolve()
+    run_bat = base_path / "run.bat"
+    if not run_bat.exists():
+        return None
+    try:
+        content = run_bat.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    if "-xmx" not in content.lower():
+        return None
+
+    lines = content.splitlines()
+    changed = False
+    for idx, line in enumerate(lines):
+        if "java" not in line.lower():
+            continue
+        new_line = _apply_memory_flags_to_command(
+            line, server.memory_min_mb, server.memory_max_mb
+        )
+        if new_line != line:
+            lines[idx] = new_line
+            changed = True
+        break
+    if changed:
+        run_bat.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+    return None
+
+
 def _sync_bat_start_memory(server: Server) -> str | None:
     base_path = Path(server.base_path).expanduser().resolve()
     bat_path = Path(server.start_bat_path or str(base_path / "start.bat")).expanduser()
@@ -365,6 +399,12 @@ def sync_server_settings_to_files(server: Server) -> list[str]:
         warning = _sync_forge_jvm_args(server)
         if warning:
             warnings.append(warning)
+        if server.server_type == "forge":
+            # Legacy-Forge (<1.17) startet ueber ein generiertes run.bat mit
+            # literalen -Xms/-Xmx – dort die Speicher-Flags mitziehen.
+            warning = _sync_legacy_forge_run_bat_memory(server)
+            if warning:
+                warnings.append(warning)
     elif server.start_mode == "bat":
         warning = _sync_bat_start_memory(server)
         if warning:
