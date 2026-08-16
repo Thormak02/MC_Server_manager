@@ -1,14 +1,5 @@
 # Lobby-/Gateway-Routing-Proxy — Umsetzungsplan & Prompts
 
-> **Status:** Phasen 1–4 sind **umgesetzt** (Backend-Kern, Lifecycle/Reconcile,
-> UI, Härtung + Doku). Alle drei globalen Werte — **an/aus, Port und Zieldomain**
-> — sind unter *Einstellungen → Lobby/Gateway* editierbar **und** per `.env`
-> (`MCSM_GATEWAY_ENABLED`, `MCSM_GATEWAY_PORT`, `MCSM_GATEWAY_DOMAIN`) setzbar;
-> **die UI-Einstellung überschreibt den ENV-Wert.** Offen bleiben nur die
-> **externen Go-Live-Schritte** (DNS/Firewall/Reverse-Proxy, siehe unten) und der
-> manuelle Live-Test mit echten Clients. `thormakmc.de` ist hier nur ein
-> **Beispiel** — trag deine echte Domain in den Einstellungen (oder `.env`) ein.
-
 Ziel: **ein** MC-Eingangspunkt (Gateway) auf einem Port. Jeder Server bekommt
 einen **Hostnamen-Alias**. Ein Spieler verbindet sich mit `atm10.deinedomain`
 → das Gateway liest den Handshake, wählt anhand **Alias** (Fallback:
@@ -69,16 +60,11 @@ Entwicklung/Tests:
    Manager (der intern auf seinem HTTP-Port bleibt).
 3. **Router/Firewall**: **Gateway-Port** (25565) **und** 80/443 nach außen
    freigeben/forwarden. Die **internen Server-Ports NICHT** öffnen.
-4. **Gateway aktivieren** — entweder unter *Einstellungen → Lobby/Gateway*
-   (an/aus, Port, **Zieldomain**) **oder** per `.env`
-   (`MCSM_GATEWAY_ENABLED=true`, `MCSM_GATEWAY_PORT=25565`,
-   `MCSM_GATEWAY_DOMAIN=deine-domain.de`). Die UI-Einstellung **überschreibt**
-   den jeweiligen ENV-Wert. Änderungen greifen sofort (Reconcile), ein
-   Manager-Neustart ist dafür nicht nötig.
+4. **.env** auf dem Server: `MCSM_GATEWAY_ENABLED=true`,
+   `MCSM_GATEWAY_PORT=25565`.
 5. Pro Server einen **Alias** (Subdomain) vergeben, **einen** Server als
    **Lobby/Default** markieren, betroffene Server **einmal neu starten**
-   (wechseln auf den internen Port). Diese Server-Felder sind nur für
-   **Super-Admins** sichtbar/setzbar (sie wirken global).
+   (wechseln auf den internen Port).
 6. **Live-Test** mit echtem Client je Version/Modpack (kann ich nicht
    simulieren).
 
@@ -217,6 +203,8 @@ Voraussetzungen" oben — konkret:
 > - **Verifikations-Checkliste** für den manuellen Live-Test ergänzen.
 > - Volle Suite grün.
 
+außerdem: thormakmc.de ist nur ein beispiel, admins sollen die domain und die ports in den einstellungen und in der env ändern können (einstellungen überschreibt env wert), sofern sinnvoll.
+
 **Akzeptanzkriterien:** Randfall-Tests grün; Doku vollständig; manuelle
 Checkliste vorhanden.
 
@@ -224,40 +212,10 @@ Checkliste vorhanden.
 
 ## Kurz-Checkliste „extern" (nur für Go-Live)
 
-`deine-domain.de` ist ein Platzhalter — trag deine echte Domain ein.
-
-- [ ] DNS: `deine-domain.de` (A) + `*.deine-domain.de` (Wildcard-A) → Server-IP
+- [ ] DNS: `thormakmc.de` (A) + `*.thormakmc.de` (Wildcard-A) → Server-IP
 - [ ] Manager auf 80/443 erreichbar (Reverse-Proxy + TLS)
-- [ ] Router/Firewall: Gateway-Port (25565) + 80/443 offen; **interne** Ports zu
-- [ ] Gateway aktiviert (Einstellungen **oder** `.env`
-      `MCSM_GATEWAY_ENABLED`/`MCSM_GATEWAY_PORT`/`MCSM_GATEWAY_DOMAIN`;
-      UI überschreibt ENV)
+- [ ] Router/Firewall: 25565 + 80/443 offen; interne Ports zu
+- [ ] `.env`: `MCSM_GATEWAY_ENABLED=true`, `MCSM_GATEWAY_PORT=25565`
 - [ ] Aliase gesetzt, **ein** Server als Lobby/Default markiert
 - [ ] betroffene Server neu gestartet
 - [ ] Live-Test: Apex → Lobby, Subdomains → jeweilige Server
-
----
-
-## Manuelle Verifikations-Checkliste (nach Go-Live, echter Client)
-
-Kann nicht automatisiert werden (echte MC-Clients/DNS) — bitte einmal durchgehen:
-
-- [ ] **Gateway aus:** Nichts ändert sich; Standalone-/Sleep-Server wie zuvor
-      direkt über ihren Port erreichbar.
-- [ ] **Apex → Lobby:** Verbindung mit `deine-domain.de` landet auf dem als
-      *Lobby/Default* markierten Server.
-- [ ] **Subdomain → Server:** `atm10.deine-domain.de` landet auf dem Server mit
-      Alias `atm10`.
-- [ ] **Wake:** Ein schlafender Gateway-Server startet beim Login-Versuch; nach
-      dem Hochfahren verbindet ein erneuter Versuch normal (langsamer Start →
-      „bitte in ~30 Sekunden erneut verbinden").
-- [ ] **Idle-Shutdown:** Leerer Sleep-Server fährt nach der Verzögerung wieder
-      herunter; Serverlisten-Ping zeigt ihn als schlafend.
-- [ ] **Unbekannter Alias / Apex ohne Lobby:** Login → sauberer Disconnect mit
-      Liste der Aliase; Serverlisten-Ping → „Netzwerk"-MOTD mit Serverliste.
-- [ ] **Modpack-Client:** Forge/Fabric-Client verbindet über die Subdomain seines
-      Servers (die Vanilla-Lobby kann er nicht betreten — Client-Limit, kein
-      Cross-Version-Hub).
-- [ ] **Dashboard:** zeigt je Gateway-Server die Route `alias.domain` (+ „Lobby").
-- [ ] **Domain-/Port-Wechsel:** Änderung in den Einstellungen greift sofort
-      (Reconcile), ohne Manager-Neustart.

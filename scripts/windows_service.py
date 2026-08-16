@@ -131,6 +131,13 @@ class McServerManagerService(win32serviceutil.ServiceFramework):
             host=runtime_config["listen_host"],
             port=runtime_config["port"],
             log_level="info",
+            # Hinter einem lokalen Reverse-Proxy (z.B. Caddy fuer HTTPS auf
+            # mc.friedrich-dietrich.de) X-Forwarded-Proto/-Host auswerten, damit
+            # request.base_url das richtige Schema (https) hat -> sonst schlaegt die
+            # CSRF-Same-Origin-Pruefung bei jedem POST fehl. Nur dem lokalen Proxy
+            # vertrauen (127.0.0.1); Direktzugriff bleibt unveraendert.
+            proxy_headers=True,
+            forwarded_allow_ips=runtime_config.get("forwarded_allow_ips", "127.0.0.1"),
         )
         self.server = uvicorn.Server(uvicorn_config)
         self.server_thread = threading.Thread(target=self.server.run, daemon=True)

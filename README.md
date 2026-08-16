@@ -217,6 +217,12 @@ Server.
 
 Details, Phasen und die manuelle Verifikations-Checkliste: `docs/lobby_gateway_plan.md`.
 
+**Web-UI unter derselben Domain (HTTPS):** Der Manager kann zusätzlich per Browser
+über denselben Namen erreichbar sein (z.B. `https://mc.friedrich-dietrich.de`) —
+via Reverse-Proxy (Caddy, automatisches TLS). Fertige Konfiguration:
+[`deploy/Caddyfile`](deploy/Caddyfile), Schritt-für-Schritt:
+[`docs/reverse_proxy_setup.md`](docs/reverse_proxy_setup.md).
+
 ## Hinweise
 
 - `.env` und Laufzeitdaten sind in `.gitignore` ausgeschlossen.

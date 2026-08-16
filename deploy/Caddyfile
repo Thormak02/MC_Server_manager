@@ -1,0 +1,22 @@
+# Reverse-Proxy fuer die MC-Server-Manager Web-UI mit automatischem HTTPS.
+#
+# Caddy holt/erneuert das TLS-Zertifikat selbst (Let's Encrypt) und leitet an den
+# lokal laufenden Manager weiter. Host- und X-Forwarded-Proto/-For/-Host-Header
+# setzt Caddy automatisch -> der Manager erkennt "https" (proxy_headers im Service).
+#
+# Voraussetzungen (siehe docs/reverse_proxy_setup.md):
+#   - DNS: mc.friedrich-dietrich.de zeigt auf diesen Server (CNAME -> No-IP).
+#   - Router/Firewall: Ports 80 UND 443 aus dem Internet auf diesen PC geforwardet.
+#   - Manager laeuft lokal auf 127.0.0.1:8000 (data/service_config.json).
+#
+# Umstieg auf eine andere Domain: nur die Domainzeile unten aendern.
+
+{
+	# Empfohlen: E-Mail fuer Ablauf-/Problemhinweise von Let's Encrypt.
+	# email deine-mail@example.com
+}
+
+mc.friedrich-dietrich.de {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8000
+}
