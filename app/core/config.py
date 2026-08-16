@@ -49,6 +49,15 @@ class Settings(BaseSettings):
     # (25565+), fern von ueblichen Diensten und dem Manager-Port.
     server_port_range_start: int = 25565
     server_port_range_end: int = 25999
+    # Lobby-/Gateway-Routing-Proxy: EIN MC-Eingangspunkt, der eingehende
+    # Verbindungen anhand Hostname-Alias (Fallback: Protokoll-Version) auf das
+    # passende Backend routet. Standardmaessig AUS (Opt-in ueber .env).
+    # Alle drei sind auch in den Einstellungen editierbar (UI ueberschreibt ENV).
+    gateway_enabled: bool = False
+    gateway_port: int = 25565
+    # Ziel-/Basisdomain fuer die Verbindungsadressen (`<alias>.<domain>`). Nur
+    # Anzeige/UX; das Routing selbst nutzt den vom Client gesendeten Hostnamen.
+    gateway_domain: str | None = None
     modrinth_enabled: bool = True
     curseforge_enabled: bool = True
     curseforge_api_key: str | None = None

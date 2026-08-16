@@ -782,6 +782,12 @@ button.sleep-btn:hover,
     box-shadow: 0 6px 16px rgba(15, 127, 112, 0.15);
 }
 
+.gateway-route {
+    margin-top: 0.2rem;
+    font-size: 0.78rem;
+    color: color-mix(in srgb, var(--accent) 78%, var(--text));
+}
+
 .server-player-list {
     margin-top: 0.45rem;
     display: flex;

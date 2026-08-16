@@ -258,6 +258,22 @@ def server_detail_page(
         or normalized_server_type in _MODPACK_UPDATE_CANDIDATE_TYPES
     )
 
+    from urllib.parse import urlsplit
+
+    from app.services.app_setting_service import (
+        get_gateway_domain,
+        get_gateway_enabled,
+        get_public_base_url,
+    )
+
+    gateway_enabled_global = get_gateway_enabled(db)
+    # Verbindungsadresse: konfigurierte Zieldomain bevorzugt, sonst Host aus der
+    # oeffentlichen Basis-URL, sonst Platzhalter im Template.
+    gateway_connect_host = get_gateway_domain(db) or None
+    if not gateway_connect_host:
+        public_base = get_public_base_url(db)
+        gateway_connect_host = urlsplit(public_base).hostname if public_base else None
+
     return templates.TemplateResponse(
         request,
         "server_detail.html",
@@ -275,6 +291,8 @@ def server_detail_page(
             can_change_mc_version=version_change_block_reason is None,
             version_change_block_reason=version_change_block_reason,
             has_modpack_update=has_modpack_update,
+            gateway_enabled_global=gateway_enabled_global,
+            gateway_connect_host=gateway_connect_host,
         ),
     )
 
@@ -626,6 +644,9 @@ def update_server_settings_action(
     start_mode: Annotated[str | None, Form()] = None,
     start_command: Annotated[str | None, Form()] = None,
     start_bat_path: Annotated[str | None, Form()] = None,
+    gateway_enabled: Annotated[str | None, Form()] = None,
+    gateway_hostname: Annotated[str | None, Form()] = None,
+    gateway_is_default: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_logged_in(request, db)
@@ -637,6 +658,7 @@ def update_server_settings_action(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
     if not can_control_server(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    is_super_admin = current_user.role == UserRole.SUPER_ADMIN.value
 
     target_mc_version = (mc_version or "").strip() or server.mc_version
     raw_loader_version = (loader_version or "").strip()
@@ -694,6 +716,17 @@ def update_server_settings_action(
         start_mode=(start_mode or "").strip().lower() or None,
         start_command=(start_command or "").strip() or None,
         start_bat_path=(start_bat_path or "").strip() or None,
+        # Gateway-/Lobby-Routing wirkt GLOBAL (Alias-Namespace, Default-/Apex-Route).
+        # Nur Super-Admins duerfen es setzen; sonst bleiben die bestehenden Werte.
+        gateway_enabled=(
+            _to_bool(gateway_enabled) if is_super_admin else server.gateway_enabled
+        ),
+        gateway_hostname=(
+            gateway_hostname if is_super_admin else server.gateway_hostname
+        ),
+        gateway_is_default=(
+            _to_bool(gateway_is_default) if is_super_admin else server.gateway_is_default
+        ),
     )
     reprovision_notes: list[str] = []
     if version_changed:

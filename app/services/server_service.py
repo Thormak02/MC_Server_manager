@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.constants import DEFAULT_SERVER_STATUS, UserRole
@@ -375,13 +375,41 @@ def sleep_delay_to_seconds(value: int | None, unit: str | None) -> int | None:
     return max(0, int(value)) * mult
 
 
+_GATEWAY_HOSTNAME_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
+
+
+def normalize_gateway_hostname(raw: str | None) -> str:
+    """Alias normalisieren: Kleinschreibung, ohne fuehrende/abschliessende Punkte."""
+    return (raw or "").strip().strip(".").lower()
+
+
+def is_valid_gateway_hostname(value: str) -> bool:
+    return (
+        bool(value)
+        and len(value) <= 255
+        and ".." not in value
+        and _GATEWAY_HOSTNAME_RE.match(value) is not None
+    )
+
+
+def gateway_hostname_taken(
+    db: Session, hostname: str, *, exclude_server_id: int | None = None
+) -> bool:
+    stmt = select(Server.id).where(func.lower(Server.gateway_hostname) == hostname.lower())
+    if exclude_server_id is not None:
+        stmt = stmt.where(Server.id != exclude_server_id)
+    return db.scalar(stmt) is not None
+
+
 def effective_server_port(server: Server) -> int | None:
     """Port, auf dem der echte MC-Server laeuft.
 
-    Im Sleep-Modus belegt der Proxy den oeffentlichen ``port``, der echte
-    Server laeuft auf ``sleep_internal_port``. Sonst der normale Port.
+    Sleep- **oder** Gateway-Server laufen auf ``sleep_internal_port`` (der
+    oeffentliche ``port`` wird vom Sleep-Proxy bzw. vom Gateway belegt). Sonst
+    der normale Port.
     """
-    if server.sleep_enabled and server.sleep_internal_port:
+    behind_proxy = server.sleep_enabled or getattr(server, "gateway_enabled", False)
+    if behind_proxy and server.sleep_internal_port:
         return int(server.sleep_internal_port)
     return server.port
 
@@ -436,6 +464,9 @@ def update_server_settings(
     start_bat_path: str | None,
     sleep_enabled: bool = False,
     sleep_delay_seconds: int | None = None,
+    gateway_enabled: bool = False,
+    gateway_hostname: str | None = None,
+    gateway_is_default: bool = False,
 ) -> tuple[Server, list[str]]:
     if mc_version is not None:
         stripped_version = mc_version.strip()
@@ -501,18 +532,84 @@ def update_server_settings(
                 "Port uebernehmen kann."
             )
 
+    # --- Lobby-/Gateway-Routing ---
+    normalized_alias = normalize_gateway_hostname(gateway_hostname)
+    server.gateway_enabled = bool(gateway_enabled)
+    server.gateway_hostname = None
+    server.gateway_is_default = False
+    if server.gateway_enabled:
+        if not normalized_alias:
+            warnings.append("Gateway-Alias (Hostname) ist erforderlich.")
+            server.gateway_enabled = False
+        elif not is_valid_gateway_hostname(normalized_alias):
+            warnings.append(
+                f"Ungueltiger Alias '{normalized_alias}' - erlaubt sind nur "
+                "Kleinbuchstaben, Ziffern, '-' und '.'."
+            )
+            server.gateway_enabled = False
+        elif gateway_hostname_taken(db, normalized_alias, exclude_server_id=server.id):
+            warnings.append(
+                f"Der Alias '{normalized_alias}' ist bereits vergeben - bitte einen "
+                "anderen waehlen."
+            )
+            server.gateway_enabled = False
+        else:
+            server.gateway_hostname = normalized_alias
+            server.gateway_is_default = bool(gateway_is_default)
+            # Gateway-Server laeuft auf seinem internen Port -> sicherstellen.
+            # Der eigene Gateway-Port darf NIE als interner Port vergeben werden
+            # (sonst wuerde das Gateway spaeter auf sich selbst routen).
+            from app.services import app_setting_service, port_service
+
+            gateway_port = app_setting_service.get_gateway_port(db)
+            if not server.sleep_internal_port or server.sleep_internal_port == server.port:
+                preferred = (
+                    server.port + 1 if server.port and server.port < 65535 else None
+                )
+                exclude_ports = {p for p in (server.port, gateway_port) if p}
+                try:
+                    server.sleep_internal_port = port_service.allocate_server_port(
+                        db,
+                        preferred=preferred,
+                        exclude=exclude_ports or None,
+                        exclude_server_id=server.id,
+                    )
+                except ValueError as exc:
+                    warnings.append(str(exc))
+            if server.status in {"running", "starting", "restarting"}:
+                warnings.append(
+                    "Gateway aktiviert: bitte den Server neu starten, damit er auf "
+                    "den internen Port wechselt (erreichbar dann ueber das Gateway)."
+                )
+
+    # Genau EIN Default-/Lobby-Server: beim Setzen die Markierung aller anderen
+    # Server zuruecksetzen.
+    if server.gateway_is_default:
+        db.execute(
+            update(Server)
+            .where(Server.id != server.id)
+            .values(gateway_is_default=False)
+        )
+
     warnings.extend(sync_server_settings_to_files(server))
 
     db.add(server)
     db.commit()
     db.refresh(server)
 
-    # Proxy-Zustand an die neue Einstellung angleichen (Start/Stop des Listeners).
+    # Proxy-/Gateway-Zustand an die neue Einstellung angleichen (Start/Stop der
+    # Listener, Routing-Tabelle aktualisieren).
     try:
         from app.services import sleep_proxy_service
 
         sleep_proxy_service.reconcile_proxies()
     except Exception:  # noqa: BLE001 - UI-Update darf daran nicht scheitern
+        pass
+    try:
+        from app.services import gateway_service
+
+        gateway_service.reconcile_gateway()
+    except Exception:  # noqa: BLE001
         pass
 
     return server, warnings

@@ -10,6 +10,9 @@ from app.models.app_setting import AppSetting
 SERVER_STORAGE_ROOT_KEY = "server_storage_root"
 BACKUP_STORAGE_ROOT_KEY = "backup_storage_root"
 PUBLIC_BASE_URL_KEY = "public_base_url"
+GATEWAY_ENABLED_KEY = "gateway_enabled"
+GATEWAY_PORT_KEY = "gateway_port"
+GATEWAY_DOMAIN_KEY = "gateway_domain"
 
 
 def _normalize_path(raw_value: str) -> Path:
@@ -277,3 +280,122 @@ def get_public_base_url_runtime() -> str:
 
     with SessionLocal() as db:
         return get_public_base_url(db)
+
+
+# --- Globales Lobby-/Gateway-Routing (an/aus + Port) ---
+
+
+def _normalize_bool(raw: object) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    return str(raw or "").strip().lower() in {"1", "true", "on", "yes"}
+
+
+def get_gateway_enabled(db: Session) -> bool:
+    """UI-Override > ENV/Config (MCSM_GATEWAY_ENABLED)."""
+    row = _get_setting_row(db, GATEWAY_ENABLED_KEY)
+    if row and row.value.strip():
+        return _normalize_bool(row.value)
+    return bool(get_settings().gateway_enabled)
+
+
+def get_gateway_enabled_source(db: Session) -> str:
+    row = _get_setting_row(db, GATEWAY_ENABLED_KEY)
+    return "ui" if (row and row.value.strip()) else "config"
+
+
+def get_gateway_port(db: Session) -> int:
+    row = _get_setting_row(db, GATEWAY_PORT_KEY)
+    if row and row.value.strip():
+        try:
+            return int(row.value.strip())
+        except ValueError:
+            pass
+    return int(get_settings().gateway_port)
+
+
+def get_gateway_port_source(db: Session) -> str:
+    row = _get_setting_row(db, GATEWAY_PORT_KEY)
+    return "ui" if (row and row.value.strip()) else "config"
+
+
+def _set_or_clear(db: Session, key: str, value: str | None) -> None:
+    row = _get_setting_row(db, key)
+    normalized = (value or "").strip()
+    if not normalized:
+        if row is not None:
+            db.delete(row)
+            db.commit()
+        return
+    if row is None:
+        row = AppSetting(key=key, value=normalized)
+    else:
+        row.value = normalized
+    db.add(row)
+    db.commit()
+
+
+def set_gateway_enabled(db: Session, enabled: bool) -> bool:
+    _set_or_clear(db, GATEWAY_ENABLED_KEY, "true" if enabled else "false")
+    return enabled
+
+
+def set_gateway_port(db: Session, port: int) -> int:
+    port = int(port)
+    if not (1 <= port <= 65535):
+        raise ValueError("Port muss zwischen 1 und 65535 liegen.")
+    _set_or_clear(db, GATEWAY_PORT_KEY, str(port))
+    return port
+
+
+def get_gateway_enabled_runtime() -> bool:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_gateway_enabled(db)
+
+
+def get_gateway_port_runtime() -> int:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_gateway_port(db)
+
+
+def _normalize_gateway_domain(raw: str | None) -> str:
+    """Domain vereinheitlichen: ohne Schema, ohne Slashes/Punkt am Ende, klein."""
+    value = (raw or "").strip().lower()
+    if "://" in value:
+        value = value.split("://", 1)[1]
+    value = value.split("/", 1)[0].strip().strip(".")
+    return value
+
+
+def get_gateway_domain(db: Session) -> str:
+    """UI-Override > ENV/Config (MCSM_GATEWAY_DOMAIN) > leer."""
+    row = _get_setting_row(db, GATEWAY_DOMAIN_KEY)
+    if row and row.value.strip():
+        return _normalize_gateway_domain(row.value)
+    return _normalize_gateway_domain(get_settings().gateway_domain)
+
+
+def get_gateway_domain_source(db: Session) -> str:
+    row = _get_setting_row(db, GATEWAY_DOMAIN_KEY)
+    if row and row.value.strip():
+        return "ui"
+    if (get_settings().gateway_domain or "").strip():
+        return "env"
+    return "default"
+
+
+def set_gateway_domain(db: Session, domain: str | None) -> str:
+    normalized = _normalize_gateway_domain(domain)
+    _set_or_clear(db, GATEWAY_DOMAIN_KEY, normalized)
+    return normalized
+
+
+def get_gateway_domain_runtime() -> str:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_gateway_domain(db)

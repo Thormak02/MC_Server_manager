@@ -241,6 +241,36 @@
             </div>
         </div>
 
+        {% if current_user.role == "super_admin" %}
+        <div class="settings-section">
+            <h3>Lobby / Gateway</h3>
+            {% if not gateway_enabled_global %}
+            <p class="muted">&#8505; Das Gateway ist global deaktiviert (unter <a href="/settings">Einstellungen</a> aktivierbar). Diese Angaben wirken erst, wenn das Gateway aktiv ist.</p>
+            {% endif %}
+            <div class="grid settings-grid">
+                <div>
+                    <div class="toggle-field">
+                        <label><input type="checkbox" name="gateway_enabled" value="true" {% if server.gateway_enabled %}checked{% endif %}> &Uuml;ber Lobby/Gateway erreichbar</label>
+                    </div>
+                </div>
+                <div>
+                    <label for="gateway_hostname">Hostname-Alias</label>
+                    <input id="gateway_hostname" name="gateway_hostname" type="text" placeholder="z.B. atm10 oder voller Hostname" value="{{ server.gateway_hostname or '' }}">
+                    <p class="muted">Verbinde dich dann mit <code>{% if '.' in (server.gateway_hostname or '') %}{{ server.gateway_hostname }}{% else %}{{ server.gateway_hostname or 'alias' }}.{{ gateway_connect_host or 'deine-domain' }}{% endif %}</code>. Kurzes Label (z.B. <code>atm10</code>) + Zieldomain ergibt eine Subdomain (echte Domain mit Wildcard-DNS). Ein <strong>voller Hostname mit Punkt</strong> (z.B. <code>atm10.ddns.net</code> bei No-IP) wird direkt genutzt.</p>
+                </div>
+                <div>
+                    <div class="toggle-field">
+                        <label><input type="checkbox" name="gateway_is_default" value="true" {% if server.gateway_is_default %}checked{% endif %}> Als Lobby/Default (Apex-Route)</label>
+                    </div>
+                    <p class="muted">Genau ein Server. Verbindungen mit der blanken Domain (oder unbekanntem Alias) landen hier.</p>
+                </div>
+            </div>
+            {% if server.gateway_enabled and server.status in ["running", "starting", "restarting"] %}
+            <p class="muted">&#9888; Server l&auml;uft &ndash; nach dem Speichern neu starten, damit er auf den internen Port wechselt.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="settings-actions">
             <button type="submit">Speichern</button>
         </div>

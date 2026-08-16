@@ -57,7 +57,12 @@
             {% set status_online = server.status == "running" %}
             {% set status_view = server_status_view(server) %}
             <tr data-server-id="{{ server.id }}">
-                <td><a href="/servers/{{ server.id }}">{{ server.name }}</a></td>
+                <td>
+                    <a href="/servers/{{ server.id }}">{{ server.name }}</a>
+                    {% if gateway_enabled and server.gateway_enabled and server.gateway_hostname %}
+                    <div class="gateway-route">&#127760; {{ server.gateway_hostname }}{% if gateway_domain %}.{{ gateway_domain }}{% endif %}{% if server.gateway_is_default %} &middot; Lobby{% endif %}</div>
+                    {% endif %}
+                </td>
                 <td>{{ server.server_type }}</td>
                 <td>{{ server.mc_version }}</td>
                 <td id="dashboard-status-{{ server.id }}" class="dashboard-status-cell" data-online="{{ 'true' if status_online else 'false' }}">

@@ -24,7 +24,7 @@ from app.core.config import get_settings
 from app.db.init_db import init_db
 from app.middleware.csrf import CSRFSameOriginMiddleware
 from app.services.schedule_service import sync_all_jobs
-from app.services import sleep_proxy_service
+from app.services import gateway_service, sleep_proxy_service
 from app.services.process_service import (
     reconcile_runtime_states_on_manager_startup,
     shutdown_all_managed_processes,
@@ -42,6 +42,9 @@ async def lifespan(app: FastAPI):
     reconcile_runtime_states_on_manager_startup()
     start_scheduler()
     sync_all_jobs()
+    # Gateway VOR dem Autostart aufsetzen: Gateway-Server bekommen so ihren internen
+    # Port + server.properties, bevor der MC-Prozess einen Port bindet.
+    gateway_service.reconcile_gateway()
     start_servers_marked_for_manager_startup()
     sleep_proxy_service.reconcile_proxies()
     sleep_proxy_service.start_idle_monitor()
@@ -49,6 +52,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         # Shutdown
+        gateway_service.stop_gateway()
         sleep_proxy_service.shutdown_all()
         shutdown_all_managed_processes(preserve_for_restart=True)
         shutdown_scheduler()

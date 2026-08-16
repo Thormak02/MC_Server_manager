@@ -15,11 +15,20 @@ from app.services.app_setting_service import (
     clear_server_storage_override,
     get_backup_storage_root,
     get_backup_storage_source,
+    get_gateway_domain,
+    get_gateway_domain_source,
+    get_gateway_enabled,
+    get_gateway_enabled_source,
+    get_gateway_port,
+    get_gateway_port_source,
     get_public_base_url,
     get_public_base_url_source,
     get_server_storage_root,
     get_server_storage_source,
     set_backup_storage_root,
+    set_gateway_domain,
+    set_gateway_enabled,
+    set_gateway_port,
     set_public_base_url,
     set_server_storage_root,
 )
@@ -82,6 +91,12 @@ def settings_page(
     backup_storage_source = get_backup_storage_source(db)
     public_base_url = get_public_base_url(db)
     public_base_url_source = get_public_base_url_source(db)
+    gateway_enabled = get_gateway_enabled(db)
+    gateway_enabled_source = get_gateway_enabled_source(db)
+    gateway_port = get_gateway_port(db)
+    gateway_port_source = get_gateway_port_source(db)
+    gateway_domain = get_gateway_domain(db)
+    gateway_domain_source = get_gateway_domain_source(db)
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
     return templates.TemplateResponse(
@@ -98,10 +113,61 @@ def settings_page(
             backup_storage_source=backup_storage_source,
             public_base_url=public_base_url,
             public_base_url_source=public_base_url_source,
+            gateway_enabled=gateway_enabled,
+            gateway_enabled_source=gateway_enabled_source,
+            gateway_port=gateway_port,
+            gateway_port_source=gateway_port_source,
+            gateway_domain=gateway_domain,
+            gateway_domain_source=gateway_domain_source,
             platform_settings=platform_settings,
             manager_update_status=manager_update_status,
         ),
     )
+
+
+@router.post("/settings/gateway")
+def update_gateway_settings_action(
+    request: Request,
+    gateway_enabled: Annotated[str | None, Form()] = None,
+    gateway_port: Annotated[str | None, Form()] = None,
+    gateway_domain: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    enabled = _to_bool(gateway_enabled)
+    try:
+        raw_port = (gateway_port or "").strip()
+        if raw_port:
+            set_gateway_port(db, int(raw_port))
+        set_gateway_domain(db, gateway_domain)
+        set_gateway_enabled(db, enabled)
+    except (ValueError, TypeError) as exc:
+        push_flash(request, f"Ungueltiger Gateway-Port: {exc}", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    # Listener/Routing sofort an die neue Einstellung angleichen.
+    try:
+        from app.services import gateway_service
+
+        gateway_service.reconcile_gateway()
+    except Exception:  # noqa: BLE001
+        pass
+
+    audit_service.log_action(
+        db,
+        action="settings.gateway_update",
+        user_id=current_user.id,
+        details=f"enabled={enabled} port={raw_port or '(unveraendert)'}",
+    )
+    push_flash(
+        request,
+        f"Gateway-Einstellungen gespeichert (aktiv={'ja' if enabled else 'nein'}).",
+        "success",
+    )
+    return RedirectResponse(url="/settings", status_code=303)
 
 
 @router.post("/settings/server-storage")

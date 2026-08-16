@@ -259,6 +259,8 @@ Thormak2002 UUID: 69f230e1-af2c-4d0e-9885-93d66595a855 immer standardmäßig als
 
 ~~manueller sleep button innerhalb des dashboards neben start, stopp und neustart, sowie in der detail ansicht~~
 
+"City build" und minigames Server netzwerk, mit mehreren welten und selben invnetar usw. also zb. bau welt minenwelt usw. mit warp, shopsystem, jobs, geld usw.
+
 
 bei manuellem backup: fortschrittsbalken, statt langes laden des tabs
 

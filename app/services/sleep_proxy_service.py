@@ -157,8 +157,11 @@ def reconcile_proxies() -> None:
         servers = list(db.scalars(select(Server)).all())
         wanted: dict[int, tuple[int, int]] = {}
         for server in servers:
+            # Gateway-Server sind ueber das Gateway erreichbar (Wake/Forward laeuft
+            # dort) und bekommen KEINEN eigenen oeffentlichen Sleep-Proxy.
             if (
                 server.sleep_enabled
+                and not server.gateway_enabled
                 and server.port
                 and server.sleep_internal_port
                 and server.port != server.sleep_internal_port
@@ -330,13 +333,27 @@ def _wake_server(server_id: int, client: socket.socket) -> bool:
 
 
 def _forward(listener: _ProxyListener, client: socket.socket, initial: bytes) -> None:
+    _forward_to_backend(client, listener.internal_port, listener.server_id, initial)
+
+
+def _forward_to_backend(
+    client: socket.socket,
+    internal_port: int,
+    server_id: int,
+    initial: bytes,
+) -> None:
+    """Client transparent an ``127.0.0.1:internal_port`` koppeln (Byte-Splicing).
+
+    Gemeinsamer Baustein fuer den Sleep-Proxy (ein Backend) und das Gateway
+    (viele Backends).
+    """
     try:
         backend = socket.create_connection(
-            ("127.0.0.1", listener.internal_port),
+            ("127.0.0.1", internal_port),
             timeout=_BACKEND_CONNECT_TIMEOUT,
         )
     except OSError as exc:
-        _log(listener.server_id, "sleep_proxy.backend_unreachable", repr(exc))
+        _log(server_id, "sleep_proxy.backend_unreachable", repr(exc))
         _send_login_disconnect(client, "Server nicht erreichbar. Bitte erneut verbinden.")
         return
 
@@ -424,6 +441,14 @@ def _idle_tick() -> None:
     # aktiviert, war der Port zunaechst belegt; sobald er frei ist (nach Stop/
     # Neustart), bindet der Proxy hier automatisch nach.
     reconcile_proxies()
+    # Gateway analog abgleichen (Listener nachbinden, Routing-Tabelle auffrischen).
+    # Lazy-Import bricht den Zyklus gateway_service -> sleep_proxy_service.
+    try:
+        from app.services import gateway_service
+
+        gateway_service.reconcile_gateway()
+    except Exception:  # noqa: BLE001 - Monitor darf nie sterben
+        pass
 
     with SessionLocal() as db:
         servers = list(
