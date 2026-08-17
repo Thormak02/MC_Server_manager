@@ -750,7 +750,7 @@ def test_start_server_allows_restarting_only_for_internal_restart(client, tmp_pa
     monkeypatch.setattr(
         process_service,
         "prepare_server_java_runtime",
-        lambda db, server: (True, "", None),
+        lambda db, server, **_kwargs: (True, "", None),
     )
     monkeypatch.setattr(modpack_service, "get_pending_install", lambda db, server_id: None)
     monkeypatch.setattr(process_service.subprocess, "Popen", lambda *args, **kwargs: fake_process)

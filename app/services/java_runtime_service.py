@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import json
 import os
 import re
+import shutil
 import subprocess
+import urllib.request
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
+from threading import RLock
+from typing import Callable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.java_profile import JavaProfile
 from app.models.server import Server
 
@@ -40,6 +47,16 @@ _WINGET_TEMURIN_IDS = {
 
 _LAST_SCAN_AT: datetime | None = None
 _SCAN_CACHE_SECONDS = 300
+
+# Serialisiert automatische Java-Installationen (verhindert Doppel-Downloads,
+# wenn mehrere Server gleichzeitig starten).
+_JAVA_INSTALL_LOCK = RLock()
+
+# Adoptium/Temurin liefert fertige JDK-ZIPs ohne winget/Adminrechte.
+_ADOPTIUM_ASSETS_URL = (
+    "https://api.adoptium.net/v3/assets/latest/{major}/hotspot"
+    "?architecture=x64&image_type=jdk&os=windows&vendor=eclipse"
+)
 
 
 @dataclass
@@ -184,6 +201,9 @@ def _candidate_paths() -> list[Path]:
     if user_profile:
         found.update(_scan_root_for_java(Path(user_profile) / ".jdks"))
 
+    # Vom Manager selbst installierte JDKs (data_dir/java/temurin-<major>/...).
+    found.update(_scan_root_for_java(managed_java_root()))
+
     return sorted(found, key=lambda item: str(item).lower())
 
 
@@ -295,6 +315,154 @@ def sync_detected_java_profiles(
     return len(detected), created, updated
 
 
+def managed_java_root() -> Path:
+    """Ordner fuer vom Manager selbst installierte JDKs (data_dir/java)."""
+    return (get_settings().data_dir / "java").resolve()
+
+
+def _find_java_exe(root: Path) -> Path | None:
+    if not root.exists() or not root.is_dir():
+        return None
+    for candidate in sorted(root.glob("**/bin/java.exe")):
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
+def _download_to_file(url: str, target: Path, *, timeout: float = 900.0) -> None:
+    """Streamt einen (grossen) Download chunkweise auf die Platte."""
+    from app.providers.server.common import USER_AGENT
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout) as response, target.open("wb") as handle:
+        shutil.copyfileobj(response, handle, length=1024 * 256)
+
+
+def install_java_from_adoptium(major_version: int) -> tuple[bool, str, Path | None]:
+    """Laedt ein Temurin-JDK direkt von Adoptium und entpackt es nach
+    ``data_dir/java/temurin-<major>``. Braucht weder winget noch Adminrechte.
+
+    Rueckgabe: (erfolg, meldung, pfad_zu_java_exe | None).
+    """
+    major = int(major_version)
+    dest = managed_java_root() / f"temurin-{major}"
+
+    existing = _find_java_exe(dest)
+    if existing is not None:
+        return True, f"Java {major} ist bereits vorhanden ({existing}).", existing
+
+    meta_url = _ADOPTIUM_ASSETS_URL.format(major=major)
+    try:
+        from app.providers.server.common import USER_AGENT
+
+        req = urllib.request.Request(meta_url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Adoptium-API fuer Java {major} nicht erreichbar: {exc}", None
+
+    if not isinstance(payload, list) or not payload:
+        return False, f"Keine Temurin-JDK-{major}-Version (Windows x64) gefunden.", None
+
+    package = (((payload[0] or {}).get("binary") or {}).get("package") or {})
+    link = str(package.get("link") or "")
+    file_name = str(package.get("name") or f"temurin-{major}.zip")
+    if not link:
+        return False, f"Adoptium-Download-Link fuer Java {major} fehlt.", None
+
+    dest.mkdir(parents=True, exist_ok=True)
+    archive = dest / file_name
+    try:
+        _download_to_file(link, archive, timeout=1200)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Java {major} konnte nicht geladen werden: {exc}", None
+
+    try:
+        with zipfile.ZipFile(archive) as zf:
+            zf.extractall(dest)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Java {major} konnte nicht entpackt werden: {exc}", None
+    finally:
+        try:
+            archive.unlink()
+        except OSError:
+            pass
+
+    java_exe = _find_java_exe(dest)
+    if java_exe is None:
+        return False, f"Java {major} entpackt, aber java.exe wurde nicht gefunden.", None
+    return True, f"Java {major} (Temurin) installiert: {java_exe}", java_exe
+
+
+def _best_profile_for_major(db: Session, required_major: int) -> JavaProfile | None:
+    for profile in db.scalars(select(JavaProfile)).all():
+        java_path = Path(profile.java_path).expanduser().resolve()
+        if not java_path.exists() or not java_path.is_file():
+            continue
+        major = _profile_major(profile)
+        if major is None or major < required_major:
+            continue
+        return profile
+    return None
+
+
+def ensure_java_available(
+    db: Session,
+    required_major: int,
+    *,
+    on_progress: Callable[[str], None] | None = None,
+) -> tuple[bool, str]:
+    """Stellt sicher, dass ein Java >= ``required_major`` vorhanden ist.
+
+    Ist keins installiert, laedt der Manager es automatisch von Adoptium
+    (Temurin) herunter und legt ein passendes Java-Profil an. Bei mehreren
+    gleichzeitigen Starts wird nur einmal heruntergeladen (Lock + Re-Check).
+    """
+
+    def _log(message: str) -> None:
+        if on_progress and message:
+            on_progress(message)
+
+    if _best_profile_for_major(db, required_major) is not None:
+        return True, ""
+
+    from app.providers.server.common import offline_mode_enabled
+
+    if offline_mode_enabled():
+        return False, (
+            f"Java {required_major} fehlt und kann im Offline-Modus nicht automatisch "
+            "geladen werden. Bitte Java manuell installieren."
+        )
+
+    with _JAVA_INSTALL_LOCK:
+        # Zweiter, konkurrenzfester Blick (ein anderer Start koennte inzwischen
+        # installiert haben).
+        try:
+            sync_detected_java_profiles(db, force=True)
+        except Exception:  # noqa: BLE001
+            pass
+        if _best_profile_for_major(db, required_major) is not None:
+            return True, ""
+
+        _log(f"Java {required_major} fehlt – wird automatisch von Adoptium (Temurin) geladen ...")
+        ok, message, _java_exe = install_java_from_adoptium(required_major)
+        _log(message)
+        if not ok:
+            return False, message
+
+        try:
+            sync_detected_java_profiles(db, force=True)
+        except Exception:  # noqa: BLE001
+            pass
+        if _best_profile_for_major(db, required_major) is not None:
+            return True, message
+
+        return False, (
+            f"Java {required_major} wurde installiert, aber kein passendes Profil erkannt."
+        )
+
+
 def required_java_major_for_mc(mc_version: str) -> int:
     text = (mc_version or "").strip()
     match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", text)
@@ -350,7 +518,13 @@ def choose_best_java_profile(
     return candidates[0][3]
 
 
-def ensure_server_java_profile(db: Session, server: Server) -> tuple[bool, str]:
+def ensure_server_java_profile(
+    db: Session,
+    server: Server,
+    *,
+    on_progress: Callable[[str], None] | None = None,
+    auto_install: bool = True,
+) -> tuple[bool, str]:
     required = required_java_major_for_mc(server.mc_version)
     selected: JavaProfile | None = None
 
@@ -364,11 +538,17 @@ def ensure_server_java_profile(db: Session, server: Server) -> tuple[bool, str]:
 
     if selected is None:
         best = choose_best_java_profile(db, mc_version=server.mc_version)
+        if best is None and auto_install:
+            # Kein passendes Java -> automatisch herunterladen (Adoptium/Temurin).
+            installed, _msg = ensure_java_available(db, required, on_progress=on_progress)
+            if installed:
+                best = choose_best_java_profile(db, mc_version=server.mc_version)
         if best is None:
             return (
                 False,
-                f"Kein kompatibles Java gefunden (benoetigt Java {required}+ fuer MC {server.mc_version}). "
-                "Bitte Java in den Einstellungen erkennen oder installieren.",
+                f"Kein kompatibles Java gefunden (benoetigt Java {required}+ fuer MC {server.mc_version}) "
+                "und die automatische Installation ist fehlgeschlagen. "
+                "Bitte Java in den Einstellungen installieren.",
             )
         if server.java_profile_id != best.id:
             server.java_profile_id = best.id
@@ -398,11 +578,16 @@ def build_java_env_from_profile(profile: JavaProfile) -> dict[str, str]:
     return env
 
 
-def prepare_server_java_runtime(db: Session, server: Server) -> tuple[bool, str, dict[str, str] | None]:
+def prepare_server_java_runtime(
+    db: Session,
+    server: Server,
+    *,
+    on_progress: Callable[[str], None] | None = None,
+) -> tuple[bool, str, dict[str, str] | None]:
     # Cache-aware background synchronization
     sync_detected_java_profiles(db, force=False)
 
-    ok, message = ensure_server_java_profile(db, server)
+    ok, message = ensure_server_java_profile(db, server, on_progress=on_progress)
     if not ok:
         return False, message, None
 
@@ -415,6 +600,32 @@ def prepare_server_java_runtime(db: Session, server: Server) -> tuple[bool, str,
         return False, f"Java-Pfad nicht gefunden: {java_path}", None
 
     return True, message, build_java_env_from_profile(profile)
+
+
+def _resolve_winget_executable() -> str | None:
+    """winget.exe zuverlaessig finden.
+
+    Als Dienst/ohne interaktives Profil liegt ``winget`` oft nicht im PATH
+    (fuehrt zu ``[WinError 2]``). Deshalb zusaetzlich die bekannten
+    App-Installer-Speicherorte pruefen.
+    """
+    found = shutil.which("winget")
+    if found:
+        return found
+
+    candidates: list[Path] = []
+    local_app = os.environ.get("LOCALAPPDATA", "").strip()
+    if local_app:
+        candidates.append(Path(local_app) / "Microsoft" / "WindowsApps" / "winget.exe")
+    program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+    windows_apps = Path(program_files) / "WindowsApps"
+    if windows_apps.exists():
+        candidates.extend(sorted(windows_apps.glob("Microsoft.DesktopAppInstaller_*/winget.exe")))
+
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return str(candidate)
+    return None
 
 
 def install_java_with_winget(
@@ -430,9 +641,16 @@ def install_java_with_winget(
     if not package_id:
         return False, "Ungueltige Java-Version. Erlaubt: 8, 11, 17, 21, 23, 25."
 
+    winget = _resolve_winget_executable()
+    if not winget:
+        return False, (
+            "winget wurde nicht gefunden. Der Manager kann Java stattdessen direkt "
+            "von Adoptium installieren (Button unten) – dafuer ist kein winget noetig."
+        )
+
     try:
         version_check = subprocess.run(
-            ["winget", "--version"],
+            [winget, "--version"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -448,7 +666,7 @@ def install_java_with_winget(
         return False, f"winget nicht verfuegbar. {details}"
 
     command = [
-        "winget",
+        winget,
         "install",
         "--id",
         package_id,

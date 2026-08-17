@@ -39,6 +39,7 @@ from app.services.java_profile_service import (
     set_default_java_profile,
 )
 from app.services.java_runtime_service import (
+    install_java_from_adoptium,
     install_java_with_winget,
     sync_detected_java_profiles,
 )
@@ -550,10 +551,22 @@ def install_java_action(
         push_flash(request, "Ungueltige Java-Version.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
-    ok, message = install_java_with_winget(
-        major_version=major,
-        distribution=(distribution or "temurin").strip().lower(),
-    )
+    distro = (distribution or "temurin").strip().lower()
+    # Temurin direkt von Adoptium ziehen (kein winget/Adminrechte noetig, laeuft
+    # auch als Dienst). winget bleibt Fallback fuer andere Distributionen.
+    if distro == "temurin":
+        ok, message, _java_exe = install_java_from_adoptium(major)
+        if not ok:
+            winget_ok, winget_msg = install_java_with_winget(
+                major_version=major, distribution=distro
+            )
+            if winget_ok:
+                ok, message = True, winget_msg
+            else:
+                message = f"{message} (winget-Fallback: {winget_msg})"
+    else:
+        ok, message = install_java_with_winget(major_version=major, distribution=distro)
+
     if not ok:
         push_flash(request, message, "error")
         return RedirectResponse(url="/settings", status_code=303)

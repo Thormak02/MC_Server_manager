@@ -492,6 +492,16 @@ def _prepare_buildtools_if_needed(
         return True, ""  # bereits gebaut
 
     display = "CraftBukkit" if server_type == "bukkit" else "Spigot"
+
+    from app.providers.server.common import download_file, offline_mode_enabled
+
+    if offline_mode_enabled():
+        # BuildTools klont die Spigot-Repos und laedt Maven -> ohne Netz unmoeglich.
+        return False, (
+            f"{display} kann im Offline-Modus nicht gebaut werden: {jar_name} fehlt "
+            "und BuildTools benoetigt Internetzugang."
+        )
+
     _set_start_progress(
         server.id,
         active=True,
@@ -510,8 +520,6 @@ def _prepare_buildtools_if_needed(
     buildtools_jar = buildtools_dir / "BuildTools.jar"
     if not buildtools_jar.exists():
         try:
-            from app.providers.server.common import download_file
-
             download_file(
                 "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar",
                 buildtools_jar,
@@ -527,8 +535,11 @@ def _prepare_buildtools_if_needed(
     else:
         step = build_cmd
 
+    # BuildTools laeuft mehrere Minuten (erster Lauf klont Repos + laedt Maven).
+    # Ausgabe live streamen (Reader-Thread) und den Fortschrittsbalken per
+    # Heartbeat bewegen, damit die Konsole nicht "eingefroren" wirkt.
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             ["cmd", "/d", "/c", step],
             cwd=None if use_pushd else str(buildtools_dir),
             env=runtime_env,
@@ -537,16 +548,62 @@ def _prepare_buildtools_if_needed(
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=1800,
+            bufsize=1,
             creationflags=_build_creation_flags(),
         )
-    except subprocess.TimeoutExpired as exc:
-        _append_subprocess_output(server.id, exc.stdout or "", tag="buildtools")
-        return False, f"{display} BuildTools: Timeout nach 30 Minuten."
     except Exception as exc:  # noqa: BLE001
         return False, f"{display} BuildTools fehlgeschlagen: {exc}"
 
-    _append_subprocess_output(server.id, completed.stdout or "", tag="buildtools")
+    def _pump_output(stream) -> None:
+        try:
+            for raw_line in stream:
+                text = raw_line.rstrip("\r\n")
+                if text.strip():
+                    _append_subprocess_output(server.id, text, tag="buildtools")
+        except Exception:  # noqa: BLE001 - Reader darf den Build nie stoppen
+            pass
+
+    build_done = Event()
+
+    def _heartbeat() -> None:
+        percent = 30
+        while not build_done.wait(12):
+            if percent < 88:
+                percent += 2
+            _set_start_progress(
+                server.id,
+                active=True,
+                stage="buildtools",
+                message=f"{display} wird mit BuildTools gebaut (laeuft) ...",
+                percent=percent,
+            )
+
+    reader = Thread(target=_pump_output, args=(process.stdout,), daemon=True)
+    heartbeat = Thread(target=_heartbeat, daemon=True)
+    reader.start()
+    heartbeat.start()
+
+    try:
+        returncode = process.wait(timeout=1800)
+    except subprocess.TimeoutExpired:
+        try:
+            process.kill()
+        except Exception:  # noqa: BLE001
+            pass
+        build_done.set()
+        reader.join(timeout=10)
+        heartbeat.join(timeout=3)
+        return False, f"{display} BuildTools: Timeout nach 30 Minuten."
+    finally:
+        build_done.set()
+
+    reader.join(timeout=10)
+    heartbeat.join(timeout=3)
+
+    if returncode != 0:
+        console_service.append_output(
+            server.id, f"[buildtools] BuildTools beendet mit Exit-Code {returncode}."
+        )
 
     # Erzeugte Jar liegt im buildtools-Ordner -> in den Serverordner uebernehmen.
     produced = buildtools_dir / jar_name
@@ -1183,7 +1240,21 @@ def start_server(
             message="Java-Laufzeit wird vorbereitet ...",
             percent=40,
         )
-        java_ok, java_message, runtime_env = prepare_server_java_runtime(db, server)
+
+        def _java_progress(message: str) -> None:
+            # Auto-Download der Java-Laufzeit im Konsolen-/Fortschrittsfenster zeigen.
+            console_service.append_output(server.id, message)
+            _set_start_progress(
+                server.id,
+                active=True,
+                stage="java_install",
+                message=message,
+                percent=42,
+            )
+
+        java_ok, java_message, runtime_env = prepare_server_java_runtime(
+            db, server, on_progress=_java_progress
+        )
         if not java_ok:
             server.status = "error"
             db.add(server)

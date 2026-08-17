@@ -61,3 +61,14 @@ def test_buildtools_skips_when_jar_already_built(tmp_path):
     srv = SimpleNamespace(id=2, server_type="spigot", mc_version="1.21.4")
     ok, msg = ps._prepare_buildtools_if_needed(srv, tmp_path, None)
     assert ok is True and msg == ""  # bereits gebaut -> kein BuildTools-Lauf
+
+
+def test_buildtools_offline_mode_does_not_hit_network(tmp_path, monkeypatch):
+    from app.providers.server import common as provider_common
+    from app.services import process_service as ps
+
+    # Im Offline-Modus darf BuildTools nicht heruntergeladen/gestartet werden.
+    monkeypatch.setattr(provider_common, "offline_mode_enabled", lambda: True)
+    srv = SimpleNamespace(id=3, server_type="bukkit", mc_version="1.21.4")
+    ok, msg = ps._prepare_buildtools_if_needed(srv, tmp_path, None)
+    assert ok is False and "Offline" in msg
