@@ -10,16 +10,15 @@ from app.models.app_setting import AppSetting
 SERVER_STORAGE_ROOT_KEY = "server_storage_root"
 BACKUP_STORAGE_ROOT_KEY = "backup_storage_root"
 PUBLIC_BASE_URL_KEY = "public_base_url"
-GATEWAY_ENABLED_KEY = "gateway_enabled"
-GATEWAY_PORT_KEY = "gateway_port"
-GATEWAY_DOMAIN_KEY = "gateway_domain"
 NETWORK_MODE_KEY = "network_mode"
+NETWORK_PORT_KEY = "network_port"
+NETWORK_DOMAIN_KEY = "network_domain"
 VELOCITY_VERSION_KEY = "velocity_version"
 VELOCITY_VIA_ENABLED_KEY = "velocity_via_enabled"
 
-# Erlaubte Netzwerk-Modi. "gateway" = leichter Hostname-Router (bestehend),
-# "velocity" = echter Proxy mit Lobby/In-Game-Wechsel, "off" = keiner.
-NETWORK_MODES = ("off", "gateway", "velocity")
+# Erlaubte Netzwerk-Modi. "velocity" = echter Proxy mit Lobby/In-Game-Wechsel,
+# "off" = kein gemeinsamer Eingang.
+NETWORK_MODES = ("off", "velocity")
 
 
 def _normalize_path(raw_value: str) -> Path:
@@ -289,41 +288,13 @@ def get_public_base_url_runtime() -> str:
         return get_public_base_url(db)
 
 
-# --- Globales Lobby-/Gateway-Routing (an/aus + Port) ---
+# --- Netzwerk (Velocity-Lobby): Modus + oeffentlicher Port + Domain ---
 
 
 def _normalize_bool(raw: object) -> bool:
     if isinstance(raw, bool):
         return raw
     return str(raw or "").strip().lower() in {"1", "true", "on", "yes"}
-
-
-def get_gateway_enabled(db: Session) -> bool:
-    """UI-Override > ENV/Config (MCSM_GATEWAY_ENABLED)."""
-    row = _get_setting_row(db, GATEWAY_ENABLED_KEY)
-    if row and row.value.strip():
-        return _normalize_bool(row.value)
-    return bool(get_settings().gateway_enabled)
-
-
-def get_gateway_enabled_source(db: Session) -> str:
-    row = _get_setting_row(db, GATEWAY_ENABLED_KEY)
-    return "ui" if (row and row.value.strip()) else "config"
-
-
-def get_gateway_port(db: Session) -> int:
-    row = _get_setting_row(db, GATEWAY_PORT_KEY)
-    if row and row.value.strip():
-        try:
-            return int(row.value.strip())
-        except ValueError:
-            pass
-    return int(get_settings().gateway_port)
-
-
-def get_gateway_port_source(db: Session) -> str:
-    row = _get_setting_row(db, GATEWAY_PORT_KEY)
-    return "ui" if (row and row.value.strip()) else "config"
 
 
 def _set_or_clear(db: Session, key: str, value: str | None) -> None:
@@ -342,34 +313,38 @@ def _set_or_clear(db: Session, key: str, value: str | None) -> None:
     db.commit()
 
 
-def set_gateway_enabled(db: Session, enabled: bool) -> bool:
-    _set_or_clear(db, GATEWAY_ENABLED_KEY, "true" if enabled else "false")
-    return enabled
+def get_network_port(db: Session) -> int:
+    """Oeffentlicher Netzwerk-Port (Velocity-Eingangstuer). UI > ENV > Default."""
+    row = _get_setting_row(db, NETWORK_PORT_KEY)
+    if row and row.value.strip():
+        try:
+            return int(row.value.strip())
+        except ValueError:
+            pass
+    return int(get_settings().network_port)
 
 
-def set_gateway_port(db: Session, port: int) -> int:
+def get_network_port_source(db: Session) -> str:
+    row = _get_setting_row(db, NETWORK_PORT_KEY)
+    return "ui" if (row and row.value.strip()) else "config"
+
+
+def set_network_port(db: Session, port: int) -> int:
     port = int(port)
     if not (1 <= port <= 65535):
         raise ValueError("Port muss zwischen 1 und 65535 liegen.")
-    _set_or_clear(db, GATEWAY_PORT_KEY, str(port))
+    _set_or_clear(db, NETWORK_PORT_KEY, str(port))
     return port
 
 
-def get_gateway_enabled_runtime() -> bool:
+def get_network_port_runtime() -> int:
     from app.db.session import SessionLocal
 
     with SessionLocal() as db:
-        return get_gateway_enabled(db)
+        return get_network_port(db)
 
 
-def get_gateway_port_runtime() -> int:
-    from app.db.session import SessionLocal
-
-    with SessionLocal() as db:
-        return get_gateway_port(db)
-
-
-def _normalize_gateway_domain(raw: str | None) -> str:
+def _normalize_network_domain(raw: str | None) -> str:
     """Domain vereinheitlichen: ohne Schema, ohne Slashes/Punkt am Ende, klein."""
     value = (raw or "").strip().lower()
     if "://" in value:
@@ -378,48 +353,44 @@ def _normalize_gateway_domain(raw: str | None) -> str:
     return value
 
 
-def get_gateway_domain(db: Session) -> str:
-    """UI-Override > ENV/Config (MCSM_GATEWAY_DOMAIN) > leer."""
-    row = _get_setting_row(db, GATEWAY_DOMAIN_KEY)
+def get_network_domain(db: Session) -> str:
+    """UI-Override > ENV/Config (MCSM_NETWORK_DOMAIN) > leer."""
+    row = _get_setting_row(db, NETWORK_DOMAIN_KEY)
     if row and row.value.strip():
-        return _normalize_gateway_domain(row.value)
-    return _normalize_gateway_domain(get_settings().gateway_domain)
+        return _normalize_network_domain(row.value)
+    return _normalize_network_domain(get_settings().network_domain)
 
 
-def get_gateway_domain_source(db: Session) -> str:
-    row = _get_setting_row(db, GATEWAY_DOMAIN_KEY)
+def get_network_domain_source(db: Session) -> str:
+    row = _get_setting_row(db, NETWORK_DOMAIN_KEY)
     if row and row.value.strip():
         return "ui"
-    if (get_settings().gateway_domain or "").strip():
+    if (get_settings().network_domain or "").strip():
         return "env"
     return "default"
 
 
-def set_gateway_domain(db: Session, domain: str | None) -> str:
-    normalized = _normalize_gateway_domain(domain)
-    _set_or_clear(db, GATEWAY_DOMAIN_KEY, normalized)
+def set_network_domain(db: Session, domain: str | None) -> str:
+    normalized = _normalize_network_domain(domain)
+    _set_or_clear(db, NETWORK_DOMAIN_KEY, normalized)
     return normalized
 
 
-def get_gateway_domain_runtime() -> str:
+def get_network_domain_runtime() -> str:
     from app.db.session import SessionLocal
 
     with SessionLocal() as db:
-        return get_gateway_domain(db)
+        return get_network_domain(db)
 
 
 def get_network_mode(db: Session) -> str:
-    """Aktiver Netzwerk-Modus: 'off' | 'gateway' | 'velocity'.
-
-    Default (kein UI-Wert): 'gateway', falls das alte Gateway aktiviert ist,
-    sonst 'off' (rueckwaertskompatibel zum bisherigen Verhalten).
-    """
+    """Aktiver Netzwerk-Modus: 'off' | 'velocity'. Default: 'off'."""
     row = _get_setting_row(db, NETWORK_MODE_KEY)
     if row and row.value.strip():
         value = row.value.strip().lower()
         if value in NETWORK_MODES:
             return value
-    return "gateway" if get_gateway_enabled(db) else "off"
+    return "off"
 
 
 def get_network_mode_source(db: Session) -> str:

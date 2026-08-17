@@ -15,14 +15,12 @@ from app.services.app_setting_service import (
     clear_server_storage_override,
     get_backup_storage_root,
     get_backup_storage_source,
-    get_gateway_domain,
-    get_gateway_domain_source,
-    get_gateway_enabled,
-    get_gateway_enabled_source,
-    get_gateway_port,
-    get_gateway_port_source,
+    get_network_domain,
+    get_network_domain_source,
     get_network_mode,
     get_network_mode_source,
+    get_network_port,
+    get_network_port_source,
     get_public_base_url,
     get_public_base_url_source,
     get_server_storage_root,
@@ -30,10 +28,9 @@ from app.services.app_setting_service import (
     get_velocity_version,
     get_velocity_via_enabled,
     set_backup_storage_root,
-    set_gateway_domain,
-    set_gateway_enabled,
-    set_gateway_port,
+    set_network_domain,
     set_network_mode,
+    set_network_port,
     set_public_base_url,
     set_server_storage_root,
     set_velocity_version,
@@ -99,12 +96,10 @@ def settings_page(
     backup_storage_source = get_backup_storage_source(db)
     public_base_url = get_public_base_url(db)
     public_base_url_source = get_public_base_url_source(db)
-    gateway_enabled = get_gateway_enabled(db)
-    gateway_enabled_source = get_gateway_enabled_source(db)
-    gateway_port = get_gateway_port(db)
-    gateway_port_source = get_gateway_port_source(db)
-    gateway_domain = get_gateway_domain(db)
-    gateway_domain_source = get_gateway_domain_source(db)
+    network_port = get_network_port(db)
+    network_port_source = get_network_port_source(db)
+    network_domain = get_network_domain(db)
+    network_domain_source = get_network_domain_source(db)
     network_mode = get_network_mode(db)
     network_mode_source = get_network_mode_source(db)
     velocity_version = get_velocity_version(db)
@@ -125,12 +120,10 @@ def settings_page(
             backup_storage_source=backup_storage_source,
             public_base_url=public_base_url,
             public_base_url_source=public_base_url_source,
-            gateway_enabled=gateway_enabled,
-            gateway_enabled_source=gateway_enabled_source,
-            gateway_port=gateway_port,
-            gateway_port_source=gateway_port_source,
-            gateway_domain=gateway_domain,
-            gateway_domain_source=gateway_domain_source,
+            network_port=network_port,
+            network_port_source=network_port_source,
+            network_domain=network_domain,
+            network_domain_source=network_domain_source,
             network_mode=network_mode,
             network_mode_source=network_mode_source,
             velocity_version=velocity_version,
@@ -141,55 +134,12 @@ def settings_page(
     )
 
 
-@router.post("/settings/gateway")
-def update_gateway_settings_action(
-    request: Request,
-    gateway_enabled: Annotated[str | None, Form()] = None,
-    gateway_port: Annotated[str | None, Form()] = None,
-    gateway_domain: Annotated[str | None, Form()] = None,
-    db: Session = Depends(get_db),
-):
-    current_user = _require_super_admin(request, db)
-    if current_user is None:
-        return RedirectResponse(url="/login", status_code=303)
-
-    enabled = _to_bool(gateway_enabled)
-    try:
-        raw_port = (gateway_port or "").strip()
-        if raw_port:
-            set_gateway_port(db, int(raw_port))
-        set_gateway_domain(db, gateway_domain)
-        set_gateway_enabled(db, enabled)
-    except (ValueError, TypeError) as exc:
-        push_flash(request, f"Ungueltiger Gateway-Port: {exc}", "error")
-        return RedirectResponse(url="/settings", status_code=303)
-
-    # Listener/Routing sofort an die neue Einstellung angleichen.
-    try:
-        from app.services import gateway_service
-
-        gateway_service.reconcile_gateway()
-    except Exception:  # noqa: BLE001
-        pass
-
-    audit_service.log_action(
-        db,
-        action="settings.gateway_update",
-        user_id=current_user.id,
-        details=f"enabled={enabled} port={raw_port or '(unveraendert)'}",
-    )
-    push_flash(
-        request,
-        f"Gateway-Einstellungen gespeichert (aktiv={'ja' if enabled else 'nein'}).",
-        "success",
-    )
-    return RedirectResponse(url="/settings", status_code=303)
-
-
 @router.post("/settings/network")
 def update_network_settings_action(
     request: Request,
     network_mode: Annotated[str | None, Form()] = None,
+    network_port: Annotated[str | None, Form()] = None,
+    network_domain: Annotated[str | None, Form()] = None,
     velocity_version: Annotated[str | None, Form()] = None,
     velocity_via_enabled: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
@@ -199,21 +149,22 @@ def update_network_settings_action(
         return RedirectResponse(url="/login", status_code=303)
 
     try:
+        raw_port = (network_port or "").strip()
+        if raw_port:
+            set_network_port(db, int(raw_port))
+        set_network_domain(db, network_domain)
         mode = set_network_mode(db, network_mode or "off")
         set_velocity_version(db, velocity_version)
         set_velocity_via_enabled(db, _to_bool(velocity_via_enabled))
-    except ValueError as exc:
+    except (ValueError, TypeError) as exc:
         push_flash(request, str(exc), "error")
         return RedirectResponse(url="/settings", status_code=303)
 
-    # Front-Door sofort umschalten: reconcile_network stoppt den falschen und
-    # bindet den richtigen (Velocity und Gateway teilen sich den Port).
+    # Front-Door sofort umschalten (Velocity starten/stoppen) + ViaVersion anwenden.
     try:
         from app.services import velocity_service
 
         velocity_service.reconcile_network()
-        # ViaVersion-Umschaltung sofort anwenden (Plugins laden/entfernen + ggf.
-        # Velocity neu starten).
         velocity_service.sync_via_plugins(db)
     except Exception:  # noqa: BLE001
         pass
@@ -222,9 +173,31 @@ def update_network_settings_action(
         db,
         action="settings.network_update",
         user_id=current_user.id,
-        details=f"mode={mode} velocity_version={(velocity_version or '').strip() or '(neueste)'}",
+        details=f"mode={mode} port={raw_port or '(unveraendert)'}",
     )
-    push_flash(request, f"Netzwerk-Modus gespeichert: {mode}.", "success")
+    push_flash(request, f"Netzwerk-Einstellungen gespeichert (Modus: {mode}).", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/lobby/auto-create")
+def auto_create_lobby_action(request: Request, db: Session = Depends(get_db)):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import lobby_service
+
+    try:
+        ok, message, server_id = lobby_service.create_auto_lobby(
+            db, initiated_by_user_id=current_user.id
+        )
+    except Exception as exc:  # noqa: BLE001
+        push_flash(request, f"Auto-Lobby fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    push_flash(request, message, "success" if ok else "error")
+    if ok and server_id:
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
     return RedirectResponse(url="/settings", status_code=303)
 
 

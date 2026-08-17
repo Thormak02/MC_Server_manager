@@ -33,10 +33,37 @@ def init_db() -> None:
     settings.ensure_data_dir()
     Base.metadata.create_all(bind=engine)
     _ensure_server_schema()
+    _migrate_gateway_settings_to_network()
     _normalize_runtime_states()
     _cleanup_orphaned_server_relations()
     _seed_super_admin()
     _ensure_server_storage_root()
+
+
+def _migrate_gateway_settings_to_network() -> None:
+    """Alte Gateway-Einstellungen auf die neuen Netzwerk-Schluessel umbenennen,
+    damit bereits konfigurierte Werte (Port/Domain) erhalten bleiben.
+
+    Das alte Gateway-System wurde durch das Velocity-Netzwerk ersetzt.
+    """
+    from app.models.app_setting import AppSetting
+
+    renames = {"gateway_port": "network_port", "gateway_domain": "network_domain"}
+    drop_keys = ("gateway_enabled",)  # ohne Nachfolger -> entfernen
+    with SessionLocal() as db:
+        for old_key, new_key in renames.items():
+            old = db.scalar(select(AppSetting).where(AppSetting.key == old_key))
+            if old is None:
+                continue
+            new = db.scalar(select(AppSetting).where(AppSetting.key == new_key))
+            if new is None and (old.value or "").strip():
+                db.add(AppSetting(key=new_key, value=old.value))
+            db.delete(old)
+        for key in drop_keys:
+            row = db.scalar(select(AppSetting).where(AppSetting.key == key))
+            if row is not None:
+                db.delete(row)
+        db.commit()
 
 
 def _seed_super_admin() -> None:
@@ -84,20 +111,6 @@ def _ensure_server_schema() -> None:
         (
             "sleep_internal_port",
             "ALTER TABLE servers ADD COLUMN sleep_internal_port INTEGER",
-        ),
-        (
-            "gateway_enabled",
-            "ALTER TABLE servers "
-            "ADD COLUMN gateway_enabled BOOLEAN NOT NULL DEFAULT 0",
-        ),
-        (
-            "gateway_hostname",
-            "ALTER TABLE servers ADD COLUMN gateway_hostname VARCHAR(255)",
-        ),
-        (
-            "gateway_is_default",
-            "ALTER TABLE servers "
-            "ADD COLUMN gateway_is_default BOOLEAN NOT NULL DEFAULT 0",
         ),
         (
             "velocity_enabled",

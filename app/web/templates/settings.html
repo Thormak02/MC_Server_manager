@@ -72,33 +72,39 @@
 </section>
 
 <section class="card">
-    <h2>Netzwerk-Modus</h2>
+    <h2>Netzwerk (Lobby)</h2>
     <p class="muted">
-        Bestimmt die gemeinsame Eingangstuer fuer alle Server. Aktuell:
+        Gemeinsame Eingangstuer fuer alle Server ueber einen Velocity-Proxy. Aktuell:
         <strong>{{ network_mode }}</strong> (Quelle: {{ "UI" if network_mode_source == "ui" else "Standard" }}).
     </p>
     <ul class="muted">
         <li><strong>off</strong> &ndash; kein gemeinsamer Eingang; jeder Server auf eigenem Port.</li>
-        <li><strong>gateway</strong> &ndash; leichter Hostname-Router (<code>&lt;alias&gt;.&lt;domain&gt;</code>).
-            Jeder landet direkt auf dem passenden Server seiner Version. Kein In-Game-Wechsel.</li>
         <li><strong>velocity</strong> &ndash; echter Proxy mit Lobby: einmal verbinden, dann per
-            <code>/server</code>/Schild/Portal im Spiel wechseln; ViaVersion erlaubt mehrere Client-Versionen.
-            Velocity und Gateway teilen sich den Port &ndash; es laeuft immer nur einer.</li>
+            <code>/server</code>/Schild/Portal im Spiel wechseln; ViaVersion erlaubt mehrere Client-Versionen.</li>
     </ul>
     <form method="post" action="/settings/network" class="grid grid-4">
         <div>
             <label for="network_mode">Modus</label>
             <select id="network_mode" name="network_mode">
                 <option value="off" {% if network_mode == "off" %}selected{% endif %}>off</option>
-                <option value="gateway" {% if network_mode == "gateway" %}selected{% endif %}>gateway</option>
                 <option value="velocity" {% if network_mode == "velocity" %}selected{% endif %}>velocity</option>
             </select>
+        </div>
+        <div>
+            <label for="network_port">Netzwerk-Port</label>
+            <input id="network_port" name="network_port" type="number" min="1" max="65535" value="{{ network_port }}">
+            <p class="muted">Oeffentlicher Port (Velocity-Eingang). Nur diesen nach aussen freigeben.</p>
+        </div>
+        <div>
+            <label for="network_domain">Netzwerk-Domain</label>
+            <input id="network_domain" name="network_domain" type="text" placeholder="z.B. deine-domain.de" value="{{ network_domain }}">
+            <p class="muted">Fuer Direktadressen <code>&lt;name&gt;.&lt;domain&gt;</code>.</p>
         </div>
         <div>
             <label for="velocity_version">Velocity-Version</label>
             <input id="velocity_version" name="velocity_version" type="text"
                    placeholder="leer = neueste stabile" value="{{ velocity_version }}">
-            <p class="muted">Nur fuer Modus <code>velocity</code>. Leer = automatisch neueste stabile.</p>
+            <p class="muted">Leer = automatisch neueste stabile.</p>
         </div>
         <div>
             <div class="toggle-field">
@@ -107,56 +113,28 @@
             <p class="muted">L&auml;dt ViaVersion/-Backwards/-Rewind auf den Proxy, damit Clients verschiedener Versionen verbinden k&ouml;nnen.</p>
         </div>
         <div class="align-end">
-            <button type="submit">Netzwerk-Modus speichern</button>
+            <button type="submit">Netzwerk speichern</button>
         </div>
     </form>
     <p class="muted">
-        Hinweis: Im <code>velocity</code>-Modus laufen die Backend-Server in
+        Im <code>velocity</code>-Modus laufen die Backend-Server in
         <code>online-mode=false</code> und duerfen nur ueber Velocity erreichbar sein
-        &ndash; nach aussen ausschliesslich den Velocity-Port (25565) freigeben. Die
-        Backend-Anbindung (Forwarding, Lobby) kommt in Phase 2.
-    </p>
-</section>
-
-<section class="card">
-    <h2>Lobby / Gateway</h2>
-    <p class="muted">
-        Ein gemeinsamer MC-Eingangspunkt: Spieler verbinden sich mit
-        <code>&lt;alias&gt;.&lt;deine-domain&gt;</code>, das Gateway leitet anhand des
-        Hostnamens auf den passenden Server (und weckt ihn ggf.). Aktuell:
-        <strong>{{ "aktiv" if gateway_enabled else "inaktiv" }}</strong> auf Port
-        <strong>{{ gateway_port }}</strong>
-        (Quelle: {{ "UI" if gateway_enabled_source == "ui" else "ENV/Standard" }}).
-    </p>
-    <form method="post" action="/settings/gateway" class="grid grid-4">
-        <div>
-            <div class="toggle-field">
-                <label>
-                    <input type="checkbox" name="gateway_enabled" value="true" {% if gateway_enabled %}checked{% endif %}>
-                    Gateway aktiv
-                </label>
-            </div>
-        </div>
-        <div>
-            <label for="gateway_port">Gateway-Port</label>
-            <input id="gateway_port" name="gateway_port" type="number" min="1" max="65535" value="{{ gateway_port }}">
-        </div>
-        <div>
-            <label for="gateway_domain">Zieldomain</label>
-            <input id="gateway_domain" name="gateway_domain" type="text" placeholder="z.B. deine-domain.de" value="{{ gateway_domain }}">
-            <p class="muted">Nur fuer die Anzeige der Verbindungsadressen (<code>&lt;alias&gt;.&lt;domain&gt;</code>).</p>
-        </div>
-        <div class="align-end">
-            <button type="submit">Speichern</button>
-        </div>
-    </form>
-    <p class="muted">
-        Pro Server werden Alias/Lobby unter <em>Server &rarr; Einstellungen</em> gesetzt.
-        Fuer den Live-Betrieb: Wildcard-DNS (<code>*.{{ gateway_domain or 'deine-domain' }}</code>)
-        auf diese IP, Port {{ gateway_port }} nach aussen freigeben. Werte gelten auch via
-        <code>MCSM_GATEWAY_ENABLED</code>/<code>MCSM_GATEWAY_PORT</code>/<code>MCSM_GATEWAY_DOMAIN</code>
+        &ndash; nach aussen ausschliesslich den Netzwerk-Port ({{ network_port }}) freigeben.
+        Pro Server unter <em>Server &rarr; Einstellungen</em> als Netzwerk-Backend markieren.
+        Werte gelten auch via <code>MCSM_NETWORK_PORT</code>/<code>MCSM_NETWORK_DOMAIN</code>
         in der <code>.env</code> (die Einstellungen hier <strong>ueberschreiben</strong> die ENV-Werte).
     </p>
+    <hr>
+    <h3>Lobby automatisch einrichten</h3>
+    <p class="muted">
+        Legt mit einem Klick einen fertigen Paper-Lobby-Server (stabiles 1.21.x) an,
+        markiert ihn als Netzwerk-Lobby (Sleep aus), setzt eine ruhige Lobby-Welt und
+        installiert das Server-Auswahl-Plugin <code>ServerSelector</code>. Danach nur
+        noch starten. Setzt den Netzwerk-Modus auf <code>velocity</code>.
+    </p>
+    <form method="post" action="/settings/lobby/auto-create" class="inline-form">
+        <button type="submit">Lobby automatisch einrichten</button>
+    </form>
 </section>
 
 <section class="card">

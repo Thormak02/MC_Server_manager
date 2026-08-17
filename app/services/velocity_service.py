@@ -240,7 +240,7 @@ def _build_velocity_toml_text(db, *, bind_port: int) -> str:
         try:
             from app.services import app_setting_service
 
-            domain = app_setting_service.get_gateway_domain(db)
+            domain = app_setting_service.get_network_domain(db)
         except Exception:  # noqa: BLE001
             domain = ""
     servers_block, forced_block = _render_servers_block(members, domain)
@@ -528,7 +528,7 @@ def sync_velocity_config(db) -> None:
 
     if app_setting_service.get_network_mode(db) != "velocity":
         return
-    bind_port = app_setting_service.get_gateway_port(db)
+    bind_port = app_setting_service.get_network_port(db)
     new_text = _build_velocity_toml_text(db, bind_port=bind_port)
 
     path = _toml_path()
@@ -690,7 +690,7 @@ def start_velocity(db, *, on_progress=None) -> tuple[bool, str]:
             return False, f"Kein passendes Java {required}+ fuer Velocity gefunden."
         env = build_java_env_from_profile(profile)
 
-        bind_port = app_setting_service.get_gateway_port(db)
+        bind_port = app_setting_service.get_network_port(db)
         generate_velocity_toml(db, bind_port=bind_port)
 
         base = managed_velocity_dir()
@@ -786,23 +786,15 @@ def _start_velocity_bg() -> None:
 
 
 def reconcile_network() -> None:
-    """Koordiniert die gemeinsame Eingangstuer (Gateway vs. Velocity).
+    """Velocity passend zum Netzwerk-Modus starten/stoppen.
 
     Idempotent -> laeuft bei App-Start, nach Settings-Aenderungen und bei jedem
-    Idle-Tick (Selbstheilung/Crash-Recovery). Der jeweils **falsche** Front-Door
-    wird zuerst gestoppt (Port freigeben), bevor der richtige gebunden wird.
+    Idle-Tick (Selbstheilung/Crash-Recovery).
     """
-    from app.services import gateway_service
-
-    mode = _current_network_mode()
-    if mode == "velocity":
-        # Gateway teilt sich den Port -> zuerst stoppen, dann Velocity starten.
-        gateway_service.stop_gateway()
+    if _current_network_mode() == "velocity":
         _ensure_velocity_started()
     else:
-        # Erst Velocity freigeben, dann Gateway (bindet nur im Modus "gateway").
         stop_velocity()
-        gateway_service.reconcile_gateway()
 
 
 # Rueckwaertskompatibler Alias (Lifespan/Settings/Idle rufen die Koordination).

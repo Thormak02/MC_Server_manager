@@ -173,7 +173,6 @@ def reconcile_proxies() -> None:
     - Velocity-Backend (Netzwerk-Modus velocity): Proxy nur auf ``127.0.0.1:port``
       – davor sitzt Velocity, der Backend-Port bleibt nach aussen dicht. Velocity
       zeigt auf diesen lokalen Proxy und weckt so beim ``/server``-Wechsel.
-    - Gateway-Server: kein eigener Sleep-Proxy (das Gateway weckt selbst).
     """
     from app.services import app_setting_service
 
@@ -189,8 +188,6 @@ def reconcile_proxies() -> None:
                 and server.port != server.sleep_internal_port
             ):
                 continue
-            if getattr(server, "gateway_enabled", False):
-                continue  # Gateway-Backend: das Gateway weckt selbst (wie bisher)
             if getattr(server, "velocity_enabled", False) and mode == "velocity":
                 bind_host = "127.0.0.1"  # nur lokal – Velocity ist die Eingangstuer
             else:

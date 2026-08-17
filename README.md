@@ -43,7 +43,7 @@ Webbasierte Verwaltungssoftware fuer mehrere Minecraft-Server auf einem Windows-
 - Modpack-Import erstellt immer einen neuen Server (Super Admin)
 - Import-Protokollierung ueber Audit-Log (`modpack.import_preview`, `modpack.import_execute`)
 - On-Demand-/Sleep-Modus: Server schlafen bei 0 Spielern und werden beim Beitritt automatisch geweckt
-- Optionales Lobby-/Gateway-Routing: ein MC-Eingangspunkt, Routing per Hostname-Alias (`<alias>.<domain>`), inkl. Wake (siehe unten)
+- Velocity-Lobby-Netzwerk: ein MC-Eingangspunkt, In-Game-Wechsel per `/server`, ViaVersion (Cross-Version), Wake schlafender Backends (siehe unten)
 - Modernes UI mit Light/Dark Umschaltung und ausklappbarer Sidebar
 
 ## Voraussetzungen
@@ -161,12 +161,12 @@ Wichtige Variablen:
 - `MCSM_TLS_CA_BUNDLE_PATH` Optionales PEM-Bundle fuer eigene/Firmen-Root-CAs
 - `MCSM_TLS_SKIP_VERIFY` Notfall-/Debug-Schalter zum Abschalten der TLS-Pruefung (nicht empfohlen)
 - `MCSM_PUBLIC_BASE_URL` Oeffentliche Manager-URL (z.B. `http://deine-domain.de:8000`) fuer selbst-gehostete Resource Packs
-- `MCSM_GATEWAY_ENABLED` Lobby-/Gateway-Routing aktivieren (`true`/`false`, Default `false`)
-- `MCSM_GATEWAY_PORT` Port des Gateway-Eingangs (Default `25565`)
-- `MCSM_GATEWAY_DOMAIN` Ziel-/Basisdomain fuer die Verbindungsadressen `<alias>.<domain>` (nur Anzeige)
+- `MCSM_NETWORK_PORT` Oeffentlicher Port des Velocity-Netzwerks (Default `25565`)
+- `MCSM_NETWORK_DOMAIN` Basisdomain fuer Direktadressen `<name>.<domain>` (nur Anzeige)
 
-> Die drei `MCSM_GATEWAY_*`-Werte sind auch unter *Einstellungen → Lobby/Gateway*
-> editierbar; **die UI-Einstellung ueberschreibt den jeweiligen ENV-Wert.**
+> Der Netzwerk-Modus (`off` | `velocity`) sowie Port/Domain sind auch unter
+> *Einstellungen → Netzwerk (Lobby)* editierbar; **die UI-Einstellung ueberschreibt
+> den jeweiligen ENV-Wert.**
 
 ## Erstlogin
 
@@ -185,37 +185,26 @@ Vor Produktivbetrieb in `.env` aendern.
 - Bei automatischer Erstellung (ohne Zielpfad) bekommt jeder Server einen eigenen Unterordner im Basisordner
 - Importierte Server werden nicht verschoben oder umgebaut
 
-## Lobby / Gateway (On-Demand-Routing)
+## Velocity-Lobby-Netzwerk
 
-Optional laesst sich **ein** gemeinsamer Minecraft-Eingangspunkt betreiben: Ein
-Spieler verbindet sich mit `<alias>.<deine-domain>` (z.B. `atm10.deine-domain.de`),
-das Gateway liest den Handshake, waehlt anhand des **Hostname-Alias** (Fallback:
-**Protokoll-Version**) das passende Backend und leitet **transparent** weiter —
-inklusive **Aufwecken** schlafender Server. Verbindungen mit der blanken Domain
-(oder einem unbekannten Alias) landen auf dem als **Lobby/Default** markierten
-Server.
+Ein gemeinsamer Minecraft-Eingangspunkt ueber einen **Velocity-Proxy**: Spieler
+verbinden sich **einmal**, landen in der **Lobby** und wechseln **im Spiel** per
+`/server <name>`, Schild oder Portal zu den einzelnen Servern. **ViaVersion**
+erlaubt Clients unterschiedlicher Versionen; schlafende Backends werden beim
+Wechsel automatisch **geweckt**. Direktverbindung ueber `<name>.<domain>`.
 
-- **Aktivieren:** *Einstellungen → Lobby/Gateway* (an/aus, Port, Zieldomain) oder
-  per `.env` (`MCSM_GATEWAY_ENABLED`, `MCSM_GATEWAY_PORT`, `MCSM_GATEWAY_DOMAIN`).
-  Die **UI-Einstellung ueberschreibt** den ENV-Wert; Aenderungen greifen sofort.
-- **Pro Server** (nur Super-Admin): *Server → Einstellungen → Lobby/Gateway* —
-  Toggle „Ueber Lobby/Gateway erreichbar", eindeutiger **Hostname-Alias** und
-  Toggle „Als Lobby/Default" (genau **ein** Server). Nach dem Aktivieren den
-  Server einmal **neu starten** (er wechselt auf einen internen Port; das Gateway
-  belegt den oeffentlichen Port).
-- **DNS (Go-Live):** `deine-domain.de` (A-Record) **und** `*.deine-domain.de`
-  (Wildcard-A) auf die Server-IP. Optional `_minecraft._tcp` SRV-Record, falls der
-  Gateway-Port ≠ 25565 ist. Lokal ohne DNS testbar ueber die `hosts`-Datei.
-- **Firewall/Router:** nur den **Gateway-Port** (25565) nach aussen freigeben —
-  die **internen** Server-Ports bleiben zu. Fuer die Web-UI auf `deine-domain.de`
-  im Browser zusaetzlich 80/443 (Reverse-Proxy + TLS).
-- **Grenzen:** Es gibt **keinen begehbaren Cross-Version-Hub** — ein Client kann
-  nur Server seiner eigenen Protokollversion betreten. Modpack-Spieler verbinden
-  sich direkt ueber die Subdomain ihres Servers; die (Vanilla-)Lobby kann sie
-  nicht „hinueberschieben" (Client-Limitierung). Das Gateway greift nicht ins
-  Protokoll ein (reines Byte-Splicing), daher funktionieren Forge/Fabric/Modpacks.
+- **Aktivieren:** *Einstellungen → Netzwerk (Lobby)* → Modus `velocity`, Port,
+  Domain, ViaVersion. Velocity + Java werden automatisch geladen.
+- **Pro Server** (nur Super-Admin): *Server → Einstellungen → Velocity-Lobby-Netzwerk*
+  — „Teil des Velocity-Netzwerks", **Backend-Name** und „Als Lobby" (genau **ein**
+  Server). Danach den Server einmal **neu starten** (Forwarding + interner Port).
+- **Sicherheit/Firewall:** Nach aussen **nur** den Netzwerk-Port (25565) freigeben —
+  die Backends laufen in `online-mode=false` **nur auf 127.0.0.1** und duerfen nie
+  direkt erreichbar sein. Fuer die Web-UI zusaetzlich 80/443 (Reverse-Proxy + TLS).
+- **Lobby empfohlen** auf stabilem 1.21.x (Paper); sehr neue Versionen lassen sich
+  am schlechtesten fuer alte Clients uebersetzen.
 
-Details, Phasen und die manuelle Verifikations-Checkliste: `docs/lobby_gateway_plan.md`.
+Details, Phasen und die Go-Live-Checkliste: `docs/velocity_network_plan.md`.
 
 **Web-UI unter derselben Domain (HTTPS):** Der Manager kann zusätzlich per Browser
 über denselben Namen erreichbar sein (z.B. `https://mc.friedrich-dietrich.de`) —

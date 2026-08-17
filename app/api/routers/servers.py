@@ -261,20 +261,18 @@ def server_detail_page(
     from urllib.parse import urlsplit
 
     from app.services.app_setting_service import (
-        get_gateway_domain,
-        get_gateway_enabled,
+        get_network_domain,
         get_network_mode,
         get_public_base_url,
     )
 
-    gateway_enabled_global = get_gateway_enabled(db)
     network_mode = get_network_mode(db)
-    # Verbindungsadresse: konfigurierte Zieldomain bevorzugt, sonst Host aus der
-    # oeffentlichen Basis-URL, sonst Platzhalter im Template.
-    gateway_connect_host = get_gateway_domain(db) or None
-    if not gateway_connect_host:
+    # Verbindungsadresse: konfigurierte Netzwerk-Domain bevorzugt, sonst Host aus
+    # der oeffentlichen Basis-URL, sonst Platzhalter im Template.
+    network_connect_host = get_network_domain(db) or None
+    if not network_connect_host:
         public_base = get_public_base_url(db)
-        gateway_connect_host = urlsplit(public_base).hostname if public_base else None
+        network_connect_host = urlsplit(public_base).hostname if public_base else None
 
     return templates.TemplateResponse(
         request,
@@ -293,8 +291,7 @@ def server_detail_page(
             can_change_mc_version=version_change_block_reason is None,
             version_change_block_reason=version_change_block_reason,
             has_modpack_update=has_modpack_update,
-            gateway_enabled_global=gateway_enabled_global,
-            gateway_connect_host=gateway_connect_host,
+            network_connect_host=network_connect_host,
             network_mode=network_mode,
         ),
     )
@@ -647,9 +644,6 @@ def update_server_settings_action(
     start_mode: Annotated[str | None, Form()] = None,
     start_command: Annotated[str | None, Form()] = None,
     start_bat_path: Annotated[str | None, Form()] = None,
-    gateway_enabled: Annotated[str | None, Form()] = None,
-    gateway_hostname: Annotated[str | None, Form()] = None,
-    gateway_is_default: Annotated[str | None, Form()] = None,
     velocity_enabled: Annotated[str | None, Form()] = None,
     velocity_name: Annotated[str | None, Form()] = None,
     velocity_is_lobby: Annotated[str | None, Form()] = None,
@@ -722,19 +716,8 @@ def update_server_settings_action(
         start_mode=(start_mode or "").strip().lower() or None,
         start_command=(start_command or "").strip() or None,
         start_bat_path=(start_bat_path or "").strip() or None,
-        # Gateway-/Lobby-Routing wirkt GLOBAL (Alias-Namespace, Default-/Apex-Route).
-        # Nur Super-Admins duerfen es setzen; sonst bleiben die bestehenden Werte.
-        gateway_enabled=(
-            _to_bool(gateway_enabled) if is_super_admin else server.gateway_enabled
-        ),
-        gateway_hostname=(
-            gateway_hostname if is_super_admin else server.gateway_hostname
-        ),
-        gateway_is_default=(
-            _to_bool(gateway_is_default) if is_super_admin else server.gateway_is_default
-        ),
-        # Velocity-Netzwerk wirkt ebenfalls global (Backend-Namespace, Lobby) ->
-        # nur Super-Admins duerfen es setzen.
+        # Velocity-Netzwerk wirkt global (Backend-Namespace, Lobby) -> nur
+        # Super-Admins duerfen es setzen; sonst bleiben die bestehenden Werte.
         velocity_enabled=(
             _to_bool(velocity_enabled) if is_super_admin else server.velocity_enabled
         ),

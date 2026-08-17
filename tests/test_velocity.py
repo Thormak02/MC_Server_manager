@@ -11,15 +11,15 @@ def test_network_mode_default_and_switch(client):
     from app.services import app_setting_service as svc
 
     with SessionLocal() as db:
-        assert svc.get_network_mode(db) == "off"  # nichts aktiv
+        assert svc.get_network_mode(db) == "off"  # Default
         assert svc.get_network_mode_source(db) == "default"
-
-        svc.set_gateway_enabled(db, True)
-        assert svc.get_network_mode(db) == "gateway"  # abgeleitet vom Gateway
 
         svc.set_network_mode(db, "velocity")
         assert svc.get_network_mode(db) == "velocity"
         assert svc.get_network_mode_source(db) == "ui"
+
+        svc.set_network_mode(db, "off")
+        assert svc.get_network_mode(db) == "off"
 
 
 def test_network_mode_rejects_invalid(client):
@@ -126,29 +126,27 @@ def test_default_version_prefers_known_major(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# reconcile_network: gegenseitiger Ausschluss + Reihenfolge (Port zuerst frei)
+# reconcile_network: Velocity je nach Modus starten/stoppen
 # --------------------------------------------------------------------------- #
-def test_reconcile_network_ordering(client, monkeypatch):
+def test_reconcile_network_starts_and_stops_velocity(client, monkeypatch):
     from app.db.session import SessionLocal
     from app.services import app_setting_service as svc
-    from app.services import gateway_service, velocity_service as vs
+    from app.services import velocity_service as vs
 
     calls: list[str] = []
-    monkeypatch.setattr(gateway_service, "stop_gateway", lambda: calls.append("gw_stop"))
-    monkeypatch.setattr(gateway_service, "reconcile_gateway", lambda: calls.append("gw_reconcile"))
     monkeypatch.setattr(vs, "_ensure_velocity_started", lambda: calls.append("vel_start"))
     monkeypatch.setattr(vs, "stop_velocity", lambda **_k: calls.append("vel_stop"))
 
     with SessionLocal() as db:
         svc.set_network_mode(db, "velocity")
     vs.reconcile_network()
-    assert calls == ["gw_stop", "vel_start"]  # erst Gateway freigeben, dann Velocity
+    assert calls == ["vel_start"]
 
     calls.clear()
     with SessionLocal() as db:
-        svc.set_network_mode(db, "gateway")
+        svc.set_network_mode(db, "off")
     vs.reconcile_network()
-    assert calls == ["vel_stop", "gw_reconcile"]  # erst Velocity freigeben, dann Gateway
+    assert calls == ["vel_stop"]
 
 
 def test_start_velocity_aborts_when_mode_not_velocity(client, monkeypatch, tmp_path):
@@ -417,7 +415,7 @@ def test_reconcile_proxies_velocity_backend_binds_localhost(client, tmp_path):
     internal = sp.find_free_port()
     with SessionLocal() as db:
         svc.set_network_mode(db, "velocity")
-        svc.set_gateway_port(db, 25565)
+        svc.set_network_port(db, 25565)
         base = tmp_path / "vsleep"
         base.mkdir()
         srv = Server(
@@ -455,7 +453,7 @@ def test_velocity_sleep_port_collision_is_relocated(client, tmp_path):
 
     with SessionLocal() as db:
         svc.set_network_mode(db, "velocity")
-        svc.set_gateway_port(db, 25565)
+        svc.set_network_port(db, 25565)
         base = tmp_path / "coll"
         base.mkdir()
         (base / "server.properties").write_text("server-port=25565\n", encoding="utf-8")
@@ -486,3 +484,53 @@ def test_velocity_sleep_port_collision_is_relocated(client, tmp_path):
         assert server.velocity_enabled is True
         assert server.port != 25565
         assert server.port != server.sleep_internal_port
+
+
+# --------------------------------------------------------------------------- #
+# Auto-Lobby
+# --------------------------------------------------------------------------- #
+def test_create_auto_lobby(client, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import app_setting_service as svc
+    from app.services import lobby_service
+    from app.services import velocity_service as vs
+
+    monkeypatch.setattr(lobby_service, "_latest_stable_lobby_version", lambda: "1.21.1")
+    monkeypatch.setattr(lobby_service, "_install_selector_plugin", lambda base: "ServerSelector (mock)")
+    # Velocity nicht wirklich starten / velocity.toml nicht schreiben.
+    monkeypatch.setattr(vs, "sync_velocity_config", lambda db: None)
+
+    with SessionLocal() as db:
+        svc.set_server_storage_root(db, str(tmp_path / "servers"))
+        ok, message, sid = lobby_service.create_auto_lobby(db, initiated_by_user_id=None)
+
+    assert ok is True and sid is not None
+
+    with SessionLocal() as db:
+        lobby = db.get(Server, sid)
+        base = lobby.base_path
+        assert lobby.server_type == "paper"
+        assert lobby.velocity_enabled is True
+        assert lobby.velocity_name == "lobby"
+        assert lobby.velocity_is_lobby is True
+        assert lobby.sleep_enabled is False
+        assert svc.get_network_mode(db) == "velocity"
+
+    props = (Path(base) / "server.properties").read_text(encoding="utf-8")
+    assert "level-type=minecraft:flat" in props
+    assert "difficulty=peaceful" in props
+    assert (Path(base) / "LOBBY-SETUP.txt").exists()
+
+    # Idempotent: zweiter Klick legt KEINEN zweiten Server an, sondern gibt die
+    # bestehende Lobby zurueck.
+    from app.models.server import Server as _Server
+    from sqlalchemy import func, select
+
+    with SessionLocal() as db:
+        ok2, _msg2, sid2 = lobby_service.create_auto_lobby(db, initiated_by_user_id=None)
+        count = db.scalar(select(func.count(_Server.id)))
+    assert ok2 is True and sid2 == sid
+    assert count == 1  # keine Duplikate

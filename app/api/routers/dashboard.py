@@ -47,7 +47,7 @@ def dashboard_page(
             "usage": usage,
         }
 
-    from app.services.app_setting_service import get_gateway_domain, get_gateway_enabled
+    from app.services.app_setting_service import get_network_domain, get_network_mode
 
     return templates.TemplateResponse(
         request,
@@ -60,8 +60,8 @@ def dashboard_page(
             servers=summary["servers"],
             server_runtime=server_runtime,
             host_resources=get_host_resources(),
-            gateway_enabled=get_gateway_enabled(db),
-            gateway_domain=get_gateway_domain(db),
+            network_mode=get_network_mode(db),
+            network_domain=get_network_domain(db),
         ),
     )
 

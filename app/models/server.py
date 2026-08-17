@@ -41,12 +41,6 @@ class Server(Base):
     sleep_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     sleep_delay_seconds: Mapped[int] = mapped_column(Integer, default=300)
     sleep_internal_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Lobby-/Gateway-Routing: Server ist ueber das Gateway per Hostname-Alias
-    # erreichbar. Genau ein Server darf Default/Lobby (Apex-Route) sein. Server
-    # hinter dem Gateway laufen auf ihrem internen Port (sleep_internal_port).
-    gateway_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    gateway_hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    gateway_is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     # Velocity-Lobby-Netzwerk: Server ist ein Backend hinter dem Velocity-Proxy.
     # `velocity_name` ist der Backend-Name in velocity.toml / im `/server`-Befehl,
     # genau ein Backend ist die Lobby (Fallback/try-Ziel). Backends laufen auf
