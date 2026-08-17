@@ -1321,6 +1321,28 @@ def start_server(
         except Exception as exc:  # noqa: BLE001 - Start nicht am Port-Abgleich scheitern lassen
             console_service.append_output(server.id, f"Port-Abgleich uebersprungen: {exc}")
 
+        # Velocity-Netzwerk: Backend-Server fuer Modern Forwarding vorbereiten
+        # (online-mode=false, nur lokal, paper-global.yml) + velocity.toml angleichen.
+        try:
+            from app.services import app_setting_service, velocity_service
+
+            is_velocity_backend = getattr(server, "velocity_enabled", False) and (
+                app_setting_service.get_network_mode(db) == "velocity"
+            )
+            if is_velocity_backend:
+                for note in velocity_service.apply_backend_forwarding(db, server):
+                    if note:
+                        console_service.append_output(server.id, note)
+                velocity_service.sync_velocity_config(db)
+            else:
+                # Kein aktives Velocity-Backend -> evtl. hinterlassenen Backend-Modus
+                # (online-mode=false, loopback-Bind) wieder zuruecknehmen.
+                for note in velocity_service.revert_backend_forwarding(db, server):
+                    if note:
+                        console_service.append_output(server.id, note)
+        except Exception as exc:  # noqa: BLE001 - Start nicht am Velocity-Abgleich scheitern lassen
+            console_service.append_output(server.id, f"Velocity-Abgleich uebersprungen: {exc}")
+
         _set_start_progress(
             server.id,
             active=True,

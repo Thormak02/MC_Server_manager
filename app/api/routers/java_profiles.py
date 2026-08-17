@@ -21,16 +21,23 @@ from app.services.app_setting_service import (
     get_gateway_enabled_source,
     get_gateway_port,
     get_gateway_port_source,
+    get_network_mode,
+    get_network_mode_source,
     get_public_base_url,
     get_public_base_url_source,
     get_server_storage_root,
     get_server_storage_source,
+    get_velocity_version,
+    get_velocity_via_enabled,
     set_backup_storage_root,
     set_gateway_domain,
     set_gateway_enabled,
     set_gateway_port,
+    set_network_mode,
     set_public_base_url,
     set_server_storage_root,
+    set_velocity_version,
+    set_velocity_via_enabled,
 )
 from app.services.java_profile_service import (
     create_java_profile,
@@ -98,6 +105,10 @@ def settings_page(
     gateway_port_source = get_gateway_port_source(db)
     gateway_domain = get_gateway_domain(db)
     gateway_domain_source = get_gateway_domain_source(db)
+    network_mode = get_network_mode(db)
+    network_mode_source = get_network_mode_source(db)
+    velocity_version = get_velocity_version(db)
+    velocity_via_enabled = get_velocity_via_enabled(db)
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
     return templates.TemplateResponse(
@@ -120,6 +131,10 @@ def settings_page(
             gateway_port_source=gateway_port_source,
             gateway_domain=gateway_domain,
             gateway_domain_source=gateway_domain_source,
+            network_mode=network_mode,
+            network_mode_source=network_mode_source,
+            velocity_version=velocity_version,
+            velocity_via_enabled=velocity_via_enabled,
             platform_settings=platform_settings,
             manager_update_status=manager_update_status,
         ),
@@ -168,6 +183,48 @@ def update_gateway_settings_action(
         f"Gateway-Einstellungen gespeichert (aktiv={'ja' if enabled else 'nein'}).",
         "success",
     )
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/network")
+def update_network_settings_action(
+    request: Request,
+    network_mode: Annotated[str | None, Form()] = None,
+    velocity_version: Annotated[str | None, Form()] = None,
+    velocity_via_enabled: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        mode = set_network_mode(db, network_mode or "off")
+        set_velocity_version(db, velocity_version)
+        set_velocity_via_enabled(db, _to_bool(velocity_via_enabled))
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    # Front-Door sofort umschalten: reconcile_network stoppt den falschen und
+    # bindet den richtigen (Velocity und Gateway teilen sich den Port).
+    try:
+        from app.services import velocity_service
+
+        velocity_service.reconcile_network()
+        # ViaVersion-Umschaltung sofort anwenden (Plugins laden/entfernen + ggf.
+        # Velocity neu starten).
+        velocity_service.sync_via_plugins(db)
+    except Exception:  # noqa: BLE001
+        pass
+
+    audit_service.log_action(
+        db,
+        action="settings.network_update",
+        user_id=current_user.id,
+        details=f"mode={mode} velocity_version={(velocity_version or '').strip() or '(neueste)'}",
+    )
+    push_flash(request, f"Netzwerk-Modus gespeichert: {mode}.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
 

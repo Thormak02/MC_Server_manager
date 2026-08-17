@@ -37,6 +37,7 @@ class _ProxyListener:
     public_port: int
     internal_port: int
     sock: socket.socket
+    bind_host: str = "0.0.0.0"
     stop_event: Event = field(default_factory=Event)
     thread: Thread | None = None
 
@@ -84,17 +85,24 @@ def _port_is_free(port: int) -> bool:
 # --------------------------------------------------------------------------- #
 # Lifecycle
 # --------------------------------------------------------------------------- #
-def start_proxy(server_id: int, public_port: int, internal_port: int) -> bool:
+def start_proxy(
+    server_id: int,
+    public_port: int,
+    internal_port: int,
+    *,
+    bind_host: str = "0.0.0.0",
+) -> bool:
     with _PROXY_LOCK:
         existing = _PROXIES.get(server_id)
         if (
             existing is not None
             and existing.public_port == public_port
             and existing.internal_port == internal_port
+            and existing.bind_host == bind_host
         ):
             return True
-        # Aenderte sich der interne Port (Neuvergabe), rebinden statt still lassen,
-        # sonst leitet der Listener weiter auf den alten (falschen) Backend-Port.
+        # Aenderte sich Port ODER Bind-Host (z.B. Wechsel Velocity <-> Standalone),
+        # rebinden statt still lassen.
         if existing is not None:
             _stop_locked(server_id)
 
@@ -104,7 +112,7 @@ def start_proxy(server_id: int, public_port: int, internal_port: int) -> bool:
             # darauf laeuft (Port-Hijacking -> Split-Zustand). Ohne REUSEADDR
             # bindet er nur, wenn der Port wirklich frei ist.
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(("0.0.0.0", public_port))
+            sock.bind((bind_host, public_port))
             sock.listen(64)
         except OSError as exc:
             if server_id not in _BIND_FAILED:
@@ -123,6 +131,7 @@ def start_proxy(server_id: int, public_port: int, internal_port: int) -> bool:
             public_port=public_port,
             internal_port=internal_port,
             sock=sock,
+            bind_host=bind_host,
         )
         thread = Thread(
             target=_accept_loop,
@@ -136,7 +145,7 @@ def start_proxy(server_id: int, public_port: int, internal_port: int) -> bool:
         _log(
             server_id,
             "sleep_proxy.started",
-            f"public_port={public_port} internal_port={internal_port}",
+            f"bind={bind_host}:{public_port} internal_port={internal_port}",
         )
         return True
 
@@ -158,28 +167,48 @@ def _stop_locked(server_id: int) -> None:
 
 
 def reconcile_proxies() -> None:
-    """Proxies gemaess DB (sleep_enabled) starten/stoppen."""
+    """Proxies gemaess DB (sleep_enabled) starten/stoppen.
+
+    - Standalone-Sleep-Server: Proxy auf ``0.0.0.0:port`` (oeffentlich).
+    - Velocity-Backend (Netzwerk-Modus velocity): Proxy nur auf ``127.0.0.1:port``
+      – davor sitzt Velocity, der Backend-Port bleibt nach aussen dicht. Velocity
+      zeigt auf diesen lokalen Proxy und weckt so beim ``/server``-Wechsel.
+    - Gateway-Server: kein eigener Sleep-Proxy (das Gateway weckt selbst).
+    """
+    from app.services import app_setting_service
+
     with SessionLocal() as db:
+        mode = app_setting_service.get_network_mode(db)
         servers = list(db.scalars(select(Server)).all())
-        wanted: dict[int, tuple[int, int]] = {}
+        wanted: dict[int, tuple[str, int, int]] = {}
         for server in servers:
-            # Gateway-Server sind ueber das Gateway erreichbar (Wake/Forward laeuft
-            # dort) und bekommen KEINEN eigenen oeffentlichen Sleep-Proxy.
-            if (
+            if not (
                 server.sleep_enabled
-                and not server.gateway_enabled
                 and server.port
                 and server.sleep_internal_port
                 and server.port != server.sleep_internal_port
             ):
-                wanted[server.id] = (int(server.port), int(server.sleep_internal_port))
+                continue
+            if getattr(server, "gateway_enabled", False):
+                continue  # Gateway-Backend: das Gateway weckt selbst (wie bisher)
+            if getattr(server, "velocity_enabled", False) and mode == "velocity":
+                bind_host = "127.0.0.1"  # nur lokal – Velocity ist die Eingangstuer
+            else:
+                # Kein aktives Velocity-Backend -> normaler oeffentlicher Wake-Proxy,
+                # sonst waere ein Sleep-Server ohne Listener (unerreichbar).
+                bind_host = "0.0.0.0"
+            wanted[server.id] = (
+                bind_host,
+                int(server.port),
+                int(server.sleep_internal_port),
+            )
 
     with _PROXY_LOCK:
         for server_id in list(_PROXIES.keys()):
             if server_id not in wanted:
                 _stop_locked(server_id)
-        for server_id, (public_port, internal_port) in wanted.items():
-            start_proxy(server_id, public_port, internal_port)
+        for server_id, (bind_host, public_port, internal_port) in wanted.items():
+            start_proxy(server_id, public_port, internal_port, bind_host=bind_host)
 
 
 def sleep_server(
@@ -447,12 +476,14 @@ def _idle_tick() -> None:
     # aktiviert, war der Port zunaechst belegt; sobald er frei ist (nach Stop/
     # Neustart), bindet der Proxy hier automatisch nach.
     reconcile_proxies()
-    # Gateway analog abgleichen (Listener nachbinden, Routing-Tabelle auffrischen).
-    # Lazy-Import bricht den Zyklus gateway_service -> sleep_proxy_service.
+    # Eingangstuer (Gateway ODER Velocity) abgleichen: Listener nachbinden,
+    # Routing auffrischen bzw. abgestuerzten Velocity-Proxy neu starten
+    # (Crash-Recovery). reconcile_network koordiniert beide Front-Doors.
+    # Lazy-Import bricht den Zyklus velocity_service -> sleep_proxy_service.
     try:
-        from app.services import gateway_service
+        from app.services import velocity_service
 
-        gateway_service.reconcile_gateway()
+        velocity_service.reconcile_network()
     except Exception:  # noqa: BLE001 - Monitor darf nie sterben
         pass
 

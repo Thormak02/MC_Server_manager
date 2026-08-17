@@ -64,3 +64,50 @@ def test_resolve_winget_executable_returns_str_or_none():
 
     result = jrs._resolve_winget_executable()
     assert result is None or isinstance(result, str)
+
+
+def test_install_java_from_adoptium_atomic_success(tmp_path, monkeypatch):
+    """Download + Entpacken laufen atomar: nur ein vollstaendiges JDK landet in
+    dest, der Temp-Ordner wird aufgeraeumt (netzwerkfrei via Mocks)."""
+    import json as _json
+    import zipfile as _zip
+    from types import SimpleNamespace
+
+    from app.services import java_runtime_service as jrs
+
+    monkeypatch.setattr(jrs, "get_settings", lambda: SimpleNamespace(data_dir=tmp_path))
+
+    meta = [{"binary": {"package": {"link": "https://example/jdk.zip", "name": "jdk.zip"}}}]
+
+    class _Resp:
+        def __init__(self, data):
+            self._data = data
+
+        def read(self):
+            return self._data
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+    monkeypatch.setattr(
+        jrs.urllib.request,
+        "urlopen",
+        lambda req, timeout=30: _Resp(_json.dumps(meta).encode("utf-8")),
+    )
+
+    def _fake_download(url, target, timeout=1200):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with _zip.ZipFile(target, "w") as zf:
+            zf.writestr("jdk-25.0.4+7/bin/java.exe", "fake-java")
+
+    monkeypatch.setattr(jrs, "_download_to_file", _fake_download)
+
+    ok, msg, path = jrs.install_java_from_adoptium(25)
+    assert ok is True, msg
+    assert path is not None and path.name == "java.exe" and path.exists()
+    assert (tmp_path / "java" / "temurin-25" / "jdk-25.0.4+7" / "bin" / "java.exe").exists()
+    # Temp-Ordner wurde aufgeraeumt.
+    assert not (tmp_path / "tmp" / "java-install-25").exists()

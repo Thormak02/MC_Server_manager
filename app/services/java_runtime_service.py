@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -339,60 +340,86 @@ def _download_to_file(url: str, target: Path, *, timeout: float = 900.0) -> None
         shutil.copyfileobj(response, handle, length=1024 * 256)
 
 
+def _sha256_of_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 256), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def install_java_from_adoptium(major_version: int) -> tuple[bool, str, Path | None]:
     """Laedt ein Temurin-JDK direkt von Adoptium und entpackt es nach
     ``data_dir/java/temurin-<major>``. Braucht weder winget noch Adminrechte.
 
+    Serialisiert ueber ``_JAVA_INSTALL_LOCK`` (der Auto-Start-Pfad haelt den Lock
+    ebenfalls; RLock -> reentrant). Download + Entpacken laufen atomar ueber einen
+    Temp-Ordner ausserhalb des gescannten Java-Ordners; erst ein vollstaendig
+    entpacktes JDK wird nach ``dest`` verschoben. So kann kein halb-fertiges JDK
+    als "bereits vorhanden" haengenbleiben und keine zwei Laeufe kollidieren.
+
     Rueckgabe: (erfolg, meldung, pfad_zu_java_exe | None).
     """
     major = int(major_version)
-    dest = managed_java_root() / f"temurin-{major}"
 
-    existing = _find_java_exe(dest)
-    if existing is not None:
-        return True, f"Java {major} ist bereits vorhanden ({existing}).", existing
+    with _JAVA_INSTALL_LOCK:
+        dest = managed_java_root() / f"temurin-{major}"
 
-    meta_url = _ADOPTIUM_ASSETS_URL.format(major=major)
-    try:
-        from app.providers.server.common import USER_AGENT
+        existing = _find_java_exe(dest)
+        if existing is not None:
+            return True, f"Java {major} ist bereits vorhanden ({existing}).", existing
 
-        req = urllib.request.Request(meta_url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except Exception as exc:  # noqa: BLE001
-        return False, f"Adoptium-API fuer Java {major} nicht erreichbar: {exc}", None
-
-    if not isinstance(payload, list) or not payload:
-        return False, f"Keine Temurin-JDK-{major}-Version (Windows x64) gefunden.", None
-
-    package = (((payload[0] or {}).get("binary") or {}).get("package") or {})
-    link = str(package.get("link") or "")
-    file_name = str(package.get("name") or f"temurin-{major}.zip")
-    if not link:
-        return False, f"Adoptium-Download-Link fuer Java {major} fehlt.", None
-
-    dest.mkdir(parents=True, exist_ok=True)
-    archive = dest / file_name
-    try:
-        _download_to_file(link, archive, timeout=1200)
-    except Exception as exc:  # noqa: BLE001
-        return False, f"Java {major} konnte nicht geladen werden: {exc}", None
-
-    try:
-        with zipfile.ZipFile(archive) as zf:
-            zf.extractall(dest)
-    except Exception as exc:  # noqa: BLE001
-        return False, f"Java {major} konnte nicht entpackt werden: {exc}", None
-    finally:
+        meta_url = _ADOPTIUM_ASSETS_URL.format(major=major)
         try:
-            archive.unlink()
-        except OSError:
-            pass
+            from app.providers.server.common import USER_AGENT
 
-    java_exe = _find_java_exe(dest)
-    if java_exe is None:
-        return False, f"Java {major} entpackt, aber java.exe wurde nicht gefunden.", None
-    return True, f"Java {major} (Temurin) installiert: {java_exe}", java_exe
+            req = urllib.request.Request(meta_url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            return False, f"Adoptium-API fuer Java {major} nicht erreichbar: {exc}", None
+
+        if not isinstance(payload, list) or not payload:
+            return False, f"Keine Temurin-JDK-{major}-Version (Windows x64) gefunden.", None
+
+        package = (((payload[0] or {}).get("binary") or {}).get("package") or {})
+        link = str(package.get("link") or "")
+        file_name = str(package.get("name") or f"temurin-{major}.zip")
+        checksum = str(package.get("checksum") or "").strip().lower()
+        if not link:
+            return False, f"Adoptium-Download-Link fuer Java {major} fehlt.", None
+
+        # Temp-Ordner ausserhalb von data_dir/java (wird nicht gescannt), damit ein
+        # halb entpacktes JDK nie faelschlich erkannt wird.
+        work = (get_settings().data_dir / "tmp" / f"java-install-{major}").resolve()
+        shutil.rmtree(work, ignore_errors=True)
+        work.mkdir(parents=True, exist_ok=True)
+        archive = work / file_name
+        extract = work / "jdk"
+        try:
+            _download_to_file(link, archive, timeout=1200)
+            if checksum and _sha256_of_file(archive).lower() != checksum:
+                return False, f"Java {major}: Pruefsumme des Downloads stimmt nicht.", None
+
+            with zipfile.ZipFile(archive) as zf:
+                zf.extractall(extract)
+            if _find_java_exe(extract) is None:
+                return False, f"Java {major} entpackt, aber java.exe wurde nicht gefunden.", None
+
+            # Vollstaendig entpacktes JDK atomar an den Zielort verschieben.
+            if dest.exists():
+                shutil.rmtree(dest, ignore_errors=True)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(extract), str(dest))
+        except Exception as exc:  # noqa: BLE001
+            return False, f"Java {major} Installation fehlgeschlagen: {exc}", None
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+
+        java_exe = _find_java_exe(dest)
+        if java_exe is None:
+            return False, f"Java {major} installiert, aber java.exe nicht gefunden.", None
+        return True, f"Java {major} (Temurin) installiert: {java_exe}", java_exe
 
 
 def _best_profile_for_major(db: Session, required_major: int) -> JavaProfile | None:

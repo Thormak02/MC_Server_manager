@@ -307,11 +307,14 @@ def reconcile_gateway() -> None:
     An/Aus und Port stammen aus den (UI-ueberschreibbaren) Laufzeit-Settings.
     """
     from app.services.app_setting_service import (
-        get_gateway_enabled_runtime,
         get_gateway_port_runtime,
+        get_network_mode_runtime,
     )
 
-    if not get_gateway_enabled_runtime():
+    # Der Netzwerk-Modus ist die einzige Wahrheit ueber die Eingangstuer: Das
+    # Gateway laeuft ausschliesslich im Modus "gateway" (bei "velocity" ist
+    # Velocity die Eingangstuer, bei "off" gibt es keine).
+    if get_network_mode_runtime() != "gateway":
         if is_running():
             stop_gateway()
         _set_routes_cache(None)

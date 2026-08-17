@@ -401,23 +401,90 @@ def gateway_hostname_taken(
     return db.scalar(stmt) is not None
 
 
-def effective_server_port(server: Server) -> int | None:
+_VELOCITY_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$")
+
+
+def normalize_velocity_name(raw: str | None) -> str:
+    """Backend-Namen vereinheitlichen: klein, Leerzeichen -> '-', nur [a-z0-9_-]."""
+    value = (raw or "").strip().lower().replace(" ", "-")
+    value = re.sub(r"[^a-z0-9_-]", "", value)
+    return value.strip("-_")
+
+
+def is_valid_velocity_name(value: str) -> bool:
+    return bool(value) and len(value) <= 64 and _VELOCITY_NAME_RE.match(value) is not None
+
+
+def velocity_name_taken(
+    db: Session, name: str, *, exclude_server_id: int | None = None
+) -> bool:
+    stmt = select(Server.id).where(func.lower(Server.velocity_name) == name.lower())
+    if exclude_server_id is not None:
+        stmt = stmt.where(Server.id != exclude_server_id)
+    return db.scalar(stmt) is not None
+
+
+def is_behind_front_proxy(server: Server, *, network_mode: str | None = None) -> bool:
+    """Server laeuft auf seinem internen Port (Sleep-Proxy, Gateway oder Velocity).
+
+    Sleep ist immer proxybasiert. Gateway/Velocity gelten nur, wenn der jeweilige
+    Netzwerk-Modus AKTIV ist – sonst wuerde ein Server nach einem Moduswechsel auf
+    seinem internen Port stranden (kein Proxy leitet dann dorthin weiter). Ohne
+    ``network_mode`` (Alt-Aufrufer) wird modus-blind entschieden.
+    """
+    if server.sleep_enabled:
+        return True
+    gateway = getattr(server, "gateway_enabled", False)
+    velocity = getattr(server, "velocity_enabled", False)
+    if network_mode is None:
+        return bool(gateway or velocity)
+    if gateway and network_mode == "gateway":
+        return True
+    if velocity and network_mode == "velocity":
+        return True
+    return False
+
+
+def effective_server_port(server: Server, *, network_mode: str | None = None) -> int | None:
     """Port, auf dem der echte MC-Server laeuft.
 
-    Sleep- **oder** Gateway-Server laufen auf ``sleep_internal_port`` (der
-    oeffentliche ``port`` wird vom Sleep-Proxy bzw. vom Gateway belegt). Sonst
-    der normale Port.
+    Sleep-, Gateway- **oder** Velocity-Server laufen auf ``sleep_internal_port``
+    (der oeffentliche ``port`` bzw. der Front-Door-Port wird vom Proxy/Gateway/
+    Velocity belegt). Sonst der normale Port.
     """
-    behind_proxy = server.sleep_enabled or getattr(server, "gateway_enabled", False)
-    if behind_proxy and server.sleep_internal_port:
+    if is_behind_front_proxy(server, network_mode=network_mode) and server.sleep_internal_port:
         return int(server.sleep_internal_port)
     return server.port
 
 
-def sync_server_settings_to_files(server: Server) -> list[str]:
+def active_front_port(db: Session) -> int | None:
+    """Der belegte Front-Door-Port (Gateway ODER Velocity), sonst None."""
+    from app.services import app_setting_service
+
+    mode = app_setting_service.get_network_mode(db)
+    if mode in ("gateway", "velocity"):
+        return app_setting_service.get_gateway_port(db)
+    return None
+
+
+def velocity_target_port(server: Server) -> int | None:
+    """Der lokale Port, auf den Velocity fuer dieses Backend zeigt.
+
+    - Ohne Sleep: direkt der Backend-Port (``sleep_internal_port``).
+    - Mit Sleep: der oeffentliche ``port`` – dort bindet der (lokale) Sleep-Proxy,
+      der den Server beim Beitritt weckt und auf ``sleep_internal_port`` weiterleitet.
+    """
+    if server.sleep_enabled:
+        return server.port
+    return effective_server_port(server, network_mode="velocity")
+
+
+def sync_server_settings_to_files(
+    server: Server, *, network_mode: str | None = None
+) -> list[str]:
     warnings: list[str] = []
 
-    internal_port = effective_server_port(server)
+    internal_port = effective_server_port(server, network_mode=network_mode)
     if internal_port is not None:
         warning = _upsert_server_property(server, "server-port", str(internal_port))
         if warning:
@@ -460,15 +527,13 @@ def prepare_ports_before_start(db: Session, server: Server) -> list[str]:
     from app.services import app_setting_service, port_service
 
     warnings: list[str] = []
-    behind_proxy = bool(server.sleep_enabled or getattr(server, "gateway_enabled", False))
-    # Der Gateway-Port ist nur dann "reserviert", wenn das Gateway auch laeuft.
-    # Sonst ist 25565 ein ganz normaler Port -> nicht anfassen (sonst wuerde eine
-    # Neuvergabe einen bereits gebundenen Sleep-Proxy ins Leere zeigen lassen).
-    gateway_port = (
-        app_setting_service.get_gateway_port(db)
-        if app_setting_service.get_gateway_enabled(db)
-        else None
-    )
+    # Der Front-Door-Port (Gateway ODER Velocity) ist nur "reserviert", wenn auch
+    # eine Eingangstuer laeuft. Sonst ist 25565 ein ganz normaler Port -> nicht
+    # anfassen (sonst zeigte eine Neuvergabe einen bereits gebundenen Proxy ins Leere).
+    mode = app_setting_service.get_network_mode(db)
+    behind_proxy = is_behind_front_proxy(server, network_mode=mode)
+    front_port = active_front_port(db)
+    front_label = "Velocity-Port" if mode == "velocity" else "Gateway-Port"
 
     reallocated = False
     if behind_proxy:
@@ -476,13 +541,13 @@ def prepare_ports_before_start(db: Session, server: Server) -> list[str]:
         collides = (
             not internal
             or internal == server.port
-            or (gateway_port is not None and internal == gateway_port)
+            or (front_port is not None and internal == front_port)
         )
         if collides:
             try:
                 server.sleep_internal_port = port_service.allocate_server_port(
                     db,
-                    exclude={p for p in (server.port, gateway_port) if p},
+                    exclude={p for p in (server.port, front_port) if p},
                     exclude_server_id=server.id,
                 )
                 db.add(server)
@@ -490,15 +555,15 @@ def prepare_ports_before_start(db: Session, server: Server) -> list[str]:
                 reallocated = True
             except ValueError as exc:
                 warnings.append(str(exc))
-    elif gateway_port is not None and server.port and server.port == gateway_port:
-        # Standalone-Server auf dem Gateway-Port kann nicht binden. Der oeffentliche
-        # Port ist spielerseitig -> nicht stillschweigend verschieben, nur warnen.
+    elif front_port is not None and server.port and server.port == front_port:
+        # Standalone-Server auf dem Front-Door-Port kann nicht binden. Der
+        # oeffentliche Port ist spielerseitig -> nicht stillschweigend verschieben.
         warnings.append(
-            f"Port {server.port} ist der Gateway-Port und kann nicht gebunden werden. "
-            "Bitte einen anderen Port setzen oder den Server ueber das Gateway erreichbar machen."
+            f"Port {server.port} ist der {front_label} und kann nicht gebunden werden. "
+            "Bitte einen anderen Port setzen oder den Server ueber das Netzwerk erreichbar machen."
         )
 
-    warnings.extend(sync_server_settings_to_files(server))
+    warnings.extend(sync_server_settings_to_files(server, network_mode=mode))
 
     # Wurde der interne Port neu vergeben, den Sleep-Proxy auffrischen, damit sein
     # Forward-Ziel auf den neuen Port zeigt (der Listener rebindet, siehe start_proxy).
@@ -533,6 +598,9 @@ def update_server_settings(
     gateway_enabled: bool = False,
     gateway_hostname: str | None = None,
     gateway_is_default: bool = False,
+    velocity_enabled: bool = False,
+    velocity_name: str | None = None,
+    velocity_is_lobby: bool = False,
 ) -> tuple[Server, list[str]]:
     if mc_version is not None:
         stripped_version = mc_version.strip()
@@ -565,14 +633,10 @@ def update_server_settings(
         server.sleep_delay_seconds = max(0, int(sleep_delay_seconds))
     if server.sleep_enabled:
         # Interner Port fuer den echten Server hinter dem Proxy sicherstellen.
-        # Der Gateway-Port darf NIE als interner Port dienen (sonst Kollision).
-        from app.services import app_setting_service, port_service
+        # Der Front-Door-Port (Gateway/Velocity) darf NIE als interner Port dienen.
+        from app.services import port_service
 
-        gateway_port = (
-            app_setting_service.get_gateway_port(db)
-            if app_setting_service.get_gateway_enabled(db)
-            else None
-        )
+        gateway_port = active_front_port(db)
         if not server.port:
             warnings.append(
                 "Sleep-Modus benoetigt einen festen Port - bitte Port setzen."
@@ -663,6 +727,84 @@ def update_server_settings(
             .values(gateway_is_default=False)
         )
 
+    # --- Velocity-Lobby-Netzwerk ---
+    normalized_vname = normalize_velocity_name(velocity_name) or normalize_velocity_name(server.slug)
+    server.velocity_enabled = bool(velocity_enabled)
+    server.velocity_name = None
+    server.velocity_is_lobby = False
+    if server.velocity_enabled:
+        if not is_valid_velocity_name(normalized_vname):
+            warnings.append(
+                f"Ungueltiger Velocity-Name '{normalized_vname}' - erlaubt sind nur "
+                "Kleinbuchstaben, Ziffern, '-' und '_'."
+            )
+            server.velocity_enabled = False
+        elif velocity_name_taken(db, normalized_vname, exclude_server_id=server.id):
+            warnings.append(
+                f"Der Velocity-Name '{normalized_vname}' ist bereits vergeben - bitte "
+                "einen anderen waehlen."
+            )
+            server.velocity_enabled = False
+        else:
+            server.velocity_name = normalized_vname
+            server.velocity_is_lobby = bool(velocity_is_lobby)
+            # Backend laeuft hinter Velocity auf seinem internen Port -> sicherstellen,
+            # dass er nicht den Velocity-Port (Front-Door) belegt.
+            from app.services import app_setting_service, port_service
+
+            front_port = app_setting_service.get_gateway_port(db)
+            # Bei Sleep dient server.port als lokaler Sleep-Proxy-Port (Velocity zeigt
+            # dorthin). Der darf nicht der Velocity-Port selbst sein, sonst zeigte
+            # velocity.toml auf Velocitys eigenen Listener (Self-Loop). server.port ist
+            # im Netzwerk nur intern -> automatisch auf einen freien Port verschieben.
+            if server.sleep_enabled and server.port and server.port == front_port:
+                try:
+                    server.port = port_service.allocate_server_port(
+                        db,
+                        exclude={p for p in (front_port, server.sleep_internal_port) if p},
+                        exclude_server_id=server.id,
+                    )
+                    warnings.append(
+                        f"Backend-Port war der Velocity-Port -> automatisch auf "
+                        f"{server.port} geaendert (im Netzwerk nur intern)."
+                    )
+                except ValueError as exc:
+                    warnings.append(str(exc))
+                    server.velocity_enabled = False
+                    server.velocity_name = None
+                    server.velocity_is_lobby = False
+            if not server.sleep_internal_port or server.sleep_internal_port in {
+                server.port,
+                front_port,
+            }:
+                preferred = server.port + 1 if server.port and server.port < 65535 else None
+                exclude_ports = {p for p in (server.port, front_port) if p}
+                try:
+                    server.sleep_internal_port = port_service.allocate_server_port(
+                        db,
+                        preferred=preferred,
+                        exclude=exclude_ports or None,
+                        exclude_server_id=server.id,
+                    )
+                except ValueError as exc:
+                    # Ohne internen Port wuerde das Backend auf den oeffentlichen
+                    # (ggf. Velocity-)Port zeigen -> lieber deaktivieren.
+                    warnings.append(str(exc))
+                    server.velocity_enabled = False
+                    server.velocity_name = None
+                    server.velocity_is_lobby = False
+            if server.velocity_enabled and server.status in {"running", "starting", "restarting"}:
+                warnings.append(
+                    "Velocity-Netzwerk aktiviert: bitte den Server neu starten, damit "
+                    "Forwarding/Interner Port aktiv werden (erreichbar dann ueber die Lobby)."
+                )
+
+    # Genau EINE Lobby: beim Setzen alle anderen zuruecksetzen.
+    if server.velocity_is_lobby:
+        db.execute(
+            update(Server).where(Server.id != server.id).values(velocity_is_lobby=False)
+        )
+
     warnings.extend(sync_server_settings_to_files(server))
 
     db.add(server)
@@ -681,6 +823,13 @@ def update_server_settings(
         from app.services import gateway_service
 
         gateway_service.reconcile_gateway()
+    except Exception:  # noqa: BLE001
+        pass
+    # Velocity-Backends (velocity.toml) an die neue Mitgliedschaft angleichen.
+    try:
+        from app.services import velocity_service
+
+        velocity_service.sync_velocity_config(db)
     except Exception:  # noqa: BLE001
         pass
 

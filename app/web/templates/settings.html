@@ -72,6 +72,53 @@
 </section>
 
 <section class="card">
+    <h2>Netzwerk-Modus</h2>
+    <p class="muted">
+        Bestimmt die gemeinsame Eingangstuer fuer alle Server. Aktuell:
+        <strong>{{ network_mode }}</strong> (Quelle: {{ "UI" if network_mode_source == "ui" else "Standard" }}).
+    </p>
+    <ul class="muted">
+        <li><strong>off</strong> &ndash; kein gemeinsamer Eingang; jeder Server auf eigenem Port.</li>
+        <li><strong>gateway</strong> &ndash; leichter Hostname-Router (<code>&lt;alias&gt;.&lt;domain&gt;</code>).
+            Jeder landet direkt auf dem passenden Server seiner Version. Kein In-Game-Wechsel.</li>
+        <li><strong>velocity</strong> &ndash; echter Proxy mit Lobby: einmal verbinden, dann per
+            <code>/server</code>/Schild/Portal im Spiel wechseln; ViaVersion erlaubt mehrere Client-Versionen.
+            Velocity und Gateway teilen sich den Port &ndash; es laeuft immer nur einer.</li>
+    </ul>
+    <form method="post" action="/settings/network" class="grid grid-4">
+        <div>
+            <label for="network_mode">Modus</label>
+            <select id="network_mode" name="network_mode">
+                <option value="off" {% if network_mode == "off" %}selected{% endif %}>off</option>
+                <option value="gateway" {% if network_mode == "gateway" %}selected{% endif %}>gateway</option>
+                <option value="velocity" {% if network_mode == "velocity" %}selected{% endif %}>velocity</option>
+            </select>
+        </div>
+        <div>
+            <label for="velocity_version">Velocity-Version</label>
+            <input id="velocity_version" name="velocity_version" type="text"
+                   placeholder="leer = neueste stabile" value="{{ velocity_version }}">
+            <p class="muted">Nur fuer Modus <code>velocity</code>. Leer = automatisch neueste stabile.</p>
+        </div>
+        <div>
+            <div class="toggle-field">
+                <label><input type="checkbox" name="velocity_via_enabled" value="true" {% if velocity_via_enabled %}checked{% endif %}> ViaVersion (Cross-Version)</label>
+            </div>
+            <p class="muted">L&auml;dt ViaVersion/-Backwards/-Rewind auf den Proxy, damit Clients verschiedener Versionen verbinden k&ouml;nnen.</p>
+        </div>
+        <div class="align-end">
+            <button type="submit">Netzwerk-Modus speichern</button>
+        </div>
+    </form>
+    <p class="muted">
+        Hinweis: Im <code>velocity</code>-Modus laufen die Backend-Server in
+        <code>online-mode=false</code> und duerfen nur ueber Velocity erreichbar sein
+        &ndash; nach aussen ausschliesslich den Velocity-Port (25565) freigeben. Die
+        Backend-Anbindung (Forwarding, Lobby) kommt in Phase 2.
+    </p>
+</section>
+
+<section class="card">
     <h2>Lobby / Gateway</h2>
     <p class="muted">
         Ein gemeinsamer MC-Eingangspunkt: Spieler verbinden sich mit

@@ -99,6 +99,20 @@ def _ensure_server_schema() -> None:
             "ALTER TABLE servers "
             "ADD COLUMN gateway_is_default BOOLEAN NOT NULL DEFAULT 0",
         ),
+        (
+            "velocity_enabled",
+            "ALTER TABLE servers "
+            "ADD COLUMN velocity_enabled BOOLEAN NOT NULL DEFAULT 0",
+        ),
+        (
+            "velocity_name",
+            "ALTER TABLE servers ADD COLUMN velocity_name VARCHAR(64)",
+        ),
+        (
+            "velocity_is_lobby",
+            "ALTER TABLE servers "
+            "ADD COLUMN velocity_is_lobby BOOLEAN NOT NULL DEFAULT 0",
+        ),
     ]
 
     pending = [(name, sql) for name, sql in migrations if name not in columns]

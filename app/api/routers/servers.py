@@ -263,10 +263,12 @@ def server_detail_page(
     from app.services.app_setting_service import (
         get_gateway_domain,
         get_gateway_enabled,
+        get_network_mode,
         get_public_base_url,
     )
 
     gateway_enabled_global = get_gateway_enabled(db)
+    network_mode = get_network_mode(db)
     # Verbindungsadresse: konfigurierte Zieldomain bevorzugt, sonst Host aus der
     # oeffentlichen Basis-URL, sonst Platzhalter im Template.
     gateway_connect_host = get_gateway_domain(db) or None
@@ -293,6 +295,7 @@ def server_detail_page(
             has_modpack_update=has_modpack_update,
             gateway_enabled_global=gateway_enabled_global,
             gateway_connect_host=gateway_connect_host,
+            network_mode=network_mode,
         ),
     )
 
@@ -647,6 +650,9 @@ def update_server_settings_action(
     gateway_enabled: Annotated[str | None, Form()] = None,
     gateway_hostname: Annotated[str | None, Form()] = None,
     gateway_is_default: Annotated[str | None, Form()] = None,
+    velocity_enabled: Annotated[str | None, Form()] = None,
+    velocity_name: Annotated[str | None, Form()] = None,
+    velocity_is_lobby: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_logged_in(request, db)
@@ -726,6 +732,15 @@ def update_server_settings_action(
         ),
         gateway_is_default=(
             _to_bool(gateway_is_default) if is_super_admin else server.gateway_is_default
+        ),
+        # Velocity-Netzwerk wirkt ebenfalls global (Backend-Namespace, Lobby) ->
+        # nur Super-Admins duerfen es setzen.
+        velocity_enabled=(
+            _to_bool(velocity_enabled) if is_super_admin else server.velocity_enabled
+        ),
+        velocity_name=(velocity_name if is_super_admin else server.velocity_name),
+        velocity_is_lobby=(
+            _to_bool(velocity_is_lobby) if is_super_admin else server.velocity_is_lobby
         ),
     )
     reprovision_notes: list[str] = []
