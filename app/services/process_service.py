@@ -1124,6 +1124,17 @@ def start_server(
             )
             return False, prepare_message
 
+        # Port-Konflikte automatisch aufloesen + server.properties angleichen
+        # (interner Port fuer Sleep-/Gateway-Server, nie der Gateway-Port).
+        try:
+            from app.services import server_service
+
+            for note in server_service.prepare_ports_before_start(db, server):
+                if note:
+                    console_service.append_output(server.id, note)
+        except Exception as exc:  # noqa: BLE001 - Start nicht am Port-Abgleich scheitern lassen
+            console_service.append_output(server.id, f"Port-Abgleich uebersprungen: {exc}")
+
         _set_start_progress(
             server.id,
             active=True,

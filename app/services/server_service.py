@@ -447,6 +447,47 @@ def sync_server_settings_to_files(server: Server) -> list[str]:
     return warnings
 
 
+def prepare_ports_before_start(db: Session, server: Server) -> list[str]:
+    """Vor dem Start Ports/``server.properties`` automatisch angleichen.
+
+    - Sleep-/Gateway-Server bekommen einen internen Port, der weder mit ihrem
+      oeffentlichen Port noch mit dem Gateway-Port kollidiert (bei Bedarf wird ein
+      neuer vergeben). So loesen sich Port-Konflikte selbst – z.B. ein veraltetes
+      ``server-port=25565``, das jetzt dem Gateway gehoert.
+    - Danach wird ``server.properties`` auf den effektiven Port geschrieben, damit
+      der Serverprozess garantiert den richtigen Port bindet.
+    """
+    from app.services import app_setting_service, port_service
+
+    warnings: list[str] = []
+    behind_proxy = bool(server.sleep_enabled or getattr(server, "gateway_enabled", False))
+    gateway_port = app_setting_service.get_gateway_port(db)
+
+    if behind_proxy:
+        internal = server.sleep_internal_port
+        if not internal or internal in {server.port, gateway_port}:
+            try:
+                server.sleep_internal_port = port_service.allocate_server_port(
+                    db,
+                    exclude={p for p in (server.port, gateway_port) if p},
+                    exclude_server_id=server.id,
+                )
+                db.add(server)
+                db.commit()
+            except ValueError as exc:
+                warnings.append(str(exc))
+    elif server.port and server.port == gateway_port:
+        # Standalone-Server auf dem Gateway-Port kann nicht binden. Der oeffentliche
+        # Port ist spielerseitig -> nicht stillschweigend verschieben, nur warnen.
+        warnings.append(
+            f"Port {server.port} ist der Gateway-Port und kann nicht gebunden werden. "
+            "Bitte einen anderen Port setzen oder den Server ueber das Gateway erreichbar machen."
+        )
+
+    warnings.extend(sync_server_settings_to_files(server))
+    return warnings
+
+
 def update_server_settings(
     db: Session,
     server: Server,
@@ -499,8 +540,10 @@ def update_server_settings(
         server.sleep_delay_seconds = max(0, int(sleep_delay_seconds))
     if server.sleep_enabled:
         # Interner Port fuer den echten Server hinter dem Proxy sicherstellen.
-        from app.services import port_service
+        # Der Gateway-Port darf NIE als interner Port dienen (sonst Kollision).
+        from app.services import app_setting_service, port_service
 
+        gateway_port = app_setting_service.get_gateway_port(db)
         if not server.port:
             warnings.append(
                 "Sleep-Modus benoetigt einen festen Port - bitte Port setzen."
@@ -508,14 +551,14 @@ def update_server_settings(
             server.sleep_enabled = False
         elif (
             not server.sleep_internal_port
-            or server.sleep_internal_port == server.port
+            or server.sleep_internal_port in {server.port, gateway_port}
         ):
             preferred = server.port + 1 if server.port < 65535 else None
             try:
                 server.sleep_internal_port = port_service.allocate_server_port(
                     db,
                     preferred=preferred,
-                    exclude={server.port},
+                    exclude={p for p in (server.port, gateway_port) if p},
                     exclude_server_id=server.id,
                 )
             except ValueError as exc:
