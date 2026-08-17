@@ -188,6 +188,9 @@ def reconcile_proxies() -> None:
                 and server.port != server.sleep_internal_port
             ):
                 continue
+            # Gateway-Server bleiben auf ihrem OEFFENTLICHEN Port -> ein normaler
+            # (0.0.0.0) Wake-Proxy dort weckt sie sowohl bei Direktverbindung als
+            # auch beim Gateway-Forward (das Gateway zeigt auf genau diesen Port).
             if getattr(server, "velocity_enabled", False) and mode == "velocity":
                 bind_host = "127.0.0.1"  # nur lokal – Velocity ist die Eingangstuer
             else:

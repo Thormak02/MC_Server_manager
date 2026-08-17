@@ -59,7 +59,9 @@
             <tr data-server-id="{{ server.id }}">
                 <td>
                     <a href="/servers/{{ server.id }}">{{ server.name }}</a>
-                    {% if network_mode == "velocity" and server.velocity_enabled and server.velocity_name %}
+                    {% if network_mode == "gateway" and server.gateway_enabled and server.gateway_hostname %}
+                    <div class="gateway-route">&#127760; {% if '.' in server.gateway_hostname %}{{ server.gateway_hostname }}{% else %}{{ server.gateway_hostname }}{% if network_domain %}.{{ network_domain }}{% endif %}{% endif %}{% if server.gateway_is_default %} &middot; Lobby{% endif %}</div>
+                    {% elif network_mode == "velocity" and server.velocity_enabled and server.velocity_name %}
                     <div class="gateway-route">&#127760; {{ server.velocity_name }}{% if network_domain %}.{{ network_domain }}{% endif %}{% if server.velocity_is_lobby %} &middot; Lobby{% endif %}</div>
                     {% endif %}
                 </td>

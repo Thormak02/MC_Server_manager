@@ -644,6 +644,9 @@ def update_server_settings_action(
     start_mode: Annotated[str | None, Form()] = None,
     start_command: Annotated[str | None, Form()] = None,
     start_bat_path: Annotated[str | None, Form()] = None,
+    gateway_enabled: Annotated[str | None, Form()] = None,
+    gateway_hostname: Annotated[str | None, Form()] = None,
+    gateway_is_default: Annotated[str | None, Form()] = None,
     velocity_enabled: Annotated[str | None, Form()] = None,
     velocity_name: Annotated[str | None, Form()] = None,
     velocity_is_lobby: Annotated[str | None, Form()] = None,
@@ -716,8 +719,15 @@ def update_server_settings_action(
         start_mode=(start_mode or "").strip().lower() or None,
         start_command=(start_command or "").strip() or None,
         start_bat_path=(start_bat_path or "").strip() or None,
-        # Velocity-Netzwerk wirkt global (Backend-Namespace, Lobby) -> nur
-        # Super-Admins duerfen es setzen; sonst bleiben die bestehenden Werte.
+        # Gateway-/Velocity-Netzwerk wirkt global (Alias/Lobby) -> nur Super-Admins
+        # duerfen es setzen; sonst bleiben die bestehenden Werte.
+        gateway_enabled=(
+            _to_bool(gateway_enabled) if is_super_admin else server.gateway_enabled
+        ),
+        gateway_hostname=(gateway_hostname if is_super_admin else server.gateway_hostname),
+        gateway_is_default=(
+            _to_bool(gateway_is_default) if is_super_admin else server.gateway_is_default
+        ),
         velocity_enabled=(
             _to_bool(velocity_enabled) if is_super_admin else server.velocity_enabled
         ),

@@ -262,19 +262,55 @@ def test_apply_backend_forwarding_paper_writes_security_props(tmp_path, client, 
     assert (tmp_path / "server" / "config" / "paper-global.yml").exists()
 
 
-def test_apply_backend_forwarding_warns_for_non_paper(tmp_path, client, monkeypatch):
+def test_apply_backend_forwarding_does_not_break_non_paper(tmp_path, client, monkeypatch):
     from types import SimpleNamespace
 
     from app.services import velocity_service as vs
 
     monkeypatch.setattr(vs, "managed_velocity_dir", lambda: tmp_path / "velocity")
     (tmp_path / "srv").mkdir()
-    server = SimpleNamespace(id=2, server_type="fabric", base_path=str(tmp_path / "srv"))
+    (tmp_path / "srv" / "server.properties").write_text("online-mode=true\n", encoding="utf-8")
+    server = SimpleNamespace(id=2, server_type="spigot", base_path=str(tmp_path / "srv"))
     warnings = vs.apply_backend_forwarding(None, server)
-    assert any("Forwarding" in w for w in warnings)  # Hinweis auf fehlendes Modern Forwarding
-    # Sicherheits-Properties werden trotzdem gesetzt.
+    assert any("Paper" in w for w in warnings)
+    # WICHTIG: online-mode wird NICHT auf false gesetzt (sonst kaputte UUIDs).
     props = (tmp_path / "srv" / "server.properties").read_text(encoding="utf-8")
-    assert "online-mode=false" in props
+    assert "online-mode=false" not in props
+
+
+def test_non_paper_cannot_be_velocity_backend(client, tmp_path, monkeypatch):
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import app_setting_service as svc, server_service
+    from app.services import velocity_service as vs
+
+    monkeypatch.setattr(vs, "sync_velocity_config", lambda db: None)
+    with SessionLocal() as db:
+        svc.set_network_mode(db, "velocity")
+        base = tmp_path / "spg"
+        base.mkdir()
+        srv = Server(
+            name="Spg", slug="spg", server_type="spigot", mc_version="1.21.1",
+            base_path=str(base), port=25591, status="stopped",
+        )
+        db.add(srv)
+        db.commit()
+        sid = srv.id
+
+    with SessionLocal() as db:
+        server = db.get(Server, sid)
+        _s, warnings = server_service.update_server_settings(
+            db, server, mc_version="1.21.1", loader_version=None, java_profile_id=None,
+            memory_min_mb=1024, memory_max_mb=2048, port=25591, auto_restart=False,
+            auto_start_with_manager=False, start_mode="command",
+            start_command="java -jar x.jar", start_bat_path=None,
+            sleep_enabled=False, sleep_delay_seconds=None,
+            velocity_enabled=True, velocity_name="spg", velocity_is_lobby=False,
+        )
+
+    with SessionLocal() as db:
+        assert db.get(Server, sid).velocity_enabled is False  # Spigot blockiert
+    assert any("Paper" in w for w in warnings)
 
 
 def test_revert_backend_forwarding_restores_public_online_mode(tmp_path):

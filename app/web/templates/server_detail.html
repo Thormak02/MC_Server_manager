@@ -243,6 +243,35 @@
 
         {% if current_user.role == "super_admin" %}
         <div class="settings-section">
+            <h3>Gateway-Routing</h3>
+            {% if network_mode != "gateway" %}
+            <p class="muted">&#8505; Netzwerk-Modus ist nicht <code>gateway</code> (unter <a href="/settings">Einstellungen</a> umstellbar). Diese Angaben wirken erst im Gateway-Modus.</p>
+            {% endif %}
+            <div class="grid settings-grid">
+                <div>
+                    <div class="toggle-field">
+                        <label><input type="checkbox" name="gateway_enabled" value="true" {% if server.gateway_enabled %}checked{% endif %}> &Uuml;ber Gateway erreichbar</label>
+                    </div>
+                    <p class="muted">Jeder Servertyp/jede Version. Direktverbindung (eigener Port) bleibt parallel erhalten.</p>
+                </div>
+                <div>
+                    <label for="gateway_hostname">Hostname-Alias</label>
+                    <input id="gateway_hostname" name="gateway_hostname" type="text" placeholder="z.B. david oder voller Hostname" value="{{ server.gateway_hostname or '' }}">
+                    <p class="muted">Verbinde dich dann mit <code>{% if '.' in (server.gateway_hostname or '') %}{{ server.gateway_hostname }}{% else %}{{ server.gateway_hostname or 'alias' }}.{{ network_connect_host or 'deine-domain' }}{% endif %}</code>. Kurzes Label + Domain = Subdomain (Wildcard-DNS), oder ein voller Hostname mit Punkt wird direkt genutzt.</p>
+                </div>
+                <div>
+                    <div class="toggle-field">
+                        <label><input type="checkbox" name="gateway_is_default" value="true" {% if server.gateway_is_default %}checked{% endif %}> Als Lobby/Default (Apex-Route)</label>
+                    </div>
+                    <p class="muted">Genau ein Server. Verbindungen mit der blanken Domain (oder unbekanntem Alias) landen hier.</p>
+                </div>
+            </div>
+            {% if server.gateway_enabled and server.status in ["running", "starting", "restarting"] %}
+            <p class="muted">&#9888; Server l&auml;uft &ndash; nach dem Speichern neu starten, damit er auf den internen Port wechselt.</p>
+            {% endif %}
+        </div>
+
+        <div class="settings-section">
             <h3>Velocity-Lobby-Netzwerk</h3>
             {% if network_mode != "velocity" %}
             <p class="muted">&#8505; Der Netzwerk-Modus ist nicht <code>velocity</code> (unter <a href="/settings">Einstellungen</a> umstellbar). Diese Angaben wirken erst im Velocity-Modus.</p>

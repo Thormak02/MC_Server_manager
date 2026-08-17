@@ -113,6 +113,18 @@ def _ensure_server_schema() -> None:
             "ALTER TABLE servers ADD COLUMN sleep_internal_port INTEGER",
         ),
         (
+            "gateway_enabled",
+            "ALTER TABLE servers ADD COLUMN gateway_enabled BOOLEAN NOT NULL DEFAULT 0",
+        ),
+        (
+            "gateway_hostname",
+            "ALTER TABLE servers ADD COLUMN gateway_hostname VARCHAR(255)",
+        ),
+        (
+            "gateway_is_default",
+            "ALTER TABLE servers ADD COLUMN gateway_is_default BOOLEAN NOT NULL DEFAULT 0",
+        ),
+        (
             "velocity_enabled",
             "ALTER TABLE servers "
             "ADD COLUMN velocity_enabled BOOLEAN NOT NULL DEFAULT 0",

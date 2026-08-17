@@ -375,6 +375,32 @@ def sleep_delay_to_seconds(value: int | None, unit: str | None) -> int | None:
     return max(0, int(value)) * mult
 
 
+_GATEWAY_HOSTNAME_RE = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
+
+
+def normalize_gateway_hostname(raw: str | None) -> str:
+    """Alias normalisieren: Kleinschreibung, ohne fuehrende/abschliessende Punkte."""
+    return (raw or "").strip().strip(".").lower()
+
+
+def is_valid_gateway_hostname(value: str) -> bool:
+    return (
+        bool(value)
+        and len(value) <= 255
+        and ".." not in value
+        and _GATEWAY_HOSTNAME_RE.match(value) is not None
+    )
+
+
+def gateway_hostname_taken(
+    db: Session, hostname: str, *, exclude_server_id: int | None = None
+) -> bool:
+    stmt = select(Server.id).where(func.lower(Server.gateway_hostname) == hostname.lower())
+    if exclude_server_id is not None:
+        stmt = stmt.where(Server.id != exclude_server_id)
+    return db.scalar(stmt) is not None
+
+
 _VELOCITY_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9_-]*[a-z0-9])?$")
 
 
@@ -406,6 +432,9 @@ def is_behind_front_proxy(server: Server, *, network_mode: str | None = None) ->
     stranden (kein Proxy leitet dann dorthin weiter). Ohne ``network_mode``
     (Alt-Aufrufer) wird modus-blind entschieden.
     """
+    # Sleep + Velocity laufen auf dem internen Port. Gateway NICHT: dort bleibt der
+    # Server auf seinem oeffentlichen Port (direkt erreichbar), das Gateway leitet
+    # nur transparent dorthin weiter.
     if server.sleep_enabled:
         return True
     velocity = getattr(server, "velocity_enabled", False)
@@ -430,7 +459,7 @@ def active_front_port(db: Session) -> int | None:
     """Der belegte Front-Door-Port (Gateway ODER Velocity), sonst None."""
     from app.services import app_setting_service
 
-    if app_setting_service.get_network_mode(db) == "velocity":
+    if app_setting_service.get_network_mode(db) in ("gateway", "velocity"):
         return app_setting_service.get_network_port(db)
     return None
 
@@ -563,6 +592,9 @@ def update_server_settings(
     start_bat_path: str | None,
     sleep_enabled: bool = False,
     sleep_delay_seconds: int | None = None,
+    gateway_enabled: bool = False,
+    gateway_hostname: str | None = None,
+    gateway_is_default: bool = False,
     velocity_enabled: bool = False,
     velocity_name: str | None = None,
     velocity_is_lobby: bool = False,
@@ -633,13 +665,68 @@ def update_server_settings(
                 "Port uebernehmen kann."
             )
 
+    # --- Gateway-Routing (Hostname-Alias, jeder Typ/jede Version) ---
+    normalized_alias = normalize_gateway_hostname(gateway_hostname)
+    server.gateway_enabled = bool(gateway_enabled)
+    server.gateway_hostname = None
+    server.gateway_is_default = False
+    if server.gateway_enabled:
+        if not normalized_alias:
+            warnings.append("Gateway-Alias (Hostname) ist erforderlich.")
+            server.gateway_enabled = False
+        elif not is_valid_gateway_hostname(normalized_alias):
+            warnings.append(
+                f"Ungueltiger Alias '{normalized_alias}' - erlaubt sind nur "
+                "Kleinbuchstaben, Ziffern, '-' und '.'."
+            )
+            server.gateway_enabled = False
+        elif gateway_hostname_taken(db, normalized_alias, exclude_server_id=server.id):
+            warnings.append(
+                f"Der Alias '{normalized_alias}' ist bereits vergeben - bitte einen "
+                "anderen waehlen."
+            )
+            server.gateway_enabled = False
+        else:
+            server.gateway_hostname = normalized_alias
+            server.gateway_is_default = bool(gateway_is_default)
+            # Gateway = reiner Router: der Server bleibt auf seinem OEFFENTLICHEN
+            # Port (direkt erreichbar). Er darf nur nicht der Netzwerk-Port selbst
+            # sein (den belegt das Gateway).
+            from app.services import app_setting_service
+
+            front_port = app_setting_service.get_network_port(db)
+            if server.port and server.port == front_port:
+                warnings.append(
+                    f"Port {server.port} ist der Netzwerk-Port (Gateway) und kann nicht "
+                    "vom Server belegt werden. Bitte einen anderen Port setzen."
+                )
+                server.gateway_enabled = False
+                server.gateway_hostname = None
+                server.gateway_is_default = False
+
+    if server.gateway_is_default:
+        db.execute(update(Server).where(Server.id != server.id).values(gateway_is_default=False))
+
     # --- Velocity-Lobby-Netzwerk ---
     normalized_vname = normalize_velocity_name(velocity_name) or normalize_velocity_name(server.slug)
     server.velocity_enabled = bool(velocity_enabled)
     server.velocity_name = None
     server.velocity_is_lobby = False
     if server.velocity_enabled:
-        if not is_valid_velocity_name(normalized_vname):
+        from app.services.velocity_service import PAPER_FORKS
+
+        server_type_lc = (server.server_type or "").strip().lower()
+        if server_type_lc not in PAPER_FORKS:
+            # Nur Paper/Purpur koennen "Modern Forwarding". Bei anderen Typen wuerde
+            # online-mode=false den Server zerschiessen (falsche UUIDs -> Whitelist/OP
+            # greifen nicht), ohne dass die Identitaet weitergereicht wird.
+            warnings.append(
+                f"Servertyp '{server_type_lc}' kann kein Velocity-Backend sein (kein "
+                "Modern Forwarding). Stelle den Server auf Paper um (Drop-in: gleiche "
+                "Welten/Plugins), um ihn ins Netzwerk aufzunehmen."
+            )
+            server.velocity_enabled = False
+        elif not is_valid_velocity_name(normalized_vname):
             warnings.append(
                 f"Ungueltiger Velocity-Name '{normalized_vname}' - erlaubt sind nur "
                 "Kleinbuchstaben, Ziffern, '-' und '_'."
@@ -723,6 +810,12 @@ def update_server_settings(
 
         sleep_proxy_service.reconcile_proxies()
     except Exception:  # noqa: BLE001 - UI-Update darf daran nicht scheitern
+        pass
+    try:
+        from app.services import gateway_service
+
+        gateway_service.reconcile_gateway()
+    except Exception:  # noqa: BLE001
         pass
     # Velocity-Backends (velocity.toml) an die neue Mitgliedschaft angleichen.
     try:

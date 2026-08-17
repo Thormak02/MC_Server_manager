@@ -1343,6 +1343,19 @@ def start_server(
         except Exception as exc:  # noqa: BLE001 - Start nicht am Velocity-Abgleich scheitern lassen
             console_service.append_output(server.id, f"Velocity-Abgleich uebersprungen: {exc}")
 
+        # Gateway-Netzwerk: Server transfer-bereit machen (accept-transfers=true), damit
+        # eine Transfer-Lobby (1.20.5+) Spieler direkt hierher schicken kann. Harmlos
+        # fuer aeltere Versionen (unbekannte Property wird ignoriert).
+        try:
+            from app.services import app_setting_service, server_service
+
+            if getattr(server, "gateway_enabled", False) and (
+                app_setting_service.get_network_mode(db) == "gateway"
+            ):
+                server_service._upsert_server_property(server, "accept-transfers", "true")
+        except Exception as exc:  # noqa: BLE001
+            console_service.append_output(server.id, f"Transfer-Bereitschaft uebersprungen: {exc}")
+
         _set_start_progress(
             server.id,
             active=True,

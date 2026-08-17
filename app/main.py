@@ -24,7 +24,7 @@ from app.core.config import get_settings
 from app.db.init_db import init_db
 from app.middleware.csrf import CSRFSameOriginMiddleware
 from app.services.schedule_service import sync_all_jobs
-from app.services import sleep_proxy_service, velocity_service
+from app.services import gateway_service, sleep_proxy_service, velocity_service
 from app.services.process_service import (
     reconcile_runtime_states_on_manager_startup,
     shutdown_all_managed_processes,
@@ -55,6 +55,7 @@ async def lifespan(app: FastAPI):
     finally:
         # Shutdown
         velocity_service.stop_velocity(shutting_down=True)
+        gateway_service.stop_gateway()
         sleep_proxy_service.shutdown_all()
         shutdown_all_managed_processes(preserve_for_restart=True)
         shutdown_scheduler()

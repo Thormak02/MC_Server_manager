@@ -16,9 +16,12 @@ NETWORK_DOMAIN_KEY = "network_domain"
 VELOCITY_VERSION_KEY = "velocity_version"
 VELOCITY_VIA_ENABLED_KEY = "velocity_via_enabled"
 
-# Erlaubte Netzwerk-Modi. "velocity" = echter Proxy mit Lobby/In-Game-Wechsel,
-# "off" = kein gemeinsamer Eingang.
-NETWORK_MODES = ("off", "velocity")
+# Erlaubte Netzwerk-Modi:
+#  - "gateway"  = transparenter Hostname-Router (jeder Typ/jede Version,
+#                 Direktverbindung bleibt; kein In-Game-Hub).
+#  - "velocity" = echter Proxy mit begehbarer Lobby, aber nur Paper-Backends.
+#  - "off"      = kein gemeinsamer Eingang.
+NETWORK_MODES = ("off", "gateway", "velocity")
 
 
 def _normalize_path(raw_value: str) -> Path:

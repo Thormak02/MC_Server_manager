@@ -350,23 +350,27 @@ def apply_backend_forwarding(db, server) -> list[str]:
     if not base_path.exists():
         return [f"Serverordner nicht gefunden: {base_path}"]
 
-    # Sicherheit: hinter Velocity nur lokal + Offline-Mode (Velocity authentifiziert).
+    server_type = (server.server_type or "").strip().lower()
+    if server_type not in PAPER_FORKS:
+        # WICHTIG: online-mode NICHT abschalten fuer Typen ohne Modern Forwarding –
+        # sonst falsche Offline-UUIDs (Whitelist/OP greifen nicht) OHNE dass die
+        # echte Identitaet weitergereicht wird. Solche Server gehoeren nicht ins
+        # Velocity-Netz (siehe Sperre in update_server_settings).
+        return [
+            f"Servertyp '{server_type}' unterstuetzt kein Velocity-Forwarding – "
+            "Backend-Modus nicht angewendet. Empfohlen: Paper/Purpur."
+        ]
+
+    # Sicherheit: hinter Velocity nur lokal + Offline-Mode (Velocity authentifiziert
+    # ueber Modern Forwarding und reicht die echte Spieler-UUID durch).
     for key, value in (("online-mode", "false"), ("server-ip", "127.0.0.1")):
         warning = server_service._upsert_server_property(server, key, value)
         if warning:
             warnings.append(warning)
-
-    server_type = (server.server_type or "").strip().lower()
-    if server_type in PAPER_FORKS:
-        try:
-            _write_paper_velocity_config(base_path, ensure_forwarding_secret())
-        except Exception as exc:  # noqa: BLE001
-            warnings.append(f"paper-global.yml (Velocity) konnte nicht geschrieben werden: {exc}")
-    else:
-        warnings.append(
-            f"Servertyp '{server_type}' unterstuetzt kein natives Velocity-Forwarding. "
-            "Empfohlen fuer das Netzwerk: Paper/Purpur (Fabric/Forge benoetigen ein Zusatz-Mod)."
-        )
+    try:
+        _write_paper_velocity_config(base_path, ensure_forwarding_secret())
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(f"paper-global.yml (Velocity) konnte nicht geschrieben werden: {exc}")
     return warnings
 
 
@@ -786,15 +790,24 @@ def _start_velocity_bg() -> None:
 
 
 def reconcile_network() -> None:
-    """Velocity passend zum Netzwerk-Modus starten/stoppen.
+    """Gemeinsame Eingangstuer (Gateway ODER Velocity) passend zum Netzwerk-Modus.
 
-    Idempotent -> laeuft bei App-Start, nach Settings-Aenderungen und bei jedem
-    Idle-Tick (Selbstheilung/Crash-Recovery).
+    Beide teilen sich den Netzwerk-Port -> der jeweils falsche wird zuerst gestoppt
+    (Port freigeben), bevor der richtige bindet. Idempotent (App-Start, Settings,
+    Idle-Tick/Crash-Recovery).
     """
-    if _current_network_mode() == "velocity":
+    from app.services import gateway_service
+
+    mode = _current_network_mode()
+    if mode == "velocity":
+        gateway_service.stop_gateway()
         _ensure_velocity_started()
-    else:
+    elif mode == "gateway":
         stop_velocity()
+        gateway_service.reconcile_gateway()
+    else:  # off
+        stop_velocity()
+        gateway_service.stop_gateway()
 
 
 # Rueckwaertskompatibler Alias (Lifespan/Settings/Idle rufen die Koordination).

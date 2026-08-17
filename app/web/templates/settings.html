@@ -79,14 +79,18 @@
     </p>
     <ul class="muted">
         <li><strong>off</strong> &ndash; kein gemeinsamer Eingang; jeder Server auf eigenem Port.</li>
-        <li><strong>velocity</strong> &ndash; echter Proxy mit Lobby: einmal verbinden, dann per
-            <code>/server</code>/Schild/Portal im Spiel wechseln; ViaVersion erlaubt mehrere Client-Versionen.</li>
+        <li><strong>gateway</strong> &ndash; transparenter Router: eine Adresse leitet per Hostname
+            (<code>&lt;alias&gt;.&lt;domain&gt;</code>) direkt zum passenden Server. <strong>Jeder Typ, jede
+            Version</strong>, Direktverbindung bleibt erhalten. Kein begehbarer In-Game-Hub.</li>
+        <li><strong>velocity</strong> &ndash; echter Proxy mit begehbarer Lobby (<code>/server</code>/Portal,
+            ViaVersion) &ndash; aber <strong>nur Paper/Purpur</strong>-Server, nicht direkt erreichbar.</li>
     </ul>
     <form method="post" action="/settings/network" class="grid grid-4">
         <div>
             <label for="network_mode">Modus</label>
             <select id="network_mode" name="network_mode">
                 <option value="off" {% if network_mode == "off" %}selected{% endif %}>off</option>
+                <option value="gateway" {% if network_mode == "gateway" %}selected{% endif %}>gateway</option>
                 <option value="velocity" {% if network_mode == "velocity" %}selected{% endif %}>velocity</option>
             </select>
         </div>
