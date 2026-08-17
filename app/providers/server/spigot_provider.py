@@ -58,7 +58,8 @@ class SpigotProvider(ServerProviderBase):
             encoding="utf-8",
         )
         notes.append(
-            "BuildTools heruntergeladen. Fuehre buildtools\\build_spigot.bat aus, um spigot.jar zu erzeugen."
+            "BuildTools heruntergeladen. Spigot wird beim ersten Start automatisch "
+            "gebaut (dauert einige Minuten, benoetigt ein JDK)."
         )
 
         # Target name expected after BuildTools run.

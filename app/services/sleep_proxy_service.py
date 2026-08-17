@@ -87,8 +87,14 @@ def _port_is_free(port: int) -> bool:
 def start_proxy(server_id: int, public_port: int, internal_port: int) -> bool:
     with _PROXY_LOCK:
         existing = _PROXIES.get(server_id)
-        if existing is not None and existing.public_port == public_port:
+        if (
+            existing is not None
+            and existing.public_port == public_port
+            and existing.internal_port == internal_port
+        ):
             return True
+        # Aenderte sich der interne Port (Neuvergabe), rebinden statt still lassen,
+        # sonst leitet der Listener weiter auf den alten (falschen) Backend-Port.
         if existing is not None:
             _stop_locked(server_id)
 

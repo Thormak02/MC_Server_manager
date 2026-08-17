@@ -461,11 +461,24 @@ def prepare_ports_before_start(db: Session, server: Server) -> list[str]:
 
     warnings: list[str] = []
     behind_proxy = bool(server.sleep_enabled or getattr(server, "gateway_enabled", False))
-    gateway_port = app_setting_service.get_gateway_port(db)
+    # Der Gateway-Port ist nur dann "reserviert", wenn das Gateway auch laeuft.
+    # Sonst ist 25565 ein ganz normaler Port -> nicht anfassen (sonst wuerde eine
+    # Neuvergabe einen bereits gebundenen Sleep-Proxy ins Leere zeigen lassen).
+    gateway_port = (
+        app_setting_service.get_gateway_port(db)
+        if app_setting_service.get_gateway_enabled(db)
+        else None
+    )
 
+    reallocated = False
     if behind_proxy:
         internal = server.sleep_internal_port
-        if not internal or internal in {server.port, gateway_port}:
+        collides = (
+            not internal
+            or internal == server.port
+            or (gateway_port is not None and internal == gateway_port)
+        )
+        if collides:
             try:
                 server.sleep_internal_port = port_service.allocate_server_port(
                     db,
@@ -474,9 +487,10 @@ def prepare_ports_before_start(db: Session, server: Server) -> list[str]:
                 )
                 db.add(server)
                 db.commit()
+                reallocated = True
             except ValueError as exc:
                 warnings.append(str(exc))
-    elif server.port and server.port == gateway_port:
+    elif gateway_port is not None and server.port and server.port == gateway_port:
         # Standalone-Server auf dem Gateway-Port kann nicht binden. Der oeffentliche
         # Port ist spielerseitig -> nicht stillschweigend verschieben, nur warnen.
         warnings.append(
@@ -485,6 +499,17 @@ def prepare_ports_before_start(db: Session, server: Server) -> list[str]:
         )
 
     warnings.extend(sync_server_settings_to_files(server))
+
+    # Wurde der interne Port neu vergeben, den Sleep-Proxy auffrischen, damit sein
+    # Forward-Ziel auf den neuen Port zeigt (der Listener rebindet, siehe start_proxy).
+    if reallocated:
+        try:
+            from app.services import sleep_proxy_service
+
+            sleep_proxy_service.reconcile_proxies()
+        except Exception:  # noqa: BLE001
+            pass
+
     return warnings
 
 
@@ -543,7 +568,11 @@ def update_server_settings(
         # Der Gateway-Port darf NIE als interner Port dienen (sonst Kollision).
         from app.services import app_setting_service, port_service
 
-        gateway_port = app_setting_service.get_gateway_port(db)
+        gateway_port = (
+            app_setting_service.get_gateway_port(db)
+            if app_setting_service.get_gateway_enabled(db)
+            else None
+        )
         if not server.port:
             warnings.append(
                 "Sleep-Modus benoetigt einen festen Port - bitte Port setzen."

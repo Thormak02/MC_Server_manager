@@ -34,6 +34,8 @@ _WINGET_TEMURIN_IDS = {
     17: "EclipseAdoptium.Temurin.17.JDK",
     21: "EclipseAdoptium.Temurin.21.JDK",
     23: "EclipseAdoptium.Temurin.23.JDK",
+    # Java 25 (LTS) wird fuer das neue jahresbasierte MC-Schema (26.x) benoetigt.
+    25: "EclipseAdoptium.Temurin.25.JDK",
 }
 
 _LAST_SCAN_AT: datetime | None = None
@@ -304,7 +306,9 @@ def required_java_major_for_mc(mc_version: str) -> int:
     patch = int(match.group(3) or 0)
 
     if first != 1:
-        return 21
+        # Neues jahresbasiertes Schema (YY.D.H, z.B. 26.2). Die 2026er-Reihe
+        # benoetigt Java 25 (laut PaperMC-API java.version.minimum=25).
+        return 25
     if second <= 16:
         return 8
     if second == 17:
@@ -424,7 +428,7 @@ def install_java_with_winget(
 
     package_id = _WINGET_TEMURIN_IDS.get(int(major_version))
     if not package_id:
-        return False, "Ungueltige Java-Version. Erlaubt: 8, 11, 17, 21, 23."
+        return False, "Ungueltige Java-Version. Erlaubt: 8, 11, 17, 21, 23, 25."
 
     try:
         version_check = subprocess.run(

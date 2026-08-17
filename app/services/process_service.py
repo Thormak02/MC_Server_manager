@@ -467,6 +467,107 @@ def _generate_legacy_forge_run_bat(
     return True
 
 
+def _prepare_buildtools_if_needed(
+    server: Server,
+    base_path: Path,
+    runtime_env: dict[str, str] | None,
+) -> tuple[bool, str]:
+    """CraftBukkit/Spigot bei Bedarf mit BuildTools bauen (beim ersten Start).
+
+    Der Bukkit-/Spigot-Provider laedt nur BuildTools.jar herunter, die eigentliche
+    Server-Jar entsteht erst durch einen BuildTools-Lauf (Minuten, braucht ein JDK).
+    Fehlt die Jar, wird BuildTools hier ausgefuehrt und die erzeugte Jar in den
+    Serverordner kopiert.
+    """
+    server_type = (server.server_type or "").strip().lower()
+    if server_type not in {"bukkit", "spigot"}:
+        return True, ""
+    mc = (server.mc_version or "").strip()
+    if not mc:
+        return True, ""
+
+    jar_name = f"{'craftbukkit' if server_type == 'bukkit' else 'spigot'}-{mc}.jar"
+    target_jar = (base_path / jar_name).resolve()
+    if target_jar.exists():
+        return True, ""  # bereits gebaut
+
+    display = "CraftBukkit" if server_type == "bukkit" else "Spigot"
+    _set_start_progress(
+        server.id,
+        active=True,
+        stage="buildtools",
+        message=f"{display} wird mit BuildTools gebaut (kann einige Minuten dauern) ...",
+        percent=30,
+        reset_installer_counters=True,
+    )
+    console_service.append_output(
+        server.id,
+        f"{display} wird mit BuildTools gebaut (--rev {mc}). Das dauert einige Minuten "
+        "und benoetigt ein JDK ...",
+    )
+
+    buildtools_dir = (base_path / "buildtools").resolve()
+    buildtools_jar = buildtools_dir / "BuildTools.jar"
+    if not buildtools_jar.exists():
+        try:
+            from app.providers.server.common import download_file
+
+            download_file(
+                "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar",
+                buildtools_jar,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return False, f"BuildTools konnte nicht geladen werden: {exc}"
+
+    compile_arg = " --compile craftbukkit" if server_type == "bukkit" else ""
+    use_pushd = _is_unc_path(buildtools_dir)
+    build_cmd = f"java -jar BuildTools.jar --rev {mc}{compile_arg}"
+    if use_pushd:
+        step = f"pushd {_escape_cmd_token(_normalize_windows_path(str(buildtools_dir)))} && {build_cmd}"
+    else:
+        step = build_cmd
+
+    try:
+        completed = subprocess.run(
+            ["cmd", "/d", "/c", step],
+            cwd=None if use_pushd else str(buildtools_dir),
+            env=runtime_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=1800,
+            creationflags=_build_creation_flags(),
+        )
+    except subprocess.TimeoutExpired as exc:
+        _append_subprocess_output(server.id, exc.stdout or "", tag="buildtools")
+        return False, f"{display} BuildTools: Timeout nach 30 Minuten."
+    except Exception as exc:  # noqa: BLE001
+        return False, f"{display} BuildTools fehlgeschlagen: {exc}"
+
+    _append_subprocess_output(server.id, completed.stdout or "", tag="buildtools")
+
+    # Erzeugte Jar liegt im buildtools-Ordner -> in den Serverordner uebernehmen.
+    produced = buildtools_dir / jar_name
+    if produced.exists():
+        try:
+            import shutil
+
+            shutil.copyfile(produced, target_jar)
+        except OSError as exc:
+            return False, f"{display} Jar konnte nicht kopiert werden: {exc}"
+    if target_jar.exists():
+        console_service.append_output(server.id, f"{display} erfolgreich gebaut: {jar_name}")
+        return True, ""
+
+    return False, (
+        f"{display} BuildTools ist durchgelaufen, aber {jar_name} fehlt. Moeglich: "
+        f"BuildTools unterstuetzt {mc} noch nicht, oder es fehlt ein passendes JDK "
+        "(BuildTools braucht javac; fuer sehr neue Versionen ggf. ein neueres JDK)."
+    )
+
+
 def _prepare_loader_runtime_if_needed(
     server: Server,
     base_path: Path,
@@ -1123,6 +1224,20 @@ def start_server(
                 message=prepare_message,
             )
             return False, prepare_message
+
+        # CraftBukkit/Spigot bei Bedarf mit BuildTools bauen (erzeugt die Server-Jar).
+        built, build_message = _prepare_buildtools_if_needed(server, base_path, runtime_env)
+        if not built:
+            server.status = "error"
+            db.add(server)
+            db.commit()
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="error",
+                message=build_message,
+            )
+            return False, build_message
 
         # Port-Konflikte automatisch aufloesen + server.properties angleichen
         # (interner Port fuer Sleep-/Gateway-Server, nie der Gateway-Port).

@@ -58,7 +58,8 @@ class BukkitProvider(ServerProviderBase):
             encoding="utf-8",
         )
         notes.append(
-            "BuildTools heruntergeladen. Fuehre buildtools\\build_bukkit.bat aus, um craftbukkit.jar zu erzeugen."
+            "BuildTools heruntergeladen. CraftBukkit wird beim ersten Start automatisch "
+            "gebaut (dauert einige Minuten, benoetigt ein JDK)."
         )
 
         jar_path = target_dir / f"craftbukkit-{request.mc_version}.jar"

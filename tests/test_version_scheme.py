@@ -7,9 +7,9 @@ def test_new_year_based_version_scheme_is_handled():
     from app.services.java_runtime_service import required_java_major_for_mc
     from app.services.vanillatweaks_service import map_vt_version
 
-    # YY.D.H (year-based) -> moderne Java-Laufzeit (21+).
-    assert required_java_major_for_mc("26.2") == 21
-    assert required_java_major_for_mc("26.4.1") == 21
+    # YY.D.H (year-based, 2026er) -> Java 25 (PaperMC-API java.minimum=25).
+    assert required_java_major_for_mc("26.2") == 25
+    assert required_java_major_for_mc("26.4.1") == 25
     # Alte 1.x-Regeln bleiben erhalten.
     assert required_java_major_for_mc("1.21.11") == 21
     assert required_java_major_for_mc("1.16.5") == 8
