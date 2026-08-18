@@ -401,6 +401,50 @@ def gateway_hostname_taken(
     return db.scalar(stmt) is not None
 
 
+def cleanup_velocity_leftovers(server: Server) -> list[str]:
+    """Reste aus der (entfernten) Velocity-Zeit beim Start bereinigen (idempotent).
+
+    Der Manager erkennt seine eigene Backend-Signatur am loopback-Bind
+    (``server-ip=127.0.0.1``) und stellt dann ``online-mode=true`` wieder her und
+    gibt den Bind frei. Zusaetzlich wird eine aktive Velocity-Forwarding-Sektion in
+    ``config/paper-global.yml`` deaktiviert. Ein bewusst 'cracked' Standalone-Server
+    (online-mode=false OHNE loopback) bleibt unangetastet.
+    """
+    notes: list[str] = []
+    base_path = Path(server.base_path).expanduser().resolve()
+    if not base_path.exists():
+        return notes
+
+    props = base_path / "server.properties"
+    if props.exists():
+        server_ip = None
+        for line in props.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.strip().startswith("server-ip="):
+                server_ip = line.split("=", 1)[1].strip()
+        if server_ip == "127.0.0.1":
+            _upsert_server_property(server, "online-mode", "true")
+            _upsert_server_property(server, "server-ip", "")
+            notes.append("Velocity-Rest entfernt: online-mode=true, oeffentlicher Bind.")
+
+    paper_global = base_path / "config" / "paper-global.yml"
+    if paper_global.exists():
+        try:
+            import yaml
+
+            data = yaml.safe_load(paper_global.read_text(encoding="utf-8", errors="ignore")) or {}
+            velocity = ((data.get("proxies") or {}).get("velocity") or {})
+            if isinstance(velocity, dict) and velocity.get("enabled"):
+                velocity["enabled"] = False
+                data["proxies"]["velocity"] = velocity
+                paper_global.write_text(
+                    yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8"
+                )
+                notes.append("Velocity-Forwarding in paper-global.yml deaktiviert.")
+        except Exception:  # noqa: BLE001 - darf den Start nie stoeren
+            pass
+    return notes
+
+
 def is_behind_front_proxy(server: Server, *, network_mode: str | None = None) -> bool:
     """Server laeuft auf seinem internen Port.
 

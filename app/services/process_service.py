@@ -1321,6 +1321,17 @@ def start_server(
         except Exception as exc:  # noqa: BLE001 - Start nicht am Port-Abgleich scheitern lassen
             console_service.append_output(server.id, f"Port-Abgleich uebersprungen: {exc}")
 
+        # Alt-Reste aus der (entfernten) Velocity-Zeit bereinigen (online-mode/
+        # server-ip/paper-global.yml), damit Server nicht auf loopback stranden.
+        try:
+            from app.services import server_service
+
+            for note in server_service.cleanup_velocity_leftovers(server):
+                if note:
+                    console_service.append_output(server.id, note)
+        except Exception as exc:  # noqa: BLE001
+            console_service.append_output(server.id, f"Velocity-Cleanup uebersprungen: {exc}")
+
         # Gateway-Netzwerk: Server transfer-bereit machen (accept-transfers=true), damit
         # eine Transfer-Lobby (1.20.5+) Spieler direkt hierher schicken kann. Harmlos
         # fuer aeltere Versionen (unbekannte Property wird ignoriert).

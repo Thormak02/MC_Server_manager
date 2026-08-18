@@ -899,3 +899,44 @@ def test_create_auto_lobby_gateway(client, tmp_path, monkeypatch):
         ok2, _m2, sid2 = lobby_service.create_auto_lobby(db, initiated_by_user_id=None)
         count = db.scalar(select(func.count(Server.id)))
     assert ok2 and sid2 == sid and count == 1
+
+
+def test_cleanup_velocity_leftovers(tmp_path):
+    from types import SimpleNamespace
+
+    import yaml
+
+    from app.services import server_service as ss
+
+    srv = tmp_path / "srv"
+    srv.mkdir()
+    (srv / "server.properties").write_text(
+        "online-mode=false\nserver-ip=127.0.0.1\nmotd=x\n", encoding="utf-8"
+    )
+    cfg = srv / "config"
+    cfg.mkdir()
+    (cfg / "paper-global.yml").write_text(
+        "_version: 28\nproxies:\n  velocity:\n    enabled: true\n    secret: abc\n",
+        encoding="utf-8",
+    )
+    notes = ss.cleanup_velocity_leftovers(SimpleNamespace(base_path=str(srv)))
+    assert notes
+    props = (srv / "server.properties").read_text(encoding="utf-8")
+    assert "online-mode=true" in props
+    assert "server-ip=\n" in props or props.rstrip().endswith("server-ip=")
+    data = yaml.safe_load((cfg / "paper-global.yml").read_text(encoding="utf-8"))
+    assert data["proxies"]["velocity"]["enabled"] is False
+    assert data["proxies"]["velocity"]["secret"] == "abc"  # Rest bleibt
+
+
+def test_cleanup_velocity_leftovers_ignores_cracked_server(tmp_path):
+    from types import SimpleNamespace
+
+    from app.services import server_service as ss
+
+    srv = tmp_path / "srv2"
+    srv.mkdir()
+    (srv / "server.properties").write_text("online-mode=false\nmotd=x\n", encoding="utf-8")
+    notes = ss.cleanup_velocity_leftovers(SimpleNamespace(base_path=str(srv)))
+    assert notes == []
+    assert "online-mode=false" in (srv / "server.properties").read_text(encoding="utf-8")
