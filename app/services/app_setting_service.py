@@ -13,15 +13,12 @@ PUBLIC_BASE_URL_KEY = "public_base_url"
 NETWORK_MODE_KEY = "network_mode"
 NETWORK_PORT_KEY = "network_port"
 NETWORK_DOMAIN_KEY = "network_domain"
-VELOCITY_VERSION_KEY = "velocity_version"
-VELOCITY_VIA_ENABLED_KEY = "velocity_via_enabled"
 
 # Erlaubte Netzwerk-Modi:
-#  - "gateway"  = transparenter Hostname-Router (jeder Typ/jede Version,
-#                 Direktverbindung bleibt; kein In-Game-Hub).
-#  - "velocity" = echter Proxy mit begehbarer Lobby, aber nur Paper-Backends.
-#  - "off"      = kein gemeinsamer Eingang.
-NETWORK_MODES = ("off", "gateway", "velocity")
+#  - "gateway" = transparenter Hostname-Router (jeder Typ/jede Version, alle Server
+#                laufen parallel, Direktverbindung bleibt).
+#  - "off"     = kein gemeinsamer Eingang.
+NETWORK_MODES = ("off", "gateway")
 
 
 def _normalize_path(raw_value: str) -> Path:
@@ -317,7 +314,7 @@ def _set_or_clear(db: Session, key: str, value: str | None) -> None:
 
 
 def get_network_port(db: Session) -> int:
-    """Oeffentlicher Netzwerk-Port (Velocity-Eingangstuer). UI > ENV > Default."""
+    """Oeffentlicher Netzwerk-Port (Gateway-Eingang). UI > ENV > Default."""
     row = _get_setting_row(db, NETWORK_PORT_KEY)
     if row and row.value.strip():
         try:
@@ -387,7 +384,7 @@ def get_network_domain_runtime() -> str:
 
 
 def get_network_mode(db: Session) -> str:
-    """Aktiver Netzwerk-Modus: 'off' | 'velocity'. Default: 'off'."""
+    """Aktiver Netzwerk-Modus: 'off' | 'gateway'. Default: 'off'."""
     row = _get_setting_row(db, NETWORK_MODE_KEY)
     if row and row.value.strip():
         value = row.value.strip().lower()
@@ -416,35 +413,3 @@ def get_network_mode_runtime() -> str:
         return get_network_mode(db)
 
 
-def get_velocity_version(db: Session) -> str:
-    """Gewuenschte Velocity-Version ('' = neueste stabile automatisch)."""
-    row = _get_setting_row(db, VELOCITY_VERSION_KEY)
-    if row and row.value.strip():
-        return row.value.strip()
-    return ""
-
-
-def set_velocity_version(db: Session, version: str | None) -> str:
-    normalized = (version or "").strip()
-    _set_or_clear(db, VELOCITY_VERSION_KEY, normalized)
-    return normalized
-
-
-def get_velocity_version_runtime() -> str:
-    from app.db.session import SessionLocal
-
-    with SessionLocal() as db:
-        return get_velocity_version(db)
-
-
-def get_velocity_via_enabled(db: Session) -> bool:
-    """ViaVersion (Cross-Version) auf dem Velocity-Proxy. Default: aktiv."""
-    row = _get_setting_row(db, VELOCITY_VIA_ENABLED_KEY)
-    if row and row.value.strip():
-        return _normalize_bool(row.value)
-    return True
-
-
-def set_velocity_via_enabled(db: Session, enabled: bool) -> bool:
-    _set_or_clear(db, VELOCITY_VIA_ENABLED_KEY, "true" if enabled else "false")
-    return enabled

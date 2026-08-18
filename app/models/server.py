@@ -47,13 +47,6 @@ class Server(Base):
     gateway_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     gateway_hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     gateway_is_default: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Velocity-Lobby-Netzwerk: Server ist ein Backend hinter dem Velocity-Proxy.
-    # `velocity_name` ist der Backend-Name in velocity.toml / im `/server`-Befehl,
-    # genau ein Backend ist die Lobby (Fallback/try-Ziel). Backends laufen auf
-    # ihrem internen Port (sleep_internal_port), nur lokal erreichbar.
-    velocity_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    velocity_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    velocity_is_lobby: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

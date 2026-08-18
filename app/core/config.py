@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     # (25565+), fern von ueblichen Diensten und dem Manager-Port.
     server_port_range_start: int = 25565
     server_port_range_end: int = 25999
-    # Velocity-Lobby-Netzwerk: EIN gemeinsamer MC-Eingangspunkt (Proxy). Der
+    # Netzwerk (Gateway): EIN gemeinsamer MC-Eingangspunkt (Hostname-Router). Der
     # oeffentliche Port und die Anzeige-/Basisdomain (`<name>.<domain>`) sind auch
     # in den Einstellungen editierbar (UI ueberschreibt ENV).
     network_port: int = 25565

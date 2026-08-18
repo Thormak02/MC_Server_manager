@@ -280,8 +280,7 @@ def reconcile_gateway() -> None:
     )
 
     # Der Netzwerk-Modus ist die einzige Wahrheit ueber die Eingangstuer: Das
-    # Gateway laeuft ausschliesslich im Modus "gateway" (bei "velocity" ist
-    # Velocity die Eingangstuer, bei "off" gibt es keine).
+    # Gateway laeuft ausschliesslich im Modus "gateway" (bei "off" gibt es
     if get_network_mode_runtime() != "gateway":
         if is_running():
             stop_gateway()

@@ -270,35 +270,6 @@
             <p class="muted">&#9888; Server l&auml;uft &ndash; nach dem Speichern neu starten, damit er auf den internen Port wechselt.</p>
             {% endif %}
         </div>
-
-        <div class="settings-section">
-            <h3>Velocity-Lobby-Netzwerk</h3>
-            {% if network_mode != "velocity" %}
-            <p class="muted">&#8505; Der Netzwerk-Modus ist nicht <code>velocity</code> (unter <a href="/settings">Einstellungen</a> umstellbar). Diese Angaben wirken erst im Velocity-Modus.</p>
-            {% endif %}
-            <div class="grid settings-grid">
-                <div>
-                    <div class="toggle-field">
-                        <label><input type="checkbox" name="velocity_enabled" value="true" {% if server.velocity_enabled %}checked{% endif %}> Teil des Velocity-Netzwerks</label>
-                    </div>
-                    <p class="muted">Server l&auml;uft als Backend hinter Velocity (Offline-Mode + nur lokal erreichbar). Empfohlen: Paper/Purpur.</p>
-                </div>
-                <div>
-                    <label for="velocity_name">Backend-Name</label>
-                    <input id="velocity_name" name="velocity_name" type="text" placeholder="z.B. lobby, smp, creative" value="{{ server.velocity_name or '' }}">
-                    <p class="muted">Name f&uuml;r <code>/server &lt;name&gt;</code> und Direktverbindung <code>&lt;name&gt;.{{ network_connect_host or 'deine-domain' }}</code>. Nur Kleinbuchstaben, Ziffern, <code>-</code>, <code>_</code>.</p>
-                </div>
-                <div>
-                    <div class="toggle-field">
-                        <label><input type="checkbox" name="velocity_is_lobby" value="true" {% if server.velocity_is_lobby %}checked{% endif %}> Als Lobby (Standard-Ziel)</label>
-                    </div>
-                    <p class="muted">Genau ein Server. Neue Verbindungen landen hier (<code>try</code>).</p>
-                </div>
-            </div>
-            {% if server.velocity_enabled and server.status in ["running", "starting", "restarting"] %}
-            <p class="muted">&#9888; Server l&auml;uft &ndash; nach dem Speichern neu starten, damit Forwarding/interner Port aktiv werden.</p>
-            {% endif %}
-        </div>
         {% endif %}
 
         <div class="settings-actions">

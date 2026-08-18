@@ -91,50 +91,36 @@
             <select id="network_mode" name="network_mode">
                 <option value="off" {% if network_mode == "off" %}selected{% endif %}>off</option>
                 <option value="gateway" {% if network_mode == "gateway" %}selected{% endif %}>gateway</option>
-                <option value="velocity" {% if network_mode == "velocity" %}selected{% endif %}>velocity</option>
             </select>
         </div>
         <div>
             <label for="network_port">Netzwerk-Port</label>
             <input id="network_port" name="network_port" type="number" min="1" max="65535" value="{{ network_port }}">
-            <p class="muted">Oeffentlicher Port (Velocity-Eingang). Nur diesen nach aussen freigeben.</p>
+            <p class="muted">Oeffentlicher Gateway-Eingang. Nur diesen (zusaetzlich zu den direkten Server-Ports) freigeben.</p>
         </div>
         <div>
             <label for="network_domain">Netzwerk-Domain</label>
             <input id="network_domain" name="network_domain" type="text" placeholder="z.B. deine-domain.de" value="{{ network_domain }}">
-            <p class="muted">Fuer Direktadressen <code>&lt;name&gt;.&lt;domain&gt;</code>.</p>
-        </div>
-        <div>
-            <label for="velocity_version">Velocity-Version</label>
-            <input id="velocity_version" name="velocity_version" type="text"
-                   placeholder="leer = neueste stabile" value="{{ velocity_version }}">
-            <p class="muted">Leer = automatisch neueste stabile.</p>
-        </div>
-        <div>
-            <div class="toggle-field">
-                <label><input type="checkbox" name="velocity_via_enabled" value="true" {% if velocity_via_enabled %}checked{% endif %}> ViaVersion (Cross-Version)</label>
-            </div>
-            <p class="muted">L&auml;dt ViaVersion/-Backwards/-Rewind auf den Proxy, damit Clients verschiedener Versionen verbinden k&ouml;nnen.</p>
+            <p class="muted">Fuer die Adressen <code>&lt;alias&gt;.&lt;domain&gt;</code>.</p>
         </div>
         <div class="align-end">
             <button type="submit">Netzwerk speichern</button>
         </div>
     </form>
     <p class="muted">
-        Im <code>velocity</code>-Modus laufen die Backend-Server in
-        <code>online-mode=false</code> und duerfen nur ueber Velocity erreichbar sein
-        &ndash; nach aussen ausschliesslich den Netzwerk-Port ({{ network_port }}) freigeben.
-        Pro Server unter <em>Server &rarr; Einstellungen</em> als Netzwerk-Backend markieren.
-        Werte gelten auch via <code>MCSM_NETWORK_PORT</code>/<code>MCSM_NETWORK_DOMAIN</code>
-        in der <code>.env</code> (die Einstellungen hier <strong>ueberschreiben</strong> die ENV-Werte).
+        Im <code>gateway</code>-Modus laufen ALLE Server ganz normal weiter (jeder Typ,
+        jede Version, parallel) und bleiben direkt auf ihrem Port erreichbar. Das Gateway
+        leitet zusaetzlich <code>&lt;alias&gt;.&lt;domain&gt;</code> transparent zum passenden
+        Server. Pro Server unter <em>Server &rarr; Einstellungen &rarr; Gateway-Routing</em>
+        einen Alias vergeben. Werte gelten auch via
+        <code>MCSM_NETWORK_PORT</code>/<code>MCSM_NETWORK_DOMAIN</code> in der <code>.env</code>.
     </p>
     <hr>
     <h3>Lobby automatisch einrichten</h3>
     <p class="muted">
         Legt mit einem Klick einen fertigen Paper-Lobby-Server (stabiles 1.21.x) an,
-        markiert ihn als Netzwerk-Lobby (Sleep aus), setzt eine ruhige Lobby-Welt und
-        installiert das Server-Auswahl-Plugin <code>ServerSelector</code>. Danach nur
-        noch starten. Setzt den Netzwerk-Modus auf <code>velocity</code>.
+        markiert ihn als Gateway-Default (blanke Domain landet dort), setzt eine ruhige
+        Lobby-Welt. Setzt den Netzwerk-Modus auf <code>gateway</code>. Danach nur noch starten.
     </p>
     <form method="post" action="/settings/lobby/auto-create" class="inline-form">
         <button type="submit">Lobby automatisch einrichten</button>

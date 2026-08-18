@@ -860,3 +860,42 @@ def test_gateway_domain_settings_override_env(client, monkeypatch):
         assert svc.get_network_domain(db) == "thormakmc.de"
         assert svc.get_network_domain_source(db) == "ui"
         assert svc.get_network_domain_runtime() == "thormakmc.de"
+
+
+def test_create_auto_lobby_gateway(client, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    import app.services.gateway_service as gw
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import app_setting_service as svc
+    from app.services import lobby_service
+
+    monkeypatch.setattr(lobby_service, "_latest_stable_lobby_version", lambda: "1.21.1")
+    monkeypatch.setattr(gw, "reconcile_gateway", lambda: None)  # kein echter Socket-Bind
+
+    with SessionLocal() as db:
+        svc.set_server_storage_root(db, str(tmp_path / "servers"))
+        ok, message, sid = lobby_service.create_auto_lobby(db, initiated_by_user_id=None)
+
+    assert ok is True and sid is not None
+    with SessionLocal() as db:
+        lobby = db.get(Server, sid)
+        base = lobby.base_path
+        assert lobby.server_type == "paper"
+        assert lobby.gateway_enabled is True
+        assert lobby.gateway_is_default is True
+        assert lobby.gateway_hostname == "lobby"
+        assert svc.get_network_mode(db) == "gateway"
+
+    props = (Path(base) / "server.properties").read_text(encoding="utf-8")
+    assert "level-type=minecraft:flat" in props
+    assert (Path(base) / "LOBBY-SETUP.txt").exists()
+
+    # Idempotent: zweiter Aufruf legt keinen zweiten Server an.
+    from sqlalchemy import func, select
+
+    with SessionLocal() as db:
+        ok2, _m2, sid2 = lobby_service.create_auto_lobby(db, initiated_by_user_id=None)
+        count = db.scalar(select(func.count(Server.id)))
+    assert ok2 and sid2 == sid and count == 1

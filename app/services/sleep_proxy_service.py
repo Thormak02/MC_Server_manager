@@ -169,15 +169,11 @@ def _stop_locked(server_id: int) -> None:
 def reconcile_proxies() -> None:
     """Proxies gemaess DB (sleep_enabled) starten/stoppen.
 
-    - Standalone-Sleep-Server: Proxy auf ``0.0.0.0:port`` (oeffentlich).
-    - Velocity-Backend (Netzwerk-Modus velocity): Proxy nur auf ``127.0.0.1:port``
-      – davor sitzt Velocity, der Backend-Port bleibt nach aussen dicht. Velocity
-      zeigt auf diesen lokalen Proxy und weckt so beim ``/server``-Wechsel.
+    Jeder Sleep-Server bekommt einen Wake-Proxy auf ``0.0.0.0:port`` (oeffentlich).
+    So funktioniert die Direktverbindung UND – falls das Gateway auf diesen Port
+    zeigt – der Gateway-Forward (das Gateway weckt darueber mit).
     """
-    from app.services import app_setting_service
-
     with SessionLocal() as db:
-        mode = app_setting_service.get_network_mode(db)
         servers = list(db.scalars(select(Server)).all())
         wanted: dict[int, tuple[str, int, int]] = {}
         for server in servers:
@@ -188,17 +184,8 @@ def reconcile_proxies() -> None:
                 and server.port != server.sleep_internal_port
             ):
                 continue
-            # Gateway-Server bleiben auf ihrem OEFFENTLICHEN Port -> ein normaler
-            # (0.0.0.0) Wake-Proxy dort weckt sie sowohl bei Direktverbindung als
-            # auch beim Gateway-Forward (das Gateway zeigt auf genau diesen Port).
-            if getattr(server, "velocity_enabled", False) and mode == "velocity":
-                bind_host = "127.0.0.1"  # nur lokal – Velocity ist die Eingangstuer
-            else:
-                # Kein aktives Velocity-Backend -> normaler oeffentlicher Wake-Proxy,
-                # sonst waere ein Sleep-Server ohne Listener (unerreichbar).
-                bind_host = "0.0.0.0"
             wanted[server.id] = (
-                bind_host,
+                "0.0.0.0",
                 int(server.port),
                 int(server.sleep_internal_port),
             )
@@ -476,14 +463,12 @@ def _idle_tick() -> None:
     # aktiviert, war der Port zunaechst belegt; sobald er frei ist (nach Stop/
     # Neustart), bindet der Proxy hier automatisch nach.
     reconcile_proxies()
-    # Eingangstuer (Gateway ODER Velocity) abgleichen: Listener nachbinden,
-    # Routing auffrischen bzw. abgestuerzten Velocity-Proxy neu starten
-    # (Crash-Recovery). reconcile_network koordiniert beide Front-Doors.
-    # Lazy-Import bricht den Zyklus velocity_service -> sleep_proxy_service.
+    # Gateway abgleichen: Listener nachbinden, Routing-Tabelle auffrischen.
+    # Lazy-Import bricht den Zyklus gateway_service -> sleep_proxy_service.
     try:
-        from app.services import velocity_service
+        from app.services import gateway_service
 
-        velocity_service.reconcile_network()
+        gateway_service.reconcile_gateway()
     except Exception:  # noqa: BLE001 - Monitor darf nie sterben
         pass
 
