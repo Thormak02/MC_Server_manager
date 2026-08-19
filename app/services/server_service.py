@@ -227,6 +227,19 @@ def _upsert_server_property(server: Server, key: str, value: str) -> str | None:
     return None
 
 
+def enable_accept_transfers(server: Server) -> None:
+    """Server transfer-bereit machen, damit eine Transfer-Lobby (1.20.5+) Spieler
+    hierher schicken darf.
+
+    Mojangs echte server.properties-Option heisst ``accepts-transfers`` (MIT 's';
+    der Server generiert sie selbst mit Default ``false``). Wir schreiben zur
+    Sicherheit auch die alternative Schreibweise ``accept-transfers`` - unbekannte
+    Keys ignoriert der Server, das schadet also nicht.
+    """
+    _upsert_server_property(server, "accepts-transfers", "true")
+    _upsert_server_property(server, "accept-transfers", "true")
+
+
 def _sync_forge_jvm_args(server: Server) -> str | None:
     base_path = Path(server.base_path).expanduser().resolve()
     args_path = base_path / "user_jvm_args.txt"
@@ -701,6 +714,12 @@ def update_server_settings(
 
     if server.gateway_is_default:
         db.execute(update(Server).where(Server.id != server.id).values(gateway_is_default=False))
+
+    # Eine Transfer-Lobby (1.20.5+) kann Spieler nur hierher schicken, wenn der
+    # Server Transfers akzeptiert. Sofort auf die Platte schreiben (greift beim
+    # naechsten (Neu-)Start des Servers - ein laufender Server liest es nicht neu).
+    if server.gateway_enabled:
+        enable_accept_transfers(server)
 
     warnings.extend(sync_server_settings_to_files(server))
 

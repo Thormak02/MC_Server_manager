@@ -458,6 +458,25 @@ def test_update_settings_gateway_valid_alias(client, tmp_path):
         assert srv.port == 25570
 
 
+def test_update_settings_gateway_writes_accept_transfers(client, tmp_path):
+    """Gateway aktivieren schreibt accepts-transfers=true in server.properties.
+
+    Mojangs echter Key heisst 'accepts-transfers' (mit 's'); ein falsch geschriebener
+    'accept-transfers' wird vom Server ignoriert -> Transfer schlaegt fehl.
+    """
+    from pathlib import Path
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    sid = _make_server(tmp_path, "gwtransfer", port=25570)
+    with SessionLocal() as db:
+        srv = db.get(Server, sid)
+        _update(db, srv, gateway_enabled=True, gateway_hostname="atm10")
+        props = (Path(srv.base_path) / "server.properties").read_text(encoding="utf-8")
+    assert "accepts-transfers=true" in props  # der ECHTE Mojang-Key (mit 's')
+
+
 def test_update_settings_gateway_invalid_alias(client, tmp_path):
     from app.db.session import SessionLocal
     from app.models.server import Server

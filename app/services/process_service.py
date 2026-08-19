@@ -1341,7 +1341,7 @@ def start_server(
             if getattr(server, "gateway_enabled", False) and (
                 app_setting_service.get_network_mode(db) == "gateway"
             ):
-                server_service._upsert_server_property(server, "accept-transfers", "true")
+                server_service.enable_accept_transfers(server)
         except Exception as exc:  # noqa: BLE001
             console_service.append_output(server.id, f"Transfer-Bereitschaft uebersprungen: {exc}")
 
