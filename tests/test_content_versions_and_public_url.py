@@ -163,6 +163,17 @@ def test_public_base_url_setting_roundtrip(client):
         assert svc.get_public_base_url_source(db) == "default"
 
 
+def test_settings_page_has_tabs(client):
+    _login_admin(client)
+    page = client.get("/settings")
+    assert page.status_code == 200
+    # Tab-Navigation + alle 5 Panels vorhanden.
+    assert 'id="settings-nav"' in page.text
+    for panel in ("netzwerk", "speicher", "java", "plattformen", "system"):
+        assert f'data-settings-tab="{panel}"' in page.text
+        assert f'data-settings-panel="{panel}"' in page.text
+
+
 def test_public_url_settings_page_and_post(client):
     _login_admin(client)
 

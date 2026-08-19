@@ -2,6 +2,144 @@
 {% block content %}
 <h1>Einstellungen</h1>
 
+<style>
+  .settings-tab { display: none; }
+  .settings-tab.active { display: block; }
+</style>
+
+<section class="card">
+    <div class="inline-form server-nav" id="settings-nav">
+        <button type="button" class="button-like" data-settings-tab="netzwerk">Netzwerk &amp; Lobby</button>
+        <button type="button" class="button-like" data-settings-tab="speicher">Speicher &amp; Domain</button>
+        <button type="button" class="button-like" data-settings-tab="java">Java</button>
+        <button type="button" class="button-like" data-settings-tab="plattformen">Plattformen</button>
+        <button type="button" class="button-like" data-settings-tab="system">System</button>
+    </div>
+</section>
+
+{# ===================== Netzwerk & Lobby ===================== #}
+<div class="settings-tab" data-settings-panel="netzwerk">
+<section class="card">
+    <h2>Netzwerk (Lobby)</h2>
+    <p class="muted">
+        Gemeinsame Eingangstuer fuer alle Server ueber einen transparenten Router. Aktuell:
+        <strong>{{ network_mode }}</strong> (Quelle: {{ "UI" if network_mode_source == "ui" else "Standard" }}).
+    </p>
+    <ul class="muted">
+        <li><strong>off</strong> &ndash; kein gemeinsamer Eingang; jeder Server auf eigenem Port.</li>
+        <li><strong>gateway</strong> &ndash; transparenter Router: eine Adresse leitet per Hostname
+            (<code>&lt;alias&gt;.&lt;domain&gt;</code>) direkt zum passenden Server. <strong>Jeder Typ, jede
+            Version</strong>, Direktverbindung bleibt erhalten. Kein begehbarer In-Game-Hub.</li>
+    </ul>
+    <form method="post" action="/settings/network" class="grid grid-4">
+        <div>
+            <label for="network_mode">Modus</label>
+            <select id="network_mode" name="network_mode">
+                <option value="off" {% if network_mode == "off" %}selected{% endif %}>off</option>
+                <option value="gateway" {% if network_mode == "gateway" %}selected{% endif %}>gateway</option>
+            </select>
+        </div>
+        <div>
+            <label for="network_port">Netzwerk-Port</label>
+            <input id="network_port" name="network_port" type="number" min="1" max="65535" value="{{ network_port }}">
+            <p class="muted">Oeffentlicher Gateway-Eingang. Nur diesen (zusaetzlich zu den direkten Server-Ports) freigeben.</p>
+        </div>
+        <div>
+            <label for="network_domain">Netzwerk-Domain</label>
+            <input id="network_domain" name="network_domain" type="text" placeholder="z.B. deine-domain.de" value="{{ network_domain }}">
+            <p class="muted">Fuer die Adressen <code>&lt;alias&gt;.&lt;domain&gt;</code>.</p>
+        </div>
+        <div class="align-end">
+            <button type="submit">Netzwerk speichern</button>
+        </div>
+    </form>
+    <p class="muted">
+        Im <code>gateway</code>-Modus laufen ALLE Server ganz normal weiter (jeder Typ,
+        jede Version, parallel) und bleiben direkt auf ihrem Port erreichbar. Das Gateway
+        leitet zusaetzlich <code>&lt;alias&gt;.&lt;domain&gt;</code> transparent zum passenden
+        Server. Pro Server unter <em>Server &rarr; Einstellungen &rarr; Gateway-Routing</em>
+        einen Alias vergeben. Werte gelten auch via
+        <code>MCSM_NETWORK_PORT</code>/<code>MCSM_NETWORK_DOMAIN</code> in der <code>.env</code>.
+    </p>
+</section>
+
+{% if gateway_status and gateway_status.mode == "gateway" %}
+<section class="card">
+    <h2>Gateway-Status &amp; Routing</h2>
+    <p class="muted">
+        Listener:
+        {% if gateway_status.running %}
+            <strong style="color:#2e7d32">laeuft</strong> auf Port {{ gateway_status.port }}
+        {% else %}
+            <strong style="color:#c62828">nicht gebunden</strong> (Port {{ gateway_status.port }} belegt? &ndash; anderen Prozess auf dem Port beenden)
+        {% endif %}
+    </p>
+    {% if gateway_status.routes %}
+    <table class="table">
+        <thead>
+            <tr><th>Adresse</th><th>&rarr; Server</th><th>Port</th><th>Rolle</th></tr>
+        </thead>
+        <tbody>
+            {% for r in gateway_status.routes %}
+            <tr{% if not r.valid %} style="opacity:.6"{% endif %}>
+                <td>
+                    {% if r.alias %}<code>{{ r.alias }}{% if gateway_status.domain %}.{{ gateway_status.domain }}{% endif %}</code>
+                    {% else %}<span class="muted">(kein Alias &ndash; nicht erreichbar)</span>{% endif %}
+                </td>
+                <td>{{ r.server }}</td>
+                <td>{{ r.port or "?" }}</td>
+                <td>{% if r.is_default %}<strong>Default/Lobby</strong> (blanke Domain landet hier){% else %}Alias{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <p class="muted">
+        Fehlt hier ein Server (z.B. <code>david</code>), ist er <strong>nicht</strong> im Gateway registriert &ndash;
+        dann landen seine Adressen auf dem Default/Lobby. Fix: Server &rarr; Einstellungen &rarr;
+        <em>Gateway-Routing</em> aktivieren + Alias vergeben + speichern.
+    </p>
+    {% else %}
+    <p class="muted">Noch kein Server im Gateway registriert. Pro Server unter
+        <em>Einstellungen &rarr; Gateway-Routing</em> einen Alias vergeben.</p>
+    {% endif %}
+</section>
+{% endif %}
+
+<section class="card">
+    <h2>Lobby automatisch einrichten</h2>
+    <p class="muted">
+        Legt mit einem Klick einen fertigen Paper-Lobby-Server (stabiles 1.21.x) an,
+        markiert ihn als Gateway-Default (blanke Domain landet dort), setzt eine ruhige
+        Lobby-Welt und installiert die <strong>begehbare Transfer-Lobby</strong>
+        (Plugin <code>MCSMLobby</code>). Setzt den Netzwerk-Modus auf <code>gateway</code>.
+        Danach nur noch starten.
+    </p>
+    <p class="muted">
+        <strong>Begehbare Lobby (ab Client 1.20.5):</strong> In der Lobby &ndash; Kompass
+        (Rechtsklick) oeffnet das Server-Menue, alternativ <code>/server &lt;alias&gt;</code>,
+        <code>/hub</code>. Schild: Zeile 1 <code>[server]</code>, Zeile 2 der Alias.
+        Begehbare Portale traegst du in <code>plugins/MCSMLobby/config.yml</code> unter
+        <code>regions</code> ein. Die Server-Liste im Menue erzeugt der Manager automatisch
+        aus den Gateway-Aliassen &ndash; funktioniert fuer <strong>jeden</strong> Servertyp.
+    </p>
+    <div class="inline-form">
+        <form method="post" action="/settings/lobby/auto-create" class="inline-form">
+            <button type="submit">Lobby automatisch einrichten</button>
+        </form>
+        <form method="post" action="/settings/lobby/sync-plugin" class="inline-form">
+            <button type="submit" class="secondary">Transfer-Menue neu erzeugen</button>
+        </form>
+    </div>
+    <p class="muted">
+        „Transfer-Menue neu erzeugen" schreibt die Server-Liste des Plugins neu (z.B. nach
+        dem Hinzufuegen/Umbenennen eines Servers). Bei laufender Lobby danach neu starten,
+        damit das Plugin die Aenderung laedt.
+    </p>
+</section>
+</div>
+
+{# ===================== Speicher & Domain ===================== #}
+<div class="settings-tab" data-settings-panel="speicher">
 <section class="card">
     <h2>Server Speicherpfad</h2>
     <p class="muted">
@@ -70,154 +208,10 @@
         <button type="submit" class="ghost">Auf ENV/leer zuruecksetzen</button>
     </form>
 </section>
+</div>
 
-<section class="card">
-    <h2>Netzwerk (Lobby)</h2>
-    <p class="muted">
-        Gemeinsame Eingangstuer fuer alle Server ueber einen transparenten Router. Aktuell:
-        <strong>{{ network_mode }}</strong> (Quelle: {{ "UI" if network_mode_source == "ui" else "Standard" }}).
-    </p>
-    <ul class="muted">
-        <li><strong>off</strong> &ndash; kein gemeinsamer Eingang; jeder Server auf eigenem Port.</li>
-        <li><strong>gateway</strong> &ndash; transparenter Router: eine Adresse leitet per Hostname
-            (<code>&lt;alias&gt;.&lt;domain&gt;</code>) direkt zum passenden Server. <strong>Jeder Typ, jede
-            Version</strong>, Direktverbindung bleibt erhalten. Kein begehbarer In-Game-Hub.</li>
-    </ul>
-    <form method="post" action="/settings/network" class="grid grid-4">
-        <div>
-            <label for="network_mode">Modus</label>
-            <select id="network_mode" name="network_mode">
-                <option value="off" {% if network_mode == "off" %}selected{% endif %}>off</option>
-                <option value="gateway" {% if network_mode == "gateway" %}selected{% endif %}>gateway</option>
-            </select>
-        </div>
-        <div>
-            <label for="network_port">Netzwerk-Port</label>
-            <input id="network_port" name="network_port" type="number" min="1" max="65535" value="{{ network_port }}">
-            <p class="muted">Oeffentlicher Gateway-Eingang. Nur diesen (zusaetzlich zu den direkten Server-Ports) freigeben.</p>
-        </div>
-        <div>
-            <label for="network_domain">Netzwerk-Domain</label>
-            <input id="network_domain" name="network_domain" type="text" placeholder="z.B. deine-domain.de" value="{{ network_domain }}">
-            <p class="muted">Fuer die Adressen <code>&lt;alias&gt;.&lt;domain&gt;</code>.</p>
-        </div>
-        <div class="align-end">
-            <button type="submit">Netzwerk speichern</button>
-        </div>
-    </form>
-    <p class="muted">
-        Im <code>gateway</code>-Modus laufen ALLE Server ganz normal weiter (jeder Typ,
-        jede Version, parallel) und bleiben direkt auf ihrem Port erreichbar. Das Gateway
-        leitet zusaetzlich <code>&lt;alias&gt;.&lt;domain&gt;</code> transparent zum passenden
-        Server. Pro Server unter <em>Server &rarr; Einstellungen &rarr; Gateway-Routing</em>
-        einen Alias vergeben. Werte gelten auch via
-        <code>MCSM_NETWORK_PORT</code>/<code>MCSM_NETWORK_DOMAIN</code> in der <code>.env</code>.
-    </p>
-
-    {% if gateway_status and gateway_status.mode == "gateway" %}
-    <hr>
-    <h3>Gateway-Status &amp; Routing</h3>
-    <p class="muted">
-        Listener:
-        {% if gateway_status.running %}
-            <strong style="color:#2e7d32">laeuft</strong> auf Port {{ gateway_status.port }}
-        {% else %}
-            <strong style="color:#c62828">nicht gebunden</strong> (Port {{ gateway_status.port }} belegt? &ndash; anderen Prozess auf dem Port beenden)
-        {% endif %}
-    </p>
-    {% if gateway_status.routes %}
-    <table class="table">
-        <thead>
-            <tr><th>Adresse</th><th>&rarr; Server</th><th>Port</th><th>Rolle</th></tr>
-        </thead>
-        <tbody>
-            {% for r in gateway_status.routes %}
-            <tr{% if not r.valid %} style="opacity:.6"{% endif %}>
-                <td>
-                    {% if r.alias %}<code>{{ r.alias }}{% if gateway_status.domain %}.{{ gateway_status.domain }}{% endif %}</code>
-                    {% else %}<span class="muted">(kein Alias &ndash; nicht erreichbar)</span>{% endif %}
-                </td>
-                <td>{{ r.server }}</td>
-                <td>{{ r.port or "?" }}</td>
-                <td>{% if r.is_default %}<strong>Default/Lobby</strong> (blanke Domain landet hier){% else %}Alias{% endif %}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <p class="muted">
-        Fehlt hier ein Server (z.B. <code>david</code>), ist er <strong>nicht</strong> im Gateway registriert &ndash;
-        dann landen seine Adressen auf dem Default/Lobby. Fix: Server &rarr; Einstellungen &rarr;
-        <em>Gateway-Routing</em> aktivieren + Alias vergeben + speichern.
-    </p>
-    {% else %}
-    <p class="muted">Noch kein Server im Gateway registriert. Pro Server unter
-        <em>Einstellungen &rarr; Gateway-Routing</em> einen Alias vergeben.</p>
-    {% endif %}
-    {% endif %}
-
-    <hr>
-    <h3>Lobby automatisch einrichten</h3>
-    <p class="muted">
-        Legt mit einem Klick einen fertigen Paper-Lobby-Server (stabiles 1.21.x) an,
-        markiert ihn als Gateway-Default (blanke Domain landet dort), setzt eine ruhige
-        Lobby-Welt und installiert die <strong>begehbare Transfer-Lobby</strong>
-        (Plugin <code>MCSMLobby</code>). Setzt den Netzwerk-Modus auf <code>gateway</code>.
-        Danach nur noch starten.
-    </p>
-    <p class="muted">
-        <strong>Begehbare Lobby (ab Client 1.20.5):</strong> In der Lobby &ndash; Kompass
-        (Rechtsklick) oeffnet das Server-Menue, alternativ <code>/server &lt;alias&gt;</code>,
-        <code>/hub</code>. Schild: Zeile 1 <code>[server]</code>, Zeile 2 der Alias.
-        Begehbare Portale traegst du in <code>plugins/MCSMLobby/config.yml</code> unter
-        <code>regions</code> ein. Die Server-Liste im Menue erzeugt der Manager automatisch
-        aus den Gateway-Aliassen &ndash; funktioniert fuer <strong>jeden</strong> Servertyp.
-    </p>
-    <div class="inline-form">
-        <form method="post" action="/settings/lobby/auto-create" class="inline-form">
-            <button type="submit">Lobby automatisch einrichten</button>
-        </form>
-        <form method="post" action="/settings/lobby/sync-plugin" class="inline-form">
-            <button type="submit" class="secondary">Transfer-Menue neu erzeugen</button>
-        </form>
-    </div>
-    <p class="muted">
-        „Transfer-Menue neu erzeugen" schreibt die Server-Liste des Plugins neu (z.B. nach
-        dem Hinzufuegen/Umbenennen eines Servers). Bei laufender Lobby danach neu starten,
-        damit das Plugin die Aenderung laedt.
-    </p>
-</section>
-
-<section class="card">
-    <h2>Plattform Einstellungen</h2>
-    <div class="grid grid-4">
-        <form method="post" action="/settings/platform/modrinth" class="stack">
-            <h3>Modrinth</h3>
-            <label>
-                <input type="checkbox" name="enabled" value="true" {% if platform_settings.modrinth.enabled == "true" %}checked{% endif %}>
-                Provider aktiv
-            </label>
-            <label for="modrinth_user_agent">User-Agent</label>
-            <input id="modrinth_user_agent" name="user_agent" type="text" value="{{ platform_settings.modrinth.user_agent }}">
-            <button type="submit">Modrinth speichern</button>
-        </form>
-
-        <form method="post" action="/settings/platform/curseforge" class="stack">
-            <h3>CurseForge</h3>
-            <label>
-                <input type="checkbox" name="enabled" value="true" {% if platform_settings.curseforge.enabled == "true" %}checked{% endif %}>
-                Provider aktiv
-            </label>
-            <label for="curseforge_api_key">API Key (optional neu setzen)</label>
-            <input id="curseforge_api_key" name="api_key" type="text" placeholder="{% if platform_settings.curseforge.api_key %}Gesetzt{% else %}Leer{% endif %}">
-            <label>
-                <input type="checkbox" name="clear_api_key" value="true">
-                API Key zuruecksetzen (ENV/leer)
-            </label>
-            <button type="submit">CurseForge speichern</button>
-        </form>
-    </div>
-</section>
-
+{# ===================== Java ===================== #}
+<div class="settings-tab" data-settings-panel="java">
 <section class="card">
     <h2>Java automatisch erkennen</h2>
     <p class="muted">
@@ -226,31 +220,6 @@
     <form method="post" action="/settings/java-profiles/discover" class="inline-form">
         <button type="submit">Java auf Host erkennen</button>
     </form>
-</section>
-
-<section class="card">
-    <h2>Manager Update</h2>
-    <p class="muted">
-        Branch: <strong>{{ manager_update_status.branch }}</strong>,
-        lokal: <code>{{ manager_update_status.local_commit_short }}</code>,
-        remote: <code>{{ manager_update_status.remote_commit_short }}</code>,
-        ahead: {{ manager_update_status.ahead_count }},
-        behind: {{ manager_update_status.behind_count }},
-        Working Tree: {{ "dirty" if manager_update_status.dirty else "clean" }}
-    </p>
-    <p class="muted">{{ manager_update_status.message }}</p>
-    <div class="inline-form">
-        <form method="post" action="/settings/manager-update/check" class="inline-form">
-            <button type="submit">Update checken</button>
-        </form>
-        <form method="post" action="/settings/manager-update/apply" class="inline-form">
-            <button type="submit" {% if not manager_update_status.can_apply %}disabled{% endif %}>Update durchfuehren</button>
-        </form>
-        <form method="post" action="/settings/manager/restart" class="inline-form">
-            <button type="submit">Anwendung neu starten</button>
-        </form>
-    </div>
-    <p class="muted">Hinweis: Beim Update kann die Weboberflaeche kurzzeitig nicht erreichbar sein.</p>
 </section>
 
 <section class="card">
@@ -348,4 +317,91 @@
         </tbody>
     </table>
 </section>
+</div>
+
+{# ===================== Plattformen ===================== #}
+<div class="settings-tab" data-settings-panel="plattformen">
+<section class="card">
+    <h2>Plattform Einstellungen</h2>
+    <div class="grid grid-4">
+        <form method="post" action="/settings/platform/modrinth" class="stack">
+            <h3>Modrinth</h3>
+            <label>
+                <input type="checkbox" name="enabled" value="true" {% if platform_settings.modrinth.enabled == "true" %}checked{% endif %}>
+                Provider aktiv
+            </label>
+            <label for="modrinth_user_agent">User-Agent</label>
+            <input id="modrinth_user_agent" name="user_agent" type="text" value="{{ platform_settings.modrinth.user_agent }}">
+            <button type="submit">Modrinth speichern</button>
+        </form>
+
+        <form method="post" action="/settings/platform/curseforge" class="stack">
+            <h3>CurseForge</h3>
+            <label>
+                <input type="checkbox" name="enabled" value="true" {% if platform_settings.curseforge.enabled == "true" %}checked{% endif %}>
+                Provider aktiv
+            </label>
+            <label for="curseforge_api_key">API Key (optional neu setzen)</label>
+            <input id="curseforge_api_key" name="api_key" type="text" placeholder="{% if platform_settings.curseforge.api_key %}Gesetzt{% else %}Leer{% endif %}">
+            <label>
+                <input type="checkbox" name="clear_api_key" value="true">
+                API Key zuruecksetzen (ENV/leer)
+            </label>
+            <button type="submit">CurseForge speichern</button>
+        </form>
+    </div>
+</section>
+</div>
+
+{# ===================== System ===================== #}
+<div class="settings-tab" data-settings-panel="system">
+<section class="card">
+    <h2>Manager Update</h2>
+    <p class="muted">
+        Branch: <strong>{{ manager_update_status.branch }}</strong>,
+        lokal: <code>{{ manager_update_status.local_commit_short }}</code>,
+        remote: <code>{{ manager_update_status.remote_commit_short }}</code>,
+        ahead: {{ manager_update_status.ahead_count }},
+        behind: {{ manager_update_status.behind_count }},
+        Working Tree: {{ "dirty" if manager_update_status.dirty else "clean" }}
+    </p>
+    <p class="muted">{{ manager_update_status.message }}</p>
+    <div class="inline-form">
+        <form method="post" action="/settings/manager-update/check" class="inline-form">
+            <button type="submit">Update checken</button>
+        </form>
+        <form method="post" action="/settings/manager-update/apply" class="inline-form">
+            <button type="submit" {% if not manager_update_status.can_apply %}disabled{% endif %}>Update durchfuehren</button>
+        </form>
+        <form method="post" action="/settings/manager/restart" class="inline-form">
+            <button type="submit">Anwendung neu starten</button>
+        </form>
+    </div>
+    <p class="muted">Hinweis: Beim Update kann die Weboberflaeche kurzzeitig nicht erreichbar sein.</p>
+</section>
+</div>
+
+<script>
+(function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('#settings-nav [data-settings-tab]'));
+    var panels = Array.prototype.slice.call(document.querySelectorAll('[data-settings-panel]'));
+    if (!tabs.length) { return; }
+    var STORAGE_KEY = 'mcsm-settings-tab';
+
+    function show(name) {
+        tabs.forEach(function (t) { t.classList.toggle('active', t.dataset.settingsTab === name); });
+        panels.forEach(function (p) { p.classList.toggle('active', p.dataset.settingsPanel === name); });
+        try { sessionStorage.setItem(STORAGE_KEY, name); } catch (e) {}
+    }
+
+    tabs.forEach(function (t) {
+        t.addEventListener('click', function () { show(t.dataset.settingsTab); });
+    });
+
+    var initial = null;
+    try { initial = sessionStorage.getItem(STORAGE_KEY); } catch (e) {}
+    var valid = tabs.some(function (t) { return t.dataset.settingsTab === initial; });
+    show(valid ? initial : tabs[0].dataset.settingsTab);
+})();
+</script>
 {% endblock %}

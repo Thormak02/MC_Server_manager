@@ -272,6 +272,9 @@ die Einstellungen sind inzwischen zu unübersichtlich, bitte ebenfalls sinnvolle
 schlafender server wird in lobby nicht als solcher angezeigt und von einem beitrittsversuch über lobby nicht geweckt
 
 
+es soll auch möglich sein, von einem server mit /lobby wieder zur lobby zu gelangen
+
+alte plugins erkennen / updaten
 
 
 KI Ideen:
