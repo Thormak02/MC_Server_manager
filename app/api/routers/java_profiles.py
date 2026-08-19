@@ -98,6 +98,9 @@ def settings_page(
     network_domain_source = get_network_domain_source(db)
     network_mode = get_network_mode(db)
     network_mode_source = get_network_mode_source(db)
+    from app.services import gateway_service
+
+    gateway_status = gateway_service.gateway_status_runtime()
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
     return templates.TemplateResponse(
@@ -120,6 +123,7 @@ def settings_page(
             network_domain_source=network_domain_source,
             network_mode=network_mode,
             network_mode_source=network_mode_source,
+            gateway_status=gateway_status,
             platform_settings=platform_settings,
             manager_update_status=manager_update_status,
         ),
@@ -155,6 +159,13 @@ def update_network_settings_action(
         gateway_service.reconcile_gateway()
     except Exception:  # noqa: BLE001
         pass
+    # Lobby-Plugin-config an die (evtl. geaenderte) Domain angleichen.
+    try:
+        from app.services import lobby_service
+
+        lobby_service.sync_lobby_plugin(db)
+    except Exception:  # noqa: BLE001
+        pass
 
     audit_service.log_action(
         db,
@@ -185,6 +196,24 @@ def auto_create_lobby_action(request: Request, db: Session = Depends(get_db)):
     push_flash(request, message, "success" if ok else "error")
     if ok and server_id:
         return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/lobby/sync-plugin")
+def sync_lobby_plugin_action(request: Request, db: Session = Depends(get_db)):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import lobby_service
+
+    try:
+        ok, message = lobby_service.sync_lobby_plugin(db)
+    except Exception as exc:  # noqa: BLE001
+        push_flash(request, f"Transfer-Plugin-Sync fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    push_flash(request, message, "success" if ok else "error")
     return RedirectResponse(url="/settings", status_code=303)
 
 

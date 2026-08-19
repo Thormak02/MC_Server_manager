@@ -1,0 +1,27 @@
+# MCSMLobby - wird vom MC Server Manager aus den Gateway-Routen erzeugt.
+# Manuelle Aenderungen bleiben beim naechsten Manager-Update ueberschrieben,
+# AUSSER unter "regions" (Portale) - die ergaenzt du selbst.
+cooldown_ms: 3000
+messages:
+  transfer: "&aVerbinde zu &e%server%&a..."
+compass:
+  enabled: true
+  slot: 4
+  name: "&bServer-Auswahl &7(Rechtsklick)"
+gui:
+  title: "Server auswaehlen"
+  rows: 3
+# Vom Manager befuellt (Alias -> Zieladresse). Beispiel:
+servers: {}
+#  "1.21.11-spigot":
+#    display: "&aDavid (Spigot)"
+#    host: "1.21.11-spigot.mc.friedrich-dietrich.de"
+#    port: 25565
+#    material: GRASS_BLOCK
+#    slot: 11
+# Begehbare Portale: in diesen Quader laufen -> Transfer. Selbst ergaenzen:
+regions: []
+#  - world: world
+#    min: [10, 64, 10]
+#    max: [12, 67, 12]
+#    target: "1.21.11-spigot"

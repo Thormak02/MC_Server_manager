@@ -940,3 +940,162 @@ def test_cleanup_velocity_leftovers_ignores_cracked_server(tmp_path):
     notes = ss.cleanup_velocity_leftovers(SimpleNamespace(base_path=str(srv)))
     assert notes == []
     assert "online-mode=false" in (srv / "server.properties").read_text(encoding="utf-8")
+
+
+def test_gateway_status_runtime_reflects_registration(client):
+    import app.services.app_setting_service as svc
+    import app.services.gateway_service as gw
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    with SessionLocal() as db:
+        db.add_all([
+            Server(
+                name="Lobby", slug="lobby", server_type="paper", mc_version="1.21.1",
+                base_path="C:/tmp/lobby", gateway_enabled=True, gateway_hostname="lobby",
+                gateway_is_default=True, port=25571,
+            ),
+            Server(
+                name="David", slug="david", server_type="spigot", mc_version="1.21.1",
+                base_path="C:/tmp/david", gateway_enabled=True, gateway_hostname="david",
+                port=25591,
+            ),
+            Server(  # nicht im Gateway -> darf im Status fehlen
+                name="Solo", slug="solo", server_type="paper", mc_version="1.20.1",
+                base_path="C:/tmp/solo", gateway_enabled=False, port=25572,
+            ),
+        ])
+        db.commit()
+        svc.set_network_mode(db, "gateway")
+
+    status = gw.gateway_status_runtime()
+    assert status["mode"] == "gateway"
+    names = {r["server"]: r for r in status["routes"]}
+    assert "David" in names and names["David"]["alias"] == "david" and names["David"]["valid"]
+    assert "Solo" not in names  # nicht registriert -> landet sonst auf Default
+    assert status["default"] == "Lobby"
+
+    with SessionLocal() as db:
+        svc.set_network_mode(db, "off")
+    assert gw.gateway_status_runtime()["mode"] == "off"
+
+
+def test_decide_route_dotted_alias_strips_domain():
+    """Alias mit Punkten (z.B. 1.21.11-spigot) muss ueber Domain-Abzug matchen."""
+    import app.services.gateway_service as gw
+
+    routes = gw.GatewayRoutes(
+        by_hostname={"1.21.11-spigot": 7, "lobby": 3},
+        default_server_id=3,
+        domain="mc.friedrich-dietrich.de",
+    )
+    # Punkt-Alias + Domain -> Server 7 (nicht Default 3)
+    d = gw.decide_route("1.21.11-spigot.mc.friedrich-dietrich.de", None, routes)
+    assert d.server_id == 7 and d.reason == "alias"
+    # Einfacher Alias weiterhin per erstem Label
+    assert gw.decide_route("lobby.mc.friedrich-dietrich.de", None, routes).server_id == 3
+    # Blanke Domain -> Default
+    assert gw.decide_route("mc.friedrich-dietrich.de", None, routes).server_id == 3
+    # Unbekannter Punkt-Alias -> Default, nicht der falsche Server
+    assert gw.decide_route("nope.mc.friedrich-dietrich.de", None, routes).server_id == 3
+
+
+def test_build_gateway_routes_populates_domain(client):
+    import app.services.app_setting_service as svc
+    import app.services.gateway_service as gw
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    with SessionLocal() as db:
+        db.add(Server(
+            name="spg", slug="spg", server_type="spigot", mc_version="1.21.1",
+            base_path="C:/tmp/spg", gateway_enabled=True,
+            gateway_hostname="1.21.11-spigot", port=25591,
+        ))
+        db.commit()
+        svc.set_network_domain(db, "mc.friedrich-dietrich.de")
+
+    with SessionLocal() as db:
+        routes = gw.build_gateway_routes(db)
+    assert routes.domain == "mc.friedrich-dietrich.de"
+    assert gw.decide_route(
+        "1.21.11-spigot.mc.friedrich-dietrich.de", None, routes
+    ).reason == "alias"
+
+
+def test_sync_lobby_plugin_writes_menu(client, tmp_path):
+    import yaml
+
+    import app.services.app_setting_service as svc
+    import app.services.lobby_service as lobby_service
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    lobby_dir = tmp_path / "lobby"
+    lobby_dir.mkdir()
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Lobby", slug="lobby", server_type="paper", mc_version="1.21.1",
+                   base_path=str(lobby_dir), gateway_enabled=True, gateway_hostname="lobby",
+                   gateway_is_default=True, port=25569),
+            Server(name="David", slug="david", server_type="spigot", mc_version="1.21.11",
+                   base_path=str(tmp_path / "david"), gateway_enabled=True,
+                   gateway_hostname="1.21.11-spigot", port=25591),
+        ])
+        db.commit()
+        svc.set_network_domain(db, "mc.friedrich-dietrich.de")
+        svc.set_network_port(db, 25565)
+        svc.set_network_mode(db, "gateway")
+
+    with SessionLocal() as db:
+        ok, msg = lobby_service.sync_lobby_plugin(db)
+    assert ok, msg
+
+    cfg = yaml.safe_load(
+        (lobby_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8")
+    )
+    servers = cfg["servers"]
+    assert "1.21.11-spigot" in servers
+    assert servers["1.21.11-spigot"]["host"] == "1.21.11-spigot.mc.friedrich-dietrich.de"
+    assert servers["1.21.11-spigot"]["port"] == 25565
+    assert "lobby" not in servers  # die Lobby selbst gehoert nicht ins Menue
+    # Fertiges Plugin-Jar wird mitgeliefert und in die Lobby kopiert.
+    assert (lobby_dir / "plugins" / "MCSMLobby.jar").exists()
+
+
+def test_sync_lobby_plugin_preserves_user_regions(client, tmp_path):
+    import yaml
+
+    import app.services.app_setting_service as svc
+    import app.services.lobby_service as lobby_service
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    lobby_dir = tmp_path / "lobby2"
+    (lobby_dir / "plugins" / "MCSMLobby").mkdir(parents=True)
+    region = [{"world": "world", "min": [1, 64, 1], "max": [3, 66, 3], "target": "1.21.11-spigot"}]
+    (lobby_dir / "plugins" / "MCSMLobby" / "config.yml").write_text(
+        yaml.safe_dump({"regions": region, "cooldown_ms": 1234}), encoding="utf-8"
+    )
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Lobby", slug="lob2", server_type="paper", mc_version="1.21.1",
+                   base_path=str(lobby_dir), gateway_enabled=True, gateway_hostname="lobby",
+                   gateway_is_default=True, port=25569),
+            Server(name="David", slug="dav2", server_type="spigot", mc_version="1.21.11",
+                   base_path=str(tmp_path / "d2"), gateway_enabled=True,
+                   gateway_hostname="1.21.11-spigot", port=25591),
+        ])
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        svc.set_network_mode(db, "gateway")
+
+    with SessionLocal() as db:
+        ok, _ = lobby_service.sync_lobby_plugin(db)
+    assert ok
+    cfg = yaml.safe_load(
+        (lobby_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8")
+    )
+    assert cfg["regions"] == region  # begehbare Portale bleiben erhalten
+    assert cfg["cooldown_ms"] == 1234  # Nutzerwert bleibt erhalten
+    assert "1.21.11-spigot" in cfg["servers"]

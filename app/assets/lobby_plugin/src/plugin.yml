@@ -1,0 +1,21 @@
+name: MCSMLobby
+version: 1.0.0
+main: net.mcsm.lobby.MCSMLobby
+api-version: "1.20"
+author: MC Server Manager
+description: Begehbare Transfer-Lobby - schickt Spieler per Transfer-Paket an Gateway-Server.
+commands:
+  server:
+    description: Zu einem Server wechseln
+    usage: /server <name>
+  hub:
+    description: Server-Auswahl oeffnen
+  servers:
+    description: Server-Auswahl oeffnen
+  mcsmlobby:
+    description: MCSMLobby verwalten
+    usage: /mcsmlobby reload
+permissions:
+  mcsmlobby.admin:
+    description: Darf /mcsmlobby reload nutzen
+    default: op

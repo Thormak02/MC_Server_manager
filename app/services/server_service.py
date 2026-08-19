@@ -721,6 +721,13 @@ def update_server_settings(
         gateway_service.reconcile_gateway()
     except Exception:  # noqa: BLE001
         pass
+    # Lobby-Plugin-config an die (evtl. geaenderten) Gateway-Aliase angleichen.
+    try:
+        from app.services import lobby_service
+
+        lobby_service.sync_lobby_plugin(db)
+    except Exception:  # noqa: BLE001
+        pass
 
     return server, warnings
 

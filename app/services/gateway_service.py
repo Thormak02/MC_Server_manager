@@ -82,6 +82,7 @@ class GatewayRoutes:
     default_server_id: int | None = None
     internal_ports: dict[int, int] = field(default_factory=dict)
     aliases: tuple[str, ...] = ()
+    domain: str = ""
 
 
 @dataclass(frozen=True)
@@ -97,13 +98,22 @@ def decide_route(
 ) -> RouteDecision:
     """Ziel-Server fuer eine Verbindung bestimmen.
 
-    Reihenfolge: (1) exakter Alias-Match (bzw. erstes DNS-Label);
-    (2) Apex/unbekannter Hostname -> Default/Lobby; (3) Versions-Fallback (nur
-    wenn diese Protokollversion eindeutig einem Server zugeordnet ist).
+    Reihenfolge des Alias-Matchings (der Alias selbst darf Punkte enthalten,
+    z.B. ``1.21.11-spigot``):
+      (1) exakter Match des ganzen Hostnamens (voll-qualifizierte Aliase);
+      (2) bekannte Netzwerk-Domain abziehen -> Rest ist der Alias
+          (``1.21.11-spigot.mc.example.de`` - ``mc.example.de`` = ``1.21.11-spigot``);
+      (3) erstes DNS-Label (einfaches ``david.egal-was``).
+    Danach: (4) Apex/unbekannt -> Default/Lobby; (5) Versions-Fallback (nur wenn
+    diese Protokollversion eindeutig einem Server zugeordnet ist).
     """
     cleaned = clean_hostname(hostname)
     if cleaned:
         server_id = routes.by_hostname.get(cleaned)
+        if server_id is None and routes.domain:
+            suffix = "." + routes.domain
+            if cleaned.endswith(suffix) and len(cleaned) > len(suffix):
+                server_id = routes.by_hostname.get(cleaned[: -len(suffix)])
         if server_id is None:
             first_label = cleaned.split(".", 1)[0]
             if first_label != cleaned:
@@ -135,6 +145,9 @@ def build_gateway_routes(db) -> GatewayRoutes:
     der Sleep-Proxy, der auf demselben oeffentlichen Port sitzt.
     """
     from app.models.server import Server
+    from app.services import app_setting_service
+
+    domain = clean_hostname(app_setting_service.get_network_domain(db))
 
     servers = list(
         db.scalars(select(Server).where(Server.gateway_enabled.is_(True))).all()
@@ -174,6 +187,7 @@ def build_gateway_routes(db) -> GatewayRoutes:
         default_server_id=default_server_id,
         internal_ports=target_ports,
         aliases=tuple(sorted(set(aliases))),
+        domain=domain,
     )
 
 
@@ -321,6 +335,55 @@ def _stop_locked() -> None:
 def is_running() -> bool:
     with _GATEWAY_LOCK:
         return _GATEWAY is not None
+
+
+def gateway_status_runtime() -> dict:
+    """Diagnose-Snapshot des Gateways fuer die UI.
+
+    Zeigt, welche Aliase auf welche Server zeigen (die Routing-Tabelle) sowie ob
+    der Listener laeuft. So sieht man sofort, ob ein Server (z.B. david) wirklich
+    im Gateway registriert ist oder ob alle Verbindungen auf den Default fallen.
+    """
+    from sqlalchemy import select
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import app_setting_service
+
+    status: dict = {
+        "mode": "off",
+        "running": is_running(),
+        "domain": None,
+        "port": None,
+        "routes": [],
+        "default": None,
+    }
+    try:
+        with SessionLocal() as db:
+            status["mode"] = app_setting_service.get_network_mode(db)
+            status["domain"] = app_setting_service.get_network_domain(db)
+            status["port"] = app_setting_service.get_network_port(db)
+            if status["mode"] != "gateway":
+                return status
+            servers = db.scalars(
+                select(Server).where(Server.gateway_enabled.is_(True))
+            ).all()
+            for srv in servers:
+                alias = clean_hostname(srv.gateway_hostname)
+                status["routes"].append(
+                    {
+                        "server": srv.name,
+                        "alias": alias,
+                        "is_default": bool(srv.gateway_is_default),
+                        "port": srv.port,
+                        "valid": bool(alias) and bool(srv.port),
+                    }
+                )
+                if srv.gateway_is_default:
+                    status["default"] = srv.name
+    except Exception as exc:  # noqa: BLE001 - Diagnose darf nie crashen
+        status["error"] = repr(exc)
+    return status
 
 
 def _accept_loop(listener: _GatewayListener) -> None:

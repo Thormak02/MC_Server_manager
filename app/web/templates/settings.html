@@ -74,7 +74,7 @@
 <section class="card">
     <h2>Netzwerk (Lobby)</h2>
     <p class="muted">
-        Gemeinsame Eingangstuer fuer alle Server ueber einen Velocity-Proxy. Aktuell:
+        Gemeinsame Eingangstuer fuer alle Server ueber einen transparenten Router. Aktuell:
         <strong>{{ network_mode }}</strong> (Quelle: {{ "UI" if network_mode_source == "ui" else "Standard" }}).
     </p>
     <ul class="muted">
@@ -82,8 +82,6 @@
         <li><strong>gateway</strong> &ndash; transparenter Router: eine Adresse leitet per Hostname
             (<code>&lt;alias&gt;.&lt;domain&gt;</code>) direkt zum passenden Server. <strong>Jeder Typ, jede
             Version</strong>, Direktverbindung bleibt erhalten. Kein begehbarer In-Game-Hub.</li>
-        <li><strong>velocity</strong> &ndash; echter Proxy mit begehbarer Lobby (<code>/server</code>/Portal,
-            ViaVersion) &ndash; aber <strong>nur Paper/Purpur</strong>-Server, nicht direkt erreichbar.</li>
     </ul>
     <form method="post" action="/settings/network" class="grid grid-4">
         <div>
@@ -115,16 +113,78 @@
         einen Alias vergeben. Werte gelten auch via
         <code>MCSM_NETWORK_PORT</code>/<code>MCSM_NETWORK_DOMAIN</code> in der <code>.env</code>.
     </p>
+
+    {% if gateway_status and gateway_status.mode == "gateway" %}
+    <hr>
+    <h3>Gateway-Status &amp; Routing</h3>
+    <p class="muted">
+        Listener:
+        {% if gateway_status.running %}
+            <strong style="color:#2e7d32">laeuft</strong> auf Port {{ gateway_status.port }}
+        {% else %}
+            <strong style="color:#c62828">nicht gebunden</strong> (Port {{ gateway_status.port }} belegt? &ndash; anderen Prozess auf dem Port beenden)
+        {% endif %}
+    </p>
+    {% if gateway_status.routes %}
+    <table class="table">
+        <thead>
+            <tr><th>Adresse</th><th>&rarr; Server</th><th>Port</th><th>Rolle</th></tr>
+        </thead>
+        <tbody>
+            {% for r in gateway_status.routes %}
+            <tr{% if not r.valid %} style="opacity:.6"{% endif %}>
+                <td>
+                    {% if r.alias %}<code>{{ r.alias }}{% if gateway_status.domain %}.{{ gateway_status.domain }}{% endif %}</code>
+                    {% else %}<span class="muted">(kein Alias &ndash; nicht erreichbar)</span>{% endif %}
+                </td>
+                <td>{{ r.server }}</td>
+                <td>{{ r.port or "?" }}</td>
+                <td>{% if r.is_default %}<strong>Default/Lobby</strong> (blanke Domain landet hier){% else %}Alias{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <p class="muted">
+        Fehlt hier ein Server (z.B. <code>david</code>), ist er <strong>nicht</strong> im Gateway registriert &ndash;
+        dann landen seine Adressen auf dem Default/Lobby. Fix: Server &rarr; Einstellungen &rarr;
+        <em>Gateway-Routing</em> aktivieren + Alias vergeben + speichern.
+    </p>
+    {% else %}
+    <p class="muted">Noch kein Server im Gateway registriert. Pro Server unter
+        <em>Einstellungen &rarr; Gateway-Routing</em> einen Alias vergeben.</p>
+    {% endif %}
+    {% endif %}
+
     <hr>
     <h3>Lobby automatisch einrichten</h3>
     <p class="muted">
         Legt mit einem Klick einen fertigen Paper-Lobby-Server (stabiles 1.21.x) an,
         markiert ihn als Gateway-Default (blanke Domain landet dort), setzt eine ruhige
-        Lobby-Welt. Setzt den Netzwerk-Modus auf <code>gateway</code>. Danach nur noch starten.
+        Lobby-Welt und installiert die <strong>begehbare Transfer-Lobby</strong>
+        (Plugin <code>MCSMLobby</code>). Setzt den Netzwerk-Modus auf <code>gateway</code>.
+        Danach nur noch starten.
     </p>
-    <form method="post" action="/settings/lobby/auto-create" class="inline-form">
-        <button type="submit">Lobby automatisch einrichten</button>
-    </form>
+    <p class="muted">
+        <strong>Begehbare Lobby (ab Client 1.20.5):</strong> In der Lobby &ndash; Kompass
+        (Rechtsklick) oeffnet das Server-Menue, alternativ <code>/server &lt;alias&gt;</code>,
+        <code>/hub</code>. Schild: Zeile 1 <code>[server]</code>, Zeile 2 der Alias.
+        Begehbare Portale traegst du in <code>plugins/MCSMLobby/config.yml</code> unter
+        <code>regions</code> ein. Die Server-Liste im Menue erzeugt der Manager automatisch
+        aus den Gateway-Aliassen &ndash; funktioniert fuer <strong>jeden</strong> Servertyp.
+    </p>
+    <div class="inline-form">
+        <form method="post" action="/settings/lobby/auto-create" class="inline-form">
+            <button type="submit">Lobby automatisch einrichten</button>
+        </form>
+        <form method="post" action="/settings/lobby/sync-plugin" class="inline-form">
+            <button type="submit" class="secondary">Transfer-Menue neu erzeugen</button>
+        </form>
+    </div>
+    <p class="muted">
+        „Transfer-Menue neu erzeugen" schreibt die Server-Liste des Plugins neu (z.B. nach
+        dem Hinzufuegen/Umbenennen eines Servers). Bei laufender Lobby danach neu starten,
+        damit das Plugin die Aenderung laedt.
+    </p>
 </section>
 
 <section class="card">

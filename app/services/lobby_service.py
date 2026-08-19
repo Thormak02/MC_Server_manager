@@ -5,9 +5,27 @@ landet dort) und eine ruhige Lobby-Welt setzen.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from sqlalchemy.orm import Session
+
+# Fertig kompiliertes Transfer-Plugin (siehe app/assets/lobby_plugin/BUILD.md).
+_PLUGIN_ASSET_DIR = Path(__file__).resolve().parents[1] / "assets" / "lobby_plugin"
+_PLUGIN_JAR = _PLUGIN_ASSET_DIR / "MCSMLobby.jar"
+
+# Item-Palette fuer die GUI (nur Optik) - je nach Servertyp.
+_TYPE_MATERIAL = {
+    "paper": "PAPER",
+    "purpur": "PURPUR_BLOCK",
+    "spigot": "GRASS_BLOCK",
+    "bukkit": "GRASS_BLOCK",
+    "vanilla": "GRASS_BLOCK",
+    "forge": "ANVIL",
+    "neoforge": "ANVIL",
+    "fabric": "LOOM",
+    "quilt": "LOOM",
+}
 
 # Ruhige Lobby-Welt (Flat, kein Kampf/Monster) via server.properties.
 _LOBBY_PROPERTIES = {
@@ -61,14 +79,134 @@ def _write_setup_readme(base_path: Path, member_aliases: list[str]) -> None:
         "  - <alias>.<deine-domain>   (ueber das Gateway zum passenden Server)\n"
         "  - <server-ip>:<port>       (Direktverbindung, parallel)\n\n"
         f"Aktuelle Gateway-Aliase: {servers}\n\n"
-        "Fuer eine begehbare Lobby mit Portal/Schild (Version 1.20.5+) kann spaeter ein\n"
-        "Transfer-Plugin ergaenzt werden. Bis dahin verbinden sich Spieler ueber die\n"
-        "Adresse ihres Servers.\n"
+        "Begehbare Transfer-Lobby (Plugin MCSMLobby, ab Client 1.20.5):\n"
+        "  - Kompass (Rechtsklick) oeffnet das Server-Menue\n"
+        "  - /server <alias>, /hub, /servers\n"
+        "  - Schild bauen: Zeile 1 [server], Zeile 2 = Alias -> Rechtsklick\n"
+        "  - Begehbare Portale: plugins/MCSMLobby/config.yml unter 'regions' Quader\n"
+        "    (world, min:[x,y,z], max:[x,y,z], target: <alias>) eintragen -> reinlaufen\n"
+        "Die Server-Liste im Menue erzeugt der Manager automatisch aus den Aliassen.\n"
     )
     try:
         (base_path / "LOBBY-SETUP.txt").write_text(text, encoding="utf-8")
     except Exception:  # noqa: BLE001
         pass
+
+
+def _build_plugin_servers(db: Session, lobby_id: int) -> tuple[dict, list[str]]:
+    """Server-Eintraege fuer die Plugin-config aus den Gateway-Routen bauen.
+
+    Ziel jeder Verbindung ist die Gateway-Subdomain ``<alias>.<domain>`` auf dem
+    Netzwerk-Port - so laeuft der Transfer ueber dasselbe Gateway (jeder Servertyp,
+    Direktverbindung + Sleep-Wake bleiben erhalten). Gibt zusaetzlich die Namen der
+    Server zurueck, die mangels Domain/Alias uebersprungen wurden.
+    """
+    from sqlalchemy import select
+
+    from app.models.server import Server as _Server
+    from app.services import app_setting_service, gateway_service
+
+    domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
+    network_port = app_setting_service.get_network_port(db)
+
+    servers: dict = {}
+    skipped: list[str] = []
+    rows = db.scalars(
+        select(_Server).where(_Server.gateway_enabled.is_(True))
+    ).all()
+    for srv in rows:
+        if srv.id == lobby_id:
+            continue
+        alias = gateway_service.clean_hostname(srv.gateway_hostname)
+        if not alias or not domain:
+            skipped.append(srv.name)
+            continue
+        material = _TYPE_MATERIAL.get(str(srv.server_type or "").lower(), "GRASS_BLOCK")
+        label = f"&a{srv.name}"
+        if srv.mc_version:
+            label += f" &7({srv.server_type} {srv.mc_version})"
+        servers[alias] = {
+            "display": label,
+            "host": f"{alias}.{domain}",
+            "port": int(network_port),
+            "material": material,
+        }
+    return servers, skipped
+
+
+def sync_lobby_plugin(db: Session) -> tuple[bool, str]:
+    """Transfer-Plugin + config.yml in den Lobby-Server schreiben (idempotent).
+
+    - Kopiert ``MCSMLobby.jar`` nach ``<lobby>/plugins/`` (best-effort; ein laufender
+      Server haelt das Jar unter Windows gesperrt -> Update erst beim Neustart).
+    - Erzeugt ``<lobby>/plugins/MCSMLobby/config.yml`` aus den Gateway-Routen und
+      **erhaelt dabei die vom Nutzer gepflegten** ``regions`` (begehbare Portale).
+
+    No-op, wenn keine Default-Lobby existiert.
+    """
+    from sqlalchemy import select
+
+    import yaml
+
+    from app.models.server import Server as _Server
+
+    lobby = db.scalar(select(_Server).where(_Server.gateway_is_default.is_(True)))
+    if lobby is None:
+        return False, "Keine Gateway-Lobby vorhanden."
+
+    base = Path(lobby.base_path).expanduser().resolve()
+    plugins_dir = base / "plugins"
+    data_dir = plugins_dir / "MCSMLobby"
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Lobby-Plugin-Ordner nicht erstellbar: {exc}"
+
+    notes: list[str] = []
+
+    # Jar kopieren (best-effort - laufender Server sperrt die Datei).
+    if _PLUGIN_JAR.exists():
+        target = plugins_dir / "MCSMLobby.jar"
+        try:
+            shutil.copy2(_PLUGIN_JAR, target)
+        except (PermissionError, OSError):
+            notes.append("Plugin-Jar gesperrt (Lobby laeuft) - Update beim Neustart.")
+    else:
+        notes.append("MCSMLobby.jar fehlt in den Assets - nur config geschrieben.")
+
+    # config.yml erzeugen, vorhandene regions/cooldown erhalten.
+    cfg_path = data_dir / "config.yml"
+    existing: dict = {}
+    if cfg_path.exists():
+        try:
+            existing = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
+        except Exception:  # noqa: BLE001
+            existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    servers, skipped = _build_plugin_servers(db, lobby.id)
+    config = {
+        "cooldown_ms": existing.get("cooldown_ms", 3000),
+        "messages": {"transfer": "&aVerbinde zu &e%server%&a..."},
+        "compass": {"enabled": True, "slot": 4, "name": "&bServer-Auswahl &7(Rechtsklick)"},
+        "gui": {"title": "Server auswaehlen", "rows": 3},
+        "servers": servers,
+        "regions": existing.get("regions", []) or [],
+    }
+    try:
+        cfg_path.write_text(
+            yaml.safe_dump(config, sort_keys=False, allow_unicode=True), encoding="utf-8"
+        )
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Plugin-config nicht schreibbar: {exc}"
+
+    msg = f"Transfer-Plugin aktualisiert: {len(servers)} Server im Menue."
+    if skipped:
+        msg += f" Ohne Alias/Domain uebersprungen: {', '.join(skipped)}."
+    if notes:
+        msg += " " + " ".join(notes)
+    return True, msg
 
 
 def create_auto_lobby(db: Session, *, initiated_by_user_id: int | None) -> tuple[bool, str, int | None]:
@@ -92,6 +230,10 @@ def create_auto_lobby(db: Session, *, initiated_by_user_id: int | None) -> tuple
             from app.services import gateway_service
 
             gateway_service.reconcile_gateway()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            sync_lobby_plugin(db)
         except Exception:  # noqa: BLE001
             pass
         return (
@@ -179,6 +321,10 @@ def create_auto_lobby(db: Session, *, initiated_by_user_id: int | None) -> tuple
         from app.services import gateway_service
 
         gateway_service.reconcile_gateway()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        sync_lobby_plugin(db)
     except Exception:  # noqa: BLE001
         pass
 
