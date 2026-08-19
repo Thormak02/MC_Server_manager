@@ -62,6 +62,10 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     private String transferMsg = "&aVerbinde zu &e%server%&a...";
     private long cooldownMs = 3000L;
 
+    // Ziel fuer /lobby (leer, wenn dieser Server selbst die Lobby ist).
+    private String lobbyHost = "";
+    private int lobbyPort = 25565;
+
     static final class ServerEntry {
         String key;
         String display;
@@ -69,6 +73,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         int port;
         Material material = Material.GRASS_BLOCK;
         int slot = -1;
+        boolean sleep = false;
     }
 
     static final class Region {
@@ -96,7 +101,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         getServer().getPluginManager().registerEvents(this, this);
         // Tab-Vervollstaendigung fuer /server auf Server-Aliase setzen (sonst
         // schlaegt Bukkit Spielernamen vor).
-        for (String cmd : new String[] {"server", "hub", "servers", "mcsmlobby"}) {
+        for (String cmd : new String[] {"server", "hub", "servers", "lobby", "mcsmlobby"}) {
             PluginCommand pc = getCommand(cmd);
             if (pc != null) {
                 pc.setExecutor(this);
@@ -123,6 +128,8 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         compassName = c.getString("compass.name", compassName);
         transferMsg = c.getString("messages.transfer", transferMsg);
         cooldownMs = Math.max(0L, c.getLong("cooldown_ms", cooldownMs));
+        lobbyHost = c.getString("lobby.host", "");
+        lobbyPort = c.getInt("lobby.port", 25565);
 
         // WICHTIG: servers ist eine LISTE, nicht eine Map mit Alias als Schluessel.
         // Bukkit-YAML behandelt '.' im Schluessel als Pfad-Trenner, d.h. ein Alias
@@ -136,6 +143,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                 e.host = str(raw.get("host"));
                 e.port = raw.get("port") instanceof Number ? ((Number) raw.get("port")).intValue() : 25565;
                 e.slot = raw.get("slot") instanceof Number ? ((Number) raw.get("slot")).intValue() : -1;
+                e.sleep = Boolean.TRUE.equals(raw.get("sleep"));
                 Material m = Material.matchMaterial(
                     raw.get("material") != null ? str(raw.get("material")) : "GRASS_BLOCK");
                 e.material = m != null ? m : Material.GRASS_BLOCK;
@@ -194,6 +202,26 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
     }
 
+    private void goLobby(Player p) {
+        if (lobbyHost == null || lobbyHost.isEmpty()) {
+            p.sendMessage(color("&7Du bist bereits in der Lobby."));
+            return;
+        }
+        long now = System.currentTimeMillis();
+        Long last = lastTransfer.get(p.getUniqueId());
+        if (last != null && now - last < cooldownMs) {
+            return;
+        }
+        lastTransfer.put(p.getUniqueId(), now);
+        p.sendMessage(color(transferMsg.replace("%server%", "&bLobby")));
+        try {
+            p.transfer(lobbyHost, lobbyPort);
+        } catch (Throwable t) {
+            p.sendMessage(color("&cTransfer fehlgeschlagen. Braucht Client 1.20.5+."));
+            getLogger().warning("Lobby-transfer() fehlgeschlagen fuer " + p.getName() + ": " + t);
+        }
+    }
+
     private void openGui(Player p) {
         int size = guiRows * 9;
         Inventory inv = Bukkit.createInventory(null, size, guiTitle);
@@ -221,6 +249,9 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                 meta.setDisplayName(color(e.display));
                 List<String> lore = new ArrayList<>();
                 lore.add(color("&7" + e.host + ":" + e.port));
+                if (e.sleep) {
+                    lore.add(color("&d● Schlafmodus &7– Beitritt weckt ihn (kurz warten)"));
+                }
                 lore.add(color("&aKlick zum Verbinden"));
                 meta.setLore(lore);
                 item.setItemMeta(meta);
@@ -348,6 +379,10 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
             return true;
         }
         Player p = (Player) sender;
+        if (cmd.equals("lobby")) {
+            goLobby(p);
+            return true;
+        }
         if (cmd.equals("hub") || cmd.equals("servers")) {
             openGui(p);
             return true;

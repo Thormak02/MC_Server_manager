@@ -285,7 +285,10 @@ def _handle_connection(listener: _ProxyListener, client: socket.socket) -> None:
         if handshake.next_state == mc_protocol.NEXT_STATE_STATUS and not running:
             _respond_sleeping_status(client, buffer, handshake)
             return
-        if handshake.next_state == mc_protocol.NEXT_STATE_LOGIN and not running:
+        # Login (2) ODER Transfer (3, seit 1.20.5): ein echter Spieler will rein ->
+        # schlafenden Server wecken. Ohne den Transfer-Fall bleibt ein per Lobby
+        # weitergereichter Client haengen (Backend ist noch aus).
+        if handshake.next_state in mc_protocol.JOIN_NEXT_STATES and not running:
             if not _wake_server(server_id, client):
                 return  # Timeout/Fehler -> Client wurde informiert/geschlossen
         # Ab hier laeuft der Server (oder wurde geweckt) -> transparent forwarden.

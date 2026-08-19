@@ -1209,3 +1209,78 @@ def test_sync_lobby_plugin_aborts_on_corrupt_config(client, tmp_path):
     assert not ok and "nicht" in msg.lower()
     # Die kaputte Datei ist unveraendert (nicht mit Defaults ueberschrieben).
     assert (lobby_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8") == broken
+
+
+def test_sync_installs_lobby_command_and_sleep_flag(client, tmp_path):
+    """Plugin kommt auf ALLE Gateway-Bukkit-Server: Lobby mit Kompass-Menue,
+    andere mit /lobby-Ziel; Sleep-Server werden im Menue markiert."""
+    import yaml
+
+    import app.services.app_setting_service as svc
+    import app.services.lobby_service as lobby_service
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    lobby_dir = tmp_path / "lob"
+    david_dir = tmp_path / "david"
+    lobby_dir.mkdir()
+    david_dir.mkdir()
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Lobby", slug="lob", server_type="paper", mc_version="1.21.1",
+                   base_path=str(lobby_dir), gateway_enabled=True, gateway_hostname="lobby",
+                   gateway_is_default=True, port=25569),
+            Server(name="David", slug="david", server_type="spigot", mc_version="1.21.11",
+                   base_path=str(david_dir), gateway_enabled=True,
+                   gateway_hostname="1.21.11-spigot", port=25591, sleep_enabled=True),
+        ])
+        db.commit()
+        svc.set_network_domain(db, "mc.friedrich-dietrich.de")
+        svc.set_network_port(db, 25565)
+        svc.set_network_mode(db, "gateway")
+        ok, _ = lobby_service.sync_lobby_plugin(db)
+    assert ok
+
+    lob_cfg = yaml.safe_load((lobby_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8"))
+    dav_cfg = yaml.safe_load((david_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8"))
+
+    # Lobby: Kompass an, KEIN /lobby-Ziel (ist selbst die Lobby), David im Menue mit Sleep-Flag.
+    assert lob_cfg["compass"]["enabled"] is True
+    assert lob_cfg["lobby"]["host"] == ""
+    david_entry = next(s for s in lob_cfg["servers"] if s["key"] == "1.21.11-spigot")
+    assert david_entry["sleep"] is True
+
+    # David: Kompass aus, /lobby zeigt auf die Lobby-Adresse, Lobby im Menue.
+    assert dav_cfg["compass"]["enabled"] is False
+    assert dav_cfg["lobby"]["host"] == "lobby.mc.friedrich-dietrich.de"
+    assert dav_cfg["lobby"]["port"] == 25565
+    assert "lobby" in {s["key"] for s in dav_cfg["servers"]}
+
+
+def test_sync_skips_non_bukkit_servers(client, tmp_path):
+    """Forge/Vanilla koennen keine Plugins laden -> kein config-Ordner, aber gemeldet."""
+    import app.services.app_setting_service as svc
+    import app.services.lobby_service as lobby_service
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    lobby_dir = tmp_path / "lobx"
+    forge_dir = tmp_path / "forgex"
+    lobby_dir.mkdir()
+    forge_dir.mkdir()
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Lobby", slug="lobx", server_type="paper", mc_version="1.21.1",
+                   base_path=str(lobby_dir), gateway_enabled=True, gateway_hostname="lobby",
+                   gateway_is_default=True, port=25569),
+            Server(name="ATM10", slug="atm", server_type="forge", mc_version="1.21.1",
+                   base_path=str(forge_dir), gateway_enabled=True, gateway_hostname="atm10",
+                   port=25572),
+        ])
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        svc.set_network_mode(db, "gateway")
+        ok, msg = lobby_service.sync_lobby_plugin(db)
+    assert ok
+    assert "ATM10" in msg  # als nicht-Bukkit gemeldet
+    assert not (forge_dir / "plugins" / "MCSMLobby").exists()  # kein Plugin auf Forge

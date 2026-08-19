@@ -217,6 +217,34 @@ def sync_lobby_plugin_action(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(url="/settings", status_code=303)
 
 
+@router.post("/settings/lobby/install-multiversion")
+def install_multiversion_action(request: Request, db: Session = Depends(get_db)):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from sqlalchemy import select
+
+    from app.models.server import Server
+    from app.services import viaversion_service
+
+    lobby = db.scalar(select(Server).where(Server.gateway_is_default.is_(True)))
+    if lobby is None:
+        push_flash(request, "Keine Gateway-Lobby vorhanden.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    try:
+        ok, message = viaversion_service.install_multiversion(lobby.base_path, lobby.mc_version)
+    except Exception as exc:  # noqa: BLE001
+        push_flash(request, f"Multi-Version-Installation fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    if ok:
+        message += " Lobby neu starten, damit die Plugins laden."
+    push_flash(request, message, "success" if ok else "error")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
 @router.post("/settings/server-storage")
 def update_server_storage_action(
     request: Request,

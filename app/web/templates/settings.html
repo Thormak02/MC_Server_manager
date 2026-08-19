@@ -131,9 +131,27 @@
         </form>
     </div>
     <p class="muted">
-        „Transfer-Menue neu erzeugen" schreibt die Server-Liste des Plugins neu (z.B. nach
-        dem Hinzufuegen/Umbenennen eines Servers). Bei laufender Lobby danach neu starten,
-        damit das Plugin die Aenderung laedt.
+        „Transfer-Menue neu erzeugen" schreibt die Server-Liste des Plugins auf <strong>allen</strong>
+        Gateway-Servern neu (Lobby-Menue + <code>/lobby</code> auf den anderen). Bei laufenden
+        Servern danach neu starten, damit das Plugin die Aenderung laedt.
+    </p>
+
+    <hr>
+    <h3>Multi-Version-Lobby (ViaVersion)</h3>
+    <p class="muted">
+        Standardmaessig kann sich nur ein Client der <strong>exakt gleichen</strong> Version wie die
+        Lobby verbinden – sonst „Outdated client/server". Dieser Knopf laedt <strong>ViaVersion</strong>,
+        <strong>ViaBackwards</strong> und <strong>ViaRewind</strong> in die Lobby, damit sich Clients
+        <strong>jeder</strong> Version (neuer wie aelter, auch modded wie ATM10) mit der Lobby verbinden
+        koennen. Download von Modrinth passend zur Lobby-Version.
+    </p>
+    <form method="post" action="/settings/lobby/install-multiversion" class="inline-form">
+        <button type="submit">Multi-Version auf Lobby installieren</button>
+    </form>
+    <p class="muted">
+        Danach die Lobby neu starten. Hinweis: Via macht die <em>Lobby</em> fuer alle Versionen
+        erreichbar. Ein transferierter Spieler landet dann auf dem Zielserver – der sollte moeglichst
+        die passende Version sprechen (oder ebenfalls Via haben).
     </p>
 </section>
 </div>

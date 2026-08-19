@@ -12,6 +12,9 @@ commands:
     description: Server-Auswahl oeffnen
   servers:
     description: Server-Auswahl oeffnen
+  lobby:
+    description: Zurueck zur Lobby
+    usage: /lobby
   mcsmlobby:
     description: MCSMLobby verwalten
     usage: /mcsmlobby reload

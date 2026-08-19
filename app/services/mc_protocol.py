@@ -26,6 +26,12 @@ class ProtocolError(Exception):
 
 NEXT_STATE_STATUS = 1
 NEXT_STATE_LOGIN = 2
+# Seit MC 1.20.5: ein per Transfer-Paket weitergereichter Client verbindet sich mit
+# next_state=3 (statt 2). Fuer Wecken/Weiterleiten wie ein Login behandeln.
+NEXT_STATE_TRANSFER = 3
+
+# next_state-Werte, bei denen sich ein echter Spieler verbindet (kein Status-Ping).
+JOIN_NEXT_STATES = (NEXT_STATE_LOGIN, NEXT_STATE_TRANSFER)
 
 _LEGACY_PING = 0xFE
 _MAX_VARINT_BYTES = 5

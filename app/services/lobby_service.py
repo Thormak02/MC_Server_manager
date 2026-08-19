@@ -27,6 +27,10 @@ _TYPE_MATERIAL = {
     "quilt": "LOOM",
 }
 
+# Servertypen, die Bukkit-Plugins laden koennen -> hier laesst sich MCSMLobby (fuer
+# /lobby, /server, Kompass) installieren. Vanilla/Forge/Fabric koennen das nicht.
+_BUKKIT_TYPES = {"paper", "purpur", "spigot", "bukkit", "folia"}
+
 # Ruhige Lobby-Welt (Flat, kein Kampf/Monster) via server.properties.
 _LOBBY_PROPERTIES = {
     "level-type": "minecraft:flat",
@@ -93,13 +97,14 @@ def _write_setup_readme(base_path: Path, member_aliases: list[str]) -> None:
         pass
 
 
-def _build_plugin_servers(db: Session, lobby_id: int) -> tuple[list[dict], list[str]]:
+def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], list[str]]:
     """Server-Eintraege fuer die Plugin-config aus den Gateway-Routen bauen.
 
     Ziel jeder Verbindung ist die Gateway-Subdomain ``<alias>.<domain>`` auf dem
     Netzwerk-Port - so laeuft der Transfer ueber dasselbe Gateway (jeder Servertyp,
-    Direktverbindung + Sleep-Wake bleiben erhalten). Gibt zusaetzlich die Namen der
-    Server zurueck, die mangels Domain/Alias uebersprungen wurden.
+    Direktverbindung + Sleep-Wake bleiben erhalten). ``exclude_id`` ist der Server, auf
+    dem das Plugin laeuft (er darf sich nicht selbst im Menue anbieten). Gibt zusaetzlich
+    die Namen der Server zurueck, die mangels Domain/Alias uebersprungen wurden.
 
     WICHTIG: eine **Liste** (jeder Eintrag mit ``key``-Feld), KEINE Map mit Alias als
     Schluessel. Bukkit-YAML behandelt '.' im Schluessel als Pfad-Trenner - ein Alias
@@ -120,7 +125,7 @@ def _build_plugin_servers(db: Session, lobby_id: int) -> tuple[list[dict], list[
         select(_Server).where(_Server.gateway_enabled.is_(True))
     ).all()
     for srv in rows:
-        if srv.id == lobby_id:
+        if srv.id == exclude_id:
             continue
         alias = gateway_service.clean_hostname(srv.gateway_hostname)
         # Ohne Port hat das Gateway keine Route (build_gateway_routes ueberspringt
@@ -138,73 +143,88 @@ def _build_plugin_servers(db: Session, lobby_id: int) -> tuple[list[dict], list[
             "host": f"{alias}.{domain}",
             "port": int(network_port),
             "material": material,
+            "sleep": bool(srv.sleep_enabled),
         })
     return servers, skipped
 
 
-def sync_lobby_plugin(db: Session) -> tuple[bool, str]:
-    """Transfer-Plugin + config.yml in den Lobby-Server schreiben (idempotent).
+def _lobby_transfer_target(db: Session) -> dict | None:
+    """Adresse der Default-Lobby fuer ``/lobby`` (``<alias>.<domain>:<network_port>``).
 
-    - Kopiert ``MCSMLobby.jar`` nach ``<lobby>/plugins/`` (best-effort; ein laufender
-      Server haelt das Jar unter Windows gesperrt -> Update erst beim Neustart).
-    - Erzeugt ``<lobby>/plugins/MCSMLobby/config.yml`` aus den Gateway-Routen und
-      **erhaelt dabei die vom Nutzer gepflegten** ``regions`` (begehbare Portale).
-
-    No-op, wenn keine Default-Lobby existiert.
+    None, wenn keine Lobby / kein Alias / keine Domain gesetzt ist.
     """
     from sqlalchemy import select
 
-    import yaml
-
     from app.models.server import Server as _Server
+    from app.services import app_setting_service, gateway_service
 
     lobby = db.scalar(select(_Server).where(_Server.gateway_is_default.is_(True)))
     if lobby is None:
-        return False, "Keine Gateway-Lobby vorhanden."
+        return None
+    alias = gateway_service.clean_hostname(lobby.gateway_hostname)
+    domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
+    if not alias or not domain:
+        return None
+    return {
+        "id": lobby.id,
+        "host": f"{alias}.{domain}",
+        "port": int(app_setting_service.get_network_port(db)),
+    }
 
-    base = Path(lobby.base_path).expanduser().resolve()
+
+def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_target: dict | None) -> tuple[bool, str]:
+    """Jar + config.yml fuer EINEN Gateway-Bukkit-Server schreiben (idempotent).
+
+    - Kompass nur auf der Lobby (auf Gameplay-Servern nervt ein Auto-Kompass).
+    - ``/lobby`` ueberall wo ein Ziel bekannt ist und der Server nicht selbst die
+      Lobby ist.
+    - Bestehende ``regions``/``cooldown_ms`` bleiben erhalten; bei kaputter config
+      wird abgebrochen statt ueberschrieben (schuetzt Nutzer-Portale).
+    """
+    import yaml
+
+    base = Path(server.base_path).expanduser().resolve()
     plugins_dir = base / "plugins"
     data_dir = plugins_dir / "MCSMLobby"
     try:
         data_dir.mkdir(parents=True, exist_ok=True)
     except Exception as exc:  # noqa: BLE001
-        return False, f"Lobby-Plugin-Ordner nicht erstellbar: {exc}"
+        return False, f"{server.name}: Plugin-Ordner nicht erstellbar: {exc}"
 
     notes: list[str] = []
-
-    # Jar kopieren (best-effort - laufender Server sperrt die Datei).
     if _PLUGIN_JAR.exists():
-        target = plugins_dir / "MCSMLobby.jar"
         try:
-            shutil.copy2(_PLUGIN_JAR, target)
+            shutil.copy2(_PLUGIN_JAR, plugins_dir / "MCSMLobby.jar")
         except (PermissionError, OSError):
-            notes.append("Plugin-Jar gesperrt (Lobby laeuft) - Update beim Neustart.")
+            notes.append("Jar gesperrt (laeuft) - Update beim Neustart")
     else:
-        notes.append("MCSMLobby.jar fehlt in den Assets - nur config geschrieben.")
+        notes.append("MCSMLobby.jar fehlt in Assets")
 
-    # config.yml erzeugen, vorhandene regions/cooldown erhalten.
     cfg_path = data_dir / "config.yml"
     existing: dict = {}
     if cfg_path.exists():
-        # WICHTIG: existiert die Datei, laesst sich aber nicht lesen/parsen (Syntax-
-        # fehler, gesperrt, kaputt), NICHT mit Defaults ueberschreiben - das wuerde die
-        # vom Nutzer gepflegten regions/cooldown vernichten. Stattdessen abbrechen.
         try:
             raw = cfg_path.read_text(encoding="utf-8")
         except OSError as exc:
-            return False, f"config.yml nicht lesbar ({exc}) - nicht ueberschrieben, um Portale zu schuetzen."
+            return False, f"{server.name}: config.yml nicht lesbar ({exc}) - nicht ueberschrieben."
         try:
             parsed = yaml.safe_load(raw)
         except yaml.YAMLError as exc:
-            return False, f"config.yml hat einen YAML-Fehler ({exc}) - nicht ueberschrieben, um Portale zu schuetzen."
+            return False, f"{server.name}: config.yml YAML-Fehler ({exc}) - nicht ueberschrieben."
         existing = parsed if isinstance(parsed, dict) else {}
 
-    servers, skipped = _build_plugin_servers(db, lobby.id)
+    servers, _skipped = _build_plugin_servers(db, server.id)
+    # /lobby-Ziel: nur wenn dieser Server NICHT selbst die Lobby ist.
+    lobby_cfg = {"host": "", "port": 25565}
+    if lobby_target and not is_lobby:
+        lobby_cfg = {"host": lobby_target["host"], "port": lobby_target["port"]}
+
     config = {
         "cooldown_ms": existing.get("cooldown_ms", 3000),
         "messages": {"transfer": "&aVerbinde zu &e%server%&a..."},
-        "compass": {"enabled": True, "slot": 4, "name": "&bServer-Auswahl &7(Rechtsklick)"},
+        "compass": {"enabled": bool(is_lobby), "slot": 4, "name": "&bServer-Auswahl &7(Rechtsklick)"},
         "gui": {"title": "Server auswaehlen", "rows": 3},
+        "lobby": lobby_cfg,
         "servers": servers,
         "regions": existing.get("regions", []) or [],
     }
@@ -213,14 +233,52 @@ def sync_lobby_plugin(db: Session) -> tuple[bool, str]:
             yaml.safe_dump(config, sort_keys=False, allow_unicode=True), encoding="utf-8"
         )
     except Exception as exc:  # noqa: BLE001
-        return False, f"Plugin-config nicht schreibbar: {exc}"
+        return False, f"{server.name}: config nicht schreibbar: {exc}"
 
-    msg = f"Transfer-Plugin aktualisiert: {len(servers)} Server im Menue."
-    if skipped:
-        msg += f" Ohne Alias/Domain uebersprungen: {', '.join(skipped)}."
-    if notes:
-        msg += " " + " ".join(notes)
-    return True, msg
+    suffix = f" ({'; '.join(notes)})" if notes else ""
+    return True, f"{server.name}: {len(servers)} Server im Menue{suffix}"
+
+
+def sync_lobby_plugin(db: Session) -> tuple[bool, str]:
+    """Transfer-Plugin (MCSMLobby) auf ALLEN Gateway-Bukkit-Servern angleichen.
+
+    - Lobby: Kompass-Menue + /server/hub, alle anderen Server im Menue.
+    - Andere Bukkit-Server (Paper/Spigot/Purpur/...): ``/lobby`` zurueck zur Lobby,
+      plus /server/hub-Menue; Kompass aus. So kommt man von ueberall zurueck.
+    - Vanilla/Forge/Fabric koennen keine Plugins laden -> werden uebersprungen.
+
+    No-op, wenn keine Default-Lobby existiert. Idempotent.
+    """
+    from sqlalchemy import select
+
+    from app.models.server import Server as _Server
+
+    lobby = db.scalar(select(_Server).where(_Server.gateway_is_default.is_(True)))
+    if lobby is None:
+        return False, "Keine Gateway-Lobby vorhanden."
+
+    lobby_target = _lobby_transfer_target(db)
+    rows = db.scalars(select(_Server).where(_Server.gateway_enabled.is_(True))).all()
+
+    done: list[str] = []
+    failed: list[str] = []
+    non_bukkit: list[str] = []
+    for srv in rows:
+        if str(srv.server_type or "").lower() not in _BUKKIT_TYPES:
+            non_bukkit.append(srv.name)
+            continue
+        ok, detail = _write_plugin_for_server(
+            db, srv, is_lobby=(srv.id == lobby.id), lobby_target=lobby_target
+        )
+        (done if ok else failed).append(detail)
+
+    msg = f"Transfer-Plugin auf {len(done)} Bukkit-Server(n) aktualisiert."
+    if non_bukkit:
+        msg += f" Kein Plugin moeglich (Vanilla/Forge/Fabric): {', '.join(non_bukkit)}."
+    if failed:
+        msg += " Fehler: " + " | ".join(failed)
+    ok_overall = bool(done) or not failed
+    return ok_overall, msg
 
 
 def create_auto_lobby(db: Session, *, initiated_by_user_id: int | None) -> tuple[bool, str, int | None]:
@@ -341,6 +399,18 @@ def create_auto_lobby(db: Session, *, initiated_by_user_id: int | None) -> tuple
         sync_lobby_plugin(db)
     except Exception:  # noqa: BLE001
         pass
+    # Multi-Version (ViaVersion) best-effort mitliefern, damit sich JEDE Client-Version
+    # mit der Lobby verbinden kann. Nur online (im Offline-/Test-Modus ueberspringen).
+    via_note = ""
+    try:
+        from app.providers.server.common import offline_mode_enabled
+        from app.services import viaversion_service
+
+        if not offline_mode_enabled():
+            ok_via, _ = viaversion_service.install_multiversion(server.base_path, version)
+            via_note = " Multi-Version (ViaVersion) installiert." if ok_via else ""
+    except Exception:  # noqa: BLE001
+        pass
 
     audit_service.log_action(
         db,
@@ -354,6 +424,6 @@ def create_auto_lobby(db: Session, *, initiated_by_user_id: int | None) -> tuple
     message = (
         f"Lobby '{server.name}' erstellt (Paper {version}), als Gateway-Default markiert "
         f"(Alias '{alias}'). Jetzt starten – erreichbar ueber die blanke Domain oder "
-        f"'{alias}.<domain>'.{warn_suffix}"
+        f"'{alias}.<domain>'.{via_note}{warn_suffix}"
     )
     return True, message, server.id

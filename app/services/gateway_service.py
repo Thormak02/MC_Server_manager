@@ -469,7 +469,7 @@ def _handle_gateway_connection(client: socket.socket) -> None:
         except Exception as exc:  # noqa: BLE001 - DB-Fehler/Port-Erschoepfung
             # Darf den Verbindungs-Thread nicht mit einem Traceback beenden.
             _glog("gateway.route_build_failed", repr(exc))
-            if handshake.next_state == mc_protocol.NEXT_STATE_LOGIN:
+            if handshake.next_state in mc_protocol.JOIN_NEXT_STATES:
                 sleep_proxy_service._send_login_disconnect(
                     client,
                     "Netzwerk voruebergehend nicht erreichbar. Bitte erneut verbinden.",
@@ -507,7 +507,7 @@ def _respond_no_route(
     handshake: mc_protocol.Handshake,
     routes: GatewayRoutes,
 ) -> None:
-    if handshake.next_state == mc_protocol.NEXT_STATE_LOGIN:
+    if handshake.next_state in mc_protocol.JOIN_NEXT_STATES:
         if routes.aliases:
             message = (
                 "Kein Server fuer diese Adresse. Verfuegbar: "

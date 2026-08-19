@@ -121,6 +121,32 @@ def test_reconcile_starts_and_stops_proxy(client, monkeypatch):
         sp_live.stop_proxy(sid)
 
 
+def test_transfer_intent_triggers_wake(monkeypatch):
+    """Ein per Lobby-Transfer weitergereichter Client nutzt next_state=3 (Transfer).
+    Der schlafende Server muss trotzdem geweckt werden (frueher nur bei next_state=2).
+    """
+    monkeypatch.setattr(sp, "_log", lambda *a, **k: None)
+    monkeypatch.setattr(sp.process_service, "is_running", lambda sid: False)
+    woke: list[int] = []
+
+    def fake_wake(server_id, client):
+        woke.append(server_id)
+        return False  # kein Backend im Test -> nach dem Wecken abbrechen
+
+    monkeypatch.setattr(sp, "_wake_server", fake_wake)
+
+    public_port = sp.find_free_port()
+    assert sp.start_proxy(9993, public_port, sp.find_free_port())
+    try:
+        client = socket.create_connection(("127.0.0.1", public_port), timeout=5)
+        client.sendall(_handshake(mp.NEXT_STATE_TRANSFER, public_port))
+        time.sleep(0.4)
+        client.close()
+        assert woke == [9993]  # Transfer-Intent hat den Wake ausgeloest
+    finally:
+        sp.stop_proxy(9993)
+
+
 def test_forward_when_running(monkeypatch):
     monkeypatch.setattr(sp, "_log", lambda *a, **k: None)
     monkeypatch.setattr(sp.process_service, "is_running", lambda sid: True)

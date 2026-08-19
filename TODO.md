@@ -266,7 +266,7 @@ konsole überarbeiten, sodass sie praktisch wie ein cmd fenster funktioniert, in
 bei manuellem backup: fortschrittsbalken, statt langes laden des tabs
 
 
-die Einstellungen sind inzwischen zu unübersichtlich, bitte ebenfalls sinnvolle Tabs zur sortierung erstellen, wie bei der Server detailansicht
+~~die Einstellungen sind inzwischen zu unübersichtlich, bitte ebenfalls sinnvolle Tabs zur sortierung erstellen, wie bei der Server detailansicht~~
 
 
 schlafender server wird in lobby nicht als solcher angezeigt und von einem beitrittsversuch über lobby nicht geweckt
