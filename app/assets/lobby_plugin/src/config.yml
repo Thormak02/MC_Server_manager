@@ -11,9 +11,10 @@ compass:
 gui:
   title: "Server auswaehlen"
   rows: 3
-# Vom Manager befuellt (Alias -> Zieladresse). Beispiel:
-servers: {}
-#  "1.21.11-spigot":
+# Vom Manager befuellt (LISTE, damit Aliase mit Punkten wie 1.21.11-spigot nicht
+# als YAML-Pfad zerfallen). Beispiel:
+servers: []
+#  - key: "1.21.11-spigot"
 #    display: "&aDavid (Spigot)"
 #    host: "1.21.11-spigot.mc.friedrich-dietrich.de"
 #    port: 25565

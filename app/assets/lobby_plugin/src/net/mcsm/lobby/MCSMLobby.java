@@ -8,7 +8,8 @@ import org.bukkit.block.Block;
 import org.bukkit.block.Sign;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.command.PluginCommand;
+import org.bukkit.command.TabCompleter;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -24,6 +25,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -46,7 +48,7 @@ import java.util.UUID;
  *
  * Die config.yml wird vom Manager aus den Gateway-Routen erzeugt.
  */
-public class MCSMLobby extends JavaPlugin implements Listener {
+public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
 
     private final Map<String, ServerEntry> servers = new LinkedHashMap<>();
     private final List<Region> regions = new ArrayList<>();
@@ -92,6 +94,15 @@ public class MCSMLobby extends JavaPlugin implements Listener {
         saveDefaultConfig();
         load();
         getServer().getPluginManager().registerEvents(this, this);
+        // Tab-Vervollstaendigung fuer /server auf Server-Aliase setzen (sonst
+        // schlaegt Bukkit Spielernamen vor).
+        for (String cmd : new String[] {"server", "hub", "servers", "mcsmlobby"}) {
+            PluginCommand pc = getCommand(cmd);
+            if (pc != null) {
+                pc.setExecutor(this);
+                pc.setTabCompleter(this);
+            }
+        }
         getLogger().info("MCSMLobby aktiv: " + servers.size()
             + " Server, " + regions.size() + " Portal-Regionen.");
     }
@@ -113,24 +124,26 @@ public class MCSMLobby extends JavaPlugin implements Listener {
         transferMsg = c.getString("messages.transfer", transferMsg);
         cooldownMs = Math.max(0L, c.getLong("cooldown_ms", cooldownMs));
 
-        ConfigurationSection sec = c.getConfigurationSection("servers");
-        if (sec != null) {
-            for (String key : sec.getKeys(false)) {
-                ConfigurationSection s = sec.getConfigurationSection(key);
-                if (s == null) {
-                    continue;
-                }
+        // WICHTIG: servers ist eine LISTE, nicht eine Map mit Alias als Schluessel.
+        // Bukkit-YAML behandelt '.' im Schluessel als Pfad-Trenner, d.h. ein Alias
+        // wie "1.21.11-spigot" wuerde sonst in verschachtelte Sektionen zerfallen
+        // (1 -> 21 -> 11-spigot) und nie geladen. Als Listen-Wert bleibt er intakt.
+        for (Map<?, ?> raw : c.getMapList("servers")) {
+            try {
                 ServerEntry e = new ServerEntry();
-                e.key = key.toLowerCase(Locale.ROOT);
-                e.display = s.getString("display", key);
-                e.host = s.getString("host", "");
-                e.port = s.getInt("port", 25565);
-                e.slot = s.getInt("slot", -1);
-                Material m = Material.matchMaterial(s.getString("material", "GRASS_BLOCK"));
+                e.key = str(raw.get("key")).toLowerCase(Locale.ROOT);
+                e.display = raw.get("display") != null ? str(raw.get("display")) : e.key;
+                e.host = str(raw.get("host"));
+                e.port = raw.get("port") instanceof Number ? ((Number) raw.get("port")).intValue() : 25565;
+                e.slot = raw.get("slot") instanceof Number ? ((Number) raw.get("slot")).intValue() : -1;
+                Material m = Material.matchMaterial(
+                    raw.get("material") != null ? str(raw.get("material")) : "GRASS_BLOCK");
                 e.material = m != null ? m : Material.GRASS_BLOCK;
-                if (!e.host.isEmpty()) {
+                if (!e.key.isEmpty() && !e.host.isEmpty()) {
                     servers.put(e.key, e);
                 }
+            } catch (Exception ex) {
+                getLogger().warning("Ungueltiger Server-Eintrag uebersprungen: " + ex.getMessage());
             }
         }
 
@@ -154,6 +167,10 @@ public class MCSMLobby extends JavaPlugin implements Listener {
 
     private String color(String s) {
         return ChatColor.translateAlternateColorCodes('&', s == null ? "" : s);
+    }
+
+    private static String str(Object o) {
+        return o == null ? "" : String.valueOf(o);
     }
 
     private void doTransfer(Player p, String key) {
@@ -345,5 +362,22 @@ public class MCSMLobby extends JavaPlugin implements Listener {
             return true;
         }
         return false;
+    }
+
+    @Override
+    public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
+        // Nur fuer /server die Server-Aliase vorschlagen; sonst leere Liste
+        // (verhindert die Bukkit-Standardvervollstaendigung mit Spielernamen).
+        if (command.getName().equalsIgnoreCase("server") && args.length == 1) {
+            String prefix = args[0].toLowerCase(Locale.ROOT);
+            List<String> out = new ArrayList<>();
+            for (String key : servers.keySet()) {
+                if (key.startsWith(prefix)) {
+                    out.add(key);
+                }
+            }
+            return out;
+        }
+        return Collections.emptyList();
     }
 }

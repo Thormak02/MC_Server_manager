@@ -1054,11 +1054,14 @@ def test_sync_lobby_plugin_writes_menu(client, tmp_path):
     cfg = yaml.safe_load(
         (lobby_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8")
     )
+    # servers ist eine LISTE (Alias mit Punkten darf kein YAML-Map-Key sein).
     servers = cfg["servers"]
-    assert "1.21.11-spigot" in servers
-    assert servers["1.21.11-spigot"]["host"] == "1.21.11-spigot.mc.friedrich-dietrich.de"
-    assert servers["1.21.11-spigot"]["port"] == 25565
-    assert "lobby" not in servers  # die Lobby selbst gehoert nicht ins Menue
+    assert isinstance(servers, list)
+    by_key = {s["key"]: s for s in servers}
+    assert "1.21.11-spigot" in by_key
+    assert by_key["1.21.11-spigot"]["host"] == "1.21.11-spigot.mc.friedrich-dietrich.de"
+    assert by_key["1.21.11-spigot"]["port"] == 25565
+    assert "lobby" not in by_key  # die Lobby selbst gehoert nicht ins Menue
     # Fertiges Plugin-Jar wird mitgeliefert und in die Lobby kopiert.
     assert (lobby_dir / "plugins" / "MCSMLobby.jar").exists()
 
@@ -1098,7 +1101,7 @@ def test_sync_lobby_plugin_preserves_user_regions(client, tmp_path):
     )
     assert cfg["regions"] == region  # begehbare Portale bleiben erhalten
     assert cfg["cooldown_ms"] == 1234  # Nutzerwert bleibt erhalten
-    assert "1.21.11-spigot" in cfg["servers"]
+    assert "1.21.11-spigot" in {s["key"] for s in cfg["servers"]}
 
 
 def test_decide_route_apex_never_hijacked_by_sibling_alias():
@@ -1162,7 +1165,7 @@ def test_build_plugin_servers_skips_portless(client, tmp_path):
         svc.set_network_domain(db, "mc.example.de")
         lobby = db.scalar(__import__("sqlalchemy").select(Server).where(Server.gateway_is_default.is_(True)))
         servers, skipped = lobby_service._build_plugin_servers(db, lobby.id)
-    assert "noport" not in servers
+    assert "noport" not in {s["key"] for s in servers}
     assert "NoPort" in skipped
 
 

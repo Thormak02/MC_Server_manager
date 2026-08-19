@@ -93,13 +93,18 @@ def _write_setup_readme(base_path: Path, member_aliases: list[str]) -> None:
         pass
 
 
-def _build_plugin_servers(db: Session, lobby_id: int) -> tuple[dict, list[str]]:
+def _build_plugin_servers(db: Session, lobby_id: int) -> tuple[list[dict], list[str]]:
     """Server-Eintraege fuer die Plugin-config aus den Gateway-Routen bauen.
 
     Ziel jeder Verbindung ist die Gateway-Subdomain ``<alias>.<domain>`` auf dem
     Netzwerk-Port - so laeuft der Transfer ueber dasselbe Gateway (jeder Servertyp,
     Direktverbindung + Sleep-Wake bleiben erhalten). Gibt zusaetzlich die Namen der
     Server zurueck, die mangels Domain/Alias uebersprungen wurden.
+
+    WICHTIG: eine **Liste** (jeder Eintrag mit ``key``-Feld), KEINE Map mit Alias als
+    Schluessel. Bukkit-YAML behandelt '.' im Schluessel als Pfad-Trenner - ein Alias
+    wie ``1.21.11-spigot`` als Map-Key wuerde im Plugin in ``1 -> 21 -> 11-spigot``
+    zerfallen und nie geladen. Als Listen-Wert bleibt der Alias intakt.
     """
     from sqlalchemy import select
 
@@ -109,7 +114,7 @@ def _build_plugin_servers(db: Session, lobby_id: int) -> tuple[dict, list[str]]:
     domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
     network_port = app_setting_service.get_network_port(db)
 
-    servers: dict = {}
+    servers: list[dict] = []
     skipped: list[str] = []
     rows = db.scalars(
         select(_Server).where(_Server.gateway_enabled.is_(True))
@@ -127,12 +132,13 @@ def _build_plugin_servers(db: Session, lobby_id: int) -> tuple[dict, list[str]]:
         label = f"&a{srv.name}"
         if srv.mc_version:
             label += f" &7({srv.server_type} {srv.mc_version})"
-        servers[alias] = {
+        servers.append({
+            "key": alias,
             "display": label,
             "host": f"{alias}.{domain}",
             "port": int(network_port),
             "material": material,
-        }
+        })
     return servers, skipped
 
 
