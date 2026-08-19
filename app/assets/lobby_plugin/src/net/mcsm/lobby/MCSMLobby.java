@@ -106,7 +106,9 @@ public class MCSMLobby extends JavaPlugin implements Listener {
         guiTitle = color(c.getString("gui.title", guiTitle));
         guiRows = Math.max(1, Math.min(6, c.getInt("gui.rows", guiRows)));
         compassEnabled = c.getBoolean("compass.enabled", compassEnabled);
-        compassSlot = c.getInt("compass.slot", compassSlot);
+        // Auf gueltige Hotbar-/Inventar-Indizes klemmen (0..40), sonst wirft
+        // setItem() im PlayerJoin-Handler bei jedem Login.
+        compassSlot = Math.max(0, Math.min(40, c.getInt("compass.slot", compassSlot)));
         compassName = c.getString("compass.name", compassName);
         transferMsg = c.getString("messages.transfer", transferMsg);
         cooldownMs = Math.max(0L, c.getLong("cooldown_ms", cooldownMs));
@@ -178,12 +180,24 @@ public class MCSMLobby extends JavaPlugin implements Listener {
     private void openGui(Player p) {
         int size = guiRows * 9;
         Inventory inv = Bukkit.createInventory(null, size, guiTitle);
+        java.util.Set<Integer> used = new java.util.HashSet<>();
         int auto = 0;
         for (ServerEntry e : servers.values()) {
-            int slot = e.slot >= 0 && e.slot < size ? e.slot : auto++;
-            if (slot >= size) {
-                break;
+            int slot;
+            if (e.slot >= 0 && e.slot < size && !used.contains(e.slot)) {
+                slot = e.slot;
+            } else {
+                // Auto-Platzierung: freien Slot suchen, belegte (auch explizite)
+                // ueberspringen, damit kein Icon ueberschrieben wird.
+                while (auto < size && used.contains(auto)) {
+                    auto++;
+                }
+                if (auto >= size) {
+                    break;
+                }
+                slot = auto;
             }
+            used.add(slot);
             ItemStack item = new ItemStack(e.material);
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {

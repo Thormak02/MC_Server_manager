@@ -118,7 +118,9 @@ def _build_plugin_servers(db: Session, lobby_id: int) -> tuple[dict, list[str]]:
         if srv.id == lobby_id:
             continue
         alias = gateway_service.clean_hostname(srv.gateway_hostname)
-        if not alias or not domain:
+        # Ohne Port hat das Gateway keine Route (build_gateway_routes ueberspringt
+        # portlose Server) -> ein Menue-Eintrag wuerde nur zur Lobby zurueckwerfen.
+        if not alias or not domain or not srv.port:
             skipped.append(srv.name)
             continue
         material = _TYPE_MATERIAL.get(str(srv.server_type or "").lower(), "GRASS_BLOCK")
@@ -178,12 +180,18 @@ def sync_lobby_plugin(db: Session) -> tuple[bool, str]:
     cfg_path = data_dir / "config.yml"
     existing: dict = {}
     if cfg_path.exists():
+        # WICHTIG: existiert die Datei, laesst sich aber nicht lesen/parsen (Syntax-
+        # fehler, gesperrt, kaputt), NICHT mit Defaults ueberschreiben - das wuerde die
+        # vom Nutzer gepflegten regions/cooldown vernichten. Stattdessen abbrechen.
         try:
-            existing = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) or {}
-        except Exception:  # noqa: BLE001
-            existing = {}
-    if not isinstance(existing, dict):
-        existing = {}
+            raw = cfg_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            return False, f"config.yml nicht lesbar ({exc}) - nicht ueberschrieben, um Portale zu schuetzen."
+        try:
+            parsed = yaml.safe_load(raw)
+        except yaml.YAMLError as exc:
+            return False, f"config.yml hat einen YAML-Fehler ({exc}) - nicht ueberschrieben, um Portale zu schuetzen."
+        existing = parsed if isinstance(parsed, dict) else {}
 
     servers, skipped = _build_plugin_servers(db, lobby.id)
     config = {

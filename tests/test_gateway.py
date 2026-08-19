@@ -1099,3 +1099,91 @@ def test_sync_lobby_plugin_preserves_user_regions(client, tmp_path):
     assert cfg["regions"] == region  # begehbare Portale bleiben erhalten
     assert cfg["cooldown_ms"] == 1234  # Nutzerwert bleibt erhalten
     assert "1.21.11-spigot" in cfg["servers"]
+
+
+def test_decide_route_apex_never_hijacked_by_sibling_alias():
+    """Apex (blanke Domain) muss zur Default-Lobby, auch wenn ein Server 'mc' heisst."""
+    import app.services.gateway_service as gw
+
+    routes = gw.GatewayRoutes(
+        by_hostname={"mc": 9, "lobby": 3, "1.21.11-spigot": 7},
+        default_server_id=3,
+        domain="mc.example.de",
+    )
+    # Apex -> Default 3, NICHT der 'mc'-Server (9).
+    assert gw.decide_route("mc.example.de", None, routes).server_id == 3
+    # Dotted-Alias unter der Domain matcht weiterhin exakt.
+    assert gw.decide_route("1.21.11-spigot.mc.example.de", None, routes).server_id == 7
+    # Bekannter 'mc'-Alias via Subdomain funktioniert normal.
+    assert gw.decide_route("mc.mc.example.de", None, routes).server_id == 9
+
+
+def test_decide_route_unknown_under_domain_not_misrouted_to_prefix():
+    """Unbekannter Alias unter der Domain -> Default, nicht auf ein kuerzeres Label raten."""
+    import app.services.gateway_service as gw
+
+    routes = gw.GatewayRoutes(
+        by_hostname={"play": 1, "play.creative": 2},
+        default_server_id=5,
+        domain="mc.example.de",
+    )
+    # Exakter dotted-Alias unter Domain -> Server 2 (creative).
+    assert gw.decide_route("play.creative.mc.example.de", None, routes).server_id == 2
+    # Extra-Label (nicht im Schema) -> Default, NICHT faelschlich auf 'play' (1).
+    d = gw.decide_route("play.creative.eu.mc.example.de", None, routes)
+    assert d.server_id == 5 and d.reason == "default"
+
+
+def test_decide_route_first_label_only_without_domain():
+    """Ohne konfigurierte Domain bleibt der Komfort-Fallback (erstes Label)."""
+    import app.services.gateway_service as gw
+
+    routes = gw.GatewayRoutes(by_hostname={"david": 7}, default_server_id=3, domain="")
+    assert gw.decide_route("david.irgendwas.net", None, routes).server_id == 7
+
+
+def test_build_plugin_servers_skips_portless(client, tmp_path):
+    """Ein Gateway-Server ohne Port darf NICHT ins Menue (Gateway hat keine Route)."""
+    import app.services.app_setting_service as svc
+    import app.services.lobby_service as lobby_service
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Lobby", slug="lob3", server_type="paper", mc_version="1.21.1",
+                   base_path=str(tmp_path / "l3"), gateway_enabled=True, gateway_hostname="lobby",
+                   gateway_is_default=True, port=25569),
+            Server(name="NoPort", slug="np", server_type="paper", mc_version="1.21.1",
+                   base_path=str(tmp_path / "np"), gateway_enabled=True,
+                   gateway_hostname="noport", port=None),
+        ])
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        lobby = db.scalar(__import__("sqlalchemy").select(Server).where(Server.gateway_is_default.is_(True)))
+        servers, skipped = lobby_service._build_plugin_servers(db, lobby.id)
+    assert "noport" not in servers
+    assert "NoPort" in skipped
+
+
+def test_sync_lobby_plugin_aborts_on_corrupt_config(client, tmp_path):
+    """Kaputte config.yml wird NICHT ueberschrieben (Portale bleiben erhalten)."""
+    import app.services.app_setting_service as svc
+    import app.services.lobby_service as lobby_service
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    lobby_dir = tmp_path / "lob4"
+    (lobby_dir / "plugins" / "MCSMLobby").mkdir(parents=True)
+    broken = "regions: [ this is : not valid yaml : ["
+    (lobby_dir / "plugins" / "MCSMLobby" / "config.yml").write_text(broken, encoding="utf-8")
+    with SessionLocal() as db:
+        db.add(Server(name="Lobby", slug="lob4", server_type="paper", mc_version="1.21.1",
+                      base_path=str(lobby_dir), gateway_enabled=True, gateway_hostname="lobby",
+                      gateway_is_default=True, port=25569))
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        ok, msg = lobby_service.sync_lobby_plugin(db)
+    assert not ok and "nicht" in msg.lower()
+    # Die kaputte Datei ist unveraendert (nicht mit Defaults ueberschrieben).
+    assert (lobby_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8") == broken

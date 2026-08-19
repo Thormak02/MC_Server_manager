@@ -98,26 +98,36 @@ def decide_route(
 ) -> RouteDecision:
     """Ziel-Server fuer eine Verbindung bestimmen.
 
-    Reihenfolge des Alias-Matchings (der Alias selbst darf Punkte enthalten,
-    z.B. ``1.21.11-spigot``):
+    Das Schema ist ``<alias>.<domain>`` (der Alias selbst darf Punkte enthalten,
+    z.B. ``1.21.11-spigot``). Domain-verankertes Matching:
       (1) exakter Match des ganzen Hostnamens (voll-qualifizierte Aliase);
-      (2) bekannte Netzwerk-Domain abziehen -> Rest ist der Alias
-          (``1.21.11-spigot.mc.example.de`` - ``mc.example.de`` = ``1.21.11-spigot``);
-      (3) erstes DNS-Label (einfaches ``david.egal-was``).
+      (2) Domain gesetzt:
+          - Hostname == Domain (Apex) -> KEIN Alias, faellt auf Default/Lobby;
+          - Hostname endet auf ``.<domain>`` -> der Teil davor ist der Alias
+            (exakt; ein unbekannter Alias faellt auf Default, wird NICHT auf ein
+            kuerzeres Praefix wie ``play`` fehlgeleitet);
+          - sonst (fremde Domain/IP) -> kein Alias, Default;
+      (3) Domain NICHT gesetzt: erstes DNS-Label als Komfort-Fallback.
     Danach: (4) Apex/unbekannt -> Default/Lobby; (5) Versions-Fallback (nur wenn
     diese Protokollversion eindeutig einem Server zugeordnet ist).
     """
     cleaned = clean_hostname(hostname)
     if cleaned:
         server_id = routes.by_hostname.get(cleaned)
-        if server_id is None and routes.domain:
-            suffix = "." + routes.domain
-            if cleaned.endswith(suffix) and len(cleaned) > len(suffix):
-                server_id = routes.by_hostname.get(cleaned[: -len(suffix)])
         if server_id is None:
-            first_label = cleaned.split(".", 1)[0]
-            if first_label != cleaned:
-                server_id = routes.by_hostname.get(first_label)
+            if routes.domain:
+                suffix = "." + routes.domain
+                if cleaned == routes.domain:
+                    server_id = None  # Apex -> Default (kein Alias-Match)
+                elif cleaned.endswith(suffix) and len(cleaned) > len(suffix):
+                    # Unter unserer Domain: Alias ist exakt der Teil davor.
+                    # Unbekannt -> Default, NICHT auf ein kuerzeres Label raten.
+                    server_id = routes.by_hostname.get(cleaned[: -len(suffix)])
+            else:
+                # Ohne konfigurierte Domain: erstes Label als Komfort-Fallback.
+                first_label = cleaned.split(".", 1)[0]
+                if first_label != cleaned:
+                    server_id = routes.by_hostname.get(first_label)
         if server_id is not None:
             return RouteDecision(server_id, "alias")
 
