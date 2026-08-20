@@ -54,6 +54,9 @@ PLAY_SB_KEEP_ALIVE = 0x18
 
 # Game-Event 13 = "Start waiting for level chunks" (schliesst den "Lade Gelaende"-Screen)
 GAME_EVENT_WAIT_FOR_CHUNKS = 13
+# Game-Event 3 = "Change game mode"; Value = Gamemode (0 survival, 1 creative, 2 adventure, 3 spec.)
+GAME_EVENT_CHANGE_GAMEMODE = 3
+GAMEMODE_ADVENTURE = 2
 
 # Overworld-Standard (Phase 1: fest angenommen; Phase 2 leitet es aus registry_data ab)
 OVERWORLD_MIN_Y = -64

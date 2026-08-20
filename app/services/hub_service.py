@@ -48,6 +48,13 @@ _SB_SET_ROT = 0x1C           # yaw,pitch, flags
 
 _BOT_KEY = 0                  # reservierter Roster-Key fuer den virtuellen Bot
 
+# PLAY-Setup-Pakete aus dem Capture, die wir mit-abspielen, damit der modded Client
+# in einen konsistenten Zustand kommt: 0x11 Commands, 0x41 Update Recipes (feuert
+# RecipesUpdatedEvent -> JEI startet sauber beim Join statt spaet beim Screen-Oeffnen
+# -> kein Inventar-/Menue-Crash), 0x74 Advancements, 0x75 Mod-Daten. Die riesigen
+# 0x19-Mod-Datamaps (15 MB) lassen wir bewusst weg.
+_SETUP_PACKET_IDS = frozenset({0x11, 0x41, 0x74, 0x75})
+
 
 class _Reader:
     """Gepufferter Socket-Leser (Handshake + laengenpraefigierte Pakete)."""
@@ -114,6 +121,16 @@ class Hub:
         # Config-Steps + Plattform-Pakete EINMAL vorbauen (records prozessweit geteilt).
         self.config_steps = rp.build_steps(self.records[: self.play_login], self.config_start)
         self.platform_packets = self._build_platform()
+        # Kleine PLAY-Setup-Pakete (Recipes/Commands/...) aus dem Capture extrahieren.
+        first_chunk = len(self.records)
+        for i in range(self.play_login, len(self.records)):
+            if self.records[i].to_client and self.records[i].packet_id == pl.PLAY_CB_CHUNK_DATA:
+                first_chunk = i
+                break
+        self.setup_packets = [self.records[i].raw
+                              for i in range(self.play_login + 1, first_chunk)
+                              if self.records[i].to_client
+                              and self.records[i].packet_id in _SETUP_PACKET_IDS]
 
         self.lock = threading.Lock()
         self.players: dict = {}
@@ -229,14 +246,19 @@ class Hub:
                         except (OSError, ConnectionError):
                             break
 
-            # --- PLAY: mitgeschnittener Login (korrekte Registry) + eigene Welt ---
+            # --- PLAY: mitgeschnittener Login (korrekte Registry) + Setup + eigene Welt ---
             sock.sendall(self.login_raw)
+            # Rezepte/Commands/Advancements mit-abspielen -> JEI startet sauber (kein Crash).
+            for p in self.setup_packets:
+                sock.sendall(p)
             for p in self.platform_packets:
                 sock.sendall(p)
             sx, sy, sz = _SPAWN
             sock.sendall(pl.build_sync_position(sx, sy, sz, teleport_id=1))
             sock.sendall(pl.build_set_default_spawn(int(sx), int(sy), int(sz)))
             sock.sendall(pl.build_game_event(pl.GAME_EVENT_WAIT_FOR_CHUNKS, 0.0))
+            # Interaktions-Lock: Adventure-Mode (Welt unzerstoerbar, kein Fliegen/Bauen).
+            sock.sendall(pl.build_game_event(pl.GAME_EVENT_CHANGE_GAMEMODE, float(pl.GAMEMODE_ADVENTURE)))
 
             # --- Ins Roster aufnehmen + gegenseitig sichtbar machen ---
             with self.lock:
