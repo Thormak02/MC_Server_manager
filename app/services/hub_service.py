@@ -49,11 +49,27 @@ _SB_SET_ROT = 0x1C           # yaw,pitch, flags
 _BOT_KEY = 0                  # reservierter Roster-Key fuer den virtuellen Bot
 
 # PLAY-Setup-Pakete aus dem Capture, die wir mit-abspielen, damit der modded Client
-# in einen konsistenten Zustand kommt: 0x11 Commands, 0x41 Update Recipes (feuert
-# RecipesUpdatedEvent -> JEI startet sauber beim Join statt spaet beim Screen-Oeffnen
-# -> kein Inventar-/Menue-Crash), 0x74 Advancements, 0x75 Mod-Daten. Die riesigen
-# 0x19-Mod-Datamaps (15 MB) lassen wir bewusst weg.
+# in einen konsistenten Zustand kommt und beim Oeffnen eines Screens (Inventar, spaeter
+# Kisten-Menue) nicht crasht.
+#
+# Vanilla-Datenpakete: 0x11 Commands, 0x41/0x74/0x75 (Recipes/Advancements/Mod-Daten).
 _SETUP_PACKET_IDS = frozenset({0x11, 0x41, 0x74, 0x75})
+# 0x19 = custom_payload (Mod-Sync). Wir spielen ALLE Mod-Sync-Pakete ab AUSSER den paar
+# riesigen Kanaelen (12 MB neoforge:split + FTB-Quests/Buecher ~2 MB), die fuer eine
+# kosmetische Lobby unnoetig sind. Damit kommt u.a. apothic_enchanting:enchantment_info
+# (1 KB) durch -> Apotheosis-Enchantment-Daten geladen -> JEI/Inventar crasht nicht mehr.
+_CB_CUSTOM_PAYLOAD = 0x19
+_SKIP_PAYLOAD_CHANNELS = frozenset({
+    "neoforge:split",                     # ~12 MB gesplittete Registry/Rezept-Daten
+    "ftbquests:sync_translation_table",   # ~1 MB Quest-Uebersetzungen
+    "ftbquests:sync_quests_message",      # ~0.6 MB Quests
+    "rechiseled:main",                    # ~0.5 MB Textur-Daten
+    "modonomicon:sync_book_data",         # ~0.2 MB Buch
+    "modonomicon:sync_multiblock_data",
+    "modonomicon:sync_book_unlock_states",
+    "productivebees:beedata",             # ~0.14 MB
+    "silentgear:sync_materials",
+})
 
 
 class _Reader:
@@ -127,10 +143,22 @@ class Hub:
             if self.records[i].to_client and self.records[i].packet_id == pl.PLAY_CB_CHUNK_DATA:
                 first_chunk = i
                 break
-        self.setup_packets = [self.records[i].raw
-                              for i in range(self.play_login + 1, first_chunk)
-                              if self.records[i].to_client
-                              and self.records[i].packet_id in _SETUP_PACKET_IDS]
+        setup = []
+        for i in range(self.play_login + 1, first_chunk):
+            r = self.records[i]
+            if not r.to_client:
+                continue
+            if r.packet_id in _SETUP_PACKET_IDS:
+                setup.append(r.raw)
+            elif r.packet_id == _CB_CUSTOM_PAYLOAD:
+                _p, body, _c = mcd.try_read_packet(r.raw)
+                try:
+                    channel, _o = mp._read_string(body, 0)
+                except Exception:  # noqa: BLE001
+                    continue
+                if channel not in _SKIP_PAYLOAD_CHANNELS:
+                    setup.append(r.raw)
+        self.setup_packets = setup
 
         self.lock = threading.Lock()
         self.players: dict = {}
