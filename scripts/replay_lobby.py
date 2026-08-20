@@ -125,15 +125,20 @@ def handle(client: socket.socket, records, config_start: int) -> None:
         # Section erst, wenn ihre Nachbarn geladen sind, sonst bleibt die Plattform unsichtbar.
         client.sendall(records[play_login].raw)
         client.sendall(pl.build_set_center_chunk(0, 0))
+        # Chunks in einen Batch rahmen (Start -> N x ChunkData -> Finished), sonst
+        # committet der Client nur den Spawn-Chunk und die Nachbarn bleiben ungemesht.
+        client.sendall(pl.build_chunk_batch_start())
+        n_chunks = 0
         for cx in range(-_GRID_RADIUS, _GRID_RADIUS + 1):
             for cz in range(-_GRID_RADIUS, _GRID_RADIUS + 1):
                 client.sendall(pl.build_flat_chunk(cx, cz, floor_section_index=_FLOOR_SECTION))
+                n_chunks += 1
+        client.sendall(pl.build_chunk_batch_finished(n_chunks))
         sx, sy, sz = _SPAWN
         client.sendall(pl.build_sync_position(sx, sy, sz, teleport_id=1))
         client.sendall(pl.build_set_default_spawn(int(sx), int(sy), int(sz)))
         client.sendall(pl.build_game_event(pl.GAME_EVENT_WAIT_FOR_CHUNKS, 0.0))
-        n_chunks = (2 * _GRID_RADIUS + 1) ** 2
-        print(f"[replay] Eigene Vanilla-Plattform ({n_chunks} Chunks) gesendet. PLAY am Leben halten ...")
+        print(f"[replay] Eigene Vanilla-Plattform ({n_chunks} Chunks, gebatcht) gesendet. PLAY am Leben halten ...")
 
         # --- PLAY am Leben halten: regelmaessig Clientbound-Keep-Alive senden, damit
         # der Client nicht "timed out" fliegt; Client-Pakete (Bewegung, KA-Antwort)

@@ -32,6 +32,8 @@ PLAY_CB_LOGIN = 0x2B            # Login (Join Game)
 PLAY_CB_GAME_EVENT = 0x22       # Game Event
 PLAY_CB_KEEP_ALIVE = 0x26       # Keep Alive
 PLAY_CB_CHUNK_DATA = 0x27       # Chunk Data & Update Light
+PLAY_CB_CHUNK_BATCH_FINISHED = 0x0C  # Chunk Batch Finished (VarInt batch size)
+PLAY_CB_CHUNK_BATCH_START = 0x0D     # Chunk Batch Start (keine Felder)
 PLAY_CB_PLAYER_ABILITIES = 0x38
 PLAY_CB_SYNC_POSITION = 0x40    # Synchronize Player Position
 PLAY_CB_SET_HELD_ITEM = 0x53    # Set Held Item (Byte in 767!)
@@ -145,6 +147,16 @@ def _heightmaps_nbt(height_value: int) -> bytes:
 def build_set_center_chunk(chunk_x: int, chunk_z: int) -> bytes:
     body = encode_varint(PLAY_CB_SET_CENTER_CHUNK) + encode_varint(chunk_x) + encode_varint(chunk_z)
     return _wrap_packet(body)
+
+
+def build_chunk_batch_start() -> bytes:
+    """Eroeffnet einen Chunk-Batch. Ohne Start/Finished-Rahmung mesht der Client nur den Spawn-Chunk."""
+    return _wrap_packet(encode_varint(PLAY_CB_CHUNK_BATCH_START))
+
+
+def build_chunk_batch_finished(batch_size: int) -> bytes:
+    """Schliesst den Batch ab (Anzahl Chunks). Client antwortet mit Chunk Batch Received (Float)."""
+    return _wrap_packet(encode_varint(PLAY_CB_CHUNK_BATCH_FINISHED) + encode_varint(batch_size))
 
 
 def build_set_default_spawn(x: int, y: int, z: int, angle: float = 0.0) -> bytes:
