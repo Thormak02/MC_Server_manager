@@ -148,6 +148,30 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
     return servers, skipped
 
 
+def refresh_plugin_jar(server) -> None:
+    """Aktuelles ``MCSMLobby.jar`` in den Server kopieren (Gateway-Bukkit-Server).
+
+    Wird beim **Serverstart** aufgerufen - da ist der Server noch aus, das Jar also
+    nicht gesperrt. So aktualisiert ein Deploy + Neustart das Plugin zuverlaessig,
+    ohne dass der Nutzer erst „stoppen -> Sync -> starten" machen muss.
+    """
+    if not getattr(server, "gateway_enabled", False):
+        return
+    if str(getattr(server, "server_type", "") or "").lower() not in _BUKKIT_TYPES:
+        return
+    if not _PLUGIN_JAR.exists():
+        return
+    plugins = Path(server.base_path).expanduser().resolve() / "plugins"
+    # Nur aktualisieren, wenn das Plugin ueberhaupt installiert ist (config-Ordner da)
+    # oder der plugins-Ordner existiert -> keinen Plugin-Ordner ungefragt anlegen.
+    if not (plugins / "MCSMLobby").exists() and not (plugins / "MCSMLobby.jar").exists():
+        return
+    try:
+        shutil.copy2(_PLUGIN_JAR, plugins / "MCSMLobby.jar")
+    except (PermissionError, OSError):
+        pass
+
+
 def _lobby_transfer_target(db: Session) -> dict | None:
     """Adresse der Default-Lobby fuer ``/lobby`` (``<alias>.<domain>:<network_port>``).
 

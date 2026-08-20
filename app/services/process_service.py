@@ -1332,6 +1332,15 @@ def start_server(
         except Exception as exc:  # noqa: BLE001
             console_service.append_output(server.id, f"Velocity-Cleanup uebersprungen: {exc}")
 
+        # Transfer-Plugin (MCSMLobby) auf den frischesten Stand bringen - jetzt ist der
+        # Server aus, das Jar also nicht gesperrt. So zieht ein Deploy per Neustart.
+        try:
+            from app.services import lobby_service
+
+            lobby_service.refresh_plugin_jar(server)
+        except Exception:  # noqa: BLE001
+            pass
+
         # Gateway-Netzwerk: Server transfer-bereit machen (accept-transfers=true), damit
         # eine Transfer-Lobby (1.20.5+) Spieler direkt hierher schicken kann. Harmlos
         # fuer aeltere Versionen (unbekannte Property wird ignoriert).

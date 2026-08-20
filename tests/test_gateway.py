@@ -1284,3 +1284,33 @@ def test_sync_skips_non_bukkit_servers(client, tmp_path):
     assert ok
     assert "ATM10" in msg  # als nicht-Bukkit gemeldet
     assert not (forge_dir / "plugins" / "MCSMLobby").exists()  # kein Plugin auf Forge
+
+
+def test_refresh_plugin_jar_updates_installed_only(tmp_path):
+    """refresh_plugin_jar aktualisiert das Jar nur, wenn das Plugin installiert ist,
+    und nur auf Bukkit-Gateway-Servern (Server ist beim Start aus -> nicht gesperrt)."""
+    from types import SimpleNamespace
+
+    from app.services import lobby_service
+
+    # 1) Bukkit-Gateway-Server MIT installiertem Plugin -> Jar wird (neu) kopiert.
+    installed = tmp_path / "lob"
+    (installed / "plugins" / "MCSMLobby").mkdir(parents=True)
+    (installed / "plugins" / "MCSMLobby.jar").write_bytes(b"old")
+    lobby_service.refresh_plugin_jar(SimpleNamespace(
+        gateway_enabled=True, server_type="paper", base_path=str(installed)))
+    assert (installed / "plugins" / "MCSMLobby.jar").read_bytes() != b"old"
+
+    # 2) Ohne installiertes Plugin -> kein Plugin-Ordner wird angelegt.
+    fresh = tmp_path / "fresh"
+    fresh.mkdir()
+    lobby_service.refresh_plugin_jar(SimpleNamespace(
+        gateway_enabled=True, server_type="paper", base_path=str(fresh)))
+    assert not (fresh / "plugins" / "MCSMLobby.jar").exists()
+
+    # 3) Nicht-Bukkit (Forge) -> nichts kopiert, auch wenn Ordner existiert.
+    forge = tmp_path / "forge"
+    (forge / "plugins" / "MCSMLobby").mkdir(parents=True)
+    lobby_service.refresh_plugin_jar(SimpleNamespace(
+        gateway_enabled=True, server_type="forge", base_path=str(forge)))
+    assert not (forge / "plugins" / "MCSMLobby.jar").exists()
