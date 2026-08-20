@@ -29,6 +29,11 @@ from app.services.mc_protocol import _wrap_packet, encode_string, encode_varint
 # Clientbound PLAY Packet-IDs (Protokoll 767 / MC 1.21.1)
 # --------------------------------------------------------------------------- #
 PLAY_CB_ADD_ENTITY = 0x01      # Spawn Entity (seit 1.20.2 auch fuer Spieler, Type=128)
+PLAY_CB_ENTITY_POS_ROT = 0x2F  # Update Entity Position & Rotation (kleine Bewegung, Delta)
+PLAY_CB_TELEPORT_ENTITY = 0x70 # Teleport Entity (grosse Bewegung, absolute Koordinaten)
+PLAY_CB_HEAD_ROTATION = 0x48   # Set Head Rotation
+PLAY_CB_REMOVE_ENTITIES = 0x42 # Remove Entities
+PLAY_CB_PLAYER_INFO_REMOVE = 0x3D
 PLAY_CB_PLAYER_INFO_UPDATE = 0x3E
 PLAY_CB_LOGIN = 0x2B            # Login (Join Game)
 PLAY_CB_GAME_EVENT = 0x22       # Game Event
@@ -306,6 +311,60 @@ def build_add_entity(
     body += struct.pack(">b", _angle(head_yaw))
     body += encode_varint(0)                        # Data
     body += struct.pack(">hhh", 0, 0, 0)            # Velocity
+    return _wrap_packet(bytes(body))
+
+
+def _delta_short(old: float, new: float) -> int:
+    """Positions-Delta fuer 0x2F: (new*4096 - old*4096) als i16."""
+    return int(round(new * 4096)) - int(round(old * 4096))
+
+
+def build_teleport_entity(
+    entity_id: int, x: float, y: float, z: float, *,
+    yaw: float = 0.0, pitch: float = 0.0, on_ground: bool = True,
+) -> bytes:
+    body = bytearray(encode_varint(PLAY_CB_TELEPORT_ENTITY))
+    body += encode_varint(entity_id)
+    body += struct.pack(">ddd", x, y, z)
+    body += struct.pack(">b", _angle(yaw)) + struct.pack(">b", _angle(pitch))
+    body += b"\x01" if on_ground else b"\x00"
+    return _wrap_packet(bytes(body))
+
+
+def build_entity_move_rot(
+    entity_id: int, ox: float, oy: float, oz: float, nx: float, ny: float, nz: float, *,
+    yaw: float = 0.0, pitch: float = 0.0, on_ground: bool = True,
+) -> bytes:
+    """Kleine Bewegung als Delta (0x2F). Bei >~8 Bloecken/Achse Fallback auf Teleport (0x70)."""
+    dx, dy, dz = _delta_short(ox, nx), _delta_short(oy, ny), _delta_short(oz, nz)
+    if max(abs(dx), abs(dy), abs(dz)) > 32000:
+        return build_teleport_entity(entity_id, nx, ny, nz, yaw=yaw, pitch=pitch, on_ground=on_ground)
+    body = bytearray(encode_varint(PLAY_CB_ENTITY_POS_ROT))
+    body += encode_varint(entity_id)
+    body += struct.pack(">hhh", dx, dy, dz)
+    body += struct.pack(">b", _angle(yaw)) + struct.pack(">b", _angle(pitch))
+    body += b"\x01" if on_ground else b"\x00"
+    return _wrap_packet(bytes(body))
+
+
+def build_head_rotation(entity_id: int, head_yaw: float) -> bytes:
+    body = encode_varint(PLAY_CB_HEAD_ROTATION) + encode_varint(entity_id) + struct.pack(">b", _angle(head_yaw))
+    return _wrap_packet(body)
+
+
+def build_remove_entities(entity_ids: list[int]) -> bytes:
+    body = bytearray(encode_varint(PLAY_CB_REMOVE_ENTITIES))
+    body += encode_varint(len(entity_ids))
+    for eid in entity_ids:
+        body += encode_varint(eid)
+    return _wrap_packet(bytes(body))
+
+
+def build_player_info_remove(uuids16: list[bytes]) -> bytes:
+    body = bytearray(encode_varint(PLAY_CB_PLAYER_INFO_REMOVE))
+    body += encode_varint(len(uuids16))
+    for u in uuids16:
+        body += (u or b"")[:16].ljust(16, b"\x00")
     return _wrap_packet(bytes(body))
 
 

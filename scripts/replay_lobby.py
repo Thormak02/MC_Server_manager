@@ -18,6 +18,7 @@ Dann den ATM10-Client auf  <server-ip>:25601  verbinden. Beobachten: kommt er re
 from __future__ import annotations
 
 import argparse
+import math
 import socket
 import sys
 import threading
@@ -158,7 +159,9 @@ def handle(client: socket.socket, records, config_start: int) -> None:
         # verwerfen. So bleibst du in der (replay-ten ATM10-)Welt stehen. ---
         ka = 0
         last_ka = 0.0
-        client.settimeout(1.0)
+        t0 = time.monotonic()
+        bx, by, bz = _DUMMY_POS  # letzte Bot-Position (fuer Delta-Bewegung)
+        client.settimeout(0.1)   # ~10 Hz Tick fuer fluessige Bot-Animation
         while True:  # bis der Client selbst trennt
             now = time.monotonic()
             if now - last_ka >= 10.0:
@@ -168,8 +171,20 @@ def handle(client: socket.socket, records, config_start: int) -> None:
                     break
                 ka += 1
                 last_ka = now
-                print(f"[replay]   Keep-Alive #{ka} gesendet, Verbindung lebt.")
-            # Client-Pakete draenen (nicht blockierend genug -> Timeout ist ok).
+            # --- Lobby-Bot vor dem Spawn hin- und herlaufen lassen ---
+            # (beweist den Entity-Bewegungs-Broadcast; spaeter bewegen sich hier echte Spieler)
+            ang = (now - t0) * 1.2
+            nx = 8.5 + 3.0 * math.sin(ang)          # 6 Bloecke breit pendeln (x 5.5..11.5)
+            ny, nz = 64.0, 13.5
+            move_yaw = 270.0 if math.cos(ang) >= 0 else 90.0  # Blick in Laufrichtung (Ost/West)
+            try:
+                client.sendall(pl.build_entity_move_rot(_DUMMY_EID, bx, by, bz, nx, ny, nz,
+                                                        yaw=move_yaw, on_ground=True))
+                client.sendall(pl.build_head_rotation(_DUMMY_EID, move_yaw))
+            except OSError:
+                break
+            bx, by, bz = nx, ny, nz
+            # Client-Pakete draenen (Bewegung/KA-Antwort verwerfen).
             got = mcd.try_read_packet(bytes(reader.buf))
             if got is not None:
                 _pid, _f, consumed = got
