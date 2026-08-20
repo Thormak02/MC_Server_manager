@@ -26,14 +26,18 @@ import time
 sys.path.insert(0, ".")  # Repo-Root fuer app.services.*
 
 from app.services import mc_dispatch as mcd  # noqa: E402
+from app.services import mc_play as pl  # noqa: E402
 from app.services import mc_protocol as mp  # noqa: E402
 from app.services import replay_service as rp  # noqa: E402
 
 _DRAIN_TIMEOUT = 6.0
-_HOLD_SECONDS = 300.0
 # 1.21.1 PLAY clientbound Keep Alive (bei Bedarf anpassen, falls Client trotzdem
 # "timed out" fliegt).
-_PLAY_KEEPALIVE_CB = 0x26
+_PLAY_KEEPALIVE_CB = pl.PLAY_CB_KEEP_ALIVE
+
+# --- Phase-1-Plattform (unsere eigene Vanilla-Welt statt der aufgezeichneten) ---
+_FLOOR_SECTION = 7            # bei 24 Sections -> Boden y 48..63
+_SPAWN = (8.5, 64.0, 8.5)     # mittig auf Chunk (0,0), auf dem Boden
 
 
 class Reader:
@@ -88,10 +92,15 @@ def handle(client: socket.socket, records, config_start: int) -> None:
         if pid != mcd.LOGIN_ACK:
             print(f"[replay] erwartete LoginAck, bekam 0x{pid:02X}")
             return
-        print(f"[replay] Login ok ({username}). Spiele Config/PLAY ab ...")
+        print(f"[replay] Login ok ({username}). Spiele NUR die Config-Phase ab ...")
 
-        # --- Config/PLAY abspielen ---
-        steps = rp.build_steps(records, config_start)
+        # --- Nur die Config-Phase abspielen (bis zur PLAY-Grenze) ---
+        play_login = rp.find_play_login(records)
+        if play_login >= len(records):
+            print("[replay] Kein PLAY-Login (0x2B) im Capture gefunden - abbruch.")
+            return
+        config_records = records[:play_login]
+        steps = rp.build_steps(config_records, config_start)
         sent_bytes = 0
         for n, step in enumerate(steps):
             if step.send:
@@ -107,24 +116,32 @@ def handle(client: socket.socket, records, config_start: int) -> None:
                         break
             if n % 25 == 0:
                 print(f"[replay]   Schritt {n}/{len(steps)}, {sent_bytes/1e6:.1f} MB gesendet")
-        print(f"[replay] Replay fertig: {sent_bytes/1e6:.1f} MB. PLAY am Leben halten (Keep-Alive) ...")
+        print(f"[replay] Config abgespielt ({sent_bytes/1e6:.1f} MB). Client ist in PLAY.")
+
+        # --- PLAY-Naht: EIGENE Vanilla-Plattform statt der aufgezeichneten ATM10-Welt ---
+        # Login verbatim aus dem Capture (garantiert korrekte dimension_type-Indizes),
+        # danach unsere selbst gebaute Welt.
+        client.sendall(records[play_login].raw)
+        cx, cz = 0, 0
+        client.sendall(pl.build_set_center_chunk(cx, cz))
+        client.sendall(pl.build_flat_chunk(cx, cz, floor_section_index=_FLOOR_SECTION))
+        sx, sy, sz = _SPAWN
+        client.sendall(pl.build_sync_position(sx, sy, sz, teleport_id=1))
+        client.sendall(pl.build_set_default_spawn(int(sx), int(sy), int(sz)))
+        client.sendall(pl.build_game_event(pl.GAME_EVENT_WAIT_FOR_CHUNKS, 0.0))
+        print("[replay] Eigene Vanilla-Plattform gesendet. PLAY am Leben halten (Keep-Alive) ...")
 
         # --- PLAY am Leben halten: regelmaessig Clientbound-Keep-Alive senden, damit
         # der Client nicht "timed out" fliegt; Client-Pakete (Bewegung, KA-Antwort)
         # verwerfen. So bleibst du in der (replay-ten ATM10-)Welt stehen. ---
-        import struct as _struct
-
-        from app.services.mc_protocol import _wrap_packet as _wrap
-
         ka = 0
         last_ka = 0.0
         client.settimeout(1.0)
-        end = time.monotonic() + _HOLD_SECONDS
-        while time.monotonic() < end:
+        while True:  # bis der Client selbst trennt
             now = time.monotonic()
             if now - last_ka >= 10.0:
                 try:
-                    client.sendall(_wrap(mp.encode_varint(_PLAY_KEEPALIVE_CB) + _struct.pack(">q", ka)))
+                    client.sendall(pl.build_keep_alive(ka))
                 except OSError:
                     break
                 ka += 1

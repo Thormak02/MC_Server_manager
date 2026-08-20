@@ -79,6 +79,20 @@ def find_config_start(records: list[Record]) -> int:
     return 0
 
 
+def find_play_login(records: list[Record]) -> int:
+    """Index des ersten PLAY-Login (S->C Join Game, 0x2B).
+
+    In der Config-/Login-Phase kommt 0x2B nie vor (Login-CB max 0x02, Config-CB max 0x0E),
+    daher ist das erste S->C-0x2B zwangslaeufig der PLAY-Login. Ab hier baut die
+    Universal-Lobby ihre EIGENE Welt statt der aufgezeichneten Modpack-Welt.
+    Rueckgabe = len(records), falls kein PLAY-Login gefunden wurde.
+    """
+    for i, rec in enumerate(records):
+        if rec.to_client and rec.packet_id == 0x2B:
+            return i
+    return len(records)
+
+
 def build_steps(records: list[Record], start: int = 0) -> list[Step]:
     """Records ab ``start`` in Sende-Chargen und Warte-Checkpoints gruppieren.
 
