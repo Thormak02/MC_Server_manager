@@ -370,12 +370,14 @@ def gateway_status_runtime() -> dict:
         "port": None,
         "routes": [],
         "default": None,
+        "dispatcher_enabled": False,
     }
     try:
         with SessionLocal() as db:
             status["mode"] = app_setting_service.get_network_mode(db)
             status["domain"] = app_setting_service.get_network_domain(db)
             status["port"] = app_setting_service.get_network_port(db)
+            status["dispatcher_enabled"] = app_setting_service.get_dispatcher_enabled(db)
             if status["mode"] != "gateway":
                 return status
             servers = db.scalars(

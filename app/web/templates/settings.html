@@ -85,6 +85,12 @@
         {% else %}
             <strong style="color:#c62828">nicht gebunden</strong> (Port {{ gateway_status.port }} belegt? &ndash; anderen Prozess auf dem Port beenden)
         {% endif %}
+        &nbsp;|&nbsp; Modpack-Dispatcher:
+        {% if gateway_status.dispatcher_enabled %}
+            <strong style="color:#2e7d32">aktiv</strong>
+        {% else %}
+            <strong style="color:#c62828">aus</strong> (blanke Domain geht direkt zur Lobby)
+        {% endif %}
     </p>
     {% if gateway_status.routes %}
     <table class="table">
