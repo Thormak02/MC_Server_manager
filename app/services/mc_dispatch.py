@@ -60,6 +60,9 @@ MINECRAFT_BRAND = "minecraft:brand"
 _BUILTIN_NAMESPACES = {"minecraft", "neoforge", "forge", "fml", "c", "cpw"}
 # Resource-Location: namespace:path
 _RESLOC_RE = re.compile(rb"[a-z0-9_.\-]+:[a-z0-9_./\-]+")
+# Fuehrende Nicht-Buchstaben (Varint-Laengenbyte-Verschmutzung) entfernen -
+# Mod-Namespaces beginnen immer mit a-z.
+_LEADING_JUNK = re.compile(r"^[^a-z]+")
 
 
 # --------------------------------------------------------------------------- #
@@ -208,6 +211,9 @@ def extract_mod_namespaces(payload: bytes) -> set[str]:
     out: set[str] = set()
     for match in _RESLOC_RE.findall(payload):
         ns = match.split(b":", 1)[0].decode("ascii", "ignore")
+        # Direkt vor der Resource-Location steht ihr Varint-Laengenbyte; ist das
+        # druckbar (z.B. '-' bei Laenge 45), faengt die Regex es mit ein -> strippen.
+        ns = _LEADING_JUNK.sub("", ns)
         if ns and ns not in _BUILTIN_NAMESPACES:
             out.add(ns)
     return out

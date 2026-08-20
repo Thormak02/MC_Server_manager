@@ -101,7 +101,8 @@ def _pipe(src, dst, direction, log, lock, stop, idx_ref):
                 "dir": direction,
                 "id": pid,
                 "len": len(raw),
-                "hex": raw[:_MAX_HEX].hex(),
+                "hex": raw[:_MAX_HEX].hex(),   # nur fuer die .log/.jsonl (gekuerzt)
+                "raw": raw,                     # VOLLE Bytes fuer das .replay (in-memory)
                 **_analyze(payload),
             }
             with lock:
@@ -161,6 +162,19 @@ def main() -> None:
     time.sleep(0.3)
 
     log.sort(key=lambda e: e["idx"])
+    # .replay: replay-faehiger Voll-Mitschnitt. Pro Paket: [dir:1][len:4 BE][raw].
+    # dir 0 = S->C (spaeter an den neuen Client abspielen), 1 = C->S (Checkpoint).
+    total = 0
+    with open(f"{args.out}.replay", "wb") as rf:
+        rf.write(b"MCRP\x01")  # Magic + Version
+        for e in log:
+            raw = e["raw"]
+            rf.write(bytes([0 if e["dir"] == "S->C" else 1]))
+            rf.write(len(raw).to_bytes(4, "big"))
+            rf.write(raw)
+            total += len(raw)
+    for e in log:
+        e.pop("raw", None)  # nicht in die (lesbare) jsonl/log schreiben
     with open(f"{args.out}.jsonl", "w", encoding="utf-8") as f:
         for e in log:
             f.write(json.dumps(e) + "\n")
@@ -171,7 +185,7 @@ def main() -> None:
                     f" {('channel=' + ch) if ch else ''}\n")
             if e.get("reslocs"):
                 f.write(f"        reslocs: {', '.join(e['reslocs'][:40])}\n")
-    print(f"[capture] {len(log)} Pakete geschrieben -> {args.out}.log / {args.out}.jsonl")
+    print(f"[capture] {len(log)} Pakete ({total/1e6:.1f} MB) -> {args.out}.replay (+ .log/.jsonl)")
 
 
 if __name__ == "__main__":

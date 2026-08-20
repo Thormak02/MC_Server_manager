@@ -109,3 +109,15 @@ def test_try_read_packet_rejects_bogus_length():
     # Nulllaenge -> keine Packet-ID -> ProtocolError.
     with pytest.raises(ProtocolError):
         d.try_read_packet(encode_varint(0))
+
+
+def test_extract_mod_namespaces_strips_length_byte_pollution():
+    # Channel der Laenge 45 -> Varint-Laengenbyte 0x2d ('-'); der Scanner darf den
+    # nicht als Teil des Namespace nehmen (echter Bug aus dem ATM10-Mitschnitt).
+    ch = "cyclopscore:advancement_rewards_obtain_packet"
+    assert len(ch) == 45
+    blob = encode_string(ch)
+    assert blob[0:1] == b"-"  # das Laengenbyte ist druckbar
+    ns = d.extract_mod_namespaces(blob)
+    assert "cyclopscore" in ns
+    assert "-cyclopscore" not in ns
