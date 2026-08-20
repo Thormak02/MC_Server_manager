@@ -30,7 +30,10 @@ from app.services import mc_protocol as mp  # noqa: E402
 from app.services import replay_service as rp  # noqa: E402
 
 _DRAIN_TIMEOUT = 6.0
-_HOLD_SECONDS = 45.0
+_HOLD_SECONDS = 300.0
+# 1.21.1 PLAY clientbound Keep Alive (bei Bedarf anpassen, falls Client trotzdem
+# "timed out" fliegt).
+_PLAY_KEEPALIVE_CB = 0x26
 
 
 class Reader:
@@ -104,15 +107,45 @@ def handle(client: socket.socket, records, config_start: int) -> None:
                         break
             if n % 25 == 0:
                 print(f"[replay]   Schritt {n}/{len(steps)}, {sent_bytes/1e6:.1f} MB gesendet")
-        print(f"[replay] Replay fertig: {sent_bytes/1e6:.1f} MB. Halte Verbindung offen ...")
+        print(f"[replay] Replay fertig: {sent_bytes/1e6:.1f} MB. PLAY am Leben halten (Keep-Alive) ...")
 
-        # --- Halten: Client-Pakete leeren, bis Timeout/Disconnect (Beobachtung) ---
-        deadline = time.monotonic() + _HOLD_SECONDS
-        while time.monotonic() < deadline:
+        # --- PLAY am Leben halten: regelmaessig Clientbound-Keep-Alive senden, damit
+        # der Client nicht "timed out" fliegt; Client-Pakete (Bewegung, KA-Antwort)
+        # verwerfen. So bleibst du in der (replay-ten ATM10-)Welt stehen. ---
+        import struct as _struct
+
+        from app.services.mc_protocol import _wrap_packet as _wrap
+
+        ka = 0
+        last_ka = 0.0
+        client.settimeout(1.0)
+        end = time.monotonic() + _HOLD_SECONDS
+        while time.monotonic() < end:
+            now = time.monotonic()
+            if now - last_ka >= 10.0:
+                try:
+                    client.sendall(_wrap(mp.encode_varint(_PLAY_KEEPALIVE_CB) + _struct.pack(">q", ka)))
+                except OSError:
+                    break
+                ka += 1
+                last_ka = now
+                print(f"[replay]   Keep-Alive #{ka} gesendet, Verbindung lebt.")
+            # Client-Pakete draenen (nicht blockierend genug -> Timeout ist ok).
+            got = mcd.try_read_packet(bytes(reader.buf))
+            if got is not None:
+                _pid, _f, consumed = got
+                del reader.buf[:consumed]
+                continue
             try:
-                reader.read_packet(2.0)
-            except (OSError, ConnectionError):
+                chunk = client.recv(16384)
+            except socket.timeout:
+                continue
+            except OSError:
                 break
+            if not chunk:
+                print("[replay] Client hat getrennt.")
+                break
+            reader.buf.extend(chunk)
         print("[replay] Verbindung beendet.")
     except (OSError, ConnectionError, mp.ProtocolError) as exc:
         print(f"[replay] Verbindungsfehler: {exc!r}")
