@@ -85,7 +85,8 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         String key;
         String display;
         String host;
-        int port;
+        int port;       // Transfer-Ziel (Gateway-Port)
+        int pingPort;   // Status-Ping direkt (kein Gateway-Hop)
         Material material = Material.GRASS_BLOCK;
         int slot = -1;
         boolean sleep = false;
@@ -135,18 +136,19 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
 
     private void pingAll() {
         for (ServerEntry e : servers.values()) {
-            statusCache.put(e.key, pingStatus(e.host, e.port));
+            statusCache.put(e.key, pingStatus(e.host, e.pingPort));
         }
     }
 
     /**
-     * Server-List-Ping ueber das lokale Gateway (127.0.0.1:&lt;port&gt;, Hostname im
-     * Handshake) - kein DNS/Hairpin noetig. Liefert "online" / "sleeping" / "offline".
+     * Server-List-Ping direkt auf 127.0.0.1:&lt;pingPort&gt; (Server bzw. dessen
+     * Sleep-Proxy sitzt dort) - kein Gateway-Hop, kein DNS/Hairpin. Liefert
+     * "online" / "sleeping" / "offline".
      */
     private String pingStatus(String host, int port) {
         try (Socket s = new Socket()) {
-            s.connect(new InetSocketAddress("127.0.0.1", port), 900);
-            s.setSoTimeout(900);
+            s.connect(new InetSocketAddress("127.0.0.1", port), 1500);
+            s.setSoTimeout(1500);
             OutputStream out = s.getOutputStream();
             InputStream in = s.getInputStream();
 
@@ -262,6 +264,8 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                 e.display = raw.get("display") != null ? str(raw.get("display")) : e.key;
                 e.host = str(raw.get("host"));
                 e.port = raw.get("port") instanceof Number ? ((Number) raw.get("port")).intValue() : 25565;
+                e.pingPort = raw.get("ping_port") instanceof Number
+                    ? ((Number) raw.get("ping_port")).intValue() : e.port;
                 e.slot = raw.get("slot") instanceof Number ? ((Number) raw.get("slot")).intValue() : -1;
                 e.sleep = Boolean.TRUE.equals(raw.get("sleep"));
                 Material m = Material.matchMaterial(

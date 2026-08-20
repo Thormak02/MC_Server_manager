@@ -141,19 +141,22 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
             "key": alias,
             "display": label,
             "host": f"{alias}.{domain}",
-            "port": int(network_port),
+            "port": int(network_port),          # Transfer laeuft ueber das Gateway
+            "ping_port": int(srv.port),         # Status-Ping direkt (kein Gateway-Hop)
             "material": material,
             "sleep": bool(srv.sleep_enabled),
         })
     return servers, skipped
 
 
-def refresh_plugin_jar(server) -> None:
-    """Aktuelles ``MCSMLobby.jar`` in den Server kopieren (Gateway-Bukkit-Server).
+def refresh_plugin_for_server(db: Session, server) -> None:
+    """Jar **und** config des Transfer-Plugins beim Serverstart auffrischen.
 
-    Wird beim **Serverstart** aufgerufen - da ist der Server noch aus, das Jar also
-    nicht gesperrt. So aktualisiert ein Deploy + Neustart das Plugin zuverlaessig,
-    ohne dass der Nutzer erst „stoppen -> Sync -> starten" machen muss.
+    Wird beim Serverstart aufgerufen - da ist der Server noch aus, das Jar also
+    nicht gesperrt. So zieht ein Deploy per Neustart die aktuelle Plugin-Version UND
+    eine frische config (Sleep-Flags, ping_port, Struktur), ohne dass der Nutzer erst
+    „stoppen -> Sync -> starten" machen muss. Nur fuer bereits installierte
+    Gateway-Bukkit-Server; vorhandene ``regions`` bleiben erhalten.
     """
     if not getattr(server, "gateway_enabled", False):
         return
@@ -162,13 +165,18 @@ def refresh_plugin_jar(server) -> None:
     if not _PLUGIN_JAR.exists():
         return
     plugins = Path(server.base_path).expanduser().resolve() / "plugins"
-    # Nur aktualisieren, wenn das Plugin ueberhaupt installiert ist (config-Ordner da)
-    # oder der plugins-Ordner existiert -> keinen Plugin-Ordner ungefragt anlegen.
+    # Nur auffrischen, wenn das Plugin schon installiert ist -> keinen Plugin-Ordner
+    # ungefragt anlegen.
     if not (plugins / "MCSMLobby").exists() and not (plugins / "MCSMLobby.jar").exists():
         return
     try:
-        shutil.copy2(_PLUGIN_JAR, plugins / "MCSMLobby.jar")
-    except (PermissionError, OSError):
+        _write_plugin_for_server(
+            db,
+            server,
+            is_lobby=bool(getattr(server, "gateway_is_default", False)),
+            lobby_target=_lobby_transfer_target(db),
+        )
+    except Exception:  # noqa: BLE001 - darf den Start nie stoeren
         pass
 
 

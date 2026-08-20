@@ -26,7 +26,8 @@ servers: []
 #  - key: "1.21.11-spigot"
 #    display: "&aDavid (Spigot)"
 #    host: "1.21.11-spigot.mc.friedrich-dietrich.de"
-#    port: 25565
+#    port: 25565          # Transfer-Ziel (Gateway)
+#    ping_port: 25591     # direkter Port fuer den Status-Ping
 #    material: GRASS_BLOCK
 #    slot: 11
 #    sleep: true

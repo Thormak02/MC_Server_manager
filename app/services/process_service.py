@@ -1333,11 +1333,12 @@ def start_server(
             console_service.append_output(server.id, f"Velocity-Cleanup uebersprungen: {exc}")
 
         # Transfer-Plugin (MCSMLobby) auf den frischesten Stand bringen - jetzt ist der
-        # Server aus, das Jar also nicht gesperrt. So zieht ein Deploy per Neustart.
+        # Server aus, das Jar also nicht gesperrt. So zieht ein Deploy per Neustart
+        # (Jar + config mit aktuellen Sleep-Flags/ping_port).
         try:
             from app.services import lobby_service
 
-            lobby_service.refresh_plugin_jar(server)
+            lobby_service.refresh_plugin_for_server(db, server)
         except Exception:  # noqa: BLE001
             pass
 

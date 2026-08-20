@@ -1286,31 +1286,46 @@ def test_sync_skips_non_bukkit_servers(client, tmp_path):
     assert not (forge_dir / "plugins" / "MCSMLobby").exists()  # kein Plugin auf Forge
 
 
-def test_refresh_plugin_jar_updates_installed_only(tmp_path):
-    """refresh_plugin_jar aktualisiert das Jar nur, wenn das Plugin installiert ist,
-    und nur auf Bukkit-Gateway-Servern (Server ist beim Start aus -> nicht gesperrt)."""
-    from types import SimpleNamespace
+def test_refresh_plugin_for_server_updates_jar_and_config(client, tmp_path):
+    """Beim Start wird Jar UND config nur fuer installierte Bukkit-Gateway-Server
+    aufgefrischt (Sleep-Flag + ping_port landen so zuverlaessig in der config)."""
+    import yaml
 
-    from app.services import lobby_service
+    import app.services.app_setting_service as svc
+    import app.services.lobby_service as lobby_service
+    from app.db.session import SessionLocal
+    from app.models.server import Server
 
-    # 1) Bukkit-Gateway-Server MIT installiertem Plugin -> Jar wird (neu) kopiert.
-    installed = tmp_path / "lob"
-    (installed / "plugins" / "MCSMLobby").mkdir(parents=True)
-    (installed / "plugins" / "MCSMLobby.jar").write_bytes(b"old")
-    lobby_service.refresh_plugin_jar(SimpleNamespace(
-        gateway_enabled=True, server_type="paper", base_path=str(installed)))
-    assert (installed / "plugins" / "MCSMLobby.jar").read_bytes() != b"old"
+    lobby_dir = tmp_path / "lob"
+    david_dir = tmp_path / "david"
+    (lobby_dir / "plugins" / "MCSMLobby").mkdir(parents=True)  # Plugin installiert
+    (lobby_dir / "plugins" / "MCSMLobby.jar").write_bytes(b"old")
+    fresh_dir = tmp_path / "fresh"
+    fresh_dir.mkdir()  # Plugin NICHT installiert
 
-    # 2) Ohne installiertes Plugin -> kein Plugin-Ordner wird angelegt.
-    fresh = tmp_path / "fresh"
-    fresh.mkdir()
-    lobby_service.refresh_plugin_jar(SimpleNamespace(
-        gateway_enabled=True, server_type="paper", base_path=str(fresh)))
-    assert not (fresh / "plugins" / "MCSMLobby.jar").exists()
+    with SessionLocal() as db:
+        lobby = Server(name="Lobby", slug="lob", server_type="paper", mc_version="1.21.1",
+                       base_path=str(lobby_dir), gateway_enabled=True, gateway_hostname="lobby",
+                       gateway_is_default=True, port=25569)
+        david = Server(name="David", slug="david", server_type="spigot", mc_version="1.21.11",
+                       base_path=str(david_dir), gateway_enabled=True,
+                       gateway_hostname="1.21.11-spigot", port=25591, sleep_enabled=True)
+        fresh = Server(name="Fresh", slug="fresh", server_type="paper", mc_version="1.21.1",
+                       base_path=str(fresh_dir), gateway_enabled=True, gateway_hostname="fresh",
+                       port=25573)
+        db.add_all([lobby, david, fresh])
+        db.commit()
+        svc.set_network_domain(db, "mc.friedrich-dietrich.de")
+        svc.set_network_port(db, 25565)
 
-    # 3) Nicht-Bukkit (Forge) -> nichts kopiert, auch wenn Ordner existiert.
-    forge = tmp_path / "forge"
-    (forge / "plugins" / "MCSMLobby").mkdir(parents=True)
-    lobby_service.refresh_plugin_jar(SimpleNamespace(
-        gateway_enabled=True, server_type="forge", base_path=str(forge)))
-    assert not (forge / "plugins" / "MCSMLobby.jar").exists()
+        # Installierter Server -> Jar neu + config mit Sleep-Flag/ping_port fuer David.
+        lobby_service.refresh_plugin_for_server(db, lobby)
+        # Nicht installiert -> kein Plugin-Ordner angelegt.
+        lobby_service.refresh_plugin_for_server(db, fresh)
+
+    assert (lobby_dir / "plugins" / "MCSMLobby.jar").read_bytes() != b"old"
+    cfg = yaml.safe_load((lobby_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8"))
+    david_entry = next(s for s in cfg["servers"] if s["key"] == "1.21.11-spigot")
+    assert david_entry["sleep"] is True
+    assert david_entry["ping_port"] == 25591  # direkter Port fuer den Status-Ping
+    assert not (fresh_dir / "plugins" / "MCSMLobby").exists()
