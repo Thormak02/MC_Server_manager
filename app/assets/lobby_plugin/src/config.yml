@@ -11,6 +11,15 @@ compass:
 gui:
   title: "Server auswaehlen"
   rows: 3
+# Ziel fuer /lobby (host leer = dieser Server IST die Lobby).
+lobby:
+  host: ""
+  port: 25565
+# Live-Status: pingt die Server regelmaessig und faerbt das Menue
+# (gruen=online, lila=schlaeft, rot=offline).
+status:
+  enabled: true
+  interval_seconds: 8
 # Vom Manager befuellt (LISTE, damit Aliase mit Punkten wie 1.21.11-spigot nicht
 # als YAML-Pfad zerfallen). Beispiel:
 servers: []
@@ -20,6 +29,7 @@ servers: []
 #    port: 25565
 #    material: GRASS_BLOCK
 #    slot: 11
+#    sleep: true
 # Begehbare Portale: in diesen Quader laufen -> Transfer. Selbst ergaenzen:
 regions: []
 #  - world: world

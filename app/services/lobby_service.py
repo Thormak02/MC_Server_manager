@@ -219,12 +219,16 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
     if lobby_target and not is_lobby:
         lobby_cfg = {"host": lobby_target["host"], "port": lobby_target["port"]}
 
+    status_cfg = existing.get("status")
+    if not isinstance(status_cfg, dict):
+        status_cfg = {"enabled": True, "interval_seconds": 8}
     config = {
         "cooldown_ms": existing.get("cooldown_ms", 3000),
         "messages": {"transfer": "&aVerbinde zu &e%server%&a..."},
         "compass": {"enabled": bool(is_lobby), "slot": 4, "name": "&bServer-Auswahl &7(Rechtsklick)"},
         "gui": {"title": "Server auswaehlen", "rows": 3},
         "lobby": lobby_cfg,
+        "status": status_cfg,
         "servers": servers,
         "regions": existing.get("regions", []) or [],
     }

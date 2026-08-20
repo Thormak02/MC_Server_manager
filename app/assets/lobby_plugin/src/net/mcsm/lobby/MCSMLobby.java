@@ -24,6 +24,13 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -31,6 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * MCSMLobby - begehbare Transfer-Lobby fuer den MC Server Manager.
@@ -65,6 +73,13 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     // Ziel fuer /lobby (leer, wenn dieser Server selbst die Lobby ist).
     private String lobbyHost = "";
     private int lobbyPort = 25565;
+
+    // Live-Status je Server (key -> "online" | "sleeping" | "offline"). Ein Hintergrund-
+    // Task pingt regelmaessig ueber das lokale Gateway und fuellt den Cache; das Menue
+    // faerbt danach die Eintraege. So sieht man, ob ein Server gerade schlaeft.
+    private final Map<String, String> statusCache = new ConcurrentHashMap<>();
+    private boolean statusPingEnabled = true;
+    private int statusIntervalTicks = 160;  // ~8s
 
     static final class ServerEntry {
         String key;
@@ -110,6 +125,109 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
         getLogger().info("MCSMLobby aktiv: " + servers.size()
             + " Server, " + regions.size() + " Portal-Regionen.");
+
+        // Live-Status im Hintergrund pollen (async, blockiert nie den Server-Thread).
+        if (statusPingEnabled) {
+            getServer().getScheduler().runTaskTimerAsynchronously(
+                this, this::pingAll, 40L, statusIntervalTicks);
+        }
+    }
+
+    private void pingAll() {
+        for (ServerEntry e : servers.values()) {
+            statusCache.put(e.key, pingStatus(e.host, e.port));
+        }
+    }
+
+    /**
+     * Server-List-Ping ueber das lokale Gateway (127.0.0.1:&lt;port&gt;, Hostname im
+     * Handshake) - kein DNS/Hairpin noetig. Liefert "online" / "sleeping" / "offline".
+     */
+    private String pingStatus(String host, int port) {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress("127.0.0.1", port), 900);
+            s.setSoTimeout(900);
+            OutputStream out = s.getOutputStream();
+            InputStream in = s.getInputStream();
+
+            ByteArrayOutputStream hs = new ByteArrayOutputStream();
+            writeVarInt(hs, 0x00);
+            writeVarInt(hs, 767);              // Protokollversion (beliebig fuer Status)
+            writeString(hs, host);             // Gateway routet nach diesem Hostnamen
+            hs.write((port >> 8) & 0xFF);
+            hs.write(port & 0xFF);
+            writeVarInt(hs, 1);                // next_state = status
+            writePacket(out, hs.toByteArray());
+
+            ByteArrayOutputStream req = new ByteArrayOutputStream();
+            writeVarInt(req, 0x00);            // status request
+            writePacket(out, req.toByteArray());
+
+            readVarInt(in);                     // Paketlaenge (ignoriert)
+            readVarInt(in);                     // Paket-ID (0x00)
+            int jsonLen = readVarInt(in);
+            byte[] buf = new byte[Math.max(0, Math.min(jsonLen, 64 * 1024))];
+            readFully(in, buf);
+            String json = new String(buf, StandardCharsets.UTF_8);
+            if (json.contains("Schlaeft") || json.contains("Sleeping")) {
+                return "sleeping";
+            }
+            return "online";
+        } catch (Exception ex) {
+            return "offline";
+        }
+    }
+
+    private static void writeVarInt(OutputStream out, int value) throws IOException {
+        while ((value & ~0x7F) != 0) {
+            out.write((value & 0x7F) | 0x80);
+            value >>>= 7;
+        }
+        out.write(value);
+    }
+
+    private static void writeString(OutputStream out, String s) throws IOException {
+        byte[] b = s.getBytes(StandardCharsets.UTF_8);
+        writeVarInt(out, b.length);
+        out.write(b);
+    }
+
+    private static void writePacket(OutputStream out, byte[] body) throws IOException {
+        ByteArrayOutputStream framed = new ByteArrayOutputStream();
+        writeVarInt(framed, body.length);
+        framed.write(body);
+        out.write(framed.toByteArray());
+        out.flush();
+    }
+
+    private static int readVarInt(InputStream in) throws IOException {
+        int result = 0;
+        int shift = 0;
+        while (true) {
+            int b = in.read();
+            if (b < 0) {
+                throw new IOException("EOF");
+            }
+            result |= (b & 0x7F) << shift;
+            if ((b & 0x80) == 0) {
+                return result;
+            }
+            shift += 7;
+            if (shift >= 35) {
+                throw new IOException("VarInt zu lang");
+            }
+        }
+    }
+
+    private static void readFully(InputStream in, byte[] buf) throws IOException {
+        int off = 0;
+        while (off < buf.length) {
+            int r = in.read(buf, off, buf.length - off);
+            if (r < 0) {
+                throw new IOException("EOF");
+            }
+            off += r;
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -130,6 +248,8 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         cooldownMs = Math.max(0L, c.getLong("cooldown_ms", cooldownMs));
         lobbyHost = c.getString("lobby.host", "");
         lobbyPort = c.getInt("lobby.port", 25565);
+        statusPingEnabled = c.getBoolean("status.enabled", true);
+        statusIntervalTicks = Math.max(40, c.getInt("status.interval_seconds", 8) * 20);
 
         // WICHTIG: servers ist eine LISTE, nicht eine Map mit Alias als Schluessel.
         // Bukkit-YAML behandelt '.' im Schluessel als Pfad-Trenner, d.h. ein Alias
@@ -222,9 +342,10 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
     }
 
-    private void openGui(Player p) {
+    /** Deterministische Slot -> Server-Zuordnung (gleich in openGui und onGuiClick). */
+    private Map<Integer, ServerEntry> computeSlots() {
         int size = guiRows * 9;
-        Inventory inv = Bukkit.createInventory(null, size, guiTitle);
+        Map<Integer, ServerEntry> layout = new LinkedHashMap<>();
         java.util.Set<Integer> used = new java.util.HashSet<>();
         int auto = 0;
         for (ServerEntry e : servers.values()) {
@@ -232,8 +353,6 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
             if (e.slot >= 0 && e.slot < size && !used.contains(e.slot)) {
                 slot = e.slot;
             } else {
-                // Auto-Platzierung: freien Slot suchen, belegte (auch explizite)
-                // ueberspringen, damit kein Icon ueberschrieben wird.
                 while (auto < size && used.contains(auto)) {
                     auto++;
                 }
@@ -243,22 +362,57 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                 slot = auto;
             }
             used.add(slot);
+            layout.put(slot, e);
+        }
+        return layout;
+    }
+
+    private void openGui(Player p) {
+        int size = guiRows * 9;
+        Inventory inv = Bukkit.createInventory(null, size, guiTitle);
+        for (Map.Entry<Integer, ServerEntry> slotEntry : computeSlots().entrySet()) {
+            ServerEntry e = slotEntry.getValue();
+            String state = statusCache.get(e.key);  // null = noch nicht gepingt
             ItemStack item = new ItemStack(e.material);
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
-                meta.setDisplayName(color(e.display));
+                meta.setDisplayName(color(statusDot(state) + e.display));
                 List<String> lore = new ArrayList<>();
                 lore.add(color("&7" + e.host + ":" + e.port));
-                if (e.sleep) {
-                    lore.add(color("&d● Schlafmodus &7– Beitritt weckt ihn (kurz warten)"));
-                }
+                lore.add(color(statusLine(state, e.sleep)));
                 lore.add(color("&aKlick zum Verbinden"));
                 meta.setLore(lore);
                 item.setItemMeta(meta);
             }
-            inv.setItem(slot, item);
+            inv.setItem(slotEntry.getKey(), item);
         }
         p.openInventory(inv);
+    }
+
+    private String statusDot(String state) {
+        if ("online".equals(state)) {
+            return "&a● ";
+        }
+        if ("sleeping".equals(state)) {
+            return "&d● ";
+        }
+        if ("offline".equals(state)) {
+            return "&c● ";
+        }
+        return "&7● ";
+    }
+
+    private String statusLine(String state, boolean sleep) {
+        if ("online".equals(state)) {
+            return "&aOnline";
+        }
+        if ("sleeping".equals(state)) {
+            return "&dSchlaeft &7– Beitritt weckt ihn (kurz warten)";
+        }
+        if ("offline".equals(state)) {
+            return sleep ? "&dSchlaeft &7– Beitritt weckt ihn" : "&cOffline";
+        }
+        return "&7Status wird geprueft ...";
     }
 
     private ItemStack compassItem() {
@@ -327,17 +481,12 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
             return;
         }
         e.setCancelled(true);
-        ItemStack clicked = e.getCurrentItem();
-        if (clicked == null || !clicked.hasItemMeta()) {
-            return;
-        }
-        String name = ChatColor.stripColor(clicked.getItemMeta().getDisplayName());
-        for (ServerEntry entry : servers.values()) {
-            if (ChatColor.stripColor(color(entry.display)).equals(name)) {
-                ((Player) e.getWhoClicked()).closeInventory();
-                doTransfer((Player) e.getWhoClicked(), entry.key);
-                return;
-            }
+        // Robust ueber den geklickten Slot aufloesen (nicht ueber den Anzeigenamen,
+        // der jetzt einen Status-Punkt traegt).
+        ServerEntry entry = computeSlots().get(e.getRawSlot());
+        if (entry != null) {
+            ((Player) e.getWhoClicked()).closeInventory();
+            doTransfer((Player) e.getWhoClicked(), entry.key);
         }
     }
 
