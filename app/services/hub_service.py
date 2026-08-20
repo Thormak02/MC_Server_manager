@@ -279,6 +279,9 @@ class Hub:
             # Rezepte/Commands/Advancements mit-abspielen -> JEI startet sauber (kein Crash).
             for p in self.setup_packets:
                 sock.sendall(p)
+            # Leeres declare_recipes -> feuert RecipesUpdatedEvent, damit JEI schon beim Join
+            # initialisiert statt beim 1. Inventar-Oeffnen 30-40s einzufrieren (siehe mc_play).
+            sock.sendall(pl.build_declare_recipes_empty())
             for p in self.platform_packets:
                 sock.sendall(p)
             sx, sy, sz = _SPAWN

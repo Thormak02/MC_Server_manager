@@ -47,6 +47,12 @@ PLAY_CB_SET_HELD_ITEM = 0x53    # Set Held Item (Byte in 767!)
 PLAY_CB_SET_CENTER_CHUNK = 0x54
 PLAY_CB_SET_DEFAULT_SPAWN = 0x56
 PLAY_CB_SYSTEM_CHAT = 0x6C
+# 0x77 declare_recipes = ClientboundUpdateRecipesPacket. Traegt normalerweise ALLE Rezepte
+# (bei ATM10 mehrere MB, per neoforge:split zerlegt). Wir schicken NUR ein LEERES Paket:
+# das feuert clientseitig RecipesUpdatedEvent, wodurch JEI & Co. schon BEIM JOIN (hinter dem
+# Ladebildschirm) initialisieren statt beim ersten Inventar-Oeffnen 30-40s zu freezen.
+# 0x41 unlock_recipes (Rezeptbuch) feuert dieses Event NICHT - deshalb kam JEI bisher zu spaet.
+PLAY_CB_DECLARE_RECIPES = 0x77
 
 # Serverbound PLAY Packet-IDs (fuer den Aufrufer, der Client-Pakete auswertet)
 PLAY_SB_CONFIRM_TELEPORT = 0x00
@@ -166,6 +172,13 @@ def _heightmaps_nbt(height_value: int) -> bytes:
 def build_set_center_chunk(chunk_x: int, chunk_z: int) -> bytes:
     body = encode_varint(PLAY_CB_SET_CENTER_CHUNK) + encode_varint(chunk_x) + encode_varint(chunk_z)
     return _wrap_packet(body)
+
+
+def build_declare_recipes_empty() -> bytes:
+    """Leeres declare_recipes (0x77) = 0 Rezepte. Loest clientseitig RecipesUpdatedEvent aus,
+    damit rezeptbasierte Mod-Clients (v.a. JEI) schon beim Join initialisieren. Fuer eine
+    Kosmetik-Lobby ohne Crafting ist ein leerer Rezeptsatz unkritisch: Body = VarInt(0)."""
+    return _wrap_packet(encode_varint(PLAY_CB_DECLARE_RECIPES) + encode_varint(0))
 
 
 def build_chunk_batch_start() -> bytes:
