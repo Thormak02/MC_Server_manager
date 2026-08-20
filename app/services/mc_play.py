@@ -96,6 +96,49 @@ def _chunk_section(block_state_id: int, biome_id: int, *, solid: bool) -> bytes:
     return bytes(out)
 
 
+def _pack_heightmap(height_value: int, *, columns: int = 256, bits: int = 9) -> list[int]:
+    """256 Spalten-Hoehen als gepacktes Long-Array (MC-Format: KEIN Spanning, 7 Werte/Long).
+
+    ``height_value`` = Anzahl Bloecke von min_y bis (hoechster_block_y + 1); bei 384er-Welt
+    passen die Werte 0..384 in 9 Bit -> floor(64/9)=7 Werte pro Long -> 37 Longs fuer 256 Spalten.
+    """
+    per_long = 64 // bits
+    mask = (1 << bits) - 1
+    longs: list[int] = []
+    cur = 0
+    cnt = 0
+    for _ in range(columns):
+        cur |= (height_value & mask) << (bits * cnt)
+        cnt += 1
+        if cnt == per_long:
+            longs.append(cur)
+            cur = 0
+            cnt = 0
+    if cnt:
+        longs.append(cur)
+    return longs
+
+
+def _nbt_long_array(name: str, longs: list[int]) -> bytes:
+    nb = name.encode("utf-8")
+    out = bytearray([0x0C])                        # TAG_Long_Array
+    out += struct.pack(">H", len(nb)) + nb
+    out += struct.pack(">i", len(longs))
+    for lo in longs:
+        out += struct.pack(">q", lo)
+    return bytes(out)
+
+
+def _heightmaps_nbt(height_value: int) -> bytes:
+    """Namenloses Netzwerk-NBT-Compound mit MOTION_BLOCKING + WORLD_SURFACE (Sodium braucht sie)."""
+    longs = _pack_heightmap(height_value)
+    out = bytearray([0x0A])                        # Root-Compound (kein Name)
+    out += _nbt_long_array("MOTION_BLOCKING", longs)
+    out += _nbt_long_array("WORLD_SURFACE", longs)
+    out.append(0x00)                               # TAG_End
+    return bytes(out)
+
+
 # --------------------------------------------------------------------------- #
 # Clientbound PLAY Builder
 # --------------------------------------------------------------------------- #
@@ -165,8 +208,8 @@ def build_flat_chunk(
     body = bytearray(encode_varint(PLAY_CB_CHUNK_DATA))
     body += struct.pack(">i", chunk_x)
     body += struct.pack(">i", chunk_z)
-    # Heightmaps: leeres, namenloses Netzwerk-NBT-Compound.
-    body += b"\x0a\x00"
+    # Heightmaps: Hoehe = Bloecke von min_y bis Oberkante der Boden-Section (Sodium braucht sie).
+    body += _heightmaps_nbt((floor_section_index + 1) * 16)
     # Sections -> laengenpraefigiert.
     sections = bytearray()
     for idx in range(section_count):

@@ -38,6 +38,7 @@ _PLAY_KEEPALIVE_CB = pl.PLAY_CB_KEEP_ALIVE
 # --- Phase-1-Plattform (unsere eigene Vanilla-Welt statt der aufgezeichneten) ---
 _FLOOR_SECTION = 7            # bei 24 Sections -> Boden y 48..63
 _SPAWN = (8.5, 64.0, 8.5)     # mittig auf Chunk (0,0), auf dem Boden
+_GRID_RADIUS = 2             # 5x5-Chunk-Grid um (0,0) (wie der echte ATM10-Server sendete)
 
 
 class Reader:
@@ -120,16 +121,19 @@ def handle(client: socket.socket, records, config_start: int) -> None:
 
         # --- PLAY-Naht: EIGENE Vanilla-Plattform statt der aufgezeichneten ATM10-Welt ---
         # Login verbatim aus dem Capture (garantiert korrekte dimension_type-Indizes),
-        # danach unsere selbst gebaute Welt.
+        # danach unsere selbst gebaute Welt: 5x5-Chunk-Grid um (0,0) - Sodium mesht eine
+        # Section erst, wenn ihre Nachbarn geladen sind, sonst bleibt die Plattform unsichtbar.
         client.sendall(records[play_login].raw)
-        cx, cz = 0, 0
-        client.sendall(pl.build_set_center_chunk(cx, cz))
-        client.sendall(pl.build_flat_chunk(cx, cz, floor_section_index=_FLOOR_SECTION))
+        client.sendall(pl.build_set_center_chunk(0, 0))
+        for cx in range(-_GRID_RADIUS, _GRID_RADIUS + 1):
+            for cz in range(-_GRID_RADIUS, _GRID_RADIUS + 1):
+                client.sendall(pl.build_flat_chunk(cx, cz, floor_section_index=_FLOOR_SECTION))
         sx, sy, sz = _SPAWN
         client.sendall(pl.build_sync_position(sx, sy, sz, teleport_id=1))
         client.sendall(pl.build_set_default_spawn(int(sx), int(sy), int(sz)))
         client.sendall(pl.build_game_event(pl.GAME_EVENT_WAIT_FOR_CHUNKS, 0.0))
-        print("[replay] Eigene Vanilla-Plattform gesendet. PLAY am Leben halten (Keep-Alive) ...")
+        n_chunks = (2 * _GRID_RADIUS + 1) ** 2
+        print(f"[replay] Eigene Vanilla-Plattform ({n_chunks} Chunks) gesendet. PLAY am Leben halten ...")
 
         # --- PLAY am Leben halten: regelmaessig Clientbound-Keep-Alive senden, damit
         # der Client nicht "timed out" fliegt; Client-Pakete (Bewegung, KA-Antwort)
