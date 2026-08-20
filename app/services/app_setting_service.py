@@ -13,6 +13,8 @@ PUBLIC_BASE_URL_KEY = "public_base_url"
 NETWORK_MODE_KEY = "network_mode"
 NETWORK_PORT_KEY = "network_port"
 NETWORK_DOMAIN_KEY = "network_domain"
+# Modpack-Dispatcher: blanke Domain erkennt den Client-Loader/-Mods und leitet weiter.
+DISPATCHER_ENABLED_KEY = "dispatcher_enabled"
 
 # Erlaubte Netzwerk-Modi:
 #  - "gateway" = transparenter Hostname-Router (jeder Typ/jede Version, alle Server
@@ -311,6 +313,16 @@ def _set_or_clear(db: Session, key: str, value: str | None) -> None:
         row.value = normalized
     db.add(row)
     db.commit()
+
+
+def get_dispatcher_enabled(db: Session) -> bool:
+    """Ob der Modpack-Dispatcher an der blanken Domain aktiv ist (Default: aus)."""
+    row = _get_setting_row(db, DISPATCHER_ENABLED_KEY)
+    return _normalize_bool(row.value) if row and row.value else False
+
+
+def set_dispatcher_enabled(db: Session, enabled: bool) -> None:
+    _set_or_clear(db, DISPATCHER_ENABLED_KEY, "true" if enabled else None)
 
 
 def get_network_port(db: Session) -> int:

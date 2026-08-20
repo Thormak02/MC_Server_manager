@@ -52,6 +52,18 @@
         <div class="align-end">
             <button type="submit">Netzwerk speichern</button>
         </div>
+        <div class="field-span-2">
+            <label>
+                <input type="checkbox" name="dispatcher_enabled" value="true" {% if dispatcher_enabled %}checked{% endif %}>
+                <strong>Modpack-Dispatcher</strong> an der blanken Domain (experimentell)
+            </label>
+            <p class="muted">
+                Wenn aktiv: Verbindungen auf die <em>blanke</em> Domain (<code>{{ network_domain or "&lt;domain&gt;" }}</code>)
+                erkennen den Client &ndash; Vanilla/Fabric wird zur Lobby geschickt, ein modded Client (NeoForge/Forge)
+                automatisch an seinen passenden Modpack-Server (per Mod-Erkennung). Alias-Adressen
+                (<code>&lt;alias&gt;.&lt;domain&gt;</code>) bleiben unveraendert.
+            </p>
+        </div>
     </form>
     <p class="muted">
         Im <code>gateway</code>-Modus laufen ALLE Server ganz normal weiter (jeder Typ,

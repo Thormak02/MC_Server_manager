@@ -83,6 +83,7 @@ class GatewayRoutes:
     internal_ports: dict[int, int] = field(default_factory=dict)
     aliases: tuple[str, ...] = ()
     domain: str = ""
+    dispatcher_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -158,6 +159,7 @@ def build_gateway_routes(db) -> GatewayRoutes:
     from app.services import app_setting_service
 
     domain = clean_hostname(app_setting_service.get_network_domain(db))
+    dispatcher_enabled = app_setting_service.get_dispatcher_enabled(db)
 
     servers = list(
         db.scalars(select(Server).where(Server.gateway_enabled.is_(True))).all()
@@ -198,6 +200,7 @@ def build_gateway_routes(db) -> GatewayRoutes:
         internal_ports=target_ports,
         aliases=tuple(sorted(set(aliases))),
         domain=domain,
+        dispatcher_enabled=dispatcher_enabled,
     )
 
 
@@ -478,6 +481,22 @@ def _handle_gateway_connection(client: socket.socket) -> None:
         decision = decide_route(
             handshake.server_address, handshake.protocol_version, routes
         )
+
+        # Blanke Domain (Default-Route) + Join + Dispatcher aktiv -> Modpack-Dispatcher:
+        # er erkennt den Client (Vanilla vs. modded), liest die Mods und leitet per
+        # Transfer an den passenden Server. Alias-Treffer bleiben unberuehrt (nahtlos).
+        if (
+            routes.dispatcher_enabled
+            and decision.reason == "default"
+            and handshake.next_state in mc_protocol.JOIN_NEXT_STATES
+        ):
+            from app.services import dispatcher_service
+
+            dispatcher_service.dispatch(
+                client, handshake, bytes(buffer)[handshake.consumed:]
+            )
+            return
+
         target_port = (
             routes.internal_ports.get(decision.server_id)
             if decision.server_id is not None

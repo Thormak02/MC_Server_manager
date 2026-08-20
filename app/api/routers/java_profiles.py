@@ -99,7 +99,9 @@ def settings_page(
     network_mode = get_network_mode(db)
     network_mode_source = get_network_mode_source(db)
     from app.services import gateway_service
+    from app.services.app_setting_service import get_dispatcher_enabled
 
+    dispatcher_enabled = get_dispatcher_enabled(db)
     gateway_status = gateway_service.gateway_status_runtime()
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
@@ -123,6 +125,7 @@ def settings_page(
             network_domain_source=network_domain_source,
             network_mode=network_mode,
             network_mode_source=network_mode_source,
+            dispatcher_enabled=dispatcher_enabled,
             gateway_status=gateway_status,
             platform_settings=platform_settings,
             manager_update_status=manager_update_status,
@@ -136,6 +139,7 @@ def update_network_settings_action(
     network_mode: Annotated[str | None, Form()] = None,
     network_port: Annotated[str | None, Form()] = None,
     network_domain: Annotated[str | None, Form()] = None,
+    dispatcher_enabled: Annotated[bool, Form()] = False,
     db: Session = Depends(get_db),
 ):
     current_user = _require_super_admin(request, db)
@@ -147,6 +151,9 @@ def update_network_settings_action(
         if raw_port:
             set_network_port(db, int(raw_port))
         set_network_domain(db, network_domain)
+        from app.services.app_setting_service import set_dispatcher_enabled
+
+        set_dispatcher_enabled(db, dispatcher_enabled)
         mode = set_network_mode(db, network_mode or "off")
     except (ValueError, TypeError) as exc:
         push_flash(request, str(exc), "error")
