@@ -40,6 +40,10 @@ _FLOOR_SECTION = 7            # bei 24 Sections -> Boden y 48..63
 _SPAWN = (8.5, 64.0, 8.5)     # mittig auf Chunk (0,0), auf dem Boden
 _GRID_RADIUS = 4             # 9x9-Chunk-Grid: Sodium mesht nur Chunks mit voll geladenem
                              # Nachbar-Ring -> ein groesseres Grid macht einen sichtbaren Kern frei
+# Dummy-Spieler zum Testen der Entity-Sichtbarkeit (spaeter echte Spieler)
+_DUMMY_EID = 424242
+_DUMMY_UUID = b"MCSM-LOBBY-BOT!!"   # 16 Byte, offline reicht das
+_DUMMY_POS = (8.5, 64.0, 13.5)      # ~5 Bloecke vor dem Spawn, auf der Plattform
 
 
 class Reader:
@@ -139,7 +143,15 @@ def handle(client: socket.socket, records, config_start: int) -> None:
         client.sendall(pl.build_sync_position(sx, sy, sz, teleport_id=1))
         client.sendall(pl.build_set_default_spawn(int(sx), int(sy), int(sz)))
         client.sendall(pl.build_game_event(pl.GAME_EVENT_WAIT_FOR_CHUNKS, 0.0))
-        print(f"[replay] Eigene Vanilla-Plattform ({n_chunks} Chunks, gebatcht) gesendet. PLAY am Leben halten ...")
+        print(f"[replay] Eigene Vanilla-Plattform ({n_chunks} Chunks, gebatcht) gesendet.")
+
+        # --- Dummy-Spieler sichtbar machen (Info-Update MUSS vor Spawn kommen) ---
+        dx, dy, dz = _DUMMY_POS
+        client.sendall(pl.build_player_info_update(_DUMMY_UUID, "Lobby-Bot"))
+        client.sendall(pl.build_add_entity(_DUMMY_EID, _DUMMY_UUID, dx, dy, dz, yaw=180, head_yaw=180))
+        client.sendall(pl.build_system_chat(mcd._nbt_text_component(
+            "Willkommen in der Universal-Lobby! (modded Client, 0 Server-Mods)")))
+        print("[replay] Dummy-Spieler + Willkommens-Chat gesendet. PLAY am Leben halten ...")
 
         # --- PLAY am Leben halten: regelmaessig Clientbound-Keep-Alive senden, damit
         # der Client nicht "timed out" fliegt; Client-Pakete (Bewegung, KA-Antwort)

@@ -23,11 +23,13 @@ from __future__ import annotations
 
 import struct
 
-from app.services.mc_protocol import _wrap_packet, encode_varint
+from app.services.mc_protocol import _wrap_packet, encode_string, encode_varint
 
 # --------------------------------------------------------------------------- #
 # Clientbound PLAY Packet-IDs (Protokoll 767 / MC 1.21.1)
 # --------------------------------------------------------------------------- #
+PLAY_CB_ADD_ENTITY = 0x01      # Spawn Entity (seit 1.20.2 auch fuer Spieler, Type=128)
+PLAY_CB_PLAYER_INFO_UPDATE = 0x3E
 PLAY_CB_LOGIN = 0x2B            # Login (Join Game)
 PLAY_CB_GAME_EVENT = 0x22       # Game Event
 PLAY_CB_KEEP_ALIVE = 0x26       # Keep Alive
@@ -56,6 +58,15 @@ OVERWORLD_SECTIONS = OVERWORLD_HEIGHT // 16  # 24
 # Vanilla-Block-State-IDs (1.21.1, aus dem ATM10-Capture bestaetigt)
 BLOCK_AIR = 0
 BLOCK_STONE = 1
+
+# Vanilla-Entity-Type-ID fuer minecraft:player (1.21.1) - bleibt unter Mods erhalten.
+ENTITY_TYPE_PLAYER = 128
+
+
+def _angle(degrees: float) -> int:
+    """MC-Winkel: 1 Byte, 256 = 360 Grad; als signed Byte (-128..127)."""
+    v = int(round(degrees / 360.0 * 256.0)) & 0xFF
+    return v - 256 if v >= 128 else v
 
 
 # --------------------------------------------------------------------------- #
@@ -257,6 +268,44 @@ def build_flat_chunk(
         body += encode_varint(0)
     # Block-Light-Arrays: keine.
     body += encode_varint(0)
+    return _wrap_packet(bytes(body))
+
+
+def build_player_info_update(uuid16: bytes, name: str, *, listed: bool = True) -> bytes:
+    """Player Info Update (0x3E) mit add_player(0x01)+listed(0x08).
+
+    MUSS vor dem Spawn-Entity kommen - die Spieler-Entity holt sich Name/Skin per UUID
+    aus dieser Liste. 0 Properties -> Default-Skin (Steve/Alex).
+    """
+    actions = 0x01 | 0x08
+    body = bytearray(encode_varint(PLAY_CB_PLAYER_INFO_UPDATE))
+    body.append(actions)
+    body += encode_varint(1)                       # ein Spieler
+    body += (uuid16 or b"")[:16].ljust(16, b"\x00")
+    # add_player (0x01): Name + Properties
+    body += encode_string(name)
+    body += encode_varint(0)                        # 0 Properties (kein Skin-Texture)
+    # listed (0x08): Bool
+    body += b"\x01" if listed else b"\x00"
+    return _wrap_packet(bytes(body))
+
+
+def build_add_entity(
+    entity_id: int, uuid16: bytes, x: float, y: float, z: float, *,
+    yaw: float = 0.0, pitch: float = 0.0, head_yaw: float = 0.0,
+    entity_type: int = ENTITY_TYPE_PLAYER,
+) -> bytes:
+    """Spawn Entity (0x01). Fuer Spieler entity_type=128 und dieselbe UUID wie im Info-Update."""
+    body = bytearray(encode_varint(PLAY_CB_ADD_ENTITY))
+    body += encode_varint(entity_id)
+    body += (uuid16 or b"")[:16].ljust(16, b"\x00")
+    body += encode_varint(entity_type)
+    body += struct.pack(">ddd", x, y, z)
+    body += struct.pack(">b", _angle(pitch))
+    body += struct.pack(">b", _angle(yaw))
+    body += struct.pack(">b", _angle(head_yaw))
+    body += encode_varint(0)                        # Data
+    body += struct.pack(">hhh", 0, 0, 0)            # Velocity
     return _wrap_packet(bytes(body))
 
 
