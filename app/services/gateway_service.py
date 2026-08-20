@@ -75,6 +75,14 @@ def clean_hostname(raw: str | None) -> str:
     return head.strip().rstrip(".").lower()
 
 
+# Reservierter Alias fuer die Universal-Lobby (Python-Hub). Der Dispatcher
+# transferiert modded Clients auf ``<HUB_LOBBY_ALIAS>.<domain>`` -> das Gateway leitet
+# das (per Wildcard-DNS) transparent an den lokalen Hub-Port weiter. Ein Server sollte
+# diesen Alias nicht benutzen, solange die Universal-Lobby aktiv ist.
+HUB_LOBBY_ALIAS = "modlobby"      # Dispatcher schickt modded Clients hierher
+HUB_VANILLA_ALIAS = "vanlobby"    # ... und vanilla Clients hierher (gleicher Hub-Port)
+
+
 @dataclass(frozen=True)
 class GatewayRoutes:
     by_hostname: dict[str, int] = field(default_factory=dict)
@@ -84,6 +92,8 @@ class GatewayRoutes:
     aliases: tuple[str, ...] = ()
     domain: str = ""
     dispatcher_enabled: bool = False
+    hub_lobby_enabled: bool = False   # Universal-Lobby (Python-Hub) aktiv?
+    hub_lobby_port: int = 0           # lokaler Port des Hub-Listeners
 
 
 @dataclass(frozen=True)
@@ -160,6 +170,8 @@ def build_gateway_routes(db) -> GatewayRoutes:
 
     domain = clean_hostname(app_setting_service.get_network_domain(db))
     dispatcher_enabled = app_setting_service.get_dispatcher_enabled(db)
+    hub_lobby_enabled = app_setting_service.get_hub_lobby_enabled(db)
+    hub_lobby_port = app_setting_service.get_hub_lobby_port(db) if hub_lobby_enabled else 0
 
     servers = list(
         db.scalars(select(Server).where(Server.gateway_enabled.is_(True))).all()
@@ -201,6 +213,8 @@ def build_gateway_routes(db) -> GatewayRoutes:
         aliases=tuple(sorted(set(aliases))),
         domain=domain,
         dispatcher_enabled=dispatcher_enabled,
+        hub_lobby_enabled=hub_lobby_enabled,
+        hub_lobby_port=int(hub_lobby_port or 0),
     )
 
 
@@ -483,6 +497,23 @@ def _handle_gateway_connection(client: socket.socket) -> None:
         decision = decide_route(
             handshake.server_address, handshake.protocol_version, routes
         )
+
+        # Universal-Lobby: ein Join auf <HUB_LOBBY_ALIAS>.<domain> (dorthin transferiert
+        # der Dispatcher modded Clients) transparent an den lokalen Hub-Port koppeln.
+        if (
+            routes.hub_lobby_enabled
+            and routes.hub_lobby_port
+            and handshake.next_state in mc_protocol.JOIN_NEXT_STATES
+        ):
+            cleaned_host = clean_hostname(handshake.server_address)
+            alias_part = cleaned_host
+            if routes.domain and cleaned_host.endswith("." + routes.domain):
+                alias_part = cleaned_host[: -(len(routes.domain) + 1)]
+            if alias_part in (HUB_LOBBY_ALIAS, HUB_VANILLA_ALIAS):
+                sleep_proxy_service._forward_to_backend(
+                    client, int(routes.hub_lobby_port), None, bytes(buffer)
+                )
+                return
 
         # Blanke Domain (Default-Route) + Join + Dispatcher aktiv -> Modpack-Dispatcher:
         # er erkennt den Client (Vanilla vs. modded), liest die Mods und leitet per

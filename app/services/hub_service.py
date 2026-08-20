@@ -18,6 +18,7 @@ hier ist nur die Zustands- und Socket-Orchestrierung.
 from __future__ import annotations
 
 import math
+import re
 import socket
 import struct
 import threading
@@ -45,8 +46,46 @@ _SB_KEEP_ALIVE = 0x18
 _SB_SET_POS = 0x1A            # x,y,z, flags
 _SB_SET_POS_ROT = 0x1B        # x,y,z, yaw,pitch, flags
 _SB_SET_ROT = 0x1C           # yaw,pitch, flags
+_SB_HELD_ITEM = 0x2F         # held_item_slot (i16) - aktueller Hotbar-Slot
+_SB_USE_ITEM = 0x39          # Rechtsklick in die Luft
+_SB_USE_ITEM_ON = 0x38       # Rechtsklick auf einen Block
+_SB_CONTAINER_CLICK = 0x0E   # Klick in einem offenen Kisten-Menue
+_SB_CONTAINER_CLOSE = 0x0F   # Kisten-Menue geschlossen (Esc)
 
 _BOT_KEY = 0                  # reservierter Roster-Key fuer den virtuellen Bot
+
+# --- Kisten-Menue: Ziel-Server aus der Manager-DB -----------------------------
+# Die Server-Auswahl kommt aus lobby_service.get_menu_servers(db) - dieselbe Quelle
+# wie das Java-Lobby-Plugin (gateway_enabled-Server; Transfer-Ziel <alias>.<domain>:
+# <network_port>, laeuft also ueber dasselbe Gateway). KEINE hardcodierten Adressen.
+_MENU_WINDOW = 1                       # Fenster-ID des Kisten-Menues (!= 0 Spieler-Inv)
+
+# Bukkit-Material (aus lobby_service._TYPE_MATERIAL) -> Vanilla-Item-ID fuers Icon.
+_MATERIAL_ITEM = {
+    "PAPER": pl.ITEM_GRASS_BLOCK,
+    "PURPUR_BLOCK": pl.ITEM_GRASS_BLOCK,
+    "GRASS_BLOCK": pl.ITEM_GRASS_BLOCK,
+    "ANVIL": pl.ITEM_NETHER_STAR,      # Forge/NeoForge-Modpacks
+    "LOOM": pl.ITEM_EMERALD,           # Fabric/Quilt
+}
+_COLOR_CODE = re.compile(r"&.")        # Bukkit-Legacy-Farbcodes (&a, &7 ...)
+
+
+def _plain(text: str) -> str:
+    """Legacy-&-Farbcodes entfernen (der Hub nutzt Component-custom_name, kein &)."""
+    return _COLOR_CODE.sub("", text or "").strip()
+
+
+def _menu_servers() -> list[dict]:
+    """DB-getriebene Server-Auswahl fuers Kompass-Menue (leer bei DB-Problemen)."""
+    try:
+        from app.db.session import SessionLocal
+        from app.services import lobby_service
+        with SessionLocal() as db:
+            return lobby_service.get_menu_servers(db)
+    except Exception as exc:  # noqa: BLE001 - Menue darf den Hub-Thread nie crashen
+        print(f"[hub] Menue-Serverliste nicht ladbar: {exc!r}")
+        return []
 
 # PLAY-Setup-Pakete aus dem Capture, die wir mit-abspielen, damit der modded Client
 # in einen konsistenten Zustand kommt und beim Oeffnen eines Screens (Inventar, spaeter
@@ -121,55 +160,96 @@ class _Session:
         self.pitch = pitch
         self.alive = True
         self.send_lock = threading.Lock()   # serialisiert Writes auf DIESES Socket
+        self.held_slot = 0                  # aktueller Hotbar-Slot (0 = Kompass)
+        self.menu_open = False              # ist gerade das Server-Kisten-Menue offen?
+        self.menu_servers: list[dict] = []  # DB-Liste, aus der das offene Menue gebaut wurde
+
+
+def _extract_setup_packets(records: list, play_login: int) -> list[bytes]:
+    """Kleine PLAY-Setup-Pakete (Recipes/Commands/Mod-Sync) aus einem Replay ziehen -
+    alles zwischen PLAY-Login und erstem Chunk ausser den riesigen Ballast-Kanaelen."""
+    first_chunk = len(records)
+    for i in range(play_login, len(records)):
+        if records[i].to_client and records[i].packet_id == pl.PLAY_CB_CHUNK_DATA:
+            first_chunk = i
+            break
+    setup: list[bytes] = []
+    for i in range(play_login + 1, first_chunk):
+        r = records[i]
+        if not r.to_client:
+            continue
+        if r.packet_id in _SETUP_PACKET_IDS:
+            setup.append(r.raw)
+        elif r.packet_id == _CB_CUSTOM_PAYLOAD:
+            _p, body, _c = mcd.try_read_packet(r.raw)
+            try:
+                channel, _o = mp._read_string(body, 0)
+            except Exception:  # noqa: BLE001
+                continue
+            if channel not in _SKIP_PAYLOAD_CHANNELS:
+                setup.append(r.raw)
+    return setup
+
+
+def _load_profile(replay_path: str) -> dict:
+    """Ein Replay in ein Config-Profil laden: Config-Steps, PLAY-Login, Setup-Pakete,
+    Self-Entity-ID. Pro Client-Typ (modded/vanilla) einmal beim Start gebaut."""
+    records = rp.load_replay_file(replay_path)
+    play_login = rp.find_play_login(records)
+    if play_login >= len(records):
+        raise ValueError(f"kein PLAY-Login (0x2B) im Replay {replay_path}")
+    config_start = rp.find_config_start(records)
+    login_raw = records[play_login].raw
+    _pid, body, _c = mcd.try_read_packet(login_raw)
+    self_eid = struct.unpack_from(">i", body, 0)[0]
+    return {
+        "config_steps": rp.build_steps(records[:play_login], config_start),
+        "login_raw": login_raw,
+        "setup_packets": _extract_setup_packets(records, play_login),
+        "self_eid": self_eid,
+    }
 
 
 class Hub:
-    def __init__(self, replay_path: str):
-        self.records = rp.load_replay_file(replay_path)
-        self.config_start = rp.find_config_start(self.records)
-        self.play_login = rp.find_play_login(self.records)
-        if self.play_login >= len(self.records):
-            raise ValueError("kein PLAY-Login (0x2B) im Replay gefunden")
-        self.login_raw = self.records[self.play_login].raw
-        # Self-Entity-ID des Clients (aus dem Login) - unsere Entity-IDs muessen != sein.
-        _pid, body, _c = mcd.try_read_packet(self.login_raw)
-        self._self_eid = struct.unpack_from(">i", body, 0)[0]
-        # Config-Steps + Plattform-Pakete EINMAL vorbauen (records prozessweit geteilt).
-        self.config_steps = rp.build_steps(self.records[: self.play_login], self.config_start)
+    def __init__(self, replay_path: str, vanilla_replay_path: str | None = None):
+        # MODDED-Profil (Pflicht). Backward-compat-Attribute zeigen darauf.
+        self.modded = _load_profile(replay_path)
+        self.config_steps = self.modded["config_steps"]
+        self.login_raw = self.modded["login_raw"]
+        self.setup_packets = self.modded["setup_packets"]
+        self._self_eid = self.modded["self_eid"]
+        # VANILLA-Profil (optional; ohne Capture bleibt der Hub rein modded).
+        self.vanilla: dict | None = None
+        if vanilla_replay_path:
+            try:
+                self.vanilla = _load_profile(vanilla_replay_path)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[hub] Vanilla-Replay {vanilla_replay_path} nicht ladbar: {exc!r} -> nur modded")
+        # Gemeinsame Vanilla-Welt (fuer BEIDE Client-Typen identisch -> sie begegnen sich).
         self.platform_packets = self._build_platform()
-        # Kleine PLAY-Setup-Pakete (Recipes/Commands/...) aus dem Capture extrahieren.
-        first_chunk = len(self.records)
-        for i in range(self.play_login, len(self.records)):
-            if self.records[i].to_client and self.records[i].packet_id == pl.PLAY_CB_CHUNK_DATA:
-                first_chunk = i
-                break
-        setup = []
-        for i in range(self.play_login + 1, first_chunk):
-            r = self.records[i]
-            if not r.to_client:
-                continue
-            if r.packet_id in _SETUP_PACKET_IDS:
-                setup.append(r.raw)
-            elif r.packet_id == _CB_CUSTOM_PAYLOAD:
-                _p, body, _c = mcd.try_read_packet(r.raw)
-                try:
-                    channel, _o = mp._read_string(body, 0)
-                except Exception:  # noqa: BLE001
-                    continue
-                if channel not in _SKIP_PAYLOAD_CHANNELS:
-                    setup.append(r.raw)
-        self.setup_packets = setup
 
         self.lock = threading.Lock()
         self.players: dict = {}
         self._conn_ctr = 0
-        self._eid_ctr = max(1000, self._self_eid + 1000)
+        base = max(self._self_eid, self.vanilla["self_eid"] if self.vanilla else 0)
+        self._eid_ctr = max(1000, base + 1000)
 
         # Virtuellen Bot ins Roster legen (nutzt dieselbe Maschinerie wie echte Spieler).
         self._eid_ctr += 1
         self.bot = _Session(_BOT_KEY, None, self._eid_ctr, b"MCSMHB-BOT".ljust(16, b"\x00"),
                             "Lobby-Bot", 8.5, 64.0, 13.5, yaw=180.0)
         self.players[_BOT_KEY] = self.bot
+
+    def _pick_profile(self, server_address: str | None) -> dict:
+        """Config-Profil anhand des Handshake-Alias waehlen: vanlobby.<domain> -> vanilla
+        (falls geladen), sonst modded. Der Dispatcher setzt den Alias je nach Client-Typ."""
+        host = (server_address or "").split("\x00", 1)[0].strip().rstrip(".").lower()
+        alias = host.split(".", 1)[0] if host else ""
+        if self.vanilla is not None:
+            from app.services import gateway_service
+            if alias == gateway_service.HUB_VANILLA_ALIAS:
+                return self.vanilla
+        return self.modded
 
     # ------------------------------------------------------------------ #
     # Aufbau
@@ -260,10 +340,12 @@ class Hub:
             pid, _ = reader.read_packet()
             if pid != mcd.LOGIN_ACK:
                 return
-            print(f"[hub] {addr} Login ok ({username}). Spiele Config-Phase ab ...")
+            profile = self._pick_profile(hs.server_address)
+            kind = "vanilla" if profile is self.vanilla else "modded"
+            print(f"[hub] {addr} Login ok ({username}, {kind}). Spiele Config-Phase ab ...")
 
-            # --- Config-Phase abspielen (modded Client kommt durch die Mod-Pruefung) ---
-            for step in self.config_steps:
+            # --- Config-Phase abspielen (der passende Client-Typ kommt durch die Aushandlung) ---
+            for step in profile["config_steps"]:
                 if step.send:
                     for raw in step.send:
                         sock.sendall(raw)
@@ -275,9 +357,9 @@ class Hub:
                             break
 
             # --- PLAY: mitgeschnittener Login (korrekte Registry) + Setup + eigene Welt ---
-            sock.sendall(self.login_raw)
+            sock.sendall(profile["login_raw"])
             # Rezepte/Commands/Advancements mit-abspielen -> JEI startet sauber (kein Crash).
-            for p in self.setup_packets:
+            for p in profile["setup_packets"]:
                 sock.sendall(p)
             # Leeres declare_recipes -> feuert RecipesUpdatedEvent, damit JEI schon beim Join
             # initialisiert statt beim 1. Inventar-Oeffnen 30-40s einzufrieren (siehe mc_play).
@@ -290,6 +372,10 @@ class Hub:
             sock.sendall(pl.build_game_event(pl.GAME_EVENT_WAIT_FOR_CHUNKS, 0.0))
             # Interaktions-Lock: Adventure-Mode (Welt unzerstoerbar, kein Fliegen/Bauen).
             sock.sendall(pl.build_game_event(pl.GAME_EVENT_CHANGE_GAMEMODE, float(pl.GAMEMODE_ADVENTURE)))
+            # Kompass in Hotbar-Slot 0 -> Rechtsklick oeffnet das Server-Auswahl-Menue.
+            sock.sendall(pl.build_set_slot(0, pl.INV_HOTBAR0_SLOT,
+                pl.encode_slot(pl.ITEM_COMPASS, custom_name="Server-Menü (Rechtsklick)")))
+            sock.sendall(pl.build_set_held_item(0))
 
             # --- Ins Roster aufnehmen + gegenseitig sichtbar machen ---
             with self.lock:
@@ -383,7 +469,56 @@ class Hub:
             if text:
                 self._broadcast(pl.build_system_chat(mcd._nbt_text_component(
                     f"<{session.name}> {text}")))
+        elif pid == _SB_HELD_ITEM and len(fields) >= 2:
+            session.held_slot = struct.unpack_from(">h", fields, 0)[0]
+        elif pid in (_SB_USE_ITEM, _SB_USE_ITEM_ON):
+            # Rechtsklick mit dem Kompass (Hotbar-Slot 0) -> Server-Menue oeffnen.
+            if session.held_slot == 0 and not session.menu_open:
+                self._open_menu(session)
+        elif pid == _SB_CONTAINER_CLICK:
+            self._on_menu_click(session, fields)
+        elif pid == _SB_CONTAINER_CLOSE:
+            session.menu_open = False
         # 0x00 Confirm Teleport, 0x18 Keep-Alive, 0x04 Command etc.: ignorieren.
+
+    # ------------------------------------------------------------------ #
+    # Server-Auswahl-Menue (Kompass -> Kiste -> Transfer 0x73)
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _menu_slots(servers: list[dict]) -> list[bytes]:
+        """63 Slots fuer generic_9x3: 27 Container-Slots (Server) + 36 Spieler-Inv.
+        Server oben (Slot 0..N-1), Kompass gespiegelt in der Menue-Hotbar (Slot 54)."""
+        slots = [pl.encode_slot_empty()] * (27 + 36)
+        for i, srv in enumerate(servers[:27]):
+            item = _MATERIAL_ITEM.get(srv.get("material", ""), pl.ITEM_GRASS_BLOCK)
+            name = _plain(srv.get("display") or srv.get("key") or "?")
+            slots[i] = pl.encode_slot(item, custom_name=name)
+        slots[27 + 27] = pl.encode_slot(pl.ITEM_COMPASS, custom_name="Server-Menü")
+        return slots
+
+    def _open_menu(self, session: _Session) -> None:
+        session.menu_servers = _menu_servers()          # frische DB-Liste
+        session.menu_open = True
+        self._send(session, pl.build_open_screen(_MENU_WINDOW, pl.MENU_GENERIC_9X3, "Server auswählen"))
+        self._send(session, pl.build_container_content(_MENU_WINDOW, self._menu_slots(session.menu_servers)))
+
+    def _on_menu_click(self, session: _Session, fields: bytes) -> None:
+        """Klick im Server-Menue -> Server aus der beim Oeffnen gemerkten DB-Liste
+        auslesen und per Transfer (0x73) ueber das Gateway dorthin schicken."""
+        if not session.menu_open or len(fields) < 1 or fields[0] != _MENU_WINDOW:
+            return
+        try:
+            _state, off = mp.read_varint(fields, 1)          # stateId ueberspringen
+            slot = struct.unpack_from(">h", fields, off)[0]  # geklickter Slot (i16)
+        except Exception:  # noqa: BLE001
+            return
+        if 0 <= slot < len(session.menu_servers):
+            srv = session.menu_servers[slot]
+            host, port = srv["host"], int(srv["port"])
+            session.menu_open = False
+            self._send(session, pl.build_close_container(_MENU_WINDOW))
+            self._send(session, pl.build_transfer(host, port))
+            print(f"[hub] {session.name} -> Transfer zu {host}:{port} ({_plain(srv.get('display',''))})")
 
     def _on_move(self, session: _Session, nx, ny, nz, yaw, pitch) -> None:
         ox, oy, oz = session.x, session.y, session.z
@@ -394,11 +529,11 @@ class Hub:
         self._broadcast(pl.build_head_rotation(session.eid, yaw), exclude=session)
 
 
-def serve(port: int, replay_path: str) -> None:
-    hub = Hub(replay_path)
-    s2c = sum(1 for r in hub.records if r.to_client)
-    print(f"[hub] {len(hub.records)} Pakete geladen ({s2c} S->C), Config-Start #{hub.config_start}, "
-          f"PLAY-Login #{hub.play_login}, self-eid={hub._self_eid}.")
+def serve(port: int, replay_path: str, vanilla_replay_path: str | None = None) -> None:
+    hub = Hub(replay_path, vanilla_replay_path)
+    profile = "modded+vanilla" if hub.vanilla else "nur modded"
+    print(f"[hub] Replay geladen ({profile}): {len(hub.modded['config_steps'])} Config-Steps, "
+          f"self-eid={hub.modded['self_eid']}.")
     threading.Thread(target=hub.animate_bot, daemon=True).start()
 
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

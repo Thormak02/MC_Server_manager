@@ -15,6 +15,14 @@ NETWORK_PORT_KEY = "network_port"
 NETWORK_DOMAIN_KEY = "network_domain"
 # Modpack-Dispatcher: blanke Domain erkennt den Client-Loader/-Mods und leitet weiter.
 DISPATCHER_ENABLED_KEY = "dispatcher_enabled"
+# Universal-Lobby: der Python-Hub (modded + vanilla, begehbar) als verwalteter
+# Listener hinter dem Gateway. Default AUS -> aendert nichts am bestehenden Netzwerk.
+HUB_LOBBY_ENABLED_KEY = "hub_lobby_enabled"
+HUB_LOBBY_PORT_KEY = "hub_lobby_port"
+HUB_LOBBY_REPLAY_KEY = "hub_lobby_replay"
+HUB_LOBBY_VANILLA_REPLAY_KEY = "hub_lobby_vanilla_replay"  # optional; leer = nur modded
+_HUB_LOBBY_DEFAULT_PORT = 25599
+_HUB_LOBBY_DEFAULT_REPLAY = "atm10_capture.replay"
 
 # Erlaubte Netzwerk-Modi:
 #  - "gateway" = transparenter Hostname-Router (jeder Typ/jede Version, alle Server
@@ -423,5 +431,85 @@ def get_network_mode_runtime() -> str:
 
     with SessionLocal() as db:
         return get_network_mode(db)
+
+
+# --- Universal-Lobby (Python-Hub fuer modded + vanilla) ------------------------
+def get_hub_lobby_enabled(db: Session) -> bool:
+    """Ob der begehbare Python-Hub als Lobby laeuft (Default: aus)."""
+    row = _get_setting_row(db, HUB_LOBBY_ENABLED_KEY)
+    return _normalize_bool(row.value) if row and row.value else False
+
+
+def set_hub_lobby_enabled(db: Session, enabled: bool) -> None:
+    _set_or_clear(db, HUB_LOBBY_ENABLED_KEY, "true" if enabled else None)
+
+
+def get_hub_lobby_port(db: Session) -> int:
+    """Lokaler Port des Hub-Listeners (hinter dem Gateway). UI > Default."""
+    row = _get_setting_row(db, HUB_LOBBY_PORT_KEY)
+    if row and row.value.strip():
+        try:
+            return int(row.value.strip())
+        except ValueError:
+            pass
+    return _HUB_LOBBY_DEFAULT_PORT
+
+
+def set_hub_lobby_port(db: Session, port: int) -> int:
+    port = int(port)
+    if not (1 <= port <= 65535):
+        raise ValueError("Port muss zwischen 1 und 65535 liegen.")
+    _set_or_clear(db, HUB_LOBBY_PORT_KEY, str(port))
+    return port
+
+
+def get_hub_lobby_replay(db: Session) -> str:
+    """Pfad zur Config-Replay-Datei, die der Hub abspielt (Default: ATM10-Capture)."""
+    row = _get_setting_row(db, HUB_LOBBY_REPLAY_KEY)
+    if row and row.value.strip():
+        return row.value.strip()
+    return _HUB_LOBBY_DEFAULT_REPLAY
+
+
+def set_hub_lobby_replay(db: Session, path: str | None) -> None:
+    _set_or_clear(db, HUB_LOBBY_REPLAY_KEY, (path or "").strip() or None)
+
+
+def get_hub_lobby_enabled_runtime() -> bool:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_hub_lobby_enabled(db)
+
+
+def get_hub_lobby_port_runtime() -> int:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_hub_lobby_port(db)
+
+
+def get_hub_lobby_replay_runtime() -> str:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_hub_lobby_replay(db)
+
+
+def get_hub_lobby_vanilla_replay(db: Session) -> str:
+    """Pfad zum Vanilla-Config-Replay (leer = kein Vanilla-Pfad, nur modded)."""
+    row = _get_setting_row(db, HUB_LOBBY_VANILLA_REPLAY_KEY)
+    return row.value.strip() if row and row.value.strip() else ""
+
+
+def set_hub_lobby_vanilla_replay(db: Session, path: str | None) -> None:
+    _set_or_clear(db, HUB_LOBBY_VANILLA_REPLAY_KEY, (path or "").strip() or None)
+
+
+def get_hub_lobby_vanilla_replay_runtime() -> str:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_hub_lobby_vanilla_replay(db)
 
 

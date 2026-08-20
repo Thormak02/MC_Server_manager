@@ -149,6 +149,17 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
     return servers, skipped
 
 
+def get_menu_servers(db: Session, exclude_id: int | None = None) -> list[dict]:
+    """Oeffentliche, DB-getriebene Server-Auswahlliste fuers Lobby-Menue.
+
+    Dieselbe Quelle wie das Java-Lobby-Plugin (``_build_plugin_servers``), damit der
+    Python-Universal-Hub UND die Bukkit-Lobby identische Server mit identischen
+    Transfer-Zielen (``<alias>.<domain>:<network_port>``) anbieten. ``exclude_id`` laesst
+    den eigenen Server aus (None = keinen ausschliessen)."""
+    servers, _skipped = _build_plugin_servers(db, exclude_id if exclude_id is not None else -1)
+    return servers
+
+
 def refresh_plugin_for_server(db: Session, server) -> None:
     """Jar **und** config des Transfer-Plugins beim Serverstart auffrischen.
 

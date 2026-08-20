@@ -92,13 +92,33 @@ def dispatch(client: socket.socket, handshake: Handshake, initial: bytes) -> Non
         from app.db.session import SessionLocal
 
         with SessionLocal() as db:
+            from app.services import app_setting_service, gateway_service
+
             if not modded:
+                # Vanilla in die gemeinsame Lobby, ABER nur wenn ein Vanilla-Config-Replay
+                # konfiguriert ist (sonst wuerde der Hub sie mit dem Modpack-Spoof kicken).
+                if (app_setting_service.get_hub_lobby_enabled(db)
+                        and app_setting_service.get_hub_lobby_vanilla_replay(db)):
+                    vt = _hub_target(db, gateway_service.HUB_VANILLA_ALIAS)
+                    if vt:
+                        _finish(client, vt, _no_lobby_message())
+                        _glog("route_vanilla_hub", str(vt))
+                        return
                 target = _server_target(db, _lobby_id(db))
                 _finish(client, target, _no_lobby_message())
                 _glog("route_vanilla", str(target))
                 return
 
-            # --- Modded: Mod-Manifest anfragen + lesen ---
+            # Modded in die gemeinsame Python-Lobby (Kompass-Menue). Kein Pack-Match
+            # noetig; der Hub bedient sie direkt mit dem Modpack-Spoof.
+            if app_setting_service.get_hub_lobby_enabled(db):
+                hub_target = _hub_target(db, gateway_service.HUB_LOBBY_ALIAS)
+                if hub_target:
+                    _finish(client, hub_target, _no_match_message(db))
+                    _glog("route_modded_hub", str(hub_target))
+                    return
+
+            # --- Modded ohne Hub: Mod-Manifest anfragen + passenden Pack matchen ---
             client.sendall(mcd.build_neoforge_query())
             mods = _read_neoforge_manifest(reader)
             from app.services.modpack_router_service import match_backend_for_client
@@ -192,6 +212,17 @@ def _server_target(db, server_id: int | None) -> tuple[str, int] | None:
     alias = gateway_service.clean_hostname(srv.gateway_hostname)
     domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
     if not alias or not domain:
+        return None
+    return f"{alias}.{domain}", int(app_setting_service.get_network_port(db))
+
+
+def _hub_target(db, alias: str) -> tuple[str, int] | None:
+    """Transfer-Ziel der Universal-Lobby: ``<alias>.<domain>`` auf dem Netzwerk-Port.
+    Das Gateway leitet modlobby/vanlobby an den lokalen Hub-Port weiter."""
+    from app.services import app_setting_service, gateway_service
+
+    domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
+    if not domain:
         return None
     return f"{alias}.{domain}", int(app_setting_service.get_network_port(db))
 

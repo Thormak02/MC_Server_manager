@@ -54,6 +54,41 @@ PLAY_CB_SYSTEM_CHAT = 0x6C
 # 0x41 unlock_recipes (Rezeptbuch) feuert dieses Event NICHT - deshalb kam JEI bisher zu spaet.
 PLAY_CB_DECLARE_RECIPES = 0x77
 
+# --- Kisten-Menue: Kompass -> Server-Auswahl -> Transfer (Phase 4c/4d) --------- #
+# Clientbound (Feld-Layouts aus minecraft-data 1.21.1 verifiziert)
+PLAY_CB_OPEN_SCREEN = 0x33         # open_window: windowId(varint), menuType(varint), title(NBT)
+PLAY_CB_CONTAINER_CONTENT = 0x13   # window_items: windowId(u8), stateId(varint), items[Slot], carried(Slot)
+PLAY_CB_CONTAINER_SET_SLOT = 0x15  # set_slot:   windowId(u8), stateId(varint), slot(i16), item(Slot)
+PLAY_CB_CONTAINER_CLOSE = 0x12     # close_window (clientbound): windowId(u8)
+PLAY_CB_TRANSFER = 0x73            # transfer:   host(String), port(varint)
+# Serverbound (fuer den Aufrufer, der Client-Pakete auswertet)
+PLAY_SB_HELD_ITEM = 0x2F           # held_item_slot: slotId(i16)
+PLAY_SB_USE_ITEM = 0x39            # use_item (Rechtsklick Luft): hand,seq,rot
+PLAY_SB_USE_ITEM_ON = 0x38         # block_place (Rechtsklick auf Block)
+PLAY_SB_CONTAINER_CLICK = 0x0E     # window_click: windowId(u8), stateId(varint), slot(i16), ...
+PLAY_SB_CONTAINER_CLOSE = 0x0F     # close_window (serverbound): windowId(u8)
+
+# Menue-Typen (minecraft:menu-Registry, vanilla-Reihenfolge - Mods haengen nur an)
+MENU_GENERIC_9X3 = 2               # 27 Container- + 36 Spieler-Slots = 63
+MENU_GENERIC_9X6 = 5               # 54 + 36 = 90
+
+# Datenkomponenten-ID (net.minecraft.core.component.DataComponents Reihenfolge)
+DATA_COMPONENT_CUSTOM_NAME = 5
+
+# Vanilla-Item-IDs (1.21.1; Vanilla behaelt seine Nummern unter Mods)
+ITEM_COMPASS = 928
+ITEM_GRASS_BLOCK = 27
+ITEM_DIAMOND = 805
+ITEM_EMERALD = 806
+ITEM_NETHER_STAR = 1110
+ITEM_ENDER_PEARL = 993
+ITEM_BEACON = 396
+ITEM_ENCHANTED_BOOK = 1114
+ITEM_GRAY_STAINED_GLASS_PANE = 494
+
+# Spieler-Inventar-Container (windowId 0): Hotbar-Slot 0 = Container-Slot 36.
+INV_HOTBAR0_SLOT = 36
+
 # Serverbound PLAY Packet-IDs (fuer den Aufrufer, der Client-Pakete auswertet)
 PLAY_SB_CONFIRM_TELEPORT = 0x00
 PLAY_SB_KEEP_ALIVE = 0x18
@@ -179,6 +214,73 @@ def build_declare_recipes_empty() -> bytes:
     damit rezeptbasierte Mod-Clients (v.a. JEI) schon beim Join initialisieren. Fuer eine
     Kosmetik-Lobby ohne Crafting ist ein leerer Rezeptsatz unkritisch: Body = VarInt(0)."""
     return _wrap_packet(encode_varint(PLAY_CB_DECLARE_RECIPES) + encode_varint(0))
+
+
+# --------------------------------------------------------------------------- #
+# Kisten-Menue: Item-Slots, Open Screen, Container-Inhalt, Transfer
+# --------------------------------------------------------------------------- #
+def _text_component_nbt(text: str) -> bytes:
+    """Netzwerk-NBT (namenloser Root, seit 1.20.2) einer TextComponent aus reinem String.
+    Root = TAG_String; der Component-Codec des Clients akzeptiert das als {"text": ...}."""
+    raw = text.encode("utf-8")
+    return bytes([0x08]) + struct.pack(">H", len(raw)) + raw
+
+
+def encode_slot_empty() -> bytes:
+    """Leerer Item-Slot: itemCount = 0 (danach folgt nichts)."""
+    return encode_varint(0)
+
+
+def encode_slot(item_id: int, count: int = 1, custom_name: str | None = None) -> bytes:
+    """Item-Stack im 1.21.1-Slot-Format:
+    VarInt count; wenn >0: VarInt itemId, VarInt add-Komponenten, VarInt remove-Komponenten,
+    dann die Komponenten. Optionaler custom_name (Datenkomponente 5) = TextComponent-NBT."""
+    if count <= 0:
+        return encode_slot_empty()
+    out = bytearray(encode_varint(count) + encode_varint(item_id))
+    if custom_name is None:
+        out += encode_varint(0) + encode_varint(0)                      # 0 add, 0 remove
+    else:
+        out += encode_varint(1) + encode_varint(0)                      # 1 add, 0 remove
+        out += encode_varint(DATA_COMPONENT_CUSTOM_NAME) + _text_component_nbt(custom_name)
+    return bytes(out)
+
+
+def build_open_screen(window_id: int, menu_type: int, title: str) -> bytes:
+    """Open Screen (0x33): oeffnet clientseitig ein Container-Fenster."""
+    body = (encode_varint(PLAY_CB_OPEN_SCREEN) + encode_varint(window_id)
+            + encode_varint(menu_type) + _text_component_nbt(title))
+    return _wrap_packet(body)
+
+
+def build_container_content(window_id: int, slots, *, state_id: int = 1,
+                            carried: bytes | None = None) -> bytes:
+    """Set Container Content (0x13): fuellt ALLE Slots eines offenen Fensters.
+    ``slots`` = Liste vorkodierter Slot-Bytes (Container- UND Spieler-Inventar-Slots)."""
+    body = bytearray(encode_varint(PLAY_CB_CONTAINER_CONTENT))
+    body += bytes([window_id & 0xFF])                                    # ContainerID = u8
+    body += encode_varint(state_id) + encode_varint(len(slots))
+    for s in slots:
+        body += s
+    body += carried if carried is not None else encode_slot_empty()
+    return _wrap_packet(bytes(body))
+
+
+def build_set_slot(window_id: int, slot: int, item: bytes, *, state_id: int = 1) -> bytes:
+    """Set Slot (0x15): setzt EINEN Slot (z.B. Kompass in die Hotbar, windowId 0)."""
+    body = (encode_varint(PLAY_CB_CONTAINER_SET_SLOT) + bytes([window_id & 0xFF])
+            + encode_varint(state_id) + struct.pack(">h", slot) + item)
+    return _wrap_packet(body)
+
+
+def build_close_container(window_id: int) -> bytes:
+    """Close Container (clientbound 0x12): schliesst das Fenster beim Client."""
+    return _wrap_packet(encode_varint(PLAY_CB_CONTAINER_CLOSE) + bytes([window_id & 0xFF]))
+
+
+def build_transfer(host: str, port: int) -> bytes:
+    """Transfer (0x73): Client trennt und verbindet sich zu host:port neu (next_state=3)."""
+    return _wrap_packet(encode_varint(PLAY_CB_TRANSFER) + encode_string(host) + encode_varint(port))
 
 
 def build_chunk_batch_start() -> bytes:

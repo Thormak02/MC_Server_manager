@@ -474,6 +474,14 @@ def _idle_tick() -> None:
         gateway_service.reconcile_gateway()
     except Exception:  # noqa: BLE001 - Monitor darf nie sterben
         pass
+    # Universal-Lobby (Python-Hub) ebenso selbstheilend abgleichen -> ein Settings-
+    # Toggle greift ohne App-Neustart (Listener wird ~15s spaeter gestartet/gestoppt).
+    try:
+        from app.services import hub_lobby_service
+
+        hub_lobby_service.reconcile_hub_lobby()
+    except Exception:  # noqa: BLE001
+        pass
 
     with SessionLocal() as db:
         servers = list(
