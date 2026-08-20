@@ -38,7 +38,8 @@ _PLAY_KEEPALIVE_CB = pl.PLAY_CB_KEEP_ALIVE
 # --- Phase-1-Plattform (unsere eigene Vanilla-Welt statt der aufgezeichneten) ---
 _FLOOR_SECTION = 7            # bei 24 Sections -> Boden y 48..63
 _SPAWN = (8.5, 64.0, 8.5)     # mittig auf Chunk (0,0), auf dem Boden
-_GRID_RADIUS = 2             # 5x5-Chunk-Grid um (0,0) (wie der echte ATM10-Server sendete)
+_GRID_RADIUS = 4             # 9x9-Chunk-Grid: Sodium mesht nur Chunks mit voll geladenem
+                             # Nachbar-Ring -> ein groesseres Grid macht einen sichtbaren Kern frei
 
 
 class Reader:
