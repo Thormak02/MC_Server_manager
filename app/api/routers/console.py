@@ -210,8 +210,8 @@ def download_log_action(
 def audit_logs_page(
     request: Request,
     limit: int = 200,
-    user_id: int | None = None,
-    server_id: int | None = None,
+    user_id: str | None = None,
+    server_id: str | None = None,
     action: str | None = None,
     q: str | None = None,
     date_from: str | None = None,
@@ -223,6 +223,10 @@ def audit_logs_page(
         return RedirectResponse(url="/login", status_code=303)
     if current_user.role != UserRole.SUPER_ADMIN.value:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    # "Alle" sendet leere Strings -> tolerant zu int|None coercen (sonst 422 int_parsing).
+    user_id = int(user_id) if (user_id or "").strip().lstrip("-").isdigit() else None
+    server_id = int(server_id) if (server_id or "").strip().lstrip("-").isdigit() else None
 
     safe_limit = max(1, min(limit, 2000))
     stmt = select(AuditLog).order_by(desc(AuditLog.created_at))
@@ -284,8 +288,8 @@ def audit_logs_page(
 def audit_logs_api(
     request: Request,
     limit: int = 200,
-    user_id: int | None = None,
-    server_id: int | None = None,
+    user_id: str | None = None,
+    server_id: str | None = None,
     action: str | None = None,
     q: str | None = None,
     date_from: str | None = None,
@@ -297,6 +301,10 @@ def audit_logs_api(
         return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
     if current_user.role != UserRole.SUPER_ADMIN.value:
         return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+
+    # "Alle" sendet leere Strings -> tolerant zu int|None coercen (sonst 422 int_parsing).
+    user_id = int(user_id) if (user_id or "").strip().lstrip("-").isdigit() else None
+    server_id = int(server_id) if (server_id or "").strip().lstrip("-").isdigit() else None
 
     safe_limit = max(1, min(limit, 2000))
     stmt = select(AuditLog).order_by(desc(AuditLog.created_at))

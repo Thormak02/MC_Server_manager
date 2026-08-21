@@ -133,15 +133,23 @@ def match_backend_for_client(
         scored.append((srv.id, overlap, wanted <= server_mods, len(server_mods)))
 
     if not scored:
-        return None, f"kein Server deckt die {len(wanted)} verlangten Mods ab"
+        return None, (f"kein Server deckt die {len(wanted)} verlangten Mods ab "
+                      f"(gateway_enabled-Server mit Mods gescannt: {len(servers)})")
+
+    # Diagnose: Score JEDES Kandidaten (Overlap/gefordert). Fehlt der erwartete Server hier,
+    # ist er entweder nicht gateway_enabled oder sein mods-Ordner wird leer gescannt.
+    dbg = " | ".join(
+        f"srv{sid}:{ov}/{len(wanted)}{'(voll)' if full_cov else ''}"
+        for sid, ov, full_cov, _tot in sorted(scored, key=lambda s: s[1], reverse=True)
+    )
 
     full = [s for s in scored if s[2]]
     if full:
         full.sort(key=lambda s: s[3])  # kleinste Ausstattung = spezifischster Pack
-        return full[0][0], f"Voll-Match ({len(wanted)} verlangte Mods)"
+        return full[0][0], f"Voll-Match ({len(wanted)} verlangte Mods) [{dbg}]"
 
     scored.sort(key=lambda s: s[1], reverse=True)
     if len(scored) > 1 and scored[0][1] == scored[1][1]:
-        return None, f"mehrdeutig ({scored[0][1]} gemeinsame Mods bei mehreren Servern)"
+        return None, f"mehrdeutig ({scored[0][1]} gemeinsame Mods bei mehreren Servern) [{dbg}]"
     top = scored[0]
-    return top[0], f"Best-Overlap ({top[1]}/{len(wanted)} Mods, keine Voll-Abdeckung)"
+    return top[0], f"Best-Overlap ({top[1]}/{len(wanted)} Mods, keine Voll-Abdeckung) [{dbg}]"

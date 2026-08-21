@@ -218,12 +218,16 @@ def test_dispatch_modded_hub_tags_pack_with_replay(client, tmp_path, monkeypatch
         svc.set_hub_lobby_enabled(db, True)
         sid = db.scalar(select(Server).where(Server.slug == "atm")).id
 
-    # LADBARES Replay fuer ATM anlegen (mit S->C PLAY-Login 0x2B) -> Pack-Tag modlobby-<id>.
-    # (Eine blosse MCRP-Magic zaehlt nicht mehr - der Hub koennte daraus kein Profil bauen.)
+    # Pack-Replay fuer ATM: C->S-Manifest (fuer die Deckungspruefung des Dispatchers) UND
+    # S->C PLAY-Login 0x2B (ladbar). Client-Mods decken das Manifest voll ab -> modlobby-<id>.
     replay = Path(hub_replay_service.replay_path_for("atm"))
     replay.parent.mkdir(parents=True, exist_ok=True)
     from app.services import hub_capture_service
-    hub_capture_service._write_replay(str(replay), [(0, b"\x05\x2b\x00\x00\x00\x01")])
+    from app.services.mc_protocol import _wrap_packet, encode_string, encode_varint
+    _blob = b"".join(encode_string(c) + b"\x00\x00" for c in ("create:network", "mekanism:tile", "ae2:main"))
+    _manifest_frame = _wrap_packet(encode_varint(0x02) + encode_string("neoforge:register") + _blob)
+    _login_frame = _wrap_packet(encode_varint(0x2B) + b"\x00\x00\x00\x01")
+    hub_capture_service._write_replay(str(replay), [(1, _manifest_frame), (0, _login_frame)])
 
     script = (_login_start() + _login_ack() + _client_info()
               + _brand("neoforge")

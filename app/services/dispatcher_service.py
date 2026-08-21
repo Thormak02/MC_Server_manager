@@ -134,9 +134,19 @@ def dispatch(client: socket.socket, handshake: Handshake, initial: bytes) -> Non
                     srv = db.get(Server, sid)
                     slug = srv.slug if srv is not None else None
                     if slug and hub_replay_service.has_replay(slug):
-                        _finish(client, _hub_target(db, f"{gateway_service.HUB_LOBBY_ALIAS}-{sid}"),
-                                _no_match_message(db))
-                        _glog("route_modded_hub", f"server={sid} tagged ({reason})")
+                        # SICHERHEIT: nur servieren, wenn der Client die Registry-Mods DIESES
+                        # Replays wirklich abdeckt. Sonst matcht ein grosses Pack faelschlich
+                        # ein anderes (Best-Overlap) und bekaeme dessen Registry -> Kick
+                        # (genau der atm10sky->Seasons-Fall). Dann NICHT servieren.
+                        rpath = hub_replay_service.replay_path_for(slug)
+                        if hub_replay_service.client_matches_replay(mods, rpath, threshold=1.0):
+                            _finish(client, _hub_target(db, f"{gateway_service.HUB_LOBBY_ALIAS}-{sid}"),
+                                    _no_match_message(db))
+                            _glog("route_modded_hub", f"server={sid} tagged ({reason})")
+                            return
+                        client.sendall(mcd.build_config_disconnect(_no_pack_message(db)))
+                        _glog("route_mismatch",
+                              f"server={sid} Replay nicht vom Client abgedeckt -> Fehlmatch ({reason})")
                         return
                     # Kein eigenes (exaktes) Replay -> diesen Server einmalig aufnehmen.
                     _route_auto_capture(client, db, sid, srv)
