@@ -119,23 +119,35 @@ def dispatch(client: socket.socket, handshake: Handshake, initial: bytes) -> Non
 
             sid, reason = match_backend_for_client(db, mods)
 
-            # In die gemeinsame Python-Lobby (Kompass-Menue) - mit Pack-Tag (Path A:
-            # modlobby-<server_id>), damit der Hub das RICHTIGE Per-Pack-Replay spielt.
-            # Kein Match oder (noch) kein Replay -> Default-Profil (2.3: Auto-Capture).
+            # In die gemeinsame Python-Lobby (Kompass-Menue). Auswahl (Path A):
+            #  - Pack hat eigenes Replay        -> modlobby-<server_id> (richtiger Spoof)
+            #  - Mods passen zum Default-Replay -> modlobby (Default-Profil, schuetzt ATM10)
+            #  - unbekanntes Pack ohne Replay   -> Auto-Capture beim Erstverbinden
             if app_setting_service.get_hub_lobby_enabled(db):
                 from app.models.server import Server
                 from app.services import hub_replay_service
 
-                alias = gateway_service.HUB_LOBBY_ALIAS
                 if sid is not None:
                     srv = db.get(Server, sid)
-                    if srv is not None and hub_replay_service.has_replay(srv.slug):
-                        alias = f"{gateway_service.HUB_LOBBY_ALIAS}-{sid}"
-                hub_target = _hub_target(db, alias)
-                if hub_target:
-                    _finish(client, hub_target, _no_match_message(db))
-                    _glog("route_modded_hub", f"{hub_target} server={sid} ({reason})")
+                    slug = srv.slug if srv is not None else None
+                    if slug and hub_replay_service.has_replay(slug):
+                        _finish(client, _hub_target(db, f"{gateway_service.HUB_LOBBY_ALIAS}-{sid}"),
+                                _no_match_message(db))
+                        _glog("route_modded_hub", f"server={sid} tagged ({reason})")
+                        return
+                    default_replay = app_setting_service.get_hub_lobby_replay(db)
+                    if hub_replay_service.client_matches_replay(mods, default_replay):
+                        _finish(client, _hub_target(db, gateway_service.HUB_LOBBY_ALIAS),
+                                _no_match_message(db))
+                        _glog("route_modded_hub_default", f"server={sid} matches-default")
+                        return
+                    # Unbekanntes Pack ohne Replay -> Auto-Capture (klare Kommunikation).
+                    _route_auto_capture(client, db, sid, srv)
                     return
+                # Kein passender Server -> Default-Profil (bisheriges Verhalten).
+                _finish(client, _hub_target(db, gateway_service.HUB_LOBBY_ALIAS), _no_match_message(db))
+                _glog("route_modded_hub", f"server=None default ({reason})")
+                return
 
             # --- NeoForge/Forge ohne Hub: direkt zum passenden Modpack-Server ---
             if sid is not None:
@@ -161,6 +173,38 @@ def _finish(client: socket.socket, target: tuple[str, int] | None, fallback_msg:
         client.sendall(mcd.build_config_transfer(target[0], target[1]))
     else:
         client.sendall(mcd.build_config_disconnect(fallback_msg))
+
+
+def _route_auto_capture(client: socket.socket, db, sid: int, srv) -> None:
+    """Auto-Capture eines Packs ohne Replay: Aufnahme anstossen und den Client mit klarer
+    Meldung fuehren. Der erste Durchlauf dauert einmalig laenger (Pack-Server-Neustart)."""
+    from app.services import app_setting_service, gateway_service, hub_capture_service
+
+    name = srv.name if srv is not None else f"Pack {sid}"
+    st = hub_capture_service.capture_status(sid)
+
+    # Relay bereit -> Client zum Capture-Port lotsen (dort wird transparent aufgenommen).
+    if st and st.get("status") == "waiting" and st.get("active"):
+        domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
+        port = st.get("relay_port")
+        if domain and port:
+            _finish(client, (domain, int(port)), "")
+            _glog("auto_capture_forward", f"server={sid} -> {domain}:{port}")
+            return
+
+    if st and st.get("active"):
+        client.sendall(mcd.build_config_disconnect(
+            f"Ersteinrichtung von '{name}' laeuft (Server startet neu). "
+            "Bitte in ~1-2 Minuten erneut verbinden."))
+        _glog("auto_capture_wait", f"server={sid} status={st.get('status')}")
+        return
+
+    ok, _msg = hub_capture_service.start_capture_for_server(sid, None)
+    client.sendall(mcd.build_config_disconnect(
+        f"Modpack '{name}' wird erstmalig fuer die Lobby eingerichtet "
+        "(Server startet kurz neu, ~1-2 Min). Bitte danach erneut verbinden - "
+        "ab dann landest du in der gemeinsamen Lobby."))
+    _glog("auto_capture_start", f"server={sid} ok={ok}")
 
 
 def _read_client_opening(reader: _Reader) -> tuple[str, list[str]]:

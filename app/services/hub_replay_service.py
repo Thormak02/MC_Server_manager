@@ -50,3 +50,55 @@ def build_pack_registry_runtime() -> dict[int, str]:
 
     with SessionLocal() as db:
         return build_pack_registry(db)
+
+
+# --- Pack-Fingerprint eines Replays (fuer den Default-Schutz bei Auto-Capture) ----
+_MODS_CACHE: dict[str, tuple[float, frozenset]] = {}
+
+
+def replay_mod_namespaces(replay_path: str) -> frozenset:
+    """Mod-Namespaces aus dem im Replay mitgeschnittenen neoforge:register-Manifest
+    (C->S). Leeres Set bei Vanilla-Replays oder wenn keins gefunden. Gecacht per mtime."""
+    from app.services import mc_dispatch as mcd
+    from app.services import replay_service as rp
+
+    try:
+        mtime = Path(replay_path).stat().st_mtime
+    except OSError:
+        return frozenset()
+    cached = _MODS_CACHE.get(replay_path)
+    if cached and cached[0] == mtime:
+        return cached[1]
+
+    mods: frozenset = frozenset()
+    try:
+        for rec in rp.load_replay_file(replay_path):
+            if rec.to_client or rec.packet_id != mcd.CFG_SB_CUSTOM:
+                continue
+            parsed = mcd.try_read_packet(rec.raw)
+            if not parsed:
+                continue
+            channel, data = mcd.parse_custom_payload(parsed[1])
+            if channel == mcd.NEOFORGE_REGISTER:
+                got = mcd.extract_mod_namespaces(data)
+                if got:
+                    mods = frozenset(got)
+                    break
+    except Exception:  # noqa: BLE001 - defekte/fehlende Datei -> leeres Set
+        mods = frozenset()
+    _MODS_CACHE[replay_path] = (mtime, mods)
+    return mods
+
+
+def client_matches_replay(client_mods: set, replay_path: str, threshold: float = 0.6) -> bool:
+    """True, wenn die Client-Mods das Pack des Replays hinreichend abdecken.
+
+    Schutz: ein Client, dessen Mods zum vorhandenen Default-Replay passen (z.B. ATM10),
+    loest KEINE Auto-Aufnahme aus, sondern wird weiter mit dem Default-Profil bedient.
+    """
+    pack = replay_mod_namespaces(replay_path)
+    if not pack:
+        return False
+    lc = {m.lower() for m in client_mods}
+    lp = {m.lower() for m in pack}
+    return len(lc & lp) / max(1, len(lp)) >= threshold

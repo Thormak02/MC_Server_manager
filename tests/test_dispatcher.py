@@ -232,25 +232,27 @@ def test_dispatch_modded_hub_tags_pack_with_replay(client, tmp_path, monkeypatch
     assert _find_transfer(sock.sent) == (f"modlobby-{sid}.mc.example.de", 25565)
 
 
-def test_dispatch_modded_hub_no_replay_uses_default(client, tmp_path, monkeypatch):
+def test_dispatch_modded_no_match_uses_default(client, tmp_path):
+    """NeoForge-Client ohne passenden Modpack-Server -> sid None -> Default-Profil (modlobby)."""
     import app.services.app_setting_service as svc
     from app.db.session import SessionLocal
-    from app.services import dispatcher_service, hub_replay_service
+    from app.models.server import Server
+    from app.services import dispatcher_service
 
-    monkeypatch.setattr(hub_replay_service, "REPLAY_DIR", str(tmp_path / "replays"))
-    _make_neoforge_server(tmp_path / "atm" / "mods", ["create", "mekanism", "ae2"])
     with SessionLocal() as db:
-        _neoforge_lobby_and_pack(db.add_all, tmp_path, svc)
+        db.add(Server(name="Lobby", slug="lob", server_type="paper", mc_version="1.21.1",
+                      base_path=str(tmp_path / "lob"), gateway_enabled=True,
+                      gateway_hostname="lobby", gateway_is_default=True, port=25569))
         db.commit()
         svc.set_network_domain(db, "mc.example.de")
         svc.set_network_port(db, 25565)
         svc.set_hub_lobby_enabled(db, True)
 
-    # KEIN Replay angelegt -> Default-Profil (plain modlobby)
+    # Mods passen zu keinem Server -> sid None -> Default-Profil (plain modlobby)
     script = (_login_start() + _login_ack() + _client_info()
               + _brand("neoforge")
               + _register(["neoforge:register", "minecraft:register"])
-              + _manifest(["create:network", "mekanism:tile", "ae2:main"]))
+              + _manifest(["unknownmod:x", "anotherunknown:y"]))
     sock = FakeSock(script)
     dispatcher_service.dispatch(sock, _hs(), b"")
     assert _find_transfer(sock.sent) == ("modlobby.mc.example.de", 25565)
@@ -278,6 +280,114 @@ def test_dispatch_fabric_routes_to_vanilla_profile(client, tmp_path):
     sock = FakeSock(script)
     dispatcher_service.dispatch(sock, _hs(), b"")
     assert _find_transfer(sock.sent) == ("vanlobby.mc.example.de", 25565)
+
+
+# --------------------------- Auto-Capture (2.3) ----------------------------- #
+def _write_manifest_replay(path, mod_channels):
+    from app.services import hub_capture_service
+    from app.services.mc_protocol import _wrap_packet, encode_string, encode_varint
+
+    blob = b"".join(encode_string(c) + b"\x00\x00" for c in mod_channels)
+    frame = _wrap_packet(encode_varint(0x02) + encode_string("neoforge:register") + blob)
+    hub_capture_service._write_replay(str(path), [(1, frame)])   # dir 1 = C->S
+
+
+def test_replay_mod_namespaces_and_match(tmp_path):
+    from app.services import hub_replay_service as R
+
+    p = tmp_path / "atm.replay"
+    _write_manifest_replay(p, ["create:network", "mekanism:tile", "ae2:main"])
+    assert R.replay_mod_namespaces(str(p)) == frozenset({"create", "mekanism", "ae2"})
+    assert R.client_matches_replay({"create", "mekanism", "ae2", "sodium"}, str(p)) is True
+    assert R.client_matches_replay({"twilightforest", "ironchests"}, str(p)) is False
+
+
+def test_dispatch_auto_capture_unknown_pack(client, tmp_path, monkeypatch):
+    from sqlalchemy import select
+
+    import app.services.app_setting_service as svc
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import dispatcher_service, hub_capture_service, hub_replay_service
+
+    monkeypatch.setattr(hub_replay_service, "REPLAY_DIR", str(tmp_path / "replays"))
+    default_replay = tmp_path / "default.replay"
+    _write_manifest_replay(default_replay, ["foo:bar", "baz:qux"])   # anderes Pack
+
+    _make_neoforge_server(tmp_path / "seasons" / "mods", ["seasons", "create", "mekanism"])
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Lobby", slug="lob", server_type="paper", mc_version="1.21.1",
+                   base_path=str(tmp_path / "lob"), gateway_enabled=True,
+                   gateway_hostname="lobby", gateway_is_default=True, port=25569),
+            Server(name="Seasons", slug="seasons", server_type="neoforge", mc_version="1.21.1",
+                   base_path=str(tmp_path / "seasons"), gateway_enabled=True,
+                   gateway_hostname="seasons", port=25602),
+        ])
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        svc.set_network_port(db, 25565)
+        svc.set_hub_lobby_enabled(db, True)
+        svc.set_hub_lobby_replay(db, str(default_replay))
+        sid = db.scalar(select(Server).where(Server.slug == "seasons")).id
+
+    calls: dict = {}
+
+    def fake_start(server_id, user_id=None):
+        calls["sid"] = server_id
+        return True, "ok"
+
+    monkeypatch.setattr(hub_capture_service, "start_capture_for_server", fake_start)
+    monkeypatch.setattr(hub_capture_service, "capture_status", lambda server_id: None)
+
+    script = (_login_start() + _login_ack() + _client_info()
+              + _brand("neoforge")
+              + _register(["neoforge:register", "minecraft:register"])
+              + _manifest(["seasons:net", "create:network", "mekanism:tile"]))
+    sock = FakeSock(script)
+    dispatcher_service.dispatch(sock, _hs(), b"")
+
+    assert _find_transfer(sock.sent) is None          # kein Transfer -> Einrichtungs-Disconnect
+    assert b"erstmalig" in bytes(sock.sent)           # klare Meldung
+    assert calls["sid"] == sid                        # Auto-Capture angestossen
+
+
+def test_dispatch_matches_default_serves_default(client, tmp_path, monkeypatch):
+    from sqlalchemy import select
+
+    import app.services.app_setting_service as svc
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import dispatcher_service, hub_replay_service
+
+    monkeypatch.setattr(hub_replay_service, "REPLAY_DIR", str(tmp_path / "replays"))
+    default_replay = tmp_path / "default.replay"
+    _write_manifest_replay(default_replay, ["create:network", "mekanism:tile", "ae2:main"])
+
+    _make_neoforge_server(tmp_path / "atm" / "mods", ["create", "mekanism", "ae2"])
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Lobby", slug="lob", server_type="paper", mc_version="1.21.1",
+                   base_path=str(tmp_path / "lob"), gateway_enabled=True,
+                   gateway_hostname="lobby", gateway_is_default=True, port=25569),
+            Server(name="ATM10", slug="atm", server_type="neoforge", mc_version="1.21.1",
+                   base_path=str(tmp_path / "atm"), gateway_enabled=True,
+                   gateway_hostname="atm10", port=25601),
+        ])
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        svc.set_network_port(db, 25565)
+        svc.set_hub_lobby_enabled(db, True)
+        svc.set_hub_lobby_replay(db, str(default_replay))
+
+    # Client-Mods passen zum Default-Replay -> Default-Profil (modlobby), KEINE Aufnahme.
+    script = (_login_start() + _login_ack() + _client_info()
+              + _brand("neoforge")
+              + _register(["neoforge:register", "minecraft:register"])
+              + _manifest(["create:network", "mekanism:tile", "ae2:main"]))
+    sock = FakeSock(script)
+    dispatcher_service.dispatch(sock, _hs(), b"")
+    assert _find_transfer(sock.sent) == ("modlobby.mc.example.de", 25565)
 
 
 # --------------------------- is_neoforge_client ----------------------------- #
