@@ -218,10 +218,12 @@ def test_dispatch_modded_hub_tags_pack_with_replay(client, tmp_path, monkeypatch
         svc.set_hub_lobby_enabled(db, True)
         sid = db.scalar(select(Server).where(Server.slug == "atm")).id
 
-    # Replay fuer ATM anlegen -> Pack-Tag modlobby-<id>
+    # LADBARES Replay fuer ATM anlegen (mit S->C PLAY-Login 0x2B) -> Pack-Tag modlobby-<id>.
+    # (Eine blosse MCRP-Magic zaehlt nicht mehr - der Hub koennte daraus kein Profil bauen.)
     replay = Path(hub_replay_service.replay_path_for("atm"))
     replay.parent.mkdir(parents=True, exist_ok=True)
-    replay.write_bytes(b"MCRP\x01")
+    from app.services import hub_capture_service
+    hub_capture_service._write_replay(str(replay), [(0, b"\x05\x2b\x00\x00\x00\x01")])
 
     script = (_login_start() + _login_ack() + _client_info()
               + _brand("neoforge")
@@ -232,8 +234,9 @@ def test_dispatch_modded_hub_tags_pack_with_replay(client, tmp_path, monkeypatch
     assert _find_transfer(sock.sent) == (f"modlobby-{sid}.mc.example.de", 25565)
 
 
-def test_dispatch_modded_no_match_uses_default(client, tmp_path):
-    """NeoForge-Client ohne passenden Modpack-Server -> sid None -> Default-Profil (modlobby)."""
+def test_dispatch_modded_no_match_disconnects(client, tmp_path):
+    """NeoForge-Client ohne passenden Server UND ohne Voll-Abdeckung des Default-Replays ->
+    klarer Hinweis-Disconnect (KEIN fremdes Replay servieren -> kein Registry-Kick)."""
     import app.services.app_setting_service as svc
     from app.db.session import SessionLocal
     from app.models.server import Server
@@ -248,14 +251,15 @@ def test_dispatch_modded_no_match_uses_default(client, tmp_path):
         svc.set_network_port(db, 25565)
         svc.set_hub_lobby_enabled(db, True)
 
-    # Mods passen zu keinem Server -> sid None -> Default-Profil (plain modlobby)
+    # Mods passen zu keinem Server, Default-Replay fehlt/leer -> Disconnect mit Hinweis.
     script = (_login_start() + _login_ack() + _client_info()
               + _brand("neoforge")
               + _register(["neoforge:register", "minecraft:register"])
               + _manifest(["unknownmod:x", "anotherunknown:y"]))
     sock = FakeSock(script)
     dispatcher_service.dispatch(sock, _hs(), b"")
-    assert _find_transfer(sock.sent) == ("modlobby.mc.example.de", 25565)
+    assert _find_transfer(sock.sent) is None
+    assert b"nicht eingerichtet" in bytes(sock.sent)
 
 
 def test_dispatch_fabric_routes_to_vanilla_profile(client, tmp_path):
@@ -298,7 +302,10 @@ def test_replay_mod_namespaces_and_match(tmp_path):
     p = tmp_path / "atm.replay"
     _write_manifest_replay(p, ["create:network", "mekanism:tile", "ae2:main"])
     assert R.replay_mod_namespaces(str(p)) == frozenset({"create", "mekanism", "ae2"})
+    # Voll-Abdeckung (Pack-Mods ⊆ Client, plus Client-only sodium) -> darf serviert werden.
     assert R.client_matches_replay({"create", "mekanism", "ae2", "sodium"}, str(p)) is True
+    # Fehlt auch nur EINE Pack-Mod (ae2) -> NICHT servieren (sonst Registry-Kick).
+    assert R.client_matches_replay({"create", "mekanism"}, str(p)) is False
     assert R.client_matches_replay({"twilightforest", "ironchests"}, str(p)) is False
 
 
@@ -352,13 +359,16 @@ def test_dispatch_auto_capture_unknown_pack(client, tmp_path, monkeypatch):
     assert calls["sid"] == sid                        # Auto-Capture angestossen
 
 
-def test_dispatch_matches_default_serves_default(client, tmp_path, monkeypatch):
+def test_dispatch_matched_server_without_replay_auto_captures(client, tmp_path, monkeypatch):
+    """Gematchter Pack-Server OHNE eigenes Replay -> Auto-Capture DIESES Servers, NICHT das
+    (moeglicherweise fremde) Default-Replay servieren. Genau der atm10sky-Bug: das Default
+    'atm10_capture.replay' passt ~aehnlich, wuerde aber mit fehlender Registry kicken."""
     from sqlalchemy import select
 
     import app.services.app_setting_service as svc
     from app.db.session import SessionLocal
     from app.models.server import Server
-    from app.services import dispatcher_service, hub_replay_service
+    from app.services import dispatcher_service, hub_capture_service, hub_replay_service
 
     monkeypatch.setattr(hub_replay_service, "REPLAY_DIR", str(tmp_path / "replays"))
     default_replay = tmp_path / "default.replay"
@@ -379,15 +389,29 @@ def test_dispatch_matches_default_serves_default(client, tmp_path, monkeypatch):
         svc.set_network_port(db, 25565)
         svc.set_hub_lobby_enabled(db, True)
         svc.set_hub_lobby_replay(db, str(default_replay))
+        sid = db.scalar(select(Server).where(Server.slug == "atm")).id
 
-    # Client-Mods passen zum Default-Replay -> Default-Profil (modlobby), KEINE Aufnahme.
+    calls: dict = {}
+
+    def fake_start(server_id, user_id=None):
+        calls["sid"] = server_id
+        return True, "ok"
+
+    monkeypatch.setattr(hub_capture_service, "start_capture_for_server", fake_start)
+    monkeypatch.setattr(hub_capture_service, "capture_status", lambda server_id: None)
+
+    # Client-Mods decken das Default-Replay voll ab - trotzdem: eigener Server, eigenes
+    # (fehlendes) Replay -> Aufnahme, KEIN Default-Serve.
     script = (_login_start() + _login_ack() + _client_info()
               + _brand("neoforge")
               + _register(["neoforge:register", "minecraft:register"])
               + _manifest(["create:network", "mekanism:tile", "ae2:main"]))
     sock = FakeSock(script)
     dispatcher_service.dispatch(sock, _hs(), b"")
-    assert _find_transfer(sock.sent) == ("modlobby.mc.example.de", 25565)
+
+    assert _find_transfer(sock.sent) is None       # kein Transfer -> Einrichtungs-Disconnect
+    assert b"erstmalig" in bytes(sock.sent)
+    assert calls["sid"] == sid                     # Auto-Capture DIESES Servers angestossen
 
 
 # --------------------------- is_neoforge_client ----------------------------- #

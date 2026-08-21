@@ -17,37 +17,62 @@ def test_record_streams_writes_replay_and_forwards(tmp_path):
     result: dict = {}
 
     def run():
-        result["r"] = C._record_streams(cli_relay, bk_relay, out, record_seconds=0.8)
+        # Ende via Grace kurz nach dem PLAY-Login (kein Chunk-Frame im Test).
+        result["r"] = C._record_streams(cli_relay, bk_relay, out,
+                                        max_seconds=3.0, grace_after_login=0.3)
 
     t = threading.Thread(target=run, daemon=True)
     t.start()
 
-    frame_cs = b"\x03" + b"\x00hi"   # [len=3][id=0x00]"hi"  (C->S)
-    frame_sc = b"\x03" + b"\x02ok"   # [len=3][id=0x02]"ok"  (S->C)
+    frame_cs = b"\x03" + b"\x00hi"                  # [len=3][id=0x00]"hi"  (C->S)
+    frame_login = b"\x05" + b"\x2b\x00\x00\x00\x01"  # [len=5][id=0x2B PLAY-Login][eid] (S->C)
     cli_test.sendall(frame_cs)        # Client -> Relay -> Backend
-    bk_test.sendall(frame_sc)         # Backend -> Relay -> Client
+    bk_test.sendall(frame_login)      # Backend -> Relay -> Client (schliesst Config ab)
 
     # Weiterleitung WAEHREND des Aufnahmefensters pruefen (nach dem Close verwirft
     # der Windows-Socketpair gepufferte Daten).
     bk_test.settimeout(2.0)
     cli_test.settimeout(2.0)
-    assert bk_test.recv(64) == frame_cs   # Backend hat den Client-Frame bekommen
-    assert cli_test.recv(64) == frame_sc  # Client hat den Backend-Frame bekommen
+    assert bk_test.recv(64) == frame_cs      # Backend hat den Client-Frame bekommen
+    assert cli_test.recv(64) == frame_login  # Client hat den PLAY-Login bekommen
 
-    t.join(timeout=3)
-    assert result["r"][0] is True
+    t.join(timeout=4)
+    assert result["r"][0] is True            # PLAY-Login gesehen -> Aufnahme gilt als komplett
 
     data = Path(out).read_bytes()
     assert data.startswith(b"MCRP\x01")
     assert frame_cs in data           # C->S-Frame mitgeschnitten
-    assert frame_sc in data           # S->C-Frame mitgeschnitten
+    assert frame_login in data        # S->C PLAY-Login mitgeschnitten
+
+
+def test_record_streams_without_play_login_is_error(tmp_path):
+    """Config nie fertig (kein 0x2B) -> KEIN (unvollstaendiges) Replay schreiben."""
+    cli_relay, cli_test = socket.socketpair()
+    bk_relay, bk_test = socket.socketpair()
+    out = str(tmp_path / "partial.replay")
+
+    result: dict = {}
+
+    def run():
+        result["r"] = C._record_streams(cli_relay, bk_relay, out,
+                                        max_seconds=0.6, grace_after_login=0.3)
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    bk_test.sendall(b"\x03" + b"\x05ab")   # irgendein Config-Frame, aber kein PLAY-Login
+    t.join(timeout=3)
+
+    ok, _n, msg = result["r"]
+    assert ok is False
+    assert "PLAY-Login" in msg
+    assert not Path(out).exists()          # unvollstaendiges Replay nicht gespeichert
 
 
 def test_record_streams_empty_is_error(tmp_path):
     cli_relay, _cli_test = socket.socketpair()
     bk_relay, _bk_test = socket.socketpair()
     out = str(tmp_path / "empty.replay")
-    ok, n, msg = C._record_streams(cli_relay, bk_relay, out, record_seconds=0.3)
+    ok, n, msg = C._record_streams(cli_relay, bk_relay, out, max_seconds=0.3)
     assert ok is False
     assert n == 0
     assert not Path(out).exists()

@@ -62,10 +62,29 @@ def test_snapshot_db_consistent(monkeypatch, tmp_path):
     con.close()
 
 
-def test_snapshot_db_no_central(monkeypatch):
+def test_snapshot_db_local_without_nas(monkeypatch, tmp_path):
+    """Ohne NAS-Setting wird trotzdem LOKAL nach data/db-snapshots gesnapshottet
+    (Option D: der Manager schreibt lokal, ein Sync-Task liefert es auf die NAS)."""
+    dbfile = tmp_path / "src.db"
+    con = sqlite3.connect(str(dbfile))
+    con.execute("create table t(x)")
+    con.execute("insert into t values (7)")
+    con.commit()
+    con.close()
+
+    local = tmp_path / "localdata"
+
+    class _S:
+        data_dir = local
+
     monkeypatch.setattr(C, "_central_root", lambda: "")
+    monkeypatch.setattr(C, "_db_file", lambda: dbfile)
+    monkeypatch.setattr(C, "get_settings", lambda: _S())
+
     ok, _msg = C.snapshot_db()
-    assert ok is False
+    assert ok is True
+    snaps = list((local / "db-snapshots").glob("mc_server_manager-*.db"))
+    assert len(snaps) == 1
 
 
 def test_share_root():

@@ -19,8 +19,8 @@ from app.core.config import get_settings
 
 _SUBDIR_LOGS = "logs"
 _SUBDIR_DB = "db-snapshots"
-_SNAPSHOT_KEEP = 20
-_SNAPSHOT_MIN_INTERVAL = 1800.0   # 30 min zwischen automatischen Snapshots
+_SNAPSHOT_KEEP = 40
+_SNAPSHOT_MIN_INTERVAL = 300.0    # 5 min zwischen automatischen Snapshots (frische Audit-Logs)
 
 _last_snapshot = 0.0
 # kurzer Cache der Beschreibbarkeits-Pruefung, damit nicht bei jeder Log-Zeile geprobt wird
@@ -187,14 +187,17 @@ def logs_dir() -> Path:
 
 
 def db_snapshot_dir() -> Path | None:
+    """Ziel fuer DB-Snapshots. Bevorzugt ``<root>/db-snapshots`` NUR wenn direkt
+    beschreibbar; sonst - UND immer, auch ganz ohne NAS-Setting - LOKAL
+    ``data/db-snapshots``. Option D: der SYSTEM-Dienst kann nicht direkt auf die
+    anmeldepflichtige NAS schreiben, also lokal snapshotten; ein Sync-Task
+    (Benutzerkontext) spiegelt ``data/`` auf die NAS. (Frueher an ``central_storage_root``
+    gekoppelt -> es gab GAR KEINE Snapshots, sobald der direkte NAS-Schreibtest scheiterte.)"""
     root = _central_root()
-    if not root:
-        return None  # kein zentrales Verzeichnis gesetzt -> keine Snapshots gewuenscht
-    nas = Path(root) / _SUBDIR_DB
-    if is_usable(nas):
-        return nas
-    # NAS nicht direkt beschreibbar (z.B. SYSTEM-Dienst) -> lokal snapshotten; ein
-    # Sync-Task (im Benutzerkontext) spiegelt data/ dann auf die NAS.
+    if root:
+        nas = Path(root) / _SUBDIR_DB
+        if is_usable(nas):
+            return nas
     local = get_settings().data_dir / _SUBDIR_DB
     try:
         local.mkdir(parents=True, exist_ok=True)
@@ -251,10 +254,11 @@ def snapshot_db() -> tuple[bool, str]:
 
 
 def maybe_snapshot_db() -> None:
-    """Gedrosselter Snapshot fuer den Idle-Tick. No-op wenn NAS aus / kuerzlich gemacht."""
+    """Gedrosselter LOKALER DB-Snapshot fuer den Idle-Tick (der Sync-Task bringt
+    ``data/db-snapshots`` auf die NAS). Laeuft UNABHAENGIG vom NAS-Setting - sonst gaebe
+    es (wie zuvor) nie Snapshots, wenn der direkte NAS-Schreibtest aus dem SYSTEM-Dienst
+    scheitert. Snapshot ist billig (SQLite-Backup-API) und auf ``_SNAPSHOT_KEEP`` begrenzt."""
     global _last_snapshot
-    if not _central_root():
-        return
     now = time.monotonic()
     if now - _last_snapshot < _SNAPSHOT_MIN_INTERVAL:
         return

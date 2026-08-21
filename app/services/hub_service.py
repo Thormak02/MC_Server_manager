@@ -259,20 +259,21 @@ class Hub:
         host = (server_address or "").split("\x00", 1)[0].strip().rstrip(".").lower()
         return host.split(".", 1)[0] if host else ""
 
-    def _modded_for_alias(self, alias: str) -> dict:
-        """Per-Pack-Profil aus ``modlobby-<server_id>`` waehlen, sonst Default-modded."""
+    def _modded_for_alias(self, alias: str) -> dict | None:
+        """Per-Pack-Profil aus ``modlobby-<server_id>`` waehlen. Fehlt zu einem EXPLIZITEN
+        Pack-Tag das Profil (Race: Capture eben fertig, Reconcile laeuft noch), NICHT still
+        das Default servieren (fremdes Pack -> Registry-Kick), sondern None -> der Handler
+        trennt mit klarer 'wird eingerichtet'-Meldung. Ohne Pack-Tag: Default-modded."""
         from app.services import gateway_service
 
         prefix = gateway_service.HUB_LOBBY_ALIAS + "-"  # z.B. "modlobby-"
         if alias.startswith(prefix):
             suffix = alias[len(prefix):]
             if suffix.isdigit():
-                profile = self.pack_profiles.get(int(suffix))
-                if profile is not None:
-                    return profile
+                return self.pack_profiles.get(int(suffix))  # kann None sein -> Handler trennt
         return self.modded
 
-    def _pick_profile(self, server_address: str | None, force_kind: str | None = None) -> dict:
+    def _pick_profile(self, server_address: str | None, force_kind: str | None = None) -> dict | None:
         """Config-Profil waehlen. ``force_kind`` (vom Listener-Port gesetzt) trennt nur
         vanilla vs. modded. WELCHES Modpack kommt aus dem Host-Tag ``modlobby-<server_id>``
         (vom Dispatcher gesetzt, Path A) -> Per-Pack-Profil, sonst Default-modded.
@@ -287,6 +288,20 @@ class Hub:
             if alias == gateway_service.HUB_VANILLA_ALIAS:
                 return self.vanilla
         return self._modded_for_alias(alias)
+
+    def update_pack_profiles(self, pack_replays: dict[int, str] | None) -> None:
+        """Per-Pack-Profile LIVE angleichen (nach einem neuen Capture) - ohne Hub-Neustart
+        und ohne die verbundenen Lobby-Spieler zu trennen. Neue/geaenderte Replays laden,
+        verschwundene entfernen; unladbare ueberspringen. Der Dict-Swap ist in CPython
+        atomar, ``_modded_for_alias`` liest also stets ein konsistentes Dict."""
+        loaded: dict[int, dict] = {}
+        for sid, path in (pack_replays or {}).items():
+            try:
+                loaded[int(sid)] = _load_profile(path)
+            except Exception as exc:  # noqa: BLE001 - kaputtes Replay -> ueberspringen
+                print(f"[hub] Pack-Replay {path} (server {sid}) nicht ladbar: {exc!r} -> uebersprungen")
+        with self.lock:
+            self.pack_profiles = loaded
 
     # ------------------------------------------------------------------ #
     # Aufbau
@@ -425,6 +440,12 @@ class Hub:
             if pid != mcd.LOGIN_ACK:
                 return
             profile = self._pick_profile(hs.server_address, force_kind)
+            if profile is None:
+                # Explizites Pack-Tag, aber Profil (noch) nicht geladen (Capture eben fertig,
+                # Reconcile laeuft) -> KEIN fremdes Default servieren, sauber vertroesten.
+                sock.sendall(mcd.build_config_disconnect(
+                    "Dieses Modpack wird gerade eingerichtet. Bitte in ~10 Sekunden erneut verbinden."))
+                return
             kind = "vanilla" if profile is self.vanilla else "modded"
             print(f"[hub] {addr} Login ok ({username}, {kind}). Spiele Config-Phase ab ...")
 

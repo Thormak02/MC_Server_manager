@@ -28,8 +28,16 @@ _LOCK = threading.RLock()
 _SESSIONS: dict[int, "CaptureSession"] = {}
 
 _DEFAULT_CAPTURE_PORT = 25610
-_ACCEPT_TIMEOUT = 300.0   # bis 5 min auf den Client warten (Modpack-Neustart dauert)
-_RECORD_SECONDS = 40.0    # so lange nach dem Join mitschneiden (wie das CLI-Tool)
+_ACCEPT_TIMEOUT = 300.0        # bis 5 min auf den Client warten (Modpack-Neustart dauert)
+# Aufnahme laeuft bis die Config-Phase KOMPLETT ist (S->C PLAY-Login 0x2B gesehen), dann
+# noch die Setup-Pakete bis zum ersten Chunk (0x27) - NICHT feste Sekunden: grosse Packs
+# (z.B. ATM10-Sky) brauchen laenger als ein festes Fenster, kleine sollen nicht warten.
+_PLAY_LOGIN_ID = 0x2B          # S->C PLAY-Login = Config-Phase fertig
+_FIRST_CHUNK_ID = 0x27         # erster Chunk = ab hier nur noch Weltdaten-Ballast
+_GRACE_AFTER_LOGIN = 8.0       # falls kein Chunk folgt: nach dem Login noch sammeln (grosse
+                               # Packs flushen Setup-Pakete evtl. verzoegert; normal wird
+                               # ohnehin am ersten Chunk gestoppt, die Grace greift selten)
+_MAX_RECORD_SECONDS = 180.0    # Sicherheitsobergrenze (falls PLAY-Login nie kommt)
 _ACTIVE_STATES = ("preparing", "waiting", "recording", "saving")
 
 
@@ -60,9 +68,23 @@ def _read_varint(buf: bytearray, start: int = 0):
     raise ValueError("VarInt zu lang")
 
 
-def _pipe(src, dst, direction: int, log: list, lock: threading.Lock, stop: threading.Event) -> None:
+def _frame_pid(raw: bytes) -> int | None:
+    """Packet-ID eines rohen (unkomprimierten) Frames [len][id][...]."""
+    ba = bytearray(raw)
+    head = _read_varint(ba, 0)
+    if head is None:
+        return None
+    _length, n = head
+    pid = _read_varint(ba, n)
+    return pid[0] if pid else None
+
+
+def _pipe(src, dst, direction: int, log: list, lock: threading.Lock,
+          stop: threading.Event, state: dict) -> None:
     """Frames von src -> dst durchreichen UND (direction, raw) protokollieren.
-    direction: 0 = S->C (spaeter abspielen), 1 = C->S (Checkpoint)."""
+    direction: 0 = S->C (spaeter abspielen), 1 = C->S (Checkpoint). Auf der S->C-Seite
+    den PLAY-Login (0x2B) und den ersten Chunk (0x27) markieren -> Aufnahme kann enden,
+    sobald die Config-Phase samt Setup-Paketen vollstaendig ist."""
     buf = bytearray()
     try:
         while not stop.is_set():
@@ -76,6 +98,13 @@ def _pipe(src, dst, direction: int, log: list, lock: threading.Lock, stop: threa
                     dst.sendall(raw)
                     with lock:
                         log.append((direction, raw))
+                    if direction == 0:
+                        pid = _frame_pid(raw)
+                        if pid == _PLAY_LOGIN_ID and state.get("play_login_at") is None:
+                            state["play_login_at"] = time.monotonic()
+                        elif (pid == _FIRST_CHUNK_ID and state.get("play_login_at") is not None
+                              and state.get("first_chunk_at") is None):
+                            state["first_chunk_at"] = time.monotonic()
                     continue
             chunk = src.recv(16384)
             if not chunk:
@@ -98,20 +127,30 @@ def _write_replay(out_path: str, frames: list) -> None:
 
 
 def _record_streams(client: socket.socket, backend: socket.socket, out_path: str,
-                    record_seconds: float = _RECORD_SECONDS) -> tuple[bool, int, str]:
-    """Zwei bereits verbundene Sockets ``record_seconds`` lang mitschneiden + schreiben."""
+                    max_seconds: float = _MAX_RECORD_SECONDS,
+                    grace_after_login: float = _GRACE_AFTER_LOGIN) -> tuple[bool, int, str]:
+    """Config-Phase mitschneiden: bis zum ersten Chunk NACH dem PLAY-Login (dann ist die
+    Config samt Setup-Paketen vollstaendig) - oder ``grace_after_login`` nach dem Login,
+    falls kein Chunk folgt. So wird der Client vor dem Weltladen getrennt (kein 'komisches'
+    Offline-Spielen) UND die Aufnahme ist auch bei riesigen Packs vollstaendig."""
     log: list = []
     lock = threading.Lock()
     stop = threading.Event()
-    threads = [
-        threading.Thread(target=_pipe, args=(client, backend, 1, log, lock, stop), daemon=True),
-        threading.Thread(target=_pipe, args=(backend, client, 0, log, lock, stop), daemon=True),
-    ]
-    for t in threads:
-        t.start()
-    deadline = time.monotonic() + record_seconds
-    while not stop.is_set() and time.monotonic() < deadline:
-        time.sleep(0.1)
+    state: dict = {"play_login_at": None, "first_chunk_at": None}
+    for src, dst, direction in ((client, backend, 1), (backend, client, 0)):
+        threading.Thread(target=_pipe, args=(src, dst, direction, log, lock, stop, state),
+                         daemon=True).start()
+    deadline = time.monotonic() + max_seconds
+    while not stop.is_set():
+        now = time.monotonic()
+        if now >= deadline:
+            break
+        if state.get("first_chunk_at") is not None:
+            break  # Config + Login + Setup komplett -> Schluss (vor den Chunks)
+        login_at = state.get("play_login_at")
+        if login_at is not None and now >= login_at + grace_after_login:
+            break  # Login da, aber (noch) kein Chunk -> Setup-Pakete duerften reichen
+        time.sleep(0.05)
     stop.set()
     for s in (client, backend):
         try:
@@ -123,13 +162,18 @@ def _record_streams(client: socket.socket, backend: socket.socket, out_path: str
         frames = list(log)
     if not frames:
         return False, 0, "Nichts aufgenommen (kein Datenverkehr)."
+    if state.get("play_login_at") is None:
+        return False, len(frames), (
+            f"{len(frames)} Pakete, aber kein PLAY-Login (0x2B) erreicht - Config "
+            "unvollstaendig. Server evtl. zu langsam/gross oder Client kam nicht bis PLAY.")
     _write_replay(out_path, frames)
-    return True, len(frames), f"{len(frames)} Pakete aufgenommen."
+    via = "erster Chunk" if state.get("first_chunk_at") else f"Timeout {grace_after_login:.0f}s nach Login"
+    return True, len(frames), f"{len(frames)} Pakete aufgenommen (Config komplett; Ende via {via})."
 
 
 def record_capture(listen_port: int, backend_host: str, backend_port: int, out_path: str,
                    accept_timeout: float = _ACCEPT_TIMEOUT,
-                   record_seconds: float = _RECORD_SECONDS) -> tuple[bool, int, str]:
+                   max_seconds: float = _MAX_RECORD_SECONDS) -> tuple[bool, int, str]:
     """Blockierend: einen Client auf ``listen_port`` annehmen, ueber das Backend
     aufnehmen und ``out_path`` schreiben. Gibt (ok, packet_count, message) zurueck."""
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -154,7 +198,7 @@ def record_capture(listen_port: int, backend_host: str, backend_port: int, out_p
         except OSError:
             pass
         return False, 0, f"Backend {backend_host}:{backend_port} nicht erreichbar: {exc}"
-    return _record_streams(client, backend, out_path, record_seconds)
+    return _record_streams(client, backend, out_path, max_seconds)
 
 
 # --------------------------------------------------------------------------- #

@@ -120,9 +120,12 @@ def dispatch(client: socket.socket, handshake: Handshake, initial: bytes) -> Non
             sid, reason = match_backend_for_client(db, mods)
 
             # In die gemeinsame Python-Lobby (Kompass-Menue). Auswahl (Path A):
-            #  - Pack hat eigenes Replay        -> modlobby-<server_id> (richtiger Spoof)
-            #  - Mods passen zum Default-Replay -> modlobby (Default-Profil, schuetzt ATM10)
-            #  - unbekanntes Pack ohne Replay   -> Auto-Capture beim Erstverbinden
+            #  - Pack hat EIGENES Replay -> modlobby-<server_id> (exakter Spoof)
+            #  - gematchter Server ohne eigenes Replay -> DIESEN Server aufnehmen
+            #    (NIE ein fremdes/aehnliches Replay servieren: Registry-Sync ist exakt,
+            #     eine fehlende Registry kickt den Client -> "tide:... not found").
+            #  - kein passender Server -> nichts zum Aufnehmen: Default nur bei Voll-
+            #    Abdeckung, sonst klarer Hinweis-Disconnect.
             if app_setting_service.get_hub_lobby_enabled(db):
                 from app.models.server import Server
                 from app.services import hub_replay_service
@@ -135,18 +138,19 @@ def dispatch(client: socket.socket, handshake: Handshake, initial: bytes) -> Non
                                 _no_match_message(db))
                         _glog("route_modded_hub", f"server={sid} tagged ({reason})")
                         return
-                    default_replay = app_setting_service.get_hub_lobby_replay(db)
-                    if hub_replay_service.client_matches_replay(mods, default_replay):
-                        _finish(client, _hub_target(db, gateway_service.HUB_LOBBY_ALIAS),
-                                _no_match_message(db))
-                        _glog("route_modded_hub_default", f"server={sid} matches-default")
-                        return
-                    # Unbekanntes Pack ohne Replay -> Auto-Capture (klare Kommunikation).
+                    # Kein eigenes (exaktes) Replay -> diesen Server einmalig aufnehmen.
                     _route_auto_capture(client, db, sid, srv)
                     return
-                # Kein passender Server -> Default-Profil (bisheriges Verhalten).
-                _finish(client, _hub_target(db, gateway_service.HUB_LOBBY_ALIAS), _no_match_message(db))
-                _glog("route_modded_hub", f"server=None default ({reason})")
+                # Kein Server gematcht -> Default-Profil nur, wenn der Client es VOLL
+                # abdeckt (sonst Registry-Kick), andernfalls klarer Hinweis.
+                default_replay = app_setting_service.get_hub_lobby_replay(db)
+                if hub_replay_service.client_matches_replay(mods, default_replay, threshold=1.0):
+                    _finish(client, _hub_target(db, gateway_service.HUB_LOBBY_ALIAS),
+                            _no_match_message(db))
+                    _glog("route_modded_hub_default", "server=None matches-default (voll)")
+                    return
+                client.sendall(mcd.build_config_disconnect(_no_pack_message(db)))
+                _glog("route_modded_hub_nomatch", f"server=None ({reason}) mods={len(mods)}")
                 return
 
             # --- NeoForge/Forge ohne Hub: direkt zum passenden Modpack-Server ---
@@ -308,6 +312,16 @@ def _no_match_message(db) -> str:
     if hosts:
         return "Kein passendes Modpack erkannt. Verbinde dich direkt: " + ", ".join(hosts)
     return "Kein passender Modpack-Server gefunden."
+
+
+def _no_pack_message(db) -> str:
+    """Klarer Hinweis, wenn ein modded Client keinem eingerichteten Pack zugeordnet werden
+    kann (statt ihn mit einem fremden Replay in einen Registry-Kick laufen zu lassen)."""
+    hosts = _modded_pack_hosts(db)
+    base = "Dein Modpack ist im Universal-Netz (noch) nicht eingerichtet."
+    if hosts:
+        return base + " Direkt verfuegbar: " + ", ".join(hosts)
+    return base
 
 
 def _no_lobby_message() -> str:

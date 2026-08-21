@@ -31,16 +31,54 @@ def replay_path_for(slug: str) -> str:
     return str(Path(REPLAY_DIR) / f"{slug}_capture.replay")
 
 
+_LOADABLE_CACHE: dict[str, tuple[tuple, bool]] = {}
+
+
+def replay_is_loadable(replay_path: str) -> bool:
+    """True, wenn das Replay einen S->C PLAY-Login (0x2B) enthaelt - NUR dann kann der Hub
+    daraus ein Profil bauen (_load_profile wirft sonst 'kein PLAY-Login').
+
+    Schliesst den Kern-Bug: der Dispatcher taggt sonst auf ein (altes/unvollstaendiges)
+    Replay ohne 0x2B, der Hub kann es nicht laden und faellt STILL auf das Default-Profil
+    (fremdes Pack) zurueck -> Registry-Kick. So gilt hier dieselbe Bedingung wie beim Hub.
+    Gecacht per (mtime, size) - ein Re-Capture aendert die Groesse, also nie stale, und ein
+    grosses Replay wird nicht bei jeder Verbindung neu geparst."""
+    try:
+        st = Path(replay_path).stat()
+        key = (st.st_mtime, st.st_size)
+    except OSError:
+        return False
+    cached = _LOADABLE_CACHE.get(replay_path)
+    if cached and cached[0] == key:
+        return cached[1]
+    ok = False
+    try:
+        from app.services import replay_service as rp
+
+        records = rp.load_replay_file(replay_path)
+        ok = rp.find_play_login(records) < len(records)
+    except Exception:  # noqa: BLE001 - defekte/leere Datei -> nicht ladbar
+        ok = False
+    _LOADABLE_CACHE[replay_path] = (key, ok)
+    return ok
+
+
 def has_replay(slug: str) -> bool:
-    return Path(replay_path_for(slug)).exists()
+    """True, wenn ein LADBARES Pack-Replay existiert (Datei da UND mit PLAY-Login). Muss
+    zur Hub-Seite (pack_profiles) passen, sonst taggt der Dispatcher auf ein nicht ladbares
+    Replay und der Hub serviert still das (fremde) Default -> Registry-Kick."""
+    path = replay_path_for(slug)
+    return Path(path).exists() and replay_is_loadable(path)
 
 
 def build_pack_registry(db: Session) -> dict[int, str]:
-    """``{server_id: replay_pfad}`` fuer gateway_enabled-Server, deren Replay existiert."""
+    """``{server_id: replay_pfad}`` fuer gateway_enabled-Server, deren Replay existiert
+    UND ladbar ist. Dieselbe Bedingung wie ``has_replay`` -> Dispatcher-Tag und Hub-Profil
+    stimmen ueberein (kein stilles Zurueckfallen aufs Default)."""
     registry: dict[int, str] = {}
     for srv in db.scalars(select(Server).where(Server.gateway_enabled.is_(True))).all():
         path = replay_path_for(srv.slug)
-        if Path(path).exists():
+        if Path(path).exists() and replay_is_loadable(path):
             registry[srv.id] = path
     return registry
 
@@ -90,11 +128,14 @@ def replay_mod_namespaces(replay_path: str) -> frozenset:
     return mods
 
 
-def client_matches_replay(client_mods: set, replay_path: str, threshold: float = 0.6) -> bool:
-    """True, wenn die Client-Mods das Pack des Replays hinreichend abdecken.
+def client_matches_replay(client_mods: set, replay_path: str, threshold: float = 1.0) -> bool:
+    """True, wenn die Client-Mods das Pack des Replays abdecken.
 
-    Schutz: ein Client, dessen Mods zum vorhandenen Default-Replay passen (z.B. ATM10),
-    loest KEINE Auto-Aufnahme aus, sondern wird weiter mit dem Default-Profil bedient.
+    WICHTIG: Registry-Sync ist exakt - fehlt dem Client auch nur EINE der im Replay
+    registrierten Mod-Registries, kickt der Server ihn ("tried to apply snapshot with
+    registry name X but was not found"). Deshalb Default ``threshold=1.0`` (Voll-
+    Abdeckung, Pack-Mods ⊆ Client-Mods). Ein niedrigerer Schwellwert wuerde ein
+    "aehnliches" Replay servieren und den Client zuverlaessig kicken.
     """
     pack = replay_mod_namespaces(replay_path)
     if not pack:

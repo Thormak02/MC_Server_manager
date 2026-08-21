@@ -101,9 +101,16 @@ def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
         if (_LISTENER is not None
                 and _LISTENER.modded_port == int(modded_port)
                 and _LISTENER.vanilla_port == int(vanilla_port)
-                and _LISTENER.replay == replay_path and _LISTENER.vanilla == vanilla
-                and _LISTENER.pack_replays == packs):
-            return True  # nichts geaendert
+                and _LISTENER.replay == replay_path and _LISTENER.vanilla == vanilla):
+            if _LISTENER.pack_replays == packs:
+                return True  # nichts geaendert
+            # NUR die Per-Pack-Replays haben sich geaendert (neuer Capture) -> live
+            # aktualisieren statt Hub-Rebuild: keine Kicks der Lobby-Spieler, kein
+            # riskantes Rebind ohne SO_REUSEADDR (TIME_WAIT koennte den Hub offline nehmen).
+            _LISTENER.hub.update_pack_profiles(packs)
+            _LISTENER.pack_replays = packs
+            _glog("packs_updated", f"{sorted(packs)}")
+            return True
         if _LISTENER is not None:
             _stop_locked()
         try:
