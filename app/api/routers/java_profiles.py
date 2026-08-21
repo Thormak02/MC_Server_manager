@@ -90,9 +90,13 @@ def settings_page(
     server_storage_source = get_server_storage_source(db)
     backup_storage_root = str(get_backup_storage_root(db))
     backup_storage_source = get_backup_storage_source(db)
-    from app.services.app_setting_service import get_central_storage_root
+    from app.services.app_setting_service import (
+        get_central_storage_root, get_nas_password, get_nas_user,
+    )
 
     central_storage_root = get_central_storage_root(db)
+    nas_user = get_nas_user(db)
+    nas_password_set = bool(get_nas_password(db))
     public_base_url = get_public_base_url(db)
     public_base_url_source = get_public_base_url_source(db)
     network_port = get_network_port(db)
@@ -145,6 +149,8 @@ def settings_page(
             server_storage_source=server_storage_source,
             backup_storage_root=backup_storage_root,
             central_storage_root=central_storage_root,
+            nas_user=nas_user,
+            nas_password_set=nas_password_set,
             backup_storage_source=backup_storage_source,
             public_base_url=public_base_url,
             public_base_url_source=public_base_url_source,
@@ -506,6 +512,8 @@ def update_central_storage_action(
     request: Request,
     central_storage_root: Annotated[str | None, Form()] = None,
     action: Annotated[str | None, Form()] = None,  # save | test | clear
+    nas_user: Annotated[str | None, Form()] = None,
+    nas_password: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_super_admin(request, db)
@@ -519,34 +527,60 @@ def update_central_storage_action(
 
     raw = (central_storage_root or "").strip()
 
+    if action == "clear":
+        A.set_central_storage_root(db, None)
+        A.set_nas_user(db, None)
+        A.set_nas_password(db, None)
+        try:
+            A.clear_backup_storage_override(db)  # Backups zurueck auf Standard/lokal
+        except Exception:  # noqa: BLE001
+            pass
+        audit_service.log_action(db, action="settings.central_storage_clear",
+                                 user_id=current_user.id, details="cleared")
+        push_flash(request, "Zentrales NAS-Verzeichnis geleert - Logs + Backups wieder lokal, NAS-Anmeldung entfernt.", "success")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    # NAS-Anmeldung fuer test + save speichern (Passwort leer = beibehalten), damit die
+    # Schreibprobe/Verbindung sie sofort nutzt.
+    A.set_nas_user(db, (nas_user or "").strip() or None)
+    if (nas_password or "").strip():
+        A.set_nas_password(db, nas_password)
+
     if action == "test":
         ok, msg = central_storage_service.probe_now(raw)
         push_flash(request, msg, "success" if ok else "error")
         return RedirectResponse(url="/settings", status_code=303)
 
-    if action == "clear" or not raw:
+    if not raw:
         A.set_central_storage_root(db, None)
-        audit_service.log_action(db, action="settings.central_storage_clear",
-                                 user_id=current_user.id, details="cleared")
-        push_flash(request, "Zentrales NAS-Verzeichnis geleert - alles bleibt lokal (data/).", "success")
+        try:
+            A.clear_backup_storage_override(db)
+        except Exception:  # noqa: BLE001
+            pass
+        push_flash(request, "Kein Pfad angegeben - alles bleibt lokal (data/).", "success")
         return RedirectResponse(url="/settings", status_code=303)
 
-    A.set_central_storage_root(db, raw)
-    # Backups gleich mit auf die NAS (eigener Unterordner); scheitert nicht die ganze Aktion.
-    backups_path = str(Path(raw) / "backups")
-    try:
-        A.set_backup_storage_root(db, backups_path)
-    except Exception:  # noqa: BLE001
-        backups_path = "(unveraendert - Backup-Pfad manuell setzen)"
     ok, msg = central_storage_service.probe_now(raw)
+    # Pfad merken: Logs faellt bei Nicht-Erreichbarkeit automatisch auf lokal zurueck.
+    A.set_central_storage_root(db, raw)
+    backups_path = "(lokal - kein NAS-Schreibzugriff)"
+    if ok:
+        # Backups NUR auf die NAS zeigen, wenn wirklich beschreibbar (fuer Backups gibt es
+        # keinen Auto-Fallback - sonst wuerden Backups auf ein totes Ziel schreiben).
+        backups_path = str(Path(raw) / "backups")
+        try:
+            A.set_backup_storage_root(db, backups_path)
+        except Exception:  # noqa: BLE001
+            backups_path = "(Backup-Pfad manuell setzen)"
     audit_service.log_action(db, action="settings.central_storage_update",
                              user_id=current_user.id, details=f"root={raw} probe_ok={ok}")
     if ok:
-        push_flash(request, (f"NAS-Verzeichnis gespeichert. Logs -> {raw}\\logs, "
+        push_flash(request, (f"NAS-Verzeichnis aktiv. Logs -> {raw}\\logs, "
                              f"Backups -> {backups_path}, DB-Snapshots -> {raw}\\db-snapshots."), "success")
     else:
-        push_flash(request, (f"Gespeichert, aber Schreibprobe fehlgeschlagen: {msg}. Der Manager nutzt "
-                             "bis auf Weiteres lokal (data/). Pruefe UNC-Pfad + Dienst-Rechte."), "error")
+        push_flash(request, (f"Pfad gespeichert, aber KEIN Schreibzugriff aus Manager-Sicht: {msg}. "
+                             "Logs bleiben lokal (automatischer Fallback), Backups NICHT umgestellt. "
+                             "Ursache meist: Dienst laeuft als SYSTEM ohne NAS-Zugang - siehe Anleitung."), "error")
     return RedirectResponse(url="/settings", status_code=303)
 
 

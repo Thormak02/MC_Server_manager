@@ -37,8 +37,85 @@ def _central_root() -> str:
         return ""
 
 
+_conn_ok_cache: dict[str, float] = {}
+_CONN_TTL = 120.0
+
+
+def _share_root(unc: str) -> str | None:
+    r"""Aus ``\\host\share\...`` die Freigabe-Wurzel ``\\host\share`` extrahieren."""
+    u = (unc or "").strip().replace("/", "\\")
+    if not u.startswith("\\\\"):
+        return None
+    parts = [p for p in u[2:].split("\\") if p]
+    if len(parts) < 2:
+        return None
+    return "\\\\" + parts[0] + "\\" + parts[1]
+
+
+def _wnet_connect(remote: str, user: str, password: str) -> int:
+    """WNetAddConnection2 (wie ``net use``). 0/85 = ok. Nur Windows."""
+    import ctypes
+    from ctypes import wintypes
+
+    class NETRESOURCE(ctypes.Structure):
+        _fields_ = [
+            ("dwScope", wintypes.DWORD), ("dwType", wintypes.DWORD),
+            ("dwDisplayType", wintypes.DWORD), ("dwUsage", wintypes.DWORD),
+            ("lpLocalName", wintypes.LPWSTR), ("lpRemoteName", wintypes.LPWSTR),
+            ("lpComment", wintypes.LPWSTR), ("lpProvider", wintypes.LPWSTR),
+        ]
+
+    mpr = ctypes.WinDLL("mpr")
+    nr = NETRESOURCE()
+    nr.dwType = 1  # RESOURCETYPE_DISK
+    nr.lpRemoteName = remote
+    ret = int(mpr.WNetAddConnection2W(ctypes.byref(nr), password, user, 0))
+    if ret == 1219:  # ERROR_SESSION_CREDENTIAL_CONFLICT -> alte Session trennen, neu verbinden
+        mpr.WNetCancelConnection2W(remote, 0, 1)
+        ret = int(mpr.WNetAddConnection2W(ctypes.byref(nr), password, user, 0))
+    return ret
+
+
+def _connect_root(root: str) -> int | None:
+    """Authentifizierte Verbindung zur Freigabe-Wurzel von ``root`` (falls Creds gesetzt).
+
+    So kann auch ein SYSTEM-Dienst auf eine Freigabe schreiben, die Anmeldung verlangt -
+    unabhaengig von cmdkey/Benutzerprofil. Gibt den WNet-Returncode zurueck (0/85 = ok)
+    oder None (keine Creds / kein UNC / Nicht-Windows)."""
+    remote = _share_root(root)
+    if not remote:
+        return None
+    try:
+        from app.services import app_setting_service
+
+        user = app_setting_service.get_nas_user_runtime()
+        password = app_setting_service.get_nas_password_runtime()
+    except Exception:  # noqa: BLE001
+        return None
+    if not user:
+        return None  # keine Creds -> Standard-Auth (Gast/Maschinenkonto)
+    try:
+        return _wnet_connect(remote, user, password)
+    except Exception:  # noqa: BLE001 - z.B. Nicht-Windows / DLL fehlt
+        return None
+
+
+def _ensure_connection() -> None:
+    """Wie _connect_root fuer das zentrale Verzeichnis, aber gecacht (Log-/Snapshot-Pfade)."""
+    root = _central_root()
+    remote = _share_root(root) if root else None
+    if not remote:
+        return
+    now = time.monotonic()
+    if now - _conn_ok_cache.get(remote, 0.0) < _CONN_TTL:
+        return
+    if _connect_root(root) in (0, 85):  # 85 = ALREADY_ASSIGNED
+        _conn_ok_cache[remote] = now
+
+
 def is_usable(path: Path) -> bool:
     """True, wenn ``path`` anlegbar + beschreibbar ist (kurz gecacht)."""
+    _ensure_connection()
     key = str(path)
     now = time.monotonic()
     cached = _usable_cache.get(key)
@@ -62,6 +139,7 @@ def probe_now(root: str) -> tuple[bool, str]:
     root = (root or "").strip()
     if not root:
         return False, "Kein Pfad gesetzt (alles bleibt lokal)."
+    _connect_root(root)  # NAS ggf. mit gespeicherten Creds authentifizieren
     target = Path(root) / _SUBDIR_LOGS
     try:
         target.mkdir(parents=True, exist_ok=True)

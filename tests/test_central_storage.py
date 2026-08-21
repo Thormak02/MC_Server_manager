@@ -68,6 +68,49 @@ def test_snapshot_db_no_central(monkeypatch):
     assert ok is False
 
 
+def test_share_root():
+    assert C._share_root(r"\\FriedrichNAS\FriedrichNAS\MC-manager-Logs") == r"\\FriedrichNAS\FriedrichNAS"
+    assert C._share_root(r"\\host\share") == r"\\host\share"
+    assert C._share_root(r"\\host\share\a\b\c") == r"\\host\share"
+    assert C._share_root("C:\\local\\path") is None
+    assert C._share_root("") is None
+    assert C._share_root(r"\\host") is None  # nur Host, keine Freigabe
+
+
+def test_central_route_saves_nas_creds(client, tmp_path):
+    client.post("/login", data={"username": "admin", "password": "admin123!"})
+    nas = tmp_path / "nas"
+
+    import app.db.session as dbs
+    from app.services import app_setting_service as A
+
+    resp = client.post("/settings/central-storage", data={
+        "central_storage_root": str(nas), "action": "save",
+        "nas_user": "Friedrich", "nas_password": "secret1",
+    })
+    assert resp.status_code == 200
+    with dbs.SessionLocal() as db:
+        assert A.get_nas_user(db) == "Friedrich"
+        assert A.get_nas_password(db) == "secret1"
+
+    # Passwort leer lassen -> beibehalten; Benutzer aendern
+    resp = client.post("/settings/central-storage", data={
+        "central_storage_root": str(nas), "action": "save",
+        "nas_user": "Friedrich2", "nas_password": "",
+    })
+    assert resp.status_code == 200
+    with dbs.SessionLocal() as db:
+        assert A.get_nas_user(db) == "Friedrich2"
+        assert A.get_nas_password(db) == "secret1"  # unveraendert
+
+    # clear entfernt auch die Anmeldung
+    resp = client.post("/settings/central-storage", data={"action": "clear"})
+    assert resp.status_code == 200
+    with dbs.SessionLocal() as db:
+        assert A.get_nas_user(db) == ""
+        assert A.get_nas_password(db) == ""
+
+
 def test_central_storage_route(client, tmp_path):
     client.post("/login", data={"username": "admin", "password": "admin123!"})
     nas = tmp_path / "nas"

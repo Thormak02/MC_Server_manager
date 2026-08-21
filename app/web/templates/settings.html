@@ -312,6 +312,24 @@
                    placeholder="\\Host\Freigabe\MC-manager-Logs" value="{{ central_storage_root }}">
             <p class="muted">Unterordner werden automatisch angelegt: <code>logs</code>, <code>backups</code>, <code>db-snapshots</code>.</p>
         </div>
+        <div>
+            <label for="nas_user">NAS-Benutzer (optional)</label>
+            <input id="nas_user" name="nas_user" type="text" value="{{ nas_user }}" placeholder="fuer SYSTEM-Dienst noetig">
+        </div>
+        <div>
+            <label for="nas_password">NAS-Passwort</label>
+            <input id="nas_password" name="nas_password" type="password" autocomplete="new-password"
+                   placeholder="{{ '(gesetzt - leer lassen zum Behalten)' if nas_password_set else 'leer = ohne Anmeldung' }}">
+        </div>
+        <div class="field-span-4">
+            <p class="muted">
+                <strong>Läuft der Manager als SYSTEM-Dienst</strong> und die Freigabe verlangt eine Anmeldung
+                (WinError 1326/1312 beim Testen): hier <strong>NAS-Benutzer + Passwort</strong> eintragen &ndash; der
+                Manager meldet sich dann <strong>selbst</strong> an der Freigabe an (wie <code>net use</code>),
+                unabhängig von cmdkey/Benutzerprofil. Nimm <strong>dieselben Daten wie fürs <code>Z:</code>-Laufwerk</strong>
+                (bei Synology o. ä. der NAS-eigene SMB-Benutzer, nicht zwingend „Friedrich").
+            </p>
+        </div>
         <div class="align-end">
             <button type="submit" name="action" value="save">Speichern</button>
         </div>

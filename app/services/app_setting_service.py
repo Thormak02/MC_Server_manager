@@ -12,6 +12,11 @@ BACKUP_STORAGE_ROOT_KEY = "backup_storage_root"
 # Zentrales NAS-Verzeichnis fuer Logs + Backups + DB-Snapshots (leer = alles lokal).
 # UNC bevorzugen (ein SYSTEM-Dienst sieht Laufwerksbuchstaben wie Z: meist nicht).
 CENTRAL_STORAGE_ROOT_KEY = "central_storage_root"
+# Optionale NAS-Anmeldung: der Manager authentifiziert sich selbst an der Freigabe
+# (WNetAddConnection2) - noetig, wenn er als SYSTEM laeuft und die Freigabe Anmeldung
+# verlangt. Leer = Standard-Auth (Gast/Maschinenkonto).
+NAS_USER_KEY = "nas_user"
+NAS_PASSWORD_KEY = "nas_password"
 PUBLIC_BASE_URL_KEY = "public_base_url"
 NETWORK_MODE_KEY = "network_mode"
 NETWORK_PORT_KEY = "network_port"
@@ -273,6 +278,38 @@ def get_central_storage_root_runtime() -> str:
 
     with SessionLocal() as db:
         return get_central_storage_root(db)
+
+
+def get_nas_user(db: Session) -> str:
+    row = _get_setting_row(db, NAS_USER_KEY)
+    return row.value.strip() if row and row.value.strip() else ""
+
+
+def set_nas_user(db: Session, value: str | None) -> None:
+    _set_or_clear(db, NAS_USER_KEY, (value or "").strip() or None)
+
+
+def get_nas_password(db: Session) -> str:
+    row = _get_setting_row(db, NAS_PASSWORD_KEY)
+    return row.value if row and row.value else ""
+
+
+def set_nas_password(db: Session, value: str | None) -> None:
+    _set_or_clear(db, NAS_PASSWORD_KEY, (value or "") or None)
+
+
+def get_nas_user_runtime() -> str:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_nas_user(db)
+
+
+def get_nas_password_runtime() -> str:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_nas_password(db)
 
 
 # --- Oeffentliche Basis-URL / Zieldomain (fuer Resource-Pack-Hosting etc.) ---
