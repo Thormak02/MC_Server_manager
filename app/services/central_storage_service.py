@@ -189,9 +189,18 @@ def logs_dir() -> Path:
 def db_snapshot_dir() -> Path | None:
     root = _central_root()
     if not root:
+        return None  # kein zentrales Verzeichnis gesetzt -> keine Snapshots gewuenscht
+    nas = Path(root) / _SUBDIR_DB
+    if is_usable(nas):
+        return nas
+    # NAS nicht direkt beschreibbar (z.B. SYSTEM-Dienst) -> lokal snapshotten; ein
+    # Sync-Task (im Benutzerkontext) spiegelt data/ dann auf die NAS.
+    local = get_settings().data_dir / _SUBDIR_DB
+    try:
+        local.mkdir(parents=True, exist_ok=True)
+        return local
+    except Exception:  # noqa: BLE001
         return None
-    candidate = Path(root) / _SUBDIR_DB
-    return candidate if is_usable(candidate) else None
 
 
 def _db_file() -> Path | None:
