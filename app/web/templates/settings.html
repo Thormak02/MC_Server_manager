@@ -20,17 +20,26 @@
 {# ===================== Netzwerk & Lobby ===================== #}
 <div class="settings-tab" data-settings-panel="netzwerk">
 <section class="card">
-    <h2>Netzwerk (Lobby)</h2>
+    <h2>Universal-Netzwerk</h2>
     <p class="muted">
-        Gemeinsame Eingangstuer fuer alle Server ueber einen transparenten Router. Aktuell:
-        <strong>{{ network_mode }}</strong> (Quelle: {{ "UI" if network_mode_source == "ui" else "Standard" }}).
+        <strong>Ein Eingang, eine Lobby.</strong> Alle Spieler &ndash; jede Version, jeder Loader
+        (NeoForge/Forge/Fabric/Quilt/Vanilla) &ndash; verbinden sich mit
+        <code>{{ network_domain or "&lt;deine-domain&gt;" }}</code>, treffen sich im begehbaren
+        <strong>Universal-Hub</strong> und waehlen per Kompass ihren Zielserver. Das <em>Gateway</em>
+        ist die unsichtbare Transportschicht darunter (leitet transparent an die echten Server,
+        weckt schlafende, Direktverbindung bleibt).
     </p>
-    <ul class="muted">
-        <li><strong>off</strong> &ndash; kein gemeinsamer Eingang; jeder Server auf eigenem Port.</li>
-        <li><strong>gateway</strong> &ndash; transparenter Router: eine Adresse leitet per Hostname
-            (<code>&lt;alias&gt;.&lt;domain&gt;</code>) direkt zum passenden Server. <strong>Jeder Typ, jede
-            Version</strong>, Direktverbindung bleibt erhalten. Kein begehbarer In-Game-Hub.</li>
-    </ul>
+    <p class="muted">Schnellstart: <strong>„Universal-Hub automatisch einrichten"</strong> (Abschnitt 2) &ndash; ein Klick.</p>
+</section>
+
+<section class="card">
+    <h2>1 &middot; Netzwerk-Eingang</h2>
+    <p class="muted">
+        Modus: <strong>{{ network_mode }}</strong> (Quelle: {{ "UI" if network_mode_source == "ui" else "Standard" }}).
+        &nbsp;<strong>off</strong> = kein gemeinsamer Eingang (jeder Server eigener Port).
+        &nbsp;<strong>gateway</strong> = <code>&lt;alias&gt;.&lt;domain&gt;</code> geht direkt zum Server,
+        die blanke Domain (mit Dispatcher) in die Lobby. Direktverbindung &amp; eigene Ports bleiben.
+    </p>
     <form method="post" action="/settings/network" class="grid grid-4">
         <div>
             <label for="network_mode">Modus</label>
@@ -42,12 +51,12 @@
         <div>
             <label for="network_port">Netzwerk-Port</label>
             <input id="network_port" name="network_port" type="number" min="1" max="65535" value="{{ network_port }}">
-            <p class="muted">Oeffentlicher Gateway-Eingang. Nur diesen (zusaetzlich zu den direkten Server-Ports) freigeben.</p>
+            <p class="muted">Oeffentlicher Eingang. Nur diesen freigeben.</p>
         </div>
         <div>
             <label for="network_domain">Netzwerk-Domain</label>
             <input id="network_domain" name="network_domain" type="text" placeholder="z.B. deine-domain.de" value="{{ network_domain }}">
-            <p class="muted">Fuer die Adressen <code>&lt;alias&gt;.&lt;domain&gt;</code>.</p>
+            <p class="muted">Fuer <code>&lt;alias&gt;.&lt;domain&gt;</code>. Noetig, damit die Lobby erreichbar ist.</p>
         </div>
         <div class="align-end">
             <button type="submit">Netzwerk speichern</button>
@@ -55,29 +64,114 @@
         <div class="field-span-2">
             <label>
                 <input type="checkbox" name="dispatcher_enabled" value="true" {% if dispatcher_enabled %}checked{% endif %}>
-                <strong>Modpack-Dispatcher</strong> an der blanken Domain (experimentell)
+                <strong>Modpack-Dispatcher</strong> an der blanken Domain
             </label>
             <p class="muted">
-                Wenn aktiv: Verbindungen auf die <em>blanke</em> Domain (<code>{{ network_domain or "&lt;domain&gt;" }}</code>)
-                erkennen den Client &ndash; Vanilla/Fabric wird zur Lobby geschickt, ein modded Client (NeoForge/Forge)
-                automatisch an seinen passenden Modpack-Server (per Mod-Erkennung). Alias-Adressen
-                (<code>&lt;alias&gt;.&lt;domain&gt;</code>) bleiben unveraendert.
+                Noetig, damit die blanke Domain in die Lobby fuehrt: erkennt den Client (Version/Loader/Mods)
+                und leitet ins passende Lobby-Profil. Alias-Adressen (<code>&lt;alias&gt;.&lt;domain&gt;</code>) bleiben unveraendert.
             </p>
         </div>
     </form>
+</section>
+
+<section class="card">
+    <h2>2 &middot; Universal-Hub (die Lobby)</h2>
     <p class="muted">
-        Im <code>gateway</code>-Modus laufen ALLE Server ganz normal weiter (jeder Typ,
-        jede Version, parallel) und bleiben direkt auf ihrem Port erreichbar. Das Gateway
-        leitet zusaetzlich <code>&lt;alias&gt;.&lt;domain&gt;</code> transparent zum passenden
-        Server. Pro Server unter <em>Server &rarr; Einstellungen &rarr; Gateway-Routing</em>
-        einen Alias vergeben. Werte gelten auch via
-        <code>MCSM_NETWORK_PORT</code>/<code>MCSM_NETWORK_DOMAIN</code> in der <code>.env</code>.
+        Der begehbare <strong>Python-Hub</strong>: NeoForge/Forge, Fabric/Quilt und Vanilla landen in
+        <strong>einer</strong> Welt und begegnen sich, dann per Kompass zum Zielserver. Modpacks werden
+        automatisch erkannt und gespooft (pro Pack ein Config-Replay, Aufnahme automatisch beim Erstverbinden
+        oder per Knopf am Modpack-Server); Vanilla &amp; Fabric teilen sich das Vanilla-Replay; andere Versionen
+        kommen ueber <strong>ViaProxy</strong> herein.
     </p>
+    <p class="muted">
+        Status: Hub
+        {% if universal_lobby.hub_running %}<strong style="color:#2e7d32">laeuft</strong>
+        {% else %}<strong style="color:#c62828">aus</strong>{% endif %}
+        &nbsp;|&nbsp; ViaProxy
+        {% if universal_lobby.viaproxy_running %}<strong style="color:#2e7d32">laeuft</strong>
+        {% else %}<strong style="color:#c62828">aus</strong>{% endif %}
+    </p>
+    <div class="inline-form">
+        <form method="post" action="/settings/hub/auto-create" class="inline-form">
+            <button type="submit">Universal-Hub automatisch einrichten</button>
+        </form>
+    </div>
+    <p class="muted">Ein Klick: schaltet <strong>Gateway + Dispatcher + Hub</strong> an und macht den Hub zum Standard-Eingang.</p>
+    <form method="post" action="/settings/universal-lobby" class="grid grid-4">
+        <div class="field-span-2">
+            <label>
+                <input type="checkbox" name="hub_lobby_enabled" value="true" {% if universal_lobby.hub_enabled %}checked{% endif %}>
+                <strong>Universal-Lobby aktivieren</strong> (Python-Hub)
+            </label>
+        </div>
+        <div class="field-span-2">
+            <label>
+                <input type="checkbox" name="viaproxy_enabled" value="true" {% if universal_lobby.viaproxy_enabled %}checked{% endif %}>
+                <strong>Cross-Version (ViaProxy)</strong> &ndash; andere Versionen (Jar laedt automatisch)
+            </label>
+        </div>
+        <div>
+            <label for="hub_name">Hub-Name (Serverliste)</label>
+            <input id="hub_name" name="hub_name" type="text" value="{{ universal_lobby.hub_name }}">
+        </div>
+        <div>
+            <label for="hub_max_players">Max. Spieler (Anzeige)</label>
+            <input id="hub_max_players" name="hub_max_players" type="number" min="1" max="100000" value="{{ universal_lobby.hub_max_players }}">
+        </div>
+        <div class="field-span-2">
+            <label for="hub_motd">MOTD (Serverliste)</label>
+            <input id="hub_motd" name="hub_motd" type="text" value="{{ universal_lobby.hub_motd }}">
+        </div>
+        <div class="field-span-2">
+            <label>
+                <input type="checkbox" name="hub_whitelist_enabled" value="true" {% if universal_lobby.hub_whitelist_enabled %}checked{% endif %}>
+                <strong>Whitelist</strong> aktiv (nur gelistete Namen)
+            </label>
+        </div>
+        <div class="field-span-2">
+            <label for="hub_whitelist">Whitelist-Namen</label>
+            <textarea id="hub_whitelist" name="hub_whitelist" rows="2" placeholder="ein Name pro Zeile oder mit Komma">{{ universal_lobby.hub_whitelist }}</textarea>
+        </div>
+        <div class="field-span-4">
+            <details class="muted">
+                <summary>Erweitert: Ports &amp; Replays (nur bei Bedarf)</summary>
+                <div class="grid grid-4" style="margin-top:.6rem">
+                    <div>
+                        <label for="hub_lobby_port">Hub-Port (modded)</label>
+                        <input id="hub_lobby_port" name="hub_lobby_port" type="number" min="1" max="65535" value="{{ universal_lobby.hub_port }}">
+                    </div>
+                    <div>
+                        <label for="hub_lobby_vanilla_port">Hub-Port (vanilla)</label>
+                        <input id="hub_lobby_vanilla_port" name="hub_lobby_vanilla_port" type="number" min="1" max="65535" value="{{ universal_lobby.hub_vanilla_port }}">
+                    </div>
+                    <div>
+                        <label for="viaproxy_port">ViaProxy-Port</label>
+                        <input id="viaproxy_port" name="viaproxy_port" type="number" min="1" max="65535" value="{{ universal_lobby.viaproxy_port }}">
+                    </div>
+                    <div></div>
+                    <div class="field-span-2">
+                        <label for="hub_lobby_replay">Modpack-Replay (Default/Fallback)</label>
+                        <input id="hub_lobby_replay" name="hub_lobby_replay" type="text" value="{{ universal_lobby.hub_replay }}">
+                        <p class="muted">Fallback-Spoof. Pro Pack nimmt der Manager automatisch beim Erstverbinden auf (oder Server &rarr; „Kompatibilitaet aufnehmen").</p>
+                    </div>
+                    <div class="field-span-2">
+                        <label for="hub_lobby_vanilla_replay">Vanilla-Replay</label>
+                        <input id="hub_lobby_vanilla_replay" name="hub_lobby_vanilla_replay" type="text" placeholder="leer = kein Vanilla-Pfad" value="{{ universal_lobby.hub_vanilla_replay }}">
+                        <p class="muted">1.21.1-Vanilla-Config (auch fuer Fabric/Quilt). Leer = Vanilla bleibt auf der klassischen Java-Lobby.</p>
+                    </div>
+                </div>
+            </details>
+        </div>
+        <div class="field-span-2 align-end">
+            <button type="submit">Universal-Lobby speichern</button>
+        </div>
+    </form>
+    <p class="muted">Ports sind lokal (nur der Netzwerk-Port oben muss oeffentlich sein). Speichern greift sofort.</p>
 </section>
 
 {% if gateway_status and gateway_status.mode == "gateway" %}
 <section class="card">
-    <h2>Gateway-Status &amp; Routing</h2>
+    <h2>Status &amp; Routing</h2>
     <p class="muted">
         Listener:
         {% if gateway_status.running %}
@@ -124,150 +218,33 @@
 {% endif %}
 
 <section class="card">
-    <h2>Lobby automatisch einrichten</h2>
-    <p class="muted">
-        Legt mit einem Klick einen fertigen Paper-Lobby-Server (stabiles 1.21.x) an,
-        markiert ihn als Gateway-Default (blanke Domain landet dort), setzt eine ruhige
-        Lobby-Welt und installiert die <strong>begehbare Transfer-Lobby</strong>
-        (Plugin <code>MCSMLobby</code>). Setzt den Netzwerk-Modus auf <code>gateway</code>.
-        Danach nur noch starten.
-    </p>
-    <p class="muted">
-        <strong>Begehbare Lobby (ab Client 1.20.5):</strong> In der Lobby &ndash; Kompass
-        (Rechtsklick) oeffnet das Server-Menue, alternativ <code>/server &lt;alias&gt;</code>,
-        <code>/hub</code>. Schild: Zeile 1 <code>[server]</code>, Zeile 2 der Alias.
-        Begehbare Portale traegst du in <code>plugins/MCSMLobby/config.yml</code> unter
-        <code>regions</code> ein. Die Server-Liste im Menue erzeugt der Manager automatisch
-        aus den Gateway-Aliassen &ndash; funktioniert fuer <strong>jeden</strong> Servertyp.
-    </p>
-    <div class="inline-form">
-        <form method="post" action="/settings/lobby/auto-create" class="inline-form">
-            <button type="submit">Lobby automatisch einrichten</button>
-        </form>
-        <form method="post" action="/settings/lobby/sync-plugin" class="inline-form">
-            <button type="submit" class="secondary">Transfer-Menue neu erzeugen</button>
-        </form>
-    </div>
-    <p class="muted">
-        „Transfer-Menue neu erzeugen" schreibt die Server-Liste des Plugins auf <strong>allen</strong>
-        Gateway-Servern neu (Lobby-Menue + <code>/lobby</code> auf den anderen). Bei laufenden
-        Servern danach neu starten, damit das Plugin die Aenderung laedt.
-    </p>
-
-    <hr>
-    <h3>Multi-Version-Lobby (ViaVersion)</h3>
-    <p class="muted">
-        Standardmaessig kann sich nur ein Client der <strong>exakt gleichen</strong> Version wie die
-        Lobby verbinden – sonst „Outdated client/server". Dieser Knopf laedt <strong>ViaVersion</strong>,
-        <strong>ViaBackwards</strong> und <strong>ViaRewind</strong> in die Lobby, damit sich Clients
-        <strong>jeder</strong> Version (neuer wie aelter, auch modded wie ATM10) mit der Lobby verbinden
-        koennen. Download von Modrinth passend zur Lobby-Version.
-    </p>
-    <form method="post" action="/settings/lobby/install-multiversion" class="inline-form">
-        <button type="submit">Multi-Version auf Lobby installieren</button>
-    </form>
-    <p class="muted">
-        Danach die Lobby neu starten. Hinweis: Via macht die <em>Lobby</em> fuer alle Versionen
-        erreichbar. Ein transferierter Spieler landet dann auf dem Zielserver – der sollte moeglichst
-        die passende Version sprechen (oder ebenfalls Via haben).
-    </p>
+    <details class="muted">
+        <summary><strong>Klassische Java-Lobby (optional)</strong> &ndash; Paper-Lobby zum Selbstbauen / Legacy</summary>
+        <p class="muted" style="margin-top:.6rem">
+            Nur noetig, wenn du eine <strong>begehbare Paper-Lobby</strong> willst (zum Bauen, mit Plugins) &ndash;
+            z.B. um spaeter eine Welt fuer den Universal-Hub vorzubereiten. Fuer den normalen Betrieb reicht der
+            Universal-Hub (Abschnitt 2).
+        </p>
+        <div class="inline-form">
+            <form method="post" action="/settings/lobby/auto-create" class="inline-form">
+                <button type="submit">Paper-Lobby anlegen</button>
+            </form>
+            <form method="post" action="/settings/lobby/sync-plugin" class="inline-form">
+                <button type="submit" class="secondary">Transfer-Menue neu erzeugen</button>
+            </form>
+            <form method="post" action="/settings/lobby/install-multiversion" class="inline-form">
+                <button type="submit" class="secondary">Multi-Version (ViaVersion) installieren</button>
+            </form>
+        </div>
+        <p class="muted">
+            „Paper-Lobby anlegen" erstellt einen Paper-Server als Gateway-Default (Plugin <code>MCSMLobby</code>:
+            Kompass-Menue, <code>/server</code>, <code>/hub</code>). „Transfer-Menue neu erzeugen" schreibt die
+            Server-Liste auf allen Gateway-Servern neu. „Multi-Version" laedt ViaVersion/ViaBackwards/ViaRewind in
+            die Paper-Lobby. Danach die betroffenen Server neu starten.
+        </p>
+    </details>
 </section>
 
-<section class="card">
-    <h2>Universal-Lobby (modded + Cross-Version)</h2>
-    <p class="muted">
-        Der begehbare <strong>Python-Hub</strong>: modded (NeoForge/Forge, ATM10) UND vanilla/Plugin-Spieler
-        landen in <strong>einer</strong> Welt und begegnen sich. Modpack-Clients bekommen den ATM10-Spoof,
-        vanilla-Clients <strong>jeder Version</strong> kommen ueber <strong>ViaProxy</strong> herein
-        (Jar laedt der Manager automatisch). Erreichbar ueber die blanke Domain &ndash; dafuer muss der
-        <em>Modpack-Dispatcher</em> (oben) aktiv sein.
-    </p>
-    <p class="muted">
-        Status: Hub
-        {% if universal_lobby.hub_running %}<strong style="color:#2e7d32">laeuft</strong>
-        {% else %}<strong style="color:#c62828">aus</strong>{% endif %}
-        &nbsp;|&nbsp; ViaProxy
-        {% if universal_lobby.viaproxy_running %}<strong style="color:#2e7d32">laeuft</strong>
-        {% else %}<strong style="color:#c62828">aus</strong>{% endif %}
-    </p>
-    <div class="inline-form">
-        <form method="post" action="/settings/hub/auto-create" class="inline-form">
-            <button type="submit">Universal-Hub automatisch einrichten</button>
-        </form>
-    </div>
-    <p class="muted">
-        Ein Klick: schaltet <strong>Gateway-Modus + Modpack-Dispatcher + Hub</strong> an und macht den Hub
-        zum <strong>Standard-Eingang</strong> der blanken Domain. Cross-Version (ViaProxy) und die Ports/Replays
-        stellst du darunter ein.
-    </p>
-    <form method="post" action="/settings/universal-lobby" class="grid grid-4">
-        <div class="field-span-2">
-            <label>
-                <input type="checkbox" name="hub_lobby_enabled" value="true" {% if universal_lobby.hub_enabled %}checked{% endif %}>
-                <strong>Universal-Lobby aktivieren</strong> (begehbarer Python-Hub)
-            </label>
-        </div>
-        <div class="field-span-2">
-            <label>
-                <input type="checkbox" name="viaproxy_enabled" value="true" {% if universal_lobby.viaproxy_enabled %}checked{% endif %}>
-                <strong>Cross-Version (ViaProxy)</strong> &ndash; vanilla jeder Version (Jar laedt automatisch)
-            </label>
-        </div>
-        <div>
-            <label for="hub_lobby_port">Hub-Port (modded)</label>
-            <input id="hub_lobby_port" name="hub_lobby_port" type="number" min="1" max="65535" value="{{ universal_lobby.hub_port }}">
-        </div>
-        <div>
-            <label for="hub_lobby_vanilla_port">Hub-Port (vanilla)</label>
-            <input id="hub_lobby_vanilla_port" name="hub_lobby_vanilla_port" type="number" min="1" max="65535" value="{{ universal_lobby.hub_vanilla_port }}">
-        </div>
-        <div>
-            <label for="viaproxy_port">ViaProxy-Port</label>
-            <input id="viaproxy_port" name="viaproxy_port" type="number" min="1" max="65535" value="{{ universal_lobby.viaproxy_port }}">
-        </div>
-        <div class="align-end">
-            <button type="submit">Universal-Lobby speichern</button>
-        </div>
-        <div class="field-span-2">
-            <label for="hub_lobby_replay">Modpack-Replay (Spoof)</label>
-            <input id="hub_lobby_replay" name="hub_lobby_replay" type="text" value="{{ universal_lobby.hub_replay }}">
-            <p class="muted">Config-Mitschnitt des Modpacks (Standard: <code>atm10_capture.replay</code>).</p>
-        </div>
-        <div class="field-span-2">
-            <label for="hub_lobby_vanilla_replay">Vanilla-Replay</label>
-            <input id="hub_lobby_vanilla_replay" name="hub_lobby_vanilla_replay" type="text" placeholder="leer = kein Vanilla-Pfad" value="{{ universal_lobby.hub_vanilla_replay }}">
-            <p class="muted">1.21.1-Vanilla-Config. Leer = vanilla bleibt auf der Java-Lobby. (Aufnahme per Knopf &ndash; folgt.)</p>
-        </div>
-        <div>
-            <label for="hub_name">Hub-Name (Serverliste)</label>
-            <input id="hub_name" name="hub_name" type="text" value="{{ universal_lobby.hub_name }}">
-        </div>
-        <div>
-            <label for="hub_max_players">Max. Spieler (Anzeige)</label>
-            <input id="hub_max_players" name="hub_max_players" type="number" min="1" max="100000" value="{{ universal_lobby.hub_max_players }}">
-        </div>
-        <div class="field-span-2">
-            <label for="hub_motd">MOTD (Serverliste)</label>
-            <input id="hub_motd" name="hub_motd" type="text" value="{{ universal_lobby.hub_motd }}">
-            <p class="muted">Text/Beschreibung im Multiplayer-Menue. Der Hub taucht damit in der Serverliste auf.</p>
-        </div>
-        <div class="field-span-2">
-            <label>
-                <input type="checkbox" name="hub_whitelist_enabled" value="true" {% if universal_lobby.hub_whitelist_enabled %}checked{% endif %}>
-                <strong>Whitelist</strong> aktiv (nur gelistete Namen duerfen in die Lobby)
-            </label>
-        </div>
-        <div class="field-span-2">
-            <label for="hub_whitelist">Whitelist-Namen</label>
-            <textarea id="hub_whitelist" name="hub_whitelist" rows="3" placeholder="ein Name pro Zeile oder mit Komma getrennt">{{ universal_lobby.hub_whitelist }}</textarea>
-            <p class="muted">Nur wirksam, wenn die Whitelist oben aktiv ist. Gross-/Kleinschreibung egal.</p>
-        </div>
-    </form>
-    <p class="muted">
-        Die Hub-/ViaProxy-Ports sind <strong>lokal</strong> (nur der Netzwerk-Port oben muss oeffentlich
-        sein). Nach dem Speichern greift alles sofort (Hub-Listener + ViaProxy-Prozess + Gateway-Routen).
-    </p>
-</section>
 </div>
 
 {# ===================== Speicher & Domain ===================== #}
