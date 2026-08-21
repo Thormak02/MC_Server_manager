@@ -727,8 +727,11 @@ def _prepare_loader_runtime_if_needed(
 
 
 def _server_log_dir(server_id: int) -> Path:
-    settings = get_settings()
-    log_dir = settings.data_dir / "logs" / f"server_{server_id}"
+    # Basis-Log-Verzeichnis kommt aus central_storage_service: NAS (falls gesetzt +
+    # beschreibbar), sonst lokal data/logs. So landen Server-Konsolen-Logs auf der NAS.
+    from app.services import central_storage_service
+
+    log_dir = central_storage_service.logs_dir() / f"server_{server_id}"
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
 

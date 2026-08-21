@@ -79,6 +79,28 @@ def test_decide_route_version_fallback_unique_vs_ambiguous():
     assert decide_route("nope.host", 763, ambiguous).reason == "none"
 
 
+def test_decide_route_apex_to_dispatcher_when_enabled():
+    """Kein gateway_is_default-Server, aber Dispatcher an (Hub = Lobby): die blanke/
+    unbekannte Domain geht an den Dispatcher ("default"), NICHT per Versions-Fallback
+    direkt auf einen zufaellig versionsgleichen Server."""
+    from app.services.gateway_service import GatewayRoutes, decide_route
+
+    routes = GatewayRoutes(by_version={767: 5}, default_server_id=None,
+                           dispatcher_enabled=True, domain="mc.example.de")
+    assert decide_route("mc.example.de", 767, routes).reason == "default"          # Apex
+    assert decide_route("unknown.mc.example.de", 767, routes).reason == "default"  # unbekannter Alias
+
+    # Ein echter Alias trifft weiterhin direkt.
+    aliased = GatewayRoutes(by_hostname={"seasons": 3}, default_server_id=None,
+                            dispatcher_enabled=True, domain="mc.example.de")
+    assert decide_route("seasons.mc.example.de", 767, aliased).server_id == 3
+
+    # Dispatcher AUS -> Versions-Fallback bleibt erhalten.
+    off = GatewayRoutes(by_version={767: 5}, default_server_id=None,
+                        dispatcher_enabled=False, domain="mc.example.de")
+    assert decide_route("mc.example.de", 767, off).reason == "version"
+
+
 def test_decide_route_no_match():
     from app.services.gateway_service import GatewayRoutes, decide_route
 

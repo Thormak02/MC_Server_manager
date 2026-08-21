@@ -9,6 +9,9 @@ from app.models.app_setting import AppSetting
 
 SERVER_STORAGE_ROOT_KEY = "server_storage_root"
 BACKUP_STORAGE_ROOT_KEY = "backup_storage_root"
+# Zentrales NAS-Verzeichnis fuer Logs + Backups + DB-Snapshots (leer = alles lokal).
+# UNC bevorzugen (ein SYSTEM-Dienst sieht Laufwerksbuchstaben wie Z: meist nicht).
+CENTRAL_STORAGE_ROOT_KEY = "central_storage_root"
 PUBLIC_BASE_URL_KEY = "public_base_url"
 NETWORK_MODE_KEY = "network_mode"
 NETWORK_PORT_KEY = "network_port"
@@ -252,6 +255,24 @@ def clear_backup_storage_override(db: Session) -> Path:
         key=BACKUP_STORAGE_ROOT_KEY,
         resolver=get_backup_storage_root,
     )
+
+
+# --- Zentrales NAS-Verzeichnis (Logs + Backups + DB-Snapshots) -----------------
+def get_central_storage_root(db: Session) -> str:
+    """Roh-Pfad des zentralen NAS-Verzeichnisses (leer = lokal). UNC empfohlen."""
+    row = _get_setting_row(db, CENTRAL_STORAGE_ROOT_KEY)
+    return row.value.strip() if row and row.value.strip() else ""
+
+
+def set_central_storage_root(db: Session, value: str | None) -> None:
+    _set_or_clear(db, CENTRAL_STORAGE_ROOT_KEY, (value or "").strip() or None)
+
+
+def get_central_storage_root_runtime() -> str:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_central_storage_root(db)
 
 
 # --- Oeffentliche Basis-URL / Zieldomain (fuer Resource-Pack-Hosting etc.) ---

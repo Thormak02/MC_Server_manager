@@ -90,6 +90,9 @@ def settings_page(
     server_storage_source = get_server_storage_source(db)
     backup_storage_root = str(get_backup_storage_root(db))
     backup_storage_source = get_backup_storage_source(db)
+    from app.services.app_setting_service import get_central_storage_root
+
+    central_storage_root = get_central_storage_root(db)
     public_base_url = get_public_base_url(db)
     public_base_url_source = get_public_base_url_source(db)
     network_port = get_network_port(db)
@@ -141,6 +144,7 @@ def settings_page(
             server_storage_root=server_storage_root,
             server_storage_source=server_storage_source,
             backup_storage_root=backup_storage_root,
+            central_storage_root=central_storage_root,
             backup_storage_source=backup_storage_source,
             public_base_url=public_base_url,
             public_base_url_source=public_base_url_source,
@@ -494,6 +498,55 @@ def update_backup_storage_action(
         details=f"path={new_path}",
     )
     push_flash(request, f"Backup-Pfad gespeichert: {new_path}", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/central-storage")
+def update_central_storage_action(
+    request: Request,
+    central_storage_root: Annotated[str | None, Form()] = None,
+    action: Annotated[str | None, Form()] = None,  # save | test | clear
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from pathlib import Path
+
+    from app.services import app_setting_service as A
+    from app.services import central_storage_service
+
+    raw = (central_storage_root or "").strip()
+
+    if action == "test":
+        ok, msg = central_storage_service.probe_now(raw)
+        push_flash(request, msg, "success" if ok else "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    if action == "clear" or not raw:
+        A.set_central_storage_root(db, None)
+        audit_service.log_action(db, action="settings.central_storage_clear",
+                                 user_id=current_user.id, details="cleared")
+        push_flash(request, "Zentrales NAS-Verzeichnis geleert - alles bleibt lokal (data/).", "success")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    A.set_central_storage_root(db, raw)
+    # Backups gleich mit auf die NAS (eigener Unterordner); scheitert nicht die ganze Aktion.
+    backups_path = str(Path(raw) / "backups")
+    try:
+        A.set_backup_storage_root(db, backups_path)
+    except Exception:  # noqa: BLE001
+        backups_path = "(unveraendert - Backup-Pfad manuell setzen)"
+    ok, msg = central_storage_service.probe_now(raw)
+    audit_service.log_action(db, action="settings.central_storage_update",
+                             user_id=current_user.id, details=f"root={raw} probe_ok={ok}")
+    if ok:
+        push_flash(request, (f"NAS-Verzeichnis gespeichert. Logs -> {raw}\\logs, "
+                             f"Backups -> {backups_path}, DB-Snapshots -> {raw}\\db-snapshots."), "success")
+    else:
+        push_flash(request, (f"Gespeichert, aber Schreibprobe fehlgeschlagen: {msg}. Der Manager nutzt "
+                             "bis auf Weiteres lokal (data/). Pruefe UNC-Pfad + Dienst-Rechte."), "error")
     return RedirectResponse(url="/settings", status_code=303)
 
 

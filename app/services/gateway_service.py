@@ -148,6 +148,14 @@ def decide_route(
     if routes.default_server_id is not None:
         return RouteDecision(routes.default_server_id, "default")
 
+    # Kein Alias/Default getroffen, aber der Dispatcher (Universal-Hub) ist aktiv:
+    # die blanke/unbekannte Domain geht an den Dispatcher = die Lobby. WICHTIG: ohne
+    # diesen Zweig faellt die blanke Domain (wenn kein gateway_is_default-Server
+    # existiert, weil der Python-Hub die Lobby ist) auf den Versions-Fallback und
+    # landet direkt auf einem zufaellig versionsgleichen Server statt in der Lobby.
+    if routes.dispatcher_enabled:
+        return RouteDecision(None, "default")
+
     try:
         version = int(protocol_version)
     except (TypeError, ValueError):

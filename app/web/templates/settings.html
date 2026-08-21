@@ -292,6 +292,40 @@
 </section>
 
 <section class="card">
+    <h2>Zentrales NAS-Verzeichnis (Logs, Backups, DB-Snapshots)</h2>
+    <p class="muted">
+        Optional: legt <strong>Server-/Manager-Logs</strong>, <strong>Backups</strong> und
+        konsistente <strong>DB-Snapshots</strong> auf ein zentrales Verzeichnis (z.B. NAS),
+        damit sie ausgelagert + einsehbar sind. Leer = alles lokal unter <code>data/</code>.
+        Die <strong>Live-DB bleibt lokal</strong> (nur Snapshots wandern, per SQLite-Backup-API).
+    </p>
+    <p class="muted">
+        Aktuell: <strong>{{ central_storage_root or "(lokal - data/)" }}</strong>.
+        <strong>UNC-Pfad bevorzugen</strong> (ein SYSTEM-Dienst sieht Laufwerksbuchstaben wie
+        <code>Z:</code> meist nicht), z.B. <code>\\FriedrichNAS\FriedrichNAS\MC-manager-Logs</code>.
+        Bei Nicht-Erreichbarkeit faellt der Manager automatisch auf lokal zurueck.
+    </p>
+    <form method="post" action="/settings/central-storage" class="grid grid-4">
+        <div class="field-span-2">
+            <label for="central_storage_root">NAS-Basisverzeichnis (UNC)</label>
+            <input id="central_storage_root" name="central_storage_root" type="text"
+                   placeholder="\\Host\Freigabe\MC-manager-Logs" value="{{ central_storage_root }}">
+            <p class="muted">Unterordner werden automatisch angelegt: <code>logs</code>, <code>backups</code>, <code>db-snapshots</code>.</p>
+        </div>
+        <div class="align-end">
+            <button type="submit" name="action" value="save">Speichern</button>
+        </div>
+        <div class="align-end">
+            <button type="submit" name="action" value="test" class="secondary">Schreibzugriff testen</button>
+        </div>
+    </form>
+    <form method="post" action="/settings/central-storage" class="inline-form" style="margin-top:.75rem">
+        <input type="hidden" name="action" value="clear">
+        <button type="submit" class="ghost">Leeren (alles lokal)</button>
+    </form>
+</section>
+
+<section class="card">
     <h2>Oeffentliche URL / Zieldomain</h2>
     <p class="muted">
         Aktuell: <strong>{{ public_base_url or "(nicht gesetzt)" }}</strong>

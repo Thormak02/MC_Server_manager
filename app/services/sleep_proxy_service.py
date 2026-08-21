@@ -489,6 +489,13 @@ def _idle_tick() -> None:
     except Exception:  # noqa: BLE001
         pass
 
+    try:
+        from app.services import central_storage_service
+
+        central_storage_service.maybe_snapshot_db()  # gedrosselt (30 min)
+    except Exception:  # noqa: BLE001
+        pass
+
     with SessionLocal() as db:
         servers = list(
             db.scalars(select(Server).where(Server.sleep_enabled.is_(True))).all()
