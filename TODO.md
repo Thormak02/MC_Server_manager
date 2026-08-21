@@ -276,6 +276,11 @@ es soll auch möglich sein, von einem server mit /lobby wieder zur lobby zu gela
 
 alte plugins erkennen / updaten
 
+transfer mit klick im kompass menu funktioniert, ich komme auch mit dem 1.21.1 client in die 1.21.11 lobby.
+ist damit nicht das gateway netz überholt und kann weg? ich möchte anstelle des gateway netzes das neue universal netz mit den selben funktionen (automatische hub server erstellung, hub lobby server im dashboard sichtbar und wie ein normaler server bearbeitbar [port, whitelist, ram, welt, usw. änderbar] usw.)
+alles klar?
+das ganze soll für alle aktuellen und zukünftigen versionen und modpacks funktionieren, nicht nur für atm 10 und vanilla, sondern zb. acuh für seasons oder fabric, quilt und forge modpacks und neoforge. eventuell brauchen wir ein automatisches spoofing bei erstmaligen anlegen eines modpacks im manager und dem erstmaligen verbinden mit diesem modpack auf den server, das ganze soll wie gesagt automatisch geschehen.
+
 
 KI Ideen:
 

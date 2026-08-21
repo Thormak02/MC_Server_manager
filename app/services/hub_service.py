@@ -24,6 +24,7 @@ import struct
 import threading
 import time
 
+from app.services import app_setting_service
 from app.services import mc_dispatch as mcd
 from app.services import mc_play as pl
 from app.services import mc_protocol as mp
@@ -327,6 +328,46 @@ class Hub:
             bx, by, bz = nx, ny, nz
 
     # ------------------------------------------------------------------ #
+    # Serverlisten-Ping + Whitelist
+    # ------------------------------------------------------------------ #
+    def _handle_status(self, reader: "_Reader", sock: socket.socket, hs) -> None:
+        """Serverlisten-Ping beantworten (MOTD, echte Spielerzahl, Version).
+
+        Ohne das erschiene der Hub gar nicht in der Multiplayer-Liste (frueher
+        wurde der Status-Ping kommentarlos verworfen).
+        """
+        try:
+            cfg = app_setting_service.get_hub_config_runtime()
+        except Exception:  # noqa: BLE001 - Ping darf nie den Hub stoeren
+            cfg = {"name": "Universal-Lobby", "motd": "Universal-Lobby", "max_players": 100}
+        try:
+            reader.read_packet(3.0)  # Status Request (0x00, leer)
+            online = len([s for s in self.players.values() if s.alive and s.sock is not None])
+            status = mp.build_status_json(
+                motd=cfg["motd"],
+                version_name=cfg["name"],
+                protocol_version=hs.protocol_version,
+                players_online=online,
+                players_max=cfg["max_players"],
+            )
+            sock.sendall(mp.build_status_response_packet(status))
+            pid, payload = reader.read_packet(3.0)  # optionaler Ping (0x01 + long)
+            if pid == 0x01 and len(payload) >= 8:
+                sock.sendall(mp.build_pong_packet(int.from_bytes(payload[:8], "big", signed=True)))
+        except (OSError, ConnectionError):
+            pass
+
+    def _whitelist_ok(self, username: str) -> bool:
+        """True, wenn der Spieler beitreten darf (Whitelist aus -> immer True)."""
+        try:
+            cfg = app_setting_service.get_hub_config_runtime()
+        except Exception:  # noqa: BLE001 - im Zweifel niemanden aussperren
+            return True
+        if not cfg.get("whitelist_enabled"):
+            return True
+        return username.strip().lower() in cfg.get("whitelist", set())
+
+    # ------------------------------------------------------------------ #
     # Verbindungs-Handler (eigener Thread pro Client)
     # ------------------------------------------------------------------ #
     def handle(self, sock: socket.socket, addr, force_kind: str | None = None) -> None:
@@ -335,12 +376,19 @@ class Hub:
             reader = _Reader(sock)
             hs = reader.read_handshake()
             if hs.next_state == mp.NEXT_STATE_STATUS:
+                self._handle_status(reader, sock, hs)
                 return
             pid, payload = reader.read_packet()
             if pid != mcd.LOGIN_START:
                 return
             username, uuid16_login = mcd.parse_login_start(payload)
             username = username or "Spieler"
+            # Whitelist (optional) VOR dem Login-Success pruefen - danach ist der
+            # Spieler bereits admitted.
+            if not self._whitelist_ok(username):
+                sock.sendall(mp.build_login_disconnect_packet(
+                    "Du stehst nicht auf der Whitelist der Universal-Lobby."))
+                return
             sock.sendall(mcd.build_login_success(uuid16_login, username, hs.protocol_version))
             pid, _ = reader.read_packet()
             if pid != mcd.LOGIN_ACK:

@@ -26,6 +26,17 @@ _HUB_LOBBY_DEFAULT_PORT = 25599
 _HUB_LOBBY_DEFAULT_VANILLA_PORT = 25600
 _HUB_LOBBY_DEFAULT_REPLAY = "atm10_capture.replay"
 
+# Hub-Praesentation (Serverlisten-Ping) + Zugang. Werden pro Verbindung gelesen
+# (live editierbar ohne Hub-Neustart).
+HUB_NAME_KEY = "hub_name"
+HUB_MOTD_KEY = "hub_motd"
+HUB_MAX_PLAYERS_KEY = "hub_max_players"
+HUB_WHITELIST_ENABLED_KEY = "hub_whitelist_enabled"
+HUB_WHITELIST_KEY = "hub_whitelist"  # Namen, per Zeile/Komma getrennt
+_HUB_DEFAULT_NAME = "Universal-Lobby"
+_HUB_DEFAULT_MOTD = "Universal-Lobby - alle Versionen und Modpacks"
+_HUB_DEFAULT_MAX_PLAYERS = 100
+
 # ViaProxy: standalone Java-Uebersetzer VOR dem Hub, damit vanilla Clients JEDER Version
 # in die 1.21.1-Welt kommen (modded 1.21.1 umgeht ihn direkt). Default AUS.
 VIAPROXY_ENABLED_KEY = "viaproxy_enabled"
@@ -547,6 +558,94 @@ def get_hub_lobby_vanilla_port_runtime() -> int:
 
     with SessionLocal() as db:
         return get_hub_lobby_vanilla_port(db)
+
+
+# --- Hub-Praesentation (Serverlisten-Ping) + Whitelist -------------------------
+def get_hub_name(db: Session) -> str:
+    """Anzeigename/Version-Text des Hubs im Serverlisten-Ping."""
+    row = _get_setting_row(db, HUB_NAME_KEY)
+    if row and row.value.strip():
+        return row.value.strip()
+    return _HUB_DEFAULT_NAME
+
+
+def set_hub_name(db: Session, value: str | None) -> None:
+    _set_or_clear(db, HUB_NAME_KEY, (value or "").strip() or None)
+
+
+def get_hub_motd(db: Session) -> str:
+    """MOTD-Text (Beschreibung) im Serverlisten-Ping."""
+    row = _get_setting_row(db, HUB_MOTD_KEY)
+    if row and row.value.strip():
+        return row.value.strip()
+    return _HUB_DEFAULT_MOTD
+
+
+def set_hub_motd(db: Session, value: str | None) -> None:
+    _set_or_clear(db, HUB_MOTD_KEY, (value or "").strip() or None)
+
+
+def get_hub_max_players(db: Session) -> int:
+    row = _get_setting_row(db, HUB_MAX_PLAYERS_KEY)
+    if row and row.value.strip():
+        try:
+            return int(row.value.strip())
+        except ValueError:
+            pass
+    return _HUB_DEFAULT_MAX_PLAYERS
+
+
+def set_hub_max_players(db: Session, value: int) -> int:
+    value = int(value)
+    if not (1 <= value <= 100000):
+        raise ValueError("Maximale Spielerzahl muss zwischen 1 und 100000 liegen.")
+    _set_or_clear(db, HUB_MAX_PLAYERS_KEY, str(value))
+    return value
+
+
+def get_hub_whitelist_enabled(db: Session) -> bool:
+    row = _get_setting_row(db, HUB_WHITELIST_ENABLED_KEY)
+    return _normalize_bool(row.value) if row and row.value else False
+
+
+def set_hub_whitelist_enabled(db: Session, enabled: bool) -> None:
+    _set_or_clear(db, HUB_WHITELIST_ENABLED_KEY, "true" if enabled else None)
+
+
+def get_hub_whitelist(db: Session) -> str:
+    """Rohtext der Whitelist (Namen, per Zeile/Komma getrennt)."""
+    row = _get_setting_row(db, HUB_WHITELIST_KEY)
+    return row.value.strip() if row and row.value.strip() else ""
+
+
+def set_hub_whitelist(db: Session, value: str | None) -> None:
+    _set_or_clear(db, HUB_WHITELIST_KEY, (value or "").strip() or None)
+
+
+def _parse_name_list(raw: str) -> set[str]:
+    names: set[str] = set()
+    for chunk in (raw or "").replace(",", "\n").splitlines():
+        name = chunk.strip().lower()
+        if name:
+            names.add(name)
+    return names
+
+
+def get_hub_config_runtime() -> dict:
+    """Alle Hub-Praesentations-/Zugangswerte in EINER Session.
+
+    Wird vom Hub pro Verbindung gelesen -> Aenderungen greifen ohne Hub-Neustart.
+    """
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return {
+            "name": get_hub_name(db),
+            "motd": get_hub_motd(db),
+            "max_players": get_hub_max_players(db),
+            "whitelist_enabled": get_hub_whitelist_enabled(db),
+            "whitelist": _parse_name_list(get_hub_whitelist(db)),
+        }
 
 
 # --- ViaProxy (Cross-Version-Uebersetzer vor dem Hub) --------------------------

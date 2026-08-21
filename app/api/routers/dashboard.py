@@ -47,7 +47,19 @@ def dashboard_page(
             "usage": usage,
         }
 
-    from app.services.app_setting_service import get_network_domain, get_network_mode
+    from app.services import hub_lobby_service
+    from app.services.app_setting_service import (
+        get_hub_lobby_enabled, get_hub_lobby_port, get_hub_name,
+        get_network_domain, get_network_mode,
+    )
+
+    hub_view = {
+        "enabled": get_hub_lobby_enabled(db),
+        "running": hub_lobby_service.is_running(),
+        "port": get_hub_lobby_port(db),
+        "name": get_hub_name(db),
+        "can_control": current_user.role == UserRole.SUPER_ADMIN.value,
+    }
 
     return templates.TemplateResponse(
         request,
@@ -62,6 +74,7 @@ def dashboard_page(
             host_resources=get_host_resources(),
             network_mode=get_network_mode(db),
             network_domain=get_network_domain(db),
+            hub=hub_view,
         ),
     )
 

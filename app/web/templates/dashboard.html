@@ -33,6 +33,37 @@
     </article>
 </section>
 
+{% if hub and hub.enabled %}
+<section class="card">
+    <h2>Universal-Hub (Lobby)</h2>
+    <p>
+        <span class="status-dot status-dot-{{ 'online' if hub.running else 'offline' }}"></span>
+        <strong>{{ hub.name }}</strong>
+        &ndash; {{ "laeuft" if hub.running else "gestoppt" }}
+        <span class="muted">(Port {{ hub.port }}, Eingang: blanke Domain)</span>
+    </p>
+    <p class="muted">
+        Begehbarer Python-Hub: modded &amp; vanilla treffen sich hier und waehlen per Kompass
+        einen Server. Einstellungen (MOTD, Whitelist, Ports, Replays) unter
+        <a href="/settings">Einstellungen &rarr; Netzwerk &amp; Lobby</a>.
+    </p>
+    {% if hub.can_control %}
+    <div class="inline-form">
+        {% if hub.running %}
+        <form method="post" action="/hub/stop" class="inline-form">
+            <button type="submit" class="danger">Hub stoppen</button>
+        </form>
+        {% else %}
+        <form method="post" action="/hub/start" class="inline-form">
+            <button type="submit">Hub starten</button>
+        </form>
+        {% endif %}
+        <a class="button-like" href="/settings">Verwalten</a>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+
 <section class="card">
     <h2>Sichtbare Server</h2>
     {% if servers %}

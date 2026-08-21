@@ -108,6 +108,8 @@ def settings_page(
         get_hub_lobby_enabled, get_hub_lobby_port, get_hub_lobby_vanilla_port,
         get_hub_lobby_replay, get_hub_lobby_vanilla_replay,
         get_viaproxy_enabled, get_viaproxy_port,
+        get_hub_name, get_hub_motd, get_hub_max_players,
+        get_hub_whitelist_enabled, get_hub_whitelist,
     )
 
     universal_lobby = {
@@ -120,6 +122,11 @@ def settings_page(
         "viaproxy_port": get_viaproxy_port(db),
         "hub_running": hub_lobby_service.is_running(),
         "viaproxy_running": viaproxy_service.is_running(),
+        "hub_name": get_hub_name(db),
+        "hub_motd": get_hub_motd(db),
+        "hub_max_players": get_hub_max_players(db),
+        "hub_whitelist_enabled": get_hub_whitelist_enabled(db),
+        "hub_whitelist": get_hub_whitelist(db),
     }
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
@@ -225,6 +232,69 @@ def auto_create_lobby_action(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(url="/settings", status_code=303)
 
 
+@router.post("/settings/hub/auto-create")
+def auto_create_hub_action(request: Request, db: Session = Depends(get_db)):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import hub_setup_service
+
+    try:
+        ok, message = hub_setup_service.create_auto_hub(
+            db, initiated_by_user_id=current_user.id
+        )
+    except Exception as exc:  # noqa: BLE001
+        push_flash(request, f"Hub-Einrichtung fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    push_flash(request, message, "success" if ok else "error")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/hub/start")
+def hub_start_action(request: Request, db: Session = Depends(get_db)):
+    return _set_hub_running(request, db, enabled=True)
+
+
+@router.post("/hub/stop")
+def hub_stop_action(request: Request, db: Session = Depends(get_db)):
+    return _set_hub_running(request, db, enabled=False)
+
+
+def _set_hub_running(request: Request, db: Session, *, enabled: bool):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import app_setting_service as A
+
+    A.set_hub_lobby_enabled(db, enabled)
+    running = enabled
+    try:
+        from app.services import gateway_service, hub_lobby_service
+
+        hub_lobby_service.reconcile_hub_lobby()
+        gateway_service.reconcile_gateway()
+        running = hub_lobby_service.is_running()
+    except Exception:  # noqa: BLE001
+        pass
+
+    audit_service.log_action(
+        db,
+        action="hub.start" if enabled else "hub.stop",
+        user_id=current_user.id,
+        details=f"running={running}",
+    )
+    if enabled:
+        msg = "Universal-Hub gestartet." if running else (
+            "Universal-Hub aktiviert, Listener laeuft aber (noch) nicht - meist fehlt ein Replay.")
+    else:
+        msg = "Universal-Hub gestoppt."
+    push_flash(request, msg, "success" if (running or not enabled) else "error")
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+
 @router.post("/settings/lobby/sync-plugin")
 def sync_lobby_plugin_action(request: Request, db: Session = Depends(get_db)):
     current_user = _require_super_admin(request, db)
@@ -281,6 +351,11 @@ def update_universal_lobby_action(
     hub_lobby_vanilla_replay: Annotated[str | None, Form()] = None,
     viaproxy_enabled: Annotated[bool, Form()] = False,
     viaproxy_port: Annotated[str | None, Form()] = None,
+    hub_name: Annotated[str | None, Form()] = None,
+    hub_motd: Annotated[str | None, Form()] = None,
+    hub_max_players: Annotated[str | None, Form()] = None,
+    hub_whitelist_enabled: Annotated[bool, Form()] = False,
+    hub_whitelist: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_super_admin(request, db)
@@ -296,8 +371,14 @@ def update_universal_lobby_action(
             A.set_hub_lobby_vanilla_port(db, int(hub_lobby_vanilla_port))
         if (viaproxy_port or "").strip():
             A.set_viaproxy_port(db, int(viaproxy_port))
+        if (hub_max_players or "").strip():
+            A.set_hub_max_players(db, int(hub_max_players))
         A.set_hub_lobby_replay(db, hub_lobby_replay)
         A.set_hub_lobby_vanilla_replay(db, hub_lobby_vanilla_replay)
+        A.set_hub_name(db, hub_name)
+        A.set_hub_motd(db, hub_motd)
+        A.set_hub_whitelist(db, hub_whitelist)
+        A.set_hub_whitelist_enabled(db, hub_whitelist_enabled)
         A.set_hub_lobby_enabled(db, hub_lobby_enabled)
         A.set_viaproxy_enabled(db, viaproxy_enabled)
     except (ValueError, TypeError) as exc:
