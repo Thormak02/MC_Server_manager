@@ -79,6 +79,25 @@ def next_packet(sock: socket.socket, buf: bytearray):
         buf.extend(chunk)
 
 
+def _handshake_protocol(raw: bytes):
+    """Protokoll-Version aus dem ersten C->S-Handshake (id=0x00) lesen.
+
+    Frame: [len VarInt][packet-id VarInt =0][protocol VarInt][...]. Gibt die
+    Protokollnummer zurueck oder None, wenn es kein Handshake ist.
+    """
+    buf = bytearray(raw)
+    got = read_varint(buf, 0)  # Frame-Laenge
+    if got is None:
+        return None
+    off = got[1]
+    got = read_varint(buf, off)  # Packet-ID
+    if got is None or got[0] != 0:
+        return None
+    off += got[1]
+    got = read_varint(buf, off)  # Protokoll-Version
+    return got[0] if got is not None else None
+
+
 def _analyze(payload: bytes) -> dict:
     """Best-effort: fuehrenden Channel-String + alle Resource-Locations extrahieren."""
     info: dict = {}
@@ -126,6 +145,12 @@ def main() -> None:
     ap.add_argument("--backend", required=True, help="host:port des echten Modpack-Servers")
     ap.add_argument("--out", default="capture", help="Datei-Prefix fuer .log/.jsonl")
     ap.add_argument("--max-seconds", type=float, default=30.0)
+    ap.add_argument(
+        "--expect-protocol",
+        type=int,
+        default=767,
+        help="Erwartete Client-Protokollnummer (767 = 1.21.1). Warnt bei Abweichung.",
+    )
     args = ap.parse_args()
 
     bhost, bport = args.backend.rsplit(":", 1)
@@ -162,6 +187,26 @@ def main() -> None:
     time.sleep(0.3)
 
     log.sort(key=lambda e: e["idx"])
+
+    # Client-Protokoll aus dem Handshake bestimmen und pruefen. Verhindert, dass
+    # versehentlich mit der falschen MC-Version (z.B. 26.2 statt 1.21.1) auf-
+    # genommen wird - der Hub spricht 767 (1.21.1).
+    proto = None
+    for e in log:
+        if e["dir"] == "C->S" and e.get("id") == 0:
+            proto = _handshake_protocol(e["raw"])
+            break
+    if proto is None:
+        print("[capture] WARNUNG: Kein Handshake gefunden - Protokoll unbekannt.")
+    elif proto == args.expect_protocol:
+        print(f"[capture] Client-Protokoll: {proto} (== erwartet {args.expect_protocol}=1.21.1) -> OK")
+    else:
+        print(
+            f"[capture] !!! FALSCHE VERSION: Client-Protokoll {proto}, erwartet "
+            f"{args.expect_protocol} (=1.21.1). Dieser Mitschnitt ist fuer den Hub UNBRAUCHBAR."
+        )
+        print("[capture] -> Bitte mit einem 1.21.1-Client (Protokoll 767) neu aufnehmen.")
+
     # .replay: replay-faehiger Voll-Mitschnitt. Pro Paket: [dir:1][len:4 BE][raw].
     # dir 0 = S->C (spaeter an den neuen Client abspielen), 1 = C->S (Checkpoint).
     total = 0
