@@ -103,6 +103,24 @@ def settings_page(
 
     dispatcher_enabled = get_dispatcher_enabled(db)
     gateway_status = gateway_service.gateway_status_runtime()
+    from app.services import hub_lobby_service, viaproxy_service
+    from app.services.app_setting_service import (
+        get_hub_lobby_enabled, get_hub_lobby_port, get_hub_lobby_vanilla_port,
+        get_hub_lobby_replay, get_hub_lobby_vanilla_replay,
+        get_viaproxy_enabled, get_viaproxy_port,
+    )
+
+    universal_lobby = {
+        "hub_enabled": get_hub_lobby_enabled(db),
+        "hub_port": get_hub_lobby_port(db),
+        "hub_vanilla_port": get_hub_lobby_vanilla_port(db),
+        "hub_replay": get_hub_lobby_replay(db),
+        "hub_vanilla_replay": get_hub_lobby_vanilla_replay(db),
+        "viaproxy_enabled": get_viaproxy_enabled(db),
+        "viaproxy_port": get_viaproxy_port(db),
+        "hub_running": hub_lobby_service.is_running(),
+        "viaproxy_running": viaproxy_service.is_running(),
+    }
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
     return templates.TemplateResponse(
@@ -126,6 +144,7 @@ def settings_page(
             network_mode=network_mode,
             network_mode_source=network_mode_source,
             dispatcher_enabled=dispatcher_enabled,
+            universal_lobby=universal_lobby,
             gateway_status=gateway_status,
             platform_settings=platform_settings,
             manager_update_status=manager_update_status,
@@ -249,6 +268,59 @@ def install_multiversion_action(request: Request, db: Session = Depends(get_db))
     if ok:
         message += " Lobby neu starten, damit die Plugins laden."
     push_flash(request, message, "success" if ok else "error")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/universal-lobby")
+def update_universal_lobby_action(
+    request: Request,
+    hub_lobby_enabled: Annotated[bool, Form()] = False,
+    hub_lobby_port: Annotated[str | None, Form()] = None,
+    hub_lobby_vanilla_port: Annotated[str | None, Form()] = None,
+    hub_lobby_replay: Annotated[str | None, Form()] = None,
+    hub_lobby_vanilla_replay: Annotated[str | None, Form()] = None,
+    viaproxy_enabled: Annotated[bool, Form()] = False,
+    viaproxy_port: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import app_setting_service as A
+
+    try:
+        if (hub_lobby_port or "").strip():
+            A.set_hub_lobby_port(db, int(hub_lobby_port))
+        if (hub_lobby_vanilla_port or "").strip():
+            A.set_hub_lobby_vanilla_port(db, int(hub_lobby_vanilla_port))
+        if (viaproxy_port or "").strip():
+            A.set_viaproxy_port(db, int(viaproxy_port))
+        A.set_hub_lobby_replay(db, hub_lobby_replay)
+        A.set_hub_lobby_vanilla_replay(db, hub_lobby_vanilla_replay)
+        A.set_hub_lobby_enabled(db, hub_lobby_enabled)
+        A.set_viaproxy_enabled(db, viaproxy_enabled)
+    except (ValueError, TypeError) as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    # Sofort anwenden: Hub-Listener, ViaProxy-Prozess und Gateway-Routen angleichen.
+    try:
+        from app.services import gateway_service, hub_lobby_service, viaproxy_service
+
+        hub_lobby_service.reconcile_hub_lobby()
+        viaproxy_service.reconcile_viaproxy()
+        gateway_service.reconcile_gateway()
+    except Exception:  # noqa: BLE001
+        pass
+
+    audit_service.log_action(
+        db,
+        action="settings.universal_lobby_update",
+        user_id=current_user.id,
+        details=f"hub={hub_lobby_enabled} viaproxy={viaproxy_enabled}",
+    )
+    push_flash(request, "Universal-Lobby-Einstellungen gespeichert.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
 

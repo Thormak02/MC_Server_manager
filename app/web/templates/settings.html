@@ -172,6 +172,68 @@
         die passende Version sprechen (oder ebenfalls Via haben).
     </p>
 </section>
+
+<section class="card">
+    <h2>Universal-Lobby (modded + Cross-Version)</h2>
+    <p class="muted">
+        Der begehbare <strong>Python-Hub</strong>: modded (NeoForge/Forge, ATM10) UND vanilla/Plugin-Spieler
+        landen in <strong>einer</strong> Welt und begegnen sich. Modpack-Clients bekommen den ATM10-Spoof,
+        vanilla-Clients <strong>jeder Version</strong> kommen ueber <strong>ViaProxy</strong> herein
+        (Jar laedt der Manager automatisch). Erreichbar ueber die blanke Domain &ndash; dafuer muss der
+        <em>Modpack-Dispatcher</em> (oben) aktiv sein.
+    </p>
+    <p class="muted">
+        Status: Hub
+        {% if universal_lobby.hub_running %}<strong style="color:#2e7d32">laeuft</strong>
+        {% else %}<strong style="color:#c62828">aus</strong>{% endif %}
+        &nbsp;|&nbsp; ViaProxy
+        {% if universal_lobby.viaproxy_running %}<strong style="color:#2e7d32">laeuft</strong>
+        {% else %}<strong style="color:#c62828">aus</strong>{% endif %}
+    </p>
+    <form method="post" action="/settings/universal-lobby" class="grid grid-4">
+        <div class="field-span-2">
+            <label>
+                <input type="checkbox" name="hub_lobby_enabled" value="true" {% if universal_lobby.hub_enabled %}checked{% endif %}>
+                <strong>Universal-Lobby aktivieren</strong> (begehbarer Python-Hub)
+            </label>
+        </div>
+        <div class="field-span-2">
+            <label>
+                <input type="checkbox" name="viaproxy_enabled" value="true" {% if universal_lobby.viaproxy_enabled %}checked{% endif %}>
+                <strong>Cross-Version (ViaProxy)</strong> &ndash; vanilla jeder Version (Jar laedt automatisch)
+            </label>
+        </div>
+        <div>
+            <label for="hub_lobby_port">Hub-Port (modded)</label>
+            <input id="hub_lobby_port" name="hub_lobby_port" type="number" min="1" max="65535" value="{{ universal_lobby.hub_port }}">
+        </div>
+        <div>
+            <label for="hub_lobby_vanilla_port">Hub-Port (vanilla)</label>
+            <input id="hub_lobby_vanilla_port" name="hub_lobby_vanilla_port" type="number" min="1" max="65535" value="{{ universal_lobby.hub_vanilla_port }}">
+        </div>
+        <div>
+            <label for="viaproxy_port">ViaProxy-Port</label>
+            <input id="viaproxy_port" name="viaproxy_port" type="number" min="1" max="65535" value="{{ universal_lobby.viaproxy_port }}">
+        </div>
+        <div class="align-end">
+            <button type="submit">Universal-Lobby speichern</button>
+        </div>
+        <div class="field-span-2">
+            <label for="hub_lobby_replay">Modpack-Replay (Spoof)</label>
+            <input id="hub_lobby_replay" name="hub_lobby_replay" type="text" value="{{ universal_lobby.hub_replay }}">
+            <p class="muted">Config-Mitschnitt des Modpacks (Standard: <code>atm10_capture.replay</code>).</p>
+        </div>
+        <div class="field-span-2">
+            <label for="hub_lobby_vanilla_replay">Vanilla-Replay</label>
+            <input id="hub_lobby_vanilla_replay" name="hub_lobby_vanilla_replay" type="text" placeholder="leer = kein Vanilla-Pfad" value="{{ universal_lobby.hub_vanilla_replay }}">
+            <p class="muted">1.21.1-Vanilla-Config. Leer = vanilla bleibt auf der Java-Lobby. (Aufnahme per Knopf &ndash; folgt.)</p>
+        </div>
+    </form>
+    <p class="muted">
+        Die Hub-/ViaProxy-Ports sind <strong>lokal</strong> (nur der Netzwerk-Port oben muss oeffentlich
+        sein). Nach dem Speichern greift alles sofort (Hub-Listener + ViaProxy-Prozess + Gateway-Routen).
+    </p>
+</section>
 </div>
 
 {# ===================== Speicher & Domain ===================== #}
