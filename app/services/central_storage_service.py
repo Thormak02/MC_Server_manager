@@ -11,6 +11,7 @@ die Live-DB bleibt lokal. UNC-Pfad bevorzugen (SYSTEM-Dienst sieht ``Z:`` meist 
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -19,10 +20,14 @@ from app.core.config import get_settings
 
 _SUBDIR_LOGS = "logs"
 _SUBDIR_DB = "db-snapshots"
-_SNAPSHOT_KEEP = 40
-_SNAPSHOT_MIN_INTERVAL = 300.0    # 5 min zwischen automatischen Snapshots (frische Audit-Logs)
+_SNAPSHOT_NAME = "mc_server_manager-current.db"   # EINE Datei, atomar ueberschrieben
+_SNAPSHOT_MIN_INTERVAL = 15.0     # naht-live: bis ~15s nach einer DB-Aenderung neuer Snapshot
+_LOG_KEEP_PER_SERVER = 5          # je Server nur die N neuesten Session-Logs behalten
+_LOG_PRUNE_INTERVAL = 300.0       # Logs-Pruning gedrosselt (alle 5 min genuegt)
 
 _last_snapshot = 0.0
+_last_db_sig: tuple | None = None
+_last_log_prune = 0.0
 # kurzer Cache der Beschreibbarkeits-Pruefung, damit nicht bei jeder Log-Zeile geprobt wird
 _usable_cache: dict[str, tuple[float, bool]] = {}
 _USABLE_TTL = 60.0
@@ -219,48 +224,106 @@ def _db_file() -> Path | None:
 
 
 def _prune_snapshots(dest: Path) -> None:
+    """Alte timestamped Snapshots + temp-Reste entfernen - es bleibt nur die eine aktuelle
+    ``current.db`` (Platz sparen, keine 40 Kopien mehr; /MIR im Sync spiegelt das auf die NAS)."""
     try:
-        snaps = sorted(dest.glob("mc_server_manager-*.db"),
-                       key=lambda p: p.stat().st_mtime, reverse=True)
-        for old in snaps[_SNAPSHOT_KEEP:]:
+        for old in dest.glob("mc_server_manager-2*.db"):   # timestamped (Jahr 2xxx)
             old.unlink(missing_ok=True)
-    except Exception:  # noqa: BLE001
+        for tmp in dest.glob("*.db.tmp"):
+            tmp.unlink(missing_ok=True)
+    except OSError:
         pass
 
 
+def _db_sig(src: Path) -> tuple:
+    """Signatur der Live-DB (Groesse+mtime von .db und -wal) -> erkennt Aenderungen, damit
+    NUR bei echten Aenderungen ein neuer Snapshot geschrieben wird (kein Leerlauf-Sync)."""
+    sig: list = []
+    for suffix in ("", "-wal"):
+        try:
+            st = Path(str(src) + suffix).stat()
+            sig.append((suffix, st.st_size, st.st_mtime))
+        except OSError:
+            pass
+    return tuple(sig)
+
+
 def snapshot_db() -> tuple[bool, str]:
-    """Konsistenten SQLite-Snapshot auf die NAS legen (Backup-API). (ok, Nachricht)."""
+    """Konsistenten SQLite-Snapshot in EINE Datei ``current.db`` schreiben (Backup-API,
+    atomar per temp + os.replace). So kopiert der Sync nie eine halb geschriebene Datei und
+    der Speicher bleibt auf eine Kopie begrenzt. (ok, Nachricht)."""
     dest = db_snapshot_dir()
     if dest is None:
-        return False, "Kein/kein beschreibbares NAS-Verzeichnis."
+        return False, "Kein beschreibbares Snapshot-Verzeichnis."
     src = _db_file()
     if src is None or not src.exists():
         return False, "DB-Datei nicht gefunden (evtl. nicht-lokale DB)."
-    out = dest / f"mc_server_manager-{time.strftime('%Y%m%d-%H%M%S')}.db"
+    out = dest / _SNAPSHOT_NAME
+    tmp = dest / (_SNAPSHOT_NAME + ".tmp")
     try:
         source = sqlite3.connect(str(src))
         try:
-            target = sqlite3.connect(str(out))
+            target = sqlite3.connect(str(tmp))
             try:
                 source.backup(target)
             finally:
                 target.close()
         finally:
             source.close()
+        os.replace(str(tmp), str(out))   # atomar: Sync sieht immer eine vollstaendige Datei
     except Exception as exc:  # noqa: BLE001
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
         return False, f"Snapshot fehlgeschlagen: {exc}"
     _prune_snapshots(dest)
     return True, f"Snapshot -> {out.name}"
 
 
 def maybe_snapshot_db() -> None:
-    """Gedrosselter LOKALER DB-Snapshot fuer den Idle-Tick (der Sync-Task bringt
-    ``data/db-snapshots`` auf die NAS). Laeuft UNABHAENGIG vom NAS-Setting - sonst gaebe
-    es (wie zuvor) nie Snapshots, wenn der direkte NAS-Schreibtest aus dem SYSTEM-Dienst
-    scheitert. Snapshot ist billig (SQLite-Backup-API) und auf ``_SNAPSHOT_KEEP`` begrenzt."""
-    global _last_snapshot
+    """Naht-live DB-Snapshot fuer den Idle-Tick: nur wenn sich die DB seit dem letzten
+    Snapshot GEAENDERT hat (sonst nichts -> keine Leerlauf-Syncs). ``current.db`` wird
+    ueberschrieben. Der Sync-Task bringt ``data/db-snapshots`` naht-live auf die NAS."""
+    global _last_snapshot, _last_db_sig
     now = time.monotonic()
     if now - _last_snapshot < _SNAPSHOT_MIN_INTERVAL:
         return
+    src = _db_file()
+    sig = _db_sig(src) if src else None
+    if sig is not None and sig == _last_db_sig:
+        return  # DB unveraendert -> kein neuer Snapshot noetig
     _last_snapshot = now
-    snapshot_db()
+    ok, _msg = snapshot_db()
+    if ok and sig is not None:
+        _last_db_sig = sig
+
+
+def prune_logs() -> None:
+    """Alte Session-Logs entfernen: je ``server_<id>``-Ordner nur die neuesten
+    ``_LOG_KEEP_PER_SERVER`` behalten (das aktive Log ist das neueste -> bleibt). /MIR im
+    Sync spiegelt die Loeschungen auf die NAS -> Speicher bleibt schlank."""
+    base = _local_logs_dir()
+    try:
+        for srv_dir in base.glob("server_*"):
+            if not srv_dir.is_dir():
+                continue
+            sessions = sorted(srv_dir.glob("session-*.log"),
+                              key=lambda p: p.stat().st_mtime, reverse=True)
+            for old in sessions[_LOG_KEEP_PER_SERVER:]:
+                try:
+                    old.unlink(missing_ok=True)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
+
+def maybe_prune_logs() -> None:
+    """Gedrosseltes Logs-Pruning fuer den Idle-Tick (alle ``_LOG_PRUNE_INTERVAL``)."""
+    global _last_log_prune
+    now = time.monotonic()
+    if now - _last_log_prune < _LOG_PRUNE_INTERVAL:
+        return
+    _last_log_prune = now
+    prune_logs()

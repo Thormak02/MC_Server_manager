@@ -282,6 +282,12 @@ alles klar?
 das ganze soll für alle aktuellen und zukünftigen versionen und modpacks funktionieren, nicht nur für atm 10 und vanilla, sondern zb. acuh für seasons oder fabric, quilt und forge modpacks und neoforge. eventuell brauchen wir ein automatisches spoofing bei erstmaligen anlegen eines modpacks im manager und dem erstmaligen verbinden mit diesem modpack auf den server, das ganze soll wie gesagt automatisch geschehen.
 
 
+die verwaltung des hub / lobby server soll wie die eines normalen servers mit untermenus usw. funktionieren und auch genauso aussehen, um mehr kontiniuität zu schaffen
+
+
+logs und db live / deutlich öfter, als nur alle paar minuten plus alte löschen um speicher zu sparen
+
+
 KI Ideen:
 
 Monitoring & Alarme

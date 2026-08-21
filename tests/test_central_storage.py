@@ -87,6 +87,79 @@ def test_snapshot_db_local_without_nas(monkeypatch, tmp_path):
     assert len(snaps) == 1
 
 
+def test_maybe_snapshot_single_file_change_detection(monkeypatch, tmp_path):
+    """EINE Datei (current.db), alte timestamped werden entfernt, nur bei DB-Aenderung neu."""
+    import os as _os
+
+    dbfile = tmp_path / "src.db"
+    con = sqlite3.connect(str(dbfile))
+    con.execute("create table t(x)")
+    con.execute("insert into t values (1)")
+    con.commit()
+    con.close()
+
+    local = tmp_path / "data"
+
+    class _S:
+        data_dir = local
+
+    monkeypatch.setattr(C, "_central_root", lambda: "")
+    monkeypatch.setattr(C, "_db_file", lambda: dbfile)
+    monkeypatch.setattr(C, "get_settings", lambda: _S())
+    C._last_snapshot = 0.0
+    C._last_db_sig = None
+
+    snapdir = local / "db-snapshots"
+    snapdir.mkdir(parents=True, exist_ok=True)
+    (snapdir / "mc_server_manager-20260101-000000.db").write_bytes(b"alt")  # alter timestamped
+
+    C.maybe_snapshot_db()
+    assert (snapdir / "mc_server_manager-current.db").exists()
+    assert list(snapdir.glob("mc_server_manager-2*.db")) == []            # timestamped entfernt
+    assert len(list(snapdir.glob("mc_server_manager-*.db"))) == 1          # nur EINE Datei
+
+    # 2. Aufruf ohne DB-Aenderung (Drossel zuruecksetzen) -> Skip: Signatur bleibt gleich.
+    sig_before = C._last_db_sig
+    C._last_snapshot = 0.0
+    C.maybe_snapshot_db()
+    assert C._last_db_sig == sig_before
+
+    # DB aendern -> current.db spiegelt die Aenderung, weiterhin nur EINE Datei.
+    con = sqlite3.connect(str(dbfile))
+    con.execute("insert into t values (2)")
+    con.commit()
+    con.close()
+    C._last_snapshot = 0.0
+    C.maybe_snapshot_db()
+    cur = sqlite3.connect(str(snapdir / "mc_server_manager-current.db"))
+    assert cur.execute("select count(*) from t").fetchone()[0] == 2
+    cur.close()
+    assert len(list(snapdir.glob("mc_server_manager-*.db"))) == 1
+    _os.utime(dbfile, None)  # touch (kein Assert, nur Aufraeumen)
+
+
+def test_prune_logs_keeps_newest(monkeypatch, tmp_path):
+    import os as _os
+
+    local = tmp_path / "data"
+
+    class _S:
+        data_dir = local
+
+    monkeypatch.setattr(C, "get_settings", lambda: _S())
+    monkeypatch.setattr(C, "_LOG_KEEP_PER_SERVER", 2)
+    srv = local / "logs" / "server_2"
+    srv.mkdir(parents=True)
+    for i in range(5):
+        f = srv / f"session-2026010{i}-000000.log"
+        f.write_text("x")
+        _os.utime(f, (1000 + i, 1000 + i))  # klare mtime-Reihenfolge
+
+    C.prune_logs()
+    remaining = sorted(p.name for p in srv.glob("session-*.log"))
+    assert remaining == ["session-20260103-000000.log", "session-20260104-000000.log"]
+
+
 def test_share_root():
     assert C._share_root(r"\\FriedrichNAS\FriedrichNAS\MC-manager-Logs") == r"\\FriedrichNAS\FriedrichNAS"
     assert C._share_root(r"\\host\share") == r"\\host\share"

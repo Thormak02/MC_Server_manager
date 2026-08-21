@@ -492,7 +492,8 @@ def _idle_tick() -> None:
     try:
         from app.services import central_storage_service
 
-        central_storage_service.maybe_snapshot_db()  # gedrosselt (30 min)
+        central_storage_service.maybe_snapshot_db()  # naht-live, nur bei DB-Aenderung
+        central_storage_service.maybe_prune_logs()    # alte Session-Logs entfernen (gedrosselt)
     except Exception:  # noqa: BLE001
         pass
 
