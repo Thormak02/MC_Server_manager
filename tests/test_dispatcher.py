@@ -182,3 +182,110 @@ def test_dispatch_modded_without_register(client, tmp_path):
     sock = FakeSock(script)
     dispatcher_service.dispatch(sock, _hs(), b"")
     assert _find_transfer(sock.sent) == ("atm10.mc.example.de", 25565)
+
+
+# --------------------------- Phase 2: Path-A (Pack-Tag) --------------------- #
+def _neoforge_lobby_and_pack(db_add, tmp_path, svc):
+    from app.models.server import Server
+
+    db_add([
+        Server(name="Lobby", slug="lob", server_type="paper", mc_version="1.21.1",
+               base_path=str(tmp_path / "lob"), gateway_enabled=True,
+               gateway_hostname="lobby", gateway_is_default=True, port=25569),
+        Server(name="ATM10", slug="atm", server_type="neoforge", mc_version="1.21.1",
+               base_path=str(tmp_path / "atm"), gateway_enabled=True,
+               gateway_hostname="atm10", port=25601),
+    ])
+
+
+def test_dispatch_modded_hub_tags_pack_with_replay(client, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from sqlalchemy import select
+
+    import app.services.app_setting_service as svc
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import dispatcher_service, hub_replay_service
+
+    monkeypatch.setattr(hub_replay_service, "REPLAY_DIR", str(tmp_path / "replays"))
+    _make_neoforge_server(tmp_path / "atm" / "mods", ["create", "mekanism", "ae2"])
+    with SessionLocal() as db:
+        _neoforge_lobby_and_pack(db.add_all, tmp_path, svc)
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        svc.set_network_port(db, 25565)
+        svc.set_hub_lobby_enabled(db, True)
+        sid = db.scalar(select(Server).where(Server.slug == "atm")).id
+
+    # Replay fuer ATM anlegen -> Pack-Tag modlobby-<id>
+    replay = Path(hub_replay_service.replay_path_for("atm"))
+    replay.parent.mkdir(parents=True, exist_ok=True)
+    replay.write_bytes(b"MCRP\x01")
+
+    script = (_login_start() + _login_ack() + _client_info()
+              + _brand("neoforge")
+              + _register(["neoforge:register", "minecraft:register"])
+              + _manifest(["create:network", "mekanism:tile", "ae2:main"]))
+    sock = FakeSock(script)
+    dispatcher_service.dispatch(sock, _hs(), b"")
+    assert _find_transfer(sock.sent) == (f"modlobby-{sid}.mc.example.de", 25565)
+
+
+def test_dispatch_modded_hub_no_replay_uses_default(client, tmp_path, monkeypatch):
+    import app.services.app_setting_service as svc
+    from app.db.session import SessionLocal
+    from app.services import dispatcher_service, hub_replay_service
+
+    monkeypatch.setattr(hub_replay_service, "REPLAY_DIR", str(tmp_path / "replays"))
+    _make_neoforge_server(tmp_path / "atm" / "mods", ["create", "mekanism", "ae2"])
+    with SessionLocal() as db:
+        _neoforge_lobby_and_pack(db.add_all, tmp_path, svc)
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        svc.set_network_port(db, 25565)
+        svc.set_hub_lobby_enabled(db, True)
+
+    # KEIN Replay angelegt -> Default-Profil (plain modlobby)
+    script = (_login_start() + _login_ack() + _client_info()
+              + _brand("neoforge")
+              + _register(["neoforge:register", "minecraft:register"])
+              + _manifest(["create:network", "mekanism:tile", "ae2:main"]))
+    sock = FakeSock(script)
+    dispatcher_service.dispatch(sock, _hs(), b"")
+    assert _find_transfer(sock.sent) == ("modlobby.mc.example.de", 25565)
+
+
+def test_dispatch_fabric_routes_to_vanilla_profile(client, tmp_path):
+    """Fabric ist lenient -> Vanilla-Profil (vanlobby), NICHT der NeoForge-Spoof."""
+    import app.services.app_setting_service as svc
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import dispatcher_service
+
+    with SessionLocal() as db:
+        db.add(Server(name="Lobby", slug="lob", server_type="paper", mc_version="1.21.1",
+                      base_path=str(tmp_path / "lob"), gateway_enabled=True,
+                      gateway_hostname="lobby", gateway_is_default=True, port=25569))
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        svc.set_network_port(db, 25565)
+        svc.set_hub_lobby_enabled(db, True)
+        svc.set_hub_lobby_vanilla_replay(db, "vanilla_capture.replay")
+
+    script = (_login_start() + _login_ack() + _client_info()
+              + _brand("fabric") + _register(["minecraft:register"]))
+    sock = FakeSock(script)
+    dispatcher_service.dispatch(sock, _hs(), b"")
+    assert _find_transfer(sock.sent) == ("vanlobby.mc.example.de", 25565)
+
+
+# --------------------------- is_neoforge_client ----------------------------- #
+def test_is_neoforge_client():
+    assert mcd.is_neoforge_client("neoforge", []) is True
+    assert mcd.is_neoforge_client("forge", []) is True
+    assert mcd.is_neoforge_client("vanilla", ["neoforge:handshake"]) is True
+    assert mcd.is_neoforge_client("vanilla", ["fml:handshake"]) is True
+    assert mcd.is_neoforge_client("fabric", []) is False   # lenient -> Vanilla-Profil
+    assert mcd.is_neoforge_client("fabric", ["minecraft:register"]) is False
+    assert mcd.is_neoforge_client("vanilla", []) is False

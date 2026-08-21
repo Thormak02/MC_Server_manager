@@ -274,6 +274,11 @@ def server_detail_page(
         public_base = get_public_base_url(db)
         network_connect_host = urlsplit(public_base).hostname if public_base else None
 
+    from app.services import hub_capture_service, hub_replay_service
+
+    hub_capture = hub_capture_service.capture_status(server.id)
+    hub_has_replay = hub_replay_service.has_replay(server.slug)
+
     return templates.TemplateResponse(
         request,
         "server_detail.html",
@@ -293,6 +298,8 @@ def server_detail_page(
             has_modpack_update=has_modpack_update,
             network_connect_host=network_connect_host,
             network_mode=network_mode,
+            hub_capture=hub_capture,
+            hub_has_replay=hub_has_replay,
         ),
     )
 
@@ -548,6 +555,36 @@ def start_server_action(
     ok, message = start_server(db, server, current_user.id)
     push_flash(request, message, "success" if ok else "error")
     return _redirect_to_referer(request, fallback=f"/servers/{server_id}")
+
+
+@router.post("/servers/{server_id}/hub/capture")
+def hub_capture_action(request: Request, server_id: int, db: Session = Depends(get_db)):
+    """Config-Capture fuers Universal-Hub-Spoofing starten (Server startet kurz neu)."""
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    from app.services import hub_capture_service
+
+    ok, message = hub_capture_service.start_capture_for_server(server_id, current_user.id)
+    push_flash(request, message, "success" if ok else "error")
+    return _redirect_to_referer(request, fallback=f"/servers/{server_id}")
+
+
+@router.get("/servers/{server_id}/hub/capture/status", response_class=JSONResponse)
+def hub_capture_status_action(request: Request, server_id: int, db: Session = Depends(get_db)):
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return JSONResponse({"capture": None}, status_code=401)
+    from app.services import hub_capture_service
+
+    return JSONResponse({"capture": hub_capture_service.capture_status(server_id)})
 
 
 @router.post("/servers/{server_id}/stop")

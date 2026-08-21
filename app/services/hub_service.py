@@ -212,8 +212,9 @@ def _load_profile(replay_path: str) -> dict:
 
 
 class Hub:
-    def __init__(self, replay_path: str, vanilla_replay_path: str | None = None):
-        # MODDED-Profil (Pflicht). Backward-compat-Attribute zeigen darauf.
+    def __init__(self, replay_path: str, vanilla_replay_path: str | None = None,
+                 pack_replays: dict[int, str] | None = None):
+        # MODDED-Profil (Pflicht, Default/Fallback). Backward-compat-Attribute zeigen darauf.
         self.modded = _load_profile(replay_path)
         self.config_steps = self.modded["config_steps"]
         self.login_raw = self.modded["login_raw"]
@@ -226,14 +227,25 @@ class Hub:
                 self.vanilla = _load_profile(vanilla_replay_path)
             except Exception as exc:  # noqa: BLE001
                 print(f"[hub] Vanilla-Replay {vanilla_replay_path} nicht ladbar: {exc!r} -> nur modded")
-        # Gemeinsame Vanilla-Welt (fuer BEIDE Client-Typen identisch -> sie begegnen sich).
+        # PER-PACK-Profile: server_id -> Profil. Auswahl via Path A (Dispatcher taggt das
+        # erkannte Pack in den Hostnamen modlobby-<server_id>). Kaputte Replays -> ueberspringen.
+        self.pack_profiles: dict[int, dict] = {}
+        for sid, path in (pack_replays or {}).items():
+            try:
+                self.pack_profiles[int(sid)] = _load_profile(path)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[hub] Pack-Replay {path} (server {sid}) nicht ladbar: {exc!r} -> uebersprungen")
+        # Gemeinsame Vanilla-Welt (fuer ALLE Client-Typen identisch -> sie begegnen sich).
         self.platform_packets = self._build_platform()
 
         self.lock = threading.Lock()
         self.players: dict = {}
         self._conn_ctr = 0
-        base = max(self._self_eid, self.vanilla["self_eid"] if self.vanilla else 0)
-        self._eid_ctr = max(1000, base + 1000)
+        eids = [self._self_eid]
+        if self.vanilla:
+            eids.append(self.vanilla["self_eid"])
+        eids.extend(p["self_eid"] for p in self.pack_profiles.values())
+        self._eid_ctr = max(1000, max(eids) + 1000)
 
         # Virtuellen Bot ins Roster legen (nutzt dieselbe Maschinerie wie echte Spieler).
         self._eid_ctr += 1
@@ -241,21 +253,40 @@ class Hub:
                             "Lobby-Bot", 8.5, 64.0, 13.5, yaw=180.0)
         self.players[_BOT_KEY] = self.bot
 
+    @staticmethod
+    def _alias_of(server_address: str | None) -> str:
+        """Erstes Host-Label aus dem Handshake-Address (FML-Suffix \\x00 wird gestrippt)."""
+        host = (server_address or "").split("\x00", 1)[0].strip().rstrip(".").lower()
+        return host.split(".", 1)[0] if host else ""
+
+    def _modded_for_alias(self, alias: str) -> dict:
+        """Per-Pack-Profil aus ``modlobby-<server_id>`` waehlen, sonst Default-modded."""
+        from app.services import gateway_service
+
+        prefix = gateway_service.HUB_LOBBY_ALIAS + "-"  # z.B. "modlobby-"
+        if alias.startswith(prefix):
+            suffix = alias[len(prefix):]
+            if suffix.isdigit():
+                profile = self.pack_profiles.get(int(suffix))
+                if profile is not None:
+                    return profile
+        return self.modded
+
     def _pick_profile(self, server_address: str | None, force_kind: str | None = None) -> dict:
-        """Config-Profil waehlen. ``force_kind`` (vom Listener-Port gesetzt) hat Vorrang:
-        'vanilla' -> Vanilla-Profil, 'modded' -> Modpack. Ohne force: per Handshake-Alias
-        (vanlobby.<domain> -> vanilla) - fuer Standalone-Tests ohne Zweitport."""
+        """Config-Profil waehlen. ``force_kind`` (vom Listener-Port gesetzt) trennt nur
+        vanilla vs. modded. WELCHES Modpack kommt aus dem Host-Tag ``modlobby-<server_id>``
+        (vom Dispatcher gesetzt, Path A) -> Per-Pack-Profil, sonst Default-modded.
+        ``vanlobby.<domain>`` -> Vanilla."""
         if force_kind == "vanilla" and self.vanilla is not None:
             return self.vanilla
+        alias = self._alias_of(server_address)
         if force_kind == "modded":
-            return self.modded
-        host = (server_address or "").split("\x00", 1)[0].strip().rstrip(".").lower()
-        alias = host.split(".", 1)[0] if host else ""
+            return self._modded_for_alias(alias)
         if self.vanilla is not None:
             from app.services import gateway_service
             if alias == gateway_service.HUB_VANILLA_ALIAS:
                 return self.vanilla
-        return self.modded
+        return self._modded_for_alias(alias)
 
     # ------------------------------------------------------------------ #
     # Aufbau

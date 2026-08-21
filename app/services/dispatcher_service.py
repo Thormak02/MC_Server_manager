@@ -87,16 +87,19 @@ def dispatch(client: socket.socket, handshake: Handshake, initial: bytes) -> Non
 
         # --- Config: Client-Eroeffnung lesen (Brand + register) ---
         brand, channels = _read_client_opening(reader)
-        modded = mcd.is_modded_client(brand, channels)
+        # NeoForge/Forge brauchen ein Pack-Replay; Fabric/Quilt/Vanilla sind lenient und
+        # teilen sich das Vanilla-Replay -> nur echte NeoForge/Forge in den Modpack-Zweig.
+        neoforge = mcd.is_neoforge_client(brand, channels)
 
         from app.db.session import SessionLocal
 
         with SessionLocal() as db:
             from app.services import app_setting_service, gateway_service
 
-            if not modded:
-                # Vanilla in die gemeinsame Lobby, ABER nur wenn ein Vanilla-Config-Replay
-                # konfiguriert ist (sonst wuerde der Hub sie mit dem Modpack-Spoof kicken).
+            if not neoforge:
+                # Vanilla ODER Fabric/Quilt -> gemeinsame Lobby ueber das Vanilla-Profil,
+                # aber nur wenn ein Vanilla-Config-Replay konfiguriert ist (sonst wuerde
+                # der Hub sie mit dem Modpack-Spoof kicken).
                 if (app_setting_service.get_hub_lobby_enabled(db)
                         and app_setting_service.get_hub_lobby_vanilla_replay(db)):
                     vt = _hub_target(db, gateway_service.HUB_VANILLA_ALIAS)
@@ -109,21 +112,32 @@ def dispatch(client: socket.socket, handshake: Handshake, initial: bytes) -> Non
                 _glog("route_vanilla", str(target))
                 return
 
-            # Modded in die gemeinsame Python-Lobby (Kompass-Menue). Kein Pack-Match
-            # noetig; der Hub bedient sie direkt mit dem Modpack-Spoof.
-            if app_setting_service.get_hub_lobby_enabled(db):
-                hub_target = _hub_target(db, gateway_service.HUB_LOBBY_ALIAS)
-                if hub_target:
-                    _finish(client, hub_target, _no_match_message(db))
-                    _glog("route_modded_hub", str(hub_target))
-                    return
-
-            # --- Modded ohne Hub: Mod-Manifest anfragen + passenden Pack matchen ---
+            # --- NeoForge/Forge: Mod-Manifest anfragen + passenden Pack matchen ---
             client.sendall(mcd.build_neoforge_query())
             mods = _read_neoforge_manifest(reader)
             from app.services.modpack_router_service import match_backend_for_client
 
             sid, reason = match_backend_for_client(db, mods)
+
+            # In die gemeinsame Python-Lobby (Kompass-Menue) - mit Pack-Tag (Path A:
+            # modlobby-<server_id>), damit der Hub das RICHTIGE Per-Pack-Replay spielt.
+            # Kein Match oder (noch) kein Replay -> Default-Profil (2.3: Auto-Capture).
+            if app_setting_service.get_hub_lobby_enabled(db):
+                from app.models.server import Server
+                from app.services import hub_replay_service
+
+                alias = gateway_service.HUB_LOBBY_ALIAS
+                if sid is not None:
+                    srv = db.get(Server, sid)
+                    if srv is not None and hub_replay_service.has_replay(srv.slug):
+                        alias = f"{gateway_service.HUB_LOBBY_ALIAS}-{sid}"
+                hub_target = _hub_target(db, alias)
+                if hub_target:
+                    _finish(client, hub_target, _no_match_message(db))
+                    _glog("route_modded_hub", f"{hub_target} server={sid} ({reason})")
+                    return
+
+            # --- NeoForge/Forge ohne Hub: direkt zum passenden Modpack-Server ---
             if sid is not None:
                 target = _server_target(db, sid)
                 _finish(client, target, _no_match_message(db))

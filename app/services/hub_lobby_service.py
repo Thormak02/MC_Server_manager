@@ -16,7 +16,7 @@ idempotent -> gefahrlos bei jedem Start/Idle-Tick.
 from __future__ import annotations
 
 import socket
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import RLock, Thread
 from typing import Optional
 
@@ -34,6 +34,7 @@ class _HubListener:
     hub: object                             # hub_service.Hub (Profile + Roster)
     replay: str = ""                        # aktives modded-Replay (Reconcile-Vergleich)
     vanilla: Optional[str] = None           # aktives vanilla-Replay
+    pack_replays: dict = field(default_factory=dict)  # {server_id: pfad} (Per-Pack)
     stopped: bool = False
 
 
@@ -85,25 +86,28 @@ def _bind(port: int) -> socket.socket | None:
 
 
 def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
-                    vanilla_replay_path: str | None = None) -> bool:
+                    vanilla_replay_path: str | None = None,
+                    pack_replays: dict[int, str] | None = None) -> bool:
     """Hub mit modded-Port (+ vanilla-Port, falls Vanilla-Replay) binden (ohne Flag-Check).
 
-    Idempotent: gleiche Ports/Replays -> No-op. Aenderung -> Neustart. Bindet beim
-    naechsten Reconcile nach, falls ein Port noch belegt ist."""
+    Idempotent: gleiche Ports/Replays (inkl. Per-Pack-Registry) -> No-op. Aenderung ->
+    Neustart. Bindet beim naechsten Reconcile nach, falls ein Port noch belegt ist."""
     global _LISTENER, _BIND_FAILED
     from app.services import hub_service
 
     vanilla = vanilla_replay_path or None
+    packs = dict(pack_replays or {})
     with _LOCK:
         if (_LISTENER is not None
                 and _LISTENER.modded_port == int(modded_port)
                 and _LISTENER.vanilla_port == int(vanilla_port)
-                and _LISTENER.replay == replay_path and _LISTENER.vanilla == vanilla):
+                and _LISTENER.replay == replay_path and _LISTENER.vanilla == vanilla
+                and _LISTENER.pack_replays == packs):
             return True  # nichts geaendert
         if _LISTENER is not None:
             _stop_locked()
         try:
-            hub = hub_service.Hub(replay_path, vanilla)
+            hub = hub_service.Hub(replay_path, vanilla, packs)
         except Exception as exc:  # noqa: BLE001 - fehlendes/kaputtes Replay
             _glog("replay_failed", f"{replay_path}: {exc!r}")
             return False
@@ -127,7 +131,7 @@ def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
         listener = _HubListener(
             modded_port=int(modded_port), vanilla_port=int(vanilla_port),
             modded_sock=modded_sock, vanilla_sock=vanilla_sock, hub=hub,
-            replay=replay_path, vanilla=vanilla,
+            replay=replay_path, vanilla=vanilla, pack_replays=packs,
         )
         Thread(target=hub.animate_bot, daemon=True, name="hublobby-bot").start()
         Thread(target=_accept_loop, args=(listener, modded_sock, "modded"),
@@ -169,9 +173,12 @@ def reconcile_hub_lobby() -> None:
         if is_running():
             stop_hub_lobby()
         return
+    from app.services import hub_replay_service
+
     start_hub_lobby(
         s.get_hub_lobby_port_runtime(),
         s.get_hub_lobby_vanilla_port_runtime(),
         s.get_hub_lobby_replay_runtime(),
         s.get_hub_lobby_vanilla_replay_runtime() or None,
+        pack_replays=hub_replay_service.build_pack_registry_runtime(),
     )

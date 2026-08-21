@@ -229,3 +229,20 @@ def is_modded_client(brand: str, register_channels: list[str]) -> bool:
         if low.startswith("neoforge:") or low.startswith("fml:") or low.startswith("forge:"):
             return True
     return False
+
+
+def is_neoforge_client(brand: str, register_channels: list[str]) -> bool:
+    """Speziell NeoForge/Forge - NICHT Fabric/Quilt.
+
+    Diese Loader machen eine Config-Phase-Mod-Aushandlung (neoforge:register-Manifest)
+    und brauchen ein passendes Pack-Replay. Fabric/Quilt/Vanilla sind lenient und teilen
+    sich das Vanilla-Replay -> sie duerfen NICHT den NeoForge-Spoof bekommen.
+    """
+    b = (brand or "").lower()
+    if b in ("neoforge", "forge"):
+        return True
+    for ch in register_channels:
+        low = ch.lower()
+        if low.startswith("neoforge:") or low.startswith("fml:") or low.startswith("forge:"):
+            return True
+    return False

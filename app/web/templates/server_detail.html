@@ -325,6 +325,40 @@
 {% endif %}
 {% endif %}
 
+{% if server.server_type|lower in ["neoforge", "forge"] %}
+<section class="card">
+    <h2>Universal-Hub: Kompatibilitaet aufnehmen</h2>
+    <p class="muted">
+        Nimmt die Config-Phase dieses Modpacks auf, damit der Universal-Hub es spoofen kann
+        (dieses Pack landet dann in der gemeinsamen Lobby). Der Server wird dafuer kurz auf
+        <code>online-mode=false</code> + <code>compression=-1</code> gesetzt und
+        <strong>neu gestartet</strong>, danach automatisch zurueckgesetzt.
+    </p>
+    {% if hub_has_replay %}
+    <p class="muted">Replay: <strong style="color:#2e7d32">vorhanden</strong> &ndash; Pack ist spoofbar. Neu aufnehmen ueberschreibt es.</p>
+    {% else %}
+    <p class="muted">Replay: <strong style="color:#c62828">fehlt</strong> &ndash; Pack noch nicht spoofbar.</p>
+    {% endif %}
+    {% if hub_capture %}
+    <p class="muted">
+        Aufnahme-Status: <strong>{{ hub_capture.status }}</strong> &ndash; {{ hub_capture.message }}
+    </p>
+    {% endif %}
+    {% if can_control %}
+    <div class="inline-form">
+        <form method="post" action="/servers/{{ server.id }}/hub/capture" class="inline-form"
+              onsubmit="return confirm('Der Server wird kurz NEU GESTARTET (online-mode/compression werden temporaer umgestellt und danach zurueckgesetzt). Fortfahren?');">
+            <button type="submit">Kompatibilitaet aufnehmen</button>
+        </form>
+    </div>
+    <p class="muted">
+        Nach dem Start: Modpack-Client einmal mit <code>&lt;server-ip&gt;:25610</code> verbinden
+        (Port ggf. in der Firewall oeffnen). Seite neu laden zeigt den Fortschritt.
+    </p>
+    {% endif %}
+</section>
+{% endif %}
+
 {% if current_user.role == "super_admin" %}
 <section class="card">
     <h2>Server loeschen</h2>

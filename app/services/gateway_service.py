@@ -520,7 +520,9 @@ def _handle_gateway_connection(client: socket.socket) -> None:
             if routes.domain and cleaned_host.endswith("." + routes.domain):
                 alias_part = cleaned_host[: -(len(routes.domain) + 1)]
             hub_target = None
-            if alias_part == HUB_LOBBY_ALIAS:
+            if alias_part == HUB_LOBBY_ALIAS or alias_part.startswith(HUB_LOBBY_ALIAS + "-"):
+                # modlobby ODER modlobby-<server_id> (Per-Pack-Tag, Path A) -> Hub-Port.
+                # Der volle Host wird unveraendert weitergereicht, der Hub liest den Tag.
                 hub_target = routes.hub_lobby_port
             elif alias_part == HUB_VANILLA_ALIAS:
                 hub_target = (
