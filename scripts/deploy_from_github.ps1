@@ -5,7 +5,8 @@ param(
     [string]$Branch = "main",
     [string]$ServiceName = "mc-server-manager",
     [string]$StartupTaskName = "mc-server-manager-startup",
-    [string]$PythonExe = "python"
+    [string]$PythonExe = "python",
+    [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -103,7 +104,16 @@ Push-Location -LiteralPath $resolvedRepoPath
 try {
     Invoke-Git @("fetch", "origin", $Branch)
     Invoke-Git @("checkout", $Branch)
-    Invoke-Git @("pull", "--ff-only", "origin", $Branch)
+    if ($Force) {
+        # Versionierte Dateien hart auf den Remote-Stand setzen. Untracked-
+        # und ignorierte Laufzeitdaten (data/, .env, Logs, .replay) bleiben
+        # erhalten, weil kein 'git clean' ausgefuehrt wird.
+        Write-Output "Force update: resetting tracked files to origin/$Branch (untracked/ignored files kept)."
+        Invoke-Git @("reset", "--hard", "origin/$Branch")
+    }
+    else {
+        Invoke-Git @("pull", "--ff-only", "origin", $Branch)
+    }
 
     $venvPython = Join-Path $resolvedRepoPath ".venv\Scripts\python.exe"
     if (-not (Test-Path -LiteralPath $venvPython)) {

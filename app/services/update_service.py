@@ -18,6 +18,8 @@ class ManagerUpdateStatus:
     ahead_count: int = 0
     behind_count: int = 0
     dirty: bool = False
+    dirty_tracked: bool = False
+    dirty_files: tuple[str, ...] = ()
 
     @property
     def has_update(self) -> bool:
@@ -25,7 +27,16 @@ class ManagerUpdateStatus:
 
     @property
     def can_apply(self) -> bool:
-        return self.ok and self.has_update and not self.dirty
+        # Ein normales ``git pull --ff-only`` scheitert nur an *versionierten*
+        # lokalen Aenderungen. Reine untracked-Dateien (Logs, Replays, Daten)
+        # blockieren es nicht -> normales Update bleibt moeglich.
+        return self.ok and self.has_update and not self.dirty_tracked
+
+    @property
+    def needs_force(self) -> bool:
+        # Versionierte lokale Aenderungen vorhanden: normales Update wuerde
+        # blockieren, ein Force-Update (hard reset) ist noetig.
+        return self.ok and self.has_update and self.dirty_tracked
 
 
 def _repo_root() -> Path:
@@ -153,13 +164,27 @@ def get_manager_update_status(*, fetch_remote: bool) -> ManagerUpdateStatus:
     behind_count = int(count_parts[1]) if len(count_parts) > 1 and count_parts[1].isdigit() else 0
 
     dirty_result = _run_git(["status", "--porcelain"], cwd=repo_path)
-    dirty = bool((dirty_result.stdout or "").strip())
+    dirty_lines = [ln for ln in (dirty_result.stdout or "").splitlines() if ln.strip()]
+    dirty = bool(dirty_lines)
+    # ``git status --porcelain`` markiert untracked-Dateien mit "?? ". Alles
+    # andere sind versionierte Aenderungen (modifiziert/gestaged/geloescht/
+    # umbenannt), die ein ``git pull --ff-only`` blockieren koennen. Ignorierte
+    # Dateien tauchen ohne ``--ignored`` gar nicht auf und zaehlen nie mit.
+    dirty_tracked = any(not ln.startswith("??") for ln in dirty_lines)
+    dirty_files = tuple(
+        (ln[3:] if len(ln) > 3 else ln).strip() for ln in dirty_lines[:15]
+    )
 
     if behind_count > 0:
-        if dirty:
+        if dirty_tracked:
             message = (
                 f"Update verfuegbar ({behind_count} Commit(s) hinter {remote_ref}), "
-                "aber Working Tree ist nicht sauber."
+                "aber es gibt lokale Aenderungen an versionierten Dateien."
+            )
+        elif dirty:
+            message = (
+                f"Update verfuegbar ({behind_count} Commit(s) hinter {remote_ref}). "
+                "Nicht versionierte Dateien vorhanden, Update dennoch moeglich."
             )
         else:
             message = f"Update verfuegbar ({behind_count} Commit(s) hinter {remote_ref})."
@@ -177,17 +202,23 @@ def get_manager_update_status(*, fetch_remote: bool) -> ManagerUpdateStatus:
         ahead_count=ahead_count,
         behind_count=behind_count,
         dirty=dirty,
+        dirty_tracked=dirty_tracked,
+        dirty_files=dirty_files,
     )
 
 
-def trigger_manager_update() -> tuple[bool, str]:
+def trigger_manager_update(*, force: bool = False) -> tuple[bool, str]:
     status = get_manager_update_status(fetch_remote=True)
     if not status.ok:
         return False, status.message
     if not status.has_update:
         return False, "Kein Update verfuegbar."
-    if status.dirty:
-        return False, "Update blockiert: Working Tree ist nicht sauber."
+    if status.dirty_tracked and not force:
+        return False, (
+            "Update blockiert: lokale Aenderungen an versionierten Dateien. "
+            "Nutze 'Lokale Aenderungen verwerfen & aktualisieren', um sie zu "
+            "verwerfen und auf den Remote-Stand zu setzen."
+        )
 
     repo_path = _repo_root()
     deploy_script = repo_path / "scripts" / "deploy_from_github.ps1"
@@ -216,6 +247,10 @@ def trigger_manager_update() -> tuple[bool, str]:
         "-PythonExe",
         "python",
     ]
+    if force:
+        # Setzt versionierte Dateien per ``git reset --hard`` auf den
+        # Remote-Stand. Untracked/ignorierte Laufzeitdaten bleiben erhalten.
+        command.append("-Force")
 
     creationflags = 0
     for name in ("CREATE_NEW_PROCESS_GROUP", "CREATE_NO_WINDOW"):
@@ -235,11 +270,16 @@ def trigger_manager_update() -> tuple[bool, str]:
     except Exception as exc:
         return False, f"Update-Prozess konnte nicht gestartet werden: {exc}"
 
+    prefix = (
+        "Update wurde gestartet (lokale Aenderungen an versionierten Dateien "
+        "wurden verworfen)."
+        if force
+        else "Update wurde gestartet."
+    )
     return (
         True,
         (
-            "Update wurde gestartet. Details unter "
-            f"'{update_log_path.as_posix()}'. "
+            f"{prefix} Details unter '{update_log_path.as_posix()}'. "
             "Der notwendige Neustart wird automatisch ausgefuehrt."
         ),
     )

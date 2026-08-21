@@ -533,19 +533,21 @@ def check_manager_update_action(
 @router.post("/settings/manager-update/apply")
 def apply_manager_update_action(
     request: Request,
+    force: str = Form(default=""),
     db: Session = Depends(get_db),
 ):
     current_user = _require_super_admin(request, db)
     if current_user is None:
         return RedirectResponse(url="/login", status_code=303)
 
-    ok, message = trigger_manager_update()
+    force_flag = force.strip().lower() in {"1", "true", "on", "yes"}
+    ok, message = trigger_manager_update(force=force_flag)
     push_flash(request, message, "success" if ok else "error")
     audit_service.log_action(
         db,
         action="settings.manager_update_apply",
         user_id=current_user.id,
-        details=f"ok={ok} message={message}",
+        details=f"ok={ok} force={force_flag} message={message}",
     )
     return RedirectResponse(url="/settings", status_code=303)
 

@@ -464,6 +464,16 @@
         Working Tree: {{ "dirty" if manager_update_status.dirty else "clean" }}
     </p>
     <p class="muted">{{ manager_update_status.message }}</p>
+    {% if manager_update_status.dirty_files %}
+    <details class="muted">
+        <summary>Lokale Aenderungen ({{ manager_update_status.dirty_files|length }}{% if manager_update_status.dirty_files|length >= 15 %}+{% endif %})</summary>
+        <ul>
+            {% for f in manager_update_status.dirty_files %}
+            <li><code>{{ f }}</code></li>
+            {% endfor %}
+        </ul>
+    </details>
+    {% endif %}
     <div class="inline-form">
         <form method="post" action="/settings/manager-update/check" class="inline-form">
             <button type="submit">Update checken</button>
@@ -471,10 +481,24 @@
         <form method="post" action="/settings/manager-update/apply" class="inline-form">
             <button type="submit" {% if not manager_update_status.can_apply %}disabled{% endif %}>Update durchfuehren</button>
         </form>
+        {% if manager_update_status.needs_force %}
+        <form method="post" action="/settings/manager-update/apply" class="inline-form"
+              onsubmit="return confirm('Lokale Aenderungen an versionierten Dateien werden verworfen und auf den Remote-Stand gesetzt. Nicht versionierte Dateien (Daten, Logs, .replay, .env) bleiben erhalten. Fortfahren?');">
+            <input type="hidden" name="force" value="1">
+            <button type="submit" class="danger">Lokale Aenderungen verwerfen &amp; aktualisieren</button>
+        </form>
+        {% endif %}
         <form method="post" action="/settings/manager/restart" class="inline-form">
             <button type="submit">Anwendung neu starten</button>
         </form>
     </div>
+    {% if manager_update_status.needs_force %}
+    <p class="muted">
+        Das normale Update ist deaktiviert, weil lokale Aenderungen an versionierten Dateien
+        vorliegen (ein <code>git pull</code> wuerde sie ueberschreiben). Committe/pushe sie am
+        Entwicklungsrechner oder nutze das rote Verwerfen-Update.
+    </p>
+    {% endif %}
     <p class="muted">Hinweis: Beim Update kann die Weboberflaeche kurzzeitig nicht erreichbar sein.</p>
 </section>
 </div>
