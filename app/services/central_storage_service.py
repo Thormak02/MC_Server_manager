@@ -53,7 +53,11 @@ def _share_root(unc: str) -> str | None:
 
 
 def _wnet_connect(remote: str, user: str, password: str) -> int:
-    """WNetAddConnection2 (wie ``net use``). 0/85 = ok. Nur Windows."""
+    """WNetAddConnection2 (wie ``net use``). 0/85 = ok. Nur Windows.
+
+    WICHTIG: argtypes explizit setzen, sonst uebergibt ctypes die Strings ggf. als ANSI
+    an die W-(Wide-)Funktion -> verstuemmelte Zugangsdaten (1326/1312).
+    """
     import ctypes
     from ctypes import wintypes
 
@@ -66,13 +70,20 @@ def _wnet_connect(remote: str, user: str, password: str) -> int:
         ]
 
     mpr = ctypes.WinDLL("mpr")
+    add = mpr.WNetAddConnection2W
+    add.argtypes = [ctypes.POINTER(NETRESOURCE), wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD]
+    add.restype = wintypes.DWORD
+    cancel = mpr.WNetCancelConnection2W
+    cancel.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.BOOL]
+    cancel.restype = wintypes.DWORD
+
     nr = NETRESOURCE()
     nr.dwType = 1  # RESOURCETYPE_DISK
     nr.lpRemoteName = remote
-    ret = int(mpr.WNetAddConnection2W(ctypes.byref(nr), password, user, 0))
+    ret = int(add(ctypes.byref(nr), password, user, 0))
     if ret == 1219:  # ERROR_SESSION_CREDENTIAL_CONFLICT -> alte Session trennen, neu verbinden
-        mpr.WNetCancelConnection2W(remote, 0, 1)
-        ret = int(mpr.WNetAddConnection2W(ctypes.byref(nr), password, user, 0))
+        cancel(remote, 0, True)
+        ret = int(add(ctypes.byref(nr), password, user, 0))
     return ret
 
 
@@ -139,7 +150,7 @@ def probe_now(root: str) -> tuple[bool, str]:
     root = (root or "").strip()
     if not root:
         return False, "Kein Pfad gesetzt (alles bleibt lokal)."
-    _connect_root(root)  # NAS ggf. mit gespeicherten Creds authentifizieren
+    conn = _connect_root(root)  # None = keine Creds/kein UNC; sonst WNet-Code (0/85 = ok)
     target = Path(root) / _SUBDIR_LOGS
     try:
         target.mkdir(parents=True, exist_ok=True)
@@ -147,9 +158,16 @@ def probe_now(root: str) -> tuple[bool, str]:
         probe.write_text("ok", encoding="utf-8")
         probe.unlink(missing_ok=True)
         _usable_cache.pop(str(target), None)
-        return True, f"Schreibzugriff OK: {target}"
+        note = " (NAS-Anmeldung genutzt)" if conn in (0, 85) else ""
+        return True, f"Schreibzugriff OK: {target}{note}"
     except Exception as exc:  # noqa: BLE001
-        return False, f"Kein Schreibzugriff auf {target}: {exc}"
+        is_unc = _share_root(root) is not None
+        hint = ""
+        if is_unc and conn is None:
+            hint = " -> Trage NAS-Benutzer + Passwort ein (die Freigabe verlangt eine Anmeldung, dieselben Daten wie fuers Z:-Laufwerk)."
+        elif is_unc and conn not in (0, 85):
+            hint = f" -> NAS-Anmeldung fehlgeschlagen (Code {conn}): Benutzer/Passwort pruefen."
+        return False, f"Kein Schreibzugriff auf {target}: {exc}{hint}"
 
 
 def _local_logs_dir() -> Path:
