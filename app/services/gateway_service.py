@@ -93,7 +93,10 @@ class GatewayRoutes:
     domain: str = ""
     dispatcher_enabled: bool = False
     hub_lobby_enabled: bool = False   # Universal-Lobby (Python-Hub) aktiv?
-    hub_lobby_port: int = 0           # lokaler Port des Hub-Listeners
+    hub_lobby_port: int = 0           # Hub-Port fuer modded (direkt, 1.21.1)
+    hub_lobby_vanilla_port: int = 0   # Hub-Port fuer vanilla (Ziel von ViaProxy bzw. direkt)
+    viaproxy_enabled: bool = False    # Cross-Version-Uebersetzer vor dem Vanilla-Pfad?
+    viaproxy_port: int = 0            # ViaProxy-Listener-Port
 
 
 @dataclass(frozen=True)
@@ -172,6 +175,9 @@ def build_gateway_routes(db) -> GatewayRoutes:
     dispatcher_enabled = app_setting_service.get_dispatcher_enabled(db)
     hub_lobby_enabled = app_setting_service.get_hub_lobby_enabled(db)
     hub_lobby_port = app_setting_service.get_hub_lobby_port(db) if hub_lobby_enabled else 0
+    hub_lobby_vanilla_port = app_setting_service.get_hub_lobby_vanilla_port(db) if hub_lobby_enabled else 0
+    viaproxy_enabled = app_setting_service.get_viaproxy_enabled(db)
+    viaproxy_port = app_setting_service.get_viaproxy_port(db) if viaproxy_enabled else 0
 
     servers = list(
         db.scalars(select(Server).where(Server.gateway_enabled.is_(True))).all()
@@ -215,6 +221,9 @@ def build_gateway_routes(db) -> GatewayRoutes:
         dispatcher_enabled=dispatcher_enabled,
         hub_lobby_enabled=hub_lobby_enabled,
         hub_lobby_port=int(hub_lobby_port or 0),
+        hub_lobby_vanilla_port=int(hub_lobby_vanilla_port or 0),
+        viaproxy_enabled=viaproxy_enabled,
+        viaproxy_port=int(viaproxy_port or 0),
     )
 
 
@@ -498,20 +507,30 @@ def _handle_gateway_connection(client: socket.socket) -> None:
             handshake.server_address, handshake.protocol_version, routes
         )
 
-        # Universal-Lobby: ein Join auf <HUB_LOBBY_ALIAS>.<domain> (dorthin transferiert
-        # der Dispatcher modded Clients) transparent an den lokalen Hub-Port koppeln.
+        # Universal-Lobby: Joins auf modlobby/vanlobby.<domain> transparent koppeln.
+        #  - modlobby (modded, 1.21.1) -> direkt an den Hub-Port (keine Uebersetzung).
+        #  - vanlobby (vanilla, jede Version) -> ViaProxy (falls an), sonst direkt an den
+        #    Hub-Vanilla-Port. So kommen gemischte Versionen ueber ViaProxy in die 767-Welt.
         if (
             routes.hub_lobby_enabled
-            and routes.hub_lobby_port
             and handshake.next_state in mc_protocol.JOIN_NEXT_STATES
         ):
             cleaned_host = clean_hostname(handshake.server_address)
             alias_part = cleaned_host
             if routes.domain and cleaned_host.endswith("." + routes.domain):
                 alias_part = cleaned_host[: -(len(routes.domain) + 1)]
-            if alias_part in (HUB_LOBBY_ALIAS, HUB_VANILLA_ALIAS):
+            hub_target = None
+            if alias_part == HUB_LOBBY_ALIAS:
+                hub_target = routes.hub_lobby_port
+            elif alias_part == HUB_VANILLA_ALIAS:
+                hub_target = (
+                    routes.viaproxy_port
+                    if (routes.viaproxy_enabled and routes.viaproxy_port)
+                    else routes.hub_lobby_vanilla_port
+                )
+            if hub_target:
                 sleep_proxy_service._forward_to_backend(
-                    client, int(routes.hub_lobby_port), None, bytes(buffer)
+                    client, int(hub_target), None, bytes(buffer)
                 )
                 return
 

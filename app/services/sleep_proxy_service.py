@@ -482,6 +482,12 @@ def _idle_tick() -> None:
         hub_lobby_service.reconcile_hub_lobby()
     except Exception:  # noqa: BLE001
         pass
+    try:
+        from app.services import viaproxy_service
+
+        viaproxy_service.reconcile_viaproxy()
+    except Exception:  # noqa: BLE001
+        pass
 
     with SessionLocal() as db:
         servers = list(

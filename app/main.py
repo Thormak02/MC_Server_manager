@@ -24,7 +24,7 @@ from app.core.config import get_settings
 from app.db.init_db import init_db
 from app.middleware.csrf import CSRFSameOriginMiddleware
 from app.services.schedule_service import sync_all_jobs
-from app.services import gateway_service, hub_lobby_service, sleep_proxy_service
+from app.services import gateway_service, hub_lobby_service, sleep_proxy_service, viaproxy_service
 from app.services.process_service import (
     reconcile_runtime_states_on_manager_startup,
     shutdown_all_managed_processes,
@@ -48,6 +48,9 @@ async def lifespan(app: FastAPI):
     # Universal-Lobby (Python-Hub) hinter dem Gateway aufsetzen (gated hinter
     # hub_lobby_enabled; Default aus -> No-op, keine Regression).
     hub_lobby_service.reconcile_hub_lobby()
+    # ViaProxy (Cross-Version-Uebersetzer vor dem Hub) aufsetzen (gated hinter
+    # viaproxy_enabled; Default aus -> kein Prozess).
+    viaproxy_service.reconcile_viaproxy()
     start_servers_marked_for_manager_startup()
     sleep_proxy_service.reconcile_proxies()
     sleep_proxy_service.start_idle_monitor()
@@ -57,6 +60,7 @@ async def lifespan(app: FastAPI):
         # Shutdown
         gateway_service.stop_gateway()
         hub_lobby_service.stop_hub_lobby()
+        viaproxy_service.stop_viaproxy()
         sleep_proxy_service.shutdown_all()
         shutdown_all_managed_processes(preserve_for_restart=True)
         shutdown_scheduler()

@@ -240,9 +240,14 @@ class Hub:
                             "Lobby-Bot", 8.5, 64.0, 13.5, yaw=180.0)
         self.players[_BOT_KEY] = self.bot
 
-    def _pick_profile(self, server_address: str | None) -> dict:
-        """Config-Profil anhand des Handshake-Alias waehlen: vanlobby.<domain> -> vanilla
-        (falls geladen), sonst modded. Der Dispatcher setzt den Alias je nach Client-Typ."""
+    def _pick_profile(self, server_address: str | None, force_kind: str | None = None) -> dict:
+        """Config-Profil waehlen. ``force_kind`` (vom Listener-Port gesetzt) hat Vorrang:
+        'vanilla' -> Vanilla-Profil, 'modded' -> Modpack. Ohne force: per Handshake-Alias
+        (vanlobby.<domain> -> vanilla) - fuer Standalone-Tests ohne Zweitport."""
+        if force_kind == "vanilla" and self.vanilla is not None:
+            return self.vanilla
+        if force_kind == "modded":
+            return self.modded
         host = (server_address or "").split("\x00", 1)[0].strip().rstrip(".").lower()
         alias = host.split(".", 1)[0] if host else ""
         if self.vanilla is not None:
@@ -324,7 +329,7 @@ class Hub:
     # ------------------------------------------------------------------ #
     # Verbindungs-Handler (eigener Thread pro Client)
     # ------------------------------------------------------------------ #
-    def handle(self, sock: socket.socket, addr) -> None:
+    def handle(self, sock: socket.socket, addr, force_kind: str | None = None) -> None:
         session = None
         try:
             reader = _Reader(sock)
@@ -340,7 +345,7 @@ class Hub:
             pid, _ = reader.read_packet()
             if pid != mcd.LOGIN_ACK:
                 return
-            profile = self._pick_profile(hs.server_address)
+            profile = self._pick_profile(hs.server_address, force_kind)
             kind = "vanilla" if profile is self.vanilla else "modded"
             print(f"[hub] {addr} Login ok ({username}, {kind}). Spiele Config-Phase ab ...")
 

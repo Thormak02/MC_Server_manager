@@ -21,8 +21,19 @@ HUB_LOBBY_ENABLED_KEY = "hub_lobby_enabled"
 HUB_LOBBY_PORT_KEY = "hub_lobby_port"
 HUB_LOBBY_REPLAY_KEY = "hub_lobby_replay"
 HUB_LOBBY_VANILLA_REPLAY_KEY = "hub_lobby_vanilla_replay"  # optional; leer = nur modded
+HUB_LOBBY_VANILLA_PORT_KEY = "hub_lobby_vanilla_port"     # 2. Hub-Port (vanilla, via ViaProxy)
 _HUB_LOBBY_DEFAULT_PORT = 25599
+_HUB_LOBBY_DEFAULT_VANILLA_PORT = 25600
 _HUB_LOBBY_DEFAULT_REPLAY = "atm10_capture.replay"
+
+# ViaProxy: standalone Java-Uebersetzer VOR dem Hub, damit vanilla Clients JEDER Version
+# in die 1.21.1-Welt kommen (modded 1.21.1 umgeht ihn direkt). Default AUS.
+VIAPROXY_ENABLED_KEY = "viaproxy_enabled"
+VIAPROXY_PORT_KEY = "viaproxy_port"
+VIAPROXY_JAR_KEY = "viaproxy_jar"
+VIAPROXY_JAVA_KEY = "viaproxy_java"
+_VIAPROXY_DEFAULT_PORT = 25601
+_VIAPROXY_TARGET_VERSION = "1.21.1"
 
 # Erlaubte Netzwerk-Modi:
 #  - "gateway" = transparenter Hostname-Router (jeder Typ/jede Version, alle Server
@@ -511,5 +522,92 @@ def get_hub_lobby_vanilla_replay_runtime() -> str:
 
     with SessionLocal() as db:
         return get_hub_lobby_vanilla_replay(db)
+
+
+def get_hub_lobby_vanilla_port(db: Session) -> int:
+    row = _get_setting_row(db, HUB_LOBBY_VANILLA_PORT_KEY)
+    if row and row.value.strip():
+        try:
+            return int(row.value.strip())
+        except ValueError:
+            pass
+    return _HUB_LOBBY_DEFAULT_VANILLA_PORT
+
+
+def set_hub_lobby_vanilla_port(db: Session, port: int) -> int:
+    port = int(port)
+    if not (1 <= port <= 65535):
+        raise ValueError("Port muss zwischen 1 und 65535 liegen.")
+    _set_or_clear(db, HUB_LOBBY_VANILLA_PORT_KEY, str(port))
+    return port
+
+
+def get_hub_lobby_vanilla_port_runtime() -> int:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_hub_lobby_vanilla_port(db)
+
+
+# --- ViaProxy (Cross-Version-Uebersetzer vor dem Hub) --------------------------
+def get_viaproxy_enabled(db: Session) -> bool:
+    row = _get_setting_row(db, VIAPROXY_ENABLED_KEY)
+    return _normalize_bool(row.value) if row and row.value else False
+
+
+def set_viaproxy_enabled(db: Session, enabled: bool) -> None:
+    _set_or_clear(db, VIAPROXY_ENABLED_KEY, "true" if enabled else None)
+
+
+def get_viaproxy_port(db: Session) -> int:
+    row = _get_setting_row(db, VIAPROXY_PORT_KEY)
+    if row and row.value.strip():
+        try:
+            return int(row.value.strip())
+        except ValueError:
+            pass
+    return _VIAPROXY_DEFAULT_PORT
+
+
+def set_viaproxy_port(db: Session, port: int) -> int:
+    port = int(port)
+    if not (1 <= port <= 65535):
+        raise ValueError("Port muss zwischen 1 und 65535 liegen.")
+    _set_or_clear(db, VIAPROXY_PORT_KEY, str(port))
+    return port
+
+
+def get_viaproxy_jar(db: Session) -> str:
+    row = _get_setting_row(db, VIAPROXY_JAR_KEY)
+    return row.value.strip() if row and row.value.strip() else ""
+
+
+def set_viaproxy_jar(db: Session, path: str | None) -> None:
+    _set_or_clear(db, VIAPROXY_JAR_KEY, (path or "").strip() or None)
+
+
+def get_viaproxy_java(db: Session) -> str:
+    """Java-Binary fuer ViaProxy (leer = 'java' aus dem PATH)."""
+    row = _get_setting_row(db, VIAPROXY_JAVA_KEY)
+    return row.value.strip() if row and row.value.strip() else "java"
+
+
+def set_viaproxy_java(db: Session, path: str | None) -> None:
+    _set_or_clear(db, VIAPROXY_JAVA_KEY, (path or "").strip() or None)
+
+
+def get_viaproxy_config_runtime() -> dict:
+    """Alle ViaProxy-Laufzeitwerte auf einmal (fuer den viaproxy_service-Reconcile)."""
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return {
+            "enabled": get_viaproxy_enabled(db),
+            "port": get_viaproxy_port(db),
+            "jar": get_viaproxy_jar(db),
+            "java": get_viaproxy_java(db),
+            "target_port": get_hub_lobby_vanilla_port(db),
+            "target_version": _VIAPROXY_TARGET_VERSION,
+        }
 
 

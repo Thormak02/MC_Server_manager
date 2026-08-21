@@ -4,9 +4,13 @@ Startet/stoppt ``hub_service.Hub`` analog zum Gateway - **gated hinter dem Setti
 ``hub_lobby_enabled`` (Default AUS)**, damit sich am bestehenden Netzwerk nichts
 aendert, solange die Universal-Lobby nicht eingeschaltet ist.
 
-Der Hub laeuft auf einem eigenen (per Default lokalen) Port; das Gateway leitet den
-Verkehr dorthin (siehe Schritt 1.3). So bleibt ``mc.friedrich-dietrich.de`` der einzige
-oeffentliche Eingang. Reconcile ist idempotent -> gefahrlos bei jedem Start/Idle-Tick.
+Der Hub bindet ZWEI lokale Ports, damit der Client-Typ eindeutig ist (unabhaengig davon,
+wie ein davor geschalteter ViaProxy den Hostnamen weiterreicht):
+  * modded-Port  -> Gateway leitet ``modlobby`` direkt hierher (1.21.1, kein ViaProxy).
+  * vanilla-Port -> Ziel von ViaProxy bzw. direktes ``vanlobby`` (nur wenn ein
+    Vanilla-Replay geladen ist).
+So bleibt ``mc.friedrich-dietrich.de`` der einzige oeffentliche Eingang. Reconcile ist
+idempotent -> gefahrlos bei jedem Start/Idle-Tick.
 """
 
 from __future__ import annotations
@@ -23,12 +27,13 @@ _BIND_FAILED = False
 
 @dataclass
 class _HubListener:
-    port: int
-    sock: socket.socket
-    hub: object                      # hub_service.Hub (geladenes Replay + Roster)
-    replay: str = ""                 # aktives modded-Replay
-    vanilla: Optional[str] = None    # aktives vanilla-Replay (fuer Reconcile-Vergleich)
-    thread: Optional[Thread] = None
+    modded_port: int
+    vanilla_port: int
+    modded_sock: socket.socket
+    vanilla_sock: Optional[socket.socket]   # None, wenn kein Vanilla-Profil geladen
+    hub: object                             # hub_service.Hub (Profile + Roster)
+    replay: str = ""                        # aktives modded-Replay (Reconcile-Vergleich)
+    vanilla: Optional[str] = None           # aktives vanilla-Replay
     stopped: bool = False
 
 
@@ -48,62 +53,91 @@ def is_running() -> bool:
 
 def current_port() -> int | None:
     with _LOCK:
-        return _LISTENER.port if _LISTENER is not None else None
+        return _LISTENER.modded_port if _LISTENER is not None else None
 
 
-def _accept_loop(listener: "_HubListener") -> None:
+def current_vanilla_port() -> int | None:
+    with _LOCK:
+        return _LISTENER.vanilla_port if (_LISTENER and _LISTENER.vanilla_sock) else None
+
+
+def _accept_loop(listener: "_HubListener", sock: socket.socket, kind: str) -> None:
     while not listener.stopped:
         try:
-            conn, addr = listener.sock.accept()
+            conn, addr = sock.accept()
         except OSError:
             break  # Socket geschlossen -> Listener gestoppt
         Thread(
-            target=listener.hub.handle, args=(conn, addr),
-            daemon=True, name="hublobby-conn",
+            target=listener.hub.handle, args=(conn, addr, kind),
+            daemon=True, name=f"hublobby-{kind}",
         ).start()
 
 
-def start_hub_lobby(port: int, replay_path: str, vanilla_replay_path: str | None = None) -> bool:
-    """Hub-Listener auf ``port`` binden und mit ``replay_path`` (+ optional Vanilla-Replay)
-    bedienen (ohne Flag-Check).
+def _bind(port: int) -> socket.socket | None:
+    """Ohne SO_REUSEADDR binden (wie Gateway/Sleep-Proxy)."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(("0.0.0.0", int(port)))
+        sock.listen(64)
+        return sock
+    except OSError:
+        return None
 
-    Idempotent: gleicher Port -> No-op. Anderer Port/Replay -> Neustart. Bind ohne
-    SO_REUSEADDR (wie Gateway/Sleep-Proxy); bindet beim naechsten Reconcile nach, falls
-    der Port noch belegt ist."""
+
+def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
+                    vanilla_replay_path: str | None = None) -> bool:
+    """Hub mit modded-Port (+ vanilla-Port, falls Vanilla-Replay) binden (ohne Flag-Check).
+
+    Idempotent: gleiche Ports/Replays -> No-op. Aenderung -> Neustart. Bindet beim
+    naechsten Reconcile nach, falls ein Port noch belegt ist."""
     global _LISTENER, _BIND_FAILED
     from app.services import hub_service
 
     vanilla = vanilla_replay_path or None
     with _LOCK:
-        if (_LISTENER is not None and _LISTENER.port == int(port)
+        if (_LISTENER is not None
+                and _LISTENER.modded_port == int(modded_port)
+                and _LISTENER.vanilla_port == int(vanilla_port)
                 and _LISTENER.replay == replay_path and _LISTENER.vanilla == vanilla):
             return True  # nichts geaendert
         if _LISTENER is not None:
-            _stop_locked()  # Port ODER Replay geaendert -> neu starten
+            _stop_locked()
         try:
             hub = hub_service.Hub(replay_path, vanilla)
         except Exception as exc:  # noqa: BLE001 - fehlendes/kaputtes Replay
             _glog("replay_failed", f"{replay_path}: {exc!r}")
             return False
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(("0.0.0.0", int(port)))
-            sock.listen(64)
-        except OSError as exc:
+
+        modded_sock = _bind(modded_port)
+        if modded_sock is None:
             if not _BIND_FAILED:
-                _glog("bind_failed", f"port={port} error={exc!r} (Port belegt? bindet nach.)")
+                _glog("bind_failed", f"modded-port={modded_port} belegt? bindet nach.")
                 _BIND_FAILED = True
             return False
+        # Vanilla-Port nur binden, wenn es ueberhaupt ein Vanilla-Profil gibt.
+        vanilla_sock = _bind(vanilla_port) if hub.vanilla is not None else None
+        if hub.vanilla is not None and vanilla_sock is None:
+            if not _BIND_FAILED:
+                _glog("bind_failed", f"vanilla-port={vanilla_port} belegt? bindet nach.")
+                _BIND_FAILED = True
+            modded_sock.close()
+            return False
         _BIND_FAILED = False
-        listener = _HubListener(port=int(port), sock=sock, hub=hub,
-                                replay=replay_path, vanilla=vanilla)
-        # Virtueller Lobby-Bot (macht den Hub schon mit einem echten Client testbar).
+
+        listener = _HubListener(
+            modded_port=int(modded_port), vanilla_port=int(vanilla_port),
+            modded_sock=modded_sock, vanilla_sock=vanilla_sock, hub=hub,
+            replay=replay_path, vanilla=vanilla,
+        )
         Thread(target=hub.animate_bot, daemon=True, name="hublobby-bot").start()
-        thread = Thread(target=_accept_loop, args=(listener,), daemon=True, name="hublobby")
-        listener.thread = thread
+        Thread(target=_accept_loop, args=(listener, modded_sock, "modded"),
+               daemon=True, name="hublobby-modded").start()
+        if vanilla_sock is not None:
+            Thread(target=_accept_loop, args=(listener, vanilla_sock, "vanilla"),
+                   daemon=True, name="hublobby-vanilla").start()
         _LISTENER = listener
-        thread.start()
-        _glog("started", f"port={port} replay={replay_path}")
+        _glog("started",
+              f"modded:{modded_port} vanilla:{vanilla_port if vanilla_sock else '-'} replay={replay_path}")
         return True
 
 
@@ -112,11 +146,13 @@ def _stop_locked() -> None:
     if _LISTENER is None:
         return
     _LISTENER.stopped = True
-    try:
-        _LISTENER.sock.close()
-    except OSError:
-        pass
-    _glog("stopped", f"port={_LISTENER.port}")
+    for sock in (_LISTENER.modded_sock, _LISTENER.vanilla_sock):
+        if sock is not None:
+            try:
+                sock.close()
+            except OSError:
+                pass
+    _glog("stopped", f"modded:{_LISTENER.modded_port}")
     _LISTENER = None
 
 
@@ -126,7 +162,7 @@ def stop_hub_lobby() -> None:
 
 
 def reconcile_hub_lobby() -> None:
-    """Listener an ``hub_lobby_enabled`` / Port / Replay angleichen (selbstheilend)."""
+    """Listener an ``hub_lobby_enabled`` / Ports / Replays angleichen (selbstheilend)."""
     from app.services import app_setting_service as s
 
     if not s.get_hub_lobby_enabled_runtime():
@@ -135,6 +171,7 @@ def reconcile_hub_lobby() -> None:
         return
     start_hub_lobby(
         s.get_hub_lobby_port_runtime(),
+        s.get_hub_lobby_vanilla_port_runtime(),
         s.get_hub_lobby_replay_runtime(),
         s.get_hub_lobby_vanilla_replay_runtime() or None,
     )
