@@ -4,6 +4,7 @@ main: net.mcsm.lobby.MCSMLobby
 api-version: "1.20"
 author: MC Server Manager
 description: Begehbare Transfer-Lobby - schickt Spieler per Transfer-Paket an Gateway-Server.
+softdepend: [packetevents]
 commands:
   server:
     description: Zu einem Server wechseln

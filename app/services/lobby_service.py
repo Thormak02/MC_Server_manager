@@ -14,6 +14,17 @@ from sqlalchemy.orm import Session
 _PLUGIN_ASSET_DIR = Path(__file__).resolve().parents[1] / "assets" / "lobby_plugin"
 _PLUGIN_JAR = _PLUGIN_ASSET_DIR / "MCSMLobby.jar"
 
+
+def _plugin_jar() -> Path:
+    """Bevorzugt das vom Manager selbst gebaute Jar (data/plugin-build), sonst das
+    mitgelieferte Asset - so wird nach einem Auto-Build die frische Version deployt."""
+    try:
+        from app.services import plugin_build_service
+
+        return plugin_build_service.preferred_plugin_jar()
+    except Exception:  # noqa: BLE001
+        return _PLUGIN_JAR
+
 # Item-Palette fuer die GUI (nur Optik) - je nach Servertyp.
 _TYPE_MATERIAL = {
     "paper": "PAPER",
@@ -201,7 +212,7 @@ def refresh_plugin_for_server(db: Session, server) -> None:
         return
     if str(getattr(server, "server_type", "") or "").lower() not in _BUKKIT_TYPES:
         return
-    if not _PLUGIN_JAR.exists():
+    if not _plugin_jar().exists():
         return
     plugins = Path(server.base_path).expanduser().resolve() / "plugins"
     # Nur auffrischen, wenn das Plugin schon installiert ist -> keinen Plugin-Ordner
@@ -263,13 +274,14 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
         return False, f"{server.name}: Plugin-Ordner nicht erstellbar: {exc}"
 
     notes: list[str] = []
-    if _PLUGIN_JAR.exists():
+    _jar = _plugin_jar()
+    if _jar.exists():
         try:
-            shutil.copy2(_PLUGIN_JAR, plugins_dir / "MCSMLobby.jar")
+            shutil.copy2(_jar, plugins_dir / "MCSMLobby.jar")
         except (PermissionError, OSError):
             notes.append("Jar gesperrt (laeuft) - Update beim Neustart")
     else:
-        notes.append("MCSMLobby.jar fehlt in Assets")
+        notes.append("MCSMLobby.jar fehlt (weder gebaut noch als Asset)")
 
     cfg_path = data_dir / "config.yml"
     existing: dict = {}
@@ -293,6 +305,24 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
     status_cfg = existing.get("status")
     if not isinstance(status_cfg, dict):
         status_cfg = {"enabled": True, "interval_seconds": 8}
+
+    # Presence-Bridge (Avatar-Spiegelung): NUR auf der Default-Lobby (Vanilla-Instanz hinter
+    # Velocity) und nur im velocity-Modus + wenn die Bridge an ist. Dann laedt der Manager
+    # auch packetevents (Runtime) in diesen plugins-Ordner.
+    bridge_cfg = {"enabled": False, "host": "127.0.0.1", "port": 25606, "token": ""}
+    try:
+        from app.services import app_setting_service as _A
+
+        if is_lobby and _A.get_network_mode(db) == "velocity" and _A.get_presence_bridge_enabled(db):
+            _pb = _A.get_presence_bridge_runtime()
+            bridge_cfg = {"enabled": True, "host": "127.0.0.1",
+                          "port": int(_pb["port"]), "token": str(_pb["token"])}
+            from app.services import plugin_build_service
+
+            plugin_build_service.download_packetevents_runtime(plugins_dir)
+    except Exception:  # noqa: BLE001 - Bridge/Download darf den Plugin-Sync nie stoeren
+        pass
+
     config = {
         "cooldown_ms": existing.get("cooldown_ms", 3000),
         "messages": {"transfer": "&aVerbinde zu &e%server%&a..."},
@@ -302,6 +332,7 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
         "status": status_cfg,
         "servers": servers,
         "regions": existing.get("regions", []) or [],
+        "bridge": bridge_cfg,
     }
     try:
         cfg_path.write_text(

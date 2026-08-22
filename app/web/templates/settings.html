@@ -39,8 +39,21 @@
         &nbsp;<strong>off</strong> = kein gemeinsamer Eingang (jeder Server eigener Port).
         &nbsp;<strong>gateway</strong> = <code>&lt;alias&gt;.&lt;domain&gt;</code> geht direkt zum Server,
         die blanke Domain (mit Dispatcher) in die Lobby. Direktverbindung &amp; eigene Ports bleiben.
-        &nbsp;<strong>velocity</strong> = echter Proxy + neueste-Version-Lobby &ndash; <em>jede</em> Client-Version
-        (1.7.10 &hellip; 26.x) landet in EINER Lobby, In-Game-Serverwechsel inklusive.
+        &nbsp;<strong>velocity</strong> = <em>Universal (alles zusammen)</em>: Gateway + Python-Hub (modded)
+        + Velocity-Lobby (vanilla, jede Version 1.7.10&hellip;26.x) laufen <strong>gleichzeitig</strong>.
+        Modded &rarr; Hub, Vanilla &rarr; Paper-Lobby &ndash; beide hinter <em>einer</em> Adresse.
+    </p>
+    <p class="muted" style="font-size:1.05em">
+        <strong>Aktiv jetzt:</strong>&nbsp;
+        Eingang (Gateway)
+        {% if gateway_status.mode in ['gateway','velocity'] %}<strong style="color:#2e7d32">✓</strong>{% else %}<strong style="color:#c62828">–</strong>{% endif %}
+        &nbsp;&middot;&nbsp; Hub (modded)
+        {% if universal_lobby.hub_running %}<strong style="color:#2e7d32">✓</strong>{% else %}<strong style="color:#c62828">–</strong>{% endif %}
+        &nbsp;&middot;&nbsp; Velocity-Lobby (vanilla)
+        {% if velocity_running %}<strong style="color:#2e7d32">✓</strong>{% else %}<strong style="color:#c62828">–</strong>{% endif %}
+        &nbsp;&middot;&nbsp; Avatar-Bridge
+        {% if universal_lobby.presence_bridge_enabled %}<strong style="color:#2e7d32">✓</strong>{% else %}<strong style="color:#c62828">–</strong>{% endif %}
+        <br><span style="opacity:.8">Im <strong>velocity</strong>-Modus sollen alle vier ✓ sein &ndash; sie ergänzen sich, sie schließen sich nicht aus.</span>
     </p>
     <form method="post" action="/settings/network" class="grid grid-4">
         <div>
@@ -48,7 +61,7 @@
             <select id="network_mode" name="network_mode">
                 <option value="off" {% if network_mode == "off" %}selected{% endif %}>off</option>
                 <option value="gateway" {% if network_mode == "gateway" %}selected{% endif %}>gateway</option>
-                <option value="velocity" {% if network_mode == "velocity" %}selected{% endif %}>velocity</option>
+                <option value="velocity" {% if network_mode == "velocity" %}selected{% endif %}>velocity (Universal &ndash; Gateway + Hub + Velocity zusammen)</option>
             </select>
         </div>
         <div>
@@ -96,7 +109,15 @@
         <form method="post" action="/settings/velocity/auto-create" class="inline-form">
             <button type="submit">Velocity-Netzwerk automatisch einrichten</button>
         </form>
+        <form method="post" action="/settings/lobby/build-plugin" class="inline-form">
+            <button type="submit">Lobby-Plugin bauen (Manager kompiliert)</button>
+        </form>
     </div>
+    <p class="muted">
+        „Lobby-Plugin bauen": der Manager kompiliert das Lobby-Plugin selbst aus dem Quelltext
+        (nutzt ein installiertes JDK) und verteilt es. Noetig, wenn eine neue Plugin-Version
+        (z.B. das Avatar-Modul) hinzukommt.
+    </p>
     <p class="muted">
         Ein Klick: legt die Neueste-Version-Lobby an, stellt den Modus auf <strong>velocity</strong> und laedt beim
         ersten Start Java&nbsp;25, Paper, Velocity und die Via-Plugins automatisch. Danach die Lobby einmal starten.

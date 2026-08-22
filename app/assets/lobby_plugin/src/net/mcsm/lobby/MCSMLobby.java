@@ -16,9 +16,11 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -81,6 +83,14 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     private boolean statusPingEnabled = true;
     private int statusIntervalTicks = 160;  // ~8s
 
+    // Presence-Bridge: spiegelt Avatare der anderen Instanz (Hub). Nur aktiv, wenn in der
+    // config eingeschaltet UND packetevents vorhanden ist (sonst bleibt das Feld null).
+    private PresenceBridge presenceBridge;
+    private boolean bridgeEnabled = false;
+    private String bridgeHost = "127.0.0.1";
+    private int bridgePort = 25606;
+    private String bridgeToken = "";
+
     static final class ServerEntry {
         String key;
         String display;
@@ -131,6 +141,28 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         if (statusPingEnabled) {
             getServer().getScheduler().runTaskTimerAsynchronously(
                 this, this::pingAll, 40L, statusIntervalTicks);
+        }
+
+        // Presence-Bridge starten (nur wenn eingeschaltet + packetevents-Klassen vorhanden).
+        if (bridgeEnabled && !bridgeToken.isEmpty()) {
+            try {
+                presenceBridge = new PresenceBridge(this, bridgeHost, bridgePort, bridgeToken);
+                presenceBridge.start();
+                getLogger().info("Presence-Bridge aktiv -> " + bridgeHost + ":" + bridgePort);
+            } catch (Throwable t) {
+                presenceBridge = null;
+                getLogger().warning("Presence-Bridge nicht gestartet (packetevents fehlt?): " + t);
+            }
+        }
+    }
+
+    @Override
+    public void onDisable() {
+        if (presenceBridge != null) {
+            try {
+                presenceBridge.stop();
+            } catch (Throwable ignored) {
+            }
         }
     }
 
@@ -252,6 +284,10 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         lobbyPort = c.getInt("lobby.port", 25565);
         statusPingEnabled = c.getBoolean("status.enabled", true);
         statusIntervalTicks = Math.max(40, c.getInt("status.interval_seconds", 8) * 20);
+        bridgeEnabled = c.getBoolean("bridge.enabled", false);
+        bridgeHost = c.getString("bridge.host", "127.0.0.1");
+        bridgePort = c.getInt("bridge.port", 25606);
+        bridgeToken = c.getString("bridge.token", "");
 
         // WICHTIG: servers ist eine LISTE, nicht eine Map mit Alias als Schluessel.
         // Bukkit-YAML behandelt '.' im Schluessel als Pfad-Trenner, d.h. ein Alias
@@ -438,6 +474,33 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         p.getInventory().setItem(compassSlot, compassItem());
         if (!servers.isEmpty()) {
             p.sendMessage(color("&7Rechtsklick mit dem &bKompass&7 oder &e/server <name>&7 zum Wechseln."));
+        }
+        // Dem neuen Spieler alle bereits gespiegelten Fremd-Avatare zeigen.
+        if (presenceBridge != null) {
+            try {
+                presenceBridge.showAllTo(p);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent e) {
+        if (presenceBridge != null) {
+            try {
+                presenceBridge.onLocalQuit(e.getPlayer());
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    @EventHandler
+    public void onChat(AsyncPlayerChatEvent e) {
+        if (presenceBridge != null) {
+            try {
+                presenceBridge.onLocalChat(e.getPlayer().getName(), e.getMessage());
+            } catch (Throwable ignored) {
+            }
         }
     }
 

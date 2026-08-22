@@ -279,6 +279,33 @@ def auto_create_velocity_action(request: Request, db: Session = Depends(get_db))
     return RedirectResponse(url="/settings", status_code=303)
 
 
+@router.post("/settings/lobby/build-plugin")
+def build_lobby_plugin_action(request: Request, db: Session = Depends(get_db)):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import plugin_build_service
+
+    try:
+        ok, message = plugin_build_service.build_lobby_plugin(db)
+    except Exception as exc:  # noqa: BLE001
+        push_flash(request, f"Plugin-Build fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    # Bei Erfolg gleich auf alle Gateway-Bukkit-Server verteilen (frisches Jar).
+    if ok:
+        try:
+            from app.services import lobby_service
+
+            lobby_service.sync_lobby_plugin(db)
+        except Exception:  # noqa: BLE001
+            pass
+        message += " Auf die Lobby-Server verteilt - beim naechsten Serverstart aktiv."
+    push_flash(request, message, "success" if ok else "error")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
 @router.post("/settings/hub/auto-create")
 def auto_create_hub_action(request: Request, db: Session = Depends(get_db)):
     current_user = _require_super_admin(request, db)
