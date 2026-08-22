@@ -66,12 +66,15 @@ PRESENCE_BRIDGE_ENABLED_KEY = "presence_bridge_enabled"
 VELOCITY_VERSION_KEY = "velocity_version"       # "" = neueste stabile (fill-API)
 VELOCITY_JAR_KEY = "velocity_jar"               # manueller Jar-Pfad (override)
 VELOCITY_FORWARDING_SECRET_KEY = "velocity_forwarding_secret"  # auto-generiert (Proxy<->Backends)
+VELOCITY_INTERNAL_PORT_KEY = "velocity_internal_port"  # Velocity bindet loopback:diesen Port
+_VELOCITY_DEFAULT_INTERNAL_PORT = 25605
 
 # Erlaubte Netzwerk-Modi:
 #  - "gateway"  = transparenter Hostname-Router (jeder Typ/jede Version, alle Server
-#                 laufen parallel, Direktverbindung bleibt).
-#  - "velocity" = echter Proxy (Velocity + Via) als einziger Eingang -> begehbare
-#                 Lobby auf neuester Version, In-Game-Serverwechsel, alle Client-Versionen.
+#                 laufen parallel, Direktverbindung bleibt); Vanilla ueber den Python-Hub.
+#  - "velocity" = UNIVERSAL: Gateway VORN (network_port) routet modded -> Python-Hub und
+#                 Vanilla (jede Version) -> Velocity+Paper-Lobby (interner Port). Die
+#                 Presence-Bridge spiegelt Avatare zwischen beiden -> EINE Lobby.
 #  - "off"      = kein gemeinsamer Eingang.
 NETWORK_MODES = ("off", "gateway", "velocity")
 
@@ -823,6 +826,32 @@ def set_velocity_jar(db: Session, path: str | None) -> None:
     _set_or_clear(db, VELOCITY_JAR_KEY, (path or "").strip() or None)
 
 
+def get_velocity_internal_port(db: Session) -> int:
+    """Loopback-Port, auf dem Velocity lauscht (hinter dem Gateway). UI > Default."""
+    row = _get_setting_row(db, VELOCITY_INTERNAL_PORT_KEY)
+    if row and row.value.strip():
+        try:
+            return int(row.value.strip())
+        except ValueError:
+            pass
+    return _VELOCITY_DEFAULT_INTERNAL_PORT
+
+
+def set_velocity_internal_port(db: Session, port: int) -> int:
+    port = int(port)
+    if not (1 <= port <= 65535):
+        raise ValueError("Port muss zwischen 1 und 65535 liegen.")
+    _set_or_clear(db, VELOCITY_INTERNAL_PORT_KEY, str(port))
+    return port
+
+
+def get_velocity_internal_port_runtime() -> int:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_velocity_internal_port(db)
+
+
 def get_velocity_forwarding_secret(db: Session) -> str:
     """Gemeinsames Forwarding-Geheimnis Proxy<->Backends (leer bis erstmalig erzeugt)."""
     row = _get_setting_row(db, VELOCITY_FORWARDING_SECRET_KEY)
@@ -860,7 +889,9 @@ def get_velocity_config_runtime() -> dict:
             "version": get_velocity_version(db),
             "jar": get_velocity_jar(db),
             "secret": ensure_velocity_forwarding_secret(db) if is_velocity else get_velocity_forwarding_secret(db),
-            "bind_port": get_network_port(db),
+            # Velocity ist ein INTERNES Backend hinter dem Gateway (loopback) -> nicht der
+            # oeffentliche network_port. Das Gateway bleibt der einzige oeffentliche Eingang.
+            "bind_port": get_velocity_internal_port(db),
             "domain": get_network_domain(db),
             "motd": get_hub_motd(db),
             "max_players": get_hub_max_players(db),

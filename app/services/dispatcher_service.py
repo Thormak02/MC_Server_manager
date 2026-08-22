@@ -97,7 +97,18 @@ def dispatch(client: socket.socket, handshake: Handshake, initial: bytes) -> Non
             from app.services import app_setting_service, gateway_service
 
             if not neoforge:
-                # Vanilla ODER Fabric/Quilt -> gemeinsame Lobby ueber das Vanilla-Profil,
+                # UNIVERSAL-Modus (velocity): Vanilla/Fabric -> vanlobby. Das Gateway leitet
+                # vanlobby auf das interne Velocity+Paper-Backend (das per Via JEDE Version
+                # bedient). UNABHAENGIG vom Python-Hub-Vanilla-Replay (der Velocity-Weg
+                # braucht keins). WICHTIG: sonst landet 767-Vanilla auf der Lobby-Alias und
+                # wird roh an das online-mode=false-Paper-Backend gespliced -> Kick.
+                if app_setting_service.get_network_mode(db) == "velocity":
+                    vt = _hub_target(db, gateway_service.HUB_VANILLA_ALIAS)
+                    if vt:
+                        _finish(client, vt, _no_lobby_message())
+                        _glog("route_vanilla_velocity", str(vt))
+                        return
+                # gateway-Modus: gemeinsame Lobby ueber das Vanilla-Profil des Python-Hubs,
                 # aber nur wenn ein Vanilla-Config-Replay konfiguriert ist (sonst wuerde
                 # der Hub sie mit dem Modpack-Spoof kicken).
                 if (app_setting_service.get_hub_lobby_enabled(db)

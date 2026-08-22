@@ -548,22 +548,20 @@ def create_velocity_lobby(
     warnings: list[str] = []
 
     def _apply_velocity_mode(lobby_id: int) -> None:
+        # UNIVERSAL-Modus: Gateway VORN + Hub (modded) + Velocity+Paper (vanilla) + Bridge.
         app_setting_service.set_network_mode(db, "velocity")
         app_setting_service.ensure_velocity_forwarding_secret(db)
+        app_setting_service.set_dispatcher_enabled(db, True)     # modded/vanilla-Split
+        app_setting_service.set_hub_lobby_enabled(db, True)      # Python-Hub (modded)
+        app_setting_service.set_presence_bridge_enabled(db, True)  # Avatare spiegeln
         _demote_other_default_lobbies(db, lobby_id)
-        # Erst das Gateway stoppen (Modus ist jetzt velocity -> reconcile_gateway gibt den
-        # network_port frei), DANN Velocity im Hintergrund hochziehen (Download blockiert
-        # nicht die HTTP-Antwort; kein Bind-Konflikt -> kein Crash-Backoff).
+        # Alle drei Fronten angleichen: Gateway (Eingang), Hub (modded), Velocity (vanilla).
         try:
-            from app.services import gateway_service
+            from app.services import gateway_service, hub_lobby_service, proxy_service
 
             gateway_service.reconcile_gateway()
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            from app.services import proxy_service
-
-            proxy_service.reconcile_velocity_async()
+            hub_lobby_service.reconcile_hub_lobby()
+            proxy_service.reconcile_velocity_async()   # Download blockiert die Antwort nicht
         except Exception:  # noqa: BLE001
             pass
         try:
@@ -651,6 +649,19 @@ def create_velocity_lobby(
         pass
 
     _apply_velocity_mode(server.id)
+
+    # Modded-Hub-Status sichtbar machen: laeuft er nicht (meist fehlendes Modpack-Replay),
+    # koennen modded Clients die Lobby (noch) nicht erreichen -> als Hinweis mitgeben.
+    try:
+        from app.services import hub_lobby_service
+
+        if not hub_lobby_service.is_running():
+            warnings.append(
+                "Der modded-Hub laeuft noch nicht (meist fehlt ein gueltiges Modpack-Replay) "
+                "- modded Clients erreichen die Lobby erst, sobald er laeuft."
+            )
+    except Exception:  # noqa: BLE001
+        pass
 
     audit_service.log_action(
         db,

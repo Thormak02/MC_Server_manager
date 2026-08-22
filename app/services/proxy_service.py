@@ -3,19 +3,19 @@
 Der Manager verwaltet Velocity als externen Java-Prozess VOR allen Servern - analog zu
 ``viaproxy_service`` (Popen + idempotenter Reconcile + Crash-Backoff), nur maechtiger:
 
-- Velocity bindet ``network_port`` (der EINE oeffentliche MC-Port) und haelt die
-  Client-Session, kann also den Backend-Server **im Spiel** wechseln (``/server``).
+- Velocity ist ein **INTERNES Backend hinter dem Gateway**: es bindet nur
+  ``127.0.0.1:velocity_internal_port`` (loopback, NICHT oeffentlich). Der oeffentliche
+  Eingang bleibt das Gateway (network_port); es routet Vanilla-Clients hierher.
 - Mit ViaVersion + ViaBackwards + ViaRewind als **Velocity-Plugins** landet **jede**
-  Client-Version (1.7.10 .. 26.2) in der EINEN neuesten Lobby: der Proxy uebersetzt
+  Vanilla-Version (1.7.10 .. 26.2) in der EINEN neuesten Lobby: der Proxy uebersetzt
   abwaerts (die reife Via-Richtung). 26.2-Clients nativ, aeltere per Backwards/Rewind.
 - Backends (Lobby + Vanilla-Paper-Server) laufen hinter Velocity mit **Modern
   Forwarding** (Loopback, online-mode=false + Secret). **Modded-Server sind KEINE
-  Velocity-Backends** - sie werden per nativem Transfer direkt angesprungen (kein Via,
-  keine Forge-Forwarding-Fragilitaet).
+  Velocity-Backends** - modded Clients laufen ueber den Dispatcher in den Python-Hub.
 
-Gated hinter ``network_mode == "velocity"`` (schliesst das Gateway am selben Port aus).
-Reconcile laeuft idempotent im Lifespan + 15s-Idle-Monitor -> ein Moduswechsel greift
-ohne App-Neustart.
+Gated hinter ``network_mode == "velocity"`` (UNIVERSAL-Modus). Das Gateway laeuft dabei
+WEITER (Eingang); Velocity ist nur das interne Vanilla-Backend. Reconcile laeuft
+idempotent im Lifespan + 15s-Idle-Monitor -> ein Moduswechsel greift ohne App-Neustart.
 """
 
 from __future__ import annotations
@@ -213,7 +213,9 @@ def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None
 
     lines: list[str] = []
     lines.append('config-version = "2.7"')
-    lines.append(f'bind = "0.0.0.0:{bind_port}"')
+    # Loopback-Bind: Velocity ist ein INTERNES Backend hinter dem Gateway (oeffentlich ist
+    # nur der Gateway-Port). Kein oeffentlicher Bind -> kein Umgehen des Routers.
+    lines.append(f'bind = "127.0.0.1:{bind_port}"')
     lines.append(f'motd = "{motd}"')
     lines.append(f'show-max-players = {int(cfg.get("max_players") or 100)}')
     lines.append("online-mode = true")
@@ -410,16 +412,8 @@ def reconcile_velocity() -> None:
         _last_start_mono = 0.0
         return
 
-    # Mutual Exclusion am network_port: Velocity ist die Eingangstuer -> das Gateway
-    # muss weg, BEVOR Velocity bindet (sonst Bind-Konflikt -> Crash-Backoff).
-    try:
-        from app.services import gateway_service
-
-        if gateway_service.is_running():
-            gateway_service.stop_gateway()
-    except Exception:  # noqa: BLE001
-        pass
-
+    # Velocity ist jetzt ein INTERNES Backend (loopback:velocity_internal_port) HINTER dem
+    # Gateway - kein Kampf mehr um den network_port, das Gateway bleibt der Eingang.
     if is_running():
         _crash_reported = False
         start_velocity(cfg)   # idempotent: gleiche Signatur -> No-op, sonst Neustart

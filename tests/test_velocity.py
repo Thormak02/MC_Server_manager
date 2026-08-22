@@ -19,7 +19,7 @@ def test_render_velocity_toml_modern_forwarding():
         {"name": "smp", "address": "127.0.0.1:30002", "alias": "smp", "is_lobby": False},
     ]
     toml = proxy_service.render_velocity_toml(cfg, backends, "lobby")
-    assert 'bind = "0.0.0.0:25565"' in toml
+    assert 'bind = "127.0.0.1:25565"' in toml
     assert 'player-info-forwarding-mode = "modern"' in toml
     assert 'forwarding-secret-file = "forwarding.secret"' in toml
     assert '"lobby" = "127.0.0.1:30001"' in toml   # QUOTED key
@@ -36,7 +36,7 @@ def test_render_velocity_toml_no_backends():
     cfg = {"bind_port": 25565, "domain": "", "motd": "x", "max_players": 20}
     toml = proxy_service.render_velocity_toml(cfg, [], None)
     assert "try = []" in toml           # kein Backend -> leere try-Liste, valides TOML
-    assert 'bind = "0.0.0.0:25565"' in toml
+    assert 'bind = "127.0.0.1:25565"' in toml
 
 
 def test_render_velocity_toml_quotes_dotted_backend_name():
@@ -252,6 +252,63 @@ def test_velocity_config_runtime_disabled_off_mode(client):
         A.set_network_mode(db, "off")
     cfg = A.get_velocity_config_runtime()
     assert cfg["enabled"] is False
+
+
+# --- UNIVERSAL-Routing (Gateway vorn, Velocity intern) -------------------------
+def test_needs_velocity_vanilla_gating():
+    """UNIVERSAL-Modus: nicht-767-Joins -> Velocity; 767 + Status + gateway-Modus nicht."""
+    from types import SimpleNamespace
+
+    from app.services import gateway_service as gw
+    from app.services.mc_protocol import JOIN_NEXT_STATES
+
+    routes = gw.GatewayRoutes(velocity_enabled=True, velocity_internal_port=25605)
+    join = next(iter(JOIN_NEXT_STATES))
+    assert gw._needs_velocity_vanilla(routes, SimpleNamespace(protocol_version=774, next_state=join)) is True
+    assert gw._needs_velocity_vanilla(routes, SimpleNamespace(protocol_version=767, next_state=join)) is False
+    off = gw.GatewayRoutes(velocity_enabled=False, velocity_internal_port=25605)
+    assert gw._needs_velocity_vanilla(off, SimpleNamespace(protocol_version=774, next_state=join)) is False
+    assert gw._needs_velocity_vanilla(routes, SimpleNamespace(protocol_version=774, next_state=999)) is False
+
+
+def test_build_gateway_routes_velocity_vs_gateway(client):
+    import app.db.session as dbs
+    from app.services import app_setting_service as A
+    from app.services import gateway_service as gw
+
+    with dbs.SessionLocal() as db:
+        A.set_network_mode(db, "velocity")
+        A.set_velocity_internal_port(db, 25605)
+        routes = gw.build_gateway_routes(db)
+    assert routes.velocity_enabled is True and routes.velocity_internal_port == 25605
+
+    with dbs.SessionLocal() as db:
+        A.set_network_mode(db, "gateway")
+        routes = gw.build_gateway_routes(db)
+    assert routes.velocity_enabled is False and routes.velocity_internal_port == 0
+
+
+def test_velocity_backend_ids_only_bukkit(client):
+    """Alias auf ein Bukkit-Backend (Lobby) laeuft ueber Velocity; modded-Server nicht."""
+    import app.db.session as dbs
+    from app.models.server import Server
+    from app.services import app_setting_service as A
+    from app.services import gateway_service as gw
+
+    with dbs.SessionLocal() as db:
+        A.set_network_mode(db, "velocity")
+        A.set_network_domain(db, "mc.example.de")
+        lobby = Server(name="lobby", slug="vbid_l", server_type="paper", mc_version="26.2",
+                       base_path="C:/tmp/vbidl", gateway_enabled=True, gateway_hostname="lobby",
+                       gateway_is_default=True, port=25569)
+        atm = Server(name="atm", slug="vbid_a", server_type="neoforge", mc_version="1.21.1",
+                     base_path="C:/tmp/vbida", gateway_enabled=True, gateway_hostname="atm10",
+                     port=25590)
+        db.add_all([lobby, atm])
+        db.commit()
+        routes = gw.build_gateway_routes(db)
+        assert lobby.id in routes.velocity_backend_ids      # Bukkit -> ueber Velocity
+        assert atm.id not in routes.velocity_backend_ids    # modded -> nativ/Hub
 
 
 # --- UI ------------------------------------------------------------------------

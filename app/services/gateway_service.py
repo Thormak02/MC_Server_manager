@@ -98,6 +98,9 @@ class GatewayRoutes:
     hub_lobby_vanilla_port: int = 0   # Hub-Port fuer vanilla (Ziel von ViaProxy bzw. direkt)
     viaproxy_enabled: bool = False    # Cross-Version-Uebersetzer vor dem Vanilla-Pfad?
     viaproxy_port: int = 0            # ViaProxy-Listener-Port
+    velocity_enabled: bool = False    # UNIVERSAL-Modus: Vanilla -> Velocity+Paper statt Hub
+    velocity_internal_port: int = 0   # Velocity-Loopback-Port (internes Backend)
+    velocity_backend_ids: frozenset = field(default_factory=frozenset)  # ueber Velocity geroutet
 
 
 @dataclass(frozen=True)
@@ -187,6 +190,13 @@ def build_gateway_routes(db) -> GatewayRoutes:
     hub_lobby_vanilla_port = app_setting_service.get_hub_lobby_vanilla_port(db) if hub_lobby_enabled else 0
     viaproxy_enabled = app_setting_service.get_viaproxy_enabled(db)
     viaproxy_port = app_setting_service.get_viaproxy_port(db) if viaproxy_enabled else 0
+    # UNIVERSAL-Modus ("velocity"): Vanilla-Pfad geht an das interne Velocity+Paper-Backend
+    # statt an den Python-Hub. Modded laeuft weiter ueber Dispatcher -> Hub.
+    velocity_enabled = app_setting_service.get_network_mode(db) == "velocity"
+    velocity_internal_port = (
+        app_setting_service.get_velocity_internal_port(db) if velocity_enabled else 0
+    )
+    _VELOCITY_BACKEND_TYPES = {"paper", "purpur", "spigot", "bukkit", "folia"}
 
     servers = list(
         db.scalars(select(Server).where(Server.gateway_enabled.is_(True))).all()
@@ -220,6 +230,14 @@ def build_gateway_routes(db) -> GatewayRoutes:
         if len(ids) == 1
     }
 
+    # Im UNIVERSAL-Modus laufen die Bukkit-Backends (Lobby + Vanilla-Paper) HINTER Velocity
+    # (loopback, online-mode=false, modern forwarding). Ein Direkt-Splice auf ihren Port
+    # wuerde sie ohne Forwarding-Daten roh treffen -> Kick. -> ueber Velocity routen.
+    velocity_backend_ids = frozenset(
+        s.id for s in servers
+        if velocity_enabled and str(s.server_type or "").lower() in _VELOCITY_BACKEND_TYPES
+    )
+
     return GatewayRoutes(
         by_hostname=by_hostname,
         by_version=by_version,
@@ -233,6 +251,9 @@ def build_gateway_routes(db) -> GatewayRoutes:
         hub_lobby_vanilla_port=int(hub_lobby_vanilla_port or 0),
         viaproxy_enabled=viaproxy_enabled,
         viaproxy_port=int(viaproxy_port or 0),
+        velocity_enabled=velocity_enabled,
+        velocity_internal_port=int(velocity_internal_port or 0),
+        velocity_backend_ids=velocity_backend_ids,
     )
 
 
@@ -317,7 +338,7 @@ def start_gateway_if_enabled() -> bool:
         get_network_port_runtime,
     )
 
-    if get_network_mode_runtime() != "gateway":
+    if get_network_mode_runtime() not in ("gateway", "velocity"):
         return False
     return start_gateway(get_network_port_runtime())
 
@@ -338,9 +359,10 @@ def reconcile_gateway() -> None:
         get_network_mode_runtime,
     )
 
-    # Der Netzwerk-Modus ist die einzige Wahrheit ueber die Eingangstuer: Das
-    # Gateway laeuft ausschliesslich im Modus "gateway" (bei "off" gibt es
-    if get_network_mode_runtime() != "gateway":
+    # Das Gateway ist in BEIDEN Modi die oeffentliche Eingangstuer: "gateway" (Vanilla ueber
+    # den Hub) und "velocity" (Vanilla ueber das interne Velocity+Paper-Backend). Nur bei
+    # "off" laeuft es nicht.
+    if get_network_mode_runtime() not in ("gateway", "velocity"):
         if is_running():
             stop_gateway()
         _set_routes_cache(None)
@@ -478,6 +500,20 @@ def _current_routes() -> GatewayRoutes:
         return _ROUTES_CACHE
 
 
+def _needs_velocity_vanilla(routes: "GatewayRoutes", handshake) -> bool:
+    """True: UNIVERSAL-Modus + nicht-767-Join -> direkt an das interne Velocity+Paper-Backend
+    (Velocity+Via bedient JEDE Vanilla-Version). 767-Clients laufen ueber den Dispatcher, der
+    modded (->Hub) von vanilla (->vanlobby->Velocity) trennt. Kein Loop: hinter Velocity ist
+    der Strom das Backend, nicht das Gateway."""
+    return bool(
+        routes.velocity_enabled
+        and routes.velocity_internal_port
+        and handshake.protocol_version is not None
+        and int(handshake.protocol_version) != _PROTOCOL_767
+        and handshake.next_state in mc_protocol.JOIN_NEXT_STATES
+    )
+
+
 def _needs_viaproxy_translation(routes: "GatewayRoutes", handshake) -> bool:
     """True, wenn dieser Join zuerst durch ViaProxy uebersetzt werden muss: ViaProxy an,
     Client spricht NICHT 767, und es ist ein Join (nicht nur ein Status-Ping). 767-Clients
@@ -530,11 +566,29 @@ def _handle_gateway_connection(client: socket.socket) -> None:
             handshake.server_address, handshake.protocol_version, routes
         )
 
-        # Cross-Version (Option A): nicht-767-Joins ZUERST durch ViaProxy uebersetzen.
-        # ViaProxy zielt zurueck ins Gateway (Loopback; Original-Host bleibt erhalten dank
+        # UNIVERSAL-Modus: nicht-767-Joins an der BLANKEN Domain (kein expliziter Alias) gehen
+        # DIREKT an Velocity+Paper (Velocity+Via uebersetzt abwaerts). Modded ist 1.21.1/767
+        # und laeuft ueber den Dispatcher -> Hub. WICHTIG: nur reason=="default" (Apex) - ein
+        # expliziter <alias>.<domain>-Join (z.B. ein 1.16.5-Forge-Pack) faellt auf die normale
+        # Alias-Route durch und wird NICHT faelschlich an die Vanilla-Lobby gehijackt.
+        if decision.reason == "default" and _needs_velocity_vanilla(routes, handshake):
+            from app.services import proxy_service
+
+            if proxy_service.is_running():
+                sleep_proxy_service._forward_to_backend(
+                    client, int(routes.velocity_internal_port), None, bytes(buffer)
+                )
+            else:
+                sleep_proxy_service._send_login_disconnect(
+                    client,
+                    "Vanilla-Lobby (Velocity) startet gerade. Bitte in Kuerze erneut verbinden.",
+                )
+            return
+
+        # Cross-Version (Option A, nur gateway-Modus): nicht-767-Joins ZUERST durch ViaProxy
+        # uebersetzen. ViaProxy zielt zurueck ins Gateway (Loopback; Original-Host bleibt dank
         # rewrite-handshake-packet=false) -> der uebersetzte 767-Strom wird unten normal
-        # geroutet (Hub/Dispatcher/Server). Loopschutz automatisch: hinter ViaProxy ist alles
-        # 767, dieser Zweig greift also nie erneut. 767-Clients bleiben voellig unberuehrt.
+        # geroutet. Loopschutz automatisch: hinter ViaProxy ist alles 767. 767-Clients unberuehrt.
         if _needs_viaproxy_translation(routes, handshake):
             from app.services import viaproxy_service
 
@@ -555,7 +609,7 @@ def _handle_gateway_connection(client: socket.socket) -> None:
         #  - modlobby (modded) -> direkt an den Hub-Port.
         #  - vanlobby -> Hub-Vanilla-Port (Uebersetzung passiert jetzt VORNE, s.o.).
         if (
-            routes.hub_lobby_enabled
+            (routes.hub_lobby_enabled or routes.velocity_enabled)
             and handshake.next_state in mc_protocol.JOIN_NEXT_STATES
         ):
             cleaned_host = clean_hostname(handshake.server_address)
@@ -563,17 +617,31 @@ def _handle_gateway_connection(client: socket.socket) -> None:
             if routes.domain and cleaned_host.endswith("." + routes.domain):
                 alias_part = cleaned_host[: -(len(routes.domain) + 1)]
             hub_target = None
+            is_hub_alias = False
             if alias_part == HUB_LOBBY_ALIAS or alias_part.startswith(HUB_LOBBY_ALIAS + "-"):
                 # modlobby ODER modlobby-<server_id> (Per-Pack-Tag, Path A) -> Hub-Port.
                 # Der volle Host wird unveraendert weitergereicht, der Hub liest den Tag.
+                is_hub_alias = True
                 hub_target = routes.hub_lobby_port
             elif alias_part == HUB_VANILLA_ALIAS:
-                # Uebersetzung passiert jetzt VORNE (nicht-767 -> ViaProxy -> Gateway); hier
-                # ist der Strom bereits 767 -> direkt an den Hub-Vanilla-Port.
-                hub_target = routes.hub_lobby_vanilla_port
+                # UNIVERSAL: vom Dispatcher auf vanlobby transferierter (767-)Vanilla-Client ->
+                # internes Velocity+Paper-Backend. Sonst (gateway-Modus): Hub-Vanilla-Port.
+                is_hub_alias = True
+                hub_target = (
+                    routes.velocity_internal_port if routes.velocity_enabled
+                    else routes.hub_lobby_vanilla_port
+                )
             if hub_target:
                 sleep_proxy_service._forward_to_backend(
                     client, int(hub_target), None, bytes(buffer)
+                )
+                return
+            if is_hub_alias:
+                # Interner Lobby-Alias, aber Ziel-Port fehlt (Hub aus / Velocity aus). NICHT
+                # zum Dispatcher durchfallen: der wuerde denselben Alias erneut per Transfer
+                # schicken -> Endlosschleife. Stattdessen klare Meldung.
+                sleep_proxy_service._send_login_disconnect(
+                    client, "Lobby momentan nicht verfuegbar. Bitte in Kuerze erneut verbinden."
                 )
                 return
 
@@ -590,6 +658,27 @@ def _handle_gateway_connection(client: socket.socket) -> None:
             dispatcher_service.dispatch(
                 client, handshake, bytes(buffer)[handshake.consumed:]
             )
+            return
+
+        # UNIVERSAL: zeigt ein expliziter Alias auf ein Velocity-Backend (Lobby/Vanilla-Paper),
+        # laeuft der Client NICHT roh auf dessen loopback+online-mode=false-Port (-> Kick),
+        # sondern ueber Velocity (das per forced-hosts/try routet + authentifiziert). Der
+        # Original-Host bleibt erhalten -> Velocitys forced-hosts greifen.
+        if (
+            decision.server_id is not None
+            and decision.server_id in routes.velocity_backend_ids
+            and routes.velocity_internal_port
+        ):
+            from app.services import proxy_service
+
+            if proxy_service.is_running():
+                sleep_proxy_service._forward_to_backend(
+                    client, int(routes.velocity_internal_port), None, bytes(buffer)
+                )
+            else:
+                sleep_proxy_service._send_login_disconnect(
+                    client, "Lobby (Velocity) startet gerade. Bitte in Kuerze erneut verbinden."
+                )
             return
 
         target_port = (

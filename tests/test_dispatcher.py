@@ -290,6 +290,32 @@ def test_dispatch_fabric_routes_to_vanilla_profile(client, tmp_path):
     assert _find_transfer(sock.sent) == ("vanlobby.mc.example.de", 25565)
 
 
+def test_dispatch_vanilla_velocity_mode_to_vanlobby(client, tmp_path):
+    """UNIVERSAL-Modus (velocity): Vanilla -> vanlobby OHNE Python-Hub-Vanilla-Replay. Das
+    Gateway leitet vanlobby auf Velocity+Paper. Regression-Guard fuer den kritischen Bug:
+    ohne diese Route landet 767-Vanilla auf der Lobby-Alias -> roh aufs Paper-Backend -> Kick."""
+    import app.services.app_setting_service as svc
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import dispatcher_service
+
+    with SessionLocal() as db:
+        db.add(Server(name="Lobby", slug="vlob2", server_type="paper", mc_version="26.2",
+                      base_path=str(tmp_path / "vlob2"), gateway_enabled=True,
+                      gateway_hostname="lobby", gateway_is_default=True, port=25569))
+        db.commit()
+        svc.set_network_domain(db, "mc.example.de")
+        svc.set_network_port(db, 25565)
+        svc.set_network_mode(db, "velocity")   # KEIN Vanilla-Replay noetig
+        # bewusst KEIN set_hub_lobby_vanilla_replay -> ohne den Fix ginge es zur Lobby-Alias
+
+    script = (_login_start() + _login_ack() + _client_info()
+              + _brand("vanilla") + _register(["minecraft:register"]))
+    sock = FakeSock(script)
+    dispatcher_service.dispatch(sock, _hs(), b"")
+    assert _find_transfer(sock.sent) == ("vanlobby.mc.example.de", 25565)
+
+
 # --------------------------- Auto-Capture (2.3) ----------------------------- #
 def _write_manifest_replay(path, mod_channels):
     from app.services import hub_capture_service
