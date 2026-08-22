@@ -57,10 +57,12 @@ def _sync_bridge(hub) -> None:
 
         if s.get_presence_bridge_enabled_runtime():
             hub.attach_bridge()
-            pb.start_synthetic_feeder()   # Phase-1-Proof: sichtbarer Vanilla-Avatar
+            pb.start_synthetic_feeder()          # Proof: Vanilla-Avatar im Hub sichtbar
+            pb.start_synthetic_modded_feeder()   # Proof: Modded-Avatar in der Vanilla-Lobby sichtbar
         else:
             hub.detach_bridge()
             pb.stop_synthetic_feeder()
+            pb.stop_synthetic_modded_feeder()
     except Exception:  # noqa: BLE001 - Bridge darf den Hub-Reconcile nie stoeren
         pass
 

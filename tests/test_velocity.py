@@ -28,6 +28,10 @@ def test_render_velocity_toml_modern_forwarding():
     assert '"lobby.mc.example.de" = ["lobby"]' in toml
     assert '"smp.mc.example.de" = ["smp"]' in toml
     assert "read-timeout = 185000" in toml
+    # accepts-transfers MUSS im [advanced]-Block stehen (sonst ignoriert Velocity es) -
+    # ohne das scheitern per Transfer-Paket transferierte 767-Vanilla-Clients.
+    assert "accepts-transfers = true" in toml
+    assert "accepts-transfers = true" in toml.split("[advanced]", 1)[1]
 
 
 def test_render_velocity_toml_no_backends():

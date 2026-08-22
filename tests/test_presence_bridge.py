@@ -168,6 +168,65 @@ def test_plugin_server_roundtrip():
         pb.BUS.remove("van-y")
 
 
+def test_synthetic_modded_feeder_publishes_hub_avatar():
+    """Der Modded-Feeder muss einen 'hub'-Avatar in den Bus legen (Proof Hub->Vanilla),
+    damit die Vanilla-Lobby beim Solo-Test etwas Gespiegeltes zeigt."""
+    import time
+
+    from app.services import presence_bridge_service as pb
+
+    with pb.BUS._lock:
+        pb.BUS._presences.clear()
+    try:
+        pb.start_synthetic_modded_feeder()
+        deadline = time.monotonic() + 3
+        got = None
+        while time.monotonic() < deadline:
+            snap = {p.uuid: p for p in pb.BUS.snapshot()}
+            if "synthetic-modded" in snap:
+                got = snap["synthetic-modded"]
+                break
+            time.sleep(0.05)
+        assert got is not None
+        assert got.origin == pb.ORIGIN_HUB and got.name == "Modded-Test"
+        status = pb.bridge_status()
+        assert status["presence_count"] >= 1
+        assert any(p["origin"] == pb.ORIGIN_HUB for p in status["presences"])
+    finally:
+        pb.stop_synthetic_modded_feeder()
+        pb.BUS.remove("synthetic-modded")
+
+
+def test_bridge_status_counts_connected_plugin():
+    """bridge_status meldet einen verbundenen (authentifizierten) Plugin-Client."""
+    import socket
+    import time
+
+    from app.services import presence_bridge_service as pb
+
+    port = 25619
+    assert pb.start_plugin_server(port, "tok") is True
+    conn = None
+    try:
+        conn = socket.create_connection(("127.0.0.1", port), timeout=5)
+        conn.settimeout(5)
+        rf = conn.makefile("rb")
+        conn.sendall(b'{"t":"hello","token":"tok"}\n')
+        assert b"welcome" in rf.readline()
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            if pb.bridge_status()["plugins_connected"] >= 1:
+                break
+            time.sleep(0.05)
+        st = pb.bridge_status()
+        assert st["server_running"] is True
+        assert st["plugins_connected"] >= 1
+    finally:
+        if conn is not None:
+            conn.close()
+        pb.stop_plugin_server()
+
+
 def test_plugin_server_rejects_bad_token():
     import socket
 

@@ -145,6 +145,8 @@ def settings_page(
     velocity_installed_version = proxy_service.installed_velocity_version()
     velocity_via_plugins = proxy_service.installed_via_plugins()
     velocity_log_tail = proxy_service.log_tail(80)
+    from app.services import presence_bridge_service
+    bridge_status = presence_bridge_service.bridge_status()
     plugin_build_status = plugin_build_service.last_build_status()
     plugin_building = plugin_build_service.is_building()
     platform_settings = list_platform_settings(db, include_secrets=False)
@@ -179,6 +181,7 @@ def settings_page(
             velocity_installed_version=velocity_installed_version,
             velocity_via_plugins=velocity_via_plugins,
             velocity_log_tail=velocity_log_tail,
+            bridge_status=bridge_status,
             plugin_build_status=plugin_build_status,
             plugin_building=plugin_building,
             gateway_status=gateway_status,

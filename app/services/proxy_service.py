@@ -242,6 +242,11 @@ def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None
     lines.append("")
     lines.append("[advanced]")
     lines.append(f"read-timeout = {_READ_TIMEOUT_MS}")
+    # Der Dispatcher schickt 767-Vanilla-Clients per Transfer-Paket auf die vanlobby ->
+    # Velocity. Ohne accepts-transfers (Velocity-Default: false) weist Velocity solche
+    # transferierten Verbindungen ab -> Client: "Connection failed while transferring to
+    # the server". Muss im [advanced]-Block stehen, sonst ignoriert Velocity es.
+    lines.append("accepts-transfers = true")
     lines.append("")
     lines.append("[query]")
     lines.append("enabled = false")

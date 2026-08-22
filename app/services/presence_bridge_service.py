@@ -212,6 +212,49 @@ def stop_synthetic_feeder() -> None:
         _synth_stop = None
 
 
+# --- Synthetischer MODDED-Feeder (Proof der Gegenrichtung Hub -> Vanilla-Lobby) --------
+# Publiziert EINEN sich bewegenden 'hub'-Avatar ("Modded-Test"), damit in der VANILLA-Lobby
+# (Paper-Plugin) sichtbar wird, dass gespiegelte Modded-Spieler gerendert werden - auch beim
+# Solo-Test ohne echten modded Client. Anders als der Vanilla-Feeder wird er beim Plugin-
+# Connect NICHT gestoppt (die Vanilla-Seite kann keine modded Spieler liefern, er ersetzt
+# also nichts). Laeuft, solange die Bridge an ist.
+_synth_modded_stop: "Optional[threading.Event]" = None  # type: ignore[name-defined]
+
+
+def start_synthetic_modded_feeder() -> None:
+    global _synth_modded_stop
+    if _synth_modded_stop is not None:
+        return  # laeuft bereits
+    import math
+
+    _synth_modded_stop = threading.Event()
+    ev = _synth_modded_stop
+
+    def _run() -> None:
+        t0 = time.monotonic()
+        seq = 0
+        while not ev.is_set():
+            time.sleep(0.1)
+            ang = (time.monotonic() - t0) * 0.8
+            seq += 1
+            BUS.upsert(Presence(
+                uuid="synthetic-modded", name="Modded-Test", origin=ORIGIN_HUB,
+                x=8.5 + 4.0 * math.sin(ang), y=64.0, z=13.5 + 4.0 * math.cos(ang),
+                yaw=((math.degrees(ang) + 180.0) % 360.0),
+                head_yaw=((math.degrees(ang) + 180.0) % 360.0), seq=seq,
+            ))
+        BUS.remove("synthetic-modded")
+
+    threading.Thread(target=_run, daemon=True, name="presence-synth-modded").start()
+
+
+def stop_synthetic_modded_feeder() -> None:
+    global _synth_modded_stop
+    if _synth_modded_stop is not None:
+        _synth_modded_stop.set()
+        _synth_modded_stop = None
+
+
 def is_enabled() -> bool:
     """Ob die Presence-Bridge aktiv ist (Default aus). Fehlertolerant."""
     try:
@@ -235,6 +278,8 @@ import socket  # noqa: E402
 _SRV_LOCK = threading.RLock()
 _SRV_SOCK: "Optional[socket.socket]" = None  # type: ignore[name-defined]
 _SRV_STATE: dict = {}
+_ACTIVE_PLUGINS = 0        # aktuell verbundene (authentifizierte) Paper-Plugin-Instanzen
+_LAST_PLUGIN_AT: float = 0.0   # Zeitpunkt der letzten erfolgreichen Plugin-Verbindung
 
 
 def _send_json(conn, lock: threading.Lock, obj: dict) -> bool:
@@ -261,6 +306,7 @@ def _handle_plugin_client(conn: "socket.socket", token: str) -> None:
     origin = ORIGIN_VANILLA
     published: set[str] = set()
     alive = {"v": True}
+    authed = {"v": False}   # True erst nach erfolgreicher Auth -> sauberes Zaehler-Dekrement
 
     def on_bus(event: str, payload) -> None:
         if not alive["v"]:
@@ -301,7 +347,13 @@ def _handle_plugin_client(conn: "socket.socket", token: str) -> None:
             return
         _send_json(conn, send_lock, {"t": "welcome"})
 
-        # 2) Ein echtes Plugin ist da -> den synthetischen Proof-Feeder abschalten.
+        # 2) Ein echtes Plugin ist da -> den (Vanilla-)Proof-Feeder abschalten (echte
+        # Vanilla-Spieler ersetzen ihn). Der MODDED-Feeder laeuft weiter (Proof Hub->Vanilla).
+        global _ACTIVE_PLUGINS, _LAST_PLUGIN_AT
+        with _SRV_LOCK:
+            _ACTIVE_PLUGINS += 1
+            _LAST_PLUGIN_AT = time.time()
+        authed["v"] = True
         stop_synthetic_feeder()
 
         # 3) Snapshot der Hub-Praesenzen + kuenftige Hub-Events an das Plugin.
@@ -356,6 +408,9 @@ def _handle_plugin_client(conn: "socket.socket", token: str) -> None:
         BUS.unsubscribe(on_bus)
         for uuid in list(published):   # Avatare dieser Instanz entfernen
             BUS.remove(uuid)
+        if authed["v"]:
+            with _SRV_LOCK:
+                globals()["_ACTIVE_PLUGINS"] = max(0, _ACTIVE_PLUGINS - 1)
         try:
             conn.close()
         except OSError:
@@ -413,6 +468,26 @@ def stop_plugin_server() -> None:
 def server_running() -> bool:
     with _SRV_LOCK:
         return _SRV_SOCK is not None
+
+
+def bridge_status() -> dict:
+    """Diagnose-Schnappschuss der Presence-Bridge fuers UI: laeuft der TCP-Endpoint, wie viele
+    Paper-Plugins sind verbunden, und welche Praesenzen (Avatare) liegen aktuell im Bus?"""
+    try:
+        presences = BUS.snapshot()
+    except Exception:  # noqa: BLE001
+        presences = []
+    people = [{"name": p.name, "origin": p.origin, "uuid": p.uuid} for p in presences]
+    with _SRV_LOCK:
+        active = _ACTIVE_PLUGINS
+        last_at = _LAST_PLUGIN_AT
+    return {
+        "server_running": server_running(),
+        "plugins_connected": active,
+        "presence_count": len(people),
+        "presences": people,
+        "last_plugin_at": last_at,
+    }
 
 
 def reconcile_presence_bridge() -> None:

@@ -213,13 +213,45 @@
         <div class="field-span-2">
             <label>
                 <input type="checkbox" name="presence_bridge_enabled" value="true" {% if universal_lobby.presence_bridge_enabled %}checked{% endif %}>
-                <strong>Presence-Bridge (Projektion)</strong> &ndash; spiegelt Avatare der Vanilla-Instanz in den Hub
+                <strong>Presence-Bridge (Projektion)</strong> &ndash; spiegelt Avatare in <em>beide</em> Richtungen
+                (modded &harr; vanilla)
             </label>
             <p class="muted">
-                Experimentell (Phase 1): zeigt einen Test-Avatar „Vanilla-Test", der sich im Hub bewegt &ndash;
-                Beweis, dass gespiegelte Spieler gerendert werden. Später erscheinen hier echte Spieler der
-                neuesten Vanilla-Versionen.
+                Bei aktiver Bridge laufen zwei Test-Avatare als Beweis: <strong>„Vanilla-Test"</strong> bewegt sich
+                im <em>Hub</em> (modded Clients sehen ihn), <strong>„Modded-Test"</strong> bewegt sich in der
+                <em>Vanilla-Lobby</em> (Vanilla/26.2-Clients sehen ihn). Siehst du „Modded-Test" in der Vanilla-Lobby,
+                funktioniert die Projektion Hub&rarr;Vanilla. Echte Spieler erscheinen zusaetzlich, sobald beide
+                Seiten gleichzeitig besetzt sind.
             </p>
+            {% if bridge_status %}
+            <details class="muted" style="margin-top:.2rem">
+                <summary style="cursor:pointer"><strong>Bridge-Diagnose</strong> &ndash; verbundene Plugins &amp; Avatare im Bus</summary>
+                <div style="margin-top:.3rem">
+                    <p style="margin:.2rem 0">
+                        TCP-Endpoint (Manager):
+                        {% if bridge_status.server_running %}<strong style="color:#2e7d32">laeuft</strong>
+                        {% else %}<strong style="color:#c62828">aus</strong>{% endif %}
+                        &nbsp;|&nbsp; verbundene Paper-Plugins:
+                        <strong{% if bridge_status.plugins_connected < 1 %} style="color:#c62828"{% else %} style="color:#2e7d32"{% endif %}>{{ bridge_status.plugins_connected }}</strong>
+                        &nbsp;|&nbsp; Avatare im Bus: <strong>{{ bridge_status.presence_count }}</strong>
+                    </p>
+                    {% if bridge_status.plugins_connected < 1 %}
+                    <p style="margin:.2rem 0;color:#c62828">
+                        Kein Paper-Plugin verbunden &rarr; in der Vanilla-Lobby erscheinen KEINE gespiegelten
+                        Avatare. Pruefen: Plugin gebaut &amp; verteilt (oben „Lobby-Plugin bauen"), Lobby neu
+                        gestartet, packetevents geladen, Token stimmt.
+                    </p>
+                    {% endif %}
+                    {% if bridge_status.presences %}
+                    <ul style="margin:.2rem 0 .2rem 1.2rem">
+                        {% for pr in bridge_status.presences %}<li><code>{{ pr.origin }}</code> &ndash; {{ pr.name }}</li>{% endfor %}
+                    </ul>
+                    {% else %}
+                    <p style="margin:.2rem 0"><em>keine Praesenzen im Bus</em> (Bridge aus oder niemand online).</p>
+                    {% endif %}
+                </div>
+            </details>
+            {% endif %}
         </div>
         <div>
             <label for="hub_name">Hub-Name (Serverliste)</label>
