@@ -458,6 +458,74 @@ def cleanup_velocity_leftovers(server: Server) -> list[str]:
     return notes
 
 
+_VELOCITY_BACKEND_TYPES = {"paper", "purpur", "spigot", "bukkit", "folia"}
+
+
+def is_velocity_backend(server: Server, *, network_mode: str | None = None) -> bool:
+    """Ob dieser Server ein Velocity-Backend ist (Modern Forwarding, loopback).
+
+    Nur im Modus 'velocity' und nur Bukkit-basierte, gateway_enabled Server. Modded-/
+    Vanilla-Server sind KEINE Backends - sie werden per nativem Transfer direkt
+    angesprungen (bleiben oeffentlich, online-mode=true).
+    """
+    if (network_mode or "").strip().lower() != "velocity":
+        return False
+    if not getattr(server, "gateway_enabled", False):
+        return False
+    return str(getattr(server, "server_type", "") or "").lower() in _VELOCITY_BACKEND_TYPES
+
+
+def apply_velocity_backend_forwarding(server: Server, secret: str) -> list[str]:
+    """Server als Velocity-Backend einrichten (Modern Forwarding) - Gegenstueck zu
+    ``cleanup_velocity_leftovers``.
+
+    - server.properties: ``online-mode=false`` (der Proxy authentifiziert) +
+      ``server-ip=127.0.0.1`` (nur ueber Velocity erreichbar, kein Username-Spoofing).
+    - config/paper-global.yml: ``proxies.velocity {enabled:true, online-mode:true,
+      secret:<secret>}`` (partiell schreiben; Paper ergaenzt die restlichen Defaults).
+    """
+    notes: list[str] = []
+    base_path = Path(server.base_path).expanduser().resolve()
+    if not base_path.exists():
+        return notes
+    if not (secret or "").strip():
+        notes.append("Velocity-Forwarding uebersprungen: kein Secret.")
+        return notes
+
+    _upsert_server_property(server, "online-mode", "false")
+    _upsert_server_property(server, "server-ip", "127.0.0.1")
+
+    cfg_dir = base_path / "config"
+    paper_global = cfg_dir / "paper-global.yml"
+    try:
+        import yaml
+
+        data: dict = {}
+        if paper_global.exists():
+            loaded = yaml.safe_load(paper_global.read_text(encoding="utf-8", errors="ignore"))
+            if isinstance(loaded, dict):
+                data = loaded
+        proxies = data.get("proxies")
+        if not isinstance(proxies, dict):
+            proxies = {}
+        velocity = proxies.get("velocity")
+        if not isinstance(velocity, dict):
+            velocity = {}
+        velocity["enabled"] = True
+        velocity["online-mode"] = True
+        velocity["secret"] = secret
+        proxies["velocity"] = velocity
+        data["proxies"] = proxies
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        paper_global.write_text(
+            yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8"
+        )
+        notes.append("Velocity-Forwarding aktiv: online-mode=false, loopback, Secret gesetzt.")
+    except Exception as exc:  # noqa: BLE001 - darf den Start nie stoeren
+        notes.append(f"Velocity-Forwarding (paper-global.yml) fehlgeschlagen: {exc}")
+    return notes
+
+
 def is_behind_front_proxy(server: Server, *, network_mode: str | None = None) -> bool:
     """Server laeuft auf seinem internen Port.
 

@@ -25,15 +25,16 @@ _PROJECTS = ("viaversion", "viabackwards", "viarewind")
 _LOADERS = ("paper", "spigot", "bukkit", "folia")
 
 
-def _pick_version_file(slug: str, mc_version: str) -> tuple[str, str] | None:
+def _pick_version_file(slug: str, mc_version: str, loaders_list: tuple[str, ...] = _LOADERS) -> tuple[str, str] | None:
     """(Dateiname, Download-URL) der besten Version fuer ``mc_version`` oder None.
 
-    Erst exakt fuer die MC-Version + Bukkit-Loader; findet Modrinth dazu nichts
+    Erst exakt fuer die MC-Version + Loader; findet Modrinth dazu nichts
     (z.B. brandneue Version), Fallback auf die neueste Version ueberhaupt.
+    ``loaders_list`` = ("paper", ...) fuer die Bukkit-Lobby oder ("velocity",) fuer den Proxy.
     """
     from app.providers.server.common import fetch_json
 
-    loaders = json.dumps(list(_LOADERS))
+    loaders = json.dumps(list(loaders_list))
     attempts = (
         {"loaders": loaders, "game_versions": json.dumps([mc_version])},
         {"loaders": loaders},
@@ -98,6 +99,50 @@ def install_multiversion(lobby_base_path: str, mc_version: str) -> tuple[bool, s
     if not installed:
         return False, f"Multi-Version-Download fehlgeschlagen ({', '.join(failed) or 'unbekannt'})."
     msg = f"Multi-Version installiert: {', '.join(installed)}."
+    if failed:
+        msg += f" Nicht geladen: {', '.join(failed)}."
+    return True, msg
+
+
+def install_velocity_plugins(plugins_dir: str | Path, mc_version: str) -> tuple[bool, str]:
+    """ViaVersion/ViaBackwards/ViaRewind als **Velocity**-Plugins nach ``plugins_dir`` laden.
+
+    Wie ``install_multiversion``, aber die Velocity-Builds (Loader "velocity") in den
+    Velocity-``plugins/``-Ordner. So uebersetzt EIN Proxy jede Client-Version (1.7.10 ..
+    ``mc_version``) auf die neueste Lobby-Version (abwaerts = die reife Via-Richtung).
+    Idempotent: ersetzt vorhandene alte Via*-Jars. Best-effort.
+    """
+    from app.providers.server.common import download_file
+
+    plugins = Path(plugins_dir).expanduser().resolve()
+    try:
+        plugins.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Velocity-plugins-Ordner nicht erstellbar: {exc}"
+
+    installed: list[str] = []
+    failed: list[str] = []
+    for slug in _PROJECTS:
+        picked = _pick_version_file(slug, mc_version, ("velocity",))
+        if picked is None:
+            failed.append(slug)
+            continue
+        filename, url = picked
+        for old in plugins.glob("*.jar"):
+            if old.name.lower().startswith(slug):
+                try:
+                    old.unlink()
+                except OSError:
+                    pass
+        try:
+            download_file(url, plugins / filename)
+            installed.append(filename)
+        except Exception:  # noqa: BLE001
+            failed.append(slug)
+
+    if not installed:
+        return False, f"Velocity-Via-Download fehlgeschlagen ({', '.join(failed) or 'unbekannt'})."
+    msg = f"Velocity-Via installiert: {', '.join(installed)}."
     if failed:
         msg += f" Nicht geladen: {', '.join(failed)}."
     return True, msg

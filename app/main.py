@@ -24,7 +24,7 @@ from app.core.config import get_settings
 from app.db.init_db import init_db
 from app.middleware.csrf import CSRFSameOriginMiddleware
 from app.services.schedule_service import sync_all_jobs
-from app.services import gateway_service, hub_lobby_service, sleep_proxy_service, viaproxy_service
+from app.services import gateway_service, hub_lobby_service, proxy_service, sleep_proxy_service, viaproxy_service
 from app.services.process_service import (
     reconcile_runtime_states_on_manager_startup,
     shutdown_all_managed_processes,
@@ -51,6 +51,9 @@ async def lifespan(app: FastAPI):
     # ViaProxy (Cross-Version-Uebersetzer vor dem Hub) aufsetzen (gated hinter
     # viaproxy_enabled; Default aus -> kein Prozess).
     viaproxy_service.reconcile_viaproxy()
+    # Velocity (echter Proxy als Eingang) aufsetzen (gated hinter network_mode==velocity;
+    # Default 'off'/'gateway' -> kein Prozess).
+    proxy_service.reconcile_velocity()
     start_servers_marked_for_manager_startup()
     sleep_proxy_service.reconcile_proxies()
     sleep_proxy_service.start_idle_monitor()
@@ -61,6 +64,7 @@ async def lifespan(app: FastAPI):
         gateway_service.stop_gateway()
         hub_lobby_service.stop_hub_lobby()
         viaproxy_service.stop_viaproxy()
+        proxy_service.stop_velocity()
         sleep_proxy_service.shutdown_all()
         shutdown_all_managed_processes(preserve_for_restart=True)
         shutdown_scheduler()

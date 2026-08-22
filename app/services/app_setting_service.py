@@ -54,11 +54,22 @@ VIAPROXY_JAVA_KEY = "viaproxy_java"
 _VIAPROXY_DEFAULT_PORT = 25601
 _VIAPROXY_TARGET_VERSION = "1.21.1"
 
+# Velocity: ECHTER Proxy als oeffentlicher Eingang (bindet network_port). Cross-Version
+# via ViaVersion/-Backwards/-Rewind als Velocity-Plugins -> JEDE Client-Version
+# (1.7.10 .. 26.2) landet in der EINEN neuesten Lobby (die abwaerts uebersetzt wird,
+# die reife Via-Richtung). Modded-Server sind NICHT Velocity-Backends, sondern werden
+# per nativem Transfer direkt angesprungen. Gated hinter network_mode == "velocity".
+VELOCITY_VERSION_KEY = "velocity_version"       # "" = neueste stabile (fill-API)
+VELOCITY_JAR_KEY = "velocity_jar"               # manueller Jar-Pfad (override)
+VELOCITY_FORWARDING_SECRET_KEY = "velocity_forwarding_secret"  # auto-generiert (Proxy<->Backends)
+
 # Erlaubte Netzwerk-Modi:
-#  - "gateway" = transparenter Hostname-Router (jeder Typ/jede Version, alle Server
-#                laufen parallel, Direktverbindung bleibt).
-#  - "off"     = kein gemeinsamer Eingang.
-NETWORK_MODES = ("off", "gateway")
+#  - "gateway"  = transparenter Hostname-Router (jeder Typ/jede Version, alle Server
+#                 laufen parallel, Direktverbindung bleibt).
+#  - "velocity" = echter Proxy (Velocity + Via) als einziger Eingang -> begehbare
+#                 Lobby auf neuester Version, In-Game-Serverwechsel, alle Client-Versionen.
+#  - "off"      = kein gemeinsamer Eingang.
+NETWORK_MODES = ("off", "gateway", "velocity")
 
 
 def _normalize_path(raw_value: str) -> Path:
@@ -484,7 +495,7 @@ def get_network_domain_runtime() -> str:
 
 
 def get_network_mode(db: Session) -> str:
-    """Aktiver Netzwerk-Modus: 'off' | 'gateway'. Default: 'off'."""
+    """Aktiver Netzwerk-Modus: 'off' | 'gateway' | 'velocity'. Default: 'off'."""
     row = _get_setting_row(db, NETWORK_MODE_KEY)
     if row and row.value.strip():
         value = row.value.strip().lower()
@@ -767,6 +778,71 @@ def get_viaproxy_config_runtime() -> dict:
             # und reicht sie ZURUECK ins Gateway, das dann normal per Host routet (Option A).
             "target_port": get_network_port(db),
             "target_version": _VIAPROXY_TARGET_VERSION,
+        }
+
+
+# --- Velocity (echter Proxy als Eingang, Cross-Version via Via-Plugins) ---------
+def get_velocity_version(db: Session) -> str:
+    """Gewuenschte Velocity-Version ("" = neueste stabile ueber die fill-API)."""
+    row = _get_setting_row(db, VELOCITY_VERSION_KEY)
+    return row.value.strip() if row and row.value.strip() else ""
+
+
+def set_velocity_version(db: Session, version: str | None) -> None:
+    _set_or_clear(db, VELOCITY_VERSION_KEY, (version or "").strip() or None)
+
+
+def get_velocity_jar(db: Session) -> str:
+    """Manueller Velocity-Jar-Pfad (override; leer = Auto-Download)."""
+    row = _get_setting_row(db, VELOCITY_JAR_KEY)
+    return row.value.strip() if row and row.value.strip() else ""
+
+
+def set_velocity_jar(db: Session, path: str | None) -> None:
+    _set_or_clear(db, VELOCITY_JAR_KEY, (path or "").strip() or None)
+
+
+def get_velocity_forwarding_secret(db: Session) -> str:
+    """Gemeinsames Forwarding-Geheimnis Proxy<->Backends (leer bis erstmalig erzeugt)."""
+    row = _get_setting_row(db, VELOCITY_FORWARDING_SECRET_KEY)
+    return row.value.strip() if row and row.value.strip() else ""
+
+
+def set_velocity_forwarding_secret(db: Session, secret: str | None) -> None:
+    _set_or_clear(db, VELOCITY_FORWARDING_SECRET_KEY, (secret or "").strip() or None)
+
+
+def ensure_velocity_forwarding_secret(db: Session) -> str:
+    """Forwarding-Secret zurueckgeben, bei Bedarf sicher erzeugen und persistieren."""
+    secret = get_velocity_forwarding_secret(db)
+    if secret:
+        return secret
+    import secrets
+
+    secret = secrets.token_hex(16)   # 128 bit, hex -> keine Sonderzeichen in Configs
+    set_velocity_forwarding_secret(db, secret)
+    return secret
+
+
+def get_velocity_config_runtime() -> dict:
+    """Alle Velocity-Laufzeitwerte auf einmal (fuer den proxy_service-Reconcile).
+
+    ``enabled`` ist an ``network_mode == 'velocity'`` gekoppelt (kein eigener Toggle):
+    Velocity ist der oeffentliche Eingang und schliesst das Gateway am selben Port aus.
+    """
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        is_velocity = get_network_mode(db) == "velocity"
+        return {
+            "enabled": is_velocity,
+            "version": get_velocity_version(db),
+            "jar": get_velocity_jar(db),
+            "secret": ensure_velocity_forwarding_secret(db) if is_velocity else get_velocity_forwarding_secret(db),
+            "bind_port": get_network_port(db),
+            "domain": get_network_domain(db),
+            "motd": get_hub_motd(db),
+            "max_players": get_hub_max_players(db),
         }
 
 

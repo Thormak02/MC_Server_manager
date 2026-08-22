@@ -39,6 +39,8 @@
         &nbsp;<strong>off</strong> = kein gemeinsamer Eingang (jeder Server eigener Port).
         &nbsp;<strong>gateway</strong> = <code>&lt;alias&gt;.&lt;domain&gt;</code> geht direkt zum Server,
         die blanke Domain (mit Dispatcher) in die Lobby. Direktverbindung &amp; eigene Ports bleiben.
+        &nbsp;<strong>velocity</strong> = echter Proxy + neueste-Version-Lobby &ndash; <em>jede</em> Client-Version
+        (1.7.10 &hellip; 26.x) landet in EINER Lobby, In-Game-Serverwechsel inklusive.
     </p>
     <form method="post" action="/settings/network" class="grid grid-4">
         <div>
@@ -46,6 +48,7 @@
             <select id="network_mode" name="network_mode">
                 <option value="off" {% if network_mode == "off" %}selected{% endif %}>off</option>
                 <option value="gateway" {% if network_mode == "gateway" %}selected{% endif %}>gateway</option>
+                <option value="velocity" {% if network_mode == "velocity" %}selected{% endif %}>velocity</option>
             </select>
         </div>
         <div>
@@ -72,6 +75,32 @@
             </p>
         </div>
     </form>
+</section>
+
+<section class="card">
+    <h2>1b &middot; Velocity-Netzwerk (alle Versionen, empfohlen)</h2>
+    <p class="muted">
+        Ein echter <strong>Velocity</strong>-Proxy als einziger Eingang + eine Lobby auf der
+        <strong>neuesten</strong> Version. Mit <strong>ViaVersion/ViaBackwards/ViaRewind</strong> auf dem Proxy
+        landet <strong>jede</strong> Client-Version (1.7.10 &hellip; 26.x, modded wie vanilla) in EINER Lobby;
+        Serverwechsel im Spiel per <code>/server</code>. Modded-Zielserver werden per nativem Transfer direkt
+        angesprungen (kein Via, kein Forge-Forwarding-Problem).
+    </p>
+    <p class="muted">
+        Status: Velocity
+        {% if velocity_running %}<strong style="color:#2e7d32">laeuft</strong>
+        {% else %}<strong style="color:#c62828">aus</strong>{% endif %}
+        {% if velocity_version %}&nbsp;|&nbsp; Version {{ velocity_version }}{% endif %}
+    </p>
+    <div class="inline-form">
+        <form method="post" action="/settings/velocity/auto-create" class="inline-form">
+            <button type="submit">Velocity-Netzwerk automatisch einrichten</button>
+        </form>
+    </div>
+    <p class="muted">
+        Ein Klick: legt die Neueste-Version-Lobby an, stellt den Modus auf <strong>velocity</strong> und laedt beim
+        ersten Start Java&nbsp;25, Paper, Velocity und die Via-Plugins automatisch. Danach die Lobby einmal starten.
+    </p>
 </section>
 
 <section class="card">

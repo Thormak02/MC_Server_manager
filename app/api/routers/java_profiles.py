@@ -135,6 +135,11 @@ def settings_page(
         "hub_whitelist_enabled": get_hub_whitelist_enabled(db),
         "hub_whitelist": get_hub_whitelist(db),
     }
+    from app.services import proxy_service
+    from app.services.app_setting_service import get_velocity_version
+
+    velocity_running = proxy_service.is_running()
+    velocity_version = get_velocity_version(db)
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
     return templates.TemplateResponse(
@@ -162,6 +167,8 @@ def settings_page(
             network_mode_source=network_mode_source,
             dispatcher_enabled=dispatcher_enabled,
             universal_lobby=universal_lobby,
+            velocity_running=velocity_running,
+            velocity_version=velocity_version,
             gateway_status=gateway_status,
             platform_settings=platform_settings,
             manager_update_status=manager_update_status,
@@ -234,6 +241,28 @@ def auto_create_lobby_action(request: Request, db: Session = Depends(get_db)):
         )
     except Exception as exc:  # noqa: BLE001
         push_flash(request, f"Auto-Lobby fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    push_flash(request, message, "success" if ok else "error")
+    if ok and server_id:
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/velocity/auto-create")
+def auto_create_velocity_action(request: Request, db: Session = Depends(get_db)):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import lobby_service
+
+    try:
+        ok, message, server_id = lobby_service.create_velocity_lobby(
+            db, initiated_by_user_id=current_user.id
+        )
+    except Exception as exc:  # noqa: BLE001
+        push_flash(request, f"Velocity-Einrichtung fehlgeschlagen: {exc}", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
     push_flash(request, message, "success" if ok else "error")

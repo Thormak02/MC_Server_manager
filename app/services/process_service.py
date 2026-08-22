@@ -1324,16 +1324,25 @@ def start_server(
         except Exception as exc:  # noqa: BLE001 - Start nicht am Port-Abgleich scheitern lassen
             console_service.append_output(server.id, f"Port-Abgleich uebersprungen: {exc}")
 
-        # Alt-Reste aus der (entfernten) Velocity-Zeit bereinigen (online-mode/
-        # server-ip/paper-global.yml), damit Server nicht auf loopback stranden.
+        # Velocity-Backend? Dann Modern Forwarding SCHREIBEN (online-mode=false,
+        # loopback, paper-global velocity+secret). Sonst Alt-Reste aus der Velocity-Zeit
+        # bereinigen (online-mode=true, oeffentlicher Bind), damit Nicht-Backends und
+        # Modded-Transfer-Ziele nicht faelschlich auf loopback stranden.
         try:
-            from app.services import server_service
+            from app.services import app_setting_service, server_service
 
-            for note in server_service.cleanup_velocity_leftovers(server):
-                if note:
-                    console_service.append_output(server.id, note)
+            _net_mode = app_setting_service.get_network_mode(db)
+            if server_service.is_velocity_backend(server, network_mode=_net_mode):
+                _secret = app_setting_service.ensure_velocity_forwarding_secret(db)
+                for note in server_service.apply_velocity_backend_forwarding(server, _secret):
+                    if note:
+                        console_service.append_output(server.id, note)
+            else:
+                for note in server_service.cleanup_velocity_leftovers(server):
+                    if note:
+                        console_service.append_output(server.id, note)
         except Exception as exc:  # noqa: BLE001
-            console_service.append_output(server.id, f"Velocity-Cleanup uebersprungen: {exc}")
+            console_service.append_output(server.id, f"Velocity-Forwarding uebersprungen: {exc}")
 
         # Transfer-Plugin (MCSMLobby) auf den frischesten Stand bringen - jetzt ist der
         # Server aus, das Jar also nicht gesperrt. So zieht ein Deploy per Neustart
@@ -1352,7 +1361,7 @@ def start_server(
             from app.services import app_setting_service, server_service
 
             if getattr(server, "gateway_enabled", False) and (
-                app_setting_service.get_network_mode(db) == "gateway"
+                app_setting_service.get_network_mode(db) in ("gateway", "velocity")
             ):
                 server_service.enable_accept_transfers(server)
         except Exception as exc:  # noqa: BLE001

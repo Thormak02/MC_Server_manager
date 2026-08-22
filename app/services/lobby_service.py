@@ -61,6 +61,23 @@ def _latest_stable_lobby_version() -> str:
     return "1.21.1"
 
 
+def _newest_stable_version() -> str:
+    """Absolut neueste stabile Paper-Version (z.B. 26.2) - fuer die Velocity-Lobby.
+
+    Anders als ``_latest_stable_lobby_version`` NICHT auf 1.21.x beschraenkt: die
+    Velocity-Lobby muss die neueste Version sprechen, damit 26.2-Clients nativ landen
+    und alle aelteren per ViaBackwards ABWAERTS uebersetzt werden (die reife Richtung)."""
+    try:
+        from app.providers.server.paper_provider import PaperProvider
+
+        versions = PaperProvider().list_versions("release")  # neueste zuerst
+        if versions:
+            return str(versions[0].id)
+    except Exception:  # noqa: BLE001
+        pass
+    return _latest_stable_lobby_version()
+
+
 def _free_gateway_alias(db: Session, preferred: str = "lobby") -> str:
     from app.services import server_service
 
@@ -118,6 +135,12 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
 
     domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
     network_port = app_setting_service.get_network_port(db)
+    mode = app_setting_service.get_network_mode(db)
+    # Velocity-Backends (Bukkit) sind hinter dem Proxy (loopback) -> Menue-Ziel ist der
+    # Proxy-Port (forced-host routet). Modded-/Vanilla-Ziele sind KEINE Backends -> sie
+    # laufen oeffentlich auf ihrem eigenen Port und werden per nativem Transfer DIREKT
+    # angesprungen (kein Proxy, keine Forge-Forwarding-Fragilitaet).
+    _backend_types = {"paper", "purpur", "spigot", "bukkit", "folia"}
 
     servers: list[dict] = []
     skipped: list[str] = []
@@ -137,12 +160,17 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
         label = f"&a{srv.name}"
         if srv.mc_version:
             label += f" &7({srv.server_type} {srv.mc_version})"
+        is_backend = str(srv.server_type or "").lower() in _backend_types
+        if mode == "velocity" and not is_backend:
+            target_port = int(srv.port)          # nativer Transfer DIREKT zum Modserver
+        else:
+            target_port = int(network_port)       # ueber Gateway/Velocity-Proxy
         servers.append({
             "key": alias,
             "display": label,
             "host": f"{alias}.{domain}",
-            "port": int(network_port),          # Transfer laeuft ueber das Gateway
-            "ping_port": int(srv.port),         # Status-Ping direkt (kein Gateway-Hop)
+            "port": target_port,
+            "ping_port": int(srv.port),         # Status-Ping direkt (kein Proxy-Hop)
             "material": material,
             "sleep": bool(srv.sleep_enabled),
         })
@@ -472,5 +500,148 @@ def create_auto_lobby(db: Session, *, initiated_by_user_id: int | None) -> tuple
         f"Lobby '{server.name}' erstellt (Paper {version}), als Gateway-Default markiert "
         f"(Alias '{alias}'). Jetzt starten – erreichbar ueber die blanke Domain oder "
         f"'{alias}.<domain>'.{via_note}{warn_suffix}"
+    )
+    return True, message, server.id
+
+
+def _demote_other_default_lobbies(db: Session, keep_id: int) -> None:
+    """Sicherstellen, dass nur EIN Server gateway_is_default ist (der neue)."""
+    from sqlalchemy import select
+
+    from app.models.server import Server as _Server
+
+    for srv in db.scalars(select(_Server).where(_Server.gateway_is_default.is_(True))).all():
+        if srv.id != keep_id:
+            srv.gateway_is_default = False
+            db.add(srv)
+    db.commit()
+
+
+def create_velocity_lobby(
+    db: Session, *, initiated_by_user_id: int | None
+) -> tuple[bool, str, int | None]:
+    """Velocity-Netzwerk mit einem Klick einrichten: neueste-Version-Paper-Lobby als
+    Backend hinter einem echten Velocity-Proxy - so landet JEDE Client-Version
+    (1.7.10 .. neueste) in der EINEN Lobby.
+
+    - Lobby = neueste stabile Paper-Version (26.x). 26.x-Clients nativ, alle aelteren
+      per ViaBackwards/ViaRewind auf dem Proxy (abwaerts = reife Via-Richtung).
+    - Java (25 fuer 26.x) wird beim ersten Serverstart automatisch installiert.
+    - Via-Plugins liegen auf dem PROXY (nicht auf der Lobby) -> keine Doppel-Uebersetzung.
+    - Netzwerk-Modus wird auf 'velocity' gestellt; Velocity uebernimmt den network_port.
+
+    Idempotent: eine vorhandene Lobby (gateway_is_default) mit bereits neuester Version
+    wird wiederverwendet.
+    """
+    from sqlalchemy import select
+
+    from app.models.server import Server as _Server
+    from app.schemas.provider import ProvisionServerRequest
+    from app.services import app_setting_service, audit_service, port_service, server_service
+    from app.services.provisioning_service import ProvisioningService
+
+    version = _newest_stable_version()
+    warnings: list[str] = []
+
+    def _apply_velocity_mode(lobby_id: int) -> None:
+        app_setting_service.set_network_mode(db, "velocity")
+        app_setting_service.ensure_velocity_forwarding_secret(db)
+        _demote_other_default_lobbies(db, lobby_id)
+        try:
+            from app.services import proxy_service
+
+            proxy_service.reconcile_velocity()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            sync_lobby_plugin(db)
+        except Exception:  # noqa: BLE001
+            pass
+
+    # Wiederverwenden, wenn schon eine Default-Lobby auf der neuesten Version existiert.
+    existing = db.scalar(select(_Server).where(_Server.gateway_is_default.is_(True)))
+    if existing is not None and str(existing.mc_version or "") == version:
+        _apply_velocity_mode(existing.id)
+        return (
+            True,
+            f"Velocity-Netzwerk aktiv: vorhandene Lobby '{existing.name}' (Paper {version}) "
+            f"als Backend, Modus 'velocity'. Lobby neu starten, damit das Modern Forwarding "
+            f"greift.",
+            existing.id,
+        )
+
+    alias = _free_gateway_alias(db, "lobby")
+    network_port = app_setting_service.get_network_port(db)
+    try:
+        lobby_port = port_service.allocate_server_port(db, exclude={network_port})
+    except ValueError:
+        lobby_port = None
+
+    try:
+        server, _notes = ProvisioningService().create_server_instance(
+            db,
+            ProvisionServerRequest(
+                name="Velocity-Lobby",
+                server_type="paper",
+                mc_version=version,
+                target_path="",
+                memory_min_mb=1024,
+                memory_max_mb=2048,
+                port=lobby_port,
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Velocity-Lobby konnte nicht erstellt werden: {exc}", None
+
+    try:
+        _srv, warns = server_service.update_server_settings(
+            db,
+            server,
+            mc_version=version,
+            loader_version=None,
+            java_profile_id=server.java_profile_id,
+            memory_min_mb=server.memory_min_mb,
+            memory_max_mb=server.memory_max_mb,
+            port=server.port,
+            auto_restart=False,
+            auto_start_with_manager=True,
+            start_mode=server.start_mode,
+            start_command=server.start_command,
+            start_bat_path=server.start_bat_path,
+            sleep_enabled=False,
+            sleep_delay_seconds=None,
+            gateway_enabled=True,
+            gateway_hostname=alias,
+            gateway_is_default=True,
+        )
+        warnings.extend(warns or [])
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Velocity-Lobby '{server.name}' angelegt, aber Konfiguration fehlgeschlagen: {exc}", server.id
+    db.refresh(server)
+
+    try:
+        base_path = Path(server.base_path).expanduser().resolve()
+        for key, value in _LOBBY_PROPERTIES.items():
+            server_service._upsert_server_property(server, key, value)
+        _write_setup_readme(base_path, [])
+    except Exception:  # noqa: BLE001
+        pass
+
+    _apply_velocity_mode(server.id)
+
+    audit_service.log_action(
+        db,
+        action="velocity.auto_create",
+        user_id=initiated_by_user_id,
+        server_id=server.id,
+        details=f"version={version} alias={alias}",
+    )
+
+    warn_suffix = f" Hinweise: {'; '.join(warnings)}." if warnings else ""
+    message = (
+        f"Velocity-Netzwerk eingerichtet: Lobby '{server.name}' (Paper {version}) als Backend, "
+        f"Modus 'velocity'. Beim ersten Start laedt der Manager Java 25, Paper {version}, Velocity "
+        f"und die Via-Plugins automatisch. Danach verbindet sich JEDE Client-Version ueber "
+        f"die Domain.{warn_suffix}"
     )
     return True, message, server.id

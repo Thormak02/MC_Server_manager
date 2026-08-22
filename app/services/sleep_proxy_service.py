@@ -488,6 +488,12 @@ def _idle_tick() -> None:
         viaproxy_service.reconcile_viaproxy()
     except Exception:  # noqa: BLE001
         pass
+    try:
+        from app.services import proxy_service
+
+        proxy_service.reconcile_velocity()   # Velocity (network_mode==velocity) selbstheilen
+    except Exception:  # noqa: BLE001
+        pass
 
     try:
         from app.services import central_storage_service

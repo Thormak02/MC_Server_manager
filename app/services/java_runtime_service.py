@@ -490,6 +490,34 @@ def ensure_java_available(
         )
 
 
+def resolve_java_binary(
+    db: Session,
+    required_major: int,
+    *,
+    auto_install: bool = True,
+    on_progress: Callable[[str], None] | None = None,
+) -> str | None:
+    """Pfad zu einer ``java.exe`` mit Major >= ``required_major`` (oder None).
+
+    Fuer verwaltete Nicht-Server-Prozesse (z.B. Velocity), die kein Server-Java-Profil
+    haben. Installiert bei Bedarf automatisch (Adoptium/Temurin) und gibt den besten
+    passenden Profil-Pfad zurueck. None, wenn nichts Passendes verfuegbar/installierbar.
+    """
+    try:
+        sync_detected_java_profiles(db, force=False)
+    except Exception:  # noqa: BLE001
+        pass
+    profile = _best_profile_for_major(db, required_major)
+    if profile is None and auto_install:
+        ok, _msg = ensure_java_available(db, required_major, on_progress=on_progress)
+        if ok:
+            profile = _best_profile_for_major(db, required_major)
+    if profile is None:
+        return None
+    java_path = Path(profile.java_path).expanduser().resolve()
+    return str(java_path) if java_path.is_file() else None
+
+
 def required_java_major_for_mc(mc_version: str) -> int:
     text = (mc_version or "").strip()
     match = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", text)
