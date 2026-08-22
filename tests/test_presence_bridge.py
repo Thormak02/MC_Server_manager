@@ -231,6 +231,31 @@ def test_bridge_status_counts_connected_plugin():
         pb.stop_plugin_server()
 
 
+def test_fetch_mojang_skin_uses_cache():
+    """fetch_mojang_skin liefert gecachte Werte ohne Netzwerk + case-insensitiv."""
+    import time
+
+    from app.services import presence_bridge_service as pb
+
+    pb._SKIN_CACHE["skintest"] = ("BASE64VALUE", "SIGNATURE", time.monotonic())
+    v, s = pb.fetch_mojang_skin("SkinTest")
+    assert v == "BASE64VALUE" and s == "SIGNATURE"
+    assert pb.fetch_mojang_skin("") == ("", "")
+
+
+def test_player_info_update_includes_textures():
+    """build_player_info_update haengt die textures-Property an, wenn ein Skin uebergeben wird."""
+    from app.services import mc_play as pl
+
+    plain = pl.build_player_info_update(b"u" * 16, "Steve")
+    signed = pl.build_player_info_update(b"u" * 16, "Steve", textures="VAL", signature="SIG")
+    unsigned = pl.build_player_info_update(b"u" * 16, "Steve", textures="VAL")
+    assert b"textures" not in plain            # 0 Properties -> Default-Skin
+    assert b"textures" in signed and b"VAL" in signed and b"SIG" in signed
+    assert b"textures" in unsigned and b"VAL" in unsigned
+    assert len(signed) > len(unsigned) > len(plain)
+
+
 def test_plugin_server_rejects_bad_token():
     import socket
 

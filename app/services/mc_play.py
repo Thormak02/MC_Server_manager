@@ -394,11 +394,14 @@ def build_flat_chunk(
     return _wrap_packet(bytes(body))
 
 
-def build_player_info_update(uuid16: bytes, name: str, *, listed: bool = True) -> bytes:
+def build_player_info_update(uuid16: bytes, name: str, *, listed: bool = True,
+                             textures: str = "", signature: str = "") -> bytes:
     """Player Info Update (0x3E) mit add_player(0x01)+listed(0x08).
 
     MUSS vor dem Spawn-Entity kommen - die Spieler-Entity holt sich Name/Skin per UUID
-    aus dieser Liste. 0 Properties -> Default-Skin (Steve/Alex).
+    aus dieser Liste. Ohne ``textures`` -> 0 Properties -> Default-Skin (Steve/Alex).
+    Mit ``textures`` (Base64-Wert der Mojang-"textures"-Property) + optional ``signature``
+    wird der echte Skin gerendert (fuer Bridge-Avatare echter Spieler).
     """
     actions = 0x01 | 0x08
     body = bytearray(encode_varint(PLAY_CB_PLAYER_INFO_UPDATE))
@@ -407,7 +410,17 @@ def build_player_info_update(uuid16: bytes, name: str, *, listed: bool = True) -
     body += (uuid16 or b"")[:16].ljust(16, b"\x00")
     # add_player (0x01): Name + Properties
     body += encode_string(name)
-    body += encode_varint(0)                        # 0 Properties (kein Skin-Texture)
+    if textures:
+        body += encode_varint(1)                    # 1 Property: textures
+        body += encode_string("textures")
+        body += encode_string(textures)
+        if signature:
+            body += b"\x01"                          # is_signed = true
+            body += encode_string(signature)
+        else:
+            body += b"\x00"                          # is_signed = false (unsignierter Skin)
+    else:
+        body += encode_varint(0)                    # 0 Properties (kein Skin-Texture)
     # listed (0x08): Bool
     body += b"\x01" if listed else b"\x00"
     return _wrap_packet(bytes(body))

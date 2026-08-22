@@ -148,7 +148,8 @@ class _Reader:
 class _Session:
     """Ein Spieler im Hub. ``sock is None`` => virtueller Bot (empfaengt nichts)."""
 
-    def __init__(self, conn_id, sock, eid, uuid16, name, x, y, z, yaw=0.0, pitch=0.0):
+    def __init__(self, conn_id, sock, eid, uuid16, name, x, y, z, yaw=0.0, pitch=0.0,
+                 textures="", textures_sig=""):
         self.conn_id = conn_id
         self.sock = sock
         self.eid = eid
@@ -159,6 +160,8 @@ class _Session:
         self.z = z
         self.yaw = yaw
         self.pitch = pitch
+        self.textures = textures          # Base64-Skin-Textur (Bridge-Avatare echter Spieler)
+        self.textures_sig = textures_sig  # Mojang-Signatur (leer = unsigniert)
         self.alive = True
         self.send_lock = threading.Lock()   # serialisiert Writes auf DIESES Socket
         self.held_slot = 0                  # aktueller Hotbar-Slot (0 = Kompass)
@@ -350,7 +353,9 @@ class Hub:
     @staticmethod
     def _spawn_packets(s: _Session) -> list[bytes]:
         return [
-            pl.build_player_info_update(s.uuid16, s.name),
+            pl.build_player_info_update(s.uuid16, s.name,
+                                        textures=getattr(s, "textures", ""),
+                                        signature=getattr(s, "textures_sig", "")),
             pl.build_add_entity(s.eid, s.uuid16, s.x, s.y, s.z, yaw=s.yaw, head_yaw=s.yaw),
             pl.build_head_rotation(s.eid, s.yaw),
         ]
@@ -449,7 +454,9 @@ class Hub:
                 sess = _Session(f"br:{p.uuid}", None, self._eid_ctr,
                                 pb.uuid16_from("br:" + p.uuid), p.name,
                                 _SPAWN[0] + p.x, _SPAWN[1] + p.y, _SPAWN[2] + p.z,
-                                yaw=p.yaw, pitch=p.pitch)
+                                yaw=p.yaw, pitch=p.pitch,
+                                textures=getattr(p, "textures", "") or "",
+                                textures_sig=getattr(p, "textures_sig", "") or "")
                 self.bridge[p.uuid] = sess
                 self.players[sess.conn_id] = sess
                 spawn_sess = sess
@@ -516,6 +523,27 @@ class Hub:
         from app.services import presence_bridge_service as pb
 
         pb.BUS.chat(name, pb.ORIGIN_HUB, text)
+
+    def _bridge_ensure_skin(self, session: "_Session") -> None:
+        """Echten Skin eines Hub-Spielers von Mojang holen (async) und mit Skin neu publizieren.
+        Hub-Login ist offline -> kein Profil-Skin; die Vanilla-Seite bekommt so den echten Skin.
+        Die Vanilla-Instanz spawnt den Avatar bei Textur-Wechsel neu (Plugin-Seite)."""
+        if not self._bridge_attached or getattr(session, "textures", ""):
+            return
+
+        def _run() -> None:
+            try:
+                from app.services import presence_bridge_service as pb
+
+                value, sig = pb.fetch_mojang_skin(session.name)
+                if value and session.alive and self._bridge_attached:
+                    session.textures = value
+                    session.textures_sig = sig
+                    self._bridge_pub_join(session)   # jetzt MIT Skin publizieren
+            except Exception as exc:  # noqa: BLE001
+                print(f"[hub] Skin-Abruf {session.name!r} fehlgeschlagen: {exc!r}")
+
+        threading.Thread(target=_run, daemon=True, name="hub-skin-fetch").start()
 
     def _bridge_keepalive_loop(self) -> None:
         """Idle Hub-Spieler alle 10s neu publizieren -> refresht ihre Praesenz (updated), damit
@@ -667,6 +695,7 @@ class Hub:
                 f"{username} ist der Lobby beigetreten.")), exclude=session)
             print(f"[hub] {username} beigetreten (eid={eid}, online={online}).")
             self._bridge_pub_join(session)   # der Vanilla-Instanz zeigen
+            self._bridge_ensure_skin(session)   # echten Skin (Mojang) async nachreichen
 
             # --- Hauptschleife: Bewegung/Chat lesen + broadcasten, Keep-Alive senden ---
             sock.settimeout(_READ_TIMEOUT)

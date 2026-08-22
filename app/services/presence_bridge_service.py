@@ -276,6 +276,54 @@ def is_enabled() -> bool:
         return False
 
 
+# --- Mojang-Skin-Abruf (fuer Hub-Spieler ohne echtes Login-Profil) --------------
+# Der Hub loggt offline ein -> keine signierte "textures"-Property. Damit die Vanilla-Seite
+# den ECHTEN Skin eines modded Spielers zeigen kann, holen wir ihn ueber Mojang (Name -> UUID
+# -> signierte textures). Prozessweiter Cache (TTL) gegen Mojang-Rate-Limits.
+_SKIN_CACHE: dict = {}          # name_lower -> (value, signature, monotonic_ts)
+_SKIN_TTL_SECONDS = 3600.0
+
+
+def fetch_mojang_skin(name: str) -> tuple[str, str]:
+    """Signierten Skin (value, signature) zu einem Mojang-Namen holen. ("","") wenn nicht
+    gefunden/Fehler (dann Default-Skin). Gecached; blockierend -> im Hintergrund-Thread rufen."""
+    key = (name or "").strip().lower()
+    if not key:
+        return "", ""
+    now = time.monotonic()
+    cached = _SKIN_CACHE.get(key)
+    if cached and (now - cached[2]) < _SKIN_TTL_SECONDS:
+        return cached[0], cached[1]
+
+    import json
+    import urllib.parse
+    import urllib.request
+
+    value = sig = ""
+    try:
+        req = urllib.request.Request(
+            "https://api.mojang.com/users/profiles/minecraft/" + urllib.parse.quote(key),
+            headers={"User-Agent": "mcsm-presence"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            prof = json.loads(resp.read().decode("utf-8"))
+        uid = str((prof or {}).get("id") or "")
+        if uid:
+            req2 = urllib.request.Request(
+                f"https://sessionserver.mojang.com/session/minecraft/profile/{uid}?unsigned=false",
+                headers={"User-Agent": "mcsm-presence"})
+            with urllib.request.urlopen(req2, timeout=5) as resp2:
+                full = json.loads(resp2.read().decode("utf-8"))
+            for prop in (full or {}).get("properties", []):
+                if prop.get("name") == "textures":
+                    value = str(prop.get("value") or "")
+                    sig = str(prop.get("signature") or "")
+                    break
+    except Exception:  # noqa: BLE001 - Netzwerk/JSON/404 -> Default-Skin
+        pass
+    _SKIN_CACHE[key] = (value, sig, now)
+    return value, sig
+
+
 # --- TCP/JSON-Endpoint fuer das externe Paper-Avatar-Plugin (Vanilla-Instanz) ---
 # Das Plugin PUBLIZIERT seine Paper-Lobby-Spieler (origin=vanilla) und KONSUMIERT die
 # Hub-Praesenzen (origin=hub) -> es spawnt fuer jeden Hub-Spieler einen Fake-Avatar.

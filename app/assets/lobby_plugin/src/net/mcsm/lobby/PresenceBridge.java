@@ -71,6 +71,7 @@ final class PresenceBridge {
     // Zuletzt publizierte Position je lokalem Spieler (Drossel: nur bei Bewegung senden).
     private final Map<UUID, long[]> lastSent = new ConcurrentHashMap<>();
     private final Map<UUID, Long> lastPub = new ConcurrentHashMap<>();   // Keepalive-Zeit je Spieler
+    private final Map<UUID, String[]> texCache = new ConcurrentHashMap<>();  // Skin {value, signature} je Spieler
     private volatile long lastTraffic = 0L;                              // letzte Wire-Aktivitaet (Ping)
     private final AtomicBoolean loggedSendError = new AtomicBoolean(false);
     private long seq = 0L;
@@ -90,6 +91,7 @@ final class PresenceBridge {
         String name;
         double x, y, z;
         float yaw, pitch, headYaw;
+        String tex = "", sig = "";   // aktuell gerenderter Skin (fuer Re-Spawn bei Aenderung)
     }
 
     void start() {
@@ -256,6 +258,7 @@ final class PresenceBridge {
                               float yaw, float pitch, float headYaw, String tex, String sig) {
         double[] an = anchor();          // spawn-relativer Offset -> lokale Weltkoordinaten
         x += an[0]; y += an[1]; z += an[2];
+        String tx = tex == null ? "" : tex, sg = sig == null ? "" : sig;
         Avatar a = avatars.get(uuid);
         if (a == null) {
             a = new Avatar();
@@ -263,8 +266,15 @@ final class PresenceBridge {
             a.uuid = uuidFrom(uuid);
             a.name = name;
             a.x = x; a.y = y; a.z = z; a.yaw = yaw; a.pitch = pitch; a.headYaw = headYaw;
+            a.tex = tx; a.sig = sg;
             avatars.put(uuid, a);
-            spawn(a, tex, sig);
+            spawn(a, tx, sg);
+        } else if (!tx.isEmpty() && !tx.equals(a.tex)) {
+            // Skin nachgereicht (Hub holt ihn async von Mojang) -> Avatar mit echtem Skin neu spawnen.
+            despawn(a);
+            a.tex = tx; a.sig = sg;
+            a.x = x; a.y = y; a.z = z; a.yaw = yaw; a.pitch = pitch; a.headYaw = headYaw;
+            spawn(a, tx, sg);
         } else {
             move(a, x, y, z, yaw, pitch, headYaw);
         }
@@ -376,9 +386,10 @@ final class PresenceBridge {
             lastPub.put(p.getUniqueId(), now);
             lastTraffic = now;
             seq++;
-            // Skin-Textur bleibt vorerst leer (die Hub-Seite nutzt ohnehin Default-Skins);
-            // signierte Texturen kommen in einem spaeteren Schritt (Phase 3).
-            String tex = "", sig = "";
+            // Echten Skin (signierte Mojang-"textures"-Property) mitschicken -> die Gegenseite
+            // rendert den Avatar mit dem echten Skin. Pro Spieler gecached (aendert sich nicht).
+            String[] t = texCache.computeIfAbsent(p.getUniqueId(), k -> localTextures(p));
+            String tex = t[0], sig = t[1];
             sendLine("{\"t\":\"up\",\"uuid\":\"" + p.getUniqueId() + "\",\"name\":\"" + esc(p.getName())
                 + "\",\"x\":" + (l.getX() - an[0]) + ",\"y\":" + (l.getY() - an[1]) + ",\"z\":" + (l.getZ() - an[2])
                 + ",\"yaw\":" + l.getYaw() + ",\"pitch\":" + l.getPitch() + ",\"hy\":" + l.getYaw()
@@ -394,7 +405,29 @@ final class PresenceBridge {
 
     void onLocalQuit(Player p) {
         lastSent.remove(p.getUniqueId());
+        lastPub.remove(p.getUniqueId());
+        texCache.remove(p.getUniqueId());
         sendLine("{\"t\":\"rm\",\"uuid\":\"" + p.getUniqueId() + "\"}");
+    }
+
+    /**
+     * Echten Skin des lokalen Spielers auslesen: die signierte Mojang-"textures"-Property aus
+     * dem (per Velocity-Forwarding weitergereichten) GameProfile. Rueckgabe {value, signature};
+     * leer, wenn nicht vorhanden (dann Default-Skin). Nur auf dem Main-Thread aufrufen.
+     */
+    private String[] localTextures(Player p) {
+        try {
+            for (com.destroystokyo.paper.profile.ProfileProperty prop
+                    : p.getPlayerProfile().getProperties()) {
+                if ("textures".equals(prop.getName())) {
+                    String v = prop.getValue();
+                    String s = prop.getSignature();
+                    return new String[]{v == null ? "" : v, s == null ? "" : s};
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return new String[]{"", ""};
     }
 
     void onLocalChat(String name, String text) {
