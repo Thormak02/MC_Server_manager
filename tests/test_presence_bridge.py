@@ -119,3 +119,70 @@ def test_hub_consumer_spawns_moves_removes():
     h._on_bridge_event(pb.EVENT_REMOVE, pb.Presence(
         uuid="u-van", name="Steve26", origin=pb.ORIGIN_VANILLA))
     assert "u-van" not in h.bridge and "br:u-van" not in h.players
+
+
+# --- TCP/JSON-Endpoint (Paper-Plugin <-> Bus) ----------------------------------
+def test_plugin_server_roundtrip():
+    """Ein simuliertes Paper-Plugin: Hub-Praesenz -> Plugin; Plugin-Spieler -> BUS."""
+    import json
+    import socket
+    import time
+
+    from app.services import presence_bridge_service as pb
+
+    with pb.BUS._lock:                 # Testisolation: BUS leeren
+        pb.BUS._presences.clear()
+    port = 25617
+    assert pb.start_plugin_server(port, "tok") is True
+    conn = None
+    try:
+        conn = socket.create_connection(("127.0.0.1", port), timeout=5)
+        conn.settimeout(5)
+        rf = conn.makefile("rb")
+        conn.sendall(b'{"t":"hello","token":"tok"}\n')
+        assert b"welcome" in rf.readline()
+
+        time.sleep(0.25)               # Server abonniert den BUS
+        # Hub-Praesenz -> das Plugin muss ein "up" bekommen
+        pb.BUS.upsert(pb.Presence(uuid="hub-x", name="Modder", origin=pb.ORIGIN_HUB,
+                                  x=1, y=64, z=2, seq=1))
+        msg = json.loads(rf.readline())
+        assert msg["t"] == "up" and msg["uuid"] == "hub-x" and msg["name"] == "Modder"
+
+        # Plugin publiziert einen Vanilla-Spieler -> landet als origin=vanilla im BUS
+        conn.sendall(b'{"t":"up","uuid":"van-y","name":"Steve26","x":3,"y":64,"z":4,"seq":1}\n')
+        deadline = time.monotonic() + 3
+        got = None
+        while time.monotonic() < deadline:
+            snap = {p.uuid: p for p in pb.BUS.snapshot()}
+            if "van-y" in snap:
+                got = snap["van-y"]
+                break
+            time.sleep(0.05)
+        assert got is not None and got.origin == pb.ORIGIN_VANILLA and got.name == "Steve26"
+    finally:
+        if conn is not None:
+            conn.close()
+        pb.stop_plugin_server()
+        pb.BUS.remove("hub-x")
+        pb.BUS.remove("van-y")
+
+
+def test_plugin_server_rejects_bad_token():
+    import socket
+
+    from app.services import presence_bridge_service as pb
+
+    port = 25618
+    assert pb.start_plugin_server(port, "secret") is True
+    conn = None
+    try:
+        conn = socket.create_connection(("127.0.0.1", port), timeout=5)
+        conn.settimeout(5)
+        rf = conn.makefile("rb")
+        conn.sendall(b'{"t":"hello","token":"wrong"}\n')
+        assert b"error" in rf.readline()
+    finally:
+        if conn is not None:
+            conn.close()
+        pb.stop_plugin_server()

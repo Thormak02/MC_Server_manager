@@ -222,10 +222,209 @@ def is_enabled() -> bool:
         return False
 
 
+# --- TCP/JSON-Endpoint fuer das externe Paper-Avatar-Plugin (Vanilla-Instanz) ---
+# Das Plugin PUBLIZIERT seine Paper-Lobby-Spieler (origin=vanilla) und KONSUMIERT die
+# Hub-Praesenzen (origin=hub) -> es spawnt fuer jeden Hub-Spieler einen Fake-Avatar.
+# Zeilenweises JSON, loopback-only, Token-Auth. Nachrichten:
+#   Plugin->Manager: {"t":"hello","token":..}, {"t":"up",uuid,name,x,y,z,yaw,pitch,hy,tex,sig,seq},
+#                    {"t":"rm",uuid}, {"t":"chat",name,text}
+#   Manager->Plugin: {"t":"up",..}, {"t":"rm",uuid}, {"t":"chat",name,text}  (nur Hub-Events)
+import json  # noqa: E402
+import socket  # noqa: E402
+
+_SRV_LOCK = threading.RLock()
+_SRV_SOCK: "Optional[socket.socket]" = None  # type: ignore[name-defined]
+_SRV_STATE: dict = {}
+
+
+def _send_json(conn, lock: threading.Lock, obj: dict) -> bool:
+    try:
+        data = (json.dumps(obj, separators=(",", ":")) + "\n").encode("utf-8")
+        with lock:
+            conn.sendall(data)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _presence_to_msg(p: "Presence") -> dict:
+    return {"t": "up", "uuid": p.uuid, "name": p.name, "x": p.x, "y": p.y, "z": p.z,
+            "yaw": p.yaw, "pitch": p.pitch, "hy": p.head_yaw or p.yaw,
+            "tex": p.textures, "sig": p.textures_sig}
+
+
+def _handle_plugin_client(conn: "socket.socket", token: str) -> None:
+    """Eine Plugin-Verbindung bedienen: Hub-Events -> Plugin, Plugin-Events -> BUS."""
+    send_lock = threading.Lock()
+    origin = ORIGIN_VANILLA
+    published: set[str] = set()
+    alive = {"v": True}
+
+    def on_bus(event: str, payload) -> None:
+        if not alive["v"]:
+            return
+        try:
+            if event == EVENT_CHAT:
+                if isinstance(payload, dict) and payload.get("origin") != origin:
+                    if not _send_json(conn, send_lock, {"t": "chat", "name": payload.get("name", "?"),
+                                                        "text": payload.get("text", "")}):
+                        alive["v"] = False
+                return
+            if getattr(payload, "origin", None) == origin:
+                return  # eigene (vanilla) Praesenz nicht zurueckspiegeln
+            if event in (EVENT_ADD, EVENT_UPDATE):
+                if not _send_json(conn, send_lock, _presence_to_msg(payload)):
+                    alive["v"] = False
+            elif event == EVENT_REMOVE:
+                if not _send_json(conn, send_lock, {"t": "rm", "uuid": payload.uuid}):
+                    alive["v"] = False
+        except Exception:  # noqa: BLE001
+            alive["v"] = False
+
+    try:
+        conn.settimeout(20.0)
+        buf = b""
+        # 1) Auth-Hello abwarten
+        while b"\n" not in buf:
+            chunk = conn.recv(4096)
+            if not chunk:
+                return
+            buf += chunk
+            if len(buf) > 65536:
+                return
+        line, buf = buf.split(b"\n", 1)
+        hello = json.loads(line.decode("utf-8"))
+        if hello.get("t") != "hello" or (token and hello.get("token") != token):
+            _send_json(conn, send_lock, {"t": "error", "msg": "auth"})
+            return
+        _send_json(conn, send_lock, {"t": "welcome"})
+
+        # 2) Ein echtes Plugin ist da -> den synthetischen Proof-Feeder abschalten.
+        stop_synthetic_feeder()
+
+        # 3) Snapshot der Hub-Praesenzen + kuenftige Hub-Events an das Plugin.
+        BUS.subscribe(on_bus)
+        for p in BUS.snapshot(exclude_origin=origin):
+            _send_json(conn, send_lock, _presence_to_msg(p))
+
+        # 4) Plugin-Events lesen -> BUS (origin=vanilla).
+        conn.settimeout(65.0)
+        while alive["v"]:
+            while b"\n" not in buf:
+                chunk = conn.recv(8192)
+                if not chunk:
+                    alive["v"] = False
+                    break
+                buf += chunk
+            if not alive["v"]:
+                break
+            line, buf = buf.split(b"\n", 1)
+            if not line.strip():
+                continue
+            try:
+                msg = json.loads(line.decode("utf-8"))
+            except Exception:  # noqa: BLE001
+                continue
+            t = msg.get("t")
+            if t == "up" and msg.get("uuid"):
+                uuid = str(msg["uuid"])
+                published.add(uuid)
+                BUS.upsert(Presence(
+                    uuid=uuid, name=str(msg.get("name", "?")), origin=origin,
+                    x=float(msg.get("x", 0.0)), y=float(msg.get("y", 64.0)), z=float(msg.get("z", 0.0)),
+                    yaw=float(msg.get("yaw", 0.0)), pitch=float(msg.get("pitch", 0.0)),
+                    head_yaw=float(msg.get("hy", msg.get("yaw", 0.0))),
+                    textures=str(msg.get("tex", "")), textures_sig=str(msg.get("sig", "")),
+                    seq=int(msg.get("seq", 0)),
+                ))
+            elif t == "rm" and msg.get("uuid"):
+                uuid = str(msg["uuid"])
+                published.discard(uuid)
+                BUS.remove(uuid)
+            elif t == "chat":
+                BUS.chat(str(msg.get("name", "?")), origin, str(msg.get("text", "")))
+            elif t == "ping":
+                _send_json(conn, send_lock, {"t": "pong"})
+    except (OSError, ValueError):
+        pass
+    except Exception as exc:  # noqa: BLE001
+        print(f"[presence] Plugin-Client Fehler: {exc!r}")
+    finally:
+        alive["v"] = False
+        BUS.unsubscribe(on_bus)
+        for uuid in list(published):   # Avatare dieser Instanz entfernen
+            BUS.remove(uuid)
+        try:
+            conn.close()
+        except OSError:
+            pass
+
+
+def _accept_loop(listener: "socket.socket", token: str) -> None:
+    while True:
+        try:
+            conn, _addr = listener.accept()
+        except OSError:
+            return  # Socket geschlossen -> Server gestoppt
+        threading.Thread(target=_handle_plugin_client, args=(conn, token),
+                         daemon=True, name="presence-plugin").start()
+
+
+def start_plugin_server(port: int, token: str) -> bool:
+    global _SRV_SOCK, _SRV_STATE
+    with _SRV_LOCK:
+        desired = {"port": int(port)}
+        if _SRV_SOCK is not None and _SRV_STATE.get("port") == int(port):
+            return True   # laeuft schon auf dem Port
+        _stop_server_locked()
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("127.0.0.1", int(port)))   # NUR loopback (Plugin ist lokal)
+            sock.listen(8)
+        except OSError:
+            return False
+        _SRV_SOCK = sock
+        _SRV_STATE = desired
+        threading.Thread(target=_accept_loop, args=(sock, token),
+                         daemon=True, name="presence-accept").start()
+        return True
+
+
+def _stop_server_locked() -> None:
+    global _SRV_SOCK, _SRV_STATE
+    if _SRV_SOCK is not None:
+        try:
+            _SRV_SOCK.close()
+        except OSError:
+            pass
+    _SRV_SOCK = None
+    _SRV_STATE = {}
+
+
+def stop_plugin_server() -> None:
+    with _SRV_LOCK:
+        _stop_server_locked()
+
+
+def server_running() -> bool:
+    with _SRV_LOCK:
+        return _SRV_SOCK is not None
+
+
 def reconcile_presence_bridge() -> None:
-    """Vom Idle-Monitor getaktet: verwaiste Avatare aufraeumen (nur wenn aktiv)."""
-    if not is_enabled():
+    """Vom Idle-Monitor getaktet: TCP-Endpoint an ``presence_bridge_enabled`` angleichen +
+    verwaiste Avatare aufraeumen (nur wenn aktiv)."""
+    try:
+        from app.services import app_setting_service as s
+
+        cfg = s.get_presence_bridge_runtime()
+    except Exception:  # noqa: BLE001
         return
+    if not cfg["enabled"]:
+        if server_running():
+            stop_plugin_server()
+        return
+    start_plugin_server(cfg["port"], cfg["token"])
     try:
         BUS.sweep()
     except Exception:  # noqa: BLE001

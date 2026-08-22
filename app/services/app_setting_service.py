@@ -62,6 +62,10 @@ _VIAPROXY_TARGET_VERSION = "1.21.1"
 # Presence-Bridge: gespiegelte Avatare zwischen Hub (modded) und Vanilla-Instanz -> beide
 # Gruppen sehen sich als EINE Lobby (Projektion). Default AUS.
 PRESENCE_BRIDGE_ENABLED_KEY = "presence_bridge_enabled"
+# TCP/JSON-Endpoint, an den sich das Paper-Avatar-Plugin (Vanilla-Instanz) anklinkt.
+PRESENCE_BRIDGE_PORT_KEY = "presence_bridge_port"
+PRESENCE_BRIDGE_TOKEN_KEY = "presence_bridge_token"   # gemeinsames Geheimnis (Plugin<->Manager)
+_PRESENCE_BRIDGE_DEFAULT_PORT = 25606
 
 VELOCITY_VERSION_KEY = "velocity_version"       # "" = neueste stabile (fill-API)
 VELOCITY_JAR_KEY = "velocity_jar"               # manueller Jar-Pfad (override)
@@ -803,6 +807,48 @@ def get_presence_bridge_enabled_runtime() -> bool:
 
     with SessionLocal() as db:
         return get_presence_bridge_enabled(db)
+
+
+def get_presence_bridge_port(db: Session) -> int:
+    row = _get_setting_row(db, PRESENCE_BRIDGE_PORT_KEY)
+    if row and row.value.strip():
+        try:
+            return int(row.value.strip())
+        except ValueError:
+            pass
+    return _PRESENCE_BRIDGE_DEFAULT_PORT
+
+
+def set_presence_bridge_port(db: Session, port: int) -> int:
+    port = int(port)
+    if not (1 <= port <= 65535):
+        raise ValueError("Port muss zwischen 1 und 65535 liegen.")
+    _set_or_clear(db, PRESENCE_BRIDGE_PORT_KEY, str(port))
+    return port
+
+
+def ensure_presence_bridge_token(db: Session) -> str:
+    row = _get_setting_row(db, PRESENCE_BRIDGE_TOKEN_KEY)
+    if row and row.value.strip():
+        return row.value.strip()
+    import secrets
+
+    token = secrets.token_hex(16)
+    _set_or_clear(db, PRESENCE_BRIDGE_TOKEN_KEY, token)
+    return token
+
+
+def get_presence_bridge_runtime() -> dict:
+    """Presence-Bridge-Endpoint-Config fuer den TCP-Server + das Paper-Plugin."""
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        enabled = get_presence_bridge_enabled(db)
+        return {
+            "enabled": enabled,
+            "port": get_presence_bridge_port(db),
+            "token": ensure_presence_bridge_token(db) if enabled else "",
+        }
 
 
 # --- Velocity (echter Proxy als Eingang, Cross-Version via Via-Plugins) ---------
