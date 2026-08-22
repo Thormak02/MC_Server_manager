@@ -196,7 +196,13 @@ def velocity_backends(db) -> tuple[list[dict], str | None]:
 
 
 def _toml_escape(value: str) -> str:
-    return str(value).replace("\\", "\\\\").replace('"', '\\"')
+    """Fuer einen TOML-Basic-String escapen. Steuerzeichen (Newline/Tab/CR) sind in
+    Basic-Strings VERBOTEN -> escapen, sonst ist die velocity.toml ungueltig und
+    Velocity startet nicht (z.B. mehrzeilige MOTD)."""
+    out = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    out = out.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    # Restliche Steuerzeichen (<0x20) als \uXXXX kodieren.
+    return "".join(ch if ch >= " " or ch in "\\\"" else f"\\u{ord(ch):04X}" for ch in out)
 
 
 def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None) -> str:
@@ -221,7 +227,9 @@ def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None
     lines.append("")
     lines.append("[servers]")
     for be in backends:
-        lines.append(f'{be["name"]} = "{be["address"]}"')
+        # Namen als QUOTED key: ein Alias mit Punkt (z.B. "1.21.1") wuerde als bare key
+        # zu verschachtelten TOML-Tabellen zerfallen und das Backend nie definieren.
+        lines.append(f'"{_toml_escape(be["name"])}" = "{be["address"]}"')
     try_list = f'"{_toml_escape(lobby_name)}"' if lobby_name else ""
     lines.append(f"try = [{try_list}]")
     lines.append("")
@@ -277,37 +285,50 @@ def _install_via_plugins(mc_version: str) -> None:
 
 
 def is_running() -> bool:
-    with _LOCK:
-        return _PROC is not None and _PROC.poll() is None
+    # LOCK-FREI: nur das Prozess-Handle lesen + pollen (beides guenstig/atomar in CPython).
+    # So blockiert weder der 15s-Idle-Monitor noch die /settings-Seite, waehrend ein
+    # (Neu-)Start gerade Downloads erledigt.
+    p = _PROC
+    return p is not None and p.poll() is None
 
 
 def start_velocity(cfg: dict) -> bool:
-    """Velocity-Prozess starten. Idempotent: gleiche Config-Signatur -> No-op."""
+    """Velocity-Prozess starten. Idempotent: gleiche Config-Signatur -> No-op.
+
+    WICHTIG: die potenziell langen NETZWERK-Schritte (Velocity-Jar-Download, Java-Resolve/
+    -Autoinstall, Via-Plugin-Download) laufen BEWUSST OHNE ``_LOCK``. Der Lock wird nur fuer
+    den schnellen Prozess-Tausch (terminate/Popen) gehalten -> der Idle-Monitor und
+    HTTP-Anfragen (is_running) bleiben responsiv, auch waehrend Minuten dauernder Downloads.
+    """
     global _PROC, _LOG, _STATE
+
+    # --- 1) Alles Langsame ausserhalb des Locks (Download/Install/Config schreiben) ---
+    jar = _resolve_jar(cfg)                          # ggf. Velocity-Jar-Download
+    if not jar:
+        _glog("jar_missing", "Velocity-Jar fehlt und Auto-Download fehlgeschlagen.")
+        return False
+
+    from app.db.session import SessionLocal
+    from app.services import java_runtime_service
+
+    with SessionLocal() as db:
+        java = java_runtime_service.resolve_java_binary(db, 17)   # ggf. JDK-Autoinstall
+    if not java:
+        _glog("java_missing", "Kein Java 17+ fuer Velocity verfuegbar (Auto-Install fehlgeschlagen).")
+        return False
+
+    signature, backend_names, mc_version = _write_runtime_config(cfg)   # nur Dateien, kein Netz
+    desired = {"jar": jar, "java": java, "sig": signature}
+    if is_running() and _STATE == desired:
+        return True   # unveraendert -> KEIN Neustart, KEIN Plugin-Download
+
+    _install_via_plugins(mc_version)                 # Via-Plugin-Download (nur bei Start)
+
+    # --- 2) Nur der schnelle Prozess-Tausch unter dem Lock ---
     with _LOCK:
-        jar = _resolve_jar(cfg)
-        if not jar:
-            _glog("jar_missing", "Velocity-Jar fehlt und Auto-Download fehlgeschlagen.")
-            return False
-
-        from app.db.session import SessionLocal
-        from app.services import java_runtime_service
-
-        with SessionLocal() as db:
-            java = java_runtime_service.resolve_java_binary(db, 17)
-        if not java:
-            _glog("java_missing", "Kein Java 17+ fuer Velocity verfuegbar (Auto-Install fehlgeschlagen).")
-            return False
-
-        signature, backend_names, mc_version = _write_runtime_config(cfg)
-        desired = {"jar": jar, "java": java, "sig": signature}
         if is_running() and _STATE == desired:
-            return True   # unveraendert -> KEIN Neustart, KEIN Plugin-Download
+            return True                              # ein Parallel-Reconcile war schneller
         _stop_locked()
-
-        # Nur beim tatsaechlichen (Neu-)Start die Via-Plugins nachladen (Netzwerk).
-        _install_via_plugins(mc_version)
-
         wd = _work_dir()
         try:
             _LOG = open(wd / "velocity.log", "ab")  # noqa: SIM115 - Handle lebt bis stop
@@ -321,8 +342,8 @@ def start_velocity(cfg: dict) -> bool:
             _stop_locked()
             return False
         _STATE = desired
-        _glog("started", f"port={cfg['bind_port']} backends={','.join(backend_names) or '-'}")
-        return True
+    _glog("started", f"port={cfg['bind_port']} backends={','.join(backend_names) or '-'}")
+    return True
 
 
 def _stop_locked() -> None:
@@ -352,6 +373,17 @@ def stop_velocity() -> None:
         _stop_locked()
 
 
+def reconcile_velocity_async() -> None:
+    """reconcile_velocity in einem Hintergrund-Thread anstossen.
+
+    Fuer Aufrufer im HTTP-Request-Thread (Setup-Button / Settings-Form): der erste
+    (Neu-)Start laedt ggf. Velocity-Jar + Java + Via-Plugins (Minuten) - das darf die
+    Antwort nicht blockieren. Der Idle-Monitor haelt es danach selbstheilend am Leben."""
+    import threading
+
+    threading.Thread(target=reconcile_velocity, name="velocity-reconcile", daemon=True).start()
+
+
 def _read_log_tail(lines: int = 20) -> str:
     try:
         data = (_work_dir() / "velocity.log").read_text(
@@ -378,6 +410,16 @@ def reconcile_velocity() -> None:
         _last_start_mono = 0.0
         return
 
+    # Mutual Exclusion am network_port: Velocity ist die Eingangstuer -> das Gateway
+    # muss weg, BEVOR Velocity bindet (sonst Bind-Konflikt -> Crash-Backoff).
+    try:
+        from app.services import gateway_service
+
+        if gateway_service.is_running():
+            gateway_service.stop_gateway()
+    except Exception:  # noqa: BLE001
+        pass
+
     if is_running():
         _crash_reported = False
         start_velocity(cfg)   # idempotent: gleiche Signatur -> No-op, sonst Neustart
@@ -389,9 +431,11 @@ def reconcile_velocity() -> None:
             _crash_reported = True
             tail = _read_log_tail()
             _glog("crashed",
-                  f"Velocity sofort beendet. Log-Ende: {tail}" if tail
-                  else "Velocity sofort beendet - keine Log-Ausgabe (Java/Jar pruefen).")
+                  f"Velocity sofort beendet/nicht gestartet. Log-Ende: {tail}" if tail
+                  else "Velocity nicht gestartet - Java/Jar/Config pruefen (keine Log-Ausgabe).")
         return
-    if start_velocity(cfg):
-        _last_start_mono = now
-        _crash_reported = False
+    # Start VERSUCHEN und den Zeitpunkt IMMER merken (auch bei Fehlschlag) -> der 60s-
+    # Backoff greift auch, wenn Jar/Java fehlen (kein Download-Hammern alle 15s).
+    ok = start_velocity(cfg)
+    _last_start_mono = now
+    _crash_reported = False if ok else _crash_reported

@@ -202,11 +202,17 @@ def update_network_settings_action(
         push_flash(request, str(exc), "error")
         return RedirectResponse(url="/settings", status_code=303)
 
-    # Gateway sofort an den neuen Modus/Port angleichen (Listener start/stop/rebind).
+    # Front-Door sofort an den neuen Modus angleichen. Gateway und Velocity teilen sich
+    # den network_port -> den VERLIERER zuerst stoppen, dann den Gewinner binden.
     try:
-        from app.services import gateway_service
+        from app.services import gateway_service, proxy_service
 
-        gateway_service.reconcile_gateway()
+        if mode == "velocity":
+            gateway_service.reconcile_gateway()       # Modus!=gateway -> Gateway stoppt, Port frei
+            proxy_service.reconcile_velocity_async()  # Velocity im Hintergrund hochziehen
+        else:
+            proxy_service.stop_velocity()             # schnell: Velocity aus, Port frei
+            gateway_service.reconcile_gateway()       # Gateway bindet (falls mode==gateway)
     except Exception:  # noqa: BLE001
         pass
     # Lobby-Plugin-config an die (evtl. geaenderte) Domain angleichen.

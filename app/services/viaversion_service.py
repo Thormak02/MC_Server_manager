@@ -25,21 +25,30 @@ _PROJECTS = ("viaversion", "viabackwards", "viarewind")
 _LOADERS = ("paper", "spigot", "bukkit", "folia")
 
 
-def _pick_version_file(slug: str, mc_version: str, loaders_list: tuple[str, ...] = _LOADERS) -> tuple[str, str] | None:
+def _pick_version_file(
+    slug: str,
+    mc_version: str,
+    loaders_list: tuple[str, ...] = _LOADERS,
+    *,
+    allow_any_loader: bool = True,
+) -> tuple[str, str] | None:
     """(Dateiname, Download-URL) der besten Version fuer ``mc_version`` oder None.
 
     Erst exakt fuer die MC-Version + Loader; findet Modrinth dazu nichts
     (z.B. brandneue Version), Fallback auf die neueste Version ueberhaupt.
     ``loaders_list`` = ("paper", ...) fuer die Bukkit-Lobby oder ("velocity",) fuer den Proxy.
+    ``allow_any_loader=False`` UNTERDRUECKT den letzten loaderlosen Fallback (fuer Velocity:
+    sonst landet z.B. ein Bukkit-Build im Proxy-plugins-Ordner, den Velocity nicht laedt).
     """
     from app.providers.server.common import fetch_json
 
     loaders = json.dumps(list(loaders_list))
-    attempts = (
+    attempts = [
         {"loaders": loaders, "game_versions": json.dumps([mc_version])},
         {"loaders": loaders},
-        {},
-    )
+    ]
+    if allow_any_loader:
+        attempts.append({})
     for params in attempts:
         query = urllib.parse.urlencode(params)
         url = f"{_MODRINTH}/project/{slug}/version"
@@ -123,7 +132,9 @@ def install_velocity_plugins(plugins_dir: str | Path, mc_version: str) -> tuple[
     installed: list[str] = []
     failed: list[str] = []
     for slug in _PROJECTS:
-        picked = _pick_version_file(slug, mc_version, ("velocity",))
+        # KEIN loaderloser Fallback: lieber sauber ueberspringen als einen Bukkit-Build
+        # in den Velocity-plugins-Ordner legen (den Velocity nicht laedt).
+        picked = _pick_version_file(slug, mc_version, ("velocity",), allow_any_loader=False)
         if picked is None:
             failed.append(slug)
             continue

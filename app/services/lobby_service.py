@@ -505,7 +505,10 @@ def create_auto_lobby(db: Session, *, initiated_by_user_id: int | None) -> tuple
 
 
 def _demote_other_default_lobbies(db: Session, keep_id: int) -> None:
-    """Sicherstellen, dass nur EIN Server gateway_is_default ist (der neue)."""
+    """Nur EIN Server bleibt Default-Lobby (der neue). Alte Default-Lobbys werden AUCH
+    aus dem Netzwerk genommen (gateway_enabled=False) - sonst wuerde eine 1.21.x-Alt-Lobby
+    im Velocity-Modus zum (kaputten, weil ohne Forwarding gestarteten) Backend + Doppel-
+    Eintrag im Menue. Wer sie behalten will, aktiviert sie bewusst neu."""
     from sqlalchemy import select
 
     from app.models.server import Server as _Server
@@ -513,6 +516,7 @@ def _demote_other_default_lobbies(db: Session, keep_id: int) -> None:
     for srv in db.scalars(select(_Server).where(_Server.gateway_is_default.is_(True))).all():
         if srv.id != keep_id:
             srv.gateway_is_default = False
+            srv.gateway_enabled = False
             db.add(srv)
     db.commit()
 
@@ -547,10 +551,19 @@ def create_velocity_lobby(
         app_setting_service.set_network_mode(db, "velocity")
         app_setting_service.ensure_velocity_forwarding_secret(db)
         _demote_other_default_lobbies(db, lobby_id)
+        # Erst das Gateway stoppen (Modus ist jetzt velocity -> reconcile_gateway gibt den
+        # network_port frei), DANN Velocity im Hintergrund hochziehen (Download blockiert
+        # nicht die HTTP-Antwort; kein Bind-Konflikt -> kein Crash-Backoff).
+        try:
+            from app.services import gateway_service
+
+            gateway_service.reconcile_gateway()
+        except Exception:  # noqa: BLE001
+            pass
         try:
             from app.services import proxy_service
 
-            proxy_service.reconcile_velocity()
+            proxy_service.reconcile_velocity_async()
         except Exception:  # noqa: BLE001
             pass
         try:
@@ -576,6 +589,16 @@ def create_velocity_lobby(
         lobby_port = port_service.allocate_server_port(db, exclude={network_port})
     except ValueError:
         lobby_port = None
+    if not lobby_port:
+        # Ohne Port ist die Lobby kein Velocity-Backend (velocity_backends ueberspringt
+        # portlose Server) -> Velocity haette keinen try-Server. Harter Abbruch statt
+        # stillschweigend unbrauchbarer Lobby.
+        return (
+            False,
+            "Kein freier Port fuer die Velocity-Lobby verfuegbar (Port-Bereich ausgeschoepft). "
+            "Bitte den Server-Port-Bereich in den Einstellungen erweitern.",
+            None,
+        )
 
     try:
         server, _notes = ProvisioningService().create_server_instance(

@@ -466,13 +466,23 @@ def _idle_tick() -> None:
     # aktiviert, war der Port zunaechst belegt; sobald er frei ist (nach Stop/
     # Neustart), bindet der Proxy hier automatisch nach.
     reconcile_proxies()
+    # Velocity ZUERST abgleichen (vor dem Gateway): beide konkurrieren um den network_port.
+    # So gibt ein velocity->gateway-Wechsel den Port frei (Velocity stoppt), BEVOR das
+    # Gateway im selben Tick zu binden versucht; ein gateway->velocity-Wechsel stoppt das
+    # Gateway in reconcile_velocity selbst, bevor Velocity bindet.
+    try:
+        from app.services import proxy_service
+
+        proxy_service.reconcile_velocity()   # Velocity (network_mode==velocity) selbstheilen
+    except Exception:  # noqa: BLE001 - Monitor darf nie sterben
+        pass
     # Gateway abgleichen: Listener nachbinden, Routing-Tabelle auffrischen.
     # Lazy-Import bricht den Zyklus gateway_service -> sleep_proxy_service.
     try:
         from app.services import gateway_service
 
         gateway_service.reconcile_gateway()
-    except Exception:  # noqa: BLE001 - Monitor darf nie sterben
+    except Exception:  # noqa: BLE001
         pass
     # Universal-Lobby (Python-Hub) ebenso selbstheilend abgleichen -> ein Settings-
     # Toggle greift ohne App-Neustart (Listener wird ~15s spaeter gestartet/gestoppt).
@@ -486,12 +496,6 @@ def _idle_tick() -> None:
         from app.services import viaproxy_service
 
         viaproxy_service.reconcile_viaproxy()
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        from app.services import proxy_service
-
-        proxy_service.reconcile_velocity()   # Velocity (network_mode==velocity) selbstheilen
     except Exception:  # noqa: BLE001
         pass
 

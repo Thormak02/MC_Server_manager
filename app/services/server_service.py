@@ -492,9 +492,11 @@ def apply_velocity_backend_forwarding(server: Server, secret: str) -> list[str]:
         notes.append("Velocity-Forwarding uebersprungen: kein Secret.")
         return notes
 
-    _upsert_server_property(server, "online-mode", "false")
-    _upsert_server_property(server, "server-ip", "127.0.0.1")
-
+    # SICHERHEIT: ZUERST das Modern-Forwarding in paper-global.yml schreiben (und nur bei
+    # Erfolg danach online-mode=false + loopback). So laeuft NIE ein offline-mode-Server
+    # ohne Forwarding-Enforcement (sonst koennte jeder ueber den oeffentlichen Sleep-Port
+    # jeden Usernamen faelschen). Schlaegt der YAML-Schreibvorgang fehl -> online-mode=true.
+    forwarding_ok = False
     cfg_dir = base_path / "config"
     paper_global = cfg_dir / "paper-global.yml"
     try:
@@ -520,9 +522,21 @@ def apply_velocity_backend_forwarding(server: Server, secret: str) -> list[str]:
         paper_global.write_text(
             yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8"
         )
-        notes.append("Velocity-Forwarding aktiv: online-mode=false, loopback, Secret gesetzt.")
+        forwarding_ok = True
     except Exception as exc:  # noqa: BLE001 - darf den Start nie stoeren
         notes.append(f"Velocity-Forwarding (paper-global.yml) fehlgeschlagen: {exc}")
+
+    if forwarding_ok:
+        _upsert_server_property(server, "online-mode", "false")
+        _upsert_server_property(server, "server-ip", "127.0.0.1")
+        notes.append("Velocity-Forwarding aktiv: online-mode=false, loopback, Secret gesetzt.")
+    else:
+        # Fail-safe: kein offline-mode ohne Forwarding -> online-mode=true (Mojang-Auth).
+        _upsert_server_property(server, "online-mode", "true")
+        notes.append(
+            "Velocity-Forwarding NICHT geschrieben -> online-mode=true erzwungen (Sicherheit). "
+            "Backend laeuft erst hinter dem Proxy, wenn paper-global.yml schreibbar ist."
+        )
     return notes
 
 
@@ -547,10 +561,13 @@ def effective_server_port(server: Server, *, network_mode: str | None = None) ->
 
 
 def active_front_port(db: Session) -> int | None:
-    """Der belegte Front-Door-Port (Gateway), sonst None."""
+    """Der belegte Front-Door-Port (Gateway ODER Velocity), sonst None.
+
+    In beiden Modi bindet der Front-Door den network_port -> ein normaler Server darf
+    diesen Port nicht als eigenen Bind bekommen (sonst Bind-Konflikt ohne Warnung)."""
     from app.services import app_setting_service
 
-    if app_setting_service.get_network_mode(db) == "gateway":
+    if app_setting_service.get_network_mode(db) in ("gateway", "velocity"):
         return app_setting_service.get_network_port(db)
     return None
 

@@ -22,8 +22,8 @@ def test_render_velocity_toml_modern_forwarding():
     assert 'bind = "0.0.0.0:25565"' in toml
     assert 'player-info-forwarding-mode = "modern"' in toml
     assert 'forwarding-secret-file = "forwarding.secret"' in toml
-    assert 'lobby = "127.0.0.1:30001"' in toml
-    assert 'smp = "127.0.0.1:30002"' in toml
+    assert '"lobby" = "127.0.0.1:30001"' in toml   # QUOTED key
+    assert '"smp" = "127.0.0.1:30002"' in toml
     assert 'try = ["lobby"]' in toml
     assert '"lobby.mc.example.de" = ["lobby"]' in toml
     assert '"smp.mc.example.de" = ["smp"]' in toml
@@ -37,6 +37,30 @@ def test_render_velocity_toml_no_backends():
     toml = proxy_service.render_velocity_toml(cfg, [], None)
     assert "try = []" in toml           # kein Backend -> leere try-Liste, valides TOML
     assert 'bind = "0.0.0.0:25565"' in toml
+
+
+def test_render_velocity_toml_quotes_dotted_backend_name():
+    """Ein Alias mit Punkt (z.B. '1.21.1') muss als QUOTED key raus, sonst zerfaellt
+    er in verschachtelte TOML-Tabellen und das Backend existiert nie."""
+    from app.services import proxy_service
+
+    be = [{"name": "1.21.1", "address": "127.0.0.1:30001", "alias": "1.21.1", "is_lobby": True}]
+    toml = proxy_service.render_velocity_toml(
+        {"bind_port": 25565, "domain": "mc.x.de", "motd": "x", "max_players": 10}, be, "1.21.1")
+    assert '"1.21.1" = "127.0.0.1:30001"' in toml
+    assert '"1.21.1.mc.x.de" = ["1.21.1"]' in toml   # forced-host mit dem quoted Namen
+
+
+def test_render_velocity_toml_escapes_control_chars_in_motd():
+    """Mehrzeilige MOTD darf die velocity.toml nicht zerstoeren (Basic-String verbietet
+    rohe Steuerzeichen)."""
+    from app.services import proxy_service
+
+    toml = proxy_service.render_velocity_toml(
+        {"bind_port": 25565, "domain": "", "motd": "Zeile1\nZeile2\tTab", "max_players": 10}, [], None)
+    motd_line = next(l for l in toml.splitlines() if l.startswith("motd"))
+    assert motd_line == 'motd = "Zeile1\\nZeile2\\tTab"'   # literal \n \t, kein roher Umbruch
+    assert "\n" not in motd_line[7:]
 
 
 # --- Backend-Auswahl (nur Bukkit-Typen sind Velocity-Backends) -----------------
@@ -109,6 +133,25 @@ def test_apply_velocity_backend_forwarding_writes_files(tmp_path):
     assert vel["enabled"] is True
     assert vel["online-mode"] is True
     assert vel["secret"] == "s3cr3t"
+
+
+def test_apply_velocity_backend_forwarding_failsafe_online_mode(tmp_path):
+    """Wenn paper-global.yml NICHT schreibbar ist, darf der Server NICHT als offline-mode
+    starten (sonst Username-Spoofing) -> Fail-safe online-mode=true."""
+    from app.models.server import Server
+    from app.services import server_service
+
+    base = tmp_path / "backend2"
+    base.mkdir()
+    (base / "config").write_text("ich bin eine datei, kein ordner", encoding="utf-8")  # mkdir schlaegt fehl
+    srv = Server(name="b2", slug="b2", server_type="paper", base_path=str(base),
+                 gateway_enabled=True, port=30012)
+
+    notes = server_service.apply_velocity_backend_forwarding(srv, "s3cr3t")
+    props = (base / "server.properties").read_text(encoding="utf-8")
+    assert "online-mode=true" in props        # Fail-safe: KEIN offline-mode ohne Forwarding
+    assert "online-mode=false" not in props
+    assert any("online-mode=true erzwungen" in n for n in notes)
 
 
 def test_cleanup_velocity_leftovers_reverts(tmp_path):
