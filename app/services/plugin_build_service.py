@@ -41,6 +41,9 @@ _COMPILE_DEPS: tuple[tuple[str, str], ...] = (
     ("examination-api.jar", f"{_CENTRAL}/net/kyori/examination-api/1.3.0/examination-api-1.3.0.jar"),
     ("bungeecord-chat.jar",
      f"{_PAPER}/net/md-5/bungeecord-chat/1.20-R0.2-deprecated+build.18/bungeecord-chat-1.20-R0.2-deprecated+build.18.jar"),
+    # javac braucht die JetBrains-Annotations, weil paper-api + packetevents-api sie in
+    # Methoden-Signaturen verwenden (@NotNull/@Nullable) -> sonst CompletionFailure.
+    ("annotations.jar", f"{_CENTRAL}/org/jetbrains/annotations/24.1.0/annotations-24.1.0.jar"),
 )
 
 # packetevents-api (nur noetig, sobald der Avatar-Code es importiert). Separat gehalten,
