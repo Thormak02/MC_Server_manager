@@ -193,13 +193,17 @@ def start_synthetic_feeder() -> None:
         seq = 0
         while not ev.is_set():
             time.sleep(0.1)
-            ang = time.monotonic() - t0
-            seq += 1
-            BUS.upsert(Presence(
-                uuid="synthetic-vanilla", name="Vanilla-Test", origin=ORIGIN_VANILLA,
-                x=8.5 + 3.0 * math.cos(ang), y=64.0, z=13.5 + 3.0 * math.sin(ang),
-                yaw=(math.degrees(ang) % 360.0), head_yaw=(math.degrees(ang) % 360.0), seq=seq,
-            ))
+            try:
+                ang = time.monotonic() - t0
+                seq += 1
+                BUS.upsert(Presence(
+                    uuid="synthetic-vanilla", name="Vanilla-Test", origin=ORIGIN_VANILLA,
+                    x=8.5 + 3.0 * math.cos(ang), y=64.0, z=13.5 + 3.0 * math.sin(ang),
+                    yaw=(math.degrees(ang) % 360.0), head_yaw=(math.degrees(ang) % 360.0), seq=seq,
+                ))
+            except Exception:  # noqa: BLE001 - Feeder-Thread darf nie unbehandelt sterben
+                if ev.is_set():
+                    return
         BUS.remove("synthetic-vanilla")
 
     threading.Thread(target=_run, daemon=True, name="presence-synth").start()
@@ -235,14 +239,18 @@ def start_synthetic_modded_feeder() -> None:
         seq = 0
         while not ev.is_set():
             time.sleep(0.1)
-            ang = (time.monotonic() - t0) * 0.8
-            seq += 1
-            BUS.upsert(Presence(
-                uuid="synthetic-modded", name="Modded-Test", origin=ORIGIN_HUB,
-                x=8.5 + 4.0 * math.sin(ang), y=64.0, z=13.5 + 4.0 * math.cos(ang),
-                yaw=((math.degrees(ang) + 180.0) % 360.0),
-                head_yaw=((math.degrees(ang) + 180.0) % 360.0), seq=seq,
-            ))
+            try:
+                ang = (time.monotonic() - t0) * 0.8
+                seq += 1
+                BUS.upsert(Presence(
+                    uuid="synthetic-modded", name="Modded-Test", origin=ORIGIN_HUB,
+                    x=8.5 + 4.0 * math.sin(ang), y=64.0, z=13.5 + 4.0 * math.cos(ang),
+                    yaw=((math.degrees(ang) + 180.0) % 360.0),
+                    head_yaw=((math.degrees(ang) + 180.0) % 360.0), seq=seq,
+                ))
+            except Exception:  # noqa: BLE001 - Feeder-Thread darf nie unbehandelt sterben
+                if ev.is_set():
+                    return
         BUS.remove("synthetic-modded")
 
     threading.Thread(target=_run, daemon=True, name="presence-synth-modded").start()
