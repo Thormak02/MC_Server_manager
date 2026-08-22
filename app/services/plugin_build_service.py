@@ -36,6 +36,11 @@ _CENTRAL = "https://repo1.maven.org/maven2"
 _COMPILE_DEPS: tuple[tuple[str, str], ...] = (
     ("paper-api.jar",
      f"{_PAPER}/io/papermc/paper/paper-api/1.20.6-R0.1-SNAPSHOT/paper-api-1.20.6-R0.1-20241030.191541-127.jar"),
+    # Guava: paper-api hat Guava-typisierte Signaturen (z.B. Material.getItemAttributes -> Multimap)
+    # MIT @NotNull-Type-Annotations. Neuere javac (>=23, u.a. das vom Manager fuer Velocity/Paper 26
+    # installierte JDK 25) brechen hart ab ("Cannot attach type annotations ... Multimap nicht
+    # gefunden"), wenn Guava nicht im Classpath liegt. Version wie in Paper 1.20.6.
+    ("guava.jar", f"{_CENTRAL}/com/google/guava/guava/32.1.2-jre/guava-32.1.2-jre.jar"),
     ("adventure-api.jar", f"{_CENTRAL}/net/kyori/adventure-api/4.17.0/adventure-api-4.17.0.jar"),
     ("adventure-key.jar", f"{_CENTRAL}/net/kyori/adventure-key/4.17.0/adventure-key-4.17.0.jar"),
     ("examination-api.jar", f"{_CENTRAL}/net/kyori/examination-api/1.3.0/examination-api-1.3.0.jar"),
