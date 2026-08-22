@@ -137,6 +137,21 @@ final class PresenceBridge {
         runOnMain(this::cleanupAvatars);
     }
 
+    /**
+     * Anker = Spawn der Lobby-Welt. Bus-Koordinaten sind SPAWN-RELATIV: lokale Spieler werden als
+     * (Position - Anker) publiziert, Fremd-Avatare bei (Anker + empfangener Offset) gerendert.
+     * So stehen modded &amp; vanilla Spieler am selben Ort, obwohl Hub (Y=64-Plattform) und diese
+     * Vanilla-Superflat-Welt verschiedene absolute Koordinaten haben. Nur auf dem Main-Thread rufen.
+     */
+    private double[] anchor() {
+        try {
+            org.bukkit.Location s = plugin.getServer().getWorlds().get(0).getSpawnLocation();
+            return new double[]{s.getX(), s.getY(), s.getZ()};
+        } catch (Throwable t) {
+            return new double[]{0.0, 64.0, 0.0};
+        }
+    }
+
     // --- Verbindung -----------------------------------------------------------
     private void connectAsync() {
         reader = new Thread(this::runConnection, "mcsm-presence");
@@ -239,6 +254,8 @@ final class PresenceBridge {
     // --- Fremd-Avatar rendern (Main-Thread) -----------------------------------
     private void upsertAvatar(String uuid, String name, double x, double y, double z,
                               float yaw, float pitch, float headYaw, String tex, String sig) {
+        double[] an = anchor();          // spawn-relativer Offset -> lokale Weltkoordinaten
+        x += an[0]; y += an[1]; z += an[2];
         Avatar a = avatars.get(uuid);
         if (a == null) {
             a = new Avatar();
@@ -341,6 +358,7 @@ final class PresenceBridge {
             return;
         }
         long now = System.currentTimeMillis();
+        double[] an = anchor();          // Positionen SPAWN-RELATIV publizieren (Anker = Welt-Spawn)
         for (Player p : Bukkit.getOnlinePlayers()) {
             org.bukkit.Location l = p.getLocation();
             long xi = Math.round(l.getX() * 32), yi = Math.round(l.getY() * 32), zi = Math.round(l.getZ() * 32);
@@ -362,7 +380,7 @@ final class PresenceBridge {
             // signierte Texturen kommen in einem spaeteren Schritt (Phase 3).
             String tex = "", sig = "";
             sendLine("{\"t\":\"up\",\"uuid\":\"" + p.getUniqueId() + "\",\"name\":\"" + esc(p.getName())
-                + "\",\"x\":" + (l.getX()) + ",\"y\":" + (l.getY()) + ",\"z\":" + (l.getZ())
+                + "\",\"x\":" + (l.getX() - an[0]) + ",\"y\":" + (l.getY() - an[1]) + ",\"z\":" + (l.getZ() - an[2])
                 + ",\"yaw\":" + l.getYaw() + ",\"pitch\":" + l.getPitch() + ",\"hy\":" + l.getYaw()
                 + ",\"tex\":\"" + esc(tex) + "\",\"sig\":\"" + esc(sig) + "\",\"seq\":" + seq + "}");
         }

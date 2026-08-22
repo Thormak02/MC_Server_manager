@@ -196,9 +196,11 @@ def start_synthetic_feeder() -> None:
             try:
                 ang = time.monotonic() - t0
                 seq += 1
+                # Spawn-RELATIVE Offsets (kleiner Kreis um 0) -> die Gegenseite rendert bei
+                # IHREM Spawn -> Test-Avatar laeuft am Boden nahe dem Lobby-Spawn (kein Schweben).
                 BUS.upsert(Presence(
                     uuid="synthetic-vanilla", name="Vanilla-Test", origin=ORIGIN_VANILLA,
-                    x=8.5 + 3.0 * math.cos(ang), y=64.0, z=13.5 + 3.0 * math.sin(ang),
+                    x=3.0 * math.cos(ang), y=0.0, z=3.0 * math.sin(ang),
                     yaw=(math.degrees(ang) % 360.0), head_yaw=(math.degrees(ang) % 360.0), seq=seq,
                 ))
             except Exception:  # noqa: BLE001 - Feeder-Thread darf nie unbehandelt sterben
@@ -242,9 +244,10 @@ def start_synthetic_modded_feeder() -> None:
             try:
                 ang = (time.monotonic() - t0) * 0.8
                 seq += 1
+                # Spawn-RELATIVE Offsets (kleiner Kreis um 0), siehe Vanilla-Feeder.
                 BUS.upsert(Presence(
                     uuid="synthetic-modded", name="Modded-Test", origin=ORIGIN_HUB,
-                    x=8.5 + 4.0 * math.sin(ang), y=64.0, z=13.5 + 4.0 * math.cos(ang),
+                    x=4.0 * math.sin(ang), y=0.0, z=4.0 * math.cos(ang),
                     yaw=((math.degrees(ang) + 180.0) % 360.0),
                     head_yaw=((math.degrees(ang) + 180.0) % 360.0), seq=seq,
                 ))

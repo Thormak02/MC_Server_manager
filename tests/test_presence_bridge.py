@@ -88,20 +88,24 @@ def test_hub_consumer_spawns_moves_removes():
     _bind_hub_methods()
     h = _FakeHub()
 
-    # ADD (fremde Vanilla-Praesenz) -> Bridge-Avatar entsteht + Spawn wird gebroadcastet
+    # ADD (fremde Vanilla-Praesenz) -> Bridge-Avatar entsteht + Spawn wird gebroadcastet.
+    # Bus-Koordinaten sind SPAWN-RELATIV -> der Avatar rendert bei _SPAWN + Offset.
+    from app.services.hub_service import _SPAWN
+
     h._on_bridge_event(pb.EVENT_ADD, pb.Presence(
-        uuid="u-van", name="Steve26", origin=pb.ORIGIN_VANILLA, x=1, y=64, z=2, yaw=10, seq=1))
+        uuid="u-van", name="Steve26", origin=pb.ORIGIN_VANILLA, x=1, y=0, z=2, yaw=10, seq=1))
     assert "u-van" in h.bridge
     sess = h.bridge["u-van"]
     assert sess.conn_id == "br:u-van"
     assert sess.eid == 1001                          # aus dem reservierten eid-Zaehler
     assert sess.conn_id in h.players                 # im Roster -> spaetere Joiner sehen ihn
     assert ("many", 3) in h.sent                     # _spawn_packets = 3 Pakete
+    assert (sess.x, sess.y, sess.z) == (_SPAWN[0] + 1, _SPAWN[1] + 0, _SPAWN[2] + 2)
 
-    # UPDATE -> Position wandert
+    # UPDATE -> Position wandert (weiterhin spawn-relativ auf lokal gemappt)
     h._on_bridge_event(pb.EVENT_UPDATE, pb.Presence(
-        uuid="u-van", name="Steve26", origin=pb.ORIGIN_VANILLA, x=5, y=64, z=6, yaw=20, seq=2))
-    assert (h.bridge["u-van"].x, h.bridge["u-van"].z) == (5, 6)
+        uuid="u-van", name="Steve26", origin=pb.ORIGIN_VANILLA, x=5, y=0, z=6, yaw=20, seq=2))
+    assert (h.bridge["u-van"].x, h.bridge["u-van"].z) == (_SPAWN[0] + 5, _SPAWN[2] + 6)
 
     # Self-Filter: eigene (hub) Praesenz wird NICHT gespiegelt
     h._on_bridge_event(pb.EVENT_ADD, pb.Presence(

@@ -417,8 +417,10 @@ class Hub:
             if event == pb.EVENT_CHAT:
                 if not isinstance(payload, dict) or payload.get("origin") == pb.ORIGIN_HUB:
                     return
+                # Einheitliches Netz-Praefix wie auf der Vanilla-Seite ("[Lobby] <name> text"),
+                # damit man sieht, dass die Nachricht aus dem gemeinsamen Netz kommt.
                 self._broadcast(pl.build_system_chat(mcd._nbt_text_component(
-                    f"<{payload.get('name', '?')}> {payload.get('text', '')}")))
+                    f"[Lobby] <{payload.get('name', '?')}> {payload.get('text', '')}")))
                 return
             if getattr(payload, "origin", None) == pb.ORIGIN_HUB:
                 return  # eigene Spieler nicht als Avatar spiegeln
@@ -438,8 +440,10 @@ class Hub:
         with self.lock:
             if p.uuid not in self.bridge:
                 self._eid_ctr += 1
+                # p.x/y/z sind spawn-relative Offsets der Gegenseite -> bei UNSEREM Spawn rendern.
                 sess = _Session(f"br:{p.uuid}", None, self._eid_ctr,
-                                pb.uuid16_from(p.uuid), p.name, p.x, p.y, p.z,
+                                pb.uuid16_from(p.uuid), p.name,
+                                _SPAWN[0] + p.x, _SPAWN[1] + p.y, _SPAWN[2] + p.z,
                                 yaw=p.yaw, pitch=p.pitch)
                 self.bridge[p.uuid] = sess
                 self.players[sess.conn_id] = sess
@@ -455,8 +459,9 @@ class Hub:
             self._bridge_add(p)
             return
         ox, oy, oz = sess.x, sess.y, sess.z
-        sess.x, sess.y, sess.z, sess.yaw, sess.pitch = p.x, p.y, p.z, p.yaw, p.pitch
-        self._broadcast(pl.build_entity_move_rot(sess.eid, ox, oy, oz, p.x, p.y, p.z,
+        nx, ny, nz = _SPAWN[0] + p.x, _SPAWN[1] + p.y, _SPAWN[2] + p.z   # spawn-relativ -> lokal
+        sess.x, sess.y, sess.z, sess.yaw, sess.pitch = nx, ny, nz, p.yaw, p.pitch
+        self._broadcast(pl.build_entity_move_rot(sess.eid, ox, oy, oz, nx, ny, nz,
                                                  yaw=p.yaw, pitch=p.pitch, on_ground=True))
         self._broadcast(pl.build_head_rotation(sess.eid, p.head_yaw or p.yaw))
 
@@ -475,10 +480,14 @@ class Hub:
         from app.services import presence_bridge_service as pb
 
         self._bus_seq += 1
+        # SPAWN-RELATIV publizieren: der Bus traegt Offsets vom eigenen Lobby-Spawn, nicht
+        # absolute Koordinaten. Die Gegenseite rendert bei IHREM Spawn + Offset -> Spieler
+        # stehen auf beiden Seiten am selben Ort (kein Schweben, gegenseitig sichtbar), obwohl
+        # Hub (Y=64-Plattform) und Vanilla-Superflat verschiedene Welt-Koordinaten haben.
         pb.BUS.upsert(pb.Presence(
             uuid=self._hub_bus_uuid(session), name=session.name, origin=pb.ORIGIN_HUB,
-            x=session.x, y=session.y, z=session.z, yaw=session.yaw, pitch=session.pitch,
-            head_yaw=session.yaw, seq=self._bus_seq))
+            x=session.x - _SPAWN[0], y=session.y - _SPAWN[1], z=session.z - _SPAWN[2],
+            yaw=session.yaw, pitch=session.pitch, head_yaw=session.yaw, seq=self._bus_seq))
 
     def _bridge_pub_move(self, session: "_Session") -> None:
         if not self._bridge_attached:
