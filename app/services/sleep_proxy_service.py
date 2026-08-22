@@ -476,6 +476,12 @@ def _idle_tick() -> None:
         proxy_service.reconcile_velocity()   # Velocity (network_mode==velocity) selbstheilen
     except Exception:  # noqa: BLE001 - Monitor darf nie sterben
         pass
+    try:
+        from app.services import presence_bridge_service
+
+        presence_bridge_service.reconcile_presence_bridge()  # verwaiste Avatare aufraeumen
+    except Exception:  # noqa: BLE001
+        pass
     # Gateway abgleichen: Listener nachbinden, Routing-Tabelle auffrischen.
     # Lazy-Import bricht den Zyklus gateway_service -> sleep_proxy_service.
     try:

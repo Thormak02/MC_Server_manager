@@ -59,6 +59,10 @@ _VIAPROXY_TARGET_VERSION = "1.21.1"
 # (1.7.10 .. 26.2) landet in der EINEN neuesten Lobby (die abwaerts uebersetzt wird,
 # die reife Via-Richtung). Modded-Server sind NICHT Velocity-Backends, sondern werden
 # per nativem Transfer direkt angesprungen. Gated hinter network_mode == "velocity".
+# Presence-Bridge: gespiegelte Avatare zwischen Hub (modded) und Vanilla-Instanz -> beide
+# Gruppen sehen sich als EINE Lobby (Projektion). Default AUS.
+PRESENCE_BRIDGE_ENABLED_KEY = "presence_bridge_enabled"
+
 VELOCITY_VERSION_KEY = "velocity_version"       # "" = neueste stabile (fill-API)
 VELOCITY_JAR_KEY = "velocity_jar"               # manueller Jar-Pfad (override)
 VELOCITY_FORWARDING_SECRET_KEY = "velocity_forwarding_secret"  # auto-generiert (Proxy<->Backends)
@@ -779,6 +783,23 @@ def get_viaproxy_config_runtime() -> dict:
             "target_port": get_network_port(db),
             "target_version": _VIAPROXY_TARGET_VERSION,
         }
+
+
+# --- Presence-Bridge (gespiegelte Avatare Hub <-> Vanilla-Instanz) --------------
+def get_presence_bridge_enabled(db: Session) -> bool:
+    row = _get_setting_row(db, PRESENCE_BRIDGE_ENABLED_KEY)
+    return _normalize_bool(row.value) if row and row.value else False
+
+
+def set_presence_bridge_enabled(db: Session, enabled: bool) -> None:
+    _set_or_clear(db, PRESENCE_BRIDGE_ENABLED_KEY, "true" if enabled else None)
+
+
+def get_presence_bridge_enabled_runtime() -> bool:
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return get_presence_bridge_enabled(db)
 
 
 # --- Velocity (echter Proxy als Eingang, Cross-Version via Via-Plugins) ---------

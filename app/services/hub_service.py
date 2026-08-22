@@ -253,6 +253,11 @@ class Hub:
                             "Lobby-Bot", 8.5, 64.0, 13.5, yaw=180.0)
         self.players[_BOT_KEY] = self.bot
 
+        # Presence-Bridge: gespiegelte Avatare fremder Instanzen (Vanilla-Lobby).
+        self.bridge: dict = {}          # fremde UUID (str) -> Bridge-Avatar-_Session
+        self._bridge_attached = False
+        self._bus_seq = 0               # monoton fuer publizierte Praesenz-Updates
+
     @staticmethod
     def _alias_of(server_address: str | None) -> str:
         """Erstes Host-Label aus dem Handshake-Address (FML-Suffix \\x00 wird gestrippt)."""
@@ -372,6 +377,129 @@ class Hub:
                                                      yaw=yaw, on_ground=True))
             self._broadcast(pl.build_head_rotation(self.bot.eid, yaw))
             bx, by, bz = nx, ny, nz
+
+    # ------------------------------------------------------------------ #
+    # Presence-Bridge: fremde Instanzen (Vanilla-Lobby) als Avatare spiegeln
+    # ------------------------------------------------------------------ #
+    def attach_bridge(self) -> None:
+        """Den Hub an den Praesenz-Bus haengen (idempotent). Fremde Praesenzen werden ab
+        jetzt als Fake-Avatare gerendert; lokale Spieler werden publiziert."""
+        from app.services import presence_bridge_service as pb
+
+        if self._bridge_attached:
+            return
+        self._bridge_attached = True
+        pb.BUS.subscribe(self._on_bridge_event)
+        for p in pb.BUS.snapshot(exclude_origin=pb.ORIGIN_HUB):   # bereits Bekannte einspielen
+            self._bridge_add(p)
+
+    def detach_bridge(self) -> None:
+        from app.services import presence_bridge_service as pb
+
+        if not self._bridge_attached:
+            return
+        pb.BUS.unsubscribe(self._on_bridge_event)
+        self._bridge_attached = False
+        with self.lock:
+            for sess in list(self.bridge.values()):
+                self.players.pop(sess.conn_id, None)
+            self.bridge.clear()
+
+    def _hub_bus_uuid(self, session: "_Session") -> str:
+        return "hub-" + session.uuid16.hex()
+
+    def _on_bridge_event(self, event: str, payload) -> None:
+        from app.services import presence_bridge_service as pb
+
+        try:
+            if event == pb.EVENT_CHAT:
+                if not isinstance(payload, dict) or payload.get("origin") == pb.ORIGIN_HUB:
+                    return
+                self._broadcast(pl.build_system_chat(mcd._nbt_text_component(
+                    f"<{payload.get('name', '?')}> {payload.get('text', '')}")))
+                return
+            if getattr(payload, "origin", None) == pb.ORIGIN_HUB:
+                return  # eigene Spieler nicht als Avatar spiegeln
+            if event == pb.EVENT_ADD:
+                self._bridge_add(payload)
+            elif event == pb.EVENT_UPDATE:
+                self._bridge_update(payload)
+            elif event == pb.EVENT_REMOVE:
+                self._bridge_remove(payload)
+        except Exception as exc:  # noqa: BLE001 - Bridge darf den Hub nie stoeren
+            print(f"[hub] Bridge-Event {event} Fehler: {exc!r}")
+
+    def _bridge_add(self, p) -> None:
+        from app.services import presence_bridge_service as pb
+
+        spawn_sess = None
+        with self.lock:
+            if p.uuid not in self.bridge:
+                self._eid_ctr += 1
+                sess = _Session(f"br:{p.uuid}", None, self._eid_ctr,
+                                pb.uuid16_from(p.uuid), p.name, p.x, p.y, p.z,
+                                yaw=p.yaw, pitch=p.pitch)
+                self.bridge[p.uuid] = sess
+                self.players[sess.conn_id] = sess
+                spawn_sess = sess
+        if spawn_sess is not None:   # ausserhalb des Locks broadcasten (wie bei echten Joins)
+            self._broadcast_many(self._spawn_packets(spawn_sess))
+        else:
+            self._bridge_update(p)   # war schon da -> nur bewegen
+
+    def _bridge_update(self, p) -> None:
+        sess = self.bridge.get(p.uuid)
+        if sess is None:
+            self._bridge_add(p)
+            return
+        ox, oy, oz = sess.x, sess.y, sess.z
+        sess.x, sess.y, sess.z, sess.yaw, sess.pitch = p.x, p.y, p.z, p.yaw, p.pitch
+        self._broadcast(pl.build_entity_move_rot(sess.eid, ox, oy, oz, p.x, p.y, p.z,
+                                                 yaw=p.yaw, pitch=p.pitch, on_ground=True))
+        self._broadcast(pl.build_head_rotation(sess.eid, p.head_yaw or p.yaw))
+
+    def _bridge_remove(self, p) -> None:
+        with self.lock:
+            sess = self.bridge.pop(p.uuid, None)
+            if sess is not None:
+                self.players.pop(sess.conn_id, None)
+        if sess is not None:
+            self._broadcast_many(self._despawn_packets(sess))
+
+    # Producer: lokale Hub-Spieler auf den Bus melden (fuer die Vanilla-Instanz)
+    def _bridge_pub_join(self, session: "_Session") -> None:
+        if not self._bridge_attached:
+            return
+        from app.services import presence_bridge_service as pb
+
+        self._bus_seq += 1
+        pb.BUS.upsert(pb.Presence(
+            uuid=self._hub_bus_uuid(session), name=session.name, origin=pb.ORIGIN_HUB,
+            x=session.x, y=session.y, z=session.z, yaw=session.yaw, pitch=session.pitch,
+            head_yaw=session.yaw, seq=self._bus_seq))
+
+    def _bridge_pub_move(self, session: "_Session") -> None:
+        if not self._bridge_attached:
+            return
+        now = time.monotonic()
+        if now - getattr(session, "_last_bus_pub", 0.0) < 0.1:   # ~10 Hz drosseln
+            return
+        session._last_bus_pub = now
+        self._bridge_pub_join(session)   # gleiche upsert-Struktur aktualisiert die Praesenz
+
+    def _bridge_pub_leave(self, session: "_Session") -> None:
+        if not self._bridge_attached:
+            return
+        from app.services import presence_bridge_service as pb
+
+        pb.BUS.remove(self._hub_bus_uuid(session))
+
+    def _bridge_pub_chat(self, name: str, text: str) -> None:
+        if not self._bridge_attached:
+            return
+        from app.services import presence_bridge_service as pb
+
+        pb.BUS.chat(name, pb.ORIGIN_HUB, text)
 
     # ------------------------------------------------------------------ #
     # Serverlisten-Ping + Whitelist
@@ -506,6 +634,7 @@ class Hub:
             self._broadcast(pl.build_system_chat(mcd._nbt_text_component(
                 f"{username} ist der Lobby beigetreten.")), exclude=session)
             print(f"[hub] {username} beigetreten (eid={eid}, online={online}).")
+            self._bridge_pub_join(session)   # der Vanilla-Instanz zeigen
 
             # --- Hauptschleife: Bewegung/Chat lesen + broadcasten, Keep-Alive senden ---
             sock.settimeout(_READ_TIMEOUT)
@@ -545,6 +674,7 @@ class Hub:
                 self._broadcast_many(self._despawn_packets(session))
                 self._broadcast(pl.build_system_chat(mcd._nbt_text_component(
                     f"{session.name} hat die Lobby verlassen.")))
+                self._bridge_pub_leave(session)   # Abgang der Vanilla-Instanz melden
                 print(f"[hub] {session.name} getrennt.")
             try:
                 sock.close()
@@ -574,6 +704,7 @@ class Hub:
             if text:
                 self._broadcast(pl.build_system_chat(mcd._nbt_text_component(
                     f"<{session.name}> {text}")))
+                self._bridge_pub_chat(session.name, text)   # Chat an die Vanilla-Instanz
         elif pid == _SB_HELD_ITEM and len(fields) >= 2:
             session.held_slot = struct.unpack_from(">h", fields, 0)[0]
         elif pid in (_SB_USE_ITEM, _SB_USE_ITEM_ON):
@@ -632,6 +763,7 @@ class Hub:
                                                  yaw=yaw, pitch=pitch, on_ground=True),
                         exclude=session)
         self._broadcast(pl.build_head_rotation(session.eid, yaw), exclude=session)
+        self._bridge_pub_move(session)   # Bewegung an die Vanilla-Instanz spiegeln
 
 
 def serve(port: int, replay_path: str, vanilla_replay_path: str | None = None) -> None:

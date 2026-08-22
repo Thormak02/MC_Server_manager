@@ -47,6 +47,24 @@ def _glog(event: str, detail: str = "") -> None:
         pass
 
 
+def _sync_bridge(hub) -> None:
+    """Presence-Bridge des Hubs an ``presence_bridge_enabled`` angleichen (idempotent).
+    Wird bei JEDEM Reconcile aufgerufen -> ein Setting-Toggle greift binnen ~15s, auch
+    ohne Hub-Rebuild."""
+    try:
+        from app.services import app_setting_service as s
+        from app.services import presence_bridge_service as pb
+
+        if s.get_presence_bridge_enabled_runtime():
+            hub.attach_bridge()
+            pb.start_synthetic_feeder()   # Phase-1-Proof: sichtbarer Vanilla-Avatar
+        else:
+            hub.detach_bridge()
+            pb.stop_synthetic_feeder()
+    except Exception:  # noqa: BLE001 - Bridge darf den Hub-Reconcile nie stoeren
+        pass
+
+
 def is_running() -> bool:
     with _LOCK:
         return _LISTENER is not None
@@ -103,12 +121,14 @@ def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
                 and _LISTENER.vanilla_port == int(vanilla_port)
                 and _LISTENER.replay == replay_path and _LISTENER.vanilla == vanilla):
             if _LISTENER.pack_replays == packs:
+                _sync_bridge(_LISTENER.hub)   # Bridge-Toggle ohne Rebuild uebernehmen
                 return True  # nichts geaendert
             # NUR die Per-Pack-Replays haben sich geaendert (neuer Capture) -> live
             # aktualisieren statt Hub-Rebuild: keine Kicks der Lobby-Spieler, kein
             # riskantes Rebind ohne SO_REUSEADDR (TIME_WAIT koennte den Hub offline nehmen).
             _LISTENER.hub.update_pack_profiles(packs)
             _LISTENER.pack_replays = packs
+            _sync_bridge(_LISTENER.hub)
             _glog("packs_updated", f"{sorted(packs)}")
             return True
         if _LISTENER is not None:
@@ -146,6 +166,7 @@ def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
         if vanilla_sock is not None:
             Thread(target=_accept_loop, args=(listener, vanilla_sock, "vanilla"),
                    daemon=True, name="hublobby-vanilla").start()
+        _sync_bridge(hub)   # Presence-Bridge anhaengen, falls eingeschaltet
         _LISTENER = listener
         _glog("started",
               f"modded:{modded_port} vanilla:{vanilla_port if vanilla_sock else '-'} replay={replay_path}")
@@ -156,6 +177,13 @@ def _stop_locked() -> None:
     global _LISTENER
     if _LISTENER is None:
         return
+    try:
+        _LISTENER.hub.detach_bridge()
+        from app.services import presence_bridge_service as pb
+
+        pb.stop_synthetic_feeder()
+    except Exception:  # noqa: BLE001
+        pass
     _LISTENER.stopped = True
     for sock in (_LISTENER.modded_sock, _LISTENER.vanilla_sock):
         if sock is not None:
