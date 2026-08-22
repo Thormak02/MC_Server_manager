@@ -47,13 +47,25 @@ def _work_dir() -> Path:
 
 
 def render_config(cfg: dict) -> str:
-    """viaproxy.yml-Inhalt aus der Laufzeit-Config bauen (offline, keine Auth)."""
+    """viaproxy.yml-Inhalt aus der Laufzeit-Config bauen (offline, keine Auth).
+
+    Platzierung (Option A): ViaProxy ist eine INTERNE Uebersetzungsstufe VOR Dispatcher/Hub.
+    - ``bind-address 127.0.0.1`` -> nur intern erreichbar (das Gateway leitet nicht-767-Joins
+      hierher), nicht oeffentlich.
+    - ``target-address`` = GATEWAY-Port (Loopback): der auf 767 uebersetzte Strom geht ZURUECK
+      ins Gateway und wird dort normal geroutet (Hub/Dispatcher/Server).
+    - ``rewrite-handshake-packet: false`` -> ViaProxy reicht den ORIGINAL-Handshake-Host
+      unveraendert durch -> das Gateway-Host-Routing (modlobby-<id>/vanlobby/alias) ueberlebt.
+    - ``rewrite-transfer-packets: true`` -> ViaProxy faengt Transfer-Pakete ab und bleibt in
+      der Uebersetzungsschleife (emuliert Transfer auch fuer Clients < 1.20.5)."""
     return (
-        f"bind-address: 0.0.0.0:{int(cfg['port'])}\n"
+        f"bind-address: 127.0.0.1:{int(cfg['port'])}\n"
         f"target-address: 127.0.0.1:{int(cfg['target_port'])}\n"
         f"target-version: {cfg['target_version']}\n"
         "proxy-online-mode: false\n"
         "auth-method: NONE\n"
+        "rewrite-handshake-packet: false\n"
+        "rewrite-transfer-packets: true\n"
     )
 
 

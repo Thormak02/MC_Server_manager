@@ -81,6 +81,7 @@ def clean_hostname(raw: str | None) -> str:
 # diesen Alias nicht benutzen, solange die Universal-Lobby aktiv ist.
 HUB_LOBBY_ALIAS = "modlobby"      # Dispatcher schickt modded Clients hierher
 HUB_VANILLA_ALIAS = "vanlobby"    # ... und vanilla Clients hierher (gleicher Hub-Port)
+_PROTOCOL_767 = 767               # 1.21.1 - Dispatcher + Hub sprechen NUR das
 
 
 @dataclass(frozen=True)
@@ -477,6 +478,20 @@ def _current_routes() -> GatewayRoutes:
         return _ROUTES_CACHE
 
 
+def _needs_viaproxy_translation(routes: "GatewayRoutes", handshake) -> bool:
+    """True, wenn dieser Join zuerst durch ViaProxy uebersetzt werden muss: ViaProxy an,
+    Client spricht NICHT 767, und es ist ein Join (nicht nur ein Status-Ping). 767-Clients
+    und Status bleiben unberuehrt. Loopschutz: hinter ViaProxy ist der Strom 767, dieser
+    Zweig greift also nie erneut (Option A)."""
+    return bool(
+        routes.viaproxy_enabled
+        and routes.viaproxy_port
+        and handshake.protocol_version is not None
+        and int(handshake.protocol_version) != _PROTOCOL_767
+        and handshake.next_state in mc_protocol.JOIN_NEXT_STATES
+    )
+
+
 def _handle_gateway_connection(client: socket.socket) -> None:
     try:
         client.settimeout(_HANDSHAKE_READ_TIMEOUT)
@@ -515,10 +530,20 @@ def _handle_gateway_connection(client: socket.socket) -> None:
             handshake.server_address, handshake.protocol_version, routes
         )
 
+        # Cross-Version (Option A): nicht-767-Joins ZUERST durch ViaProxy uebersetzen.
+        # ViaProxy zielt zurueck ins Gateway (Loopback; Original-Host bleibt erhalten dank
+        # rewrite-handshake-packet=false) -> der uebersetzte 767-Strom wird unten normal
+        # geroutet (Hub/Dispatcher/Server). Loopschutz automatisch: hinter ViaProxy ist alles
+        # 767, dieser Zweig greift also nie erneut. 767-Clients bleiben voellig unberuehrt.
+        if _needs_viaproxy_translation(routes, handshake):
+            sleep_proxy_service._forward_to_backend(
+                client, int(routes.viaproxy_port), None, bytes(buffer)
+            )
+            return
+
         # Universal-Lobby: Joins auf modlobby/vanlobby.<domain> transparent koppeln.
-        #  - modlobby (modded, 1.21.1) -> direkt an den Hub-Port (keine Uebersetzung).
-        #  - vanlobby (vanilla, jede Version) -> ViaProxy (falls an), sonst direkt an den
-        #    Hub-Vanilla-Port. So kommen gemischte Versionen ueber ViaProxy in die 767-Welt.
+        #  - modlobby (modded) -> direkt an den Hub-Port.
+        #  - vanlobby -> Hub-Vanilla-Port (Uebersetzung passiert jetzt VORNE, s.o.).
         if (
             routes.hub_lobby_enabled
             and handshake.next_state in mc_protocol.JOIN_NEXT_STATES
@@ -533,11 +558,9 @@ def _handle_gateway_connection(client: socket.socket) -> None:
                 # Der volle Host wird unveraendert weitergereicht, der Hub liest den Tag.
                 hub_target = routes.hub_lobby_port
             elif alias_part == HUB_VANILLA_ALIAS:
-                hub_target = (
-                    routes.viaproxy_port
-                    if (routes.viaproxy_enabled and routes.viaproxy_port)
-                    else routes.hub_lobby_vanilla_port
-                )
+                # Uebersetzung passiert jetzt VORNE (nicht-767 -> ViaProxy -> Gateway); hier
+                # ist der Strom bereits 767 -> direkt an den Hub-Vanilla-Port.
+                hub_target = routes.hub_lobby_vanilla_port
             if hub_target:
                 sleep_proxy_service._forward_to_backend(
                     client, int(hub_target), None, bytes(buffer)

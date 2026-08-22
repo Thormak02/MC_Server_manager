@@ -285,7 +285,7 @@ das ganze soll für alle aktuellen und zukünftigen versionen und modpacks funkt
 die verwaltung des hub / lobby server soll wie die eines normalen servers mit untermenus usw. funktionieren und auch genauso aussehen, um mehr kontiniuität zu schaffen
 
 
-logs und db live / deutlich öfter, als nur alle paar minuten plus alte löschen um speicher zu sparen
+~~logs und db live / deutlich öfter, als nur alle paar minuten plus alte löschen um speicher zu sparen~~
 
 
 KI Ideen:

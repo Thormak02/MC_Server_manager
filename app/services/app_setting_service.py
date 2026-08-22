@@ -763,7 +763,9 @@ def get_viaproxy_config_runtime() -> dict:
             "port": get_viaproxy_port(db),
             "jar": get_viaproxy_jar(db),
             "java": get_viaproxy_java(db),
-            "target_port": get_hub_lobby_vanilla_port(db),
+            # Ziel = GATEWAY-Port (Loopback): ViaProxy uebersetzt nicht-767-Clients auf 767
+            # und reicht sie ZURUECK ins Gateway, das dann normal per Host routet (Option A).
+            "target_port": get_network_port(db),
             "target_version": _VIAPROXY_TARGET_VERSION,
         }
 
