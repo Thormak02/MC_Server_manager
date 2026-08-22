@@ -496,6 +496,12 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
 
     @EventHandler
     public void onChat(AsyncPlayerChatEvent e) {
+        // Lokale Anzeige mit einheitlichem [Lobby]-Praefix (wie im Hub + wie eingehende
+        // Bridge-Nachrichten) -> jede Nachricht sieht ueberall gleich aus. %1$s=Name, %2$s=Text.
+        try {
+            e.setFormat("[Lobby] <%1$s> %2$s");
+        } catch (Throwable ignored) {
+        }
         if (presenceBridge != null) {
             try {
                 presenceBridge.onLocalChat(e.getPlayer().getName(), e.getMessage());

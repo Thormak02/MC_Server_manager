@@ -440,9 +440,14 @@ class Hub:
         with self.lock:
             if p.uuid not in self.bridge:
                 self._eid_ctr += 1
+                # WICHTIG: Avatar-UUID NAMESPACEN ("br:"+uuid -> SHA1), damit sie NIE der echten
+                # UUID eines lokalen Hub-Spielers gleicht. Sonst kollidiert ein per Velocity
+                # eingeloggter Vanilla-Spieler, der DIESELBE Mojang-UUID wie ein Hub-Client hat
+                # (z.B. dasselbe Konto auf beiden Clients), mit der Eigen-UUID des Betrachters ->
+                # der Client rendert seine eigene UUID NICHT -> Avatar unsichtbar (einseitig!).
                 # p.x/y/z sind spawn-relative Offsets der Gegenseite -> bei UNSEREM Spawn rendern.
                 sess = _Session(f"br:{p.uuid}", None, self._eid_ctr,
-                                pb.uuid16_from(p.uuid), p.name,
+                                pb.uuid16_from("br:" + p.uuid), p.name,
                                 _SPAWN[0] + p.x, _SPAWN[1] + p.y, _SPAWN[2] + p.z,
                                 yaw=p.yaw, pitch=p.pitch)
                 self.bridge[p.uuid] = sess
@@ -729,8 +734,10 @@ class Hub:
                 return
             text = text.strip()
             if text:
+                # Einheitliches [Lobby]-Praefix AUCH lokal -> jede Nachricht sieht ueberall
+                # gleich aus (lokal wie ueber die Bridge), egal aus welcher Lobby sie kommt.
                 self._broadcast(pl.build_system_chat(mcd._nbt_text_component(
-                    f"<{session.name}> {text}")))
+                    f"[Lobby] <{session.name}> {text}")))
                 self._bridge_pub_chat(session.name, text)   # Chat an die Vanilla-Instanz
         elif pid == _SB_HELD_ITEM and len(fields) >= 2:
             session.held_slot = struct.unpack_from(">h", fields, 0)[0]
