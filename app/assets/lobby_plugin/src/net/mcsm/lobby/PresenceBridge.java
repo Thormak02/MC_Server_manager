@@ -225,20 +225,21 @@ final class PresenceBridge {
         if (tex != null && !tex.isEmpty()) {
             profile.getTextureProperties().add(new TextureProperty("textures", tex, sig == null ? "" : sig));
         }
-        // 1) Player-Info-Eintrag (mit Textur) VOR dem Spawn.
+        // 1) Player-Info-Eintrag (mit Textur) VOR dem Spawn. listed=true -> Tab-Eintrag
+        //    (aeltere Clients brauchen ihn zum Rendern; Via uebersetzt abwaerts).
         WrapperPlayServerPlayerInfoUpdate.PlayerInfo info = new WrapperPlayServerPlayerInfoUpdate.PlayerInfo(
-            profile, false, 0, GameMode.SURVIVAL, null, null);
+            profile, true, 0, GameMode.SURVIVAL, null, null);
         WrapperPlayServerPlayerInfoUpdate infoPkt = new WrapperPlayServerPlayerInfoUpdate(
             EnumSet.of(WrapperPlayServerPlayerInfoUpdate.Action.ADD_PLAYER,
                        WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_LISTED),
             info);
-        // 2) Entity spawnen (Typ PLAYER).
+        // 2) Entity spawnen (Typ PLAYER) - Location-Konstruktor (klare UUID, kein Optional).
         WrapperPlayServerSpawnEntity spawnPkt = new WrapperPlayServerSpawnEntity(
             a.entityId, a.uuid, EntityTypes.PLAYER,
-            new Vector3d(a.x, a.y, a.z), a.pitch, a.yaw, a.yaw, 0, new Vector3d(0, 0, 0));
+            new Location(new Vector3d(a.x, a.y, a.z), a.yaw, a.pitch), a.headYaw, 0, null);
         // 3) Metadaten: displayed-skin-parts (Index 17) = 0x7F -> alle Skin-Layer sichtbar.
-        List<EntityData> data = new ArrayList<>();
-        data.add(new EntityData(17, EntityDataTypes.BYTE, (byte) 0x7F));
+        List<EntityData<?>> data = new ArrayList<>();
+        data.add(new EntityData<>(17, EntityDataTypes.BYTE, (byte) 0x7F));
         WrapperPlayServerEntityMetadata metaPkt = new WrapperPlayServerEntityMetadata(a.entityId, data);
 
         for (Player p : Bukkit.getOnlinePlayers()) {
@@ -275,14 +276,14 @@ final class PresenceBridge {
         for (Avatar a : avatars.values()) {
             UserProfile profile = new UserProfile(a.uuid, trimName(a.name));
             WrapperPlayServerPlayerInfoUpdate.PlayerInfo info = new WrapperPlayServerPlayerInfoUpdate.PlayerInfo(
-                profile, false, 0, GameMode.SURVIVAL, null, null);
+                profile, true, 0, GameMode.SURVIVAL, null, null);
             send(p, new WrapperPlayServerPlayerInfoUpdate(
                 EnumSet.of(WrapperPlayServerPlayerInfoUpdate.Action.ADD_PLAYER,
                            WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_LISTED), info));
             send(p, new WrapperPlayServerSpawnEntity(a.entityId, a.uuid, EntityTypes.PLAYER,
-                new Vector3d(a.x, a.y, a.z), a.pitch, a.yaw, a.yaw, 0, new Vector3d(0, 0, 0)));
-            List<EntityData> data = new ArrayList<>();
-            data.add(new EntityData(17, EntityDataTypes.BYTE, (byte) 0x7F));
+                new Location(new Vector3d(a.x, a.y, a.z), a.yaw, a.pitch), a.headYaw, 0, null));
+            List<EntityData<?>> data = new ArrayList<>();
+            data.add(new EntityData<>(17, EntityDataTypes.BYTE, (byte) 0x7F));
             send(p, new WrapperPlayServerEntityMetadata(a.entityId, data));
             send(p, new WrapperPlayServerEntityHeadLook(a.entityId, a.headYaw));
         }

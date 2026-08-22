@@ -118,6 +118,18 @@
         (nutzt ein installiertes JDK) und verteilt es. Noetig, wenn eine neue Plugin-Version
         (z.B. das Avatar-Modul) hinzukommt.
     </p>
+    <div class="muted" style="margin-top:.4rem">
+        <strong>Letzter Plugin-Build:</strong>
+        {% if plugin_building %}
+            <strong style="color:#b26a00">laeuft gerade &hellip;</strong> (Seite in ~1 Min neu laden)
+        {% elif plugin_build_status and plugin_build_status.at %}
+            {% if plugin_build_status.ok %}<strong style="color:#2e7d32">✓ Erfolg</strong>
+            {% else %}<strong style="color:#c62828">✗ Fehler</strong>{% endif %}
+            <pre style="white-space:pre-wrap;background:#0000000d;padding:.5rem;border-radius:6px;max-height:220px;overflow:auto;font-size:.85em">{{ plugin_build_status.msg }}</pre>
+        {% else %}
+            noch nie gebaut (nutzt das mitgelieferte Jar).
+        {% endif %}
+    </div>
     <p class="muted">
         Ein Klick: legt die Neueste-Version-Lobby an, stellt den Modus auf <strong>velocity</strong> und laedt beim
         ersten Start Java&nbsp;25, Paper, Velocity und die Via-Plugins automatisch. Danach die Lobby einmal starten.

@@ -137,11 +137,13 @@ def settings_page(
         "hub_whitelist_enabled": get_hub_whitelist_enabled(db),
         "hub_whitelist": get_hub_whitelist(db),
     }
-    from app.services import proxy_service
+    from app.services import plugin_build_service, proxy_service
     from app.services.app_setting_service import get_velocity_version
 
     velocity_running = proxy_service.is_running()
     velocity_version = get_velocity_version(db)
+    plugin_build_status = plugin_build_service.last_build_status()
+    plugin_building = plugin_build_service.is_building()
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
     return templates.TemplateResponse(
@@ -171,6 +173,8 @@ def settings_page(
             universal_lobby=universal_lobby,
             velocity_running=velocity_running,
             velocity_version=velocity_version,
+            plugin_build_status=plugin_build_status,
+            plugin_building=plugin_building,
             gateway_status=gateway_status,
             platform_settings=platform_settings,
             manager_update_status=manager_update_status,
@@ -287,22 +291,17 @@ def build_lobby_plugin_action(request: Request, db: Session = Depends(get_db)):
 
     from app.services import plugin_build_service
 
-    try:
-        ok, message = plugin_build_service.build_lobby_plugin(db)
-    except Exception as exc:  # noqa: BLE001
-        push_flash(request, f"Plugin-Build fehlgeschlagen: {exc}", "error")
-        return RedirectResponse(url="/settings", status_code=303)
-
-    # Bei Erfolg gleich auf alle Gateway-Bukkit-Server verteilen (frisches Jar).
-    if ok:
-        try:
-            from app.services import lobby_service
-
-            lobby_service.sync_lobby_plugin(db)
-        except Exception:  # noqa: BLE001
-            pass
-        message += " Auf die Lobby-Server verteilt - beim naechsten Serverstart aktiv."
-    push_flash(request, message, "success" if ok else "error")
+    started = plugin_build_service.run_build_async(user_id=current_user.id)
+    if started:
+        push_flash(
+            request,
+            "Plugin-Build laeuft im Hintergrund (~1 Min: Bibliotheken laden + kompilieren). "
+            "Das Ergebnis erscheint gleich unter 'Letzter Plugin-Build' (Seite neu laden) und "
+            "im Audit-Log. Bei Erfolg wird es automatisch verteilt - Lobby danach neu starten.",
+            "success",
+        )
+    else:
+        push_flash(request, "Es laeuft bereits ein Build. Bitte auf das Ergebnis warten.", "error")
     return RedirectResponse(url="/settings", status_code=303)
 
 

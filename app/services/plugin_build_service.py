@@ -18,8 +18,15 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import threading
+import time
 import urllib.request
 from pathlib import Path
+
+# Letztes Build-Ergebnis (fuers UI + Audit). Der Build laeuft asynchron -> der Klick
+# blockiert nicht, das Ergebnis erscheint hier + im Audit-Log.
+_LAST_BUILD: dict = {"ok": None, "msg": "", "at": 0.0}
+_BUILD_RUNNING = threading.Lock()
 
 # Compile-Classpath (nur zum Kompilieren, NICHT ins Jar). Versionen wie in
 # app/assets/lobby_plugin/BUILD.md; Bukkit-API ist abwaerts stabil -> gegen 1.20.6
@@ -40,38 +47,39 @@ _COMPILE_DEPS: tuple[tuple[str, str], ...] = (
 # damit die Build-Pipeline zuerst OHNE das riskante Avatar-Modul validiert werden kann.
 _PACKETEVENTS_API = (
     "packetevents-api.jar",
-    "https://repo.codemc.io/repository/maven-releases/com/github/retrooper/packetevents-api/2.9.6/packetevents-api-2.9.6.jar",
+    "https://repo.codemc.io/repository/maven-releases/com/github/retrooper/packetevents-api/2.13.0/packetevents-api-2.13.0.jar",
 )
 
 
-_PACKETEVENTS_GH = "https://api.github.com/repos/retrooper/packetevents/releases/latest"
+_MODRINTH = "https://api.modrinth.com/v2"
 
 
 def download_packetevents_runtime(plugins_dir: str | Path) -> tuple[bool, str]:
-    """packetevents (Spigot-Plugin, Runtime-Abhaengigkeit fuer die Avatar-Bridge) in den
-    plugins-Ordner der Lobby laden. Neueste GitHub-Release, Asset mit 'spigot' im Namen.
-    Idempotent: ist schon eins da, nichts tun."""
+    """packetevents (eigenstaendiges Spigot/Paper-Plugin, Runtime fuer die Avatar-Bridge) in
+    den plugins-Ordner laden. Neueste Spigot-Version von Modrinth. Idempotent."""
     import json
+    import urllib.parse
 
     plugins = Path(plugins_dir).expanduser().resolve()
     plugins.mkdir(parents=True, exist_ok=True)
     if any(p.name.lower().startswith("packetevents") for p in plugins.glob("*.jar")):
         return True, "packetevents bereits vorhanden."
     try:
-        from app.providers.server.common import USER_AGENT
+        from app.providers.server.common import download_file, fetch_json
 
-        req = urllib.request.Request(_PACKETEVENTS_GH, headers={
-            "User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        assets = [a for a in data.get("assets", []) if str(a.get("name", "")).endswith(".jar")]
-        pick = next((a for a in assets if "spigot" in str(a.get("name", "")).lower()), None)
-        pick = pick or (assets[0] if assets else None)
-        url = pick.get("browser_download_url") if pick else None
-        if not url:
-            return False, "packetevents-Release ohne passendes Jar-Asset."
-        _download(url, plugins / str(pick.get("name")))
-        return True, f"packetevents geladen: {pick.get('name')}"
+        params = urllib.parse.urlencode(
+            {"loaders": json.dumps(["spigot", "paper", "bukkit", "purpur", "folia"])})
+        versions = fetch_json(f"{_MODRINTH}/project/packetevents/version?{params}")
+        if not isinstance(versions, list) or not versions:
+            return False, "Kein packetevents-Spigot-Build auf Modrinth gefunden."
+        versions.sort(key=lambda v: str(v.get("date_published", "")), reverse=True)
+        for v in versions:
+            files = v.get("files") or []
+            primary = next((f for f in files if f.get("primary")), files[0] if files else None)
+            if primary and "sources" not in str(primary.get("filename", "")):
+                download_file(primary["url"], plugins / str(primary["filename"]))
+                return True, f"packetevents geladen: {primary['filename']}"
+        return False, "packetevents-Build ohne primaeres Jar."
     except Exception as exc:  # noqa: BLE001
         return False, f"packetevents-Download fehlgeschlagen: {exc}"
 
@@ -200,3 +208,59 @@ def build_lobby_plugin(db, *, with_packetevents: bool = True) -> tuple[bool, str
 
     warn = f" (Hinweis: {'; '.join(dep_errors)})" if dep_errors else ""
     return True, f"MCSMLobby gebaut: {out_jar.name} aus {len(java_files)} Quelldatei(en).{warn}"
+
+
+def last_build_status() -> dict:
+    """Letztes Build-Ergebnis {ok, msg, at} (fuer die Settings-Anzeige)."""
+    return dict(_LAST_BUILD)
+
+
+def is_building() -> bool:
+    return _BUILD_RUNNING.locked()
+
+
+def _record_build(ok: bool, msg: str) -> None:
+    global _LAST_BUILD
+    _LAST_BUILD = {"ok": ok, "msg": msg, "at": time.time()}
+    try:
+        (_build_dir() / "build.log").write_text(msg, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def run_build_async(user_id: int | None = None) -> bool:
+    """Build im Hintergrund starten (blockiert den HTTP-Request nicht). Bei Erfolg wird das
+    Jar gleich auf die Lobby-Server verteilt. Ergebnis -> last_build_status() + Audit-Log.
+    Gibt False zurueck, wenn schon ein Build laeuft."""
+    if not _BUILD_RUNNING.acquire(blocking=False):
+        return False
+
+    def _run() -> None:
+        from app.db.session import SessionLocal
+
+        try:
+            with SessionLocal() as db:
+                ok, msg = build_lobby_plugin(db)
+                _record_build(ok, msg)
+                if ok:
+                    try:
+                        from app.services import lobby_service
+
+                        lobby_service.sync_lobby_plugin(db)
+                    except Exception:  # noqa: BLE001
+                        pass
+                try:
+                    from app.services import audit_service
+
+                    audit_service.log_action(
+                        db, action="plugin.build", user_id=user_id,
+                        details=("ok: " if ok else "FEHLER: ") + msg[:600])
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception as exc:  # noqa: BLE001
+            _record_build(False, f"Build-Thread-Fehler: {exc}")
+        finally:
+            _BUILD_RUNNING.release()
+
+    threading.Thread(target=_run, daemon=True, name="plugin-build").start()
+    return True
