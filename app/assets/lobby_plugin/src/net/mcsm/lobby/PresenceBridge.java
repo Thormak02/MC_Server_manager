@@ -70,7 +70,12 @@ final class PresenceBridge {
 
     // Zuletzt publizierte Position je lokalem Spieler (Drossel: nur bei Bewegung senden).
     private final Map<UUID, long[]> lastSent = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> lastPub = new ConcurrentHashMap<>();   // Keepalive-Zeit je Spieler
+    private volatile long lastTraffic = 0L;                              // letzte Wire-Aktivitaet (Ping)
+    private final AtomicBoolean loggedSendError = new AtomicBoolean(false);
     private long seq = 0L;
+    private static final long KEEPALIVE_MS = 10_000L;   // Spieler mind. alle 10s neu melden (TTL-Schutz)
+    private static final long PING_MS = 20_000L;        // sonst Ping, damit die Verbindung nicht abbricht
 
     PresenceBridge(MCSMLobby plugin, String host, int port, String token) {
         this.plugin = plugin;
@@ -92,20 +97,44 @@ final class PresenceBridge {
             return;
         }
         connectAsync();
-        // Lokale Spieler ~10 Hz publizieren (async Task, sendet nur bei Bewegung).
-        plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, this::publishLocal, 20L, 2L);
+        // Lokale Spieler ~10 Hz publizieren. MAIN-Thread, weil getLocation()/getOnlinePlayers()
+        // off-thread unsicher ist (Paper) bzw. auf Folia hart fehlschlaegt. Der Socket-Write ist
+        // klein + loopback -> unkritisch auf dem Main-Thread.
+        plugin.getServer().getScheduler().runTaskTimer(plugin, this::publishLocal, 20L, 2L);
     }
 
     void stop() {
         running.set(false);
         closeSocket();
-        // Alle Fremd-Avatare fuer alle Spieler entfernen.
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            for (Avatar a : new ArrayList<>(avatars.values())) {
-                despawn(a);
+        // Direkt aufraeumen: stop() kommt aus onDisable (Main-Thread), wo der Scheduler
+        // KEINE neuen Tasks mehr annimmt (sonst blieben die Avatare als Geister stehen).
+        if (Bukkit.isPrimaryThread()) {
+            cleanupAvatars();
+        } else {
+            runOnMain(this::cleanupAvatars);
+        }
+    }
+
+    private void cleanupAvatars() {
+        for (Avatar a : new ArrayList<>(avatars.values())) {
+            despawn(a);
+        }
+        avatars.clear();
+    }
+
+    private void runOnMain(Runnable r) {
+        if (Bukkit.isPrimaryThread()) {
+            r.run();
+        } else {
+            try {
+                Bukkit.getScheduler().runTask(plugin, r);
+            } catch (Throwable ignored) {   // waehrend onDisable abgelehnt -> egal
             }
-            avatars.clear();
-        });
+        }
+    }
+
+    private void dropAllAvatars() {
+        runOnMain(this::cleanupAvatars);
     }
 
     // --- Verbindung -----------------------------------------------------------
@@ -133,6 +162,10 @@ final class PresenceBridge {
                 plugin.getLogger().info("Presence-Bridge nicht verbunden: " + ex.getMessage());
             }
             closeSocket();
+            // Verbindung weg -> ALLE gespiegelten Avatare entfernen. Der Manager schickt beim
+            // naechsten hello einen frischen Snapshot; sonst bleiben tote Avatare als Geister
+            // stehen (ein Hub-Spieler, der waehrend der Trennung ging, kaeme nie als 'rm').
+            dropAllAvatars();
             if (!running.get()) {
                 return;
             }
@@ -294,7 +327,13 @@ final class PresenceBridge {
             PacketEvents.getAPI().getPlayerManager().sendPacket(p,
                 (com.github.retrooper.packetevents.wrapper.PacketWrapper<?>) wrapper);
         } catch (Throwable t) {
-            // Ein Rendering-Fehler darf die Lobby nie stoeren.
+            // Ein Rendering-Fehler darf die Lobby nie stoeren - aber den ERSTEN einmal loggen,
+            // sonst waere ein systematischer packetevents-Fehler voellig unsichtbar (keine Avatare,
+            // kein Hinweis).
+            if (loggedSendError.compareAndSet(false, true)) {
+                plugin.getLogger().warning("Presence-Bridge: Avatar-Paket fehlgeschlagen (weitere "
+                    + "unterdrueckt): " + t + " [" + wrapper.getClass().getSimpleName() + "]");
+            }
         }
     }
 
@@ -303,17 +342,23 @@ final class PresenceBridge {
         if (out == null) {
             return;
         }
+        long now = System.currentTimeMillis();
         for (Player p : Bukkit.getOnlinePlayers()) {
             org.bukkit.Location l = p.getLocation();
             long xi = Math.round(l.getX() * 32), yi = Math.round(l.getY() * 32), zi = Math.round(l.getZ() * 32);
             long yawi = Math.round(l.getYaw()), pitchi = Math.round(l.getPitch());
             long[] last = lastSent.get(p.getUniqueId());
             long[] cur = {xi, yi, zi, yawi, pitchi};
-            if (last != null && last[0] == xi && last[1] == yi && last[2] == zi
-                && last[3] == yawi && last[4] == pitchi) {
-                continue;   // keine Bewegung -> nichts senden
+            boolean moved = last == null || last[0] != xi || last[1] != yi || last[2] != zi
+                || last[3] != yawi || last[4] != pitchi;
+            Long lp = lastPub.get(p.getUniqueId());
+            boolean keepalive = lp == null || (now - lp) > KEEPALIVE_MS;
+            if (!moved && !keepalive) {
+                continue;   // steht still + Keepalive noch nicht faellig -> nichts senden
             }
             lastSent.put(p.getUniqueId(), cur);
+            lastPub.put(p.getUniqueId(), now);
+            lastTraffic = now;
             seq++;
             // Skin-Textur bleibt vorerst leer (die Hub-Seite nutzt ohnehin Default-Skins);
             // signierte Texturen kommen in einem spaeteren Schritt (Phase 3).
@@ -322,6 +367,12 @@ final class PresenceBridge {
                 + "\",\"x\":" + (l.getX()) + ",\"y\":" + (l.getY()) + ",\"z\":" + (l.getZ())
                 + ",\"yaw\":" + l.getYaw() + ",\"pitch\":" + l.getPitch() + ",\"hy\":" + l.getYaw()
                 + ",\"tex\":\"" + esc(tex) + "\",\"sig\":\"" + esc(sig) + "\",\"seq\":" + seq + "}");
+        }
+        // Kein Traffic seit PING_MS (z.B. leere Lobby) -> Ping, sonst schlaegt der 65s-Read-
+        // Timeout des Managers zu und die Verbindung bricht ab.
+        if (now - lastTraffic > PING_MS) {
+            lastTraffic = now;
+            sendLine("{\"t\":\"ping\"}");
         }
     }
 

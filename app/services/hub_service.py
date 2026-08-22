@@ -392,6 +392,8 @@ class Hub:
         pb.BUS.subscribe(self._on_bridge_event)
         for p in pb.BUS.snapshot(exclude_origin=pb.ORIGIN_HUB):   # bereits Bekannte einspielen
             self._bridge_add(p)
+        threading.Thread(target=self._bridge_keepalive_loop, daemon=True,
+                         name="hub-bridge-keepalive").start()
 
     def detach_bridge(self) -> None:
         from app.services import presence_bridge_service as pb
@@ -500,6 +502,22 @@ class Hub:
         from app.services import presence_bridge_service as pb
 
         pb.BUS.chat(name, pb.ORIGIN_HUB, text)
+
+    def _bridge_keepalive_loop(self) -> None:
+        """Idle Hub-Spieler alle 10s neu publizieren -> refresht ihre Praesenz (updated), damit
+        ihre Avatare auf der Vanilla-Seite nicht nach dem TTL-Sweep (30s) verschwinden."""
+        while self._bridge_attached:
+            time.sleep(10.0)
+            if not self._bridge_attached:
+                return
+            try:
+                with self.lock:
+                    sessions = [s for s in self.players.values()
+                                if s.sock is not None and s.alive]   # echte Spieler (kein Bot/Avatar)
+                for s in sessions:
+                    self._bridge_pub_join(s)   # Praesenz auffrischen (unbedingt, kein Throttle)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[hub] Bridge-Keepalive Fehler: {exc!r}")
 
     # ------------------------------------------------------------------ #
     # Serverlisten-Ping + Whitelist

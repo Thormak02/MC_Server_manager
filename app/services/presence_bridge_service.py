@@ -239,7 +239,9 @@ _SRV_STATE: dict = {}
 
 def _send_json(conn, lock: threading.Lock, obj: dict) -> bool:
     try:
-        data = (json.dumps(obj, separators=(",", ":")) + "\n").encode("utf-8")
+        # allow_nan=False: kein "NaN"/"Infinity" ins JSON (der Java-Mini-Parser wuerde die
+        # ganze Zeile verwerfen). Nicht-finite Werte -> Nachricht wird uebersprungen.
+        data = (json.dumps(obj, separators=(",", ":"), allow_nan=False) + "\n").encode("utf-8")
         with lock:
             conn.sendall(data)
         return True
@@ -373,9 +375,11 @@ def _accept_loop(listener: "socket.socket", token: str) -> None:
 def start_plugin_server(port: int, token: str) -> bool:
     global _SRV_SOCK, _SRV_STATE
     with _SRV_LOCK:
-        desired = {"port": int(port)}
-        if _SRV_SOCK is not None and _SRV_STATE.get("port") == int(port):
-            return True   # laeuft schon auf dem Port
+        # Token MIT in die Soll-Signatur: rotiert er, muss neu gebunden werden (der
+        # Accept-Loop haelt sonst den alten Token -> Plugin mit neuem Token faellt raus).
+        desired = {"port": int(port), "token": token}
+        if _SRV_SOCK is not None and _SRV_STATE == desired:
+            return True   # laeuft schon mit Port + Token
         _stop_server_locked()
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
