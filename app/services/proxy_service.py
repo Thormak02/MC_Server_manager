@@ -395,6 +395,62 @@ def _read_log_tail(lines: int = 20) -> str:
     return " / ".join(ln.strip() for ln in data[-lines:] if ln.strip())[:900]
 
 
+def log_tail(lines: int = 80) -> str:
+    """Rohes Ende von velocity.log (mehrzeilig) fuer die Diagnose-Anzeige im UI.
+
+    Zeigt u.a. welche ViaVersion wirklich laedt und bis zu welcher Protokoll-/MC-Version
+    der Proxy Clients akzeptiert ("... range 1.7.2-26.2" bzw. ViaVersion-Ladezeile)."""
+    try:
+        data = (_work_dir() / "velocity.log").read_text(
+            encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return ""
+    tail = [ln.rstrip() for ln in data[-lines:]]
+    return "\n".join(tail)[-6000:]
+
+
+def installed_via_plugins() -> list[str]:
+    """Jar-Namen der aktuell im Velocity-plugins-Ordner liegenden Via-Plugins (Diagnose).
+
+    So sieht man im UI SCHWARZ AUF WEISS, welche ViaVersion/ViaBackwards/ViaRewind-Version
+    der Proxy tatsaechlich geladen hat - statt aus dem Quelltext zu raten."""
+    try:
+        plugins = _work_dir() / "plugins"
+        return sorted(p.name for p in plugins.glob("*.jar"))
+    except OSError:
+        return []
+
+
+def installed_velocity_version() -> str:
+    """Zuletzt heruntergeladene Velocity-Version (aus .velocity-version), leer wenn unbekannt."""
+    try:
+        return (_work_dir() / ".velocity-version").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def restart_velocity() -> None:
+    """Velocity ZWINGEND neu starten und dabei die NEUESTEN Via-Plugins frisch ziehen.
+
+    Wichtig, weil ein Neustart der Paper-Lobby (Server #7) den SEPARATEN Velocity-Proxy
+    NICHT neu startet - der Proxy laeuft sonst mit den Via-Jars weiter, die er beim ersten
+    Start geladen hat (u.U. veraltet). Diese Funktion stoppt den Proxy, setzt den Crash-
+    Backoff zurueck und laesst reconcile ihn frisch (inkl. Via-Neuinstallation) hochziehen.
+    """
+    global _last_start_mono, _crash_reported
+    stop_velocity()            # setzt _STATE zurueck -> naechster start ist ein echter Neustart
+    _last_start_mono = 0.0     # Backoff zuruecksetzen -> sofortiger Neustart erlaubt
+    _crash_reported = False
+    reconcile_velocity()       # nicht laufend -> start_velocity() -> _install_via_plugins()
+
+
+def restart_velocity_async() -> None:
+    """restart_velocity im Hintergrund (Via-Download + Java/Jar-Resolve dauern)."""
+    import threading
+
+    threading.Thread(target=restart_velocity, name="velocity-restart", daemon=True).start()
+
+
 def reconcile_velocity() -> None:
     """Velocity-Prozess an ``network_mode == velocity`` + Config angleichen (selbstheilend).
 

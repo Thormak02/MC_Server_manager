@@ -103,16 +103,25 @@
         Status: Velocity
         {% if velocity_running %}<strong style="color:#2e7d32">laeuft</strong>
         {% else %}<strong style="color:#c62828">aus</strong>{% endif %}
-        {% if velocity_version %}&nbsp;|&nbsp; Version {{ velocity_version }}{% endif %}
+        {% if velocity_installed_version %}&nbsp;|&nbsp; installiert: {{ velocity_installed_version }}{% endif %}
+        {% if velocity_version %}&nbsp;|&nbsp; angefordert: {{ velocity_version }}{% endif %}
     </p>
     <div class="inline-form">
         <form method="post" action="/settings/velocity/auto-create" class="inline-form">
             <button type="submit">Velocity-Netzwerk automatisch einrichten</button>
         </form>
+        <form method="post" action="/settings/velocity/restart" class="inline-form">
+            <button type="submit">Velocity neu starten (neueste Via laden)</button>
+        </form>
         <form method="post" action="/settings/lobby/build-plugin" class="inline-form">
             <button type="submit">Lobby-Plugin bauen (Manager kompiliert)</button>
         </form>
     </div>
+    <p class="muted">
+        „Velocity neu starten": startet den <em>Proxy</em> zwingend neu und laedt die neuesten
+        Via-Plugins. <strong>Wichtig:</strong> ein Neustart der Lobby (Server&nbsp;#7) startet den
+        Proxy NICHT mit neu &ndash; nach einem Via-Update also hier klicken.
+    </p>
     <p class="muted">
         „Lobby-Plugin bauen": der Manager kompiliert das Lobby-Plugin selbst aus dem Quelltext
         (nutzt ein installiertes JDK) und verteilt es. Noetig, wenn eine neue Plugin-Version
@@ -130,6 +139,35 @@
             noch nie gebaut (nutzt das mitgelieferte Jar).
         {% endif %}
     </div>
+    <details class="muted" style="margin-top:.6rem">
+        <summary style="cursor:pointer"><strong>Velocity-Diagnose</strong> &ndash; geladene Via-Versionen &amp; Proxy-Log
+            (bei „Network Protocol Error" der neuesten Clients hier zuerst schauen)</summary>
+        <div style="margin-top:.4rem">
+            <strong>Geladene Via-Plugins (Proxy):</strong>
+            {% if velocity_via_plugins %}
+                <ul style="margin:.2rem 0 .4rem 1.2rem">
+                    {% for jar in velocity_via_plugins %}<li><code>{{ jar }}</code></li>{% endfor %}
+                </ul>
+                <p style="margin:.2rem 0">
+                    Fuer MC&nbsp;26.2/1.21.11 muss ViaVersion &ge; 5.10.0 sein (26.2-Support). Steht hier eine
+                    aeltere/keine Version oder passt ViaBackwards nicht dazu &rarr; „Velocity neu starten" klicken.
+                </p>
+            {% else %}
+                <em>keine Via-Jars gefunden</em> &ndash; der Proxy uebersetzt dann NICHTS.
+                „Velocity neu starten" laedt sie.
+            {% endif %}
+            <strong>Proxy-Log (Ende):</strong>
+            {% if velocity_log_tail %}
+                <pre style="white-space:pre-wrap;background:#0000000d;padding:.5rem;border-radius:6px;max-height:320px;overflow:auto;font-size:.8em">{{ velocity_log_tail }}</pre>
+                <p style="margin:.2rem 0">
+                    Suche nach der ViaVersion-Ladezeile und einer evtl. „Incompatible client"/Fehlermeldung,
+                    wenn ein neuer Client abgewiesen wird.
+                </p>
+            {% else %}
+                <em>noch kein Log</em> (Proxy lief in diesem Datenordner noch nicht).
+            {% endif %}
+        </div>
+    </details>
     <p class="muted">
         Ein Klick: legt die Neueste-Version-Lobby an, stellt den Modus auf <strong>velocity</strong> und laedt beim
         ersten Start Java&nbsp;25, Paper, Velocity und die Via-Plugins automatisch. Danach die Lobby einmal starten.

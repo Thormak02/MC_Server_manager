@@ -142,6 +142,9 @@ def settings_page(
 
     velocity_running = proxy_service.is_running()
     velocity_version = get_velocity_version(db)
+    velocity_installed_version = proxy_service.installed_velocity_version()
+    velocity_via_plugins = proxy_service.installed_via_plugins()
+    velocity_log_tail = proxy_service.log_tail(80)
     plugin_build_status = plugin_build_service.last_build_status()
     plugin_building = plugin_build_service.is_building()
     platform_settings = list_platform_settings(db, include_secrets=False)
@@ -173,6 +176,9 @@ def settings_page(
             universal_lobby=universal_lobby,
             velocity_running=velocity_running,
             velocity_version=velocity_version,
+            velocity_installed_version=velocity_installed_version,
+            velocity_via_plugins=velocity_via_plugins,
+            velocity_log_tail=velocity_log_tail,
             plugin_build_status=plugin_build_status,
             plugin_building=plugin_building,
             gateway_status=gateway_status,
@@ -280,6 +286,30 @@ def auto_create_velocity_action(request: Request, db: Session = Depends(get_db))
     push_flash(request, message, "success" if ok else "error")
     if ok and server_id:
         return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/velocity/restart")
+def restart_velocity_action(request: Request, db: Session = Depends(get_db)):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import app_setting_service, proxy_service
+
+    if app_setting_service.get_network_mode(db) != "velocity":
+        push_flash(request, "Velocity laeuft nur im UNIVERSAL-Modus (velocity). Erst Modus setzen.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    proxy_service.restart_velocity_async()
+    push_flash(
+        request,
+        "Velocity wird neu gestartet und laedt dabei die NEUESTEN Via-Plugins "
+        "(ViaVersion/ViaBackwards/ViaRewind). Das dauert ~15-30 s. Danach Seite neu laden - "
+        "unten unter 'Velocity-Diagnose' siehst du die geladenen Via-Versionen und das Log "
+        "(inkl. bis zu welcher MC-Version der Proxy Clients akzeptiert).",
+        "success",
+    )
     return RedirectResponse(url="/settings", status_code=303)
 
 
