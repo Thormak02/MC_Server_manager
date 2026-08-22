@@ -13,7 +13,7 @@ def test_render_config_option_a():
     assert "target-address: 127.0.0.1:25565" in yml     # ZURUECK ins Gateway (Loopback)
     assert "target-version: 1.21.1" in yml
     assert "rewrite-handshake-packet: false" in yml     # Original-Host durchreichen -> Routing bleibt
-    assert "rewrite-transfer-packets: true" in yml      # Transfer-Emulation (auch <1.20.5)
+    assert "rewrite-transfer-packets: false" in yml     # KEINE Emulation (intern -> sonst Endlosschleife)
     assert "proxy-online-mode: false" in yml
 
 

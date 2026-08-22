@@ -61,8 +61,12 @@ def render_config(cfg: dict) -> str:
       ins Gateway und wird dort normal geroutet (Hub/Dispatcher/Server).
     - ``rewrite-handshake-packet: false`` -> ViaProxy reicht den ORIGINAL-Handshake-Host
       unveraendert durch -> das Gateway-Host-Routing (modlobby-<id>/vanlobby/alias) ueberlebt.
-    - ``rewrite-transfer-packets: true`` -> ViaProxy faengt Transfer-Pakete ab und bleibt in
-      der Uebersetzungsschleife (emuliert Transfer auch fuer Clients < 1.20.5)."""
+    - ``rewrite-transfer-packets: false`` -> ViaProxy sitzt INTERN hinter dem Gateway; die
+      Transfer-EMULATION (true) wuerde den Client an ViaProxys internen Eingang (= Apex)
+      zurueckschicken -> Dispatcher -> Transfer -> ENDLOSSCHLEIFE. Mit false reicht ViaProxy
+      das Transfer-Paket uebersetzt DURCH -> Clients >=1.20.5 folgen ihm nativ (auf
+      vanlobby/<alias>.<domain> -> wieder ueber ViaProxy -> Ziel). Sehr alte Clients <1.20.5
+      koennen (noch) nicht transferieren -> spaeterer Ausbau (ViaProxy als oeffentl. Eingang)."""
     return (
         f"bind-address: 127.0.0.1:{int(cfg['port'])}\n"
         f"target-address: 127.0.0.1:{int(cfg['target_port'])}\n"
@@ -70,7 +74,7 @@ def render_config(cfg: dict) -> str:
         "proxy-online-mode: false\n"
         "auth-method: NONE\n"
         "rewrite-handshake-packet: false\n"
-        "rewrite-transfer-packets: true\n"
+        "rewrite-transfer-packets: false\n"
     )
 
 
