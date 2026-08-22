@@ -65,6 +65,21 @@ def _default_jar_path() -> Path:
     return _work_dir() / "velocity.jar"
 
 
+def _proxy_log_path() -> Path:
+    """Pfad der velocity.log. Bevorzugt das ZENTRALE Log-Verzeichnis (``data/logs`` bzw. NAS-
+    ``<root>/logs``), das per Sync-Task auf die NAS gespiegelt wird -> die Proxy-Logs liegen dann
+    neben den Server-Logs auf ``\\\\FriedrichNAS\\...\\MC-manager-Logs``. Fallback: lokaler
+    Velocity-Arbeitsordner (falls das zentrale Logs-Verzeichnis nicht ermittelbar ist)."""
+    try:
+        from app.services import central_storage_service
+
+        d = central_storage_service.logs_dir() / "velocity"
+        d.mkdir(parents=True, exist_ok=True)
+        return d / "velocity.log"
+    except Exception:  # noqa: BLE001 - im Zweifel im Arbeitsordner loggen
+        return _work_dir() / "velocity.log"
+
+
 # --- Velocity-Download (fill-API, wie PaperProvider) ---------------------------
 def _resolve_velocity_download(version: str = "") -> tuple[str, str]:
     """(URL, Dateiname) des besten Velocity-Builds. ``version`` leer = neueste stabile."""
@@ -338,7 +353,7 @@ def start_velocity(cfg: dict) -> bool:
         _stop_locked()
         wd = _work_dir()
         try:
-            _LOG = open(wd / "velocity.log", "ab")  # noqa: SIM115 - Handle lebt bis stop
+            _LOG = open(_proxy_log_path(), "ab")  # noqa: SIM115 - Handle lebt bis stop (zentral -> NAS)
             _PROC = subprocess.Popen(
                 [java, "-jar", str(Path(jar).resolve())],
                 cwd=str(wd), stdout=_LOG, stderr=subprocess.STDOUT,
@@ -393,7 +408,7 @@ def reconcile_velocity_async() -> None:
 
 def _read_log_tail(lines: int = 20) -> str:
     try:
-        data = (_work_dir() / "velocity.log").read_text(
+        data = _proxy_log_path().read_text(
             encoding="utf-8", errors="ignore").splitlines()
     except OSError:
         return ""
@@ -406,7 +421,7 @@ def log_tail(lines: int = 80) -> str:
     Zeigt u.a. welche ViaVersion wirklich laedt und bis zu welcher Protokoll-/MC-Version
     der Proxy Clients akzeptiert ("... range 1.7.2-26.2" bzw. ViaVersion-Ladezeile)."""
     try:
-        data = (_work_dir() / "velocity.log").read_text(
+        data = _proxy_log_path().read_text(
             encoding="utf-8", errors="ignore").splitlines()
     except OSError:
         return ""

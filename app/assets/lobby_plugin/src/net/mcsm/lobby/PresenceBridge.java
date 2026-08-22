@@ -270,15 +270,15 @@ final class PresenceBridge {
         WrapperPlayServerSpawnEntity spawnPkt = new WrapperPlayServerSpawnEntity(
             a.entityId, a.uuid, EntityTypes.PLAYER,
             new Location(new Vector3d(a.x, a.y, a.z), a.yaw, a.pitch), a.headYaw, 0, null);
-        // 3) Metadaten: displayed-skin-parts (Index 17) = 0x7F -> alle Skin-Layer sichtbar.
-        List<EntityData<?>> data = new ArrayList<>();
-        data.add(new EntityData<>(17, EntityDataTypes.BYTE, (byte) 0x7F));
-        WrapperPlayServerEntityMetadata metaPkt = new WrapperPlayServerEntityMetadata(a.entityId, data);
+        // Hinweis: KEIN EntityMetadata-Paket (displayed-skin-parts). Der Metadaten-Index fuer
+        // Player-Felder verschiebt sich zwischen MC-Versionen; ein fester Byte-Index (17) auf
+        // dem 26.2-Backend landet nach ViaBackwards auf einem Float-Feld aelterer Clients
+        // -> "Invalid entity data item type for field 15" -> JEDER Client crasht beim Sehen des
+        // Avatars. Ohne Metadaten spawnt der Avatar mit Default-Skin-Layern (weiter sichtbar).
 
         for (Player p : Bukkit.getOnlinePlayers()) {
             send(p, infoPkt);
             send(p, spawnPkt);
-            send(p, metaPkt);
             send(p, new WrapperPlayServerEntityHeadLook(a.entityId, a.headYaw));
         }
     }
@@ -315,9 +315,7 @@ final class PresenceBridge {
                            WrapperPlayServerPlayerInfoUpdate.Action.UPDATE_LISTED), info));
             send(p, new WrapperPlayServerSpawnEntity(a.entityId, a.uuid, EntityTypes.PLAYER,
                 new Location(new Vector3d(a.x, a.y, a.z), a.yaw, a.pitch), a.headYaw, 0, null));
-            List<EntityData<?>> data = new ArrayList<>();
-            data.add(new EntityData<>(17, EntityDataTypes.BYTE, (byte) 0x7F));
-            send(p, new WrapperPlayServerEntityMetadata(a.entityId, data));
+            // Kein EntityMetadata-Paket (siehe spawn(): fester Skin-Parts-Index crasht Clients).
             send(p, new WrapperPlayServerEntityHeadLook(a.entityId, a.headYaw));
         }
     }
