@@ -536,9 +536,19 @@ def _handle_gateway_connection(client: socket.socket) -> None:
         # geroutet (Hub/Dispatcher/Server). Loopschutz automatisch: hinter ViaProxy ist alles
         # 767, dieser Zweig greift also nie erneut. 767-Clients bleiben voellig unberuehrt.
         if _needs_viaproxy_translation(routes, handshake):
-            sleep_proxy_service._forward_to_backend(
-                client, int(routes.viaproxy_port), None, bytes(buffer)
-            )
+            from app.services import viaproxy_service
+
+            if viaproxy_service.is_running():
+                sleep_proxy_service._forward_to_backend(
+                    client, int(routes.viaproxy_port), None, bytes(buffer)
+                )
+            else:
+                # ViaProxy an, aber (noch) nicht bereit -> klare Meldung statt Forward auf
+                # einen toten Port ("Server nicht erreichbar").
+                sleep_proxy_service._send_login_disconnect(
+                    client,
+                    "Cross-Version-Uebersetzer startet gerade. Bitte in Kuerze erneut verbinden.",
+                )
             return
 
         # Universal-Lobby: Joins auf modlobby/vanlobby.<domain> transparent koppeln.

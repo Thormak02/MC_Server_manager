@@ -50,3 +50,59 @@ def test_needs_viaproxy_translation():
     assert gw._needs_viaproxy_translation(on, hs(770, status)) is False # Status-Ping -> nicht
     assert gw._needs_viaproxy_translation(off, hs(770, login)) is False # ViaProxy aus -> nicht
     assert gw._needs_viaproxy_translation(on, hs(None, login)) is False # unbekannt -> nicht
+
+
+def test_pick_jar_asset_by_java_version():
+    """Java 21 -> regulaerer Build; Java 8 -> +java8-Build (der auf 21 crasht)."""
+    cands = [{"name": "ViaProxy-3.4.12.jar"}, {"name": "ViaProxy-3.4.12+java8.jar"}]
+    assert viaproxy_service._pick_jar_asset(cands, 21)["name"] == "ViaProxy-3.4.12.jar"
+    assert viaproxy_service._pick_jar_asset(cands, 8)["name"] == "ViaProxy-3.4.12+java8.jar"
+    assert viaproxy_service._pick_jar_asset(cands, None)["name"] == "ViaProxy-3.4.12.jar"  # unbekannt -> regulaer
+
+
+def test_java_major_version_parsing(monkeypatch):
+    import subprocess
+    from types import SimpleNamespace
+
+    def make(text):
+        return lambda *a, **k: SimpleNamespace(stderr=text, stdout="")
+
+    monkeypatch.setattr(subprocess, "run", make('openjdk version "21.0.6" 2025-01-21'))
+    assert viaproxy_service._java_major_version("java") == 21
+    monkeypatch.setattr(subprocess, "run", make('openjdk version "1.8.0_482"'))
+    assert viaproxy_service._java_major_version("java") == 8
+    monkeypatch.setattr(subprocess, "run", make("garbage"))
+    assert viaproxy_service._java_major_version("java") is None
+
+
+def test_maybe_refetch_wrong_jar(monkeypatch, tmp_path):
+    """Selbstheilung: falscher (+java8) Auto-Jar wird auf Java 17+ nach Crash EINMAL verworfen."""
+    V = viaproxy_service
+    jarp = tmp_path / "ViaProxy.jar"
+    jarp.write_bytes(b"fake +java8 jar")
+    monkeypatch.setattr(V, "_default_jar_path", lambda: jarp)
+    monkeypatch.setattr(V, "_glog", lambda *a, **k: None)
+    V._jar_refetch_done = False
+    V._DOWNLOAD_TRIED = True
+    V._last_start_mono = 123.0
+
+    monkeypatch.setattr(V, "_java_major_version", lambda j: 21)     # Java 21 -> verwerfen
+    V._maybe_refetch_wrong_jar({"java": "java", "jar": ""})
+    assert not jarp.exists()
+    assert V._DOWNLOAD_TRIED is False
+    assert V._last_start_mono == 0.0
+    assert V._jar_refetch_done is True
+
+    jarp.write_bytes(b"again")                                       # 2. Aufruf -> no-op (kein Loop)
+    V._maybe_refetch_wrong_jar({"java": "java", "jar": ""})
+    assert jarp.exists()
+
+    V._jar_refetch_done = False
+    monkeypatch.setattr(V, "_java_major_version", lambda j: 8)      # Java 8 -> +java8 ist ok
+    V._maybe_refetch_wrong_jar({"java": "java", "jar": ""})
+    assert jarp.exists()
+
+    V._jar_refetch_done = False
+    monkeypatch.setattr(V, "_java_major_version", lambda j: 21)
+    V._maybe_refetch_wrong_jar({"java": "java", "jar": r"C:\custom\ViaProxy.jar"})  # manuell -> nicht anfassen
+    assert jarp.exists()
