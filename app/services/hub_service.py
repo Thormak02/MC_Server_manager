@@ -695,6 +695,12 @@ class Hub:
             sock.sendall(pl.build_set_slot(0, pl.INV_HOTBAR0_SLOT,
                 pl.encode_slot(pl.ITEM_COMPASS, custom_name="Server-Menü (Rechtsklick)")))
             sock.sendall(pl.build_set_held_item(0))
+            # Eigener player-info-Eintrag MIT Skin (UUID aus dem LoginSuccess = die, die der
+            # Client fuer SICH SELBST nutzt). Moderne Clients (1.19.3+) rendern den Skin - auch den
+            # eigenen - aus dem player-info, NICHT aus dem LoginSuccess-Profil -> sonst Default.
+            if login_tex:
+                sock.sendall(pl.build_player_info_update(
+                    uuid16_login, username, textures=login_tex, signature=login_sig))
 
             # --- Ins Roster aufnehmen + gegenseitig sichtbar machen ---
             with self.lock:
