@@ -270,6 +270,18 @@ def test_bridge_pub_join_publishes_skin():
     pb.BUS.remove(key)
 
 
+def test_login_success_includes_textures():
+    """build_login_success traegt die textures-Property -> der Spieler sieht seinen EIGENEN Skin
+    (Hub-Offline-Login = sonst 0 Properties = Default)."""
+    from app.services import mc_dispatch as mcd
+
+    plain = mcd.build_login_success(b"u" * 16, "Steve", 767)
+    signed = mcd.build_login_success(b"u" * 16, "Steve", 767, textures="VAL", signature="SIG")
+    assert b"textures" not in plain
+    assert b"textures" in signed and b"VAL" in signed and b"SIG" in signed
+    assert len(signed) > len(plain)
+
+
 def test_fetch_mojang_skin_uses_cache():
     """fetch_mojang_skin liefert gecachte Werte ohne Netzwerk + case-insensitiv."""
     import time

@@ -284,9 +284,10 @@ _SKIN_CACHE: dict = {}          # name_lower -> (value, signature, monotonic_ts)
 _SKIN_TTL_SECONDS = 3600.0
 
 
-def fetch_mojang_skin(name: str) -> tuple[str, str]:
+def fetch_mojang_skin(name: str, timeout: float = 5.0) -> tuple[str, str]:
     """Signierten Skin (value, signature) zu einem Mojang-Namen holen. ("","") wenn nicht
-    gefunden/Fehler (dann Default-Skin). Gecached; blockierend -> im Hintergrund-Thread rufen."""
+    gefunden/Fehler (dann Default-Skin). Gecached; blockierend -> mit kleinem ``timeout`` auch
+    direkt im Login-Pfad nutzbar (sonst im Hintergrund-Thread)."""
     key = (name or "").strip().lower()
     if not key:
         return "", ""
@@ -304,14 +305,14 @@ def fetch_mojang_skin(name: str) -> tuple[str, str]:
         req = urllib.request.Request(
             "https://api.mojang.com/users/profiles/minecraft/" + urllib.parse.quote(key),
             headers={"User-Agent": "mcsm-presence"})
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             prof = json.loads(resp.read().decode("utf-8"))
         uid = str((prof or {}).get("id") or "")
         if uid:
             req2 = urllib.request.Request(
                 f"https://sessionserver.mojang.com/session/minecraft/profile/{uid}?unsigned=false",
                 headers={"User-Agent": "mcsm-presence"})
-            with urllib.request.urlopen(req2, timeout=5) as resp2:
+            with urllib.request.urlopen(req2, timeout=timeout) as resp2:
                 full = json.loads(resp2.read().decode("utf-8"))
             for prop in (full or {}).get("properties", []):
                 if prop.get("name") == "textures":

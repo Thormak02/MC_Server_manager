@@ -638,7 +638,18 @@ class Hub:
                 sock.sendall(mp.build_login_disconnect_packet(
                     "Du stehst nicht auf der Whitelist der Universal-Lobby."))
                 return
-            sock.sendall(mcd.build_login_success(uuid16_login, username, hs.protocol_version))
+            # Eigenen Skin von Mojang holen (bounded, gecached) und ins LoginSuccess-Profil legen,
+            # damit sich der Spieler SELBST mit echtem Skin sieht (Hub-Offline-Login = sonst Default).
+            # Wird unten auch fuer die Bridge (session.textures) wiederverwendet -> nur EIN Fetch.
+            login_tex = login_sig = ""
+            try:
+                from app.services import presence_bridge_service as _pb
+
+                login_tex, login_sig = _pb.fetch_mojang_skin(username, timeout=2.5)
+            except Exception:  # noqa: BLE001 - Skin ist optional, nie den Login blockieren
+                login_tex = login_sig = ""
+            sock.sendall(mcd.build_login_success(uuid16_login, username, hs.protocol_version,
+                                                 textures=login_tex, signature=login_sig))
             pid, _ = reader.read_packet()
             if pid != mcd.LOGIN_ACK:
                 return
@@ -692,7 +703,8 @@ class Hub:
                 self._eid_ctr += 1
                 eid = self._eid_ctr
                 uuid16 = (b"MCSMHB" + struct.pack(">Q", conn_id)).ljust(16, b"\x00")
-                session = _Session(conn_id, sock, eid, uuid16, username, sx, sy, sz)
+                session = _Session(conn_id, sock, eid, uuid16, username, sx, sy, sz,
+                                   textures=login_tex, textures_sig=login_sig)  # Skin schon da
                 existing = [s for s in self.players.values() if s.alive]  # Bot + andere Spieler
                 self.players[conn_id] = session
 

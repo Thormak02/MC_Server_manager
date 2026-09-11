@@ -68,12 +68,25 @@ _LEADING_JUNK = re.compile(r"^[^a-z]+")
 # --------------------------------------------------------------------------- #
 # Bauen (clientbound)
 # --------------------------------------------------------------------------- #
-def build_login_success(uuid16: bytes, username: str, protocol: int) -> bytes:
+def build_login_success(uuid16: bytes, username: str, protocol: int, *,
+                        textures: str = "", signature: str = "") -> bytes:
     body = bytearray()
     body += encode_varint(LOGIN_SUCCESS)
     body += (uuid16 or b"")[:16].ljust(16, b"\x00")
     body += encode_string(username)
-    body += encode_varint(0)  # properties: 0 (offline)
+    if textures:
+        # Eine "textures"-Property ins GameProfile -> der Spieler sieht seinen EIGENEN Skin
+        # (der Hub loggt sonst offline ein = 0 Properties = Default-Steve/Alex).
+        body += encode_varint(1)
+        body += encode_string("textures")
+        body += encode_string(textures)
+        if signature:
+            body += b"\x01"
+            body += encode_string(signature)
+        else:
+            body += b"\x00"
+    else:
+        body += encode_varint(0)  # properties: 0 (offline -> Default-Skin)
     if protocol < PROTOCOL_1_21_2:
         body += b"\x00"  # strictErrorHandling = false (nur 767)
     return _wrap_packet(bytes(body))
