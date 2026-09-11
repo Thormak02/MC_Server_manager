@@ -40,6 +40,10 @@ async def lifespan(app: FastAPI):
     # Startup
     init_db()
     reconcile_runtime_states_on_manager_startup()
+    # Lobby-Plugin automatisch neu bauen, wenn der Quelltext neuer ist als das gebaute Jar
+    # (typisch nach einem Update/Deploy) -> kein vergessener Handklick "Lobby-Plugin bauen".
+    from app.services import plugin_build_service
+    plugin_build_service.maybe_autobuild_plugin()
     start_scheduler()
     sync_all_jobs()
     # Gateway passend zum Netzwerk-Modus aufsetzen (vor dem Autostart, damit

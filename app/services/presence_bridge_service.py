@@ -320,7 +320,8 @@ def fetch_mojang_skin(name: str) -> tuple[str, str]:
                     break
     except Exception:  # noqa: BLE001 - Netzwerk/JSON/404 -> Default-Skin
         pass
-    _SKIN_CACHE[key] = (value, sig, now)
+    if value:                       # nur Erfolge cachen -> transiente Fehler werden neu versucht
+        _SKIN_CACHE[key] = (value, sig, now)
     return value, sig
 
 

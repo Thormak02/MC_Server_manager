@@ -499,7 +499,14 @@ class Hub:
         pb.BUS.upsert(pb.Presence(
             uuid=self._hub_bus_uuid(session), name=session.name, origin=pb.ORIGIN_HUB,
             x=session.x - _SPAWN[0], y=session.y - _SPAWN[1], z=session.z - _SPAWN[2],
-            yaw=session.yaw, pitch=session.pitch, head_yaw=session.yaw, seq=self._bus_seq))
+            yaw=session.yaw, pitch=session.pitch, head_yaw=session.yaw, seq=self._bus_seq,
+            # Skin MITSCHICKEN (von _bridge_ensure_skin async aus Mojang geholt) - sonst blieb der
+            # modded Avatar auf der Vanilla-Seite immer Default, obwohl der Skin gefetcht wurde.
+            textures=getattr(session, "textures", "") or "",
+            textures_sig=getattr(session, "textures_sig", "") or ""))
+        # Skin sicherstellen (idempotent, In-Flight-geguarded) - deckt auch den Fall ab, dass
+        # die Bridge erst NACH dem Join attached: der Keepalive triggert es dann nach.
+        self._bridge_ensure_skin(session)
 
     def _bridge_pub_move(self, session: "_Session") -> None:
         if not self._bridge_attached:
@@ -527,9 +534,15 @@ class Hub:
     def _bridge_ensure_skin(self, session: "_Session") -> None:
         """Echten Skin eines Hub-Spielers von Mojang holen (async) und mit Skin neu publizieren.
         Hub-Login ist offline -> kein Profil-Skin; die Vanilla-Seite bekommt so den echten Skin.
-        Die Vanilla-Instanz spawnt den Avatar bei Textur-Wechsel neu (Plugin-Seite)."""
-        if not self._bridge_attached or getattr(session, "textures", ""):
+        Die Vanilla-Instanz spawnt den Avatar bei Textur-Wechsel neu (Plugin-Seite).
+
+        Wird auch aus _bridge_pub_join (Join + 10s-Keepalive) getriggert -> robust gegen Timing
+        (Bridge erst NACH dem Join attached). In-Flight-Guard verhindert Thread-Spam; ein
+        Fehlschlag wird nicht gecached -> spaeter erneut versucht."""
+        if (not self._bridge_attached or getattr(session, "textures", "")
+                or getattr(session, "_skin_fetching", False)):
             return
+        session._skin_fetching = True
 
         def _run() -> None:
             try:
@@ -542,6 +555,8 @@ class Hub:
                     self._bridge_pub_join(session)   # jetzt MIT Skin publizieren
             except Exception as exc:  # noqa: BLE001
                 print(f"[hub] Skin-Abruf {session.name!r} fehlgeschlagen: {exc!r}")
+            finally:
+                session._skin_fetching = False
 
         threading.Thread(target=_run, daemon=True, name="hub-skin-fetch").start()
 
@@ -694,8 +709,7 @@ class Hub:
             self._broadcast(pl.build_system_chat(mcd._nbt_text_component(
                 f"{username} ist der Lobby beigetreten.")), exclude=session)
             print(f"[hub] {username} beigetreten (eid={eid}, online={online}).")
-            self._bridge_pub_join(session)   # der Vanilla-Instanz zeigen
-            self._bridge_ensure_skin(session)   # echten Skin (Mojang) async nachreichen
+            self._bridge_pub_join(session)   # der Vanilla-Instanz zeigen (triggert auch Skin-Fetch)
 
             # --- Hauptschleife: Bewegung/Chat lesen + broadcasten, Keep-Alive senden ---
             sock.settimeout(_READ_TIMEOUT)

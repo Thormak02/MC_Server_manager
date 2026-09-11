@@ -236,6 +236,32 @@ def _record_build(ok: bool, msg: str) -> None:
         pass
 
 
+def maybe_autobuild_plugin() -> None:
+    """Beim Manager-Start automatisch neu bauen, wenn der Plugin-QUELLTEXT neuer ist als das
+    gebaute Jar (typisch NACH einem Deploy). So bekommt man nach jedem Update ohne Handklick ein
+    frisches Jar - vermeidet den Fehler "Code deployt, aber altes Plugin laeuft noch". Best-effort,
+    asynchron (blockiert den Start nicht); verteilt bei Erfolg automatisch auf die Lobby-Server.
+    Die LAUFENDE Lobby laedt das neue Jar erst beim naechsten Neustart (Datei ist sonst gesperrt).
+    """
+    try:
+        src_dir = _plugin_src_dir()
+        sources = list(src_dir.glob("net/mcsm/lobby/*.java"))
+        if not sources:
+            return
+        newest_src = max(s.stat().st_mtime for s in sources)
+        built = built_jar_path()
+        jar_mtime = built.stat().st_mtime if built.is_file() else 0.0
+        if newest_src <= jar_mtime:
+            return                     # gebautes Jar ist aktuell -> nichts zu tun
+        if is_building():
+            return                     # laeuft schon
+        started = run_build_async(user_id=None)
+        if started:
+            print("[plugin-build] Auto-Build gestartet (Quelltext neuer als Jar, z.B. nach Update).")
+    except Exception as exc:  # noqa: BLE001 - Auto-Build darf den Start nie stoeren
+        print(f"[plugin-build] Auto-Build-Check fehlgeschlagen: {exc!r}")
+
+
 def run_build_async(user_id: int | None = None) -> bool:
     """Build im Hintergrund starten (blockiert den HTTP-Request nicht). Bei Erfolg wird das
     Jar gleich auf die Lobby-Server verteilt. Ergebnis -> last_build_status() + Audit-Log.

@@ -231,6 +231,45 @@ def test_bridge_status_counts_connected_plugin():
         pb.stop_plugin_server()
 
 
+def test_bridge_pub_join_publishes_skin():
+    """_bridge_pub_join muss den (async aus Mojang geholten) Skin des Hub-Spielers MIT auf den
+    Bus legen. Fehlte das, blieb der modded Avatar auf der Vanilla-Seite immer Default."""
+    from app.services import hub_service
+    from app.services import presence_bridge_service as pb
+
+    _bind_hub_methods()
+    for name in ("_bridge_pub_join", "_bridge_ensure_skin"):
+        setattr(_FakeHub, name, getattr(hub_service.Hub, name))
+    h = _FakeHub()
+    h._bus_seq = 0
+
+    with pb.BUS._lock:
+        pb.BUS._presences.clear()
+
+    class _S:
+        conn_id = 1
+        sock = object()
+        eid = 5
+        uuid16 = b"MCSMHB\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+        name = "Modder"
+        x = 8.5
+        y = 64.0
+        z = 8.5
+        yaw = 0.0
+        pitch = 0.0
+        alive = True
+        textures = "SKINVAL"        # bereits gefetcht -> ensure_skin ueberspringt (kein Netzwerk)
+        textures_sig = "SKINSIG"
+
+    s = _S()
+    h._bridge_pub_join(s)
+    key = h._hub_bus_uuid(s)
+    snap = {p.uuid: p for p in pb.BUS.snapshot()}
+    assert key in snap
+    assert snap[key].textures == "SKINVAL" and snap[key].textures_sig == "SKINSIG"
+    pb.BUS.remove(key)
+
+
 def test_fetch_mojang_skin_uses_cache():
     """fetch_mojang_skin liefert gecachte Werte ohne Netzwerk + case-insensitiv."""
     import time

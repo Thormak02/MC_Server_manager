@@ -370,3 +370,14 @@ Globale Suche über Server/Dateien/Logs.
 PWA / mobil-optimierte Ansicht.
 
 Onboarding-Assistent beim ersten Start.
+
+
+
+
+Ideen aus dem Urlaub (09/2026), für viel später:
+
+Graceful Rejection: wenn ein Server beim Verbindungsversuch aus der Lobby ablehnt (falsches Modpack, nicht auf Whitelist/Waitlist, Pack nicht eingerichtet), soll die Verbindung nicht getrennt werden, sondern der Spieler zurück in die Lobby mit einer Fehlermeldung im Chat. (gilt beim Serverwechsel via Kompass/Command/Portal; beim allerersten Join gibt es noch keine Lobby zum Zurückkehren)
+
+Mobile Verwaltung: MCSM auch als App-Version + mobile Web-App zur Verwaltung. Selbes Backend, immer selber Stand wie die Web-Version. Dünne native App (PWA / Wrapper), die selbst nicht aktualisiert werden muss - alles läuft über die Web-App. Evtl. eigenes, für Mobile optimiertes Frontend. Außerdem die bestehende Website für mobile Browser optimieren. (erweitert die vorhandene "PWA / mobil-optimierte Ansicht")
+
+Server-Vermietung: den Manager als Basis für Server-Vermietung schaffen - z.B. Bezahlmodelle, RAM- und Speicherzuweisung, Selbstverwaltung usw. URL-Schema: nutzername.servername.domain.de/... oder nutzername.domain.de/servername. (verwandt mit "mehrere getrennte Verwaltungsumgebungen" weiter oben)
