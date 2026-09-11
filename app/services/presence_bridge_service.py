@@ -537,7 +537,8 @@ def bridge_status() -> dict:
         presences = BUS.snapshot()
     except Exception:  # noqa: BLE001
         presences = []
-    people = [{"name": p.name, "origin": p.origin, "uuid": p.uuid} for p in presences]
+    people = [{"name": p.name, "origin": p.origin, "uuid": p.uuid,
+               "has_skin": bool(getattr(p, "textures", ""))} for p in presences]
     with _SRV_LOCK:
         active = _ACTIVE_PLUGINS
         last_at = _LAST_PLUGIN_AT

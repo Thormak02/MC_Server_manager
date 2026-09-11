@@ -271,7 +271,10 @@ final class PresenceBridge {
             spawn(a, tx, sg);
         } else if (!tx.isEmpty() && !tx.equals(a.tex)) {
             // Skin nachgereicht (Hub holt ihn async von Mojang) -> Avatar mit echtem Skin neu spawnen.
+            // FRISCHE Entity-ID: eine sofort wiederverwendete ID nach DestroyEntities laesst manche
+            // Clients den Neu-Spawn (und damit den Skin) ignorieren.
             despawn(a);
+            a.entityId = entityIds.incrementAndGet();
             a.tex = tx; a.sig = sg;
             a.x = x; a.y = y; a.z = z; a.yaw = yaw; a.pitch = pitch; a.headYaw = headYaw;
             spawn(a, tx, sg);

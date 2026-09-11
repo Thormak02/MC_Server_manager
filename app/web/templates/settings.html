@@ -244,7 +244,8 @@
                     {% endif %}
                     {% if bridge_status.presences %}
                     <ul style="margin:.2rem 0 .2rem 1.2rem">
-                        {% for pr in bridge_status.presences %}<li><code>{{ pr.origin }}</code> &ndash; {{ pr.name }}</li>{% endfor %}
+                        {% for pr in bridge_status.presences %}<li><code>{{ pr.origin }}</code> &ndash; {{ pr.name }}
+                            {% if pr.has_skin %}<span style="color:#2e7d32">· Skin ✓</span>{% else %}<span style="color:#c62828">· Skin ✗ (Default)</span>{% endif %}</li>{% endfor %}
                     </ul>
                     {% else %}
                     <p style="margin:.2rem 0"><em>keine Praesenzen im Bus</em> (Bridge aus oder niemand online).</p>
