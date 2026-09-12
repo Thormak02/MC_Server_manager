@@ -322,3 +322,26 @@ def test_settings_page_shows_velocity_button(client):
     assert resp.status_code == 200
     assert 'action="/settings/velocity/auto-create"' in resp.text
     assert '<option value="velocity"' in resp.text
+
+
+def test_apply_lobby_properties(tmp_path):
+    """Lobby-Properties: Adventure + friedlich gesetzt, fremde Keys bleiben, level-name gelesen."""
+    from app.services import lobby_service
+
+    (tmp_path / "server.properties").write_text(
+        "level-name=lobby\ngamemode=survival\nmotd=hi\n", encoding="utf-8")
+    lobby_service._apply_lobby_properties(tmp_path)
+    txt = (tmp_path / "server.properties").read_text(encoding="utf-8")
+    assert "gamemode=adventure" in txt and "gamemode=survival" not in txt
+    assert "pvp=false" in txt and "difficulty=peaceful" in txt
+    assert "motd=hi" in txt                       # unbeteiligte Keys bleiben erhalten
+    assert lobby_service._level_name(tmp_path) == "lobby"
+
+
+def test_deploy_lobby_world_missing_asset(monkeypatch, tmp_path):
+    """Fehlt die Welt im Asset-Ordner, gibt es einen klaren Fehler (kein Crash)."""
+    from app.services import lobby_service
+
+    monkeypatch.setattr(lobby_service, "_LOBBY_WORLD_ASSET", tmp_path / "nope")
+    ok, msg = lobby_service.deploy_lobby_world(None)   # db unbenutzt, weil Asset zuerst geprueft wird
+    assert ok is False and "Keine Lobby-Welt" in msg

@@ -34,6 +34,7 @@ from app.services import replay_service as rp
 _GRID_RADIUS = 4               # 9x9-Chunk-Grid -> ~112x112 sichtbare Plattform
 _FLOOR_SECTION = 7             # Boden y 48..63, Spawn auf y=64
 _SPAWN = (8.5, 64.0, 8.5)
+_BAKE_RADIUS = 6               # 13x13-Chunk-Fenster (~208x208) um den Lobby-Spawn (gebackene Welt)
 _KEEPALIVE_INTERVAL = 10.0
 _READ_TIMEOUT = 0.5
 _CONFIG_WAIT_TIMEOUT = 6.0
@@ -216,7 +217,9 @@ def _load_profile(replay_path: str) -> dict:
 
 class Hub:
     def __init__(self, replay_path: str, vanilla_replay_path: str | None = None,
-                 pack_replays: dict[int, str] | None = None):
+                 pack_replays: dict[int, str] | None = None,
+                 lobby_world_dir: str | None = None,
+                 bake_radius: int = _BAKE_RADIUS):
         # MODDED-Profil (Pflicht, Default/Fallback). Backward-compat-Attribute zeigen darauf.
         self.modded = _load_profile(replay_path)
         self.config_steps = self.modded["config_steps"]
@@ -240,6 +243,14 @@ class Hub:
                 print(f"[hub] Pack-Replay {path} (server {sid}) nicht ladbar: {exc!r} -> uebersprungen")
         # Gemeinsame Vanilla-Welt (fuer ALLE Client-Typen identisch -> sie begegnen sich).
         self.platform_packets = self._build_platform()
+        # Gebackene Lobby-Welt (Option B): die LIVE Vanilla-Lobby-Welt nativ als 1.21.1-Chunks
+        # servieren. self.origin = Spawn (wohin der Spieler gesetzt wird + Bezugspunkt fuer die
+        # spawn-relativen Bridge-Offsets). Ohne gesetzten /setworldspawn oder bei jedem Fehler ->
+        # Fallback auf die flache Plattform (self.world_setup bleibt None, origin = _SPAWN).
+        self.origin: tuple[float, float, float] = _SPAWN
+        self.world_setup: list[bytes] | None = None
+        if lobby_world_dir:
+            self._bake_lobby_world(lobby_world_dir, bake_radius)
 
         self.lock = threading.Lock()
         self.players: dict = {}
@@ -251,9 +262,11 @@ class Hub:
         self._eid_ctr = max(1000, max(eids) + 1000)
 
         # Virtuellen Bot ins Roster legen (nutzt dieselbe Maschinerie wie echte Spieler).
+        # 5 Bloecke vor dem Spawn (origin-relativ, damit er auch in der gebackenen Welt am Spawn steht).
         self._eid_ctr += 1
+        bx, by, bz = self.origin
         self.bot = _Session(_BOT_KEY, None, self._eid_ctr, b"MCSMHB-BOT".ljust(16, b"\x00"),
-                            "Lobby-Bot", 8.5, 64.0, 13.5, yaw=180.0)
+                            "Lobby-Bot", bx, by, bz + 5.0, yaw=180.0)
         self.players[_BOT_KEY] = self.bot
 
         # Presence-Bridge: gespiegelte Avatare fremder Instanzen (Vanilla-Lobby).
@@ -323,6 +336,28 @@ class Hub:
                 n += 1
         pkts.append(pl.build_chunk_batch_finished(n))
         return pkts
+
+    def _bake_lobby_world(self, lobby_world_dir: str, bake_radius: int) -> None:
+        """Live-Lobby-Welt backen und als self.world_setup (mit Batch-Rahmung) hinterlegen.
+        Setzt self.origin auf den Welt-Spawn. Jeder Fehler/kein Spawn -> Plattform-Fallback."""
+        try:
+            from app.services import world_bake_service as wb
+            baked = wb.bake_lobby_packets(lobby_world_dir, radius=bake_radius)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[hub] Lobby-Welt-Bake fehlgeschlagen ({exc!r}) -> Plattform")
+            return
+        if not baked:
+            print("[hub] Kein /setworldspawn in der Lobby-Welt (oder keine Chunks) -> Plattform. "
+                  "In der Vanilla-Lobby /setworldspawn setzen und den Hub neu starten.")
+            return
+        cx, cz = baked["center_chunk"]
+        setup = [pl.build_set_center_chunk(cx, cz), pl.build_chunk_batch_start()]
+        setup.extend(baked["packets"])
+        setup.append(pl.build_chunk_batch_finished(baked["chunk_count"]))
+        self.world_setup = setup
+        self.origin = baked["origin"]
+        print(f"[hub] Lobby-Welt gebacken: {baked['chunk_count']} Chunks um Spawn "
+              f"{baked['spawn_block']} (Chunk {baked['center_chunk']}).")
 
     # ------------------------------------------------------------------ #
     # Senden / Broadcast (thread-safe)
@@ -453,7 +488,7 @@ class Hub:
                 # p.x/y/z sind spawn-relative Offsets der Gegenseite -> bei UNSEREM Spawn rendern.
                 sess = _Session(f"br:{p.uuid}", None, self._eid_ctr,
                                 pb.uuid16_from("br:" + p.uuid), p.name,
-                                _SPAWN[0] + p.x, _SPAWN[1] + p.y, _SPAWN[2] + p.z,
+                                self.origin[0] + p.x, self.origin[1] + p.y, self.origin[2] + p.z,
                                 yaw=p.yaw, pitch=p.pitch,
                                 textures=getattr(p, "textures", "") or "",
                                 textures_sig=getattr(p, "textures_sig", "") or "")
@@ -471,7 +506,8 @@ class Hub:
             self._bridge_add(p)
             return
         ox, oy, oz = sess.x, sess.y, sess.z
-        nx, ny, nz = _SPAWN[0] + p.x, _SPAWN[1] + p.y, _SPAWN[2] + p.z   # spawn-relativ -> lokal
+        nx, ny, nz = (self.origin[0] + p.x, self.origin[1] + p.y,
+                      self.origin[2] + p.z)   # spawn-relativ -> lokal
         sess.x, sess.y, sess.z, sess.yaw, sess.pitch = nx, ny, nz, p.yaw, p.pitch
         self._broadcast(pl.build_entity_move_rot(sess.eid, ox, oy, oz, nx, ny, nz,
                                                  yaw=p.yaw, pitch=p.pitch, on_ground=True))
@@ -498,7 +534,7 @@ class Hub:
         # Hub (Y=64-Plattform) und Vanilla-Superflat verschiedene Welt-Koordinaten haben.
         pb.BUS.upsert(pb.Presence(
             uuid=self._hub_bus_uuid(session), name=session.name, origin=pb.ORIGIN_HUB,
-            x=session.x - _SPAWN[0], y=session.y - _SPAWN[1], z=session.z - _SPAWN[2],
+            x=session.x - self.origin[0], y=session.y - self.origin[1], z=session.z - self.origin[2],
             yaw=session.yaw, pitch=session.pitch, head_yaw=session.yaw, seq=self._bus_seq,
             # Skin MITSCHICKEN (von _bridge_ensure_skin async aus Mojang geholt) - sonst blieb der
             # modded Avatar auf der Vanilla-Seite immer Default, obwohl der Skin gefetcht wurde.
@@ -683,9 +719,9 @@ class Hub:
             # Leeres declare_recipes -> feuert RecipesUpdatedEvent, damit JEI schon beim Join
             # initialisiert statt beim 1. Inventar-Oeffnen 30-40s einzufrieren (siehe mc_play).
             sock.sendall(pl.build_declare_recipes_empty())
-            for p in self.platform_packets:
+            for p in (self.world_setup if self.world_setup is not None else self.platform_packets):
                 sock.sendall(p)
-            sx, sy, sz = _SPAWN
+            sx, sy, sz = self.origin
             sock.sendall(pl.build_sync_position(sx, sy, sz, teleport_id=1))
             sock.sendall(pl.build_set_default_spawn(int(sx), int(sy), int(sz)))
             sock.sendall(pl.build_game_event(pl.GAME_EVENT_WAIT_FOR_CHUNKS, 0.0))

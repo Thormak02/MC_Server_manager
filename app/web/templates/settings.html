@@ -116,6 +116,10 @@
         <form method="post" action="/settings/lobby/build-plugin" class="inline-form">
             <button type="submit">Lobby-Plugin bauen (Manager kompiliert)</button>
         </form>
+        <form method="post" action="/settings/lobby/deploy-world" class="inline-form"
+              onsubmit="return confirm('Ersetzt die aktuelle Lobby-Welt durch die Welt aus app/assets/lobby_world. Die Lobby muss GESTOPPT sein. Fortfahren?');">
+            <button type="submit">Lobby-Welt aus Asset laden</button>
+        </form>
     </div>
     <p class="muted">
         „Velocity neu starten": startet den <em>Proxy</em> zwingend neu und laedt die neuesten

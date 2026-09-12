@@ -338,6 +338,19 @@ def build_lobby_plugin_action(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(url="/settings", status_code=303)
 
 
+@router.post("/settings/lobby/deploy-world")
+def deploy_lobby_world_action(request: Request, db: Session = Depends(get_db)):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import lobby_service
+
+    ok, message = lobby_service.deploy_lobby_world(db, overwrite=True)
+    push_flash(request, message, "success" if ok else "error")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
 @router.post("/settings/hub/auto-create")
 def auto_create_hub_action(request: Request, db: Session = Depends(get_db)):
     current_user = _require_super_admin(request, db)

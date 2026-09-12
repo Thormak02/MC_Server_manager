@@ -555,6 +555,126 @@ def _demote_other_default_lobbies(db: Session, keep_id: int) -> None:
     db.commit()
 
 
+_LOBBY_WORLD_ASSET = Path(__file__).resolve().parents[1] / "assets" / "lobby_world"
+
+
+def _find_world_root(asset: Path) -> Path | None:
+    """Den eigentlichen Welt-Ordner (mit level.dat) finden: direkt im Asset-Ordner ODER in einem
+    einzelnen Unterordner (z.B. 'world'). So ist es egal, ob die Welt als .../lobby_world/level.dat
+    oder .../lobby_world/world/level.dat abgelegt wurde."""
+    if not asset.is_dir():
+        return None
+    if (asset / "level.dat").is_file():
+        return asset
+    for sub in sorted(asset.iterdir()):
+        if sub.is_dir() and (sub / "level.dat").is_file():
+            return sub
+    return None
+
+
+def _level_name(base: Path) -> str:
+    """level-name aus server.properties (Default 'world')."""
+    try:
+        for line in (base / "server.properties").read_text(encoding="utf-8").splitlines():
+            if line.startswith("level-name="):
+                return line.split("=", 1)[1].strip() or "world"
+    except OSError:
+        pass
+    return "world"
+
+
+def _apply_lobby_properties(base: Path) -> None:
+    """Lobby-taugliche server.properties: Adventure (normale Spieler bauen nicht; Operatoren per
+    /gamemode creative), PvP aus, keine Monster/friedlich. Nur diese Keys werden gesetzt."""
+    props = base / "server.properties"
+    updates = {"gamemode": "adventure", "pvp": "false",
+               "spawn-monsters": "false", "difficulty": "peaceful"}
+    try:
+        lines = props.read_text(encoding="utf-8").splitlines() if props.is_file() else []
+    except OSError:
+        lines = []
+    seen: set[str] = set()
+    out: list[str] = []
+    for line in lines:
+        if "=" in line and not line.lstrip().startswith("#"):
+            key = line.split("=", 1)[0].strip()
+            if key in updates:
+                out.append(f"{key}={updates[key]}")
+                seen.add(key)
+                continue
+        out.append(line)
+    for key, val in updates.items():
+        if key not in seen:
+            out.append(f"{key}={val}")
+    try:
+        props.write_text("\n".join(out) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def default_lobby_world_dir() -> str | None:
+    """Welt-Ordner der Default-Lobby (``<base_path>/<level-name>``) als String, oder None, wenn
+    keine Default-Lobby existiert bzw. der Ordner (mit level.dat) noch nicht angelegt ist. Vom
+    Hub-Bake genutzt: DIESE live Welt ist die Source of Truth (Option B)."""
+    from sqlalchemy import select
+
+    from app.db.session import SessionLocal
+    from app.models.server import Server as _Server
+
+    try:
+        with SessionLocal() as db:
+            lobby = db.scalar(select(_Server).where(_Server.gateway_is_default.is_(True)))
+            if lobby is None:
+                return None
+            base = Path(lobby.base_path).expanduser().resolve()
+            world_dir = base / _level_name(base)
+            if not (world_dir / "level.dat").is_file():
+                return None
+            return str(world_dir)
+    except Exception:  # noqa: BLE001 - DB/FS-Problem soll den Hub-Start nicht kippen
+        return None
+
+
+def deploy_lobby_world(db: Session, *, overwrite: bool = True) -> tuple[bool, str]:
+    """Vorgebaute Lobby-Welt (``app/assets/lobby_world``, im 1.21-Format) in den Welt-Ordner der
+    Default-Lobby (Paper) kopieren. Paper 26.x upgradet sie beim Laden automatisch; der Hub nutzt
+    dieselbe Welt spaeter NATIV (Option B: keine 26->1.21-Umwandlung). Setzt die Lobby auf
+    Adventure + friedlich.
+
+    overwrite=True ERSETZT eine vorhandene Welt (Austauschen) - die Lobby muss GESTOPPT sein,
+    sonst ist der Welt-Ordner gesperrt. overwrite=False nur beim Erst-Setup (keine Welt da).
+    """
+    from sqlalchemy import select
+
+    from app.models.server import Server as _Server
+
+    world_root = _find_world_root(_LOBBY_WORLD_ASSET)
+    if world_root is None:
+        return False, (f"Keine Lobby-Welt (level.dat) gefunden - bitte die Welt nach "
+                       f"{_LOBBY_WORLD_ASSET} (oder .../world/) legen.")
+    lobby = db.scalar(select(_Server).where(_Server.gateway_is_default.is_(True)))
+    if lobby is None:
+        return False, "Keine Default-Lobby gesetzt. Erst das Velocity-Netzwerk einrichten."
+
+    base = Path(lobby.base_path).expanduser().resolve()
+    level_name = _level_name(base)
+    world_dir = base / level_name
+    if world_dir.exists() and not overwrite:
+        return False, f"Welt-Ordner '{level_name}' existiert bereits (nicht ueberschrieben)."
+    try:
+        if world_dir.exists():
+            shutil.rmtree(world_dir)
+        # session.lock nicht mitkopieren (stale Lock koennte Paper stoeren; wird neu erzeugt).
+        shutil.copytree(world_root, world_dir,
+                        ignore=shutil.ignore_patterns("session.lock"))
+    except (OSError, PermissionError) as exc:
+        return False, f"Welt kopieren fehlgeschlagen - laeuft die Lobby noch? Bitte stoppen. ({exc})"
+
+    _apply_lobby_properties(base)
+    return True, (f"Lobby-Welt nach '{level_name}' uebernommen (Adventure + friedlich gesetzt). "
+                  f"Lobby (neu) starten, damit sie geladen wird.")
+
+
 def create_velocity_lobby(
     db: Session, *, initiated_by_user_id: int | None
 ) -> tuple[bool, str, int | None]:

@@ -35,6 +35,7 @@ class _HubListener:
     replay: str = ""                        # aktives modded-Replay (Reconcile-Vergleich)
     vanilla: Optional[str] = None           # aktives vanilla-Replay
     pack_replays: dict = field(default_factory=dict)  # {server_id: pfad} (Per-Pack)
+    lobby_world_dir: Optional[str] = None   # gebackene Lobby-Welt (None -> Plattform)
     stopped: bool = False
 
 
@@ -55,14 +56,15 @@ def _sync_bridge(hub) -> None:
         from app.services import app_setting_service as s
         from app.services import presence_bridge_service as pb
 
+        # Synthetische Test-Avatare (Vanilla-Test/Modded-Test) sind ABGESCHALTET: echte Spieler
+        # projizieren jetzt mit Skin: die Bots waren nur der Phase-1-Beweis. Immer stoppen, falls
+        # noch welche aus einer frueheren Version laufen. (Funktionen bleiben fuer Debug erhalten.)
+        pb.stop_synthetic_feeder()
+        pb.stop_synthetic_modded_feeder()
         if s.get_presence_bridge_enabled_runtime():
             hub.attach_bridge()
-            pb.start_synthetic_feeder()          # Proof: Vanilla-Avatar im Hub sichtbar
-            pb.start_synthetic_modded_feeder()   # Proof: Modded-Avatar in der Vanilla-Lobby sichtbar
         else:
             hub.detach_bridge()
-            pb.stop_synthetic_feeder()
-            pb.stop_synthetic_modded_feeder()
     except Exception:  # noqa: BLE001 - Bridge darf den Hub-Reconcile nie stoeren
         pass
 
@@ -107,10 +109,14 @@ def _bind(port: int) -> socket.socket | None:
 
 def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
                     vanilla_replay_path: str | None = None,
-                    pack_replays: dict[int, str] | None = None) -> bool:
+                    pack_replays: dict[int, str] | None = None,
+                    lobby_world_dir: str | None = None) -> bool:
     """Hub mit modded-Port (+ vanilla-Port, falls Vanilla-Replay) binden (ohne Flag-Check).
 
-    Idempotent: gleiche Ports/Replays (inkl. Per-Pack-Registry) -> No-op. Aenderung ->
+    ``lobby_world_dir`` (optional): Welt-Ordner der Default-Lobby -> der Hub backt sie und serviert
+    sie modded Clients nativ (Option B). None/ohne /setworldspawn -> flache Plattform.
+
+    Idempotent: gleiche Ports/Replays/Welt (inkl. Per-Pack-Registry) -> No-op. Aenderung ->
     Neustart. Bindet beim naechsten Reconcile nach, falls ein Port noch belegt ist."""
     global _LISTENER, _BIND_FAILED
     from app.services import hub_service
@@ -121,7 +127,8 @@ def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
         if (_LISTENER is not None
                 and _LISTENER.modded_port == int(modded_port)
                 and _LISTENER.vanilla_port == int(vanilla_port)
-                and _LISTENER.replay == replay_path and _LISTENER.vanilla == vanilla):
+                and _LISTENER.replay == replay_path and _LISTENER.vanilla == vanilla
+                and _LISTENER.lobby_world_dir == lobby_world_dir):
             if _LISTENER.pack_replays == packs:
                 _sync_bridge(_LISTENER.hub)   # Bridge-Toggle ohne Rebuild uebernehmen
                 return True  # nichts geaendert
@@ -136,7 +143,7 @@ def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
         if _LISTENER is not None:
             _stop_locked()
         try:
-            hub = hub_service.Hub(replay_path, vanilla, packs)
+            hub = hub_service.Hub(replay_path, vanilla, packs, lobby_world_dir=lobby_world_dir)
         except Exception as exc:  # noqa: BLE001 - fehlendes/kaputtes Replay
             _glog("replay_failed", f"{replay_path}: {exc!r}")
             return False
@@ -161,6 +168,7 @@ def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
             modded_port=int(modded_port), vanilla_port=int(vanilla_port),
             modded_sock=modded_sock, vanilla_sock=vanilla_sock, hub=hub,
             replay=replay_path, vanilla=vanilla, pack_replays=packs,
+            lobby_world_dir=lobby_world_dir,
         )
         Thread(target=hub.animate_bot, daemon=True, name="hublobby-bot").start()
         Thread(target=_accept_loop, args=(listener, modded_sock, "modded"),
@@ -210,7 +218,7 @@ def reconcile_hub_lobby() -> None:
         if is_running():
             stop_hub_lobby()
         return
-    from app.services import hub_replay_service
+    from app.services import hub_replay_service, lobby_service
 
     start_hub_lobby(
         s.get_hub_lobby_port_runtime(),
@@ -218,4 +226,5 @@ def reconcile_hub_lobby() -> None:
         s.get_hub_lobby_replay_runtime(),
         s.get_hub_lobby_vanilla_replay_runtime() or None,
         pack_replays=hub_replay_service.build_pack_registry_runtime(),
+        lobby_world_dir=lobby_service.default_lobby_world_dir(),
     )

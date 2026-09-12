@@ -56,12 +56,16 @@ class _FakeHub:
     Die Broadcast-Methoden werden aufgezeichnet statt an Sockets zu senden."""
 
     def __init__(self):
+        from app.services.hub_service import _SPAWN
+
         self.lock = threading.Lock()
         self.players: dict = {}
         self.bridge: dict = {}
         self._eid_ctr = 1000
         self._bridge_attached = True
         self.sent: list = []
+        self.origin = _SPAWN            # wie beim echten Hub ohne gebackene Welt (Plattform-Spawn)
+        self._bus_seq = 0
 
     def _broadcast(self, data, exclude=None):
         self.sent.append(("one", data))

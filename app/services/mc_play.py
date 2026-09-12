@@ -158,6 +158,70 @@ def _chunk_section(block_state_id: int, biome_id: int, *, solid: bool) -> bytes:
     return bytes(out)
 
 
+def _pack_longs(values: list[int], bits: int) -> bytes:
+    """Netzwerk-Long-Array (MC 1.16+): jeder Wert ``bits`` breit, KEIN Spanning ueber
+    Long-Grenzen (Padding oben). Rueckgabe = VarInt(longCount) + longs (big-endian)."""
+    per_long = 64 // bits
+    mask = (1 << bits) - 1
+    longs: list[int] = []
+    cur = 0
+    cnt = 0
+    for v in values:
+        cur |= (v & mask) << (bits * cnt)
+        cnt += 1
+        if cnt == per_long:
+            longs.append(cur)
+            cur = 0
+            cnt = 0
+    if cnt:
+        longs.append(cur)
+    out = bytearray(encode_varint(len(longs)))
+    for lo in longs:
+        out += struct.pack(">Q", lo)
+    return bytes(out)
+
+
+# Block-States: <=8 Bit -> indirekte Palette; darueber direkt (globale IDs). 1.21.1 hat ~28k
+# Block-States -> ceil(log2)=15 Bit fuer den Direct-Modus.
+_BLOCKSTATE_DIRECT_BITS = 15
+
+
+def _paletted_block_states(states: list[int]) -> bytes:
+    """Paletted Container fuer 4096 Block-State-IDs (YZX-Reihenfolge).
+
+    single-valued (bits=0, nur eine ID), indirekt (4..8 Bit, lokale Palette) oder direkt
+    (15 Bit, globale IDs) je nach Anzahl verschiedener Bloecke in der Sektion."""
+    index: dict[int, int] = {}
+    uniq: list[int] = []
+    for s in states:
+        if s not in index:
+            index[s] = len(uniq)
+            uniq.append(s)
+    if len(uniq) == 1:
+        return _single_valued_container(uniq[0])
+    bits = max(4, (len(uniq) - 1).bit_length())
+    if bits <= 8:                                  # indirekt: lokale Palette
+        out = bytearray([bits])
+        out += encode_varint(len(uniq))
+        for v in uniq:
+            out += encode_varint(v)
+        out += _pack_longs([index[s] for s in states], bits)
+        return bytes(out)
+    # direkt: keine Palette, Werte = globale State-IDs
+    out = bytearray([_BLOCKSTATE_DIRECT_BITS])
+    out += _pack_longs(states, _BLOCKSTATE_DIRECT_BITS)
+    return bytes(out)
+
+
+def _chunk_section_from_states(states: list[int], biome_id: int = 0) -> bytes:
+    """Eine 16x16x16-Section aus 4096 Block-State-IDs (YZX). BLOCK_AIR zaehlt nicht als Block."""
+    block_count = sum(1 for s in states if s != BLOCK_AIR)
+    out = bytearray(struct.pack(">h", block_count))
+    out += _paletted_block_states(states)
+    out += _single_valued_container(biome_id)
+    return bytes(out)
+
+
 def _pack_heightmap(height_value: int, *, columns: int = 256, bits: int = 9) -> list[int]:
     """256 Spalten-Hoehen als gepacktes Long-Array (MC-Format: KEIN Spanning, 7 Werte/Long).
 
@@ -198,6 +262,35 @@ def _heightmaps_nbt(height_value: int) -> bytes:
     out += _nbt_long_array("MOTION_BLOCKING", longs)
     out += _nbt_long_array("WORLD_SURFACE", longs)
     out.append(0x00)                               # TAG_End
+    return bytes(out)
+
+
+def _pack_heightmap_columns(heights: list[int], *, bits: int = 9) -> list[int]:
+    """256 Spalten-Hoehen (je 0..worldHeight) als gepacktes Long-Array (KEIN Spanning, 7/Long)."""
+    per_long = 64 // bits
+    mask = (1 << bits) - 1
+    longs: list[int] = []
+    cur = 0
+    cnt = 0
+    for h in heights:
+        cur |= (h & mask) << (bits * cnt)
+        cnt += 1
+        if cnt == per_long:
+            longs.append(cur)
+            cur = 0
+            cnt = 0
+    if cnt:
+        longs.append(cur)
+    return longs
+
+
+def _heightmaps_nbt_columns(heights: list[int]) -> bytes:
+    """Wie _heightmaps_nbt, aber mit echten Spalten-Hoehen (256 Werte, Index z*16+x)."""
+    longs = _pack_heightmap_columns(heights)
+    out = bytearray([0x0A])
+    out += _nbt_long_array("MOTION_BLOCKING", longs)
+    out += _nbt_long_array("WORLD_SURFACE", longs)
+    out.append(0x00)
     return bytes(out)
 
 
@@ -390,6 +483,59 @@ def build_flat_chunk(
     else:
         body += encode_varint(0)
     # Block-Light-Arrays: keine.
+    body += encode_varint(0)
+    return _wrap_packet(bytes(body))
+
+
+def build_world_chunk(
+    chunk_x: int, chunk_z: int,
+    sections_by_index: dict[int, list[int]],
+    heights: list[int], *,
+    section_count: int = OVERWORLD_SECTIONS,
+    biome_id: int = 0,
+    full_bright: bool = True,
+) -> bytes:
+    """Chunk-Data-Packet aus echten Block-Daten (gebackene Lobby-Welt).
+
+    ``sections_by_index``: {netz-Section-Index 0..section_count-1 -> [4096 State-IDs, YZX]}.
+    Fehlende Indizes = Luft. ``heights``: 256 Spalten-Hoehen (Index z*16+x) fuer die Heightmaps.
+    Spiegelt exakt build_flat_chunk (Framing, Licht), nur mit Multi-Block-Sektionen.
+    """
+    body = bytearray(encode_varint(PLAY_CB_CHUNK_DATA))
+    body += struct.pack(">i", chunk_x)
+    body += struct.pack(">i", chunk_z)
+    body += _heightmaps_nbt_columns(heights)
+    sections = bytearray()
+    for idx in range(section_count):
+        states = sections_by_index.get(idx)
+        if states is None:
+            sections += _chunk_section(BLOCK_AIR, biome_id, solid=False)
+        else:
+            sections += _chunk_section_from_states(states, biome_id)
+    body += encode_varint(len(sections))
+    body += sections
+    body += encode_varint(0)                        # Block Entities: keine (Schilder-Text folgt spaeter)
+    # --- Licht (identisch zu build_flat_chunk: voll hell) ---
+    light_sections = section_count + 2
+    if full_bright:
+        sky_mask = (1 << light_sections) - 1
+        empty_sky_mask = 0
+    else:
+        sky_mask = 0
+        empty_sky_mask = (1 << light_sections) - 1
+    block_mask = 0
+    empty_block_mask = (1 << light_sections) - 1
+    body += encode_bitset(sky_mask)
+    body += encode_bitset(block_mask)
+    body += encode_bitset(empty_sky_mask)
+    body += encode_bitset(empty_block_mask)
+    if full_bright:
+        body += encode_varint(light_sections)
+        full = b"\xff" * 2048
+        for _ in range(light_sections):
+            body += encode_varint(2048) + full
+    else:
+        body += encode_varint(0)
     body += encode_varint(0)
     return _wrap_packet(bytes(body))
 
