@@ -173,7 +173,10 @@ def reconcile_proxies() -> None:
     So funktioniert die Direktverbindung UND – falls das Gateway auf diesen Port
     zeigt – der Gateway-Forward (das Gateway weckt darueber mit).
     """
+    from app.services import app_setting_service, server_service
+
     with SessionLocal() as db:
+        net_mode = app_setting_service.get_network_mode(db)
         servers = list(db.scalars(select(Server)).all())
         wanted: dict[int, tuple[str, int, int]] = {}
         for server in servers:
@@ -184,8 +187,16 @@ def reconcile_proxies() -> None:
                 and server.port != server.sleep_internal_port
             ):
                 continue
+            # SICHERHEIT: Velocity-Backends NUR loopback binden. Velocity (selbst loopback)
+            # weckt sie ueber 127.0.0.1:<port>; ein oeffentlicher 0.0.0.0-Raw-Pfad waere unter
+            # legacy/BungeeCord-Forwarding ein UUID-Spoofing-Loch (Backend vertraut Handshake-
+            # Daten ohne Secret). Direkt erreichbare (Nicht-Backend-)Sleep-Server bleiben public.
+            if server_service.is_velocity_backend(server, network_mode=net_mode):
+                bind_host = "127.0.0.1"
+            else:
+                bind_host = "0.0.0.0"
             wanted[server.id] = (
-                "0.0.0.0",
+                bind_host,
                 int(server.port),
                 int(server.sleep_internal_port),
             )

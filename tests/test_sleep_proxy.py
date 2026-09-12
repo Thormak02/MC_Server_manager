@@ -118,7 +118,41 @@ def test_reconcile_starts_and_stops_proxy(client, monkeypatch):
         sp_live.reconcile_proxies()
         assert sid not in sp_live._PROXIES  # nach Deaktivierung gestoppt
     finally:
-        sp_live.stop_proxy(sid)
+        sp_live.shutdown_all()
+
+
+def test_velocity_backend_sleep_proxy_binds_loopback(client, monkeypatch):
+    """Sicherheit: ein Velocity-Backend (legacy/BungeeCord vertraut Handshake-Daten) darf keinen
+    oeffentlichen Wake-Pfad haben -> der Wake-Proxy bindet 127.0.0.1 (nur Velocity/loopback weckt),
+    sonst koennte jeder im LAN eine UUID faelschen. Nicht-Backends bleiben 0.0.0.0 (public)."""
+    import app.services.sleep_proxy_service as sp_live
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import app_setting_service
+
+    monkeypatch.setattr(sp_live, "_log", lambda *a, **k: None)
+    pub = sp_live.find_free_port()
+    internal = sp_live.find_free_port()
+    while internal == pub:
+        internal = sp_live.find_free_port()
+
+    with SessionLocal() as db:
+        app_setting_service.set_network_mode(db, "velocity")
+        srv = Server(
+            name="spig-be", slug="spig-be", server_type="spigot", mc_version="1.21.11",
+            base_path="C:/tmp/spig-be", port=pub, sleep_enabled=True,
+            sleep_internal_port=internal, gateway_enabled=True,
+        )
+        db.add(srv)
+        db.commit()
+        sid = srv.id
+
+    try:
+        sp_live.reconcile_proxies()
+        assert sid in sp_live._PROXIES
+        assert sp_live._PROXIES[sid].bind_host == "127.0.0.1"   # loopback, NICHT 0.0.0.0
+    finally:
+        sp_live.shutdown_all()
 
 
 def test_transfer_intent_triggers_wake(monkeypatch):

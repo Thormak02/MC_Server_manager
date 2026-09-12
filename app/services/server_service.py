@@ -429,15 +429,26 @@ def cleanup_velocity_leftovers(server: Server) -> list[str]:
         return notes
 
     props = base_path / "server.properties"
+    was_backend = False
     if props.exists():
         server_ip = None
         for line in props.read_text(encoding="utf-8", errors="ignore").splitlines():
             if line.strip().startswith("server-ip="):
                 server_ip = line.split("=", 1)[1].strip()
         if server_ip == "127.0.0.1":
+            was_backend = True
             _upsert_server_property(server, "online-mode", "true")
             _upsert_server_property(server, "server-ip", "")
             notes.append("Velocity-Rest entfernt: online-mode=true, oeffentlicher Bind.")
+
+    # legacy-Rest: spigot.yml bungeecord=true wieder abschalten (sonst bricht ein nun
+    # eigenstaendiger Server die Auth - bungeecord=true erwartet einen Proxy davor).
+    if was_backend:
+        try:
+            _set_spigot_bungeecord(base_path, False)
+            notes.append("Legacy-Rest entfernt: spigot.yml bungeecord=false.")
+        except Exception:  # noqa: BLE001 - darf den Start nie stoeren
+            pass
 
     paper_global = base_path / "config" / "paper-global.yml"
     if paper_global.exists():
@@ -459,10 +470,14 @@ def cleanup_velocity_leftovers(server: Server) -> list[str]:
 
 
 _VELOCITY_BACKEND_TYPES = {"paper", "purpur", "spigot", "bukkit", "folia"}
+# NUR Paper-Familie kann Velocity "modern forwarding". Spigot/Bukkit brauchen "legacy"
+# (BungeeCord) Forwarding - sonst laufen sie offline-mode OHNE echte UUID (Skin + Spielstand
+# weg, weil die playerdata pro UUID liegt).
+_MODERN_FORWARDING_TYPES = {"paper", "purpur", "folia"}
 
 
 def is_velocity_backend(server: Server, *, network_mode: str | None = None) -> bool:
-    """Ob dieser Server ein Velocity-Backend ist (Modern Forwarding, loopback).
+    """Ob dieser Server ein Velocity-Backend ist (loopback + Forwarding).
 
     Nur im Modus 'velocity' und nur Bukkit-basierte, gateway_enabled Server. Modded-/
     Vanilla-Server sind KEINE Backends - sie werden per nativem Transfer direkt
@@ -475,15 +490,41 @@ def is_velocity_backend(server: Server, *, network_mode: str | None = None) -> b
     return str(getattr(server, "server_type", "") or "").lower() in _VELOCITY_BACKEND_TYPES
 
 
-def apply_velocity_backend_forwarding(server: Server, secret: str) -> list[str]:
-    """Server als Velocity-Backend einrichten (Modern Forwarding) - Gegenstueck zu
-    ``cleanup_velocity_leftovers``.
+def velocity_forwarding_mode(db: Session) -> str:
+    """'modern' NUR wenn ALLE Velocity-Backends Paper-Familie sind; sonst 'legacy' (BungeeCord).
 
-    - server.properties: ``online-mode=false`` (der Proxy authentifiziert) +
-      ``server-ip=127.0.0.1`` (nur ueber Velocity erreichbar, kein Username-Spoofing).
-    - config/paper-global.yml: ``proxies.velocity {enabled:true, online-mode:true,
-      secret:<secret>}`` (partiell schreiben; Paper ergaenzt die restlichen Defaults).
-    """
+    Velocitys Forwarding-Modus ist global. Sobald EIN Backend Spigot/Bukkit ist (kann kein
+    modern forwarding), muss das ganze Netzwerk auf legacy - sonst bekaeme dieser Server keine
+    echte Mojang-UUID (Offline-UUID -> Skin/Spielstand-Verlust). Reine Paper-Netze bleiben auf
+    dem sichereren modern forwarding."""
+    from sqlalchemy import select
+
+    from app.services import app_setting_service
+
+    net = app_setting_service.get_network_mode(db)
+    if (net or "").strip().lower() != "velocity":
+        return "modern"
+    for srv in db.scalars(select(Server)).all():
+        if (is_velocity_backend(srv, network_mode=net)
+                and str(getattr(srv, "server_type", "") or "").lower() not in _MODERN_FORWARDING_TYPES):
+            return "legacy"
+    return "modern"
+
+
+def apply_velocity_backend_forwarding(server: Server, secret: str, *, mode: str = "modern") -> list[str]:
+    """Server als Velocity-Backend einrichten - Gegenstueck zu ``cleanup_velocity_leftovers``.
+
+    ``mode='modern'`` (Paper-Familie): paper-global.yml velocity + Secret.
+    ``mode='legacy'`` (BungeeCord; noetig sobald ein Spigot/Bukkit-Backend im Netz ist):
+    spigot.yml ``settings.bungeecord=true`` (liest Spigot UND Paper) - kein Secret.
+
+    Beide: server.properties ``online-mode=false`` (der Proxy authentifiziert) +
+    ``server-ip=127.0.0.1`` (nur ueber Velocity erreichbar). SICHERHEIT: bei legacy vertraut
+    das Backend den weitergereichten Daten -> es darf NUR ueber den Proxy erreichbar sein
+    (Backends binden loopback; oeffentlich ist nur der Gateway-Port)."""
+    if (mode or "modern").strip().lower() == "legacy":
+        return _apply_legacy_forwarding(server)
+
     notes: list[str] = []
     base_path = Path(server.base_path).expanduser().resolve()
     if not base_path.exists():
@@ -527,6 +568,12 @@ def apply_velocity_backend_forwarding(server: Server, secret: str) -> list[str]:
         notes.append(f"Velocity-Forwarding (paper-global.yml) fehlgeschlagen: {exc}")
 
     if forwarding_ok:
+        # Ein evtl. von legacy uebrig gebliebenes bungeecord=true ABSCHALTEN, sonst laeuft das
+        # Backend mit modern UND legacy gleichzeitig -> Doppel-Forwarding -> Kick.
+        try:
+            _set_spigot_bungeecord(base_path, False)
+        except Exception:  # noqa: BLE001 - best-effort, darf modern nicht kippen
+            pass
         _upsert_server_property(server, "online-mode", "false")
         _upsert_server_property(server, "server-ip", "127.0.0.1")
         notes.append("Velocity-Forwarding aktiv: online-mode=false, loopback, Secret gesetzt.")
@@ -537,6 +584,81 @@ def apply_velocity_backend_forwarding(server: Server, secret: str) -> list[str]:
             "Velocity-Forwarding NICHT geschrieben -> online-mode=true erzwungen (Sicherheit). "
             "Backend laeuft erst hinter dem Proxy, wenn paper-global.yml schreibbar ist."
         )
+    return notes
+
+
+def _set_spigot_bungeecord(base_path: Path, enabled: bool) -> None:
+    """spigot.yml ``settings.bungeecord`` setzen (partiell; wirft bei Schreibfehler)."""
+    import yaml
+
+    spigot_yml = base_path / "spigot.yml"
+    data: dict = {}
+    if spigot_yml.exists():
+        loaded = yaml.safe_load(spigot_yml.read_text(encoding="utf-8", errors="ignore"))
+        if isinstance(loaded, dict):
+            data = loaded
+    settings = data.get("settings")
+    if not isinstance(settings, dict):
+        settings = {}
+    # Beim Ausschalten nichts anlegen, wenn ohnehin schon aus/fehlend.
+    if not enabled and not settings.get("bungeecord"):
+        return
+    settings["bungeecord"] = bool(enabled)
+    data["settings"] = settings
+    spigot_yml.write_text(
+        yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding="utf-8"
+    )
+
+
+def _set_paper_velocity_enabled(base_path: Path, enabled: bool) -> None:
+    """paper-global.yml ``proxies.velocity.enabled`` setzen, wenn die Datei existiert (best-effort)."""
+    paper_global = base_path / "config" / "paper-global.yml"
+    if not paper_global.exists():
+        return
+    try:
+        import yaml
+
+        pdata = yaml.safe_load(paper_global.read_text(encoding="utf-8", errors="ignore")) or {}
+        vel = ((pdata.get("proxies") or {}).get("velocity") or {})
+        if isinstance(pdata, dict) and isinstance(vel, dict) and bool(vel.get("enabled")) != enabled:
+            vel["enabled"] = enabled
+            pdata.setdefault("proxies", {})["velocity"] = vel
+            paper_global.write_text(
+                yaml.safe_dump(pdata, sort_keys=False, allow_unicode=True), encoding="utf-8"
+            )
+    except Exception:  # noqa: BLE001 - Paper-spezifisch, darf Spigot nicht stoeren
+        pass
+
+
+def _apply_legacy_forwarding(server: Server) -> list[str]:
+    """Legacy (BungeeCord) Forwarding: spigot.yml ``settings.bungeecord=true`` (Spigot UND Paper).
+
+    Damit reicht der (online-mode=true) Proxy die ECHTE Mojang-UUID + Skin durch. Bei Paper wird
+    zusaetzlich das modern-velocity-Forwarding deaktiviert (sonst Doppel-Forwarding -> Kick). Nur bei
+    Erfolg online-mode=false + loopback; sonst Fail-safe online-mode=true (kein offline-mode ohne
+    Forwarding-Enforcement)."""
+    notes: list[str] = []
+    base_path = Path(server.base_path).expanduser().resolve()
+    if not base_path.exists():
+        return notes
+
+    ok = False
+    try:
+        _set_spigot_bungeecord(base_path, True)
+        # Paper: modern-velocity-Forwarding deaktivieren, damit es nicht mit legacy kollidiert.
+        _set_paper_velocity_enabled(base_path, False)
+        ok = True
+    except Exception as exc:  # noqa: BLE001 - darf den Start nie stoeren
+        notes.append(f"Legacy-Forwarding (spigot.yml) fehlgeschlagen: {exc}")
+
+    if ok:
+        _upsert_server_property(server, "online-mode", "false")
+        _upsert_server_property(server, "server-ip", "127.0.0.1")
+        notes.append("Velocity-Forwarding (legacy/BungeeCord) aktiv: online-mode=false, loopback, "
+                     "spigot.yml bungeecord=true (echte Mojang-UUID + Skin).")
+    else:
+        _upsert_server_property(server, "online-mode", "true")
+        notes.append("Legacy-Forwarding NICHT geschrieben -> online-mode=true erzwungen (Sicherheit).")
     return notes
 
 

@@ -1334,7 +1334,10 @@ def start_server(
             _net_mode = app_setting_service.get_network_mode(db)
             if server_service.is_velocity_backend(server, network_mode=_net_mode):
                 _secret = app_setting_service.ensure_velocity_forwarding_secret(db)
-                for note in server_service.apply_velocity_backend_forwarding(server, _secret):
+                # Modus global aus den Backends ableiten (legacy sobald ein Spigot/Bukkit dabei ist).
+                _fwd_mode = server_service.velocity_forwarding_mode(db)
+                for note in server_service.apply_velocity_backend_forwarding(
+                    server, _secret, mode=_fwd_mode):
                     if note:
                         console_service.append_output(server.id, note)
             else:

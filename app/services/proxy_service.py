@@ -220,8 +220,12 @@ def _toml_escape(value: str) -> str:
     return "".join(ch if ch >= " " or ch in "\\\"" else f"\\u{ord(ch):04X}" for ch in out)
 
 
-def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None) -> str:
-    """velocity.toml aus Backends + Laufzeit-Config bauen (Modern Forwarding)."""
+def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None,
+                         *, forwarding_mode: str = "modern") -> str:
+    """velocity.toml aus Backends + Laufzeit-Config bauen.
+
+    ``forwarding_mode``: 'modern' (Paper-only, sicher, Secret) oder 'legacy' (BungeeCord;
+    noetig sobald ein Spigot/Bukkit-Backend im Netz ist - Velocitys Modus ist global)."""
     bind_port = int(cfg["bind_port"])
     domain = (cfg.get("domain") or "").strip()
     motd = _toml_escape(cfg.get("motd") or "Willkommen im Netzwerk")
@@ -236,8 +240,12 @@ def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None
     lines.append("online-mode = true")
     lines.append("force-key-authentication = true")
     lines.append("prevent-client-proxy-connections = false")
-    lines.append('player-info-forwarding-mode = "modern"')
-    lines.append('forwarding-secret-file = "forwarding.secret"')
+    if (forwarding_mode or "modern").strip().lower() == "legacy":
+        # BungeeCord/legacy: kein Secret. Backends brauchen spigot.yml bungeecord=true.
+        lines.append('player-info-forwarding-mode = "legacy"')
+    else:
+        lines.append('player-info-forwarding-mode = "modern"')
+        lines.append('forwarding-secret-file = "forwarding.secret"')
     lines.append("announce-forge = false")
     lines.append("kick-existing-players = false")
     lines.append('ping-passthrough = "DISABLED"')
@@ -286,7 +294,9 @@ def _write_runtime_config(cfg: dict) -> tuple[str, list[str], str]:
     with SessionLocal() as db:
         backends, lobby_name = velocity_backends(db)
         mc_version = _lobby_mc_version(db)
-    toml_text = render_velocity_toml(cfg, backends, lobby_name)
+        from app.services import server_service
+        forwarding_mode = server_service.velocity_forwarding_mode(db)
+    toml_text = render_velocity_toml(cfg, backends, lobby_name, forwarding_mode=forwarding_mode)
     (wd / "velocity.toml").write_text(toml_text, encoding="utf-8")
 
     signature = f"{toml_text}||secret={secret}"

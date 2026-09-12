@@ -113,6 +113,26 @@ def test_is_velocity_backend_gating():
     assert server_service.is_velocity_backend(paper, network_mode="velocity") is False
 
 
+def test_velocity_forwarding_mode_auto(client):
+    """Nur-Paper-Netz -> modern; sobald ein Spigot-Backend dabei ist -> legacy (global)."""
+    import app.db.session as dbs
+    from app.models.server import Server
+    from app.services import app_setting_service, server_service
+
+    with dbs.SessionLocal() as db:
+        app_setting_service.set_network_mode(db, "velocity")
+        db.add(Server(name="lob", slug="fmlob", server_type="paper", mc_version="26.2",
+                      base_path="C:/tmp/fmlob", gateway_enabled=True, gateway_is_default=True,
+                      port=31001))
+        db.commit()
+        assert server_service.velocity_forwarding_mode(db) == "modern"
+
+        db.add(Server(name="smp", slug="fmsmp", server_type="spigot", mc_version="1.21.11",
+                      base_path="C:/tmp/fmsmp", gateway_enabled=True, port=31002))
+        db.commit()
+        assert server_service.velocity_forwarding_mode(db) == "legacy"
+
+
 # --- Modern Forwarding schreiben ----------------------------------------------
 def test_apply_velocity_backend_forwarding_writes_files(tmp_path):
     import yaml
@@ -156,6 +176,64 @@ def test_apply_velocity_backend_forwarding_failsafe_online_mode(tmp_path):
     assert "online-mode=true" in props        # Fail-safe: KEIN offline-mode ohne Forwarding
     assert "online-mode=false" not in props
     assert any("online-mode=true erzwungen" in n for n in notes)
+
+
+def test_render_velocity_toml_legacy_forwarding():
+    """Legacy (BungeeCord) Modus: player-info-forwarding-mode=legacy + KEIN Secret-File."""
+    from app.services import proxy_service
+
+    cfg = {"bind_port": 25565, "domain": "mc.example.de", "motd": "Hallo", "max_players": 80}
+    backends = [{"name": "smp", "address": "127.0.0.1:30002", "alias": "smp", "is_lobby": False}]
+    toml = proxy_service.render_velocity_toml(cfg, backends, "smp", forwarding_mode="legacy")
+    assert 'player-info-forwarding-mode = "legacy"' in toml
+    assert 'player-info-forwarding-mode = "modern"' not in toml
+    assert "forwarding-secret-file" not in toml           # legacy nutzt kein Secret
+    assert "online-mode = true" in toml                    # Proxy authentifiziert weiter
+
+
+def test_apply_legacy_forwarding_writes_spigot_yml(tmp_path):
+    """Spigot-Backend: legacy schreibt spigot.yml bungeecord=true + online-mode=false + loopback."""
+    import yaml
+
+    from app.models.server import Server
+    from app.services import server_service
+
+    base = tmp_path / "spigot-backend"
+    base.mkdir()
+    srv = Server(name="s", slug="s", server_type="spigot", base_path=str(base),
+                 gateway_enabled=True, port=30020)
+
+    notes = server_service.apply_velocity_backend_forwarding(srv, "irrelevant", mode="legacy")
+    assert any("legacy/BungeeCord" in n for n in notes)
+
+    spig = yaml.safe_load((base / "spigot.yml").read_text(encoding="utf-8"))
+    assert spig["settings"]["bungeecord"] is True
+
+    props = (base / "server.properties").read_text(encoding="utf-8")
+    assert "online-mode=false" in props
+    assert "server-ip=127.0.0.1" in props
+
+
+def test_apply_legacy_forwarding_disables_paper_modern(tmp_path):
+    """Paper-Backend im legacy-Netz: vorhandenes modern-velocity wird deaktiviert (kein Konflikt)."""
+    import yaml
+
+    from app.models.server import Server
+    from app.services import server_service
+
+    base = tmp_path / "paper-in-legacy"
+    (base / "config").mkdir(parents=True)
+    (base / "config" / "paper-global.yml").write_text(
+        yaml.safe_dump({"proxies": {"velocity": {"enabled": True, "online-mode": True,
+                                                  "secret": "x"}}}), encoding="utf-8")
+    srv = Server(name="p", slug="p", server_type="paper", base_path=str(base),
+                 gateway_enabled=True, port=30021)
+
+    server_service.apply_velocity_backend_forwarding(srv, "x", mode="legacy")
+    spig = yaml.safe_load((base / "spigot.yml").read_text(encoding="utf-8"))
+    assert spig["settings"]["bungeecord"] is True
+    pdata = yaml.safe_load((base / "config" / "paper-global.yml").read_text(encoding="utf-8"))
+    assert pdata["proxies"]["velocity"]["enabled"] is False   # modern aus -> kein Konflikt
 
 
 def test_cleanup_velocity_leftovers_reverts(tmp_path):
