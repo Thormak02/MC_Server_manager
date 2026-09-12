@@ -2,6 +2,7 @@ package net.mcsm.lobby;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -95,6 +96,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     private int bridgePort = 25606;
     private String bridgeToken = "";
     private boolean peaceful = false;   // Lobby: kein Schaden/PvP/Rueckstoss + keine Spieler-Kollision
+    private boolean resetOnJoin = false;  // Lobby: bei (Re-)Join an den Welt-Spawn + Adventure (ausser Ops)
 
     static final class ServerEntry {
         String key;
@@ -294,6 +296,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         bridgePort = c.getInt("bridge.port", 25606);
         bridgeToken = c.getString("bridge.token", "");
         peaceful = c.getBoolean("peaceful", false);
+        resetOnJoin = c.getBoolean("reset_on_join", false);
 
         // WICHTIG: servers ist eine LISTE, nicht eine Map mit Alias als Schluessel.
         // Bukkit-YAML behandelt '.' im Schluessel als Pfad-Trenner, d.h. ein Alias
@@ -474,6 +477,16 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
+        // (Re-)Join: immer an den Welt-Spawn + Adventure. Operatoren ausgenommen, damit sie die
+        // Lobby bauen koennen, ohne bei jedem Login zum Spawn gezogen/in Adventure gesetzt zu werden.
+        if (resetOnJoin && !p.isOp()) {
+            try {
+                Location spawn = p.getWorld().getSpawnLocation().clone().add(0.5, 0.0, 0.5);
+                p.teleport(spawn);
+                p.setGameMode(GameMode.ADVENTURE);
+            } catch (Throwable ignored) {
+            }
+        }
         if (peaceful) {
             addToNoCollisionTeam(p);   // Spieler koennen sich nicht schubsen
         }

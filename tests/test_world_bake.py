@@ -230,3 +230,39 @@ def test_bake_lobby_packets_no_spawn_returns_none(tmp_path: Path):
     (wd / "region").mkdir(parents=True)
     (wd / "level.dat").write_bytes(_level_dat_bytes(None))    # KEIN Spawn -> Fallback
     assert wb.bake_lobby_packets(wd, radius=4) is None
+
+
+def test_diagnose_lobby_bake_no_spawn(tmp_path: Path):
+    wd = tmp_path / "world"
+    (wd / "region").mkdir(parents=True)
+    (wd / "level.dat").write_bytes(_level_dat_bytes(None))
+    d = wb.diagnose_lobby_bake(wd, radius=2)
+    assert d["level_dat"] is True
+    assert d["spawn_explicit"] is False
+    assert d["chunks_baked"] == 0
+    assert d["error"] is None
+    assert d["chunks_in_window"] == 25
+
+
+def test_diagnose_lobby_bake_missing_level_dat(tmp_path: Path):
+    d = wb.diagnose_lobby_bake(tmp_path / "nope", radius=1)
+    assert d["level_dat"] is False and d["error"] is None
+
+
+def test_hub_world_status_not_running():
+    from app.services import hub_lobby_service as hl
+
+    st = hl.hub_world_status()
+    assert st["running"] is False and st["baked"] is False
+
+
+def test_world_spawn_raises_on_corrupt_level_dat(tmp_path: Path):
+    """world_spawn ist bewusst NICHT defensiv (roher IO). Aufrufer (bake_lobby_packets, die
+    Rebake-Route) MUESSEN es kapseln - z.B. wenn Paper level.dat gerade sperrt/halb schreibt."""
+    import pytest
+
+    wd = tmp_path / "world"
+    wd.mkdir()
+    (wd / "level.dat").write_bytes(b"not-a-gzip-file")   # halb geschrieben / gesperrt-Simulation
+    with pytest.raises(Exception):
+        wb.world_spawn(wd)

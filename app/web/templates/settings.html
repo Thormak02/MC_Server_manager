@@ -120,7 +120,28 @@
               onsubmit="return confirm('Ersetzt die aktuelle Lobby-Welt durch die Welt aus app/assets/lobby_world. Die Lobby muss GESTOPPT sein. Fortfahren?');">
             <button type="submit">Lobby-Welt aus Asset laden</button>
         </form>
+        <form method="post" action="/settings/hub/rebake" class="inline-form">
+            <button type="submit">Hub-Welt neu backen (modded)</button>
+        </form>
     </div>
+    <div class="muted" style="margin-top:.4rem">
+        <strong>Modded-Hub-Welt:</strong>
+        {% if not hub_world_status or not hub_world_status.running %}
+            <span style="color:#b26a00">Hub laeuft nicht</span> (nur im UNIVERSAL-Modus aktiv).
+        {% elif hub_world_status.baked %}
+            <strong style="color:#2e7d32">✓ gebackene Lobby-Welt</strong>
+            &ndash; {{ hub_world_status.chunk_packets }} Chunks, Spawn <code>{{ hub_world_status.origin }}</code>.
+        {% else %}
+            <strong style="color:#c62828">✗ Plattform (Steinplatte)</strong>
+            &ndash; kein Bake. In der Lobby <code>/setworldspawn</code> setzen, <code>/save-all</code>,
+            dann „Hub-Welt neu backen" klicken.
+        {% endif %}
+    </div>
+    <p class="muted">
+        „Hub-Welt neu backen": liest die <em>live</em> Lobby-Welt (Blöcke + Spawn) und serviert sie
+        modded 1.21.1-Clients nativ statt der Plattform. Nötig nach <code>/setworldspawn</code> oder
+        Umbauten. Ohne gesetzten Welt-Spawn bleibt die Plattform (mit Erklärung als Meldung).
+    </p>
     <p class="muted">
         „Velocity neu starten": startet den <em>Proxy</em> zwingend neu und laedt die neuesten
         Via-Plugins. <strong>Wichtig:</strong> ein Neustart der Lobby (Server&nbsp;#7) startet den

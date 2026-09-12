@@ -336,6 +336,9 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
         # Friedliche Lobby: kein Schaden/PvP/Rueckstoss + keine Spieler-Kollision (Schubsen).
         # Nur auf der Lobby - auf Gameplay-Servern soll normal gekaempft werden koennen.
         "peaceful": bool(is_lobby),
+        # Bei (Re-)Join immer an den Welt-Spawn + Adventure (Nicht-Operatoren). So landet man
+        # nach dem Zurueckwechseln wieder am Lobby-Spawn; Operatoren bleiben zum Bauen unberuehrt.
+        "reset_on_join": bool(is_lobby),
     }
     try:
         cfg_path.write_text(

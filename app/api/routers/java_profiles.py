@@ -147,6 +147,8 @@ def settings_page(
     velocity_log_tail = proxy_service.log_tail(80)
     from app.services import presence_bridge_service
     bridge_status = presence_bridge_service.bridge_status()
+    from app.services import hub_lobby_service
+    hub_world_status = hub_lobby_service.hub_world_status()
     plugin_build_status = plugin_build_service.last_build_status()
     plugin_building = plugin_build_service.is_building()
     platform_settings = list_platform_settings(db, include_secrets=False)
@@ -182,6 +184,7 @@ def settings_page(
             velocity_via_plugins=velocity_via_plugins,
             velocity_log_tail=velocity_log_tail,
             bridge_status=bridge_status,
+            hub_world_status=hub_world_status,
             plugin_build_status=plugin_build_status,
             plugin_building=plugin_building,
             gateway_status=gateway_status,
@@ -348,6 +351,49 @@ def deploy_lobby_world_action(request: Request, db: Session = Depends(get_db)):
 
     ok, message = lobby_service.deploy_lobby_world(db, overwrite=True)
     push_flash(request, message, "success" if ok else "error")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/hub/rebake")
+def rebake_hub_world_action(request: Request, db: Session = Depends(get_db)):
+    """Hub neu starten -> backt die live Lobby-Welt frisch (nach /setworldspawn + Bauen). Zeigt
+    danach, ob die gebackene Welt oder die Plattform serviert wird - und bei Fallback WARUM."""
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import app_setting_service, hub_lobby_service, lobby_service, world_bake_service
+
+    if not app_setting_service.get_hub_lobby_enabled(db):
+        push_flash(request, "Der modded Hub ist nicht aktiv (nur im UNIVERSAL-Modus).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    hub_lobby_service.restart_hub_lobby()
+    st = hub_lobby_service.hub_world_status()
+    if st.get("baked"):
+        push_flash(
+            request,
+            f"Hub neu gebacken: {st['chunk_packets']} Chunks um Spawn {st.get('origin')}. "
+            f"Mit modded Client neu verbinden - du solltest die Lobby-Welt statt der Plattform sehen.",
+            "success",
+        )
+    else:
+        lwd = lobby_service.default_lobby_world_dir()
+        if not lwd:
+            why = ("keine Lobby-Welt gefunden - erst 'Lobby-Welt aus Asset laden', dann Lobby starten.")
+        else:
+            # world_spawn liest level.dat (IO). Waehrend Paper speichert, kann die Datei kurz
+            # gesperrt/halb geschrieben sein -> nicht crashen, sondern als Grund melden.
+            try:
+                sx, sy, sz, explicit = world_bake_service.world_spawn(lwd)
+                why = ("KEIN Welt-Spawn gesetzt - in der Lobby zum Zentrum gehen, /setworldspawn, dann "
+                       "/save-all ausfuehren und hier erneut 'Hub-Welt neu backen'." if not explicit else
+                       f"Spawn {sx},{sy},{sz} gesetzt, aber keine Chunks lesbar - laeuft die Lobby noch "
+                       "(Region-Dateien gesperrt)? Sonst Lobby kurz stoppen und erneut backen.")
+            except Exception:  # noqa: BLE001 - level.dat gesperrt/halb geschrieben (Lobby speichert?)
+                why = ("level.dat nicht lesbar (Lobby speichert gerade?) - kurz warten oder Lobby "
+                       "stoppen und erneut 'Hub-Welt neu backen'.")
+        push_flash(request, f"Hub laeuft auf der Plattform (kein Bake): {why}", "error")
     return RedirectResponse(url="/settings", status_code=303)
 
 

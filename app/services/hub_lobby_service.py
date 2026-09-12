@@ -170,6 +170,13 @@ def start_hub_lobby(modded_port: int, vanilla_port: int, replay_path: str,
             replay=replay_path, vanilla=vanilla, pack_replays=packs,
             lobby_world_dir=lobby_world_dir,
         )
+        # Bake-Ergebnis ins (NAS-synchronisierte) Gateway-Log schreiben -> Diagnose auch remote.
+        _wsetup = getattr(hub, "world_setup", None)
+        if lobby_world_dir:
+            if _wsetup is not None:
+                _glog("world_baked", f"{len(_wsetup) - 3} Chunks, origin={getattr(hub, 'origin', None)}")
+            else:
+                _glog("world_fallback", f"kein Bake ({lobby_world_dir}) -> Plattform (Spawn gesetzt?)")
         Thread(target=hub.animate_bot, daemon=True, name="hublobby-bot").start()
         Thread(target=_accept_loop, args=(listener, modded_sock, "modded"),
                daemon=True, name="hublobby-modded").start()
@@ -208,6 +215,34 @@ def _stop_locked() -> None:
 def stop_hub_lobby() -> None:
     with _LOCK:
         _stop_locked()
+
+
+def restart_hub_lobby() -> bool:
+    """Hub stoppen und neu aufbauen -> backt die Lobby-Welt frisch (nach /setworldspawn + Edits).
+    Ohne vollen Manager-Neustart nutzbar. Gibt zurueck, ob der Hub danach laeuft."""
+    with _LOCK:
+        _stop_locked()
+    reconcile_hub_lobby()
+    return is_running()
+
+
+def hub_world_status() -> dict:
+    """Was serviert der LAUFENDE Hub gerade? (gebackene Welt vs. Plattform + Origin + Chunk-Zahl).
+    Ground-Truth aus der Hub-Instanz (im Gegensatz zur Dry-Run-Diagnose in world_bake_service)."""
+    with _LOCK:
+        lst = _LISTENER
+    if lst is None or getattr(lst, "hub", None) is None:
+        return {"running": False, "baked": False}
+    hub = lst.hub
+    ws = getattr(hub, "world_setup", None)
+    return {
+        "running": True,
+        "baked": ws is not None,
+        # world_setup = set_center_chunk + batch_start + N Chunk-Packets + batch_finished.
+        "chunk_packets": max(0, len(ws) - 3) if ws else 0,
+        "origin": list(getattr(hub, "origin", ()) or ()),
+        "world_dir": getattr(lst, "lobby_world_dir", None),
+    }
 
 
 def reconcile_hub_lobby() -> None:

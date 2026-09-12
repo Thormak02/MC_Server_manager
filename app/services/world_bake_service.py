@@ -354,3 +354,44 @@ def bake_lobby_packets(world_dir: str | Path, *, radius: int, biome_id: int = 0)
         }
     except Exception:  # noqa: BLE001 - defensiv: jeder Bake-Fehler -> Plattform-Fallback
         return None
+
+
+def diagnose_lobby_bake(world_dir: str | Path, *, radius: int) -> dict:
+    """Nicht-destruktive Diagnose: WARUM backt der Hub die Welt (nicht)? Liest level.dat + Spawn,
+    zaehlt bakebare Chunks im Fenster, sammelt ein paar Blocknamen aus dem Spawn-Chunk. Fuer das
+    Settings-Panel, damit der Fallback auf die Plattform sichtbar/erklaerbar wird."""
+    info: dict = {
+        "world_dir": str(world_dir), "level_dat": False, "data_version": None,
+        "spawn": None, "spawn_explicit": False, "center_chunk": None,
+        "region_file": None, "region_exists": False,
+        "chunks_in_window": (2 * radius + 1) ** 2, "chunks_baked": 0,
+        "sample_names": [], "error": None,
+    }
+    try:
+        wd = Path(world_dir)
+        ld = wd / "level.dat"
+        info["level_dat"] = ld.is_file()
+        if not ld.is_file():
+            return info
+        d = read_nbt(gzip.decompress(ld.read_bytes())).get("Data", {})
+        info["data_version"] = d.get("DataVersion")
+        sx, sy, sz, explicit = world_spawn(wd)
+        info["spawn"] = [sx, sy, sz]
+        info["spawn_explicit"] = explicit
+        ccx, ccz = sx >> 4, sz >> 4
+        info["center_chunk"] = [ccx, ccz]
+        rf = wd / "region" / f"r.{ccx >> 5}.{ccz >> 5}.mca"
+        info["region_file"] = rf.name
+        info["region_exists"] = rf.is_file()
+        info["chunks_baked"] = len(bake_area(wd, ccx, ccz, radius))
+        if rf.is_file():
+            ch = read_region(rf).get((ccx, ccz))
+            if ch:
+                names: set[str] = set()
+                for sec in ch.get("sections", []):
+                    for e in ((sec.get("block_states") or {}).get("palette") or []):
+                        names.add(str(e.get("Name", "")).replace("minecraft:", ""))
+                info["sample_names"] = sorted(names)[:12]
+    except Exception as exc:  # noqa: BLE001
+        info["error"] = repr(exc)
+    return info
