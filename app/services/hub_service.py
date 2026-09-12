@@ -709,8 +709,11 @@ class Hub:
                 self._eid_ctr += 1
                 eid = self._eid_ctr
                 uuid16 = (b"MCSMHB" + struct.pack(">Q", conn_id)).ljust(16, b"\x00")
-                session = _Session(conn_id, sock, eid, uuid16, username, sx, sy, sz,
-                                   textures=login_tex, textures_sig=login_sig)  # Skin schon da
+                # WICHTIG: session.textures NICHT vorab setzen. Sonst ueberspringt
+                # _bridge_ensure_skin das Nachpublizieren -> das Plugin bleibt beim allerersten
+                # (skinlosen) Spawn und rendert den Skin nie. Leer lassen -> ensure_skin holt den
+                # Skin (Cache-Hit dank Login-Fetch) und re-published ihn -> Plugin RE-SPAWNT mit Skin.
+                session = _Session(conn_id, sock, eid, uuid16, username, sx, sy, sz)
                 existing = [s for s in self.players.values() if s.alive]  # Bot + andere Spieler
                 self.players[conn_id] = session
 
