@@ -15,6 +15,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -25,6 +27,8 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -90,6 +94,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     private String bridgeHost = "127.0.0.1";
     private int bridgePort = 25606;
     private String bridgeToken = "";
+    private boolean peaceful = false;   // Lobby: kein Schaden/PvP/Rueckstoss + keine Spieler-Kollision
 
     static final class ServerEntry {
         String key;
@@ -288,6 +293,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         bridgeHost = c.getString("bridge.host", "127.0.0.1");
         bridgePort = c.getInt("bridge.port", 25606);
         bridgeToken = c.getString("bridge.token", "");
+        peaceful = c.getBoolean("peaceful", false);
 
         // WICHTIG: servers ist eine LISTE, nicht eine Map mit Alias als Schluessel.
         // Bukkit-YAML behandelt '.' im Schluessel als Pfad-Trenner, d.h. ein Alias
@@ -467,10 +473,13 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
 
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
+        Player p = e.getPlayer();
+        if (peaceful) {
+            addToNoCollisionTeam(p);   // Spieler koennen sich nicht schubsen
+        }
         if (!compassEnabled) {
             return;
         }
-        Player p = e.getPlayer();
         p.getInventory().setItem(compassSlot, compassItem());
         if (!servers.isEmpty()) {
             p.sendMessage(color("&7Rechtsklick mit dem &bKompass&7 oder &e/server <name>&7 zum Wechseln."));
@@ -491,6 +500,40 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                 presenceBridge.onLocalQuit(e.getPlayer());
             } catch (Throwable ignored) {
             }
+        }
+    }
+
+    @EventHandler
+    public void onDamage(EntityDamageEvent e) {
+        // Friedliche Lobby: KEIN Schaden fuer Spieler (deckt PvP, Fall, Ertrinken, Mobs ab).
+        // Das Abbrechen des Damage-Events unterbindet auch den Rueckstoss beim Zuschlagen.
+        // server.properties pvp=false stoppt nur den Schaden, nicht das Schlagen/Rueckstossen.
+        // Nur wenn peaceful (= Lobby), damit Gameplay-Server normal kaempfen koennen.
+        if (peaceful && e.getEntity() instanceof Player) {
+            e.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onHunger(FoodLevelChangeEvent e) {
+        if (peaceful) {
+            e.setCancelled(true);   // kein Hunger in der Lobby
+        }
+    }
+
+    private void addToNoCollisionTeam(Player p) {
+        // Spieler-Kollision (gegenseitiges Schubsen) via Scoreboard-Team abschalten.
+        try {
+            Scoreboard sb = Bukkit.getScoreboardManager().getMainScoreboard();
+            Team team = sb.getTeam("mcsm_lobby");
+            if (team == null) {
+                team = sb.registerNewTeam("mcsm_lobby");
+                team.setOption(Team.Option.COLLISION_RULE, Team.OptionStatus.NEVER);
+            }
+            if (!team.hasEntry(p.getName())) {
+                team.addEntry(p.getName());
+            }
+        } catch (Throwable ignored) {
         }
     }
 

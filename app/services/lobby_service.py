@@ -333,6 +333,9 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
         "servers": servers,
         "regions": existing.get("regions", []) or [],
         "bridge": bridge_cfg,
+        # Friedliche Lobby: kein Schaden/PvP/Rueckstoss + keine Spieler-Kollision (Schubsen).
+        # Nur auf der Lobby - auf Gameplay-Servern soll normal gekaempft werden koennen.
+        "peaceful": bool(is_lobby),
     }
     try:
         cfg_path.write_text(
