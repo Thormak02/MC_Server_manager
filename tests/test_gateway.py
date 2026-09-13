@@ -1021,6 +1021,28 @@ def test_gateway_status_runtime_reflects_registration(client):
     assert gw.gateway_status_runtime()["mode"] == "off"
 
 
+def test_viaproxy_translation_gated_to_default_route():
+    """ViaProxy (gibt IMMER 767 aus, Einstieg in den 1.21.1-Hub) darf NUR die Default-Route
+    uebersetzen. Ein expliziter Alias auf einen nativ gleichversionigen Server (z.B. 774->774)
+    muss DIREKT gehen - sonst landet der Client als 767 dort und wird als 'Outdated' abgewiesen."""
+    import app.services.gateway_service as gw
+
+    routes = gw.GatewayRoutes(viaproxy_enabled=True, viaproxy_port=25580)
+
+    class _HS:
+        protocol_version = 774   # 1.21.11 vanilla
+        next_state = 2           # Join
+
+    hs = _HS()
+    # Protokoll-basiert IST Uebersetzung noetig-faehig ...
+    assert gw._needs_viaproxy_translation(routes, hs) is True
+    # ... aber der Handler gated auf reason=='default'. Alias -> NICHT uebersetzen (direkt).
+    alias = gw.RouteDecision(server_id=4, reason="alias")
+    default = gw.RouteDecision(server_id=7, reason="default")
+    assert (alias.reason == "default" and gw._needs_viaproxy_translation(routes, hs)) is False
+    assert (default.reason == "default" and gw._needs_viaproxy_translation(routes, hs)) is True
+
+
 def test_decide_route_dotted_alias_strips_domain():
     """Alias mit Punkten (z.B. 1.21.11-spigot) muss ueber Domain-Abzug matchen."""
     import app.services.gateway_service as gw

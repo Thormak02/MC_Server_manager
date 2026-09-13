@@ -570,13 +570,6 @@ def _handle_gateway_connection(client: socket.socket) -> None:
         decision = decide_route(
             handshake.server_address, handshake.protocol_version, routes
         )
-        # DIAGNOSE (nur echte Joins): welchen Host bekommt das Gateway + wohin routet es?
-        # Landet im Audit-Log (DB) -> per DB-Snapshot remote lesbar. Bei Bedarf spaeter entfernen.
-        if handshake.next_state in mc_protocol.JOIN_NEXT_STATES:
-            _glog("gateway.route",
-                  f"host={clean_hostname(handshake.server_address)!r} "
-                  f"proto={handshake.protocol_version} -> id={decision.server_id} "
-                  f"reason={decision.reason}")
 
         # UNIVERSAL-Modus: nicht-767-Joins an der BLANKEN Domain (kein expliziter Alias) gehen
         # DIREKT an Velocity+Paper (Velocity+Via uebersetzt abwaerts). Modded ist 1.21.1/767
@@ -601,7 +594,12 @@ def _handle_gateway_connection(client: socket.socket) -> None:
         # uebersetzen. ViaProxy zielt zurueck ins Gateway (Loopback; Original-Host bleibt dank
         # rewrite-handshake-packet=false) -> der uebersetzte 767-Strom wird unten normal
         # geroutet. Loopschutz automatisch: hinter ViaProxy ist alles 767. 767-Clients unberuehrt.
-        if _needs_viaproxy_translation(routes, handshake):
+        # NUR die Default-Route (blanke Domain -> Universal-Lobby) durch ViaProxy schicken.
+        # ViaProxy gibt IMMER 767 aus (Einstieg in den 1.21.1-Hub/Dispatcher). Ein EXPLIZITER
+        # Alias (z.B. 1.21.11-spigot.<domain>) zeigt auf einen konkreten, nativ gleichversionigen
+        # Server -> direkt anspringen. Ohne dieses Gate landete ein 774-Client via Alias als 767
+        # auf dem 1.21.11-Server -> "Outdated client". (Analog zu _needs_velocity_vanilla oben.)
+        if decision.reason == "default" and _needs_viaproxy_translation(routes, handshake):
             from app.services import viaproxy_service
 
             if viaproxy_service.is_running():
