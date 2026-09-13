@@ -625,6 +625,54 @@ async def adopt_content(request: Request, server_id: int, db: Session = Depends(
     return JSONResponse(result)
 
 
+@router.post("/api/servers/{server_id}/content/vt-update", response_class=JSONResponse)
+async def vt_update_content(request: Request, server_id: int, db: Session = Depends(get_db)):
+    """Installierte VanillaTweaks-Datapacks auf die aktuelle Katalog-Version bringen.
+    Optional {content_id} fuer EINE Zeile; sonst alle VT-Datapacks des Servers."""
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    server = _ensure_server_access(db, current_user, server_id)
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    raw_content_id = (payload or {}).get("content_id")
+    try:
+        content_id = int(raw_content_id) if raw_content_id is not None else None
+    except (TypeError, ValueError):
+        content_id = None
+
+    from app.services import vanillatweaks_service as vt
+
+    rows = db.scalars(
+        select(InstalledContent).where(
+            InstalledContent.server_id == server.id,
+            InstalledContent.provider_name == "vanillatweaks",
+            InstalledContent.content_type == "datapack",
+        )
+    ).all()
+    if content_id is not None:
+        rows = [r for r in rows if r.id == content_id]
+
+    notes: list[str] = []
+    warnings: list[str] = []
+    for row in rows:
+        try:
+            updated, note = vt.update_installed_vt(db, server, row, current_user.id)
+            if updated:
+                notes.append(note)
+            elif note:
+                warnings.append(note)
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            warnings.append(f"{row.name}: {exc}")
+    return JSONResponse({"updated": len(notes), "notes": notes, "warnings": warnings})
+
+
 @router.get(
     "/api/servers/{server_id}/vanillatweaks/categories",
     response_class=JSONResponse,

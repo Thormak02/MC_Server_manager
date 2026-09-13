@@ -2581,13 +2581,50 @@ def auto_adopt_local_content(db: Session, server: Server, user_id: int | None, *
                 still_remaining.append((entry, path, sha1))
         remaining = still_remaining
 
-    # (3) Uebrige als 'unmatched' markieren - aber NUR, wenn beide Provider zu einem definitiven
-    # Ergebnis kamen (gelaufen ODER dauerhaft unverfuegbar) und KEIN Lookup transient scheiterte.
-    # So blockiert ein einmaliger Netzwerk-/Rate-Limit-Fehler nicht dauerhaft die spaetere Zuordnung.
+    # (3) VanillaTweaks: uebrige Datapacks per Katalog-Namen zuordnen (VT ist nicht auf Modrinth/CF).
+    vt_datapacks = [t for t in remaining if (t[0].content_type or "").strip().lower() == "datapack"]
+    vt_ran = False
+    vt_failed = False
+    if vt_datapacks:
+        from app.services import vanillatweaks_service as _vt
+        try:
+            vt_lookup = _vt.build_datapack_lookup(_vt.map_vt_version(server.mc_version))
+            vt_ran = True
+        except Exception as exc:  # noqa: BLE001
+            vt_lookup = {}
+            vt_failed = True
+            warnings.append(f"VanillaTweaks-Zuordnung nicht moeglich: {exc}")
+        if vt_ran:
+            matched_ids: set = set()
+            for entry, _path, _sha1 in vt_datapacks:
+                info = vt_lookup.get(_normalized_lookup_key(_vt._pack_name_from_file(entry.file_name)))
+                if info:
+                    installed_ver = _vt._pack_version_from_file(entry.file_name) or info["version"]
+                    _apply_adoption(
+                        entry,
+                        provider_name="vanillatweaks",
+                        project_id=f"vt:{info['pack_type']}",
+                        version_id=installed_ver,
+                        name=info["display"],
+                        version_label=installed_ver,
+                    )
+                    adopted += 1
+                    matched_ids.add(entry.id)
+            if matched_ids:
+                remaining = [t for t in remaining if t[0].id not in matched_ids]
+
+    # (4) Uebrige als 'unmatched' markieren - aber NUR, wenn die zustaendigen Provider zu einem
+    # definitiven Ergebnis kamen (gelaufen ODER dauerhaft unverfuegbar) und KEIN Lookup transient
+    # scheiterte. So blockiert ein einmaliger Netzwerk-/Rate-Limit-Fehler nicht die spaetere Zuordnung.
     modrinth_definitive = modrinth_ran or not modrinth_available
     cf_definitive = cf_ran or not cf_available
-    if modrinth_definitive and cf_definitive and not modrinth_failed and not cf_failed:
-        for entry, _path, _sha1 in remaining:
+    base_definitive = modrinth_definitive and cf_definitive and not modrinth_failed and not cf_failed
+    for entry, _path, _sha1 in remaining:
+        if (entry.content_type or "").strip().lower() == "datapack":
+            # Datapacks zusaetzlich erst nach einem definitiven VT-Lauf endgueltig abschreiben.
+            if base_definitive and vt_ran and not vt_failed:
+                entry.local_adopt_state = "unmatched"
+        elif base_definitive:
             entry.local_adopt_state = "unmatched"
 
     db.commit()
@@ -2904,6 +2941,15 @@ def bulk_update_installed_content(
             continue
 
         try:
+            if provider == "vanillatweaks":
+                # VanillaTweaks hat keine Versionsliste -> eigener Regenerate-Pfad.
+                from app.services import vanillatweaks_service as _vt
+                updated, note = _vt.update_installed_vt(db, server, item, user_id)
+                if updated:
+                    notes.append(note)
+                elif note:
+                    warnings.append(note)
+                continue
             if provider == "modrinth":
                 if not project_id:
                     warnings.append(

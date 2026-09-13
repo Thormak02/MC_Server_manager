@@ -446,6 +446,131 @@ def test_sync_discovers_datapacks_with_level_name(client, tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# VanillaTweaks-Erkennung + Update
+# --------------------------------------------------------------------------- #
+def test_auto_adopt_vanillatweaks_datapack(client, monkeypatch, tmp_path):
+    """Ein manuell hinzugefuegtes VT-Datapack (nicht auf Modrinth/CF) wird per VT-Katalog
+    dem Provider 'vanillatweaks' zugeordnet - mit der aus dem Dateinamen gelesenen Version."""
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import content_service as cs
+    from app.services import vanillatweaks_service as vt
+    from sqlalchemy import select
+
+    monkeypatch.setattr(cs, "_modrinth_headers", lambda: {"User-Agent": "x"})
+    monkeypatch.setattr(cs, "_curseforge_headers",
+                        lambda: (_ for _ in ()).throw(ValueError("kein Key")))
+    monkeypatch.setattr(cs, "_request_json_post",
+                        lambda url, payload, headers=None, *, timeout=30: {})   # Modrinth-Miss
+
+    lookup = {
+        cs._normalized_lookup_key("armor statues"): {
+            "pack_type": "datapacks", "category": "Decorative/Cosmetic",
+            "name": "armor statues", "display": "Armor Statues", "version": "2.8.21",
+        }
+    }
+    monkeypatch.setattr(vt, "build_datapack_lookup", lambda version: lookup)
+
+    base = tmp_path / "srv"
+    base.mkdir()
+    dp = base / "world" / "datapacks" / "armor statues v2.8.20 (MC 1.21-1.21.10).zip"
+    dp.parent.mkdir(parents=True)
+    dp.write_bytes(b"zip")
+
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="1.21.11")
+        cs.auto_adopt_local_content(db, srv, None)
+        row = db.scalar(select(InstalledContent).where(InstalledContent.server_id == srv.id))
+        assert row.provider_name == "vanillatweaks"
+        assert row.external_project_id == "vt:datapacks"
+        assert row.external_version_id == "2.8.20"        # installierte Version aus dem Dateinamen
+        assert row.version_label == "2.8.20"
+        assert row.name == "Armor Statues"
+        assert row.local_adopt_state is None
+
+
+def _vt_container(inner_name: str) -> bytes:
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as z:
+        z.writestr("pack.mcmeta", '{"pack":{"pack_format":61}}')
+    container = io.BytesIO()
+    with zipfile.ZipFile(container, "w") as z:
+        z.writestr(inner_name, inner.getvalue())
+    return container.getvalue()
+
+
+def test_update_installed_vt_regenerates_and_replaces_file(client, monkeypatch, tmp_path):
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import vanillatweaks_service as vt
+
+    monkeypatch.setattr(vt, "find_pack", lambda pt, ver, name: {
+        "pack_type": "datapacks", "category": "Decorative/Cosmetic",
+        "name": "armor statues", "display": "Armor Statues", "version": "2.8.21",
+    })
+    new_inner = "armor statues v2.8.21 (MC 1.21-1.21.11).zip"
+    monkeypatch.setattr(vt, "generate_zip",
+                        lambda pack_type, version, selection: _vt_container(new_inner))
+
+    base = tmp_path / "srv"
+    base.mkdir()
+    old_file = "armor statues v2.8.20 (MC 1.21-1.21.10).zip"
+    dp_dir = base / "world" / "datapacks"
+    dp_dir.mkdir(parents=True)
+    (dp_dir / old_file).write_bytes(b"old")
+
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="1.21.11")
+        entry = InstalledContent(
+            server_id=srv.id, provider_name="vanillatweaks", content_type="datapack",
+            external_project_id="vt:datapacks", external_version_id="2.8.20",
+            name="Armor Statues", version_label="2.8.20", file_name=old_file,
+        )
+        db.add(entry)
+        db.commit()
+
+        updated, note = vt.update_installed_vt(db, srv, entry, None)
+        assert updated is True
+        assert entry.version_label == "2.8.21"
+        assert entry.external_version_id == "2.8.21"
+        assert entry.file_name == new_inner
+        assert (dp_dir / new_inner).exists()
+        assert not (dp_dir / old_file).exists()           # alte Datei entfernt
+
+
+def test_update_installed_vt_already_current_is_noop(client, monkeypatch, tmp_path):
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import vanillatweaks_service as vt
+
+    monkeypatch.setattr(vt, "find_pack", lambda pt, ver, name: {
+        "pack_type": "datapacks", "category": "Convenience",
+        "name": "elevators", "display": "Elevators", "version": "1.0.16",
+    })
+
+    def fail_generate(*a, **k):
+        raise AssertionError("generate_zip darf bei aktueller Version nicht laufen")
+
+    monkeypatch.setattr(vt, "generate_zip", fail_generate)
+
+    base = tmp_path / "srv"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="1.21.11")
+        entry = InstalledContent(
+            server_id=srv.id, provider_name="vanillatweaks", content_type="datapack",
+            external_project_id="vt:datapacks", external_version_id="1.0.16",
+            name="Elevators", version_label="1.0.16",
+            file_name="elevators v1.0.16 (MC 1.21-1.21.11).zip",
+        )
+        db.add(entry)
+        db.commit()
+
+        updated, note = vt.update_installed_vt(db, srv, entry, None)
+        assert updated is False and note == ""            # bereits aktuell -> No-op
+
+
+# --------------------------------------------------------------------------- #
 # Schema-Migration
 # --------------------------------------------------------------------------- #
 def test_installed_content_schema_migration_idempotent(client):

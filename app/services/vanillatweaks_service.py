@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -181,6 +182,156 @@ def install_datapacks(
         details=f"type={pack_type} version={version} installed={len(notes)}",
     )
     return notes, warnings
+
+
+# --------------------------------------------------------------------------- #
+# Zuordnung + Update manuell hinzugefuegter VanillaTweaks-Datapacks
+# (VT ist NICHT auf Modrinth/CurseForge -> eigener Katalog-Abgleich per Pack-Name)
+# --------------------------------------------------------------------------- #
+def _pack_name_from_file(file_name: str) -> str:
+    """VT-Dateiname -> Pack-Name. "armor statues v2.8.20 (MC 1.21-1.21.10).zip" -> "armor statues"."""
+    stem = file_name[:-4] if file_name.lower().endswith(".zip") else file_name
+    match = re.match(r"^(.*?)\s+v\d", stem)
+    return (match.group(1) if match else stem).strip()
+
+
+def _pack_version_from_file(file_name: str) -> str | None:
+    """VT-Dateiname -> Pack-Version. "armor statues v2.8.20 (MC 1.21-1.21.10).zip" -> "2.8.20".
+    (Die Version steht in der Mitte vor der MC-Klammer, nicht am Ende - daher ein eigener Parser.)"""
+    match = re.search(r"\sv(\d[\w.]*?)\s*\(", file_name)
+    if match:
+        return match.group(1)
+    match = re.search(r"\sv(\d[\w.]*)", file_name)
+    return match.group(1).rstrip(".") if match else None
+
+
+def _pack_type_from_project(external_project_id: str | None) -> str:
+    """external_project_id ("vt:datapacks"/"vt:craftingtweaks") -> Pack-Typ (Default datapacks)."""
+    return "craftingtweaks" if "craftingtweaks" in str(external_project_id or "") else "datapacks"
+
+
+def _catalog_packs(pack_type: str, version: str) -> list[dict]:
+    """Flache Pack-Liste des VT-Katalogs mit injizierter Kategorie."""
+    packs: list[dict] = []
+    for category in list_categories(pack_type, version):
+        cname = category.get("category") or ""
+        for pack in category.get("packs", []):
+            packs.append({
+                "pack_type": pack_type,
+                "category": cname,
+                "name": pack.get("name") or "",
+                "display": pack.get("display") or pack.get("name") or "",
+                "version": str(pack.get("version") or "").strip(),
+            })
+    return packs
+
+
+def build_datapack_lookup(version: str) -> dict[str, dict]:
+    """Normalisierter Name -> Pack-Info aus dp- UND ct-Katalog (beide landen als Datapacks).
+    Wirft, wenn KEIN Katalog erreichbar war (damit der Aufrufer transient/permanent unterscheiden kann)."""
+    lookup: dict[str, dict] = {}
+    ok = False
+    errors: list[str] = []
+    for pack_type in ("datapacks", "craftingtweaks"):
+        try:
+            packs = _catalog_packs(pack_type, version)
+            ok = True
+        except Exception as exc:  # noqa: BLE001
+            errors.append(str(exc))
+            continue
+        for info in packs:
+            for key in (content_service._normalized_lookup_key(info["name"]),
+                        content_service._normalized_lookup_key(info["display"])):
+                if key and key not in lookup:
+                    lookup[key] = info
+    if not ok:
+        raise ValueError("; ".join(errors) or "VanillaTweaks-Katalog nicht erreichbar.")
+    return lookup
+
+
+def find_pack(pack_type: str, version: str, pack_name: str) -> dict | None:
+    """Ein Pack im VT-Katalog per Name finden (bevorzugt ``pack_type``, sonst der andere)."""
+    key = content_service._normalized_lookup_key(pack_name)
+    if not key:
+        return None
+    order = [pack_type] + [t for t in ("datapacks", "craftingtweaks") if t != pack_type]
+    for ptype in order:
+        try:
+            for info in _catalog_packs(ptype, version):
+                if (content_service._normalized_lookup_key(info["name"]) == key
+                        or content_service._normalized_lookup_key(info["display"]) == key):
+                    return info
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
+def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
+                        user_id: int | None) -> tuple[bool, str]:
+    """Ein installiertes VT-Datapack auf die aktuelle Katalog-Version bringen (falls neuer).
+
+    VT liefert immer nur die aktuelle Version -> "Update" = neu generieren, alte Datei
+    (anderer Name wegen neuer Versionsnummer) ersetzen. Rueckgabe (aktualisiert, Notiz/Hinweis);
+    ``(False, "")`` bedeutet "bereits aktuell"."""
+    version = map_vt_version(server.mc_version)
+    pack_type = _pack_type_from_project(entry.external_project_id)
+    pack_name = _pack_name_from_file(entry.file_name)
+    match = find_pack(pack_type, version, pack_name)
+    if match is None:
+        return (False, f"Uebersprungen ({entry.name}): bei VanillaTweaks nicht gefunden.")
+
+    latest = match["version"]
+    installed = (entry.version_label or "").strip() or (
+        _pack_version_from_file(entry.file_name) or ""
+    )
+    if latest and installed and latest == installed:
+        return (False, "")   # bereits aktuell
+
+    archive = generate_zip(match["pack_type"], version, {match["category"]: [match["name"]]})
+    with zipfile.ZipFile(io.BytesIO(archive)) as container:
+        inner = [n for n in container.namelist() if n.lower().endswith(".zip")]
+        members = inner or [n for n in container.namelist() if not n.endswith("/")]
+        if not members:
+            raise ValueError("VanillaTweaks-Archiv war leer.")
+        member = members[0]
+        raw = container.read(member)
+
+    base_name = member.rsplit("/", 1)[-1]
+    if not base_name.lower().endswith(".zip"):
+        base_name = f"{base_name}.zip"
+    new_file = content_service._safe_file_name(base_name)
+    target_dir = content_service._target_dir(server, "datapack")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / new_file).write_bytes(raw)
+
+    old_file = entry.file_name
+    if old_file and old_file != new_file:
+        try:
+            content_service._delete_content_file(server, "datapack", old_file)
+        except ValueError:
+            pass   # z.B. gesperrt (Server laeuft) - neue Datei ist trotzdem da
+    # Eine evtl. bereits getrackte gleichnamige Zeile (nicht diese) entfernen -> keine Dublette.
+    db.execute(
+        delete(InstalledContent).where(
+            InstalledContent.server_id == server.id,
+            InstalledContent.content_type == "datapack",
+            InstalledContent.file_name == new_file,
+            InstalledContent.id != entry.id,
+        )
+    )
+    entry.provider_name = "vanillatweaks"
+    entry.external_project_id = f"vt:{match['pack_type']}"
+    entry.external_version_id = latest
+    entry.version_label = latest
+    entry.name = match["display"]
+    entry.file_name = new_file
+    entry.local_adopt_state = None
+    db.commit()
+    audit_service.log_action(
+        db, action="vanillatweaks.update", user_id=user_id, server_id=server.id,
+        details=f"{match['display']} {installed or '?'} -> {latest}",
+    )
+    return (True, f"{match['display']} -> {latest}")
 
 
 def install_resourcepack(

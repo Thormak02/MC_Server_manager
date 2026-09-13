@@ -157,7 +157,15 @@
                     </td>
                     <td>
                         {% if can_manage %}
-                            {% if item.provider_name == 'local' %}
+                            {% if item.provider_name == 'vanillatweaks' %}
+                            <div class="stack">
+                                <span class="muted">VanillaTweaks</span>
+                                <div class="inline-form">
+                                    <button class="ghost vt-update-btn" type="button" data-content-id="{{ item.id }}">Aktualisieren</button>
+                                </div>
+                                <span class="muted installed-version-label">{{ item.version_label or "-" }}</span>
+                            </div>
+                            {% elif item.provider_name == 'local' %}
                             <div class="stack">
                                 <span class="muted">Manuell &ndash; nicht zugeordnet</span>
                                 <div class="inline-form">
@@ -526,6 +534,17 @@
     }
 
     function buildInstalledVersionCell(item) {
+        if ((item.provider_name || "").toLowerCase() === "vanillatweaks") {
+            // VanillaTweaks kennt keine Versionsliste -> aktuelle Version + 'Aktualisieren' (regeneriert).
+            return `
+<div class="stack">
+    <span class="muted">VanillaTweaks</span>
+    <div class="inline-form">
+        <button class="ghost vt-update-btn" type="button" data-content-id="${item.id}">Aktualisieren</button>
+    </div>
+    <span class="muted installed-version-label">${escapeHtml(item.version_label || "-")}</span>
+</div>`;
+        }
         if ((item.provider_name || "").toLowerCase() === "local") {
             // Manuell hinzugefuegt und (noch) keinem Upstream-Projekt zugeordnet: kein Versions-
             // Dropdown (es gibt kein Projekt zum Abfragen), stattdessen die manuelle Suche anbieten.
@@ -1221,6 +1240,39 @@
         });
     }
 
+    async function vtUpdate(contentId, btn) {
+        const statusEl = document.getElementById("update-all-status");
+        if (statusEl) statusEl.textContent = "Aktualisiere VanillaTweaks ...";
+        if (btn) btn.disabled = true;
+        try {
+            const response = await fetch(`/api/servers/${serverId}/content/vt-update`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content_id: Number(contentId) }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error((payload && payload.detail) || "Aktualisierung fehlgeschlagen.");
+            }
+            const updated = payload.updated || 0;
+            const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+            let msg = updated ? `${updated} aktualisiert.` : "Bereits aktuell.";
+            if (warnings.length) msg += ` ${warnings.length} Hinweis(e) – Details per Maus-Hover.`;
+            if (statusEl) {
+                statusEl.textContent = msg;
+                if (warnings.length) statusEl.title = warnings.join("\n");
+                else statusEl.removeAttribute("title");
+            }
+            await refreshInstalled();
+        } catch (err) {
+            if (statusEl) {
+                statusEl.textContent = err instanceof Error ? err.message : "Aktualisierung fehlgeschlagen.";
+            }
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
     if (searchBtn) {
         searchBtn.addEventListener("click", function () {
             search(true);
@@ -1311,6 +1363,12 @@
                     queryInput.scrollIntoView({ behavior: "smooth", block: "center" });
                 }
                 search(true);
+                return;
+            }
+            if (target.classList.contains("vt-update-btn")) {
+                const contentId = target.dataset.contentId;
+                if (!contentId) return;
+                vtUpdate(contentId, target);
                 return;
             }
         });
