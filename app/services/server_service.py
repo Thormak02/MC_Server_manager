@@ -469,10 +469,13 @@ def cleanup_velocity_leftovers(server: Server) -> list[str]:
     return notes
 
 
-_VELOCITY_BACKEND_TYPES = {"paper", "purpur", "spigot", "bukkit", "folia"}
-# NUR Paper-Familie kann Velocity "modern forwarding". Spigot/Bukkit brauchen "legacy"
-# (BungeeCord) Forwarding - sonst laufen sie offline-mode OHNE echte UUID (Skin + Spielstand
-# weg, weil die playerdata pro UUID liegt).
+# NUR die Paper-Familie kann Velocity "modern forwarding" -> nur sie laeuft als loopback-Backend
+# HINTER Velocity. Spigot/Bukkit koennen KEIN modern forwarding; ein Legacy/offline-mode-Backend
+# haette bei DIREKT-Verbindungen (Port/Domain, die Velocity umgehen) keine echte UUID. Darum sind
+# Spigot/Bukkit KEINE Backends, sondern eigenstaendige ONLINE-MODE-Server (wie die Modded-Server):
+# per Gateway-Route + nativem Lobby-Transfer direkt angesprungen -> echte Mojang-UUID auf ALLEN
+# Wegen (Direktverbindung UND Lobby).
+_VELOCITY_BACKEND_TYPES = {"paper", "purpur", "folia"}
 _MODERN_FORWARDING_TYPES = {"paper", "purpur", "folia"}
 
 

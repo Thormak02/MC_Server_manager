@@ -40,7 +40,9 @@ _RETRY_AFTER_CRASH = 60.0   # nach sofortigem Absturz nicht alle 15s neu starten
 _VELOCITY_API = "https://fill.papermc.io/v3/projects/velocity"
 # Servertypen, die als Velocity-Backend taugen (Modern Forwarding = nur Paper-basiert).
 # Alles andere (vanilla/forge/neoforge/fabric/quilt) ist ein nativer Transfer-Ziel-Server.
-_BACKEND_TYPES = {"paper", "purpur", "spigot", "bukkit", "folia"}
+# Nur Paper-Familie laeuft als loopback-Backend hinter Velocity (modern forwarding). Spigot/Bukkit
+# sind eigenstaendige online-mode-Server (direkt + Lobby), damit Direktverbindungen echte UUIDs geben.
+_BACKEND_TYPES = {"paper", "purpur", "folia"}
 _READ_TIMEOUT_MS = 185000   # >= Sleep-Wake-Timeout (180 s), damit kalt startende Backends hochkommen
 
 

@@ -113,8 +113,9 @@ def test_is_velocity_backend_gating():
     assert server_service.is_velocity_backend(paper, network_mode="velocity") is False
 
 
-def test_velocity_forwarding_mode_auto(client):
-    """Nur-Paper-Netz -> modern; sobald ein Spigot-Backend dabei ist -> legacy (global)."""
+def test_spigot_is_not_velocity_backend(client):
+    """Spigot/Bukkit sind KEINE Velocity-Backends (koennen kein modern forwarding) -> eigenstaendige
+    online-mode-Server. Der Forwarding-Modus bleibt daher 'modern' (nur Paper-Lobby als Backend)."""
     import app.db.session as dbs
     from app.models.server import Server
     from app.services import app_setting_service, server_service
@@ -124,13 +125,14 @@ def test_velocity_forwarding_mode_auto(client):
         db.add(Server(name="lob", slug="fmlob", server_type="paper", mc_version="26.2",
                       base_path="C:/tmp/fmlob", gateway_enabled=True, gateway_is_default=True,
                       port=31001))
+        spig = Server(name="smp", slug="fmsmp", server_type="spigot", mc_version="1.21.11",
+                      base_path="C:/tmp/fmsmp", gateway_enabled=True, port=31002)
+        db.add(spig)
         db.commit()
+        # Spigot ist kein Backend -> laeuft eigenstaendig (direkt anspringbar).
+        assert server_service.is_velocity_backend(spig, network_mode="velocity") is False
+        # Nur Paper-Backends -> Modus bleibt modern (kein Legacy-Zwang durch Spigot).
         assert server_service.velocity_forwarding_mode(db) == "modern"
-
-        db.add(Server(name="smp", slug="fmsmp", server_type="spigot", mc_version="1.21.11",
-                      base_path="C:/tmp/fmsmp", gateway_enabled=True, port=31002))
-        db.commit()
-        assert server_service.velocity_forwarding_mode(db) == "legacy"
 
 
 # --- Modern Forwarding schreiben ----------------------------------------------

@@ -199,7 +199,9 @@ def build_gateway_routes(db) -> GatewayRoutes:
     velocity_internal_port = (
         app_setting_service.get_velocity_internal_port(db) if velocity_enabled else 0
     )
-    _VELOCITY_BACKEND_TYPES = {"paper", "purpur", "spigot", "bukkit", "folia"}
+    # Nur Paper-Familie laeuft HINTER Velocity (modern forwarding). Spigot/Bukkit sind
+    # eigenstaendige online-mode-Server -> direkt anspringen (echte UUID auch bei Direktverbindung).
+    _VELOCITY_BACKEND_TYPES = {"paper", "purpur", "folia"}
 
     servers = list(
         db.scalars(select(Server).where(Server.gateway_enabled.is_(True))).all()

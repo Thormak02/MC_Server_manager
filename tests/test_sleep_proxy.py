@@ -121,10 +121,9 @@ def test_reconcile_starts_and_stops_proxy(client, monkeypatch):
         sp_live.shutdown_all()
 
 
-def test_velocity_backend_sleep_proxy_binds_loopback(client, monkeypatch):
-    """Sicherheit: ein Velocity-Backend (legacy/BungeeCord vertraut Handshake-Daten) darf keinen
-    oeffentlichen Wake-Pfad haben -> der Wake-Proxy bindet 127.0.0.1 (nur Velocity/loopback weckt),
-    sonst koennte jeder im LAN eine UUID faelschen. Nicht-Backends bleiben 0.0.0.0 (public)."""
+def test_sleep_proxy_binds_public_for_direct_access(client, monkeypatch):
+    """Der Wake-Proxy bindet 0.0.0.0 -> Direkt-Verbindungen (Port/Domain) wecken + erreichen den
+    Server. Spigot ist online-mode (kein Backend) -> sicher trotz oeffentlichem Port."""
     import app.services.sleep_proxy_service as sp_live
     from app.db.session import SessionLocal
     from app.models.server import Server
@@ -150,7 +149,7 @@ def test_velocity_backend_sleep_proxy_binds_loopback(client, monkeypatch):
     try:
         sp_live.reconcile_proxies()
         assert sid in sp_live._PROXIES
-        assert sp_live._PROXIES[sid].bind_host == "127.0.0.1"   # loopback, NICHT 0.0.0.0
+        assert sp_live._PROXIES[sid].bind_host == "0.0.0.0"   # oeffentlich -> direkt erreichbar
     finally:
         sp_live.shutdown_all()
 

@@ -147,11 +147,11 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
     domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
     network_port = app_setting_service.get_network_port(db)
     mode = app_setting_service.get_network_mode(db)
-    # Velocity-Backends (Bukkit) sind hinter dem Proxy (loopback) -> Menue-Ziel ist der
-    # Proxy-Port (forced-host routet). Modded-/Vanilla-Ziele sind KEINE Backends -> sie
-    # laufen oeffentlich auf ihrem eigenen Port und werden per nativem Transfer DIREKT
-    # angesprungen (kein Proxy, keine Forge-Forwarding-Fragilitaet).
-    _backend_types = {"paper", "purpur", "spigot", "bukkit", "folia"}
+    # Nur Paper-Familie ist ein Velocity-Backend (loopback hinter dem Proxy) -> Menue-Ziel ist der
+    # Proxy-Port (forced-host routet) + internes Umschalten (Connect). Modded-/Vanilla-/Spigot-Ziele
+    # sind KEINE Backends -> eigenstaendige online-mode-Server, per nativem Transfer DIREKT
+    # angesprungen (echte UUID auch bei Direktverbindung; keine Forge-/Legacy-Forwarding-Fragilitaet).
+    _backend_types = {"paper", "purpur", "folia"}
 
     servers: list[dict] = []
     skipped: list[str] = []
