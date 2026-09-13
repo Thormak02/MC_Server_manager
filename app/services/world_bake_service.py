@@ -285,9 +285,23 @@ def build_chunk_column_packet(chunk_nbt: dict, *, biome_id: int = 0) -> bytes:
 
 
 def world_spawn(world_dir: str | Path) -> tuple[int, int, int, bool]:
-    """(x, y, z, explizit?) aus level.dat. Fehlt ein Feld -> Default (0,64,0), explizit=False."""
+    """(x, y, z, explizit?) aus level.dat.
+
+    Zwei Formate:
+      - NEU (1.21.x / 26.x): ``Data.spawn = {pos:[x,y,z], pitch, yaw, dimension}``
+      - ALT: ``Data.SpawnX/SpawnY/SpawnZ`` (Integers)
+    Fehlt beides -> Default (0,64,0), explizit=False."""
     lvl = read_nbt(gzip.decompress((Path(world_dir) / "level.dat").read_bytes()))
     d = lvl.get("Data", lvl)
+
+    # Neues Format zuerst: Data.spawn.pos (Int-Array/Liste [x,y,z]).
+    spawn = d.get("spawn")
+    if isinstance(spawn, dict):
+        pos = spawn.get("pos")
+        if isinstance(pos, (list, tuple)) and len(pos) == 3:
+            return (int(pos[0]), int(pos[1]), int(pos[2]), True)
+
+    # Altes Format.
     sx, sy, sz = d.get("SpawnX"), d.get("SpawnY"), d.get("SpawnZ")
     explicit = sx is not None and sz is not None
     return (int(sx) if sx is not None else 0,
@@ -365,7 +379,7 @@ def diagnose_lobby_bake(world_dir: str | Path, *, radius: int) -> dict:
         "spawn": None, "spawn_explicit": False, "center_chunk": None,
         "region_file": None, "region_exists": False,
         "chunks_in_window": (2 * radius + 1) ** 2, "chunks_baked": 0,
-        "sample_names": [], "error": None,
+        "sample_names": [], "error": None, "data_keys": [], "spawn_hits": {},
     }
     try:
         wd = Path(world_dir)
@@ -375,6 +389,9 @@ def diagnose_lobby_bake(world_dir: str | Path, *, radius: int) -> dict:
             return info
         d = read_nbt(gzip.decompress(ld.read_bytes())).get("Data", {})
         info["data_version"] = d.get("DataVersion")
+        # Diagnose: welche Data-Schluessel gibt es (wo liegt der Spawn in dieser MC-Version?).
+        info["data_keys"] = sorted(str(k) for k in d.keys())
+        info["spawn_hits"] = {str(k): str(d.get(k))[:60] for k in d if "spawn" in str(k).lower()}
         sx, sy, sz, explicit = world_spawn(wd)
         info["spawn"] = [sx, sy, sz]
         info["spawn_explicit"] = explicit

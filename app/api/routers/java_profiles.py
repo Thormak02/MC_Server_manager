@@ -394,7 +394,7 @@ def rebake_hub_world_action(request: Request, db: Session = Depends(get_db)):
                              f"explicit={diag.get('spawn_explicit')} center={diag.get('center_chunk')} "
                              f"region={diag.get('region_file')}({diag.get('region_exists')}) "
                              f"chunks={diag.get('chunks_baked')} err={diag.get('error')} "
-                             f"names={diag.get('sample_names')}"))
+                             f"spawn_hits={diag.get('spawn_hits')} data_keys={diag.get('data_keys')}"))
             except Exception:  # noqa: BLE001 - Diagnose-Log darf den Request nie kippen
                 pass
             if not diag.get("level_dat"):

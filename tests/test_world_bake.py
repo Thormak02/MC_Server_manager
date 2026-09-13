@@ -31,13 +31,28 @@ def _nbt_compound(name: str, body: bytes) -> bytes:
 
 
 def _level_dat_bytes(spawn: tuple[int, int, int] | None) -> bytes:
-    """Gzip-komprimiertes level.dat mit/ohne SpawnX/Y/Z (wie Vanilla)."""
+    """Gzip-komprimiertes level.dat mit/ohne SpawnX/Y/Z (ALTES Format)."""
     data = b""
     if spawn is not None:
         sx, sy, sz = spawn
         data += _nbt_int("SpawnX", sx) + _nbt_int("SpawnY", sy) + _nbt_int("SpawnZ", sz)
     data += _nbt_int("thunderTime", 42)                       # irgendein weiteres Feld
     root = _nbt_compound("", _nbt_compound("Data", data))     # namenloser Root -> "Data"
+    return gzip.compress(root)
+
+
+def _nbt_int_array(name: str, vals) -> bytes:
+    out = bytes([11]) + _nbt_str(name) + struct.pack(">i", len(vals))   # 11 = TAG_Int_Array
+    for v in vals:
+        out += struct.pack(">i", int(v))
+    return out
+
+
+def _level_dat_new_spawn(pos: tuple[int, int, int]) -> bytes:
+    """NEUES Format (1.21.x/26.x): Data.spawn = {pos:[x,y,z], ...}."""
+    spawn_body = _nbt_int_array("pos", list(pos)) + _nbt_int("yaw", 0)
+    data = _nbt_compound("spawn", spawn_body) + _nbt_int("thunderTime", 42)
+    root = _nbt_compound("", _nbt_compound("Data", data))
     return gzip.compress(root)
 
 
@@ -50,6 +65,14 @@ def test_read_nbt_compound_field_order():
     d = nbt["Data"]
     assert d["SpawnX"] == 10 and d["SpawnY"] == 64 and d["SpawnZ"] == -20
     assert d["thunderTime"] == 42
+
+
+def test_world_spawn_new_format(tmp_path: Path):
+    """1.21.x/26.x speichert den Spawn als Data.spawn.pos (nicht mehr SpawnX/Y/Z)."""
+    wd = tmp_path / "world"
+    wd.mkdir()
+    (wd / "level.dat").write_bytes(_level_dat_new_spawn((300, 50, -1171)))
+    assert wb.world_spawn(wd) == (300, 50, -1171, True)
 
 
 def test_world_spawn_explicit_and_missing(tmp_path: Path):
