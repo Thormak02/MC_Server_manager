@@ -37,6 +37,7 @@ PLAY_CB_PLAYER_INFO_REMOVE = 0x3D
 PLAY_CB_PLAYER_INFO_UPDATE = 0x3E
 PLAY_CB_LOGIN = 0x2B            # Login (Join Game)
 PLAY_CB_GAME_EVENT = 0x22       # Game Event
+PLAY_CB_UPDATE_TIME = 0x64      # Update Time (worldAge Long + timeOfDay Long); aus minecraft-data 767
 PLAY_CB_KEEP_ALIVE = 0x26       # Keep Alive
 PLAY_CB_CHUNK_DATA = 0x27       # Chunk Data & Update Light
 PLAY_CB_CHUNK_BATCH_FINISHED = 0x0C  # Chunk Batch Finished (VarInt batch size)
@@ -73,7 +74,8 @@ MENU_GENERIC_9X3 = 2               # 27 Container- + 36 Spieler-Slots = 63
 MENU_GENERIC_9X6 = 5               # 54 + 36 = 90
 
 # Datenkomponenten-ID (net.minecraft.core.component.DataComponents Reihenfolge)
-DATA_COMPONENT_CUSTOM_NAME = 5
+DATA_COMPONENT_CUSTOM_NAME = 5     # custom_name
+DATA_COMPONENT_LORE = 7            # ...custom_name(5), item_name(6), lore(7), rarity(8)...
 
 # Vanilla-Item-IDs (1.21.1; Vanilla behaelt seine Nummern unter Mods)
 ITEM_COMPASS = 928
@@ -98,6 +100,9 @@ GAME_EVENT_WAIT_FOR_CHUNKS = 13
 # Game-Event 3 = "Change game mode"; Value = Gamemode (0 survival, 1 creative, 2 adventure, 3 spec.)
 GAME_EVENT_CHANGE_GAMEMODE = 3
 GAMEMODE_ADVENTURE = 2
+GAME_EVENT_END_RAINING = 1      # Regen aus (Lobby = klares Wetter, nicht abgedunkelt)
+GAME_EVENT_RAIN_LEVEL = 7       # Value 0.0 = kein Regen
+GAME_EVENT_THUNDER_LEVEL = 8    # Value 0.0 = kein Gewitter
 
 # Overworld-Standard (Phase 1: fest angenommen; Phase 2 leitet es aus registry_data ab)
 OVERWORLD_MIN_Y = -64
@@ -312,11 +317,58 @@ def build_declare_recipes_empty() -> bytes:
 # --------------------------------------------------------------------------- #
 # Kisten-Menue: Item-Slots, Open Screen, Container-Inhalt, Transfer
 # --------------------------------------------------------------------------- #
-def _text_component_nbt(text: str) -> bytes:
-    """Netzwerk-NBT (namenloser Root, seit 1.20.2) einer TextComponent aus reinem String.
-    Root = TAG_String; der Component-Codec des Clients akzeptiert das als {"text": ...}."""
-    raw = text.encode("utf-8")
-    return bytes([0x08]) + struct.pack(">H", len(raw)) + raw
+def _nbt_field_str(name: str, val: str) -> bytes:
+    nb, vb = name.encode("utf-8"), val.encode("utf-8")
+    return bytes([0x08]) + struct.pack(">H", len(nb)) + nb + struct.pack(">H", len(vb)) + vb
+
+
+def _nbt_field_byte(name: str, val: int) -> bytes:
+    nb = name.encode("utf-8")
+    return bytes([0x01]) + struct.pack(">H", len(nb)) + nb + struct.pack(">b", val & 0xFF)
+
+
+def _nbt_text_body(text: str, color: str | None = None, italic: bool | None = None) -> bytes:
+    """Compound-BODY (Felder + TAG_End) einer TextComponent - OHNE fuehrendes Root-Tag 0x0A.
+    So verwendbar sowohl als Compound-Root (mit vorangestelltem 0x0A) als auch als Element
+    einer TAG_List (deren Header den Elementtyp 0x0A bereits deklariert)."""
+    b = bytearray()
+    b += _nbt_field_str("text", text)
+    if color is not None:
+        b += _nbt_field_str("color", color)
+    if italic is not None:
+        b += _nbt_field_byte("italic", 1 if italic else 0)
+    b.append(0x00)                               # TAG_End
+    return bytes(b)
+
+
+def _text_component_from_runs(runs: "list[tuple[str, str | None]]", *, italic: bool | None = None) -> bytes:
+    """Netzwerk-NBT (namenloser Root, seit 1.20.2) einer TextComponent aus Farb-Runs.
+
+    ``runs`` = Liste von (Text, Farbname|None). Ein einzelner farbloser Run ohne ``italic``
+    wird als schneller TAG_String-Root kodiert; sonst Compound-Root. Mehrere Runs ->
+    Root ``text=""`` mit ``extra``-Liste (mehrere Farben in einer Zeile, wie Bukkit-Legacy)."""
+    runs = [r for r in runs if r is not None] or [("", None)]
+    if len(runs) == 1 and italic is None and runs[0][1] is None:
+        raw = runs[0][0].encode("utf-8")
+        return bytes([0x08]) + struct.pack(">H", len(raw)) + raw
+    if len(runs) == 1:
+        return bytes([0x0A]) + _nbt_text_body(runs[0][0], runs[0][1], italic)
+    out = bytearray([0x0A])                      # Compound-Root (kein Name)
+    out += _nbt_field_str("text", "")
+    if italic is not None:                       # Root-Formatierung vererbt sich an extra-Kinder
+        out += _nbt_field_byte("italic", 1 if italic else 0)
+    name = b"extra"                              # extra: TAG_List<TAG_Compound>
+    out += bytes([0x09]) + struct.pack(">H", len(name)) + name
+    out += bytes([0x0A]) + struct.pack(">i", len(runs))
+    for text, color in runs:
+        out += _nbt_text_body(text, color, None)
+    out.append(0x00)                             # Root TAG_End
+    return bytes(out)
+
+
+def _text_component_nbt(text: str, *, color: str | None = None, italic: bool | None = None) -> bytes:
+    """Einfache Einzelfarb-TextComponent (Bequemlichkeits-Wrapper um _text_component_from_runs)."""
+    return _text_component_from_runs([(text, color)], italic=italic)
 
 
 def encode_slot_empty() -> bytes:
@@ -324,18 +376,47 @@ def encode_slot_empty() -> bytes:
     return encode_varint(0)
 
 
-def encode_slot(item_id: int, count: int = 1, custom_name: str | None = None) -> bytes:
+def encode_slot(item_id: int, count: int = 1, custom_name: str | None = None,
+                *, name_color: str | None = None,
+                lore: "list[tuple[str, str | None]] | None" = None,
+                name_runs: "list[tuple[str, str | None]] | None" = None,
+                lore_runs: "list[list[tuple[str, str | None]]] | None" = None) -> bytes:
     """Item-Stack im 1.21.1-Slot-Format:
     VarInt count; wenn >0: VarInt itemId, VarInt add-Komponenten, VarInt remove-Komponenten,
-    dann die Komponenten. Optionaler custom_name (Datenkomponente 5) = TextComponent-NBT."""
+    dann die Komponenten (aufsteigend nach ID).
+
+    Anzeigename (Komponente 5): entweder ``name_runs`` (mehrfarbig) oder ``custom_name``
+    (+ optional ``name_color``). Lore (Komponente 7): entweder ``lore_runs`` (jede Zeile
+    ein Run-Liste, mehrfarbig) oder ``lore`` (einfarbige (Text, Farbe)-Zeilen). Lore wird
+    stets auf italic=false gesetzt (Vanilla rendert Lore sonst kursiv)."""
     if count <= 0:
         return encode_slot_empty()
     out = bytearray(encode_varint(count) + encode_varint(item_id))
-    if custom_name is None:
-        out += encode_varint(0) + encode_varint(0)                      # 0 add, 0 remove
+    comps = bytearray()
+    n_add = 0
+    # custom_name (5)
+    if name_runs is not None:
+        name_comp = _text_component_from_runs(name_runs)
+    elif custom_name is not None:
+        name_comp = _text_component_nbt(custom_name, color=name_color)
     else:
-        out += encode_varint(1) + encode_varint(0)                      # 1 add, 0 remove
-        out += encode_varint(DATA_COMPONENT_CUSTOM_NAME) + _text_component_nbt(custom_name)
+        name_comp = None
+    if name_comp is not None:
+        comps += encode_varint(DATA_COMPONENT_CUSTOM_NAME) + name_comp
+        n_add += 1
+    # lore (7)
+    if lore_runs is not None:
+        lore_lines = [_text_component_from_runs(line, italic=False) for line in lore_runs]
+    elif lore:
+        lore_lines = [_text_component_nbt(t, color=c, italic=False) for (t, c) in lore]
+    else:
+        lore_lines = []
+    if lore_lines:
+        comps += encode_varint(DATA_COMPONENT_LORE) + encode_varint(len(lore_lines))
+        for lc in lore_lines:
+            comps += lc
+        n_add += 1
+    out += encode_varint(n_add) + encode_varint(0) + comps               # n add, 0 remove
     return bytes(out)
 
 
@@ -422,6 +503,15 @@ def build_sync_position(
 
 def build_game_event(event: int, value: float = 0.0) -> bytes:
     body = encode_varint(PLAY_CB_GAME_EVENT) + struct.pack(">B", event) + struct.pack(">f", value)
+    return _wrap_packet(body)
+
+
+def build_update_time(world_age: int, time_of_day: int) -> bytes:
+    """Update Time (0x64): World Age (Long) + Time of Day (Long).
+
+    Ein NEGATIVES ``time_of_day`` friert die Sonne bei ``abs(time_of_day)`` ein (kein
+    Tag/Nacht-Zyklus). Fuer eine Lobby: ``time_of_day=-6000`` = fester Mittag (hell)."""
+    body = encode_varint(PLAY_CB_UPDATE_TIME) + struct.pack(">qq", int(world_age), int(time_of_day))
     return _wrap_packet(body)
 
 

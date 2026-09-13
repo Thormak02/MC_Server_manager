@@ -72,10 +72,46 @@ _MATERIAL_ITEM = {
 }
 _COLOR_CODE = re.compile(r"&.")        # Bukkit-Legacy-Farbcodes (&a, &7 ...)
 
+# Bukkit-Legacy-Farbcode -> Vanilla-Farbname (fuer mc_play-TextComponents).
+_LEGACY_COLORS = {
+    "0": "black", "1": "dark_blue", "2": "dark_green", "3": "dark_aqua",
+    "4": "dark_red", "5": "dark_purple", "6": "gold", "7": "gray",
+    "8": "dark_gray", "9": "blue", "a": "green", "b": "aqua",
+    "c": "red", "d": "light_purple", "e": "yellow", "f": "white",
+}
+
 
 def _plain(text: str) -> str:
     """Legacy-&-Farbcodes entfernen (der Hub nutzt Component-custom_name, kein &)."""
     return _COLOR_CODE.sub("", text or "").strip()
+
+
+def _legacy_runs(text: str) -> list[tuple[str, str | None]]:
+    """Bukkit-Legacy-String (``&a...&7...``) -> Liste von (Text, Farbname|None)-Runs, wie
+    mc_play-TextComponents sie erwarten. So sieht das Kompass-Menue exakt wie die Bukkit-Lobby
+    aus (gruener Name, grauer Zusatz, farbige Lore). Format-Codes (&l/&o/&r ...) setzen die
+    Farbe zurueck bzw. werden ignoriert - der Hub rendert nur Farben, keine Extra-Stile."""
+    s = text or ""
+    runs: list[tuple[str, str | None]] = []
+    color: str | None = None
+    buf: list[str] = []
+    i = 0
+    while i < len(s):
+        if s[i] in "&§" and i + 1 < len(s):
+            code = s[i + 1].lower()
+            if code in _LEGACY_COLORS:
+                if buf:
+                    runs.append(("".join(buf), color)); buf = []
+                color = _LEGACY_COLORS[code]; i += 2; continue
+            if code == "r":
+                if buf:
+                    runs.append(("".join(buf), color)); buf = []
+                color = None; i += 2; continue
+            i += 2; continue                      # &l/&o/&m/&n/&k: ignorieren
+        buf.append(s[i]); i += 1
+    if buf:
+        runs.append(("".join(buf), color))
+    return runs or [("", None)]
 
 
 def _menu_servers() -> list[dict]:
@@ -727,9 +763,17 @@ class Hub:
             sock.sendall(pl.build_game_event(pl.GAME_EVENT_WAIT_FOR_CHUNKS, 0.0))
             # Interaktions-Lock: Adventure-Mode (Welt unzerstoerbar, kein Fliegen/Bauen).
             sock.sendall(pl.build_game_event(pl.GAME_EVENT_CHANGE_GAMEMODE, float(pl.GAMEMODE_ADVENTURE)))
+            # Lobby-Atmosphaere: fester Mittag (kein Tag/Nacht-Zyklus, sonst wird es nachts dunkel
+            # trotz Voll-Skylight) + klares Wetter (kein abdunkelnder Regen).
+            sock.sendall(pl.build_update_time(6000, -6000))
+            sock.sendall(pl.build_game_event(pl.GAME_EVENT_RAIN_LEVEL, 0.0))
+            sock.sendall(pl.build_game_event(pl.GAME_EVENT_THUNDER_LEVEL, 0.0))
+            sock.sendall(pl.build_game_event(pl.GAME_EVENT_END_RAINING, 0.0))
             # Kompass in Hotbar-Slot 0 -> Rechtsklick oeffnet das Server-Auswahl-Menue.
-            sock.sendall(pl.build_set_slot(0, pl.INV_HOTBAR0_SLOT,
-                pl.encode_slot(pl.ITEM_COMPASS, custom_name="Server-Menü (Rechtsklick)")))
+            sock.sendall(pl.build_set_slot(0, pl.INV_HOTBAR0_SLOT, pl.encode_slot(
+                pl.ITEM_COMPASS,
+                name_runs=_legacy_runs("&bServer-Auswahl &7(Rechtsklick)"),
+                lore_runs=[_legacy_runs("&7Rechtsklick öffnet die Serverliste")])))
             sock.sendall(pl.build_set_held_item(0))
             # Eigener player-info-Eintrag MIT Skin (UUID aus dem LoginSuccess = die, die der
             # Client fuer SICH SELBST nutzt). Moderne Clients (1.19.3+) rendern den Skin - auch den
@@ -861,9 +905,19 @@ class Hub:
         slots = [pl.encode_slot_empty()] * (27 + 36)
         for i, srv in enumerate(servers[:27]):
             item = _MATERIAL_ITEM.get(srv.get("material", ""), pl.ITEM_GRASS_BLOCK)
-            name = _plain(srv.get("display") or srv.get("key") or "?")
-            slots[i] = pl.encode_slot(item, custom_name=name)
-        slots[27 + 27] = pl.encode_slot(pl.ITEM_COMPASS, custom_name="Server-Menü")
+            display = srv.get("display") or srv.get("key") or "?"
+            host, port = srv.get("host", ""), srv.get("port", "")
+            sleeps = bool(srv.get("sleep"))
+            # Name mehrfarbig wie in der Bukkit-Lobby: gruener Name + grauer (Typ Version).
+            name_runs = _legacy_runs(display)
+            # Lore wie im Java-Plugin: Adresse, Sleep-Hinweis (falls aktiv), Klick-Aufforderung.
+            lore_runs = [_legacy_runs(f"&7{host}:{port}")]
+            if sleeps:
+                lore_runs.append(_legacy_runs("&dSchläft ggf. – Beitritt weckt ihn (kurz warten)"))
+            lore_runs.append(_legacy_runs("&aKlick zum Verbinden"))
+            slots[i] = pl.encode_slot(item, name_runs=name_runs, lore_runs=lore_runs)
+        slots[27 + 27] = pl.encode_slot(
+            pl.ITEM_COMPASS, name_runs=_legacy_runs("&bServer-Auswahl &7(Rechtsklick)"))
         return slots
 
     def _open_menu(self, session: _Session) -> None:
