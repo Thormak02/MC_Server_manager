@@ -570,6 +570,13 @@ def _handle_gateway_connection(client: socket.socket) -> None:
         decision = decide_route(
             handshake.server_address, handshake.protocol_version, routes
         )
+        # DIAGNOSE (nur echte Joins): welchen Host bekommt das Gateway + wohin routet es?
+        # Landet im Audit-Log (DB) -> per DB-Snapshot remote lesbar. Bei Bedarf spaeter entfernen.
+        if handshake.next_state in mc_protocol.JOIN_NEXT_STATES:
+            _glog("gateway.route",
+                  f"host={clean_hostname(handshake.server_address)!r} "
+                  f"proto={handshake.protocol_version} -> id={decision.server_id} "
+                  f"reason={decision.reason}")
 
         # UNIVERSAL-Modus: nicht-767-Joins an der BLANKEN Domain (kein expliziter Alias) gehen
         # DIREKT an Velocity+Paper (Velocity+Via uebersetzt abwaerts). Modded ist 1.21.1/767
