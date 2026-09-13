@@ -32,6 +32,7 @@ import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -80,6 +81,11 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     // Ziel fuer /lobby (leer, wenn dieser Server selbst die Lobby ist).
     private String lobbyHost = "";
     private int lobbyPort = 25565;
+    private String lobbyVelocityName = "";   // != leer -> internes Velocity-Umschalten (Connect)
+
+    // BungeeCord/Velocity-Plugin-Message-Kanal (Velocity fuehrt "Connect" server-seitig aus).
+    // Moderner, namespaced Name (aeltere "BungeeCord"-Schreibweise wird von neuem Paper abgelehnt).
+    private static final String BUNGEE_CHANNEL = "bungeecord:main";
 
     // Live-Status je Server (key -> "online" | "sleeping" | "offline"). Ein Hintergrund-
     // Task pingt regelmaessig ueber das lokale Gateway und fuellt den Cache; das Menue
@@ -104,6 +110,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         String host;
         int port;       // Transfer-Ziel (Gateway-Port)
         int pingPort;   // Status-Ping direkt (kein Gateway-Hop)
+        String velocityName = "";  // != leer -> Velocity-Backend: intern umschalten (Connect)
         Material material = Material.GRASS_BLOCK;
         int slot = -1;
         boolean sleep = false;
@@ -132,6 +139,8 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         saveDefaultConfig();
         load();
         getServer().getPluginManager().registerEvents(this, this);
+        // Ausgehenden BungeeCord-Kanal registrieren -> Velocity-internes Umschalten (Connect).
+        getServer().getMessenger().registerOutgoingPluginChannel(this, BUNGEE_CHANNEL);
         // Tab-Vervollstaendigung fuer /server auf Server-Aliase setzen (sonst
         // schlaegt Bukkit Spielernamen vor).
         for (String cmd : new String[] {"server", "hub", "servers", "lobby", "mcsmlobby"}) {
@@ -289,6 +298,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         cooldownMs = Math.max(0L, c.getLong("cooldown_ms", cooldownMs));
         lobbyHost = c.getString("lobby.host", "");
         lobbyPort = c.getInt("lobby.port", 25565);
+        lobbyVelocityName = c.getString("lobby.velocity_name", "");
         statusPingEnabled = c.getBoolean("status.enabled", true);
         statusIntervalTicks = Math.max(40, c.getInt("status.interval_seconds", 8) * 20);
         bridgeEnabled = c.getBoolean("bridge.enabled", false);
@@ -311,6 +321,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                 e.port = raw.get("port") instanceof Number ? ((Number) raw.get("port")).intValue() : 25565;
                 e.pingPort = raw.get("ping_port") instanceof Number
                     ? ((Number) raw.get("ping_port")).intValue() : e.port;
+                e.velocityName = raw.get("velocity_name") != null ? str(raw.get("velocity_name")) : "";
                 e.slot = raw.get("slot") instanceof Number ? ((Number) raw.get("slot")).intValue() : -1;
                 e.sleep = Boolean.TRUE.equals(raw.get("sleep"));
                 Material m = Material.matchMaterial(
@@ -363,11 +374,34 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
         lastTransfer.put(p.getUniqueId(), now);
         p.sendMessage(color(transferMsg.replace("%server%", e.display)));
+        // Velocity-Backend -> INTERN umschalten (kein Client-Transfer -> keine Re-Auth zum
+        // online-mode-Proxy -> kein "target server is in online mode"-Fehler). Sonst nativer Transfer.
+        if (e.velocityName != null && !e.velocityName.isEmpty()) {
+            if (!connectViaProxy(p, e.velocityName)) {
+                p.sendMessage(color("&cWechsel fehlgeschlagen. Bitte erneut versuchen."));
+            }
+            return;
+        }
         try {
             p.transfer(e.host, e.port);
         } catch (Throwable t) {
             p.sendMessage(color("&cTransfer fehlgeschlagen. Braucht Client 1.20.5+."));
             getLogger().warning("transfer() fehlgeschlagen fuer " + p.getName() + ": " + t);
+        }
+    }
+
+    /** Spieler ueber Velocity intern auf ein Backend schieben (BungeeCord 'Connect'). */
+    private boolean connectViaProxy(Player p, String velocityName) {
+        try {
+            ByteArrayOutputStream b = new ByteArrayOutputStream();
+            DataOutputStream out = new DataOutputStream(b);
+            out.writeUTF("Connect");
+            out.writeUTF(velocityName);
+            p.sendPluginMessage(this, BUNGEE_CHANNEL, b.toByteArray());
+            return true;
+        } catch (Throwable t) {
+            getLogger().warning("Connect (" + velocityName + ") fehlgeschlagen fuer " + p.getName() + ": " + t);
+            return false;
         }
     }
 
@@ -383,6 +417,12 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
         lastTransfer.put(p.getUniqueId(), now);
         p.sendMessage(color(transferMsg.replace("%server%", "&bLobby")));
+        if (lobbyVelocityName != null && !lobbyVelocityName.isEmpty()) {
+            if (!connectViaProxy(p, lobbyVelocityName)) {
+                p.sendMessage(color("&cWechsel fehlgeschlagen. Bitte erneut versuchen."));
+            }
+            return;
+        }
         try {
             p.transfer(lobbyHost, lobbyPort);
         } catch (Throwable t) {

@@ -176,6 +176,10 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
             target_port = int(srv.port)          # nativer Transfer DIREKT zum Modserver
         else:
             target_port = int(network_port)       # ueber Gateway/Velocity-Proxy
+        # Velocity-Backends INTERN umschalten (BungeeCord 'Connect'), NICHT per Client-Transfer:
+        # ein Transfer verbindet den Client neu zum online-mode-Proxy -> Re-Auth schlaegt fehl
+        # ("target server is in online mode"). velocity_name = Backend-Name in der velocity.toml.
+        velocity_name = alias if (mode == "velocity" and is_backend) else ""
         servers.append({
             "key": alias,
             "display": label,
@@ -184,6 +188,7 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
             "ping_port": int(srv.port),         # Status-Ping direkt (kein Proxy-Hop)
             "material": material,
             "sleep": bool(srv.sleep_enabled),
+            "velocity_name": velocity_name,
         })
     return servers, skipped
 
@@ -247,10 +252,14 @@ def _lobby_transfer_target(db: Session) -> dict | None:
     domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
     if not alias or not domain:
         return None
+    # Die Lobby ist ein Paper-Velocity-Backend -> /lobby von anderen Backends aus intern
+    # umschalten (Connect), nicht per Client-Transfer (Re-Auth-Fehler). velocity_name = Alias.
+    velocity_name = alias if app_setting_service.get_network_mode(db) == "velocity" else ""
     return {
         "id": lobby.id,
         "host": f"{alias}.{domain}",
         "port": int(app_setting_service.get_network_port(db)),
+        "velocity_name": velocity_name,
     }
 
 
@@ -298,9 +307,10 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
 
     servers, _skipped = _build_plugin_servers(db, server.id)
     # /lobby-Ziel: nur wenn dieser Server NICHT selbst die Lobby ist.
-    lobby_cfg = {"host": "", "port": 25565}
+    lobby_cfg = {"host": "", "port": 25565, "velocity_name": ""}
     if lobby_target and not is_lobby:
-        lobby_cfg = {"host": lobby_target["host"], "port": lobby_target["port"]}
+        lobby_cfg = {"host": lobby_target["host"], "port": lobby_target["port"],
+                     "velocity_name": lobby_target.get("velocity_name", "")}
 
     status_cfg = existing.get("status")
     if not isinstance(status_cfg, dict):
