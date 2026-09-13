@@ -310,6 +310,29 @@ def world_spawn(world_dir: str | Path) -> tuple[int, int, int, bool]:
             explicit)
 
 
+def overworld_region_dir(world_dir: str | Path) -> Path:
+    """Overworld-Region-Ordner finden - versions-unabhaengig.
+
+    - ALT (<=1.21.x): ``<world>/region``
+    - NEU (26.x): ``<world>/dimensions/minecraft/overworld/region`` (Paper/Mojang haben ALLE
+      Dimensionen inkl. Overworld nach ``dimensions/<ns>/<dim>/region`` verschoben).
+    Nimmt den ersten Kandidaten mit .mca-Dateien; sonst den groessten ``dimensions/*/*/region``."""
+    wd = Path(world_dir)
+    for c in (wd / "region", wd / "dimensions" / "minecraft" / "overworld" / "region"):
+        if c.is_dir() and any(c.glob("*.mca")):
+            return c
+    dims = wd / "dimensions"
+    if dims.is_dir():
+        best, best_n = None, 0
+        for rd in dims.glob("*/*/region"):
+            n = len(list(rd.glob("*.mca")))
+            if n > best_n:
+                best, best_n = rd, n
+        if best is not None:
+            return best
+    return wd / "region"  # Fallback (leer -> 0 Chunks, aber kein Crash)
+
+
 def bake_area(world_dir: str | Path, center_cx: int, center_cz: int, radius: int,
               *, biome_id: int = 0) -> list[tuple[int, int, bytes]]:
     """Festen quadratischen Chunk-Bereich um (center_cx, center_cz) backen.
@@ -317,7 +340,7 @@ def bake_area(world_dir: str | Path, center_cx: int, center_cz: int, radius: int
     Rueckgabe [(chunk_x, chunk_z, packet_bytes), ...] fuer alle EXISTIERENDEN Chunks im
     (2*radius+1)^2-Fenster. Fehlende Chunks werden ausgelassen (Client sieht dort Void).
     Regionen werden je Datei genau einmal gelesen."""
-    region_dir = Path(world_dir) / "region"
+    region_dir = overworld_region_dir(world_dir)
     by_region: dict[tuple[int, int], list[tuple[int, int]]] = defaultdict(list)
     for cx in range(center_cx - radius, center_cx + radius + 1):
         for cz in range(center_cz - radius, center_cz + radius + 1):
@@ -380,7 +403,7 @@ def diagnose_lobby_bake(world_dir: str | Path, *, radius: int) -> dict:
         "region_file": None, "region_exists": False,
         "chunks_in_window": (2 * radius + 1) ** 2, "chunks_baked": 0,
         "sample_names": [], "error": None, "data_keys": [], "spawn_hits": {},
-        "region_count": 0, "region_sample": [], "world_subdirs": [],
+        "region_count": 0, "region_sample": [], "world_subdirs": [], "region_dir": None,
     }
     try:
         wd = Path(world_dir)
@@ -398,12 +421,11 @@ def diagnose_lobby_bake(world_dir: str | Path, *, radius: int) -> dict:
         info["spawn_explicit"] = explicit
         ccx, ccz = sx >> 4, sz >> 4
         info["center_chunk"] = [ccx, ccz]
-        rf = wd / "region" / f"r.{ccx >> 5}.{ccz >> 5}.mca"
+        rdir = overworld_region_dir(wd)
+        rf = rdir / f"r.{ccx >> 5}.{ccz >> 5}.mca"
         info["region_file"] = rf.name
         info["region_exists"] = rf.is_file()
-        # Struktur-Diagnose: wo liegen die Regionen wirklich? (26.x koennte Overworld verschieben,
-        # oder die live Welt ist gar nicht deckungsgleich mit dem Asset.)
-        rdir = wd / "region"
+        info["region_dir"] = str(rdir.relative_to(wd)) if rdir.is_relative_to(wd) else str(rdir)
         info["region_count"] = len(list(rdir.glob("*.mca"))) if rdir.is_dir() else 0
         info["region_sample"] = sorted(p.name for p in rdir.glob("*.mca"))[:10] if rdir.is_dir() else []
         info["world_subdirs"] = sorted(p.name for p in wd.iterdir() if p.is_dir())[:20]

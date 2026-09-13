@@ -67,6 +67,20 @@ def test_read_nbt_compound_field_order():
     assert d["thunderTime"] == 42
 
 
+def test_overworld_region_dir_old_and_new_layout(tmp_path: Path):
+    """Overworld-Regionen finden: alt <world>/region, neu (26.x) dimensions/minecraft/overworld/region."""
+    old = tmp_path / "old"
+    (old / "region").mkdir(parents=True)
+    (old / "region" / "r.0.0.mca").write_bytes(b"")
+    assert wb.overworld_region_dir(old).name == "region"
+
+    new = tmp_path / "new"
+    nr = new / "dimensions" / "minecraft" / "overworld" / "region"
+    nr.mkdir(parents=True)
+    (nr / "r.0.0.mca").write_bytes(b"")
+    assert wb.overworld_region_dir(new) == nr
+
+
 def test_world_spawn_new_format(tmp_path: Path):
     """1.21.x/26.x speichert den Spawn als Data.spawn.pos (nicht mehr SpawnX/Y/Z)."""
     wd = tmp_path / "world"
