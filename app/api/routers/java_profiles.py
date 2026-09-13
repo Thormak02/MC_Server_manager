@@ -382,17 +382,33 @@ def rebake_hub_world_action(request: Request, db: Session = Depends(get_db)):
         if not lwd:
             why = ("keine Lobby-Welt gefunden - erst 'Lobby-Welt aus Asset laden', dann Lobby starten.")
         else:
-            # world_spawn liest level.dat (IO). Waehrend Paper speichert, kann die Datei kurz
-            # gesperrt/halb geschrieben sein -> nicht crashen, sondern als Grund melden.
+            from app.services import audit_service, hub_service
+
+            diag = world_bake_service.diagnose_lobby_bake(lwd, radius=hub_service._BAKE_RADIUS)
+            # Volle Diagnose ins Audit-Log (per DB-Snapshot remote lesbar).
             try:
-                sx, sy, sz, explicit = world_bake_service.world_spawn(lwd)
-                why = ("KEIN Welt-Spawn gesetzt - in der Lobby zum Zentrum gehen, /setworldspawn, dann "
-                       "/save-all ausfuehren und hier erneut 'Hub-Welt neu backen'." if not explicit else
-                       f"Spawn {sx},{sy},{sz} gesetzt, aber keine Chunks lesbar - laeuft die Lobby noch "
-                       "(Region-Dateien gesperrt)? Sonst Lobby kurz stoppen und erneut backen.")
-            except Exception:  # noqa: BLE001 - level.dat gesperrt/halb geschrieben (Lobby speichert?)
-                why = ("level.dat nicht lesbar (Lobby speichert gerade?) - kurz warten oder Lobby "
-                       "stoppen und erneut 'Hub-Welt neu backen'.")
+                audit_service.log_action(
+                    db, action="hub.bake_diagnose", user_id=current_user.id, server_id=None,
+                    details=(f"dir={diag.get('world_dir')} level_dat={diag.get('level_dat')} "
+                             f"dv={diag.get('data_version')} spawn={diag.get('spawn')} "
+                             f"explicit={diag.get('spawn_explicit')} center={diag.get('center_chunk')} "
+                             f"region={diag.get('region_file')}({diag.get('region_exists')}) "
+                             f"chunks={diag.get('chunks_baked')} err={diag.get('error')} "
+                             f"names={diag.get('sample_names')}"))
+            except Exception:  # noqa: BLE001 - Diagnose-Log darf den Request nie kippen
+                pass
+            if not diag.get("level_dat"):
+                why = "keine level.dat gefunden (Welt-Ordner falsch?) - erneut 'Lobby-Welt aus Asset laden'."
+            elif not diag.get("spawn_explicit"):
+                why = (f"KEIN Welt-Spawn in level.dat (DataVersion {diag.get('data_version')}). In der Lobby "
+                       "/setworldspawn + /save-all ausfuehren, dann erneut backen.")
+            elif diag.get("chunks_baked", 0) == 0:
+                why = (f"Spawn {diag.get('spawn')} gesetzt, aber 0 Chunks um Chunk {diag.get('center_chunk')} "
+                       f"(Region {diag.get('region_file')} vorhanden={diag.get('region_exists')}) - "
+                       "leerer Bereich oder Region gesperrt (Lobby laeuft).")
+            else:
+                why = (f"Spawn + {diag.get('chunks_baked')} Chunks lesbar - aber Hub-Bake dennoch "
+                       "fehlgeschlagen. Bitte melden.")
         push_flash(request, f"Hub laeuft auf der Plattform (kein Bake): {why}", "error")
     return RedirectResponse(url="/settings", status_code=303)
 
