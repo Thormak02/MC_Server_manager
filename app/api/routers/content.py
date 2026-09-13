@@ -69,8 +69,19 @@ def server_content_page(request: Request, server_id: int, db: Session = Depends(
         if current_user is None:
             return RedirectResponse(url="/login", status_code=303)
         server = _ensure_server_access(db, current_user, server_id)
+        can_manage = can_control_server(db, current_user, server)
+        adopt_synced = False
+        if can_manage:
+            # "Automatisch beim Laden": manuell hinzugefuegte Dateien einem Upstream-Projekt
+            # zuordnen (Modrinth-Hash / CurseForge-Fingerprint). Best-effort und idempotent -
+            # pro Datei nur einmal Netzwerk-Lookup; darf die Seite nie blockieren/crashen.
+            try:
+                content_service.auto_adopt_local_content(db, server, current_user.id)
+                adopt_synced = True   # auto_adopt hat bereits synchronisiert -> kein zweiter Scan
+            except Exception:
+                db.rollback()
         try:
-            installed = content_service.list_installed_content(db, server)
+            installed = content_service.list_installed_content(db, server, skip_sync=adopt_synced)
         except SQLAlchemyError as exc:
             installed = []
             push_flash(request, f"Inhalte konnten nicht geladen werden: {exc}", "error")
@@ -88,7 +99,7 @@ def server_content_page(request: Request, server_id: int, db: Session = Depends(
             server=server,
             installed=installed,
             default_content_type=default_content_type,
-            can_manage=can_control_server(db, current_user, server),
+            can_manage=can_manage,
             is_modpack_server=is_modpack_server,
         )
         template = templates.get_template("server_content.html")
@@ -425,6 +436,8 @@ def list_server_content(request: Request, server_id: int, db: Session = Depends(
                 "name": item.name,
                 "version_label": item.version_label,
                 "file_name": item.file_name,
+                "declared_mc_version": item.declared_mc_version,
+                "local_adopt_state": item.local_adopt_state,
                 "installed_at": item.installed_at.isoformat() if item.installed_at else None,
             }
         )
@@ -578,6 +591,38 @@ async def update_all_content(
     return JSONResponse(
         {"updated": len(notes), "notes": notes, "warnings": warnings}
     )
+
+
+@router.post("/api/servers/{server_id}/content/adopt", response_class=JSONResponse)
+async def adopt_content(request: Request, server_id: int, db: Session = Depends(get_db)):
+    """Manuell hinzugefuegte (provider='local') Dateien einem Upstream-Projekt zuordnen,
+    damit sie Versionen laden + aktualisiert werden koennen. Optional {content_id} fuer EINE Zeile;
+    ``recheck`` erzwingt einen erneuten Versuch auch fuer bereits als 'unmatched' markierte."""
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    server = _ensure_server_access(db, current_user, server_id)
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    raw_content_id = (payload or {}).get("content_id")
+    try:
+        content_id = int(raw_content_id) if raw_content_id is not None else None
+    except (TypeError, ValueError):
+        content_id = None
+
+    try:
+        result = content_service.auto_adopt_local_content(
+            db, server, current_user.id, content_id=content_id, recheck=True
+        )
+    except Exception as exc:
+        db.rollback()
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    return JSONResponse(result)
 
 
 @router.get(

@@ -33,6 +33,7 @@ def init_db() -> None:
     settings.ensure_data_dir()
     Base.metadata.create_all(bind=engine)
     _ensure_server_schema()
+    _ensure_installed_content_schema()
     _migrate_gateway_settings_to_network()
     _normalize_runtime_states()
     _cleanup_orphaned_server_relations()
@@ -124,6 +125,34 @@ def _ensure_server_schema() -> None:
             "gateway_is_default",
             "ALTER TABLE servers ADD COLUMN gateway_is_default BOOLEAN NOT NULL DEFAULT 0",
         ),
+    ]
+
+    pending = [(name, sql) for name, sql in migrations if name not in columns]
+    if not pending:
+        return
+
+    with engine.begin() as conn:
+        for _name, sql in pending:
+            conn.execute(text(sql))
+
+
+def _ensure_installed_content_schema() -> None:
+    """Neue Spalten fuer die Zuordnung manuell hinzugefuegter Inhalte idempotent nachziehen.
+
+    SQLite kennt keine Migrations-Framework hier - dasselbe ALTER-falls-fehlt-Muster wie
+    _ensure_server_schema. Bei einer frisch angelegten DB (create_all) sind die Spalten schon da.
+    """
+    inspector = inspect(engine)
+    try:
+        columns = {column["name"] for column in inspector.get_columns("installed_content")}
+    except Exception:
+        return
+
+    migrations = [
+        ("file_sha1", "ALTER TABLE installed_content ADD COLUMN file_sha1 VARCHAR(40)"),
+        ("file_sha512", "ALTER TABLE installed_content ADD COLUMN file_sha512 VARCHAR(128)"),
+        ("local_adopt_state", "ALTER TABLE installed_content ADD COLUMN local_adopt_state VARCHAR(16)"),
+        ("declared_mc_version", "ALTER TABLE installed_content ADD COLUMN declared_mc_version VARCHAR(64)"),
     ]
 
     pending = [(name, sql) for name, sql in migrations if name not in columns]

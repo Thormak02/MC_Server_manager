@@ -292,6 +292,8 @@ die verwaltung des hub / lobby server soll wie die eines normalen servers mit un
 Die Bukkit-Lobby zeigt einen Live-Status-Punkt (grün/magenta/rot), weil sie jeden Server anpingt. Der Python-Hub pingt nicht — einen grünen Punkt zu zeigen, wenn ein Server evtl. aus ist, wäre irreführend, deshalb habe ich ihn weggelassen. Wenn du den Live-Punkt auch im modded Hub willst, kann ich dem Hub einen Status-Ping-Thread spendieren (sauber mit Timeouts) — sag Bescheid
 
 
+welten zwischen servern kopierbar zb. welt von david 1.21.11 spigot server nach neuen 26.1 server kopieren
+
 KI Ideen:
 
 Monitoring & Alarme

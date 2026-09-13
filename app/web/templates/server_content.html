@@ -110,6 +110,7 @@
         <h2>Installierte Inhalte</h2>
         {% if can_manage %}
         <div class="inline-form">
+            <button type="button" id="adopt-all-btn" title="Manuell hinzugefuegte Dateien per Hash einem Modrinth-/CurseForge-Projekt zuordnen">Projekte zuordnen</button>
             <button type="button" id="update-all-btn" data-modpack="{{ 'true' if is_modpack_server else 'false' }}">Alle auf neueste Version aktualisieren</button>
         </div>
         {% endif %}
@@ -138,6 +139,8 @@
                     data-project-id="{{ item.external_project_id }}"
                     data-version-id="{{ item.external_version_id }}"
                     data-content-type="{{ item.content_type }}"
+                    data-declared-mc="{{ item.declared_mc_version or '' }}"
+                    data-local-state="{{ item.local_adopt_state or '' }}"
                 >
                     <td>
                         <div class="installed-name">
@@ -147,19 +150,32 @@
                             <span class="content-icon content-icon-placeholder">{{ (item.name or "?")[:1] }}</span>
                             {% endif %}
                             <span>{{ item.name }}</span>
+                            {% if item.declared_mc_version and item.declared_mc_version != server.mc_version %}
+                            <span class="muted" title="In der Datei angegebene Ziel-MC-Version">[MC {{ item.declared_mc_version }}]</span>
+                            {% endif %}
                         </div>
                     </td>
                     <td>
                         {% if can_manage %}
-                        <div class="stack">
-                            <select class="installed-version-select">
-                                <option value="">- Versionen laden -</option>
-                            </select>
-                            <div class="inline-form">
-                                <button class="ghost apply-installed-version" type="button" data-content-id="{{ item.id }}">Version anwenden</button>
+                            {% if item.provider_name == 'local' %}
+                            <div class="stack">
+                                <span class="muted">Manuell &ndash; nicht zugeordnet</span>
+                                <div class="inline-form">
+                                    <button class="ghost search-local" type="button" data-name="{{ item.name }}">Version suchen</button>
+                                </div>
+                                <span class="muted installed-version-label">{{ item.version_label or "-" }}</span>
                             </div>
-                            <span class="muted installed-version-label">{{ item.version_label or "-" }}</span>
-                        </div>
+                            {% else %}
+                            <div class="stack">
+                                <select class="installed-version-select">
+                                    <option value="">- Versionen laden -</option>
+                                </select>
+                                <div class="inline-form">
+                                    <button class="ghost apply-installed-version" type="button" data-content-id="{{ item.id }}">Version anwenden</button>
+                                </div>
+                                <span class="muted installed-version-label">{{ item.version_label or "-" }}</span>
+                            </div>
+                            {% endif %}
                         {% else %}
                         {{ item.version_label or "-" }}
                         {% endif %}
@@ -510,6 +526,18 @@
     }
 
     function buildInstalledVersionCell(item) {
+        if ((item.provider_name || "").toLowerCase() === "local") {
+            // Manuell hinzugefuegt und (noch) keinem Upstream-Projekt zugeordnet: kein Versions-
+            // Dropdown (es gibt kein Projekt zum Abfragen), stattdessen die manuelle Suche anbieten.
+            return `
+<div class="stack">
+    <span class="muted">Manuell &ndash; nicht zugeordnet</span>
+    <div class="inline-form">
+        <button class="ghost search-local" type="button" data-name="${escapeHtml(item.name || "")}">Version suchen</button>
+    </div>
+    <span class="muted installed-version-label">${escapeHtml(item.version_label || "-")}</span>
+</div>`;
+        }
         return `
 <div class="stack">
     <select class="installed-version-select">
@@ -908,14 +936,19 @@
             const canManage = {{ "true" if can_manage else "false" }};
             installedBody.innerHTML = items
                 .map((item) => {
+                    const serverMc = defaults.mcVersion || "";
+                    const declaredMc = item.declared_mc_version ? String(item.declared_mc_version) : "";
+                    const mcBadge = (declaredMc && declaredMc !== serverMc)
+                        ? ` <span class="muted" title="In der Datei angegebene Ziel-MC-Version">[MC ${escapeHtml(declaredMc)}]</span>`
+                        : "";
                     return `
-<tr data-content-id="${item.id}" data-provider="${escapeHtml(item.provider_name || "")}" data-project-id="${escapeHtml(item.external_project_id || "")}" data-version-id="${escapeHtml(item.external_version_id || "")}" data-content-type="${escapeHtml(item.content_type || "mod")}">
+<tr data-content-id="${item.id}" data-provider="${escapeHtml(item.provider_name || "")}" data-project-id="${escapeHtml(item.external_project_id || "")}" data-version-id="${escapeHtml(item.external_version_id || "")}" data-content-type="${escapeHtml(item.content_type || "mod")}" data-declared-mc="${escapeHtml(declaredMc)}" data-local-state="${escapeHtml(item.local_adopt_state || "")}">
     <td>
         <div class="installed-name">
             ${item.icon_url
                 ? `<img class="content-icon" src="${escapeHtml(item.icon_url)}" alt="" loading="lazy">`
                 : `<span class="content-icon content-icon-placeholder">${escapeHtml((item.name || "?").slice(0, 1))}</span>`}
-            <span>${escapeHtml(item.name || "-")}</span>
+            <span>${escapeHtml(item.name || "-")}${mcBadge}</span>
         </div>
     </td>
     <td>${canManage ? buildInstalledVersionCell(item) : escapeHtml(item.version_label || "-")}</td>
@@ -981,6 +1014,8 @@
                     release_channel: releaseChannel,
                 }).toString();
         } else {
+            // Unbekannter/lokaler Provider ohne Versions-Endpunkt -> klar kennzeichnen statt leer lassen.
+            select.innerHTML = "<option value=\"\">Nicht zugeordnet</option>";
             return;
         }
 
@@ -1145,6 +1180,47 @@
         });
     }
 
+    async function adoptAllContent(btn) {
+        const statusEl = document.getElementById("update-all-status");
+        if (statusEl) statusEl.textContent = "Ordne manuell hinzugefuegte Dateien zu ...";
+        if (btn) btn.disabled = true;
+        try {
+            const response = await fetch(`/api/servers/${serverId}/content/adopt`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error((payload && payload.detail) || "Zuordnung fehlgeschlagen.");
+            }
+            const adopted = payload.adopted || 0;
+            const checked = payload.checked || 0;
+            const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+            let msg = `${adopted} von ${checked} geprueften Datei(en) zugeordnet.`;
+            if (warnings.length) msg += ` ${warnings.length} Hinweis(e) – Details per Maus-Hover.`;
+            if (statusEl) {
+                statusEl.textContent = msg;
+                if (warnings.length) statusEl.title = warnings.join("\n");
+                else statusEl.removeAttribute("title");
+            }
+            await refreshInstalled();
+        } catch (err) {
+            if (statusEl) {
+                statusEl.textContent = err instanceof Error ? err.message : "Zuordnung fehlgeschlagen.";
+            }
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    const adoptAllBtn = document.getElementById("adopt-all-btn");
+    if (adoptAllBtn) {
+        adoptAllBtn.addEventListener("click", function () {
+            adoptAllContent(adoptAllBtn);
+        });
+    }
+
     if (searchBtn) {
         searchBtn.addEventListener("click", function () {
             search(true);
@@ -1224,6 +1300,17 @@
                 const contentId = target.dataset.contentId;
                 if (!contentId) return;
                 deleteContent(contentId, row);
+                return;
+            }
+            if (target.classList.contains("search-local")) {
+                // Nicht zugeordnete Datei: Namen in die Suche uebernehmen und suchen,
+                // damit der Nutzer das Projekt manuell findet + installiert (ersetzt die Datei).
+                const name = target.dataset.name || "";
+                if (queryInput) {
+                    queryInput.value = name;
+                    queryInput.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+                search(true);
                 return;
             }
         });

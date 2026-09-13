@@ -209,6 +209,35 @@ def _request_json(url: str, headers: dict[str, str] | None = None) -> dict | lis
         raise ValueError("Ungueltige API-Antwort (kein JSON).") from exc
 
 
+def _request_json_post(
+    url: str, payload: dict | list, headers: dict[str, str] | None = None, *, timeout: int = 30
+) -> dict | list:
+    """POST-Variante von _request_json (JSON-Body). Fuer Bulk-Endpunkte, die es nur per POST gibt:
+    Modrinth /version_files (Hash-Lookup) und CurseForge /v1/fingerprints. _request_json bleibt
+    GET-only, damit die vorhandenen Test-Fakes unveraendert greifen."""
+    data = json.dumps(payload).encode("utf-8")
+    hdrs = dict(headers or {})
+    hdrs.setdefault("Content-Type", "application/json")
+    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=_tls_context()) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        message = f"HTTP {exc.code}: {exc.reason}"
+        try:
+            body = exc.read().decode("utf-8")
+            if body:
+                message = f"{message} - {body}"
+        except Exception:
+            pass
+        raise ValueError(message) from exc
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        raise ValueError(f"Netzwerkfehler: {reason}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError("Ungueltige API-Antwort (kein JSON).") from exc
+
+
 def _download_file(url: str, target: Path, headers: dict[str, str] | None = None) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(url, headers=headers or {})
@@ -640,8 +669,13 @@ def _sync_local_content_entries(db: Session, server: Server) -> bool:
     if not base_path.exists() or not base_path.is_dir():
         return False
 
-    folders = [("mod", base_path / "mods"), ("plugin", base_path / "plugins")]
-    tracked_by_type: dict[str, set[str]] = {"mod": set(), "plugin": set()}
+    folders = [
+        ("mod", base_path / "mods"),
+        ("plugin", base_path / "plugins"),
+        # Datapacks liegen im Welt-Ordner (per-World-Name, nicht hart "world").
+        ("datapack", base_path / _server_level_name(server) / "datapacks"),
+    ]
+    tracked_by_type: dict[str, set[str]] = {"mod": set(), "plugin": set(), "datapack": set()}
     stmt = select(InstalledContent).where(InstalledContent.server_id == server.id)
     existing_entries = list(db.scalars(stmt))
     for entry in existing_entries:
@@ -2188,8 +2222,394 @@ def install_bukkit(
     return entry
 
 
-def list_installed_content(db: Session, server: Server) -> list[InstalledContent]:
-    _sync_local_content_entries(db, server)
+# --------------------------------------------------------------------------- #
+# Zuordnung manuell hinzugefuegter Dateien zu einem Upstream-Projekt
+# (Modrinth-Hash-Lookup + CurseForge-Fingerprint), damit local-Eintraege
+# Versionen laden und aktualisiert werden koennen.
+# --------------------------------------------------------------------------- #
+_ADOPT_MAX_PER_PASS = 80          # Obergrenze je Auto-Durchlauf (Seitenladung bleibt beschraenkt)
+_CF_WHITESPACE_BYTES = bytes((9, 10, 13, 32))    # Tab, LF, CR, Space
+_MURMUR2_M = 0x5BD1E995
+_MURMUR2_R = 24
+# Datapack pack.mcmeta pack_format -> ungefaehre MC-Version (rein informatives Badge).
+_PACK_FORMAT_MC = {
+    4: "1.13", 5: "1.14", 6: "1.16.1", 7: "1.17", 8: "1.18", 9: "1.18.2",
+    10: "1.19", 12: "1.19.4", 15: "1.20.1", 18: "1.20.2", 26: "1.20.5",
+    41: "1.21", 48: "1.21.2", 57: "1.21.4", 61: "1.21.5", 71: "1.21.9",
+}
+
+
+def _file_sha1(path: Path) -> str:
+    """SHA1 einer Datei (64 KB-Bloecke). Nur SHA1 - Modrinth-Hash-Lookup nutzt SHA1, und die
+    Datei wird auf einer NAS-Freigabe gelesen, also nicht unnoetig ein zweites Mal durchhashen."""
+    digest = hashlib.sha1()
+    with Path(path).open("rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _murmur2(data: bytes, seed: int = 1) -> int:
+    """MurmurHash2 (32-bit, little-endian) - die von CurseForge fuer Fingerprints genutzte Variante."""
+    length = len(data)
+    h = (seed ^ length) & 0xFFFFFFFF
+    i = 0
+    while length >= 4:
+        k = data[i] | (data[i + 1] << 8) | (data[i + 2] << 16) | (data[i + 3] << 24)
+        k = (k * _MURMUR2_M) & 0xFFFFFFFF
+        k ^= k >> _MURMUR2_R
+        k = (k * _MURMUR2_M) & 0xFFFFFFFF
+        h = (h * _MURMUR2_M) & 0xFFFFFFFF
+        h ^= k
+        i += 4
+        length -= 4
+    if length == 3:
+        h ^= data[i + 2] << 16
+    if length >= 2:
+        h ^= data[i + 1] << 8
+    if length >= 1:
+        h ^= data[i]
+        h = (h * _MURMUR2_M) & 0xFFFFFFFF
+    h ^= h >> 13
+    h = (h * _MURMUR2_M) & 0xFFFFFFFF
+    h ^= h >> 15
+    return h & 0xFFFFFFFF
+
+
+def _curseforge_fingerprint(path: Path) -> int:
+    """CurseForges Datei-Fingerprint: murmur2(seed=1) ueber die Bytes OHNE Whitespace (Tab/LF/CR/Space)."""
+    raw = Path(path).read_bytes()
+    normalized = raw.translate(None, _CF_WHITESPACE_BYTES)
+    return _murmur2(normalized, 1)
+
+
+def _parse_plugin_yml(text: str) -> dict:
+    """Bukkit plugin.yml: nur die nicht-eingerueckten Skalare name/version/api-version.
+    Bewusst ohne YAML-Abhaengigkeit (PyYAML ist nicht in requirements)."""
+    out: dict = {}
+    for raw_line in text.splitlines():
+        if not raw_line or raw_line[0] in (" ", "\t", "#"):
+            continue                          # nur Top-Level-Keys, keine verschachtelten
+        if ":" not in raw_line:
+            continue
+        key, _, val = raw_line.partition(":")
+        key = key.strip().lower()
+        val = val.strip().strip('"').strip("'")
+        if not val:
+            continue
+        if key == "name":
+            out["name"] = val
+        elif key == "version":
+            out["version"] = val
+        elif key == "api-version":
+            out["mc_version"] = val
+    return out
+
+
+def _mc_range_hint(dep) -> str | None:
+    if isinstance(dep, list):
+        dep = " ".join(str(x) for x in dep)
+    match = re.search(r"1\.\d{1,2}(?:\.\d{1,2})?", str(dep or ""))
+    return match.group(0) if match else None
+
+
+def _merge_mods_toml(text: str, meta: dict) -> None:
+    modid = re.search(r'modId\s*=\s*["\']([A-Za-z0-9_\-]+)["\']', text)
+    if modid:
+        meta.setdefault("modid", modid.group(1))
+        meta.setdefault("name", modid.group(1))
+    ver = re.search(r'version\s*=\s*["\']([^"\']+)["\']', text)
+    if ver and "${" not in ver.group(1):     # ${file.jarVersion} ist ein Build-Platzhalter
+        meta.setdefault("version", ver.group(1))
+
+
+def _read_artifact_metadata(path: Path) -> dict:
+    """Best-effort: oeffnet .jar/.zip und liest Identitaets-Metadaten (name/version/mc_version).
+    Wirft NIE - eine kaputte/fremde Datei liefert einfach {}."""
+    import zipfile
+
+    meta: dict = {}
+    try:
+        with zipfile.ZipFile(path) as zf:
+            names = set(zf.namelist())
+            if "plugin.yml" in names:
+                try:
+                    meta.update(_parse_plugin_yml(zf.read("plugin.yml").decode("utf-8", "ignore")))
+                except Exception:
+                    pass
+            if "fabric.mod.json" in names:
+                try:
+                    data = json.loads(zf.read("fabric.mod.json").decode("utf-8", "ignore"))
+                    meta.setdefault("name", data.get("name") or data.get("id"))
+                    if data.get("version"):
+                        meta.setdefault("version", str(data["version"]))
+                    dep = (data.get("depends") or {}).get("minecraft")
+                    if dep and _mc_range_hint(dep):
+                        meta.setdefault("mc_version", _mc_range_hint(dep))
+                except Exception:
+                    pass
+            if "quilt.mod.json" in names:
+                try:
+                    data = json.loads(zf.read("quilt.mod.json").decode("utf-8", "ignore"))
+                    loader = data.get("quilt_loader") or {}
+                    meta.setdefault("name", (data.get("metadata") or {}).get("name") or loader.get("id"))
+                    if loader.get("version"):
+                        meta.setdefault("version", str(loader["version"]))
+                except Exception:
+                    pass
+            for toml_name in ("META-INF/neoforge.mods.toml", "META-INF/mods.toml"):
+                if toml_name in names:
+                    try:
+                        _merge_mods_toml(zf.read(toml_name).decode("utf-8", "ignore"), meta)
+                    except Exception:
+                        pass
+                    break
+            if "pack.mcmeta" in names:
+                try:
+                    data = json.loads(zf.read("pack.mcmeta").decode("utf-8-sig", "ignore"))
+                    pack_format = (data.get("pack") or {}).get("pack_format")
+                    if pack_format is not None:
+                        meta.setdefault(
+                            "mc_version",
+                            _PACK_FORMAT_MC.get(int(pack_format), f"Pack-Format {int(pack_format)}"),
+                        )
+                except Exception:
+                    pass
+    except Exception:
+        return meta
+    return meta
+
+
+def find_modrinth_versions_by_hashes(sha1_hashes, algorithm: str = "sha1") -> dict:
+    """Bulk-Lookup Modrinth POST /version_files: gibt {hash(kleingeschrieben): versionObj}
+    fuer die gefundenen Hashes zurueck (fehlende Hashes fehlen im Ergebnis)."""
+    hashes = sorted({(h or "").lower() for h in sha1_hashes if h})
+    if not hashes:
+        return {}
+    result = _request_json_post(
+        f"{MODRINTH_BASE}/version_files",
+        {"hashes": hashes, "algorithm": algorithm},
+        _modrinth_headers(),
+        timeout=15,        # laeuft beim Seitenaufruf -> Ladezeit begrenzen
+    )
+    return result if isinstance(result, dict) else {}
+
+
+def find_curseforge_fingerprint_matches(fingerprints):
+    """Bulk CurseForge POST /v1/fingerprints -> {fingerprint(int): fileObj} exakter Treffer.
+
+    Rueckgabe ``None``, wenn der Lookup mangels API-Key/deaktiviert NICHT laufen konnte
+    (damit der Aufrufer solche Dateien nicht faelschlich als 'unmatched' markiert)."""
+    fps = sorted({int(f) for f in fingerprints if f})
+    if not fps:
+        return {}
+    try:
+        headers = _curseforge_headers()
+    except ValueError:
+        return None
+    data = _request_json_post(
+        f"{CURSEFORGE_BASE}/v1/fingerprints",
+        {"fingerprints": fps},
+        headers,
+        timeout=15,        # laeuft beim Seitenaufruf -> Ladezeit begrenzen
+    )
+    exact = (((data or {}).get("data") or {}).get("exactMatches")) or []
+    out: dict = {}
+    for match in exact:
+        file_obj = match.get("file") or {}
+        fingerprint = file_obj.get("fileFingerprint")
+        if fingerprint is not None and file_obj.get("modId") and file_obj.get("id"):
+            out[int(fingerprint)] = file_obj
+    return out
+
+
+def _curseforge_mod_name(mod_id, headers: dict) -> str | None:
+    try:
+        data = _request_json(f"{CURSEFORGE_BASE}/v1/mods/{int(mod_id)}", headers)
+        return ((data or {}).get("data") or {}).get("name")
+    except Exception:
+        return None
+
+
+def _apply_adoption(entry: InstalledContent, *, provider_name: str, project_id, version_id,
+                    name=None, version_label=None) -> None:
+    """local-Zeile IN-PLACE zu einer echten Provider-Zeile umschreiben (behaelt file_name/content_type).
+    Ab hier greifen Versionsliste, 'Version anwenden' und 'Alle aktualisieren' ohne Sonderweg."""
+    entry.provider_name = provider_name
+    entry.external_project_id = _truncate_with_hash(str(project_id), 128)
+    entry.external_version_id = _truncate_with_hash(str(version_id), 128)
+    if name:
+        entry.name = _truncate_with_hash(str(name), 256)
+    if version_label:
+        entry.version_label = _truncate_with_hash(str(version_label), 128)
+    entry.local_adopt_state = None
+
+
+def auto_adopt_local_content(db: Session, server: Server, user_id: int | None, *,
+                             content_id: int | None = None, recheck: bool = False) -> dict:
+    """Ordnet provider_name='local'-Zeilen ihrem Upstream-Projekt zu:
+    Modrinth-Hash (SHA1, exakt, ohne API-Key) und - falls kein Treffer - CurseForge-Fingerprint.
+    Die Zeile wird in-place umgeschrieben, damit danach alles Weitere ohne Aenderung funktioniert.
+
+    Idempotent: im Normalfall werden nur noch nicht versuchte Zeilen (local_adopt_state IS NULL)
+    bearbeitet und pro Datei Hash/Metadaten einmal persistiert; ``recheck``/``content_id`` erzwingen
+    einen erneuten Versuch. Best-effort: Ist ein Provider-Lookup wegen Netzwerk-/Key-Problemen gar
+    nicht gelaufen, wird NICHTS als 'unmatched' markiert (naechster Aufruf versucht es erneut)."""
+    _sync_local_content_entries(db, server)   # sicherstellen, dass local-Zeilen ueberhaupt existieren
+
+    stmt = select(InstalledContent).where(
+        InstalledContent.server_id == server.id,
+        InstalledContent.provider_name == "local",
+    )
+    rows = list(db.scalars(stmt))
+    if content_id is not None:
+        rows = [r for r in rows if r.id == content_id]
+    elif not recheck:
+        rows = [r for r in rows if r.local_adopt_state is None][:_ADOPT_MAX_PER_PASS]
+
+    # Metadaten anreichern + SHA1 berechnen. Bereits gespeicherter file_sha1 wird
+    # wiederverwendet (kein erneutes Vollstaendig-Lesen der Datei ueber die NAS-Freigabe);
+    # nur beim ersten Mal oder bei ``recheck`` (Datei koennte ausgetauscht sein) neu hashen.
+    candidates: list[tuple[InstalledContent, Path, str]] = []
+    for entry in rows:
+        try:
+            path = _content_file_path(server, entry.content_type, entry.file_name)
+        except ValueError:
+            continue
+        if not path.exists() or not path.is_file():
+            continue
+        if recheck or not entry.file_sha1:
+            meta = _read_artifact_metadata(path)
+            if meta.get("name") and (entry.name or "").strip() in ("", Path(entry.file_name).stem):
+                entry.name = _truncate_with_hash(str(meta["name"]), 256)
+            if meta.get("mc_version"):
+                entry.declared_mc_version = _truncate_with_hash(str(meta["mc_version"]), 64)
+            if meta.get("version") and not entry.version_label:
+                entry.version_label = _truncate_with_hash(str(meta["version"]), 128)
+            try:
+                entry.file_sha1 = _file_sha1(path)
+            except OSError:
+                continue
+        candidates.append((entry, path, entry.file_sha1))
+
+    adopted = 0
+    warnings: list[str] = []
+
+    # (1) Modrinth: ein Bulk-Lookup ueber alle SHA1. modrinth_available unterscheidet
+    # "Provider aus" (permanent) von einem transienten Netzwerkfehler (modrinth_failed).
+    modrinth_available = is_provider_enabled_runtime("modrinth")
+    modrinth_ran = False
+    modrinth_failed = False
+    modrinth_map: dict = {}
+    if candidates and modrinth_available:
+        try:
+            modrinth_map = find_modrinth_versions_by_hashes([c[2] for c in candidates], "sha1")
+            modrinth_ran = True
+        except ValueError as exc:
+            modrinth_failed = True
+            warnings.append(f"Modrinth-Zuordnung nicht moeglich: {exc}")
+
+    # Anzeigename kommt aus den bereits gelesenen Datei-Metadaten (plugin.yml/mods.toml) -
+    # der ist meist praeziser als der Modrinth-Projekttitel und spart einen Netzwerk-Request
+    # pro Treffer. name=None -> vorhandenen entry.name (Metadaten- oder Dateiname) behalten.
+    remaining: list[tuple[InstalledContent, Path, str]] = []
+    for entry, path, sha1 in candidates:
+        payload = modrinth_map.get(sha1) or modrinth_map.get((sha1 or "").lower())
+        if isinstance(payload, dict) and payload.get("project_id") and payload.get("id"):
+            _apply_adoption(
+                entry,
+                provider_name="modrinth",
+                project_id=payload["project_id"],
+                version_id=payload["id"],
+                name=None,
+                version_label=payload.get("version_number"),
+            )
+            adopted += 1
+        else:
+            remaining.append((entry, path, sha1))
+
+    # (2) CurseForge-Fingerprint fuer die uebrigen Dateien - NUR wenn ein API-Key vorhanden ist.
+    # Die Verfuegbarkeit wird ZUERST geprueft, damit ohne Key gar nicht erst jede Datei fuer den
+    # Fingerprint komplett gelesen wird (Default-Fall: kein CF-Key).
+    cf_headers = None
+    cf_available = False
+    try:
+        cf_headers = _curseforge_headers()
+        cf_available = True
+    except ValueError:
+        cf_available = False
+
+    cf_ran = False
+    cf_failed = False
+    if remaining and cf_available:
+        fp_by_entry: dict[int, int] = {}
+        for entry, path, _sha in remaining:
+            try:
+                fp_by_entry[entry.id] = _curseforge_fingerprint(path)
+            except OSError:
+                continue
+        cf_map: dict = {}
+        if fp_by_entry:
+            try:
+                result = find_curseforge_fingerprint_matches(fp_by_entry.values())
+                if result is None:
+                    cf_available = False          # Key doch nicht nutzbar -> permanent unverfuegbar
+                else:
+                    cf_map = result
+                    cf_ran = True
+            except ValueError as exc:
+                cf_failed = True
+                warnings.append(f"CurseForge-Zuordnung nicht moeglich: {exc}")
+        cf_name_cache: dict = {}
+        still_remaining: list[tuple[InstalledContent, Path, str]] = []
+        for entry, path, sha1 in remaining:
+            file_obj = cf_map.get(fp_by_entry.get(entry.id))
+            if isinstance(file_obj, dict):
+                mod_id = file_obj.get("modId")
+                if mod_id not in cf_name_cache:
+                    cf_name_cache[mod_id] = _curseforge_mod_name(mod_id, cf_headers)
+                _apply_adoption(
+                    entry,
+                    provider_name="curseforge",
+                    project_id=mod_id,
+                    version_id=file_obj.get("id"),
+                    name=cf_name_cache.get(mod_id) or file_obj.get("displayName"),
+                    version_label=file_obj.get("displayName") or file_obj.get("fileName"),
+                )
+                adopted += 1
+            else:
+                still_remaining.append((entry, path, sha1))
+        remaining = still_remaining
+
+    # (3) Uebrige als 'unmatched' markieren - aber NUR, wenn beide Provider zu einem definitiven
+    # Ergebnis kamen (gelaufen ODER dauerhaft unverfuegbar) und KEIN Lookup transient scheiterte.
+    # So blockiert ein einmaliger Netzwerk-/Rate-Limit-Fehler nicht dauerhaft die spaetere Zuordnung.
+    modrinth_definitive = modrinth_ran or not modrinth_available
+    cf_definitive = cf_ran or not cf_available
+    if modrinth_definitive and cf_definitive and not modrinth_failed and not cf_failed:
+        for entry, _path, _sha1 in remaining:
+            entry.local_adopt_state = "unmatched"
+
+    db.commit()
+
+    if adopted and user_id is not None:
+        try:
+            audit_service.log_action(
+                db, action="content.adopt", user_id=user_id, server_id=server.id,
+                details=f"{adopted} Inhalt(e) einem Projekt zugeordnet",
+            )
+        except Exception:
+            pass
+
+    return {"adopted": adopted, "checked": len(candidates), "warnings": warnings}
+
+
+def list_installed_content(db: Session, server: Server, *,
+                           skip_sync: bool = False) -> list[InstalledContent]:
+    # skip_sync vermeidet einen doppelten Ordner-Scan, wenn der Aufrufer (z.B. der Content-Seiten-
+    # GET nach auto_adopt_local_content) gerade eben schon synchronisiert hat.
+    if not skip_sync:
+        _sync_local_content_entries(db, server)
 
     stmt = select(InstalledContent).where(InstalledContent.server_id == server.id)
     entries = list(db.scalars(stmt))
@@ -2473,9 +2893,13 @@ def bulk_update_installed_content(
         current_version_id = str(item.external_version_id or "").strip()
         display_name = item.name or project_id or content_type
         expected_loader = _expected_server_loader(server, content_type)
-        if not expected_mc_version or not expected_loader:
+        # Datapacks/Resource Packs sind loader-unabhaengig - fuer sie darf der fehlende Loader
+        # kein Ausschlusskriterium sein (sonst wird JEDER Datapack faelschlich uebersprungen).
+        loader_required = content_type in {"mod", "modpack", "plugin"}
+        if not expected_mc_version or (loader_required and not expected_loader):
+            missing = "MC-Version" if not expected_mc_version else "Loader"
             warnings.append(
-                f"Uebersprungen ({display_name}): MC-Version/Loader unbekannt."
+                f"Uebersprungen ({display_name}): {missing} unbekannt."
             )
             continue
 
