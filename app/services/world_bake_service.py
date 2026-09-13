@@ -380,6 +380,7 @@ def diagnose_lobby_bake(world_dir: str | Path, *, radius: int) -> dict:
         "region_file": None, "region_exists": False,
         "chunks_in_window": (2 * radius + 1) ** 2, "chunks_baked": 0,
         "sample_names": [], "error": None, "data_keys": [], "spawn_hits": {},
+        "region_count": 0, "region_sample": [], "world_subdirs": [],
     }
     try:
         wd = Path(world_dir)
@@ -400,6 +401,12 @@ def diagnose_lobby_bake(world_dir: str | Path, *, radius: int) -> dict:
         rf = wd / "region" / f"r.{ccx >> 5}.{ccz >> 5}.mca"
         info["region_file"] = rf.name
         info["region_exists"] = rf.is_file()
+        # Struktur-Diagnose: wo liegen die Regionen wirklich? (26.x koennte Overworld verschieben,
+        # oder die live Welt ist gar nicht deckungsgleich mit dem Asset.)
+        rdir = wd / "region"
+        info["region_count"] = len(list(rdir.glob("*.mca"))) if rdir.is_dir() else 0
+        info["region_sample"] = sorted(p.name for p in rdir.glob("*.mca"))[:10] if rdir.is_dir() else []
+        info["world_subdirs"] = sorted(p.name for p in wd.iterdir() if p.is_dir())[:20]
         info["chunks_baked"] = len(bake_area(wd, ccx, ccz, radius))
         if rf.is_file():
             ch = read_region(rf).get((ccx, ccz))
