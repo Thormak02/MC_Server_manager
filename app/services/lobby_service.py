@@ -382,9 +382,15 @@ def sync_lobby_plugin(db: Session) -> tuple[bool, str]:
     lobby_target = _lobby_transfer_target(db)
     rows = db.scalars(select(_Server).where(_Server.gateway_enabled.is_(True))).all()
 
+    # Laufende Bukkit-Server nach dem Schreiben live neu laden lassen (Plugin liest config.yml
+    # sonst nur beim Start -> ein frisch aktivierter Server taucht sonst erst nach Lobby-Neustart
+    # im Kompass-Menue auf). Das Plugin hat dafuer den Konsolenbefehl `mcsmlobby reload`.
+    from app.services.process_service import is_running, send_console_command
+
     done: list[str] = []
     failed: list[str] = []
     non_bukkit: list[str] = []
+    reloaded = 0
     for srv in rows:
         if str(srv.server_type or "").lower() not in _BUKKIT_TYPES:
             non_bukkit.append(srv.name)
@@ -393,8 +399,16 @@ def sync_lobby_plugin(db: Session) -> tuple[bool, str]:
             db, srv, is_lobby=(srv.id == lobby.id), lobby_target=lobby_target
         )
         (done if ok else failed).append(detail)
+        if ok and is_running(srv.id):
+            try:
+                send_console_command(db, srv, "mcsmlobby reload", None)
+                reloaded += 1
+            except Exception:  # noqa: BLE001 - Live-Reload darf den Sync nie kippen
+                pass
 
     msg = f"Transfer-Plugin auf {len(done)} Bukkit-Server(n) aktualisiert."
+    if reloaded:
+        msg += f" {reloaded} laufende(r) Server live neu geladen."
     if non_bukkit:
         msg += f" Kein Plugin moeglich (Vanilla/Forge/Fabric): {', '.join(non_bukkit)}."
     if failed:

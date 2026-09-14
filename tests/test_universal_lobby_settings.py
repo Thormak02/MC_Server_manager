@@ -67,3 +67,39 @@ def test_universal_lobby_toggle_on(client):
 
         hub_lobby_service.stop_hub_lobby()
         viaproxy_service.stop_viaproxy()
+
+
+def test_sync_lobby_plugin_live_reloads_running_servers(client, monkeypatch, tmp_path):
+    """Nach dem Schreiben der config.yml wird laufenden Bukkit-Servern `mcsmlobby reload`
+    geschickt, damit ein frisch aktivierter Server sofort (ohne Lobby-Neustart) im Menue auftaucht."""
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import lobby_service
+
+    calls = []
+    monkeypatch.setattr(lobby_service, "_write_plugin_for_server",
+                        lambda db, srv, is_lobby, lobby_target: (True, srv.name))
+    monkeypatch.setattr(lobby_service, "_lobby_transfer_target", lambda db: None)
+    monkeypatch.setattr("app.services.process_service.is_running", lambda sid: True)
+
+    def fake_cmd(db, server, command, user_id):
+        calls.append((server.id, command))
+        return (True, "ok")
+
+    monkeypatch.setattr("app.services.process_service.send_console_command", fake_cmd)
+
+    with SessionLocal() as db:
+        lobby = Server(name="Lobby", slug="lobby", server_type="paper", mc_version="1.21.1",
+                       base_path=str(tmp_path / "lobby"), port=25569, status="running",
+                       gateway_enabled=True, gateway_hostname="lobby", gateway_is_default=True)
+        spg = Server(name="Spg", slug="spg", server_type="spigot", mc_version="26.2",
+                     base_path=str(tmp_path / "spg"), port=25570, status="running",
+                     gateway_enabled=True, gateway_hostname="26.2-spigot")
+        db.add_all([lobby, spg])
+        db.commit()
+        lobby_id, spg_id = lobby.id, spg.id
+
+        ok, _msg = lobby_service.sync_lobby_plugin(db)
+        assert ok
+        assert (lobby_id, "mcsmlobby reload") in calls
+        assert (spg_id, "mcsmlobby reload") in calls
