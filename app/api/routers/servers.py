@@ -853,63 +853,59 @@ def delete_server_action(
         push_flash(request, "Bitte die Bestaetigung aktivieren.", "error")
         return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
 
-    if can_control_server(db, current_user, server):
-        stop_server(db, server, current_user.id, force=False)
-
+    # WICHTIG: Der DB-Eintrag muss am Ende IMMER verschwinden - kein Aufraeum-Schritt (Prozess
+    # stoppen, Ordner/Backups loeschen, Sleep-Proxy) darf das Loeschen verhindern. Alle
+    # potenziell werfenden Schritte sind daher gekapselt; die DB-Bereinigung laeuft garantiert.
+    base_path_str = server.base_path
     delete_folder = not _to_bool(keep_folder)
-    if delete_folder:
-        base_path = Path(server.base_path).expanduser().resolve()
-        if base_path.exists():
-            if not base_path.is_dir():
-                push_flash(request, "Serverpfad ist kein Ordner. Abbruch.", "error")
-                return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
-            if base_path.parent == base_path:
-                push_flash(request, "Serverpfad ist ungueltig. Abbruch.", "error")
-                return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
-            # Sicherstellen, dass keine Altprozesse mehr Dateien im Serverordner sperren.
+
+    # Laufenden Prozess best-effort stoppen (darf nie werfen).
+    try:
+        if can_control_server(db, current_user, server):
+            stop_server(db, server, current_user.id, force=True)
+    except Exception:
+        pass
+
+    folder_warning: str | None = None
+    if delete_folder and base_path_str:
+        try:
+            base_path = Path(base_path_str).expanduser().resolve()
+            if base_path.exists() and base_path.is_dir() and base_path.parent != base_path:
+                try:
+                    terminate_processes_for_server_path(base_path)
+                except Exception:
+                    pass
+                last_exc: Exception | None = None
+                for _ in range(3):
+                    try:
+                        shutil.rmtree(base_path)
+                        last_exc = None
+                        break
+                    except Exception as exc:
+                        last_exc = exc
+                        sleep(1)
+                if last_exc is not None:
+                    shutil.rmtree(base_path, ignore_errors=True)
+                    if base_path.exists():
+                        folder_warning = str(last_exc)
+        except Exception as exc:  # noqa: BLE001 - Ordnerfehler darf das Loeschen nie stoppen
+            folder_warning = str(exc)
+
+    # Backups (best-effort einzeln) + Pending-Modpack aufraeumen.
+    try:
+        for backup in backup_service.list_backups_for_server(db, server.id):
             try:
-                stop_server(db, server, current_user.id, force=True)
+                backup_service.delete_backup(db, backup=backup, initiated_by_user_id=current_user.id)
             except Exception:
                 pass
-            terminate_processes_for_server_path(base_path)
-            last_exc: Exception | None = None
-            for _ in range(3):
-                try:
-                    shutil.rmtree(base_path)
-                    last_exc = None
-                    break
-                except Exception as exc:
-                    last_exc = exc
-                    sleep(1)
-            if last_exc is not None:
-                # NICHT abbrechen: Reste best-effort entfernen und den Eintrag trotzdem loeschen,
-                # damit ein kaputter/gesperrter (Klon-)Server nicht undelbar in der Liste haengt.
-                shutil.rmtree(base_path, ignore_errors=True)
-                if base_path.exists():
-                    push_flash(
-                        request,
-                        f"Server wird geloescht - der Ordner konnte nicht vollstaendig entfernt "
-                        f"werden ({last_exc}). Bitte Reste manuell loeschen.",
-                        "error",
-                    )
+    except Exception:
+        pass
+    try:
+        modpack_service.delete_pending_install_for_server(db, server.id, discard_preview_archive=True)
+    except Exception:
+        pass
 
-    audit_service.log_action(
-        db,
-        action="server.delete",
-        user_id=current_user.id,
-        server_id=server.id,
-        details=f"path={server.base_path} delete_folder={delete_folder}",
-    )
-
-    for backup in backup_service.list_backups_for_server(db, server.id):
-        backup_service.delete_backup(db, backup=backup, initiated_by_user_id=current_user.id)
-
-    modpack_service.delete_pending_install_for_server(
-        db,
-        server.id,
-        discard_preview_archive=True,
-    )
-
+    # DB-Bereinigung - garantiert, auch wenn oben etwas schiefging.
     db.execute(delete(InstalledContent).where(InstalledContent.server_id == server.id))
     db.execute(delete(ServerModpackState).where(ServerModpackState.server_id == server.id))
     db.execute(delete(ServerPermission).where(ServerPermission.server_id == server.id))
@@ -917,12 +913,30 @@ def delete_server_action(
     db.delete(server)
     db.commit()
 
+    audit_service.log_action(
+        db,
+        action="server.delete",
+        user_id=current_user.id,
+        server_id=server_id,
+        details=f"path={base_path_str} delete_folder={delete_folder} folder_ok={folder_warning is None}",
+    )
+
     # Eventuell laufenden Sleep-Proxy dieses Servers stoppen (Port freigeben).
-    from app.services import sleep_proxy_service
+    try:
+        from app.services import sleep_proxy_service
 
-    sleep_proxy_service.stop_proxy(server_id)
+        sleep_proxy_service.stop_proxy(server_id)
+    except Exception:
+        pass
 
-    if delete_folder:
+    if folder_warning:
+        push_flash(
+            request,
+            f"Server geloescht - der Ordner konnte nicht vollstaendig entfernt werden "
+            f"({folder_warning}). Bitte Reste manuell loeschen.",
+            "error",
+        )
+    elif delete_folder:
         push_flash(request, "Server und Ordner wurden geloescht.", "success")
     else:
         push_flash(request, "Server wurde geloescht. Ordner wurde behalten.", "success")

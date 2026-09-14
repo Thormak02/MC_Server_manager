@@ -629,6 +629,44 @@ def test_delete_server_retries_folder_removal_on_transient_error(client, tmp_pat
     assert calls["terminate"] == 1
 
 
+def test_delete_server_succeeds_even_when_cleanup_fails(client, tmp_path, monkeypatch):
+    """Regression: Ein kaputter (Klon-)Server muss loeschbar sein, selbst wenn Stoppen,
+    Prozess-Terminierung und Ordner-Loeschen ALLE fehlschlagen - der DB-Eintrag verschwindet."""
+    _login_admin(client)
+    server_name = "Broken Clone Server"
+    server_dir = tmp_path / "broken_clone"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\necho hi\n", encoding="utf-8")
+    server_location = _import_server(client, server_dir, name=server_name)
+
+    from app.api.routers import servers as servers_router
+
+    def boom_stop(*a, **k):
+        raise RuntimeError("stop kaputt")
+
+    def boom_terminate(path):
+        raise RuntimeError("terminate kaputt")
+
+    def always_fail_rmtree(path, *a, **k):
+        if k.get("ignore_errors"):
+            return None                       # ignore_errors -> Ordner bleibt, kein Fehler
+        raise OSError("[WinError 32] dauerhaft gesperrt")
+
+    monkeypatch.setattr(servers_router, "stop_server", boom_stop)
+    monkeypatch.setattr(servers_router, "terminate_processes_for_server_path", boom_terminate)
+    monkeypatch.setattr(servers_router.shutil, "rmtree", always_fail_rmtree)
+
+    delete_response = client.post(
+        f"{server_location}/delete",
+        data={"confirm_name": server_name, "confirm_delete": "true"},
+        follow_redirects=False,
+    )
+    assert delete_response.status_code == 303
+    assert delete_response.headers["location"] == "/dashboard"
+    # Trotz aller Fehler ist der Server wirklich geloescht:
+    assert client.get(server_location, follow_redirects=False).status_code == 404
+
+
 def test_start_progress_endpoint_returns_payload(client, tmp_path, monkeypatch):
     _login_admin(client)
     server_dir = tmp_path / "start_progress_srv"
