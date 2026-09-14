@@ -230,7 +230,16 @@ def create_backup(
 
 def delete_backup(db: Session, *, backup: Backup, initiated_by_user_id: int | None) -> None:
     path = Path(backup.storage_path).expanduser().resolve()
-    if path.exists() and path.is_file():
+    # Die ZIP-Datei nur entfernen, wenn KEINE andere Backup-Zeile mehr darauf zeigt.
+    # Beim Server-Duplizieren werden Backups nur als Pointer (gleicher storage_path) uebernommen -
+    # ein Loeschen des Klons (oder der Quelle) darf die noch referenzierte Datei nicht mitloeschen.
+    other = db.scalars(
+        select(Backup).where(
+            Backup.storage_path == backup.storage_path,
+            Backup.id != backup.id,
+        )
+    ).first()
+    if other is None and path.exists() and path.is_file():
         path.unlink()
 
     audit_service.log_action(

@@ -225,8 +225,8 @@ def test_duplicate_reports_progress_to_100(client, monkeypatch, tmp_path, _det_p
         assert prog["active"] is False
 
 
-def test_duplicate_copies_backups(client, monkeypatch, tmp_path, _det_ports):
-    """Backups (ausserhalb des Serverordners) werden mitkopiert: ZIP + DB-Zeile."""
+def test_duplicate_links_backups_as_pointer(client, monkeypatch, tmp_path, _det_ports):
+    """Backups werden NICHT kopiert, nur referenziert (gleicher storage_path) - kein Extra-Speicher."""
     from app.db.session import SessionLocal
     from app.models.backup import Backup
     from app.services import server_service
@@ -246,10 +246,38 @@ def test_duplicate_copies_backups(client, monkeypatch, tmp_path, _det_ports):
         clone_backups = db.scalars(_select(Backup).where(Backup.server_id == clone.id)).all()
         assert len(clone_backups) == 1
         assert clone_backups[0].backup_name == "b1"
-        copied_zip = Path(clone_backups[0].storage_path)
-        assert copied_zip.exists()
-        assert copied_zip.read_bytes() == b"PK\x03\x04 backup-inhalt"
-        assert str(copied_zip) != str(zip_path)          # eigene Kopie, nicht dieselbe Datei
+        assert clone_backups[0].storage_path == str(zip_path)   # Pointer auf dieselbe Datei
+        assert list(tmp_path.glob("*.zip")) == [zip_path]        # keine zweite ZIP angelegt
+
+
+def test_delete_backup_keeps_shared_zip_until_last_reference(client, tmp_path):
+    """Ein Pointer-Backup loescht die geteilte ZIP erst, wenn keine andere Zeile mehr darauf zeigt."""
+    from app.db.session import SessionLocal
+    from app.models.backup import Backup
+    from app.models.server import Server
+    from app.services import backup_service
+
+    zip_path = tmp_path / "shared.zip"
+    zip_path.write_bytes(b"data")
+
+    with SessionLocal() as db:
+        s1 = Server(name="S1", slug="s1", server_type="paper", mc_version="1.21.1",
+                    base_path="a", port=25599, status="stopped")
+        s2 = Server(name="S2", slug="s2", server_type="paper", mc_version="1.21.1",
+                    base_path="b", port=25600, status="stopped")
+        db.add_all([s1, s2])
+        db.commit()
+        b1 = Backup(server_id=s1.id, backup_name="b", backup_type="manual",
+                    storage_path=str(zip_path), status="success")
+        b2 = Backup(server_id=s2.id, backup_name="b", backup_type="manual",
+                    storage_path=str(zip_path), status="success")
+        db.add_all([b1, b2])
+        db.commit()
+
+        backup_service.delete_backup(db, backup=b1, initiated_by_user_id=None)
+        assert zip_path.exists()                          # b2 zeigt noch drauf -> Datei bleibt
+        backup_service.delete_backup(db, backup=b2, initiated_by_user_id=None)
+        assert not zip_path.exists()                      # letzte Referenz weg -> Datei geloescht
 
 
 def test_robust_copy_tree_skips_locked_file(client, monkeypatch, tmp_path):

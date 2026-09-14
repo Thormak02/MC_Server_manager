@@ -384,43 +384,27 @@ def _robust_copy_tree(src, dst, *, on_file=None, is_cancelled=None) -> list[str]
     return skipped
 
 
-def _copy_server_backups(db: Session, source_id: int, clone_id: int) -> list[str]:
-    """Backups der Quelle fuer den Klon uebernehmen (ZIP-Datei kopieren + DB-Zeile anlegen).
-    Backups liegen ausserhalb des Serverordners, werden also NICHT vom Ordner-Copy erfasst.
-    Best-effort - Rueckgabe: Warnungen."""
-    import shutil
-
+def _link_server_backups(db: Session, source_id: int, clone_id: int) -> None:
+    """Backups NICHT kopieren, nur referenzieren: der Klon bekommt Backup-Zeilen, die auf
+    dieselben ZIP-Dateien der Quelle zeigen (kein doppelter Speicher, keine Extra-Kopierzeit).
+    delete_backup entfernt eine ZIP-Datei nur, solange keine andere Zeile mehr darauf zeigt -
+    ein Loeschen von Klon ODER Quelle laesst die noch referenzierte Datei also unangetastet."""
     from app.models.backup import Backup
     from app.services import backup_service
 
-    clone = db.get(Server, clone_id)
-    if clone is None:
-        return []
-    warnings: list[str] = []
-    try:
-        target_dir = backup_service._backup_folder_for_server(db, clone)
-    except Exception as exc:  # noqa: BLE001
-        return [f"Backups nicht kopierbar: {exc}"]
-    copied = 0
+    added = 0
     for backup in backup_service.list_backups_for_server(db, source_id):
-        src_zip = Path(backup.storage_path)
-        if (backup.status or "") != "success" or not src_zip.exists() or not src_zip.is_file():
-            continue
-        dest = (target_dir / src_zip.name).resolve()
-        try:
-            shutil.copy2(src_zip, dest)
-        except OSError as exc:
-            warnings.append(f"Backup '{backup.backup_name}' nicht kopiert: {exc}")
+        if (backup.status or "") != "success":
             continue
         db.add(Backup(
             server_id=clone_id, backup_name=backup.backup_name, backup_type=backup.backup_type,
-            storage_path=str(dest), created_by_user_id=backup.created_by_user_id,
-            size_bytes=backup.size_bytes, status="success",
+            storage_path=backup.storage_path,   # Pointer auf dieselbe Datei der Quelle
+            created_by_user_id=backup.created_by_user_id, size_bytes=backup.size_bytes,
+            status="success",
         ))
-        copied += 1
-    if copied:
+        added += 1
+    if added:
         db.commit()
-    return warnings
 
 
 def _perform_duplicate(db: Session, source_id: int, clone_id: int, user_id: int | None) -> None:
@@ -490,13 +474,13 @@ def _perform_duplicate(db: Session, source_id: int, clone_id: int, user_id: int 
             )
 
             report_progress(clone_id, active=True, stage="duplicate", percent=99,
-                            message="Inhalte, Rechte, Tasks & Backups werden uebernommen ...")
+                            message="Inhalte, Rechte & Tasks werden uebernommen ...")
             _copy_server_relations(db, source_id, clone_id)
             try:
                 sync_server_settings_to_files(clone)   # schreibt server-port = neuer Port
             except Exception:
                 pass
-            backup_warnings = _copy_server_backups(db, source_id, clone_id)
+            _link_server_backups(db, source_id, clone_id)   # nur Pointer, keine ZIP-Kopie
 
             clone.status = DEFAULT_SERVER_STATUS       # "stopped" - fertig
             db.add(clone)
@@ -505,13 +489,11 @@ def _perform_duplicate(db: Session, source_id: int, clone_id: int, user_id: int 
             done_msg = "Kopie abgeschlossen."
             if skipped:
                 done_msg += f" {len(skipped)} gesperrte Datei(en) uebersprungen."
-            if backup_warnings:
-                done_msg += f" {len(backup_warnings)} Backup-Hinweis(e)."
             report_progress(clone_id, active=False, stage="stopped", percent=100, message=done_msg)
             audit_service.log_action(
                 db, action="server.duplicate", user_id=user_id, server_id=clone_id,
                 details=(f"source={source_id} name={clone.name} port={clone.port} "
-                         f"skipped={len(skipped)} backup_warnings={len(backup_warnings)}"),
+                         f"skipped={len(skipped)}"),
             )
         except _DuplicationCancelled:
             # Nutzer loescht den Klon -> Kopie stoppen. Ordner/DB-Zeile raeumt der Loesch-Vorgang auf.
