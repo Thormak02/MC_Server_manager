@@ -440,7 +440,8 @@
         if (value === "loader_install") return "Loader-Installation";
         if (value === "launch") return "Serverstart";
         if (value === "running") return "Server laeuft";
-        if (value === "error") return "Startfehler";
+        if (value === "duplicate") return "Server wird kopiert";
+        if (value === "error") return "Fehler";
         if (value === "stopped") return "Gestoppt";
         return "Startvorgang";
     }
@@ -452,7 +453,8 @@
         const serverStatus = payload && payload.server_status ? String(payload.server_status) : "";
         const rawPercent = payload && typeof payload.percent === "number" ? payload.percent : null;
 
-        const shouldShow = active || stage === "error" || serverStatus === "starting";
+        const shouldShow = active || stage === "error"
+            || serverStatus === "starting" || serverStatus === "provisioning";
         panel.hidden = !shouldShow;
         if (!shouldShow) return;
 

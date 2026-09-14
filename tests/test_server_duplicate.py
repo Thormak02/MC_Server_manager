@@ -206,18 +206,100 @@ def test_start_server_refused_while_duplication_source(client, monkeypatch, tmp_
         assert "dupliziert" in msg.lower()
 
 
-def test_duplicate_does_not_copy_backups(client, monkeypatch, tmp_path, _det_ports):
+def test_duplicate_reports_progress_to_100(client, monkeypatch, tmp_path, _det_ports):
+    """Der Kopier-Fortschritt wird ueber die Start-Progress-Anzeige gemeldet und endet bei 100%."""
+    from app.db.session import SessionLocal
+    from app.services import process_service, server_service
+
+    with SessionLocal() as db:
+        src = _make_source(db, tmp_path / "source")
+        region = Path(src.base_path) / "world" / "region"
+        region.mkdir(parents=True, exist_ok=True)
+        for i in range(3):
+            (region / f"r.{i}.mca").write_bytes(b"x" * 100_000)   # mehrere Dateien -> copy_function laeuft
+
+        clone = server_service.duplicate_server(db, src, None, run_async=False)
+        prog = process_service.get_start_progress(clone.id)
+        assert prog["percent"] == 100
+        assert prog["stage"] == "stopped"
+        assert prog["active"] is False
+
+
+def test_duplicate_copies_backups(client, monkeypatch, tmp_path, _det_ports):
+    """Backups (ausserhalb des Serverordners) werden mitkopiert: ZIP + DB-Zeile."""
     from app.db.session import SessionLocal
     from app.models.backup import Backup
     from app.services import server_service
     from sqlalchemy import select as _select
 
+    zip_path = tmp_path / "b1.zip"
+    zip_path.write_bytes(b"PK\x03\x04 backup-inhalt")
+
     with SessionLocal() as db:
         src = _make_source(db, tmp_path / "source")
         db.add(Backup(server_id=src.id, backup_name="b1", backup_type="manual",
-                      storage_path=str(tmp_path / "b1.zip"), status="success"))
+                      storage_path=str(zip_path), size_bytes=zip_path.stat().st_size,
+                      status="success"))
         db.commit()
 
         clone = server_service.duplicate_server(db, src, None, run_async=False)
         clone_backups = db.scalars(_select(Backup).where(Backup.server_id == clone.id)).all()
-        assert clone_backups == []                       # Backups gehoeren zum Original
+        assert len(clone_backups) == 1
+        assert clone_backups[0].backup_name == "b1"
+        copied_zip = Path(clone_backups[0].storage_path)
+        assert copied_zip.exists()
+        assert copied_zip.read_bytes() == b"PK\x03\x04 backup-inhalt"
+        assert str(copied_zip) != str(zip_path)          # eigene Kopie, nicht dieselbe Datei
+
+
+def test_robust_copy_tree_skips_locked_file(client, monkeypatch, tmp_path):
+    """Eine gesperrte Datei (z.B. offene logs/latest.log) darf den Rest NICHT verhindern."""
+    import shutil as _sh
+    from app.services import server_service
+
+    src = tmp_path / "src"
+    (src / "logs").mkdir(parents=True)
+    (src / "logs" / "latest.log").write_bytes(b"log")
+    (src / "mods").mkdir()
+    (src / "mods" / "a.jar").write_bytes(b"a")
+    (src / "plugins").mkdir()
+    (src / "plugins" / "p.jar").write_bytes(b"p")
+    dst = tmp_path / "dst"
+
+    real_copy2 = _sh.copy2
+
+    def fake_copy2(s, d, *a, **k):
+        if str(s).endswith("latest.log"):
+            raise PermissionError("locked by manager")
+        return real_copy2(s, d, *a, **k)
+
+    monkeypatch.setattr("shutil.copy2", fake_copy2)
+    skipped = server_service._robust_copy_tree(src, dst)
+
+    assert any("latest.log" in s for s in skipped)       # gesperrte Datei uebersprungen
+    assert (dst / "mods" / "a.jar").read_bytes() == b"a"  # Rest trotzdem kopiert
+    assert (dst / "plugins" / "p.jar").read_bytes() == b"p"
+
+
+def test_robust_copy_tree_cancellation(client, tmp_path):
+    from app.services import server_service
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "f.txt").write_bytes(b"x")
+    with pytest.raises(server_service._DuplicationCancelled):
+        server_service._robust_copy_tree(src, tmp_path / "dst", is_cancelled=lambda: True)
+
+
+def test_cancel_and_wait_helpers(client):
+    from app.services import server_service as ss
+
+    ss._mark_clone_copy_active(999)
+    assert ss.is_clone_copy_active(999) is True
+    ss.request_cancel_duplication(999)
+    assert ss._is_duplication_cancelled(999) is True
+    # ohne Clear laeuft der Wait in den Timeout
+    assert ss.wait_for_duplication_to_stop(999, timeout=0.3) is False
+    ss._clear_clone_copy(999)
+    assert ss.is_clone_copy_active(999) is False
+    assert ss.wait_for_duplication_to_stop(999, timeout=0.3) is True

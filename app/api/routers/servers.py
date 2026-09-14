@@ -837,9 +837,13 @@ def delete_server_action(
     if server is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
 
-    if (server.status or "").strip().lower() == "provisioning":
-        push_flash(request, "Server wird gerade kopiert - bitte warten, bis das Duplizieren fertig ist.", "error")
-        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+    # Falls dieser Server gerade als Klon kopiert wird: Kopie sauber abbrechen und warten, bis der
+    # Kopier-Thread wirklich gestoppt hat (sonst sperren offene Datei-Handles das Loeschen).
+    from app.services import server_service as _svc
+
+    if _svc.is_clone_copy_active(server.id):
+        _svc.request_cancel_duplication(server.id)
+        _svc.wait_for_duplication_to_stop(server.id, timeout=8.0)
 
     if not _matches_confirm_name(confirm_name, server.name):
         push_flash(request, "Servername stimmt nicht ueberein.", "error")
@@ -862,24 +866,32 @@ def delete_server_action(
             if base_path.parent == base_path:
                 push_flash(request, "Serverpfad ist ungueltig. Abbruch.", "error")
                 return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+            # Sicherstellen, dass keine Altprozesse mehr Dateien im Serverordner sperren.
             try:
-                # Sicherstellen, dass keine Altprozesse mehr Dateien im Serverordner sperren.
                 stop_server(db, server, current_user.id, force=True)
-                terminate_processes_for_server_path(base_path)
-                last_exc: Exception | None = None
-                for _ in range(3):
-                    try:
-                        shutil.rmtree(base_path)
-                        last_exc = None
-                        break
-                    except Exception as exc:
-                        last_exc = exc
-                        sleep(1)
-                if last_exc is not None:
-                    raise last_exc
-            except Exception as exc:
-                push_flash(request, f"Ordner konnte nicht geloescht werden: {exc}", "error")
-                return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+            except Exception:
+                pass
+            terminate_processes_for_server_path(base_path)
+            last_exc: Exception | None = None
+            for _ in range(3):
+                try:
+                    shutil.rmtree(base_path)
+                    last_exc = None
+                    break
+                except Exception as exc:
+                    last_exc = exc
+                    sleep(1)
+            if last_exc is not None:
+                # NICHT abbrechen: Reste best-effort entfernen und den Eintrag trotzdem loeschen,
+                # damit ein kaputter/gesperrter (Klon-)Server nicht undelbar in der Liste haengt.
+                shutil.rmtree(base_path, ignore_errors=True)
+                if base_path.exists():
+                    push_flash(
+                        request,
+                        f"Server wird geloescht - der Ordner konnte nicht vollstaendig entfernt "
+                        f"werden ({last_exc}). Bitte Reste manuell loeschen.",
+                        "error",
+                    )
 
     audit_service.log_action(
         db,

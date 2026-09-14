@@ -393,3 +393,6 @@ live übersicht über map, spieler position, gebäude, inventar usw. Dynmap? int
 
 
 rechte verwaltung: nutzern und nutzergruppen je per checkbox berechtigungen zuweisen
+
+
+bestimmte server bei manager neustart nicht mit neustarten, sondern weiterlaufen lassen und wieder aufgreifen

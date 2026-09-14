@@ -42,6 +42,51 @@ def _unmark_duplication_source(server_id: int) -> None:
         _ACTIVE_DUP_SOURCES.discard(server_id)
 
 
+# Klon-IDs, deren Kopie gerade laeuft, + offene Abbruch-Anforderungen (z.B. wenn der Nutzer
+# einen noch kopierenden/fehlerhaften Klon loeschen will -> Kopie sauber stoppen, dann loeschen).
+_ACTIVE_DUP_CLONES: set[int] = set()
+_CANCEL_DUP_CLONES: set[int] = set()
+
+
+def is_clone_copy_active(clone_id: int) -> bool:
+    with _DUP_LOCK:
+        return clone_id in _ACTIVE_DUP_CLONES
+
+
+def request_cancel_duplication(clone_id: int) -> None:
+    with _DUP_LOCK:
+        _CANCEL_DUP_CLONES.add(clone_id)
+
+
+def _is_duplication_cancelled(clone_id: int) -> bool:
+    with _DUP_LOCK:
+        return clone_id in _CANCEL_DUP_CLONES
+
+
+def _mark_clone_copy_active(clone_id: int) -> None:
+    with _DUP_LOCK:
+        _ACTIVE_DUP_CLONES.add(clone_id)
+
+
+def _clear_clone_copy(clone_id: int) -> None:
+    with _DUP_LOCK:
+        _ACTIVE_DUP_CLONES.discard(clone_id)
+        _CANCEL_DUP_CLONES.discard(clone_id)
+
+
+def wait_for_duplication_to_stop(clone_id: int, timeout: float = 8.0) -> bool:
+    """Nach request_cancel_duplication warten, bis der Kopier-Thread wirklich gestoppt hat
+    (damit anschliessend keine Datei-Handles das Loeschen blockieren)."""
+    import time
+
+    deadline = time.monotonic() + timeout
+    while is_clone_copy_active(clone_id):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.15)
+    return True
+
+
 _XMS_PATTERN = re.compile(r"(?i)-Xms\S+")
 _XMX_PATTERN = re.compile(r"(?i)-Xmx\S+")
 _JAVA_TOKEN_PATTERN = re.compile(r'(?i)("[^"]*java(?:\.exe)?"|java(?:\.exe)?)')
@@ -291,6 +336,93 @@ def _dir_total_size(path: Path) -> int:
     return total
 
 
+class _DuplicationCancelled(Exception):
+    """Signalisiert einen vom Nutzer angeforderten Abbruch der laufenden Kopie."""
+
+
+def _robust_copy_tree(src, dst, *, on_file=None, is_cancelled=None) -> list[str]:
+    """Kopiert einen Ordner rekursiv wie Explorer/xcopy: einzelne gesperrte/unlesbare Dateien
+    werden UEBERSPRUNGEN, statt den ganzen Vorgang abzubrechen (shutil.copytree bricht schon beim
+    ersten Fehler ab - z.B. bei einer vom Manager offen gehaltenen logs/latest.log, alphabetisch
+    VOR mods/plugins/world -> dann fehlt der Rest). Rueckgabe: Liste uebersprungener Pfade."""
+    import os
+    import shutil
+    import time
+
+    src = Path(src)
+    dst = Path(dst)
+    skipped: list[str] = []
+    for root, _dirs, files in os.walk(src):
+        if is_cancelled and is_cancelled():
+            raise _DuplicationCancelled()
+        rel = Path(root).relative_to(src)
+        target_dir = dst / rel
+        try:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            skipped.append(f"{rel}\\*")
+            continue
+        for name in files:
+            if is_cancelled and is_cancelled():
+                raise _DuplicationCancelled()
+            source_file = Path(root) / name
+            dest_file = target_dir / name
+            copied_ok = False
+            for attempt in range(3):
+                try:
+                    shutil.copy2(source_file, dest_file)
+                    copied_ok = True
+                    break
+                except OSError:
+                    if attempt < 2:
+                        time.sleep(0.2)   # kurzer Retry (transiente SMB-/Datei-Sperre)
+            if copied_ok:
+                if on_file is not None:
+                    on_file(dest_file)
+            else:
+                skipped.append(str(rel / name))
+    return skipped
+
+
+def _copy_server_backups(db: Session, source_id: int, clone_id: int) -> list[str]:
+    """Backups der Quelle fuer den Klon uebernehmen (ZIP-Datei kopieren + DB-Zeile anlegen).
+    Backups liegen ausserhalb des Serverordners, werden also NICHT vom Ordner-Copy erfasst.
+    Best-effort - Rueckgabe: Warnungen."""
+    import shutil
+
+    from app.models.backup import Backup
+    from app.services import backup_service
+
+    clone = db.get(Server, clone_id)
+    if clone is None:
+        return []
+    warnings: list[str] = []
+    try:
+        target_dir = backup_service._backup_folder_for_server(db, clone)
+    except Exception as exc:  # noqa: BLE001
+        return [f"Backups nicht kopierbar: {exc}"]
+    copied = 0
+    for backup in backup_service.list_backups_for_server(db, source_id):
+        src_zip = Path(backup.storage_path)
+        if (backup.status or "") != "success" or not src_zip.exists() or not src_zip.is_file():
+            continue
+        dest = (target_dir / src_zip.name).resolve()
+        try:
+            shutil.copy2(src_zip, dest)
+        except OSError as exc:
+            warnings.append(f"Backup '{backup.backup_name}' nicht kopiert: {exc}")
+            continue
+        db.add(Backup(
+            server_id=clone_id, backup_name=backup.backup_name, backup_type=backup.backup_type,
+            storage_path=str(dest), created_by_user_id=backup.created_by_user_id,
+            size_bytes=backup.size_bytes, status="success",
+        ))
+        copied += 1
+    if copied:
+        db.commit()
+    return warnings
+
+
 def _perform_duplicate(db: Session, source_id: int, clone_id: int, user_id: int | None) -> None:
     """Die eigentliche (potenziell langsame) Klon-Arbeit: Serverordner 1:1 kopieren,
     DB-Verknuepfungen uebernehmen, server.properties auf den neuen Port angleichen.
@@ -298,7 +430,7 @@ def _perform_duplicate(db: Session, source_id: int, clone_id: int, user_id: int 
     import shutil
 
     from app.services import audit_service
-    from app.services.process_service import is_running
+    from app.services.process_service import is_running, report_progress
 
     try:
         source = db.get(Server, source_id)
@@ -311,33 +443,81 @@ def _perform_duplicate(db: Session, source_id: int, clone_id: int, user_id: int 
             # Welt-Dateien gesperrt/inkonsistent (die Vorabpruefung deckt nur den Klick-Moment ab).
             if is_running(source_id):
                 raise ValueError("Quell-Server wurde waehrend des Kopierens gestartet - Abbruch.")
-            # Freien Speicher grob pruefen, bevor GBs kopiert werden (best-effort).
+            # Gesamtgroesse einmal bestimmen: fuer Speicher-Check UND Fortschrittsanzeige.
+            total_bytes = 0
             try:
-                need = _dir_total_size(Path(source.base_path))
+                total_bytes = _dir_total_size(Path(source.base_path))
                 free = shutil.disk_usage(str(Path(clone_base).parent)).free
-                if need and free < need + (256 * 1024 * 1024):
+                if total_bytes and free < total_bytes + (256 * 1024 * 1024):
                     raise ValueError(
-                        f"Nicht genug freier Speicher (benoetigt ~{need // (1024 * 1024)} MB, "
+                        f"Nicht genug freier Speicher (benoetigt ~{total_bytes // (1024 * 1024)} MB, "
                         f"frei ~{free // (1024 * 1024)} MB)."
                     )
             except ValueError:
                 raise
             except Exception:
-                pass   # Groessen-/Speicherpruefung darf das Duplizieren nicht blockieren
+                total_bytes = 0   # Groessen-/Speicherpruefung darf das Duplizieren nicht blockieren
 
-            shutil.copytree(source.base_path, clone.base_path, dirs_exist_ok=True)
+            # Fortschritt ueber dieselbe Anzeige wie der Startvorgang (Detailseite pollt sie).
+            _mb = 1024 * 1024
+            report_progress(clone_id, active=True, stage="duplicate", percent=0,
+                            message="Serverdateien werden kopiert ...")
+            copied = [0]
+            last_pct = [-1]
+
+            def _on_file(dest_file):
+                if not total_bytes:
+                    return
+                try:
+                    copied[0] += Path(dest_file).stat().st_size
+                except OSError:
+                    return
+                pct = min(99, int(copied[0] * 100 / total_bytes))
+                if pct != last_pct[0]:
+                    last_pct[0] = pct
+                    report_progress(
+                        clone_id, active=True, stage="duplicate", percent=pct,
+                        message=f"Serverdateien werden kopiert ... "
+                                f"{copied[0] // _mb} / {total_bytes // _mb} MB",
+                    )
+
+            # Wie Explorer/xcopy: gesperrte Einzeldateien ueberspringen statt den ganzen
+            # Vorgang abzubrechen (sonst fehlten mods/plugins/world nach einer offenen logs-Datei).
+            skipped = _robust_copy_tree(
+                source.base_path, clone.base_path,
+                on_file=_on_file,
+                is_cancelled=lambda: _is_duplication_cancelled(clone_id),
+            )
+
+            report_progress(clone_id, active=True, stage="duplicate", percent=99,
+                            message="Inhalte, Rechte, Tasks & Backups werden uebernommen ...")
             _copy_server_relations(db, source_id, clone_id)
             try:
                 sync_server_settings_to_files(clone)   # schreibt server-port = neuer Port
             except Exception:
                 pass
+            backup_warnings = _copy_server_backups(db, source_id, clone_id)
+
             clone.status = DEFAULT_SERVER_STATUS       # "stopped" - fertig
             db.add(clone)
             db.commit()
+
+            done_msg = "Kopie abgeschlossen."
+            if skipped:
+                done_msg += f" {len(skipped)} gesperrte Datei(en) uebersprungen."
+            if backup_warnings:
+                done_msg += f" {len(backup_warnings)} Backup-Hinweis(e)."
+            report_progress(clone_id, active=False, stage="stopped", percent=100, message=done_msg)
             audit_service.log_action(
                 db, action="server.duplicate", user_id=user_id, server_id=clone_id,
-                details=f"source={source_id} name={clone.name} port={clone.port}",
+                details=(f"source={source_id} name={clone.name} port={clone.port} "
+                         f"skipped={len(skipped)} backup_warnings={len(backup_warnings)}"),
             )
+        except _DuplicationCancelled:
+            # Nutzer loescht den Klon -> Kopie stoppen. Ordner/DB-Zeile raeumt der Loesch-Vorgang auf.
+            db.rollback()
+            report_progress(clone_id, active=False, stage="stopped", percent=0,
+                            message="Kopie abgebrochen.")
         except Exception as exc:
             db.rollback()
             # Halb kopierten Klon-Ordner wieder entfernen (kein GB-Muell auf der NAS-Freigabe).
@@ -350,6 +530,8 @@ def _perform_duplicate(db: Session, source_id: int, clone_id: int, user_id: int 
                 broken.status = "error"
                 db.add(broken)
                 db.commit()
+            report_progress(clone_id, active=False, stage="error", percent=0,
+                            message=f"Kopie fehlgeschlagen: {exc}")
             try:
                 audit_service.log_action(
                     db, action="server.duplicate_failed", user_id=user_id, server_id=clone_id,
@@ -359,6 +541,7 @@ def _perform_duplicate(db: Session, source_id: int, clone_id: int, user_id: int 
                 pass
             raise
     finally:
+        _clear_clone_copy(clone_id)
         _unmark_duplication_source(source_id)
 
 
@@ -433,8 +616,14 @@ def duplicate_server(db: Session, source: Server, user_id: int | None, *,
         db.refresh(clone)
 
     # Quelle fuer die Dauer der Kopie als "wird dupliziert" sperren (start_server verweigert
-    # dann den Start dieses Servers).
+    # dann den Start dieses Servers); Klon als "Kopie laeuft" markieren (fuer Loeschen-Abbruch).
     _mark_duplication_source(source.id)
+    _mark_clone_copy_active(clone.id)
+
+    # Sofort einen Fortschritts-Eintrag setzen, damit die Detailseite gleich "wird kopiert" zeigt.
+    from app.services import process_service as _ps
+    _ps.report_progress(clone.id, active=True, stage="duplicate", percent=0,
+                        message="Kopie wird vorbereitet ...")
 
     if run_async:
         clone_id, src_id = clone.id, source.id

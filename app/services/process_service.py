@@ -110,6 +110,21 @@ def _set_start_progress(
         return dict(payload)
 
 
+def report_progress(
+    server_id: int,
+    *,
+    active: bool | None = None,
+    stage: str | None = None,
+    message: str | None = None,
+    percent: int | None = None,
+) -> dict[str, object]:
+    """Oeffentlicher Fortschritts-Setter - nutzt dieselbe Anzeige wie der Startvorgang.
+    Wird z.B. beim Server-Duplizieren fuer den Kopier-Fortschritt verwendet."""
+    return _set_start_progress(
+        server_id, active=active, stage=stage, message=message, percent=percent
+    )
+
+
 def get_start_progress(server_id: int) -> dict[str, object]:
     with _START_PROGRESS_LOCK:
         payload = dict(_START_PROGRESS.get(server_id) or {})
