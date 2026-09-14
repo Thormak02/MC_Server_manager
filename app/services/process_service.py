@@ -1144,6 +1144,20 @@ def start_server(
             )
             return False, "Server ist gerade in einem Start-/Wartungsvorgang."
 
+        # Waehrend dieser Server gerade als Duplizier-Quelle kopiert wird, darf er nicht starten
+        # (sonst sperrt/veraendert er Welt-Dateien und die Kopie wird inkonsistent).
+        from app.services import server_service as _svc
+
+        if _svc.is_active_duplication_source(server.id):
+            _set_start_progress(
+                server.id,
+                active=False,
+                stage="stopped",
+                message="Server wird gerade dupliziert - bitte warten.",
+                percent=0,
+            )
+            return False, "Server wird gerade dupliziert - bitte warten."
+
         base_path = Path(server.base_path).expanduser().resolve()
         if not base_path.exists() or not base_path.is_dir():
             server.status = "error"

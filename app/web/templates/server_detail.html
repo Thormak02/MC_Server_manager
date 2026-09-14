@@ -361,6 +361,15 @@
 
 {% if current_user.role == "super_admin" %}
 <section class="card">
+    <h2>Server duplizieren</h2>
+    <p class="muted">Erstellt eine vollstaendige 1:1-Kopie (Welt, Mods/Plugins, Einstellungen, installierte Inhalte, Rechte, geplante Tasks). Der Klon bekommt einen neuen Namen und einen freien Port; Netzwerk/Alias ist deaktiviert und geplante Tasks sind pausiert. Der Server muss dafuer gestoppt sein.</p>
+    <form method="post" action="/servers/{{ server.id }}/duplicate" class="inline-form"
+          onsubmit="return confirm('Diesen Server jetzt duplizieren? Das kopiert den kompletten Serverordner und kann bei grossen Welten etwas dauern.');">
+        <button type="submit">Server duplizieren</button>
+    </form>
+</section>
+
+<section class="card">
     <h2>Server loeschen</h2>
     <p class="muted">Loescht den Servereintrag und standardmaessig auch den Serverordner. Diese Aktion kann nicht rueckgaengig gemacht werden.</p>
     <button type="button" class="danger" id="open-delete-modal" data-server-name="{{ server.name }}">Server loeschen &hellip;</button>

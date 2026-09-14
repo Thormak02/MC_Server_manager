@@ -390,3 +390,6 @@ Server-Vermietung: den Manager als Basis für Server-Vermietung schaffen - z.B. 
 
 
 live übersicht über map, spieler position, gebäude, inventar usw. Dynmap? interaktiv aus der vogelperspektive, pro server zuschaltbar und nach auswahl über link öffentlich einsehbar
+
+
+rechte verwaltung: nutzern und nutzergruppen je per checkbox berechtigungen zuweisen

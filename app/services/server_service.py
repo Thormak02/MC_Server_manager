@@ -1,4 +1,5 @@
 import re
+import threading
 from pathlib import Path
 
 from sqlalchemy import delete, func, select, update
@@ -13,6 +14,32 @@ from app.models.user import User
 from app.services.java_runtime_service import choose_best_java_profile
 from app.services.memory_settings_service import validate_memory_bounds
 from app.schemas.server import ServerCreate, ServerImportConfirm
+
+
+# Serialisiert Port-/Namens-/Slug-Vergabe bis zum Commit, damit zwei gleichzeitige
+# Server-Erstellungen/Duplikate nicht denselben freien Port oder Namen bekommen
+# (allocate/generate lesen nur COMMITTED Zeilen -> ohne Lock waere das ein Race).
+_SERVER_ALLOC_LOCK = threading.Lock()
+
+# Quell-Server, deren Ordner gerade kopiert wird (Duplizieren). Solange gesperrt darf der
+# Quell-Server nicht gestartet werden (sonst sperrt/veraendert er Welt-Dateien waehrend der Kopie).
+_DUP_LOCK = threading.Lock()
+_ACTIVE_DUP_SOURCES: set[int] = set()
+
+
+def is_active_duplication_source(server_id: int) -> bool:
+    with _DUP_LOCK:
+        return server_id in _ACTIVE_DUP_SOURCES
+
+
+def _mark_duplication_source(server_id: int) -> None:
+    with _DUP_LOCK:
+        _ACTIVE_DUP_SOURCES.add(server_id)
+
+
+def _unmark_duplication_source(server_id: int) -> None:
+    with _DUP_LOCK:
+        _ACTIVE_DUP_SOURCES.discard(server_id)
 
 
 _XMS_PATTERN = re.compile(r"(?i)-Xms\S+")
@@ -117,34 +144,37 @@ def create_server(db: Session, data: ServerCreate) -> Server:
             java_profile_id = auto_profile.id
 
     # Kein Port angegeben -> host-weit freien Port aus dem Bereich vergeben.
-    assigned_port = data.port
-    if assigned_port is None:
-        try:
-            assigned_port = port_service.allocate_server_port(db)
-        except ValueError:
-            assigned_port = None
+    # Vergabe + Insert unter dem Alloc-Lock, damit parallele Erstellungen/Duplikate nicht
+    # denselben Port bekommen (used_server_ports sieht nur committete Zeilen).
+    with _SERVER_ALLOC_LOCK:
+        assigned_port = data.port
+        if assigned_port is None:
+            try:
+                assigned_port = port_service.allocate_server_port(db)
+            except ValueError:
+                assigned_port = None
 
-    server = Server(
-        name=unique_name,
-        slug=_generate_unique_slug(db, unique_name),
-        server_type=data.server_type,
-        mc_version=data.mc_version,
-        loader_version=data.loader_version,
-        base_path=base_path,
-        start_mode=data.start_mode,
-        start_command=data.start_command,
-        start_bat_path=data.start_bat_path,
-        java_profile_id=java_profile_id,
-        memory_min_mb=memory_min_mb,
-        memory_max_mb=memory_max_mb,
-        port=assigned_port,
-        status=DEFAULT_SERVER_STATUS,
-        auto_restart=False,
-        auto_start_with_manager=False,
-    )
-    db.add(server)
-    db.commit()
-    db.refresh(server)
+        server = Server(
+            name=unique_name,
+            slug=_generate_unique_slug(db, unique_name),
+            server_type=data.server_type,
+            mc_version=data.mc_version,
+            loader_version=data.loader_version,
+            base_path=base_path,
+            start_mode=data.start_mode,
+            start_command=data.start_command,
+            start_bat_path=data.start_bat_path,
+            java_profile_id=java_profile_id,
+            memory_min_mb=memory_min_mb,
+            memory_max_mb=memory_max_mb,
+            port=assigned_port,
+            status=DEFAULT_SERVER_STATUS,
+            auto_restart=False,
+            auto_start_with_manager=False,
+        )
+        db.add(server)
+        db.commit()
+        db.refresh(server)
 
     # Safety cleanup for environments where old orphan rows existed and IDs get reused.
     cleanup_changed = False
@@ -157,6 +187,272 @@ def create_server(db: Session, data: ServerCreate) -> Server:
         db.refresh(server)
 
     return server
+
+
+def _rebase_path_string(value: str | None, old_base: str, new_base: str) -> str | None:
+    """Absolute Verweise auf den Quell-Serverordner (z.B. in start_command / start_bat_path)
+    auf den Klon-Ordner umbiegen. Best-effort ueber String-Ersetzung des Basispfads."""
+    if not value or not old_base:
+        return value
+    if old_base in value:
+        return value.replace(old_base, new_base)
+    # Windows: gross-/kleinschreibungsunabhaengig probieren.
+    lowered = value.lower()
+    idx = lowered.find(old_base.lower())
+    if idx != -1:
+        return value[:idx] + new_base + value[idx + len(old_base):]
+    return value
+
+
+def _unique_server_dir(root: Path, slug: str) -> Path:
+    """Freien Zielordner unter dem Storage-Root fuer den Slug finden (slug, slug-2, ...)."""
+    candidate = root / slug
+    counter = 2
+    while candidate.exists():
+        candidate = root / f"{slug}-{counter}"
+        counter += 1
+    return candidate
+
+
+def _copy_server_relations(db: Session, source_id: int, clone_id: int) -> None:
+    """DB-Verknuepfungen des Servers auf den Klon kopieren: installierte Inhalte,
+    Zugriffsrechte, geplante Tasks (pausiert), Modpack-Herkunft. NICHT: Backups/Historien."""
+    from app.models.server_modpack_state import ServerModpackState
+
+    for row in db.scalars(
+        select(InstalledContent).where(InstalledContent.server_id == source_id)
+    ):
+        db.add(InstalledContent(
+            server_id=clone_id, provider_name=row.provider_name, content_type=row.content_type,
+            external_project_id=row.external_project_id, external_version_id=row.external_version_id,
+            name=row.name, version_label=row.version_label, file_name=row.file_name,
+            file_sha1=row.file_sha1, file_sha512=row.file_sha512,
+            local_adopt_state=row.local_adopt_state, declared_mc_version=row.declared_mc_version,
+            installed_by_user_id=row.installed_by_user_id,
+        ))
+
+    for row in db.scalars(
+        select(ServerPermission).where(ServerPermission.server_id == source_id)
+    ):
+        db.add(ServerPermission(
+            server_id=clone_id, user_id=row.user_id, can_view=row.can_view,
+            can_console=row.can_console, can_restart=row.can_restart,
+            can_edit_files=row.can_edit_files, can_manage=row.can_manage,
+        ))
+
+    for row in db.scalars(
+        select(ScheduledJob).where(ScheduledJob.server_id == source_id)
+    ):
+        # Geplante Tasks werden pausiert uebernommen (Nutzer aktiviert sie bewusst) und
+        # bekommen einen frischen Zeitplan (keine geerbten last/next-Zeiten).
+        db.add(ScheduledJob(
+            server_id=clone_id, job_type=row.job_type,
+            schedule_expression=row.schedule_expression, command_payload=row.command_payload,
+            is_enabled=False, last_run_at=None, next_run_at=None,
+        ))
+
+    state = db.scalar(
+        select(ServerModpackState).where(ServerModpackState.server_id == source_id)
+    )
+    if state is not None:
+        db.add(ServerModpackState(
+            server_id=clone_id, source=state.source, pack_name=state.pack_name,
+            source_ref=state.source_ref, upstream_project_id=state.upstream_project_id,
+            current_version_id=state.current_version_id, pending_version_id=state.pending_version_id,
+            pack_version=state.pack_version, last_known_version_id=state.last_known_version_id,
+            last_known_version_label=state.last_known_version_label,
+            last_check_error=state.last_check_error,
+        ))
+
+    db.commit()
+
+
+def _dir_total_size(path: Path) -> int:
+    """Gesamtgroesse eines Verzeichnisbaums (Bytes), scandir-basiert (unter Windows nutzt
+    entry.stat() die bereits gecachten Verzeichnisdaten -> schnell auch ueber SMB)."""
+    import os
+
+    total = 0
+    stack = [str(path)]
+    while stack:
+        current = stack.pop()
+        try:
+            with os.scandir(current) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+                        elif entry.is_file(follow_symlinks=False):
+                            total += entry.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+    return total
+
+
+def _perform_duplicate(db: Session, source_id: int, clone_id: int, user_id: int | None) -> None:
+    """Die eigentliche (potenziell langsame) Klon-Arbeit: Serverordner 1:1 kopieren,
+    DB-Verknuepfungen uebernehmen, server.properties auf den neuen Port angleichen.
+    Gibt die Quell-Sperre am Ende immer frei."""
+    import shutil
+
+    from app.services import audit_service
+    from app.services.process_service import is_running
+
+    try:
+        source = db.get(Server, source_id)
+        clone = db.get(Server, clone_id)
+        if source is None or clone is None:
+            return
+        clone_base = clone.base_path
+        try:
+            # Erneut sicherstellen, dass die Quelle nicht (wieder) laeuft - sonst waeren die
+            # Welt-Dateien gesperrt/inkonsistent (die Vorabpruefung deckt nur den Klick-Moment ab).
+            if is_running(source_id):
+                raise ValueError("Quell-Server wurde waehrend des Kopierens gestartet - Abbruch.")
+            # Freien Speicher grob pruefen, bevor GBs kopiert werden (best-effort).
+            try:
+                need = _dir_total_size(Path(source.base_path))
+                free = shutil.disk_usage(str(Path(clone_base).parent)).free
+                if need and free < need + (256 * 1024 * 1024):
+                    raise ValueError(
+                        f"Nicht genug freier Speicher (benoetigt ~{need // (1024 * 1024)} MB, "
+                        f"frei ~{free // (1024 * 1024)} MB)."
+                    )
+            except ValueError:
+                raise
+            except Exception:
+                pass   # Groessen-/Speicherpruefung darf das Duplizieren nicht blockieren
+
+            shutil.copytree(source.base_path, clone.base_path, dirs_exist_ok=True)
+            _copy_server_relations(db, source_id, clone_id)
+            try:
+                sync_server_settings_to_files(clone)   # schreibt server-port = neuer Port
+            except Exception:
+                pass
+            clone.status = DEFAULT_SERVER_STATUS       # "stopped" - fertig
+            db.add(clone)
+            db.commit()
+            audit_service.log_action(
+                db, action="server.duplicate", user_id=user_id, server_id=clone_id,
+                details=f"source={source_id} name={clone.name} port={clone.port}",
+            )
+        except Exception as exc:
+            db.rollback()
+            # Halb kopierten Klon-Ordner wieder entfernen (kein GB-Muell auf der NAS-Freigabe).
+            try:
+                shutil.rmtree(clone_base, ignore_errors=True)
+            except Exception:
+                pass
+            broken = db.get(Server, clone_id)
+            if broken is not None:
+                broken.status = "error"
+                db.add(broken)
+                db.commit()
+            try:
+                audit_service.log_action(
+                    db, action="server.duplicate_failed", user_id=user_id, server_id=clone_id,
+                    details=str(exc),
+                )
+            except Exception:
+                pass
+            raise
+    finally:
+        _unmark_duplication_source(source_id)
+
+
+def duplicate_server(db: Session, source: Server, user_id: int | None, *,
+                     run_async: bool = True) -> Server:
+    """Einen Server 1:1 duplizieren (Ordner, Welt, Mods/Plugins, Einstellungen, Inhalte,
+    Rechte, geplante Tasks). Der Klon bekommt einen neuen Namen, freien Port und deaktiviertes
+    Netzwerk (Alias/Lobby sind eindeutig). Die Quelle MUSS gestoppt sein (konsistente Kopie).
+
+    Die (bei grossen Welten langsame) Datei-Kopie laeuft standardmaessig im Hintergrund; der Klon
+    startet im Status 'provisioning' und wird nach Abschluss 'stopped' (oder 'error')."""
+    from app.services import app_setting_service, port_service
+    from app.services.process_service import is_running
+
+    if (source.status or "").strip().lower() == "provisioning":
+        raise ValueError("Dieser Server wird gerade erstellt/kopiert - bitte warten.")
+    if is_running(source.id):
+        raise ValueError("Bitte den Server zuerst stoppen, bevor du ihn duplizierst.")
+
+    storage_root = app_setting_service.ensure_server_storage_initialized(db)
+    src_path = Path(source.base_path).resolve()
+    old_base = str(source.base_path)
+
+    # Namen/Slug/Ports vergeben + Klon-Zeile schreiben unter dem Alloc-Lock (atomar gegen
+    # parallele Erstellungen/Duplikate - sonst gleiche Ports oder Namens-IntegrityError).
+    with _SERVER_ALLOC_LOCK:
+        new_name = _generate_unique_name(db, f"{source.name} (Kopie)")
+        new_slug = _generate_unique_slug(db, new_name)
+        new_base = _unique_server_dir(storage_root, new_slug)
+        new_base_str = str(new_base)
+        dst_path = new_base.resolve()
+
+        # Verschachtelung Quelle<->Ziel verhindern (sonst kopiert copytree endlos in sich selbst
+        # bzw. den ganzen Storage-Root in den Klon).
+        if (dst_path == src_path or dst_path.is_relative_to(src_path)
+                or src_path.is_relative_to(dst_path)):
+            raise ValueError(
+                "Zielordner liegt im Quellordner (oder umgekehrt) - Duplizieren abgebrochen."
+            )
+
+        new_port = port_service.allocate_server_port(db)
+        new_sleep_port = None
+        if source.sleep_enabled:
+            new_sleep_port = port_service.allocate_server_port(db, exclude={new_port})
+
+        clone = Server(
+            name=new_name,
+            slug=new_slug,
+            server_type=source.server_type,
+            mc_version=source.mc_version,
+            loader_version=source.loader_version,
+            base_path=new_base_str,
+            start_mode=source.start_mode,
+            start_command=_rebase_path_string(source.start_command, old_base, new_base_str),
+            start_bat_path=_rebase_path_string(source.start_bat_path, old_base, new_base_str),
+            java_profile_id=source.java_profile_id,
+            memory_min_mb=source.memory_min_mb,
+            memory_max_mb=source.memory_max_mb,
+            port=new_port,
+            status="provisioning",
+            auto_restart=source.auto_restart,
+            auto_start_with_manager=False,          # Sicherheit: Klon nicht automatisch mitstarten
+            sleep_enabled=source.sleep_enabled,
+            sleep_delay_seconds=source.sleep_delay_seconds,
+            sleep_internal_port=new_sleep_port,
+            gateway_enabled=False,                   # Netzwerk/Alias sind eindeutig -> auf dem Klon aus
+            gateway_hostname=None,
+            gateway_is_default=False,
+        )
+        db.add(clone)
+        db.commit()
+        db.refresh(clone)
+
+    # Quelle fuer die Dauer der Kopie als "wird dupliziert" sperren (start_server verweigert
+    # dann den Start dieses Servers).
+    _mark_duplication_source(source.id)
+
+    if run_async:
+        clone_id, src_id = clone.id, source.id
+
+        def _bg() -> None:
+            from app.db.session import SessionLocal
+            with SessionLocal() as worker_db:
+                try:
+                    _perform_duplicate(worker_db, src_id, clone_id, user_id)
+                except Exception:
+                    pass   # Status/Sperre wurden bereits in _perform_duplicate behandelt
+
+        threading.Thread(target=_bg, daemon=True).start()
+    else:
+        _perform_duplicate(db, source.id, clone.id, user_id)
+        db.refresh(clone)
+
+    return clone
 
 
 def _memory_token(value_mb: int | None, kind: str) -> str | None:

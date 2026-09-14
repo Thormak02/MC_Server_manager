@@ -665,6 +665,11 @@ def _local_version_from_file_name(file_name: str) -> str | None:
 
 
 def _sync_local_content_entries(db: Session, server: Server) -> bool:
+    # Waehrend eines laufenden Klon-Vorgangs (Ordner wird gerade 1:1 kopiert) nicht scannen -
+    # sonst entstehen 'local'-Zeilen fuer halb kopierte Dateien, die spaeter mit den kopierten
+    # Provider-Zeilen kollidieren (Dubletten).
+    if (server.status or "").strip().lower() == "provisioning":
+        return False
     base_path = Path(server.base_path).expanduser().resolve()
     if not base_path.exists() or not base_path.is_dir():
         return False

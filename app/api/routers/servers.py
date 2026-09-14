@@ -34,6 +34,7 @@ from app.services.server_service import (
     can_edit_server_files,
     can_control_server,
     can_view_server,
+    duplicate_server,
     get_server_by_id,
     sleep_delay_to_seconds,
     sync_server_settings_to_files,
@@ -836,6 +837,10 @@ def delete_server_action(
     if server is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
 
+    if (server.status or "").strip().lower() == "provisioning":
+        push_flash(request, "Server wird gerade kopiert - bitte warten, bis das Duplizieren fertig ist.", "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
     if not _matches_confirm_name(confirm_name, server.name):
         push_flash(request, "Servername stimmt nicht ueberein.", "error")
         return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
@@ -910,3 +915,39 @@ def delete_server_action(
     else:
         push_flash(request, "Server wurde geloescht. Ordner wurde behalten.", "success")
     return RedirectResponse(url="/dashboard", status_code=303)
+
+
+@router.post("/servers/{server_id}/duplicate")
+def duplicate_server_action(
+    request: Request,
+    server_id: int,
+    db: Session = Depends(get_db),
+):
+    """Server 1:1 duplizieren (neuer Name/Port, Netzwerk aus, Tasks pausiert)."""
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+    if current_user.role != UserRole.SUPER_ADMIN.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+
+    try:
+        clone = duplicate_server(db, server, current_user.id)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+    except Exception as exc:  # noqa: BLE001 - z.B. seltener Namens-/Port-Konflikt bei Parallelaufruf
+        db.rollback()
+        push_flash(request, f"Duplizieren fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
+    push_flash(
+        request,
+        f"Kopie „{clone.name}“ wird erstellt (Ordner wird kopiert). "
+        "Netzwerk ist aus, geplante Tasks sind pausiert.",
+        "success",
+    )
+    return RedirectResponse(url=f"/servers/{clone.id}", status_code=303)

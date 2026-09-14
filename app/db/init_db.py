@@ -176,11 +176,18 @@ def _normalize_runtime_states() -> None:
                         "stopping",
                         "restarting",
                         "backup_running",
-                        "provisioning",
                     ]
                 )
             )
             .values(status="stopped")
+        )
+        # 'provisioning' = ein beim Neustart unterbrochenes Duplizieren -> der Ordner ist nur
+        # halb kopiert. NICHT als 'stopped' (= startbereit) ausgeben, sondern als 'error'
+        # kennzeichnen, damit niemand einen unvollstaendigen Server startet.
+        db.execute(
+            update(Server)
+            .where(Server.status == "provisioning")
+            .values(status="error")
         )
         db.commit()
 
