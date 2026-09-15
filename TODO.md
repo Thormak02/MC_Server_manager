@@ -398,3 +398,5 @@ rechte verwaltung: nutzern und nutzergruppen je per checkbox berechtigungen zuwe
 bestimmte server bei manager neustart nicht mit neustarten, sondern weiterlaufen lassen und wieder aufgreifen
 
 mir ist außerdem grade aufgefallen: es funktionieren nur vanilla tweaks, aber vanilla tweaks crafting rezepte werden nicht erkannt und nicht zur auswahl verfügbar
+
+/lobby / /server lobby geht nicht

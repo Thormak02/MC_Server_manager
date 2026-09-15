@@ -571,6 +571,140 @@ def test_update_installed_vt_already_current_is_noop(client, monkeypatch, tmp_pa
 
 
 # --------------------------------------------------------------------------- #
+# VanillaTweaks Crafting Tweaks (EIN kombiniertes Datapack + 'Selected Packs.txt')
+# --------------------------------------------------------------------------- #
+def _fake_ct_archive(pack_names: list[str]) -> bytes:
+    """Simuliert ein kombiniertes VT-Crafting-Tweaks-Datapack: pack.mcmeta + data/ + Manifest."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("pack.mcmeta", '{"pack":{"pack_format":48}}')
+        z.writestr("data/example/recipe.json", "{}")
+        manifest = ("Vanilla Tweaks Crafting Tweaks\nVersion: 1.21\nPacks:\n"
+                    + "".join(f"\t{n}\n" for n in pack_names))
+        z.writestr("Selected Packs.txt", manifest)
+    return buf.getvalue()
+
+
+def test_read_selected_packs_parses_manifest(tmp_path):
+    from app.services import vanillatweaks_service as vt
+
+    path = tmp_path / "ct.zip"
+    path.write_bytes(_fake_ct_archive(["back to blocks", "double doors"]))
+    m = vt.read_selected_packs(path)
+    assert m == {"kind": "craftingtweaks", "version": "1.21",
+                 "packs": ["back to blocks", "double doors"]}
+    # normales Datapack ohne Manifest -> None
+    plain = tmp_path / "plain.zip"
+    with zipfile.ZipFile(plain, "w") as z:
+        z.writestr("pack.mcmeta", "{}")
+    assert vt.read_selected_packs(plain) is None
+
+
+def test_install_craftingtweaks_writes_one_combined_datapack(client, monkeypatch, tmp_path):
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import vanillatweaks_service as vt
+    from sqlalchemy import select as _select
+
+    monkeypatch.setattr(vt, "generate_zip",
+                        lambda pt, ver, sel: _fake_ct_archive(["back to blocks"]))
+    base = tmp_path / "srv"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="paper", mc="1.21.1")
+        notes, warnings = vt.install_datapacks(
+            db, srv, "craftingtweaks", {"Quality of Life": ["back to blocks"]}, None
+        )
+        assert warnings == []
+        rows = db.scalars(_select(InstalledContent).where(InstalledContent.server_id == srv.id)).all()
+        assert len(rows) == 1                                   # EIN Eintrag, kein Datei-Wildwuchs
+        assert rows[0].file_name == "VanillaTweaks Crafting Tweaks.zip"
+        assert rows[0].provider_name == "vanillatweaks"
+        assert rows[0].external_project_id == "vt:craftingtweaks"
+        dp = base / "world" / "datapacks" / "VanillaTweaks Crafting Tweaks.zip"
+        assert dp.exists()
+        with zipfile.ZipFile(dp) as z:
+            assert "pack.mcmeta" in z.namelist()               # ein gueltiges Datapack
+
+
+def test_auto_adopt_recognizes_combined_crafting_tweaks_offline(client, monkeypatch, tmp_path):
+    """Ein manuell reingelegtes (kombiniertes) Crafting-Tweaks-Datapack wird per Manifest erkannt -
+    OHNE VT-Katalog/Netzwerk (Dateiname ist der VT-Hash-Name)."""
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import content_service as cs
+    from app.services import vanillatweaks_service as vt
+    from sqlalchemy import select as _select
+
+    monkeypatch.setattr(cs, "_modrinth_headers", lambda: {"User-Agent": "x"})
+    monkeypatch.setattr(cs, "_curseforge_headers",
+                        lambda: (_ for _ in ()).throw(ValueError("kein Key")))
+    monkeypatch.setattr(cs, "_request_json_post",
+                        lambda url, payload, headers=None, *, timeout=30: {})
+    # Katalog absichtlich kaputt -> Offline-Manifest-Erkennung muss trotzdem greifen.
+    monkeypatch.setattr(vt, "build_datapack_lookup",
+                        lambda version: (_ for _ in ()).throw(ValueError("Katalog down")))
+
+    base = tmp_path / "srv"
+    base.mkdir()
+    dp_dir = base / "world" / "datapacks"
+    dp_dir.mkdir(parents=True)
+    (dp_dir / "VanillaTweaks_abc123_MC1.21-1.21.11.zip").write_bytes(
+        _fake_ct_archive(["back to blocks", "double doors"])
+    )
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="1.21.11")
+        cs.auto_adopt_local_content(db, srv, None)
+        row = db.scalar(_select(InstalledContent).where(InstalledContent.server_id == srv.id))
+        assert row.provider_name == "vanillatweaks"
+        assert row.external_project_id == "vt:craftingtweaks"
+        assert row.name == "VanillaTweaks Crafting Tweaks"
+        assert row.version_label == "1.21"
+
+
+def test_update_crafting_tweaks_regenerates_from_manifest(client, monkeypatch, tmp_path):
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import vanillatweaks_service as vt
+
+    monkeypatch.setattr(vt, "_catalog_packs", lambda pt, ver: (
+        [{"pack_type": "craftingtweaks", "category": "Quality of Life",
+          "name": "back to blocks", "display": "Back to Blocks", "version": "1.2.14"}]
+        if pt == "craftingtweaks" else []
+    ))
+    gen_calls = []
+
+    def fake_gen(pt, ver, sel):
+        gen_calls.append((pt, ver, sel))
+        return _fake_ct_archive(["back to blocks"])
+
+    monkeypatch.setattr(vt, "generate_zip", fake_gen)
+
+    base = tmp_path / "srv"
+    base.mkdir()
+    dp_dir = base / "world" / "datapacks"
+    dp_dir.mkdir(parents=True)
+    (dp_dir / "VanillaTweaks Crafting Tweaks.zip").write_bytes(_fake_ct_archive(["back to blocks"]))
+
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="1.21.11")
+        entry = InstalledContent(
+            server_id=srv.id, provider_name="vanillatweaks", content_type="datapack",
+            external_project_id="vt:craftingtweaks", external_version_id="1.21",
+            name="VanillaTweaks Crafting Tweaks", version_label="1.21",
+            file_name="VanillaTweaks Crafting Tweaks.zip",
+        )
+        db.add(entry)
+        db.commit()
+
+        updated, note = vt.update_installed_vt(db, srv, entry, None)
+        assert updated is True
+        assert gen_calls and gen_calls[0][0] == "craftingtweaks"
+        # Auswahl aus dem Manifest -> Kategorie aus dem Katalog aufgefuellt
+        assert gen_calls[0][2] == {"Quality of Life": ["back to blocks"]}
+
+
+# --------------------------------------------------------------------------- #
 # Schema-Migration
 # --------------------------------------------------------------------------- #
 def test_installed_content_schema_migration_idempotent(client):

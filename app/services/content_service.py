@@ -2592,31 +2592,50 @@ def auto_adopt_local_content(db: Session, server: Server, user_id: int | None, *
     vt_failed = False
     if vt_datapacks:
         from app.services import vanillatweaks_service as _vt
-        try:
-            vt_lookup = _vt.build_datapack_lookup(_vt.map_vt_version(server.mc_version))
-            vt_ran = True
-        except Exception as exc:  # noqa: BLE001
-            vt_lookup = {}
-            vt_failed = True
-            warnings.append(f"VanillaTweaks-Zuordnung nicht moeglich: {exc}")
-        if vt_ran:
-            matched_ids: set = set()
-            for entry, _path, _sha1 in vt_datapacks:
-                info = vt_lookup.get(_normalized_lookup_key(_vt._pack_name_from_file(entry.file_name)))
-                if info:
-                    installed_ver = _vt._pack_version_from_file(entry.file_name) or info["version"]
-                    _apply_adoption(
-                        entry,
-                        provider_name="vanillatweaks",
-                        project_id=f"vt:{info['pack_type']}",
-                        version_id=installed_ver,
-                        name=info["display"],
-                        version_label=installed_ver,
-                    )
-                    adopted += 1
-                    matched_ids.add(entry.id)
-            if matched_ids:
-                remaining = [t for t in remaining if t[0].id not in matched_ids]
+        matched_ids: set = set()
+
+        # (3a) Kombinierte Crafting-Tweaks-Datapacks OFFLINE per Manifest 'Selected Packs.txt'
+        # erkennen - kein Katalog/Netzwerk noetig (Crafting Tweaks sind EIN Datapack, kein Einzel-Pack).
+        for entry, path, _sha1 in vt_datapacks:
+            try:
+                manifest = _vt.read_selected_packs(path)
+            except Exception:  # noqa: BLE001
+                manifest = None
+            if manifest and manifest.get("kind") == "craftingtweaks":
+                ver = manifest.get("version") or _vt.map_vt_version(server.mc_version)
+                _apply_adoption(
+                    entry, provider_name="vanillatweaks", project_id="vt:craftingtweaks",
+                    version_id=ver, name="VanillaTweaks Crafting Tweaks", version_label=ver,
+                )
+                adopted += 1
+                matched_ids.add(entry.id)
+
+        # (3b) Einzel-Datapacks per Katalog-Namensabgleich (braucht das VT-Verzeichnis).
+        rest = [t for t in vt_datapacks if t[0].id not in matched_ids]
+        if not rest:
+            vt_ran = True   # nur kombinierte CT-Packs -> offline definitiv erledigt
+        else:
+            try:
+                vt_lookup = _vt.build_datapack_lookup(_vt.map_vt_version(server.mc_version))
+                vt_ran = True
+            except Exception as exc:  # noqa: BLE001
+                vt_lookup = {}
+                vt_failed = True
+                warnings.append(f"VanillaTweaks-Zuordnung nicht moeglich: {exc}")
+            if vt_ran:
+                for entry, _path, _sha1 in rest:
+                    info = vt_lookup.get(_normalized_lookup_key(_vt._pack_name_from_file(entry.file_name)))
+                    if info:
+                        installed_ver = _vt._pack_version_from_file(entry.file_name) or info["version"]
+                        _apply_adoption(
+                            entry, provider_name="vanillatweaks", project_id=f"vt:{info['pack_type']}",
+                            version_id=installed_ver, name=info["display"], version_label=installed_ver,
+                        )
+                        adopted += 1
+                        matched_ids.add(entry.id)
+
+        if matched_ids:
+            remaining = [t for t in remaining if t[0].id not in matched_ids]
 
     # (4) Uebrige als 'unmatched' markieren - aber NUR, wenn die zustaendigen Provider zu einem
     # definitiven Ergebnis kamen (gelaufen ODER dauerhaft unverfuegbar) und KEIN Lookup transient

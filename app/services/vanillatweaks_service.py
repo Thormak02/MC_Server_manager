@@ -51,12 +51,22 @@ def _headers() -> dict[str, str]:
     return {"User-Agent": ua}
 
 
+# VanillaTweaks pflegt nur MC 1.x. Fuer alles andere (z.B. das neue Schema 26.x) die neueste
+# 1.x-Gruppe als Best-effort verwenden, damit VT ueberhaupt Packs liefert.
+_VT_LATEST_VERSION = "1.21"
+# Dateiname des kombinierten Crafting-Tweaks-Datapacks (Crafting Tweaks kommen NICHT als
+# Einzel-Packs, sondern als EIN Datapack mit allen gewaehlten Rezepten + 'Selected Packs.txt').
+_CT_COMBINED_FILE = "VanillaTweaks Crafting Tweaks.zip"
+
+
 def map_vt_version(mc_version: str | None) -> str:
-    """Server-MC-Version auf die VT-Versionsgruppe (major.minor) abbilden."""
+    """Server-MC-Version auf die VT-Versionsgruppe (major.minor) abbilden (z.B. 1.21.11->1.21,
+    26.2.1->26.2). Ob VT diese Gruppe wirklich anbietet, faengt der Fallback in list_categories/
+    generate_zip ab (neue Schemata wie 26.x kennt VT noch nicht -> dann die neueste 1.x-Gruppe)."""
     parts = str(mc_version or "").strip().split(".")
     if len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
         return f"{parts[0]}.{parts[1]}"
-    return "1.21"
+    return _VT_LATEST_VERSION
 
 
 def list_categories(pack_type: str, version: str) -> list[dict]:
@@ -64,11 +74,19 @@ def list_categories(pack_type: str, version: str) -> list[dict]:
     if pack_type not in _PACK_TYPES:
         raise ValueError(f"Unbekannter Pack-Typ: {pack_type}")
     prefix, _endpoint = _PACK_TYPES[pack_type]
-    url = f"{VT_BASE}/assets/resources/json/{version}/{prefix}categories.json"
-    payload = content_service._request_json(url, headers=_headers())
-    if isinstance(payload, dict):
-        return list(payload.get("categories", []))
-    return []
+
+    def _fetch(ver: str) -> list[dict]:
+        url = f"{VT_BASE}/assets/resources/json/{ver}/{prefix}categories.json"
+        payload = content_service._request_json(url, headers=_headers())
+        return list(payload.get("categories", [])) if isinstance(payload, dict) else []
+
+    try:
+        return _fetch(version)
+    except ValueError:
+        # VT kennt diese Versionsgruppe (noch) nicht (z.B. 26.x) -> auf die neueste 1.x-Gruppe zurueck.
+        if version != _VT_LATEST_VERSION:
+            return _fetch(_VT_LATEST_VERSION)
+        raise
 
 
 def _post_json(url: str, form: dict[str, str]) -> dict:
@@ -107,13 +125,23 @@ def generate_zip(
     if not selection:
         raise ValueError("Keine Packs ausgewaehlt.")
     _prefix, endpoint = _PACK_TYPES[pack_type]
-    resp = _post_json(
-        f"{VT_BASE}/assets/server/{endpoint}",
-        {"packs": json.dumps(selection), "version": version},
-    )
-    if str(resp.get("status")) != "success" or not resp.get("link"):
-        raise ValueError(f"Generierung fehlgeschlagen: {resp}")
-    return _get_bytes(f"{VT_BASE}{resp['link']}")
+
+    def _gen(ver: str) -> bytes:
+        resp = _post_json(
+            f"{VT_BASE}/assets/server/{endpoint}",
+            {"packs": json.dumps(selection), "version": ver},
+        )
+        if str(resp.get("status")) != "success" or not resp.get("link"):
+            raise ValueError(f"Generierung fehlgeschlagen: {resp}")
+        return _get_bytes(f"{VT_BASE}{resp['link']}")
+
+    try:
+        return _gen(version)
+    except ValueError:
+        # Unbekannte Versionsgruppe (26.x) -> neueste 1.x-Gruppe als Best-effort.
+        if version != _VT_LATEST_VERSION:
+            return _gen(_VT_LATEST_VERSION)
+        raise
 
 
 def install_datapacks(
@@ -135,6 +163,36 @@ def install_datapacks(
 
     notes: list[str] = []
     warnings: list[str] = []
+
+    if pack_type == "craftingtweaks":
+        # Crafting Tweaks = EIN kombiniertes Datapack (kein Container mit Einzel-Zips) -> das
+        # ganze Archiv 1:1 als ein Datapack ablegen. Die Auswahl steckt in 'Selected Packs.txt'.
+        file_name = content_service._safe_file_name(_CT_COMBINED_FILE)
+        try:
+            (target_dir / file_name).write_bytes(archive)
+        except OSError as exc:
+            return [], [f"{file_name}: {exc}"]
+        db.execute(
+            delete(InstalledContent).where(
+                InstalledContent.server_id == server.id,
+                InstalledContent.content_type == "datapack",
+                InstalledContent.file_name == file_name,
+            )
+        )
+        display = "VanillaTweaks Crafting Tweaks"
+        db.add(InstalledContent(
+            server_id=server.id, provider_name="vanillatweaks", content_type="datapack",
+            external_project_id="vt:craftingtweaks", external_version_id=version,
+            name=display, version_label=version, file_name=file_name, installed_by_user_id=user_id,
+        ))
+        db.commit()
+        n_packs = sum(len(v) for v in selection.values())
+        audit_service.log_action(
+            db, action="vanillatweaks.install", user_id=user_id, server_id=server.id,
+            details=f"type=craftingtweaks version={version} packs={n_packs}",
+        )
+        return [f"{display} ({n_packs} Packs)"], warnings
+
     with zipfile.ZipFile(io.BytesIO(archive)) as container:
         inner_zips = [n for n in container.namelist() if n.lower().endswith(".zip")]
         # Container ("UNZIP_ME") enthaelt die einzelnen Datapack-.zips.
@@ -266,6 +324,108 @@ def find_pack(pack_type: str, version: str, pack_name: str) -> dict | None:
     return None
 
 
+def read_selected_packs(path) -> dict | None:
+    """Liest 'Selected Packs.txt' aus einem (kombinierten) VT-Datapack. Das Manifest listet die
+    ausgewaehlten Packs - so lassen sich Crafting Tweaks erkennen UND aktualisieren (neu generieren).
+    Rueckgabe {kind: 'craftingtweaks'|'datapacks', version, packs:[...]} oder None."""
+    try:
+        with zipfile.ZipFile(path) as zf:
+            if "Selected Packs.txt" not in zf.namelist():
+                return None
+            text = zf.read("Selected Packs.txt").decode("utf-8", "ignore")
+    except Exception:  # noqa: BLE001
+        return None
+    lines = text.splitlines()
+    if not lines:
+        return None
+    kind = "craftingtweaks" if "crafting tweaks" in lines[0].lower() else "datapacks"
+    version = ""
+    packs: list[str] = []
+    collecting = False
+    for line in lines:
+        low = line.strip().lower()
+        if low.startswith("version:"):
+            version = line.split(":", 1)[1].strip()
+        elif low == "packs:":
+            collecting = True
+        elif collecting:
+            name = line.strip()
+            if name:
+                packs.append(name)
+    return {"kind": kind, "version": version, "packs": packs}
+
+
+def _ct_selection_from_packs(version: str, pack_names: list[str]) -> tuple[dict[str, list[str]], list[str]]:
+    """Pack-Namen -> {Kategorie: [Namen]} anhand des Crafting-Tweaks-Katalogs (+ Liste Unbekannter)."""
+    by_key: dict[str, dict] = {}
+    for info in _catalog_packs("craftingtweaks", version):
+        for key in (content_service._normalized_lookup_key(info["name"]),
+                    content_service._normalized_lookup_key(info["display"])):
+            if key:
+                by_key.setdefault(key, info)
+    selection: dict[str, list[str]] = {}
+    missing: list[str] = []
+    for name in pack_names:
+        info = by_key.get(content_service._normalized_lookup_key(name))
+        if info:
+            selection.setdefault(info["category"], []).append(info["name"])
+        else:
+            missing.append(name)
+    return selection, missing
+
+
+def _update_crafting_tweaks(db: Session, server: Server, entry: InstalledContent,
+                            user_id: int | None) -> tuple[bool, str]:
+    """Kombiniertes Crafting-Tweaks-Datapack neu generieren: Auswahl aus 'Selected Packs.txt'
+    lesen, Kategorien aus dem Katalog auffuellen, frisch generieren, alte Datei ersetzen."""
+    version = map_vt_version(server.mc_version)
+    path = content_service._content_file_path(server, "datapack", entry.file_name)
+    manifest = read_selected_packs(path) if path.exists() else None
+    pack_names = (manifest or {}).get("packs") or []
+    if not pack_names:
+        return (False, f"Uebersprungen ({entry.name}): Auswahl (Selected Packs.txt) nicht lesbar.")
+    selection, missing = _ct_selection_from_packs(version, pack_names)
+    if not selection:
+        return (False, f"Uebersprungen ({entry.name}): keine bekannten Crafting Tweaks im Katalog.")
+
+    archive = generate_zip("craftingtweaks", version, selection)
+    target_dir = content_service._target_dir(server, "datapack")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    new_file = content_service._safe_file_name(_CT_COMBINED_FILE)
+    (target_dir / new_file).write_bytes(archive)
+
+    old_file = entry.file_name
+    if old_file and old_file != new_file:
+        try:
+            content_service._delete_content_file(server, "datapack", old_file)
+        except ValueError:
+            pass
+    db.execute(
+        delete(InstalledContent).where(
+            InstalledContent.server_id == server.id,
+            InstalledContent.content_type == "datapack",
+            InstalledContent.file_name == new_file,
+            InstalledContent.id != entry.id,
+        )
+    )
+    entry.provider_name = "vanillatweaks"
+    entry.external_project_id = "vt:craftingtweaks"
+    entry.external_version_id = version
+    entry.version_label = version
+    entry.name = "VanillaTweaks Crafting Tweaks"
+    entry.file_name = new_file
+    entry.local_adopt_state = None
+    db.commit()
+    audit_service.log_action(
+        db, action="vanillatweaks.update", user_id=user_id, server_id=server.id,
+        details=f"craftingtweaks version={version} packs={len(pack_names)} missing={len(missing)}",
+    )
+    note = f"Crafting Tweaks -> {version} ({len(pack_names)} Pack(s))"
+    if missing:
+        note += f", {len(missing)} unbekannt uebersprungen"
+    return (True, note)
+
+
 def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
                         user_id: int | None) -> tuple[bool, str]:
     """Ein installiertes VT-Datapack auf die aktuelle Katalog-Version bringen (falls neuer).
@@ -275,6 +435,9 @@ def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
     ``(False, "")`` bedeutet "bereits aktuell"."""
     version = map_vt_version(server.mc_version)
     pack_type = _pack_type_from_project(entry.external_project_id)
+    # Crafting Tweaks sind EIN kombiniertes Datapack -> eigener Regenerate-Pfad ueber das Manifest.
+    if pack_type == "craftingtweaks":
+        return _update_crafting_tweaks(db, server, entry, user_id)
     pack_name = _pack_name_from_file(entry.file_name)
     match = find_pack(pack_type, version, pack_name)
     if match is None:
