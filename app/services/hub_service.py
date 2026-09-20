@@ -893,7 +893,61 @@ class Hub:
             self._on_menu_click(session, fields)
         elif pid == _SB_CONTAINER_CLOSE:
             session.menu_open = False
-        # 0x00 Confirm Teleport, 0x18 Keep-Alive, 0x04 Command etc.: ignorieren.
+        elif pid == _SB_CHAT_COMMAND:
+            # Chat-Befehl (0x04): erstes Feld ist der Befehl OHNE fuehrenden Slash.
+            try:
+                raw, _ = mp._read_string(fields, 0)
+            except Exception:  # noqa: BLE001
+                return
+            self._on_command(session, raw)
+        # 0x00 Confirm Teleport, 0x18 Keep-Alive etc.: ignorieren.
+
+    def _tell(self, session: _Session, text: str) -> None:
+        """Systemnachricht nur an diesen Spieler."""
+        self._send(session, pl.build_system_chat(mcd._nbt_text_component(text)))
+
+    def _on_command(self, session: _Session, raw: str) -> None:
+        """Befehle im Universal-Hub - Gegenstueck zum Bukkit-Plugin (MCSMLobby), damit
+        /hub, /servers, /server <alias> und /lobby auch hier funktionieren (der Hub ist
+        kein Bukkit-Server, kann also kein Plugin laden)."""
+        parts = (raw or "").strip().split()
+        if not parts:
+            return
+        cmd = parts[0].lstrip("/").lower()
+        args = parts[1:]
+
+        if cmd in ("hub", "servers"):
+            if not session.menu_open:
+                self._open_menu(session)
+            return
+        if cmd == "server":
+            if not args:
+                if not session.menu_open:
+                    self._open_menu(session)
+                return
+            self._transfer_by_alias(session, args[0])
+            return
+        if cmd == "lobby":
+            # Der Hub IST die Lobby - wie im Plugin nur ein Hinweis.
+            self._tell(session, "Du bist bereits in der Lobby.")
+            return
+
+    def _transfer_by_alias(self, session: _Session, alias: str) -> None:
+        """/server <alias> -> Transfer auf denselben Weg wie ein Klick im Kompass-Menue."""
+        key = (alias or "").strip().lower()
+        entries = _menu_servers()
+        for srv in entries:
+            if str(srv.get("key") or "").strip().lower() == key:
+                host, port = srv.get("host"), int(srv.get("port") or 0)
+                if not host or port <= 0:
+                    self._tell(session, f"Server '{alias}' hat kein gueltiges Ziel.")
+                    return
+                self._tell(session, f"Verbinde zu {_plain(srv.get('display') or key)} ...")
+                self._send(session, pl.build_transfer(host, port))
+                print(f"[hub] {session.name} -> /server {key} -> Transfer zu {host}:{port}")
+                return
+        known = ", ".join(str(e.get("key") or "") for e in entries) or "-"
+        self._tell(session, f"Unbekannter Server: {alias}. Verfuegbar: {known}")
 
     # ------------------------------------------------------------------ #
     # Server-Auswahl-Menue (Kompass -> Kiste -> Transfer 0x73)
