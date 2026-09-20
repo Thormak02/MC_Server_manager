@@ -961,3 +961,22 @@ def test_modpack_execute_skips_required_curseforge_client_only_entry_in_fallback
         assert result is not None
         assert result.installed_count == 0
         assert any("client-only" in warning.lower() for warning in result.warnings)
+
+
+def test_curseforge_share_code_extraction():
+    """Regression: CurseForge-Share-Codes duerfen Unterstriche enthalten, und generische
+    Pfad-Segmente (z.B. 'share') duerfen NICHT als Code durchgehen - sonst wurde
+    /v1/shared-profile/share angefragt -> HTTP 404."""
+    from app.services.modpack_service import _extract_curseforge_shared_profile_code as ex
+
+    # Share-Link mit Unterstrich im Code (bisher: 'share' -> 404)
+    assert ex("https://www.curseforge.com/minecraft/share/Q_wueWrr") == "Q_wueWrr"
+    # Blanker Code - so wird er als source_ref spaeter erneut aufgeloest ("Update pruefen")
+    assert ex("Q_wueWrr") == "Q_wueWrr"
+    # Alternative Pfadform + Query-Parameter
+    assert ex("https://www.curseforge.com/minecraft/shared-profile/Q_wueWrr") == "Q_wueWrr"
+    assert ex("https://www.curseforge.com/x?code=Q_wueWrr") == "Q_wueWrr"
+    # Generische Segmente sind keine Share-Codes
+    assert ex("https://www.curseforge.com/minecraft/share/") is None
+    for keyword in ("share", "minecraft", "modpacks", "files"):
+        assert ex(keyword) is None

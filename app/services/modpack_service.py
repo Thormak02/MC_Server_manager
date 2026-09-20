@@ -781,6 +781,14 @@ def _looks_like_http_url(value: str | None) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
+# Pfad-/Domain-Segmente von CurseForge-Links, die nie ein Share-Code sein koennen.
+_CURSEFORGE_PATH_KEYWORDS = {
+    "curseforge", "curseforge.com", "www.curseforge.com", "legacy.curseforge.com",
+    "minecraft", "share", "shared-profile", "shared-profiles", "modpacks", "mc-mods",
+    "projects", "project", "files", "file", "download", "downloads", "install",
+}
+
+
 def _extract_curseforge_shared_profile_code(reference: str | None) -> str | None:
     raw = (reference or "").strip()
     if not raw:
@@ -796,7 +804,12 @@ def _extract_curseforge_shared_profile_code(reference: str | None) -> str | None
             return False
         if value.isdigit():
             return False
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{4,63}", value):
+        # Generische Pfad-/Domain-Segmente sind KEINE Share-Codes (sonst wird z.B. aus
+        # ".../minecraft/share/<code>" faelschlich "share" als Code genommen -> HTTP 404).
+        if value.lower() in _CURSEFORGE_PATH_KEYWORDS:
+            return False
+        # Share-Codes duerfen Unterstriche enthalten (z.B. "Q_wueWrr").
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{4,63}", value):
             return False
         return bool(re.search(r"[A-Za-z]", value))
 
@@ -812,12 +825,14 @@ def _extract_curseforge_shared_profile_code(reference: str | None) -> str | None
 
         path_parts = [part for part in parsed.path.split("/") if part]
         lower_parts = [part.lower() for part in path_parts]
-        if "shared-profile" in lower_parts:
-            idx = lower_parts.index("shared-profile")
-            if idx + 1 < len(path_parts):
-                candidate = _normalize_candidate(path_parts[idx + 1])
-                if _is_valid_code(candidate):
-                    return candidate
+        # Bekannte Share-Pfade: /minecraft/share/<code> und /.../shared-profile/<code>
+        for marker in ("shared-profile", "shared-profiles", "share"):
+            if marker in lower_parts:
+                idx = lower_parts.index(marker)
+                if idx + 1 < len(path_parts):
+                    candidate = _normalize_candidate(path_parts[idx + 1])
+                    if _is_valid_code(candidate):
+                        return candidate
 
         for part in reversed(path_parts):
             candidate = _normalize_candidate(part)
