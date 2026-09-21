@@ -67,6 +67,13 @@ PRESENCE_BRIDGE_PORT_KEY = "presence_bridge_port"
 PRESENCE_BRIDGE_TOKEN_KEY = "presence_bridge_token"   # gemeinsames Geheimnis (Plugin<->Manager)
 _PRESENCE_BRIDGE_DEFAULT_PORT = 25606
 
+# Lobby-API: lokaler TCP/JSON-Endpoint, ueber den das Lobby-Plugin VOR einem Transfer
+# fragt, ob der Spieler auf dem Ziel landen darf (Graceful Rejection). Der Manager ist
+# die einzige Wahrheitsquelle - so sagen Python-Hub und Bukkit-Lobby dasselbe.
+LOBBY_API_PORT_KEY = "lobby_api_port"
+LOBBY_API_TOKEN_KEY = "lobby_api_token"   # gemeinsames Geheimnis (Plugin<->Manager)
+_LOBBY_API_DEFAULT_PORT = 25607
+
 VELOCITY_VERSION_KEY = "velocity_version"       # "" = neueste stabile (fill-API)
 VELOCITY_JAR_KEY = "velocity_jar"               # manueller Jar-Pfad (override)
 VELOCITY_FORWARDING_SECRET_KEY = "velocity_forwarding_secret"  # auto-generiert (Proxy<->Backends)
@@ -850,6 +857,44 @@ def get_presence_bridge_runtime() -> dict:
             "token": ensure_presence_bridge_token(db) if enabled else "",
         }
 
+
+
+# --- Lobby-API (Vorab-Pruefung fuer den Serverwechsel) --------------------------
+def get_lobby_api_port(db: Session) -> int:
+    row = _get_setting_row(db, LOBBY_API_PORT_KEY)
+    if row and row.value.strip():
+        try:
+            return int(row.value.strip())
+        except ValueError:
+            pass
+    return _LOBBY_API_DEFAULT_PORT
+
+
+def set_lobby_api_port(db: Session, port: int) -> int:
+    port = int(port)
+    if not (1 <= port <= 65535):
+        raise ValueError("Port muss zwischen 1 und 65535 liegen.")
+    _set_or_clear(db, LOBBY_API_PORT_KEY, str(port))
+    return port
+
+
+def ensure_lobby_api_token(db: Session) -> str:
+    row = _get_setting_row(db, LOBBY_API_TOKEN_KEY)
+    if row and row.value.strip():
+        return row.value.strip()
+    import secrets
+
+    token = secrets.token_hex(16)
+    _set_or_clear(db, LOBBY_API_TOKEN_KEY, token)
+    return token
+
+
+def get_lobby_api_runtime() -> dict:
+    """Endpoint-Config fuer den TCP-Server UND die Plugin-config.yml (gleiche Quelle)."""
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        return {"port": get_lobby_api_port(db), "token": ensure_lobby_api_token(db)}
 
 # --- Velocity (echter Proxy als Eingang, Cross-Version via Via-Plugins) ---------
 def get_velocity_version(db: Session) -> str:

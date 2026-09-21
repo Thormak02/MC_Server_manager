@@ -81,6 +81,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     // Ziel fuer /lobby (leer, wenn dieser Server selbst die Lobby ist).
     private String lobbyHost = "";
     private int lobbyPort = 25565;
+    private int lobbyId = 0;         // Server-ID der Lobby (fuer die Vorab-Pruefung bei /lobby)
     private String lobbyVelocityName = "";   // != leer -> internes Velocity-Umschalten (Connect)
 
     // BungeeCord/Velocity-Plugin-Message-Kanal (Velocity fuehrt "Connect" server-seitig aus).
@@ -101,10 +102,22 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     private String bridgeHost = "127.0.0.1";
     private int bridgePort = 25606;
     private String bridgeToken = "";
+    // Vorab-Pruefung (Graceful Rejection): fragt den Manager VOR jedem Wechsel, ob der
+    // Spieler auf dem Ziel landen darf. Der Manager ist die einzige Wahrheitsquelle -
+    // so sagt diese Lobby exakt dasselbe wie der Python-Hub.
+    private JoinCheck joinCheck;
+    // Laufende Pruefungen - verhindert, dass Klick-Spam mehrere Abfragen parallel startet.
+    private final java.util.Set<UUID> checking = ConcurrentHashMap.newKeySet();
+    // Letzte Absage je Spieler UND Ziel ("uuid|serverId"). Wer in einer Portal-Region steht,
+    // loest sonst bei JEDEM Schritt eine neue Abfrage samt Nachricht aus. Ein anderes Ziel
+    // bleibt dabei sofort waehlbar - gedrosselt wird nur die Wiederholung derselben Absage.
+    private final Map<String, Long> lastRejection = new ConcurrentHashMap<>();
+
     private boolean peaceful = false;   // Lobby: kein Schaden/PvP/Rueckstoss + keine Spieler-Kollision
     private boolean resetOnJoin = false;  // Lobby: bei (Re-)Join an den Welt-Spawn + Adventure (ausser Ops)
 
     static final class ServerEntry {
+        int id;         // Server-ID im Manager (0 = unbekannt -> keine Vorab-Pruefung)
         String key;
         String display;
         String host;
@@ -299,12 +312,19 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         lobbyHost = c.getString("lobby.host", "");
         lobbyPort = c.getInt("lobby.port", 25565);
         lobbyVelocityName = c.getString("lobby.velocity_name", "");
+        lobbyId = c.getInt("lobby.id", 0);
         statusPingEnabled = c.getBoolean("status.enabled", true);
         statusIntervalTicks = Math.max(40, c.getInt("status.interval_seconds", 8) * 20);
         bridgeEnabled = c.getBoolean("bridge.enabled", false);
         bridgeHost = c.getString("bridge.host", "127.0.0.1");
         bridgePort = c.getInt("bridge.port", 25606);
         bridgeToken = c.getString("bridge.token", "");
+        joinCheck = c.getBoolean("join_check.enabled", false)
+            ? new JoinCheck(c.getString("join_check.host", "127.0.0.1"),
+                            c.getInt("join_check.port", 25607),
+                            c.getString("join_check.token", ""),
+                            c.getInt("join_check.timeout_ms", 5000))
+            : null;
         peaceful = c.getBoolean("peaceful", false);
         resetOnJoin = c.getBoolean("reset_on_join", false);
 
@@ -315,6 +335,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         for (Map<?, ?> raw : c.getMapList("servers")) {
             try {
                 ServerEntry e = new ServerEntry();
+                e.id = raw.get("id") instanceof Number ? ((Number) raw.get("id")).intValue() : 0;
                 e.key = str(raw.get("key")).toLowerCase(Locale.ROOT);
                 e.display = raw.get("display") != null ? str(raw.get("display")) : e.key;
                 e.host = str(raw.get("host"));
@@ -361,18 +382,24 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         return o == null ? "" : String.valueOf(o);
     }
 
+    /**
+     * EINZIGER Trichter fuer jeden Serverwechsel (Kompass-GUI, /server, Schild, Portal).
+     * Prueft erst beim Manager, transferiert nur bei gruenem Licht.
+     */
     private void doTransfer(Player p, String key) {
         ServerEntry e = servers.get(key == null ? "" : key.toLowerCase(Locale.ROOT));
         if (e == null) {
             p.sendMessage(color("&cUnbekannter Server: &e" + key));
             return;
         }
-        long now = System.currentTimeMillis();
-        Long last = lastTransfer.get(p.getUniqueId());
-        if (last != null && now - last < cooldownMs) {
+        if (onCooldown(p)) {
             return;
         }
-        lastTransfer.put(p.getUniqueId(), now);
+        guardedTransfer(p, e.id, e.display, () -> performTransfer(p, e));
+    }
+
+    private void performTransfer(Player p, ServerEntry e) {
+        lastTransfer.put(p.getUniqueId(), System.currentTimeMillis());
         p.sendMessage(color(transferMsg.replace("%server%", e.display)));
         // Velocity-Backend -> INTERN umschalten (kein Client-Transfer -> keine Re-Auth zum
         // online-mode-Proxy -> kein "target server is in online mode"-Fehler). Sonst nativer Transfer.
@@ -387,6 +414,61 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         } catch (Throwable t) {
             p.sendMessage(color("&cTransfer fehlgeschlagen. Braucht Client 1.20.5+."));
             getLogger().warning("transfer() fehlgeschlagen fuer " + p.getName() + ": " + t);
+        }
+    }
+
+    private boolean onCooldown(Player p) {
+        Long last = lastTransfer.get(p.getUniqueId());
+        return last != null && System.currentTimeMillis() - last < cooldownMs;
+    }
+
+    /**
+     * Beim Manager nachfragen und den Wechsel nur ausfuehren, wenn er erlaubt ist.
+     *
+     * <p>Die Abfrage laeuft ASYNCHRON (TCP im Main-Thread wuerde den Server einfrieren),
+     * der Wechsel selbst dann wieder synchron - Bukkit-API gehoert in den Main-Thread.
+     * Bei einer Absage bleibt der Spieler genau da, wo er ist: in dieser Lobby. Er
+     * bekommt den Grund als Nachricht und kann sofort etwas anderes waehlen (kein
+     * Cooldown, denn es hat ja kein Wechsel stattgefunden).
+     */
+    private void guardedTransfer(Player p, int serverId, String display, Runnable transfer) {
+        JoinCheck check = joinCheck;
+        if (check == null || serverId <= 0) {
+            transfer.run();   // keine Pruefung moeglich -> durchlassen (fail-open)
+            return;
+        }
+        final UUID id = p.getUniqueId();
+        final String rejectKey = id + "|" + serverId;
+        Long rejected = lastRejection.get(rejectKey);
+        if (rejected != null && System.currentTimeMillis() - rejected < cooldownMs) {
+            return;   // dieselbe Absage gerade erst gezeigt -> nicht nochmal fragen/spammen
+        }
+        if (!checking.add(id)) {
+            return;   // fuer diesen Spieler laeuft schon eine Pruefung -> Klick-Spam ignorieren
+        }
+        try {
+            getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                JoinCheck.Result result = check.check(serverId, p.getName());
+                getServer().getScheduler().runTask(this, () -> {
+                    checking.remove(id);
+                    if (!p.isOnline()) {
+                        return;   // waehrend der Abfrage ausgeloggt
+                    }
+                    if (result.allowed) {
+                        lastRejection.remove(rejectKey);
+                        transfer.run();
+                        return;
+                    }
+                    lastRejection.put(rejectKey, System.currentTimeMillis());
+                    String reason = result.reason.isEmpty()
+                        ? (display + " ist gerade nicht erreichbar.") : result.reason;
+                    p.sendMessage(color("&c" + reason));
+                });
+            });
+        } catch (Throwable t) {
+            // Scheduler weg (Plugin faehrt runter) -> lieber ungeprueft durchlassen.
+            checking.remove(id);
+            transfer.run();
         }
     }
 
@@ -410,12 +492,16 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
             p.sendMessage(color("&7Du bist bereits in der Lobby."));
             return;
         }
-        long now = System.currentTimeMillis();
-        Long last = lastTransfer.get(p.getUniqueId());
-        if (last != null && now - last < cooldownMs) {
+        if (onCooldown(p)) {
             return;
         }
-        lastTransfer.put(p.getUniqueId(), now);
+        // Auch der Rueckweg wird geprueft: ist die Lobby gerade nicht erreichbar, soll der
+        // Spieler das lesen und hier bleiben - statt beim Transfer ins Leere zu fliegen.
+        guardedTransfer(p, lobbyId, "Die Lobby", () -> performLobbyTransfer(p));
+    }
+
+    private void performLobbyTransfer(Player p) {
+        lastTransfer.put(p.getUniqueId(), System.currentTimeMillis());
         p.sendMessage(color(transferMsg.replace("%server%", "&bLobby")));
         if (lobbyVelocityName != null && !lobbyVelocityName.isEmpty()) {
             if (!connectViaProxy(p, lobbyVelocityName)) {
@@ -548,6 +634,10 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
 
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
+        UUID id = e.getPlayer().getUniqueId();
+        lastTransfer.remove(id);
+        checking.remove(id);
+        lastRejection.keySet().removeIf(k -> k.startsWith(id + "|"));
         if (presenceBridge != null) {
             try {
                 presenceBridge.onLocalQuit(e.getPlayer());

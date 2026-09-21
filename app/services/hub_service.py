@@ -1010,7 +1010,7 @@ class Hub:
             except Exception:  # noqa: BLE001 - Pruefung darf den Wechsel nie blockieren
                 ok, reason = True, ""
             if not ok:
-                self._tell(session, reason or f"Wechsel zu {label} nicht moeglich.")
+                self._tell(session, reason or f"{label} ist gerade nicht erreichbar.")
                 print(f"[hub] {session.name} -> {label} ABGELEHNT: {reason}")
                 return False
         self._tell(session, f"Verbinde zu {label} ...")

@@ -1373,3 +1373,63 @@ def test_refresh_plugin_for_server_updates_jar_and_config(client, tmp_path):
     assert david_entry["sleep"] is True
     assert david_entry["ping_port"] == 25591  # direkter Port fuer den Status-Ping
     assert not (fresh_dir / "plugins" / "MCSMLobby").exists()
+
+
+def test_sync_writes_join_check_config(client, tmp_path):
+    """Die Bukkit-Lobby braucht Endpoint + Server-IDs, um VOR dem Transfer zu fragen.
+
+    Ohne die IDs koennte das Plugin nicht sagen, WORUEBER es fragt - und wuerde
+    (fail-open) jeden durchlassen, waehrend der Python-Hub ablehnt. Genau diese
+    Ungleichheit soll die Vorab-Pruefung verhindern.
+    """
+    import yaml
+
+    import app.services.app_setting_service as svc
+    import app.services.lobby_service as lobby_service
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    lobby_dir = tmp_path / "jc_lobby"
+    david_dir = tmp_path / "jc_david"
+    lobby_dir.mkdir()
+    david_dir.mkdir()
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Lobby", slug="jclob", server_type="paper", mc_version="1.21.1",
+                   base_path=str(lobby_dir), gateway_enabled=True, gateway_hostname="lobby",
+                   gateway_is_default=True, port=25569),
+            Server(name="David", slug="jcdavid", server_type="spigot", mc_version="1.21.11",
+                   base_path=str(david_dir), gateway_enabled=True,
+                   gateway_hostname="1.21.11-spigot", port=25591),
+        ])
+        db.commit()
+        svc.set_network_domain(db, "mc.friedrich-dietrich.de")
+        svc.set_network_port(db, 25565)
+        svc.set_network_mode(db, "gateway")
+        expected_token = svc.get_lobby_api_runtime()["token"]
+        lobby_id = db.query(Server).filter_by(slug="jclob").one().id
+        david_id = db.query(Server).filter_by(slug="jcdavid").one().id
+        ok, _ = lobby_service.sync_lobby_plugin(db)
+    assert ok
+
+    lob_cfg = yaml.safe_load(
+        (lobby_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8"))
+    dav_cfg = yaml.safe_load(
+        (david_dir / "plugins" / "MCSMLobby" / "config.yml").read_text(encoding="utf-8"))
+
+    # Endpoint: nur lokal, mit Token - sonst koennte jeder Ablehnungen erfragen/faelschen.
+    jc = lob_cfg["join_check"]
+    assert jc["enabled"] is True
+    assert jc["host"] == "127.0.0.1"
+    assert jc["port"] > 0
+    assert jc["token"] == expected_token and jc["token"] != ""
+    assert jc["timeout_ms"] >= 1000
+
+    # Jeder Menue-Eintrag traegt die Manager-ID des Ziels.
+    david_entry = next(s for s in lob_cfg["servers"] if s["key"] == "1.21.11-spigot")
+    assert david_entry["id"] == david_id
+
+    # Auch der Rueckweg wird geprueft -> /lobby kennt die ID der Lobby ...
+    assert dav_cfg["lobby"]["id"] == lobby_id
+    # ... waehrend die Lobby selbst kein /lobby-Ziel hat.
+    assert lob_cfg["lobby"]["id"] == 0

@@ -24,7 +24,7 @@ from app.core.config import get_settings
 from app.db.init_db import init_db
 from app.middleware.csrf import CSRFSameOriginMiddleware
 from app.services.schedule_service import sync_all_jobs
-from app.services import gateway_service, hub_lobby_service, presence_bridge_service, proxy_service, sleep_proxy_service, viaproxy_service
+from app.services import gateway_service, hub_lobby_service, lobby_api_service, presence_bridge_service, proxy_service, sleep_proxy_service, viaproxy_service
 from app.services.process_service import (
     reconcile_runtime_states_on_manager_startup,
     shutdown_all_managed_processes,
@@ -61,6 +61,10 @@ async def lifespan(app: FastAPI):
     # Presence-Bridge-TCP-Endpoint (fuer das Paper-Avatar-Plugin) aufsetzen (gated hinter
     # presence_bridge_enabled; Default aus).
     presence_bridge_service.reconcile_presence_bridge()
+    # Lobby-API: das Lobby-Plugin fragt hier VOR jedem Transfer nach, ob der Spieler auf
+    # dem Ziel landen darf. Muss laufen, bevor Server starten - sonst waere die erste
+    # Pruefung ungeprueft (fail-open) und jemand flaeche doch aus der Lobby.
+    lobby_api_service.reconcile_lobby_api()
     start_servers_marked_for_manager_startup()
     sleep_proxy_service.reconcile_proxies()
     sleep_proxy_service.start_idle_monitor()
@@ -73,6 +77,7 @@ async def lifespan(app: FastAPI):
         viaproxy_service.stop_viaproxy()
         proxy_service.stop_velocity()
         presence_bridge_service.stop_plugin_server()
+        lobby_api_service.stop_server()
         sleep_proxy_service.shutdown_all()
         shutdown_all_managed_processes(preserve_for_restart=True)
         shutdown_scheduler()

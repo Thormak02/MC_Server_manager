@@ -10,6 +10,11 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.services import mc_ping
+
+# Kurz genug, damit ein Menue-Klick nicht haengt; lang genug fuer einen lokalen Ping.
+_JOIN_CHECK_PING_TIMEOUT = 1.5
+
 # Fertig kompiliertes Transfer-Plugin (siehe app/assets/lobby_plugin/BUILD.md).
 _PLUGIN_ASSET_DIR = Path(__file__).resolve().parents[1] / "assets" / "lobby_plugin"
 _PLUGIN_JAR = _PLUGIN_ASSET_DIR / "MCSMLobby.jar"
@@ -308,10 +313,12 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
 
     servers, _skipped = _build_plugin_servers(db, server.id)
     # /lobby-Ziel: nur wenn dieser Server NICHT selbst die Lobby ist.
-    lobby_cfg = {"host": "", "port": 25565, "velocity_name": ""}
+    lobby_cfg = {"host": "", "port": 25565, "velocity_name": "", "id": 0}
     if lobby_target and not is_lobby:
         lobby_cfg = {"host": lobby_target["host"], "port": lobby_target["port"],
-                     "velocity_name": lobby_target.get("velocity_name", "")}
+                     "velocity_name": lobby_target.get("velocity_name", ""),
+                     # id -> auch der Rueckweg laeuft durch die Vorab-Pruefung
+                     "id": int(lobby_target.get("id") or 0)}
 
     status_cfg = existing.get("status")
     if not isinstance(status_cfg, dict):
@@ -334,6 +341,19 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
     except Exception:  # noqa: BLE001 - Bridge/Download darf den Plugin-Sync nie stoeren
         pass
 
+    # Vorab-Pruefung (Graceful Rejection): das Plugin fragt VOR jedem Transfer beim
+    # Manager nach. Immer an - sonst verhielte sich die Bukkit-Lobby anders als der
+    # Python-Hub, und je nach Client bekaeme man eine andere Antwort.
+    join_check_cfg = {"enabled": False, "host": "127.0.0.1", "port": 25607,
+                      "token": "", "timeout_ms": 5000}
+    try:
+        from app.services import app_setting_service as _A
+
+        _api = _A.get_lobby_api_runtime()
+        join_check_cfg.update(enabled=True, port=int(_api["port"]), token=str(_api["token"]))
+    except Exception:  # noqa: BLE001 - ohne Endpoint laesst das Plugin durch (fail-open)
+        pass
+
     config = {
         "cooldown_ms": existing.get("cooldown_ms", 3000),
         "messages": {"transfer": "&aVerbinde zu &e%server%&a..."},
@@ -344,6 +364,7 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
         "servers": servers,
         "regions": existing.get("regions", []) or [],
         "bridge": bridge_cfg,
+        "join_check": join_check_cfg,
         # Friedliche Lobby: kein Schaden/PvP/Rueckstoss + keine Spieler-Kollision (Schubsen).
         # Nur auf der Lobby - auf Gameplay-Servern soll normal gekaempft werden koennen.
         "peaceful": bool(is_lobby),
@@ -895,6 +916,48 @@ def _ban_reason(server, player_name: str) -> str:
     return ""
 
 
+def _bind_host(server) -> str:
+    """``server-ip`` aus server.properties (leer = an alle Adressen gebunden)."""
+    from app.services import file_service
+
+    try:
+        target = file_service.resolve_server_path(
+            server, "server.properties", must_exist=False, expect_file=None
+        )
+        if not target.exists():
+            return ""
+        values, _ = file_service._parse_properties(
+            target.read_text(encoding="utf-8", errors="replace")
+        )
+        return str(values.get("server-ip", "")).strip()
+    except Exception:  # noqa: BLE001 - nicht lesbar -> einfach ohne Bind-Adresse pruefen
+        return ""
+
+
+def _ping_local(server) -> dict | None:
+    """Status-Ping auf den lokalen Port des Servers (None = antwortet nicht).
+
+    Erst 127.0.0.1; haengt der Server per ``server-ip`` an einer bestimmten Adresse,
+    wird die als Zweitversuch geprueft - sonst laese man so eine Bindung faelschlich
+    als "startet noch" und sperrte alle aus.
+    """
+    try:
+        port = int(getattr(server, "port", 0) or 0)
+    except (TypeError, ValueError):
+        return None
+    if port <= 0:
+        return None
+    hosts = ["127.0.0.1"]
+    bind = _bind_host(server)
+    if bind and bind not in hosts:
+        hosts.append(bind)
+    for host in hosts:
+        status = mc_ping.ping(host, port, timeout=_JOIN_CHECK_PING_TIMEOUT)
+        if status is not None:
+            return status
+    return None
+
+
 def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str]:
     """Darf ``player_name`` auf ``server`` wechseln? Rueckgabe ``(ok, grund)``.
 
@@ -933,14 +996,30 @@ def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str
             if allowed and name.lower() not in allowed:
                 return False, f"Du stehst nicht auf der Whitelist von {server.name}."
 
-    # Voll? Nur pruefen, wenn der Server laeuft (sonst sind die Zahlen bedeutungslos).
-    if running:
+    # Nimmt der Server WIRKLICH Verbindungen an? "Prozess laeuft" heisst noch lange nicht
+    # "Port offen" - waehrend des Startens (Welt laden, Mods) liefe der Transfer ins Leere
+    # und der Spieler flaeche aus der Lobby. Der Status-Ping ist auth-frei und hat keine
+    # Nebenwirkungen (kein Login, kein Playerdata, kein Eintrag in der Spielerliste).
+    status = _ping_local(server)
+    online: int | None = None
+    maximum: int | None = None
+    if status is None:
+        if running:
+            return False, f"{server.name} startet noch - gleich nochmal versuchen."
+    else:
+        # Zahlen vom Server selbst schlagen jede Schaetzung des Managers.
+        online, maximum = mc_ping.player_counts(status)
+
+    # Voll? Ohne Ping-Zahlen auf die Prozess-Sicht zurueckfallen - aber nur bei laufendem
+    # Server, sonst sind die Zahlen bedeutungslos.
+    if (online is None or maximum is None) and running:
         try:
             online, maximum = process_service.get_player_counts(server)
         except Exception:  # noqa: BLE001
             online, maximum = None, None
-        if online is not None and maximum is not None and maximum > 0 and online >= maximum:
-            return False, f"{server.name} ist voll ({online}/{maximum})."
+
+    if online is not None and maximum is not None and maximum > 0 and online >= maximum:
+        return False, f"{server.name} ist voll ({online}/{maximum})."
 
     return True, ""
 

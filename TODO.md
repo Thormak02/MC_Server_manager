@@ -378,7 +378,9 @@ Onboarding-Assistent beim ersten Start.
 
 Ideen aus dem Urlaub (09/2026), für viel später:
 
-Graceful Rejection: wenn ein Server beim Verbindungsversuch aus der Lobby ablehnt (falsches Modpack, nicht auf Whitelist/Waitlist, Pack nicht eingerichtet), soll die Verbindung nicht getrennt werden, sondern der Spieler zurück in die Lobby mit einer Fehlermeldung im Chat. (gilt beim Serverwechsel via Kompass/Command/Portal; beim allerersten Join gibt es noch keine Lobby zum Zurückkehren)
+Graceful Rejection: ERLEDIGT als Vorab-Prüfung. Statt den Spieler wegzuschicken und danach aufzufangen (nach einem nativen Transfer ist die Lobby-Verbindung weg und kann ihn nicht mehr erreichen), wird VOR dem Wechsel gefragt - dann bleibt er einfach in seiner Lobby und liest den Grund im Chat. Eine Wahrheitsquelle (`lobby_service.check_join_allowed`) für BEIDE Lobbys: der Python-Hub ruft sie direkt auf, die Bukkit-Lobby über den lokalen TCP/JSON-Endpoint (`lobby_api_service`, Token, nur 127.0.0.1) - dadurch identische Texte, egal mit welchem Client. Greift bei Kompass/Command/Schild/Portal und auch bei `/lobby`. Geprüft werden: Server offline, Ban (mit Grund), Whitelist, voll, sowie per Status-Ping "läuft zwar, nimmt aber noch keine Verbindungen an". Überall fail-open - eine kaputte Prüfung darf niemanden aussperren.
+
+Offen dazu: Modpack-/Resourcepack-Abgleich vor dem Wechsel (der Ping liefert bei Forge/NeoForge eine Mod-Liste - damit wäre "falsches Modpack" vorab erkennbar). Ebenso ungedeckt: der allererste Join (da gibt es noch keine Lobby zum Zurückkehren) und eine Ablehnung, die erst NACH dem Transfer passiert (z.B. ein Plugin auf dem Ziel) - dafür bräuchte es einen echten Proxy in der Verbindung.
 
 Mobile Verwaltung: MCSM auch als App-Version + mobile Web-App zur Verwaltung. Selbes Backend, immer selber Stand wie die Web-Version. Dünne native App (PWA / Wrapper), die selbst nicht aktualisiert werden muss - alles läuft über die Web-App. Evtl. eigenes, für Mobile optimiertes Frontend. Außerdem die bestehende Website für mobile Browser optimieren. (erweitert die vorhandene "PWA / mobil-optimierte Ansicht")
 
