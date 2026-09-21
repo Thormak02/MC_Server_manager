@@ -15,6 +15,7 @@ class _StubHub:
     _tell = hub_service.Hub._tell
     _on_command = hub_service.Hub._on_command
     _transfer_by_alias = hub_service.Hub._transfer_by_alias
+    _try_transfer = hub_service.Hub._try_transfer
 
     def __init__(self):
         self.sent: list[bytes] = []
@@ -87,3 +88,48 @@ def test_hub_command_without_slash_and_empty(monkeypatch):
     hub2, sess2 = _StubHub(), _session()
     hub2._on_command(sess2, "   ")
     assert not hub2.sent and hub2.menus == 0
+
+
+# --------------------------------------------------------------------------- #
+# Graceful Rejection: abgelehnte Wechsel duerfen NICHT transferieren
+# --------------------------------------------------------------------------- #
+_GUARDED = [{"id": 42, "key": "david", "display": "&aDavid",
+             "host": "david.mc.example.de", "port": 25591}]
+
+
+def test_transfer_blocked_when_join_not_allowed(monkeypatch):
+    """Ablehnung -> Spieler bleibt in der Lobby, bekommt den Grund im Chat, KEIN Transfer."""
+    from app.services import lobby_service
+
+    monkeypatch.setattr(hub_service, "_menu_servers", lambda: list(_GUARDED))
+    monkeypatch.setattr(lobby_service, "check_join_allowed_by_id",
+                        lambda sid, name: (False, "Du stehst nicht auf der Whitelist von David."))
+    hub, sess = _StubHub(), _session()
+    hub._on_command(sess, "/server david")
+    assert pl.build_transfer("david.mc.example.de", 25591) not in hub.sent
+    assert hub.sent, "Der Grund muss im Chat ankommen"
+
+
+def test_transfer_proceeds_when_allowed(monkeypatch):
+    from app.services import lobby_service
+
+    monkeypatch.setattr(hub_service, "_menu_servers", lambda: list(_GUARDED))
+    monkeypatch.setattr(lobby_service, "check_join_allowed_by_id", lambda sid, name: (True, ""))
+    hub, sess = _StubHub(), _session()
+    hub._on_command(sess, "/server david")
+    assert pl.build_transfer("david.mc.example.de", 25591) in hub.sent
+
+
+def test_transfer_allowed_when_check_crashes(monkeypatch):
+    """Fail-open: eine kaputte Pruefung darf niemanden aussperren."""
+    from app.services import lobby_service
+
+    def boom(sid, name):
+        raise RuntimeError("DB weg")
+
+    monkeypatch.setattr(hub_service, "_menu_servers", lambda: list(_GUARDED))
+    monkeypatch.setattr(lobby_service, "check_join_allowed_by_id", boom)
+    hub, sess = _StubHub(), _session()
+    hub._on_command(sess, "/server david")
+    assert pl.build_transfer("david.mc.example.de", 25591) in hub.sent
+

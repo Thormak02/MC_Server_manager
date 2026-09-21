@@ -175,7 +175,7 @@
 ~~wenn bei port nichts eingetragen wurde automatisch einen freien festlegen, nicht einfach nur Standard port, nicht 5000 da läuft der Manager, sondern ein port, der noch nicht belegt ist.~~
 
 
-
+super, dann jetzt bitte die portale. nicht einfach so portale platzieren, sondern das system liefern um diese als operator / builder manuell zu setzen
 
 
 templates nicht nur für server erstellung, auch für datein wie server.properties
@@ -231,13 +231,13 @@ spielerzahl auch bei Servereinstellungen anpassen können
 
 
 
-backup auf nas als netzwerklaufwerk
+~~backup auf nas als netzwerklaufwerk~~
 
 
 
 
 
-Plugins funktionieren nicht ganz, nochmal schauen, was genau
+~~Plugins funktionieren nicht ganz, nochmal schauen, was genau~~
 
 
 
@@ -269,17 +269,13 @@ bei manuellem backup: fortschrittsbalken, statt langes laden des tabs
 ~~die Einstellungen sind inzwischen zu unübersichtlich, bitte ebenfalls sinnvolle Tabs zur sortierung erstellen, wie bei der Server detailansicht~~
 
 
-schlafender server wird in lobby nicht als solcher angezeigt und von einem beitrittsversuch über lobby nicht geweckt
+~~schlafender server wird in lobby nicht als solcher angezeigt und von einem beitrittsversuch über lobby nicht geweckt~~
 
 
-es soll auch möglich sein, von einem server mit /lobby wieder zur lobby zu gelangen
+~~es soll auch möglich sein, von einem server mit /lobby wieder zur lobby zu gelangen~~
 
-alte plugins erkennen / updaten
+~~alte plugins erkennen / updaten~~
 
-transfer mit klick im kompass menu funktioniert, ich komme auch mit dem 1.21.1 client in die 1.21.11 lobby.
-ist damit nicht das gateway netz überholt und kann weg? ich möchte anstelle des gateway netzes das neue universal netz mit den selben funktionen (automatische hub server erstellung, hub lobby server im dashboard sichtbar und wie ein normaler server bearbeitbar [port, whitelist, ram, welt, usw. änderbar] usw.)
-alles klar?
-das ganze soll für alle aktuellen und zukünftigen versionen und modpacks funktionieren, nicht nur für atm 10 und vanilla, sondern zb. acuh für seasons oder fabric, quilt und forge modpacks und neoforge. eventuell brauchen wir ein automatisches spoofing bei erstmaligen anlegen eines modpacks im manager und dem erstmaligen verbinden mit diesem modpack auf den server, das ganze soll wie gesagt automatisch geschehen.
 
 
 die verwaltung des hub / lobby server soll wie die eines normalen servers mit untermenus usw. funktionieren und auch genauso aussehen, um mehr kontiniuität zu schaffen
@@ -401,4 +397,4 @@ bestimmte server bei manager neustart nicht mit neustarten, sondern weiterlaufen
 
 ~~mir ist außerdem grade aufgefallen: es funktionieren nur vanilla tweaks, aber vanilla tweaks crafting rezepte werden nicht erkannt und nicht zur auswahl verfügbar~~
 
-/lobby / /server lobby geht nicht
+~~/lobby / /server lobby geht nicht~~

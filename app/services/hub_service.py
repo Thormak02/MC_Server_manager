@@ -938,13 +938,7 @@ class Hub:
         entries = _menu_servers()
         for srv in entries:
             if str(srv.get("key") or "").strip().lower() == key:
-                host, port = srv.get("host"), int(srv.get("port") or 0)
-                if not host or port <= 0:
-                    self._tell(session, f"Server '{alias}' hat kein gueltiges Ziel.")
-                    return
-                self._tell(session, f"Verbinde zu {_plain(srv.get('display') or key)} ...")
-                self._send(session, pl.build_transfer(host, port))
-                print(f"[hub] {session.name} -> /server {key} -> Transfer zu {host}:{port}")
+                self._try_transfer(session, srv)   # inkl. Vorab-Pruefung
                 return
         known = ", ".join(str(e.get("key") or "") for e in entries) or "-"
         self._tell(session, f"Unbekannter Server: {alias}. Verfuegbar: {known}")
@@ -992,11 +986,37 @@ class Hub:
             return
         if 0 <= slot < len(session.menu_servers):
             srv = session.menu_servers[slot]
-            host, port = srv["host"], int(srv["port"])
             session.menu_open = False
             self._send(session, pl.build_close_container(_MENU_WINDOW))
-            self._send(session, pl.build_transfer(host, port))
-            print(f"[hub] {session.name} -> Transfer zu {host}:{port} ({_plain(srv.get('display',''))})")
+            self._try_transfer(session, srv)
+
+    def _try_transfer(self, session: _Session, srv: dict) -> bool:
+        """Serverwechsel MIT Vorab-Pruefung (Graceful Rejection).
+
+        Ein nativer Transfer trennt die Verbindung zur Lobby - wuerde das Ziel den Spieler
+        ablehnen (Whitelist, Ban, offline, voll), landete er im Disconnect-Screen statt
+        zurueck in der Lobby. Deshalb VORHER pruefen und ihn bei Ablehnung einfach hier
+        behalten, mit Begruendung im Chat."""
+        host, port = srv.get("host"), int(srv.get("port") or 0)
+        label = _plain(srv.get("display") or srv.get("key") or "?")
+        if not host or port <= 0:
+            self._tell(session, f"{label} hat kein gueltiges Ziel.")
+            return False
+        server_id = srv.get("id")
+        if server_id is not None:
+            try:
+                from app.services import lobby_service
+                ok, reason = lobby_service.check_join_allowed_by_id(int(server_id), session.name)
+            except Exception:  # noqa: BLE001 - Pruefung darf den Wechsel nie blockieren
+                ok, reason = True, ""
+            if not ok:
+                self._tell(session, reason or f"Wechsel zu {label} nicht moeglich.")
+                print(f"[hub] {session.name} -> {label} ABGELEHNT: {reason}")
+                return False
+        self._tell(session, f"Verbinde zu {label} ...")
+        self._send(session, pl.build_transfer(host, port))
+        print(f"[hub] {session.name} -> Transfer zu {host}:{port} ({label})")
+        return True
 
     def _on_move(self, session: _Session, nx, ny, nz, yaw, pitch) -> None:
         ox, oy, oz = session.x, session.y, session.z

@@ -181,6 +181,7 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
         # ("target server is in online mode"). velocity_name = Backend-Name in der velocity.toml.
         velocity_name = alias if (mode == "velocity" and is_backend) else ""
         servers.append({
+            "id": int(srv.id),                  # fuer die Vorab-Pruefung (Graceful Rejection)
             "key": alias,
             "display": label,
             "host": f"{alias}.{domain}",
@@ -860,3 +861,98 @@ def create_velocity_lobby(
         f"die Domain.{warn_suffix}"
     )
     return True, message, server.id
+
+
+# --------------------------------------------------------------------------- #
+# Graceful Rejection: VOR dem Transfer pruefen, ob der Spieler auf dem Ziel-Server
+# ueberhaupt landen darf. Ein nativer Transfer trennt die Verbindung zur Lobby - ein
+# abgelehnter Spieler landet sonst im Disconnect-Screen statt zurueck in der Lobby.
+# --------------------------------------------------------------------------- #
+def _access_names(server, list_key: str) -> set[str]:
+    """Namen einer Zugriffsliste (whitelist/banned_players) in Kleinschreibung."""
+    from app.services import file_service
+
+    names: set[str] = set()
+    try:
+        for entry in file_service.list_access_entries(server, list_key):
+            name = str((entry or {}).get("name") or "").strip().lower()
+            if name:
+                names.add(name)
+    except Exception:  # noqa: BLE001 - unlesbare Datei darf NICHT aussperren
+        return set()
+    return names
+
+
+def _ban_reason(server, player_name: str) -> str:
+    from app.services import file_service
+
+    try:
+        for entry in file_service.list_access_entries(server, "banned_players"):
+            if str((entry or {}).get("name") or "").strip().lower() == player_name.strip().lower():
+                return str((entry or {}).get("reason") or "").strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
+def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str]:
+    """Darf ``player_name`` auf ``server`` wechseln? Rueckgabe ``(ok, grund)``.
+
+    Bewusst FAIL-OPEN: ist etwas nicht lesbar (Ordner weg, kaputte JSON), wird der
+    Wechsel erlaubt - eine kaputte Pruefung darf niemanden aussperren. Geprueft wird nur,
+    was der Manager sicher weiss (Serverzustand, Bans, Whitelist, voll).
+    """
+    from app.services import file_service, process_service
+
+    if server is None:
+        return False, "Server nicht gefunden."
+
+    name = (player_name or "").strip()
+    running = False
+    try:
+        running = process_service.is_running(server.id)
+    except Exception:  # noqa: BLE001
+        running = False
+
+    # Offline UND kein Sleep-Wake -> Transfer wuerde ins Leere laufen.
+    if not running and not bool(getattr(server, "sleep_enabled", False)):
+        return False, f"{server.name} ist offline."
+
+    if name:
+        if name.lower() in _access_names(server, "banned_players"):
+            reason = _ban_reason(server, name)
+            return False, (f"Du bist auf {server.name} gebannt."
+                           + (f" Grund: {reason}" if reason else ""))
+        try:
+            whitelist_on = file_service.get_whitelist_enabled(server)
+        except Exception:  # noqa: BLE001
+            whitelist_on = False
+        if whitelist_on:
+            allowed = _access_names(server, "whitelist")
+            # Leere/unlesbare Whitelist -> nicht aussperren (fail-open).
+            if allowed and name.lower() not in allowed:
+                return False, f"Du stehst nicht auf der Whitelist von {server.name}."
+
+    # Voll? Nur pruefen, wenn der Server laeuft (sonst sind die Zahlen bedeutungslos).
+    if running:
+        try:
+            online, maximum = process_service.get_player_counts(server)
+        except Exception:  # noqa: BLE001
+            online, maximum = None, None
+        if online is not None and maximum is not None and maximum > 0 and online >= maximum:
+            return False, f"{server.name} ist voll ({online}/{maximum})."
+
+    return True, ""
+
+
+def check_join_allowed_by_id(server_id: int, player_name: str) -> tuple[bool, str]:
+    """Wie check_join_allowed, oeffnet aber eine eigene DB-Session (fuer den Hub-Thread)."""
+    try:
+        from app.db.session import SessionLocal
+        from app.models.server import Server as _Server
+
+        with SessionLocal() as db:
+            return check_join_allowed(db, db.get(_Server, int(server_id)), player_name)
+    except Exception:  # noqa: BLE001 - Pruefung darf den Wechsel nie blockieren
+        return True, ""
+
