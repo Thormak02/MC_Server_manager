@@ -23,6 +23,7 @@ import socket
 import struct
 import threading
 import time
+from dataclasses import dataclass
 
 from app.services import app_setting_service
 from app.services import mc_dispatch as mcd
@@ -39,6 +40,8 @@ _KEEPALIVE_INTERVAL = 10.0
 _READ_TIMEOUT = 0.5
 _CONFIG_WAIT_TIMEOUT = 6.0
 _BOT_TICK = 0.1
+# Rueckfrage bei unpassendem Client: so lange gilt ein zweiter Klick als "trotzdem".
+_CONFIRM_TTL = 60.0
 
 # Serverbound PLAY Packet-IDs (767)
 _SB_CONFIRM_TELEPORT = 0x00
@@ -125,6 +128,75 @@ def _menu_servers() -> list[dict]:
         print(f"[hub] Menue-Serverliste nicht ladbar: {exc!r}")
         return []
 
+
+@dataclass(frozen=True)
+class _Verdict:
+    """Ersatz-Urteil, wenn der Manager keines liefert - Felder wie lobby_service.JoinVerdict.
+
+    Die Voreinstellung ist bewusst "erlaubt": fehlt das Urteil, wird durchgelassen.
+    """
+
+    ok: bool = True
+    reason: str = ""
+    confirm: bool = False
+    note: str = ""
+    code: str = "ok"
+
+
+_VERDICT_OPEN = _Verdict()
+
+
+def _client_info(session):
+    """Client-Fingerabdruck der Session als join_match_service.ClientInfo (None bei Fehler)."""
+    try:
+        from app.services import join_match_service as jm
+
+        return jm.ClientInfo(brand=getattr(session, "brand", "") or "",
+                             mods=getattr(session, "mods", None) or frozenset(),
+                             source="hub")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _join_verdict(server_id: int, session, *, override: bool):
+    """Vorab-Urteil des Managers zu einem Serverwechsel holen - FAIL-OPEN.
+
+    Der Client-Fingerabdruck geht mit, kann aber hoechstens eine Rueckfrage ausloesen:
+    der Brand ist ein freier String vom Client und faelschbar.
+    """
+    try:
+        from app.services import lobby_service
+
+        verdict = lobby_service.evaluate_join_by_id(
+            int(server_id), session.name, client=_client_info(session), override=bool(override))
+        # Unbrauchbares Urteil (None, altes Tupel) heisst: kein Urteil -> durchlassen.
+        return verdict if hasattr(verdict, "ok") else _VERDICT_OPEN
+    except Exception:  # noqa: BLE001 - eine kaputte Pruefung darf den Wechsel nie blockieren
+        return _VERDICT_OPEN
+
+
+def _menu_fits(servers: list[dict], session) -> dict:
+    """Server-ID -> Fit fuer die Eintraege, die NICHT zum Client passen (level "confirm").
+
+    Nur Treffer landen im Dict; ein fehlender Eintrag heisst "passt". Fehler werden
+    geschluckt - ein Marker ist Kosmetik, das Menue muss trotzdem aufgehen.
+    """
+    fits: dict = {}
+    client = _client_info(session)
+    if client is None or (not client.brand and not client.mods):
+        # Ohne jedes Client-Merkmal kann die Pruefung nur "passt" sagen - dann sparen wir
+        # uns bis zu 27 DB-Abfragen pro Menue-Oeffnung.
+        return fits
+    try:
+        from app.services import lobby_service
+
+        # Gebuendelt: EINE DB-Session fuers ganze Menue. Nur die sichtbaren Slots.
+        ids = [srv.get("id") for srv in servers[:27] if srv.get("id") is not None]
+        fits = lobby_service.evaluate_fits_by_ids(ids, client)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[hub] Menue-Marker nicht ermittelbar: {exc!r}")
+    return fits
+
 # PLAY-Setup-Pakete aus dem Capture, die wir mit-abspielen, damit der modded Client
 # in einen konsistenten Zustand kommt und beim Oeffnen eines Screens (Inventar, spaeter
 # Kisten-Menue) nicht crasht.
@@ -182,6 +254,59 @@ class _Reader:
             self._fill(timeout)
 
 
+def _sniff_client(fields: bytes) -> tuple[str, frozenset]:
+    """Ein serverbound Config-Paket auf Client-Merkmale absuchen -> (brand, mods).
+
+    Leere Rueckgabewerte heissen "dieses Paket sagt nichts". Gesucht wird nach KANAL,
+    nicht nach Paket-ID oder Position: der Kanalname ist ueber Protokollversionen und
+    Loader hinweg stabil, die IDs und die Paketreihenfolge sind es nicht.
+    """
+    try:
+        channel, data = mcd.parse_custom_payload(fields)
+    except Exception:  # noqa: BLE001 - kein custom_payload -> einfach nichts zu holen
+        return "", frozenset()
+    if channel == mcd.MINECRAFT_BRAND:
+        return mcd.parse_brand(data).strip()[:64], frozenset()
+    if channel == mcd.NEOFORGE_REGISTER:
+        return "", frozenset(mcd.extract_mod_namespaces(data))
+    return "", frozenset()
+
+
+def _play_config_phase(sock: socket.socket, reader: "_Reader", steps: list) -> tuple[str, frozenset]:
+    """Aufgezeichnete Config-Phase abspielen und dabei den Client-Fingerabdruck mitlesen.
+
+    Der Client schickt Brand und (bei NeoForge) sein Mod-Manifest ohnehin durch diese
+    Warteschleife - frueher wurde der Rueckgabewert von read_packet nur weggeworfen.
+
+    NICHT VERHANDELBAR: Anzahl und Reihenfolge der read_packet-Aufrufe bleiben exakt wie
+    vorher - nichts zusaetzlich lesen, nie frueher abbrechen. Sonst geriete die Config-Phase
+    bei Clients, deren Paketfolge vom Capture abweicht, aus dem Tritt und jeder Join haengt
+    sekundenlang im _CONFIG_WAIT_TIMEOUT.
+    """
+    brand = ""
+    mods: frozenset = frozenset()
+    for step in steps:
+        if step.send:
+            for raw in step.send:
+                sock.sendall(raw)
+        else:
+            for _ in range(step.wait):
+                try:
+                    got = reader.read_packet(_CONFIG_WAIT_TIMEOUT)
+                except (OSError, ConnectionError):
+                    break
+                try:
+                    found_brand, found_mods = _sniff_client(got[1])
+                    if found_brand:
+                        brand = found_brand
+                    if found_mods:
+                        # Vereinigen statt ersetzen: NeoForge darf sein Manifest splitten.
+                        mods = mods | found_mods
+                except Exception:  # noqa: BLE001 - Mitlesen darf die Config-Phase nie stoeren
+                    pass
+    return brand, mods
+
+
 class _Session:
     """Ein Spieler im Hub. ``sock is None`` => virtueller Bot (empfaengt nichts)."""
 
@@ -204,6 +329,12 @@ class _Session:
         self.held_slot = 0                  # aktueller Hotbar-Slot (0 = Kompass)
         self.menu_open = False              # ist gerade das Server-Kisten-Menue offen?
         self.menu_servers: list[dict] = []  # DB-Liste, aus der das offene Menue gebaut wurde
+        # Client-Fingerabdruck aus der Config-Phase (siehe _play_config_phase). Beides darf
+        # leer bleiben - leer heisst ueberall "keine Aussage moeglich", nie "passt nicht".
+        self.brand = ""                     # "neoforge"/"fabric"/... , roh vom Client
+        self.mods: frozenset = frozenset()  # networked Mod-Namespaces (nur NeoForge/Forge)
+        # Server-ID -> Zeitpunkt der Rueckfrage (time.monotonic); der zweite Klick ueberstimmt.
+        self.pending_confirm: dict[int, float] = {}
 
 
 def _extract_setup_packets(records: list, play_login: int) -> list[bytes]:
@@ -736,16 +867,9 @@ class Hub:
             print(f"[hub] {addr} Login ok ({username}, {kind}). Spiele Config-Phase ab ...")
 
             # --- Config-Phase abspielen (der passende Client-Typ kommt durch die Aushandlung) ---
-            for step in profile["config_steps"]:
-                if step.send:
-                    for raw in step.send:
-                        sock.sendall(raw)
-                else:
-                    for _ in range(step.wait):
-                        try:
-                            reader.read_packet(_CONFIG_WAIT_TIMEOUT)
-                        except (OSError, ConnectionError):
-                            break
+            # Nebenbei faellt der Client-Fingerabdruck an (Brand + Mod-Manifest) - er
+            # entscheidet spaeter, ob ein Serverwechsel eine Rueckfrage wert ist.
+            client_brand, client_mods = _play_config_phase(sock, reader, profile["config_steps"])
 
             # --- PLAY: mitgeschnittener Login (korrekte Registry) + Setup + eigene Welt ---
             sock.sendall(profile["login_raw"])
@@ -794,6 +918,7 @@ class Hub:
                 # (skinlosen) Spawn und rendert den Skin nie. Leer lassen -> ensure_skin holt den
                 # Skin (Cache-Hit dank Login-Fetch) und re-published ihn -> Plugin RE-SPAWNT mit Skin.
                 session = _Session(conn_id, sock, eid, uuid16, username, sx, sy, sz)
+                session.brand, session.mods = client_brand, client_mods
                 existing = [s for s in self.players.values() if s.alive]  # Bot + andere Spieler
                 self.players[conn_id] = session
 
@@ -947,19 +1072,27 @@ class Hub:
     # Server-Auswahl-Menue (Kompass -> Kiste -> Transfer 0x73)
     # ------------------------------------------------------------------ #
     @staticmethod
-    def _menu_slots(servers: list[dict]) -> list[bytes]:
+    def _menu_slots(servers: list[dict], fits: dict | None = None) -> list[bytes]:
         """63 Slots fuer generic_9x3: 27 Container-Slots (Server) + 36 Spieler-Inv.
-        Server oben (Slot 0..N-1), Kompass gespiegelt in der Menue-Hotbar (Slot 54)."""
+        Server oben (Slot 0..N-1), Kompass gespiegelt in der Menue-Hotbar (Slot 54).
+
+        ``fits`` (Server-ID -> Fit) markiert die Ziele, die nicht zum Client passen: grau
+        statt bunt, mit dem Grund als Lore-Zeile. Klickbar bleiben sie trotzdem - die
+        Erkennung ist ein Verdacht, kein Urteil (siehe join_match_service)."""
         slots = [pl.encode_slot_empty()] * (27 + 36)
         for i, srv in enumerate(servers[:27]):
             item = _MATERIAL_ITEM.get(srv.get("material", ""), pl.ITEM_GRASS_BLOCK)
             display = srv.get("display") or srv.get("key") or "?"
             host, port = srv.get("host", ""), srv.get("port", "")
             sleeps = bool(srv.get("sleep"))
-            # Name mehrfarbig wie in der Bukkit-Lobby: gruener Name + grauer (Typ Version).
-            name_runs = _legacy_runs(display)
+            fit = (fits or {}).get(srv.get("id"))
+            # Name mehrfarbig wie in der Bukkit-Lobby: gruener Name + grauer (Typ Version);
+            # passt der Client nicht, wird der ganze Name grau.
+            name_runs = _legacy_runs("&7" + _plain(display)) if fit else _legacy_runs(display)
             # Lore wie im Java-Plugin: Adresse, Sleep-Hinweis (falls aktiv), Klick-Aufforderung.
             lore_runs = [_legacy_runs(f"&7{host}:{port}")]
+            if fit is not None and getattr(fit, "short", ""):
+                lore_runs.append(_legacy_runs(f"&e{fit.short}"))
             if sleeps:
                 lore_runs.append(_legacy_runs("&dSchläft ggf. – Beitritt weckt ihn (kurz warten)"))
             lore_runs.append(_legacy_runs("&aKlick zum Verbinden"))
@@ -971,8 +1104,10 @@ class Hub:
     def _open_menu(self, session: _Session) -> None:
         session.menu_servers = _menu_servers()          # frische DB-Liste
         session.menu_open = True
+        fits = _menu_fits(session.menu_servers, session)
         self._send(session, pl.build_open_screen(_MENU_WINDOW, pl.MENU_GENERIC_9X3, "Server auswählen"))
-        self._send(session, pl.build_container_content(_MENU_WINDOW, self._menu_slots(session.menu_servers)))
+        self._send(session, pl.build_container_content(
+            _MENU_WINDOW, self._menu_slots(session.menu_servers, fits)))
 
     def _on_menu_click(self, session: _Session, fields: bytes) -> None:
         """Klick im Server-Menue -> Server aus der beim Oeffnen gemerkten DB-Liste
@@ -996,23 +1131,41 @@ class Hub:
         Ein nativer Transfer trennt die Verbindung zur Lobby - wuerde das Ziel den Spieler
         ablehnen (Whitelist, Ban, offline, voll), landete er im Disconnect-Screen statt
         zurueck in der Lobby. Deshalb VORHER pruefen und ihn bei Ablehnung einfach hier
-        behalten, mit Begruendung im Chat."""
+        behalten, mit Begruendung im Chat.
+
+        Passt nur der CLIENT nicht (Loader/Mods), ist das eine Rueckfrage statt einer Absage:
+        der zweite Klick innerhalb _CONFIRM_TTL geht trotzdem durch."""
         host, port = srv.get("host"), int(srv.get("port") or 0)
         label = _plain(srv.get("display") or srv.get("key") or "?")
         if not host or port <= 0:
             self._tell(session, f"{label} hat kein gueltiges Ziel.")
             return False
-        server_id = srv.get("id")
-        if server_id is not None:
-            try:
-                from app.services import lobby_service
-                ok, reason = lobby_service.check_join_allowed_by_id(int(server_id), session.name)
-            except Exception:  # noqa: BLE001 - Pruefung darf den Wechsel nie blockieren
-                ok, reason = True, ""
-            if not ok:
-                self._tell(session, reason or f"{label} ist gerade nicht erreichbar.")
-                print(f"[hub] {session.name} -> {label} ABGELEHNT: {reason}")
+        try:
+            sid = int(srv.get("id"))
+        except (TypeError, ValueError):
+            sid = None          # ohne brauchbare Server-ID keine Vorab-Pruefung
+        if sid is not None:
+            pending = getattr(session, "pending_confirm", None)
+            if pending is None:
+                pending = session.pending_confirm = {}
+            # Der zweite Klick verbraucht die Rueckfrage - danach zaehlt nur noch, ob einer
+            # der harten Gruende (Ban, Whitelist, offline, voll) dagegensteht.
+            stamp = pending.pop(sid, None)
+            override = stamp is not None and (time.monotonic() - stamp) <= _CONFIRM_TTL
+            verdict = _join_verdict(sid, session, override=override)
+            if verdict.confirm:
+                pending[sid] = time.monotonic()
+                self._tell(session, verdict.reason
+                           or f"{label} passt vermutlich nicht zu deinem Client.")
+                self._tell(session, "Klick nochmal, um es trotzdem zu versuchen.")
+                print(f"[hub] {session.name} -> {label} RUECKFRAGE: {verdict.code}")
                 return False
+            if not verdict.ok:
+                self._tell(session, verdict.reason or f"{label} ist gerade nicht erreichbar.")
+                print(f"[hub] {session.name} -> {label} ABGELEHNT: {verdict.reason}")
+                return False
+            if verdict.note:
+                self._tell(session, verdict.note)
         self._tell(session, f"Verbinde zu {label} ...")
         self._send(session, pl.build_transfer(host, port))
         print(f"[hub] {session.name} -> Transfer zu {host}:{port} ({label})")

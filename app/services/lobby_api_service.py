@@ -9,9 +9,28 @@ egal mit welchem Client der Spieler unterwegs ist.
 
 Protokoll (bewusst identisch zur Presence-Bridge: eine Zeile JSON in UTF-8, mit
 Zeilenumbruch abgeschlossen):
-    -> {"token": "...", "op": "join_check", "server_id": 7, "player": "David"}
-    <- {"ok": true}                      | {"ok": false, "reason": "..."}
+    -> {"token": "...", "op": "join_check", "server_id": 7, "player": "David",
+        "client": {"brand": "vanilla", "source": "bukkit"}, "override": false}
+    <- {"ok": true} | {"ok": true, "note": ".."}
+     | {"ok": false, "reason": "..", "confirm": true}   <- Rueckfrage, ueberstimmbar
+     | {"ok": false, "reason": ".."}                    <- hart
+     | {"error": ".."}                                  <- kein Urteil
+    -> {"token": "...", "op": "fit_check", "server_ids": [2, 5, 7], "player": "David",
+        "client": {"brand": "vanilla"}}
+    <- {"ok": true, "fits": {"2": {"level": "confirm", "short": "Braucht NeoForge"}}}
 Danach wird die Verbindung geschlossen (kurzlebig, ein Request pro Verbindung).
+
+``client`` und ``override`` sind optional. Ein altes Plugin schickt gar keinen
+client-Block - dann bleibt der Client-Abgleich stumm und die Antwort ist exakt die von
+frueher. Genau dieses Vorhandensein IST die Versionsverhandlung; eine Versionsnummer
+braucht es nicht.
+
+NIEMALS EIN JSON-ARRAY IN DER ANTWORT. Der Mini-Parser des Plugins (Json.java) kennt
+kein '[' - er faellt bis zur Zahl durch, wirft und liefert null, und null liest
+JoinCheck als ALLOW. Ein Array in der Antwort wuerde auf jeder noch nicht neu
+gestarteten Lobby also auch Ban und Whitelist still abschalten. ``fits`` ist deshalb ein
+OBJEKT (Schluessel = Server-ID als String) und mehrere Hinweise werden zu EINEM String
+verkettet. In der ANFRAGE sind Arrays erlaubt - die liest Python.
 
 Nur auf 127.0.0.1 gebunden - die Lobby-Server laufen auf demselben Host wie der Manager.
 
@@ -32,6 +51,11 @@ import threading
 _MAX_LINE_BYTES = 8 * 1024
 _CLIENT_TIMEOUT = 10.0
 
+# Obergrenze fuer fit_check: jede ID kostet eine eigene DB-Session. Ein Menue hat
+# ein paar Dutzend Eintraege - was darueber liegt, bleibt einfach ohne Marker (und
+# ein fehlender Marker heisst "passt", also fail-open).
+_MAX_FIT_IDS = 64
+
 _SRV_LOCK = threading.Lock()
 _SRV_SOCK: socket.socket | None = None
 _SRV_STATE: dict = {}
@@ -42,20 +66,74 @@ def _handle_request(payload: dict) -> dict:
     op = str(payload.get("op") or "").strip()
     if op == "ping":
         return {"ok": True, "pong": True}
-    if op != "join_check":
-        return {"error": "unknown_op"}
+    if op == "join_check":
+        return _join_check(payload)
+    if op == "fit_check":
+        return _fit_check(payload)
+    return {"error": "unknown_op"}
 
+
+def _join_check(payload: dict) -> dict:
+    """Vorab-Pruefung fuer EINEN Wechsel."""
     try:
         server_id = int(payload.get("server_id"))
     except (TypeError, ValueError):
         return {"error": "bad_server_id"}
 
-    from app.services import lobby_service
+    from app.services import join_match_service, lobby_service
 
-    allowed, reason = lobby_service.check_join_allowed_by_id(
-        server_id, str(payload.get("player") or "")
+    player = str(payload.get("player") or "")
+    # Alles Unerwartete im client-Block (fehlend, Liste, Zahl, Unsinn) ergibt None -
+    # und None schaltet den Client-Abgleich fuer diese Anfrage schlicht ab.
+    client = join_match_service.profile_from_payload(payload.get("client"))
+    override = bool(payload.get("override"))
+
+    if client is None and not override:
+        # Ohne Client gibt es nichts abzugleichen. Dann laeuft die Anfrage ueber denselben
+        # schmalen Einstiegspunkt wie der Python-Hub - alte Jars und Hub sagen garantiert
+        # dasselbe.
+        allowed, reason = lobby_service.check_join_allowed_by_id(server_id, player)
+        return {"ok": True} if allowed else {"ok": False, "reason": reason}
+
+    verdict = lobby_service.evaluate_join_by_id(
+        server_id, player, client=client, override=override
     )
-    return {"ok": bool(allowed)} if allowed else {"ok": False, "reason": reason}
+    if not verdict.ok:
+        if verdict.confirm:
+            # Ohne diese Zeile hinterlaesst eine zu Unrecht verhinderte Verbindung
+            # keinerlei Spur - und der Brand, auf dem sie beruht, ist faelschbar.
+            print(f"[lobby-api] Rueckfrage ({verdict.code}) fuer {player!r} "
+                  f"auf Server {server_id}: {verdict.reason}")
+            return {"ok": False, "reason": verdict.reason, "confirm": True}
+        return {"ok": False, "reason": verdict.reason}
+    if verdict.note:
+        return {"ok": True, "note": verdict.note}
+    return {"ok": True}
+
+
+def _fit_check(payload: dict) -> dict:
+    """Marker fuer das Server-Menue: welche Ziele passen NICHT zum Client?
+
+    ``player`` wird mitgeschickt, aber nicht gebraucht - die Passung haengt am Client,
+    nicht am Namen. Nur Server mit ``level != "ok"`` kommen in die Antwort; ein
+    fehlender Eintrag heisst "passt".
+    """
+    raw_ids = payload.get("server_ids")
+    if not isinstance(raw_ids, (list, tuple)):
+        return {"error": "bad_server_ids"}
+
+    from app.services import join_match_service, lobby_service
+
+    fits: dict[str, dict] = {}
+    client = join_match_service.profile_from_payload(payload.get("client"))
+    if client is None:
+        return {"ok": True, "fits": fits}     # kein Client bekannt -> keine Marker
+
+    # Gebuendelt: EINE DB-Session fuer das ganze Menue statt einer je Eintrag.
+    for server_id, fit in lobby_service.evaluate_fits_by_ids(
+            list(raw_ids)[:_MAX_FIT_IDS], client).items():
+        fits[str(server_id)] = {"level": fit.level, "short": fit.short}
+    return {"ok": True, "fits": fits}
 
 
 def _read_line(conn: socket.socket) -> bytes | None:

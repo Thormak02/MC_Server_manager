@@ -108,10 +108,19 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     private JoinCheck joinCheck;
     // Laufende Pruefungen - verhindert, dass Klick-Spam mehrere Abfragen parallel startet.
     private final java.util.Set<UUID> checking = ConcurrentHashMap.newKeySet();
-    // Letzte Absage je Spieler UND Ziel ("uuid|serverId"). Wer in einer Portal-Region steht,
+    // Letzte HARTE Absage je Spieler UND Ziel ("uuid|serverId"). Wer in einer Portal-Region steht,
     // loest sonst bei JEDEM Schritt eine neue Abfrage samt Nachricht aus. Ein anderes Ziel
     // bleibt dabei sofort waehlbar - gedrosselt wird nur die Wiederholung derselben Absage.
     private final Map<String, Long> lastRejection = new ConcurrentHashMap<>();
+    // Offene Rueckfragen ("uuid|serverId" -> Zeitpunkt). Ein zweiter Klick innerhalb des
+    // Fensters fragt mit override=true und setzt sich damit ueber den Client-Abgleich
+    // hinweg. Bewusst GETRENNT von lastRejection: dort wuerde der Cooldown genau den
+    // zweiten Klick schlucken, der den Wechsel rettet.
+    private final Map<String, Long> pendingConfirm = new ConcurrentHashMap<>();
+    private static final long CONFIRM_WINDOW_MS = 60_000L;
+    // Laufende Menue-Abfragen. Eigenes Set statt checking, damit ein offenes Menue
+    // keinen Transfer blockiert (und umgekehrt).
+    private final java.util.Set<UUID> guiChecking = ConcurrentHashMap.newKeySet();
 
     private boolean peaceful = false;   // Lobby: kein Schaden/PvP/Rueckstoss + keine Spieler-Kollision
     private boolean resetOnJoin = false;  // Lobby: bei (Re-)Join an den Welt-Spawn + Adventure (ausser Ops)
@@ -430,6 +439,10 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
      * Bei einer Absage bleibt der Spieler genau da, wo er ist: in dieser Lobby. Er
      * bekommt den Grund als Nachricht und kann sofort etwas anderes waehlen (kein
      * Cooldown, denn es hat ja kein Wechsel stattgefunden).
+     *
+     * <p>Zwei Arten von Nein: eine HARTE Absage (Ban, Whitelist, voll) bleibt stehen,
+     * eine RUECKFRAGE aus dem Client-Abgleich hebt der naechste Klick auf. Der Brand
+     * ist ein freier String vom Client - er darf niemanden endgueltig aussperren.
      */
     private void guardedTransfer(Player p, int serverId, String display, Runnable transfer) {
         JoinCheck check = joinCheck;
@@ -439,16 +452,26 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
         final UUID id = p.getUniqueId();
         final String rejectKey = id + "|" + serverId;
-        Long rejected = lastRejection.get(rejectKey);
-        if (rejected != null && System.currentTimeMillis() - rejected < cooldownMs) {
-            return;   // dieselbe Absage gerade erst gezeigt -> nicht nochmal fragen/spammen
+        // Zweiter Klick auf dieselbe Rueckfrage? Dann ueberstimmen. Der Eintrag geht in
+        // jedem Fall weg - ein abgelaufener waere sonst ein Blindgaenger fuer spaeter.
+        Long asked = pendingConfirm.remove(rejectKey);
+        final boolean override = asked != null && System.currentTimeMillis() - asked < CONFIRM_WINDOW_MS;
+        if (!override) {
+            Long rejected = lastRejection.get(rejectKey);
+            if (rejected != null && System.currentTimeMillis() - rejected < cooldownMs) {
+                return;   // dieselbe Absage gerade erst gezeigt -> nicht nochmal fragen/spammen
+            }
         }
         if (!checking.add(id)) {
             return;   // fuer diesen Spieler laeuft schon eine Pruefung -> Klick-Spam ignorieren
         }
+        // Beides VOR dem Async-Task holen: Bukkit-API gehoert in den Main-Thread
+        // (p.getName() wurde hier bisher off-thread gelesen).
+        final String pname = p.getName();
+        final String brand = ClientInfo.brandOf(p);
         try {
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
-                JoinCheck.Result result = check.check(serverId, p.getName());
+                JoinCheck.Result result = check.check(serverId, pname, brand, override);
                 getServer().getScheduler().runTask(this, () -> {
                     checking.remove(id);
                     if (!p.isOnline()) {
@@ -456,12 +479,28 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                     }
                     if (result.allowed) {
                         lastRejection.remove(rejectKey);
+                        pendingConfirm.remove(rejectKey);
+                        if (!result.note.isEmpty()) {
+                            p.sendMessage(color("&e" + result.note));   // Hinweis, haelt nie auf
+                        }
                         transfer.run();
                         return;
                     }
+                    String reason = result.reason;
+                    if (reason.isEmpty()) {
+                        reason = result.confirm
+                            ? ("Dein Client passt moeglicherweise nicht zu " + display + ".")
+                            : (display + " ist gerade nicht erreichbar.");
+                    }
+                    if (result.confirm) {
+                        // AUSDRUECKLICH NICHT in lastRejection - sonst schluckt der
+                        // Cooldown genau den zweiten Klick, der hier angeboten wird.
+                        p.sendMessage(color("&e" + reason));
+                        p.sendMessage(color("&eNochmal klicken, um es trotzdem zu versuchen."));
+                        pendingConfirm.put(rejectKey, System.currentTimeMillis());
+                        return;
+                    }
                     lastRejection.put(rejectKey, System.currentTimeMillis());
-                    String reason = result.reason.isEmpty()
-                        ? (display + " ist gerade nicht erreichbar.") : result.reason;
                     p.sendMessage(color("&c" + reason));
                 });
             });
@@ -542,19 +581,94 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         return layout;
     }
 
+    /**
+     * Server-Auswahl oeffnen - vorher einmal fragen, welche Ziele nicht zum Client passen.
+     *
+     * <p>Die Abfrage laeuft ASYNCHRON (TCP im Main-Thread wuerde den Server einfrieren),
+     * das Inventar wird danach im Main-Thread geoeffnet. Faellt die Antwort leer aus
+     * (Fehler, Timeout, altes Backend, kein Brand), sieht das Menue exakt aus wie vorher.
+     */
     private void openGui(Player p) {
+        JoinCheck check = joinCheck;
+        final int[] ids = menuServerIds();
+        if (check == null || ids.length == 0) {
+            openGuiNow(p, Collections.<String, String>emptyMap());
+            return;
+        }
+        final UUID id = p.getUniqueId();
+        if (!guiChecking.add(id)) {
+            return;   // fuer diesen Spieler laeuft schon eine Abfrage -> Klick-Spam ignorieren
+        }
+        final String pname = p.getName();
+        final String brand = ClientInfo.brandOf(p);   // Bukkit-API -> hier, nicht off-thread
+        try {
+            getServer().getScheduler().runTaskAsynchronously(this, () -> {
+                Map<String, String> found;
+                try {
+                    found = check.fitCheck(ids, pname, brand);
+                } catch (Throwable t) {
+                    found = Collections.emptyMap();
+                }
+                final Map<String, String> fits = found;
+                try {
+                    getServer().getScheduler().runTask(this, () -> {
+                        guiChecking.remove(id);
+                        if (p.isOnline()) {
+                            openGuiNow(p, fits);
+                        }
+                    });
+                } catch (Throwable t) {
+                    guiChecking.remove(id);   // Scheduler weg -> Menue faellt diesmal aus
+                }
+            });
+        } catch (Throwable t) {
+            guiChecking.remove(id);
+            openGuiNow(p, Collections.<String, String>emptyMap());
+        }
+    }
+
+    /** Server-IDs des Menues (0 = unbekannt -> keine Pruefung moeglich). */
+    private int[] menuServerIds() {
+        List<Integer> ids = new ArrayList<>();
+        for (ServerEntry e : computeSlots().values()) {
+            if (e.id > 0) {
+                ids.add(e.id);
+            }
+        }
+        int[] out = new int[ids.size()];
+        for (int i = 0; i < out.length; i++) {
+            out[i] = ids.get(i);
+        }
+        return out;
+    }
+
+    /**
+     * Inventar bauen und oeffnen. Nur aus dem Main-Thread.
+     *
+     * @param fits Server-ID (als String) -&gt; Kurzhinweis. Fehlender Eintrag = passt.
+     */
+    private void openGuiNow(Player p, Map<String, String> fits) {
         int size = guiRows * 9;
         Inventory inv = Bukkit.createInventory(null, size, guiTitle);
         for (Map.Entry<Integer, ServerEntry> slotEntry : computeSlots().entrySet()) {
             ServerEntry e = slotEntry.getValue();
             String state = statusCache.get(e.key);  // null = noch nicht gepingt
-            ItemStack item = new ItemStack(e.material);
+            String warn = e.id > 0 ? fits.get(String.valueOf(e.id)) : null;
+            if (warn != null && warn.isEmpty()) {
+                warn = null;
+            }
+            // Graues Glas statt des Server-Materials: sichtbar anders, aber weiter
+            // klickbar - es ist eine Warnung, keine Sperre.
+            ItemStack item = new ItemStack(warn != null ? Material.GRAY_STAINED_GLASS_PANE : e.material);
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
                 meta.setDisplayName(color(statusDot(state) + e.display));
                 List<String> lore = new ArrayList<>();
                 lore.add(color("&7" + e.host + ":" + e.port));
                 lore.add(color(statusLine(state, e.sleep)));
+                if (warn != null) {
+                    lore.add(color("&7" + warn));
+                }
                 lore.add(color("&aKlick zum Verbinden"));
                 meta.setLore(lore);
                 item.setItemMeta(meta);
@@ -600,9 +714,25 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         return item;
     }
 
+    /**
+     * Absagen und offene Rueckfragen eines Spielers vergessen.
+     *
+     * <p>"Dir fehlt das Modpack" ist die eine Absage, die der Spieler selbst beheben
+     * kann - sie darf einen Rejoin nicht ueberleben. Wer neu hereinkommt, faengt bei
+     * null an statt gegen einen Cooldown von vorhin zu laufen.
+     */
+    private void clearGuards(UUID id) {
+        String prefix = id + "|";
+        lastRejection.keySet().removeIf(k -> k.startsWith(prefix));
+        pendingConfirm.keySet().removeIf(k -> k.startsWith(prefix));
+        checking.remove(id);
+        guiChecking.remove(id);
+    }
+
     @EventHandler
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
+        clearGuards(p.getUniqueId());
         // (Re-)Join: immer an den Welt-Spawn + Adventure. Operatoren ausgenommen, damit sie die
         // Lobby bauen koennen, ohne bei jedem Login zum Spawn gezogen/in Adventure gesetzt zu werden.
         if (resetOnJoin && !p.isOp()) {
@@ -636,8 +766,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     public void onQuit(PlayerQuitEvent e) {
         UUID id = e.getPlayer().getUniqueId();
         lastTransfer.remove(id);
-        checking.remove(id);
-        lastRejection.keySet().removeIf(k -> k.startsWith(id + "|"));
+        clearGuards(id);
         if (presenceBridge != null) {
             try {
                 presenceBridge.onLocalQuit(e.getPlayer());
@@ -777,8 +906,18 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                 && sender.hasPermission("mcsmlobby.admin")) {
                 load();
                 sender.sendMessage(color("&aMCSMLobby neu geladen: &e" + servers.size() + "&a Server."));
+            } else if (args.length == 1 && args[0].equalsIgnoreCase("debug")) {
+                // Zeigt in 10 Sekunden auf dem Live-Host, ob der Brand hinter
+                // Velocity/ViaProxy ueberhaupt bis hierher durchkommt.
+                if (!(sender instanceof Player)) {
+                    sender.sendMessage("Nur fuer Spieler.");
+                    return true;
+                }
+                String brand = ClientInfo.brandOf((Player) sender);
+                sender.sendMessage(color("&7Client-Brand: &f"
+                    + (brand.isEmpty() ? "(leer - nicht verfuegbar)" : brand)));
             } else {
-                sender.sendMessage(color("&7MCSMLobby &f- /mcsmlobby reload"));
+                sender.sendMessage(color("&7MCSMLobby &f- /mcsmlobby reload &7| &f/mcsmlobby debug"));
             }
             return true;
         }

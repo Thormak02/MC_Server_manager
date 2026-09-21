@@ -56,10 +56,13 @@ def _serve(responder, *, host="127.0.0.1"):
             conn, _ = listener.accept()
             with conn:
                 responder(conn)
-        except OSError:
-            pass
+        except Exception:  # noqa: BLE001 - ein Fakeserver-Fehler darf den Lauf nicht
+            pass           # mit einer unbehandelten Thread-Ausnahme verrauschen
         finally:
-            listener.close()
+            try:
+                listener.close()
+            except OSError:
+                pass
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()

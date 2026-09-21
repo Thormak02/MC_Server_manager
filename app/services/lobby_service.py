@@ -6,11 +6,12 @@ landet dort) und eine ruhige Lobby-Welt setzen.
 from __future__ import annotations
 
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.services import mc_ping
+from app.services import join_match_service, mc_ping
 
 # Kurz genug, damit ein Menue-Klick nicht haengt; lang genug fuer einen lokalen Ping.
 _JOIN_CHECK_PING_TIMEOUT = 1.5
@@ -958,8 +959,29 @@ def _ping_local(server) -> dict | None:
     return None
 
 
-def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str]:
-    """Darf ``player_name`` auf ``server`` wechseln? Rueckgabe ``(ok, grund)``.
+@dataclass(frozen=True)
+class JoinVerdict:
+    """Urteil der Vorab-Pruefung.
+
+    ``ok=False`` mit ``confirm=True`` ist eine RUECKFRAGE: sie stammt aus dem
+    Client-Abgleich und laesst sich mit ``override=True`` ueberstimmen. ``ok=False`` ohne
+    ``confirm`` ist hart und bleibt es auch mit override - sonst waere die Rueckfrage ein
+    Generalschluessel an Ban und Whitelist vorbei. ``note`` haelt nie auf, sie wird nur
+    mitgegeben.
+    """
+
+    ok: bool
+    reason: str = ""
+    confirm: bool = False
+    note: str = ""
+    code: str = "ok"
+
+
+_VERDICT_OK = JoinVerdict(True)
+
+
+def _hard_join_verdict(server, player_name: str) -> JoinVerdict:
+    """Die harten Gruende: Server weg, offline, Ban, Whitelist, startet noch, voll.
 
     Bewusst FAIL-OPEN: ist etwas nicht lesbar (Ordner weg, kaputte JSON), wird der
     Wechsel erlaubt - eine kaputte Pruefung darf niemanden aussperren. Geprueft wird nur,
@@ -968,7 +990,7 @@ def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str
     from app.services import file_service, process_service
 
     if server is None:
-        return False, "Server nicht gefunden."
+        return JoinVerdict(False, "Server nicht gefunden.", code="missing")
 
     name = (player_name or "").strip()
     running = False
@@ -979,13 +1001,17 @@ def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str
 
     # Offline UND kein Sleep-Wake -> Transfer wuerde ins Leere laufen.
     if not running and not bool(getattr(server, "sleep_enabled", False)):
-        return False, f"{server.name} ist offline."
+        return JoinVerdict(False, f"{server.name} ist offline.", code="offline")
 
     if name:
         if name.lower() in _access_names(server, "banned_players"):
             reason = _ban_reason(server, name)
-            return False, (f"Du bist auf {server.name} gebannt."
-                           + (f" Grund: {reason}" if reason else ""))
+            return JoinVerdict(
+                False,
+                (f"Du bist auf {server.name} gebannt."
+                 + (f" Grund: {reason}" if reason else "")),
+                code="banned",
+            )
         try:
             whitelist_on = file_service.get_whitelist_enabled(server)
         except Exception:  # noqa: BLE001
@@ -994,7 +1020,11 @@ def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str
             allowed = _access_names(server, "whitelist")
             # Leere/unlesbare Whitelist -> nicht aussperren (fail-open).
             if allowed and name.lower() not in allowed:
-                return False, f"Du stehst nicht auf der Whitelist von {server.name}."
+                return JoinVerdict(
+                    False,
+                    f"Du stehst nicht auf der Whitelist von {server.name}.",
+                    code="whitelist",
+                )
 
     # Nimmt der Server WIRKLICH Verbindungen an? "Prozess laeuft" heisst noch lange nicht
     # "Port offen" - waehrend des Startens (Welt laden, Mods) liefe der Transfer ins Leere
@@ -1005,7 +1035,11 @@ def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str
     maximum: int | None = None
     if status is None:
         if running:
-            return False, f"{server.name} startet noch - gleich nochmal versuchen."
+            return JoinVerdict(
+                False,
+                f"{server.name} startet noch - gleich nochmal versuchen.",
+                code="starting",
+            )
     else:
         # Zahlen vom Server selbst schlagen jede Schaetzung des Managers.
         online, maximum = mc_ping.player_counts(status)
@@ -1019,19 +1053,127 @@ def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str
             online, maximum = None, None
 
     if online is not None and maximum is not None and maximum > 0 and online >= maximum:
-        return False, f"{server.name} ist voll ({online}/{maximum})."
+        return JoinVerdict(False, f"{server.name} ist voll ({online}/{maximum}).", code="full")
 
-    return True, ""
+    return _VERDICT_OK
 
 
-def check_join_allowed_by_id(server_id: int, player_name: str) -> tuple[bool, str]:
-    """Wie check_join_allowed, oeffnet aber eine eigene DB-Session (fuer den Hub-Thread)."""
+def evaluate_join(
+    db: Session, server, player_name: str, *, client=None, override: bool = False
+) -> JoinVerdict:
+    """Vollstaendiges Urteil ueber einen Serverwechsel.
+
+    Die Reihenfolge ist Absicht: zuerst die HARTEN Gruende (offline, Ban, Whitelist,
+    startet noch, voll) - sie gelten immer und sind auch mit ``override`` nicht
+    ueberstimmbar. Erst danach der Client-Abgleich, der hoechstens eine Rueckfrage
+    erzeugt. Andersherum koennte ein gefaelschter Client-Brand einen Ban in eine
+    ueberstimmbare Rueckfrage verwandeln.
+
+    ``client=None`` (kein Client bekannt) oder ``db=None`` (keine Session, etwa im
+    Unit-Test) schaltet den Client-Teil ab; ``override=True`` ueberspringt NUR ihn.
+    Faellt im Client-Teil irgendetwas um, bleibt das harte Urteil stehen.
+    """
+    verdict = _hard_join_verdict(server, player_name)
+    if not verdict.ok or client is None or override or db is None:
+        return verdict
+
+    try:
+        fit = join_match_service.evaluate_fit(db, server, client)
+        if fit.level == join_match_service.LEVEL_CONFIRM:
+            return JoinVerdict(False, fit.text, confirm=True, code=fit.code)
+        if fit.note:
+            return JoinVerdict(True, note=fit.note, code=fit.code)
+    except Exception:  # noqa: BLE001 - ein Client-Signal darf nie ueber das harte Urteil siegen
+        pass
+    return verdict
+
+
+def evaluate_join_by_id(
+    server_id: int, player_name: str, *, client=None, override: bool = False
+) -> JoinVerdict:
+    """Wie evaluate_join, oeffnet aber eine eigene DB-Session (fuer Hub-/Endpoint-Threads).
+
+    Bei JEDER Exception fail-open: der Wechsel wird erlaubt.
+    """
     try:
         from app.db.session import SessionLocal
         from app.models.server import Server as _Server
 
         with SessionLocal() as db:
-            return check_join_allowed(db, db.get(_Server, int(server_id)), player_name)
+            return evaluate_join(
+                db,
+                db.get(_Server, int(server_id)),
+                player_name,
+                client=client,
+                override=override,
+            )
     except Exception:  # noqa: BLE001 - Pruefung darf den Wechsel nie blockieren
-        return True, ""
+        return _VERDICT_OK
+
+
+def evaluate_fit_by_id(server_id: int, client) -> join_match_service.Fit:
+    """Nur der Client-Abgleich fuer EIN Ziel - fuer die Marker im Server-Menue.
+
+    Eigene DB-Session; bei jedem Fehler ein leeres (= passendes) Fit. Ein Marker, der
+    nicht zu ermitteln ist, darf keinen Server faelschlich als unpassend ausweisen.
+    """
+    try:
+        from app.db.session import SessionLocal
+        from app.models.server import Server as _Server
+
+        with SessionLocal() as db:
+            return join_match_service.evaluate_fit(
+                db, db.get(_Server, int(server_id)), client
+            )
+    except Exception:  # noqa: BLE001
+        return join_match_service.Fit()
+
+
+def evaluate_fits_by_ids(server_ids, client) -> dict:
+    """Client-Abgleich fuer MEHRERE Ziele in EINER DB-Session -> {server_id: Fit}.
+
+    Ein Menue-Oeffnen fragt bis zu 27 Eintraege ab; einzeln waeren das 27 Sessions,
+    nur um Marker zu faerben. Enthalten sind nur Treffer (level != "ok") - ein
+    fehlender Eintrag heisst "passt", und das ist zugleich das Fail-open-Verhalten.
+    """
+    found: dict = {}
+    try:
+        from app.db.session import SessionLocal
+        from app.models.server import Server as _Server
+
+        wanted = []
+        for raw in server_ids or ():
+            try:
+                wanted.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        if not wanted:
+            return found
+        with SessionLocal() as db:
+            for server_id in wanted:
+                try:
+                    fit = join_match_service.evaluate_fit(db, db.get(_Server, server_id), client)
+                except Exception:  # noqa: BLE001 - ein kaputter Eintrag kippt nicht das Menue
+                    continue
+                if fit is not None and fit.level != join_match_service.LEVEL_OK:
+                    found[server_id] = fit
+    except Exception:  # noqa: BLE001 - ohne Marker sieht das Menue aus wie bisher
+        return {}
+    return found
+
+
+def check_join_allowed(db: Session, server, player_name: str) -> tuple[bool, str]:
+    """Darf ``player_name`` auf ``server`` wechseln? Rueckgabe ``(ok, grund)``.
+
+    Duenner Wrapper um ``evaluate_join`` OHNE Client-Abgleich - fuer alle Aufrufer, die
+    nur ja/nein brauchen.
+    """
+    verdict = evaluate_join(db, server, player_name)
+    return verdict.ok, verdict.reason
+
+
+def check_join_allowed_by_id(server_id: int, player_name: str) -> tuple[bool, str]:
+    """Wie check_join_allowed, oeffnet aber eine eigene DB-Session (fuer den Hub-Thread)."""
+    verdict = evaluate_join_by_id(server_id, player_name)
+    return verdict.ok, verdict.reason
 

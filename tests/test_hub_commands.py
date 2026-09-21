@@ -102,8 +102,10 @@ def test_transfer_blocked_when_join_not_allowed(monkeypatch):
     from app.services import lobby_service
 
     monkeypatch.setattr(hub_service, "_menu_servers", lambda: list(_GUARDED))
-    monkeypatch.setattr(lobby_service, "check_join_allowed_by_id",
-                        lambda sid, name: (False, "Du stehst nicht auf der Whitelist von David."))
+    monkeypatch.setattr(lobby_service, "evaluate_join_by_id",
+                        lambda sid, name, **kw: lobby_service.JoinVerdict(
+                            ok=False, reason="Du stehst nicht auf der Whitelist von David."),
+                        raising=False)
     hub, sess = _StubHub(), _session()
     hub._on_command(sess, "/server david")
     assert pl.build_transfer("david.mc.example.de", 25591) not in hub.sent
@@ -114,7 +116,9 @@ def test_transfer_proceeds_when_allowed(monkeypatch):
     from app.services import lobby_service
 
     monkeypatch.setattr(hub_service, "_menu_servers", lambda: list(_GUARDED))
-    monkeypatch.setattr(lobby_service, "check_join_allowed_by_id", lambda sid, name: (True, ""))
+    monkeypatch.setattr(lobby_service, "evaluate_join_by_id",
+                        lambda sid, name, **kw: lobby_service.JoinVerdict(ok=True),
+                        raising=False)
     hub, sess = _StubHub(), _session()
     hub._on_command(sess, "/server david")
     assert pl.build_transfer("david.mc.example.de", 25591) in hub.sent
@@ -124,11 +128,13 @@ def test_transfer_allowed_when_check_crashes(monkeypatch):
     """Fail-open: eine kaputte Pruefung darf niemanden aussperren."""
     from app.services import lobby_service
 
-    def boom(sid, name):
+    def boom(sid, name, **kw):
         raise RuntimeError("DB weg")
 
     monkeypatch.setattr(hub_service, "_menu_servers", lambda: list(_GUARDED))
-    monkeypatch.setattr(lobby_service, "check_join_allowed_by_id", boom)
+    # Der Hub fragt seit dem Client-Abgleich ueber evaluate_join_by_id - genau die
+    # muss krachen duerfen, ohne dass jemand haengen bleibt.
+    monkeypatch.setattr(lobby_service, "evaluate_join_by_id", boom)
     hub, sess = _StubHub(), _session()
     hub._on_command(sess, "/server david")
     assert pl.build_transfer("david.mc.example.de", 25591) in hub.sent

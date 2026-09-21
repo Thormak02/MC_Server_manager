@@ -1842,3 +1842,46 @@ def execute_preview(
         warnings=warnings,
         notes=resolved_notes,
     )
+
+
+# Namen, die nichts ueber das Pack aussagen -> lieber neutral formulieren.
+_GENERIC_PACK_NAMES = {"server-pack", "serverpack", "modpack", "pack", "server", "modpack-server"}
+
+
+def client_pack_hint(db: Session, server_id: int) -> tuple[str, str]:
+    """(Bezeichnung, Bezugsweg) des Modpacks - fuer die Meldung an den Spieler.
+
+    Beides leer, wenn kein Modpack importiert wurde. Bewusst ein reiner SELECT:
+    das laeuft im heissen Pfad eines Menue-Klicks, also kein HTTP zu Modrinth/
+    CurseForge und kein db.commit (anders als build_modpack_state_payload).
+    """
+    try:
+        state = get_server_modpack_state(db, int(server_id))
+    except Exception:  # noqa: BLE001
+        return "", ""
+    if state is None:
+        return "", ""
+
+    name = str(state.pack_name or "").strip()
+    if not name or name.lower() in _GENERIC_PACK_NAMES:
+        label = "Das Modpack des Servers"
+    else:
+        version = str(state.pack_version or "").strip()
+        label = f'"{name}"' + (f" {version}" if version else "")
+
+    source = str(state.source or "").strip().lower()
+    ref = str(state.source_ref or "").strip()
+    link = ""
+    if source == "modrinth":
+        project = str(state.upstream_project_id or "").strip() or ref
+        if project:
+            link = f"https://modrinth.com/modpack/{project}"
+    elif source == "curseforge":
+        project_id, _file_id = _parse_curseforge_source_ref_ids(ref)
+        project_id = project_id or str(state.upstream_project_id or "").strip()
+        if project_id and project_id.isdigit():
+            link = f"https://www.curseforge.com/projects/{project_id}"
+        elif ref:
+            # Kein Projekt, aber ein Profilcode -> der Weg ueber die CurseForge-App.
+            link = f"In der CurseForge-App: Import > Code: {ref}"
+    return label, link
