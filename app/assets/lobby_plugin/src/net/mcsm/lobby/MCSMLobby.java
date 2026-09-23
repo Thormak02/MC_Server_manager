@@ -118,6 +118,14 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     // zweiten Klick schlucken, der den Wechsel rettet.
     private final Map<String, Long> pendingConfirm = new ConcurrentHashMap<>();
     private static final long CONFIRM_WINDOW_MS = 60_000L;
+    // Eine Rueckfrage darf nicht im selben Augenblick beantwortet werden, in dem sie
+    // gestellt wurde - sonst zaehlt ein Doppelklick oder ein Schritt als Zustimmung,
+    // bevor der Spieler den Text ueberhaupt lesen konnte.
+    private static final long CONFIRM_MIN_AGE_MS = 1_000L;
+    // Wann zuletzt eine Rueckfrage gestellt wurde ("uuid|serverId"). Drosselt das
+    // WIEDERHOLEN: wer in einer Portal-Region steht, loest sonst bei jedem Schritt
+    // eine neue Abfrage samt Chatzeilen aus.
+    private final Map<String, Long> lastAsked = new ConcurrentHashMap<>();
     // Laufende Menue-Abfragen. Eigenes Set statt checking, damit ein offenes Menue
     // keinen Transfer blockiert (und umgekehrt).
     private final java.util.Set<UUID> guiChecking = ConcurrentHashMap.newKeySet();
@@ -396,6 +404,16 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
      * Prueft erst beim Manager, transferiert nur bei gruenem Licht.
      */
     private void doTransfer(Player p, String key) {
+        doTransfer(p, key, true);
+    }
+
+    /**
+     * @param deliberate true, wenn der Spieler den Wechsel BEWUSST ausgeloest hat
+     *                   (Menue-Klick, /server, Schild). Beim Hineinlaufen in eine
+     *                   Portal-Region ist er false - eine Bewegung darf keine
+     *                   Rueckfrage beantworten.
+     */
+    private void doTransfer(Player p, String key, boolean deliberate) {
         ServerEntry e = servers.get(key == null ? "" : key.toLowerCase(Locale.ROOT));
         if (e == null) {
             p.sendMessage(color("&cUnbekannter Server: &e" + key));
@@ -404,7 +422,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         if (onCooldown(p)) {
             return;
         }
-        guardedTransfer(p, e.id, e.display, () -> performTransfer(p, e));
+        guardedTransfer(p, e.id, e.display, deliberate, () -> performTransfer(p, e));
     }
 
     private void performTransfer(Player p, ServerEntry e) {
@@ -426,6 +444,12 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
     }
 
+    /** Liegt der Zeitstempel zu ``key`` weniger als einen Cooldown zurueck? */
+    private boolean isRecent(Map<String, Long> stamps, String key, long now) {
+        Long stamp = stamps.get(key);
+        return stamp != null && now - stamp < cooldownMs;
+    }
+
     private boolean onCooldown(Player p) {
         Long last = lastTransfer.get(p.getUniqueId());
         return last != null && System.currentTimeMillis() - last < cooldownMs;
@@ -444,7 +468,8 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
      * eine RUECKFRAGE aus dem Client-Abgleich hebt der naechste Klick auf. Der Brand
      * ist ein freier String vom Client - er darf niemanden endgueltig aussperren.
      */
-    private void guardedTransfer(Player p, int serverId, String display, Runnable transfer) {
+    private void guardedTransfer(Player p, int serverId, String display, boolean deliberate,
+                                 Runnable transfer) {
         JoinCheck check = joinCheck;
         if (check == null || serverId <= 0) {
             transfer.run();   // keine Pruefung moeglich -> durchlassen (fail-open)
@@ -452,18 +477,25 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
         final UUID id = p.getUniqueId();
         final String rejectKey = id + "|" + serverId;
-        // Zweiter Klick auf dieselbe Rueckfrage? Dann ueberstimmen. Der Eintrag geht in
-        // jedem Fall weg - ein abgelaufener waere sonst ein Blindgaenger fuer spaeter.
-        Long asked = pendingConfirm.remove(rejectKey);
-        final boolean override = asked != null && System.currentTimeMillis() - asked < CONFIRM_WINDOW_MS;
-        if (!override) {
-            Long rejected = lastRejection.get(rejectKey);
-            if (rejected != null && System.currentTimeMillis() - rejected < cooldownMs) {
-                return;   // dieselbe Absage gerade erst gezeigt -> nicht nochmal fragen/spammen
-            }
+        final long now = System.currentTimeMillis();
+
+        // Eine Rueckfrage beantwortet NUR eine bewusste Handlung, und erst nach einer
+        // Sekunde. Ohne diese beiden Bedingungen liefert ein Schritt in einer
+        // Portal-Region (onMove feuert bei jedem Blockwechsel) den "zweiten Klick"
+        // selbst - der Spieler waere transferiert, bevor er die Frage lesen konnte.
+        final boolean override = TransferGuard.mayOverride(
+            pendingConfirm.get(rejectKey), now, deliberate,
+            CONFIRM_MIN_AGE_MS, CONFIRM_WINDOW_MS);
+        if (!override && (isRecent(lastRejection, rejectKey, now)
+                || isRecent(lastAsked, rejectKey, now))) {
+            return;   // gerade erst abgesagt oder gefragt -> nicht nochmal fragen/spammen
         }
         if (!checking.add(id)) {
             return;   // fuer diesen Spieler laeuft schon eine Pruefung -> Klick-Spam ignorieren
+        }
+        // ERST JETZT verbrauchen: ein verworfener Klick darf die Rueckfrage nicht aufessen.
+        if (override) {
+            pendingConfirm.remove(rejectKey);
         }
         // Beides VOR dem Async-Task holen: Bukkit-API gehoert in den Main-Thread
         // (p.getName() wurde hier bisher off-thread gelesen).
@@ -472,6 +504,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         try {
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
                 JoinCheck.Result result = check.check(serverId, pname, brand, override);
+                try {
                 getServer().getScheduler().runTask(this, () -> {
                     checking.remove(id);
                     if (!p.isOnline()) {
@@ -480,6 +513,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                     if (result.allowed) {
                         lastRejection.remove(rejectKey);
                         pendingConfirm.remove(rejectKey);
+                        lastAsked.remove(rejectKey);
                         if (!result.note.isEmpty()) {
                             p.sendMessage(color("&e" + result.note));   // Hinweis, haelt nie auf
                         }
@@ -495,14 +529,24 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                     if (result.confirm) {
                         // AUSDRUECKLICH NICHT in lastRejection - sonst schluckt der
                         // Cooldown genau den zweiten Klick, der hier angeboten wird.
+                        // lastAsked drosselt nur das WIEDERHOLEN der Frage.
+                        long asked = System.currentTimeMillis();
                         p.sendMessage(color("&e" + reason));
-                        p.sendMessage(color("&eNochmal klicken, um es trotzdem zu versuchen."));
-                        pendingConfirm.put(rejectKey, System.currentTimeMillis());
+                        p.sendMessage(color(deliberate
+                            ? "&eNochmal klicken, um es trotzdem zu versuchen."
+                            : "&eWaehle ihn im Menue, um es trotzdem zu versuchen."));
+                        pendingConfirm.put(rejectKey, asked);
+                        lastAsked.put(rejectKey, asked);
                         return;
                     }
                     lastRejection.put(rejectKey, System.currentTimeMillis());
                     p.sendMessage(color("&c" + reason));
                 });
+                } catch (Throwable t) {
+                    // Scheduler weg (Plugin faehrt gerade runter) -> Sperre loesen,
+                    // sonst koennte dieser Spieler nach einem Reload nichts mehr anklicken.
+                    checking.remove(id);
+                }
             });
         } catch (Throwable t) {
             // Scheduler weg (Plugin faehrt runter) -> lieber ungeprueft durchlassen.
@@ -536,7 +580,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
         // Auch der Rueckweg wird geprueft: ist die Lobby gerade nicht erreichbar, soll der
         // Spieler das lesen und hier bleiben - statt beim Transfer ins Leere zu fliegen.
-        guardedTransfer(p, lobbyId, "Die Lobby", () -> performLobbyTransfer(p));
+        guardedTransfer(p, lobbyId, "Die Lobby", true, () -> performLobbyTransfer(p));
     }
 
     private void performLobbyTransfer(Player p) {
@@ -597,7 +641,10 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
         final UUID id = p.getUniqueId();
         if (!guiChecking.add(id)) {
-            return;   // fuer diesen Spieler laeuft schon eine Abfrage -> Klick-Spam ignorieren
+            // Laeuft schon eine Abfrage -> lieber SOFORT ohne Marker oeffnen, als den
+            // Klick stumm zu verschlucken. Die Marker sind Kosmetik, das Menue nicht.
+            openGuiNow(p, Collections.<String, String>emptyMap());
+            return;
         }
         final String pname = p.getName();
         final String brand = ClientInfo.brandOf(p);   // Bukkit-API -> hier, nicht off-thread
@@ -725,6 +772,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         String prefix = id + "|";
         lastRejection.keySet().removeIf(k -> k.startsWith(prefix));
         pendingConfirm.keySet().removeIf(k -> k.startsWith(prefix));
+        lastAsked.keySet().removeIf(k -> k.startsWith(prefix));
         checking.remove(id);
         guiChecking.remove(id);
     }
@@ -892,7 +940,9 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         }
         for (Region r : regions) {
             if (r.contains(to)) {
-                doTransfer(e.getPlayer(), r.target);
+                // false: Hineinlaufen ist keine bewusste Zustimmung. Sonst beantwortete
+                // der naechste Schritt die Rueckfrage, die der erste ausgeloest hat.
+                doTransfer(e.getPlayer(), r.target, false);
                 return;
             }
         }

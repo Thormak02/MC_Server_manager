@@ -335,6 +335,7 @@ class _Session:
         self.mods: frozenset = frozenset()  # networked Mod-Namespaces (nur NeoForge/Forge)
         # Server-ID -> Zeitpunkt der Rueckfrage (time.monotonic); der zweite Klick ueberstimmt.
         self.pending_confirm: dict[int, float] = {}
+        self.menu_fits: dict = {}      # beim Oeffnen ermittelte Marker (zum Neuzeichnen)
 
 
 def _extract_setup_packets(records: list, play_login: int) -> list[bytes]:
@@ -1104,10 +1105,10 @@ class Hub:
     def _open_menu(self, session: _Session) -> None:
         session.menu_servers = _menu_servers()          # frische DB-Liste
         session.menu_open = True
-        fits = _menu_fits(session.menu_servers, session)
+        session.menu_fits = _menu_fits(session.menu_servers, session)
         self._send(session, pl.build_open_screen(_MENU_WINDOW, pl.MENU_GENERIC_9X3, "Server auswählen"))
         self._send(session, pl.build_container_content(
-            _MENU_WINDOW, self._menu_slots(session.menu_servers, fits)))
+            _MENU_WINDOW, self._menu_slots(session.menu_servers, session.menu_fits)))
 
     def _on_menu_click(self, session: _Session, fields: bytes) -> None:
         """Klick im Server-Menue -> Server aus der beim Oeffnen gemerkten DB-Liste
@@ -1121,9 +1122,18 @@ class Hub:
             return
         if 0 <= slot < len(session.menu_servers):
             srv = session.menu_servers[slot]
-            session.menu_open = False
-            self._send(session, pl.build_close_container(_MENU_WINDOW))
-            self._try_transfer(session, srv)
+            # Das Menue erst schliessen, wenn der Wechsel wirklich laeuft. Bei einer
+            # Rueckfrage MUSS der Spieler noch einmal klicken koennen ("Klick nochmal"),
+            # und bei einer Absage kann er gleich etwas anderes waehlen.
+            if self._try_transfer(session, srv):
+                session.menu_open = False
+                self._send(session, pl.build_close_container(_MENU_WINDOW))
+            else:
+                # Der Klick hat den Cursor des Clients bewegt - Ansicht zuruecksetzen,
+                # sonst klebt das Item am Mauszeiger.
+                self._send(session, pl.build_container_content(
+                    _MENU_WINDOW,
+                    self._menu_slots(session.menu_servers, getattr(session, "menu_fits", None))))
 
     def _try_transfer(self, session: _Session, srv: dict) -> bool:
         """Serverwechsel MIT Vorab-Pruefung (Graceful Rejection).

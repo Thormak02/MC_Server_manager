@@ -139,6 +139,13 @@ final class JoinCheck {
      *     heisst "passt". Bei JEDEM Fehler eine leere Map - dann sieht das Menue exakt
      *     aus wie ohne diese Pruefung.
      */
+    /**
+     * Die Marker sind Kosmetik - das Menue darf auf sie nicht lange warten. Deshalb ein
+     * eigenes, kurzes Zeitlimit: normal antwortet der Manager in wenigen Millisekunden,
+     * und haengt er, geht das Menue lieber ungemarkt auf als gar nicht.
+     */
+    private static final int FIT_TIMEOUT_MS = 1_500;
+
     Map<String, String> fitCheck(int[] serverIds, String player, String brand) {
         // Ohne Brand kann der Manager ueber den Client nichts sagen (der Abgleich ist
         // dann abgeschaltet) - die Runde ueber das Netz waere garantiert ergebnislos.
@@ -163,7 +170,7 @@ final class JoinCheck {
             + ",\"op\":\"fit_check\",\"server_ids\":[" + ids + "]"
             + ",\"player\":" + quote(player)
             + clientPart(brand) + "}\n";
-        String line = exchange(request);
+        String line = exchange(request, Math.min(timeoutMs, FIT_TIMEOUT_MS));
         if (line == null) {
             return Collections.emptyMap();
         }
@@ -187,9 +194,13 @@ final class JoinCheck {
 
     /** Eine Zeile hin, eine Zeile zurueck. {@code null} = keine verwertbare Antwort. */
     private String exchange(String request) {
+        return exchange(request, timeoutMs);
+    }
+
+    private String exchange(String request, int waitMs) {
         try (Socket sock = new Socket()) {
-            sock.connect(new InetSocketAddress(host, port), timeoutMs);
-            sock.setSoTimeout(timeoutMs);
+            sock.connect(new InetSocketAddress(host, port), waitMs);
+            sock.setSoTimeout(waitMs);
             OutputStream out = sock.getOutputStream();
             out.write(request.getBytes(StandardCharsets.UTF_8));
             out.flush();
