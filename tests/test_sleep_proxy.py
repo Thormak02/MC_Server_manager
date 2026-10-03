@@ -2,6 +2,8 @@ import socket
 import threading
 import time
 
+import pytest
+
 from app.services import mc_protocol as mp
 from app.services import sleep_proxy_service as sp
 
@@ -305,6 +307,7 @@ def test_wake_server_reports_start_failure_at_once(monkeypatch):
     assert elapsed < 1.0  # nicht die vollen 15 s abgewartet
 
 
+@pytest.mark.real_wake
 def test_wake_server_picks_up_background_failure(monkeypatch):
     """Der Fehler entsteht erst im Hintergrund-Thread - die Schleife holt ihn ab."""
     _reset_wake_state()
@@ -366,6 +369,7 @@ def test_status_connect_failure_stays_silent(monkeypatch):
     assert client.sent == []
 
 
+@pytest.mark.real_wake
 def test_request_wake_is_non_blocking_and_deduplicates(monkeypatch):
     """Zweimal wecken -> start_server genau einmal (ein Thread je Server)."""
     _reset_wake_state()
@@ -406,6 +410,7 @@ def test_request_wake_is_non_blocking_and_deduplicates(monkeypatch):
         _reset_wake_state()
 
 
+@pytest.mark.real_wake
 def test_request_wake_skips_running_server(monkeypatch):
     _reset_wake_state()
     monkeypatch.setattr(sp.process_service, "is_running", lambda sid: True)

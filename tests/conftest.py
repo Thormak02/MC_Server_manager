@@ -42,3 +42,42 @@ def client(tmp_path, monkeypatch):
 
     with TestClient(main_module.app) as test_client:
         yield test_client
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "real_wake: dieser Test prueft request_wake selbst und bekommt deshalb den "
+        "echten Weckpfad statt der Sicherheits-Attrappe",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _never_really_start_a_server(monkeypatch, request):
+    """Sicherheitsnetz: kein Test darf einen echten Serverstart ausloesen.
+
+    ``sleep_proxy_service.request_wake`` startet absichtlich einen Hintergrund-Thread,
+    der ``process_service.start_server`` ruft (Modpack-Install, Java-Prep, Popen).
+    Erreicht ein Test diesen Pfad - z.B. ueber eine Join-Pruefung auf einem Server mit
+    ``sleep_enabled`` -, laeuft der Thread weiter, waehrend das Fixture die Test-DB
+    schon abgeraeumt hat: "no such table: servers" aus einem fremden Thread, sporadisch
+    und schwer zu finden. Schlimmer noch koennte er bei einem Fixture-Server mit
+    gueltigem Startbefehl tatsaechlich einen Prozess starten.
+
+    Wer den echten Pfad pruefen will, markiert seinen Test mit
+    ``@pytest.mark.real_wake``.
+    """
+    if request.node.get_closest_marker("real_wake"):
+        return []
+
+    gerufen: list[int] = []
+
+    def _fake_request_wake(server_id):
+        gerufen.append(int(server_id))
+        return True, "Start angestossen (Test-Attrappe)"
+
+    from app.services import sleep_proxy_service
+
+    monkeypatch.setattr(sleep_proxy_service, "request_wake", _fake_request_wake,
+                        raising=False)
+    return gerufen

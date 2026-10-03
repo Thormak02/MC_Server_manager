@@ -33,6 +33,25 @@ _HANDSHAKE_READ_TIMEOUT = 5.0
 # Bewusst nicht 0: schnelle Server (Paper 9-14 s, Spigot 17 s) werden damit
 # weiterhin transparent durchgereicht statt den Spieler wegzuschicken.
 _WAKE_READY_TIMEOUT = 15.0
+
+# ... ES SEI DENN, wir koennen die Uhr des Clients zuruecksetzen. Jedes EINGEHENDE
+# Paket tut das, und in der Login-Phase gibt es dafuer ein folgenloses: den Login
+# Plugin Request. Der Client antwortet darauf laut Protokoll immer (notfalls mit
+# "nicht verstanden") und BLEIBT in der Login-Phase - beliebig oft wiederholbar.
+# Ein Keep-Alive gibt es in der Login-Phase nicht, also ist das das einzige Mittel,
+# eine Direktverbindung ueber einen langen Serverstart zu halten.
+# Erst ab Client 1.13 (Protokoll 393); davor kennt der Login-Zustand nur 0x00-0x03.
+_PROTOCOL_LOGIN_PLUGIN = 393
+_LOGIN_CB_PLUGIN_REQUEST = 0x04
+_LOGIN_SB_PLUGIN_RESPONSE = 0x02
+# Deutlich unter 30 s, damit auch ein verzoegertes Paket die Uhr noch rechtzeitig
+# zurueckstellt.
+_HEARTBEAT_INTERVAL = 8.0
+# Mit Heartbeat ist die Haltezeit technisch unbegrenzt - trotzdem eine Obergrenze,
+# damit ein gescheiterter Start den Spieler nicht ewig im Ladebildschirm laesst.
+# 300 s sind gut 5x die gemessenen 56 s des langsamsten Modpacks und decken auch
+# einen ersten Start mit Modpack-Install.
+_HOLD_READY_TIMEOUT = 300.0
 # Takt der Warteschleife; gleichzeitig das recv-Timeout, mit dem wir waehrend
 # des Wartens am Client mitlesen (Abbruch-Erkennung).
 _WAKE_POLL_INTERVAL = 0.5
@@ -347,6 +366,56 @@ def _wake_worker(server_id: int) -> None:
             _WAKE_PENDING.discard(server_id)
 
 
+def _build_login_plugin_request(message_id: int) -> bytes:
+    """Ein folgenloses Login-Paket, nur um die 30-s-Uhr des Clients zurueckzusetzen.
+
+    Kanalname ist bewusst eigen ("mcsm:wake"): der Client kennt ihn nicht, antwortet
+    mit "nicht verstanden" und bleibt im Login-Zustand - genau das Verhalten, das wir
+    brauchen. Die Antwort wird spaeter aus dem Puffer geschnitten, siehe
+    _consume_client_packets.
+    """
+    payload = (
+        mc_protocol.encode_varint(_LOGIN_CB_PLUGIN_REQUEST)
+        + mc_protocol.encode_varint(message_id)
+        + mc_protocol.encode_string("mcsm:wake")
+    )
+    return mc_protocol._wrap_packet(payload)
+
+
+def _consume_client_packets(pending: bytearray, scratch: bytearray) -> None:
+    """Vollstaendige Pakete aus ``scratch`` nach ``pending`` uebernehmen - ausser
+    den Antworten auf unsere Heartbeats.
+
+    Die haben wir erfunden; das Backend hat sie nie angefragt. Blieben sie im
+    Puffer, kickte das Ziel den Spieler mit "Unexpected custom data from client" -
+    und zwar genau in der Sekunde, in der es endlich bereit ist.
+
+    Unvollstaendige Pakete bleiben in ``scratch`` liegen, bis der Rest da ist.
+    """
+    while scratch:
+        try:
+            length, body = mc_protocol.read_varint(bytes(scratch), 0)
+        except mc_protocol.IncompletePacket:
+            return
+        except Exception:  # noqa: BLE001 - unparsbarer Strom: nicht fehlleiten
+            pending.extend(scratch)
+            scratch.clear()
+            return
+        if length <= 0 or len(scratch) - body < length:
+            return
+        packet = bytes(scratch[body:body + length])
+        framed = bytes(scratch[:body + length])
+        del scratch[:body + length]
+        try:
+            packet_id, _ = mc_protocol.read_varint(packet, 0)
+        except Exception:  # noqa: BLE001 - im Zweifel weitergeben
+            pending.extend(framed)
+            continue
+        if packet_id == _LOGIN_SB_PLUGIN_RESPONSE:
+            continue
+        pending.extend(framed)
+
+
 def _set_wake_error(server_id: int, message: str) -> None:
     with _IDLE_LOCK:
         _WAKE_ERRORS[server_id] = message
@@ -416,8 +485,12 @@ def _handle_connection(listener: _ProxyListener, client: socket.socket) -> None:
             if not _wake_server(
                 server_id,
                 client,
-                deadline=accepted_at + _WAKE_READY_TIMEOUT,
                 pending=buffer,
+                # Echte Client-Version: ViaProxy sitzt nur auf der Default-Route,
+                # ein expliziter Server-Alias kommt unuebersetzt hier an. Davon
+                # haengt ab, ob wir halten koennen oder absagen muessen.
+                protocol_version=handshake.protocol_version,
+                accepted_at=accepted_at,
             ):
                 return  # Timeout/Fehler -> Client wurde informiert/geschlossen
         # Ab hier laeuft der Server (oder wurde geweckt) -> transparent forwarden.
@@ -461,6 +534,8 @@ def _wake_server(
     *,
     deadline: float | None = None,
     pending: bytearray | None = None,
+    protocol_version: int | None = None,
+    accepted_at: float | None = None,
 ) -> bool:
     """Server wecken und begrenzt auf Bereitschaft warten.
 
@@ -478,8 +553,19 @@ def _wake_server(
         _send_login_disconnect(client, f"Serverstart nicht moeglich: {message}")
         return False
 
+    # Kann dieser Client gehalten werden? Dann warten wir, bis der Server WIRKLICH
+    # bereit ist, statt den Spieler wegzuschicken. Ohne Heartbeat bleibt nur das
+    # kurze Zeitfenster, in dem die Absage ihn noch erreicht.
+    hold = bool(protocol_version is not None and protocol_version >= _PROTOCOL_LOGIN_PLUGIN)
+    scratch: bytearray | None = bytearray() if hold else None
     if deadline is None:
-        deadline = monotonic() + _WAKE_READY_TIMEOUT
+        budget = _HOLD_READY_TIMEOUT if hold else _WAKE_READY_TIMEOUT
+        deadline = (accepted_at if accepted_at is not None else monotonic()) + budget
+    if hold:
+        _log(server_id, "sleep_proxy.hold", f"protocol={protocol_version}")
+
+    message_id = 0
+    next_beat = monotonic() + _HEARTBEAT_INTERVAL
     while monotonic() < deadline:
         if process_service.is_server_ready(server_id):
             return True
@@ -487,7 +573,17 @@ def _wake_server(
         if error:
             _send_login_disconnect(client, f"Serverstart nicht moeglich: {error}")
             return False
-        if not _client_still_waiting(client, pending):
+        if hold and monotonic() >= next_beat:
+            message_id += 1
+            try:
+                client.sendall(_build_login_plugin_request(message_id))
+            except OSError:
+                _log(server_id, "sleep_proxy.wake_aborted", "client gone (heartbeat)")
+                return False
+            except Exception:  # noqa: BLE001 - Attrappen-Sockets in Tests
+                pass
+            next_beat = monotonic() + _HEARTBEAT_INTERVAL
+        if not _client_still_waiting(client, pending, scratch):
             # Client weg (oder Muellflut) -> kein Backend-Socket mehr oeffnen.
             _log(server_id, "sleep_proxy.wake_aborted", "client gone")
             return False
@@ -497,13 +593,20 @@ def _wake_server(
 
 
 def _client_still_waiting(
-    client: socket.socket, pending: bytearray | None = None
+    client: socket.socket,
+    pending: bytearray | None = None,
+    scratch: bytearray | None = None,
 ) -> bool:
     """Waehrend des Wartens am Client mitlesen -> Abbruch frueh erkennen.
 
     Nichts gelesen (Timeout) heisst "wartet noch". b"" oder OSError heisst
     "Verbindung ist weg". Gelesene Bytes gehoeren zum Login-Strom und duerfen
     NICHT verworfen werden, sonst kommt der Server-seitige Decoder aus dem Takt.
+
+    ``scratch`` != None heisst "wir senden Heartbeats": dann laeuft alles Gelesene
+    erst durch _consume_client_packets, das NUR die Antworten auf unsere eigenen
+    Heartbeats herausschneidet. Ohne das kickte das Ziel den Spieler mit
+    "Unexpected custom data from client", sobald es bereit ist.
     """
     try:
         client.settimeout(_WAKE_POLL_INTERVAL)
@@ -518,7 +621,13 @@ def _client_still_waiting(
     if not chunk:
         return False
     if pending is not None:
-        pending.extend(chunk)
+        if scratch is not None:
+            scratch.extend(chunk)
+            _consume_client_packets(pending, scratch)
+            if len(scratch) > _BUFFER_SIZE * 4:
+                return False
+        else:
+            pending.extend(chunk)
         # Ein echter Login-Start ist winzig. Wer auf dem oeffentlichen Port
         # waehrend des Wartens Megabytes schiebt, soll nicht unseren Speicher
         # fuellen - solche Verbindung fallen lassen.
