@@ -13,6 +13,7 @@ from app.models.scheduled_job import ScheduledJob
 from app.models.server import Server
 from app.services import audit_service, backup_service
 from app.services.process_service import (
+    is_running,
     queue_restart,
     send_console_command,
     start_server,
@@ -232,14 +233,22 @@ def _execute_job(db: Session, job: ScheduledJob) -> tuple[bool, str]:
         elif job_type == "stop":
             ok, message = stop_server(db, server, initiated_by_user_id=None, force=False)
         elif job_type == "restart":
-            ok, message = queue_restart(
-                db,
-                server,
-                initiated_by_user_id=None,
-                delay_seconds=int(payload.get("delay_seconds", 0) or 0),
-                warning_message=str(payload.get("warning_message", "") or ""),
-                source="scheduled_job",
-            )
+            # Ein geplanter Restart ERNEUERT einen laufenden Server. Auf einem gestoppten
+            # wuerde er ihn hochfahren und damit Autostart und Gateway-Einstellung
+            # ueberfahren, die jemand bewusst abgeschaltet hat - ein stillgelegter Server
+            # stand so jeden Morgen wieder da. Wer einen taeglichen Start will, nimmt den
+            # eigenen Job-Typ "start".
+            if not is_running(server.id):
+                ok, message = True, "Server laeuft nicht - geplanter Restart uebersprungen."
+            else:
+                ok, message = queue_restart(
+                    db,
+                    server,
+                    initiated_by_user_id=None,
+                    delay_seconds=int(payload.get("delay_seconds", 0) or 0),
+                    warning_message=str(payload.get("warning_message", "") or ""),
+                    source="scheduled_job",
+                )
         elif job_type == "command":
             command = str(payload.get("command", "") or "")
             ok, message = send_console_command(db, server, command, initiated_by_user_id=None)

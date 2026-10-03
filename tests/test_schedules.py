@@ -113,3 +113,73 @@ def test_restart_via_console_command_is_supported(client, tmp_path):
     )
     assert response.status_code == 200
     assert "Neustart geplant in 1 Sekunden." in response.text
+
+
+def test_scheduled_restart_skips_a_stopped_server(client, tmp_path, monkeypatch):
+    """Ein geplanter Restart darf einen stillgelegten Server nicht hochfahren.
+
+    Genau das passierte: ein Server stand jeden Morgen wieder da, obwohl Autostart aus
+    und das Gateway-Routing entfernt war - der taegliche Restart-Job hat beides
+    ueberfahren. Fuer einen geplanten START gibt es den eigenen Job-Typ "start".
+    """
+    from types import SimpleNamespace
+
+    from app.services import schedule_service
+
+    gerufen = []
+    monkeypatch.setattr(schedule_service, "is_running", lambda sid: False)
+    monkeypatch.setattr(schedule_service, "queue_restart",
+                        lambda *a, **kw: gerufen.append("restart") or (True, "gestartet"))
+    monkeypatch.setattr(schedule_service, "_record_job_history_start", lambda db, job: None)
+    monkeypatch.setattr(schedule_service, "_record_job_history_finish",
+                        lambda db, row, **kw: None)
+    monkeypatch.setattr(schedule_service.audit_service, "log_action", lambda *a, **kw: None)
+
+    class _Db:
+        def get(self, _model, _pk):
+            return SimpleNamespace(id=4, name="David", base_path="x")
+
+        def add(self, _row):
+            pass
+
+        def commit(self):
+            pass
+
+    job = SimpleNamespace(id=4, server_id=4, job_type="restart", command_payload="{}")
+    ok, message = schedule_service._execute_job(_Db(), job)
+
+    assert gerufen == []                       # queue_restart wurde NICHT gerufen
+    assert ok is True                          # ein Uebersprung ist kein Fehler
+    assert "uebersprungen" in message.lower()
+
+
+def test_scheduled_restart_still_restarts_a_running_server(client, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.services import schedule_service
+
+    gerufen = []
+    monkeypatch.setattr(schedule_service, "is_running", lambda sid: True)
+    monkeypatch.setattr(schedule_service, "queue_restart",
+                        lambda *a, **kw: gerufen.append("restart") or (True, "neu gestartet"))
+    monkeypatch.setattr(schedule_service, "_record_job_history_start", lambda db, job: None)
+    monkeypatch.setattr(schedule_service, "_record_job_history_finish",
+                        lambda db, row, **kw: None)
+    monkeypatch.setattr(schedule_service.audit_service, "log_action", lambda *a, **kw: None)
+
+    class _Db:
+        def get(self, _model, _pk):
+            return SimpleNamespace(id=2, name="ATM10SKY", base_path="x")
+
+        def add(self, _row):
+            pass
+
+        def commit(self):
+            pass
+
+    job = SimpleNamespace(id=1, server_id=2, job_type="restart",
+                          command_payload='{"delay_seconds": 5}')
+    ok, message = schedule_service._execute_job(_Db(), job)
+
+    assert gerufen == ["restart"]
+    assert ok is True and "neu gestartet" in message

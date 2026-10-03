@@ -198,13 +198,13 @@ Lobby Server unter selben port wie manager, von hier aus soll man auch server st
 welt ist eine struktur, die sich automatisch pro server erweitert. ist das möglich? siehe docs/lobby_gateway_plan.md
 
 
-
+SSH zugriff?
 
 
 mehrere verwaltungsumgebungen, die voneinander getrennt sind, server 1, 2 und 3 in umgebung A und server 4, 5 und 6 in umgebung B
 
 
-
+Server umbenennen können
 
 
 ~~ein button um alle mods auf aktuellste Version zu updaten (im mods bereich, auch für plugins usw.), außerdem beim download automatisch aktuellste version ausgewählt. abhängigkeiten werden automatisch mit installiert. nicht für modpacks, wo oft eine spezifische version gefordert ist.~~
@@ -407,3 +407,6 @@ bestimmte server bei manager neustart nicht mit neustarten, sondern weiterlaufen
 ~~mir ist außerdem grade aufgefallen: es funktionieren nur vanilla tweaks, aber vanilla tweaks crafting rezepte werden nicht erkannt und nicht zur auswahl verfügbar~~
 
 ~~/lobby / /server lobby geht nicht~~
+
+
+manager kann auch server pc restarten

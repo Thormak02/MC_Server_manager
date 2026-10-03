@@ -10,6 +10,7 @@ darf GENAU so viele read_packet-Aufrufe machen wie die alte. Liest sie ein Paket
 bricht sie frueher ab, geraet die Config-Phase bei Clients, deren Paketfolge vom Capture
 abweicht, aus dem Tritt - und jeder Join haengt sekundenlang im _CONFIG_WAIT_TIMEOUT.
 """
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -177,6 +178,8 @@ class _StubHub:
 
     _tell = hub_service.Hub._tell
     _try_transfer = hub_service.Hub._try_transfer
+    _start_wait = hub_service.Hub._start_wait
+    _wait_loop = hub_service.Hub._wait_loop
 
     def __init__(self):
         self.sent: list[bytes] = []
@@ -189,11 +192,13 @@ class _StubHub:
 
 
 def _session(brand: str = "vanilla", mods=frozenset()):
-    return SimpleNamespace(name="David", brand=brand, mods=mods, pending_confirm={})
+    return SimpleNamespace(name="David", brand=brand, mods=mods, pending_confirm={},
+                           alive=True, waiting_for=None)
 
 
 def _verdict(**kw):
-    base = {"ok": True, "reason": "", "confirm": False, "note": "", "code": "ok"}
+    base = {"ok": True, "reason": "", "confirm": False, "note": "", "code": "ok",
+            "retry": False}
     base.update(kw)
     return SimpleNamespace(**base)
 
@@ -344,3 +349,178 @@ def test_menu_fits_survives_broken_check(monkeypatch):
 
     monkeypatch.setattr(lobby_service, "evaluate_fits_by_ids", boom, raising=False)
     assert hub_service._menu_fits([dict(_SRV)], _session()) == {}
+
+
+# --------------------------------------------------------------------------- #
+# NOCH NICHT statt NEIN: der Spieler wartet im PLAY-Zustand auf den Serverstart
+#
+# Ein schlafendes Ziel braucht gemessen bis 56 s - mehr als die 30 s, nach denen der
+# Client eine stille Verbindung kappt. In der Lobby laeuft dagegen Keep-Alive, also
+# wird hier gewartet und erst transferiert, wenn das Ziel Logins annimmt.
+# --------------------------------------------------------------------------- #
+_RETRY = {"ok": False, "retry": True,
+          "reason": "ATM10 wird gestartet - bleib in der Lobby, du wirst automatisch verbunden."}
+_LABEL = "ATM10 (neoforge 1.21.1)"      # == _plain(_SRV["display"])
+
+
+class _NoWaitHub(_StubHub):
+    """Wie _StubHub, aber die Warteschleife wird nur protokolliert statt gestartet -
+    so laesst sich _try_transfer ohne Thread pruefen."""
+
+    def __init__(self):
+        super().__init__()
+        self.waits: list[tuple] = []
+
+    def _start_wait(self, session, sid, label, host, port, override) -> None:
+        self.waits.append((sid, label, host, port, override))
+
+
+def _patch_verdicts(monkeypatch, verdicts, interval=0.0, rounds=None):
+    """_join_verdict durch eine Liste von Urteilen ersetzen (das letzte gilt weiter).
+
+    Zurueck kommt die Liste der uebergebenen override-Flags - daran haengt die Zusicherung,
+    dass die Schleife mit DEMSELBEN override weiterfragt wie der erste Klick.
+    """
+    seen: list[bool] = []
+
+    def fake(server_id, session, *, override: bool):
+        seen.append(override)
+        return verdicts[min(len(seen) - 1, len(verdicts) - 1)]
+
+    monkeypatch.setattr(hub_service, "_join_verdict", fake)
+    monkeypatch.setattr(hub_service, "_WAIT_POLL_INTERVAL", interval)
+    if rounds is not None:
+        monkeypatch.setattr(hub_service, "_WAIT_MAX_ROUNDS", rounds)
+    return seen
+
+
+def _wait_until(cond, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if cond():
+            return
+        time.sleep(0.01)
+    raise AssertionError("Bedingung ist nicht eingetreten")
+
+
+def _join_wait_threads(timeout: float = 5.0) -> None:
+    for t in list(threading.enumerate()):
+        if t.name.startswith("hub-wait-"):
+            t.join(timeout)
+            assert not t.is_alive(), t.name
+
+
+def test_retry_verdict_keeps_player_in_lobby(monkeypatch):
+    """retry -> kein Transfer, zwei Hinweise im Chat, Warteschleife mit dem Klick-override."""
+    _patch_join(monkeypatch, lambda sid, player, *, client=None, override=False:
+                _verdict(**_RETRY))
+    hub, sess = _NoWaitHub(), _session()
+
+    assert hub._try_transfer(sess, _SRV) is False
+    assert _TRANSFER not in hub.sent
+    assert len(hub.sent) == 2
+    assert b"bleib in der Lobby, du wirst automatisch verbunden." in hub.chat()
+    assert b"Du bleibst in der Lobby und wirst automatisch verbunden." in hub.chat()
+    assert hub.waits == [(7, _LABEL, _SRV["host"], _SRV["port"], False)]
+    # Eine Rueckfrage ist das NICHT - es wird kein zweiter Klick verlangt.
+    assert b"Klick nochmal" not in hub.chat()
+    assert sess.pending_confirm == {}
+
+
+def test_ok_verdict_transfers_without_waiting(monkeypatch):
+    """Gegentest: ein gruenes Urteil geht weiterhin direkt durch - keine Warteschleife."""
+    _patch_join(monkeypatch, lambda sid, player, *, client=None, override=False: _verdict())
+    hub, sess = _NoWaitHub(), _session()
+
+    assert hub._try_transfer(sess, _SRV) is True
+    assert _TRANSFER in hub.sent
+    assert hub.waits == []
+
+
+def test_wait_loop_sends_nothing_when_player_left(monkeypatch):
+    """Der Spieler hat die Lobby verlassen -> nichts senden und nicht mehr nachfragen."""
+    seen = _patch_verdicts(monkeypatch, [_verdict(**_RETRY)])
+    hub, sess = _StubHub(), _session()
+    sess.alive = False
+
+    hub._wait_loop(sess, 7, _LABEL, _SRV["host"], _SRV["port"], False)
+    assert hub.sent == [] and seen == []
+
+
+def test_wait_loop_transfers_when_target_becomes_ready(monkeypatch):
+    """Viermal "noch nicht", dann gruenes Licht -> Transfer genau wie in _try_transfer."""
+    seen = _patch_verdicts(monkeypatch, [_verdict(**_RETRY)] * 4 + [_verdict()])
+    hub, sess = _StubHub(), _session()
+
+    hub._wait_loop(sess, 7, _LABEL, _SRV["host"], _SRV["port"], True)
+    assert seen == [True] * 5                     # immer dasselbe override wie beim Klick
+    assert hub.chat().count(f"{_LABEL} startet noch ...".encode()) == 1   # nur Lauf 3
+    assert f"{_LABEL} ist bereit - verbinde ...".encode() in hub.chat()
+    assert hub.sent[-1] == _TRANSFER
+    assert sess.waiting_for is None               # Guard wieder frei
+
+
+def test_wait_loop_stops_on_hard_no(monkeypatch):
+    """Wird aus dem Warten ein hartes Nein (Start gescheitert), bricht die Schleife ab."""
+    seen = _patch_verdicts(monkeypatch,
+                           [_verdict(**_RETRY),
+                            _verdict(ok=False, reason="Serverstart nicht moeglich: kein Java.")])
+    hub, sess = _StubHub(), _session()
+
+    hub._wait_loop(sess, 7, _LABEL, _SRV["host"], _SRV["port"], False)
+    assert len(seen) == 2
+    assert b"Serverstart nicht moeglich: kein Java." in hub.chat()
+    assert _TRANSFER not in hub.sent
+    assert sess.waiting_for is None
+
+
+def test_wait_loop_gives_up_after_the_limit(monkeypatch):
+    """Nach _WAIT_MAX_ROUNDS Laeufen ist Schluss - mit Hinweis, ohne Transfer."""
+    seen = _patch_verdicts(monkeypatch, [_verdict(**_RETRY)], rounds=7)
+    hub, sess = _StubHub(), _session()
+
+    hub._wait_loop(sess, 7, _LABEL, _SRV["host"], _SRV["port"], False)
+    assert len(seen) == 7
+    assert hub.chat().count(f"{_LABEL} startet noch ...".encode()) == 2   # Laeufe 3 und 6
+    assert (f"{_LABEL} braucht laenger als erwartet. "
+            "Bitte spaeter noch einmal versuchen.").encode() in hub.chat()
+    assert _TRANSFER not in hub.sent
+    assert sess.waiting_for is None
+
+
+def test_wait_messages_carry_no_seconds_or_percent(monkeypatch):
+    """Keine Zahlen in den Wartemeldungen: get_start_progress springt 5 -> 97 -> 100,
+    eine daran gehaengte Anzeige stuende die ganze Modladezeit hindurch auf 97 %."""
+    _patch_verdicts(monkeypatch, [_verdict(**_RETRY)], rounds=3)
+    hub, sess = _StubHub(), _session()
+
+    hub._wait_loop(sess, 7, "David", _SRV["host"], _SRV["port"], False)
+    assert hub.sent and b"%" not in hub.chat()
+    assert b"Sekunden" not in hub.chat() and b"Minute" not in hub.chat()
+
+
+def test_second_click_while_waiting_starts_no_second_thread(monkeypatch):
+    """Zweiter Klick waehrend des Wartens -> nur ein Hinweis, KEINE zweite Schleife."""
+    gate = threading.Event()
+    seen: list[bool] = []
+
+    def fake(server_id, session, *, override: bool):
+        seen.append(override)
+        gate.wait(5.0)            # der erste Poll haengt, bis der Test ihn freigibt
+        return _verdict(**_RETRY)
+
+    monkeypatch.setattr(hub_service, "_join_verdict", fake)
+    monkeypatch.setattr(hub_service, "_WAIT_POLL_INTERVAL", 0.0)
+    monkeypatch.setattr(hub_service, "_WAIT_MAX_ROUNDS", 1)
+    hub, sess = _StubHub(), _session()
+
+    hub._start_wait(sess, 7, _LABEL, _SRV["host"], _SRV["port"], False)
+    _wait_until(lambda: bool(seen))               # Schleife steht im ersten Poll
+    assert sess.waiting_for == 7
+    hub._start_wait(sess, 7, _LABEL, _SRV["host"], _SRV["port"], False)
+    assert b"Du wartest bereits auf einen Serverstart." in hub.chat()
+
+    gate.set()
+    _join_wait_threads()
+    assert len(seen) == 1                         # genau EIN Poll-Thread war unterwegs
+    assert sess.waiting_for is None

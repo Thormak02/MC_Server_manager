@@ -25,10 +25,30 @@ from app.models.server import Server
 from app.services import audit_service, mc_protocol, process_service
 
 _HANDSHAKE_READ_TIMEOUT = 5.0
-_WAKE_READY_TIMEOUT = 180.0
+# Der Client haengt ReadTimeoutHandler(30) als ERSTEN Handler in seine Netty-
+# Pipeline (vor Splitter und Decoder) und gibt nach 30 s ohne EINGEHENDES Paket
+# auf - in Handshake, Login, Configuration und Play gleich; Fabric/Forge/NeoForge
+# patchen das nicht. Stilles Warten muss also deutlich unter 30 s bleiben:
+# 15 s Warten + 5 s _HANDSHAKE_READ_TIMEOUT = 20 s, also 10 s Luft.
+# Bewusst nicht 0: schnelle Server (Paper 9-14 s, Spigot 17 s) werden damit
+# weiterhin transparent durchgereicht statt den Spieler wegzuschicken.
+_WAKE_READY_TIMEOUT = 15.0
+# Takt der Warteschleife; gleichzeitig das recv-Timeout, mit dem wir waehrend
+# des Wartens am Client mitlesen (Abbruch-Erkennung).
+_WAKE_POLL_INTERVAL = 0.5
 _BACKEND_CONNECT_TIMEOUT = 5.0
 _IDLE_CHECK_INTERVAL = 15.0
 _BUFFER_SIZE = 8192
+
+# Texte fuer die Direktverbindung ohne Lobby: hier gibt es keinen Warteraum, der
+# Spieler muss die Meldung VOR der 30-s-Grenze bekommen.
+_MSG_STARTING = "Server startet noch - bitte in ~30 Sekunden erneut verbinden."
+_MSG_START_TRIGGERED = (
+    "Server startet gerade (dauert bei diesem Modpack rund eine Minute). "
+    "Bitte in ~45 Sekunden erneut verbinden - oder ueber die Lobby beitreten, "
+    "dort wartest du im Spiel und wirst automatisch verbunden."
+)
+_MSG_UNREACHABLE = "Server nicht erreichbar. Bitte erneut verbinden."
 
 
 @dataclass
@@ -51,6 +71,16 @@ _BIND_FAILED: set[int] = set()
 # server_id -> monotonic-Zeitpunkt, seit dem der Server leer ist (0 Spieler).
 _EMPTY_SINCE: dict[int, float] = {}
 _IDLE_LOCK = RLock()
+
+# Server-IDs mit laufendem Weckvorgang (Hintergrund-Thread). Dedupe spart nur
+# Threads bei einem ungeduldig mehrfach klickenden Spieler - start_server ist
+# selbst idempotent ("Startvorgang laeuft bereits.").
+_WAKE_PENDING: set[int] = set()
+# Letzte Startfehlermeldung je Server. start_server laeuft im Hintergrund, der
+# Fehler entsteht also NACH der Rueckkehr von request_wake; die Warteschleife
+# holt ihn hier ab und sagt dem Spieler sofort Bescheid, statt das ganze
+# Zeitbudget stumm abzuwarten (z.B. "Serverordner existiert nicht.").
+_WAKE_ERRORS: dict[int, str] = {}
 
 _IDLE_THREAD: Thread | None = None
 _IDLE_STOP = Event()
@@ -243,6 +273,92 @@ def shutdown_all() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Wecken (nicht blockierend)
+# --------------------------------------------------------------------------- #
+def request_wake(server_id: int) -> tuple[bool, str]:
+    """Serverstart anstossen und SOFORT zurueckkehren.
+
+    Der eigentliche Start laeuft in einem Hintergrund-Thread, weil
+    ``process_service.start_server`` synchron und langsam ist (Modpack-Install,
+    Java-Prep, Client-Mod-Quarantaene ueber UNC, Loader-Installer, Plugin-
+    Refresh - alles vor ``subprocess.Popen``). Wuerde das einen Lobby-
+    ``join_check`` blockieren, reisst dort der Client-Timeout, die Pruefung
+    faellt fail-open durch und erlaubt genau den Transfer auf den noch toten
+    Server, den wir verhindern wollen.
+
+    True heisst "Start laeuft oder Server laeuft schon", nicht "fertig".
+    """
+    if process_service.is_running(server_id):
+        return True, "laeuft bereits"
+
+    with _IDLE_LOCK:
+        if server_id in _WAKE_PENDING:
+            return True, "Weckvorgang laeuft bereits"
+        _WAKE_PENDING.add(server_id)
+        _WAKE_ERRORS.pop(server_id, None)
+
+    try:
+        # Existenzpruefung synchron (ein lokaler DB-Zugriff, vernachlaessigbar):
+        # ein unbekannter Server soll sofort als Fehler zurueckkommen und nicht
+        # erst ueber die Warteschleife auffallen.
+        with SessionLocal() as db:
+            if db.get(Server, server_id) is None:
+                with _IDLE_LOCK:
+                    _WAKE_PENDING.discard(server_id)
+                return False, "Server nicht gefunden."
+    except Exception as exc:  # noqa: BLE001 - DB-Fehler darf den Proxy nicht toeten
+        with _IDLE_LOCK:
+            _WAKE_PENDING.discard(server_id)
+        return False, f"Datenbankfehler: {exc!r}"
+
+    Thread(
+        target=_wake_worker,
+        args=(server_id,),
+        daemon=True,
+        name=f"sleep-wake-{server_id}",
+    ).start()
+    return True, "Serverstart angestossen"
+
+
+def _wake_worker(server_id: int) -> None:
+    """Hintergrund-Thread: start_server aufrufen, Fehler hinterlegen."""
+    try:
+        with SessionLocal() as db:
+            server = db.get(Server, server_id)
+            if server is None:
+                _set_wake_error(server_id, "Server nicht gefunden.")
+                return
+            ok, message = process_service.start_server(
+                db, server, initiated_by_user_id=None
+            )
+        if ok:
+            _log(server_id, "sleep_proxy.wake", "login trigger")
+        elif "bereits" in message.lower():
+            # Paralleler Start (anderer Spieler, Zeitplan) -> kein Fehler.
+            _log(server_id, "sleep_proxy.wake", f"already starting: {message}")
+        else:
+            _set_wake_error(server_id, message)
+            _log(server_id, "sleep_proxy.wake_failed", message)
+    except Exception as exc:  # noqa: BLE001 - Thread darf nie mit Traceback enden
+        _set_wake_error(server_id, repr(exc))
+        _log(server_id, "sleep_proxy.wake_failed", repr(exc))
+    finally:
+        with _IDLE_LOCK:
+            _WAKE_PENDING.discard(server_id)
+
+
+def _set_wake_error(server_id: int, message: str) -> None:
+    with _IDLE_LOCK:
+        _WAKE_ERRORS[server_id] = message
+
+
+def _take_wake_error(server_id: int) -> str | None:
+    """Fehler abholen UND entfernen, damit der naechste Versuch neu startet."""
+    with _IDLE_LOCK:
+        return _WAKE_ERRORS.pop(server_id, None)
+
+
+# --------------------------------------------------------------------------- #
 # Accept-Loop + Verbindungshandhabung
 # --------------------------------------------------------------------------- #
 def _accept_loop(listener: _ProxyListener) -> None:
@@ -262,6 +378,10 @@ def _accept_loop(listener: _ProxyListener) -> None:
 
 def _handle_connection(listener: _ProxyListener, client: socket.socket) -> None:
     server_id = listener.server_id
+    # Die 30-s-Geduld des Clients laeuft ab der VERBINDUNGSANNAHME, nicht erst ab
+    # dem Start. Deshalb wird das Zeitbudget hier festgenagelt - sonst verbraucht
+    # das Handshake-Lesen unbemerkt einen Teil davon.
+    accepted_at = monotonic()
     try:
         client.settimeout(_HANDSHAKE_READ_TIMEOUT)
         buffer = bytearray()
@@ -285,17 +405,23 @@ def _handle_connection(listener: _ProxyListener, client: socket.socket) -> None:
                 return
 
         running = process_service.is_running(server_id)
+        join = handshake.next_state in mc_protocol.JOIN_NEXT_STATES
         if handshake.next_state == mc_protocol.NEXT_STATE_STATUS and not running:
             _respond_sleeping_status(client, buffer, handshake)
             return
         # Login (2) ODER Transfer (3, seit 1.20.5): ein echter Spieler will rein ->
         # schlafenden Server wecken. Ohne den Transfer-Fall bleibt ein per Lobby
         # weitergereichter Client haengen (Backend ist noch aus).
-        if handshake.next_state in mc_protocol.JOIN_NEXT_STATES and not running:
-            if not _wake_server(server_id, client):
+        if join and not running:
+            if not _wake_server(
+                server_id,
+                client,
+                deadline=accepted_at + _WAKE_READY_TIMEOUT,
+                pending=buffer,
+            ):
                 return  # Timeout/Fehler -> Client wurde informiert/geschlossen
         # Ab hier laeuft der Server (oder wurde geweckt) -> transparent forwarden.
-        _forward(listener, client, bytes(buffer))
+        _forward(listener, client, bytes(buffer), join=join)
     except OSError:
         pass
     finally:
@@ -329,39 +455,88 @@ def _respond_sleeping_status(
         pass
 
 
-def _wake_server(server_id: int, client: socket.socket) -> bool:
-    """Server starten und auf Bereitschaft warten.
+def _wake_server(
+    server_id: int,
+    client: socket.socket,
+    *,
+    deadline: float | None = None,
+    pending: bytearray | None = None,
+) -> bool:
+    """Server wecken und begrenzt auf Bereitschaft warten.
+
+    ``deadline`` (monotonic) kommt vom Aufrufer, gemessen ab Verbindungsannahme.
+    ``pending`` ist der bisher gelesene Byte-Puffer: schickt der Client waehrend
+    des Wartens weitere Bytes (z.B. Login Start in einem eigenen Segment),
+    werden sie dort angehaengt und spaeter mitweitergeleitet.
 
     True -> Server ist bereit, Verbindung kann weitergeleitet werden.
-    False -> Timeout/Fehler; der Client wurde mit einer Meldung getrennt.
+    False -> Timeout/Fehler/Abbruch; der Client wurde ggf. mit Meldung getrennt.
     """
-    try:
-        with SessionLocal() as db:
-            server = db.get(Server, server_id)
-            if server is None:
-                return False
-            process_service.start_server(db, server, initiated_by_user_id=None)
-        _log(server_id, "sleep_proxy.wake", "login trigger")
-    except Exception as exc:  # noqa: BLE001
-        _log(server_id, "sleep_proxy.wake_failed", repr(exc))
-        _send_login_disconnect(client, "Serverstart fehlgeschlagen. Bitte spaeter erneut versuchen.")
+    ok, message = request_wake(server_id)
+    if not ok and "bereits" not in message.lower():
+        # Harte Startfehler sofort melden statt das Zeitbudget stumm abzuwarten.
+        _send_login_disconnect(client, f"Serverstart nicht moeglich: {message}")
         return False
 
-    deadline = monotonic() + _WAKE_READY_TIMEOUT
+    if deadline is None:
+        deadline = monotonic() + _WAKE_READY_TIMEOUT
     while monotonic() < deadline:
         if process_service.is_server_ready(server_id):
             return True
-        sleep(0.5)
+        error = _take_wake_error(server_id)
+        if error:
+            _send_login_disconnect(client, f"Serverstart nicht moeglich: {error}")
+            return False
+        if not _client_still_waiting(client, pending):
+            # Client weg (oder Muellflut) -> kein Backend-Socket mehr oeffnen.
+            _log(server_id, "sleep_proxy.wake_aborted", "client gone")
+            return False
 
-    _send_login_disconnect(
-        client,
-        "Server wird gestartet – bitte in ~30 Sekunden erneut verbinden.",
-    )
+    _send_login_disconnect(client, _MSG_START_TRIGGERED)
     return False
 
 
-def _forward(listener: _ProxyListener, client: socket.socket, initial: bytes) -> None:
-    _forward_to_backend(client, listener.internal_port, listener.server_id, initial)
+def _client_still_waiting(
+    client: socket.socket, pending: bytearray | None = None
+) -> bool:
+    """Waehrend des Wartens am Client mitlesen -> Abbruch frueh erkennen.
+
+    Nichts gelesen (Timeout) heisst "wartet noch". b"" oder OSError heisst
+    "Verbindung ist weg". Gelesene Bytes gehoeren zum Login-Strom und duerfen
+    NICHT verworfen werden, sonst kommt der Server-seitige Decoder aus dem Takt.
+    """
+    try:
+        client.settimeout(_WAKE_POLL_INTERVAL)
+        chunk = client.recv(_BUFFER_SIZE)
+    except socket.timeout:
+        return True
+    except OSError:
+        return False
+    except Exception:  # noqa: BLE001 - ein Socket ohne recv darf nicht abbrechen
+        sleep(_WAKE_POLL_INTERVAL)
+        return True
+    if not chunk:
+        return False
+    if pending is not None:
+        pending.extend(chunk)
+        # Ein echter Login-Start ist winzig. Wer auf dem oeffentlichen Port
+        # waehrend des Wartens Megabytes schiebt, soll nicht unseren Speicher
+        # fuellen - solche Verbindung fallen lassen.
+        if len(pending) > _BUFFER_SIZE * 4:
+            return False
+    return True
+
+
+def _forward(
+    listener: _ProxyListener,
+    client: socket.socket,
+    initial: bytes,
+    *,
+    join: bool = True,
+) -> None:
+    _forward_to_backend(
+        client, listener.internal_port, listener.server_id, initial, join=join
+    )
 
 
 def _forward_to_backend(
@@ -369,11 +544,14 @@ def _forward_to_backend(
     internal_port: int,
     server_id: int,
     initial: bytes,
+    *,
+    join: bool = True,
 ) -> None:
     """Client transparent an ``127.0.0.1:internal_port`` koppeln (Byte-Splicing).
 
     Gemeinsamer Baustein fuer den Sleep-Proxy (ein Backend) und das Gateway
-    (viele Backends).
+    (viele Backends). ``join`` sagt, ob der Client einen Login/Transfer wollte -
+    nur dann ist ein Login-Disconnect ueberhaupt ein gueltiges Paket.
     """
     try:
         backend = socket.create_connection(
@@ -382,7 +560,19 @@ def _forward_to_backend(
         )
     except OSError as exc:
         _log(server_id, "sleep_proxy.backend_unreachable", repr(exc))
-        _send_login_disconnect(client, "Server nicht erreichbar. Bitte erneut verbinden.")
+        if not join:
+            # Status-Zustand: Paket 0x00 ist hier die Status-RESPONSE. Ein
+            # Login-Disconnect wird vom Client als Status-JSON ohne version/
+            # players gelesen -> kaputter Serverlisten-Eintrag (und mc_ping
+            # haelt denselben Muell fuer "Server antwortet").
+            return
+        if process_service.is_running(server_id):
+            # Prozess lebt, Port noch zu -> Server bootet gerade. Ohne diesen
+            # Zweig wird beim Neuversuch waehrend des Bootens gar nicht gewartet
+            # (is_running ist True), sondern blind auf den toten Port geforwardet.
+            _send_login_disconnect(client, _MSG_STARTING)
+        else:
+            _send_login_disconnect(client, _MSG_UNREACHABLE)
         return
 
     client.settimeout(None)

@@ -27,6 +27,7 @@ import java.util.Map;
  *       "client":{"brand":"vanilla","source":"bukkit"},"override":false}
  *   &lt;- {"ok":true}  |  {"ok":true,"note":".."}
  *      {"ok":false,"reason":"..","confirm":true}   &lt;- Rueckfrage, mit override ueberstimmbar
+ *      {"ok":false,"reason":"..","retry":true}     &lt;- NOCH NICHT, gleich nochmal fragen
  *      {"ok":false,"reason":".."}                  &lt;- hart
  *
  *   -&gt; {"token":"..","op":"fit_check","server_ids":[2,5,7],"player":"David",
@@ -47,22 +48,33 @@ final class JoinCheck {
      * (Ban, Whitelist, voll) und unueberstimmbar, {@code true} ist eine Rueckfrage
      * aus dem Client-Abgleich, die ein zweiter Klick mit {@code override} aufhebt.
      * {@code note} ist ein Hinweis, der den Wechsel NIE aufhaelt.
+     *
+     * <p>{@code retry} ist die dritte Absage-Art und heisst NOCH NICHT, nicht NEIN:
+     * das Ziel faehrt gerade hoch. Niemand soll deswegen aus der Lobby fliegen - die
+     * Lobby behaelt den Spieler und fragt gleich wieder. Default {@code false}, damit
+     * ein altes Backend (kein {@code retry}-Feld) genau das heutige Verhalten liefert.
      */
     static final class Result {
         final boolean allowed;
         final String reason;
         final boolean confirm;
         final String note;
+        final boolean retry;
 
         Result(boolean allowed, String reason) {
             this(allowed, reason, false, "");
         }
 
         Result(boolean allowed, String reason, boolean confirm, String note) {
+            this(allowed, reason, confirm, note, false);
+        }
+
+        Result(boolean allowed, String reason, boolean confirm, String note, boolean retry) {
             this.allowed = allowed;
             this.reason = reason == null ? "" : reason;
             this.confirm = confirm;
             this.note = note == null ? "" : note;
+            this.retry = retry;
         }
     }
 
@@ -127,7 +139,11 @@ final class JoinCheck {
             // Nur ein echtes Boolean zaehlt: alles andere (fehlend, Zahl, String) heisst
             // "harte Absage" - im Zweifel lieber nicht ueberstimmbar machen.
             Boolean.TRUE.equals(confirm),
-            "");
+            "",
+            // Dieselbe Regel fuer retry: fehlt das Feld (altes Backend) oder kommt eine
+            // Zahl/ein String, heisst das "kein Warten" - also genau das heutige
+            // Verhalten. Nur ein echtes true haelt den Spieler in der Lobby.
+            Boolean.TRUE.equals(answer.get("retry")));
     }
 
     /**

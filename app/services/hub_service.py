@@ -42,6 +42,16 @@ _CONFIG_WAIT_TIMEOUT = 6.0
 _BOT_TICK = 0.1
 # Rueckfrage bei unpassendem Client: so lange gilt ein zweiter Klick als "trotzdem".
 _CONFIRM_TTL = 60.0
+# --- Warteschleife auf einen noch startenden Server (retry-Urteil) ---
+# Hier darf beliebig lange gewartet werden: der Spieler sitzt im PLAY-Zustand und bekommt
+# alle _KEEPALIVE_INTERVAL Sekunden ein Paket, sein ReadTimeoutHandler(30) laeuft also nie
+# ab. Eine Direktverbindung haette diesen Warteraum nicht.
+_WAIT_POLL_INTERVAL = 5.0     # Abstand der Nachfragen (Tests setzen ihn klein)
+_WAIT_MAX_ROUNDS = 48         # 48 x 5 s = 240 s, ~4,5x die laengste gemessene Weckzeit (53 s)
+_WAIT_PROGRESS_EVERY = 3      # Fortschritt alle 3 Laeufe (= 15 s)
+# Dedupe der Warteschleifen (session.waiting_for): der Klick kommt aus dem Session-Thread,
+# die Schleife laeuft daneben - ohne Lock koennten zwei Klicks beide durchrutschen.
+_WAIT_LOCK = threading.Lock()
 
 # Serverbound PLAY Packet-IDs (767)
 _SB_CONFIRM_TELEPORT = 0x00
@@ -141,6 +151,7 @@ class _Verdict:
     confirm: bool = False
     note: str = ""
     code: str = "ok"
+    retry: bool = False
 
 
 _VERDICT_OPEN = _Verdict()
@@ -336,6 +347,9 @@ class _Session:
         # Server-ID -> Zeitpunkt der Rueckfrage (time.monotonic); der zweite Klick ueberstimmt.
         self.pending_confirm: dict[int, float] = {}
         self.menu_fits: dict = {}      # beim Oeffnen ermittelte Marker (zum Neuzeichnen)
+        # Server-ID, auf deren Start gerade gewartet wird (None = keine Warteschleife).
+        # Verhindert, dass jeder weitere Klick einen zweiten Poll-Thread anwirft.
+        self.waiting_for = None
 
 
 def _extract_setup_packets(records: list, play_login: int) -> list[bytes]:
@@ -1170,6 +1184,14 @@ class Hub:
                 self._tell(session, "Klick nochmal, um es trotzdem zu versuchen.")
                 print(f"[hub] {session.name} -> {label} RUECKFRAGE: {verdict.code}")
                 return False
+            if getattr(verdict, "retry", False):
+                # NOCH NICHT, nicht NEIN: das Ziel wird gerade geweckt. Der Spieler bleibt
+                # hier und wird transferiert, sobald es Logins annimmt.
+                self._tell(session, verdict.reason or f"{label} wird gestartet - bleib in "
+                                                      "der Lobby, du wirst automatisch verbunden.")
+                self._tell(session, "Du bleibst in der Lobby und wirst automatisch verbunden.")
+                self._start_wait(session, sid, label, host, port, override)
+                return False
             if not verdict.ok:
                 self._tell(session, verdict.reason or f"{label} ist gerade nicht erreichbar.")
                 print(f"[hub] {session.name} -> {label} ABGELEHNT: {verdict.reason}")
@@ -1180,6 +1202,63 @@ class Hub:
         self._send(session, pl.build_transfer(host, port))
         print(f"[hub] {session.name} -> Transfer zu {host}:{port} ({label})")
         return True
+
+    def _start_wait(self, session: _Session, sid: int, label: str, host: str, port: int,
+                    override: bool) -> None:
+        """Warteschleife auf einen startenden Server anwerfen (einmal je Session).
+
+        Eigener Thread, weil der Session-Thread weiter Keep-Alive, Bewegung und Chat
+        bedienen muss - genau das haelt den Spieler ueber die 30-s-Grenze des Clients.
+        """
+        with _WAIT_LOCK:
+            busy = getattr(session, "waiting_for", None) is not None
+            if not busy:
+                session.waiting_for = sid
+        if busy:
+            self._tell(session, "Du wartest bereits auf einen Serverstart.")
+            return
+        threading.Thread(target=self._wait_loop, daemon=True, name=f"hub-wait-{sid}",
+                         args=(session, sid, label, host, port, override)).start()
+
+    def _wait_loop(self, session: _Session, sid: int, label: str, host: str, port: int,
+                   override: bool) -> None:
+        """Alle _WAIT_POLL_INTERVAL Sekunden nachfragen, bis das Ziel Logins annimmt.
+
+        ``override`` ist dasselbe wie beim ersten Klick: hart True wuerde die
+        Loader-Rueckfrage der Graceful Rejection still uebergehen.
+        """
+        try:
+            for run in range(1, _WAIT_MAX_ROUNDS + 1):
+                # Der Spieler kann die Lobby jederzeit verlassen; ein Rejoin bekommt eine
+                # neue conn_id und damit eine neue Session - diese hier kann nicht fehlzuenden.
+                if not session.alive:
+                    print(f"[hub] Warten auf {label} abgebrochen: {session.name} ist weg.")
+                    return
+                verdict = _join_verdict(sid, session, override=override)
+                if verdict.ok:
+                    self._tell(session, f"{label} ist bereit - verbinde ...")
+                    self._send(session, pl.build_transfer(host, port))
+                    print(f"[hub] {session.name} -> Transfer zu {host}:{port} ({label}) "
+                          f"nach {run} Nachfragen")
+                    return
+                if not getattr(verdict, "retry", False):
+                    # Aus dem Warten ist ein hartes Nein geworden (Start gescheitert, Ban ...).
+                    self._tell(session, verdict.reason or f"{label} ist gerade nicht erreichbar.")
+                    print(f"[hub] Warten auf {label} beendet: {verdict.reason}")
+                    return
+                # KEINE Sekunden-/Prozentangabe: die Startdauer wird nicht gemessen, und
+                # get_start_progress springt von 5 auf 97 - jede Zahl waere erfunden.
+                if run % _WAIT_PROGRESS_EVERY == 0:
+                    self._tell(session, f"{label} startet noch ...")
+                time.sleep(_WAIT_POLL_INTERVAL)
+            self._tell(session, f"{label} braucht laenger als erwartet. "
+                                "Bitte spaeter noch einmal versuchen.")
+            print(f"[hub] Warten auf {label} ohne Ergebnis beendet ({_WAIT_MAX_ROUNDS} Laeufe).")
+        finally:
+            # Immer freigeben, sonst bleibt die Session fuer jeden weiteren Klick blockiert.
+            with _WAIT_LOCK:
+                if getattr(session, "waiting_for", None) == sid:
+                    session.waiting_for = None
 
     def _on_move(self, session: _Session, nx, ny, nz, yaw, pitch) -> None:
         ox, oy, oz = session.x, session.y, session.z

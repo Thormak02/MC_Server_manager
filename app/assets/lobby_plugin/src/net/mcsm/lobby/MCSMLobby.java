@@ -28,6 +28,7 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
@@ -47,6 +48,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * MCSMLobby - begehbare Transfer-Lobby fuer den MC Server Manager.
@@ -129,6 +131,11 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     // Laufende Menue-Abfragen. Eigenes Set statt checking, damit ein offenes Menue
     // keinen Transfer blockiert (und umgekehrt).
     private final java.util.Set<UUID> guiChecking = ConcurrentHashMap.newKeySet();
+    // Laufende Warteschleifen (Spieler -> Bukkit-Task-ID). Ein geweckter Server braucht
+    // laenger als die 30 s, nach denen der Client eine stumme Verbindung abbricht - hier
+    // in der Lobby sitzt der Spieler dagegen im PLAY-Zustand mit laufendem Keep-Alive und
+    // darf beliebig lange warten. Siehe WaitLoop fuer die Zahlen und das WARUM.
+    private final Map<UUID, Integer> waiting = new ConcurrentHashMap<>();
 
     private boolean peaceful = false;   // Lobby: kein Schaden/PvP/Rueckstoss + keine Spieler-Kollision
     private boolean resetOnJoin = false;  // Lobby: bei (Re-)Join an den Welt-Spawn + Adventure (ausser Ops)
@@ -464,9 +471,10 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
      * bekommt den Grund als Nachricht und kann sofort etwas anderes waehlen (kein
      * Cooldown, denn es hat ja kein Wechsel stattgefunden).
      *
-     * <p>Zwei Arten von Nein: eine HARTE Absage (Ban, Whitelist, voll) bleibt stehen,
-     * eine RUECKFRAGE aus dem Client-Abgleich hebt der naechste Klick auf. Der Brand
-     * ist ein freier String vom Client - er darf niemanden endgueltig aussperren.
+     * <p>Drei Arten von Nein: eine HARTE Absage (Ban, Whitelist, voll) bleibt stehen,
+     * eine RUECKFRAGE aus dem Client-Abgleich hebt der naechste Klick auf (der Brand ist
+     * ein freier String vom Client - er darf niemanden endgueltig aussperren), und ein
+     * NOCH NICHT (Ziel faehrt hoch) laesst den Spieler hier warten, bis es bereit ist.
      */
     private void guardedTransfer(Player p, int serverId, String display, boolean deliberate,
                                  Runnable transfer) {
@@ -522,9 +530,24 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
                     }
                     String reason = result.reason;
                     if (reason.isEmpty()) {
-                        reason = result.confirm
-                            ? ("Dein Client passt moeglicherweise nicht zu " + display + ".")
-                            : (display + " ist gerade nicht erreichbar.");
+                        if (result.retry) {
+                            reason = display + " wird gestartet - bleib in der Lobby,"
+                                + " du wirst automatisch verbunden.";
+                        } else if (result.confirm) {
+                            reason = "Dein Client passt moeglicherweise nicht zu " + display + ".";
+                        } else {
+                            reason = display + " ist gerade nicht erreichbar.";
+                        }
+                    }
+                    if (result.retry) {
+                        // "Noch nicht", kein "nein": der Spieler bleibt hier und wird
+                        // automatisch verbunden, sobald das Ziel Logins annimmt.
+                        // Bewusst OHNE lastRejection/lastAsked - ein Cooldown wuerde den
+                        // naechsten Versuch desselben Spielers schlucken, auch den, mit
+                        // dem er nach einem Abbruch wieder in die Warteschleife kommt.
+                        p.sendMessage(color("&e" + reason));
+                        startWaiting(p, serverId, display, pname, brand, override, transfer);
+                        return;
                     }
                     if (result.confirm) {
                         // AUSDRUECKLICH NICHT in lastRejection - sonst schluckt der
@@ -552,6 +575,157 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
             // Scheduler weg (Plugin faehrt runter) -> lieber ungeprueft durchlassen.
             checking.remove(id);
             transfer.run();
+        }
+    }
+
+    /**
+     * Den Spieler in der Lobby halten und nachfassen, bis das Ziel Logins annimmt.
+     *
+     * <p>Der Client bricht eine stumme Verbindung nach 30 s ab, ein geweckter
+     * Modpack-Server braucht gemessen 35-56 s - durch den Handshake ist das nicht zu
+     * ueberbruecken. Hier im PLAY-Zustand laeuft dagegen Keep-Alive, also wird hier
+     * gewartet. Zahlen und WARUM: {@link WaitLoop}.
+     *
+     * <p>Gefragt wird mit dem ORIGINAL-override: sonst stellt der Manager beim Nachfassen
+     * die schon bejahte Client-Rueckfrage erneut, und der Spieler wartet gegen eine Frage,
+     * die ihm niemand mehr zeigt.
+     *
+     * <p>Nur aus dem Main-Thread aufrufen.
+     */
+    private void startWaiting(Player p, int serverId, String display, String pname,
+                              String brand, boolean override, Runnable transfer) {
+        final JoinCheck check = joinCheck;
+        if (check == null) {
+            transfer.run();   // keine Pruefung moeglich -> wie im ganzen Trichter: fail-open
+            return;
+        }
+        final UUID id = p.getUniqueId();
+        if (waiting.containsKey(id)) {
+            // Zweites Ziel angeklickt, waehrend schon gewartet wird: EINE Zeile und sonst
+            // nichts - zwei Schleifen wuerden sich um denselben Spieler reissen.
+            p.sendMessage(color("&eDu wartest bereits auf einen Serverstart."));
+            return;
+        }
+        final AtomicInteger runs = new AtomicInteger();
+        BukkitRunnable loop = new BukkitRunnable() {
+            @Override
+            public void run() {
+                final int taskId = getTaskId();
+                Integer current = waiting.get(id);
+                if (current == null || current.intValue() != taskId) {
+                    // Der Eintrag gehoert einer neueren Schleife (Rejoin) oder ist weg:
+                    // nur den EIGENEN Task abbestellen, den fremden nicht anfassen.
+                    cancel();
+                    return;
+                }
+                if (!p.isOnline()) {
+                    stopWaiting(id, taskId);   // weg ist weg - nicht gegen ein Phantom pollen
+                    return;
+                }
+                final int run = runs.incrementAndGet();
+                JoinCheck.Result result;
+                try {
+                    result = check.check(serverId, pname, brand, override);
+                } catch (Throwable t) {
+                    // check() faengt selbst alles ab. Bleibt doch etwas uebrig, heisst das
+                    // "noch keine Antwort" und NICHT "erlaubt": ein Transfer ins Leere
+                    // waere genau der Disconnect, den diese Schleife verhindert.
+                    result = new JoinCheck.Result(false, "", false, "", true);
+                }
+                if (result.allowed) {
+                    stopWaiting(id, taskId);
+                    final String note = result.note;
+                    runOnMain(() -> {
+                        if (!p.isOnline()) {
+                            return;
+                        }
+                        if (!note.isEmpty()) {
+                            p.sendMessage(color("&a" + note));
+                        }
+                        transfer.run();
+                    });
+                    return;
+                }
+                if (!result.retry) {
+                    // Aus dem Warten ist ein echtes Nein geworden (Ban, voll, Start
+                    // fehlgeschlagen) -> Grund melden und aufhoeren.
+                    stopWaiting(id, taskId);
+                    final String why = result.reason.isEmpty()
+                        ? (display + " ist gerade nicht erreichbar.")
+                        : result.reason;
+                    runOnMain(() -> {
+                        if (p.isOnline()) {
+                            p.sendMessage(color("&c" + why));
+                        }
+                    });
+                    return;
+                }
+                if (WaitLoop.exhausted(run)) {
+                    stopWaiting(id, taskId);
+                    runOnMain(() -> {
+                        if (p.isOnline()) {
+                            p.sendMessage(color("&c" + display + " braucht laenger als"
+                                + " erwartet. Bitte spaeter noch einmal versuchen."));
+                        }
+                    });
+                    return;
+                }
+                if (WaitLoop.isProgressRun(run)) {
+                    // Bukkit-API gehoert in den Main-Thread, auch fuer eine Chatzeile.
+                    runOnMain(() -> {
+                        if (p.isOnline()) {
+                            p.sendMessage(color("&e" + display + " startet noch ..."));
+                        }
+                    });
+                }
+            }
+        };
+        try {
+            // Async: jeder Lauf macht eine blockierende TCP-Runde zum Manager.
+            waiting.put(id, loop.runTaskTimerAsynchronously(
+                this, WaitLoop.INTERVAL_TICKS, WaitLoop.INTERVAL_TICKS).getTaskId());
+        } catch (Throwable t) {
+            // Scheduler weg (Plugin faehrt gerade runter) -> keine Schleife. Der Eintrag
+            // muss trotzdem verschwinden, sonst haelt er diesen Spieler fuer wartend.
+            waiting.remove(id);
+            getLogger().warning("Warteschleife nicht gestartet fuer " + pname + ": " + t);
+        }
+    }
+
+    /**
+     * Die EIGENE Warteschleife beenden.
+     *
+     * <p>Mit der Task-ID, nicht blind: nach einem Rejoin kann im {@code waiting}-Eintrag
+     * schon eine neue Schleife stehen, die ein noch laufender Nachlaeufer sonst
+     * mit abschaltet.
+     */
+    private void stopWaiting(UUID id, int taskId) {
+        waiting.remove(id, Integer.valueOf(taskId));
+        cancelTask(taskId);
+    }
+
+    /** Die Warteschleife eines Spielers beenden, welche auch immer (Quit/Join). */
+    private void stopWaiting(UUID id) {
+        Integer taskId = waiting.remove(id);
+        if (taskId != null) {
+            cancelTask(taskId);
+        }
+    }
+
+    private void cancelTask(int taskId) {
+        try {
+            getServer().getScheduler().cancelTask(taskId);
+        } catch (Throwable ignored) {
+            // Scheduler weg -> der Task laeuft ohnehin nicht mehr
+        }
+    }
+
+    /** Etwas im Main-Thread ausfuehren. Aus einem Async-Task der einzige erlaubte Weg. */
+    private void runOnMain(Runnable action) {
+        try {
+            getServer().getScheduler().runTask(this, action);
+        } catch (Throwable ignored) {
+            // Scheduler weg (Reload/Shutdown) -> die Zeile faellt aus, nichts Schlimmeres
         }
     }
 
@@ -767,6 +941,9 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
      * <p>"Dir fehlt das Modpack" ist die eine Absage, die der Spieler selbst beheben
      * kann - sie darf einen Rejoin nicht ueberleben. Wer neu hereinkommt, faengt bei
      * null an statt gegen einen Cooldown von vorhin zu laufen.
+     *
+     * <p>Die Warteschleife geht mit: sonst pollt sie weiter und transferiert am Ende
+     * gegen einen Spieler, der gar nicht mehr hier ist.
      */
     private void clearGuards(UUID id) {
         String prefix = id + "|";
@@ -775,6 +952,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         lastAsked.keySet().removeIf(k -> k.startsWith(prefix));
         checking.remove(id);
         guiChecking.remove(id);
+        stopWaiting(id);
     }
 
     @EventHandler

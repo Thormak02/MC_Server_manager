@@ -16,6 +16,10 @@ from app.services import join_match_service, mc_ping
 # Kurz genug, damit ein Menue-Klick nicht haengt; lang genug fuer einen lokalen Ping.
 _JOIN_CHECK_PING_TIMEOUT = 1.5
 
+# Die Bereitschaftspruefung laeuft in der Lobby-Warteschleife alle 5 s - dort zaehlt
+# jede Sekunde doppelt, deshalb knapper als der Ping fuer die Spielerzahlen.
+_INTERNAL_PING_TIMEOUT = 1.0
+
 # Fertig kompiliertes Transfer-Plugin (siehe app/assets/lobby_plugin/BUILD.md).
 _PLUGIN_ASSET_DIR = Path(__file__).resolve().parents[1] / "assets" / "lobby_plugin"
 _PLUGIN_JAR = _PLUGIN_ASSET_DIR / "MCSMLobby.jar"
@@ -935,15 +939,15 @@ def _bind_host(server) -> str:
         return ""
 
 
-def _ping_local(server) -> dict | None:
-    """Status-Ping auf den lokalen Port des Servers (None = antwortet nicht).
+def _ping_port(server, port, *, timeout: float = _JOIN_CHECK_PING_TIMEOUT) -> dict | None:
+    """Status-Ping auf EINEN Port des Servers (None = antwortet nicht).
 
     Erst 127.0.0.1; haengt der Server per ``server-ip`` an einer bestimmten Adresse,
     wird die als Zweitversuch geprueft - sonst laese man so eine Bindung faelschlich
     als "startet noch" und sperrte alle aus.
     """
     try:
-        port = int(getattr(server, "port", 0) or 0)
+        port = int(port or 0)
     except (TypeError, ValueError):
         return None
     if port <= 0:
@@ -953,10 +957,46 @@ def _ping_local(server) -> dict | None:
     if bind and bind not in hosts:
         hosts.append(bind)
     for host in hosts:
-        status = mc_ping.ping(host, port, timeout=_JOIN_CHECK_PING_TIMEOUT)
+        status = mc_ping.ping(host, port, timeout=timeout)
         if status is not None:
             return status
     return None
+
+
+def _ping_local(server) -> dict | None:
+    """Status-Ping auf den OEFFENTLICHEN Port - Quelle der Spielerzahlen."""
+    return _ping_port(server, getattr(server, "port", 0))
+
+
+def _ping_internal(server) -> dict | None:
+    """Status-Ping auf den INTERNEN Port (``sleep_internal_port``, sonst ``port``).
+
+    Auf dem oeffentlichen Port antwortet im Schlaf der Sleep-Proxy selbst
+    ("Sleeping") - ein Ping dorthin wuerde also auch einen schlafenden Server als
+    "nimmt Logins an" melden. Nur der interne Port gehoert wirklich dem Server.
+    Knapper Timeout, weil diese Pruefung in einer 5-s-Warteschleife wiederholt wird.
+    """
+    port = getattr(server, "sleep_internal_port", None) or getattr(server, "port", 0)
+    return _ping_port(server, port, timeout=_INTERNAL_PING_TIMEOUT)
+
+
+def _accepts_logins(server) -> bool:
+    """Nimmt der Server WIRKLICH schon Logins an?
+
+    BEIDE Quellen sind Pflicht: ``is_server_ready`` ist kostenlos (Blick in die
+    Prozess-Registry plus gesehene Done-Zeile), kennt aber nur vom Manager selbst
+    gestartete Prozesse - ein von aussen gestarteter Server wird dort NIE ready und
+    haenge ohne den Ping ewig auf "startet noch". Der Ping ist der Rueckfall, weil er
+    Netzwerk und Zeit kostet.
+    """
+    from app.services import process_service
+
+    try:
+        if process_service.is_server_ready(server.id):
+            return True
+    except Exception:  # noqa: BLE001 - Registry-Problem -> auf den Ping zurueckfallen
+        pass
+    return _ping_internal(server) is not None
 
 
 @dataclass(frozen=True)
@@ -968,6 +1008,10 @@ class JoinVerdict:
     ``confirm`` ist hart und bleibt es auch mit override - sonst waere die Rueckfrage ein
     Generalschluessel an Ban und Whitelist vorbei. ``note`` haelt nie auf, sie wird nur
     mitgegeben.
+
+    ``retry=True`` (immer zusammen mit ``ok=False``) heisst NOCH NICHT, nicht NEIN:
+    die Lobby behaelt den Spieler und fragt gleich wieder. Default False, damit kein
+    bestehender Aufrufer bricht.
     """
 
     ok: bool
@@ -975,6 +1019,7 @@ class JoinVerdict:
     confirm: bool = False
     note: str = ""
     code: str = "ok"
+    retry: bool = False
 
 
 _VERDICT_OK = JoinVerdict(True)
@@ -999,8 +1044,11 @@ def _hard_join_verdict(server, player_name: str) -> JoinVerdict:
     except Exception:  # noqa: BLE001
         running = False
 
-    # Offline UND kein Sleep-Wake -> Transfer wuerde ins Leere laufen.
-    if not running and not bool(getattr(server, "sleep_enabled", False)):
+    # Offline UND kein Sleep-Wake -> Transfer wuerde ins Leere laufen. Dieser Zweig
+    # bleibt HART: ohne sleep_enabled gibt es keinen Weck-Pfad, wer solche Server in
+    # eine Warteschleife schickt, laesst den Spieler endlos warten.
+    sleeping = not running and bool(getattr(server, "sleep_enabled", False))
+    if not running and not sleeping:
         return JoinVerdict(False, f"{server.name} ist offline.", code="offline")
 
     if name:
@@ -1026,6 +1074,30 @@ def _hard_join_verdict(server, player_name: str) -> JoinVerdict:
                     code="whitelist",
                 )
 
+    # Schlaefer wecken und den Spieler in der Lobby HALTEN. Die Reihenfolge ist tragend:
+    # erst nach Ban/Whitelist, damit kein gebannter Spieler einen minutenlangen Start
+    # ausloest und damit er "gebannt" hoert statt "warte". Und VOR _ping_local, weil das
+    # bis zu 2 x 1,5 s kostet und jeder 5-s-Poll das multipliziert, bis der
+    # JoinCheck-Timeout reisst - und der faellt FAIL-OPEN durch, also mitten in genau
+    # den Timeout, den wir beseitigen wollen.
+    if sleeping:
+        # Lazy importiert, weil sleep_proxy_service seinerseits auf die Join-Pruefung
+        # schaut (Import-Zyklus).
+        from app.services import sleep_proxy_service
+
+        # Startet im HINTERGRUND und kehrt sofort zurueck - ein synchroner Start
+        # (Modpack-Install, Java-Prep, Mod-Quarantaene) wuerde den API-Timeout reissen,
+        # die Pruefung fiele fail-open durch und erlaubte genau den Transfer, den wir
+        # verhindern wollen.
+        sleep_proxy_service.request_wake(server.id)
+        return JoinVerdict(
+            False,
+            f"{server.name} wird gestartet - bleib in der Lobby, "
+            "du wirst automatisch verbunden.",
+            code="waking",
+            retry=True,
+        )
+
     # Nimmt der Server WIRKLICH Verbindungen an? "Prozess laeuft" heisst noch lange nicht
     # "Port offen" - waehrend des Startens (Welt laden, Mods) liefe der Transfer ins Leere
     # und der Spieler flaeche aus der Lobby. Der Status-Ping ist auth-frei und hat keine
@@ -1034,11 +1106,16 @@ def _hard_join_verdict(server, player_name: str) -> JoinVerdict:
     online: int | None = None
     maximum: int | None = None
     if status is None:
-        if running:
+        # Antwortet der oeffentliche Port nicht, kann der Server trotzdem schon Logins
+        # annehmen (interner Port, ausserhalb des Managers gestartet) - deshalb
+        # _accepts_logins statt des Ping-Ergebnisses. Sonst retry: die Lobby haelt den
+        # Spieler und fragt gleich wieder, statt ihn in einen Timeout zu transferieren.
+        if running and not _accepts_logins(server):
             return JoinVerdict(
                 False,
-                f"{server.name} startet noch - gleich nochmal versuchen.",
-                code="starting",
+                f"{server.name} startet noch ...",
+                code="waking",
+                retry=True,
             )
     else:
         # Zahlen vom Server selbst schlagen jede Schaetzung des Managers.

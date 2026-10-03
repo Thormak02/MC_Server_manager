@@ -12,6 +12,7 @@ Zeilenumbruch abgeschlossen):
     -> {"token": "...", "op": "join_check", "server_id": 7, "player": "David",
         "client": {"brand": "vanilla", "source": "bukkit"}, "override": false}
     <- {"ok": true} | {"ok": true, "note": ".."}
+     | {"ok": false, "reason": "..", "retry": true}     <- noch nicht, nicht nein
      | {"ok": false, "reason": "..", "confirm": true}   <- Rueckfrage, ueberstimmbar
      | {"ok": false, "reason": ".."}                    <- hart
      | {"error": ".."}                                  <- kein Urteil
@@ -25,12 +26,19 @@ client-Block - dann bleibt der Client-Abgleich stumm und die Antwort ist exakt d
 frueher. Genau dieses Vorhandensein IST die Versionsverhandlung; eine Versionsnummer
 braucht es nicht.
 
+``retry: true`` (nur zusammen mit ``ok: false``) heisst NOCH NICHT, nicht NEIN: das Ziel
+wird gerade geweckt. Die neue Lobby behaelt den Spieler, meldet den Grund und fragt
+gleich wieder - der Spieler wartet im PLAY-Zustand, wo Keep-Alive den Client beliebig
+lange haelt. Ein altes Jar kennt das Feld nicht, liest die Antwort als normale Ablehnung
+und laesst den Spieler damit ebenfalls in der Lobby - also genau das Richtige.
+
 NIEMALS EIN JSON-ARRAY IN DER ANTWORT. Der Mini-Parser des Plugins (Json.java) kennt
 kein '[' - er faellt bis zur Zahl durch, wirft und liefert null, und null liest
 JoinCheck als ALLOW. Ein Array in der Antwort wuerde auf jeder noch nicht neu
 gestarteten Lobby also auch Ban und Whitelist still abschalten. ``fits`` ist deshalb ein
 OBJEKT (Schluessel = Server-ID als String) und mehrere Hinweise werden zu EINEM String
-verkettet. In der ANFRAGE sind Arrays erlaubt - die liest Python.
+verkettet; ``retry`` und ``confirm`` sind echte Booleans, niemals Listen. In der ANFRAGE
+sind Arrays erlaubt - die liest Python.
 
 Nur auf 127.0.0.1 gebunden - die Lobby-Server laufen auf demselben Host wie der Manager.
 
@@ -88,17 +96,22 @@ def _join_check(payload: dict) -> dict:
     client = join_match_service.profile_from_payload(payload.get("client"))
     override = bool(payload.get("override"))
 
-    if client is None and not override:
-        # Ohne Client gibt es nichts abzugleichen. Dann laeuft die Anfrage ueber denselben
-        # schmalen Einstiegspunkt wie der Python-Hub - alte Jars und Hub sagen garantiert
-        # dasselbe.
-        allowed, reason = lobby_service.check_join_allowed_by_id(server_id, player)
-        return {"ok": True} if allowed else {"ok": False, "reason": reason}
-
+    # EIN Einstiegspunkt fuer beide Welten: ein altes Jar ohne client-Block laeuft mit
+    # client=None hier durch, und client=None schaltet den Abgleich ab - das Urteil ist
+    # damit nachweislich das alte. Fuer diesen Fall NICHT check_join_allowed_by_id
+    # nehmen: das ist nur ein Wrapper um genau diesen Aufruf, presst das Urteil aber in
+    # ein Tupel und verliert dabei code und retry. Ein gerade startendes Ziel kaeme dann
+    # als hartes Nein an statt als "noch nicht".
     verdict = lobby_service.evaluate_join_by_id(
         server_id, player, client=client, override=override
     )
+
     if not verdict.ok:
+        if verdict.retry:
+            # VOR confirm: ein noch startender Server ist kein Client-Problem. Eine
+            # Rueckfrage waere hier ein Knopf, der nichts beschleunigt - stattdessen
+            # behaelt die Lobby den Spieler und fragt gleich wieder.
+            return {"ok": False, "reason": verdict.reason, "retry": True}
         if verdict.confirm:
             # Ohne diese Zeile hinterlaesst eine zu Unrecht verhinderte Verbindung
             # keinerlei Spur - und der Brand, auf dem sie beruht, ist faelschbar.

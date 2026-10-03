@@ -16,9 +16,25 @@ def _server(**kw):
     return SimpleNamespace(**base)
 
 
+# Aufrufe von request_wake im laufenden Test. Die Attrappe haengt im _env-Fixture,
+# damit KEIN Test versehentlich den echten Weck-Pfad trifft - der wuerde einen echten
+# Serverstart (JVM, Modpack-Install) ausloesen.
+_WAKE_CALLS: list[int] = []
+
+
+def _fake_request_wake(server_id):
+    _WAKE_CALLS.append(int(server_id))
+    return True, "Start angestossen"
+
+
 @pytest.fixture()
 def _env(monkeypatch):
     """Default: Server laeuft, keine Whitelist, keine Bans, nicht voll."""
+    _WAKE_CALLS.clear()
+    # raising=False: sleep_proxy_service.request_wake kommt aus demselben Umbau - der
+    # Test soll auch dann laufen, wenn das Modul noch die alte Fassung ist.
+    monkeypatch.setattr("app.services.sleep_proxy_service.request_wake",
+                        _fake_request_wake, raising=False)
     monkeypatch.setattr("app.services.process_service.is_running", lambda sid: True)
     monkeypatch.setattr("app.services.process_service.get_player_counts", lambda s: (1, 20))
     monkeypatch.setattr("app.services.file_service.get_whitelist_enabled", lambda s: False)
@@ -39,11 +55,21 @@ def test_offline_without_sleep_is_rejected(_env):
     assert ok is False and "offline" in reason.lower()
 
 
-def test_offline_with_sleep_is_allowed(_env):
-    """Sleep-Server werden beim Beitritt geweckt -> kein Grund abzulehnen."""
+def test_offline_with_sleep_waits_in_lobby(_env):
+    """BEWUSSTE UMKEHR (hiess ``test_offline_with_sleep_is_allowed``, erwartete ok=True).
+
+    Der alte Test schrieb den Fehler fest: gruenes Licht fuer einen schlafenden Server
+    -> Transfer -> der Client gibt nach 30 s Funkstille auf, waehrend die gemessenen
+    Weckzeiten bei 35-56 s liegen. Wer diesen Test "unverstanden reparierte", stellte
+    genau diesen Timeout wieder her. Richtig ist: wecken und den Spieler in der Lobby
+    HALTEN (retry) - dort laeuft Keep-Alive, also darf es beliebig lange dauern.
+    """
     _env.setattr("app.services.process_service.is_running", lambda sid: False)
-    ok, _reason = lobby_service.check_join_allowed(None, _server(sleep_enabled=True), "Thormak")
-    assert ok is True
+    verdict = lobby_service.evaluate_join(None, _server(sleep_enabled=True), "Thormak")
+    assert verdict.ok is False and verdict.code == "waking" and verdict.retry is True
+    assert verdict.reason == ("David wird gestartet - bleib in der Lobby, "
+                              "du wirst automatisch verbunden.")
+    assert _WAKE_CALLS == [7]          # der Start wurde angestossen
 
 
 def test_banned_player_is_rejected(_env):
@@ -98,19 +124,88 @@ def test_missing_server_is_rejected(_env):
     assert ok is False and "nicht gefunden" in reason.lower()
 
 
-def test_running_but_not_yet_accepting_is_rejected(_env):
-    """Prozess laeuft, Port noch zu (Welt/Mods laden) -> Transfer wuerde ins Leere laufen."""
+def test_running_but_not_yet_accepting_waits_in_lobby(_env):
+    """Prozess laeuft, Port noch zu (Welt/Mods laden) -> Transfer wuerde ins Leere laufen.
+
+    Auch ohne sleep_enabled: der Server kommt ja gerade hoch, hier lohnt das Warten.
+    """
     _env.setattr(lobby_service, "_ping_local", lambda s: None)
-    ok, reason = lobby_service.check_join_allowed(None, _server(), "Thormak")
-    assert ok is False and "startet noch" in reason.lower()
+    _env.setattr(lobby_service, "_ping_internal", lambda s: None)
+    _env.setattr("app.services.process_service.is_server_ready", lambda sid: False)
+    verdict = lobby_service.evaluate_join(None, _server(), "Thormak")
+    assert verdict.ok is False and verdict.code == "waking" and verdict.retry is True
+    assert verdict.reason == "David startet noch ..."
 
 
-def test_sleeping_server_without_ping_is_still_allowed(_env):
-    """Schlafender Server: der Transfer WECKT ihn - kein Ping noetig, kein Ablehnen."""
+@pytest.mark.parametrize("ready,ping,erwartet", [
+    (True, None, True),     # Prozess-Registry sagt bereit -> kein Ping noetig
+    (False, {}, True),      # nur der interne Port antwortet (extern gestartet)
+    (False, None, False),   # beide stumm -> nimmt noch keine Logins an
+])
+def test_accepts_logins_uses_both_sources(_env, ready, ping, erwartet):
+    """Beide Quellen sind Pflicht, eine positive genuegt - und die kostenlose kommt
+    zuerst, damit die 5-s-Warteschleife keinen Ping verschwendet."""
+    pings: list[object] = []
+
+    def _ping(server):
+        pings.append(server)
+        return ping
+
+    _env.setattr("app.services.process_service.is_server_ready", lambda sid: ready)
+    _env.setattr(lobby_service, "_ping_internal", _ping)
+    assert lobby_service._accepts_logins(_server()) is erwartet
+    assert len(pings) == (0 if ready else 1)
+
+
+def test_sleeping_server_waits_without_any_ping(_env):
+    """BEWUSSTE UMKEHR (hiess ``test_sleeping_server_without_ping_is_still_allowed``).
+
+    Richtig war daran nur "kein Ping noetig" - der Transfer weckt ihn zwar, aber der
+    Client ueberlebt das Warten nicht (30-s-Grenze gegen 35-56 s Weckzeit). Statt ok
+    also retry. Der Ping knallt hier absichtlich: er beweist, dass der Weck-Zweig VOR
+    dem teuren _ping_local liegt (2 x 1,5 s je 5-s-Poll wuerden den JoinCheck-Timeout
+    reissen, und der faellt fail-open durch).
+    """
+    def boom(_server_arg):
+        raise AssertionError("Ein Schlaefer darf nicht gepingt werden")
+
     _env.setattr("app.services.process_service.is_running", lambda sid: False)
+    _env.setattr(lobby_service, "_ping_local", boom)
+    verdict = lobby_service.evaluate_join(None, _server(sleep_enabled=True), "Thormak")
+    assert verdict.ok is False and verdict.code == "waking" and verdict.retry is True
+    assert _WAKE_CALLS == [7]
+
+
+def test_banned_player_on_sleeping_server_is_not_woken(_env):
+    """Reihenfolge: Ban VOR dem Wecken. Ein gebannter Spieler darf keinen minutenlangen
+    Start ausloesen - und er soll "gebannt" hoeren, nicht "warte"."""
+    _env.setattr("app.services.process_service.is_running", lambda sid: False)
+    _env.setattr("app.services.file_service.list_access_entries",
+                 lambda s, k: [{"name": "Thormak"}] if k == "banned_players" else [])
+    verdict = lobby_service.evaluate_join(None, _server(sleep_enabled=True), "Thormak")
+    assert verdict.ok is False and verdict.code == "banned" and verdict.retry is False
+    assert _WAKE_CALLS == []
+
+
+def test_stopped_server_without_sleep_stays_hard_offline(_env):
+    """Ohne sleep_enabled (Dinos, Seasons, Forever Stranded) gibt es keinen Weck-Pfad -
+    eine Warteschleife wuerde hier endlos drehen. Also hart, ohne retry, ohne Wecken."""
+    _env.setattr("app.services.process_service.is_running", lambda sid: False)
+    verdict = lobby_service.evaluate_join(None, _server(sleep_enabled=False), "Thormak")
+    assert verdict.ok is False and verdict.code == "offline" and verdict.retry is False
+    assert verdict.reason == "David ist offline."
+    assert _WAKE_CALLS == []
+
+
+def test_externally_started_server_is_allowed_via_internal_ping(_env):
+    """Ausserhalb des Managers gestartet: is_server_ready kennt nur Prozesse aus der
+    eigenen Registry und wird hier NIE True - ohne den internen Ping haenge so ein
+    Server ewig auf "startet noch"."""
+    _env.setattr("app.services.process_service.is_server_ready", lambda sid: False)
     _env.setattr(lobby_service, "_ping_local", lambda s: None)
-    ok, reason = lobby_service.check_join_allowed(None, _server(sleep_enabled=True), "Thormak")
-    assert ok is True and reason == ""
+    _env.setattr(lobby_service, "_ping_internal", lambda s: {})
+    verdict = lobby_service.evaluate_join(None, _server(), "Thormak")
+    assert verdict.ok is True and verdict.retry is False
 
 
 def test_ping_player_counts_beat_process_estimate(_env):
@@ -186,6 +281,13 @@ def test_check_join_allowed_stays_a_tuple(_env):
     assert lobby_service.check_join_allowed(None, _server(), "Thormak") == (True, "")
 
 
+def _starting(e):
+    """Prozess laeuft, aber nichts antwortet - weder oeffentlicher noch interner Port."""
+    e.setattr(lobby_service, "_ping_local", lambda s: None)
+    e.setattr(lobby_service, "_ping_internal", lambda s: None)
+    e.setattr("app.services.process_service.is_server_ready", lambda sid: False)
+
+
 _HARTE_GRUENDE = [
     (lambda e: e.setattr("app.services.process_service.is_running", lambda sid: False),
      "David ist offline."),
@@ -195,8 +297,7 @@ _HARTE_GRUENDE = [
     (lambda e: e.setattr("app.services.process_service.get_player_counts",
                          lambda s: (20, 20)),
      "David ist voll (20/20)."),
-    (lambda e: e.setattr(lobby_service, "_ping_local", lambda s: None),
-     "David startet noch - gleich nochmal versuchen."),
+    (_starting, "David startet noch ..."),
 ]
 
 

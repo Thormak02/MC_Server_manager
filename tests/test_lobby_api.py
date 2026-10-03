@@ -4,7 +4,7 @@ import socket
 
 import pytest
 
-from app.services import lobby_api_service
+from app.services import join_match_service, lobby_api_service, lobby_service
 
 _TOKEN = "geheim-token-1234"
 
@@ -36,36 +36,50 @@ def _ask(port: int, payload: dict, *, timeout: float = 5.0) -> dict | None:
     return json.loads(buffer.split(b"\n", 1)[0].decode("utf-8"))
 
 
+def _verdict(monkeypatch, verdict):
+    """evaluate_join_by_id festnageln und die gesehenen Argumente zurueckgeben.
+
+    Der Endpoint fragt AUSSCHLIESSLICH hier - auch ohne client-Block, denn
+    check_join_allowed_by_id ist nur ein Tupel-Wrapper darum und wuerde code und retry
+    unterwegs verlieren.
+    """
+    seen = {}
+
+    def fake(server_id, player, *, client=None, override=False):
+        seen.update(server_id=server_id, player=player, client=client, override=override)
+        return verdict
+
+    monkeypatch.setattr("app.services.lobby_service.evaluate_join_by_id", fake)
+    return seen
+
+
+def _retry_verdict(reason, *, confirm=False):
+    """Ein "noch nicht"-Urteil: das Ziel wird geweckt, die Lobby behaelt den Spieler."""
+    return lobby_service.JoinVerdict(False, reason, confirm=confirm,
+                                     code="starting", retry=True)
+
+
 def test_join_check_allows(endpoint, monkeypatch):
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id",
-                        lambda sid, name: (True, ""))
+    _verdict(monkeypatch, lobby_service.JoinVerdict(True))
     assert _ask(endpoint, {"token": _TOKEN, "op": "join_check",
                            "server_id": 7, "player": "Thormak"}) == {"ok": True}
 
 
 def test_join_check_rejects_with_reason(endpoint, monkeypatch):
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id",
-                        lambda sid, name: (False, "David ist voll (20/20)."))
+    _verdict(monkeypatch, lobby_service.JoinVerdict(False, "David ist voll (20/20)."))
     answer = _ask(endpoint, {"token": _TOKEN, "op": "join_check",
                              "server_id": 7, "player": "Thormak"})
     assert answer == {"ok": False, "reason": "David ist voll (20/20)."}
 
 
 def test_join_check_passes_player_and_server_through(endpoint, monkeypatch):
-    seen = {}
-
-    def check(server_id, player):
-        seen.update(server_id=server_id, player=player)
-        return True, ""
-
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id", check)
+    seen = _verdict(monkeypatch, lobby_service.JoinVerdict(True))
     _ask(endpoint, {"token": _TOKEN, "op": "join_check", "server_id": "42", "player": "David"})
-    assert seen == {"server_id": 42, "player": "David"}
+    assert seen == {"server_id": 42, "player": "David", "client": None, "override": False}
 
 
 def test_reason_keeps_umlauts(endpoint, monkeypatch):
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id",
-                        lambda sid, name: (False, "Du bist gebannt: Grießbrei"))
+    _verdict(monkeypatch, lobby_service.JoinVerdict(False, "Du bist gebannt: Grießbrei"))
     answer = _ask(endpoint, {"token": _TOKEN, "op": "join_check",
                              "server_id": 1, "player": "x"})
     assert answer["reason"] == "Du bist gebannt: Grießbrei"
@@ -73,8 +87,7 @@ def test_reason_keeps_umlauts(endpoint, monkeypatch):
 
 def test_wrong_token_is_not_a_rejection(endpoint, monkeypatch):
     """Falscher Token -> KEIN ok:false. Das Plugin soll dann durchlassen, nicht aussperren."""
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id",
-                        lambda sid, name: (False, "gebannt"))
+    _verdict(monkeypatch, lobby_service.JoinVerdict(False, "gebannt"))
     answer = _ask(endpoint, {"token": "falsch", "op": "join_check",
                              "server_id": 7, "player": "Thormak"})
     assert answer == {"error": "auth"}
@@ -102,10 +115,10 @@ def test_bad_server_id_has_no_ok_field(endpoint):
 
 
 def test_internal_error_is_not_a_rejection(endpoint, monkeypatch):
-    def boom(sid, name):
+    def boom(sid, name, *, client=None, override=False):
         raise RuntimeError("DB weg")
 
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id", boom)
+    monkeypatch.setattr("app.services.lobby_service.evaluate_join_by_id", boom)
     answer = _ask(endpoint, {"token": _TOKEN, "op": "join_check",
                              "server_id": 7, "player": "x"})
     assert answer == {"error": "internal"} and "ok" not in answer
@@ -129,8 +142,7 @@ def test_oversized_line_is_dropped(endpoint):
 
 
 def test_endpoint_survives_many_sequential_requests(endpoint, monkeypatch):
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id",
-                        lambda sid, name: (True, ""))
+    _verdict(monkeypatch, lobby_service.JoinVerdict(True))
     for _ in range(25):
         assert _ask(endpoint, {"token": _TOKEN, "op": "join_check",
                                "server_id": 1, "player": "x"}) == {"ok": True}
@@ -154,8 +166,6 @@ def test_stop_server_closes_endpoint(endpoint):
 # Das Vorhandensein des Blocks IST die Versionsverhandlung - ein altes Jar schickt
 # keinen, bekommt genau die alte Antwort und merkt von alldem nichts.
 # --------------------------------------------------------------------------- #
-from app.services import join_match_service, lobby_service  # noqa: E402
-
 _CLIENT = {"brand": "vanilla", "source": "bukkit"}
 
 _CONFIRM = lobby_service.JoinVerdict(
@@ -165,17 +175,7 @@ _CONFIRM = lobby_service.JoinVerdict(
     code="loader",
 )
 
-
-def _verdict(monkeypatch, verdict):
-    """evaluate_join_by_id festnageln und die gesehenen Argumente zurueckgeben."""
-    seen = {}
-
-    def fake(server_id, player, *, client=None, override=False):
-        seen.update(server_id=server_id, player=player, client=client, override=override)
-        return verdict
-
-    monkeypatch.setattr("app.services.lobby_service.evaluate_join_by_id", fake)
-    return seen
+_WAIT_REASON = "David wird gestartet - bleib in der Lobby, du wirst automatisch verbunden."
 
 
 def _never_called(*_a, **_kw):
@@ -234,14 +234,19 @@ def test_override_is_passed_through(endpoint, monkeypatch):
 
 
 def test_request_without_client_block_behaves_like_before(endpoint, monkeypatch):
-    """Regressionsschutz fuer alte Jars: kein client-Block -> alter Pfad, alte Antwort."""
-    monkeypatch.setattr("app.services.lobby_service.evaluate_join_by_id", _never_called)
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id",
-                        lambda sid, name: (False, "David ist voll (20/20)."))
+    """Regressionsschutz fuer alte Jars: kein client-Block -> kein Abgleich, alte Antwort.
+
+    Geprueft wird am ARGUMENT: ``client=None`` schaltet den Client-Teil in evaluate_join
+    ab. Dass die Anfrage ueber evaluate_join_by_id statt ueber den Tupel-Wrapper laeuft,
+    aendert am Urteil also nichts - sie nimmt nur code und retry mit.
+    """
+    seen = _verdict(monkeypatch,
+                    lobby_service.JoinVerdict(False, "David ist voll (20/20)."))
     answer = _ask(endpoint, {"token": _TOKEN, "op": "join_check",
                              "server_id": 7, "player": "David"})
     assert answer == {"ok": False, "reason": "David ist voll (20/20)."}
-    assert "confirm" not in answer and "note" not in answer
+    assert "confirm" not in answer and "note" not in answer and "retry" not in answer
+    assert seen["client"] is None and seen["override"] is False
 
 
 @pytest.mark.parametrize("kaputt", ["bloedsinn", ["neoforge", "fabric"], 7, 1.5, True, None])
@@ -257,12 +262,76 @@ def test_broken_client_block_arrives_as_none(endpoint, monkeypatch, kaputt):
 @pytest.mark.parametrize("kaputt", ["bloedsinn", ["neoforge"], 7, {}, {"brand": 5}])
 def test_broken_client_block_keeps_the_old_path(endpoint, monkeypatch, kaputt):
     """Ohne verwertbaren Client bleibt es beim alten Urteil - kein confirm, kein note."""
-    monkeypatch.setattr("app.services.lobby_service.evaluate_join_by_id", _never_called)
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id",
-                        lambda sid, name: (True, ""))
+    seen = _verdict(monkeypatch, lobby_service.JoinVerdict(True))
     answer = _ask(endpoint, {"token": _TOKEN, "op": "join_check", "server_id": 7,
                              "player": "David", "client": kaputt})
     assert answer == {"ok": True}
+    assert seen["client"] is None and seen["override"] is False
+
+
+# --------------------------------------------------------------------------- #
+# retry: "noch nicht" statt "nein". Ein schlafendes Ziel wird im Hintergrund geweckt,
+# die Lobby behaelt den Spieler und fragt gleich wieder - stilles Warten im Login
+# scheitert am ReadTimeoutHandler(30) des Clients, der Weckvorgang dauert laenger.
+# --------------------------------------------------------------------------- #
+def test_sleeping_server_answers_retry(endpoint, monkeypatch):
+    """Das Feld muss ein echtes Boolean sein - und die Antwort ohne eckige Klammer.
+
+    Json.java im Plugin hat keinen '['-Zweig: es faellt bis number() durch, wirft, und
+    parse() liefert null - was JoinCheck als ALLOW liest. Ein Array (auch ein
+    verschachteltes) wuerde auf jeder noch nicht neu gestarteten Lobby damit auch Ban
+    und Whitelist still abschalten. Deshalb wird das hier maschinell geprueft.
+    """
+    _verdict(monkeypatch, _retry_verdict(_WAIT_REASON))
+    answer = _ask(endpoint, {"token": _TOKEN, "op": "join_check", "server_id": 7,
+                             "player": "David", "client": _CLIENT})
+    assert answer == {"ok": False, "reason": _WAIT_REASON, "retry": True}
+    assert isinstance(answer["retry"], bool)
+    assert "[" not in json.dumps(answer)
+
+
+def test_old_jar_path_also_carries_retry(endpoint, monkeypatch):
+    """Ohne client-Block ebenfalls retry - sonst verliert genau der Alt-Pfad das Warten.
+
+    Das ist der Grund, warum dieser Pfad nicht mehr ueber check_join_allowed_by_id
+    laeuft: dessen Tupel kennt nur ok und reason.
+    """
+    seen = _verdict(monkeypatch, _retry_verdict(_WAIT_REASON))
+    answer = _ask(endpoint, {"token": _TOKEN, "op": "join_check",
+                             "server_id": 7, "player": "David"})
+    assert answer == {"ok": False, "reason": _WAIT_REASON, "retry": True}
+    assert seen["client"] is None     # wirklich der Alt-Jar-Pfad
+    assert "[" not in json.dumps(answer)
+
+
+def test_retry_beats_confirm(endpoint, monkeypatch):
+    """retry schlaegt confirm: ein startender Server ist kein Client-Problem.
+
+    Eine Rueckfrage waere hier ein Knopf, der nichts beschleunigt - und ein
+    ueberstimmter Transfer landete auf einem Server, der noch keine Logins annimmt.
+    """
+    _verdict(monkeypatch, _retry_verdict(_WAIT_REASON, confirm=True))
+    answer = _ask(endpoint, {"token": _TOKEN, "op": "join_check", "server_id": 7,
+                             "player": "David", "client": _CLIENT})
+    assert answer == {"ok": False, "reason": _WAIT_REASON, "retry": True}
+    assert "confirm" not in answer
+
+
+def test_plain_verdicts_have_no_retry_field(endpoint, monkeypatch):
+    """Kein Rauschen: ein normales Nein und ein Ja tragen das Feld gar nicht.
+
+    Ein immer mitgesendetes retry: false waere ein zweiter Weg, dieselbe Aussage zu
+    machen - und das Plugin muesste beide lesen koennen.
+    """
+    _verdict(monkeypatch, lobby_service.JoinVerdict(False, "Du bist auf David gebannt."))
+    nein = _ask(endpoint, {"token": _TOKEN, "op": "join_check", "server_id": 7,
+                           "player": "David", "client": _CLIENT})
+    _verdict(monkeypatch, lobby_service.JoinVerdict(True))
+    ja = _ask(endpoint, {"token": _TOKEN, "op": "join_check", "server_id": 7,
+                         "player": "David", "client": _CLIENT})
+    assert nein == {"ok": False, "reason": "Du bist auf David gebannt."}
+    assert ja == {"ok": True}
+    assert "retry" not in nein and "retry" not in ja
 
 
 def _fits(monkeypatch, mapping):
@@ -344,6 +413,8 @@ def test_no_answer_ever_contains_a_json_array(monkeypatch):
         lobby_service.JoinVerdict(True, note="Hinweis eins | Hinweis zwei"),
         _CONFIRM,
         lobby_service.JoinVerdict(False, "David ist voll (20/20)."),
+        _retry_verdict(_WAIT_REASON),
+        _retry_verdict(_WAIT_REASON, confirm=True),
     ]
     anfragen = [
         {"op": "ping"},
@@ -358,8 +429,11 @@ def test_no_answer_ever_contains_a_json_array(monkeypatch):
         _verdict(monkeypatch, verdict)
         antworten.append(lobby_api_service._handle_request(
             {"op": "join_check", "server_id": 7, "player": "David", "client": _CLIENT}))
-    monkeypatch.setattr("app.services.lobby_service.check_join_allowed_by_id",
-                        lambda sid, name: (False, "Du bist auf David gebannt."))
+    # Zuletzt der Alt-Jar-Pfad (ohne client-Block) - auch er darf kein Array liefern.
+    _verdict(monkeypatch, lobby_service.JoinVerdict(False, "Du bist auf David gebannt."))
+    antworten.append(lobby_api_service._handle_request(
+        {"op": "join_check", "server_id": 7, "player": "David"}))
+    _verdict(monkeypatch, _retry_verdict(_WAIT_REASON))
     antworten.append(lobby_api_service._handle_request(
         {"op": "join_check", "server_id": 7, "player": "David"}))
 
