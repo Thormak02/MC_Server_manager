@@ -351,6 +351,11 @@ Tunnel-Integration (playit.gg/ngrok) bzw. UPnP-Portöffnung, um ohne Portfreigab
 
 
 KI-gestützte Funktionen nur ondemand, local ai ohne externe api?
+-> Beantwortet: es stehen **200 $ Claude-API-Guthaben pro Monat** zur Verfügung. Die externe API ist damit gesetzt, lokale Modelle sind nicht nötig (bleiben aber als Rückfall denkbar, wenn das Monatsbudget aufgebraucht ist). Noch NICHTS umgesetzt - nur als Rahmenbedingung für die Ideen unten festgehalten.
+Beim Umsetzen zu beachten: Budget pro Monat deckeln und den Verbrauch sichtbar machen (sonst frisst eine Crash-Analyse-Schleife still das Guthaben); API-Schlüssel wie die übrigen Geheimnisse behandeln, nicht in die DB im Klartext; jeder KI-Aufruf ondemand und abschaltbar; Logs/Crash-Reports vor dem Versenden auf Spielernamen und IPs prüfen.
+Rate Limit hinzufügen + missbrauch verhinden durch Themen lockin
+API Anbieter einfach änderbar
+API Keys nur in .env und die .env soll durch ein menufenster beschrieben werden, wie zb. bei der CurseForge API
 
 KI-Log-/Crash-Analyse: Fehlerursache erklären + konkrete Lösungsvorschläge (welche Mod, welcher Fix).
 
@@ -373,6 +378,9 @@ PWA / mobil-optimierte Ansicht.
 
 Onboarding-Assistent beim ersten Start.
 
+getrennte nutzungsumgebungen, folgendes modell:
+nutzer / Organisation modell: ein nutzer kann eine oder mehr organisationen besitzen, verwalten und delegieren, einer orga können mehrere nutzer angehören. rollenverwaltung in orga, aber für super admins immer zugriff auf alle und volle rechte
+später: monetarisierung: server, orgas usw. vermieten, kosten nach kapazität, leistung und anzahl an orgas und server
 
 
 
@@ -398,7 +406,7 @@ push benachrichtigungen auf handy und pc zb. bei crash
 
 ai analysen für crashes usw
 
-ai modpack / datapack / pluginpack / server generator und ersteller / modpack ersteller (modpack und quests und custom rezepte usw.) -> curseforge code / link für installation
+ai modpack / datapack / pluginpack / server generator und ersteller / modpack ersteller (modpack und quests und custom rezepte usw.) mit claude API -> curseforge code / link für installation
 
 
 
@@ -410,3 +418,10 @@ bestimmte server bei manager neustart nicht mit neustarten, sondern weiterlaufen
 
 
 manager kann auch server pc restarten
+
+zb. spigot oder andere pluginloader configs bearbeitbar machen
+
+
+
+
+MOTD editor in Server einstellungen mit Farben, allen optionen usw.

@@ -355,10 +355,19 @@ def _expected_server_mc_version(server: Server) -> str | None:
 
 
 def _is_loader_compatible(expected_loader: str, available_loaders: set[str]) -> bool:
+    """Passt der Inhalt zum Loader des Servers?
+
+    KEINE Angabe des Providers heisst "nicht beurteilbar", NICHT "inkompatibel".
+    CurseForge fuehrt bei Bukkit-Plugins regelmaessig gar keinen Loader in
+    ``gameVersions`` (Loader sind ein Forge/Fabric-Begriff) - wer das als Absage
+    wertet, sperrt systematisch halb CurseForge aus, obwohl das Plugin laeuft
+    (WorldGuard auf Spigot war der gemeldete Fall). Abgelehnt wird nur, wenn der
+    Provider Loader NENNT und keiner davon passt.
+    """
     if not expected_loader:
         return True
     if not available_loaders:
-        return False
+        return True
 
     if expected_loader == "paper":
         return bool(available_loaders.intersection({"paper", "spigot", "bukkit"}))
@@ -370,10 +379,15 @@ def _is_loader_compatible(expected_loader: str, available_loaders: set[str]) -> 
 
 
 def _is_mc_version_compatible(expected_mc_version: str, available_mc_versions: set[str]) -> bool:
+    """Passt der Inhalt zur MC-Version des Servers?
+
+    Wie beim Loader: nennt der Provider keine Version, ist das keine Aussage und
+    damit kein Ablehnungsgrund. Abgelehnt wird nur gegen eine NICHT leere Liste.
+    """
     if not expected_mc_version:
         return True
     if not available_mc_versions:
-        return False
+        return True
     if expected_mc_version in available_mc_versions:
         return True
     for candidate in available_mc_versions:
