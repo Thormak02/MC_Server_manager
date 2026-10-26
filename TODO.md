@@ -204,7 +204,7 @@ SSH zugriff?
 mehrere verwaltungsumgebungen, die voneinander getrennt sind, server 1, 2 und 3 in umgebung A und server 4, 5 und 6 in umgebung B
 
 
-Server umbenennen können
+~~Server umbenennen können~~
 
 
 ~~ein button um alle mods auf aktuellste Version zu updaten (im mods bereich, auch für plugins usw.), außerdem beim download automatisch aktuellste version ausgewählt. abhängigkeiten werden automatisch mit installiert. nicht für modpacks, wo oft eine spezifische version gefordert ist.~~
@@ -221,7 +221,7 @@ modpack Version im Dashboard anzeigen, wie mc Version
 
 
 
-spielerzahl auch bei Servereinstellungen anpassen können
+~~spielerzahl auch bei Servereinstellungen anpassen können~~
 
 
 

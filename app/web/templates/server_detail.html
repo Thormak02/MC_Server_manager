@@ -251,6 +251,13 @@
                     <input id="port" name="port" type="number" value="{{ server.port or '' }}">
                 </div>
                 <div>
+                    <label for="max_players">Max. Spieler</label>
+                    <input id="max_players" name="max_players" type="number" min="0" max="10000"
+                           placeholder="20" value="{{ configured_max_players if configured_max_players is not none else '' }}">
+                    <p class="muted">Steht in <code>server.properties</code> (<code>max-players</code>) und wird beim
+                    n&auml;chsten Start wirksam. <code>0</code> macht den Server dicht, ohne ihn zu stoppen.</p>
+                </div>
+                <div>
                     <label for="start_mode">Startmodus</label>
                     <select id="start_mode" name="start_mode">
                         <option value="bat" {% if server.start_mode == "bat" %}selected{% endif %}>bat</option>

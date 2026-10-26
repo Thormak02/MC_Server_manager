@@ -36,10 +36,12 @@ from app.services.server_service import (
     can_view_server,
     duplicate_server,
     get_server_by_id,
+    read_max_players,
     rename_server,
     sleep_delay_to_seconds,
     sync_server_settings_to_files,
     update_server_settings,
+    validate_max_players,
 )
 from app.services.provisioning_service import ProvisioningService
 from app.web.routes.pages import build_context, push_flash, templates
@@ -294,6 +296,10 @@ def server_detail_page(
             java_profiles=list_java_profiles(db),
             players_current=players_current,
             players_max=players_max,
+            # Fuers Eingabefeld der konfigurierte Wert AUS DER DATEI - players_max ist
+            # der Wert, mit dem der Server gestartet ist, und haengt nach einer
+            # Aenderung bis zum Neustart hinterher.
+            configured_max_players=read_max_players(server),
             online_players=online_players,
             can_change_mc_version=version_change_block_reason is None,
             version_change_block_reason=version_change_block_reason,
@@ -710,6 +716,7 @@ def update_server_settings_action(
     memory_min_mb: Annotated[str | None, Form()] = None,
     memory_max_mb: Annotated[str | None, Form()] = None,
     port: Annotated[str | None, Form()] = None,
+    max_players: Annotated[str | None, Form()] = None,
     auto_restart: Annotated[str | None, Form()] = None,
     auto_start_with_manager: Annotated[str | None, Form()] = None,
     sleep_enabled: Annotated[str | None, Form()] = None,
@@ -765,6 +772,7 @@ def update_server_settings_action(
             _to_optional_int(memory_min_mb),
             _to_optional_int(memory_max_mb),
         )
+        parsed_max_players = validate_max_players(max_players)
     except ValueError as exc:
         push_flash(request, str(exc), "error")
         return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
@@ -779,6 +787,7 @@ def update_server_settings_action(
         memory_max_mb=parsed_memory_max_mb,
         port=_to_optional_int(port),
         auto_restart=_to_bool(auto_restart),
+        max_players=parsed_max_players,
         auto_start_with_manager=_to_bool(auto_start_with_manager),
         sleep_enabled=_to_bool(sleep_enabled),
         sleep_delay_seconds=(

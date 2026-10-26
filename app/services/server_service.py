@@ -667,6 +667,80 @@ def _apply_memory_flags_to_command(
     return merged.strip()
 
 
+MAX_PLAYERS_LIMIT = 10_000
+
+
+def validate_max_players(value: str | int | None) -> int | None:
+    """Spielerzahl pruefen. ``None``/leer heisst "nicht mitgeschickt" -> unveraendert.
+
+    Nimmt bewusst auch den rohen Formularwert entgegen, damit die ganze Regel -
+    Zahl? Bereich? - an EINER Stelle steht und der Nutzer bei Unsinn einen
+    deutschen Satz sieht statt "invalid literal for int()".
+
+    ``0`` ist erlaubt: damit macht man den Server voruebergehend dicht, ohne ihn
+    zu stoppen. Die Obergrenze ist reine Vernunft - Minecraft selbst wuerde jede
+    Zahl schlucken und dann an der Speichergrenze scheitern.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        roh = value.strip()
+        if not roh:
+            return None
+        try:
+            value = int(roh)
+        except ValueError:
+            raise ValueError(
+                "Die maximale Spielerzahl muss eine ganze Zahl sein."
+            ) from None
+    if value < 0:
+        raise ValueError("Die maximale Spielerzahl darf nicht negativ sein.")
+    if value > MAX_PLAYERS_LIMIT:
+        raise ValueError(
+            f"Die maximale Spielerzahl darf hoechstens {MAX_PLAYERS_LIMIT} betragen."
+        )
+    return value
+
+
+def read_server_property(server: Server, key: str) -> str | None:
+    """Einen Wert aus server.properties lesen.
+
+    ``None``, wenn Ordner, Datei oder Schluessel fehlen - das ist der Normalfall
+    bei einem Server, der noch nie gestartet wurde, und darf nie knallen.
+    """
+    try:
+        pfad = Path(server.base_path).expanduser().resolve() / "server.properties"
+        if not pfad.is_file():
+            return None
+        prefix = f"{key}="
+        for roh in pfad.read_text(encoding="utf-8", errors="ignore").splitlines():
+            zeile = roh.strip()
+            if not zeile or zeile.startswith("#"):
+                continue
+            if zeile.startswith(prefix):
+                return zeile.split("=", 1)[1].strip()
+    except Exception:  # noqa: BLE001 - eine unlesbare Datei ist kein Grund zu scheitern
+        return None
+    return None
+
+
+def read_max_players(server: Server) -> int | None:
+    """Konfigurierte Spielerzahl aus server.properties (None = nicht gesetzt).
+
+    BEWUSST aus der Datei, nicht aus der Laufzeit: ``process_service.get_player_counts``
+    liefert den Wert, mit dem der Server GESTARTET ist. Fuer das Eingabefeld zaehlt
+    aber, was gerade in der Datei steht - sonst zeigt das Formular nach einer
+    Aenderung weiter den alten Wert, bis neu gestartet wurde.
+    """
+    roh = read_server_property(server, "max-players")
+    if roh is None:
+        return None
+    try:
+        return int(roh)
+    except ValueError:
+        return None
+
+
 def _upsert_server_property(server: Server, key: str, value: str) -> str | None:
     base_path = Path(server.base_path).expanduser().resolve()
     if not base_path.exists() or not base_path.is_dir():
@@ -1390,6 +1464,7 @@ def update_server_settings(
     port: int | None,
     auto_restart: bool,
     auto_start_with_manager: bool,
+    max_players: int | None = None,
     start_mode: str | None,
     start_command: str | None,
     start_bat_path: str | None,
@@ -1424,6 +1499,14 @@ def update_server_settings(
         server.start_mode = start_mode
     server.start_command = start_command
     server.start_bat_path = start_bat_path
+
+    # Spielerzahl steht NICHT in der Datenbank - server.properties ist die
+    # Wahrheitsquelle, und der Server liest sie beim Start. None heisst
+    # "Feld nicht mitgeschickt" und laesst den vorhandenen Wert in Ruhe.
+    if max_players is not None:
+        warnung = _upsert_server_property(server, "max-players", str(int(max_players)))
+        if warnung:
+            warnings.append(warnung)
 
     server.sleep_enabled = bool(sleep_enabled)
     if sleep_delay_seconds is not None:
