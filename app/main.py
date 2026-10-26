@@ -69,6 +69,13 @@ async def lifespan(app: FastAPI):
     start_servers_marked_for_manager_startup()
     sleep_proxy_service.reconcile_proxies()
     sleep_proxy_service.start_idle_monitor()
+    # Wache fuer die fest hinterlegten Operatoren: faengt ein Deop ab, das ohne die
+    # uebliche Konsolenmeldung passiert (z.B. durch ein Rechte-Plugin). Das
+    # Sofort-Zurueck-Oppen bei einem gewoehnlichen /deop laeuft dagegen direkt aus
+    # der Konsolenauswertung heraus.
+    from app.services import global_access_service
+
+    global_access_service.starte_waechter()
     try:
         yield
     finally:

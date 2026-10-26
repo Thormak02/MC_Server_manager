@@ -878,6 +878,30 @@ def _update_player_runtime(server_id: int, line: str) -> None:
             runtime.player_count_hint = len(runtime.players)
 
 
+def _schuetze_feste_ops(server_id: int, line: str) -> None:
+    """Wird ein fest hinterlegter Operator ge-deopt, sofort zurueck-oppen.
+
+    In einem eigenen Thread: ``send_console_command`` oeffnet eine DB-Sitzung und
+    schreibt auf stdin des Serverprozesses. Direkt hier wuerde das den Leser der
+    Konsolenausgabe anhalten - und der haelt dann auch Spielerliste, Startzustand
+    und Ingame-Neustart auf.
+    """
+    try:
+        from app.services import global_access_service
+
+        name = global_access_service.erkenne_deop(line)
+        if not name:
+            return
+        Thread(
+            target=global_access_service.erzwinge_op,
+            args=(server_id, name),
+            daemon=True,
+            name=f"mcsm-reop-{server_id}",
+        ).start()
+    except Exception:  # noqa: BLE001 - darf den Konsolenleser nie kippen
+        pass
+
+
 def _stream_output(server_id: int, process: subprocess.Popen[str], log_file_path: Path) -> None:
     try:
         with log_file_path.open("a", encoding="utf-8", errors="ignore") as log_file:
@@ -892,6 +916,7 @@ def _stream_output(server_id: int, process: subprocess.Popen[str], log_file_path
                     _update_player_runtime(server_id, line)
                     if _line_indicates_server_ready(line):
                         _mark_server_running(server_id)
+                    _schuetze_feste_ops(server_id, line)
                     if _looks_like_ingame_restart(line):
                         request_restart_by_server_id(
                             server_id,
@@ -1398,6 +1423,20 @@ def start_server(
                 server_service.enable_accept_transfers(server)
         except Exception as exc:  # noqa: BLE001
             console_service.append_output(server.id, f"Transfer-Bereitschaft uebersprungen: {exc}")
+
+        # Managerweite Zugriffslisten durchsetzen. GENAU HIER, weil der Server noch
+        # aus ist: Minecraft liest ops.json/whitelist.json/banned-*.json beim
+        # Hochfahren und schreibt sie spaeter selbst - waehrend des Betriebs
+        # geaenderte Eintraege wuerden wieder ueberschrieben.
+        try:
+            from app.services import global_access_service
+
+            for hinweis in global_access_service.auf_server_anwenden(db, server):
+                console_service.append_output(server.id, hinweis)
+        except Exception as exc:  # noqa: BLE001 - darf den Start nie verhindern
+            console_service.append_output(
+                server.id, f"Managerweite Zugriffslisten uebersprungen: {exc}"
+            )
 
         _set_start_progress(
             server.id,

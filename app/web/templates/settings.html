@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_player.html" import name_mit_kopf %}
 {% block content %}
 <h1>Einstellungen</h1>
 
@@ -13,6 +14,7 @@
         <button type="button" class="button-like" data-settings-tab="speicher">Speicher &amp; Domain</button>
         <button type="button" class="button-like" data-settings-tab="java">Java</button>
         <button type="button" class="button-like" data-settings-tab="plattformen">Plattformen</button>
+        <button type="button" class="button-like" data-settings-tab="zugriff">Spieler &amp; Zugriff</button>
         <button type="button" class="button-like" data-settings-tab="system">System</button>
     </div>
 </section>
@@ -684,6 +686,138 @@
 </div>
 
 {# ===================== System ===================== #}
+<div class="settings-tab" data-settings-panel="zugriff">
+<section class="card">
+    <h2>Managerweite Zugriffslisten</h2>
+    <p class="muted">Gilt f&uuml;r <strong>alle</strong> Server. Die Eintr&auml;ge werden bei
+    <strong>jedem Serverstart</strong> erneut in <code>ops.json</code>, <code>whitelist.json</code>,
+    <code>banned-players.json</code> und <code>banned-ips.json</code> geschrieben &ndash; wer lokal
+    entfernt wird, ist nach dem n&auml;chsten Start wieder drin.</p>
+    <p class="muted">Geschrieben wird bewusst nur beim Start: Minecraft liest diese Dateien beim
+    Hochfahren und schreibt sie danach selbst. W&auml;hrend des Betriebs eingetragene &Auml;nderungen
+    w&uuml;rde der Server beim n&auml;chsten eigenen Schreibvorgang wieder verwerfen.</p>
+    <form method="post" action="/settings/global-access/apply" class="inline-form">
+        <button type="submit">Jetzt auf alle gestoppten Server schreiben</button>
+    </form>
+</section>
+
+<section class="card">
+    <h2>OPs (managerweit)</h2>
+    <form method="post" action="/settings/global-access/add" class="inline-form">
+        <input type="hidden" name="list_key" value="ops">
+        <input type="text" name="identity" placeholder="Spielername" required>
+        <select name="op_level">
+            {% for stufe in [1, 2, 3, 4] %}
+            <option value="{{ stufe }}" {% if stufe == 4 %}selected{% endif %}>Level {{ stufe }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Hinzuf&uuml;gen</button>
+    </form>
+
+    <div class="stack">
+        {% for eintrag in globale_listen["ops"] %}
+        <form method="post" action="/settings/global-access/remove" class="inline-form">
+            <input type="hidden" name="list_key" value="ops">
+            <input type="hidden" name="identity" value="{{ eintrag.identity }}">
+            <span>{{ name_mit_kopf(eintrag.identity, eintrag.player_uuid) }}</span>
+            <span class="muted">Level {{ eintrag.op_level or 4 }}</span>
+            <span class="muted">{{ eintrag.player_uuid or "-" }}</span>
+            {% if eintrag.fest %}
+            <span class="muted">fest hinterlegt &ndash; nicht entfernbar</span>
+            {% else %}
+            <button type="submit" class="danger">Entfernen</button>
+            {% endif %}
+        </form>
+        {% else %}
+        <p class="muted">Keine Eintr&auml;ge.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card">
+    <h2>Whitelist (managerweit)</h2>
+    <form method="post" action="/settings/global-access/add" class="inline-form">
+        <input type="hidden" name="list_key" value="whitelist">
+        <input type="text" name="identity" placeholder="Spielername" required>
+        <button type="submit">Hinzuf&uuml;gen</button>
+    </form>
+
+    <div class="stack">
+        {% for eintrag in globale_listen["whitelist"] %}
+        <form method="post" action="/settings/global-access/remove" class="inline-form">
+            <input type="hidden" name="list_key" value="whitelist">
+            <input type="hidden" name="identity" value="{{ eintrag.identity }}">
+            <span>{{ name_mit_kopf(eintrag.identity, eintrag.player_uuid) }}</span>
+            <span class="muted">{{ eintrag.player_uuid or "-" }}</span>
+            {% if eintrag.fest %}
+            <span class="muted">fest hinterlegt &ndash; nicht entfernbar</span>
+            {% else %}
+            <button type="submit" class="danger">Entfernen</button>
+            {% endif %}
+        </form>
+        {% else %}
+        <p class="muted">Keine Eintr&auml;ge.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card">
+    <h2>Banns, Spieler (managerweit)</h2>
+    <form method="post" action="/settings/global-access/add" class="inline-form">
+        <input type="hidden" name="list_key" value="banned_players">
+        <input type="text" name="identity" placeholder="Spielername" required>
+        <input type="text" name="reason" placeholder="Grund (optional)">
+        <button type="submit">Hinzuf&uuml;gen</button>
+    </form>
+
+    <div class="stack">
+        {% for eintrag in globale_listen["banned_players"] %}
+        <form method="post" action="/settings/global-access/remove" class="inline-form">
+            <input type="hidden" name="list_key" value="banned_players">
+            <input type="hidden" name="identity" value="{{ eintrag.identity }}">
+            <span>{{ name_mit_kopf(eintrag.identity, eintrag.player_uuid) }}</span>
+            <span class="muted">Grund: {{ eintrag.reason or "-" }}</span>
+            {% if eintrag.fest %}
+            <span class="muted">fest hinterlegt &ndash; nicht entfernbar</span>
+            {% else %}
+            <button type="submit" class="danger">Entfernen</button>
+            {% endif %}
+        </form>
+        {% else %}
+        <p class="muted">Keine Eintr&auml;ge.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card">
+    <h2>Banns, IP (managerweit)</h2>
+    <form method="post" action="/settings/global-access/add" class="inline-form">
+        <input type="hidden" name="list_key" value="banned_ips">
+        <input type="text" name="identity" placeholder="IP-Adresse" required>
+        <input type="text" name="reason" placeholder="Grund (optional)">
+        <button type="submit">Hinzuf&uuml;gen</button>
+    </form>
+
+    <div class="stack">
+        {% for eintrag in globale_listen["banned_ips"] %}
+        <form method="post" action="/settings/global-access/remove" class="inline-form">
+            <input type="hidden" name="list_key" value="banned_ips">
+            <input type="hidden" name="identity" value="{{ eintrag.identity }}">
+            <span>{{ name_mit_kopf(eintrag.identity, eintrag.player_uuid) }}</span>
+            <span class="muted">Grund: {{ eintrag.reason or "-" }}</span>
+            {% if eintrag.fest %}
+            <span class="muted">fest hinterlegt &ndash; nicht entfernbar</span>
+            {% else %}
+            <button type="submit" class="danger">Entfernen</button>
+            {% endif %}
+        </form>
+        {% else %}
+        <p class="muted">Keine Eintr&auml;ge.</p>
+        {% endfor %}
+    </div>
+</section>
+</div>
+
 <div class="settings-tab" data-settings-panel="system">
 <section class="card">
     <h2>Manager Update</h2>

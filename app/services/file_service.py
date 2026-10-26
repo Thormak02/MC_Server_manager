@@ -525,12 +525,29 @@ def add_access_entry(
     identity_field = str(schema["identity_field"])
     file_name = str(schema["file"])
 
-    entries = _read_json_list_file(server, file_name)
     entry = _build_access_entry(normalized_key, identity, op_level=op_level)
+    return upsert_access_entry(server, normalized_key, entry)
+
+
+def upsert_access_entry(
+    server: Server, list_key: str, entry: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Einen FERTIGEN Eintrag in die Liste schreiben (vorhandenen gleichen ersetzen).
+
+    Getrennt von ``add_access_entry``, weil die managerweiten Listen ihre UUID
+    bereits kennen: ``_build_access_entry`` wuerde sonst bei JEDEM Serverstart
+    erneut bei Mojang anfragen - pro Eintrag, pro Server.
+    """
+    schema = _get_access_schema(list_key)
+    normalized_key = (list_key or "").strip().lower()
+    identity_field = str(schema["identity_field"])
+    file_name = str(schema["file"])
+
     desired_identity = str(entry.get(identity_field) or "").strip()
     if not desired_identity:
         raise ValueError("Eintrag ist ungueltig.")
 
+    entries = _read_json_list_file(server, file_name)
     filtered: list[dict[str, Any]] = []
     for item in entries:
         existing_identity = str(item.get(identity_field) or "").strip()

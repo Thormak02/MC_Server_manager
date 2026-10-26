@@ -85,6 +85,8 @@ def settings_page(
     if current_user is None:
         return RedirectResponse(url="/login", status_code=303)
 
+    from app.services import global_access_service
+
     profiles = list_java_profiles(db)
     server_storage_root = str(get_server_storage_root(db))
     server_storage_source = get_server_storage_source(db)
@@ -178,6 +180,7 @@ def settings_page(
             network_mode_source=network_mode_source,
             dispatcher_enabled=dispatcher_enabled,
             universal_lobby=universal_lobby,
+            globale_listen=global_access_service.alle_listen(db),
             velocity_running=velocity_running,
             velocity_version=velocity_version,
             velocity_installed_version=velocity_installed_version,
@@ -1138,4 +1141,91 @@ def delete_java_profile_action(
         details=f"profile_id={profile_id}",
     )
     push_flash(request, "Java-Profil geloescht.", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/global-access/add")
+def global_access_add(
+    request: Request,
+    list_key: Annotated[str, Form()],
+    identity: Annotated[str, Form()],
+    op_level: Annotated[str | None, Form()] = None,
+    reason: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import global_access_service
+
+    try:
+        eintrag = global_access_service.hinzufuegen(
+            db, list_key, identity, op_level=op_level, reason=reason
+        )
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    audit_service.log_action(
+        db, action="global_access.add", user_id=current_user.id,
+        details=f"{list_key}: {eintrag.identity}",
+    )
+    push_flash(
+        request,
+        f"'{eintrag.identity}' managerweit eingetragen. Wirkt auf jedem Server "
+        "beim naechsten Start.",
+        "success",
+    )
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/global-access/remove")
+def global_access_remove(
+    request: Request,
+    list_key: Annotated[str, Form()],
+    identity: Annotated[str, Form()],
+    db: Session = Depends(get_db),
+):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import global_access_service
+
+    try:
+        entfernt = global_access_service.entfernen(db, list_key, identity)
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    if entfernt:
+        audit_service.log_action(
+            db, action="global_access.remove", user_id=current_user.id,
+            details=f"{list_key}: {identity}",
+        )
+        push_flash(
+            request,
+            f"'{identity}' aus der managerweiten Liste entfernt. Auf den Servern "
+            "bleibt der Eintrag bestehen, bis er dort entfernt wird.",
+            "success",
+        )
+    else:
+        push_flash(request, f"'{identity}' war nicht eingetragen.", "info")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/global-access/apply")
+def global_access_apply(request: Request, db: Session = Depends(get_db)):
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from app.services import global_access_service
+
+    erledigt, warnungen = global_access_service.auf_alle_server_anwenden(db)
+    meldung = f"Managerweite Listen auf {erledigt} gestoppte(n) Server geschrieben."
+    if warnungen:
+        meldung += " " + " | ".join(warnungen)
+    push_flash(request, meldung, "info" if warnungen else "success")
     return RedirectResponse(url="/settings", status_code=303)

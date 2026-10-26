@@ -239,7 +239,7 @@ a {
    liegt dann bei -64px/-64px und ist 64px gross. Zweite Lage = die Huthaut
    (40,8)-(48,16), die viele Skins fuer Haare/Muetze nutzen. */
 .player-head {
-    --kopf: 22px;
+    --kopf: 26px;
     width: var(--kopf);
     height: var(--kopf);
     flex: 0 0 auto;
@@ -872,7 +872,7 @@ button.sleep-btn:hover,
 
 /* Im Chip darf der Kopf kleiner sein - der Text daneben ist nur 0.85rem. */
 .server-player-chip .player-head {
-    --kopf: 18px;
+    --kopf: 21px;
 }
 
 .server-player-chip {

@@ -8,6 +8,7 @@ from app.db.session import SessionLocal, engine
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.app_setting import AppSetting  # noqa: F401
 from app.models.backup import Backup  # noqa: F401
+from app.models.global_access import GlobalAccessEntry  # noqa: F401
 from app.models.installed_content import InstalledContent  # noqa: F401
 from app.models.java_profile import JavaProfile  # noqa: F401
 from app.models.job_history import JobHistory  # noqa: F401
