@@ -562,6 +562,9 @@ def test_update_installed_vt_already_current_is_noop(client, monkeypatch, tmp_pa
             external_project_id="vt:datapacks", external_version_id="1.0.16",
             name="Elevators", version_label="1.0.16",
             file_name="elevators v1.0.16 (MC 1.21-1.21.11).zip",
+            # Die Gruppe gehoert dazu: ohne sie gilt der Eintrag als "Herkunft unbekannt"
+            # und wird bewusst einmal neu erzeugt (siehe Test darunter).
+            declared_mc_version="1.21",
         )
         db.add(entry)
         db.commit()
@@ -720,3 +723,102 @@ def test_installed_content_schema_migration_idempotent(client):
 
     cols = {c["name"] for c in inspect(engine).get_columns("installed_content")}
     assert {"file_sha1", "file_sha512", "local_adopt_state", "declared_mc_version"} <= cols
+
+
+def test_update_installed_vt_regenerates_when_the_version_group_changed(client, monkeypatch,
+                                                                       tmp_path):
+    """Gleiche Pack-Nummer, andere MC-Gruppe -> trotzdem neu erzeugen.
+
+    Der gemeldete Fehler: auf dem auf 26.2 angehobenen Server blieben alle
+    VanillaTweaks-Datapacks die fuer 1.21 erzeugten Dateien. VT vergibt dieselbe
+    Pack-Versionsnummer in mehreren Gruppen, und verglichen wurde nur sie - also galt
+    das 1.21-Pack als "aktuell". Laden kann ein 26.2-Server es aber nicht: 1.21-Packs
+    decken die Formate 48-94 ab, ein 26.2-Server verlangt 101+.
+    """
+    import io as _io
+    import zipfile as _zipfile
+
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import vanillatweaks_service as vt
+
+    monkeypatch.setattr(vt, "find_pack", lambda pt, ver, name: {
+        "pack_type": "datapacks", "category": "Informative",
+        "name": "durability ping", "display": "Durability Ping", "version": "1.1.18",
+    })
+
+    gerufen = []
+
+    def fake_generate(pack_type, version, selection):
+        gerufen.append(version)
+        puffer = _io.BytesIO()
+        with _zipfile.ZipFile(puffer, "w") as z:
+            z.writestr("durability ping v1.1.18 (MC 26.2).zip", b"PK-Platzhalter")
+        return puffer.getvalue()
+
+    monkeypatch.setattr(vt, "generate_zip", fake_generate)
+
+    base = tmp_path / "srv262"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="26.2")
+        entry = InstalledContent(
+            server_id=srv.id, provider_name="vanillatweaks", content_type="datapack",
+            external_project_id="vt:datapacks", external_version_id="1.1.18",
+            name="Durability Ping", version_label="1.1.18",
+            file_name="durability ping v1.1.18 (MC 1.21-1.21.11).zip",
+            declared_mc_version="1.21",          # fuer die ALTE Gruppe erzeugt
+        )
+        db.add(entry)
+        db.commit()
+        aktualisiert, notiz = vt.update_installed_vt(db, srv, entry, None)
+
+        assert aktualisiert is True, f"haette neu erzeugt werden muessen (Notiz: {notiz!r})"
+        assert gerufen == ["26.2"], f"fuer die falsche Gruppe erzeugt: {gerufen}"
+        db.refresh(entry)
+        assert entry.declared_mc_version == "26.2"
+
+
+def test_update_installed_vt_without_a_known_group_regenerates_once(client, monkeypatch,
+                                                                    tmp_path):
+    """Altbestand ohne vermerkte Gruppe: einmal neu erzeugen, dann ist Ruhe.
+
+    Selbstheilend - genau die Eintraege, die vor dieser Korrektur angelegt wurden.
+    """
+    import io as _io
+    import zipfile as _zipfile
+
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import vanillatweaks_service as vt
+
+    monkeypatch.setattr(vt, "find_pack", lambda pt, ver, name: {
+        "pack_type": "datapacks", "category": "Convenience",
+        "name": "elevators", "display": "Elevators", "version": "1.0.18",
+    })
+
+    def fake_generate(pack_type, version, selection):
+        puffer = _io.BytesIO()
+        with _zipfile.ZipFile(puffer, "w") as z:
+            z.writestr("elevators v1.0.18 (MC 26.2).zip", b"PK-Platzhalter")
+        return puffer.getvalue()
+
+    monkeypatch.setattr(vt, "generate_zip", fake_generate)
+
+    base = tmp_path / "srvalt"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="26.2")
+        entry = InstalledContent(
+            server_id=srv.id, provider_name="vanillatweaks", content_type="datapack",
+            external_project_id="vt:datapacks", external_version_id="1.0.18",
+            name="Elevators", version_label="1.0.18",
+            file_name="elevators v1.0.18 (MC 26.2).zip",
+            declared_mc_version=None,            # Altbestand
+        )
+        db.add(entry)
+        db.commit()
+        aktualisiert, _notiz = vt.update_installed_vt(db, srv, entry, None)
+        assert aktualisiert is True
+        db.refresh(entry)
+        assert entry.declared_mc_version == "26.2"

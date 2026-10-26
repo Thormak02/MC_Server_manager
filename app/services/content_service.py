@@ -2258,6 +2258,47 @@ _PACK_FORMAT_MC = {
 }
 
 
+def _pack_mcmeta_badge(pack: dict) -> str:
+    """Aus dem ``pack``-Block einer pack.mcmeta eine lesbare Versionsangabe bauen.
+
+    Es gibt ZWEI Schemata, und wer nur das alte kennt, liest bei modernen Packs gar
+    nichts und laesst einen veralteten Wert stehen:
+    - bis MC 1.21.x: ``pack_format`` (eine Zahl), optional ``supported_formats``
+      mit ``min_inclusive``/``max_inclusive``.
+    - ab MC 26.x:    ``min_format`` / ``max_format`` - KEIN ``pack_format`` mehr.
+      ``max_format`` kann dabei eine Liste sein ([107, 1] = Format 107, Unterversion 1).
+
+    Die Formatnummern ab 26.x (101+) stehen bewusst NICHT in _PACK_FORMAT_MC: eine
+    erfundene Zuordnung waere schlechter als die ehrliche Angabe "Pack-Format 101".
+    """
+    def _zahl(wert) -> int | None:
+        if isinstance(wert, list) and wert:
+            wert = wert[0]
+        try:
+            return int(wert)
+        except (TypeError, ValueError):
+            return None
+
+    unten = _zahl(pack.get("pack_format"))
+    if unten is None:
+        unten = _zahl(pack.get("min_format"))
+    unterstuetzt = pack.get("supported_formats")
+    oben = _zahl(pack.get("max_format"))
+    if oben is None and isinstance(unterstuetzt, dict):
+        oben = _zahl(unterstuetzt.get("max_inclusive"))
+    if unten is None and isinstance(unterstuetzt, dict):
+        unten = _zahl(unterstuetzt.get("min_inclusive"))
+    if unten is None:
+        return ""
+
+    bekannt = _PACK_FORMAT_MC.get(unten)
+    if bekannt:
+        return bekannt
+    if oben is not None and oben != unten:
+        return f"Pack-Format {unten}-{oben}"
+    return f"Pack-Format {unten}"
+
+
 def _file_sha1(path: Path) -> str:
     """SHA1 einer Datei (64 KB-Bloecke). Nur SHA1 - Modrinth-Hash-Lookup nutzt SHA1, und die
     Datei wird auf einer NAS-Freigabe gelesen, also nicht unnoetig ein zweites Mal durchhashen."""
@@ -2386,12 +2427,9 @@ def _read_artifact_metadata(path: Path) -> dict:
             if "pack.mcmeta" in names:
                 try:
                     data = json.loads(zf.read("pack.mcmeta").decode("utf-8-sig", "ignore"))
-                    pack_format = (data.get("pack") or {}).get("pack_format")
-                    if pack_format is not None:
-                        meta.setdefault(
-                            "mc_version",
-                            _PACK_FORMAT_MC.get(int(pack_format), f"Pack-Format {int(pack_format)}"),
-                        )
+                    badge = _pack_mcmeta_badge((data.get("pack") or {}))
+                    if badge:
+                        meta.setdefault("mc_version", badge)
                 except Exception:
                     pass
     except Exception:

@@ -184,6 +184,10 @@ def install_datapacks(
             server_id=server.id, provider_name="vanillatweaks", content_type="datapack",
             external_project_id="vt:craftingtweaks", external_version_id=version,
             name=display, version_label=version, file_name=file_name, installed_by_user_id=user_id,
+            # Die VT-Gruppe festhalten. Ohne sie laesst sich spaeter nicht
+            # unterscheiden, ob ein Pack fuer 1.21 oder fuer 26.2 erzeugt wurde -
+            # die Pack-Versionsnummer allein ist in beiden Gruppen dieselbe.
+            declared_mc_version=version,
         ))
         db.commit()
         n_packs = sum(len(v) for v in selection.values())
@@ -227,6 +231,8 @@ def install_datapacks(
                     version_label=version,
                     file_name=file_name,
                     installed_by_user_id=user_id,
+                    # s.o.: die VT-Gruppe gehoert zum Eintrag, nicht nur die Pack-Version.
+                    declared_mc_version=version,
                 )
             )
             notes.append(display)
@@ -447,7 +453,14 @@ def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
     installed = (entry.version_label or "").strip() or (
         _pack_version_from_file(entry.file_name) or ""
     )
-    if latest and installed and latest == installed:
+    # Die VT-Gruppe MUSS mitverglichen werden. VanillaTweaks vergibt dieselbe
+    # Pack-Versionsnummer in mehreren Gruppen - ein fuer 1.21 erzeugtes Pack und das
+    # 26.2-Pack koennen beide "1.1.18" heissen. Verglichen wurde frueher nur diese Nummer,
+    # also galt ein 1.21-Pack auf einem 26.2-Server als "aktuell" und wurde nie ersetzt -
+    # obwohl es dort gar nicht laedt (1.21-Packs decken nur die Formate 48-94 ab, ein
+    # 26.2-Server verlangt 101+). Genau das war der gemeldete Fehler.
+    installed_group = map_vt_version(entry.declared_mc_version) if entry.declared_mc_version else ""
+    if latest and installed and latest == installed and installed_group == version:
         return (False, "")   # bereits aktuell
 
     archive = generate_zip(match["pack_type"], version, {match["category"]: [match["name"]]})
@@ -486,6 +499,7 @@ def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
     entry.external_project_id = f"vt:{match['pack_type']}"
     entry.external_version_id = latest
     entry.version_label = latest
+    entry.declared_mc_version = version
     entry.name = match["display"]
     entry.file_name = new_file
     entry.local_adopt_state = None
