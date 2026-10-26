@@ -112,6 +112,18 @@ def normalisiere(spieler: str) -> str | None:
     return None
 
 
+def ist_online_uuid(schluessel: str) -> bool:
+    """True, wenn die UUID von Mojang stammen KANN (Version 4, zufaellig erzeugt).
+
+    Server im Offline-Mode vergeben die UUID selbst, als MD5 ueber
+    "OfflinePlayer:<name>" - das ergibt Version 3. Solche UUIDs kennt der
+    Sessionserver nicht; mit ihnen zu fragen liefert garantiert nichts. An der
+    13. Stelle (dritte Gruppe, erstes Zeichen) steht die Version.
+    """
+    roh = (schluessel or "").replace("-", "")
+    return len(roh) == 32 and roh[12] == "4"
+
+
 def _hole(url: str, zeitlimit: float) -> bytes:
     anfrage = urllib.request.Request(url, headers={"User-Agent": "mcsm-avatar"})
     with urllib.request.urlopen(anfrage, timeout=zeitlimit) as antwort:

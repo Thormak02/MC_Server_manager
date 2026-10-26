@@ -282,3 +282,54 @@ def test_live_player_refresh_also_draws_heads():
     assert "${kopfHtml(name)}" in quelle
     # Name landet in einer URL -> muss URL-kodiert werden, nicht nur HTML-escaped.
     assert "encodeURIComponent" in quelle
+
+
+@pytest.mark.parametrize("uuid,online", [
+    # Echte UUIDs aus den Listen des Nutzers - die dritte Gruppe traegt die Version.
+    ("79668c7e-c702-3ba1-9b9e-20219be4de43", False),   # Offline-Mode (Version 3)
+    ("69f230e1-af2c-4d0e-9885-93d66595a855", True),
+    ("2abd16ed-9f71-4a80-994e-71dd35b8c53e", True),
+    ("db317fd4-e539-4c49-a174-e6da13e7012c", True),
+    ("4eda60c7-1b3d-4bc5-93ce-42f35911befd", True),
+])
+def test_ist_online_uuid(uuid, online):
+    from app.services.avatar_service import ist_online_uuid
+
+    assert ist_online_uuid(uuid) is online
+
+
+def test_offline_uuid_falls_back_to_name(client):
+    """Ein Server im Offline-Mode vergibt die UUID selbst (Version 3, aus dem Namen
+    gehasht). Mojang kennt sie nicht - dann muss der NAME als Schluessel dienen,
+    sonst sieht derselbe Spieler in der Whitelist anders aus als in der OP-Liste.
+    """
+    from app.web.routes.pages import _avatar_schluessel
+
+    # Offline-UUID -> Name gewinnt
+    assert _avatar_schluessel("79668c7e-c702-3ba1-9b9e-20219be4de43", "Thormak2002") == "thormak2002"
+    # Echte UUID -> bleibt, sie ueberlebt eine Umbenennung
+    assert (_avatar_schluessel("69f230e1-af2c-4d0e-9885-93d66595a855", "Thormak2002")
+            == "69f230e1af2c4d0e988593d66595a855")
+    # Keine UUID -> Name
+    assert _avatar_schluessel(None, "Thormak2002") == "thormak2002"
+    # Weder noch -> kein Icon
+    assert _avatar_schluessel("192.168.1.5", "192.168.1.5") is None
+    # Offline-UUID ohne brauchbaren Namen -> lieber die UUID als gar nichts
+    assert (_avatar_schluessel("79668c7e-c702-3ba1-9b9e-20219be4de43", "[Essentials] X")
+            == "79668c7ec7023ba19b9e20219be4de43")
+
+
+def test_head_crop_keeps_aspect_ratio_for_old_skins():
+    """Alte Konten haben Skins im Format 64x32 statt 64x64. Eine feste Hoehe im
+    background-size wuerde so ein Bild vertikal auf das Doppelte ziehen - der
+    Ausschnitt saesse dann an der falschen Stelle und der Kopf saehe verzerrt aus.
+    """
+    from pathlib import Path
+
+    css = Path("app/web/static/css/app.css").read_text(encoding="utf-8")
+    block = css[css.index(".player-head {"):css.index(".player-name {")]
+    assert "background-size: calc(var(--kopf) * 8) auto;" in block
+    assert "image-rendering: pixelated" in block
+    # Gesicht (8,8) und Huthaut (40,8), bei Massstab kopf/8 pro Quellpixel.
+    assert "calc(var(--kopf) * -5) calc(var(--kopf) * -1)" in block
+    assert "calc(var(--kopf) * -1) calc(var(--kopf) * -1)" in block

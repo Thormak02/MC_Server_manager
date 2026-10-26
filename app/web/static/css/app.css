@@ -250,7 +250,11 @@ a {
     background-repeat: no-repeat, no-repeat;
     /* Pixelkunst darf nicht weichgezeichnet werden. */
     image-rendering: pixelated;
-    background-size: calc(var(--kopf) * 8) calc(var(--kopf) * 8);
+    /* Hoehe MUSS auto bleiben: alte Konten haben noch Skins im 64x32-Format.
+       Mit fester Hoehe wuerde so ein Bild vertikal auf das Doppelte gezogen und
+       der Ausschnitt saesse an der falschen Stelle. Mit auto ist der Massstab in
+       beiden Achsen gleich und (8,8)-(16,16) trifft in BEIDEN Formaten. */
+    background-size: calc(var(--kopf) * 8) auto;
     background-position:
         calc(var(--kopf) * -5) calc(var(--kopf) * -1),
         calc(var(--kopf) * -1) calc(var(--kopf) * -1);

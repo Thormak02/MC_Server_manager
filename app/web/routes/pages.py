@@ -31,18 +31,28 @@ templates.env.globals["server_status_view"] = _server_status_view
 templates.env.globals["sleep_delay_parts"] = _sleep_delay_parts
 
 
-def _avatar_schluessel(wert: object) -> str | None:
-    """Fuer das Kopf-Icon: brauchbarer Name/UUID - sonst None (= kein Icon).
+def _avatar_schluessel(wert: object, ersatz: object = None) -> str | None:
+    """Fuer das Kopf-Icon: brauchbarer Schluessel - sonst None (= kein Icon).
 
-    Die Online-Liste kommt aus dem Konsolen-Log, und die Join-Regex ist gierig:
-    schreibt jemand "xy joined the game" in den CHAT, landet "<Name> xy" als
-    vermeintlicher Spieler in der Liste. Auch Plugin-Praefixe ("[Essentials] Name"),
-    Farbcodes und Bedrock-Namen mit Punkt kommen so durch. Fuer solche Eintraege
-    soll gar kein Kopf erscheinen statt eines grauen Platzhalters.
+    Reihenfolge: eine ECHTE Mojang-UUID (Version 4) ist am genauesten, weil sie
+    eine Umbenennung ueberlebt. Eine Offline-Mode-UUID (Version 3, aus dem Namen
+    gehasht) kennt Mojang dagegen nicht - mit ihr zu fragen liefert garantiert
+    nichts, also nehmen wir dann den Namen. Genau dieser Fall liess denselben
+    Spieler in der Whitelist anders aussehen als in der OP-Liste.
+
+    Verworfen wird alles, was gar kein Spieler sein kann. Die Online-Liste kommt
+    aus dem Konsolen-Log, und die Join-Regex ist gierig: schreibt jemand
+    "xy joined the game" in den CHAT, landet "<Name> xy" als vermeintlicher
+    Spieler in der Liste. Auch Plugin-Praefixe ("[Essentials] Name"), Farbcodes
+    und IP-Banns kommen so an - fuer die soll gar kein Kopf erscheinen.
     """
-    from app.services.avatar_service import normalisiere
+    from app.services.avatar_service import ist_online_uuid, normalisiere
 
-    return normalisiere(str(wert or ""))
+    haupt = normalisiere(str(wert or ""))
+    zweit = normalisiere(str(ersatz or ""))
+    if haupt and len(haupt) == 32 and not ist_online_uuid(haupt):
+        return zweit or haupt
+    return haupt or zweit
 
 
 templates.env.globals["avatar_schluessel"] = _avatar_schluessel
