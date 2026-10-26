@@ -31,6 +31,23 @@ templates.env.globals["server_status_view"] = _server_status_view
 templates.env.globals["sleep_delay_parts"] = _sleep_delay_parts
 
 
+def _avatar_schluessel(wert: object) -> str | None:
+    """Fuer das Kopf-Icon: brauchbarer Name/UUID - sonst None (= kein Icon).
+
+    Die Online-Liste kommt aus dem Konsolen-Log, und die Join-Regex ist gierig:
+    schreibt jemand "xy joined the game" in den CHAT, landet "<Name> xy" als
+    vermeintlicher Spieler in der Liste. Auch Plugin-Praefixe ("[Essentials] Name"),
+    Farbcodes und Bedrock-Namen mit Punkt kommen so durch. Fuer solche Eintraege
+    soll gar kein Kopf erscheinen statt eines grauen Platzhalters.
+    """
+    from app.services.avatar_service import normalisiere
+
+    return normalisiere(str(wert or ""))
+
+
+templates.env.globals["avatar_schluessel"] = _avatar_schluessel
+
+
 def push_flash(request: Request, message: str, kind: str = "info") -> None:
     request.session["_flash"] = {"message": message, "kind": kind}
 

@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.routers.auth import router as auth_router
+from app.api.routers.avatars import router as avatars_router
 from app.api.routers.backups import router as backups_router
 from app.api.routers.console import router as console_router
 from app.api.routers.content import router as content_router
@@ -128,6 +129,7 @@ def create_app() -> FastAPI:
 
     app.include_router(page_router)
     app.include_router(auth_router)
+    app.include_router(avatars_router)
     app.include_router(backups_router)
     app.include_router(console_router)
     app.include_router(content_router)

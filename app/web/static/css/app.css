@@ -234,6 +234,34 @@ a {
     display: none;
 }
 
+/* Spielerkopf: aus der 64x64-Skin-Datei den Gesichts-Ausschnitt (8,8)-(16,16)
+   zeigen. Bei 8-facher Vergroesserung ist das Bild 512px breit, der Ausschnitt
+   liegt dann bei -64px/-64px und ist 64px gross. Zweite Lage = die Huthaut
+   (40,8)-(48,16), die viele Skins fuer Haare/Muetze nutzen. */
+.player-head {
+    --kopf: 22px;
+    width: var(--kopf);
+    height: var(--kopf);
+    flex: 0 0 auto;
+    display: inline-block;
+    vertical-align: middle;
+    border-radius: 0.2rem;
+    background-color: color-mix(in srgb, var(--panel) 80%, var(--border));
+    background-repeat: no-repeat, no-repeat;
+    /* Pixelkunst darf nicht weichgezeichnet werden. */
+    image-rendering: pixelated;
+    background-size: calc(var(--kopf) * 8) calc(var(--kopf) * 8);
+    background-position:
+        calc(var(--kopf) * -5) calc(var(--kopf) * -1),
+        calc(var(--kopf) * -1) calc(var(--kopf) * -1);
+}
+
+.player-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
 .container {
     width: min(1560px, 97%);
     margin: 1.2rem auto 2rem;
@@ -838,12 +866,18 @@ button.sleep-btn:hover,
     gap: 0.4rem;
 }
 
+/* Im Chip darf der Kopf kleiner sein - der Text daneben ist nur 0.85rem. */
+.server-player-chip .player-head {
+    --kopf: 18px;
+}
+
 .server-player-chip {
     display: inline-flex;
     align-items: center;
+    gap: 0.4rem;
     border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
     border-radius: 999px;
-    padding: 0.2rem 0.6rem;
+    padding: 0.2rem 0.6rem 0.2rem 0.3rem;
     font-size: 0.85rem;
     color: var(--accent-strong);
     background: color-mix(in srgb, var(--accent) 10%, var(--panel));

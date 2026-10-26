@@ -244,7 +244,7 @@ modpack Version im Dashboard anzeigen, wie mc Version
 ~~schedule Kalender funktioniert nicht, nochmal prüfen, was genau nicht geht~~
 
 
-Spielerkopf als icon bei namen in onlineliste, op, white und bannliste usw. anzeigen
+~~Spielerkopf als icon bei namen in onlineliste, op, white und bannliste usw. anzeigen~~
 
 
 ~~Neustart geht nicht~~

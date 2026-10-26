@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_player.html" import kopf %}
 {% block content %}
 <h1 class="page-title" id="server-title">Server: {{ server.name }}<button type="button" id="rename-start"
         class="icon-btn rename-pencil" title="Server umbenennen" aria-label="Server umbenennen">
@@ -110,7 +111,7 @@
             </p>
             <div id="server-players-list" class="server-player-list">
                 {% for player_name in online_players %}
-                <span class="server-player-chip">{{ player_name }}</span>
+                <span class="server-player-chip">{{ kopf(player_name) }}{{ player_name }}</span>
                 {% endfor %}
             </div>
         </div>
@@ -1006,6 +1007,20 @@
             .replace(/'/g, "&#39;");
     }
 
+    // Spiegelbild des Jinja-Makros in _player.html. Die Pruefung muss hier WIEDER
+    // stattfinden: die Namen kommen aus dem Konsolen-Log und koennen Unfug enthalten
+    // (Chat-Echo "<Name> xy joined the game", Plugin-Praefixe, Farbcodes). Fuer die
+    // bekommt man keinen Skin - dann lieber gar kein Icon.
+    const SPIELER_MUSTER = /^[A-Za-z0-9_]{1,16}$/;
+
+    function kopfHtml(name) {
+        const sauber = String(name || "").trim();
+        if (!SPIELER_MUSTER.test(sauber)) return "";
+        const adresse = "/api/avatar/" + encodeURIComponent(sauber.toLowerCase());
+        return `<span class="player-head" aria-hidden="true" style="background-image: `
+            + `url('${adresse}'), url('${adresse}');"></span>`;
+    }
+
     function renderPlayers(names) {
         if (!Array.isArray(names) || names.length === 0) {
             playerListEl.innerHTML = "";
@@ -1014,7 +1029,7 @@
         }
         playerEmptyEl.style.display = "none";
         playerListEl.innerHTML = names
-            .map((name) => `<span class="server-player-chip">${escapeHtml(name)}</span>`)
+            .map((name) => `<span class="server-player-chip">${kopfHtml(name)}${escapeHtml(name)}</span>`)
             .join("");
     }
 

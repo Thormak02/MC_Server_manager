@@ -1,0 +1,26 @@
+{# Spielerkopf vor einem Namen.
+
+   Die Skin-Datei kommt vom Manager (/api/avatar/...), nicht von einem Fremddienst -
+   sonst wuerde der Browser jedes Betrachters seine IP an Dritte liefern (derselbe
+   Sachverhalt wie bei den Google-Fonts-Abmahnungen 2022). Den Kopf schneidet
+   .player-head per background-position aus der 64x64-Skin-Datei aus; die zwei
+   gleichen URLs sind die zwei Lagen (Huthaut ueber Gesicht), der Browser laedt die
+   Datei trotzdem nur einmal.
+
+   `schluessel` ist UUID ODER Name - die UUID ist genauer, weil Namen sich aendern.
+   avatar_schluessel() prueft, ob daraus ueberhaupt ein Spieler werden kann; bei
+   IP-Banns oder verunglueckten Log-Eintraegen kommt None zurueck und es wird gar
+   kein Kopf gezeigt. #}
+{% macro kopf(schluessel) -%}
+{%- set key = avatar_schluessel(schluessel) -%}
+{%- if key -%}
+{%- set adresse = '/api/avatar/' ~ key -%}
+<span class="player-head" aria-hidden="true"
+      style="background-image: url('{{ adresse }}'), url('{{ adresse }}');"></span>
+{%- endif -%}
+{%- endmacro %}
+
+{# Kopf + Name als eine Einheit, damit beide zusammen umbrechen. #}
+{% macro name_mit_kopf(anzeige, schluessel=None) -%}
+<span class="player-name">{{ kopf(schluessel if schluessel is not none else anzeige) }}<span>{{ anzeige }}</span></span>
+{%- endmacro %}
