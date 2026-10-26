@@ -85,7 +85,20 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
+    # /docs, /redoc und /openapi.json sind bei FastAPI standardmaessig offen - und zwar
+    # OHNE Anmeldung, weil FastAPI sie selbst registriert und nur CSRF- und
+    # Session-Middleware davorliegen. Bei einer aus dem Internet erreichbaren
+    # Verwaltungsoberflaeche heisst das: jeder kann die komplette API-Struktur samt
+    # Parametern auslesen. Deshalb nur im Debug-Betrieb an.
+    api_docs = settings.debug
+    app = FastAPI(
+        title=settings.app_name,
+        debug=settings.debug,
+        lifespan=lifespan,
+        docs_url="/docs" if api_docs else None,
+        redoc_url="/redoc" if api_docs else None,
+        openapi_url="/openapi.json" if api_docs else None,
+    )
 
     app.add_middleware(
         CSRFSameOriginMiddleware,

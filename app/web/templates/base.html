@@ -4,9 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ page_title or "MC Server Manager" }}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    {# Schriften LOKAL - kein Abruf bei Google. Ein Einbinden ueber fonts.googleapis.com
+       uebertraegt die IP jedes Besuchers an Google, bevor er zustimmen konnte (LG Muenchen I,
+       20.01.2022, Az. 3 O 17493/20). Siehe static/css/fonts.css. #}
+    <link rel="stylesheet" href="{{ request.url_for('static', path='css/fonts.css') }}?v=1">
     <link rel="stylesheet" href="{{ request.url_for('static', path='css/app.css') }}?v=15">
 </head>
 <body class="{% if current_user %}layout-authenticated{% else %}layout-public{% endif %}">
