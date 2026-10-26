@@ -224,44 +224,53 @@ def test_rename_survives_broken_lobby_sync(tmp_path, client, monkeypatch):
         assert srv.name == "Davids Welt"
         assert "Hinweis" in message and "gesperrt" in message
 
-
-def test_rename_via_settings_route(tmp_path, client, _no_lobby_sync):
-    """Durch die echte Route - inklusive Weiterleitung und Erfolgsmeldung."""
+def test_rename_via_route(tmp_path, client, _no_lobby_sync):
+    """Durch den echten Endpunkt - inklusive Weiterleitung."""
     from app.db.session import SessionLocal
+    from app.models.server import Server
 
     with SessionLocal() as db:
-        srv = _make_server(db, tmp_path / "srv")
-        sid = srv.id
+        sid = _make_server(db, tmp_path / "srv").id
 
     _login_admin(client)
     antwort = client.post(
-        f"/servers/{sid}/settings",
-        data={"name": "Davids Welt", "mc_version": "1.21.11"},
+        f"/servers/{sid}/rename",
+        data={"name": "Davids Welt"},
         follow_redirects=False,
     )
     assert antwort.status_code == 303
 
     with SessionLocal() as db:
-        from app.models.server import Server
-
         assert db.get(Server, sid).name == "Davids Welt"
 
 
-def test_settings_route_without_name_field_keeps_name(tmp_path, client, _no_lobby_sync):
-    """Ein Aufruf ohne ``name``-Feld darf den Namen nicht leeren - sonst wuerde
-    jedes aeltere Formular und jeder externe Aufruf den Server namenlos machen."""
+def test_rename_route_requires_name_field(tmp_path, client, _no_lobby_sync):
+    """Ohne ``name`` ist der Aufruf ungueltig - der Server darf dabei auf keinen
+    Fall namenlos werden."""
     from app.db.session import SessionLocal
     from app.models.server import Server
 
     with SessionLocal() as db:
-        srv = _make_server(db, tmp_path / "srv")
-        sid = srv.id
+        sid = _make_server(db, tmp_path / "srv").id
+
+    _login_admin(client)
+    antwort = client.post(f"/servers/{sid}/rename", data={}, follow_redirects=False)
+    assert antwort.status_code == 422
+
+    with SessionLocal() as db:
+        assert db.get(Server, sid).name == "David Survival"
+
+
+def test_rename_route_rejects_blank_name(tmp_path, client, _no_lobby_sync):
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    with SessionLocal() as db:
+        sid = _make_server(db, tmp_path / "srv").id
 
     _login_admin(client)
     antwort = client.post(
-        f"/servers/{sid}/settings",
-        data={"mc_version": "1.21.11"},
-        follow_redirects=False,
+        f"/servers/{sid}/rename", data={"name": "   "}, follow_redirects=False
     )
     assert antwort.status_code == 303
 
@@ -269,20 +278,30 @@ def test_settings_route_without_name_field_keeps_name(tmp_path, client, _no_lobb
         assert db.get(Server, sid).name == "David Survival"
 
 
-def test_settings_route_rejects_empty_name_without_saving_rest(tmp_path, client, _no_lobby_sync):
-    """Ein leeres Namensfeld bricht das Speichern ab - es soll nicht die Haelfte
-    der Einstellungen uebernehmen und den Namen unkommentiert stehen lassen."""
+def test_settings_route_no_longer_touches_the_name(tmp_path, client, _no_lobby_sync):
+    """Der Grund fuer den eigenen Endpunkt: die Einstellungen-Route traegt Schalter
+    als Checkboxen. Ein Formular, das nur den Namen schickt, liefert sie nicht mit -
+    ueber /settings wuerden sie dadurch alle auf "aus" fallen. Deshalb darf der Name
+    dort gar nicht mehr vorkommen."""
     from app.db.session import SessionLocal
     from app.models.server import Server
 
     with SessionLocal() as db:
         srv = _make_server(db, tmp_path / "srv")
-        sid, alter_ram = srv.id, srv.memory_max_mb
+        srv.auto_restart = True
+        srv.auto_start_with_manager = True
+        db.commit()
+        sid = srv.id
 
     _login_admin(client)
     antwort = client.post(
         f"/servers/{sid}/settings",
-        data={"name": "   ", "mc_version": "1.21.11", "memory_max_mb": "8192"},
+        data={
+            "name": "Heimlich umbenannt",
+            "mc_version": "1.21.11",
+            "auto_restart": "true",
+            "auto_start_with_manager": "true",
+        },
         follow_redirects=False,
     )
     assert antwort.status_code == 303
@@ -290,4 +309,5 @@ def test_settings_route_rejects_empty_name_without_saving_rest(tmp_path, client,
     with SessionLocal() as db:
         nachher = db.get(Server, sid)
         assert nachher.name == "David Survival"
-        assert nachher.memory_max_mb == alter_ram
+        assert nachher.auto_restart is True
+        assert nachher.auto_start_with_manager is True

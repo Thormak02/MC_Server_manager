@@ -664,11 +664,46 @@ def sleep_server_action(
     return _redirect_to_referer(request, fallback=f"/servers/{server_id}")
 
 
+@router.post("/servers/{server_id}/rename")
+def rename_server_action(
+    request: Request,
+    server_id: int,
+    name: Annotated[str, Form()],
+    db: Session = Depends(get_db),
+):
+    """Server umbenennen - eigener Endpunkt, bewusst NICHT Teil der Einstellungen.
+
+    Die Einstellungen-Route traegt Schalter als Checkboxen (auto_restart,
+    auto_start_with_manager, sleep_enabled, die Gateway-Flags). Ein Formular, das
+    nur den Namen schickt, liefert diese Felder gar nicht mit - ueber /settings
+    wuerden sie dadurch samt und sonders auf "aus" gesetzt.
+    """
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    try:
+        renamed, message = rename_server(
+            db, server, name, initiated_by_user_id=current_user.id
+        )
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
+    push_flash(request, message, "success" if renamed else "info")
+    return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
+
 @router.post("/servers/{server_id}/settings")
 def update_server_settings_action(
     request: Request,
     server_id: int,
-    name: Annotated[str | None, Form()] = None,
     mc_version: Annotated[str | None, Form()] = None,
     loader_version: Annotated[str | None, Form()] = None,
     java_profile_id: Annotated[str | None, Form()] = None,
@@ -699,24 +734,6 @@ def update_server_settings_action(
     if not can_control_server(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     is_super_admin = current_user.role == UserRole.SUPER_ADMIN.value
-
-    # Umbenennen zuerst: ein ungueltiger Name soll das Speichern abbrechen, statt
-    # die Haelfte der Einstellungen zu uebernehmen. ``name is None`` heisst "Feld nicht
-    # mitgeschickt" (aeltere Formulare/externe Aufrufe) -> dann bleibt der Name, wie er ist.
-    rename_note: str | None = None
-    if name is not None:
-        try:
-            renamed, rename_message = rename_server(
-                db, server, name, initiated_by_user_id=current_user.id
-            )
-        except ValueError as exc:
-            push_flash(request, str(exc), "error")
-            return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
-        if renamed:
-            rename_note = rename_message
-            # Sofort melden: das Umbenennen ist bereits committet. Bricht das Speichern
-            # danach ab (Versionssperre, Speichergrenzen), waere die Meldung sonst weg.
-            push_flash(request, rename_message, "success")
 
     target_mc_version = (mc_version or "").strip() or server.mc_version
     raw_loader_version = (loader_version or "").strip()
@@ -845,7 +862,7 @@ def update_server_settings_action(
             "Servereinstellungen gespeichert. " + " | ".join(reprovision_notes),
             "info",
         )
-    elif not rename_note:
+    else:
         push_flash(request, "Servereinstellungen gespeichert.", "success")
     return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
 

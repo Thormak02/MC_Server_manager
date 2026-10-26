@@ -191,6 +191,35 @@ a {
     font: inherit;
 }
 
+.page-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.page-title-row h1 {
+    margin: 0;
+}
+
+.rename-form .rename-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.rename-form input {
+    flex: 1 1 22rem;
+    min-width: 0;
+}
+
+/* display:flex wuerde das hidden-Attribut sonst aushebeln. */
+.page-title-row[hidden],
+.rename-form[hidden] {
+    display: none;
+}
+
 .container {
     width: min(1560px, 97%);
     margin: 1.2rem auto 2rem;
