@@ -254,8 +254,6 @@
                     <label for="max_players">Max. Spieler</label>
                     <input id="max_players" name="max_players" type="number" min="0" max="10000"
                            placeholder="20" value="{{ configured_max_players if configured_max_players is not none else '' }}">
-                    <p class="muted">Steht in <code>server.properties</code> (<code>max-players</code>) und wird beim
-                    n&auml;chsten Start wirksam. <code>0</code> macht den Server dicht, ohne ihn zu stoppen.</p>
                 </div>
                 <div>
                     <label for="start_mode">Startmodus</label>
