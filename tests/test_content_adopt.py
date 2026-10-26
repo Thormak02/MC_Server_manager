@@ -1020,3 +1020,56 @@ def test_plugin_wrapper_still_limits_itself_to_plugins(client, monkeypatch, tmp_
 
         cs.auto_update_content_for_server_version(db, srv, None)
         assert set(gesucht) == {"sod"}, "der allgemeine Pfad haette die Mod nachziehen muessen"
+
+
+def test_modpack_servers_keep_their_mods_untouched(client, monkeypatch, tmp_path):
+    """Auf einem Modpack-Server gehoeren die Mods DEM PACK.
+
+    Sie einzeln beim Anbieter nachzuziehen triebe den Server von seinem Manifest weg -
+    andere Versionen als das Pack vorsieht, fehlende Abhaengigkeiten - und das naechste
+    Pack-Update ueberschriebe ohnehin alles wieder. Auf ATM10SKY waeren das 296 Mods.
+    """
+    from app.db.session import SessionLocal
+    from app.services import content_service as cs
+    from app.services import modpack_service
+
+    gesucht = []
+    monkeypatch.setattr(cs, "list_modrinth_versions",
+                        lambda pid, mc, loader, release_channel="release": (
+                            gesucht.append(pid) or []))
+    monkeypatch.setattr(modpack_service, "get_server_modpack_state",
+                        lambda db, sid: object())      # Server haengt an einem Pack
+
+    base = tmp_path / "packsrv"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="fabric", mc="26.3")
+        db.add(_eintrag(srv.id, srv, "mod", "Sodium", "sodium.jar", projekt="sod"))
+        db.commit()
+        notizen, _warnungen = cs.auto_update_content_for_server_version(db, srv, None)
+
+    assert gesucht == [], "die Mods eines Modpack-Servers duerfen nicht einzeln angefasst werden"
+    assert any("Modpack" in n for n in notizen), "der Grund gehoert in die Meldung"
+
+
+def test_without_a_modpack_mods_are_still_updated(client, monkeypatch, tmp_path):
+    """Gegenprobe - ein handgebauter Modded-Server soll weiter nachgezogen werden."""
+    from app.db.session import SessionLocal
+    from app.services import content_service as cs
+    from app.services import modpack_service
+
+    gesucht = []
+    monkeypatch.setattr(cs, "list_modrinth_versions",
+                        lambda pid, mc, loader, release_channel="release": (
+                            gesucht.append(pid) or []))
+    monkeypatch.setattr(modpack_service, "get_server_modpack_state", lambda db, sid: None)
+
+    base = tmp_path / "handsrv"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="fabric", mc="26.3")
+        db.add(_eintrag(srv.id, srv, "mod", "Sodium", "sodium.jar", projekt="sod"))
+        db.commit()
+        cs.auto_update_content_for_server_version(db, srv, None)
+
+    assert set(gesucht) == {"sod"}

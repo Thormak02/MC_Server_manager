@@ -973,3 +973,81 @@ def test_shutdown_all_managed_processes_preserves_restart_status_when_requested(
         server = db.get(Server, server_id)
         assert server is not None
         assert server.status == "restarting"
+
+
+def _make_modpack_server(client, tmp_path, name="Pack Server", server_type="paper"):
+    """Server anlegen und ihm einen Modpack-Zustand verpassen."""
+    from app.db.session import SessionLocal
+    from app.models.server_modpack_state import ServerModpackState
+
+    server_dir = tmp_path / name.lower().replace(" ", "_")
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\n", encoding="utf-8")
+    ort = _import_server_with_type(client, server_dir, name=name,
+                                   server_type=server_type, mc_version="1.21.1")
+    server_id = int(ort.rsplit("/", 1)[-1])
+    with SessionLocal() as db:
+        db.add(ServerModpackState(server_id=server_id, source="curseforge",
+                                  pack_name="Testpack", source_ref="1:2"))
+        db.commit()
+    return server_id
+
+
+def test_modpack_server_version_change_is_blocked(client, tmp_path):
+    """Bei einem Modpack-Server bestimmt das PACK die Minecraft-Version.
+
+    Sie einzeln umzustellen wuerde den Server von seinem Manifest trennen: das Jar
+    passte dann nicht mehr zu den Mods, und das naechste Pack-Update ueberschriebe es
+    ohnehin. Der Weg ist das Modpack-Update.
+    """
+    _login_admin(client)
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    server_id = _make_modpack_server(client, tmp_path, name="Pack Blocked")
+
+    antwort = client.post(f"/servers/{server_id}/settings",
+                          data={"mc_version": "1.21.11"}, follow_redirects=False)
+    assert antwort.status_code == 303
+
+    with SessionLocal() as db:
+        server = db.get(Server, server_id)
+        assert server.mc_version == "1.21.1", "die Version wurde trotz Sperre geaendert"
+
+
+def test_modpack_lock_is_reported_on_the_server_page(client, tmp_path):
+    """Die Sperre muss sichtbar sein - sonst sucht man den Fehler bei sich."""
+    _login_admin(client)
+    server_id = _make_modpack_server(client, tmp_path, name="Pack Visible")
+
+    seite = client.get(f"/servers/{server_id}").text
+    assert "Modpack" in seite
+
+
+def test_plain_server_version_change_still_works(client, tmp_path, monkeypatch):
+    """Gegenprobe: ohne Modpack-Zustand bleibt der Wechsel moeglich."""
+    from app.api.routers import servers as servers_router
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+
+    _login_admin(client)
+    server_dir = tmp_path / "plain_srv"
+    server_dir.mkdir()
+    (server_dir / "start.bat").write_text("@echo off\n", encoding="utf-8")
+    ort = _import_server_with_type(client, server_dir, name="Plain Server",
+                                   server_type="paper", mc_version="1.21.1")
+    server_id = int(ort.rsplit("/", 1)[-1])
+
+    monkeypatch.setattr(servers_router.provisioning_service, "reprovision_existing_server",
+                        lambda server, *, mc_version, loader_version: ["ok"])
+    monkeypatch.setattr(servers_router.content_service,
+                        "auto_update_content_for_server_version",
+                        lambda *a, **kw: ([], []))
+    monkeypatch.setattr(servers_router.content_service,
+                        "auto_update_datapacks_for_server_version",
+                        lambda *a, **kw: ([], []))
+
+    client.post(f"/servers/{server_id}/settings",
+                data={"mc_version": "1.21.11"}, follow_redirects=False)
+    with SessionLocal() as db:
+        assert db.get(Server, server_id).mc_version == "1.21.11"

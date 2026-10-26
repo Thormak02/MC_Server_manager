@@ -3201,13 +3201,33 @@ def auto_update_content_for_server_version(
 
     installed_items = list_installed_content(db, server)
     gewuenscht = {t.strip().lower() for t in content_types}
+    # Auf einem Modpack-Server gehoeren die Mods DEM PACK. Sie einzeln beim Anbieter
+    # nachzuziehen triebe den Server von seinem Manifest weg: andere Versionen als das
+    # Pack vorsieht, fehlende Abhaengigkeiten - und das naechste Pack-Update
+    # ueberschreibt ohnehin alles wieder. Der richtige Weg ist das Modpack-Update,
+    # das der Manager getrennt anbietet.
+    hinweis_modpack = ""
+    if "mod" in gewuenscht:
+        try:
+            from app.services import modpack_service as _mp
+
+            if _mp.get_server_modpack_state(db, server.id) is not None:
+                gewuenscht.discard("mod")
+                hinweis_modpack = (
+                    "Mods nicht einzeln aktualisiert: Dieser Server haengt an einem "
+                    "Modpack - dafuer bitte das Modpack aktualisieren."
+                )
+        except Exception:  # noqa: BLE001 - im Zweifel NICHT einzeln anfassen
+            gewuenscht.discard("mod")
     plugin_items = [item for item in installed_items
                     if (item.content_type or "").strip().lower() in gewuenscht]
     if not plugin_items:
-        return [], []
+        return ([hinweis_modpack] if hinweis_modpack else []), []
 
     notes: list[str] = []
     warnings: list[str] = []
+    if hinweis_modpack:
+        notes.append(hinweis_modpack)
     for item in plugin_items:
         provider = (item.provider_name or "").strip().lower()
         project_id = str(item.external_project_id or "").strip()
