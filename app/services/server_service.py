@@ -3,6 +3,7 @@ import threading
 from pathlib import Path
 
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.constants import DEFAULT_SERVER_STATUS, UserRole
@@ -1261,6 +1262,120 @@ def prepare_ports_before_start(db: Session, server: Server) -> list[str]:
             pass
 
     return warnings
+
+
+MAX_SERVER_NAME_LENGTH = 128
+
+
+def rename_server(
+    db: Session,
+    server: Server,
+    new_name: str,
+    *,
+    initiated_by_user_id: int | None = None,
+) -> tuple[bool, str]:
+    """Server umbenennen - der Anzeigename wandert ueberall mit, abgeleitete
+    Bezeichner bleiben bewusst stehen.
+
+    BEWUSST UNVERAENDERT, weil daran dauerhafte Dinge haengen:
+    - ``slug``: traegt den Backup-Ordner (``server-<id>-<slug>``) und die
+      Hub-Replay-Datei (``<slug>_capture.replay``, siehe hub_replay_service).
+      Wuerde er mitwandern, waeren bestehende Backups und das Modpack-Profil des
+      Hubs nicht mehr unter dem erwarteten Namen auffindbar.
+    - ``base_path``: eigenstaendiger Pfad, der schon bei der Erstellung vom Namen
+      abweichen darf (eigener Zielpfad). Ein Ordner-Umzug wuerde ausserdem
+      ``start_bat_path``/``start_command`` und offene Datei-Handles betreffen.
+    - ``gateway_hostname``: daran haengen ``/server <alias>``, die Gateway-Route
+      und die Lesezeichen der Spieler - ein Alias-Wechsel waere ein Umzug, kein
+      Umbenennen.
+
+    MITGEZOGEN wird alles, was den Namen ANZEIGT: der Python-Hub liest ihn live
+    aus der DB, die Bukkit-Lobbys bekommen ihre ``config.yml`` neu geschrieben
+    und - sofern sie laufen - ein ``mcsmlobby reload``. Dadurch steht der neue
+    Name sofort im Kompass-Menue, ohne Lobby-Neustart.
+
+    Weil weder Ordner noch Ports noch Prozesse beruehrt werden, ist Umbenennen
+    auch im LAUFENDEN Betrieb unkritisch. Historie (Audit-Log, Job-Historie)
+    bleibt beim alten Namen - das ist gewollt, sie beschreibt die Vergangenheit.
+
+    Rueckgabe ``(veraendert, meldung)``.
+    """
+    bereinigt = (new_name or "").strip()
+    if not bereinigt:
+        raise ValueError("Der Servername darf nicht leer sein.")
+    if len(bereinigt) > MAX_SERVER_NAME_LENGTH:
+        raise ValueError(
+            f"Der Servername darf hoechstens {MAX_SERVER_NAME_LENGTH} Zeichen lang sein "
+            f"(aktuell {len(bereinigt)})."
+        )
+    if bereinigt == server.name:
+        return False, "Der Name ist unveraendert."
+
+    alter_name = server.name
+
+    # Namensvergabe bis zum Commit serialisieren - dieselbe Sperre wie Erstellen und
+    # Duplizieren, sonst koennte parallel derselbe Name entstehen (unique-Spalte).
+    with _SERVER_ALLOC_LOCK:
+        # Gross-/Kleinschreibung mitpruefen: SQLite waere "David" und "david" beides
+        # erlaubt, im Lobby-Menue und im Loesch-Dialog waere das aber nicht
+        # unterscheidbar.
+        kollision = db.scalar(
+            select(Server).where(
+                func.lower(Server.name) == bereinigt.lower(),
+                Server.id != server.id,
+            )
+        )
+        if kollision is not None:
+            raise ValueError(
+                f"Es gibt bereits einen Server mit dem Namen '{kollision.name}'."
+            )
+        server.name = bereinigt
+        db.add(server)
+        try:
+            db.commit()
+        except IntegrityError as exc:  # pragma: no cover - Race trotz Sperre
+            db.rollback()
+            raise ValueError(
+                f"Name '{bereinigt}' ist bereits belegt - bitte erneut versuchen."
+            ) from exc
+    db.refresh(server)
+
+    try:
+        from app.services import audit_service
+
+        audit_service.log_action(
+            db,
+            action="server.rename",
+            user_id=initiated_by_user_id,
+            server_id=server.id,
+            details=f"'{alter_name}' -> '{bereinigt}'",
+        )
+    except Exception:  # noqa: BLE001 - Protokoll darf das Umbenennen nie kippen
+        pass
+
+    meldung = f"Server umbenannt: '{alter_name}' -> '{bereinigt}'."
+
+    # Den neuen Namen in die Lobby-Menues tragen. Der Name steht in der config.yml
+    # JEDES ANDEREN Gateway-Bukkit-Servers (als Menue-Eintrag), nicht in der eigenen -
+    # deshalb ein Sync ueber alle, nicht nur ueber diesen Server.
+    try:
+        from app.services import lobby_service
+
+        ok, detail = lobby_service.sync_lobby_plugin(db)
+        if ok:
+            meldung += f" Lobby-Menues aktualisiert: {detail}"
+        else:
+            meldung += (
+                f" Hinweis: Lobby-Menues nicht vollstaendig aktualisiert ({detail}) - "
+                "der alte Name kann dort bis zum naechsten Lobby-Start stehen bleiben."
+            )
+    except Exception as exc:  # noqa: BLE001 - Umbenennen selbst ist schon committet
+        meldung += (
+            f" Hinweis: Lobby-Menues nicht aktualisiert ({exc}) - der alte Name kann "
+            "dort bis zum naechsten Lobby-Start stehen bleiben."
+        )
+
+    return True, meldung
 
 
 def update_server_settings(

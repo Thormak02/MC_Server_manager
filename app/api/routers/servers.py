@@ -36,6 +36,7 @@ from app.services.server_service import (
     can_view_server,
     duplicate_server,
     get_server_by_id,
+    rename_server,
     sleep_delay_to_seconds,
     sync_server_settings_to_files,
     update_server_settings,
@@ -667,6 +668,7 @@ def sleep_server_action(
 def update_server_settings_action(
     request: Request,
     server_id: int,
+    name: Annotated[str | None, Form()] = None,
     mc_version: Annotated[str | None, Form()] = None,
     loader_version: Annotated[str | None, Form()] = None,
     java_profile_id: Annotated[str | None, Form()] = None,
@@ -697,6 +699,24 @@ def update_server_settings_action(
     if not can_control_server(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     is_super_admin = current_user.role == UserRole.SUPER_ADMIN.value
+
+    # Umbenennen zuerst: ein ungueltiger Name soll das Speichern abbrechen, statt
+    # die Haelfte der Einstellungen zu uebernehmen. ``name is None`` heisst "Feld nicht
+    # mitgeschickt" (aeltere Formulare/externe Aufrufe) -> dann bleibt der Name, wie er ist.
+    rename_note: str | None = None
+    if name is not None:
+        try:
+            renamed, rename_message = rename_server(
+                db, server, name, initiated_by_user_id=current_user.id
+            )
+        except ValueError as exc:
+            push_flash(request, str(exc), "error")
+            return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+        if renamed:
+            rename_note = rename_message
+            # Sofort melden: das Umbenennen ist bereits committet. Bricht das Speichern
+            # danach ab (Versionssperre, Speichergrenzen), waere die Meldung sonst weg.
+            push_flash(request, rename_message, "success")
 
     target_mc_version = (mc_version or "").strip() or server.mc_version
     raw_loader_version = (loader_version or "").strip()
@@ -825,7 +845,7 @@ def update_server_settings_action(
             "Servereinstellungen gespeichert. " + " | ".join(reprovision_notes),
             "info",
         )
-    else:
+    elif not rename_note:
         push_flash(request, "Servereinstellungen gespeichert.", "success")
     return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
 

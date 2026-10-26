@@ -103,6 +103,19 @@
     <form method="post" action="/servers/{{ server.id }}/settings" class="settings-form">
 
         <div class="settings-section">
+            <h3>Name</h3>
+            <div class="grid settings-grid">
+                <div>
+                    <label for="name">Servername</label>
+                    <input id="name" name="name" type="text" maxlength="128" required value="{{ server.name }}">
+                    <p class="muted">Der Anzeigename - im Dashboard und im Lobby-Men&uuml;. Ordner, Backups und der
+                    Hostname-Alias (<code>/server {{ server.gateway_hostname or 'alias' }}</code>) bleiben unver&auml;ndert,
+                    damit bestehende Sicherungen und Lesezeichen weiter funktionieren.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
             <h3>Version</h3>
             <div class="grid settings-grid">
                 <div>

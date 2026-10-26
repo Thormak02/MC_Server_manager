@@ -194,7 +194,7 @@ localisation (englisch), später
 
 
 
-Lobby Server unter selben port wie manager, von hier aus soll man auch server starten können.
+~~Lobby Server unter selben port wie manager, von hier aus soll man auch server starten können.~~
 welt ist eine struktur, die sich automatisch pro server erweitert. ist das möglich? siehe docs/lobby_gateway_plan.md
 
 
@@ -314,9 +314,9 @@ Welten & Inhalte
 
 Welten-Manager: mehrere Welten je Server, umschalten, einzelne Welt sichern/hoch-/runterladen, Seed anzeigen. später evtl.
 
-Datapack-Verwaltung (installieren/aktivieren/deaktivieren), analog zu Mods.
+~~Datapack-Verwaltung (installieren/aktivieren/deaktivieren), analog zu Mods.~~
 
-Resourcepack-Hosting: Server-Resourcepack automatisch bereitstellen und resource-pack-URL setzen, ebenfalls über api, analog zu mods.
+~~Resourcepack-Hosting: Server-Resourcepack automatisch bereitstellen und resource-pack-URL setzen, ebenfalls über api, analog zu mods.~~
 
 Chunk-Vorgenerierung (z.B. via Chunky) zur Lag-Reduktion eher nein, wenn nur on demand.
 
@@ -386,9 +386,9 @@ später: monetarisierung: server, orgas usw. vermieten, kosten nach kapazität, 
 
 Ideen aus dem Urlaub (09/2026), für viel später:
 
-Graceful Rejection: ERLEDIGT als Vorab-Prüfung. Statt den Spieler wegzuschicken und danach aufzufangen (nach einem nativen Transfer ist die Lobby-Verbindung weg und kann ihn nicht mehr erreichen), wird VOR dem Wechsel gefragt - dann bleibt er einfach in seiner Lobby und liest den Grund im Chat. Eine Wahrheitsquelle (`lobby_service.check_join_allowed`) für BEIDE Lobbys: der Python-Hub ruft sie direkt auf, die Bukkit-Lobby über den lokalen TCP/JSON-Endpoint (`lobby_api_service`, Token, nur 127.0.0.1) - dadurch identische Texte, egal mit welchem Client. Greift bei Kompass/Command/Schild/Portal und auch bei `/lobby`. Geprüft werden: Server offline, Ban (mit Grund), Whitelist, voll, sowie per Status-Ping "läuft zwar, nimmt aber noch keine Verbindungen an". Überall fail-open - eine kaputte Prüfung darf niemanden aussperren.
+~~Graceful Rejection: ERLEDIGT als Vorab-Prüfung. Statt den Spieler wegzuschicken und danach aufzufangen (nach einem nativen Transfer ist die Lobby-Verbindung weg und kann ihn nicht mehr erreichen), wird VOR dem Wechsel gefragt - dann bleibt er einfach in seiner Lobby und liest den Grund im Chat. Eine Wahrheitsquelle (`lobby_service.check_join_allowed`) für BEIDE Lobbys: der Python-Hub ruft sie direkt auf, die Bukkit-Lobby über den lokalen TCP/JSON-Endpoint (`lobby_api_service`, Token, nur 127.0.0.1) - dadurch identische Texte, egal mit welchem Client. Greift bei Kompass/Command/Schild/Portal und auch bei `/lobby`. Geprüft werden: Server offline, Ban (mit Grund), Whitelist, voll, sowie per Status-Ping "läuft zwar, nimmt aber noch keine Verbindungen an". Überall fail-open - eine kaputte Prüfung darf niemanden aussperren.~~
 
-Offen dazu: Modpack-/Resourcepack-Abgleich vor dem Wechsel (der Ping liefert bei Forge/NeoForge eine Mod-Liste - damit wäre "falsches Modpack" vorab erkennbar). Ebenso ungedeckt: der allererste Join (da gibt es noch keine Lobby zum Zurückkehren) und eine Ablehnung, die erst NACH dem Transfer passiert (z.B. ein Plugin auf dem Ziel) - dafür bräuchte es einen echten Proxy in der Verbindung.
+~~Offen dazu: Modpack-Abgleich vor dem Wechsel (der Ping liefert bei Forge/NeoForge eine Mod-Liste - damit wäre "falsches Modpack" vorab erkennbar).~~ Weiterhin offen: Resourcepack-Abgleich (der Client meldet sein Pack nicht), der allererste Join (da gibt es noch keine Lobby zum Zurückkehren) und eine Ablehnung, die erst NACH dem Transfer passiert (z.B. ein Plugin auf dem Ziel) - dafür bräuchte es einen echten Proxy in der Verbindung.
 
 Mobile Verwaltung: MCSM auch als App-Version + mobile Web-App zur Verwaltung. Selbes Backend, immer selber Stand wie die Web-Version. Dünne native App (PWA / Wrapper), die selbst nicht aktualisiert werden muss - alles läuft über die Web-App. Evtl. eigenes, für Mobile optimiertes Frontend. Außerdem die bestehende Website für mobile Browser optimieren. (erweitert die vorhandene "PWA / mobil-optimierte Ansicht")
 
@@ -419,7 +419,7 @@ bestimmte server bei manager neustart nicht mit neustarten, sondern weiterlaufen
 
 manager kann auch server pc restarten
 
-zb. spigot oder andere pluginloader configs bearbeitbar machen
+~~zb. spigot oder andere pluginloader configs bearbeitbar machen~~
 
 
 
