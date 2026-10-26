@@ -784,6 +784,15 @@ def update_server_settings_action(
             )
             reprovision_notes.extend(plugin_notes)
             sync_warnings.extend(plugin_warnings)
+            # Datapacks GEHOEREN dazu. auto_update_plugins_for_server_version filtert auf
+            # content_type == "plugin" - beim Sprung 1.21.11 -> 26.2 blieben dadurch alle
+            # VanillaTweaks-Packs auf der alten Gruppe stehen und luden auf dem neuen
+            # Server nicht mehr, ohne dass irgendetwas davon berichtet haette.
+            dp_notes, dp_warnings = content_service.auto_update_datapacks_for_server_version(
+                db, server, current_user.id
+            )
+            reprovision_notes.extend(dp_notes)
+            sync_warnings.extend(dp_warnings)
         except Exception as exc:
             db.rollback()
             push_flash(

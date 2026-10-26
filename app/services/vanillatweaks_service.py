@@ -69,6 +69,61 @@ def map_vt_version(mc_version: str | None) -> str:
     return _VT_LATEST_VERSION
 
 
+# Wie viele Minor-Schritte abwaerts gesucht wird, wenn VT die Gruppe des Servers noch
+# nicht kennt. Mehr Schritte waeren keine passende Grundlage mehr.
+_VERSION_SEARCH_DEPTH = 8
+_VERSION_CACHE: dict[str, str] = {}
+
+
+def version_exists(version: str) -> bool:
+    """Bietet VanillaTweaks diese Versionsgruppe ueberhaupt an?"""
+    try:
+        content_service._request_json(
+            f"{VT_BASE}/assets/resources/json/{version}/dpcategories.json", headers=_headers()
+        )
+        return True
+    except Exception:  # noqa: BLE001 - nicht erreichbar zaehlt hier wie "gibt es nicht"
+        return False
+
+
+def resolve_vt_version(mc_version: str | None) -> str:
+    """Die VT-Gruppe, die zu diesem Server passt UND die es bei VT wirklich gibt.
+
+    Warum nicht einfach map_vt_version: die bildet nur den String ab (26.2.1 -> 26.2) und
+    weiss nichts darueber, was VT anbietet. Frueher fingen list_categories/generate_zip eine
+    unbekannte Gruppe still mit "1.21" ab - das lieferte fuer einen 26.x-Server ein Pack,
+    das dort gar nicht laedt (1.21-Packs decken die Formate 48-94 ab, 26.x verlangt 101+),
+    und der Aufrufer merkte nichts.
+
+    Deshalb: ein Rueckfall NUR innerhalb derselben Hauptversion (26.4 -> 26.3 -> ...), nie
+    ueber den Schemawechsel hinweg. Gibt es gar nichts, scheitert das hier LAUT, statt
+    etwas Unbrauchbares auszuliefern.
+    """
+    gewuenscht = map_vt_version(mc_version)
+    gemerkt = _VERSION_CACHE.get(gewuenscht)
+    if gemerkt:
+        return gemerkt
+
+    major, _punkt, minor = gewuenscht.partition(".")
+    kandidaten = [gewuenscht]
+    if major.isdigit() and minor.isdigit():
+        for schritt in range(1, _VERSION_SEARCH_DEPTH + 1):
+            kleiner = int(minor) - schritt
+            if kleiner < 0:
+                break
+            kandidaten.append(f"{major}.{kleiner}")
+
+    for kandidat in kandidaten:
+        if version_exists(kandidat):
+            _VERSION_CACHE[gewuenscht] = kandidat
+            return kandidat
+
+    raise ValueError(
+        f"VanillaTweaks bietet fuer Minecraft {mc_version} noch nichts an "
+        f"(geprueft: {', '.join(kandidaten)}). Bitte spaeter erneut versuchen."
+    )
+
+
 def list_categories(pack_type: str, version: str) -> list[dict]:
     pack_type = (pack_type or "").strip().lower()
     if pack_type not in _PACK_TYPES:
@@ -80,13 +135,9 @@ def list_categories(pack_type: str, version: str) -> list[dict]:
         payload = content_service._request_json(url, headers=_headers())
         return list(payload.get("categories", [])) if isinstance(payload, dict) else []
 
-    try:
-        return _fetch(version)
-    except ValueError:
-        # VT kennt diese Versionsgruppe (noch) nicht (z.B. 26.x) -> auf die neueste 1.x-Gruppe zurueck.
-        if version != _VT_LATEST_VERSION:
-            return _fetch(_VT_LATEST_VERSION)
-        raise
+    # KEIN stiller Rueckfall auf eine andere Gruppe - die Auswahl trifft
+    # resolve_vt_version, und zwar sichtbar. Siehe dort.
+    return _fetch(version)
 
 
 def _post_json(url: str, form: dict[str, str]) -> dict:
@@ -135,13 +186,9 @@ def generate_zip(
             raise ValueError(f"Generierung fehlgeschlagen: {resp}")
         return _get_bytes(f"{VT_BASE}{resp['link']}")
 
-    try:
-        return _gen(version)
-    except ValueError:
-        # Unbekannte Versionsgruppe (26.x) -> neueste 1.x-Gruppe als Best-effort.
-        if version != _VT_LATEST_VERSION:
-            return _gen(_VT_LATEST_VERSION)
-        raise
+    # KEIN stiller Rueckfall: ein Pack der falschen Gruppe laedt auf dem Server nicht,
+    # wuerde aber als "installiert" verbucht. Die Gruppe waehlt resolve_vt_version.
+    return _gen(version)
 
 
 def install_datapacks(
@@ -155,7 +202,7 @@ def install_datapacks(
     pack_type = (pack_type or "").strip().lower()
     if pack_type not in _DATAPACK_LIKE:
         raise ValueError("Nur datapacks/craftingtweaks werden abgelegt.")
-    version = map_vt_version(server.mc_version)
+    version = resolve_vt_version(server.mc_version)
     archive = generate_zip(pack_type, version, selection)
 
     target_dir = content_service._target_dir(server, "datapack")
@@ -384,7 +431,7 @@ def _update_crafting_tweaks(db: Session, server: Server, entry: InstalledContent
                             user_id: int | None) -> tuple[bool, str]:
     """Kombiniertes Crafting-Tweaks-Datapack neu generieren: Auswahl aus 'Selected Packs.txt'
     lesen, Kategorien aus dem Katalog auffuellen, frisch generieren, alte Datei ersetzen."""
-    version = map_vt_version(server.mc_version)
+    version = resolve_vt_version(server.mc_version)
     path = content_service._content_file_path(server, "datapack", entry.file_name)
     manifest = read_selected_packs(path) if path.exists() else None
     pack_names = (manifest or {}).get("packs") or []
@@ -439,7 +486,7 @@ def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
     VT liefert immer nur die aktuelle Version -> "Update" = neu generieren, alte Datei
     (anderer Name wegen neuer Versionsnummer) ersetzen. Rueckgabe (aktualisiert, Notiz/Hinweis);
     ``(False, "")`` bedeutet "bereits aktuell"."""
-    version = map_vt_version(server.mc_version)
+    version = resolve_vt_version(server.mc_version)
     pack_type = _pack_type_from_project(entry.external_project_id)
     # Crafting Tweaks sind EIN kombiniertes Datapack -> eigener Regenerate-Pfad ueber das Manifest.
     if pack_type == "craftingtweaks":
@@ -536,7 +583,7 @@ def install_resourcepack(
             "MCSM_PUBLIC_BASE_URL), wird zum Hosten des Resource Packs benoetigt."
         )
 
-    version = map_vt_version(server.mc_version)
+    version = resolve_vt_version(server.mc_version)
     archive = generate_zip("resourcepacks", version, selection)
     sha1 = hashlib.sha1(archive).hexdigest()
 

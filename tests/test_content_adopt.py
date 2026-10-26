@@ -822,3 +822,90 @@ def test_update_installed_vt_without_a_known_group_regenerates_once(client, monk
         assert aktualisiert is True
         db.refresh(entry)
         assert entry.declared_mc_version == "26.2"
+
+
+def _vt_datapack(server_id, name, datei, server=None):
+    """VT-Datapack-Eintrag. external_version_id ist NOT NULL - immer mitgeben.
+
+    Mit ``server`` wird auch die DATEI angelegt: list_installed_content gleicht mit dem
+    Ordner ab und wirft Eintraege ohne Datei hinaus - der Test pruefte sonst nichts.
+    """
+    from app.models.installed_content import InstalledContent
+
+    if server is not None:
+        from app.services import content_service as _cs
+
+        ziel = _cs._target_dir(server, "datapack")
+        ziel.mkdir(parents=True, exist_ok=True)
+        (ziel / datei).write_bytes(b"PKPlatzhalter")
+
+    return InstalledContent(
+        server_id=server_id, provider_name="vanillatweaks", content_type="datapack",
+        external_project_id="vt:datapacks", external_version_id="1",
+        name=name, file_name=datei,
+    )
+
+
+def test_version_change_also_updates_datapacks(client, monkeypatch, tmp_path):
+    """Beim Versionswechsel wurden nur Plugins nachgezogen, Datapacks nicht.
+
+    Genau so blieben beim Sprung 1.21.11 -> 26.2 alle VanillaTweaks-Packs auf der alten
+    Gruppe stehen: ein 1.21-Pack deckt die Pack-Formate 48-94 ab, ein 26.x-Server
+    verlangt 101+ - es laedt dort nicht, und nichts hat es gemeldet.
+    """
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import content_service as cs
+    from app.services import vanillatweaks_service as vt
+
+    gerufen = []
+    monkeypatch.setattr(vt, "update_installed_vt",
+                        lambda db, srv, e, uid: (gerufen.append(e.name), (True, ""))[1])
+
+    base = tmp_path / "vswitch"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="26.3")
+        db.add_all([
+            _vt_datapack(srv.id, "Durability Ping", "dp.zip", srv),
+            _vt_datapack(srv.id, "Elevators", "el.zip", srv),
+            # Fremdes Datapack: dafuer gibt es keine Neuerzeugung -> unberuehrt lassen.
+            InstalledContent(server_id=srv.id, provider_name="local", content_type="datapack",
+                             external_project_id="local", external_version_id="1",
+                             name="Eigenbau", file_name="x.zip"),
+            # Plugin: gehoert in den anderen Pfad.
+            InstalledContent(server_id=srv.id, provider_name="modrinth", content_type="plugin",
+                             external_project_id="abc", external_version_id="1",
+                             name="Irgendein Plugin", file_name="p.jar"),
+        ])
+        db.commit()
+        notizen, warnungen = cs.auto_update_datapacks_for_server_version(db, srv, None)
+
+    assert sorted(gerufen) == ["Durability Ping", "Elevators"]
+    assert len(notizen) == 2 and warnungen == []
+
+
+def test_datapack_update_survives_a_single_broken_pack(client, monkeypatch, tmp_path):
+    """Ein kaputtes Pack darf den Versionswechsel nicht kippen."""
+    from app.db.session import SessionLocal
+    from app.services import content_service as cs
+    from app.services import vanillatweaks_service as vt
+
+    def mal_so_mal_so(db, srv, e, uid):
+        if e.name == "Kaputt":
+            raise ValueError("bei VanillaTweaks nicht gefunden")
+        return True, ""
+
+    monkeypatch.setattr(vt, "update_installed_vt", mal_so_mal_so)
+
+    base = tmp_path / "vswitch2"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="26.3")
+        db.add_all([_vt_datapack(srv.id, "Kaputt", "k.zip", srv),
+                    _vt_datapack(srv.id, "Heil", "h.zip", srv)])
+        db.commit()
+        notizen, warnungen = cs.auto_update_datapacks_for_server_version(db, srv, None)
+
+    assert any("Heil" in n for n in notizen)
+    assert any("Kaputt" in w for w in warnungen)

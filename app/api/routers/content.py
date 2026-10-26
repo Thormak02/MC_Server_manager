@@ -690,8 +690,10 @@ def vanillatweaks_categories(
 
     from app.services import vanillatweaks_service as vt
 
-    version = vt.map_vt_version(server.mc_version)
     try:
+        # Aufloesen statt nur abbilden: so bekommt der Nutzer die Packs der Gruppe, die
+        # VT fuer seine Serverversion wirklich hat - oder eine klare Meldung.
+        version = vt.resolve_vt_version(server.mc_version)
         categories = vt.list_categories(type, version)
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"detail": str(exc)})

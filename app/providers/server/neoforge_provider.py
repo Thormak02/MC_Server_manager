@@ -37,11 +37,25 @@ class NeoForgeProvider(ServerProviderBase):
                 return []
         return parts
 
+    # NeoForge nummeriert seine Loader nach der Minecraft-Version - aber die Bedeutung
+    # der ersten Zahl haengt am Versionsschema:
+    #   altes Schema: MC 1.21.1  -> Loader 21.1.x   (erste Zahl = MINOR von 1.x)
+    #   neues Schema: MC 26.3    -> Loader 26.3.0.x (erste Zahl = MAJOR)
+    # Die Grenze liegt sicher dazwischen: 1.21 war die letzte 1.x-Reihe, danach kam 26.x -
+    # eine 1.22 hat es nie gegeben, also kann hier nichts kollidieren.
+    _YEAR_SCHEME_FROM = 22
+
     @classmethod
     def _mc_version_from_loader(cls, loader_version: str) -> str | None:
         parts = cls._parse_core_parts(loader_version)
         if len(parts) < 2:
             return None
+        if parts[0] >= cls._YEAR_SCHEME_FROM:
+            # Kein "1." davor! Sonst entsteht aus Loader 26.3.0.99 die Phantomversion
+            # "1.26.3": sie sieht plausibel aus, steht im Dropdown ganz oben, laesst sich
+            # anlegen - und danach waehlt der Manager Java 21 statt 25, lehnt jede Mod als
+            # "inkompatibel" ab und findet keine VanillaTweaks-Gruppe.
+            return f"{parts[0]}.{parts[1]}"
         mc = f"1.{parts[0]}.{parts[1]}"
         if mc.endswith(".0"):
             mc = mc[:-2]

@@ -33,7 +33,22 @@ def _parse_version_tuple(version: str) -> tuple[int, ...]:
     return tuple(parts)
 
 
+def _looks_numeric(version: str) -> bool:
+    """Sieht die Kennung nach einer Zahlenversion aus (1.21.11, 26.2, 26.2-pre1)?
+
+    Snapshot-Kennungen wie "26w14a" tun das NICHT - sie haben gar keine Zahlenpunkte.
+    """
+    kopf = version.strip().split("-", 1)[0]
+    return bool(kopf) and kopf.split(".")[0].isdigit()
+
+
 def is_version_at_least(version: str, minimum: str) -> bool:
+    # Eine Snapshot-Kennung laesst sich nicht sinnvoll gegen eine Mindestversion
+    # vergleichen: "26w14a" wird zu (0,) und faellt damit IMMER durch - auch wenn
+    # der Nutzer den Snapshot-Kanal ausdruecklich gewaehlt hat. Solche Kennungen
+    # gehen hier durch; ueber ihre Aufnahme entscheidet allein der Kanal-Filter.
+    if not _looks_numeric(version):
+        return True
     left = _parse_version_tuple(version)
     right = _parse_version_tuple(minimum)
     max_len = max(len(left), len(right))

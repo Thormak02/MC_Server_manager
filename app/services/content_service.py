@@ -2668,7 +2668,7 @@ def auto_adopt_local_content(db: Session, server: Server, user_id: int | None, *
             vt_ran = True   # nur kombinierte CT-Packs -> offline definitiv erledigt
         else:
             try:
-                vt_lookup = _vt.build_datapack_lookup(_vt.map_vt_version(server.mc_version))
+                vt_lookup = _vt.build_datapack_lookup(_vt.resolve_vt_version(server.mc_version))
                 vt_ran = True
             except Exception as exc:  # noqa: BLE001
                 vt_lookup = {}
@@ -3128,6 +3128,49 @@ def bulk_update_installed_content(
     return notes, warnings
 
 
+def auto_update_datapacks_for_server_version(
+    db: Session, server: Server, user_id: int | None
+) -> tuple[list[str], list[str]]:
+    """Datapacks nach einem Versionswechsel nachziehen -> (Notizen, Warnungen).
+
+    Warum ueberhaupt: auto_update_plugins_for_server_version filtert auf
+    content_type == "plugin". Beim Sprung 1.21.11 -> 26.2 blieben dadurch alle 22
+    VanillaTweaks-Packs auf ihrer alten Gruppe stehen. Ein 1.21-Pack deckt die
+    Pack-Formate 48-94 ab, ein 26.x-Server verlangt 101+ - sie luden also einfach
+    nicht mehr, und nichts hat davon berichtet.
+
+    Betrifft nur Packs von VanillaTweaks: nur bei denen weiss der Manager, wie er
+    sie fuer eine andere Minecraft-Version neu erzeugt. Fremde Datapacks bleiben
+    unberuehrt, denn eine Neuerzeugung gibt es dort nicht.
+    """
+    from app.services import vanillatweaks_service as _vt
+
+    notes: list[str] = []
+    warnings: list[str] = []
+    try:
+        eintraege = [
+            e for e in list_installed_content(db, server)
+            if (e.content_type or "").strip().lower() == "datapack"
+            and (e.provider_name or "").strip().lower() == "vanillatweaks"
+        ]
+    except Exception as exc:  # noqa: BLE001 - ein Versionswechsel darf daran nicht scheitern
+        return [], [f"Datapacks nicht pruefbar: {exc}"]
+    if not eintraege:
+        return [], []
+
+    for eintrag in eintraege:
+        try:
+            geaendert, hinweis = _vt.update_installed_vt(db, server, eintrag, user_id)
+        except Exception as exc:  # noqa: BLE001 - ein kaputtes Pack kippt nicht den Rest
+            warnings.append(f"{eintrag.name or eintrag.file_name}: {exc}")
+            continue
+        if geaendert:
+            notes.append(f"Datapack aktualisiert: {eintrag.name or eintrag.file_name}")
+        elif hinweis:
+            warnings.append(hinweis)
+    return notes, warnings
+
+
 def auto_update_plugins_for_server_version(
     db: Session,
     server: Server,
@@ -3177,7 +3220,17 @@ def auto_update_plugins_for_server_version(
                     or (latest or {}).get("version_number")
                     or latest_version_id
                 ).strip() or latest_version_id
-                if not latest_version_id or latest_version_id == current_version_id:
+                if not latest_version_id:
+                    # Kein Build fuer die neue Minecraft-Version. Frueher wurde hier
+                    # stillschweigend weitergelaufen - die Meldung listete dann nichts
+                    # und der Nutzer las daraus, alles passe, obwohl das Plugin noch
+                    # den Build der ALTEN Version hatte.
+                    warnings.append(
+                        f"{item.name or item.file_name}: kein Build fuer Minecraft "
+                        f"{expected_mc_version} gefunden - bleibt auf der alten Version."
+                    )
+                    continue
+                if latest_version_id == current_version_id:
                     continue
                 updated_entry = install_modrinth(
                     db,
