@@ -191,32 +191,46 @@ a {
     font: inherit;
 }
 
-.page-title-row {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex-wrap: wrap;
+/* Stift sitzt IM h1, also inline hinter dem Namen - das haelt auch dann,
+   wenn der Browser noch eine alte app.css im Cache hat. */
+.rename-pencil {
+    margin-left: 0.6rem;
+    padding: 0.3rem 0.4rem;
+    line-height: 0;
+    vertical-align: middle;
+    opacity: 0.65;
 }
 
-.page-title-row h1 {
-    margin: 0;
+.rename-pencil:hover,
+.rename-pencil:focus-visible {
+    opacity: 1;
 }
 
-.rename-form .rename-row {
+.rename-form {
+    margin: 0 0 0.3rem;
+}
+
+.rename-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    flex-wrap: wrap;
 }
 
-.rename-form input {
-    flex: 1 1 22rem;
-    min-width: 0;
+.rename-row input {
+    flex: 1 1 auto;
+    min-width: 8rem;
+    max-width: 42rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.rename-hint {
+    margin: 0.4rem 0 0;
 }
 
 /* display:flex wuerde das hidden-Attribut sonst aushebeln. */
-.page-title-row[hidden],
-.rename-form[hidden] {
+.rename-form[hidden],
+.rename-row[hidden] {
     display: none;
 }
 

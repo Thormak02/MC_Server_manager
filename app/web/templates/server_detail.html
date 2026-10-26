@@ -1,43 +1,39 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page-title-row" id="server-title-row">
-    <h1>Server: {{ server.name }}</h1>
-    <button type="button" id="rename-start" class="icon-btn" title="Server umbenennen" aria-label="Server umbenennen">
+<h1 class="page-title" id="server-title">Server: {{ server.name }}<button type="button" id="rename-start"
+        class="icon-btn rename-pencil" title="Server umbenennen" aria-label="Server umbenennen">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
             <path d="M12 20h9"></path>
             <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
-        </svg>
-    </button>
-</div>
+        </svg></button></h1>
 
 <form id="rename-form" method="post" action="/servers/{{ server.id }}/rename" class="rename-form" hidden>
-    <label for="rename-input">Servername</label>
     <div class="rename-row">
         <input id="rename-input" name="name" type="text" maxlength="128" required
-               autocomplete="off" value="{{ server.name }}">
+               autocomplete="off" aria-label="Servername" value="{{ server.name }}">
         <button type="submit">Speichern</button>
         <button type="button" id="rename-cancel" class="ghost">Abbrechen</button>
     </div>
-    <p class="muted">Nur der Anzeigename - im Dashboard und im Lobby-Men&uuml;. Serverordner, Backups und der
-    Hostname-Alias (<code>/server {{ server.gateway_hostname or 'alias' }}</code>) bleiben unver&auml;ndert,
+    <p class="muted rename-hint">Nur der Anzeigename - im Dashboard und im Lobby-Men&uuml;. Serverordner, Backups
+    und der Hostname-Alias (<code>/server {{ server.gateway_hostname or 'alias' }}</code>) bleiben unver&auml;ndert,
     damit bestehende Sicherungen und Lesezeichen weiter funktionieren.</p>
 </form>
 
 <script>
 (function () {
-    const row = document.getElementById("server-title-row");
+    const titel = document.getElementById("server-title");
     const form = document.getElementById("rename-form");
     const input = document.getElementById("rename-input");
     const startBtn = document.getElementById("rename-start");
     const cancelBtn = document.getElementById("rename-cancel");
-    if (!row || !form || !input || !startBtn) return;
+    if (!titel || !form || !input || !startBtn) return;
 
     // Ausgangswert festhalten: Abbrechen soll auch nach wildem Tippen zurueckstellen.
     const original = input.value;
 
     function bearbeiten(an) {
-        row.hidden = an;
+        titel.hidden = an;
         form.hidden = !an;
         if (an) {
             input.value = original;
