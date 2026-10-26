@@ -909,3 +909,114 @@ def test_datapack_update_survives_a_single_broken_pack(client, monkeypatch, tmp_
 
     assert any("Heil" in n for n in notizen)
     assert any("Kaputt" in w for w in warnungen)
+
+
+def _eintrag(server_id, server, art, name, datei, provider="modrinth", projekt="abc"):
+    """Inhaltseintrag MIT Datei - sonst wirft der Ordner-Abgleich ihn hinaus."""
+    from app.models.installed_content import InstalledContent
+    from app.services import content_service as _cs
+
+    ziel = _cs._target_dir(server, art)
+    ziel.mkdir(parents=True, exist_ok=True)
+    (ziel / datei).write_bytes(b"PK\x03\x04Platzhalter")
+    return InstalledContent(
+        server_id=server_id, provider_name=provider, content_type=art,
+        external_project_id=projekt, external_version_id="alt",
+        name=name, file_name=datei,
+    )
+
+
+def test_version_change_updates_mods_too(client, monkeypatch, tmp_path):
+    """Mods hingen genauso an der Minecraft-Version wie Plugins, wurden aber nie
+    nachgezogen - auf einem Modpack-Server war das der groesste Teil des Inhalts."""
+    from app.db.session import SessionLocal
+    from app.services import content_service as cs
+
+    gesucht = []
+    monkeypatch.setattr(cs, "list_modrinth_versions",
+                        lambda pid, mc, loader, release_channel="release": (
+                            gesucht.append((pid, mc, loader)) or []))
+
+    base = tmp_path / "modsrv"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="fabric", mc="26.3")
+        db.add(_eintrag(srv.id, srv, "mod", "Sodium", "sodium.jar"))
+        db.commit()
+        _notizen, warnungen = cs.auto_update_content_for_server_version(db, srv, None)
+
+    assert gesucht, "fuer die Mod wurde gar nicht nach einem neuen Build gesucht"
+    assert gesucht[0][1] == "26.3" and gesucht[0][2] == "fabric"
+    assert any("26.3" in w for w in warnungen), "fehlender Build muss gemeldet werden"
+
+
+def test_loader_is_derived_per_content_type():
+    """Der Loader haengt am INHALTSTYP, nicht am Server allein.
+
+    Ein Spigot-Server kann keine Mods laden, ein Fabric-Server keine Plugins -
+    solche Eintraege duerfen nicht mit dem falschen Loader gesucht werden.
+    Datapacks/Resourcepacks sind loader-unabhaengig und gehen deshalb einen
+    eigenen Weg (VanillaTweaks-Neuerzeugung).
+    """
+    from types import SimpleNamespace
+
+    from app.services.content_service import _expected_server_loader as loader
+
+    spigot = SimpleNamespace(server_type="spigot", mc_version="26.3")
+    fabric = SimpleNamespace(server_type="fabric", mc_version="26.3")
+
+    assert loader(spigot, "plugin") == "spigot"
+    assert loader(spigot, "mod") is None            # Spigot laedt keine Mods
+    assert loader(fabric, "mod") == "fabric"
+    assert loader(fabric, "plugin") is None         # Fabric laedt keine Plugins
+    assert loader(spigot, "datapack") is None       # bewusst loader-unabhaengig
+    assert loader(spigot, "resourcepack") is None
+
+
+def test_entries_the_server_cannot_host_are_skipped(client, monkeypatch, tmp_path):
+    """Ein Fabric-Server hat keine Plugins - fuer so einen Eintrag darf gar nicht
+    erst beim Anbieter gesucht werden."""
+    from app.db.session import SessionLocal
+    from app.services import content_service as cs
+
+    gesucht = []
+    monkeypatch.setattr(cs, "list_modrinth_versions",
+                        lambda pid, mc, loader, release_channel="release": (
+                            gesucht.append((pid, loader)) or []))
+
+    base = tmp_path / "fabsrv"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="fabric", mc="26.3")
+        db.add(_eintrag(srv.id, srv, "mod", "Sodium", "sodium.jar", projekt="sod"))
+        db.commit()
+        cs.auto_update_content_for_server_version(db, srv, None)
+
+    # Zweimal gesucht ist normal: findet der Release-Kanal nichts, wird mit
+    # release_channel="all" nachgefasst. Entscheidend ist WOMIT gesucht wurde.
+    assert set(gesucht) == {("sod", "fabric")}, f"falsch gesucht: {gesucht}"
+
+
+def test_plugin_wrapper_still_limits_itself_to_plugins(client, monkeypatch, tmp_path):
+    """Der alte Einstiegspunkt darf sich nicht heimlich verbreitert haben:
+    auf einem Fabric-Server hat er nichts zu tun, der allgemeine dagegen schon."""
+    from app.db.session import SessionLocal
+    from app.services import content_service as cs
+
+    gesucht = []
+    monkeypatch.setattr(cs, "list_modrinth_versions",
+                        lambda pid, mc, loader, release_channel="release": (
+                            gesucht.append(pid) or []))
+
+    base = tmp_path / "wrapsrv"
+    base.mkdir()
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="fabric", mc="26.3")
+        db.add(_eintrag(srv.id, srv, "mod", "Sodium", "sodium.jar", projekt="sod"))
+        db.commit()
+
+        cs.auto_update_plugins_for_server_version(db, srv, None)
+        assert gesucht == [], "der Wrapper hat eine Mod angefasst"
+
+        cs.auto_update_content_for_server_version(db, srv, None)
+        assert set(gesucht) == {"sod"}, "der allgemeine Pfad haette die Mod nachziehen muessen"

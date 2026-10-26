@@ -3150,7 +3150,7 @@ def auto_update_datapacks_for_server_version(
     try:
         eintraege = [
             e for e in list_installed_content(db, server)
-            if (e.content_type or "").strip().lower() == "datapack"
+            if (e.content_type or "").strip().lower() in {"datapack", "resourcepack"}
             and (e.provider_name or "").strip().lower() == "vanillatweaks"
         ]
     except Exception as exc:  # noqa: BLE001 - ein Versionswechsel darf daran nicht scheitern
@@ -3165,26 +3165,44 @@ def auto_update_datapacks_for_server_version(
             warnings.append(f"{eintrag.name or eintrag.file_name}: {exc}")
             continue
         if geaendert:
-            notes.append(f"Datapack aktualisiert: {eintrag.name or eintrag.file_name}")
+            art = (eintrag.content_type or "Datapack").strip().lower()
+            notes.append(f"{art} aktualisiert: {eintrag.name or eintrag.file_name}")
         elif hinweis:
             warnings.append(hinweis)
     return notes, warnings
 
 
-def auto_update_plugins_for_server_version(
+def auto_update_content_for_server_version(
     db: Session,
     server: Server,
     user_id: int | None,
     *,
     release_channel: str = "release",
+    content_types: tuple[str, ...] = ("plugin", "mod"),
 ) -> tuple[list[str], list[str]]:
+    """Installierte Inhalte auf die neue Minecraft-Version des Servers nachziehen.
+
+    Frueher wurden nur Plugins nachgezogen - Mods blieben beim Versionswechsel auf
+    dem alten Build stehen und luden danach nicht mehr.
+
+    Der erwartete Loader haengt am INHALTSTYP, nicht am Server allein: ein
+    Forge-Server erwartet fuer "mod" den Loader forge, fuer "plugin" gar keinen
+    (er kann keine laden) - solche Eintraege werden uebersprungen.
+
+    Datapacks und Resourcepacks sind hier bewusst NICHT dabei: sie sind
+    loader-unabhaengig (_expected_server_loader liefert fuer sie None), und die
+    Anbieter-Suche braucht einen Loader. Fuer sie gibt es
+    auto_update_datapacks_for_server_version, das die VanillaTweaks-Packs fuer die
+    neue Version NEU ERZEUGT - der einzige Weg, der dort ueberhaupt funktioniert.
+    """
     expected_mc_version = _expected_server_mc_version(server)
-    expected_loader = _expected_server_loader(server, "plugin")
-    if not expected_mc_version or not expected_loader:
+    if not expected_mc_version:
         return [], []
 
     installed_items = list_installed_content(db, server)
-    plugin_items = [item for item in installed_items if (item.content_type or "").strip().lower() == "plugin"]
+    gewuenscht = {t.strip().lower() for t in content_types}
+    plugin_items = [item for item in installed_items
+                    if (item.content_type or "").strip().lower() in gewuenscht]
     if not plugin_items:
         return [], []
 
@@ -3194,11 +3212,17 @@ def auto_update_plugins_for_server_version(
         provider = (item.provider_name or "").strip().lower()
         project_id = str(item.external_project_id or "").strip()
         current_version_id = str(item.external_version_id or "").strip()
-        display_name = item.name or project_id or "plugin"
+        art = (item.content_type or "plugin").strip().lower()
+        # Der Loader haengt am Inhaltstyp: "mod" auf Forge -> forge, "plugin" auf
+        # Forge -> None (unmoeglich) -> Eintrag ueberspringen statt falsch suchen.
+        expected_loader = _expected_server_loader(server, art)
+        if not expected_loader:
+            continue
+        display_name = item.name or project_id or art
         try:
             if provider == "modrinth":
                 if not project_id:
-                    warnings.append(f"Plugin uebersprungen ({display_name}): Modrinth Projekt-ID fehlt.")
+                    warnings.append(f"{art} uebersprungen ({display_name}): Modrinth Projekt-ID fehlt.")
                     continue
                 versions = list_modrinth_versions(
                     project_id,
@@ -3237,25 +3261,25 @@ def auto_update_plugins_for_server_version(
                     server,
                     project_id,
                     latest_version_id,
-                    "plugin",
+                    art,
                     user_id,
                 )
                 notes.append(
-                    f"Plugin aktualisiert: {updated_entry.name} -> {latest_label}."
+                    f"{art} aktualisiert: {updated_entry.name} -> {latest_label}."
                 )
                 continue
 
             if provider == "curseforge":
                 if not project_id.isdigit():
                     warnings.append(
-                        f"Plugin uebersprungen ({display_name}): ungueltige CurseForge Projekt-ID."
+                        f"{art} uebersprungen ({display_name}): ungueltige CurseForge Projekt-ID."
                     )
                     continue
                 versions = list_curseforge_versions(
                     int(project_id),
                     expected_mc_version,
                     expected_loader,
-                    "plugin",
+                    art,
                     release_channel=release_channel,
                 )
                 if not versions and release_channel != "all":
@@ -3263,7 +3287,7 @@ def auto_update_plugins_for_server_version(
                         int(project_id),
                         expected_mc_version,
                         expected_loader,
-                        "plugin",
+                        art,
                         release_channel="all",
                     )
                 latest = versions[0] if versions else None
@@ -3277,7 +3301,7 @@ def auto_update_plugins_for_server_version(
                     continue
                 if not latest_version_id.isdigit():
                     warnings.append(
-                        f"Plugin uebersprungen ({display_name}): ungueltige CurseForge Datei-ID."
+                        f"{art} uebersprungen ({display_name}): ungueltige CurseForge Datei-ID."
                     )
                     continue
                 updated_entry = install_curseforge(
@@ -3285,20 +3309,20 @@ def auto_update_plugins_for_server_version(
                     server,
                     int(project_id),
                     int(latest_version_id),
-                    "plugin",
+                    art,
                     user_id,
                     resolve_dependencies=False,
                     enforce_compatibility=True,
                 )
                 notes.append(
-                    f"Plugin aktualisiert: {updated_entry.name} -> {latest_label}."
+                    f"{art} aktualisiert: {updated_entry.name} -> {latest_label}."
                 )
                 continue
 
             if provider == "bukkit":
                 if not project_id.isdigit():
                     warnings.append(
-                        f"Plugin uebersprungen ({display_name}): ungueltige Bukkit Resource-ID."
+                        f"{art} uebersprungen ({display_name}): ungueltige Bukkit Resource-ID."
                     )
                     continue
                 versions = list_bukkit_versions(
@@ -3325,7 +3349,7 @@ def auto_update_plugins_for_server_version(
                     continue
                 if not latest_version_id.isdigit():
                     warnings.append(
-                        f"Plugin uebersprungen ({display_name}): ungueltige Bukkit Versions-ID."
+                        f"{art} uebersprungen ({display_name}): ungueltige Bukkit Versions-ID."
                     )
                     continue
                 updated_entry = install_bukkit(
@@ -3333,19 +3357,29 @@ def auto_update_plugins_for_server_version(
                     server,
                     int(project_id),
                     int(latest_version_id),
-                    "plugin",
+                    art,
                     user_id,
                 )
                 notes.append(
-                    f"Plugin aktualisiert: {updated_entry.name} -> {latest_label}."
+                    f"{art} aktualisiert: {updated_entry.name} -> {latest_label}."
                 )
                 continue
 
             warnings.append(
-                f"Plugin uebersprungen ({display_name}): Provider '{item.provider_name}' wird nicht unterstuetzt."
+                f"{art} uebersprungen ({display_name}): Provider '{item.provider_name}' wird nicht unterstuetzt."
             )
         except Exception as exc:
             warnings.append(f"Plugin-Update fehlgeschlagen ({display_name}): {exc}")
 
     return notes, warnings
 
+
+
+def auto_update_plugins_for_server_version(
+    db: Session, server: Server, user_id: int | None, *,
+    release_channel: str = "release",
+) -> tuple[list[str], list[str]]:
+    """Nur Plugins - duenner Aufruf von auto_update_content_for_server_version."""
+    return auto_update_content_for_server_version(
+        db, server, user_id, release_channel=release_channel, content_types=("plugin",)
+    )

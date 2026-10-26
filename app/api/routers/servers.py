@@ -776,7 +776,10 @@ def update_server_settings_action(
             db.add(server)
             db.commit()
             db.refresh(server)
-            plugin_notes, plugin_warnings = content_service.auto_update_plugins_for_server_version(
+            # ALLE Inhaltsarten nachziehen, nicht nur Plugins: Mods, Datapacks und
+            # Resourcepacks binden genauso an die Minecraft-Version und luden nach
+            # einem Versionswechsel sonst nicht mehr.
+            plugin_notes, plugin_warnings = content_service.auto_update_content_for_server_version(
                 db,
                 server,
                 current_user.id,

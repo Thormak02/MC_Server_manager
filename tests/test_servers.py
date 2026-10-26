@@ -504,8 +504,10 @@ def test_version_change_allowed_for_plugin_server(client, tmp_path, monkeypatch)
     )
     monkeypatch.setattr(
         servers_router.content_service,
-        "auto_update_plugins_for_server_version",
-        lambda db, server, user_id, release_channel="release": (
+        # Der Versionswechsel zieht seit der Verallgemeinerung ALLE Inhaltsarten nach
+        # (Mods, Datapacks, Resourcepacks), nicht mehr nur Plugins.
+        "auto_update_content_for_server_version",
+        lambda db, server, user_id, release_channel="release", content_types=None: (
             plugin_update_called.append((server.id, release_channel)) or (["plugins updated"], [])
         ),
     )

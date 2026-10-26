@@ -426,5 +426,3 @@ zb. spigot oder andere pluginloader configs bearbeitbar machen
 
 MOTD editor in Server einstellungen mit Farben, allen optionen usw.
 
-
-wenn ein server auf eine neue version geändert wird, dann sollen plugins, datapacks usw. automatisch mit geupdated werden
