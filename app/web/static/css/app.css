@@ -1536,3 +1536,83 @@ th {
     }
 
 }
+
+/* --- Daten von einem anderen Server uebernehmen -------------------------- */
+.transfer-report {
+    margin: 0.85rem 0;
+    padding: 0.75rem 0.9rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-soft);
+}
+
+.transfer-report p {
+    margin: 0.3rem 0;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.transfer-summary {
+    font-size: 0.95rem;
+}
+
+/* Blocker heissen: so wird nicht kopiert. Hinweise heissen: es passiert etwas,
+   das man wissen sollte (Strukturumbau, Weltmigration). */
+.transfer-blocker {
+    color: color-mix(in srgb, var(--danger) 85%, var(--text));
+}
+
+.transfer-blocker::before {
+    content: "Nicht moeglich: ";
+    font-weight: 600;
+}
+
+.transfer-hinweis {
+    color: color-mix(in srgb, var(--accent-strong) 70%, var(--text));
+}
+
+.transfer-flag {
+    display: inline-block;
+    margin-left: 0.3rem;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+    color: var(--accent-strong);
+    font-size: 0.78rem;
+}
+
+.transfer-options {
+    margin: 0 0 0.85rem;
+    padding: 0.6rem 0.9rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.transfer-options[disabled] {
+    opacity: 0.55;
+}
+
+.transfer-options legend {
+    padding: 0 0.35rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+/* Der Spielerdaten-Haken haengt am Welt-Haken - die Einrueckung zeigt das. */
+.transfer-sub {
+    margin-left: 1.6rem;
+    font-size: 0.92rem;
+}
+
+/* Warnung: der Transfer laeuft, aber etwas geht dabei verloren oder bricht - deutlicher
+   als ein Hinweis, aber kein Blocker. */
+.transfer-warnung {
+    color: color-mix(in srgb, var(--danger) 70%, var(--text));
+    font-weight: 500;
+}
+
+.transfer-warnung::before {
+    content: "Achtung: ";
+    font-weight: 700;
+}

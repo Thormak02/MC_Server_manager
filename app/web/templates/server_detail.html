@@ -429,6 +429,206 @@
 {% endif %}
 
 {% if current_user.role == "super_admin" %}
+{% if transfer_sources %}
+<section class="card">
+    <h2>Daten von einem anderen Server uebernehmen</h2>
+    <p class="muted">Holt Welt, Configs oder Plugins/Mods von einem anderen Server hierher. Welten
+        werden dabei auf die Struktur dieses Servers gebracht: Spigot und CraftBukkit legen Nether
+        und End in eigene Weltordner, Vanilla, Forge, Fabric und Paper ab 26.1 in die Hauptwelt.
+        Vor dem Ueberschreiben legt der Manager automatisch eine Sicherung des Zielservers an.
+        Beide Server muessen gestoppt sein.</p>
+    <form method="post" action="/servers/{{ server.id }}/transfer" id="transfer-form">
+        <div class="grid settings-grid">
+            <div class="field-span-2">
+                <label for="transfer-source">Quellserver</label>
+                <select id="transfer-source" name="source_id" required>
+                    <option value="">&ndash; auswaehlen &ndash;</option>
+                    {% for other in transfer_sources %}
+                    <option value="{{ other.id }}">{{ other.name }} &mdash; {{ other.server_type }} {{ other.mc_version }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div id="transfer-report" class="transfer-report" hidden></div>
+        <fieldset id="transfer-options" class="transfer-options" disabled>
+            <legend>Was soll uebernommen werden?</legend>
+            <div class="toggle-field">
+                <label><input type="checkbox" name="welt" value="true" id="transfer-welt" checked>
+                    <strong>Welt</strong> <span id="transfer-welt-info" class="muted"></span></label>
+            </div>
+            <div class="toggle-field transfer-sub">
+                <label><input type="checkbox" name="spielerdaten" value="true" id="transfer-spielerdaten" checked>
+                    Spielerdaten mitnehmen <span class="muted">&ndash; Inventare, Positionen, Statistiken, Fortschritte</span></label>
+            </div>
+            <div class="toggle-field" id="transfer-zusatz-zeile" hidden>
+                <label><input type="checkbox" name="zusatzwelten" value="true" id="transfer-zusatzwelten">
+                    <strong>Weitere Welten</strong>
+                    <span id="transfer-zusatz-info" class="muted"></span></label>
+            </div>
+            <div class="toggle-field">
+                <label><input type="checkbox" name="configs" value="true" id="transfer-configs">
+                    <strong>Configs</strong> <span class="muted">&ndash; server.properties ohne Ports,
+                    level-name und Netzwerk, dazu YAMLs und config/</span></label>
+            </div>
+            <div class="toggle-field">
+                <label><input type="checkbox" name="zugangslisten" value="true" id="transfer-zugangslisten">
+                    <strong>Zugangslisten</strong> <span class="muted">&ndash; Operatoren,
+                    Whitelist und Banns des Quellservers; UUIDs werden angepasst</span></label>
+            </div>
+            <div class="toggle-field">
+                <label><input type="checkbox" name="erweiterungen" value="true" id="transfer-erweiterungen">
+                    <strong id="transfer-ext-label">Plugins/Mods</strong>
+                    <span id="transfer-ext-info" class="muted"></span></label>
+            </div>
+        </fieldset>
+        <button type="submit" id="transfer-submit" disabled>Uebernehmen</button>
+    </form>
+</section>
+
+<script>
+(function () {
+    const auswahl = document.getElementById("transfer-source");
+    if (!auswahl) { return; }
+    const bericht = document.getElementById("transfer-report");
+    const optionen = document.getElementById("transfer-options");
+    const senden = document.getElementById("transfer-submit");
+    const hakenWelt = document.getElementById("transfer-welt");
+    const hakenSpieler = document.getElementById("transfer-spielerdaten");
+    const hakenConfigs = document.getElementById("transfer-configs");
+    const hakenZusatz = document.getElementById("transfer-zusatzwelten");
+    const hakenListen = document.getElementById("transfer-zugangslisten");
+    const zusatzZeile = document.getElementById("transfer-zusatz-zeile");
+    const zusatzInfo = document.getElementById("transfer-zusatz-info");
+    const hakenExt = document.getElementById("transfer-erweiterungen");
+    const extLabel = document.getElementById("transfer-ext-label");
+    const extInfo = document.getElementById("transfer-ext-info");
+    const weltInfo = document.getElementById("transfer-welt-info");
+    let letzteVorschau = null;
+
+    function groesse(bytes) {
+        const wert = Number(bytes || 0);
+        if (wert >= 1024 * 1024 * 1024) { return (wert / (1024 * 1024 * 1024)).toFixed(1) + " GB"; }
+        return Math.round(wert / (1024 * 1024)) + " MB";
+    }
+
+    function sicher(wert) {
+        const hilfe = document.createElement("div");
+        hilfe.textContent = String(wert === null || wert === undefined ? "" : wert);
+        return hilfe.innerHTML;
+    }
+
+    function zeilen(klasse, eintraege) {
+        if (!eintraege || !eintraege.length) { return ""; }
+        return eintraege.map(function (eintrag) {
+            return "<p class=\"" + klasse + "\">" + sicher(eintrag) + "</p>";
+        }).join("");
+    }
+
+    function zeichne(daten) {
+        const quelle = daten.quelle || {};
+        const ziel = daten.ziel || {};
+        const blocker = daten.blocker || [];
+        const hinweise = daten.hinweise || [];
+        let html = "";
+        if (quelle.welt) {
+            html += "<p class=\"transfer-summary\">Welt <strong>" + sicher(quelle.welt)
+                + "</strong> (" + sicher(groesse(quelle.bytes)) + ", "
+                + sicher((quelle.ordner || []).join(", ")) + ") &rarr; <strong>"
+                + sicher(ziel.welt) + "</strong>";
+            if (daten.struktur_umbau) {
+                html += " <span class=\"transfer-flag\">Struktur wird umgebaut</span>";
+            }
+            html += "</p>";
+        }
+        html += zeilen("transfer-blocker", blocker);
+        html += zeilen("transfer-warnung", daten.warnungen || []);
+        html += zeilen("transfer-hinweis", hinweise);
+        if (!blocker.length && !hinweise.length && !(daten.warnungen || []).length
+                && quelle.welt) {
+            html += "<p class=\"muted\">Keine Besonderheiten &ndash; Struktur und Version passen.</p>";
+        }
+        bericht.innerHTML = html || "<p class=\"muted\">Keine Angaben.</p>";
+        bericht.hidden = false;
+
+        const moegl = daten.moeglichkeiten || {};
+        const welt = moegl.welt || {};
+        hakenWelt.disabled = !welt.moeglich;
+        if (!welt.moeglich) { hakenWelt.checked = false; }
+        weltInfo.textContent = welt.moeglich ? "" : (welt.grund || "");
+
+        const ext = moegl.erweiterungen || {};
+        hakenExt.disabled = !ext.moeglich;
+        if (!ext.moeglich) { hakenExt.checked = false; }
+        extLabel.textContent = ext.art === "mods" ? "Mods"
+            : (ext.art === "plugins" ? "Plugins" : "Plugins/Mods");
+        extInfo.textContent = ext.grund || "";
+
+        const weitere = daten.zusatzwelten || [];
+        zusatzZeile.hidden = weitere.length === 0;
+        if (weitere.length) {
+            zusatzInfo.textContent = "– " + weitere.join(", ");
+        } else {
+            hakenZusatz.checked = false;
+        }
+
+        optionen.disabled = false;
+        letzteVorschau = daten;
+        aktualisiere();
+    }
+
+    function aktualisiere() {
+        hakenSpieler.disabled = !hakenWelt.checked || hakenWelt.disabled;
+        const blocker = letzteVorschau ? (letzteVorschau.blocker || []) : [];
+        const gewaehlt = hakenWelt.checked || hakenConfigs.checked || hakenExt.checked
+            || hakenListen.checked || (hakenZusatz.checked && !zusatzZeile.hidden);
+        senden.disabled = Boolean(blocker.length) || !gewaehlt || !auswahl.value;
+    }
+
+    function laden() {
+        const id = auswahl.value;
+        letzteVorschau = null;
+        if (!id) {
+            bericht.hidden = true;
+            optionen.disabled = true;
+            senden.disabled = true;
+            zusatzZeile.hidden = true;
+            return;
+        }
+        bericht.hidden = false;
+        bericht.innerHTML = "<p class=\"muted\">Wird geprueft &hellip;</p>";
+        senden.disabled = true;
+        fetch("/api/servers/{{ server.id }}/transfer-preview?source_id=" + encodeURIComponent(id),
+              { credentials: "same-origin" })
+            .then(function (antwort) { return antwort.json(); })
+            .then(zeichne)
+            .catch(function () {
+                bericht.innerHTML = "<p class=\"transfer-blocker\">Vorschau konnte nicht geladen werden.</p>";
+                optionen.disabled = true;
+                senden.disabled = true;
+            });
+    }
+
+    auswahl.addEventListener("change", laden);
+    [hakenWelt, hakenConfigs, hakenExt, hakenZusatz, hakenListen].forEach(function (haken) {
+        haken.addEventListener("change", aktualisiere);
+    });
+    document.getElementById("transfer-form").addEventListener("submit", function (ereignis) {
+        const name = auswahl.options[auswahl.selectedIndex].textContent.trim();
+        const was = [];
+        if (hakenWelt.checked) { was.push("die Welt"); }
+        if (hakenConfigs.checked) { was.push("die Configs"); }
+        if (hakenZusatz.checked && !zusatzZeile.hidden) { was.push("weitere Welten"); }
+        if (hakenListen.checked) { was.push("die Zugangslisten"); }
+        if (hakenExt.checked) { was.push(extLabel.textContent.toLowerCase()); }
+        const frage = "Jetzt " + was.join(", ") + " von " + name + " uebernehmen?\n\n"
+            + "Die bisherigen Daten dieses Servers werden dabei ersetzt. Eine Sicherung legt "
+            + "der Manager vorher automatisch an.";
+        if (!confirm(frage)) { ereignis.preventDefault(); }
+    });
+})();
+</script>
+{% endif %}
+
 <section class="card">
     <h2>Server duplizieren</h2>
     <p class="muted">Erstellt eine vollstaendige 1:1-Kopie (Welt, Mods/Plugins, Einstellungen, installierte Inhalte, Rechte, geplante Tasks). Der Klon bekommt einen neuen Namen und einen freien Port; Netzwerk/Alias ist deaktiviert und geplante Tasks sind pausiert. Der Server muss dafuer gestoppt sein.</p>
@@ -510,6 +710,7 @@
         if (value === "launch") return "Serverstart";
         if (value === "running") return "Server laeuft";
         if (value === "duplicate") return "Server wird kopiert";
+        if (value === "transfer") return "Daten werden uebernommen";
         if (value === "error") return "Fehler";
         if (value === "stopped") return "Gestoppt";
         return "Startvorgang";

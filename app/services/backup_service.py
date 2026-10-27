@@ -52,7 +52,16 @@ def _iter_backup_files(server_base: Path, scope: str) -> list[Path]:
         return paths
 
     if normalized == "world":
-        candidates = ["world", "world_nether", "world_the_end"]
+        # Den Weltnamen NICHT fest verdrahten: er steht in server.properties (level-name).
+        # Mit "world" als Konstante bekam ein Server mit level-name=lobby ein Welt-Backup
+        # OHNE eine einzige Weltdatei - und das faellt erst auf, wenn man es braucht.
+        from app.services.transfer_service import weltname_aus_ordner
+
+        level = weltname_aus_ordner(server_base)
+        candidates = [level, f"{level}_nether", f"{level}_the_end"]
+        if level != "world":
+            # Eine frueher unter dem Standardnamen angelegte Welt kann noch daneben liegen.
+            candidates += ["world", "world_nether", "world_the_end"]
         for name in candidates:
             folder = server_base / name
             if folder.exists() and folder.is_dir():

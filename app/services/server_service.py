@@ -22,25 +22,64 @@ from app.schemas.server import ServerCreate, ServerImportConfirm
 # (allocate/generate lesen nur COMMITTED Zeilen -> ohne Lock waere das ein Race).
 _SERVER_ALLOC_LOCK = threading.Lock()
 
-# Quell-Server, deren Ordner gerade kopiert wird (Duplizieren). Solange gesperrt darf der
-# Quell-Server nicht gestartet werden (sonst sperrt/veraendert er Welt-Dateien waehrend der Kopie).
+# Server, an deren Dateien gerade kopiert wird (Duplizieren oder Uebernahme). Solange
+# gesperrt darf der Server nicht gestartet werden (sonst sperrt/veraendert er Welt-Dateien
+# mitten in der Kopie).
+#
+# ZAEHLER, nicht Menge: ein Server kann an mehreren Vorgaengen beteiligt sein - etwa als
+# Duplizier-Quelle und gleichzeitig als Quelle einer Uebernahme. Mit einer Menge wuerde der
+# zuerst fertige Vorgang die Sperre fuer ALLE aufheben, und der noch laufende Kopiervorgang
+# stuende ab da ungeschuetzt da: ein Zeitplan-Job oder Sleep-Weckruf koennte den Server
+# mitten in der Kopie starten.
 _DUP_LOCK = threading.Lock()
-_ACTIVE_DUP_SOURCES: set[int] = set()
+_ACTIVE_DUP_SOURCES: dict[int, int] = {}
 
 
 def is_active_duplication_source(server_id: int) -> bool:
     with _DUP_LOCK:
-        return server_id in _ACTIVE_DUP_SOURCES
+        return _ACTIVE_DUP_SOURCES.get(server_id, 0) > 0
 
 
 def _mark_duplication_source(server_id: int) -> None:
     with _DUP_LOCK:
-        _ACTIVE_DUP_SOURCES.add(server_id)
+        _ACTIVE_DUP_SOURCES[server_id] = _ACTIVE_DUP_SOURCES.get(server_id, 0) + 1
 
 
 def _unmark_duplication_source(server_id: int) -> None:
     with _DUP_LOCK:
-        _ACTIVE_DUP_SOURCES.discard(server_id)
+        rest = _ACTIVE_DUP_SOURCES.get(server_id, 0) - 1
+        if rest > 0:
+            _ACTIVE_DUP_SOURCES[server_id] = rest
+        else:
+            _ACTIVE_DUP_SOURCES.pop(server_id, None)
+
+
+def try_lock_servers_for_file_copy(server_ids) -> bool:
+    """Mehrere Server in EINEM Schritt exklusiv start-sperren; False, wenn einer davon
+    schon in einem Kopiervorgang steckt.
+
+    Exklusiv und atomar, weil sich zwei Vorgaenge an denselben Dateien sonst in die Quere
+    kommen: zwei gleichzeitige Uebernahmen auf dasselbe Ziel wuerden denselben
+    Zwischenordner benutzen, und eine Uebernahme auf einen Server, der gerade als
+    Duplizier-Quelle gelesen wird, wuerde dessen Welt unter der laufenden Kopie wegziehen.
+    Alles-oder-nichts: schlaegt EIN Server fehl, wird keiner gesperrt - sonst bliebe eine
+    halbe Sperre stehen, die niemand mehr aufloest.
+
+    is_active_duplication_source fragt dieselbe Sperre ab; start_server verweigert so lange
+    den Start.
+    """
+    ids = sorted({int(server_id) for server_id in server_ids})
+    with _DUP_LOCK:
+        if any(_ACTIVE_DUP_SOURCES.get(server_id, 0) for server_id in ids):
+            return False
+        for server_id in ids:
+            _ACTIVE_DUP_SOURCES[server_id] = 1
+    return True
+
+
+def unlock_server_for_file_copy(server_id: int) -> None:
+    """Gegenstueck zu try_lock_servers_for_file_copy - gehoert in ein finally."""
+    _unmark_duplication_source(server_id)
 
 
 # Klon-IDs, deren Kopie gerade laeuft, + offene Abbruch-Anforderungen (z.B. wenn der Nutzer
@@ -341,11 +380,18 @@ class _DuplicationCancelled(Exception):
     """Signalisiert einen vom Nutzer angeforderten Abbruch der laufenden Kopie."""
 
 
-def _robust_copy_tree(src, dst, *, on_file=None, is_cancelled=None) -> list[str]:
+def _robust_copy_tree(src, dst, *, on_file=None, is_cancelled=None, skip=None) -> list[str]:
     """Kopiert einen Ordner rekursiv wie Explorer/xcopy: einzelne gesperrte/unlesbare Dateien
     werden UEBERSPRUNGEN, statt den ganzen Vorgang abzubrechen (shutil.copytree bricht schon beim
     ersten Fehler ab - z.B. bei einer vom Manager offen gehaltenen logs/latest.log, alphabetisch
-    VOR mods/plugins/world -> dann fehlt der Rest). Rueckgabe: Liste uebersprungener Pfade."""
+    VOR mods/plugins/world -> dann fehlt der Rest). Rueckgabe: Liste uebersprungener Pfade.
+
+    ``skip`` (optional) bekommt jeden Eintrag RELATIV zur Quelle und entscheidet, ob er
+    uebergangen wird; bei einem Ordner entfaellt der ganze Teilbaum, der wird gar nicht erst
+    betreten. Der Welt-Transfer laesst damit session.lock/uid.dat und - auf Wunsch - die
+    grossen Spielerdaten-Ordner weg, ohne sie erst zu kopieren und dann zu loeschen.
+    Bewusst Uebergangenes landet NICHT in der Rueckgabe: die meldet nur, was kopiert werden
+    sollte und nicht konnte."""
     import os
     import shutil
     import time
@@ -353,10 +399,13 @@ def _robust_copy_tree(src, dst, *, on_file=None, is_cancelled=None) -> list[str]
     src = Path(src)
     dst = Path(dst)
     skipped: list[str] = []
-    for root, _dirs, files in os.walk(src):
+    for root, dirs, files in os.walk(src):
         if is_cancelled and is_cancelled():
             raise _DuplicationCancelled()
         rel = Path(root).relative_to(src)
+        if skip is not None:
+            # In-place kuerzen, damit os.walk uebergangene Teilbaeume nicht betritt.
+            dirs[:] = [name for name in dirs if not skip(rel / name)]
         target_dir = dst / rel
         try:
             target_dir.mkdir(parents=True, exist_ok=True)
@@ -366,6 +415,8 @@ def _robust_copy_tree(src, dst, *, on_file=None, is_cancelled=None) -> list[str]
         for name in files:
             if is_cancelled and is_cancelled():
                 raise _DuplicationCancelled()
+            if skip is not None and skip(rel / name):
+                continue
             source_file = Path(root) / name
             dest_file = target_dir / name
             copied_ok = False
@@ -543,6 +594,9 @@ def duplicate_server(db: Session, source: Server, user_id: int | None, *,
         raise ValueError("Dieser Server wird gerade erstellt/kopiert - bitte warten.")
     if is_running(source.id):
         raise ValueError("Bitte den Server zuerst stoppen, bevor du ihn duplizierst.")
+    if is_active_duplication_source(source.id):
+        raise ValueError("An den Dateien dieses Servers wird gerade gearbeitet (eine Kopie "
+                         "oder eine Uebernahme laeuft) - bitte warten.")
 
     storage_root = app_setting_service.ensure_server_storage_initialized(db)
     src_path = Path(source.base_path).resolve()

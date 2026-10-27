@@ -285,10 +285,7 @@ die verwaltung des hub / lobby server soll wie die eines normalen servers mit un
 
 
 
-Die Bukkit-Lobby zeigt einen Live-Status-Punkt (grün/magenta/rot), weil sie jeden Server anpingt. Der Python-Hub pingt nicht — einen grünen Punkt zu zeigen, wenn ein Server evtl. aus ist, wäre irreführend, deshalb habe ich ihn weggelassen. Wenn du den Live-Punkt auch im modded Hub willst, kann ich dem Hub einen Status-Ping-Thread spendieren (sauber mit Timeouts) — sag Bescheid
-
-
-welten zwischen servern kopierbar zb. welt von david 1.21.11 spigot server nach neuen 26.1 server kopieren
+~~welten zwischen servern kopierbar zb. welt von david 1.21.11 spigot server nach neuen 26.1 server kopieren~~
 
 KI Ideen:
 
@@ -410,8 +407,6 @@ ai modpack / datapack / pluginpack / server generator und ersteller / modpack er
 
 
 
-bestimmte server bei manager neustart nicht mit neustarten, sondern weiterlaufen lassen und wieder aufgreifen
-
 ~~mir ist außerdem grade aufgefallen: es funktionieren nur vanilla tweaks, aber vanilla tweaks crafting rezepte werden nicht erkannt und nicht zur auswahl verfügbar~~
 
 ~~/lobby / /server lobby geht nicht~~
@@ -420,7 +415,6 @@ bestimmte server bei manager neustart nicht mit neustarten, sondern weiterlaufen
 manager kann auch server pc restarten
 
 ~~zb. spigot oder andere pluginloader configs bearbeitbar machen~~
-
 
 
 

@@ -19,4 +19,9 @@ __all__ = [
     "platform_settings_service",
     "security_service",
     "system_service",
+    "nbt_codec",
+    "player_data_service",
+    "transfer_service",
+    "world_identity_service",
+    "world_merge_service",
 ]

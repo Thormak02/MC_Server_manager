@@ -15,7 +15,13 @@ from app.models.scheduled_job import ScheduledJob
 from app.models.server_permission import ServerPermission
 from app.models.server_modpack_state import ServerModpackState
 from app.schemas.server import ServerImportConfirm
-from app.services import audit_service, backup_service, content_service, modpack_service
+from app.services import (
+    audit_service,
+    backup_service,
+    content_service,
+    modpack_service,
+    transfer_service,
+)
 from app.services.auth_service import get_current_user_from_session
 from app.services.java_profile_service import list_java_profiles
 from app.services.memory_settings_service import validate_memory_bounds
@@ -36,6 +42,7 @@ from app.services.server_service import (
     can_view_server,
     duplicate_server,
     get_server_by_id,
+    list_servers_for_user,
     read_max_players,
     rename_server,
     sleep_delay_to_seconds,
@@ -308,6 +315,12 @@ def server_detail_page(
             network_mode=network_mode,
             hub_capture=hub_capture,
             hub_has_replay=hub_has_replay,
+            # Moegliche Quellen fuer "Daten uebernehmen" - alle sichtbaren Server ausser
+            # diesem. Was davon tatsaechlich geht, sagt die Vorschau beim Auswaehlen.
+            transfer_sources=[
+                other for other in list_servers_for_user(db, current_user)
+                if other.id != server.id
+            ],
         ),
     )
 
@@ -999,6 +1012,101 @@ def delete_server_action(
     else:
         push_flash(request, "Server wurde geloescht. Ordner wurde behalten.", "success")
     return RedirectResponse(url="/dashboard", status_code=303)
+
+
+@router.get("/api/servers/{server_id}/transfer-preview", response_class=JSONResponse)
+def server_transfer_preview(
+    request: Request,
+    server_id: int,
+    source_id: int,
+    db: Session = Depends(get_db),
+):
+    """Was wuerde eine Uebernahme von `source_id` nach `server_id` bedeuten?
+
+    Liefert Groesse, Strukturwechsel, Migrationshinweise und Blocker, damit der Dialog das
+    anzeigen kann, BEVOR etwas kopiert wird."""
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    if current_user.role != UserRole.SUPER_ADMIN.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    ziel = get_server_by_id(db, server_id)
+    quelle = get_server_by_id(db, source_id)
+    if ziel is None or quelle is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    if not can_view_server(db, current_user, ziel) or not can_view_server(db, current_user, quelle):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    refresh_runtime_states(db, [quelle, ziel])
+    try:
+        return JSONResponse(transfer_service.vorschau(quelle, ziel))
+    except Exception as exc:  # noqa: BLE001 - ein unlesbarer Ordner darf den Dialog nicht leeren
+        return JSONResponse({"blocker": [f"Vorschau nicht moeglich: {exc}"], "hinweise": [],
+                             "moeglichkeiten": {}, "quelle": {}, "ziel": {}})
+
+
+@router.post("/servers/{server_id}/transfer")
+def server_transfer_action(
+    request: Request,
+    server_id: int,
+    source_id: Annotated[str, Form()],
+    welt: Annotated[str | None, Form()] = None,
+    spielerdaten: Annotated[str | None, Form()] = None,
+    configs: Annotated[str | None, Form()] = None,
+    erweiterungen: Annotated[str | None, Form()] = None,
+    zusatzwelten: Annotated[str | None, Form()] = None,
+    zugangslisten: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    """Welt/Configs/Plugins von einem anderen Server uebernehmen (server_id ist das ZIEL)."""
+    current_user = _require_logged_in(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+    if current_user.role != UserRole.SUPER_ADMIN.value:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    ziel = get_server_by_id(db, server_id)
+    if ziel is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+
+    try:
+        quell_id = int((source_id or "").strip())
+    except ValueError:
+        push_flash(request, "Bitte einen Quellserver auswaehlen.", "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
+    quelle = get_server_by_id(db, quell_id)
+    if quelle is None:
+        push_flash(request, "Quellserver nicht gefunden.", "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+    if not can_view_server(db, current_user, quelle):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    refresh_runtime_states(db, [quelle, ziel])
+    try:
+        transfer_service.uebertrage(
+            db, quelle=quelle, ziel=ziel,
+            welt=_to_bool(welt), spielerdaten=_to_bool(spielerdaten),
+            configs=_to_bool(configs), erweiterungen=_to_bool(erweiterungen),
+            zusatzwelten=_to_bool(zusatzwelten),
+            zugangslisten=_to_bool(zugangslisten), user_id=current_user.id,
+        )
+    except ValueError as exc:
+        push_flash(request, str(exc), "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        push_flash(request, f"Uebernahme fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
+
+    push_flash(
+        request,
+        f"Daten von „{quelle.name}“ werden uebernommen. Der Zielserver wird vorher "
+        f"automatisch gesichert; den Fortschritt siehst du hier auf der Seite.",
+        "success",
+    )
+    return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
 
 
 @router.post("/servers/{server_id}/duplicate")
