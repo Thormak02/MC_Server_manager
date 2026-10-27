@@ -1682,3 +1682,73 @@ th {
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
 }
+
+/* --- KI-Einstellungen --------------------------------------------------- */
+.ki-budget {
+    margin: 0.5rem 0 1rem;
+}
+
+/* Der Balken zeigt auf einen Blick, wie viel vom Monatsbudget weg ist - genau das
+   wollte der Nutzer sichtbar haben. */
+.ki-budget-balken {
+    height: 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--panel-soft);
+    overflow: hidden;
+}
+
+.ki-budget-fuellung {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+    transition: width 0.3s ease;
+}
+
+.ki-budget-fuellung.warnung {
+    background: linear-gradient(90deg,
+        color-mix(in srgb, var(--danger) 45%, var(--accent)), var(--danger));
+}
+
+.ki-budget-fuellung.voll {
+    background: var(--danger);
+}
+
+.ki-budget-zahlen {
+    margin: 0.35rem 0 0;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.ki-tabelle {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+}
+
+.ki-tabelle th,
+.ki-tabelle td {
+    padding: 0.3rem 0.45rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+
+/* Zahlenspalten rechts und mit gleichen Zifferbreiten, damit sie vergleichbar sind. */
+.ki-tabelle td:not(:first-child):not(:last-child),
+.ki-tabelle th:not(:first-child):not(:last-child) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.ki-funktion {
+    align-items: end;
+    margin-bottom: 0.4rem;
+}
+
+.ki-status-abgelehnt {
+    color: color-mix(in srgb, var(--danger) 60%, var(--text));
+}
+
+.ki-status-fehler {
+    color: var(--danger);
+    font-weight: 600;
+}

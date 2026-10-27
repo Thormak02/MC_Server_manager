@@ -15,6 +15,7 @@
         <button type="button" class="button-like" data-settings-tab="java">Java</button>
         <button type="button" class="button-like" data-settings-tab="plattformen">Plattformen</button>
         <button type="button" class="button-like" data-settings-tab="zugriff">Spieler &amp; Zugriff</button>
+        <button type="button" class="button-like" data-settings-tab="ki">KI</button>
         <button type="button" class="button-like" data-settings-tab="system">System</button>
     </div>
 </section>
@@ -816,6 +817,185 @@
         {% endfor %}
     </div>
 </section>
+</div>
+
+<div class="settings-tab" data-settings-panel="ki">
+    <article class="card">
+        <h2>KI-Funktionen</h2>
+        <p class="muted">Die KI-Funktionen rufen einen externen Dienst auf und kosten Guthaben.
+            Jeder Aufruf wird protokolliert, laeuft nur auf Anforderung und ist abschaltbar.</p>
+
+        {% if not ki.schluessel_hinterlegt %}
+        <p class="muted">Noch kein Schluessel hinterlegt &ndash; die Funktionen bleiben aus,
+            bis einer eingetragen ist.</p>
+        {% endif %}
+
+        <h3>Verbrauch im laufenden Monat</h3>
+        <div class="ki-budget">
+            <div class="ki-budget-balken">
+                <div class="ki-budget-fuellung{% if ki_budget.gesperrt %} voll{% elif ki_budget.warnt %} warnung{% endif %}"
+                     style="width: {{ (ki_budget.anteil * 100)|round|int if ki_budget.anteil < 1 else 100 }}%"></div>
+            </div>
+            <p class="ki-budget-zahlen">
+                <strong>{{ '%.2f'|format(ki_budget.verbraucht_cent / 100) }} $</strong>
+                von {{ '%.2f'|format(ki_budget.deckel_cent / 100) }} $
+                ({{ (ki_budget.anteil * 100)|round|int }} %)
+            </p>
+            {% if ki_budget.gesperrt %}
+            <p class="transfer-warnung">Das Monatsbudget ist ausgeschoepft. Bis zum
+                Monatswechsel sind keine Aufrufe mehr moeglich.</p>
+            {% elif ki_budget.warnt %}
+            <p class="transfer-hinweis">Die Warnschwelle ist erreicht.</p>
+            {% endif %}
+        </div>
+
+        {% if ki_budget.je_funktion %}
+        <table class="ki-tabelle">
+            <thead><tr><th>Funktion</th><th>Aufrufe</th><th>Token ein</th><th>Token aus</th><th>Kosten</th></tr></thead>
+            <tbody>
+                {% for zeile in ki_budget.je_funktion %}
+                <tr>
+                    <td>{{ ki_funktionen.get(zeile.funktion, zeile.funktion) }}</td>
+                    <td>{{ zeile.aufrufe }}</td>
+                    <td>{{ '{:,}'.format(zeile.tokens_ein)|replace(',', '.') }}</td>
+                    <td>{{ '{:,}'.format(zeile.tokens_aus)|replace(',', '.') }}</td>
+                    <td>{{ '%.2f'|format(zeile.cent / 100) }} $</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">In diesem Monat noch keine Aufrufe.</p>
+        {% endif %}
+    </article>
+
+    <article class="card">
+        <h3>Zugangsschluessel</h3>
+        <p class="muted">Der Schluessel wird von Windows verschluesselt abgelegt (an diesen
+            Rechner gebunden) und danach nur noch verkuerzt angezeigt &ndash; auch dir. Eine
+            Datenbank-Sicherung auf der NAS enthaelt damit keinen nutzbaren Schluessel.</p>
+
+        <form method="post" action="/settings/ki/schluessel" class="stack">
+            <div>
+                <label for="ki-schluessel">API-Schluessel</label>
+                <input id="ki-schluessel" name="api_key" type="password" autocomplete="off"
+                       placeholder="{{ ki.schluessel_maskiert or 'sk-ant-...' }}">
+                <p class="muted">{{ ki_anbieter_hinweis }}</p>
+            </div>
+            <div class="inline-form">
+                <button type="submit">Schluessel speichern</button>
+                {% if ki.schluessel_hinterlegt %}
+                <button type="submit" name="pruefen" value="true" class="ghost">Verbindung pruefen</button>
+                <button type="submit" name="loeschen" value="true" class="danger">Schluessel entfernen</button>
+                {% endif %}
+            </div>
+        </form>
+        {% if ki.schluessel_hinterlegt and not ki.schluessel_verschluesselt %}
+        <p class="transfer-warnung">Der hinterlegte Wert ist NICHT verschluesselt. Bitte neu
+            eintragen.</p>
+        {% endif %}
+    </article>
+
+    <article class="card">
+        <h3>Funktionen, Modelle und Grenzen</h3>
+        <form method="post" action="/settings/ki" class="stack">
+            <div class="toggle-field">
+                <label><input type="checkbox" name="aktiv" value="true"
+                              {% if ki.aktiv %}checked{% endif %}>
+                    <strong>KI-Funktionen aktiv</strong> <span class="muted">&ndash; der
+                    Hauptschalter; ist er aus, laeuft kein Aufruf</span></label>
+            </div>
+
+            <h4>Je Funktion</h4>
+            {% for schluessel, bezeichnung in ki_funktionen.items() %}
+            <div class="grid settings-grid ki-funktion">
+                <div>
+                    <div class="toggle-field">
+                        <label><input type="checkbox" name="funktion_{{ schluessel }}" value="true"
+                                      {% if ki.funktionen.get(schluessel) %}checked{% endif %}>
+                            {{ bezeichnung }}</label>
+                    </div>
+                </div>
+                <div>
+                    <label for="ki-modell-{{ schluessel }}">Modell</label>
+                    <select id="ki-modell-{{ schluessel }}" name="modell_{{ schluessel }}">
+                        {% for name, angabe in ki_modelle.items() %}
+                        <option value="{{ name }}"
+                                {% if ki.modelle.get(schluessel) == name %}selected{% endif %}>{{ angabe.anzeige }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            {% endfor %}
+
+            <h4>Grenzen</h4>
+            <div class="grid settings-grid">
+                <div>
+                    <label for="ki-budget">Monatsbudget in US-Dollar</label>
+                    <input id="ki-budget" name="monatsbudget_dollar" type="number" min="0"
+                           step="1" value="{{ (ki.monatsbudget_cent / 100)|round|int }}">
+                    <p class="muted">0 = kein Deckel</p>
+                </div>
+                <div>
+                    <label for="ki-warnschwelle">Warnen ab (Prozent)</label>
+                    <input id="ki-warnschwelle" name="warnschwelle_prozent" type="number"
+                           min="0" max="100" step="5"
+                           value="{{ (ki.warnschwelle * 100)|round|int }}">
+                </div>
+                <div>
+                    <label for="ki-limit-stunde">Anfragen je Stunde und Nutzer</label>
+                    <input id="ki-limit-stunde" name="limit_stunde" type="number" min="1"
+                           value="{{ ki.limit_stunde }}">
+                </div>
+                <div>
+                    <label for="ki-limit-tag">Anfragen je Tag und Nutzer</label>
+                    <input id="ki-limit-tag" name="limit_tag" type="number" min="1"
+                           value="{{ ki.limit_tag }}">
+                    <p class="muted">Moderatoren erhalten jeweils die Haelfte.</p>
+                </div>
+            </div>
+
+            <h4>Was hinausgeht</h4>
+            <div class="toggle-field">
+                <label><input type="checkbox" name="themensperre" value="true"
+                              {% if ki.themensperre %}checked{% endif %}>
+                    Themen-Sperre <span class="muted">&ndash; weist Anfragen ohne
+                    Serverbezug ab, bevor sie Geld kosten</span></label>
+            </div>
+            <div class="toggle-field">
+                <label><input type="checkbox" name="namen_ersetzen" value="true"
+                              {% if ki.namen_ersetzen %}checked{% endif %}>
+                    Spielernamen durch Platzhalter ersetzen
+                    <span class="muted">&ndash; IP-Adressen und Zugangsdaten werden immer
+                    entfernt. Namen gehen standardmaessig im Klartext hinaus, weil sie zur
+                    Diagnose gehoeren; dieser Schalter ersetzt sie durch &bdquo;Spieler1&ldquo;
+                    usw. und uebersetzt die Antwort zurueck.</span></label>
+            </div>
+
+            <button type="submit">Einstellungen speichern</button>
+        </form>
+    </article>
+
+    {% if ki_aufrufe %}
+    <article class="card">
+        <h3>Letzte Aufrufe</h3>
+        <table class="ki-tabelle">
+            <thead><tr><th>Zeitpunkt</th><th>Funktion</th><th>Modell</th><th>Token</th><th>Kosten</th><th>Status</th></tr></thead>
+            <tbody>
+                {% for eintrag in ki_aufrufe %}
+                <tr>
+                    <td>{{ eintrag.created_at.strftime('%d.%m. %H:%M') if eintrag.created_at else '-' }}</td>
+                    <td>{{ ki_funktionen.get(eintrag.funktion, eintrag.funktion) }}</td>
+                    <td>{{ eintrag.modell }}</td>
+                    <td>{{ eintrag.tokens_ein }} / {{ eintrag.tokens_aus }}</td>
+                    <td>{{ '%.3f'|format(eintrag.kosten_cent / 100) }} $</td>
+                    <td>{% if eintrag.status == 'ok' %}ok{% else %}<span class="ki-status-{{ eintrag.status }}" title="{{ eintrag.hinweis or '' }}">{{ eintrag.status }}</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </article>
+    {% endif %}
 </div>
 
 <div class="settings-tab" data-settings-panel="system">

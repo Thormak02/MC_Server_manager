@@ -7,7 +7,13 @@ from sqlalchemy.orm import Session
 from app.core.constants import UserRole
 from app.db.session import get_db
 from app.schemas.java_profile import JavaProfileCreate
-from app.services import audit_service
+from app.services import (
+    ai_budget_service,
+    ai_provider_service,
+    ai_service,
+    ai_settings_service,
+    audit_service,
+)
 from app.services.auth_service import get_current_user_from_session
 from app.services.app_setting_service import (
     clear_backup_storage_override,
@@ -181,6 +187,13 @@ def settings_page(
             dispatcher_enabled=dispatcher_enabled,
             universal_lobby=universal_lobby,
             globale_listen=global_access_service.alle_listen(db),
+            ki=ai_settings_service.hole_einstellungen(db),
+            ki_budget=ai_budget_service.budget_stand(
+                db, ai_settings_service.hole_einstellungen(db)),
+            ki_funktionen=ai_settings_service.FUNKTIONEN,
+            ki_modelle=ai_provider_service.MODELLE,
+            ki_anbieter_hinweis=ai_provider_service.hole_anbieter().schluessel_hinweis,
+            ki_aufrufe=ai_budget_service.letzte_aufrufe(db, grenze=25),
             velocity_running=velocity_running,
             velocity_version=velocity_version,
             velocity_installed_version=velocity_installed_version,
@@ -1229,3 +1242,112 @@ def global_access_apply(request: Request, db: Session = Depends(get_db)):
         meldung += " " + " | ".join(warnungen)
     push_flash(request, meldung, "info" if warnungen else "success")
     return RedirectResponse(url="/settings", status_code=303)
+
+
+@router.post("/settings/ki")
+def settings_ki_speichern(
+    request: Request,
+    aktiv: Annotated[str | None, Form()] = None,
+    themensperre: Annotated[str | None, Form()] = None,
+    namen_ersetzen: Annotated[str | None, Form()] = None,
+    monatsbudget_dollar: Annotated[str | None, Form()] = None,
+    warnschwelle_prozent: Annotated[str | None, Form()] = None,
+    limit_stunde: Annotated[str | None, Form()] = None,
+    limit_tag: Annotated[str | None, Form()] = None,
+    funktion_crash_analyse: Annotated[str | None, Form()] = None,
+    funktion_config_assistent: Annotated[str | None, Form()] = None,
+    funktion_changelog: Annotated[str | None, Form()] = None,
+    funktion_agent: Annotated[str | None, Form()] = None,
+    modell_crash_analyse: Annotated[str | None, Form()] = None,
+    modell_config_assistent: Annotated[str | None, Form()] = None,
+    modell_changelog: Annotated[str | None, Form()] = None,
+    modell_agent: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    """KI-Einstellungen speichern. Nur Super-Admin: hier haengt echtes Geld dran."""
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    def _zahl(rohwert: str | None, standard: int) -> int:
+        try:
+            return int(str(rohwert).strip())
+        except (TypeError, ValueError):
+            return standard
+
+    werte = {
+        "aktiv": _to_bool(aktiv),
+        "themensperre": _to_bool(themensperre),
+        "namen_ersetzen": _to_bool(namen_ersetzen),
+        "monatsbudget_cent": _zahl(monatsbudget_dollar, 200) * 100,
+        "warnschwelle": _zahl(warnschwelle_prozent, 80) / 100.0,
+        "limit_stunde": _zahl(limit_stunde, 20),
+        "limit_tag": _zahl(limit_tag, 60),
+        "funktion_crash_analyse": _to_bool(funktion_crash_analyse),
+        "funktion_config_assistent": _to_bool(funktion_config_assistent),
+        "funktion_changelog": _to_bool(funktion_changelog),
+        "funktion_agent": _to_bool(funktion_agent),
+        "modell_crash_analyse": modell_crash_analyse,
+        "modell_config_assistent": modell_config_assistent,
+        "modell_changelog": modell_changelog,
+        "modell_agent": modell_agent,
+    }
+    meldungen = ai_settings_service.speichere(db, werte)
+    audit_service.log_action(db, action="settings.ai_update", user_id=current_user.id,
+                             details=f"aktiv={werte['aktiv']} "
+                                     f"budget_cent={werte['monatsbudget_cent']}")
+    push_flash(request, "KI-Einstellungen gespeichert." + (" " + " ".join(meldungen)
+                                                           if meldungen else ""),
+               "warning" if meldungen else "success")
+    return RedirectResponse(url="/settings?tab=ki", status_code=303)
+
+
+@router.post("/settings/ki/schluessel")
+def settings_ki_schluessel(
+    request: Request,
+    api_key: Annotated[str | None, Form()] = None,
+    pruefen: Annotated[str | None, Form()] = None,
+    loeschen: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    """Schluessel eintragen, pruefen oder entfernen.
+
+    Der Klartext wird nur an ai_settings_service.setze_schluessel weitergegeben und
+    nirgends protokolliert - auch nicht im Audit-Log."""
+    current_user = _require_super_admin(request, db)
+    if current_user is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if _to_bool(loeschen):
+        ai_settings_service.loesche_schluessel(db)
+        audit_service.log_action(db, action="settings.ai_key_removed",
+                                 user_id=current_user.id)
+        push_flash(request, "Der API-Schluessel wurde entfernt.", "success")
+        return RedirectResponse(url="/settings?tab=ki", status_code=303)
+
+    if _to_bool(pruefen) and not (api_key or "").strip():
+        ok, meldung = ai_service.pruefe_verbindung(db, user=current_user)
+        push_flash(request, meldung, "success" if ok else "error")
+        return RedirectResponse(url="/settings?tab=ki", status_code=303)
+
+    roh = (api_key or "").strip()
+    if not roh:
+        push_flash(request, "Es wurde kein Schluessel eingegeben.", "error")
+        return RedirectResponse(url="/settings?tab=ki", status_code=303)
+
+    try:
+        maske = ai_settings_service.setze_schluessel(db, roh)
+    except Exception as exc:  # noqa: BLE001 - z.B. DPAPI nicht verfuegbar
+        push_flash(request, f"Der Schluessel konnte nicht sicher gespeichert werden: {exc}",
+                   "error")
+        return RedirectResponse(url="/settings?tab=ki", status_code=303)
+
+    audit_service.log_action(db, action="settings.ai_key_set", user_id=current_user.id,
+                             details=f"maske={maske}")
+    meldung = f"Schluessel verschluesselt gespeichert ({maske})."
+    if _to_bool(pruefen):
+        ok, pruefmeldung = ai_service.pruefe_verbindung(db, user=current_user)
+        push_flash(request, f"{meldung} {pruefmeldung}", "success" if ok else "error")
+    else:
+        push_flash(request, meldung, "success")
+    return RedirectResponse(url="/settings?tab=ki", status_code=303)

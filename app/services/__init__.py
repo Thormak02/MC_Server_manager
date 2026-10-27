@@ -1,4 +1,10 @@
 __all__ = [
+    "ai_settings_service",
+    "ai_service",
+    "ai_secret_service",
+    "ai_provider_service",
+    "ai_privacy_service",
+    "ai_budget_service",
     "auth_service",
     "user_service",
     "server_service",
