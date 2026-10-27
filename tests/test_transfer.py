@@ -2749,3 +2749,84 @@ def test_altlast_wandert_nicht_mit_wenn_kein_umbau_stattfindet(tmp_path, client,
             ).read_bytes() == b"ECHTER-NETHER"
     # ... die Altlast bleibt zurueck.
     assert not (tmp_path / "z" / "world" / "DIM-1").exists()
+
+
+def test_data_ordner_der_huelle_bricht_den_transfer_nicht_ab(tmp_path, client):
+    """Aus der Praxis: 'Im Weltordner world_nether liegen Daten an einem Platz, den der
+    Manager nicht zuordnen kann (data/minecraft/custom_boss_events.dat, ...)'.
+
+    Das sind keine Fremddaten, sondern die normalen Weltdaten der Nether-Welt - seit 26.1
+    namespaced unter data/minecraft/. Sie gehoeren zur Dimension und muessen mitwandern."""
+    from app.services import transfer_service as ts
+
+    _dimension(tmp_path / "world", b"overworld")
+    _level_dat(tmp_path / "world" / "level.dat")
+    huelle = tmp_path / "world_nether"
+    _dimension(huelle / "DIM-1", b"nether")
+    _level_dat(huelle / "level.dat")
+    (huelle / "data" / "minecraft").mkdir(parents=True)
+    for name in ("custom_boss_events.dat", "game_rules.dat", "random_sequences.dat",
+                 "scheduled_events.dat"):
+        (huelle / "data" / "minecraft" / name).write_bytes(b"NETHER-" + name.encode())
+
+    # Frueher: ValueError "nicht zuordnen".
+    meldungen = ts._baue_stil_um(tmp_path, "world", ts.STIL_GETRENNT, ts.STIL_GEMEINSAM)
+
+    # Die Dimension ist da ...
+    assert (tmp_path / "world" / "DIM-1" / "region" / "r.0.0.mca").read_bytes() == b"nether"
+    # ... und ihre Weltdaten sind nicht verloren.
+    ziel = tmp_path / "world" / "DIM-1" / "data" / "minecraft"
+    assert (ziel / "custom_boss_events.dat").read_bytes() == b"NETHER-custom_boss_events.dat"
+    assert (ziel / "game_rules.dat").is_file()
+    assert not huelle.exists()
+    assert any("data" in m for m in meldungen)
+
+
+def test_namensgleiche_datei_wird_nicht_ueberschrieben(tmp_path, client):
+    """Liegt unter der Dimension schon eine Datei gleichen Namens, gewinnt sie - die der
+    Huelle zu ueberschreiben waere stiller Datenverlust."""
+    from app.services import transfer_service as ts
+
+    _dimension(tmp_path / "world", b"overworld")
+    _level_dat(tmp_path / "world" / "level.dat")
+    huelle = tmp_path / "world_nether"
+    _dimension(huelle / "DIM-1", b"nether")
+    _level_dat(huelle / "level.dat")
+    (huelle / "DIM-1" / "data").mkdir(parents=True, exist_ok=True)
+    (huelle / "DIM-1" / "data" / "raids.dat").write_bytes(b"SCHON-DA")
+    (huelle / "data").mkdir(parents=True, exist_ok=True)
+    (huelle / "data" / "raids.dat").write_bytes(b"AUS-DER-HUELLE")
+
+    meldungen = ts._baue_stil_um(tmp_path, "world", ts.STIL_GETRENNT, ts.STIL_GEMEINSAM)
+
+    assert (tmp_path / "world" / "DIM-1" / "data" / "raids.dat"
+            ).read_bytes() == b"SCHON-DA"
+    assert any("uebersprungen" in m for m in meldungen)
+
+
+def test_spigot_mit_dimensionsdaten_nach_paper(tmp_path, client, monkeypatch):
+    """Der vollstaendige Praxisfall: Spigot 26.2 mit data/minecraft in den Huellen
+    -> Paper 26.3."""
+    from app.db.session import SessionLocal
+    from app.services import transfer_service as ts
+
+    _ohne_backup(monkeypatch, tmp_path)
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Spigot", slug="spigot", typ="spigot",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Paper", slug="paper", typ="paper",
+                       version="26.3", port=25600)
+        _welt_getrennt(tmp_path / "q")
+        for huelle in ("world_nether", "world_the_end"):
+            ordner = tmp_path / "q" / huelle / "data" / "minecraft"
+            ordner.mkdir(parents=True)
+            (ordner / "game_rules.dat").write_bytes(f"REGELN-{huelle}".encode())
+
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=True, run_async=False)
+
+    # Kein Abbruch - die Welt ist angekommen.
+    assert (tmp_path / "z" / "world" / "region" / "r.0.0.mca").read_bytes() == b"overworld"
+    assert (tmp_path / "z" / "world" / "DIM-1" / "region" / "r.0.0.mca").read_bytes() == b"nether"
+    # Und die Dimensionsdaten sind nicht verloren.
+    assert (tmp_path / "z" / "world" / "DIM-1" / "data" / "minecraft" / "game_rules.dat"
+            ).read_bytes() == b"REGELN-world_nether"

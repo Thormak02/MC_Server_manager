@@ -341,7 +341,9 @@ def test_spielerdateien_werden_umbenannt(tmp_path, client):
         (welt / ordner).mkdir(parents=True)
         (welt / ordner / f"{ALT}{endung}").write_text("x", encoding="utf-8")
 
-    assert wis.benenne_spielerdateien_um(welt, {ALT: NEU}) == 3
+    anzahl, aufgeloest = wis.benenne_spielerdateien_um(welt, {ALT: NEU})
+    assert anzahl == 3
+    assert aufgeloest == []
     assert (welt / "playerdata" / f"{NEU}.dat").is_file()
     assert (welt / "stats" / f"{NEU}.json").is_file()
     assert not (welt / "playerdata" / f"{ALT}.dat").exists()
@@ -354,22 +356,36 @@ def test_spielerdateien_im_26x_ordner_werden_umbenannt(tmp_path, client):
     (welt / "players" / "data").mkdir(parents=True)
     (welt / "players" / "data" / f"{ALT}.dat").write_text("x", encoding="utf-8")
 
-    assert wis.benenne_spielerdateien_um(welt, {ALT: NEU}) == 1
+    anzahl, _ = wis.benenne_spielerdateien_um(welt, {ALT: NEU})
+    assert anzahl == 1
     assert (welt / "players" / "data" / f"{NEU}.dat").is_file()
 
 
-def test_vorhandener_zielstand_wird_nicht_ueberschrieben(tmp_path, client):
-    """Liegt unter dem neuen Namen schon etwas, waere das Ueberschreiben Datenverlust."""
+def test_kein_stand_geht_verloren_wenn_zwei_vorliegen(tmp_path, client):
+    """Liegt unter dem neuen Namen schon etwas, gibt es zwei Staende desselben Spielers.
+    Der juengere gewinnt - und der andere wird aufgehoben, nicht geloescht."""
+    import os
+    import time
+
     from app.services import world_identity_service as wis
 
     welt = tmp_path / "world"
     (welt / "playerdata").mkdir(parents=True)
-    (welt / "playerdata" / f"{ALT}.dat").write_text("alt", encoding="utf-8")
+    alt_datei = welt / "playerdata" / f"{ALT}.dat"
+    alt_datei.write_text("alt", encoding="utf-8")
+    stempel = time.time() - 86400 * 10
+    os.utime(alt_datei, (stempel, stempel))
     (welt / "playerdata" / f"{NEU}.dat").write_text("schon da", encoding="utf-8")
 
-    assert wis.benenne_spielerdateien_um(welt, {ALT: NEU}) == 0
-    assert (welt / "playerdata" / f"{NEU}.dat").read_text(encoding="utf-8") == "schon da"
+    anzahl, aufgeloest = wis.benenne_spielerdateien_um(welt, {ALT: NEU})
 
+    # "schon da" ist juenger -> bleibt.
+    assert (welt / "playerdata" / f"{NEU}.dat").read_text(encoding="utf-8") == "schon da"
+    assert aufgeloest and aufgeloest[0]["behalten"] == "neu"
+    # Der unterlegene Stand ist aufgehoben, nicht weg.
+    aufgehoben = list((welt / "playerdata").glob("*.ersetzt"))
+    assert len(aufgehoben) == 1
+    assert aufgehoben[0].read_text(encoding="utf-8") == "alt"
 
 # --------------------------------------------------------- Alles zusammen, eine Welt
 
@@ -405,7 +421,7 @@ def test_leere_zuordnung_aendert_nichts(tmp_path, client):
 
     ergebnis = wis.schreibe_welt_um(welt, {})
 
-    assert ergebnis == {"dateien": 0, "chunks": 0, "dat": 0}
+    assert ergebnis == {"dateien": 0, "chunks": 0, "dat": 0, "aufgeloest": []}
     assert (welt / "entities" / "r.0.0.mca").read_bytes() == vorher
 
 

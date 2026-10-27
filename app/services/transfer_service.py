@@ -644,12 +644,32 @@ def _baue_stil_um(temp: Path, welt: str, von: str, nach: str) -> list[str]:
             if not huelle.is_dir():
                 continue
             bewegt: list[str] = []
+            zuletzt: str | None = None
             for relativ in pfade:
                 quelle = huelle / relativ
                 if not quelle.is_dir():
                     continue
                 _verschiebe(quelle, haupt / relativ)
                 bewegt.append(relativ)
+                zuletzt = relativ
+
+            # Der data-Ordner der Huelle gehoert zur Dimension, nicht zur Huelle:
+            # Bossbars, Spielregeln, geplante Ereignisse und Zufallsfolgen dieser Welt.
+            # Seit 26.1 ist er zusaetzlich namespaced (data/minecraft/...). Ohne diesen
+            # Schritt gilt er als "nicht zuordenbar" und bricht den Transfer ab - obwohl
+            # es ganz normale Weltdaten sind.
+            huellen_daten = huelle / "data"
+            if huellen_daten.is_dir() and zuletzt:
+                for eintrag in list(huellen_daten.iterdir()):
+                    ziel_pfad = haupt / zuletzt / "data" / eintrag.name
+                    if ziel_pfad.exists():
+                        meldungen.append(
+                            f"'{eintrag.name}' aus {huelle.name}/data uebersprungen - "
+                            f"unter {zuletzt}/data liegt schon eine Datei dieses Namens.")
+                        continue
+                    _verschiebe(eintrag, ziel_pfad)
+                shutil.rmtree(huellen_daten, ignore_errors=True)
+                bewegt.append("data")
             uebrig = _huelle_reste(huelle)
             if uebrig:
                 raise ValueError(
@@ -697,7 +717,12 @@ def _baue_stil_um(temp: Path, welt: str, von: str, nach: str) -> list[str]:
             quelle = haupt / relativ
             if not quelle.is_dir():
                 continue
+            # Der data-Ordner der Dimension wandert mit ihr nach aussen: in der
+            # getrennten Struktur fuehrt jede Welt ihren eigenen.
+            dim_daten = quelle / "data"
             _verschiebe(quelle, huelle / relativ)
+            if (huelle / relativ / "data").is_dir():
+                _verschiebe(huelle / relativ / "data", huelle / "data")
             bewegt.append(relativ)
         if not bewegt:
             continue
