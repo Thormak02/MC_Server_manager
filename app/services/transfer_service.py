@@ -1478,7 +1478,8 @@ def pruefe_transfer(quelle: Server, ziel: Server, *, welt: bool, configs: bool,
 def uebertrage(db: Session, *, quelle: Server, ziel: Server, welt: bool = True,
                spielerdaten: bool = True, configs: bool = False, erweiterungen: bool = False,
                zusatzwelten: bool = False, zugangslisten: bool = False,
-               user_id: int | None = None, run_async: bool = True) -> None:
+               inhalte_aktualisieren: bool = False, user_id: int | None = None,
+               run_async: bool = True) -> None:
     """Ausgewaehlte Daten von ``quelle`` nach ``ziel`` uebernehmen.
 
     Prueft synchron (ValueError bei Problemen) und kopiert dann im Hintergrund - eine Welt
@@ -1491,7 +1492,8 @@ def uebertrage(db: Session, *, quelle: Server, ziel: Server, welt: bool = True,
 
     optionen = {"welt": welt, "spielerdaten": spielerdaten, "configs": configs,
                 "erweiterungen": erweiterungen, "zusatzwelten": zusatzwelten,
-                "zugangslisten": zugangslisten}
+                "zugangslisten": zugangslisten,
+                "inhalte_aktualisieren": inhalte_aktualisieren}
     quell_id, ziel_id = quelle.id, ziel.id
 
     # ZUERST sperren, dann pruefen: beide Server fuer die Dauer der Kopie start-sperren -
@@ -1975,6 +1977,92 @@ def _fuehre_usercache_zusammen(quell_base: Path, ziel_base: Path) -> list[str]:
             f"damit bleiben Name und UUID auch fuer spaetere Umzuege zuordenbar."]
 
 
+def _uebernimm_inhalts_eintraege(db, quelle: Server, ziel: Server) -> list[str]:
+    """Die Verwaltungseintraege zu Plugins/Mods mituebernehmen.
+
+    Die JAR-Dateien allein genuegen nicht: ohne den zugehoerigen Eintrag weiss der Manager
+    nicht mehr, von welchem Projekt sie stammen, und kann sie weder aktualisieren noch
+    ihre Version anzeigen. Beim Duplizieren wird das laengst gemacht
+    (server_service._copy_server_relations); der Transfer hatte es schlicht nicht.
+
+    Eintraege des ZIELS zu Dateien, die jetzt ueberschrieben wurden, werden ersetzt -
+    sonst stuenden zwei Eintraege fuer dieselbe Datei in der Liste.
+    """
+    from sqlalchemy import select
+
+    from app.models.installed_content import InstalledContent
+
+    try:
+        quell_zeilen = list(db.scalars(
+            select(InstalledContent).where(InstalledContent.server_id == quelle.id)))
+        if not quell_zeilen:
+            return []
+        vorhanden = {
+            (z.content_type or "", z.file_name or ""): z
+            for z in db.scalars(select(InstalledContent)
+                                .where(InstalledContent.server_id == ziel.id))
+        }
+        uebernommen = 0
+        for zeile in quell_zeilen:
+            schluessel = (zeile.content_type or "", zeile.file_name or "")
+            alt = vorhanden.get(schluessel)
+            if alt is not None:
+                db.delete(alt)
+            db.add(InstalledContent(
+                server_id=ziel.id, provider_name=zeile.provider_name,
+                content_type=zeile.content_type,
+                external_project_id=zeile.external_project_id,
+                external_version_id=zeile.external_version_id,
+                name=zeile.name, version_label=zeile.version_label,
+                file_name=zeile.file_name, file_sha1=zeile.file_sha1,
+                file_sha512=zeile.file_sha512, local_adopt_state=zeile.local_adopt_state,
+                declared_mc_version=zeile.declared_mc_version,
+                installed_by_user_id=zeile.installed_by_user_id))
+            uebernommen += 1
+        db.commit()
+    except Exception as exc:  # noqa: BLE001 - die Dateien sind das Wichtige, nicht die Liste
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        return [f"Die Inhaltsliste konnte nicht uebernommen werden ({exc}) - die Dateien "
+                f"sind da, aber Updates ueber den Manager funktionieren fuer sie nicht."]
+
+    return [f"{uebernommen} Eintrag/Eintraege der Inhaltsliste uebernommen - damit kennt "
+            f"der Manager Herkunft und Version der Dateien und kann sie aktualisieren."]
+
+
+def aktualisiere_inhalte_auf_zielversion(db, ziel: Server,
+                                         user_id: int | None = None) -> list[str]:
+    """Uebernommene Plugins/Mods auf die zum ZIELSERVER passende Version bringen.
+
+    Nach einem Transfer tragen die Dateien noch die Version des Quellservers - bei einem
+    Wechsel von 26.2 auf 26.3 also Plugins fuer 26.2. Die laufen meist, aber alles mit
+    Zugriff auf Server-Interna bricht. Hier wird nachgeladen, was es fuer die Zielversion
+    gibt; manuell hochgeladene Dateien ohne Projekt-Zuordnung bleiben unangetastet.
+    """
+    from app.services import content_service
+
+    try:
+        hinweise, warnungen = content_service.bulk_update_installed_content(
+            db, ziel, user_id, content_types={"mod", "plugin", "datapack"})
+    except Exception as exc:  # noqa: BLE001
+        return [f"Die Aktualisierung auf {ziel.mc_version} ist fehlgeschlagen ({exc}). "
+                f"Die uebernommenen Dateien sind unveraendert."]
+
+    meldungen: list[str] = []
+    if hinweise:
+        meldungen.append(f"Auf {ziel.mc_version} aktualisiert: " + " ".join(hinweise[:6])
+                         + (" ..." if len(hinweise) > 6 else ""))
+    if warnungen:
+        meldungen.append("Nicht aktualisiert: " + " ".join(warnungen[:6])
+                         + (" ..." if len(warnungen) > 6 else ""))
+    if not meldungen:
+        meldungen.append(f"Alle uebernommenen Inhalte passen bereits zu "
+                         f"{ziel.mc_version}.")
+    return meldungen
+
+
 def _uebernimm_erweiterungen(quelle: Server, ziel: Server) -> list[str]:
     """``plugins/`` oder ``mods/`` uebernehmen und die alten JARs dabei entfernen.
 
@@ -2118,6 +2206,12 @@ def _fuehre_aus(db: Session, quell_id: int, ziel_id: int, optionen: dict,
             # Die mitgebrachten Plugin-Daten tragen noch die UUIDs der Quelle.
             meldungen += _stelle_server_daten_um(
                 quelle, ziel, _LETZTE_ZUORDNUNG.get(ziel_id, {}))
+            # Ohne die Eintraege kennt der Manager Herkunft und Version der JARs nicht -
+            # und kann sie folglich auch nicht aktualisieren.
+            meldungen += _uebernimm_inhalts_eintraege(db, quelle, ziel)
+            if optionen.get("inhalte_aktualisieren"):
+                melde(96, f"Inhalte werden auf {ziel.mc_version} gebracht ...")
+                meldungen += aktualisiere_inhalte_auf_zielversion(db, ziel, user_id)
 
         if optionen.get("zugangslisten"):
             melde(97, "Zugangslisten werden uebernommen ...")

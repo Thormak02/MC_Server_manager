@@ -1057,6 +1057,7 @@ def server_transfer_action(
     erweiterungen: Annotated[str | None, Form()] = None,
     zusatzwelten: Annotated[str | None, Form()] = None,
     zugangslisten: Annotated[str | None, Form()] = None,
+    inhalte_aktualisieren: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     """Welt/Configs/Plugins von einem anderen Server uebernehmen (server_id ist das ZIEL)."""
@@ -1090,7 +1091,9 @@ def server_transfer_action(
             welt=_to_bool(welt), spielerdaten=_to_bool(spielerdaten),
             configs=_to_bool(configs), erweiterungen=_to_bool(erweiterungen),
             zusatzwelten=_to_bool(zusatzwelten),
-            zugangslisten=_to_bool(zugangslisten), user_id=current_user.id,
+            zugangslisten=_to_bool(zugangslisten),
+            inhalte_aktualisieren=_to_bool(inhalte_aktualisieren),
+            user_id=current_user.id,
         )
     except ValueError as exc:
         push_flash(request, str(exc), "error")

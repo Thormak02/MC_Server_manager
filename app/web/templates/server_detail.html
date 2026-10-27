@@ -480,6 +480,12 @@
                     <strong id="transfer-ext-label">Plugins/Mods</strong>
                     <span id="transfer-ext-info" class="muted"></span></label>
             </div>
+            <div class="toggle-field transfer-sub">
+                <label><input type="checkbox" name="inhalte_aktualisieren" value="true"
+                              id="transfer-inhalte-aktualisieren">
+                    Auf die Version dieses Servers aktualisieren
+                    <span class="muted" id="transfer-aktualisieren-info"></span></label>
+            </div>
         </fieldset>
         <button type="submit" id="transfer-submit" disabled>Uebernehmen</button>
     </form>
@@ -497,6 +503,8 @@
     const hakenConfigs = document.getElementById("transfer-configs");
     const hakenZusatz = document.getElementById("transfer-zusatzwelten");
     const hakenListen = document.getElementById("transfer-zugangslisten");
+    const hakenAktualisieren = document.getElementById("transfer-inhalte-aktualisieren");
+    const aktualisierenInfo = document.getElementById("transfer-aktualisieren-info");
     const zusatzZeile = document.getElementById("transfer-zusatz-zeile");
     const zusatzInfo = document.getElementById("transfer-zusatz-info");
     const hakenExt = document.getElementById("transfer-erweiterungen");
@@ -572,6 +580,13 @@
         extLabel.textContent = ext.art === "mods" ? "Mods"
             : (ext.art === "plugins" ? "Plugins" : "Plugins/Mods");
         extInfo.textContent = ext.grund ? "– " + ext.grund : "";
+        const zielVersion = (daten.ziel || {}).version || "";
+        const quellVersion = (daten.quelle || {}).version || "";
+        aktualisierenInfo.textContent = (zielVersion && quellVersion
+                && zielVersion !== quellVersion)
+            ? "– holt neuere Fassungen für " + zielVersion
+                + " (die Dateien stammen von " + quellVersion + ")"
+            : "– lädt neuere Fassungen, wo es welche gibt";
 
         const weitere = daten.zusatzwelten || [];
         zusatzZeile.hidden = weitere.length === 0;
@@ -588,6 +603,8 @@
 
     function aktualisiere() {
         hakenSpieler.disabled = !hakenWelt.checked || hakenWelt.disabled;
+        // Aktualisieren ergibt nur Sinn, wenn ueberhaupt Plugins/Mods mitkommen.
+        hakenAktualisieren.disabled = !hakenExt.checked || hakenExt.disabled;
         const blocker = letzteVorschau ? (letzteVorschau.blocker || []) : [];
         const gewaehlt = hakenWelt.checked || hakenConfigs.checked || hakenExt.checked
             || hakenListen.checked || (hakenZusatz.checked && !zusatzZeile.hidden);
@@ -619,7 +636,8 @@
     }
 
     auswahl.addEventListener("change", laden);
-    [hakenWelt, hakenConfigs, hakenExt, hakenZusatz, hakenListen].forEach(function (haken) {
+    [hakenWelt, hakenConfigs, hakenExt, hakenZusatz, hakenListen,
+     hakenAktualisieren].forEach(function (haken) {
         haken.addEventListener("change", aktualisiere);
     });
     document.getElementById("transfer-form").addEventListener("submit", function (ereignis) {

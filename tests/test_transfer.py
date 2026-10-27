@@ -2948,3 +2948,142 @@ def test_drachen_warnung_nur_wenn_der_stand_fehlt(tmp_path, client):
 
     ohne = ts._baue_stil_um(tmp_path / "b", "world", ts.STIL_GETRENNT, ts.STIL_GEMEINSAM)
     assert any("Enderdrachen" in m for m in ohne)
+
+
+# --- Inhaltsliste und Versionsanpassung -------------------------------------------------
+
+def _inhalt(db, server_id, *, name, datei, version, typ="plugin",
+            provider="modrinth", projekt="abc123"):
+    from app.models.installed_content import InstalledContent
+
+    zeile = InstalledContent(
+        server_id=server_id, provider_name=provider, content_type=typ,
+        external_project_id=projekt, external_version_id="v1", name=name,
+        version_label=version, file_name=datei, declared_mc_version=version)
+    db.add(zeile)
+    db.commit()
+    return zeile
+
+
+def test_inhaltsliste_wandert_mit(tmp_path, client, monkeypatch):
+    """Ohne die Eintraege kennt der Manager Herkunft und Version der JARs nicht - und
+    kann sie folglich nicht aktualisieren. Beim Duplizieren wird das laengst gemacht."""
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from sqlalchemy import select
+
+    from app.services import transfer_service as ts
+
+    _ohne_backup(monkeypatch, tmp_path)
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="spigot",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Z", slug="z", typ="paper",
+                       version="26.3", port=25600)
+        _inhalt(db, quelle.id, name="GSit", datei="GSit.jar", version="26.2")
+        (tmp_path / "q" / "plugins").mkdir(parents=True)
+        (tmp_path / "q" / "plugins" / "GSit.jar").write_bytes(b"jar")
+        ziel_id = ziel.id
+
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=False, erweiterungen=True,
+                      run_async=False)
+
+        zeilen = list(db.scalars(select(InstalledContent)
+                                 .where(InstalledContent.server_id == ziel_id)))
+
+    assert len(zeilen) == 1
+    assert zeilen[0].name == "GSit"
+    assert zeilen[0].external_project_id == "abc123"   # Zuordnung erhalten
+
+
+def test_eintrag_des_ziels_wird_ersetzt_nicht_verdoppelt(tmp_path, client, monkeypatch):
+    """Die Datei wurde ueberschrieben - dann darf nicht zweimal derselbe Eintrag
+    dastehen."""
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from sqlalchemy import select
+
+    from app.services import transfer_service as ts
+
+    _ohne_backup(monkeypatch, tmp_path)
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="spigot",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Z", slug="z", typ="paper",
+                       version="26.3", port=25600)
+        _inhalt(db, quelle.id, name="GSit", datei="GSit.jar", version="26.2")
+        _inhalt(db, ziel.id, name="GSit (alt)", datei="GSit.jar", version="1.21")
+        (tmp_path / "q" / "plugins").mkdir(parents=True)
+        (tmp_path / "q" / "plugins" / "GSit.jar").write_bytes(b"jar")
+        ziel_id = ziel.id
+
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=False, erweiterungen=True,
+                      run_async=False)
+
+        zeilen = list(db.scalars(select(InstalledContent)
+                                 .where(InstalledContent.server_id == ziel_id)))
+
+    assert len(zeilen) == 1
+    assert zeilen[0].name == "GSit"
+
+
+def test_aktualisierung_wird_nur_auf_wunsch_ausgefuehrt(tmp_path, client, monkeypatch):
+    from app.db.session import SessionLocal
+    from app.services import content_service, transfer_service as ts
+
+    _ohne_backup(monkeypatch, tmp_path)
+    aufrufe = []
+
+    def _attrappe(db, server, user_id, **kwargs):
+        aufrufe.append(server.mc_version)
+        return ([f"GSit auf {server.mc_version} gebracht."], [])
+
+    monkeypatch.setattr(content_service, "bulk_update_installed_content", _attrappe)
+
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="spigot",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Z", slug="z", typ="paper",
+                       version="26.3", port=25600)
+        (tmp_path / "q" / "plugins").mkdir(parents=True)
+        (tmp_path / "q" / "plugins" / "GSit.jar").write_bytes(b"jar")
+
+        # Ohne Haken: keine Aktualisierung.
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=False, erweiterungen=True,
+                      run_async=False)
+        assert aufrufe == []
+
+        # Mit Haken: auf die Version des ZIELS.
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=False, erweiterungen=True,
+                      inhalte_aktualisieren=True, run_async=False)
+
+    assert aufrufe == ["26.3"]
+
+
+def test_fehlgeschlagene_aktualisierung_kippt_den_transfer_nicht(tmp_path, client,
+                                                                 monkeypatch):
+    """Die Dateien sind das Wichtige - ein Netzfehler beim Nachladen darf den schon
+    erledigten Transfer nicht entwerten."""
+    from app.db.session import SessionLocal
+    from app.services import content_service, transfer_service as ts
+
+    _ohne_backup(monkeypatch, tmp_path)
+
+    def _kaputt(*args, **kwargs):
+        raise OSError("kein Netz")
+
+    monkeypatch.setattr(content_service, "bulk_update_installed_content", _kaputt)
+
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="spigot",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Z", slug="z", typ="paper",
+                       version="26.3", port=25600)
+        (tmp_path / "q" / "plugins").mkdir(parents=True)
+        (tmp_path / "q" / "plugins" / "GSit.jar").write_bytes(b"jar")
+
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=False, erweiterungen=True,
+                      inhalte_aktualisieren=True, run_async=False)
+
+    # Die Datei ist trotzdem angekommen.
+    assert (tmp_path / "z" / "plugins" / "GSit.jar").is_file()
