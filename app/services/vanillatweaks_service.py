@@ -316,6 +316,29 @@ def _pack_version_from_file(file_name: str) -> str | None:
     return match.group(1).rstrip(".") if match else None
 
 
+def _pack_gruppe_from_file(file_name: str) -> str:
+    """VT-Dateiname -> VT-Versionsgruppe.
+
+    "armor statues v2.8.23 (MC 26.2).zip"            -> "26.2"
+    "armor statues v2.8.20 (MC 1.21-1.21.10).zip"    -> "1.21"
+
+    Warum nicht ``declared_mc_version``: dieses Feld kann falsch sein. Auf einem
+    26.2-Server standen dort "1.21.2", obwohl die Dateien korrekt "(MC 26.2)" hiessen -
+    das Feld wird beim Duplizieren und beim Transfer mitkopiert und passt dann nicht mehr
+    zum Server. Der Dateiname kommt von VanillaTweaks selbst und ist damit die
+    verlaesslichere Quelle. Folge des falschen Feldes: der Vergleich "schon aktuell"
+    griff nie, und jedes Update erzeugte die Packs neu.
+    """
+    treffer = re.search(r"\(MC\s+([^)]+)\)", file_name or "")
+    if not treffer:
+        return ""
+    wert = treffer.group(1).strip()
+    if "-" in wert:
+        # Ein Bereich wie "1.21-1.21.10": die Gruppe steht vorn.
+        wert = wert.split("-", 1)[0].strip()
+    return map_vt_version(wert)
+
+
 def _pack_type_from_project(external_project_id: str | None) -> str:
     """external_project_id ("vt:datapacks"/"vt:craftingtweaks") -> Pack-Typ (Default datapacks)."""
     return "craftingtweaks" if "craftingtweaks" in str(external_project_id or "") else "datapacks"
@@ -448,11 +471,7 @@ def _update_crafting_tweaks(db: Session, server: Server, entry: InstalledContent
     (target_dir / new_file).write_bytes(archive)
 
     old_file = entry.file_name
-    if old_file and old_file != new_file:
-        try:
-            content_service._delete_content_file(server, "datapack", old_file)
-        except ValueError:
-            pass
+    rest_hinweis = _alte_datei_weg(server, old_file, new_file)
     db.execute(
         delete(InstalledContent).where(
             InstalledContent.server_id == server.id,
@@ -476,7 +495,37 @@ def _update_crafting_tweaks(db: Session, server: Server, entry: InstalledContent
     note = f"Crafting Tweaks -> {version} ({len(pack_names)} Pack(s))"
     if missing:
         note += f", {len(missing)} unbekannt uebersprungen"
+    if rest_hinweis:
+        # Derselbe Fall wie bei den einzelnen Packs: bleibt die alte Datei liegen, laedt
+        # Minecraft beide. Das darf nicht verschwiegen werden.
+        note = f"{note}. {rest_hinweis}"
     return (True, note)
+
+
+def _alte_datei_weg(server: Server, old_file: str | None, new_file: str) -> str:
+    """Die alte Pack-Datei loeschen. Rueckgabe: ein Hinweis, falls das nicht ging.
+
+    Hier stand vorher ein stilles ``except ValueError: pass``. Das war der Grund fuer
+    doppelte Datapacks: ein LAUFENDER Server haelt seine Datapack-ZIPs offen, das
+    Loeschen scheitert unter Windows - und weil der Fehlschlag verschwiegen wurde, blieb
+    die alte Datei liegen. Der Eintrag zeigte danach auf die neue Datei, die alte war
+    fuer den Manager unsichtbar, wurde von Minecraft aber weiter geladen. Beide Packs
+    liefen gleichzeitig.
+
+    Deshalb wird der Fehlschlag jetzt zurueckgegeben und landet in den Hinweisen des
+    Updates - mit dem Dateinamen und dem, was zu tun ist.
+    """
+    if not old_file or old_file == new_file:
+        return ""
+    try:
+        content_service._delete_content_file(server, "datapack", old_file)
+    except ValueError:
+        return (f"Die alte Datei '{old_file}' konnte nicht geloescht werden - "
+                f"vermutlich laeuft der Server und haelt sie offen. Sie liegt weiterhin "
+                f"im datapacks-Ordner und wird von Minecraft ZUSAETZLICH geladen. "
+                f"Bitte den Server stoppen und die Datei entfernen (Dateien-Seite) oder "
+                f"die Aktualisierung bei gestopptem Server wiederholen.")
+    return ""
 
 
 def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
@@ -506,8 +555,16 @@ def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
     # also galt ein 1.21-Pack auf einem 26.2-Server als "aktuell" und wurde nie ersetzt -
     # obwohl es dort gar nicht laedt (1.21-Packs decken nur die Formate 48-94 ab, ein
     # 26.2-Server verlangt 101+). Genau das war der gemeldete Fehler.
-    installed_group = map_vt_version(entry.declared_mc_version) if entry.declared_mc_version else ""
+    # Zuerst der Dateiname (von VT selbst geschrieben), dann das Feld als Rueckfall.
+    installed_group = _pack_gruppe_from_file(entry.file_name) or (
+        map_vt_version(entry.declared_mc_version) if entry.declared_mc_version else "")
     if latest and installed and latest == installed and installed_group == version:
+        if entry.declared_mc_version != version:
+            # Die Angabe nachziehen, auch wenn nichts neu zu erzeugen ist - sonst bleibt
+            # sie fuer immer falsch, weil dieser Zweig vorzeitig zurueckkehrt.
+            entry.declared_mc_version = version
+            db.add(entry)
+            db.commit()
         return (False, "")   # bereits aktuell
 
     archive = generate_zip(match["pack_type"], version, {match["category"]: [match["name"]]})
@@ -528,11 +585,7 @@ def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
     (target_dir / new_file).write_bytes(raw)
 
     old_file = entry.file_name
-    if old_file and old_file != new_file:
-        try:
-            content_service._delete_content_file(server, "datapack", old_file)
-        except ValueError:
-            pass   # z.B. gesperrt (Server laeuft) - neue Datei ist trotzdem da
+    rest_hinweis = _alte_datei_weg(server, old_file, new_file)
     # Eine evtl. bereits getrackte gleichnamige Zeile (nicht diese) entfernen -> keine Dublette.
     db.execute(
         delete(InstalledContent).where(
@@ -555,7 +608,10 @@ def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
         db, action="vanillatweaks.update", user_id=user_id, server_id=server.id,
         details=f"{match['display']} {installed or '?'} -> {latest}",
     )
-    return (True, f"{match['display']} -> {latest}")
+    meldung = f"{match['display']} -> {latest}"
+    if rest_hinweis:
+        meldung = f"{meldung}. {rest_hinweis}"
+    return (True, meldung)
 
 
 def install_resourcepack(

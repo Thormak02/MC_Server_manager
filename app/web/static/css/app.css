@@ -2048,3 +2048,191 @@ button.ghost[disabled] {
     color: color-mix(in srgb, var(--success, #3fb950) 80%, var(--text));
     font-size: 0.9rem;
 }
+
+
+/* --- Dargestelltes Markdown in KI-Antworten -----------------------------
+   Die Antworten sind in Markdown geschrieben. Als Rohtext angezeigt stehen dort
+   Sternchen und Raster statt Ueberschriften und Listen - lesbar, aber muehsam. */
+.md-h {
+    margin: 0.9rem 0 0.35rem;
+    line-height: 1.3;
+}
+
+.md-h:first-child {
+    margin-top: 0;
+}
+
+h3.md-h { font-size: 1.05rem; }
+h4.md-h { font-size: 0.98rem; }
+h5.md-h, h6.md-h { font-size: 0.92rem; }
+
+.md-p {
+    margin: 0.45rem 0;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.md-p:first-child { margin-top: 0; }
+.md-p:last-child { margin-bottom: 0; }
+
+.md-liste {
+    margin: 0.35rem 0;
+    padding-left: 1.3rem;
+    line-height: 1.5;
+}
+
+.md-liste .md-liste {
+    margin: 0.15rem 0 0.25rem;
+}
+
+.md-liste li {
+    margin-bottom: 0.2rem;
+}
+
+.md-zitat {
+    margin: 0.5rem 0;
+    padding: 0.35rem 0.8rem;
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+}
+
+/* Codebloecke sollen nicht aus dem Kasten laufen. */
+.md-code {
+    margin: 0.5rem 0;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel-soft);
+    overflow-x: auto;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.md-code code {
+    background: none;
+    padding: 0;
+    white-space: pre;
+}
+
+.md-tabelle {
+    width: 100%;
+    margin: 0.5rem 0;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+}
+
+.md-tabelle th,
+.md-tabelle td {
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+}
+
+.md-tabelle th {
+    font-weight: 600;
+}
+
+
+/* --- KI-Assistent: Gespraeche links, Unterhaltung rechts ------------------
+   Wie im Web-Chat. Auf schmalen Fenstern untereinander, damit die Unterhaltung nicht
+   auf ein Drittel der Breite zusammengequetscht wird. */
+.ki-raum {
+    display: grid;
+    grid-template-columns: minmax(14rem, 18rem) 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+@media (max-width: 60rem) {
+    .ki-raum {
+        grid-template-columns: 1fr;
+    }
+    .ki-chatliste-karte {
+        order: 2;
+    }
+}
+
+.ki-chatliste-kopf {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.ki-chatliste {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.ki-chatliste:empty {
+    display: none;
+}
+
+.ki-chateintrag {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    padding: 0.35rem 0.45rem;
+    border-radius: 6px;
+}
+
+.ki-chateintrag:hover {
+    background: var(--panel-soft);
+}
+
+.ki-chateintrag.aktiv {
+    background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+}
+
+/* Der Titel ist ein Knopf, sieht aber wie ein Eintrag aus - angeklickt wird die ganze
+   Zeile, nicht ein kleines Symbol daneben. */
+.ki-chattitel {
+    all: unset;
+    cursor: pointer;
+    display: block;
+    width: 100%;
+    font-size: 0.88rem;
+    line-height: 1.35;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ki-chattitel:hover {
+    text-decoration: underline;
+}
+
+/* Die Werkzeuge erscheinen erst beim Darauffahren - sonst steht neben jedem Gespraech
+   dauerhaft "Loeschen", und man trifft es versehentlich. */
+.ki-chatwerkzeuge {
+    display: flex;
+    gap: 0.3rem;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+.ki-chateintrag:hover .ki-chatwerkzeuge,
+.ki-chateintrag:focus-within .ki-chatwerkzeuge {
+    opacity: 1;
+}
+
+.ki-chatwerkzeuge button {
+    font-size: 0.74rem;
+    padding: 0.1rem 0.35rem;
+}
+
+/* Auf Geraeten ohne Mauszeiger gibt es kein Darauffahren - dort immer sichtbar. */
+@media (hover: none) {
+    .ki-chatwerkzeuge {
+        opacity: 1;
+    }
+}

@@ -1095,6 +1095,20 @@
         return koerper;
     }
 
+    // Eine KI-Antwort ist in Markdown geschrieben. MdDarsteller baut daraus DOM-Knoten
+    // und setzt jeden Text ueber textContent - aus der Antwort kann also kein HTML
+    // werden. Fehlt das Skript, bleibt der Rohtext stehen statt nichts anzuzeigen.
+    function kiAntwortAbsatz(text) {
+        const huelle = document.createElement("div");
+        huelle.className = "ki-antwort-text";
+        if (window.MdDarsteller && text) {
+            window.MdDarsteller.inElement(huelle, text);
+        } else {
+            huelle.textContent = text || "";
+        }
+        return huelle;
+    }
+
     function kiAbsatz(ziel, text, klasse) {
         if (!text) { return; }
         const p = document.createElement("p");
@@ -1164,7 +1178,9 @@
                 kopf.textContent = empf[0];
                 koerper.appendChild(kopf);
                 kiAbsatz(koerper, d.begruendung_empfehlung, "ki-vorschlag-grund");
-                kiAbsatz(koerper, d.zusammenfassung);
+                if (d.zusammenfassung) {
+                    koerper.appendChild(kiAntwortAbsatz(d.zusammenfassung));
+                }
 
                 if ((d.breaking || []).length) {
                     const h = document.createElement("p");

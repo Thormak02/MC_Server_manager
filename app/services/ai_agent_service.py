@@ -412,6 +412,153 @@ def _tue_inhalte_update(db: Session, user: User, server: Server, p: dict) -> dic
             "warnungen": warnungen[:20]}
 
 
+def _lies_inhalt_suchen(db: Session, user: User, server: Server, p: dict) -> dict:
+    """Ein Plugin/eine Mod bei den Anbietern suchen - passend zu DIESEM Server.
+
+    Ohne dieses Werkzeug konnte der Agent einen Auftrag wie "installiere Plugin X" gar
+    nicht angehen: er kannte die Projekt-ID nicht und hatte keinen Weg, sie zu finden.
+    """
+    from app.services import content_service as cs
+
+    begriff = str(p.get("begriff") or "").strip()
+    if not begriff:
+        raise AgentFehler("Es wurde kein Suchbegriff angegeben.")
+    art = str(p.get("typ") or "plugin").strip().lower()
+    if art not in {"mod", "plugin", "datapack", "modpack", "resourcepack"}:
+        art = "plugin"
+
+    mc_version = cs._expected_server_mc_version(server)
+    loader = cs._expected_server_loader(server, art)
+    treffer: list[dict] = []
+    fehler: list[str] = []
+    for anbieter, suche in (("modrinth", cs.search_modrinth),
+                            ("curseforge", cs.search_curseforge)):
+        try:
+            for eintrag in suche(begriff, mc_version, loader, art)[:8]:
+                treffer.append({
+                    "anbieter": anbieter,
+                    "projekt_id": eintrag.get("id"),
+                    "name": eintrag.get("title"),
+                    "beschreibung": (str(eintrag.get("description") or "")[:200]),
+                    "downloads": eintrag.get("downloads"),
+                    "url": eintrag.get("project_url"),
+                })
+        except Exception as exc:  # noqa: BLE001 - ein Anbieter darf den anderen nicht toeten
+            fehler.append(f"{anbieter}: {exc}")
+
+    ergebnis: dict = {"treffer": treffer, "mc_version": mc_version, "loader": loader,
+                      "typ": art}
+    if fehler:
+        ergebnis["anbieter_fehler"] = fehler
+    if not treffer:
+        ergebnis["hinweis"] = (f"Zu '{begriff}' gab es keinen Treffer fuer "
+                               f"{mc_version} / {loader or 'ohne Loader'}. Vielleicht "
+                               f"heisst das Projekt anders, oder es gibt es fuer diese "
+                               f"Version nicht.")
+    return ergebnis
+
+
+def _lies_versionen(db: Session, user: User, server: Server, p: dict) -> dict:
+    """Welche Fassungen eines Projekts passen zu diesem Server?"""
+    from app.services import content_service as cs
+
+    anbieter = str(p.get("anbieter") or "").strip().lower()
+    projekt_id = str(p.get("projekt_id") or "").strip()
+    art = str(p.get("typ") or "plugin").strip().lower()
+    if not projekt_id:
+        raise AgentFehler("Es wurde keine Projekt-ID angegeben.")
+
+    mc_version = cs._expected_server_mc_version(server)
+    loader = cs._expected_server_loader(server, art)
+    try:
+        if anbieter == "modrinth":
+            fassungen = cs.list_modrinth_versions(projekt_id, mc_version, loader)
+        elif anbieter == "curseforge":
+            # CurseForge arbeitet mit Zahlen-IDs, Modrinth mit Zeichenketten.
+            fassungen = cs.list_curseforge_versions(int(projekt_id), mc_version, loader,
+                                                    art)
+        else:
+            raise AgentFehler(f"Unbekannter Anbieter '{anbieter}'.")
+    except AgentFehler:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise AgentFehler(f"Die Versionsliste konnte nicht geladen werden: {exc}") from exc
+    return {"fassungen": fassungen[:12], "mc_version": mc_version, "loader": loader}
+
+
+def _tue_inhalt_installieren(db: Session, user: User, server: Server, p: dict) -> dict:
+    from app.services import content_service as cs
+
+    anbieter = str(p.get("anbieter") or "").strip().lower()
+    projekt_id = str(p.get("projekt_id") or "").strip()
+    version_id = str(p.get("version_id") or "").strip()
+    art = str(p.get("typ") or "plugin").strip().lower()
+    if not projekt_id or not version_id:
+        raise AgentFehler("Projekt-ID und Version-ID sind beide noetig.")
+
+    try:
+        if anbieter == "modrinth":
+            eintrag = cs.install_modrinth(db, server, projekt_id, version_id, art, user.id)
+        elif anbieter == "curseforge":
+            # CurseForge erwartet Zahlen-IDs. Eine nicht-numerische ID ist ein Versehen
+            # des Modells und keine Stoerung - also als Meldung, nicht als Abbruch.
+            try:
+                eintrag = cs.install_curseforge(db, server, int(projekt_id),
+                                                int(version_id), art, user.id)
+            except (TypeError, ValueError) as exc:
+                raise AgentFehler(
+                    f"CurseForge braucht Zahlen als Projekt- und Version-ID "
+                    f"(bekommen: '{projekt_id}' / '{version_id}')." ) from exc
+        else:
+            raise AgentFehler(f"Unbekannter Anbieter '{anbieter}'.")
+    except AgentFehler:
+        raise
+    except ValueError as exc:
+        raise AgentFehler(str(exc)) from exc
+
+    return {"meldung": f"'{eintrag.name or projekt_id}' {eintrag.version_label or ''} "
+                       f"nach '{server.name}' installiert. Wirksam wird es beim naechsten "
+                       f"Start.",
+            "inhalt_id": eintrag.id, "datei": eintrag.file_name}
+
+
+def _tue_inhalt_entfernen(db: Session, user: User, server: Server, p: dict) -> dict:
+    from app.models.installed_content import InstalledContent
+    from app.services import content_service as cs
+
+    try:
+        inhalt_id = int(p.get("inhalt_id") or 0)
+    except (TypeError, ValueError):
+        inhalt_id = 0
+    if not inhalt_id:
+        raise AgentFehler("Es wurde keine Inhalts-ID angegeben (siehe "
+                          "inhalte_auflisten).")
+    eintrag = db.get(InstalledContent, inhalt_id)
+    if eintrag is None or eintrag.server_id != server.id:
+        raise AgentFehler("Diesen Eintrag gibt es auf diesem Server nicht.")
+
+    name = eintrag.name or eintrag.file_name or str(inhalt_id)
+    try:
+        cs.delete_installed_content(db, server, eintrag, user.id)
+    except ValueError as exc:
+        raise AgentFehler(str(exc)) from exc
+    return {"meldung": f"'{name}' wurde von '{server.name}' entfernt."}
+
+
+def _b_inhalt_installieren(db: Session, server: Server, p: dict) -> str:
+    return (f"{str(p.get('typ') or 'Plugin')} '{str(p.get('projekt_id') or '?')}' "
+            f"(Version {str(p.get('version_id') or '?')}, {p.get('anbieter')}) auf "
+            f"'{server.name}' installieren.")
+
+
+def _b_inhalt_entfernen(db: Session, server: Server, p: dict) -> str:
+    from app.models.installed_content import InstalledContent
+
+    eintrag = db.get(InstalledContent, int(p.get("inhalt_id") or 0) or 0)
+    name = (eintrag.name or eintrag.file_name) if eintrag else str(p.get("inhalt_id"))
+    return f"'{name}' von '{server.name}' entfernen - die Datei wird geloescht."
+
+
 # ------------------------------------------------------------- Beschreibungen
 
 def _b_backup(db: Session, server: Server, p: dict) -> str:
@@ -589,6 +736,51 @@ _eintragen(Werkzeug(
                 "entwertet - ein Transfer ist ein Umzug, keine Kopie."))
 
 
+_eintragen(Werkzeug(
+    name="inhalt_suchen", lesend=True, recht="ansehen",
+    beschreibung="Ein Plugin, eine Mod oder ein Datapack bei Modrinth und CurseForge "
+                 "suchen - gefiltert auf Version und Loader DIESES Servers. Liefert "
+                 "Anbieter und Projekt-ID, die zum Installieren gebraucht werden.",
+    felder={"begriff": {"type": "string", "description": "Name oder Teil des Namens"},
+            "typ": {"type": "string",
+                    "enum": ["plugin", "mod", "datapack", "modpack", "resourcepack"]}},
+    pflicht=["begriff"], ausfuehren=_lies_inhalt_suchen))
+
+_eintragen(Werkzeug(
+    name="versionen_auflisten", lesend=True, recht="ansehen",
+    beschreibung="Welche Fassungen eines Projekts passen zu diesem Server? Liefert die "
+                 "Version-ID, die zum Installieren gebraucht wird.",
+    felder={"anbieter": {"type": "string", "enum": ["modrinth", "curseforge"]},
+            "projekt_id": {"type": "string"},
+            "typ": {"type": "string",
+                    "enum": ["plugin", "mod", "datapack", "modpack", "resourcepack"]}},
+    pflicht=["anbieter", "projekt_id"], ausfuehren=_lies_versionen))
+
+_eintragen(Werkzeug(
+    name="inhalt_installieren", lesend=False, recht="steuern", gefahr="mittel",
+    beschreibung="Ein Plugin/eine Mod/ein Datapack installieren. Projekt- und Version-ID "
+                 "vorher mit inhalt_suchen und versionen_auflisten ermitteln.",
+    felder={"anbieter": {"type": "string", "enum": ["modrinth", "curseforge"]},
+            "projekt_id": {"type": "string"}, "version_id": {"type": "string"},
+            "typ": {"type": "string",
+                    "enum": ["plugin", "mod", "datapack", "modpack", "resourcepack"]}},
+    pflicht=["anbieter", "projekt_id", "version_id"],
+    ausfuehren=_tue_inhalt_installieren, beschreibe=_b_inhalt_installieren,
+    nachwirkung="Legt eine Datei im plugins-/mods-Ordner an. Wirksam beim naechsten "
+                "Start; Abhaengigkeiten werden bei Mods mitinstalliert."))
+
+_eintragen(Werkzeug(
+    name="inhalt_entfernen", lesend=False, recht="steuern", gefahr="hoch",
+    beschreibung="Ein installiertes Plugin/eine Mod/ein Datapack entfernen. Die ID kommt "
+                 "aus inhalte_auflisten.",
+    felder={"inhalt_id": {"type": "integer", "description": "ID aus inhalte_auflisten"}},
+    pflicht=["inhalt_id"], ausfuehren=_tue_inhalt_entfernen,
+    beschreibe=_b_inhalt_entfernen,
+    nachwirkung="Die Datei wird geloescht. Was ein Plugin in der Welt angelegt hat "
+                "(Konfiguration, Daten, gesetzte Bloecke) bleibt liegen und kann ohne das "
+                "Plugin unbrauchbar oder fehlerhaft sein. Vorher sichern."))
+
+
 def werkzeug_schemas() -> list[dict]:
     return [w.schema() for w in WERKZEUGE.values()]
 
@@ -596,15 +788,33 @@ def werkzeug_schemas() -> list[dict]:
 # ---------------------------------------------------------------------- Auftrag
 
 AUFTRAG_ZUSATZ = (
-    "Du arbeitest IM Manager und kannst nachsehen, bevor du antwortest. Nutze dafuer die "
-    "lesenden Werkzeuge, statt zu raten oder den Nutzer nach Dingen zu fragen, die du "
-    "selbst nachsehen kannst.\n"
-    "Fuer alles, was etwas VERAENDERT, rufe das passende Werkzeug auf - es wird nicht "
+    "Du arbeitest IM Manager eines Minecraft-Servernetzwerks und kannst nachsehen, bevor "
+    "du antwortest.\n"
+    "\n"
+    "WICHTIGSTE REGEL: Beantworte GENAU das, was der Nutzer will - nichts daneben. Hat er "
+    "einen Auftrag gegeben ('installiere X', 'starte Y'), dann arbeite diesen Auftrag ab. "
+    "Liefere KEINE unaufgeforderte Bestandsaufnahme, keine Liste von Verbesserungen und "
+    "keine Hinweise zu Dingen, nach denen niemand gefragt hat. Faellt dir dabei etwas "
+    "Wichtiges auf, nenne es in EINEM Satz am Ende und frage, ob du darauf eingehen "
+    "sollst.\n"
+    "\n"
+    "Nutze die lesenden Werkzeuge, statt zu raten oder nach Dingen zu fragen, die du "
+    "selbst nachsehen kannst - aber nur die, die du fuer DIESEN Auftrag brauchst.\n"
+    "\n"
+    "Fuer alles, was etwas VERAENDERT, rufe das passende Werkzeug auf. Es wird nicht "
     "sofort ausgefuehrt, sondern dem Nutzer zur Bestaetigung vorgelegt. Rufe hoechstens "
-    "ein veraenderndes Werkzeug auf einmal auf und erklaere im Text davor, warum.\n"
-    "Du kannst nichts tun, was der angemeldete Nutzer nicht auch selbst darf; eine Absage "
-    "wegen fehlender Rechte ist keine Fehlfunktion.\n"
-    "Antworte knapp und auf Deutsch. Nenne Server mit Namen, nicht mit ID."
+    "ein veraenderndes Werkzeug auf einmal auf und schreibe davor in einem Satz, warum. "
+    "Besteht der Auftrag aus mehreren Schritten (installieren, dann neu starten), nenne "
+    "den Plan kurz und schlage den ERSTEN Schritt vor; die weiteren kommen nach der "
+    "Bestaetigung.\n"
+    "\n"
+    "Gibt es fuer das Verlangte kein Werkzeug, sage das in einem Satz, nenne was du "
+    "stattdessen tun kannst, und hoere auf. Weiche NICHT auf etwas anderes aus - eine "
+    "Antwort, die am Auftrag vorbeigeht, ist schlechter als ein klares 'das kann ich "
+    "nicht'. Dasselbe gilt fuer fehlende Rechte.\n"
+    "\n"
+    "Antworte knapp und auf Deutsch. Nenne Server mit Namen, nicht mit ID. Du darfst "
+    "Markdown benutzen (Ueberschriften, Listen, **fett**, `code`)."
 )
 
 
@@ -659,8 +869,13 @@ def beauftrage(db: Session, *, user: User, nachricht: str,
     for runde in range(MAX_SCHRITTE):
         ergebnis = ai_service.frage(
             db, user=user, funktion="agent",
+            # Die Folgefrage WIEDERHOLT den Auftrag. "Mach weiter mit dem, was du
+            # jetzt weisst" war eine Aufforderung zum Zusammenfassen - das Modell hat
+            # daraufhin eine Bestandsaufnahme geliefert statt den Auftrag abzuarbeiten.
             nachricht=nachricht if runde == 0 else
-                      "Mach weiter mit dem, was du jetzt weisst.",
+                      (f"Der Auftrag lautet weiterhin: {nachricht}\n"
+                       f"Arbeite genau diesen Auftrag ab. Liefere keine "
+                       f"Bestandsaufnahme zu anderen Dingen."),
             kontext=f"Lage im Manager:\n{lage(db, user)}" if runde == 0 else "",
             zusatzauftrag=AUFTRAG_ZUSATZ, werkzeuge=werkzeug_schemas(),
             verlauf=lauf, thema_geprueft=True, max_tokens=3072)

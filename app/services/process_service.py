@@ -1098,6 +1098,92 @@ def get_online_player_names(server_id: int) -> list[str]:
     return []
 
 
+# Gemerkte psutil-Prozessobjekte je PID.
+#
+# Zwei Gruende, sie nicht jedes Mal neu zu bauen:
+#
+# 1. ``cpu_percent(interval=None)`` vergleicht mit dem Stand beim LETZTEN Aufruf AM
+#    SELBEN OBJEKT. Ein frisch gebautes Objekt liefert deshalb immer 0,0 - die
+#    CPU-Anzeige stand also dauerhaft auf null, ohne dass es auffiel.
+# 2. Die Objekte merken sich die Startzeit des Prozesses. Wird eine PID nach einem
+#    Neustart wiederverwendet, meldet ``is_running()`` korrekt False statt die Zahlen
+#    eines fremden Prozesses zu liefern.
+_PSUTIL_CACHE: dict[int, object] = {}
+_PSUTIL_LOCK = RLock()
+
+# Obergrenze fuer den Prozessbaum. Ein Minecraft-Server hat ein paar Kinder, nicht
+# tausende - die Grenze schuetzt nur davor, dass eine Messung zur Dauerbeschaeftigung
+# wird.
+_BAUM_MAX = 64
+
+
+def _psutil_prozess(pid: int):
+    """Ein gemerktes psutil-Objekt zu dieser PID, oder None."""
+    if psutil is None:
+        return None
+    with _PSUTIL_LOCK:
+        gemerkt = _PSUTIL_CACHE.get(pid)
+        if gemerkt is not None:
+            try:
+                if gemerkt.is_running():  # type: ignore[attr-defined]
+                    return gemerkt
+            except Exception:  # noqa: BLE001
+                pass
+            _PSUTIL_CACHE.pop(pid, None)
+        try:
+            neu = psutil.Process(pid)
+        except Exception:  # noqa: BLE001
+            return None
+        if len(_PSUTIL_CACHE) > 256:
+            _PSUTIL_CACHE.clear()   # beendete Prozesse nicht ewig mitschleppen
+        _PSUTIL_CACHE[pid] = neu
+        return neu
+
+
+def _baum_verbrauch(pid: int) -> tuple[float, float]:
+    """CPU-Prozent und Arbeitsspeicher des ganzen Prozessbaums.
+
+    Der Manager startet JEDEN Server ueber ``cmd /d /c ...`` (siehe
+    _command_for_server) - gemessen wurde damit die Huelle cmd.exe und nicht Java.
+    Angezeigt wurden deshalb konstant etwa 5 MB und 0 % CPU, egal was der Server
+    tatsaechlich belegte. Dass beim BEENDEN der ganze Baum behandelt wird
+    (_terminate_process_tree), beim MESSEN aber nicht, war der Fehler.
+
+    Rueckgabe: (cpu_percent, memory_mb). Die CPU-Prozente sind ueber alle Kerne
+    aufsummiert und koennen daher 100 uebersteigen - bei einem Server, der vier Kerne
+    beschaeftigt, sind 400 richtig und nicht kaputt.
+    """
+    wurzel = _psutil_prozess(pid)
+    if wurzel is None:
+        return 0.0, 0.0
+
+    pids = [pid]
+    try:
+        pids += [kind.pid for kind in wurzel.children(recursive=True)][:_BAUM_MAX]
+    except Exception:  # noqa: BLE001 - ohne Kinder messen wir eben nur die Wurzel
+        pass
+
+    cpu = 0.0
+    speicher = 0.0
+    for kennung in pids:
+        prozess = _psutil_prozess(kennung)
+        if prozess is None:
+            continue
+        # Getrennt abfragen: scheitert eine der beiden Angaben (etwa die CPU-Zeit bei
+        # einem Prozess, auf den wir nicht genug Rechte haben), soll die andere trotzdem
+        # zaehlen. Zusammen in einem try haette ein einzelner Fehlschlag den ganzen
+        # Prozess aus der Summe geworfen - und bei der Wurzel die ganze Messung.
+        try:
+            cpu += float(prozess.cpu_percent(interval=None))  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            speicher += float(prozess.memory_info().rss)  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001
+            pass
+    return cpu, speicher / (1024 * 1024)
+
+
 def get_process_resource_usage(server_id: int) -> dict[str, float | int | None]:
     with _PROCESS_LOCK:
         managed = _PROCESS_REGISTRY.get(server_id)
@@ -1112,16 +1198,7 @@ def get_process_resource_usage(server_id: int) -> dict[str, float | int | None]:
         pid = managed.process.pid
         started_at = managed.started_at
 
-    cpu_percent = 0.0
-    memory_mb = 0.0
-    if psutil is not None:
-        try:
-            proc = psutil.Process(pid)
-            cpu_percent = float(proc.cpu_percent(interval=None))
-            memory_mb = float(proc.memory_info().rss / (1024 * 1024))
-        except Exception:
-            cpu_percent = 0.0
-            memory_mb = 0.0
+    cpu_percent, memory_mb = _baum_verbrauch(pid)
 
     uptime = (datetime.now(timezone.utc) - started_at).total_seconds()
     return {
