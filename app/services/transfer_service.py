@@ -626,6 +626,79 @@ def _huelle_reste(huelle: Path) -> list[str]:
     return rest
 
 
+def _drachenkampf_gesichert(haupt: Path) -> bool:
+    """Ist der Drachenkampf-Stand in der Hauptwelt angekommen?
+
+    Zwei moegliche Orte: die eigene Datei ab 26.1, oder Data.DragonFight in der level.dat
+    (dorthin holt ihn world_merge_service vor dem Umbau).
+    """
+    if any(haupt.glob("**/ender_dragon_fight.dat")):
+        return True
+    datei = haupt / "level.dat"
+    if not datei.is_file():
+        return False
+    try:
+        from app.services import nbt_codec as nc
+
+        _, wurzel, _ = nc.lies_datei(datei)
+        kampf = nc.daten_wurzel(wurzel).hole("DragonFight")
+    except Exception:  # noqa: BLE001
+        return False
+    if kampf is None:
+        return False
+    # Ein DragonFight-Compound, in dem nichts besiegt ist, kann der leere Standard sein -
+    # dann ist nichts "gesichert", sondern nur nichts da gewesen.
+    for feld in ("DragonKilled", "PreviouslyKilled"):
+        wert = kampf.hole(feld)
+        if wert is not None and wert.wert:
+            return True
+    return bool(kampf.hole("ExitPortalLocation") or kampf.hole("Gateways"))
+
+
+def _uebernimm_huellen_reste(huelle: Path, haupt: Path) -> list[str]:
+    """Alles aus einer Huelle holen, was nach dem Umbau noch darin liegt.
+
+    Beim Upgrade auf 26.x legt Minecraft in JEDER Welt die volle dimensions/-Struktur an,
+    auch fuer Dimensionen, fuer die diese Welt nicht zustaendig ist. In der Nether-Huelle
+    steht dann z.B. ``dimensions/minecraft/the_end/data/minecraft/ender_dragon_fight.dat``.
+    Das sind echte Dateien an einem Platz, den ein Umbau "nimm den Nether aus der
+    Nether-Huelle" nicht erfasst - und ohne diesen Schritt bricht der Transfer daran ab.
+
+    VORHANDENES WIRD NIE UEBERSCHRIEBEN. Die echten Daten einer Dimension kommen aus ihrer
+    zustaendigen Huelle und werden vorher per _verschiebe eingesetzt; was hier nachkommt,
+    ist der Platzhalter aus einer fremden Huelle und darf sie nicht verdraengen.
+    """
+    if not huelle.is_dir():
+        return []
+    bewegt = 0
+    uebersprungen = 0
+    for quelle in sorted(huelle.rglob("*")):
+        if quelle.is_dir() or not quelle.exists():
+            continue
+        relativ = quelle.relative_to(huelle)
+        if len(relativ.parts) == 1 and relativ.name in HUELLE_RESTE:
+            continue
+        ziel = haupt / relativ
+        if ziel.exists():
+            uebersprungen += 1
+            continue
+        try:
+            ziel.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(quelle), str(ziel))
+            bewegt += 1
+        except OSError:
+            uebersprungen += 1
+
+    if not bewegt and not uebersprungen:
+        return []
+    text = (f"Aus '{huelle.name}' zusaetzlich {bewegt} Datei(en) uebernommen - Platzhalter, "
+            f"die Minecraft beim Versionswechsel in jeder Welt anlegt")
+    if uebersprungen:
+        text += (f"; {uebersprungen} uebersprungen, weil die Fassung aus der zustaendigen "
+                 f"Welt schon da war")
+    return [text + "."]
+
+
 def _baue_stil_um(temp: Path, welt: str, von: str, nach: str) -> list[str]:
     """Dimensionsdaten zwischen eigenem Weltordner und Unterordner der Hauptwelt verschieben.
 
@@ -670,6 +743,11 @@ def _baue_stil_um(temp: Path, welt: str, von: str, nach: str) -> list[str]:
                     _verschiebe(eintrag, ziel_pfad)
                 shutil.rmtree(huellen_daten, ignore_errors=True)
                 bewegt.append("data")
+            # Was jetzt noch in der Huelle liegt, sind Platzhalter fremder Dimensionen.
+            # Die wandern mit, ohne die echten Daten zu verdraengen - erst danach darf
+            # der Abbruch greifen, und nur fuer wirklich Unbekanntes.
+            meldungen += _uebernimm_huellen_reste(huelle, haupt)
+
             uebrig = _huelle_reste(huelle)
             if uebrig:
                 raise ValueError(
@@ -698,16 +776,18 @@ def _baue_stil_um(temp: Path, welt: str, von: str, nach: str) -> list[str]:
             shutil.rmtree(huelle, ignore_errors=True)
             if bewegt:
                 meldungen.append(f"{', '.join(bewegt)} nach {welt}/ einsortiert.")
-            if rest == "the_end" and hatte_level_dat:
-                # In der getrennten Struktur steht der Drachenkampf-Stand (Data.DragonFight:
-                # besiegt?, Portal, Gateways) in der level.dat der End-Welt; in der
-                # gemeinsamen Struktur gehoert er in die level.dat der Hauptwelt. Den Stand
-                # umzuschreiben braeuchte einen NBT-Schreiber, den der Manager nicht hat -
-                # deshalb benannt statt stillschweigend verloren.
+            if rest == "the_end" and hatte_level_dat and not _drachenkampf_gesichert(haupt):
+                # Der Drachenkampf-Stand (besiegt?, Portal, Gateways) steht je nach Version
+                # an zwei Stellen: bis 26.0 als Data.DragonFight in der level.dat der
+                # End-Welt, ab 26.1 als eigene Datei ender_dragon_fight.dat. Beides wird
+                # inzwischen uebernommen - die level.dat ueber world_merge_service, die
+                # Datei ueber den Umbau. Gewarnt wird nur, wenn WEDER das eine noch das
+                # andere geklappt hat; eine Warnung, die nicht zutrifft, entwertet die
+                # anderen.
                 meldungen.append(
-                    "Hinweis: Der Stand des Enderdrachen (besiegt, Portal, Gateways) wandert "
-                    "bei diesem Strukturwechsel nicht mit - der Drache kann auf dem "
-                    "Zielserver erneut erscheinen.")
+                    "Der Stand des Enderdrachen (besiegt, Portal, Gateways) liess sich "
+                    "nicht uebernehmen - der Drache kann auf dem Zielserver erneut "
+                    "erscheinen.")
         return meldungen
 
     for rest, pfade in (("nether", DIM_PFADE["nether"]), ("the_end", DIM_PFADE["end"])):

@@ -1021,22 +1021,57 @@ def test_rollback_entfernt_schon_eingeschobene_ordner(tmp_path, client, monkeypa
 
 # --- Stil-Umbau loeschte die Huellen bedingungslos ---------------------------------------
 
-def test_umbau_bricht_ab_statt_unbekannte_dimensionsdaten_zu_loeschen(tmp_path, client):
-    """Findet der Umbau in der Huelle kein DIM-1/dimensions, darf er sie NICHT loeschen -
-    sonst sind Nether und End stillschweigend weg."""
+def test_unbekannte_dimensionsdaten_wandern_mit_statt_zu_blockieren(tmp_path, client):
+    """Frueher ein Abbruch, falls der Umbau in der Huelle etwas Unbekanntes fand. Das Ziel
+    war richtig - nichts stillschweigend loeschen -, der Weg aber zu grob: in der Praxis
+    legt Minecraft in jeder Welt Dateien ab, die ein Umbau "nimm den Nether" nicht kennt.
+    Jetzt wandert alles mit, und der Abbruch bleibt fuer den Fall, dass das misslingt."""
     from app.services import transfer_service as ts
 
     _dimension(tmp_path / "world", b"overworld")
+    _level_dat(tmp_path / "world" / "level.dat")
     huelle = tmp_path / "world_nether"
+    _dimension(huelle / "DIM-1", b"nether")
     (huelle / "irgendwas_neues" / "region").mkdir(parents=True)
     (huelle / "irgendwas_neues" / "region" / "r.0.0.mca").write_bytes(b"NETHER-DATEN")
     _level_dat(huelle / "level.dat")
 
+    meldungen = ts._baue_stil_um(tmp_path, "world", ts.STIL_GETRENNT, ts.STIL_GEMEINSAM)
+
+    # Nichts verloren: die unbekannten Daten liegen jetzt in der Hauptwelt.
+    assert (tmp_path / "world" / "irgendwas_neues" / "region" / "r.0.0.mca"
+            ).read_bytes() == b"NETHER-DATEN"
+    assert not huelle.exists()
+    assert meldungen
+
+
+def test_abbruch_wenn_die_uebernahme_misslingt(tmp_path, client, monkeypatch):
+    """Das Sicherheitsnetz bleibt: laesst sich eine Datei nicht verschieben, wird die
+    Huelle NICHT geloescht, sondern abgebrochen."""
+    from app.services import transfer_service as ts
+
+    _dimension(tmp_path / "world", b"overworld")
+    _level_dat(tmp_path / "world" / "level.dat")
+    huelle = tmp_path / "world_nether"
+    _dimension(huelle / "DIM-1", b"nether")
+    (huelle / "fremd").mkdir(parents=True)
+    (huelle / "fremd" / "wichtig.dat").write_bytes(b"NICHT-VERLIEREN")
+    _level_dat(huelle / "level.dat")
+
+    echtes_move = ts.shutil.move
+
+    def _stoerrisch(von, nach):
+        if "wichtig.dat" in str(nach):
+            raise OSError("gesperrt")
+        return echtes_move(von, nach)
+
+    monkeypatch.setattr(ts.shutil, "move", _stoerrisch)
     with pytest.raises(ValueError, match="nicht zuordnen"):
         ts._baue_stil_um(tmp_path, "world", ts.STIL_GETRENNT, ts.STIL_GEMEINSAM)
+    monkeypatch.undo()
 
-    # Die Daten muessen noch da sein.
-    assert (huelle / "irgendwas_neues" / "region" / "r.0.0.mca").read_bytes() == b"NETHER-DATEN"
+    # Die Datei ist noch da - nichts wurde stillschweigend geloescht.
+    assert (huelle / "fremd" / "wichtig.dat").read_bytes() == b"NICHT-VERLIEREN"
 
 
 def test_umbau_verschiebt_die_26x_struktur(tmp_path, client):
@@ -2830,3 +2865,86 @@ def test_spigot_mit_dimensionsdaten_nach_paper(tmp_path, client, monkeypatch):
     # Und die Dimensionsdaten sind nicht verloren.
     assert (tmp_path / "z" / "world" / "DIM-1" / "data" / "minecraft" / "game_rules.dat"
             ).read_bytes() == b"REGELN-world_nether"
+
+
+def test_platzhalter_fremder_dimensionen_brechen_nicht_ab(tmp_path, client):
+    """Aus der Praxis: 'Im Weltordner world_nether liegen Daten an einem Platz, den der
+    Manager nicht zuordnen kann (dimensions/minecraft/the_end/data/minecraft/
+    ender_dragon_fight.dat)'.
+
+    Beim Upgrade auf 26.x legt Minecraft in JEDER Welt die volle dimensions/-Struktur an,
+    auch fuer fremde Dimensionen. Das darf den Transfer nicht verhindern."""
+    from app.services import transfer_service as ts
+
+    _dimension(tmp_path / "world", b"overworld")
+    _level_dat(tmp_path / "world" / "level.dat")
+    nether = tmp_path / "world_nether"
+    _dimension(nether / "DIM-1", b"ECHTER-NETHER")
+    _level_dat(nether / "level.dat")
+    # Der Platzhalter aus der Fehlermeldung.
+    platz = nether / "dimensions" / "minecraft" / "the_end" / "data" / "minecraft"
+    platz.mkdir(parents=True)
+    (platz / "ender_dragon_fight.dat").write_bytes(b"PLATZHALTER")
+
+    meldungen = ts._baue_stil_um(tmp_path, "world", ts.STIL_GETRENNT, ts.STIL_GEMEINSAM)
+
+    assert (tmp_path / "world" / "DIM-1" / "region" / "r.0.0.mca"
+            ).read_bytes() == b"ECHTER-NETHER"
+    assert not nether.exists()
+    # Der Platzhalter ist nicht verloren.
+    assert (tmp_path / "world" / "dimensions" / "minecraft" / "the_end" / "data"
+            / "minecraft" / "ender_dragon_fight.dat").is_file()
+    assert any("Platzhalter" in m for m in meldungen)
+
+
+def test_echte_daten_schlagen_den_platzhalter(tmp_path, client):
+    """Der Drachenkampf aus der End-Welt muss gewinnen, nicht die leere Fassung, die in
+    der Nether-Huelle liegt."""
+    from app.services import transfer_service as ts
+
+    _dimension(tmp_path / "world", b"overworld")
+    _level_dat(tmp_path / "world" / "level.dat")
+    for huelle, dim, inhalt in (("world_nether", "DIM-1", b"nether"),
+                                ("world_the_end", "DIM1", b"end")):
+        _dimension(tmp_path / huelle / dim, inhalt)
+        _level_dat(tmp_path / huelle / "level.dat")
+        ordner = (tmp_path / huelle / "dimensions" / "minecraft" / "the_end"
+                  / "data" / "minecraft")
+        ordner.mkdir(parents=True)
+        (ordner / "ender_dragon_fight.dat").write_bytes(
+            b"ECHT" if huelle == "world_the_end" else b"PLATZHALTER")
+
+    ts._baue_stil_um(tmp_path, "world", ts.STIL_GETRENNT, ts.STIL_GEMEINSAM)
+
+    ziel = (tmp_path / "world" / "dimensions" / "minecraft" / "the_end" / "data"
+            / "minecraft" / "ender_dragon_fight.dat")
+    assert ziel.read_bytes() == b"ECHT"
+
+
+def test_drachen_warnung_nur_wenn_der_stand_fehlt(tmp_path, client):
+    """Eine Warnung, die nicht zutrifft, entwertet alle anderen. Ist der Stand
+    uebernommen, darf sie nicht erscheinen."""
+    from app.services import transfer_service as ts
+
+    # Fall A: Der Stand ist als eigene Datei da -> keine Warnung.
+    _dimension(tmp_path / "a" / "world", b"ow")
+    _level_dat(tmp_path / "a" / "world" / "level.dat")
+    _dimension(tmp_path / "a" / "world_the_end" / "DIM1", b"end")
+    _level_dat(tmp_path / "a" / "world_the_end" / "level.dat")
+    ordner = (tmp_path / "a" / "world_the_end" / "dimensions" / "minecraft" / "the_end"
+              / "data" / "minecraft")
+    ordner.mkdir(parents=True)
+    (ordner / "ender_dragon_fight.dat").write_bytes(b"stand")
+
+    mit_datei = ts._baue_stil_um(tmp_path / "a", "world", ts.STIL_GETRENNT,
+                                 ts.STIL_GEMEINSAM)
+    assert not any("Enderdrachen" in m for m in mit_datei)
+
+    # Fall B: Kein Stand nirgends -> Warnung.
+    _dimension(tmp_path / "b" / "world", b"ow")
+    _level_dat(tmp_path / "b" / "world" / "level.dat")
+    _dimension(tmp_path / "b" / "world_the_end" / "DIM1", b"end")
+    _level_dat(tmp_path / "b" / "world_the_end" / "level.dat")
+
+    ohne = ts._baue_stil_um(tmp_path / "b", "world", ts.STIL_GETRENNT, ts.STIL_GEMEINSAM)
+    assert any("Enderdrachen" in m for m in ohne)

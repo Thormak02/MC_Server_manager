@@ -427,4 +427,4 @@ eine KI integration, die fragen beantworten kann und auch cowork mößig aufgabe
 
 
 
-gut, dann jetzt bitte weiter mit den funktionen
+gut, dann jetzt bitte weiter mit den ki funktionen, aber erstmal gibt es ein Problem mit dem key: das speichern geht nicht, beim speichern wird nicht meine eingabe gespeichert, sondern irgendwas anderes und nicht das api token, das eigendlich mit sk-ant-usr starten sollte
