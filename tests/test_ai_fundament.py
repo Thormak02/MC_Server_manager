@@ -499,8 +499,15 @@ def test_gebundene_funktionen_brauchen_kein_schluesselwort(client, monkeypatch):
     assert len(attrappe.gesehen) == 1
 
 
-def test_mitgelieferte_daten_heben_die_wortsperre_auf(client, monkeypatch):
-    """Wer einen Log mitschickt, hat Serverbezug - auch beim Agenten ohne Schluesselwort."""
+def test_mitgelieferte_daten_heben_die_wortsperre_NICHT_auf(client, monkeypatch):
+    """Frueher galt: wer Daten mitschickt, hat Serverbezug - der Wortfilter blieb aus.
+
+    Diese Regel war ein Loch. Der freie Agent schickt bei JEDER Anfrage die
+    Lage-Uebersicht als Kontext mit; damit war der Wortfilter bei ihm immer aus -
+    ausgerechnet bei der einen Funktion, fuer die er gedacht ist. Jetzt gilt er
+    unabhaengig von mitgeschickten Daten, und wer mehrere Anfragen zu einem Auftrag
+    stellt, prueft einmal selbst (ai_service.pruefe_thema) und setzt thema_geprueft.
+    """
     from app.db.session import SessionLocal
     from app.services import ai_service
 
@@ -508,12 +515,51 @@ def test_mitgelieferte_daten_heben_die_wortsperre_auf(client, monkeypatch):
     with SessionLocal() as db:
         person = _nutzer(db, name="frage4")
         _bereite_vor(db, monkeypatch, attrappe)
+
+        with pytest.raises(ai_service.KiAbgelehnt):
+            ai_service.frage(db, user=person, funktion="agent",
+                             nachricht="Was ist hier los?",
+                             kontext="[12:00:01] Exception ticking entity")
+
+        # Mit Schluesselwort in der Frage geht derselbe Aufruf durch.
         ergebnis = ai_service.frage(db, user=person, funktion="agent",
-                                    nachricht="Was ist hier los?",
+                                    nachricht="Was ist auf dem Server los?",
                                     kontext="[12:00:01] Exception ticking entity")
 
     assert ergebnis["text"] == "Antwort"
-    assert len(attrappe.gesehen) == 1
+    assert len(attrappe.gesehen) == 1, "Der abgelehnte Aufruf darf nichts gekostet haben"
+
+
+def test_thema_geprueft_umgeht_nur_den_wortfilter(client, monkeypatch):
+    """Wer selbst geprueft hat, darf den Wortfilter ueberspringen - aber nur den."""
+    from app.db.session import SessionLocal
+    from app.services import ai_service
+
+    attrappe = _Attrappe()
+    with SessionLocal() as db:
+        person = _nutzer(db, name="frage4b")
+        _bereite_vor(db, monkeypatch, attrappe)
+        ergebnis = ai_service.frage(db, user=person, funktion="agent",
+                                    nachricht="Mach weiter.", thema_geprueft=True)
+
+    assert ergebnis["text"] == "Antwort"
+
+
+def test_pruefe_thema_sieht_das_ganze_gespraech(client):
+    """Eine Rueckfrage traegt kein Schluesselwort. Das Thema steht im Gespraech."""
+    from app.db.session import SessionLocal
+    from app.services import ai_service
+
+    with SessionLocal() as db:
+        person = _nutzer(db, name="frage4c")
+
+        with pytest.raises(ai_service.KiAbgelehnt):
+            ai_service.pruefe_thema(db, user=person, nachricht="Und der andere?")
+
+        # Mit einem Gespraech, in dem das Thema schon steht, geht es durch.
+        ai_service.pruefe_thema(
+            db, user=person, nachricht="Und der andere?",
+            verlauf=[{"rolle": "nutzer", "inhalt": "Laufen alle Server?"}])
 
 
 def test_antwort_mit_ablehnung_wird_erkannt(client, monkeypatch):

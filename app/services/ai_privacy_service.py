@@ -44,6 +44,14 @@ _IP_KONTEXT = re.compile(
     r"(?i)\b(?:ip|address|adresse|from|von|connection|verbindung|logged in|host|"
     r"remote|client|server-ip|bind)\b")
 
+# Woran erkennbar ist, dass eine vierteilige Zahlenfolge eine VERSION ist und keine
+# Adresse. Nur dann bleibt sie stehen - im Zweifel wird entfernt, denn die Zusage lautet,
+# dass IP-Adressen das Haus nicht verlassen.
+_VERSION_KONTEXT = re.compile(
+    r"(?i)\b(?:version|versionen|ver|build|revision|loader|fabric|forge|neoforge|"
+    r"mod|mods|plugin|plugins|datapack|jar|api|protokoll|protocol|schema|"
+    r"laeuft auf|running)\b")
+
 # Zeichen, die direkt an einer Zahlenfolge stehen und zeigen, dass sie zu einem Namen
 # gehoert (Mod-Dateien, Versionen): "jei-1.21.1-19.21.0.247", "forge_1.2.3.4".
 _NAMENSZEICHEN = set("-_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -60,16 +68,60 @@ _NAME_MUSTER = [
 
 # Zeilen, die unabhaengig von allem anderen nie hinausgehen. Der Wert wird ersetzt, der
 # Schluesselname bleibt - sonst versteht die KI die Config nicht mehr.
+# Woerter, die einen Wert als Geheimnis kennzeichnen. Getrennt in zwei Gruppen, weil
+# "token" auch in harmlosen Zaehlern steckt ("max_tokens: 2048") und die uebrigen nicht.
+_GEHEIM_STARK = (r"(?:secret|passwor[dt]|passwd|api[_-]?key|apikey|access[_-]?key|"
+                 r"private[_-]?key|credential|auth|bearer)")
+_GEHEIM_ZAEHLBAR = r"(?:token)"
+_GEHEIM_WORT = r"(?:" + _GEHEIM_STARK + r"|" + _GEHEIM_ZAEHLBAR + r")"
+
+# Der Wert eines Geheimnisses in einer Logzeile: bis zum naechsten Trennzeichen.
+_WERT = r"[^\s,;\"'\)\]}]{3,}"
+
+# Zwei Orte, zwei Muster:
+#
+# 1. In einer CONFIGDATEI beginnt der Schluessel die Zeile, und der Wert laeuft bis zum
+#    Zeilenende (er darf Leerzeichen enthalten).
+_GEHEIM_ZEILENANFANG = re.compile(
+    r"(?im)^(\s*[\w.$-]*" + _GEHEIM_WORT + r"[\w.$-]*\s*[:=]).*$")
+
+# 2. In einer LOGZEILE steht davor immer ein Zeitstempel und ein Thread-Praefix:
+#       [12:00:00] [Server thread/INFO]: rcon.password=meinPasswort
+#    Die an ^ gebundenen Muster griffen dort nicht - und die Log-/Crash-Analyse schickt
+#    ausschliesslich Logzeilen hinaus. Besonders heikel: die Zeile
+#    "JVM Flags: 3 total; -Xmx8G -Dapi_key=..." steht in JEDEM Crash-Report.
+#    Entfernt wird nur der WERT, nicht der Rest der Zeile - der wird zur Diagnose
+#    gebraucht.
+_GEHEIM_INLINE = re.compile(
+    r"(?i)(?<![\w.$-])([\w.$-]*" + _GEHEIM_STARK + r"[\w.$-]*\s*[:=]\s*)(" + _WERT + r")")
+
+# Fuer "token" dasselbe, aber eine kurze reine Zahl bleibt stehen: "max_tokens: 2048" ist
+# ein Zaehler, kein Geheimnis, und ihn zu verstecken wuerde nur die Diagnose erschweren.
+# Ein langer Zahlenwert (ab 8 Stellen) gilt wieder als Geheimnis.
+_GEHEIM_INLINE_TOKEN = re.compile(
+    r"(?i)(?<![\w.$-])([\w.$-]*" + _GEHEIM_ZAEHLBAR + r"[\w.$-]*\s*[:=]\s*)"
+    r"(?!\d{1,7}(?:[\s,;)\]}]|$))(" + _WERT + r")")
+
 _GEHEIM_ZEILEN = [
-    (re.compile(r"(?i)^(\s*rcon\.password\s*=).*$", re.M), r"\1<entfernt>"),
-    (re.compile(r"(?i)^(\s*[a-z0-9_.-]*secret\s*[:=]).*$", re.M), r"\1 <entfernt>"),
-    (re.compile(r"(?i)^(\s*[a-z0-9_.-]*password\s*[:=]).*$", re.M), r"\1 <entfernt>"),
-    (re.compile(r"(?i)^(\s*[a-z0-9_.-]*api[_-]?key\s*[:=]).*$", re.M), r"\1 <entfernt>"),
-    (re.compile(r"(?i)^(\s*[a-z0-9_.-]*token\s*[:=]).*$", re.M), r"\1 <entfernt>"),
+    (_GEHEIM_ZEILENANFANG, r"\1 <entfernt>"),
+    (_GEHEIM_INLINE, r"\1<entfernt>"),
+    (_GEHEIM_INLINE_TOKEN, r"\1<entfernt>"),
+    # "Authorization: Bearer eyJ..." - zwischen Schluessel und Wert steht ein Leerzeichen,
+    # an dem das Inline-Muster endet.
+    (re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}"), "Bearer <entfernt>"),
+    # Ein JWT ist auch ohne Schluesselwort als solcher erkennbar.
+    (re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"),
+     "<entfernter Token>"),
+    # Webhook-URLs tragen das Geheimnis im Pfad: wer die URL hat, kann posten.
+    (re.compile(r"(?i)https?://(?:[\w.-]*\.)?(?:discord(?:app)?\.com/api/webhooks|"
+                r"hooks\.slack\.com/services)/\S+"), "<entfernte Webhook-URL>"),
+    # Geheimnisse als Abfrageparameter in einer URL.
+    (re.compile(r"(?i)([?&](?:" + _GEHEIM_WORT + r")=)[^&\s]+"), r"\1<entfernt>"),
     # Freistehende Schluessel im Text (etwa in einem Stacktrace).
     (re.compile(r"\bsk-ant-[A-Za-z0-9_-]{10,}"), "<entfernter Schluessel>"),
     (re.compile(r"\b\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}\b"), "<entfernter Hash>"),
 ]
+
 
 
 def saeubere(text: str, *, namen_ersetzen: bool = False) -> tuple[str, dict]:
@@ -124,9 +176,19 @@ def _teil_eines_namens(treffer: "re.Match") -> bool:
 def _ist_ipv4(wert: str, treffer: "re.Match | None" = None) -> bool:
     """Echte IPv4-ADRESSE? Nicht jede gueltige IPv4 ist auch eine Adresse im Text.
 
-    Mit Port ist es immer eine. Ohne Port zaehlt der Kontext: direkt nach einem
-    Schraegstrich, oder die Zeile spricht von einer Adresse/Verbindung. Sonst ist es eine
-    Versionsnummer und bleibt stehen - die Diagnose braucht sie.
+    Mit Port ist es immer eine. Ohne Port entscheidet der Kontext - aber in der anderen
+    Richtung als zuerst gebaut: im Zweifel ist es eine ADRESSE und wird entfernt.
+
+    Vorher war ein positives Kontextwort noetig ("from", "connection", "address"). Das
+    passte zu Logzeilen, liess aber jede freistehende Adresse stehen - etwa eine, die der
+    Nutzer selbst in das Fragefeld schreibt ("vorhin stand da 198.51.100.4"). Die Zusage
+    lautet, dass IP-Adressen entfernt werden; eine Ausnahme fuer Zeilen ohne
+    Schluesselwort hoehlt sie aus.
+
+    Stehen bleibt eine Zahlenfolge nur, wenn die Zeile erkennbar von einer VERSION
+    spricht ("Loader-Version 47.2.0.1" ist eine gueltige IPv4, und sie zu entfernen nimmt
+    der Crash-Analyse die Antwort auf "welche Version?"). Zahlen, die zu einem Namen
+    gehoeren ("jei-1.21.1-19.21.0.247"), faengt ohnehin _teil_eines_namens ab.
     """
     import ipaddress
 
@@ -145,7 +207,9 @@ def _ist_ipv4(wert: str, treffer: "re.Match | None" = None) -> bool:
     anfang = text.rfind("\n", 0, treffer.start()) + 1
     ende = text.find("\n", treffer.end())
     zeile = text[anfang:ende if ende != -1 else len(text)]
-    return bool(_IP_KONTEXT.search(zeile))
+    if _IP_KONTEXT.search(zeile):
+        return True
+    return not _VERSION_KONTEXT.search(zeile)
 
 
 def _ist_ipv6(wert: str) -> bool:

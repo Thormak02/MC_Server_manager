@@ -11,11 +11,18 @@ from app.db.session import get_db
 from app.models.audit_log import AuditLog
 from app.models.server import Server
 from app.models.user import User
+from app.services import (
+    ai_log_service,
+    ai_provider_service,
+    ai_service,
+    audit_service,
+)
 from app.services.auth_service import get_current_user_from_session
 from app.services.log_service import (
     filter_lines,
     get_console_lines,
     get_download_log_file,
+    lies_fuer_analyse,
     list_log_files,
     read_log_file,
 )
@@ -347,3 +354,122 @@ def audit_logs_api(
         for entry in entries
     ]
     return JSONResponse({"items": payload, "count": len(payload)})
+
+
+# ------------------------------------------------------------------ KI-Analyse
+
+# Fuer die Analyse wird mehr gelesen als angezeigt: der Kopf des Logs nennt Software,
+# Version und geladene Mods, und ohne den kann niemand sagen, WELCHE Mod abgestuerzt ist.
+# Das Anzeigelimit der Seite (Standard 800) wuerde genau diesen Teil abschneiden.
+KI_ANALYSE_ZEILEN = 20000
+
+
+def _log_zeilen(server: Server, datei: str | None) -> tuple[list[str], str, int]:
+    """Die Zeilen fuer eine KI-Analyse holen - ungefiltert, mit Kopf UND Ende.
+
+    Der Seitenfilter (q/level) wird absichtlich NICHT angewendet: eine Analyse auf
+    vorgefilterten Zeilen sieht nur die Fehlermeldung, nicht das, was davor passiert ist.
+
+    Gelesen wird ueber ``lies_fuer_analyse``, nicht ueber ``read_log_file``: letzteres
+    liefert nur den Schwanz, und bei einem Log mit 200.000 Zeilen fehlte damit der Kopf
+    mit Software, Version und Modliste - also genau das, was die Frage "welche Mod?"
+    beantwortet.
+
+    Rueckgabe: (Zeilen, Bezeichnung, echte Gesamtzahl im Log).
+    """
+    schluessel = (datei or "").strip()
+    if not schluessel:
+        zeilen = get_console_lines(server.id, limit_lines=KI_ANALYSE_ZEILEN)
+        return zeilen, "Aktuelle Sitzung", len(zeilen)
+    vorhanden = {str(eintrag.get("key")) for eintrag in list_log_files(server)}
+    if schluessel not in vorhanden:
+        raise ValueError("Logdatei nicht vorhanden.")
+    return lies_fuer_analyse(server, schluessel, max_zeilen=KI_ANALYSE_ZEILEN)
+
+
+def _ki_server(request: Request, server_id: int, db: Session) -> tuple:
+    """(Nutzer, Server) oder (None, Antwort).
+
+    Geprueft wird der Serverzugriff UND die Rolle. Die Rollenschranke gilt auch fuer die
+    Vorschau, obwohl die kein Guthaben kostet: sie liest Logdateien und laesst Regex ueber
+    zweistellige Megabyte laufen, und die Zusage "KI-Funktionen ab Moderator" soll fuer
+    die ganze Funktion gelten, nicht nur fuer den teuren Teil. Im Template ist der
+    Abschnitt fuer view_only ausgeblendet - ein ausgeblendeter Knopf ist aber keine
+    Pruefung.
+    """
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return None, JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    if (current_user.role or "") == UserRole.VIEW_ONLY.value:
+        return None, JSONResponse(status_code=403, content={
+            "detail": "Fuer KI-Funktionen braucht es mindestens Moderator-Rechte."})
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        return None, JSONResponse(status_code=404, content={"detail": "Server not found"})
+    if not can_view_server(db, current_user, server):
+        return None, JSONResponse(status_code=403, content={"detail": "Forbidden"})
+    return current_user, server
+
+
+@router.get("/api/servers/{server_id}/logs/ki-vorschau", response_class=JSONResponse)
+def logs_ki_vorschau(
+    request: Request,
+    server_id: int,
+    file: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Was wuerde an die KI gesendet? Zeigen, BEVOR Daten das Haus verlassen."""
+    current_user, server = _ki_server(request, server_id, db)
+    if current_user is None:
+        return server
+
+    try:
+        zeilen, quelle, gesamt = _log_zeilen(server, file)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    if not zeilen:
+        return JSONResponse({"leer": True, "quelle": quelle,
+                             "meldung": "Dieser Log ist leer - es gibt nichts zu analysieren."})
+
+    try:
+        sicht = ai_log_service.vorschau(zeilen, db, gesamt_im_log=gesamt)
+    except Exception as exc:  # noqa: BLE001 - die Vorschau darf die Seite nicht zerreissen
+        return JSONResponse(status_code=500, content={"detail": f"Vorschau nicht moeglich: {exc}"})
+    sicht["quelle"] = quelle
+    return JSONResponse(sicht)
+
+
+@router.post("/api/servers/{server_id}/logs/ki-analyse", response_class=JSONResponse)
+def logs_ki_analyse(
+    request: Request,
+    server_id: int,
+    file: Annotated[str | None, Form()] = None,
+    frage: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    """Den Log analysieren lassen. Kostet Guthaben - deshalb erst nach einem Klick."""
+    current_user, server = _ki_server(request, server_id, db)
+    if current_user is None:
+        return server
+
+    try:
+        zeilen, quelle, gesamt = _log_zeilen(server, file)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    try:
+        ergebnis = ai_log_service.analysiere(db, user=current_user, server=server,
+                                            zeilen=zeilen, frage=(frage or ""),
+                                            gesamt_im_log=gesamt)
+    except ai_service.KiAbgelehnt as exc:
+        return JSONResponse(status_code=409, content={"detail": str(exc), "abgelehnt": True})
+    except ai_provider_service.KiFehler as exc:
+        return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+    audit_service.log_action(db, action="ai.log_analysis", user_id=current_user.id,
+                             server_id=server.id,
+                             details=f"quelle={quelle} modell={ergebnis.get('modell')} "
+                                     f"zeilen={ergebnis['auswahl']['gesendet']}")
+    ergebnis["quelle"] = quelle
+    return JSONResponse(ergebnis)

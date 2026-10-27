@@ -244,4 +244,267 @@
 })();
 </script>
 
+{# KI-Konfigurationsassistent. Er SCHREIBT NICHTS: angehakte Vorschlaege werden in die
+   Felder des Assistenten-Formulars oben geschrieben, gespeichert wird mit dessen
+   normalem Knopf - gleicher Pfad, gleiche Pruefung wie bei einer Handeingabe. #}
+{% if can_edit and current_user.role != "view_only" and selected_file
+      and selected_mode == "assistant" and assistant_payload
+      and assistant_payload.mode == "server_properties" %}
+<section class="card">
+    <h2>KI-Vorschlag fuer diese Einstellungen</h2>
+    <p class="muted">
+        Die KI bekommt diese Datei und die Eckdaten des Servers (Typ, Version, zugewiesener
+        Speicher, RAM des Rechners, Spielerzahl, Zahl der Mods) und schlaegt einzelne Werte
+        vor. <strong>Geschrieben wird nichts:</strong> angehakte Vorschlaege landen in den
+        Feldern oben, gespeichert wird mit &bdquo;Assistent speichern&ldquo;.
+    </p>
+
+    <label for="kic-ziel">Was ist das Ziel? (optional)</label>
+    <input id="kic-ziel" type="text"
+           placeholder="z.B. 40 Spieler, weniger Lag - leer lassen fuer eine allgemeine Pruefung">
+
+    <div class="ki-analyse-aktionen">
+        <button type="button" id="kic-vorschau-knopf" class="secondary">Was wird gesendet?</button>
+        <button type="button" id="kic-senden-knopf">Vorschlaege holen</button>
+        <span class="muted" id="kic-status"></span>
+    </div>
+
+    <div id="kic-ausgabe"></div>
+</section>
+
+<script>
+(function () {
+    const serverId = {{ server.id }};
+    const datei = {{ selected_file|tojson }};
+    const zielFeld = document.getElementById("kic-ziel");
+    const ausgabe = document.getElementById("kic-ausgabe");
+    const statusFeld = document.getElementById("kic-status");
+    const vorschauKnopf = document.getElementById("kic-vorschau-knopf");
+    const sendenKnopf = document.getElementById("kic-senden-knopf");
+
+    function sperren(an, text) {
+        vorschauKnopf.disabled = an;
+        sendenKnopf.disabled = an;
+        statusFeld.textContent = text || "";
+    }
+
+    function kasten(titel, fehler) {
+        const d = document.createElement("div");
+        d.className = "ki-kasten" + (fehler ? " fehler" : "");
+        const h = document.createElement("h3");
+        h.textContent = titel;
+        d.appendChild(h);
+        ausgabe.innerHTML = "";
+        ausgabe.appendChild(d);
+        return d;
+    }
+
+    function absatz(text, klasse) {
+        const p = document.createElement("p");
+        p.className = klasse || "ki-antwort-text";
+        p.textContent = text;
+        return p;
+    }
+
+    async function hole(pfad, optionen) {
+        const antwort = await fetch(pfad, Object.assign({ credentials: "same-origin" },
+                                                        optionen || {}));
+        let daten = {};
+        try { daten = await antwort.json(); } catch (fehler) { daten = {}; }
+        if (!antwort.ok) { throw new Error(daten.detail || ("Fehler " + antwort.status)); }
+        return daten;
+    }
+
+    vorschauKnopf.addEventListener("click", async function () {
+        sperren(true, "Wird zusammengestellt ...");
+        try {
+            const d = await hole("/api/servers/" + serverId + "/files/ki-vorschau?file="
+                                 + encodeURIComponent(datei));
+            const k = kasten("Das wird gesendet", false);
+            k.appendChild(absatz("Die Datei (" + d.zeilen_gesamt + " Zeilen) und die "
+                                 + "Eckdaten des Servers.", "ki-antwort-text"));
+            const fakten = document.createElement("ul");
+            fakten.className = "ki-fakten";
+            [["Zeichen", d.zeichen],
+             ["Entfernte IP-Adressen", d.entfernte_ips],
+             ["Entfernte Zugangsdaten", d.entfernte_geheimnisse]].forEach(function (paar) {
+                if (paar[1] === undefined || paar[1] === null) { return; }
+                const li = document.createElement("li");
+                li.textContent = paar[0] + ": " + paar[1];
+                fakten.appendChild(li);
+            });
+            k.appendChild(fakten);
+            const auszug = document.createElement("pre");
+            auszug.className = "ki-auszug";
+            auszug.textContent = d.auszug || "";
+            k.appendChild(auszug);
+        } catch (fehler) {
+            kasten("Vorschau nicht moeglich", true).appendChild(absatz(fehler.message));
+        } finally {
+            sperren(false, "");
+        }
+    });
+
+    function zeigeVorschlaege(d) {
+        const k = kasten("Vorschlaege", false);
+        const aenderungen = d.aenderungen || [];
+
+        if (!aenderungen.length) {
+            k.appendChild(absatz("Kein uebernehmbarer Vorschlag."));
+        }
+
+        aenderungen.forEach(function (a, index) {
+            const zeile = document.createElement("div");
+            zeile.className = "ki-vorschlag";
+
+            const haken = document.createElement("input");
+            haken.type = "checkbox";
+            haken.id = "kic-haken-" + index;
+            // Was den laufenden Betrieb merkbar aendert, wird NICHT vorgehakt: diese
+            // Entscheidung soll bewusst fallen, nicht aus Versehen mitlaufen.
+            haken.checked = !a.bedenklich;
+            haken.dataset.schluessel = a.schluessel;
+            haken.dataset.wert = a.wert;
+            zeile.appendChild(haken);
+
+            const kopf = document.createElement("label");
+            kopf.className = "ki-vorschlag-kopf";
+            kopf.htmlFor = haken.id;
+            const name = document.createElement("strong");
+            name.textContent = a.schluessel + ": ";
+            kopf.appendChild(name);
+            const alt = document.createElement("span");
+            alt.className = "ki-wert-alt";
+            alt.textContent = a.alt || "(leer)";
+            kopf.appendChild(alt);
+            kopf.appendChild(document.createTextNode(" \u2192 "));
+            const neu = document.createElement("span");
+            neu.className = "ki-wert-neu";
+            neu.textContent = a.wert;
+            kopf.appendChild(neu);
+            zeile.appendChild(kopf);
+
+            if (a.begruendung) {
+                zeile.appendChild(absatz(a.begruendung, "ki-vorschlag-grund"));
+            }
+            if (a.bedenklich) {
+                zeile.appendChild(absatz("Achtung: " + a.bedenklich
+                                         + " - deshalb nicht vorgehakt.",
+                                         "ki-vorschlag-achtung"));
+            }
+            k.appendChild(zeile);
+        });
+
+        if (d.speicher) {
+            const s = d.speicher;
+            const sp = document.createElement("div");
+            sp.className = "ki-vorschlag";
+            sp.appendChild(document.createElement("span"));
+            const kopf = document.createElement("div");
+            kopf.className = "ki-vorschlag-kopf";
+            kopf.textContent = "Arbeitsspeicher: "
+                + (s.alt_max_mb ? (s.alt_min_mb || "?") + "-" + s.alt_max_mb + " MB"
+                                : "nicht gesetzt")
+                + " \u2192 " + (s.min_mb || "?") + "-" + s.max_mb + " MB";
+            sp.appendChild(kopf);
+            if (s.begruendung) { sp.appendChild(absatz(s.begruendung, "ki-vorschlag-grund")); }
+            (s.warnungen || []).forEach(function (w) {
+                sp.appendChild(absatz(w, "ki-vorschlag-achtung"));
+            });
+            sp.appendChild(absatz("Der Arbeitsspeicher steht nicht in dieser Datei - er wird "
+                                  + "in den Servereinstellungen gesetzt.",
+                                  "ki-vorschlag-grund"));
+            k.appendChild(sp);
+        }
+
+        (d.beobachtungen || []).forEach(function (b) {
+            k.appendChild(absatz(b, "ki-antwort-text"));
+        });
+
+        if ((d.abgelehnt || []).length) {
+            k.appendChild(absatz("Nicht uebernommen:", "muted"));
+            const ul = document.createElement("ul");
+            ul.className = "ki-abgelehnt";
+            d.abgelehnt.forEach(function (a) {
+                const li = document.createElement("li");
+                const code = document.createElement("code");
+                code.textContent = a.schluessel + "=" + a.wert;
+                li.appendChild(code);
+                li.appendChild(document.createTextNode(" \u2013 " + a.grund));
+                ul.appendChild(li);
+            });
+            k.appendChild(ul);
+        }
+
+        (d.hinweise || []).forEach(function (h) {
+            k.appendChild(absatz(h, "ki-hinweise"));
+        });
+
+        if (aenderungen.length) {
+            const aktionen = document.createElement("div");
+            aktionen.className = "ki-analyse-aktionen";
+            const knopf = document.createElement("button");
+            knopf.type = "button";
+            knopf.textContent = "Angehakte in das Formular uebernehmen";
+            const meldung = document.createElement("span");
+            meldung.className = "muted";
+            knopf.addEventListener("click", function () {
+                let gesetzt = 0;
+                const nicht = [];
+                k.querySelectorAll("input[type=checkbox]").forEach(function (h) {
+                    if (!h.checked) { return; }
+                    const feld = document.getElementById("field_" + h.dataset.schluessel);
+                    if (!feld) { nicht.push(h.dataset.schluessel); return; }
+                    feld.value = h.dataset.wert;
+                    // Sichtbar machen, was die KI geaendert hat - sonst uebersieht man es
+                    // in einem Formular mit dreissig Feldern.
+                    feld.classList.add("ki-geaendert");
+                    gesetzt += 1;
+                });
+                meldung.textContent = gesetzt + " Wert(e) in das Formular uebernommen - "
+                    + "jetzt oben mit \u201eAssistent speichern\u201c sichern."
+                    + (nicht.length ? " Kein Feld gefunden fuer: " + nicht.join(", ") + "."
+                                    : "");
+            });
+            aktionen.appendChild(knopf);
+            aktionen.appendChild(meldung);
+            k.appendChild(aktionen);
+        }
+
+        const fakten = document.createElement("ul");
+        fakten.className = "ki-fakten";
+        const budget = d.budget || {};
+        [["Modell", d.modell],
+         ["Diese Anfrage", d.kosten_cent !== undefined
+             ? (d.kosten_cent / 100).toFixed(4) + " $" : null],
+         ["Monat", budget.verbraucht_cent !== undefined
+             ? ((budget.verbraucht_cent / 100).toFixed(2) + " von "
+                + (budget.deckel_cent / 100).toFixed(2) + " $") : null]].forEach(function (paar) {
+            if (paar[1] === undefined || paar[1] === null) { return; }
+            const li = document.createElement("li");
+            li.textContent = paar[0] + ": " + paar[1];
+            fakten.appendChild(li);
+        });
+        k.appendChild(fakten);
+    }
+
+    sendenKnopf.addEventListener("click", async function () {
+        sperren(true, "Die KI sieht sich die Konfiguration an ...");
+        try {
+            const daten = new FormData();
+            daten.append("file", datei);
+            daten.append("ziel", zielFeld.value || "");
+            zeigeVorschlaege(await hole(
+                "/api/servers/" + serverId + "/files/ki-vorschlag",
+                { method: "POST", body: daten }));
+        } catch (fehler) {
+            kasten("Keine Vorschlaege", true).appendChild(absatz(fehler.message));
+        } finally {
+            sperren(false, "");
+        }
+    });
+})();
+</script>
+{% endif %}
+
 {% endblock %}

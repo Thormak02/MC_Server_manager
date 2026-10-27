@@ -161,6 +161,11 @@ def settings_page(
     plugin_building = plugin_build_service.is_building()
     platform_settings = list_platform_settings(db, include_secrets=False)
     manager_update_status = get_manager_update_status(fetch_remote=False)
+    # Haengengebliebene KI-Vorbuchungen aufraeumen, bevor die Liste angezeigt wird: sonst
+    # stehen sie fuer immer auf "laeuft" und sehen nach einem Dauerlauf aus. Der Verbrauch
+    # ist davon unabhaengig, den uebergeht verbrauch_monat_cent ohnehin.
+    ai_budget_service.raeume_haengende_auf(db)
+    ki_aufrufe = ai_budget_service.letzte_aufrufe(db, grenze=25)
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -193,7 +198,7 @@ def settings_page(
             ki_funktionen=ai_settings_service.FUNKTIONEN,
             ki_modelle=ai_provider_service.MODELLE,
             ki_anbieter_hinweis=ai_provider_service.hole_anbieter().schluessel_hinweis,
-            ki_aufrufe=ai_budget_service.letzte_aufrufe(db, grenze=25),
+            ki_aufrufe=ki_aufrufe,
             velocity_running=velocity_running,
             velocity_version=velocity_version,
             velocity_installed_version=velocity_installed_version,

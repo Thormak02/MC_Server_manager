@@ -7,7 +7,13 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.installed_content import InstalledContent
 from app.models.server_modpack_state import ServerModpackState
-from app.services import content_service
+from app.services import (
+    ai_changelog_service,
+    ai_provider_service,
+    ai_service,
+    audit_service,
+    content_service,
+)
 from app.services.auth_service import get_current_user_from_session
 from app.services.server_service import can_control_server, can_view_server, get_server_by_id
 from app.web.routes.pages import build_context, push_flash, templates
@@ -771,3 +777,63 @@ def delete_content(request: Request, server_id: int, content_id: int, db: Sessio
         db.rollback()
         return JSONResponse(status_code=400, content={"detail": str(exc)})
     return JSONResponse({"status": "ok"})
+
+
+# -------------------------------------------------- KI-Changelog-Zusammenfassung
+
+@router.post("/api/servers/{server_id}/content/ki-changelog", response_class=JSONResponse)
+async def content_ki_changelog(
+    request: Request, server_id: int, db: Session = Depends(get_db)
+):
+    """Was aendert sich, wenn dieser Eintrag auf diese Version geht?
+
+    Verlangt dieselben Rechte wie das Anwenden einer Version: die Antwort bereitet eine
+    Entscheidung vor, die nur treffen kann, wer sie auch ausfuehren darf.
+    """
+    current_user = _ensure_user(request, db)
+    if current_user is None:
+        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+    server = _ensure_server_access(db, current_user, server_id)
+    if not can_control_server(db, current_user, server):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001
+        payload = {}
+    try:
+        content_id = int((payload or {}).get("content_id") or 0)
+    except (TypeError, ValueError):
+        content_id = 0
+    version_id = str((payload or {}).get("version_id") or "").strip()
+    version_label = str((payload or {}).get("version_label") or "").strip()
+
+    if not content_id or not version_id:
+        return JSONResponse(status_code=400,
+                            content={"detail": "content_id und version_id erforderlich."})
+
+    eintrag = db.get(InstalledContent, content_id)
+    if eintrag is None or eintrag.server_id != server.id:
+        return JSONResponse(status_code=404, content={"detail": "Eintrag nicht gefunden."})
+
+    try:
+        ergebnis = ai_changelog_service.berichte(
+            db, user=current_user, server=server, eintrag=eintrag,
+            ziel_version_id=version_id, ziel_version_label=version_label)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    except ai_service.KiAbgelehnt as exc:
+        return JSONResponse(status_code=409, content={"detail": str(exc), "abgelehnt": True})
+    except ai_provider_service.KiFehler as exc:
+        return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+    # Ein Lauf ohne KI-Aufruf (kein Changelog hinterlegt) ist nichts, was ins Protokoll
+    # gehoert - es hat nichts gekostet und keine Daten verlassen das Haus.
+    if not ergebnis.get("ohne_ki"):
+        audit_service.log_action(
+            db, action="ai.changelog", user_id=current_user.id, server_id=server.id,
+            details=f"inhalt={eintrag.name or eintrag.external_project_id} "
+                    f"ziel={ergebnis.get('ziel')} "
+                    f"empfehlung={ergebnis.get('empfehlung')} "
+                    f"modell={ergebnis.get('modell')}")
+    return JSONResponse(ergebnis)

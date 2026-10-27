@@ -54,4 +54,224 @@
         {% endfor %}
     </div>
 </section>
+
+{# Fuer KI-Funktionen braucht es mindestens Moderator-Rechte (ai_budget_service
+   .pruefe_erlaubt). Ohne diese Abfrage sieht ein View-only-Nutzer einen Knopf, der
+   immer nur eine Absage liefern kann. #}
+{% if current_user.role != "view_only" %}
+<section class="card">
+    <h2>KI-Analyse</h2>
+    <p class="muted">
+        Statt den Log selbst zu durchsuchen: die KI nennt die Ursache und was zu tun ist.
+        Analysiert wird die oben gewaehlte Datei - nach einem Absturz ist ein
+        <strong>Crash-Report</strong> dort die beste Wahl, er enthaelt den vollstaendigen
+        Stacktrace. Gesendet wird nicht die ganze Datei, sondern Kopf, Fehlerstellen und
+        Ende; das spart Guthaben. Vor dem Senden kannst du sehen, was genau hinausgeht.
+    </p>
+
+    <label for="ki-frage">Deine Frage (optional)</label>
+    <input id="ki-frage" type="text"
+           placeholder="z.B. warum startet der Server nicht? - leer lassen fuer eine allgemeine Ursachenanalyse">
+
+    <div class="ki-analyse-aktionen">
+        <button type="button" id="ki-vorschau-knopf" class="secondary">Was wird gesendet?</button>
+        <button type="button" id="ki-senden-knopf">Analysieren</button>
+        <span class="muted" id="ki-status"></span>
+    </div>
+
+    <div id="ki-ausgabe"></div>
+</section>
+
+<script>
+(function () {
+    const serverId = {{ server.id }};
+    const dateiFeld = document.getElementById("file");
+
+    // Die Datei wird beim Klick aus dem Auswahlfeld gelesen, NICHT beim Laden der Seite
+    // festgehalten. Wer oben eine andere Datei waehlt, ohne auf "Anzeigen" zu klicken,
+    // haette sonst eine Analyse der alten Datei bekommen - und bezahlt. Angezeigt wird
+    // bei jeder Antwort, welche Datei tatsaechlich analysiert wurde.
+    function gewaehlteDatei() {
+        return dateiFeld ? (dateiFeld.value || "") : {{ (selected_file or "")|tojson }};
+    }
+
+    function gewaehlteBezeichnung() {
+        if (!dateiFeld || !dateiFeld.options[dateiFeld.selectedIndex]) {
+            return "Aktuelle Sitzung";
+        }
+        return dateiFeld.options[dateiFeld.selectedIndex].text.trim();
+    }
+    const frageFeld = document.getElementById("ki-frage");
+    const ausgabe = document.getElementById("ki-ausgabe");
+    const statusFeld = document.getElementById("ki-status");
+    const vorschauKnopf = document.getElementById("ki-vorschau-knopf");
+    const sendenKnopf = document.getElementById("ki-senden-knopf");
+
+    function sperren(an, text) {
+        vorschauKnopf.disabled = an;
+        sendenKnopf.disabled = an;
+        statusFeld.textContent = text || "";
+    }
+
+    function kasten(titel, inhalt, fehler) {
+        const d = document.createElement("div");
+        d.className = "ki-kasten" + (fehler ? " fehler" : "");
+        const h = document.createElement("h3");
+        h.textContent = titel;
+        d.appendChild(h);
+        d.appendChild(inhalt);
+        ausgabe.innerHTML = "";
+        ausgabe.appendChild(d);
+        return d;
+    }
+
+    function textAbsatz(text, klasse) {
+        const p = document.createElement("p");
+        p.className = klasse || "ki-antwort-text";
+        p.textContent = text;
+        return p;
+    }
+
+    function listeAnhaengen(ziel, eintraege, klasse) {
+        if (!eintraege || !eintraege.length) { return; }
+        const ul = document.createElement("ul");
+        ul.className = klasse;
+        eintraege.forEach(function (eintrag) {
+            const li = document.createElement("li");
+            li.textContent = eintrag;
+            ul.appendChild(li);
+        });
+        ziel.appendChild(ul);
+    }
+
+    async function hole(pfad, optionen) {
+        const antwort = await fetch(pfad, Object.assign({ credentials: "same-origin" },
+                                                        optionen || {}));
+        let daten = {};
+        try { daten = await antwort.json(); } catch (fehler) { daten = {}; }
+        if (!antwort.ok) {
+            // "Not authenticated" und ein nackter Fehlercode lassen es so aussehen, als
+            // haette die KI versagt. Was zu tun ist, soll dastehen.
+            if (antwort.status === 401) {
+                throw new Error("Deine Anmeldung ist abgelaufen. Bitte neu anmelden - die "
+                                + "Seite laedt gleich neu.");
+            }
+            if (antwort.status === 403) {
+                throw new Error(daten.detail
+                    || "Dafuer fehlen dir die Rechte (KI-Funktionen ab Moderator).");
+            }
+            throw new Error(daten.detail || ("Unerwarteter Fehler " + antwort.status));
+        }
+        return daten;
+    }
+
+    vorschauKnopf.addEventListener("click", async function () {
+        sperren(true, "Ausschnitt wird zusammengestellt ...");
+        try {
+            const d = await hole("/api/servers/" + serverId + "/logs/ki-vorschau?file="
+                                 + encodeURIComponent(gewaehlteDatei()));
+            if (d.leer) {
+                kasten("Nichts zu senden", textAbsatz(d.meldung), true);
+                return;
+            }
+            const inhalt = document.createElement("div");
+            const a = d.auswahl || {};
+            inhalt.appendChild(textAbsatz(
+                a.vollstaendig
+                    ? ("Der Log hat " + a.gesamt + " Zeilen und wird vollstaendig gesendet.")
+                    : ("Vom Log mit " + a.gesamt + " Zeilen werden " + a.gesendet
+                       + " gesendet: Kopf, " + a.fehlerstellen
+                       + " Fehlerstellen mit Umfeld und das Ende."),
+                "ki-antwort-text"));
+
+            const fakten = document.createElement("ul");
+            fakten.className = "ki-fakten";
+            [["Zeichen", d.zeichen],
+             ["Entfernte IP-Adressen", d.entfernte_ips],
+             ["Entfernte Zugangsdaten", d.entfernte_geheimnisse]].forEach(function (paar) {
+                if (paar[1] === undefined || paar[1] === null) { return; }
+                const li = document.createElement("li");
+                li.textContent = paar[0] + ": " + paar[1];
+                fakten.appendChild(li);
+            });
+            inhalt.appendChild(fakten);
+
+            // Spielernamen gehen nach der aktuellen Einstellung im Klartext hinaus. Das
+            // soll hier stehen, nicht verschwiegen werden - die Vorschau ist genau dafuer
+            // da. ACHTUNG: d.namen ist die ZUORDNUNG (Objekt), nicht die Anzahl - direkt
+            // ausgegeben stand dort "[object Object]", und der Hinweis erschien auch bei
+            // null Namen.
+            const namenAnzahl = d.namen && typeof d.namen === "object"
+                ? Object.keys(d.namen).length
+                : Number(d.namen || 0);
+            if (namenAnzahl > 0) {
+                listeAnhaengen(inhalt, [d.namen_ersetzt
+                    ? namenAnzahl + " Spielername(n) werden vor dem Senden durch "
+                      + "Platzhalter ersetzt."
+                    : namenAnzahl + " Spielername(n) gehen im Klartext mit - so ist es in "
+                      + "den Einstellungen festgelegt. Umstellbar unter "
+                      + "Einstellungen \u2192 KI."], "ki-hinweise");
+            } else if (!d.namen_ersetzt) {
+                listeAnhaengen(inhalt, ["In diesem Ausschnitt steht kein bekannter "
+                    + "Spielername. Namen wuerden im Klartext mitgehen - so ist es "
+                    + "eingestellt."], "ki-hinweise");
+            }
+
+            const auszug = document.createElement("pre");
+            auszug.className = "ki-auszug";
+            auszug.textContent = d.auszug || "";
+            inhalt.appendChild(textAbsatz("Anfang des Ausschnitts, so wie er gesendet wird:",
+                                          "muted"));
+            inhalt.appendChild(auszug);
+            kasten("Das wird gesendet \u2013 " + gewaehlteBezeichnung(), inhalt, false);
+        } catch (fehler) {
+            kasten("Vorschau nicht moeglich", textAbsatz(fehler.message), true);
+        } finally {
+            sperren(false, "");
+        }
+    });
+
+    sendenKnopf.addEventListener("click", async function () {
+        sperren(true, "Die KI liest den Log ... das dauert einige Sekunden.");
+        try {
+            const daten = new FormData();
+            daten.append("file", gewaehlteDatei());
+            daten.append("frage", frageFeld.value || "");
+            const d = await hole("/api/servers/" + serverId + "/logs/ki-analyse",
+                                 { method: "POST", body: daten });
+
+            const inhalt = document.createElement("div");
+            inhalt.appendChild(textAbsatz("Analysiert: " + (d.quelle || "?"), "muted"));
+            inhalt.appendChild(textAbsatz(d.text || "(keine Antwort)"));
+            listeAnhaengen(inhalt, d.hinweise, "ki-hinweise");
+
+            const fakten = document.createElement("ul");
+            fakten.className = "ki-fakten";
+            const budget = d.budget || {};
+            [["Modell", d.modell],
+             ["Diese Anfrage", (d.kosten_cent / 100).toFixed(4) + " $"],
+             ["Token", d.tokens_ein + " ein / " + d.tokens_aus + " aus"],
+             ["Monat", budget.verbraucht_cent !== undefined
+                 ? ((budget.verbraucht_cent / 100).toFixed(2) + " von "
+                    + (budget.deckel_cent / 100).toFixed(2) + " $")
+                 : null]].forEach(function (paar) {
+                if (paar[1] === undefined || paar[1] === null) { return; }
+                const li = document.createElement("li");
+                li.textContent = paar[0] + ": " + paar[1];
+                fakten.appendChild(li);
+            });
+            inhalt.appendChild(fakten);
+            kasten("Antwort", inhalt, false);
+        } catch (fehler) {
+            kasten("Keine Analyse", textAbsatz(fehler.message), true);
+            if (fehler.message.indexOf("Anmeldung") === 0) {
+                window.setTimeout(function () { window.location.reload(); }, 2500);
+            }
+        } finally {
+            sperren(false, "");
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

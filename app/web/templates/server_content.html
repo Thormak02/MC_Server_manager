@@ -180,6 +180,8 @@
                                 </select>
                                 <div class="inline-form">
                                     <button class="ghost apply-installed-version" type="button" data-content-id="{{ item.id }}">Version anwenden</button>
+                                    {# Vor dem Wechsel fragen, was sich aendert - danach ist es zu spaet. #}
+                                    <button class="ghost ki-changelog-btn" type="button" data-content-id="{{ item.id }}" title="KI fasst die Changelogs zwischen installierter und gewaehlter Version zusammen">Was aendert sich?</button>
                                 </div>
                                 <span class="muted installed-version-label">{{ item.version_label or "-" }}</span>
                             </div>
@@ -209,6 +211,9 @@
 <script>
 (function () {
     const serverId = {{ server.id }};
+    // Weit unten gebraucht, aber hier deklariert: buildInstalledVersionCell steht
+    // oberhalb und wuerde sonst auf eine noch nicht belegte const zugreifen.
+    const kiErlaubt = {{ 'true' if can_manage and current_user.role != "view_only" else 'false' }};
     const defaults = {
         mcVersion: {{ (server.mc_version or "") | tojson }},
         loader: {{ (server.server_type if server.server_type != "vanilla" else "") | tojson }},
@@ -564,6 +569,7 @@
     </select>
     <div class="inline-form">
         <button class="ghost apply-installed-version" type="button" data-content-id="${item.id}">Version anwenden</button>
+        ${kiErlaubt ? `<button class="ghost ki-changelog-btn" type="button" data-content-id="${item.id}" title="KI fasst die Changelogs zwischen installierter und gewaehlter Version zusammen">Was aendert sich?</button>` : ""}
     </div>
     <span class="muted installed-version-label">${escapeHtml(item.version_label || "-")}</span>
 </div>`;
@@ -1079,6 +1085,150 @@
         }
     }
 
+    function kiKasten(titel, fehler) {
+        const dialog = document.getElementById("ki-changelog-dialog");
+        const koerper = document.getElementById("ki-changelog-body");
+        document.getElementById("ki-changelog-title").textContent = titel;
+        koerper.innerHTML = "";
+        koerper.className = "stack" + (fehler ? " ki-changelog-fehler" : "");
+        if (!dialog.open) { dialog.showModal(); }
+        return koerper;
+    }
+
+    function kiAbsatz(ziel, text, klasse) {
+        if (!text) { return; }
+        const p = document.createElement("p");
+        p.className = klasse || "ki-antwort-text";
+        p.textContent = text;
+        ziel.appendChild(p);
+    }
+
+    function kiListe(ziel, eintraege, klasse) {
+        if (!eintraege || !eintraege.length) { return; }
+        const ul = document.createElement("ul");
+        ul.className = klasse || "ki-hinweise";
+        eintraege.forEach(function (e) {
+            const li = document.createElement("li");
+            li.textContent = e;
+            ul.appendChild(li);
+        });
+        ziel.appendChild(ul);
+    }
+
+    const KI_EMPFEHLUNG = {
+        jetzt: ["Kann jetzt aktualisiert werden", "ki-empfehlung-gut"],
+        pruefen: ["Vorher ein Schritt noetig", "ki-empfehlung-pruefen"],
+        warten: ["Es gibt einen Grund zu warten", "ki-empfehlung-warten"],
+    };
+
+    async function kiChangelog(row, btn) {
+        const select = row.querySelector(".installed-version-select");
+        const contentId = btn.dataset.contentId;
+        const versionId = select ? (select.value || "").trim() : "";
+        if (!contentId) { return; }
+        if (!versionId) {
+            alert("Bitte zuerst die Zielversion auswaehlen.");
+            return;
+        }
+        const label = select.options[select.selectedIndex]
+            ? select.options[select.selectedIndex].text : "";
+
+        const vorherText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Liest Changelogs ...";
+        try {
+            const response = await fetch(
+                `/api/servers/${serverId}/content/ki-changelog`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ content_id: Number(contentId),
+                                           version_id: versionId,
+                                           version_label: label }),
+                });
+            let d = {};
+            try { d = await response.json(); } catch (_) { d = {}; }
+            if (!response.ok) {
+                throw new Error(d.detail || `Fehler ${response.status}`);
+            }
+
+            const koerper = kiKasten(`${d.name}: ${d.installiert} \u2192 ${d.ziel}`, false);
+
+            if (d.ohne_ki) {
+                kiAbsatz(koerper, d.meldung);
+            } else {
+                const empf = KI_EMPFEHLUNG[d.empfehlung] || KI_EMPFEHLUNG.pruefen;
+                const kopf = document.createElement("p");
+                kopf.className = "ki-empfehlung " + empf[1];
+                kopf.textContent = empf[0];
+                koerper.appendChild(kopf);
+                kiAbsatz(koerper, d.begruendung_empfehlung, "ki-vorschlag-grund");
+                kiAbsatz(koerper, d.zusammenfassung);
+
+                if ((d.breaking || []).length) {
+                    const h = document.createElement("p");
+                    h.className = "ki-empfehlung ki-empfehlung-warten";
+                    h.textContent = "Bricht bestehende Installationen:";
+                    koerper.appendChild(h);
+                    const ul = document.createElement("ul");
+                    ul.className = "ki-breaking";
+                    d.breaking.forEach(function (b) {
+                        const li = document.createElement("li");
+                        const was = document.createElement("strong");
+                        was.textContent = b.was || "";
+                        li.appendChild(was);
+                        if (b.folge) {
+                            li.appendChild(document.createTextNode(" \u2013 " + b.folge));
+                        }
+                        if (b.zu_tun) {
+                            const tun = document.createElement("div");
+                            tun.className = "ki-vorschlag-grund";
+                            tun.textContent = "Zu tun: " + b.zu_tun;
+                            li.appendChild(tun);
+                        }
+                        ul.appendChild(li);
+                    });
+                    koerper.appendChild(ul);
+                } else {
+                    kiAbsatz(koerper, "Keine Aenderung genannt, die eine bestehende "
+                             + "Installation bricht.", "ki-vorschlag-grund");
+                }
+
+                if ((d.wichtig || []).length) {
+                    kiAbsatz(koerper, "Ausserdem:", "muted");
+                    kiListe(koerper, d.wichtig, "ki-hinweise");
+                }
+            }
+
+            if ((d.fassungen || []).length) {
+                kiAbsatz(koerper, "Beruecksichtigte Fassungen:", "muted");
+                kiListe(koerper, d.fassungen.map(function (f) {
+                    return f.version + (f.datum ? ` (${f.datum})` : "")
+                        + (f.kanal && f.kanal !== "release" ? ` [${f.kanal}]` : "")
+                        + (f.hat_changelog ? "" : " \u2013 ohne Changelog");
+                }), "ki-hinweise");
+            }
+            kiListe(koerper, d.hinweise || [], "ki-hinweise");
+
+            if (!d.ohne_ki && d.kosten_cent !== undefined) {
+                const fakten = document.createElement("ul");
+                fakten.className = "ki-fakten";
+                const li = document.createElement("li");
+                li.textContent = "Modell: " + d.modell + " \u2013 "
+                    + (d.kosten_cent / 100).toFixed(4) + " $";
+                fakten.appendChild(li);
+                koerper.appendChild(fakten);
+            }
+        } catch (err) {
+            kiAbsatz(kiKasten("Keine Zusammenfassung", true),
+                     err instanceof Error ? err.message : String(err));
+        } finally {
+            btn.disabled = false;
+            btn.textContent = vorherText;
+        }
+    }
+
     async function applyInstalledVersion(row) {
         const provider = (row.dataset.provider || "").toLowerCase();
         const projectId = (row.dataset.projectId || "").trim();
@@ -1369,6 +1519,12 @@
                 const contentId = target.dataset.contentId;
                 if (!contentId) return;
                 vtUpdate(contentId, target);
+                return;
+            }
+            if (target.classList.contains("ki-changelog-btn")) {
+                const row = target.closest("tr");
+                if (!row) return;
+                kiChangelog(row, target);
                 return;
             }
         });
@@ -1671,4 +1827,19 @@
     refreshInstalled();
 })();
 </script>
+
+{% if can_manage %}
+{# Die Zusammenfassung erscheint als Dialog: man liest sie, bevor man die Version
+   anwendet - der Knopf dafuer bleibt dahinter sichtbar. #}
+<dialog id="ki-changelog-dialog" class="modal ki-changelog-modal">
+    <div class="modal-body">
+        <h2 class="modal-title" id="ki-changelog-title">Changelog</h2>
+        <div id="ki-changelog-body" class="stack"></div>
+        <div class="modal-actions">
+            <button type="button" onclick="document.getElementById('ki-changelog-dialog').close()">Schliessen</button>
+        </div>
+    </div>
+</dialog>
+{% endif %}
+
 {% endblock %}

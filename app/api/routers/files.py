@@ -6,7 +6,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.services import audit_service
+from app.services import (
+    ai_config_service,
+    ai_provider_service,
+    ai_service,
+    audit_service,
+)
 from app.services.auth_service import get_current_user_from_session
 from app.services.file_service import (
     add_access_entry,
@@ -739,3 +744,84 @@ def api_create_directory_action(
         details=f"path={created}",
     )
     return JSONResponse({"status": "ok", "path": created})
+
+
+# -------------------------------------------------- KI-Konfigurationsassistent
+
+def _ki_ziel(request: Request, server_id: int, datei: str, db: Session):
+    """(Nutzer, Server, Inhalt) oder (None, Antwort, None).
+
+    Verlangt Schreibrechte: die Vorschlaege wandern in das Formular, und ein Vorschlag,
+    den man nicht anwenden kann, waere Geld fuer nichts.
+    """
+    current_user = _require_user(request, db)
+    if current_user is None:
+        return None, JSONResponse(status_code=401, content={"detail": "Not authenticated"}), None
+    server = get_server_by_id(db, server_id)
+    if server is None:
+        return None, JSONResponse(status_code=404, content={"detail": "Server not found"}), None
+    if not can_edit_server_files(db, current_user, server):
+        return None, JSONResponse(status_code=403, content={"detail": "Forbidden"}), None
+
+    pfad = (datei or "").strip()
+    if not ai_config_service.unterstuetzt(pfad):
+        return None, JSONResponse(status_code=400, content={
+            "detail": "Fuer diese Datei gibt es keinen KI-Assistenten. Er kann nur "
+                      "Dateien vorschlagen, deren Schluessel der Manager lesen kann "
+                      "(.properties) - sonst liesse sich ein Vorschlag nicht gegen den "
+                      "Istzustand pruefen."}), None
+    try:
+        inhalt = read_text_file(server, pfad).content
+    except ValueError as exc:
+        return None, JSONResponse(status_code=400, content={"detail": str(exc)}), None
+    return current_user, server, inhalt
+
+
+@router.get("/api/servers/{server_id}/files/ki-vorschau", response_class=JSONResponse)
+def files_ki_vorschau(
+    request: Request,
+    server_id: int,
+    file: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Was wuerde an die KI gesendet? Kostet nichts."""
+    current_user, server, inhalt = _ki_ziel(request, server_id, file or "", db)
+    if current_user is None:
+        return server
+
+    try:
+        sicht = ai_config_service.vorschau(db, server, file or "", inhalt)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=500,
+                            content={"detail": f"Vorschau nicht moeglich: {exc}"})
+    return JSONResponse(sicht)
+
+
+@router.post("/api/servers/{server_id}/files/ki-vorschlag", response_class=JSONResponse)
+def files_ki_vorschlag(
+    request: Request,
+    server_id: int,
+    file: Annotated[str | None, Form()] = None,
+    ziel: Annotated[str | None, Form()] = None,
+    db: Session = Depends(get_db),
+):
+    """Vorschlaege holen. Es wird NICHTS geschrieben - sie landen nur im Formular."""
+    current_user, server, inhalt = _ki_ziel(request, server_id, file or "", db)
+    if current_user is None:
+        return server
+
+    try:
+        ergebnis = ai_config_service.schlage_vor(
+            db, user=current_user, server=server, pfad=file or "", inhalt=inhalt,
+            ziel=(ziel or ""))
+    except ai_service.KiAbgelehnt as exc:
+        return JSONResponse(status_code=409, content={"detail": str(exc), "abgelehnt": True})
+    except ai_provider_service.KiFehler as exc:
+        return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+    audit_service.log_action(
+        db, action="ai.config_suggest", user_id=current_user.id, server_id=server.id,
+        details=f"datei={file} vorschlaege={len(ergebnis.get('aenderungen') or [])} "
+                f"abgelehnt={len(ergebnis.get('abgelehnt') or [])} "
+                f"modell={ergebnis.get('modell')}")
+    return JSONResponse(ergebnis)

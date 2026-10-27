@@ -46,6 +46,13 @@ class KiAnfrage:
     werkzeuge: list[dict] = field(default_factory=list)
     """Werkzeugbeschreibungen fuer den Agenten. Leer = reine Textantwort."""
 
+    werkzeugzwang: str | None = None
+    """Name eines Werkzeugs, das das Modell benutzen MUSS.
+
+    Ohne Zwang entscheidet das Modell selbst und antwortet oft in Prosa. Wo die Antwort
+    weiterverarbeitet wird - etwa Konfigurationsvorschlaege, die in ein Formular wandern -
+    muss sie strukturiert sein, sonst muesste man Prosa parsen und raten."""
+
 
 @dataclass
 class KiAntwort:
@@ -138,7 +145,12 @@ class AnthropicAnbieter:
             "system": anfrage.auftrag,
             "messages": [
                 {"role": "assistant" if n.get("rolle") == "assistent" else "user",
-                 "content": str(n.get("inhalt") or "")}
+                 # Eine Liste sind Inhaltsbloecke (tool_use / tool_result) und wird
+                 # unveraendert durchgelassen. Ohne sie koennte ein Agent sein Werkzeug
+                 # nicht zurueckmelden: das Modell saehe den eigenen Aufruf nicht und
+                 # wuerde ihn beim naechsten Zug wiederholen.
+                 "content": (n["inhalt"] if isinstance(n.get("inhalt"), list)
+                             else str(n.get("inhalt") or ""))}
                 for n in anfrage.nachrichten
             ],
         }
@@ -146,6 +158,9 @@ class AnthropicAnbieter:
             inhalt["temperature"] = float(anfrage.temperatur)
         if anfrage.werkzeuge:
             inhalt["tools"] = anfrage.werkzeuge
+            if anfrage.werkzeugzwang:
+                inhalt["tool_choice"] = {"type": "tool",
+                                         "name": anfrage.werkzeugzwang}
 
         daten = json.dumps(inhalt).encode("utf-8")
         kopf = {

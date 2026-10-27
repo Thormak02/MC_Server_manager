@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>KI-Assistent</h1>
+
+{% if current_user.role == "view_only" %}
+<section class="card">
+    <p>Fuer den KI-Assistenten braucht es mindestens Moderator-Rechte.</p>
+</section>
+{% else %}
+
+{% if not ki_aktiv or not ki_schluessel or not ki_agent_an %}
+<section class="card">
+    <h2>Noch nicht einsatzbereit</h2>
+    <ul class="ki-hinweise">
+        {% if not ki_aktiv %}<li>Die KI-Funktionen sind abgeschaltet (Einstellungen &rarr; KI).</li>{% endif %}
+        {% if not ki_schluessel %}<li>Es ist kein API-Schluessel hinterlegt (Einstellungen &rarr; KI).</li>{% endif %}
+        {% if ki_aktiv and ki_schluessel and not ki_agent_an %}<li>Die Funktion &bdquo;Freier Agent&ldquo; ist abgeschaltet (Einstellungen &rarr; KI).</li>{% endif %}
+    </ul>
+</section>
+{% endif %}
+
+<section class="card">
+    <p class="muted">
+        Frag nach dem Zustand deiner Server oder gib einen Auftrag. Der Assistent sieht
+        selbst nach &ndash; Status, Configs, Logs, Sicherungen, installierte Inhalte.
+        <strong>Aendern tut er nichts von selbst:</strong> jede Aktion wird dir als
+        Vorschlag vorgelegt, und ausgefuehrt wird sie erst, wenn du bestaetigst. Dabei
+        gelten dieselben Rechte wie bei einem Klick in der Oberflaeche &ndash; der Assistent
+        kann nichts, was du nicht selbst darfst.
+    </p>
+
+    <div id="ki-chat" class="ki-chat" aria-live="polite"></div>
+
+    <label for="ki-eingabe">Dein Auftrag</label>
+    <textarea id="ki-eingabe" rows="3"
+              placeholder="z.B. Warum ist Server 'Survival' gestoppt? oder: Mach ein Backup der Welt von Survival."></textarea>
+    <div class="ki-analyse-aktionen">
+        <button type="button" id="ki-senden">Senden</button>
+        <button type="button" id="ki-neu" class="secondary">Gespraech neu beginnen</button>
+        <span class="muted" id="ki-status"></span>
+    </div>
+</section>
+
+<section class="card">
+    <details>
+        <summary>Was der Assistent tun kann ({{ werkzeuge|length }} Werkzeuge)</summary>
+        <table class="ki-tabelle">
+            <thead>
+                <tr><th>Werkzeug</th><th>Art</th><th>Recht</th><th>Beschreibung</th></tr>
+            </thead>
+            <tbody>
+                {% for w in werkzeuge %}
+                <tr>
+                    <td><code>{{ w.name }}</code></td>
+                    <td>{% if w.lesend %}sieht nach{% else %}<strong>veraendert</strong> ({{ w.gefahr }}){% endif %}</td>
+                    <td>{{ {"ansehen": "Ansehen", "steuern": "Steuern", "dateien": "Dateien", "super_admin": "Super-Admin"}.get(w.recht, w.recht) }}</td>
+                    <td>{{ w.beschreibung }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </details>
+</section>
+
+<script>
+(function () {
+    const chat = document.getElementById("ki-chat");
+    const eingabe = document.getElementById("ki-eingabe");
+    const senden = document.getElementById("ki-senden");
+    const neu = document.getElementById("ki-neu");
+    const statusFeld = document.getElementById("ki-status");
+
+    // Der Verlauf lebt nur in dieser Seite. Er wird bei jedem Zug mitgeschickt, damit sich
+    // ein Auftrag auf das Vorige beziehen kann ("und jetzt dasselbe fuer den anderen").
+    let verlauf = [];
+
+    function sperren(an, text) {
+        senden.disabled = an;
+        eingabe.disabled = an;
+        statusFeld.textContent = text || "";
+    }
+
+    function blase(rolle) {
+        const d = document.createElement("div");
+        d.className = "ki-blase ki-blase-" + rolle;
+        chat.appendChild(d);
+        chat.scrollTop = chat.scrollHeight;
+        return d;
+    }
+
+    function absatz(ziel, text, klasse) {
+        if (!text) { return; }
+        const p = document.createElement("p");
+        p.className = klasse || "ki-antwort-text";
+        p.textContent = text;
+        ziel.appendChild(p);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    function liste(ziel, eintraege, klasse) {
+        if (!eintraege || !eintraege.length) { return; }
+        const ul = document.createElement("ul");
+        ul.className = klasse || "ki-hinweise";
+        eintraege.forEach(function (e) {
+            const li = document.createElement("li");
+            li.textContent = e;
+            ul.appendChild(li);
+        });
+        ziel.appendChild(ul);
+    }
+
+    const GEFAHR_TEXT = {
+        niedrig: ["Geringes Risiko", "ki-empfehlung-gut"],
+        mittel: ["Wirkt sich auf den laufenden Betrieb aus", "ki-empfehlung-pruefen"],
+        hoch: ["Achtung: wirkt sofort und ist schwer zurueckzudrehen", "ki-empfehlung-warten"],
+    };
+
+    function zeigeVorschlag(ziel, v) {
+        const kasten = document.createElement("div");
+        kasten.className = "ki-kasten" + (v.moeglich ? "" : " fehler");
+
+        const titel = document.createElement("h3");
+        titel.textContent = v.moeglich ? "Vorschlag" : "Nicht moeglich";
+        kasten.appendChild(titel);
+
+        absatz(kasten, v.beschreibung, "ki-vorschlag-tat");
+
+        if (!v.moeglich) {
+            absatz(kasten, v.hindernis, "ki-vorschlag-achtung");
+            ziel.appendChild(kasten);
+            return;
+        }
+
+        const g = GEFAHR_TEXT[v.gefahr] || GEFAHR_TEXT.mittel;
+        const gefahr = document.createElement("p");
+        gefahr.className = "ki-empfehlung " + g[1];
+        gefahr.textContent = g[0];
+        kasten.appendChild(gefahr);
+        absatz(kasten, v.nachwirkung, "ki-vorschlag-grund");
+
+        const aktionen = document.createElement("div");
+        aktionen.className = "ki-analyse-aktionen";
+        const ja = document.createElement("button");
+        ja.type = "button";
+        ja.textContent = "Ausfuehren";
+        const nein = document.createElement("button");
+        nein.type = "button";
+        nein.className = "secondary";
+        nein.textContent = "Verwerfen";
+        const meldung = document.createElement("span");
+        meldung.className = "muted";
+
+        ja.addEventListener("click", async function () {
+            ja.disabled = true;
+            nein.disabled = true;
+            meldung.textContent = "Wird ausgefuehrt ...";
+            try {
+                const antwort = await fetch("/api/ki/ausfuehren", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ werkzeug: v.werkzeug, parameter: v.parameter }),
+                });
+                let d = {};
+                try { d = await antwort.json(); } catch (_) { d = {}; }
+                if (!antwort.ok) { throw new Error(d.detail || ("Fehler " + antwort.status)); }
+                meldung.textContent = "";
+                absatz(kasten, d.meldung || "Ausgefuehrt.", "ki-ausgefuehrt");
+                // Das Ergebnis in den Verlauf, damit der Assistent beim naechsten Zug
+                // weiss, dass es passiert ist.
+                verlauf.push({ rolle: "nutzer",
+                               inhalt: "Ich habe die Aktion '" + v.werkzeug
+                                       + "' ausgefuehrt. Ergebnis: "
+                                       + (d.meldung || "ohne Meldung") });
+            } catch (fehler) {
+                ja.disabled = false;
+                nein.disabled = false;
+                meldung.textContent = "";
+                absatz(kasten, fehler.message, "ki-vorschlag-achtung");
+            }
+        });
+
+        nein.addEventListener("click", function () {
+            ja.disabled = true;
+            nein.disabled = true;
+            absatz(kasten, "Verworfen - es wurde nichts ausgefuehrt.", "muted");
+            verlauf.push({ rolle: "nutzer",
+                           inhalt: "Ich habe den Vorschlag '" + v.werkzeug
+                                   + "' verworfen. Mach nichts davon." });
+        });
+
+        aktionen.appendChild(ja);
+        aktionen.appendChild(nein);
+        aktionen.appendChild(meldung);
+        kasten.appendChild(aktionen);
+        ziel.appendChild(kasten);
+        chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function frage() {
+        const text = (eingabe.value || "").trim();
+        if (!text) { return; }
+
+        absatz(blase("nutzer"), text);
+        eingabe.value = "";
+        sperren(true, "Der Assistent sieht nach ...");
+
+        try {
+            const antwort = await fetch("/api/ki/auftrag", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({ nachricht: text, verlauf: verlauf }),
+            });
+            let d = {};
+            try { d = await antwort.json(); } catch (_) { d = {}; }
+            if (!antwort.ok) { throw new Error(d.detail || ("Fehler " + antwort.status)); }
+
+            verlauf = d.verlauf || verlauf;
+            const ziel = blase("assistent");
+            absatz(ziel, d.text);
+
+            if ((d.schritte || []).length) {
+                absatz(ziel, "Nachgesehen:", "muted");
+                liste(ziel, d.schritte.map(function (s) {
+                    const wo = s.eingabe && s.eingabe.server_id
+                        ? " (Server " + s.eingabe.server_id + ")" : "";
+                    return s.werkzeug + wo + (s.fehler ? " – " + s.fehler : "");
+                }), "ki-hinweise");
+            }
+            if (d.vorschlag) { zeigeVorschlag(ziel, d.vorschlag); }
+            liste(ziel, d.hinweise || [], "ki-hinweise");
+
+            if (d.kosten_cent !== undefined && d.kosten_cent !== null) {
+                const fakten = document.createElement("ul");
+                fakten.className = "ki-fakten";
+                const li = document.createElement("li");
+                const budget = d.budget || {};
+                li.textContent = (d.modell || "") + " – "
+                    + (d.kosten_cent / 100).toFixed(4) + " $"
+                    + (budget.verbraucht_cent !== undefined
+                        ? " – Monat: " + (budget.verbraucht_cent / 100).toFixed(2)
+                          + " von " + (budget.deckel_cent / 100).toFixed(2) + " $"
+                        : "");
+                fakten.appendChild(li);
+                ziel.appendChild(fakten);
+            }
+        } catch (fehler) {
+            absatz(blase("fehler"), fehler.message, "ki-vorschlag-achtung");
+        } finally {
+            sperren(false, "");
+            eingabe.focus();
+        }
+    }
+
+    senden.addEventListener("click", frage);
+    eingabe.addEventListener("keydown", function (e) {
+        // Enter sendet, Shift+Enter macht eine neue Zeile.
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            frage();
+        }
+    });
+    neu.addEventListener("click", function () {
+        verlauf = [];
+        chat.innerHTML = "";
+        statusFeld.textContent = "Neues Gespraech - der Assistent kennt das Vorige nicht mehr.";
+        eingabe.focus();
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}
