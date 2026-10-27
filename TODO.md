@@ -347,22 +347,7 @@ RCON-Unterstützung (echtes Protokoll) als robuster Konsolenkanal, auch für ext
 Tunnel-Integration (playit.gg/ngrok) bzw. UPnP-Portöffnung, um ohne Portfreigabe erreichbar zu sein. lieber über eigene ionos domain "thormakmc.de"
 
 
-KI-gestützte Funktionen nur ondemand, local ai ohne externe api?
--> Beantwortet: es stehen **200 $ Claude-API-Guthaben pro Monat** zur Verfügung. Die externe API ist damit gesetzt, lokale Modelle sind nicht nötig (bleiben aber als Rückfall denkbar, wenn das Monatsbudget aufgebraucht ist). Noch NICHTS umgesetzt - nur als Rahmenbedingung für die Ideen unten festgehalten.
-Beim Umsetzen zu beachten: Budget pro Monat deckeln und den Verbrauch sichtbar machen (sonst frisst eine Crash-Analyse-Schleife still das Guthaben); API-Schlüssel wie die übrigen Geheimnisse behandeln, nicht in die DB im Klartext; jeder KI-Aufruf ondemand und abschaltbar; Logs/Crash-Reports vor dem Versenden auf Spielernamen und IPs prüfen.
-Rate Limit hinzufügen + missbrauch verhinden durch Themen lockin
-API Anbieter einfach änderbar
-API Keys nur in .env und die .env soll durch ein menufenster beschrieben werden, wie zb. bei der CurseForge API
 
-KI-Log-/Crash-Analyse: Fehlerursache erklären + konkrete Lösungsvorschläge (welche Mod, welcher Fix).
-
-KI-Konfigurationsassistent: server.properties/JVM anhand Ziel (RAM, Spielerzahl, Modpack) optimieren.
-
-KI-Chat-Moderation: In-Game-Chat auf Toxizität/Spam prüfen, automatische Warnungen.
-
-KI-Changelog-Zusammenfassung vor einem Mod-Update („Was ändert sich, gibt es Breaking Changes?").
-
-Natürlichsprachliche Steuerung: „starte alle Vanilla-Server", „sichere Server X" → Aktionen.
 
 
 Komfort/UX
@@ -420,3 +405,22 @@ manager kann auch server pc restarten
 
 MOTD editor in Server einstellungen mit Farben, allen optionen usw.
 
+
+KI-gestützte Funktionen nur ondemand, local ai ohne externe api?
+-> Beantwortet: es stehen **200 $ Claude-API-Guthaben pro Monat** zur Verfügung. Die externe API ist damit gesetzt, lokale Modelle sind nicht nötig (bleiben aber als Rückfall denkbar, wenn das Monatsbudget aufgebraucht ist). Noch NICHTS umgesetzt - nur als Rahmenbedingung für die Ideen unten festgehalten.
+Beim Umsetzen zu beachten: Budget pro Monat deckeln und den Verbrauch sichtbar machen (sonst frisst eine Crash-Analyse-Schleife still das Guthaben); API-Schlüssel wie die übrigen Geheimnisse behandeln, nicht in die DB im Klartext; jeder KI-Aufruf ondemand und abschaltbar; Logs/Crash-Reports vor dem Versenden auf Spielernamen und IPs prüfen.
+Rate Limit hinzufügen + missbrauch verhinden durch Themen lockin
+API Anbieter einfach änderbar
+API Keys nur in .env und die .env soll durch ein menufenster beschrieben werden, wie zb. bei der CurseForge API
+
+KI-Log-/Crash-Analyse: Fehlerursache erklären + konkrete Lösungsvorschläge (welche Mod, welcher Fix).
+
+KI-Konfigurationsassistent: server.properties/JVM anhand Ziel (RAM, Spielerzahl, Modpack) optimieren.
+
+KI-Chat-Moderation: In-Game-Chat auf Toxizität/Spam prüfen, automatische Warnungen.
+
+KI-Changelog-Zusammenfassung vor einem Mod-Update („Was ändert sich, gibt es Breaking Changes?").
+
+Natürlichsprachliche Steuerung: „starte alle Vanilla-Server", „sichere Server X" → Aktionen.
+
+eine KI integration, die fragen beantworten kann und auch cowork mößig aufgaben durchführen kann, nicht nur vorgefertigte commands, sondern freie bearbeitung und freies prompting wie claude code cowork auf dem rechner. aufgaben wie brarbeite diese config datei oder tue etwas in den einstellungen usw. rechte dürfen dadurch nicht umgehbar sein

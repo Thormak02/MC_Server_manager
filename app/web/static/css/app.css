@@ -1616,3 +1616,69 @@ th {
     content: "Achtung: ";
     font-weight: 700;
 }
+
+/* --- Dateimanager: Suche und Sortierung --------------------------------- */
+.file-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.file-search {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.file-search input[type="search"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-sort {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.file-sort label {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.file-sort select {
+    flex: 1;
+    min-width: 8rem;
+}
+
+.file-count {
+    margin: 0 0 0.5rem;
+    font-size: 0.82rem;
+}
+
+/* Pfad und Kennzahlen in einer Zeile - der Pfad darf kuerzen, die Zahlen nicht. */
+.file-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.file-row > a {
+    overflow-wrap: anywhere;
+}
+
+.file-row > a.aktiv {
+    font-weight: 600;
+    color: var(--accent-strong);
+}
+
+.file-meta {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+}

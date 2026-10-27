@@ -14,13 +14,27 @@ from app.models.server import Server
 from app.schemas.file_editor import FileReadResponse
 
 
-_ROOT_LEVEL_CANDIDATES = [
+# Reihenfolge, in der die bekannten Dateien im Serverordner angezeigt werden - die am
+# haeufigsten gebrauchten zuerst. Es ist eine SORTIERUNG, keine Auswahl: gelistet wird
+# jede Textdatei in der Wurzel (siehe _root_level_files). Eine feste Auswahl hatte
+# spigot.yml, bukkit.yml und die Bukkit-YAMLs verschluckt - also genau die Dateien, in
+# denen die Server-Einstellungen von Spigot und Paper stehen.
+_ROOT_LEVEL_ORDER = [
     "server.properties",
+    "spigot.yml",
+    "bukkit.yml",
+    "paper.yml",
+    "purpur.yml",
+    "pufferfish.yml",
     "eula.txt",
     "whitelist.json",
     "ops.json",
     "banned-players.json",
     "banned-ips.json",
+    "commands.yml",
+    "help.yml",
+    "permissions.yml",
+    "user_jvm_args.txt",
 ]
 
 _TEXT_EXTENSIONS = {
@@ -168,15 +182,19 @@ def validate_server_relative_path(server: Server, relative_path: str) -> Path:
 
 
 def list_files(server: Server, max_files: int = 500) -> list[str]:
+    """Bearbeitbare Dateien des Servers. ``max_files=0`` hebt die Begrenzung auf -
+    das braucht die Suche, die ueber ALLE Dateien gehen soll."""
     base = _server_base_path(server)
     if not base.exists() or not base.is_dir():
         return []
 
     found: set[str] = set()
-    for filename in _ROOT_LEVEL_CANDIDATES:
-        candidate = base / filename
-        if candidate.exists() and candidate.is_file():
-            found.add(filename)
+    try:
+        for eintrag in base.iterdir():
+            if eintrag.is_file() and _is_text_file(eintrag):
+                found.add(eintrag.name)
+    except OSError:
+        pass
 
     for directory_name in ["config", "plugins", "mods"]:
         root = base / directory_name
@@ -187,12 +205,19 @@ def list_files(server: Server, max_files: int = 500) -> list[str]:
                 continue
             relative = file.relative_to(base).as_posix()
             found.add(relative)
-            if len(found) >= max_files:
+            if max_files and len(found) >= max_files:
                 break
-        if len(found) >= max_files:
+        if max_files and len(found) >= max_files:
             break
 
-    return sorted(found)
+    # Bekannte Dateien zuerst und in der Reihenfolge von _ROOT_LEVEL_ORDER, danach der
+    # Rest alphabetisch - Dateien in der Wurzel vor denen in Unterordnern.
+    def _rang(name: str) -> tuple:
+        if name in _ROOT_LEVEL_ORDER:
+            return (0, _ROOT_LEVEL_ORDER.index(name), name)
+        return (1 if "/" not in name else 2, 0, name)
+
+    return sorted(found, key=_rang)
 
 
 def read_text_file(server: Server, relative_path: str) -> FileReadResponse:
@@ -968,3 +993,161 @@ def build_content_from_assistant(relative_path: str, form_data: dict[str, str]) 
         return json.dumps(parsed, indent=2, ensure_ascii=False) + "\n"
 
     raise ValueError("Assistent fuer diese Datei nicht verfuegbar.")
+
+
+# -------------------------------------------------- Sortieren, Suchen, Nutzung zaehlen
+
+# Die Sortierungen, die die Oberflaeche anbietet. Schluessel -> (Beschriftung,
+# Standardrichtung). Die Standardrichtung ist die, die man beim Umschalten erwartet:
+# Namen aufsteigend, Zeiten und Zahlen absteigend (das Neueste und Haeufigste zuerst).
+SORTIERUNGEN: dict[str, tuple[str, str]] = {
+    "empfohlen": ("Empfohlen", "auf"),
+    "name": ("Name", "auf"),
+    "haeufigkeit": ("Nutzungshaeufigkeit", "ab"),
+    "zuletzt": ("Zuletzt genutzt", "ab"),
+    "geaendert": ("Zuletzt geaendert", "ab"),
+    "groesse": ("Groesse", "ab"),
+}
+
+RICHTUNGEN = ("auf", "ab")
+
+
+def normalisiere_sortierung(wert: str | None) -> str:
+    schluessel = (wert or "").strip().lower()
+    return schluessel if schluessel in SORTIERUNGEN else "empfohlen"
+
+
+def normalisiere_richtung(wert: str | None, sortierung: str) -> str:
+    richtung = (wert or "").strip().lower()
+    if richtung in RICHTUNGEN:
+        return richtung
+    return SORTIERUNGEN[normalisiere_sortierung(sortierung)][1]
+
+
+def _empfohlen_rang(name: str) -> tuple:
+    """Bekannte Dateien zuerst, dann der Rest der Wurzel, dann Unterordner."""
+    if name in _ROOT_LEVEL_ORDER:
+        return (0, _ROOT_LEVEL_ORDER.index(name), name.lower())
+    return (1 if "/" not in name else 2, 0, name.lower())
+
+
+def zaehle_oeffnung(db, server: Server, relative_path: str) -> None:
+    """Eine Oeffnung im Dateimanager vermerken (fuer Haeufigkeit und "zuletzt genutzt").
+
+    Faellt still aus, wenn etwas schiefgeht: eine fehlende Statistik darf das Anzeigen
+    einer Datei nie verhindern.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from app.models.file_usage import FileUsage
+
+    try:
+        pfad = _normalize_relative_path(relative_path)
+    except ValueError:
+        return
+    try:
+        eintrag = db.scalar(select(FileUsage).where(
+            FileUsage.server_id == server.id, FileUsage.relative_path == pfad))
+        jetzt = datetime.now(timezone.utc)
+        if eintrag is None:
+            db.add(FileUsage(server_id=server.id, relative_path=pfad, open_count=1,
+                             last_opened_at=jetzt))
+        else:
+            eintrag.open_count = int(eintrag.open_count or 0) + 1
+            eintrag.last_opened_at = jetzt
+            db.add(eintrag)
+        db.commit()
+    except Exception:  # noqa: BLE001 - Statistik ist nie wichtiger als die Anzeige
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _nutzung(db, server: Server) -> dict[str, tuple[int, object]]:
+    """Gezaehlte Oeffnungen je Datei: Pfad -> (Anzahl, letzte Oeffnung)."""
+    if db is None:
+        return {}
+    from sqlalchemy import select
+
+    from app.models.file_usage import FileUsage
+
+    try:
+        zeilen = db.scalars(select(FileUsage).where(FileUsage.server_id == server.id)).all()
+    except Exception:  # noqa: BLE001
+        return {}
+    return {z.relative_path: (int(z.open_count or 0), z.last_opened_at) for z in zeilen}
+
+
+def liste_mit_metadaten(server: Server, db=None, *, sortierung: str = "empfohlen",
+                        richtung: str | None = None, suche: str = "",
+                        max_files: int = 500) -> dict:
+    """Dateien mit allem, wonach sortiert werden kann - plus Suche.
+
+    Die Suche laeuft ueber ALLE gefundenen Dateien, nicht nur ueber die ersten
+    ``max_files``: bei einem Modpack mit tausenden Config-Dateien ist das der Unterschied
+    zwischen "Datei gefunden" und "Datei existiert angeblich nicht". Deshalb wird erst
+    gefiltert und dann begrenzt.
+    """
+    sortierung = normalisiere_sortierung(sortierung)
+    richtung = normalisiere_richtung(richtung, sortierung)
+    begriff = (suche or "").strip().lower()
+
+    base = _server_base_path(server)
+    if not base.exists() or not base.is_dir():
+        return {"dateien": [], "sortierung": sortierung, "richtung": richtung,
+                "suche": suche or "", "gesamt": 0, "gekuerzt": False}
+
+    pfade = list_files(server, max_files=0)
+    if begriff:
+        pfade = [p for p in pfade if begriff in p.lower()]
+    gesamt = len(pfade)
+    gekuerzt = max_files > 0 and gesamt > max_files
+
+    nutzung = _nutzung(db, server)
+    dateien: list[dict] = []
+    for pfad in pfade:
+        ganz = base / pfad
+        try:
+            stat = ganz.stat()
+            groesse, geaendert = stat.st_size, stat.st_mtime
+        except OSError:
+            groesse, geaendert = 0, 0.0
+        anzahl, zuletzt = nutzung.get(pfad, (0, None))
+        dateien.append({
+            "pfad": pfad,
+            "name": pfad.rsplit("/", 1)[-1],
+            "groesse": groesse,
+            "geaendert": geaendert,
+            "anzahl": anzahl,
+            "zuletzt": zuletzt,
+        })
+
+    # Zweitschluessel ist die empfohlene Reihenfolge, damit Dateien mit gleichem Wert
+    # (etwa alle mit 0 Oeffnungen) eine sinnvolle Folge haben. Streng genommen reicht
+    # dafuer schon, dass list_files vorsortiert liefert und Pythons sort stabil ist - der
+    # Zweitschluessel macht die Zusicherung aber unabhaengig davon, dass das so bleibt.
+    def _schluessel(eintrag: dict):
+        rang = _empfohlen_rang(eintrag["pfad"])
+        if sortierung == "name":
+            return (eintrag["pfad"].lower(),)
+        if sortierung == "groesse":
+            return (eintrag["groesse"], rang)
+        if sortierung == "geaendert":
+            return (eintrag["geaendert"], rang)
+        if sortierung == "haeufigkeit":
+            return (eintrag["anzahl"], rang)
+        if sortierung == "zuletzt":
+            # Nie geoeffnete Dateien ganz hinten, nicht mitten in der Liste.
+            stempel = eintrag["zuletzt"].timestamp() if eintrag["zuletzt"] else 0.0
+            return (stempel, rang)
+        return (rang,)
+
+    dateien.sort(key=_schluessel, reverse=(richtung == "ab"))
+    if gekuerzt:
+        dateien = dateien[:max_files]
+
+    return {"dateien": dateien, "sortierung": sortierung, "richtung": richtung,
+            "suche": suche or "", "gesamt": gesamt, "gekuerzt": gekuerzt}

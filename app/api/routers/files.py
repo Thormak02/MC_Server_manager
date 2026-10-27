@@ -19,6 +19,9 @@ from app.services.file_service import (
     get_download_file,
     get_whitelist_enabled,
     list_files,
+    liste_mit_metadaten,
+    SORTIERUNGEN,
+    zaehle_oeffnung,
     list_access_entries,
     read_text_file,
     remove_access_entry,
@@ -92,6 +95,9 @@ def files_page(
     server_id: int,
     file: str | None = None,
     mode: str | None = None,
+    sort: str | None = None,
+    dir: str | None = None,
+    q: str | None = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_user(request, db)
@@ -104,7 +110,9 @@ def files_page(
     if not can_view_server(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-    available_files = list_files(server)
+    dateiliste = liste_mit_metadaten(server, db, sortierung=sort, richtung=dir,
+                                     suche=q or "")
+    available_files = [eintrag["pfad"] for eintrag in dateiliste["dateien"]]
     selected_file = (file or "").strip() or None
     file_content = None
     assistant_payload = None
@@ -115,6 +123,8 @@ def files_page(
     if selected_file:
         try:
             file_content = read_text_file(server, selected_file)
+            # Erst nach dem erfolgreichen Lesen zaehlen - ein Fehlversuch ist keine Nutzung.
+            zaehle_oeffnung(db, server, selected_file)
             assistant_payload = get_assistant_payload(selected_file, file_content.content)
             if assistant_payload is None and selected_mode == "assistant":
                 selected_mode = "raw"
@@ -131,6 +141,8 @@ def files_page(
             page_title=f"Dateien: {server.name}",
             server=server,
             available_files=available_files,
+            dateiliste=dateiliste,
+            sortierungen=SORTIERUNGEN,
             selected_file=selected_file,
             file_content=file_content,
             assistant_payload=assistant_payload,

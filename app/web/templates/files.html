@@ -49,15 +49,61 @@
 <section class="grid grid-3">
     <article class="card">
         <h2>Verfuegbare Dateien</h2>
-        <div class="file-list">
-            {% for path in available_files %}
-            <div>
-                <a href="/servers/{{ server.id }}/files?file={{ path|urlencode }}">{{ path }}</a>
+
+        <form method="get" action="/servers/{{ server.id }}/files" class="file-tools">
+            {% if selected_file %}<input type="hidden" name="file" value="{{ selected_file }}">{% endif %}
+            {% if selected_mode %}<input type="hidden" name="mode" value="{{ selected_mode }}">{% endif %}
+            <input type="hidden" name="dir" id="file-dir" value="{{ dateiliste.richtung }}">
+            <div class="file-search">
+                <input type="search" name="q" id="file-search" value="{{ dateiliste.suche }}"
+                       placeholder="Datei suchen &hellip;" autocomplete="off"
+                       aria-label="Datei suchen">
+                {% if dateiliste.suche %}
+                <a class="ghost" href="/servers/{{ server.id }}/files?sort={{ dateiliste.sortierung }}&amp;dir={{ dateiliste.richtung }}"
+                   title="Suche zuruecksetzen">&times;</a>
+                {% endif %}
+            </div>
+            <div class="file-sort">
+                <label for="file-sort-select">Sortieren</label>
+                <select name="sort" id="file-sort-select">
+                    {% for schluessel, angabe in sortierungen.items() %}
+                    <option value="{{ schluessel }}" {% if schluessel == dateiliste.sortierung %}selected{% endif %}>{{ angabe[0] }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" id="file-dir-toggle" class="icon-btn"
+                        title="{{ 'Absteigend - zum Umschalten klicken' if dateiliste.richtung == 'ab' else 'Aufsteigend - zum Umschalten klicken' }}"
+                        aria-label="Sortierrichtung umschalten">{{ '↓' if dateiliste.richtung == 'ab' else '↑' }}</button>
+                <button type="submit" class="ghost">Anwenden</button>
+            </div>
+        </form>
+
+        <p class="muted file-count">
+            {% if dateiliste.suche %}
+            {{ dateiliste.gesamt }} Treffer fuer &bdquo;{{ dateiliste.suche }}&ldquo;
+            {% else %}
+            {{ dateiliste.gesamt }} Datei(en)
+            {% endif %}
+            {% if dateiliste.gekuerzt %}&ndash; die ersten {{ dateiliste.dateien|length }} werden gezeigt, bitte suchen{% endif %}
+        </p>
+
+        <div class="file-list" id="file-list">
+            {% for eintrag in dateiliste.dateien %}
+            <div class="file-row" data-pfad="{{ eintrag.pfad|lower }}">
+                <a href="/servers/{{ server.id }}/files?file={{ eintrag.pfad|urlencode }}&amp;sort={{ dateiliste.sortierung }}&amp;dir={{ dateiliste.richtung }}{% if dateiliste.suche %}&amp;q={{ dateiliste.suche|urlencode }}{% endif %}"
+                   {% if eintrag.pfad == selected_file %}class="aktiv"{% endif %}>{{ eintrag.pfad }}</a>
+                <span class="file-meta">
+                    {% if eintrag.anzahl %}{{ eintrag.anzahl }}&times;{% endif %}
+                    {% if eintrag.groesse %}{{ (eintrag.groesse / 1024)|round(1) }} KB{% endif %}
+                </span>
             </div>
             {% else %}
-            <p class="muted">Keine editierbaren Dateien gefunden.</p>
+            <p class="muted">
+                {% if dateiliste.suche %}Keine Datei enthaelt &bdquo;{{ dateiliste.suche }}&ldquo;.
+                {% else %}Keine editierbaren Dateien gefunden.{% endif %}
+            </p>
             {% endfor %}
         </div>
+        <p class="muted" id="file-filter-hinweis" hidden></p>
     </article>
 
     <article class="card field-span-2">
@@ -141,4 +187,61 @@
         {% endif %}
     </article>
 </section>
+
+<script>
+(function () {
+    const suche = document.getElementById("file-search");
+    const liste = document.getElementById("file-list");
+    const hinweis = document.getElementById("file-filter-hinweis");
+    const richtung = document.getElementById("file-dir");
+    const umschalter = document.getElementById("file-dir-toggle");
+    const auswahl = document.getElementById("file-sort-select");
+    if (!liste) { return; }
+
+    // Soforttippen filtert die bereits geladene Liste - ohne Neuladen. Fuer eine Suche
+    // ueber ALLE Dateien (auch die nicht geladenen) schickt Enter das Formular ab.
+    if (suche) {
+        suche.addEventListener("input", function () {
+            const begriff = suche.value.trim().toLowerCase();
+            let sichtbar = 0;
+            liste.querySelectorAll(".file-row").forEach(function (zeile) {
+                const passt = !begriff || (zeile.dataset.pfad || "").indexOf(begriff) !== -1;
+                zeile.hidden = !passt;
+                if (passt) { sichtbar += 1; }
+            });
+            if (hinweis) {
+                if (begriff && sichtbar === 0) {
+                    hinweis.textContent = "In der geladenen Liste nichts gefunden "
+                        + "\u2013 Enter sucht ueber alle Dateien.";
+                    hinweis.hidden = false;
+                } else {
+                    hinweis.hidden = true;
+                }
+            }
+        });
+    }
+
+    // Richtung umschalten und gleich anwenden.
+    if (umschalter && richtung) {
+        umschalter.addEventListener("click", function () {
+            richtung.value = richtung.value === "ab" ? "auf" : "ab";
+            umschalter.closest("form").submit();
+        });
+    }
+
+    // Beim Wechsel der Sortierung die passende Standardrichtung nehmen: Namen
+    // aufsteigend, Zeiten und Zahlen absteigend (das Neueste zuerst).
+    if (auswahl && richtung) {
+        const standard = {
+            empfohlen: "auf", name: "auf",
+            haeufigkeit: "ab", zuletzt: "ab", geaendert: "ab", groesse: "ab",
+        };
+        auswahl.addEventListener("change", function () {
+            richtung.value = standard[auswahl.value] || "auf";
+            auswahl.closest("form").submit();
+        });
+    }
+})();
+</script>
+
 {% endblock %}
