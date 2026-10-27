@@ -416,6 +416,16 @@ def pruefe_richtung(quelle: Server, ziel: Server) -> str | None:
     return None
 
 
+def _doppelte_staende_kurz(quelle: Server) -> list[dict]:
+    """Spieler mit zwei Staenden - fuer die Anzeige im Dialog."""
+    from app.services import world_identity_service as wis
+
+    try:
+        return wis.doppelte_staende(basis(quelle) / level_name(quelle), basis(quelle))
+    except Exception:  # noqa: BLE001 - die Vorschau darf daran nicht scheitern
+        return []
+
+
 def moeglichkeiten(quelle: Server, ziel: Server) -> dict:
     """Was zwischen diesen beiden Servern uebertragbar ist - Grundlage fuer die Haken im Dialog."""
     qt = (quelle.server_type or "").strip().lower()
@@ -545,6 +555,7 @@ def vorschau(quelle: Server, ziel: Server) -> dict:
                  "version": ziel.mc_version, "welt": level_name(ziel),
                  "stil": ziel_struktur, "data_version": zd},
         "zusatzwelten": zusatz_welten(quelle),
+        "doppelte_staende": _doppelte_staende_kurz(quelle),
         "moeglichkeiten": moeglichkeiten(quelle, ziel),
         "struktur_umbau": struktur_umbau,
         "hinweise": hinweise,
@@ -566,8 +577,16 @@ def _zielname(ordner_name: str, quell_welt: str, ziel_welt: str) -> str:
     return f"{ziel_welt}{rest}"
 
 
-def _welt_filter(spielerdaten: bool):
-    """``skip``-Funktion fuer _robust_copy_tree: was beim Welt-Transfer nicht mitkommt."""
+def _welt_filter(spielerdaten: bool, ohne_dimensionen: bool = False):
+    """``skip``-Funktion fuer _robust_copy_tree: was beim Welt-Transfer nicht mitkommt.
+
+    ``ohne_dimensionen`` laesst die Dimensions-Unterordner im Hauptweltordner weg. Das
+    braucht der Fall "zwei Strukturen gleichzeitig": bei einem Spigot-Server gelten die
+    eigenen Weltordner, und ein uebrig gebliebenes ``world/DIM-1`` ist ein Rest, der die
+    echten Daten beim Umbau ueberschreiben wuerde.
+    """
+    dim_pfade = {relativ for pfade in DIM_PFADE.values() for relativ in pfade}
+
     def skip(rel: Path) -> bool:
         if rel.name in NICHT_KOPIEREN:
             return True
@@ -575,6 +594,10 @@ def _welt_filter(spielerdaten: bool):
         # zu einem Datapack und bleibt drin.
         if not spielerdaten and len(rel.parts) == 1 and rel.name in SPIELERDATEN_ORDNER:
             return True
+        if ohne_dimensionen:
+            als_text = rel.as_posix()
+            if any(als_text == p or als_text.startswith(p + "/") for p in dim_pfade):
+                return True
         return False
     return skip
 
@@ -858,10 +881,25 @@ def spieleridentitaet_warnung(quelle: Server, ziel: Server) -> str | None:
     if gemessen is None:
         return None
     if gemessen == "gemischt":
-        return ("In der Welt liegen Spielerdaten unter beiden UUID-Arten (echte Mojang-UUIDs "
-                "und selbst erzeugte). Der Quellserver hat die Anmeldeart im Laufe seines "
-                "Lebens gewechselt; fuer manche Spieler gibt es zwei Staende, und welcher "
-                "gilt, laesst sich nicht entscheiden.")
+        from app.services import world_identity_service as wis
+
+        betroffen = wis.doppelte_staende(basis(quelle) / level_name(quelle), basis(quelle))
+        if not betroffen:
+            return ("In der Welt liegen Spielerdaten unter beiden UUID-Arten (echte "
+                    "Mojang-UUIDs und selbst erzeugte) - der Quellserver hat die "
+                    "Anmeldeart im Laufe seines Lebens gewechselt. Betroffene Spieler mit "
+                    "zwei Staenden konnten nicht ermittelt werden (die usercache.json "
+                    "kennt sie nicht mehr).")
+        namen = ", ".join(
+            f"{e['name']} (es gilt der Stand vom "
+            f"{e['echt']['datum'] if e['juenger'] == 'echt' else e['offline']['datum']})"
+            for e in betroffen[:5])
+        return (f"{len(betroffen)} Spieler haben zwei Staende, weil der Quellserver die "
+                f"Anmeldeart gewechselt hat: {namen}"
+                f"{' und weitere' if len(betroffen) > 5 else ''}. Der Manager nimmt jeweils "
+                f"den ZULETZT GESPIELTEN Stand; der andere wird nicht geloescht, sondern "
+                f"als '<uuid>.dat.ersetzt' daneben aufgehoben - falls die Wahl falsch war, "
+                f"laesst sie sich von Hand umkehren.")
 
     erwartet = erwartete_uuid_art(ziel)
     if erwartet == "unklar" or erwartet == gemessen:
@@ -897,6 +935,9 @@ def warnungen(quelle: Server, ziel: Server, *, welt: bool) -> list[str]:
             f"Der Weg von {quelle.server_type} zurueck zu {ziel.server_type} ist von Paper "
             f"ausdruecklich NICHT unterstuetzt - Datenverlust ist laut Hersteller moeglich. "
             f"Bitte vorher ein eigenes Backup anlegen, auf das du dich verlassen kannst.")
+
+    if welt and hat_zwei_strukturen(quelle):
+        liste.append(_zwei_strukturen_meldung(quelle, basis(quelle), level_name(quelle)))
 
     if welt and qt in MOD_TYPEN and (zt in BUKKIT_TYPEN or zt == "vanilla"):
         liste.append(
@@ -941,11 +982,15 @@ def warnungen(quelle: Server, ziel: Server, *, welt: bool) -> list[str]:
         if any((base / f"{name}_{rest}" / "level.dat").is_file()
                for rest in ("nether", "the_end")):
             liste.append(
-                "In der getrennten Struktur ist jede Dimension eine eigene Welt mit eigenem "
-                "Seed, eigener Weltgrenze, eigenen Spielregeln, eigener Zeit und eigenem "
-                "Wetter. Nach dem Zusammenlegen gelten fuer Nether und End die Werte der "
-                "Hauptwelt. Die Landschaft bleibt, bereits erzeugte Chunks aendern sich "
-                "nicht - neu erzeugte koennen abweichen, wenn die Seeds verschieden waren.")
+                "ALLES GEBAUTE BLEIBT: Nether und End werden nicht neu erzeugt, sondern "
+                "mitsamt ihren Chunk-Dateien uebernommen. Was ihr gebaut oder erkundet "
+                "habt, ist danach unveraendert da. "
+                "Was sich aendert: in der getrennten Struktur hat jede Dimension eigene "
+                "Werte fuer Seed, Weltgrenze, Spielregeln, Zeit und Wetter; nach dem "
+                "Zusammenlegen gelten die der Hauptwelt. Spuerbar ist das nur bei "
+                "Gelaende, das NOCH NIE betreten wurde - dort kann an der Grenze des "
+                "Erkundeten eine sichtbare Naht entstehen, weil neue Chunks mit dem Seed "
+                "der Hauptwelt erzeugt werden.")
 
     return liste
 
@@ -1025,11 +1070,16 @@ def _passe_identitaet_an(quelle: Server, ziel: Server, welt: Path,
     _LETZTE_ZUORDNUNG[ziel.id] = dict(zuordnung)
     meldungen: list[str] = []
     if zuordnung:
-        gesamt = {"dateien": 0, "chunks": 0, "dat": 0}
+        gesamt: dict = {"dateien": 0, "chunks": 0, "dat": 0, "aufgeloest": []}
         for ordner in [welt] + [p for p in (weitere or []) if p.is_dir()]:
             teil = wis.schreibe_welt_um(ordner, zuordnung)
-            for schluessel in gesamt:
+            for schluessel in ("dateien", "chunks", "dat"):
                 gesamt[schluessel] += teil[schluessel]
+            gesamt["aufgeloest"] += teil.get("aufgeloest") or []
+        if gesamt.get("aufgeloest"):
+            meldungen.append(
+                f"{len(gesamt['aufgeloest'])} Spieler hatten zwei Staende - es gilt "
+                f"jeweils der zuletzt gespielte, der andere liegt als '.ersetzt' daneben.")
         meldungen.append(
             f"Spieleridentitaet auf {len(zuordnung)} Spieler umgestellt "
             f"({'echte Minecraft-UUIDs' if ziel_art == 'v4' else 'serverseitig erzeugte UUIDs'}): "
@@ -1201,6 +1251,76 @@ def _passe_plugin_weltnamen_an(ziel_base: Path, quell_welt: str,
 
 # ------------------------------------------------------------------- Vorpruefung
 
+def hat_zwei_strukturen(server: Server) -> bool:
+    """Liegen die Dimensionen gleichzeitig in beiden Strukturen?
+
+    Passiert nach einem Wechsel des Servertyps (Vanilla -> Spigot) oder einem Umzug: die
+    alte Struktur bleibt als Rest liegen. Das ist KEIN Grund, den Transfer zu verweigern -
+    welche Struktur gilt, sagt der Servertyp eindeutig. Der Rest wird beim Kopieren
+    ausgelassen und die Sache gemeldet.
+    """
+    base, name = basis(server), level_name(server)
+    getrennt_da = any((base / f"{name}_{rest}").is_dir()
+                      for rest in ("nether", "the_end"))
+    gemeinsam_da = any((base / name / relativ).is_dir()
+                       for pfade in DIM_PFADE.values() for relativ in pfade)
+    return getrennt_da and gemeinsam_da
+
+
+def _zwei_strukturen_meldung(quelle: Server, base: Path, name: str) -> str:
+    """Erklaeren, welche Struktur genommen wird und welche liegen bleibt.
+
+    Der Servertyp entscheidet: Spigot und CraftBukkit lesen die eigenen Weltordner,
+    Vanilla, Forge, Fabric und Paper ab 26.1 die Unterordner. Groesse und Datum beider
+    Strukturen stehen dabei, damit die Einschaetzung nachpruefbar ist und nicht geglaubt
+    werden muss.
+    """
+    from datetime import datetime
+
+    from app.services.server_service import _dir_total_size
+
+    def _angabe(pfade: list[Path]) -> str:
+        vorhanden = [p for p in pfade if p.is_dir()]
+        if not vorhanden:
+            return "nicht vorhanden"
+        bytes_gesamt = sum(_dir_total_size(p) for p in vorhanden)
+        try:
+            juengste = max(p.stat().st_mtime for p in vorhanden)
+            datum = datetime.fromtimestamp(juengste).strftime("%d.%m.%Y")
+        except OSError:
+            datum = "unbekannt"
+        if bytes_gesamt >= 1024 ** 3:
+            groesse = f"{bytes_gesamt / (1024 ** 3):.1f} GB"
+        elif bytes_gesamt >= 1024 ** 2:
+            groesse = f"{bytes_gesamt // (1024 ** 2)} MB"
+        else:
+            # "0 MB" waere irrefuehrend - gerade bei der Altlast ist "fast leer" die
+            # entscheidende Information.
+            groesse = f"{max(1, bytes_gesamt // 1024)} KB"
+        return f"{groesse}, zuletzt geaendert {datum}"
+
+    eigene = [base / f"{name}_nether", base / f"{name}_the_end"]
+    innere = [base / name / relativ
+              for pfade in DIM_PFADE.values() for relativ in pfade]
+
+    erwartet_getrennt = stil_aus_typ(quelle) == STIL_GETRENNT
+    if erwartet_getrennt:
+        gilt = f"die eigenen Ordner '{name}_nether'/'{name}_the_end'"
+        altlast = f"die Unterordner in '{name}'"
+    else:
+        gilt = f"die Unterordner in '{name}'"
+        altlast = f"die eigenen Ordner '{name}_nether'/'{name}_the_end'"
+
+    return (
+        f"'{quelle.name}' hat die Dimensionen gleichzeitig in zwei Strukturen. "
+        f"Eigene Ordner: {_angabe(eigene)}. Unterordner in '{name}': {_angabe(innere)}. "
+        f"Weil der Server {quelle.server_type} {quelle.mc_version} ist, gelten dort {gilt} - "
+        f"nur die werden uebernommen. {altlast[:1].upper()}{altlast[1:]} sind ein Rest "
+        f"aus einer "
+        f"frueheren Installation und bleiben zurueck. Falls das nicht stimmt, den Transfer "
+        f"abbrechen und die Ordner erst im Dateimanager bereinigen.")
+
+
 def pruefe_transfer(quelle: Server, ziel: Server, *, welt: bool, configs: bool,
                     erweiterungen: bool, zusatzwelten: bool = False,
                     zugangslisten: bool = False) -> None:
@@ -1239,21 +1359,6 @@ def pruefe_transfer(quelle: Server, ziel: Server, *, welt: bool, configs: bool,
                 f"Im Ordner '{level_name(quelle)}' von '{quelle.name}' fehlt die level.dat - "
                 f"das ist keine vollstaendige Welt. Die Uebernahme wuerde die Welt des "
                 f"Zielservers loeschen und nichts Brauchbares an ihre Stelle setzen.")
-
-        # Widerspruechliches Layout in der Quelle: beide Stile gleichzeitig vorhanden
-        # (z.B. ein uebrig gebliebenes world/DIM-1 neben world_nether/). Dann laesst sich
-        # nicht entscheiden, welche Daten gelten - und ein Paper ab 26.1 bricht beim ersten
-        # Start mit "Failed to migrate world storage" ab.
-        base, name = basis(quelle), level_name(quelle)
-        getrennt_da = any((base / f"{name}_{rest}").is_dir() for rest in ("nether", "the_end"))
-        gemeinsam_da = any((base / name / relativ).is_dir()
-                           for pfade in DIM_PFADE.values() for relativ in pfade)
-        if getrennt_da and gemeinsam_da:
-            raise ValueError(
-                f"'{quelle.name}' hat die Dimensionen gleichzeitig in zwei Strukturen "
-                f"(eigene Ordner '{name}_nether'/'{name}_the_end' UND Unterordner in "
-                f"'{name}'). Welche gelten, laesst sich nicht entscheiden - bitte den "
-                f"ungenutzten Rest erst im Dateimanager entfernen.")
 
         abwaerts = pruefe_richtung(quelle, ziel)
         if abwaerts:
@@ -1487,11 +1592,21 @@ def _uebernimm_welt(quelle: Server, ziel: Server, *, spielerdaten: bool, stempel
                 melde(prozent, f"Welt wird kopiert ... {kopiert[0] // mb} / {gesamt // mb} MB")
 
         melde(5, "Welt wird kopiert ...")
+        # Liegen beide Strukturen gleichzeitig vor, gilt die des Servertyps. Bei einer
+        # getrennten Quelle sind die Unterordner im Hauptweltordner dann der Rest - er
+        # darf nicht mitkommen, sonst ueberschreibt er beim Umbau die echten Daten.
+        rest_auslassen = (quell_struktur == STIL_GETRENNT
+                          and hat_zwei_strukturen(quelle))
         uebersprungen: list[str] = []
         for ordner in quell_ordner:
+            ist_hauptwelt = ordner.name == quell_welt
             uebersprungen += _robust_copy_tree(
                 ordner, temp / _zielname(ordner.name, quell_welt, ziel_welt),
-                on_file=_datei, skip=_welt_filter(spielerdaten))
+                on_file=_datei,
+                skip=_welt_filter(spielerdaten,
+                                  ohne_dimensionen=rest_auslassen and ist_hauptwelt))
+        if rest_auslassen:
+            meldungen.append(_zwei_strukturen_meldung(quelle, basis(quelle), quell_welt))
 
         # Vor dem Umbau: die level.dat der Huellen verschwindet dabei. Was sich retten
         # laesst (Drachenkampf), wird uebernommen; der Rest wird mit den echten Werten

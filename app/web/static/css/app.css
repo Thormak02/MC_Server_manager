@@ -1752,3 +1752,56 @@ th {
     color: var(--danger);
     font-weight: 600;
 }
+
+/* --- Gesperrte Knoepfe ---------------------------------------------------
+   Ohne diese Regel sieht ein per JavaScript gesperrter Knopf genauso aus wie ein
+   anklickbarer: man klickt, nichts passiert, und die Oberflaeche wirkt kaputt.
+   Betrifft u.a. den Uebernehmen-Knopf, solange ein Blocker besteht. */
+button:disabled,
+button[disabled] {
+    cursor: not-allowed;
+    opacity: 0.45;
+    background: var(--border);
+    color: color-mix(in srgb, var(--text) 60%, transparent);
+    box-shadow: none;
+}
+
+button.ghost:disabled,
+button.ghost[disabled] {
+    background: var(--panel-soft);
+    border-color: var(--border);
+}
+
+/* Ein Blocker ist etwas anderes als eine Warnung: er verhindert die Aktion. Deshalb
+   ein eigener Kasten statt nur roter Schrift - sonst geht er zwischen den Hinweisen
+   unter, und der gesperrte Knopf bleibt unerklaert. */
+.transfer-blocker-kasten {
+    margin: 0.5rem 0;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+    border-left: 4px solid var(--danger);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+}
+
+.transfer-blocker-kasten > p:first-child {
+    margin-top: 0;
+    font-weight: 700;
+    color: color-mix(in srgb, var(--danger) 85%, var(--text));
+}
+
+.transfer-blocker-kasten > p:last-child {
+    margin-bottom: 0;
+}
+
+/* Hinweise, die erst nach dem Beheben des Blockers zaehlen, treten zurueck. */
+.transfer-report.gesperrt .transfer-hinweis,
+.transfer-report.gesperrt .transfer-summary {
+    opacity: 0.55;
+}
+
+/* Im Blocker-Kasten braucht die Begruendung kein eigenes "Nicht moeglich:" mehr -
+   das steht schon in der Ueberschrift des Kastens. */
+.transfer-blocker-grund {
+    color: color-mix(in srgb, var(--danger) 80%, var(--text));
+}

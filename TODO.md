@@ -424,3 +424,7 @@ KI-Changelog-Zusammenfassung vor einem Mod-Update („Was ändert sich, gibt es 
 Natürlichsprachliche Steuerung: „starte alle Vanilla-Server", „sichere Server X" → Aktionen.
 
 eine KI integration, die fragen beantworten kann und auch cowork mößig aufgaben durchführen kann, nicht nur vorgefertigte commands, sondern freie bearbeitung und freies prompting wie claude code cowork auf dem rechner. aufgaben wie brarbeite diese config datei oder tue etwas in den einstellungen usw. rechte dürfen dadurch nicht umgehbar sein
+
+
+
+gut, dann jetzt bitte weiter mit den funktionen

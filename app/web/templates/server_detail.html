@@ -540,7 +540,16 @@
             }
             html += "</p>";
         }
-        html += zeilen("transfer-blocker", blocker);
+        if (blocker.length) {
+            // Eigener Kasten: ein Blocker verhindert die Uebernahme, eine Warnung nicht.
+            // Nur rote Schrift zwischen den Hinweisen laesst den gesperrten Knopf
+            // unerklaert.
+            html += "<div class=\"transfer-blocker-kasten\">"
+                + "<p>So ist die Uebernahme nicht moeglich</p>"
+                + zeilen("transfer-blocker-grund", blocker)
+                + "<p class=\"muted\">Der Knopf bleibt gesperrt, bis das behoben ist.</p>"
+                + "</div>";
+        }
         html += zeilen("transfer-warnung", daten.warnungen || []);
         html += zeilen("transfer-hinweis", hinweise);
         if (!blocker.length && !hinweise.length && !(daten.warnungen || []).length
@@ -548,20 +557,21 @@
             html += "<p class=\"muted\">Keine Besonderheiten &ndash; Struktur und Version passen.</p>";
         }
         bericht.innerHTML = html || "<p class=\"muted\">Keine Angaben.</p>";
+        bericht.classList.toggle("gesperrt", blocker.length > 0);
         bericht.hidden = false;
 
         const moegl = daten.moeglichkeiten || {};
         const welt = moegl.welt || {};
         hakenWelt.disabled = !welt.moeglich;
         if (!welt.moeglich) { hakenWelt.checked = false; }
-        weltInfo.textContent = welt.moeglich ? "" : (welt.grund || "");
+        weltInfo.textContent = (!welt.moeglich && welt.grund) ? "– " + welt.grund : "";
 
         const ext = moegl.erweiterungen || {};
         hakenExt.disabled = !ext.moeglich;
         if (!ext.moeglich) { hakenExt.checked = false; }
         extLabel.textContent = ext.art === "mods" ? "Mods"
             : (ext.art === "plugins" ? "Plugins" : "Plugins/Mods");
-        extInfo.textContent = ext.grund || "";
+        extInfo.textContent = ext.grund ? "– " + ext.grund : "";
 
         const weitere = daten.zusatzwelten || [];
         zusatzZeile.hidden = weitere.length === 0;

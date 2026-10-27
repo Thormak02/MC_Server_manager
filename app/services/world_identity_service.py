@@ -327,13 +327,19 @@ def region_umschreiben(pfad: Path, paare: dict[bytes, bytes]) -> int:
     return geaendert
 
 
-def benenne_spielerdateien_um(welt: Path, zuordnung: dict[str, str]) -> int:
+def benenne_spielerdateien_um(welt: Path, zuordnung: dict[str, str]) -> tuple[int, list]:
     """``playerdata/<alt>.dat`` -> ``<neu>.dat``, ebenso stats und advancements.
 
-    Rueckgabe: Zahl der umbenannten Dateien. Eine Datei, die schon unter dem neuen Namen
-    liegt, wird uebersprungen, damit kein vorhandener Stand ueberschrieben wird.
+    Liegt unter dem NEUEN Namen schon eine Datei, gibt es fuer diesen Spieler zwei Staende
+    (der Server hat irgendwann die Anmeldeart gewechselt). Dann gewinnt der ZULETZT
+    GEAENDERTE - das ist der Stand, mit dem zuletzt gespielt wurde. Der andere wird nicht
+    geloescht, sondern als ``<uuid>.ersetzt.dat`` aufgehoben: falls die Wahl falsch war,
+    laesst sie sich von Hand rueckgaengig machen.
+
+    Rueckgabe: (umbenannte Dateien, Liste der aufgeloesten Faelle).
     """
     umbenannt = 0
+    aufgeloest: list[dict] = []
     for ordner, endung in _spieler_ordner(welt):
         if not ordner.is_dir():
             continue
@@ -343,13 +349,55 @@ def benenne_spielerdateien_um(welt: Path, zuordnung: dict[str, str]) -> int:
                     continue
                 ziel = ordner / kandidat.name.replace(alt, neu, 1)
                 if ziel.exists():
+                    behalten = _loese_doppelten_stand_auf(kandidat, ziel)
+                    if behalten is None:
+                        continue
+                    aufgeloest.append({"ordner": ordner.name, "alt": alt, "neu": neu,
+                                       "behalten": behalten})
+                    if behalten == "alt":
+                        umbenannt += 1
                     continue
                 try:
                     kandidat.rename(ziel)
                     umbenannt += 1
                 except OSError:
                     continue
-    return umbenannt
+    return umbenannt, aufgeloest
+
+
+def _loese_doppelten_stand_auf(kandidat: Path, ziel: Path) -> str | None:
+    """Zwei Staende fuer denselben Spieler: der juengere gewinnt, der andere bleibt liegen.
+
+    Rueckgabe: "alt" (der umbenannte Stand gewinnt), "neu" (der vorhandene gewinnt) oder
+    None, wenn nichts entschieden werden konnte.
+    """
+    try:
+        zeit_kandidat = kandidat.stat().st_mtime
+        zeit_ziel = ziel.stat().st_mtime
+    except OSError:
+        return None
+
+    if zeit_kandidat <= zeit_ziel:
+        # Der vorhandene Stand ist juenger - den umzubenennenden beiseitelegen.
+        beiseite = kandidat.with_suffix(kandidat.suffix + ".ersetzt")
+        try:
+            if beiseite.exists():
+                beiseite.unlink()
+            kandidat.rename(beiseite)
+        except OSError:
+            return None
+        return "neu"
+
+    # Der umzubenennende Stand ist juenger - er gewinnt, der bisherige wird aufgehoben.
+    beiseite = ziel.with_suffix(ziel.suffix + ".ersetzt")
+    try:
+        if beiseite.exists():
+            beiseite.unlink()
+        ziel.rename(beiseite)
+        kandidat.rename(ziel)
+    except OSError:
+        return None
+    return "alt"
 
 
 def schreibe_welt_um(welt: Path, zuordnung: dict[str, str]) -> dict:
@@ -358,11 +406,12 @@ def schreibe_welt_um(welt: Path, zuordnung: dict[str, str]) -> dict:
     Rueckgabe: {"dateien": n, "chunks": n, "dat": n} - wie viel jeweils angefasst wurde.
     """
     paare = _ersetzungen(zuordnung)
-    ergebnis = {"dateien": 0, "chunks": 0, "dat": 0}
+    ergebnis: dict = {"dateien": 0, "chunks": 0, "dat": 0, "aufgeloest": []}
     if not paare:
         return ergebnis
 
-    ergebnis["dateien"] = benenne_spielerdateien_um(welt, zuordnung)
+    ergebnis["dateien"], ergebnis["aufgeloest"] = benenne_spielerdateien_um(
+        welt, zuordnung)
 
     # Spielerdateien selbst enthalten UUIDs (z.B. das Reittier, auf dem man sass).
     for ordner, endung in _spieler_ordner(welt):
@@ -401,3 +450,61 @@ def schreibe_welt_um(welt: Path, zuordnung: dict[str, str]) -> dict:
                 ergebnis["chunks"] += region_umschreiben(datei, paare)
 
     return ergebnis
+
+
+# ------------------------------------------------- Spieler mit zwei Staenden
+
+def _datei_angaben(pfad: Path) -> dict | None:
+    try:
+        stat = pfad.stat()
+    except OSError:
+        return None
+    return {"pfad": pfad, "bytes": stat.st_size, "zeit": stat.st_mtime}
+
+
+def _spielerdatei(welt: Path, kennung: str) -> Path | None:
+    """playerdata-Datei eines Spielers - alte und 26.1er Ablage."""
+    for ordner in (welt / "playerdata", welt / "players" / "data"):
+        datei = ordner / f"{kennung}.dat"
+        if datei.is_file():
+            return datei
+    return None
+
+
+def doppelte_staende(welt: Path, server_base: Path) -> list[dict]:
+    """Spieler, die unter BEIDEN UUID-Arten Spielerdaten haben.
+
+    Entsteht, wenn ein Server die Anmeldeart gewechselt hat: derselbe Mensch hat dann einen
+    Stand unter seiner echten Mojang-UUID und einen unter der selbst erzeugten. Beim Umzug
+    muss entschieden werden, welcher gilt - sonst gewinnt zufaellig der, der gerade am
+    Zielnamen liegt.
+
+    Rueckgabe je Spieler: beide Kennungen mit Groesse und letzter Aenderung, dazu welcher
+    der juengere ist. Die Dateizeit ist das beste verfuegbare Mass dafuer, wann zuletzt
+    mit diesem Stand gespielt wurde.
+    """
+    from datetime import datetime
+
+    cache = lade_usercache(server_base)
+    treffer: list[dict] = []
+    for kennung, name in sorted(cache.items(), key=lambda p: p[1].lower()):
+        if not ist_v4(kennung):
+            continue   # von der echten UUID aus suchen, sonst findet man jeden zweimal
+        andere = offline_uuid(name)
+        echt = _spielerdatei(welt, kennung)
+        offline = _spielerdatei(welt, andere)
+        if not (echt and offline):
+            continue
+        a, b = _datei_angaben(echt), _datei_angaben(offline)
+        if not (a and b):
+            continue
+        juenger = "echt" if a["zeit"] >= b["zeit"] else "offline"
+        treffer.append({
+            "name": name,
+            "echt": {"uuid": kennung, "bytes": a["bytes"],
+                     "datum": datetime.fromtimestamp(a["zeit"]).strftime("%d.%m.%Y %H:%M")},
+            "offline": {"uuid": andere, "bytes": b["bytes"],
+                        "datum": datetime.fromtimestamp(b["zeit"]).strftime("%d.%m.%Y %H:%M")},
+            "juenger": juenger,
+        })
+    return treffer

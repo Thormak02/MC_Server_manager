@@ -1575,21 +1575,25 @@ def test_release_auf_vorabversion_wird_blockiert(tmp_path, client, neuer, aelter
 
 # --- Widerspruechliches Layout und unvollstaendige Welten --------------------------------
 
-def test_zwei_layouts_gleichzeitig_werden_abgelehnt(tmp_path, client):
-    """Ein uebrig gebliebenes world/DIM-1 neben world_nether/ laesst sich nicht zuordnen -
-    und Paper ab 26.1 bricht beim Start mit 'Failed to migrate world storage' ab."""
+def test_zwei_layouts_gleichzeitig_blockieren_nicht(tmp_path, client):
+    """Frueher ein Blocker mit der Begruendung "nicht entscheidbar" - dabei beantwortet
+    der Servertyp die Frage eindeutig. Jetzt laeuft der Transfer und sagt, was gilt."""
     from app.db.session import SessionLocal
     from app.services import transfer_service as ts
 
     with SessionLocal() as db:
-        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="spigot")
-        ziel = _server(db, tmp_path / "z", name="Z", slug="z", typ="paper", version="26.2",
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="spigot",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Z", slug="z", typ="paper", version="26.3",
                        port=25600)
         _welt_getrennt(tmp_path / "q")
         _dimension(tmp_path / "q" / "world" / "DIM-1", b"alter-rest")
 
-        with pytest.raises(ValueError, match="zwei Strukturen"):
-            ts.pruefe_transfer(quelle, ziel, welt=True, configs=False, erweiterungen=False)
+        # Kein ValueError mehr.
+        ts.pruefe_transfer(quelle, ziel, welt=True, configs=False, erweiterungen=False)
+        meldungen = ts.warnungen(quelle, ziel, welt=True)
+
+    assert any("zwei Strukturen" in m for m in meldungen)
 
 
 def test_welt_ohne_level_dat_wird_abgelehnt(tmp_path, client):
@@ -2558,3 +2562,190 @@ def test_identitaet_erfasst_nether_und_end(tmp_path, client, monkeypatch):
         roh = _owner(tmp_path / "z" / rel)
         assert wis.uuid_bytes(NEU_V3) in roh, f"{rel}: Haustier gehoert niemandem mehr"
         assert wis.uuid_bytes(ALT_V4) not in roh
+
+
+# --- Blocker "zwei Strukturen": konkret statt nur ablehnend ------------------------------
+
+def test_zwei_strukturen_meldung_nennt_die_altlast(tmp_path, client):
+    """"Entferne den ungenutzten Rest" hilft nur, wenn klar ist, WELCHER das ist.
+    Der Servertyp verraet es."""
+    from app.db.session import SessionLocal
+    from app.services import transfer_service as ts
+
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="spigot",
+                         version="26.2")
+        _welt_getrennt(tmp_path / "q")
+        _dimension(tmp_path / "q" / "world" / "DIM-1", b"altlast")
+
+        meldung = ts._zwei_strukturen_meldung(quelle, tmp_path / "q", "world")
+
+    # Spigot liest die eigenen Ordner -> die Unterordner sind die Altlast.
+    assert "gelten dort die eigenen Ordner" in meldung
+    assert "nur die werden uebernommen" in meldung
+    assert "sind ein Rest aus einer frueheren Installation" in meldung
+    # Groesse und Datum sind genannt, damit die Einschaetzung nachpruefbar ist.
+    assert "KB" in meldung or "MB" in meldung or "GB" in meldung
+    assert "zuletzt geaendert" in meldung
+
+
+def test_zwei_strukturen_meldung_dreht_sich_bei_paper_26x(tmp_path, client):
+    """Paper ab 26.1 liest die Unterordner - dann sind die eigenen Ordner die Altlast."""
+    from app.db.session import SessionLocal
+    from app.services import transfer_service as ts
+
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="paper",
+                         version="26.2")
+        _welt_getrennt(tmp_path / "q")
+        _dimension(tmp_path / "q" / "world" / "DIM-1", b"aktiv")
+
+        meldung = ts._zwei_strukturen_meldung(quelle, tmp_path / "q", "world")
+
+    assert "gelten dort die Unterordner" in meldung
+    assert "Die eigenen Ordner" in meldung
+    assert "Rest" in meldung and "frueheren Installation" in meldung
+
+
+def test_kleine_ordner_werden_nicht_als_null_gemeldet(tmp_path, client):
+    """"0 MB" waere irrefuehrend - bei der Altlast ist "fast leer" die entscheidende
+    Information."""
+    from app.db.session import SessionLocal
+    from app.services import transfer_service as ts
+
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="spigot",
+                         version="26.2")
+        _welt_getrennt(tmp_path / "q")
+        _dimension(tmp_path / "q" / "world" / "DIM-1", b"winzig")
+
+        meldung = ts._zwei_strukturen_meldung(quelle, tmp_path / "q", "world")
+
+    assert "0 MB" not in meldung
+
+
+def test_blocker_sperrt_den_knopf_in_der_oberflaeche(tmp_path, client):
+    """Der Knopf wird per JavaScript gesperrt - und muss auch SO AUSSEHEN, sonst klickt
+    der Nutzer ins Leere und haelt die Oberflaeche fuer kaputt. Geprueft an einem echten
+    Blocker: eine Welt abwaerts zu schieben zerstoert sie."""
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Quelle", slug="quelle", typ="spigot",
+                         version="26.3")
+        ziel = _server(db, tmp_path / "z", name="Ziel", slug="ziel", typ="spigot",
+                       version="26.2", port=25600)
+        _welt_getrennt(tmp_path / "q")
+        quell_id, ziel_id = quelle.id, ziel.id
+
+    _login_admin(client)
+    daten = client.get(
+        f"/api/servers/{ziel_id}/transfer-preview?source_id={quell_id}").json()
+    assert any("herunterrechnen" in b for b in daten["blocker"])
+
+    seite = client.get(f"/servers/{ziel_id}")
+    # Der Kasten hebt den Blocker von den Warnungen ab ...
+    assert "transfer-blocker-kasten" in seite.text
+    # ... und erklaert den gesperrten Knopf.
+    assert "Der Knopf bleibt gesperrt" in seite.text
+
+
+# --- Der konkrete Fall des Nutzers: Spigot 26.2 mit Altlast -> Paper 26.3 ---------------
+
+def test_spigot_mit_altlast_nach_paper_laeuft_durch(tmp_path, client, monkeypatch):
+    """Genau die Konstellation aus der Praxis: ein gewachsener Spigot-Server, in dem noch
+    ein world/DIM-1 aus einer frueheren Vanilla-Installation liegt. Das war ein Blocker -
+    obwohl der Servertyp eindeutig sagt, welche Struktur gilt."""
+    from app.db.session import SessionLocal
+    from app.services import transfer_service as ts
+
+    _ohne_backup(monkeypatch, tmp_path)
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Spigot mit David", slug="spigot",
+                         typ="spigot", version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Paper", slug="paper", typ="paper",
+                       version="26.3", port=25600)
+        # Die gueltige Struktur: eigene Weltordner.
+        _welt_getrennt(tmp_path / "q")
+        (tmp_path / "q" / "world_nether" / "DIM-1" / "region" / "r.0.0.mca").write_bytes(
+            b"ECHTER-NETHER")
+        # Die Altlast: Unterordner im Hauptweltordner, die Spigot gar nicht liest.
+        _dimension(tmp_path / "q" / "world" / "DIM-1", b"ALTLAST")
+
+        # Vorher: keine Ablehnung mehr.
+        ts.pruefe_transfer(quelle, ziel, welt=True, configs=False, erweiterungen=False)
+
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=True, run_async=False)
+
+    # Paper 26.x erwartet alles in EINEM Weltordner - der echte Nether muss ankommen,
+    # nicht die Altlast.
+    ziel_nether = tmp_path / "z" / "world" / "DIM-1" / "region" / "r.0.0.mca"
+    assert ziel_nether.read_bytes() == b"ECHTER-NETHER"
+    assert not (tmp_path / "z" / "world_nether").exists()
+
+
+def test_zwei_strukturen_ist_eine_warnung_kein_blocker(tmp_path, client):
+    """Die Frage IST entscheidbar - der Servertyp beantwortet sie."""
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Quelle", slug="quelle", typ="spigot",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Ziel", slug="ziel", typ="paper",
+                       version="26.3", port=25600)
+        _welt_getrennt(tmp_path / "q")
+        _dimension(tmp_path / "q" / "world" / "DIM-1", b"altlast")
+        quell_id, ziel_id = quelle.id, ziel.id
+
+    _login_admin(client)
+    daten = client.get(
+        f"/api/servers/{ziel_id}/transfer-preview?source_id={quell_id}").json()
+
+    assert daten["blocker"] == [], "Der Transfer darf nicht mehr verweigert werden"
+    assert any("zwei Strukturen" in w for w in daten["warnungen"])
+    assert any("nur die werden uebernommen" in w for w in daten["warnungen"])
+
+
+def test_altlast_wird_beim_kopieren_ausgelassen(tmp_path, client):
+    """Der Rest darf nicht mitkommen - beim Umbau wuerde er die echten Daten
+    ueberschreiben."""
+    from app.services import transfer_service as ts
+
+    skip = ts._welt_filter(True, ohne_dimensionen=True)
+    assert skip(Path("DIM-1")) is True
+    assert skip(Path("DIM-1/region/r.0.0.mca")) is True
+    assert skip(Path("DIM1/entities/r.0.0.mca")) is True
+    assert skip(Path("dimensions/minecraft/the_nether/region/r.0.0.mca")) is True
+    # Alles andere bleibt.
+    assert skip(Path("region/r.0.0.mca")) is False
+    assert skip(Path("playerdata/abc.dat")) is False
+    # Ohne den Schalter wird nichts ausgelassen.
+    assert ts._welt_filter(True)(Path("DIM-1")) is False
+
+
+def test_altlast_wandert_nicht_mit_wenn_kein_umbau_stattfindet(tmp_path, client,
+                                                               monkeypatch):
+    """Spigot -> Spigot: hier gibt es keinen Struktur-Umbau, der die Altlast ueberschreiben
+    wuerde. Ohne das gezielte Auslassen landet world/DIM-1 am Ziel und wird dort zur
+    Zeitbombe - spaetestens beim Wechsel auf Paper 26.x."""
+    from app.db.session import SessionLocal
+    from app.services import transfer_service as ts
+
+    _ohne_backup(monkeypatch, tmp_path)
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="spigot",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Z", slug="z", typ="spigot",
+                       version="26.2", port=25600)
+        _welt_getrennt(tmp_path / "q")
+        (tmp_path / "q" / "world_nether" / "DIM-1" / "region" / "r.0.0.mca").write_bytes(
+            b"ECHTER-NETHER")
+        _dimension(tmp_path / "q" / "world" / "DIM-1", b"ALTLAST")
+
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=True, run_async=False)
+
+    # Die gueltige Struktur kommt an ...
+    assert (tmp_path / "z" / "world_nether" / "DIM-1" / "region" / "r.0.0.mca"
+            ).read_bytes() == b"ECHTER-NETHER"
+    # ... die Altlast bleibt zurueck.
+    assert not (tmp_path / "z" / "world" / "DIM-1").exists()

@@ -442,3 +442,108 @@ def test_echte_regionen_bleiben_nach_dem_umschreiben_lesbar(tmp_path, client):
                 assert vorher[i][1] == nachher[i][1], f"{quelle.name}: NBT-Struktur geaendert"
         geprueft += 1
     assert geprueft > 0
+
+
+# ------------------------------------------- Spieler mit zwei Staenden
+
+def _spielerdatei(welt, kennung, inhalt, alter_tage=0):
+    import os
+    import time
+
+    ordner = welt / "playerdata"
+    ordner.mkdir(parents=True, exist_ok=True)
+    datei = ordner / f"{kennung}.dat"
+    datei.write_bytes(gzip.compress(inhalt))
+    if alter_tage:
+        stempel = time.time() - alter_tage * 86400
+        os.utime(datei, (stempel, stempel))
+    return datei
+
+
+def test_doppelte_staende_werden_erkannt(tmp_path, client):
+    """Entsteht, wenn ein Server die Anmeldeart gewechselt hat - derselbe Mensch hat dann
+    zwei Spielerdaten."""
+    from app.services import world_identity_service as wis
+
+    welt = tmp_path / "world"
+    offline = wis.offline_uuid("Thormak2002")
+    (tmp_path / "usercache.json").write_text(
+        '[{"name":"Thormak2002","uuid":"' + ALT + '"}]', encoding="utf-8")
+    _spielerdatei(welt, ALT, b"neu")
+    _spielerdatei(welt, offline, b"alt", alter_tage=30)
+
+    treffer = wis.doppelte_staende(welt, tmp_path)
+
+    assert len(treffer) == 1
+    assert treffer[0]["name"] == "Thormak2002"
+    assert treffer[0]["juenger"] == "echt"
+    assert treffer[0]["offline"]["uuid"] == offline
+
+
+def test_ein_einzelner_stand_ist_kein_doppelter(tmp_path, client):
+    from app.services import world_identity_service as wis
+
+    welt = tmp_path / "world"
+    (tmp_path / "usercache.json").write_text(
+        '[{"name":"Thormak2002","uuid":"' + ALT + '"}]', encoding="utf-8")
+    _spielerdatei(welt, ALT, b"nur einer")
+
+    assert wis.doppelte_staende(welt, tmp_path) == []
+
+
+def test_juengerer_stand_gewinnt(tmp_path, client):
+    """Der zuletzt gespielte Stand ist der, den der Spieler erwartet."""
+    from app.services import world_identity_service as wis
+
+    welt = tmp_path / "world"
+    offline = wis.offline_uuid("Thormak2002")
+    (tmp_path / "usercache.json").write_text(
+        '[{"name":"Thormak2002","uuid":"' + ALT + '"}]', encoding="utf-8")
+    _spielerdatei(welt, ALT, b"NEUER-STAND")
+    _spielerdatei(welt, offline, b"ALTER-STAND", alter_tage=30)
+
+    # Umzug auf einen Offline-Server: echt -> offline.
+    ergebnis = wis.schreibe_welt_um(welt, {ALT: offline})
+
+    gewonnen = gzip.decompress((welt / "playerdata" / f"{offline}.dat").read_bytes())
+    assert gewonnen == b"NEUER-STAND"
+    assert len(ergebnis["aufgeloest"]) == 1
+    assert ergebnis["aufgeloest"][0]["behalten"] == "alt"
+
+
+def test_aelterer_stand_wird_nicht_geloescht(tmp_path, client):
+    """Falls die Wahl falsch war, muss sie umkehrbar bleiben."""
+    from app.services import world_identity_service as wis
+
+    welt = tmp_path / "world"
+    offline = wis.offline_uuid("Thormak2002")
+    (tmp_path / "usercache.json").write_text(
+        '[{"name":"Thormak2002","uuid":"' + ALT + '"}]', encoding="utf-8")
+    _spielerdatei(welt, ALT, b"NEUER-STAND")
+    _spielerdatei(welt, offline, b"ALTER-STAND", alter_tage=30)
+
+    wis.schreibe_welt_um(welt, {ALT: offline})
+
+    aufgehoben = list((welt / "playerdata").glob("*.ersetzt"))
+    assert len(aufgehoben) == 1
+    assert gzip.decompress(aufgehoben[0].read_bytes()) == b"ALTER-STAND"
+
+
+def test_vorhandener_juengerer_stand_bleibt(tmp_path, client):
+    """Die Gegenrichtung: ist der Stand am Zielnamen juenger, gewinnt er."""
+    from app.services import world_identity_service as wis
+
+    welt = tmp_path / "world"
+    offline = wis.offline_uuid("Thormak2002")
+    (tmp_path / "usercache.json").write_text(
+        '[{"name":"Thormak2002","uuid":"' + ALT + '"}]', encoding="utf-8")
+    _spielerdatei(welt, ALT, b"ALTER-STAND", alter_tage=30)
+    _spielerdatei(welt, offline, b"NEUER-STAND")
+
+    ergebnis = wis.schreibe_welt_um(welt, {ALT: offline})
+
+    assert gzip.decompress(
+        (welt / "playerdata" / f"{offline}.dat").read_bytes()) == b"NEUER-STAND"
+    assert ergebnis["aufgeloest"][0]["behalten"] == "neu"
+    # Auch hier bleibt der unterlegene Stand erhalten.
+    assert list((welt / "playerdata").glob("*.ersetzt"))
