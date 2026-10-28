@@ -427,8 +427,13 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
             return;
         }
         if (onCooldown(p)) {
+            getLogger().info("Wechsel zu " + key + " fuer " + p.getName()
+                + " liegt im Cooldown (" + cooldownMs + " ms) - ignoriert.");
             return;
         }
+        getLogger().info("Wechsel angefordert: " + p.getName() + " -> " + key
+            + " (velocity_name=" + (e.velocityName == null || e.velocityName.isEmpty()
+                ? "-" : e.velocityName) + ", deliberate=" + deliberate + ")");
         guardedTransfer(p, e.id, e.display, deliberate, () -> performTransfer(p, e));
     }
 
@@ -443,6 +448,7 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
             }
             return;
         }
+        getLogger().info("Nativer Transfer: " + p.getName() + " -> " + e.host + ":" + e.port);
         try {
             p.transfer(e.host, e.port);
         } catch (Throwable t) {
@@ -496,10 +502,15 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
             CONFIRM_MIN_AGE_MS, CONFIRM_WINDOW_MS);
         if (!override && (isRecent(lastRejection, rejectKey, now)
                 || isRecent(lastAsked, rejectKey, now))) {
-            return;   // gerade erst abgesagt oder gefragt -> nicht nochmal fragen/spammen
+            // Nicht nochmal fragen/spammen - aber nachvollziehbar machen.
+            getLogger().info("Wechsel zu " + display + " fuer " + p.getName()
+                + " unterdrueckt: gerade erst abgesagt oder gefragt.");
+            return;
         }
         if (!checking.add(id)) {
-            return;   // fuer diesen Spieler laeuft schon eine Pruefung -> Klick-Spam ignorieren
+            getLogger().info("Wechsel fuer " + p.getName()
+                + " unterdrueckt: eine Pruefung laeuft bereits.");
+            return;
         }
         // ERST JETZT verbrauchen: ein verworfener Klick darf die Rueckfrage nicht aufessen.
         if (override) {
@@ -511,7 +522,20 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         final String brand = ClientInfo.brandOf(p);
         try {
             getServer().getScheduler().runTaskAsynchronously(this, () -> {
-                JoinCheck.Result result = check.check(serverId, pname, brand, override);
+                final JoinCheck.Result result;
+                try {
+                    result = check.check(serverId, pname, brand, override);
+                } catch (Throwable t) {
+                    // OHNE DAS bleibt die Sperre fuer diesen Spieler fuer immer stehen:
+                    // checking enthaelt seine UUID, und jeder weitere Klick faellt oben
+                    // wortlos heraus. Der umgebende catch deckt nur den AUFRUF von
+                    // runTaskAsynchronously ab, nicht diesen Rumpf.
+                    checking.remove(id);
+                    getLogger().warning("Join-Pruefung fehlgeschlagen fuer " + pname
+                        + " - lasse durch: " + t);
+                    getServer().getScheduler().runTask(this, transfer);
+                    return;
+                }
                 try {
                 getServer().getScheduler().runTask(this, () -> {
                     checking.remove(id);
@@ -737,6 +761,12 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
             out.writeUTF("Connect");
             out.writeUTF(velocityName);
             p.sendPluginMessage(this, BUNGEE_CHANNEL, b.toByteArray());
+            // Der Versand sagt nichts darueber, ob der Proxy etwas damit anfaengt: eine
+            // "Connect"-Nachricht auf einen unbekannten Servernamen verwirft Velocity
+            // wortlos. Deshalb steht hier wenigstens, DASS und WOMIT gesendet wurde.
+            getLogger().info("Connect an den Proxy gesendet: " + p.getName() + " -> "
+                + velocityName + " (Kanal " + BUNGEE_CHANNEL + ", "
+                + b.size() + " Byte)");
             return true;
         } catch (Throwable t) {
             getLogger().warning("Connect (" + velocityName + ") fehlgeschlagen fuer " + p.getName() + ": " + t);

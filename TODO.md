@@ -421,7 +421,7 @@ MOTD editor in Server einstellungen mit Farben, allen optionen usw. mit einer vo
 ~~KI-Konfigurationsassistent: server.properties/JVM anhand Ziel (RAM, Spielerzahl, Modpack) optimieren.~~
 ~~Erledigt: Dateieditor bei offener .properties. KI füllt nur das Formular, gespeichert wird von Hand. level-name/level-seed/Ports/online-mode gesperrt. Noch offen: KI-Vorschläge für YAML (der Assistent selbst kann YAML jetzt).~~
 
-KI-Chat-Moderation: In-Game-Chat auf Toxizität/Spam prüfen, automatische Warnungen.
+~~KI-Chat-Moderation: In-Game-Chat auf Toxizität/Spam prüfen, automatische Warnungen. -> nicht gewünscht~~
 
 ~~KI-Changelog-Zusammenfassung vor einem Mod-Update („Was ändert sich, gibt es Breaking Changes?").~~
 ~~Erledigt: Inhalte-Seite, Knopf "Was ändert sich?". Liest die Changelogs ALLER Fassungen zwischen installiert und Ziel, nicht nur der Zielversion. Ohne Changelog wird die KI nicht gefragt.~~
@@ -492,7 +492,7 @@ Offen: Testisolation. schedule_service war im conftest nicht neu geladen und fra
 
 Offen: NAS-Abgleich steht seit 6.10. Task mcsm-nas-sync ist aktiv und korrekt eingerichtet, letzter Lauf 6.10. 14:17 mit Ergebnis 0 - der Auslöser hängt, Ursache noch offen.
 
-Offen: 1.21.11-spigot und 26.2-spigot haben kein Gateway und keinen Hostnamen - im Netzwerk nicht erreichbar.
+~~Offen: 1.21.11-spigot und 26.2-spigot haben kein Gateway und keinen Hostnamen - im Netzwerk nicht erreichbar.~~
 
 ~~Lobby-Wechsel (Kompass und /lobby) blieb stumm: Velocity wurde EINMAL geladen und nie wieder, blieb auf 26.2 waehrend das Netz auf 26.3 zog. ViaVersion uebersetzte still 26.3->26.2 und verschluckte dabei die bungeecord:main-Nachricht. /server ging, weil das Velocitys eigener Befehl ist.~~
 
