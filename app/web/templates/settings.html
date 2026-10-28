@@ -239,6 +239,31 @@
             </label>
         </div>
         <div class="field-span-2">
+            <strong>Zweite Anmeldung desselben Spielers</strong>
+            <label>
+                <input type="radio" name="velocity_kick_existing" value="ersetzen"
+                       {% if universal_lobby.velocity_kick_existing %}checked{% endif %}>
+                <strong>Alte Sitzung ersetzen</strong> &ndash; empfohlen
+            </label>
+            <label>
+                <input type="radio" name="velocity_kick_existing" value="abweisen"
+                       {% if not universal_lobby.velocity_kick_existing %}checked{% endif %}>
+                <strong>Neue Anmeldung abweisen</strong>
+            </label>
+            <p class="muted">
+                <em>Ersetzen</em> ist noetig, damit der Rueckweg aus der Lobby verlaesslich
+                funktioniert: ein Wechsel fuehrt den Client zum selben Proxy zurueck, und die
+                alte Sitzung ist dabei noch einen Moment registriert &ndash; sonst scheitert er
+                an &bdquo;Du bist bereits mit diesem Proxy verbunden!&ldquo;. Es raeumt
+                ausserdem haengende Verbindungen weg, die sonst bis zum Proxy-Neustart stehen
+                bleiben. <em>Abweisen</em> ist die bessere Wahl, wenn du oft mit zwei Instanzen
+                arbeitest &ndash; dann wirft der zweite Start den ersten nicht still hinaus.
+                Beides ist unbedenklich, weil der Proxy die Anmeldung prueft: wer sich neu
+                anmeldet, ist nachweislich derselbe Spieler.
+            </p>
+        </div>
+
+        <div class="field-span-2">
             <label>
                 <input type="checkbox" name="presence_bridge_enabled" value="true" {% if universal_lobby.presence_bridge_enabled %}checked{% endif %}>
                 <strong>Presence-Bridge (Projektion)</strong> &ndash; spiegelt Avatare in <em>beide</em> Richtungen

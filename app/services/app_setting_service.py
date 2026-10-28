@@ -47,6 +47,10 @@ _HUB_DEFAULT_MAX_PLAYERS = 100
 
 # ViaProxy: standalone Java-Uebersetzer VOR dem Hub, damit vanilla Clients JEDER Version
 # in die 1.21.1-Welt kommen (modded 1.21.1 umgeht ihn direkt). Default AUS.
+# Soll eine neue Anmeldung eine alte Sitzung desselben Spielers ersetzen (true) oder
+# abgewiesen werden (false)? Siehe set_velocity_kick_existing.
+VELOCITY_KICK_EXISTING_KEY = "velocity_kick_existing"
+
 VIAPROXY_ENABLED_KEY = "viaproxy_enabled"
 VIAPROXY_PORT_KEY = "viaproxy_port"
 VIAPROXY_JAR_KEY = "viaproxy_jar"
@@ -736,6 +740,30 @@ def get_hub_config_runtime() -> dict:
 
 
 # --- ViaProxy (Cross-Version-Uebersetzer vor dem Hub) --------------------------
+def get_velocity_kick_existing(db: Session) -> bool:
+    """Ersetzt eine neue Anmeldung eine alte Sitzung desselben Spielers?
+
+    Vorgabe ``True``. Das ist noetig, damit der Rueckweg aus der Lobby verlaesslich
+    funktioniert: ein nativer Transfer fuehrt den Client zum SELBEN Proxy zurueck, und
+    die alte Sitzung ist dabei noch einen Moment registriert - mit ``False`` scheitert
+    der Wechsel dann an "Du bist bereits mit diesem Proxy verbunden!". Ausserdem raeumt
+    es haengende Verbindungen weg, die sonst bis zum Proxy-Neustart stehen bleiben.
+
+    ``False`` ist die richtige Wahl, wenn oft mit zwei Instanzen gearbeitet wird: dann
+    wirft der zweite Start den ersten nicht still hinaus.
+
+    Unbedenklich ist beides nur, weil Velocity mit Anmeldepruefung laeuft - wer sich neu
+    anmeldet, ist nachweislich derselbe Spieler.
+    """
+    row = _get_setting_row(db, VELOCITY_KICK_EXISTING_KEY)
+    return _normalize_bool(row.value) if row and row.value.strip() else True
+
+
+def set_velocity_kick_existing(db: Session, ersetzen: bool) -> None:
+    # Die Vorgabe ist True, deshalb wird nur das ABWEICHEN gespeichert.
+    _set_or_clear(db, VELOCITY_KICK_EXISTING_KEY, None if ersetzen else "false")
+
+
 def get_viaproxy_enabled(db: Session) -> bool:
     row = _get_setting_row(db, VIAPROXY_ENABLED_KEY)
     return _normalize_bool(row.value) if row and row.value else False
@@ -986,6 +1014,7 @@ def get_velocity_config_runtime() -> dict:
             "domain": get_network_domain(db),
             "motd": get_hub_motd(db),
             "max_players": get_hub_max_players(db),
+            "kick_existing": get_velocity_kick_existing(db),
         }
 
 

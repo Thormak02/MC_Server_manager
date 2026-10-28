@@ -49,7 +49,9 @@ global.window={matchMedia:()=>({matches:true})};
 await import(process.argv[2]);
 const M = global.window.MotdDarsteller;
 import { readFileSync } from "node:fs";
-const faelle = JSON.parse(readFileSync(process.argv[3], "utf-8"));
+const eingabe = JSON.parse(readFileSync(process.argv[3], "utf-8"));
+const faelle = eingabe.faelle;
+M.hexFarbenErlauben(eingabe.hex !== false);
 const raus = faelle.map((text) => {
   const ziel = new N("div");
   M.zeichneZeile(ziel, text);
@@ -66,14 +68,15 @@ def _node():
     return shutil.which("node")
 
 
-def _zeichne(tmp_path, faelle):
+def _zeichne(tmp_path, faelle, *, hex_erlaubt=True):
     node = _node()
     if not node:
         pytest.skip("Node ist nicht installiert")
     treiber = tmp_path / "treiber.mjs"
     treiber.write_text(TREIBER, encoding="utf-8")
     eingabe = tmp_path / "faelle.json"
-    eingabe.write_text(json.dumps(faelle), encoding="utf-8")
+    eingabe.write_text(json.dumps({"faelle": faelle, "hex": hex_erlaubt}),
+                       encoding="utf-8")
     ergebnis = subprocess.run(
         [node, str(treiber), DARSTELLER.as_uri(), str(eingabe)],
         capture_output=True, text=True, timeout=60,
@@ -138,18 +141,32 @@ def test_eigene_farbe_aus_hex(tmp_path):
     assert ergebnis["text"] == "Orange"
 
 
-def test_unbekannter_code_bleibt_text(tmp_path):
-    """Im Spiel wirkt er auch nicht - also darf ihn die Vorschau nicht verschlucken."""
+def test_unbekannter_code_wird_verschluckt(tmp_path):
+    """Minecraft wirft die ganze Folge weg - zeigt die Vorschau sie an, laeuft ab da
+    alles um ein Zeichen versetzt.
+
+    Meine erste Fassung liess den Code stehen; die Pruefung hat es als Fehler belegt.
+    """
     ergebnis = _zeichne(tmp_path, [PARAGRAF + "zHallo"])[0]
 
-    assert PARAGRAF in ergebnis["text"]
-    assert "zHallo" in ergebnis["text"]
+    assert ergebnis["text"] == "Hallo"
+    assert PARAGRAF not in ergebnis["text"]
+
+
+def test_doppeltes_trennzeichen_verschiebt_nichts(tmp_path):
+    """Entsteht leicht: Farbknopf gedrueckt, wo schon ein Trennzeichen steht."""
+    ergebnis = _zeichne(tmp_path, [PARAGRAF + PARAGRAF + "cHallo"])[0]
+
+    # Die ersten beiden Zeichen sind ein unbekannter Code und fallen weg; das "c"
+    # ist danach gewoehnlicher Text - genau so zeigt es der Server auch.
+    assert ergebnis["text"] == "cHallo"
 
 
 def test_abgeschnittener_code_am_ende(tmp_path):
+    """Ein haengendes Trennzeichen sendet der Server auch nicht."""
     ergebnis = _zeichne(tmp_path, ["Text" + PARAGRAF])[0]
 
-    assert ergebnis["text"] == "Text" + PARAGRAF
+    assert ergebnis["text"] == "Text"
 
 
 # ------------------------------------------------------------ Sicherheit
@@ -199,3 +216,29 @@ def test_sichtbare_zeichen_zaehlen_ohne_codes(tmp_path, text, sichtbar):
     """Der Zaehler warnt vor dem Abschneiden in der Serverliste - Codes zaehlen dort
     nicht mit, also darf er sie auch nicht mitzaehlen."""
     assert _zeichne(tmp_path, [text])[0]["sichtbar"] == sichtbar
+
+
+# ------------------------------------------------------------ Funde der Pruefung
+
+def test_hexfarbe_setzt_die_formate_zurueck(tmp_path):
+    """Wie jede andere Farbe. Vorher zeigte die Vorschau fett, wo der Server mager sendet."""
+    code = PARAGRAF + "x" + "".join(PARAGRAF + c for c in "ff0000")
+    ergebnis = _zeichne(tmp_path, [PARAGRAF + "lFett" + code + "Mager"])[0]
+
+    letzter = ergebnis["html"].split("<span")[-1]
+    assert "color:#ff0000" in letzter
+    assert "font-weight" not in letzter, letzter
+
+
+def test_hexfarbe_nur_wo_der_server_sie_kennt(tmp_path):
+    """Bei Vanilla/Fabric/Forge sendet der Server die sechs Codes EINZELN - dann steht
+    im Spiel schwarzer Text, nicht die Wunschfarbe. Die Vorschau muss das zeigen."""
+    code = PARAGRAF + "x" + "".join(PARAGRAF + c for c in "ff8800")
+
+    mit = _zeichne(tmp_path, [code + "Orange"], hex_erlaubt=True)[0]
+    ohne = _zeichne(tmp_path, [code + "Orange"], hex_erlaubt=False)[0]
+
+    assert "color:#ff8800" in mit["html"]
+    assert "color:#ff8800" not in ohne["html"], ohne["html"][:200]
+    # §0 ist die letzte der sechs Stellen -> schwarz, genau wie im Spiel.
+    assert "color:#000000" in ohne["html"]

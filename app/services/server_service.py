@@ -757,22 +757,23 @@ def validate_max_players(value: str | int | None) -> int | None:
 
 
 def read_server_property(server: Server, key: str) -> str | None:
-    """Einen Wert aus server.properties lesen.
+    """Einen Wert aus server.properties lesen - so, wie Java ihn liest.
 
     ``None``, wenn Ordner, Datei oder Schluessel fehlen - das ist der Normalfall
     bei einem Server, der noch nie gestartet wurde, und darf nie knallen.
+
+    Der Wert kommt ENTFLUCHTET zurueck (``\\n`` ist dann ein echter Umbruch, ``\\:`` ein
+    Doppelpunkt). Vorher stand hier ein eigener Zerleger, der am Prefix ``key=`` suchte
+    und Fluchtzeichen stehen liess: ``motd = x`` mit Leerzeichen wurde nicht gefunden,
+    und die Backslashes wuchsen mit jedem Speichern.
     """
+    from app.services import properties_service
+
     try:
         pfad = Path(server.base_path).expanduser().resolve() / "server.properties"
         if not pfad.is_file():
             return None
-        prefix = f"{key}="
-        for roh in pfad.read_text(encoding="utf-8", errors="ignore").splitlines():
-            zeile = roh.strip()
-            if not zeile or zeile.startswith("#"):
-                continue
-            if zeile.startswith(prefix):
-                return zeile.split("=", 1)[1].strip()
+        return properties_service.lies_wert(pfad, key)
     except Exception:  # noqa: BLE001 - eine unlesbare Datei ist kein Grund zu scheitern
         return None
     return None
@@ -804,85 +805,67 @@ MOTD_ZEICHEN = "\u00a7"
 
 
 def read_motd(server: Server) -> str:
-    """Die MOTD, wie sie in server.properties steht (mit ``\\n`` als Umbruch)."""
+    """Die MOTD als Text - mit einem ECHTEN Umbruch zwischen den beiden Zeilen.
+
+    Das Aufloesen der Fluchtzeichen macht properties_service beim Lesen; hier kommt
+    schon an, was der Spieler spaeter sieht.
+    """
     return read_server_property(server, "motd") or ""
 
 
 def motd_zerlegen(roh: str) -> list[str]:
-    """Den Dateiwert in seine (hoechstens zwei) Zeilen zerlegen.
+    """Den (schon entfluchteten) Wert in seine hoechstens zwei Zeilen zerlegen.
 
-    In server.properties ist der Backslash ein Fluchtzeichen: ``\\n`` ist der Umbruch,
-    ``\\\\`` ein echter Backslash. Beides wird hier aufgeloest, damit im Eingabefeld
-    steht, was der Spieler spaeter sieht.
+    Frueher stand hier eine eigene Fluchtlogik, die nur ``\\n`` und ``\\\\`` kannte. Alles
+    andere, was ``Properties.store`` schreibt - ``\\:`` ``\\=`` ``\\#`` ``\\!`` ``\\t``
+    ``\\uXXXX`` -, blieb stehen und wurde beim naechsten Speichern erneut gefluchtet:
+    die Backslashes wuchsen mit jeder Runde, und im Spiel stand irgendwann ``Preis \\= 0``.
     """
-    text = roh or ""
-    zeilen: list[str] = [""]
-    i = 0
-    while i < len(text):
-        zeichen = text[i]
-        if zeichen == "\\" and i + 1 < len(text):
-            folgt = text[i + 1]
-            if folgt == "n":
-                zeilen.append("")
-                i += 2
-                continue
-            if folgt == "\\":
-                zeilen[-1] += "\\"
-                i += 2
-                continue
-            # Unbekannte Flucht: so lassen, wie sie dasteht.
-            zeilen[-1] += zeichen
-            i += 1
-            continue
-        zeilen[-1] += zeichen
-        i += 1
+    zeilen = (roh or "").split("\n")
     while len(zeilen) < MOTD_ZEILEN:
         zeilen.append("")
     return zeilen[:MOTD_ZEILEN]
 
 
 def motd_bauen(*zeilen: str) -> str:
-    """Die Zeilen zu dem Wert zusammensetzen, der in server.properties gehoert.
+    """Die Zeilen zu EINEM Text mit echtem Umbruch zusammensetzen.
 
-    Echte Zeilenumbrueche aus einem Eingabefeld wuerden die Datei zerreissen - eine
-    Property endet am Zeilenende. Sie werden deshalb entfernt, der Umbruch zwischen den
-    beiden MOTD-Zeilen wird als ``\\n`` geschrieben.
+    Gefluchtet wird beim Schreiben (properties_service) - hier wird nur dafuer gesorgt,
+    dass keine ZEILENTRENNER im Text stehen bleiben. Davon kennt Python acht weitere
+    ausser ``\\n`` und ``\\r``; ein ``U+2028`` aus einer Textverarbeitung hat genuegt,
+    um aus der MOTD-Zeile einen zweiten Eintrag in server.properties zu machen und damit
+    jede andere Einstellung zu setzen.
     """
+    from app.services.properties_service import TRENNT_PYTHON_NICHT_JAVA
+
     sauber: list[str] = []
     for zeile in list(zeilen)[:MOTD_ZEILEN]:
-        text = (zeile or "").replace("\r", "").replace("\n", " ").strip()
-        sauber.append(text.replace("\\", "\\\\"))
+        text = (zeile or "").replace("\r", " ").replace("\n", " ")
+        for trenner in TRENNT_PYTHON_NICHT_JAVA:
+            text = text.replace(trenner, " ")
+        sauber.append(text.strip())
     while sauber and not sauber[-1]:
-        sauber.pop()   # leere zweite Zeile nicht als "\n" mitschreiben
-    return "\\n".join(sauber)
+        sauber.pop()   # leere zweite Zeile nicht als Umbruch mitschreiben
+    return "\n".join(sauber)
 
 
 def _upsert_server_property(server: Server, key: str, value: str) -> str | None:
+    """Einen Wert setzen. Rueckgabe: eine Warnung als Text, sonst None.
+
+    Die Arbeit macht properties_service - eine Umsetzung von Javas Regeln fuer alle.
+    Frueher stand hier eine eigene: sie suchte am Prefix (``motd = x`` mit Leerzeichen
+    wurde nicht gefunden und ein ZWEITER Eintrag angehaengt), las mit
+    ``errors="ignore"`` (jedes Nicht-ASCII-Zeichen der ganzen Datei ging verloren, wenn
+    sie nicht UTF-8 war), trennte mit ``splitlines()`` (ein U+2028 im Wert machte aus
+    einer Zeile zwei Eintraege) und liess einen Schreibfehler als HTTP 500 durchschlagen.
+    """
+    from app.services import properties_service
+
     base_path = Path(server.base_path).expanduser().resolve()
     if not base_path.exists() or not base_path.is_dir():
         return f"Serverordner nicht gefunden: {base_path}"
 
-    properties_path = base_path / "server.properties"
-    lines: list[str] = []
-    if properties_path.exists():
-        lines = properties_path.read_text(encoding="utf-8", errors="ignore").splitlines()
-
-    prefix = f"{key}="
-    replaced = False
-    output: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith(prefix):
-            output.append(f"{key}={value}")
-            replaced = True
-        else:
-            output.append(line)
-
-    if not replaced:
-        output.append(f"{key}={value}")
-
-    properties_path.write_text("\n".join(output).strip() + "\n", encoding="utf-8")
-    return None
+    return properties_service.schreibe_wert(base_path / "server.properties", key, value)
 
 
 def enable_accept_transfers(server: Server) -> None:

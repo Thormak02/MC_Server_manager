@@ -723,6 +723,23 @@ def rename_server_action(
     return RedirectResponse(url=f"/servers/{server_id}", status_code=303)
 
 
+def _motd_aus_formular(server, zeile1: str | None, zeile2: str | None) -> str | None:
+    """Die MOTD aus den beiden Formularfeldern - oder None, wenn keines dabei war.
+
+    ``None`` laesst den vorhandenen Wert in Ruhe; sonst wuerde ein Speichern von
+    anderer Stelle die MOTD leeren. Kommt nur EINES der beiden Felder, wird das andere
+    aus dem vorhandenen Wert gefuellt - sonst leert ein Formular, das nur eine Zeile
+    kennt, still die zweite.
+    """
+    if zeile1 is None and zeile2 is None:
+        return None
+    vorhanden = motd_zerlegen(read_motd(server))
+    return motd_bauen(
+        zeile1 if zeile1 is not None else vorhanden[0],
+        zeile2 if zeile2 is not None else vorhanden[1],
+    )
+
+
 @router.post("/servers/{server_id}/settings")
 def update_server_settings_action(
     request: Request,
@@ -807,10 +824,7 @@ def update_server_settings_action(
         port=_to_optional_int(port),
         auto_restart=_to_bool(auto_restart),
         max_players=parsed_max_players,
-        # Nur mitschicken, wenn das Formular die Felder wirklich hatte - sonst
-        # wuerde ein Speichern von anderer Stelle die MOTD leeren.
-        motd=(motd_bauen(motd_zeile1 or "", motd_zeile2 or "")
-              if (motd_zeile1 is not None or motd_zeile2 is not None) else None),
+        motd=_motd_aus_formular(server, motd_zeile1, motd_zeile2),
         auto_start_with_manager=_to_bool(auto_start_with_manager),
         sleep_enabled=_to_bool(sleep_enabled),
         sleep_delay_seconds=(

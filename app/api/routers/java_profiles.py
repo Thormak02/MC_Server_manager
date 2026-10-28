@@ -123,6 +123,7 @@ def settings_page(
         get_hub_lobby_enabled, get_hub_lobby_port, get_hub_lobby_vanilla_port,
         get_hub_lobby_replay, get_hub_lobby_vanilla_replay,
         get_viaproxy_enabled, get_viaproxy_port,
+        get_velocity_kick_existing,
         get_presence_bridge_enabled,
         get_hub_name, get_hub_motd, get_hub_max_players,
         get_hub_whitelist_enabled, get_hub_whitelist,
@@ -135,6 +136,7 @@ def settings_page(
         "hub_replay": get_hub_lobby_replay(db),
         "hub_vanilla_replay": get_hub_lobby_vanilla_replay(db),
         "viaproxy_enabled": get_viaproxy_enabled(db),
+        "velocity_kick_existing": get_velocity_kick_existing(db),
         "viaproxy_port": get_viaproxy_port(db),
         "presence_bridge_enabled": get_presence_bridge_enabled(db),
         "hub_running": hub_lobby_service.is_running(),
@@ -555,6 +557,7 @@ def update_universal_lobby_action(
     hub_lobby_replay: Annotated[str | None, Form()] = None,
     hub_lobby_vanilla_replay: Annotated[str | None, Form()] = None,
     viaproxy_enabled: Annotated[bool, Form()] = False,
+    velocity_kick_existing: Annotated[str | None, Form()] = None,
     viaproxy_port: Annotated[str | None, Form()] = None,
     presence_bridge_enabled: Annotated[bool, Form()] = False,
     hub_name: Annotated[str | None, Form()] = None,
@@ -587,6 +590,8 @@ def update_universal_lobby_action(
         A.set_hub_whitelist_enabled(db, hub_whitelist_enabled)
         A.set_hub_lobby_enabled(db, hub_lobby_enabled)
         A.set_viaproxy_enabled(db, viaproxy_enabled)
+        if velocity_kick_existing is not None:
+            A.set_velocity_kick_existing(db, velocity_kick_existing == "ersetzen")
         A.set_presence_bridge_enabled(db, presence_bridge_enabled)
     except (ValueError, TypeError) as exc:
         push_flash(request, str(exc), "error")

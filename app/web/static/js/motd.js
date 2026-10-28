@@ -29,11 +29,23 @@
     var PARAGRAF = "§";
     var VERWUERFELN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789#$%&*";
 
+    /* Eigene Farben (Paragraf-x) kann in der MOTD nur die Paper-Familie. Bei Vanilla,
+     * Fabric und Forge sendet der Server die sechs Codes einzeln - die Vorschau muss
+     * das genauso zeigen, sonst verspricht sie eine Farbe, die es im Spiel nicht gibt. */
+    var hexErlaubt = true;
+
+    /* Knoten mit Paragraf-k, die der Takt unten durchwuerfelt. Gehoert hierher und
+     * nicht zur Editor-Verdrahtung: stueck() benutzt sie, und der Darsteller laeuft
+     * auch ohne Editor (Vorschau im Test). */
+    var verwuerfelt = [];
+
     // Nach aussen nur das, was ohne Editor Sinn ergibt - damit es pruefbar ist.
     window.MotdDarsteller = {
         zeichneZeile: zeichneZeile,
         ohneCodes: ohneCodes,
         hexCode: hexCode,
+        // Nur fuer die Pruefung: ohne Editor gibt es kein data-hex am Element.
+        hexFarbenErlauben: function (an) { hexErlaubt = !!an; },
         sichtbareLaenge: sichtbareLaenge,
         FARBEN: FARBEN
     };
@@ -44,7 +56,6 @@
     var eingaben = Array.prototype.slice.call(wurzel.querySelectorAll(".motd-eingabe"));
     var hinweis = wurzel.querySelector(".motd-hinweis");
     var letztesFeld = eingaben[0] || null;
-    var verwuerfelt = [];   // Knoten mit §k, die der Takt unten durchwuerfelt
 
     eingaben.forEach(function (feld) {
         feld.addEventListener("focus", function () { letztesFeld = feld; });
@@ -84,8 +95,9 @@
     /* Eigene Farbe nur dort anbieten, wo sie auch wirkt: §x funktioniert in der MOTD
      * nur bei Paper und Verwandten, nicht bei Vanilla. Ein Knopf, der nichts tut,
      * ist schlimmer als keiner. */
+    hexErlaubt = wurzel.dataset.hex === "ja";
     var hexFeld = document.getElementById("motd-hex");
-    if (hexFeld && wurzel.dataset.hex === "ja") {
+    if (hexFeld && hexErlaubt) {
         hexFeld.parentNode.hidden = false;
         hexFeld.addEventListener("change", function () {
             einfuegen(hexCode(hexFeld.value));
@@ -167,19 +179,26 @@
         }
 
         while (i < text.length) {
-            if (text.charAt(i) !== PARAGRAF || i + 1 >= text.length) {
+            if (text.charAt(i) !== PARAGRAF) {
                 puffer += text.charAt(i);
                 i += 1;
+                continue;
+            }
+            if (i + 1 >= text.length) {
+                i += 1;   // haengendes Trennzeichen am Ende - der Server sendet es auch nicht
                 continue;
             }
             var code = text.charAt(i + 1).toLowerCase();
 
             // §x§r§r§g§g§b§b - eine eigene Farbe (Paper).
-            if (code === "x" && /^(?:§[0-9a-f]){6}/i.test(text.slice(i + 2))) {
+            if (code === "x" && hexErlaubt && /^(?:§[0-9a-f]){6}/i.test(text.slice(i + 2))) {
                 spuelen();
                 var hex = "";
                 for (var k = 0; k < 6; k++) { hex += text.charAt(i + 3 + k * 2); }
-                stil = Object.assign({}, stil, { farbe: "#" + hex.toLowerCase() });
+                // Wie jede andere Farbe setzt auch diese die Formate zurueck - sonst
+                // zeigt die Vorschau fett, wo der Server mager sendet.
+                stil = neuerStil();
+                stil.farbe = "#" + hex.toLowerCase();
                 i += 14;
                 continue;
             }
@@ -213,9 +232,9 @@
                 i += 2;
                 continue;
             }
-            // Unbekannter Code: so anzeigen, wie er dasteht - er wirkt im Spiel auch nicht.
-            puffer += text.charAt(i);
-            i += 1;
+            // Unbekannter Code: Minecraft verschluckt die ganze Folge. Wer ihn hier
+            // stehen laesst, zeigt ab da alles um ein Zeichen versetzt an.
+            i += 2;
         }
         spuelen();
     }
@@ -259,7 +278,14 @@
             verwuerfelt[i].textContent = raus;
         }
     }
-    if (!ruhig) { window.setInterval(wuerfeln, 80); }
+    if (ruhig) {
+        // Ohne Bewegung stand bisher der lesbare Klartext da - Paragraf-k
+        // heisst aber "verwuerfelt", und genau das soll man sehen.
+        zeichnen();
+        wuerfeln();
+    } else {
+        window.setInterval(wuerfeln, 80);
+    }
 
     zeichnen();
 })();

@@ -519,3 +519,17 @@ Offen: Via-Plugins werden still auf dem alten Stand gelassen, wenn es fuer die n
 ~~Velocity 4 braucht Java 25 und ein anderes Konfigurationsformat ([ping-passthrough] als Abschnitt, config-version 2.9). Beides wird jetzt aus dem Jar gelesen statt festgeschrieben.~~
 
 Offen: warum Velocity die "Connect"-Nachricht verwirft, ist ungeklaert. Kanal, Servername, Laenge und Konfiguration stimmen nachweislich; Velocity 4 bedient den Kanal laut eigenem Jar. Der Rueckfall macht die Funktion benutzbar, erklaert sie aber nicht.
+
+~~MOTD-Editor in den Servereinstellungen: zwei Zeilen, Minecrafts 16 Farben, sechs Formate, eigene Farbe bei Paper, Zähler ab 45 sichtbaren Zeichen, Live-Vorschau im Stil der Serverliste.~~
+
+~~Vorschau hält sich an Minecrafts Regeln: eine Farbe setzt Formate zurück, unbekannte Codes werden verschluckt, §x nur wo es wirkt. Nur DOM-Knoten, kein HTML aus dem Eingabefeld.~~
+
+~~Schwer: über das MOTD-Feld ließ sich eine zweite Zeile in server.properties erzeugen und damit level-name/difficulty setzen - Python trennt an acht Zeichen mehr als \n und \r. Reichte can_control_server, wirkte beim zweiten Speichern.~~
+
+~~server.properties hatte vier verschiedene Leser mit vier Auslegungen. Jetzt ein properties_service, der Javas Regeln umsetzt: Trennung am ersten ungefluchteten = oder :, volle Fluchtzeichen inkl. \uXXXX, Zeilenfortsetzung, Kodierungserkennung mit Latin-1-Rückfall, Schreibfehler als Warnung statt HTTP 500.~~
+
+~~errors="ignore" löschte beim Speichern jedes Nicht-ASCII-Zeichen der ganzen Datei, wenn sie nicht UTF-8 war - auch in Werten, die niemand angefasst hat.~~
+
+~~Zweite Anmeldung desselben Spielers: ersetzen oder abweisen, als Einstellung unter Netzwerk & Lobby. Vorgabe ersetzen, sonst scheitert der Lobby-Rückweg an "Du bist bereits mit diesem Proxy verbunden!".~~
+
+Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten (lobby_service, transfer_service, server_service); eine wirft bei Latin-1. Gehört auf den properties_service zusammengezogen.
