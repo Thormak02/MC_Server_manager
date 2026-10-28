@@ -836,6 +836,45 @@ def enable_accept_transfers(server: Server) -> None:
     _upsert_server_property(server, "accept-transfers", "true")
 
 
+# server.properties-Schluessel fuer Minecrafts eigenes Pausieren (seit 1.21.2).
+PAUSE_SCHLUESSEL = "pause-when-empty-seconds"
+
+
+def disable_server_pause(server: Server) -> bool:
+    """Minecrafts "pause when empty" abschalten. True, wenn etwas geaendert wurde.
+
+    Der Manager bringt einen eigenen Schlafmodus mit, der den Prozess beendet und ihn
+    beim Beitritt weckt. Minecrafts Pause macht etwas anderes: sie parkt den Haupt-Thread
+    und LAESST DEN PORT OFFEN. Damit antwortet der Server weiter auf Pings - der Manager,
+    der Sleep-Proxy und das Lobby-Menue halten ihn fuer verfuegbar - nimmt aber keinen
+    Spieler mehr auf. Ein Wechsel aus der Lobby bleibt dann stumm haengen, bis der Proxy
+    nach Minuten aufgibt.
+
+    Zwei Mechanismen fuer dieselbe Aufgabe, und nur einer davon ist fuer den Manager
+    sichtbar. Also bleibt der sichtbare.
+    """
+    alt = _server_property(server, PAUSE_SCHLUESSEL)
+    if alt is not None and alt.strip() in {"0", "-1"}:
+        return False
+    _upsert_server_property(server, PAUSE_SCHLUESSEL, "0")
+    return True
+
+
+def _server_property(server: Server, key: str) -> str | None:
+    """Aktueller Wert aus server.properties, oder None wenn es ihn nicht gibt."""
+    try:
+        pfad = Path(server.base_path).expanduser().resolve() / "server.properties"
+        if not pfad.is_file():
+            return None
+        for roh in pfad.read_text(encoding="utf-8", errors="ignore").splitlines():
+            zeile = roh.strip()
+            if zeile.startswith(f"{key}="):
+                return zeile.split("=", 1)[1]
+    except OSError:
+        return None
+    return None
+
+
 def _sync_forge_jvm_args(server: Server) -> str | None:
     base_path = Path(server.base_path).expanduser().resolve()
     args_path = base_path / "user_jvm_args.txt"

@@ -1542,6 +1542,21 @@ def start_server(
         except Exception as exc:  # noqa: BLE001
             console_service.append_output(server.id, f"Transfer-Bereitschaft uebersprungen: {exc}")
 
+        # Minecrafts eigenes Pausieren abschalten - der Manager hat seinen eigenen
+        # Schlafmodus. Eine Pause laesst den Port offen: der Server gilt ueberall als
+        # erreichbar und nimmt trotzdem niemanden mehr auf.
+        try:
+            from app.services import server_service as _srv
+
+            if _srv.disable_server_pause(server):
+                console_service.append_output(
+                    server.id,
+                    "Minecrafts 'pause-when-empty' abgeschaltet - der Schlafmodus des "
+                    "Managers uebernimmt das (eine Pause laesst den Port offen und "
+                    "blockiert stattdessen den Beitritt).")
+        except Exception as exc:  # noqa: BLE001 - darf den Start nie verhindern
+            console_service.append_output(server.id, f"Pause-Einstellung uebersprungen: {exc}")
+
         # Managerweite Zugriffslisten durchsetzen. GENAU HIER, weil der Server noch
         # aus ist: Minecraft liest ops.json/whitelist.json/banned-*.json beim
         # Hochfahren und schreibt sie spaeter selbst - waehrend des Betriebs

@@ -477,3 +477,19 @@ Offen: Testisolation. schedule_service war im conftest nicht neu geladen und fra
 ~~Dateieditor war die dritte Tür zu op/pardon/whitelist off: ops.json und banned-*.json ließen sich mit can_edit_files schreiben, hochladen, neu anlegen und löschen. Auch über die API und über das KI-Werkzeug einstellung_setzen. Jetzt dieselbe Regel wie Konsole und Zeitplan.~~
 
 ~~YAML-Alias-Geflecht: 486 Byte ergaben 137 s Rechenzeit pro Seitenaufruf, auslösbar mit reinem Leserecht. Zu tiefe Verschachtelung endete im 500er.~~
+
+~~Serverliste zeigte bei jedem Eintrag die Lobby-MOTD, 0/100, immer grün - auch bei ausgeschaltetem Server. Das Gateway schob auch Status-Pings in Velocity, und das beantwortet sie wegen ping-passthrough=DISABLED selbst. Jetzt antwortet der gemeinte Server.~~
+
+~~Adresse ohne Route zeigte die Lobby statt "kein Server für diese Adresse" - ein Tippfehler sah aus wie ein laufender Server.~~
+
+~~Status-Pings wurden als Join weitergeleitet: toter Zielport antwortete mit einem Login-Disconnect, den der Client als Status-JSON liest. Kaputter Listeneintrag statt offline.~~
+
+~~Lobby → Paper-Server blieb stumm. Minecrafts pause-when-empty-seconds (Vorgabe 60) parkt den Server, lässt den Port aber offen: überall "online", nimmt aber niemanden auf. Velocity wartete 185 s. Wird jetzt beim Start abgeschaltet - der Schlafmodus des Managers macht das sichtbar.~~
+
+~~Lobby-Plugin konnte nach einem Update veraltet weiterlaufen: der Auto-Build lief im Hintergrund, die Server starteten vorher und nahmen das alte Jar mit. Danach ist die Datei gesperrt. Start wartet jetzt auf den Build; ein wirklich veraltetes Jar wird gemeldet statt verschwiegen.~~
+
+~~/lobby-Rückweg setzte velocity_name ohne Typ- und Portprüfung - zweite Regel für dieselbe Frage. Jetzt eine gemeinsame.~~
+
+Offen: NAS-Abgleich steht seit 6.10. Task mcsm-nas-sync ist aktiv und korrekt eingerichtet, letzter Lauf 6.10. 14:17 mit Ergebnis 0 - der Auslöser hängt, Ursache noch offen.
+
+Offen: 1.21.11-spigot und 26.2-spigot haben kein Gateway und keinen Hostnamen - im Netzwerk nicht erreichbar.
