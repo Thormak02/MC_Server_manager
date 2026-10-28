@@ -507,3 +507,15 @@ Offen: NAS-Abgleich steht seit 6.10. Task mcsm-nas-sync ist aktiv und korrekt ei
 Offen: Absturzschleife des Proxys gehoert aufs Dashboard, nicht nur ins Pruefprotokoll. Velocity starb zwei Stunden im Minutentakt, sichtbar war nur "Lobby startet gerade".
 
 Offen: Via-Plugins werden still auf dem alten Stand gelassen, wenn es fuer die neue Version keinen Build gibt - ohne Hinweis.
+
+~~Kompass-Wechsel auf ein Velocity-Backend ging nie: das "Connect" an den Proxy wird nicht quittiert, und niemand hat nachgesehen. Modpack-Ziele liefen immer ueber den nativen Transfer, deshalb fiel es nicht auf - der 26.3er war das erste Backend im Menue. Jetzt wird nach 2 s geprueft und notfalls nativ transferiert.~~
+
+~~Vier Stellen im Klickpfad des Lobby-Plugins stiegen wortlos aus (Cooldown, kuerzlich abgesagt, Pruefung laeuft, Versand). Jede schreibt jetzt eine Logzeile.~~
+
+~~Platzte die Join-Pruefung im Async-Task, blieb der Spieler fuer immer in der Sperrliste - sein Kompass war danach dauerhaft tot, ohne Meldung. Der umgebende catch deckte nur den Aufruf ab, nicht den Rumpf.~~
+
+~~Via-Plugins: Rueckmeldung von install_velocity_plugins wurde weggeworfen (kein Build fuer die neue Version -> alte Jars bleiben still liegen), und gewaehlt wurde nach der Lobby- statt der hoechsten Netzversion.~~
+
+~~Velocity 4 braucht Java 25 und ein anderes Konfigurationsformat ([ping-passthrough] als Abschnitt, config-version 2.9). Beides wird jetzt aus dem Jar gelesen statt festgeschrieben.~~
+
+Offen: warum Velocity die "Connect"-Nachricht verwirft, ist ungeklaert. Kanal, Servername, Laenge und Konfiguration stimmen nachweislich; Velocity 4 bedient den Kanal laut eigenem Jar. Der Rueckfall macht die Funktion benutzbar, erklaert sie aber nicht.

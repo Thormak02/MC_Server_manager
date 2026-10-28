@@ -90,6 +90,12 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
     // Moderner, namespaced Name (aeltere "BungeeCord"-Schreibweise wird von neuem Paper abgelehnt).
     private static final String BUNGEE_CHANNEL = "bungeecord:main";
 
+    // Wie lange auf das stumme "Connect" gewartet wird, bevor nativ transferiert wird.
+    // 40 Ticks = 2 s: ein Proxy-internes Umschalten ist in Millisekunden durch, ein
+    // Netzwerk-Hop dauert nie so lange. Laenger zu warten hiesse nur, den Spieler
+    // laenger ratlos dastehen zu lassen.
+    private static final long RUECKFALL_TICKS = 40L;
+
     // Live-Status je Server (key -> "online" | "sleeping" | "offline"). Ein Hintergrund-
     // Task pingt regelmaessig ueber das lokale Gateway und fuellt den Cache; das Menue
     // faerbt danach die Eintraege. So sieht man, ob ein Server gerade schlaeft.
@@ -445,7 +451,11 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         if (e.velocityName != null && !e.velocityName.isEmpty()) {
             if (!connectViaProxy(p, e.velocityName)) {
                 p.sendMessage(color("&cWechsel fehlgeschlagen. Bitte erneut versuchen."));
+                return;
             }
+            // Das "Connect" wird vom Proxy NICHT bestaetigt. Also nachsehen, ob es
+            // gewirkt hat - sonst steht der Spieler ohne jede Meldung weiter hier.
+            planeRueckfall(p, e);
             return;
         }
         getLogger().info("Nativer Transfer: " + p.getName() + " -> " + e.host + ":" + e.port);
@@ -454,6 +464,45 @@ public class MCSMLobby extends JavaPlugin implements Listener, TabCompleter {
         } catch (Throwable t) {
             p.sendMessage(color("&cTransfer fehlgeschlagen. Braucht Client 1.20.5+."));
             getLogger().warning("transfer() fehlgeschlagen fuer " + p.getName() + ": " + t);
+        }
+    }
+
+    /**
+     * Nachsehen, ob das stumme "Connect" gewirkt hat - und sonst nativ transferieren.
+     *
+     * <p>Hat der Proxy umgeschaltet, ist der Spieler auf DIESEM Server nicht mehr online;
+     * dann passiert hier nichts. Ist er noch da, hat der Proxy die Nachricht verworfen
+     * (unbekannter Name, abgeschalteter Kanal, irgendetwas im Weg) - und der Spieler
+     * bekommt den Wechsel trotzdem, nur mit kurzem Verbindungsbildschirm.
+     */
+    private void planeRueckfall(Player p, ServerEntry e) {
+        final UUID id = p.getUniqueId();
+        final String ziel = e.velocityName;
+        final String host = e.host;
+        final int port = e.port;
+        try {
+            getServer().getScheduler().runTaskLater(this, () -> {
+                Player jetzt = getServer().getPlayer(id);
+                if (jetzt == null || !jetzt.isOnline()) {
+                    return;   // weg von hier -> der Proxy hat umgeschaltet, alles gut
+                }
+                getLogger().warning("Der Proxy hat auf 'Connect' (" + ziel + ") nicht"
+                    + " reagiert - weiche auf den nativen Transfer nach " + host + ":"
+                    + port + " aus.");
+                jetzt.sendMessage(color("&7Der Proxy antwortet nicht - ich verbinde dich"
+                    + " direkt."));
+                try {
+                    jetzt.transfer(host, port);
+                } catch (Throwable t) {
+                    jetzt.sendMessage(color("&cWechsel fehlgeschlagen. Braucht Client"
+                        + " 1.20.5+."));
+                    getLogger().warning("Rueckfall-transfer() fehlgeschlagen fuer "
+                        + jetzt.getName() + ": " + t);
+                }
+            }, RUECKFALL_TICKS);
+        } catch (Throwable t) {
+            // Scheduler weg (Reload/Shutdown) - dann gibt es eben keine Nachkontrolle.
+            getLogger().warning("Nachkontrolle nicht geplant: " + t);
         }
     }
 
