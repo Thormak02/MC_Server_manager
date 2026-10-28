@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.services import audit_service
 from app.services.auth_service import get_current_user_from_session
 from app.services.schedule_service import (
     _scheduler_job_id,
@@ -410,18 +411,28 @@ def create_schedule_action(
         return RedirectResponse(url=f"/servers/{server_id}/schedules", status_code=303)
 
     try:
-        create_job(
+        job = create_job(
             db,
             server_id=server.id,
             job_type=normalized_type,
             schedule_expression=computed_schedule_expression,
             command_payload=payload,
             is_enabled=True,
+            # Der Job laeuft spaeter mit den Rechten DIESES Nutzers. Ohne die Angabe lief
+            # er als "Manager selbst" und umging damit die Admin-Sperre fuer op/deop/
+            # pardon/whitelist off.
+            created_by_user_id=current_user.id,
         )
     except ValueError as exc:
         push_flash(request, str(exc), "error")
         return RedirectResponse(url=f"/servers/{server_id}/schedules", status_code=303)
 
+    # Das Anlegen wurde bisher nicht protokolliert - bei einem Job, der einen
+    # Konsolenbefehl absetzt, blieb damit keine Spur, wer ihn eingerichtet hat.
+    audit_service.log_action(
+        db, action="schedule.create", user_id=current_user.id, server_id=server.id,
+        details=f"typ={normalized_type} ausdruck={computed_schedule_expression} "
+                f"job={job.id}")
     push_flash(request, "Job angelegt.", "success")
     return RedirectResponse(url=f"/servers/{server_id}/schedules", status_code=303)
 

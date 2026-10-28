@@ -29,6 +29,27 @@ from app.web.routes.pages import build_context, templates
 
 router = APIRouter(include_in_schema=False)
 
+def _ki_nutzer(request: Request, db: Session):
+    """Angemeldeter Nutzer MIT KI-Berechtigung, sonst (None, Antwort).
+
+    Die Rolle wurde vorher erst in ``ai_service.frage`` geprueft - also NACH dem
+    Anlegen des Gespraechs und dem Festhalten der Frage. Ein Nutzer ohne jedes KI-Recht
+    beschrieb damit bei jedem Versuch drei Tabellen, und die Routen unter
+    /api/ki/chats* fragten die Rolle gar nicht ab. Jetzt steht die Pruefung vor dem
+    ersten Schreiben, an einer Stelle fuer alle Routen dieses Moduls.
+    """
+    from app.core.constants import UserRole
+
+    current_user = get_current_user_from_session(request, db)
+    if current_user is None:
+        return None, JSONResponse(status_code=401,
+                                  content={"detail": "Not authenticated"})
+    if (current_user.role or "") == UserRole.VIEW_ONLY.value:
+        return None, JSONResponse(status_code=403, content={
+            "detail": "Fuer KI-Funktionen braucht es mindestens Moderator-Rechte."})
+    return current_user, None
+
+
 def _nutzer(request: Request, db: Session):
     return get_current_user_from_session(request, db)
 
@@ -66,9 +87,9 @@ async def ki_auftrag(request: Request, db: Session = Depends(get_db)):
     damit frei erfinden - ausfuehren liess sich so nichts, aber das Modell liess sich mit
     erfundenen Werkzeugergebnissen fuettern.
     """
-    current_user = _nutzer(request, db)
+    current_user, absage = _ki_nutzer(request, db)
     if current_user is None:
-        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+        return absage
 
     try:
         nutzlast = await request.json()
@@ -127,9 +148,9 @@ async def ki_auftrag(request: Request, db: Session = Depends(get_db)):
 @router.post("/api/ki/ausfuehren", response_class=JSONResponse)
 async def ki_ausfuehren(request: Request, db: Session = Depends(get_db)):
     """Eine bestaetigte Aktion ausfuehren - mit vollstaendig neuer Pruefung."""
-    current_user = _nutzer(request, db)
+    current_user, absage = _ki_nutzer(request, db)
     if current_user is None:
-        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+        return absage
 
     try:
         nutzlast = await request.json()
@@ -159,18 +180,18 @@ async def ki_ausfuehren(request: Request, db: Session = Depends(get_db)):
 @router.get("/api/ki/chats", response_class=JSONResponse)
 def ki_chats(request: Request, db: Session = Depends(get_db)):
     """Die eigenen Gespraeche auflisten."""
-    current_user = _nutzer(request, db)
+    current_user, absage = _ki_nutzer(request, db)
     if current_user is None:
-        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+        return absage
     return JSONResponse({"chats": ai_chat_service.liste(db, user=current_user)})
 
 
 @router.get("/api/ki/chats/{chat_id}", response_class=JSONResponse)
 def ki_chat_laden(request: Request, chat_id: int, db: Session = Depends(get_db)):
     """Ein Gespraech mit allen Zuegen laden."""
-    current_user = _nutzer(request, db)
+    current_user, absage = _ki_nutzer(request, db)
     if current_user is None:
-        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+        return absage
     try:
         return JSONResponse(ai_chat_service.lade(db, user=current_user,
                                                  chat_id=chat_id))
@@ -180,9 +201,9 @@ def ki_chat_laden(request: Request, chat_id: int, db: Session = Depends(get_db))
 
 @router.post("/api/ki/chats/{chat_id}/loeschen", response_class=JSONResponse)
 def ki_chat_loeschen(request: Request, chat_id: int, db: Session = Depends(get_db)):
-    current_user = _nutzer(request, db)
+    current_user, absage = _ki_nutzer(request, db)
     if current_user is None:
-        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+        return absage
     try:
         ai_chat_service.loesche(db, user=current_user, chat_id=chat_id)
     except ai_chat_service.ChatFehler as exc:
@@ -193,9 +214,9 @@ def ki_chat_loeschen(request: Request, chat_id: int, db: Session = Depends(get_d
 @router.post("/api/ki/chats/{chat_id}/titel", response_class=JSONResponse)
 async def ki_chat_umbenennen(request: Request, chat_id: int,
                              db: Session = Depends(get_db)):
-    current_user = _nutzer(request, db)
+    current_user, absage = _ki_nutzer(request, db)
     if current_user is None:
-        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+        return absage
     try:
         nutzlast = await request.json()
     except Exception:  # noqa: BLE001
@@ -212,9 +233,9 @@ async def ki_chat_umbenennen(request: Request, chat_id: int,
 @router.post("/api/ki/chats/{chat_id}/anheften", response_class=JSONResponse)
 async def ki_chat_anheften(request: Request, chat_id: int,
                            db: Session = Depends(get_db)):
-    current_user = _nutzer(request, db)
+    current_user, absage = _ki_nutzer(request, db)
     if current_user is None:
-        return JSONResponse(status_code=401, content={"detail": "Not authenticated"})
+        return absage
     try:
         nutzlast = await request.json()
     except Exception:  # noqa: BLE001

@@ -125,6 +125,23 @@ def sync_all_jobs() -> None:
             _sync_single_job(db, job)
 
 
+def _ist_admin(db: Session, user_id: int | None) -> bool:
+    """Hat dieser Nutzer Admin-Rechte? ``None`` ist KEIN Admin.
+
+    ``None`` heisst hier "unbekannt" (ein Job aus der Zeit vor dieser Spalte), nicht
+    "der Manager selbst". Ein Befehl mit Admin-Vorbehalt wird dann abgewiesen - besser
+    ein Job, der einmal laut scheitert, als einer, der stillschweigend Rechte vergibt.
+    """
+    if user_id is None:
+        return False
+    from app.core.constants import UserRole
+    from app.models.user import User
+
+    person = db.get(User, int(user_id))
+    rolle = (getattr(person, "role", "") or "") if person else ""
+    return rolle in {UserRole.SUPER_ADMIN.value, UserRole.ADMIN.value}
+
+
 def create_job(
     db: Session,
     *,
@@ -133,17 +150,31 @@ def create_job(
     schedule_expression: str,
     command_payload: dict[str, object] | None = None,
     is_enabled: bool = True,
+    created_by_user_id: int | None = None,
 ) -> ScheduledJob:
     normalized_job_type = job_type.strip().lower()
     if normalized_job_type not in _ALLOWED_JOB_TYPES:
         raise ValueError(f"Ungueltiger Job-Typ: {job_type}")
     _parse_trigger(schedule_expression)
+
+    # Den Befehl schon beim Anlegen pruefen, nicht erst nachts bei der Ausfuehrung.
+    # Ohne das konnte sich jeder mit can_console per Zeitplan Operator-Rechte
+    # verschaffen: der Job lief mit initiated_by_user_id=None, und das heisst fuer
+    # process_service "der Manager selbst" - die Admin-Sperre griff dort nie.
+    if normalized_job_type == "command":
+        from app.services.process_service import braucht_admin
+
+        grund = braucht_admin(str((command_payload or {}).get("command") or ""))
+        if grund and not _ist_admin(db, created_by_user_id):
+            raise ValueError(f"Dafuer braucht es Admin-Rechte: {grund}")
+
     job = ScheduledJob(
         server_id=server_id,
         job_type=normalized_job_type,
         schedule_expression=schedule_expression.strip(),
         command_payload=json.dumps(command_payload or {}, ensure_ascii=False),
         is_enabled=is_enabled,
+        created_by_user_id=created_by_user_id,
     )
     db.add(job)
     db.commit()
@@ -251,7 +282,13 @@ def _execute_job(db: Session, job: ScheduledJob) -> tuple[bool, str]:
                 )
         elif job_type == "command":
             command = str(payload.get("command", "") or "")
-            ok, message = send_console_command(db, server, command, initiated_by_user_id=None)
+            # Mit den Rechten DESSEN, der den Job angelegt hat - nicht als "Manager
+            # selbst". Sonst waere der Zeitplan der Weg an der Admin-Sperre vorbei, und
+            # zwar dauerhaft: der Job laeuft danach jede Nacht weiter.
+            ok, message = send_console_command(
+                db, server, command,
+                initiated_by_user_id=job.created_by_user_id,
+                system_fallback=False)
         elif job_type == "backup":
             scope = str(payload.get("backup_scope", "full") or "full")
             pre_action = str(payload.get("pre_action", "none") or "none")

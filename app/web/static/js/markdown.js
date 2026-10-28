@@ -18,67 +18,80 @@
 
     // --- Zeichen innerhalb einer Zeile -------------------------------------
 
-    // Reihenfolge ist wichtig: `code` zuerst, damit Sternchen INNERHALB von Code nicht
-    // als Auszeichnung gelesen werden.
-    const INLINE = [
-        { re: /`([^`]+)`/, bau: function (m) {
-            const el = document.createElement("code");
-            el.textContent = m[1];
-            return el;
-        } },
-        { re: /\*\*([^*]+)\*\*/, bau: function (m) {
-            const el = document.createElement("strong");
-            el.textContent = m[1];
-            return el;
-        } },
-        { re: /__([^_]+)__/, bau: function (m) {
-            const el = document.createElement("strong");
-            el.textContent = m[1];
-            return el;
-        } },
-        { re: /(?<![*\w])\*([^*\n]+)\*(?!\*)/, bau: function (m) {
-            const el = document.createElement("em");
-            el.textContent = m[1];
-            return el;
-        } },
-        { re: /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/, bau: function (m) {
+    /* EIN Ausdruck fuer alle Auszeichnungen, mit g-Flag und einem einzigen Durchgang.
+     *
+     * Vorher lief je Auszeichnung ein eigenes Muster, und zwar in einer Schleife, die
+     * den REST jedes Mal von vorn durchsuchte - bei einer langen Zeile also quadratisch,
+     * und der Schutzzaehler liess das 500-mal zu. Eine Antwort im normalen Rahmen konnte
+     * den Browser-Tab mehrere Sekunden einfrieren (synchron im Haupt-Thread, kein
+     * Abbruch moeglich). Mit einem gemeinsamen Ausdruck gewinnt automatisch der
+     * FRUEHESTE Treffer, und die Reihenfolge der Alternativen entscheidet nur noch bei
+     * gleichem Startpunkt - genau die Semantik, die vorher muehsam nachgebaut wurde.
+     *
+     * Die Laengen sind nach oben begrenzt. Nicht aus Geschmack: ohne Grenze kann ein
+     * Text aus vielen offenen Klammern das Muster zu langem Zurueckspringen bringen.
+     *
+     * Reihenfolge: `code` zuerst, damit Sternchen INNERHALB von Code nicht als
+     * Auszeichnung gelesen werden.
+     */
+    const INLINE = new RegExp([
+        "(`[^`\\n]{1,500}`)",                                  // 1 Code
+        "(\\*\\*[^*\\n]{1,500}\\*\\*)",                        // 2 fett
+        "(__[^_\\n]{1,500}__)",                                // 3 fett
+        "(\\[([^\\]\\n]{1,300})\\]\\((https?://[^\\s)]{1,500})\\))",  // 4,5,6 Link
+        "((?<![*\\w])\\*([^*\\n]{1,500})\\*(?!\\*))",          // 7,8 kursiv
+    ].join("|"), "g");
+
+    function _codeKnoten(text) {
+        const el = document.createElement("code");
+        el.textContent = text;
+        return el;
+    }
+
+    function _starkKnoten(text) {
+        const el = document.createElement("strong");
+        el.textContent = text;
+        return el;
+    }
+
+    /* Aus einem Treffer des gemeinsamen Ausdrucks den passenden Knoten bauen. */
+    function knotenFuerTreffer(m) {
+        if (m[1] !== undefined) { return _codeKnoten(m[1].slice(1, -1)); }
+        if (m[2] !== undefined) { return _starkKnoten(m[2].slice(2, -2)); }
+        if (m[3] !== undefined) { return _starkKnoten(m[3].slice(2, -2)); }
+        if (m[4] !== undefined) {
+            // Das Muster laesst nur http:// und https:// zu - javascript:, data: und
+            // vbscript: koennen hier also gar nicht ankommen und bleiben Text.
             const el = document.createElement("a");
-            el.textContent = m[1];
-            el.href = m[2];
+            el.textContent = m[5];
+            el.href = m[6];
             el.target = "_blank";
             el.rel = "noopener noreferrer";
             return el;
-        } },
-    ];
-
-    /* Eine Zeile in Textknoten und Auszeichnungen zerlegen.
-     *
-     * Sucht jeweils den FRUEHESTEN Treffer aller Muster und arbeitet sich von links nach
-     * rechts durch. Dadurch ist die Reihenfolge der Muster nur bei gleichem Startpunkt
-     * entscheidend, und verschachtelte Faelle brechen nicht die Zeile. */
-    function inlineAnhaengen(ziel, text) {
-        let rest = String(text == null ? "" : text);
-        let schutz = 0;
-        while (rest && schutz < 500) {
-            schutz += 1;
-            let bester = null;
-            for (let i = 0; i < INLINE.length; i += 1) {
-                const treffer = INLINE[i].re.exec(rest);
-                if (!treffer) { continue; }
-                if (!bester || treffer.index < bester.treffer.index) {
-                    bester = { treffer: treffer, muster: INLINE[i] };
-                }
-            }
-            if (!bester) { break; }
-            const t = bester.treffer;
-            if (t.index > 0) {
-                ziel.appendChild(document.createTextNode(rest.slice(0, t.index)));
-            }
-            ziel.appendChild(bester.muster.bau(t));
-            rest = rest.slice(t.index + t[0].length);
         }
-        if (rest) {
-            ziel.appendChild(document.createTextNode(rest));
+        const el = document.createElement("em");
+        el.textContent = m[8];
+        return el;
+    }
+
+    /* Eine Zeile in Textknoten und Auszeichnungen zerlegen - ein Durchgang. */
+    function inlineAnhaengen(ziel, text) {
+        const quelle = String(text == null ? "" : text);
+        INLINE.lastIndex = 0;
+        let zuletzt = 0;
+        let treffer;
+        while ((treffer = INLINE.exec(quelle)) !== null) {
+            if (treffer.index > zuletzt) {
+                ziel.appendChild(document.createTextNode(
+                    quelle.slice(zuletzt, treffer.index)));
+            }
+            ziel.appendChild(knotenFuerTreffer(treffer));
+            zuletzt = treffer.index + treffer[0].length;
+            // Ein leerer Treffer wuerde die Schleife nicht weiterbringen.
+            if (treffer[0].length === 0) { INLINE.lastIndex += 1; }
+        }
+        if (zuletzt < quelle.length) {
+            ziel.appendChild(document.createTextNode(quelle.slice(zuletzt)));
         }
     }
 
@@ -90,7 +103,24 @@
     const ZITAT = /^>\s?(.*)$/;
     const TRENNER = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
     const CODE_ZAUN = /^\s*```(.*)$/;
-    const TABELLE_TRENNER = /^\s*\|?[\s:|-]+\|[\s:|-]*$/;
+    /* Die Trennzeile einer Tabelle ("|---|---|") Zeichen fuer Zeichen pruefen.
+     *
+     * Als Ausdruck (`^\s*\|?[\s:|-]+\|[\s:|-]*$`) lief das auf einer Zeile aus
+     * reinem Leerraum quadratisch: mehrere Zeichenklassen passen auf dasselbe
+     * Leerzeichen, und ohne Treffer am Ende probiert der Ausdruck jede Aufteilung
+     * durch. Von Hand geprueft ist es ein einziger Durchlauf.
+     */
+    function istTabellenTrenner(zeile) {
+        const roh = String(zeile == null ? "" : zeile).trim();
+        if (!roh || roh.indexOf("|") === -1 || roh.indexOf("-") === -1) { return false; }
+        for (let i = 0; i < roh.length; i += 1) {
+            const c = roh.charAt(i);
+            if (c !== "|" && c !== "-" && c !== ":" && c !== " " && c !== "\t") {
+                return false;
+            }
+        }
+        return true;
+    }
 
     function zellen(zeile) {
         let roh = zeile.trim();
@@ -167,7 +197,7 @@
 
             // Tabelle: Kopfzeile, Trennzeile, dann Datenzeilen.
             if (zeile.indexOf("|") !== -1 && i + 1 < zeilen.length
-                    && TABELLE_TRENNER.test(zeilen[i + 1])) {
+                    && istTabellenTrenner(zeilen[i + 1])) {
                 const tabelle = document.createElement("table");
                 tabelle.className = "md-tabelle";
                 const kopf = document.createElement("thead");

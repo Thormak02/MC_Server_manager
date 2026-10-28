@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event, RLock, Thread
-from time import sleep
+from time import monotonic, sleep
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -1135,9 +1135,54 @@ def _psutil_prozess(pid: int):
         except Exception:  # noqa: BLE001
             return None
         if len(_PSUTIL_CACHE) > 256:
-            _PSUTIL_CACHE.clear()   # beendete Prozesse nicht ewig mitschleppen
+            # Nur BEENDETE Prozesse wegraeumen. Ein vollstaendiges Leeren nahm allen
+            # laufenden Servern die Vergleichsbasis fuer cpu_percent - die CPU-Spalte
+            # stand danach einen Durchgang lang fuer alle auf 0,0 %, obwohl sie Last
+            # hatten.
+            for kennung in [k for k, v in _PSUTIL_CACHE.items()
+                            if not _laeuft_noch(v)]:
+                _PSUTIL_CACHE.pop(kennung, None)
+            if len(_PSUTIL_CACHE) > 512:
+                # Wenn selbst dann noch zu viele leben, ist etwas grundsaetzlich anders
+                # als gedacht - dann lieber leeren als unbegrenzt wachsen.
+                _PSUTIL_CACHE.clear()
         _PSUTIL_CACHE[pid] = neu
         return neu
+
+
+def _laeuft_noch(prozess) -> bool:
+    try:
+        return bool(prozess.is_running())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+# Wie lange die Liste der Kindprozesse eines Servers gilt, bevor sie neu erhoben wird.
+#
+# ``children(recursive=True)`` liest jedes Mal die KOMPLETTE Prozesstabelle des Rechners
+# (gemessen 12-16 ms). Bei 20 Servern und mehreren offenen Tabs, die alle fuenf Sekunden
+# aktualisieren, summiert sich das. Der Prozessbaum eines laufenden Servers aendert sich
+# aber praktisch nie - Java startet seine Kinder beim Hochlaufen und dann nicht mehr.
+KINDER_GUELTIG_SEKUNDEN = 20.0
+_KINDER_CACHE: dict[int, tuple[float, list[int]]] = {}
+
+
+def _baum_pids(pid: int, wurzel) -> list[int]:
+    """Die PIDs des Prozessbaums - fuer kurze Zeit gemerkt."""
+    jetzt = monotonic()
+    gemerkt = _KINDER_CACHE.get(pid)
+    if gemerkt is not None and jetzt - gemerkt[0] < KINDER_GUELTIG_SEKUNDEN:
+        return gemerkt[1]
+    pids = [pid]
+    try:
+        pids += [kind.pid for kind in wurzel.children(recursive=True)][:_BAUM_MAX]
+    except Exception:  # noqa: BLE001 - ohne Kinder messen wir eben nur die Wurzel
+        pass
+    with _PSUTIL_LOCK:
+        if len(_KINDER_CACHE) > 256:
+            _KINDER_CACHE.clear()
+        _KINDER_CACHE[pid] = (jetzt, pids)
+    return pids
 
 
 def _baum_verbrauch(pid: int) -> tuple[float, float]:
@@ -1157,11 +1202,7 @@ def _baum_verbrauch(pid: int) -> tuple[float, float]:
     if wurzel is None:
         return 0.0, 0.0
 
-    pids = [pid]
-    try:
-        pids += [kind.pid for kind in wurzel.children(recursive=True)][:_BAUM_MAX]
-    except Exception:  # noqa: BLE001 - ohne Kinder messen wir eben nur die Wurzel
-        pass
+    pids = _baum_pids(pid, wurzel)
 
     cpu = 0.0
     speicher = 0.0
@@ -1731,15 +1772,124 @@ def request_restart_by_server_id(
         )
 
 
+# Konsolenbefehle, die Rechte VERGEBEN oder Zugangssperren aufheben. Sie duerfen nur von
+# Admins ausgefuehrt werden - ein Moderator darf einen Server steuern, aber nicht
+# bestimmen, wer Operator wird oder wer wieder hereinkommt.
+#
+# ``pardon-ip`` steht mit dabei, weil es dieselbe Tat fuer IP-Sperren ist; eine Regel, die
+# nur ``pardon`` nennt, waere mit einem Bindestrich umgehbar.
+RECHTE_BEFEHLE = frozenset({"op", "deop", "pardon", "pardon-ip"})
+
+# ``whitelist`` ist nur in einer Form gesperrt: "off" oeffnet den Server fuer alle.
+# Hinzufuegen und Nachsehen bleibt Moderatorenarbeit.
+WHITELIST_GESPERRT = frozenset({"off"})
+
+
+def _befehl_wortfolge(command: str) -> list[str]:
+    """Den Befehl in Kleinbuchstaben zerlegen, ohne Schraegstrich und Namensraum.
+
+    Minecraft nimmt ``/op X``, ``op X`` und auf Paper auch ``minecraft:op X`` - alle drei
+    sind dieselbe Tat. Ohne das Abschneiden des Namensraums waere die Sperre mit einem
+    Praefix umgehbar.
+    """
+    roh = (command or "").strip().lstrip("/")
+    teile = roh.split()
+    return [t.split(":")[-1].lower() for t in teile]
+
+
+def braucht_admin(command: str) -> str:
+    """Verlangt dieser Befehl Admin-Rechte? Rueckgabe: der Grund, sonst "".
+
+    Geprueft wird das erste Wort UND die Stelle hinter ``run`` - damit
+    ``execute as @a run op X`` nicht an der Sperre vorbeikommt. Was NICHT erkannt wird:
+    ein Befehl, der ueber eine Datapack-Funktion ausgefuehrt wird (``function ns:tut_was``);
+    dort steht der eigentliche Befehl in einer Datei und ist von hier aus nicht sichtbar.
+    """
+    worte = _befehl_wortfolge(command)
+    if not worte:
+        return ""
+
+    def _pruefe(wort: str, danach: str | None) -> str:
+        if wort in RECHTE_BEFEHLE:
+            return (f"'{wort}' vergibt Rechte oder hebt eine Sperre auf und ist "
+                    f"Admin-Sache.")
+        if wort == "whitelist" and (danach or "") in WHITELIST_GESPERRT:
+            return ("'whitelist off' oeffnet den Server fuer alle und ist Admin-Sache.")
+        return ""
+
+    grund = _pruefe(worte[0], worte[1] if len(worte) > 1 else None)
+    if grund:
+        return grund
+
+    # Hinter "run" nur dann suchen, wenn der Befehl mit "execute" beginnt - das ist der
+    # einzige, der einen weiteren Befehl ausfuehrt. Vorher wurde ueberall nach "run"
+    # gesucht, und damit war eine Chatnachricht wie "say wer will run op werden?"
+    # gesperrt, mit der irrefuehrenden Begruendung, sie vergebe Rechte.
+    if worte[0] != "execute":
+        return ""
+    for i, wort in enumerate(worte):
+        if wort == "run" and i + 1 < len(worte):
+            grund = _pruefe(worte[i + 1],
+                            worte[i + 2] if i + 2 < len(worte) else None)
+            if grund:
+                return grund
+    return ""
+
+
+def _darf_befehl(db: Session, user_id: int | None, command: str,
+                system_fallback: bool = True) -> str:
+    """Darf dieser Nutzer diesen Befehl senden? Rueckgabe: Absage-Text, sonst "".
+
+    Geprueft wird hier, nicht in der Oberflaeche: sonst waere die Konsolenseite der Weg
+    an der Sperre vorbei, und der KI-Agent haette eine strengere Regel als ein Klick.
+
+    ``user_id is None`` bedeutet je nach Aufrufer Verschiedenes, deshalb
+    ``system_fallback``:
+
+    * ``True`` - der Manager handelt aus sich heraus (Automatik ohne Nutzerbezug). Er darf.
+    * ``False`` - es GAB einen Nutzer, er ist nur nicht bekannt (ein Zeitplan-Job aus der
+      Zeit vor der Spalte ``created_by_user_id``). Dann wird abgewiesen. Dass beides
+      vorher dasselbe ``None`` war, war das Loch: ein Job mit ``op`` lief als "Manager
+      selbst" und umging die Sperre vollstaendig.
+    """
+    grund = braucht_admin(command)
+    if not grund:
+        return ""
+    if user_id is None:
+        if system_fallback:
+            return ""
+        return (f"Dafuer braucht es Admin-Rechte: {grund} Bei diesem Zeitplan-Job ist "
+                f"nicht hinterlegt, wer ihn angelegt hat - bitte neu anlegen.")
+    from app.core.constants import UserRole
+    from app.models.user import User
+
+    person = db.get(User, int(user_id))
+    rolle = (getattr(person, "role", "") or "") if person else ""
+    if rolle in {UserRole.SUPER_ADMIN.value, UserRole.ADMIN.value}:
+        return ""
+    return f"Dafuer braucht es Admin-Rechte: {grund}"
+
+
 def send_console_command(
     db: Session,
     server: Server,
     command: str,
     initiated_by_user_id: int | None,
+    *,
+    system_fallback: bool = True,
 ) -> tuple[bool, str]:
     normalized = command.strip()
     if not normalized:
         return False, "Leerer Befehl."
+
+    absage = _darf_befehl(db, initiated_by_user_id, normalized,
+                          system_fallback=system_fallback)
+    if absage:
+        audit_service.log_action(
+            db, action="server.console_command_denied",
+            user_id=initiated_by_user_id, server_id=server.id,
+            details=f"command={normalized}")
+        return False, absage
 
     if normalized.lower() in {"/restart", "restart"}:
         return queue_restart(

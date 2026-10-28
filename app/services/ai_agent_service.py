@@ -63,6 +63,13 @@ class Werkzeug:
     """Ein Satz fuer die Bestaetigung: was ist danach anders und was laesst sich nicht
     zurueckdrehen."""
 
+    zusatzpruefung: Callable[..., None] | None = None
+    """Eine Pruefung, die von den PARAMETERN abhaengt und nicht vom Werkzeug allein.
+
+    Beispiel Konsolenbefehl: das Werkzeug braucht Steuerrechte, aber 'op' und 'whitelist
+    off' verlangen Admin. Ohne diesen Haken erfaehrt der Nutzer das erst NACH dem
+    Bestaetigen - der Vorschlag soll aber schon sagen, dass es nicht geht."""
+
     def schema(self) -> dict:
         felder = dict(self.felder)
         pflicht = list(self.pflicht)
@@ -199,22 +206,58 @@ def _lies_server_details(db: Session, user: User, server: Server, _p: dict) -> d
     }
 
 
+# Wie gross eine Datei sein darf, die der Agent ganz einliest. Darueber wird nur der
+# Anfang gelesen: ``read_text_file`` holt die VOLLSTAENDIGE Datei in den Speicher, um
+# daraus 12.000 Zeichen zurueckzugeben - bei einer 8-MB-Datei schon eine Speicherspitze
+# von 26 MB, bei einem gewachsenen Log entsprechend mehr. Fuer Logs ist ohnehin
+# ``log_ansehen`` das richtige Werkzeug, das Kopf und Ende liest.
+MAX_DATEI_BYTES = 1_000_000
+
+
 def _lies_datei(db: Session, user: User, server: Server, p: dict) -> dict:
-    from app.services.file_service import read_text_file
+    from app.services.file_service import validate_server_relative_path
 
     pfad = str(p.get("pfad") or "").strip()
     if not pfad:
         raise AgentFehler("Es wurde kein Dateipfad angegeben.")
     try:
-        # read_text_file prueft den Pfad gegen den Serverordner - der Agent kann damit
-        # nicht aus dem Serverordner herauslesen.
-        datei = read_text_file(server, pfad)
+        # Prueft den Pfad gegen den Serverordner (kein Ausbruch, kein absoluter Pfad,
+        # keine Binaerdatei) - und liefert den aufgeloesten Pfad, damit die GROESSE
+        # geprueft werden kann, bevor etwas gelesen wird.
+        ziel = validate_server_relative_path(server, pfad)
     except ValueError as exc:
         raise AgentFehler(str(exc)) from exc
-    inhalt = datei.content or ""
-    gekuerzt = len(inhalt) > MAX_ERGEBNIS
-    return {"pfad": datei.relative_path, "inhalt": inhalt[:MAX_ERGEBNIS],
-            "gekuerzt": gekuerzt}
+
+    try:
+        groesse = ziel.stat().st_size
+    except OSError as exc:
+        raise AgentFehler(f"Die Datei konnte nicht gelesen werden: {exc}") from exc
+
+    # IMMER begrenzt lesen, nicht nur oberhalb der Groessengrenze.
+    #
+    # Vorher wurde unterhalb der Grenze ueber read_text_file gelesen, und das holt die
+    # ganze Datei in den Speicher. Eine Datei, die ZWISCHEN stat() und open() waechst -
+    # ein Log, in das der Server gerade schreibt -, kam damit trotzdem vollstaendig in
+    # den Speicher; gemessen wurde das Achtfache der Grenze. Ein einziger begrenzter
+    # Lesevorgang kennt dieses Fenster nicht.
+    try:
+        with ziel.open("r", encoding="utf-8", errors="replace") as f:
+            inhalt = f.read(MAX_ERGEBNIS + 1)
+    except OSError as exc:
+        raise AgentFehler(f"Die Datei konnte nicht gelesen werden: {exc}") from exc
+
+    gekuerzt = len(inhalt) > MAX_ERGEBNIS or groesse > MAX_DATEI_BYTES
+    ergebnis: dict = {"pfad": pfad.replace("\\", "/"),
+                      "inhalt": inhalt[:MAX_ERGEBNIS], "gekuerzt": gekuerzt}
+    if groesse > MAX_DATEI_BYTES:
+        ergebnis["groesse_bytes"] = groesse
+        ergebnis["hinweis"] = (
+            f"Die Datei ist {groesse / 1024 / 1024:.1f} MB gross - nur der Anfang wurde "
+            f"gelesen. Fuer Logs ist 'log_ansehen' das richtige Werkzeug, es liest Kopf "
+            f"UND Ende.")
+    elif gekuerzt:
+        ergebnis["hinweis"] = f"Nur die ersten {MAX_ERGEBNIS} Zeichen der Datei."
+    return ergebnis
 
 
 def _lies_dateiliste(db: Session, user: User, server: Server, _p: dict) -> dict:
@@ -332,6 +375,25 @@ def _tue_befehl(db: Session, user: User, server: Server, p: dict) -> dict:
     if not ok:
         raise AgentFehler(meldung)
     return {"meldung": meldung, "befehl": befehl}
+
+
+def _pruefe_konsolenbefehl(db: Session, user: User, server: Server, p: dict) -> None:
+    """Befehle, die Rechte vergeben oder Sperren aufheben, sind Admin-Sache.
+
+    Die Regel selbst steht in process_service (``braucht_admin``) und greift dort fuer
+    JEDEN Weg - auch fuer die Konsolenseite. Hier wird sie nur vorgezogen, damit der
+    Vorschlag gleich sagt, dass es nicht geht, statt erst bei der Ausfuehrung.
+    """
+    from app.core.constants import UserRole
+    from app.services.process_service import braucht_admin
+
+    grund = braucht_admin(str(p.get("befehl") or ""))
+    if not grund:
+        return
+    if (getattr(user, "role", "") or "") in {UserRole.SUPER_ADMIN.value,
+                                             UserRole.ADMIN.value}:
+        return
+    raise AgentFehler(f"Dafuer braucht es Admin-Rechte: {grund}")
 
 
 def _tue_einstellung(db: Session, user: User, server: Server, p: dict) -> dict:
@@ -486,6 +548,25 @@ def _lies_versionen(db: Session, user: User, server: Server, p: dict) -> dict:
     return {"fassungen": fassungen[:12], "mc_version": mc_version, "loader": loader}
 
 
+def _pruefe_inhaltstyp(server: Server, art: str) -> None:
+    """Passt dieser Inhaltstyp ueberhaupt zu diesem Server?
+
+    Ohne diese Pruefung legte der Agent ein Plugin in den plugins-Ordner eines
+    Fabric-Servers - der liest den Ordner nie, und die Meldung "installiert, wirksam
+    beim naechsten Start" war trotzdem da. Der Nutzer sucht den Fehler dann im Plugin.
+    """
+    from app.services import content_service as cs
+
+    if art in {"datapack", "resourcepack"}:
+        return   # loaderunabhaengig
+    if cs._expected_server_loader(server, art) is None:
+        passend = {"mod": "Mods", "plugin": "Plugins",
+                   "modpack": "Modpacks"}.get(art, art)
+        raise AgentFehler(
+            f"'{server.name}' ist ein {server.server_type}-Server und laedt keine "
+            f"{passend}. Pruefe mit server_details, welche Art hier passt.")
+
+
 def _tue_inhalt_installieren(db: Session, user: User, server: Server, p: dict) -> dict:
     from app.services import content_service as cs
 
@@ -495,6 +576,22 @@ def _tue_inhalt_installieren(db: Session, user: User, server: Server, p: dict) -
     art = str(p.get("typ") or "plugin").strip().lower()
     if not projekt_id or not version_id:
         raise AgentFehler("Projekt-ID und Version-ID sind beide noetig.")
+    _pruefe_inhaltstyp(server, art)
+
+    if art == "resourcepack":
+        # Resource Packs werden NICHT als Datei abgelegt, sondern ueber
+        # server.properties gesetzt (resource-pack + resource-pack-sha1) - genau wie in
+        # der Oberflaeche. Ohne diesen Zweig landete die Datei in einem Ordner, den der
+        # Server nicht liest, und die Erfolgsmeldung war eine Falschmeldung.
+        try:
+            eintrag = cs.set_server_resource_pack(db, server, anbieter, projekt_id,
+                                                  version_id, user.id)
+        except ValueError as exc:
+            raise AgentFehler(str(exc)) from exc
+        return {"meldung": f"Resource Pack '{eintrag.name or projekt_id}' in "
+                           f"server.properties von '{server.name}' gesetzt. Wirksam beim "
+                           f"naechsten Start.",
+                "inhalt_id": eintrag.id}
 
     try:
         if anbieter == "modrinth":
@@ -542,6 +639,9 @@ def _tue_inhalt_entfernen(db: Session, user: User, server: Server, p: dict) -> d
         cs.delete_installed_content(db, server, eintrag, user.id)
     except ValueError as exc:
         raise AgentFehler(str(exc)) from exc
+    if (eintrag.content_type or "").strip().lower() == "resourcepack":
+        return {"meldung": f"Resource Pack '{name}' aus server.properties von "
+                           f"'{server.name}' entfernt. Wirksam beim naechsten Start."}
     return {"meldung": f"'{name}' wurde von '{server.name}' entfernt."}
 
 
@@ -552,11 +652,56 @@ def _b_inhalt_installieren(db: Session, server: Server, p: dict) -> str:
 
 
 def _b_inhalt_entfernen(db: Session, server: Server, p: dict) -> str:
+    """Beschreibung der Tat - robust, denn hier darf nichts scheitern.
+
+    ``int(...)`` auf einer nicht-numerischen ID warf vorher eine ValueError, und die
+    riss die ganze Anfrage mit: HTTP 500, obwohl die Antwort des Modells schon bezahlt
+    war. Zusaetzlich wurde der Server des Eintrags nicht geprueft, weshalb der
+    Bestaetigungstext Namen von Inhalten FREMDER Server nennen konnte.
+    """
     from app.models.installed_content import InstalledContent
 
-    eintrag = db.get(InstalledContent, int(p.get("inhalt_id") or 0) or 0)
-    name = (eintrag.name or eintrag.file_name) if eintrag else str(p.get("inhalt_id"))
+    try:
+        kennung = int(p.get("inhalt_id") or 0)
+    except (TypeError, ValueError):
+        kennung = 0
+    eintrag = db.get(InstalledContent, kennung) if kennung else None
+    if eintrag is None or eintrag.server_id != server.id:
+        return (f"Einen Inhalt mit der ID {p.get('inhalt_id')!r} gibt es auf "
+                f"'{server.name}' nicht.")
+    name = eintrag.name or eintrag.file_name or str(kennung)
+    if (eintrag.content_type or "").strip().lower() == "resourcepack":
+        return (f"Resource Pack '{name}' aus server.properties von '{server.name}' "
+                f"entfernen.")
     return f"'{name}' von '{server.name}' entfernen - die Datei wird geloescht."
+
+
+def _pruefe_inhalt_rechte(db: Session, user: User, server: Server, p: dict) -> None:
+    """Resource Packs brauchen Dateirechte, denn sie werden in server.properties gesetzt.
+
+    Das Werkzeug verlangt sonst nur Steuerrechte - damit haette ein Nutzer ohne
+    Dateirecht drei Schluessel in server.properties ueberschrieben und ein vorhandenes
+    Resource Pack zerstoert.
+    """
+    art = str(p.get("typ") or "").strip().lower()
+    if art != "resourcepack":
+        return
+    _recht_pruefen(db, user, server, "dateien")
+
+
+def _pruefe_entfernen_rechte(db: Session, user: User, server: Server, p: dict) -> None:
+    """Wie oben, nur dass die Art hier am Eintrag haengt und nicht am Parameter."""
+    from app.models.installed_content import InstalledContent
+
+    try:
+        kennung = int(p.get("inhalt_id") or 0)
+    except (TypeError, ValueError):
+        return
+    eintrag = db.get(InstalledContent, kennung) if kennung else None
+    if eintrag is None or eintrag.server_id != server.id:
+        return
+    if (eintrag.content_type or "").strip().lower() == "resourcepack":
+        _recht_pruefen(db, user, server, "dateien")
 
 
 # ------------------------------------------------------------- Beschreibungen
@@ -694,10 +839,12 @@ _eintragen(Werkzeug(
 _eintragen(Werkzeug(
     name="konsolenbefehl", lesend=False, recht="steuern", gefahr="hoch",
     beschreibung="Einen Befehl auf der Serverkonsole ausfuehren, z.B. 'save-all' oder "
-                 "'whitelist reload'.",
+                 "'whitelist reload'. 'op', 'deop', 'pardon' und 'whitelist off' "
+                 "verlangen Admin-Rechte - ein Moderator kann sie nicht ausfuehren.",
     felder={"befehl": {"type": "string",
                        "description": "Der Befehl ohne fuehrenden Schraegstrich"}},
     pflicht=["befehl"], ausfuehren=_tue_befehl, beschreibe=_b_befehl,
+    zusatzpruefung=_pruefe_konsolenbefehl,
     nachwirkung="Ein Konsolenbefehl wirkt sofort und laesst sich nicht zurueckdrehen. "
                 "Lies ihn Wort fuer Wort, bevor du bestaetigst."))
 
@@ -766,6 +913,7 @@ _eintragen(Werkzeug(
                     "enum": ["plugin", "mod", "datapack", "modpack", "resourcepack"]}},
     pflicht=["anbieter", "projekt_id", "version_id"],
     ausfuehren=_tue_inhalt_installieren, beschreibe=_b_inhalt_installieren,
+    zusatzpruefung=_pruefe_inhalt_rechte,
     nachwirkung="Legt eine Datei im plugins-/mods-Ordner an. Wirksam beim naechsten "
                 "Start; Abhaengigkeiten werden bei Mods mitinstalliert."))
 
@@ -775,7 +923,7 @@ _eintragen(Werkzeug(
                  "aus inhalte_auflisten.",
     felder={"inhalt_id": {"type": "integer", "description": "ID aus inhalte_auflisten"}},
     pflicht=["inhalt_id"], ausfuehren=_tue_inhalt_entfernen,
-    beschreibe=_b_inhalt_entfernen,
+    beschreibe=_b_inhalt_entfernen, zusatzpruefung=_pruefe_entfernen_rechte,
     nachwirkung="Die Datei wird geloescht. Was ein Plugin in der Welt angelegt hat "
                 "(Konfiguration, Daten, gesetzte Bloecke) bleibt liegen und kann ohne das "
                 "Plugin unbrauchbar oder fehlerhaft sein. Vorher sichern."))
@@ -839,6 +987,8 @@ def _fuehre_lesend_aus(db: Session, user: User, name: str, eingabe: dict) -> dic
         server = (_server_holen(db, user, eingabe.get("server_id"))
                   if werkzeug.braucht_server else None)
         _recht_pruefen(db, user, server, werkzeug.recht)
+        if werkzeug.zusatzpruefung is not None:
+            werkzeug.zusatzpruefung(db, user, server, eingabe)
         if werkzeug.ausfuehren is None:
             return {"fehler": "Dieses Werkzeug kann nichts tun."}
         return werkzeug.ausfuehren(db, user, server, eingabe)
@@ -978,6 +1128,8 @@ def _baue_vorschlag(db: Session, user: User, aufruf: dict) -> dict:
         server = (_server_holen(db, user, eingabe.get("server_id"))
                   if werkzeug.braucht_server else None)
         _recht_pruefen(db, user, server, werkzeug.recht)
+        if werkzeug.zusatzpruefung is not None:
+            werkzeug.zusatzpruefung(db, user, server, eingabe)
         vorschlag["server_name"] = server.name if server else None
         vorschlag["beschreibung"] = (werkzeug.beschreibe(db, server, eingabe)
                                      if werkzeug.beschreibe else werkzeug.beschreibung)
@@ -1013,6 +1165,8 @@ def fuehre_aus(db: Session, *, user: User, werkzeug_name: str, parameter: dict) 
     server = (_server_holen(db, user, (parameter or {}).get("server_id"))
               if werkzeug.braucht_server else None)
     _recht_pruefen(db, user, server, werkzeug.recht)
+    if werkzeug.zusatzpruefung is not None:
+        werkzeug.zusatzpruefung(db, user, server, parameter or {})
 
     audit_service.log_action(
         db, action=f"ai.agent.{werkzeug.name}", user_id=user.id,

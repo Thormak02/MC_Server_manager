@@ -21,3 +21,15 @@ class ScheduledJob(Base):
         DateTime(timezone=True),
         server_default=func.now(),
     )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    """Wer den Job angelegt hat.
+
+    Noetig, weil ein Job SPAETER laeuft: ohne diese Angabe wurde er mit
+    ``initiated_by_user_id=None`` ausgefuehrt, und das heisst in
+    process_service._darf_befehl "der Manager selbst" - die Admin-Sperre fuer op/deop/
+    pardon/whitelist off griff dort also nie. Ein Nutzer mit can_console konnte sich so
+    per Zeitplan Operator-Rechte verschaffen. Jetzt laeuft der Job mit den Rechten
+    dessen, der ihn angelegt hat."""

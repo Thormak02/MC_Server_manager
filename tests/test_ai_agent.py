@@ -16,6 +16,8 @@ wichtigsten Tests:
 
 Kein Test spricht mit der echten API; der Anbieter wird ersetzt.
 """
+from pathlib import Path
+
 import pytest
 
 
@@ -604,6 +606,113 @@ def test_seite_bleibt_fuer_view_only_leer(client, tmp_path):
     assert seite.status_code == 200
     assert "Moderator-Rechte" in seite.text
     assert "ki-senden" not in seite.text
+
+
+# ------------------------------------------- Dateizugriff: Grenzen des Werkzeugs
+
+def test_kein_ausbruch_aus_dem_serverordner(client, tmp_path):
+    """Die Zusage lautet "nur innerhalb des Managers". Der Pfad kommt vom Modell und
+    damit mittelbar aus einer Nutzereingabe - jeder Ausbruchsversuch muss abprallen."""
+    from app.db.session import SessionLocal
+    from app.services import ai_agent_service as aas
+
+    draussen = tmp_path / "geheim_draussen.txt"
+    draussen.write_text("DAS DARF NIE AN DIE KI", encoding="utf-8")
+
+    with SessionLocal() as db:
+        person = _nutzer(db, name="ausbruch")
+        server = _server(db, tmp_path, slug="ausbruch", port=25791)
+
+        for pfad in ("../geheim_draussen.txt",
+                     "..\\geheim_draussen.txt",
+                     "plugins/../../geheim_draussen.txt",
+                     "C:/Windows/win.ini",
+                     "/etc/passwd",
+                     "//friedrichnas/FriedrichNAS/geheim.txt"):
+            ergebnis = aas._fuehre_lesend_aus(db, person, "datei_lesen",
+                                              {"server_id": server.id, "pfad": pfad})
+            assert "fehler" in ergebnis, f"{pfad} wurde gelesen!"
+            assert "DARF NIE" not in str(ergebnis)
+
+        # Und die legitime Datei geht.
+        ok = aas._fuehre_lesend_aus(db, person, "datei_lesen",
+                                    {"server_id": server.id,
+                                     "pfad": "server.properties"})
+        assert "fehler" not in ok
+        assert "view-distance" in ok["inhalt"]
+
+
+def test_binaerdatei_wird_abgewiesen(client, tmp_path):
+    """Eine Plugin-Datenbank als Text zu lesen liefert Muell, kostet Token und koennte
+    Bruchstuecke von Spielerdaten hinausschicken."""
+    from app.db.session import SessionLocal
+    from app.services import ai_agent_service as aas
+
+    with SessionLocal() as db:
+        person = _nutzer(db, name="binaer")
+        server = _server(db, tmp_path, slug="binaer", port=25792)
+        ordner = Path(server.base_path) / "plugins" / "Irgendwas"
+        ordner.mkdir(parents=True, exist_ok=True)
+        (ordner / "daten.db").write_bytes(b"SQLite format 3\x00" + bytes(range(256)) * 20)
+
+        ergebnis = aas._fuehre_lesend_aus(db, person, "datei_lesen",
+                                          {"server_id": server.id,
+                                           "pfad": "plugins/Irgendwas/daten.db"})
+
+    assert "fehler" in ergebnis
+    assert "Text" in ergebnis["fehler"]
+
+
+def test_grosse_datei_wird_nicht_ganz_eingelesen(client, tmp_path):
+    """read_text_file holt die VOLLSTAENDIGE Datei in den Speicher, um daraus 12.000
+    Zeichen zurueckzugeben - bei 8 MB schon eine Speicherspitze von 26 MB, bei einem
+    gewachsenen Log entsprechend mehr. Jetzt wird die Groesse vorher geprueft."""
+    import tracemalloc
+
+    from app.db.session import SessionLocal
+    from app.services import ai_agent_service as aas
+
+    with SessionLocal() as db:
+        person = _nutzer(db, name="gross")
+        server = _server(db, tmp_path, slug="gross", port=25793)
+        riesig = Path(server.base_path) / "riesig.log"
+        with riesig.open("w", encoding="utf-8") as f:
+            for i in range(120_000):
+                f.write(f"Zeile {i} mit etwas Text damit die Datei waechst\n")
+        groesse = riesig.stat().st_size
+        assert groesse > 3 * aas.MAX_DATEI_BYTES, "Testdatei ist zu klein"
+
+        tracemalloc.start()
+        ergebnis = aas._fuehre_lesend_aus(db, person, "datei_lesen",
+                                          {"server_id": server.id, "pfad": "riesig.log"})
+        _aktuell, spitze = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+    assert "fehler" not in ergebnis
+    assert ergebnis["gekuerzt"] is True
+    assert len(ergebnis["inhalt"]) <= aas.MAX_ERGEBNIS
+    assert "log_ansehen" in ergebnis["hinweis"], "Der Hinweis auf das richtige Werkzeug fehlt"
+    # Entscheidend: die Datei darf NICHT komplett im Speicher landen.
+    assert spitze < groesse / 2, (
+        f"Speicherspitze {spitze / 1024 / 1024:.0f} MB bei einer Datei von "
+        f"{groesse / 1024 / 1024:.0f} MB - sie wurde ganz gelesen")
+
+
+def test_kleine_datei_kommt_vollstaendig(client, tmp_path):
+    from app.db.session import SessionLocal
+    from app.services import ai_agent_service as aas
+
+    with SessionLocal() as db:
+        person = _nutzer(db, name="klein")
+        server = _server(db, tmp_path, slug="klein", port=25794)
+
+        ergebnis = aas._fuehre_lesend_aus(db, person, "datei_lesen",
+                                          {"server_id": server.id,
+                                           "pfad": "server.properties"})
+
+    assert ergebnis["gekuerzt"] is False
+    assert "hinweis" not in ergebnis
+    assert "level-name=world" in ergebnis["inhalt"]
 
 
 # ---------------------------------------- Inhalte suchen, installieren, entfernen

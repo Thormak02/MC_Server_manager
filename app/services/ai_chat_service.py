@@ -79,28 +79,46 @@ def erstelle(db: Session, *, user: User, erste_nachricht: str = "") -> AiChat:
     db.add(chat)
     db.commit()
     db.refresh(chat)
-    _alte_chats_aufraeumen(db, user)
+    # Das GERADE angelegte Gespraech ausnehmen. Ohne diese Angabe war es bei einem
+    # Nutzer mit MAX_CHATS angehefteten Gespraechen der einzige nicht angeheftete
+    # Kandidat - und wurde sofort wieder geloescht. Der Aufrufer arbeitete danach mit
+    # einem Objekt, das es nicht mehr gibt: jede neue Frage endete im 500er, und die
+    # Frage selbst war verloren.
+    _alte_chats_aufraeumen(db, user, ausser_id=chat.id)
     return chat
 
 
-def _alte_chats_aufraeumen(db: Session, user: User) -> int:
-    """Ueber MAX_CHATS hinausgehende Gespraeche loeschen - angeheftete bleiben."""
+def _alte_chats_aufraeumen(db: Session, user: User,
+                           *, ausser_id: int | None = None) -> int:
+    """Ueber MAX_CHATS hinausgehende Gespraeche loeschen.
+
+    Angeheftete bleiben immer, und ``ausser_id`` bleibt auch - damit nicht das Gespraech
+    geloescht wird, fuer das der Aufrufer gerade einen Platz braucht.
+
+    Sind so viele Gespraeche angeheftet, dass die Grenze allein damit erreicht ist, wird
+    NICHTS geloescht. Das ist Absicht: angeheftet heisst "behalten", und ein Aufraeumen,
+    das dafuer das neue Gespraech wegnimmt, macht die Funktion unbenutzbar statt sie zu
+    begrenzen.
+    """
     try:
-        kandidaten = list(db.scalars(
-            select(AiChat)
-            .where(AiChat.user_id == user.id, AiChat.angeheftet.is_(False))
-            .order_by(AiChat.updated_at.desc())))
+        kandidaten = [
+            c for c in db.scalars(
+                select(AiChat)
+                .where(AiChat.user_id == user.id, AiChat.angeheftet.is_(False))
+                .order_by(AiChat.updated_at.desc()))
+            if ausser_id is None or c.id != ausser_id
+        ]
+        if not kandidaten:
+            return 0
         gesamt = db.scalar(select(func.count(AiChat.id))
                            .where(AiChat.user_id == user.id)) or 0
-        zuviel = int(gesamt) - MAX_CHATS
+        zuviel = min(int(gesamt) - MAX_CHATS, len(kandidaten))
         if zuviel <= 0:
             return 0
-        weg = kandidaten[len(kandidaten) - zuviel:] if zuviel <= len(kandidaten) \
-            else kandidaten
-        for chat in weg:
+        for chat in kandidaten[len(kandidaten) - zuviel:]:
             db.delete(chat)
         db.commit()
-        return len(weg)
+        return zuviel
     except Exception:  # noqa: BLE001 - Aufraeumen darf nichts kaputt machen
         try:
             db.rollback()
@@ -120,8 +138,10 @@ def haenge_an(db: Session, *, chat: AiChat, rolle: str, inhalt: str,
         inhalt=(inhalt or "")[:MAX_INHALT],
         modell=modell,
         kosten_cent=max(0.0, float(kosten_cent or 0.0)),
-        schritte=(json.dumps(schritte, ensure_ascii=False, default=str)
-                  if schritte else None),
+        # Auch die Schritte deckeln: die Grenze galt nur fuer ``inhalt``, und ein
+        # Werkzeugergebnis kann laenger sein als die Antwort selbst.
+        schritte=(json.dumps(schritte, ensure_ascii=False,
+                             default=str)[:MAX_INHALT] if schritte else None),
         tokens_ein=max(0, int(tokens_ein or 0)),
         tokens_aus=max(0, int(tokens_aus or 0)))
     db.add(nachricht)
@@ -158,6 +178,16 @@ def _alte_nachrichten_aufraeumen(db: Session, chat: AiChat) -> int:
         return 0
 
 
+def _schritte_lesen(roh: str | None) -> list:
+    if not roh:
+        return []
+    try:
+        wert = json.loads(roh)
+    except Exception:  # noqa: BLE001 - abgeschnitten oder beschaedigt
+        return []
+    return wert if isinstance(wert, list) else []
+
+
 def liste(db: Session, *, user: User, grenze: int = 50) -> list[dict]:
     """Die Gespraeche eines Nutzers, zuletzt benutzte zuerst, angeheftete oben."""
     zeilen = list(db.scalars(
@@ -187,7 +217,9 @@ def lade(db: Session, *, user: User, chat_id: int) -> dict:
         "nachrichten": [{
             "rolle": n.rolle, "inhalt": n.inhalt, "modell": n.modell,
             "kosten_cent": n.kosten_cent,
-            "schritte": json.loads(n.schritte) if n.schritte else [],
+            # Abgeschnittenes JSON (siehe MAX_INHALT) darf das Laden nicht
+            # scheitern lassen - der Text der Antwort ist das Wichtige.
+            "schritte": _schritte_lesen(n.schritte),
             "zeit": n.created_at.isoformat() if n.created_at else None,
         } for n in nachrichten],
     }

@@ -38,6 +38,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_server_schema()
     _ensure_installed_content_schema()
+    _ensure_scheduled_job_schema()
     _migrate_gateway_settings_to_network()
     _normalize_runtime_states()
     _cleanup_orphaned_server_relations()
@@ -166,6 +167,26 @@ def _ensure_installed_content_schema() -> None:
     with engine.begin() as conn:
         for _name, sql in pending:
             conn.execute(text(sql))
+
+
+def _ensure_scheduled_job_schema() -> None:
+    """``created_by_user_id`` nachziehen - dasselbe ALTER-falls-fehlt-Muster wie oben.
+
+    Bestehende Jobs behalten NULL. Das ist Absicht: fuer sie ist nicht nachvollziehbar,
+    wer sie angelegt hat, und ein Befehl mit Admin-Vorbehalt wird deshalb bei der
+    Ausfuehrung abgewiesen (siehe process_service._darf_befehl). Besser ein Job, der
+    einmal laut scheitert, als einer, der stillschweigend Operator-Rechte vergibt.
+    """
+    inspector = inspect(engine)
+    try:
+        columns = {column["name"] for column in inspector.get_columns("scheduled_jobs")}
+    except Exception:  # noqa: BLE001 - Tabelle noch nicht da
+        return
+    if "created_by_user_id" in columns:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(
+            "ALTER TABLE scheduled_jobs ADD COLUMN created_by_user_id INTEGER"))
 
 
 def _normalize_runtime_states() -> None:

@@ -58,6 +58,39 @@ def _normalize_access_tab(value: str | None) -> str:
     return "whitelist"
 
 
+def _zugang_erlaubt(request: Request, db: Session, current_user, server,
+                    *, befehl: str | None, tab: str) -> bool:
+    """Darf dieser Nutzer diese Zugangsaenderung SCHREIBEN?
+
+    Die Zugriffsseite schreibt ops.json, banned-players.json, banned-ips.json und
+    server.properties - und das ist der DAUERHAFTE Weg: genau diese Dateien liest
+    Minecraft beim Start. Die Admin-Sperre fuer op/deop/pardon/whitelist off galt
+    zunaechst nur fuer den fluechtigen Konsolenbefehl; ueber die Datei war sie mit
+    ``can_edit_files`` umgehbar - ein Moderator konnte sich Operator mit Level 4
+    eintragen, Banns aufheben und die Whitelist abschalten, wirksam nach dem naechsten
+    Neustart.
+
+    Geprueft wird deshalb VOR dem Schreiben, und zwar mit derselben Regel wie fuer die
+    Konsole (``process_service.braucht_admin``) - eine zweite, eigene Liste wuerde
+    irgendwann auseinanderlaufen.
+    """
+    from app.core.constants import UserRole
+    from app.services.process_service import braucht_admin
+
+    grund = braucht_admin(befehl or "")
+    if not grund:
+        return True
+    if (getattr(current_user, "role", "") or "") in {UserRole.SUPER_ADMIN.value,
+                                                     UserRole.ADMIN.value}:
+        return True
+
+    audit_service.log_action(
+        db, action="server.access_change_denied", user_id=current_user.id,
+        server_id=server.id, details=f"list={tab} befehl={befehl}")
+    push_flash(request, f"Dafuer braucht es Admin-Rechte: {grund}", "error")
+    return False
+
+
 def _build_access_runtime_command(*, list_key: str, identity: str, action: str) -> str | None:
     normalized_identity = (identity or "").strip()
     if not normalized_identity:
@@ -86,12 +119,20 @@ def _try_send_runtime_command(
     server,
     command: str | None,
     user_id: int,
-) -> None:
+) -> str:
+    """Den Befehl auch am laufenden Server anwenden. Rueckgabe: eine Notiz, falls nicht.
+
+    Die Notiz wird ZURUECKGEGEBEN und nicht geblitzt: ``push_flash`` haelt nur EINE
+    Meldung in der Sitzung, und die Erfolgsmeldung danach hat sie ueberschrieben. Der
+    Bedienende sah "Eintrag hinzugefuegt." und erfuhr nicht, dass der laufende Server
+    davon nichts weiss - Datei und Server sagten Verschiedenes.
+    """
     if not command:
-        return
+        return ""
     ok, message = send_console_command(db, server, command, user_id)
-    if not ok:
-        push_flash(request, f"Live-Anwendung uebersprungen: {message}", "info")
+    if ok:
+        return ""
+    return f" Am laufenden Server nicht angewandt: {message}"
 
 
 @router.get("/servers/{server_id}/files", response_class=HTMLResponse)
@@ -227,19 +268,19 @@ def access_add_entry_action(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     tab = _normalize_access_tab(list_key)
+    befehl = _build_access_runtime_command(list_key=tab, identity=identity, action="add")
+    if not _zugang_erlaubt(request, db, current_user, server, befehl=befehl, tab=tab):
+        return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}",
+                                status_code=303)
+
     try:
         add_access_entry(server, tab, identity, op_level=op_level if tab == "ops" else None)
     except ValueError as exc:
         push_flash(request, str(exc), "error")
         return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
 
-    _try_send_runtime_command(
-        request,
-        db=db,
-        server=server,
-        command=_build_access_runtime_command(list_key=tab, identity=identity, action="add"),
-        user_id=current_user.id,
-    )
+    notiz = _try_send_runtime_command(
+        request, db=db, server=server, command=befehl, user_id=current_user.id)
 
     audit_service.log_action(
         db,
@@ -252,7 +293,7 @@ def access_add_entry_action(
             else f"list={tab} identity={identity.strip()}"
         ),
     )
-    push_flash(request, "Eintrag hinzugefuegt.", "success")
+    push_flash(request, "Eintrag hinzugefuegt." + notiz, "success")
     return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
 
 
@@ -273,6 +314,13 @@ def access_update_op_level_action(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
     if not can_edit_server_files(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    # Das OP-Level zu aendern ist dieselbe Tat wie 'op' - es bestimmt, wie viel ein
+    # Operator darf (Level 4 erlaubt u.a. /stop und /op). Also dieselbe Schranke.
+    if not _zugang_erlaubt(request, db, current_user, server,
+                           befehl=f"op {identity.strip()}", tab="ops"):
+        return RedirectResponse(url=f"/servers/{server_id}/access?tab=ops",
+                                status_code=303)
 
     try:
         update_op_level(server, identity, op_level)
@@ -310,19 +358,20 @@ def access_remove_entry_action(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     tab = _normalize_access_tab(list_key)
+    befehl = _build_access_runtime_command(list_key=tab, identity=identity,
+                                           action="remove")
+    if not _zugang_erlaubt(request, db, current_user, server, befehl=befehl, tab=tab):
+        return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}",
+                                status_code=303)
+
     try:
         remove_access_entry(server, tab, identity)
     except ValueError as exc:
         push_flash(request, str(exc), "error")
         return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
 
-    _try_send_runtime_command(
-        request,
-        db=db,
-        server=server,
-        command=_build_access_runtime_command(list_key=tab, identity=identity, action="remove"),
-        user_id=current_user.id,
-    )
+    notiz = _try_send_runtime_command(
+        request, db=db, server=server, command=befehl, user_id=current_user.id)
 
     audit_service.log_action(
         db,
@@ -331,7 +380,7 @@ def access_remove_entry_action(
         server_id=server.id,
         details=f"list={tab} identity={identity.strip()}",
     )
-    push_flash(request, "Eintrag entfernt.", "success")
+    push_flash(request, "Eintrag entfernt." + notiz, "success")
     return RedirectResponse(url=f"/servers/{server_id}/access?tab={tab}", status_code=303)
 
 
@@ -353,14 +402,17 @@ def access_whitelist_toggle_action(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
     target_state = str(enabled or "").strip().lower() in {"1", "true", "on", "yes"}
+    befehl = f"whitelist {'on' if target_state else 'off'}"
+    # Nur das AUSSCHALTEN ist Admin-Sache (es oeffnet den Server fuer alle) - das
+    # entscheidet braucht_admin, hier wird nur gefragt.
+    if not _zugang_erlaubt(request, db, current_user, server, befehl=befehl,
+                           tab="whitelist"):
+        return RedirectResponse(url=f"/servers/{server_id}/access?tab=whitelist",
+                                status_code=303)
+
     set_whitelist_enabled(server, target_state)
-    _try_send_runtime_command(
-        request,
-        db=db,
-        server=server,
-        command=f"whitelist {'on' if target_state else 'off'}",
-        user_id=current_user.id,
-    )
+    notiz = _try_send_runtime_command(
+        request, db=db, server=server, command=befehl, user_id=current_user.id)
     audit_service.log_action(
         db,
         action="server.whitelist_toggle",
@@ -370,7 +422,7 @@ def access_whitelist_toggle_action(
     )
     push_flash(
         request,
-        "Whitelist aktiviert." if target_state else "Whitelist deaktiviert.",
+        ("Whitelist aktiviert." if target_state else "Whitelist deaktiviert.") + notiz,
         "success",
     )
     return RedirectResponse(url=f"/servers/{server_id}/access?tab=whitelist", status_code=303)

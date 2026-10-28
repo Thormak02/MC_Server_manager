@@ -26,6 +26,7 @@ def client(tmp_path, monkeypatch):
     import app.db.session as db_session
     import app.db.init_db as init_db
     import app.services.process_service as process_service
+    import app.services.schedule_service as schedule_service
     import app.services.sleep_proxy_service as sleep_proxy_service
     import app.main as main_module
 
@@ -37,6 +38,11 @@ def client(tmp_path, monkeypatch):
     # gegen ein veraltetes Schema ("no such column"). Reload bindet sie an die
     # frische Test-DB.
     importlib.reload(process_service)
+    # schedule_service gehoert in dieselbe Liste: der Lifespan ruft sync_all_jobs(), das
+    # ueber die Modulreferenz SessionLocal laeuft. Ohne Reload fragte es die ECHTE
+    # Entwicklungs-DB ab statt der Test-DB - aufgefallen, als scheduled_jobs eine neue
+    # Spalte bekam und jeder Test mit "no such column" abbrach.
+    importlib.reload(schedule_service)
     importlib.reload(sleep_proxy_service)
     importlib.reload(main_module)
 

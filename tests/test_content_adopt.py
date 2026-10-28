@@ -779,11 +779,18 @@ def test_update_installed_vt_regenerates_when_the_version_group_changed(client, 
         assert entry.declared_mc_version == "26.2"
 
 
-def test_update_installed_vt_without_a_known_group_regenerates_once(client, monkeypatch,
-                                                                    tmp_path):
-    """Altbestand ohne vermerkte Gruppe: einmal neu erzeugen, dann ist Ruhe.
+def test_update_installed_vt_without_a_known_group_heals_without_rebuilding(
+        client, monkeypatch, tmp_path):
+    """Altbestand ohne vermerkte Gruppe: Angabe nachziehen, aber NICHT neu erzeugen.
 
-    Selbstheilend - genau die Eintraege, die vor dieser Korrektur angelegt wurden.
+    Vorher wurde in diesem Fall vorsichtshalber neu erzeugt, weil die Gruppe nur im Feld
+    ``declared_mc_version`` stand und dort fehlte. Inzwischen wird sie aus dem DATEINAMEN
+    gelesen, den VanillaTweaks selbst schreibt ("... (MC 26.2).zip") - die Datei ist also
+    nachweislich die richtige, und ein Neuerzeugen waere sinnlose Arbeit. Mehr noch: jedes
+    Neuerzeugen ist die Gelegenheit, bei der die alte Datei liegenbleibt, wenn der Server
+    laeuft und sie offen haelt (siehe tests/test_vanillatweaks_dubletten.py).
+
+    Selbstheilend bleibt es trotzdem: die fehlende Angabe wird nachgetragen.
     """
     import io as _io
     import zipfile as _zipfile
@@ -818,9 +825,17 @@ def test_update_installed_vt_without_a_known_group_regenerates_once(client, monk
         )
         db.add(entry)
         db.commit()
-        aktualisiert, _notiz = vt.update_installed_vt(db, srv, entry, None)
-        assert aktualisiert is True
+        erzeugt: list = []
+        echtes_generate = vt.generate_zip
+        monkeypatch.setattr(vt, "generate_zip", lambda *a, **k: (
+            erzeugt.append(1), echtes_generate(*a, **k))[1])
+
+        aktualisiert, notiz = vt.update_installed_vt(db, srv, entry, None)
+
+        assert aktualisiert is False and notiz == "", "Das Pack ist bereits das richtige"
+        assert erzeugt == [], "Es haette nichts neu erzeugt werden duerfen"
         db.refresh(entry)
+        # Die fehlende Angabe wird trotzdem nachgetragen.
         assert entry.declared_mc_version == "26.2"
 
 

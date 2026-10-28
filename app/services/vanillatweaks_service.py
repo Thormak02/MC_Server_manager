@@ -267,18 +267,27 @@ def install_datapacks(
                     InstalledContent.file_name == file_name,
                 )
             )
+            # In version_label gehoert die PACK-Version ("2.8.23"), nicht die VT-Gruppe.
+            # Vorher stand hier die Gruppe - und update_installed_vt vergleicht
+            # version_label mit der Pack-Version aus dem Katalog. Die konnte nie
+            # uebereinstimmen, also wurde JEDES frisch installierte Pack beim naechsten
+            # Update-Lauf einmal unnoetig neu geholt und ueber die laufende Datei
+            # geschrieben. Genau diese unnoetige Neuerzeugung ist die Gelegenheit, bei
+            # der die alte Datei liegenbleibt.
+            pack_version = _pack_version_from_file(file_name) or version
             db.add(
                 InstalledContent(
                     server_id=server.id,
                     provider_name="vanillatweaks",
                     content_type="datapack",
                     external_project_id=f"vt:{pack_type}",
-                    external_version_id=version,
+                    external_version_id=pack_version,
                     name=display,
-                    version_label=version,
+                    version_label=pack_version,
                     file_name=file_name,
                     installed_by_user_id=user_id,
-                    # s.o.: die VT-Gruppe gehoert zum Eintrag, nicht nur die Pack-Version.
+                    # Die VT-Gruppe gehoert ebenfalls zum Eintrag: die Pack-Version
+                    # allein ist in mehreren Gruppen dieselbe.
                     declared_mc_version=version,
                 )
             )
@@ -464,6 +473,15 @@ def _update_crafting_tweaks(db: Session, server: Server, entry: InstalledContent
     if not selection:
         return (False, f"Uebersprungen ({entry.name}): keine bekannten Crafting Tweaks im Katalog.")
 
+    # Hier fehlte jede "schon aktuell"-Pruefung: das kombinierte Datapack wurde bei JEDEM
+    # Update-Lauf neu von VanillaTweaks geholt und ueber die Datei des laufenden Servers
+    # geschrieben, und die Oberflaeche meldete eine Aktualisierung, die keine war.
+    # Anders als bei einzelnen Packs gibt es keine Pack-Version - aendern kann sich nur
+    # die VT-Gruppe (also die Serverversion) oder die Auswahl, und die Auswahl kommt aus
+    # derselben Datei, die gerade gelesen wurde.
+    if entry.declared_mc_version == version and path.exists():
+        return (False, "")
+
     archive = generate_zip("craftingtweaks", version, selection)
     target_dir = content_service._target_dir(server, "datapack")
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -484,6 +502,7 @@ def _update_crafting_tweaks(db: Session, server: Server, entry: InstalledContent
     entry.external_project_id = "vt:craftingtweaks"
     entry.external_version_id = version
     entry.version_label = version
+    entry.declared_mc_version = version
     entry.name = "VanillaTweaks Crafting Tweaks"
     entry.file_name = new_file
     entry.local_adopt_state = None
@@ -536,6 +555,28 @@ def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
     (anderer Name wegen neuer Versionsnummer) ersetzen. Rueckgabe (aktualisiert, Notiz/Hinweis);
     ``(False, "")`` bedeutet "bereits aktuell"."""
     version = resolve_vt_version(server.mc_version)
+
+    # Resource Packs sind keine Datapacks: sie werden nicht als Datei im Weltordner
+    # abgelegt, sondern selbst gehostet und ueber server.properties gesetzt. Sie liefen
+    # bisher in den Datapack-Zweig, wurden dort im Katalog nicht gefunden und blieben
+    # damit stumm auf der alten Gruppe stehen - die Clients laden nach einem
+    # Versionswechsel weiter das Pack der falschen Gruppe.
+    #
+    # Automatisch erneuern laesst sich das nicht: welche Packs ausgewaehlt waren, wird
+    # beim Resource Pack nicht mitgespeichert (anders als bei Crafting Tweaks, wo die
+    # Auswahl in 'Selected Packs.txt' steht). Also klar sagen, was zu tun ist.
+    if ((entry.content_type or "").strip().lower() == "resourcepack"
+            or "resourcepacks" in str(entry.external_project_id or "")):
+        alt = entry.declared_mc_version or entry.version_label or "unbekannt"
+        if alt == version:
+            return (False, "")
+        return (False,
+                f"Uebersprungen ({entry.name}): das VT-Resource-Pack wurde fuer Gruppe "
+                f"{alt} erzeugt, dieser Server braucht {version}. Automatisch erneuern "
+                f"geht nicht, weil die Auswahl der Packs nicht mitgespeichert wird - "
+                f"bitte auf der Inhalte-Seite neu zusammenstellen. Bis dahin laden die "
+                f"Clients weiter das Pack der alten Gruppe.")
+
     pack_type = _pack_type_from_project(entry.external_project_id)
     # Crafting Tweaks sind EIN kombiniertes Datapack -> eigener Regenerate-Pfad ueber das Manifest.
     if pack_type == "craftingtweaks":
