@@ -135,6 +135,28 @@ def _write_setup_readme(base_path: Path, member_aliases: list[str]) -> None:
         pass
 
 
+# Nur die Paper-Familie ist ein Velocity-Backend (loopback hinter dem Proxy) -> Menue-Ziel
+# ist der Proxy-Port (forced-host routet) + internes Umschalten per "Connect". Modded-,
+# Vanilla- und Spigot-Ziele sind KEINE Backends -> eigenstaendige online-mode-Server, per
+# nativem Transfer direkt angesprungen (echte UUID auch bei Direktverbindung).
+_BACKEND_TYPES_VELOCITY = {"paper", "purpur", "folia"}
+
+
+def _ist_velocity_backend(srv) -> bool:
+    """Schreibt proxy_service diesen Server als Backend in die velocity.toml?
+
+    Die Antwort MUSS dieselbe sein wie dort (``velocity_backends``), sonst steht in der
+    Plugin-Konfiguration ein ``velocity_name``, den Velocity nicht kennt - und ein
+    "Connect" darauf verwirft der Proxy wortlos. Genau diese zweite, eigene Regel hat
+    gefehlt: der Rueckweg ``/lobby`` setzte den Namen allein anhand des Netzwerkmodus.
+    """
+    return bool(
+        srv is not None
+        and str(getattr(srv, "server_type", "") or "").lower() in _BACKEND_TYPES_VELOCITY
+        and getattr(srv, "port", None)
+    )
+
+
 def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], list[str]]:
     """Server-Eintraege fuer die Plugin-config aus den Gateway-Routen bauen.
 
@@ -157,11 +179,6 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
     domain = gateway_service.clean_hostname(app_setting_service.get_network_domain(db))
     network_port = app_setting_service.get_network_port(db)
     mode = app_setting_service.get_network_mode(db)
-    # Nur Paper-Familie ist ein Velocity-Backend (loopback hinter dem Proxy) -> Menue-Ziel ist der
-    # Proxy-Port (forced-host routet) + internes Umschalten (Connect). Modded-/Vanilla-/Spigot-Ziele
-    # sind KEINE Backends -> eigenstaendige online-mode-Server, per nativem Transfer DIREKT
-    # angesprungen (echte UUID auch bei Direktverbindung; keine Forge-/Legacy-Forwarding-Fragilitaet).
-    _backend_types = {"paper", "purpur", "folia"}
 
     servers: list[dict] = []
     skipped: list[str] = []
@@ -181,7 +198,7 @@ def _build_plugin_servers(db: Session, exclude_id: int) -> tuple[list[dict], lis
         label = f"&a{srv.name}"
         if srv.mc_version:
             label += f" &7({srv.server_type} {srv.mc_version})"
-        is_backend = str(srv.server_type or "").lower() in _backend_types
+        is_backend = _ist_velocity_backend(srv)
         if mode == "velocity" and not is_backend:
             target_port = int(srv.port)          # nativer Transfer DIREKT zum Modserver
         else:
@@ -213,6 +230,47 @@ def get_menu_servers(db: Session, exclude_id: int | None = None) -> list[dict]:
     den eigenen Server aus (None = keinen ausschliessen)."""
     servers, _skipped = _build_plugin_servers(db, exclude_id if exclude_id is not None else -1)
     return servers
+
+
+def _jar_weicht_ab(quelle: Path, ziel: Path) -> bool:
+    """Liegt im Serverordner eine ANDERE Fassung als die aktuelle? Im Zweifel ja."""
+    try:
+        if not ziel.is_file():
+            return True
+        if quelle.stat().st_size != ziel.stat().st_size:
+            return True
+        return quelle.read_bytes() != ziel.read_bytes()
+    except OSError:
+        return True
+
+
+def _melde_veraltetes_plugin(db: Session, server) -> None:
+    """Ins Protokoll, nicht nur in einen Hinweistext, der im Zweifel niemand liest."""
+    try:
+        from app.services import audit_service
+
+        audit_service.log_action(
+            db, action="lobby.plugin_veraltet", user_id=None,
+            server_id=getattr(server, "id", None),
+            details=("Das Jar konnte nicht ersetzt werden (Server laeuft). Die alte "
+                     "Plugin-Fassung bleibt aktiv, bis der Server neu startet - neue "
+                     "Felder in der config.yml wirken bis dahin nicht."))
+    except Exception:  # noqa: BLE001 - darf den Deploy nie stoeren
+        pass
+
+
+def plugin_ist_veraltet(server) -> bool:
+    """Laeuft dieser Server mit einer anderen Plugin-Fassung als der aktuellen?"""
+    try:
+        quelle = _plugin_jar()
+        if not quelle.exists():
+            return False
+        ziel = Path(server.base_path).expanduser().resolve() / "plugins" / "MCSMLobby.jar"
+        if not ziel.is_file():
+            return False   # gar nicht installiert ist kein "veraltet"
+        return _jar_weicht_ab(quelle, ziel)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def refresh_plugin_for_server(db: Session, server) -> None:
@@ -265,7 +323,16 @@ def _lobby_transfer_target(db: Session) -> dict | None:
         return None
     # Die Lobby ist ein Paper-Velocity-Backend -> /lobby von anderen Backends aus intern
     # umschalten (Connect), nicht per Client-Transfer (Re-Auth-Fehler). velocity_name = Alias.
-    velocity_name = alias if app_setting_service.get_network_mode(db) == "velocity" else ""
+    #
+    # Hier stand nur die Modusabfrage - ohne zu pruefen, ob proxy_service die Lobby
+    # ueberhaupt als Backend in die velocity.toml schreibt. Waere die Default-Lobby ein
+    # Spigot-Server oder haette sie keinen Port, stuende in jeder Plugin-Konfiguration ein
+    # velocity_name, den Velocity nicht kennt - und "Connect" darauf verwirft der Proxy
+    # wortlos. Dieselbe Frage gehoert an dieselbe Stelle beantwortet wie oben.
+    velocity_name = (
+        alias if (app_setting_service.get_network_mode(db) == "velocity"
+                  and _ist_velocity_backend(lobby)) else ""
+    )
     return {
         "id": lobby.id,
         "host": f"{alias}.{domain}",
@@ -296,10 +363,20 @@ def _write_plugin_for_server(db: Session, server, *, is_lobby: bool, lobby_targe
     notes: list[str] = []
     _jar = _plugin_jar()
     if _jar.exists():
+        ziel_jar = plugins_dir / "MCSMLobby.jar"
         try:
-            shutil.copy2(_jar, plugins_dir / "MCSMLobby.jar")
+            shutil.copy2(_jar, ziel_jar)
         except (PermissionError, OSError):
-            notes.append("Jar gesperrt (laeuft) - Update beim Neustart")
+            # Windows sperrt die Datei, solange der Server laeuft - bei einer 24/7-Lobby
+            # also der Normalfall. Nur: die config.yml daneben wird trotzdem frisch
+            # geschrieben. Kennt die laufende Fassung ein neues Feld nicht (zuletzt
+            # velocity_name), tut sie stillschweigend etwas anderes als gedacht. Deshalb
+            # wird hier GEPRUEFT, ob die Fassungen wirklich auseinanderliegen, und nur dann
+            # deutlich gemeldet - samt Protokolleintrag, damit es auffindbar bleibt.
+            if _jar_weicht_ab(_jar, ziel_jar):
+                notes.append("VERALTET: Jar gesperrt (Server laeuft) - die alte "
+                             "Plugin-Fassung bleibt aktiv bis zum Neustart")
+                _melde_veraltetes_plugin(db, server)
     else:
         notes.append("MCSMLobby.jar fehlt (weder gebaut noch als Asset)")
 

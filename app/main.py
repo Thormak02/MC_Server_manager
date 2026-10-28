@@ -67,6 +67,13 @@ async def lifespan(app: FastAPI):
     # dem Ziel landen darf. Muss laufen, bevor Server starten - sonst waere die erste
     # Pruefung ungeprueft (fail-open) und jemand flaeche doch aus der Lobby.
     lobby_api_service.reconcile_lobby_api()
+    # Laeuft oben ein Auto-Build des Lobby-Plugins, erst ihn abwarten. Sonst starten die
+    # Server mit dem Jar der VORIGEN Fassung, und danach ist die Datei gesperrt - die Lobby
+    # bliebe bis zum naechsten Neustart von Hand auf dem alten Stand, waehrend ihre frisch
+    # geschriebene config.yml schon neue Felder enthaelt.
+    if not plugin_build_service.warte_auf_build():
+        print("[plugin-build] Build dauert ungewoehnlich lange - die Server starten mit dem "
+              "vorhandenen Jar. Die Lobby braucht danach einen Neustart.")
     start_servers_marked_for_manager_startup()
     sleep_proxy_service.reconcile_proxies()
     sleep_proxy_service.start_idle_monitor()

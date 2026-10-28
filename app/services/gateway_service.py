@@ -110,6 +110,11 @@ class GatewayRoutes:
 class RouteDecision:
     server_id: int | None
     reason: str  # "alias" | "default" | "version" | "none"
+    # True: der Hostname lag unter UNSERER Domain, der Alias davor ist aber keinem Server
+    # zugeordnet. Fuer Joins bleibt das wie bisher (freundlich in der Lobby landen), fuer
+    # den Serverlisten-Ping ist es ein Unterschied: dort gehoert eine ehrliche Antwort hin
+    # und nicht die MOTD der Lobby, sonst sehen alle Eintraege gleich aus.
+    alias_unbekannt: bool = False
 
 
 def decide_route(
@@ -133,6 +138,7 @@ def decide_route(
     diese Protokollversion eindeutig einem Server zugeordnet ist).
     """
     cleaned = clean_hostname(hostname)
+    alias_unbekannt = False
     if cleaned:
         server_id = routes.by_hostname.get(cleaned)
         if server_id is None:
@@ -143,7 +149,15 @@ def decide_route(
                 elif cleaned.endswith(suffix) and len(cleaned) > len(suffix):
                     # Unter unserer Domain: Alias ist exakt der Teil davor.
                     # Unbekannt -> Default, NICHT auf ein kuerzeres Label raten.
-                    server_id = routes.by_hostname.get(cleaned[: -len(suffix)])
+                    rest = cleaned[: -len(suffix)]
+                    server_id = routes.by_hostname.get(rest)
+                    # Die Lobby-Aliase gehoeren dem Hub, nicht einem Server - sie sind
+                    # bekannt, auch wenn kein Server sie traegt.
+                    if server_id is None and not (
+                            rest == HUB_LOBBY_ALIAS
+                            or rest.startswith(HUB_LOBBY_ALIAS + "-")
+                            or rest == HUB_VANILLA_ALIAS):
+                        alias_unbekannt = True
             else:
                 # Ohne konfigurierte Domain: erstes Label als Komfort-Fallback.
                 first_label = cleaned.split(".", 1)[0]
@@ -153,7 +167,8 @@ def decide_route(
             return RouteDecision(server_id, "alias")
 
     if routes.default_server_id is not None:
-        return RouteDecision(routes.default_server_id, "default")
+        return RouteDecision(routes.default_server_id, "default",
+                             alias_unbekannt=alias_unbekannt)
 
     # Kein Alias/Default getroffen, aber der Dispatcher (Universal-Hub) ist aktiv:
     # die blanke/unbekannte Domain geht an den Dispatcher = die Lobby. WICHTIG: ohne
@@ -670,6 +685,40 @@ def _handle_gateway_connection(client: socket.socket) -> None:
             )
             return
 
+        # Serverlisten-Ping auf einen EXPLIZITEN Alias: direkt den gemeinten Server fragen.
+        #
+        # Vorher lief auch der Status-Ping durch den Zweig unten in den Velocity-Proxy, und
+        # der beantwortet ihn wegen ping-passthrough = DISABLED selbst - mit seiner eigenen
+        # MOTD und show-max-players. Damit zeigte JEDER Eintrag in der Minecraft-Serverliste
+        # dieselbe Netzwerk-MOTD, dieselbe 0/100 und war immer gruen, egal ob der Server
+        # lief. Ein Status-Ping braucht kein Forwarding und keine Anmeldung, er darf den
+        # Server also roh treffen: dann kommt die MOTD aus dessen server.properties, die
+        # echte Spielerzahl - und wenn er schlaeft, antwortet der Sleep-Proxy ehrlich mit
+        # "Schlaeft". Laeuft gar nichts, bleibt die Verbindung aus und der Client zeigt ihn
+        # als offline. Genau das soll die Liste zeigen.
+        #
+        # Die blanke Domain (reason "default") bleibt ausgenommen: dort GEHOERT die
+        # Netzwerk-MOTD hin.
+        if handshake.next_state not in mc_protocol.JOIN_NEXT_STATES:
+            if decision.alias_unbekannt:
+                # Ein Tippfehler im Hostnamen zeigte bisher die Lobby - und sah damit aus
+                # wie ein funktionierender Server.
+                _respond_no_route(client, buffer, handshake, routes)
+                return
+            if decision.reason == "alias" and decision.server_id is not None:
+                eigener_port = routes.internal_ports.get(decision.server_id)
+                if eigener_port:
+                    # join=False ist hier wesentlich: antwortet niemand auf dem Port,
+                    # DARF nichts zurueckgeschickt werden. Im Status-Zustand ist Paket
+                    # 0x00 die Status-Antwort - ein Login-Disconnect landet beim Client
+                    # als Status-JSON ohne version/players und erzeugt einen kaputten
+                    # Listeneintrag statt eines ehrlichen "offline".
+                    sleep_proxy_service._forward_to_backend(
+                        client, int(eigener_port), decision.server_id, bytes(buffer),
+                        join=False,
+                    )
+                    return
+
         # UNIVERSAL: zeigt ein expliziter Alias auf ein Velocity-Backend (Lobby/Vanilla-Paper),
         # laeuft der Client NICHT roh auf dessen loopback+online-mode=false-Port (-> Kick),
         # sondern ueber Velocity (das per forced-hosts/try routet + authentifiziert). Der
@@ -704,7 +753,8 @@ def _handle_gateway_connection(client: socket.socket) -> None:
         # Status/Wecken uebernimmt der Sleep-Proxy, der ggf. auf diesem Port sitzt
         # (bei laufenden Servern trifft der Forward direkt den Server).
         sleep_proxy_service._forward_to_backend(
-            client, int(target_port), decision.server_id, bytes(buffer)
+            client, int(target_port), decision.server_id, bytes(buffer),
+            join=handshake.next_state in mc_protocol.JOIN_NEXT_STATES,
         )
     except OSError:
         pass

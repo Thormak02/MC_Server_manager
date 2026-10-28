@@ -403,7 +403,7 @@ manager kann auch server pc restarten
 
 
 
-MOTD editor in Server einstellungen mit Farben, allen optionen usw.
+MOTD editor in Server einstellungen mit Farben, allen optionen usw. mit einer vorschau
 
 
 ~~KI-gestützte Funktionen nur ondemand, local ai ohne externe api?~~

@@ -262,6 +262,24 @@ def maybe_autobuild_plugin() -> None:
         print(f"[plugin-build] Auto-Build-Check fehlgeschlagen: {exc!r}")
 
 
+def warte_auf_build(max_sekunden: float = 120.0) -> bool:
+    """Wartet, bis ein laufender Plugin-Build fertig ist. True = nichts mehr offen.
+
+    Gebraucht beim Managerstart: der Auto-Build laeuft im Hintergrund, die Autostart-Server
+    starten aber sofort - und nehmen dabei das Jar mit, das in dem Moment auf der Platte
+    liegt. Ohne dieses Warten bekommt die Lobby nach JEDEM Update die vorige Fassung und
+    behaelt sie, bis jemand sie von Hand neu startet (danach ist die Datei gesperrt).
+    """
+    from time import monotonic, sleep as _schlafe
+
+    ende = monotonic() + max(0.0, float(max_sekunden))
+    while is_building():
+        if monotonic() >= ende:
+            return False
+        _schlafe(0.5)
+    return True
+
+
 def run_build_async(user_id: int | None = None) -> bool:
     """Build im Hintergrund starten (blockiert den HTTP-Request nicht). Bei Erfolg wird das
     Jar gleich auf die Lobby-Server verteilt. Ergebnis -> last_build_status() + Audit-Log.
