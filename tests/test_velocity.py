@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from pathlib import Path
 
 
@@ -581,3 +583,118 @@ def test_ohne_netzversion_wird_nichts_erneuert(tmp_path, monkeypatch):
     ps._resolve_jar({})
 
     assert geladen == []
+
+
+# ------------------------------------------------- Java-Bedarf aus dem Jar
+
+def _jar_mit_klasse(tmp_path, name, klassen_version, *, mit_manifest=True):
+    """Ein Mini-Jar mit einer .class-Datei der gewuenschten Klassendatei-Version."""
+    import zipfile
+
+    kopf = b"\xca\xfe\xba\xbe" + (0).to_bytes(2, "big") + klassen_version.to_bytes(2, "big")
+    jar = tmp_path / f"test-{klassen_version}.jar"
+    with zipfile.ZipFile(jar, "w") as z:
+        if mit_manifest:
+            z.writestr("META-INF/MANIFEST.MF",
+                       "Manifest-Version: 1.0\nMain-Class: " + name.replace("/", ".") + "\n")
+        z.writestr(name + ".class", kopf + b"restliche bytes")
+    return jar
+
+
+@pytest.mark.parametrize("klassen_version,java", [
+    (61, 17),   # Java 17
+    (65, 21),   # Java 21
+    (67, 23),   # Java 23
+    (69, 25),   # Java 25 - daran ist Velocity 4.3.1 gescheitert
+])
+def test_java_bedarf_kommt_aus_dem_jar(tmp_path, klassen_version, java):
+    from app.services.proxy_service import java_major_fuer_jar
+
+    jar = _jar_mit_klasse(tmp_path, "com/beispiel/Haupt", klassen_version)
+
+    assert java_major_fuer_jar(jar) == java
+
+
+def test_java_bedarf_faellt_nie_unter_das_mindestmass(tmp_path):
+    """Velocity 3.x braucht mindestens 17 - eine alte Klasse darf das nicht unterbieten."""
+    from app.services.proxy_service import java_major_fuer_jar
+
+    assert java_major_fuer_jar(_jar_mit_klasse(tmp_path, "a/B", 52)) == 17
+
+
+def test_java_bedarf_ohne_manifest(tmp_path):
+    """Ohne Main-Class wird irgendeine normale Klasse genommen."""
+    from app.services.proxy_service import java_major_fuer_jar
+
+    jar = _jar_mit_klasse(tmp_path, "irgend/Wo", 69, mit_manifest=False)
+
+    assert java_major_fuer_jar(jar) == 25
+
+
+def test_java_bedarf_ignoriert_mehrfachfassungen(tmp_path):
+    """META-INF/versions/ sind Zusatzfassungen fuer neuere Laufzeiten - KEINE Voraussetzung.
+
+    Wer die mitzaehlt, verlangt ein Java, das das Jar gar nicht braucht.
+    """
+    import zipfile
+
+    from app.services.proxy_service import java_major_fuer_jar
+
+    def _kopf(v):
+        return b"\xca\xfe\xba\xbe" + (0).to_bytes(2, "big") + v.to_bytes(2, "big") + b"xx"
+
+    jar = tmp_path / "mehrfach.jar"
+    with zipfile.ZipFile(jar, "w") as z:
+        z.writestr("com/beispiel/Haupt.class", _kopf(61))          # Java 17
+        z.writestr("META-INF/versions/25/com/beispiel/Haupt.class", _kopf(69))
+
+    assert java_major_fuer_jar(jar) == 17
+
+
+def test_java_bedarf_bei_kaputtem_jar(tmp_path):
+    from app.services.proxy_service import java_major_fuer_jar
+
+    kaputt = tmp_path / "kaputt.jar"
+    kaputt.write_bytes(b"kein zip")
+
+    assert java_major_fuer_jar(kaputt) == 17
+    assert java_major_fuer_jar(tmp_path / "fehlt.jar") == 17
+
+
+# ------------------------------------------------- Hoechste Version im Netz
+
+@pytest.mark.parametrize("a,b", [
+    ("26.3", "26.2"),
+    ("26.10", "26.2"),     # alphabetisch waere das falschherum
+    ("26.2", "1.21.11"),
+    ("1.21.11", "1.21.9"),
+])
+def test_versionsrang_zaehlt_zahlen_nicht_buchstaben(a, b):
+    from app.services.proxy_service import _version_rang
+
+    assert _version_rang(a) > _version_rang(b)
+
+
+def test_netzversion_nimmt_den_hoechsten_backend(client, tmp_path):
+    """Nicht die Lobby: ein 26.3-Client kommt sonst nicht herein, weil der Proxy
+    fuer die 26.2 der Lobby geholt wurde."""
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import proxy_service
+
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Lobby 26.2", slug="nv-lobby", server_type="paper",
+                   mc_version="26.2", base_path=str(tmp_path / "a"), port=25569,
+                   gateway_enabled=True, gateway_hostname="lobby", gateway_is_default=True),
+            Server(name="Paper 26.3", slug="nv-paper", server_type="paper",
+                   mc_version="26.3", base_path=str(tmp_path / "b"), port=25573,
+                   gateway_enabled=True, gateway_hostname="neu"),
+            # Kein Velocity-Backend -> zaehlt nicht mit.
+            Server(name="Spigot 99.9", slug="nv-spigot", server_type="spigot",
+                   mc_version="99.9", base_path=str(tmp_path / "c"), port=25591,
+                   gateway_enabled=True, gateway_hostname="alt"),
+        ])
+        db.commit()
+
+    assert proxy_service._netz_version() == "26.3"

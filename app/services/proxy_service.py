@@ -177,15 +177,92 @@ def _merke_geholt_fuer(version: str) -> None:
         pass
 
 
+def _version_rang(version: str) -> tuple:
+    """Vergleichbarer Rang einer MC-Version: "26.3" > "26.2" > "1.21.11".
+
+    Zahlenweise, nicht alphabetisch - sonst waere "26.10" kleiner als "26.2".
+    """
+    import re
+
+    return tuple(int(x) for x in re.findall(r"\d+", version or ""))
+
+
 def _netz_version() -> str:
-    """MC-Version der Lobby - die Version, die der Proxy koennen muss."""
+    """Die HOECHSTE Minecraft-Version unter den Velocity-Backends.
+
+    Nicht die der Lobby: durch den Proxy laufen alle Paper-Backends, und ein Client der
+    neuesten Version kommt gar nicht erst herein, wenn der Proxy sie nicht kennt. Eine
+    Lobby auf 26.2 neben einem Server auf 26.3 hat genau das erzeugt - der Proxy wies
+    26.3-Clients ab ("Incompatible client! Please use 1.7.2-26.2").
+    """
+    from sqlalchemy import select
+
     from app.db.session import SessionLocal
+    from app.models.server import Server as _Server
 
     try:
         with SessionLocal() as db:
-            return _lobby_mc_version(db).strip()
+            versionen = [
+                str(s.mc_version or "").strip()
+                for s in db.scalars(select(_Server).where(_Server.gateway_enabled.is_(True)))
+                if str(s.server_type or "").lower() in _BACKEND_TYPES
+            ]
     except Exception:  # noqa: BLE001 - darf den Start nie verhindern
         return ""
+    versionen = [v for v in versionen if v]
+    return max(versionen, key=_version_rang) if versionen else ""
+
+
+# Kleinste Java-Fassung, die wir ueberhaupt verlangen (Velocity 3.x braucht mindestens 17).
+_JAVA_MIN = 17
+# Eine .class-Datei traegt ihre Fassung in den Bytes 6-7. 61 = Java 17, 69 = Java 25.
+_KLASSE_ZU_JAVA = 44
+
+
+def java_major_fuer_jar(jar: str | Path) -> int:
+    """Welche Java-Hauptversion verlangt dieses Jar?
+
+    Gelesen wird die Klassendatei-Version der Hauptklasse (aus dem Manifest). Ein fest
+    verdrahtetes Mindestmass geht so lange gut, bis das Jar auf etwas Neuerem gebaut wird -
+    dann startet der Prozess, wirft UnsupportedClassVersionError und stirbt, im Minutentakt,
+    ohne dass irgendwo steht warum.
+    """
+    import re
+    import zipfile
+
+    def _aus_klasse(rohdaten: bytes) -> int | None:
+        if len(rohdaten) >= 8 and rohdaten[:4] == b"\xca\xfe\xba\xbe":
+            major = int.from_bytes(rohdaten[6:8], "big")
+            if 45 <= major <= 99:
+                return max(_JAVA_MIN, major - _KLASSE_ZU_JAVA)
+        return None
+
+    try:
+        with zipfile.ZipFile(jar) as z:
+            try:
+                manifest = z.read("META-INF/MANIFEST.MF").decode("utf-8", "replace")
+                treffer = re.search(r"Main-Class:\s*([\w.$]+)", manifest)
+            except KeyError:
+                treffer = None
+            if treffer:
+                pfad = treffer.group(1).strip().replace(".", "/") + ".class"
+                try:
+                    gefunden = _aus_klasse(z.read(pfad)[:8])
+                    if gefunden:
+                        return gefunden
+                except KeyError:
+                    pass
+            # Keine Hauptklasse gefunden -> irgendeine normale Klasse nehmen. NICHT die
+            # unter META-INF/versions/: das sind Zusatzfassungen fuer neuere Laufzeiten,
+            # die das Jar gerade NICHT voraussetzt.
+            for name in z.namelist():
+                if name.endswith(".class") and not name.startswith("META-INF/"):
+                    gefunden = _aus_klasse(z.read(name)[:8])
+                    if gefunden:
+                        return gefunden
+    except Exception:  # noqa: BLE001 - im Zweifel das Mindestmass, nie abstuerzen
+        pass
+    return _JAVA_MIN
 
 
 def _resolve_jar(cfg: dict) -> str | None:
@@ -442,10 +519,15 @@ def start_velocity(cfg: dict) -> bool:
     from app.db.session import SessionLocal
     from app.services import java_runtime_service
 
+    # Nicht raten, sondern das Jar fragen: ein neueres Velocity braucht ein neueres Java.
+    gebraucht = java_major_fuer_jar(jar)
     with SessionLocal() as db:
-        java = java_runtime_service.resolve_java_binary(db, 17)   # ggf. JDK-Autoinstall
+        java = java_runtime_service.resolve_java_binary(db, gebraucht)  # ggf. JDK-Autoinstall
     if not java:
-        _glog("java_missing", "Kein Java 17+ fuer Velocity verfuegbar (Auto-Install fehlgeschlagen).")
+        _glog("java_missing",
+              f"Kein Java {gebraucht}+ fuer Velocity verfuegbar (Auto-Install fehlgeschlagen). "
+              f"Dieses velocity.jar ist fuer Java {gebraucht} gebaut - mit einer aelteren "
+              f"Laufzeit startet es, wirft UnsupportedClassVersionError und stirbt sofort.")
         return False
 
     signature, backend_names, mc_version = _write_runtime_config(cfg)   # nur Dateien, kein Netz
