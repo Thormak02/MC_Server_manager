@@ -895,3 +895,22 @@ def test_via_plugins_folgen_der_netzversion(client, tmp_path, monkeypatch):
          "max_players": 100, "secret": ""})
 
     assert mc_version == "26.3", f"Via wuerde fuer {mc_version} geladen"
+
+
+def test_neue_anmeldung_ersetzt_eine_haengende_sitzung():
+    """Sonst sperrt eine Geistersitzung den Spieler aus - gemessen ueber zwei Stunden.
+
+    Velocity meldet dann "Du bist bereits mit diesem Proxy verbunden!", obwohl niemand
+    mehr da ist: ein Client ist ohne sauberes Abmelden verschwunden und die halboffene
+    Verbindung blieb registriert. Dasselbe trifft den Rueckweg der Lobby, weil ein
+    nativer Transfer zum SELBEN Proxy zurueckfuehrt.
+
+    Unbedenklich ist das nur mit Anmeldepruefung - deshalb steht beides zusammen hier.
+    """
+    from app.services import proxy_service
+
+    cfg = {"bind_port": 25605, "domain": "mc.example.de", "motd": "x", "max_players": 100}
+    toml = proxy_service.render_velocity_toml(cfg, [], None)
+
+    assert "kick-existing-players = true" in toml
+    assert "online-mode = true" in toml

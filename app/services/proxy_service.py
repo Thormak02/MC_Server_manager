@@ -441,7 +441,19 @@ def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None
         lines.append('player-info-forwarding-mode = "modern"')
         lines.append('forwarding-secret-file = "forwarding.secret"')
     lines.append("announce-forge = false")
-    lines.append("kick-existing-players = false")
+    # Eine neue Anmeldung ERSETZT eine alte Sitzung desselben Spielers.
+    #
+    # Mit false weist Velocity sie ab: "Du bist bereits mit diesem Proxy verbunden!".
+    # Das trifft zwei Faelle, die beide weh tun:
+    #   * Geistersitzungen. Verschwindet ein Client ohne sauberes Abmelden (Fenster zu,
+    #     Netz weg), bleibt die halboffene Verbindung im Proxy stehen - gemessen ueber
+    #     zwei Stunden. Der Spieler kommt bis zu einem Proxy-Neustart nicht mehr herein.
+    #   * Den Rueckweg der Lobby. Ein nativer Transfer fuehrt den Client zum SELBEN Proxy
+    #     zurueck; die alte Sitzung ist dabei noch einen Moment registriert.
+    # Gefahrlos ist das, weil Velocity hier online-mode = true faehrt: wer sich neu
+    # anmeldet, ist nachweislich derselbe Spieler. Erst ohne Anmeldepruefung waere das
+    # ein Weg, andere hinauszuwerfen.
+    lines.append("kick-existing-players = true")
     # Durchreichen bleibt AUS: die Status-Antwort je Server holt das Gateway direkt beim
     # gemeinten Server (siehe gateway_service), und am Apex gehoert die Netzwerk-MOTD hin.
     # Nur die SCHREIBWEISE richtet sich nach dem Jar.
