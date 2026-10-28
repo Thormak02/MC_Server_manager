@@ -813,3 +813,85 @@ def test_kein_schluessel_steht_ausserhalb_der_vorlage(tmp_path):
                           "player-info-forwarding-mode", "forwarding-secret-file",
                           "announce-forge", "kick-existing-players"}
         assert not unbekannt, f"[{abschnitt}]: {sorted(unbekannt)}"
+
+
+# ------------------------------------------------- Via-Plugins duerfen nicht still veralten
+
+def test_fehlgeschlagener_via_download_wird_gemeldet(monkeypatch):
+    """Vorher wurde die Rueckgabe weggeworfen - der Uebersetzer hing dem Netz hinterher
+    und niemand erfuhr davon."""
+    from app.services import proxy_service, viaversion_service
+
+    monkeypatch.setattr(viaversion_service, "install_velocity_plugins",
+                        lambda ordner, version: (False, "Velocity-Via-Download fehlgeschlagen (viaversion)."))
+    monkeypatch.setattr("app.providers.server.common.offline_mode_enabled", lambda: False)
+    gemeldet = []
+    monkeypatch.setattr(proxy_service, "_glog",
+                        lambda ereignis, text="": gemeldet.append((ereignis, text)))
+
+    proxy_service._install_via_plugins("26.3")
+
+    assert any(e == "via_veraltet" for e, _ in gemeldet), gemeldet
+    assert any("26.3" in txt for _, txt in gemeldet)
+
+
+def test_teilweise_geladene_via_plugins_werden_gemeldet(monkeypatch):
+    from app.services import proxy_service, viaversion_service
+
+    monkeypatch.setattr(viaversion_service, "install_velocity_plugins",
+                        lambda ordner, version: (True, "Velocity-Via installiert: A. Nicht geladen: viarewind."))
+    monkeypatch.setattr("app.providers.server.common.offline_mode_enabled", lambda: False)
+    gemeldet = []
+    monkeypatch.setattr(proxy_service, "_glog",
+                        lambda ereignis, text="": gemeldet.append((ereignis, text)))
+
+    proxy_service._install_via_plugins("26.3")
+
+    assert any(e == "via_teilweise" for e, _ in gemeldet), gemeldet
+
+
+def test_vollstaendiger_via_download_meldet_nichts(monkeypatch):
+    """Ueberzumelden waere auch falsch - der Start laeuft alle paar Sekunden."""
+    from app.services import proxy_service, viaversion_service
+
+    monkeypatch.setattr(viaversion_service, "install_velocity_plugins",
+                        lambda ordner, version: (True, "Velocity-Via installiert: A, B, C."))
+    monkeypatch.setattr("app.providers.server.common.offline_mode_enabled", lambda: False)
+    gemeldet = []
+    monkeypatch.setattr(proxy_service, "_glog",
+                        lambda ereignis, text="": gemeldet.append((ereignis, text)))
+
+    proxy_service._install_via_plugins("26.3")
+
+    assert gemeldet == []
+
+
+def test_via_plugins_folgen_der_netzversion(client, tmp_path, monkeypatch):
+    """Nicht der Lobby-Version: die Uebersetzer muessen zu dem passen, was der Proxy
+    tatsaechlich bedient."""
+    from app.db.session import SessionLocal
+    from app.models.server import Server
+    from app.services import proxy_service
+
+    with SessionLocal() as db:
+        db.add_all([
+            Server(name="Via Lobby", slug="via-lobby", server_type="paper",
+                   mc_version="26.2", base_path=str(tmp_path / "a"), port=25569,
+                   gateway_enabled=True, gateway_hostname="lobby", gateway_is_default=True),
+            Server(name="Via Neu", slug="via-neu", server_type="paper",
+                   mc_version="26.3", base_path=str(tmp_path / "b"), port=25573,
+                   gateway_enabled=True, gateway_hostname="neu"),
+        ])
+        db.commit()
+
+    gesehen = []
+    monkeypatch.setattr(proxy_service, "_work_dir", lambda: tmp_path)
+    monkeypatch.setattr(proxy_service, "render_velocity_toml",
+                        lambda *a, **k: "config-version = \"2.9\"\n")
+    monkeypatch.setattr(proxy_service, "_install_via_plugins", lambda v: gesehen.append(v))
+
+    _sig, _namen, mc_version = proxy_service._write_runtime_config(
+        {"bind_port": 25605, "domain": "mc.example.de", "motd": "x",
+         "max_players": 100, "secret": ""})
+
+    assert mc_version == "26.3", f"Via wuerde fuer {mc_version} geladen"

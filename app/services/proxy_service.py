@@ -505,7 +505,9 @@ def _write_runtime_config(cfg: dict) -> tuple[str, list[str], str]:
 
     with SessionLocal() as db:
         backends, lobby_name = velocity_backends(db)
-        mc_version = _lobby_mc_version(db)
+        # Die HOECHSTE Version im Netz, nicht die der Lobby: die Via-Builds muessen zu dem
+        # passen, was der Proxy tatsaechlich bedienen soll.
+        mc_version = _netz_version() or _lobby_mc_version(db)
         from app.services import server_service
         forwarding_mode = server_service.velocity_forwarding_mode(db)
     toml_text = render_velocity_toml(cfg, backends, lobby_name, forwarding_mode=forwarding_mode)
@@ -516,14 +518,26 @@ def _write_runtime_config(cfg: dict) -> tuple[str, list[str], str]:
 
 
 def _install_via_plugins(mc_version: str) -> None:
-    """Via-Plugins (Velocity-Builds) passend zur Lobby-Version laden (best-effort,
-    nur beim tatsaechlichen Start aufrufen - Netzwerk)."""
+    """Via-Plugins (Velocity-Builds) zur hoechsten Netzversion laden (best-effort).
+
+    Das Ergebnis wird PROTOKOLLIERT. Vorher wurde es weggeworfen: fand der Manager fuer
+    eine neue Minecraft-Version keinen Build, behielt er stillschweigend die alten Jars -
+    und niemand erfuhr, dass der Uebersetzer dem Netz hinterherhinkt.
+    """
     try:
         from app.providers.server.common import offline_mode_enabled
         from app.services import viaversion_service
 
         if mc_version and not offline_mode_enabled():
-            viaversion_service.install_velocity_plugins(_work_dir() / "plugins", mc_version)
+            ok, meldung = viaversion_service.install_velocity_plugins(
+                _work_dir() / "plugins", mc_version)
+            if not ok:
+                _glog("via_veraltet",
+                      f"{meldung} Fuer '{mc_version}' konnte kein Via-Build geladen werden - "
+                      f"die vorhandenen Jars bleiben in Betrieb und koennen aelter sein als "
+                      f"das Netz.")
+            elif "Nicht geladen" in meldung:
+                _glog("via_teilweise", meldung)
     except Exception:  # noqa: BLE001
         pass
 
