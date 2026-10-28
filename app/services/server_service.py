@@ -795,6 +795,68 @@ def read_max_players(server: Server) -> int | None:
         return None
 
 
+# Eine MOTD hat hoechstens zwei Zeilen - mehr zeigt kein Client an.
+MOTD_ZEILEN = 2
+# Ab ungefaehr hier schneidet die Serverliste sichtbar ab (Farbcodes zaehlen nicht mit).
+MOTD_ZEICHEN_WARNUNG = 45
+# Der Paragraf, mit dem Minecraft Farben und Formatierung einleitet.
+MOTD_ZEICHEN = "\u00a7"
+
+
+def read_motd(server: Server) -> str:
+    """Die MOTD, wie sie in server.properties steht (mit ``\\n`` als Umbruch)."""
+    return read_server_property(server, "motd") or ""
+
+
+def motd_zerlegen(roh: str) -> list[str]:
+    """Den Dateiwert in seine (hoechstens zwei) Zeilen zerlegen.
+
+    In server.properties ist der Backslash ein Fluchtzeichen: ``\\n`` ist der Umbruch,
+    ``\\\\`` ein echter Backslash. Beides wird hier aufgeloest, damit im Eingabefeld
+    steht, was der Spieler spaeter sieht.
+    """
+    text = roh or ""
+    zeilen: list[str] = [""]
+    i = 0
+    while i < len(text):
+        zeichen = text[i]
+        if zeichen == "\\" and i + 1 < len(text):
+            folgt = text[i + 1]
+            if folgt == "n":
+                zeilen.append("")
+                i += 2
+                continue
+            if folgt == "\\":
+                zeilen[-1] += "\\"
+                i += 2
+                continue
+            # Unbekannte Flucht: so lassen, wie sie dasteht.
+            zeilen[-1] += zeichen
+            i += 1
+            continue
+        zeilen[-1] += zeichen
+        i += 1
+    while len(zeilen) < MOTD_ZEILEN:
+        zeilen.append("")
+    return zeilen[:MOTD_ZEILEN]
+
+
+def motd_bauen(*zeilen: str) -> str:
+    """Die Zeilen zu dem Wert zusammensetzen, der in server.properties gehoert.
+
+    Echte Zeilenumbrueche aus einem Eingabefeld wuerden die Datei zerreissen - eine
+    Property endet am Zeilenende. Sie werden deshalb entfernt, der Umbruch zwischen den
+    beiden MOTD-Zeilen wird als ``\\n`` geschrieben.
+    """
+    sauber: list[str] = []
+    for zeile in list(zeilen)[:MOTD_ZEILEN]:
+        text = (zeile or "").replace("\r", "").replace("\n", " ").strip()
+        sauber.append(text.replace("\\", "\\\\"))
+    while sauber and not sauber[-1]:
+        sauber.pop()   # leere zweite Zeile nicht als "\n" mitschreiben
+    return "\\n".join(sauber)
+
+
 def _upsert_server_property(server: Server, key: str, value: str) -> str | None:
     base_path = Path(server.base_path).expanduser().resolve()
     if not base_path.exists() or not base_path.is_dir():
@@ -853,26 +915,11 @@ def disable_server_pause(server: Server) -> bool:
     Zwei Mechanismen fuer dieselbe Aufgabe, und nur einer davon ist fuer den Manager
     sichtbar. Also bleibt der sichtbare.
     """
-    alt = _server_property(server, PAUSE_SCHLUESSEL)
+    alt = read_server_property(server, PAUSE_SCHLUESSEL)
     if alt is not None and alt.strip() in {"0", "-1"}:
         return False
     _upsert_server_property(server, PAUSE_SCHLUESSEL, "0")
     return True
-
-
-def _server_property(server: Server, key: str) -> str | None:
-    """Aktueller Wert aus server.properties, oder None wenn es ihn nicht gibt."""
-    try:
-        pfad = Path(server.base_path).expanduser().resolve() / "server.properties"
-        if not pfad.is_file():
-            return None
-        for roh in pfad.read_text(encoding="utf-8", errors="ignore").splitlines():
-            zeile = roh.strip()
-            if zeile.startswith(f"{key}="):
-                return zeile.split("=", 1)[1]
-    except OSError:
-        return None
-    return None
 
 
 def _sync_forge_jvm_args(server: Server) -> str | None:
@@ -1558,6 +1605,7 @@ def update_server_settings(
     auto_restart: bool,
     auto_start_with_manager: bool,
     max_players: int | None = None,
+    motd: str | None = None,
     start_mode: str | None,
     start_command: str | None,
     start_bat_path: str | None,
@@ -1598,6 +1646,14 @@ def update_server_settings(
     # "Feld nicht mitgeschickt" und laesst den vorhandenen Wert in Ruhe.
     if max_players is not None:
         warnung = _upsert_server_property(server, "max-players", str(int(max_players)))
+        if warnung:
+            warnings.append(warnung)
+
+    # Dasselbe fuer die MOTD: sie gehoert in die Datei, nicht in die Datenbank. None
+    # heisst "Feld nicht mitgeschickt" und laesst den vorhandenen Wert in Ruhe - sonst
+    # wuerde jedes Speichern einer anderen Einstellung die MOTD loeschen.
+    if motd is not None:
+        warnung = _upsert_server_property(server, "motd", motd)
         if warnung:
             warnings.append(warnung)
 

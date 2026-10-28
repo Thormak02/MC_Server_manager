@@ -44,6 +44,9 @@ from app.services.server_service import (
     get_server_by_id,
     list_servers_for_user,
     read_max_players,
+    read_motd,
+    motd_zerlegen,
+    motd_bauen,
     rename_server,
     sleep_delay_to_seconds,
     sync_server_settings_to_files,
@@ -307,6 +310,7 @@ def server_detail_page(
             # der Wert, mit dem der Server gestartet ist, und haengt nach einer
             # Aenderung bis zum Neustart hinterher.
             configured_max_players=read_max_players(server),
+            motd_zeilen=motd_zerlegen(read_motd(server)),
             online_players=online_players,
             can_change_mc_version=version_change_block_reason is None,
             version_change_block_reason=version_change_block_reason,
@@ -730,6 +734,8 @@ def update_server_settings_action(
     memory_max_mb: Annotated[str | None, Form()] = None,
     port: Annotated[str | None, Form()] = None,
     max_players: Annotated[str | None, Form()] = None,
+    motd_zeile1: Annotated[str | None, Form()] = None,
+    motd_zeile2: Annotated[str | None, Form()] = None,
     auto_restart: Annotated[str | None, Form()] = None,
     auto_start_with_manager: Annotated[str | None, Form()] = None,
     sleep_enabled: Annotated[str | None, Form()] = None,
@@ -801,6 +807,10 @@ def update_server_settings_action(
         port=_to_optional_int(port),
         auto_restart=_to_bool(auto_restart),
         max_players=parsed_max_players,
+        # Nur mitschicken, wenn das Formular die Felder wirklich hatte - sonst
+        # wuerde ein Speichern von anderer Stelle die MOTD leeren.
+        motd=(motd_bauen(motd_zeile1 or "", motd_zeile2 or "")
+              if (motd_zeile1 is not None or motd_zeile2 is not None) else None),
         auto_start_with_manager=_to_bool(auto_start_with_manager),
         sleep_enabled=_to_bool(sleep_enabled),
         sleep_delay_seconds=(

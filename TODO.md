@@ -492,7 +492,7 @@ Offen: Testisolation. schedule_service war im conftest nicht neu geladen und fra
 
 Offen: NAS-Abgleich steht seit 6.10. Task mcsm-nas-sync ist aktiv und korrekt eingerichtet, letzter Lauf 6.10. 14:17 mit Ergebnis 0 - der Auslöser hängt, Ursache noch offen.
 
-~~Offen: 1.21.11-spigot und 26.2-spigot haben kein Gateway und keinen Hostnamen - im Netzwerk nicht erreichbar.~~
+~~~~1.21.11-spigot und 26.2-spigot ohne Gateway - bewusst so, bleiben aus dem Netz draußen.~~~~
 
 ~~Lobby-Wechsel (Kompass und /lobby) blieb stumm: Velocity wurde EINMAL geladen und nie wieder, blieb auf 26.2 waehrend das Netz auf 26.3 zog. ViaVersion uebersetzte still 26.3->26.2 und verschluckte dabei die bungeecord:main-Nachricht. /server ging, weil das Velocitys eigener Befehl ist.~~
 
@@ -504,9 +504,9 @@ Offen: NAS-Abgleich steht seit 6.10. Task mcsm-nas-sync ist aktiv und korrekt ei
 
 ~~Zwei .bat-Dateien zum Starten/Stoppen des Managers (scripts/), fuer Desktop-Verknuepfungen. Stoppen beendet auch den uvicorn-Prozess, sonst blockiert er den naechsten Start.~~
 
-Offen: Absturzschleife des Proxys gehoert aufs Dashboard, nicht nur ins Pruefprotokoll. Velocity starb zwei Stunden im Minutentakt, sichtbar war nur "Lobby startet gerade".
+Offen: stille Fehlzustände gehören aufs Dashboard, nicht nur ins Prüfprotokoll. Velocity starb zwei Stunden im Minutentakt, sichtbar war nur "Lobby startet gerade". Dasselbe gilt für ein veraltetes Lobby-Plugin, eine veraltete Via-Fassung und ein Jar, das nicht zur Netzversion passt - alles wird inzwischen protokolliert, aber nirgends angezeigt.
 
-Offen: Via-Plugins werden still auf dem alten Stand gelassen, wenn es fuer die neue Version keinen Build gibt - ohne Hinweis.
+~~Via-Plugins blieben still auf altem Stand, wenn es für die neue Version keinen Build gibt. Wird jetzt gemeldet, und die Fassung folgt der höchsten Netzversion statt der Lobby-Version.~~
 
 ~~Kompass-Wechsel auf ein Velocity-Backend ging nie: das "Connect" an den Proxy wird nicht quittiert, und niemand hat nachgesehen. Modpack-Ziele liefen immer ueber den nativen Transfer, deshalb fiel es nicht auf - der 26.3er war das erste Backend im Menue. Jetzt wird nach 2 s geprueft und notfalls nativ transferiert.~~
 
@@ -518,4 +518,6 @@ Offen: Via-Plugins werden still auf dem alten Stand gelassen, wenn es fuer die n
 
 ~~Velocity 4 braucht Java 25 und ein anderes Konfigurationsformat ([ping-passthrough] als Abschnitt, config-version 2.9). Beides wird jetzt aus dem Jar gelesen statt festgeschrieben.~~
 
-Offen: warum Velocity die "Connect"-Nachricht verwirft, ist ungeklaert. Kanal, Servername, Laenge und Konfiguration stimmen nachweislich; Velocity 4 bedient den Kanal laut eigenem Jar. Der Rueckfall macht die Funktion benutzbar, erklaert sie aber nicht.
+~~Kompass auf den 26.3er geht wieder - über den Rückfall auf den nativen Transfer, live bestätigt.~~
+
+Offen: warum Velocity die "Connect"-Nachricht verwirft, ist ungeklärt. Kanal, Servername, Länge und Konfiguration stimmen nachweislich, Velocity 4 bedient den Kanal laut eigenem Jar. Nur kosmetisch (kurzer Verbindungsbildschirm statt internem Umschalten) - aber ungeklärt.

@@ -2263,3 +2263,135 @@ h5.md-h, h6.md-h { font-size: 0.92rem; }
         opacity: 1;
     }
 }
+
+
+/* ----------------------------------------------------------------- MOTD-Editor */
+/* Die Vorschau ahmt die Serverliste nach: dunkler Grund, Minecrafts Graustufe als
+   Grundfarbe, feste Zeichenbreite. Sie soll zeigen, was der Spieler sieht - nicht,
+   was zur Oberflaeche passt. */
+.motd-palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin: 0.5rem 0 0.75rem;
+}
+
+.motd-gruppe {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.motd-gruppe-extra {
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.motd-knopf {
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1;
+    background: var(--panel-soft);
+    color: var(--text);
+}
+
+.motd-knopf:hover {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+.motd-format-l { font-weight: 800; }
+.motd-format-o { font-style: italic; }
+.motd-format-n { text-decoration: underline; }
+.motd-format-m { text-decoration: line-through; }
+
+.motd-hex {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.motd-hex input[type="color"] {
+    width: 2rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: none;
+}
+
+.motd-eingabe {
+    font-family: var(--font-mono);
+}
+
+.motd-zaehler {
+    display: block;
+    margin-top: 0.2rem;
+    font-size: 0.78rem;
+}
+
+.motd-zuviel {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+.motd-vorschau {
+    margin-top: 0.35rem;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    /* Fester dunkler Grund, unabhaengig vom Thema: so sieht die Serverliste aus. */
+    background: #2b2b2b;
+}
+
+.motd-vorschau-kopf {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+
+.motd-icon {
+    flex: 0 0 auto;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 4px;
+    background: linear-gradient(135deg, #6a7b53, #4a5a3c);
+}
+
+.motd-vorschau-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-family: var(--font-mono);
+    font-size: 0.95rem;
+    line-height: 1.35;
+}
+
+.motd-zeile {
+    /* Kein Umbruch: die Serverliste bricht auch nicht um, sie schneidet ab. */
+    white-space: pre;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-height: 1.35em;
+    color: #aaaaaa;
+}
+
+.motd-ping {
+    flex: 0 0 auto;
+    color: #aaaaaa;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.motd-hinweis:empty {
+    display: none;
+}

@@ -274,6 +274,58 @@
             </div>
         </div>
 
+        <div class="settings-section" id="motd-editor"
+             data-hex="{{ 'ja' if server.server_type|lower in ['paper', 'purpur', 'folia'] else 'nein' }}">
+            <h3>MOTD &ndash; der Text in der Serverliste</h3>
+            <p class="muted">
+                Zwei Zeilen, genau wie im Spiel. Farben und Formatierung setzt du mit den
+                Knoepfen &ndash; sie werden an der Stelle eingefuegt, an der die Schreibmarke
+                steht, und gelten ab dort bis zum naechsten Code oder bis &bdquo;Zuruecksetzen&ldquo;.
+            </p>
+
+            <div class="motd-palette" role="group" aria-label="Farben und Formatierung">
+                <div class="motd-gruppe" data-gruppe="farben"></div>
+                <div class="motd-gruppe" data-gruppe="formate"></div>
+                <div class="motd-gruppe motd-gruppe-extra">
+                    <label class="motd-hex" hidden>
+                        <input type="color" id="motd-hex" value="#55ffff">
+                        <span>Eigene Farbe</span>
+                    </label>
+                    <button type="button" class="ghost" id="motd-clear">Codes entfernen</button>
+                </div>
+            </div>
+
+            <div class="grid settings-grid">
+                <div class="field-full">
+                    <label for="motd_zeile1">Zeile 1</label>
+                    <input id="motd_zeile1" name="motd_zeile1" type="text" class="motd-eingabe"
+                           maxlength="200" autocomplete="off" spellcheck="false"
+                           value="{{ motd_zeilen[0] if motd_zeilen else '' }}">
+                    <span class="motd-zaehler muted" data-fuer="motd_zeile1"></span>
+                </div>
+                <div class="field-full">
+                    <label for="motd_zeile2">Zeile 2</label>
+                    <input id="motd_zeile2" name="motd_zeile2" type="text" class="motd-eingabe"
+                           maxlength="200" autocomplete="off" spellcheck="false"
+                           value="{{ motd_zeilen[1] if motd_zeilen and motd_zeilen|length > 1 else '' }}">
+                    <span class="motd-zaehler muted" data-fuer="motd_zeile2"></span>
+                </div>
+            </div>
+
+            <label>Vorschau</label>
+            <div class="motd-vorschau" aria-live="polite">
+                <div class="motd-vorschau-kopf">
+                    <span class="motd-icon" aria-hidden="true"></span>
+                    <div class="motd-vorschau-text">
+                        <div class="motd-zeile" data-zeile="1"></div>
+                        <div class="motd-zeile" data-zeile="2"></div>
+                    </div>
+                    <span class="motd-ping" aria-hidden="true">0/{{ configured_max_players or 20 }}</span>
+                </div>
+            </div>
+            <p class="muted motd-hinweis"></p>
+        </div>
+
         <div class="settings-section">
             <h3>Automatik &amp; Sleep</h3>
             <div class="grid settings-grid">
@@ -1292,4 +1344,5 @@
     });
 })();
 </script>
+<script src="{{ request.url_for('static', path='js/motd.js') }}?v=1"></script>
 {% endblock %}
