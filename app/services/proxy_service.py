@@ -272,6 +272,12 @@ def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None
     # transferierten Verbindungen ab -> Client: "Connection failed while transferring to
     # the server". Muss im [advanced]-Block stehen, sonst ignoriert Velocity es.
     lines.append("accepts-transfers = true")
+    # Der BungeeCord-Kanal ist der Weg, auf dem die Lobby Spieler INTERN umschaltet
+    # ("Connect"). Velocitys Vorgabe ist true - aber der Manager schreibt diese Datei
+    # vollstaendig selbst, und was er nicht hinschreibt, haengt an einer Vorgabe, die er
+    # nicht kontrolliert. Eine Zeile, die eine Unbekannte beseitigt: ohne diesen Kanal
+    # verschwinden Menue-Klick und /lobby spurlos, ohne jede Meldung irgendwo.
+    lines.append("bungee-plugin-message-channel = true")
     lines.append("")
     lines.append("[query]")
     lines.append("enabled = false")

@@ -32,6 +32,11 @@ def test_render_velocity_toml_modern_forwarding():
     # ohne das scheitern per Transfer-Paket transferierte 767-Vanilla-Clients.
     assert "accepts-transfers = true" in toml
     assert "accepts-transfers = true" in toml.split("[advanced]", 1)[1]
+    # Der BungeeCord-Kanal traegt das interne Umschalten der Lobby ("Connect").
+    # Fehlt er, verschwinden Menue-Klick und /lobby spurlos - ohne Meldung irgendwo.
+    # Velocitys Vorgabe waere true, aber der Manager schreibt die Datei vollstaendig
+    # selbst und soll sich nicht auf eine Vorgabe verlassen, die er nicht kontrolliert.
+    assert "bungee-plugin-message-channel = true" in toml.split("[advanced]", 1)[1]
 
 
 def test_render_velocity_toml_no_backends():
