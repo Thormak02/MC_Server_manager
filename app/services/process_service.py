@@ -1785,6 +1785,66 @@ RECHTE_BEFEHLE = frozenset({"op", "deop", "pardon", "pardon-ip"})
 WHITELIST_GESPERRT = frozenset({"off"})
 
 
+# Dateien im Serverhauptordner, die Minecraft beim Start liest. Wer sie schreibt, tut
+# dasselbe wie mit dem Konsolenbefehl daneben - nur dauerhaft und ueber einen Neustart
+# hinweg. Zugeordnet wird deshalb der BEFEHL und nicht ein eigener Grund: eine zweite
+# Liste wuerde irgendwann von RECHTE_BEFEHLE abweichen, und dann ist wieder ein Weg offen.
+RECHTE_DATEIEN = {
+    "ops.json": "op",
+    "banned-players.json": "pardon",
+    "banned-ips.json": "pardon-ip",
+}
+
+# Der Schalter in server.properties, der die Whitelist abschaltet.
+WHITELIST_SCHALTER = "white-list"
+
+
+def _dateiname_im_hauptordner(relativer_pfad: str) -> str:
+    """Der Dateiname, wenn die Datei direkt im Serverordner liegt - sonst leer.
+
+    Minecraft liest nur ``<Serverordner>/ops.json``. Eine ``backups/ops.json`` oder eine
+    Plugin-Datei gleichen Namens vergibt keine Rechte und wird deshalb nicht gesperrt.
+    """
+    pfad = (relativer_pfad or "").replace("\\", "/").strip()
+    while pfad.startswith("./"):
+        pfad = pfad[2:]
+    pfad = pfad.strip("/")
+    return pfad.lower() if pfad and "/" not in pfad else ""
+
+
+def datei_braucht_admin(relativer_pfad: str) -> str:
+    """Ist diese Datei der dauerhafte Weg zu op/deop/pardon? Rueckgabe: der Grund, sonst "".
+    """
+    befehl = RECHTE_DATEIEN.get(_dateiname_im_hauptordner(relativer_pfad))
+    return braucht_admin(befehl) if befehl else ""
+
+
+def _whitelist_wert(inhalt: str) -> str:
+    for roh in (inhalt or "").splitlines():
+        zeile = roh.strip()
+        if not zeile or zeile.startswith("#") or "=" not in zeile:
+            continue
+        schluessel, wert = zeile.split("=", 1)
+        if schluessel.strip().lower() == WHITELIST_SCHALTER:
+            return wert.strip().lower()
+    return ""
+
+
+def whitelist_wird_abgeschaltet(relativer_pfad: str, alt: str, neu: str) -> str:
+    """Schaltet diese Aenderung an server.properties die Whitelist ab?
+
+    Nicht die Datei als Ganzes ist Admin-Sache - ``motd`` darf jeder Moderator aendern.
+    Admin-Sache ist genau der Uebergang von an nach aus, also dasselbe wie
+    ``whitelist off``. Ein fehlender Schluessel zaehlt als aus (so liest es Minecraft),
+    damit auch das Loeschen der Datei erkannt wird.
+    """
+    if _dateiname_im_hauptordner(relativer_pfad) != "server.properties":
+        return ""
+    if _whitelist_wert(alt) != "true" or _whitelist_wert(neu) == "true":
+        return ""
+    return braucht_admin("whitelist off")
+
+
 def _befehl_wortfolge(command: str) -> list[str]:
     """Den Befehl in Kleinbuchstaben zerlegen, ohne Schraegstrich und Namensraum.
 

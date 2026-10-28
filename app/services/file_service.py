@@ -12,6 +12,7 @@ from typing import Any
 
 from app.models.server import Server
 from app.schemas.file_editor import FileReadResponse
+from app.services import yaml_assistant_service
 
 
 # Reihenfolge, in der die bekannten Dateien im Serverordner angezeigt werden - die am
@@ -904,10 +905,42 @@ def get_assistant_payload(relative_path: str, content: str) -> dict[str, Any] | 
             "assistant_json_base": json.dumps(obj, ensure_ascii=False),
         }
 
+    if normalized.endswith((".yml", ".yaml")):
+        payload, _grund = yaml_assistant_service.baue(content)
+        return payload
+
     return None
 
 
-def build_content_from_assistant(relative_path: str, form_data: dict[str, str]) -> str:
+def assistent_hinweis(relative_path: str, content: str) -> str:
+    """Warum gibt es hier keinen Assistenten? Leerer Text heisst: es gibt einen.
+
+    Ohne diese Erklaerung sah der Nutzer nach einem Klick auf „Assistent“ einfach
+    wieder den Freitext und musste raten, ob der Knopf kaputt ist.
+    """
+    normalized = relative_path.replace("\\", "/").lower()
+    if normalized.endswith((".yml", ".yaml")):
+        payload, grund = yaml_assistant_service.baue(content)
+        return "" if payload is not None else grund
+    try:
+        if get_assistant_payload(relative_path, content) is not None:
+            return ""
+    except Exception:  # noqa: BLE001 - ein kaputter Assistent darf die Seite nicht killen
+        return ("Diese Datei konnte der Assistent nicht lesen. Aenderungen gehen hier ueber "
+                "den Freitext.")
+    return ("Fuer diese Dateiart gibt es keinen Assistenten - der Manager kennt "
+            ".properties, .yml, .yaml, .json und eula.txt. Aenderungen gehen hier ueber "
+            "den Freitext.")
+
+
+def build_content_from_assistant(relative_path: str, form_data: dict[str, str],
+                                 aktueller_inhalt: str | None = None) -> str:
+    """Baut den neuen Dateiinhalt aus den Formularfeldern.
+
+    ``aktueller_inhalt`` ist der Stand, der JETZT auf der Platte liegt. Nur YAML braucht
+    ihn: dort wird nicht neu erzeugt, sondern im vorhandenen Text ersetzt - sonst waeren
+    alle Kommentare weg.
+    """
     normalized = relative_path.replace("\\", "/").lower()
 
     if normalized.endswith(".properties"):
@@ -991,6 +1024,13 @@ def build_content_from_assistant(relative_path: str, form_data: dict[str, str]) 
         raw_json = form_data.get("extras_text", "")
         parsed = json.loads(raw_json)
         return json.dumps(parsed, indent=2, ensure_ascii=False) + "\n"
+
+    if normalized.endswith((".yml", ".yaml")):
+        if aktueller_inhalt is None:
+            raise ValueError("Die Datei konnte nicht gelesen werden - nichts gespeichert.")
+        return yaml_assistant_service.schreibe(
+            aktueller_inhalt, form_data,
+            form_data.get("__assistant_yaml_meta") or "")
 
     raise ValueError("Assistent fuer diese Datei nicht verfuegbar.")
 

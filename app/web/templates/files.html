@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
+{# Sortierung, Richtung und Suche der Dateiliste. Jeder Weg zurueck auf diese Seite muss
+   sie mitnehmen - sonst steht man nach dem Umschalten oder Speichern wieder in der
+   Standardsortierung. Als URL-Anhang fuer Links, als versteckte Felder fuer Formulare. #}
+{% set listenstand %}&amp;sort={{ dateiliste.sortierung }}&amp;dir={{ dateiliste.richtung }}{% if dateiliste.suche %}&amp;q={{ dateiliste.suche|urlencode }}{% endif %}{% endset %}
+{% set listenfelder %}<input type="hidden" name="__liste_sort" value="{{ dateiliste.sortierung }}"><input type="hidden" name="__liste_dir" value="{{ dateiliste.richtung }}"><input type="hidden" name="__liste_q" value="{{ dateiliste.suche }}">{% endset %}
 <h1>Dateien: {{ server.name }}</h1>
 
 {% include "server_nav.html" %}
@@ -8,6 +13,7 @@
     <h2>Dateiaktionen</h2>
     <div class="grid grid-4 file-actions-grid">
         <form method="post" action="/servers/{{ server.id }}/files/upload" enctype="multipart/form-data" class="stack file-action-form">
+            {{ listenfelder }}
             <label for="upload_target_dir">Upload Zielordner</label>
             <input id="upload_target_dir" name="target_dir" type="text" placeholder="z.B. mods oder config" value=".">
             <input name="upload" type="file" required {% if not can_edit %}disabled{% endif %}>
@@ -16,6 +22,7 @@
         </form>
 
         <form method="post" action="/servers/{{ server.id }}/files/create-text" class="stack file-action-form">
+            {{ listenfelder }}
             <label for="create_text_path">Neue Textdatei</label>
             <input id="create_text_path" name="relative_path" type="text" placeholder="z.B. config/mein-config.txt" {% if not can_edit %}readonly{% endif %}>
             <input name="initial_content" type="text" placeholder="Optionaler Startinhalt" {% if not can_edit %}readonly{% endif %}>
@@ -23,12 +30,14 @@
         </form>
 
         <form method="post" action="/servers/{{ server.id }}/directories" class="stack file-action-form">
+            {{ listenfelder }}
             <label for="create_dir_path">Neuer Ordner</label>
             <input id="create_dir_path" name="relative_dir" type="text" placeholder="z.B. backups/manual" {% if not can_edit %}readonly{% endif %}>
             <button type="submit" {% if not can_edit %}disabled{% endif %}>Ordner erstellen</button>
         </form>
 
         <form method="post" action="/servers/{{ server.id }}/files/delete" class="stack file-action-form">
+            {{ listenfelder }}
             <label for="delete_path">Datei/Ordner loeschen</label>
             <input id="delete_path" name="relative_path" type="text" value="{{ selected_file or '' }}" placeholder="Relativer Pfad" {% if not can_edit %}readonly{% endif %}>
             <label><input name="recursive" type="checkbox" value="true" {% if not can_edit %}disabled{% endif %}> Rekursiv (nur fuer Ordner)</label>
@@ -36,6 +45,9 @@
         </form>
 
         <form method="get" action="/servers/{{ server.id }}/files/download" class="stack file-action-form">
+            <input type="hidden" name="sort" value="{{ dateiliste.sortierung }}">
+            <input type="hidden" name="dir" value="{{ dateiliste.richtung }}">
+            <input type="hidden" name="q" value="{{ dateiliste.suche }}">
             <label for="download_path">Datei herunterladen</label>
             <input id="download_path" name="path" type="text" value="{{ selected_file or '' }}" placeholder="Relativer Dateipfad">
             <button type="submit">Download</button>
@@ -59,7 +71,7 @@
                        placeholder="Datei suchen &hellip;" autocomplete="off"
                        aria-label="Datei suchen">
                 {% if dateiliste.suche %}
-                <a class="ghost" href="/servers/{{ server.id }}/files?sort={{ dateiliste.sortierung }}&amp;dir={{ dateiliste.richtung }}"
+                <a class="ghost" href="/servers/{{ server.id }}/files?sort={{ dateiliste.sortierung }}&amp;dir={{ dateiliste.richtung }}{% if selected_file %}&amp;file={{ selected_file|urlencode }}&amp;mode={{ selected_mode }}{% endif %}"
                    title="Suche zuruecksetzen">&times;</a>
                 {% endif %}
             </div>
@@ -89,7 +101,7 @@
         <div class="file-list" id="file-list">
             {% for eintrag in dateiliste.dateien %}
             <div class="file-row" data-pfad="{{ eintrag.pfad|lower }}">
-                <a href="/servers/{{ server.id }}/files?file={{ eintrag.pfad|urlencode }}&amp;sort={{ dateiliste.sortierung }}&amp;dir={{ dateiliste.richtung }}{% if dateiliste.suche %}&amp;q={{ dateiliste.suche|urlencode }}{% endif %}"
+                <a href="/servers/{{ server.id }}/files?file={{ eintrag.pfad|urlencode }}&amp;mode={{ selected_mode }}&amp;sort={{ dateiliste.sortierung }}&amp;dir={{ dateiliste.richtung }}{% if dateiliste.suche %}&amp;q={{ dateiliste.suche|urlencode }}{% endif %}"
                    {% if eintrag.pfad == selected_file %}class="aktiv"{% endif %}>{{ eintrag.pfad }}</a>
                 <span class="file-meta">
                     {% if eintrag.anzahl %}{{ eintrag.anzahl }}&times;{% endif %}
@@ -110,14 +122,20 @@
         <h2>Dateiinhalt</h2>
         {% if file_content %}
         <div class="inline-form">
-            <a class="button-like" href="/servers/{{ server.id }}/files/download?path={{ file_content.relative_path|urlencode }}">Download</a>
-            <a class="button-like" href="/servers/{{ server.id }}/files?file={{ file_content.relative_path|urlencode }}&mode=assistant">Assistent</a>
-            <a class="button-like" href="/servers/{{ server.id }}/files?file={{ file_content.relative_path|urlencode }}&mode=raw">Freitext</a>
+            <a class="button-like" href="/servers/{{ server.id }}/files/download?path={{ file_content.relative_path|urlencode }}{{ listenstand }}">Download</a>
+            <a class="button-like{% if selected_mode == 'assistant' %} aktiv{% endif %}"
+               href="/servers/{{ server.id }}/files?file={{ file_content.relative_path|urlencode }}&amp;mode=assistant{{ listenstand }}">Assistent</a>
+            <a class="button-like{% if selected_mode == 'raw' %} aktiv{% endif %}"
+               href="/servers/{{ server.id }}/files?file={{ file_content.relative_path|urlencode }}&amp;mode=raw{{ listenstand }}">Freitext</a>
         </div>
 
         {% if selected_mode == "assistant" and assistant_payload %}
         <form method="post" action="/servers/{{ server.id }}/files/assistant-save" class="stack">
             <input type="hidden" name="relative_path" value="{{ file_content.relative_path }}">
+            {{ listenfelder }}
+            {% if assistant_payload.assistant_yaml_meta %}
+            <input type="hidden" name="__assistant_yaml_meta" value="{{ assistant_payload.assistant_yaml_meta }}">
+            {% endif %}
             {% if assistant_payload.field_keys_json %}
             <input type="hidden" name="__assistant_field_keys" value="{{ assistant_payload.field_keys_json }}">
             {% endif %}
@@ -131,15 +149,23 @@
             <input type="hidden" name="__assistant_json_base" value="{{ assistant_payload.assistant_json_base }}">
             {% endif %}
             <p><strong>{{ assistant_payload.title }}</strong></p>
+            {% if assistant_payload.hinweis %}
+            <p class="muted">{{ assistant_payload.hinweis }}</p>
+            {% endif %}
             <div class="scroll-pane editor-scroll-pane">
                 {% if assistant_payload.mode == "json_text" %}
                 <label for="extras_text">JSON Inhalt</label>
                 <textarea id="extras_text" name="extras_text" rows="24" class="code-area" {% if not can_edit %}readonly{% endif %}>{{ assistant_payload.extras_text }}</textarea>
                 {% else %}
+                {% set ns = namespace(gruppe=false) %}
                 <div class="assistant-grid">
                     {% for field in assistant_payload.fields %}
+                    {% if assistant_payload.mode == "yaml_fields" and field.gruppe != ns.gruppe %}
+                    {% set ns.gruppe = field.gruppe %}
+                    <h3 class="assistant-gruppe">{{ field.gruppe or "oberste Ebene" }}</h3>
+                    {% endif %}
                     <div class="stack">
-                        <label for="field_{{ field.key }}">{{ field.label }}</label>
+                        <label for="field_{{ field.key }}" title="{{ field.titel or field.label }}">{{ field.label }}</label>
                         {% if field.kind == "select" %}
                         <select id="field_{{ field.key }}" name="{{ field.key }}" {% if not can_edit %}disabled{% endif %}>
                             {% for option in field.options %}
@@ -169,8 +195,12 @@
             {% endif %}
         </form>
         {% else %}
+        {% if assistant_hinweis %}
+        <p class="muted">{{ assistant_hinweis }}</p>
+        {% endif %}
         <form method="post" action="/servers/{{ server.id }}/files/save" class="stack">
             <input name="relative_path" type="hidden" value="{{ file_content.relative_path }}">
+            {{ listenfelder }}
             <label><strong>{{ file_content.relative_path }}</strong></label>
             <div class="scroll-pane editor-scroll-pane">
                 <textarea name="content" rows="26" class="code-area" {% if not can_edit %}readonly{% endif %}>{{ file_content.content }}</textarea>

@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -21,6 +22,7 @@ from app.services.file_service import (
     delete_path,
     get_access_schema_key_label,
     get_assistant_payload,
+    assistent_hinweis,
     get_download_file,
     get_whitelist_enabled,
     list_files,
@@ -91,6 +93,69 @@ def _zugang_erlaubt(request: Request, db: Session, current_user, server,
     return False
 
 
+def _ziel_pfad(ordner: str | None, dateiname: str) -> str:
+    """Wohin der Upload gehen wird - ohne die Datei anzufassen."""
+    teil = (ordner or ".").replace("\\", "/").strip().strip("/")
+    while teil.startswith("./"):
+        teil = teil[2:]
+    name = Path((dateiname or "").replace("\\", "/")).name
+    return f"{teil}/{name}" if teil and teil != "." else name
+
+
+def _als_text(rohdaten: bytes) -> str:
+    """Der hochgeladene Inhalt als Text - notfalls mit Ersatzzeichen.
+
+    Eine server.properties in einer anderen Kodierung soll die Whitelist-Pruefung nicht
+    umgehen koennen; die gesuchte Zeile ist in jeder ASCII-nahen Kodierung lesbar.
+    """
+    try:
+        return rohdaten.decode("utf-8", errors="replace")
+    except AttributeError:
+        return ""
+
+
+def _dauerhafte_sperre(db: Session, current_user, server, pfad: str,
+                       *, neuer_inhalt: str | None = None) -> str:
+    """Braucht diese Dateiaenderung Admin-Rechte? Rueckgabe: der Grund, sonst "".
+
+    Der Dateieditor war die dritte Tuer zu derselben Tat. Die Zugriffsseite prueft seit
+    der letzten Runde, die Konsole und der Zeitplan auch - aber wer ops.json einfach im
+    Editor oeffnete und sich mit Level 4 eintrug, kam an allem vorbei. Dasselbe fuer
+    banned-players.json (Bann weg) und fuer white-list=false in server.properties.
+    Geprueft wird VOR dem Schreiben und mit derselben Regel wie ueberall sonst.
+    """
+    from app.core.constants import UserRole
+    from app.services.process_service import datei_braucht_admin, whitelist_wird_abgeschaltet
+
+    grund = datei_braucht_admin(pfad)
+    ist_properties = Path((pfad or "").replace("\\", "/")).name.lower() == "server.properties"
+    if not grund and neuer_inhalt is not None and ist_properties:
+        try:
+            alt = read_text_file(server, pfad).content
+        except ValueError:
+            alt = ""   # gibt es noch nicht - dann war auch keine Whitelist an
+        grund = whitelist_wird_abgeschaltet(pfad, alt, neuer_inhalt)
+    if not grund:
+        return ""
+    if (getattr(current_user, "role", "") or "") in {UserRole.SUPER_ADMIN.value,
+                                                     UserRole.ADMIN.value}:
+        return ""
+    audit_service.log_action(
+        db, action="server.access_change_denied", user_id=current_user.id,
+        server_id=server.id, details=f"datei={pfad}")
+    return grund
+
+
+def _datei_sperre_flash(request: Request, db: Session, current_user, server, pfad: str,
+                        *, neuer_inhalt: str | None = None) -> bool:
+    """Wie oben, nur mit Meldung fuer die HTML-Routen. True = gesperrt."""
+    grund = _dauerhafte_sperre(db, current_user, server, pfad, neuer_inhalt=neuer_inhalt)
+    if not grund:
+        return False
+    push_flash(request, f"Dafuer braucht es Admin-Rechte: {grund}", "error")
+    return True
+
+
 def _build_access_runtime_command(*, list_key: str, identity: str, action: str) -> str | None:
     normalized_identity = (identity or "").strip()
     if not normalized_identity:
@@ -110,6 +175,24 @@ def _build_access_runtime_command(*, list_key: str, identity: str, action: str) 
     if normalized_key == "banned_ips":
         return f"{'ban-ip' if normalized_action == 'add' else 'pardon-ip'} {normalized_identity}"
     return None
+
+
+def _dateien_url(server_id: int, *, datei: str | None = None, modus: str | None = None,
+                 sort: str | None = None, richtung: str | None = None,
+                 suche: str | None = None) -> str:
+    """Der Weg zurueck zur Dateiseite - MIT dem Zustand der Liste.
+
+    Jede Ruecksprungstelle hatte ihre eigene URL zusammengebaut und dabei Sortierung,
+    Richtung und Suche weggelassen. Wer nach Groesse sortiert hatte und zwischen
+    Assistent und Freitext wechselte, sass danach wieder in der Standardsortierung.
+    Nebenbei wird der Dateipfad hier richtig kodiert; vorher landete ein Pfad mit
+    Leerzeichen roh im Location-Kopf.
+    """
+    paare = [(name, wert) for name, wert in (("file", datei), ("mode", modus),
+                                             ("sort", sort), ("dir", richtung),
+                                             ("q", suche)) if wert]
+    basis = f"/servers/{server_id}/files"
+    return f"{basis}?{urlencode(paare)}" if paare else basis
 
 
 def _try_send_runtime_command(
@@ -162,6 +245,7 @@ def files_page(
     selected_file = (file or "").strip() or None
     file_content = None
     assistant_payload = None
+    assistant_hinweis = ""
     selected_mode = (mode or "assistant").strip().lower()
     if selected_mode not in {"assistant", "raw"}:
         selected_mode = "assistant"
@@ -172,6 +256,10 @@ def files_page(
             # Erst nach dem erfolgreichen Lesen zaehlen - ein Fehlversuch ist keine Nutzung.
             zaehle_oeffnung(db, server, selected_file)
             assistant_payload = get_assistant_payload(selected_file, file_content.content)
+            if assistant_payload is None:
+                # Frueher wurde hier stillschweigend auf Freitext umgeschaltet - der Knopf
+                # "Assistent" sah damit schlicht kaputt aus.
+                assistant_hinweis = assistent_hinweis(selected_file, file_content.content)
             if assistant_payload is None and selected_mode == "assistant":
                 selected_mode = "raw"
         except ValueError as exc:
@@ -192,6 +280,7 @@ def files_page(
             selected_file=selected_file,
             file_content=file_content,
             assistant_payload=assistant_payload,
+            assistant_hinweis=assistant_hinweis,
             selected_mode=selected_mode,
             can_edit=can_edit_server_files(db, current_user, server),
         ),
@@ -434,6 +523,9 @@ def save_file_action(
     server_id: int,
     relative_path: Annotated[str, Form()],
     content: Annotated[str, Form()],
+    liste_sort: Annotated[str | None, Form(alias="__liste_sort")] = None,
+    liste_dir: Annotated[str | None, Form(alias="__liste_dir")] = None,
+    liste_q: Annotated[str | None, Form(alias="__liste_q")] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_user(request, db)
@@ -446,11 +538,19 @@ def save_file_action(
     if not can_edit_server_files(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
+    if _datei_sperre_flash(request, db, current_user, server, relative_path,
+                           neuer_inhalt=content):
+        return RedirectResponse(url=_dateien_url(server_id, datei=relative_path, modus="raw",
+                                                 sort=liste_sort, richtung=liste_dir,
+                                                 suche=liste_q), status_code=303)
+
     try:
         write_text_file(server, relative_path, content)
     except ValueError as exc:
         push_flash(request, str(exc), "error")
-        return RedirectResponse(url=f"/servers/{server_id}/files?file={relative_path}&mode=raw", status_code=303)
+        return RedirectResponse(url=_dateien_url(server_id, datei=relative_path, modus="raw",
+                                                 sort=liste_sort, richtung=liste_dir,
+                                                 suche=liste_q), status_code=303)
 
     audit_service.log_action(
         db,
@@ -460,7 +560,9 @@ def save_file_action(
         details=f"path={relative_path} mode=raw",
     )
     push_flash(request, f"Datei '{relative_path}' gespeichert.", "success")
-    return RedirectResponse(url=f"/servers/{server_id}/files?file={relative_path}&mode=raw", status_code=303)
+    return RedirectResponse(url=_dateien_url(server_id, datei=relative_path, modus="raw",
+                                             sort=liste_sort, richtung=liste_dir,
+                                             suche=liste_q), status_code=303)
 
 
 @router.post("/servers/{server_id}/files/assistant-save")
@@ -481,15 +583,33 @@ async def save_file_assistant_action(
 
     form = await request.form()
     relative_path = str(form.get("relative_path", "")).strip()
-    data = {key: str(value) for key, value in form.items() if key != "relative_path"}
+    # Der Zustand der Dateiliste gehoert nicht zu den Assistentenfeldern - sonst landet
+    # "sort" als Schluessel in einer .properties.
+    liste_sort = str(form.get("__liste_sort") or "") or None
+    liste_dir = str(form.get("__liste_dir") or "") or None
+    liste_q = str(form.get("__liste_q") or "") or None
+    data = {key: str(value) for key, value in form.items()
+            if key not in {"relative_path", "__liste_sort", "__liste_dir", "__liste_q"}}
+
+    # YAML wird nicht neu erzeugt, sondern im vorhandenen Text ersetzt - dafuer braucht
+    # der Assistent den Stand, der gerade auf der Platte liegt.
+    try:
+        aktueller_inhalt = read_text_file(server, relative_path).content
+    except ValueError:
+        aktueller_inhalt = None
 
     try:
-        content = build_content_from_assistant(relative_path, data)
+        content = build_content_from_assistant(relative_path, data, aktueller_inhalt)
+        gesperrt = _dauerhafte_sperre(db, current_user, server, relative_path,
+                                      neuer_inhalt=content)
+        if gesperrt:
+            raise ValueError(f"Dafuer braucht es Admin-Rechte: {gesperrt}")
         write_text_file(server, relative_path, content)
     except (ValueError, TypeError, KeyError, Exception) as exc:
         push_flash(request, f"Assistent-Speichern fehlgeschlagen: {exc}", "error")
         return RedirectResponse(
-            url=f"/servers/{server_id}/files?file={relative_path}&mode=assistant",
+            url=_dateien_url(server_id, datei=relative_path, modus="assistant",
+                             sort=liste_sort, richtung=liste_dir, suche=liste_q),
             status_code=303,
         )
 
@@ -502,7 +622,8 @@ async def save_file_assistant_action(
     )
     push_flash(request, f"Datei '{relative_path}' via Assistent gespeichert.", "success")
     return RedirectResponse(
-        url=f"/servers/{server_id}/files?file={relative_path}&mode=assistant",
+        url=_dateien_url(server_id, datei=relative_path, modus="assistant",
+                         sort=liste_sort, richtung=liste_dir, suche=liste_q),
         status_code=303,
     )
 
@@ -512,6 +633,9 @@ def download_file_action(
     request: Request,
     server_id: int,
     path: str,
+    sort: str | None = None,
+    dir: str | None = None,
+    q: str | None = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_user(request, db)
@@ -528,7 +652,8 @@ def download_file_action(
         target = get_download_file(server, path)
     except ValueError as exc:
         push_flash(request, str(exc), "error")
-        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+        return RedirectResponse(url=_dateien_url(server_id, sort=sort, richtung=dir,
+                                                 suche=q), status_code=303)
 
     audit_service.log_action(
         db,
@@ -547,6 +672,9 @@ async def upload_file_action(
     upload: UploadFile = File(...),
     target_dir: Annotated[str, Form()] = ".",
     overwrite: Annotated[bool, Form()] = False,
+    liste_sort: Annotated[str | None, Form(alias="__liste_sort")] = None,
+    liste_dir: Annotated[str | None, Form(alias="__liste_dir")] = None,
+    liste_q: Annotated[str | None, Form(alias="__liste_q")] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_user(request, db)
@@ -559,13 +687,27 @@ async def upload_file_action(
     if not can_edit_server_files(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
+    zurueck = _dateien_url(server_id, sort=liste_sort, richtung=liste_dir, suche=liste_q)
     filename = (upload.filename or "").strip()
     if not filename:
         push_flash(request, "Bitte eine Datei auswaehlen.", "error")
-        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+        return RedirectResponse(url=zurueck, status_code=303)
 
     try:
         payload = await upload.read()
+    except Exception as exc:  # noqa: BLE001
+        push_flash(request, f"Upload fehlgeschlagen: {exc}", "error")
+        return RedirectResponse(url=zurueck, status_code=303)
+
+    # Eine hochgeladene ops.json ueberschreibt die vorhandene - derselbe Weg wie der
+    # Editor, also dieselbe Schranke. Geprueft wird vor dem Schreiben, deshalb wird der
+    # Zielpfad hier vorab gebildet.
+    ziel = _ziel_pfad(target_dir, filename)
+    if _datei_sperre_flash(request, db, current_user, server, ziel,
+                           neuer_inhalt=_als_text(payload)):
+        return RedirectResponse(url=zurueck, status_code=303)
+
+    try:
         relative_path = upload_server_file(
             server,
             target_dir=(target_dir or ".").strip() or ".",
@@ -575,7 +717,7 @@ async def upload_file_action(
         )
     except ValueError as exc:
         push_flash(request, str(exc), "error")
-        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+        return RedirectResponse(url=zurueck, status_code=303)
 
     audit_service.log_action(
         db,
@@ -585,7 +727,9 @@ async def upload_file_action(
         details=f"path={relative_path} size={len(payload)}",
     )
     push_flash(request, f"Datei hochgeladen: {relative_path}", "success")
-    return RedirectResponse(url=f"/servers/{server_id}/files?file={relative_path}&mode=raw", status_code=303)
+    return RedirectResponse(url=_dateien_url(server_id, datei=relative_path, modus="raw",
+                                             sort=liste_sort, richtung=liste_dir,
+                                             suche=liste_q), status_code=303)
 
 
 @router.post("/servers/{server_id}/directories")
@@ -593,6 +737,9 @@ def create_directory_action(
     request: Request,
     server_id: int,
     relative_dir: Annotated[str, Form()],
+    liste_sort: Annotated[str | None, Form(alias="__liste_sort")] = None,
+    liste_dir: Annotated[str | None, Form(alias="__liste_dir")] = None,
+    liste_q: Annotated[str | None, Form(alias="__liste_q")] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_user(request, db)
@@ -605,11 +752,12 @@ def create_directory_action(
     if not can_edit_server_files(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
+    zurueck = _dateien_url(server_id, sort=liste_sort, richtung=liste_dir, suche=liste_q)
     try:
         created = create_directory(server, relative_dir)
     except ValueError as exc:
         push_flash(request, str(exc), "error")
-        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+        return RedirectResponse(url=zurueck, status_code=303)
 
     audit_service.log_action(
         db,
@@ -619,7 +767,7 @@ def create_directory_action(
         details=f"path={created}",
     )
     push_flash(request, f"Ordner erstellt: {created}", "success")
-    return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+    return RedirectResponse(url=zurueck, status_code=303)
 
 
 @router.post("/servers/{server_id}/files/create-text")
@@ -628,6 +776,9 @@ def create_text_file_action(
     server_id: int,
     relative_path: Annotated[str, Form()],
     initial_content: Annotated[str | None, Form()] = None,
+    liste_sort: Annotated[str | None, Form(alias="__liste_sort")] = None,
+    liste_dir: Annotated[str | None, Form(alias="__liste_dir")] = None,
+    liste_q: Annotated[str | None, Form(alias="__liste_q")] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_user(request, db)
@@ -640,11 +791,19 @@ def create_text_file_action(
     if not can_edit_server_files(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
+    if _datei_sperre_flash(request, db, current_user, server, relative_path,
+                           neuer_inhalt=initial_content or ""):
+        return RedirectResponse(url=_dateien_url(server_id, sort=liste_sort,
+                                                 richtung=liste_dir, suche=liste_q),
+                                status_code=303)
+
     try:
         created = create_text_file(server, relative_path, initial_content or "")
     except ValueError as exc:
         push_flash(request, str(exc), "error")
-        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+        return RedirectResponse(url=_dateien_url(server_id, sort=liste_sort,
+                                                 richtung=liste_dir, suche=liste_q),
+                                status_code=303)
 
     audit_service.log_action(
         db,
@@ -654,7 +813,9 @@ def create_text_file_action(
         details=f"path={created}",
     )
     push_flash(request, f"Textdatei erstellt: {created}", "success")
-    return RedirectResponse(url=f"/servers/{server_id}/files?file={created}&mode=raw", status_code=303)
+    return RedirectResponse(url=_dateien_url(server_id, datei=created, modus="raw",
+                                             sort=liste_sort, richtung=liste_dir,
+                                             suche=liste_q), status_code=303)
 
 
 @router.post("/servers/{server_id}/files/delete")
@@ -663,6 +824,9 @@ def delete_file_action(
     server_id: int,
     relative_path: Annotated[str, Form()],
     recursive: Annotated[bool, Form()] = False,
+    liste_sort: Annotated[str | None, Form(alias="__liste_sort")] = None,
+    liste_dir: Annotated[str | None, Form(alias="__liste_dir")] = None,
+    liste_q: Annotated[str | None, Form(alias="__liste_q")] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_user(request, db)
@@ -675,11 +839,16 @@ def delete_file_action(
     if not can_edit_server_files(db, current_user, server):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
+    zurueck = _dateien_url(server_id, sort=liste_sort, richtung=liste_dir, suche=liste_q)
+    if _datei_sperre_flash(request, db, current_user, server, relative_path,
+                           neuer_inhalt=""):
+        return RedirectResponse(url=zurueck, status_code=303)
+
     try:
         deleted = delete_path(server, relative_path, recursive=recursive)
     except ValueError as exc:
         push_flash(request, str(exc), "error")
-        return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+        return RedirectResponse(url=zurueck, status_code=303)
 
     audit_service.log_action(
         db,
@@ -689,7 +858,7 @@ def delete_file_action(
         details=f"path={deleted} recursive={recursive}",
     )
     push_flash(request, f"Geloescht: {deleted}", "success")
-    return RedirectResponse(url=f"/servers/{server_id}/files", status_code=303)
+    return RedirectResponse(url=zurueck, status_code=303)
 
 
 @router.post("/api/servers/{server_id}/files/upload", response_class=JSONResponse)
@@ -713,6 +882,17 @@ async def api_upload_file_action(
 
     try:
         payload = await upload.read()
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+    gesperrt = _dauerhafte_sperre(db, current_user, server,
+                                  _ziel_pfad(target_dir, upload.filename or ""),
+                                  neuer_inhalt=_als_text(payload))
+    if gesperrt:
+        return JSONResponse(status_code=403,
+                            content={"detail": f"Dafuer braucht es Admin-Rechte: {gesperrt}"})
+
+    try:
         relative_path = upload_server_file(
             server,
             target_dir=(target_dir or ".").strip() or ".",
@@ -750,6 +930,11 @@ def api_delete_file_action(
         return JSONResponse(status_code=404, content={"detail": "Server not found"})
     if not can_edit_server_files(db, current_user, server):
         return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+
+    gesperrt = _dauerhafte_sperre(db, current_user, server, path, neuer_inhalt="")
+    if gesperrt:
+        return JSONResponse(status_code=403,
+                            content={"detail": f"Dafuer braucht es Admin-Rechte: {gesperrt}"})
 
     try:
         deleted = delete_path(server, path, recursive=recursive)

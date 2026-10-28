@@ -396,6 +396,28 @@ def _pruefe_konsolenbefehl(db: Session, user: User, server: Server, p: dict) -> 
     raise AgentFehler(f"Dafuer braucht es Admin-Rechte: {grund}")
 
 
+def _pruefe_einstellung_rechte(db: Session, user: User, server: Server, p: dict) -> None:
+    """``white-list=false`` ist dasselbe wie ``whitelist off`` - also Admin-Sache.
+
+    Vierter Weg zur selben Tat: Konsole, Zeitplan, Zugriffsseite, Dateieditor waren schon
+    gesichert. Das Werkzeug ``einstellung_setzen`` schreibt aber ebenfalls in
+    server.properties und verlangte bisher nur das Dateirecht.
+    """
+    from app.core.constants import UserRole
+    from app.services.process_service import whitelist_wird_abgeschaltet
+
+    schluessel = str(p.get("schluessel") or "").strip().lower()
+    wert = str(p.get("wert") if p.get("wert") is not None else "").strip()
+    grund = whitelist_wird_abgeschaltet("server.properties",
+                                        f"{schluessel}=true", f"{schluessel}={wert}")
+    if not grund:
+        return
+    if (getattr(user, "role", "") or "") in {UserRole.SUPER_ADMIN.value,
+                                             UserRole.ADMIN.value}:
+        return
+    raise AgentFehler(f"Dafuer braucht es Admin-Rechte: {grund}")
+
+
 def _tue_einstellung(db: Session, user: User, server: Server, p: dict) -> dict:
     from app.services import ai_config_service
     from app.services.file_service import read_text_file, write_text_file
@@ -855,6 +877,7 @@ _eintragen(Werkzeug(
     felder={"schluessel": {"type": "string"}, "wert": {"type": "string"}},
     pflicht=["schluessel", "wert"], ausfuehren=_tue_einstellung,
     beschreibe=_b_einstellung,
+    zusatzpruefung=_pruefe_einstellung_rechte,
     nachwirkung="Wirkt beim naechsten Start des Servers."))
 
 _eintragen(Werkzeug(

@@ -1312,6 +1312,33 @@ th {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+/* Abschnittsueberschrift im YAML-Assistenten: eine YAML-Datei ist verschachtelt, ohne
+   diese Trenner waere aus "view-distance" nicht zu erkennen, zu welcher Welt es gehoert. */
+.assistant-gruppe {
+    grid-column: 1 / -1;
+    margin: 0.9rem 0 0;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    overflow-wrap: anywhere;
+}
+
+.assistant-grid > .assistant-gruppe:first-child {
+    margin-top: 0;
+}
+
+/* Welcher Ansichtsmodus gerade laeuft, war bisher nicht zu sehen. */
+.button-like.aktiv {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent-strong);
+    font-weight: 600;
+}
+
 .calendar-header {
     display: flex;
     align-items: flex-start;

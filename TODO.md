@@ -406,8 +406,8 @@ manager kann auch server pc restarten
 MOTD editor in Server einstellungen mit Farben, allen optionen usw.
 
 
-KI-gestützte Funktionen nur ondemand, local ai ohne externe api?
--> Beantwortet: es stehen **200 $ Claude-API-Guthaben pro Monat** zur Verfügung. Die externe API ist damit gesetzt, lokale Modelle sind nicht nötig (bleiben aber als Rückfall denkbar, wenn das Monatsbudget aufgebraucht ist). Fundament und Log-/Crash-Analyse sind umgesetzt (siehe unten); die übrigen Funktionen stehen noch aus.
+~~KI-gestützte Funktionen nur ondemand, local ai ohne externe api?~~
+~~Beantwortet: externe Claude-API gesetzt, lokale Modelle nur als Rückfall. Jeder Aufruf ondemand, abschaltbar, mit Monatsdeckel.~~
 ~~Beim Umsetzen zu beachten: Budget pro Monat deckeln und den Verbrauch sichtbar machen (sonst frisst eine Crash-Analyse-Schleife still das Guthaben); API-Schlüssel wie die übrigen Geheimnisse behandeln, nicht in die DB im Klartext; jeder KI-Aufruf ondemand und abschaltbar; Logs/Crash-Reports vor dem Versenden auf Spielernamen und IPs prüfen.~~
 ~~Rate Limit hinzufügen + missbrauch verhinden durch Themen lockin~~
 ~~API Anbieter einfach änderbar~~
@@ -419,14 +419,15 @@ KI-gestützte Funktionen nur ondemand, local ai ohne externe api?
 ~~Erledigt: Logs-Seite, Knopf "Analysieren". Gesendet wird nur Kopf + Fehlerstellen + Ende, Vorschau "Was wird gesendet?" kostet nichts. Crash-Reports und .log.gz wählbar.~~
 
 ~~KI-Konfigurationsassistent: server.properties/JVM anhand Ziel (RAM, Spielerzahl, Modpack) optimieren.~~
-~~Erledigt: Dateieditor bei offener .properties. KI füllt nur das Formular, gespeichert wird von Hand. level-name/level-seed/Ports/online-mode gesperrt. Noch offen: YAML (spigot.yml, paper-global.yml).~~
+~~Erledigt: Dateieditor bei offener .properties. KI füllt nur das Formular, gespeichert wird von Hand. level-name/level-seed/Ports/online-mode gesperrt. Noch offen: KI-Vorschläge für YAML (der Assistent selbst kann YAML jetzt).~~
 
 KI-Chat-Moderation: In-Game-Chat auf Toxizität/Spam prüfen, automatische Warnungen.
 
 ~~KI-Changelog-Zusammenfassung vor einem Mod-Update („Was ändert sich, gibt es Breaking Changes?").~~
 ~~Erledigt: Inhalte-Seite, Knopf "Was ändert sich?". Liest die Changelogs ALLER Fassungen zwischen installiert und Ziel, nicht nur der Zielversion. Ohne Changelog wird die KI nicht gefragt.~~
 
-Natürlichsprachliche Steuerung: „starte alle Vanilla-Server", „sichere Server X" → Aktionen.
+~~Natürlichsprachliche Steuerung: „starte alle Vanilla-Server", „sichere Server X" → Aktionen.~~
+~~Erledigt über den KI-Assistenten: starten/stoppen/neustarten, sichern, Konsolenbefehl, Einstellung setzen. Noch offen: mehrere Server in einem Auftrag - es wird eine Aktion je Bestätigung ausgeführt.~~
 
 ~~eine KI integration, die fragen beantworten kann und auch cowork mößig aufgaben durchführen kann, nicht nur vorgefertigte commands, sondern freie bearbeitung und freies prompting wie claude code cowork auf dem rechner. aufgaben wie brarbeite diese config datei oder tue etwas in den einstellungen usw. rechte dürfen dadurch nicht umgehbar sein~~
 ~~Erledigt: eigene Seite KI-Assistent, 18 Werkzeuge (8 lesen, 10 verändern). Verändernde nur als Vorschlag, Ausführung prüft Werkzeug/Server/Recht neu gegen die DB. Beschreibung formuliert der Manager, nicht das Modell. Eine Aktion auf einmal.~~
@@ -434,7 +435,9 @@ Natürlichsprachliche Steuerung: „starte alle Vanilla-Server", „sichere Serv
 ~~Antworten als Markdown dargestellt (eigener Darsteller, nur DOM-Knoten - kein HTML aus Modellausgabe).~~
 
 
-die KI soll auch zugriff auf die ordnerstruktur, die datein und logs haben. allerdings nur innerhalb des managers, nicht darüber hinaus, allerdings muss hierbei die sicherheit beachtet werden, dass nutzer zb. keine schadsoftware einführen können oder informationen erhalten können, die sie nicht erhalten dürfen
+~~die KI soll auch zugriff auf die ordnerstruktur, die datein und logs haben. allerdings nur innerhalb des managers, nicht darüber hinaus, allerdings muss hierbei die sicherheit beachtet werden, dass nutzer zb. keine schadsoftware einführen können oder informationen erhalten können, die sie nicht erhalten dürfen~~
+~~Erledigt: dateien_auflisten, datei_lesen, log_ansehen, inhalte_auflisten, backups_auflisten. Nur innerhalb des Serverordners (aufgelöster Pfad, keine Symlinks/.. hinaus), nur Textdateien, nur Server, die der Nutzer sehen darf.~~
+~~Keine Schadsoftware möglich: der Agent kann keine Datei anlegen oder hochladen. Geschrieben wird nur über einstellung_setzen (geprüfte Schlüssel) und Inhalte aus Modrinth/CurseForge - beides mit Rechteprüfung und Bestätigung.~~
 
 ~~Nach gegnerischer Prüfung 19 Fehler behoben: Fragefeld war unbegrenzt + ungesäubert, Geldschranken zählten erst nach der Antwort (parallele Aufrufe kamen durch), Geheimnisse mitten in Logzeilen blieben stehen, Logauswahl verlor Zeilen bei freiem Budget, analysiert wurde die falsche Datei.~~
 
@@ -464,3 +467,13 @@ Nicht Code, sondern Einrichtung: AdvancedBackups 3.6 ist Legacy ohne api-version
 ~~VanillaTweaks: frisch installierte Packs wurden beim ersten Update unnötig neu geholt (Gruppe stand in version_label), Crafting Tweaks bei jedem Lauf, Resource Packs nie.~~
 
 Offen: Testisolation. schedule_service war im conftest nicht neu geladen und fragte die echte Entwicklungs-DB ab; mindestens 14 weitere Dienste halten dieselbe SessionLocal-Modulreferenz.
+
+~~Assistent für spigot.yml, bukkit.yml, paper-*.yml und Plugin-Configs. Ersetzt nur den geänderten Wert im Text - Kommentare, Reihenfolge und Anführungszeichen bleiben. Ohne Änderung ist die Datei danach byteweise gleich.~~
+
+~~Dateien ohne Assistenten sagen jetzt warum, statt wortlos den Freitext zu zeigen.~~
+
+~~Sortierung/Suche gingen auf JEDEM Rückweg zur Dateiseite verloren, nicht nur beim Umschalten: Speichern, Upload, Löschen, Ordner anlegen, Download-Fehler. Jetzt ein gemeinsamer Weg zurück.~~
+
+~~Dateieditor war die dritte Tür zu op/pardon/whitelist off: ops.json und banned-*.json ließen sich mit can_edit_files schreiben, hochladen, neu anlegen und löschen. Auch über die API und über das KI-Werkzeug einstellung_setzen. Jetzt dieselbe Regel wie Konsole und Zeitplan.~~
+
+~~YAML-Alias-Geflecht: 486 Byte ergaben 137 s Rechenzeit pro Seitenaufruf, auslösbar mit reinem Leserecht. Zu tiefe Verschachtelung endete im 500er.~~

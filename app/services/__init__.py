@@ -30,4 +30,5 @@ __all__ = [
     "transfer_service",
     "world_identity_service",
     "world_merge_service",
+    "yaml_assistant_service",
 ]
