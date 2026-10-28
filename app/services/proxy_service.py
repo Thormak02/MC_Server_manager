@@ -143,19 +143,85 @@ def download_velocity_jar(dest: Path | None = None, version: str = "") -> Path |
         return None
 
 
+# Fuer welche Zielversion zuletzt ein Download VERSUCHT wurde (Zeitpunkt). Der Reconcile
+# laeuft alle 15 s - ohne Bremse wuerde ein fehlschlagender Download zum Dauerfeuer.
+_JAR_VERSUCH: dict[str, float] = {}
+_JAR_WIEDERHOLUNG_SEKUNDEN = 600.0
+
+
+def _darf_erneut(version: str) -> bool:
+    jetzt = time.monotonic()
+    letzter = _JAR_VERSUCH.get(version)
+    if letzter is not None and (jetzt - letzter) < _JAR_WIEDERHOLUNG_SEKUNDEN:
+        return False
+    _JAR_VERSUCH[version] = jetzt
+    return True
+
+
+def _jar_marke() -> Path:
+    """Datei neben dem Jar, in der steht, fuer welche MC-Version es geholt wurde."""
+    return _work_dir() / "velocity.jar.mcversion"
+
+
+def _geholt_fuer() -> str:
+    try:
+        return _jar_marke().read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _merke_geholt_fuer(version: str) -> None:
+    try:
+        _jar_marke().write_text(version.strip(), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _netz_version() -> str:
+    """MC-Version der Lobby - die Version, die der Proxy koennen muss."""
+    from app.db.session import SessionLocal
+
+    try:
+        with SessionLocal() as db:
+            return _lobby_mc_version(db).strip()
+    except Exception:  # noqa: BLE001 - darf den Start nie verhindern
+        return ""
+
+
 def _resolve_jar(cfg: dict) -> str | None:
-    """Jar-Pfad: Setting -> Standardordner -> einmalig Auto-Download."""
+    """Jar-Pfad: Setting -> vorhandenes Jar (bei Versionswechsel erneuert) -> Download.
+
+    Frueher stand hier "einmalig Auto-Download": lag die Datei da, wurde sie fuer immer
+    benutzt. Ein Proxy, der die Version seiner Server nicht nativ kann, laesst niemanden
+    mehr herein - oder, mit ViaVersion davor, uebersetzt still und verliert dabei
+    Plugin-Nachrichten. Beides sah der Manager nicht.
+    """
     global _DOWNLOAD_TRIED
     jar = (cfg.get("jar") or "").strip()
     if jar and Path(jar).is_file():
-        return jar
+        return jar          # ausdruecklich gesetzt -> der Nutzer bestimmt, nicht wir
     default = _default_jar_path()
+    ziel = _netz_version()
+
     if default.is_file():
+        if ziel and _geholt_fuer() != ziel and _darf_erneut(ziel):
+            _glog("jar_outdated",
+                  f"Velocity-Jar wurde fuer '{_geholt_fuer() or 'unbekannt'}' geholt, das "
+                  f"Netzwerk laeuft auf '{ziel}' - lade neu.")
+            if download_velocity_jar(default, cfg.get("version") or ""):
+                _merke_geholt_fuer(ziel)
+            else:
+                _glog("jar_update_failed",
+                      f"Neuladen fuer '{ziel}' fehlgeschlagen - der Proxy laeuft weiter "
+                      f"mit der alten Fassung. Clients dieser Version kommen womoeglich "
+                      f"nicht herein, und der Lobby-Wechsel bleibt stumm.")
         return str(default)
+
     if not _DOWNLOAD_TRIED:
         _DOWNLOAD_TRIED = True
         got = download_velocity_jar(default, cfg.get("version") or "")
         if got:
+            _merke_geholt_fuer(ziel)
             return str(got)
     return None
 

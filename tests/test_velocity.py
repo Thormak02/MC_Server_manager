@@ -469,3 +469,115 @@ def test_render_nimmt_die_uebergebene_config_version():
     toml = proxy_service.render_velocity_toml(cfg, [], None)
 
     assert 'config-version = "9.9"' in toml
+
+
+# ------------------------------------------------- Jar folgt der Netzwerkversion
+
+def _jar_umgebung(tmp_path, monkeypatch, *, netz="26.3", marke=None, jar=True):
+    """Arbeitsordner mit (optional) vorhandenem Jar und Versionsmarke."""
+    from app.services import proxy_service
+
+    monkeypatch.setattr(proxy_service, "_work_dir", lambda: tmp_path)
+    monkeypatch.setattr(proxy_service, "_default_jar_path", lambda: tmp_path / "velocity.jar")
+    monkeypatch.setattr(proxy_service, "_netz_version", lambda: netz)
+    monkeypatch.setattr(proxy_service, "_JAR_VERSUCH", {})
+    if jar:
+        (tmp_path / "velocity.jar").write_bytes(b"altes jar")
+    if marke is not None:
+        (tmp_path / "velocity.jar.mcversion").write_text(marke, encoding="utf-8")
+    return proxy_service
+
+
+def test_jar_bleibt_wenn_die_version_passt(tmp_path, monkeypatch):
+    ps = _jar_umgebung(tmp_path, monkeypatch, netz="26.3", marke="26.3")
+    geladen = []
+    monkeypatch.setattr(ps, "download_velocity_jar", lambda *a, **k: geladen.append(1))
+
+    ps._resolve_jar({})
+
+    assert geladen == [], "Es wurde ohne Not neu geladen"
+
+
+def test_jar_wird_bei_versionswechsel_neu_geladen(tmp_path, monkeypatch):
+    """Der eigentliche Fehler: der Proxy blieb auf seiner alten Minecraft-Version."""
+    ps = _jar_umgebung(tmp_path, monkeypatch, netz="26.3", marke="26.2")
+    gerufen = []
+
+    def _laden(ziel, version=""):
+        gerufen.append(version)
+        Path(ziel).write_bytes(b"neues jar")
+        return Path(ziel)
+
+    monkeypatch.setattr(ps, "download_velocity_jar", _laden)
+
+    pfad = ps._resolve_jar({})
+
+    assert len(gerufen) == 1
+    assert Path(pfad).read_bytes() == b"neues jar"
+    assert (tmp_path / "velocity.jar.mcversion").read_text(encoding="utf-8") == "26.3"
+
+
+def test_ohne_marke_wird_einmal_nachgeladen(tmp_path, monkeypatch):
+    """Ein Jar aus der Zeit vor dieser Reparatur hat noch keine Marke."""
+    ps = _jar_umgebung(tmp_path, monkeypatch, netz="26.3", marke=None)
+    gerufen = []
+    monkeypatch.setattr(ps, "download_velocity_jar",
+                        lambda ziel, version="": (gerufen.append(1), Path(ziel))[1])
+
+    ps._resolve_jar({})
+
+    assert len(gerufen) == 1
+
+
+def test_fehlgeschlagener_download_behaelt_das_alte_jar(tmp_path, monkeypatch):
+    """Lieber ein veralteter Proxy als gar keiner - aber es muss im Protokoll stehen."""
+    ps = _jar_umgebung(tmp_path, monkeypatch, netz="26.3", marke="26.2")
+    monkeypatch.setattr(ps, "download_velocity_jar", lambda *a, **k: None)
+    meldungen = []
+    monkeypatch.setattr(ps, "_glog", lambda ereignis, text="": meldungen.append(ereignis))
+
+    pfad = ps._resolve_jar({})
+
+    assert Path(pfad).read_bytes() == b"altes jar"
+    assert "jar_update_failed" in meldungen
+    # Marke NICHT gesetzt - sonst waere der naechste Versuch fuer immer verloren.
+    assert not (tmp_path / "velocity.jar.mcversion").read_text(encoding="utf-8") == "26.3"
+
+
+def test_fehlschlag_wird_nicht_alle_15_sekunden_wiederholt(tmp_path, monkeypatch):
+    """Der Reconcile laeuft im Sekundentakt - ohne Bremse waere das Dauerfeuer."""
+    ps = _jar_umgebung(tmp_path, monkeypatch, netz="26.3", marke="26.2")
+    versuche = []
+    monkeypatch.setattr(ps, "download_velocity_jar",
+                        lambda *a, **k: versuche.append(1) or None)
+
+    ps._resolve_jar({})
+    ps._resolve_jar({})
+    ps._resolve_jar({})
+
+    assert len(versuche) == 1, f"{len(versuche)} Versuche statt einem"
+
+
+def test_ausdruecklich_gesetztes_jar_wird_nie_angefasst(tmp_path, monkeypatch):
+    """Wer einen Pfad eintraegt, bestimmt selbst - da laden wir nichts nach."""
+    ps = _jar_umgebung(tmp_path, monkeypatch, netz="26.3", marke="26.2")
+    eigenes = tmp_path / "eigenes.jar"
+    eigenes.write_bytes(b"meins")
+    geladen = []
+    monkeypatch.setattr(ps, "download_velocity_jar", lambda *a, **k: geladen.append(1))
+
+    pfad = ps._resolve_jar({"jar": str(eigenes)})
+
+    assert pfad == str(eigenes)
+    assert geladen == []
+
+
+def test_ohne_netzversion_wird_nichts_erneuert(tmp_path, monkeypatch):
+    """Keine Lobby, keine Zielversion - dann gibt es auch keinen Grund zu laden."""
+    ps = _jar_umgebung(tmp_path, monkeypatch, netz="", marke="26.2")
+    geladen = []
+    monkeypatch.setattr(ps, "download_velocity_jar", lambda *a, **k: geladen.append(1))
+
+    ps._resolve_jar({})
+
+    assert geladen == []
