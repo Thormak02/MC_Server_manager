@@ -698,3 +698,118 @@ def test_netzversion_nimmt_den_hoechsten_backend(client, tmp_path):
         db.commit()
 
     assert proxy_service._netz_version() == "26.3"
+
+
+# ------------------------------------------------- ping-passthrough je Jar-Fassung
+
+def _jar_mit_vorlage(tmp_path, vorlage, name="velocity.jar"):
+    import zipfile
+
+    jar = tmp_path / name
+    with zipfile.ZipFile(jar, "w") as z:
+        z.writestr("default-velocity.toml", vorlage)
+    return jar
+
+
+VORLAGE_V3 = (
+    'config-version = "2.8"\n'
+    'bind = "0.0.0.0:25565"\n'
+    'ping-passthrough = "DISABLED"\n'
+    "[advanced]\n"
+    "read-timeout = 30000\n"
+)
+
+VORLAGE_V4 = (
+    'config-version = "2.9"\n'
+    'bind = "0.0.0.0:25565"\n'
+    "[ping-passthrough]\n"
+    "version = false\n"
+    "players = false\n"
+    "description = false\n"
+    "favicon = false\n"
+    "modinfo = false\n"
+    "[advanced]\n"
+    "read-timeout = 30000\n"
+)
+
+
+def test_schreibweise_wird_am_jar_abgelesen(tmp_path):
+    """Velocity 3 will einen Schluessel, Velocity 4 einen Abschnitt."""
+    from app.services.proxy_service import ping_passthrough_als_abschnitt
+
+    assert ping_passthrough_als_abschnitt(_jar_mit_vorlage(tmp_path, VORLAGE_V3, "v3.jar")) is False
+    assert ping_passthrough_als_abschnitt(_jar_mit_vorlage(tmp_path, VORLAGE_V4, "v4.jar")) is True
+
+
+def test_ohne_jar_bleibt_es_bei_der_alten_schreibweise(tmp_path):
+    from app.services.proxy_service import ping_passthrough_als_abschnitt
+
+    assert ping_passthrough_als_abschnitt(tmp_path / "fehlt.jar") is False
+
+
+def test_velocity4_bekommt_den_abschnitt_und_keinen_schluessel():
+    """Die alte Form laesst Velocity 4 beim Lesen der Konfiguration komplett abbrechen:
+    "ClassCastException: String cannot be cast to ...Config" - und der Proxy startet nicht."""
+    from app.services import proxy_service
+
+    cfg = {"bind_port": 25605, "domain": "mc.example.de", "motd": "x", "max_players": 100,
+           "config_version": "2.9", "ping_passthrough_abschnitt": True}
+    toml = proxy_service.render_velocity_toml(cfg, [], None)
+
+    assert "[ping-passthrough]" in toml
+    assert 'ping-passthrough = "DISABLED"' not in toml
+    # Alle fuenf Schalter aus - das ist dasselbe wie das alte DISABLED.
+    abschnitt = toml.split("[ping-passthrough]", 1)[1].split("[", 1)[0]
+    for schalter in ("version", "players", "description", "favicon", "modinfo"):
+        assert f"{schalter} = false" in abschnitt, schalter
+
+
+def test_velocity3_bekommt_weiterhin_den_schluessel():
+    from app.services import proxy_service
+
+    cfg = {"bind_port": 25605, "domain": "mc.example.de", "motd": "x", "max_players": 100,
+           "config_version": "2.8", "ping_passthrough_abschnitt": False}
+    toml = proxy_service.render_velocity_toml(cfg, [], None)
+
+    assert 'ping-passthrough = "DISABLED"' in toml
+    assert "[ping-passthrough]" not in toml
+
+
+def test_kein_schluessel_steht_ausserhalb_der_vorlage(tmp_path):
+    """Regressionsbremse: was der Manager schreibt, muss das Jar auch kennen.
+
+    Genau daran ist der Start gescheitert - ein Schluessel, den es in der neuen Fassung
+    so nicht mehr gab.
+    """
+    from app.services import proxy_service
+
+    def _schluessel(text):
+        raus, abschnitt = {}, ""
+        for roh in text.splitlines():
+            z = roh.strip()
+            if not z or z.startswith("#"):
+                continue
+            if z.startswith("["):
+                abschnitt = z.strip("[]")
+                raus.setdefault(abschnitt, set())
+                continue
+            if "=" in z:
+                raus.setdefault(abschnitt, set()).add(z.split("=", 1)[0].strip().strip('"'))
+        return raus
+
+    vorlage = VORLAGE_V4 + "accepts-transfers = false\nbungee-plugin-message-channel = true\n"
+    cfg = {"bind_port": 25605, "domain": "mc.example.de", "motd": "x", "max_players": 100,
+           "config_version": "2.9", "ping_passthrough_abschnitt": True}
+    erzeugt = _schluessel(proxy_service.render_velocity_toml(cfg, [], None))
+    bekannt = _schluessel(vorlage)
+    # Alles ausser den frei waehlbaren Namen in [servers]/[forced-hosts].
+    for abschnitt in ("", "ping-passthrough", "advanced"):
+        unbekannt = erzeugt.get(abschnitt, set()) - bekannt.get(abschnitt, set())
+        # "query" und die Namensabschnitte bleiben aussen vor; die Vorlage hier ist
+        # absichtlich kurz, deshalb nur die Abschnitte pruefen, die sie fuehrt.
+        if abschnitt == "":
+            unbekannt -= {"motd", "show-max-players", "online-mode",
+                          "force-key-authentication", "prevent-client-proxy-connections",
+                          "player-info-forwarding-mode", "forwarding-secret-file",
+                          "announce-forge", "kick-existing-players"}
+        assert not unbekannt, f"[{abschnitt}]: {sorted(unbekannt)}"

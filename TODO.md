@@ -493,3 +493,17 @@ Offen: Testisolation. schedule_service war im conftest nicht neu geladen und fra
 Offen: NAS-Abgleich steht seit 6.10. Task mcsm-nas-sync ist aktiv und korrekt eingerichtet, letzter Lauf 6.10. 14:17 mit Ergebnis 0 - der Auslöser hängt, Ursache noch offen.
 
 Offen: 1.21.11-spigot und 26.2-spigot haben kein Gateway und keinen Hostnamen - im Netzwerk nicht erreichbar.
+
+~~Lobby-Wechsel (Kompass und /lobby) blieb stumm: Velocity wurde EINMAL geladen und nie wieder, blieb auf 26.2 waehrend das Netz auf 26.3 zog. ViaVersion uebersetzte still 26.3->26.2 und verschluckte dabei die bungeecord:main-Nachricht. /server ging, weil das Velocitys eigener Befehl ist.~~
+
+~~Velocity-Jar folgt jetzt der hoechsten Version im Netzwerk (nicht der Lobby-Version) und wird bei einem Versionswechsel neu geladen. Fehlschlag wird gemeldet statt verschwiegen.~~
+
+~~Velocity lief mit "irgendein Java ab 17". Das neue Jar (4.3.1) braucht Java 25 -> UnsupportedClassVersionError, Absturz im Minutentakt. Die noetige Java-Fassung wird jetzt aus dem Jar gelesen.~~
+
+~~config-version der velocity.toml stand fest auf 2.7, das Jar erwartet 2.8 - wird jetzt aus dem Jar gelesen. bungee-plugin-message-channel steht ausdruecklich drin.~~
+
+~~Zwei .bat-Dateien zum Starten/Stoppen des Managers (scripts/), fuer Desktop-Verknuepfungen. Stoppen beendet auch den uvicorn-Prozess, sonst blockiert er den naechsten Start.~~
+
+Offen: Absturzschleife des Proxys gehoert aufs Dashboard, nicht nur ins Pruefprotokoll. Velocity starb zwei Stunden im Minutentakt, sichtbar war nur "Lobby startet gerade".
+
+Offen: Via-Plugins werden still auf dem alten Stand gelassen, wenn es fuer die neue Version keinen Build gibt - ohne Hinweis.

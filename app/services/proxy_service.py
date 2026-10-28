@@ -390,6 +390,30 @@ def velocity_config_version(jar: str | Path | None = None) -> str:
     return treffer.group(1) if treffer else _CONFIG_VERSION_FALLBACK
 
 
+def _vorlage_aus_jar(jar: str | Path | None = None) -> str:
+    """Die mitgelieferte default-velocity.toml aus dem Jar - oder leer."""
+    import zipfile
+
+    pfad = Path(jar) if jar else (_work_dir() / "velocity.jar")
+    try:
+        with zipfile.ZipFile(pfad) as z:
+            return z.read("default-velocity.toml").decode("utf-8", "replace")
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return ""
+
+
+def ping_passthrough_als_abschnitt(jar: str | Path | None = None) -> bool:
+    """Erwartet dieses Velocity ``[ping-passthrough]`` als Abschnitt (ab 4.x)?
+
+    In 3.x ist es ein Schluessel mit einem Wort ("DISABLED"), in 4.x ein Abschnitt mit
+    fuenf Schaltern. Die falsche Form laesst Velocity 4 beim Lesen der Konfiguration
+    abbrechen - mit einem ClassCastException, der nichts ueber die Ursache verraet.
+    """
+    import re
+
+    return bool(re.search(r"^\s*\[ping-passthrough\]", _vorlage_aus_jar(jar), re.MULTILINE))
+
+
 def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None,
                          *, forwarding_mode: str = "modern") -> str:
     """velocity.toml aus Backends + Laufzeit-Config bauen.
@@ -418,8 +442,20 @@ def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None
         lines.append('forwarding-secret-file = "forwarding.secret"')
     lines.append("announce-forge = false")
     lines.append("kick-existing-players = false")
-    lines.append('ping-passthrough = "DISABLED"')
+    # Durchreichen bleibt AUS: die Status-Antwort je Server holt das Gateway direkt beim
+    # gemeinten Server (siehe gateway_service), und am Apex gehoert die Netzwerk-MOTD hin.
+    # Nur die SCHREIBWEISE richtet sich nach dem Jar.
+    abschnittsform = cfg.get("ping_passthrough_abschnitt")
+    if abschnittsform is None:
+        abschnittsform = ping_passthrough_als_abschnitt()
+    if not abschnittsform:
+        lines.append('ping-passthrough = "DISABLED"')
     lines.append("")
+    if abschnittsform:
+        lines.append("[ping-passthrough]")
+        for schalter in ("version", "players", "description", "favicon", "modinfo"):
+            lines.append(f"{schalter} = false")
+        lines.append("")
     lines.append("[servers]")
     for be in backends:
         # Namen als QUOTED key: ein Alias mit Punkt (z.B. "1.21.1") wuerde als bare key
