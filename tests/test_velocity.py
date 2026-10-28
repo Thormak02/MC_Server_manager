@@ -430,3 +430,42 @@ def test_deploy_lobby_world_missing_asset(monkeypatch, tmp_path):
     monkeypatch.setattr(lobby_service, "_LOBBY_WORLD_ASSET", tmp_path / "nope")
     ok, msg = lobby_service.deploy_lobby_world(None)   # db unbenutzt, weil Asset zuerst geprueft wird
     assert ok is False and "Keine Lobby-Welt" in msg
+
+
+def test_config_version_kommt_aus_dem_jar(tmp_path):
+    """Fest eingetragen lief sie zwangslaeufig auseinander.
+
+    Der Manager schrieb "2.7", das mitgelieferte Velocity 3.5.1 erwartet "2.8". Eine
+    aeltere Version schickt die Datei bei jedem Start durch Velocitys Migration, statt
+    sie so zu lesen, wie sie dasteht.
+    """
+    import zipfile
+
+    from app.services import proxy_service
+
+    jar = tmp_path / "velocity.jar"
+    with zipfile.ZipFile(jar, "w") as z:
+        z.writestr("default-velocity.toml",
+                   '# Kommentar\nconfig-version = "3.1"\n')
+
+    assert proxy_service.velocity_config_version(jar) == "3.1"
+
+
+def test_config_version_faellt_sauber_zurueck(tmp_path):
+    """Ohne lesbares Jar darf nichts krachen - der Start haengt daran."""
+    from app.services import proxy_service
+
+    assert proxy_service.velocity_config_version(tmp_path / "fehlt.jar") == "2.8"
+    kaputt = tmp_path / "kaputt.jar"
+    kaputt.write_bytes(b"kein zip")
+    assert proxy_service.velocity_config_version(kaputt) == "2.8"
+
+
+def test_render_nimmt_die_uebergebene_config_version():
+    from app.services import proxy_service
+
+    cfg = {"bind_port": 25605, "domain": "mc.example.de", "motd": "x",
+           "max_players": 100, "config_version": "9.9"}
+    toml = proxy_service.render_velocity_toml(cfg, [], None)
+
+    assert 'config-version = "9.9"' in toml

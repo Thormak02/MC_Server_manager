@@ -222,6 +222,31 @@ def _toml_escape(value: str) -> str:
     return "".join(ch if ch >= " " or ch in "\\\"" else f"\\u{ord(ch):04X}" for ch in out)
 
 
+# Fallback, falls sich die Version nicht aus dem Jar lesen laesst.
+_CONFIG_VERSION_FALLBACK = "2.8"
+
+
+def velocity_config_version(jar: str | Path | None = None) -> str:
+    """Die ``config-version``, die DIESES Velocity-Jar erwartet.
+
+    Steht in der Datei eine aeltere Version, laeuft sie bei jedem Start durch Velocitys
+    Migration statt direkt gelesen zu werden. Eine fest eingetragene Fremdversion laeuft
+    zudem auseinander, sobald das Jar aktualisiert wird - deshalb wird sie aus der
+    Vorlage im Jar gelesen (``default-velocity.toml``).
+    """
+    import re
+    import zipfile
+
+    pfad = Path(jar) if jar else (_work_dir() / "velocity.jar")
+    try:
+        with zipfile.ZipFile(pfad) as z:
+            text = z.read("default-velocity.toml").decode("utf-8", "replace")
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return _CONFIG_VERSION_FALLBACK
+    treffer = re.search(r'^\s*config-version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    return treffer.group(1) if treffer else _CONFIG_VERSION_FALLBACK
+
+
 def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None,
                          *, forwarding_mode: str = "modern") -> str:
     """velocity.toml aus Backends + Laufzeit-Config bauen.
@@ -233,7 +258,7 @@ def render_velocity_toml(cfg: dict, backends: list[dict], lobby_name: str | None
     motd = _toml_escape(cfg.get("motd") or "Willkommen im Netzwerk")
 
     lines: list[str] = []
-    lines.append('config-version = "2.7"')
+    lines.append(f'config-version = "{cfg.get("config_version") or velocity_config_version()}"')
     # Loopback-Bind: Velocity ist ein INTERNES Backend hinter dem Gateway (oeffentlich ist
     # nur der Gateway-Port). Kein oeffentlicher Bind -> kein Umgehen des Routers.
     lines.append(f'bind = "127.0.0.1:{bind_port}"')
