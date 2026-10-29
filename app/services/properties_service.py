@@ -122,9 +122,12 @@ def zerlege_zeile(zeile: str) -> tuple[str, str] | None:
     return text.strip(), ""
 
 
-def _lies_text(pfad: Path) -> tuple[str, str]:
-    """Dateiinhalt plus erkannte Kodierung. Latin-1 ist der Rueckfall, nicht Datenverlust."""
-    rohdaten = pfad.read_bytes()
+def dekodiere(rohdaten: bytes) -> tuple[str, str]:
+    """Bytes plus erkannte Kodierung. Latin-1 ist der Rueckfall, nicht Datenverlust.
+
+    Oeffentlich, weil es einen zweiten Leser gibt (admin_path_service): zwei Kaskaden
+    waeren zwei Meinungen darueber, was in einer Datei steht.
+    """
     try:
         return rohdaten.decode("utf-8"), "utf-8"
     except UnicodeDecodeError:
@@ -133,6 +136,11 @@ def _lies_text(pfad: Path) -> tuple[str, str]:
             return rohdaten.decode("cp1252"), "cp1252"
         except UnicodeDecodeError:
             return rohdaten.decode("latin-1"), "latin-1"
+
+
+def _lies_text(pfad: Path) -> tuple[str, str]:
+    """Dateiinhalt plus erkannte Kodierung."""
+    return dekodiere(pfad.read_bytes())
 
 
 def _zeilen(text: str) -> list[str]:

@@ -2900,6 +2900,7 @@ def apply_server_resource_pack(
     version_label: str,
     user_id: int | None,
     require: bool = False,
+    file_name: str = "",
 ) -> InstalledContent:
     """server.properties setzen (resource-pack + sha1) und Eintrag fuehren.
 
@@ -2928,7 +2929,10 @@ def apply_server_resource_pack(
         external_version_id=str(version_id),
         name=name or "Resource Pack",
         version_label=version_label,
-        file_name="",
+        # Den Dateinamen festhalten, wenn der Aufrufer selbst hostet: sonst ist die
+        # Zuordnung Eintrag -> Datei nur noch aus der URL in server.properties zu
+        # erraten, und die aendert sich mit der oeffentlichen Manager-Adresse.
+        file_name=file_name or "",
         installed_by_user_id=user_id,
     )
     db.add(entry)

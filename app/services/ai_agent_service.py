@@ -63,6 +63,15 @@ class Werkzeug:
     """Ein Satz fuer die Bestaetigung: was ist danach anders und was laesst sich nicht
     zurueckdrehen."""
 
+    nur_admin: bool = False
+    """Zusaetzlich zu ``recht``: nur Admin und Super-Admin.
+
+    Fuer Werkzeuge, die mehr zeigen oder aendern, als die Oberflaeche einem Moderator
+    gibt - in ein Archiv zu sehen heisst auch, eine Konfiguration mit Zugangsdaten zu
+    sehen, die der Dateieditor nicht anzeigt (der kennt nur Textdateien). Geprueft wird
+    das an denselben drei Toren wie ``recht``, damit der Vorbehalt nicht neben einem
+    Werkzeug stehen kann, ohne zu wirken."""
+
     zusatzpruefung: Callable[..., None] | None = None
     """Eine Pruefung, die von den PARAMETERN abhaengt und nicht vom Werkzeug allein.
 
@@ -375,6 +384,20 @@ def _tue_befehl(db: Session, user: User, server: Server, p: dict) -> dict:
     if not ok:
         raise AgentFehler(meldung)
     return {"meldung": meldung, "befehl": befehl}
+
+
+def _pruefe_admin(db: Session, user: User, server: Server | None, p: dict) -> None:
+    """Fuer Werkzeuge, die mehr zeigen oder aendern, als die Oberflaeche einem Moderator gibt.
+
+    In einem Archiv kann alles stehen - auch eine Konfiguration mit Zugangsdaten, die
+    ueber den Dateieditor nicht sichtbar waere (der zeigt nur Textdateien). Und wer die
+    Teilpakete eines Resource Packs aendert, aendert, was JEDER Spieler beim Beitritt
+    geladen bekommt.
+    """
+    if (getattr(user, "role", "") or "") in {UserRole.SUPER_ADMIN.value,
+                                             UserRole.ADMIN.value}:
+        return
+    raise AgentFehler("Dafuer braucht es Admin-Rechte.")
 
 
 def _pruefe_konsolenbefehl(db: Session, user: User, server: Server, p: dict) -> None:
@@ -726,6 +749,424 @@ def _pruefe_entfernen_rechte(db: Session, user: User, server: Server, p: dict) -
         _recht_pruefen(db, user, server, "dateien")
 
 
+def _ja(wert) -> bool:
+    """Das Modell schickt Wahrheitswerte als bool, als "true" oder als "ja"."""
+    if isinstance(wert, bool):
+        return wert
+    return str(wert or "").strip().lower() in {"true", "1", "ja", "yes", "y"}
+
+
+def _pfad_ziel(db: Session, p: dict, feld: str = "pfad", *, zweck: str,
+               muss_existieren: bool = True, erwarte: str | None = None) -> Path:
+    """Einen Pfad durch die Regel schicken und als Ausnahme des Agenten weitergeben."""
+    from app.services import admin_path_service
+
+    try:
+        return admin_path_service.pruefe(str(p.get(feld) or ""), db=db, zweck=zweck,
+                                         muss_existieren=muss_existieren,
+                                         erwarte=erwarte)
+    except admin_path_service.PfadFehler as exc:
+        raise AgentFehler(str(exc)) from exc
+
+
+def _protokolliere_lesen(db: Session, user: User, name: str, ziel: Path) -> None:
+    """Auch das LESEN eines freien Pfades wird protokolliert.
+
+    Veraendernde Werkzeuge protokolliert fuehre_aus von selbst. Lesende nicht - bei
+    Serverdateien genuegt das auch, denn die sieht der Nutzer ohnehin im Dateieditor.
+    Ein freier Pfad ist etwas anderes: dort kann alles liegen, und hinterher soll
+    nachvollziehbar sein, was angesehen wurde.
+    """
+    from app.services import audit_service
+
+    audit_service.log_action(db, action=f"ai.agent.{name}", user_id=user.id,
+                             details=str(ziel)[:400])
+
+
+def _lies_pfad_liste(db: Session, user: User, _server, p: dict) -> dict:
+    from app.services import admin_path_service
+
+    ziel = _pfad_ziel(db, p, zweck="lesen", erwarte="ordner")
+    _protokolliere_lesen(db, user, "pfad_auflisten", ziel)
+    try:
+        return admin_path_service.auflisten(ziel)
+    except admin_path_service.PfadFehler as exc:
+        raise AgentFehler(str(exc)) from exc
+
+
+def _lies_pfad_datei(db: Session, user: User, _server, p: dict) -> dict:
+    from app.services import admin_path_service
+
+    ziel = _pfad_ziel(db, p, zweck="lesen", erwarte="datei")
+    _protokolliere_lesen(db, user, "pfad_lesen", ziel)
+    try:
+        return admin_path_service.lesen(ziel)
+    except admin_path_service.PfadFehler as exc:
+        raise AgentFehler(str(exc)) from exc
+
+
+def _tue_pfad_schreiben(db: Session, user: User, _server, p: dict) -> dict:
+    from app.services import admin_path_service
+
+    ziel = _pfad_ziel(db, p, zweck="schreiben", muss_existieren=False, erwarte="datei")
+    try:
+        return admin_path_service.schreiben(ziel, p.get("inhalt") or "")
+    except admin_path_service.PfadFehler as exc:
+        raise AgentFehler(str(exc)) from exc
+
+
+def _tue_pfad_loeschen(db: Session, user: User, _server, p: dict) -> dict:
+    from app.services import admin_path_service
+
+    ziel = _pfad_ziel(db, p, zweck="loeschen")
+    try:
+        return admin_path_service.loeschen(ziel, rekursiv=_ja(p.get("rekursiv")))
+    except admin_path_service.PfadFehler as exc:
+        raise AgentFehler(str(exc)) from exc
+
+
+def _tue_pfad_verschieben(db: Session, user: User, _server, p: dict) -> dict:
+    from app.services import admin_path_service
+
+    # Die QUELLE wird mit dem Zweck "loeschen" geprueft: verschieben nimmt sie von ihrem
+    # Platz weg, und das ist fuer alles, was danach dort sucht, dasselbe wie loeschen.
+    quelle = _pfad_ziel(db, p, "quelle", zweck="loeschen")
+    ziel = _pfad_ziel(db, p, "ziel", zweck="schreiben", muss_existieren=False)
+    try:
+        return admin_path_service.verschieben(quelle, ziel)
+    except admin_path_service.PfadFehler as exc:
+        raise AgentFehler(str(exc)) from exc
+
+
+def _pruefe_pfad_schreiben(db: Session, user: User, server, p: dict) -> None:
+    """Die Pfadregel schon bei der VORLAGE anwenden.
+
+    Sonst liest der Nutzer eine Bestaetigungsfrage zu einer Tat, die danach an der Regel
+    scheitert - dieselbe Ueberlegung wie bei einem Konsolenbefehl, der Admin braucht.
+    """
+    _pfad_ziel(db, p, zweck="schreiben", muss_existieren=False, erwarte="datei")
+
+
+def _pruefe_pfad_loeschen(db: Session, user: User, server, p: dict) -> None:
+    _pfad_ziel(db, p, zweck="loeschen")
+
+
+def _pruefe_pfad_verschieben(db: Session, user: User, server, p: dict) -> None:
+    _pfad_ziel(db, p, "quelle", zweck="loeschen")
+    _pfad_ziel(db, p, "ziel", zweck="schreiben", muss_existieren=False)
+
+
+# Hoechstens so viele Eintraege eines Archivs auf einmal: ein Modpack-Jar hat
+# zehntausende, und das Inhaltsverzeichnis allein waere teurer als jede Antwort darauf.
+ARCHIV_MAX_EINTRAEGE = 200
+# Und hoechstens so viel aus einer Datei darin. In Bytes gelesen, nicht in Zeichen:
+# bei einem Zip-Bomb-Eintrag entscheidet, wie viel ENTPACKT wird, nicht wie viel ankommt.
+ARCHIV_MAX_BYTES = 32_000
+ARCHIV_MAX_ZEICHEN = 8_000
+
+# Wo Archive liegen. Keine Suche ueber den ganzen Serverordner: dort stehen die
+# Weltdaten, und ein rglob darueber kostet bei grossen Welten Sekunden fuer nichts.
+ARCHIV_MUSTER = ("*.jar", "*.zip", "plugins/*.jar", "plugins/*/*.jar", "mods/*.jar",
+                 "datapacks/*.zip", "*/datapacks/*.zip", "*/datapacks/*/*.zip")
+
+
+def _archive_finden(server: Server) -> list[str]:
+    """Die Archive des Servers - der Entdeckungsschritt zu 'pfad'.
+
+    Noetig, weil dateien_auflisten nur TEXT-Dateien zeigt: ohne das hier muesste der
+    Assistent Pfade raten, und ein geratener Pfad kostet eine Runde fuer nichts.
+    """
+    from app.services.file_service import _server_base_path
+
+    try:
+        basis = _server_base_path(server)
+    except Exception:  # noqa: BLE001
+        return []
+    try:
+        wurzel = basis.resolve()
+    except OSError:
+        return []
+    gefunden: set[str] = set()
+    for muster in ARCHIV_MUSTER:
+        try:
+            for datei in basis.glob(muster):
+                if not datei.is_file():
+                    continue
+                # Aufgeloest pruefen: glob folgt Abzweigungen. Ein "plugins/update",
+                # das auf ein anderes Laufwerk zeigt, haette sonst die Namen fremder
+                # Archive in die Liste gebracht - lesen liesse sie sich nicht, aber
+                # genannt waeren sie.
+                try:
+                    echt = datei.resolve()
+                except OSError:
+                    continue
+                if echt != wurzel and wurzel not in echt.parents:
+                    continue
+                gefunden.add(datei.relative_to(basis).as_posix())
+                if len(gefunden) >= ARCHIV_MAX_EINTRAEGE:
+                    return sorted(gefunden)
+        except OSError:
+            continue
+    return sorted(gefunden)
+
+
+def _tue_archiv_ansehen(db: Session, user: User, server: Server | None, p: dict) -> dict:
+    """In ein Archiv sehen: Inhaltsverzeichnis oder eine Datei daraus.
+
+    Zwei Wege, eine Funktion: serverrelativ (Admin, wie bisher) und an einem freien Pfad
+    (Super-Admin). Der Katalog fuehrt dieses Werkzeug ohne Serverpflicht, weil es fuer den
+    zweiten Weg keinen Server gibt - deshalb wird er hier geholt und geprueft, mit
+    derselben Pruefung, die der Katalog sonst uebernimmt.
+    """
+    from app.services.file_service import resolve_server_path
+
+    if server is None and p.get("server_id") is not None:
+        server = _server_holen(db, user, p.get("server_id"))
+        _recht_pruefen(db, user, server, "ansehen")
+
+    pfad = str(p.get("pfad") or "").strip()
+    eintrag = str(p.get("eintrag") or "").strip().replace(chr(92), "/")
+    if not pfad:
+        if server is None:
+            raise AgentFehler("Ohne server_id braucht es den vollen Pfad des Archivs.")
+        archive = _archive_finden(server)
+        return {"archive": archive,
+                "hinweis": ("Mit 'pfad' eines dieser Archive oeffnen."
+                            if archive else
+                            "In diesem Serverordner liegt kein Archiv.")}
+
+    if _ist_freier_pfad(pfad):
+        # Ein vollstaendiger Pfad verlaesst den Serverordner - das ist Super-Admin-Sache
+        # und laeuft durch dieselbe Regel wie die uebrigen Pfadwerkzeuge. Genau dafuer
+        # gibt es den Fall: das gehostete Resource Pack liegt unter data/resourcepacks,
+        # also ausserhalb jedes Serverordners.
+        _recht_pruefen(db, user, None, "super_admin")
+        ziel = _pfad_ziel(db, p, zweck="lesen", erwarte="datei")
+        anzeige = str(ziel)
+        _protokolliere_lesen(db, user, "archiv_ansehen", ziel)
+        return _archiv_oeffnen(ziel, anzeige, eintrag)
+
+    if server is None:
+        raise AgentFehler("Ohne server_id muss der Pfad vollstaendig sein, z.B. "
+                          "'data/resourcepacks/vt_1_abc.zip'.")
+    try:
+        # Derselbe Haken wie beim Dateilesen: kein Ausbruch aus dem Serverordner, kein
+        # absoluter Pfad. Nur die Textdatei-Pruefung entfaellt - ein Jar ist keine.
+        ziel = resolve_server_path(server, pfad, must_exist=True, expect_file=True)
+    except ValueError as exc:
+        # Bei einem geratenen Pfad gleich die echten nennen, statt eine Runde zu kosten.
+        gesucht = pfad.replace(chr(92), "/").rsplit("/", 1)[-1].lower()
+        passend = [a for a in _archive_finden(server)
+                   if a.rsplit("/", 1)[-1].lower() == gesucht]
+        raise AgentFehler(str(exc) + (f" Gemeint war vielleicht: {', '.join(passend[:5])}."
+                                      if passend else "")) from exc
+
+    anzeige = pfad.replace(chr(92), "/")
+    return _archiv_oeffnen(ziel, anzeige, eintrag)
+
+
+def _ist_freier_pfad(pfad: str) -> bool:
+    """Ob das ein Pfad AUSSERHALB des Serverordners sein will.
+
+    'data/...' relativ zum Programmordner zaehlt dazu: ein Serverordner hat kein data/,
+    und wer so etwas angibt, meint den Manager. Alles andere bleibt serverrelativ,
+    damit 'plugins/X.jar' weiter das Naheliegende tut.
+    """
+    gerade = pfad.replace(chr(92), "/")
+    if gerade.startswith("/") or gerade.startswith("~"):
+        return True
+    if len(gerade) > 2 and gerade[1] == ":":
+        return True
+    return gerade.split("/", 1)[0].lower() in {"data", "managed_servers"}
+
+
+# Hoechstens so lang darf ein Eintragsname im Inhaltsverzeichnis sein. Ein Zip darf
+# Namen bis 64 KB fuehren; 200 davon waeren 12 MB JSON, gebaut um auf 12 KB gekuerzt zu
+# werden.
+ARCHIV_MAX_NAME = 300
+
+# Nur diese beiden Verfahren werden gelesen. Begruendung steht in _archiv_oeffnen.
+_LESBARE_VERFAHREN = (0, 8)  # ZIP_STORED, ZIP_DEFLATED
+
+
+def _archiv_oeffnen(ziel, anzeige: str, eintrag: str) -> dict:
+    """Inhaltsverzeichnis oder einen Eintrag - begrenzt, und ohne das Archiv zu entpacken."""
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(ziel) as z:
+            namen = z.namelist()
+            if not eintrag:
+                return {
+                    "pfad": anzeige,
+                    "eintraege_gesamt": len(namen),
+                    "eintraege": [n[:ARCHIV_MAX_NAME]
+                                  for n in namen[:ARCHIV_MAX_EINTRAEGE]],
+                    "gekuerzt": len(namen) > ARCHIV_MAX_EINTRAEGE,
+                    "hinweis": ("Mit 'eintrag' eine einzelne Datei daraus lesen, z.B. "
+                                "plugin.yml, pack.mcmeta oder 'Selected Packs.txt'."),
+                }
+            if eintrag not in namen:
+                treffer = [n for n in namen if n.lower().endswith(eintrag.lower())][:5]
+                raise AgentFehler(
+                    f"'{eintrag}' steht nicht in {anzeige}."
+                    + (f" Gemeint war vielleicht: {', '.join(treffer)}." if treffer
+                       else " Ohne 'eintrag' kommt das Inhaltsverzeichnis."))
+            angaben = z.getinfo(eintrag)
+            if eintrag.endswith("/") or angaben.is_dir():
+                raise AgentFehler(f"'{eintrag}' ist ein Ordner im Archiv, keine Datei.")
+            # Die Grenze beim Lesen wirkt nur bei STORED und DEFLATE. Nachgelesen in
+            # zipfile.ZipExtFile._read1 (3.12): fuer Deflate laeuft
+            # decompress(data, n) - begrenzt -, fuer JEDES andere Verfahren
+            # decompress(data) OHNE Grenze, und gefuettert wird mit 32 KB komprimiert.
+            # Gemessen ergeben 32 KB bzip2 rund 43 GB, 32 KB lzma 224 MB - in EINEM
+            # bytes-Objekt, bevor irgendeine Kappung greift. Da die Route im Event-Loop
+            # laeuft, friert das nicht die Anfrage ein, sondern den ganzen Manager.
+            if angaben.compress_type not in _LESBARE_VERFAHREN:
+                raise AgentFehler(
+                    f"'{eintrag}' ist mit Verfahren {angaben.compress_type} gepackt "
+                    f"(nicht Deflate oder unkomprimiert). Solche Eintraege liest der "
+                    f"Manager nicht: dabei liesse sich die Groessengrenze umgehen.")
+            with z.open(eintrag) as f:
+                rohdaten = f.read(ARCHIV_MAX_BYTES + 1)
+    except AgentFehler:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        # Absichtlich breit. Das Archiv kommt von aussen, und ein Fuzz ueber verfaelschte
+        # Zips lieferte neben BadZipFile/OSError auch zlib.error (46 von 60 Laeufen),
+        # ValueError ("negative seek value") und UnicodeDecodeError aus dem Oeffnen -
+        # alles Ausnahmen, die keine gemeinsame Oberklasse haben. Fuer den Nutzer
+        # bedeuten sie dasselbe: die Datei ist nicht lesbar.
+        raise AgentFehler(f"{anzeige} konnte nicht gelesen werden: "
+                          f"{type(exc).__name__}: {exc}") from exc
+
+    nutzdaten = rohdaten[:ARCHIV_MAX_BYTES]
+    if b"\x00" in nutzdaten[:8192]:
+        raise AgentFehler(
+            f"'{eintrag}' ist keine Textdatei. Als Text gelesen ergibt das Muell, und "
+            f"an das Modell gingen tausende Ersatzzeichen.")
+    text = nutzdaten.decode("utf-8", errors="replace")
+    gekuerzt = len(rohdaten) > ARCHIV_MAX_BYTES or len(text) > ARCHIV_MAX_ZEICHEN
+    ergebnis = {"pfad": anzeige, "eintrag": eintrag,
+                "inhalt": text[:ARCHIV_MAX_ZEICHEN], "gekuerzt": gekuerzt}
+    if gekuerzt:
+        ergebnis["hinweis"] = "Nur der Anfang der Datei."
+    return ergebnis
+
+
+def _vt_eintrag(db: Session, server: Server, p: dict):
+    """Den Inhaltseintrag zu einer ID holen - und zwar nur einen mit Teilpaketen."""
+    from app.models.installed_content import InstalledContent
+    from app.services import vanillatweaks_service as vt
+
+    try:
+        kennung = int(p.get("inhalt_id") or 0)
+    except (TypeError, ValueError):
+        kennung = 0
+    eintrag = db.get(InstalledContent, kennung) if kennung else None
+    # Die Zugehoerigkeit zum Server pruefen, nicht nur die ID: sonst liesse sich ueber
+    # einen Server, den man steuern darf, ein Eintrag eines anderen anfassen.
+    if eintrag is None or eintrag.server_id != server.id:
+        raise AgentFehler(f"Einen Inhalt mit der ID {p.get('inhalt_id')!r} gibt es auf "
+                          f"'{server.name}' nicht.")
+    if not vt.auswahl_typ(eintrag):
+        raise AgentFehler(
+            f"'{eintrag.name}' buendelt keine VanillaTweaks-Teilpakete. Das gibt es nur "
+            f"beim Resource Pack und bei den Crafting Tweaks - einzelne Datapacks fuehrt "
+            f"der Manager als je eigenen Eintrag, die lassen sich direkt entfernen.")
+    return eintrag
+
+
+def _tue_vt_auswahl_zeigen(db: Session, user: User, server: Server, p: dict) -> dict:
+    from app.services import vanillatweaks_service as vt
+
+    eintrag = _vt_eintrag(db, server, p)
+    stand = vt.auswahl_lesen(server, eintrag) or {}
+    raus = {"name": eintrag.name, "inhalt_id": eintrag.id, "typ": stand.get("typ", ""),
+            "version": stand.get("version", ""),
+            "zielversion": stand.get("zielversion", ""),
+            "gewaehlt": stand.get("gewaehlt", []),
+            "unbekannt": stand.get("unbekannt", []),
+            "datei": stand.get("datei", ""),
+            "lesbar": bool(stand.get("lesbar"))}
+    if stand.get("hinweis"):
+        raus["hinweis"] = stand["hinweis"]
+    try:
+        # Gegen die ZIELGRUPPE: mit der wird neu erzeugt, also muessen die waehlbaren
+        # Namen aus ihr kommen. Sonst bestaetigt der Nutzer einen Namen aus dem alten
+        # Katalog, und die Ausfuehrung weist ihn als unbekannt ab.
+        katalog, hinweis = vt.verfuegbare_packs(
+            stand.get("typ") or "resourcepacks",
+            stand.get("zielversion") or stand.get("version") or "",
+            str(p.get("suche") or ""))
+        raus["verfuegbar"] = katalog
+        if hinweis:
+            raus["verfuegbar_hinweis"] = hinweis
+    except Exception as exc:  # noqa: BLE001 - ohne Katalog bleibt die Auswahl lesbar
+        raus["verfuegbar_fehler"] = f"Der Katalog war nicht erreichbar: {exc}"
+    return raus
+
+
+def _vt_namen(p: dict, feld: str) -> list[str]:
+    """Eine Namensliste aus den Parametern - das Modell schickt Liste ODER Fliesstext."""
+    wert = p.get(feld)
+    if isinstance(wert, str):
+        wert = wert.replace(";", ",").split(",")
+    return [str(x).strip() for x in (wert or []) if str(x).strip()]
+
+
+def _vt_neue_auswahl(db: Session, server: Server, p: dict):
+    """Die kuenftige Auswahl aus dem Istzustand plus 'hinzufuegen'/'entfernen'.
+
+    Zweimal gebraucht: fuer die Beschreibung im Bestaetigungsdialog und fuer die
+    Ausfuehrung - beide muessen dieselbe Liste nennen.
+    """
+    from app.services import vanillatweaks_service as vt
+
+    eintrag = _vt_eintrag(db, server, p)
+    stand = vt.auswahl_lesen(server, eintrag) or {}
+    namen = list(stand.get("gewaehlt") or [])
+    dazu = _vt_namen(p, "hinzufuegen")
+
+    # "Leere Auswahl" und "Auswahl nicht lesbar" sehen gleich aus und bedeuten das
+    # Gegenteil: auf einer unlesbaren Grundlage ERSETZT ein Hinzufuegen die ganze
+    # Zusammenstellung, statt sie zu ergaenzen. Aus 21 Teilpaketen wird dann eines -
+    # und die Nachwirkung des Werkzeugs sagt selbst, dass das nur aus einer Sicherung
+    # zurueckzuholen ist.
+    if dazu and not stand.get("lesbar"):
+        raise AgentFehler(
+            "Die bisherige Auswahl laesst sich nicht lesen"
+            + (f" ({stand['hinweis']})" if stand.get("hinweis") else "")
+            + ". Etwas hinzuzufuegen wuerde sie nicht ergaenzen, sondern durch die "
+              "genannten Teilpakete ersetzen. Erst mit vt_auswahl_zeigen klaeren, was "
+              "wirklich drin ist.")
+
+    # Verglichen wird ueber den Namensschluessel, nicht per .lower(): das Manifest fuehrt
+    # interne Namen ("WavyWater"), Nutzer und Katalog-Anzeige den Namen mit Leerzeichen
+    # ("Wavy Water"). Bei Resource Packs weichen name und display in 670 von 672 Faellen
+    # ab - mit .lower() entfernte "weg: Wavy Water" nichts, und der Satz im Dialog sagte
+    # trotzdem, es sei entfernt.
+    weg = {vt.namensschluessel(n) for n in _vt_namen(p, "entfernen")}
+    namen = [n for n in namen if vt.namensschluessel(n) not in weg]
+    for neu in dazu:
+        if vt.namensschluessel(neu) not in {vt.namensschluessel(n) for n in namen}:
+            namen.append(neu)
+    return eintrag, namen
+
+
+def _tue_vt_auswahl_setzen(db: Session, user: User, server: Server, p: dict) -> dict:
+    from app.services import vanillatweaks_service as vt
+
+    eintrag, namen = _vt_neue_auswahl(db, server, p)
+    try:
+        ok, meldung = vt.auswahl_setzen(db, server, eintrag, namen, user.id)
+    except ValueError as exc:
+        raise AgentFehler(str(exc)) from exc
+    if not ok:
+        raise AgentFehler(meldung)
+    return {"meldung": meldung, "gewaehlt": namen}
+
+
 # ------------------------------------------------------------- Beschreibungen
 
 def _b_backup(db: Session, server: Server, p: dict) -> str:
@@ -780,6 +1221,86 @@ def _b_inhalte_update(db: Session, server: Server, p: dict) -> str:
     was = {"mod": "Mods", "plugin": "Plugins", "datapack": "Datapacks"}.get(
         art, "Mods und Plugins")
     return f"Alle {was} von '{server.name}' auf die neueste passende Version bringen."
+
+
+def _pfad_fuer_satz(db: Session, p: dict, feld: str = "pfad") -> str:
+    """Der aufgeloeste Pfad fuer den Bestaetigungssatz - oder der eingegebene.
+
+    Ein Pfad, der die Regel nicht besteht, erscheint im Vorschlag schon als Hindernis
+    (siehe _pruefe_pfad_*). Hier soll derselbe Fehler den Satz nicht sprengen.
+    """
+    from app.services import admin_path_service
+
+    roh = str(p.get(feld) or "").strip()
+    try:
+        return str(admin_path_service.pruefe(roh, db=db, zweck="lesen",
+                                             muss_existieren=False))
+    except Exception:  # noqa: BLE001
+        return roh or "(kein Pfad)"
+
+
+def _b_pfad_schreiben(db: Session, server: Server | None, p: dict) -> str:
+    from pathlib import Path as _Pfad
+
+    pfad = _pfad_fuer_satz(db, p)
+    inhalt = str(p.get("inhalt") or "")
+    zusatz = ""
+    try:
+        vorhanden = _Pfad(pfad)
+        if vorhanden.is_file():
+            zusatz = (f" Die Datei gibt es schon ({vorhanden.stat().st_size} Bytes) und "
+                      f"wird vollstaendig ersetzt.")
+    except OSError:
+        pass
+    return f"'{pfad}' schreiben, {len(inhalt)} Zeichen.{zusatz}"
+
+
+def _b_pfad_loeschen(db: Session, server: Server | None, p: dict) -> str:
+    from pathlib import Path as _Pfad
+
+    from app.services import admin_path_service
+
+    pfad = _pfad_fuer_satz(db, p)
+    try:
+        ziel = _Pfad(pfad)
+        if ziel.is_dir():
+            anzahl = admin_path_service.zaehle(ziel)
+            return (f"Den Ordner '{pfad}' loeschen - mit {anzahl} Eintraegen darunter."
+                    if anzahl else f"Den leeren Ordner '{pfad}' loeschen.")
+    except OSError:
+        pass
+    return f"Die Datei '{pfad}' loeschen."
+
+
+def _b_pfad_verschieben(db: Session, server: Server | None, p: dict) -> str:
+    return (f"'{_pfad_fuer_satz(db, p, 'quelle')}' nach "
+            f"'{_pfad_fuer_satz(db, p, 'ziel')}' verschieben.")
+
+
+def _pruefe_vt_auswahl(db: Session, user: User, server: Server, p: dict) -> None:
+    """Die Parameter schon bei der VORLAGE pruefen.
+
+    Vorher fing die Beschreibung den Fehler ab und gab ihn als TATBESCHREIBUNG zurueck.
+    Der Dialog titelte dann "Vorschlag", setzte den Fehlersatz als das ein, was passieren
+    soll, und bot "Ausfuehren" aktiv an - ausgefuehrt wurde nichts, aber die Zusage "der
+    Bestaetigungssatz kommt vom Manager und beschreibt die Tat" galt nicht mehr.
+    """
+    _vt_neue_auswahl(db, server, p)
+
+
+def _b_vt_auswahl_setzen(db: Session, server: Server, p: dict) -> str:
+    # Hier wird NICHT mehr gefangen: _baue_vorschlag ruft die Beschreibung innerhalb
+    # seines try auf, eine Ausnahme wird dort also zum Hindernis - genau richtig.
+    eintrag, namen = _vt_neue_auswahl(db, server, p)
+    weg = _vt_namen(p, "entfernen")
+    dazu = _vt_namen(p, "hinzufuegen")
+    teile = []
+    if dazu:
+        teile.append("dazu: " + ", ".join(dazu))
+    if weg:
+        teile.append("weg: " + ", ".join(weg))
+    return (f"'{eintrag.name}' neu erzeugen mit {len(namen)} Teilpaket(en)"
+            + (" (" + "; ".join(teile) + ")" if teile else "") + ".")
 
 
 # ------------------------------------------------------------------- Katalog
@@ -952,6 +1473,122 @@ _eintragen(Werkzeug(
                 "Plugin unbrauchbar oder fehlerhaft sein. Vorher sichern."))
 
 
+_PFAD_FELD = {"type": "string",
+              "description": "Vollstaendiger Pfad, z.B. 'C:/mc/data/logs/app.log'. "
+                             "Ohne Laufwerk zaehlt der Pfad vom Programmordner des "
+                             "Managers, also 'data/logs/app.log'."}
+
+_eintragen(Werkzeug(
+    name="pfad_auflisten", lesend=True, recht="super_admin", braucht_server=False,
+    beschreibung="Einen Ordner irgendwo auf dem Managerrechner auflisten - auch "
+                 "ausserhalb der Serverordner, z.B. data/resourcepacks oder "
+                 "data/downloads. Nur fuer Super-Admins.",
+    felder={"pfad": _PFAD_FELD}, pflicht=["pfad"], ausfuehren=_lies_pfad_liste))
+
+_eintragen(Werkzeug(
+    name="pfad_lesen", lesend=True, recht="super_admin", braucht_server=False,
+    beschreibung="Eine Textdatei irgendwo auf dem Managerrechner lesen - auch ausserhalb "
+                 "der Serverordner. Nur fuer Super-Admins. Geheimnisse (.env, Datenbank, "
+                 "Schluesselspeicher) bleiben auch dann zu.",
+    felder={"pfad": _PFAD_FELD}, pflicht=["pfad"], ausfuehren=_lies_pfad_datei))
+
+_eintragen(Werkzeug(
+    name="pfad_schreiben", lesend=False, recht="super_admin", braucht_server=False,
+    gefahr="hoch", ausfuehren=_tue_pfad_schreiben, beschreibe=_b_pfad_schreiben,
+    zusatzpruefung=_pruefe_pfad_schreiben,
+    beschreibung="Eine Textdatei irgendwo auf dem Managerrechner anlegen oder ersetzen. "
+                 "Fehlende Ordner werden angelegt. Eine bestehende Datei behaelt ihre "
+                 "Kodierung. In den Programmcode des Managers fuehrt kein Weg.",
+    felder={"pfad": _PFAD_FELD,
+            "inhalt": {"type": "string",
+                       "description": "Der vollstaendige neue Inhalt der Datei"}},
+    pflicht=["pfad", "inhalt"],
+    nachwirkung="Der bisherige Inhalt der Datei ist danach weg - vollstaendig, nicht "
+                "ergaenzt. Der Manager legt dafuer keine Sicherung an. Fehlende Ordner "
+                "im Pfad werden mit angelegt."))
+
+_eintragen(Werkzeug(
+    name="pfad_loeschen", lesend=False, recht="super_admin", braucht_server=False,
+    gefahr="hoch", ausfuehren=_tue_pfad_loeschen, beschreibe=_b_pfad_loeschen,
+    zusatzpruefung=_pruefe_pfad_loeschen,
+    beschreibung="Eine Datei oder einen Ordner auf dem Managerrechner loeschen. Ordner "
+                 "nur mit rekursiv=true. Serverordner, Geheimnisse und alles dicht unter "
+                 "einer Laufwerkswurzel bleiben geschuetzt.",
+    felder={"pfad": _PFAD_FELD,
+            "rekursiv": {"type": "boolean",
+                         "description": "Auch einen Ordner mit Inhalt loeschen"}},
+    pflicht=["pfad"],
+    nachwirkung="Geloescht ist geloescht - der Manager legt dafuer keine Sicherung an "
+                "und der Windows-Papierkorb wird nicht benutzt. Bei einem Ordner geht "
+                "alles darunter mit."))
+
+_eintragen(Werkzeug(
+    name="pfad_verschieben", lesend=False, recht="super_admin", braucht_server=False,
+    gefahr="mittel", ausfuehren=_tue_pfad_verschieben, beschreibe=_b_pfad_verschieben,
+    zusatzpruefung=_pruefe_pfad_verschieben,
+    beschreibung="Eine Datei oder einen Ordner verschieben oder umbenennen. Das Ziel "
+                 "muss frei sein - ueberschrieben wird nichts.",
+    felder={"quelle": _PFAD_FELD, "ziel": _PFAD_FELD},
+    pflicht=["quelle", "ziel"],
+    nachwirkung="Am alten Ort liegt danach nichts mehr. Was den alten Pfad kennt - "
+                "Startskripte, Konfigurationen, geplante Aufgaben - findet die Datei "
+                "nicht mehr."))
+
+_eintragen(Werkzeug(
+    name="archiv_ansehen", lesend=True, recht="ansehen", nur_admin=True,
+    braucht_server=False,
+    beschreibung="In ein Archiv des Servers hineinsehen, ohne es zu entpacken: ein "
+                 "Datapack-Zip, ein Plugin- oder Mod-Jar, ein Resource Pack. Ohne "
+                 "'pfad' kommt die Liste der vorhandenen Archive (dateien_auflisten "
+                 "zeigt nur Textdateien), ohne 'eintrag' das Inhaltsverzeichnis, mit "
+                 "'eintrag' der Inhalt einer "
+                 "Datei daraus (plugin.yml, pack.mcmeta, 'Selected Packs.txt', ...). "
+                 "Nur fuer Admins; ein Pfad ausserhalb des Serverordners nur fuer "
+                 "Super-Admins.",
+    felder={"server_id": {"type": "integer",
+                          "description": "Server, in dessen Ordner gesucht wird; weglassen "
+                                         "bei einem vollstaendigen Pfad"},
+            "pfad": {"type": "string",
+                     "description": "Pfad des Archivs relativ zum Serverordner, z.B. "
+                                    "'plugins/EssentialsX.jar'; leer lassen, um die "
+                                    "Archive des Servers aufzulisten. Ein vollstaendiger "
+                                    "Pfad (z.B. 'data/resourcepacks/vt_1_abc.zip') geht "
+                                    "auch, dafuer braucht es Super-Admin-Rechte"},
+            "eintrag": {"type": "string",
+                        "description": "Datei im Archiv; leer lassen fuer das "
+                                       "Inhaltsverzeichnis"}},
+    pflicht=[], ausfuehren=_tue_archiv_ansehen))
+
+_eintragen(Werkzeug(
+    name="vt_auswahl_zeigen", lesend=True, recht="ansehen", nur_admin=True,
+    beschreibung="Welche Teilpakete stecken in einem VanillaTweaks-Paket (Resource Pack "
+                 "oder Crafting Tweaks), und welche gibt es fuer diese Version? Die ID "
+                 "kommt aus inhalte_auflisten. Nur fuer Admins.",
+    felder={"inhalt_id": {"type": "integer", "description": "ID aus inhalte_auflisten"},
+            "suche": {"type": "string",
+                      "description": "Nur Teilpakete nennen, deren Name dazu passt - "
+                                     "der Katalog hat ueber 700 Eintraege"}},
+    pflicht=["inhalt_id"], ausfuehren=_tue_vt_auswahl_zeigen))
+
+_eintragen(Werkzeug(
+    name="vt_auswahl_setzen", lesend=False, recht="steuern", gefahr="mittel",
+    nur_admin=True, ausfuehren=_tue_vt_auswahl_setzen,
+    beschreibe=_b_vt_auswahl_setzen, zusatzpruefung=_pruefe_vt_auswahl,
+    beschreibung="Teilpakete eines VanillaTweaks-Pakets hinzufuegen oder entfernen. Die "
+                 "bisherige Auswahl bleibt bestehen, soweit sie nicht in 'entfernen' "
+                 "steht. Namen vorher mit vt_auswahl_zeigen pruefen. Nur fuer Admins.",
+    felder={"inhalt_id": {"type": "integer", "description": "ID aus inhalte_auflisten"},
+            "hinzufuegen": {"type": "array", "items": {"type": "string"},
+                            "description": "Namen aus dem Katalog, z.B. 'WavyWater'"},
+            "entfernen": {"type": "array", "items": {"type": "string"},
+                          "description": "Namen, die aus der Auswahl fallen"}},
+    pflicht=["inhalt_id"],
+    nachwirkung="Das Paket wird bei VanillaTweaks neu erzeugt und ersetzt die alte Datei. "
+                "Beim Resource Pack laedt es jeder Spieler beim naechsten Beitritt neu; "
+                "bei den Crafting Tweaks wirkt es ab dem naechsten Start. Die alte "
+                "Zusammenstellung ist danach nur ueber eine Sicherung zurueckzuholen."))
+
+
 def werkzeug_schemas() -> list[dict]:
     return [w.schema() for w in WERKZEUGE.values()]
 
@@ -989,8 +1626,36 @@ AUFTRAG_ZUSATZ = (
 )
 
 
+def _saeubere_werte(wert):
+    """Jeden Text im Werkzeugergebnis saeubern, BEVOR er in JSON verpackt wird.
+
+    ai_service saeubert den tool_result-Text ebenfalls - aber erst, wenn er EINE
+    JSON-Zeile ist. Die Geheimnis-Muster haengen an ``(?im)^``, und ein Zeilenanfang
+    kommt dort nicht mehr vor: die Umbrueche sind im Blob die zwei Zeichen Backslash
+    und n. Gemessen wurde 'password: "hunter2"' im Rohtext entfernt und im Blob nicht;
+    ebenso fraesst das Inline-Muster im Blob den Rest der Datei auf, weil Backslash-n
+    dort kein Leerraum ist. Deshalb hier, am Rohtext, wo die Muster greifen.
+
+    ``namen_ersetzen`` bleibt aus: Spielernamen gehen nach ausdruecklicher Entscheidung
+    unveraendert mit, und die Namensersetzung erledigt ai_service anhand der
+    Einstellung. Geheimnisse und Adressen dagegen gehen immer, unabhaengig von jeder
+    Einstellung.
+    """
+    from app.services import ai_privacy_service
+
+    if isinstance(wert, str):
+        sauber, _ = ai_privacy_service.saeubere(wert, namen_ersetzen=False)
+        return sauber
+    if isinstance(wert, dict):
+        return {schluessel: _saeubere_werte(unterwert)
+                for schluessel, unterwert in wert.items()}
+    if isinstance(wert, list):
+        return [_saeubere_werte(eintrag) for eintrag in wert]
+    return wert
+
+
 def _ergebnis_text(daten: dict) -> str:
-    text = json.dumps(daten, ensure_ascii=False, default=str)
+    text = json.dumps(_saeubere_werte(daten), ensure_ascii=False, default=str)
     if len(text) > MAX_ERGEBNIS:
         return text[:MAX_ERGEBNIS] + ' ... (gekuerzt)"'
     return text
@@ -1010,6 +1675,8 @@ def _fuehre_lesend_aus(db: Session, user: User, name: str, eingabe: dict) -> dic
         server = (_server_holen(db, user, eingabe.get("server_id"))
                   if werkzeug.braucht_server else None)
         _recht_pruefen(db, user, server, werkzeug.recht)
+        if werkzeug.nur_admin:
+            _pruefe_admin(db, user, server, eingabe)
         if werkzeug.zusatzpruefung is not None:
             werkzeug.zusatzpruefung(db, user, server, eingabe)
         if werkzeug.ausfuehren is None:
@@ -1151,6 +1818,8 @@ def _baue_vorschlag(db: Session, user: User, aufruf: dict) -> dict:
         server = (_server_holen(db, user, eingabe.get("server_id"))
                   if werkzeug.braucht_server else None)
         _recht_pruefen(db, user, server, werkzeug.recht)
+        if werkzeug.nur_admin:
+            _pruefe_admin(db, user, server, eingabe)
         if werkzeug.zusatzpruefung is not None:
             werkzeug.zusatzpruefung(db, user, server, eingabe)
         vorschlag["server_name"] = server.name if server else None
@@ -1188,6 +1857,8 @@ def fuehre_aus(db: Session, *, user: User, werkzeug_name: str, parameter: dict) 
     server = (_server_holen(db, user, (parameter or {}).get("server_id"))
               if werkzeug.braucht_server else None)
     _recht_pruefen(db, user, server, werkzeug.recht)
+    if werkzeug.nur_admin:
+        _pruefe_admin(db, user, server, parameter or {})
     if werkzeug.zusatzpruefung is not None:
         werkzeug.zusatzpruefung(db, user, server, parameter or {})
 

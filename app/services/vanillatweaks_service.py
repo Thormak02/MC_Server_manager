@@ -354,18 +354,41 @@ def _pack_type_from_project(external_project_id: str | None) -> str:
 
 
 def _catalog_packs(pack_type: str, version: str) -> list[dict]:
-    """Flache Pack-Liste des VT-Katalogs mit injizierter Kategorie."""
+    """Flache Pack-Liste des VT-Katalogs mit injizierter Kategorie.
+
+    Der Resource-Pack-Katalog ist NICHT flach: 5 der 14 Hauptkategorien fuehren eigene
+    Unterkategorien ("Aesthetic" -> "More Zombies" -> MZSteve, MZAlex, ...). Gemessen am
+    1.21-Katalog liegen 329 Packs oben und 343 in Unterkategorien - wer nur die oberste
+    Ebene liest, haelt also die HAELFTE aller Teilpakete fuer unbekannt. Ein Pack, das
+    eines davon enthielt, liess sich damit nicht mehr aendern, und der naheliegende
+    Ausweg "dann nimm es raus" hat es endgueltig verloren.
+
+    Der dp- und der ct-Katalog sind flach; die Rekursion kostet dort nichts.
+    """
     packs: list[dict] = []
-    for category in list_categories(pack_type, version):
-        cname = category.get("category") or ""
-        for pack in category.get("packs", []):
-            packs.append({
-                "pack_type": pack_type,
-                "category": cname,
-                "name": pack.get("name") or "",
-                "display": pack.get("display") or pack.get("name") or "",
-                "version": str(pack.get("version") or "").strip(),
-            })
+
+    def _sammle(gruppen: list, tiefe: int = 0) -> None:
+        # Tiefe begrenzt: der Katalog kommt von aussen, und eine Antwort, die sich
+        # selbst enthaelt, soll keine Endlosschleife werden.
+        if tiefe > 4:
+            return
+        for category in gruppen or []:
+            if not isinstance(category, dict):
+                continue
+            cname = category.get("category") or ""
+            for pack in category.get("packs") or []:
+                if not isinstance(pack, dict):
+                    continue
+                packs.append({
+                    "pack_type": pack_type,
+                    "category": cname,
+                    "name": pack.get("name") or "",
+                    "display": pack.get("display") or pack.get("name") or "",
+                    "version": str(pack.get("version") or "").strip(),
+                })
+            _sammle(category.get("categories") or [], tiefe + 1)
+
+    _sammle(list_categories(pack_type, version))
     return packs
 
 
@@ -440,10 +463,26 @@ def read_selected_packs(path) -> dict | None:
     return {"kind": kind, "version": version, "packs": packs}
 
 
-def _ct_selection_from_packs(version: str, pack_names: list[str]) -> tuple[dict[str, list[str]], list[str]]:
-    """Pack-Namen -> {Kategorie: [Namen]} anhand des Crafting-Tweaks-Katalogs (+ Liste Unbekannter)."""
+def namensschluessel(name: str) -> str:
+    """Der Schluessel, unter dem zwei Pack-Namen als derselbe gelten.
+
+    Oeffentlich, weil der Assistent dieselbe Gleichheit braucht: das Manifest fuehrt
+    interne Namen ("WavyWater"), Nutzer und Katalog-Anzeige den Namen mit Leerzeichen
+    ("Wavy Water"). In allen drei Katalogen weichen name und display praktisch immer ab
+    (bei Resource Packs 670 von 672). Ein Vergleich per .lower() findet deshalb nichts.
+    """
+    return content_service._normalized_lookup_key(name or "")
+
+
+def selection_from_packs(pack_type: str, version: str,
+                         pack_names: list[str]) -> tuple[dict[str, list[str]], list[str]]:
+    """Pack-Namen -> {Kategorie: [Namen]} anhand des Katalogs (+ Liste der Unbekannten).
+
+    Die Auswahl in ``Selected Packs.txt`` nennt nur die Namen; zum Neuerzeugen braucht
+    VanillaTweaks sie nach Kategorien sortiert. Der Katalog liefert die Zuordnung.
+    """
     by_key: dict[str, dict] = {}
-    for info in _catalog_packs("craftingtweaks", version):
+    for info in _catalog_packs(pack_type, version):
         for key in (content_service._normalized_lookup_key(info["name"]),
                     content_service._normalized_lookup_key(info["display"])):
             if key:
@@ -457,6 +496,12 @@ def _ct_selection_from_packs(version: str, pack_names: list[str]) -> tuple[dict[
         else:
             missing.append(name)
     return selection, missing
+
+
+def _ct_selection_from_packs(version: str, pack_names: list[str]) -> tuple[dict[str, list[str]], list[str]]:
+    """Wie oben, fuer Crafting Tweaks - bleibt als Name erhalten, die Arbeit macht
+    selection_from_packs."""
+    return selection_from_packs("craftingtweaks", version, pack_names)
 
 
 def _update_crafting_tweaks(db: Session, server: Server, entry: InstalledContent,
@@ -655,6 +700,213 @@ def update_installed_vt(db: Session, server: Server, entry: InstalledContent,
     return (True, meldung)
 
 
+# Welcher Eintrag traegt welche Art von VT-Archiv? Nur diese beiden buendeln mehrere
+# Teilpakete in EINER Datei - einzelne Datapacks fuehrt der Manager je als eigenen Eintrag.
+AUSWAHL_TYPEN = {
+    "vt:resourcepacks": "resourcepacks",
+    "vt:craftingtweaks": "craftingtweaks",
+}
+
+
+def auswahl_typ(entry: InstalledContent) -> str:
+    """'resourcepacks', 'craftingtweaks' - oder leer, wenn der Eintrag keine Auswahl hat."""
+    return AUSWAHL_TYPEN.get(str(getattr(entry, "external_project_id", "") or ""), "")
+
+
+def auswahl_datei(server: Server, entry: InstalledContent) -> Path | None:
+    """Die Archivdatei zu einem Eintrag - auch die, die ausserhalb des Serverordners liegt.
+
+    Das gehostete Resource Pack liegt unter ``data/resourcepacks/``. Steht dort kein
+    Dateiname im Eintrag (aeltere Installationen), wird er aus der URL in
+    server.properties abgeleitet - die zeigt immer auf die Datei, die der Server ausliefert.
+    """
+    typ = auswahl_typ(entry)
+    if typ == "craftingtweaks":
+        pfad = content_service._content_file_path(server, "datapack", entry.file_name)
+        return pfad if pfad and pfad.exists() else None
+    if typ != "resourcepacks":
+        return None
+
+    from app.services import server_service
+
+    ordner = Path(get_settings().data_dir) / "resourcepacks"
+    name = (getattr(entry, "file_name", "") or "").strip()
+    if not name:
+        url = (server_service.read_server_property(server, "resource-pack") or "").strip()
+        name = url.rsplit("/", 1)[-1] if url else ""
+    if not _eigener_paketname(server, name):
+        return None
+    pfad = ordner / name
+    return pfad if pfad.exists() else None
+
+
+def _eigener_paketname(server: Server, name: str) -> bool:
+    """Ob dieser Dateiname zu einem selbst gehosteten Paket DIESES Servers gehoert.
+
+    Zwei Gruende fuer die Strenge. Erstens kann der Name aus der resource-pack-URL
+    kommen, und die zeigt vielleicht auf ein fremdes Paket im Netz - dann gehoert der
+    Name nicht hierher. Zweitens genuegt eine Trennerpruefung unter Windows nicht:
+    "C:x.zip" enthaelt keinen Trenner, ist aber ein LAUFWERKSRELATIVER Pfad, und
+    Path(ordner) / "C:x.zip" ergibt auf einer UNC-Installation schlicht "C:x.zip" -
+    also eine Datei neben dem Arbeitsverzeichnis statt im Paketordner.
+
+    install_resourcepack benennt seine Dateien "vt_<server>_<hash>.zip"; genau das wird
+    hier verlangt.
+    """
+    name = (name or "").strip()
+    if not name or name != Path(name).name or ":" in name:
+        return False
+    return name.startswith(f"vt_{server.id}_") and name.endswith(".zip")
+
+
+def auswahl_lesen(server: Server, entry: InstalledContent) -> dict | None:
+    """Welche Teilpakete stecken in diesem Archiv? None, wenn es keine Auswahl gibt."""
+    typ = auswahl_typ(entry)
+    if not typ:
+        return None
+    pfad = auswahl_datei(server, entry)
+    if pfad is None:
+        return {"typ": typ, "version": "", "zielversion": "", "gewaehlt": [],
+                "unbekannt": [], "datei": "", "lesbar": False,
+                "hinweis": "Die Paketdatei wurde nicht gefunden - was darin ausgewaehlt "
+                           "ist, laesst sich hier nicht feststellen."}
+    manifest = read_selected_packs(pfad)
+    namen = list((manifest or {}).get("packs") or [])
+    version = str((manifest or {}).get("version") or "").strip()
+    unbekannt: list[str] = []
+    hinweis = ""
+    # "Keine Auswahl" und "Auswahl nicht lesbar" sind NICHT dasselbe. Der Unterschied ist
+    # der zwischen ergaenzen und alles wegwerfen: wer auf eine unlesbare Grundlage etwas
+    # "hinzufuegt", erzeugt ein Paket aus genau diesem einen Teilpaket. Deshalb traegt die
+    # Antwort, ob die Grundlage ueberhaupt gelesen werden konnte.
+    lesbar = manifest is not None and bool(namen)
+    if manifest is None:
+        hinweis = ("Im Archiv steht keine Auswahlliste ('Selected Packs.txt') - was darin "
+                   "steckt, laesst sich nicht feststellen.")
+    elif not namen:
+        hinweis = ("Die Auswahlliste im Archiv nennt keine Teilpakete - entweder ist sie "
+                   "leer oder in einem unbekannten Format.")
+
+    # Geprueft wird gegen die ZIELGRUPPE, nicht gegen die des Manifests: neu erzeugt wird
+    # immer fuer die Version des Servers. Sonst stammen 'unbekannt' und 'verfuegbar' aus
+    # einem anderen Katalog als der, mit dem anschliessend erzeugt wird - der Nutzer
+    # bestaetigt dann einen Satz, dessen Ausfuehrung an unbekannten Namen scheitert.
+    zielversion = ""
+    try:
+        zielversion = resolve_vt_version(server.mc_version)
+    except Exception as exc:  # noqa: BLE001
+        hinweis = (hinweis + " " if hinweis else "") + f"Keine Zielgruppe bei VT: {exc}"
+    pruefgruppe = zielversion or version
+    if namen and pruefgruppe:
+        # Der Katalog haengt am Netz. Ein Ausfall darf die Antwort auf die gestellte
+        # Frage nicht verschlucken - die Auswahl selbst steht in der Datei.
+        try:
+            _auswahl, unbekannt = selection_from_packs(typ, pruefgruppe, namen)
+        except Exception as exc:  # noqa: BLE001
+            hinweis = ((hinweis + " " if hinweis else "")
+                       + f"Der VanillaTweaks-Katalog war nicht erreichbar: {exc}")
+    return {"typ": typ, "version": version or zielversion, "zielversion": zielversion,
+            "gewaehlt": namen, "unbekannt": unbekannt, "datei": pfad.name,
+            "lesbar": lesbar, "hinweis": hinweis}
+
+
+# Hoechstens so viele Packs nennt der Katalog auf einmal. Mit den Unterkategorien sind
+# es bei Resource Packs ueber 670 - vollstaendig gelistet draengen sie die eigentliche
+# Antwort aus dem Ergebnis, das auf 12.000 Zeichen gekuerzt wird.
+MAX_KATALOG_PACKS = 250
+
+
+def verfuegbare_packs(pack_type: str, version: str,
+                      suche: str = "") -> tuple[dict[str, list[dict]], str]:
+    """Was VanillaTweaks fuer diese Version anbietet, nach Kategorien.
+
+    Rueckgabe: (Katalog, Hinweis). Der Hinweis ist nicht leer, wenn gekuerzt wurde -
+    sonst waere die Liste still unvollstaendig, und ein Name, der nur deshalb fehlt,
+    sieht wie ein nicht vorhandener aus.
+    """
+    schluessel = namensschluessel(suche)
+    alle = _catalog_packs(pack_type, version)
+    passend = [i for i in alle
+               if not schluessel
+               or schluessel in namensschluessel(i["name"])
+               or schluessel in namensschluessel(i["display"])]
+    raus: dict[str, list[dict]] = {}
+    for info in passend[:MAX_KATALOG_PACKS]:
+        raus.setdefault(info["category"], []).append(
+            {"name": info["name"], "display": info["display"]})
+    hinweis = ""
+    if len(passend) > MAX_KATALOG_PACKS:
+        hinweis = (f"{len(passend)} von {len(alle)} Teilpaketen passen, genannt sind die "
+                   f"ersten {MAX_KATALOG_PACKS}. Mit 'suche' eingrenzen.")
+    elif schluessel and not passend:
+        hinweis = f"Kein Teilpaket passt zu '{suche}' ({len(alle)} im Katalog)."
+    return raus, hinweis
+
+
+def auswahl_setzen(db: Session, server: Server, entry: InstalledContent,
+                   namen: list[str], user_id: int | None) -> tuple[bool, str]:
+    """Das Archiv mit einer neuen Teilpaket-Auswahl neu erzeugen und ersetzen."""
+    typ = auswahl_typ(entry)
+    if not typ:
+        raise ValueError("Dieser Eintrag buendelt keine VanillaTweaks-Teilpakete.")
+    sauber = [n.strip() for n in namen if (n or "").strip()]
+    if not sauber:
+        raise ValueError("Ohne Teilpakete gibt es nichts zu erzeugen - dann lieber "
+                         "den ganzen Eintrag entfernen.")
+
+    version = resolve_vt_version(server.mc_version)
+    selection, unbekannt = selection_from_packs(typ, version, sauber)
+    if unbekannt:
+        raise ValueError("Unbekannte Teilpakete fuer " + version + ": "
+                         + ", ".join(sorted(unbekannt)))
+    if not selection:
+        raise ValueError("Keines der genannten Teilpakete steht im Katalog.")
+
+    if typ == "resourcepacks":
+        # apply_server_resource_pack loescht die bisherige Zeile und legt eine neue an -
+        # die uebergebene entry-Zeile ist danach weg. Die neue ID gehoert deshalb in die
+        # Antwort, sonst arbeitet der naechste Aufruf mit einer ID, die es nicht gibt.
+        neu = install_resourcepack(db, server, selection, user_id)
+        audit_service.log_action(
+            db, action="vanillatweaks.auswahl", user_id=user_id, server_id=server.id,
+            details=f"resourcepacks version={version} packs={len(sauber)}")
+        return (True, f"Resource Pack neu erzeugt mit {len(sauber)} Teilpaket(en) "
+                      f"(neue Inhalts-ID {getattr(neu, 'id', '?')}). Spieler bekommen es "
+                      f"beim naechsten Beitritt.")
+
+    archive = generate_zip("craftingtweaks", version, selection)
+    target_dir = content_service._target_dir(server, "datapack")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    new_file = content_service._safe_file_name(_CT_COMBINED_FILE)
+    # Alle Crafting Tweaks eines Servers liegen in EINER Datei mit festem Namen. Gibt es
+    # dafuer zwei Eintraege, wuerde das Schreiben die Auswahl des anderen ueberschreiben,
+    # ohne dass es irgendwo auffaellt.
+    fremd = (db.query(InstalledContent)
+             .filter(InstalledContent.server_id == server.id,
+                     InstalledContent.file_name == new_file,
+                     InstalledContent.id != entry.id).first())
+    if fremd is not None:
+        raise ValueError(
+            f"Zu '{new_file}' gibt es einen zweiten Eintrag ('{fremd.name}', ID "
+            f"{fremd.id}). Beide wuerden dieselbe Datei beschreiben - bitte zuerst einen "
+            f"der Eintraege entfernen.")
+    (target_dir / new_file).write_bytes(archive)
+    rest_hinweis = _alte_datei_weg(server, entry.file_name, new_file)
+    entry.file_name = new_file
+    entry.external_version_id = version
+    entry.version_label = version
+    entry.declared_mc_version = version
+    db.commit()
+    audit_service.log_action(
+        db, action="vanillatweaks.auswahl", user_id=user_id, server_id=server.id,
+        details=f"craftingtweaks version={version} packs={len(sauber)}")
+    meldung = (f"Crafting Tweaks neu erzeugt mit {len(sauber)} Teilpaket(en). "
+               f"Wirksam beim naechsten Start.")
+    if rest_hinweis:
+        meldung += " " + rest_hinweis
+    return (True, meldung)
+
+
 def install_resourcepack(
     db: Session,
     server: Server,
@@ -701,4 +953,7 @@ def install_resourcepack(
         name="Vanilla Tweaks Resource Pack",
         version_label=version,
         user_id=user_id,
+        # Den Dateinamen mitfuehren: sonst laesst sich spaeter nur ueber die URL in
+        # server.properties erraten, welche Datei zu diesem Eintrag gehoert.
+        file_name=file_name,
     )

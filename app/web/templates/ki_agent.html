@@ -65,7 +65,7 @@
                 <tr>
                     <td><code>{{ w.name }}</code></td>
                     <td>{% if w.lesend %}sieht nach{% else %}<strong>veraendert</strong> ({{ w.gefahr }}){% endif %}</td>
-                    <td>{{ {"ansehen": "Ansehen", "steuern": "Steuern", "dateien": "Dateien", "super_admin": "Super-Admin"}.get(w.recht, w.recht) }}</td>
+                    <td>{{ {"ansehen": "Ansehen", "steuern": "Steuern", "dateien": "Dateien", "super_admin": "Super-Admin"}.get(w.recht, w.recht) }}{% if w.nur_admin %} + Admin{% endif %}</td>
                     <td>{{ w.beschreibung }}</td>
                 </tr>
                 {% endfor %}

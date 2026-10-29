@@ -533,3 +533,35 @@ Offen: warum Velocity die "Connect"-Nachricht verwirft, ist ungeklaert. Kanal, S
 ~~Zweite Anmeldung desselben Spielers: ersetzen oder abweisen, als Einstellung unter Netzwerk & Lobby. Vorgabe ersetzen, sonst scheitert der Lobby-Rückweg an "Du bist bereits mit diesem Proxy verbunden!".~~
 
 Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten (lobby_service, transfer_service, server_service); eine wirft bei Latin-1. Gehört auf den properties_service zusammengezogen.
+
+~~Der Assistent kann in Archive sehen: Plugin-/Mod-Jars, Datapack-Zips, Resource Packs - Inhaltsverzeichnis oder eine Datei daraus. Ohne Pfad kommt die Liste der Archive, weil dateien_auflisten nur Textdateien zeigt. Nur fuer Admins.~~
+
+~~VanillaTweaks-Teilpakete waren unsichtbar: die Liste steht IM Archiv, beim Resource Pack ausserhalb des Serverordners. Jetzt lesbar und aenderbar (vt_auswahl_zeigen/-setzen), ohne den Dateizugriff aufzuweiten. Nur fuer Admins.~~
+
+~~Ein Katalogausfall bei VanillaTweaks verschluckte die ganze Antwort, obwohl die Auswahl in der Datei steht und den Katalog nicht braucht.~~
+
+~~Pfadzugriff für Super-Admins: auflisten, lesen, schreiben, löschen, verschieben - überall auf dem Managerrechner, nicht nur im Serverordner. Archivblick nimmt jetzt auch einen vollen Pfad (data/resourcepacks).~~
+
+~~Die Regel dazu an EINER Stelle (admin_path_service.pruefe): Geheimnisse bleiben zu (.env, DB, .git, SSH/DPAPI-Speicher), kein Schreibweg in den Programmcode, nichts dicht unter einer Laufwerkswurzel löschen, kein Serverordner, Abzweigungen werden aufgelöst UND danach geprüft.~~
+
+~~write_text kürzt die Datei beim Öffnen und scheitert erst danach am Kodieren - gemessen blieben von 18 Bytes null übrig. Jetzt wird zuerst kodiert.~~
+
+~~Schnitt-Toleranz beim Dekodieren war zu gutgläubig: aus cp1252 "Grüße" wurde ein utf-8-taugliches "Gr". Ein echter Schnitt ist am Fehler-ENDE erkennbar, nicht an der Fehlerstelle.~~
+
+~~Auch das LESEN eines freien Pfades wird protokolliert - bei Serverdateien genügt der Dateieditor als Spur, bei einem freien Pfad nicht.~~
+
+~~Werkzeugergebnisse gehen als EINE JSON-Zeile hinaus, die Geheimnis-Muster hängen an (?im)^ - in einem einzeiligen Blob gibt es keinen Zeilenanfang. Zugangsdaten aus Configs gingen damit im Klartext an den Anbieter, gegen die Zusage, die das Projekt selbst testet. Jetzt am Rohtext gesäubert, vor dem Verpacken.~~
+
+~~Entpackgrenze griff nur bei Deflate: bei bzip2/lzma entpackt zipfile ohne Grenze, 32 KB werden zu ~43 GB in einem bytes-Objekt. Fremde Verfahren werden jetzt abgewiesen.~~
+
+~~VT-Resource-Pack-Katalog ist nicht flach - die Hälfte aller Teilpakete steckt in Unterkategorien und galt als "unbekannt". Ein Pack damit ließ sich nicht mehr ändern, und der Ausweg "dann raus damit" verlor es endgültig.~~
+
+~~"Auswahl leer" und "Auswahl nicht lesbar" waren nicht unterscheidbar - hinzufügen ersetzte dann die ganze Zusammenstellung. Aus 21 Teilpaketen wurde eines.~~
+
+~~Namensvergleich per .lower(): das Manifest führt "WavyWater", Nutzer und Anzeige "Wavy Water" (bei 670 von 672 Packs verschieden). "weg: Wavy Water" entfernte nichts, der Dialog sagte trotzdem es sei weg.~~
+
+~~Fehler aus der Parameterprüfung erschien als Tatbeschreibung im Bestätigungsdialog, mit aktivem Ausführen-Knopf. Jetzt Hindernis.~~
+
+~~Kleiner: zeigen und setzen rechneten mit verschiedenen VT-Gruppen; Paketname aus der resource-pack-URL ungeprüft ("C:x.zip" ist laufwerksrelativ); zweiter CT-Eintrag überschrieb still die Auswahl des ersten; Abzweigungen brachten fremde Archivnamen in die Liste; zlib.error/ValueError entwischten dem Archivleser.~~
+
+~~Testlücken: Admin-Vorbehalt war nur beim ersten Werkzeug geprüft, Byte-Grenze nur behauptet (jetzt über tracemalloc gemessen), Crafting-Tweaks-Hälfte ganz ohne Test.~~
