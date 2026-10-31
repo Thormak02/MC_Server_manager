@@ -147,18 +147,26 @@ CREATE DATABASE IF NOT EXISTS freimarken_test
 CREATE USER IF NOT EXISTS 'freimarken'@'localhost' IDENTIFIED BY '$appPasswort';
 ALTER USER 'freimarken'@'localhost' IDENTIFIED BY '$appPasswort';
 GRANT ALL PRIVILEGES ON freimarken.* TO 'freimarken'@'localhost';
--- Der Backstrich ist Pflicht: In GRANT ist _ ein Platzhalter fuer ein beliebiges
--- Zeichen. Ohne ihn gaebe 'freimarken_test' Rechte auf jedes Schema, dessen Name
--- 'freimarken' plus ein Zeichen plus 'test' lautet. Und KEINE Backticks um den Namen:
--- Dieses Skript steckt den SQL-Text in einen PowerShell-Here-String, und dort ist der
--- Backtick das Fluchtzeichen - aus einem vorangestellten Backtick-f wuerde ein
--- Seitenvorschub statt eines Bezeichners.
-GRANT ALL PRIVILEGES ON freimarken\_test.* TO 'freimarken'@'localhost';
+-- Zwei Fluchtzeichen auf einmal, und beide sind Pflicht:
+--
+-- Der Backstrich, weil _ in GRANT ein Platzhalter fuer ein beliebiges Zeichen ist. Ohne
+-- ihn gaebe 'freimarken_test' Rechte auf jedes Schema, dessen Name 'freimarken' plus ein
+-- Zeichen plus 'test' lautet.
+--
+-- Die Backticks um den Bezeichner, weil der MariaDB-Client jede Zeile nach eigenen
+-- Befehlen absucht, die mit einem Backstrich beginnen - '\_' quittiert er mit
+-- "Unknown command" und bricht ab, bevor der Server die Zeile je sieht. Innerhalb von
+-- Backticks steht er im Zeichenketten-Zustand und reicht den Backstrich durch.
+--
+-- Im Quelltext stehen sie DOPPELT: Dieses SQL liegt in einem doppelt angefuehrten
+-- PowerShell-Here-String, und dort ist der Backtick selbst das Fluchtzeichen. Ein
+-- einzelner vor dem f von 'freimarken' waere ein Seitenvorschub; zwei ergeben einen.
+GRANT ALL PRIVILEGES ON ``freimarken\_test``.* TO 'freimarken'@'localhost';
 
 CREATE USER IF NOT EXISTS 'freimarken'@'$LanMuster' IDENTIFIED BY '$appPasswort';
 ALTER USER 'freimarken'@'$LanMuster' IDENTIFIED BY '$appPasswort';
 GRANT ALL PRIVILEGES ON freimarken.* TO 'freimarken'@'$LanMuster';
-GRANT ALL PRIVILEGES ON freimarken\_test.* TO 'freimarken'@'$LanMuster';
+GRANT ALL PRIVILEGES ON ``freimarken\_test``.* TO 'freimarken'@'$LanMuster';
 
 FLUSH PRIVILEGES;
 SELECT CONCAT('Schema bereit: ', SCHEMA_NAME) AS stand
