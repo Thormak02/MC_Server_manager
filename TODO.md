@@ -360,6 +360,18 @@ PWA / mobil-optimierte Ansicht.
 
 Onboarding-Assistent beim ersten Start.
 
+eigene Domänen je Server und je Umgebung (Standard bleibt vorerst mc.friedrich-dietrich.de):
+
+- Heute: EINE Domäne (network_domain), Server tragen nur ein Label (gateway_hostname), "Standard" gilt global. Künftig: Domäne als eigene Entität; Server UND Umgebung können je eine bekommen, jeweils auch mit eigener Subdomain.
+- Routing: das Gateway muss die längste passende Domäne abschneiden statt der einen festen. Eindeutigkeit dann über (Domäne, Label) statt über das Label allein - sonst kollidieren zwei "lobby" in verschiedenen Domänen.
+- "Standard" wird je Domäne statt global: freimarken.de ohne Label muss woanders landen als mc.friedrich-dietrich.de ohne Label.
+- DNS: alle Domänen auf dieselbe IP, A-Record genügt, solange das Gateway auf 25565 sitzt. Abweichender Port braucht SRV (_minecraft._tcp.<name>).
+- Zieht mit: public_base_url ist global, landet aber als Resource-Pack-URL in server.properties. Bei eigener Domäne je Server sollte sie aus DIESER Domäne kommen, sonst lädt der Spieler von einer fremd aussehenden Adresse.
+- Web (Spielerseite, Manager) braucht je Domäne ein Zertifikat. Der Spielteil nicht - Minecraft spricht kein TLS.
+- Velocity-forced-hosts müssen dieselben Namen kennen, sobald ein Unterproxy dazukommt.
+- hängt an "getrennte Verwaltungsumgebungen" (Domäne je Orga) und an "Server-Vermietung" (URL-Schema)
+
+
 getrennte Verwaltungsumgebungen - zuerst für die eigenen Server mit Helfern, als Grundlage für späteres Hosting:
 
 - Nutzer/Orga-Modell: ein Nutzer besitzt, verwaltet und delegiert mehrere Orgas; eine Orga hat mehrere Nutzer; Rollenverwaltung je Orga. Super-Admin hat immer Zugriff auf alles.

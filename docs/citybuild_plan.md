@@ -113,6 +113,24 @@ Gateway (25565, Hostname-Routing, Wake-on-Join)          ← bestehend
 höchstens 20 Spieler — die Architektur wird trotzdem so gebaut, dass ein Vielfaches
 möglich bleibt ([Abschnitt 14](#14-wachstum)).
 
+### 3.1 Adresse
+
+Vorerst eine Subdomain der Hauptadresse — Standard bleibt `mc.friedrich-dietrich.de`,
+Freimarken hängt als eigener Hostname darunter. [entschieden]
+
+Perspektivisch bekommt Freimarken eine **eigene Domäne**; der Manager soll das je Server
+und je Umgebung können (siehe TODO). Drei Dinge hängen daran und sind beim Umstellen zu
+beachten:
+
+- Der **Resource-Pack-Link** steht in `server.properties` und kommt heute aus der globalen
+  `public_base_url`. Bekommt Freimarken eine eigene Domäne, sollte er aus *dieser* kommen —
+  sonst lädt der Spieler sein Paket von einer fremd aussehenden Adresse.
+- Die **Spielerseite** ([12b](#12b-die-spielerseite-entschieden)) gehört unter dieselbe
+  Domäne wie der Spielserver. Ein Zertifikat braucht sie, der Spielserver nicht —
+  Minecraft spricht kein TLS.
+- Ein **Domänenwechsel ändert keine UUIDs** und damit keinen Besitz. Er ist jederzeit
+  möglich, anders als E1 — nur alte Lesezeichen der Spieler gehen ins Leere.
+
 **Geteiltes Inventar gilt im gesamten Freimarkenbund einschließlich Bundesmarkt, aber nicht
 darüber hinaus** [entschieden]. Damit funktionieren Events, die Freie Truhe und Geschäfte am
 Spawn mit demselben Inventar wie das Bauen in der Marktstadt. Die Lobby ist davon ohnehin
@@ -163,8 +181,19 @@ statt nur anders auszusehen. [empfohlen]
   vorgeneriert — so kommen neue Blöcke und Biome ins Spiel, ohne gebaute Welten anzufassen.
 - Gebaute Welten (Altfurt, Marktstadt, Freistädte, beide Werder) werden **nie**
   zurückgesetzt.
-- Paper nutzt ab 26.1 die Vanilla-Ordnerstruktur — beim Verschieben von Welten auf das
-  Layout achten, das dein Manager erwartet.
+- **Weltordner seit Paper 26.1**: Eine zur Laufzeit erzeugte Welt liegt **nicht** im
+  Serverwurzelverzeichnis. Gemessen am Testserver:
+
+  ```
+  world/dimensions/freimarken/marktstadt/
+  ```
+
+  Der Namensraum ist der Plugin-Name, der Schlüssel der Weltname. Das trifft deinen
+  Manager unmittelbar: Sicherung, Dateieditor, Größenanzeige und ein Zurücksetzen einzelner
+  Welten müssen dort hineinsehen. Ein Sicherungsmuster, das `marktstadt` im
+  Wurzelverzeichnis erwartet, sichert **nichts**.
+- Deshalb gehört in die Datenbank der **Weltschlüssel** (`freimarken:marktstadt`), nicht
+  der Weltname — sonst wandert später jeder Fremdschlüssel mit.
 
 ---
 
@@ -1032,9 +1061,9 @@ Jeder Schritt endet mit etwas, in dem man herumlaufen kann. Keine Fristen.
 |---|---|---|
 | 0 | E1 bestätigen, Namen festschreiben | sie hier eingetragen sind |
 | 1 | ~~Paper 26.3, Java 25, Gradle-Gerüst, leeres Plugin mit einem Befehl~~ **erledigt 31.10.2026** | ~~Server startet und der Befehl antwortet~~ — Plugin lädt auf Build 231, `/freimarken preis 5` antwortet „400.000 Mark" aus dem Kernmodul |
-| 2 | MariaDB, Schema, Migrationen, Datenzugriff hinter Schnittstelle | ein Testdatensatz übersteht einen Neustart |
-| 3 | Welten anlegen, Grenzen, Vorgenerierung, Altfurt als Rohbau (Gebäude aus [2.1](#21-die-gebäude-in-altfurt) als Platzhalter) | man kann durch alle Welten laufen |
-| 4 | **Weltgenerator für die Marktstadt** — Raster, Wege, Grenzen | das Raster steht und sieht richtig aus |
+| 2 | MariaDB, Schema, Migrationen, Datenzugriff hinter Schnittstelle | ein Testdatensatz übersteht einen Neustart — *vorgezogen auf Schritt 5, solange es nichts zu speichern gibt* |
+| 3 | Welten anlegen, Grenzen, Vorgenerierung, Altfurt als Rohbau (Gebäude aus [2.1](#21-die-gebäude-in-altfurt) als Platzhalter) | man kann durch alle Welten laufen — *Marktstadt steht, übrige Welten offen* |
+| 4 | ~~**Weltgenerator für die Marktstadt** — Raster, Wege, Grenzen~~ **erledigt 31.10.2026** | ~~das Raster steht~~ — `Rasterplan` im Kern (9 Tests ohne Server), `MarktstadtGenerator` im Plugin; am Testserver geprüft: Parzellenmitte Gras, Mauer Steinziegel, Weg glatter Stein, Krone Halbstufe |
 | 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer | zwei Spieler, einer baut, der andere nicht |
 | 6 | Zusammenlegen und Auftrennen mit Gebühr | zwei Parzellen werden eine, der Weg verschwindet |
 | 7 | Wirtschaft: Konto, Berufe, Bundesmarkt-Ankauf, Tagesbonus | man kann Mark verdienen und ausgeben |
