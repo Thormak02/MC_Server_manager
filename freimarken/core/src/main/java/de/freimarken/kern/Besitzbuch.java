@@ -43,7 +43,9 @@ public final class Besitzbuch {
         /** Der Spieler steht schon auf der Liste. */
         SCHON_EINGETRAGEN,
         /** Der Spieler stand gar nicht auf der Liste. */
-        NICHT_EINGETRAGEN
+        NICHT_EINGETRAGEN,
+        /** Die Parzelle gehoert zu einer Gruppe - einzeln geht hier nichts. */
+        TEIL_EINER_GRUPPE
     }
 
     /**
@@ -176,17 +178,45 @@ public final class Besitzbuch {
         }
     }
 
+    /**
+     * Was einer Aenderung an dieser Stelle entgegensteht - leer heisst: nichts.
+     *
+     * <p>Die eine Stelle fuer den Dreischritt, den Mitbauer-Eintragen, Mitbauer-Austragen
+     * und Aufgeben vorher jeweils fuer sich erledigt haben. Sobald es Kindzeilen gibt,
+     * braucht jeder dieser Wege dieselbe Pruefung - und einer von dreien wuerde sie
+     * vergessen. Genau das ist hier schon einmal passiert: Zwei von sieben Befehlen hatten
+     * die Weltpruefung nicht, bis sie in {@code ortInMarktstadt} zusammengezogen wurde.
+     *
+     * <p>Gibt nur das HINDERNIS zurueck, nie eine Erlaubnis. Ein durchgereichter Entscheid
+     * mit {@code ERTEILT} meldete dem Spieler "Erledigt.", ohne dass etwas geschehen waere.
+     */
+    private static Optional<Entscheid> hindernis(Optional<Parzelle> gefunden, UUID handelnder) {
+        if (gefunden.isEmpty()) {
+            return Optional.of(Entscheid.nein(Bescheid.KEINE_PARZELLE));
+        }
+        Parzelle parzelle = gefunden.get();
+        if (!parzelle.gehoert(handelnder)) {
+            return Optional.of(new Entscheid(Bescheid.NICHT_EIGENTUEMER, 0L, gefunden));
+        }
+        if (parzelle.hatElternteil()) {
+            // Eigentuemer und Mitbauer stehen am Kind zwar vollstaendig - nur so bleibt
+            // darfBauen eine Abfrage ohne Umweg -, geschrieben wird aber ausschliesslich
+            // ueber die Gruppe. Verweigern ist die rueckholbare Antwort: Ein halb
+            // durchgeschriebener Besitzerwechsel waere es nicht.
+            return Optional.of(new Entscheid(Bescheid.TEIL_EINER_GRUPPE, 0L, gefunden));
+        }
+        return Optional.empty();
+    }
+
     /** Einen Mitbauer eintragen. Nur der Eigentuemer darf das. */
     public Entscheid mitbauerHinzufuegen(String welt, UUID eigentuemer, int weltX, int weltZ,
                                          UUID neuerMitbauer) {
         Optional<Parzelle> gefunden = parzelleAn(welt, weltX, weltZ);
-        if (gefunden.isEmpty()) {
-            return Entscheid.nein(Bescheid.KEINE_PARZELLE);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer);
+        if (stehtEntgegen.isPresent()) {
+            return stehtEntgegen.get();
         }
         Parzelle parzelle = gefunden.get();
-        if (!parzelle.gehoert(eigentuemer)) {
-            return new Entscheid(Bescheid.NICHT_EIGENTUEMER, 0L, gefunden);
-        }
         if (parzelle.mitbauer().contains(neuerMitbauer) || parzelle.gehoert(neuerMitbauer)) {
             return new Entscheid(Bescheid.SCHON_EINGETRAGEN, 0L, gefunden);
         }
@@ -200,13 +230,11 @@ public final class Besitzbuch {
     public Entscheid mitbauerEntfernen(String welt, UUID eigentuemer, int weltX, int weltZ,
                                        UUID bisherigerMitbauer) {
         Optional<Parzelle> gefunden = parzelleAn(welt, weltX, weltZ);
-        if (gefunden.isEmpty()) {
-            return Entscheid.nein(Bescheid.KEINE_PARZELLE);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer);
+        if (stehtEntgegen.isPresent()) {
+            return stehtEntgegen.get();
         }
         Parzelle parzelle = gefunden.get();
-        if (!parzelle.gehoert(eigentuemer)) {
-            return new Entscheid(Bescheid.NICHT_EIGENTUEMER, 0L, gefunden);
-        }
         if (!parzelle.mitbauer().contains(bisherigerMitbauer)) {
             return new Entscheid(Bescheid.NICHT_EINGETRAGEN, 0L, gefunden);
         }
@@ -225,13 +253,11 @@ public final class Besitzbuch {
      */
     public Entscheid aufgeben(String welt, UUID eigentuemer, int weltX, int weltZ) {
         Optional<Parzelle> gefunden = parzelleAn(welt, weltX, weltZ);
-        if (gefunden.isEmpty()) {
-            return Entscheid.nein(Bescheid.KEINE_PARZELLE);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer);
+        if (stehtEntgegen.isPresent()) {
+            return stehtEntgegen.get();
         }
         Parzelle parzelle = gefunden.get();
-        if (!parzelle.gehoert(eigentuemer)) {
-            return new Entscheid(Bescheid.NICHT_EIGENTUEMER, 0L, gefunden);
-        }
         lager.entfernen(parzelle.id());
         return new Entscheid(Bescheid.ERTEILT, 0L, gefunden);
     }

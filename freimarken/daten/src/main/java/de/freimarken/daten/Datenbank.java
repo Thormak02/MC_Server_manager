@@ -57,6 +57,52 @@ public final class Datenbank implements AutoCloseable {
               mark    BIGINT   NOT NULL,
               PRIMARY KEY (spieler)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 4: Das Modell aus Plan 6.1 - art, eltern_id, zustand.
+            //
+            // x und z werden NULL-faehig, weil ein zusammengelegter Besitz keine eigene
+            // Rasterzelle hat; sein Bereich ergibt sich aus seinen Kindern. Der eindeutige
+            // Schluessel ort (welt, x, z) bleibt unangetastet und behaelt genau seine eine
+            // Aufgabe: InnoDB zaehlt NULL in einem eindeutigen Schluessel als verschieden,
+            // also bleibt "ein Eigentuemer je Rasterzelle" eine Zusage der Datenbank,
+            // waehrend beliebig viele rasterlose Zeilen hineinpassen.
+            //
+            // Die neuen Spalten haengen hinten an, ohne AFTER: Plan 12a.2 sagt zu, dass der
+            // Manager Spieldaten direkt liest, und eine verschobene Spaltenreihenfolge
+            // braeche das - auch wenn dieses Projekt selbst nirgends SELECT * benutzt.
+            //
+            // nach_elternteil ist Pflicht, nicht Ziererei: InnoDB verlangt fuer den
+            // Fremdschluessel einen Index mit eltern_id links und legte sonst selbst einen
+            // an - dann lieber selbst benannt.
+            """
+            ALTER TABLE parzellen
+              MODIFY COLUMN IF EXISTS x INT NULL,
+              MODIFY COLUMN IF EXISTS z INT NULL,
+              ADD COLUMN IF NOT EXISTS art
+                  ENUM('parzelle','gruppe','werder','freistadt','ladeneinheit')
+                  NOT NULL DEFAULT 'parzelle',
+              ADD COLUMN IF NOT EXISTS eltern_id BIGINT NULL DEFAULT NULL,
+              ADD COLUMN IF NOT EXISTS zustand
+                  ENUM('aktiv','gekuendigt','verfallen') NOT NULL DEFAULT 'aktiv',
+              ADD KEY IF NOT EXISTS nach_elternteil (eltern_id)
+            """,
+
+            // Schritt 5: der Fremdschluessel allein.
+            //
+            // Eigener Schritt, weil ein Schemaschritt entweder ganz oder gar nicht laufen
+            // muss: migriere() fuehrt erst das DDL aus und schreibt danach getrennt den
+            // Stand fort. Bricht es dazwischen ab, ist die Aenderung da und der Stand
+            // zurueck - deshalb traegt jeder Satz oben sein IF [NOT] EXISTS und laeuft ein
+            // zweites Mal folgenlos durch.
+            //
+            // ON DELETE RESTRICT, nicht SET NULL: Plan 6.3 verlangt, dass Auftrennen auch
+            // den Weg in der Welt wiederherstellt. Das darf nie die stille Nebenwirkung
+            // eines DELETE sein. RESTRICT macht aus dem Fehlgriff eine laute Absage.
+            """
+            ALTER TABLE parzellen
+              ADD CONSTRAINT fk_besitz_elternteil FOREIGN KEY IF NOT EXISTS (eltern_id)
+                  REFERENCES parzellen (id) ON DELETE RESTRICT
             """);
 
     /**
@@ -186,6 +232,17 @@ public final class Datenbank implements AutoCloseable {
             }
         }
 
+        // Ein zurueckgelegtes aelteres Jar faende ein Schema vor, das es nicht kennt.
+        // Heute waere das harmlos - es gibt kein SELECT *, alle Spalten stehen namentlich
+        // da, und das alte INSERT laeuft in die Vorgabewerte. Ab dem naechsten
+        // Schemaschritt ist das nicht mehr sicher, und dann ist ein verweigerter Start
+        // die freundlichere Antwort als ein halb laufender.
+        if (stand > SCHRITTE.size()) {
+            throw new SQLException("Die Datenbank steht auf Schemastand " + stand
+                    + ", dieses Jar kennt nur " + SCHRITTE.size()
+                    + ". Es ist aelter als das Schema - bitte das neuere Jar einspielen.");
+        }
+
         for (int nummer = stand + 1; nummer <= SCHRITTE.size(); nummer++) {
             try (Statement anweisung = c.createStatement()) {
                 anweisung.execute(SCHRITTE.get(nummer - 1));
@@ -221,6 +278,12 @@ public final class Datenbank implements AutoCloseable {
         }
         try (Statement anweisung = verbindung().createStatement()) {
             anweisung.execute("DELETE FROM parzellen_mitbauer");
+            // Erst die Elternkette loesen. fk_besitz_elternteil steht auf RESTRICT und
+            // zeigt auf dieselbe Tabelle; InnoDB prueft zeilenweise waehrend der
+            // Anweisung, und trifft das DELETE die Gruppe vor ihren Kindern, verweigert
+            // es die Zeile. Dieses UPDATE ist von der Tiefe der Kette unabhaengig - ein
+            // "erst die Kinder, dann die Eltern" waere es nicht.
+            anweisung.execute("UPDATE parzellen SET eltern_id = NULL");
             anweisung.execute("DELETE FROM parzellen");
             anweisung.execute("DELETE FROM kassen");
         }

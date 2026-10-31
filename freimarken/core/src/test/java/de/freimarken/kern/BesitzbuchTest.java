@@ -8,6 +8,7 @@ import static de.freimarken.kern.Besitzbuch.Bescheid.NICHT_EIGENTUEMER;
 import static de.freimarken.kern.Besitzbuch.Bescheid.NICHT_EINGETRAGEN;
 import static de.freimarken.kern.Besitzbuch.Bescheid.SCHON_EINGETRAGEN;
 import static de.freimarken.kern.Besitzbuch.Bescheid.SCHON_VERGEBEN;
+import static de.freimarken.kern.Besitzbuch.Bescheid.TEIL_EINER_GRUPPE;
 import static de.freimarken.kern.Besitzbuch.Bescheid.ZU_WENIG_MARK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -343,6 +344,121 @@ class BesitzbuchTest {
         // Weg" sein und nicht "hier endet die Stadt" - sonst steht der Spieler auf einem
         // begehbaren Weg und bekommt gesagt, er sei draussen.
         assertEquals(KEINE_PARZELLE, buch.nehmen(WELT, anna, -1495, 0, VIELE).bescheid());
+    }
+
+    // --- Teil einer Gruppe ------------------------------------------------------
+
+    /** Ein Buch, dessen Lager jede Parzelle als Kind der Gruppe 42 ausgibt. */
+    private Besitzbuch buchMitGruppenkind() {
+        return new Besitzbuch(Stadtgrenze.marktstadt(), new KindLager(lager), kasse);
+    }
+
+    @Test
+    @DisplayName("Ein Kind einer Gruppe laesst sich nicht einzeln aufgeben")
+    void kindLaesstSichNichtAufgeben() {
+        lager.anlegen(WELT, 0, 0, anna, 0L);
+        Besitzbuch buchMitKind = buchMitGruppenkind();
+
+        var entscheid = buchMitKind.aufgeben(WELT, anna, 10, 10);
+
+        assertEquals(TEIL_EINER_GRUPPE, entscheid.bescheid());
+        assertTrue(buchMitKind.parzelleAn(WELT, 10, 10).isPresent(),
+                "Nach einer Absage darf nichts entfernt worden sein");
+    }
+
+    @Test
+    @DisplayName("Auf einem Kind einer Gruppe werden keine Mitbauer eingetragen")
+    void keineMitbauerAufDemKind() {
+        lager.anlegen(WELT, 0, 0, anna, 0L);
+        Besitzbuch buchMitKind = buchMitGruppenkind();
+
+        var entscheid = buchMitKind.mitbauerHinzufuegen(WELT, anna, 10, 10, bert);
+
+        assertEquals(TEIL_EINER_GRUPPE, entscheid.bescheid());
+        assertFalse(buchMitKind.darfBauen(WELT, bert, 10, 10));
+    }
+
+    @Test
+    @DisplayName("Auf einem Kind einer Gruppe werden keine Mitbauer ausgetragen")
+    void keineMitbauerVomKind() {
+        lager.anlegen(WELT, 0, 0, anna, 0L);
+        Besitzbuch buchMitKind = buchMitGruppenkind();
+
+        assertEquals(TEIL_EINER_GRUPPE,
+                buchMitKind.mitbauerEntfernen(WELT, anna, 10, 10, bert).bescheid());
+    }
+
+    @Test
+    @DisplayName("Der Waechter kommt nach dem Eigentum - ein Fremder liest weiterhin das")
+    void fremderLiestNichtEigentuemer() {
+        lager.anlegen(WELT, 0, 0, anna, 0L);
+        Besitzbuch buchMitKind = buchMitGruppenkind();
+
+        // bert ist weder Eigentuemer noch darf er die Gruppe anfassen. Die Antwort soll
+        // die sein, die ihn betrifft, nicht die ueber den inneren Aufbau des Besitzes.
+        assertEquals(NICHT_EIGENTUEMER,
+                buchMitKind.aufgeben(WELT, bert, 10, 10).bescheid());
+    }
+
+    @Test
+    @DisplayName("Eine eigenstaendige Parzelle laesst sich weiterhin aufgeben")
+    void eigenstaendigeGehtWeiterhin() {
+        buch.nehmen(WELT, anna, 10, 10, VIELE);
+
+        assertEquals(ERTEILT, buch.aufgeben(WELT, anna, 10, 10).bescheid());
+        assertTrue(buch.parzelleAn(WELT, 10, 10).isEmpty());
+    }
+
+    /**
+     * Ein Lager, das jede gefundene Parzelle als Kind einer Gruppe ausgibt.
+     *
+     * <p>Es gibt heute keinen Schreibweg, der eine Kindzeile erzeugt - deshalb dieses
+     * Doppel. Es prueft die Regel, bevor es die Lage gibt, in der sie gebraucht wird.
+     */
+    private static final class KindLager implements BesitzLager {
+
+        private static final long GRUPPE = 42L;
+
+        private final BesitzLager echt;
+
+        private KindLager(BesitzLager echt) {
+            this.echt = echt;
+        }
+
+        private static Parzelle alsKind(Parzelle p) {
+            return new Parzelle(p.id(), p.welt(), p.x(), p.z(), p.eigentuemer(),
+                    p.mitbauer(), p.preis(), p.erworbenAm(), p.art(), GRUPPE, p.zustand());
+        }
+
+        @Override
+        public Optional<Parzelle> finde(String welt, int x, int z) {
+            return echt.finde(welt, x, z).map(KindLager::alsKind);
+        }
+
+        @Override
+        public List<Parzelle> vonSpieler(String welt, UUID spieler) {
+            return echt.vonSpieler(welt, spieler).stream().map(KindLager::alsKind).toList();
+        }
+
+        @Override
+        public int anzahlVon(String welt, UUID spieler) {
+            return echt.anzahlVon(welt, spieler);
+        }
+
+        @Override
+        public Parzelle anlegen(String welt, int x, int z, UUID eigentuemer, long preis) {
+            return alsKind(echt.anlegen(welt, x, z, eigentuemer, preis));
+        }
+
+        @Override
+        public Parzelle mitbauerSetzen(long id, Set<UUID> mitbauer) {
+            throw new AssertionError("Auf einem Gruppenkind darf nie geschrieben werden");
+        }
+
+        @Override
+        public void entfernen(long id) {
+            throw new AssertionError("Ein Gruppenkind darf nie entfernt werden");
+        }
     }
 
     /**

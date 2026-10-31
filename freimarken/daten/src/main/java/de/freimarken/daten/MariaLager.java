@@ -1,7 +1,9 @@
 package de.freimarken.daten;
 
+import de.freimarken.kern.Art;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.Zustand;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -32,6 +34,30 @@ import java.util.UUID;
  */
 public final class MariaLager implements BesitzLager {
 
+    /**
+     * Die Spalten, die eine Zeile zu einem Stueck Besitz machen - an einer Stelle.
+     *
+     * <p>Vorher stand diese Aufzaehlung dreimal da. Beim naechsten Feld haette eine der
+     * drei sie nicht bekommen, und welche, zeigte sich erst im Betrieb.
+     */
+    private static final String SPALTEN =
+            "id, welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand";
+
+    /**
+     * Was auf dem Raster liegt - und damit alles, was als Parzelle zaehlt.
+     *
+     * <p>Gefragt wird nach der LAGE, nicht nach der art: Eine Gruppe hat keine eigene
+     * Rasterzelle, ihr Bereich ergibt sich aus ihren Kindern. Kommt spaeter eine art dazu,
+     * die sehr wohl auf dem Raster liegt, zaehlt sie von selbst mit - richtig, denn sie
+     * belegt Flaeche - ohne dass diese Zeichenfolge wandern muesste.
+     *
+     * <p>Ohne diesen Filter zaehlte die Gruppenzeile mit, und das ist keine Kleinigkeit:
+     * Nach dem Zusammenlegen zweier Felder koestete die dritte Parzelle 100.000 statt
+     * 50.000 Mark, weil die Preisstaffel verdoppelt (25.000 << (bereits-1)), und eine
+     * Rangobergrenze von vier waere schon nach drei Parzellen erreicht.
+     */
+    private static final String AUF_DEM_RASTER = " AND x IS NOT NULL";
+
     private final Datenbank datenbank;
 
     public MariaLager(Datenbank datenbank) {
@@ -46,8 +72,13 @@ public final class MariaLager implements BesitzLager {
 
     @Override
     public Optional<Parzelle> finde(String welt, int x, int z) {
-        String sql = "SELECT id, welt, x, z, eigentuemer, preis, erworben_am "
-                + "FROM parzellen WHERE welt = ? AND x = ? AND z = ?";
+        // Ohne AUF_DEM_RASTER und ohne art-Filter: x = ? wird gegen SQL NULL nie wahr,
+        // der Filter waere also wirkungslos. Ein art-Filter dagegen waere gefaehrlich -
+        // er meldete jeden Besitz, der eine echte Rasterzelle belegt und zufaellig eine
+        // andere art hat, als "frei", und die Schutzwache liesse dort jeden bauen.
+        // Was eine Rasterzelle belegt, wird gemeldet, gleich welcher Art.
+        String sql = "SELECT " + SPALTEN + " FROM parzellen "
+                + "WHERE welt = ? AND x = ? AND z = ?";
         try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
             anfrage.setString(1, welt);
             anfrage.setInt(2, x);
@@ -65,8 +96,8 @@ public final class MariaLager implements BesitzLager {
 
     @Override
     public List<Parzelle> vonSpieler(String welt, UUID spieler) {
-        String sql = "SELECT id, welt, x, z, eigentuemer, preis, erworben_am "
-                + "FROM parzellen WHERE welt = ? AND eigentuemer = ? ORDER BY x, z";
+        String sql = "SELECT " + SPALTEN + " FROM parzellen "
+                + "WHERE welt = ? AND eigentuemer = ?" + AUF_DEM_RASTER + " ORDER BY x, z";
         List<Parzelle> treffer = new ArrayList<>();
         try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
             anfrage.setString(1, welt);
@@ -84,7 +115,8 @@ public final class MariaLager implements BesitzLager {
 
     @Override
     public int anzahlVon(String welt, UUID spieler) {
-        String sql = "SELECT COUNT(*) FROM parzellen WHERE welt = ? AND eigentuemer = ?";
+        String sql = "SELECT COUNT(*) FROM parzellen WHERE welt = ? AND eigentuemer = ?"
+                + AUF_DEM_RASTER;
         try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
             anfrage.setString(1, welt);
             anfrage.setString(2, spieler.toString());
@@ -102,8 +134,12 @@ public final class MariaLager implements BesitzLager {
         // einen genaueren Zeitpunkt zurueck als der, der wirklich gespeichert wird - zwei
         // Wahrheiten fuer dieselbe Parzelle.
         Instant jetzt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
-        String sql = "INSERT INTO parzellen (welt, x, z, eigentuemer, preis, erworben_am) "
-                + "VALUES (?, ?, ?, ?, ?, ?)";
+        // Art, Elternteil und Zustand als Literale und nicht ueber den Vorgabewert der
+        // Spalte: Was dieser Schreibweg erzeugt, soll hier stehen und nicht im Schema.
+        // Die Platzhalter 1 bis 6 behalten dabei ihre Nummern.
+        String sql = "INSERT INTO parzellen "
+                + "(welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand) "
+                + "VALUES (?, ?, ?, ?, ?, ?, 'parzelle', NULL, 'aktiv')";
         try (PreparedStatement anfrage = datenbank.verbindung()
                 .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             anfrage.setString(1, welt);
@@ -120,7 +156,8 @@ public final class MariaLager implements BesitzLager {
             try (ResultSet schluessel = anfrage.getGeneratedKeys()) {
                 schluessel.next();
                 return new Parzelle(schluessel.getLong(1), welt, x, z, eigentuemer,
-                        Set.of(), preis, jetzt);
+                        Set.of(), preis, jetzt,
+                        Art.PARZELLE, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV);
             }
         } catch (SQLIntegrityConstraintViolationException schonDa) {
             // Der eindeutige Schluessel hat zugeschlagen - jemand war schneller. Genau
@@ -193,14 +230,23 @@ public final class MariaLager implements BesitzLager {
             anfrage.setLong(1, id);
             anfrage.executeUpdate();
             // Die Mitbauer raeumt der Fremdschluessel mit ON DELETE CASCADE weg.
+        } catch (SQLIntegrityConstraintViolationException hatKinder) {
+            // fk_besitz_elternteil steht auf RESTRICT: Eine Zeile, auf die eltern_id
+            // zeigt, laesst sich nicht loeschen - sonst naehme ein Aufgeben die Kinder
+            // mit. Das hier ist Protokolltext und KEINE Spielerantwort; die kommt aus
+            // Bescheid.TEIL_EINER_GRUPPE, bevor es ueberhaupt so weit kommt.
+            throw new IllegalStateException("Besitz " + id
+                    + " hat noch untergeordnete Eintraege - erst auftrennen", hatKinder);
         } catch (SQLException fehler) {
             throw weiterreichen("Entfernen einer Parzelle", fehler);
         }
     }
 
     private Optional<Parzelle> nachNummer(long id) throws SQLException {
-        String sql = "SELECT id, welt, x, z, eigentuemer, preis, erworben_am "
-                + "FROM parzellen WHERE id = ?";
+        // Bewusst ohne AUF_DEM_RASTER: Wer hier nach einer Nummer fragt, hat sie gerade
+        // selbst geschrieben. Liegt sie nicht auf dem Raster, soll das laut auffallen -
+        // siehe den Riegel in lies().
+        String sql = "SELECT " + SPALTEN + " FROM parzellen WHERE id = ?";
         try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
             anfrage.setLong(1, id);
             try (ResultSet ergebnis = anfrage.executeQuery()) {
@@ -211,16 +257,31 @@ public final class MariaLager implements BesitzLager {
 
     private Parzelle lies(ResultSet ergebnis) throws SQLException {
         long id = ergebnis.getLong("id");
+        Integer x = ergebnis.getObject("x", Integer.class);
+        Integer z = ergebnis.getObject("z", Integer.class);
+        if (x == null || z == null) {
+            // getInt() gaebe hier lautlos 0 zurueck - also die Parzelle 0/0 mitten in der
+            // Marktstadt, mit dem Eigentuemer dieser Zeile. 0/0 ist in der Spieldatenbank
+            // vergeben. Wer Besitz ohne Rasterzelle lesen will, braucht einen eigenen
+            // Leseweg, keine stille Notluege.
+            throw new IllegalStateException("Besitz " + id + " der Art "
+                    + ergebnis.getString("art") + " liegt nicht auf dem Raster");
+        }
         return new Parzelle(
                 id,
                 ergebnis.getString("welt"),
-                ergebnis.getInt("x"),
-                ergebnis.getInt("z"),
+                x,
+                z,
                 UUID.fromString(ergebnis.getString("eigentuemer")),
                 mitbauerVon(id),
                 ergebnis.getLong("preis"),
                 ergebnis.getObject("erworben_am", LocalDateTime.class)
-                        .toInstant(ZoneOffset.UTC));
+                        .toInstant(ZoneOffset.UTC),
+                Art.ausSchluessel(ergebnis.getString("art")),
+                // SQL NULL wird hier zu 0, und 0 ist KEIN_ELTERNTEIL. Die eine Stelle,
+                // an der sich die Wahl der Null auszahlt.
+                ergebnis.getLong("eltern_id"),
+                Zustand.ausSchluessel(ergebnis.getString("zustand")));
     }
 
     private Set<UUID> mitbauerVon(long id) throws SQLException {

@@ -109,6 +109,42 @@ public abstract class BesitzLagerVertrag {
         assertEquals(anna, danach.eigentuemer());
         assertEquals(50_000L, danach.preis());
         assertEquals(parzelle.erworbenAm(), danach.erworbenAm());
+        // Diese drei sind der eigentliche Grund, warum es diese Pruefung gibt: Eine
+        // Umsetzung, die hier feste Werte einsetzt statt die alten durchzutragen, loescht
+        // bei jeder Mitbauer-Aenderung still den Gruppenbezug - und zwar nur im Betrieb,
+        // wo es keiner sieht.
+        assertEquals(parzelle.art(), danach.art());
+        assertEquals(parzelle.elternId(), danach.elternId());
+        assertEquals(parzelle.zustand(), danach.zustand());
+    }
+
+    @Test
+    @DisplayName("Anlegen erzeugt eigenstaendigen, laufenden Besitz auf dem Raster")
+    void anlegenErzeugtEigenstaendigeParzelle() {
+        BesitzLager lager = lager();
+        Parzelle neu = lager.anlegen(WELT, 3, 4, anna, 0L);
+
+        assertEquals(Art.PARZELLE, neu.art());
+        assertEquals(Zustand.AKTIV, neu.zustand());
+        assertEquals(Parzelle.KEIN_ELTERNTEIL, neu.elternId());
+        assertFalse(neu.hatElternteil());
+        assertTrue(neu.darfBauen(anna));
+    }
+
+    @Test
+    @DisplayName("Gezaehlt wird genau das, was auch aufgelistet wird")
+    void zaehlenUndAuflistenStimmenUeberein() {
+        // Die Zahl aus anzahlVon geht in die Preisstaffel und in die Rangobergrenze, die
+        // Liste aus vonSpieler in die Anzeige. Laufen sie auseinander, zahlt der Spieler
+        // fuer etwas anderes, als er sieht.
+        BesitzLager lager = lager();
+        lager.anlegen(WELT, 1, 1, anna, 0L);
+        lager.anlegen(WELT, 2, 2, anna, 25_000L);
+        lager.anlegen(WELT, 3, 3, bert, 0L);
+
+        assertEquals(lager.vonSpieler(WELT, anna).size(), lager.anzahlVon(WELT, anna));
+        assertEquals(lager.vonSpieler(WELT, bert).size(), lager.anzahlVon(WELT, bert));
+        assertEquals(2, lager.anzahlVon(WELT, anna));
     }
 
     @Test

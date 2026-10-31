@@ -385,6 +385,8 @@ final class ParzellenBefehle {
             case ZU_WENIG_MARK -> "Dein Guthaben reicht nicht.";
             case SCHON_EINGETRAGEN -> "Steht schon auf der Liste.";
             case NICHT_EINGETRAGEN -> "Stand gar nicht auf der Liste.";
+            case TEIL_EINER_GRUPPE -> "Die Parzelle gehoert zu einer Gruppe - "
+                    + "das geht nur ueber die ganze Gruppe.";
             case ERTEILT -> "Erledigt.";
         }, NamedTextColor.RED);
     }

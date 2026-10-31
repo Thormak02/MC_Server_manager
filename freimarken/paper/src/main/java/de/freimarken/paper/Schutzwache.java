@@ -232,12 +232,24 @@ public final class Schutzwache implements Listener {
         return name != null ? name : spieler.toString().substring(0, 8);
     }
 
-    /** Pruefen und bei Bedarf absagen - was jeder Zugang unten tut. */
+    /**
+     * Pruefen und bei Bedarf absagen - was jeder Zugang unten tut.
+     *
+     * <p>Der Fang um {@link #verweigere} ist kein Schmuck: Die Absage steht in diesem
+     * Augenblick schon fest, aber die Begruendung geht ueber {@link #grund} ein zweites
+     * Mal zur Ablage. Ist die weg, floege von dort dieselbe Ausnahme, {@code return true}
+     * wuerde nie erreicht, und Bukkit liesse das Ereignis unabgebrochen - der Block auf
+     * fremdem Grund braeche, weil der Grund dafuer nicht zu beschaffen war.
+     */
     private boolean unterbinden(Player spieler, Location ort) {
         if (darfHandeln(spieler, ort)) {
             return false;
         }
-        verweigere(spieler, ort);
+        try {
+            verweigere(spieler, ort);
+        } catch (RuntimeException besitzNichtNachsehbar) {
+            klageUeberAblage(besitzNichtNachsehbar);
+        }
         return true;
     }
 

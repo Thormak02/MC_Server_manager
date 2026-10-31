@@ -276,6 +276,27 @@ Parzelle in der Marktstadt, nur mit Elternteil. Der Spielermarkt — Stadtbesitz
 eigene Grundstücke zu eigenen Preisen — fällt damit aus dem Modell heraus und ist keine
 Sonderlocke. [empfohlen]
 
+**Gebaut am 31.10.2026, mit einer Abweichung** [entschieden]: `art`, `eltern_id` und
+`zustand` sind da; **`bereich` ist es nicht**. Die Rasterparzelle bleibt die Atomeinheit
+mit `x`/`z`, und der Bereich einer Gruppe ergibt sich aus ihren Kindern. Grund:
+`darfBauen` läuft bei **jedem** gesetzten und abgebauten Block und ist heute eine
+Punktabfrage auf den Index `(welt, x, z)`; ein Quadervergleich wäre dort spürbar teurer.
+Für Besitz, der nicht am Raster hängt — Freistädte im natürlichen Gelände, Werder-Inseln —
+kommt der Quader später als **eigene** Spalte, die nur dort gefüllt wird. `x`/`z` sind
+dafür schon NULL-fähig.
+
+Wem ein Gruppenkind gehört: **sich selbst.** Jede Zeile trägt Eigentümer und Mitbauer
+vollständig, `eltern_id` ist eine Schicht darüber und kein Verweis zum Nachschlagen —
+sonst würde aus jeder Blockprüfung ein zweiter Gang zur Datenbank. Der Preis dafür ist
+die Doppelung, und die wird beim **Schreiben** gehalten: Gruppe und Kinder in einer
+Transaktion. Bis Schritt 6 das baut, verweigert das Besitzbuch Einzeländerungen an einem
+Kind (`TEIL_EINER_GRUPPE`) — Verweigern ist die zurückholbare Antwort.
+
+Eine Gruppe aus drei Parzellen zählt als **drei**, nicht als eine: Gezählt werden
+Rasterzellen, weil sie Fläche belegen. Sonst wäre Zusammenlegen eine Geldmaschine —
+die Preisstaffel verdoppelt (25.000 ≪ *besessen*−1), und die Rangobergrenze ließe sich
+durch Zusammenlegen umgehen.
+
 ### 6.2 Stufen und Preise
 
 Preise in **Mark**. Verhältnisse an Lumia angelehnt [belegt], Beträge modernisiert.

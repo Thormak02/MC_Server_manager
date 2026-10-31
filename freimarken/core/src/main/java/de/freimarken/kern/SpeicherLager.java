@@ -67,8 +67,11 @@ public final class SpeicherLager implements BesitzLager {
         if (nachOrt.containsKey(schluessel)) {
             throw new IllegalStateException("Parzelle ist bereits vergeben: " + schluessel);
         }
+        // Art, Elternteil und Zustand sind hier fest: Dieses Lager hat genau einen
+        // Schreibweg, und der legt eine eigenstaendige, laufende Rasterparzelle an.
         Parzelle neu = new Parzelle(naechsteId.getAndIncrement(), welt, x, z, eigentuemer,
-                Set.of(), preis, uhr.instant());
+                Set.of(), preis, uhr.instant(),
+                Art.PARZELLE, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV);
         nachOrt.put(schluessel, neu);
         orteNachId.put(neu.id(), schluessel);
         return neu;
@@ -82,7 +85,10 @@ public final class SpeicherLager implements BesitzLager {
         }
         Parzelle alt = nachOrt.get(schluessel);
         Parzelle neu = new Parzelle(alt.id(), alt.welt(), alt.x(), alt.z(), alt.eigentuemer(),
-                mitbauer, alt.preis(), alt.erworbenAm());
+                mitbauer, alt.preis(), alt.erworbenAm(),
+                // Durchtragen, nicht neu setzen: Feste Werte loeschten hier bei jeder
+                // Mitbauer-Aenderung still den Gruppenbezug und den Zustand.
+                alt.art(), alt.elternId(), alt.zustand());
         nachOrt.put(schluessel, neu);
         return neu;
     }
