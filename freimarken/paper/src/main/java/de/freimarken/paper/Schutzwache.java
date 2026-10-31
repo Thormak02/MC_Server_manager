@@ -213,12 +213,15 @@ public final class Schutzwache implements Listener {
     private Component grund(Location ort) {
         Optional<Parzelle> parzelle = buch.parzelleAn(welt, ort.getBlockX(), ort.getBlockZ());
         if (parzelle.isEmpty()) {
-            boolean bauland = buch.plan().feldBei(ort.getBlockX(), ort.getBlockZ())
-                    == Rasterplan.Feld.PARZELLE;
-            return bauland
+            int x = ort.getBlockX();
+            int z = ort.getBlockZ();
+            if (buch.plan().feldBei(x, z) != Rasterplan.Feld.PARZELLE) {
+                return Component.text("Weg und Mauer gehoeren allen", NamedTextColor.YELLOW);
+            }
+            return buch.grenze().enthaelt(x, z)
                     ? Component.text("Diese Parzelle ist frei - /parzelle nehmen",
                             NamedTextColor.YELLOW)
-                    : Component.text("Weg und Mauer gehoeren allen", NamedTextColor.YELLOW);
+                    : Component.text("Hier endet die Marktstadt", NamedTextColor.YELLOW);
         }
         return Component.text("Diese Parzelle gehoert ", NamedTextColor.RED)
                 .append(Component.text(namen(parzelle.get().eigentuemer()), NamedTextColor.WHITE));

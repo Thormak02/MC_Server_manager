@@ -25,3 +25,26 @@ kasse:
   # Was ein Spieler beim ersten Mal an Mark mitbringt. Die erste Parzelle ist ohnehin
   # gratis; dieser Betrag entscheidet, wie weit es ohne Verdienen reicht.
   startguthaben: 50000
+
+welten:
+  # Eine Welt je Eintrag. Heute steht nur die Marktstadt hier, weil es nur die eine gibt.
+  marktstadt:
+    # Wunschkante der Weltgrenze in Bloecken; Plan Abschnitt 4 nennt 3.000.
+    #
+    # Gerechnet wird daraus ABGERUNDET auf ganze Rasterzellen (64 Parzelle + 7 Weg = 71)
+    # und auf eine gerade Zellenzahl: Aus 3.000 werden 42 Parzellen je Achse mit den
+    # Nummern -21 bis 20, zusammen 1.764. Die Grenze wird dann 2.989 Bloecke breit
+    # (42 x 71 + 7) und liegt um -3,5/-3,5 - genau auf der Aussenkante des umlaufenden
+    # Mauer-Weg-Rings. So kann eine Grenze nie mitten durch eine Parzelle laufen.
+    # Ohne Rest gehen Kanten der Form 142 x n + 7 auf: 2.989, 3.131, 4.267.
+    #
+    # GROESSER geht jederzeit, KLEINER NICHT: Beim Start gilt immer der groessere Wert aus
+    # dieser Zeile und der Grenze, die schon in der Welt steht. Ein kleinerer Wert hier
+    # landet nur im Protokoll. Eine bezahlte Parzelle darf nie vor die Tuer geraten.
+    kante: 3000
+
+    # Nur noetig, wenn die Kante auf mehr als das Doppelte steigen soll - weil Kleiner
+    # nicht geht, ist auch ein zu grosser Wert nicht zurueckzunehmen. Hier gehoert dann
+    # genau der Text hin, den das Protokoll beim letzten Start genannt hat, etwa
+    # "2989 -> 8000". Steht etwas anderes, bleibt die Grenze, die in der Welt steht.
+    sprung-bestaetigt: ""

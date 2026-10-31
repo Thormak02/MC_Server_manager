@@ -146,7 +146,7 @@ schieben, nach innen nicht — deshalb jetzt etwas Luft.
 | Welt | Radius | Kante | Spielmodus | Besonderheit |
 |---|---|---|---|---|
 | `altfurt` | 400 | 800 | Abenteuer | Gebaut: Bundesmarkt und die Gebäude aus [2.1](#21-die-gebäude-in-altfurt), Farmen, Mine |
-| `marktstadt` | 1.500 | 3.000 | Überleben | ~1.760 Parzellen zu 64×64, Weg 7 |
+| `marktstadt` | 1.494,5 | 2.989* | Überleben | 1.764 Parzellen zu 64×64, Weg 7, Nummern −21 bis 20 |
 | `freistaedte` | 3.000 | 6.000 | Überleben | ~320 Freistädte, natürliches Gelände |
 | `hafenwerder` | 2.500 | 5.000 | Überleben | Archipel, **eigenes Angelgut** |
 | `wolkenwerder` | Raster | — | Überleben | Leerwelt, **eigene Skyblock-Mechaniken** |
@@ -154,8 +154,19 @@ schieben, nach innen nicht — deshalb jetzt etwas Luft.
 | `kornmark` | 1.000 | 2.000 | Überleben | Reset je Minecraft-Version |
 | `nether`, `end` | 1.000 | 2.000 | Überleben | Farmen |
 
+\* Die Einstellung nennt weiter den Wunsch **3.000**; das Plugin rundet ihn auf ganze
+Rasterzellen ab (71 = 64 + 7) und auf eine gerade Zellenzahl. Daraus werden 42 Parzellen
+je Achse und eine Kante von 42 × 71 + 7 = **2.989** um die Mitte **−3,5/−3,5** — genau die
+Außenkante des umlaufenden Mauer-Weg-Rings. Die runden 3.000 dürfen nicht als Kante
+gesetzt werden: Sie schlössen Bauland der Parzellen 21 und −22 ein, die es nicht gibt.
+Die Grenze steht in `welten.marktstadt.kante`, wird bei **jedem** Start neu gesetzt und
+wandert nur nach außen — beim Start gilt immer der größere Wert aus Einstellung und
+Welt. Ein Sprung über das Doppelte braucht eine zweite Bestätigung ([12a.6](#12a6-was-anpassbar-ist--und-was-nicht)).
+
 Vorgenerierung grob 3–4 Stunden, Platzbedarf 15–20 GB. **Erst Grenze setzen, dann
-vorgenerieren** — nie umgekehrt.
+vorgenerieren** — nie umgekehrt. Für die Marktstadt: Mitte −3,5/−3,5, Radius 1.495,
+35.344 Chunks (−94…93 je Achse), 36 Regionsdateien. Ein spawnzentriertes Werkzeug
+bräuchte um 32/32 den Radius 1.530, sonst fehlt der ganze Westring.
 
 ### 4.1 Die zwei Inselwelten [entschieden]
 
@@ -194,6 +205,11 @@ statt nur anders auszusehen. [empfohlen]
   Wurzelverzeichnis erwartet, sichert **nichts**.
 - Deshalb gehört in die Datenbank der **Weltschlüssel** (`freimarken:marktstadt`), nicht
   der Weltname — sonst wandert später jeder Fremdschlüssel mit.
+- **Die Weltgrenze liegt nicht in der `level.dat`**, sondern in
+  `<level-name>/dimensions/<namensraum>/<welt>/data/minecraft/world_border.dat`. Ein
+  Sicherungs- oder Umzugsmuster, das sie in der `level.dat` sucht, findet sie nicht. Das
+  Plugin setzt sie bei jedem Start neu, ein Verlust heilt sich also — aber nur, solange
+  die Einstellung stimmt.
 
 ---
 

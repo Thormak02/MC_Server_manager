@@ -6,11 +6,14 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
+import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
+import de.freimarken.kern.Stadtgrenze;
 import de.freimarken.kern.ZwischenspeicherLager;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -25,6 +28,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
+import org.bukkit.WorldBorder;
 import org.bukkit.WorldCreator;
 import org.bukkit.entity.Player;
 import org.bukkit.generator.BiomeProvider;
@@ -53,6 +57,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
     private World marktstadt;
     private Datenbank datenbank;
+    private BesitzLager lager;
+    private Kasse kasse;
+    private Stadtgrenze grenze;
     private Besitzbuch buch;
     private ParzellenBefehle befehle;
     private boolean fluechtig;
@@ -77,6 +84,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
+
+        // Erst die Grenze, dann das Besitzbuch: Die Grenze entscheidet, welche
+        // Parzellennummern es ueberhaupt gibt, und sie muss stehen, bevor der erste Befehl
+        // angemeldet wird - die Brigadier-Grenzen von /freimarken parzelle kommen aus ihr.
+        // Der Aufruf steht hier und nicht in ladeMarktstadt(), weil jene Methode vorzeitig
+        // zurueckkehrt, wenn die Welt schon geladen ist; dann stuende die Grenze auf dem
+        // Vorgabewert einer frischen Welt und waere faktisch keine.
+        grenze = richteWeltgrenzeEin(marktstadt);
+        buch = new Besitzbuch(grenze, lager, kasse);
 
         // Der Schluesseltext, nicht der NamespacedKey: World.key() gibt ein Key zurueck,
             // und ein Vergleich zwischen beiden ist immer falsch, ohne dass es auffaellt.
@@ -111,7 +127,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
         if (url.isEmpty()) {
             fluechtig = true;
-            buch = new Besitzbuch(plan, new SpeicherLager(), new SpeicherKasse(startguthaben));
+            lager = new SpeicherLager();
+            kasse = new SpeicherKasse(startguthaben);
             getLogger().warning("Keine Datenbank eingetragen: Parzellen und Guthaben gelten "
                     + "nur bis zum naechsten Neustart.");
             getLogger().warning("Zum Festhalten datenbank.url in plugins/"
@@ -126,9 +143,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             datenbank.migriere();
             // ZwischenspeicherLager um das MariaLager: darfBauen laeuft bei jedem gesetzten
             // und abgebauten Block, und das darf keine Abfrage ueber das Netz werden.
-            buch = new Besitzbuch(plan,
-                    new ZwischenspeicherLager(new MariaLager(datenbank)),
-                    new MariaKasse(datenbank, startguthaben));
+            lager = new ZwischenspeicherLager(new MariaLager(datenbank));
+            kasse = new MariaKasse(datenbank, startguthaben);
             getLogger().info("Datenbank bereit: " + ohneGeheimnis(url));
             return true;
         } catch (SQLException | RuntimeException fehler) {
@@ -246,9 +262,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
                         }))
                 .then(Commands.literal("parzelle")
                         .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
-                        .then(Commands.argument("x", IntegerArgumentType.integer(-64, 64))
+                        // Die Grenzen kommen aus der Stadt, nicht aus einer geratenen
+                        // Zahl: mitteX(64) laege 3.085 Bloecke jenseits der Weltgrenze.
+                        .then(Commands.argument("x",
+                                        IntegerArgumentType.integer(grenze.von(), grenze.bis()))
                                 .then(Commands.argument("z",
-                                                IntegerArgumentType.integer(-64, 64))
+                                                IntegerArgumentType.integer(grenze.von(),
+                                                        grenze.bis()))
                                         .executes(z -> {
                                             bringeZurParzelle(z.getSource().getSender(),
                                                     IntegerArgumentType.getInteger(z, "x"),
@@ -291,6 +311,48 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Setzt die Weltgrenze und gibt zurueck, welche Stadt ab jetzt gilt.
+     *
+     * <p>Laeuft auf jedem Weg, auf dem die Welt in den Server kommt, und vor jeder
+     * Vorgenerierung - "erst Grenze setzen, dann vorgenerieren" (Plan Abschnitt 4).
+     *
+     * <p>Die Grenze wird bei jedem Start neu gesetzt. Das heilt auch den Fall, dass die
+     * Datei verloren geht, in der sie steht: Sie liegt nicht in der level.dat, sondern
+     * unter dimensions/freimarken/marktstadt/data/minecraft/world_border.dat - ein
+     * Sicherungsmuster, das sie dort nicht sucht, findet sie nicht.
+     */
+    private Stadtgrenze richteWeltgrenzeEin(World welt) {
+        int ausEinstellung = getConfig().getInt("welten.marktstadt.kante",
+                Stadtgrenze.MARKTSTADT_KANTE);
+        WorldBorder rand = welt.getWorldBorder();
+        double inDerWelt = rand.getSize();
+        String erwartet = Stadtgrenze.sprungText(ausEinstellung, inDerWelt);
+        boolean bestaetigt = erwartet.equals(
+                getConfig().getString("welten.marktstadt.sprung-bestaetigt", "").trim());
+
+        int wirksam = Stadtgrenze.wirksameKante(plan, ausEinstellung, inDerWelt, bestaetigt);
+        Stadtgrenze neu = Stadtgrenze.ausKante(plan, wirksam);
+        if (wirksam != ausEinstellung) {
+            getLogger().severe("welten.marktstadt.kante sagt " + ausEinstellung
+                    + ", in der Welt stehen " + (long) inDerWelt + " - es gilt " + wirksam
+                    + ". Eine Weltgrenze wird nie nach innen geschoben. Fuer einen Sprung "
+                    + "auf mehr als das Doppelte: welten.marktstadt.sprung-bestaetigt: "
+                    + erwartet);
+        }
+        rand.setCenter(neu.mitte(), neu.mitte());
+        rand.setSize(neu.kante());
+        // Genau der aeussere Mauer-Weg-Ring wird rot umrandet, nicht bebaubares Land.
+        rand.setWarningDistance(plan.wegBreite());
+        // Eine Mauer, keine Falle: Wer heute weit draussen ausloggt, soll beim naechsten
+        // Einloggen nicht am Grenzschaden sterben.
+        rand.setDamageAmount(0.0);
+        getLogger().info("Weltgrenze " + (long) neu.kante() + " um " + neu.mitte() + "/"
+                + neu.mitte() + " - Parzellen " + neu.von() + ".." + neu.bis()
+                + " je Achse, " + neu.parzellenZahl() + " Stueck");
+        return neu;
+    }
+
+    /**
      * Zeigt den Zustand der Welt - und liest dafuer echte Bloecke aus.
      *
      * <p>Absichtlich keine Berechnung: Der Rasterplan wuerde dieselbe Antwort liefern, ohne
@@ -307,6 +369,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 "Schluessel " + marktstadt.key().asString()
                         + " · Raster " + plan.parzellenKante() + "+" + plan.wegBreite()
                         + " · Boden y=" + MarktstadtGenerator.BODEN,
+                NamedTextColor.GRAY));
+
+        WorldBorder rand = marktstadt.getWorldBorder();
+        empfaenger.sendMessage(Component.text(
+                "Grenze gemessen: Kante " + (long) rand.getSize() + " um "
+                        + rand.getCenter().getX() + "/" + rand.getCenter().getZ(),
+                NamedTextColor.GRAY));
+        empfaenger.sendMessage(Component.text(
+                "Grenze gerechnet: Parzellen " + grenze.von() + ".." + grenze.bis()
+                        + " je Achse \u00b7 " + grenze.parzellenZahl() + " Stueck",
                 NamedTextColor.GRAY));
 
         int y = MarktstadtGenerator.BODEN;
@@ -327,6 +399,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private void bringeZurParzelle(Audience empfaenger, int parzelleX, int parzelleZ) {
         if (marktstadt == null) {
             empfaenger.sendMessage(Component.text("Die Marktstadt fehlt.", NamedTextColor.RED));
+            return;
+        }
+        if (!grenze.enthaeltParzelle(parzelleX, parzelleZ)) {
+            empfaenger.sendMessage(Component.text(
+                    "Parzellen gibt es nur von " + grenze.von() + "/" + grenze.von()
+                            + " bis " + grenze.bis() + "/" + grenze.bis() + ".",
+                    NamedTextColor.RED));
             return;
         }
         Location ziel = new Location(marktstadt,

@@ -1,5 +1,6 @@
 package de.freimarken.kern;
 
+import static de.freimarken.kern.Besitzbuch.Bescheid.AUSSERHALB;
 import static de.freimarken.kern.Besitzbuch.Bescheid.ERTEILT;
 import static de.freimarken.kern.Besitzbuch.Bescheid.GRENZE_ERREICHT;
 import static de.freimarken.kern.Besitzbuch.Bescheid.KEINE_PARZELLE;
@@ -45,13 +46,13 @@ class BesitzbuchTest {
     void aufbauen() {
         lager = new SpeicherLager();
         kasse = new SpeicherKasse(REICH);
-        buch = new Besitzbuch(Rasterplan.marktstadt(), lager, kasse);
+        buch = new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse);
     }
 
     /** Ein Buch, dessen Spieler genau so viel Geld haben wie angegeben. */
     private Besitzbuch buchMitGuthaben(long guthaben) {
         kasse = new SpeicherKasse(guthaben);
-        return new Besitzbuch(Rasterplan.marktstadt(), lager, kasse);
+        return new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse);
     }
 
     // --- Nehmen -----------------------------------------------------------------
@@ -157,7 +158,7 @@ class BesitzbuchTest {
         // Der Fall im Betrieb: Zwei Spieler nehmen im selben Augenblick dieselbe Parzelle,
         // der eindeutige Schluessel in der Datenbank laesst den zweiten auflaufen. Dann
         // darf nicht das Geld weg und die Parzelle nicht da sein.
-        Besitzbuch sperrigesBuch = new Besitzbuch(Rasterplan.marktstadt(), new StoerLager(), kasse);
+        Besitzbuch sperrigesBuch = new Besitzbuch(Stadtgrenze.marktstadt(), new StoerLager(), kasse);
         sperrigesBuch.nehmen(WELT, anna, 10, 10, VIELE);
         long vorher = kasse.guthaben(anna);
 
@@ -269,6 +270,79 @@ class BesitzbuchTest {
 
         assertEquals(NICHT_EIGENTUEMER, buch.aufgeben(WELT, bert, 10, 10).bescheid());
         assertTrue(buch.parzelleAn(WELT, 10, 10).isPresent());
+    }
+
+    // --- Stadtgrenze ------------------------------------------------------------
+
+    @Test
+    @DisplayName("Jenseits der Grenze gibt es nichts - und es kostet auch nichts")
+    void jenseitsDerGrenze() {
+        // Block 1491 ist der erste Baulandblock der Parzelle 21, die es nicht mehr gibt.
+        var entscheid = buch.nehmen(WELT, anna, 1491, 0, VIELE);
+
+        assertEquals(AUSSERHALB, entscheid.bescheid());
+        assertEquals(0L, entscheid.kosten());
+        assertTrue(entscheid.parzelle().isEmpty());
+        assertEquals(0, lager.anzahlVon(WELT, anna), "Es darf nichts angelegt worden sein");
+        assertEquals(REICH, kasse.guthaben(anna), "Es darf nichts abgebucht worden sein");
+    }
+
+    @Test
+    @DisplayName("Die aeusserste Parzelle im Osten und Sueden geht noch")
+    void aeussersteParzelleGehtNoch() {
+        var entscheid = buch.nehmen(WELT, anna, 1483, 1483, VIELE);
+
+        assertEquals(ERTEILT, entscheid.bescheid());
+        var parzelle = entscheid.parzelle().orElseThrow();
+        assertEquals(20, parzelle.x());
+        assertEquals(20, parzelle.z());
+    }
+
+    @Test
+    @DisplayName("Die aeusserste Parzelle im Westen und Norden geht auch - negative Nummern")
+    void aeussersteParzelleNegativ() {
+        var entscheid = buch.nehmen(WELT, anna, -1491, -1491, VIELE);
+
+        assertEquals(ERTEILT, entscheid.bescheid());
+        var parzelle = entscheid.parzelle().orElseThrow();
+        assertEquals(-21, parzelle.x());
+        assertEquals(-21, parzelle.z());
+    }
+
+    @Test
+    @DisplayName("Eine draussen schon vergebene Parzelle meldet den Eigentuemer, nicht die Grenze")
+    void altbestandDraussenBehaeltSeinenEigentuemer() {
+        // So etwas entsteht, wenn die Grenze erst nach dem Verkauf gezogen wird.
+        lager.anlegen(WELT, 99, 99, bert, 0L);
+
+        var entscheid = buch.nehmen(WELT, anna, 99 * 71, 99 * 71, VIELE);
+
+        assertEquals(SCHON_VERGEBEN, entscheid.bescheid());
+        assertEquals(bert, entscheid.parzelle().orElseThrow().eigentuemer());
+    }
+
+    @Test
+    @DisplayName("Die Grenze enteignet nicht: draussen wird weiter geschuetzt und gebaut")
+    void grenzeEnteignetNicht() {
+        lager.anlegen(WELT, 99, 99, bert, 0L);
+
+        assertTrue(buch.parzelleAn(WELT, 99 * 71, 99 * 71).isPresent());
+        assertTrue(buch.darfBauen(WELT, bert, 99 * 71, 99 * 71));
+        assertFalse(buch.darfBauen(WELT, anna, 99 * 71, 99 * 71));
+        // Und aufgeben kann er sie auch - sonst liesse sich draussen nie aufraeumen.
+        assertEquals(ERTEILT, buch.aufgeben(WELT, bert, 99 * 71, 99 * 71).bescheid());
+    }
+
+    @Test
+    @DisplayName("Weg und Mauer bleiben KEINE_PARZELLE - auch am aeussersten Rand")
+    void wegBleibtWeg() {
+        // Mitten in der Stadt.
+        assertEquals(KEINE_PARZELLE, buch.nehmen(WELT, anna, 67, 0, VIELE).bescheid());
+        // Der aeusserste Westweg liegt innerhalb der Grenze, gehoert aber zur Rasterzelle
+        // -22, die es als Parzelle nicht mehr gibt. Die Antwort muss trotzdem "das ist ein
+        // Weg" sein und nicht "hier endet die Stadt" - sonst steht der Spieler auf einem
+        // begehbaren Weg und bekommt gesagt, er sei draussen.
+        assertEquals(KEINE_PARZELLE, buch.nehmen(WELT, anna, -1495, 0, VIELE).bescheid());
     }
 
     /**

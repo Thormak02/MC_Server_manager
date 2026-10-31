@@ -10,7 +10,7 @@ import java.util.UUID;
  * Die Regeln rund um Parzellenbesitz: nehmen, schuetzen, Mitbauer.
  *
  * <p>Hier steht das Spiel, nicht die Technik. Kein Bukkit, keine Datenbank - nur
- * {@link Rasterplan} fuer die Geometrie, {@link BesitzLager} fuer die Ablage und
+ * {@link Stadtgrenze} fuer die Geometrie, {@link BesitzLager} fuer die Ablage und
  * {@link Kasse} fuer das Geld. Dadurch laesst sich jede Regel ohne Server pruefen.
  *
  * <p>Bezahlt wird bewusst hier und nicht beim Aufrufer: Es gibt genau einen Weg, auf dem
@@ -32,6 +32,8 @@ public final class Besitzbuch {
         KEINE_PARZELLE,
         /** Die Parzelle gehoert schon jemandem. */
         SCHON_VERGEBEN,
+        /** Jenseits der Stadtgrenze - nicht zu verwechseln mit GRENZE_ERREICHT. */
+        AUSSERHALB,
         /** Die Rangobergrenze ist erreicht. */
         GRENZE_ERREICHT,
         /** Das Guthaben reicht nicht. */
@@ -66,14 +68,21 @@ public final class Besitzbuch {
         }
     }
 
+    private final Stadtgrenze grenze;
     private final Rasterplan plan;
     private final BesitzLager lager;
     private final Kasse kasse;
 
-    public Besitzbuch(Rasterplan plan, BesitzLager lager, Kasse kasse) {
-        this.plan = plan;
+    public Besitzbuch(Stadtgrenze grenze, BesitzLager lager, Kasse kasse) {
+        this.grenze = grenze;
+        this.plan = grenze.plan();
         this.lager = lager;
         this.kasse = kasse;
+    }
+
+    /** Wie weit die Stadt reicht. */
+    public Stadtgrenze grenze() {
+        return grenze;
     }
 
     public Rasterplan plan() {
@@ -138,6 +147,10 @@ public final class Besitzbuch {
         Optional<Parzelle> vorhanden = lager.finde(welt, px, pz);
         if (vorhanden.isPresent()) {
             return new Entscheid(Bescheid.SCHON_VERGEBEN, 0L, vorhanden);
+        }
+
+        if (!grenze.enthaeltParzelle(px, pz)) {
+            return Entscheid.nein(Bescheid.AUSSERHALB);
         }
 
         int bereits = lager.anzahlVon(welt, spieler);

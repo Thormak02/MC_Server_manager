@@ -128,6 +128,12 @@ final class ParzellenBefehle {
 
         Optional<Parzelle> gefunden = buch.parzelleAn(welt, x, z);
         if (gefunden.isEmpty()) {
+            if (!buch.grenze().enthaeltParzelle(px, pz)) {
+                spieler.sendMessage(Component.text(
+                        "  ausserhalb der Marktstadt - wird nicht vergeben",
+                        NamedTextColor.GRAY));
+                return;
+            }
             long preis = Preisstaffel.preisFuerNaechste(anzahl(spieler));
             spieler.sendMessage(Component.text("  frei · ", NamedTextColor.GRAY)
                     .append(Component.text(preis == 0L ? "gratis" : Betraege.mark(preis),
@@ -188,6 +194,11 @@ final class ParzellenBefehle {
                     .append(Component.text(", du hast "
                             + Betraege.mark(buch.kasse().guthaben(spieler.getUniqueId())) + ".",
                             NamedTextColor.RED)));
+            case AUSSERHALB -> spieler.sendMessage(Component.text(
+                    "Hier endet die Marktstadt. Parzellen gibt es von "
+                            + buch.grenze().von() + "/" + buch.grenze().von() + " bis "
+                            + buch.grenze().bis() + "/" + buch.grenze().bis() + ".",
+                    NamedTextColor.RED));
             default -> spieler.sendMessage(Component.text(
                     "Das ging nicht: " + entscheid.bescheid(), NamedTextColor.RED));
         }
@@ -369,6 +380,7 @@ final class ParzellenBefehle {
             case KEINE_PARZELLE -> "Hier ist keine Parzelle.";
             case NICHT_EIGENTUEMER -> "Das darf nur der Eigentuemer.";
             case SCHON_VERGEBEN -> "Die gehoert schon jemandem.";
+            case AUSSERHALB -> "Das liegt ausserhalb der Marktstadt.";
             case GRENZE_ERREICHT -> "Dein Rang erlaubt nicht mehr Parzellen.";
             case ZU_WENIG_MARK -> "Dein Guthaben reicht nicht.";
             case SCHON_EINGETRAGEN -> "Steht schon auf der Liste.";
