@@ -1,0 +1,11 @@
+name: Freimarken
+version: '${version}'
+main: de.freimarken.paper.FreimarkenPlugin
+api-version: '26.3'
+description: Besitzleiter, Wirtschaft und Verwaltung des Freimarkenbunds
+authors: [Friedrich]
+website: https://friedrich-dietrich.de
+
+# Keine commands-Liste: Befehle werden ueber die Lifecycle-API als Brigadier-Befehle
+# angemeldet. Dort stehen Argumenttypen, Vervollstaendigung und Rechte je Zweig - hier
+# stuenden nur Platzhalter.

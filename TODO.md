@@ -360,8 +360,16 @@ PWA / mobil-optimierte Ansicht.
 
 Onboarding-Assistent beim ersten Start.
 
-getrennte nutzungsumgebungen, folgendes modell:
-nutzer / Organisation modell: ein nutzer kann eine oder mehr organisationen besitzen, verwalten und delegieren, einer orga können mehrere nutzer angehören. rollenverwaltung in orga, aber für super admins immer zugriff auf alle und volle rechte
+getrennte Verwaltungsumgebungen - zuerst für die eigenen Server mit Helfern, als Grundlage für späteres Hosting:
+
+- Nutzer/Orga-Modell: ein Nutzer besitzt, verwaltet und delegiert mehrere Orgas; eine Orga hat mehrere Nutzer; Rollenverwaltung je Orga. Super-Admin hat immer Zugriff auf alles.
+- Umgebung (eigene Servergruppe: Freimarken, ATM10, Test) und Kunde (Vertrag, Rechnung, Kontingent) sind ZWEI Entitäten. Zusammengelegt wird man selbst Kunde Nr. 1 - getrennt modellieren.
+- Billige Hälfte: Entität + server.umgebung_id + Mitglieder mit Rollen. Teure Hälfte: die ~30 globalen Einstellungen (Speicherwurzeln, Netzport/-modus, Gateway, Velocity, Hub-Lobby) je Umgebung umhängen - erst nötig, wenn es ein zweites echtes Netz gibt.
+- Auslöser für den Bau: der erste Helfer, der nicht alles sehen soll. Vorher gibt es nichts zu gruppieren.
+- Spieldaten der Spielserver brauchen KEINE Mandantenspalten - Trennung läuft über eine Datenbank je Netz.
+- Bei Fremdkunden kippt "Super-Admin sieht alles" ins Datenschutzrecht: dann Auftragsverarbeiter, Zugriff nur auf Weisung und protokolliert.
+- hängt zusammen mit "rechte verwaltung" und "Server-Vermietung" weiter unten
+
 später: monetarisierung: server, orgas usw. vermieten, kosten nach kapazität, leistung und anzahl an orgas und server
 
 
@@ -374,13 +382,13 @@ Ideen aus dem Urlaub (09/2026), für viel später:
 
 Mobile Verwaltung: MCSM auch als App-Version + mobile Web-App zur Verwaltung. Selbes Backend, immer selber Stand wie die Web-Version. Dünne native App (PWA / Wrapper), die selbst nicht aktualisiert werden muss - alles läuft über die Web-App. Evtl. eigenes, für Mobile optimiertes Frontend. Außerdem die bestehende Website für mobile Browser optimieren. (erweitert die vorhandene "PWA / mobil-optimierte Ansicht")
 
-Server-Vermietung: den Manager als Basis für Server-Vermietung schaffen - z.B. Bezahlmodelle, RAM- und Speicherzuweisung, Selbstverwaltung usw. URL-Schema: nutzername.servername.domain.de/... oder nutzername.domain.de/servername. (verwandt mit "mehrere getrennte Verwaltungsumgebungen" weiter oben)
+Server-Vermietung: den Manager als Basis für Server-Vermietung schaffen - z.B. Bezahlmodelle, RAM- und Speicherzuweisung, Selbstverwaltung usw. URL-Schema: nutzername.servername.domain.de/... oder nutzername.domain.de/servername. Setzt die getrennten Umgebungen voraus, ist damit aber erst zu etwa einem Zehntel erledigt - dazu kommen Kontingente und Grenzen, Selbstbedienung beim Anlegen, Abrechnung, Verfügbarkeitszusagen, Supportpflicht und die Rolle als Auftragsverarbeiter.
 
 
 live übersicht über map, spieler position, gebäude, inventar usw. Dynmap? interaktiv aus der vogelperspektive, pro server zuschaltbar und nach auswahl über link öffentlich einsehbar
 
 
-rechte verwaltung: nutzern und nutzergruppen je per checkbox berechtigungen zuweisen
+rechte verwaltung: nutzern und nutzergruppen je per checkbox berechtigungen zuweisen - frei anpassbar, je Rolle UND je Umgebung. Ersetzt perspektivisch die feste Rollenliste (super_admin/admin/moderator/view_only) plus ServerPermission durch EINE Stelle. Teil der getrennten Umgebungen.
 
 
 push benachrichtigungen auf handy und pc zb. bei crash

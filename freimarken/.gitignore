@@ -1,0 +1,5 @@
+.gradle/
+build/
+*/build/
+# Testserver, den run-paper spaeter anlegt
+run/
