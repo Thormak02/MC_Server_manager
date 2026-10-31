@@ -411,6 +411,9 @@ ai analysen für crashes usw
 ai modpack / datapack / pluginpack / server generator und ersteller / modpack ersteller (modpack und quests und custom rezepte usw.) mit claude API -> curseforge code / link für installation
 
 
+Automatisches löschen alter backups. komprimieren? zu viel speicherplatz nötig.
+
+
 
 ~~mir ist außerdem grade aufgefallen: es funktionieren nur vanilla tweaks, aber vanilla tweaks crafting rezepte werden nicht erkannt und nicht zur auswahl verfügbar~~
 
@@ -585,3 +588,8 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten 
 ~~Kleiner: zeigen und setzen rechneten mit verschiedenen VT-Gruppen; Paketname aus der resource-pack-URL ungeprüft ("C:x.zip" ist laufwerksrelativ); zweiter CT-Eintrag überschrieb still die Auswahl des ersten; Abzweigungen brachten fremde Archivnamen in die Liste; zlib.error/ValueError entwischten dem Archivleser.~~
 
 ~~Testlücken: Admin-Vorbehalt war nur beim ersten Werkzeug geprüft, Byte-Grenze nur behauptet (jetzt über tracemalloc gemessen), Crafting-Tweaks-Hälfte ganz ohne Test.~~
+
+- Freimarken Schritt 5 im Spiel prüfen: zwei Spieler, fremder Grund, /parzelle nehmen|info|mitbauer|aufgeben, /mark.
+- Auf dem Testserver plugins/Freimarken/config.yml mit den MariaDB-Zugangsdaten füllen. Leer heißt flüchtig, das Plugin sagt es im Protokoll und in /freimarken.
+- Noch nicht geschützt (Weltregeln, kein Spielerhandeln): Explosionen, Feuerausbreitung, Kolben über die Grenze, Flüssigkeiten von außen, Trichter in fremde Kisten.
+- Gradle auf der Freigabe: nach "clean" scheitert der nächste Bau daran, dass ein gelöschtes Verzeichnis noch nicht weg ist. Fehlende build-Verzeichnisse von Hand anlegen, dann geht es.

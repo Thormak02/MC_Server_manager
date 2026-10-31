@@ -1061,12 +1061,12 @@ Jeder Schritt endet mit etwas, in dem man herumlaufen kann. Keine Fristen.
 |---|---|---|
 | 0 | E1 bestätigen, Namen festschreiben | sie hier eingetragen sind |
 | 1 | ~~Paper 26.3, Java 25, Gradle-Gerüst, leeres Plugin mit einem Befehl~~ **erledigt 31.10.2026** | ~~Server startet und der Befehl antwortet~~ — Plugin lädt auf Build 231, `/freimarken preis 5` antwortet „400.000 Mark" aus dem Kernmodul |
-| 2 | MariaDB, Schema, Migrationen, Datenzugriff hinter Schnittstelle | ein Testdatensatz übersteht einen Neustart — *vorgezogen auf Schritt 5, solange es nichts zu speichern gibt* |
+| 2 | ~~MariaDB, Schema, Migrationen, Datenzugriff hinter Schnittstelle~~ **erledigt 31.10.2026** | ~~ein Testdatensatz übersteht einen Neustart~~ — MariaDB als Dienst auf dem Server-PC, Zugriff aus dem LAN; `Datenbank` mit nummerierten Schema-Schritten, `MariaLager` und `MariaKasse` hinter `BesitzLager`/`Kasse`. 26 Tests gegen die echte Datenbank, darunter Überleben eines Verbindungsabbruchs, der eindeutige Schlüssel gegen Doppelvergabe und UTC-Rückgabe |
 | 3 | Welten anlegen, Grenzen, Vorgenerierung, Altfurt als Rohbau (Gebäude aus [2.1](#21-die-gebäude-in-altfurt) als Platzhalter) | man kann durch alle Welten laufen — *Marktstadt steht, übrige Welten offen* |
 | 4 | ~~**Weltgenerator für die Marktstadt** — Raster, Wege, Grenzen~~ **erledigt 31.10.2026** | ~~das Raster steht~~ — `Rasterplan` im Kern (9 Tests ohne Server), `MarktstadtGenerator` im Plugin; am Testserver geprüft: Parzellenmitte Gras, Mauer Steinziegel, Weg glatter Stein, Krone Halbstufe |
-| 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer | zwei Spieler, einer baut, der andere nicht |
+| 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer — **gebaut 31.10.2026, Probe im Spiel offen** | zwei Spieler, einer baut, der andere nicht — *Code steht: `Besitzbuch` mit allen Regeln (Preisstaffel, Obergrenze, Mitbauer, Aufgeben ohne Rückzahlung), `Schutzwache` mit einer Regel für alle Ereignisse, `/parzelle` und `/mark`. 89 Tests grün. Was fehlt, ist der Durchgang mit zwei Spielern auf dem Testserver* |
 | 6 | Zusammenlegen und Auftrennen mit Gebühr | zwei Parzellen werden eine, der Weg verschwindet |
-| 7 | Wirtschaft: Konto, Berufe, Bundesmarkt-Ankauf, Tagesbonus | man kann Mark verdienen und ausgeben |
+| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — *das Konto selbst gibt es schon: `Kasse` mit Startguthaben, Abbuchen und Gutschreiben, in MariaDB mit der Deckungsprüfung in der Abfrage. Es fehlen Verdienen, Buchungsprotokoll, Goldmark und Wechselkurs* | man kann Mark verdienen und ausgeben |
 | 8 | Markthalle, Mietverträge, Abholfach, Freie Truhe | ein Laden läuft ab und wird sauber zurückgegeben |
 | 9 | Freistädte: gründen, Grundstücke vergeben, Bürger, Kasse | ein Spieler verkauft einem anderen ein Grundstück |
 | 10 | Hafenwerder mit eigener Angeltabelle | eine Insel lässt sich sichern, der Fang unterscheidet sich |

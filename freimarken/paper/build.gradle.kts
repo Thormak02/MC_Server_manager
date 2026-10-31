@@ -1,5 +1,6 @@
 dependencies {
     implementation(project(":core"))
+    implementation(project(":daten"))
 
     // compileOnly, NIE implementation: Paper bringt seine API selbst mit. Wer sie in die
     // eigene Jar packt, hat zwei Fassungen derselben Klassen in einer JVM - das endet in
@@ -8,14 +9,23 @@ dependencies {
 }
 
 tasks.jar {
-    // Der Kern gehoert IN die Jar. Er ist kein Fremdpaket, sondern die andere Haelfte
-    // dieses Plugins - ohne ihn laedt Paper eine Jar ohne Rechenregeln.
+    // Kern, Datenschicht und der MariaDB-Treiber gehoeren IN die Jar. Der Treiber bewusst
+    // mit: Paper liefert keinen mit, und ihn zur Laufzeit nachladen zu lassen hiesse, dass
+    // ein Server ohne Internet beim ersten Start nicht hochkommt.
     //
-    // Solange der Kern keine eigenen Abhaengigkeiten hat, genuegt das hier. Kommt je eine
-    // dazu, gehoert stattdessen com.gradleup.shadow her, samt Umbenennung der Pakete.
+    // Ohne Umbenennung der Treiberpakete, und das ist Absicht: Paper gibt jedem Plugin
+    // seinen eigenen Klassenlader, also stoert ein zweiter MariaDB-Treiber in einem anderen
+    // Plugin nicht. Die eine Stelle, an der es doch global zugeht - DriverManager - umgeht
+    // Datenbank.java, indem sie den Treiber direkt anspricht.
     from(configurations.runtimeClasspath.map { pfad ->
         pfad.filter { it.name.endsWith(".jar") }.map { zipTree(it) }
     })
+
+    // Signaturen fremder Jars werden ungueltig, sobald deren Inhalt in eine andere Jar
+    // wandert - bleiben sie drin, lehnt die JVM die Klassen ab. module-info.class landete
+    // durch das Auspacken im Wurzelverzeichnis und gehoert dort nicht hin.
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.EC")
+    exclude("module-info.class", "META-INF/versions/*/module-info.class")
 
     // Zwei Module koennen dieselbe Datei beisteuern (etwa META-INF): die erste gewinnt,
     // statt den Build mit einer Dublettenmeldung abzubrechen.

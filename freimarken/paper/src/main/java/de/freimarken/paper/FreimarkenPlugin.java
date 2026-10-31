@@ -2,13 +2,21 @@ package de.freimarken.paper;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.tree.LiteralCommandNode;
+import de.freimarken.daten.Datenbank;
+import de.freimarken.daten.MariaKasse;
+import de.freimarken.daten.MariaLager;
+import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Rasterplan;
+import de.freimarken.kern.SpeicherKasse;
+import de.freimarken.kern.SpeicherLager;
+import de.freimarken.kern.ZwischenspeicherLager;
+import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
-import java.text.NumberFormat;
+import java.sql.SQLException;
 import java.util.List;
-import java.util.Locale;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -29,24 +37,114 @@ import org.bukkit.plugin.java.JavaPlugin;
  * wird nicht in der Weltdatei gespeichert. Wuerde die Welt einmal ohne ihn geladen, schriebe
  * der Server beim naechsten neuen Chunk Vanille-Gelaende an den Parzellenrand - und das ist
  * ohne Ruecksicherung nicht mehr zu reparieren.
+ *
+ * <p>Zur Ablage gibt es zwei Zustaende und keinen dritten: Mit Datenbank laeuft alles, ohne
+ * Datenbank laeuft es fluechtig und sagt das laut. Ist eine Datenbank eingetragen, antwortet
+ * aber nicht, startet das Plugin NICHT. Ein Server, der Parzellen vergibt und beim Neustart
+ * vergisst, waere schlimmer als einer, der gar nicht hochkommt.
  */
 public final class FreimarkenPlugin extends JavaPlugin {
 
-    /** Deutsche Tausenderpunkte: 400000 wird zu 400.000. */
-    private static final NumberFormat BETRAG = NumberFormat.getIntegerInstance(Locale.GERMANY);
-
     private final Rasterplan plan = Rasterplan.marktstadt();
     private final MarktstadtGenerator generator = new MarktstadtGenerator(plan);
+
     private World marktstadt;
+    private Datenbank datenbank;
+    private Besitzbuch buch;
+    private ParzellenBefehle befehle;
+    private boolean fluechtig;
 
     @Override
     public void onEnable() {
+        saveDefaultConfig();
+
         marktstadt = ladeMarktstadt();
+        if (marktstadt == null) {
+            getLogger().severe("Ohne Marktstadt gibt es nichts zu verwalten - Freimarken bleibt aus.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        if (!richteAblageEin()) {
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        // Der Schluesseltext, nicht der NamespacedKey: World.key() gibt ein Key zurueck,
+            // und ein Vergleich zwischen beiden ist immer falsch, ohne dass es auffaellt.
+        String welt = marktstadt.key().asString();
+        befehle = new ParzellenBefehle(buch, welt,
+                getConfig().getInt("parzellen.hoechstzahl", 4));
+        getServer().getPluginManager().registerEvents(new Schutzwache(buch, welt), this);
         registriereBefehle();
 
         getLogger().info("Freimarken " + getPluginMeta().getVersion()
                 + " bereit - Java " + Runtime.version().feature()
-                + ", Marktstadt " + (marktstadt != null ? "bereit" : "FEHLT"));
+                + ", Ablage " + (fluechtig ? "FLUECHTIG" : "MariaDB"));
+    }
+
+    @Override
+    public void onDisable() {
+        if (datenbank != null) {
+            datenbank.close();
+            datenbank = null;
+        }
+    }
+
+    /**
+     * Baut Lager und Kasse auf.
+     *
+     * @return {@code false}, wenn eine eingetragene Datenbank nicht erreichbar ist - dann
+     *         soll das Plugin nicht starten
+     */
+    private boolean richteAblageEin() {
+        String url = getConfig().getString("datenbank.url", "").trim();
+        long startguthaben = getConfig().getLong("kasse.startguthaben", 50_000L);
+
+        if (url.isEmpty()) {
+            fluechtig = true;
+            buch = new Besitzbuch(plan, new SpeicherLager(), new SpeicherKasse(startguthaben));
+            getLogger().warning("Keine Datenbank eingetragen: Parzellen und Guthaben gelten "
+                    + "nur bis zum naechsten Neustart.");
+            getLogger().warning("Zum Festhalten datenbank.url in plugins/"
+                    + getName() + "/config.yml ausfuellen.");
+            return true;
+        }
+
+        try {
+            datenbank = new Datenbank(url,
+                    getConfig().getString("datenbank.benutzer", ""),
+                    getConfig().getString("datenbank.passwort", ""));
+            datenbank.migriere();
+            // ZwischenspeicherLager um das MariaLager: darfBauen laeuft bei jedem gesetzten
+            // und abgebauten Block, und das darf keine Abfrage ueber das Netz werden.
+            buch = new Besitzbuch(plan,
+                    new ZwischenspeicherLager(new MariaLager(datenbank)),
+                    new MariaKasse(datenbank, startguthaben));
+            getLogger().info("Datenbank bereit: " + ohneGeheimnis(url));
+            return true;
+        } catch (SQLException | RuntimeException fehler) {
+            getLogger().severe("Die Datenbank ist eingetragen, antwortet aber nicht: "
+                    + fehler.getMessage());
+            getLogger().severe("Freimarken startet nicht. Lieber kein Server als einer, der "
+                    + "Parzellen vergibt und beim Neustart vergisst.");
+            if (datenbank != null) {
+                datenbank.close();
+                datenbank = null;
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Die Adresse ohne alles hinter dem Fragezeichen.
+     *
+     * <p>Dort koennen Benutzer und Passwort stehen, und das Protokoll liest spaeter jemand,
+     * der es nicht lesen soll.
+     */
+    private static String ohneGeheimnis(String url) {
+        int fragezeichen = url.indexOf('?');
+        return fragezeichen < 0 ? url : url.substring(0, fragezeichen);
     }
 
     /**
@@ -89,42 +187,46 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     private void registriereBefehle() {
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, ereignis ->
-                ereignis.registrar().register(
-                        Commands.literal("freimarken")
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, ereignis -> {
+            var verzeichnis = ereignis.registrar();
+            verzeichnis.register(freimarken(),
+                    "Stand, Preise und Welt des Freimarkenbunds", List.of("fm"));
+            verzeichnis.register(befehle.parzelle(),
+                    "Parzellen nehmen, ansehen und verwalten", List.of("pz"));
+            verzeichnis.register(befehle.mark(), "Dein Guthaben in Mark");
+        });
+    }
+
+    private LiteralCommandNode<CommandSourceStack> freimarken() {
+        return Commands.literal("freimarken")
+                .executes(z -> {
+                    zeigeStand(z.getSource().getSender());
+                    return Command.SINGLE_SUCCESS;
+                })
+                .then(Commands.literal("preis")
+                        .then(Commands.argument("besessen",
+                                        IntegerArgumentType.integer(0, 64))
                                 .executes(z -> {
-                                    zeigeStand(z.getSource().getSender());
+                                    zeigePreis(z.getSource().getSender(),
+                                            IntegerArgumentType.getInteger(z, "besessen"));
                                     return Command.SINGLE_SUCCESS;
-                                })
-                                .then(Commands.literal("preis")
-                                        .then(Commands.argument("besessen",
-                                                        IntegerArgumentType.integer(0, 64))
-                                                .executes(z -> {
-                                                    zeigePreis(z.getSource().getSender(),
-                                                            IntegerArgumentType.getInteger(
-                                                                    z, "besessen"));
-                                                    return Command.SINGLE_SUCCESS;
-                                                })))
-                                .then(Commands.literal("welt")
+                                })))
+                .then(Commands.literal("welt")
+                        .executes(z -> {
+                            zeigeWelt(z.getSource().getSender());
+                            return Command.SINGLE_SUCCESS;
+                        }))
+                .then(Commands.literal("parzelle")
+                        .then(Commands.argument("x", IntegerArgumentType.integer(-64, 64))
+                                .then(Commands.argument("z",
+                                                IntegerArgumentType.integer(-64, 64))
                                         .executes(z -> {
-                                            zeigeWelt(z.getSource().getSender());
+                                            bringeZurParzelle(z.getSource().getSender(),
+                                                    IntegerArgumentType.getInteger(z, "x"),
+                                                    IntegerArgumentType.getInteger(z, "z"));
                                             return Command.SINGLE_SUCCESS;
-                                        }))
-                                .then(Commands.literal("parzelle")
-                                        .then(Commands.argument("x",
-                                                        IntegerArgumentType.integer(-64, 64))
-                                                .then(Commands.argument("z",
-                                                                IntegerArgumentType.integer(-64, 64))
-                                                        .executes(z -> {
-                                                            bringeZurParzelle(
-                                                                    z.getSource().getSender(),
-                                                                    IntegerArgumentType.getInteger(z, "x"),
-                                                                    IntegerArgumentType.getInteger(z, "z"));
-                                                            return Command.SINGLE_SUCCESS;
-                                                        }))))
-                                .build(),
-                        "Stand, Preise und Welt des Freimarkenbunds",
-                        List.of("fm")));
+                                        }))))
+                .build();
     }
 
     private void zeigeStand(Audience empfaenger) {
@@ -134,8 +236,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
                         + " · Java " + Runtime.version().feature()
                         + " · " + getServer().getMinecraftVersion(),
                 NamedTextColor.GRAY));
+        empfaenger.sendMessage(fluechtig
+                ? Component.text("Ablage fluechtig - nichts ueberlebt den Neustart",
+                        NamedTextColor.RED)
+                : Component.text("Ablage MariaDB", NamedTextColor.DARK_GRAY));
         empfaenger.sendMessage(Component.text(
-                "/freimarken preis <anzahl> · welt · parzelle <x> <z>", NamedTextColor.GRAY));
+                "/parzelle · /mark · /freimarken preis <anzahl> · welt · parzelle <x> <z>",
+                NamedTextColor.GRAY));
     }
 
     private void zeigePreis(Audience empfaenger, int besessen) {
@@ -143,11 +250,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
         empfaenger.sendMessage(preis == 0L
                 ? Component.text("Die erste Parzelle ist gratis.", NamedTextColor.GREEN)
                 : Component.text("Parzelle Nr. " + (besessen + 1) + " kostet ", NamedTextColor.GRAY)
-                        .append(Component.text(BETRAG.format(preis) + " Mark", NamedTextColor.GOLD))
+                        .append(Component.text(Betraege.mark(preis), NamedTextColor.GOLD))
                         .append(Component.text(".", NamedTextColor.GRAY)));
         empfaenger.sendMessage(Component.text(
-                "Bisher ausgegeben: " + BETRAG.format(Preisstaffel.gesamtpreisFuer(besessen))
-                        + " Mark", NamedTextColor.DARK_GRAY));
+                "Bisher ausgegeben: " + Betraege.mark(Preisstaffel.gesamtpreisFuer(besessen)),
+                NamedTextColor.DARK_GRAY));
     }
 
     /**

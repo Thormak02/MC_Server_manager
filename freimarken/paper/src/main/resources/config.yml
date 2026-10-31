@@ -1,0 +1,27 @@
+# Freimarken - Einstellungen
+#
+# Diese Datei liegt auf dem Server unter plugins/Freimarken/config.yml. Dort stehen
+# Zugangsdaten - sie gehoert nicht ins Git-Verzeichnis und nicht in ein Backup, das
+# weitergegeben wird.
+
+datenbank:
+  # Leer heisst: Es wird nichts gespeichert. Parzellen und Guthaben gelten dann nur bis zum
+  # naechsten Neustart. Gut zum Ausprobieren, nichts fuer den Betrieb.
+  #
+  # Beispiel: jdbc:mariadb://192.168.178.88:3306/freimarken
+  # Die Zugangsdaten legt skripte/mariadb_einrichten.bat an und schreibt sie nach
+  # data/freimarken/datenbank.properties - von dort hierher uebertragen.
+  url: ""
+  benutzer: ""
+  passwort: ""
+
+parzellen:
+  # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
+  # Mehr erlaubt das Recht freimarken.parzellen.<zahl>, etwa freimarken.parzellen.8.
+  # Die hoechste Zahl gewinnt, dieser Wert ist die Untergrenze.
+  hoechstzahl: 4
+
+kasse:
+  # Was ein Spieler beim ersten Mal an Mark mitbringt. Die erste Parzelle ist ohnehin
+  # gratis; dieser Betrag entscheidet, wie weit es ohne Verdienen reicht.
+  startguthaben: 50000

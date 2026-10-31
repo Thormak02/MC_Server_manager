@@ -199,7 +199,7 @@ $inhalt = @"
 # ACHTUNG: Dieser Ordner liegt unter data/ und ist in .gitignore - er gehoert NICHT
 # ins Repository. Wer diese Datei hat, hat die Datenbank.
 url=jdbc:mariadb://127.0.0.1:3306/freimarken
-url.netz=jdbc:mariadb://$rechner:3306/freimarken
+url.netz=jdbc:mariadb://${rechner}:3306/freimarken
 benutzer=freimarken
 passwort=$appPasswort
 
@@ -221,6 +221,6 @@ foreach ($ordner in @($zugangsOrdner, $ZweitAblage)) {
 }
 
 Write-Host "`nFertig." -ForegroundColor Green
-Write-Host "Verbindung aus dem Netz: jdbc:mariadb://$rechner:3306/freimarken"
+Write-Host "Verbindung aus dem Netz: jdbc:mariadb://${rechner}:3306/freimarken"
 Write-Host "Die Zugangsdaten sind ein Geheimnis - nicht ins Repository, nicht in eine"
 Write-Host "Sicherung, die jemand anders lesen kann."

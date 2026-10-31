@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
  * sondern ein gruener Testlauf - und ein Unterschied im Verhalten faellt sofort auf,
  * statt im Betrieb.
  */
-abstract class BesitzLagerVertrag {
+public abstract class BesitzLagerVertrag {
 
     protected static final String WELT = "freimarken:marktstadt";
 

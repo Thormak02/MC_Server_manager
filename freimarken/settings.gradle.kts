@@ -10,4 +10,4 @@ dependencyResolutionManagement {
     }
 }
 
-include("core", "paper")
+include("core", "daten", "paper")

@@ -1,3 +1,13 @@
+plugins {
+    // Macht den Lagervertrag fuer andere Module nutzbar. Ohne das muesste jedes Modul
+    // seine eigene Fassung der Pruefungen schreiben - und genau dann weichen sie ab.
+    `java-test-fixtures`
+}
+
+dependencies {
+    testFixturesImplementation("org.junit.jupiter:junit-jupiter:6.1.3")
+}
+
 // Der Kern hat ABSICHTLICH keine einzige Abhaengigkeit ausser dem JDK.
 //
 // Hier liegen Preisstaffeln, Zusammenlegungsregeln, Mietfristen, Buergerrechte und das

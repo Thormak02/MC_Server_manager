@@ -9,3 +9,12 @@ website: https://friedrich-dietrich.de
 # Keine commands-Liste: Befehle werden ueber die Lifecycle-API als Brigadier-Befehle
 # angemeldet. Dort stehen Argumenttypen, Vervollstaendigung und Rechte je Zweig - hier
 # stuenden nur Platzhalter.
+
+permissions:
+  freimarken.bauen.ueberall:
+    description: Baut und oeffnet auf jeder Parzelle, auch auf fremder
+    default: op
+  # Die Obergrenze kommt ueber ein Recht mit Zahl: freimarken.parzellen.8 erlaubt acht.
+  # Die hoechste Zahl gewinnt, der Wert aus der config.yml ist die Untergrenze. Hier steht
+  # kein Eintrag dafuer, weil die Zahl frei waehlbar ist - eingetragen wird sie in der
+  # Rechteverwaltung, nicht hier.

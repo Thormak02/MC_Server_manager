@@ -1,6 +1,7 @@
 package de.freimarken.kern;
 
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -9,8 +10,13 @@ import java.util.UUID;
  * Die Regeln rund um Parzellenbesitz: nehmen, schuetzen, Mitbauer.
  *
  * <p>Hier steht das Spiel, nicht die Technik. Kein Bukkit, keine Datenbank - nur
- * {@link Rasterplan} fuer die Geometrie und {@link BesitzLager} fuer die Ablage. Dadurch
- * laesst sich jede Regel ohne Server pruefen.
+ * {@link Rasterplan} fuer die Geometrie, {@link BesitzLager} fuer die Ablage und
+ * {@link Kasse} fuer das Geld. Dadurch laesst sich jede Regel ohne Server pruefen.
+ *
+ * <p>Bezahlt wird bewusst hier und nicht beim Aufrufer: Es gibt genau einen Weg, auf dem
+ * eine Parzelle den Besitzer wechselt, und auf genau diesem Weg wird abgebucht. Wer das
+ * Pruefen des Guthabens und das Abbuchen trennt, hat zwei Wege zur selben Tat - und einer
+ * von beiden vergisst irgendwann das Abbuchen.
  *
  * <p>Die Grundregel des Schutzes ist absichtlich streng: Gebaut wird nur auf einer
  * Parzelle, die einem gehoert oder auf der man Mitbauer ist. Wege und Mauern gehoeren
@@ -62,14 +68,30 @@ public final class Besitzbuch {
 
     private final Rasterplan plan;
     private final BesitzLager lager;
+    private final Kasse kasse;
 
-    public Besitzbuch(Rasterplan plan, BesitzLager lager) {
+    public Besitzbuch(Rasterplan plan, BesitzLager lager, Kasse kasse) {
         this.plan = plan;
         this.lager = lager;
+        this.kasse = kasse;
     }
 
     public Rasterplan plan() {
         return plan;
+    }
+
+    public Kasse kasse() {
+        return kasse;
+    }
+
+    /**
+     * Alle Parzellen dieses Spielers in dieser Welt, nach Lage sortiert.
+     *
+     * <p>Geht ueber das Buch und nicht am Lager vorbei: Sonst haette ein Aufrufer zwei
+     * Ansprechpartner, und der Grund, warum das Lager hinter dem Buch liegt, waere hin.
+     */
+    public List<Parzelle> parzellenVon(String welt, UUID spieler) {
+        return lager.vonSpieler(welt, spieler);
     }
 
     /** Die Parzelle an dieser WELTkoordinate, falls dort ueberhaupt Bauland ist. */
@@ -96,15 +118,17 @@ public final class Besitzbuch {
     /**
      * Eine Parzelle nehmen.
      *
+     * <p>Bei Erfolg ist der Preis bereits abgebucht. Bei jedem anderen Bescheid ist
+     * nichts passiert - auch nicht an der Kasse.
+     *
      * @param welt            Weltschluessel
      * @param spieler         wer sie haben will
      * @param weltX           Weltkoordinate, an der er steht
      * @param weltZ           Weltkoordinate, an der er steht
      * @param hoechstzahl     wie viele Parzellen sein Rang erlaubt
-     * @param guthaben        was er an Mark hat
      */
     public Entscheid nehmen(String welt, UUID spieler, int weltX, int weltZ,
-                            int hoechstzahl, long guthaben) {
+                            int hoechstzahl) {
         if (plan.feldBei(weltX, weltZ) != Rasterplan.Feld.PARZELLE) {
             return Entscheid.nein(Bescheid.KEINE_PARZELLE);
         }
@@ -122,12 +146,21 @@ public final class Besitzbuch {
         }
 
         long preis = Preisstaffel.preisFuerNaechste(bereits);
-        if (guthaben < preis) {
+        if (!kasse.abbuchen(spieler, preis)) {
             return Entscheid.nein(Bescheid.ZU_WENIG_MARK, preis);
         }
 
-        Parzelle neu = lager.anlegen(welt, px, pz, spieler, preis);
-        return new Entscheid(Bescheid.ERTEILT, preis, Optional.of(neu));
+        try {
+            Parzelle neu = lager.anlegen(welt, px, pz, spieler, preis);
+            return new Entscheid(Bescheid.ERTEILT, preis, Optional.of(neu));
+        } catch (RuntimeException fehler) {
+            // Das Geld ist weg, die Parzelle nicht gekommen - also zurueck damit. Der Fall
+            // ist nicht theoretisch: Nehmen zwei Spieler im selben Augenblick dieselbe
+            // Parzelle, laesst der eindeutige Schluessel in der Datenbank den zweiten
+            // auflaufen. Ohne diese Gegenbuchung zahlte er fuer nichts.
+            kasse.gutschreiben(spieler, preis);
+            throw fehler;
+        }
     }
 
     /** Einen Mitbauer eintragen. Nur der Eigentuemer darf das. */
