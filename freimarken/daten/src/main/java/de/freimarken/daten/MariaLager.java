@@ -158,10 +158,26 @@ public final class MariaLager implements BesitzLager {
                 }
                 c.commit();
             } catch (SQLException fehler) {
-                c.rollback();
+                // rollback laeuft ueber dieselbe, vielleicht gerade gestorbene Verbindung.
+                // Wirft es, darf seine Ausnahme nicht die eigentliche ersetzen - sonst ist
+                // der Grund des Fehlschlags weg und im Protokoll steht nur noch, dass das
+                // Zuruecknehmen nicht ging.
+                try {
+                    c.rollback();
+                } catch (SQLException beimZuruecknehmen) {
+                    fehler.addSuppressed(beimZuruecknehmen);
+                }
                 throw fehler;
             } finally {
-                c.setAutoCommit(vorherAutomatisch);
+                try {
+                    c.setAutoCommit(vorherAutomatisch);
+                } catch (SQLException beimZuruecksetzen) {
+                    // Jetzt steht die Verbindung womoeglich dauerhaft auf autoCommit=false.
+                    // Weitergegeben wuerde jeder weitere Schreibvorgang in einer
+                    // Transaktion landen, die niemand mehr committet - also lieber weg
+                    // damit, der naechste Zugriff baut eine frische auf.
+                    datenbank.verwerfen();
+                }
             }
             return nachNummer(id).orElseThrow(() ->
                     new IllegalStateException("Keine Parzelle mit der Nummer " + id));

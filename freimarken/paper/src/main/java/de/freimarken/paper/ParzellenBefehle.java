@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -61,15 +62,28 @@ final class ParzellenBefehle {
                 .then(Commands.literal("mitbauer")
                         .executes(fuerSpieler(this::zeigeMitbauer))
                         .then(Commands.literal("hinzu")
-                                .then(spielerName().executes(z -> mitSpieler(z, this::mitbauerHinzu))))
+                                .then(anwesendeNamen()
+                                        .executes(z -> mitOrtUndName(z, this::mitbauerHinzu))))
+                        // Eigener Vorschlagsgeber: Zum Austragen sind die Namen auf der
+                        // Parzelle gefragt, nicht die aller Anwesenden.
                         .then(Commands.literal("weg")
-                                .then(spielerName().executes(z -> mitSpieler(z, this::mitbauerWeg)))))
+                                .then(mitbauerNamen()
+                                        .executes(z -> mitOrtUndName(z, this::mitbauerWeg)))))
                 .then(Commands.literal("aufgeben")
                         .executes(fuerSpieler(this::warneVorAufgeben))
                         // Das zweite Wort ist die Sicherung. Aufgeben zahlt nichts zurueck,
                         // und ein Vertipper darf keine bezahlte Parzelle kosten.
+                        //
+                        // Die Nummer gehoert mit in den Befehl: Ohne sie gab "bestaetigen"
+                        // die Parzelle auf, auf der der Spieler JETZT steht - ein Schritt
+                        // ueber den Weg zwischen Warnung und Bestaetigung kostete die
+                        // falsche, und zurueck gibt es nichts. Die Warnung schreibt die
+                        // Nummer vor, und hier muss sie wieder auftauchen.
                         .then(Commands.literal("bestaetigen")
-                                .executes(fuerSpieler(this::aufgeben))))
+                                .then(Commands.argument("x", IntegerArgumentType.integer())
+                                        .then(Commands.argument("z",
+                                                        IntegerArgumentType.integer())
+                                                .executes(this::aufgeben)))))
                 .build();
     }
 
@@ -228,14 +242,16 @@ final class ParzellenBefehle {
         }
     }
 
-    private void mitbauerHinzu(Player spieler, UUID betroffener, String name) {
-        Optional<Location> hier = ortInMarktstadt(spieler);
-        if (hier.isEmpty()) {
+    private void mitbauerHinzu(Player spieler, Location ort, String name) {
+        Optional<UUID> betroffener = findeSpieler(name);
+        if (betroffener.isEmpty()) {
+            spieler.sendMessage(Component.text(
+                    "Den kenne ich nicht. Er muss einmal auf dem Server gewesen sein.",
+                    NamedTextColor.RED));
             return;
         }
-        Location ort = hier.get();
         var entscheid = buch.mitbauerHinzufuegen(welt, spieler.getUniqueId(),
-                ort.getBlockX(), ort.getBlockZ(), betroffener);
+                ort.getBlockX(), ort.getBlockZ(), betroffener.get());
         switch (entscheid.bescheid()) {
             case ERTEILT -> spieler.sendMessage(Component.text(name + " darf hier jetzt bauen.",
                     NamedTextColor.GREEN));
@@ -245,14 +261,28 @@ final class ParzellenBefehle {
         }
     }
 
-    private void mitbauerWeg(Player spieler, UUID betroffener, String name) {
-        Optional<Location> hier = ortInMarktstadt(spieler);
-        if (hier.isEmpty()) {
+    /**
+     * Traegt einen Mitbauer aus - und sucht ihn zuerst auf der Parzelle selbst.
+     *
+     * <p>Das ist der Unterschied zum Eintragen: Dort muss ein Spieler erst gefunden werden,
+     * hier steht er schon auf einer Liste. Vorher ging auch das Austragen ueber die
+     * Spielerhistorie, und damit war genau der Eintrag unentfernbar, den die Anzeige als
+     * UUID-Anfang zeigt - weil es zu ihm keinen Namen mehr gibt, den jemand nachschlagen
+     * koennte. Gesucht wird gegen dieselbe Zeichenfolge, die die Anzeige ausgibt.
+     */
+    private void mitbauerWeg(Player spieler, Location ort, String name) {
+        Optional<Parzelle> gefunden = buch.parzelleAn(welt, ort.getBlockX(), ort.getBlockZ());
+        Optional<UUID> betroffener = gefunden
+                .flatMap(parzelle -> ausDerListe(parzelle, name))
+                .or(() -> findeSpieler(name));
+        if (betroffener.isEmpty()) {
+            spieler.sendMessage(Component.text(
+                    "Steht hier niemand mit dem Namen - /parzelle mitbauer zeigt die Liste.",
+                    NamedTextColor.RED));
             return;
         }
-        Location ort = hier.get();
         var entscheid = buch.mitbauerEntfernen(welt, spieler.getUniqueId(),
-                ort.getBlockX(), ort.getBlockZ(), betroffener);
+                ort.getBlockX(), ort.getBlockZ(), betroffener.get());
         switch (entscheid.bescheid()) {
             case ERTEILT -> spieler.sendMessage(Component.text(
                     name + " darf hier nicht mehr bauen.", NamedTextColor.GREEN));
@@ -260,6 +290,17 @@ final class ParzellenBefehle {
                     name + " stand gar nicht auf der Liste.", NamedTextColor.YELLOW));
             default -> spieler.sendMessage(absage(entscheid.bescheid()));
         }
+    }
+
+    /** Einen Eintrag der Mitbauerliste an der Zeichenfolge erkennen, die angezeigt wird. */
+    private static Optional<UUID> ausDerListe(Parzelle parzelle, String eingabe) {
+        for (UUID kandidat : parzelle.mitbauer()) {
+            if (namen(kandidat).equalsIgnoreCase(eingabe)
+                    || kandidat.toString().equalsIgnoreCase(eingabe)) {
+                return Optional.of(kandidat);
+            }
+        }
+        return Optional.empty();
     }
 
     private void warneVorAufgeben(Player spieler) {
@@ -279,25 +320,46 @@ final class ParzellenBefehle {
                 + " aufgeben?", NamedTextColor.YELLOW));
         spieler.sendMessage(Component.text(
                 "  Es gibt kein Geld zurueck, und gebaut bleibt stehen.", NamedTextColor.GRAY));
-        spieler.sendMessage(Component.text("  /parzelle aufgeben bestaetigen",
-                NamedTextColor.RED));
+        spieler.sendMessage(Component.text("  /parzelle aufgeben bestaetigen "
+                + parzelle.x() + " " + parzelle.z(), NamedTextColor.RED));
     }
 
-    private void aufgeben(Player spieler) {
+    /**
+     * Gibt die Parzelle auf, die im Befehl steht - nicht die, auf der der Spieler steht.
+     *
+     * <p>Der Unterschied ist der ganze Punkt: Vorher las dieser Zweig den Ort neu ein, und
+     * ein Schritt ueber den Weg zwischen Warnung und Bestaetigung gab die Nachbarparzelle
+     * auf. Jetzt muss der Spieler immer noch auf der Parzelle stehen, die er aufgibt, aber
+     * es muss auch dieselbe sein, die im Befehl steht.
+     */
+    private int aufgeben(CommandContext<CommandSourceStack> zusammenhang) {
+        if (!(zusammenhang.getSource().getExecutor() instanceof Player spieler)) {
+            return Command.SINGLE_SUCCESS;
+        }
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
-            return;
+            return Command.SINGLE_SUCCESS;
         }
         Location ort = hier.get();
+        int gemeintX = IntegerArgumentType.getInteger(zusammenhang, "x");
+        int gemeintZ = IntegerArgumentType.getInteger(zusammenhang, "z");
+        Rasterplan plan = buch.plan();
+        if (plan.parzelleX(ort.getBlockX()) != gemeintX
+                || plan.parzelleZ(ort.getBlockZ()) != gemeintZ) {
+            spieler.sendMessage(Component.text("Du stehst nicht auf Parzelle "
+                    + gemeintX + "/" + gemeintZ + ". Nichts aufgegeben.", NamedTextColor.RED));
+            return Command.SINGLE_SUCCESS;
+        }
         var entscheid = buch.aufgeben(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ());
         if (entscheid.erteilt()) {
             Parzelle weg = entscheid.parzelle().orElseThrow();
             spieler.sendMessage(Component.text("Parzelle " + weg.x() + "/" + weg.z()
                     + " ist wieder frei.", NamedTextColor.GREEN));
-            return;
+            return Command.SINGLE_SUCCESS;
         }
         spieler.sendMessage(absage(entscheid.bescheid()));
+        return Command.SINGLE_SUCCESS;
     }
 
     // --- Kleinteile ------------------------------------------------------------
@@ -358,8 +420,12 @@ final class ParzellenBefehle {
                 continue;
             }
             try {
-                hoechste = Math.max(hoechste, Integer.parseInt(
-                        eintrag.getPermission().substring(RECHT_ANZAHL.length())));
+                // long und dann gekappt: Integer.parseInt haette auch bei einer gueltigen,
+                // nur sehr grossen Zahl geworfen - und die waere dann wie ein Tippfehler
+                // behandelt worden, also stillschweigend als "keine Erhoehung".
+                long gewuenscht = Long.parseLong(
+                        eintrag.getPermission().substring(RECHT_ANZAHL.length()));
+                hoechste = (int) Math.max(hoechste, Math.min(gewuenscht, Integer.MAX_VALUE));
             } catch (NumberFormatException keineZahl) {
                 // "freimarken.parzellen.alle" oder ein Tippfehler - kein Grund fuer einen
                 // Abbruch, nur kein Anlass, die Obergrenze zu heben.
@@ -379,29 +445,57 @@ final class ParzellenBefehle {
     }
 
     /**
-     * Sucht einen Spieler am Namen - ohne ins Netz zu gehen.
+     * Sucht einen Spieler am Namen - ohne ins Netz und ohne durch die Historie zu laufen.
      *
-     * <p>Erst die Anwesenden, dann die, die schon einmal da waren. Absichtlich NICHT
-     * {@code Bukkit.getOfflinePlayer(String)}: Das fragt im Zweifel bei Mojang nach und
-     * haelt dabei den ganzen Server an.
+     * <p>Absichtlich NICHT {@code Bukkit.getOfflinePlayer(String)}: Das fragt im Zweifel bei
+     * Mojang nach und haelt dabei den ganzen Server an.
+     *
+     * <p>Und absichtlich nicht mehr {@code Bukkit.getOfflinePlayers()}: Das baute die Liste
+     * aller je angemeldeten Spieler bei JEDEM Aufruf neu auf, mit einem {@code getName()}
+     * je Eintrag. Ein Spieler, der diesen Befehl mit Zufallsnamen wiederholt, haelt damit
+     * den ganzen Server an - ohne Recht, ohne eigene Parzelle, aus jeder Welt heraus.
+     * {@code getOfflinePlayerIfCached} schaut nur in den Zwischenspeicher und geht nie ins
+     * Netz; der Preis ist, dass ein lange abwesender Spieler nicht gefunden wird, solange
+     * ihn niemand nachgeschlagen hat.
      */
     private static Optional<UUID> findeSpieler(String name) {
         Player anwesend = Bukkit.getPlayerExact(name);
         if (anwesend != null) {
             return Optional.of(anwesend.getUniqueId());
         }
-        for (OfflinePlayer bekannt : Bukkit.getOfflinePlayers()) {
-            if (name.equalsIgnoreCase(bekannt.getName())) {
-                return Optional.of(bekannt.getUniqueId());
-            }
-        }
-        return Optional.empty();
+        OfflinePlayer bekannt = Bukkit.getOfflinePlayerIfCached(name);
+        return bekannt != null ? Optional.of(bekannt.getUniqueId()) : Optional.empty();
     }
 
-    private static RequiredArgumentBuilder<CommandSourceStack, String> spielerName() {
+    /** Zum Eintragen: wer gerade da ist. */
+    private static RequiredArgumentBuilder<CommandSourceStack, String> anwesendeNamen() {
         return Commands.argument("spieler", StringArgumentType.word())
                 .suggests((zusammenhang, bauer) -> {
                     Bukkit.getOnlinePlayers().forEach(p -> bauer.suggest(p.getName()));
+                    return bauer.buildFuture();
+                });
+    }
+
+    /**
+     * Zum Austragen: wer auf dieser Parzelle steht.
+     *
+     * <p>Ohne Meldung und ohne {@link #ortInMarktstadt}: Ein Vorschlagsgeber laeuft bei
+     * jedem Tastendruck. Eine Absage im Chat waere dort kein Hinweis, sondern Laerm.
+     */
+    private RequiredArgumentBuilder<CommandSourceStack, String> mitbauerNamen() {
+        return Commands.argument("spieler", StringArgumentType.word())
+                .suggests((zusammenhang, bauer) -> {
+                    if (zusammenhang.getSource().getExecutor() instanceof Player spieler) {
+                        Location ort = spieler.getLocation();
+                        if (ort.getWorld() != null
+                                && welt.equals(ort.getWorld().key().asString())) {
+                            buch.parzelleAn(welt, ort.getBlockX(), ort.getBlockZ())
+                                    .ifPresent(parzelle -> parzelle.mitbauer().stream()
+                                            .map(ParzellenBefehle::namen)
+                                            .sorted()
+                                            .forEach(bauer::suggest));
+                        }
+                    }
                     return bauer.buildFuture();
                 });
     }
@@ -416,25 +510,29 @@ final class ParzellenBefehle {
         };
     }
 
-    /** Wie {@link #fuerSpieler}, zusaetzlich mit aufgeloestem Spielernamen. */
-    private int mitSpieler(CommandContext<CommandSourceStack> zusammenhang, DreiFachTat tat) {
+    /**
+     * Wie {@link #fuerSpieler}, zusaetzlich mit Ort und dem eingegebenen Namen.
+     *
+     * <p>Die Welt wird hier geprueft, VOR allem anderen. Vorher lief die Namensauflösung
+     * zuerst - und damit auch dann, wenn der Spieler in einer Welt stand, in der es keine
+     * Parzellen gibt. Der Name wird absichtlich unaufgeloest weitergegeben: Eintragen und
+     * Austragen suchen an verschiedenen Stellen.
+     */
+    private int mitOrtUndName(CommandContext<CommandSourceStack> zusammenhang, OrtUndName tat) {
         if (!(zusammenhang.getSource().getExecutor() instanceof Player spieler)) {
             return Command.SINGLE_SUCCESS;
         }
-        String name = StringArgumentType.getString(zusammenhang, "spieler");
-        Optional<UUID> gefunden = findeSpieler(name);
-        if (gefunden.isEmpty()) {
-            spieler.sendMessage(Component.text(
-                    "Den kenne ich nicht. Er muss einmal auf dem Server gewesen sein.",
-                    NamedTextColor.RED));
+        Optional<Location> hier = ortInMarktstadt(spieler);
+        if (hier.isEmpty()) {
             return Command.SINGLE_SUCCESS;
         }
-        tat.fuehreAus(spieler, gefunden.get(), name);
+        tat.fuehreAus(spieler, hier.get(),
+                StringArgumentType.getString(zusammenhang, "spieler"));
         return Command.SINGLE_SUCCESS;
     }
 
     @FunctionalInterface
-    private interface DreiFachTat {
-        void fuehreAus(Player spieler, UUID betroffener, String name);
+    private interface OrtUndName {
+        void fuehreAus(Player spieler, Location ort, String name);
     }
 }

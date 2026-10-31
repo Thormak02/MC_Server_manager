@@ -9,6 +9,15 @@ dependencies {
 }
 
 tasks.jar {
+    manifest {
+        // Der MariaDB-Treiber ist ein Multi-Release-Jar: Unter META-INF/versions/11 liegt
+        // eine eigene Fassung seines SocketHelper, und genau dort stehen die
+        // Socket-Einstellungen, auf die sich socketTimeout stuetzt. Ohne diesen Eintrag
+        // wandert die Datei mit in die Jar, wird aber nie geladen - die JVM sieht das
+        // Verzeichnis gar nicht an.
+        attributes("Multi-Release" to "true")
+    }
+
     // Kern, Datenschicht und der MariaDB-Treiber gehoeren IN die Jar. Der Treiber bewusst
     // mit: Paper liefert keinen mit, und ihn zur Laufzeit nachladen zu lassen hiesse, dass
     // ein Server ohne Internet beim ersten Start nicht hochkommt.

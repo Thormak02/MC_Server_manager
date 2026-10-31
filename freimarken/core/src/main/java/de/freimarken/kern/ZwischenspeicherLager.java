@@ -34,6 +34,9 @@ public final class ZwischenspeicherLager implements BesitzLager {
     /** Wie lange ein gelesener Eintrag gilt. Kurz genug fuer einen zweiten Server. */
     public static final Duration VERFALL = Duration.ofSeconds(30);
 
+    /** Ab so vielen Eintraegen wird beim Einfuegen nach Abgelaufenem gesucht. */
+    private static final int HOECHSTZAHL = 20_000;
+
     private record Eintrag(Optional<Parzelle> parzelle, Instant bis) {
     }
 
@@ -63,6 +66,9 @@ public final class ZwischenspeicherLager implements BesitzLager {
         Eintrag vorhanden = speicher.get(schluessel);
         if (vorhanden != null && uhr.instant().isBefore(vorhanden.bis())) {
             return vorhanden.parzelle();
+        }
+        if (speicher.size() >= HOECHSTZAHL) {
+            raeumeVerfallenes();
         }
         Optional<Parzelle> frisch = wahrheit.finde(welt, x, z);
         speicher.put(schluessel, new Eintrag(frisch, uhr.instant().plus(verfall)));
@@ -100,6 +106,24 @@ public final class ZwischenspeicherLager implements BesitzLager {
     public void entfernen(long id) {
         wahrheit.entfernen(id);
         leeren();
+    }
+
+    /**
+     * Wirft abgelaufene Eintraege weg.
+     *
+     * <p>Sonst wird nur in {@link #leeren()} entfernt, also erst bei einem Schreibvorgang.
+     * Ein Weglaufen ist das nicht: Der Schluessel ist die Parzellennummer und nicht der
+     * Block, also wird der Speicher hoechstens so gross wie die Zahl der je angesehenen
+     * Parzellen - in der Marktstadt gut tausend. Die Grenze ist Vorsorge fuer den Tag, an
+     * dem mehrere Welten dazukommen, und wird im normalen Betrieb nie erreicht.
+     *
+     * <p>Aufgeraeumt wird nur beim Einfuegen und nur oberhalb der Grenze, nicht bei jedem
+     * Nachsehen: Ein Durchlauf ueber alles bei jeder Abfrage waere teurer als der
+     * Zwischenspeicher einbringt.
+     */
+    private void raeumeVerfallenes() {
+        Instant jetzt = uhr.instant();
+        speicher.values().removeIf(eintrag -> !jetzt.isBefore(eintrag.bis()));
     }
 
     /** Alles vergessen. Nach jeder Aenderung und bei Bedarf von aussen. */

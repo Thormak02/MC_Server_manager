@@ -589,7 +589,12 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten 
 
 ~~Testlücken: Admin-Vorbehalt war nur beim ersten Werkzeug geprüft, Byte-Grenze nur behauptet (jetzt über tracemalloc gemessen), Crafting-Tweaks-Hälfte ganz ohne Test.~~
 
-- Freimarken Schritt 5 im Spiel prüfen: zwei Spieler, fremder Grund, /parzelle nehmen|info|mitbauer|aufgeben, /mark.
-- Auf dem Testserver plugins/Freimarken/config.yml mit den MariaDB-Zugangsdaten füllen. Leer heißt flüchtig, das Plugin sagt es im Protokoll und in /freimarken.
+- ~~Freimarken Schritt 5 im Spiel prüfen: zwei Spieler, fremder Grund.~~ 31.10. bestanden: Schutz greift mit Hinweis in der Aktionsleiste, Mitbauer schaltet frei und zu, zweite Parzelle für 25.000 bezahlt, Parzelle -1/0 stimmt. In der Datenbank gegengeprüft.
+- ~~Auf dem Testserver plugins/Freimarken/config.yml mit den MariaDB-Zugangsdaten füllen.~~ Startprobe durch: Treiber wird im Plugin-Klassenlader gefunden, Welt entsteht, Befehle sind angemeldet.
+- **Einmal auf dem Datenbankrechner skripte/mariadb_einrichten.bat erneut ausführen.** Es legt freimarken_test an; ohne das schlägt :daten:test absichtlich fehl. Vorhandene Passwörter bleiben unverändert. Grund: Die Tests leeren vor jedem Test alle Tabellen und liefen vorher gegen das Spielschema.
+- **Weltgrenze einziehen, bevor zum ersten Mal echt gespielt wird.** /parzelle nehmen nimmt heute jede Position; Plan §4 nennt Radius 1.500. Eine Grenze lässt sich nach außen schieben, nach innen nicht - eine draußen gekaufte Parzelle ist später nur durch Entwertung wegzubekommen. Regel in den Kern UND WorldBorder setzen.
+- Vor Schritt 6 entscheiden: kommt das Datenmodell aus §6.1 (art, bereich, eltern_id, zustand, flags) oder bleibt die Parzellen-Tabelle parzellenspezifisch? Schritt 6 (Gruppen), 8 (Ladeneinheit) und 9 (eltern_id) hängen alle daran. Jetzt ist die Tabelle leer, die Wanderung kostet nichts.
+- §4.2 und §14 verlangen "Welt != Code": Weltschlüssel und Rasterplan stehen fest im Code, config.yml hat keinen Welt-Abschnitt. Vor Schritt 3 (acht Welten) umstellen.
 - Noch nicht geschützt (Weltregeln, kein Spielerhandeln): Explosionen, Feuerausbreitung, Kolben über die Grenze, Flüssigkeiten von außen, Trichter in fremde Kisten.
+- Datenbankzugriffe laufen im Hauptfaden. Zeitgrenzen sind gesetzt (socketTimeout 5 s) und der Schutz scheitert geschlossen, aber ein Wiederholungsversuch für Leseoperationen fehlt - ein stiller Verbindungsabbruch kostet eine Absage.
 - Gradle auf der Freigabe: nach "clean" scheitert der nächste Bau daran, dass ein gelöschtes Verzeichnis noch nicht weg ist. Fehlende build-Verzeichnisse von Hand anlegen, dann geht es.

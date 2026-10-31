@@ -71,10 +71,37 @@ public final class Datenbank implements AutoCloseable {
      */
     private static final Driver TREIBER = new org.mariadb.jdbc.Driver();
 
+    /**
+     * Wie lange eine einzelne Anweisung hoechstens auf Antwort wartet.
+     *
+     * <p>Muss gesetzt sein: Der Treiber nimmt ohne Angabe 0, also unbegrenzt. Schlaeft der
+     * Datenbankrechner ein oder verwirft eine Firewall den bestehenden Fluss, wartet eine
+     * Abfrage dann, bis der TCP-Stack von selbst aufgibt - Minuten. Das laeuft im
+     * Hauptfaden des Spielservers, weil der Besitzschutz bei jedem Blockereignis dort
+     * fragt. Fuenf Sekunden sind fuer ein lokales Netz reichlich und fuer einen stehenden
+     * Server kurz genug, dass daraus ein Fehler wird statt eines Stillstands.
+     */
+    private static final String ANTWORTFRIST_MS = "5000";
+
+    /** Wie lange der Aufbau einer neuen Verbindung hoechstens dauern darf. */
+    private static final String AUFBAUFRIST_MS = "3000";
+
+    /**
+     * Wie lange eine einmal gepruefte Verbindung als brauchbar gilt.
+     *
+     * <p>{@code isValid} ist kein lokaler Test, sondern ein Ping ueber das Netz. Bei jedem
+     * Statement geprueft verdoppelt das die Netzrunden: Fuer einen abgebauten Block auf
+     * einer vergebenen Parzelle waren es vier statt zwei. Eine Sekunde Vertrauen kostet
+     * nichts, denn eine Anweisung an einer inzwischen toten Verbindung scheitert mit einer
+     * SQLException - und darauf wird ohnehin neu aufgebaut.
+     */
+    private static final long PRUEFABSTAND_MS = 1_000L;
+
     private final String url;
     private final String benutzer;
     private final String passwort;
     private Connection verbindung;
+    private long zuletztGeprueft;
 
     public Datenbank(String url, String benutzer, String passwort) {
         this.url = url;
@@ -89,8 +116,10 @@ public final class Datenbank implements AutoCloseable {
      * Ein Server, der nachts schlaeft und morgens weiterarbeitet, trifft genau das.
      */
     public synchronized Connection verbindung() throws SQLException {
-        if (verbindung == null || verbindung.isClosed() || !verbindung.isValid(2)) {
+        if (verbindung != null && !brauchbar()) {
             schliesseLeise();
+        }
+        if (verbindung == null) {
             Properties angaben = new Properties();
             angaben.setProperty("user", benutzer);
             angaben.setProperty("password", passwort);
@@ -100,13 +129,39 @@ public final class Datenbank implements AutoCloseable {
             // sonst in die Zeitzone der JVM um, hin wie zurueck.
             angaben.setProperty("connectionTimeZone", "UTC");
             angaben.setProperty("forceConnectionTimeZoneToSession", "true");
+            angaben.setProperty("socketTimeout", ANTWORTFRIST_MS);
+            angaben.setProperty("connectTimeout", AUFBAUFRIST_MS);
             verbindung = TREIBER.connect(url, angaben);
             if (verbindung == null) {
                 // connect() gibt null zurueck, wenn der Treiber die Adresse nicht annimmt.
                 throw new SQLException("Keine MariaDB-Adresse: " + url);
             }
+            zuletztGeprueft = System.nanoTime();
         }
         return verbindung;
+    }
+
+    /**
+     * Ist die gehaltene Verbindung noch zu gebrauchen?
+     *
+     * <p>Gedrosselt: Wurde sie vor weniger als {@link #PRUEFABSTAND_MS} schon geprueft,
+     * gilt sie als gut, ohne dass dafuer ein Ping ueber das Netz geht. nanoTime und nicht
+     * currentTimeMillis, weil nur nanoTime monoton laeuft - eine zurueckgestellte Uhr
+     * wuerde den Abstand sonst negativ machen.
+     */
+    private boolean brauchbar() throws SQLException {
+        if (verbindung.isClosed()) {
+            return false;
+        }
+        long seit = (System.nanoTime() - zuletztGeprueft) / 1_000_000L;
+        if (seit < PRUEFABSTAND_MS) {
+            return true;
+        }
+        boolean gut = verbindung.isValid(2);
+        if (gut) {
+            zuletztGeprueft = System.nanoTime();
+        }
+        return gut;
     }
 
     /** Legt fehlende Tabellen an. Mehrfach aufrufbar. */
@@ -145,12 +200,54 @@ public final class Datenbank implements AutoCloseable {
      *
      * <p>Bewusst {@code DELETE} und kein {@code DROP}: So bleibt das Schema stehen und ein
      * Testlauf prueft weiterhin gegen die echten Schluessel und Fremdschluessel.
+     *
+     * <p>Verweigert jedes Schema, dessen Name nicht auf {@code _test} endet. Die Sperre
+     * sitzt hier und nicht in der Gradle-Datei oder in den Testklassen, weil sie dort von
+     * jedem kuenftigen Testlauf und jeder kuenftigen Testklasse neu eingehalten werden
+     * muesste - und eine davon wuerde es vergessen. Hier fragt die Methode die Datenbank
+     * selbst, wo sie steckt, und kann nicht umgangen werden.
+     *
+     * @throws IllegalStateException wenn die Verbindung nicht in einem Testschema haengt
      */
     public synchronized void leereAlles() throws SQLException {
+        String schema = schemaName();
+        if (!schema.endsWith("_test")) {
+            throw new IllegalStateException(
+                    "leereAlles() verweigert das Schema \"" + schema + "\": Es loescht ALLE "
+                            + "Parzellen, Mitbauer und Guthaben und ist nur fuer Tests "
+                            + "gedacht. Erlaubt sind nur Schemata, deren Name auf _test "
+                            + "endet. In data/freimarken/datenbank.properties gehoert dafuer "
+                            + "url.test, angelegt von skripte/mariadb_einrichten.bat.");
+        }
         try (Statement anweisung = verbindung().createStatement()) {
             anweisung.execute("DELETE FROM parzellen_mitbauer");
             anweisung.execute("DELETE FROM parzellen");
             anweisung.execute("DELETE FROM kassen");
+        }
+    }
+
+    /**
+     * Die gehaltene Verbindung wegwerfen; der naechste Zugriff baut eine neue auf.
+     *
+     * <p>Fuer den Fall, dass ein Aufrufer die Verbindung in einem Zustand zurueckliesse,
+     * den er nicht aufraeumen konnte - etwa mit abgeschaltetem autoCommit, weil schon das
+     * Zurueckstellen gescheitert ist. Eine solche Verbindung weiterzugeben waere der
+     * schlimmste Fall: Schreibvorgaenge landeten in einer Transaktion, die niemand mehr
+     * committet, und verschwinden lautlos.
+     */
+    public synchronized void verwerfen() {
+        schliesseLeise();
+    }
+
+    /** In welchem Schema die Verbindung gerade haengt. Leer, wenn keines gewaehlt ist. */
+    public synchronized String schemaName() throws SQLException {
+        try (Statement anweisung = verbindung().createStatement();
+             var ergebnis = anweisung.executeQuery("SELECT DATABASE()")) {
+            if (!ergebnis.next()) {
+                return "";
+            }
+            String name = ergebnis.getString(1);
+            return name != null ? name : "";
         }
     }
 

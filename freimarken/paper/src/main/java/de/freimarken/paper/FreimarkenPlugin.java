@@ -17,6 +17,8 @@ import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -27,6 +29,7 @@ import org.bukkit.WorldCreator;
 import org.bukkit.entity.Player;
 import org.bukkit.generator.BiomeProvider;
 import org.bukkit.generator.ChunkGenerator;
+import org.bukkit.permissions.Permissible;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -58,14 +61,19 @@ public final class FreimarkenPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
 
-        marktstadt = ladeMarktstadt();
-        if (marktstadt == null) {
-            getLogger().severe("Ohne Marktstadt gibt es nichts zu verwalten - Freimarken bleibt aus.");
+        // Die Ablage ZUERST. Andersherum stand die Marktstadt schon geladen da, wenn
+        // sich das Plugin wegen einer unerreichbaren Datenbank abschaltet - mit ihr eine
+        // Welt voller Parzellen und ohne jede Schutzwache, denn die wird erst weiter unten
+        // angemeldet. Wer zuletzt dort ausgeloggt war, erschiene beim Einloggen genau dort
+        // und duerfte ueberall bauen. Jetzt entsteht im Fehlerfall gar keine Welt.
+        if (!richteAblageEin()) {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
 
-        if (!richteAblageEin()) {
+        marktstadt = ladeMarktstadt();
+        if (marktstadt == null) {
+            getLogger().severe("Ohne Marktstadt gibt es nichts zu verwalten - Freimarken bleibt aus.");
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -189,13 +197,28 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private void registriereBefehle() {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, ereignis -> {
             var verzeichnis = ereignis.registrar();
-            verzeichnis.register(freimarken(),
-                    "Stand, Preise und Welt des Freimarkenbunds", List.of("fm"));
-            verzeichnis.register(befehle.parzelle(),
-                    "Parzellen nehmen, ansehen und verwalten", List.of("pz"));
-            verzeichnis.register(befehle.mark(), "Dein Guthaben in Mark");
+            Set<String> angemeldet = new TreeSet<>();
+            angemeldet.addAll(verzeichnis.register(freimarken(),
+                    "Stand, Preise und Welt des Freimarkenbunds", List.of("fm")));
+            // /p und /konto stehen so im Plan (Abschnitt 11, [entschieden]); /pz bleibt
+            // als zweite Kurzform, weil sie schon im Umlauf ist.
+            angemeldet.addAll(verzeichnis.register(befehle.parzelle(),
+                    "Parzellen nehmen, ansehen und verwalten", List.of("p", "pz")));
+            angemeldet.addAll(verzeichnis.register(befehle.mark(),
+                    "Dein Guthaben in Mark", List.of("konto")));
+
+            // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
+            // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein
+            // Befehl, den es nicht gibt. Ohne diese Ausgabe laesst sich von aussen nicht
+            // feststellen, ob die Anmeldung geklappt hat - und sie passiert hier, in einem
+            // spaeteren Ereignis, nicht in onEnable, also beweist die Bereitmeldung es auch
+            // nicht.
+            getLogger().info("Befehle angemeldet: " + String.join(", ", angemeldet));
         });
     }
+
+    /** Wer nachsehen und sich versetzen darf - nicht jeder Spieler. */
+    private static final String RECHT_VERWALTEN = "freimarken.verwalten";
 
     private LiteralCommandNode<CommandSourceStack> freimarken() {
         return Commands.literal("freimarken")
@@ -211,12 +234,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
                                             IntegerArgumentType.getInteger(z, "besessen"));
                                     return Command.SINGLE_SUCCESS;
                                 })))
+                // Rechte je Zweig: Stand und Preise sind fuer alle, Nachsehen und
+                // Versetzen nicht. Ohne das hatte jeder Spieler einen kostenlosen Teleport
+                // quer durch die Marktstadt - und das unterlaeuft die Rangleiter, an der
+                // Heimatpunkte und Warps spaeter haengen sollen, bevor sie gebaut ist.
                 .then(Commands.literal("welt")
+                        .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
                         .executes(z -> {
                             zeigeWelt(z.getSource().getSender());
                             return Command.SINGLE_SUCCESS;
                         }))
                 .then(Commands.literal("parzelle")
+                        .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
                         .then(Commands.argument("x", IntegerArgumentType.integer(-64, 64))
                                 .then(Commands.argument("z",
                                                 IntegerArgumentType.integer(-64, 64))
@@ -241,8 +270,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
                         NamedTextColor.RED)
                 : Component.text("Ablage MariaDB", NamedTextColor.DARK_GRAY));
         empfaenger.sendMessage(Component.text(
-                "/parzelle · /mark · /freimarken preis <anzahl> · welt · parzelle <x> <z>",
-                NamedTextColor.GRAY));
+                "/parzelle · /mark · /freimarken preis <anzahl>", NamedTextColor.GRAY));
+        if (empfaenger instanceof Permissible darf
+                && darf.hasPermission(RECHT_VERWALTEN)) {
+            empfaenger.sendMessage(Component.text(
+                    "/freimarken welt · parzelle <x> <z>", NamedTextColor.DARK_GRAY));
+        }
     }
 
     private void zeigePreis(Audience empfaenger, int besessen) {

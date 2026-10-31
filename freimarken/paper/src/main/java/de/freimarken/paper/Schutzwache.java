@@ -20,10 +20,13 @@ import org.bukkit.block.Block;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Openable;
 import org.bukkit.block.data.Powerable;
+import org.bukkit.entity.Animals;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Hanging;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Vehicle;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -31,13 +34,20 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+// Liegt in .entity, nicht in .player - anders als sein Gegenstueck PlayerUnleashEntityEvent.
+import org.bukkit.event.entity.PlayerLeashEntityEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerBucketEntityEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerUnleashEntityEvent;
+import org.bukkit.event.vehicle.VehicleDamageEvent;
+import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
@@ -55,6 +65,13 @@ import org.bukkit.inventory.ItemStack;
  * Lavafluss von aussen, Enderman und Ziegen, Trichter, die in fremde Kisten greifen. Das
  * sind Weltregeln, keine Spielerhandlungen, und sie gehoeren zu einem eigenen Schritt.
  *
+ * <p>Diese Liste hat einmal zu viel versprochen: Sie fuehrte nur Weltregeln auf und liess
+ * damit den Eindruck entstehen, Spielerhandlungen seien vollstaendig gedeckt. Es fehlte
+ * jedes Schadensereignis - ein Ruestungsstaender erbt von LivingEntity und stirbt durch
+ * Schlagen, ein bestueckter Bilderrahmen gibt beim ersten Treffer seinen Inhalt her, ohne
+ * dass der Rahmen selbst entfernt wird. Beides war mit der Faust zu holen. Daher jetzt
+ * {@link #beimWesenSchaden} und {@link #beimFahrzeugSchaden}.
+ *
  * <p>Gueltig nur in der eigenen Welt. Andere Welten des Servers gehen diese Wache nichts an.
  */
 public final class Schutzwache implements Listener {
@@ -64,6 +81,9 @@ public final class Schutzwache implements Listener {
 
     /** Eine Absage je Spieler und Pause. Ohne das wird aus Abbauhalten ein Chatregen. */
     private static final long MELDEPAUSE_MS = 2_000L;
+
+    /** So selten wird ein Ausfall der Ablage ins Protokoll geschrieben. */
+    private static final long KLAGEPAUSE_MS = 30_000L;
 
     /**
      * Bloecke, deren Anklicken etwas veraendert, die aber weder Behaelter noch
@@ -77,11 +97,20 @@ public final class Schutzwache implements Listener {
             Material.BELL, Material.CAKE, Material.NOTE_BLOCK, Material.JUKEBOX,
             Material.LECTERN, Material.COMPARATOR, Material.REPEATER,
             Material.DAYLIGHT_DETECTOR, Material.TNT, Material.FARMLAND,
-            Material.TURTLE_EGG, Material.SNIFFER_EGG);
+            Material.TURTLE_EGG, Material.SNIFFER_EGG,
+            // Nachgetragen: Keines davon ist Behaelter, Openable oder Powerable. Das
+            // Leuchtfeuer liess seine Wirkung umstellen, auf dem Lagerfeuer liess sich
+            // fremdes Fleisch braten - und ein nicht gewachstes Schild auf einer
+            // Ladenparzelle liess jeder Besucher umschreiben, samt der Preise darauf.
+            Material.BEACON, Material.CAMPFIRE, Material.SOUL_CAMPFIRE,
+            Material.DECORATED_POT, Material.CHISELED_BOOKSHELF);
 
     /** Ganze Blockgruppen, damit nicht jede Topfpflanze einzeln aufgezaehlt werden muss. */
     private static final List<Tag<Material>> HEIKLE_GRUPPEN = List.of(
-            Tag.FLOWER_POTS, Tag.CANDLES, Tag.CANDLE_CAKES, Tag.CAULDRONS, Tag.BEDS);
+            Tag.FLOWER_POTS, Tag.CANDLES, Tag.CANDLE_CAKES, Tag.CAULDRONS, Tag.BEDS,
+            // ALL_SIGNS deckt Steh- und Wandschilder samt Haengeschildern in allen
+            // Holzarten ab; CAVE_VINES die Leuchtbeeren, die sonst jeder abernten konnte.
+            Tag.ALL_SIGNS, Tag.CAVE_VINES);
 
     /**
      * Gegenstaende, die einen Block veraendern, ohne dass ein Setz- oder Abbauereignis
@@ -108,6 +137,7 @@ public final class Schutzwache implements Listener {
     private final String welt;
 
     private final Map<UUID, Long> letzteMeldung = new HashMap<>();
+    private long letzteKlage;
 
     public Schutzwache(Besitzbuch buch, String welt) {
         this.buch = buch;
@@ -121,6 +151,13 @@ public final class Schutzwache implements Listener {
      *
      * <p>Antwortet {@code true} fuer alles ausserhalb der eigenen Welt: Dort ist diese Wache
      * nicht zustaendig, und "nicht zustaendig" heisst nicht "verboten".
+     *
+     * <p>Fehlt die Antwort, lautet sie nein. Wer nicht nachsehen kann, wem der Grund
+     * gehoert, darf dort nicht bauen. Ohne diesen Fang flog eine Ausnahme aus der
+     * Datenschicht - Netz weg, Zeitgrenze erreicht - aus dem Ereignishandler heraus; Bukkit
+     * schreibt sie ins Protokoll und laesst das Ereignis UNABGEBROCHEN. Ein Aussetzer der
+     * Datenbank waere damit eine Luecke im Besitzschutz gewesen, und zwar die unauffaellige
+     * Sorte: Gebaut wird, der Eintrag im Protokoll liest sich wie ein technisches Problem.
      */
     public boolean darfHandeln(Player spieler, Location ort) {
         World gewaehlt = ort.getWorld();
@@ -130,14 +167,43 @@ public final class Schutzwache implements Listener {
         if (spieler.hasPermission(UEBERALL)) {
             return true;
         }
-        return buch.darfBauen(welt, spieler.getUniqueId(), ort.getBlockX(), ort.getBlockZ());
+        try {
+            return buch.darfBauen(welt, spieler.getUniqueId(), ort.getBlockX(), ort.getBlockZ());
+        } catch (RuntimeException fehler) {
+            klageUeberAblage(fehler);
+            return false;
+        }
     }
 
-    /** Sagt dem Spieler, warum nicht - hoechstens einmal je Pause. */
+    /**
+     * Meldet einen Ausfall der Ablage - hoechstens einmal je Pause.
+     *
+     * <p>Gedrosselt, weil der Fall bei jedem Blockereignis eintreten wuerde: Ohne Drossel
+     * schreibt ein ausgefallener Datenbankrechner in Sekunden ein Protokoll voll und
+     * verdeckt damit jede andere Meldung.
+     */
+    private void klageUeberAblage(RuntimeException fehler) {
+        long jetzt = System.nanoTime();
+        if (letzteKlage != 0L && (jetzt - letzteKlage) / 1_000_000L < KLAGEPAUSE_MS) {
+            return;
+        }
+        letzteKlage = jetzt;
+        Bukkit.getLogger().warning("[Freimarken] Besitz nicht nachsehbar, es wird abgelehnt: "
+                + fehler.getMessage());
+    }
+
+    /**
+     * Sagt dem Spieler, warum nicht - hoechstens einmal je Pause.
+     *
+     * <p>nanoTime und nicht currentTimeMillis: Die Wanduhr laeuft nicht monoton. Wird sie
+     * zurueckgestellt - Zeitumstellung, Zeitabgleich - ist die Differenz negativ und damit
+     * immer kleiner als die Pause. Die Begruendung bliebe dann dauerhaft stumm, und der
+     * Spieler saehe nur, dass nichts passiert.
+     */
     public void verweigere(Player spieler, Location ort) {
-        long jetzt = System.currentTimeMillis();
+        long jetzt = System.nanoTime();
         Long zuletzt = letzteMeldung.get(spieler.getUniqueId());
-        if (zuletzt != null && jetzt - zuletzt < MELDEPAUSE_MS) {
+        if (zuletzt != null && (jetzt - zuletzt) / 1_000_000L < MELDEPAUSE_MS) {
             return;
         }
         letzteMeldung.put(spieler.getUniqueId(), jetzt);
@@ -253,13 +319,104 @@ public final class Schutzwache implements Listener {
      */
     @EventHandler(ignoreCancelled = true)
     public void beimWesenAnklicken(PlayerInteractEntityEvent ereignis) {
-        Entity ziel = ereignis.getRightClicked();
-        if (!(ziel instanceof Hanging) && !(ziel instanceof ArmorStand)) {
-            return;
-        }
-        if (unterbinden(ereignis.getPlayer(), ziel.getLocation())) {
+        if (gehoertZumGrundstueck(ereignis.getRightClicked())
+                && unterbinden(ereignis.getPlayer(), ereignis.getRightClicked().getLocation())) {
             ereignis.setCancelled(true);
         }
+    }
+
+    /**
+     * Ist dieses Wesen Teil dessen, was auf der Parzelle steht?
+     *
+     * <p>{@link InventoryHolder} ist der Grund, warum hier ueberhaupt etwas zu holen ist:
+     * Eine Kisten-Lore und ein Truhenboot tragen genau dasselbe Merkmal, an dem
+     * {@link #istHeikel} einen Behaelterblock erkennt - nur sind sie Wesen und fielen
+     * deshalb durch einen Filter, der nur Hanging und ArmorStand kannte. Wer sie als Lager
+     * auf seine Parzelle stellt, stellte sie jedem offen.
+     *
+     * <p>Tiere sind mit dabei: Sie gehoeren zwar niemandem im Sinne des Besitzbuchs, stehen
+     * aber im Gehege des Eigentuemers. Ein Besucher, der sie fortleint oder erschlaegt,
+     * nimmt ihm etwas weg.
+     */
+    private static boolean gehoertZumGrundstueck(Entity wesen) {
+        return wesen instanceof Hanging
+                || wesen instanceof ArmorStand
+                || wesen instanceof Vehicle
+                || wesen instanceof InventoryHolder
+                || wesen instanceof Animals;
+    }
+
+    /**
+     * Schaden an dem, was auf der Parzelle steht.
+     *
+     * <p>Das war die groesste Luecke: Ein Ruestungsstaender erbt von LivingEntity, ist also
+     * KEIN Hanging - er stirbt durch Schlagen und nicht durch einen Hanging-Break. Und ein
+     * bestueckter Bilderrahmen gibt beim ersten Treffer seinen Inhalt her, ohne dass der
+     * Rahmen selbst entfernt wird; auch dabei faellt kein HangingBreakByEntityEvent. Beides
+     * war mit der Faust zu holen, ohne Meldung und ohne Protokolleintrag.
+     *
+     * <p>Der Schlaeger kann ein Pfeil oder ein Schneeball sein - dann steckt der Spieler im
+     * Schuetzen, nicht im Angreifer.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void beimWesenSchaden(EntityDamageByEntityEvent ereignis) {
+        if (!gehoertZumGrundstueck(ereignis.getEntity())) {
+            return;
+        }
+        Player taeter = urheber(ereignis.getDamager());
+        if (taeter != null && unterbinden(taeter, ereignis.getEntity().getLocation())) {
+            ereignis.setCancelled(true);
+        }
+    }
+
+    /** Loren und Boote; faengt auch {@link VehicleDestroyEvent}, weil es davon erbt. */
+    @EventHandler(ignoreCancelled = true)
+    public void beimFahrzeugSchaden(VehicleDamageEvent ereignis) {
+        Player taeter = urheber(ereignis.getAttacker());
+        if (taeter != null && unterbinden(taeter, ereignis.getVehicle().getLocation())) {
+            ereignis.setCancelled(true);
+        }
+    }
+
+    /** Tiere mit dem Eimer aus dem Teich schoepfen - Axolotl, Kaulquappe, Fisch. */
+    @EventHandler(ignoreCancelled = true)
+    public void beimWesenSchoepfen(PlayerBucketEntityEvent ereignis) {
+        if (unterbinden(ereignis.getPlayer(), ereignis.getEntity().getLocation())) {
+            ereignis.setCancelled(true);
+        }
+    }
+
+    /** Fremde Tiere fortleinen. */
+    @EventHandler(ignoreCancelled = true)
+    public void beimLeinen(PlayerLeashEntityEvent ereignis) {
+        if (unterbinden(ereignis.getPlayer(), ereignis.getEntity().getLocation())) {
+            ereignis.setCancelled(true);
+        }
+    }
+
+    /** Und fremde Tiere losmachen, damit sie weglaufen. */
+    @EventHandler(ignoreCancelled = true)
+    public void beimEntleinen(PlayerUnleashEntityEvent ereignis) {
+        if (unterbinden(ereignis.getPlayer(), ereignis.getEntity().getLocation())) {
+            ereignis.setCancelled(true);
+        }
+    }
+
+    /**
+     * Der Spieler hinter einem Schaden - direkt oder als Schuetze hinter einem Geschoss.
+     *
+     * @return {@code null}, wenn kein Spieler dahintersteht; dann ist es eine Weltregel und
+     *         nicht Sache dieser Wache
+     */
+    private static Player urheber(Entity schlaeger) {
+        if (schlaeger instanceof Player spieler) {
+            return spieler;
+        }
+        if (schlaeger instanceof Projectile geschoss
+                && geschoss.getShooter() instanceof Player schuetze) {
+            return schuetze;
+        }
+        return null;
     }
 
     /**
@@ -280,6 +437,16 @@ public final class Schutzwache implements Listener {
             // bekommt ein Spieler, der ueber fremdes Ackerland laeuft, bei jedem Schritt
             // eine Absage fuer etwas, das er nicht vorhatte.
             if (unterbindenLeise(ereignis.getPlayer(), block.getLocation())) {
+                ereignis.setCancelled(true);
+            }
+            return;
+        }
+        if (ereignis.getAction() == Action.LEFT_CLICK_BLOCK) {
+            // Der Linksklick war gar nicht geprueft. Fuer das Abbauen genuegt
+            // BlockBreakEvent, aber nicht alles am Linksklick ist ein Abbau: Ein Drachenei
+            // springt weg, ein Feuer wird ausgeschlagen, ein Gemaelde faellt. Nur bei
+            // heiklen Bloecken eingreifen, sonst bliebe kein normales Abbauen moeglich.
+            if (istHeikel(block) && unterbinden(ereignis.getPlayer(), block.getLocation())) {
                 ereignis.setCancelled(true);
             }
             return;
@@ -331,6 +498,11 @@ public final class Schutzwache implements Listener {
             return false;
         }
         Material art = gegenstand.getType();
+        // Der einzige Eimer, der keinen Block anfasst. Ohne diese Zeile liess sich auf
+        // fremdem Grund keine Milch trinken - eine Absage fuer etwas, das niemandem schadet.
+        if (art == Material.MILK_BUCKET) {
+            return false;
+        }
         if (art.isBlock() && !art.isAir()) {
             return true;
         }

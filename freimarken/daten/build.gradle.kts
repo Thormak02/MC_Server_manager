@@ -18,20 +18,41 @@ val zugangsDatei = rootProject.projectDir.parentFile
     .resolve("data/freimarken/datenbank.properties")
 
 tasks.test {
-    if (zugangsDatei.isFile) {
-        val angaben = Properties().apply { zugangsDatei.inputStream().use { load(it) } }
+    // Lokale Kopien, und alle Meldungen schon hier fertig gerechnet: Eine doFirst-Lambda,
+    // die eine Variable von der Skriptebene anfasst, haelt in der Kotlin-DSL das ganze
+    // Skriptobjekt fest - und das kann Gradle nicht in den Konfigurationszwischenspeicher
+    // schreiben. Lambdas duerfen deshalb nur noch Zeichenketten sehen.
+    val datei = zugangsDatei
+    val wo = datei.toString()
+
+    if (datei.isFile) {
+        val angaben = Properties().apply { datei.inputStream().use { load(it) } }
+        // AUSSCHLIESSLICH die Testadresse. Die Tests leeren vor jedem Test alle Tabellen -
+        // gegen das Spielschema gerichtet loeschen sie jede Parzelle und jedes Guthaben.
+        // Deshalb gibt es hier kein Ausweichen auf url/url.netz, auch nicht als Notnagel.
         // Vom Entwicklungsrechner geht es ueber das Netz, auf dem Spielserver ueber
-        // localhost. url.netz hat Vorrang, wenn sie da ist.
-        val url = angaben.getProperty("url.netz")?.takeIf { it.isNotBlank() }
-            ?: angaben.getProperty("url")
-        systemProperty("freimarken.db.url", url ?: "")
-        systemProperty("freimarken.db.benutzer", angaben.getProperty("benutzer") ?: "")
-        systemProperty("freimarken.db.passwort", angaben.getProperty("passwort") ?: "")
-        doFirst { logger.lifecycle("Datenbanktests laufen gegen $url") }
-    } else {
-        doFirst {
-            logger.warn("ACHTUNG: ${zugangsDatei} fehlt - die Datenbanktests werden "
-                    + "UEBERSPRUNGEN. Erst skripte/mariadb_einrichten.bat ausfuehren.")
+        // localhost; url.test.netz hat Vorrang, wenn sie da ist.
+        val url = angaben.getProperty("url.test.netz")?.takeIf { it.isNotBlank() }
+            ?: angaben.getProperty("url.test")?.takeIf { it.isNotBlank() }
+
+        if (url == null) {
+            val meldung = "In $wo fehlt url.test (bzw. url.test.netz).\n" +
+                "Die Datenbanktests leeren vor jedem Test alle Tabellen und duerfen daher " +
+                "nur gegen ein Testschema laufen.\n" +
+                "Auf dem Datenbankrechner einmal freimarken/skripte/mariadb_einrichten.bat " +
+                "erneut ausfuehren - es legt freimarken_test an und ergaenzt die Zeile. " +
+                "Vorhandene Passwoerter bleiben dabei unveraendert."
+            doFirst { throw GradleException(meldung) }
+        } else {
+            systemProperty("freimarken.db.url", url)
+            systemProperty("freimarken.db.benutzer", angaben.getProperty("benutzer") ?: "")
+            systemProperty("freimarken.db.passwort", angaben.getProperty("passwort") ?: "")
+            val anzeige = "Datenbanktests laufen gegen $url"
+            doFirst { logger.lifecycle(anzeige) }
         }
+    } else {
+        val meldung = "ACHTUNG: $wo fehlt - die Datenbanktests werden UEBERSPRUNGEN. " +
+            "Erst skripte/mariadb_einrichten.bat ausfuehren."
+        doFirst { logger.warn(meldung) }
     }
 }

@@ -137,17 +137,33 @@ $sql = @"
 CREATE DATABASE IF NOT EXISTS freimarken
   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Zweites Schema nur fuer die Tests. Die Datenbanktests leeren vor jedem Test alle
+-- Tabellen - laufen sie gegen das Spielschema, ist nach einem 'gradlew test' jede
+-- Parzelle und jedes Guthaben weg. Darum ein eigenes, und der Name endet auf _test,
+-- weil die Sperre in Datenbank.leereAlles() genau darauf besteht.
+CREATE DATABASE IF NOT EXISTS freimarken_test
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 CREATE USER IF NOT EXISTS 'freimarken'@'localhost' IDENTIFIED BY '$appPasswort';
 ALTER USER 'freimarken'@'localhost' IDENTIFIED BY '$appPasswort';
 GRANT ALL PRIVILEGES ON freimarken.* TO 'freimarken'@'localhost';
+-- Der Backstrich ist Pflicht: In GRANT ist _ ein Platzhalter fuer ein beliebiges
+-- Zeichen. Ohne ihn gaebe 'freimarken_test' Rechte auf jedes Schema, dessen Name
+-- 'freimarken' plus ein Zeichen plus 'test' lautet. Und KEINE Backticks um den Namen:
+-- Dieses Skript steckt den SQL-Text in einen PowerShell-Here-String, und dort ist der
+-- Backtick das Fluchtzeichen - aus einem vorangestellten Backtick-f wuerde ein
+-- Seitenvorschub statt eines Bezeichners.
+GRANT ALL PRIVILEGES ON freimarken\_test.* TO 'freimarken'@'localhost';
 
 CREATE USER IF NOT EXISTS 'freimarken'@'$LanMuster' IDENTIFIED BY '$appPasswort';
 ALTER USER 'freimarken'@'$LanMuster' IDENTIFIED BY '$appPasswort';
 GRANT ALL PRIVILEGES ON freimarken.* TO 'freimarken'@'$LanMuster';
+GRANT ALL PRIVILEGES ON freimarken\_test.* TO 'freimarken'@'$LanMuster';
 
 FLUSH PRIVILEGES;
 SELECT CONCAT('Schema bereit: ', SCHEMA_NAME) AS stand
-  FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = 'freimarken';
+  FROM information_schema.SCHEMATA
+  WHERE SCHEMA_NAME IN ('freimarken', 'freimarken_test');
 SELECT CONCAT('Benutzer: ', user, '@', host) AS konten
   FROM mysql.user WHERE user = 'freimarken';
 "@
@@ -202,6 +218,12 @@ url=jdbc:mariadb://127.0.0.1:3306/freimarken
 url.netz=jdbc:mariadb://${rechner}:3306/freimarken
 benutzer=freimarken
 passwort=$appPasswort
+
+# Nur fuer die Testlaeufe. Die Tests leeren vor jedem Test alle Tabellen, deshalb duerfen
+# sie das Spielschema nie anfassen. Datenbank.leereAlles() verweigert jedes Schema, dessen
+# Name nicht auf _test endet.
+url.test=jdbc:mariadb://127.0.0.1:3306/freimarken_test
+url.test.netz=jdbc:mariadb://${rechner}:3306/freimarken_test
 
 # Nur fuer Wartung. Das Plugin benutzt root nie.
 root.passwort=$rootPasswort
