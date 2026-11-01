@@ -350,9 +350,39 @@ Drei Festlegungen, die dabei fielen:
   zweiten Weg für Koordinaten benutzen: Auf einem Band liefert `floorDiv` immer die
   **kleinere** Nachbarzelle, also womöglich das Nachbargrundstück.
 
-Was noch fehlt: die Befehle (`/parzelle zusammenlegen`, `auftrennen`) und das Füllen
-des Weges in der Welt. Beide werden zusammen ausgeliefert — nach den Befehlen allein
-dürfte man auf dem Streifen bauen, er sähe aber noch aus wie eine Straße.
+**Stand 01.11.2026 — Befehle und Weltarbeit, der Schritt ist fertig** [entschieden]:
+`/parzelle zusammenlegen <nord|ost|sued|west>` und `/parzelle auftrennen`, beide mit
+Bestätigung samt Parzellennummer, und die Wegfläche wird gefüllt bzw. zurückgebaut.
+
+- **Beim Auftrennen kommt der Weg zurück und räumt dabei, was darauf steht**
+  [entschieden]. Die Warnung nennt die Zahl der Blöcke vorher. Die beiden Alternativen
+  waren schlechter: „erst räumen, sonst Abbruch" fährt den Spieler bei einem großen
+  Gebäude fest und macht die Gruppe faktisch endgültig; „Weg bleibt bebaut, nur das
+  Eigentum fällt" stellt eine Mauer quer über eine öffentliche Straße, die danach
+  niemand mehr entfernen darf.
+- **Zwei Obergrenzen, nicht eine**: `freimarken.parzellen.<n>` begrenzt, wie viel
+  jemand besitzt — das bremst das Flächenhorten; `freimarken.gruppe.<n>`, wie viel er
+  davon zu *einem* Grundstück verbindet — das entscheidet, wie groß ein einzelnes
+  Bauwerk werden kann. Beide lesen dieselbe Rechteauswertung.
+- **`Stadtboden` ist die eine Blocktabelle.** Welcher Block auf Bauland, Mauer und Weg
+  liegt, stand im Weltgenerator — solange der der einzige Schreiber war, reichte das.
+  Mit dem Zurückbau gibt es einen zweiten, und zwei Tabellen wären das Fehlerbild, das
+  niemand sucht: Wer den Weg auf ein anderes Pflaster umstellt, bekäme nach jedem
+  Auftrennen einen Streifen in der alten Farbe mitten in der Stadt, für immer.
+- **Die Ablage führt, die Welt folgt.** Beides zusammen lässt sich nicht sichern — eine
+  Welt kennt keine Transaktion. Scheitert das Blocksetzen, gilt die Ablage: Der Spieler
+  darf dort bauen, es sieht nur noch nicht danach aus. Das ist die harmlose Hälfte des
+  Fehlers; andersherum wäre das Geld weg und das Grundstück nicht da.
+- **Die Fugengeometrie liegt im Kern** (`Gruppenflaeche`), nicht im Blockschreiber. Ob
+  eine Koordinate dazugehört, ist die Frage, bei der ein Fehler teuer ist, und im Kern
+  ist sie ohne Server prüfbar — eine Zelle zu viel fällt sonst erst auf, wenn der
+  Nachbar sich beschwert. Eine Fuge zwischen zwei Feldern sind 448 Blöcke Oberfläche
+  plus 128 Mauerkronen, zusammen 576 Schreibvorgänge; vier Felder im Quadrat rund
+  2.400.
+- **Derselbe Leseweg überall**: `/parzelle info` und die Begründung der Schutzwache
+  lasen die Rasterzelle und hätten auf gefülltem Weg „gehört allen" gesagt — während
+  dieselbe Wache die fremde Hand gerade abgewiesen hatte. Beide lesen jetzt
+  `zustaendigerBesitz`, wie `darfBauen`.
 
 ---
 

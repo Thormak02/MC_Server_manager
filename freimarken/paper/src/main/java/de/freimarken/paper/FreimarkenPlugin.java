@@ -97,8 +97,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Der Schluesseltext, nicht der NamespacedKey: World.key() gibt ein Key zurueck,
             // und ein Vergleich zwischen beiden ist immer falsch, ohne dass es auffaellt.
         String welt = marktstadt.key().asString();
-        befehle = new ParzellenBefehle(buch, welt,
-                getConfig().getInt("parzellen.hoechstzahl", 4));
+        // Die WELT und nicht nur ihr Schluessel: Seit das Zusammenlegen den Weg fuellt,
+        // setzen die Befehle Bloecke. Den Schluesseltext holt sich ParzellenBefehle aus
+        // derselben Welt - zwei Angaben koennten auseinanderlaufen.
+        befehle = new ParzellenBefehle(buch, marktstadt,
+                getConfig().getInt("parzellen.hoechstzahl", 4),
+                getConfig().getInt("parzellen.gruppe-hoechstzahl", 4),
+                getLogger());
         getServer().getPluginManager().registerEvents(new Schutzwache(buch, welt), this);
         registriereBefehle();
 
@@ -204,7 +209,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
             getLogger().severe("Die Marktstadt konnte nicht angelegt werden.");
             return null;
         }
-        welt.setSpawnLocation(plan.mitteX(0), MarktstadtGenerator.BODEN + 1, plan.mitteZ(0));
+        welt.setSpawnLocation(plan.mitteX(0), Stadtboden.BODEN + 1, plan.mitteZ(0));
         getLogger().info("Marktstadt bereit in " + (System.currentTimeMillis() - begonnen)
                 + " ms, Raster " + plan.parzellenKante() + " + " + plan.wegBreite());
         return welt;
@@ -368,7 +373,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         empfaenger.sendMessage(Component.text(
                 "Schluessel " + marktstadt.key().asString()
                         + " · Raster " + plan.parzellenKante() + "+" + plan.wegBreite()
-                        + " · Boden y=" + MarktstadtGenerator.BODEN,
+                        + " · Boden y=" + Stadtboden.BODEN,
                 NamedTextColor.GRAY));
 
         WorldBorder rand = marktstadt.getWorldBorder();
@@ -381,7 +386,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
                         + " je Achse \u00b7 " + grenze.parzellenZahl() + " Stueck",
                 NamedTextColor.GRAY));
 
-        int y = MarktstadtGenerator.BODEN;
+        int y = Stadtboden.BODEN;
         probe(empfaenger, "Parzellenmitte", plan.mitteX(0), y, plan.mitteZ(0));
         probe(empfaenger, "Parzellenrand ", plan.parzellenKante() - 1, y, 10);
         probe(empfaenger, "Mauer         ", plan.parzellenKante(), y, 10);
@@ -409,7 +414,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
             return;
         }
         Location ziel = new Location(marktstadt,
-                plan.mitteX(parzelleX) + 0.5, MarktstadtGenerator.BODEN + 1,
+                plan.mitteX(parzelleX) + 0.5, Stadtboden.BODEN + 1,
                 plan.mitteZ(parzelleZ) + 0.5);
         if (empfaenger instanceof Player spieler) {
             spieler.teleportAsync(ziel);

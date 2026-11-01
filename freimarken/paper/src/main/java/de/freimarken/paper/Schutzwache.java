@@ -211,7 +211,11 @@ public final class Schutzwache implements Listener {
     }
 
     private Component grund(Location ort) {
-        Optional<Parzelle> parzelle = buch.parzelleAn(welt, ort.getBlockX(), ort.getBlockZ());
+        // Derselbe Leseweg wie darfBauen. Mit parzelleAn hiess die Begruendung auf
+        // einer gefuellten Wegflaeche "Weg und Mauer gehoeren allen" - waehrend
+        // dieselbe Wache die Hand gerade abgewiesen hatte, weil sie jemandem gehoert.
+        Optional<Parzelle> parzelle = buch.zustaendigerBesitz(welt, ort.getBlockX(),
+                ort.getBlockZ());
         if (parzelle.isEmpty()) {
             int x = ort.getBlockX();
             int z = ort.getBlockZ();

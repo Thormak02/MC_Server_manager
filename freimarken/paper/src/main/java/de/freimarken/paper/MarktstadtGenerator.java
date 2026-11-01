@@ -34,9 +34,6 @@ import org.bukkit.generator.WorldInfo;
  */
 public final class MarktstadtGenerator extends ChunkGenerator {
 
-    /** Hoehe der begehbaren Oberflaeche. */
-    public static final int BODEN = 62;
-
     private final Rasterplan plan;
     private final BiomeProvider biome = new EinBiom();
 
@@ -55,31 +52,20 @@ public final class MarktstadtGenerator extends ChunkGenerator {
         int oben = daten.getMaxHeight();
 
         daten.setRegion(0, unten, 0, 16, unten + 1, 16, Material.BEDROCK);
-        daten.setRegion(0, unten + 1, 0, 16, BODEN - 3, 16, Material.STONE);
-        daten.setRegion(0, BODEN - 3, 0, 16, BODEN, 16, Material.DIRT);
+        daten.setRegion(0, unten + 1, 0, 16, Stadtboden.ERDE_AB, 16, Material.STONE);
+        daten.setRegion(0, Stadtboden.ERDE_AB, 0, 16, Stadtboden.BODEN, 16, Material.DIRT);
         // Alles oberhalb der Mauerkrone leeren - siehe dritter Punkt oben.
-        daten.setRegion(0, BODEN + 2, 0, 16, oben, 16, Material.AIR);
+        daten.setRegion(0, Stadtboden.BODEN + 2, 0, 16, oben, 16, Material.AIR);
 
         for (int lx = 0; lx < 16; lx++) {
             for (int lz = 0; lz < 16; lz++) {
-                int weltX = chunkX * 16 + lx;
-                int weltZ = chunkZ * 16 + lz;
-                switch (plan.feldBei(weltX, weltZ)) {
-                    case PARZELLE -> {
-                        daten.setBlock(lx, BODEN, lz, Material.GRASS_BLOCK);
-                        daten.setBlock(lx, BODEN + 1, lz, Material.AIR);
-                    }
-                    case WEG -> {
-                        daten.setBlock(lx, BODEN, lz, Material.SMOOTH_STONE);
-                        daten.setBlock(lx, BODEN + 1, lz, Material.AIR);
-                    }
-                    case MAUER -> {
-                        daten.setBlock(lx, BODEN, lz, Material.STONE_BRICKS);
-                        // Halbstufe statt vollem Block: sichtbare Grenze, aber man kommt
-                        // darueber, ohne springen zu muessen.
-                        daten.setBlock(lx, BODEN + 1, lz, Material.STONE_BRICK_SLAB);
-                    }
-                }
+                // Welcher Block wohin gehoert, steht in Stadtboden - in derselben Tabelle,
+                // aus der das Auftrennen einer Gruppe den Weg zurueckbaut. Stuende die
+                // Zuordnung hier, saehe ein zurueckgebauter Weg nach der ersten Aenderung
+                // anders aus als der Rest der Stadt, und zwar fuer immer.
+                Rasterplan.Feld feld = plan.feldBei(chunkX * 16 + lx, chunkZ * 16 + lz);
+                daten.setBlock(lx, Stadtboden.BODEN, lz, Stadtboden.oberflaeche(feld));
+                daten.setBlock(lx, Stadtboden.BODEN + 1, lz, Stadtboden.darueber(feld));
             }
         }
     }
@@ -126,7 +112,8 @@ public final class MarktstadtGenerator extends ChunkGenerator {
     @Override
     public Location getFixedSpawnLocation(World welt, Random zufall) {
         // Mitte der Parzelle 0/0, einen Block ueber dem Boden.
-        return new Location(welt, plan.mitteX(0) + 0.5, BODEN + 1, plan.mitteZ(0) + 0.5);
+        return new Location(welt, plan.mitteX(0) + 0.5, Stadtboden.BODEN + 1,
+                plan.mitteZ(0) + 0.5);
     }
 
     /**

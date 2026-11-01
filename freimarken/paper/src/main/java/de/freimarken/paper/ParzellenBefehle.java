@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
@@ -10,6 +11,7 @@ import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Rasterplan;
+import de.freimarken.kern.Richtung;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.Collection;
@@ -17,11 +19,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.permissions.PermissionAttachmentInfo;
 
@@ -37,17 +43,34 @@ final class ParzellenBefehle {
     /** Mit diesem Recht und einer Zahl dahinter steigt die Obergrenze: {@code .4}, {@code .16}. */
     private static final String RECHT_ANZAHL = "freimarken.parzellen.";
 
+    /** Dasselbe fuer die Felderzahl einer Gruppe: {@code freimarken.gruppe.4}. */
+    private static final String RECHT_GRUPPE = "freimarken.gruppe.";
+
     private final Besitzbuch buch;
+
+    /** Die Welt, in der Bloecke stehen - fuer das Fuellen und Zurueckbauen des Weges. */
+    private final World marktstadt;
 
     /** Die Welt als Schluesseltext - aus demselben Grund wie in {@link Schutzwache}. */
     private final String welt;
 
+    private final Wegbau wegbau;
+    private final Logger protokoll;
     private final int standardHoechstzahl;
+    private final int standardGruppenFelder;
 
-    ParzellenBefehle(Besitzbuch buch, String welt, int standardHoechstzahl) {
+    ParzellenBefehle(Besitzbuch buch, World marktstadt, int standardHoechstzahl,
+                     int standardGruppenFelder, Logger protokoll) {
         this.buch = buch;
-        this.welt = welt;
+        this.marktstadt = marktstadt;
+        // Aus der Welt gelesen und nicht daneben uebergeben: Zwei Angaben fuer dieselbe
+        // Welt koennen auseinanderlaufen, und der Fehler faellt erst auf, wenn ein Befehl
+        // in der Ablage nichts findet, obwohl der Spieler richtig steht.
+        this.welt = marktstadt.key().asString();
+        this.wegbau = new Wegbau(buch.plan(), marktstadt);
         this.standardHoechstzahl = standardHoechstzahl;
+        this.standardGruppenFelder = standardGruppenFelder;
+        this.protokoll = protokoll;
     }
 
     // --- Anmeldung -------------------------------------------------------------
@@ -84,6 +107,16 @@ final class ParzellenBefehle {
                                         .then(Commands.argument("z",
                                                         IntegerArgumentType.integer())
                                                 .executes(this::aufgeben)))))
+                .then(zusammenlegenZweig())
+                .then(Commands.literal("auftrennen")
+                        .executes(fuerSpieler(this::warneVorAuftrennen))
+                        // Zweites Wort und Nummer wie beim Aufgeben: Auftrennen raeumt den
+                        // Weg, und was dort stand, ist danach weg.
+                        .then(Commands.literal("bestaetigen")
+                                .then(Commands.argument("x", IntegerArgumentType.integer())
+                                        .then(Commands.argument("z",
+                                                        IntegerArgumentType.integer())
+                                                .executes(this::auftrennen)))))
                 .build();
     }
 
@@ -114,6 +147,19 @@ final class ParzellenBefehle {
         Rasterplan.Feld feld = plan.feldBei(x, z);
 
         if (feld != Rasterplan.Feld.PARZELLE) {
+            // Erst nachsehen, ob hier eine Gruppe liegt: Nach einem Zusammenlegen ist
+            // diese Stelle Bauland, auch wenn der Rasterplan weiter "Weg" sagt. Ohne
+            // diesen Zweig hiesse es hier "gehoert allen", waehrend die Schutzwache
+            // nebenan fremde Haende abweist - zwei Antworten auf dieselbe Frage.
+            Optional<Parzelle> gruppenboden = buch.zustaendigerBesitz(welt, x, z);
+            if (gruppenboden.isPresent()) {
+                spieler.sendMessage(Component.text("Gruppenboden - war einmal Weg",
+                        NamedTextColor.GOLD));
+                spieler.sendMessage(Component.text("  Eigentuemer: ", NamedTextColor.GRAY)
+                        .append(Component.text(namen(gruppenboden.get().eigentuemer()),
+                                NamedTextColor.WHITE)));
+                return;
+            }
             spieler.sendMessage(Component.text(
                     feld == Rasterplan.Feld.WEG
                             ? "Du stehst auf einem Weg - der gehoert allen."
@@ -152,6 +198,19 @@ final class ParzellenBefehle {
         if (!parzelle.mitbauer().isEmpty()) {
             spieler.sendMessage(Component.text("  Mitbauer: ", NamedTextColor.GRAY)
                     .append(Component.text(namenListe(parzelle.mitbauer()), NamedTextColor.WHITE)));
+        }
+        boolean meine = parzelle.gehoert(spieler.getUniqueId());
+        if (parzelle.hatElternteil()) {
+            spieler.sendMessage(Component.text("  Teil einer Gruppe aus "
+                    + buch.gruppenFelder(welt, x, z).size() + " Feldern",
+                    NamedTextColor.WHITE));
+            if (meine) {
+                spieler.sendMessage(Component.text("  /parzelle auftrennen",
+                        NamedTextColor.DARK_GRAY));
+            }
+        } else if (meine) {
+            spieler.sendMessage(Component.text(
+                    "  /parzelle zusammenlegen <nord|ost|sued|west>", NamedTextColor.DARK_GRAY));
         }
     }
 
@@ -220,7 +279,11 @@ final class ParzellenBefehle {
                     + " · " + (parzelle.preis() == 0L ? "gratis"
                             : Betraege.mark(parzelle.preis()))
                     + (parzelle.mitbauer().isEmpty() ? ""
-                            : " · " + parzelle.mitbauer().size() + " Mitbauer"),
+                            : " · " + parzelle.mitbauer().size() + " Mitbauer")
+                    // Sonst saehe eine Gruppe aus zwei Feldern in der Liste genauso aus
+                    // wie zwei einzelne Parzellen - und der Spieler wuesste nicht, warum
+                    // /parzelle aufgeben bei ihnen nicht geht.
+                    + (parzelle.hatElternteil() ? " · Gruppe" : ""),
                     NamedTextColor.GRAY));
         }
         if (meine.size() < hoechstzahl) {
@@ -236,7 +299,8 @@ final class ParzellenBefehle {
             return;
         }
         Location ort = hier.get();
-        Optional<Parzelle> gefunden = buch.parzelleAn(welt, ort.getBlockX(), ort.getBlockZ());
+        Optional<Parzelle> gefunden = buch.zustaendigerBesitz(welt, ort.getBlockX(),
+                ort.getBlockZ());
         if (gefunden.isEmpty()) {
             spieler.sendMessage(Component.text("Hier ist keine vergebene Parzelle.",
                     NamedTextColor.RED));
@@ -282,7 +346,8 @@ final class ParzellenBefehle {
      * koennte. Gesucht wird gegen dieselbe Zeichenfolge, die die Anzeige ausgibt.
      */
     private void mitbauerWeg(Player spieler, Location ort, String name) {
-        Optional<Parzelle> gefunden = buch.parzelleAn(welt, ort.getBlockX(), ort.getBlockZ());
+        Optional<Parzelle> gefunden = buch.zustaendigerBesitz(welt, ort.getBlockX(),
+                ort.getBlockZ());
         Optional<UUID> betroffener = gefunden
                 .flatMap(parzelle -> ausDerListe(parzelle, name))
                 .or(() -> findeSpieler(name));
@@ -320,13 +385,22 @@ final class ParzellenBefehle {
             return;
         }
         Location ort = hier.get();
-        Optional<Parzelle> gefunden = buch.parzelleAn(welt, ort.getBlockX(), ort.getBlockZ());
+        Optional<Parzelle> gefunden = buch.zustaendigerBesitz(welt, ort.getBlockX(),
+                ort.getBlockZ());
         if (gefunden.isEmpty() || !gefunden.get().gehoert(spieler.getUniqueId())) {
             spieler.sendMessage(Component.text("Das ist nicht deine Parzelle.",
                     NamedTextColor.RED));
             return;
         }
         Parzelle parzelle = gefunden.get();
+        if (parzelle.hatElternteil()) {
+            // Aufgeben verweigert auf einem Gruppenkind. Das sagt sich hier besser als
+            // erst nach der Bestaetigung, mit dem allgemeinen Satz aus absage().
+            spieler.sendMessage(Component.text(
+                    "Die Parzelle gehoert zu einer Gruppe - erst /parzelle auftrennen.",
+                    NamedTextColor.RED));
+            return;
+        }
         spieler.sendMessage(Component.text("Parzelle " + parzelle.x() + "/" + parzelle.z()
                 + " aufgeben?", NamedTextColor.YELLOW));
         spieler.sendMessage(Component.text(
@@ -352,13 +426,8 @@ final class ParzellenBefehle {
             return Command.SINGLE_SUCCESS;
         }
         Location ort = hier.get();
-        int gemeintX = IntegerArgumentType.getInteger(zusammenhang, "x");
-        int gemeintZ = IntegerArgumentType.getInteger(zusammenhang, "z");
-        Rasterplan plan = buch.plan();
-        if (plan.parzelleX(ort.getBlockX()) != gemeintX
-                || plan.parzelleZ(ort.getBlockZ()) != gemeintZ) {
-            spieler.sendMessage(Component.text("Du stehst nicht auf Parzelle "
-                    + gemeintX + "/" + gemeintZ + ". Nichts aufgegeben.", NamedTextColor.RED));
+        if (!stehtAuf(spieler, ort, IntegerArgumentType.getInteger(zusammenhang, "x"),
+                IntegerArgumentType.getInteger(zusammenhang, "z"), "Nichts aufgegeben.")) {
             return Command.SINGLE_SUCCESS;
         }
         var entscheid = buch.aufgeben(welt, spieler.getUniqueId(),
@@ -373,7 +442,241 @@ final class ParzellenBefehle {
         return Command.SINGLE_SUCCESS;
     }
 
+    // --- Zusammenlegen und Auftrennen ------------------------------------------
+
+    /**
+     * Der Zweig {@code /parzelle zusammenlegen <richtung>} - vier Literale, kein Textfeld.
+     *
+     * <p>Brigadier vergleicht die Literale selbst und schlaegt sie vor. Ein Textfeld
+     * muesste den Namen zurueck in eine {@link Richtung} uebersetzen, und dabei liegt die
+     * Falle mit dem Gebietsschema: {@code toUpperCase()} macht aus "sued" auf einem
+     * tuerkischen Rechner "SUED" mit Punkt auf dem I, und der Befehl scheitert auf genau
+     * einem Rechner der Welt. Diese Falle wird hier gar nicht gebaut.
+     */
+    private LiteralArgumentBuilder<CommandSourceStack> zusammenlegenZweig() {
+        LiteralArgumentBuilder<CommandSourceStack> zweig = Commands.literal("zusammenlegen");
+        for (Richtung richtung : Richtung.values()) {
+            zweig.then(Commands.literal(richtung.wort())
+                    .executes(fuerSpieler(spieler -> warneVorZusammenlegen(spieler, richtung)))
+                    // Die Nummer gehoert in die Bestaetigung, genau wie beim Aufgeben: Ohne
+                    // sie legt ein Schritt ueber den Weg zwischen Warnung und Bestaetigung
+                    // ein anderes Paar zusammen - zu einem anderen Preis, und bezahlt ist
+                    // es dann.
+                    .then(Commands.literal("bestaetigen")
+                            .then(Commands.argument("x", IntegerArgumentType.integer())
+                                    .then(Commands.argument("z",
+                                                    IntegerArgumentType.integer())
+                                            .executes(z -> zusammenlegen(z, richtung))))));
+        }
+        return zweig;
+    }
+
+    /**
+     * Was ein Zusammenlegen kosten wuerde - und was es mit dem Weg macht.
+     *
+     * <p>Gerechnet wird mit {@link Besitzbuch#pruefeZusammenlegen}, also mit derselben
+     * Formel, die anschliessend abbucht. Eine eigene Rechnung hier waere der zweite Weg zur
+     * selben Tat, und einer von beiden nennt irgendwann einen anderen Betrag.
+     */
+    private void warneVorZusammenlegen(Player spieler, Richtung richtung) {
+        Optional<Location> hier = ortInMarktstadt(spieler);
+        if (hier.isEmpty()) {
+            return;
+        }
+        Location ort = hier.get();
+        int felder = gruppenFelder(spieler);
+        var entscheid = buch.pruefeZusammenlegen(welt, spieler.getUniqueId(),
+                ort.getBlockX(), ort.getBlockZ(), richtung, felder);
+        if (entscheid.bescheid() == Besitzbuch.Bescheid.GRUPPE_ZU_GROSS) {
+            // Mit Zahl, nicht mit dem allgemeinen Satz: "dein Rang erlaubt nicht mehr"
+            // laesst offen, was er erlaubt.
+            spieler.sendMessage(Component.text("Dein Rang erlaubt hoechstens " + felder
+                    + (felder == 1 ? " Feld" : " Felder") + " je Gruppe.", NamedTextColor.RED));
+            return;
+        }
+        if (!entscheid.erteilt()) {
+            spieler.sendMessage(absage(entscheid.bescheid()));
+            return;
+        }
+
+        Rasterplan plan = buch.plan();
+        int px = plan.parzelleX(ort.getBlockX());
+        int pz = plan.parzelleZ(ort.getBlockZ());
+        long guthaben = buch.kasse().guthaben(spieler.getUniqueId());
+
+        spieler.sendMessage(Component.text("Parzelle " + px + "/" + pz + " mit "
+                + (px + richtung.dx()) + "/" + (pz + richtung.dz()) + " zusammenlegen?",
+                NamedTextColor.YELLOW));
+        spieler.sendMessage(Component.text("  Gebuehr: ", NamedTextColor.GRAY)
+                .append(Component.text(Betraege.mark(entscheid.kosten()), NamedTextColor.GOLD))
+                .append(Component.text(" · du hast " + Betraege.mark(guthaben),
+                        NamedTextColor.GRAY)));
+        spieler.sendMessage(Component.text(
+                "  Der Weg dazwischen wird dein Bauland.", NamedTextColor.GRAY));
+        spieler.sendMessage(Component.text(
+                "  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann",
+                NamedTextColor.GRAY));
+        spieler.sendMessage(Component.text("  darauf steht.", NamedTextColor.GRAY));
+        if (guthaben < entscheid.kosten()) {
+            // Das Geld prueft pruefeZusammenlegen absichtlich nicht - es ist die einzige
+            // Pruefung, die bei Erfolg schreibt. Hier wird nur verglichen.
+            spieler.sendMessage(Component.text("  Dein Guthaben reicht nicht.",
+                    NamedTextColor.RED));
+            return;
+        }
+        spieler.sendMessage(Component.text("  /parzelle zusammenlegen " + richtung.wort()
+                + " bestaetigen " + px + " " + pz, NamedTextColor.YELLOW));
+    }
+
+    private int zusammenlegen(CommandContext<CommandSourceStack> zusammenhang,
+                              Richtung richtung) {
+        if (!(zusammenhang.getSource().getExecutor() instanceof Player spieler)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Optional<Location> hier = ortInMarktstadt(spieler);
+        if (hier.isEmpty()) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Location ort = hier.get();
+        if (!stehtAuf(spieler, ort, IntegerArgumentType.getInteger(zusammenhang, "x"),
+                IntegerArgumentType.getInteger(zusammenhang, "z"), "Nichts zusammengelegt.")) {
+            return Command.SINGLE_SUCCESS;
+        }
+        var entscheid = buch.zusammenlegen(welt, spieler.getUniqueId(),
+                ort.getBlockX(), ort.getBlockZ(), richtung, gruppenFelder(spieler));
+        if (!entscheid.erteilt()) {
+            spieler.sendMessage(absage(entscheid.bescheid()));
+            return Command.SINGLE_SUCCESS;
+        }
+        List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
+        spieler.sendMessage(Component.text("Ein Grundstueck aus " + gruppe.size()
+                + " Feldern.", NamedTextColor.GREEN));
+        spieler.sendMessage(Component.text("  Bezahlt: "
+                + Betraege.mark(entscheid.kosten()) + " · Rest: "
+                + Betraege.mark(buch.kasse().guthaben(spieler.getUniqueId())),
+                NamedTextColor.GRAY));
+        andereDenBoden(spieler, () -> wegbau.fuelle(gruppe), "Der Weg dazwischen ist Bauland");
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Warnt vor dem Auftrennen - und nennt vorher, wie viele Bloecke dabei verschwinden.
+     *
+     * <p>Das ist der Grund, warum es diese Warnung ueberhaupt gibt. Nach dem Zusammenlegen
+     * ist die ehemalige Wegflaeche Bauland, und der Spieler baut dort. Beim Auftrennen muss
+     * der Weg zurueck, sonst stuende eine Mauer quer ueber einer oeffentlichen Strasse, die
+     * niemand mehr entfernen darf. Also wird geraeumt - aber nicht, ohne es vorher zu sagen.
+     */
+    private void warneVorAuftrennen(Player spieler) {
+        Optional<Location> hier = ortInMarktstadt(spieler);
+        if (hier.isEmpty()) {
+            return;
+        }
+        Location ort = hier.get();
+        var entscheid = buch.pruefeAuftrennen(welt, spieler.getUniqueId(),
+                ort.getBlockX(), ort.getBlockZ());
+        if (!entscheid.erteilt()) {
+            spieler.sendMessage(absage(entscheid.bescheid()));
+            return;
+        }
+        Parzelle anker = entscheid.parzelle().orElseThrow();
+        List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
+
+        spieler.sendMessage(Component.text("Grundstueck aus " + gruppe.size()
+                + " Feldern auftrennen?", NamedTextColor.YELLOW));
+        spieler.sendMessage(Component.text(
+                "  Der Weg zwischen den Feldern kommt zurueck. Geld gibt es keines zurueck.",
+                NamedTextColor.GRAY));
+        int bauten = wegbau.bautenAufDemWeg(gruppe);
+        spieler.sendMessage(bauten == 0
+                ? Component.text("  Auf der Wegflaeche steht nichts - es geht nichts verloren.",
+                        NamedTextColor.GRAY)
+                : Component.text("  Dabei verschwinden " + bauten
+                        + " Bloecke, die auf der Wegflaeche stehen.", NamedTextColor.RED));
+        spieler.sendMessage(Component.text("  /parzelle auftrennen bestaetigen "
+                + anker.x() + " " + anker.z(), NamedTextColor.RED));
+    }
+
+    private int auftrennen(CommandContext<CommandSourceStack> zusammenhang) {
+        if (!(zusammenhang.getSource().getExecutor() instanceof Player spieler)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Optional<Location> hier = ortInMarktstadt(spieler);
+        if (hier.isEmpty()) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Location ort = hier.get();
+        if (!stehtAuf(spieler, ort, IntegerArgumentType.getInteger(zusammenhang, "x"),
+                IntegerArgumentType.getInteger(zusammenhang, "z"), "Nichts aufgetrennt.")) {
+            return Command.SINGLE_SUCCESS;
+        }
+        // Die Felder VOR dem Auftrennen holen. Danach gehoert keines mehr zu einer Gruppe,
+        // und welche Flaeche zurueckzubauen waere, liesse sich nicht mehr feststellen.
+        List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
+        var entscheid = buch.auftrennen(welt, spieler.getUniqueId(),
+                ort.getBlockX(), ort.getBlockZ());
+        if (!entscheid.erteilt()) {
+            spieler.sendMessage(absage(entscheid.bescheid()));
+            return Command.SINGLE_SUCCESS;
+        }
+        spieler.sendMessage(Component.text("Aufgetrennt - " + gruppe.size()
+                + " eigenstaendige Parzellen.", NamedTextColor.GREEN));
+        andereDenBoden(spieler, () -> wegbau.baueZurueck(gruppe), "Der Weg ist zurueck");
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Fuehrt die Bodenarbeit aus und sagt, was daraus geworden ist.
+     *
+     * <p>Die Ablage ist an dieser Stelle schon geaendert, und beides zusammen laesst sich
+     * nicht sichern - eine Welt kennt keine Transaktion. Scheitert das Setzen, gilt
+     * trotzdem die Ablage: Der Spieler darf dort bauen, es sieht nur noch nicht danach aus.
+     * Das ist die harmlose Haelfte des Fehlers, und sie gehoert ins Protokoll, nicht in
+     * einen Abbruch - andersherum waere das Geld weg und das Grundstueck nicht da.
+     */
+    private void andereDenBoden(Player spieler, IntSupplier arbeit, String gelungen) {
+        try {
+            spieler.sendMessage(Component.text("  " + gelungen + " (" + arbeit.getAsInt()
+                    + " Bloecke).", NamedTextColor.GRAY));
+        } catch (RuntimeException fehler) {
+            protokoll.log(Level.SEVERE,
+                    "Der Boden der Gruppe liess sich nicht aendern - die Ablage stimmt, "
+                            + "die Welt nicht", fehler);
+            spieler.sendMessage(Component.text(
+                    "  Der Boden liess sich nicht aendern. Die Parzellen stimmen - "
+                            + "sag einem Operator Bescheid.", NamedTextColor.RED));
+        }
+    }
+
     // --- Kleinteile ------------------------------------------------------------
+
+    /**
+     * Ob der Spieler auf der Rasterzelle steht, die im Befehl steht.
+     *
+     * <p>Die Sicherung gegen einen Schritt zwischen Warnung und Bestaetigung, fuer alle
+     * drei Befehle, die etwas Endgueltiges tun. Sie steht an einer Stelle, weil der dritte
+     * sie sonst irgendwann nicht bekommt.
+     *
+     * <p>Gefragt wird nach der Rasterzelle und nicht nach dem zustaendigen Besitz: Beide
+     * nennen dieselbe Nummer - {@code zustaendigerBesitz} sucht die Zeile ja bei
+     * {@code parzelleX/parzelleZ} -, aber die Rasterzelle braucht keine Abfrage.
+     */
+    private boolean stehtAuf(Player spieler, Location ort, int gemeintX, int gemeintZ,
+                             String nichtsPassiert) {
+        Rasterplan plan = buch.plan();
+        if (plan.parzelleX(ort.getBlockX()) == gemeintX
+                && plan.parzelleZ(ort.getBlockZ()) == gemeintZ) {
+            return true;
+        }
+        spieler.sendMessage(Component.text("Du stehst nicht auf Parzelle " + gemeintX + "/"
+                + gemeintZ + ". " + nichtsPassiert, NamedTextColor.RED));
+        return false;
+    }
+
+    /** Ob dieser Ort in der Marktstadt liegt - der eine Vergleich dafuer. */
+    private boolean inDerMarktstadt(Location ort) {
+        return marktstadt.equals(ort.getWorld());
+    }
 
     private Component absage(Besitzbuch.Bescheid bescheid) {
         return Component.text(switch (bescheid) {
@@ -409,7 +712,7 @@ final class ParzellenBefehle {
      */
     private Optional<Location> ortInMarktstadt(Player spieler) {
         Location ort = spieler.getLocation();
-        if (ort.getWorld() != null && welt.equals(ort.getWorld().key().asString())) {
+        if (inDerMarktstadt(ort)) {
             return Optional.of(ort);
         }
         spieler.sendMessage(Component.text(
@@ -434,9 +737,31 @@ final class ParzellenBefehle {
      * die Obergrenze ist eine Spielregel und keine Verwaltungsbefugnis.
      */
     private int hoechstzahl(Player spieler) {
-        int hoechste = standardHoechstzahl;
+        return hoechsteAus(spieler, RECHT_ANZAHL, standardHoechstzahl);
+    }
+
+    /**
+     * Wie viele Felder eine Gruppe dieses Spielers haben darf.
+     *
+     * <p>Eine eigene Grenze und bewusst nicht dieselbe wie {@link #hoechstzahl}: Wie viele
+     * Parzellen jemand besitzt, bremst das Flaechenhorten; wie viele davon er zu EINEM
+     * Grundstueck verbinden darf, entscheidet, wie gross ein einzelnes Bauwerk werden kann.
+     */
+    private int gruppenFelder(Player spieler) {
+        return hoechsteAus(spieler, RECHT_GRUPPE, standardGruppenFelder);
+    }
+
+    /**
+     * Die hoechste Zahl, die ein gesetztes Recht mit diesem Anfang nennt - mindestens die
+     * Vorgabe.
+     *
+     * <p>Eine Auswertung fuer beide Grenzen. Zwei Abschriften derselben Schleife waeren
+     * zwei Orte fuer dieselbe Falle, und die zweite bekaeme den Hinweis unten nicht mit.
+     */
+    private static int hoechsteAus(Player spieler, String recht, int vorgabe) {
+        int hoechste = vorgabe;
         for (PermissionAttachmentInfo eintrag : spieler.getEffectivePermissions()) {
-            if (!eintrag.getValue() || !eintrag.getPermission().startsWith(RECHT_ANZAHL)) {
+            if (!eintrag.getValue() || !eintrag.getPermission().startsWith(recht)) {
                 continue;
             }
             try {
@@ -444,7 +769,7 @@ final class ParzellenBefehle {
                 // nur sehr grossen Zahl geworfen - und die waere dann wie ein Tippfehler
                 // behandelt worden, also stillschweigend als "keine Erhoehung".
                 long gewuenscht = Long.parseLong(
-                        eintrag.getPermission().substring(RECHT_ANZAHL.length()));
+                        eintrag.getPermission().substring(recht.length()));
                 hoechste = (int) Math.max(hoechste, Math.min(gewuenscht, Integer.MAX_VALUE));
             } catch (NumberFormatException keineZahl) {
                 // "freimarken.parzellen.alle" oder ein Tippfehler - kein Grund fuer einen
@@ -507,9 +832,8 @@ final class ParzellenBefehle {
                 .suggests((zusammenhang, bauer) -> {
                     if (zusammenhang.getSource().getExecutor() instanceof Player spieler) {
                         Location ort = spieler.getLocation();
-                        if (ort.getWorld() != null
-                                && welt.equals(ort.getWorld().key().asString())) {
-                            buch.parzelleAn(welt, ort.getBlockX(), ort.getBlockZ())
+                        if (inDerMarktstadt(ort)) {
+                            buch.zustaendigerBesitz(welt, ort.getBlockX(), ort.getBlockZ())
                                     .ifPresent(parzelle -> parzelle.mitbauer().stream()
                                             .map(ParzellenBefehle::namen)
                                             .sorted()

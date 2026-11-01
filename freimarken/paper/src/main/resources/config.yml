@@ -21,6 +21,15 @@ parzellen:
   # Die hoechste Zahl gewinnt, dieser Wert ist die Untergrenze.
   hoechstzahl: 4
 
+  # Wie viele Felder eine zusammengelegte Gruppe haben darf. Mehr erlaubt das Recht
+  # freimarken.gruppe.<zahl>, nach derselben Regel wie oben.
+  #
+  # Das ist eine eigene Grenze und nicht dieselbe wie hoechstzahl: Wie viele Parzellen
+  # jemand besitzt, bremst das Flaechenhorten; wie viele davon er zu EINEM Grundstueck
+  # verbinden darf, entscheidet, wie gross ein einzelnes Bauwerk werden kann. Vier Felder
+  # im Quadrat sind 135 x 135 Bloecke.
+  gruppe-hoechstzahl: 4
+
 kasse:
   # Was ein Spieler beim ersten Mal an Mark mitbringt. Die erste Parzelle ist ohnehin
   # gratis; dieser Betrag entscheidet, wie weit es ohne Verdienen reicht.
