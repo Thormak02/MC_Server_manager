@@ -518,6 +518,40 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
   die Fehler dieses Schritts alle durch Nachrechnen gefunden wurden. Mit Teil D gibt es
   die ersten sieben.
 
+**Stand 01.11.2026 — was die Meldungen sagen** [aus dem Prüflauf über den Befehlspfad]:
+
+- **Drei verschiedene Lagen, drei verschiedene Sätze.** „Hier ist keine Parzelle" stimmt
+  auf dem Weg und vor der Stadtgrenze. Auf freiem Bauland ist es falsch: Die Parzelle
+  gibt es, sie gehört nur noch niemandem — und `/parzelle info` sagt an genau derselben
+  Stelle „frei" und nennt einen Preis. Wer auf denselben Block zwei Antworten bekommt,
+  sucht den Fehler bei sich. Deshalb `NOCH_FREI`, und die Unterscheidung steht in
+  `hindernis` — an einer Stelle, nicht bei den sieben Aufrufern: Sechs davon kommen über
+  `zustaendigerBesitz` und kennen das Feld unter sich gar nicht.
+- **Zweimal zusammenlegen ist kein Hindernis.** Wer denselben Befehl zweimal nimmt, weil
+  er die Meldung im Chatgewimmel übersehen hat, las vorher „Beide Felder gehoeren schon
+  zu einer Gruppe" — als stünde etwas im Weg. Es ist seine. Zwei getrennte Bescheide:
+  `SCHON_ZUSAMMEN` für dieselbe Gruppe, `SCHON_IN_GRUPPE` für zwei verschiedene, und nur
+  der zweite nennt den Ausweg (eine auftrennen, Felder einzeln anhängen).
+- **Wo ein Rang die Grenze setzt, steht die Zahl dabei** — „dein Rang erlaubt nicht mehr"
+  lässt offen, was er denn erlaubt. Und darunter eine Zeile aus der Konfiguration
+  (`hinweise.rang-werbung`), die sagt, wie es auf diesem Server weitergeht.
+- **Werben ja, einladen nein.** `/parzelle info` zeigte auf einer freien Parzelle Preis
+  und „/parzelle nehmen" auch dann, wenn der Rang längst ausgereizt war — eine
+  Aufforderung, die drei Sekunden später mit einer Absage endet. Jetzt bleibt der Preis
+  stehen (er ist wahr und interessant), die Aufforderung verschwindet, und an ihre Stelle
+  tritt die Grenze mit Zahl plus die Werbezeile. Das ist die Trennlinie: zeigen, was es
+  kostet, und sagen, wie man dahin kommt — aber nicht zu etwas auffordern, das gerade
+  nicht geht.
+- **Die Werbezeile ist nicht fest eingebaut.** Was ein Spieler tun muss, um mehr zu
+  dürfen, weiß nur der Server — ein eingebauter Hinweis auf einen Shop, den es dort nicht
+  gibt, wäre schlechter als gar keiner. Die Vorgabe sagt deshalb nur, was ohnehin wahr
+  ist, und sie steht als Konstante im Programm und nicht nur in der `config.yml`:
+  `saveDefaultConfig()` schreibt die Datei nur, wenn es sie noch nicht gibt, und ein
+  Server, der schon läuft, bekäme sonst ausgerechnet gar keinen Hinweis.
+- **Angehängt wird nur, wo der Rang der Grund ist.** Wer zu wenig Geld hat oder auf dem
+  Weg steht, bekommt keine Werbung: Sie würde ihm etwas verkaufen wollen, das sein
+  Problem nicht löst.
+
 - **Gegengeprüft mit einer Mutationsprobe.** Ein grüner Test, der nicht rot werden
   kann, ist schlimmer als kein Test — genau das waren zwei der ersten Proben: Die eine
   verglich ein Material mit sich selbst, die andere benutzte die geprüfte Regel als
@@ -1328,7 +1362,7 @@ Jeder Schritt endet mit etwas, in dem man herumlaufen kann. Keine Fristen.
 | 3 | Welten anlegen, Grenzen, Vorgenerierung, Altfurt als Rohbau (Gebäude aus [2.1](#21-die-gebäude-in-altfurt) als Platzhalter) | man kann durch alle Welten laufen — *Marktstadt steht, übrige Welten offen* |
 | 4 | ~~**Weltgenerator für die Marktstadt** — Raster, Wege, Grenzen~~ **erledigt 31.10.2026** | ~~das Raster steht~~ — `Rasterplan` im Kern (8 Tests ohne Server), `MarktstadtGenerator` im Plugin; am Testserver geprüft: Parzellenmitte Gras, Mauer Steinziegel, Weg glatter Stein, Krone Halbstufe |
 | 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer — **fertig 31.10.2026** | zwei Spieler, einer baut, der andere nicht — *Code steht: `Besitzbuch` mit allen Regeln (Preisstaffel, Obergrenze, Mitbauer, Aufgeben ohne Rückzahlung), `Schutzwache` mit einer Regel für alle 14 Schutzereignisse, `/parzelle` und `/mark`. 89 Tests grün, Startprobe auf einem echten Paper-26.3-Server durch. Danach eine adversariale Prüfung mit 41 Agenten: 9 bestätigte Befunde, alle behoben — darunter fehlender Schutz gegen Schaden an Rüstungsständern und Rahmeninhalt, Kisten-Loren, ein Besitzschutz, der bei Datenbankausfall nach außen offen scheiterte, und Tests, die das Spielschema leerten. Durchgang mit zwei Spielern am 31.10. gelaufen: Der Schutz greift auf fremdem Grund und sagt es in der Aktionsleiste, Mitbauer schaltet frei und wieder zu, die zweite Parzelle wurde fuer 25.000 Mark bezahlt, und Parzelle -1/0 beweist die negative Seite der Rasterrechnung. Jeder Schritt in der Datenbank gegengeprueft* |
-| 6 | Zusammenlegen und Auftrennen mit Gebühr | zwei Parzellen werden eine, der Weg verschwindet |
+| 6 | ~~Zusammenlegen und Auftrennen mit Gebühr~~ **erledigt 01.11.2026** | ~~zwei Parzellen werden eine, der Weg verschwindet~~ — `/parzelle zusammenlegen <richtung>` und `/parzelle auftrennen [alles]`, Gebühr 10.000 je Feld der neuen Gruppe. Die Geometrie liegt im Kern (`Gruppenflaeche`), die Blocktabelle an einer Stelle (`Stadtboden`), die Weltarbeit hinter einem 4-Methoden-Griff (`Weltgriff`), damit sie ohne Server prüfbar ist. Vier Runden Fix-und-Nachweis mit je einem adversarialen Prüflauf: elf bestätigte Befunde, alle behoben, jeder mit Probe und Mutationsnachweis. Drei Spieltests am 1.11. bestanden — zuletzt das Quadrat mit 19 von 19 nachgemessenen Koordinaten. 231 Tests |
 | 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — *das Konto selbst gibt es schon: `Kasse` mit Startguthaben, Abbuchen und Gutschreiben, in MariaDB mit der Deckungsprüfung in der Abfrage. Es fehlen Verdienen, Buchungsprotokoll, Goldmark und Wechselkurs* | man kann Mark verdienen und ausgeben |
 | 8 | Markthalle, Mietverträge, Abholfach, Freie Truhe | ein Laden läuft ab und wird sauber zurückgegeben |
 | 9 | Freistädte: gründen, Grundstücke vergeben, Bürger, Kasse | ein Spieler verkauft einem anderen ein Grundstück |

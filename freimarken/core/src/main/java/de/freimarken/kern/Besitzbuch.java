@@ -28,8 +28,10 @@ public final class Besitzbuch {
     /** Ausgang eines Versuchs. */
     public enum Bescheid {
         ERTEILT,
-        /** Hier ist gar keine Parzelle - Weg, Mauer oder andere Welt. */
+        /** Hier ist gar keine Parzelle - Weg, Mauer, andere Welt oder vor der Stadt. */
         KEINE_PARZELLE,
+        /** Bauland in der Stadt, aber noch niemandem vergeben. Nicht KEINE_PARZELLE. */
+        NOCH_FREI,
         /** Die Parzelle gehoert schon jemandem. */
         SCHON_VERGEBEN,
         /** Jenseits der Stadtgrenze - nicht zu verwechseln mit GRENZE_ERREICHT. */
@@ -269,10 +271,22 @@ public final class Besitzbuch {
         return parzelle.hatElternteil() ? parzelle.elternId() : parzelle.id();
     }
 
-    private static Optional<Entscheid> hindernis(Optional<Parzelle> gefunden, UUID handelnder,
-                                                 AufGruppe aufGruppe) {
+    private Optional<Entscheid> hindernis(Optional<Parzelle> gefunden, UUID handelnder,
+                                          AufGruppe aufGruppe, int weltX, int weltZ) {
         if (gefunden.isEmpty()) {
-            return Optional.of(Entscheid.nein(Bescheid.KEINE_PARZELLE));
+            // "Hier ist keine Parzelle" stimmt auf dem Weg und vor der Stadt - auf freiem
+            // Bauland ist es falsch. Dort GIBT es die Parzelle, sie gehoert nur noch
+            // niemandem, und /parzelle info sagt an derselben Stelle "frei". Ein Spieler,
+            // der zwei verschiedene Antworten auf denselben Block bekommt, sucht den
+            // Fehler bei sich.
+            //
+            // Die Unterscheidung steht hier und nicht bei den sieben Aufrufern: Sie
+            // brauchen alle dieselbe, und sechs davon kommen ueber zustaendigerBesitz,
+            // kennen das Feld unter sich also gar nicht.
+            boolean aufBauland = plan.feldBei(weltX, weltZ) == Rasterplan.Feld.PARZELLE
+                    && grenze.enthaeltParzelle(plan.parzelleX(weltX), plan.parzelleZ(weltZ));
+            return Optional.of(Entscheid.nein(
+                    aufBauland ? Bescheid.NOCH_FREI : Bescheid.KEINE_PARZELLE));
         }
         Parzelle parzelle = gefunden.get();
         if (!parzelle.gehoert(handelnder)) {
@@ -347,7 +361,7 @@ public final class Besitzbuch {
         int px = plan.parzelleX(weltX);
         int pz = plan.parzelleZ(weltZ);
         Optional<Parzelle> hier = lager.finde(welt, px, pz);
-        Optional<Entscheid> stehtEntgegen = hindernis(hier, eigentuemer, AufGruppe.ERLAUBT);
+        Optional<Entscheid> stehtEntgegen = hindernis(hier, eigentuemer, AufGruppe.ERLAUBT, weltX, weltZ);
         if (stehtEntgegen.isPresent()) {
             return stehtEntgegen.get();
         }
@@ -447,7 +461,7 @@ public final class Besitzbuch {
     private Entscheid auftrennenWeg(String welt, UUID eigentuemer, int weltX, int weltZ,
                                     boolean wirklich) {
         Optional<Parzelle> gefunden = zustaendigerBesitz(welt, weltX, weltZ);
-        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.ERLAUBT);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.ERLAUBT, weltX, weltZ);
         if (stehtEntgegen.isPresent()) {
             return stehtEntgegen.get();
         }
@@ -496,7 +510,7 @@ public final class Besitzbuch {
         }
         Optional<Parzelle> hier = lager.finde(welt, plan.parzelleX(weltX),
                 plan.parzelleZ(weltZ));
-        Optional<Entscheid> stehtEntgegen = hindernis(hier, eigentuemer, AufGruppe.ERLAUBT);
+        Optional<Entscheid> stehtEntgegen = hindernis(hier, eigentuemer, AufGruppe.ERLAUBT, weltX, weltZ);
         if (stehtEntgegen.isPresent()) {
             return stehtEntgegen.get();
         }
@@ -533,7 +547,7 @@ public final class Besitzbuch {
     public Entscheid mitbauerHinzufuegen(String welt, UUID eigentuemer, int weltX, int weltZ,
                                          UUID neuerMitbauer) {
         Optional<Parzelle> gefunden = zustaendigerBesitz(welt, weltX, weltZ);
-        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.ERLAUBT);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.ERLAUBT, weltX, weltZ);
         if (stehtEntgegen.isPresent()) {
             return stehtEntgegen.get();
         }
@@ -552,7 +566,7 @@ public final class Besitzbuch {
     public Entscheid mitbauerEntfernen(String welt, UUID eigentuemer, int weltX, int weltZ,
                                        UUID bisherigerMitbauer) {
         Optional<Parzelle> gefunden = zustaendigerBesitz(welt, weltX, weltZ);
-        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.ERLAUBT);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.ERLAUBT, weltX, weltZ);
         if (stehtEntgegen.isPresent()) {
             return stehtEntgegen.get();
         }
@@ -579,7 +593,7 @@ public final class Besitzbuch {
         // VERWEIGERN, nicht ERLAUBT: "/parzelle aufgeben bestaetigen 3 7" nennt EIN Feld.
         // Durchgeschrieben loeschte es die ganze Gruppe - und genau diese Bestaetigung
         // ist die Sicherung, die so etwas verhindern soll.
-        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.VERWEIGERN);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.VERWEIGERN, weltX, weltZ);
         if (stehtEntgegen.isPresent()) {
             return stehtEntgegen.get();
         }

@@ -9,6 +9,7 @@ import static de.freimarken.kern.Besitzbuch.Bescheid.KEINE_GRUPPE;
 import static de.freimarken.kern.Besitzbuch.Bescheid.KEINE_PARZELLE;
 import static de.freimarken.kern.Besitzbuch.Bescheid.NICHT_EIGENTUEMER;
 import static de.freimarken.kern.Besitzbuch.Bescheid.NICHT_EINGETRAGEN;
+import static de.freimarken.kern.Besitzbuch.Bescheid.NOCH_FREI;
 import static de.freimarken.kern.Besitzbuch.Bescheid.SCHON_EINGETRAGEN;
 import static de.freimarken.kern.Besitzbuch.Bescheid.SCHON_IN_GRUPPE;
 import static de.freimarken.kern.Besitzbuch.Bescheid.SCHON_VERGEBEN;
@@ -168,7 +169,24 @@ class BesitzbuchTest {
         lager.anlegen(WELT, 0, 0, anna, 0L);
 
         assertEquals(KEINE_GRUPPE, buch.herausloesen(WELT, anna, mitte(0), 32).bescheid());
-        assertEquals(KEINE_PARZELLE, buch.herausloesen(WELT, anna, mitte(9), 32).bescheid());
+        // Auf 9/0 ist freies Bauland, und das ist NICHT "hier ist keine Parzelle":
+        // Die Parzelle gibt es, sie gehoert nur noch niemandem.
+        assertEquals(NOCH_FREI, buch.herausloesen(WELT, anna, mitte(9), 32).bescheid());
+    }
+
+    @Test
+    @DisplayName("Freies Bauland, Weg und ausserhalb sind drei verschiedene Antworten")
+    void dreierleiNichts() {
+        // Frueher sagten alle drei "Hier ist keine Parzelle". Auf freiem Bauland ist das
+        // falsch - /parzelle info nennt dieselbe Stelle "frei" und bietet sie zum Kauf an.
+        // Wer auf denselben Block zwei verschiedene Antworten bekommt, sucht den Fehler
+        // bei sich.
+        assertEquals(NOCH_FREI, buch.zusammenlegen(WELT, anna, mitte(3), 32,
+                Richtung.OST, VIELE).bescheid(), "freies Bauland in der Stadt");
+        assertEquals(KEINE_PARZELLE, buch.zusammenlegen(WELT, anna, 67, 32,
+                Richtung.OST, VIELE).bescheid(), "auf dem oeffentlichen Weg");
+        assertEquals(KEINE_PARZELLE, buch.zusammenlegen(WELT, anna, mitte(100), 32,
+                Richtung.OST, VIELE).bescheid(), "weit vor der Stadtgrenze");
     }
 
     @Test

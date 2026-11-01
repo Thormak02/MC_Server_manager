@@ -52,6 +52,17 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 public final class FreimarkenPlugin extends JavaPlugin {
 
+    /**
+     * Was ohne Eintrag in der Konfiguration unter einer Rangabsage steht.
+     *
+     * <p>Hier und nicht nur in der config.yml: {@code saveDefaultConfig()} schreibt die
+     * Datei nur, wenn es sie noch nicht gibt. Auf einem Server, der schon laeuft, fehlt
+     * der neue Eintrag also - und mit einer leeren Vorgabe bekaeme ausgerechnet der gar
+     * keinen Hinweis. Der Satz sagt nur, was ohnehin wahr ist; wie es auf DIESEM Server
+     * weitergeht, traegt der Betreiber in die config.yml ein.
+     */
+    private static final String WERBUNG_VORGABE = "Mehr erlaubt ein hoeherer Rang.";
+
     private final Rasterplan plan = Rasterplan.marktstadt();
     private final MarktstadtGenerator generator = new MarktstadtGenerator(plan);
 
@@ -103,6 +114,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         befehle = new ParzellenBefehle(buch, marktstadt,
                 getConfig().getInt("parzellen.hoechstzahl", 4),
                 getConfig().getInt("parzellen.gruppe-hoechstzahl", 4),
+                getConfig().getString("hinweise.rang-werbung", WERBUNG_VORGABE),
                 getLogger());
         getServer().getPluginManager().registerEvents(new Schutzwache(buch, welt), this);
         registriereBefehle();

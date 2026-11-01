@@ -30,6 +30,27 @@ parzellen:
   # im Quadrat sind 135 x 135 Bloecke.
   gruppe-hoechstzahl: 4
 
+hinweise:
+  # Eine Zeile, die der Spieler zusaetzlich sieht, wenn sein RANG die Grenze setzt: beim
+  # Kauf einer weiteren Parzelle, beim Zusammenlegen und auf einer freien Parzelle, die er
+  # nicht mehr nehmen darf. Was der Rang erlaubt, steht schon in der Zeile davor - hier
+  # gehoert hin, wie es auf DIESEM Server weitergeht.
+  #
+  # Beispiel: "Mehr Parzellen gibt es mit dem Rang Buerger - rund 40 Spielstunden und
+  # eine bebaute Parzelle."
+  #
+  # Versprich hier nichts, was es nicht gibt - weder einen Befehl noch einen Weg. Der Satz
+  # erscheint genau in dem Augenblick, in dem der Spieler abgewiesen wurde; ein Hinweis
+  # auf einen Shop oder einen /rang-Befehl, den es nicht gibt, ist dann aergerlicher als
+  # gar keiner.
+  #
+  # Und er darf den Raengen nicht widersprechen: Nach Plan 9 werden sie ERSPIELT, nicht
+  # gekauft, und eine Mitgliedschaft gibt ausdruecklich keine Macht. "Kauf dir mehr
+  # Parzellen" waere hier also nicht nur Werbung, sondern falsch.
+  #
+  # Leer lassen heisst: kein Hinweis.
+  rang-werbung: "Mehr erlaubt ein hoeherer Rang."
+
 kasse:
   # Was ein Spieler beim ersten Mal an Mark mitbringt. Die erste Parzelle ist ohnehin
   # gratis; dieser Betrag entscheidet, wie weit es ohne Verdienen reicht.

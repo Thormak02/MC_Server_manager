@@ -59,8 +59,18 @@ final class ParzellenBefehle {
     private final int standardHoechstzahl;
     private final int standardGruppenFelder;
 
+    /**
+     * Die eine Zeile, die angehaengt wird, wenn ein Rang die Grenze setzt - leer heisst:
+     * keine.
+     *
+     * <p>Aus der Konfiguration und nicht fest im Programm: Was ein Spieler tun muss, um
+     * mehr zu duerfen, weiss nur der Server. Ein eingebauter Hinweis auf einen Shop, den
+     * es dort nicht gibt, waere schlechter als gar keiner.
+     */
+    private final String rangWerbung;
+
     ParzellenBefehle(Besitzbuch buch, World marktstadt, int standardHoechstzahl,
-                     int standardGruppenFelder, Logger protokoll) {
+                     int standardGruppenFelder, String rangWerbung, Logger protokoll) {
         this.buch = buch;
         this.marktstadt = marktstadt;
         // Aus der Welt gelesen und nicht daneben uebergeben: Zwei Angaben fuer dieselbe
@@ -70,6 +80,7 @@ final class ParzellenBefehle {
         this.wegbau = new Wegbau(buch.plan(), new Weltgriff.AufDerWelt(marktstadt));
         this.standardHoechstzahl = standardHoechstzahl;
         this.standardGruppenFelder = standardGruppenFelder;
+        this.rangWerbung = rangWerbung == null ? "" : rangWerbung.trim();
         this.protokoll = protokoll;
     }
 
@@ -193,10 +204,24 @@ final class ParzellenBefehle {
                 return;
             }
             long preis = Preisstaffel.preisFuerNaechste(anzahl(spieler));
+            boolean amLimit = anzahl(spieler) >= hoechstzahl(spieler);
+            // Der Preis bleibt stehen, die Einladung nicht. Wer vier von vier Parzellen
+            // hat, soll ruhig sehen, was die fuenfte kosten WUERDE - aber "/parzelle
+            // nehmen" darunter ist eine Aufforderung, die an derselben Stelle mit einer
+            // Absage endet. Genau das ist der Unterschied zwischen Werbung und Irrefuehrung.
             spieler.sendMessage(Component.text("  frei · ", NamedTextColor.GRAY)
                     .append(Component.text(preis == 0L ? "gratis" : Betraege.mark(preis),
-                            NamedTextColor.GREEN))
-                    .append(Component.text(" · /parzelle nehmen", NamedTextColor.DARK_GRAY)));
+                            amLimit ? NamedTextColor.GRAY : NamedTextColor.GREEN))
+                    .append(amLimit
+                            ? Component.empty()
+                            : Component.text(" · /parzelle nehmen", NamedTextColor.DARK_GRAY)));
+            if (amLimit) {
+                spieler.sendMessage(Component.text("  Dein Rang erlaubt "
+                        + hoechstzahl(spieler)
+                        + (hoechstzahl(spieler) == 1 ? " Parzelle" : " Parzellen")
+                        + ", und so viele hast du schon.", NamedTextColor.RED));
+                werbung(spieler);
+            }
             return;
         }
 
@@ -256,10 +281,13 @@ final class ParzellenBefehle {
                             "Die gehoert schon ", NamedTextColor.RED)
                     .append(Component.text(namen(entscheid.parzelle().orElseThrow().eigentuemer()),
                             NamedTextColor.WHITE)));
-            case GRENZE_ERREICHT -> spieler.sendMessage(Component.text(
-                    "Du hast schon " + hoechstzahl
-                            + (hoechstzahl == 1 ? " Parzelle" : " Parzellen")
-                            + " - mehr erlaubt dein Rang nicht.", NamedTextColor.RED));
+            case GRENZE_ERREICHT -> {
+                spieler.sendMessage(Component.text(
+                        "Du hast schon " + hoechstzahl
+                                + (hoechstzahl == 1 ? " Parzelle" : " Parzellen")
+                                + " - mehr erlaubt dein Rang nicht.", NamedTextColor.RED));
+                werbung(spieler);
+            }
             case ZU_WENIG_MARK -> spieler.sendMessage(Component.text("Die kostet ",
                             NamedTextColor.RED)
                     .append(Component.text(Betraege.mark(entscheid.kosten()), NamedTextColor.GOLD))
@@ -345,7 +373,7 @@ final class ParzellenBefehle {
                     NamedTextColor.GREEN));
             case SCHON_EINGETRAGEN -> spieler.sendMessage(Component.text(
                     name + " darf hier ohnehin bauen.", NamedTextColor.YELLOW));
-            default -> spieler.sendMessage(absage(entscheid.bescheid()));
+            default -> absage(spieler, entscheid.bescheid());
         }
     }
 
@@ -377,7 +405,7 @@ final class ParzellenBefehle {
                     name + " darf hier nicht mehr bauen.", NamedTextColor.GREEN));
             case NICHT_EINGETRAGEN -> spieler.sendMessage(Component.text(
                     name + " stand gar nicht auf der Liste.", NamedTextColor.YELLOW));
-            default -> spieler.sendMessage(absage(entscheid.bescheid()));
+            default -> absage(spieler, entscheid.bescheid());
         }
     }
 
@@ -451,7 +479,7 @@ final class ParzellenBefehle {
                     + " ist wieder frei.", NamedTextColor.GREEN));
             return Command.SINGLE_SUCCESS;
         }
-        spieler.sendMessage(absage(entscheid.bescheid()));
+        absage(spieler, entscheid.bescheid());
         return Command.SINGLE_SUCCESS;
     }
 
@@ -505,10 +533,11 @@ final class ParzellenBefehle {
             // laesst offen, was er erlaubt.
             spieler.sendMessage(Component.text("Dein Rang erlaubt hoechstens " + felder
                     + (felder == 1 ? " Feld" : " Felder") + " je Gruppe.", NamedTextColor.RED));
+            werbung(spieler);
             return;
         }
         if (!entscheid.erteilt()) {
-            spieler.sendMessage(absage(entscheid.bescheid()));
+            absage(spieler, entscheid.bescheid());
             return;
         }
 
@@ -570,7 +599,7 @@ final class ParzellenBefehle {
         var entscheid = buch.zusammenlegen(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ(), richtung, gruppenFelder(spieler));
         if (!entscheid.erteilt()) {
-            spieler.sendMessage(absage(entscheid.bescheid()));
+            absage(spieler, entscheid.bescheid());
             return Command.SINGLE_SUCCESS;
         }
         List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
@@ -602,7 +631,7 @@ final class ParzellenBefehle {
         var entscheid = buch.pruefeAuftrennen(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ());
         if (!entscheid.erteilt()) {
-            spieler.sendMessage(absage(entscheid.bescheid()));
+            absage(spieler, entscheid.bescheid());
             return;
         }
         Parzelle anker = entscheid.parzelle().orElseThrow();
@@ -637,7 +666,7 @@ final class ParzellenBefehle {
         var entscheid = buch.pruefeHerausloesen(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ());
         if (!entscheid.erteilt()) {
-            spieler.sendMessage(absage(entscheid.bescheid()));
+            absage(spieler, entscheid.bescheid());
             return;
         }
         Parzelle feld = entscheid.parzelle().orElseThrow();
@@ -742,7 +771,7 @@ final class ParzellenBefehle {
         var entscheid = buch.herausloesen(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ());
         if (!entscheid.erteilt()) {
-            spieler.sendMessage(absage(entscheid.bescheid()));
+            absage(spieler, entscheid.bescheid());
             return Command.SINGLE_SUCCESS;
         }
         Parzelle feld = entscheid.parzelle().orElseThrow();
@@ -779,7 +808,7 @@ final class ParzellenBefehle {
         var entscheid = buch.auftrennen(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ());
         if (!entscheid.erteilt()) {
-            spieler.sendMessage(absage(entscheid.bescheid()));
+            absage(spieler, entscheid.bescheid());
             return Command.SINGLE_SUCCESS;
         }
         spieler.sendMessage(Component.text("Aufgetrennt - " + gruppe.size()
@@ -845,13 +874,36 @@ final class ParzellenBefehle {
         return marktstadt.equals(ort.getWorld());
     }
 
-    private Component absage(Besitzbuch.Bescheid bescheid) {
-        return Component.text(switch (bescheid) {
+    /**
+     * Die Absage an den Spieler: der Satz - und wo ein RANG die Grenze setzt, die Werbung
+     * dahinter.
+     *
+     * <p>Beides hier und nicht an den zehn Aufrufstellen. Ein Hinweis, den neun von zehn
+     * Wegen kennen, wirkt auf den zehnten wie ein Zufall, und der Spieler sucht beim
+     * naechsten Mal vergeblich danach.
+     *
+     * <p>Angehaengt wird nur, wo der Rang wirklich der Grund ist. Wer zu wenig Geld hat
+     * oder auf dem Weg steht, bekommt keine Werbung - sie wuerde ihm etwas verkaufen
+     * wollen, das sein Problem nicht loest.
+     */
+    private void absage(Player spieler, Besitzbuch.Bescheid bescheid) {
+        boolean amLimit = anzahl(spieler) >= hoechstzahl(spieler);
+        spieler.sendMessage(Component.text(switch (bescheid) {
             case KEINE_PARZELLE -> "Hier ist keine Parzelle.";
+            case NOCH_FREI -> amLimit
+                    ? "Diese Parzelle gehoert noch niemandem - aber dein Rang erlaubt "
+                            + hoechstzahl(spieler)
+                            + (hoechstzahl(spieler) == 1 ? " Parzelle" : " Parzellen")
+                            + ", und so viele hast du schon."
+                    : "Diese Parzelle gehoert noch niemandem - nimm sie mit "
+                            + "/parzelle nehmen.";
             case NICHT_EIGENTUEMER -> "Das darf nur der Eigentuemer.";
             case SCHON_VERGEBEN -> "Die gehoert schon jemandem.";
             case AUSSERHALB -> "Das liegt ausserhalb der Marktstadt.";
-            case GRENZE_ERREICHT -> "Dein Rang erlaubt nicht mehr Parzellen.";
+            // Mit der Zahl: "nicht mehr" laesst offen, wie viele es denn sind.
+            case GRENZE_ERREICHT -> "Dein Rang erlaubt " + hoechstzahl(spieler)
+                    + (hoechstzahl(spieler) == 1 ? " Parzelle" : " Parzellen")
+                    + ", und so viele hast du schon.";
             case ZU_WENIG_MARK -> "Dein Guthaben reicht nicht.";
             case SCHON_EINGETRAGEN -> "Steht schon auf der Liste.";
             case NICHT_EINGETRAGEN -> "Stand gar nicht auf der Liste.";
@@ -862,12 +914,30 @@ final class ParzellenBefehle {
             case SCHON_IN_GRUPPE -> "Die beiden gehoeren zu zwei verschiedenen "
                     + "Grundstuecken. Trenne eines auf und haenge die Felder einzeln an.";
             case SCHON_ZUSAMMEN -> "Die beiden sind schon dasselbe Grundstueck.";
-            case GRUPPE_ZU_GROSS -> "Dein Rang erlaubt keine groessere Gruppe.";
+            case GRUPPE_ZU_GROSS -> "Dein Rang erlaubt hoechstens " + gruppenFelder(spieler)
+                    + (gruppenFelder(spieler) == 1 ? " Feld" : " Felder") + " je Gruppe.";
             case KEINE_GRUPPE -> "Hier ist keine Gruppe.";
             case AUF_DEM_WEG -> "Stell dich auf das Feld, das du meinst - nicht auf den Weg.";
             case HAELT_ZUSAMMEN -> "Dieses Feld haelt dein Grundstueck zusammen. Loese erst eines am Rand heraus.";
             case ERTEILT -> "Erledigt.";
-        }, NamedTextColor.RED);
+        }, NamedTextColor.RED));
+        if (bescheid == Besitzbuch.Bescheid.GRENZE_ERREICHT
+                || bescheid == Besitzbuch.Bescheid.GRUPPE_ZU_GROSS
+                || (bescheid == Besitzbuch.Bescheid.NOCH_FREI && amLimit)) {
+            werbung(spieler);
+        }
+    }
+
+    /**
+     * Die Zeile aus der Konfiguration - einmal, wenn sie gesetzt ist.
+     *
+     * <p>In Gelb und nicht in Rot: Die Absage darueber ist die Nachricht, das hier ist
+     * das Angebot. Zwei rote Zeilen hintereinander liest niemand als zwei Dinge.
+     */
+    private void werbung(Player spieler) {
+        if (!rangWerbung.isEmpty()) {
+            spieler.sendMessage(Component.text(rangWerbung, NamedTextColor.YELLOW));
+        }
     }
 
     /**
