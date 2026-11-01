@@ -230,6 +230,23 @@ class WegbauTest {
     }
 
     @Test
+    @DisplayName("Nach dem Loesen aus dem Quadrat sieht die Welt aus wie ein frisches L")
+    void ausDemQuadratWirdEinL() {
+        // Die staerkste Probe fuer den Rueckweg, und das Orakel steht daneben: Ein Quadrat,
+        // aus dem ein Feld geloest wird, muss Block fuer Block aussehen wie ein L, das man
+        // frisch gefuellt hat. Der erste Anlauf liess hier 20 Bloecke falsch stehen - zwei
+        // fuenf Bloecke breite Loecher in der Mauer, an den Armen der Kreuzung.
+        List<Parzelle> quadrat = gruppe(0, 0, 1, 0, 0, 1, 1, 1);
+        List<Parzelle> lForm = gruppe(0, 0, 1, 0, 0, 1);
+        wegbau.fuelle(quadrat, List.of());
+        wegbau.baueZurueck(quadrat, List.of(lForm));
+
+        Probewelt frisch = new Probewelt(plan, UNTEN);
+        new Wegbau(plan, frisch).fuelle(lForm, List.of());
+        assertEquals(frisch.abweichungen(), welt.abweichungen());
+    }
+
+    @Test
     @DisplayName("Der Bau auf den bleibenden Wegen wird beim Herausloesen nicht gewarnt")
     void bauAufBleibendenWegenKostetNichts() {
         // Gewarnt wird nur, was der Zurueckbau wirklich anfasst. Ein Haus auf der ersten

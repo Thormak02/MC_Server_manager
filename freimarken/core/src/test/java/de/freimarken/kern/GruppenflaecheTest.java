@@ -252,9 +252,12 @@ class GruppenflaecheTest {
         List<String> neu = naht(flaeche(0, 0, 1, 0, 0, 1, 1, 1), List.of(lForm));
 
         assertEquals(2 * 448 + 49 + 10, neu.size(), "zwei Baender, die Kreuzung, zwei Enden");
-        assertTrue(neu.contains("67/64/WEG/PARZELLE"), "aus der alten Mauer wird Bauland");
-        assertTrue(neu.contains("70/67/WEG/PARZELLE"));
-        assertTrue(neu.contains("67/67/WEG/PARZELLE"), "die Kreuzung selbst");
+        // ohneGruppe ist hier MAUER und nicht WEG: Die alte Flaeche hat die Stelle als
+        // Mauerstueck beansprucht, und genau das muss der Rueckweg wieder hinlegen.
+        assertTrue(neu.contains("67/64/MAUER/PARZELLE"), "aus der alten Mauer wird Bauland");
+        assertTrue(neu.contains("70/67/MAUER/PARZELLE"));
+        assertTrue(neu.contains("67/67/WEG/PARZELLE"),
+                "die Kreuzungsmitte war vorher nur Weg");
         assertFalse(neu.contains("67/30/WEG/PARZELLE"), "die alte Fuge bleibt liegen");
         assertEquals(10, neu.stream().filter(stelle -> stelle.endsWith("/MAUER")).count(),
                 "zuzumauern sind nur die Enden der neuen Baender");
@@ -279,6 +282,34 @@ class GruppenflaecheTest {
                 2 * 448 + 10);
         pruefeAuslassung(flaeche(-21, -21, -20, -21),
                 flaeche(-21, -21, -20, -21, -20, -20), 448 + 10);
+    }
+
+    @Test
+    @DisplayName("Beim Loesen aus dem Quadrat wird aus dem Kreuzungsarm wieder Mauer")
+    void ausDemKreuzungsarmWirdWiederMauer() {
+        // Der Rueckweg, und der Fall, an dem der erste Anlauf scheiterte. Im Quadrat ist
+        // die ganze Kreuzung Bauland. Loest sich ein Feld heraus, muss an den beiden Armen,
+        // die zu ihm zeigen, wieder MAUER liegen - die Kreuzung wird oeffentlich, und das
+        // Restgrundstueck braucht dort seine Umrandung. Der Rasterplan allein sagt dort
+        // WEG; wer den zurueckschreibt, laesst ein fuenf Bloecke breites Loch.
+        Gruppenflaeche quadrat = flaeche(0, 0, 1, 0, 0, 1, 1, 1);
+        Gruppenflaeche lForm = flaeche(0, 0, 1, 0, 0, 1);
+        List<String> weg = naht(quadrat, List.of(lForm));
+
+        for (int i = 65; i <= 69; i++) {
+            assertTrue(weg.contains("64/" + i + "/MAUER/PARZELLE"),
+                    "Arm nach Osten bei z=" + i);
+            assertTrue(weg.contains(i + "/64/MAUER/PARZELLE"),
+                    "Arm nach Sueden bei x=" + i);
+        }
+        // Die Mitte der Kreuzung dagegen wird wieder Weg - dort stossen alle vier Zellen
+        // zusammen, und eine davon gehoert jetzt nicht mehr dazu.
+        assertTrue(weg.contains("67/67/WEG/PARZELLE"));
+        // Und die Fugen des bleibenden L bleiben liegen.
+        assertFalse(weg.stream().anyMatch(stelle -> stelle.startsWith("67/30/")),
+                "die Fuge zwischen 0/0 und 1/0 bleibt Bauland");
+        assertFalse(weg.stream().anyMatch(stelle -> stelle.startsWith("30/67/")),
+                "die Fuge zwischen 0/0 und 0/1 bleibt Bauland");
     }
 
     @Test
@@ -338,20 +369,27 @@ class GruppenflaecheTest {
 
     private void pruefeAuslassung(Gruppenflaeche vorher, Gruppenflaeche nachher,
                                   int erwarteteAuslassungen) {
+        // Verglichen wird je KOORDINATE und nicht die ganze Zeichenkette: ohneGruppe
+        // unterscheidet sich zwischen voller Naht und Differenz, und zwar richtig - in der
+        // Differenz traegt es den Anspruch der alten Flaeche.
         Map<String, Rasterplan.Feld> alt = new HashMap<>();
         vorher.ueberDieNaht(plan, (x, z, ohneGruppe, mitGruppe) ->
                 alt.put(x + "/" + z, mitGruppe));
-        List<String> volle = naht(nachher);
-        Set<String> neu = new HashSet<>(naht(nachher, List.of(vorher)));
+        Map<String, Rasterplan.Feld> volle = new HashMap<>();
+        nachher.ueberDieNaht(plan, (x, z, ohneGruppe, mitGruppe) ->
+                volle.put(x + "/" + z, mitGruppe));
+        Set<String> neu = new HashSet<>();
+        nachher.ueberDieNaht(plan, List.of(vorher), (x, z, ohneGruppe, mitGruppe) ->
+                neu.add(x + "/" + z));
         int ausgelassen = 0;
-        for (String stelle : volle) {
-            if (neu.contains(stelle)) {
+        for (Map.Entry<String, Rasterplan.Feld> stelle : volle.entrySet()) {
+            if (neu.contains(stelle.getKey())) {
                 continue;
             }
             ausgelassen++;
-            String[] teile = stelle.split("/");
-            assertEquals(Rasterplan.Feld.valueOf(teile[3]), alt.get(teile[0] + "/" + teile[1]),
-                    "ausgelassen, aber die alte Gruppe legt dort etwas anderes: " + stelle);
+            assertEquals(stelle.getValue(), alt.get(stelle.getKey()),
+                    "ausgelassen, aber die alte Gruppe legt dort etwas anderes: "
+                            + stelle.getKey());
         }
         assertEquals(erwarteteAuslassungen, ausgelassen, "Zahl der ausgelassenen Stellen");
         assertEquals(volle.size(), neu.size() + ausgelassen,

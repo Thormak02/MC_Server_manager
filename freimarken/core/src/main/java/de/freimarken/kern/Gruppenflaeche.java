@@ -39,7 +39,9 @@ public final class Gruppenflaeche {
         /**
          * @param weltX      Weltkoordinate, nicht Parzellennummer
          * @param weltZ      Weltkoordinate, nicht Parzellennummer
-         * @param ohneGruppe was der Rasterplan hier vorsieht - Mauer oder Weg, nie Bauland
+         * @param ohneGruppe was hier liegt, wenn DIESE Gruppe nicht besteht: der
+         *                   Rasterplan - oder, wenn eine der anderen Flaechen die Stelle
+         *                   braucht, deren Anspruch. Kann deshalb auch Bauland sein.
          * @param mitGruppe  was hier liegen muss, solange die Gruppe besteht: Bauland in
          *                   den Fugen, Mauer am Ende einer geschluckten Strasse
          */
@@ -195,9 +197,14 @@ public final class Gruppenflaeche {
      * <p>Ein Mauerstueck, das zur Fuge wird, kommt trotzdem: Beim vierten Feld wird aus dem
      * Bandende eine Kreuzung. Verglichen wird das Ergebnis, nicht die Teilnahme.
      *
-     * @param schonGelegt die Flaechen VOR dieser Zusammenlegung, je Gruppe eine
+     * <p>Dieselbe Methode traegt beide Richtungen. Beim Fuellen sind die anderen Flaechen
+     * die Gruppen VOR dem Zusammenlegen, und geschrieben wird {@code mitGruppe}. Beim
+     * Zurueckbauen sind es die Gruppen, die DANACH noch bestehen, und geschrieben wird
+     * {@code ohneGruppe} - das, was sie an dieser Stelle brauchen.
+     *
+     * @param andere die anderen Flaechen, je Gruppe eine
      */
-    public void ueberDieNaht(Rasterplan plan, Collection<Gruppenflaeche> schonGelegt,
+    public void ueberDieNaht(Rasterplan plan, Collection<Gruppenflaeche> andere,
                              AnDerNaht arbeit) {
         int vonWeltX = plan.ursprungX(vonX) - 1;
         int vonWeltZ = plan.ursprungZ(vonZ) - 1;
@@ -207,8 +214,13 @@ public final class Gruppenflaeche {
             for (int z = vonWeltZ; z <= bisWeltZ; z++) {
                 Rasterplan.Feld feld = plan.feldBei(x, z);
                 Rasterplan.Feld mitGruppe = nahtstelle(plan, x, z, feld);
-                if (mitGruppe != null && !lagSchonSo(plan, schonGelegt, x, z, feld, mitGruppe)) {
-                    arbeit.an(x, z, feld, mitGruppe);
+                if (mitGruppe == null) {
+                    continue;
+                }
+                Rasterplan.Feld ohneGruppe = beiDenAnderen(plan, andere, x, z, feld);
+                // Gleich heisst: hier ist nichts zu tun, die Stelle liegt schon richtig.
+                if (ohneGruppe != mitGruppe) {
+                    arbeit.an(x, z, ohneGruppe, mitGruppe);
                 }
             }
         }
@@ -239,14 +251,34 @@ public final class Gruppenflaeche {
         return null;
     }
 
-    private boolean lagSchonSo(Rasterplan plan, Collection<Gruppenflaeche> schonGelegt,
-                               int x, int z, Rasterplan.Feld feld, Rasterplan.Feld mitGruppe) {
-        for (Gruppenflaeche frueher : schonGelegt) {
-            if (frueher.nahtstelle(plan, x, z, feld) == mitGruppe) {
-                return true;
+    /**
+     * Was an dieser Stelle liegt, wenn diese Gruppe nicht besteht.
+     *
+     * <p>Nicht einfach der Rasterplan: Steht daneben noch eine Gruppe, hat die ihren
+     * eigenen Anspruch auf die Stelle. Das ist der Unterschied, an dem der erste Anlauf
+     * scheiterte - er verglich nur, ob eine andere Flaeche DASSELBE wollte, und schrieb
+     * sonst stur den Rasterplan zurueck. Am Arm einer Kreuzung ist das falsch: Dort war
+     * Bauland, und danach muss MAUER liegen, nicht Pflaster. Das Loch war fuenf Bloecke
+     * breit, und der Eigentuemer durfte es nicht einmal selbst zumauern - die Stelle
+     * gehoerte ihm nach dem Loesen nicht mehr.
+     *
+     * <p>Bauland gewinnt vor Mauer: Beansprucht eine Flaeche die Stelle als ihr Inneres,
+     * gehoert sie ihr, auch wenn eine zweite dort eine Mauer braeuchte.
+     */
+    private static Rasterplan.Feld beiDenAnderen(Rasterplan plan,
+                                                 Collection<Gruppenflaeche> andere,
+                                                 int x, int z, Rasterplan.Feld feld) {
+        Rasterplan.Feld anspruch = null;
+        for (Gruppenflaeche flaeche : andere) {
+            Rasterplan.Feld dort = flaeche.nahtstelle(plan, x, z, feld);
+            if (dort == Rasterplan.Feld.PARZELLE) {
+                return dort;
+            }
+            if (dort != null) {
+                anspruch = dort;
             }
         }
-        return false;
+        return anspruch != null ? anspruch : feld;
     }
 
     /**

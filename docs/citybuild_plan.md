@@ -483,6 +483,36 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
   die Gruppenzeile, das andere lässt sie stehen. Der Preis der Gruppe bleibt, wie er
   ist — beim Auftrennen gibt es kein Geld zurück, und eine Rückrechnung wäre eine
   zweite Preisregel neben der Staffel.
+- **Der Rückweg legt, was die bleibende Gruppe braucht — nicht den Rasterplan**
+  [1.11., aus der eigenen Prüfung]. Der erste Anlauf kannte nur zwei Fälle: Wollte eine
+  andere Fläche dasselbe, wurde die Stelle ausgelassen; sonst schrieb er den reinen
+  Rasterwert zurück. Der dritte Fall fehlte, und er ist der häufigste überhaupt: Die
+  bleibende Gruppe braucht MAUER, wo die aufgelöste PARZELLE hatte.
+
+  Das passiert an den **Armen einer Kreuzung**. Im Quadrat ist die ganze Kreuzung
+  Bauland. Löst sich ein Feld heraus, wird sie wieder öffentlich — und an den beiden
+  Armen, die zum gelösten Feld zeigen, braucht das Restgrundstück seine Umrandung.
+  Der Rasterplan sagt dort WEG, weil der Weg immer gewinnt. Wer den zurückschreibt,
+  lässt zwei fünf Blöcke breite Tore offen, durch die die Straße ebenerdig ins Bauland
+  läuft: dasselbe Fehlerbild wie am Bandende, nur eine Ecke weiter. Erschwerend: Die
+  Stelle liegt nach dem Lösen nicht mehr im Inneren der Gruppe, also hätte der
+  Eigentümer sie nicht einmal selbst zumauern dürfen.
+
+  `ueberDieNaht` fragt deshalb die anderen Flächen nach ihrem Anspruch
+  (`beiDenAnderen`), und `ohneGruppe` heißt nicht mehr „was der Rasterplan vorsieht",
+  sondern „was hier liegt, wenn DIESE Gruppe nicht besteht". Das Auslassen fällt damit
+  als eigene Regel weg — eine Stelle wird übersprungen, wenn beide Seiten dasselbe
+  wollen, und das ist dieselbe Prüfung. Bauland gewinnt vor Mauer, wenn zwei Gruppen
+  dieselbe Stelle beanspruchen.
+
+  Gefunden hat das keine Probe, sondern eine Nachrechnung: Von allen zusammenhängenden
+  Formen aus zwei bis sechs Feldern im 3×3-Fenster waren 148 von 476 möglichen
+  Herauslösungen betroffen, immer in der Richtung „Pflaster, wo Mauer sein muss".
+  Der Spieltest fand es nicht, weil die getestete Gruppe eine L-Form ohne Kreuzung war.
+  Gesichert ist es jetzt zweifach: im Kern über den Anspruch an allen zehn
+  Armkoordinaten, und in der Welt über das stärkste Orakel, das es hier gibt — ein
+  Quadrat, aus dem ein Feld gelöst wird, muss Block für Block aussehen wie ein L, das
+  man frisch gefüllt hat.
 - **Die Gruppenbefehle hatten gar keine Proben.** Zusammenlegen und Auftrennen waren
   im Besitzbuch ungetestet — nur die Ablage hatte ihren Vertrag. Das erklärt, warum
   die Fehler dieses Schritts alle durch Nachrechnen gefunden wurden. Mit Teil D gibt es
