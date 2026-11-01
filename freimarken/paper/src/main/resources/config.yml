@@ -36,17 +36,29 @@ hinweise:
   # nicht mehr nehmen darf. Was der Rang erlaubt, steht schon in der Zeile davor - hier
   # gehoert hin, wie es auf DIESEM Server weitergeht.
   #
-  # Beispiel: "Mehr Parzellen gibt es mit dem Rang Buerger - rund 40 Spielstunden und
-  # eine bebaute Parzelle."
+  # Beispiele:
+  #   "Mehr Parzellen gibt es mit dem Rang Buerger - rund 40 Spielstunden und eine
+  #    bebaute Parzelle."
+  #   "Mehr Parzellen gibt es mit dem Rang Buerger - oder als Zuschlag obendrauf mit
+  #    einer Mitgliedschaft."
   #
   # Versprich hier nichts, was es nicht gibt - weder einen Befehl noch einen Weg. Der Satz
   # erscheint genau in dem Augenblick, in dem der Spieler abgewiesen wurde; ein Hinweis
   # auf einen Shop oder einen /rang-Befehl, den es nicht gibt, ist dann aergerlicher als
   # gar keiner.
   #
-  # Und er darf den Raengen nicht widersprechen: Nach Plan 9 werden sie ERSPIELT, nicht
-  # gekauft, und eine Mitgliedschaft gibt ausdruecklich keine Macht. "Kauf dir mehr
-  # Parzellen" waere hier also nicht nur Werbung, sondern falsch.
+  # Und er darf den Raengen nicht widersprechen. Nach Plan 9 haengt die Parzellengrenze an
+  # den drei erspielbaren Raengen (Reisender, Siedler, Buerger); die beiden kaufbaren
+  # (Foerderer, Stifter) geben einen ZUSCHLAG darauf: +2 bzw. +4 Parzellen und +1 bzw. +2
+  # Felder je Grundstueck, ueber die Rechte freimarken.extra.parzellen.<n> und
+  # freimarken.extra.gruppe.<n>.
+  #
+  # Der Zuschlag ersetzt den erspielten Rang nicht, er kommt obendrauf - wer am ersten Tag
+  # zahlt, hat 1+2 Parzellen und nicht 4. Wirb hier also mit dem Zuschlag und nicht mit
+  # "kauf dir mehr Parzellen": Sonst erwartet ein Neuling, dass Geld die vierzig Stunden
+  # bis Buerger ersetzt, und das tut es nicht.
+  #
+  # Den Zuschlag gibt es nur mit einer Mitgliedschaft, nicht fuer Goldmark (Plan 8.4).
   #
   # Leer lassen heisst: kein Hinweis.
   rang-werbung: "Mehr erlaubt ein hoeherer Rang."

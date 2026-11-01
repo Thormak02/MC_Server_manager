@@ -682,21 +682,38 @@ Mitgliedschaften**, nur gegen Echtgeld, nicht erspielbar.
 
 ### 8.4 Warum das die Zusage nicht bricht
 
-„Alles ist auch über das Spielen erreichbar" gilt weiterhin — aber für den **Inhalt**, nicht
-für das Abzeichen. Die Regel, die das trägt [entschieden]:
+„Alles ist auch über das Spielen erreichbar" galt bis zum 01.11.2026 für den gesamten
+**Inhalt**. Seitdem gilt es mit einer benannten Ausnahme [entschieden]:
 
-> Eine Mitgliedschaft bündelt ausschließlich Dinge, die es **einzeln auch für Goldmark
-> gibt** — und Goldmark ist erspielbar. Gekauft werden das Bündel, die Bequemlichkeit des
-> Bündels und das Abzeichen. Nie der einzige Zugang zu etwas.
+> Eine Mitgliedschaft bündelt Dinge, die es **einzeln auch für Goldmark gibt** — und
+> Goldmark ist erspielbar. Davon ausgenommen und **allein den bezahlten Rängen
+> vorbehalten**: der Zuschlag auf Parzellen und auf Felder je Grundstück, zusätzliche
+> Heimatpunkte und zusätzliche Warps. Alles Übrige bleibt erspielbar; gekauft werden
+> sonst nur das Bündel, seine Bequemlichkeit und das Abzeichen.
 
-Praktisch heißt das: Partikel, Hüte, Haustiere, Rangfarben und zusätzliche Heimatpunkte
-bleiben einzeln im Münzhaus erhältlich. Wer spielt statt zu zahlen, kommt an jedes
-einzelne Stück heran — nur nicht an das Abzeichen „Förderer", und das ist auch richtig so:
-Ein Dankeschön für Unterstützung lässt sich nicht erarbeiten, sonst wäre es keins.
+Praktisch heißt das: Partikel, Hüte, Haustiere und Rangfarben bleiben einzeln im Münzhaus
+erhältlich — wer spielt statt zu zahlen, kommt an jedes einzelne Stück heran. Der
+Zuschlag, die zusätzlichen Heimatpunkte und die zusätzlichen Warps dagegen nicht: Sie sind
+der Inhalt, für den bezahlt wird. Und das Abzeichen „Förderer" bleibt ohnehin unerspielbar
+— ein Dankeschön für Unterstützung lässt sich nicht erarbeiten, sonst wäre es keins.
 
-**Was eine Mitgliedschaft niemals enthalten darf**: mehr Parzellen, mehr Fläche, höhere
-Verdienstsätze, günstigere Preise, Vorrang beim Support, Vorteile in Wettbewerben. Sobald
-einer dieser Punkte dazukäme, wäre es Pay-to-Win — unabhängig vom Preis.
+**Die Begründung [entschieden, 01.11.2026]**: Vier Parzellen sind 135 × 135 Blöcke und
+mehr — nach Einschätzung des Serverbesitzers absurd viel Platz für ein einzelnes
+Bauvorhaben. Wer mehr will, will nicht gewinnen, sondern bauen. Das Angebot richtet sich
+ausdrücklich an Vielspieler und an die, die den Server tragen, und zählt damit zu
+Bequemlichkeit und nicht zu Macht.
+
+**Was eine Mitgliedschaft weiterhin niemals enthalten darf**: höhere Verdienstsätze,
+günstigere Preise, Vorrang beim Support, Vorteile in Wettbewerben, Rechte auf fremdem
+Besitz. Sobald einer dieser Punkte dazukäme, wäre es Pay-to-Win — unabhängig vom Preis.
+
+**Der eine Punkt, an dem sich das reiben kann** — hier festgehalten, damit er nicht
+verloren geht: Heimatpunkte und Warps lassen sich beliebig vermehren, Fläche nicht. Die
+Marktstadt hat 1.764 Parzellen, siehe [4](#4-welten); was ein Zahler bindet, steht keinem
+anderen mehr zur Verfügung, und ein Stifter bindet mit 8 Parzellen doppelt so viel wie ein
+Bürger ohne Mitgliedschaft. Solange die Stadt halb leer ist, merkt das niemand — wird sie
+voll, ist das die erste Stelle zum Nachjustieren. Sie lässt sich nachjustieren, weil die
+Zahl in einem Recht steht und nicht im Programm.
 
 ### 8.5 Wenn eine Mitgliedschaft ausläuft
 
@@ -709,6 +726,7 @@ des Servers. [entschieden]
 | Partikel, Haustier-Erscheinungen aus dem Bündel | ruhen — wieder da, sobald verlängert wird |
 | Zusätzliche Heimatpunkte aus dem Bündel | werden **inaktiv, nicht gelöscht**; der Spieler kann sie nicht nutzen, verliert sie aber nicht |
 | **Parzellen, Freistädte, Inseln, Läden, Geld, Gebautes** | **bleiben unangetastet** |
+| **Zuschlag auf Parzellen und Felder je Grundstück** | die Grenze sinkt wieder — wer darüber liegt, **behält alles**, kann aber nichts Neues nehmen und nichts mehr zusammenlegen, bis er wieder darunter ist |
 | Einzeln für Goldmark gekaufte Kosmetik | bleibt, sie gehört dem Spieler |
 
 Die letzte Zeile ist der Grund, warum das Bündel nur bündeln darf: Was einzeln gekauft
@@ -782,8 +800,20 @@ Premium        Förderer      Stifter
 ```
 
 Die Mitgliedschaften stehen **neben** der Leiter, nicht darüber. Sie geben Kosmetik,
-Bequemlichkeit und Dank — keine Macht. Nach Lumias Regel [belegt]: kein Vorteil beim
-Support, und Rechte gelten nur für einen selbst. Was sie enthalten dürfen und was beim
+Bequemlichkeit, Dank — und seit dem 01.11.2026 einen **Zuschlag auf die Parzellenzahl und
+auf die Felder je Grundstück** [entschieden]. Keine Macht über andere: kein Vorteil beim
+Support, keine Rechte auf fremdem Besitz, nach Lumias Regel [belegt] gelten sie nur für
+einen selbst.
+
+Der Zuschlag **ersetzt den erspielten Rang nicht, er kommt obendrauf**. Wer am ersten Tag
+zahlt, hat 1 + 2 Parzellen, nicht 4 — die vierzig Stunden bis Bürger spart ihm niemand.
+Gedacht ist er als Extra für die, die ohnehin viel spielen, und genau so ist er gebaut:
+als eigenes Recht (`freimarken.extra.parzellen.<n>`, `freimarken.extra.gruppe.<n>`), das
+addiert wird. Als zweite absolute Zahl wäre aus dem Zuschlag eine Abkürzung geworden.
+
+Der Zuschlag ist **den bezahlten Rängen vorbehalten** und nicht für Goldmark zu haben —
+die Ausnahme von der Regel in [8.4](#84-warum-das-die-zusage-nicht-bricht), dort mit
+Begründung. Was sie enthalten dürfen und was beim
 Auslaufen passiert, steht in [8.4](#84-warum-das-die-zusage-nicht-bricht) und
 [8.5](#85-wenn-eine-mitgliedschaft-ausläuft).
 
@@ -792,8 +822,8 @@ Auslaufen passiert, steht in [8.4](#84-warum-das-die-zusage-nicht-bricht) und
 | **Reisender** | beim ersten Beitritt | 1 Parzelle, 1 Heimatpunkt, Markthalle besuchen |
 | **Siedler** | ~5 h Spielzeit + Rundgang abgeschlossen | 2 Parzellen, 3 Heimatpunkte, eigener Warp, Laden mieten, Zusammenlegen bis 2 Felder |
 | **Bürger** | ~40 h + eigene Parzelle bebaut | 4 Parzellen, 5 Heimatpunkte, 3 Warps, Freistadt gründen, Zusammenlegen bis 4 Felder |
-| **Förderer** | Mitgliedschaft, 10 €/Monat | Rangfarbe, Haustier, Partikel, +2 Heimatpunkte, Kornmark-Vorabzugang — alles auch einzeln für Goldmark erhältlich |
-| **Stifter** | Mitgliedschaft, 20 €/Monat | wie Förderer, dazu Abzeichen, Namensanzeige, Platz auf der Stiftertafel in Altfurt |
+| **Förderer** | Mitgliedschaft, 10 €/Monat | Rangfarbe, Haustier, Partikel, +2 Heimatpunkte, Kornmark-Vorabzugang, **+2 Parzellen, +1 Feld je Grundstück** — Kosmetik auch einzeln für Goldmark; Zuschlag, Heimatpunkte und Warps nur hier |
+| **Stifter** | Mitgliedschaft, 20 €/Monat | wie Förderer, aber **+4 Parzellen und +2 Felder je Grundstück**, dazu Abzeichen, Namensanzeige, Platz auf der Stiftertafel in Altfurt |
 
 Der Spielzeit-Aufstieg läuft automatisch — ohne Antrag, ohne Team.
 

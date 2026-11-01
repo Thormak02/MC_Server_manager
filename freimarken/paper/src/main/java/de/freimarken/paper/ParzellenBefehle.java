@@ -15,6 +15,7 @@ import de.freimarken.kern.Richtung;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.Collection;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,6 +47,24 @@ final class ParzellenBefehle {
     /** Dasselbe fuer die Felderzahl einer Gruppe: {@code freimarken.gruppe.4}. */
     private static final String RECHT_GRUPPE = "freimarken.gruppe.";
 
+    /**
+     * Ein ZUSCHLAG auf die Parzellenzahl: {@code freimarken.extra.parzellen.2}.
+     *
+     * <p>Dafuer sind die kaufbaren Raenge da. Als zweite absolute Zahl waere eine
+     * Mitgliedschaft eine Abkuerzung: Wer am ersten Tag zahlt, haette sofort so viele
+     * Parzellen wie jemand mit vierzig Spielstunden, und die erspielte Leiter waere
+     * nebensaechlich. Als Zuschlag kommt sie auf das drauf, was er sich erspielt hat -
+     * sie belohnt also genau die, die ohnehin viel spielen.
+     *
+     * <p>Eigener Anfang und nicht {@code freimarken.parzellen.extra.}: Sonst faengt das
+     * Recht mit dem Text des anderen an, und die Auswertung dort haengt allein daran,
+     * dass "extra.2" sich nicht als Zahl lesen laesst. Das ist kein Riegel, das ist Glueck.
+     */
+    private static final String RECHT_EXTRA_ANZAHL = "freimarken.extra.parzellen.";
+
+    /** Derselbe Zuschlag fuer die Felderzahl: {@code freimarken.extra.gruppe.1}. */
+    private static final String RECHT_EXTRA_GRUPPE = "freimarken.extra.gruppe.";
+
     private final Besitzbuch buch;
 
     /** Die Welt, in der Bloecke stehen - fuer das Fuellen und Zurueckbauen des Weges. */
@@ -68,6 +87,17 @@ final class ParzellenBefehle {
      * es dort nicht gibt, waere schlechter als gar keiner.
      */
     private final String rangWerbung;
+
+    /**
+     * Wie lange ein Spieler zwischen zwei Abschaetzungen warten muss.
+     *
+     * <p>Drei Sekunden sind im normalen Gebrauch unsichtbar: Wer die Warnung liest und
+     * dann bestaetigt, braucht sie kein zweites Mal. Wer die Taste gedrueckt haelt,
+     * merkt es - und genau darum geht es.
+     */
+    private static final Duration ZWISCHEN_ZWEI_ABSCHAETZUNGEN = Duration.ofSeconds(3);
+
+    private final Abklingzeit abschaetzungen = new Abklingzeit(ZWISCHEN_ZWEI_ABSCHAETZUNGEN);
 
     ParzellenBefehle(Besitzbuch buch, World marktstadt, int standardHoechstzahl,
                      int standardGruppenFelder, String rangWerbung, Logger protokoll) {
@@ -634,6 +664,9 @@ final class ParzellenBefehle {
             absage(spieler, entscheid.bescheid());
             return;
         }
+        if (zuSchnellHintereinander(spieler)) {
+            return;
+        }
         Parzelle anker = entscheid.parzelle().orElseThrow();
         List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
 
@@ -669,6 +702,9 @@ final class ParzellenBefehle {
             absage(spieler, entscheid.bescheid());
             return;
         }
+        if (zuSchnellHintereinander(spieler)) {
+            return;
+        }
         Parzelle feld = entscheid.parzelle().orElseThrow();
         List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
         List<Parzelle> bleibend = ohneDasFeld(gruppe, feld);
@@ -693,6 +729,25 @@ final class ParzellenBefehle {
         nenneAufwand(spieler, wegbau.aufwandBeimAuftrennen(gruppe, bleibt(bleibend)));
         spieler.sendMessage(Component.text("  /parzelle auftrennen bestaetigen "
                 + feld.x() + " " + feld.z(), NamedTextColor.RED));
+    }
+
+    /**
+     * Ob diese Abschaetzung noch warten muss.
+     *
+     * <p>Gefragt wird erst, wenn feststeht, dass der Befehl ueberhaupt durchgeht: Eine
+     * Absage ist billig, und wer falsch steht, soll das sofort erfahren und nicht erst
+     * nach drei Sekunden.
+     */
+    private boolean zuSchnellHintereinander(Player spieler) {
+        long rest = abschaetzungen.restNs(spieler.getUniqueId(), System.nanoTime());
+        if (rest <= 0L) {
+            return false;
+        }
+        long sekunden = (rest + 999_999_999L) / 1_000_000_000L;
+        spieler.sendMessage(Component.text("Einen Augenblick - die Abschaetzung liest jeden"
+                + " Block ueber dem Weg. Noch " + sekunden
+                + (sekunden == 1 ? " Sekunde." : " Sekunden."), NamedTextColor.GRAY));
+        return true;
     }
 
     /**
@@ -977,7 +1032,33 @@ final class ParzellenBefehle {
      * die Obergrenze ist eine Spielregel und keine Verwaltungsbefugnis.
      */
     private int hoechstzahl(Player spieler) {
-        return hoechsteAus(spieler, RECHT_ANZAHL, standardHoechstzahl);
+        return ausRecht(spieler, RECHT_ANZAHL, RECHT_EXTRA_ANZAHL, standardHoechstzahl);
+    }
+
+    /**
+     * Eine Grenze aus den Rechten: die hoechste erlaubte Zahl plus den Zuschlag.
+     *
+     * <p>Eine Methode fuer beide Grenzen, damit der Zuschlag nicht an einer von zwei
+     * Stellen vergessen werden kann. Genau das ist die Art Fehler, die niemand meldet:
+     * Der Spieler sieht nur, dass seine Mitgliedschaft beim Zusammenlegen nichts bringt,
+     * und haelt es fuer die Regel.
+     */
+    private static int ausRecht(Player spieler, String recht, String zuschlagsrecht,
+                                int vorgabe) {
+        return mitZuschlag(hoechsteAus(spieler, recht, vorgabe),
+                hoechsteAus(spieler, zuschlagsrecht, 0));
+    }
+
+    /**
+     * Grundlage plus Zuschlag, ohne ueberzulaufen.
+     *
+     * <p>Beide Zahlen koennen bis {@link Integer#MAX_VALUE} gehen - die Auswertung der
+     * Rechte kappt jede einzelne dort. Zusammengezaehlt liefe ein {@code int} ueber und
+     * waere danach NEGATIV, und eine negative Obergrenze heisst: gar keine Parzelle mehr,
+     * ausgerechnet fuer den, der am meisten hat.
+     */
+    static int mitZuschlag(int grundlage, int zuschlag) {
+        return (int) Math.min((long) grundlage + Math.max(zuschlag, 0), Integer.MAX_VALUE);
     }
 
     /**
@@ -988,7 +1069,7 @@ final class ParzellenBefehle {
      * Grundstueck verbinden darf, entscheidet, wie gross ein einzelnes Bauwerk werden kann.
      */
     private int gruppenFelder(Player spieler) {
-        return hoechsteAus(spieler, RECHT_GRUPPE, standardGruppenFelder);
+        return ausRecht(spieler, RECHT_GRUPPE, RECHT_EXTRA_GRUPPE, standardGruppenFelder);
     }
 
     /**
