@@ -776,9 +776,23 @@ Jede CityBuild-Wirtschaft kippt nach einem halben Jahr, wenn die Senken fehlen.
 | Marktgebühr beim Verkauf | 5 % | laufend |
 | Reparatur, Teleport, weitere Heimatpunkte | klein | laufend |
 
-**Kalibrierung** [empfohlen]: Ein Beruf trägt 2.000–5.000 Mark je Spielstunde. Dann ist die
-zweite Parzelle nach 5–10 Stunden erreichbar, eine Meerinsel nach 15–35, eine Freistadt nach
-80–200. Die Freistadt soll ein Jahresziel sein, kein Wochenendprojekt.
+**Kalibrierung** [entschieden 01.11.2026]: Ein **Spieler** verdient 2.000–5.000 Mark je
+Spielstunde — nicht jeder Beruf einzeln. Dann ist die zweite Parzelle nach 5–10 Stunden
+erreichbar, eine Meerinsel nach 15–35, eine Freistadt nach 80–200. Die Freistadt soll ein
+Jahresziel sein, kein Wochenendprojekt.
+
+Bis zum 01.11. stand hier „ein Beruf". Das war mit [9.1](#91-berufe-im-zunfthaus-entschieden)
+nicht vereinbar: Dort hält jeder zwei Grundberufe plus eine Spezialisierung, und mit der
+Lesart „je Beruf" wären alle drei Zeitangaben oben falsch — ebenso die Gegenprobe in
+[8.5](#85-wenn-eine-mitgliedschaft-ausläuft), die mit demselben Satz rechnet. Daraus folgt
+zweierlei: Die zwei Grundberufe teilen sich dieses Einkommen, und der **Tagesdeckel zählt
+je Spieler**, nicht je Beruf — sonst käme er über zwei Berufe doppelt.
+
+**Die Tagesgrenze** [entschieden 01.11.2026] — sie gilt für Tagesbonus, Tagesdeckel,
+Wechseldeckel, Ladenmiete und die Freie Truhe: **Mitternacht Ortszeit**, die Zone als Wert
+in der `config.yml` mit Vorgabe `Europe/Berlin`. Ein Bonus, der um 01:00 umspringt, erklärt
+sich niemandem. Die Zeitstempel in der Datenbank bleiben UTC; nur die Tagesgrenze ist eine
+konfigurierte Zone, und gespeichert wird je Spieler ein Datum und kein Zeitpunkt.
 
 ### 8.3 Was Echtgeld kaufen darf [entschieden]
 
@@ -848,6 +862,13 @@ Zwölf Berufe: sechs Grundberufe, jeder mit einer Spezialisierung ab dem Rang B�
   umgeschaltet.
 - **Abnehmender Ertrag**: Derselbe Block bringt innerhalb einer Stunde immer weniger. Ohne
   das ist jede Mobfarm eine Gelddruckmaschine.
+- **Ein Block zahlt nur einmal** [entschieden 01.11.2026]. Ein von einem Spieler gesetzter
+  Block wird markiert und bringt beim Abbauen nichts; der Baumeister zahlt fürs Setzen, der
+  Bergmann nur für ungesetzten Boden. Sonst ist Setzen-und-Abbauen eine Gelddruckmaschine,
+  und zwar eine, die jeder in der ersten Stunde findet — beide Berufe darf man gleichzeitig
+  halten, und abnehmender Ertrag dämpft den Kreis, hebt ihn nicht auf. **Die Markierung muss
+  stehen, bevor die erste Mark aus Arbeit fließt**: Alles, was vorher gesetzt wurde, gilt
+  danach für immer als gewachsener Boden.
 - **Tagesdeckel** je Beruf, großzügig genug, dass ihn normales Spielen nicht erreicht.
 - Spezialisierungen sind in der Konfiguration angelegt — eine zweite je Grundberuf ist
   später ein Eintrag, kein Umbau.
@@ -1389,11 +1410,11 @@ Jeder Schritt endet mit etwas, in dem man herumlaufen kann. Keine Fristen.
 | 0 | E1 bestätigen, Namen festschreiben | sie hier eingetragen sind |
 | 1 | ~~Paper 26.3, Java 25, Gradle-Gerüst, leeres Plugin mit einem Befehl~~ **erledigt 31.10.2026** | ~~Server startet und der Befehl antwortet~~ — Plugin lädt auf Build 231, `/freimarken preis 5` antwortet „400.000 Mark" aus dem Kernmodul |
 | 2 | ~~MariaDB, Schema, Migrationen, Datenzugriff hinter Schnittstelle~~ **erledigt 31.10.2026** | ~~ein Testdatensatz übersteht einen Neustart~~ — MariaDB als Dienst auf dem Server-PC, Zugriff aus dem LAN; `Datenbank` mit nummerierten Schema-Schritten, `MariaLager` und `MariaKasse` hinter `BesitzLager`/`Kasse`. 26 Tests gegen die echte Datenbank, darunter Überleben eines Verbindungsabbruchs, der eindeutige Schlüssel gegen Doppelvergabe und UTC-Rückgabe. Am 31.10. auch im Plugin gelaufen: Paper 26.3/231 lädt den mitgelieferten Treiber im Plugin-Klassenlader, `migriere()` läuft, `/freimarken` meldet „Ablage MariaDB". Tests liegen seither in einem eigenen Schema `freimarken_test`; `leereAlles()` verweigert jedes andere |
-| 3 | Welten anlegen, Grenzen, Vorgenerierung, Altfurt als Rohbau (Gebäude aus [2.1](#21-die-gebäude-in-altfurt) als Platzhalter) | man kann durch alle Welten laufen — *Marktstadt steht, übrige Welten offen* |
+| 3 | Welten anlegen, Grenzen, Vorgenerierung, Altfurt als Rohbau (Gebäude aus [2.1](#21-die-gebäude-in-altfurt) als Platzhalter) — **vorgezogen vor Schritt 7** [entschieden 01.11.2026] | man kann durch alle Welten laufen — *Marktstadt steht, übrige Welten offen* |
 | 4 | ~~**Weltgenerator für die Marktstadt** — Raster, Wege, Grenzen~~ **erledigt 31.10.2026** | ~~das Raster steht~~ — `Rasterplan` im Kern (8 Tests ohne Server), `MarktstadtGenerator` im Plugin; am Testserver geprüft: Parzellenmitte Gras, Mauer Steinziegel, Weg glatter Stein, Krone Halbstufe |
 | 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer — **fertig 31.10.2026** | zwei Spieler, einer baut, der andere nicht — *Code steht: `Besitzbuch` mit allen Regeln (Preisstaffel, Obergrenze, Mitbauer, Aufgeben ohne Rückzahlung), `Schutzwache` mit einer Regel für alle 14 Schutzereignisse, `/parzelle` und `/mark`. 89 Tests grün, Startprobe auf einem echten Paper-26.3-Server durch. Danach eine adversariale Prüfung mit 41 Agenten: 9 bestätigte Befunde, alle behoben — darunter fehlender Schutz gegen Schaden an Rüstungsständern und Rahmeninhalt, Kisten-Loren, ein Besitzschutz, der bei Datenbankausfall nach außen offen scheiterte, und Tests, die das Spielschema leerten. Durchgang mit zwei Spielern am 31.10. gelaufen: Der Schutz greift auf fremdem Grund und sagt es in der Aktionsleiste, Mitbauer schaltet frei und wieder zu, die zweite Parzelle wurde fuer 25.000 Mark bezahlt, und Parzelle -1/0 beweist die negative Seite der Rasterrechnung. Jeder Schritt in der Datenbank gegengeprueft* |
 | 6 | ~~Zusammenlegen und Auftrennen mit Gebühr~~ **erledigt 01.11.2026** | ~~zwei Parzellen werden eine, der Weg verschwindet~~ — `/parzelle zusammenlegen <richtung>` und `/parzelle auftrennen [alles]`, Gebühr 10.000 je Feld der neuen Gruppe. Die Geometrie liegt im Kern (`Gruppenflaeche`), die Blocktabelle an einer Stelle (`Stadtboden`), die Weltarbeit hinter einem 4-Methoden-Griff (`Weltgriff`), damit sie ohne Server prüfbar ist. Vier Runden Fix-und-Nachweis mit je einem adversarialen Prüflauf: elf bestätigte Befunde, alle behoben, jeder mit Probe und Mutationsnachweis. Drei Spieltests am 1.11. bestanden — zuletzt das Quadrat mit 19 von 19 nachgemessenen Koordinaten. 231 Tests |
-| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — *das Konto selbst gibt es schon: `Kasse` mit Startguthaben, Abbuchen und Gutschreiben, in MariaDB mit der Deckungsprüfung in der Abfrage. Es fehlen Verdienen, Buchungsprotokoll, Goldmark und Wechselkurs* | man kann Mark verdienen und ausgeben |
+| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — **nach Schritt 3**, weil vier der sechs Grundberufe in der Marktstadt keine Grundlage haben: kein Holz, kein Wasser, keine Erze, keine Nutztiere — *das Konto selbst gibt es schon: `Kasse` mit Startguthaben, Abbuchen und Gutschreiben, in MariaDB mit der Deckungsprüfung in der Abfrage. Es fehlen Verdienen, Buchungsprotokoll, Goldmark und Wechselkurs* | man kann Mark verdienen und ausgeben |
 | 8 | Markthalle, Mietverträge, Abholfach, Freie Truhe | ein Laden läuft ab und wird sauber zurückgegeben |
 | 9 | Freistädte: gründen, Grundstücke vergeben, Bürger, Kasse | ein Spieler verkauft einem anderen ein Grundstück |
 | 10 | Hafenwerder mit eigener Angeltabelle | eine Insel lässt sich sichern, der Fang unterscheidet sich |
