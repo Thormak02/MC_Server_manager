@@ -4,6 +4,8 @@ import static de.freimarken.kern.Rasterplan.Feld.MAUER;
 import static de.freimarken.kern.Rasterplan.Feld.PARZELLE;
 import static de.freimarken.kern.Rasterplan.Feld.WEG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +18,79 @@ import org.junit.jupiter.api.Test;
 class RasterplanTest {
 
     private final Rasterplan plan = Rasterplan.marktstadt();
+
+    // --- Das Innere einer Gruppe ------------------------------------------------
+
+    /** Eine Flaeche aus Rasterzellen, wie eine Gruppe sie belegt. */
+    private static Rasterplan.ZellenPruefung flaeche(java.util.Set<String> zellen) {
+        return (x, z) -> zellen.contains(x + "/" + z);
+    }
+
+    @Test
+    @DisplayName("Zwischen zwei Zellen liegt das Band aus Mauer und Weg")
+    void zwischenZellen() {
+        assertFalse(plan.zwischenZellen(0));
+        assertFalse(plan.zwischenZellen(63), "63 ist der letzte Baulandblock");
+        assertTrue(plan.zwischenZellen(64), "64 ist die Mauer");
+        assertTrue(plan.zwischenZellen(70), "70 ist die zweite Mauer");
+        assertFalse(plan.zwischenZellen(71), "71 ist wieder Bauland");
+        // Auch auf der negativen Seite - dort rechnet floorMod, nicht der Rest.
+        assertFalse(plan.zwischenZellen(-71));
+        assertTrue(plan.zwischenZellen(-1), "-1 ist die Mauer der Zelle -1");
+    }
+
+    @Test
+    @DisplayName("Bauland liegt innen, wenn seine eigene Zelle dazugehoert")
+    void baulandLiegtInnen() {
+        var zwei = flaeche(java.util.Set.of("0/0", "1/0"));
+        assertTrue(plan.imInneren(32, 32, zwei));
+        assertTrue(plan.imInneren(103, 32, zwei), "Mitte der Zelle 1/0");
+        assertFalse(plan.imInneren(32, 103, zwei), "Zelle 0/1 gehoert nicht dazu");
+    }
+
+    @Test
+    @DisplayName("Das Band zwischen zwei Feldern der Gruppe liegt innen")
+    void bandZwischenZweiFeldern() {
+        var zwei = flaeche(java.util.Set.of("0/0", "1/0"));
+        assertTrue(plan.imInneren(64, 32, zwei), "Mauer");
+        assertTrue(plan.imInneren(67, 32, zwei), "Weg");
+        assertTrue(plan.imInneren(70, 32, zwei), "zweite Mauer");
+    }
+
+    @Test
+    @DisplayName("Der Aussenring einer Gruppe bleibt Weg")
+    void aussenringBleibtWeg() {
+        var zwei = flaeche(java.util.Set.of("0/0", "1/0"));
+        // Westlich von 0/0 liegt die Zelle -1, die nicht dazugehoert.
+        assertFalse(plan.imInneren(-4, 32, zwei));
+        // Oestlich von 1/0 liegt die Zelle 2.
+        assertFalse(plan.imInneren(138, 32, zwei));
+        // Noerdlich liegt 0/-1.
+        assertFalse(plan.imInneren(32, -4, zwei));
+    }
+
+    @Test
+    @DisplayName("Eine Kreuzung gehoert nur dazu, wenn alle vier Zellen dazugehoeren")
+    void kreuzungBrauchtAlleVier() {
+        // Bei 67/67 stossen die Zellen 0/0, 1/0, 0/1 und 1/1 zusammen.
+        assertTrue(plan.imInneren(67, 67,
+                flaeche(java.util.Set.of("0/0", "1/0", "0/1", "1/1"))));
+        // Fehlt eine davon, liegt dort fremdes Grundstueck an - der Nachbar bekaeme
+        // sonst einen Grasfleck vor die Tuer.
+        assertFalse(plan.imInneren(67, 67,
+                flaeche(java.util.Set.of("0/0", "1/0", "0/1"))));
+        assertFalse(plan.imInneren(67, 67, flaeche(java.util.Set.of("0/0", "1/0"))));
+    }
+
+    @Test
+    @DisplayName("Das Innere stimmt auch bei negativen Parzellennummern")
+    void innenAufDerNegativenSeite() {
+        var zwei = flaeche(java.util.Set.of("-21/-21", "-20/-21"));
+        assertTrue(plan.imInneren(plan.mitteX(-21), plan.mitteZ(-21), zwei));
+        // Das Band zwischen -21 und -20 liegt bei -1491 + 64 = -1427.
+        assertTrue(plan.imInneren(-1427, plan.mitteZ(-21), zwei));
+        assertFalse(plan.imInneren(-1495, plan.mitteZ(-21), zwei), "Band vor -21");
+    }
 
     @Test
     @DisplayName("Die Marktstadt hat 64er Parzellen und 7 Bloecke Weg")

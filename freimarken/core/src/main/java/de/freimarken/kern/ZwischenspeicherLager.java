@@ -96,15 +96,40 @@ public final class ZwischenspeicherLager implements BesitzLager {
     }
 
     @Override
-    public Parzelle mitbauerSetzen(long id, Set<UUID> mitbauer) {
-        Parzelle neu = wahrheit.mitbauerSetzen(id, mitbauer);
+    public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
+        wahrheit.mitbauerSetzen(id, mitbauer);
         leeren();
-        return neu;
     }
 
     @Override
     public void entfernen(long id) {
         wahrheit.entfernen(id);
+        leeren();
+    }
+
+    /**
+     * Ungepuffert durchgereicht.
+     *
+     * <p>Diese Frage kommt aus einem Befehl und nicht aus einem Blockereignis. Sie zu
+     * puffern braechte nichts und waere ein zweiter Eintrag, der veralten kann.
+     */
+    @Override
+    public List<Parzelle> kinderVon(long gruppeId) {
+        return wahrheit.kinderVon(gruppeId);
+    }
+
+    @Override
+    public long gruppeSetzen(long gruppeId, String welt, UUID eigentuemer,
+                             Set<UUID> mitbauer, long gebuehr, List<Long> felder) {
+        long id = wahrheit.gruppeSetzen(gruppeId, welt, eigentuemer, mitbauer, gebuehr,
+                felder);
+        leeren();
+        return id;
+    }
+
+    @Override
+    public void auftrennen(long gruppeId) {
+        wahrheit.auftrennen(gruppeId);
         leeren();
     }
 
@@ -126,7 +151,14 @@ public final class ZwischenspeicherLager implements BesitzLager {
         speicher.values().removeIf(eintrag -> !jetzt.isBefore(eintrag.bis()));
     }
 
-    /** Alles vergessen. Nach jeder Aenderung und bei Bedarf von aussen. */
+    /**
+     * Alles vergessen. Nach jeder Aenderung und bei Bedarf von aussen.
+     *
+     * <p>Nach {@code gruppeSetzen} ist das die leiseste Stelle, an der Gruppen kaputtgehen
+     * koennten: Ohne dieses Leeren lieferte {@code finde} bis zu {@link #VERFALL} lang
+     * Zeilen ohne Elternbezug. Eine Mitbauer-Aenderung schriebe dann auf das Kind statt
+     * auf die Gruppe und wirkte nur auf einem einzigen Feld.
+     */
     public void leeren() {
         speicher.clear();
     }

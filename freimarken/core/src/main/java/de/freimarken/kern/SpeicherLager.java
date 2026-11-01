@@ -22,6 +22,8 @@ public final class SpeicherLager implements BesitzLager {
 
     private final Map<String, Parzelle> nachOrt = new LinkedHashMap<>();
     private final Map<Long, String> orteNachId = new LinkedHashMap<>();
+    /** Gruppen liegen getrennt: Sie haben keine Rasterzelle, also keinen Ortsschluessel. */
+    private final Map<Long, Gruppe> gruppen = new LinkedHashMap<>();
     private final AtomicLong naechsteId = new AtomicLong(1L);
     private final Clock uhr;
 
@@ -78,27 +80,137 @@ public final class SpeicherLager implements BesitzLager {
     }
 
     @Override
-    public synchronized Parzelle mitbauerSetzen(long id, Set<UUID> mitbauer) {
+    public synchronized void mitbauerSetzen(long id, Set<UUID> mitbauer) {
+        Gruppe gruppe = gruppen.get(id);
+        if (gruppe != null) {
+            // Durchschreiben: Die Gruppe und jedes ihrer Kinder bekommen dieselbe Liste.
+            // Nur so bleibt darfBauen am Kind eine Abfrage ohne Umweg.
+            gruppen.put(id, new Gruppe(gruppe.id(), gruppe.welt(), gruppe.eigentuemer(),
+                    Set.copyOf(mitbauer), gruppe.preis(), gruppe.erworbenAm()));
+            for (Parzelle kind : kinderVon(id)) {
+                schreibeMitbauer(kind.id(), mitbauer);
+            }
+            return;
+        }
+        schreibeMitbauer(id, mitbauer);
+    }
+
+    private void schreibeMitbauer(long id, Set<UUID> mitbauer) {
         String schluessel = orteNachId.get(id);
         if (schluessel == null) {
             throw new IllegalStateException("Keine Parzelle mit der Nummer " + id);
         }
         Parzelle alt = nachOrt.get(schluessel);
-        Parzelle neu = new Parzelle(alt.id(), alt.welt(), alt.x(), alt.z(), alt.eigentuemer(),
-                mitbauer, alt.preis(), alt.erworbenAm(),
+        nachOrt.put(schluessel, new Parzelle(alt.id(), alt.welt(), alt.x(), alt.z(),
+                alt.eigentuemer(), mitbauer, alt.preis(), alt.erworbenAm(),
                 // Durchtragen, nicht neu setzen: Feste Werte loeschten hier bei jeder
                 // Mitbauer-Aenderung still den Gruppenbezug und den Zustand.
-                alt.art(), alt.elternId(), alt.zustand());
-        nachOrt.put(schluessel, neu);
-        return neu;
+                alt.art(), alt.elternId(), alt.zustand()));
     }
 
     @Override
     public synchronized void entfernen(long id) {
+        if (gruppen.containsKey(id)) {
+            throw new IllegalStateException(
+                    "Nummer " + id + " ist eine Gruppe - erst auftrennen");
+        }
         String schluessel = orteNachId.remove(id);
         if (schluessel != null) {
             nachOrt.remove(schluessel);
         }
+    }
+
+    @Override
+    public synchronized List<Parzelle> kinderVon(long gruppeId) {
+        List<Parzelle> treffer = new ArrayList<>();
+        for (Parzelle parzelle : nachOrt.values()) {
+            if (parzelle.elternId() == gruppeId) {
+                treffer.add(parzelle);
+            }
+        }
+        treffer.sort(Comparator.comparingInt(Parzelle::x).thenComparingInt(Parzelle::z));
+        return List.copyOf(treffer);
+    }
+
+    @Override
+    public synchronized long gruppeSetzen(long gruppeId, String welt, UUID eigentuemer,
+                                          Set<UUID> mitbauer, long gebuehr,
+                                          List<Long> felder) {
+        if (felder.isEmpty()) {
+            throw new IllegalStateException("Kein Feld zum Anhaengen angegeben");
+        }
+        // ERST alles pruefen, DANN alles schreiben. Ohne die Vorpruefung haette ein Fehler
+        // beim dritten Feld die ersten beiden schon angehaengt - und "alles oder nichts"
+        // waere eine Zusage, die diese Umsetzung nur meistens einhaelt.
+        for (long feldId : felder) {
+            String schluessel = orteNachId.get(feldId);
+            Parzelle feld = schluessel == null ? null : nachOrt.get(schluessel);
+            if (feld == null) {
+                throw new IllegalStateException("Keine Parzelle mit der Nummer " + feldId);
+            }
+            if (!feld.welt().equals(welt) || !feld.gehoert(eigentuemer)) {
+                throw new IllegalStateException(
+                        "Feld " + feldId + " gehoert nicht zu dieser Gruppe");
+            }
+            if (feld.hatElternteil()) {
+                throw new IllegalStateException(
+                        "Feld " + feldId + " gehoert schon zu einer Gruppe");
+            }
+        }
+
+        long id = gruppeId;
+        if (id == Parzelle.KEIN_ELTERNTEIL) {
+            id = naechsteId.getAndIncrement();
+            gruppen.put(id, new Gruppe(id, welt, eigentuemer, Set.copyOf(mitbauer),
+                    gebuehr, uhr.instant()));
+        } else {
+            Gruppe alt = gruppen.get(id);
+            if (alt == null) {
+                throw new IllegalStateException("Keine Gruppe mit der Nummer " + id);
+            }
+            // erworbenAm bleibt: Die Gruppe entsteht einmal. Eine Gruppe, die bei jedem
+            // Wachsen juenger wird als ihre Kinder, setzt jede kuenftige Verfallsrechnung
+            // still zurueck.
+            gruppen.put(id, new Gruppe(id, alt.welt(), alt.eigentuemer(),
+                    Set.copyOf(mitbauer), alt.preis() + gebuehr, alt.erworbenAm()));
+        }
+
+        for (long feldId : felder) {
+            String schluessel = orteNachId.get(feldId);
+            Parzelle alt = nachOrt.get(schluessel);
+            nachOrt.put(schluessel, new Parzelle(alt.id(), alt.welt(), alt.x(), alt.z(),
+                    alt.eigentuemer(), mitbauer, alt.preis(), alt.erworbenAm(),
+                    alt.art(), id, alt.zustand()));
+        }
+        // Auch die schon vorhandenen Kinder bekommen die neue Liste - beim Erweitern ist
+        // sie die Vereinigung und kann gewachsen sein.
+        for (Parzelle kind : kinderVon(id)) {
+            schreibeMitbauer(kind.id(), mitbauer);
+        }
+        return id;
+    }
+
+    @Override
+    public synchronized void auftrennen(long gruppeId) {
+        if (gruppen.remove(gruppeId) == null) {
+            throw new IllegalStateException("Keine Gruppe mit der Nummer " + gruppeId);
+        }
+        for (Parzelle kind : kinderVon(gruppeId)) {
+            String schluessel = orteNachId.get(kind.id());
+            nachOrt.put(schluessel, new Parzelle(kind.id(), kind.welt(), kind.x(), kind.z(),
+                    kind.eigentuemer(), kind.mitbauer(), kind.preis(), kind.erworbenAm(),
+                    kind.art(), Parzelle.KEIN_ELTERNTEIL, kind.zustand()));
+        }
+    }
+
+    /**
+     * Eine Gruppe im Arbeitsspeicher.
+     *
+     * <p>Bewusst privat und bewusst kein {@link Parzelle}: Eine Gruppe hat keine
+     * Rasterzelle, und ein Parzelle-Objekt ohne x und z gibt es nicht.
+     */
+    private record Gruppe(long id, String welt, UUID eigentuemer, Set<UUID> mitbauer,
+                          long preis, java.time.Instant erworbenAm) {
     }
 
     /** Wie viele Parzellen insgesamt vergeben sind - fuer Tests und Anzeige. */

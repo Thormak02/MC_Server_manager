@@ -45,7 +45,19 @@ public final class Besitzbuch {
         /** Der Spieler stand gar nicht auf der Liste. */
         NICHT_EINGETRAGEN,
         /** Die Parzelle gehoert zu einer Gruppe - einzeln geht hier nichts. */
-        TEIL_EINER_GRUPPE
+        TEIL_EINER_GRUPPE,
+        /** Nebenan ist keine Parzelle vergeben. Nicht KEINE_PARZELLE - das meint den eigenen Stand. */
+        NACHBAR_FREI,
+        /** Die Nachbarparzelle gehoert einem anderen Spieler. */
+        NACHBAR_FREMD,
+        /** Mindestens eines der beiden Felder steckt schon in einer Gruppe. */
+        SCHON_IN_GRUPPE,
+        /** Die Gruppe waere groesser, als der Rang erlaubt. Nicht GRENZE_ERREICHT - das zaehlt Parzellen. */
+        GRUPPE_ZU_GROSS,
+        /** Hier ist keine Gruppe, die sich auftrennen liesse. */
+        KEINE_GRUPPE,
+        /** Der Spieler steht auf dem gefuellten Weg seiner Gruppe, braucht aber eine Rasterzelle. */
+        AUF_DEM_WEG
     }
 
     /**
@@ -121,9 +133,53 @@ public final class Besitzbuch {
      * genau eine Frage, und sie beantwortet sie fuer alle gleich.
      */
     public boolean darfBauen(String welt, UUID spieler, int weltX, int weltZ) {
-        return parzelleAn(welt, weltX, weltZ)
+        return zustaendigerBesitz(welt, weltX, weltZ)
                 .map(parzelle -> parzelle.darfBauen(spieler))
                 .orElse(false);
+    }
+
+    /**
+     * Der Besitz, der an dieser Stelle das Bauen regelt - Bauland oder Gruppeninneres.
+     *
+     * <p>Getrennt von {@link #parzelleAn}, und das ist der ganze Punkt: Jene Methode
+     * beantwortet "auf welcher Rasterzelle stehe ich", und auf dem Band zwischen zwei
+     * Zellen liefert {@code floorDiv} dafuer immer die KLEINERE der beiden. Ein
+     * Schreibbefehl, der daraus seine Zeile zieht, traefe unter Umstaenden das
+     * Nachbargrundstueck. Hier geht es um die andere Frage: Wem gehoert dieser Block?
+     *
+     * <p>Zugeschlagen wird nur das INNERE einer Gruppe. Der Aussenring bleibt Weg - sonst
+     * waere die Gruppe von aussen nicht mehr abgegrenzt, und zwei benachbarte Gruppen
+     * haetten keine Strasse mehr zwischen sich.
+     *
+     * <p>Zurueckgegeben wird die Ankerzelle und nicht die Gruppenzeile: Jedes Kind traegt
+     * Eigentuemer, Mitbauer und Zustand vollstaendig (Plan 6.1), also ist jedes Kind eine
+     * gueltige Antwort auf "wer darf hier bauen".
+     *
+     * <p>Was das im Hauptfaden kostet: auf Bauland EIN Nachsehen wie bisher. Auf Weg und
+     * Mauer bisher keines, jetzt eines - und nur im Inneren einer Gruppe zwei bis vier.
+     * Das ist der ehrliche Preis dafuer, dass ein gefuellter Weg bebaubar ist; ohne ihn
+     * zahlte der Spieler 20.000 Mark fuer einen Grasstreifen, den er nicht anfassen darf.
+     * Alle diese Abfragen gehen durch den Zwischenspeicher, der auch leere Antworten
+     * einlagert.
+     */
+    public Optional<Parzelle> zustaendigerBesitz(String welt, int weltX, int weltZ) {
+        Optional<Parzelle> anker =
+                lager.finde(welt, plan.parzelleX(weltX), plan.parzelleZ(weltZ));
+        if (plan.feldBei(weltX, weltZ) == Rasterplan.Feld.PARZELLE) {
+            return anker;
+        }
+        // Der Kurzschluss steht VOR dem Bau der Lambda: Steckt die Ankerzelle in keiner
+        // Gruppe, ist die Antwort nach einem Nachsehen fertig und es wird nichts belegt.
+        if (anker.isEmpty() || !anker.get().hatElternteil()) {
+            return Optional.empty();
+        }
+        long gruppe = anker.get().elternId();
+        return plan.imInneren(weltX, weltZ,
+                (zx, zz) -> lager.finde(welt, zx, zz)
+                        .filter(kind -> kind.elternId() == gruppe)
+                        .isPresent())
+                ? anker
+                : Optional.empty();
     }
 
     /**
@@ -190,7 +246,27 @@ public final class Besitzbuch {
      * <p>Gibt nur das HINDERNIS zurueck, nie eine Erlaubnis. Ein durchgereichter Entscheid
      * mit {@code ERTEILT} meldete dem Spieler "Erledigt.", ohne dass etwas geschehen waere.
      */
-    private static Optional<Entscheid> hindernis(Optional<Parzelle> gefunden, UUID handelnder) {
+    /** Ob eine Tat auf einem Gruppenkind erlaubt ist oder dort verweigert wird. */
+    private enum AufGruppe {
+        /** Die Tat wirkt auf die ganze Gruppe - das Lager schreibt auf alle Kinder durch. */
+        ERLAUBT,
+        /** Die Tat meint ein einzelnes Feld und waere auf einer Gruppe missverstaendlich. */
+        VERWEIGERN
+    }
+
+    /**
+     * Die Zeile, auf die eine Aenderung geschrieben wird - bei einem Gruppenkind die Gruppe.
+     *
+     * <p>Das Umlenken an einer Stelle. Geprueft wird am Kind, weil es Eigentuemer und
+     * Mitbauer vollstaendig traegt; geschrieben wird an der Gruppe, und von dort schreibt
+     * das Lager auf alle Kinder durch.
+     */
+    private static long schreibZiel(Parzelle parzelle) {
+        return parzelle.hatElternteil() ? parzelle.elternId() : parzelle.id();
+    }
+
+    private static Optional<Entscheid> hindernis(Optional<Parzelle> gefunden, UUID handelnder,
+                                                 AufGruppe aufGruppe) {
         if (gefunden.isEmpty()) {
             return Optional.of(Entscheid.nein(Bescheid.KEINE_PARZELLE));
         }
@@ -198,7 +274,7 @@ public final class Besitzbuch {
         if (!parzelle.gehoert(handelnder)) {
             return Optional.of(new Entscheid(Bescheid.NICHT_EIGENTUEMER, 0L, gefunden));
         }
-        if (parzelle.hatElternteil()) {
+        if (aufGruppe == AufGruppe.VERWEIGERN && parzelle.hatElternteil()) {
             // Eigentuemer und Mitbauer stehen am Kind zwar vollstaendig - nur so bleibt
             // darfBauen eine Abfrage ohne Umweg -, geschrieben wird aber ausschliesslich
             // ueber die Gruppe. Verweigern ist die rueckholbare Antwort: Ein halb
@@ -208,11 +284,179 @@ public final class Besitzbuch {
         return Optional.empty();
     }
 
+    // --- Zusammenlegen und Auftrennen ------------------------------------------
+
+    /**
+     * Was ein Zusammenlegen kosten wuerde und ob es ginge - ohne etwas zu tun.
+     *
+     * <p>Fuer die Warnung vor der Bestaetigung. Schreibt nichts, auch nicht an der Kasse.
+     */
+    public Entscheid pruefeZusammenlegen(String welt, UUID eigentuemer, int weltX, int weltZ,
+                                         Richtung richtung, int hoechsteFelder) {
+        return zusammenlegenWeg(welt, eigentuemer, weltX, weltZ, richtung, hoechsteFelder,
+                false);
+    }
+
+    /**
+     * Zwei benachbarte Felder zu einer Gruppe machen - oder ein Feld an eine Gruppe
+     * anhaengen.
+     *
+     * <p>Bei Erfolg ist die Gebuehr abgebucht und die Ablage geaendert. Bei jedem anderen
+     * Bescheid ist nichts passiert, auch nicht an der Kasse.
+     *
+     * <p>Die Welt wird hier NICHT angefasst. Das ist Absicht: Die Ablage fuehrt, die Welt
+     * folgt. Gefuellte Bloecke ohne Recht darauf waeren das Fehlerbild, das wie ein
+     * Rechtefehler aussieht und keiner ist.
+     *
+     * @param hoechsteFelder wie viele Felder eine Gruppe bei seinem Rang haben darf
+     */
+    public Entscheid zusammenlegen(String welt, UUID eigentuemer, int weltX, int weltZ,
+                                   Richtung richtung, int hoechsteFelder) {
+        return zusammenlegenWeg(welt, eigentuemer, weltX, weltZ, richtung, hoechsteFelder,
+                true);
+    }
+
+    /**
+     * Pruefen und auf Wunsch tun - damit die Warnung dieselbe Rechnung liest wie die Tat.
+     *
+     * <p>Zwei getrennte Methoden haetten zwei Gebuehrenformeln, und eine davon wuerde
+     * irgendwann nicht mitgepflegt. Dann nennt die Warnung einen anderen Betrag als den,
+     * der abgebucht wird.
+     *
+     * <p>Die Reihenfolge der Pruefungen ist Absicht: erst der Ort, dann die Person, dann
+     * der Rang, zuletzt das Geld. Rang VOR Geld, weil "dir fehlen 30.000" ihn verdienen
+     * schickt - und wenn er wiederkommt, sagt die Rangobergrenze trotzdem nein. Geld
+     * zuletzt auch deshalb, weil es die einzige Pruefung ist, die bei Erfolg schreibt.
+     */
+    private Entscheid zusammenlegenWeg(String welt, UUID eigentuemer, int weltX, int weltZ,
+                                       Richtung richtung, int hoechsteFelder,
+                                       boolean wirklich) {
+        // 1. Wo steht er? Auf dem gefuellten Weg seiner eigenen Gruppe braucht dieser
+        // Befehl trotzdem eine bestimmte Rasterzelle - floorDiv naehme dort die kleinere
+        // Nachbarzelle, und das waere womoeglich das falsche Feld.
+        if (plan.feldBei(weltX, weltZ) != Rasterplan.Feld.PARZELLE) {
+            return Entscheid.nein(zustaendigerBesitz(welt, weltX, weltZ).isPresent()
+                    ? Bescheid.AUF_DEM_WEG
+                    : Bescheid.KEINE_PARZELLE);
+        }
+
+        int px = plan.parzelleX(weltX);
+        int pz = plan.parzelleZ(weltZ);
+        Optional<Parzelle> hier = lager.finde(welt, px, pz);
+        Optional<Entscheid> stehtEntgegen = hindernis(hier, eigentuemer, AufGruppe.ERLAUBT);
+        if (stehtEntgegen.isPresent()) {
+            return stehtEntgegen.get();
+        }
+
+        int nx = px + richtung.dx();
+        int nz = pz + richtung.dz();
+        if (!grenze.enthaeltParzelle(nx, nz)) {
+            return Entscheid.nein(Bescheid.AUSSERHALB);
+        }
+        Optional<Parzelle> drueben = lager.finde(welt, nx, nz);
+        if (drueben.isEmpty()) {
+            return Entscheid.nein(Bescheid.NACHBAR_FREI);
+        }
+        if (!drueben.get().gehoert(eigentuemer)) {
+            return new Entscheid(Bescheid.NACHBAR_FREMD, 0L, drueben);
+        }
+
+        Parzelle a = hier.get();
+        Parzelle b = drueben.get();
+        if (a.hatElternteil() && b.hatElternteil()) {
+            // Zwei Gruppen zu vereinigen wuerde aus dem Zusammenhang eine Graphensuche
+            // machen. Wer das will, trennt eine davon auf und haengt die Felder einzeln an.
+            return new Entscheid(Bescheid.SCHON_IN_GRUPPE, 0L, hier);
+        }
+
+        // Welches der beiden die Gruppe ist, entscheidet die Lage und nicht, wo der
+        // Spieler zufaellig steht - sonst scheiterte das voellig legale "loses Feld an
+        // die eigene Gruppe anhaengen" allein an seinem Standort.
+        long gruppeId = a.hatElternteil() ? a.elternId()
+                : b.hatElternteil() ? b.elternId()
+                : Parzelle.KEIN_ELTERNTEIL;
+        Parzelle beitreter = a.hatElternteil() ? b : a;
+
+        int bisher = gruppeId == Parzelle.KEIN_ELTERNTEIL ? 1 : lager.kinderVon(gruppeId).size();
+        int nachher = bisher + 1;
+        long gebuehr = Preisstaffel.zusammenlegungsGebuehr(nachher);
+        if (nachher > hoechsteFelder) {
+            return Entscheid.nein(Bescheid.GRUPPE_ZU_GROSS, gebuehr);
+        }
+
+        // Die Vereinigung der Mitbauer. Leeren waere stiller Rechteverlust, "die des
+        // ersten" haenge davon ab, wo der Spieler steht.
+        Set<UUID> zusammen = new LinkedHashSet<>(a.mitbauer());
+        zusammen.addAll(b.mitbauer());
+
+        if (!wirklich) {
+            return new Entscheid(Bescheid.ERTEILT, gebuehr, hier);
+        }
+        if (!kasse.abbuchen(eigentuemer, gebuehr)) {
+            return Entscheid.nein(Bescheid.ZU_WENIG_MARK, gebuehr);
+        }
+        try {
+            List<Long> neueFelder = gruppeId == Parzelle.KEIN_ELTERNTEIL
+                    ? List.of(a.id(), b.id())
+                    : List.of(beitreter.id());
+            long id = lager.gruppeSetzen(gruppeId, welt, eigentuemer, zusammen, gebuehr,
+                    neueFelder);
+            return new Entscheid(Bescheid.ERTEILT, gebuehr,
+                    lager.finde(welt, px, pz).or(() -> lager.kinderVon(id).stream().findFirst()));
+        } catch (RuntimeException fehler) {
+            // Dasselbe Muster wie in nehmen(): Das Geld ist weg, die Gruppe nicht
+            // gekommen. Der Fall ist nicht theoretisch - der Wettlaufriegel im Lager
+            // laesst einen zweiten Spieler auflaufen, der dasselbe Feld gerade anhaengt.
+            kasse.gutschreiben(eigentuemer, gebuehr);
+            throw fehler;
+        }
+    }
+
+    /** Ob hier eine Gruppe liegt, die sich auftrennen liesse - ohne etwas zu tun. */
+    public Entscheid pruefeAuftrennen(String welt, UUID eigentuemer, int weltX, int weltZ) {
+        return auftrennenWeg(welt, eigentuemer, weltX, weltZ, false);
+    }
+
+    /**
+     * Eine Gruppe aufloesen - die Felder werden wieder eigenstaendig.
+     *
+     * <p>Kostet nichts und zahlt nichts zurueck, wie das Aufgeben. Plan 6.3 verlangt den
+     * Weg ausdruecklich: "sonst ist jeder Fehlgriff endgueltig."
+     */
+    public Entscheid auftrennen(String welt, UUID eigentuemer, int weltX, int weltZ) {
+        return auftrennenWeg(welt, eigentuemer, weltX, weltZ, true);
+    }
+
+    private Entscheid auftrennenWeg(String welt, UUID eigentuemer, int weltX, int weltZ,
+                                    boolean wirklich) {
+        Optional<Parzelle> gefunden = zustaendigerBesitz(welt, weltX, weltZ);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.ERLAUBT);
+        if (stehtEntgegen.isPresent()) {
+            return stehtEntgegen.get();
+        }
+        Parzelle parzelle = gefunden.get();
+        if (!parzelle.hatElternteil()) {
+            return new Entscheid(Bescheid.KEINE_GRUPPE, 0L, gefunden);
+        }
+        if (wirklich) {
+            lager.auftrennen(parzelle.elternId());
+        }
+        return new Entscheid(Bescheid.ERTEILT, 0L, gefunden);
+    }
+
+    /** Die Felder der Gruppe an dieser Stelle - leer, wenn dort keine Gruppe liegt. */
+    public List<Parzelle> gruppenFelder(String welt, int weltX, int weltZ) {
+        return zustaendigerBesitz(welt, weltX, weltZ)
+                .filter(Parzelle::hatElternteil)
+                .map(parzelle -> lager.kinderVon(parzelle.elternId()))
+                .orElseGet(List::of);
+    }
+
     /** Einen Mitbauer eintragen. Nur der Eigentuemer darf das. */
     public Entscheid mitbauerHinzufuegen(String welt, UUID eigentuemer, int weltX, int weltZ,
                                          UUID neuerMitbauer) {
-        Optional<Parzelle> gefunden = parzelleAn(welt, weltX, weltZ);
-        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer);
+        Optional<Parzelle> gefunden = zustaendigerBesitz(welt, weltX, weltZ);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.ERLAUBT);
         if (stehtEntgegen.isPresent()) {
             return stehtEntgegen.get();
         }
@@ -222,15 +466,16 @@ public final class Besitzbuch {
         }
         Set<UUID> neu = new LinkedHashSet<>(parzelle.mitbauer());
         neu.add(neuerMitbauer);
+        lager.mitbauerSetzen(schreibZiel(parzelle), neu);
         return new Entscheid(Bescheid.ERTEILT, 0L,
-                Optional.of(lager.mitbauerSetzen(parzelle.id(), neu)));
+                lager.finde(welt, parzelle.x(), parzelle.z()));
     }
 
     /** Einen Mitbauer austragen. Nur der Eigentuemer darf das. */
     public Entscheid mitbauerEntfernen(String welt, UUID eigentuemer, int weltX, int weltZ,
                                        UUID bisherigerMitbauer) {
-        Optional<Parzelle> gefunden = parzelleAn(welt, weltX, weltZ);
-        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer);
+        Optional<Parzelle> gefunden = zustaendigerBesitz(welt, weltX, weltZ);
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.ERLAUBT);
         if (stehtEntgegen.isPresent()) {
             return stehtEntgegen.get();
         }
@@ -240,8 +485,9 @@ public final class Besitzbuch {
         }
         Set<UUID> neu = new LinkedHashSet<>(parzelle.mitbauer());
         neu.remove(bisherigerMitbauer);
+        lager.mitbauerSetzen(schreibZiel(parzelle), neu);
         return new Entscheid(Bescheid.ERTEILT, 0L,
-                Optional.of(lager.mitbauerSetzen(parzelle.id(), neu)));
+                lager.finde(welt, parzelle.x(), parzelle.z()));
     }
 
     /**
@@ -252,8 +498,11 @@ public final class Besitzbuch {
      * guenstiger da als vorher.
      */
     public Entscheid aufgeben(String welt, UUID eigentuemer, int weltX, int weltZ) {
-        Optional<Parzelle> gefunden = parzelleAn(welt, weltX, weltZ);
-        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer);
+        Optional<Parzelle> gefunden = zustaendigerBesitz(welt, weltX, weltZ);
+        // VERWEIGERN, nicht ERLAUBT: "/parzelle aufgeben bestaetigen 3 7" nennt EIN Feld.
+        // Durchgeschrieben loeschte es die ganze Gruppe - und genau diese Bestaetigung
+        // ist die Sicherung, die so etwas verhindern soll.
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden, eigentuemer, AufGruppe.VERWEIGERN);
         if (stehtEntgegen.isPresent()) {
             return stehtEntgegen.get();
         }

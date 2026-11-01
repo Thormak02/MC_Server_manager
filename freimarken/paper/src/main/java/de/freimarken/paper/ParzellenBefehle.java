@@ -387,6 +387,12 @@ final class ParzellenBefehle {
             case NICHT_EINGETRAGEN -> "Stand gar nicht auf der Liste.";
             case TEIL_EINER_GRUPPE -> "Die Parzelle gehoert zu einer Gruppe - "
                     + "das geht nur ueber die ganze Gruppe.";
+            case NACHBAR_FREI -> "Dort drueben ist keine Parzelle vergeben.";
+            case NACHBAR_FREMD -> "Die Nachbarparzelle gehoert jemand anderem.";
+            case SCHON_IN_GRUPPE -> "Beide Felder gehoeren schon zu einer Gruppe.";
+            case GRUPPE_ZU_GROSS -> "Dein Rang erlaubt keine groessere Gruppe.";
+            case KEINE_GRUPPE -> "Hier ist keine Gruppe.";
+            case AUF_DEM_WEG -> "Stell dich auf das Feld, das du meinst - nicht auf den Weg.";
             case ERTEILT -> "Erledigt.";
         }, NamedTextColor.RED);
     }

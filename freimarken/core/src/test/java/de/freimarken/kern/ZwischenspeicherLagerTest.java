@@ -75,14 +75,31 @@ class ZwischenspeicherLagerTest {
         }
 
         @Override
-        public Parzelle mitbauerSetzen(long id, Set<UUID> mitbauer) {
-            return echt.mitbauerSetzen(id, mitbauer);
+        public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
+            echt.mitbauerSetzen(id, mitbauer);
         }
 
         @Override
         public void entfernen(long id) {
             echt.entfernen(id);
         }
+
+        @Override
+        public List<Parzelle> kinderVon(long gruppeId) {
+            return echt.kinderVon(gruppeId);
+        }
+
+        @Override
+        public long gruppeSetzen(long gruppeId, String welt, UUID eigentuemer,
+                                 Set<UUID> mitbauer, long gebuehr, List<Long> felder) {
+            return echt.gruppeSetzen(gruppeId, welt, eigentuemer, mitbauer, gebuehr, felder);
+        }
+
+        @Override
+        public void auftrennen(long gruppeId) {
+            echt.auftrennen(gruppeId);
+        }
+
     }
 
     private static final String WELT = "freimarken:marktstadt";

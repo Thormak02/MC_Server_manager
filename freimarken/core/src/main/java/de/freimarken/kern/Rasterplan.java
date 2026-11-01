@@ -90,14 +90,65 @@ public final class Rasterplan {
     }
 
     private Feld aufAchse(int wert) {
-        int imRaster = Math.floorMod(wert, rasterWeite());
-        if (imRaster < parzellenKante) {
+        if (!zwischenZellen(wert)) {
             return Feld.PARZELLE;
         }
+        int imRaster = Math.floorMod(wert, rasterWeite());
         if (imRaster == parzellenKante || imRaster == rasterWeite() - 1) {
             return Feld.MAUER;
         }
         return Feld.WEG;
+    }
+
+    /**
+     * Ob diese Koordinate im Band aus Mauer und Weg liegt.
+     *
+     * <p>Dort grenzen zwei Zellen aneinander: die, die {@link #parzelleX} nennt, und die
+     * naechste. Auf Bauland ist es nur eine. Dieser Unterschied traegt
+     * {@link #imInneren} - und er ist auch der Grund, warum ein Schreibbefehl seine Zeile
+     * nie aus {@code parzelleX} eines Wegfeldes ziehen darf: Er traefe immer die
+     * kleinere der beiden Nachbarzellen, also unter Umstaenden fremdes Grundstueck.
+     */
+    public boolean zwischenZellen(int wert) {
+        return Math.floorMod(wert, rasterWeite()) >= parzellenKante;
+    }
+
+    /** Ob eine Rasterzelle zu einer betrachteten Flaeche gehoert. */
+    @FunctionalInterface
+    public interface ZellenPruefung {
+
+        boolean gehoert(int zelleX, int zelleZ);
+    }
+
+    /**
+     * Liegt diese Weltkoordinate im INNEREN einer Flaeche aus Rasterzellen?
+     *
+     * <p>Anliegend sind EINE Zelle auf Bauland, ZWEI auf einem Streifen zwischen zwei
+     * Zellen und VIER auf einer Kreuzung. Innen liegt die Koordinate nur, wenn alle
+     * anliegenden Zellen dazugehoeren.
+     *
+     * <p>Alle, nicht irgendeine: Bei der L-Form aus 0/0, 1/0 und 0/1 liegt die Kreuzung
+     * zwischen allen vieren - aber die vierte Zelle 1/1 ist fremdes Grundstueck. Wuerde
+     * dort gefuellt, bekaeme der Nachbar einen Grasfleck vor die Tuer, ueber den jeder
+     * auf sein Grundstueck sieht.
+     *
+     * <p>Der Aussenring einer Gruppe bleibt damit von selbst Weg: Dort liegt jenseits des
+     * Bandes immer eine Zelle, die nicht dazugehoert. Das ist gewollt - ohne ihn waere
+     * die Gruppe von aussen nicht mehr abgegrenzt.
+     */
+    public boolean imInneren(int weltX, int weltZ, ZellenPruefung gehoertDazu) {
+        int vonX = parzelleX(weltX);
+        int vonZ = parzelleZ(weltZ);
+        int bisX = zwischenZellen(weltX) ? vonX + 1 : vonX;
+        int bisZ = zwischenZellen(weltZ) ? vonZ + 1 : vonZ;
+        for (int x = vonX; x <= bisX; x++) {
+            for (int z = vonZ; z <= bisZ; z++) {
+                if (!gehoertDazu.gehoert(x, z)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /** Nummer der Parzelle auf der X-Achse; auch negativ, Parzelle 0 beginnt bei x=0. */

@@ -170,29 +170,16 @@ public final class MariaLager implements BesitzLager {
     }
 
     @Override
-    public Parzelle mitbauerSetzen(long id, Set<UUID> mitbauer) {
+    public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
         try {
             Connection c = datenbank.verbindung();
             boolean vorherAutomatisch = c.getAutoCommit();
             c.setAutoCommit(false);
             try {
-                try (PreparedStatement weg = c.prepareStatement(
-                        "DELETE FROM parzellen_mitbauer WHERE parzelle_id = ?")) {
-                    weg.setLong(1, id);
-                    weg.executeUpdate();
-                }
-                if (!mitbauer.isEmpty()) {
-                    try (PreparedStatement rein = c.prepareStatement(
-                            "INSERT INTO parzellen_mitbauer (parzelle_id, spieler) "
-                                    + "VALUES (?, ?)")) {
-                        for (UUID spieler : mitbauer) {
-                            rein.setLong(1, id);
-                            rein.setString(2, spieler.toString());
-                            rein.addBatch();
-                        }
-                        rein.executeBatch();
-                    }
-                }
+                // schreibeMitbauerDurch nimmt die Gruppe UND alle ihre Kinder. Bei
+                // einer Rasterzelle ohne Kinder ist das genau die eine Zeile - deshalb
+                // braucht es hier keine Fallunterscheidung.
+                schreibeMitbauerDurch(c, id, mitbauer);
                 c.commit();
             } catch (SQLException fehler) {
                 // rollback laeuft ueber dieselbe, vielleicht gerade gestorbene Verbindung.
@@ -216,8 +203,6 @@ public final class MariaLager implements BesitzLager {
                     datenbank.verwerfen();
                 }
             }
-            return nachNummer(id).orElseThrow(() ->
-                    new IllegalStateException("Keine Parzelle mit der Nummer " + id));
         } catch (SQLException fehler) {
             throw weiterreichen("Setzen der Mitbauer", fehler);
         }
@@ -226,10 +211,17 @@ public final class MariaLager implements BesitzLager {
     @Override
     public void entfernen(long id) {
         try (PreparedStatement anfrage = datenbank.verbindung()
-                .prepareStatement("DELETE FROM parzellen WHERE id = ?")) {
+                .prepareStatement("DELETE FROM parzellen WHERE id = ? AND art <> 'gruppe'")) {
             anfrage.setLong(1, id);
-            anfrage.executeUpdate();
             // Die Mitbauer raeumt der Fremdschluessel mit ON DELETE CASCADE weg.
+            if (anfrage.executeUpdate() == 0 && istGruppe(id)) {
+                // Ohne diesen Riegel taete entfernen() bei einer Gruppe still gar nichts,
+                // und der Aufrufer glaubte, sie sei weg. Nachgesehen wird nur im
+                // Fehlerfall - und nur hier, denn eine unbekannte Nummer zu entfernen ist
+                // laut Vertrag ausdruecklich KEIN Fehler.
+                throw new IllegalStateException(
+                        "Nummer " + id + " ist eine Gruppe - erst auftrennen");
+            }
         } catch (SQLIntegrityConstraintViolationException hatKinder) {
             // fk_besitz_elternteil steht auf RESTRICT: Eine Zeile, auf die eltern_id
             // zeigt, laesst sich nicht loeschen - sonst naehme ein Aufgeben die Kinder
@@ -239,6 +231,233 @@ public final class MariaLager implements BesitzLager {
                     + " hat noch untergeordnete Eintraege - erst auftrennen", hatKinder);
         } catch (SQLException fehler) {
             throw weiterreichen("Entfernen einer Parzelle", fehler);
+        }
+    }
+
+    @Override
+    public List<Parzelle> kinderVon(long gruppeId) {
+        // Bewusst ohne AUF_DEM_RASTER: Ein Kind ohne Rasterzelle waere ein Fehler, und
+        // dann soll der Riegel in lies() laut werden, statt die Zeile still zu
+        // verschweigen.
+        String sql = "SELECT " + SPALTEN + " FROM parzellen WHERE eltern_id = ? "
+                + "ORDER BY x, z";
+        List<Parzelle> treffer = new ArrayList<>();
+        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
+            anfrage.setLong(1, gruppeId);
+            try (ResultSet ergebnis = anfrage.executeQuery()) {
+                while (ergebnis.next()) {
+                    treffer.add(lies(ergebnis));
+                }
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Lesen der Gruppenfelder", fehler);
+        }
+        return List.copyOf(treffer);
+    }
+
+    @Override
+    public long gruppeSetzen(long gruppeId, String welt, UUID eigentuemer,
+                             Set<UUID> mitbauer, long gebuehr, List<Long> felder) {
+        if (felder.isEmpty()) {
+            throw new IllegalStateException("Kein Feld zum Anhaengen angegeben");
+        }
+        boolean vorherAutomatisch = true;
+        Connection c = null;
+        try {
+            c = datenbank.verbindung();
+            vorherAutomatisch = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                long id = gruppeId == Parzelle.KEIN_ELTERNTEIL
+                        ? legeGruppeAn(c, welt, eigentuemer, gebuehr)
+                        : erweitereGruppe(c, gruppeId, gebuehr);
+                haengeFelderAn(c, id, welt, eigentuemer, felder);
+                schreibeMitbauerDurch(c, id, mitbauer);
+                c.commit();
+                return id;
+            } catch (SQLException | RuntimeException fehler) {
+                zuruecknehmen(c, fehler);
+                throw fehler;
+            } finally {
+                zurueckAufAutomatik(c, vorherAutomatisch);
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Anlegen oder Erweitern einer Gruppe", fehler);
+        }
+    }
+
+    @Override
+    public void auftrennen(long gruppeId) {
+        boolean vorherAutomatisch = true;
+        Connection c = null;
+        try {
+            c = datenbank.verbindung();
+            vorherAutomatisch = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                // Reihenfolge ist Pflicht: fk_besitz_elternteil steht auf RESTRICT.
+                // Andersherum verweigert InnoDB die Zeile, weil noch Kinder zeigen.
+                try (PreparedStatement loesen = c.prepareStatement(
+                        "UPDATE parzellen SET eltern_id = NULL WHERE eltern_id = ?")) {
+                    loesen.setLong(1, gruppeId);
+                    loesen.executeUpdate();
+                }
+                try (PreparedStatement weg = c.prepareStatement(
+                        "DELETE FROM parzellen WHERE id = ? AND art = 'gruppe'")) {
+                    weg.setLong(1, gruppeId);
+                    if (weg.executeUpdate() != 1) {
+                        throw new IllegalStateException(
+                                "Nummer " + gruppeId + " ist keine Gruppe");
+                    }
+                }
+                c.commit();
+            } catch (SQLException | RuntimeException fehler) {
+                zuruecknehmen(c, fehler);
+                throw fehler;
+            } finally {
+                zurueckAufAutomatik(c, vorherAutomatisch);
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Auftrennen einer Gruppe", fehler);
+        }
+    }
+
+    private long legeGruppeAn(Connection c, String welt, UUID eigentuemer, long gebuehr)
+            throws SQLException {
+        String sql = "INSERT INTO parzellen "
+                + "(welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand) "
+                + "VALUES (?, NULL, NULL, ?, ?, ?, 'gruppe', NULL, 'aktiv')";
+        try (PreparedStatement anfrage =
+                     c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            anfrage.setString(1, welt);
+            anfrage.setString(2, eigentuemer.toString());
+            anfrage.setLong(3, gebuehr);
+            anfrage.setObject(4, LocalDateTime.ofInstant(
+                    Instant.now().truncatedTo(ChronoUnit.MILLIS), ZoneOffset.UTC));
+            anfrage.executeUpdate();
+            try (ResultSet schluessel = anfrage.getGeneratedKeys()) {
+                if (!schluessel.next()) {
+                    throw new IllegalStateException("Die Gruppe bekam keine Nummer");
+                }
+                return schluessel.getLong(1);
+            }
+        }
+    }
+
+    private long erweitereGruppe(Connection c, long gruppeId, long gebuehr)
+            throws SQLException {
+        // FOR UPDATE sperrt die Zeile und reiht gleichzeitige Erweiterungen hintereinander
+        // auf. Ohne sie koennten zwei Erweiterungen denselben Preis lesen und einer der
+        // beiden Beitraege verschwaende.
+        try (PreparedStatement pruefen = c.prepareStatement(
+                "SELECT preis FROM parzellen WHERE id = ? AND art = 'gruppe' FOR UPDATE")) {
+            pruefen.setLong(1, gruppeId);
+            try (ResultSet ergebnis = pruefen.executeQuery()) {
+                if (!ergebnis.next()) {
+                    throw new IllegalStateException(
+                            "Keine Gruppe mit der Nummer " + gruppeId);
+                }
+            }
+        }
+        // erworben_am bleibt: Die Gruppe entsteht einmal. Eine Gruppe, die bei jedem
+        // Wachsen juenger wird als ihre Kinder, setzt jede kuenftige Verfallsrechnung
+        // still zurueck.
+        try (PreparedStatement teurer = c.prepareStatement(
+                "UPDATE parzellen SET preis = preis + ? WHERE id = ?")) {
+            teurer.setLong(1, gebuehr);
+            teurer.setLong(2, gruppeId);
+            teurer.executeUpdate();
+        }
+        return gruppeId;
+    }
+
+    private void haengeFelderAn(Connection c, long gruppeId, String welt, UUID eigentuemer,
+                                List<Long> felder) throws SQLException {
+        // Die vier Zusatzbedingungen sind der Wettlaufriegel. Sie machen drei Dinge
+        // unmoeglich, die kein Programm allein verhindern kann, weil zwischen Nachsehen
+        // und Schreiben immer ein zweiter Spieler passt: ein fremdes Feld anhaengen,
+        // ein Feld zweimal vergeben (eltern_id IS NULL) und eine GRUPPE als Kind
+        // anhaengen (x IS NOT NULL - eine Gruppe hat kein eltern_id und waere es sonst).
+        // Dasselbe Prinzip wie der eindeutige Schluessel ort.
+        String sql = "UPDATE parzellen SET eltern_id = ? WHERE id = ? AND welt = ? "
+                + "AND eigentuemer = ? AND eltern_id IS NULL AND x IS NOT NULL";
+        try (PreparedStatement anfrage = c.prepareStatement(sql)) {
+            for (long feldId : felder) {
+                anfrage.setLong(1, gruppeId);
+                anfrage.setLong(2, feldId);
+                anfrage.setString(3, welt);
+                anfrage.setString(4, eigentuemer.toString());
+                if (anfrage.executeUpdate() != 1) {
+                    throw new IllegalStateException("Feld " + feldId + " laesst sich nicht "
+                            + "anhaengen: Es fehlt, gehoert jemand anderem, liegt nicht auf "
+                            + "dem Raster oder ist schon in einer Gruppe");
+                }
+            }
+        }
+    }
+
+    private void schreibeMitbauerDurch(Connection c, long gruppeId, Set<UUID> mitbauer)
+            throws SQLException {
+        List<Long> zeilen = new ArrayList<>();
+        zeilen.add(gruppeId);
+        try (PreparedStatement kinder = c.prepareStatement(
+                "SELECT id FROM parzellen WHERE eltern_id = ?")) {
+            kinder.setLong(1, gruppeId);
+            try (ResultSet ergebnis = kinder.executeQuery()) {
+                while (ergebnis.next()) {
+                    zeilen.add(ergebnis.getLong(1));
+                }
+            }
+        }
+        try (PreparedStatement weg = c.prepareStatement(
+                "DELETE FROM parzellen_mitbauer WHERE parzelle_id = ?")) {
+            for (long zeile : zeilen) {
+                weg.setLong(1, zeile);
+                weg.addBatch();
+            }
+            weg.executeBatch();
+        }
+        if (mitbauer.isEmpty()) {
+            return;
+        }
+        try (PreparedStatement hin = c.prepareStatement(
+                "INSERT INTO parzellen_mitbauer (parzelle_id, spieler) VALUES (?, ?)")) {
+            for (long zeile : zeilen) {
+                for (UUID spieler : mitbauer) {
+                    hin.setLong(1, zeile);
+                    hin.setString(2, spieler.toString());
+                    hin.addBatch();
+                }
+            }
+            hin.executeBatch();
+        }
+    }
+
+    private void zuruecknehmen(Connection c, Exception ursache) {
+        try {
+            c.rollback();
+        } catch (SQLException beimZuruecknehmen) {
+            ursache.addSuppressed(beimZuruecknehmen);
+        }
+    }
+
+    private void zurueckAufAutomatik(Connection c, boolean vorher) {
+        try {
+            c.setAutoCommit(vorher);
+        } catch (SQLException beimZuruecksetzen) {
+            // Weitergegeben landete jeder weitere Schreibvorgang in einer Transaktion,
+            // die niemand mehr committet - also lieber weg damit.
+            datenbank.verwerfen();
+        }
+    }
+
+    private boolean istGruppe(long id) throws SQLException {
+        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(
+                "SELECT 1 FROM parzellen WHERE id = ? AND art = 'gruppe'")) {
+            anfrage.setLong(1, id);
+            try (ResultSet ergebnis = anfrage.executeQuery()) {
+                return ergebnis.next();
+            }
         }
     }
 

@@ -43,9 +43,64 @@ public interface BesitzLager {
      */
     Parzelle anlegen(String welt, int x, int z, UUID eigentuemer, long preis);
 
-    /** Die Mitbauer einer Parzelle setzen. Gibt den neuen Stand zurueck. */
-    Parzelle mitbauerSetzen(long id, Set<UUID> mitbauer);
+    /**
+     * Die Mitbauer setzen.
+     *
+     * <p>Ist die Nummer eine GRUPPE, wird dieselbe Liste in einem Zug auf die Gruppe und
+     * auf jedes ihrer Kinder geschrieben. Das ist das Durchschreiben aus Plan 6.1: Jede
+     * Zeile traegt ihre Mitbauer vollstaendig, damit {@code darfBauen} eine Punktabfrage
+     * ohne Umweg bleibt - und genau deshalb muss der Schreibweg alle Zeilen auf einmal
+     * treffen. Alles oder nichts.
+     *
+     * <p>Gibt nichts zurueck: Eine Gruppenzeile hat keine Rasterzelle, ein
+     * {@link Parzelle}-Objekt ohne x und z gibt es nicht, und kein Aufrufer hat den
+     * frueheren Rueckgabewert je benutzt.
+     */
+    void mitbauerSetzen(long id, Set<UUID> mitbauer);
 
     /** Eine Parzelle freigeben. */
     void entfernen(long id);
+
+    /**
+     * Die Felder dieser Gruppe, nach Lage sortiert. Leer, wenn es die Gruppe nicht gibt.
+     *
+     * <p>Die eine Frage "welche Rasterfelder stecken in dieser Gruppe". Bewusst nicht
+     * ueber {@link #vonSpieler} mit anschliessendem Filtern: Das haengt daran, dass Kind
+     * und Gruppe denselben Eigentuemer fuehren, und liest alle Parzellen des Spielers,
+     * um ein paar davon zu behalten.
+     */
+    List<Parzelle> kinderVon(long gruppeId);
+
+    /**
+     * Eine Gruppe anlegen oder erweitern - alles oder nichts.
+     *
+     * <p>Gibt die NUMMER zurueck und keine {@link Parzelle}: Die Gruppenzeile liegt auf
+     * keiner Rasterzelle. Wie eine Umsetzung das Alles-oder-nichts erreicht, bleibt ihre
+     * Sache - eine Transaktion gehoert nicht in diese Schnittstelle, denn das Lager im
+     * Arbeitsspeicher hat keine.
+     *
+     * @param gruppeId {@link Parzelle#KEIN_ELTERNTEIL} legt eine neue Gruppe an, jede
+     *                 andere Nummer erweitert die bestehende
+     * @param mitbauer die Liste, die danach fuer die Gruppe UND JEDES Kind gilt, auch die
+     *                 schon vorhandenen - beim Zusammenlegen ist das die Vereinigung
+     * @param gebuehr  was dieser Schritt gekostet hat; wird auf den Preis der Gruppe
+     *                 addiert, damit eine Gruppe ihren wahren Wert kennt
+     * @param felder   die Nummern der neu anzuhaengenden Felder, nie leer
+     * @return die Nummer der Gruppe
+     * @throws IllegalStateException wenn die Gruppe fehlt, ein Feld nicht dem Eigentuemer
+     *                               gehoert, nicht auf dem Raster liegt oder schon zu
+     *                               einer Gruppe gehoert - dann ist nichts passiert
+     */
+    long gruppeSetzen(long gruppeId, String welt, UUID eigentuemer, Set<UUID> mitbauer,
+                      long gebuehr, List<Long> felder);
+
+    /**
+     * Eine Gruppe aufloesen: Die Felder werden wieder eigenstaendig, die Gruppenzeile
+     * geht weg. Alles oder nichts.
+     *
+     * <p>Plan 6.3 verlangt das ausdruecklich - "sonst ist jeder Fehlgriff endgueltig".
+     *
+     * @throws IllegalStateException wenn die Nummer keine Gruppe ist
+     */
+    void auftrennen(long gruppeId);
 }

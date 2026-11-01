@@ -367,24 +367,27 @@ class BesitzbuchTest {
     }
 
     @Test
-    @DisplayName("Auf einem Kind einer Gruppe werden keine Mitbauer eingetragen")
-    void keineMitbauerAufDemKind() {
+    @DisplayName("Ein Mitbauer auf einem Gruppenkind wird auf die Gruppe geschrieben")
+    void mitbauerGehenAnDieGruppe() {
         lager.anlegen(WELT, 0, 0, anna, 0L);
         Besitzbuch buchMitKind = buchMitGruppenkind();
 
-        var entscheid = buchMitKind.mitbauerHinzufuegen(WELT, anna, 10, 10, bert);
-
-        assertEquals(TEIL_EINER_GRUPPE, entscheid.bescheid());
-        assertFalse(buchMitKind.darfBauen(WELT, bert, 10, 10));
+        // Das Kind traegt Eigentuemer und Mitbauer vollstaendig, damit darfBauen eine
+        // Abfrage ohne Umweg bleibt - geschrieben wird trotzdem an der Gruppe, und von
+        // dort schreibt das Lager auf alle Kinder durch. Das Lagerdoppel wirft, wenn
+        // jemand stattdessen auf das Kind schreibt.
+        assertEquals(ERTEILT,
+                buchMitKind.mitbauerHinzufuegen(WELT, anna, 10, 10, bert).bescheid());
     }
 
     @Test
-    @DisplayName("Auf einem Kind einer Gruppe werden keine Mitbauer ausgetragen")
-    void keineMitbauerVomKind() {
+    @DisplayName("Auch das Austragen laeuft ueber die Gruppe")
+    void mitbauerAustragenGehtAnDieGruppe() {
         lager.anlegen(WELT, 0, 0, anna, 0L);
+        lager.mitbauerSetzen(lager.finde(WELT, 0, 0).orElseThrow().id(), Set.of(bert));
         Besitzbuch buchMitKind = buchMitGruppenkind();
 
-        assertEquals(TEIL_EINER_GRUPPE,
+        assertEquals(ERTEILT,
                 buchMitKind.mitbauerEntfernen(WELT, anna, 10, 10, bert).bescheid());
     }
 
@@ -420,6 +423,7 @@ class BesitzbuchTest {
         private static final long GRUPPE = 42L;
 
         private final BesitzLager echt;
+        private long zuletztGeschriebenAuf = Parzelle.KEIN_ELTERNTEIL;
 
         private KindLager(BesitzLager echt) {
             this.echt = echt;
@@ -451,13 +455,34 @@ class BesitzbuchTest {
         }
 
         @Override
-        public Parzelle mitbauerSetzen(long id, Set<UUID> mitbauer) {
-            throw new AssertionError("Auf einem Gruppenkind darf nie geschrieben werden");
+        public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
+            // Geschrieben werden darf - aber nur auf die GRUPPE, nie auf das Kind.
+            if (id != GRUPPE) {
+                throw new AssertionError("Geschrieben wurde auf " + id
+                        + " statt auf die Gruppe " + GRUPPE);
+            }
+            zuletztGeschriebenAuf = id;
         }
 
         @Override
         public void entfernen(long id) {
             throw new AssertionError("Ein Gruppenkind darf nie entfernt werden");
+        }
+
+        @Override
+        public List<Parzelle> kinderVon(long gruppeId) {
+            return echt.kinderVon(gruppeId);
+        }
+
+        @Override
+        public long gruppeSetzen(long gruppeId, String welt, UUID eigentuemer,
+                                 Set<UUID> mitbauer, long gebuehr, List<Long> felder) {
+            return echt.gruppeSetzen(gruppeId, welt, eigentuemer, mitbauer, gebuehr, felder);
+        }
+
+        @Override
+        public void auftrennen(long gruppeId) {
+            echt.auftrennen(gruppeId);
         }
     }
 
@@ -495,13 +520,31 @@ class BesitzbuchTest {
         }
 
         @Override
-        public Parzelle mitbauerSetzen(long id, Set<UUID> mitbauer) {
-            return echt.mitbauerSetzen(id, mitbauer);
+        public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
+            echt.mitbauerSetzen(id, mitbauer);
         }
 
         @Override
         public void entfernen(long id) {
             echt.entfernen(id);
+        }
+
+        @Override
+        public List<Parzelle> kinderVon(long gruppeId) {
+            return echt.kinderVon(gruppeId);
+        }
+
+        @Override
+        public long gruppeSetzen(long gruppeId, String welt, UUID eigentuemer,
+                                 Set<UUID> mitbauer, long gebuehr, List<Long> felder) {
+            // Wie die Datenbank, wenn der Wettlaufriegel greift: Ein zweiter Spieler hat
+            // dasselbe Feld gerade angehaengt. Macht die Gegenbuchung pruefbar.
+            throw new IllegalStateException("Feld laesst sich nicht anhaengen");
+        }
+
+        @Override
+        public void auftrennen(long gruppeId) {
+            echt.auftrennen(gruppeId);
         }
     }
 }

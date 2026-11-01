@@ -329,6 +329,31 @@ lizenzieren. Das verhindert Geisterstädte, die Fläche blockieren.
 - Obergrenze der Gruppengröße **pro Rang**.
 - **Auftrennen muss möglich sein**, sonst ist jeder Fehlgriff endgültig.
 
+**Stand 31.10.2026 — die Hälfte, die man nicht sieht, ist gebaut** [entschieden]:
+Kern, Ablage und Schutz tragen Gruppen vollständig. Kein Befehl kann heute eine Gruppe
+erzeugen, für Spieler ändert sich also nichts — aber jede Regel darunter ist geprüft.
+
+Drei Festlegungen, die dabei fielen:
+
+- **Benachbart heißt orthogonal**, nie diagonal — diagonal liegt keine gemeinsame
+  Kante, sondern eine Kreuzung. Die Aufzählung `Richtung` ist zugleich die Definition:
+  für jeden Wert gilt |dx| + |dz| = 1, also gibt es „nicht benachbart" als Eingabe gar
+  nicht.
+- **Zur Gruppe gehört, was im Inneren liegt** (`Rasterplan.imInneren`): Ein Block
+  gehört dazu, wenn **alle** anliegenden Rasterzellen zur Gruppe gehören — eine auf
+  Bauland, zwei auf einem Band, vier auf einer Kreuzung. Der Außenring bleibt damit von
+  selbst Weg, und bei einer L-Form bleibt die Kreuzung draußen, weil dort fremdes
+  Grundstück anliegt.
+- **Zwei Fragen, zwei Zugänge**: `parzelleAn` beantwortet „auf welcher Rasterzelle stehe
+  ich" und gilt weiter nur auf Bauland; `zustaendigerBesitz` beantwortet „wem gehört
+  dieser Block" und schlägt das Gruppeninnere zu. Ein Schreibbefehl darf nie den
+  zweiten Weg für Koordinaten benutzen: Auf einem Band liefert `floorDiv` immer die
+  **kleinere** Nachbarzelle, also womöglich das Nachbargrundstück.
+
+Was noch fehlt: die Befehle (`/parzelle zusammenlegen`, `auftrennen`) und das Füllen
+des Weges in der Welt. Beide werden zusammen ausgeliefert — nach den Befehlen allein
+dürfte man auf dem Streifen bauen, er sähe aber noch aus wie eine Straße.
+
 ---
 
 ## 7. Markthalle, Läden und Handel

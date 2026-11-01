@@ -103,6 +103,25 @@ public final class Datenbank implements AutoCloseable {
             ALTER TABLE parzellen
               ADD CONSTRAINT fk_besitz_elternteil FOREIGN KEY IF NOT EXISTS (eltern_id)
                   REFERENCES parzellen (id) ON DELETE RESTRICT
+            """,
+
+            // Schritt 6: x und z sind immer beide gesetzt oder beide NULL.
+            //
+            // Jetzt faellig, weil gruppeSetzen der erste Code ist, der ueberhaupt
+            // NULL-Koordinaten schreibt. Eine halbe Zeile - x gesetzt, z NULL - waere der
+            // unangenehmste Zustand, den diese Tabelle annehmen kann: anzahlVon zaehlte
+            // sie mit, weil AUF_DEM_RASTER nur x prueft, und lies() wuerde beim Lesen
+            // werfen. Zwei Lesewege, zwei Wahrheiten.
+            //
+            // EIN Schritt mit IF NOT EXISTS, nicht ein DROP/ADD-Paar: migriere() fuehrt
+            // erst das DDL aus und schreibt danach getrennt den Stand fort, und DDL
+            // committet von selbst. Bricht es zwischen beiden ab, liefe ein ADD-Schritt
+            // allein erneut und scheiterte am doppelten Namen - ein Schema, das sich
+            // nicht mehr migrieren laesst.
+            """
+            ALTER TABLE parzellen
+              ADD CONSTRAINT IF NOT EXISTS ck_besitz_ort
+                  CHECK ((x IS NULL AND z IS NULL) OR (x IS NOT NULL AND z IS NOT NULL))
             """);
 
     /**

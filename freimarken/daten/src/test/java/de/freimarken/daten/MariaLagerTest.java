@@ -1,6 +1,7 @@
 package de.freimarken.daten;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -219,13 +220,22 @@ class MariaLagerTest extends BesitzLagerVertrag {
     @Test
     @DisplayName("Besitz ohne Rasterzelle wird laut abgewiesen, nicht als Parzelle 0/0 gelesen")
     void rasterloserBesitzFaelltAuf() throws SQLException {
-        long gruppe = gruppeAnlegen(UUID.randomUUID());
+        UUID wem = UUID.randomUUID();
+        long gruppe = gruppeAnlegen(wem);
+        // Eine Zeile, die behauptet, eine Parzelle zu sein, aber keine Rasterzelle hat.
+        // So etwas kann kein Schreibweg des Programms erzeugen - wohl aber eine Hand an
+        // der Datenbank. Ohne den Riegel in lies() gaebe getInt("x") hier lautlos 0
+        // zurueck, also die Parzelle 0/0 mitten in der Marktstadt, mit dem Eigentuemer
+        // dieser Zeile. 0/0 ist in der Spieldatenbank vergeben.
+        try (var anweisung = datenbank.verbindung().createStatement()) {
+            anweisung.execute("INSERT INTO parzellen "
+                    + "(welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand) "
+                    + "VALUES ('" + WELT + "', NULL, NULL, '" + wem
+                    + "', 0, UTC_TIMESTAMP(3), 'parzelle', " + gruppe + ", 'aktiv')");
+        }
 
-        // Ohne den Riegel in lies() gaebe getInt("x") hier lautlos 0 zurueck - also die
-        // Parzelle 0/0 mitten in der Marktstadt, mit dem Eigentuemer der Gruppe. 0/0 ist
-        // in der Spieldatenbank vergeben.
         var fehler = assertThrows(IllegalStateException.class,
-                () -> lager.mitbauerSetzen(gruppe, Set.of(UUID.randomUUID())));
+                () -> lager.kinderVon(gruppe));
         assertTrue(fehler.getMessage().contains("nicht auf dem Raster"), fehler.getMessage());
     }
 
@@ -242,14 +252,16 @@ class MariaLagerTest extends BesitzLagerVertrag {
 
         var fehler = assertThrows(IllegalStateException.class, () -> lager.entfernen(gruppe));
         assertTrue(fehler.getMessage().contains("auftrennen"), fehler.getMessage());
+        assertTrue(lager.kinderVon(gruppe).size() == 1, "Das Kind haengt noch an der Gruppe");
         assertTrue(lager.finde(WELT, 60, 60).isPresent(), "Das Kind muss stehen bleiben");
 
-        // Erst auftrennen, dann geht es - das ist Plan 6.3 als Schemapruefung.
-        try (var anweisung = datenbank.verbindung().createStatement()) {
-            anweisung.execute("UPDATE parzellen SET eltern_id = NULL WHERE id = " + kind.id());
-        }
-        lager.entfernen(gruppe);
-        assertTrue(lager.finde(WELT, 60, 60).isPresent());
+        // Erst auftrennen, dann ist die Gruppe weg und das Feld wieder eigenstaendig -
+        // das ist Plan 6.3 als Schemapruefung, bevor es einen Befehl dafuer gibt.
+        lager.auftrennen(gruppe);
+        assertTrue(lager.kinderVon(gruppe).isEmpty());
+        assertTrue(lager.finde(WELT, 60, 60).isPresent(), "Das Feld bleibt bestehen");
+        assertFalse(lager.finde(WELT, 60, 60).orElseThrow().hatElternteil(),
+                "und ist wieder eigenstaendig");
     }
 
     @Test
@@ -287,7 +299,7 @@ class MariaLagerTest extends BesitzLagerVertrag {
              var ergebnis = anweisung.executeQuery(
                      "SELECT COALESCE(MAX(schritt), 0) FROM schema_stand")) {
             ergebnis.next();
-            assertEquals(5, ergebnis.getInt(1), "Der Schemastand darf dabei nicht fallen");
+            assertEquals(6, ergebnis.getInt(1), "Der Schemastand darf dabei nicht fallen");
         }
     }
 
