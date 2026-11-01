@@ -292,10 +292,13 @@ public final class MariaLager implements BesitzLager {
         // und der Fremdschluessel auf sie ebenso. Die Bedingung art <> 'gruppe' verhindert,
         // dass jemand mit der Nummer einer Gruppe eine andere Gruppe aus ihrer Gruppe
         // loest - das waere eine Verschachtelung, die es nicht geben darf.
-        try (Connection c = datenbank.verbindung();
-                PreparedStatement loesen = c.prepareStatement(
-                        "UPDATE parzellen SET eltern_id = NULL WHERE id = ?"
-                                + " AND art <> 'gruppe' AND eltern_id IS NOT NULL")) {
+        // Die Verbindung gehoert NICHT in die Ressourcenklammer: Sie ist geteilt und
+        // langlebig, und wer sie hier schliesst, zwingt den naechsten Zugriff - im
+        // Normalfall die Besitzpruefung beim naechsten gesetzten Block, im Hauptfaden -
+        // zum vollen Neuaufbau. Jede andere Methode dieser Klasse macht es deshalb so.
+        try (PreparedStatement loesen = datenbank.verbindung().prepareStatement(
+                "UPDATE parzellen SET eltern_id = NULL WHERE id = ?"
+                        + " AND art <> 'gruppe' AND eltern_id IS NOT NULL")) {
             loesen.setLong(1, feldId);
             if (loesen.executeUpdate() != 1) {
                 throw new IllegalStateException(

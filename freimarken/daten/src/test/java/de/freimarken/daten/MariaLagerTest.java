@@ -11,6 +11,7 @@ import de.freimarken.kern.BesitzLagerVertrag;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Zustand;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
@@ -103,6 +104,30 @@ class MariaLagerTest extends BesitzLagerVertrag {
         assertEquals(25_000L, danach.preis());
         assertEquals(Set.of(bert), danach.mitbauer());
         assertEquals(parzelle.id(), danach.id());
+    }
+
+    @Test
+    @DisplayName("Ein Feld herausloesen laesst die geteilte Verbindung offen")
+    void herausloesenLaesstDieVerbindungOffen() throws SQLException {
+        // Die Verbindung ist geteilt und langlebig. Wer sie in eine Ressourcenklammer
+        // setzt, schliesst sie nach JEDEM Herausloesen - und der naechste Zugriff ist die
+        // Besitzpruefung beim naechsten gesetzten Block, im Hauptfaden des Servers. Der
+        // Vertrag im Arbeitsspeicher kann das nicht bemerken: dort gibt es keine
+        // Verbindung. Deshalb steht die Probe hier.
+        UUID anna = UUID.randomUUID();
+        Parzelle eins = lager.anlegen(WELT, 60, 60, anna, 0L);
+        Parzelle zwei = lager.anlegen(WELT, 61, 60, anna, 0L);
+        Parzelle drei = lager.anlegen(WELT, 62, 60, anna, 0L);
+        lager.gruppeSetzen(Parzelle.KEIN_ELTERNTEIL, WELT, anna, Set.of(), 30_000L,
+                List.of(eins.id(), zwei.id(), drei.id()));
+        java.sql.Connection geteilt = datenbank.verbindung();
+
+        lager.ausGruppeLoesen(drei.id());
+
+        assertFalse(geteilt.isClosed(),
+                "die geteilte Verbindung wurde geschlossen - der naechste Zugriff muesste "
+                        + "sie neu aufbauen");
+        assertFalse(lager.finde(WELT, 62, 60).orElseThrow().hatElternteil());
     }
 
     @Test

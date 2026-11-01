@@ -50,8 +50,10 @@ public final class Besitzbuch {
         NACHBAR_FREI,
         /** Die Nachbarparzelle gehoert einem anderen Spieler. */
         NACHBAR_FREMD,
-        /** Mindestens eines der beiden Felder steckt schon in einer Gruppe. */
+        /** Die beiden Felder stecken in ZWEI VERSCHIEDENEN Gruppen. */
         SCHON_IN_GRUPPE,
+        /** Die beiden Felder sind schon dasselbe Grundstueck. Nicht SCHON_IN_GRUPPE. */
+        SCHON_ZUSAMMEN,
         /** Die Gruppe waere groesser, als der Rang erlaubt. Nicht GRENZE_ERREICHT - das zaehlt Parzellen. */
         GRUPPE_ZU_GROSS,
         /** Hier ist keine Gruppe, die sich auftrennen liesse. */
@@ -366,6 +368,14 @@ public final class Besitzbuch {
         Parzelle a = hier.get();
         Parzelle b = drueben.get();
         if (a.hatElternteil() && b.hatElternteil()) {
+            // Zwei Faelle, die sich fuer den Spieler voellig verschieden anfuehlen, und
+            // deshalb zwei Bescheide. Wer zweimal in dieselbe Richtung zusammenlegt - weil
+            // er nicht gesehen hat, dass es beim ersten Mal geklappt hat -, soll nicht
+            // lesen, seine Felder gehoerten "zu einer Gruppe", als waere da etwas im Weg.
+            // Es IST seine Gruppe.
+            if (a.elternId() == b.elternId()) {
+                return new Entscheid(Bescheid.SCHON_ZUSAMMEN, 0L, hier);
+            }
             // Zwei Gruppen zu vereinigen wuerde aus dem Zusammenhang eine Graphensuche
             // machen. Wer das will, trennt eine davon auf und haengt die Felder einzeln an.
             return new Entscheid(Bescheid.SCHON_IN_GRUPPE, 0L, hier);
@@ -397,14 +407,17 @@ public final class Besitzbuch {
         if (!kasse.abbuchen(eigentuemer, gebuehr)) {
             return Entscheid.nein(Bescheid.ZU_WENIG_MARK, gebuehr);
         }
+        List<Long> neueFelder = gruppeId == Parzelle.KEIN_ELTERNTEIL
+                ? List.of(a.id(), b.id())
+                : List.of(beitreter.id());
+        long id;
+        // Die Klammer liegt eng um den EINEN Schreibvorgang. Alles, was danach kommt,
+        // gehoert nicht mehr hinein: Die Gruppe ist dann festgeschrieben, und eine
+        // Gutschrift wuerde sie verschenken - Grundstueck da, Geld zurueck. Das ist der
+        // schlimmere Ausgang von beiden, weil ihn niemand bemerkt.
         try {
-            List<Long> neueFelder = gruppeId == Parzelle.KEIN_ELTERNTEIL
-                    ? List.of(a.id(), b.id())
-                    : List.of(beitreter.id());
-            long id = lager.gruppeSetzen(gruppeId, welt, eigentuemer, zusammen, gebuehr,
+            id = lager.gruppeSetzen(gruppeId, welt, eigentuemer, zusammen, gebuehr,
                     neueFelder);
-            return new Entscheid(Bescheid.ERTEILT, gebuehr,
-                    lager.finde(welt, px, pz).or(() -> lager.kinderVon(id).stream().findFirst()));
         } catch (RuntimeException fehler) {
             // Dasselbe Muster wie in nehmen(): Das Geld ist weg, die Gruppe nicht
             // gekommen. Der Fall ist nicht theoretisch - der Wettlaufriegel im Lager
@@ -412,6 +425,8 @@ public final class Besitzbuch {
             kasse.gutschreiben(eigentuemer, gebuehr);
             throw fehler;
         }
+        return new Entscheid(Bescheid.ERTEILT, gebuehr,
+                lager.finde(welt, px, pz).or(() -> lager.kinderVon(id).stream().findFirst()));
     }
 
     /** Ob hier eine Gruppe liegt, die sich auftrennen liesse - ohne etwas zu tun. */

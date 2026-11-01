@@ -859,7 +859,9 @@ final class ParzellenBefehle {
                     + "das geht nur ueber die ganze Gruppe.";
             case NACHBAR_FREI -> "Dort drueben ist keine Parzelle vergeben.";
             case NACHBAR_FREMD -> "Die Nachbarparzelle gehoert jemand anderem.";
-            case SCHON_IN_GRUPPE -> "Beide Felder gehoeren schon zu einer Gruppe.";
+            case SCHON_IN_GRUPPE -> "Die beiden gehoeren zu zwei verschiedenen "
+                    + "Grundstuecken. Trenne eines auf und haenge die Felder einzeln an.";
+            case SCHON_ZUSAMMEN -> "Die beiden sind schon dasselbe Grundstueck.";
             case GRUPPE_ZU_GROSS -> "Dein Rang erlaubt keine groessere Gruppe.";
             case KEINE_GRUPPE -> "Hier ist keine Gruppe.";
             case AUF_DEM_WEG -> "Stell dich auf das Feld, das du meinst - nicht auf den Weg.";

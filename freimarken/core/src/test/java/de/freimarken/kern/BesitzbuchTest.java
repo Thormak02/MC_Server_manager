@@ -10,7 +10,9 @@ import static de.freimarken.kern.Besitzbuch.Bescheid.KEINE_PARZELLE;
 import static de.freimarken.kern.Besitzbuch.Bescheid.NICHT_EIGENTUEMER;
 import static de.freimarken.kern.Besitzbuch.Bescheid.NICHT_EINGETRAGEN;
 import static de.freimarken.kern.Besitzbuch.Bescheid.SCHON_EINGETRAGEN;
+import static de.freimarken.kern.Besitzbuch.Bescheid.SCHON_IN_GRUPPE;
 import static de.freimarken.kern.Besitzbuch.Bescheid.SCHON_VERGEBEN;
+import static de.freimarken.kern.Besitzbuch.Bescheid.SCHON_ZUSAMMEN;
 import static de.freimarken.kern.Besitzbuch.Bescheid.TEIL_EINER_GRUPPE;
 import static de.freimarken.kern.Besitzbuch.Bescheid.ZU_WENIG_MARK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -95,6 +97,42 @@ class BesitzbuchTest {
                 "das geloeste Feld ist eigenstaendig");
         assertEquals(2, buch.gruppenFelder(WELT, mitte(0), 32).size(),
                 "die anderen zwei bleiben zusammen");
+    }
+
+    @Test
+    @DisplayName("Zweimal dieselbe Richtung: die beiden sind schon dasselbe Grundstueck")
+    void zweimalZusammenlegenIstKeinHindernis() {
+        // Aus dem Spieltest: Ein Spieler legt zusammen, sieht die Meldung im Chatgewimmel
+        // nicht und nimmt denselben Befehl noch einmal. Frueher las er dann, beide Felder
+        // gehoerten "schon zu einer Gruppe" - als stuende etwas im Weg. Es ist seine.
+        reiheAlsGruppe(3);
+
+        var entscheid = buch.zusammenlegen(WELT, anna, mitte(0), 32, Richtung.OST, VIELE);
+
+        assertEquals(SCHON_ZUSAMMEN, entscheid.bescheid());
+        assertEquals(0L, entscheid.kosten(), "und es kostet nichts");
+        assertEquals(3, buch.gruppenFelder(WELT, mitte(0), 32).size(), "nichts veraendert");
+    }
+
+    @Test
+    @DisplayName("Zwei verschiedene Gruppen lassen sich nicht vereinigen")
+    void zweiGruppenBleibenZwei() {
+        // Derselbe Spieler, ein paar Sekunden spaeter: Er hat zwei Paare gebaut und will
+        // sie in der Mitte verbinden. Das geht mit Absicht nicht - und die Meldung muss
+        // eine andere sein als beim Fall oben, sonst sucht er den Fehler bei sich.
+        for (int i = 0; i < 4; i++) {
+            lager.anlegen(WELT, i, 0, anna, 0L);
+        }
+        assertEquals(ERTEILT,
+                buch.zusammenlegen(WELT, anna, mitte(0), 32, Richtung.OST, VIELE).bescheid());
+        assertEquals(ERTEILT,
+                buch.zusammenlegen(WELT, anna, mitte(2), 32, Richtung.OST, VIELE).bescheid());
+
+        var entscheid = buch.zusammenlegen(WELT, anna, mitte(1), 32, Richtung.OST, VIELE);
+
+        assertEquals(SCHON_IN_GRUPPE, entscheid.bescheid());
+        assertEquals(2, buch.gruppenFelder(WELT, mitte(0), 32).size(), "die eine bleibt");
+        assertEquals(2, buch.gruppenFelder(WELT, mitte(2), 32).size(), "die andere auch");
     }
 
     @Test
@@ -277,6 +315,28 @@ class BesitzbuchTest {
                 () -> sperrigesBuch.nehmen(WELT, anna, 100, 10, VIELE));
 
         assertEquals(vorher, kasse.guthaben(anna), "Gegenbuchung fehlt");
+    }
+
+    @Test
+    @DisplayName("Steht die Gruppe schon, holt ein Lesefehler die Gebuehr NICHT zurueck")
+    void keineGutschriftNachDemFestschreiben() {
+        // Der gefaehrlichere Zwilling der Probe darueber. Dort scheitert das Schreiben,
+        // und die Gegenbuchung ist richtig. Hier gelingt es - und erst der Lesezugriff
+        // danach faellt aus, weil die Verbindung abreisst. Wer die Gebuehr dann
+        // zurueckbucht, verschenkt ein Grundstueck, und es merkt niemand: In der Ablage
+        // sieht alles richtig aus, nur bezahlt hat es keiner.
+        NachDemSchreibenLager lager = new NachDemSchreibenLager();
+        Besitzbuch buch = new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse);
+        buch.nehmen(WELT, anna, mitte(0), 32, VIELE);
+        buch.nehmen(WELT, anna, mitte(1), 32, VIELE);
+        long vorher = kasse.guthaben(anna);
+
+        assertThrows(IllegalStateException.class,
+                () -> buch.zusammenlegen(WELT, anna, mitte(0), 32, Richtung.OST, VIELE));
+
+        assertTrue(lager.stehtDieGruppe(WELT, 0, 0), "die Gruppe ist festgeschrieben");
+        assertEquals(vorher - Preisstaffel.zusammenlegungsGebuehr(2), kasse.guthaben(anna),
+                "die Gebuehr muss abgebucht bleiben - die Gruppe steht ja");
     }
 
     // --- Schutz -----------------------------------------------------------------
@@ -598,6 +658,83 @@ class BesitzbuchTest {
         @Override
         public void ausGruppeLoesen(long feldId) {
             echt.ausGruppeLoesen(feldId);
+        }
+    }
+
+    /**
+     * Ein Lager, dem der Schreibvorgang GELINGT und das erst beim Lesen danach aufgibt -
+     * wie eine Datenbank, deren Verbindung zwischen Festschreiben und Nachlesen abreisst.
+     *
+     * <p>Das Gegenstueck zum {@link StoerLager}: Dort scheitert das Schreiben, und die
+     * Gegenbuchung ist richtig. Hier ist sie falsch, denn die Gruppe steht schon.
+     */
+    private static final class NachDemSchreibenLager implements BesitzLager {
+
+        private final SpeicherLager echt = new SpeicherLager();
+        private boolean geschrieben;
+
+        @Override
+        public Optional<Parzelle> finde(String welt, int x, int z) {
+            if (geschrieben) {
+                throw new IllegalStateException("Datenbankfehler beim Suchen einer Parzelle");
+            }
+            return echt.finde(welt, x, z);
+        }
+
+        @Override
+        public List<Parzelle> vonSpieler(String welt, UUID spieler) {
+            return echt.vonSpieler(welt, spieler);
+        }
+
+        @Override
+        public int anzahlVon(String welt, UUID spieler) {
+            return echt.anzahlVon(welt, spieler);
+        }
+
+        @Override
+        public Parzelle anlegen(String welt, int x, int z, UUID eigentuemer, long preis) {
+            return echt.anlegen(welt, x, z, eigentuemer, preis);
+        }
+
+        @Override
+        public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
+            echt.mitbauerSetzen(id, mitbauer);
+        }
+
+        @Override
+        public void entfernen(long id) {
+            echt.entfernen(id);
+        }
+
+        @Override
+        public List<Parzelle> kinderVon(long gruppeId) {
+            if (geschrieben) {
+                throw new IllegalStateException("Datenbankfehler beim Lesen einer Gruppe");
+            }
+            return echt.kinderVon(gruppeId);
+        }
+
+        @Override
+        public long gruppeSetzen(long gruppeId, String welt, UUID eigentuemer,
+                                 Set<UUID> mitbauer, long gebuehr, List<Long> felder) {
+            long id = echt.gruppeSetzen(gruppeId, welt, eigentuemer, mitbauer, gebuehr, felder);
+            // Ab hier ist sie festgeschrieben. Was jetzt kommt, darf nichts mehr zurueckholen.
+            geschrieben = true;
+            return id;
+        }
+
+        @Override
+        public void auftrennen(long gruppeId) {
+            echt.auftrennen(gruppeId);
+        }
+
+        @Override
+        public void ausGruppeLoesen(long feldId) {
+            echt.ausGruppeLoesen(feldId);
+        }
+
+        boolean stehtDieGruppe(String welt, int x, int z) {
+            return echt.finde(welt, x, z).orElseThrow().hatElternteil();
         }
     }
 
