@@ -57,7 +57,9 @@ public final class Besitzbuch {
         /** Hier ist keine Gruppe, die sich auftrennen liesse. */
         KEINE_GRUPPE,
         /** Der Spieler steht auf dem gefuellten Weg seiner Gruppe, braucht aber eine Rasterzelle. */
-        AUF_DEM_WEG
+        AUF_DEM_WEG,
+        /** Ohne dieses Feld laege das Grundstueck in zwei Teilen. */
+        HAELT_ZUSAMMEN
     }
 
     /**
@@ -442,6 +444,66 @@ public final class Besitzbuch {
             lager.auftrennen(parzelle.elternId());
         }
         return new Entscheid(Bescheid.ERTEILT, 0L, gefunden);
+    }
+
+    /** Ob sich das Feld hier aus seiner Gruppe loesen liesse - ohne etwas zu tun. */
+    public Entscheid pruefeHerausloesen(String welt, UUID eigentuemer, int weltX, int weltZ) {
+        return herausloesenWeg(welt, eigentuemer, weltX, weltZ, false);
+    }
+
+    /**
+     * Ein einzelnes Feld aus seiner Gruppe loesen - der Rest bleibt ein Grundstueck.
+     *
+     * <p>Gemeint ist das Feld, auf dem der Spieler steht. Der ganze Weg bleibt daneben
+     * bestehen ({@link #auftrennen}): Wer vier Felder verbunden hat und eines abgeben will,
+     * verlor sonst alle Wege dazwischen und musste dreimal neu zusammenlegen, Gebuehr
+     * inbegriffen.
+     *
+     * <p>Bei einer Gruppe aus zwei Feldern loest sich nichts einzeln: Was uebrig bliebe,
+     * waere ein einzelnes Feld, und eine Gruppe aus einem Feld gibt es nicht - sie
+     * veraendert in der Welt nichts und waere nur eine Zeile, die niemand mehr los wird.
+     * Dann wird ganz aufgetrennt, und das Ergebnis ist dasselbe.
+     *
+     * <p>Kostet nichts und zahlt nichts zurueck, wie das Auftrennen.
+     */
+    public Entscheid herausloesen(String welt, UUID eigentuemer, int weltX, int weltZ) {
+        return herausloesenWeg(welt, eigentuemer, weltX, weltZ, true);
+    }
+
+    private Entscheid herausloesenWeg(String welt, UUID eigentuemer, int weltX, int weltZ,
+                                      boolean wirklich) {
+        // Wie beim Zusammenlegen: Auf dem gefuellten Weg ist nicht entschieden, welches
+        // Feld gemeint ist - floorDiv naehme dort die kleinere Nachbarzelle.
+        if (plan.feldBei(weltX, weltZ) != Rasterplan.Feld.PARZELLE) {
+            return Entscheid.nein(zustaendigerBesitz(welt, weltX, weltZ).isPresent()
+                    ? Bescheid.AUF_DEM_WEG
+                    : Bescheid.KEINE_PARZELLE);
+        }
+        Optional<Parzelle> hier = lager.finde(welt, plan.parzelleX(weltX),
+                plan.parzelleZ(weltZ));
+        Optional<Entscheid> stehtEntgegen = hindernis(hier, eigentuemer, AufGruppe.ERLAUBT);
+        if (stehtEntgegen.isPresent()) {
+            return stehtEntgegen.get();
+        }
+        Parzelle feld = hier.get();
+        if (!feld.hatElternteil()) {
+            return new Entscheid(Bescheid.KEINE_GRUPPE, 0L, hier);
+        }
+        List<Parzelle> gruppe = lager.kinderVon(feld.elternId());
+        // Erst ab drei Feldern kann ueberhaupt etwas zerreissen, und erst ab drei bleibt
+        // nach dem Loesen eine Gruppe uebrig.
+        if (gruppe.size() > 2
+                && !Gruppenflaeche.aus(gruppe).bleibtGanzOhne(feld.x(), feld.z())) {
+            return new Entscheid(Bescheid.HAELT_ZUSAMMEN, 0L, hier);
+        }
+        if (wirklich) {
+            if (gruppe.size() > 2) {
+                lager.ausGruppeLoesen(feld.id());
+            } else {
+                lager.auftrennen(feld.elternId());
+            }
+        }
+        return new Entscheid(Bescheid.ERTEILT, 0L, hier);
     }
 
     /** Die Felder der Gruppe an dieser Stelle - leer, wenn dort keine Gruppe liegt. */

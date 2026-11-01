@@ -6,6 +6,11 @@ dependencies {
     // eigene Jar packt, hat zwei Fassungen derselben Klassen in einer JVM - das endet in
     // LinkageError oder, schlimmer, in stillem Fehlverhalten.
     compileOnly("io.papermc.paper:paper-api:26.3.build.231-stable")
+
+    // Fuer die Proben an Stadtboden. Die Blocktabelle und die Wertung einer Stelle
+    // brauchen keinen Server, nur die Material-Aufzaehlung - und genau dort sassen
+    // zwei Fehler, die kein Kerntest finden konnte.
+    testImplementation("io.papermc.paper:paper-api:26.3.build.231-stable")
 }
 
 tasks.jar {

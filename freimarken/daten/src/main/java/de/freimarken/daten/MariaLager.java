@@ -287,6 +287,26 @@ public final class MariaLager implements BesitzLager {
     }
 
     @Override
+    public void ausGruppeLoesen(long feldId) {
+        // Eine einzige Anweisung, also keine Transaktion: Die Gruppenzeile bleibt stehen,
+        // und der Fremdschluessel auf sie ebenso. Die Bedingung art <> 'gruppe' verhindert,
+        // dass jemand mit der Nummer einer Gruppe eine andere Gruppe aus ihrer Gruppe
+        // loest - das waere eine Verschachtelung, die es nicht geben darf.
+        try (Connection c = datenbank.verbindung();
+                PreparedStatement loesen = c.prepareStatement(
+                        "UPDATE parzellen SET eltern_id = NULL WHERE id = ?"
+                                + " AND art <> 'gruppe' AND eltern_id IS NOT NULL")) {
+            loesen.setLong(1, feldId);
+            if (loesen.executeUpdate() != 1) {
+                throw new IllegalStateException(
+                        "Nummer " + feldId + " steckt in keiner Gruppe");
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Ein Feld aus seiner Gruppe loesen", fehler);
+        }
+    }
+
+    @Override
     public void auftrennen(long gruppeId) {
         boolean vorherAutomatisch = true;
         Connection c = null;

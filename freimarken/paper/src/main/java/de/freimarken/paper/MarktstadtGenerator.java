@@ -51,9 +51,12 @@ public final class MarktstadtGenerator extends ChunkGenerator {
         int unten = daten.getMinHeight();
         int oben = daten.getMaxHeight();
 
-        daten.setRegion(0, unten, 0, 16, unten + 1, 16, Material.BEDROCK);
-        daten.setRegion(0, unten + 1, 0, 16, Stadtboden.ERDE_AB, 16, Material.STONE);
-        daten.setRegion(0, Stadtboden.ERDE_AB, 0, 16, Stadtboden.BODEN, 16, Material.DIRT);
+        daten.setRegion(0, unten, 0, 16, unten + 1, 16,
+                Stadtboden.darunter(unten, unten));
+        daten.setRegion(0, unten + 1, 0, 16, Stadtboden.ERDE_AB, 16,
+                Stadtboden.darunter(unten + 1, unten));
+        daten.setRegion(0, Stadtboden.ERDE_AB, 0, 16, Stadtboden.BODEN, 16,
+                Stadtboden.darunter(Stadtboden.ERDE_AB, unten));
         // Alles oberhalb der Mauerkrone leeren - siehe dritter Punkt oben.
         daten.setRegion(0, Stadtboden.BODEN + 2, 0, 16, oben, 16, Material.AIR);
 

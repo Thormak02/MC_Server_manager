@@ -1,16 +1,25 @@
 package de.freimarken.kern;
 
+import java.util.ArrayDeque;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
- * Die Flaeche, die eine Gruppe aus Rasterzellen bedeckt - und ihre Fugen.
+ * Die Flaeche, die eine Gruppe aus Rasterzellen bedeckt - und ihre Naht.
  *
- * <p>Eine Fuge ist eine Weltkoordinate im Inneren der Gruppe, auf der KEIN Bauland liegt:
- * das Band aus Mauer und Weg zwischen zwei Feldern, und die Kreuzung, wo vier Felder
- * zusammenstossen. Genau diese Flaeche wird beim Zusammenlegen gefuellt und beim
- * Auftrennen zurueckgebaut.
+ * <p>Die Naht ist alles, was sich in der Welt aendert, wenn aus mehreren Feldern ein
+ * Grundstueck wird. Sie hat zwei Teile:
+ *
+ * <ul>
+ *   <li>Die FUGEN - jede Weltkoordinate im Inneren der Gruppe, auf der kein Bauland
+ *       liegt: das Band aus Mauer und Weg zwischen zwei Feldern und die Kreuzung, wo
+ *       vier Felder zusammenstossen. Daraus wird Bauland.
+ *   <li>Die MAUERSTUECKE an den Enden der Fugen, die den Mauerring wieder schliessen,
+ *       den das Fuellen aufgerissen hat.
+ * </ul>
  *
  * <p>Die Klasse steht im Kern und nicht im Paper-Teil, obwohl nur der Paper-Teil Bloecke
  * setzt. Grund: Die Frage "welche Koordinaten gehoeren dazu" ist reine Geometrie und damit
@@ -23,16 +32,18 @@ import java.util.Set;
  */
 public final class Gruppenflaeche {
 
-    /** Arbeit an einer Fuge. */
+    /** Arbeit an einer Stelle der Naht. */
     @FunctionalInterface
-    public interface AnDerFuge {
+    public interface AnDerNaht {
 
         /**
-         * @param weltX Weltkoordinate, nicht Parzellennummer
-         * @param weltZ Weltkoordinate, nicht Parzellennummer
-         * @param feld  was der Rasterplan hier vorsieht - Mauer oder Weg, nie Bauland
+         * @param weltX      Weltkoordinate, nicht Parzellennummer
+         * @param weltZ      Weltkoordinate, nicht Parzellennummer
+         * @param ohneGruppe was der Rasterplan hier vorsieht - Mauer oder Weg, nie Bauland
+         * @param mitGruppe  was hier liegen muss, solange die Gruppe besteht: Bauland in
+         *                   den Fugen, Mauer am Ende einer geschluckten Strasse
          */
-        void an(int weltX, int weltZ, Rasterplan.Feld feld);
+        void an(int weltX, int weltZ, Rasterplan.Feld ohneGruppe, Rasterplan.Feld mitGruppe);
     }
 
     private final int vonX;
@@ -89,29 +100,171 @@ public final class Gruppenflaeche {
     }
 
     /**
-     * Ruft die Arbeit fuer jede Fuge der Gruppe auf - einmal je Weltkoordinate.
+     * Ob die Gruppe ohne dieses Feld noch in einem Stueck waere.
      *
-     * <p>Abgelaufen wird nur der Kasten um die Felder, und darin wird Bauland sofort
-     * uebersprungen. Das ist der Grund, warum ein Zusammenlegen keinen Chunk laedt, in dem
-     * nichts zu tun ist: Bei vier Feldern im Quadrat sind das rund 18.000 Rechenschritte,
-     * aber nur rund 1.800 Koordinaten, die ueberhaupt einen Block anfassen.
+     * <p>Gebraucht beim Herausloesen eines einzelnen Feldes. Wer das mittlere Feld einer
+     * Reihe herausloest, laesst zwei Haelften zurueck, die sich nicht mehr beruehren - und
+     * dann waere die Fuge zwischen ihnen Bauland ohne Verbindung zum eigenen Grundstueck,
+     * mitten auf einer Strasse, die wieder oeffentlich sein muesste.
      *
-     * <p>Der Kasten endet bewusst am letzten Bauland und nicht an der Zellkante: Das Band
-     * dahinter liegt zwischen der letzten Zelle und der naechsten, die nicht dazugehoert -
-     * also aussen. Es mitzunehmen waere nicht falsch, nur Arbeit ohne Ergebnis.
+     * <p>Zusammenhang ueber die Kante und nicht ueber die Ecke: Zwei Felder, die sich nur
+     * an einer Ecke beruehren, haben keine Fuge zwischen sich. Dort liegt die Kreuzung, und
+     * die gehoert allen - in der Welt waeren das zwei Grundstuecke.
+     *
+     * <p>Ein Feld, das gar nicht zur Gruppe gehoert, aendert nichts: Dann ist die Antwort
+     * dieselbe wie fuer die ganze Flaeche.
      */
-    public void ueberDieFugen(Rasterplan plan, AnDerFuge arbeit) {
-        int bisWeltX = plan.ursprungX(bisX) + plan.parzellenKante() - 1;
-        int bisWeltZ = plan.ursprungZ(bisZ) + plan.parzellenKante() - 1;
-        for (int x = plan.ursprungX(vonX); x <= bisWeltX; x++) {
-            for (int z = plan.ursprungZ(vonZ); z <= bisWeltZ; z++) {
-                Rasterplan.Feld feld = plan.feldBei(x, z);
-                if (feld == Rasterplan.Feld.PARZELLE || !plan.imInneren(x, z, this::gehoert)) {
-                    continue;
+    public boolean bleibtGanzOhne(int zelleX, int zelleZ) {
+        Set<Long> rest = new HashSet<>(zellen);
+        rest.remove(schluessel(zelleX, zelleZ));
+        return haengtZusammen(rest);
+    }
+
+    /** Ob diese Zellen ueber Kanten alle miteinander verbunden sind. */
+    private static boolean haengtZusammen(Set<Long> zellen) {
+        if (zellen.size() <= 1) {
+            return true;
+        }
+        Deque<Long> offen = new ArrayDeque<>();
+        Set<Long> erreicht = new HashSet<>();
+        long start = zellen.iterator().next();
+        offen.add(start);
+        erreicht.add(start);
+        while (!offen.isEmpty()) {
+            long zelle = offen.poll();
+            // Dieselbe Maske wie beim Packen, nur umgekehrt: Das Vorzeichen von x steckt
+            // im oberen Wort, deshalb schiebt der Pfeil arithmetisch.
+            int x = (int) (zelle >> 32);
+            int z = (int) zelle;
+            for (int[] schritt : new int[][] {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
+                long nachbar = schluessel(x + schritt[0], z + schritt[1]);
+                if (zellen.contains(nachbar) && erreicht.add(nachbar)) {
+                    offen.add(nachbar);
                 }
-                arbeit.an(x, z, feld);
             }
         }
+        return erreicht.size() == zellen.size();
+    }
+
+    /**
+     * Ruft die Arbeit fuer jede Stelle der Naht auf - einmal je Weltkoordinate.
+     *
+     * <p>Warum die Mauerstuecke sein muessen: Im Rasterplan gewinnt der Weg immer, damit
+     * sich Wege kreuzen koennen statt an jeder Kreuzung vor einer Mauer zu enden. Am Ende
+     * einer Fuge trifft die Querstrasse auf die Mauerreihe der Parzellen - eine Achse sagt
+     * Weg, also liegt dort Pflaster. Vor dem Zusammenlegen ist das richtig, die Strasse
+     * laeuft hindurch. Danach laeuft sie gegen Bauland, und ohne das Mauerstueck haette
+     * das neue Grundstueck als einziges in der Stadt ein Loch in der Mauer, so breit wie
+     * die Strasse.
+     *
+     * <p>Beides in EINEM Durchlauf, und beide Zustaende an derselben Stelle: Das Fuellen
+     * schreibt {@code mitGruppe}, der Zurueckbau {@code ohneGruppe}. Zwei getrennte
+     * Durchlaeufe koennten sich um eine Koordinate unterscheiden, und dann bliebe nach dem
+     * Auftrennen ein Mauerstueck quer auf einer oeffentlichen Strasse stehen, das niemand
+     * mehr entfernen darf.
+     *
+     * <p>Abgelaufen wird der Kasten um die Felder, einen Block ueber das Bauland hinaus -
+     * genau so weit und keinen weiter reicht das Mauerstueck. Bauland wird sofort
+     * uebersprungen, deshalb laedt ein Zusammenlegen keinen Chunk, in dem nichts zu tun
+     * ist: Bei vier Feldern im Quadrat sind das rund 19.000 Rechenschritte, aber nur rund
+     * 1.900 Koordinaten, die ueberhaupt einen Block anfassen.
+     */
+    public void ueberDieNaht(Rasterplan plan, AnDerNaht arbeit) {
+        ueberDieNaht(plan, List.of(), arbeit);
+    }
+
+    /**
+     * Dieselbe Naht, aber ohne die Stellen, die eine fruehere Gruppe schon genauso belegt
+     * hat.
+     *
+     * <p>Das ist der Fall "ein Feld an eine bestehende Gruppe anhaengen". Die alte Fuge ist
+     * seit dem ersten Zusammenlegen Bauland, der Spieler hat dort gebaut - und sie liegt
+     * mitten im Kasten der neuen, groesseren Gruppe. Wer sie noch einmal fuellt, setzt sein
+     * Erdgeschoss auf Gras zurueck und loescht die Schicht darueber: ohne Warnung, ohne
+     * dass etwas herausfaellt, 448 Stellen je Band.
+     *
+     * <p>Beantworten kann das nur die Ablage, nicht die Welt. Gras auf einer Fuge sieht
+     * gleich aus, ob es das Fuellen hingelegt hat oder der Spieler. Verglichen wird deshalb
+     * nicht der Block, sondern die Zuordnung: Lag hier schon Bauland, weil dieselbe
+     * Koordinate schon zur alten Gruppe gehoerte, bleibt sie unberuehrt.
+     *
+     * <p>Mehrere Flaechen und nicht eine, weil an der Stelle zwei Gruppen aneinander
+     * stossen koennen. Ihre Vereinigung waere genau die neue Gruppe - dann gaebe es nie
+     * etwas zu tun.
+     *
+     * <p>Ein Mauerstueck, das zur Fuge wird, kommt trotzdem: Beim vierten Feld wird aus dem
+     * Bandende eine Kreuzung. Verglichen wird das Ergebnis, nicht die Teilnahme.
+     *
+     * @param schonGelegt die Flaechen VOR dieser Zusammenlegung, je Gruppe eine
+     */
+    public void ueberDieNaht(Rasterplan plan, Collection<Gruppenflaeche> schonGelegt,
+                             AnDerNaht arbeit) {
+        int vonWeltX = plan.ursprungX(vonX) - 1;
+        int vonWeltZ = plan.ursprungZ(vonZ) - 1;
+        int bisWeltX = plan.ursprungX(bisX) + plan.parzellenKante();
+        int bisWeltZ = plan.ursprungZ(bisZ) + plan.parzellenKante();
+        for (int x = vonWeltX; x <= bisWeltX; x++) {
+            for (int z = vonWeltZ; z <= bisWeltZ; z++) {
+                Rasterplan.Feld feld = plan.feldBei(x, z);
+                Rasterplan.Feld mitGruppe = nahtstelle(plan, x, z, feld);
+                if (mitGruppe != null && !lagSchonSo(plan, schonGelegt, x, z, feld, mitGruppe)) {
+                    arbeit.an(x, z, feld, mitGruppe);
+                }
+            }
+        }
+    }
+
+    /**
+     * Was hier liegen muss, solange diese Gruppe besteht - oder {@code null}, wenn diese
+     * Gruppe an dieser Stelle nichts zu sagen hat.
+     *
+     * <p>Die eine Entscheidung, zweimal gebraucht: fuer diese Flaeche und fuer jede
+     * frueheres. Sie zweimal zu formulieren waere die Art Fehler, die erst auffaellt, wenn
+     * ein Spieler sein Haus verloren hat.
+     *
+     * <p>{@code null} und kein {@link java.util.Optional}: Diese Methode laeuft bei vier
+     * Feldern rund 19.000 Mal je Durchlauf, und die Antwort "hier nichts" ist der haeufige
+     * Fall.
+     */
+    private Rasterplan.Feld nahtstelle(Rasterplan plan, int x, int z, Rasterplan.Feld feld) {
+        if (feld == Rasterplan.Feld.PARZELLE) {
+            return null;
+        }
+        if (plan.imInneren(x, z, this::gehoert)) {
+            return Rasterplan.Feld.PARZELLE;
+        }
+        if (feld == Rasterplan.Feld.WEG && stoesstAufDieGruppe(plan, x, z)) {
+            return Rasterplan.Feld.MAUER;
+        }
+        return null;
+    }
+
+    private boolean lagSchonSo(Rasterplan plan, Collection<Gruppenflaeche> schonGelegt,
+                               int x, int z, Rasterplan.Feld feld, Rasterplan.Feld mitGruppe) {
+        for (Gruppenflaeche frueher : schonGelegt) {
+            if (frueher.nahtstelle(plan, x, z, feld) == mitGruppe) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Ob dieses Wegfeld unmittelbar an die gefuellte Flaeche stoesst - also eine Strasse
+     * ist, die nach dem Zusammenlegen gegen Bauland laeuft.
+     *
+     * <p>Nur ueber die Kante, nicht ueber die Ecke: Ueber Ecke liegt am Ende einer Fuge
+     * immer schon Mauer, weil dort beide Achsen Mauer sagen.
+     *
+     * <p>Ein Wegfeld grenzt nie an Bauland - dazwischen liegt im Rasterplan immer die
+     * Mauerreihe. {@link Rasterplan#imInneren} kann hier also nur Fugen treffen, nie eine
+     * Parzelle der Gruppe.
+     */
+    private boolean stoesstAufDieGruppe(Rasterplan plan, int x, int z) {
+        return plan.imInneren(x - 1, z, this::gehoert)
+                || plan.imInneren(x + 1, z, this::gehoert)
+                || plan.imInneren(x, z - 1, this::gehoert)
+                || plan.imInneren(x, z + 1, this::gehoert);
     }
 
     /**

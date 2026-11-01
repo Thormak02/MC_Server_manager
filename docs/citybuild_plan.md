@@ -373,12 +373,153 @@ Bestätigung samt Parzellennummer, und die Wegfläche wird gefüllt bzw. zurück
   Welt kennt keine Transaktion. Scheitert das Blocksetzen, gilt die Ablage: Der Spieler
   darf dort bauen, es sieht nur noch nicht danach aus. Das ist die harmlose Hälfte des
   Fehlers; andersherum wäre das Geld weg und das Grundstück nicht da.
-- **Die Fugengeometrie liegt im Kern** (`Gruppenflaeche`), nicht im Blockschreiber. Ob
+- **Die Nahtgeometrie liegt im Kern** (`Gruppenflaeche`), nicht im Blockschreiber. Ob
   eine Koordinate dazugehört, ist die Frage, bei der ein Fehler teuer ist, und im Kern
   ist sie ohne Server prüfbar — eine Zelle zu viel fällt sonst erst auf, wenn der
   Nachbar sich beschwert. Eine Fuge zwischen zwei Feldern sind 448 Blöcke Oberfläche
-  plus 128 Mauerkronen, zusammen 576 Schreibvorgänge; vier Felder im Quadrat rund
-  2.400.
+  plus 128 Mauerkronen, dazu 2 × 5 Mauerstücke an den Enden: zusammen 596
+  Schreibvorgänge; vier Felder im Quadrat rund 2.400.
+- **Die Mauer schließt den Ring, wo der Weg geschluckt wird** [1.11., aus dem
+  Spieltest]. Im Rasterplan gewinnt der Weg immer, damit sich Wege kreuzen können
+  statt an jeder Kreuzung vor einer Mauer zu enden. Am Ende einer Fuge trifft die
+  Querstraße auf die Mauerreihe der Parzellen — eine Achse sagt Weg, also liegt dort
+  Pflaster. Vor dem Zusammenlegen ist das richtig, die Straße läuft hindurch; danach
+  läuft sie gegen Bauland. Ohne das Mauerstück hatte das neue Grundstück als einziges
+  in der Stadt an beiden Enden ein fünf Blöcke breites Loch in der Umrandung.
+  `Gruppenflaeche` läuft deshalb über die ganze **Naht** und nennt je Koordinate
+  beides: was dort ohne die Gruppe läge und was mit ihr liegen muss. Füllen schreibt
+  das eine, Zurückbauen das andere — ein Durchlauf, nicht zwei, denn zwei könnten
+  sich um eine Koordinate unterscheiden, und dann bliebe nach dem Auftrennen ein
+  Mauerstück quer auf einer öffentlichen Straße stehen.
+- **Geprüft wird das Bild, nicht der Rechenweg.** Die Probe im Kern fragt für jede
+  Gruppenform: Liegt neben Bauland nur Bauland oder Mauer, nie Weg? Das ist genau das
+  gemeldete Fehlerbild, und es ist die einzige Form der Prüfung, die es gefunden
+  hätte — die Blockzahlen stimmten vorher alle.
+- **Das Füllen ist wiederholbar, weil es wiederholt läuft** [1.11.]. Ein Feld an eine
+  bestehende Gruppe anzuhängen ist erlaubt, und danach füllt der Befehl die Naht der
+  *ganzen* Gruppe. Die alte Fuge liegt mitten darin — sie ist seit dem ersten
+  Zusammenlegen Bauland, und auf Bauland wird gebaut. Noch einmal gefüllt, wird das
+  Erdgeschoss zu Gras und die Schicht darüber verschwindet: 448 Stellen je Band, ohne
+  Warnung und ohne dass etwas herausfällt. `ueberDieNaht` bekommt deshalb die Flächen
+  *vor* dieser Zusammenlegung mit und lässt aus, was dort schon dasselbe Ergebnis
+  hatte.
+
+  Beantworten kann das nur die Ablage, nicht die Welt: Gras auf einer Fuge sieht gleich
+  aus, ob es das Füllen hingelegt hat oder der Spieler. Verglichen wird das Ergebnis
+  und nicht die Teilnahme — beim vierten Feld wird aus einem zugemauerten Bandende die
+  Kreuzung, und dort muss die Mauer weg.
+- **Zählen und Herstellen laufen dieselbe Spalte** (`Wegbau.ueberDieSpalte`), aber mit
+  **zwei** Sollwerten je Höhe. Vorher zählte die Warnung ab einem Block über dem Boden,
+  der Zurückbau schrieb aber auch die Oberfläche und verfüllte darunter. Wer das Gras
+  aufbricht und eine Kiste ebenerdig einsetzt oder ein Becken aushebt, bekam „es geht
+  nichts verloren" zu lesen und verlor es beim Bestätigen doch. Zwei Formulierungen
+  derselben Sache sind hier besonders teuer, weil die eine die Zusage ist und die
+  andere die Tat.
+- **Die Wertung einer Stelle ist eine eigene Regel** (`Stadtboden.wertung`), und sie
+  unterscheidet drei Dinge, die der erste Anlauf in eine Zahl geworfen hatte
+  [1.11., aus der eigenen Prüfung]:
+
+  - **Was die Stadt selbst gelegt hat, ist kein Verlust.** Das Füllgras gehört dazu —
+    und zwar auch, wenn es zu Erde verrottet ist. Vanilla macht das von selbst, sobald
+    etwas Lichtdichtes darauf steht, und ein Schaf frisst es ebenso weg. Ohne diese
+    Ausnahme meldet eine frisch zusammengelegte, völlig unberührte Fläche nach einer
+    Weile „dabei verschwinden 448 Blöcke": eine Zahl, die sich ohne Spielerhandlung
+    bewegt.
+  - **Was der Zurückbau nicht anfasst, wird nicht genannt.** Pflastert jemand die Fuge
+    mit dem Straßenblock der Stadt, lässt der Zurückbau ihn liegen — ihn zu melden
+    wäre eine Warnung vor einer Tat, die nicht stattfindet. Deshalb braucht die
+    Zählung beide Sollwerte: das Bild mit der Gruppe und das ohne sie.
+  - **Eine Fehlstelle verschwindet nicht, sie wird verfüllt.** Über einem leeren Becken
+    stand „dabei verschwinden 4.928 Blöcke", und das Gegenteil war wahr: Der Zurückbau
+    *setzt* diese Blöcke. Die Warnung nennt beides getrennt, Verlust in Rot und
+    Verfüllung in Grau.
+- **Die Paper-Schicht hat jetzt Tests**, und das ist die eigentliche Lehre aus diesem
+  Schritt. Drei Durchgänge hintereinander fanden Fehler im Wegbau, keinen davon durch
+  einen Test — jeder wurde nachgerechnet. Der Grund war nicht Nachlässigkeit, sondern
+  dass `Wegbau` eine `World` nahm: Damit konnte nur ein laufender Server antworten.
+
+  - `Stadtboden` prüft sich ohne Hilfsmittel, weil Blocktabelle und Wertung reine
+    Funktionen von Material zu Material sind. Eine Einschränkung kam dabei gleich mit
+    heraus: `Material.isAir()` geht über die Blockregistrierung und wirft ohne Server,
+    also fragt `Stadtboden.istLuft` die drei Luftarten direkt ab.
+  - `Wegbau` erreicht die Welt jetzt über den **`Weltgriff`** — vier Methoden:
+    Unterkante, höchster Block, lesen, setzen. Damit lässt sich die Marktstadt in einer
+    Map nachstellen (`Probewelt`), und die Blockzahlen sind vorrechenbar statt
+    ablesbar. Die Abstraktion existiert allein für diese Prüfbarkeit, und sie ist es
+    wert: Die stärkste Probe vergleicht nicht Zahlen, sondern die Welt — was gefüllt
+    und wieder zurückgebaut wurde, muss hinterher Block für Block dem Generator
+    entsprechen. Eine Stelle zu viel fällt mit Koordinate auf, während sich Zahlen
+    ausgleichen können.
+**Stand 01.11.2026 — Teil D, einzeln auftrennen** [entschieden, aus dem Spieltest]:
+`/parzelle auftrennen` löst das Feld heraus, auf dem der Spieler steht; der Rest
+bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze Gruppe.
+
+- **Das Standfeld und nicht eine Richtung.** Beim Zusammenlegen braucht es die
+  Richtung, weil ein Feld dazukommt, das noch nicht dabei ist. Beim Auftrennen ist das
+  Feld schon da, und der Spieler steht darauf — ein Argument wäre eine Angabe, die er
+  sowieso durch seinen Standort macht. Auf dem gefüllten Weg gilt dieselbe Regel wie
+  beim Zusammenlegen: Dort ist nicht entschieden, welches Feld gemeint ist.
+- **Ein tragendes Feld löst sich nicht heraus** [entschieden]. Wer die Mitte einer
+  Reihe herausnimmt, ließe zwei Hälften zurück, die sich nicht mehr berühren — und die
+  Fuge zwischen ihnen wäre Bauland ohne Verbindung zum eigenen Grundstück, mitten auf
+  einer Straße, die wieder öffentlich sein müsste. Die beiden Alternativen waren
+  schlechter: „zerfällt in zwei Grundstücke" wirft neue Gruppennummern und die Frage
+  auf, wie sich der bezahlte Preis aufteilt; „dann wird eben ganz aufgetrennt" nimmt
+  dem Spieler mehr, als er wollte — genau der Grund, aus dem dieser Teil entstand.
+  Geprüft wird das im Kern (`Gruppenflaeche.bleibtGanzOhne`), über Kanten und nicht
+  über Ecken: Zwei Felder, die sich nur an einer Ecke berühren, haben keine Fuge
+  zwischen sich, dort liegt die Kreuzung, und die gehört allen.
+- **Bei zwei Feldern wird ganz aufgetrennt.** Was übrig bliebe, wäre ein einzelnes
+  Feld, und eine Gruppe aus einem Feld gibt es nicht: Sie verändert in der Welt nichts
+  und wäre nur eine Zeile, die niemand mehr los wird. Der Befehl sagt es vorher und
+  tut dann dasselbe wie `alles`.
+- **Die Weltarbeit ist dieselbe Auslassung wie beim Füllen, nur umgekehrt.**
+  `ueberDieNaht` bekommt die Flächen, die *bleiben* — und nennt genau die Stellen, die
+  wegfallen. Löst sich ein Feld heraus, kommt nur der Weg dorthin zurück; die Fugen im
+  Rest des Grundstücks bleiben Bauland. Ohne das müsste der Spieler sie neu bezahlen,
+  nur weil er ein Feld abgegeben hat. Dieselbe Methode trägt damit beide Richtungen.
+- **Die Ablage bekommt eine zweite Operation** (`BesitzLager.ausGruppeLoesen`), neben
+  dem Auflösen der ganzen Gruppe. Getrennt und nicht als Sonderfall: Das eine entfernt
+  die Gruppenzeile, das andere lässt sie stehen. Der Preis der Gruppe bleibt, wie er
+  ist — beim Auftrennen gibt es kein Geld zurück, und eine Rückrechnung wäre eine
+  zweite Preisregel neben der Staffel.
+- **Die Gruppenbefehle hatten gar keine Proben.** Zusammenlegen und Auftrennen waren
+  im Besitzbuch ungetestet — nur die Ablage hatte ihren Vertrag. Das erklärt, warum
+  die Fehler dieses Schritts alle durch Nachrechnen gefunden wurden. Mit Teil D gibt es
+  die ersten sieben.
+
+- **Gegengeprüft mit einer Mutationsprobe.** Ein grüner Test, der nicht rot werden
+  kann, ist schlimmer als kein Test — genau das waren zwei der ersten Proben: Die eine
+  verglich ein Material mit sich selbst, die andere benutzte die geprüfte Regel als
+  eigenes Orakel und wäre bei entfernter Auslassung mit null Zusicherungen grün
+  durchgelaufen. Beide sind ersetzt. Danach wurde jede Regel, die in diesem Schritt
+  einmal falsch war, nacheinander wieder kaputtgemacht: Mindesthöhe der Spalte,
+  Gras-Ausnahme, die Tat-fasst-es-nicht-an-Bedingung, Fehlstelle als Verlust,
+  Grundgestein, Räumschutz der Mauerstücke, die Auslassung und ihr Ergebnisvergleich.
+  Alle acht werden gefangen.
+- **Grenze des Zurückbaus, bewusst so:** Nach unten läuft die Spalte bis zur ersten
+  Schicht, die schon stimmt. Einen Hohlraum unter einer stehengelassenen Decke findet
+  sie deshalb nicht — liegt auf 61 wieder Erde, bricht sie dort ab. Ihn zu finden hieße,
+  jede Spalte bis zur Weltunterkante zu lesen: 126 Blöcke statt einem, bei vier Feldern
+  über 230.000 nur für diesen Fall. Ein versiegelter Keller unter der wieder
+  öffentlichen Straße stört niemanden; ein Loch, in das man fällt, wäre etwas anderes,
+  und das findet sie.
+- **Geräumt wird nur über den Fugen.** Ein Mauerstück am Bandende war öffentlicher Weg;
+  dort durfte der Eigentümer nie bauen, und was trotzdem steht — eine Laterne der Stadt
+  etwa — gehört nicht ihm. Die Zählung ließ diese Stellen schon aus, der Zurückbau
+  nicht: Er hätte fremdes Werk abgerissen, und gewarnt hätte davor nichts.
+- **Das Grundgestein gehört in dieselbe Tabelle** wie Erde und Stein. Der Zurückbau
+  stellt eine abgegrabene Spalte wieder her und läuft dabei bis zur Weltunterkante; mit
+  zwei Tabellen stünde dort danach Stein, und die Stadt hätte eine Stelle, an der man
+  aus der Welt fällt. Nach unten bricht die Schleife jetzt ab, sobald sie findet, was
+  dort hingehört — nicht beim ersten festen Block. Sonst blieb hinter einer Glasplatte
+  im Schacht ein Hohlraum unter einer Straße, die niemand mehr aufgraben darf.
+- **Offen: ein abgebrochener Zurückbau lässt sich nicht nachholen.** Beim Füllen ist
+  ein Abbruch die harmlose Hälfte — die Ablage führt, der Spieler darf bauen, es sieht
+  nur noch nicht danach aus. Beim Auftrennen ist die Gruppe in der Ablage schon
+  aufgelöst: Bleibt die Welt stehen, liegt Gras auf öffentlichem Weg, und kein Befehl
+  schreibt es zurück. Das wäre ein Befehl, der die Welt der Ablage nachzieht — eine
+  eigene Entscheidung, nicht Teil dieses Schritts.
 - **Derselbe Leseweg überall**: `/parzelle info` und die Begründung der Schutzwache
   lasen die Rasterzelle und hätten auf gefülltem Weg „gehört allen" gesagt — während
   dieselbe Wache die fremde Hand gerade abgewiesen hatte. Beide lesen jetzt

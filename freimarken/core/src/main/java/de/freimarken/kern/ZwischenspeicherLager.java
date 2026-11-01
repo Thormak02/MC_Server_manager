@@ -133,6 +133,12 @@ public final class ZwischenspeicherLager implements BesitzLager {
         leeren();
     }
 
+    @Override
+    public void ausGruppeLoesen(long feldId) {
+        wahrheit.ausGruppeLoesen(feldId);
+        leeren();
+    }
+
     /**
      * Wirft abgelaufene Eintraege weg.
      *

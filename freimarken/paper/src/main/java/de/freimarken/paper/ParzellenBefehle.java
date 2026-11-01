@@ -67,7 +67,7 @@ final class ParzellenBefehle {
         // Welt koennen auseinanderlaufen, und der Fehler faellt erst auf, wenn ein Befehl
         // in der Ablage nichts findet, obwohl der Spieler richtig steht.
         this.welt = marktstadt.key().asString();
-        this.wegbau = new Wegbau(buch.plan(), marktstadt);
+        this.wegbau = new Wegbau(buch.plan(), new Weltgriff.AufDerWelt(marktstadt));
         this.standardHoechstzahl = standardHoechstzahl;
         this.standardGruppenFelder = standardGruppenFelder;
         this.protokoll = protokoll;
@@ -109,14 +109,26 @@ final class ParzellenBefehle {
                                                 .executes(this::aufgeben)))))
                 .then(zusammenlegenZweig())
                 .then(Commands.literal("auftrennen")
-                        .executes(fuerSpieler(this::warneVorAuftrennen))
+                        // Ohne weiteres Wort loest sich das Feld heraus, auf dem der
+                        // Spieler steht. Das ist der haeufige Fall: Wer vier Felder
+                        // verbunden hat und eines abgeben will, will nicht alle Wege
+                        // dazwischen verlieren und dreimal neu zusammenlegen.
+                        .executes(fuerSpieler(this::warneVorHerausloesen))
                         // Zweites Wort und Nummer wie beim Aufgeben: Auftrennen raeumt den
                         // Weg, und was dort stand, ist danach weg.
                         .then(Commands.literal("bestaetigen")
                                 .then(Commands.argument("x", IntegerArgumentType.integer())
                                         .then(Commands.argument("z",
                                                         IntegerArgumentType.integer())
-                                                .executes(this::auftrennen)))))
+                                                .executes(this::herausloesen))))
+                        .then(Commands.literal("alles")
+                                .executes(fuerSpieler(this::warneVorAuftrennen))
+                                .then(Commands.literal("bestaetigen")
+                                        .then(Commands.argument("x",
+                                                        IntegerArgumentType.integer())
+                                                .then(Commands.argument("z",
+                                                                IntegerArgumentType.integer())
+                                                        .executes(this::auftrennen))))))
                 .build();
     }
 
@@ -205,7 +217,8 @@ final class ParzellenBefehle {
                     + buch.gruppenFelder(welt, x, z).size() + " Feldern",
                     NamedTextColor.WHITE));
             if (meine) {
-                spieler.sendMessage(Component.text("  /parzelle auftrennen",
+                spieler.sendMessage(Component.text(
+                        "  /parzelle auftrennen        dieses Feld herausloesen",
                         NamedTextColor.DARK_GRAY));
             }
         } else if (meine) {
@@ -542,6 +555,18 @@ final class ParzellenBefehle {
                 IntegerArgumentType.getInteger(zusammenhang, "z"), "Nichts zusammengelegt.")) {
             return Command.SINGLE_SUCCESS;
         }
+        // Was VOR dieser Zusammenlegung schon Gruppe war, und zwar auf beiden Seiten. Auf
+        // einer alten Fuge steht inzwischen ein Haus; sie noch einmal zu fuellen wuerde das
+        // Erdgeschoss auf Gras zuruecksetzen. Die Felder beider Seiten einzeln holen und
+        // nicht zusammen: Vereinigt waeren sie genau die neue Gruppe, und dann gaebe es
+        // nichts zu fuellen.
+        Rasterplan plan = buch.plan();
+        int px = plan.parzelleX(ort.getBlockX());
+        int pz = plan.parzelleZ(ort.getBlockZ());
+        List<List<Parzelle>> schonGelegt = List.of(
+                buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ()),
+                buch.gruppenFelder(welt, plan.ursprungX(px + richtung.dx()),
+                        plan.ursprungZ(pz + richtung.dz())));
         var entscheid = buch.zusammenlegen(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ(), richtung, gruppenFelder(spieler));
         if (!entscheid.erteilt()) {
@@ -555,7 +580,8 @@ final class ParzellenBefehle {
                 + Betraege.mark(entscheid.kosten()) + " · Rest: "
                 + Betraege.mark(buch.kasse().guthaben(spieler.getUniqueId())),
                 NamedTextColor.GRAY));
-        andereDenBoden(spieler, () -> wegbau.fuelle(gruppe), "Der Weg dazwischen ist Bauland");
+        andereDenBoden(spieler, () -> wegbau.fuelle(gruppe, schonGelegt),
+                "Der Weg dazwischen ist Bauland");
         return Command.SINGLE_SUCCESS;
     }
 
@@ -583,18 +609,155 @@ final class ParzellenBefehle {
         List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
 
         spieler.sendMessage(Component.text("Grundstueck aus " + gruppe.size()
-                + " Feldern auftrennen?", NamedTextColor.YELLOW));
+                + " Feldern ganz auftrennen?", NamedTextColor.YELLOW));
         spieler.sendMessage(Component.text(
-                "  Der Weg zwischen den Feldern kommt zurueck. Geld gibt es keines zurueck.",
-                NamedTextColor.GRAY));
-        int bauten = wegbau.bautenAufDemWeg(gruppe);
-        spieler.sendMessage(bauten == 0
-                ? Component.text("  Auf der Wegflaeche steht nichts - es geht nichts verloren.",
-                        NamedTextColor.GRAY)
-                : Component.text("  Dabei verschwinden " + bauten
-                        + " Bloecke, die auf der Wegflaeche stehen.", NamedTextColor.RED));
-        spieler.sendMessage(Component.text("  /parzelle auftrennen bestaetigen "
+                "  ALLE Wege zwischen den Feldern kommen zurueck. Geld gibt es keines"
+                        + " zurueck.", NamedTextColor.GRAY));
+        spieler.sendMessage(Component.text(
+                "  Fuer ein einzelnes Feld: stell dich darauf und nimm /parzelle auftrennen"
+                        + " ohne \"alles\".", NamedTextColor.GRAY));
+        nenneAufwand(spieler, wegbau.aufwandBeimAuftrennen(gruppe, List.of()));
+        spieler.sendMessage(Component.text("  /parzelle auftrennen alles bestaetigen "
                 + anker.x() + " " + anker.z(), NamedTextColor.RED));
+    }
+
+    /**
+     * Warnt vor dem Herausloesen des Feldes, auf dem der Spieler steht.
+     *
+     * <p>Zurueck kommt nur der Weg zu diesem einen Feld. Die Wege im Rest des
+     * Grundstuecks bleiben Bauland - sonst muesste der Spieler sie neu bezahlen, nur weil
+     * er ein Feld abgeben wollte.
+     */
+    private void warneVorHerausloesen(Player spieler) {
+        Optional<Location> hier = ortInMarktstadt(spieler);
+        if (hier.isEmpty()) {
+            return;
+        }
+        Location ort = hier.get();
+        var entscheid = buch.pruefeHerausloesen(welt, spieler.getUniqueId(),
+                ort.getBlockX(), ort.getBlockZ());
+        if (!entscheid.erteilt()) {
+            spieler.sendMessage(absage(entscheid.bescheid()));
+            return;
+        }
+        Parzelle feld = entscheid.parzelle().orElseThrow();
+        List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
+        List<Parzelle> bleibend = ohneDasFeld(gruppe, feld);
+
+        if (bleibend.size() < 2) {
+            spieler.sendMessage(Component.text("Grundstueck aus " + gruppe.size()
+                    + " Feldern auftrennen?", NamedTextColor.YELLOW));
+            spieler.sendMessage(Component.text(
+                    "  Es hat nur zwei Felder - eines allein geht nicht heraus, also wird",
+                    NamedTextColor.GRAY));
+            spieler.sendMessage(Component.text("  es ganz aufgetrennt.",
+                    NamedTextColor.GRAY));
+        } else {
+            spieler.sendMessage(Component.text("Das Feld " + feld.x() + "/" + feld.z()
+                    + " aus dem Grundstueck herausloesen?", NamedTextColor.YELLOW));
+            spieler.sendMessage(Component.text("  Die anderen " + bleibend.size()
+                    + " Felder bleiben ein Grundstueck.", NamedTextColor.GRAY));
+        }
+        spieler.sendMessage(Component.text(
+                "  Der Weg dorthin kommt zurueck. Geld gibt es keines zurueck.",
+                NamedTextColor.GRAY));
+        nenneAufwand(spieler, wegbau.aufwandBeimAuftrennen(gruppe, bleibt(bleibend)));
+        spieler.sendMessage(Component.text("  /parzelle auftrennen bestaetigen "
+                + feld.x() + " " + feld.z(), NamedTextColor.RED));
+    }
+
+    /**
+     * Nennt, was die Weltarbeit kostet - Verlust in Rot, Fuellung in Grau.
+     *
+     * <p>Dieselben Saetze fuer das Herausloesen und fuer das ganze Auftrennen. Zwei
+     * Fassungen wuerden irgendwann verschiedene Zahlen verschieden benennen.
+     */
+    private void nenneAufwand(Player spieler, Wegbau.Aufwand aufwand) {
+        // "von der Flaeche" und nicht "die auf der Wegflaeche stehen": Gezaehlt wird die
+        // ganze Spalte, also auch ein Fremdblock im Schacht darunter. Wer den Satz woertlich
+        // nimmt, sucht auf der Oberflaeche und findet nichts - und haelt die rote Zahl fuer
+        // einen Fehler.
+        if (aufwand.verschwindet() == 1) {
+            spieler.sendMessage(Component.text("  Dabei verschwindet 1 Block von der "
+                    + "Flaeche.", NamedTextColor.RED));
+        } else if (aufwand.verschwindet() > 1) {
+            spieler.sendMessage(Component.text("  Dabei verschwinden "
+                    + aufwand.verschwindet() + " Bloecke von der Flaeche.",
+                    NamedTextColor.RED));
+        }
+        // Getrennt von den Verlusten und in Grau: Hier geht nichts weg, hier kommt etwas
+        // hinzu. In einer Zahl zusammengefasst stuende ueber einem leeren Becken "es
+        // verschwinden 4.928 Bloecke" - und das Gegenteil waere wahr. "Fehlstelle" und
+        // nicht "unter der Flaeche", weil die Oberflaeche selbst dazugehoert.
+        if (aufwand.verfuellt() == 1) {
+            spieler.sendMessage(Component.text("  1 Fehlstelle wird wieder gefuellt.",
+                    NamedTextColor.GRAY));
+        } else if (aufwand.verfuellt() > 1) {
+            spieler.sendMessage(Component.text("  " + aufwand.verfuellt()
+                    + " Fehlstellen werden wieder gefuellt.", NamedTextColor.GRAY));
+        }
+        if (aufwand.istNichts()) {
+            spieler.sendMessage(Component.text(
+                    "  Auf der Wegflaeche steht nichts - es geht nichts verloren.",
+                    NamedTextColor.GRAY));
+        }
+    }
+
+    /** Die Felder der Gruppe ohne dieses eine. */
+    private static List<Parzelle> ohneDasFeld(List<Parzelle> gruppe, Parzelle feld) {
+        return gruppe.stream().filter(anderes -> anderes.id() != feld.id()).toList();
+    }
+
+    /**
+     * Was nach dem Schritt noch Gruppe ist - fuer die Weltarbeit.
+     *
+     * <p>Unter zwei Feldern ist es keine Gruppe mehr, dann kommt der ganze Weg zurueck.
+     */
+    private static List<List<Parzelle>> bleibt(List<Parzelle> bleibend) {
+        return bleibend.size() < 2 ? List.of() : List.of(bleibend);
+    }
+
+    /**
+     * Loest das Feld heraus, auf dem der Spieler steht.
+     *
+     * <p>Bei einer Gruppe aus zwei Feldern trennt es ganz auf: Was uebrig bliebe, waere ein
+     * einzelnes Feld, und eine Gruppe aus einem Feld gibt es nicht.
+     */
+    private int herausloesen(CommandContext<CommandSourceStack> zusammenhang) {
+        if (!(zusammenhang.getSource().getExecutor() instanceof Player spieler)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Optional<Location> hier = ortInMarktstadt(spieler);
+        if (hier.isEmpty()) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Location ort = hier.get();
+        if (!stehtAuf(spieler, ort, IntegerArgumentType.getInteger(zusammenhang, "x"),
+                IntegerArgumentType.getInteger(zusammenhang, "z"), "Nichts herausgeloest.")) {
+            return Command.SINGLE_SUCCESS;
+        }
+        // Die Felder VOR dem Loesen holen, wie beim ganzen Auftrennen: Danach sagt die
+        // Ablage nicht mehr, welche Flaeche zurueckzubauen waere.
+        List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
+        var entscheid = buch.herausloesen(welt, spieler.getUniqueId(),
+                ort.getBlockX(), ort.getBlockZ());
+        if (!entscheid.erteilt()) {
+            spieler.sendMessage(absage(entscheid.bescheid()));
+            return Command.SINGLE_SUCCESS;
+        }
+        Parzelle feld = entscheid.parzelle().orElseThrow();
+        List<Parzelle> bleibend = ohneDasFeld(gruppe, feld);
+        if (bleibend.size() < 2) {
+            spieler.sendMessage(Component.text("Aufgetrennt - " + gruppe.size()
+                    + " eigenstaendige Parzellen.", NamedTextColor.GREEN));
+        } else {
+            spieler.sendMessage(Component.text("Feld " + feld.x() + "/" + feld.z()
+                    + " herausgeloest - das Grundstueck hat noch " + bleibend.size()
+                    + " Felder.", NamedTextColor.GREEN));
+        }
+        andereDenBoden(spieler, () -> wegbau.baueZurueck(gruppe, bleibt(bleibend)),
+                "Der Weg ist zurueck");
+        return Command.SINGLE_SUCCESS;
     }
 
     private int auftrennen(CommandContext<CommandSourceStack> zusammenhang) {
@@ -621,7 +784,8 @@ final class ParzellenBefehle {
         }
         spieler.sendMessage(Component.text("Aufgetrennt - " + gruppe.size()
                 + " eigenstaendige Parzellen.", NamedTextColor.GREEN));
-        andereDenBoden(spieler, () -> wegbau.baueZurueck(gruppe), "Der Weg ist zurueck");
+        andereDenBoden(spieler, () -> wegbau.baueZurueck(gruppe, List.of()),
+                "Der Weg ist zurueck");
         return Command.SINGLE_SUCCESS;
     }
 
@@ -636,8 +800,11 @@ final class ParzellenBefehle {
      */
     private void andereDenBoden(Player spieler, IntSupplier arbeit, String gelungen) {
         try {
+            // "geaendert" und nicht nur die Zahl: Darin stecken der Weg selbst und das,
+            // was geraeumt wurde. Ohne das Wort liest sich "Der Weg ist zurueck (623
+            // Bloecke)", als haette der Weg 623 Bloecke.
             spieler.sendMessage(Component.text("  " + gelungen + " (" + arbeit.getAsInt()
-                    + " Bloecke).", NamedTextColor.GRAY));
+                    + " Bloecke geaendert).", NamedTextColor.GRAY));
         } catch (RuntimeException fehler) {
             protokoll.log(Level.SEVERE,
                     "Der Boden der Gruppe liess sich nicht aendern - die Ablage stimmt, "
@@ -696,6 +863,7 @@ final class ParzellenBefehle {
             case GRUPPE_ZU_GROSS -> "Dein Rang erlaubt keine groessere Gruppe.";
             case KEINE_GRUPPE -> "Hier ist keine Gruppe.";
             case AUF_DEM_WEG -> "Stell dich auf das Feld, das du meinst - nicht auf den Weg.";
+            case HAELT_ZUSAMMEN -> "Dieses Feld haelt dein Grundstueck zusammen. Loese erst eines am Rand heraus.";
             case ERTEILT -> "Erledigt.";
         }, NamedTextColor.RED);
     }

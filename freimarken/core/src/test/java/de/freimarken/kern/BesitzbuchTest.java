@@ -1,8 +1,11 @@
 package de.freimarken.kern;
 
+import static de.freimarken.kern.Besitzbuch.Bescheid.AUF_DEM_WEG;
 import static de.freimarken.kern.Besitzbuch.Bescheid.AUSSERHALB;
 import static de.freimarken.kern.Besitzbuch.Bescheid.ERTEILT;
 import static de.freimarken.kern.Besitzbuch.Bescheid.GRENZE_ERREICHT;
+import static de.freimarken.kern.Besitzbuch.Bescheid.HAELT_ZUSAMMEN;
+import static de.freimarken.kern.Besitzbuch.Bescheid.KEINE_GRUPPE;
 import static de.freimarken.kern.Besitzbuch.Bescheid.KEINE_PARZELLE;
 import static de.freimarken.kern.Besitzbuch.Bescheid.NICHT_EIGENTUEMER;
 import static de.freimarken.kern.Besitzbuch.Bescheid.NICHT_EINGETRAGEN;
@@ -50,10 +53,117 @@ class BesitzbuchTest {
         buch = new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse);
     }
 
+    /**
+     * Die Mitte der Parzelle n auf einer Achse - bei Raster 64 + 7 liegt Parzelle 1 auf
+     * 71..134.
+     */
+    private static int mitte(int parzelle) {
+        return parzelle * 71 + 32;
+    }
+
+    /**
+     * Eine Reihe aus {@code felder} Parzellen von 0/0 nach Osten, zu einer Gruppe
+     * verbunden.
+     */
+    private void reiheAlsGruppe(int felder) {
+        for (int i = 0; i < felder; i++) {
+            lager.anlegen(WELT, i, 0, anna, 0L);
+        }
+        for (int i = 0; i < felder - 1; i++) {
+            assertEquals(ERTEILT, buch.zusammenlegen(WELT, anna, mitte(i), 32,
+                    Richtung.OST, VIELE).bescheid(), "Feld " + i + " mit " + (i + 1));
+        }
+    }
+
     /** Ein Buch, dessen Spieler genau so viel Geld haben wie angegeben. */
     private Besitzbuch buchMitGuthaben(long guthaben) {
         kasse = new SpeicherKasse(guthaben);
         return new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse);
+    }
+
+    // --- Herausloesen -----------------------------------------------------------
+
+    @Test
+    @DisplayName("Ein Randfeld loest sich, das Grundstueck bleibt")
+    void randfeldLoestSich() {
+        reiheAlsGruppe(3);
+
+        var entscheid = buch.herausloesen(WELT, anna, mitte(2), 32);
+
+        assertEquals(ERTEILT, entscheid.bescheid());
+        assertFalse(lager.finde(WELT, 2, 0).orElseThrow().hatElternteil(),
+                "das geloeste Feld ist eigenstaendig");
+        assertEquals(2, buch.gruppenFelder(WELT, mitte(0), 32).size(),
+                "die anderen zwei bleiben zusammen");
+    }
+
+    @Test
+    @DisplayName("Das tragende Feld loest sich nicht - sonst laege das Grundstueck in zwei Teilen")
+    void tragendesFeldLoestSichNicht() {
+        // Die Mitte einer Reihe. Ohne sie beruehren sich die Reste nicht mehr, und die
+        // Fuge zwischen ihnen waere Bauland ohne Verbindung zum eigenen Grundstueck.
+        reiheAlsGruppe(3);
+
+        assertEquals(HAELT_ZUSAMMEN, buch.herausloesen(WELT, anna, mitte(1), 32).bescheid());
+        assertEquals(3, buch.gruppenFelder(WELT, mitte(0), 32).size(), "nichts passiert");
+        assertTrue(lager.finde(WELT, 1, 0).orElseThrow().hatElternteil());
+    }
+
+    @Test
+    @DisplayName("Bei zwei Feldern wird ganz aufgetrennt")
+    void zweiFelderWerdenGanzAufgetrennt() {
+        // Was uebrig bliebe, waere ein einzelnes Feld - und eine Gruppe aus einem Feld
+        // gibt es nicht. Sie veraendert in der Welt nichts und waere nur eine Zeile, die
+        // niemand mehr los wird.
+        reiheAlsGruppe(2);
+
+        assertEquals(ERTEILT, buch.herausloesen(WELT, anna, mitte(0), 32).bescheid());
+
+        assertFalse(lager.finde(WELT, 0, 0).orElseThrow().hatElternteil());
+        assertFalse(lager.finde(WELT, 1, 0).orElseThrow().hatElternteil());
+        assertTrue(buch.gruppenFelder(WELT, mitte(0), 32).isEmpty(), "keine Gruppe mehr");
+    }
+
+    @Test
+    @DisplayName("Ohne Gruppe gibt es nichts herauszuloesen")
+    void ohneGruppeNichtsHerauszuloesen() {
+        lager.anlegen(WELT, 0, 0, anna, 0L);
+
+        assertEquals(KEINE_GRUPPE, buch.herausloesen(WELT, anna, mitte(0), 32).bescheid());
+        assertEquals(KEINE_PARZELLE, buch.herausloesen(WELT, anna, mitte(9), 32).bescheid());
+    }
+
+    @Test
+    @DisplayName("Auf dem gefuellten Weg ist nicht entschieden, welches Feld gemeint ist")
+    void aufDemWegIstNichtsEntschieden() {
+        // Dieselbe Regel wie beim Zusammenlegen: Hier naehme floorDiv die kleinere
+        // Nachbarzelle, und das waere womoeglich das falsche Feld.
+        reiheAlsGruppe(2);
+
+        assertEquals(AUF_DEM_WEG, buch.herausloesen(WELT, anna, 67, 32).bescheid());
+        assertEquals(2, buch.gruppenFelder(WELT, mitte(0), 32).size(), "nichts passiert");
+    }
+
+    @Test
+    @DisplayName("Ein Fremder loest nichts heraus")
+    void fremderLoestNichtsHeraus() {
+        reiheAlsGruppe(3);
+
+        assertEquals(NICHT_EIGENTUEMER,
+                buch.herausloesen(WELT, bert, mitte(2), 32).bescheid());
+        assertEquals(3, buch.gruppenFelder(WELT, mitte(0), 32).size());
+    }
+
+    @Test
+    @DisplayName("Das Pruefen allein aendert nichts")
+    void pruefenAendertNichts() {
+        reiheAlsGruppe(3);
+
+        assertEquals(ERTEILT, buch.pruefeHerausloesen(WELT, anna, mitte(2), 32).bescheid());
+        assertEquals(HAELT_ZUSAMMEN,
+                buch.pruefeHerausloesen(WELT, anna, mitte(1), 32).bescheid());
+        assertEquals(3, buch.gruppenFelder(WELT, mitte(0), 32).size(),
+                "die Gruppe steht unveraendert");
     }
 
     // --- Nehmen -----------------------------------------------------------------
@@ -484,6 +594,11 @@ class BesitzbuchTest {
         public void auftrennen(long gruppeId) {
             echt.auftrennen(gruppeId);
         }
+
+        @Override
+        public void ausGruppeLoesen(long feldId) {
+            echt.ausGruppeLoesen(feldId);
+        }
     }
 
     /**
@@ -545,6 +660,11 @@ class BesitzbuchTest {
         @Override
         public void auftrennen(long gruppeId) {
             echt.auftrennen(gruppeId);
+        }
+
+        @Override
+        public void ausGruppeLoesen(long feldId) {
+            echt.ausGruppeLoesen(feldId);
         }
     }
 }

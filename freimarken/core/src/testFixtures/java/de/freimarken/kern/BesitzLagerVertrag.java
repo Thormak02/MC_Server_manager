@@ -242,6 +242,39 @@ public abstract class BesitzLagerVertrag {
     }
 
     @Test
+    @DisplayName("Ein einzelnes Feld laesst sich loesen, die Gruppe bleibt")
+    void ausGruppeLoesen() {
+        BesitzLager lager = lager();
+        Parzelle eins = lager.anlegen(WELT, 1, 0, anna, 0L);
+        Parzelle zwei = lager.anlegen(WELT, 2, 0, anna, 0L);
+        Parzelle drei = lager.anlegen(WELT, 3, 0, anna, 0L);
+        long gruppe = lager.gruppeSetzen(Parzelle.KEIN_ELTERNTEIL, WELT, anna, Set.of(),
+                30_000L, List.of(eins.id(), zwei.id(), drei.id()));
+
+        lager.ausGruppeLoesen(drei.id());
+
+        assertEquals(2, lager.kinderVon(gruppe).size(), "die Gruppe behaelt zwei Felder");
+        assertFalse(lager.finde(WELT, 3, 0).orElseThrow().hatElternteil(),
+                "das geloeste Feld ist eigenstaendig");
+        assertTrue(lager.finde(WELT, 1, 0).orElseThrow().hatElternteil(),
+                "die anderen bleiben in der Gruppe");
+        assertTrue(lager.finde(WELT, 3, 0).isPresent(), "das Feld bleibt bestehen");
+    }
+
+    @Test
+    @DisplayName("Ein Feld ohne Gruppe laesst sich nicht loesen")
+    void loesenOhneGruppeLaut() {
+        // Lieber ein Abbruch als stilles Nichtstun: Die Welt wird nach dieser Zusage
+        // umgebaut, und ein Weg, der zurueckkommt, obwohl die Gruppe noch besteht, waere
+        // eine Mauer quer durch ein Grundstueck.
+        BesitzLager lager = lager();
+        Parzelle allein = lager.anlegen(WELT, 1, 0, anna, 0L);
+
+        assertThrows(IllegalStateException.class, () -> lager.ausGruppeLoesen(allein.id()));
+        assertThrows(IllegalStateException.class, () -> lager.ausGruppeLoesen(4711L));
+    }
+
+    @Test
     @DisplayName("Ein fremdes Feld laesst sich nicht an die eigene Gruppe haengen")
     void fremdesFeldGehtNicht() {
         BesitzLager lager = lager();

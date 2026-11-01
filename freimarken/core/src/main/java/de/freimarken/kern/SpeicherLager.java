@@ -191,6 +191,18 @@ public final class SpeicherLager implements BesitzLager {
     }
 
     @Override
+    public synchronized void ausGruppeLoesen(long feldId) {
+        String schluessel = orteNachId.get(feldId);
+        Parzelle feld = schluessel == null ? null : nachOrt.get(schluessel);
+        if (feld == null || !feld.hatElternteil()) {
+            throw new IllegalStateException("Nummer " + feldId + " steckt in keiner Gruppe");
+        }
+        nachOrt.put(schluessel, new Parzelle(feld.id(), feld.welt(), feld.x(), feld.z(),
+                feld.eigentuemer(), feld.mitbauer(), feld.preis(), feld.erworbenAm(),
+                feld.art(), Parzelle.KEIN_ELTERNTEIL, feld.zustand()));
+    }
+
+    @Override
     public synchronized void auftrennen(long gruppeId) {
         if (gruppen.remove(gruppeId) == null) {
             throw new IllegalStateException("Keine Gruppe mit der Nummer " + gruppeId);

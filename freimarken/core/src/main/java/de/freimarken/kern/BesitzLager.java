@@ -103,4 +103,22 @@ public interface BesitzLager {
      * @throws IllegalStateException wenn die Nummer keine Gruppe ist
      */
     void auftrennen(long gruppeId);
+
+    /**
+     * Ein einzelnes Feld aus seiner Gruppe loesen - es wird wieder eigenstaendig, die
+     * Gruppe bleibt mit ihren uebrigen Feldern bestehen.
+     *
+     * <p>Getrennt von {@link #auftrennen}, weil es etwas anderes ist: Wer vier Felder
+     * verbunden hat und eines abgeben will, verlor sonst alle Wege dazwischen und musste
+     * dreimal neu zusammenlegen, Gebuehr inbegriffen.
+     *
+     * <p>Der Preis der Gruppe bleibt, wie er ist. Beim Auftrennen gibt es kein Geld
+     * zurueck, und beim Herausloesen eines Feldes genauso wenig - eine Rueckrechnung waere
+     * eine zweite Preisregel neben der Staffel.
+     *
+     * @param feldId die Nummer des Feldes, nicht die der Gruppe
+     * @throws IllegalStateException wenn es das Feld nicht gibt oder es zu keiner Gruppe
+     *                               gehoert - dann ist nichts passiert
+     */
+    void ausGruppeLoesen(long feldId);
 }

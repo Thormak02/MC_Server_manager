@@ -100,6 +100,11 @@ class ZwischenspeicherLagerTest {
             echt.auftrennen(gruppeId);
         }
 
+        @Override
+        public void ausGruppeLoesen(long feldId) {
+            echt.ausGruppeLoesen(feldId);
+        }
+
     }
 
     private static final String WELT = "freimarken:marktstadt";
