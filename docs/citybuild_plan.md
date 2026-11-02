@@ -187,7 +187,59 @@ statt nur anders auszusehen. [empfohlen]
 ### 4.2 Erweiterbar und portierbar [entschieden]
 
 - Welten kommen aus einer **Konfigurationsliste**, nicht aus dem Code. Eine neue Welt ist
-  ein Eintrag plus Generator, kein Umbau.
+  ein Eintrag plus Generator, kein Umbau. **Gebaut am 01.11.2026**: Je Eintrag `art`
+  (`raster`, `gewoehnlich`, `leer`), `umgebung` (`normal`, `nether`, `ende`) und `kante`.
+  Die Reihenfolge in der Datei ist die Reihenfolge beim Anlegen — die Marktstadt steht
+  oben, damit ein Fehlschlag an ihr auffällt, bevor Minuten in die übrigen Welten
+  geflossen sind.
+
+  Die Entscheidungen dabei, alle aus demselben Grund — eine falsch erzeugte Welt ist
+  nicht zurückzunehmen:
+
+  - **`art` wird nie geraten, und sie hängt am Namen — in beide Richtungen.** Das Raster
+    trägt allein `marktstadt`, und `marktstadt` trägt nichts anderes. Eine Vorgabe
+    `gewoehnlich` machte aus der Marktstadt beim nächsten Start eine Welt mit Hügeln und
+    Bäumen, mitten in den bezahlten Parzellen; eine *zweite* Rasterwelt bekäme Mauern und
+    Wege, aber kein Besitzbuch und keine Schutzwache — eine Parzellenstadt, in der jeder
+    überall baut. Steht beim Raster etwas anderes, entsteht die Marktstadt **gar nicht**
+    und Freimarken bleibt aus. Das ist hier das mildere Ende: Ein Plugin, das nicht
+    startet, ist zu reparieren; eine Marktstadt mit Bäumen in den Parzellen nicht.
+  - **Ein Tippfehler kostet eine Welt, nicht alle.** Statt einer Ausnahme mitten im Start
+    sammelt das Lesen Klagen; was klagt, wird übersprungen, der Rest entsteht. Dasselbe
+    beim Anlegen: Fällt eine Welt um, wird sie benannt und übersprungen. Flog es vorher
+    durch, kam der Start nie bis zur Schutzwache — und die Marktstadt stand geladen da,
+    voller Parzellen, in denen jeder bauen durfte.
+  - **Die Grenzregel gilt jetzt für jede Welt.** Sie stand in `Stadtgrenze` und damit am
+    Raster der Marktstadt; Altfurt, Kornmark und die Werder haben dieselbe Frage und kein
+    Raster. Jetzt steht sie einmal im Kern (`Grenzregel`), und die Marktstadt legt nur
+    noch ihre Rundung auf ganze Rasterzellen darüber. Dort steht auch das Mindestmaß und
+    die Klage — **eine Einstellung, ein Leser**: Die Kante der Marktstadt wurde vorher an
+    zwei Stellen mit zwei Rückfällen gelesen, und bei einem Vertipper standen zwei
+    widersprüchliche Meldungen desselben Starts untereinander.
+  - **Jede Welt trägt ihren Ausweis.** Diese Welten stehen in keiner Serverliste, sie
+    entstehen beim Start — „noch nicht da“ hieß also *jedes Mal*, und damit wurde ein mit
+    `/setworldspawn` gesetzter Erscheinungspunkt bei jedem Neustart überschrieben und ein
+    verschobener Grenzmittelpunkt auf 0/0 zurückgeholt — was die Grenze nach innen schiebt,
+    obwohl die Kante nie kleiner wird. Jetzt steht die `art` im `PersistentDataContainer`
+    der Welt und damit in ihrer Weltdatei: *neu* heißt, dass Freimarken sie zum ersten Mal
+    sieht. Weicht der Ausweis ab, wird geklagt; mehr ist von dort nicht möglich, denn
+    lesbar ist er erst, wenn die Welt geladen **ist**. Den teuren Fall fängt deshalb das
+    Lesen der Liste ab, bevor eine Welt angefasst wird.
+  - **Die Kante wird gelesen, nicht geraten.** `kante: "6000"` war stillschweigend 0 — eine
+    Welt ohne Grenze, in der Spieler beliebig weit hinauslaufen und endlos Gelände
+    erzeugen, und die Vorgenerierung lief gegen eine Grenze, die nie gesetzt wurde.
+    `kante: 6.000` liest YAML als 6, wie die Kommentare dieser Datei Tausender selbst
+    schreiben. Geprüft wird jetzt der Typ und die Spanne, und zwar an derselben Regel, nach
+    der gesetzt wird; ein Wert jenseits des Höchstmaßes ließ Bukkit vorher mitten im Start
+    werfen.
+  - **Was das Plugin mitbringt und in der Datei fehlt, wird benannt.** Eine vorhandene
+    `config.yml` wird beim Update nie überschrieben, und Bukkit mischt die Vorgaben aus der
+    Jar beim Zählen der Einträge nicht ein — beim Lesen eines einzelnen Schlüssels aber
+    doch. Auf einem Server, der schon lief, entstand damit genau die Marktstadt und sonst
+    nichts, ohne eine Zeile im Protokoll.
+
+  Nicht in der ausgelieferten Liste: **Wolkenwerder**. Eine Welt aus Leere, in der jeder
+  Ankommende fällt — die Startinsel kommt mit Schritt 11.
 - **Kornmark wird bei jeder neuen Minecraft-Version zurückgesetzt** und mit neuem Startwert
   vorgeneriert — so kommen neue Blöcke und Biome ins Spiel, ohne gebaute Welten anzufassen.
 - Gebaute Welten (Altfurt, Marktstadt, Freistädte, beide Werder) werden **nie**

@@ -31,7 +31,7 @@ package de.freimarken.kern;
 public final class Stadtgrenze {
 
     /** Bukkits Hoechstmass fuer die Weltgrenze - und die Vorgabe einer frischen Welt. */
-    public static final double WELTGRENZE_HOECHSTMASS = 59_999_968.0;
+    public static final double WELTGRENZE_HOECHSTMASS = Grenzregel.HOECHSTMASS;
 
     /** Die Kante aus Plan Abschnitt 4. Rueckfall, wenn die Einstellung unbrauchbar ist. */
     public static final int MARKTSTADT_KANTE = 3000;
@@ -100,35 +100,19 @@ public final class Stadtgrenze {
      */
     public static int wirksameKante(Rasterplan plan, int ausEinstellung, double inDerWelt,
                                     boolean sprungBestaetigt) {
-        int gewuenscht = brauchbar(plan, ausEinstellung) ? ausEinstellung : MARKTSTADT_KANTE;
-
-        // Die Vorgabe einer frischen Welt heisst: Hier wurde noch nie eine Grenze gesetzt.
-        // Exakt vergleichen und nicht gegen eine runde Million - sonst gaelte eine von Hand
-        // auf zwei Millionen gesetzte Grenze als ungesetzt und wuerde verkleinert.
-        if (inDerWelt >= WELTGRENZE_HOECHSTMASS) {
-            return gewuenscht;
-        }
-        int gesetzt = (int) Math.min(Math.max(inDerWelt, 0.0), WELTGRENZE_HOECHSTMASS);
-
-        // Unterhalb einer Stadt ist keine Stadt: Wer die Grenze von Hand auf 10 stellt, hat
-        // keine Parzelle eingeschlossen, die zu schuetzen waere. Ohne diesen Riegel wuerde
-        // ausKante() unten werfen - mitten im Start, zwischen Welt und Schutzwache.
-        if (gesetzt < mindestKante(plan)) {
-            return gewuenscht;
-        }
-        if (gewuenscht > 2 * gesetzt && !sprungBestaetigt) {
-            return gesetzt;
-        }
-        return Math.max(gewuenscht, gesetzt);
+        // Die Regel selbst steht in Grenzregel - sie gilt fuer jede Welt und nicht nur fuer
+        // die mit einem Raster. Hier bleibt nur, was die Marktstadt ausmacht: ihr
+        // Mindestmass sind zwei Rasterzellen, und ihr Rueckfall ist die Kante aus Plan 4.
+        //
+        // Der Riegel nach unten ist wichtiger, als er aussieht: Ohne ihn wuerde ausKante()
+        // weiter unten werfen - mitten im Start, zwischen Welt und Schutzwache.
+        return (int) Grenzregel.wirksam(ausEinstellung, inDerWelt, mindestKante(plan),
+                MARKTSTADT_KANTE, sprungBestaetigt);
     }
 
     /** Der Text, mit dem ein Sprung ueber das Doppelte bestaetigt wird, etwa "2989 -> 8000". */
     public static String sprungText(int ausEinstellung, double inDerWelt) {
-        return (long) inDerWelt + " -> " + ausEinstellung;
-    }
-
-    private static boolean brauchbar(Rasterplan plan, int kante) {
-        return kante >= mindestKante(plan) && kante <= WELTGRENZE_HOECHSTMASS;
+        return Grenzregel.sprungText(ausEinstellung, inDerWelt);
     }
 
     public Rasterplan plan() {

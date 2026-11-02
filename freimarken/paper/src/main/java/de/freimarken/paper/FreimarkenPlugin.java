@@ -8,6 +8,7 @@ import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Grenzregel;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Rasterplan;
@@ -26,10 +27,8 @@ import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
-import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
-import org.bukkit.WorldCreator;
 import org.bukkit.entity.Player;
 import org.bukkit.generator.BiomeProvider;
 import org.bukkit.generator.ChunkGenerator;
@@ -63,6 +62,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     private static final String WERBUNG_VORGABE = "Mehr erlaubt ein hoeherer Rang.";
 
+    /** Der Name, unter dem die Marktstadt in der Weltenliste steht. */
+    private static final String MARKTSTADT = "marktstadt";
+
     private final Rasterplan plan = Rasterplan.marktstadt();
     private final MarktstadtGenerator generator = new MarktstadtGenerator(plan);
 
@@ -89,11 +91,37 @@ public final class FreimarkenPlugin extends JavaPlugin {
             return;
         }
 
-        marktstadt = ladeMarktstadt();
-        if (marktstadt == null) {
-            getLogger().severe("Ohne Marktstadt gibt es nichts zu verwalten - Freimarken bleibt aus.");
+        // Welten aus der Liste, nicht aus dem Quelltext (Plan 4.2). Die Klagen zuerst
+        // und einzeln: Wer eine Welt falsch eingetragen hat, soll genau lesen, welche und
+        // warum - die uebrigen entstehen trotzdem.
+        var liste = Weltenliste.ausKonfiguration(
+                getConfig().getConfigurationSection("welten"), MARKTSTADT);
+        liste.klagen().forEach(getLogger()::severe);
+        var gebaut = new Weltenbau(this, generator, getLogger()).baueAlle(liste.welten());
+        marktstadt = gebaut.welten().get(MARKTSTADT);
+        // Dieselbe Angabe, aus der die Welt entstand, entscheidet auch ueber ihre Grenze.
+        // Vorher las richteWeltgrenzeEin die Einstellung ein zweites Mal und ungefiltert
+        // aus der config.yml - mit einem anderen Rueckfall als Weltenliste. Bei einer
+        // vertippten Kante standen dann zwei severe-Zeilen desselben Starts untereinander,
+        // die sich widersprachen: "entsteht ohne Grenze" und "Weltgrenze 2989".
+        Weltangabe stadtangabe = liste.welten().stream()
+                .filter(angabe -> angabe.name().equals(MARKTSTADT))
+                .findFirst()
+                .orElse(null);
+        if (marktstadt == null || stadtangabe == null) {
+            getLogger().severe("Ohne Marktstadt gibt es nichts zu verwalten - Freimarken"
+                    + " bleibt aus. Erwartet wird ein Eintrag welten." + MARKTSTADT
+                    + " mit art: raster.");
             getServer().getPluginManager().disablePlugin(this);
             return;
+        }
+        if (gebaut.neu().contains(MARKTSTADT)) {
+            // Nur bei einer frisch angelegten Welt: Sonst ueberschriebe jeder Start, was
+            // der Betreiber mit /setworldspawn eingestellt hat.
+            marktstadt.setSpawnLocation(plan.mitteX(0), Stadtboden.BODEN + 1, plan.mitteZ(0));
+            getLogger().info("Erscheinungspunkt der Marktstadt gesetzt: " + plan.mitteX(0)
+                    + "/" + (Stadtboden.BODEN + 1) + "/" + plan.mitteZ(0)
+                    + " - die Mitte von Parzelle 0/0.");
         }
 
         // Erst die Grenze, dann das Besitzbuch: Die Grenze entscheidet, welche
@@ -102,7 +130,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Der Aufruf steht hier und nicht in ladeMarktstadt(), weil jene Methode vorzeitig
         // zurueckkehrt, wenn die Welt schon geladen ist; dann stuende die Grenze auf dem
         // Vorgabewert einer frischen Welt und waere faktisch keine.
-        grenze = richteWeltgrenzeEin(marktstadt);
+        grenze = richteWeltgrenzeEin(marktstadt, stadtangabe);
         buch = new Besitzbuch(grenze, lager, kasse);
 
         // Der Schluesseltext, nicht der NamespacedKey: World.key() gibt ein Key zurueck,
@@ -196,35 +224,35 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     @Override
     public ChunkGenerator getDefaultWorldGenerator(String weltName, String kennung) {
-        return generator;
+        // Nur fuer die Marktstadt. Frueher gab diese Methode das Raster fuer JEDEN Namen
+        // zurueck - solange es eine einzige Welt gab, fiel das nicht auf. Seit es mehrere
+        // gibt, haette eine Welt, die dieses Plugin in der bukkit.yml als Generator nennt,
+        // Parzellenmauern statt Gelaende bekommen.
+        return gehoertZurMarktstadt(weltName) ? generator : null;
     }
 
     @Override
     public BiomeProvider getDefaultBiomeProvider(String weltName, String kennung) {
-        return generator.getDefaultBiomeProvider(null);
+        return gehoertZurMarktstadt(weltName) ? generator.getDefaultBiomeProvider(null) : null;
     }
 
-    private World ladeMarktstadt() {
-        NamespacedKey schluessel = new NamespacedKey(this, "marktstadt");
-        World vorhanden = getServer().getWorld(schluessel);
-        if (vorhanden != null) {
-            return vorhanden;
+    /**
+     * Ob dieser Weltname die Marktstadt meint.
+     *
+     * <p>Mit {@code endsWith} und nicht mit {@code equals}: Bukkit reicht hier je nach Weg
+     * den blossen Namen oder den Ordnerpfad herein, und seit Paper 26.1 liegt eine zur
+     * Laufzeit erzeugte Welt unter {@code dimensions/freimarken/marktstadt}.
+     */
+    private static boolean gehoertZurMarktstadt(String weltName) {
+        if (weltName == null) {
+            return false;
         }
-        long begonnen = System.currentTimeMillis();
-        World welt = WorldCreator.ofKey(schluessel)
-                .generator(generator)
-                .biomeProvider(generator.getDefaultBiomeProvider(null))
-                .environment(World.Environment.NORMAL)
-                .generateStructures(false)
-                .createWorld();
-        if (welt == null) {
-            getLogger().severe("Die Marktstadt konnte nicht angelegt werden.");
-            return null;
-        }
-        welt.setSpawnLocation(plan.mitteX(0), Stadtboden.BODEN + 1, plan.mitteZ(0));
-        getLogger().info("Marktstadt bereit in " + (System.currentTimeMillis() - begonnen)
-                + " ms, Raster " + plan.parzellenKante() + " + " + plan.wegBreite());
-        return welt;
+        String klein = weltName.toLowerCase(java.util.Locale.ROOT);
+        // Kein blosses endsWith: Eine Welt namens "nebenmarktstadt" bekaeme sonst das
+        // Parzellenraster - und zwar ueber die bukkit.yml, an Weltenliste vorbei. Also
+        // entweder genau der Name oder der letzte Teil eines Pfades.
+        return klein.equals(MARKTSTADT) || klein.endsWith("/" + MARKTSTADT)
+                || klein.endsWith("\\" + MARKTSTADT);
     }
 
     private void registriereBefehle() {
@@ -338,23 +366,27 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * unter dimensions/freimarken/marktstadt/data/minecraft/world_border.dat - ein
      * Sicherungsmuster, das sie dort nicht sucht, findet sie nicht.
      */
-    private Stadtgrenze richteWeltgrenzeEin(World welt) {
-        int ausEinstellung = getConfig().getInt("welten.marktstadt.kante",
-                Stadtgrenze.MARKTSTADT_KANTE);
+    private Stadtgrenze richteWeltgrenzeEin(World welt, Weltangabe angabe) {
+        int ausEinstellung = angabe.kante();
+        if (!angabe.hatGrenze()) {
+            // Die Marktstadt ist die eine Welt, die ohne Grenze nicht auskommt: Aus ihr
+            // kommen die Parzellennummern. Ohne Eintrag gilt deshalb der Plan, nicht die
+            // Grenzenlosigkeit - und das steht hier, damit es im Protokoll steht.
+            ausEinstellung = Stadtgrenze.MARKTSTADT_KANTE;
+            getLogger().info("welten." + MARKTSTADT + ".kante gilt nicht - die Marktstadt"
+                    + " braucht eine Grenze, es gilt der Planwert " + ausEinstellung + ".");
+        }
         WorldBorder rand = welt.getWorldBorder();
         double inDerWelt = rand.getSize();
-        String erwartet = Stadtgrenze.sprungText(ausEinstellung, inDerWelt);
-        boolean bestaetigt = erwartet.equals(
-                getConfig().getString("welten.marktstadt.sprung-bestaetigt", "").trim());
+        boolean bestaetigt = Stadtgrenze.sprungText(ausEinstellung, inDerWelt)
+                .equals(angabe.sprungBestaetigt());
 
         int wirksam = Stadtgrenze.wirksameKante(plan, ausEinstellung, inDerWelt, bestaetigt);
         Stadtgrenze neu = Stadtgrenze.ausKante(plan, wirksam);
-        if (wirksam != ausEinstellung) {
-            getLogger().severe("welten.marktstadt.kante sagt " + ausEinstellung
-                    + ", in der Welt stehen " + (long) inDerWelt + " - es gilt " + wirksam
-                    + ". Eine Weltgrenze wird nie nach innen geschoben. Fuer einen Sprung "
-                    + "auf mehr als das Doppelte: welten.marktstadt.sprung-bestaetigt: "
-                    + erwartet);
+        String klage = Grenzregel.klage("welten." + MARKTSTADT, ausEinstellung, inDerWelt,
+                wirksam, Stadtgrenze.mindestKante(plan));
+        if (klage != null) {
+            getLogger().severe(klage);
         }
         rand.setCenter(neu.mitte(), neu.mitte());
         rand.setSize(neu.kante());

@@ -69,8 +69,36 @@ kasse:
   startguthaben: 50000
 
 welten:
-  # Eine Welt je Eintrag. Heute steht nur die Marktstadt hier, weil es nur die eine gibt.
+  # Eine Welt je Eintrag - die Reihenfolge hier ist die Reihenfolge beim Anlegen.
+  #
+  # art:      raster      das Parzellenraster der Marktstadt
+  #           gewoehnlich gewoehnliches Minecraft: Gelaende, Erze, Baeume, Tiere
+  #           leer        Leere, ohne einen einzigen Block
+  #           Pflichtangabe. Eine fehlende Art wird NICHT geraten: "gewoehnlich" als
+  #           Vorgabe wuerde aus der Marktstadt beim naechsten Start eine Welt mit
+  #           Huegeln und Baeumen machen, mitten in den bezahlten Parzellen.
+  #           raster traegt allein marktstadt, und marktstadt traegt nichts anderes.
+  #           Steht dort etwas anderes, startet Freimarken nicht - das ist Absicht: So
+  #           wird die Marktstadt nicht als falsche Welt angelegt. Und eine ZWEITE
+  #           Rasterwelt bekaeme Mauern und Wege, aber kein Besitzbuch und keinen
+  #           Schutz; dort duerfte jeder ueberall bauen.
+  # umgebung: normal (Vorgabe), nether, ende
+  #           Nur beim Anlegen. Eine bestehende Welt behaelt ihre Umgebung; eine
+  #           geaenderte Zeile landet nur im Protokoll.
+  # kante:    Wunschkante der Weltgrenze in Bloecken, eine ganze Zahl von 32 bis
+  #           59999968. Fehlt sie oder ist sie 0, wird keine gesetzt - ausser bei der
+  #           Marktstadt, die ohne Grenze keine Parzellennummern hat und dann auf den
+  #           Planwert 3000 zurueckfaellt. Die Grenze waechst nur nach aussen, nie nach
+  #           innen. Ein Punkt trennt hier keine Tausender: 6.000 liest YAML als 6.
+  #
+  # Nicht enthalten: wolkenwerder. Es waere eine Welt aus Leere, in der jeder Ankommende
+  # faellt - die Startinsel und die Skyblock-Mechaniken kommen mit Schritt 11.
+  #
+  # Neue Welten kommen beim Update NICHT von selbst in diese Datei - eine vorhandene
+  # config.yml wird nie ueberschrieben. Was hier fehlt, nennt das Protokoll beim Start
+  # einzeln; der Block muss dann von Hand hierher.
   marktstadt:
+    art: raster
     # Wunschkante der Weltgrenze in Bloecken; Plan Abschnitt 4 nennt 3.000.
     #
     # Gerechnet wird daraus ABGERUNDET auf ganze Rasterzellen (64 Parzelle + 7 Weg = 71)
@@ -90,3 +118,43 @@ welten:
     # genau der Text hin, den das Protokoll beim letzten Start genannt hat, etwa
     # "2989 -> 8000". Steht etwas anderes, bleibt die Grenze, die in der Welt steht.
     sprung-bestaetigt: ""
+
+  # Gebaut, nicht gewachsen: Hier stehen Bundesmarkt und die Gebaeude aus Plan 2.1.
+  # Spielmodus Abenteuer setzt Schritt 3, Teil C - heute ist es eine gewoehnliche Welt.
+  altfurt:
+    art: gewoehnlich
+    kante: 800
+
+  # ~320 Freistaedte auf natuerlichem Gelaende.
+  freistaedte:
+    art: gewoehnlich
+    kante: 6000
+
+  # Archipel mit eigenem Angelgut (Plan 4.1).
+  hafenwerder:
+    art: gewoehnlich
+    kante: 5000
+
+  # Freibau; eine Sicherung kostet 5.000 Mark.
+  hochwald:
+    art: gewoehnlich
+    kante: 5000
+
+  # Farmwelt. Wird bei jeder neuen Minecraft-Version zurueckgesetzt und neu
+  # vorgeneriert - deshalb haengt an ihr kein Besitz (Plan 4.2).
+  kornmark:
+    art: gewoehnlich
+    kante: 2000
+
+  nether:
+    art: gewoehnlich
+    umgebung: nether
+    kante: 2000
+
+  # "end" und nicht "ende": Der Schluessel ist der Weltname, und den fuehrt Plan
+  # Abschnitt 4 so. Weltnamen sind nach Plan 12a.6 nur lesbar - an ihnen haengen
+  # Sicherungen und spaeter Datensaetze. Die Umgebung heisst dagegen deutsch.
+  end:
+    art: gewoehnlich
+    umgebung: ende
+    kante: 2000
