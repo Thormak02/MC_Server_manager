@@ -12,6 +12,7 @@ import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.Richtung;
+import de.freimarken.kern.Wirtschaftsstand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.Collection;
@@ -78,18 +79,21 @@ final class ParzellenBefehle {
 
     private final Wegbau wegbau;
     private final Logger protokoll;
-    private final int standardHoechstzahl;
-    private final int standardGruppenFelder;
 
     /**
-     * Die eine Zeile, die angehaengt wird, wenn ein Rang die Grenze setzt - leer heisst:
-     * keine.
+     * Woher die Obergrenzen, die Preise und der Werbetext kommen.
      *
-     * <p>Aus der Konfiguration und nicht fest im Programm: Was ein Spieler tun muss, um
-     * mehr zu duerfen, weiss nur der Server. Ein eingebauter Hinweis auf einen Shop, den
-     * es dort nicht gibt, waere schlechter als gar keiner.
+     * <p>Alle drei werden erst beim Befehl gebraucht, und niemand sonst haelt sie - also
+     * ist das Holen beim Gebrauch der Eingriff an genau einer Stelle. Vorher standen die
+     * Zahlen als {@code final}-Felder hier und waren damit bis zum Neustart eingefroren;
+     * ein neu gebautes {@code ParzellenBefehle} haette nichts geholfen, weil die Knoten
+     * des Befehlsbaums weiter auf das alte Objekt zeigen.
+     *
+     * <p>Die Rangwerbung steht ebenfalls dort: Was ein Spieler tun muss, um mehr zu
+     * duerfen, weiss nur der Server. Ein eingebauter Hinweis auf einen Shop, den es dort
+     * nicht gibt, waere schlechter als gar keiner.
      */
-    private final String rangWerbung;
+    private final Wirtschaftsstand wirtschaft;
 
     /**
      * Wie lange ein Spieler zwischen zwei Abschaetzungen warten muss.
@@ -102,8 +106,8 @@ final class ParzellenBefehle {
 
     private final Abklingzeit abschaetzungen = new Abklingzeit(ZWISCHEN_ZWEI_ABSCHAETZUNGEN);
 
-    ParzellenBefehle(Besitzbuch buch, World marktstadt, int standardHoechstzahl,
-                     int standardGruppenFelder, String rangWerbung, Logger protokoll) {
+    ParzellenBefehle(Besitzbuch buch, World marktstadt, Wirtschaftsstand wirtschaft,
+                     Logger protokoll) {
         this.buch = buch;
         this.marktstadt = marktstadt;
         // Aus der Welt gelesen und nicht daneben uebergeben: Zwei Angaben fuer dieselbe
@@ -111,9 +115,7 @@ final class ParzellenBefehle {
         // in der Ablage nichts findet, obwohl der Spieler richtig steht.
         this.welt = marktstadt.key().asString();
         this.wegbau = new Wegbau(buch.plan(), new Weltgriff.AufDerWelt(marktstadt));
-        this.standardHoechstzahl = standardHoechstzahl;
-        this.standardGruppenFelder = standardGruppenFelder;
-        this.rangWerbung = rangWerbung == null ? "" : rangWerbung.trim();
+        this.wirtschaft = wirtschaft;
         this.protokoll = protokoll;
     }
 
@@ -268,7 +270,7 @@ final class ParzellenBefehle {
                         NamedTextColor.GRAY));
                 return;
             }
-            long preis = Preisstaffel.preisFuerNaechste(anzahl(spieler));
+            long preis = preise().preisFuerNaechste(anzahl(spieler));
             boolean amLimit = anzahl(spieler) >= hoechstzahl(spieler);
             // Der Preis bleibt stehen, die Einladung nicht. Wer vier von vier Parzellen
             // hat, soll ruhig sehen, was die fuenfte kosten WUERDE - aber "/parzelle
@@ -394,7 +396,7 @@ final class ParzellenBefehle {
         }
         if (meine.size() < hoechstzahl) {
             spieler.sendMessage(Component.text("Die naechste kostet "
-                    + Betraege.mark(Preisstaffel.preisFuerNaechste(meine.size())),
+                    + Betraege.mark(preise().preisFuerNaechste(meine.size())),
                     NamedTextColor.DARK_GRAY));
         }
     }
@@ -1025,9 +1027,15 @@ final class ParzellenBefehle {
      * das Angebot. Zwei rote Zeilen hintereinander liest niemand als zwei Dinge.
      */
     private void werbung(Player spieler) {
-        if (!rangWerbung.isEmpty()) {
-            spieler.sendMessage(Component.text(rangWerbung, NamedTextColor.YELLOW));
+        String text = wirtschaft.werte().rangWerbung();
+        if (!text.isEmpty()) {
+            spieler.sendMessage(Component.text(text, NamedTextColor.YELLOW));
         }
+    }
+
+    /** Die Preise, die JETZT gelten - beim Gebrauch geholt, nie in ein Feld kopiert. */
+    private Preisstaffel preise() {
+        return wirtschaft.werte().preise();
     }
 
     /**
@@ -1067,7 +1075,8 @@ final class ParzellenBefehle {
      * die Obergrenze ist eine Spielregel und keine Verwaltungsbefugnis.
      */
     private int hoechstzahl(Player spieler) {
-        return ausRecht(spieler, RECHT_ANZAHL, RECHT_EXTRA_ANZAHL, standardHoechstzahl);
+        return ausRecht(spieler, RECHT_ANZAHL, RECHT_EXTRA_ANZAHL,
+                wirtschaft.werte().hoechstzahl());
     }
 
     /**
@@ -1104,7 +1113,8 @@ final class ParzellenBefehle {
      * Grundstueck verbinden darf, entscheidet, wie gross ein einzelnes Bauwerk werden kann.
      */
     private int gruppenFelder(Player spieler) {
-        return ausRecht(spieler, RECHT_GRUPPE, RECHT_EXTRA_GRUPPE, standardGruppenFelder);
+        return ausRecht(spieler, RECHT_GRUPPE, RECHT_EXTRA_GRUPPE,
+                wirtschaft.werte().gruppenFelder());
     }
 
     /**

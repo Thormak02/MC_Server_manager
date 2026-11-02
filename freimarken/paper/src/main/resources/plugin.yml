@@ -15,7 +15,7 @@ permissions:
     description: Baut und oeffnet auf jeder Parzelle, auch auf fremder
     default: op
   freimarken.verwalten:
-    description: Darf die Welt nachsehen und sich zu einer Parzelle versetzen
+    description: Darf die Welt nachsehen, sich zu einer Parzelle versetzen und die Einstellungen neu laden
     default: op
   freimarken.reisen:
     description: Darf mit /warp zwischen den Welten reisen

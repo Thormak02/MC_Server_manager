@@ -18,6 +18,7 @@ import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.Stadtgrenze;
 import de.freimarken.kern.Warpverzeichnis;
+import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.ZwischenspeicherLager;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -59,17 +60,6 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 public final class FreimarkenPlugin extends JavaPlugin {
 
-    /**
-     * Was ohne Eintrag in der Konfiguration unter einer Rangabsage steht.
-     *
-     * <p>Hier und nicht nur in der config.yml: {@code saveDefaultConfig()} schreibt die
-     * Datei nur, wenn es sie noch nicht gibt. Auf einem Server, der schon laeuft, fehlt
-     * der neue Eintrag also - und mit einer leeren Vorgabe bekaeme ausgerechnet der gar
-     * keinen Hinweis. Der Satz sagt nur, was ohnehin wahr ist; wie es auf DIESEM Server
-     * weitergeht, traegt der Betreiber in die config.yml ein.
-     */
-    private static final String WERBUNG_VORGABE = "Mehr erlaubt ein hoeherer Rang.";
-
     /** Der Name, unter dem die Marktstadt in der Weltenliste steht. */
     private static final String MARKTSTADT = "marktstadt";
 
@@ -98,6 +88,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private BesitzLager lager;
     private Kasse kasse;
     private Stadtgrenze grenze;
+    /**
+     * Was die Wirtschaft gerade kostet - die eine Zelle, die {@code /freimarken neuladen}
+     * austauscht.
+     *
+     * <p>Jede Stelle, die mit Geld rechnet, haelt sie und fragt sie beim Gebrauch. Darin
+     * liegt der ganze Trick: Ein neuer Wert erreicht jede Stelle, ohne dass ein Zuhoerer,
+     * ein Zeitgeber, ein Befehl oder eine Verbindung neu gebaut wird.
+     */
+    private Wirtschaftsstand wirtschaft;
     private Besitzbuch buch;
     private ParzellenBefehle befehle;
     private WarpBefehle warpBefehle;
@@ -123,12 +122,43 @@ public final class FreimarkenPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
 
+        // Die DATEI, bevor ein einziger Pfad daraus gelesen wird. getConfig() meldet
+        // einen Lesefehler nicht: Bei kaputtem YAML liefert es eine leere Konfiguration
+        // mit den Vorgaben aus der Jar, und jeder Pfad liest dann brav den
+        // ausgelieferten Wert. Ein Start mit heimlich ausgelieferten Preisen ist der
+        // teuerste aller Fehlstarts, denn er macht Mark; ein Start, der ausbleibt,
+        // kostet eine Pause.
+        String lesefehler = Wirtschaftsliste.lesefehler(getDataFolder());
+        if (lesefehler != null) {
+            getLogger().severe("Freimarken bleibt aus: " + lesefehler);
+            getLogger().severe("Sonst gelten lautlos die ausgelieferten Werte - mit"
+                    + " 25000 statt eines eingetragenen hoeheren Grundpreises waere jede"
+                    + " Parzelle zu billig, und zu billig verkaufte Flaeche liegt binnen"
+                    + " Minuten als Mark auf vielen Konten. Lieber kein Parzellensystem"
+                    + " als ein falsch bepreistes.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        // Die Wirtschaftswerte vor der Ablage: Das Lesen ist reine Dateiarbeit und
+        // braucht weder Datenbank noch Welt - und das Startguthaben steckt darin, das die
+        // Kasse zum Bauen braucht. Die Reihenfolge "Ablage vor den Welten" bleibt davon
+        // unberuehrt; die Begruendung unten gilt weiter.
+        var werte = Wirtschaftsliste.ausKonfiguration(getConfig());
+        werte.klagen().forEach(getLogger()::severe);
+        werte.bericht().forEach(getLogger()::info);
+        wirtschaft = new Wirtschaftsstand(werte.werte());
+        // Was GILT, sagt der Aufrufer - der Leser kennt nur die Datei. Beim Neuladen
+        // uebernimmt uebernimm() diesen Wert nicht und sagt es dort selbst.
+        getLogger().info("Startguthaben " + wirtschaft.werte().startguthaben()
+                + " Mark - friert bei der Eroeffnung eines Kontos ein.");
+
         // Die Ablage ZUERST. Andersherum stand die Marktstadt schon geladen da, wenn
         // sich das Plugin wegen einer unerreichbaren Datenbank abschaltet - mit ihr eine
         // Welt voller Parzellen und ohne jede Schutzwache, denn die wird erst weiter unten
         // angemeldet. Wer zuletzt dort ausgeloggt war, erschiene beim Einloggen genau dort
         // und duerfte ueberall bauen. Jetzt entsteht im Fehlerfall gar keine Welt.
-        if (!richteAblageEin()) {
+        if (!richteAblageEin(wirtschaft.werte().startguthaben())) {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -179,7 +209,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // zurueckkehrt, wenn die Welt schon geladen ist; dann stuende die Grenze auf dem
         // Vorgabewert einer frischen Welt und waere faktisch keine.
         grenze = richteWeltgrenzeEin(marktstadt, stadtangabe);
-        buch = new Besitzbuch(grenze, lager, kasse);
+        buch = new Besitzbuch(grenze, lager, kasse, wirtschaft);
 
         // Der Schluesseltext, nicht der NamespacedKey: World.key() gibt ein Key zurueck,
             // und ein Vergleich zwischen beiden ist immer falsch, ohne dass es auffaellt.
@@ -187,11 +217,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Die WELT und nicht nur ihr Schluessel: Seit das Zusammenlegen den Weg fuellt,
         // setzen die Befehle Bloecke. Den Schluesseltext holt sich ParzellenBefehle aus
         // derselben Welt - zwei Angaben koennten auseinanderlaufen.
-        befehle = new ParzellenBefehle(buch, marktstadt,
-                getConfig().getInt("parzellen.hoechstzahl", 4),
-                getConfig().getInt("parzellen.gruppe-hoechstzahl", 4),
-                getConfig().getString("hinweise.rang-werbung", WERBUNG_VORGABE),
-                getLogger());
+        befehle = new ParzellenBefehle(buch, marktstadt, wirtschaft, getLogger());
         getServer().getPluginManager().registerEvents(new Schutzwache(buch, welt), this);
         richteReisenEin(ankunftswelt);
         registriereBefehle();
@@ -223,9 +249,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * @return {@code false}, wenn eine eingetragene Datenbank nicht erreichbar ist - dann
      *         soll das Plugin nicht starten
      */
-    private boolean richteAblageEin() {
+    private boolean richteAblageEin(long startguthaben) {
         String url = getConfig().getString("datenbank.url", "").trim();
-        long startguthaben = getConfig().getLong("kasse.startguthaben", 50_000L);
 
         if (url.isEmpty()) {
             fluechtig = true;
@@ -392,6 +417,17 @@ public final class FreimarkenPlugin extends JavaPlugin {
                             zeigeVorgenerierung(z.getSource().getSender());
                             return Command.SINGLE_SUCCESS;
                         }))
+                // Kein eigenes Recht: Plan 1544-1547 begruendet, warum es keinen zweiten
+                // Ort fuer Rechte geben soll. Der Befehl kann Werte austauschen, keine
+                // Buchung aendern - und wer die Datei nicht aendern kann, aendert damit
+                // auch nichts.
+                .then(Commands.literal("neuladen")
+                        .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
+                        .executes(z -> {
+                            neulade(z.getSource().getSender(),
+                                    z.getSource().getSender().getName());
+                            return Command.SINGLE_SUCCESS;
+                        }))
                 .then(Commands.literal("parzelle")
                         .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
                         // Die Grenzen kommen aus der Stadt, nicht aus einer geratenen
@@ -426,19 +462,138 @@ public final class FreimarkenPlugin extends JavaPlugin {
         if (empfaenger instanceof Permissible darf
                 && darf.hasPermission(RECHT_VERWALTEN)) {
             empfaenger.sendMessage(Component.text(
-                    "/freimarken welt · parzelle <x> <z>", NamedTextColor.DARK_GRAY));
+                    "/freimarken welt · parzelle <x> <z> · neuladen",
+                    NamedTextColor.DARK_GRAY));
         }
     }
 
     private void zeigePreis(Audience empfaenger, int besessen) {
-        long preis = Preisstaffel.preisFuerNaechste(besessen);
+        Preisstaffel preise = wirtschaft.werte().preise();
+        long preis = preise.preisFuerNaechste(besessen);
         empfaenger.sendMessage(preis == 0L
                 ? Component.text("Die erste Parzelle ist gratis.", NamedTextColor.GREEN)
                 : Component.text("Parzelle Nr. " + (besessen + 1) + " kostet ", NamedTextColor.GRAY)
                         .append(Component.text(Betraege.mark(preis), NamedTextColor.GOLD))
                         .append(Component.text(".", NamedTextColor.GRAY)));
         empfaenger.sendMessage(Component.text(
-                "Bisher ausgegeben: " + Betraege.mark(Preisstaffel.gesamtpreisFuer(besessen)),
+                "Bisher ausgegeben: " + Betraege.mark(preise.gesamtpreisFuer(besessen)),
+                NamedTextColor.DARK_GRAY));
+    }
+
+    /**
+     * Liest die Einstellungsdatei neu und tauscht aus, was im Betrieb austauschbar ist.
+     *
+     * <p>ALLES ODER NICHTS: Ist nur eine Zeile unbrauchbar, wird gar nichts uebernommen.
+     * Eine halb uebernommene Preisliste ist der schlechteste Zustand - dann gelten Zahlen
+     * aus zwei Staenden gegeneinander, und niemand kann sagen, welcher Preis gerade gilt.
+     *
+     * <p>Es wird NICHTS neu gebaut: kein Zuhoerer, kein Zeitgeber, kein Befehl, keine
+     * Verbindung - nur der Inhalt einer Zelle getauscht. Deshalb gibt es auch nichts
+     * abzumelden, und nichts kann doppelt dastehen. Das ist der belegte Fehler eines
+     * Neuladens, das Objekte neu baut.
+     *
+     * <p>Der Block "nicht angefasst" steht am Ende JEDER Antwort, auch wenn sich nichts
+     * geaendert hat. Er ist das Gegenmittel gegen das haeufigste Fehlerbild eines
+     * Neuladens: Der Befehl meldet Erfolg, und ein Teil wirkt erst nach dem Neustart.
+     */
+    private void neulade(Audience empfaenger, String wer) {
+        // reloadConfig legt ein NEUES FileConfiguration-Objekt von der Platte an. Genau
+        // deshalb haelt dieses Plugin nirgends ein Config-Feld: Es wuerde danach auf die
+        // verworfene Instanz zeigen. Angefasst wird die Datei an genau zwei Stellen -
+        // hier und in onEnable.
+        // Zuerst die Datei selbst: reloadConfig() verschluckt einen Parse-Fehler und
+        // liefert danach die Vorgaben aus der Jar. Ohne diesen Blick waere ein Tabulator
+        // in der Datei ein gruenes "Uebernommen: grundpreis 200000 -> 25000" - ohne eine
+        // einzige Klage, weil jeder Pfad einen gueltigen Wert liest.
+        String lesefehler = Wirtschaftsliste.lesefehler(getDataFolder());
+        if (lesefehler != null) {
+            lehneAb(empfaenger, wer, List.of(lesefehler));
+            return;
+        }
+        reloadConfig();
+        var gelesen = Wirtschaftsliste.ausKonfiguration(getConfig());
+
+        if (!gelesen.klagen().isEmpty()) {
+            lehneAb(empfaenger, wer, gelesen.klagen());
+            return;
+        }
+
+        var uebernahme = wirtschaft.uebernimm(gelesen.werte());
+        if (uebernahme.geaendert().isEmpty()) {
+            empfaenger.sendMessage(Component.text(
+                    "Gelesen - an den Wirtschaftswerten hat sich nichts geaendert.",
+                    NamedTextColor.GRAY));
+        } else {
+            empfaenger.sendMessage(Component.text("Uebernommen:", NamedTextColor.GREEN));
+            for (String zeile : uebernahme.geaendert()) {
+                empfaenger.sendMessage(Component.text("  " + zeile, NamedTextColor.GREEN));
+                getLogger().info("neuladen von " + wer + ": " + zeile);
+            }
+        }
+        for (String zeile : gelesen.bericht()) {
+            empfaenger.sendMessage(Component.text("  " + zeile, NamedTextColor.DARK_GRAY));
+            getLogger().info("neuladen von " + wer + ": " + zeile);
+        }
+        nenneNichtAngefasst(empfaenger, uebernahme.nichtAngefasst());
+    }
+
+    /**
+     * Die Antwort, wenn nichts uebernommen wird - fuer jeden Grund dieselbe.
+     *
+     * <p>Zwei Gruende fuehren hierher: eine unlesbare Datei und eine unbrauchbare Zeile.
+     * Beide enden gleich, und genau deshalb steht die Antwort an einer Stelle: Sie nennt
+     * den Grund, dann was unveraendert weiter gilt, dann was ein Neuladen ohnehin nicht
+     * anfasst. Ein Betreiber, der einen Preis nicht wiederfindet, soll nicht raten
+     * muessen, welcher Stand gerade gilt.
+     */
+    private void lehneAb(Audience empfaenger, String wer, List<String> gruende) {
+        empfaenger.sendMessage(Component.text("Nichts uebernommen - " + gruende.size()
+                + " Zeile(n) stimmen nicht:", NamedTextColor.RED));
+        for (String grund : gruende) {
+            empfaenger.sendMessage(Component.text("  " + grund, NamedTextColor.RED));
+            getLogger().severe("neuladen von " + wer + " abgelehnt: " + grund);
+        }
+        empfaenger.sendMessage(Component.text("Es gilt unveraendert weiter: "
+                + wirtschaft.werte().preise().alsText(VIER_STUFEN), NamedTextColor.GRAY));
+        nenneNichtAngefasst(empfaenger, wirtschaft.nichtAngefasst(null));
+    }
+
+    /** Wie viele Preisstufen eine Antwort im Klartext nennt. */
+    private static final int VIER_STUFEN = 4;
+
+    /**
+     * Was ein Neuladen ausdruecklich NICHT anfasst - mit einem Grund je Gruppe.
+     *
+     * <p>Hier stehen die Gruppen, die das Plugin kennt und der {@link Wirtschaftsstand}
+     * nicht: Zugangsdaten, Welten und die Zahlen, die im Programm bleiben. Jede Zeile
+     * nennt, was GILT - nicht, was in der Datei steht. Genau dort sitzt das
+     * gefaehrlichste Missverstaendnis: Ein Betreiber traegt die Datenbank nach und
+     * erwartet, dass sie greift.
+     */
+    private void nenneNichtAngefasst(Audience empfaenger, List<String> ausDemStand) {
+        empfaenger.sendMessage(Component.text("Nur beim Start gelesen - das aendert kein"
+                + " Neuladen:", NamedTextColor.GRAY));
+        for (String zeile : ausDemStand) {
+            empfaenger.sendMessage(Component.text("  " + zeile, NamedTextColor.DARK_GRAY));
+        }
+        empfaenger.sendMessage(Component.text("  Ablage "
+                + (fluechtig ? "FLUECHTIG - datenbank.url wird nur beim Start gelesen,"
+                        + " eine nachgetragene Datenbank greift erst nach einem Neustart"
+                        : "MariaDB - an der Verbindung haengen Lager, Kasse und Besitzbuch"),
+                NamedTextColor.DARK_GRAY));
+        empfaenger.sendMessage(Component.text("  welten: " + welten.size()
+                + " geladen, Marktstadt " + (long) grenze.kante() + " Bloecke, Parzellen "
+                + grenze.von() + " bis " + grenze.bis() + " - Welten entstehen einmal,"
+                + " und die Zahlenbereiche von /freimarken parzelle stecken im"
+                + " Befehlsbaum", NamedTextColor.DARK_GRAY));
+        empfaenger.sendMessage(Component.text("  reisen.ankunftswelt - setzt die"
+                + " Respawn-Welt dauerhaft in der level.dat der Hauptwelt",
+                NamedTextColor.DARK_GRAY));
+        empfaenger.sendMessage(Component.text("  Im Programm, mit Begruendung:"
+                + " Parzellengroesse " + plan.parzellenKante() + ", Wegbreite " + plan.wegBreite()
+                + ", Bodenhoehe " + Stadtboden.BODEN + " (daran haengen der Generator und"
+                + " die bestehenden Daten), Deckel der Verdopplung "
+                + Preisstaffel.MAX_VERDOPPLUNGEN + " (Arithmetik gegen den Ueberlauf)",
                 NamedTextColor.DARK_GRAY));
     }
 

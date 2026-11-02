@@ -93,11 +93,26 @@ public final class Besitzbuch {
     private final BesitzLager lager;
     private final Kasse kasse;
 
-    public Besitzbuch(Stadtgrenze grenze, BesitzLager lager, Kasse kasse) {
+    /**
+     * Woher die Preise kommen.
+     *
+     * <p>Das Feld darf {@code final} bleiben, weil nicht der WERT eingefroren wird,
+     * sondern der Zugang zu ihm: Der Preis wird genau in dem Augenblick geholt, in dem
+     * abgebucht wird. Damit ist der Preis einer Buchung immer der Preis, der galt.
+     *
+     * <p>Das Besitzbuch selbst muss stehen bleiben - ParzellenBefehle, Schutzwache und
+     * Ankunftswache halten es, und die Knoten des Befehlsbaums zeigen darauf. Ein beim
+     * Neuladen neu gebautes Besitzbuch waere unsichtbar wirkungslos.
+     */
+    private final Wirtschaftsstand wirtschaft;
+
+    public Besitzbuch(Stadtgrenze grenze, BesitzLager lager, Kasse kasse,
+                      Wirtschaftsstand wirtschaft) {
         this.grenze = grenze;
         this.plan = grenze.plan();
         this.lager = lager;
         this.kasse = kasse;
+        this.wirtschaft = wirtschaft;
     }
 
     /** Wie weit die Stadt reicht. */
@@ -222,7 +237,7 @@ public final class Besitzbuch {
             return Entscheid.nein(Bescheid.GRENZE_ERREICHT);
         }
 
-        long preis = Preisstaffel.preisFuerNaechste(bereits);
+        long preis = wirtschaft.werte().preise().preisFuerNaechste(bereits);
         if (!kasse.abbuchen(spieler, preis, Buchungsgrund.PARZELLE_GEKAUFT)) {
             return Entscheid.nein(Bescheid.ZU_WENIG_MARK, preis);
         }
@@ -405,7 +420,7 @@ public final class Besitzbuch {
 
         int bisher = gruppeId == Parzelle.KEIN_ELTERNTEIL ? 1 : lager.kinderVon(gruppeId).size();
         int nachher = bisher + 1;
-        long gebuehr = Preisstaffel.zusammenlegungsGebuehr(nachher);
+        long gebuehr = wirtschaft.werte().preise().zusammenlegungsGebuehr(nachher);
         if (nachher > hoechsteFelder) {
             return Entscheid.nein(Bescheid.GRUPPE_ZU_GROSS, gebuehr);
         }

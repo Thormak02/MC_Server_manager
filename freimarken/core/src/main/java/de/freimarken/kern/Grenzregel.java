@@ -62,15 +62,23 @@ public final class Grenzregel {
         if (gesetzt < mindestens) {
             return gewuenscht;
         }
-        if (gewuenscht > 2 * gesetzt && !sprungBestaetigt) {
+        if (Sprungregel.grosserSprungNachOben(gesetzt, gewuenscht) && !sprungBestaetigt) {
             return gesetzt;
         }
         return Math.max(gewuenscht, gesetzt);
     }
 
-    /** Der Text, mit dem ein Sprung ueber das Doppelte bestaetigt wird, etwa "2989 -> 8000". */
+    /**
+     * Der Text, mit dem ein Sprung ueber das Doppelte bestaetigt wird, etwa "2989 -> 8000".
+     *
+     * <p>Reicht nur durch: Die Entscheidung "mehr als Faktor 2" und die Form des Textes
+     * stehen seit dem 02.11.2026 in {@link Sprungregel}, weil die Geldwerte in der
+     * Einstellungsdatei dieselbe Rueckfrage brauchen. Zwei Abschriften derselben Regel
+     * waeren zwei Orte, an denen sie sich auseinanderentwickeln kann - und der Betreiber
+     * saehe erst daran, dass ein eingetragener Text an einer Stelle nicht mehr passt.
+     */
     public static String sprungText(long ausEinstellung, double inDerWelt) {
-        return (long) inDerWelt + " -> " + ausEinstellung;
+        return Sprungregel.sprungText((long) inDerWelt, ausEinstellung);
     }
 
     /**

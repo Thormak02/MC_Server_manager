@@ -45,6 +45,16 @@ class BesitzbuchTest {
     private final UUID bert = UUID.randomUUID();
     private final UUID clara = UUID.randomUUID();
 
+    /**
+     * Der Wirtschaftsstand aller Proben hier: genau die ausgelieferten Werte.
+     *
+     * <p>Damit pruefen die festen Betraege in dieser Datei weiter die VORGABE und nicht
+     * eine beliebige Staffel. Dass die Rechnung auch mit anderen Zahlen stimmt, prueft
+     * {@link PreisstaffelTest}.
+     */
+    private static final Wirtschaftsstand VORGABE =
+            new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
     private SpeicherLager lager;
     private Kasse kasse;
     private Besitzbuch buch;
@@ -53,7 +63,7 @@ class BesitzbuchTest {
     void aufbauen() {
         lager = new SpeicherLager();
         kasse = new SpeicherKasse(REICH);
-        buch = new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse);
+        buch = new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse, VORGABE);
     }
 
     /**
@@ -81,7 +91,7 @@ class BesitzbuchTest {
     /** Ein Buch, dessen Spieler genau so viel Geld haben wie angegeben. */
     private Besitzbuch buchMitGuthaben(long guthaben) {
         kasse = new SpeicherKasse(guthaben);
-        return new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse);
+        return new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse, VORGABE);
     }
 
     // --- Herausloesen -----------------------------------------------------------
@@ -325,7 +335,7 @@ class BesitzbuchTest {
         // Der Fall im Betrieb: Zwei Spieler nehmen im selben Augenblick dieselbe Parzelle,
         // der eindeutige Schluessel in der Datenbank laesst den zweiten auflaufen. Dann
         // darf nicht das Geld weg und die Parzelle nicht da sein.
-        Besitzbuch sperrigesBuch = new Besitzbuch(Stadtgrenze.marktstadt(), new StoerLager(), kasse);
+        Besitzbuch sperrigesBuch = new Besitzbuch(Stadtgrenze.marktstadt(), new StoerLager(), kasse, VORGABE);
         sperrigesBuch.nehmen(WELT, anna, 10, 10, VIELE);
         long vorher = kasse.guthaben(anna);
 
@@ -344,7 +354,7 @@ class BesitzbuchTest {
         // zurueckbucht, verschenkt ein Grundstueck, und es merkt niemand: In der Ablage
         // sieht alles richtig aus, nur bezahlt hat es keiner.
         NachDemSchreibenLager lager = new NachDemSchreibenLager();
-        Besitzbuch buch = new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse);
+        Besitzbuch buch = new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse, VORGABE);
         buch.nehmen(WELT, anna, mitte(0), 32, VIELE);
         buch.nehmen(WELT, anna, mitte(1), 32, VIELE);
         long vorher = kasse.guthaben(anna);
@@ -353,7 +363,8 @@ class BesitzbuchTest {
                 () -> buch.zusammenlegen(WELT, anna, mitte(0), 32, Richtung.OST, VIELE));
 
         assertTrue(lager.stehtDieGruppe(WELT, 0, 0), "die Gruppe ist festgeschrieben");
-        assertEquals(vorher - Preisstaffel.zusammenlegungsGebuehr(2), kasse.guthaben(anna),
+        assertEquals(vorher - Preisstaffel.VORGABE.zusammenlegungsGebuehr(2),
+                kasse.guthaben(anna),
                 "die Gebuehr muss abgebucht bleiben - die Gruppe steht ja");
     }
 
@@ -538,7 +549,7 @@ class BesitzbuchTest {
 
     /** Ein Buch, dessen Lager jede Parzelle als Kind der Gruppe 42 ausgibt. */
     private Besitzbuch buchMitGruppenkind() {
-        return new Besitzbuch(Stadtgrenze.marktstadt(), new KindLager(lager), kasse);
+        return new Besitzbuch(Stadtgrenze.marktstadt(), new KindLager(lager), kasse, VORGABE);
     }
 
     @Test
@@ -821,5 +832,28 @@ class BesitzbuchTest {
         public void ausGruppeLoesen(long feldId) {
             echt.ausGruppeLoesen(feldId);
         }
+    }
+
+    @Test
+    @DisplayName("Nach einem Neuladen kostet der naechste Kauf den NEUEN Preis")
+    void neuerPreisWirktSofort() {
+        // Die Kernzusage des Neuladens, und sie hatte keine Probe: Besitzbuch haelt den
+        // Stand als final-Feld und holt den Preis erst beim Gebrauch. Wuerde es ihn im
+        // Konstruktor auspacken, bliebe nach jedem /freimarken neuladen der alte Preis
+        // gueltig - ein Neuladen, das Erfolg meldet und nichts aendert.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var eigenesBuch = new Besitzbuch(Stadtgrenze.marktstadt(), lager,
+                new SpeicherKasse(REICH), stand);
+        eigenesBuch.nehmen(WELT, anna, 10, 10, VIELE);
+
+        assertEquals(25_000L, eigenesBuch.nehmen(WELT, anna, 100, 10, VIELE).kosten());
+
+        stand.uebernimm(new Wirtschaftswerte(new Preisstaffel(60_000L, 10_000L),
+                Wirtschaftswerte.VORGABE_STARTGUTHABEN, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
+                Wirtschaftswerte.VORGABE_GRUPPEN_FELDER, ""));
+
+        // Dritte Parzelle: 60.000 mal 2 - der neue Grundpreis, nicht der alte.
+        assertEquals(120_000L, eigenesBuch.nehmen(WELT, anna, 200, 10, VIELE).kosten(),
+                "der Kauf muss den Stand von JETZT nehmen");
     }
 }

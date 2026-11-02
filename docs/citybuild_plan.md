@@ -1225,6 +1225,113 @@ kommt mit seinem eigenen Schritt.
 
 ---
 
+### 8.7 Die Stammwerte und das Neuladen [erledigt 02.11.2026]
+
+Jede Zahl der Wirtschaft steht in der `config.yml`, und `/freimarken neuladen` nimmt sie im
+Betrieb an. Das ist die Zwischenstufe zum Dashboard aus [12a](#12a4-das-dashboard):
+Was dort später als Feld mit Begründung steht, steht hier als Kommentar an der Zeile, in die
+der Betreiber tippt.
+
+**Ein Schnappschuss, eine Zelle, ein Leser.** Die fünf Stammwerte liegen in *einem*
+unveränderlichen Wert, nicht in fünf Feldern — wer rechnet, sieht immer einen in sich
+stimmigen Stand. Gehalten wird er in genau *einer* veränderlichen Zelle, und jede Stelle,
+die mit Geld rechnet, fragt sie im Augenblick des Gebrauchs.
+
+Darin liegt der ganze Trick: **Neuladen baut nichts neu.** Es tauscht den Inhalt einer Zelle.
+Kein Zuhörer wird angemeldet, kein Zeitgeber gestellt, kein Befehl eingehängt, keine
+Verbindung getauscht — also gibt es auch nichts abzumelden, und nichts kann doppelt dastehen.
+Ein Neuladen, das Objekte neu baut, hätte ohnehin nichts bewirkt: Die Knoten des
+Befehlsbaums zeigen weiter auf das alte Objekt.
+
+**Drei Schranken liegen auf jedem Geldwert**, und alle drei haben denselben Grund: Ein zu
+billiger Preis macht Mark, und die liegen binnen Minuten auf vielen Konten — zurückzuholen
+nur mit einer Rücksicherung des ganzen Servers.
+
+1. **Roh gelesen und am Typ abgelehnt.** Ein Punkt trennt in YAML keine Tausender: aus
+   `25.000` wird 25. Anführungszeichen machen aus einer Zahl Text, und daraus liest Bukkit
+   stillschweigend eine 0.
+2. **Der Bereich — gerechnet, nicht geschätzt.** Der Preis der letzten Stufe ist
+   `grundpreis << 40`, und das muss in einen `long` passen. Darüber wäre der Preis negativ,
+   also eine Gutschrift beim Kauf.
+3. **Mehr als Faktor 2 braucht eine zweite Bestätigung** — in *beide* Richtungen. Bei der
+   Weltgrenze ist nur der Weg nach oben unumkehrbar; bei Geld hängt die gefährliche Richtung
+   am Wert: beim Preis nach unten, beim Startguthaben nach oben. Verglichen wird **immer
+   gegen den ausgelieferten Wert** und nie gegen den laufenden. Sonst verlangte dieselbe
+   Datei nach einem Neustart einen anderen Text, und ein eingetragener Wert gälte plötzlich
+   nicht mehr, ohne dass jemand etwas getan hätte.
+
+**Was keine Schranke fängt, ist der Wert im Bereich, der trotzdem falsch ist** — 2.500 statt
+25.000. Beide Zahlen sind plausibel. Deshalb steht bei jedem Start und jedem Neuladen die
+Staffel im Klartext: „2. Parzelle 25000 - 3. 50000 - 4. 100000". Wer dort „2. Parzelle 25"
+liest, sieht den Vertipper. Das ist Erkennung statt Verhinderung, und mehr ist ohne einen
+Wächter auf den Umsatz nicht zu haben — den gibt es erst, wenn es Umsatz zu beobachten gibt.
+
+**Beim Start gilt der Rückfall, beim Neuladen alles-oder-nichts.** Den Parzellenkauf wegen
+eines Tippfehlers zu sperren nimmt den Spielern mehr, als der Tippfehler wert ist; der
+Rückfall ist hier kein ungeprüfter Wert, sondern die ausgelieferte Balance. Beim Neuladen
+gilt die harte Regel: Eine halb übernommene Preisliste ist der schlechteste Zustand, denn
+dann gelten Zahlen aus zwei Ständen gegeneinander.
+
+**Jede Antwort endet mit dem Block „Nur beim Start gelesen"** — auch wenn sich nichts
+geändert hat, und auch wenn eine Klage das Übernehmen verhindert hat. Er nennt Datenbank,
+Welten, Ankunftswelt, Startguthaben und die Zahlen, die im Programm bleiben
+(Parzelle 64, Weg 7, Boden 62, Deckel 40), jede mit ihrem Grund. Das ist das Gegenmittel
+gegen das häufigste Fehlerbild eines Neuladens: Der Befehl meldet Erfolg, und ein Teil wirkt
+erst nach dem Neustart. Jede Zeile nennt, was **gilt** — nicht, was in der Datei steht; genau
+dort sitzt das gefährlichste Missverständnis, weil ein Betreiber die Datenbank nachträgt und
+erwartet, dass sie greift.
+
+**Das Startguthaben wird gelesen, verglichen und gemeldet, aber nicht übernommen.** Die
+Kassen geben den Wert für ein noch nicht eröffnetes Konto als Guthaben zurück; ein neuer Wert
+im Betrieb änderte also rückwirkend, was jeder Spieler mitbringt, der noch nie gebucht hat —
+genau der Fehler, den [8.6](#86-das-buchungsbuch-erledigt-02112026) behoben hat. Ein
+Bestandsschutz dafür ist Klasse 2 nach [12a.6](#12a6-was-anpassbar-ist--und-was-nicht) und
+ein eigener Schritt.
+
+Kein eigenes Recht: `freimarken.verwalten`, derselbe Zweigschutz wie `/freimarken welt`.
+Ein `freimarken.neuladen` wäre genau der zweite Ort für Rechte, gegen den
+[12a](#12a4-das-dashboard) argumentiert.
+
+**Die Dauerprüfung** gehört zu diesem Schritt und ist bei jeder künftigen Änderung zu
+wiederholen: `getConfig()` darf nur in `onEnable` und in `neulade()` stehen. Jede neue
+Lesestelle in einem Befehl oder einem Zuhörer wäre ein Wert, der sich hinter dem Rücken des
+Standes ändert — und das ist der belegte Weg, auf dem ein Neuladen halb wirkt.
+
+**Die Datei selbst wird gelesen, nicht nur ihre Pfade.** `reloadConfig()` meldet einen
+Lesefehler nicht: Bei kaputtem YAML fängt Bukkit die Ausnahme, protokolliert sie und liefert
+eine *leere* Konfiguration, an der die Vorgaben aus der Jar hängen. Jeder Pfad liest dann
+brav einen gültigen Wert — der Leser findet nichts zu klagen, und die Alles-oder-nichts-Sperre
+greift nicht. Ein Tabulator in der Datei wurde so zu einem grünen
+„Übernommen: grundpreis 200000 → 25000", also halber Preis für jeden Kauf bis zum Neustart;
+eine gelöschte Datei lief genauso durch, nur ganz ohne Protokollzeile. Deshalb wird die Datei
+vor jedem Lesen ein zweites Mal geladen, ohne Vorgaben und mit gesehener Ausnahme: Beim
+Neuladen wird dann nichts übernommen, beim **Start bleibt Freimarken aus**. Das ist dieselbe
+Entscheidung wie bei einer unerreichbaren Datenbank — lieber kein Parzellensystem als ein
+falsch bepreistes.
+
+**Der Deckel deckt die Stufe, nicht die Summe.** Schranke 2 ist für
+`grundpreis << 40` gerechnet. Die Summe über alle Stufen ist ein Vielfaches davon und sprengt
+den `long` weit innerhalb des erlaubten Bereichs: Bei 349.526 Mark Grundpreis zeigte
+`/freimarken preis 64` einen negativen Betrag in Milliardenhöhe — ein Befehl, der jedem
+Spieler offensteht. Enger rechnen hilft nicht, weil die Summe mit jeder weiteren Parzelle
+wächst; eine feste Grenze für jede Anzahl kann es nicht geben. Die Summe läuft deshalb bei
+`Long.MAX_VALUE` an: Eine stehengebliebene Höchstzahl ist als Unsinn sichtbar, eine negative
+Zahl sieht aus wie ein Guthaben.
+
+**Geprüft wird die Zahl aus der Datei, nicht ihre unteren 32 Bit.** Eine Obergrenze ist ein
+`int`, die Datei kennt diese Grenze nicht. Wer vor der Prüfung verkürzt, prüft einen anderen
+Wert: aus `-2147483649` wird `2147483647`, und eine unbegrenzte Parzellenzahl gälte stumm.
+Die Regel nimmt darum einen `long`.
+
+Nicht dabei und mit Absicht: die Datenbank als Quelle der Stammdaten (das kommt mit dem
+Dashboard, und der eine Leser ist genau die Stelle, an der sie einträte), der gespeicherte
+Vorwert und das Zurück in einem Klick (dafür bräuchte es einen Ort, an den das Plugin
+schreibt — und `saveConfig()` würde die Kommentare der Datei antasten), und Schlüssel für
+Werte, die es noch nicht gibt: Goldmark, Kurse, Mieten, Verdienstsätze, Tagesdeckel. Eine
+Zeile Anleitung für nichts ist schlechter als keine.
+
+---
+
 ## 9. Ränge [entschieden]
 
 ```
@@ -1849,7 +1956,7 @@ Jeder Schritt endet mit etwas, in dem man herumlaufen kann. Keine Fristen.
 | 4 | ~~**Weltgenerator für die Marktstadt** — Raster, Wege, Grenzen~~ **erledigt 31.10.2026** | ~~das Raster steht~~ — `Rasterplan` im Kern (8 Tests ohne Server), `MarktstadtGenerator` im Plugin; am Testserver geprüft: Parzellenmitte Gras, Mauer Steinziegel, Weg glatter Stein, Krone Halbstufe |
 | 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer — **fertig 31.10.2026** | zwei Spieler, einer baut, der andere nicht — *Code steht: `Besitzbuch` mit allen Regeln (Preisstaffel, Obergrenze, Mitbauer, Aufgeben ohne Rückzahlung), `Schutzwache` mit einer Regel für alle 14 Schutzereignisse, `/parzelle` und `/mark`. 89 Tests grün, Startprobe auf einem echten Paper-26.3-Server durch. Danach eine adversariale Prüfung mit 41 Agenten: 9 bestätigte Befunde, alle behoben — darunter fehlender Schutz gegen Schaden an Rüstungsständern und Rahmeninhalt, Kisten-Loren, ein Besitzschutz, der bei Datenbankausfall nach außen offen scheiterte, und Tests, die das Spielschema leerten. Durchgang mit zwei Spielern am 31.10. gelaufen: Der Schutz greift auf fremdem Grund und sagt es in der Aktionsleiste, Mitbauer schaltet frei und wieder zu, die zweite Parzelle wurde fuer 25.000 Mark bezahlt, und Parzelle -1/0 beweist die negative Seite der Rasterrechnung. Jeder Schritt in der Datenbank gegengeprueft* |
 | 6 | ~~Zusammenlegen und Auftrennen mit Gebühr~~ **erledigt 01.11.2026** | ~~zwei Parzellen werden eine, der Weg verschwindet~~ — `/parzelle zusammenlegen <richtung>` und `/parzelle auftrennen [alles]`, Gebühr 10.000 je Feld der neuen Gruppe. Die Geometrie liegt im Kern (`Gruppenflaeche`), die Blocktabelle an einer Stelle (`Stadtboden`), die Weltarbeit hinter einem 4-Methoden-Griff (`Weltgriff`), damit sie ohne Server prüfbar ist. Vier Runden Fix-und-Nachweis mit je einem adversarialen Prüflauf: elf bestätigte Befunde, alle behoben, jeder mit Probe und Mutationsnachweis. Drei Spieltests am 1.11. bestanden — zuletzt das Quadrat mit 19 von 19 nachgemessenen Koordinaten. 231 Tests |
-| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — in sieben Teilen; **Teil A (Buchungsbuch) erledigt 02.11.2026**, siehe [8.6](#86-das-buchungsbuch-erledigt-02112026) — *es fehlen Wirtschaftswerte in der `config.yml` samt `/freimarken neuladen` (B), Spielzeit und Tagesgrenze (C), Berufe (D), Verdienen (E), Bundesmarkt (F), Messstelle (G)* | man kann Mark verdienen und ausgeben — *jede Geldbewegung steht im Buch, `/mark verlauf` zeigt sie* |
+| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — in sieben Teilen; **Teil A (Buchungsbuch) und Teil B (Stammwerte) erledigt 02.11.2026**, siehe [8.6](#86-das-buchungsbuch-erledigt-02112026) und [8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026) — *es fehlen Spielzeit und Tagesgrenze (C), Berufe (D), Verdienen (E), Bundesmarkt (F), Messstelle (G)* | man kann Mark verdienen und ausgeben — *jede Geldbewegung steht im Buch, `/mark verlauf` zeigt sie* |
 | 8 | Markthalle, Mietverträge, Abholfach, Freie Truhe | ein Laden läuft ab und wird sauber zurückgegeben |
 | 9 | Freistädte: gründen, Grundstücke vergeben, Bürger, Kasse | ein Spieler verkauft einem anderen ein Grundstück |
 | 10 | Hafenwerder mit eigener Angeltabelle | eine Insel lässt sich sichern, der Fang unterscheidet sich |

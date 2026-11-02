@@ -11,14 +11,86 @@ datenbank:
   # Beispiel: jdbc:mariadb://192.168.178.88:3306/freimarken
   # Die Zugangsdaten legt skripte/mariadb_einrichten.bat an und schreibt sie nach
   # data/freimarken/datenbank.properties - von dort hierher uebertragen.
+  #
+  # NUR BEIM START GELESEN - /freimarken neuladen aendert daran nichts. An der Verbindung
+  # haengen Lager, Kasse und Besitzbuch; sie im Betrieb zu tauschen hiesse, die halbe
+  # Ablage auszuwechseln. Eine nachgetragene Datenbank greift erst nach einem Neustart.
+  # Nach Plan 12a.6 gehoeren diese drei Zeilen auch nicht ins Dashboard: Zugangsdaten
+  # haben in einem weitergegebenen Backup nichts zu suchen.
   url: ""
   benutzer: ""
   passwort: ""
+
+# Was Grund und Boden kosten. Plan 12a.6: "Alles, was sich sinnvoll anpassen laesst, ist
+# im Dashboard anpassbar." Diese Datei ist die Zwischenstufe dorthin - was dort spaeter
+# als Feld mit Begruendung steht, steht hier als Kommentar.
+#
+# Drei Schranken liegen auf jeder Zahl hier, und alle drei haben denselben Grund: Ein zu
+# billiger Preis macht Mark, und die liegen binnen Minuten auf vielen Konten -
+# zurueckzuholen nur mit einer Ruecksicherung des ganzen Servers.
+#
+#   1. Gelesen wird ROH und am Typ geprueft. Ein Punkt trennt in YAML keine Tausender:
+#      aus 25.000 wird 25. Anfuehrungszeichen machen aus einer Zahl Text, und daraus
+#      liest Bukkit stillschweigend eine 0.
+#   2. Der Bereich. Er ist gerechnet und nicht geschaetzt: Der Preis der letzten Stufe
+#      ist grundpreis mal 2 hoch 40, und das muss in eine 64-Bit-Zahl passen. Darueber
+#      waere der Preis NEGATIV, also eine Gutschrift beim Kauf.
+#   3. Mehr als Faktor 2 gegenueber dem ausgelieferten Wert braucht eine zweite
+#      Bestaetigung unter sprung-bestaetigt. Verglichen wird immer mit dem AUSGELIEFERTEN
+#      Wert und nie mit dem laufenden - sonst verlangte dieselbe Datei nach einem
+#      Neustart einen anderen Text, und ein eingetragener Wert gaelte ploetzlich nicht
+#      mehr.
+#
+# Vor allen dreien steht die Datei selbst: Laesst sie sich nicht lesen - ein Tabulator als
+# Einrueckung, ein offenes Anfuehrungszeichen -, dann liefert Bukkit stillschweigend die
+# ausgelieferten Werte. Ein Neuladen uebernimmt dann NICHTS, und beim Start bleibt
+# Freimarken aus; die Meldung nennt die Zeile. Lieber kein Parzellensystem als ein falsch
+# bepreistes.
+#
+# Was keine dieser Schranken faengt, ist der Wert, der im Bereich liegt und trotzdem
+# falsch ist - 2.500 statt 25.000. Deshalb steht bei jedem Start und jedem Neuladen die
+# Staffel im Klartext im Protokoll: "2. Parzelle 25000 - 3. 50000 - 4. 100000". Wer dort
+# "2. Parzelle 25" liest, sieht den Vertipper, den keine Zahlengrenze sieht.
+wirtschaft:
+  parzelle:
+    # Was die ZWEITE Parzelle kostet; jede weitere verdoppelt. Die erste ist immer
+    # gratis - wer nur bauen will, zahlt nie etwas.
+    #
+    # Ganze Zahl von 0 bis 8388607 Mark. 0 heisst: jede Parzelle gratis, und die Bremse
+    # gegen Flaechenhorten ist aus. Das ist erlaubt, braucht aber die Bestaetigung
+    # unten, weil es der grosse Sprung nach unten ist.
+    #
+    # Mit 25.000 kostet die sechste Parzelle genau 400.000 Mark - so viel wie eine
+    # Freistadt. Ab der siebten ist Horten teurer als Gruenden, und genau das soll die
+    # Staffel bewirken (Plan 8).
+    grundpreis: 25000
+
+    # Gebuehr je Feld der NEUEN Gruppe beim Zusammenlegen: Vier Felder kosten viermal
+    # diesen Betrag. Eine der wenigen Senken, die ausschliesslich diejenigen zahlen, die
+    # ohnehin viel besitzen.
+    #
+    # Ganze Zahl von 0 bis 4294967298 Mark je Feld.
+    zusammenlegung-je-feld: 10000
+
+  # Die zweite Bestaetigung fuer einen Sprung ueber den Faktor 2. Hier gehoert genau der
+  # Text hin, den das Protokoll beim letzten Start genannt hat, etwa "25000 -> 100000".
+  # Steht etwas anderes, gilt der ausgelieferte Wert - nicht der getippte.
+  #
+  # Die Bestaetigung gilt nur fuer genau diesen Sprung: Wer sie eintraegt und spaeter eine
+  # andere Zahl setzt, wird erneut gefragt. Ein Dauerfreibrief waere keine Rueckfrage.
+  sprung-bestaetigt:
+    grundpreis: ""
+    zusammenlegung-je-feld: ""
+    startguthaben: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
   # Mehr erlaubt das Recht freimarken.parzellen.<zahl>, etwa freimarken.parzellen.8.
   # Die hoechste Zahl gewinnt, dieser Wert ist die Untergrenze.
+  #
+  # Ganze Zahl ab 1. Eine 0 hiesse, niemand darf eine Parzelle - und das sieht in einer
+  # Einstellungsdatei aus wie ein Tippfehler, weil es einer ist. Wer das Parzellensystem
+  # abschalten will, nimmt das Recht weg. /freimarken neuladen uebernimmt diesen Wert.
   hoechstzahl: 4
 
   # Wie viele Felder eine zusammengelegte Gruppe haben darf. Mehr erlaubt das Recht
@@ -28,6 +100,8 @@ parzellen:
   # jemand besitzt, bremst das Flaechenhorten; wie viele davon er zu EINEM Grundstueck
   # verbinden darf, entscheidet, wie gross ein einzelnes Bauwerk werden kann. Vier Felder
   # im Quadrat sind 135 x 135 Bloecke.
+  #
+  # Ganze Zahl ab 1, wie oben. /freimarken neuladen uebernimmt diesen Wert.
   gruppe-hoechstzahl: 4
 
 hinweise:
@@ -60,12 +134,22 @@ hinweise:
   #
   # Den Zuschlag gibt es nur mit einer Mitgliedschaft, nicht fuer Goldmark (Plan 8.4).
   #
-  # Leer lassen heisst: kein Hinweis.
+  # Leer lassen heisst: kein Hinweis. /freimarken neuladen uebernimmt diese Zeile.
   rang-werbung: "Mehr erlaubt ein hoeherer Rang."
 
 kasse:
   # Was ein Spieler beim ersten Mal an Mark mitbringt. Die erste Parzelle ist ohnehin
   # gratis; dieser Betrag entscheidet, wie weit es ohne Verdienen reicht.
+  #
+  # Ganze Zahl ab 0 Mark; mehr als Faktor 2 gegenueber 50.000 braucht die Bestaetigung
+  # unter wirtschaft.sprung-bestaetigt.startguthaben.
+  #
+  # NUR BEIM START GELESEN - /freimarken neuladen vergleicht und meldet, uebernimmt aber
+  # nicht. Der Grund: Fuer ein noch nicht eroeffnetes Konto geben die Kassen diesen Wert
+  # als Guthaben zurueck. Ein neuer Wert im Betrieb aenderte also rueckwirkend, was jeder
+  # Spieler mitbringt, der noch nie gebucht hat - genau der Fehler, den die
+  # Eroeffnungsbuchung am 02.11.2026 behoben hat. Der Betrag friert im Augenblick der
+  # Eroeffnung ein (Beitritt oder erste Buchung, je was zuerst kommt).
   startguthaben: 50000
 
 # Reisen zwischen den Welten (Plan 4.3): zwei Wege, kein dritter - die Tore am
@@ -79,9 +163,18 @@ reisen:
   # Diese Zeile setzt die Respawn-Welt des Servers. Der Eintrag wird dauerhaft in die
   # level.dat der Hauptwelt geschrieben; das Protokoll nennt beim Start die vorige Welt,
   # damit sie zurueckzustellen ist. Leer heisst: nicht anfassen.
+  #
+  # NUR BEIM START GELESEN - /freimarken neuladen aendert daran nichts. Ein zweites Lesen
+  # aenderte nicht ein Feld, sondern eine Weltdatei; ausserdem haengen Torwache,
+  # Ankunftswache und das Warpverzeichnis daran. Weltnamen sind nach Plan 12a.6 ohnehin
+  # nur lesbar.
   ankunftswelt: altfurt
 
 welten:
+  # NUR BEIM START GELESEN - /freimarken neuladen aendert hier nichts. Welten entstehen
+  # einmal, eine bestehende behaelt ihre Umgebung, und die Zahlenbereiche von
+  # /freimarken parzelle stecken im Befehlsbaum, der genau einmal angemeldet wird.
+  #
   # Eine Welt je Eintrag - die Reihenfolge hier ist die Reihenfolge beim Anlegen.
   #
   # art:      raster      das Parzellenraster der Marktstadt
