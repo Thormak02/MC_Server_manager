@@ -8,6 +8,7 @@ import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Grenzregel;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Preisstaffel;
@@ -20,7 +21,12 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.Set;
 import java.util.TreeSet;
 import net.kyori.adventure.audience.Audience;
@@ -76,6 +82,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Besitzbuch buch;
     private ParzellenBefehle befehle;
     private boolean fluechtig;
+    /**
+     * Alle gebauten Welten unter ihrem Namen.
+     *
+     * <p>Nicht nur die Marktstadt: Vorgenerierung und Reisen betreffen jede Welt, und ein
+     * zweites Mal {@code getWorld} zu fragen hiesse, den Schluessel noch einmal
+     * zusammenzusetzen - zwei Angaben, die auseinanderlaufen koennen.
+     */
+    private final Map<String, World> welten = new LinkedHashMap<>();
 
     @Override
     public void onEnable() {
@@ -98,6 +112,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 getConfig().getConfigurationSection("welten"), MARKTSTADT);
         liste.klagen().forEach(getLogger()::severe);
         var gebaut = new Weltenbau(this, generator, getLogger()).baueAlle(liste.welten());
+        welten.putAll(gebaut.welten());
         marktstadt = gebaut.welten().get(MARKTSTADT);
         // Dieselbe Angabe, aus der die Welt entstand, entscheidet auch ueber ihre Grenze.
         // Vorher las richteWeltgrenzeEin die Einstellung ein zweites Mal und ungefiltert
@@ -150,6 +165,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
         getLogger().info("Freimarken " + getPluginMeta().getVersion()
                 + " bereit - Java " + Runtime.version().feature()
                 + ", Ablage " + (fluechtig ? "FLUECHTIG" : "MariaDB"));
+
+        nenneNichtVorgenerierte();
     }
 
     @Override
@@ -305,6 +322,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
                             zeigeWelt(z.getSource().getSender());
                             return Command.SINGLE_SUCCESS;
                         }))
+                .then(Commands.literal("vorgenerieren")
+                        .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
+                        .executes(z -> {
+                            zeigeVorgenerierung(z.getSource().getSender());
+                            return Command.SINGLE_SUCCESS;
+                        }))
                 .then(Commands.literal("parzelle")
                         .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
                         // Die Grenzen kommen aus der Stadt, nicht aus einer geratenen
@@ -436,6 +459,124 @@ public final class FreimarkenPlugin extends JavaPlugin {
         probe(empfaenger, "Mauer         ", plan.parzellenKante(), y, 10);
         probe(empfaenger, "Weg           ", plan.parzellenKante() + 3, y, 10);
         probe(empfaenger, "Mauerkrone    ", plan.parzellenKante(), y + 1, 10);
+    }
+
+    /**
+     * Was jede Welt zum Vorgenerieren braucht - und wie weit sie ist.
+     *
+     * <p>Vorgeneriert wird mit Chunky, einem fremden Plugin. Dieser Befehl erzeugt keinen
+     * Chunk; er rechnet die Zahlen aus, die Chunky braucht, und liest nach, was angekommen
+     * ist. Der Grund steht in {@link Vorgenerierung}: Mitte und Radius sieht man nicht an,
+     * und die Marktstadt liegt um -3,5/-3,5 statt um den Spawn.
+     */
+    private void zeigeVorgenerierung(Audience empfaenger) {
+        empfaenger.sendMessage(Component.text("Vorgenerierung", NamedTextColor.GOLD));
+        if (welten.isEmpty()) {
+            empfaenger.sendMessage(Component.text("Keine Welt gebaut.", NamedTextColor.RED));
+            return;
+        }
+        for (World welt : welten.values()) {
+            String schluessel = welt.key().asString();
+            if (!Vorgenerierung.hatGrenze(welt)) {
+                empfaenger.sendMessage(Component.text(schluessel, NamedTextColor.YELLOW)
+                        .append(Component.text(" - keine Weltgrenze, also nichts"
+                                + " Abgeschlossenes vorzugenerieren.", NamedTextColor.GRAY)));
+                continue;
+            }
+            Chunkfeld feld = Vorgenerierung.feldVon(welt);
+            var rand = welt.getWorldBorder();
+            empfaenger.sendMessage(Component.text(schluessel, NamedTextColor.AQUA)
+                    .append(Component.text(
+                            "  " + feld.chunks() + " Chunks, " + feld.regionenImFeld()
+                                    + " Regionen im Feld, Chunks " + feld.chunkVonX() + ".."
+                                    + feld.chunkBisX() + " je Achse",
+                            NamedTextColor.GRAY)));
+            String name = Vorgenerierung.chunkyName(welt, getServer());
+            if (name == null) {
+                // Keine Zeile zum Kopieren ist besser als eine, die ins Leere laeuft oder
+                // die falsche Welt trifft.
+                empfaenger.sendMessage(Component.text(
+                        "  Chunky findet diese Welt nicht ueber ihren Namen (" + welt.getName()
+                                + ") - es gibt keinen Befehl dafuer.", NamedTextColor.RED));
+            } else {
+                empfaenger.sendMessage(Component.text("  " + Vorgenerierung.chunkyBefehl(
+                        name, feld, rand.getCenter().getX(), rand.getCenter().getZ()),
+                        NamedTextColor.WHITE));
+            }
+            // Die Stichprobe kommt von der Platte und damit nicht sofort. Sie wird
+            // nachgeschoben, statt den Hauptfaden warten zu lassen.
+            Vorgenerierung.stand(welt).thenAccept(stand -> getServer().getScheduler()
+                    .runTask(this, () -> meldeStand(empfaenger, stand)));
+        }
+    }
+
+    private void meldeStand(Audience empfaenger, Vorgenerierung.Stand stand) {
+        String kopf = "  Stichprobe " + stand.welt() + ": " + stand.fertig() + " von 9";
+        if (stand.siehtVollstaendigAus()) {
+            empfaenger.sendMessage(Component.text(kopf + " erzeugt - sieht vorgeneriert aus"
+                    + (stand.veraltet() ? ", aber veraltet" : ""),
+                    stand.veraltet() ? NamedTextColor.YELLOW : NamedTextColor.GREEN));
+            return;
+        }
+        empfaenger.sendMessage(Component.text(kopf + " erzeugt - NICHT vorgeneriert",
+                NamedTextColor.RED));
+        for (String luecke : stand.luecken()) {
+            empfaenger.sendMessage(Component.text("    " + luecke, NamedTextColor.DARK_GRAY));
+        }
+    }
+
+    /**
+     * Nennt beim Start die Welten, die nicht vorgeneriert sind.
+     *
+     * <p>Angestossen wird die Vorgenerierung nur auf Befehl [entschieden 02.11.2026] - und
+     * damit braucht es diese Meldung, sonst ist der Befehl eine Moeglichkeit, auf die
+     * niemand kommt. Plan Abschnitt 13 verlangt die Vorgenerierung vor dem ersten
+     * Spielertag.
+     *
+     * <p>Eine Zeile und nicht acht: Acht Warnungen bei jedem Start liest nach drei Wochen
+     * niemand mehr, und dann ist auch die neunte unsichtbar, die wirklich neu ist.
+     *
+     * <p>Veraltete Chunks bekommen ihre eigene Zeile. Sie sind das maschinell lesbare
+     * Zeichen fuer einen Minecraft-Versionswechsel - und damit fuer den Kornmark-Reset,
+     * den Plan Abschnitt 13 dann verlangt. Ohne diese Zeile muesste der Betreiber sich
+     * erinnern.
+     */
+    private void nenneNichtVorgenerierte() {
+        List<World> zuPruefen = welten.values().stream()
+                .filter(Vorgenerierung::hatGrenze)
+                .toList();
+        if (zuPruefen.isEmpty()) {
+            return;
+        }
+        // Erst alle Stichproben, dann EINE Meldung. Die Antworten kommen von der Platte
+        // und damit in beliebiger Reihenfolge; nacheinander zu protokollieren ergaebe
+        // wieder acht Zeilen, nur in zufaelliger Folge.
+        var stichproben = zuPruefen.stream().map(Vorgenerierung::stand).toList();
+        CompletableFuture.allOf(stichproben.toArray(CompletableFuture[]::new))
+                .thenAccept(nichts -> {
+                    List<String> fehlt = new ArrayList<>();
+                    List<String> veraltet = new ArrayList<>();
+                    for (var frage : stichproben) {
+                        var stand = frage.join();
+                        String kurz = stand.welt().replace(getName().toLowerCase(Locale.ROOT)
+                                + ":", "");
+                        if (!stand.siehtVollstaendigAus()) {
+                            fehlt.add(kurz + " (" + stand.fertig() + "/9)");
+                        } else if (stand.veraltet()) {
+                            veraltet.add(kurz);
+                        }
+                    }
+                    if (!fehlt.isEmpty()) {
+                        getLogger().warning("Nicht vorgeneriert: " + String.join(", ", fehlt)
+                                + " - /freimarken vorgenerieren nennt die Befehle dazu.");
+                    }
+                    if (!veraltet.isEmpty()) {
+                        getLogger().warning("Veraltete Chunks: " + String.join(", ", veraltet)
+                                + " - erzeugt mit einer aelteren Minecraft-Fassung. Fuer"
+                                + " Kornmark ist damit das Zuruecksetzen faellig"
+                                + " (Plan Abschnitt 13).");
+                    }
+                });
     }
 
     private void probe(Audience empfaenger, String was, int x, int y, int z) {

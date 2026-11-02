@@ -165,8 +165,22 @@ Welt. Ein Sprung über das Doppelte braucht eine zweite Bestätigung ([12a.6](#1
 
 Vorgenerierung grob 3–4 Stunden, Platzbedarf 15–20 GB. **Erst Grenze setzen, dann
 vorgenerieren** — nie umgekehrt. Für die Marktstadt: Mitte −3,5/−3,5, Radius 1.495,
-35.344 Chunks (−94…93 je Achse), 36 Regionsdateien. Ein spawnzentriertes Werkzeug
-bräuchte um 32/32 den Radius 1.530, sonst fehlt der ganze Westring.
+35.344 Chunks (−94…93 je Achse), 36 Regionen. Ein spawnzentriertes Werkzeug bräuchte um
+32/32 den Radius 1.530, sonst fehlt der ganze Westring.
+
+Diese Zahlen rechnet seit dem 02.11.2026 `Chunkfeld` im Kern nach, und `ChunkfeldTest`
+nagelt sie fest — sie standen vorher nur in diesem Text. Zwei Berichtigungen aus dem
+Nachrechnen und aus einer Messung:
+
+- **36 Regionen sind nicht 36 Dateien.** Gemeint ist, welche Regionen das Feld selbst
+  berührt. Auf der Platte liegen mehr, weil ein Chunk am Rand seine Nachbarn braucht und
+  eine Regionsdatei entsteht, sobald ein einziger Chunk in ihr angefasst wird. Gemessen an
+  Altfurt: Zielchunks −25…25, 4 Regionen im Feld, **16 Dateien** auf der Platte. Für die
+  Marktstadt sind rund 64 zu erwarten. Wer die Dateizahl als Prüfung auf Vollständigkeit
+  nimmt, bekommt einen Fehlalarm.
+- **Die Summe über alle acht Welten: 424.040 Chunks, 432 Regionen im Feld.** Davon tragen
+  Freistädte, Hafenwerder und Hochwald allein 338.568 — sie bestimmen das Zeitfenster, die
+  übrigen fünf sind Minuten.
 
 ### 4.1 Die zwei Inselwelten [entschieden]
 
@@ -262,6 +276,126 @@ statt nur anders auszusehen. [empfohlen]
   Sicherungs- oder Umzugsmuster, das sie in der `level.dat` sucht, findet sie nicht. Das
   Plugin setzt sie bei jedem Start neu, ein Verlust heilt sich also — aber nur, solange
   die Einstellung stimmt.
+
+### 4.3 Wie man zwischen den Welten reist [entschieden 02.11.2026]
+
+Acht Welten stehen, und ohne diesen Abschnitt kommt niemand hin. Entschieden sind **zwei
+Wege, kein dritter**:
+
+- **Portale am Bundesmarkt.** Der Hauptspawn in Altfurt bekommt ein Portal je Welt. Das ist
+  der Weg, den ein Neuer findet, ohne einen Befehl zu kennen — er sieht, wohin es geht, und
+  läuft hin. Ein Portal ist außerdem ein Ort: Man kann sich dort verabreden, es beschriften
+  und darüber ein Dach bauen. Ein Befehl ist nichts davon.
+- **`/warp <name>`** für den, der den Weg schon kennt. Die Rückfahrt ist derselbe Befehl,
+  von überall aus.
+
+**Ein `/warp`, und die Weltnamen sind gesperrt.** Abschnitt 11.1 führt `/warp` als
+*spielereigenes* Werkzeug, dessen Zahl mit dem Rang steigt (Siedler 1, Bürger 3, bezahlte
+Ränge mehr). Öffentliche Weltenwarps und eigene Warps liegen damit im **selben
+Namensraum** — und das ist Absicht: Ein Spieler tippt, wo er hin will, und muss keine
+Kategorie kennen. Damit es trägt, gilt:
+
+- Die acht Weltnamen sind **reserviert**. Niemand kann einen eigenen Warp `kornmark` nennen;
+  der Versuch wird abgelehnt und benennt den Grund. Andernfalls verlöre ein Spieler mit
+  einem unglücklich benannten Warp den Zugang zu einer Welt, oder — schlimmer — ein anderer
+  bekäme ihn.
+- Öffentliche Warps werden **nicht gesetzt, sondern abgeleitet**: Sie kommen aus der
+  Weltenliste in der `config.yml`, nicht aus einer zweiten Liste. Eine neue Welt ist damit
+  weiter *ein Eintrag plus Generator* ([4.2](#42-erweiterbar-und-portierbar-entschieden))
+  und nicht ein Eintrag plus ein vergessener Warp.
+- Die Vervollständigung zeigt zuerst die Welten, dann die eigenen Warps. Wer `/warp k`
+  tippt, meint fast immer Kornmark.
+
+**Wo ein Warp landet, entscheidet die Welt, nicht der Zufall.** Jede Welt braucht einen
+Ankunftspunkt, und der ist ihr Erscheinungspunkt — derselbe, den ein Betreiber mit
+`/setworldspawn` setzt und den das Plugin seit dem 02.11.2026 nicht mehr bei jedem Start
+überschreibt ([4.2](#42-erweiterbar-und-portierbar-entschieden)). Eine zweite Liste von
+Ankunftspunkten wäre eine zweite Wahrheit.
+
+**Offen und nicht erfunden**: Wie ein Spieler beim *Beitritt* in Altfurt landet. Die
+Freimarken-Welten sind namensräumig und stehen in keiner Serverliste — die Hauptwelt des
+Servers ist eine andere, und ein neuer Spieler erscheint heute dort. Das gehört zu Teil C
+(Altfurt als Rohbau), weil es ohne einen Platz zum Ankommen keine Antwort hat.
+
+### 4.4 Wie vorgeneriert wird [entschieden 02.11.2026]
+
+**Mit Chunky, und zwar ausschließlich über Konsolenbefehle.** Kein Eintrag in
+`build.gradle.kts`, kein `depend` oder `softdepend` in der `plugin.yml`, keine Zeile Code
+gegen `chunky-common`. Das Plugin bleibt damit so frei von Fremdcode wie heute, und
+Freimarken startet auf einem Server ohne Chunky vollständig — dann nennt
+`/freimarken vorgenerieren` eben nur Zahlen und Stichprobe.
+
+Chunky hat zwar eine Java-API (`ChunkyAPI` über Bukkits ServicesManager), aber sie steht
+auf Version 0 und kündigt Brüche an; außerdem ist Chunky GPL-3.0, und was das für ein
+dagegen übersetztes Plugin bedeutet, ist nicht geklärt. Ein Konsolenbefehl hat keine
+dieser Fragen.
+
+**Warum nicht selbst gebaut**, obwohl Plan [12a.6](#12a6-was-anpassbar-ist--und-was-nicht)
+„Vorgenerierung anstoßen" als Fähigkeit des eigenen Managers führt: Das Schwierige ist
+nicht das Erzeugen, sondern die Drosselung. Die Paper-API sagt zu `getChunkAtAsync`
+nirgends, wie schnell ein Chunk kommt, nennt keine Obergrenze für offene Anfragen und
+keine Reihenfolge — wer das selbst baut, baut Rückstau, Entladedisziplin,
+Ticklängen-Regelung und einen absturzfesten Zeiger. Das ist in Chunky gelöst.
+
+**Angestoßen wird nur auf Befehl** — nichts läuft von selbst. Die Vorgenerierung dauert
+Stunden und belegt Gigabyte; ein Start, der das von sich aus beginnt, überrascht den
+Betreiber beim ersten Start nach einer neuen Welt. Stattdessen nennt das Plugin in **einer**
+Zeile beim Start die Welten, die nicht vorgeneriert sind, und zeigt auf den Befehl.
+
+**Das Plugin schreibt die Befehle, statt sie dem Betreiber zu überlassen.**
+`/freimarken vorgenerieren` gibt je Welt eine Zeile zum Kopieren. Drei Gründe, jeder ein
+Fehler, der sonst unbemerkt bliebe:
+
+- **Die Mitte ist nicht der Spawn.** Mit Radius 1.495 um 32/32 fehlen der Marktstadt die
+  Chunkspalten −94 und −93 — der Westring plus 28 Blöcke der Parzellenspalte −21. Das
+  sieht man erst, wenn ein Spieler hinläuft und Gelände während des Spiels entsteht.
+- **Die Zahl in der Datei ist nicht die Grenze.** `config.yml` sagt 3.000, wirksam sind
+  2.989; die Grenze wandert nur nach außen, ein kleinerer Wert landet nur im Protokoll.
+  Mitte und Radius kommen deshalb aus der **gemessenen** `WorldBorder`.
+- **Chunky kennt keine Namensräume.** Es gibt den Weltnamen roh an
+  `Server#getWorld(String)`. Der Bukkit-Name einer namensräumigen Welt ist
+  `freimarken_marktstadt` mit Unterstrich, nicht `freimarken:marktstadt` mit Doppelpunkt —
+  am 02.11.2026 am Probeserver gemessen. Das Plugin prüft zur Laufzeit, dass der Name
+  wirklich dieselbe Welt zurückliefert, und zeigt sonst **keine** Zeile. Ein Befehl, der
+  ins Leere läuft oder die falsche Welt trifft, ist schlimmer als keiner.
+
+**Alles in einem `chunky start`** und nicht in fünf Befehlen (`world`, `center`, `shape`,
+`radius`, `start`). Die fünf hinterlassen einen Zustand, der zwischen zwei Welten
+stehenbleibt: Wer bei der zweiten Welt den Radius vergisst, generiert mit dem der ersten,
+und das meldet niemand.
+
+**Einrichtung**, einmalig: Chunky 1.5.3 (Paper 26.1–26.3, Java 25) nach `plugins/`, und in
+`plugins/Chunky/config.yml` `continue-on-restart: true`. Ab Werk steht der auf `false`, und
+Chunky schreibt den Fortschritt nur beim Verlassen seiner Schleife — ein Absturz nach zwei
+Stunden kostet zwei Stunden. Ein Update-Prüfer ist nicht eingebaut, die Fassung steht
+deshalb in der `TODO.md`.
+
+**Nacheinander, klein nach groß, ohne Spieler.** Chunky hält je Welt nur *eine* gespeicherte
+Aufgabe, und parallel teilen sich acht Welten dieselben Fäden und dieselbe Platte.
+
+**Geprüft wird an den Chunks, nicht an Chunkys Meldung.** `/freimarken vorgenerieren` nimmt
+eine Stichprobe von neun Punkten — Mitte, vier Kantenmitten und **vier Ecken**. Die Ecken
+sind der Zweck: Ein Werkzeug, das einen Kreis erzeugt statt eines Quadrats, sieht in der
+Mitte und an den Kantenmitten fertig aus. Das ist bei Chunky eine Einstellung und damit
+einen Vertipper weit. Gelesen wird mit `getChunkGenerationStateAsync`, das den Kopf der
+Regionsdatei liest, ohne einen Chunk zu laden; `OUTDATED` ist dabei das maschinell lesbare
+Zeichen für einen Minecraft-Versionswechsel und damit für den Kornmark-Reset aus
+[13](#13-betrieb).
+
+**Gemessen am 02.11.2026** (Probeserver, Altfurt, 2.553 Chunks): 20 Sekunden, **120
+Chunks/s**, **13,7 KB je Chunk**. Hochgerechnet auf alle 424.040 Chunks wären das etwa eine
+Stunde und 5,6 GB. Die 3–4 Stunden und 15–20 GB oben bleiben als obere Schranke stehen:
+Altfurt ist flach und klein, und Hochwald mit Bäumen, Hafenwerder mit Meer und der Nether
+sind nicht gemessen.
+
+**Der Ausstieg, falls Chunky einmal nicht nachzieht** — und das ist genau dann am
+wahrscheinlichsten, wenn man es braucht, denn Kornmark wird bei jeder neuen
+Minecraft-Fassung neu vorgeneriert: Ein Minimalpumpwerk im Plugin ersetzt den Lauf. **Eine**
+offene Anfrage, `getChunkAtAsync(x, z, true, false, rückruf)`, im Rückruf
+`unloadChunk(x, z, true)`, kein `addPluginChunkTicket`, kein `setChunkForceLoaded`, Zeiger
+in der MariaDB, Abbruch in `onDisable`. Mit nur einer offenen Anfrage entfällt die ganze
+schwierige Hälfte, und Kornmarks 15.876 Chunks sind selbst bei 20 Chunks/s in 13 Minuten
+durch.
 
 ---
 
