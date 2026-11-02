@@ -124,25 +124,40 @@ final class Ankunftspunkt {
     }
 
     /**
-     * Taugt diese Spalte?
+     * Taugt GENAU dieser Ort, ohne Suche?
      *
-     * <p>Drei Bedingungen, und jede hat ein Fehlerbild: fester Boden (sonst faellt der
-     * Ankommende), zwei durchquerbare Bloecke darueber (sonst steckt er in der Wand), und
-     * nirgends davon etwas Schaedliches (sonst brennt oder ertrinkt er). Ein Grasbueschel
-     * ueber dem Boden ist ausdruecklich erlaubt - sonst taugte keine Wiese.
+     * <p>{@code y} ist die Fusshoehe. Drei Bedingungen, und jede hat ein Fehlerbild:
+     * fester Boden darunter (sonst faellt der Ankommende), zwei durchquerbare Bloecke ab
+     * der Fusshoehe (sonst steckt er in der Wand), und nirgends davon etwas Schaedliches
+     * (sonst brennt oder ertrinkt er). Ein Grasbueschel in Fusshoehe ist ausdruecklich
+     * erlaubt - sonst taugte keine Wiese.
+     *
+     * <p>Diese Methode und nicht {@link #suche} ist das Richtige, wenn der Zielort schon
+     * feststeht - bei {@code /zurueck} und bei {@code /tpa}. Die ringweise Suche springt
+     * auf {@link Weltgriff#bodenHoehe}, und das heisst: Ein Rueckweg aus einer Hoehle
+     * endete an der Oberflaeche, und eine Todesstelle neben einem Lavasee im Nether
+     * endete auf dem Netherdach. Genau das ist der bei EssentialsX belegte Fehler
+     * (Ausgabe 3318, lange als „wontfix" gefuehrt). Wo ein Ort gemeint ist, wird geprueft
+     * und abgesagt, nicht gesucht.
      */
-    private static Optional<Stand> inSpalte(Weltgriff griff, int x, int z) {
-        int boden = griff.bodenHoehe(x, z);
-        if (!griff.fest(x, boden, z) || schaedlich(griff.bei(x, boden, z))) {
-            return Optional.empty();
+    static boolean taugt(Weltgriff griff, int x, int y, int z) {
+        if (!griff.fest(x, y - 1, z) || schaedlich(griff.bei(x, y - 1, z))) {
+            return false;
         }
-        for (int hoehe = 1; hoehe <= 2; hoehe++) {
-            int y = boden + hoehe;
-            if (griff.fest(x, y, z) || schaedlich(griff.bei(x, y, z))) {
-                return Optional.empty();
+        for (int hoehe = 0; hoehe <= 1; hoehe++) {
+            if (griff.fest(x, y + hoehe, z) || schaedlich(griff.bei(x, y + hoehe, z))) {
+                return false;
             }
         }
-        return Optional.of(new Stand(x, boden + 1, z));
+        return true;
+    }
+
+    /** Taugt die hoechste Stelle dieser Spalte? */
+    private static Optional<Stand> inSpalte(Weltgriff griff, int x, int z) {
+        int fuesse = griff.bodenHoehe(x, z) + 1;
+        return taugt(griff, x, fuesse, z)
+                ? Optional.of(new Stand(x, fuesse, z))
+                : Optional.empty();
     }
 
     /**

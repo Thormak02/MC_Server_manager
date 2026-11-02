@@ -20,6 +20,22 @@ permissions:
   freimarken.reisen:
     description: Darf mit /warp zwischen den Welten reisen
     default: true
+  freimarken.zurueck:
+    description: Darf mit /zurueck zum letzten Ort
+    default: true
+  freimarken.tpa:
+    description: Darf mit /tpa einen Spieler fragen und Anfragen annehmen
+    default: true
+  freimarken.sofort:
+    # Ueberspringt die drei Sekunden Wartezeit vor jedem Teleport. Fuer Betreiber und
+    # ihre Werkzeuge: /freimarken parzelle soll nicht abbrechen, weil man sich dabei dreht.
+    description: Reist ohne Wartezeit
+    default: op
+  freimarken.spawnpunkt.setzen:
+    # Oeffnet allein /spawnpoint. Bett und Respawn-Anker bleiben auch damit gesperrt -
+    # sie sind kein Werkzeug des Betreibers, sondern eine abgeschaltete Spielmechanik.
+    description: Darf trotz der Sperre einen Spawnpunkt setzen
+    default: op
   freimarken.spielmodus.frei:
     # Fuer Baumeister und Betreiber. Ohne dieses Recht wuerde ein Spieler im Kreativmodus
     # beim Betreten Altfurts mitten im Bauen auf Abenteuer heruntergestuft.

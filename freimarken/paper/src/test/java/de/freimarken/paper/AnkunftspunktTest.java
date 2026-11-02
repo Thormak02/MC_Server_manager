@@ -179,6 +179,89 @@ class AnkunftspunktTest {
     }
 
     @Test
+    @DisplayName("Die Ortsprobe prueft GENAU den Ort - sie sucht nicht")
+    void ortsprobePruefTGenau() {
+        // Der Unterschied, auf den es ankommt: /zurueck und /tpa kennen ihr Ziel. Wuerden
+        // sie die ringweise Suche benutzen, sprang sie auf bodenHoehe(x,z) - und ein
+        // Rueckweg aus einer Hoehle endete an der Oberflaeche. Hier wird der Ort
+        // genommen, wie er ist.
+        var welt = new Probewelt()
+                .boden(0, 0, 40, Material.STONE)        // Hoehlenboden
+                .setze(0, 60, 0, Material.STONE)        // Decke der Hoehle
+                .setze(0, 61, 0, Material.STONE);       // Oberflaeche darueber
+
+        assertTrue(Ankunftspunkt.taugt(welt, 0, 41, 0),
+                "in der Hoehle ist Platz, und genau dort ist das Ziel");
+        assertEquals(62, Ankunftspunkt.suche(welt, 0, 0).orElseThrow().y(),
+                "die Suche wuerde dagegen an die Oberflaeche springen");
+    }
+
+    @Test
+    @DisplayName("Ohne Boden unter den Fuessen taugt der Ort nicht")
+    void keinBodenDarunter() {
+        // Die Todesstelle eines Spielers, der ins Leere gefallen ist.
+        var welt = new Probewelt();
+
+        assertTrue(!Ankunftspunkt.taugt(welt, 0, 64, 0));
+    }
+
+    @Test
+    @DisplayName("Lava unter den Fuessen taugt nicht - der belegte /back-Fehler")
+    void lavaUnterDenFuessen() {
+        // Wer neben einem Lavasee stirbt, bekommt mit /zurueck sonst denselben Tod
+        // zweimal.
+        var welt = new Probewelt().boden(0, 0, 70, Material.MAGMA_BLOCK);
+
+        assertTrue(!Ankunftspunkt.taugt(welt, 0, 71, 0));
+    }
+
+    @Test
+    @DisplayName("Wasser im Kopfraum taugt nicht")
+    void wasserImKopfraum() {
+        var welt = new Probewelt()
+                .boden(0, 0, 70, Material.STONE)
+                .setze(0, 72, 0, Material.WATER);
+
+        assertTrue(!Ankunftspunkt.taugt(welt, 0, 71, 0), "der Kopf waere unter Wasser");
+    }
+
+    @Test
+    @DisplayName("Ein Block in Fusshoehe taugt nicht, ein Grasbueschel schon")
+    void fusshoehe() {
+        var zugebaut = new Probewelt()
+                .boden(0, 0, 70, Material.STONE)
+                .setze(0, 71, 0, Material.STONE);
+        var bewachsen = new Probewelt()
+                .boden(0, 0, 70, Material.STONE)
+                .setze(0, 71, 0, Material.SHORT_GRASS);
+
+        assertTrue(!Ankunftspunkt.taugt(zugebaut, 0, 71, 0));
+        assertTrue(Ankunftspunkt.taugt(bewachsen, 0, 71, 0));
+    }
+
+    @Test
+    @DisplayName("Ein Block ueber dem Kopf taugt nicht - zwei Bloecke braucht ein Spieler")
+    void kopfraumZuNiedrig() {
+        var welt = new Probewelt()
+                .boden(0, 0, 70, Material.STONE)
+                .setze(0, 72, 0, Material.STONE);
+
+        assertTrue(!Ankunftspunkt.taugt(welt, 0, 71, 0));
+    }
+
+    @Test
+    @DisplayName("Die Spaltensuche benutzt dieselbe Ortsprobe")
+    void spaltensucheBenutztOrtsprobe() {
+        // Damit es nicht zwei Tabellen gibt, die auseinanderlaufen: Was die Suche
+        // zurueckgibt, muss die Ortsprobe bestaetigen.
+        var welt = new Probewelt().boden(3, 4, 70, Material.RED_SAND);
+
+        var stand = Ankunftspunkt.suche(welt, 3, 4).orElseThrow();
+
+        assertTrue(Ankunftspunkt.taugt(welt, stand.x(), stand.y(), stand.z()));
+    }
+
+    @Test
     @DisplayName("Die Suche hoert nach acht Ringen auf")
     void suchfeldIstBegrenzt() {
         // 17x17 Bloecke. Ein Teleport, der hundert Bloecke weit sucht, bringt den Spieler

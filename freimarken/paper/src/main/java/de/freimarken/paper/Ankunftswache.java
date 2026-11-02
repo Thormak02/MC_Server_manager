@@ -1,17 +1,20 @@
 package de.freimarken.paper;
 
+import com.destroystokyo.paper.event.player.PlayerSetSpawnEvent;
 import io.papermc.paper.event.player.AsyncPlayerSpawnLocationEvent;
 import java.util.Map;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 
 /**
  * Wer wo ankommt - und in welchem Spielmodus.
@@ -31,11 +34,28 @@ import org.bukkit.event.player.PlayerJoinEvent;
  * Abschnitt 4 fuehrt Altfurt als Abenteuer und alle uebrigen als Ueberleben; gesetzt wird
  * er deshalb beim Betreten - und nur dann, wenn er abweicht, denn jedes Setzen raeumt das
  * Flugrecht ab.
+ *
+ * <p><b>Sterben.</b> Kein eigener Spawnpunkt im Bett [entschieden 02.11.2026] - wer
+ * stirbt, erscheint immer in Altfurt. Dafuer braucht es zwei Haken, nicht einen:
+ * {@code setRespawnWorld} wirkt nur im Standardzweig, und ein Spawnpunkt aus Bett, Anker
+ * oder {@code /spawnpoint} gewinnt davor. Der erste Haken verhindert, dass einer gesetzt
+ * wird; der zweite biegt um, was trotzdem gesetzt wurde. Der zweite allein waere auch
+ * genug - aber dann sagte das Spiel beim Schlafen weiterhin „Respawn point set", und das
+ * waere eine Luege.
  */
 final class Ankunftswache implements Listener {
 
     /** Wer nie umgestellt wird - Baumeister und Betreiber. */
     static final String RECHT_SPIELMODUS_FREI = "freimarken.spielmodus.frei";
+
+    /**
+     * Wer trotz der Sperre einen Spawnpunkt setzen darf.
+     *
+     * <p>Oeffnet allein den Zweig {@code COMMAND}, also {@code /spawnpoint}. Bett und
+     * Anker bleiben auch damit gesperrt: Sie sind kein Werkzeug des Betreibers, sondern
+     * eine Spielmechanik, und die ist hier abgeschaltet.
+     */
+    static final String RECHT_SPAWNPUNKT_SETZEN = "freimarken.spawnpunkt.setzen";
 
     private final World ankunftswelt;
     private final Map<String, Weltangabe> nachSchluessel;
@@ -74,6 +94,69 @@ final class Ankunftswache implements Listener {
                 + (war == null ? "einer unbekannten Welt" : war.key().asString())
                 + " erscheinen - das gehoert nicht zum Freimarkenbund. Umgeleitet nach "
                 + ankunftswelt.key().asString() + ".");
+    }
+
+    /**
+     * Verhindert, dass ein Bett oder ein Anker einen Spawnpunkt setzt.
+     *
+     * <p>Geschlafen werden darf weiter - gesperrt ist nur das Setzen des Punktes. Die
+     * Vanilla-Meldung wird ausdruecklich abgeschaltet und durch eine eigene ersetzt: Ohne
+     * das stuende „Respawn point set" da, waehrend keiner gesetzt wurde, und beim
+     * naechsten Tod waere der Spieler verwundert statt vorbereitet.
+     *
+     * <p>{@code UNKNOWN} gilt als gesperrt, nicht als erlaubt. Was sich nicht zuordnen
+     * laesst, soll keinen Spawnpunkt setzen - und wenn eine kuenftige
+     * Minecraft-Fassung einen neuen Weg bringt, faellt er hierher und nicht durch.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void beimSpawnpunktSetzen(PlayerSetSpawnEvent ereignis) {
+        if (!gesperrt(ereignis)) {
+            return;
+        }
+        ereignis.setCancelled(true);
+        ereignis.setNotifyPlayer(false);
+        if (ereignis.getCause() == PlayerSetSpawnEvent.Cause.BED
+                || ereignis.getCause() == PlayerSetSpawnEvent.Cause.RESPAWN_ANCHOR) {
+            ereignis.getPlayer().sendMessage(Component.text("Hier wird kein Spawnpunkt"
+                    + " gesetzt - gestorben wird immer nach Altfurt. Schlafen geht"
+                    + " weiter.", NamedTextColor.GRAY));
+        }
+    }
+
+    private boolean gesperrt(PlayerSetSpawnEvent ereignis) {
+        return switch (ereignis.getCause()) {
+            case BED, RESPAWN_ANCHOR, UNKNOWN -> true;
+            case COMMAND -> !ereignis.getPlayer().hasPermission(RECHT_SPAWNPUNKT_SETZEN);
+            // PLAYER_RESPAWN raeumt beim Erscheinen auf, PLUGIN ist unser eigener Weg.
+            case PLAYER_RESPAWN, PLUGIN -> false;
+        };
+    }
+
+    /**
+     * Wer stirbt, erscheint in Altfurt - unabhaengig davon, wo er gestorben ist.
+     *
+     * <p>Nur beim Tod. {@code END_PORTAL} ist ebenfalls ein Erscheinen, gehoert aber dem
+     * Ende: Wer durch das Rueckportal geht, will aus dem Ende heraus und nicht nach
+     * Altfurt. Ein Filter, der das verwechselt, ist der belegte Fehler solcher Zuhoerer.
+     *
+     * <p>Hier laeuft die Standprobe, anders als in {@link #beimErscheinen}: Dieses
+     * Ereignis kommt im Hauptfaden, Bloecke zu lesen ist also erlaubt.
+     */
+    @EventHandler
+    public void beimErscheinenNachTod(PlayerRespawnEvent ereignis) {
+        if (ereignis.getRespawnReason() != PlayerRespawnEvent.RespawnReason.DEATH) {
+            return;
+        }
+        Location spawn = ankunftswelt.getSpawnLocation();
+        var platz = Ankunftspunkt.fuer(ankunftswelt, spawn.getBlockX(), spawn.getBlockZ());
+        if (platz.isEmpty()) {
+            protokoll.warning("Am Erscheinungspunkt von " + ankunftswelt.key().asString()
+                    + " ist kein Platz zum Stehen - ein Toter erscheint trotzdem dort,"
+                    + " weil es keinen besseren Ort gibt. /setworldspawn setzen.");
+            ereignis.setRespawnLocation(spawn);
+            return;
+        }
+        ereignis.setRespawnLocation(platz.get());
     }
 
     @EventHandler

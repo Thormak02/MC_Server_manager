@@ -81,6 +81,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     private static final String ANKUNFTSWELT_VORGABE = "altfurt";
 
+    /**
+     * Wie lange eine Teleportanfrage steht.
+     *
+     * <p>Eine Konstante und kein Einstellschluessel: Eine Minute ist der Wert, den die
+     * verbreiteten Umsetzungen nehmen, und ein Schalter, den niemand dreht, ist eine
+     * Zeile Anleitung mehr fuer nichts.
+     */
+    private static final java.time.Duration ANFRAGE_GUELTIG = java.time.Duration.ofMinutes(1);
+
     private final Rasterplan plan = Rasterplan.marktstadt();
     private final MarktstadtGenerator generator = new MarktstadtGenerator(plan);
 
@@ -92,6 +101,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Besitzbuch buch;
     private ParzellenBefehle befehle;
     private WarpBefehle warpBefehle;
+    private RueckwegBefehle rueckwegBefehle;
+    private AnfragenBefehle anfragenBefehle;
+    /** Die eine Stelle, durch die jeder Teleport laeuft - auch /freimarken parzelle. */
+    private Reise reise;
+    private Aufwaermzeit aufwaermzeit;
     private boolean fluechtig;
     /**
      * Alle gebauten Welten unter ihrem Namen.
@@ -192,6 +206,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // Geplante Spruenge zuerst: Eine Aufgabe, die nach dem Abschalten feuert, haette
+        // keine Reise mehr, durch die sie laufen koennte.
+        if (aufwaermzeit != null) {
+            aufwaermzeit.brichAllesAb();
+        }
         if (datenbank != null) {
             datenbank.close();
             datenbank = null;
@@ -301,12 +320,34 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     "Stand, Preise und Welt des Freimarkenbunds", List.of("fm")));
             // /p und /konto stehen so im Plan (Abschnitt 11, [entschieden]); /pz bleibt
             // als zweite Kurzform, weil sie schon im Umlauf ist.
+            //
+            // Zweispurig deutsch und englisch [entschieden 02.11.2026]: Viele Spieler
+            // kommen von englischsprachigen Servern und tippen /plot und /balance, bevor
+            // sie /parzelle lesen. Ein zweiter Name kostet eine Zeile; eine Fehlmeldung
+            // auf einen Befehl, den jeder kennt, kostet den ersten Eindruck. Die Sprache
+            // der MELDUNGEN ist davon unberuehrt - sie haengt an der Sprachdatei aus Plan
+            // Abschnitt 13 und wird spaeter je Spieler waehlbar.
             angemeldet.addAll(verzeichnis.register(befehle.parzelle(),
-                    "Parzellen nehmen, ansehen und verwalten", List.of("p", "pz")));
+                    "Parzellen nehmen, ansehen und verwalten",
+                    List.of("p", "pz", "plot")));
             angemeldet.addAll(verzeichnis.register(befehle.mark(),
-                    "Dein Guthaben in Mark", List.of("konto")));
+                    "Dein Guthaben in Mark", List.of("konto", "balance", "bal")));
             angemeldet.addAll(verzeichnis.register(warpBefehle.warp(),
                     "Reisen zwischen den Welten des Freimarkenbunds"));
+            angemeldet.addAll(verzeichnis.register(rueckwegBefehle.zurueck(),
+                    "Zurueck zum letzten Ort - nach Tod, Reise oder Teleport",
+                    List.of("back")));
+            angemeldet.addAll(verzeichnis.register(anfragenBefehle.tpa(),
+                    "Frage einen Spieler, ob du zu ihm kommen darfst"));
+            angemeldet.addAll(verzeichnis.register(anfragenBefehle.tpahere(),
+                    "Lade einen Spieler ein, zu dir zu kommen",
+                    List.of("tpaher", "einladen")));
+            // Die Kurzformen sind die Schreibweisen aus dem Chat: Wer tpaaccept tippt,
+            // soll nicht lesen, dass es den Befehl nicht gibt.
+            angemeldet.addAll(verzeichnis.register(anfragenBefehle.tpaccept(),
+                    "Eine Teleportanfrage annehmen", List.of("tpaaccept", "annehmen")));
+            angemeldet.addAll(verzeichnis.register(anfragenBefehle.tpdeny(),
+                    "Teleportanfragen ablehnen", List.of("tpdecline", "ablehnen")));
 
             // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
             // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein
@@ -494,9 +535,17 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * festzustellen, worauf man zurueckstellen muesste.
      */
     private void richteReisenEin(String ankunftsweltName) {
-        Reise reise = new Reise(getLogger());
+        var rueckweg = new Rueckweg();
+        var offeneAnfragen = new Anfragen(ANFRAGE_GUELTIG);
+        aufwaermzeit = new Aufwaermzeit(this);
+        getServer().getPluginManager().registerEvents(aufwaermzeit, this);
+        reise = new Reise(getLogger(), rueckweg, aufwaermzeit);
         var verzeichnis = Warpverzeichnis.ausWelten(List.copyOf(welten.keySet()));
         warpBefehle = new WarpBefehle(verzeichnis, welten, reise);
+        rueckwegBefehle = new RueckwegBefehle(rueckweg, reise);
+        anfragenBefehle = new AnfragenBefehle(offeneAnfragen, reise);
+        getServer().getPluginManager().registerEvents(
+                new Rueckwegwache(rueckweg, offeneAnfragen), this);
 
         Set<String> eigene = welten.values().stream()
                 .map(w -> w.key().asString())
@@ -805,9 +854,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 plan.mitteX(parzelleX) + 0.5, Stadtboden.BODEN + 1,
                 plan.mitteZ(parzelleZ) + 0.5);
         if (empfaenger instanceof Player spieler) {
-            spieler.teleportAsync(ziel);
-            empfaenger.sendMessage(Component.text(
-                    "Unterwegs zu Parzelle " + parzelleX + "/" + parzelleZ, NamedTextColor.GREEN));
+            // Durch die Reise und nicht mit einem eigenen teleportAsync: Das war bis zum
+            // 02.11.2026 der einzige Teleport ohne Standprobe, ohne Abklingzeit und ohne
+            // Auswertung des Ergebnisses - und seit es /zurueck gibt, muesste er sich
+            // ausserdem gemerkt werden, sonst fuehrt /zurueck an die Stelle davor.
+            reise.fuehre(spieler, ziel, "Parzelle " + parzelleX + "/" + parzelleZ);
         } else {
             empfaenger.sendMessage(Component.text(
                     "Parzelle " + parzelleX + "/" + parzelleZ + " liegt bei "

@@ -77,7 +77,10 @@ final class Torwache implements Listener {
             }
             World ziel = welten.get(angabe.name());
             if (ziel != null) {
-                reise.fuehre(ereignis.getPlayer(), ziel, angabe.name());
+                // Der Torquader als Aufwaermbereich: Man laeuft in ein Tor hinein, und
+                // der naechste Schritt liegt noch darin. Mit „ein Block" braeche die
+                // Wartezeit genau bei dem Schritt ab, mit dem man angekommen ist.
+                reise.fuehre(ereignis.getPlayer(), ziel, angabe.name(), tor);
             }
             return;
         }

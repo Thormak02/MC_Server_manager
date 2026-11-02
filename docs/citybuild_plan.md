@@ -279,8 +279,8 @@ statt nur anders auszusehen. [empfohlen]
 
 ### 4.3 Wie man zwischen den Welten reist [entschieden 02.11.2026]
 
-Acht Welten stehen, und ohne diesen Abschnitt kommt niemand hin. Entschieden sind **zwei
-Wege, kein dritter**:
+Acht Welten stehen, und ohne diesen Abschnitt kommt niemand hin. In eine **Welt** führen
+**zwei Wege, kein dritter**:
 
 - **Portale am Bundesmarkt.** Der Hauptspawn in Altfurt bekommt ein Portal je Welt. Das ist
   der Weg, den ein Neuer findet, ohne einen Befehl zu kennen — er sieht, wohin es geht, und
@@ -314,12 +314,11 @@ Ankunftspunkten wäre eine zweite Wahrheit.
 
 **Gebaut am 02.11.2026** (Schritt 3, Teil C). Was dabei entschieden oder gemessen wurde:
 
-- **Angekommen wird ohne Zuhörer.** `setRespawnWorld(altfurt)` nach dem Weltenbau macht
-  Altfurt zum Erscheinungsort für jeden, der neu ist oder ohne Bett stirbt — das ist
-  derselbe Mechanismus, und deshalb braucht es für beides keine Zeile Ereigniscode. Der
-  Aufruf muss *hinter* den Weltenbau, sonst fällt die Dimensionssuche auf die Überwelt
-  zurück. Er ist dauerhaft (er schreibt in die `level.dat` der Hauptwelt), also nennt das
-  Protokoll die vorige Welt — gemessen stand sie auf `freimarken:marktstadt`.
+- **Angekommen wird über `setRespawnWorld(altfurt)`** nach dem Weltenbau. Das macht
+  Altfurt zum Erscheinungsort für jeden, der neu ist. Der Aufruf muss *hinter* den
+  Weltenbau, sonst fällt die Dimensionssuche auf die Überwelt zurück. Er ist dauerhaft (er
+  schreibt in die `level.dat` der Hauptwelt), also nennt das Protokoll die vorige Welt —
+  gemessen stand sie auf `freimarken:marktstadt`.
 - **Einen Zuhörer braucht nur der Fall daneben**: Wer in einer Welt ausgeloggt war, die es
   nicht mehr gibt, bekommt von Paper hart `minecraft:overworld` eingesetzt — mit den *alten*
   Koordinaten. `PlayerJoinEvent` käme dafür zu spät, `PlayerLoginEvent` hat keinen
@@ -331,8 +330,16 @@ Ankunftspunkten wäre eine zweite Wahrheit.
   Altfurt liegt unter Wasser** (Boden y 58, Wasser bis y 62) — genau dorthin setzt
   `Weltenbau` bei einer frischen Welt den Spawn, wenn der vorige außerhalb der Grenze lag.
   Jede Reise läuft deshalb durch eine Standprobe: tragender Boden, zwei durchquerbare
-  Blöcke darüber, nichts Schädliches, ringweise bis acht Blöcke weit. Ein Grasbüschel ist
-  ausdrücklich erlaubt — die erste Fassung verlangte Luft und hätte jede Wiese abgelehnt.
+  Blöcke darüber, nichts Schädliches. Ein Grasbüschel ist ausdrücklich erlaubt — die erste
+  Fassung verlangte Luft und hätte jede Wiese abgelehnt.
+
+  **Geprüft wird immer, gesucht nur am Erscheinungspunkt einer Welt.** Dort ist kein
+  bestimmter Ort gemeint („nach Kornmark", nicht „auf diesen Block"), also darf ringweise
+  bis acht Blöcke weit gesucht werden. Wo der Ort feststeht — `/zurueck`, `/tpa`,
+  `/freimarken parzelle` — wird **abgesagt statt verschoben**: Eine Suche sprang auf den
+  höchsten Block der Säule und schickte damit einen Rückweg aus einer Höhle an die
+  Oberfläche und eine Todesstelle neben einem Lavasee aufs Netherdach. Genau das ist der
+  bei EssentialsX belegte Fehler (Ausgabe 3318, lange als „wontfix" geführt).
 - **Das Plugin verschiebt keinen Erscheinungspunkt.** Es misst ihn beim Start und gibt bei
   Bedarf ein kopierfertiges `setworldspawn` aus. Ein Programm, das ihn verschiebt,
   verschiebt bei jedem Start, wo alle ankommen — unumkehrbar, weil der alte Punkt danach
@@ -385,6 +392,108 @@ Ebenfalls offen: spielereigene Warps (`/warp setzen`) samt der Absage auf einen 
 Namen — sie gehören zur Rangleiter ([11.1](#111-sprechende-befehle-mit-vervollständigung));
 ein Preis für die Reise, denn der Plan nennt an keiner Stelle einen Betrag; und Reittiere
 mitzunehmen, was eine Zustandsmaschine wäre und kein Reiseweg.
+
+### 4.3a Sterben, zurückkehren, besuchen [entschieden 02.11.2026]
+
+**Kein eigener Spawnpunkt im Bett.** Wer stirbt, erscheint **immer in Altfurt** — egal, wo
+er gestorben ist. Bett, Respawn-Anker und `/spawnpoint` setzen keinen Punkt mehr; das Recht
+`freimarken.spawnpunkt.setzen` öffnet allein `/spawnpoint` für den Betreiber. Geschlafen
+werden darf weiter, die Nacht wird übersprungen — gesperrt ist nur das Setzen des Punktes.
+
+Das braucht **zwei** Haken, nicht einen, und das ist gemessen: `setRespawnWorld` wirkt nur
+im Standardzweig, ein vorhandener Punkt aus Bett, Anker oder Befehl gewinnt davor. Der
+erste Haken (`PlayerSetSpawnEvent`) verhindert, dass einer gesetzt wird; der zweite
+(`PlayerRespawnEvent`, nur bei `DEATH`) biegt um, was trotzdem gesetzt wurde. Der zweite
+allein wäre technisch genug — aber dann sagte das Spiel beim Schlafen weiterhin „Respawn
+point set", und das wäre eine Lüge. Die Vanilla-Meldung wird deshalb ausdrücklich
+abgeschaltet und durch eine eigene ersetzt.
+
+`END_PORTAL` bleibt unangetastet: Wer durch das Rückportal aus dem Ende geht, will aus dem
+Ende heraus und nicht nach Altfurt. Ein Filter, der das verwechselt, ist der typische
+Fehler solcher Zuhörer.
+
+Der Preis dieser Entscheidung ist benannt: Wer im Nether oder in Kornmark stirbt, steht
+danach in einer anderen Welt und muss über ein Tor, `/warp` oder `/zurueck` zurück. Das ist
+der Grund, warum es `/zurueck` gibt.
+
+**`/zurueck` (`/back`)** führt an den Ort, an dem der Spieler zuletzt war: vor einer Reise,
+vor einem Teleport, oder an die Stelle, an der er gestorben ist. Ohne Ausnahme für einen
+Tod durch einen anderen Spieler — die Gegenfassung ist verbreitet, braucht aber eine
+Abfrage des Töters, ein Umgehungsrecht und eine Erklärung, und solange es keinen Kampfmodus
+und keine Arena gibt, wäre das Vorbauen.
+
+Gemerkt wird an **einer** Stelle: in `Reise`, vor jedem Teleport — und zusätzlich beim Tod,
+denn der läuft nicht durch `Reise`. Das erspart einen Zuhörer auf `PlayerTeleportEvent` und
+damit die ganze Frage, welche Teleportursachen zählen; ein Anti-Cheat, das einen Spieler
+zurücksetzt, meldet `PLUGIN` und hätte den Rückweg sonst überschrieben. Dass zweimal
+`/zurueck` wieder am Ausgangspunkt endet, steht nirgends als Regel — es folgt daraus.
+
+Der Rückweg lebt **nur im Speicher** und wird beim Abmelden vergessen. Ein Rückweg, der
+einen Neustart überlebt, führt Tage später an eine Stelle, von der niemand mehr weiß, warum
+sie gemerkt wurde.
+
+**`/tpa <spieler>`** fragt „ich komme zu dir", **`/tpahere <spieler>`** lädt ein „komm zu
+mir"; beantwortet wird beides mit `/tpaccept` oder `/tpdeny`.
+
+Die Trennlinie zum Missbrauch liegt **nicht in der Richtung**, sondern darin, dass **wer
+bewegt wird, zustimmt**: bei `/tpa` der Fragende selbst (er hat ja gefragt), bei `/tpahere`
+der Eingeladene (er nimmt an). Niemand wird gegen seinen Willen gezogen. Was es deshalb
+trotzdem nicht gibt, ist `/tpaall`: Ein Befehl, der alle zieht, wird von einem Einzigen
+benutzt und von allen anderen erduldet.
+
+Wer wandert und wer bleibt, steht in der **Anfrage** und nicht im Befehl — so muss
+`/tpaccept` die Richtung nicht erraten, und sie wird an einer Stelle entschieden. Der
+Zielort wird erst beim Annehmen geholt: Dann ist er frisch, und sein Chunk ist geladen, weil
+der Bleibende darin steht. Eine Anfrage steht eine Minute. Mehrere Fragende an denselben
+Spieler bleiben **alle** stehen, und `/tpaccept` nennt, wen es angenommen hat — die neueste
+zu nehmen und die übrigen wegzuwerfen hieße, dass eine Anfrage lautlos verschwindet. „Komm
+zu mir" und „ich komme zu dir" sind zwei verschiedene Fragen an dieselbe Person, und beide
+darf man stellen.
+
+Beides darf **jeder** (`freimarken.zurueck`, `freimarken.tpa`, Vorgabe an). Bei `/tpa` gibt
+es nichts zu rationieren, weil das Ziel zustimmen muss; eine Rangbindung ist jederzeit ohne
+Codeänderung nachzuholen, indem das Recht auf eine Gruppe gelegt wird.
+
+**Jeder Teleport hat drei Sekunden Wartezeit** [entschieden 02.11.2026]. Bewegung **und**
+Schaden brechen sie ab. Der Grund ist nicht die Platte, sondern das Spiel: Ohne sie ist
+jeder Teleport ein Fluchtweg — wer verfolgt wird, tippt `/warp altfurt` und ist weg, und
+ein Kampf hat dann keinen Ausgang mehr, sondern nur noch einen Abbruch. Die Abklingzeit
+zwischen zwei Reisen hilft dagegen nicht: Sie begrenzt, wie *oft* man reist, nicht *ob* man
+mitten im Kampf verschwindet.
+
+Drei Dinge daran sind nicht beliebig:
+
+- **Bleiben, nicht stillstehen.** Abgebrochen wird, wer den Bereich verlässt, in dem er
+  angefangen hat — nicht, wer sich darin bewegt. Bei einem Befehl ist das der eine Block,
+  auf dem er steht; **bei einem Tor der ganze Torquader**. Man läuft in ein Tor hinein, und
+  der nächste Schritt liegt noch darin: Eine Regel „ein Block" bräche genau bei dem Schritt
+  ab, mit dem man angekommen ist, und niemand käme je durch. So verhält sich ein Tor wie
+  ein Portal — ein Netherportal verlangt vier Sekunden Aufenthalt, und das hat noch
+  niemandem erklärt werden müssen.
+- **Schaden bricht auch ab.** Bewegung allein ließe eine Lücke: Wer eingekeilt in einer Ecke
+  steht und geschlagen wird, bewegt sich durch Rückstoß nicht immer einen ganzen Block
+  weit — und genau dann wäre der Teleport doch ein Fluchtweg.
+- **Geprüft wird zweimal**, vor der Wartezeit und wenn es losgeht. In drei Sekunden kann der
+  Boden am Ziel abgebaut, Lava geflossen oder die Welt entladen worden sein, und die erste
+  Prüfung sagt darüber nichts mehr aus. Der Rückweg wird erst beim Sprung gemerkt — ein
+  abgebrochenes Aufwärmen soll keinen hinterlassen.
+
+`freimarken.sofort` (Vorgabe: Betreiber) überspringt die Wartezeit. Das ist kein Vorrecht,
+sondern Werkzeugpflege: `/freimarken parzelle` soll nicht abbrechen, weil man sich dabei
+umsieht.
+
+**Kostenlos, bis es Zahlen gibt.** [1032](#8-geldsenken) führt „Reparatur, Teleport,
+weitere Heimatpunkte" als laufende Geldsenke, nennt aber keinen Betrag, und
+[4.4](#44-wie-vorgeneriert-wird-entschieden-02112026) erklärt einen erfundenen Preis
+ausdrücklich für falsch. Ein Preis für `/zurueck` und `/tpa` kommt, wenn die Kasse läuft
+und es Zahlen aus dem Betrieb gibt.
+
+**Heimatpunkte sind davon unberührt.** Der Plan führt sie durchgängig als *selbstgesetzte
+Reiseziele* ([11.1](#111-sprechende-befehle-mit-vervollständigung), [9](#9-ränge)), an
+keiner Stelle als Erscheinungsort nach dem Tod. „Kein Spawnpunkt im Bett" nimmt niemandem
+einen Heimatpunkt.
+
+---
 
 ### 4.4 Wie vorgeneriert wird [entschieden 02.11.2026]
 
@@ -1194,13 +1303,29 @@ Zweig. Umlautfrei, damit sie sich tippen lassen; kurze Alias daneben.
 | `/konto` | (Stand), `verlauf`, `zahlen <spieler> <betrag>`, `tauschen <betrag>` |
 | `/zuhause` (`/home`) | `<name>`, `setzen <name>`, `entfernen <name>`, `liste` |
 | `/warp` | `<name>`, `setzen <name>`, `entfernen <name>` |
-| `/zurueck` (`/back`) | — |
+| `/zurueck` (`/back`) | — — führt an den letzten Ort: vor Reise, vor Teleport, oder zur Todesstelle ([4.3a](#43a-sterben-zurückkehren-besuchen-entschieden-02112026)) |
+| `/tpa` | `<spieler>` — „ich komme zu dir" |
+| `/tpahere` (`/tpaher`, `/einladen`) | `<spieler>` — „komm zu mir"; der Eingeladene stimmt zu |
+| `/tpaccept` (`/tpaaccept`, `/annehmen`) | — |
+| `/tpdeny` (`/tpdecline`, `/ablehnen`) | — |
 | `/beruf` | `liste`, `waehlen <beruf>`, `verlassen <beruf>`, `stand` |
 | `/menu` | öffnet das Hauptmenü |
 | `/hilfe`, `/regeln` | — |
 
 Eigene Heimatpunkte und eigene Warps gehören zur Rangleiter: Ihre Zahl steigt mit dem Rang,
 zusätzliche sind über Goldmark erreichbar.
+
+**Jeder Befehl hat beide Namen, deutsch und englisch** [entschieden 02.11.2026]. Viele
+Spieler kommen von englischsprachigen Servern und tippen `/plot` und `/balance`, bevor sie
+`/parzelle` lesen; eine Fehlmeldung auf einen Befehl, den jeder kennt, kostet den ersten
+Eindruck, ein zweiter Name kostet eine Zeile. Gebaut: `/parzelle` auch als `/plot`, `/mark`
+auch als `/balance` und `/bal`, `/zurueck` auch als `/back`.
+
+Davon unberührt ist die **Sprache der Meldungen**. Sie hängt an der Sprachdatei aus
+[13](#13-betrieb) — heute stehen über hundert Farb- und Textstellen direkt im Quelltext.
+Sobald sie in einer Sprachdatei liegen, wird die Sprache **je Spieler wählbar**; bis dahin
+sind die Meldungen deutsch und die Befehlsnamen zweispurig. Die Reihenfolge ist Absicht:
+Zwei Namen sind eine Zeile, zwei Sprachen sind ein Schritt.
 
 ### 11.2 Menüs statt Befehle
 
