@@ -68,6 +68,19 @@ kasse:
   # gratis; dieser Betrag entscheidet, wie weit es ohne Verdienen reicht.
   startguthaben: 50000
 
+# Reisen zwischen den Welten (Plan 4.3): zwei Wege, kein dritter - die Tore am
+# Bundesmarkt und /warp <name>. Selbstgebaute Nether- und Endportale werden gesperrt:
+# Sie fuehren nicht in freimarken:nether, sondern in die Haupt-Nether des Servers, eine
+# Welt ohne Grenze, ohne Schutz und ohne Vorgenerierung.
+reisen:
+  # Die Welt, in der die Tore stehen - und in der ein neuer Spieler ankommt. Plan
+  # Abschnitt 2: "Hauptstadt (Welt mit Spawn) = Altfurt".
+  #
+  # Diese Zeile setzt die Respawn-Welt des Servers. Der Eintrag wird dauerhaft in die
+  # level.dat der Hauptwelt geschrieben; das Protokoll nennt beim Start die vorige Welt,
+  # damit sie zurueckzustellen ist. Leer heisst: nicht anfassen.
+  ankunftswelt: altfurt
+
 welten:
   # Eine Welt je Eintrag - die Reihenfolge hier ist die Reihenfolge beim Anlegen.
   #
@@ -90,6 +103,22 @@ welten:
   #           Marktstadt, die ohne Grenze keine Parzellennummern hat und dann auf den
   #           Planwert 3000 zurueckfaellt. Die Grenze waechst nur nach aussen, nie nach
   #           innen. Ein Punkt trennt hier keine Tausender: 6.000 liest YAML als 6.
+  # spielmodus: ueberleben (Vorgabe), abenteuer, kreativ, zuschauer
+  #           Wird beim Betreten der Welt gesetzt - Minecraft kennt keinen Spielmodus je
+  #           Welt. Wer das Recht freimarken.spielmodus.frei hat, wird nie umgestellt;
+  #           ohne diese Ausnahme wuerde ein Baumeister im Kreativmodus beim Betreten
+  #           Altfurts mitten im Bauen heruntergestuft.
+  # tor:      Der Quader am Bundesmarkt, der HIERHER fuehrt - zwei Ecken, je drei ganze
+  #           Zahlen, beide eingeschlossen:
+  #               tor:
+  #                 von: [58, 71, 0]
+  #                 bis: [60, 73, 0]
+  #           Das Tor steht am Eintrag der ZIELwelt und nicht in einer eigenen Liste:
+  #           So bleibt eine neue Welt ein Eintrag und ist nicht ein Eintrag plus ein
+  #           vergessenes Tor. Geprueft wird beim Start, dass kein Tor in der
+  #           Ankunftswelt selbst steht, keines ausserhalb ihrer Grenze liegt und keine
+  #           zwei Tore sich Bloecke teilen - sonst entschiede die Reihenfolge der
+  #           Eintraege, wohin ein Spieler reist.
   #
   # Nicht enthalten: wolkenwerder. Es waere eine Welt aus Leere, in der jeder Ankommende
   # faellt - die Startinsel und die Skyblock-Mechaniken kommen mit Schritt 11.
@@ -99,6 +128,19 @@ welten:
   # einzeln; der Block muss dann von Hand hierher.
   marktstadt:
     art: raster
+
+    # Das Tor steht am Bundesmarkt in Altfurt und fuehrt HIERHER. Die Reihe ist am
+    # 02.11.2026 eingemessen: flachstes trockenes 32x32 um den Ursprung ist 56/-4 bis
+    # 87/27, Boden y 70..72, durchgehend red_sand. Die Tore stehen auf z=0, je drei
+    # Bloecke breit mit einem Block Abstand; y 71..73 deckt jeden Stand in der Reihe,
+    # denn der Boden wechselt dort zwischen 70 und 71.
+    #
+    # Das Mauerwerk ist von Hand zu bauen (Plan 2.1 nennt die Gebaeude). Bis dahin ist
+    # das Tor eine unsichtbare Tuer - das Protokoll sagt beim Start, welche Tore noch
+    # ohne Bauwerk sind.
+    tor:
+      von: [58, 71, 0]
+      bis: [60, 73, 0]
     # Wunschkante der Weltgrenze in Bloecken; Plan Abschnitt 4 nennt 3.000.
     #
     # Gerechnet wird daraus ABGERUNDET auf ganze Rasterzellen (64 Parzelle + 7 Weg = 71)
@@ -124,32 +166,56 @@ welten:
   altfurt:
     art: gewoehnlich
     kante: 800
+    # Abenteuer in ganz Altfurt [entschieden 02.11.2026]. Altfurt wird nie
+    # zurueckgesetzt - solange hier Ueberleben gilt, kann jeder Besucher im Rohbau
+    # graben, und jedes Loch bleibt. Der Modus ist diese Zeile, ein abgebautes Stadttor
+    # nicht. Baumeister bekommen freimarken.spielmodus.frei.
+    spielmodus: abenteuer
+    # Kein tor: Hier stehen die Tore, ein Tor nach nebenan waere keines.
 
   # ~320 Freistaedte auf natuerlichem Gelaende.
   freistaedte:
     art: gewoehnlich
     kante: 6000
+    tor:
+      von: [62, 71, 0]
+      bis: [64, 73, 0]
 
   # Archipel mit eigenem Angelgut (Plan 4.1).
   hafenwerder:
     art: gewoehnlich
     kante: 5000
+    # Plan 2.1: "Hafen von Altfurt - Tor nach Hafenwerder".
+    tor:
+      von: [66, 71, 0]
+      bis: [68, 73, 0]
 
   # Freibau; eine Sicherung kostet 5.000 Mark.
   hochwald:
     art: gewoehnlich
     kante: 5000
+    # Plan 2.1: "Forsttor - Tor zum Hochwald".
+    tor:
+      von: [70, 71, 0]
+      bis: [72, 73, 0]
 
   # Farmwelt. Wird bei jeder neuen Minecraft-Version zurueckgesetzt und neu
   # vorgeneriert - deshalb haengt an ihr kein Besitz (Plan 4.2).
   kornmark:
     art: gewoehnlich
     kante: 2000
+    # Plan 2.1: "Kornpforte - Tor nach Kornmark".
+    tor:
+      von: [74, 71, 0]
+      bis: [76, 73, 0]
 
   nether:
     art: gewoehnlich
     umgebung: nether
     kante: 2000
+    tor:
+      von: [78, 71, 0]
+      bis: [80, 73, 0]
 
   # "end" und nicht "ende": Der Schluessel ist der Weltname, und den fuehrt Plan
   # Abschnitt 4 so. Weltnamen sind nach Plan 12a.6 nur lesbar - an ihnen haengen
@@ -158,3 +224,6 @@ welten:
     art: gewoehnlich
     umgebung: ende
     kante: 2000
+    tor:
+      von: [82, 71, 0]
+      bis: [84, 73, 0]

@@ -3,6 +3,8 @@ package de.freimarken.paper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.freimarken.kern.Quader;
+import org.bukkit.GameMode;
 import org.bukkit.World;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.DisplayName;
@@ -20,7 +22,7 @@ class WeltenlisteTest {
     private static Weltenliste.Ergebnis lies(String yaml) {
         return Weltenliste.ausKonfiguration(
                 YamlConfiguration.loadConfiguration(new java.io.StringReader(yaml))
-                        .getConfigurationSection("welten"), "marktstadt");
+                        .getConfigurationSection("welten"), "marktstadt", "altfurt");
     }
 
     @Test
@@ -184,7 +186,7 @@ class WeltenlisteTest {
             var datei = YamlConfiguration.loadConfiguration(new java.io.InputStreamReader(
                     strom, java.nio.charset.StandardCharsets.UTF_8));
             var ergebnis = Weltenliste.ausKonfiguration(
-                    datei.getConfigurationSection("welten"), "marktstadt");
+                    datei.getConfigurationSection("welten"), "marktstadt", "altfurt");
 
             assertTrue(ergebnis.klagen().isEmpty(),
                     "die ausgelieferte Datei klagt: " + ergebnis.klagen());
@@ -203,6 +205,18 @@ class WeltenlisteTest {
                             "hafenwerder", "hochwald", "kornmark", "nether", "end"),
                     ergebnis.welten().stream().map(Weltangabe::name).toList(),
                     "die Weltnamen aus Plan Abschnitt 4");
+
+            // Teil C: Altfurt ist Abenteuer, und jede Welt ausser Altfurt hat ein Tor.
+            var altfurt = ergebnis.welten().stream()
+                    .filter(w -> w.name().equals("altfurt")).findFirst().orElseThrow();
+            assertEquals(GameMode.ADVENTURE, altfurt.spielmodus(),
+                    "Plan Abschnitt 4 fuehrt Altfurt als Abenteuer");
+            assertTrue(!altfurt.hatTor(), "in Altfurt stehen die Tore, keines fuehrt hinein");
+            assertEquals(7, ergebnis.welten().stream().filter(Weltangabe::hatTor).count(),
+                    "sieben Ziele, sieben Tore");
+            ergebnis.welten().stream().filter(w -> !w.name().equals("altfurt"))
+                    .forEach(w -> assertTrue(w.hatTor(),
+                            "ohne Tor kaeme man nur mit /warp hin: " + w.name()));
         }
     }
 
@@ -354,7 +368,7 @@ class WeltenlisteTest {
         eigene.setDefaults(vorgabe);
 
         var ergebnis = Weltenliste.ausKonfiguration(
-                eigene.getConfigurationSection("welten"), "marktstadt");
+                eigene.getConfigurationSection("welten"), "marktstadt", "altfurt");
 
         assertEquals(java.util.List.of("marktstadt"),
                 ergebnis.welten().stream().map(Weltangabe::name).toList());
@@ -362,6 +376,205 @@ class WeltenlisteTest {
         assertTrue(ergebnis.klagen().get(0).contains("welten.kornmark"),
                 ergebnis.klagen().get(0));
         assertTrue(ergebnis.klagen().get(0).contains("von Hand"), ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Der Spielmodus steht je Welt, Vorgabe ist Ueberleben")
+    void spielmodusJeWelt() {
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                    spielmodus: abenteuer
+                  kornmark:
+                    art: gewoehnlich
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+        assertEquals(GameMode.ADVENTURE, ergebnis.welten().get(0).spielmodus());
+        assertEquals(GameMode.SURVIVAL, ergebnis.welten().get(1).spielmodus(),
+                "ohne Angabe gilt Ueberleben - so fuehrt Plan 4 alle Welten ausser Altfurt");
+    }
+
+    @Test
+    @DisplayName("Ein unbekannter Spielmodus klagt und kostet nicht die Welt")
+    void unbekannterSpielmodus() {
+        var ergebnis = lies("""
+                welten:
+                  kornmark:
+                    art: gewoehnlich
+                    spielmodus: hartkern
+                """);
+
+        assertEquals(1, ergebnis.welten().size(), "die Welt bleibt");
+        assertEquals(GameMode.SURVIVAL, ergebnis.welten().get(0).spielmodus());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("hartkern"), ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Ein Tor steht am Eintrag der Zielwelt")
+    void torAmEintragDerZielwelt() {
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                    kante: 800
+                  kornmark:
+                    art: gewoehnlich
+                    tor:
+                      von: [74, 71, 0]
+                      bis: [76, 73, 0]
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+        assertTrue(!ergebnis.welten().get(0).hatTor(), "Altfurt selbst hat keines");
+        assertEquals(new Quader(74, 71, 0, 76, 73, 0), ergebnis.welten().get(1).tor());
+    }
+
+    @Test
+    @DisplayName("Ein halbes Tor gibt es nicht")
+    void halbesTor() {
+        // Mit einer geratenen zweiten Ecke staende irgendwo in Altfurt ein Tor, das
+        // niemand dort haben wollte - und es wuerde ausloesen.
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                    kante: 800
+                  kornmark:
+                    art: gewoehnlich
+                    tor:
+                      von: [74, 71, 0]
+                """);
+
+        assertEquals(2, ergebnis.welten().size(), "die Welten bleiben");
+        assertTrue(!ergebnis.welten().get(1).hatTor());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("tor.bis fehlt"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Eine Torecke braucht drei ganze Zahlen")
+    void torEckeBrauchtDreiGanzeZahlen() {
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                    kante: 800
+                  kornmark:
+                    art: gewoehnlich
+                    tor:
+                      von: [74, 71]
+                      bis: [76, 73, 0]
+                  nether:
+                    art: gewoehnlich
+                    umgebung: nether
+                    tor:
+                      von: [78, 71.5, 0]
+                      bis: [80, 73, 0]
+                """);
+
+        assertTrue(!ergebnis.welten().get(1).hatTor());
+        assertTrue(!ergebnis.welten().get(2).hatTor());
+        assertEquals(2, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("genau drei Zahlen"),
+                ergebnis.klagen().get(0));
+        assertTrue(ergebnis.klagen().get(1).contains("keine ganze Zahl"),
+                ergebnis.klagen().get(1));
+    }
+
+    @Test
+    @DisplayName("Ein Tor in der Ankunftswelt selbst ist ein Tor nach nebenan")
+    void torInDerAnkunftsweltSelbst() {
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                    kante: 800
+                    tor:
+                      von: [58, 71, 0]
+                      bis: [60, 73, 0]
+                """);
+
+        assertEquals(1, ergebnis.welten().size());
+        assertTrue(!ergebnis.welten().get(0).hatTor());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("nach nebenan"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Ein Tor hinter der Grenze der Ankunftswelt fehlt sonst stumm")
+    void torAusserhalbDerGrenze() {
+        // Altfurt hat die Kante 800 um 0/0, also Bloecke -400..399. Ein Tor bei 500
+        // steht dort, wo niemand hinkommt - und ohne diese Klage merkt das niemand.
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                    kante: 800
+                  kornmark:
+                    art: gewoehnlich
+                    tor:
+                      von: [500, 71, 0]
+                      bis: [502, 73, 0]
+                """);
+
+        assertTrue(!ergebnis.welten().get(1).hatTor());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("ausserhalb der eingetragenen Grenze"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Zwei Tore mit gemeinsamen Bloecken werden beide verworfen")
+    void toreDuerfenSichNichtSchneiden() {
+        // Sonst entscheidet die Reihenfolge der Eintraege, wohin ein Spieler reist. Beide
+        // zu verwerfen ist richtig: Welches von zwei vertippten Toren das gemeinte war,
+        // weiss das Programm nicht.
+        var ergebnis = lies("""
+                welten:
+                  altfurt:
+                    art: gewoehnlich
+                    kante: 800
+                  kornmark:
+                    art: gewoehnlich
+                    tor:
+                      von: [74, 71, 0]
+                      bis: [76, 73, 0]
+                  hochwald:
+                    art: gewoehnlich
+                    tor:
+                      von: [76, 71, 0]
+                      bis: [78, 73, 0]
+                """);
+
+        assertEquals(3, ergebnis.welten().size(), "die Welten bleiben alle");
+        assertTrue(!ergebnis.welten().get(1).hatTor());
+        assertTrue(!ergebnis.welten().get(2).hatTor());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("Bloecke gemeinsam"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Tore ohne Ankunftswelt haetten keinen Ort")
+    void toreOhneAnkunftswelt() {
+        var ergebnis = lies("""
+                welten:
+                  kornmark:
+                    art: gewoehnlich
+                    tor:
+                      von: [74, 71, 0]
+                      bis: [76, 73, 0]
+                """);
+
+        assertTrue(!ergebnis.welten().get(0).hatTor());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("steht nicht in der Liste"),
+                ergebnis.klagen().get(0));
     }
 
     @Test

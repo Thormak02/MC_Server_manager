@@ -1,10 +1,13 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Grenzregel;
+import de.freimarken.kern.Quader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.bukkit.GameMode;
 import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 
@@ -31,10 +34,12 @@ final class Weltenliste {
     }
 
     /**
-     * @param abschnitt  der Abschnitt {@code welten:}, darf {@code null} sein
-     * @param rasterwelt der Name der einen Welt, die das Parzellenraster tragen darf
+     * @param abschnitt    der Abschnitt {@code welten:}, darf {@code null} sein
+     * @param rasterwelt   der Name der einen Welt, die das Parzellenraster tragen darf
+     * @param ankunftswelt die Welt, in der die Tore stehen - dort landet auch, wer neu ist
      */
-    static Ergebnis ausKonfiguration(ConfigurationSection abschnitt, String rasterwelt) {
+    static Ergebnis ausKonfiguration(ConfigurationSection abschnitt, String rasterwelt,
+                                     String ankunftswelt) {
         List<Weltangabe> welten = new ArrayList<>();
         List<String> klagen = new ArrayList<>();
         if (abschnitt == null) {
@@ -91,9 +96,182 @@ final class Weltenliste {
                 continue;
             }
             welten.add(new Weltangabe(name, umgebung, art, kante(eintrag, name, klagen),
-                    eintrag.getString("sprung-bestaetigt", "").trim()));
+                    eintrag.getString("sprung-bestaetigt", "").trim(),
+                    spielmodus(eintrag, name, klagen),
+                    tor(eintrag, name, klagen)));
         }
+        pruefeTore(welten, ankunftswelt, klagen);
         return new Ergebnis(welten, klagen);
+    }
+
+    /**
+     * Der Spielmodus, in dem ein Spieler diese Welt betritt.
+     *
+     * <p>Vorgabe ist Ueberleben - die Tabelle in Plan Abschnitt 4 fuehrt alle Welten so,
+     * ausser Altfurt. Minecraft kennt keinen Spielmodus je Welt; das Plugin setzt ihn beim
+     * Betreten.
+     */
+    private static GameMode spielmodus(ConfigurationSection eintrag, String name,
+                                       List<String> klagen) {
+        String wort = eintrag.getString("spielmodus");
+        if (wort == null) {
+            return GameMode.SURVIVAL;
+        }
+        GameMode modus = switch (wort.trim().toLowerCase(Locale.ROOT)) {
+            case "ueberleben", "überleben", "survival" -> GameMode.SURVIVAL;
+            case "abenteuer", "adventure" -> GameMode.ADVENTURE;
+            case "kreativ", "creative" -> GameMode.CREATIVE;
+            case "zuschauer", "spectator" -> GameMode.SPECTATOR;
+            default -> null;
+        };
+        if (modus == null) {
+            klagen.add("welten." + name + ".spielmodus ist unbekannt (" + wort + "). Erlaubt"
+                    + " sind ueberleben, abenteuer, kreativ, zuschauer - es gilt"
+                    + " ueberleben.");
+            return GameMode.SURVIVAL;
+        }
+        return modus;
+    }
+
+    /**
+     * Das Tor, das zu dieser Welt fuehrt - oder {@code null}, wenn keines eingetragen ist.
+     *
+     * <p>Zwei Ecken, je drei ganze Zahlen:
+     *
+     * <pre>
+     *   tor:
+     *     von: [80, 72, 2]
+     *     bis: [82, 74, 4]
+     * </pre>
+     *
+     * <p>Ein halbes Tor gibt es nicht: Fehlt eine der beiden Ecken, wird geklagt und kein
+     * Tor gebaut. Mit einer geratenen zweiten Ecke staende irgendwo in Altfurt ein Tor,
+     * das niemand dort haben wollte - und es wuerde ausloesen.
+     */
+    private static Quader tor(ConfigurationSection eintrag, String name,
+                              List<String> klagen) {
+        if (!eintrag.contains("tor")) {
+            return null;
+        }
+        ConfigurationSection abschnitt = eintrag.getConfigurationSection("tor");
+        if (abschnitt == null) {
+            klagen.add("welten." + name + ".tor ist kein Abschnitt - erwartet werden die"
+                    + " Zeilen von und bis, je drei ganze Zahlen. Kein Tor.");
+            return null;
+        }
+        int[] von = ecke(abschnitt, "welten." + name + ".tor.von", klagen);
+        int[] bis = ecke(abschnitt, "welten." + name + ".tor.bis", klagen);
+        if (von == null || bis == null) {
+            return null;
+        }
+        return new Quader(von[0], von[1], von[2], bis[0], bis[1], bis[2]);
+    }
+
+    /** Eine Ecke als drei ganze Zahlen - oder {@code null} mit Klage. */
+    private static int[] ecke(ConfigurationSection abschnitt, String pfad,
+                              List<String> klagen) {
+        String schluessel = pfad.substring(pfad.lastIndexOf('.') + 1);
+        if (!abschnitt.contains(schluessel)) {
+            klagen.add(pfad + " fehlt - ein halbes Tor gibt es nicht. Kein Tor.");
+            return null;
+        }
+        List<?> werte = abschnitt.getList(schluessel);
+        if (werte == null || werte.size() != 3) {
+            klagen.add(pfad + " braucht genau drei Zahlen [x, y, z], nicht "
+                    + abschnitt.get(schluessel) + ". Kein Tor.");
+            return null;
+        }
+        int[] ecke = new int[3];
+        for (int i = 0; i < 3; i++) {
+            if (!(werte.get(i) instanceof Number zahl)
+                    || zahl.doubleValue() != Math.floor(zahl.doubleValue())
+                    || zahl instanceof Double || zahl instanceof Float) {
+                klagen.add(pfad + " enthaelt keine ganze Zahl (" + werte.get(i)
+                        + "). Kein Tor.");
+                return null;
+            }
+            long wert = zahl.longValue();
+            if (Math.abs(wert) > 30_000_000L) {
+                // Paper stuerzt bei einem Teleport jenseits der Weltkoordinaten ab
+                // (PaperMC/Paper#13186). Ein vertippter Quader reicht dafuer.
+                klagen.add(pfad + " liegt jenseits der Weltkoordinaten (" + wert
+                        + "). Kein Tor.");
+                return null;
+            }
+            ecke[i] = (int) wert;
+        }
+        return ecke;
+    }
+
+    /**
+     * Prueft die Tore gegeneinander und gegen die Ankunftswelt.
+     *
+     * <p>Erst hier und nicht im Schleifendurchlauf: Ein Tor ist nur im Verhaeltnis zu den
+     * anderen und zur Ankunftswelt falsch, und die kann in der Datei weiter unten stehen.
+     *
+     * <p>Die Grenze wird gegen die EINGETRAGENE Kante um 0/0 geprueft. Was wirklich gilt,
+     * weiss erst die geladene Welt - diese Pruefung faengt den Vertipper, die zweite
+     * steht in {@code Reise} und faengt den Rest.
+     */
+    private static void pruefeTore(List<Weltangabe> welten, String ankunftswelt,
+                                   List<String> klagen) {
+        List<Weltangabe> mitTor = welten.stream().filter(Weltangabe::hatTor).toList();
+        if (mitTor.isEmpty()) {
+            return;
+        }
+        Weltangabe ankunft = welten.stream()
+                .filter(w -> w.name().equals(ankunftswelt))
+                .findFirst()
+                .orElse(null);
+        if (ankunft == null) {
+            klagen.add("Es sind Tore eingetragen, aber die Ankunftswelt " + ankunftswelt
+                    + " steht nicht in der Liste - die Tore haetten keinen Ort. Kein Tor"
+                    + " wird gebaut.");
+            welten.replaceAll(w -> w.hatTor() ? ohneTor(w) : w);
+            return;
+        }
+        Chunkfeld feld = ankunft.hatGrenze()
+                ? Chunkfeld.ausGrenze(0, 0, ankunft.kante())
+                : null;
+        Set<String> verworfen = new java.util.LinkedHashSet<>();
+        for (Weltangabe welt : mitTor) {
+            if (welt.name().equals(ankunftswelt)) {
+                klagen.add("welten." + ankunftswelt + ".tor fuehrt in die Welt, in der es"
+                        + " steht - ein Tor nach nebenan. Kein Tor.");
+                verworfen.add(welt.name());
+                continue;
+            }
+            if (feld != null && !welt.tor().liegtIn(feld)) {
+                klagen.add("welten." + welt.name() + ".tor liegt bei "
+                        + welt.tor().alsText() + " und damit ausserhalb der eingetragenen"
+                        + " Grenze von " + ankunftswelt + " (Kante " + ankunft.kante()
+                        + " um 0/0). Dort kaeme niemand hin. Kein Tor.");
+                verworfen.add(welt.name());
+            }
+        }
+        for (int i = 0; i < mitTor.size(); i++) {
+            for (int j = i + 1; j < mitTor.size(); j++) {
+                Weltangabe eine = mitTor.get(i);
+                Weltangabe andere = mitTor.get(j);
+                if (eine.tor().schneidet(andere.tor())) {
+                    klagen.add("Die Tore welten." + eine.name() + ".tor und welten."
+                            + andere.name() + ".tor haben Bloecke gemeinsam ("
+                            + eine.tor().alsText() + " und " + andere.tor().alsText()
+                            + "). Dann entscheidet die Reihenfolge der Eintraege, wohin ein"
+                            + " Spieler reist. Beide Tore werden verworfen.");
+                    verworfen.add(eine.name());
+                    verworfen.add(andere.name());
+                }
+            }
+        }
+        if (!verworfen.isEmpty()) {
+            welten.replaceAll(w -> verworfen.contains(w.name()) ? ohneTor(w) : w);
+        }
+    }
+
+    private static Weltangabe ohneTor(Weltangabe welt) {
+        return new Weltangabe(welt.name(), welt.umgebung(), welt.art(), welt.kante(),
+                welt.sprungBestaetigt(), welt.spielmodus(), null);
     }
 
     /**

@@ -312,10 +312,79 @@ Ankunftspunkt, und der ist ihr Erscheinungspunkt — derselbe, den ein Betreiber
 überschreibt ([4.2](#42-erweiterbar-und-portierbar-entschieden)). Eine zweite Liste von
 Ankunftspunkten wäre eine zweite Wahrheit.
 
-**Offen und nicht erfunden**: Wie ein Spieler beim *Beitritt* in Altfurt landet. Die
-Freimarken-Welten sind namensräumig und stehen in keiner Serverliste — die Hauptwelt des
-Servers ist eine andere, und ein neuer Spieler erscheint heute dort. Das gehört zu Teil C
-(Altfurt als Rohbau), weil es ohne einen Platz zum Ankommen keine Antwort hat.
+**Gebaut am 02.11.2026** (Schritt 3, Teil C). Was dabei entschieden oder gemessen wurde:
+
+- **Angekommen wird ohne Zuhörer.** `setRespawnWorld(altfurt)` nach dem Weltenbau macht
+  Altfurt zum Erscheinungsort für jeden, der neu ist oder ohne Bett stirbt — das ist
+  derselbe Mechanismus, und deshalb braucht es für beides keine Zeile Ereigniscode. Der
+  Aufruf muss *hinter* den Weltenbau, sonst fällt die Dimensionssuche auf die Überwelt
+  zurück. Er ist dauerhaft (er schreibt in die `level.dat` der Hauptwelt), also nennt das
+  Protokoll die vorige Welt — gemessen stand sie auf `freimarken:marktstadt`.
+- **Einen Zuhörer braucht nur der Fall daneben**: Wer in einer Welt ausgeloggt war, die es
+  nicht mehr gibt, bekommt von Paper hart `minecraft:overworld` eingesetzt — mit den *alten*
+  Koordinaten. `PlayerJoinEvent` käme dafür zu spät, `PlayerLoginEvent` hat keinen
+  Ortssetzer. Bleibt `AsyncPlayerSpawnLocationEvent`. Dort läuft **keine** Standprobe: Sie
+  liest Blöcke, und das heißt Chunks laden — aus einem fremden Faden nicht erlaubt.
+- **Der Erscheinungspunkt verspricht keinen Boden.** `World#getSpawnLocation` gibt einen
+  Punkt; nur Minecraft selbst sucht beim Beitritt ein 21×21-Feld ab, ein Teleport aus einem
+  Plugin sucht nichts, und `paper-api` 26.3 hat dafür keine Methode. Gemessen: **0/0 in
+  Altfurt liegt unter Wasser** (Boden y 58, Wasser bis y 62) — genau dorthin setzt
+  `Weltenbau` bei einer frischen Welt den Spawn, wenn der vorige außerhalb der Grenze lag.
+  Jede Reise läuft deshalb durch eine Standprobe: tragender Boden, zwei durchquerbare
+  Blöcke darüber, nichts Schädliches, ringweise bis acht Blöcke weit. Ein Grasbüschel ist
+  ausdrücklich erlaubt — die erste Fassung verlangte Luft und hätte jede Wiese abgelehnt.
+- **Das Plugin verschiebt keinen Erscheinungspunkt.** Es misst ihn beim Start und gibt bei
+  Bedarf ein kopierfertiges `setworldspawn` aus. Ein Programm, das ihn verschiebt,
+  verschiebt bei jedem Start, wo alle ankommen — unumkehrbar, weil der alte Punkt danach
+  nirgends mehr steht.
+- **Ein Tor ist ein Quader, kein Portalblock.** Die Quader stehen am Eintrag der *Ziel*welt
+  in der `config.yml`; beim Lesen wird geprüft, dass keines in der Ankunftswelt selbst
+  steht, keines außerhalb ihrer Grenze liegt und keine zwei sich Blöcke teilen — sonst
+  entschiede die Reihenfolge der Einträge, wohin ein Spieler reist. Gesetzte
+  `NETHER_PORTAL`- oder `END_GATEWAY`-Blöcke wären das Gegenteil: Sie erzeugen von sich aus
+  Portale und Chunks in anderen Welten und löschen sich selbst wieder.
+- **Der Torzuhörer prüft als erstes `hasExplicitlyChangedBlock`.** `PlayerMoveEvent` feuert
+  belegbar schon bei zehn Grad Kopfdrehung, bei völlig unveränderten Koordinaten. Advanced
+  Portals filtert an dieser Stelle nachweislich nicht; Multiverse-Portals hat dasselbe
+  Problem seit 2011.
+- **Die Tore werden beim Start gegen das Gelände gemessen.** Die ausgelieferten Werte sind
+  an *einem* Altfurt eingemessen (flachstes trockenes 32×32 um den Ursprung: **56/−4 bis
+  87/27**, Boden y 70–72, durchgehend `red_sand`; Torreihe auf z = 0, sieben Durchgänge je
+  drei Blöcke breit, y 71–73). Ein anderer Startwert, ein anderes Gelände — und die Tore
+  lägen im Berg oder in der Luft. Geprüft wird deshalb je Säule: trägt der Block unter dem
+  Tor, und ist der Durchgang in Fuß- und Kopfhöhe frei? **Nicht** mit der Standprobe: Die
+  sucht den höchsten festen Block und findet damit den Sturz über der Öffnung — so hat sie
+  am 02.11.2026 alle sieben Tore einer gerade gebauten Wand für unbegehbar erklärt.
+- **Beide Wege laufen durch eine Klasse** (`Reise`). Zwei Fassungen derselben Prüfungen
+  hieße, dass eine davon ohne Abklingzeit oder ohne Standprobe reist, und gemerkt würde es
+  an dem Tag, an dem jemand unter Wasser erscheint. Die Abklingzeit kommt zuletzt: Sie
+  antwortet und vermerkt in einem Zug, und wer sie vorher fragt, verbrennt die Sperre für
+  eine Reise, die danach abgelehnt wird.
+- **Zu Pferd geht es nicht.** `teleportAsync` gibt über Weltgrenzen hinweg `false` zurück,
+  und `RETAIN_VEHICLE` ist seit 1.21.10 abgekündigt und wirkt nicht. Gesagt wird es vorher;
+  das Ergebnis des Teleports wird außerdem ausgewertet — sonst bliebe der Spieler stehen und
+  hätte „Unterwegs" gelesen. Angeleinte Tiere bleiben zurück, mit einer Zeile Hinweis.
+- **Selbstgebaute Nether- und Endportale sind gesperrt** [entschieden]. Ein Portal in
+  Altfurt führt *nicht* nach `freimarken:nether`, sondern nach `minecraft:the_nether` —
+  einer Welt ohne Grenze, ohne Schutzwache und ohne Vorgenerierung. Gesperrt wird an drei
+  Stellen (Anzünden, Betreten, Reise), jede mit einer Meldung, die den gültigen Weg nennt:
+  Ohne Meldung ist das Fehlerbild ein Rahmen, der sich nicht anzünden lässt, und das sieht
+  wie ein Serverfehler aus. Das Ende ließe sich auch nicht sauber umlenken — der Rückweg
+  feuert kein `PlayerPortalEvent`, und die Obsidianplattform entstünde als Narbe im
+  Haupt-Ende.
+- **Abenteuer in ganz Altfurt** [entschieden], mit dem Recht `freimarken.spielmodus.frei`
+  für Baumeister und Betreiber. Altfurt wird nie zurückgesetzt; solange dort Überleben
+  gilt, kann jeder Besucher im Rohbau graben, und jedes Loch bleibt. Minecraft kennt keinen
+  Spielmodus je Welt, also setzt ihn ein Zuhörer beim Betreten — und nur, wenn er abweicht,
+  denn jedes Setzen räumt das Flugrecht ab.
+
+**Noch nicht gebaut**: Die zehn Gebäude aus [2.1](#21-die-gebäude-in-altfurt) sind von Hand
+zu bauen. Von Hand ist in einer Welt, die nie zurückgesetzt wird, die billigere Richtung —
+jedes Haus ist sofort änderbar. Bis dahin sind die Tore unsichtbare Türen in einer Wand.
+Ebenfalls offen: spielereigene Warps (`/warp setzen`) samt der Absage auf einen reservierten
+Namen — sie gehören zur Rangleiter ([11.1](#111-sprechende-befehle-mit-vervollständigung));
+ein Preis für die Reise, denn der Plan nennt an keiner Stelle einen Betrag; und Reittiere
+mitzunehmen, was eine Zustandsmaschine wäre und kein Reiseweg.
 
 ### 4.4 Wie vorgeneriert wird [entschieden 02.11.2026]
 

@@ -1,5 +1,7 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Quader;
+import org.bukkit.GameMode;
 import org.bukkit.World;
 
 /**
@@ -14,9 +16,11 @@ import org.bukkit.World;
  * @param art              woher die Bloecke kommen
  * @param kante            Wunschkante der Weltgrenze in Bloecken; 0 heisst: keine setzen
  * @param sprungBestaetigt der Text, der einen Sprung ueber das Doppelte freigibt
+ * @param spielmodus       in welchem Modus ein Spieler diese Welt betritt
+ * @param tor              das Tor am Bundesmarkt, das HIERHER fuehrt - oder {@code null}
  */
 record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
-                  int kante, String sprungBestaetigt) {
+                  int kante, String sprungBestaetigt, GameMode spielmodus, Quader tor) {
 
     /**
      * Woher die Bloecke kommen.
@@ -37,5 +41,17 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
     /** Ob fuer diese Welt ueberhaupt eine Grenze gesetzt werden soll. */
     boolean hatGrenze() {
         return kante > 0;
+    }
+
+    /**
+     * Ob ein Tor am Bundesmarkt hierher fuehrt.
+     *
+     * <p>Das Tor steht am Eintrag der ZIELwelt und nicht in einer eigenen Liste. Plan 4.3
+     * verlangt genau das: Eine neue Welt bleibt „ein Eintrag plus Generator" und ist nicht
+     * ein Eintrag plus ein vergessenes Tor. Und die Tore koennen so nicht von der
+     * Weltenliste abweichen - es gibt nur eine Liste.
+     */
+    boolean hatTor() {
+        return tor != null;
     }
 }

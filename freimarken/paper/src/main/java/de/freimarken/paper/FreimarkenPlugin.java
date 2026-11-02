@@ -12,10 +12,12 @@ import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Grenzregel;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Preisstaffel;
+import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.Stadtgrenze;
+import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.ZwischenspeicherLager;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -71,6 +73,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
     /** Der Name, unter dem die Marktstadt in der Weltenliste steht. */
     private static final String MARKTSTADT = "marktstadt";
 
+    /**
+     * Die Welt, in der die Tore stehen und ein neuer Spieler ankommt.
+     *
+     * <p>Rueckfall, wenn {@code reisen.ankunftswelt} fehlt. Plan Abschnitt 2:
+     * „Hauptstadt (Welt mit Spawn) = Altfurt".
+     */
+    private static final String ANKUNFTSWELT_VORGABE = "altfurt";
+
     private final Rasterplan plan = Rasterplan.marktstadt();
     private final MarktstadtGenerator generator = new MarktstadtGenerator(plan);
 
@@ -81,6 +91,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Stadtgrenze grenze;
     private Besitzbuch buch;
     private ParzellenBefehle befehle;
+    private WarpBefehle warpBefehle;
     private boolean fluechtig;
     /**
      * Alle gebauten Welten unter ihrem Namen.
@@ -90,6 +101,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * zusammenzusetzen - zwei Angaben, die auseinanderlaufen koennen.
      */
     private final Map<String, World> welten = new LinkedHashMap<>();
+
+    /** Die Eintraege aus der Datei, unter demselben Namen wie {@link #welten}. */
+    private final Map<String, Weltangabe> angaben = new LinkedHashMap<>();
 
     @Override
     public void onEnable() {
@@ -108,11 +122,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Welten aus der Liste, nicht aus dem Quelltext (Plan 4.2). Die Klagen zuerst
         // und einzeln: Wer eine Welt falsch eingetragen hat, soll genau lesen, welche und
         // warum - die uebrigen entstehen trotzdem.
+        String ankunftswelt = getConfig()
+                .getString("reisen.ankunftswelt", ANKUNFTSWELT_VORGABE).trim();
         var liste = Weltenliste.ausKonfiguration(
-                getConfig().getConfigurationSection("welten"), MARKTSTADT);
+                getConfig().getConfigurationSection("welten"), MARKTSTADT, ankunftswelt);
         liste.klagen().forEach(getLogger()::severe);
         var gebaut = new Weltenbau(this, generator, getLogger()).baueAlle(liste.welten());
         welten.putAll(gebaut.welten());
+        // Die Angaben mit, nicht nur die Welten: Spielmodus und Tor stehen dort, und ein
+        // zweites Lesen der config.yml waere eine zweite Wahrheit.
+        liste.welten().forEach(angabe -> angaben.put(angabe.name(), angabe));
         marktstadt = gebaut.welten().get(MARKTSTADT);
         // Dieselbe Angabe, aus der die Welt entstand, entscheidet auch ueber ihre Grenze.
         // Vorher las richteWeltgrenzeEin die Einstellung ein zweites Mal und ungefiltert
@@ -160,6 +179,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 getConfig().getString("hinweise.rang-werbung", WERBUNG_VORGABE),
                 getLogger());
         getServer().getPluginManager().registerEvents(new Schutzwache(buch, welt), this);
+        richteReisenEin(ankunftswelt);
         registriereBefehle();
 
         getLogger().info("Freimarken " + getPluginMeta().getVersion()
@@ -167,6 +187,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + ", Ablage " + (fluechtig ? "FLUECHTIG" : "MariaDB"));
 
         nenneNichtVorgenerierte();
+        nenneSchlechteAnkunft();
     }
 
     @Override
@@ -284,6 +305,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     "Parzellen nehmen, ansehen und verwalten", List.of("p", "pz")));
             angemeldet.addAll(verzeichnis.register(befehle.mark(),
                     "Dein Guthaben in Mark", List.of("konto")));
+            angemeldet.addAll(verzeichnis.register(warpBefehle.warp(),
+                    "Reisen zwischen den Welten des Freimarkenbunds"));
 
             // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
             // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein
@@ -459,6 +482,186 @@ public final class FreimarkenPlugin extends JavaPlugin {
         probe(empfaenger, "Mauer         ", plan.parzellenKante(), y, 10);
         probe(empfaenger, "Weg           ", plan.parzellenKante() + 3, y, 10);
         probe(empfaenger, "Mauerkrone    ", plan.parzellenKante(), y + 1, 10);
+    }
+
+    /**
+     * Richtet das Reisen ein - beide Wege aus Plan 4.3 und die Sperre fuer den dritten.
+     *
+     * <p>Die Respawn-Welt wird HIER gesetzt und nicht weiter oben: {@code setRespawnWorld}
+     * sucht die Dimension, und vor dem Weltenbau faellt diese Suche auf die Ueberwelt
+     * zurueck. Der Aufruf ist ausserdem dauerhaft - er schreibt in die level.dat der
+     * Hauptwelt. Deshalb steht die vorige Welt im Protokoll: Ohne sie waere nicht mehr
+     * festzustellen, worauf man zurueckstellen muesste.
+     */
+    private void richteReisenEin(String ankunftsweltName) {
+        Reise reise = new Reise(getLogger());
+        var verzeichnis = Warpverzeichnis.ausWelten(List.copyOf(welten.keySet()));
+        warpBefehle = new WarpBefehle(verzeichnis, welten, reise);
+
+        Set<String> eigene = welten.values().stream()
+                .map(w -> w.key().asString())
+                .collect(java.util.stream.Collectors.toSet());
+        getServer().getPluginManager().registerEvents(new Portalwache(eigene), this);
+
+        World ankunftswelt = welten.get(ankunftsweltName);
+        if (ankunftswelt == null) {
+            if (!ankunftsweltName.isEmpty()) {
+                getLogger().severe("reisen.ankunftswelt nennt " + ankunftsweltName
+                        + ", aber diese Welt gibt es nicht. Es gibt keine Tore, und ein"
+                        + " neuer Spieler erscheint da, wo der Server ihn hinsetzt.");
+            }
+            return;
+        }
+        if (!ankunftswelt.equals(getServer().getRespawnWorld())) {
+            World vorher = getServer().getRespawnWorld();
+            getServer().setRespawnWorld(ankunftswelt);
+            getLogger().info("Respawn-Welt war "
+                    + (vorher == null ? "nicht gesetzt" : vorher.key().asString())
+                    + ", ist jetzt " + ankunftswelt.key().asString()
+                    + " - hier kommt an, wer neu ist oder ohne Bett stirbt. Die Angabe"
+                    + " bleibt in der Weltdatei stehen; zum Zuruecknehmen die vorige Welt"
+                    + " in reisen.ankunftswelt eintragen.");
+        }
+        // Nach dem Schluesseltext und nicht nach dem Namen aus der Datei: Eine Hauptwelt
+        // des Servers, die zufaellig "altfurt" heisst, traegt sonst Altfurts Spielmodus.
+        Map<String, Weltangabe> nachSchluessel = new LinkedHashMap<>();
+        welten.forEach((name, w) -> {
+            Weltangabe angabe = angaben.get(name);
+            if (angabe != null) {
+                nachSchluessel.put(w.key().asString(), angabe);
+            }
+        });
+        getServer().getPluginManager().registerEvents(
+                new Ankunftswache(ankunftswelt, nachSchluessel, getLogger()), this);
+
+        var torwache = new Torwache(ankunftswelt, welten,
+                List.copyOf(angaben.values()), reise);
+        if (torwache.hatTore()) {
+            getServer().getPluginManager().registerEvents(torwache, this);
+            long tore = angaben.values().stream().filter(Weltangabe::hatTor).count();
+            getLogger().info(tore + " Tore in " + ankunftswelt.key().asString() + ".");
+            pruefeTore(ankunftswelt);
+        } else {
+            getLogger().info("Keine Tore eingetragen - gereist wird nur mit /warp.");
+        }
+    }
+
+    /**
+     * Prueft, ob durch jedes Tor ueberhaupt jemand gehen kann.
+     *
+     * <p>Noetig, weil die Torquader Zahlen in einer Datei sind und das Gelaende nicht.
+     * Die mitgelieferten Werte sind am 02.11.2026 an EINEM Altfurt eingemessen; ein
+     * anderer Startwert, ein anderes Gelaende, und die Tore liegen im Berg oder in der
+     * Luft. Beides merkt man ohne diese Pruefung erst, wenn jemand durchgehen will und
+     * nichts passiert.
+     *
+     * <p>Ein Tor ist ein <b>Loch in einer Wand</b>, und das ist der Grund, warum hier
+     * nicht die Standprobe aus {@link Ankunftspunkt} laeuft: Die sucht den hoechsten
+     * festen Block einer Saeule und findet damit den STURZ ueber der Oeffnung, nicht den
+     * Boden darin. Am 02.11.2026 hat sie deshalb alle sieben Tore einer gerade gebauten
+     * Wand fuer unbegehbar erklaert.
+     *
+     * <p>Gefragt ist also zweierlei, und zwar fuer jede Saeule der Oeffnung: traegt der
+     * Block unter dem Tor, und ist das Tor selbst in Fuss- und Kopfhoehe frei? Liegt es
+     * daneben, sucht die Meldung den Boden und nennt die passenden Zahlen zum Abtippen.
+     */
+    private void pruefeTore(World ankunftswelt) {
+        var griff = Ankunftspunkt.griffAuf(ankunftswelt);
+        for (Weltangabe angabe : angaben.values()) {
+            if (!angabe.hatTor()) {
+                continue;
+            }
+            String klage = torklage(griff, angabe.tor());
+            if (klage != null) {
+                getLogger().severe("Tor nach " + angabe.name() + " ("
+                        + angabe.tor().alsText() + "): " + klage);
+            }
+        }
+    }
+
+    /** Was an diesem Tor nicht stimmt - oder {@code null}, wenn es begehbar ist. */
+    private String torklage(Ankunftspunkt.Weltgriff griff, Quader tor) {
+        for (int x = tor.vonX(); x <= tor.bisX(); x++) {
+            for (int z = tor.vonZ(); z <= tor.bisZ(); z++) {
+                if (!griff.fest(x, tor.vonY() - 1, z)) {
+                    return "unter " + x + "/" + tor.vonY() + "/" + z + " ist kein Boden -"
+                            + " wer hier durchgeht, faellt. " + vorschlag(griff, tor, x, z);
+                }
+                for (int hoehe = 0; hoehe <= 1 && tor.vonY() + hoehe <= tor.bisY(); hoehe++) {
+                    int y = tor.vonY() + hoehe;
+                    if (griff.fest(x, y, z)) {
+                        // Hier KEIN Vorschlag mit Koordinaten: Der Boden darunter traegt
+                        // ja, also nennt die Suche dieselbe Hoehe wieder - ein Rat, der
+                        // ins Leere fuehrt. Zu tun ist etwas anderes.
+                        return "bei " + x + "/" + y + "/" + z + " steht "
+                                + griff.bei(x, y, z) + " im Tor. Die Oeffnung muss frei"
+                                + " sein - entweder die Bloecke entfernen oder den Quader"
+                                + " dorthin legen, wo der Durchgang ist.";
+                    }
+                    if (Ankunftspunkt.schaedlich(griff.bei(x, y, z))) {
+                        return "bei " + x + "/" + y + "/" + z + " steht "
+                                + griff.bei(x, y, z) + " im Tor.";
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Welche Hoehe das Tor haette haben sollen - gesucht von oben nach unten.
+     *
+     * <p>Von oben, damit eine Wand ueber dem Tor nicht als Boden durchgeht: Gesucht ist
+     * der erste feste Block UNTER der eingetragenen Fusshoehe.
+     */
+    private String vorschlag(Ankunftspunkt.Weltgriff griff, Quader tor, int x, int z) {
+        for (int y = tor.vonY(); y > ankunftsTiefe(); y--) {
+            if (griff.fest(x, y - 1, z)) {
+                return "Passend waere: von [" + tor.vonX() + ", " + y + ", " + tor.vonZ()
+                        + "] bis [" + tor.bisX() + ", " + (y + 2) + ", " + tor.bisZ() + "]";
+            }
+        }
+        return "Unter dem Tor ist bis zum Weltboden nichts.";
+    }
+
+    /** Wie weit die Suche nach unten geht - tiefer gibt es keine Welt. */
+    private static int ankunftsTiefe() {
+        return -64;
+    }
+
+    /**
+     * Nennt die Welten, in deren Erscheinungspunkt niemand stehen kann.
+     *
+     * <p>Und aendert ihn NICHT. Der Erscheinungspunkt ist die Entscheidung des Betreibers
+     * und nach Plan 4.3 die einzige Wahrheit ueber den Ankunftsort; ein Programm, das ihn
+     * verschiebt, verschiebt bei jedem Start, wo alle ankommen - unumkehrbar, weil der
+     * alte Punkt danach nirgends mehr steht. Die Schranke ist hier die Hand des
+     * Betreibers: eine Zeile zum Kopieren.
+     */
+    private void nenneSchlechteAnkunft() {
+        for (World welt : welten.values()) {
+            Location spawn = welt.getSpawnLocation();
+            var platz = Ankunftspunkt.suche(Ankunftspunkt.griffAuf(welt),
+                    spawn.getBlockX(), spawn.getBlockZ());
+            if (platz.isEmpty()) {
+                getLogger().severe("In " + welt.key().asString() + " ist am"
+                        + " Erscheinungspunkt " + spawn.getBlockX() + "/"
+                        + spawn.getBlockZ() + " und " + Ankunftspunkt.RINGE
+                        + " Ringe darum kein Platz zum Stehen. Dorthin fuehrt keine"
+                        + " Reise.");
+                continue;
+            }
+            var stand = platz.get();
+            if (stand.x() != spawn.getBlockX() || stand.z() != spawn.getBlockZ()) {
+                getLogger().warning("In " + welt.key().asString() + " taugt der"
+                        + " Erscheinungspunkt " + spawn.getBlockX() + "/"
+                        + spawn.getBlockY() + "/" + spawn.getBlockZ() + " nicht zum"
+                        + " Stehen; Platz ist bei " + stand.x() + "/" + stand.y() + "/"
+                        + stand.z() + ". Zum Uebernehmen: execute in "
+                        + welt.key().asString() + " run setworldspawn " + stand.x() + " "
+                        + stand.y() + " " + stand.z());
+            }
+        }
     }
 
     /**
