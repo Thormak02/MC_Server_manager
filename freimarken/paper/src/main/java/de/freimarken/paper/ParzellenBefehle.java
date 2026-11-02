@@ -60,6 +60,9 @@ final class ParzellenBefehle {
      * Recht mit dem Text des anderen an, und die Auswertung dort haengt allein daran,
      * dass "extra.2" sich nicht als Zahl lesen laesst. Das ist kein Riegel, das ist Glueck.
      */
+    /** Wie viele Buchungen {@code /mark verlauf} zeigt. */
+    private static final int VERLAUF_ZEILEN = 10;
+
     private static final String RECHT_EXTRA_ANZAHL = "freimarken.extra.parzellen.";
 
     /** Derselbe Zuschlag fuer die Felderzahl: {@code freimarken.extra.gruppe.1}. */
@@ -182,8 +185,40 @@ final class ParzellenBefehle {
                                     Betraege.mark(buch.kasse().guthaben(spieler.getUniqueId())),
                                     NamedTextColor.GOLD))
                             .append(Component.text(".", NamedTextColor.GRAY)));
+                    spieler.sendMessage(Component.text("/mark verlauf zeigt die letzten"
+                            + " Buchungen.", NamedTextColor.DARK_GRAY));
                 }))
+                // Der Verlauf haengt am vorhandenen /mark und bekommt keinen eigenen
+                // Befehl: Zwei Befehle, die denselben Stand zeigen, laufen eines Tages
+                // auseinander. Mit /konto (Plan 11.1: zahlen, tauschen) wird /mark sein
+                // Zweitname, und beide holen Stand und Verlauf aus derselben Methode.
+                .then(Commands.literal("verlauf")
+                        .executes(fuerSpieler(this::zeigeVerlauf)))
                 .build();
+    }
+
+    /**
+     * Die letzten Buchungen - aus derselben Kasse, die auch bucht.
+     *
+     * <p>Zehn Zeilen, nicht mehr: Der Chat hat keine Seitenzahlen, und wer weiter zurueck
+     * will, bekommt mit Plan 12b die Chronik auf der Spielerseite. Eine Obergrenze ist
+     * ausserdem Pflicht - ein unbegrenzter Verlauf waere auf einem Server, der Monate
+     * laeuft, eine Abfrage, die niemand gewollt hat.
+     */
+    private void zeigeVerlauf(Player spieler) {
+        var zeilen = buch.kasse().verlauf(spieler.getUniqueId(), VERLAUF_ZEILEN);
+        if (zeilen.isEmpty()) {
+            spieler.sendMessage(Component.text("Noch keine Buchungen.",
+                    NamedTextColor.GRAY));
+            return;
+        }
+        spieler.sendMessage(Component.text("Deine letzten Buchungen", NamedTextColor.GOLD));
+        // Die Zone des Servers: Welche der Spieler liest, weiss niemand - und die
+        // Tagesgrenze aus Plan 7 wird dieselbe sein. Sobald sie in der Einstellungsdatei
+        // steht, kommt sie von dort, ohne dass sich hier etwas aendert.
+        var zone = java.time.ZoneId.systemDefault();
+        zeilen.forEach(zeile -> spieler.sendMessage(Component.text(
+                "  " + Verlaufszeile.text(zeile, zone), NamedTextColor.GRAY)));
     }
 
     // --- Die einzelnen Befehle -------------------------------------------------

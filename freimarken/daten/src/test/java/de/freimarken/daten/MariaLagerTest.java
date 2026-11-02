@@ -324,7 +324,7 @@ class MariaLagerTest extends BesitzLagerVertrag {
              var ergebnis = anweisung.executeQuery(
                      "SELECT COALESCE(MAX(schritt), 0) FROM schema_stand")) {
             ergebnis.next();
-            assertEquals(6, ergebnis.getInt(1), "Der Schemastand darf dabei nicht fallen");
+            assertEquals(8, ergebnis.getInt(1), "Der Schemastand darf dabei nicht fallen");
         }
     }
 

@@ -581,7 +581,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
             }
         });
         getServer().getPluginManager().registerEvents(
-                new Ankunftswache(ankunftswelt, nachSchluessel, getLogger()), this);
+                new Ankunftswache(ankunftswelt, nachSchluessel, kasse, getLogger()), this);
 
         var torwache = new Torwache(ankunftswelt, welten,
                 List.copyOf(angaben.values()), reise);

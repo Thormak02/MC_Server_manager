@@ -223,7 +223,7 @@ public final class Besitzbuch {
         }
 
         long preis = Preisstaffel.preisFuerNaechste(bereits);
-        if (!kasse.abbuchen(spieler, preis)) {
+        if (!kasse.abbuchen(spieler, preis, Buchungsgrund.PARZELLE_GEKAUFT)) {
             return Entscheid.nein(Bescheid.ZU_WENIG_MARK, preis);
         }
 
@@ -235,7 +235,7 @@ public final class Besitzbuch {
             // ist nicht theoretisch: Nehmen zwei Spieler im selben Augenblick dieselbe
             // Parzelle, laesst der eindeutige Schluessel in der Datenbank den zweiten
             // auflaufen. Ohne diese Gegenbuchung zahlte er fuer nichts.
-            kasse.gutschreiben(spieler, preis);
+            kasse.gutschreiben(spieler, preis, Buchungsgrund.PARZELLE_ERSTATTET);
             throw fehler;
         }
     }
@@ -418,7 +418,7 @@ public final class Besitzbuch {
         if (!wirklich) {
             return new Entscheid(Bescheid.ERTEILT, gebuehr, hier);
         }
-        if (!kasse.abbuchen(eigentuemer, gebuehr)) {
+        if (!kasse.abbuchen(eigentuemer, gebuehr, Buchungsgrund.ZUSAMMENLEGUNG)) {
             return Entscheid.nein(Bescheid.ZU_WENIG_MARK, gebuehr);
         }
         List<Long> neueFelder = gruppeId == Parzelle.KEIN_ELTERNTEIL
@@ -436,7 +436,7 @@ public final class Besitzbuch {
             // Dasselbe Muster wie in nehmen(): Das Geld ist weg, die Gruppe nicht
             // gekommen. Der Fall ist nicht theoretisch - der Wettlaufriegel im Lager
             // laesst einen zweiten Spieler auflaufen, der dasselbe Feld gerade anhaengt.
-            kasse.gutschreiben(eigentuemer, gebuehr);
+            kasse.gutschreiben(eigentuemer, gebuehr, Buchungsgrund.ZUSAMMENLEGUNG_ERSTATTET);
             throw fehler;
         }
         return new Entscheid(Bescheid.ERTEILT, gebuehr,

@@ -122,6 +122,61 @@ public final class Datenbank implements AutoCloseable {
             ALTER TABLE parzellen
               ADD CONSTRAINT IF NOT EXISTS ck_besitz_ort
                   CHECK ((x IS NULL AND z IS NULL) OR (x IS NOT NULL AND z IS NOT NULL))
+            """,
+
+            // Schritt 7: das Buchungsbuch.
+            //
+            // betrag ist VORZEICHENBEHAFTET - eine Ausgabe negativ, eine Einnahme positiv.
+            // Nur so gilt die Zusage, mit der sich Buchung und Protokoll gegenseitig
+            // halten: Die Summe aller Buchungen eines eroeffneten Kontos ist sein Stand.
+            //
+            // stand_nachher ist Absicht und keine Redundanz. Ohne ihn liesse sich eine
+            // einzelne Zeile nicht lesen, ohne alle vorherigen zu addieren - und eine
+            // Luecke im Buch waere unsichtbar, weil es nichts gaebe, womit sie sich
+            // widerspricht.
+            //
+            // KEINE CHECK-Pruefung auf die Richtung: Welcher Grund in welche Richtung
+            // zeigt, entscheidet Buchungsgrund in Java, und eine zweite Fassung davon
+            // hier waeren zwei Stellen, die dasselbe entscheiden. Der Grund steht als
+            // ASCII-Schluessel, damit die heutige deutsche Wortwahl nicht in die
+            // Geschichte einfriert.
+            //
+            // Der Index traegt die eine Abfrage, die es gibt: die letzten N Zeilen eines
+            // Spielers. Die id als drittes Merkmal, weil zwei Buchungen im selben
+            // Millisekundenschritt sonst in beliebiger Reihenfolge kaemen.
+            """
+            CREATE TABLE IF NOT EXISTS buchungen (
+              id            BIGINT      NOT NULL AUTO_INCREMENT,
+              spieler       CHAR(36)    NOT NULL,
+              zeitpunkt     DATETIME(3) NOT NULL,
+              grund         VARCHAR(32) NOT NULL,
+              betrag        BIGINT      NOT NULL,
+              stand_nachher BIGINT      NOT NULL,
+              PRIMARY KEY (id),
+              KEY nach_spieler (spieler, zeitpunkt, id),
+              CONSTRAINT fk_buchung_kasse FOREIGN KEY (spieler)
+                  REFERENCES kassen (spieler) ON DELETE RESTRICT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 8: der Altbestand kommt ins Buch.
+            //
+            // Die einzige Ausnahme von "jeder Schritt ist DDL", und sie ist noetig: Ohne
+            // sie haetten alle heute vorhandenen Konten einen Stand ohne eine einzige
+            // Buchung, und die Summenprobe waere von der ersten Minute an falsch.
+            //
+            // Der Grund heisst bestand und nicht eroeffnung, weil wir nicht wissen, was
+            // vorher geschah. Diese Zeile behauptet nur etwas ueber das Jetzt und
+            // erfindet keine Geschichte.
+            //
+            // Das NOT EXISTS traegt der Schritt selbst: migriere() legt keine Transaktion
+            // um Anweisung und Standfortschreibung, also muss jeder Satz einen zweiten
+            // Lauf folgenlos ueberstehen.
+            """
+            INSERT INTO buchungen (spieler, zeitpunkt, grund, betrag, stand_nachher)
+              SELECT k.spieler, UTC_TIMESTAMP(3), 'bestand', k.mark, k.mark
+                FROM kassen k
+               WHERE NOT EXISTS (SELECT 1 FROM buchungen b WHERE b.spieler = k.spieler)
             """);
 
     /**
@@ -304,6 +359,9 @@ public final class Datenbank implements AutoCloseable {
             // "erst die Kinder, dann die Eltern" waere es nicht.
             anweisung.execute("UPDATE parzellen SET eltern_id = NULL");
             anweisung.execute("DELETE FROM parzellen");
+            // Die Buchungen VOR den Kassen: fk_buchung_kasse steht auf RESTRICT, und eine
+            // Kassenzeile mit Buchungen daran laesst sich nicht loeschen.
+            anweisung.execute("DELETE FROM buchungen");
             anweisung.execute("DELETE FROM kassen");
         }
     }

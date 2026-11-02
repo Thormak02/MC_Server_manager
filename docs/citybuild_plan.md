@@ -1170,6 +1170,61 @@ Namensanzeige, Förderer- und Stifter-Abzeichen. Und Goldmark selbst — mit dem
 
 ---
 
+### 8.6 Das Buchungsbuch [erledigt 02.11.2026]
+
+Jede Geldbewegung steht in einer Zeile: wer, wie viel, **warum**, wann und was danach
+dastand. `/mark verlauf` zeigt die letzten zehn; aus derselben Tabelle kommt später der
+Wirtschaftsbericht aus [12b](#12b-die-spielerseite-entschieden).
+
+**Drei Zusagen, und die dritte hält die ersten zwei zusammen:**
+
+1. Keine Geldbewegung ohne Zeile.
+2. Keine Zeile ohne Geldbewegung — ein abgelehntes Abbuchen hinterlässt nichts.
+3. **Für ein eröffnetes Konto ist die Summe aller Buchungen sein Stand.**
+
+Die dritte ist die einzige Probe, die *beide* Lügen sichtbar macht, ohne jede einzelne
+Buchungsart zu kennen. Sie steht deshalb im `KasseVertrag` und gilt für jede Umsetzung —
+auch für die Kasse im Arbeitsspeicher, denn führte nur eine das Buch, prüften die Tests
+etwas anderes als der Server tut.
+
+**Der Grund ist Pflichtparameter, ohne Vorgabewert.** Ein Vorgabe-Grund wäre genau die
+Lücke, die man sucht, wenn im Buch eines Tages „unbekannt" steht; so zwingt der Übersetzer
+jeden künftigen Buchungsweg zur Angabe. Er ist eine Aufzählung und kein Freitext, denn ein
+Freitext spaltet dieselbe Senke in Tippfehler auf und der Bericht könnte nie eine Summe
+bilden. **Die Richtung gehört an den Grund**, nicht an das Vorzeichen allein: Die erste
+Parzelle ist gratis — eine Buchung über 0 Mark, also ohne Vorzeichen, und trotzdem eine
+Ausgabe.
+
+In der Datenbank steht der Grund als ASCII-Schlüssel, die deutschen Wörter stehen im
+Quelltext. Wer die Wortwahl in die Spalte schriebe, könnte sie später nicht mehr ändern,
+ohne alte Zeilen unlesbar zu machen.
+
+**Buchung und Zeile liegen in einer Transaktion.** Das ist der Grund, warum das Buch in der
+Kasse geführt wird und nicht in einer Schicht darüber: Nur dort, wo geschrieben wird,
+lassen sich beide zusammenhalten. Scheitert das `UPDATE` an der Deckung, wird
+zurückgerollt — „nichts ist passiert" heißt dann wirklich nichts. Der Stand nach der
+Buchung kommt in derselben Anweisung aus der schon gesperrten Kassenzeile
+(`INSERT … SELECT`), ohne zweiten Gang nach Java.
+
+**Die Eröffnungsbuchung reparierte einen alten Fehler** — den dritten der vier Punkte, die
+am 01.11.2026 als „vor Schritt 7 zu klären" notiert waren: Die Kassenzeile entstand erst
+bei der ersten Buchung, und bis dahin kam das Guthaben bei *jedem Blick* neu aus der
+`config.yml`. Wer den Wert dort änderte, änderte damit rückwirkend das Guthaben jedes
+Spielers, der noch nichts gekauft hatte. Jetzt friert der Betrag im Augenblick der
+Eröffnung ein — beim Beitritt oder bei der ersten Buchung, je was zuerst kommt.
+
+**Der Altbestand kam als eigene Zeile ins Buch**, mit dem Grund `bestand` und nicht
+`eroeffnung`: Was vor dem Buch geschah, wissen wir nicht. Diese Zeile behauptet nur etwas
+über das Jetzt und erfindet keine Geschichte. Vor der Wanderung wurden das Testgeld
+zurückgesetzt und die Testparzellen gelöscht, damit die Nulllinie des späteren Berichts
+nicht aus erfundenen Mark besteht [entschieden 02.11.2026].
+
+Nicht dabei und mit Absicht: Goldmark, Wechselkurs, Tagesdeckel, ein Preis für Teleports,
+ein Veranlasser bei Zahlungen zwischen Spielern, und Blättern im Verlauf. Jedes davon
+kommt mit seinem eigenen Schritt.
+
+---
+
 ## 9. Ränge [entschieden]
 
 ```
@@ -1790,11 +1845,11 @@ Jeder Schritt endet mit etwas, in dem man herumlaufen kann. Keine Fristen.
 | 0 | E1 bestätigen, Namen festschreiben | sie hier eingetragen sind |
 | 1 | ~~Paper 26.3, Java 25, Gradle-Gerüst, leeres Plugin mit einem Befehl~~ **erledigt 31.10.2026** | ~~Server startet und der Befehl antwortet~~ — Plugin lädt auf Build 231, `/freimarken preis 5` antwortet „400.000 Mark" aus dem Kernmodul |
 | 2 | ~~MariaDB, Schema, Migrationen, Datenzugriff hinter Schnittstelle~~ **erledigt 31.10.2026** | ~~ein Testdatensatz übersteht einen Neustart~~ — MariaDB als Dienst auf dem Server-PC, Zugriff aus dem LAN; `Datenbank` mit nummerierten Schema-Schritten, `MariaLager` und `MariaKasse` hinter `BesitzLager`/`Kasse`. 26 Tests gegen die echte Datenbank, darunter Überleben eines Verbindungsabbruchs, der eindeutige Schlüssel gegen Doppelvergabe und UTC-Rückgabe. Am 31.10. auch im Plugin gelaufen: Paper 26.3/231 lädt den mitgelieferten Treiber im Plugin-Klassenlader, `migriere()` läuft, `/freimarken` meldet „Ablage MariaDB". Tests liegen seither in einem eigenen Schema `freimarken_test`; `leereAlles()` verweigert jedes andere |
-| 3 | Welten anlegen, Grenzen, Vorgenerierung, Altfurt als Rohbau (Gebäude aus [2.1](#21-die-gebäude-in-altfurt) als Platzhalter) — **vorgezogen vor Schritt 7** [entschieden 01.11.2026] | man kann durch alle Welten laufen — *Marktstadt steht, übrige Welten offen* |
+| 3 | ~~Welten anlegen, Grenzen, Reisen~~ **erledigt 02.11.2026** — Vorgenerierung angestoßen, Gebäude aus [2.1](#21-die-gebäude-in-altfurt) von Hand | ~~man kann durch alle Welten laufen~~ — Acht Welten aus der `config.yml` ([4.2](#42-erweiterbar-und-portierbar-entschieden)), Grenzen aus einer Regel im Kern, Vorgenerierung mit Chunky samt gerechneten Befehlen ([4.4](#44-wie-vorgeneriert-wird-entschieden-02112026)), Reisen über sieben Tore und `/warp` ([4.3](#43-wie-man-zwischen-den-welten-reist-entschieden-02112026)), Sterben, `/zurueck` und `/tpa` ([4.3a](#43a-sterben-zurückkehren-besuchen-entschieden-02112026)), Spielmodus je Welt. Drei adversariale Prüfläufe mit 88 Agenten: 28 bestätigte Befunde in Teil A, alle behoben; die übrigen zwei lieferten Baupläne, die zwei eigene Entwürfe korrigiert haben (ringweise Suche am festen Zielort; eine zweite Tauschmethode im Rückweg). 342 Tests. *Offen ist nur Handarbeit: die acht Generierläufe auf dem Spielserver und die zehn Platzhalterbauten in Altfurt* |
 | 4 | ~~**Weltgenerator für die Marktstadt** — Raster, Wege, Grenzen~~ **erledigt 31.10.2026** | ~~das Raster steht~~ — `Rasterplan` im Kern (8 Tests ohne Server), `MarktstadtGenerator` im Plugin; am Testserver geprüft: Parzellenmitte Gras, Mauer Steinziegel, Weg glatter Stein, Krone Halbstufe |
 | 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer — **fertig 31.10.2026** | zwei Spieler, einer baut, der andere nicht — *Code steht: `Besitzbuch` mit allen Regeln (Preisstaffel, Obergrenze, Mitbauer, Aufgeben ohne Rückzahlung), `Schutzwache` mit einer Regel für alle 14 Schutzereignisse, `/parzelle` und `/mark`. 89 Tests grün, Startprobe auf einem echten Paper-26.3-Server durch. Danach eine adversariale Prüfung mit 41 Agenten: 9 bestätigte Befunde, alle behoben — darunter fehlender Schutz gegen Schaden an Rüstungsständern und Rahmeninhalt, Kisten-Loren, ein Besitzschutz, der bei Datenbankausfall nach außen offen scheiterte, und Tests, die das Spielschema leerten. Durchgang mit zwei Spielern am 31.10. gelaufen: Der Schutz greift auf fremdem Grund und sagt es in der Aktionsleiste, Mitbauer schaltet frei und wieder zu, die zweite Parzelle wurde fuer 25.000 Mark bezahlt, und Parzelle -1/0 beweist die negative Seite der Rasterrechnung. Jeder Schritt in der Datenbank gegengeprueft* |
 | 6 | ~~Zusammenlegen und Auftrennen mit Gebühr~~ **erledigt 01.11.2026** | ~~zwei Parzellen werden eine, der Weg verschwindet~~ — `/parzelle zusammenlegen <richtung>` und `/parzelle auftrennen [alles]`, Gebühr 10.000 je Feld der neuen Gruppe. Die Geometrie liegt im Kern (`Gruppenflaeche`), die Blocktabelle an einer Stelle (`Stadtboden`), die Weltarbeit hinter einem 4-Methoden-Griff (`Weltgriff`), damit sie ohne Server prüfbar ist. Vier Runden Fix-und-Nachweis mit je einem adversarialen Prüflauf: elf bestätigte Befunde, alle behoben, jeder mit Probe und Mutationsnachweis. Drei Spieltests am 1.11. bestanden — zuletzt das Quadrat mit 19 von 19 nachgemessenen Koordinaten. 231 Tests |
-| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — **nach Schritt 3**, weil vier der sechs Grundberufe in der Marktstadt keine Grundlage haben: kein Holz, kein Wasser, keine Erze, keine Nutztiere — *das Konto selbst gibt es schon: `Kasse` mit Startguthaben, Abbuchen und Gutschreiben, in MariaDB mit der Deckungsprüfung in der Abfrage. Es fehlen Verdienen, Buchungsprotokoll, Goldmark und Wechselkurs* | man kann Mark verdienen und ausgeben |
+| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — in sieben Teilen; **Teil A (Buchungsbuch) erledigt 02.11.2026**, siehe [8.6](#86-das-buchungsbuch-erledigt-02112026) — *es fehlen Wirtschaftswerte in der `config.yml` samt `/freimarken neuladen` (B), Spielzeit und Tagesgrenze (C), Berufe (D), Verdienen (E), Bundesmarkt (F), Messstelle (G)* | man kann Mark verdienen und ausgeben — *jede Geldbewegung steht im Buch, `/mark verlauf` zeigt sie* |
 | 8 | Markthalle, Mietverträge, Abholfach, Freie Truhe | ein Laden läuft ab und wird sauber zurückgegeben |
 | 9 | Freistädte: gründen, Grundstücke vergeben, Bürger, Kasse | ein Spieler verkauft einem anderen ein Grundstück |
 | 10 | Hafenwerder mit eigener Angeltabelle | eine Insel lässt sich sichern, der Fang unterscheidet sich |

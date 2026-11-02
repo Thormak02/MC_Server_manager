@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import de.freimarken.kern.Kasse;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -59,6 +60,7 @@ final class Ankunftswache implements Listener {
 
     private final World ankunftswelt;
     private final Map<String, Weltangabe> nachSchluessel;
+    private final Kasse kasse;
     private final Logger protokoll;
 
     /**
@@ -66,11 +68,13 @@ final class Ankunftswache implements Listener {
      *                       {@code freimarken:altfurt} - nicht unter dem Namen aus der
      *                       Datei. Sonst traegt eine Hauptwelt, die zufaellig
      *                       {@code altfurt} heisst, Altfurts Spielmodus.
+     * @param kasse          um das Konto beim ersten Beitritt zu eroeffnen
      */
-    Ankunftswache(World ankunftswelt, Map<String, Weltangabe> nachSchluessel,
+    Ankunftswache(World ankunftswelt, Map<String, Weltangabe> nachSchluessel, Kasse kasse,
                   Logger protokoll) {
         this.ankunftswelt = ankunftswelt;
         this.nachSchluessel = nachSchluessel;
+        this.kasse = kasse;
         this.protokoll = protokoll;
     }
 
@@ -161,7 +165,23 @@ final class Ankunftswache implements Listener {
 
     @EventHandler
     public void beimBeitritt(PlayerJoinEvent ereignis) {
+        eroeffneKonto(ereignis.getPlayer());
         richteSpielmodus(ereignis.getPlayer());
+    }
+
+    /**
+     * Eroeffnet das Konto beim ersten Beitritt.
+     *
+     * <p>Bei jedem Beitritt gerufen und nur beim ersten wirksam. Der Grund steht in
+     * {@link Kasse#eroeffne}: Ohne einen festen Zeitpunkt kaeme das Startguthaben bei
+     * jedem Blick neu aus der Einstellungsdatei, und ein geaenderter Wert dort aenderte
+     * rueckwirkend das Guthaben jedes Spielers, der noch nichts gekauft hat.
+     */
+    private void eroeffneKonto(Player spieler) {
+        if (kasse.eroeffne(spieler.getUniqueId())) {
+            protokoll.info("Konto eroeffnet fuer " + spieler.getName() + " ("
+                    + spieler.getUniqueId() + ").");
+        }
     }
 
     @EventHandler

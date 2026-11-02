@@ -250,7 +250,7 @@ class BesitzbuchTest {
         assertEquals(1, lager.anzahlVon(WELT, anna), "Nichts angelegt");
         assertEquals(24_999L, kasse.guthaben(anna), "Eine Absage kostet nichts");
 
-        kasse.gutschreiben(anna, 1L);
+        kasse.gutschreiben(anna, 1L, Buchungsgrund.PARZELLE_ERSTATTET);
         var reicht = knappesBuch.nehmen(WELT, anna, 100, 10, VIELE);
         assertEquals(ERTEILT, reicht.bescheid());
         assertEquals(25_000L, reicht.kosten());
