@@ -69,7 +69,7 @@ Aufgabe im Spiel, nicht nur eine Fassade:
 | **Bürgeramt** | Grundstücksverwaltung | Erste Parzelle, Zusammenlegen, Mitbauer — **und die Annahme von Regeln und Nutzungsbedingungen beim ersten Beitritt** |
 | **Markthalle** | Spielerhandel und Läden | Mietbare Ladeneinheiten, Ladenverzeichnis, Abholfach |
 | **Zunfthaus** | Berufe | Beruf wählen, Stand ansehen, Jobwand mit privaten Aufträgen |
-| **Münzhaus** | Bank und Währung | Kontostand, Verlauf, Wechsel Mark ↔ Goldmark, Tagesdeckel sichtbar |
+| **Münzhaus** | Bank und Währung | Kontostand, Verlauf, Wechsel Mark ↔ Goldmark, Wechseldeckel sichtbar |
 | **Kaufmannskontor** | Aufträge und Auktionen | `/markt`, Suchlauf über alle Läden |
 | **Hafen von Altfurt** | Tor nach Hafenwerder | Insel nehmen, Bootsrennen, Angelwettbewerbe |
 | **Kornpforte** | Tor nach Kornmark | Farmwelt, Reset-Ankündigung |
@@ -1105,12 +1105,12 @@ auch über das Spielen erreichbar" nicht nur behauptet, sondern nachrechenbar.
 Mengenbonus ab 10 € [empfohlen]: 10 % mehr Goldmark.
 
 **Gegenprobe zum Pay-to-Win.** Eine Freistadt kostet 400.000 Mark. Über den Abwärtstausch
-sind das 500 Goldmark — **100 €, und trotzdem mindestens 40 Tage**, weil der Tagesdeckel von
-10.000 Mark je Tag greift. Wer stattdessen spielt, ist bei 2.000–5.000 Mark je Stunde nach
+sind das 500 Goldmark — **100 €, und trotzdem mindestens 40 Tage**, weil der Wechseldeckel
+von 10.000 Mark je Tag greift. Wer stattdessen spielt, ist bei 2.000–5.000 Mark je Stunde nach
 80–200 Stunden da. Der Geldweg ist also weder billig noch schnell, und genau so soll es
 sein: Die Besitzleiter ist der Server, sie darf nicht an der Kasse abkürzbar sein.
 
-Soll der Geldweg noch enger werden, ist der Tagesdeckel der Hebel — 5.000 Mark je Tag
+Soll der Geldweg noch enger werden, ist der Wechseldeckel der Hebel — 5.000 Mark je Tag
 ergäben 80 Tage statt 40. Der Kurs selbst bleibt davon unberührt. [empfohlen: bei 10.000
 belassen und beobachten]
 
@@ -1149,14 +1149,23 @@ Bis zum 01.11. stand hier „ein Beruf". Das war mit [9.1](#91-berufe-im-zunftha
 nicht vereinbar: Dort hält jeder zwei Grundberufe plus eine Spezialisierung, und mit der
 Lesart „je Beruf" wären alle drei Zeitangaben oben falsch — ebenso die Gegenprobe in
 [8.5](#85-wenn-eine-mitgliedschaft-ausläuft), die mit demselben Satz rechnet. Daraus folgt
-zweierlei: Die zwei Grundberufe teilen sich dieses Einkommen, und der **Tagesdeckel zählt
+zweierlei: Die zwei Grundberufe teilen sich dieses Einkommen, und der **Verdienstdeckel zählt
 je Spieler**, nicht je Beruf — sonst käme er über zwei Berufe doppelt.
 
-**Die Tagesgrenze** [entschieden 01.11.2026] — sie gilt für Tagesbonus, Tagesdeckel,
-Wechseldeckel, Ladenmiete und die Freie Truhe: **Mitternacht Ortszeit**, die Zone als Wert
-in der `config.yml` mit Vorgabe `Europe/Berlin`. Ein Bonus, der um 01:00 umspringt, erklärt
-sich niemandem. Die Zeitstempel in der Datenbank bleiben UTC; nur die Tagesgrenze ist eine
-konfigurierte Zone, und gespeichert wird je Spieler ein Datum und kein Zeitpunkt.
+**Zwei Deckel, zwei Wörter** [03.11.2026]: Der Plan nannte beide „Tagesdeckel" — den
+**Verdienstdeckel** (was ein Spieler an einem Tag höchstens erarbeiten kann; das ist der hier)
+und den **Wechseldeckel** (die 10.000 Mark je Tag, die aus Goldmark zurückfließen dürfen,
+[8.1](#81-zwei-währungen-entschieden)). Sie haben verschiedene Beträge, verschiedene Gründe und
+verschiedene Hebel; gemeinsam haben sie nur die Tagesgrenze. Ein Wort für beide heißt, dass
+eines Tages der falsche gebaut oder der falsche verstellt wird.
+
+**Die Tagesgrenze** [entschieden 01.11.2026, gebaut 03.11.2026 —
+[8.8](#88-die-spielzeit-und-die-tagesgrenze-erledigt-03112026)] — sie gilt für Tagesbonus,
+Verdienstdeckel, Wechseldeckel, Ladenmiete und die Freie Truhe: **Mitternacht Ortszeit**, die
+Zone als Wert in der `config.yml` mit Vorgabe `Europe/Berlin`. Ein Bonus, der um 01:00
+umspringt, erklärt sich niemandem. Die Zeitstempel in der Datenbank bleiben UTC; nur die
+Tagesgrenze ist eine konfigurierte Zone, und gespeichert wird je Spieler ein Datum und kein
+Zeitpunkt.
 
 ### 8.3 Was Echtgeld kaufen darf [entschieden]
 
@@ -1219,7 +1228,7 @@ Eröffnung ein — beim Beitritt oder bei der ersten Buchung, je was zuerst komm
 zurückgesetzt und die Testparzellen gelöscht, damit die Nulllinie des späteren Berichts
 nicht aus erfundenen Mark besteht [entschieden 02.11.2026].
 
-Nicht dabei und mit Absicht: Goldmark, Wechselkurs, Tagesdeckel, ein Preis für Teleports,
+Nicht dabei und mit Absicht: Goldmark, Wechselkurs, Wechseldeckel, ein Preis für Teleports,
 ein Veranlasser bei Zahlungen zwischen Spielern, und Blättern im Verlauf. Jedes davon
 kommt mit seinem eigenen Schritt.
 
@@ -1238,10 +1247,18 @@ stimmigen Stand. Gehalten wird er in genau *einer* veränderlichen Zelle, und je
 die mit Geld rechnet, fragt sie im Augenblick des Gebrauchs.
 
 Darin liegt der ganze Trick: **Neuladen baut nichts neu.** Es tauscht den Inhalt einer Zelle.
-Kein Zuhörer wird angemeldet, kein Zeitgeber gestellt, kein Befehl eingehängt, keine
-Verbindung getauscht — also gibt es auch nichts abzumelden, und nichts kann doppelt dastehen.
-Ein Neuladen, das Objekte neu baut, hätte ohnehin nichts bewirkt: Die Knoten des
+Beim Neuladen wird kein Zuhörer angemeldet, kein Zeitgeber gestellt, kein Befehl eingehängt,
+keine Verbindung getauscht — also gibt es auch nichts abzumelden, und nichts kann doppelt
+dastehen. Ein Neuladen, das Objekte neu baut, hätte ohnehin nichts bewirkt: Die Knoten des
 Befehlsbaums zeigen weiter auf das alte Objekt.
+
+**Dieser Satz gilt für das Neuladen und nicht für den Start** [präzisiert 03.11.2026]. Seit
+[8.8](#88-die-spielzeit-und-die-tagesgrenze-erledigt-03112026) meldet der Start einen Zuhörer
+an und stellt einen Zeitgeber; die Aufzählung oben sagt, was ein *Neuladen* nicht tut. Die
+Unterscheidung ist kein Wortklauben, sondern der Grund, warum die Taktlänge nicht neuladbar
+ist: Sie steckt im gestellten Zeitgeber, und ein Neuladen, das sie änderte, müsste einen
+zweiten stellen — nach dem zweiten Neuladen schrieben drei Zeitgeber dieselbe Minute. Wer „kein
+Zeitgeber" dagegen als Verbot liest, baut den nächsten wiederkehrenden Vorgang gar nicht.
 
 **Drei Schranken liegen auf jedem Geldwert**, und alle drei haben denselben Grund: Ein zu
 billiger Preis macht Mark, und die liegen binnen Minuten auf vielen Konten — zurückzuholen
@@ -1327,8 +1344,222 @@ Nicht dabei und mit Absicht: die Datenbank als Quelle der Stammdaten (das kommt 
 Dashboard, und der eine Leser ist genau die Stelle, an der sie einträte), der gespeicherte
 Vorwert und das Zurück in einem Klick (dafür bräuchte es einen Ort, an den das Plugin
 schreibt — und `saveConfig()` würde die Kommentare der Datei antasten), und Schlüssel für
-Werte, die es noch nicht gibt: Goldmark, Kurse, Mieten, Verdienstsätze, Tagesdeckel. Eine
-Zeile Anleitung für nichts ist schlechter als keine.
+Werte, die es noch nicht gibt: Goldmark, Kurse, Mieten, Verdienstsätze, Wechsel- und
+Verdienstdeckel. Eine Zeile Anleitung für nichts ist schlechter als keine.
+
+---
+
+### 8.8 Die Spielzeit und die Tagesgrenze [erledigt 03.11.2026]
+
+Der Server zählt, wie lange jemand da war, und schreibt es je Spieler und je Tag fort. Damit
+existiert die letzte fehlende Voraussetzung für den Aufstieg aus [9](#9-ränge-entschieden) und
+für alles, was „je Tag" heißt — Tagesbonus, Verdienstdeckel, Ladenmiete, Freie Truhe. Teil C
+baut die Messung und keinen Verbraucher: Bis Schritt 12 wird gezählt und nichts daran geknüpft.
+
+**Gegengelesen am 04.11.2026.** Drei Urteilslinsen — Geld, Plan, Proben — haben den gebauten
+Stand mit Fehlerfall und Belegstelle angegriffen: 17 Einwände, alle behoben. Eine zweite Runde
+gegen die Nacharbeit selbst fand sieben weitere; die vier mittleren sind behoben, einer der
+drei kleinen ist als Nebenwirkung mit erledigt, zwei stehen am Ende dieses Abschnitts. Was
+dabei genauer geworden ist, steht unten als datierter Zusatz bei der Zusage, die er betrifft —
+die alten Sätze bleiben stehen, damit lesbar bleibt, was sich geändert hat, und nicht nur das
+Ergebnis.
+
+**In der Datenbank steht verstrichene Zeit, niemals ein laufender Zeitpunkt.** Jede Minute wird
+ein Zuschlag auf die Zeile dieses Spielers und dieses Tages addiert. Daraus folgt dreierlei,
+und jedes einzelne wäre sonst eine eigene Fehlerquelle: Ein Absturz hinterlässt keine offene
+Sitzung, es gibt kein Aufräumen beim Start, und zwei Serverprozesse könnten dieselbe Zeile
+widerspruchsfrei füllen. Der Preis ist ein Verlust von höchstens einer Taktlänge, wenn der
+Prozess hart endet. Eine gespeicherte Startmarke wäre billiger zu schreiben und beliebig falsch
+zu lesen: Nach einem Absturz sähe der nächste Start eine Sitzung, die über Tage läuft.
+
+**Alles Schreiben läuft im Hauptfaden**, obwohl Datenbankarbeit dort den Server anhält. Der
+Grund ist [8.6](#86-das-buchungsbuch-erledigt-02112026): Geldbuchung und Buchzeile hängen an
+einer Transaktion über eine einzige Verbindung. Ein zweiter Faden, der auf derselben Verbindung
+eine Spielminute wegschreibt, bestätigt dabei die halb geschriebene Buchung des Hauptfadens
+mit. Eine verlorene Spielminute merkt niemand; eine halbe Geldbuchung bricht die Zusage, die
+das ganze Buch zusammenhält. Hier liegt deshalb auch der erste wiederkehrende Zeitgeber des
+Projekts, und er fängt jeden Fehler in seinem Körper ab: Eine durchgelassene Ausnahme beendet
+bei dieser Zeitplanung *alle* weiteren Ausführungen. Der Verlust wäre dann nicht eine Minute,
+sondern alles bis zum nächsten Neustart — und keine Zeile im Protokoll würde es sagen.
+
+**Den Tag rechnet das Plugin, nicht die Datenbank.** Die Verbindung steht auf UTC, damit die
+Zeitstempel eindeutig sind; dürfte sie den Tag bestimmen, bekäme ein Betreiber in Berlin die
+ersten zwei Stunden jedes Tages auf den Vortag gebucht. Der Tag ist damit das einzige Datum im
+ganzen Schema, das nicht UTC ist, sondern in der eingestellten Zone gerechnetes Ortsdatum.
+Dieser Satz steht auch am Schema selbst: Wer ihn nicht kennt, rechnet die Spalte eines Tages
+„zurück".
+
+**Ein Zuschlag über Mitternacht wird geteilt** und nicht dem neuen Tag ganz zugeschlagen —
+sonst zählte dieselbe Minute am alten Tag zu wenig und am neuen zu viel, und am alten Tag
+hängen Deckel und Bonus. Geteilt wird über die aufgelaufene Zeit und nicht Tag für Tag, weil
+jeder einzeln abgerundete Tagesanteil an jeder Tagesgrenze eine Sekunde verlieren würde. Die
+Rechnung trägt über die Umstellungstage, an denen ein Tag 23 oder 25 Stunden hat: Eine Zone ist
+kein fester Versatz, und wer so rechnet, liegt zweimal im Jahr daneben.
+
+**Die Zone ist ein Wert in der Datei, und es gibt nur eine.** `zeit.zone`, Vorgabe
+`Europe/Berlin`. Vorher fragte der Verlauf des Buchungsbuchs die Systemzone des Rechners — zwei
+Quellen für dieselbe Frage, und auf einem Rechner mit anderer Systemzone hätten `/mark verlauf`
+und die Tagesgrenze verschiedene Tage genannt. Ein fester Versatz wie `UTC+2` wird abgewiesen,
+und die Klage nennt den Grund: Er kennt keine Sommerzeit, die Tagesgrenze läge ab dem letzten
+Sonntag im März um 01:00.
+
+Zone und Taktlänge wirken **erst nach einem Neustart**. Ein Zonenwechsel mitten am Tag
+verschöbe die Tagesgrenze, und der laufende Tag hätte je nach Augenblick zwei verschiedene
+Längen; die Taktlänge steckt im gestellten Zeitgeber, und ein Neuladen, das sie änderte, müsste
+einen zweiten stellen. Beide stehen deshalb im Block „Nur beim Start gelesen" aus
+[8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026), und keine Zeile dort darf
+behaupten, der Wert aus der Datei *gelte* — genau der Fehler, den das Startguthaben an
+derselben Stelle schon einmal erzwungen hat. Die Untätigkeitsgrenze dagegen wird bei jedem Takt
+neu gefragt, es wird nichts gebaut und nichts angemeldet, also wirkt sie sofort. Damit ist die
+Zone ein weiterer Wert der Art, die [12a.6](#12a6-was-anpassbar-ist--und-was-nicht) in keiner
+ihrer drei Klassen führt: änderbar, aber erst nach einem Neustart. Dort fehlt eine vierte
+Klasse, und `kasse.startguthaben`, die Datenbankadresse und die Ankunftswelt gehören mit
+hinein.
+
+**Keine Zeile behauptet Geltung — und wer nicht neuladbar ist, steht an einer Stelle**
+[04.11.2026]. Der Satz oben stand schon vorher hier; die Umsetzung hielt ihn nicht. Für eine
+fehlende Zeile schrieb der Leser „Sie gelten aus den Vorgaben des Plugins", und zwei Zeilen
+tiefer nannte der Block „in der Datei steht Europe/Berlin" — obwohl in der Datei gar keine
+Zeile stand. Dieselbe Antwort nannte damit zwei verschiedene Tagesgrenzen, und der Betreiber
+suchte eine Zeile, die es nicht gibt. Entschieden ist jetzt, wer was wissen kann: Nur der
+**Leser** sieht, ob ein Wert aus der Datei kam oder stumm aus der Jar zurückfiel, also sagt
+allein er etwas über Geltung — und auch er nur über neuladbare Schlüssel („es gilt 4", richtig
+beim Start wie beim Neuladen). Der **Halter** sieht einen Wert und nicht seine Herkunft, also
+sagt er „es gilt weiter America/New_York, neu gelesen wurde Europe/Berlin". Zusammengelesen
+ergeben die zwei Zeilen die ganze Wahrheit, und keine von beiden behauptet mehr, als sie weiß.
+Welche Schlüssel nicht neuladbar sind, steht seitdem genau einmal — in der Klasse, die es
+entscheidet und die den Block schreibt; Leser, Block und zwei Proben ziehen daraus mit. Wer
+einen vierten Wert nicht neuladbar macht, trägt ihn dort ein und nirgends sonst.
+
+Eine gültige und trotzdem falsche Zone fängt keine Schranke: `UTC` ist eine Zone wie
+`Europe/Berlin`. Deshalb nennt das Protokoll beim Start den nächsten Tageswechsel in Ortszeit
+**und** in UTC. Stehen dort am Nachmittag zwei gleiche Uhrzeiten, ist die Zone falsch
+eingestellt. Erkennung statt Verhinderung, dieselbe Antwort wie bei der Preisstaffel in
+[8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026).
+
+**Was gezählt wird — und was nicht.** Gezählt wird Anwesenheit mit Lebenszeichen. Wer eine
+eingestellte Zeit lang keines gibt (`zeit.untaetig-minuten`, Vorgabe 10 Minuten; die 0 schaltet
+die Regel ab), zählt nicht mit, und die verworfene Zeit wird auch später nicht nachgezahlt —
+sonst wäre die Schranke eine Verzögerung und keine Schranke. Sie schließt den Nachtlang im
+Startbildschirm aus, der ohne jede Absicht passiert. Gegen Absicht ist sie **keine Mauer**: Ein
+Makro oder ein beschwertes Tastenbrett erzeugt Lebenszeichen, und damit sind die vierzig
+Stunden bis Bürger im Stehen erreichbar. Innerhalb dieses Schritts ist das nicht zu reparieren;
+es bräuchte eine Betrachtung des Verhaltens — Abbauleistung, Wiederholungsmuster, geöffnete
+Oberflächen —, also die Messstelle aus Teil G und keinen Zeitgeber. Wer „~5 h" und „~40 h" in
+[9](#9-ränge-entschieden) liest, liest deshalb eine gemessene **Anwesenheit** und keine
+gemessene Tätigkeit. Tragbar ist das, weil am Rang nur Fläche und Bequemlichkeit hängen und
+keine Macht über andere; wer daran einmal etwas aufhängt, das Mitspieler betrifft, braucht
+zuerst die Messstelle.
+
+**Die Grenze ist eine Stufe, und eine Stufe darf nicht kürzer sein als der Takt**
+[04.11.2026]. Ein verworfener Takt fällt *ganz* — und daraus folgt eine Schranke, die vorher
+fehlte: Bei `zeit.takt-sekunden: 600` und `zeit.untaetig-minuten: 1` genügte eine Minute
+Stillstand am Ende des Takts, um die 540 aktiv gespielten Sekunden davor mitzuverlieren, bei
+jedem Takt erneut und ohne eine Zeile im Protokoll, denn ein untätiger Ausgang ist nicht
+meldepflichtig. Beide Werte lagen in ihren erlaubten Bereichen; geprüft wurde jeder nur für
+sich. Erlaubt ist jetzt allein eine Grenze ab der Taktlänge, in ganzen Minuten aufgerundet —
+oder die 0 als Ausschalter. Die Regel steht einmal im Kern und wird an drei Stellen gefragt,
+weil es drei Wege zu diesem Paar gibt: Ein Wertesatz mit unpassendem Paar kommt gar nicht mehr
+zustande, der Leser der Datei klagt mit Grund und kleinster passender Zahl und bleibt bei den
+10 Minuten, und ein Neuladen lässt die alte Grenze stehen, wenn sie zum *laufenden* Takt nicht
+passt. Der letzte Fall ist nicht konstruiert: Wer Takt und Grenze gemeinsam verkürzt, hat ein
+stimmiges Paar in der Datei und ein unstimmiges im Betrieb, weil die Taktlänge erst nach dem
+Neustart wirkt. Der Block „Nur beim Start gelesen" sagt das dann mit Grund; nach dem Neustart
+gilt beides zusammen. Und weil die Stufe nur über *eine* Taktlänge zugunsten des Spielers
+wirkt, darf keine Spanne länger werden als ein Takt — das ist die Bedingung, an der der
+nächste Zusatz hängt.
+
+**Die Spielzeit hat keinen Zeugen** — anders als das Geld. Im Buchungsbuch fällt eine verlorene
+oder doppelte Zeile an der Zusage „Summe aller Buchungen ist der Stand" auf, ohne dass die
+Probe eine einzige Buchungsart kennen muss. Einer verlorenen Minute widerspricht nichts, einer
+doppelt gezählten auch nicht. Daraus folgen zwei Regeln. Erstens wird ein fehlgeschlagener
+Schreibversuch **nicht wiederholt**: Ein zweiter Versuch mit derselben Liste könnte dieselbe
+Minute zweimal addieren, und das ist der Fehler, der nie auffällt. Zweitens steht jeder Verlust
+mit Sekunden und Spielerzahl im Protokoll — was sich nicht nachrechnen lässt, muss zumindest
+nachlesbar sein. Aus demselben Grund gibt es **kein Setzen von Hand**, auch nicht für den
+Betreiber: Ein absoluter Wert hätte weder einen Grund noch einen Prüfer in einer Spalte. Wer
+Stunden eintragen will, braucht dafür zuerst das Gegenstück zum Buchungsbuch und nicht einen
+zweiten Schreibweg.
+
+**Eine unerreichbare Datenbank hält den Hauptfaden an — der Takt macht daraus keinen
+Dauerzustand** [04.11.2026]. Ein Schreibversuch in eine tote Datenbank kostet rund fünf
+Sekunden: Gültigkeitsprüfung der Verbindung, dann die Aufbaufrist. Vor diesem Schritt fror ein
+toter Datenbankrechner den Server nur, wenn ein Spieler handelte; mit dem ersten
+wiederkehrenden Zeitgeber tut er es von selbst, jede Taktlänge erneut — bei der kürzesten
+erlaubten Taktlänge die halbe Wanduhr. Und ein Proxy-Neustart, der vierzig Abmeldungen in einen
+Tick legt, summierte vierzig Aufbaufristen über die Frist des Serverwächters: Der Server wäre
+genau beim Abrechnen abgeschossen worden. Nach einem Fehlschlag setzt der Takt deshalb einige
+Schläge lang das **Schreiben** aus, und in diesem Fenster versucht es auch kein Abgang mehr.
+**Gerechnet wird weiter** — das ist der Kern, und es ist die Lehre aus einem eigenen Fehlgriff:
+Setzte auch das Rechnen aus, blieb die Marke stehen, die Spanne wüchse über mehrere
+Taktlängen, und dann träfe die Untätigkeitsstufe aus dem Zusatz oben genau das, was sie
+verhindern soll — aktiv gespielte Zeit, stumm. Jetzt rückt die Marke in jedem Schlag vor, die
+Zuschläge warten, und der nächste erfolgreiche Zug nimmt sie mit; wiederholt wird dabei nichts,
+denn geschrieben war nichts. Verloren ist allein der eine Takt, der wirklich versucht wurde.
+Der Preis steht an anderer Stelle: Während des Fensters liegen gemessene Sekunden nur im
+Arbeitsspeicher. Ein geordnetes `/stop` nimmt sie mit — das Abschalten fragt die Sperre bewusst
+nicht, es ist ein Aufruf für alle offenen Sitzungen und damit höchstens eine Aufbaufrist —, ein
+harter Absturz in diesem Fenster verliert sie. Die Zahl der ausgesetzten Schläge ist aus der
+Klemme abgeleitet und steht **nicht** in der `config.yml`: Ein Schlüssel dafür wäre ein
+Schalter, mit dem ein Betreiber sich stumm Spielzeit wegwerfen kann, und er bräuchte eine
+zweite Querprüfung gegen die Klemme — also dieselbe Falle, die der Zusatz oben für die
+Untätigkeitsgrenze gerade geschlossen hat.
+
+**Es wird kein Altbestand übernommen.** Minecraft führt selbst eine Spielzeit, aber sie ist für
+jedes Plugin beschreibbar, hängt nicht an der Welt und verdoppelt sich, wenn eine Welt kopiert
+wird. Ein Altbestand aus dieser Quelle wäre eine erfundene Geschichte — dieselbe Frage hat
+[8.6](#86-das-buchungsbuch-erledigt-02112026) mit einer eigenen Zeile „bestand" beantwortet,
+die nur etwas über das Jetzt behauptet; hier gibt es nichts, worüber eine solche Zeile etwas
+Wahres sagen könnte. Jeder fängt bei 0 an, und die Anzeige sagt genau das — sonst sieht ein
+Spieler mit zweihundert Stunden eine kleine Zahl und meldet einen Fehler.
+
+**Die Anzeige rechnet die laufende Sitzung mit**, die Datenbank kennt sie nicht. Wer eben
+beigetreten ist, läse sonst eine Null neben dem Satz „wird gezählt". Sie hängt an
+`/freimarken spielzeit [<spieler>]` und nicht an einem eigenen `/spielzeit`: Die Befehlstabelle
+in [11.1](#111-sprechende-befehle-mit-vervollständigung) nennt ihn nicht, und das Projekt baut
+keinen Hauptbefehl, bevor der Plan ihn führt. Sobald der Eintrag da ist, ist daraus ein eigener
+Befehl samt Zweitnamen `/playtime` — eine Zeile, derselbe Inhalt. Die fremde Spielzeit zeigt
+nur, wer gerade da ist: Zwei ihrer Zeilen gibt es für einen Abgemeldeten gar nicht, und eine
+Namensauflösung über Abgemeldete fragt im Zweifel bei Mojang nach und hält dabei den Server an.
+Eine zweite, schwächere Auflösung daneben zu bauen wäre schlechter als eine Absage, die den
+Grund nennt.
+
+**Was eine dritte Ablage erbt, steht im Vertrag und nicht daneben** [04.11.2026]. Die
+Schnittstelle der Ablage nennt sechs Zusagen und sagt, eine geteilte Vertragsprobe prüfe sie
+für jede Umsetzung. Zwei davon standen nicht darin: „eine Liste in einem Aufruf, alles oder
+nichts" wurde je Umsetzung einmal daneben geprüft, und bei einem Überlauf warfen die beiden
+Fassungen verschiedene Ausnahmen — dieselbe Eingabe, zwei Verhalten hinter einer Schnittstelle.
+Beides steht jetzt im Vertrag, der Überlauf damit auch mit festgelegtem Typ, und die zwei
+Kopien sind weg. Das zählt, weil die Schnittstelle eine dritte Umsetzung ankündigt (die
+Rangliste aus [12b.3](#12b3-was-darauf-ist)): Sie erbt die Proben, statt sie zu wiederholen
+oder zu vergessen. Dazu gehört auch, dass die Anzeige jeden ihrer Sätze wirklich an einer
+Stelle hält — vorher wurde eine Zeile einzeln gesendet, und eine einzeln gesendete Zeile fällt
+beim Umbau in `/playtime` heraus, ohne dass eine Probe rot wird.
+
+Nicht dabei und mit Absicht: der Rangaufstieg selbst samt Schwelle und Befehl — die Messung ist
+seine letzte fehlende Voraussetzung, das Vergeben eines Rechts kommt mit Schritt 12, und
+[15](#15-baureihenfolge) macht „Reisender steigt von selbst" ohnehin zum Abnahmekriterium dort;
+ein Schlüssel in der `config.yml` für diese Schwelle (dieselbe Regel wie in
+[8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026): keine Zeile Anleitung für etwas,
+das es noch nicht gibt); Tagesbonus und Verdienstdeckel, die beide auf dieser Tagesgrenze
+aufsetzen (Teil E); eine Rangliste und ein Verlauf über alle Tage (Schritt 12b — beides braucht
+eine zweite Leseart, und das ist eine Entscheidung im Kern und keine Datenbankfrage); und ein
+zweiter Zeitgeber für irgendetwas anderes.
+
+Nicht dabei und mit Absicht, aus der Nacharbeit [04.11.2026]: eine Schranke, die die
+Untätigkeitsgrenze gegen das ganze Sperrfenster statt gegen eine Taktlänge prüft — sie hätte
+das erlaubte Paar 600 s und 10 min verboten und bei langem Takt eine Stunde Untätigkeitsgrenze
+erzwungen, also dem Betreiber eine Einstellung weggenommen, um einen Entwurfsfehler zu decken;
+ein eigener Schreibversuch je Taktlänge beim Abmelden — mit den wartenden Zuschlägen verliert
+ein Abgang im Sperrfenster nichts, und jeder Versuch kostete erneut eine Aufbaufrist im
+Hauptfaden; ein Schlüssel für die Zahl der ausgesetzten Schläge (Begründung oben); und eine
+Zusage darüber, was beim *Lesen* einer überlaufenden Summe geschieht — aus diesem Schritt ist
+der Fall nicht erreichbar, weil jede Spanne auf zehn Taktlängen geklemmt wird, und gemessen hat
+ihn niemand, also steht er nicht im Vertrag. Zwei kleine Textfunde bleiben offen, und sie
+stehen hier, damit sie nicht verlorengehen: Die Anzeige nennt weiter die Taktlänge als Abstand („das geschieht alle 60 s"), was im
+Sperrfenster zu kurz ist — die genannte *Menge* stimmt dort, die Häufigkeit nicht; und der
+Kommentar zu `zeit.takt-sekunden` nennt die rund fünf Sekunden Stillstand als Zahl, obwohl sie
+aus zwei Fristen der Datenbankschicht folgt und mit ihnen wandert.
 
 ---
 
@@ -1365,7 +1596,11 @@ Auslaufen passiert, steht in [8.4](#84-warum-das-die-zusage-nicht-bricht) und
 | **Förderer** | Mitgliedschaft, 10 €/Monat | Rangfarbe, Haustier, Partikel, +2 Heimatpunkte, Kornmark-Vorabzugang, **+2 Parzellen, +1 Feld je Grundstück** — Kosmetik auch einzeln für Goldmark; Zuschlag, Heimatpunkte und Warps nur hier |
 | **Stifter** | Mitgliedschaft, 20 €/Monat | wie Förderer, aber **+4 Parzellen und +2 Felder je Grundstück**, dazu Abzeichen, Namensanzeige, Platz auf der Stiftertafel in Altfurt |
 
-Der Spielzeit-Aufstieg läuft automatisch — ohne Antrag, ohne Team.
+Der Spielzeit-Aufstieg läuft automatisch — ohne Antrag, ohne Team. Gezählt wird die Zeit seit
+dem 03.11.2026 ([8.8](#88-die-spielzeit-und-die-tagesgrenze-erledigt-03112026)), der Aufstieg
+selbst kommt mit Schritt 12. Die Stundenzahlen oben sind **gemessene Anwesenheit und keine
+gemessene Tätigkeit**: Was diese Messung zusagen kann und was nicht, steht in 8.8 — wer an den
+Rang etwas hängt, das Mitspieler betrifft, muss das dort zuerst lesen.
 
 ### 9.1 Berufe im Zunfthaus [entschieden]
 
@@ -1395,7 +1630,10 @@ Zwölf Berufe: sechs Grundberufe, jeder mit einer Spezialisierung ab dem Rang B�
   halten, und abnehmender Ertrag dämpft den Kreis, hebt ihn nicht auf. **Die Markierung muss
   stehen, bevor die erste Mark aus Arbeit fließt**: Alles, was vorher gesetzt wurde, gilt
   danach für immer als gewachsener Boden.
-- **Tagesdeckel** je Beruf, großzügig genug, dass ihn normales Spielen nicht erreicht.
+- **Verdienstdeckel je Spieler**, großzügig genug, dass ihn normales Spielen nicht erreicht.
+  Bis zum 03.11.2026 stand hier „je Beruf" — entschieden ist seit dem 01.11.2026 das
+  Gegenteil ([8.2](#82-quellen-und-senken)), weil ein Deckel je Beruf über zwei Grundberufe
+  doppelt käme.
 - Spezialisierungen sind in der Konfiguration angelegt — eine zweite je Grundberuf ist
   später ein Eintrag, kein Umbau.
 
@@ -1540,7 +1778,7 @@ lehrreich — aber nichts davon im eigenen Jar.
 ```
 core/    reines Java, keine Bukkit-Abhängigkeit
          Preisstaffeln, Zusammenlegungsregeln, Mietfristen, Bürgerrechte, Kontobuch,
-         Wechselkurs und Tagesdeckel — alles, was wirklich kaputtgehen kann
+         Wechselkurs, Wechsel- und Verdienstdeckel — alles, was wirklich kaputtgehen kann
 paper/   dünner Adapter: übersetzt zwischen Spielwelt und Kern
 ```
 
@@ -1626,7 +1864,7 @@ Die Unterscheidung bestimmt den ganzen Aufbau:
 
 | | **Stammdaten** | **Spieldaten** |
 |---|---|---|
-| Was | Preise, Kurse, Tagesdeckel, Rangrechte, Berufssätze, Mietdauern, Texte, Weltgrenzen | Wem gehört was, Kontostände, Mietverträge, Spielzeit, Mitgliedschaften |
+| Was | Preise, Kurse, Wechsel- und Verdienstdeckel, Rangrechte, Berufssätze, Mietdauern, Texte, Weltgrenzen | Wem gehört was, Kontostände, Mietverträge, Spielzeit, Mitgliedschaften |
 | Wer ändert | **der Mensch**, selten, bewusst | **das Spiel**, ständig, automatisch |
 | Wer schreibt | Manager | Plugin |
 | Wer liest | Plugin beim Start und auf Befehl | Manager, nur zur Anzeige |
@@ -1674,9 +1912,9 @@ Protokoll und Oberfläche schon mit:
 | Seite | Inhalt |
 |---|---|
 | **Wirtschaft** | Parzellenpreise und Staffelung, Zusammenlegungsgebühr, Mieten, Kaution, Lizenzen, Flag-Preise, Marktgebühr |
-| **Währung** | Kurse beide Richtungen, Tagesdeckel, Goldmark-Preis, Mengenbonus — mit Schranken und Verlauf, siehe [12a.6](#12a6-was-anpassbar-ist--und-was-nicht) |
+| **Währung** | Kurse beide Richtungen, Wechseldeckel, Goldmark-Preis, Mengenbonus — mit Schranken und Verlauf, siehe [12a.6](#12a6-was-anpassbar-ist--und-was-nicht) |
 | **Ränge** | Schwellen, was jeder Rang freischaltet, Mitgliedschaftsinhalte |
-| **Berufe** | Sätze je Beruf, abnehmender Ertrag, Tagesdeckel, Spezialisierungen |
+| **Berufe** | Sätze je Beruf, abnehmender Ertrag, Verdienstdeckel je Spieler, Spezialisierungen |
 | **Welten** | Grenzen, Reset-Zeitpunkte, Vorgenerierung anstoßen |
 | **Texte** | die Sprachdatei, direkt bearbeitbar |
 | **Besitz** | wer besitzt was — mit Suche; Aktionen: übertragen, freigeben, jeweils mit Grund |
@@ -1694,14 +1932,14 @@ Bestätigung, und der Satz im Dialog kommt vom Manager.
 ### 12a.6 Was anpassbar ist — und was nicht
 
 Grundsatz [entschieden]: **Alles, was sich sinnvoll anpassen lässt, ist im Dashboard
-anpassbar** — Preise, Mieten, Gebühren, Kurse, Tagesdeckel, Goldmark-Preis, Mengenbonus,
-Verdienstsätze, Rangschwellen, Mietdauern, Texte. Nichts davon steht im Quelltext.
+anpassbar** — Preise, Mieten, Gebühren, Kurse, Wechsel- und Verdienstdeckel, Goldmark-Preis,
+Mengenbonus, Verdienstsätze, Rangschwellen, Mietdauern, Texte. Nichts davon steht im Quelltext.
 
 Drei Klassen, weil sie unterschiedlich behandelt werden müssen:
 
 | Klasse | Beispiele | Wirkung |
 |---|---|---|
-| **Frei anpassbar** | Preise für Neukäufe, Kurse, Tagesdeckel, Gebühren, Verdienstsätze, Texte, Rangschwellen | sofort bzw. beim nächsten Neuladen |
+| **Frei anpassbar** | Preise für Neukäufe, Kurse, Wechsel- und Verdienstdeckel, Gebühren, Verdienstsätze, Texte, Rangschwellen | sofort bzw. beim nächsten Neuladen |
 | **Anpassbar mit Bestandsschutz** | Ladenmiete, Mitgliedschaftspreis | gilt für **neue** Verträge; laufende behalten ihren Satz bis zur Verlängerung und sehen den neuen vorher |
 | **Nur lesbar, mit Begründung** | Parzellengröße und Wegbreite, Weltnamen, Weltgrenze nach unten, geteilte Inventare, Spieler-Identität (E1) | nicht änderbar — der Weltgenerator und bestehende Daten hängen daran |
 
@@ -1956,12 +2194,12 @@ Jeder Schritt endet mit etwas, in dem man herumlaufen kann. Keine Fristen.
 | 4 | ~~**Weltgenerator für die Marktstadt** — Raster, Wege, Grenzen~~ **erledigt 31.10.2026** | ~~das Raster steht~~ — `Rasterplan` im Kern (8 Tests ohne Server), `MarktstadtGenerator` im Plugin; am Testserver geprüft: Parzellenmitte Gras, Mauer Steinziegel, Weg glatter Stein, Krone Halbstufe |
 | 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer — **fertig 31.10.2026** | zwei Spieler, einer baut, der andere nicht — *Code steht: `Besitzbuch` mit allen Regeln (Preisstaffel, Obergrenze, Mitbauer, Aufgeben ohne Rückzahlung), `Schutzwache` mit einer Regel für alle 14 Schutzereignisse, `/parzelle` und `/mark`. 89 Tests grün, Startprobe auf einem echten Paper-26.3-Server durch. Danach eine adversariale Prüfung mit 41 Agenten: 9 bestätigte Befunde, alle behoben — darunter fehlender Schutz gegen Schaden an Rüstungsständern und Rahmeninhalt, Kisten-Loren, ein Besitzschutz, der bei Datenbankausfall nach außen offen scheiterte, und Tests, die das Spielschema leerten. Durchgang mit zwei Spielern am 31.10. gelaufen: Der Schutz greift auf fremdem Grund und sagt es in der Aktionsleiste, Mitbauer schaltet frei und wieder zu, die zweite Parzelle wurde fuer 25.000 Mark bezahlt, und Parzelle -1/0 beweist die negative Seite der Rasterrechnung. Jeder Schritt in der Datenbank gegengeprueft* |
 | 6 | ~~Zusammenlegen und Auftrennen mit Gebühr~~ **erledigt 01.11.2026** | ~~zwei Parzellen werden eine, der Weg verschwindet~~ — `/parzelle zusammenlegen <richtung>` und `/parzelle auftrennen [alles]`, Gebühr 10.000 je Feld der neuen Gruppe. Die Geometrie liegt im Kern (`Gruppenflaeche`), die Blocktabelle an einer Stelle (`Stadtboden`), die Weltarbeit hinter einem 4-Methoden-Griff (`Weltgriff`), damit sie ohne Server prüfbar ist. Vier Runden Fix-und-Nachweis mit je einem adversarialen Prüflauf: elf bestätigte Befunde, alle behoben, jeder mit Probe und Mutationsnachweis. Drei Spieltests am 1.11. bestanden — zuletzt das Quadrat mit 19 von 19 nachgemessenen Koordinaten. 231 Tests |
-| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — in sieben Teilen; **Teil A (Buchungsbuch) und Teil B (Stammwerte) erledigt 02.11.2026**, siehe [8.6](#86-das-buchungsbuch-erledigt-02112026) und [8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026) — *es fehlen Spielzeit und Tagesgrenze (C), Berufe (D), Verdienen (E), Bundesmarkt (F), Messstelle (G)* | man kann Mark verdienen und ausgeben — *jede Geldbewegung steht im Buch, `/mark verlauf` zeigt sie* |
+| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — in sieben Teilen; **Teil A (Buchungsbuch) und Teil B (Stammwerte) erledigt 02.11.2026, Teil C (Spielzeit und Tagesgrenze) erledigt 03.11.2026**, siehe [8.6](#86-das-buchungsbuch-erledigt-02112026), [8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026) und [8.8](#88-die-spielzeit-und-die-tagesgrenze-erledigt-03112026) — *es fehlen Berufe (D), Verdienen (E), Bundesmarkt (F), Messstelle (G)* | man kann Mark verdienen und ausgeben — *jede Geldbewegung steht im Buch, `/mark verlauf` zeigt sie; die Spielzeit wird gezählt, aber noch von nichts benutzt* |
 | 8 | Markthalle, Mietverträge, Abholfach, Freie Truhe | ein Laden läuft ab und wird sauber zurückgegeben |
 | 9 | Freistädte: gründen, Grundstücke vergeben, Bürger, Kasse | ein Spieler verkauft einem anderen ein Grundstück |
 | 10 | Hafenwerder mit eigener Angeltabelle | eine Insel lässt sich sichern, der Fang unterscheidet sich |
 | 11 | Wolkenwerder mit Skyblock-Mechaniken | Generator, Insel-Stufe, Herausforderungen laufen |
-| 12 | Ränge, Goldmark, Wechsel mit Tagesdeckel, Kosmetik | Reisender → Siedler steigt von selbst |
+| 12 | Ränge, Goldmark, Wechsel mit Wechseldeckel, Kosmetik | Reisender → Siedler steigt von selbst |
 | 12a | **Dashboard im Manager**: Wirtschaft, Währung, Ränge, Berufe, Texte | ein Preis lässt sich ändern, ohne das Plugin neu zu bauen |
 | 13 | Bürgeramt-Anmeldung, Rundgang, Menüs, Sprachdatei, Farbwelt | ein Neuling kommt ohne Hilfe zur ersten Parzelle |
 | 14 | Kleine Spiele in Altfurt | Parkour, Lotterie, Angelwettbewerb laufen |

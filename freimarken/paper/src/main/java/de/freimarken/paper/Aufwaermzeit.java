@@ -58,7 +58,16 @@ final class Aufwaermzeit implements Listener {
     private final JavaPlugin plugin;
     private final Map<UUID, Lauf> laufende = new HashMap<>();
 
-    Aufwaermzeit(JavaPlugin plugin) {
+    /**
+     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     *
+     * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
+     * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
+     */
+    private final Sprache sprache;
+
+    Aufwaermzeit(JavaPlugin plugin, Sprache sprache) {
+        this.sprache = sprache;
         this.plugin = plugin;
     }
 

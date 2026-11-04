@@ -1,0 +1,15 @@
+# Freimarken - deine Saetze
+#
+# Diese Datei ist ABSICHTLICH leer. Jeder Satz, den ein Spieler liest, steht
+# daneben in sprache-vorlage.yml - mit Platzhaltern und einer Erklaerung.
+#
+# EINEN SATZ AENDERN: die Zeile aus sprache-vorlage.yml hierher kopieren, SAMT
+# aller Ebenen darueber, und hier den Text aendern. Dann /freimarken neuladen.
+#
+# Was hier NICHT steht, kommt aus dem Plugin - und zwar immer die neueste
+# Fassung. Darum bleibt diese Datei am besten kurz: ein Satz, den du hier
+# ueberschreibst, bekommt keine Verbesserung aus einem naechsten Update mehr.
+# /freimarken neuladen sagt dir bei jedem Lauf, wie viele Saetze von dir sind.
+#
+# Stimmt eine Zeile nicht, wird GAR NICHTS uebernommen und es bleiben die
+# Saetze, die bisher galten. Die Klage nennt Zeile, Spalte und Grund.

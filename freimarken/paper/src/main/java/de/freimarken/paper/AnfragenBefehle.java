@@ -36,7 +36,16 @@ final class AnfragenBefehle {
     private final Anfragen anfragen;
     private final Reise reise;
 
-    AnfragenBefehle(Anfragen anfragen, Reise reise) {
+    /**
+     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     *
+     * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
+     * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
+     */
+    private final Sprache sprache;
+
+    AnfragenBefehle(Anfragen anfragen, Reise reise, Sprache sprache) {
+        this.sprache = sprache;
         this.anfragen = anfragen;
         this.reise = reise;
     }

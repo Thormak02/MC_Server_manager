@@ -1,0 +1,96 @@
+# Freimarken - sprache-vorlage.yml
+#
+# WIRD BEI JEDEM START NEU GESCHRIEBEN. Was du hier aenderst, ist beim naechsten
+# Start weg. Hier steht JEDER Satz, den ein Spieler liest - zum Nachsehen und zum
+# Kopieren. Suche nach dem Wortlaut, dann hast du den Schluessel.
+#
+# EINEN SATZ AENDERN: die Zeile samt aller Ebenen darueber nach sprache.yml kopieren
+#   und DORT aendern. /freimarken neuladen uebernimmt sie sofort.
+# FARBE: <gray> <dark_gray> <white> <yellow> <gold> <green> <red> <aqua> <bold>
+#   <italic> - und jede weitere Farbe, die Minecraft kennt, auch <dark_blue> oder
+#   <#ffaa00>. Jedes geoeffnete Tag MUSS geschlossen werden: <gold>...</gold>. Ein
+#   offenes oder unbekanntes Tag ist eine Klage mit Zeile und Spalte. <click> und
+#   <hover> sind nicht erlaubt - sie koennten einen Befehl im Namen des Spielers
+#   ausloesen.
+# SPITZE KLAMMER ALS ZEICHEN: schreibe ZWEI Backslashes davor - sonst haelt das
+#   Plugin sie fuer eine Farbe. Der Grund fuer die zwei: in doppelten
+#   Anfuehrungszeichen ist ein Backslash fuer YAML selbst ein Sonderzeichen, und
+#   einer allein macht die ganze Datei unlesbar.
+#   BEISPIEL ESCAPE: zeile: "<gray>Preis fuer \\<anzahl> Parzellen</gray>"
+#   BEISPIEL LIEST: Preis fuer <anzahl> Parzellen
+# WERT: {name} in geschweiften Klammern. Welche ein Satz kennt, steht im Kommentar
+#   darueber. Einen weglassen ist erlaubt (dann liest der Spieler den Wert nicht),
+#   einen fremden Namen nicht - dann gilt fuer diesen EINEN Satz wieder der
+#   ausgelieferte, und eine Zeile im Bericht sagt es. Ein Wert, der selbst eine
+#   Klammer traegt, wird nie als Platzhalter gelesen.
+# EINZUG UND SPALTEN: stehen IM Satz. Fuehrende Leerzeichen sind Absicht - darum
+#   steht jeder Wert in doppelten Anfuehrungszeichen.
+# NEUE CHATZEILE: \n im Satz - EIN Backslash, anders als bei der spitzen
+#   Klammer. Der Unterschied: Die Folge \n kennt YAML als Umbruch, \< kennt es
+#   nicht - darum braucht die Klammer zwei und der Umbruch einen. Jede Zeile wird
+#   einzeln gesendet, mit derselben Farbe.
+#   BEISPIEL UMBRUCH: zeile: "<gray>Erste Zeile\nZweite Zeile</gray>"
+#   BEISPIEL ZWEI ZEILEN: Erste Zeile | Zweite Zeile
+# ZAEHLT: ein Satz mit einer Zahl hat zwei Formen, eins und viele. BEIDE Pflicht.
+# ZEICHEN: ASCII und · (U+00B7). Keine Umlaute, kein scharfes s, kein
+#   Paragrafenzeichen, kein &-Code. Die Datei ist UTF-8.
+
+mark:
+  verlauf:
+    # {zeit} {betrag} {grund} {stand} - Zeitform aus zeit.verlauf-muster, Betrag und
+    # Vorzeichen formt das Programm, {grund} kommt aus der Liste darunter.
+    # Einzug und Farbe stehen HIER, nicht am Sendeort: wer den Betrag golden will,
+    # schreibt <gold>{betrag}</gold> hinein, und es wirkt wirklich.
+    zeile: "<gray>  {zeit}  {betrag}  {grund}  (Stand {stand})</gray>"
+    # Was ein Spieler statt des Datenbankschluessels liest. KEINE Farbtags: diese
+    # Woerter werden in den Satz darueber eingesetzt und sind dort ein Blatt - ein
+    # Tag darin stuende dem Spieler woertlich im Chat.
+    grund:
+      eroeffnung: "Startguthaben"
+      bestand: "Stand bei Einfuehrung des Kontobuchs"
+      parzelle-gekauft: "Parzelle genommen"
+      parzelle-erstattet: "Parzelle nicht eingetragen - erstattet"
+      zusammenlegung: "Grundstueck zusammengelegt"
+      zusammenlegung-erstattet: "Zusammenlegen gescheitert - erstattet"
+
+waehrung:
+  # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
+  # deines; die Zahlform bleibt im Programm, damit ein Tippfehler keine Preise
+  # verbiegt. Kein Farbtag - der Betrag wird in andere Saetze eingesetzt.
+  # HALB IN KRAFT: Dieses Wort wirkt noch nicht an allen Stellen - ein Teil der
+  #   Betraege kommt bis zu seinem Bauschritt aus dem Programm und sagt dort weiter
+  #   "Mark". Aenderst du es jetzt, steht im Spiel beides nebeneinander. Diese
+  #   Warnung verschwindet, sobald die letzte Stelle umgezogen ist - sie kann auch
+  #   nicht stehenbleiben, eine Probe haelt beide Richtungen.
+  betrag: "{zahl} Mark"
+
+zeit:
+  # Muster fuer DateTimeFormatter, kein Satz. Wird beim LADEN uebersetzt - ein
+  # unbrauchbares Muster ist eine Klage und kein Absturz mitten in /mark verlauf.
+  # Das Jahr fehlt mit Absicht: Ein Verlauf zeigt die letzten Buchungen, und bei
+  # zehn Zeilen ist die Jahresangabe zehnmal dieselbe.
+  verlauf-muster: "dd.MM. HH:mm"
+
+befehl:
+  # Was in /help neben dem Befehl steht. NUR BEIM START GELESEN: die Beschreibungen
+  # gehen bei der Anmeldung in den Befehlsbaum; /freimarken neuladen aendert sie
+  # nicht, erst ein Neustart. Das sagt die Antwort auf /freimarken neuladen auch.
+  # Keine Farbtags - der Befehlsbaum nimmt eine Zeichenkette und kein Component.
+  beschreibung:
+    freimarken: "Stand, Preise und Welt des Freimarkenbunds"
+    parzelle: "Parzellen nehmen, ansehen und verwalten"
+    mark: "Dein Guthaben in Mark"
+    warp: "Reisen zwischen den Welten des Freimarkenbunds"
+    zurueck: "Zurueck zum letzten Ort - nach Tod, Reise oder Teleport"
+    tpa: "Frage einen Spieler, ob du zu ihm kommen darfst"
+    tpahere: "Lade einen Spieler ein, zu dir zu kommen"
+    tpaccept: "Eine Teleportanfrage annehmen"
+    tpdeny: "Teleportanfragen ablehnen"
+
+# Die Zeile, die der Rangwerbung folgt, steht NICHT hier, sondern in config.yml
+# unter hinweise.rang-werbung - sie ist eine Einstellung DIESES Servers und kein
+# ausgelieferter Satz. Suche sie dort.
+#
+# Noch nicht hier: die Saetze von /parzelle, /tpa, /warp, /zurueck, der Wachen, der
+# Spielzeit und von /freimarken selbst. Sie stehen bis zu ihrem Bauschritt im
+# Programm - ein Satz steht immer an genau einem Ort, nie an keinem und nie an zwei.

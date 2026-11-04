@@ -106,8 +106,17 @@ final class ParzellenBefehle {
 
     private final Abklingzeit abschaetzungen = new Abklingzeit(ZWISCHEN_ZWEI_ABSCHAETZUNGEN);
 
+    /**
+     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     *
+     * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
+     * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
+     */
+    private final Sprache sprache;
+
     ParzellenBefehle(Besitzbuch buch, World marktstadt, Wirtschaftsstand wirtschaft,
-                     Logger protokoll) {
+                     Logger protokoll, Sprache sprache) {
+        this.sprache = sprache;
         this.buch = buch;
         this.marktstadt = marktstadt;
         // Aus der Welt gelesen und nicht daneben uebergeben: Zwei Angaben fuer dieselbe
@@ -215,12 +224,19 @@ final class ParzellenBefehle {
             return;
         }
         spieler.sendMessage(Component.text("Deine letzten Buchungen", NamedTextColor.GOLD));
-        // Die Zone des Servers: Welche der Spieler liest, weiss niemand - und die
-        // Tagesgrenze aus Plan 7 wird dieselbe sein. Sobald sie in der Einstellungsdatei
-        // steht, kommt sie von dort, ohne dass sich hier etwas aendert.
-        var zone = java.time.ZoneId.systemDefault();
-        zeilen.forEach(zeile -> spieler.sendMessage(Component.text(
-                "  " + Verlaufszeile.text(zeile, zone), NamedTextColor.GRAY)));
+        // Die EINE Zone des Servers - dieselbe, in der die Tagesgrenze liegt. Hier stand
+        // bis zum 03.11.2026 ZoneId.systemDefault(), mit der Zusage, dass die Zone aus der
+        // Einstellungsdatei kommt, sobald es sie gibt. Jetzt gibt es sie. Stehengeblieben
+        // waere sie eine zweite Quelle: Auf einem Rechner, dessen Systemzone nicht die
+        // eingestellte ist, zeigte diese Zeile eine andere Ortszeit als die Tagesgrenze,
+        // mit der dieselbe Buchung gezaehlt wurde.
+        var zone = wirtschaft.werte().zeit().zone();
+        // Einzug und Farbe stehen seit dem 04.11.2026 IM Satz mark.verlauf.zeile und
+        // nicht mehr hier: Verlaufszeile gibt ein fertiges Component zurueck. Hier stand
+        // Component.text("  " + text, GRAY) - zwei Leerzeichen und eine Farbe, die der
+        // Betreiber nicht erreichen konnte.
+        zeilen.forEach(zeile -> spieler.sendMessage(
+                Verlaufszeile.zeile(sprache, zeile, zone)));
     }
 
     // --- Die einzelnen Befehle -------------------------------------------------

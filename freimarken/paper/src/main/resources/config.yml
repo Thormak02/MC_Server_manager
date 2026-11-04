@@ -152,6 +152,122 @@ kasse:
   # Eroeffnung ein (Beitritt oder erste Buchung, je was zuerst kommt).
   startguthaben: 50000
 
+# Wie Spielzeit gemessen wird und wann ein Tag endet.
+#
+# Gezaehlt wird Anwesenheit mit Lebenszeichen, in Sekunden, und zwar aus der Differenz
+# zweier Uhrablesungen - nicht aus der Zahl der Takte. Ein verspaeteter Takt zaehlt
+# deshalb richtig, und ein lahmender Server verliert nichts.
+#
+# In der Datenbank steht immer nur schon VERSTRICHENE Zeit und nie ein laufender
+# Zeitpunkt. Darum kann kein Absturz eine offene Sitzung hinterlassen, und es gibt kein
+# Aufraeumen beim Start.
+#
+# Gezaehlt wird erst ab dem Einbau dieser Messung. Spielstunden von davor stehen nirgends:
+# Die Minecraft-Statistik waere die einzige Quelle, und die ist fuer jedes Plugin
+# schreibbar, nicht an eine Welt gebunden und von einer Weltkopie verdoppelt - sie kann die
+# Zusage "die Datenbank ist die Wahrheit" nicht halten. Jeder faengt bei 0 an, und die
+# Anzeige sagt das.
+zeit:
+  # In welcher Zone ein Tag beginnt und endet - die Tagesgrenze.
+  #
+  # Ein Zonenname wie Europe/Berlin oder UTC, also ein Eintrag aus der Zonendatenbank.
+  # Ein fester Versatz wie "UTC+2" wird abgewiesen: Er kennt keine Sommerzeit, und die
+  # Tagesgrenze laege vom letzten Sonntag im Maerz an um 01:00 Ortszeit. Ein Tippfehler
+  # wird ebenfalls abgewiesen und faellt nicht stumm auf die Zone des Rechners zurueck.
+  #
+  # Was keine Pruefung faengt, ist der Name, der gueltig und trotzdem falsch ist: UTC statt
+  # Europe/Berlin verschiebt die Grenze um eine Stunde, ohne dass etwas klagt. Dagegen
+  # steht die Zeile im Startprotokoll, etwa "Tagesgrenze Europe/Berlin - naechster
+  # Tageswechsel 04.11.2026 00:00 Ortszeit = 03.11.2026 23:00 UTC". Wer dort bei
+  # Nachmittagslicht "00:00 Ortszeit = 00:00 UTC" liest, sieht den Fehler. Am Tag einer
+  # Zeitumstellung nennt dieselbe Zeile den 23- oder 25-Stunden-Tag.
+  #
+  # Alle Zeitstempel in der Datenbank bleiben UTC; nur der TAG wird in dieser Zone
+  # gerechnet, und zwar ausschliesslich in Java. MariaDB entscheidet die Tagesgrenze nicht
+  # (die Verbindung steht fest auf UTC, dort ist zwischen 00:00 und 02:00 Ortszeit noch der
+  # Vortag).
+  #
+  # NUR BEIM START GELESEN - /freimarken neuladen vergleicht und meldet, uebernimmt aber
+  # nicht. Eine neue Zone im Betrieb verschoebe die Tagesgrenze mitten am Tag: Mit dem
+  # ersten Verbraucher der Grenze (Tagesbonus, Ladenmiete, Verdienstdeckel) wuerde derselbe
+  # Tag dann zweimal abgerechnet oder fiele aus.
+  zone: "Europe/Berlin"
+
+  # In welchem Abstand die gemessene Zeit in die Datenbank geschrieben wird.
+  #
+  # Ganze Zahl von 10 bis 600 Sekunden. Der Wert entscheidet NUR, wie oft geschrieben wird,
+  # nicht wie viel gezaehlt wird. Er ist damit die eine Zahl, mit der Schreiblast gegen
+  # Verlust bei einem Absturz getauscht wird: Bei 60 verliert ein Absturz bis zu 1 Minute je
+  # anwesendem Spieler, bei 600 bis zu 10 - solange die Datenbank annimmt. Nach einem
+  # Fehlschlag ist es ein Mehrfaches davon, siehe den Absatz zum Stillstand weiter unten.
+  # Ein geordneter Neustart und ein Abmelden verlieren nichts - dort wird abgerechnet.
+  #
+  # Unter 10 Sekunden schreibt der Takt oefter, als jede Anzeige unterscheidet - zehn
+  # Schreibzuege je Minute und Spieler fuer eine Zahl, die in Minuten dasteht.
+  #
+  # Dieser Wert bestimmt auch, wie oft der Server bei unerreichbarer Datenbank kurz stehen
+  # bleibt: Ein Schreibversuch in eine tote Datenbank haelt den Hauptfaden an, bis die
+  # Verbindung ihre Fristen abgewartet hat - wie lange das ist, steht in den Fristen der
+  # Datenschicht und nicht hier, sonst stuende hier bald eine andere Zahl als dort.
+  # Nach einem Fehlschlag laesst der Takt darum einige Schlaege lang das SCHREIBEN aus -
+  # wie viele, sagt die Protokollzeile des Fehlschlags selbst. GERECHNET wird in diesen
+  # Schlaegen weiter: Ihre Sekunden warten auf den naechsten erfolgreichen Schreibzug und
+  # gehen auf jedem geordneten Weg mit - beim Abmelden mitten im Fenster, beim
+  # Herunterfahren, beim Neustart des Plugins. Verloren ist allein der eine Takt, der
+  # wirklich versucht wurde - und genau den nennt die Zeile.
+  #
+  # Der Preis dieses Fensters: Stuerzt der Server darin ab oder schiesst ein Waechter ihn
+  # ab, sind nicht die Sekunden EINER Taktlaenge je Spieler weg, sondern auch die aller
+  # ausgesetzten Schlaege davor. Darum ist ein grosser Takt zweimal teuer.
+  #
+  # Diese Zahl ist zugleich die Untergrenze fuer untaetig-minuten weiter unten: Die
+  # Untaetigkeitsgrenze darf nicht kuerzer sein als der Takt (aufgerundet auf ganze
+  # Minuten), sonst wirft ein verworfener Takt aktiv gespielte Zeit weg.
+  #
+  # NUR BEIM START GELESEN - und das ist kein Versehen: Der Abstand steckt im gestellten
+  # Zeitgeber. Ihn beim Neuladen neu zu stellen hiesse, dass nach zwei Neuladen drei
+  # Zeitgeber dieselbe Spielzeit dreifach schreiben.
+  takt-sekunden: 60
+
+  # Ab welcher Untaetigkeit ein Takt nicht mehr zaehlt.
+  #
+  # Ganze Zahl von 0 bis 1440 Minuten. 0 heisst ausdruecklich: Abwesenheit zaehlt mit - der
+  # ehrliche Ausschalter fuer die Regel. Gemessen wird mit der Untaetigkeitsdauer, die der
+  # Server selbst fuehrt.
+  #
+  # Die Grenze schliesst den Nachtlang im Startbildschirm aus, der ohne jede Absicht
+  # passiert. Sie ist aber KEINE Sperre: Wer alle neun Minuten eine Taste drueckt, gilt
+  # durchgehend als aktiv, und ein Makro oder ein beschwertes Tastenbrett erzeugt genau das.
+  # Eine Hoeflichkeitsregel, keine Mauer - wer das Gegenteil braucht, braucht eine
+  # Verhaltensmessung und nicht eine groessere Zahl hier.
+  #
+  # Die Grenze ist eine Stufe und kein Schnitt, also zugunsten des Spielers: Wer aufsteht,
+  # bekommt bis zu diese 10 Minuten geschenkt. Ein Rang, der durch eine Pause verlorengeht,
+  # erklaert sich niemandem. Umgekehrt wird ein verworfener Takt NICHT angespart und spaeter
+  # ausgezahlt - sonst sammelte ein abwesender Spieler seine Stunden und kassierte sie mit
+  # einem Schritt.
+  #
+  # WEIL die Grenze eine Stufe ist, darf sie nicht KUERZER sein als takt-sekunden: Bei
+  # takt-sekunden: 600 und untaetig-minuten: 1 faellt der ganze Takt weg, sobald der Spieler
+  # die letzte Minute stillsteht - 540 aktiv gespielte Sekunden waeren weg, ohne eine
+  # Protokollzeile, und bei jedem Takt erneut. Erlaubt ist darum jede Zahl ab dem Takt in
+  # ganzen Minuten aufgerundet (zu 60 s also 1, zu 90 s 2, zu 600 s 10) - oder die 0.
+  #
+  # Was passiert, wenn man es doch versucht: Das Paar wird abgewiesen, nicht abgeschnitten
+  # und nicht geraten. Beim Start klagt das Protokoll mit dem Grund und nennt die kleinste
+  # passende Zahl; es bleibt dann bei diesen 10 Minuten. Bei /freimarken neuladen wird
+  # NICHTS uebernommen - auch die uebrigen Zeilen nicht, denn eine Klage haelt die ganze
+  # Uebernahme an -, und die Antwort nennt denselben Grund.
+  #
+  # /freimarken neuladen uebernimmt diesen Wert. Er wird beim Gebrauch gefragt; es wird
+  # dafuer kein Objekt gebaut und nichts angemeldet. Die eine Ausnahme: Wer takt-sekunden
+  # verkuerzt und die Grenze mit ihm (etwa von 600/10 auf 60/1), hat ein stimmiges Paar in
+  # der DATEI und trotzdem ein unstimmiges im BETRIEB - der laufende Takt ist noch der
+  # lange, denn takt-sekunden wird nur beim Start gelesen. Dann bleibt die alte Grenze
+  # stehen, und der Block "Nur beim Start gelesen" sagt es mit dem Grund; nach dem
+  # naechsten Neustart gilt beides zusammen.
+  untaetig-minuten: 10
+
 # Reisen zwischen den Welten (Plan 4.3): zwei Wege, kein dritter - die Tore am
 # Bundesmarkt und /warp <name>. Selbstgebaute Nether- und Endportale werden gesperrt:
 # Sie fuehren nicht in freimarken:nether, sondern in die Haupt-Nether des Servers, eine

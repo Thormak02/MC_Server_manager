@@ -3,9 +3,9 @@ package de.freimarken.kern;
 /**
  * Alle Stammwerte der Wirtschaft in einem Stueck - ein Schnappschuss.
  *
- * <p>Unveraenderlich und als EIN Satz und nicht als fuenf einzelne Werte: Wer rechnet,
+ * <p>Unveraenderlich und als EIN Satz und nicht als sechs einzelne Werte: Wer rechnet,
  * sieht immer einen in sich stimmigen Stand, auch wenn mitten in der Rechnung neu geladen
- * wird. Mit fuenf Feldern koennte eine Abbuchung den alten Preis nehmen und die Meldung
+ * wird. Mit sechs Feldern koennte eine Abbuchung den alten Preis nehmen und die Meldung
  * danach den neuen nennen - ein Fehlerbild, das niemand meldet, weil es nur aussieht wie
  * ein Rechenfehler.
  *
@@ -19,9 +19,11 @@ package de.freimarken.kern;
  * @param hoechstzahl   wie viele Parzellen ohne besonderes Recht erlaubt sind
  * @param gruppenFelder wie viele Felder eine Gruppe ohne besonderes Recht haben darf
  * @param rangWerbung   die Zeile, die angehaengt wird, wenn ein Rang die Grenze setzt
+ * @param zeit          Tagesgrenze, Takt und Untaetigkeitsgrenze fuer die Spielzeit; warum
+ *                      diese drei hier liegen und nicht daneben, steht in {@link Zeitwerte}
  */
 public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoechstzahl,
-                               int gruppenFelder, String rangWerbung) {
+                               int gruppenFelder, String rangWerbung, Zeitwerte zeit) {
 
     /**
      * Die Schluessel in der Einstellungsdatei - hier und nicht an jeder Stelle, die klagt.
@@ -69,11 +71,14 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
     /** Genau das, was ohne Einstellungsdatei gelten wuerde. */
     public static final Wirtschaftswerte VORGABE = new Wirtschaftswerte(Preisstaffel.VORGABE,
             VORGABE_STARTGUTHABEN, VORGABE_HOECHSTZAHL, VORGABE_GRUPPEN_FELDER,
-            VORGABE_RANG_WERBUNG);
+            VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE);
 
     public Wirtschaftswerte {
         if (preise == null) {
             throw new IllegalArgumentException("Ohne Preisstaffel gibt es keine Wirtschaft");
+        }
+        if (zeit == null) {
+            throw new IllegalArgumentException("Ohne Zeitwerte gibt es keine Tagesgrenze");
         }
         if (!brauchbaresStartguthaben(startguthaben)) {
             throw new IllegalArgumentException("Startguthaben " + startguthaben

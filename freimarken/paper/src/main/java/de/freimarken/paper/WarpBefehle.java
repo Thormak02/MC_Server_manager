@@ -32,7 +32,17 @@ final class WarpBefehle {
     private final Map<String, World> welten;
     private final Reise reise;
 
-    WarpBefehle(Warpverzeichnis verzeichnis, Map<String, World> welten, Reise reise) {
+    /**
+     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     *
+     * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
+     * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
+     */
+    private final Sprache sprache;
+
+    WarpBefehle(Warpverzeichnis verzeichnis, Map<String, World> welten, Reise reise,
+                Sprache sprache) {
+        this.sprache = sprache;
         this.verzeichnis = verzeichnis;
         this.welten = welten;
         this.reise = reise;

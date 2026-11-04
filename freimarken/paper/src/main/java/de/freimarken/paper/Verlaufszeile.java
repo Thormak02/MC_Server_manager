@@ -3,8 +3,7 @@ package de.freimarken.paper;
 import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Buchungsgrund;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.Locale;
+import net.kyori.adventure.text.Component;
 
 /**
  * Eine Buchung in Worte - fuer {@code /mark verlauf}.
@@ -15,39 +14,49 @@ import java.util.Locale;
  *
  * <p><b>Die Zone kommt von aussen.</b> Der Zeitpunkt einer Buchung steht in UTC - so wie
  * jeder Zeitpunkt in dieser Ablage. Ein Spieler liest aber Ortszeit, und welche Zone das
- * ist, weiss diese Klasse nicht. Heute kommt sie als Systemzone herein; sobald die
- * Tagesgrenze aus der Einstellungsdatei kommt, aus derselben Stelle - ohne dass sich hier
- * etwas aendert.
+ * ist, weiss diese Klasse nicht. Sie kommt aus {@code zeit.zone}, also aus derselben
+ * Stelle, in der auch die Tagesgrenze liegt - am 03.11.2026 eingeloest, und zwar ohne eine
+ * Zeile hier. Dass die Zone ein Parameter ist und kein Feld, ist genau der Grund dafuer.
  *
- * <p><b>Die deutschen Woerter stehen hier und nicht in der Datenbank.</b> Dort liegt der
- * ASCII-Schluessel des {@link Buchungsgrund}. Wer die Wortwahl in die Spalte schriebe,
- * koennte sie spaeter nicht mehr aendern, ohne alte Zeilen unlesbar zu machen.
+ * <p><b>Die deutschen Woerter stehen ab dem 04.11.2026 in der Sprachdatei.</b> Dort liegt
+ * der Wortlaut, hier die Rechnerei. Der Datenbankschluessel des {@link Buchungsgrund}
+ * kommt dabei nicht vor: Der Pfad in der Datei entsteht aus dem AUFZAEHLUNGSNAMEN
+ * ({@link MarkSatz#grundpfad}), damit eine Umbenennung in der Spalte keine Betreiberzeile
+ * stumm entwertet - genau das verlangt {@code Buchungsgrund} im eigenen Javadoc.
+ *
+ * <p><b>Und sie gibt ein {@link Component} zurueck, nicht eine Zeichenkette.</b> Bis zum
+ * 04.11.2026 baute {@code ParzellenBefehle:225-226} aus dem Text
+ * {@code Component.text("  " + text, GRAY)} - die zwei Leerzeichen Einzug und die Farbe
+ * standen also am Sendeort. Beides steht jetzt im Satz {@code mark.verlauf.zeile}, und das
+ * geht nur mit einem Component: Waere die Zeile eine Zeichenkette geblieben, haette ein
+ * {@code <gold>} darin dem Spieler woertlich im Chat gestanden, und keine Probe waere rot
+ * geworden - denn ein Farbtag ist nur in einem {@code Art.WORT} verboten.
  */
 final class Verlaufszeile {
-
-    /**
-     * Tag und Uhrzeit ohne Jahr.
-     *
-     * <p>Das Jahr fehlt mit Absicht: Ein Verlauf zeigt die letzten Buchungen, und bei zehn
-     * Zeilen ist die Jahresangabe zehnmal dieselbe. Wer weiter zurueck will, bekommt
-     * spaeter die Chronik aus Plan 12b.
-     */
-    private static final DateTimeFormatter ZEIT =
-            DateTimeFormatter.ofPattern("dd.MM. HH:mm", Locale.GERMANY);
 
     private Verlaufszeile() {
     }
 
     /**
-     * Zum Beispiel {@code "02.11. 14:37  -25.000 Mark  Parzelle genommen  (Stand 25.000)"}.
+     * Zum Beispiel {@code "  02.11. 14:37  -25.000 Mark  Parzelle genommen  (Stand 25.000
+     * Mark)"} in Grau.
+     *
+     * <p>Eine reine Methode: Sprache und Zone kommen herein, ein Component geht hinaus -
+     * kein {@code Player}, kein Bukkit. Nur so kann eine Probe nachsehen, WAS in der Zeile
+     * steht, und nicht bloss, dass etwas gesendet wird. Dasselbe Muster macht
+     * {@code SpielzeitBefehle.sende(Audience, String, List)} (:194-200) im Projekt schon
+     * vor.
      *
      * @param zone die Zone, in der der Spieler liest
      */
-    static String text(Buchung buchung, ZoneId zone) {
-        return ZEIT.format(buchung.zeitpunkt().atZone(zone))
-                + "  " + mitVorzeichen(buchung)
-                + "  " + wort(buchung.grund())
-                + "  (Stand " + Betraege.mark(buchung.standNachher()) + ")";
+    static Component zeile(Sprache sprache, Buchung buchung, ZoneId zone) {
+        return sprache.eineZeile(MarkSatz.VERLAUF_ZEILE, Einsatz.keine()
+                .mit("zeit", sprache.muster(MarkSatz.ZEIT_VERLAUF_MUSTER)
+                        .format(buchung.zeitpunkt().atZone(zone)))
+                .mit("betrag", mitVorzeichen(sprache, buchung))
+                .mit("grund", sprache.wort(Sprachschluessel.grund(buchung.grund()),
+                        Einsatz.keine()))
+                .mit("stand", sprache.betrag(buchung.standNachher())));
     }
 
     /**
@@ -57,26 +66,18 @@ final class Verlaufszeile {
      * erraten, in welche Richtung das Geld floss - und genau bei den Erstattungen, wo es
      * darauf ankommt, heissen Hin und Zurueck fast gleich.
      *
-     * <p>Null bekommt kein Vorzeichen: Die erste Parzelle ist gratis, und „+0 Mark" oder
-     * „-0 Mark" waere beides falsch.
+     * <p>Null bekommt kein Vorzeichen: Die erste Parzelle ist gratis, und ein "+0 Mark"
+     * oder "-0 Mark" waere beides falsch.
+     *
+     * <p>Das Vorzeichen bleibt im PROGRAMM und zieht nicht in die Datei. Es ist ein
+     * Rechenzeichen und keine Aussage - wer es aendert, aendert nicht die Wortwahl,
+     * sondern die Rechnung.
      */
-    private static String mitVorzeichen(Buchung buchung) {
+    private static String mitVorzeichen(Sprache sprache, Buchung buchung) {
         if (buchung.betrag() == 0L) {
-            return Betraege.mark(0L);
+            return sprache.betrag(0L);
         }
         String zeichen = buchung.betrag() > 0L ? "+" : "-";
-        return zeichen + Betraege.mark(buchung.betragsgroesse());
-    }
-
-    /** Was ein Spieler statt des Schluessels liest. */
-    static String wort(Buchungsgrund grund) {
-        return switch (grund) {
-            case EROEFFNUNG -> "Startguthaben";
-            case BESTAND -> "Stand bei Einfuehrung des Kontobuchs";
-            case PARZELLE_GEKAUFT -> "Parzelle genommen";
-            case PARZELLE_ERSTATTET -> "Parzelle nicht eingetragen - erstattet";
-            case ZUSAMMENLEGUNG -> "Grundstueck zusammengelegt";
-            case ZUSAMMENLEGUNG_ERSTATTET -> "Zusammenlegen gescheitert - erstattet";
-        };
+        return zeichen + sprache.betrag(buchung.betragsgroesse());
     }
 }

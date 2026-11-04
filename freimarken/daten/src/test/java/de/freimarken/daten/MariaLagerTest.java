@@ -216,8 +216,14 @@ class MariaLagerTest extends BesitzLagerVertrag {
         // Bricht es dazwischen ab, ist die Aenderung da und der Stand zurueck. Das
         // vorhandene migrationIstWiederholbar prueft das NICHT: Bei vollem Stand laeuft
         // die Schleife gar nicht erst.
+        //
+        // Alles ab Schritt 4 weg und nicht nur "4, 5": Der Stand ist MAX(schritt), also
+        // aenderte das Loeschen zweier Zeilen in der Mitte gar nichts - die Schleife lief
+        // auch hier nicht, und diese Probe prueft seit Schemaschritt 7 nichts mehr. So
+        // laufen die Schritte 4 bis zum letzten erneut, und das ist die Zusage, die
+        // wirklich gilt: Jeder einzelne uebersteht einen zweiten Lauf folgenlos.
         try (var anweisung = datenbank.verbindung().createStatement()) {
-            anweisung.execute("DELETE FROM schema_stand WHERE schritt IN (4, 5)");
+            anweisung.execute("DELETE FROM schema_stand WHERE schritt >= 4");
         }
 
         datenbank.migriere();
@@ -324,7 +330,11 @@ class MariaLagerTest extends BesitzLagerVertrag {
              var ergebnis = anweisung.executeQuery(
                      "SELECT COALESCE(MAX(schritt), 0) FROM schema_stand")) {
             ergebnis.next();
-            assertEquals(8, ergebnis.getInt(1), "Der Schemastand darf dabei nicht fallen");
+            // Gegen die Zahl der Schritte und nicht gegen eine getippte Zahl: Hier stand
+            // eine 8, und Schemaschritt 9 machte diese Probe rot, ohne dass etwas kaputt
+            // war. Beim zehnten soll die Falle nicht erneut zuschnappen.
+            assertEquals(Datenbank.hoechsteFassung(), ergebnis.getInt(1),
+                    "Der Schemastand darf dabei nicht fallen");
         }
     }
 

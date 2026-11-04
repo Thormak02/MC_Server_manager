@@ -6,6 +6,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
+import de.freimarken.daten.MariaSpielzeit;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Chunkfeld;
@@ -16,14 +17,19 @@ import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
+import de.freimarken.kern.SpeicherSpielzeit;
+import de.freimarken.kern.Spielzeitablage;
 import de.freimarken.kern.Stadtgrenze;
+import de.freimarken.kern.Tagesgrenze;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
+import de.freimarken.kern.Zeitwerte;
 import de.freimarken.kern.ZwischenspeicherLager;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -83,10 +89,33 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private final Rasterplan plan = Rasterplan.marktstadt();
     private final MarktstadtGenerator generator = new MarktstadtGenerator(plan);
 
+    /**
+     * Die EINE Wanduhr des Plugins.
+     *
+     * <p>Fest UTC, und die Zone kommt getrennt aus {@link Zeitwerte} - kein
+     * {@code Clock.withZone}. Jede Stelle, die einen Zeitpunkt braucht, bekommt diese Uhr
+     * gereicht; so steht in keiner Rechnung DIESES Moduls ein {@code Instant.now()}, und die
+     * Rechnung ist ohne Server pruefbar.
+     *
+     * <p>Fuer das ganze Programm gilt der Satz NICHT, und das muss hier stehen, weil der
+     * naechste Leser sonst nach einer zweiten Zeitquelle nicht sucht: {@code MariaLager}
+     * liest die Systemuhr an zwei Stellen selbst - beim Anlegen einer Parzelle
+     * (MariaLager.java:136) und beim Anlegen einer Gruppe (:359), beides fuer die Spalte
+     * {@code erworben_am} - und ist von dieser Uhr nicht erreichbar. Wer einem Zeitfehler
+     * nachgeht, etwa einer Parzelle mit einem Kaufdatum aus der Zukunft nach einer
+     * Zeitkorrektur, muss dort ebenfalls nachsehen. Die beiden Stellen umzustellen ist ein
+     * eigener Schritt und war nicht Teil C.
+     */
+    private final Clock uhr = Clock.systemUTC();
+
     private World marktstadt;
     private Datenbank datenbank;
     private BesitzLager lager;
     private Kasse kasse;
+    private Spielzeitablage spielzeit;
+    /** Zuhoerer UND Zeitgeber der Spielzeit - der einzige wiederkehrende des Plugins. */
+    private Spielzeitwache spielzeitwache;
+    private SpielzeitBefehle spielzeitBefehle;
     private Stadtgrenze grenze;
     /**
      * Was die Wirtschaft gerade kostet - die eine Zelle, die {@code /freimarken neuladen}
@@ -97,6 +126,28 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * ein Zeitgeber, ein Befehl oder eine Verbindung neu gebaut wird.
      */
     private Wirtschaftsstand wirtschaft;
+    /**
+     * Was ein Spieler gerade liest - die zweite Zelle, die {@code /freimarken neuladen}
+     * austauscht.
+     *
+     * <p>Dieselbe Form wie {@link #wirtschaft} und aus demselben Grund: Jede sendende
+     * Stelle haelt {@link #sprache} als unveraenderliches Feld und fragt den Halter beim
+     * Gebrauch. Ein neuer Wortlaut erreicht damit jede Stelle, ohne dass ein Zuhoerer, ein
+     * Zeitgeber oder ein Befehl neu gebaut wird.
+     */
+    private Sprachstand sprachstand;
+    /** Der eine Ausgang nach Adventure - haelt nur den Halter darueber. */
+    private Sprache sprache;
+    /**
+     * Die Saetze, wie sie in der Jar stehen - der Rueckfall fuer jede Zeile, die der
+     * Betreiber nicht geaendert hat.
+     *
+     * <p>Als Feld, weil {@code /freimarken neuladen} sie wieder braucht: Ohne sie waere
+     * nach einem Neuladen nicht mehr zu sagen, welcher Satz ausgeliefert ist und welcher
+     * aus der Datei kommt - und genau diese Unterscheidung traegt die Zusage, dass eine
+     * Satzverbesserung aus einem Update einen laufenden Server erreicht.
+     */
+    private Sprachbuch ausgelieferteSaetze;
     private Besitzbuch buch;
     private ParzellenBefehle befehle;
     private WarpBefehle warpBefehle;
@@ -121,6 +172,41 @@ public final class FreimarkenPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+
+        // Die Saetze, bevor irgendetwas sendet. Zwei Dateien, und der Grund ist gemessen:
+        // sprache-vorlage.yml wird bei JEDEM Start neu geschrieben und ist vollstaendig,
+        // sprache.yml wird einmal LEER angelegt und enthaelt nur, was der Betreiber
+        // geaendert hat. Ohne diese Teilung friert die erste vorhandene Datei alle Saetze
+        // ein - saveResource ueberschreibt eine vorhandene Datei nie, und
+        // Wirtschaftsliste.nenneFehlende hat am 02.11.2026 gemessen, dass auf dem
+        // Probeserver 16 von 42 Schluesseln fehlten und trotzdem wirkten. Mit
+        // vollstaendig ausgelieferter Datei erreichte eine Satzverbesserung einen
+        // laufenden Server nie.
+        Sprachliste.schreibeVorlage(this);
+        Sprachliste.legeEigeneAn(this);
+        try {
+            ausgelieferteSaetze = Sprachliste.ausDemJar();
+        } catch (RuntimeException bauunfall) {
+            // Die EINE Stelle, an der ein Sprachfehler den Start verhindert. Ohne die
+            // Vorlage gibt es keinen einzigen Satz, und ein Plugin, das stumm in den Chat
+            // sendet, ist schlimmer als eines, das nicht laeuft. Das ist kein
+            // Betriebsfall, sondern eine unvollstaendige Jar - dagegen steht VorlageTest,
+            // die beim Bauen rot wird.
+            getLogger().severe("Freimarken bleibt aus: " + bauunfall.getMessage());
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+        var worte = lieseSprache();
+        worte.klagen().forEach(getLogger()::severe);
+        worte.bericht().forEach(getLogger()::info);
+        // Eine Klage laesst buch() auf null - dann gelten die ausgelieferten Saetze, und
+        // der Server laeuft. Anders als bei der config.yml, und aus derselben Ueberlegung
+        // wie dort: Dort geht es um Geld, und zu billig verkaufte Flaeche liegt binnen
+        // Minuten als Mark auf vielen Konten. Ein heimlich ausgeliefertes Wort kostet ein
+        // Wort.
+        sprachstand = new Sprachstand(
+                worte.buch() != null ? worte.buch() : ausgelieferteSaetze);
+        sprache = new Sprache(sprachstand);
 
         // Die DATEI, bevor ein einziger Pfad daraus gelesen wird. getConfig() meldet
         // einen Lesefehler nicht: Bei kaputtem YAML liefert es eine leere Konfiguration
@@ -152,6 +238,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // uebernimmt uebernimm() diesen Wert nicht und sagt es dort selbst.
         getLogger().info("Startguthaben " + wirtschaft.werte().startguthaben()
                 + " Mark - friert bei der Eroeffnung eines Kontos ein.");
+        // Die einzige Schranke gegen eine Zone, die gueltig und trotzdem falsch ist: UTC
+        // statt Europe/Berlin klagt nirgends, verschiebt die Tagesgrenze aber um eine
+        // Stunde. Wer hier bei Nachmittagslicht "00:00 Ortszeit = 00:00 UTC" liest, sieht
+        // den Fehler. Die Zeile steht HIER und nicht in Wirtschaftsliste.bericht(): Jener
+        // Leser kennt nur die Datei, und die Zone ist nicht neuladbar - beim Neuladen
+        // nennte er die Zone aus der Datei und nicht die, die gilt.
+        getLogger().info(Tagesgrenze.tageswechselText(uhr.instant(),
+                wirtschaft.werte().zeit().zone()));
 
         // Die Ablage ZUERST. Andersherum stand die Marktstadt schon geladen da, wenn
         // sich das Plugin wegen einer unerreichbaren Datenbank abschaltet - mit ihr eine
@@ -217,9 +311,17 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Die WELT und nicht nur ihr Schluessel: Seit das Zusammenlegen den Weg fuellt,
         // setzen die Befehle Bloecke. Den Schluesseltext holt sich ParzellenBefehle aus
         // derselben Welt - zwei Angaben koennten auseinanderlaufen.
-        befehle = new ParzellenBefehle(buch, marktstadt, wirtschaft, getLogger());
-        getServer().getPluginManager().registerEvents(new Schutzwache(buch, welt), this);
+        // Die Sprache geht an ALLE elf Sender auf einmal, und zwar bevor der erste Satz
+        // umzieht. Der Grund ist gemessen: Alle elf werden hier gebaut, sieben davon in
+        // richteReisenEin in benachbarten Zeilen. Kaeme sie je Bauschritt herein, muesste
+        // jeder Umzugsschritt diese Datei und teils dieselbe Methode anfassen -
+        // benachbarte Zeilen, zwei Haende, ein verlorener Schreibzug. So fasst nach diesem
+        // Schritt kein Umzug FreimarkenPlugin mehr an.
+        befehle = new ParzellenBefehle(buch, marktstadt, wirtschaft, getLogger(), sprache);
+        getServer().getPluginManager().registerEvents(
+                new Schutzwache(buch, welt, sprache), this);
         richteReisenEin(ankunftswelt);
+        richteSpielzeitEin();
         registriereBefehle();
 
         getLogger().info("Freimarken " + getPluginMeta().getVersion()
@@ -230,6 +332,38 @@ public final class FreimarkenPlugin extends JavaPlugin {
         nenneSchlechteAnkunft();
     }
 
+    /**
+     * Liest die {@code sprache.yml} - mit der einen Wache, die keine Probe ersetzen kann.
+     *
+     * <p>{@link Sprachliste} spricht {@code org.yaml.snakeyaml} unmittelbar an. Beim
+     * Uebersetzen ist das belegt - das POM von {@code paper-api} fuehrt
+     * {@code snakeyaml:2.2} mit {@code scope compile}, die Jar liegt im Cache, und die
+     * Proben laufen durch dieselbe Methode. Was keine Probe im Gradle-Lauf zeigen kann,
+     * ist Papers Klassenlader im laufenden Server. Faellt er aus, gelten die
+     * ausgelieferten Saetze, der Server laeuft, und die Klage sagt den Grund - dieselbe
+     * Linie wie bei jeder anderen Klage.
+     *
+     * <p>{@link Sprachliste#nichtsGelesen} gibt dafuer ein Ergebnis mit
+     * {@code buch() == null} und genau dieser einen Klage. Damit geht es durch denselben
+     * Weg wie jeder andere Mangel, und {@code uebernimm} wird nie mit {@code null}
+     * gerufen.
+     */
+    private Sprachliste.Ergebnis lieseSprache() {
+        String lesefehler = Sprachliste.lesefehler(getDataFolder());
+        if (lesefehler != null) {
+            return new Sprachliste.Ergebnis(ausgelieferteSaetze, List.of(),
+                    List.of(lesefehler));
+        }
+        try {
+            return Sprachliste.ausDatei(getDataFolder(), ausgelieferteSaetze);
+        } catch (LinkageError nichtDa) {
+            return Sprachliste.nichtsGelesen(Sprachliste.DATEI + " kann nicht geprueft"
+                    + " werden (" + nichtDa + ") - es gelten die ausgelieferten Saetze."
+                    + " Keine Zeile aus deiner Datei wird uebernommen, solange das so"
+                    + " ist.");
+        }
+    }
+
     @Override
     public void onDisable() {
         // Geplante Spruenge zuerst: Eine Aufgabe, die nach dem Abschalten feuert, haette
@@ -237,10 +371,48 @@ public final class FreimarkenPlugin extends JavaPlugin {
         if (aufwaermzeit != null) {
             aufwaermzeit.brichAllesAb();
         }
+        // Dann der Spielzeittakt, und zwar VOR datenbank.close(): Erst wird der Zeitgeber
+        // abgemeldet, damit nicht mitten im Abrechnen noch ein Takt dazukommt, dann wird
+        // jede offene Sitzung weggeschrieben - solange die Verbindung noch steht.
+        // Andersherum waere die letzte Sitzung jedes anwesenden Spielers verloren, und eine
+        // Ablage, die nach close() noch schreibt, baut eine neue Verbindung auf, die
+        // niemand mehr schliesst.
+        if (spielzeitwache != null) {
+            spielzeitwache.beende();
+            spielzeitwache = null;
+        }
         if (datenbank != null) {
             datenbank.close();
             datenbank = null;
         }
+    }
+
+    /**
+     * Stellt den Spielzeittakt und meldet seine Wache an.
+     *
+     * <p>Hier und nicht in {@code neulade()}: Ein in {@code neulade()} gestellter Zeitgeber
+     * stuende nach zwei Neuladen dreimal da und schriebe dieselbe Spielzeit dreifach. Genau
+     * deshalb sind {@code zeit.zone} und {@code zeit.takt-sekunden} nicht neuladbar - der
+     * Satz aus Plan 8.7, dass ein Neuladen keinen Zeitgeber stellt, gilt ab jetzt nur noch
+     * fuer das NEULADEN und nicht fuer den Start.
+     *
+     * <p>Nach dem Weltenbau und nach den Reisen: Der erste Takt schreibt in die Datenbank,
+     * und das soll nicht mitten in das Anlegen einer Welt fallen.
+     *
+     * <p>Das Buch ist eine LOKALE Variable und kein Feld: Gehalten wird es von der Wache und
+     * von den Befehlen, und sonst von niemandem. Als Feld blieb es beim Abschalten stehen -
+     * die Wache wird dort auf {@code null} gesetzt, die Datenbank geschlossen -, und bei
+     * einem Wiedereinschalten im Betrieb stuende das alte Buch mit seiner Markenkarte neben
+     * dem neuen, ohne dass jemand es abgeraeumt hat.
+     */
+    private void richteSpielzeitEin() {
+        Spielzeitbuch buch = new Spielzeitbuch(wirtschaft, spielzeit, uhr, getLogger());
+        spielzeitwache = new Spielzeitwache(this, buch, wirtschaft, getLogger());
+        getServer().getPluginManager().registerEvents(spielzeitwache, this);
+        spielzeitwache.starte();
+        // spielzeitBefehle MUSS ein Feld bleiben: registriereBefehle() liest es.
+        spielzeitBefehle = new SpielzeitBefehle(buch, spielzeit, wirtschaft, uhr,
+                getLogger(), sprache);
     }
 
     /**
@@ -256,6 +428,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
             fluechtig = true;
             lager = new SpeicherLager();
             kasse = new SpeicherKasse(startguthaben);
+            // Braucht keine Uhr: Der Tag kommt mit dem Zuschlag herein und bei lies() von
+            // aussen. Eine Uhr hier waere eine zweite Quelle fuer die Tagesgrenze.
+            spielzeit = new SpeicherSpielzeit();
             getLogger().warning("Keine Datenbank eingetragen: Parzellen und Guthaben gelten "
                     + "nur bis zum naechsten Neustart.");
             getLogger().warning("Zum Festhalten datenbank.url in plugins/"
@@ -272,6 +447,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // und abgebauten Block, und das darf keine Abfrage ueber das Netz werden.
             lager = new ZwischenspeicherLager(new MariaLager(datenbank));
             kasse = new MariaKasse(datenbank, startguthaben);
+            // KEIN Zwischenspeicher darum: Fortschreiben ist additiv, und ein
+            // zwischengespeicherter additiver Schreibzug ist entweder verloren oder
+            // doppelt. Gelesen wird nur auf Befehl, also auch nichts zu sparen.
+            spielzeit = new MariaSpielzeit(datenbank);
             getLogger().info("Datenbank bereit: " + ohneGeheimnis(url));
             return true;
         } catch (SQLException | RuntimeException fehler) {
@@ -341,8 +520,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, ereignis -> {
             var verzeichnis = ereignis.registrar();
             Set<String> angemeldet = new TreeSet<>();
+            // Die Beschreibungen kommen aus sprache-vorlage.yml, Abschnitt
+            // befehl.beschreibung. Dass das zeitlich geht, ist belegt: Dieser Lambda
+            // laeuft NACH onEnable (dasselbe sagt der Kommentar zu spielzeitBefehle), das
+            // Feld sprache steht also. Dass eine Aenderung daran erst nach einem Neustart
+            // wirkt, steht in Sprachstand.NUR_BEIM_START - und /freimarken neuladen sagt
+            // es in jeder Antwort.
             angemeldet.addAll(verzeichnis.register(freimarken(),
-                    "Stand, Preise und Welt des Freimarkenbunds", List.of("fm")));
+                    sprache.wort(BundSatz.BEFEHL_FREIMARKEN, Einsatz.keine()),
+                    List.of("fm")));
             // /p und /konto stehen so im Plan (Abschnitt 11, [entschieden]); /pz bleibt
             // als zweite Kurzform, weil sie schon im Umlauf ist.
             //
@@ -353,26 +539,29 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // der MELDUNGEN ist davon unberuehrt - sie haengt an der Sprachdatei aus Plan
             // Abschnitt 13 und wird spaeter je Spieler waehlbar.
             angemeldet.addAll(verzeichnis.register(befehle.parzelle(),
-                    "Parzellen nehmen, ansehen und verwalten",
+                    sprache.wort(BundSatz.BEFEHL_PARZELLE, Einsatz.keine()),
                     List.of("p", "pz", "plot")));
             angemeldet.addAll(verzeichnis.register(befehle.mark(),
-                    "Dein Guthaben in Mark", List.of("konto", "balance", "bal")));
+                    sprache.wort(BundSatz.BEFEHL_MARK, Einsatz.keine()),
+                    List.of("konto", "balance", "bal")));
             angemeldet.addAll(verzeichnis.register(warpBefehle.warp(),
-                    "Reisen zwischen den Welten des Freimarkenbunds"));
+                    sprache.wort(BundSatz.BEFEHL_WARP, Einsatz.keine())));
             angemeldet.addAll(verzeichnis.register(rueckwegBefehle.zurueck(),
-                    "Zurueck zum letzten Ort - nach Tod, Reise oder Teleport",
+                    sprache.wort(BundSatz.BEFEHL_ZURUECK, Einsatz.keine()),
                     List.of("back")));
             angemeldet.addAll(verzeichnis.register(anfragenBefehle.tpa(),
-                    "Frage einen Spieler, ob du zu ihm kommen darfst"));
+                    sprache.wort(BundSatz.BEFEHL_TPA, Einsatz.keine())));
             angemeldet.addAll(verzeichnis.register(anfragenBefehle.tpahere(),
-                    "Lade einen Spieler ein, zu dir zu kommen",
+                    sprache.wort(BundSatz.BEFEHL_TPAHERE, Einsatz.keine()),
                     List.of("tpaher", "einladen")));
             // Die Kurzformen sind die Schreibweisen aus dem Chat: Wer tpaaccept tippt,
             // soll nicht lesen, dass es den Befehl nicht gibt.
             angemeldet.addAll(verzeichnis.register(anfragenBefehle.tpaccept(),
-                    "Eine Teleportanfrage annehmen", List.of("tpaaccept", "annehmen")));
+                    sprache.wort(BundSatz.BEFEHL_TPACCEPT, Einsatz.keine()),
+                    List.of("tpaaccept", "annehmen")));
             angemeldet.addAll(verzeichnis.register(anfragenBefehle.tpdeny(),
-                    "Teleportanfragen ablehnen", List.of("tpdecline", "ablehnen")));
+                    sprache.wort(BundSatz.BEFEHL_TPDENY, Einsatz.keine()),
+                    List.of("tpdecline", "ablehnen")));
 
             // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
             // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein
@@ -405,6 +594,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 // Versetzen nicht. Ohne das hatte jeder Spieler einen kostenlosen Teleport
                 // quer durch die Marktstadt - und das unterlaeuft die Rangleiter, an der
                 // Heimatpunkte und Warps spaeter haengen sollen, bevor sie gebaut ist.
+                // Ein Zweig und kein eigener Befehl: Plan 11.1 fuehrt sechzehn Befehle, und
+                // /spielzeit steht nicht darunter. Das eigene Recht steckt im Zweig.
+                .then(spielzeitBefehle.spielzeit())
                 .then(Commands.literal("welt")
                         .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
                         .executes(z -> {
@@ -457,8 +649,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 ? Component.text("Ablage fluechtig - nichts ueberlebt den Neustart",
                         NamedTextColor.RED)
                 : Component.text("Ablage MariaDB", NamedTextColor.DARK_GRAY));
+        // Mit /freimarken spielzeit in der Zeile, weil ein Zweig, den niemand nennt, ein
+        // Befehl ist, auf den niemand kommt.
         empfaenger.sendMessage(Component.text(
-                "/parzelle · /mark · /freimarken preis <anzahl>", NamedTextColor.GRAY));
+                "/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit",
+                NamedTextColor.GRAY));
         if (empfaenger instanceof Permissible darf
                 && darf.hasPermission(RECHT_VERWALTEN)) {
             empfaenger.sendMessage(Component.text(
@@ -497,6 +692,34 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * Neuladens: Der Befehl meldet Erfolg, und ein Teil wirkt erst nach dem Neustart.
      */
     private void neulade(Audience empfaenger, String wer) {
+        // ZWEI Bloecke, jeder fuer sich alles-oder-nichts: Eine Klage in der Sprache darf
+        // eine Preisaenderung nicht blockieren, und umgekehrt. Vorher kehrte diese Methode
+        // bei einer unbrauchbaren Wirtschaftszeile zurueck - stuende der Sprachteil
+        // darunter, waere eine getippte Sprachzeile von einem Preisvertipper mitgerissen
+        // worden, der sie nicht betrifft.
+        wirtschaftAntwort(empfaenger, wer);
+        sprachAntwort(empfaenger, wer);
+    }
+
+    /**
+     * Der Sprachteil der Antwort auf {@code /freimarken neuladen}.
+     *
+     * <p>Gebaut wird sie in {@link Sprachstand#antwort} - ohne {@code Player} und ohne
+     * Server, damit eine Probe nachsehen kann, WAS in der Antwort steht, und nicht bloss,
+     * dass etwas geschieht. Dasselbe Muster macht
+     * {@code SpielzeitBefehle.sende(Audience, String, List)} (:194-200) schon vor.
+     */
+    private void sprachAntwort(Audience empfaenger, String wer) {
+        var gelesen = lieseSprache();
+        gelesen.klagen().forEach(klage ->
+                getLogger().severe("neuladen von " + wer + " abgelehnt: " + klage));
+        gelesen.bericht().forEach(zeile ->
+                getLogger().info("neuladen von " + wer + ": " + zeile));
+        sprachstand.antwort(gelesen).forEach(empfaenger::sendMessage);
+    }
+
+    /** Der Wirtschaftsteil - unveraendert, nur in eine eigene Methode gezogen. */
+    private void wirtschaftAntwort(Audience empfaenger, String wer) {
         // reloadConfig legt ein NEUES FileConfiguration-Objekt von der Platte an. Genau
         // deshalb haelt dieses Plugin nirgends ein Config-Feld: Es wuerde danach auf die
         // verworfene Instanz zeigen. Angefasst wird die Datei an genau zwei Stellen -
@@ -589,6 +812,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
         empfaenger.sendMessage(Component.text("  reisen.ankunftswelt - setzt die"
                 + " Respawn-Welt dauerhaft in der level.dat der Hauptwelt",
                 NamedTextColor.DARK_GRAY));
+        // Der Spielzeittakt ist der eine wiederkehrende Zeitgeber des Plugins. Die beiden
+        // Zeilen zu zeit.zone und zeit.takt-sekunden kommen aus dem Wirtschaftsstand; was
+        // der nicht weiss, ist, dass hier ein Zeitgeber steht. Ein Neuladen fasst ihn
+        // ausdruecklich NICHT an - sonst liefen nach zwei Neuladen drei davon.
+        empfaenger.sendMessage(Component.text("  Der Spielzeittakt steht seit dem Start -"
+                + " ein Neuladen stellt ihn nicht neu, sonst schriebe dieselbe Spielzeit"
+                + " mehrfach", NamedTextColor.DARK_GRAY));
         empfaenger.sendMessage(Component.text("  Im Programm, mit Begruendung:"
                 + " Parzellengroesse " + plan.parzellenKante() + ", Wegbreite " + plan.wegBreite()
                 + ", Bodenhoehe " + Stadtboden.BODEN + " (daran haengen der Generator und"
@@ -692,20 +922,21 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private void richteReisenEin(String ankunftsweltName) {
         var rueckweg = new Rueckweg();
         var offeneAnfragen = new Anfragen(ANFRAGE_GUELTIG);
-        aufwaermzeit = new Aufwaermzeit(this);
+        aufwaermzeit = new Aufwaermzeit(this, sprache);
         getServer().getPluginManager().registerEvents(aufwaermzeit, this);
-        reise = new Reise(getLogger(), rueckweg, aufwaermzeit);
+        reise = new Reise(getLogger(), rueckweg, aufwaermzeit, sprache);
         var verzeichnis = Warpverzeichnis.ausWelten(List.copyOf(welten.keySet()));
-        warpBefehle = new WarpBefehle(verzeichnis, welten, reise);
-        rueckwegBefehle = new RueckwegBefehle(rueckweg, reise);
-        anfragenBefehle = new AnfragenBefehle(offeneAnfragen, reise);
+        warpBefehle = new WarpBefehle(verzeichnis, welten, reise, sprache);
+        rueckwegBefehle = new RueckwegBefehle(rueckweg, reise, sprache);
+        anfragenBefehle = new AnfragenBefehle(offeneAnfragen, reise, sprache);
         getServer().getPluginManager().registerEvents(
                 new Rueckwegwache(rueckweg, offeneAnfragen), this);
 
         Set<String> eigene = welten.values().stream()
                 .map(w -> w.key().asString())
                 .collect(java.util.stream.Collectors.toSet());
-        getServer().getPluginManager().registerEvents(new Portalwache(eigene), this);
+        getServer().getPluginManager().registerEvents(
+                new Portalwache(eigene, sprache), this);
 
         World ankunftswelt = welten.get(ankunftsweltName);
         if (ankunftswelt == null) {
@@ -736,7 +967,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             }
         });
         getServer().getPluginManager().registerEvents(
-                new Ankunftswache(ankunftswelt, nachSchluessel, kasse, getLogger()), this);
+                new Ankunftswache(ankunftswelt, nachSchluessel, kasse, getLogger(),
+                        sprache), this);
 
         var torwache = new Torwache(ankunftswelt, welten,
                 List.copyOf(angaben.values()), reise);

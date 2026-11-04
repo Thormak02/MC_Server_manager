@@ -1,9 +1,12 @@
 package de.freimarken.kern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+import java.time.ZoneId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -19,12 +22,25 @@ class WirtschaftsstandTest {
     private static Wirtschaftswerte satz(long grundpreis, long jeFeld, long startguthaben,
                                          int hoechstzahl, int gruppenFelder,
                                          String werbung) {
+        return satz(grundpreis, jeFeld, startguthaben, hoechstzahl, gruppenFelder, werbung,
+                Zeitwerte.VORGABE);
+    }
+
+    private static Wirtschaftswerte satz(long grundpreis, long jeFeld, long startguthaben,
+                                         int hoechstzahl, int gruppenFelder, String werbung,
+                                         Zeitwerte zeit) {
         return new Wirtschaftswerte(new Preisstaffel(grundpreis, jeFeld), startguthaben,
-                hoechstzahl, gruppenFelder, werbung);
+                hoechstzahl, gruppenFelder, werbung, zeit);
+    }
+
+    /** Ein Zeitsatz, bei dem alle drei Werte von der Vorgabe abweichen. */
+    private static Zeitwerte anderezeit() {
+        return new Zeitwerte(ZoneId.of("Pacific/Auckland"), Duration.ofSeconds(120),
+                Duration.ofMinutes(30));
     }
 
     @Test
-    @DisplayName("Die vier neuladbaren Werte und der Text werden getauscht")
+    @DisplayName("Die neuladbaren Zahlen und der Text werden getauscht")
     void tauschtWasErlaubtIst() {
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
         var uebernahme = stand.uebernimm(
@@ -66,6 +82,115 @@ class WirtschaftsstandTest {
     }
 
     @Test
+    @DisplayName("Von den Zeitwerten wird nur die Untaetigkeitsgrenze getauscht")
+    void nurDieUntaetigkeitWirdNeuGeladen() {
+        // Die Zone verschoebe die Tagesgrenze mitten am Tag, der Takt steckt im gestellten
+        // Zeitgeber - ein zweiter Zeitgeber schriebe dieselbe Spielzeit doppelt. Die Grenze
+        // dagegen wird beim Gebrauch gefragt und kostet nichts.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, 4, 4,
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG, anderezeit()));
+
+        assertEquals(ZoneId.of("Europe/Berlin"), stand.werte().zeit().zone(),
+                "ein Neuladen darf die Tagesgrenze nicht verschieben");
+        assertEquals(60L, stand.werte().zeit().taktSekunden(),
+                "ein Neuladen darf den Zeitgeber nicht neu stellen");
+        assertEquals(30L, stand.werte().zeit().untaetigMinuten(),
+                "die Untaetigkeitsgrenze wird beim Gebrauch gefragt, also ist sie neuladbar");
+
+        assertEquals(1, uebernahme.geaendert().size(), uebernahme.geaendert().toString());
+        assertEquals(Zeitwerte.PFAD_UNTAETIG + ": 10 -> 30",
+                uebernahme.geaendert().getFirst());
+    }
+
+    @Test
+    @DisplayName("Zone und Takt werden mit dem gelesenen Wert genannt, wenn er abweicht")
+    void zoneUndTaktWerdenGenannt() {
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var zeilen = stand.nichtAngefasst(satz(25_000L, 10_000L, 50_000L, 4, 4,
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG, anderezeit()));
+
+        String zone = zeilen.get(1);
+        assertTrue(zone.contains("Europe/Berlin"), "was weiter gilt: " + zone);
+        assertTrue(zone.contains("Pacific/Auckland"), "was gelesen wurde: " + zone);
+        assertTrue(zone.contains("Neustart"), zone);
+
+        String takt = zeilen.get(2);
+        assertTrue(takt.contains("60"), "was weiter gilt: " + takt);
+        assertTrue(takt.contains("120"), "was gelesen wurde: " + takt);
+
+        // Keine Zeile darf behaupten, der gelesene Wert STEHE in der Datei. Fehlt die
+        // Zeile dort, holt der Leser die Vorgabe stumm aus der Jar und reicht sie herein -
+        // die Antwort lautete dann "es gilt weiter America/New_York, in der Datei steht
+        // Europe/Berlin", und der Betreiber suchte eine Zeile, die es nicht gibt. Ob
+        // gelesen oder zurueckgefallen, sieht allein der Leser; dieser Halter sieht nur
+        // einen Wert.
+        for (String zeile : zeilen) {
+            assertFalse(zeile.contains("in der Datei"),
+                    "diese Zeile behauptet eine Dateizeile, die fehlen kann: " + zeile);
+        }
+    }
+
+    @Test
+    @DisplayName("Eine Grenze, die zum LAUFENDEN Takt nicht passt, bleibt stehen statt zu werfen")
+    void grenzeOhneDeckungDurchDenLaufendenTaktBleibtStehen() {
+        // Die Falle, die erst hier entsteht: Das Paar der DATEI stimmt (60 s Takt brauchen
+        // 1 Minute Grenze), das Paar im BETRIEB nicht - der Takt wird nur beim Start
+        // gelesen und ist noch 600 s lang. Vorher nahm dieser Weg die Kombination stumm an
+        // und warf damit jeden Takt ganz weg, auch die aktiv gespielte Zeit darin; seit
+        // der Querpruefung im Konstruktor wuerde er mitten im Befehl werfen. Beides ist
+        // falsch: Ein Neuladen bricht nicht ab.
+        var langerTakt = new Zeitwerte(ZoneId.of("Europe/Berlin"), Duration.ofSeconds(600),
+                Duration.ofMinutes(10));
+        var stand = new Wirtschaftsstand(satz(25_000L, 10_000L, 50_000L, 4, 4,
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG, langerTakt));
+        var ausDerDatei = satz(25_000L, 10_000L, 50_000L, 4, 4,
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG,
+                new Zeitwerte(ZoneId.of("Europe/Berlin"), Duration.ofSeconds(60),
+                        Duration.ofMinutes(1)));
+
+        var uebernahme = stand.uebernimm(ausDerDatei);
+
+        assertEquals(10L, stand.werte().zeit().untaetigMinuten(),
+                "die alte Grenze bleibt stehen, solange der lange Takt laeuft");
+        assertEquals(600L, stand.werte().zeit().taktSekunden(),
+                "und der Takt sowieso");
+        assertTrue(uebernahme.geaendert().isEmpty(),
+                "nicht uebernommen heisst auch nicht als geaendert gemeldet: "
+                        + uebernahme.geaendert());
+
+        assertEquals(4, uebernahme.nichtAngefasst().size(),
+                "Startguthaben, Zone, Takt und die Grenze: "
+                        + uebernahme.nichtAngefasst());
+        String zeile = uebernahme.nichtAngefasst().getLast();
+        assertTrue(zeile.startsWith(Zeitwerte.PFAD_UNTAETIG), zeile);
+        assertTrue(zeile.contains("600"), "der laufende Takt ist der Grund: " + zeile);
+        assertTrue(zeile.contains("Mindestens 10"),
+                "und die kleinste Zahl, die dazu passt: " + zeile);
+    }
+
+    @Test
+    @DisplayName("Der Block nennt genau die Schluessel, die ein Neuladen nicht uebernimmt")
+    void blockUndListeLaufenNichtAuseinander() {
+        // Der Waechter gegen das Auseinanderlaufen: Der Leser der Einstellungsdatei
+        // schreibt seine Saetze nach NUR_BEIM_START. Nennte der Block einen Schluessel
+        // mehr oder weniger, sagten Leser und Halter in derselben Antwort Verschiedenes -
+        // genau der Fehler, der einmal zwei Tagesgrenzen in eine Antwort gebracht hat.
+        var zeilen = new Wirtschaftsstand(Wirtschaftswerte.VORGABE).nichtAngefasst(null);
+
+        assertEquals(Wirtschaftsstand.NUR_BEIM_START.size(), zeilen.size(),
+                "eine Zeile je Schluessel: " + zeilen);
+        for (int i = 0; i < zeilen.size(); i++) {
+            assertTrue(zeilen.get(i).startsWith(Wirtschaftsstand.NUR_BEIM_START.get(i)),
+                    "Zeile " + i + " gehoert zu "
+                            + Wirtschaftsstand.NUR_BEIM_START.get(i) + ": " + zeilen.get(i));
+        }
+        assertFalse(Wirtschaftsstand.NUR_BEIM_START.contains(Zeitwerte.PFAD_UNTAETIG),
+                "die Untaetigkeitsgrenze IST neuladbar - nur das eine unpassende Paar"
+                        + " bleibt stehen, und das ist keine Eigenschaft des Schluessels");
+    }
+
+    @Test
     @DisplayName("Ohne Aenderung bleibt die Liste leer - der Block darunter aber nicht")
     void nichtsGeaendert() {
         // Der Block "nicht angefasst" erscheint auch dann. Das ist das Gegenmittel gegen
@@ -75,7 +200,8 @@ class WirtschaftsstandTest {
         var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE);
 
         assertTrue(uebernahme.geaendert().isEmpty());
-        assertEquals(1, uebernahme.nichtAngefasst().size());
+        assertEquals(3, uebernahme.nichtAngefasst().size(),
+                "Startguthaben, Zone und Takt: " + uebernahme.nichtAngefasst());
         assertTrue(uebernahme.nichtAngefasst().getFirst().contains("50000"));
     }
 
@@ -88,9 +214,11 @@ class WirtschaftsstandTest {
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
         var zeilen = stand.nichtAngefasst(null);
 
-        assertEquals(1, zeilen.size());
+        assertEquals(3, zeilen.size(), "Startguthaben, Zone und Takt: " + zeilen);
         assertTrue(zeilen.getFirst().contains(Wirtschaftswerte.PFAD_STARTGUTHABEN));
         assertTrue(zeilen.getFirst().contains("50000"));
+        assertTrue(zeilen.get(1).contains("Europe/Berlin"), zeilen.get(1));
+        assertTrue(zeilen.get(2).contains(Zeitwerte.PFAD_TAKT), zeilen.get(2));
         assertEquals(Wirtschaftswerte.VORGABE, stand.werte(),
                 "ein Blick darf nichts aendern");
     }
@@ -158,5 +286,15 @@ class WirtschaftsstandTest {
         assertEquals(4, Wirtschaftswerte.VORGABE.gruppenFelder());
         assertEquals("Mehr erlaubt ein hoeherer Rang.",
                 Wirtschaftswerte.VORGABE.rangWerbung());
+        assertEquals(ZoneId.of("Europe/Berlin"), Wirtschaftswerte.VORGABE.zeit().zone());
+        assertEquals(60L, Wirtschaftswerte.VORGABE.zeit().taktSekunden());
+        assertEquals(10L, Wirtschaftswerte.VORGABE.zeit().untaetigMinuten());
+    }
+
+    @Test
+    @DisplayName("Ein Stand ohne Zeitwerte kommt nicht zustande")
+    void zeitIstPflicht() {
+        assertThrows(IllegalArgumentException.class,
+                () -> satz(25_000L, 10_000L, 50_000L, 4, 4, "", null));
     }
 }

@@ -45,9 +45,18 @@ final class Portalwache implements Listener {
     private final Abklingzeit meldungen = new Abklingzeit(ZWISCHEN_ZWEI_MELDUNGEN);
 
     /**
+     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     *
+     * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
+     * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
+     */
+    private final Sprache sprache;
+
+    /**
      * @param eigeneWelten die Schluesseltexte der Freimarken-Welten; nur dort wird gesperrt
      */
-    Portalwache(Set<String> eigeneWelten) {
+    Portalwache(Set<String> eigeneWelten, Sprache sprache) {
+        this.sprache = sprache;
         this.eigeneWelten = eigeneWelten;
     }
 

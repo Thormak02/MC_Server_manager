@@ -139,7 +139,16 @@ public final class Schutzwache implements Listener {
     private final Map<UUID, Long> letzteMeldung = new HashMap<>();
     private long letzteKlage;
 
-    public Schutzwache(Besitzbuch buch, String welt) {
+    /**
+     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     *
+     * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
+     * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
+     */
+    private final Sprache sprache;
+
+    public Schutzwache(Besitzbuch buch, String welt, Sprache sprache) {
+        this.sprache = sprache;
         this.buch = buch;
         this.welt = welt;
     }

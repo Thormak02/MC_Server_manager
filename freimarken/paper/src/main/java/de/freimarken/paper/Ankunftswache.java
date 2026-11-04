@@ -64,6 +64,14 @@ final class Ankunftswache implements Listener {
     private final Logger protokoll;
 
     /**
+     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     *
+     * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
+     * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
+     */
+    private final Sprache sprache;
+
+    /**
      * @param nachSchluessel die Weltangaben unter dem SCHLUESSELTEXT ihrer Welt, etwa
      *                       {@code freimarken:altfurt} - nicht unter dem Namen aus der
      *                       Datei. Sonst traegt eine Hauptwelt, die zufaellig
@@ -71,7 +79,8 @@ final class Ankunftswache implements Listener {
      * @param kasse          um das Konto beim ersten Beitritt zu eroeffnen
      */
     Ankunftswache(World ankunftswelt, Map<String, Weltangabe> nachSchluessel, Kasse kasse,
-                  Logger protokoll) {
+                  Logger protokoll, Sprache sprache) {
+        this.sprache = sprache;
         this.ankunftswelt = ankunftswelt;
         this.nachSchluessel = nachSchluessel;
         this.kasse = kasse;

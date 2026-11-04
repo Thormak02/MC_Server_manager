@@ -30,7 +30,16 @@ final class RueckwegBefehle {
     private final Rueckweg rueckweg;
     private final Reise reise;
 
-    RueckwegBefehle(Rueckweg rueckweg, Reise reise) {
+    /**
+     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     *
+     * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
+     * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
+     */
+    private final Sprache sprache;
+
+    RueckwegBefehle(Rueckweg rueckweg, Reise reise, Sprache sprache) {
+        this.sprache = sprache;
         this.rueckweg = rueckweg;
         this.reise = reise;
     }

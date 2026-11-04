@@ -19,6 +19,12 @@ import java.util.Properties;
  * rechnet TIMESTAMP-Spalten in die Zeitzone der Sitzung um. Wer dann den Server umstellt
  * oder von einem anderen Rechner zugreift, liest andere Zeiten als er geschrieben hat.
  * Geschrieben wird immer UTC.
+ *
+ * <p><b>Die eine Ausnahme davon ist {@code spielzeit.tag}</b> (Schritt 9). Diese Spalte
+ * traegt kein UTC, sondern das ORTSDATUM unter der eingestellten Tagesgrenze, in Java
+ * gerechnet. Sie ist so gemeint und darf nicht nachgerechnet werden: Wer sie fuer einen
+ * Fehler haelt und "zurueck" nach UTC verschiebt, verlegt den Tageswechsel um eine bis zwei
+ * Stunden - in Berlin also mitten in den Abend.
  */
 public final class Datenbank implements AutoCloseable {
 
@@ -177,6 +183,64 @@ public final class Datenbank implements AutoCloseable {
               SELECT k.spieler, UTC_TIMESTAMP(3), 'bestand', k.mark, k.mark
                 FROM kassen k
                WHERE NOT EXISTS (SELECT 1 FROM buchungen b WHERE b.spieler = k.spieler)
+            """,
+
+            // Schritt 9: die gemessene Spielzeit - eine Zeile je Spieler und Tag.
+            //
+            // tag ist die EINZIGE Spalte dieses Schemas ohne UTC: Sie traegt das
+            // Ortsdatum unter der eingestellten Tagesgrenze, gerechnet in Java
+            // (Tagesgrenze.tagVon), nie mit CURDATE(), UTC_DATE() oder NOW(). Die
+            // Sitzung steht fest auf UTC - zwischen 00:00 und 01:00 Ortszeit nennte die
+            // Datenbank noch den Vortag, und der eingestellte Wert Europe/Berlin waere
+            // stumm wirkungslos. Dasselbe steht im Klassenkopf, weil die Falle beim
+            // LESEN zuschnappt und nicht hier.
+            //
+            // Der Tag gehoert IN den Primaerschluessel und nicht als Nebenfeld neben
+            // einen einzelnen Zaehler: Die Vergangenheit laesst sich nicht nachtraeglich
+            // in Tage aufteilen, und die Ranglisten aus Plan 12b.3 wollen Zeitraeume.
+            // Ausserdem steht so in der Zeile immer schon VERSTRICHENE Zeit und nie ein
+            // laufender Zeitpunkt - darum kann kein Absturz eine offene Sitzung
+            // hinterlassen und es gibt kein Aufraeumen beim Start. Der Preis sind rund
+            // zwanzig Zeilen am Tag.
+            //
+            // sekunden als BIGINT, obwohl ein Tag nur 86.400 Sekunden hat: SMALLINT
+            // UNSIGNED (65.535) reicht fuer einen einzigen Tag nicht einmal aus,
+            // MEDIUMINT UNSIGNED (16.777.215) traegt 194 Tage in EINER Zeile und INT
+            // 24.855 Tage - beides genug und beides falsch. Denn addiert wird in der Spalte
+            // (sekunden = sekunden + ?), waehrend der Kern in long rechnet und mit
+            // Math.addExact abbricht. Eine engere Spalte braeche frueher als die
+            // Speicherfassung, und dann verhielten sich zwei Umsetzungen hinter einer
+            // Schnittstelle verschieden. Die ersparten vier Byte sind bei 7.300 Zeilen
+            // im Jahr 29 Kilobyte.
+            //
+            // CHAR(36) wie ueberall sonst und nicht BINARY(16): sonst laesst sich diese
+            // Tabelle mit kassen und parzellen nicht verbinden.
+            //
+            // KEIN Fremdschluessel auf kassen - anders als bei buchungen (Schritt 7) und
+            // mit Grund: Eine Buchung ohne Konto waere eine Zeile ohne das Ding, zu dem
+            // sie gehoert, und die Summenprobe haengt daran. Spielzeit ist eine Messung
+            // und haengt an niemandem. Ein RESTRICT-Fremdschluessel brachte dagegen die
+            // EINE Transaktion des Takts zum Scheitern - also die Minute ALLER
+            // anwesenden Spieler -, sobald ein einziger von ihnen noch keine Kassenzeile
+            // hat: eine beim Beitritt fehlgeschlagene Kontoeroeffnung genuegt. Ein
+            // CASCADE wiederum loeschte Messdaten stumm mit.
+            //
+            // KEIN zweiter Index. Beide Abfragen, die es gibt - die Sekunden eines Tages
+            // und die Summe eines Spielers -, laufen ueber spieler, also ueber das linke
+            // Glied des Primaerschluessels. Ein Index fuer eine Abfrage, die es noch
+            // nicht gibt, ist derselbe Fehler wie ein Einstellschluessel fuer einen Wert,
+            // den es noch nicht gibt; nachgeruestet ist er ein einzeiliger Schemaschritt.
+            //
+            // IF NOT EXISTS wie bei Schritt 7: migriere() legt keine Transaktion um
+            // Anweisung und Standfortschreibung, also muss der Satz einen zweiten Lauf
+            // folgenlos ueberstehen.
+            """
+            CREATE TABLE IF NOT EXISTS spielzeit (
+              spieler  CHAR(36) NOT NULL,
+              tag      DATE     NOT NULL,
+              sekunden BIGINT   NOT NULL,
+              PRIMARY KEY (spieler, tag)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -284,6 +348,17 @@ public final class Datenbank implements AutoCloseable {
         return gut;
     }
 
+    /**
+     * Der hoechste Schemaschritt, den dieses Jar kennt.
+     *
+     * <p>Damit niemand die Zahl ein zweites Mal aufschreibt: Eine Probe, die den
+     * erreichten Stand gegen eine getippte Zahl haelt, wird mit jedem neuen Schritt rot,
+     * ohne dass etwas kaputt ist - genau das ist beim Schritt 9 passiert.
+     */
+    public static int hoechsteFassung() {
+        return SCHRITTE.size();
+    }
+
     /** Legt fehlende Tabellen an. Mehrfach aufrufbar. */
     public synchronized void migriere() throws SQLException {
         Connection c = verbindung();
@@ -362,6 +437,11 @@ public final class Datenbank implements AutoCloseable {
             // Die Buchungen VOR den Kassen: fk_buchung_kasse steht auf RESTRICT, und eine
             // Kassenzeile mit Buchungen daran laesst sich nicht loeschen.
             anweisung.execute("DELETE FROM buchungen");
+            // Die Spielzeit haengt an keinem Fremdschluessel, ihre Stelle in dieser Liste
+            // ist also frei - sie steht hier, damit sie nicht uebersehen wird. Wer der
+            // Tabelle je einen Fremdschluessel gibt, muss die Zeile einordnen; ohne sie
+            // wandern gemessene Sekunden von einem Test in den naechsten.
+            anweisung.execute("DELETE FROM spielzeit");
             anweisung.execute("DELETE FROM kassen");
         }
     }

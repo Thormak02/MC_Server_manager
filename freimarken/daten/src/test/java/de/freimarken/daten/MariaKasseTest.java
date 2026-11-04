@@ -174,9 +174,19 @@ class MariaKasseTest extends KasseVertrag {
                 "ein zweiter Lauf darf nichts hinzufuegen");
     }
 
+    /**
+     * Setzt den vermerkten Stand auf den Schritt VOR dem genannten zurueck.
+     *
+     * <p>Es muss alles ab diesem Schritt weg, nicht nur die eine Zeile: migriere() nimmt
+     * {@code MAX(schritt)} als Stand und laeuft von dort weiter. Solange Schritt 8 der
+     * letzte war, genuegte das Loeschen seiner Zeile - mit Schritt 9 im Schema waere der
+     * Stand danach noch 9 und der zu pruefende Schritt liefe nie wieder. Die daraus
+     * entstehende Probe ist dabei die besser: Sie zeigt, dass JEDER Schritt ab hier einen
+     * zweiten Lauf folgenlos uebersteht.
+     */
     private void setzeSchrittZurueck(int schritt) throws SQLException {
         try (var anweisung = datenbank.verbindung().prepareStatement(
-                "DELETE FROM schema_stand WHERE schritt = ?")) {
+                "DELETE FROM schema_stand WHERE schritt >= ?")) {
             anweisung.setInt(1, schritt);
             anweisung.executeUpdate();
         }

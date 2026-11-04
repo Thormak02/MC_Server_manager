@@ -60,7 +60,17 @@ final class Reise {
     private final Rueckweg rueckweg;
     private final Aufwaermzeit aufwaermzeit;
 
-    Reise(Logger protokoll, Rueckweg rueckweg, Aufwaermzeit aufwaermzeit) {
+    /**
+     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     *
+     * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
+     * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
+     */
+    private final Sprache sprache;
+
+    Reise(Logger protokoll, Rueckweg rueckweg, Aufwaermzeit aufwaermzeit,
+          Sprache sprache) {
+        this.sprache = sprache;
         this.protokoll = protokoll;
         this.rueckweg = rueckweg;
         this.aufwaermzeit = aufwaermzeit;

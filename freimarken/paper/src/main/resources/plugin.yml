@@ -36,6 +36,15 @@ permissions:
     # sie sind kein Werkzeug des Betreibers, sondern eine abgeschaltete Spielmechanik.
     description: Darf trotz der Sperre einen Spawnpunkt setzen
     default: op
+  freimarken.spielzeit:
+    description: Darf die eigene gemessene Spielzeit sehen
+    default: true
+  freimarken.spielzeit.andere:
+    # Ein zweites Recht und nicht freimarken.verwalten: Spielzeit ist eine Messung und
+    # keine Verwaltung. Ein Moderator soll sie lesen koennen, ohne die Einstellungen neu
+    # laden zu duerfen.
+    description: Darf die Spielzeit anderer anwesender Spieler sehen
+    default: op
   freimarken.spielmodus.frei:
     # Fuer Baumeister und Betreiber. Ohne dieses Recht wuerde ein Spieler im Kreativmodus
     # beim Betreten Altfurts mitten im Bauen auf Abenteuer heruntergestuft.

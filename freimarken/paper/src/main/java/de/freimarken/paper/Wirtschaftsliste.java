@@ -2,9 +2,13 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Sprungregel;
+import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
+import de.freimarken.kern.Zeitwerte;
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.configuration.ConfigurationSection;
@@ -23,9 +27,15 @@ import org.bukkit.configuration.file.YamlConfiguration;
  * <ul>
  *   <li>KLAGE heisst: Was du getippt hast, gilt NICHT. Beim Start gilt dann die Vorgabe,
  *       beim Neuladen wird gar nichts uebernommen.
- *   <li>BERICHT heisst: Es gilt, aber du sollst es gelesen haben - eine fehlende Zeile,
- *       ein Grundpreis von 0, und die Staffel im Klartext.
+ *   <li>BERICHT heisst: Es ist nichts dagegen zu sagen, aber du sollst es gelesen haben -
+ *       eine fehlende Zeile, ein Grundpreis von 0, und die Staffel im Klartext.
  * </ul>
+ *
+ * <p>Was GILT, sagt dieser Leser nur ueber einen neuladbaren Schluessel. Fuer die aus
+ * {@link Wirtschaftsstand#NUR_BEIM_START} weiss es allein der Halter: Beim Neuladen werden
+ * sie gelesen und gemeldet, aber nicht uebernommen. Diese Trennung sitzt an EINER Stelle,
+ * naemlich in {@link #fehltText}, und die Liste dazu an EINER Stelle, naemlich in der
+ * Klasse, die es entscheidet.
  *
  * <p>Gelesen wird ROH ueber {@code get}. Bei einer Weltkante faengt das einen fehlenden
  * Rand; bei einem Preis faengt es ein tausendfach zu billiges Grundstueck:
@@ -42,7 +52,10 @@ final class Wirtschaftsliste {
             Wirtschaftswerte.PFAD_HOECHSTZAHL,
             Wirtschaftswerte.PFAD_GRUPPEN_FELDER,
             Wirtschaftswerte.PFAD_RANG_WERBUNG,
-            Wirtschaftswerte.PFAD_STARTGUTHABEN);
+            Wirtschaftswerte.PFAD_STARTGUTHABEN,
+            Zeitwerte.PFAD_ZONE,
+            Zeitwerte.PFAD_TAKT,
+            Zeitwerte.PFAD_UNTAETIG);
 
     /** Wie viele Preisstufen die Rechenprobe im Protokoll nennt. */
     private static final int STUFEN_IM_BERICHT = 4;
@@ -62,7 +75,11 @@ final class Wirtschaftsliste {
         List<String> klagen = new ArrayList<>();
         List<String> bericht = new ArrayList<>();
         if (wurzel == null) {
-            bericht.add("Keine Einstellungen zu lesen - es gelten die Vorgaben.");
+            // Kein "es gelten die Vorgaben": Fuer die Schluessel aus
+            // Wirtschaftsstand.NUR_BEIM_START waere das beim Neuladen falsch - dort gilt
+            // weiter der Wert vom Start. Dieser Leser kennt nur die Datei.
+            bericht.add("Keine Einstellungen zu lesen - gelesen wurden die Vorgaben des"
+                    + " Plugins.");
             return new Ergebnis(Wirtschaftswerte.VORGABE, klagen, bericht);
         }
         nenneFehlende(wurzel, bericht);
@@ -81,6 +98,15 @@ final class Wirtschaftsliste {
         int gruppenFelder = anzahl(wurzel, Wirtschaftswerte.PFAD_GRUPPEN_FELDER,
                 Wirtschaftswerte.VORGABE_GRUPPEN_FELDER, klagen, bericht);
         String werbung = werbung(wurzel, klagen, bericht);
+        // Der Takt VOR der Untaetigkeitsgrenze, und einzeln: Die Grenze wird gegen ihn
+        // geprueft, weil die beiden Zahlen je einzeln im Bereich liegen und zusammen
+        // trotzdem gemessene Spielzeit vernichten koennen. Der Konstruktor von Zeitwerte
+        // verweigert das Paar - und dieser Leser darf nicht werfen.
+        ZoneId zone = zone(wurzel, klagen, bericht);
+        long taktSekunden = taktSekunden(wurzel, klagen, bericht);
+        long untaetigMinuten = untaetigMinuten(wurzel, taktSekunden, klagen, bericht);
+        Zeitwerte zeit = new Zeitwerte(zone, Duration.ofSeconds(taktSekunden),
+                Duration.ofMinutes(untaetigMinuten));
 
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
@@ -105,8 +131,13 @@ final class Wirtschaftsliste {
         // Dass eine fehlende oder unbrauchbare Zeile genannt wird, besorgen ganzeZahl
         // und betrag ohnehin.
 
+        // Die Tageswechselzeile zur Zone steht mit ABSICHT nicht im Bericht - sie kommt aus
+        // Tagesgrenze.tageswechselText und wird beim Start vom Aufrufer protokolliert.
+        // Derselbe Grund wie beim Startguthaben: Dieser Leser kennt nur die Datei, die Zone
+        // ist aber nicht neuladbar. Beim Neuladen nennte eine Zeile hier die Zone aus der
+        // Datei, waehrend eine andere darunter sagt, dass die alte weiter gilt.
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
-                gruppenFelder, werbung), klagen, bericht);
+                gruppenFelder, werbung, zeit), klagen, bericht);
     }
 
     /**
@@ -205,6 +236,131 @@ final class Wirtschaftsliste {
     }
 
     /**
+     * Die Tagesgrenze als Zonenname - nach dem Muster von {@link #werbung}: roh gelesen, am
+     * Typ geprueft, Klage statt Wurf.
+     *
+     * <p>Angenommen wird nur ein Name aus {@link ZoneId#getAvailableZoneIds()}. Diese eine
+     * Regel weist zwei verschiedene Eingaben ab: den Tippfehler ({@code Europe/Berln}) und
+     * den festen Versatz ({@code UTC+2}). Der Versatz ist die gefaehrlichere von beiden,
+     * denn {@code ZoneId.of("UTC+2")} nimmt ihn an - und ein Versatz kennt keine Sommerzeit.
+     * Die Tagesgrenze laege damit vom letzten Sonntag im Maerz an um 01:00 Ortszeit und
+     * bliebe den ganzen Sommer dort. {@code UTC} selbst steht in der Liste und ist erlaubt;
+     * dagegen hilft keine Pruefung, sondern nur die Tageswechselzeile im Startprotokoll.
+     *
+     * <p>Kein {@code try/catch} um {@code ZoneId.of}: Fuer einen Namen aus dieser Liste
+     * wirft es nicht. Die Liste IST die Pruefung, und ein gefangener Wurf daneben waere eine
+     * zweite Regel fuer dieselbe Frage.
+     */
+    private static ZoneId zone(ConfigurationSection wurzel, List<String> klagen,
+                               List<String> bericht) {
+        String pfad = Zeitwerte.PFAD_ZONE;
+        Object roh = wurzel.get(pfad);
+        if (roh == null) {
+            bericht.add(fehltText(pfad, Zeitwerte.VORGABE_ZONE.getId()));
+            return Zeitwerte.VORGABE_ZONE;
+        }
+        if (!(roh instanceof String text)) {
+            klagen.add(pfad + " ist kein Text (" + wieGetippt(roh) + ") - verworfen. "
+                    + esBleibt(Zeitwerte.VORGABE_ZONE.getId()));
+            return Zeitwerte.VORGABE_ZONE;
+        }
+        String name = text.trim();
+        if (!ZoneId.getAvailableZoneIds().contains(name)) {
+            klagen.add(pfad + " ist \"" + name + "\" - verworfen. Erlaubt ist ein Zonenname"
+                    + " wie Europe/Berlin oder UTC. " + esBleibt(Zeitwerte.VORGABE_ZONE.getId())
+                    + " Ein fester Versatz wie \"UTC+2\" wird ebenfalls abgewiesen: Er kennt"
+                    + " keine Sommerzeit, und die Tagesgrenze laege vom letzten Sonntag im"
+                    + " Maerz an um 01:00 Ortszeit.");
+            return Zeitwerte.VORGABE_ZONE;
+        }
+        return ZoneId.of(name);
+    }
+
+    /**
+     * Der Taktabstand in Sekunden.
+     *
+     * <p>Geprueft wird die ROH gelesene Zahl an {@link Zeitwerte#brauchbarerTakt}, nicht am
+     * Konstruktor von {@link Zeitwerte}: Der wirft, und dieser Leser darf nicht werfen. Dass
+     * beide dieselbe Regel benutzen, ist der Grund, warum sie oeffentlich dort steht.
+     */
+    private static long taktSekunden(ConfigurationSection wurzel, List<String> klagen,
+                                     List<String> bericht) {
+        String pfad = Zeitwerte.PFAD_TAKT;
+        Long gelesen = ganzeZahl(wurzel, pfad, Zeitwerte.VORGABE_TAKT_SEKUNDEN, klagen,
+                bericht);
+        if (gelesen == null) {
+            return Zeitwerte.VORGABE_TAKT_SEKUNDEN;
+        }
+        if (!Zeitwerte.brauchbarerTakt(gelesen)) {
+            klagen.add(pfad + " ist " + gelesen + " - verworfen. Erlaubt sind "
+                    + Zeitwerte.KUERZESTER_TAKT_SEKUNDEN + " bis "
+                    + Zeitwerte.LAENGSTER_TAKT_SEKUNDEN + " Sekunden. "
+                    + esBleibt(Zeitwerte.VORGABE_TAKT_SEKUNDEN) + " Darunter schreibt der"
+                    + " Takt oefter, als jede Anzeige unterscheidet; darueber kostet ein"
+                    + " Absturz mehr als zehn Minuten je anwesendem Spieler.");
+            return Zeitwerte.VORGABE_TAKT_SEKUNDEN;
+        }
+        return gelesen;
+    }
+
+    /**
+     * Die Untaetigkeitsgrenze in Minuten; 0 ist erlaubt und heisst: Abwesenheit zaehlt mit.
+     *
+     * <p>Zwei Pruefungen und nicht eine: der eigene Bereich, und das VERHAELTNIS zum Takt.
+     * Beide Zahlen koennen einzeln erlaubt sein und zusammen Spielzeit vernichten - die
+     * Grenze ist eine Stufe und kein Schnitt, also faellt bei {@code takt-sekunden: 600}
+     * und {@code untaetig-minuten: 1} der GANZE Takt weg, sobald der Spieler die letzte
+     * Minute stillsteht. 540 aktiv gespielte Sekunden, ohne Protokollzeile, bei jedem Takt
+     * erneut. Die Regel dazu steht EINMAL, in
+     * {@link Zeitwerte#brauchbareGrenzeZumTakt} - derselbe Satz, den der Konstruktor
+     * fordert; hier wird er auf den roh gelesenen Zahlen gefragt, damit geklagt und
+     * zurueckgefallen wird, statt den Konstruktor werfen zu lassen.
+     *
+     * <p>Geprueft wird gegen den Takt AUS DER DATEI, denn mehr kennt dieser Leser nicht.
+     * Beim Neuladen kann der LAUFENDE Takt ein anderer sein (er wird nur beim Start
+     * gelesen); dagegen prueft {@link Wirtschaftsstand#uebernimm} ein zweites Mal und laesst
+     * die alte Grenze stehen.
+     *
+     * @param taktSekunden der Takt, wie er aus derselben Datei gelesen wurde - schon mit
+     *                     seinem eigenen Rueckfall, also immer ein brauchbarer Wert
+     */
+    private static long untaetigMinuten(ConfigurationSection wurzel, long taktSekunden,
+                                        List<String> klagen, List<String> bericht) {
+        String pfad = Zeitwerte.PFAD_UNTAETIG;
+        Long gelesen = ganzeZahl(wurzel, pfad, Zeitwerte.VORGABE_UNTAETIG_MINUTEN, klagen,
+                bericht);
+        if (gelesen == null) {
+            return Zeitwerte.VORGABE_UNTAETIG_MINUTEN;
+        }
+        if (!Zeitwerte.brauchbareUntaetigkeit(gelesen)) {
+            klagen.add(pfad + " ist " + gelesen + " - verworfen. Erlaubt sind 0 bis "
+                    + Zeitwerte.LAENGSTE_UNTAETIGKEIT_MINUTEN + " Minuten; 0 heisst"
+                    + " ausdruecklich, dass Abwesenheit mitzaehlt. "
+                    + esBleibt(Zeitwerte.VORGABE_UNTAETIG_MINUTEN));
+            return Zeitwerte.VORGABE_UNTAETIG_MINUTEN;
+        }
+        if (!Zeitwerte.brauchbareGrenzeZumTakt(taktSekunden, gelesen)) {
+            // Der Rueckfall ist hier IMMER gueltig, und das ist nachgerechnet: Die Vorgabe
+            // sind 10 Minuten, also 600 Sekunden, und das deckt auch den laengsten
+            // erlaubten Takt (600 s). Es braucht also keine zweite Rettung.
+            klagen.add(pfad + " ist " + gelesen + " - verworfen. Zu einem Takt von "
+                    + taktSekunden + " s ist das zu kurz: Die Grenze ist eine STUFE und"
+                    + " kein Schnitt, also faellt der GANZE Takt weg, sobald sie reisst -"
+                    + " auch die aktiv gespielte Zeit darin, und zwar ohne Protokollzeile. "
+                    + esBleibt(Zeitwerte.VORGABE_UNTAETIG_MINUTEN) + " Zu diesem Takt"
+                    + " passen mindestens " + Math.ceilDiv(taktSekunden, 60L) + " Minuten;"
+                    + " 0 schaltet die Regel ganz ab, oder " + Zeitwerte.PFAD_TAKT
+                    + " kuerzen.");
+            return Zeitwerte.VORGABE_UNTAETIG_MINUTEN;
+        }
+        if (gelesen == 0L) {
+            bericht.add(pfad + " ist 0 - Abwesenheit zaehlt mit. Wer ueber Nacht im"
+                    + " Startbildschirm stehen bleibt, sammelt Spielzeit.");
+        }
+        return gelesen;
+    }
+
+    /**
      * Roh lesen und am TYP pruefen - oder {@code null}, wenn daraus keine Zahl wird.
      *
      * <p>Am Typ und nicht am Nachkommarest: YAML macht aus {@code 25.000} eine 25.0, und
@@ -246,6 +402,11 @@ final class Wirtschaftsliste {
      * "Es gilt unveraendert weiter".
      */
     private static String esBleibt(long vorgabe) {
+        return esBleibt(String.valueOf(vorgabe));
+    }
+
+    /** Dasselbe fuer einen Wert, der keine Zahl ist - die Zone. */
+    private static String esBleibt(String vorgabe) {
         return "Es bleibt bei dem Wert, der bisher galt (ausgeliefert: " + vorgabe + ").";
     }
 
@@ -260,10 +421,37 @@ final class Wirtschaftsliste {
         return roh instanceof String text ? "\"" + text + "\"" : String.valueOf(roh);
     }
 
-    private static String fehltText(String pfad, String gilt) {
-        return pfad + " steht nicht in deiner config.yml - es gilt " + gilt + ". Eine"
-                + " vorhandene Datei wird beim Update nie ueberschrieben; die Zeile muss"
-                + " von Hand hinein, sonst ist der Wert nicht einstellbar.";
+    /**
+     * Eine Zeile, die das Plugin mitbringt und die Datei nicht hat.
+     *
+     * <p>Zwei Saetze, und zwar genau nach {@link Wirtschaftsstand#NUR_BEIM_START} getrennt:
+     * <ul>
+     *   <li>Ein NEULADBARER Schluessel bekommt wieder "es gilt 4". Das ist richtig und auf
+     *       beiden Wegen: Beim Start wirkt der Rueckfall, beim Neuladen wird er uebernommen.
+     *       Eine Zeit lang stand hier fuer alle neun nur, was ausgeliefert ist - damit
+     *       erfuhr der Betreiber bei fehlendem {@code parzellen.hoechstzahl} in der ganzen
+     *       Antwort nicht mehr, welche Hoechstzahl gilt: {@code uebernimm} nennt nur
+     *       GEAENDERTE Zeilen, und im Block darunter steht die Hoechstzahl nicht.</li>
+     *   <li>Ein Schluessel aus {@code NUR_BEIM_START} bekommt kein "gilt". Dort wird gelesen
+     *       und gemeldet, aber NICHT uebernommen - es gilt weiter der Wert vom Start, und
+     *       welcher das ist, weiss dieser Leser nicht. Er verweist auf den Block, der es
+     *       weiss. Derselbe Grund wie bei {@link #esBleibt}.</li>
+     * </ul>
+     *
+     * @param wert der ausgelieferte Wert - fuer einen neuladbaren Schluessel zugleich der,
+     *             der gilt
+     */
+    private static String fehltText(String pfad, String wert) {
+        String nachsatz = " Eine vorhandene Datei wird beim Update nie ueberschrieben; die"
+                + " Zeile muss von Hand hinein, sonst ist der Wert nicht einstellbar.";
+        if (Wirtschaftsstand.NUR_BEIM_START.contains(pfad)) {
+            return pfad + " steht nicht in deiner config.yml - ausgeliefert ist " + wert
+                    + ". Diese Zeile wird ohnehin nur beim Start gelesen; was der Server"
+                    + " JETZT benutzt, steht im Block \"Nur beim Start gelesen\"."
+                    + nachsatz;
+        }
+        return pfad + " steht nicht in deiner config.yml - es gilt " + wert + "."
+                + nachsatz;
     }
 
     /** Der Name der Einstellungsdatei - einmal, damit kein zweiter Name entsteht. */
@@ -318,7 +506,15 @@ final class Wirtschaftsliste {
      * alle wirkten trotzdem - {@code get} fuer einen einzelnen Schluessel holt die Vorgabe
      * stumm aus der Jar. Genau das ist die Falle: Was der Betreiber nicht sieht, kann er
      * nicht aendern, und Plan 12a.6 verlangt, dass alles Anpassbare anpassbar ist. Kein
-     * Grund zur Klage - es gilt ja das Richtige - aber einer, es zu lesen.
+     * Grund zur Klage - es wirkt ja das Richtige - aber einer, es zu lesen.
+     *
+     * <p>Diese Zeile nennt ALLE fehlenden Schluessel auf einmal und behauptet deshalb von
+     * KEINEM, dass er gelte. Hier stand "Sie gelten aus den Vorgaben des Plugins", und das
+     * war fuer {@code zeit.zone} und {@code zeit.takt-sekunden} beim Neuladen falsch: In
+     * derselben Antwort stand zwei Zeilen tiefer "zeit.zone: es gilt weiter
+     * America/New_York", also zwei verschiedene Tagesgrenzen. Was fuer den einzelnen
+     * Schluessel gilt, sagt {@link #fehltText} - dort ist es je Schluessel entschieden und
+     * nicht fuer alle neun zusammen geraten.
      */
     private static void nenneFehlende(ConfigurationSection wurzel, List<String> bericht) {
         List<String> fehlen = new ArrayList<>();
@@ -330,8 +526,9 @@ final class Wirtschaftsliste {
         if (!fehlen.isEmpty()) {
             bericht.add(fehlen.size() + " von " + SCHLUESSEL.size() + " Wirtschaftszeilen"
                     + " stehen nicht in deiner config.yml: " + String.join(", ", fehlen)
-                    + ". Sie gelten aus den Vorgaben des Plugins - sichtbar und aenderbar"
-                    + " sind sie erst, wenn sie in der Datei stehen.");
+                    + ". Sichtbar und aenderbar sind sie erst, wenn sie in der Datei"
+                    + " stehen; was das Plugin ohne die Zeile mitbringt, nennt die eigene"
+                    + " Zeile zu jedem Schluessel.");
         }
     }
 }
