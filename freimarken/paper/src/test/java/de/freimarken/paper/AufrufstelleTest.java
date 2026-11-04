@@ -1,0 +1,493 @@
+package de.freimarken.paper;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Buchungsgrund;
+import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.Preisstaffel;
+import de.freimarken.kern.Rasterplan;
+import de.freimarken.kern.Richtung;
+import de.freimarken.kern.SpeicherKasse;
+import de.freimarken.kern.SpeicherLager;
+import de.freimarken.kern.Stadtgrenze;
+import de.freimarken.kern.Wirtschaftsstand;
+import de.freimarken.kern.Wirtschaftswerte;
+import de.freimarken.kern.Zeitwerte;
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.logging.Logger;
+import net.kyori.adventure.key.Key;
+import net.kyori.adventure.text.Component;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.entity.Player;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Die AUFRUFSTELLE, mitgeschrieben - was ein Zweig waehlt und was er uebergibt.
+ *
+ * <p>{@link SendewegTest} ruft die reinen Methoden unmittelbar auf und prueft ihr Bild.
+ * Damit war die halbe Naht gedeckt und die andere nicht: WELCHE Methode ein Zweig waehlt,
+ * WAS er ihr uebergibt und in welcher Reihenfolge er sendet, prueft eine Tafel ueber die
+ * reine Methode nicht. Gemessen blieben alle vier dieser Eingriffe gruen - 356 Proben,
+ * Rueckgabewert 0:
+ *
+ * <ul>
+ *   <li>{@code infoKopfZeilen(sprache, pz, px)}: {@code /parzelle info} auf 3/-4 zeigte
+ *       "Parzelle -4/3".</li>
+ *   <li>Hoechstzahl und Gruppenfelder an {@code absageZeilen} getauscht: Die Absage nannte
+ *       die Zahl der jeweils ANDEREN Grenze, und der Spieler richtete sich nach ihr.</li>
+ *   <li>{@code aufgebenGruppeZeilen} durch {@code nichtDeineParzelleZeilen} ersetzt: Auf
+ *       dem eigenen Gruppenkind las der Spieler "Das ist nicht deine Parzelle." - eine
+ *       Luege, und er suchte den Eigentuemer.</li>
+ *   <li>Ein Sendeaufruf ganz weg oder verdoppelt: {@code /mark} antwortete gar nicht, oder
+ *       "ist wieder frei" stand zweimal da.</li>
+ * </ul>
+ *
+ * <p><b>Das Muster ist nicht neu.</b> {@code SpielzeitBefehleTest.derSendewegGibtAllesAus}
+ * schreibt mit einer {@code Audience} mit und sagt in seinem eigenen Kommentar genau diese
+ * Fehlerklasse: "Geprueft war bisher nur, WAS in den Zeilen steht, nicht DASS sie
+ * ankommen." {@code SendewegTest} zitiert {@code SpielzeitBefehle.sende} als Vorbild, hat
+ * aber nur die reine Haelfte uebernommen.
+ *
+ * <p><b>Ohne Server, ohne Bukkit-Laufzeit.</b> Das Besitzbuch ist das ECHTE, ueber
+ * {@code SpeicherLager} und {@code SpeicherKasse}; die Welt ist {@link Probewelt}, dieselbe
+ * Marktstadt in einer Map, mit der {@code WegbauTest} rechnet. Nur {@code World},
+ * {@code Block} und {@code Player} sind Stellvertreter: Es sind Schnittstellen, und die
+ * paar Methoden, die diese Zweige von ihnen brauchen, sind hier aufgeschrieben. Ein Aufruf,
+ * der hier nicht steht, wirft mit seinem Namen - eine stumme Null waere schlimmer als eine
+ * rote Probe.
+ *
+ * <p><b>Hoechstzahl 7 und Gruppenfelder 3 sind ABSICHTLICH verschieden</b>, aus demselben
+ * Grund wie in {@code SendewegTest} 33t: Mit zwei gleichen Zahlen waere ein Vertauschen der
+ * Quellen gruen. Die Vorgabe des Kerns hat fuer beide die 4.
+ */
+class AufrufstelleTest {
+
+    private static final UUID ANNA = UUID.nameUUIDFromBytes("anna".getBytes());
+    private static final UUID BERT = UUID.nameUUIDFromBytes("bert".getBytes());
+
+    /** Wie viele Parzellen der Rang erlaubt - nicht dieselbe Zahl wie die Felderzahl. */
+    private static final int HOECHSTZAHL = 7;
+
+    /** Wie viele Felder eine Gruppe haben darf. */
+    private static final int GRUPPENFELDER = 3;
+
+    private static final long REICH = 10_000_000L;
+
+    /** Die Weltunterkante, wie in {@code WegbauTest}. */
+    private static final int UNTEN = -64;
+
+    private final Rasterplan plan = Rasterplan.marktstadt();
+    private final Probewelt boden = new Probewelt(plan, UNTEN);
+
+    private final List<Component> gesendet = new ArrayList<>();
+
+    private World welt;
+    private SpeicherKasse kasse;
+    private Besitzbuch buch;
+    private ParzellenBefehle befehle;
+
+    @BeforeEach
+    void vorher() {
+        welt = weltDoppel();
+        kasse = new SpeicherKasse(REICH);
+        buch = new Besitzbuch(Stadtgrenze.marktstadt(), new SpeicherLager(), kasse,
+                new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
+                        REICH, HOECHSTZAHL, GRUPPENFELDER,
+                        Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE)));
+        befehle = new ParzellenBefehle(buch, welt,
+                new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
+                        REICH, HOECHSTZAHL, GRUPPENFELDER,
+                        Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE)),
+                Logger.getLogger("probe"), Sprachprobe.spracheAusDemJar());
+        kasse.eroeffne(ANNA);
+        kasse.eroeffne(BERT);
+    }
+
+    // --- Die Stellvertreter ----------------------------------------------------
+
+    /**
+     * Die Welt, soweit diese Zweige sie anfassen.
+     *
+     * <p>Vier Dinge: ihr Schluessel (daraus wird der Weltname der Ablage), der Vergleich
+     * mit dem Ort des Spielers, und die zwei Blockfragen, die {@code Weltgriff.AufDerWelt}
+     * weitergibt. Letztere laufen in die {@link Probewelt} - damit rechnet die Bodenarbeit
+     * mit derselben Stadt, mit der {@code WegbauTest} rechnet.
+     */
+    private World weltDoppel() {
+        return (World) Proxy.newProxyInstance(World.class.getClassLoader(),
+                new Class<?>[]{World.class}, (ding, methode, werte) -> switch (
+                        methode.getName()) {
+                    case "key" -> Key.key("freimarken", "marktstadt");
+                    case "getMinHeight" -> boden.unten();
+                    case "getHighestBlockYAt" -> boden.oben((Integer) werte[0],
+                            (Integer) werte[1]);
+                    case "getBlockAt" -> blockDoppel((Integer) werte[0],
+                            (Integer) werte[1], (Integer) werte[2]);
+                    case "equals" -> ding == werte[0];
+                    case "hashCode" -> System.identityHashCode(ding);
+                    case "toString" -> "Weltdoppel";
+                    default -> throw new UnsupportedOperationException("World."
+                            + methode.getName() + " - diese Probe kennt den Aufruf nicht."
+                            + " Wer ihn braucht, schreibt ihn hier auf; stumm null"
+                            + " zurueckzugeben waere ein gruener Lauf ueber einem Loch.");
+                });
+    }
+
+    private Block blockDoppel(int x, int y, int z) {
+        return (Block) Proxy.newProxyInstance(Block.class.getClassLoader(),
+                new Class<?>[]{Block.class}, (ding, methode, werte) -> switch (
+                        methode.getName()) {
+                    case "getType" -> boden.bei(x, y, z);
+                    case "setType" -> {
+                        boden.setze(x, y, z, (Material) werte[0]);
+                        yield null;
+                    }
+                    case "equals" -> ding == werte[0];
+                    case "hashCode" -> System.identityHashCode(ding);
+                    case "toString" -> "Blockdoppel " + x + "/" + y + "/" + z;
+                    default -> throw new UnsupportedOperationException("Block."
+                            + methode.getName() + " - diese Probe kennt den Aufruf nicht.");
+                });
+    }
+
+    /**
+     * Ein Spieler, der mitschreibt statt zu lesen.
+     *
+     * <p>{@code getEffectivePermissions} gibt NICHTS zurueck: Die Grenzen kommen damit aus
+     * der Wirtschaft und nicht aus einem Recht, und das sind die zwei verschiedenen Zahlen
+     * oben. Ein Recht hier waere eine zweite Quelle fuer dieselbe Zahl.
+     */
+    private Player spielerDoppel(UUID wer, Location wo) {
+        return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(),
+                new Class<?>[]{Player.class}, (ding, methode, werte) -> switch (
+                        methode.getName()) {
+                    case "getUniqueId" -> wer;
+                    case "getLocation" -> wo.clone();
+                    case "getEffectivePermissions" -> Set.of();
+                    case "sendMessage" -> {
+                        gesendet.add((Component) werte[0]);
+                        yield null;
+                    }
+                    case "equals" -> ding == werte[0];
+                    case "hashCode" -> System.identityHashCode(ding);
+                    case "toString" -> "Spielerdoppel " + wer;
+                    default -> throw new UnsupportedOperationException("Player."
+                            + methode.getName() + " - diese Probe kennt den Aufruf nicht."
+                            + " Wer ihn braucht, schreibt ihn hier auf.");
+                });
+    }
+
+    // --- Kleinteile ------------------------------------------------------------
+
+    /** Ein Ort INNERHALB der Parzelle - aus dem Plan gerechnet, nicht geraten. */
+    private Location auf(int px, int pz) {
+        return new Location(welt, plan.ursprungX(px) + 1, 70, plan.ursprungZ(pz) + 1);
+    }
+
+    /** Ein Ort auf dem Weg zwischen zwei Parzellen. */
+    private Location aufDemWeg(int px, int pz) {
+        return new Location(welt,
+                plan.ursprungX(px) + plan.parzellenKante() + plan.wegBreite() / 2,
+                70, plan.ursprungZ(pz) + 1);
+    }
+
+    private Player anna(Location wo) {
+        return spielerDoppel(ANNA, wo);
+    }
+
+    /** Was der Spieler seit dem letzten Abruf gelesen hat - als &-Bild, Zeile fuer Zeile. */
+    private String mitschrift() {
+        String bild = Sprachprobe.bild(List.copyOf(gesendet));
+        gesendet.clear();
+        return bild.isEmpty() ? "" : bild + "\n";
+    }
+
+    /** Nimmt die Parzelle fuer Anna, ohne durch den Zweig zu gehen. */
+    private Parzelle nimm(UUID wer, int px, int pz) {
+        var entscheid = buch.nehmen(welt.key().asString(), wer, plan.ursprungX(px) + 1,
+                plan.ursprungZ(pz) + 1, HOECHSTZAHL);
+        assertTrue(entscheid.erteilt(), "die Vorbereitung muss durchgehen: "
+                + entscheid.bescheid());
+        return entscheid.parzelle().orElseThrow();
+    }
+
+    // --- Die Proben ------------------------------------------------------------
+
+    @Test
+    @DisplayName("34 - die Welt wird geprueft, und zwar BEVOR irgendetwas geschieht")
+    void derZweigPrueftDieWeltZuerst() {
+        World andere = (World) Proxy.newProxyInstance(World.class.getClassLoader(),
+                new Class<?>[]{World.class}, (ding, methode, werte) ->
+                        "key".equals(methode.getName())
+                                ? Key.key("freimarken", "anderswo")
+                                : "equals".equals(methode.getName()) ? ding == werte[0]
+                                : "hashCode".equals(methode.getName())
+                                        ? System.identityHashCode(ding) : "Fremdwelt");
+        Player draussen = spielerDoppel(ANNA, new Location(andere, 1, 70, 1));
+
+        befehle.zeigeInfo(draussen);
+
+        // Genau EINE Zeile, und zwar die aus der Sprachdatei. Ein handgeschriebenes
+        // Component.text(...) ohne Farbe laesst sich hier senden, ohne dass eines der
+        // Tore in GrenzeTest rot wird - dieser Vergleich faengt es, weil er das Bild
+        // nennt und nicht nur die Zahl.
+        assertEquals("&cParzellen gibt es nur in der Marktstadt.\n", mitschrift());
+    }
+
+    @Test
+    @DisplayName("34b - Zweig /mark: beide Zeilen gehen wirklich hinaus, Stand zuerst")
+    void markSendetBeideZeilen() {
+        kasse.gutschreiben(ANNA, 25_000L, Buchungsgrund.EROEFFNUNG);
+        long stand = kasse.guthaben(ANNA);
+
+        ParzellenBefehle.markZeilen(Sprachprobe.spracheAusDemJar(), stand)
+                .forEach(anna(auf(0, 0))::sendMessage);
+
+        assertEquals("""
+                &7Du hast &610.025.000 Mark&7.
+                &8/mark verlauf zeigt die letzten Buchungen.
+                """, mitschrift());
+    }
+
+    @Test
+    @DisplayName("34c - Zweig info: der Kopf nennt die Nummer in DIESER Reihenfolge")
+    void infoNenntDieNummerRichtigHerum() {
+        befehle.zeigeInfo(anna(auf(3, -4)));
+
+        // 3/-4 und nicht -4/3: Die zwei Zahlen kommen aus zwei verschiedenen Methoden des
+        // Rasterplans, und ein Tausch an dieser Aufrufstelle war fuer den Compiler in
+        // Ordnung. Zwei verschiedene Zahlen, und eine davon negativ - mit 0/0 waere der
+        // Tausch unsichtbar.
+        assertEquals("""
+                &6Parzelle 3/-4
+                &7  frei · &agratis&8 · /parzelle nehmen
+                """, mitschrift());
+    }
+
+    @Test
+    @DisplayName("34d - Zweig info auf dem Weg und auf einer fremden Parzelle")
+    void infoAufWegUndFremd() {
+        befehle.zeigeInfo(anna(aufDemWeg(0, 0)));
+        assertEquals("&7Du stehst auf einem Weg - der gehoert allen.\n", mitschrift());
+    }
+
+    @Test
+    @DisplayName("34e - Zweig nehmen: die erste ist gratis, die zweite wird gerechnet")
+    void nehmenErstGratisDannBezahlt() {
+        befehle.nehmen(anna(auf(1, 1)));
+        assertEquals("""
+                &aParzelle 1/1 gehoert jetzt dir
+                &7  Die erste ist gratis.
+                """, mitschrift());
+
+        befehle.nehmen(anna(auf(2, 1)));
+        // Der Rest kommt aus der Kasse und nicht aus einer Null am Sendeort: Wer die
+        // Wache in nehmenErteiltZeilen fasst, liest hier eine 0.
+        assertEquals("""
+                &aParzelle 2/1 gehoert jetzt dir
+                &7  Bezahlt: 25.000 Mark · Rest: 9.975.000 Mark
+                """, mitschrift());
+    }
+
+    @Test
+    @DisplayName("34f - Zweig nehmen: eine fremde Parzelle, und die Absage am Limit")
+    void nehmenSchonVergebenUndAmLimit() {
+        nimm(BERT, 0, 1);
+
+        // Dass die Absage am Limit die HOECHSTZAHL nennt und nicht die Felderzahl, haelt
+        // diese Zeile: Die zwei Zahlen sind hier absichtlich verschieden.
+        for (int zelle = 0; zelle < HOECHSTZAHL; zelle++) {
+            nimm(ANNA, zelle, 3);
+        }
+        befehle.nehmen(anna(auf(1, 4)));
+        assertEquals("""
+                &cDu hast schon 7 Parzellen - mehr erlaubt dein Rang nicht.
+                &eMehr erlaubt ein hoeherer Rang.
+                """, mitschrift());
+    }
+
+    @Test
+    @DisplayName("34g - Zweig aufgeben: das Gruppenkind bekommt SEINE Absage")
+    void aufgebenAufDemGruppenkind() {
+        nimm(ANNA, 0, 0);
+        nimm(ANNA, 1, 0);
+        var zusammen = buch.zusammenlegen(welt.key().asString(), ANNA,
+                plan.ursprungX(0) + 1, plan.ursprungZ(0) + 1, Richtung.OST, GRUPPENFELDER);
+        assertTrue(zusammen.erteilt(), "die Vorbereitung muss durchgehen: "
+                + zusammen.bescheid());
+
+        // Auf dem Gruppenkind - nicht auf dem Anker. Dort verweigert das Aufgeben, und
+        // zwar mit dem Satz UEBER die Gruppe. Wurde hier nichtDeineParzelleZeilen
+        // gewaehlt, las der Eigentuemer "Das ist nicht deine Parzelle." und suchte den
+        // Eigentuemer seiner eigenen Parzelle.
+        befehle.warneVorAufgeben(anna(auf(1, 0)));
+        assertEquals("&cDie Parzelle gehoert zu einer Gruppe - erst /parzelle"
+                + " auftrennen.\n", mitschrift());
+
+        // Und die fremde Parzelle bekommt den anderen Satz - sonst waere die Zeile
+        // darueber auch mit dem falschen Schluessel gruen.
+        nimm(BERT, 5, 5);
+        befehle.warneVorAufgeben(anna(auf(5, 5)));
+        assertEquals("&cDas ist nicht deine Parzelle.\n", mitschrift());
+    }
+
+    @Test
+    @DisplayName("34h - Zweig aufgeben: Warnung, falsche Nummer, und die Tat")
+    void aufgebenWarnungUndTat() {
+        nimm(ANNA, 3, -4);
+
+        befehle.warneVorAufgeben(anna(auf(3, -4)));
+        assertEquals("""
+                &eParzelle 3/-4 aufgeben?
+                &7  Es gibt kein Geld zurueck, und gebaut bleibt stehen.
+                &c  /parzelle aufgeben bestaetigen 3 -4
+                """, mitschrift());
+
+        // Die Nummer im Befehl zeigt woandershin - dann geschieht nichts, und die Tat,
+        // die ausblieb, ist die dieses Zweiges.
+        befehle.aufgeben(anna(auf(3, -4)), 3, -5);
+        assertEquals("&cDu stehst nicht auf Parzelle 3/-5. Nichts aufgegeben.\n",
+                mitschrift());
+
+        befehle.aufgeben(anna(auf(3, -4)), 3, -4);
+        assertEquals("&aParzelle 3/-4 ist wieder frei.\n", mitschrift());
+    }
+
+    @Test
+    @DisplayName("34i - Zweig zusammenlegen: die Gebuehr, der Boden und sein Wortstueck")
+    void zusammenlegenNenntDenBodenRichtig() {
+        nimm(ANNA, 0, 0);
+        nimm(ANNA, 1, 0);
+
+        befehle.warneVorZusammenlegen(anna(auf(0, 0)), Richtung.OST);
+        assertEquals("""
+                &eParzelle 0/0 mit 1/0 zusammenlegen?
+                &7  Gebuehr: &620.000 Mark&7 · du hast 9.975.000 Mark
+                &7  Der Weg dazwischen wird dein Bauland.
+                &7  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
+                &7  darauf steht.
+                &e  /parzelle zusammenlegen ost bestaetigen 0 0
+                """, mitschrift());
+
+        befehle.zusammenlegen(anna(auf(0, 0)), Richtung.OST, 0, 0);
+        // Die letzte Zeile ist der Beweis fuer das Wortstueck: Beim Zusammenlegen WIRD
+        // der Weg Bauland, beim Auftrennen kommt er zurueck. Gegenseitig vertauscht las
+        // der Spieler hier das Gegenteil dessen, was gerade geschah - und keine Probe
+        // auf eine reine Methode faellt darueber, weil beide Woerter dort als Wert
+        // hereinkommen.
+        assertEquals("""
+                &aEin Grundstueck aus 2 Feldern.
+                &7  Bezahlt: 20.000 Mark · Rest: 9.955.000 Mark
+                &7  Der Weg dazwischen ist Bauland (596 Bloecke geaendert).
+                """, mitschrift());
+    }
+
+    @Test
+    @DisplayName("34j - Zweig auftrennen: die Abschaetzung, und der Weg kommt zurueck")
+    void auftrennenNenntAufwandUndBoden() {
+        nimm(ANNA, 0, 0);
+        nimm(ANNA, 1, 0);
+        // Durch den ZWEIG zusammenlegen und nicht am Besitzbuch vorbei: Nur so fuellt die
+        // Bodenarbeit den Weg wirklich, und nur dann hat der Rueckbau etwas zu tun.
+        befehle.zusammenlegen(anna(auf(0, 0)), Richtung.OST, 0, 0);
+        gesendet.clear();
+
+        befehle.warneVorAuftrennen(anna(auf(0, 0)));
+        assertEquals("""
+                &eGrundstueck aus 2 Feldern ganz auftrennen?
+                &7  ALLE Wege zwischen den Feldern kommen zurueck. Geld gibt es keines zurueck.
+                &7  Fuer ein einzelnes Feld: stell dich darauf und nimm /parzelle auftrennen ohne "alles".
+                &7  Auf der Wegflaeche steht nichts - es geht nichts verloren.
+                &c  /parzelle auftrennen alles bestaetigen 0 0
+                """, mitschrift());
+
+        befehle.auftrennen(anna(auf(0, 0)), 0, 0);
+        assertEquals("""
+                &aAufgetrennt - 2 eigenstaendige Parzellen.
+                &7  Der Weg ist zurueck (596 Bloecke geaendert).
+                """, mitschrift());
+    }
+
+    @Test
+    @DisplayName("34k - jeder Bescheid nennt die Zahl SEINER Grenze, auch durch absage()")
+    void absageNenntDieZahlDerRichtigenGrenze() {
+        for (int zelle = 0; zelle <= GRUPPENFELDER; zelle++) {
+            nimm(ANNA, zelle, 0);
+        }
+        // Eine Gruppe aus allen erlaubten Feldern, dann eines mehr: Das ist der Bescheid
+        // GRUPPE_ZU_GROSS, und er nennt die GRUPPENFELDER. Nennt er stattdessen die
+        // Hoechstzahl, richtet sich der Spieler nach der falschen Grenze.
+        //
+        // Von Feld zu Feld und immer vom RAND aus: Wer zweimal von derselben Zelle nach
+        // Osten legt, bekommt beim zweiten Mal SCHON_ZUSAMMEN - der Nachbar ist dann
+        // schon dieselbe Gruppe.
+        for (int zelle = 0; zelle + 1 < GRUPPENFELDER; zelle++) {
+            var schritt = buch.zusammenlegen(welt.key().asString(), ANNA,
+                    plan.ursprungX(zelle) + 1, plan.ursprungZ(0) + 1, Richtung.OST,
+                    GRUPPENFELDER);
+            assertTrue(schritt.erteilt(), "die Vorbereitung muss durchgehen: "
+                    + schritt.bescheid());
+        }
+        gesendet.clear();
+
+        befehle.warneVorZusammenlegen(anna(auf(GRUPPENFELDER - 1, 0)), Richtung.OST);
+        assertEquals("""
+                &cDein Rang erlaubt hoechstens 3 Felder je Gruppe.
+                &eMehr erlaubt ein hoeherer Rang.
+                """, mitschrift());
+
+        // UND DERSELBE BESCHEID DURCH absage(). Der Zweig darueber faengt
+        // GRUPPE_ZU_GROSS selbst ab; die BESTAETIGUNG geht durch die gemeinsame Absage,
+        // und genau dort kommen beide Grenzen zusammen herein. Gemessen war dieser Ort von
+        // keiner Probe erreicht - 34k lief ueber gruppeZuGrossZeilen, 34f ueber
+        // nehmenGrenzeZeilen, und beide umgehen absage(). Ein Tausch der zwei Zahlen GENAU
+        // DORT blieb darum gruen, und der Spieler richtet sich nach der falschen Grenze.
+        befehle.zusammenlegen(anna(auf(GRUPPENFELDER - 1, 0)), Richtung.OST,
+                GRUPPENFELDER - 1, 0);
+        assertEquals("""
+                &cDein Rang erlaubt hoechstens 3 Felder je Gruppe.
+                &eMehr erlaubt ein hoeherer Rang.
+                """, mitschrift());
+
+        // Und die andere Haelfte derselben Zahlenwahl: derselbe Weg mit einem Bescheid,
+        // der die PARZELLENZAHL nennt - hier 7 und nicht 3. Erst mit beiden Zeilen ist ein
+        // Tausch in jeder Richtung rot, denn eine davon allein liesse die Vertauschung
+        // zufaellig stimmen.
+        for (int zelle = GRUPPENFELDER + 1; zelle < HOECHSTZAHL; zelle++) {
+            nimm(ANNA, zelle, 0);
+        }
+        gesendet.clear();
+        befehle.aufgeben(anna(auf(0, 5)), 0, 5);
+        assertEquals("""
+                &cDiese Parzelle gehoert noch niemandem - aber dein Rang erlaubt 7 Parzellen, und so viele hast du schon.
+                &eMehr erlaubt ein hoeherer Rang.
+                """, mitschrift());
+    }
+
+    @Test
+    @DisplayName("34l - Zweig liste: der Kopf nennt Anzahl und Hoechstzahl, nicht umgekehrt")
+    void listeNenntAnzahlUndHoechstzahl() {
+        nimm(ANNA, 0, 0);
+        nimm(ANNA, 1, 2);
+        gesendet.clear();
+
+        befehle.zeigeListe(anna(auf(0, 0)));
+        assertEquals("""
+                &6Deine Parzellen (2 von 7)
+                &7  0/0 · gratis
+                &7  1/2 · 25.000 Mark
+                &8Die naechste kostet 50.000 Mark
+                """, mitschrift());
+    }
+}

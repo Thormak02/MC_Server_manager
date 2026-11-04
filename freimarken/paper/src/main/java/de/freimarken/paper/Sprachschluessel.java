@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Buchungsgrund;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -120,6 +121,85 @@ final class Sprachschluessel {
     }
 
     /**
+     * Statt des {@code switch} in {@code ParzellenBefehle.absageZeilen} - der Satz zu
+     * einem Bescheid des Besitzbuchs.
+     *
+     * <p><b>{@code NOCH_FREI} hat ZWEI Saetze</b>, gewaehlt an {@code amLimit}: "nimm sie
+     * mit /parzelle nehmen" ist eine Einladung, und wer sein Limit schon erreicht hat,
+     * soll sie nicht lesen. Das ist der Grund fuer den zweiten Parameter - und der Grund,
+     * warum eine Probe ueber {@code values()} allein nicht genuegt: Sie wuerde nur zaehlen,
+     * dass jeder Bescheid einen Satz hat, nicht dass er den richtigen von zwei bekommt.
+     *
+     * <p>Die Zuordnung steht hier und nicht am Sendeort, aus demselben Grund wie
+     * {@link #grund}: Sie wird hier entschieden, und eine Probe kann sie unmittelbar
+     * aufrufen. Der {@code switch} nennt jeden Bescheid, ohne {@code default} - ein neuer
+     * Bescheid bricht damit den Bau und nicht erst das Spielbild.
+     */
+    static Satz bescheid(Besitzbuch.Bescheid bescheid, boolean amLimit) {
+        return switch (bescheid) {
+            case ERTEILT -> ParzellenSatz.BESCHEID_ERTEILT;
+            case KEINE_PARZELLE -> ParzellenSatz.BESCHEID_KEINE_PARZELLE;
+            case NOCH_FREI -> amLimit
+                    ? ParzellenSatz.BESCHEID_NOCH_FREI_AM_LIMIT
+                    : ParzellenSatz.BESCHEID_NOCH_FREI;
+            case SCHON_VERGEBEN -> ParzellenSatz.BESCHEID_SCHON_VERGEBEN;
+            case AUSSERHALB -> ParzellenSatz.BESCHEID_AUSSERHALB;
+            case GRENZE_ERREICHT -> ParzellenSatz.BESCHEID_GRENZE_ERREICHT;
+            case ZU_WENIG_MARK -> ParzellenSatz.BESCHEID_ZU_WENIG_MARK;
+            case NICHT_EIGENTUEMER -> ParzellenSatz.BESCHEID_NICHT_EIGENTUEMER;
+            case SCHON_EINGETRAGEN -> ParzellenSatz.BESCHEID_SCHON_EINGETRAGEN;
+            case NICHT_EINGETRAGEN -> ParzellenSatz.BESCHEID_NICHT_EINGETRAGEN;
+            case TEIL_EINER_GRUPPE -> ParzellenSatz.BESCHEID_TEIL_EINER_GRUPPE;
+            case NACHBAR_FREI -> ParzellenSatz.BESCHEID_NACHBAR_FREI;
+            case NACHBAR_FREMD -> ParzellenSatz.BESCHEID_NACHBAR_FREMD;
+            case SCHON_IN_GRUPPE -> ParzellenSatz.BESCHEID_SCHON_IN_GRUPPE;
+            case SCHON_ZUSAMMEN -> ParzellenSatz.BESCHEID_SCHON_ZUSAMMEN;
+            case GRUPPE_ZU_GROSS -> ParzellenSatz.BESCHEID_GRUPPE_ZU_GROSS;
+            case KEINE_GRUPPE -> ParzellenSatz.BESCHEID_KEINE_GRUPPE;
+            case AUF_DEM_WEG -> ParzellenSatz.BESCHEID_AUF_DEM_WEG;
+            case HAELT_ZUSAMMEN -> ParzellenSatz.BESCHEID_HAELT_ZUSAMMEN;
+        };
+    }
+
+    /** Woher die Zahl kommt, die ein Bescheid in seinen Satz setzt - oder NICHTS. */
+    enum Zahlquelle {
+        KEINE,
+        /** Wie viele Parzellen der Rang erlaubt - {@code hoechstzahl(spieler)}. */
+        HOECHSTZAHL,
+        /** Wie viele Felder eine Gruppe haben darf - {@code gruppenFelder(spieler)}. */
+        GRUPPENFELDER
+    }
+
+    /**
+     * Der zweite Teil derselben Antwort, damit {@code absageZeilen} nicht raten muss.
+     *
+     * <p>Gemessen setzen DREI der neunzehn Bescheide eine Zahl in den Satz, und zwar aus
+     * ZWEI verschiedenen Quellen: {@code NOCH_FREI} am Limit und {@code GRENZE_ERREICHT}
+     * nennen die Hoechstzahl der Parzellen, {@code GRUPPE_ZU_GROSS} die erlaubte
+     * Gruppengroesse. Welche Zahl in welchen Satz geht, ist damit eine Angabe des
+     * Verzeichnisses und keine Entscheidung am Sendeort - dort stuende sonst ein zweiter
+     * {@code switch} ueber dieselbe Verzweigung, und zwei Verzweigungen ueber dieselbe
+     * Frage laufen irgendwann auseinander.
+     *
+     * <p>Dass beide Quellen wirklich auseinandergehalten werden, haelt
+     * {@code SendewegTest} fest: Seine Tafeln rufen {@code absageZeilen} mit
+     * ABSICHTLICH verschiedenen Zahlen auf (7 Parzellen, 3 Felder). Mit zwei gleichen
+     * Zahlen waere ein Vertauschen der Quellen gruen.
+     */
+    static Zahlquelle zahlquelle(Besitzbuch.Bescheid bescheid, boolean amLimit) {
+        return switch (bescheid) {
+            case NOCH_FREI -> amLimit ? Zahlquelle.HOECHSTZAHL : Zahlquelle.KEINE;
+            case GRENZE_ERREICHT -> Zahlquelle.HOECHSTZAHL;
+            case GRUPPE_ZU_GROSS -> Zahlquelle.GRUPPENFELDER;
+            case ERTEILT, KEINE_PARZELLE, SCHON_VERGEBEN, AUSSERHALB, ZU_WENIG_MARK,
+                    NICHT_EIGENTUEMER, SCHON_EINGETRAGEN, NICHT_EINGETRAGEN,
+                    TEIL_EINER_GRUPPE, NACHBAR_FREI, NACHBAR_FREMD, SCHON_IN_GRUPPE,
+                    SCHON_ZUSAMMEN, KEINE_GRUPPE, AUF_DEM_WEG, HAELT_ZUSAMMEN
+                    -> Zahlquelle.KEINE;
+        };
+    }
+
+    /**
      * Der aehnlichste bekannte Pfad zu einem unbekannten - fuer "meintest du ...?".
      *
      * <p>Die Levenshtein-Abstandsrechnung, und zwar auf dem GANZEN Pfad: Ein Tippfehler
@@ -166,10 +246,16 @@ final class Sprachschluessel {
     /**
      * Die Pfade, deren Deckung eine FAMILIENPROBE traegt und keine Textsuche.
      *
-     * <p>Diese Saetze werden nirgends namentlich getippt: Ihr Pfad entsteht mechanisch aus
-     * einem Aufzaehlungsnamen ({@link #grund}). Eine Textsuche nach dem Namen der
-     * Konstante fand sie darum nur in {@code Sprachschluessel.java} selbst - und ein
-     * Schluessel, der sich selbst bescheinigt, bescheinigt nichts.
+     * <p>Diese Saetze werden nirgends namentlich getippt: Sie werden ueber eine
+     * Familienfunktion gewaehlt ({@link #grund}, {@link #bescheid}), und die steht in
+     * dieser Datei. Eine Textsuche nach dem Namen der Konstante fand sie darum nur in
+     * {@code Sprachschluessel.java} selbst - und ein Schluessel, der sich selbst
+     * bescheinigt, bescheinigt nichts.
+     *
+     * <p>Die Liste wird MECHANISCH aus denselben Aufzaehlungen gebaut, nach denen die
+     * Familienfunktionen verzweigen - nicht von Hand aufgeschrieben. Sonst stuende hier
+     * eines Tages ein Pfad, den es nicht mehr gibt, und die Probe waere rot, ohne dass
+     * etwas kaputt ist.
      *
      * <p>{@code GrenzeTest.jederSchluesselWirdGesendet} vergleicht diese Menge mit
      * {@code assertEquals} gegen die tatsaechlich nur hier gefundenen Schluessel. Wird ein
@@ -181,6 +267,12 @@ final class Sprachschluessel {
         List<String> pfade = new ArrayList<>();
         for (Buchungsgrund grund : Buchungsgrund.values()) {
             pfade.add(MarkSatz.grundpfad(grund));
+        }
+        // Beide Formen von amLimit, weil NOCH_FREI zwei verschiedene Saetze hat - mit
+        // nur einem Durchlauf fehlte genau der Satz, den es am meisten braucht.
+        for (Besitzbuch.Bescheid bescheid : Besitzbuch.Bescheid.values()) {
+            pfade.add(bescheid(bescheid, false).pfad());
+            pfade.add(bescheid(bescheid, true).pfad());
         }
         return List.copyOf(pfade);
     }

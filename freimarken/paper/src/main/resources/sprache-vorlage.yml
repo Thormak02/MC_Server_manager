@@ -36,7 +36,18 @@
 #   Paragrafenzeichen, kein &-Code. Die Datei ist UTF-8.
 
 mark:
+  # {betrag} - dein Stand. Mehrfarbig in EINER Zeile: das goldene Stueck ist ein
+  # WERT, also kannst du den Satz umstellen, ohne einen zweiten Schluessel zu
+  # brauchen.
+  stand: "<gray>Du hast <gold>{betrag}</gold>.</gray>"
+  # Die zweite Zeile von /mark. Sie steht unter stand und nicht in verlauf: Gelesen
+  # wird sie bei /mark, nicht bei /mark verlauf.
+  verlauf-hinweis: "<dark_gray>/mark verlauf zeigt die letzten Buchungen.</dark_gray>"
   verlauf:
+    # Noch keine Buchung - dann steht nur diese eine Zeile da.
+    leer: "<gray>Noch keine Buchungen.</gray>"
+    # Der Kopf ueber den Buchungen.
+    kopf: "<gold>Deine letzten Buchungen</gold>"
     # {zeit} {betrag} {grund} {stand} - Zeitform aus zeit.verlauf-muster, Betrag und
     # Vorzeichen formt das Programm, {grund} kommt aus der Liste darunter.
     # Einzug und Farbe stehen HIER, nicht am Sendeort: wer den Betrag golden will,
@@ -57,11 +68,14 @@ waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
   # deines; die Zahlform bleibt im Programm, damit ein Tippfehler keine Preise
   # verbiegt. Kein Farbtag - der Betrag wird in andere Saetze eingesetzt.
-  # HALB IN KRAFT: Dieses Wort wirkt noch nicht an allen Stellen - ein Teil der
-  #   Betraege kommt bis zu seinem Bauschritt aus dem Programm und sagt dort weiter
-  #   "Mark". Aenderst du es jetzt, steht im Spiel beides nebeneinander. Diese
-  #   Warnung verschwindet, sobald die letzte Stelle umgezogen ist - sie kann auch
-  #   nicht stehenbleiben, eine Probe haelt beide Richtungen.
+  # HALB IN KRAFT: Dieses Wort wirkt noch nicht an allen Stellen. VON HIER kommt
+  #   jeder Betrag in /mark und /parzelle - Stand, Verlauf, Preise, Gebuehren und
+  #   Rest. NOCH NICHT von hier kommen die zwei Preiszeilen von /freimarken
+  #   ("Parzelle Nr. N kostet ..." und "Bisher ausgegeben: ..."); die sagen bis zu
+  #   ihrem Bauschritt weiter hart "Mark". Aenderst du das Wort jetzt, steht im
+  #   Spiel beides nebeneinander - aber nicht mehr in zwei Zeilen desselben
+  #   Befehls. Diese Warnung verschwindet, sobald die letzte Stelle umgezogen ist -
+  #   sie kann auch nicht stehenbleiben, eine Probe haelt beide Richtungen.
   betrag: "{zahl} Mark"
 
 zeit:
@@ -87,10 +101,280 @@ befehl:
     tpaccept: "Eine Teleportanfrage annehmen"
     tpdeny: "Teleportanfragen ablehnen"
 
-# Die Zeile, die der Rangwerbung folgt, steht NICHT hier, sondern in config.yml
-# unter hinweise.rang-werbung - sie ist eine Einstellung DIESES Servers und kein
-# ausgelieferter Satz. Suche sie dort.
-#
-# Noch nicht hier: die Saetze von /parzelle, /tpa, /warp, /zurueck, der Wachen, der
-# Spielzeit und von /freimarken selbst. Sie stehen bis zu ihrem Bauschritt im
-# Programm - ein Satz steht immer an genau einem Ort, nie an keinem und nie an zwei.
+parzelle:
+  # Das Wort fuer den Preis 0 - es wird in info.frei, info.frei-am-limit und
+  # liste.zeile EINGESETZT. Kein Farbtag: ein eingesetzter Wert ist ein Blatt, ein
+  # Tag darin stuende dem Spieler woertlich im Chat.
+  gratis: "gratis"
+  # Dasselbe fuer die erste Parzelle, die ihren Preis gleich erklaert.
+  gratis-die-erste: "gratis (die erste)"
+  # {betrag} {rest} - die Rechnung nach einem Kauf. Sie steht unter nehmen.erteilt
+  # UND unter zusammenlegen.erteilt: ein Schluessel fuer beide, damit derselbe Satz
+  # nicht zweimal in dieser Datei steht.
+  bezahlt: "<gray>  Bezahlt: {betrag} · Rest: {rest}</gray>"
+  # {werbung} - NUR DIE FARBE ist hier deine. Der Satz selbst steht in der
+  # config.yml unter hinweise.rang-werbung, denn er ist eine Einstellung DIESES
+  # Servers und kein ausgelieferter Satz. Angehaengt wird er genau dort, wo ein Rang
+  # wirklich der Grund der Absage ist: info.am-limit, nehmen.grenze,
+  # bescheid.grenze-erreicht, bescheid.gruppe-zu-gross und
+  # bescheid.noch-frei-am-limit. In Gelb und nicht in Rot - die Absage darueber ist
+  # die Nachricht, das hier ist das Angebot.
+  rang-werbung: "<yellow>{werbung}</yellow>"
+  # Die eine Weltpruefung: Jeder Zweig von /parzelle beginnt damit.
+  nicht-in-der-marktstadt: "<red>Parzellen gibt es nur in der Marktstadt.</red>"
+  # {x} {z} {tat} - du stehst nicht da, wo der Befehl hinzeigt. {tat} ist eines der
+  # vier Wortstuecke darunter: Vier Zweige geben vier verschiedene mit, und darum
+  # steht dieser Satz nur EINMAL hier. Wer ihn umstellt, stellt alle vier um.
+  steht-nicht-auf: "<red>Du stehst nicht auf Parzelle {x}/{z}. {tat}</red>"
+  # Die vier Taten, die dadurch ausblieben - Wortstuecke fuer die Zeile darueber.
+  # Kein Farbtag: ein eingesetzter Wert ist ein Blatt.
+  tat:
+    nichts-aufgegeben: "Nichts aufgegeben."
+    nichts-zusammengelegt: "Nichts zusammengelegt."
+    nichts-herausgeloest: "Nichts herausgeloest."
+    nichts-aufgetrennt: "Nichts aufgetrennt."
+
+  # /parzelle info - was auf dem Boden unter dir steht.
+  info:
+    # Hier liegt eine Gruppe, wo der Rasterplan noch "Weg" sagt: Nach einem
+    # Zusammenlegen ist diese Stelle Bauland. Darunter steht info.eigentuemer.
+    gruppenboden: "<gold>Gruppenboden - war einmal Weg</gold>"
+    weg: "<gray>Du stehst auf einem Weg - der gehoert allen.</gray>"
+    mauer: "<gray>Du stehst auf einer Mauer - die gehoert zur Strasse.</gray>"
+    # {x} {z} - der Kopf. Er geht VOR dem Blick in die Ablage hinaus, damit das
+    # Erste, was du liest, nicht von der Dauer einer Abfrage abhaengt.
+    kopf: "<gold>Parzelle {x}/{z}</gold>"
+    ausserhalb: "<gray>  ausserhalb der Marktstadt - wird nicht vergeben</gray>"
+    # {preis} - frei und zu haben. {preis} ist das Wort gratis oben oder ein Betrag.
+    frei: "<gray>  frei · <green>{preis}</green><dark_gray> · /parzelle nehmen</dark_gray></gray>"
+    # {preis} - dieselbe Parzelle, wenn der Rang nichts mehr hergibt: der Preis bleibt
+    # stehen, die Einladung nicht. Eine Aufforderung, die mit einer Absage endet,
+    # waere Irrefuehrung und keine Werbung.
+    frei-am-limit: "<gray>  frei · {preis}</gray>"
+    # {anzahl} ZAEHLT - die Absage unter dem Preis, eingerueckt.
+    # Derselbe Wortlaut steht ohne Einzug unter bescheid.grenze-erreicht. Zwei
+    # Schluessel, weil der Einzug IM Satz steht: aenderst du nur einen, aendert sich
+    # nur die eine Stelle.
+    am-limit:
+      eins: "<red>  Dein Rang erlaubt {anzahl} Parzelle, und so viele hast du schon.</red>"
+      viele: "<red>  Dein Rang erlaubt {anzahl} Parzellen, und so viele hast du schon.</red>"
+    # {name} - wem sie gehoert. Auch der Gruppenboden oben nimmt diese Zeile.
+    eigentuemer: "<gray>  Eigentuemer: <white>{name}</white></gray>"
+    # {preis} - gratis-die-erste oben oder ein Betrag.
+    gekauft-fuer: "<gray>  Gekauft fuer: <white>{preis}</white></gray>"
+    # {namen} - wer sonst hier bauen darf. Nur wenn jemand eingetragen ist.
+    mitbauer: "<gray>  Mitbauer: <white>{namen}</white></gray>"
+    # {anzahl} - wie viele Felder die Gruppe hat. KEIN ZAEHLT: dieser Satz sagt heute
+    # auch bei einem Feld "Feldern". Eine Einzahlform waere eine Verbesserung und
+    # keine Umstellung - sie kommt mit eigener Entscheidung, nicht nebenbei.
+    gruppe: "<white>  Teil einer Gruppe aus {anzahl} Feldern</white>"
+    # Nur fuer den Eigentuemer. Die acht Fuell-Leerzeichen sind die SPALTE - sie
+    # stehen hier, damit du sie sehen und verschieben kannst.
+    auftrennen-hinweis: "<dark_gray>  /parzelle auftrennen        dieses Feld herausloesen</dark_gray>"
+    # Die spitze Klammer ist hier ein ZEICHEN und keine Farbe - darum \\< davor.
+    zusammenlegen-hinweis: "<dark_gray>  /parzelle zusammenlegen \\<nord|ost|sued|west></dark_gray>"
+
+  # /parzelle nehmen - der Kauf und seine Absagen.
+  nehmen:
+    # {x} {z} - darunter steht entweder erste-gratis oder parzelle.bezahlt.
+    erteilt: "<green>Parzelle {x}/{z} gehoert jetzt dir</green>"
+    erste-gratis: "<gray>  Die erste ist gratis.</gray>"
+    kein-bauland: "<red>Hier ist kein Bauland - stell dich auf eine Parzelle.</red>"
+    # {name} - der Eigentuemer, der schon eingetragen ist.
+    schon-vergeben: "<red>Die gehoert schon <white>{name}</white></red>"
+    # {anzahl} ZAEHLT - wie viele dein Rang erlaubt. Danach steht rang-werbung.
+    grenze:
+      eins: "<red>Du hast schon {anzahl} Parzelle - mehr erlaubt dein Rang nicht.</red>"
+      viele: "<red>Du hast schon {anzahl} Parzellen - mehr erlaubt dein Rang nicht.</red>"
+    # {betrag} {guthaben} - umstellbar: wer lieber erst das Guthaben nennt, schreibt
+    # es um, und nichts bricht.
+    zu-wenig: "<red>Die kostet <gold>{betrag}</gold>, du hast {guthaben}.</red>"
+    # {von} {bis} - beide kommen ZWEIMAL vor, das ist erlaubt und Absicht.
+    ausserhalb: "<red>Hier endet die Marktstadt. Parzellen gibt es von {von}/{von} bis {bis}/{bis}.</red>"
+    # {bescheid} - der Programmname des Falls, den dieser Zweig nicht eigens benennt.
+    # Er steht als WERT im Satz, damit du ihn einem Operator weitergeben kannst.
+    sonst: "<red>Das ging nicht: {bescheid}</red>"
+
+  # /parzelle liste - deine eigenen Parzellen.
+  liste:
+    leer: "<yellow>Du hast noch keine Parzelle. Die erste ist gratis - /parzelle nehmen</yellow>"
+    # {anzahl} {hoechstzahl}
+    kopf: "<gold>Deine Parzellen ({anzahl} von {hoechstzahl})</gold>"
+    # {x} {z} {preis} {mitbauer} {gruppe} - eine Zeile je Parzelle. {mitbauer} und
+    # {gruppe} sind die beiden Wortstuecke darunter ODER NICHTS: ein leerer Wert
+    # verschwindet rueckstandslos. Darum stehen die Trenner in den Wortstuecken.
+    zeile: "<gray>  {x}/{z} · {preis}{mitbauer}{gruppe}</gray>"
+    # {anzahl} - ein Wortstueck fuer die Zeile darueber, kein Satz. Kein Farbtag.
+    mitbauer: " · {anzahl} Mitbauer"
+    gruppe: " · Gruppe"
+    # {betrag} - nur unter der Hoechstzahl: am Limit kostet keine naechste etwas.
+    naechste: "<dark_gray>Die naechste kostet {betrag}</dark_gray>"
+
+  # Die neunzehn Bescheide des Besitzbuchs - die Absage auf jeden Versuch, der nicht
+  # durchgeht. Welcher Satz zu welchem Fall gehoert, entscheidet das Programm; du
+  # entscheidest, was dort steht. Alle in Rot, weil es Absagen sind.
+  bescheid:
+    erteilt: "<red>Erledigt.</red>"
+    keine-parzelle: "<red>Hier ist keine Parzelle.</red>"
+    noch-frei: "<red>Diese Parzelle gehoert noch niemandem - nimm sie mit /parzelle nehmen.</red>"
+    # {anzahl} ZAEHLT - derselbe Fall, wenn dein Rang schon ausgeschoepft ist. Danach
+    # steht rang-werbung.
+    noch-frei-am-limit:
+      eins: "<red>Diese Parzelle gehoert noch niemandem - aber dein Rang erlaubt {anzahl} Parzelle, und so viele hast du schon.</red>"
+      viele: "<red>Diese Parzelle gehoert noch niemandem - aber dein Rang erlaubt {anzahl} Parzellen, und so viele hast du schon.</red>"
+    schon-vergeben: "<red>Die gehoert schon jemandem.</red>"
+    ausserhalb: "<red>Das liegt ausserhalb der Marktstadt.</red>"
+    # {anzahl} ZAEHLT - mit der Zahl, weil "nicht mehr" offen laesst, wie viele es
+    # denn sind. Derselbe Wortlaut steht eingerueckt unter info.am-limit.
+    grenze-erreicht:
+      eins: "<red>Dein Rang erlaubt {anzahl} Parzelle, und so viele hast du schon.</red>"
+      viele: "<red>Dein Rang erlaubt {anzahl} Parzellen, und so viele hast du schon.</red>"
+    # Derselbe Wortlaut steht MIT zwei Leerzeichen Einzug unter
+    # zusammenlegen.zu-wenig. Zwei Schluessel, weil der Einzug IM Satz steht:
+    # aenderst du nur einen, aendert sich nur die eine Stelle.
+    zu-wenig-mark: "<red>Dein Guthaben reicht nicht.</red>"
+    nicht-eigentuemer: "<red>Das darf nur der Eigentuemer.</red>"
+    schon-eingetragen: "<red>Steht schon auf der Liste.</red>"
+    nicht-eingetragen: "<red>Stand gar nicht auf der Liste.</red>"
+    teil-einer-gruppe: "<red>Die Parzelle gehoert zu einer Gruppe - das geht nur ueber die ganze Gruppe.</red>"
+    nachbar-frei: "<red>Dort drueben ist keine Parzelle vergeben.</red>"
+    nachbar-fremd: "<red>Die Nachbarparzelle gehoert jemand anderem.</red>"
+    schon-in-gruppe: "<red>Die beiden gehoeren zu zwei verschiedenen Grundstuecken. Trenne eines auf und haenge die Felder einzeln an.</red>"
+    schon-zusammen: "<red>Die beiden sind schon dasselbe Grundstueck.</red>"
+    # {anzahl} ZAEHLT - diese Zahl ist die GRUPPENGROESSE und nicht die Zahl deiner
+    # Parzellen. Danach steht rang-werbung. Auch /parzelle zusammenlegen nimmt diese
+    # Zeile, wenn die Gruppe zu gross wuerde.
+    gruppe-zu-gross:
+      eins: "<red>Dein Rang erlaubt hoechstens {anzahl} Feld je Gruppe.</red>"
+      viele: "<red>Dein Rang erlaubt hoechstens {anzahl} Felder je Gruppe.</red>"
+    keine-gruppe: "<red>Hier ist keine Gruppe.</red>"
+    auf-dem-weg: "<red>Stell dich auf das Feld, das du meinst - nicht auf den Weg.</red>"
+    haelt-zusammen: "<red>Dieses Feld haelt dein Grundstueck zusammen. Loese erst eines am Rand heraus.</red>"
+
+  # /parzelle mitbauer - wer sonst auf deiner Parzelle bauen darf.
+  mitbauer:
+    keine-parzelle: "<red>Hier ist keine vergebene Parzelle.</red>"
+    # {x} {z} {namen} - die Liste. {namen} ist entweder die Aufzaehlung oder das
+    # Wort darunter.
+    kopf: "<gold>Mitbauer auf {x}/{z}: <white>{namen}</white></gold>"
+    # Das Wort fuer die leere Liste - es wird in kopf EINGESETZT. Kein Farbtag.
+    niemand: "niemand"
+    # Nur fuer den Eigentuemer. Die spitzen Klammern um name sind ZEICHEN und keine
+    # Farbe - darum \\< davor.
+    befehle: "<dark_gray>/parzelle mitbauer hinzu \\<name> · weg \\<name></dark_gray>"
+    unbekannt: "<red>Den kenne ich nicht. Er muss einmal auf dem Server gewesen sein.</red>"
+    # {name} - eingetragen.
+    hinzu-erteilt: "<green>{name} darf hier jetzt bauen.</green>"
+    # {name} - stand schon auf der Liste. In Gelb und nicht in Rot: Es ist nichts
+    # schiefgegangen, es war nur schon so.
+    schon-drin: "<yellow>{name} darf hier ohnehin bauen.</yellow>"
+    niemand-mit-dem-namen: "<red>Steht hier niemand mit dem Namen - /parzelle mitbauer zeigt die Liste.</red>"
+    # {name} - ausgetragen.
+    weg-erteilt: "<green>{name} darf hier nicht mehr bauen.</green>"
+    # {name} - stand gar nicht auf der Liste.
+    nicht-drin: "<yellow>{name} stand gar nicht auf der Liste.</yellow>"
+
+  # /parzelle aufgeben - und die Warnung davor.
+  aufgeben:
+    nicht-deine: "<red>Das ist nicht deine Parzelle.</red>"
+    gruppe: "<red>Die Parzelle gehoert zu einer Gruppe - erst /parzelle auftrennen.</red>"
+    # {x} {z} - DREI Chatzeilen in einer Zeile dieser Datei, getrennt von der
+    # Umbruchmarke. Jede traegt ihre eigene Farbe: die Frage gelb, die Folgen grau,
+    # die Bestaetigung rot. Ein Satz und nicht drei, damit du ihn umstellen kannst.
+    warnung: "<yellow>Parzelle {x}/{z} aufgeben?</yellow>\n<gray>  Es gibt kein Geld zurueck, und gebaut bleibt stehen.</gray>\n<red>  /parzelle aufgeben bestaetigen {x} {z}</red>"
+    # {x} {z}
+    erteilt: "<green>Parzelle {x}/{z} ist wieder frei.</green>"
+
+  # /parzelle zusammenlegen - zwei Parzellen werden ein Grundstueck.
+  zusammenlegen:
+    # {x} {z} {nachbar-x} {nachbar-z} {betrag} {guthaben} - FUENF Chatzeilen in
+    # einer Zeile dieser Datei. Der Nachbar kommt schon gerechnet herein: Die
+    # Richtung bestimmt ihn, und im Satz steht seine Nummer.
+    warnung: "<yellow>Parzelle {x}/{z} mit {nachbar-x}/{nachbar-z} zusammenlegen?</yellow>\n<gray>  Gebuehr: <gold>{betrag}</gold> · du hast {guthaben}\n  Der Weg dazwischen wird dein Bauland.\n  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann\n  darauf steht.</gray>"
+    # Statt der Bestaetigung, wenn das Geld nicht reicht. Derselbe Wortlaut steht
+    # OHNE Einzug unter bescheid.zu-wenig-mark - zwei Schluessel, weil der Einzug
+    # im Satz steht.
+    zu-wenig: "<red>  Dein Guthaben reicht nicht.</red>"
+    # {richtung} {x} {z} - {richtung} ist das Befehlswort nord, ost, sued oder west.
+    bestaetigen: "<yellow>  /parzelle zusammenlegen {richtung} bestaetigen {x} {z}</yellow>"
+    # {anzahl} - wie viele Felder das Grundstueck jetzt hat. KEIN ZAEHLT: dieser
+    # Satz sagt heute auch bei einem Feld "Feldern", und eine Einzahlform waere
+    # eine Verbesserung und keine Umstellung. Darunter steht parzelle.bezahlt.
+    erteilt: "<green>Ein Grundstueck aus {anzahl} Feldern.</green>"
+
+  # /parzelle auftrennen - das Grundstueck wird wieder zu Parzellen.
+  auftrennen:
+    # {anzahl} - aufgetrennt. Dieselbe Zeile liest auch, wer ein Feld aus einer
+    # Gruppe aus ZWEI Feldern loest: Was uebrig bliebe, waere ein einzelnes Feld,
+    # also wird ganz aufgetrennt - und dann ist es genau dieser Satz.
+    erteilt: "<green>Aufgetrennt - {anzahl} eigenstaendige Parzellen.</green>"
+    # Die Zeile unter BEIDEN Warnungen des Herausloesens - beim Einzelfeld und bei
+    # der Gruppe aus zwei Feldern. Darum steht sie hier und nicht unter feld.
+    weg-kommt-zurueck: "<gray>  Der Weg dorthin kommt zurueck. Geld gibt es keines zurueck.</gray>"
+    # /parzelle auftrennen alles - die ganze Gruppe auf einmal.
+    alles:
+      # {anzahl} - DREI Chatzeilen in einer Zeile dieser Datei. Die beiden
+      # Anfuehrungszeichen um alles sind Zeichen IM Wert; weil jeder Wert dieser
+      # Datei selbst in Anfuehrungszeichen steht, traegt jedes einen Backslash.
+      warnung: "<yellow>Grundstueck aus {anzahl} Feldern ganz auftrennen?</yellow>\n<gray>  ALLE Wege zwischen den Feldern kommen zurueck. Geld gibt es keines zurueck.\n  Fuer ein einzelnes Feld: stell dich darauf und nimm /parzelle auftrennen ohne \"alles\".</gray>"
+      # {x} {z}
+      bestaetigen: "<red>  /parzelle auftrennen alles bestaetigen {x} {z}</red>"
+    # /parzelle auftrennen - nur das Feld, auf dem du stehst.
+    feld:
+      # {anzahl} - ZWEI Felder lassen sich nicht teilen, also wird ganz
+      # aufgetrennt. DREI Chatzeilen; danach steht weg-kommt-zurueck.
+      warnung-zwei-felder: "<yellow>Grundstueck aus {anzahl} Feldern auftrennen?</yellow>\n<gray>  Es hat nur zwei Felder - eines allein geht nicht heraus, also wird\n  es ganz aufgetrennt.</gray>"
+      # {x} {z} {anzahl} - das Feld geht heraus, der Rest bleibt Grundstueck. ZWEI
+      # Chatzeilen; danach steht weg-kommt-zurueck.
+      warnung: "<yellow>Das Feld {x}/{z} aus dem Grundstueck herausloesen?</yellow>\n<gray>  Die anderen {anzahl} Felder bleiben ein Grundstueck.</gray>"
+      # {x} {z}
+      bestaetigen: "<red>  /parzelle auftrennen bestaetigen {x} {z}</red>"
+      # {x} {z} {anzahl} - herausgeloest, und wie viele noch Gruppe sind.
+      erteilt: "<green>Feld {x}/{z} herausgeloest - das Grundstueck hat noch {anzahl} Felder.</green>"
+
+  # Was die Weltarbeit kostet - vor jedem Auftrennen abgeschaetzt. Verlust in Rot,
+  # Fuellung in Grau: Hier geht etwas weg, dort kommt etwas hinzu.
+  aufwand:
+    # {anzahl} ZAEHLT - was von der Flaeche verschwindet. Die Einzahl nennt die 1
+    # ausgeschrieben; du darfst dort auch {anzahl} schreiben, dann steht die Zahl.
+    # Bei NULL wird gar nichts gesendet - das entscheidet das Programm, nicht diese
+    # Datei.
+    verschwindet:
+      eins: "<red>  Dabei verschwindet 1 Block von der Flaeche.</red>"
+      viele: "<red>  Dabei verschwinden {anzahl} Bloecke von der Flaeche.</red>"
+    # {anzahl} ZAEHLT - was wieder gefuellt wird. "Fehlstelle" und nicht "unter
+    # der Flaeche", weil die Oberflaeche selbst dazugehoert.
+    verfuellt:
+      eins: "<gray>  1 Fehlstelle wird wieder gefuellt.</gray>"
+      viele: "<gray>  {anzahl} Fehlstellen werden wieder gefuellt.</gray>"
+    # Statt der beiden Zahlen, wenn es nichts zu raeumen gibt.
+    nichts: "<gray>  Auf der Wegflaeche steht nichts - es geht nichts verloren.</gray>"
+
+  # {anzahl} ZAEHLT - die Abschaetzung liest jeden Block ueber dem Weg und darf
+  # darum nicht beliebig oft hintereinander laufen.
+  abklingzeit:
+    eins: "<gray>Einen Augenblick - die Abschaetzung liest jeden Block ueber dem Weg. Noch {anzahl} Sekunde.</gray>"
+    viele: "<gray>Einen Augenblick - die Abschaetzung liest jeden Block ueber dem Weg. Noch {anzahl} Sekunden.</gray>"
+
+  # Was aus der Bodenarbeit geworden ist - sie folgt jedem Zusammenlegen und jedem
+  # Auftrennen.
+  boden:
+    # {gelungen} {anzahl} - {gelungen} ist eines der zwei Wortstuecke darunter.
+    # {anzahl} ist eine NACKTE Zahl ohne Tausenderpunkt; nur Geldbetraege tragen
+    # ihn. "geaendert" und nicht nur die Zahl: Darin stecken der Weg selbst und
+    # das, was geraeumt wurde.
+    gelungen: "<gray>  {gelungen} ({anzahl} Bloecke geaendert).</gray>"
+    # Die zwei Wortstuecke fuer die Zeile darueber. Kein Farbtag.
+    weg-ist-bauland: "Der Weg dazwischen ist Bauland"
+    weg-ist-zurueck: "Der Weg ist zurueck"
+    # Die Ablage stimmt, die Welt nicht - das ist die harmlose Haelfte des Fehlers,
+    # und der Spieler darf trotzdem bauen.
+    fehler: "<red>  Der Boden liess sich nicht aendern. Die Parzellen stimmen - sag einem Operator Bescheid.</red>"
+
+# /parzelle und /mark stehen jetzt vollstaendig hier. Noch nicht hier: /tpa und
+# /tpahere, /warp, /zurueck, die drei Wachen, die Spielzeit und /freimarken selbst.
+# Sie stehen bis zu ihrem Bauschritt im Programm - ein Satz steht immer an genau
+# einem Ort, nie an keinem. Die eine Ausnahme sagt es oben selbst: waehrung.betrag
+# traegt die Marke HALB IN KRAFT, weil die zwei Preiszeilen von /freimarken bis zu
+# ihrem Bauschritt weiter aus dem Programm kommen. Innerhalb von /mark und
+# /parzelle gibt es diese zweite Quelle nicht mehr.

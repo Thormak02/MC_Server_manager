@@ -153,9 +153,17 @@ final class Sprachliste {
             }
         }
         if (!maengel.isEmpty()) {
+            // Der Hinweis auf die EINE Probe gehoert in die Meldung: Gemessen wird ein
+            // einziger fehlender oder ueberzaehliger Schluessel zu 58 roten Zeilen in
+            // sieben Probenklassen, weil jede, die die Datei ueberhaupt laedt, hier
+            // vorbeikommt. Der Grund steht in jeder dieser 58 Zeilen - aber wer sie zum
+            // ersten Mal sieht, sucht erst, WELCHE davon der Befund ist.
             throw new IllegalStateException("Die ausgelieferte " + VORLAGE + " ist"
                     + " unvollstaendig oder falsch (" + maengel.size() + "): "
-                    + String.join(" | ", maengel));
+                    + String.join(" | ", maengel)
+                    + " -- Dieser Abbruch reisst JEDE Probe mit, die die Datei laedt."
+                    + " Der Befund steht in VorlageTest 1 und 2; die uebrigen roten"
+                    + " Zeilen sind Folgen und nennen denselben Grund.");
         }
         return new Sprachbuch(saetze, Set.of(), muster);
     }

@@ -362,25 +362,22 @@ Onboarding-Assistent beim ersten Start.
 
 eigene Domänen je Server und je Umgebung (Standard bleibt vorerst mc.friedrich-dietrich.de):
 
-- Heute: EINE Domäne (network_domain), Server tragen nur ein Label (gateway_hostname), "Standard" gilt global. Künftig: Domäne als eigene Entität; Server UND Umgebung können je eine bekommen, jeweils auch mit eigener Subdomain.
-- Routing: das Gateway muss die längste passende Domäne abschneiden statt der einen festen. Eindeutigkeit dann über (Domäne, Label) statt über das Label allein - sonst kollidieren zwei "lobby" in verschiedenen Domänen.
-- "Standard" wird je Domäne statt global: freimarken.de ohne Label muss woanders landen als mc.friedrich-dietrich.de ohne Label.
-- DNS: alle Domänen auf dieselbe IP, A-Record genügt, solange das Gateway auf 25565 sitzt. Abweichender Port braucht SRV (_minecraft._tcp.<name>).
-- Zieht mit: public_base_url ist global, landet aber als Resource-Pack-URL in server.properties. Bei eigener Domäne je Server sollte sie aus DIESER Domäne kommen, sonst lädt der Spieler von einer fremd aussehenden Adresse.
-- Web (Spielerseite, Manager) braucht je Domäne ein Zertifikat. Der Spielteil nicht - Minecraft spricht kein TLS.
-- Velocity-forced-hosts müssen dieselben Namen kennen, sobald ein Unterproxy dazukommt.
-- hängt an "getrennte Verwaltungsumgebungen" (Domäne je Orga) und an "Server-Vermietung" (URL-Schema)
+- Heute: EINE Domäne (network_domain), Server tragen nur ein Label (gateway_hostname), "Standard" gilt global.
+- Zu bauen: Domäne als eigene Entität - Server UND Umgebung je eine, auch mit eigener Subdomain; längste passende Domäne abschneiden, Eindeutigkeit über (Domäne, Label), "Standard" je Domäne.
+- DNS: alle Domänen auf dieselbe IP, A-Record genügt bei Gateway auf 25565, sonst SRV (_minecraft._tcp.<name>).
+- Zieht mit: public_base_url muss aus DERSELBEN Domäne kommen (Resource-Pack-URL), je Domäne ein Zertifikat nur für Web (Minecraft spricht kein TLS), Velocity-forced-hosts sobald ein Unterproxy dazukommt.
+- hängt an "getrennte Verwaltungsumgebungen" (Domäne je Orga) und "Server-Vermietung" (URL-Schema)
 
 
 getrennte Verwaltungsumgebungen - zuerst für die eigenen Server mit Helfern, als Grundlage für späteres Hosting:
 
-- Nutzer/Orga-Modell: ein Nutzer besitzt, verwaltet und delegiert mehrere Orgas; eine Orga hat mehrere Nutzer; Rollenverwaltung je Orga. Super-Admin hat immer Zugriff auf alles.
-- Umgebung (eigene Servergruppe: Freimarken, ATM10, Test) und Kunde (Vertrag, Rechnung, Kontingent) sind ZWEI Entitäten. Zusammengelegt wird man selbst Kunde Nr. 1 - getrennt modellieren.
-- Billige Hälfte: Entität + server.umgebung_id + Mitglieder mit Rollen. Teure Hälfte: die ~30 globalen Einstellungen (Speicherwurzeln, Netzport/-modus, Gateway, Velocity, Hub-Lobby) je Umgebung umhängen - erst nötig, wenn es ein zweites echtes Netz gibt.
-- Auslöser für den Bau: der erste Helfer, der nicht alles sehen soll. Vorher gibt es nichts zu gruppieren.
-- Spieldaten der Spielserver brauchen KEINE Mandantenspalten - Trennung läuft über eine Datenbank je Netz.
-- Bei Fremdkunden kippt "Super-Admin sieht alles" ins Datenschutzrecht: dann Auftragsverarbeiter, Zugriff nur auf Weisung und protokolliert.
-- hängt zusammen mit "rechte verwaltung" und "Server-Vermietung" weiter unten
+- Nutzer/Orga-Modell: ein Nutzer verwaltet und delegiert mehrere Orgas, eine Orga hat mehrere Nutzer; Rollen je Orga, Super-Admin sieht immer alles.
+- Umgebung (Servergruppe) und Kunde (Vertrag, Rechnung, Kontingent) getrennt modellieren.
+- Billig: server.umgebung_id + Mitglieder mit Rollen. Teuer: die ~30 globalen Einstellungen je Umgebung umhängen - erst nötig beim zweiten echten Netz.
+- Auslöser für den Bau: der erste Helfer, der nicht alles sehen soll.
+- Spieldaten: eine Datenbank je Netz, keine Mandantenspalten.
+- Bei Fremdkunden: Auftragsverarbeiter, Zugriff nur auf Weisung und protokolliert.
+- hängt an "rechte verwaltung" und "Server-Vermietung"
 
 später: monetarisierung: server, orgas usw. vermieten, kosten nach kapazität, leistung und anzahl an orgas und server
 
@@ -388,19 +385,19 @@ später: monetarisierung: server, orgas usw. vermieten, kosten nach kapazität, 
 
 Ideen aus dem Urlaub (09/2026), für viel später:
 
-~~Graceful Rejection: ERLEDIGT als Vorab-Prüfung. Statt den Spieler wegzuschicken und danach aufzufangen (nach einem nativen Transfer ist die Lobby-Verbindung weg und kann ihn nicht mehr erreichen), wird VOR dem Wechsel gefragt - dann bleibt er einfach in seiner Lobby und liest den Grund im Chat. Eine Wahrheitsquelle (`lobby_service.check_join_allowed`) für BEIDE Lobbys: der Python-Hub ruft sie direkt auf, die Bukkit-Lobby über den lokalen TCP/JSON-Endpoint (`lobby_api_service`, Token, nur 127.0.0.1) - dadurch identische Texte, egal mit welchem Client. Greift bei Kompass/Command/Schild/Portal und auch bei `/lobby`. Geprüft werden: Server offline, Ban (mit Grund), Whitelist, voll, sowie per Status-Ping "läuft zwar, nimmt aber noch keine Verbindungen an". Überall fail-open - eine kaputte Prüfung darf niemanden aussperren.~~
+~~Graceful Rejection: Vorab-Prüfung vor dem Wechsel, eine Wahrheitsquelle für beide Lobbys, fail-open.~~
 
-~~Offen dazu: Modpack-Abgleich vor dem Wechsel (der Ping liefert bei Forge/NeoForge eine Mod-Liste - damit wäre "falsches Modpack" vorab erkennbar).~~ Weiterhin offen: Resourcepack-Abgleich (der Client meldet sein Pack nicht), der allererste Join (da gibt es noch keine Lobby zum Zurückkehren) und eine Ablehnung, die erst NACH dem Transfer passiert (z.B. ein Plugin auf dem Ziel) - dafür bräuchte es einen echten Proxy in der Verbindung.
+~~Modpack-Abgleich vor dem Wechsel.~~ Weiterhin offen: Resourcepack-Abgleich, der allererste Join und eine Ablehnung erst nach dem Transfer - dafür bräuchte es einen echten Proxy.
 
-Mobile Verwaltung: MCSM auch als App-Version + mobile Web-App zur Verwaltung. Selbes Backend, immer selber Stand wie die Web-Version. Dünne native App (PWA / Wrapper), die selbst nicht aktualisiert werden muss - alles läuft über die Web-App. Evtl. eigenes, für Mobile optimiertes Frontend. Außerdem die bestehende Website für mobile Browser optimieren. (erweitert die vorhandene "PWA / mobil-optimierte Ansicht")
+Mobile Verwaltung: MCSM auch als App-Version + mobile Web-App zur Verwaltung. Selbes Backend, immer selber Stand wie die Web-Version. Außerdem die bestehende Website für mobile Browser optimieren. Dünne native Hülle (PWA/Wrapper), die selbst nicht aktualisiert werden muss; erweitert "PWA / mobil-optimierte Ansicht".
 
-Server-Vermietung: den Manager als Basis für Server-Vermietung schaffen - z.B. Bezahlmodelle, RAM- und Speicherzuweisung, Selbstverwaltung usw. URL-Schema: nutzername.servername.domain.de/... oder nutzername.domain.de/servername. Setzt die getrennten Umgebungen voraus, ist damit aber erst zu etwa einem Zehntel erledigt - dazu kommen Kontingente und Grenzen, Selbstbedienung beim Anlegen, Abrechnung, Verfügbarkeitszusagen, Supportpflicht und die Rolle als Auftragsverarbeiter.
+Server-Vermietung: den Manager als Basis für Server-Vermietung schaffen - z.B. Bezahlmodelle, RAM- und Speicherzuweisung, Selbstverwaltung usw. URL-Schema: nutzername.servername.domain.de/... oder nutzername.domain.de/servername. Setzt die getrennten Umgebungen voraus - damit aber erst zu einem Zehntel: Kontingente, Selbstbedienung, Abrechnung, Verfügbarkeitszusagen und Support fehlen.
 
 
 live übersicht über map, spieler position, gebäude, inventar usw. Dynmap? interaktiv aus der vogelperspektive, pro server zuschaltbar und nach auswahl über link öffentlich einsehbar
 
 
-rechte verwaltung: nutzern und nutzergruppen je per checkbox berechtigungen zuweisen - frei anpassbar, je Rolle UND je Umgebung. Ersetzt perspektivisch die feste Rollenliste (super_admin/admin/moderator/view_only) plus ServerPermission durch EINE Stelle. Teil der getrennten Umgebungen.
+rechte verwaltung: nutzern und nutzergruppen je per checkbox berechtigungen zuweisen - frei anpassbar, je Rolle UND je Umgebung. Ersetzt die heutige feste Rollenliste und die Serverrechte durch EINE Stelle. Teil der getrennten Umgebungen.
 
 
 push benachrichtigungen auf handy und pc zb. bei crash
@@ -432,309 +429,170 @@ eigener minecraft launcher mit manager server integriert mit curseforge und modr
 
 
 ~~KI-gestützte Funktionen nur ondemand, local ai ohne externe api?~~
-~~Beantwortet: externe Claude-API gesetzt, lokale Modelle nur als Rückfall. Jeder Aufruf ondemand, abschaltbar, mit Monatsdeckel.~~
-~~Beim Umsetzen zu beachten: Budget pro Monat deckeln und den Verbrauch sichtbar machen (sonst frisst eine Crash-Analyse-Schleife still das Guthaben); API-Schlüssel wie die übrigen Geheimnisse behandeln, nicht in die DB im Klartext; jeder KI-Aufruf ondemand und abschaltbar; Logs/Crash-Reports vor dem Versenden auf Spielernamen und IPs prüfen.~~
+~~Beantwortet: externe Claude-API gesetzt, lokale Modelle nur als Rückfall.~~
 ~~Rate Limit hinzufügen + missbrauch verhinden durch Themen lockin~~
 ~~API Anbieter einfach änderbar~~
 ~~API Keys nur in .env und die .env soll durch ein menufenster beschrieben werden, wie zb. bei der CurseForge API~~
 
-~~Fundament: Schlüssel DPAPI-verschlüsselt (nicht .env), Monatsdeckel + Verbrauchsanzeige, Stunden-/Tageslimit, Themen-Sperre, IPs/Geheimnisse raus vor dem Versand, ab Moderator, Anbieter austauschbar.~~
+~~Fundament: Schlüssel verschlüsselt im Benutzerprofil, NICHT in der .env - an Rechner und Konto gebunden. Monatsdeckel und Limits, ab Moderator.~~
 
 ~~KI-Log-/Crash-Analyse: Fehlerursache erklären + konkrete Lösungsvorschläge (welche Mod, welcher Fix).~~
-~~Erledigt: Logs-Seite, Knopf "Analysieren". Gesendet wird nur Kopf + Fehlerstellen + Ende, Vorschau "Was wird gesendet?" kostet nichts. Crash-Reports und .log.gz wählbar.~~
 
 ~~KI-Konfigurationsassistent: server.properties/JVM anhand Ziel (RAM, Spielerzahl, Modpack) optimieren.~~
-~~Erledigt: Dateieditor bei offener .properties. KI füllt nur das Formular, gespeichert wird von Hand. level-name/level-seed/Ports/online-mode gesperrt. Noch offen: KI-Vorschläge für YAML (der Assistent selbst kann YAML jetzt).~~
+Offen: KI-Vorschläge für YAML.
 
 ~~KI-Chat-Moderation: In-Game-Chat auf Toxizität/Spam prüfen, automatische Warnungen. -> nicht gewünscht~~
 
 ~~KI-Changelog-Zusammenfassung vor einem Mod-Update („Was ändert sich, gibt es Breaking Changes?").~~
-~~Erledigt: Inhalte-Seite, Knopf "Was ändert sich?". Liest die Changelogs ALLER Fassungen zwischen installiert und Ziel, nicht nur der Zielversion. Ohne Changelog wird die KI nicht gefragt.~~
 
 ~~Natürlichsprachliche Steuerung: „starte alle Vanilla-Server", „sichere Server X" → Aktionen.~~
-~~Erledigt über den KI-Assistenten: starten/stoppen/neustarten, sichern, Konsolenbefehl, Einstellung setzen. Noch offen: mehrere Server in einem Auftrag - es wird eine Aktion je Bestätigung ausgeführt.~~
+Offen: mehrere Server in einem Auftrag - bisher eine Aktion je Bestätigung.
 
 ~~eine KI integration, die fragen beantworten kann und auch cowork mößig aufgaben durchführen kann, nicht nur vorgefertigte commands, sondern freie bearbeitung und freies prompting wie claude code cowork auf dem rechner. aufgaben wie brarbeite diese config datei oder tue etwas in den einstellungen usw. rechte dürfen dadurch nicht umgehbar sein~~
-~~Erledigt: eigene Seite KI-Assistent, 18 Werkzeuge (8 lesen, 10 verändern). Verändernde nur als Vorschlag, Ausführung prüft Werkzeug/Server/Recht neu gegen die DB. Beschreibung formuliert der Manager, nicht das Modell. Eine Aktion auf einmal.~~
-~~Gesprächsverlauf in der DB, Liste links, anheften/umbenennen/löschen. Verlauf kommt vom Server, nicht aus dem Browser.~~
-~~Antworten als Markdown dargestellt (eigener Darsteller, nur DOM-Knoten - kein HTML aus Modellausgabe).~~
 
 
 ~~die KI soll auch zugriff auf die ordnerstruktur, die datein und logs haben. allerdings nur innerhalb des managers, nicht darüber hinaus, allerdings muss hierbei die sicherheit beachtet werden, dass nutzer zb. keine schadsoftware einführen können oder informationen erhalten können, die sie nicht erhalten dürfen~~
-~~Erledigt: dateien_auflisten, datei_lesen, log_ansehen, inhalte_auflisten, backups_auflisten. Nur innerhalb des Serverordners (aufgelöster Pfad, keine Symlinks/.. hinaus), nur Textdateien, nur Server, die der Nutzer sehen darf.~~
-~~Keine Schadsoftware möglich: der Agent kann keine Datei anlegen oder hochladen. Geschrieben wird nur über einstellung_setzen (geprüfte Schlüssel) und Inhalte aus Modrinth/CurseForge - beides mit Rechteprüfung und Bestätigung.~~
 
-~~Nach gegnerischer Prüfung 19 Fehler behoben: Fragefeld war unbegrenzt + ungesäubert, Geldschranken zählten erst nach der Antwort (parallele Aufrufe kamen durch), Geheimnisse mitten in Logzeilen blieben stehen, Logauswahl verlor Zeilen bei freiem Budget, analysiert wurde die falsche Datei.~~
+~~Einrichtung, steht: bei online-mode=false hinter Velocity muss der Serverport von außen gesperrt sein; pause-when-empty-seconds schaltet der Manager bei jedem Start ab.~~
 
-~~Speicher-/CPU-Anzeige war für jeden Server falsch: gemessen wurde die cmd.exe-Hülle (~7 MB), nicht Java. CPU stand immer auf 0. Jetzt ganzer Prozessbaum.~~
+Offen: Testisolation - Tests fragen die echte Entwicklungs-DB ab; betroffen sind mindestens 15 Dienste, die dieselbe Modulreferenz halten.
 
-~~Doppelte VanillaTweaks-Datapacks: Löschen der alten Datei scheitert bei laufendem Server, der Fehlschlag wurde verschwiegen. Minecraft lud beide. Jetzt wird es gemeldet.~~
+~~Assistent für spigot.yml, bukkit.yml, paper-*.yml und Plugin-Configs.~~
 
-~~declared_mc_version passte nicht zur Datei (1.21.2 auf 26.2-Server) - "schon aktuell" griff nie, bei jedem Update wurde alles neu erzeugt. Gruppe kommt jetzt aus dem Dateinamen.~~
+Offen: NAS-Abgleich steht seit 6.10., Task mcsm-nas-sync löst nicht aus.
 
-~~op, deop, pardon, pardon-ip und whitelist off nur für Admins - geprüft in send_console_command, gilt also auch für die Konsolenseite und den Zeitplan. Namensraum (minecraft:op) und execute...run op werden mit erkannt.~~
+~~Zwei .bat-Dateien zum Starten/Stoppen des Managers (scripts/), fuer Desktop-Verknuepfungen.~~
 
-~~Nicht Code, sondern Einrichtung: AdvancedBackups 3.6 ist Legacy ohne api-version; bei online-mode=false hinter Velocity muss der Serverport von außen gesperrt sein.~~
+Offen: Absturzschleife des Proxys gehoert aufs Dashboard, nicht nur ins Pruefprotokoll.
 
+Offen: Via-Plugins bleiben ohne Hinweis alt, wenn es fuer die neue Version keinen Build gibt.
 
-~~Zeitplan-Jobs liefen als "Manager selbst" und umgingen die Admin-Sperre komplett: jeder mit can_console konnte sich per Job OP geben. Jobs haben jetzt created_by_user_id, geprüft beim Anlegen und beim Ausführen; Anlegen wird protokolliert.~~
+Offen: warum Velocity die "Connect"-Nachricht verwirft, ist ungeklaert; der Rueckfall traegt nur.
 
-~~Zugriffsseite schrieb ops.json/banned-*.json/server.properties direkt - der dauerhafte Weg war mit can_edit_files offen. Jetzt dieselbe Admin-Schranke vor dem Schreiben, auch für das OP-Level.~~
+~~MOTD-Editor in den Servereinstellungen: Farben, Formate, Live-Vorschau.~~
 
-~~KI-Assistent war bei vielen angehefteten Gesprächen dauerhaft kaputt: das Aufräumen löschte das gerade angelegte Gespräch, jede Frage endete im 500er.~~
+~~Zweite Anmeldung desselben Spielers: ersetzen oder abweisen (Netzwerk & Lobby, Vorgabe ersetzen).~~
 
-~~view_only schrieb Gesprächszeilen, bevor die Rollenprüfung griff; die /api/ki/chats-Routen prüften die Rolle gar nicht.~~
+Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten, eine wirft bei Latin-1 - auf den einen Properties-Leser zusammenziehen.
 
-~~Markdown-Darsteller: ReDoS, 6-32 s eingefrorener Tab. Jetzt ein Durchgang statt 500, schlimmster Fall 2,7 ms.~~
+~~Der Assistent kann in Archive sehen: Jars, Datapack-Zips, Resource Packs. Nur fuer Admins.~~
 
-~~Agent installierte Plugins auf Fabric-Servern und meldete Erfolg; Resource Packs liefen in den Datapack-Zweig und brauchten kein Dateirecht.~~
+~~op, deop, pardon und whitelist off nur fuer Admins - an allen vier Tueren (Konsole, Zeitplan, Zugriffsseite, Dateieditor).~~
 
-~~VanillaTweaks: frisch installierte Packs wurden beim ersten Update unnötig neu geholt (Gruppe stand in version_label), Crafting Tweaks bei jedem Lauf, Resource Packs nie.~~
+~~Pfadzugriff für Super-Admins: überall auf dem Managerrechner, nicht nur im Serverordner.~~
 
-Offen: Testisolation. schedule_service war im conftest nicht neu geladen und fragte die echte Entwicklungs-DB ab; mindestens 14 weitere Dienste halten dieselbe SessionLocal-Modulreferenz.
+~~Die Grenze dazu steht an EINER Stelle: Geheimnisse bleiben zu (.env, DB, .git, Schlüsselspeicher), kein Schreibweg in den Programmcode, nichts dicht unter einer Laufwerkswurzel, kein Serverordner, Abzweigungen werden aufgelöst UND danach geprüft.~~
 
-~~Assistent für spigot.yml, bukkit.yml, paper-*.yml und Plugin-Configs. Ersetzt nur den geänderten Wert im Text - Kommentare, Reihenfolge und Anführungszeichen bleiben. Ohne Änderung ist die Datei danach byteweise gleich.~~
-
-~~Dateien ohne Assistenten sagen jetzt warum, statt wortlos den Freitext zu zeigen.~~
-
-~~Sortierung/Suche gingen auf JEDEM Rückweg zur Dateiseite verloren, nicht nur beim Umschalten: Speichern, Upload, Löschen, Ordner anlegen, Download-Fehler. Jetzt ein gemeinsamer Weg zurück.~~
-
-~~Dateieditor war die dritte Tür zu op/pardon/whitelist off: ops.json und banned-*.json ließen sich mit can_edit_files schreiben, hochladen, neu anlegen und löschen. Auch über die API und über das KI-Werkzeug einstellung_setzen. Jetzt dieselbe Regel wie Konsole und Zeitplan.~~
-
-~~YAML-Alias-Geflecht: 486 Byte ergaben 137 s Rechenzeit pro Seitenaufruf, auslösbar mit reinem Leserecht. Zu tiefe Verschachtelung endete im 500er.~~
-
-~~Serverliste zeigte bei jedem Eintrag die Lobby-MOTD, 0/100, immer grün - auch bei ausgeschaltetem Server. Das Gateway schob auch Status-Pings in Velocity, und das beantwortet sie wegen ping-passthrough=DISABLED selbst. Jetzt antwortet der gemeinte Server.~~
-
-~~Adresse ohne Route zeigte die Lobby statt "kein Server für diese Adresse" - ein Tippfehler sah aus wie ein laufender Server.~~
-
-~~Status-Pings wurden als Join weitergeleitet: toter Zielport antwortete mit einem Login-Disconnect, den der Client als Status-JSON liest. Kaputter Listeneintrag statt offline.~~
-
-~~Lobby → Paper-Server blieb stumm. Minecrafts pause-when-empty-seconds (Vorgabe 60) parkt den Server, lässt den Port aber offen: überall "online", nimmt aber niemanden auf. Velocity wartete 185 s. Wird jetzt beim Start abgeschaltet - der Schlafmodus des Managers macht das sichtbar.~~
-
-~~Lobby-Plugin konnte nach einem Update veraltet weiterlaufen: der Auto-Build lief im Hintergrund, die Server starteten vorher und nahmen das alte Jar mit. Danach ist die Datei gesperrt. Start wartet jetzt auf den Build; ein wirklich veraltetes Jar wird gemeldet statt verschwiegen.~~
-
-~~/lobby-Rückweg setzte velocity_name ohne Typ- und Portprüfung - zweite Regel für dieselbe Frage. Jetzt eine gemeinsame.~~
-
-Offen: NAS-Abgleich steht seit 6.10. Task mcsm-nas-sync ist aktiv und korrekt eingerichtet, letzter Lauf 6.10. 14:17 mit Ergebnis 0 - der Auslöser hängt, Ursache noch offen.
-
-~~Offen: 1.21.11-spigot und 26.2-spigot haben kein Gateway und keinen Hostnamen - im Netzwerk nicht erreichbar.~~
-
-~~Lobby-Wechsel (Kompass und /lobby) blieb stumm: Velocity wurde EINMAL geladen und nie wieder, blieb auf 26.2 waehrend das Netz auf 26.3 zog. ViaVersion uebersetzte still 26.3->26.2 und verschluckte dabei die bungeecord:main-Nachricht. /server ging, weil das Velocitys eigener Befehl ist.~~
-
-~~Velocity-Jar folgt jetzt der hoechsten Version im Netzwerk (nicht der Lobby-Version) und wird bei einem Versionswechsel neu geladen. Fehlschlag wird gemeldet statt verschwiegen.~~
-
-~~Velocity lief mit "irgendein Java ab 17". Das neue Jar (4.3.1) braucht Java 25 -> UnsupportedClassVersionError, Absturz im Minutentakt. Die noetige Java-Fassung wird jetzt aus dem Jar gelesen.~~
-
-~~config-version der velocity.toml stand fest auf 2.7, das Jar erwartet 2.8 - wird jetzt aus dem Jar gelesen. bungee-plugin-message-channel steht ausdruecklich drin.~~
-
-~~Zwei .bat-Dateien zum Starten/Stoppen des Managers (scripts/), fuer Desktop-Verknuepfungen. Stoppen beendet auch den uvicorn-Prozess, sonst blockiert er den naechsten Start.~~
-
-Offen: Absturzschleife des Proxys gehoert aufs Dashboard, nicht nur ins Pruefprotokoll. Velocity starb zwei Stunden im Minutentakt, sichtbar war nur "Lobby startet gerade".
-
-Offen: Via-Plugins werden still auf dem alten Stand gelassen, wenn es fuer die neue Version keinen Build gibt - ohne Hinweis.
-
-~~Kompass-Wechsel auf ein Velocity-Backend ging nie: das "Connect" an den Proxy wird nicht quittiert, und niemand hat nachgesehen. Modpack-Ziele liefen immer ueber den nativen Transfer, deshalb fiel es nicht auf - der 26.3er war das erste Backend im Menue. Jetzt wird nach 2 s geprueft und notfalls nativ transferiert.~~
-
-~~Vier Stellen im Klickpfad des Lobby-Plugins stiegen wortlos aus (Cooldown, kuerzlich abgesagt, Pruefung laeuft, Versand). Jede schreibt jetzt eine Logzeile.~~
-
-~~Platzte die Join-Pruefung im Async-Task, blieb der Spieler fuer immer in der Sperrliste - sein Kompass war danach dauerhaft tot, ohne Meldung. Der umgebende catch deckte nur den Aufruf ab, nicht den Rumpf.~~
-
-~~Via-Plugins: Rueckmeldung von install_velocity_plugins wurde weggeworfen (kein Build fuer die neue Version -> alte Jars bleiben still liegen), und gewaehlt wurde nach der Lobby- statt der hoechsten Netzversion.~~
-
-~~Velocity 4 braucht Java 25 und ein anderes Konfigurationsformat ([ping-passthrough] als Abschnitt, config-version 2.9). Beides wird jetzt aus dem Jar gelesen statt festgeschrieben.~~
-
-Offen: warum Velocity die "Connect"-Nachricht verwirft, ist ungeklaert. Kanal, Servername, Laenge und Konfiguration stimmen nachweislich; Velocity 4 bedient den Kanal laut eigenem Jar. Der Rueckfall macht die Funktion benutzbar, erklaert sie aber nicht.
-
-~~MOTD-Editor in den Servereinstellungen: zwei Zeilen, Minecrafts 16 Farben, sechs Formate, eigene Farbe bei Paper, Zähler ab 45 sichtbaren Zeichen, Live-Vorschau im Stil der Serverliste.~~
-
-~~Vorschau hält sich an Minecrafts Regeln: eine Farbe setzt Formate zurück, unbekannte Codes werden verschluckt, §x nur wo es wirkt. Nur DOM-Knoten, kein HTML aus dem Eingabefeld.~~
-
-~~Schwer: über das MOTD-Feld ließ sich eine zweite Zeile in server.properties erzeugen und damit level-name/difficulty setzen - Python trennt an acht Zeichen mehr als \n und \r. Reichte can_control_server, wirkte beim zweiten Speichern.~~
-
-~~server.properties hatte vier verschiedene Leser mit vier Auslegungen. Jetzt ein properties_service, der Javas Regeln umsetzt: Trennung am ersten ungefluchteten = oder :, volle Fluchtzeichen inkl. \uXXXX, Zeilenfortsetzung, Kodierungserkennung mit Latin-1-Rückfall, Schreibfehler als Warnung statt HTTP 500.~~
-
-~~errors="ignore" löschte beim Speichern jedes Nicht-ASCII-Zeichen der ganzen Datei, wenn sie nicht UTF-8 war - auch in Werten, die niemand angefasst hat.~~
-
-~~Zweite Anmeldung desselben Spielers: ersetzen oder abweisen, als Einstellung unter Netzwerk & Lobby. Vorgabe ersetzen, sonst scheitert der Lobby-Rückweg an "Du bist bereits mit diesem Proxy verbunden!".~~
-
-Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten (lobby_service, transfer_service, server_service); eine wirft bei Latin-1. Gehört auf den properties_service zusammengezogen.
-
-~~Der Assistent kann in Archive sehen: Plugin-/Mod-Jars, Datapack-Zips, Resource Packs - Inhaltsverzeichnis oder eine Datei daraus. Ohne Pfad kommt die Liste der Archive, weil dateien_auflisten nur Textdateien zeigt. Nur fuer Admins.~~
-
-~~VanillaTweaks-Teilpakete waren unsichtbar: die Liste steht IM Archiv, beim Resource Pack ausserhalb des Serverordners. Jetzt lesbar und aenderbar (vt_auswahl_zeigen/-setzen), ohne den Dateizugriff aufzuweiten. Nur fuer Admins.~~
-
-~~Ein Katalogausfall bei VanillaTweaks verschluckte die ganze Antwort, obwohl die Auswahl in der Datei steht und den Katalog nicht braucht.~~
-
-~~Pfadzugriff für Super-Admins: auflisten, lesen, schreiben, löschen, verschieben - überall auf dem Managerrechner, nicht nur im Serverordner. Archivblick nimmt jetzt auch einen vollen Pfad (data/resourcepacks).~~
-
-~~Die Regel dazu an EINER Stelle (admin_path_service.pruefe): Geheimnisse bleiben zu (.env, DB, .git, SSH/DPAPI-Speicher), kein Schreibweg in den Programmcode, nichts dicht unter einer Laufwerkswurzel löschen, kein Serverordner, Abzweigungen werden aufgelöst UND danach geprüft.~~
-
-~~write_text kürzt die Datei beim Öffnen und scheitert erst danach am Kodieren - gemessen blieben von 18 Bytes null übrig. Jetzt wird zuerst kodiert.~~
-
-~~Schnitt-Toleranz beim Dekodieren war zu gutgläubig: aus cp1252 "Grüße" wurde ein utf-8-taugliches "Gr". Ein echter Schnitt ist am Fehler-ENDE erkennbar, nicht an der Fehlerstelle.~~
-
-~~Auch das LESEN eines freien Pfades wird protokolliert - bei Serverdateien genügt der Dateieditor als Spur, bei einem freien Pfad nicht.~~
-
-~~Werkzeugergebnisse gehen als EINE JSON-Zeile hinaus, die Geheimnis-Muster hängen an (?im)^ - in einem einzeiligen Blob gibt es keinen Zeilenanfang. Zugangsdaten aus Configs gingen damit im Klartext an den Anbieter, gegen die Zusage, die das Projekt selbst testet. Jetzt am Rohtext gesäubert, vor dem Verpacken.~~
-
-~~Entpackgrenze griff nur bei Deflate: bei bzip2/lzma entpackt zipfile ohne Grenze, 32 KB werden zu ~43 GB in einem bytes-Objekt. Fremde Verfahren werden jetzt abgewiesen.~~
-
-~~VT-Resource-Pack-Katalog ist nicht flach - die Hälfte aller Teilpakete steckt in Unterkategorien und galt als "unbekannt". Ein Pack damit ließ sich nicht mehr ändern, und der Ausweg "dann raus damit" verlor es endgültig.~~
-
-~~"Auswahl leer" und "Auswahl nicht lesbar" waren nicht unterscheidbar - hinzufügen ersetzte dann die ganze Zusammenstellung. Aus 21 Teilpaketen wurde eines.~~
-
-~~Namensvergleich per .lower(): das Manifest führt "WavyWater", Nutzer und Anzeige "Wavy Water" (bei 670 von 672 Packs verschieden). "weg: Wavy Water" entfernte nichts, der Dialog sagte trotzdem es sei weg.~~
-
-~~Fehler aus der Parameterprüfung erschien als Tatbeschreibung im Bestätigungsdialog, mit aktivem Ausführen-Knopf. Jetzt Hindernis.~~
-
-~~Kleiner: zeigen und setzen rechneten mit verschiedenen VT-Gruppen; Paketname aus der resource-pack-URL ungeprüft ("C:x.zip" ist laufwerksrelativ); zweiter CT-Eintrag überschrieb still die Auswahl des ersten; Abzweigungen brachten fremde Archivnamen in die Liste; zlib.error/ValueError entwischten dem Archivleser.~~
-
-~~Testlücken: Admin-Vorbehalt war nur beim ersten Werkzeug geprüft, Byte-Grenze nur behauptet (jetzt über tracemalloc gemessen), Crafting-Tweaks-Hälfte ganz ohne Test.~~
-
-- ~~Freimarken Schritt 5 im Spiel prüfen: zwei Spieler, fremder Grund.~~ 31.10. bestanden: Schutz greift mit Hinweis in der Aktionsleiste, Mitbauer schaltet frei und zu, zweite Parzelle für 25.000 bezahlt, Parzelle -1/0 stimmt. In der Datenbank gegengeprüft.
-- ~~Auf dem Testserver plugins/Freimarken/config.yml mit den MariaDB-Zugangsdaten füllen.~~ Startprobe durch: Treiber wird im Plugin-Klassenlader gefunden, Welt entsteht, Befehle sind angemeldet.
-- **Einmal auf dem Datenbankrechner skripte/mariadb_einrichten.bat erneut ausführen.** Es legt freimarken_test an; ohne das schlägt :daten:test absichtlich fehl. Vorhandene Passwörter bleiben unverändert. Grund: Die Tests leeren vor jedem Test alle Tabellen und liefen vorher gegen das Spielschema.
-- ~~Weltgrenze einziehen, bevor zum ersten Mal echt gespielt wird.~~ 31.10. gebaut: Stadtgrenze im Kern (42 Parzellen je Achse, -21..20), WorldBorder 2.989 um -3,5/-3,5, Bescheid AUSSERHALB, Einstellung welten.marktstadt.kante. Wandert nur nach außen.
-- Marktstadt vorgenerieren, bevor echt gespielt wird: Mitte -3,5/-3,5, Radius 1.495, 35.344 Chunks, 36 Regionsdateien. Reihenfolge ist Pflicht - erst Grenze, dann vorgenerieren.
+- ~~Freimarken Schritt 5 im Spiel prüfen: zwei Spieler, fremder Grund.~~ 31.10. bestanden.
+- ~~Auf dem Testserver plugins/Freimarken/config.yml mit den MariaDB-Zugangsdaten füllen.~~ Startprobe durch.
+- **Einmal auf dem Datenbankrechner skripte/mariadb_einrichten.bat erneut ausführen.** Es legt freimarken_test an; ohne das schlägt :daten:test absichtlich fehl. Vorhandene Passwörter bleiben unverändert.
+- ~~Weltgrenze einziehen, bevor zum ersten Mal echt gespielt wird.~~ 31.10.: Stadtgrenze 42 Parzellen je Achse (-21..20), WorldBorder 2.989 um -3,5/-3,5, Einstellung welten.marktstadt.kante. Wandert nur nach außen.
+- Marktstadt vorgenerieren, bevor echt gespielt wird: Mitte -3,5/-3,5, Radius 1.495, 35.344 Chunks, 36 Regionen im Feld - auf der Platte liegen mehr Dateien, die Dateizahl taugt nicht als Pruefung. Reihenfolge ist Pflicht - erst Grenze, dann vorgenerieren.
 - Manager: Sicherung/Umzug muss world_border.dat mitnehmen. Sie liegt NICHT in der level.dat, sondern in dimensions/<namensraum>/<welt>/data/minecraft/.
-- ~~Vor Schritt 6 entscheiden: Datenmodell aus §6.1?~~ 31.10. gebaut: art, eltern_id, zustand; x/z NULL-fähig; KEIN bereich-Quader (darfBauen bleibt Punktabfrage). Gruppenkind behält eigenen Eigentümer, Einzeländerungen daran verweigert TEIL_EINER_GRUPPE bis Schritt 6.
-- ~~Schritt 6, Teil A: Kern, Ablage, Schutz.~~ 31.10. gebaut: Richtung, Rasterplan.imInneren, Besitzbuch.zustaendigerBesitz/zusammenlegen/auftrennen, BesitzLager.kinderVon/gruppeSetzen/auftrennen (Transaktion mit Wettlaufriegel), Schemaschritt 6 (ck_besitz_ort). 171 Tests. Mitbauer werden jetzt durchgeschrieben; nur aufgeben bleibt am Kind verweigert.
-- ~~Schritt 6, Teil B+C: Befehle und Weltarbeit.~~ 1.11. gebaut: /parzelle zusammenlegen <richtung> [bestaetigen x z], /parzelle auftrennen [bestaetigen x z], Gruppenflaeche (Fugen im Kern), Stadtboden (die eine Blocktabelle), Wegbau (fuellen, zaehlen, zurueckbauen), Recht freimarken.gruppe.<n>. 226 Tests.
+- ~~Vor Schritt 6 entscheiden: Datenmodell aus §6.1?~~ 31.10. entschieden.
+- ~~Schritt 6, Teil A: Kern, Ablage, Schutz.~~ 31.10.
+- ~~Schritt 6, Teil B+C: Befehle und Weltarbeit.~~ 1.11.: /parzelle zusammenlegen <richtung>, /parzelle auftrennen, Recht freimarken.gruppe.<n>.
 - ~~Entscheidung Auftrennen:~~ Weg kommt zurueck und raeumt, was darauf steht; die Warnung nennt die Zahl vorher, bestaetigt wird mit Nummer.
-- ~~Spieltest Zusammenlegen/Auftrennen:~~ 1.11. gelaufen, Befehle, Gebuehr, Schutz und Zurueckbau stimmen.
-- ~~Fehler aus dem Spieltest: Gruppe war an den Fugenenden nicht umrandet.~~ Im Rasterplan gewinnt der Weg (fuer Kreuzungen), also blieb je Ende ein 5 Bloecke breites Loch zur Strasse. Gruppenflaeche laeuft jetzt ueber die NAHT und nennt je Koordinate ohneGruppe und mitGruppe; Probe 'rundum geschlossen' im Kern. Je Fuge 596 statt 576 Bloecke.
-- ~~Vier Fehler aus der eigenen Pruefung des Mauerring-Fixes:~~ 1.11. behoben. (1) Fuellen war nicht wiederholbar - ein angehaengtes Feld plattete die alte, bebaute Fuge auf y=62/63; ueberDieNaht laesst jetzt aus, was schon so lag. (2) Die Warnzahl zaehlte ab y=63, der Zurueckbau schrieb auch y=62 und darunter - jetzt dieselbe Spalte und dieselbe Sollform fuer beides. (3) Der Zurueckbau raeumte auch ueber den Mauerstuecken, die nie Bauland waren. (4) Grundgestein stand nur im Generator, der Zurueckbau haette Stein hingeschrieben; nach unten bricht die Schleife jetzt beim Sollblock ab, nicht beim ersten festen.
-- ~~Drei Fehler aus der zweiten eigenen Pruefung:~~ 1.11. behoben, alle in der Zaehlung, zwei davon neu eingebaut. (1) Die Warnung zaehlte das Fuellgras mit, sobald es zu Erde verrottet - ein Schaf genuegte, dann meldete eine unberuehrte Gruppe einen Verlust. (2) Sie nannte Bloecke, die der Zurueckbau gar nicht anfasst (Pflaster aus dem Strassenblock, Stufe an der Mauerkrone). (3) Fehlstellen wurden als 'verschwinden' gemeldet, obwohl sie verfuellt werden - ueber einem leeren Becken das Gegenteil der Wahrheit. Jetzt Stadtboden.wertung mit drei Faellen und zwei getrennten Zahlen in der Warnung.
-- ~~Die Paper-Schicht hatte keine Tests.~~ Jetzt StadtbodenTest (11 Proben) UND WegbauTest (10 Proben). Wegbau nimmt dafuer einen Weltgriff statt World - vier Methoden, also in einer Map nachstellbar (Probewelt). Staerkste Probe: Fuellen und Zurueckbauen lassen die Stadt Block fuer Block wie den Generator zurueck.
-- ~~Zwei der ersten Proben konnten nicht rot werden:~~ eine verglich Material mit sich selbst, eine nutzte die gepruefte Regel als eigenes Orakel (bei entfernter Auslassung null Zusicherungen, gruen). Beide ersetzt. Mutationsprobe: alle 8 Regeln, die in diesem Schritt mal falsch waren, einzeln kaputtgemacht - alle 8 werden gefangen (Skript scratchpad/mutationsprobe.py).
-- ~~Warnsaetze stimmten nicht zu ihren Zahlen:~~ gezaehlt wird die ganze Spalte, gemeldet war 'auf der Wegflaeche'; Verfuellung hiess 'unter der Flaeche', obwohl die Oberflaeche dazugehoert; und die Einzahl fehlte ('verschwinden 1 Bloecke'). Alle drei nachgezogen.
-- Hinweis fuer kuenftige Bauten: Nach vielen Gradle-Laeufen in Folge bricht die SMB-Freigabe weg (Unerwarteter Netzwerkfehler, Cannot create directory) und Gradle nimmt danach veraltete Klassen - zwei Tests waren rot, obwohl die Quelle stimmte. Abhilfe: build/reports loeschen, fehlende build-Unterordner per mkdir anlegen, neu bauen.
-- ~~Spieltest mit dem neuen Plugin:~~ 1.11. gelaufen und bestanden. Zusammenlegen, drittes Feld anhaengen, Umrandung an beiden Bandenden, Auftrennen und Raeumen - alles richtig.
-- ~~Schritt 6, Teil D: Auftrennen einzeln.~~ 1.11. gebaut: /parzelle auftrennen loest das Standfeld heraus, /parzelle auftrennen alles trennt die ganze Gruppe. Ein tragendes Feld wird abgelehnt (Gruppenflaeche.bleibtGanzOhne, Zusammenhang ueber Kanten); bei zwei Feldern wird ganz aufgetrennt. Neue Ablage-Operation ausGruppeLoesen in allen Umsetzungen plus zwei Vertragsproben. Die Weltarbeit nutzt dieselbe Auslassung wie das Fuellen, nur umgekehrt - nur der Weg zum geloesten Feld kommt zurueck.
-- ~~Die Gruppenbefehle hatten im Besitzbuch keine Proben~~ (nur die Ablage hatte ihren Vertrag) - deshalb wurde jeder Fehler dieses Schritts durch Nachrechnen gefunden. Jetzt sieben Proben fuer das Herausloesen.
-- ~~Spieltest Teil D:~~ 1.11. gelaufen und bestanden. Tragendes Feld abgelehnt, Randfeld geloest, die bleibende Fuge blieb Bauland.
-- ~~Fehler NACH dem Spieltest gefunden (eigene Pruefung, in c54686c schon drin):~~ Am Arm einer Kreuzung schrieb der Rueckweg den Rasterplan (WEG) statt der Mauer, die die bleibende Gruppe dort braucht - zwei 5 Bloecke breite Loecher, und der Eigentuemer durfte sie nicht selbst zumauern. Betraf 148 von 476 Herausloesungen im 3x3-Fenster. Der Spieltest konnte es nicht finden: die getestete Gruppe war ein L ohne Kreuzung. Jetzt fragt ueberDieNaht die anderen Flaechen nach ihrem Anspruch (beiDenAnderen); lagSchonSo entfaellt. Zwei neue Proben, Mutation faellt in 6 Tests auf.
-- ~~Spieltest Quadrat (Kreuzungsarm):~~ 1.11. gelaufen und bestanden, 19 von 19 Koordinaten. Beide Mauerstreifen zurueck (x=-7 und z=-7, je 5 Bloecke plus Krone), Kreuzungsmitte wieder Pflaster, die Seiten zum geloesten Feld auch, beide Fugen des bleibenden L blieben Bauland.
-- ~~Die Messung war dabei still kaputt:~~ Der Server verschluckt Konsolenzeilen, wenn zu viele auf einmal kommen - von 17 Abfragen kamen 3 an. Eine verschluckte Abfrage sagt WEDER ok NOCH falsch, das Ergebnis sah also aus wie 'alles in Ordnung'. messe_quadrat.sh fragt jetzt einzeln mit Pause und verweigert das Ergebnis, wenn Antworten fehlen.
-- ~~Prueflauf ueber den ganzen Befehlspfad~~ (1.11., 17 Befunde, 10 von den Skeptikern widerlegt). Behoben, je mit Probe und Mutation: (1) ausGruppeLoesen schloss die GETEILTE Datenbankverbindung - eigener Fehler aus Teil D, jedes Herausloesen erzwang einen Neuaufbau im Hauptfaden; (2) die Rueckbuchung beim Zusammenlegen umfasste den Lesezugriff NACH dem Festschreiben - Gruppe da und Geld zurueck, und niemand haette es gemerkt; (3) SCHON_IN_GRUPPE meldete auch dann, wenn beide Felder in DERSELBEN Gruppe liegen; (4) 'Hier ist keine Parzelle' auf freiem Bauland, wo /parzelle info 'frei' sagt - jetzt NOCH_FREI; (5) /parzelle info bot eine Parzelle mit Preisschild an, obwohl der Rang ausgereizt war. 231 Tests.
-- Neu in der config.yml: hinweise.rang-werbung - eine Zeile unter jeder Absage, die ein RANG verursacht (Kauf, Zusammenlegen, freie Parzelle am Limit). Vorgabe 'Mehr erlaubt ein hoeherer Rang.'; leer heisst kein Hinweis. Bewusst nicht fest eingebaut: Was ein Spieler tun muss, um mehr zu duerfen, weiss nur der Server.
-- ~~Kaufbare Raenge geben jetzt einen Zuschlag~~ [1.11., entschieden]: Foerderer +2 Parzellen und +1 Feld je Gruppe, Stifter +4 und +2. Als ZUSCHLAG gebaut (freimarken.extra.parzellen.<n>, freimarken.extra.gruppe.<n>), nicht als zweite absolute Zahl - sonst haette ein zahlender Reisender am ersten Tag so viele Parzellen wie ein Buerger nach 40 Stunden.
-- ~~Plan 8.4 verbot 'mehr Parzellen, mehr Flaeche' in einer Mitgliedschaft.~~ 1.11. entschieden: Der Zuschlag ist den BEZAHLTEN Raengen vorbehalten und gibt es nicht fuer Goldmark - ebenso zusaetzliche Heimatpunkte und Warps. Begruendung im Plan 8.4: vier Parzellen sind schon 135x135 Bloecke, wer mehr will, will bauen und nicht gewinnen; das Angebot richtet sich an Vielspieler und Traeger des Servers. Kosmetik bleibt erspielbar.
+- ~~Spieltest Zusammenlegen/Auftrennen:~~ 1.11. bestanden.
+- Hinweis: Nach vielen Gradle-Laeufen bricht die Freigabe weg ("Unerwarteter Netzwerkfehler", "Cannot create directory"); Gradle nimmt danach veraltete Klassen, Tests werden grundlos rot. Abhilfe: build/reports loeschen, fehlende build-Unterordner anlegen, neu bauen.
+- ~~Spieltest mit dem neuen Plugin:~~ 1.11. bestanden.
+- ~~Schritt 6, Teil D: Auftrennen einzeln.~~ 1.11.: /parzelle auftrennen, /parzelle auftrennen alles; ein tragendes Feld wird abgelehnt.
+- ~~Spieltest Teil D:~~ 1.11. bestanden.
+- ~~Spieltest Quadrat (Kreuzungsarm):~~ 1.11. bestanden.
+- Warnung: Der Server verschluckt Konsolenzeilen, wenn zu viele auf einmal kommen - einzeln mit Pause fragen.
+- Neu in der config.yml: hinweise.rang-werbung - eine Zeile unter jeder Absage, die ein RANG verursacht (Kauf, Zusammenlegen, freie Parzelle am Limit). Vorgabe 'Mehr erlaubt ein hoeherer Rang.'; leer heisst kein Hinweis.
+- ~~Kaufbare Raenge geben einen Zuschlag~~ [1.11., entschieden]: Foerderer +2 Parzellen und +1 Feld je Gruppe, Stifter +4 und +2 (freimarken.extra.parzellen.<n>, freimarken.extra.gruppe.<n>).
+- ~~Zuschlag nur fuer BEZAHLTE Raenge, nicht fuer Goldmark~~ 1.11. entschieden - ebenso zusaetzliche Heimatpunkte und Warps. Kosmetik bleibt erspielbar.
 - Offen: Zahlen fuer zusaetzliche Warps je bezahltem Rang. Heimatpunkte stehen (Foerderer +2), Warps sind in der Rangtabelle noch nicht beziffert.
-- Offen, niedrig: Wird die Marktstadt voll, bindet ein Stifter mit 8 Parzellen doppelt so viel Flaeche wie ein Buerger ohne Mitgliedschaft (1.764 Parzellen insgesamt). Nachzujustieren ueber das Recht, nicht im Programm.
-- ~~Schritt 7 erfasst~~ [1.11., Pruefauftrag ueber Plan und Code]: Bauplan A-G steht (A Buchungsbuch, B Wirtschaftswerte + /freimarken neuladen, C Spielzeit und Tagesgrenze, D Berufe waehlen, E Verdienen, F Bundesmarkt, G Messstelle). Vier Fragen beantwortet: 2.000-5.000 Mark je SPIELER (nicht je Beruf), Tagesgrenze Mitternacht Ortszeit (Zone aus der config.yml), ein Block zahlt nur einmal (gesetzte Bloecke werden markiert), und Schritt 3 wird VOR Schritt 7 gebaut.
-- ~~Schritt 3, Teil A: Welten aus der Liste.~~ 1.11. gebaut: config.yml fuehrt je Welt art (raster/gewoehnlich/leer), umgebung und kante. Weltenliste liest und KLAGT statt zu raten (eine fehlende art wuerde aus der Marktstadt eine Welt mit Baeumen machen), Weltenbau legt an und setzt die Grenzen, Grenzregel im Kern aus Stadtgrenze herausgeloest - sie gilt jetzt fuer jede Welt. getDefaultWorldGenerator gibt das Raster nur noch fuer die Marktstadt zurueck; vorher fuer JEDEN Namen. Spieltest: acht Welten entstehen mit den richtigen Umgebungen und Grenzen, 7 von 7 Messpunkten (Marktstadt weiter Raster, Kornmark und Altfurt ohne Raster, Kornmark und Nether mit gewoehnlichem Grundgestein). 258 Tests.
-- ~~Schritt 3, Teil A geprueft~~ 2.11. [74 Agenten, 28 bestaetigte Befunde, alle behoben]: art haengt jetzt am Namen - raster traegt allein marktstadt, und bei falscher art entsteht die Marktstadt GAR NICHT (im Spiel belegt: "Unknown dimension freimarken:marktstadt", Plugin aus). Jede Welt traegt ihre art im PersistentDataContainer; "neu" heisst damit zum ersten Mal gesehen, nicht "war nicht geladen" - vorher wurde /setworldspawn bei JEDEM Start ueberschrieben und der Grenzmittelpunkt auf 0/0 zurueckgeholt (belegt: Erscheinungspunkt 500/70/500 hat den Neustart ueberlebt). Kante wird nach Typ und Spanne geprueft ("6000" war still 0, 6.000 ist 6, zu gross liess setSize mitten im Start werfen). Fehlende Eintraege nach einem Update werden benannt - vorher entstand nur die Marktstadt, stumm. Eine werfende Welt reisst den Start nicht mehr mit. Die Klage trennt Verkleinern vom Sprung; der Bestaetigungstext wirkte beim Verkleinern nie. Eine Einstellung, ein Leser: marktstadt.kante wurde an zwei Stellen mit zwei Rueckfaellen gelesen. Weltname end statt ende (Plan 4). 270 Tests.
-- ~~Schritt 3, Teil B: Vorgenerierung.~~ 2.11. gebaut und am Probeserver belegt: Vorgeneriert wird mit Chunky 1.5.3 (Paper 26.1-26.3, Java 25, Modrinth, sha512 43ffecc6...), NUR ueber Konsolenbefehle - keine Gradle-Abhaengigkeit, kein softdepend, kein Code gegen chunky-common (API-Version 0, GPL-3.0). In plugins/Chunky/config.yml continue-on-restart: true setzen (ab Werk false, und der Fortschritt wird nur beim Verlassen der Schleife geschrieben). Kein Update-Pruefer eingebaut - Fassung bei jedem Minecraft-Sprung von Hand nachziehen.
-- Chunkfeld im Kern rechnet Mitte, Radius, Chunks und Regionen aus der GEMESSENEN Weltgrenze; /freimarken vorgenerieren gibt je Welt eine Zeile zum Kopieren und nimmt eine Stichprobe von 9 Punkten (4 Ecken dabei - ein Kreis statt Quadrat sieht sonst fertig aus). Chunky kennt keine Namensraeume: der Bukkit-Name ist freimarken_marktstadt mit UNTERSTRICH, gemessen; das Plugin prueft das zur Laufzeit und zeigt sonst keine Zeile. Summe ueber alle acht Welten: 424.040 Chunks, 432 Regionen im Feld.
-- Gemessen (Altfurt, 2.553 Chunks): 20 s, 120 Chunks/s, 13,7 KB je Chunk -> hochgerechnet ~1 h und 5,6 GB fuer alles. Plan nennt 3-4 h und 15-20 GB als obere Schranke; Hochwald, Hafenwerder und Nether sind nicht gemessen. Berichtigung: 36 Regionsdateien im Plan sind 36 REGIONEN IM FELD - auf der Platte liegen mehr (Altfurt 4 im Feld, 16 Dateien), weil ein Randchunk seine Nachbarn braucht. Dateizahl taugt nicht als Pruefung.
+- Offen, niedrig: Ein Stifter mit 8 Parzellen bindet doppelt so viel Flaeche wie ein Buerger ohne Mitgliedschaft (1.764 Parzellen insgesamt). Nachzujustieren ueber das Recht, nicht im Programm.
+- ~~Schritt 7 erfasst~~ 1.11.: Bauplan A-G (A Buchungsbuch, B Wirtschaftswerte, C Spielzeit, D Berufe waehlen, E Verdienen, F Bundesmarkt, G Messstelle). Verdienst 2.000-5.000 Mark je SPIELER, ein Block zahlt nur einmal.
+- ~~Schritt 3, Teil A: Welten aus der Liste.~~ 1.11.: je Welt art (raster/gewoehnlich/leer), umgebung und kante in der config.yml.
+- ~~Schritt 3, Teil A geprueft~~ 2.11.
+- ~~Schritt 3, Teil B: Vorgenerierung.~~ 2.11. mit Chunky 1.5.3 von Modrinth (Paper 26.1-26.3, Java 25) ueber Konsolenbefehle. In plugins/Chunky/config.yml continue-on-restart: true setzen (ab Werk false). Fassung bei jedem Minecraft-Sprung von Hand nachziehen.
+- /freimarken vorgenerieren gibt je Welt eine Zeile zum Kopieren; alle acht Welten 424.040 Chunks, hochgerechnet ~1 h und 5,6 GB - gemessen ist nur Altfurt, die obere Schranke im Plan sind 3-4 h und 15-20 GB.
+- Chunky kennt keine Namensraeume: der Weltname traegt einen UNTERSTRICH (freimarken_marktstadt). Fertig ist eine Welt erst, wenn die Stichprobe aus 9 Punkten samt den 4 Ecken sitzt.
 - Noch nicht gelaufen: die sieben grossen Welten auf dem echten Server. Reihenfolge klein nach gross, nacheinander, ohne Spieler - Chunky haelt je Welt nur eine gespeicherte Aufgabe.
-- ~~Reisen zwischen den Welten entschieden~~ 2.11.: Portale am Bundesmarkt plus EIN /warp, in dem die acht Weltnamen reserviert sind (oeffentliche Warps aus der Weltenliste abgeleitet, nicht als zweite Liste gepflegt). Plan 4.3. Gebaut ist noch nichts - offen bleibt, wie ein Spieler beim BEITRITT in Altfurt landet (gehoert zu Teil C).
-- ~~Schritt 3, Teil C: Reisen.~~ 2.11. gebaut: EIN /warp (Ziele aus der Weltenliste abgeleitet, Vorschlaege in Dateireihenfolge, spielerpflichtig - die Konsole wird abgewiesen, gemessen) und sieben Tore am Bundesmarkt in Altfurt. Beide Wege laufen durch eine Klasse Reise: Standprobe, Grenzpruefung, Abklingzeit zuletzt, teleportAsync-Ergebnis ausgewertet. Nicht zu Pferd (teleportAsync gibt ueber Weltgrenzen false, RETAIN_VEHICLE wirkt nicht mehr). Selbstgebaute Nether- und Endportale gesperrt - sie fuehren in die Haupt-Nether des Servers, nicht nach freimarken:nether. Abenteuer in ganz Altfurt, Ausnahme freimarken.spielmodus.frei. setRespawnWorld(altfurt) statt eines Zuhoerers; AsyncPlayerSpawnLocationEvent nur fuer den Fall einer verschwundenen Welt. 316 Tests.
-- Gemessen fuer Teil C: Altfurt 0/0 liegt UNTER WASSER (Boden 58, Wasser bis 62) - deshalb laeuft jede Reise durch eine Standprobe. Flachstes trockenes 32x32 um den Ursprung: 56/-4 bis 87/27, Boden y 70-72, durchgehend red_sand, Mitte 72/12 auf y 71. Dort steht der Bundesmarkt [entschieden]. Torreihe auf z=0, sieben Durchgaenge je 3 breit, y 71..73.
-- Noch von Hand zu tun: die zehn Gebaeude aus Plan 2.1 bauen (Programm setzt keine Bloecke in Altfurt) und /setworldspawn auf den Bundesmarkt setzen. Die Torkoordinaten sind an MEINEM Probe-Altfurt eingemessen - auf anderem Gelaende klagt das Plugin beim Start und nennt die passenden Zahlen.
-- ~~Sterben, zurueckkehren, besuchen.~~ 2.11. gebaut: Kein Spawnpunkt im Bett - wer stirbt, erscheint IMMER in Altfurt. Dafuer zwei Haken, nicht einer: setRespawnWorld wirkt nur im Standardzweig, ein Punkt aus Bett/Anker/Befehl gewinnt davor. PlayerSetSpawnEvent sperrt BED, RESPAWN_ANCHOR, UNKNOWN und COMMAND ohne freimarken.spawnpunkt.setzen; die Vanilla-Meldung wird abgeschaltet und ersetzt, sonst stuende 'Respawn point set' da, wo keiner gesetzt wurde. PlayerRespawnEvent nur bei DEATH - END_PORTAL bleibt unangetastet, sonst landete der Rueckweg aus dem Ende in Altfurt. Schlafen geht weiter.
-- /zurueck (/back) fuehrt an den letzten Ort: vor Reise, vor Teleport, Todesstelle. Gemerkt an EINER Stelle (in Reise, vor jedem Teleport) plus beim Tod - damit entfaellt die TeleportCause-Frage, und ein Anti-Cheat-Rueckversetzer (meldet PLUGIN) kann den Rueckweg nicht ueberschreiben. Nur im Speicher, beim Abmelden vergessen.
-- /tpa <spieler> + /tpaccept + /tpdeny. Nur der FRAGENDE wird bewegt (kein tpahere, kein tpaall - das ist die Trennlinie zum Missbrauch). Zielort erst beim Annehmen geholt. Anfrage gilt eine Minute. Mehrere Fragende bleiben alle stehen. getPlayerExact statt getPlayer, sonst fragt /tpa Max unversehens Maxime.
-- Zwei eigene Entwuerfe korrigiert: (1) Ankunftspunkt hat jetzt taugt(x,y,z) neben der ringweisen suche() - wo der Ort feststeht, wird ABGESAGT statt verschoben, sonst endet ein Rueckweg aus einer Hoehle an der Oberflaeche und eine Todesstelle neben Lava auf dem Netherdach (belegter EssentialsX-Fehler 3318). (2) Rueckweg.tauschen entfernt - das Hin und Her folgt daraus, dass Reise vor jedem Teleport merkt; eine Tauschmethode waere die zweite Stelle fuer dasselbe.
-- bringeZurParzelle laeuft jetzt auch durch Reise - es war der letzte Teleport ohne Standprobe, ohne Abklingzeit und ohne Auswertung.
-- ~~Zweispurig deutsch/englisch~~ 2.11. [entschieden]: /parzelle auch /plot, /mark auch /balance und /bal, /zurueck auch /back, /tpaccept auch /tpaaccept und /annehmen, /tpdeny auch /tpdecline und /ablehnen. Die SPRACHE DER MELDUNGEN bleibt deutsch und wird je Spieler waehlbar, sobald die Texte in einer Sprachdatei liegen (Plan 13, ueber hundert Stellen im Quelltext). 340 Tests.
-- ~~/tpahere und Aufwaermzeit.~~ 2.11. gebaut: /tpahere laedt ein, der EINGELADENE wandert - und er ist der, der zustimmt. Die Trennlinie zum Missbrauch liegt nicht in der Richtung, sondern darin, dass wer bewegt wird zustimmt. Richtung steht in der Anfrage, nicht im Befehl, damit /tpaccept sie nicht erraten muss. /tpaall gibt es nicht.
-- Jeder Teleport hat 3 s Wartezeit [entschieden]; Bewegung UND Schaden brechen ab. Abgebrochen wird, wer den BEREICH verlaesst - bei einem Befehl der eigene Block, bei einem Tor der ganze Torquader. Mit 'ein Block' braeche es genau bei dem Schritt ab, mit dem man ins Tor laeuft. Geprueft wird zweimal (vor und nach der Wartezeit), der Rueckweg erst beim Sprung gemerkt. freimarken.sofort (op) ueberspringt sie, sonst bricht /freimarken parzelle ab, weil man sich umsieht. 342 Tests.
-- Im Spiel noch zu pruefen (geht ohne Client nicht): im Bett schlafen (Nacht uebersprungen, KEINE Meldung 'Respawn point set'), in Kornmark sterben (Ankunft Altfurt), /zurueck fuehrt an die Todesstelle, in Lava sterben + /zurueck (muss abgelehnt werden), Respawn-Anker (ohne Wirkung), als Betreiber /spawnpoint (muss gehen), aus dem Ende durch das Rueckportal (NICHT nach Altfurt), /tpa samt Ablauf, abgemeldetem Fragenden und zu Pferd.
-- Offen in Schritt 3: wolkenwerder fehlt in der Liste (Leere ohne Startinsel, kommt mit Schritt 11); Spielmodus je Welt (Altfurt = Abenteuer) gehoert zu Teil C; Vorgenerierung ist Teil B (3-4 Stunden, 15-20 GB); wie ein Spieler ZWISCHEN den Welten reist, ist nirgends entschieden - ohne das steht alles da und niemand kommt hin.
-- Naechstes: Schritt 3 - Welten anlegen, Grenzen, Vorgenerierung, Altfurt als Rohbau. Grund fuer das Vorziehen: In der Marktstadt gibt es kein Holz, kein Wasser, keine Erze und keine Nutztiere (der Generator schaltet Rauschen, Hoehlen, Dekoration und Mobs ab) - vier der sechs Grundberufe stuenden im Leeren.
-- ~~Schritt 7, Teil A: Buchungsbuch.~~ 2.11. gebaut: Jede Geldbewegung steht in einer Zeile (wer, wie viel, warum, wann, Stand danach). Buchungsgrund als Aufzaehlung mit ASCII-Schluessel und Richtung - kein Freitext (der spaltet dieselbe Senke in Tippfehler), Richtung am Grund (die gratis erste Parzelle ist eine Ausgabe ueber 0 Mark). Grund ist PFLICHTPARAMETER ohne Vorgabewert, damit der Uebersetzer jeden kuenftigen Buchungsweg zur Angabe zwingt. Buchung und Zeile in EINER Transaktion in MariaKasse; ungedeckt heisst Rollback und keine Zeile. Stand danach aus derselben Anweisung (INSERT..SELECT), kein zweiter Gang nach Java. Beide Kassen fuehren das Buch. Schema 7 (Tabelle buchungen) und 8 (Altbestand als 'bestand'). /mark verlauf zeigt zehn Zeilen. 364 Tests. Plan 8.6.
-- Die Zusage, die alles zusammenhaelt, steht im KasseVertrag und gilt fuer beide Umsetzungen: Summe aller Buchungen eines eroeffneten Kontos == Kontostand. Am 2.11. gegen die ECHTE Datenbank geprueft: Schemastand 8, Bestandsbuchung 50.000, Zeitstempel 15:36 UTC bei 16:36 Ortszeit, Summenprobe PASST.
-- ~~Testdaten zurueckgesetzt~~ 2.11. [vom Betreiber beauftragt]: sechs Testparzellen geloescht (Gruppe zuerst geloest - Fremdschluessel auf RESTRICT), Konto von 90.000 auf das Startguthaben 50.000 gestellt. Grund: Schritt 8 laeuft einmal und schreibt fest, was er findet - das ist die Nulllinie des spaeteren Wirtschaftsberichts. Die Bloecke in der Marktstadt (Mauern, gefuellte Wege) stehen noch; sie gehoeren nicht in die Datenbank.
-- Punkt 3 der vier offenen Punkte ist damit erledigt: Das Startguthaben wirkt nicht mehr rueckwirkend, weil die Eroeffnungsbuchung den Betrag einfriert. Punkte 1 (Preisstaffel in die config.yml) und 2 (/freimarken neuladen) gehoeren zu Teil B - es ist dieselbe Umstellung, weil Stammwerte heute als final-Felder in Konstruktoren einfrieren. Punkt 4 (hoechstzahl 4 statt 1) bleibt bis Schritt 12: Die Grenze kommt schon aus den Rechten, und die Raenge, die freimarken.parzellen.2 und .4 vergeben wuerden, gibt es noch nicht.
+- ~~Schritt 3, Teil C: Reisen.~~ 2.11.: EIN /warp und sieben Tore am Bundesmarkt in Altfurt. Nicht zu Pferd; selbstgebaute Nether- und Endportale gesperrt; Abenteuer in ganz Altfurt, Ausnahme freimarken.spielmodus.frei.
+- Der Bundesmarkt steht bei 72/12 auf y 71 [entschieden] - Altfurt 0/0 liegt unter Wasser; das flache trockene Feld reicht von 56/-4 bis 87/27, Boden y 70-72. Torreihe auf z=0, sieben Durchgaenge je 3 breit, y 71..73.
+- Noch von Hand zu tun: die zehn Gebaeude aus Plan 2.1 bauen (Programm setzt keine Bloecke in Altfurt) und /setworldspawn auf den Bundesmarkt setzen.
+- Die Torkoordinaten sind an MEINEM Probe-Altfurt eingemessen - auf anderem Gelaende klagt das Plugin beim Start und nennt die passenden Zahlen.
+- ~~Sterben, zurueckkehren, besuchen.~~ 2.11.: Wer stirbt, erscheint IMMER in Altfurt; Bett und Anker setzen keinen Spawnpunkt (Ausnahme freimarken.spawnpunkt.setzen), Schlafen geht weiter.
+- /zurueck (/back) fuehrt an den letzten Ort: vor Reise, vor Teleport, Todesstelle. Nur im Speicher.
+- /tpa <spieler> + /tpaccept + /tpdeny. Nur der FRAGENDE wird bewegt, kein /tpaall. Anfrage gilt eine Minute.
+- Jeder Teleport laeuft jetzt durch dieselbe Reise, auch der an die eigene Parzelle.
+- ~~Zweispurig deutsch/englisch~~ 2.11. [entschieden]: /parzelle auch /plot, /mark auch /balance und /bal, /zurueck auch /back, /tpaccept auch /tpaaccept und /annehmen, /tpdeny auch /tpdecline und /ablehnen.
+- ~~/tpahere und Aufwaermzeit.~~ 2.11.: /tpahere laedt ein, der EINGELADENE wandert und stimmt zu. /tpaall gibt es nicht.
+- Jeder Teleport hat 3 s Wartezeit [entschieden]; Bewegung UND Schaden brechen ab. freimarken.sofort (op) ueberspringt sie.
+- Im Spiel noch zu pruefen: im Bett schlafen (Nacht uebersprungen, KEINE Meldung 'Respawn point set'), Respawn-Anker ohne Wirkung, als Betreiber /spawnpoint muss gehen.
+- Im Spiel noch zu pruefen: in Kornmark sterben (Ankunft Altfurt), /zurueck an die Todesstelle, in Lava sterben + /zurueck (muss abgelehnt werden), aus dem Ende durch das Rueckportal (NICHT nach Altfurt), /tpa samt Ablauf, abgemeldetem Fragenden und zu Pferd.
+- Offen in Schritt 3: wolkenwerder fehlt in der Liste (Leere ohne Startinsel, kommt mit Schritt 11).
+- In der Marktstadt gibt es kein Holz, kein Wasser, keine Erze und keine Nutztiere - vier der sechs Grundberufe brauchen die anderen Welten.
+- ~~Schritt 7, Teil A: Buchungsbuch.~~ 2.11.: jede Geldbewegung als Zeile, /mark verlauf zeigt zehn. Plan 8.6.
+- ~~Testdaten zurueckgesetzt~~ 2.11.: Konto auf das Startguthaben 50.000. Die Bloecke in der Marktstadt stehen noch.
 - Im Spiel noch zu pruefen: beitreten (Protokollzeile 'Konto eroeffnet'), /mark verlauf, erste Parzelle (gratis, Zeile mit 0 Mark), zweite (minus 25.000), zusammenlegen, und ein Kauf mit zu wenig Mark (keine neue Zeile).
-- ~~Schritt 7, Teil B: Stammwerte in die config.yml und /freimarken neuladen.~~ 2.11. gebaut: Ein Schnappschuss, eine Zelle, ein Leser. Preisstaffel ist kein Statik-Block mehr, sondern ein Wert (record mit Grundpreis und Zusammenlegungsgebuehr); Wirtschaftswerte haelt die fuenf Stammwerte in EINEM unveraenderlichen record; Wirtschaftsstand ist die einzige veraenderliche Zelle (volatile). Besitzbuch und ParzellenBefehle halten den Stand und fragen ihn beim Gebrauch - damit erreicht ein neuer Wert jede Stelle, ohne dass ein Objekt neu gebaut wird. Neuladen tauscht nur den Inhalt der Zelle: kein Zuhoerer, kein Zeitgeber, kein Befehl, keine Verbindung - also gibt es auch nichts abzumelden und nichts kann doppelt dastehen. 399 Tests. Plan 8.7.
-- Neue Schluessel: wirtschaft.parzelle.grundpreis (0 bis 8.388.607), wirtschaft.parzelle.zusammenlegung-je-feld (0 bis 4.294.967.298), wirtschaft.sprung-bestaetigt.<name>. Die Obergrenzen sind GERECHNET und nicht getippt: grundpreis << 40 muss in einen long passen, sonst ist der Preis negativ - also eine Gutschrift beim Kauf.
-- Drei Schranken auf jedem Geldwert, alle drei gegen dieselbe Richtung: Roh lesen und am TYP ablehnen (aus 25.000 liest YAML 25, aus "25000" liest getLong 0); der gerechnete Bereich; und mehr als Faktor 2 gegen den AUSGELIEFERTEN Wert nur mit Bestaetigung. Immer gegen die Vorgabe und nie gegen den laufenden Wert - sonst verlangte dieselbe Datei nach einem Neustart einen anderen Text, und ein eingetragener Wert gaelte ploetzlich nicht mehr.
-- Was keine Schranke faengt, ist der Wert im Bereich, der trotzdem falsch ist (2.500 statt 25.000). Dagegen steht bei jedem Start UND jedem Neuladen die Staffel im Klartext: "2. Parzelle 25000 - 3. 50000 - 4. 100000". Erkennung statt Verhinderung, mehr ist ohne Umsatzwaechter nicht zu haben.
-- Beim START gilt je Wert der Rueckfall samt Klage, beim NEULADEN alles-oder-nichts. Eine halb uebernommene Preisliste ist der schlechteste Zustand - dann gelten Zahlen aus zwei Staenden gegeneinander.
-- Jede Antwort endet mit dem Block "Nur beim Start gelesen", auch wenn sich nichts geaendert hat: Datenbank, Welten, Ankunftswelt, Startguthaben, und die Zahlen, die im Programm bleiben (Parzelle 64, Weg 7, Boden 62, Deckel 40) je mit Grund. Das ist das Gegenmittel gegen "Reload meldet Erfolg, die Aenderung wirkt erst nach dem Neustart".
-- kasse.startguthaben wird gelesen, verglichen und gemeldet, aber NICHT uebernommen: Die Kassen geben den Wert fuer ein nicht eroeffnetes Konto als Guthaben zurueck, ein neuer Wert aenderte also rueckwirkend, was jeder Spieler mitbringt, der noch nie gebucht hat. Ein Bestandsschutz dafuer ist Klasse 2 nach 12a.6 und ein eigener Schritt.
-- Kein eigenes Recht fuer den Befehl: freimarken.verwalten, derselbe Zweigschutz wie /freimarken welt und parzelle. Plan 1544-1547 begruendet, warum es keinen zweiten Ort fuer Rechte geben soll.
-- Dauerpruefung, bei jeder kuenftigen Aenderung zu wiederholen: getConfig() darf nur in onEnable und neulade() stehen (heute sieben Stellen, alle dort), und es darf keinen statischen Preisstaffel-Rechenaufruf mehr geben (heute keinen). Jede neue Lesestelle in einem Befehl oder Zuhoerer waere ein Wert, der sich hinter dem Ruecken des Standes aendert.
-- Am Probeserver im Betrieb geprueft: vier Tippfehler beim Start (25.000, "10000", hoechstzahl 0, Startguthaben 120.000) - vier Klagen, Rueckfall, Server laeuft. Neuladen mit derselben Datei: nichts uebernommen. Mit gueltigen Werten: uebernommen, und /freimarken preis 3 nennt im selben Augenblick 160.000 statt 100.000. Sprung auf 100.000 ohne Bestaetigung: abgelehnt mit dem einzutragenden Text; mit Bestaetigung: uebernommen.
-- Zwei eigene Textfehler, die erst der Probelauf zeigte: Die Klage nannte nur die Gefahr nach unten (beim Startguthaben ist aber nach oben gefaehrlich), und sie sagte "Es gilt 25000", obwohl beim Neuladen der laufende Wert stehen bleibt - zwei Zeilen derselben Antwort widersprachen sich. Der Leser sagt jetzt nur, was er weiss; was gilt, sagt der Aufrufer.
-- Damit sind Punkt 1 und Punkt 2 der vier offenen Punkte erledigt. Offen bleibt nur Punkt 4 (hoechstzahl 4 statt 1) bis Schritt 12.
-- ~~Im Spiel geprueft~~ 2.11.: /freimarken neuladen als SPIELER mit freimarken.verwalten - die ganze Antwort kam im Chat an, /freimarken preis 3 nannte 100.000 fuer Nr. 4 und 75.000 bisher ausgegeben (genau die ausgelieferte Staffel), und der Block nennt keine Zugangsdaten, nur "Ablage MariaDB".
-- Dabei im Bild aufgefallen und behoben: Zwei Zeilen untereinander nannten denselben Schluessel mit derselben Zahl - "kasse.startguthaben in der Datei: 50000" und darunter "kasse.startguthaben: 50000 - wird nur beim Start gelesen". Im Protokoll war das nicht aufgefallen, im Chat ist es eine Zeile Rauschen in genau dem Block, der gelesen werden MUSS. Der Leser sagt jetzt gar nichts mehr ueber das Startguthaben; beim Start nennt es das Protokoll, beim Neuladen der Block - also je einmal.
+- ~~Schritt 7, Teil B: Stammwerte in die config.yml und /freimarken neuladen.~~ 2.11. Plan 8.7.
+- Neue Schluessel: wirtschaft.parzelle.grundpreis (0 bis 8.388.607), wirtschaft.parzelle.zusammenlegung-je-feld (0 bis 4.294.967.298), wirtschaft.sprung-bestaetigt.<name> - mehr als Faktor 2 gegen den ausgelieferten Wert nur mit Bestaetigung.
+- Geldwerte in der config.yml ohne Tausenderpunkt und ohne Anfuehrungszeichen schreiben: aus 25.000 liest YAML 25, aus "25000" wird 0. Beides wird am Typ abgelehnt und beklagt.
+- Was keine Schranke faengt, ist der falsche Wert im Bereich (2.500 statt 25.000). Dagegen steht bei jedem Start UND jedem Neuladen die Staffel im Klartext: "2. Parzelle 25000 - 3. 50000 - 4. 100000".
+- Beim START gilt je Wert der Rueckfall samt Klage, beim NEULADEN alles-oder-nichts.
+- kasse.startguthaben wird gelesen und gemeldet, aber NICHT uebernommen - ein neuer Wert aenderte rueckwirkend, was jeder noch nie buchende Spieler mitbringt.
+- Kein eigenes Recht fuer /freimarken neuladen: freimarken.verwalten, derselbe Zweigschutz wie /freimarken welt und parzelle.
+- Von den vier Punkten des Pruefauftrags sind 1 (Preisstaffel in die config.yml), 2 (/freimarken neuladen) und 3 (Startguthaben nicht mehr rueckwirkend) erledigt; offen bleibt 4 (parzellen.hoechstzahl 4 statt 1) bis Schritt 12.
+- ~~Im Spiel geprueft~~ 2.11.: /freimarken neuladen als Spieler mit freimarken.verwalten, die Preisstaffel stimmt, und der Block nennt keine Zugangsdaten.
 - Im Spiel noch zu pruefen: dass ein Kauf mitten im Neuladen den Preis EINES Standes nimmt.
-- ~~Teil B gegengelesen~~ 2.11. [86 Agenten, sechs Richtungen, jeder Fund von zwei Skeptikern angegriffen]: 40 Funde, 5 ueberlebten, vier Themen behoben. 407 Tests.
-- Behoben, hoch: Eine kaputte oder fehlende config.yml machte ein Neuladen zur stillen Rueckkehr auf die Vorgaben - MIT gruener Erfolgsmeldung. reloadConfig() faengt den Parse-Fehler selbst, haengt die Vorgaben aus der Jar an, und jeder Pfad liest dann brav einen gueltigen Wert: keine Klage, kein Riegel. Aus einem Tabulator wurde so "Uebernommen: grundpreis 200000 -> 25000", also halber Preis fuer jeden Kauf bis zum Neustart. Jetzt wird die DATEI selbst geladen (Wirtschaftsliste.lesefehler): beim Neuladen wird nichts uebernommen, beim Start bleibt Freimarken aus. Lieber kein Parzellensystem als ein falsch bepreistes.
-- Behoben, mittel: gesamtpreisFuer summierte ohne Ueberlaufschutz. Der gerechnete Deckel (8.388.607) deckt nur die EINZELNE Stufe; die Summe sprengt den long weit darunter - bei Grundpreis 349.526 zeigte /freimarken preis 64 schon -9.223.354.444.669.080.918 Mark, und der Befehl steht jedem Spieler offen. Enger rechnen hilft nicht, weil die Summe mit jeder Parzelle waechst: die Summe laeuft jetzt bei Long.MAX_VALUE an. Eine stehengebliebene Hoechstzahl ist sichtbarer Unsinn, eine negative Zahl sieht aus wie ein Guthaben.
-- Behoben, mittel: parzellen.hoechstzahl: -2147483649 galt STUMM als 2.147.483.647 - die Pruefung verkuerzte auf int, bevor sie pruefte, und (int) -2147483649 ist 2147483647. Die Regel brauchbareAnzahl nimmt jetzt einen long und prueft die Zahl aus der Datei, nicht ihre unteren 32 Bit.
-- Behoben, mittel: Eine bestaetigte Sprungzeile meldete "<pfad>: <wert> gilt" - fuer kasse.startguthaben falsch, denn uebernimm() laesst den Wert stehen. Zwei Zeilen derselben Antwort widersprachen sich. Der Leser sagt jetzt nur "Bestaetigung erkannt"; was gilt, sagt der Aufrufer.
-- Dazu geschlossen: Die Kernzusage "Preis beim Gebrauch geholt" hatte keine Probe - jetzt kauft ein Besitzbuch nach uebernimm() zum NEUEN Preis (120.000 statt 50.000).
-- Am Probeserver belegt: Neuladen mit kaputter Datei nennt Zeile 48 und uebernimmt nichts; Start mit kaputter Datei endet in "Disabling Freimarken"; die negative Hoechstzahl wird beklagt; mit heiler Datei laeuft alles unveraendert.
-- Widerlegt und bewusst NICHT gebaut: 35 Funde, darunter die Testluecken zu alles-oder-nichts und zu volatile (der record ist unveraenderlich, ein halb gefuellter Satz ist strukturell unmoeglich), die feste 64 in /freimarken preis (aelter als Teil B) und die fehlenden Rechte in der plugin.yml.
-- ~~Schritt 7, Teil C: Spielzeit und Tagesgrenze.~~ 3.11. gebaut: Der Server zaehlt anwesende Zeit je Spieler und Tag. Geschrieben wird ADDITIV auf eine Zeile (spieler, tag) - darum hinterlaesst ein Absturz keine offene Sitzung, es gibt kein Aufraeumen beim Start, und der Verlust ist hoechstens eine Taktlaenge. Alles im Hauptfaden: ein zweiter Faden auf derselben JDBC-Verbindung wuerde die halbe Geldbuchung aus Teil A mitcommitten. Eine Stelle rechnet aus einem Zeitpunkt einen Tag, in Java und nie in SQL. Ein Zuschlag ueber Mitternacht wird geteilt (traegt auch ueber den 23- und den 25-Stunden-Tag). 522 Tests (vorher 407). Plan 8.8.
-- Neue Schluessel: zeit.zone (Vorgabe Europe/Berlin), zeit.takt-sekunden (10 bis 600, Vorgabe 60), zeit.untaetig-minuten (0 bis 1440, Vorgabe 10; die 0 heisst "alles zaehlt"). Nur untaetig-minuten ist neuladbar - sie wird bei jedem Takt neu gefragt. Zone und Takt stehen im Block "Nur beim Start gelesen": die Zone verschoebe die Tagesgrenze mitten am Tag, der Takt steckt im gestellten Zeitgeber (zwei Neuladen waeren drei Zeitgeber). Ein fester Versatz wie UTC+2 wird abgewiesen - er kennt keine Sommerzeit.
-- Es gibt jetzt genau EINE Zone im Programm; ZoneId.systemDefault() kommt im paper-Modul nicht mehr vor (/mark verlauf nahm vorher die Systemzone des Rechners). Der Tag in der Tabelle spielzeit ist die einzige Spalte im Schema, die NICHT UTC ist, sondern gerechnetes Ortsdatum - der Satz steht am Schema, damit niemand sie "zurueckrechnet".
-- Untaetigkeit kommt aus Player.getIdleDuration() - kein eigener Bewegungszuhoerer, kein zweiter Zustand fuer dieselbe Frage. Ein verworfener Takt wird nicht angespart: die Marke rueckt vor, die Zeit ist weg. Der Rest unter einer Sekunde bleibt dagegen an der Marke stehen - ihn je Takt abzuschneiden kostete auf 40 Stunden rund 20 Minuten, zwanzigmal mehr als ein Absturz.
-- Erster wiederkehrender Zeitgeber des Projekts (runTaskTimer im Hauptfaden). Der Taktkoerper faengt Throwable: eine durchgelassene Ausnahme beendet bei dieser Zeitplanung ALLE weiteren Ausfuehrungen, und der Verlust waere dann nicht eine Minute, sondern alles bis zum Neustart - unauffindbar. onDisable meldet den Zeitgeber ab, rechnet die offenen Sitzungen ab und schliesst DANN die Datenbank.
-- Ein fehlgeschlagener Schreibversuch wird NICHT wiederholt, nur protokolliert (Sekunden und Spielerzahl). Die Spielzeit hat keinen Zeugen wie die Summenprobe des Buchungsbuchs - eine doppelt addierte Minute faellt nie auf. Aus demselben Grund gibt es kein Setzen von Hand und keinen Altbestand aus der Minecraft-Statistik (sie ist fuer jedes Plugin beschreibbar und verdoppelt sich mit einer Weltkopie): jeder faengt bei 0 an, und die Anzeige sagt das.
-- Die Anzeige ist ein Zweig /freimarken spielzeit [<spieler>] mit zwei Rechten (freimarken.spielzeit true, freimarken.spielzeit.andere op) - kein eigener /spielzeit, solange Plan 11.1 ihn nicht nennt. Sie rechnet die laufende Sitzung dazu, weil die Datenbank nur kennt, was geschrieben ist. Fremde Spielzeit nur fuer Anwesende: eine Namensaufloesung ueber Abgemeldete fragt im Zweifel bei Mojang nach und haelt den Server an.
-- Schemaschritt 9 (Tabelle spielzeit, neu und leer, keine bestehende Spalte angefasst). Ab dem ersten Start mit diesem Jar verweigert jedes aeltere den Start ("steht auf Schemastand 9, dieses Jar kennt nur 8") - ein Zurueckrollen der Jar-Fassung ist danach keine Option.
-- Drei geerbte Proben repariert; zwei davon prueften schon vor Teil C nichts mehr. Der Schemastand ist MAX(schritt) und keine Menge von Schritten: wer einen Schritt zum Pruefen zurueckdreht, muss alles ab ihm loeschen (schritt >= ?). Dieselbe Falle kann ein drittes Mal zuschnappen, solange migriere() mit MAX rechnet.
-- Plan nachgezogen: 8.8 ist neu (Entscheidungen mit Grund, die Stellen, an denen ein naiver Bau falsch waere, und was Teil C mit Absicht nicht baut); 8.7 trennt jetzt Start und Neuladen, weil "kein Zeitgeber gestellt" nur fuer das Neuladen gilt; Wechseldeckel und Verdienstdeckel heissen jetzt verschieden (der Plan nannte beide "Tagesdeckel", und 9.1 sagte noch "je Beruf", obwohl 8.2 seit dem 1.11. "je Spieler" entschieden hat); in 9 steht jetzt, dass die ~5 h und ~40 h gemessene Anwesenheit sind und keine Taetigkeit.
-- Pruefen, Teil C: Startprotokoll nennt die Tagesgrenze mit dem naechsten Tageswechsel in Ortszeit UND in UTC (zwei gleiche Uhrzeiten am Nachmittag heissen falsche Zone) und darunter "Spielzeittakt steht: alle 60 s (1200 Ticks) im Hauptfaden, n Spieler schon anwesend".
-- Pruefen, Teil C: /freimarken spielzeit - heute und gesamt wachsen, und die laufende Sitzung ist SOFORT nach dem Beitritt groesser 0 und steigt im Sekundentakt, obwohl nur jede Minute geschrieben wird.
-- Pruefen, Teil C: /freimarken spielzeit <spieler> nur mit freimarken.spielzeit.andere, die Vervollstaendigung bietet die Anwesenden, ein abgemeldeter Name bekommt die Absage mit Grund; auf der Konsole sagt der Befehl ohne Namen "Die Konsole spielt nicht." und mit Namen antwortet er.
-- Pruefen, Teil C: elf Minuten stillstehen - die Zahl darf nicht wachsen, die Zeile muss "wird gerade NICHT gezaehlt" sagen, und nach einem Schritt waechst sie wieder. Die elf Minuten werden NICHT nachgezahlt.
-- Pruefen, Teil C: /stop mit einem Spieler online - die Zeile in der Tabelle ist um die Sekunden seit dem letzten Takt gewachsen (0 Verlust), und das Protokoll meldet die abgerechnete Sitzung VOR dem Schliessen der Datenbank.
-- Pruefen, Teil C: Prozess hart beenden - Verlust unter einer Taktlaenge, und nach dem Neustart laeuft nichts doppelt.
-- Pruefen, Teil C: /freimarken neuladen - zeit.untaetig-minuten wirkt beim naechsten Takt, der Block "Nur beim Start gelesen" nennt Zone, Takt und den Zeitgeber, und es erscheint KEINE zweite "Spielzeittakt steht"-Zeile (die Probe, dass kein zweiter Zeitgeber entsteht).
-- Pruefen, Teil C: /mark verlauf zeigt dieselbe Ortszeit wie die Tagesgrenze - beweisen kann das nur ein Rechner, dessen Systemzone NICHT Europe/Berlin ist.
-- Pruefen, Teil C: Plugin im Betrieb ab- und wieder einschalten - die Startzeile nennt "n Spieler schon anwesend" mit n groesser 0, und die Zeit der Anwesenden laeuft weiter, ohne dass sie sich abmelden.
-- Pruefen, Teil C: Netz zur Datenbank trennen - Protokollzeile "Spielzeit nicht geschrieben: <n> Sekunden von <m> Spieler(n) sind verloren.", KEIN zweiter Versuch mit derselben Liste, und der Zeitgeber laeuft weiter (naechste Minute wieder ein Versuch).
-- Pruefen, Teil C: Mitternacht in der eingestellten Zone - zwei Zeilen fuer denselben Spieler, Summe stimmt. Ohne Warten erzwingbar, indem zeit.zone kurz auf eine Zone mit naher Mitternacht gestellt wird (Neustart noetig, die Zone ist nicht neuladbar).
-- Offen fuer den Menschen, nach Teil C: parzellen.hoechstzahl bleibt bei 4 - die Messung existiert jetzt, hat aber bis Schritt 12 keinen Verbraucher im Spiel, also hat ein Neuling weiter Buergerrechte. /spielzeit fehlt in der Befehlstabelle von Plan 11.1; wird er nachgetragen, ist der Zweig eine Zeile von einem eigenen Befehl mit Zweitnamen /playtime entfernt. Und Plan 12a.6 fehlt eine vierte Klasse fuer Werte, die aenderbar sind, aber erst nach einem Neustart wirken (zeit.zone, zeit.takt-sekunden, kasse.startguthaben, Datenbankadresse, Ankunftswelt) - heute stehen sie in keiner der drei.
-- Offen, gewollt: Die Untaetigkeitsgrenze ist eine Hoeflichkeitsregel und keine Sperre. getIdleDuration() misst Anwesenheit mit Lebenszeichen, nicht Spiel; ein Makro oder ein beschwertes Tastenbrett umgeht sie. Dagegen hilft nur eine Betrachtung des Verhaltens - das ist Teil G (Messstelle) und kein Zeitgeber.
-- ~~Teil C gegengelesen und nachgearbeitet.~~ 4.11.: Drei Urteilslinsen (Geld, Plan, Proben), jede Note 4 von 5, 17 Einwaende mit Fehlerfall und Belegstelle - alle behoben. Eine zweite Runde gegen die Nacharbeit selbst fand sieben weitere Funde: die vier mittleren behoben, einer der drei kleinen als Nebenwirkung mit erledigt. Eine dritte Runde nahm die Reparaturrunde selbst vor - siehe unten. 550 Tests (nach dem Bau waren es 522). Die Nachtraege stehen als datierte Zusaetze in Plan 8.8.
-- Behoben, mittel: zeit.untaetig-minuten kuerzer als zeit.takt-sekunden warf aktiv gespielte Zeit weg - stumm und bei jedem Takt erneut. Bei Takt 600 s und Grenze 1 min genuegte eine Minute Stillstand am Ende, um die 540 gespielten Sekunden davor mitzuverlieren, ohne eine Protokollzeile. Erlaubt ist jetzt nur eine Grenze ab dem Takt in ganzen Minuten aufgerundet - oder die 0. Die Regel steht einmal im Kern und wird an drei Stellen gefragt: Ein Wertesatz mit unpassendem Paar kommt gar nicht mehr zustande, der Leser klagt mit Grund und Mindestzahl und bleibt bei 10 min, und beim Neuladen bleibt die alte Grenze stehen, wenn sie zum LAUFENDEN Takt nicht passt (Takt und Grenze gemeinsam verkuerzt ergibt ein stimmiges Paar in der Datei und ein unstimmiges im Betrieb).
-- Behoben, mittel: Eine tote Datenbank hielt den Hauptfaden jede Taktlaenge rund 5 Sekunden an, ohne jede Spielerhandlung - beim kuerzesten erlaubten Takt die halbe Wanduhr; und vierzig Abmeldungen in einem Tick summierten vierzig Aufbaufristen ueber die Frist des Serverwaechters. Nach einem Fehlschlag setzt der Takt jetzt einige Schlaege lang das SCHREIBEN aus, auch beim Abmelden. GERECHNET wird weiter: Die Marke rueckt in jedem Schlag vor, die Zuschlaege warten, der naechste erfolgreiche Zug nimmt sie mit - verloren ist allein der eine Takt, der wirklich versucht wurde. Die Zahl der ausgesetzten Schlaege ist von der Klemme abgeleitet und steht NICHT in der config.yml: ein Schluessel dafuer waere ein Schalter zum stummen Wegwerfen von Spielzeit.
-- Preis der Sperre: Waehrend des Fensters liegen gemessene Sekunden nur im Arbeitsspeicher - bei 60 s Takt bis zu 6 Minuten je Spieler, bei 600 s bis zu 60. /stop, ein Abmelden und ein Plugin-Neustart verlieren davon nichts, ein harter Absturz oder ein Waechterkill schon. Der Preis ist nicht neu (vorher blieb die Marke stehen, dieselben Sekunden lagen auch dort im Arbeitsspeicher), nur zum ersten Mal aufgeschrieben; eingetauscht wurde, dass die Zeit eines Abgehenden nicht mehr ganz weggeworfen wird.
-- Behoben, klein: Beim Abschalten stand "Spielzeit abgerechnet: n offene Sitzung(en) weggeschrieben" auch dann, wenn nichts geschrieben wurde - genau die Zeile, die hier als Beweis fuer 0 Verlust abgehakt wird. Sie nennt jetzt zwei Zahlen: "x von y offenen Sitzung(en)". Bei toter Datenbank steht dort "0 von 3" unter der Verlustzeile; "0 von 1" kann auch harmlos sein, wenn der letzte Takt untaetig war.
-- Behoben, klein: Der Bericht behauptete fuer nicht neuladbare Schluessel "Sie gelten aus den Vorgaben des Plugins" und der Block daneben "in der Datei steht X", obwohl dort keine Zeile stand. Geltung behauptet jetzt nur der Leser und nur ueber neuladbare Schluessel ("es gilt 4"), der Block sagt "neu gelesen wurde X". Welche Schluessel nicht neuladbar sind, steht an EINER Stelle - wer einen vierten dazunimmt, traegt ihn nur dort ein.
-- Behoben, klein: Ein Beitritt setzt die Marke jetzt neu statt nur, wenn keine stand (eine ueberlebende Marke haette den Abstand zwischen zwei Sitzungen gutgeschrieben, bis zu zehn Taktlaengen und ohne Protokollzeile). Zeitwerte nimmt nur noch ganze Sekunden und ganze Minuten, damit Anzeige, Pruefung und Rechenweg nicht auseinanderlaufen koennen - eine halbe Minute galt vorher als "Regel aus". "Alles oder nichts" und der Ausnahmetyp beim Ueberlauf stehen jetzt im geteilten Vertrag der Ablage und nicht zweimal daneben; die Rangliste aus Plan 12b.3 erbt sie. Und keine Zeile der Anzeige wird mehr einzeln gesendet: eine einzeln gesendete Zeile faellt beim Umbau heraus, ohne dass eine Probe rot wird.
-- ~~Offen, klein: Anzeige, Kommentar und zwei Probennamen.~~ 4.11.: Die Anzeige nennt im Sperrfenster den Zustand statt eines Abstands, den es gerade nicht gibt; der Kommentar zu zeit.takt-sekunden nennt die rund 5 Sekunden Stillstand nicht mehr als Zahl (sie folgt aus zwei Fristen der Datenschicht und waere dort still falsch geworden); zwei Probennamen stimmen wieder mit ihren Zusicherungen.
-- ~~Offen, klein: Leseweg des Ueberlaufs.~~ 4.11.: Beide Fassungen brechen jetzt mit derselben Ausnahme ab, die Zusage steht im geteilten Vertrag der Ablage - und sie ist gegen MariaDB gemessen, nicht angenommen.
-- ~~Reparaturrunde gegengelesen.~~ 4.11.: Zwei Linsen (Verlust, Proben), je Note 4 von 5, elf Funde. Die vier mittleren nachgeprueft und behoben, keiner widerlegt; sieben kleine bleiben offen. Kein Weg im Programm verhielt sich falsch - bis auf die Zusagen in Kommentaren und Protokoll.
-- Behoben, mittel: Was ein Absturz kostet, stand an den zwei Stellen, die der Betreiber LIEST, ohne Bedingung ("bei 600 bis zu 10 Minuten je Spieler") - das gilt nur, solange die Datenbank annimmt, im Sperrfenster ist es ein Mehrfaches. config.yml und Zeitwerte nennen jetzt die Bedingung, die Verlustzeile nennt den Absturz, und eine Probe liest den ABSATZ der ausgelieferten Datei und nicht nur eine Zeile. Die Zahl der ausgesetzten Schlaege steht weiter nirgends in Text - nur die Verlustzeile rechnet sie aus.
-- Behoben, mittel: Drei Probenluecken, die einen stummen Umbau durchgelassen haetten. Der Sendeweg der Anzeige war von keiner Probe beruehrt - alle vier Zeilen konnten auf einmal herausfallen, der Spieler laese nur die Ueberschrift; das Senden steht jetzt in einer eigenen Methode, und eine Probe schreibt den Empfaenger mit. Ein zweiter Fehlschlag mit gewachsenem Stapel war nirgends geprueft - die Verlustzeile haette ein Sechstel der verlorenen Sekunden nennen koennen. Und die durchgereichte Untaetigkeit war in jeder Probe Null - die Anzeige haette "wird gezaehlt" gesagt, waehrend der Takt verwirft.
-- Offen, klein (Verlust): Die zugesicherte Obergrenze des Stapels sagt "je anwesendem Spieler", richtig ist "je Spieler, der im Fenster einmal da war" - ein Abgang hinter der Sperre leert den Stapel nicht. Und die Zahl der ausgesetzten Schlaege haengt nicht am Takt, waehrend beides, was die Sperre spart und was sie kostet, daran haengt: bei 10 s Takt ein guter Tausch, bei 600 s auf den Kopf gestellt.
-- Offen, klein (Proben): Der Wortlaut "alle 60 s" steht in keiner Zusicherung (ein Einheitenpatzer bliebe gruen). Die Wache ueber die config.yml prueft nur die erste der drei Zeilen des Satzes. Zwei von drei while(gesperrt)-Schleifen haben keine Schranke - eine nie endende Sperre laesst den Lauf haengen statt rot werden. Der leere Taktschlag, der den Stapel des letzten Abgemeldeten wegschreiben muss, ist nie geprueft. Und der Nachsatz der Verlustzeile ("wird spaeter geschrieben") ist beim Abschalten unwahr - dort gibt es kein spaeter.
-- Pruefen, Teil C (die alte Erwartung gilt nicht mehr): Netz zur Datenbank trennen und MITZAEHLEN - nach der Verlustzeile darf einige Taktlaengen lang KEINE weitere kommen, dann wieder eine. Wie viele Schlaege aussetzen, nennt die Zeile selbst. "Naechste Minute wieder ein Versuch" ist falsch geworden.
-- Pruefen, Teil C (Nacharbeit): Datenbank zurueckholen, waehrend die Sperre noch steht, und einen Spieler abmelden - seine Sekunden stehen beim naechsten Taktschlag in der Tabelle, und zu ihm darf KEINE Verlustzeile kommen. Dazu nach einem Fehlschlag /freimarken spielzeit tippen: heute und gesamt duerfen nicht stehenbleiben.
-- Pruefen, Teil C (Nacharbeit): /stop bei toter Datenbank - Verlustzeile UND darunter "Spielzeit abgerechnet: 0 von n offenen Sitzung(en) weggeschrieben.". Und /stop, nachdem die Datenbank zurueck ist, waehrend die Sperre noch steht: Es MUSS geschrieben werden.
-- Pruefen, Teil C (Nacharbeit): Proxy-Neustart oder vierzig Abgaenge auf einmal mit toter Datenbank - der Server darf nicht vom Waechter abgeschossen werden, und es steht hoechstens EINE Verlustzeile.
-- Pruefen, Teil C (Nacharbeit): Start mit einem unpassenden Paar (takt-sekunden 600, untaetig-minuten 1) - eine Klage mit Grund und "mindestens 10 Minuten", und es bleibt bei 10. Dann Takt und Grenze gemeinsam verkuerzen (600/10 auf 60/1) und neuladen: keine rote Fehlermeldung im Befehl, der Block "Nur beim Start gelesen" hat vier Zeilen, die vierte nennt zeit.untaetig-minuten als nicht uebernommen - nach einem Neustart gilt beides.
-- Pruefen, Teil C (Nacharbeit): /freimarken neuladen mit fehlendem zeit.zone - nirgends darf die Vorgabe als geltend behauptet werden, der Block sagt "es gilt weiter <laufende Zone>, neu gelesen wurde Europe/Berlin". Mit fehlendem parzellen.hoechstzahl muss die Zeile wieder "es gilt 4" nennen.
-- Pruefen, Teil C (Nacharbeit): /freimarken spielzeit - der Hinweis zum Altbestand ist jetzt grau wie die drei Zeilen darueber und nicht mehr dunkelgrau abgesetzt. Wenn die Absetzung gewollt ist, braucht es eine Farbe je Zeile - eine Entscheidung, keine Nachziehung.
-- Pruefen, Teil C (letzte Runde): Nach einem Fehlschlag der Datenbank /freimarken spielzeit tippen - die dritte Zeile muss auf "der naechste Schreibzug wartet auf die Datenbank - gezaehlt wird weiter, nachgeschrieben wird alles." enden und NICHT auf "das geschieht alle 60 s".
-- Pruefen, Teil C (letzte Runde): Die Verlustzeile im Protokoll nennt jetzt den Absturz ("Stuerzt der Server in diesem Fenster ab, sind sie weg ...") und verspricht nicht mehr unbedingt, dass nichts verloren geht. Einmal lesen und abhaken.
-- Pruefen, Teil C (letzte Runde): Eine NEU angelegte config.yml nennt die Stillstandsdauer nicht mehr als Zahl und den Absturzverlust mit seiner Bedingung. Eine schon ausgelieferte Datei bekommt den neuen Text nicht - dort steht weiter der alte Absatz.
-- Sprachdatei vorgezogen - Plan 13 hatte sie geparkt, aber jeder Schritt bis dahin baut neue harte Texte ein. Entschieden: Worte, Farben und Aufbau wie im MOTD-Editor, also Farbtags mitten im Satz und Einzug, Spaltenbreite und Umbruch ebenfalls im Satz. Zwei Dateien: sprache-vorlage.yml wird bei jedem Start neu geschrieben und zeigt jeden Satz mit seinen Platzhaltern, sprache.yml wird leer ausgeliefert und nimmt nur die eigenen Aenderungen. Alles oder nichts wie die Wirtschaftswerte: stimmt eine Zeile nicht, gilt weiter, was bisher galt.
-- ~~Sprachdatei Schritt 1: Fundament.~~ 4.11.: Vertrag, Verzeichnis, Halter, Leser und Ausgang nach dem Muster von Wirtschaftswerte/Wirtschaftsstand/Wirtschaftsliste, dazu sieben Bereichsaufzaehlungen fuer die naechsten Schritte. MiniMessage als Farbform - erlaubt sind nur Farbe und Hervorhebung, denn <click> und <hover> koennten einen Befehl im Namen des Spielers ausloesen. 18 Schluessel ziehen schon mit um, beide Gruppen aus einem Probengrund: /mark verlauf samt den sechs Buchungsgruenden (sonst pruefte die Vollstaendigkeitsprobe eine leere Liste) und die neun Befehlsbeschreibungen in /help (sonst waere die Zusicherung ueber sie leer), dazu Waehrungswort und Zeitmuster. Alle elf Sender sind verdrahtet. 601 Tests (vorher 550).
-- Behoben, klein: Der Kopf der Vorlage nannte die Umbruchmarke, ohne sie zu zeigen - und die Backslashregel direkt darueber legte die falsche Schreibweise nahe (zwei statt einem, weil die spitze Klammer zwei braucht). Beides steht jetzt mit Beispiel im Kopf, und eine Probe laesst dieses Beispiel durch den echten Weg laufen: YAML, Tagwache, MiniMessage, Teilen - zwei Zeilen, beide in der Farbe des Satzes.
-- Behoben, mittel: waehrung.betrag stand nach dem Umzug an ZWEI Orten - die Datei und, fuer fuenfzehn weitere Stellen, Betraege.mark(...) im Programm. Wer das Wort auf "Taler" geaendert haette, laese im Spiel beides nebeneinander, ohne eine Zeile, die das sagt. Der Kopf des Schluessels warnt jetzt davor, und eine Probe haelt BEIDE Richtungen: solange es einen zweiten Ort gibt, muss die Warnung stehen - sobald es keinen mehr gibt, muss sie weg.
-- Offen, Sprachdatei: die Textumzuege in den Schritten 2 bis 7 - /parzelle (etwa 100 Schluessel), /tpa, /spielzeit samt Spielzeittext, die Reisen, die Wachen und /freimarken selbst. Je Schritt eine Bereichsaufzaehlung und eine Dateigruppe. Ein Satz steht immer an genau einem Ort, nie an keinem und nie an zwei.
-- Pruefen, Sprachdatei: Nach dem ersten Start liegen sprache-vorlage.yml und sprache.yml im Plugin-Ordner, und /mark verlauf sieht aus wie vorher. Dann eine Zeile aus der Vorlage nach sprache.yml kopieren - samt aller Ebenen darueber -, die Farbe aendern und /freimarken neuladen: die Antwort nennt, wie viele Saetze von dir sind.
-- Pruefen, Sprachdatei: Eine kaputte Zeile in sprache.yml, etwa ein offenes <gold> - GAR NICHTS wird uebernommen, die Klage nennt Zeile und Spalte, und die bisherigen Saetze gelten weiter.
-- Pruefen, Sprachdatei: Die neun Befehlsbeschreibungen in /help kommen aus der Datei, aendern sich aber erst nach einem Neustart. Das sagt die Antwort auf /freimarken neuladen selbst - wenn nicht, ist die Zeile falsch und nicht der Befehl.
-- Offen, Sprachdatei (benannt, nicht im Spiel geprueft): dass schreibeVorlage die Vorlage bei jedem Start wirklich ueberschreibt und sprache.yml eine vorhandene Datei nie antastet; und dass SnakeYAML zur Laufzeit unter Paper erreichbar ist - beim Uebersetzen und in den Proben ist es belegt, im Spiel nicht. Dafuer gibt es eine Wache: schlaegt das Laden fehl, gelten die ausgelieferten Saetze, und das Plugin stuerzt nicht ab.
-- Offen aus dem Pruefauftrag, vor Schritt 7 zu klaeren: Die Preisstaffel steht als Konstante im Kern (25.000 / 10.000) statt in der config.yml; /freimarken neuladen sagt Plan 12a zu, gibt es aber nicht; das Startguthaben wirkt rueckwirkend, weil MariaKasse ohne Kassenzeile den eingestellten Wert zurueckgibt und die Zeile erst bei der ersten Buchung entsteht; parzellen.hoechstzahl: 4 gibt jedem Neuling das, was Plan 9 dem Buerger nach 40 Stunden gibt.
-- Offen: /rang gibt es noch nicht. Sobald er da ist, gehoert er ins Beispiel von hinweise.rang-werbung in der config.yml - bis dahin nennt das Beispiel den Weg (rund 40 Spielstunden und eine bebaute Parzelle) statt eines Befehls, den es nicht gibt.
-- Aufraeumen, wenn Schritt 6 abgeschlossen ist: Probeserver-Ordner im Temp loeschen (config.yml mit DB-Passwort im Klartext) und die Testdaten in der echten DB zuruecksetzen - die Parzellen 0/-1 (id 108) und -1/-1 (id 111) waren nur fuer den Test, und Thormak2002 hat Mark gutgeschrieben bekommen (Stand 200.000).
-- Offen, niedrig: Die Spaltenschleife kann im aeussersten Fall ~707.000 Blockzugriffe in einem Befehl machen (vier Felder, voll bebaut und tief ausgehoben), und die Warnung ist ohne Bestaetigung beliebig oft ausloesbar. Ein Hohlraum unter einer stehengelassenen Decke wird bewusst nicht gefunden - siehe Plan 6.3.
+- ~~Teil B gegengelesen~~ 2.11.
+- Kaputte config.yml: Neuladen uebernimmt nichts und nennt die fehlerhafte Zeile, beim Start schaltet sich das Plugin ab.
+- ~~Schritt 7, Teil C: Spielzeit und Tagesgrenze.~~ 3.11. Plan 8.8.
+- Neue Schluessel: zeit.zone (Vorgabe Europe/Berlin), zeit.takt-sekunden (10 bis 600, Vorgabe 60), zeit.untaetig-minuten (0 bis 1440, Vorgabe 10; die 0 heisst "alles zaehlt"). Nur untaetig-minuten ist neuladbar.
+- zeit.zone braucht einen Zonennamen - ein fester Versatz wie UTC+2 wird abgewiesen, er kennt keine Sommerzeit.
+- Der Tag in der Tabelle spielzeit ist die einzige Spalte im Schema, die NICHT UTC ist, sondern gerechnetes Ortsdatum - nicht zurueckrechnen.
+- Spielzeit: kein Setzen von Hand, kein Altbestand - jeder faengt bei 0 an.
+- /freimarken spielzeit [<spieler>] mit zwei Rechten (freimarken.spielzeit true, freimarken.spielzeit.andere op); fremde Spielzeit nur fuer Anwesende.
+- Schemaschritt 9 (Tabelle spielzeit, neu und leer). Ab dem ersten Start mit diesem Jar verweigert jedes aeltere den Start - ein Zurueckrollen der Jar-Fassung ist danach keine Option.
+- Warnung: Der Schemastand ist MAX(schritt) - wer einen Schritt zum Pruefen zurueckdreht, muss alles ab ihm loeschen. Die Falle hat schon zweimal zugeschnappt.
+- Jede Antwort auf /freimarken neuladen endet mit dem Block "Nur beim Start gelesen": Datenbank, Welten, Ankunftswelt, Startguthaben und die Zahlen, die im Programm bleiben (Parzelle 64, Weg 7, Boden 62, Deckel 40).
+- Pruefen, Teil C: Startprotokoll nennt die Tagesgrenze in Ortszeit UND in UTC (zwei gleiche Uhrzeiten am Nachmittag heissen falsche Zone) und darunter den Spielzeittakt.
+- Pruefen, Teil C: /freimarken spielzeit - heute und gesamt wachsen, die laufende Sitzung steigt im Sekundentakt; nach elf Minuten Stillstand waechst nichts ("wird gerade NICHT gezaehlt"), nach einem Schritt wieder. Nichts wird nachgezahlt.
+- Pruefen, Teil C: /freimarken spielzeit <spieler> nur mit freimarken.spielzeit.andere; ein abgemeldeter Name bekommt die Absage; auf der Konsole ohne Namen "Die Konsole spielt nicht.".
+- Pruefen, Teil C: /stop mit einem Spieler online - die Tabellenzeile ist um die Sekunden seit dem letzten Takt gewachsen (0 Verlust); Prozess hart beenden - Verlust unter einer Taktlaenge, nach dem Neustart laeuft nichts doppelt.
+- Pruefen, Teil C: /freimarken neuladen - zeit.untaetig-minuten wirkt beim naechsten Takt, und es erscheint KEINE zweite "Spielzeittakt steht"-Zeile.
+- Pruefen, Teil C: /mark verlauf zeigt dieselbe Ortszeit wie die Tagesgrenze - beweisbar nur auf einem Rechner, dessen Systemzone NICHT Europe/Berlin ist.
+- Pruefen, Teil C: Plugin im Betrieb ab- und wieder einschalten - die Startzeile nennt "n Spieler schon anwesend", die Zeit der Anwesenden laeuft weiter.
+- Pruefen, Teil C: Mitternacht in der eingestellten Zone - zwei Zeilen fuer denselben Spieler, Summe stimmt. Erzwingbar ueber zeit.zone (Neustart noetig).
+- Offen fuer den Menschen: parzellen.hoechstzahl bleibt bei 4, ein Neuling hat weiter Buergerrechte (bis Schritt 12).
+- Erst nach einem Neustart wirksam: zeit.zone, zeit.takt-sekunden, kasse.startguthaben, Datenbankadresse, Ankunftswelt.
+- Offen, gewollt: Die Untaetigkeitsgrenze ist eine Hoeflichkeitsregel, keine Sperre - ein Makro umgeht sie. Dagegen hilft nur Teil G (Messstelle).
+- ~~Teil C gegengelesen und nachgearbeitet.~~ 4.11.
+- zeit.untaetig-minuten muss mindestens so gross sein wie zeit.takt-sekunden (ganze Minuten, aufgerundet) - oder 0. Sonst Klage mit Mindestzahl, beim Neuladen bleibt die alte Grenze.
+- Nach einem Fehlschlag setzt der Takt einige Schlaege lang das SCHREIBEN aus; gerechnet wird weiter, der naechste erfolgreiche Zug nimmt die Zuschlaege mit.
+- Preis der Sperre: Im Sperrfenster liegen gemessene Sekunden nur im Arbeitsspeicher - bei 60 s Takt bis zu 6 Minuten, bei 600 s bis zu 60, je Spieler, der im Fenster einmal da war (ein Abgang leert den Stapel nicht). Ein Absturz oder Waechterkill verliert sie.
+- ~~Offen, klein: Leseweg des Ueberlaufs.~~ 4.11.
+- Offen, klein: Die Zahl der ausgesetzten Schlaege haengt nicht am Takt - bei 10 s ein guter Tausch, bei 600 s auf den Kopf gestellt.
+- Pruefen, Teil C: Netz zur Datenbank trennen und MITZAEHLEN - eine Verlustzeile, dann einige Taktlaengen lang KEINE weitere, dann wieder eine. Wie viele Schlaege aussetzen, nennt die Zeile selbst.
+- Pruefen, Teil C: Datenbank zurueckholen, waehrend die Sperre steht, und einen Spieler abmelden - seine Sekunden stehen beim naechsten Taktschlag in der Tabelle, KEINE Verlustzeile zu ihm; danach duerfen heute und gesamt nicht stehenbleiben.
+- Pruefen, Teil C: /stop bei toter Datenbank - Verlustzeile UND "0 von n offenen Sitzung(en) weggeschrieben" ("0 von 1" kann harmlos sein, wenn der letzte Takt untaetig war). Mit zurueckgeholter Datenbank bei stehender Sperre MUSS geschrieben werden.
+- Pruefen, Teil C: Proxy-Neustart oder vierzig Abgaenge auf einmal mit toter Datenbank - der Server darf nicht vom Waechter abgeschossen werden, hoechstens EINE Verlustzeile.
+- Pruefen, Teil C: Start mit unpassendem Paar (takt-sekunden 600, untaetig-minuten 1) - Klage mit "mindestens 10 Minuten", es bleibt bei 10. Dann beides gemeinsam auf 60/1 verkuerzen und neuladen: der Block nennt zeit.untaetig-minuten als nicht uebernommen.
+- Pruefen, Teil C: /freimarken neuladen mit fehlendem zeit.zone - der Block sagt "es gilt weiter <laufende Zone>, neu gelesen wurde Europe/Berlin". Mit fehlendem parzellen.hoechstzahl "es gilt 4".
+- Pruefen, Teil C: /freimarken spielzeit - der Hinweis zum Altbestand ist jetzt grau wie die Zeilen darueber. Soll er abgesetzt bleiben, braucht es eine Farbe je Zeile - eine Entscheidung.
+- Pruefen, Teil C: Nach einem Fehlschlag /freimarken spielzeit - die dritte Zeile muss auf "wartet auf die Datenbank" enden und NICHT auf "das geschieht alle 60 s".
+- Pruefen, Teil C: Die Verlustzeile nennt jetzt den Absturz; eine NEU angelegte config.yml nennt die Stillstandsdauer nicht mehr als Zahl und den Absturzverlust mit Bedingung - eine schon ausgelieferte Datei bekommt den neuen Text nicht.
+- Sprachdatei vorgezogen [entschieden]: Worte, Farben und Aufbau wie im MOTD-Editor. sprache-vorlage.yml wird bei jedem Start neu geschrieben, sprache.yml nimmt nur die eigenen Aenderungen. Alles oder nichts.
+- ~~Sprachdatei Schritt 1: Fundament.~~ 4.11.: MiniMessage, erlaubt sind nur Farbe und Hervorhebung (<click> und <hover> koennten einen Befehl im Namen des Spielers ausloesen). 18 Schluessel sind umgezogen.
+- ~~Sprachdatei Schritt 2: /parzelle.~~ 4.11.: 104 Schluessel dazu, die Datei traegt jetzt 122 Saetze. /parzelle nennt keine Farbe mehr selbst.
+- Entscheidung, Sprachdatei: Sechs Saetze sagen bei der Anzahl 1 die Mehrzahl ('aus 1 Feldern') - so sieht es heute aus. Eine Einzahlform waere besser, aendert aber das Bild.
+- Warnung: waehrung.betrag steht an ZWEI Orten - in der Datei und, fuer die zwei Preiszeilen von /freimarken, im Programm. Wer das Wort aendert, liest im Spiel beides nebeneinander.
+- Offen, Sprachdatei: die Textumzuege in den Schritten 3 bis 8 - /tpa, /spielzeit, die Reisen, die Wachen und /freimarken selbst. Ein Satz steht immer an genau einem Ort - nie an keinem und nie an zwei.
+- Pruefen, Sprachdatei: Nach dem ersten Start liegen beide Dateien im Plugin-Ordner, /mark verlauf sieht aus wie vorher. Dann eine Zeile samt aller Ebenen darueber nach sprache.yml kopieren, Farbe aendern, /freimarken neuladen: die Antwort nennt, wie viele Saetze von dir sind.
+- Pruefen, Sprachdatei: Eine kaputte Zeile in sprache.yml, etwa ein offenes <gold> - GAR NICHTS wird uebernommen, die Klage nennt Zeile und Spalte, die bisherigen Saetze gelten weiter.
+- Pruefen, Sprachdatei: Die neun Befehlsbeschreibungen in /help kommen aus der Datei, aendern sich aber erst nach einem Neustart.
+- Offen, Sprachdatei (nicht im Spiel geprueft): dass die Vorlage bei jedem Start ueberschrieben wird, sprache.yml nie angetastet, und dass SnakeYAML unter Paper zur Laufzeit erreichbar ist.
+- Offen: /rang gibt es noch nicht. Sobald er da ist, gehoert er ins Beispiel von hinweise.rang-werbung in der config.yml.
+- Aufraeumen, wenn Schritt 6 abgeschlossen ist: Probeserver-Ordner im Temp loeschen (Zugangsdaten im Klartext) und die Testdaten in der echten DB zuruecksetzen - die Parzellen 0/-1 (id 108) und -1/-1 (id 111) waren nur fuer den Test, Thormak2002 steht auf 200.000 Mark.
+- Offen, niedrig: Die Spaltenschleife kann im aeussersten Fall ~707.000 Blockzugriffe in einem Befehl machen, und die Warnung ist ohne Bestaetigung beliebig oft ausloesbar. Ein Hohlraum unter einer stehengelassenen Decke wird bewusst nicht gefunden.
 - Offen (eigene Entscheidung): Ein abgebrochener Zurueckbau laesst sich nicht nachholen - die Gruppe ist in der Ablage weg, Gras bleibt auf oeffentlichem Weg liegen. Braeuchte einen Befehl, der die Welt der Ablage nachzieht.
-- ~~CHECK-Bedingung (x IS NULL) = (z IS NULL).~~ 31.10. als Schemaschritt 6 gebaut. Die frühere Notiz war falsch: MariaDB 13.0 nimmt ADD CONSTRAINT IF NOT EXISTS für CHECK sehr wohl an - geprüft, zweimal hintereinander, mit Verhaltensprobe.
-- §4.2 und §14 verlangen "Welt != Code": Weltschlüssel und Rasterplan stehen fest im Code, config.yml hat keinen Welt-Abschnitt. Vor Schritt 3 (acht Welten) umstellen.
+- ~~CHECK-Bedingung (x IS NULL) = (z IS NULL).~~ 31.10. als Schemaschritt 6 gebaut.
+- Rasterplan und Weltschlüssel stehen weiter fest im Code (§4.2 und §14 verlangen "Welt != Code"); die Weltenliste steht inzwischen in der config.yml.
 - Noch nicht geschützt (Weltregeln, kein Spielerhandeln): Explosionen, Feuerausbreitung, Kolben über die Grenze, Flüssigkeiten von außen, Trichter in fremde Kisten.
-- Datenbankzugriffe laufen im Hauptfaden. Zeitgrenzen sind gesetzt (socketTimeout 5 s) und der Schutz scheitert geschlossen, aber ein Wiederholungsversuch für Leseoperationen fehlt - ein stiller Verbindungsabbruch kostet eine Absage.
+- Datenbankzugriffe laufen im Hauptfaden. Zeitgrenzen sind gesetzt (5 s) und der Schutz scheitert geschlossen, aber ein Wiederholungsversuch für Leseoperationen fehlt - ein stiller Verbindungsabbruch kostet eine Absage.
 - Gradle auf der Freigabe: nach "clean" scheitert der nächste Bau daran, dass ein gelöschtes Verzeichnis noch nicht weg ist. Fehlende build-Verzeichnisse von Hand anlegen, dann geht es.

@@ -22,6 +22,29 @@ import java.util.Set;
 enum MarkSatz implements Satz {
 
     /**
+     * Der Stand - die erste der zwei Zeilen von {@code /mark}.
+     *
+     * <p>Mehrfarbig und darum EINE Zeile der Datei: Der Betrag ist golden, der Rest grau,
+     * und das anders gefaerbte Stueck ist ein WERT (Bauplan 7). Wer den Satz umstellt,
+     * braucht dafuer keinen zweiten Schluessel.
+     *
+     * <p>Diese vier Saetze kamen mit Zug 2b von Schritt 2 dazu und nicht mit Schritt 1:
+     * Sie entstehen in {@code ParzellenBefehle}, und aus dieser Datei musste am Ende jede
+     * Farbe verschwinden. Der Bereich entscheidet sich am Befehl, den der Betreiber
+     * TIPPT - er tippt {@code /mark}, also sucht er unter {@code mark.} (Bauplan 3).
+     */
+    STAND("mark.stand", Art.SATZ, "betrag"),
+
+    /** Die zweite Zeile von {@code /mark}: der Hinweis auf den Verlauf. */
+    VERLAUF_HINWEIS("mark.verlauf-hinweis", Art.SATZ),
+
+    /** {@code /mark verlauf} ohne eine einzige Buchung. */
+    VERLAUF_LEER("mark.verlauf.leer", Art.SATZ),
+
+    /** Der Kopf ueber den Buchungen. */
+    VERLAUF_KOPF("mark.verlauf.kopf", Art.SATZ),
+
+    /**
      * Die eine Zeile von {@code /mark verlauf} - mit Einzug und Farbe IM Satz.
      *
      * <p>Bis zum 04.11.2026 gab {@code Verlaufszeile.text} eine Zeichenkette zurueck, und

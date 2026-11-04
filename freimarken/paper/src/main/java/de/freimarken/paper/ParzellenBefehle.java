@@ -8,6 +8,7 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Rasterplan;
@@ -17,6 +18,8 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.Collection;
 import java.time.Duration;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,7 +28,6 @@ import java.util.function.IntSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
@@ -161,7 +163,8 @@ final class ParzellenBefehle {
                                 .then(Commands.argument("x", IntegerArgumentType.integer())
                                         .then(Commands.argument("z",
                                                         IntegerArgumentType.integer())
-                                                .executes(this::aufgeben)))))
+                                                .executes(z -> mitNummer(z,
+                                                        this::aufgeben))))))
                 .then(zusammenlegenZweig())
                 .then(Commands.literal("auftrennen")
                         // Ohne weiteres Wort loest sich das Feld heraus, auf dem der
@@ -175,7 +178,8 @@ final class ParzellenBefehle {
                                 .then(Commands.argument("x", IntegerArgumentType.integer())
                                         .then(Commands.argument("z",
                                                         IntegerArgumentType.integer())
-                                                .executes(this::herausloesen))))
+                                                .executes(z -> mitNummer(z,
+                                                        this::herausloesen)))))
                         .then(Commands.literal("alles")
                                 .executes(fuerSpieler(this::warneVorAuftrennen))
                                 .then(Commands.literal("bestaetigen")
@@ -183,22 +187,17 @@ final class ParzellenBefehle {
                                                         IntegerArgumentType.integer())
                                                 .then(Commands.argument("z",
                                                                 IntegerArgumentType.integer())
-                                                        .executes(this::auftrennen))))))
+                                                        .executes(z -> mitNummer(z,
+                                                                this::auftrennen)))))))
                 .build();
     }
 
     LiteralCommandNode<CommandSourceStack> mark() {
         return Commands.literal("mark")
                 .requires(quelle -> quelle.getExecutor() instanceof Player)
-                .executes(fuerSpieler(spieler -> {
-                    spieler.sendMessage(Component.text("Du hast ", NamedTextColor.GRAY)
-                            .append(Component.text(
-                                    Betraege.mark(buch.kasse().guthaben(spieler.getUniqueId())),
-                                    NamedTextColor.GOLD))
-                            .append(Component.text(".", NamedTextColor.GRAY)));
-                    spieler.sendMessage(Component.text("/mark verlauf zeigt die letzten"
-                            + " Buchungen.", NamedTextColor.DARK_GRAY));
-                }))
+                .executes(fuerSpieler(spieler -> markZeilen(sprache,
+                        buch.kasse().guthaben(spieler.getUniqueId()))
+                        .forEach(spieler::sendMessage)))
                 // Der Verlauf haengt am vorhandenen /mark und bekommt keinen eigenen
                 // Befehl: Zwei Befehle, die denselben Stand zeigen, laufen eines Tages
                 // auseinander. Mit /konto (Plan 11.1: zahlen, tauschen) wird /mark sein
@@ -206,6 +205,66 @@ final class ParzellenBefehle {
                 .then(Commands.literal("verlauf")
                         .executes(fuerSpieler(this::zeigeVerlauf)))
                 .build();
+    }
+
+    // --- Die Naht: reine Methoden, die nur Zeilen bauen ------------------------
+    //
+    // Je Zweig eine Methode, die aus einfachen Werten eine List<Component> baut - ohne
+    // Player, ohne Bukkit, ohne Besitzbuch. Der Zweig holt die Werte und sendet die
+    // Liste, nichts weiter. Der Grund steht im Projekt schon einmal, im Javadoc von
+    // SpielzeitBefehle.sende: "damit eine Probe eine Audience mitschreiben lassen kann:
+    // Geprueft ist damit nicht nur, WAS in den Zeilen steht, sondern auch, DASS sie
+    // gesendet werden." Dasselbe gilt hier, nur eine Stufe strenger - eine Probe braucht
+    // nicht einmal eine Audience.
+    //
+    // WAS NICHT MITWANDERT: eine Wache, die entscheidet, OB ueberhaupt gesendet wird,
+    // bleibt im Zweig (Bauplan 9a und 5). Und was im Zweig teuer ist - ein Blick in die
+    // Kasse, in die Ablage oder in die Welt - bleibt dort, wo es heute steht. Sonst
+    // aendert sich nicht der Wortlaut, aber der Augenblick, in dem der Spieler ihn liest.
+    //
+    // Der Parameter "Sprache sprache" steht in jeder Signatur, auch wo die Methode ihn
+    // noch nicht braucht: Beim Umzug der Saetze aendert sich dann nur der Rumpf und
+    // keine Aufrufstelle.
+
+    /**
+     * Der Stand und der Hinweis auf den Verlauf - die zwei Zeilen von {@code /mark}.
+     *
+     * <p>Der Betrag kommt ueber {@link Sprache#betrag} aus {@code waehrung.betrag} - wie
+     * jeder Betrag dieser Datei. Hier stand das Wort hart aus {@link Betraege}, und damit
+     * trugen die zwei Zeilen desselben Befehls zwei verschiedene Geldwege: Zeile 1 das Wort
+     * aus dem Programm, die Verlaufszeile darunter das aus der Datei. Zeichengleich war es
+     * nur, solange niemand das Wort aendert - und wer es aendert, liest "25.000 Mark" ueber
+     * "(Stand 25.000 FM)".
+     *
+     * @param guthaben was der Spieler hat, schon aus der Kasse geholt
+     */
+    static List<Component> markZeilen(Sprache sprache, long guthaben) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(MarkSatz.STAND, 1L,
+                Einsatz.von("betrag", sprache.betrag(guthaben))));
+        zeilen.addAll(sprache.bau(MarkSatz.VERLAUF_HINWEIS, 1L, Einsatz.keine()));
+        return List.copyOf(zeilen);
+    }
+
+    /**
+     * Der Verlauf: entweder die eine Zeile "noch nichts" oder der Kopf und je Buchung
+     * eine Zeile.
+     *
+     * <p>Die Wache auf die leere Liste steht hier und nicht im Zweig, weil in BEIDEN
+     * Faellen gesendet wird - sie entscheidet, WAS der Spieler liest, und nicht, OB.
+     */
+    static List<Component> verlaufZeilen(Sprache sprache, List<Buchung> buchungen,
+                                         ZoneId zone) {
+        if (buchungen.isEmpty()) {
+            return sprache.bau(MarkSatz.VERLAUF_LEER, 1L, Einsatz.keine());
+        }
+        List<Component> zeilen = new ArrayList<>(sprache.bau(MarkSatz.VERLAUF_KOPF, 1L,
+                Einsatz.keine()));
+        // Einzug und Farbe stehen seit dem 04.11.2026 IM Satz mark.verlauf.zeile und
+        // nicht mehr hier: Verlaufszeile gibt ein fertiges Component zurueck. Hier stand
+        // Component.text("  " + text, GRAY) - zwei Leerzeichen und eine Farbe, die der
+        // Betreiber nicht erreichen konnte.
+        buchungen.forEach(buchung -> zeilen.add(Verlaufszeile.zeile(sprache, buchung, zone)));
+        return zeilen;
     }
 
     /**
@@ -216,32 +275,27 @@ final class ParzellenBefehle {
      * ausserdem Pflicht - ein unbegrenzter Verlauf waere auf einem Server, der Monate
      * laeuft, eine Abfrage, die niemand gewollt hat.
      */
-    private void zeigeVerlauf(Player spieler) {
-        var zeilen = buch.kasse().verlauf(spieler.getUniqueId(), VERLAUF_ZEILEN);
-        if (zeilen.isEmpty()) {
-            spieler.sendMessage(Component.text("Noch keine Buchungen.",
-                    NamedTextColor.GRAY));
-            return;
-        }
-        spieler.sendMessage(Component.text("Deine letzten Buchungen", NamedTextColor.GOLD));
+    void zeigeVerlauf(Player spieler) {
         // Die EINE Zone des Servers - dieselbe, in der die Tagesgrenze liegt. Hier stand
         // bis zum 03.11.2026 ZoneId.systemDefault(), mit der Zusage, dass die Zone aus der
         // Einstellungsdatei kommt, sobald es sie gibt. Jetzt gibt es sie. Stehengeblieben
         // waere sie eine zweite Quelle: Auf einem Rechner, dessen Systemzone nicht die
         // eingestellte ist, zeigte diese Zeile eine andere Ortszeit als die Tagesgrenze,
         // mit der dieselbe Buchung gezaehlt wurde.
-        var zone = wirtschaft.werte().zeit().zone();
-        // Einzug und Farbe stehen seit dem 04.11.2026 IM Satz mark.verlauf.zeile und
-        // nicht mehr hier: Verlaufszeile gibt ein fertiges Component zurueck. Hier stand
-        // Component.text("  " + text, GRAY) - zwei Leerzeichen und eine Farbe, die der
-        // Betreiber nicht erreichen konnte.
-        zeilen.forEach(zeile -> spieler.sendMessage(
-                Verlaufszeile.zeile(sprache, zeile, zone)));
+        verlaufZeilen(sprache, buch.kasse().verlauf(spieler.getUniqueId(), VERLAUF_ZEILEN),
+                wirtschaft.werte().zeit().zone()).forEach(spieler::sendMessage);
     }
 
     // --- Die einzelnen Befehle -------------------------------------------------
+    //
+    // Die Zweige sind paketweit sichtbar und nicht privat, und zwar genau fuer EINE
+    // Probe: AufrufstelleTest schreibt mit einer Audience mit und prueft, WELCHE Methode
+    // ein Zweig waehlt, WAS er ihr uebergibt und in welcher Reihenfolge er sendet. Die
+    // reinen Methoden darunter deckten das nicht - sie werden unmittelbar aufgerufen, und
+    // ein vertauschtes Argument oder ein verwechselter Zweig blieb gruen. Wer einen Zweig
+    // wieder privat macht, nimmt dieser Probe ihren Griff.
 
-    private void zeigeInfo(Player spieler) {
+    void zeigeInfo(Player spieler) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
             return;
@@ -259,83 +313,158 @@ final class ParzellenBefehle {
             // nebenan fremde Haende abweist - zwei Antworten auf dieselbe Frage.
             Optional<Parzelle> gruppenboden = buch.zustaendigerBesitz(welt, x, z);
             if (gruppenboden.isPresent()) {
-                spieler.sendMessage(Component.text("Gruppenboden - war einmal Weg",
-                        NamedTextColor.GOLD));
-                spieler.sendMessage(Component.text("  Eigentuemer: ", NamedTextColor.GRAY)
-                        .append(Component.text(namen(gruppenboden.get().eigentuemer()),
-                                NamedTextColor.WHITE)));
+                gruppenbodenZeilen(sprache, namen(gruppenboden.get().eigentuemer()))
+                        .forEach(spieler::sendMessage);
                 return;
             }
-            spieler.sendMessage(Component.text(
-                    feld == Rasterplan.Feld.WEG
-                            ? "Du stehst auf einem Weg - der gehoert allen."
-                            : "Du stehst auf einer Mauer - die gehoert zur Strasse.",
-                    NamedTextColor.GRAY));
+            ohneParzelleZeilen(sprache, feld == Rasterplan.Feld.WEG)
+                    .forEach(spieler::sendMessage);
             return;
         }
 
         int px = plan.parzelleX(x);
         int pz = plan.parzelleZ(z);
-        spieler.sendMessage(Component.text("Parzelle " + px + "/" + pz, NamedTextColor.GOLD));
+        // Der Kopf geht VOR dem Blick in die Ablage hinaus, genau wie bisher: Was der
+        // Spieler zuerst liest, haengt nicht davon ab, wie lange eine Abfrage braucht.
+        infoKopfZeilen(sprache, px, pz).forEach(spieler::sendMessage);
 
         Optional<Parzelle> gefunden = buch.parzelleAn(welt, x, z);
         if (gefunden.isEmpty()) {
             if (!buch.grenze().enthaeltParzelle(px, pz)) {
-                spieler.sendMessage(Component.text(
-                        "  ausserhalb der Marktstadt - wird nicht vergeben",
-                        NamedTextColor.GRAY));
+                ausserhalbZeilen(sprache).forEach(spieler::sendMessage);
                 return;
             }
             long preis = preise().preisFuerNaechste(anzahl(spieler));
             boolean amLimit = anzahl(spieler) >= hoechstzahl(spieler);
-            // Der Preis bleibt stehen, die Einladung nicht. Wer vier von vier Parzellen
-            // hat, soll ruhig sehen, was die fuenfte kosten WUERDE - aber "/parzelle
-            // nehmen" darunter ist eine Aufforderung, die an derselben Stelle mit einer
-            // Absage endet. Genau das ist der Unterschied zwischen Werbung und Irrefuehrung.
-            spieler.sendMessage(Component.text("  frei · ", NamedTextColor.GRAY)
-                    .append(Component.text(preis == 0L ? "gratis" : Betraege.mark(preis),
-                            amLimit ? NamedTextColor.GRAY : NamedTextColor.GREEN))
-                    .append(amLimit
-                            ? Component.empty()
-                            : Component.text(" · /parzelle nehmen", NamedTextColor.DARK_GRAY)));
-            if (amLimit) {
-                spieler.sendMessage(Component.text("  Dein Rang erlaubt "
-                        + hoechstzahl(spieler)
-                        + (hoechstzahl(spieler) == 1 ? " Parzelle" : " Parzellen")
-                        + ", und so viele hast du schon.", NamedTextColor.RED));
-                werbung(spieler);
-            }
+            freiZeilen(sprache, preis, amLimit, hoechstzahl(spieler),
+                    wirtschaft.werte().rangWerbung()).forEach(spieler::sendMessage);
             return;
         }
 
         Parzelle parzelle = gefunden.get();
-        spieler.sendMessage(Component.text("  Eigentuemer: ", NamedTextColor.GRAY)
-                .append(Component.text(namen(parzelle.eigentuemer()), NamedTextColor.WHITE)));
-        spieler.sendMessage(Component.text("  Gekauft fuer: ", NamedTextColor.GRAY)
-                .append(Component.text(parzelle.preis() == 0L
-                        ? "gratis (die erste)" : Betraege.mark(parzelle.preis()),
-                        NamedTextColor.WHITE)));
-        if (!parzelle.mitbauer().isEmpty()) {
-            spieler.sendMessage(Component.text("  Mitbauer: ", NamedTextColor.GRAY)
-                    .append(Component.text(namenListe(parzelle.mitbauer()), NamedTextColor.WHITE)));
-        }
         boolean meine = parzelle.gehoert(spieler.getUniqueId());
-        if (parzelle.hatElternteil()) {
-            spieler.sendMessage(Component.text("  Teil einer Gruppe aus "
-                    + buch.gruppenFelder(welt, x, z).size() + " Feldern",
-                    NamedTextColor.WHITE));
-            if (meine) {
-                spieler.sendMessage(Component.text(
-                        "  /parzelle auftrennen        dieses Feld herausloesen",
-                        NamedTextColor.DARK_GRAY));
-            }
-        } else if (meine) {
-            spieler.sendMessage(Component.text(
-                    "  /parzelle zusammenlegen <nord|ost|sued|west>", NamedTextColor.DARK_GRAY));
-        }
+        vergebenZeilen(sprache, namen(parzelle.eigentuemer()), parzelle.preis(),
+                parzelle.mitbauer().isEmpty() ? null : namenListe(parzelle.mitbauer()),
+                parzelle.hatElternteil(),
+                parzelle.hatElternteil() ? buch.gruppenFelder(welt, x, z).size() : 0,
+                meine).forEach(spieler::sendMessage);
     }
 
-    private void nehmen(Player spieler) {
+    /** Dass hier eine Gruppe liegt, wo der Rasterplan noch "Weg" sagt - und wem sie gehoert. */
+    static List<Component> gruppenbodenZeilen(Sprache sprache, String eigentuemer) {
+        List<Component> zeilen = new ArrayList<>(
+                sprache.bau(ParzellenSatz.INFO_GRUPPENBODEN, 1L, Einsatz.keine()));
+        // Dieselbe Zeile wie bei einer vergebenen Parzelle, also derselbe Schluessel:
+        // Wer sie umschreibt, soll das nicht an zwei Stellen tun muessen.
+        zeilen.addAll(sprache.bau(ParzellenSatz.INFO_EIGENTUEMER, 1L,
+                Einsatz.von("name", eigentuemer)));
+        return List.copyOf(zeilen);
+    }
+
+    /** Die eine Zeile fuer eine Stelle ohne Parzelle: Weg oder Mauer. */
+    static List<Component> ohneParzelleZeilen(Sprache sprache, boolean aufDemWeg) {
+        // Der Ternaer steht jetzt ueber dem SCHLUESSEL und nicht mehr ueber dem Wortlaut:
+        // Zwei Saetze bleiben zwei Saetze, nur stehen sie in der Datei.
+        return sprache.bau(aufDemWeg ? ParzellenSatz.INFO_WEG : ParzellenSatz.INFO_MAUER,
+                1L, Einsatz.keine());
+    }
+
+    /** Der Kopf von {@code /parzelle info}: die Nummer. */
+    static List<Component> infoKopfZeilen(Sprache sprache, int px, int pz) {
+        return sprache.bau(ParzellenSatz.INFO_KOPF, 1L, nummer(px, pz));
+    }
+
+    /**
+     * Eine Parzellennummer als zwei Werte - NACKT und ohne Tausenderpunkt.
+     *
+     * <p>{@code Einsatz.mit(name, long)} schickt eine Zahl durch die deutsche Zahlform,
+     * und das ist fuer Geld richtig und fuer eine Nummer falsch: Die Parzelle 1000/0 hiess
+     * heute "1000/0" und wuerde damit "1.000/0". Gemessen gilt dasselbe fuer jede andere
+     * gezaehlte Zahl dieser Zweige - nur Geldbetraege tragen den Punkt.
+     */
+    private static Einsatz nummer(int px, int pz) {
+        return Einsatz.von("x", String.valueOf(px)).mit("z", String.valueOf(pz));
+    }
+
+    /** Eine Parzelle, die es gibt, aber nicht zu haben ist. */
+    static List<Component> ausserhalbZeilen(Sprache sprache) {
+        return sprache.bau(ParzellenSatz.INFO_AUSSERHALB, 1L, Einsatz.keine());
+    }
+
+    /**
+     * Eine freie Parzelle: der Preis - und am Limit die Absage samt Werbung.
+     *
+     * <p>Der Preis bleibt stehen, die Einladung nicht. Wer vier von vier Parzellen hat,
+     * soll ruhig sehen, was die fuenfte kosten WUERDE - aber "/parzelle nehmen" darunter
+     * ist eine Aufforderung, die an derselben Stelle mit einer Absage endet. Genau das ist
+     * der Unterschied zwischen Werbung und Irrefuehrung.
+     */
+    static List<Component> freiZeilen(Sprache sprache, long preis, boolean amLimit,
+                                      int hoechstzahl, String rangWerbung) {
+        // Zwei Schluessel und nicht einer mit Wache: Am Limit faellt nicht nur die
+        // Einladung weg, auch das Gruen des Preises. Beides steht jetzt im Satz.
+        List<Component> zeilen = new ArrayList<>(sprache.bau(
+                amLimit ? ParzellenSatz.INFO_FREI_AM_LIMIT : ParzellenSatz.INFO_FREI, 1L,
+                Einsatz.von("preis", preisWort(sprache, preis))));
+        if (amLimit) {
+            zeilen.addAll(sprache.bau(ParzellenSatz.INFO_AM_LIMIT, hoechstzahl,
+                    Einsatz.von("anzahl", String.valueOf(hoechstzahl))));
+            zeilen.addAll(werbungZeilen(sprache, rangWerbung));
+        }
+        return List.copyOf(zeilen);
+    }
+
+    /**
+     * Der Preis als Wort: das Wort fuer die Null, oder ein Betrag.
+     *
+     * <p>Ein {@code Art.WORT} fuer die Null und kein zweiter Satz je Stelle: Drei Zeilen
+     * nennen den Preis, und der Betreiber soll "gratis" einmal aendern koennen.
+     */
+    private static String preisWort(Sprache sprache, long preis) {
+        return preis == 0L
+                ? sprache.wort(ParzellenSatz.GRATIS, Einsatz.keine())
+                : sprache.betrag(preis);
+    }
+
+    /**
+     * Eine vergebene Parzelle: Eigentuemer, Preis, Mitbauer, Gruppe - und die Befehle,
+     * die dem Eigentuemer offenstehen.
+     *
+     * @param mitbauer       die Namen, oder {@code null}, wenn keiner eingetragen ist
+     * @param gruppenfelder  wie viele Felder die Gruppe hat; ohne Gruppe bedeutungslos
+     */
+    static List<Component> vergebenZeilen(Sprache sprache, String eigentuemer,
+                                          long gekauftFuer, String mitbauer,
+                                          boolean teilEinerGruppe, int gruppenfelder,
+                                          boolean meine) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(
+                ParzellenSatz.INFO_EIGENTUEMER, 1L, Einsatz.von("name", eigentuemer)));
+        zeilen.addAll(sprache.bau(ParzellenSatz.INFO_GEKAUFT_FUER, 1L,
+                Einsatz.von("preis", gekauftFuer == 0L
+                        ? sprache.wort(ParzellenSatz.GRATIS_DIE_ERSTE, Einsatz.keine())
+                        : sprache.betrag(gekauftFuer))));
+        if (mitbauer != null) {
+            zeilen.addAll(sprache.bau(ParzellenSatz.INFO_MITBAUER, 1L,
+                    Einsatz.von("namen", mitbauer)));
+        }
+        if (teilEinerGruppe) {
+            // Art.SATZ und nicht Art.GEZAEHLT: Dieser Satz sagt heute auch bei einem Feld
+            // "Feldern". Eine Einzahlform waere eine inhaltliche Verbesserung und gehoert
+            // nicht nebenbei in einen Umzug, der das Bild gleich halten soll.
+            zeilen.addAll(sprache.bau(ParzellenSatz.INFO_GRUPPE, 1L,
+                    Einsatz.von("anzahl", String.valueOf(gruppenfelder))));
+            if (meine) {
+                zeilen.addAll(sprache.bau(ParzellenSatz.INFO_AUFTRENNEN_HINWEIS, 1L,
+                        Einsatz.keine()));
+            }
+        } else if (meine) {
+            zeilen.addAll(sprache.bau(ParzellenSatz.INFO_ZUSAMMENLEGEN_HINWEIS, 1L,
+                    Einsatz.keine()));
+        }
+        return List.copyOf(zeilen);
+    }
+
+    void nehmen(Player spieler) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
             return;
@@ -348,76 +477,160 @@ final class ParzellenBefehle {
         switch (entscheid.bescheid()) {
             case ERTEILT -> {
                 Parzelle neu = entscheid.parzelle().orElseThrow();
-                spieler.sendMessage(Component.text("Parzelle " + neu.x() + "/" + neu.z()
-                        + " gehoert jetzt dir", NamedTextColor.GREEN));
-                spieler.sendMessage(Component.text(entscheid.kosten() == 0L
-                        ? "  Die erste ist gratis."
-                        : "  Bezahlt: " + Betraege.mark(entscheid.kosten())
-                                + " · Rest: "
-                                + Betraege.mark(buch.kasse().guthaben(spieler.getUniqueId())),
-                        NamedTextColor.GRAY));
+                // Der Blick in die Kasse nur, wo ein Rest genannt wird: Bei der ersten,
+                // gratis vergebenen Parzelle fragte auch bisher niemand danach.
+                nehmenErteiltZeilen(sprache, neu.x(), neu.z(), entscheid.kosten(),
+                        entscheid.kosten() == 0L
+                                ? 0L : buch.kasse().guthaben(spieler.getUniqueId()))
+                        .forEach(spieler::sendMessage);
             }
-            case KEINE_PARZELLE -> spieler.sendMessage(Component.text(
-                    "Hier ist kein Bauland - stell dich auf eine Parzelle.",
-                    NamedTextColor.RED));
-            case SCHON_VERGEBEN -> spieler.sendMessage(Component.text(
-                            "Die gehoert schon ", NamedTextColor.RED)
-                    .append(Component.text(namen(entscheid.parzelle().orElseThrow().eigentuemer()),
-                            NamedTextColor.WHITE)));
-            case GRENZE_ERREICHT -> {
-                spieler.sendMessage(Component.text(
-                        "Du hast schon " + hoechstzahl
-                                + (hoechstzahl == 1 ? " Parzelle" : " Parzellen")
-                                + " - mehr erlaubt dein Rang nicht.", NamedTextColor.RED));
-                werbung(spieler);
-            }
-            case ZU_WENIG_MARK -> spieler.sendMessage(Component.text("Die kostet ",
-                            NamedTextColor.RED)
-                    .append(Component.text(Betraege.mark(entscheid.kosten()), NamedTextColor.GOLD))
-                    .append(Component.text(", du hast "
-                            + Betraege.mark(buch.kasse().guthaben(spieler.getUniqueId())) + ".",
-                            NamedTextColor.RED)));
-            case AUSSERHALB -> spieler.sendMessage(Component.text(
-                    "Hier endet die Marktstadt. Parzellen gibt es von "
-                            + buch.grenze().von() + "/" + buch.grenze().von() + " bis "
-                            + buch.grenze().bis() + "/" + buch.grenze().bis() + ".",
-                    NamedTextColor.RED));
-            default -> spieler.sendMessage(Component.text(
-                    "Das ging nicht: " + entscheid.bescheid(), NamedTextColor.RED));
+            case KEINE_PARZELLE -> nehmenKeinBaulandZeilen(sprache)
+                    .forEach(spieler::sendMessage);
+            case SCHON_VERGEBEN -> nehmenSchonVergebenZeilen(sprache,
+                    namen(entscheid.parzelle().orElseThrow().eigentuemer()))
+                    .forEach(spieler::sendMessage);
+            case GRENZE_ERREICHT -> nehmenGrenzeZeilen(sprache, hoechstzahl,
+                    wirtschaft.werte().rangWerbung()).forEach(spieler::sendMessage);
+            case ZU_WENIG_MARK -> nehmenZuWenigZeilen(sprache, entscheid.kosten(),
+                    buch.kasse().guthaben(spieler.getUniqueId()))
+                    .forEach(spieler::sendMessage);
+            case AUSSERHALB -> nehmenAusserhalbZeilen(sprache, buch.grenze().von(),
+                    buch.grenze().bis()).forEach(spieler::sendMessage);
+            default -> nehmenSonstZeilen(sprache, entscheid.bescheid())
+                    .forEach(spieler::sendMessage);
         }
     }
 
-    private void zeigeListe(Player spieler) {
+    /**
+     * Die Parzelle gehoert jetzt ihm - die Nummer und die Rechnung.
+     *
+     * <p><b>Bei {@code kosten == 0} ist {@code guthaben} bedeutungslos, und der Sendeort
+     * gibt dort eine 0 herein, die es in der Kasse nie gab.</b> Dass diese erfundene Zahl
+     * nicht in den Satz kommt, haengt allein an der Wache hier - der Sendeort hat
+     * dieselbe Bedingung, aber sie entscheidet dort nur, ob die Kasse ueberhaupt gefragt
+     * wird. Darum ruft {@code SendewegTest} den Gratisfall auch mit einem HOHEN Guthaben
+     * auf: Faellt die Wache, liest der Spieler "Bezahlt: 0 Mark - Rest: 0 Mark", obwohl
+     * er 99.000 hat, und nur jene Zeile ist dann rot.
+     *
+     * @param guthaben der Rest nach dem Kauf; bei {@code kosten == 0} bedeutungslos
+     */
+    static List<Component> nehmenErteiltZeilen(Sprache sprache, int px, int pz,
+                                               long kosten, long guthaben) {
+        List<Component> zeilen = new ArrayList<>(
+                sprache.bau(ParzellenSatz.NEHMEN_ERTEILT, 1L, nummer(px, pz)));
+        zeilen.addAll(kosten == 0L
+                ? sprache.bau(ParzellenSatz.NEHMEN_ERSTE_GRATIS, 1L, Einsatz.keine())
+                : sprache.bau(ParzellenSatz.BEZAHLT, 1L,
+                        rechnung(sprache, kosten, guthaben)));
+        return List.copyOf(zeilen);
+    }
+
+    /**
+     * Bezahlt und Rest - die zwei Werte der Rechnung.
+     *
+     * <p>Eigene Methode, weil {@code parzelle.bezahlt} denselben Satz auch nach dem
+     * Zusammenlegen tragen soll. Beide Betraege gehen durch {@link Sprache#betrag}, also
+     * durch {@code waehrung.betrag} - so wie jeder Betrag dieser Datei.
+     */
+    private static Einsatz rechnung(Sprache sprache, long kosten, long guthaben) {
+        return Einsatz.von("betrag", sprache.betrag(kosten))
+                .mit("rest", sprache.betrag(guthaben));
+    }
+
+    /** Er steht gar nicht auf Bauland. */
+    static List<Component> nehmenKeinBaulandZeilen(Sprache sprache) {
+        return sprache.bau(ParzellenSatz.NEHMEN_KEIN_BAULAND, 1L, Einsatz.keine());
+    }
+
+    /** Die Parzelle hat schon einen Eigentuemer. */
+    static List<Component> nehmenSchonVergebenZeilen(Sprache sprache, String eigentuemer) {
+        return sprache.bau(ParzellenSatz.NEHMEN_SCHON_VERGEBEN, 1L,
+                Einsatz.von("name", eigentuemer));
+    }
+
+    /** Sein Rang gibt nicht mehr her - mit Zahl und mit Werbung. */
+    static List<Component> nehmenGrenzeZeilen(Sprache sprache, int hoechstzahl,
+                                              String rangWerbung) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(
+                ParzellenSatz.NEHMEN_GRENZE, hoechstzahl,
+                Einsatz.von("anzahl", String.valueOf(hoechstzahl))));
+        zeilen.addAll(werbungZeilen(sprache, rangWerbung));
+        return List.copyOf(zeilen);
+    }
+
+    /** Das Geld reicht nicht - was sie kostet und was er hat. */
+    static List<Component> nehmenZuWenigZeilen(Sprache sprache, long kosten, long guthaben) {
+        // Eine Zeile und keine drei Stuecke: Wer lieber erst das Guthaben nennt, stellt
+        // den Satz in der Datei um, und das Gold wandert mit dem Betrag.
+        return sprache.bau(ParzellenSatz.NEHMEN_ZU_WENIG, 1L,
+                Einsatz.von("betrag", sprache.betrag(kosten))
+                        .mit("guthaben", sprache.betrag(guthaben)));
+    }
+
+    /** Hinter der Stadtgrenze - mit den Nummern, die es gibt. */
+    static List<Component> nehmenAusserhalbZeilen(Sprache sprache, int von, int bis) {
+        return sprache.bau(ParzellenSatz.NEHMEN_AUSSERHALB, 1L,
+                Einsatz.von("von", String.valueOf(von))
+                        .mit("bis", String.valueOf(bis)));
+    }
+
+    /** Der Rest, den dieser Zweig nicht eigens benennt. */
+    static List<Component> nehmenSonstZeilen(Sprache sprache,
+                                             Besitzbuch.Bescheid bescheid) {
+        return sprache.bau(ParzellenSatz.NEHMEN_SONST, 1L,
+                Einsatz.von("bescheid", bescheid.name()));
+    }
+
+    void zeigeListe(Player spieler) {
         List<Parzelle> meine = buch.parzellenVon(welt, spieler.getUniqueId());
-        if (meine.isEmpty()) {
-            spieler.sendMessage(Component.text(
-                    "Du hast noch keine Parzelle. Die erste ist gratis - /parzelle nehmen",
-                    NamedTextColor.YELLOW));
-            return;
-        }
         int hoechstzahl = hoechstzahl(spieler);
-        spieler.sendMessage(Component.text("Deine Parzellen (" + meine.size() + " von "
-                + hoechstzahl + ")", NamedTextColor.GOLD));
+        listeZeilen(sprache, meine, hoechstzahl,
+                preise().preisFuerNaechste(meine.size())).forEach(spieler::sendMessage);
+    }
+
+    /**
+     * Die eigenen Parzellen - oder die Einladung, die erste zu nehmen.
+     *
+     * <p>{@code Parzelle} ist ein Satz aus dem Kern, kein Serverobjekt: Deshalb darf die
+     * Liste hier herein, und deshalb kann eine Probe diese Zeilen ohne Welt bauen.
+     *
+     * @param naechsterPreis was die naechste kosten wuerde; nur unter der Hoechstzahl genannt
+     */
+    static List<Component> listeZeilen(Sprache sprache, List<Parzelle> meine,
+                                       int hoechstzahl, long naechsterPreis) {
+        if (meine.isEmpty()) {
+            return sprache.bau(ParzellenSatz.LISTE_LEER, 1L, Einsatz.keine());
+        }
+        List<Component> zeilen = new ArrayList<>(sprache.bau(ParzellenSatz.LISTE_KOPF, 1L,
+                Einsatz.von("anzahl", String.valueOf(meine.size()))
+                        .mit("hoechstzahl", String.valueOf(hoechstzahl))));
         for (Parzelle parzelle : meine) {
-            spieler.sendMessage(Component.text("  " + parzelle.x() + "/" + parzelle.z()
-                    + " · " + (parzelle.preis() == 0L ? "gratis"
-                            : Betraege.mark(parzelle.preis()))
-                    + (parzelle.mitbauer().isEmpty() ? ""
-                            : " · " + parzelle.mitbauer().size() + " Mitbauer")
-                    // Sonst saehe eine Gruppe aus zwei Feldern in der Liste genauso aus
-                    // wie zwei einzelne Parzellen - und der Spieler wuesste nicht, warum
-                    // /parzelle aufgeben bei ihnen nicht geht.
-                    + (parzelle.hatElternteil() ? " · Gruppe" : ""),
-                    NamedTextColor.GRAY));
+            // Die zwei Anhaenge sind ENTWEDER ihr Wortstueck ODER leer. Ein leerer Wert
+            // verschwindet rueckstandslos, weil ein eingesetzter Wert ein Blatt ist -
+            // darum braucht die Zeile keine vier Fassungen fuer vier Kombinationen.
+            zeilen.addAll(sprache.bau(ParzellenSatz.LISTE_ZEILE, 1L,
+                    nummer(parzelle.x(), parzelle.z())
+                            .mit("preis", preisWort(sprache, parzelle.preis()))
+                            .mit("mitbauer", parzelle.mitbauer().isEmpty() ? ""
+                                    : sprache.wort(ParzellenSatz.LISTE_MITBAUER,
+                                            Einsatz.von("anzahl", String.valueOf(
+                                                    parzelle.mitbauer().size()))))
+                            // Sonst saehe eine Gruppe aus zwei Feldern in der Liste
+                            // genauso aus wie zwei einzelne Parzellen - und der Spieler
+                            // wuesste nicht, warum /parzelle aufgeben bei ihnen nicht geht.
+                            .mit("gruppe", parzelle.hatElternteil()
+                                    ? sprache.wort(ParzellenSatz.LISTE_GRUPPE,
+                                            Einsatz.keine())
+                                    : "")));
         }
         if (meine.size() < hoechstzahl) {
-            spieler.sendMessage(Component.text("Die naechste kostet "
-                    + Betraege.mark(preise().preisFuerNaechste(meine.size())),
-                    NamedTextColor.DARK_GRAY));
+            zeilen.addAll(sprache.bau(ParzellenSatz.LISTE_NAECHSTE, 1L,
+                    Einsatz.von("betrag", sprache.betrag(naechsterPreis))));
         }
+        return List.copyOf(zeilen);
     }
 
-    private void zeigeMitbauer(Player spieler) {
+    void zeigeMitbauer(Player spieler) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
             return;
@@ -426,38 +639,74 @@ final class ParzellenBefehle {
         Optional<Parzelle> gefunden = buch.zustaendigerBesitz(welt, ort.getBlockX(),
                 ort.getBlockZ());
         if (gefunden.isEmpty()) {
-            spieler.sendMessage(Component.text("Hier ist keine vergebene Parzelle.",
-                    NamedTextColor.RED));
+            mitbauerKeineParzelleZeilen(sprache).forEach(spieler::sendMessage);
             return;
         }
         Parzelle parzelle = gefunden.get();
-        spieler.sendMessage(Component.text("Mitbauer auf " + parzelle.x() + "/" + parzelle.z()
-                + ": ", NamedTextColor.GOLD)
-                .append(Component.text(parzelle.mitbauer().isEmpty()
-                        ? "niemand" : namenListe(parzelle.mitbauer()), NamedTextColor.WHITE)));
-        if (parzelle.gehoert(spieler.getUniqueId())) {
-            spieler.sendMessage(Component.text(
-                    "/parzelle mitbauer hinzu <name> · weg <name>", NamedTextColor.DARK_GRAY));
-        }
+        mitbauerZeilen(sprache, parzelle.x(), parzelle.z(),
+                parzelle.mitbauer().isEmpty() ? null : namenListe(parzelle.mitbauer()),
+                parzelle.gehoert(spieler.getUniqueId())).forEach(spieler::sendMessage);
     }
 
-    private void mitbauerHinzu(Player spieler, Location ort, String name) {
+    /** Hier gibt es keine Parzelle, zu der eine Mitbauerliste gehoeren wuerde. */
+    static List<Component> mitbauerKeineParzelleZeilen(Sprache sprache) {
+        return sprache.bau(ParzellenSatz.MITBAUER_KEINE_PARZELLE, 1L, Einsatz.keine());
+    }
+
+    /**
+     * Die Mitbauerliste - und fuer den Eigentuemer die Befehle dazu.
+     *
+     * @param mitbauer die Namen, oder {@code null}, wenn niemand eingetragen ist
+     */
+    static List<Component> mitbauerZeilen(Sprache sprache, int px, int pz, String mitbauer,
+                                          boolean meine) {
+        // Das Wort fuer die leere Liste ist ein WERT und kommt darum aus der Datei:
+        // Es wird in mitbauer.kopf eingesetzt, wo der Betreiber es sonst nicht
+        // erreichen koennte.
+        String namen = mitbauer == null
+                ? sprache.wort(ParzellenSatz.MITBAUER_NIEMAND, Einsatz.keine())
+                : mitbauer;
+        List<Component> zeilen = new ArrayList<>(sprache.bau(ParzellenSatz.MITBAUER_KOPF,
+                1L, nummer(px, pz).mit("namen", namen)));
+        if (meine) {
+            zeilen.addAll(sprache.bau(ParzellenSatz.MITBAUER_BEFEHLE, 1L,
+                    Einsatz.keine()));
+        }
+        return List.copyOf(zeilen);
+    }
+
+    void mitbauerHinzu(Player spieler, Location ort, String name) {
         Optional<UUID> betroffener = findeSpieler(name);
         if (betroffener.isEmpty()) {
-            spieler.sendMessage(Component.text(
-                    "Den kenne ich nicht. Er muss einmal auf dem Server gewesen sein.",
-                    NamedTextColor.RED));
+            unbekannterSpielerZeilen(sprache).forEach(spieler::sendMessage);
             return;
         }
         var entscheid = buch.mitbauerHinzufuegen(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ(), betroffener.get());
         switch (entscheid.bescheid()) {
-            case ERTEILT -> spieler.sendMessage(Component.text(name + " darf hier jetzt bauen.",
-                    NamedTextColor.GREEN));
-            case SCHON_EINGETRAGEN -> spieler.sendMessage(Component.text(
-                    name + " darf hier ohnehin bauen.", NamedTextColor.YELLOW));
+            case ERTEILT -> mitbauerErteiltZeilen(sprache, name)
+                    .forEach(spieler::sendMessage);
+            case SCHON_EINGETRAGEN -> mitbauerSchonDrinZeilen(sprache, name)
+                    .forEach(spieler::sendMessage);
             default -> absage(spieler, entscheid.bescheid());
         }
+    }
+
+    /** Diesen Namen kennt der Server nicht. */
+    static List<Component> unbekannterSpielerZeilen(Sprache sprache) {
+        return sprache.bau(ParzellenSatz.MITBAUER_UNBEKANNT, 1L, Einsatz.keine());
+    }
+
+    /** Eingetragen. */
+    static List<Component> mitbauerErteiltZeilen(Sprache sprache, String name) {
+        return sprache.bau(ParzellenSatz.MITBAUER_HINZU_ERTEILT, 1L,
+                Einsatz.von("name", name));
+    }
+
+    /** Stand schon auf der Liste. */
+    static List<Component> mitbauerSchonDrinZeilen(Sprache sprache, String name) {
+        return sprache.bau(ParzellenSatz.MITBAUER_SCHON_DRIN, 1L,
+                Einsatz.von("name", name));
     }
 
     /**
@@ -469,27 +718,43 @@ final class ParzellenBefehle {
      * UUID-Anfang zeigt - weil es zu ihm keinen Namen mehr gibt, den jemand nachschlagen
      * koennte. Gesucht wird gegen dieselbe Zeichenfolge, die die Anzeige ausgibt.
      */
-    private void mitbauerWeg(Player spieler, Location ort, String name) {
+    void mitbauerWeg(Player spieler, Location ort, String name) {
         Optional<Parzelle> gefunden = buch.zustaendigerBesitz(welt, ort.getBlockX(),
                 ort.getBlockZ());
         Optional<UUID> betroffener = gefunden
                 .flatMap(parzelle -> ausDerListe(parzelle, name))
                 .or(() -> findeSpieler(name));
         if (betroffener.isEmpty()) {
-            spieler.sendMessage(Component.text(
-                    "Steht hier niemand mit dem Namen - /parzelle mitbauer zeigt die Liste.",
-                    NamedTextColor.RED));
+            niemandMitDemNamenZeilen(sprache).forEach(spieler::sendMessage);
             return;
         }
         var entscheid = buch.mitbauerEntfernen(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ(), betroffener.get());
         switch (entscheid.bescheid()) {
-            case ERTEILT -> spieler.sendMessage(Component.text(
-                    name + " darf hier nicht mehr bauen.", NamedTextColor.GREEN));
-            case NICHT_EINGETRAGEN -> spieler.sendMessage(Component.text(
-                    name + " stand gar nicht auf der Liste.", NamedTextColor.YELLOW));
+            case ERTEILT -> mitbauerWegErteiltZeilen(sprache, name)
+                    .forEach(spieler::sendMessage);
+            case NICHT_EINGETRAGEN -> mitbauerNichtDrinZeilen(sprache, name)
+                    .forEach(spieler::sendMessage);
             default -> absage(spieler, entscheid.bescheid());
         }
+    }
+
+    /** Auf dieser Parzelle steht niemand mit diesem Namen. */
+    static List<Component> niemandMitDemNamenZeilen(Sprache sprache) {
+        return sprache.bau(ParzellenSatz.MITBAUER_NIEMAND_MIT_DEM_NAMEN, 1L,
+                Einsatz.keine());
+    }
+
+    /** Ausgetragen. */
+    static List<Component> mitbauerWegErteiltZeilen(Sprache sprache, String name) {
+        return sprache.bau(ParzellenSatz.MITBAUER_WEG_ERTEILT, 1L,
+                Einsatz.von("name", name));
+    }
+
+    /** Stand gar nicht auf der Liste. */
+    static List<Component> mitbauerNichtDrinZeilen(Sprache sprache, String name) {
+        return sprache.bau(ParzellenSatz.MITBAUER_NICHT_DRIN, 1L,
+                Einsatz.von("name", name));
     }
 
     /** Einen Eintrag der Mitbauerliste an der Zeichenfolge erkennen, die angezeigt wird. */
@@ -503,7 +768,7 @@ final class ParzellenBefehle {
         return Optional.empty();
     }
 
-    private void warneVorAufgeben(Player spieler) {
+    void warneVorAufgeben(Player spieler) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
             return;
@@ -512,25 +777,39 @@ final class ParzellenBefehle {
         Optional<Parzelle> gefunden = buch.zustaendigerBesitz(welt, ort.getBlockX(),
                 ort.getBlockZ());
         if (gefunden.isEmpty() || !gefunden.get().gehoert(spieler.getUniqueId())) {
-            spieler.sendMessage(Component.text("Das ist nicht deine Parzelle.",
-                    NamedTextColor.RED));
+            nichtDeineParzelleZeilen(sprache).forEach(spieler::sendMessage);
             return;
         }
         Parzelle parzelle = gefunden.get();
         if (parzelle.hatElternteil()) {
             // Aufgeben verweigert auf einem Gruppenkind. Das sagt sich hier besser als
             // erst nach der Bestaetigung, mit dem allgemeinen Satz aus absage().
-            spieler.sendMessage(Component.text(
-                    "Die Parzelle gehoert zu einer Gruppe - erst /parzelle auftrennen.",
-                    NamedTextColor.RED));
+            aufgebenGruppeZeilen(sprache).forEach(spieler::sendMessage);
             return;
         }
-        spieler.sendMessage(Component.text("Parzelle " + parzelle.x() + "/" + parzelle.z()
-                + " aufgeben?", NamedTextColor.YELLOW));
-        spieler.sendMessage(Component.text(
-                "  Es gibt kein Geld zurueck, und gebaut bleibt stehen.", NamedTextColor.GRAY));
-        spieler.sendMessage(Component.text("  /parzelle aufgeben bestaetigen "
-                + parzelle.x() + " " + parzelle.z(), NamedTextColor.RED));
+        aufgebenWarnungZeilen(sprache, parzelle.x(), parzelle.z())
+                .forEach(spieler::sendMessage);
+    }
+
+    /** Hier steht er nicht auf eigenem Boden. */
+    static List<Component> nichtDeineParzelleZeilen(Sprache sprache) {
+        return sprache.bau(ParzellenSatz.AUFGEBEN_NICHT_DEINE, 1L, Einsatz.keine());
+    }
+
+    /** Ein Gruppenkind laesst sich nicht einzeln aufgeben. */
+    static List<Component> aufgebenGruppeZeilen(Sprache sprache) {
+        return sprache.bau(ParzellenSatz.AUFGEBEN_GRUPPE, 1L, Einsatz.keine());
+    }
+
+    /**
+     * Die Warnung vor dem Aufgeben - EIN Satz, der drei Chatzeilen ergibt.
+     *
+     * <p>Drei Sendestellen wurden eine Zeile der Datei mit zwei Umbruchmarken. Jede der
+     * drei traegt ihre eigene Farbe, und genau das ist der Grund: Drei Schluessel koennte
+     * der Betreiber faerben, aber nicht umstellen.
+     */
+    static List<Component> aufgebenWarnungZeilen(Sprache sprache, int px, int pz) {
+        return sprache.bau(ParzellenSatz.AUFGEBEN_WARNUNG, 1L, nummer(px, pz));
     }
 
     /**
@@ -541,29 +820,29 @@ final class ParzellenBefehle {
      * auf. Jetzt muss der Spieler immer noch auf der Parzelle stehen, die er aufgibt, aber
      * es muss auch dieselbe sein, die im Befehl steht.
      */
-    private int aufgeben(CommandContext<CommandSourceStack> zusammenhang) {
-        if (!(zusammenhang.getSource().getExecutor() instanceof Player spieler)) {
-            return Command.SINGLE_SUCCESS;
-        }
+    void aufgeben(Player spieler, int gemeintX, int gemeintZ) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
-            return Command.SINGLE_SUCCESS;
+            return;
         }
         Location ort = hier.get();
-        if (!stehtAuf(spieler, ort, IntegerArgumentType.getInteger(zusammenhang, "x"),
-                IntegerArgumentType.getInteger(zusammenhang, "z"), "Nichts aufgegeben.")) {
-            return Command.SINGLE_SUCCESS;
+        if (!stehtAuf(spieler, ort, gemeintX, gemeintZ,
+                ParzellenSatz.TAT_NICHTS_AUFGEGEBEN)) {
+            return;
         }
         var entscheid = buch.aufgeben(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ());
         if (entscheid.erteilt()) {
             Parzelle weg = entscheid.parzelle().orElseThrow();
-            spieler.sendMessage(Component.text("Parzelle " + weg.x() + "/" + weg.z()
-                    + " ist wieder frei.", NamedTextColor.GREEN));
-            return Command.SINGLE_SUCCESS;
+            aufgegebenZeilen(sprache, weg.x(), weg.z()).forEach(spieler::sendMessage);
+            return;
         }
         absage(spieler, entscheid.bescheid());
-        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Die Parzelle ist wieder frei. */
+    static List<Component> aufgegebenZeilen(Sprache sprache, int px, int pz) {
+        return sprache.bau(ParzellenSatz.AUFGEBEN_ERTEILT, 1L, nummer(px, pz));
     }
 
     // --- Zusammenlegen und Auftrennen ------------------------------------------
@@ -590,7 +869,11 @@ final class ParzellenBefehle {
                             .then(Commands.argument("x", IntegerArgumentType.integer())
                                     .then(Commands.argument("z",
                                                     IntegerArgumentType.integer())
-                                            .executes(z -> zusammenlegen(z, richtung))))));
+                                            .executes(z -> mitNummer(z,
+                                                    (spieler, gemeintX, gemeintZ)
+                                                            -> zusammenlegen(spieler,
+                                                            richtung, gemeintX,
+                                                            gemeintZ)))))));
         }
         return zweig;
     }
@@ -602,7 +885,7 @@ final class ParzellenBefehle {
      * Formel, die anschliessend abbucht. Eine eigene Rechnung hier waere der zweite Weg zur
      * selben Tat, und einer von beiden nennt irgendwann einen anderen Betrag.
      */
-    private void warneVorZusammenlegen(Player spieler, Richtung richtung) {
+    void warneVorZusammenlegen(Player spieler, Richtung richtung) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
             return;
@@ -612,11 +895,8 @@ final class ParzellenBefehle {
         var entscheid = buch.pruefeZusammenlegen(welt, spieler.getUniqueId(),
                 ort.getBlockX(), ort.getBlockZ(), richtung, felder);
         if (entscheid.bescheid() == Besitzbuch.Bescheid.GRUPPE_ZU_GROSS) {
-            // Mit Zahl, nicht mit dem allgemeinen Satz: "dein Rang erlaubt nicht mehr"
-            // laesst offen, was er erlaubt.
-            spieler.sendMessage(Component.text("Dein Rang erlaubt hoechstens " + felder
-                    + (felder == 1 ? " Feld" : " Felder") + " je Gruppe.", NamedTextColor.RED));
-            werbung(spieler);
+            gruppeZuGrossZeilen(sprache, felder, wirtschaft.werte().rangWerbung())
+                    .forEach(spieler::sendMessage);
             return;
         }
         if (!entscheid.erteilt()) {
@@ -629,43 +909,73 @@ final class ParzellenBefehle {
         int pz = plan.parzelleZ(ort.getBlockZ());
         long guthaben = buch.kasse().guthaben(spieler.getUniqueId());
 
-        spieler.sendMessage(Component.text("Parzelle " + px + "/" + pz + " mit "
-                + (px + richtung.dx()) + "/" + (pz + richtung.dz()) + " zusammenlegen?",
-                NamedTextColor.YELLOW));
-        spieler.sendMessage(Component.text("  Gebuehr: ", NamedTextColor.GRAY)
-                .append(Component.text(Betraege.mark(entscheid.kosten()), NamedTextColor.GOLD))
-                .append(Component.text(" · du hast " + Betraege.mark(guthaben),
-                        NamedTextColor.GRAY)));
-        spieler.sendMessage(Component.text(
-                "  Der Weg dazwischen wird dein Bauland.", NamedTextColor.GRAY));
-        spieler.sendMessage(Component.text(
-                "  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann",
-                NamedTextColor.GRAY));
-        spieler.sendMessage(Component.text("  darauf steht.", NamedTextColor.GRAY));
-        if (guthaben < entscheid.kosten()) {
-            // Das Geld prueft pruefeZusammenlegen absichtlich nicht - es ist die einzige
-            // Pruefung, die bei Erfolg schreibt. Hier wird nur verglichen.
-            spieler.sendMessage(Component.text("  Dein Guthaben reicht nicht.",
-                    NamedTextColor.RED));
-            return;
-        }
-        spieler.sendMessage(Component.text("  /parzelle zusammenlegen " + richtung.wort()
-                + " bestaetigen " + px + " " + pz, NamedTextColor.YELLOW));
+        zusammenlegenWarnungZeilen(sprache, px, pz, richtung, entscheid.kosten(), guthaben)
+                .forEach(spieler::sendMessage);
     }
 
-    private int zusammenlegen(CommandContext<CommandSourceStack> zusammenhang,
-                              Richtung richtung) {
-        if (!(zusammenhang.getSource().getExecutor() instanceof Player spieler)) {
-            return Command.SINGLE_SUCCESS;
+    /**
+     * Die Gruppe waere zu gross - mit Zahl und mit Werbung.
+     *
+     * <p>Mit Zahl und nicht mit dem allgemeinen Satz: "dein Rang erlaubt nicht mehr"
+     * laesst offen, was er erlaubt.
+     *
+     * <p><b>Es ist derselbe Bescheid und darum derselbe Weg.</b> Gemessen sendet dieser
+     * Zweig woertlich das, was {@code absageZeilen} fuer {@code GRUPPE_ZU_GROSS} sendet -
+     * bis zum zweiten Zug baute er die Worte nur selbst, und darum trug der Schluessel in
+     * der Vorlage die Marke {@code HALB IN KRAFT:}. Jetzt geht er durch dieselbe Methode:
+     * WELCHER Satz zu dem Bescheid gehoert und WELCHE Zahl er nennt, entscheidet allein
+     * {@code Sprachschluessel}. Zwei Wege zur selben Tat laufen irgendwann auseinander,
+     * und ein zweiter namentlicher Griff auf den Schluessel haette ausserdem
+     * {@code GrenzeTest.jederSchluesselWirdGesendet} rot gemacht: Der Bescheid wird ueber
+     * eine Familienfunktion gewaehlt und nirgends getippt.
+     */
+    static List<Component> gruppeZuGrossZeilen(Sprache sprache, int felder,
+                                               String rangWerbung) {
+        // amLimit false und hoechstzahl 0: Fuer diesen Bescheid sagt
+        // Sprachschluessel.zahlquelle GRUPPENFELDER, also nennt der Satz felder. Die 0
+        // steht da, damit ein Griff zur falschen Quelle im Spiel als "0 Parzellen"
+        // auffaellt und SendewegTest 33m rot wird - und nicht stumm plausibel bleibt.
+        return absageZeilen(sprache, Besitzbuch.Bescheid.GRUPPE_ZU_GROSS, false, 0,
+                felder, rangWerbung);
+    }
+
+    /**
+     * Die Warnung vor dem Zusammenlegen: Gebuehr und was mit dem Weg geschieht - und
+     * zuletzt entweder die Bestaetigungszeile oder der Hinweis auf das fehlende Geld.
+     */
+    static List<Component> zusammenlegenWarnungZeilen(Sprache sprache, int px, int pz,
+                                                      Richtung richtung, long kosten,
+                                                      long guthaben) {
+        // Die fuenf Zeilen sind EIN Satz der Datei - von Hand umgebrochen, also mit
+        // Umbruchmarken (Bauplan 7). Der Nachbar wird hier gerechnet und als WERT
+        // uebergeben: Im Satz steht seine Nummer, nicht die Richtung.
+        List<Component> zeilen = new ArrayList<>(sprache.bau(
+                ParzellenSatz.ZUSAMMENLEGEN_WARNUNG, 1L, nummer(px, pz)
+                        .mit("nachbar-x", String.valueOf(px + richtung.dx()))
+                        .mit("nachbar-z", String.valueOf(pz + richtung.dz()))
+                        .mit("betrag", sprache.betrag(kosten))
+                        .mit("guthaben", sprache.betrag(guthaben))));
+        if (guthaben < kosten) {
+            // Das Geld prueft pruefeZusammenlegen absichtlich nicht - es ist die einzige
+            // Pruefung, die bei Erfolg schreibt. Hier wird nur verglichen.
+            zeilen.addAll(sprache.bau(ParzellenSatz.ZUSAMMENLEGEN_ZU_WENIG, 1L,
+                    Einsatz.keine()));
+            return List.copyOf(zeilen);
         }
+        zeilen.addAll(sprache.bau(ParzellenSatz.ZUSAMMENLEGEN_BESTAETIGEN, 1L,
+                nummer(px, pz).mit("richtung", richtung.wort())));
+        return List.copyOf(zeilen);
+    }
+
+    void zusammenlegen(Player spieler, Richtung richtung, int gemeintX, int gemeintZ) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
-            return Command.SINGLE_SUCCESS;
+            return;
         }
         Location ort = hier.get();
-        if (!stehtAuf(spieler, ort, IntegerArgumentType.getInteger(zusammenhang, "x"),
-                IntegerArgumentType.getInteger(zusammenhang, "z"), "Nichts zusammengelegt.")) {
-            return Command.SINGLE_SUCCESS;
+        if (!stehtAuf(spieler, ort, gemeintX, gemeintZ,
+                ParzellenSatz.TAT_NICHTS_ZUSAMMENGELEGT)) {
+            return;
         }
         // Was VOR dieser Zusammenlegung schon Gruppe war, und zwar auf beiden Seiten. Auf
         // einer alten Fuge steht inzwischen ein Haus; sie noch einmal zu fuellen wuerde das
@@ -683,18 +993,32 @@ final class ParzellenBefehle {
                 ort.getBlockX(), ort.getBlockZ(), richtung, gruppenFelder(spieler));
         if (!entscheid.erteilt()) {
             absage(spieler, entscheid.bescheid());
-            return Command.SINGLE_SUCCESS;
+            return;
         }
         List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
-        spieler.sendMessage(Component.text("Ein Grundstueck aus " + gruppe.size()
-                + " Feldern.", NamedTextColor.GREEN));
-        spieler.sendMessage(Component.text("  Bezahlt: "
-                + Betraege.mark(entscheid.kosten()) + " · Rest: "
-                + Betraege.mark(buch.kasse().guthaben(spieler.getUniqueId())),
-                NamedTextColor.GRAY));
+        zusammengelegtZeilen(sprache, gruppe.size(), entscheid.kosten(),
+                buch.kasse().guthaben(spieler.getUniqueId()))
+                .forEach(spieler::sendMessage);
         andereDenBoden(spieler, () -> wegbau.fuelle(gruppe, schonGelegt),
-                "Der Weg dazwischen ist Bauland");
-        return Command.SINGLE_SUCCESS;
+                ParzellenSatz.BODEN_WEG_IST_BAULAND);
+    }
+
+    /**
+     * Zusammengelegt - die Felderzahl und die Rechnung.
+     *
+     * <p>Die Rechnung ist {@code parzelle.bezahlt}, derselbe Satz wie nach einem Kauf.
+     * Damit ist die Marke {@code HALB IN KRAFT:} auf diesem Schluessel aufgeloest: Bis zu
+     * diesem Zug baute diese Methode die Worte selbst, und der Betreiber las im Spiel
+     * beides nebeneinander.
+     */
+    static List<Component> zusammengelegtZeilen(Sprache sprache, int felder, long kosten,
+                                                long guthaben) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(
+                ParzellenSatz.ZUSAMMENLEGEN_ERTEILT, 1L,
+                Einsatz.von("anzahl", String.valueOf(felder))));
+        zeilen.addAll(sprache.bau(ParzellenSatz.BEZAHLT, 1L,
+                rechnung(sprache, kosten, guthaben)));
+        return List.copyOf(zeilen);
     }
 
     /**
@@ -705,7 +1029,7 @@ final class ParzellenBefehle {
      * der Weg zurueck, sonst stuende eine Mauer quer ueber einer oeffentlichen Strasse, die
      * niemand mehr entfernen darf. Also wird geraeumt - aber nicht, ohne es vorher zu sagen.
      */
-    private void warneVorAuftrennen(Player spieler) {
+    void warneVorAuftrennen(Player spieler) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
             return;
@@ -723,17 +1047,32 @@ final class ParzellenBefehle {
         Parzelle anker = entscheid.parzelle().orElseThrow();
         List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
 
-        spieler.sendMessage(Component.text("Grundstueck aus " + gruppe.size()
-                + " Feldern ganz auftrennen?", NamedTextColor.YELLOW));
-        spieler.sendMessage(Component.text(
-                "  ALLE Wege zwischen den Feldern kommen zurueck. Geld gibt es keines"
-                        + " zurueck.", NamedTextColor.GRAY));
-        spieler.sendMessage(Component.text(
-                "  Fuer ein einzelnes Feld: stell dich darauf und nimm /parzelle auftrennen"
-                        + " ohne \"alles\".", NamedTextColor.GRAY));
+        // Die drei Zeilen zuerst, dann die Abschaetzung: Sie liest jeden Block ueber dem
+        // Weg und braucht dafuer Zeit. Wer sie vorzieht, laesst den Spieler vor leerem
+        // Chat warten - es ist derselbe Grund, aus dem es die Abklingzeit darueber gibt.
+        auftrennenWarnungZeilen(sprache, gruppe.size()).forEach(spieler::sendMessage);
         nenneAufwand(spieler, wegbau.aufwandBeimAuftrennen(gruppe, List.of()));
-        spieler.sendMessage(Component.text("  /parzelle auftrennen alles bestaetigen "
-                + anker.x() + " " + anker.z(), NamedTextColor.RED));
+        auftrennenBestaetigenZeilen(sprache, anker.x(), anker.z())
+                .forEach(spieler::sendMessage);
+    }
+
+    /**
+     * Die Warnung vor dem ganzen Auftrennen - EIN Satz, drei Chatzeilen.
+     *
+     * <p>Die dritte Zeile traegt zwei doppelte Anfuehrungszeichen mitten im Wert. Weil
+     * jeder Wert der Vorlage selbst in doppelten Anfuehrungszeichen steht, tragen sie
+     * dort je einen Backslash - der einzige Satz dieses Zuges, der eine YAML-Maskierung
+     * braucht.
+     */
+    static List<Component> auftrennenWarnungZeilen(Sprache sprache, int felder) {
+        return sprache.bau(ParzellenSatz.AUFTRENNEN_ALLES_WARNUNG, 1L,
+                Einsatz.von("anzahl", String.valueOf(felder)));
+    }
+
+    /** Die Bestaetigungszeile fuer das ganze Auftrennen - mit der Nummer des Ankers. */
+    static List<Component> auftrennenBestaetigenZeilen(Sprache sprache, int px, int pz) {
+        return sprache.bau(ParzellenSatz.AUFTRENNEN_ALLES_BESTAETIGEN, 1L,
+                nummer(px, pz));
     }
 
     /**
@@ -743,7 +1082,7 @@ final class ParzellenBefehle {
      * Grundstuecks bleiben Bauland - sonst muesste der Spieler sie neu bezahlen, nur weil
      * er ein Feld abgeben wollte.
      */
-    private void warneVorHerausloesen(Player spieler) {
+    void warneVorHerausloesen(Player spieler) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
             return;
@@ -762,26 +1101,42 @@ final class ParzellenBefehle {
         List<Parzelle> gruppe = buch.gruppenFelder(welt, ort.getBlockX(), ort.getBlockZ());
         List<Parzelle> bleibend = ohneDasFeld(gruppe, feld);
 
-        if (bleibend.size() < 2) {
-            spieler.sendMessage(Component.text("Grundstueck aus " + gruppe.size()
-                    + " Feldern auftrennen?", NamedTextColor.YELLOW));
-            spieler.sendMessage(Component.text(
-                    "  Es hat nur zwei Felder - eines allein geht nicht heraus, also wird",
-                    NamedTextColor.GRAY));
-            spieler.sendMessage(Component.text("  es ganz aufgetrennt.",
-                    NamedTextColor.GRAY));
-        } else {
-            spieler.sendMessage(Component.text("Das Feld " + feld.x() + "/" + feld.z()
-                    + " aus dem Grundstueck herausloesen?", NamedTextColor.YELLOW));
-            spieler.sendMessage(Component.text("  Die anderen " + bleibend.size()
-                    + " Felder bleiben ein Grundstueck.", NamedTextColor.GRAY));
-        }
-        spieler.sendMessage(Component.text(
-                "  Der Weg dorthin kommt zurueck. Geld gibt es keines zurueck.",
-                NamedTextColor.GRAY));
+        // Dieselbe Reihenfolge wie beim ganzen Auftrennen: erst der Text, dann die
+        // Abschaetzung, dann die Bestaetigungszeile.
+        herausloesenWarnungZeilen(sprache, gruppe.size(), feld.x(), feld.z(),
+                bleibend.size()).forEach(spieler::sendMessage);
         nenneAufwand(spieler, wegbau.aufwandBeimAuftrennen(gruppe, bleibt(bleibend)));
-        spieler.sendMessage(Component.text("  /parzelle auftrennen bestaetigen "
-                + feld.x() + " " + feld.z(), NamedTextColor.RED));
+        herausloesenBestaetigenZeilen(sprache, feld.x(), feld.z())
+                .forEach(spieler::sendMessage);
+    }
+
+    /**
+     * Die Warnung vor dem Herausloesen - und bei einer Gruppe aus zwei Feldern die vor
+     * dem ganzen Auftrennen. Zuletzt in beiden Faellen der Hinweis auf den Weg; alles,
+     * was vor der Abschaetzung steht.
+     *
+     * @param bleibend wie viele Felder danach noch Gruppe waeren
+     */
+    static List<Component> herausloesenWarnungZeilen(Sprache sprache, int felder,
+                                                     int feldX, int feldZ, int bleibend) {
+        List<Component> zeilen = new ArrayList<>();
+        if (bleibend < 2) {
+            zeilen.addAll(sprache.bau(ParzellenSatz.AUFTRENNEN_FELD_WARNUNG_ZWEI, 1L,
+                    Einsatz.von("anzahl", String.valueOf(felder))));
+        } else {
+            zeilen.addAll(sprache.bau(ParzellenSatz.AUFTRENNEN_FELD_WARNUNG, 1L,
+                    nummer(feldX, feldZ).mit("anzahl", String.valueOf(bleibend))));
+        }
+        // Dieselbe Zeile unter BEIDEN Faellen - darum steht ihr Schluessel unter
+        // auftrennen und nicht unter auftrennen.feld.
+        zeilen.addAll(sprache.bau(ParzellenSatz.AUFTRENNEN_WEG_KOMMT_ZURUECK, 1L,
+                Einsatz.keine()));
+        return List.copyOf(zeilen);
+    }
+
+    /** Die Bestaetigungszeile fuer das Herausloesen - mit der Nummer des Feldes. */
+    static List<Component> herausloesenBestaetigenZeilen(Sprache sprache, int px, int pz) {
+        return sprache.bau(ParzellenSatz.AUFTRENNEN_FELD_BESTAETIGEN, 1L, nummer(px, pz));
     }
 
     /**
@@ -797,10 +1152,30 @@ final class ParzellenBefehle {
             return false;
         }
         long sekunden = (rest + 999_999_999L) / 1_000_000_000L;
-        spieler.sendMessage(Component.text("Einen Augenblick - die Abschaetzung liest jeden"
-                + " Block ueber dem Weg. Noch " + sekunden
-                + (sekunden == 1 ? " Sekunde." : " Sekunden."), NamedTextColor.GRAY));
+        zuSchnellZeilen(sprache, sekunden).forEach(spieler::sendMessage);
         return true;
+    }
+
+    /**
+     * Die Abschaetzung muss noch warten - mit der Restzeit.
+     *
+     * <p>{@code Art.GEZAEHLT}: Der Ternaer ueber dem Wortlaut ist weg, die Wahl zwischen
+     * "Sekunde" und "Sekunden" trifft {@code Sprache.bau} an der einen Stelle.
+     *
+     * <p><b>Bei null oder weniger Sekunden GAR NICHTS</b> - wie {@link #aufwandZeilen} bei
+     * zwei Nullen. Die Wache steht hier UND im Zweig darueber, und das ist Absicht: Der
+     * Zweig entscheidet, ob der Befehl ueberhaupt wartet, diese Zeile entscheidet, was der
+     * Spieler liest. Bewacht war bisher nur die erste; aus {@code rest <= 0} ein
+     * {@code rest < 0} zu machen hielt jede Probe gruen, und der Spieler las "Noch 0
+     * Sekunden" und wartete auf etwas, das nicht kommt. Jetzt faengt {@code SendewegTest}
+     * die zweite Haelfte, und die eine Stelle traegt Wache UND Probe.
+     */
+    static List<Component> zuSchnellZeilen(Sprache sprache, long sekunden) {
+        if (sekunden <= 0L) {
+            return List.of();
+        }
+        return sprache.bau(ParzellenSatz.ABKLINGZEIT, sekunden,
+                Einsatz.von("anzahl", String.valueOf(sekunden)));
     }
 
     /**
@@ -809,35 +1184,51 @@ final class ParzellenBefehle {
      * <p>Dieselben Saetze fuer das Herausloesen und fuer das ganze Auftrennen. Zwei
      * Fassungen wuerden irgendwann verschiedene Zahlen verschieden benennen.
      */
-    private void nenneAufwand(Player spieler, Wegbau.Aufwand aufwand) {
+    void nenneAufwand(Player spieler, Wegbau.Aufwand aufwand) {
+        aufwandZeilen(sprache, aufwand).forEach(spieler::sendMessage);
+    }
+
+    /**
+     * Die Zeilen dazu - keine, eine, zwei oder drei.
+     *
+     * <p><b>Bei einer Null wird GAR NICHTS gesendet</b>, und darum bleibt diese Wache ein
+     * {@code if} und wird kein Ternaer ueber dem Wortlaut: Zusammengefasst stuende dem
+     * Spieler "Dabei verschwinden 0 Bloecke von der Flaeche." neben "Auf der Wegflaeche
+     * steht nichts".
+     *
+     * <p><b>Der ganze {@link Wegbau.Aufwand} kommt herein und nicht drei einzelne
+     * Werte.</b> Vorher waren es zwei gleichartige {@code int} hintereinander, und ein
+     * Tausch an der Aufrufstelle war fuer den Compiler in Ordnung: Der Spieler las dann
+     * "Dabei verschwinden 12 Bloecke" und "4928 Fehlstellen werden wieder gefuellt" -
+     * genau die Umkehrung, vor der dieses Javadoc warnt. Jetzt gibt es an der
+     * Aufrufstelle nur noch einen Wert, und {@code istNichts} kommt aus demselben Satz
+     * wie die Zahlen, kann ihnen also nicht widersprechen.
+     */
+    static List<Component> aufwandZeilen(Sprache sprache, Wegbau.Aufwand aufwand) {
+        int verschwindet = aufwand.verschwindet();
+        int verfuellt = aufwand.verfuellt();
+        boolean istNichts = aufwand.istNichts();
+        List<Component> zeilen = new ArrayList<>();
         // "von der Flaeche" und nicht "die auf der Wegflaeche stehen": Gezaehlt wird die
         // ganze Spalte, also auch ein Fremdblock im Schacht darunter. Wer den Satz woertlich
         // nimmt, sucht auf der Oberflaeche und findet nichts - und haelt die rote Zahl fuer
         // einen Fehler.
-        if (aufwand.verschwindet() == 1) {
-            spieler.sendMessage(Component.text("  Dabei verschwindet 1 Block von der "
-                    + "Flaeche.", NamedTextColor.RED));
-        } else if (aufwand.verschwindet() > 1) {
-            spieler.sendMessage(Component.text("  Dabei verschwinden "
-                    + aufwand.verschwindet() + " Bloecke von der Flaeche.",
-                    NamedTextColor.RED));
+        if (verschwindet > 0) {
+            zeilen.addAll(sprache.bau(ParzellenSatz.AUFWAND_VERSCHWINDET, verschwindet,
+                    Einsatz.von("anzahl", String.valueOf(verschwindet))));
         }
         // Getrennt von den Verlusten und in Grau: Hier geht nichts weg, hier kommt etwas
         // hinzu. In einer Zahl zusammengefasst stuende ueber einem leeren Becken "es
         // verschwinden 4.928 Bloecke" - und das Gegenteil waere wahr. "Fehlstelle" und
         // nicht "unter der Flaeche", weil die Oberflaeche selbst dazugehoert.
-        if (aufwand.verfuellt() == 1) {
-            spieler.sendMessage(Component.text("  1 Fehlstelle wird wieder gefuellt.",
-                    NamedTextColor.GRAY));
-        } else if (aufwand.verfuellt() > 1) {
-            spieler.sendMessage(Component.text("  " + aufwand.verfuellt()
-                    + " Fehlstellen werden wieder gefuellt.", NamedTextColor.GRAY));
+        if (verfuellt > 0) {
+            zeilen.addAll(sprache.bau(ParzellenSatz.AUFWAND_VERFUELLT, verfuellt,
+                    Einsatz.von("anzahl", String.valueOf(verfuellt))));
         }
-        if (aufwand.istNichts()) {
-            spieler.sendMessage(Component.text(
-                    "  Auf der Wegflaeche steht nichts - es geht nichts verloren.",
-                    NamedTextColor.GRAY));
+        if (istNichts) {
+            zeilen.addAll(sprache.bau(ParzellenSatz.AUFWAND_NICHTS, 1L, Einsatz.keine()));
         }
+        return List.copyOf(zeilen);
     }
 
     /** Die Felder der Gruppe ohne dieses eine. */
@@ -860,18 +1251,15 @@ final class ParzellenBefehle {
      * <p>Bei einer Gruppe aus zwei Feldern trennt es ganz auf: Was uebrig bliebe, waere ein
      * einzelnes Feld, und eine Gruppe aus einem Feld gibt es nicht.
      */
-    private int herausloesen(CommandContext<CommandSourceStack> zusammenhang) {
-        if (!(zusammenhang.getSource().getExecutor() instanceof Player spieler)) {
-            return Command.SINGLE_SUCCESS;
-        }
+    void herausloesen(Player spieler, int gemeintX, int gemeintZ) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
-            return Command.SINGLE_SUCCESS;
+            return;
         }
         Location ort = hier.get();
-        if (!stehtAuf(spieler, ort, IntegerArgumentType.getInteger(zusammenhang, "x"),
-                IntegerArgumentType.getInteger(zusammenhang, "z"), "Nichts herausgeloest.")) {
-            return Command.SINGLE_SUCCESS;
+        if (!stehtAuf(spieler, ort, gemeintX, gemeintZ,
+                ParzellenSatz.TAT_NICHTS_HERAUSGELOEST)) {
+            return;
         }
         // Die Felder VOR dem Loesen holen, wie beim ganzen Auftrennen: Danach sagt die
         // Ablage nicht mehr, welche Flaeche zurueckzubauen waere.
@@ -880,35 +1268,42 @@ final class ParzellenBefehle {
                 ort.getBlockX(), ort.getBlockZ());
         if (!entscheid.erteilt()) {
             absage(spieler, entscheid.bescheid());
-            return Command.SINGLE_SUCCESS;
+            return;
         }
         Parzelle feld = entscheid.parzelle().orElseThrow();
         List<Parzelle> bleibend = ohneDasFeld(gruppe, feld);
-        if (bleibend.size() < 2) {
-            spieler.sendMessage(Component.text("Aufgetrennt - " + gruppe.size()
-                    + " eigenstaendige Parzellen.", NamedTextColor.GREEN));
-        } else {
-            spieler.sendMessage(Component.text("Feld " + feld.x() + "/" + feld.z()
-                    + " herausgeloest - das Grundstueck hat noch " + bleibend.size()
-                    + " Felder.", NamedTextColor.GREEN));
-        }
+        herausgeloestZeilen(sprache, gruppe.size(), feld.x(), feld.z(), bleibend.size())
+                .forEach(spieler::sendMessage);
         andereDenBoden(spieler, () -> wegbau.baueZurueck(gruppe, bleibt(bleibend)),
-                "Der Weg ist zurueck");
-        return Command.SINGLE_SUCCESS;
+                ParzellenSatz.BODEN_WEG_IST_ZURUECK);
     }
 
-    private int auftrennen(CommandContext<CommandSourceStack> zusammenhang) {
-        if (!(zusammenhang.getSource().getExecutor() instanceof Player spieler)) {
-            return Command.SINGLE_SUCCESS;
+    /**
+     * Herausgeloest - oder, bei einer Gruppe aus zwei Feldern, ganz aufgetrennt.
+     *
+     * <p>Der Wortlaut des zweiten Falles steht nicht zweimal im Quelltext: Er ist genau
+     * derselbe wie beim ganzen Auftrennen und kommt deshalb von dort.
+     *
+     * @param bleibend wie viele Felder jetzt noch Gruppe sind
+     */
+    static List<Component> herausgeloestZeilen(Sprache sprache, int felder, int feldX,
+                                               int feldZ, int bleibend) {
+        if (bleibend < 2) {
+            return aufgetrenntZeilen(sprache, felder);
         }
+        return sprache.bau(ParzellenSatz.AUFTRENNEN_FELD_ERTEILT, 1L,
+                nummer(feldX, feldZ).mit("anzahl", String.valueOf(bleibend)));
+    }
+
+    void auftrennen(Player spieler, int gemeintX, int gemeintZ) {
         Optional<Location> hier = ortInMarktstadt(spieler);
         if (hier.isEmpty()) {
-            return Command.SINGLE_SUCCESS;
+            return;
         }
         Location ort = hier.get();
-        if (!stehtAuf(spieler, ort, IntegerArgumentType.getInteger(zusammenhang, "x"),
-                IntegerArgumentType.getInteger(zusammenhang, "z"), "Nichts aufgetrennt.")) {
-            return Command.SINGLE_SUCCESS;
+        if (!stehtAuf(spieler, ort, gemeintX, gemeintZ,
+                ParzellenSatz.TAT_NICHTS_AUFGETRENNT)) {
+            return;
         }
         // Die Felder VOR dem Auftrennen holen. Danach gehoert keines mehr zu einer Gruppe,
         // und welche Flaeche zurueckzubauen waere, liesse sich nicht mehr feststellen.
@@ -917,13 +1312,17 @@ final class ParzellenBefehle {
                 ort.getBlockX(), ort.getBlockZ());
         if (!entscheid.erteilt()) {
             absage(spieler, entscheid.bescheid());
-            return Command.SINGLE_SUCCESS;
+            return;
         }
-        spieler.sendMessage(Component.text("Aufgetrennt - " + gruppe.size()
-                + " eigenstaendige Parzellen.", NamedTextColor.GREEN));
+        aufgetrenntZeilen(sprache, gruppe.size()).forEach(spieler::sendMessage);
         andereDenBoden(spieler, () -> wegbau.baueZurueck(gruppe, List.of()),
-                "Der Weg ist zurueck");
-        return Command.SINGLE_SUCCESS;
+                ParzellenSatz.BODEN_WEG_IST_ZURUECK);
+    }
+
+    /** Aufgetrennt - aus der Gruppe sind wieder eigene Parzellen geworden. */
+    static List<Component> aufgetrenntZeilen(Sprache sprache, int felder) {
+        return sprache.bau(ParzellenSatz.AUFTRENNEN_ERTEILT, 1L,
+                Einsatz.von("anzahl", String.valueOf(felder)));
     }
 
     /**
@@ -935,21 +1334,41 @@ final class ParzellenBefehle {
      * Das ist die harmlose Haelfte des Fehlers, und sie gehoert ins Protokoll, nicht in
      * einen Abbruch - andersherum waere das Geld weg und das Grundstueck nicht da.
      */
-    private void andereDenBoden(Player spieler, IntSupplier arbeit, String gelungen) {
+    private void andereDenBoden(Player spieler, IntSupplier arbeit, Satz gelungen) {
+        // Das Wortstueck VOR dem try holen: Es kommt aus der Sprachdatei und hat mit dem
+        // Gelingen der Weltarbeit nichts zu tun.
+        String wort = sprache.wort(gelungen, Einsatz.keine());
         try {
-            // "geaendert" und nicht nur die Zahl: Darin stecken der Weg selbst und das,
-            // was geraeumt wurde. Ohne das Wort liest sich "Der Weg ist zurueck (623
-            // Bloecke)", als haette der Weg 623 Bloecke.
-            spieler.sendMessage(Component.text("  " + gelungen + " (" + arbeit.getAsInt()
-                    + " Bloecke geaendert).", NamedTextColor.GRAY));
+            // Die Weltarbeit bleibt IM try: Scheitert sie, darf keine Erfolgszeile
+            // gebaut und keine gesendet werden.
+            bodenZeilen(sprache, wort, arbeit.getAsInt())
+                    .forEach(spieler::sendMessage);
         } catch (RuntimeException fehler) {
             protokoll.log(Level.SEVERE,
                     "Der Boden der Gruppe liess sich nicht aendern - die Ablage stimmt, "
                             + "die Welt nicht", fehler);
-            spieler.sendMessage(Component.text(
-                    "  Der Boden liess sich nicht aendern. Die Parzellen stimmen - "
-                            + "sag einem Operator Bescheid.", NamedTextColor.RED));
+            bodenFehlerZeilen(sprache).forEach(spieler::sendMessage);
         }
+    }
+
+    /**
+     * Was aus der Bodenarbeit geworden ist.
+     *
+     * <p>"geaendert" und nicht nur die Zahl: Darin stecken der Weg selbst und das, was
+     * geraeumt wurde. Ohne das Wort liest sich "Der Weg ist zurueck (623 Bloecke)", als
+     * haette der Weg 623 Bloecke.
+     *
+     * @param gelungen was gelungen ist - das Wortstueck, das der Zweig mitgibt
+     */
+    static List<Component> bodenZeilen(Sprache sprache, String gelungen, int geaendert) {
+        return sprache.bau(ParzellenSatz.BODEN_GELUNGEN, 1L,
+                Einsatz.von("gelungen", gelungen)
+                        .mit("anzahl", String.valueOf(geaendert)));
+    }
+
+    /** Die Ablage stimmt, die Welt nicht. */
+    static List<Component> bodenFehlerZeilen(Sprache sprache) {
+        return sprache.bau(ParzellenSatz.BODEN_FEHLER, 1L, Einsatz.keine());
     }
 
     // --- Kleinteile ------------------------------------------------------------
@@ -966,15 +1385,28 @@ final class ParzellenBefehle {
      * {@code parzelleX/parzelleZ} -, aber die Rasterzelle braucht keine Abfrage.
      */
     private boolean stehtAuf(Player spieler, Location ort, int gemeintX, int gemeintZ,
-                             String nichtsPassiert) {
+                             Satz tat) {
         Rasterplan plan = buch.plan();
         if (plan.parzelleX(ort.getBlockX()) == gemeintX
                 && plan.parzelleZ(ort.getBlockZ()) == gemeintZ) {
             return true;
         }
-        spieler.sendMessage(Component.text("Du stehst nicht auf Parzelle " + gemeintX + "/"
-                + gemeintZ + ". " + nichtsPassiert, NamedTextColor.RED));
+        // Die Tat ist ein WERT aus der Sprachdatei: Vier Zweige geben vier verschiedene
+        // mit, und der Satz darum steht nur EINMAL in der Datei.
+        stehtNichtAufZeilen(sprache, gemeintX, gemeintZ,
+                sprache.wort(tat, Einsatz.keine())).forEach(spieler::sendMessage);
         return false;
+    }
+
+    /**
+     * Er steht auf einer anderen Zelle, als der Befehl nennt.
+     *
+     * @param nichtsPassiert was dadurch nicht geschehen ist - das Wortstueck des Zweiges
+     */
+    static List<Component> stehtNichtAufZeilen(Sprache sprache, int gemeintX, int gemeintZ,
+                                               String nichtsPassiert) {
+        return sprache.bau(ParzellenSatz.STEHT_NICHT_AUF, 1L,
+                nummer(gemeintX, gemeintZ).mit("tat", nichtsPassiert));
     }
 
     /** Ob dieser Ort in der Marktstadt liegt - der eine Vergleich dafuer. */
@@ -994,59 +1426,70 @@ final class ParzellenBefehle {
      * oder auf dem Weg steht, bekommt keine Werbung - sie wuerde ihm etwas verkaufen
      * wollen, das sein Problem nicht loest.
      */
-    private void absage(Player spieler, Besitzbuch.Bescheid bescheid) {
+    void absage(Player spieler, Besitzbuch.Bescheid bescheid) {
         boolean amLimit = anzahl(spieler) >= hoechstzahl(spieler);
-        spieler.sendMessage(Component.text(switch (bescheid) {
-            case KEINE_PARZELLE -> "Hier ist keine Parzelle.";
-            case NOCH_FREI -> amLimit
-                    ? "Diese Parzelle gehoert noch niemandem - aber dein Rang erlaubt "
-                            + hoechstzahl(spieler)
-                            + (hoechstzahl(spieler) == 1 ? " Parzelle" : " Parzellen")
-                            + ", und so viele hast du schon."
-                    : "Diese Parzelle gehoert noch niemandem - nimm sie mit "
-                            + "/parzelle nehmen.";
-            case NICHT_EIGENTUEMER -> "Das darf nur der Eigentuemer.";
-            case SCHON_VERGEBEN -> "Die gehoert schon jemandem.";
-            case AUSSERHALB -> "Das liegt ausserhalb der Marktstadt.";
-            // Mit der Zahl: "nicht mehr" laesst offen, wie viele es denn sind.
-            case GRENZE_ERREICHT -> "Dein Rang erlaubt " + hoechstzahl(spieler)
-                    + (hoechstzahl(spieler) == 1 ? " Parzelle" : " Parzellen")
-                    + ", und so viele hast du schon.";
-            case ZU_WENIG_MARK -> "Dein Guthaben reicht nicht.";
-            case SCHON_EINGETRAGEN -> "Steht schon auf der Liste.";
-            case NICHT_EINGETRAGEN -> "Stand gar nicht auf der Liste.";
-            case TEIL_EINER_GRUPPE -> "Die Parzelle gehoert zu einer Gruppe - "
-                    + "das geht nur ueber die ganze Gruppe.";
-            case NACHBAR_FREI -> "Dort drueben ist keine Parzelle vergeben.";
-            case NACHBAR_FREMD -> "Die Nachbarparzelle gehoert jemand anderem.";
-            case SCHON_IN_GRUPPE -> "Die beiden gehoeren zu zwei verschiedenen "
-                    + "Grundstuecken. Trenne eines auf und haenge die Felder einzeln an.";
-            case SCHON_ZUSAMMEN -> "Die beiden sind schon dasselbe Grundstueck.";
-            case GRUPPE_ZU_GROSS -> "Dein Rang erlaubt hoechstens " + gruppenFelder(spieler)
-                    + (gruppenFelder(spieler) == 1 ? " Feld" : " Felder") + " je Gruppe.";
-            case KEINE_GRUPPE -> "Hier ist keine Gruppe.";
-            case AUF_DEM_WEG -> "Stell dich auf das Feld, das du meinst - nicht auf den Weg.";
-            case HAELT_ZUSAMMEN -> "Dieses Feld haelt dein Grundstueck zusammen. Loese erst eines am Rand heraus.";
-            case ERTEILT -> "Erledigt.";
-        }, NamedTextColor.RED));
-        if (bescheid == Besitzbuch.Bescheid.GRENZE_ERREICHT
-                || bescheid == Besitzbuch.Bescheid.GRUPPE_ZU_GROSS
-                || (bescheid == Besitzbuch.Bescheid.NOCH_FREI && amLimit)) {
-            werbung(spieler);
-        }
+        absageZeilen(sprache, bescheid, amLimit, hoechstzahl(spieler),
+                gruppenFelder(spieler), wirtschaft.werte().rangWerbung())
+                .forEach(spieler::sendMessage);
     }
 
     /**
-     * Die Zeile aus der Konfiguration - einmal, wenn sie gesetzt ist.
+     * Der Satz zum Bescheid - und dahinter die Werbung, wo ein Rang der Grund ist.
+     *
+     * <p>Beide Zahlen kommen herein, obwohl jeder Bescheid hoechstens eine braucht: Welche
+     * Zahl in welchen Satz geht, entscheidet der {@code switch} hier - an einer Stelle,
+     * die eine Probe unmittelbar aufrufen kann, und nicht am Sendeort.
+     *
+     * @param amLimit      ob er seine Hoechstzahl schon erreicht hat
+     * @param hoechstzahl  wie viele Parzellen sein Rang erlaubt
+     * @param gruppenfelder wie viele Felder eine Gruppe haben darf
+     * @param rangWerbung  die Zeile aus der Konfiguration, moeglicherweise leer
+     */
+    static List<Component> absageZeilen(Sprache sprache, Besitzbuch.Bescheid bescheid,
+                                        boolean amLimit, int hoechstzahl,
+                                        int gruppenfelder, String rangWerbung) {
+        // Der switch ueber den WORTLAUT ist weg. Was bleibt, ist die Frage, WELCHE Zahl
+        // dieser Bescheid nennt - und die beantwortet das Verzeichnis, nicht dieser
+        // Zweig. Zwei Verzweigungen ueber dieselbe Frage laufen irgendwann auseinander.
+        long anzahl = switch (Sprachschluessel.zahlquelle(bescheid, amLimit)) {
+            case HOECHSTZAHL -> hoechstzahl;
+            case GRUPPENFELDER -> gruppenfelder;
+            // Kein Satz nennt hier eine Zahl. Die 1 steht fuer die Einzahlform, die
+            // Art.SATZ ohnehin nicht kennt - gewaehlt wird nichts.
+            case KEINE -> 1L;
+        };
+        List<Component> zeilen = new ArrayList<>(sprache.bau(
+                Sprachschluessel.bescheid(bescheid, amLimit), anzahl,
+                Einsatz.von("anzahl", String.valueOf(anzahl))));
+        // Die Wache bleibt am Sendeort (Bauplan 5): Angehaengt wird nur, wo der Rang
+        // wirklich der Grund ist. Wer zu wenig Geld hat, bekommt keine Werbung - sie
+        // wuerde ihm etwas verkaufen wollen, das sein Problem nicht loest.
+        if (bescheid == Besitzbuch.Bescheid.GRENZE_ERREICHT
+                || bescheid == Besitzbuch.Bescheid.GRUPPE_ZU_GROSS
+                || (bescheid == Besitzbuch.Bescheid.NOCH_FREI && amLimit)) {
+            zeilen.addAll(werbungZeilen(sprache, rangWerbung));
+        }
+        return List.copyOf(zeilen);
+    }
+
+    /**
+     * Die Zeile aus der Konfiguration - einmal, wenn sie gesetzt ist, sonst keine.
      *
      * <p>In Gelb und nicht in Rot: Die Absage darueber ist die Nachricht, das hier ist
      * das Angebot. Zwei rote Zeilen hintereinander liest niemand als zwei Dinge.
+     *
+     * <p>Die EINE Stelle, an der diese Zeile entsteht - vier Zweige haengen sie an, und
+     * jeder von ihnen tut es ueber diese Methode. Ein Hinweis, den drei von vier Wegen
+     * kennen, wirkt auf den vierten wie ein Zufall.
      */
-    private void werbung(Player spieler) {
-        String text = wirtschaft.werte().rangWerbung();
-        if (!text.isEmpty()) {
-            spieler.sendMessage(Component.text(text, NamedTextColor.YELLOW));
+    static List<Component> werbungZeilen(Sprache sprache, String rangWerbung) {
+        if (rangWerbung.isEmpty()) {
+            return List.of();
         }
+        // Nur die FARBE kommt aus der Sprachdatei; der Satz selbst steht in der
+        // config.yml unter hinweise.rang-werbung und ist eine Einstellung dieses Servers.
+        return sprache.bau(ParzellenSatz.RANG_WERBUNG, 1L,
+                Einsatz.von("werbung", rangWerbung));
     }
 
     /** Die Preise, die JETZT gelten - beim Gebrauch geholt, nie in ein Feld kopiert. */
@@ -1069,9 +1512,13 @@ final class ParzellenBefehle {
         if (inDerMarktstadt(ort)) {
             return Optional.of(ort);
         }
-        spieler.sendMessage(Component.text(
-                "Parzellen gibt es nur in der Marktstadt.", NamedTextColor.RED));
+        nichtInDerMarktstadtZeilen(sprache).forEach(spieler::sendMessage);
         return Optional.empty();
+    }
+
+    /** Parzellen gibt es nur in der einen Welt. */
+    static List<Component> nichtInDerMarktstadtZeilen(Sprache sprache) {
+        return sprache.bau(ParzellenSatz.NICHT_IN_DER_MARKTSTADT, 1L, Einsatz.keine());
     }
 
     private int anzahl(Player spieler) {
@@ -1166,9 +1613,19 @@ final class ParzellenBefehle {
         return name != null ? name : spieler.toString().substring(0, 8);
     }
 
+    /**
+     * Die Namen als Aufzaehlung - und bei einer leeren Sammlung NICHTS.
+     *
+     * <p>Hier stand {@code orElse("niemand")}, und damit stand das Wort an zwei Orten: Die
+     * Vorlage fuehrt es als {@code parzelle.mitbauer.niemand}, und {@code mitbauerZeilen}
+     * holt es dort. Erreichbar war das Literal nicht - beide Aufrufstellen pruefen vorher
+     * {@code isEmpty()} -, aber eine kuenftige dritte haette "niemand" gelesen, waehrend
+     * die Datei "keiner" sagt. Jetzt gibt es nur eine Quelle fuer dieses Wort, und eine
+     * vergessene Wache faellt als leere Stelle im Satz auf, statt stumm richtig zu sein.
+     */
     private static String namenListe(Collection<UUID> spieler) {
         return spieler.stream().map(ParzellenBefehle::namen).sorted().reduce(
-                (a, b) -> a + ", " + b).orElse("niemand");
+                (a, b) -> a + ", " + b).orElse("");
     }
 
     /**
@@ -1239,7 +1696,7 @@ final class ParzellenBefehle {
     /**
      * Wie {@link #fuerSpieler}, zusaetzlich mit Ort und dem eingegebenen Namen.
      *
-     * <p>Die Welt wird hier geprueft, VOR allem anderen. Vorher lief die Namensauflösung
+     * <p>Die Welt wird hier geprueft, VOR allem anderen. Vorher lief die Namensaufloesung
      * zuerst - und damit auch dann, wenn der Spieler in einer Welt stand, in der es keine
      * Parzellen gibt. Der Name wird absichtlich unaufgeloest weitergegeben: Eintragen und
      * Austragen suchen an verschiedenen Stellen.
@@ -1257,8 +1714,30 @@ final class ParzellenBefehle {
         return Command.SINGLE_SUCCESS;
     }
 
+    /**
+     * Wie {@link #fuerSpieler}, zusaetzlich mit der Nummer aus dem Befehl.
+     *
+     * <p>Die EINE Stelle, an der die zwei Zahlen der Bestaetigung aus Brigadier geholt
+     * werden - vier Zweige brauchen sie, und jeder holte sie bis zum 04.11.2026 selbst.
+     * Dass die Zweige dahinter nur noch zwei {@code int} nehmen, ist der Zweck: Ein Zweig
+     * ohne {@code CommandContext} laesst sich von einer Probe aufrufen, und damit ist
+     * pruefbar, was er sendet.
+     */
+    private int mitNummer(CommandContext<CommandSourceStack> zusammenhang, MitNummer tat) {
+        if (zusammenhang.getSource().getExecutor() instanceof Player spieler) {
+            tat.fuehreAus(spieler, IntegerArgumentType.getInteger(zusammenhang, "x"),
+                    IntegerArgumentType.getInteger(zusammenhang, "z"));
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
     @FunctionalInterface
     private interface OrtUndName {
         void fuehreAus(Player spieler, Location ort, String name);
+    }
+
+    @FunctionalInterface
+    private interface MitNummer {
+        void fuehreAus(Player spieler, int gemeintX, int gemeintZ);
     }
 }
