@@ -4,8 +4,8 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import java.util.List;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 
 /**
@@ -55,16 +55,45 @@ final class RueckwegBefehle {
                 .build();
     }
 
-    private void fuehreZurueck(Object empfaenger) {
+    /**
+     * Der eine Zweig - sichtbar fuer die Probe, die ihn wirklich durchlaeuft.
+     *
+     * <p>Nicht {@code private}, und zwar aus demselben Grund, aus dem jeder Zweig von
+     * {@link ParzellenBefehle} es nicht ist: Nur so kann {@code AufrufstelleTest} ihn mit
+     * einem mitschreibenden Spieler aufrufen und belegen, dass der Tipper die Absage
+     * WIRKLICH liest. Ohne Server geht das hier, weil der Zweig der Absage
+     * {@link Reise} gar nicht anfasst - gebraucht wird allein der {@link Rueckweg}, und
+     * der ist eine Karte im Speicher.
+     */
+    void fuehreZurueck(Object empfaenger) {
         if (!(empfaenger instanceof Player spieler)) {
             return;
         }
         var ziel = rueckweg.letzter(spieler.getUniqueId());
         if (ziel.isEmpty()) {
-            spieler.sendMessage(Component.text("Es ist kein Ort gemerkt - du bist noch"
-                    + " nirgends gewesen, wohin es zurueckgeht.", NamedTextColor.GRAY));
+            keinOrtGemerktZeilen(sprache).forEach(spieler::sendMessage);
             return;
         }
-        reise.fuehre(spieler, ziel.get(), "deinen letzten Ort");
+        reise.fuehre(spieler, ziel.get(), letzterOrtWort(sprache));
+    }
+
+    // --- Die Naht: EIN Satz und EIN Wortstueck, beide ohne Player und ohne Bukkit ----
+
+    /** Es ist nichts gemerkt - an den Tipper, und sonst an niemanden. */
+    static List<Component> keinOrtGemerktZeilen(Sprache sprache) {
+        return sprache.bau(ReiseSatz.ZURUECK_KEIN_ORT_GEMERKT, 1L, Einsatz.keine());
+    }
+
+    /**
+     * Die Aufschrift des Reiseziels, die dieser Befehl durchgibt.
+     *
+     * <p>Kein gesendeter Satz, sondern ein Wortstueck, das in FREMDE Saetze geht - in die
+     * vier unter {@code reise.}, die {@code {ziel}} einsetzen. Darum ein eigener Griff:
+     * Ohne ihn waere nicht zu sehen, dass {@code /zurueck} an dieser Stelle eine WENDUNG
+     * durchgibt, wo {@code /warp} einen Weltnamen und {@code /tpaccept} einen
+     * Spielernamen durchgibt.
+     */
+    static String letzterOrtWort(Sprache sprache) {
+        return sprache.wort(ReiseSatz.ZURUECK_LETZTER_ORT, Einsatz.keine());
     }
 }

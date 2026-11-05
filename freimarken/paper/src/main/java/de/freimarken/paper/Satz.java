@@ -46,7 +46,25 @@ interface Satz {
     /** Die Namen, die der Satz einsetzen DARF - der Vertrag, wortlos. */
     Set<String> platzhalter();
 
-    /** Ob ein leerer Wert erlaubt ist. Heute: nirgends {@code true}. */
+    /**
+     * Fuer den Konstruktor einer Bereichsaufzaehlung: DIESER Wert darf leer sein.
+     *
+     * <p>Ein benannter Wahrheitswert und kein nacktes {@code true}, weil er im
+     * Konstruktoraufruf zwischen Pfad, Art und Platzhaltern steht und dort sonst niemand
+     * lesen koennte, was er bedeutet.
+     */
+    boolean LEER_ERLAUBT = true;
+
+    /**
+     * Ob ein leerer Wert erlaubt ist.
+     *
+     * <p>Fast nirgends {@code true}, und der Grund steht in der Klage selbst: Ein leerer
+     * SATZ sendet eine leere Chatzeile, und der Spieler sieht dann, dass etwas geschieht,
+     * aber nicht was. Die Ausnahme ist ein {@link Art#WORT}, das ein TRENNER ist - es
+     * sendet keine Zeile, sondern laesst zwei Eintraege aneinanderstossen. Heute sind das
+     * die zwei Trenner der Weltenliste in {@link ReiseSatz}; der Rest des Projekts bleibt
+     * bei {@code false}.
+     */
     boolean darfLeerSein();
 
     /** Die Pfade in der Datei: einer, oder zwei mit {@code .eins} und {@code .viele}. */

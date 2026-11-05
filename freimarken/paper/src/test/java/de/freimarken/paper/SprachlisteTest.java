@@ -169,6 +169,55 @@ class SprachlisteTest {
     }
 
     @Test
+    @DisplayName("16b - ein TRENNER darf leer werden, ein Satz und eine Aufschrift nicht")
+    void nurEinTrennerDarfLeerSein() {
+        // Die Ausnahme zu 16, und sie ist keine Bequemlichkeit, sondern PFLICHT: Der
+        // ausgelieferte Trenner der Weltenliste sind ZWEI LEERZEICHEN, und die sind fuer
+        // String.isBlank leer. Ohne die Erlaubnis wirft die ausgelieferte Vorlage schon
+        // beim Laden, und das reisst JEDE Probe mit, die die Datei anfasst - gemessen.
+        //
+        // Erlaubt ist sie aber aus einem Grund, der mit dem Messergebnis nichts zu tun
+        // hat: Ein Trenner sendet KEINE Chatzeile. Leer stossen zwei Weltnamen
+        // aneinander - haesslich, und nichts, wovor eine Klage warnen muesste. Die Klage
+        // in 16 begruendet sich ausdruecklich damit, dass ein leerer SATZ eine leere
+        // Chatzeile sendet.
+        var trennerLeer = Sprachliste.ausQuelle(quelle(
+                "warp:",
+                "  ziele-trenner: \"\"",
+                "  kein-ziel-trenner: \"\""), vorlage());
+
+        assertEquals(List.of(), trennerLeer.klagen());
+        assertNotNull(trennerLeer.buch());
+        assertEquals("", trennerLeer.buch().wortlaut(ReiseSatz.WARP_ZIELE_TRENNER));
+        assertEquals("", trennerLeer.buch().wortlaut(ReiseSatz.WARP_KEIN_ZIEL_TRENNER));
+
+        // Die andere Richtung, und sie macht die Erlaubnis erst zu einer GRENZE: Die
+        // Aufschrift von /zurueck ist ebenfalls ein Art.WORT und darf trotzdem nicht leer
+        // sein - leer liest ein Spieler "geht es nach  - bis dahin stehen bleiben". Die
+        // Erlaubnis haengt also am SCHLUESSEL und nicht an der Art; waere sie an der Art
+        // festgemacht, duerfte auch parzelle.gratis leer sein.
+        var aufschriftLeer = Sprachliste.ausQuelle(quelle(
+                "zurueck:",
+                "  letzter-ort: \"\""), vorlage());
+
+        assertNull(aufschriftLeer.buch());
+        assertTrue(aufschriftLeer.klagen().stream().anyMatch(klage
+                        -> klage.contains("zurueck.letzter-ort")
+                        && klage.contains("ist leer")),
+                "bekommen: " + aufschriftLeer.klagen());
+
+        // Und ein SATZ desselben Befehls ebenso - sonst sendete /warp eine leere Zeile.
+        var satzLeer = Sprachliste.ausQuelle(quelle(
+                "warp:",
+                "  ziele: \"\""), vorlage());
+
+        assertNull(satzLeer.buch());
+        assertTrue(satzLeer.klagen().stream().anyMatch(klage
+                        -> klage.contains("warp.ziele") && klage.contains("ist leer")),
+                "bekommen: " + satzLeer.klagen());
+    }
+
+    @Test
     @DisplayName("17 - ein kaputtes Tag ist eine Klage mit Zeile UND Spalte")
     void kaputtesTagIstKlageMitZeileUndSpalte() {
         var unbekannt = Sprachliste.ausQuelle(quelle(

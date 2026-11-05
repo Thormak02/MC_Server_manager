@@ -461,7 +461,105 @@ class BildGleichTest {
                         "&7Die Konsole spielt nicht. /freimarken spielzeit <spieler> nennt die Zeit eines anwesenden Spielers."),
                 new Zeile(SpielzeitSatz.NICHT_DA, 1L,
                         Einsatz.von("name", "Anna"),
-                        "&cAnna ist nicht da. Gezeigt werden kann nur die Spielzeit eines anwesenden Spielers."));
+                        "&cAnna ist nicht da. Gezeigt werden kann nur die Spielzeit eines anwesenden Spielers."),
+
+                // Bauschritt 5, erster Teil: das Reisen selbst - Reise und
+                // Aufwaermzeit. Die erwarteten Bilder kommen aus dem ROTEN Lauf von
+                // SendewegTest 33ac bis 33ae, der VOR dem Umzug gegen den committeten
+                // Stand lief, und sind dort mit denselben Zeichen noch einmal
+                // festgenagelt.
+                //
+                // {ziel} ist ZWEIERLEI gefuellt, und das ist Absicht: "kornmark" dort,
+                // wo nur ein Weltname ankommen kann, und "Bert" dort, wo auch ein
+                // SPIELERNAME ankommt (/tpaccept - dann liest der Reisende den Namen
+                // des anderen). Ein Satz, der nur zu einem Weltnamen passte, faellt so
+                // auf.
+                new Zeile(ReiseSatz.SCHON_DA, 1L, Einsatz.von("ziel", "kornmark"),
+                        "&7Du bist schon in kornmark."),
+                new Zeile(ReiseSatz.KEIN_PLATZ_AM_ERSCHEINUNGSPUNKT, 1L,
+                        Einsatz.von("ziel", "kornmark"),
+                        "&cIn kornmark ist am Erscheinungspunkt kein Platz zum Stehen. Das ist nichts, was du beheben kannst - melde es."),
+                // Die fuenf Hindernisse. Zwei von ihnen unterscheiden sich in GENAU
+                // EINEM Wort (Welthoehe gegen Weltgrenze), und eines sagt "nicht MEHR"
+                // statt "nicht" - drei Stellen, an denen ein Abschreiben ohne Zeugen
+                // stillschweigend angleicht.
+                new Zeile(ReiseSatz.HINDERNIS_WELT_NICHT_GELADEN, 1L, Einsatz.keine(),
+                        "&cDorthin geht es nicht mehr - die Welt ist nicht geladen."),
+                new Zeile(ReiseSatz.HINDERNIS_ZU_PFERD, 1L, Einsatz.keine(),
+                        "&cNicht zu Pferd - absteigen, dann reisen. Das Reittier bleibt zurueck."),
+                new Zeile(ReiseSatz.HINDERNIS_AUSSERHALB_DER_WELTHOEHE, 1L,
+                        Einsatz.keine(),
+                        "&cDorthin geht es nicht - der Ort liegt ausserhalb der Welthoehe."),
+                new Zeile(ReiseSatz.HINDERNIS_AUSSERHALB_DER_WELTGRENZE, 1L,
+                        Einsatz.keine(),
+                        "&cDorthin geht es nicht - der Ort liegt ausserhalb der Weltgrenze."),
+                new Zeile(ReiseSatz.HINDERNIS_KEIN_PLATZ_MEHR, 1L, Einsatz.keine(),
+                        "&cDort ist kein Platz zum Stehen mehr."),
+                new Zeile(ReiseSatz.LEINE_REISST, 1L, Einsatz.keine(),
+                        "&eAngeleinte Tiere bleiben zurueck - eine Leine reisst beim Weltwechsel."),
+                new Zeile(ReiseSatz.NICHT_GEKLAPPT, 1L, Einsatz.von("ziel", "Bert"),
+                        "&cDie Reise nach Bert hat nicht geklappt."),
+                // Die Abklingzeit ist der EINZIGE gezaehlte Satz dieses Bereichs. Die
+                // Mehrzahlform steht mit der DREI da und nicht mit einer groesseren
+                // Zahl: ZWISCHEN_ZWEI_REISEN sind drei Sekunden, mehr kann der
+                // aufgerundete Rest nicht sein. Die Null kann im Spiel nicht ankommen -
+                // ihre Wache sitzt in Reise.zuSchnellHintereinander -, aber sie steht
+                // hier, weil Probe 11b sie verlangt und weil sie festhaelt, was eine 0
+                // ergaebe: die Mehrzahlform, und nicht etwa eine erfundene dritte.
+                new Zeile(ReiseSatz.ABKLINGZEIT, 1L, Einsatz.von("anzahl", "1"),
+                        "&7Einen Augenblick - noch 1 Sekunde."),
+                new Zeile(ReiseSatz.ABKLINGZEIT, 2L, Einsatz.von("anzahl", "3"),
+                        "&7Einen Augenblick - noch 3 Sekunden."),
+                new Zeile(ReiseSatz.ABKLINGZEIT, 0L, Einsatz.von("anzahl", "0"),
+                        "&7Einen Augenblick - noch 0 Sekunden."),
+                // Die Wartezeit traegt ZWEI Werte. Die Sekunden kommen aus
+                // Aufwaermzeit.DAUER und nicht aus der Datei - darum stehen sie hier als
+                // eingesetzter Wert und nicht als Wort im erwarteten Bild.
+                new Zeile(ReiseSatz.WARTEZEIT, 1L,
+                        Einsatz.von("sekunden", "3").mit("ziel", "Bert"),
+                        "&7Nach 3 Sekunden geht es nach Bert - bis dahin stehen bleiben."),
+                new Zeile(ReiseSatz.ABBRUCH_BEWEGT, 1L, Einsatz.von("ziel", "Bert"),
+                        "&cBewegt - die Reise nach Bert ist abgebrochen."),
+                new Zeile(ReiseSatz.ABBRUCH_SCHADEN, 1L, Einsatz.von("ziel", "Bert"),
+                        "&cSchaden genommen - die Reise nach Bert ist abgebrochen."),
+
+                // Bauschritt 5, zweiter Teil: die zwei BEFEHLE des Reisens. Die
+                // erwarteten Bilder kommen aus dem ROTEN Lauf von SendewegTest 33af und
+                // 33ag, der VOR dem Umzug gegen den committeten Stand lief.
+                //
+                // ZWEI dieser vier Zeilen sind MEHRZEILIG, und das ist der Gewinn dieses
+                // Zuges: Bei warp.ziele stehen drei Chatzeilen in einem Schluessel, bei
+                // warp.kein-ziel zwei. Damit ist der ZEILENBAU festgenagelt und nicht nur
+                // die Farbe - wer eine Umbruchmarke aus der Vorlage nimmt, bekommt hier
+                // eine rote Zeile und nicht im Spiel eine zusammengeschobene Auskunft.
+                //
+                // {liste} kommt hier FERTIG herein, so wie der Zweig sie uebergibt, und
+                // die zwei Trenner sind darin verschieden: zwei Leerzeichen in der
+                // Auskunft, Komma und Leerzeichen in der Absage. Dass die Trenner selbst
+                // aus der Datei kommen, haelt SendewegTest 33af - es ruft die reine
+                // Methode, die sie holt.
+                new Zeile(ReiseSatz.WARP_ZIELE, 1L,
+                        Einsatz.von("liste", "marktstadt  kornmark  nether"),
+                        "&6Reiseziele\n&bmarktstadt  kornmark  nether\n&7/warp <ziel> - "
+                                + "oder durch ein Tor am Bundesmarkt."),
+                // {eingabe} ist der GETIPPTE Name. Hier steht ein Farbtag darin, und
+                // genau das ist die Zusicherung: Er kommt als TEXT an. Wuerde der Wert
+                // vor dem Parsen in die Zeichenkette gespleisst, stuende hier ein roter
+                // Name ohne die Zeichen - und ein Spieler koennte seinen eigenen Chat
+                // faerben.
+                new Zeile(ReiseSatz.WARP_KEIN_ZIEL, 1L,
+                        Einsatz.von("eingabe", "<red>boese</red>")
+                        .mit("liste", "marktstadt, kornmark, nether"),
+                        "&cDorthin geht keine Reise: <red>boese</red>\n&7Moeglich sind: "
+                                + "marktstadt, kornmark, nether"),
+                // KLEIN geschrieben, und das ist Absicht: Hier kommt der AUFGELOESTE Name
+                // an und nicht die Eingabe. Dass der Zweig wirklich den aufgeloesten
+                // uebergibt, haelt AufrufstelleTest 34r mit /warp KORNMARK.
+                new Zeile(ReiseSatz.WARP_WELT_FEHLT, 1L, Einsatz.von("welt", "kornmark"),
+                        "&cDie Welt kornmark gibt es gerade nicht."),
+                new Zeile(ReiseSatz.ZURUECK_KEIN_ORT_GEMERKT, 1L, Einsatz.keine(),
+                        "&7Es ist kein Ort gemerkt - du bist noch nirgends gewesen, wohin"
+                                + " es zurueckgeht."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

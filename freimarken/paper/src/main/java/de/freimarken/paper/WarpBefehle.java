@@ -6,9 +6,9 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.kern.Warpverzeichnis;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import java.util.List;
 import java.util.Map;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
@@ -76,37 +76,90 @@ final class WarpBefehle {
                 .build();
     }
 
-    private void zeigeZiele(Object empfaenger) {
+    /**
+     * Das nackte {@code /warp} - sichtbar fuer die Probe, die den Zweig durchlaeuft.
+     *
+     * <p>Nicht {@code private}, wie jeder Zweig von {@link ParzellenBefehle}: Nur so ruft
+     * {@code AufrufstelleTest} ihn mit einem mitschreibenden Spieler auf. Ohne Server geht
+     * das, weil dieser Zweig {@link Reise} nicht anfasst - er fragt allein das
+     * {@link Warpverzeichnis}, und das ist reine Zeichenkettenarbeit im Kern.
+     */
+    void zeigeZiele(Object empfaenger) {
         if (!(empfaenger instanceof Player spieler)) {
             return;
         }
-        spieler.sendMessage(Component.text("Reiseziele", NamedTextColor.GOLD));
-        spieler.sendMessage(Component.text(String.join("  ", verzeichnis.welten()),
-                NamedTextColor.AQUA));
-        spieler.sendMessage(Component.text("/warp <ziel> - oder durch ein Tor am"
-                + " Bundesmarkt.", NamedTextColor.GRAY));
+        zieleZeilen(sprache, verzeichnis.welten()).forEach(spieler::sendMessage);
     }
 
-    private void reiseAn(Object empfaenger, String eingabe) {
+    /**
+     * {@code /warp <ziel>} - und seine zwei Absagen.
+     *
+     * <p>Nicht {@code private}, aus demselben Grund wie {@link #zeigeZiele}. Auch hier
+     * bleibt {@link Reise} in BEIDEN Absagen unberuehrt; erst die letzte Zeile braucht
+     * sie, und bis dorthin kommt eine Probe ohne Server nicht.
+     */
+    void reiseAn(Object empfaenger, String eingabe) {
         if (!(empfaenger instanceof Player spieler)) {
             return;
         }
         String name = verzeichnis.aufgeloest(eingabe).orElse(null);
         if (name == null) {
-            spieler.sendMessage(Component.text("Dorthin geht keine Reise: " + eingabe,
-                    NamedTextColor.RED));
-            spieler.sendMessage(Component.text("Moeglich sind: "
-                    + String.join(", ", verzeichnis.welten()), NamedTextColor.GRAY));
+            keinZielZeilen(sprache, eingabe, verzeichnis.welten())
+                    .forEach(spieler::sendMessage);
             return;
         }
         World ziel = welten.get(name);
         if (ziel == null) {
             // Der Name steht in der Datei, die Welt ist aber nicht entstanden - das hat
             // beim Start geklagt. Hier nur die Absage, nicht noch eine Erklaerung.
-            spieler.sendMessage(Component.text("Die Welt " + name + " gibt es gerade"
-                    + " nicht.", NamedTextColor.RED));
+            weltFehltZeilen(sprache, name).forEach(spieler::sendMessage);
             return;
         }
         reise.fuehre(spieler, ziel, name);
+    }
+
+    // --- Die Naht: drei Antworten, ohne Player und ohne Bukkit -----------------
+
+    /**
+     * Die Auskunft auf das nackte {@code /warp} - DREI Chatzeilen aus EINEM Griff.
+     *
+     * <p>Ueberschrift, Liste, Hinweis: Sie gehen immer zusammen hinaus, nie einzeln, und
+     * darum ist der Zeilenbau hier ein Stueck des Satzes und nicht eine Folge von drei
+     * Sendeaufrufen. Die Reihenfolge der Welten kommt aus der {@code config.yml} und
+     * bleibt dort entschieden ({@link Warpverzeichnis}); nur der TRENNER zwischen ihnen
+     * ist Darstellung.
+     */
+    static List<Component> zieleZeilen(Sprache sprache, List<String> welten) {
+        return sprache.bau(ReiseSatz.WARP_ZIELE, 1L, Einsatz.von("liste",
+                String.join(sprache.wort(ReiseSatz.WARP_ZIELE_TRENNER, Einsatz.keine()),
+                        welten)));
+    }
+
+    /**
+     * Die Absage auf einen Namen, den es nicht gibt - ZWEI Chatzeilen aus EINEM Griff.
+     *
+     * <p>{@code eingabe} ist der GETIPPTE Name und nicht der aufgeloeste: In diesem Zweig
+     * hat {@code aufgeloest} nichts gefunden, es gibt also keinen aufgeloesten. Die zweite
+     * Zeile nennt dieselbe Liste wie {@link #zieleZeilen}, aber mit einem anderen Trenner
+     * und in Grau - zwei Lagen, zwei Saetze.
+     */
+    static List<Component> keinZielZeilen(Sprache sprache, String eingabe,
+                                          List<String> welten) {
+        return sprache.bau(ReiseSatz.WARP_KEIN_ZIEL, 1L, Einsatz
+                .von("eingabe", eingabe)
+                .mit("liste", String.join(sprache.wort(
+                        ReiseSatz.WARP_KEIN_ZIEL_TRENNER, Einsatz.keine()), welten)));
+    }
+
+    /**
+     * Der Name steht in der {@code config.yml}, die Welt ist nicht entstanden.
+     *
+     * <p>{@code welt} ist der AUFGELOESTE Name und nicht die Eingabe - immer klein, immer
+     * aus der Datei. Das ist der Unterschied, an dem ein Betreiber erkennt, ob er in die
+     * {@code config.yml} oder in den laufenden Server schauen muss, und darum traegt
+     * dieser Satz einen anderen Wertnamen als {@link #keinZielZeilen}.
+     */
+    static List<Component> weltFehltZeilen(Sprache sprache, String welt) {
+        return sprache.bau(ReiseSatz.WARP_WELT_FEHLT, 1L, Einsatz.von("welt", welt));
     }
 }

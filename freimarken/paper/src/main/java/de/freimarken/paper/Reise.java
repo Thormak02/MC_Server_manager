@@ -2,10 +2,10 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Quader;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.LivingEntity;
@@ -93,15 +93,12 @@ final class Reise {
     /** Wie {@link #fuehre(Player, World, String)}, mit einem eigenen Aufwaermbereich. */
     void fuehre(Player spieler, World ziel, String name, Quader bleibeIn) {
         if (ziel.equals(spieler.getWorld())) {
-            spieler.sendMessage(Component.text("Du bist schon in " + name + ".",
-                    NamedTextColor.GRAY));
+            sendeSchonDa(sprache, spieler, name);
             return;
         }
         Optional<Location> ankunft = ankunftIn(ziel);
         if (ankunft.isEmpty()) {
-            spieler.sendMessage(Component.text("In " + name + " ist am Erscheinungspunkt"
-                    + " kein Platz zum Stehen. Das ist nichts, was du beheben kannst -"
-                    + " melde es.", NamedTextColor.RED));
+            sendeKeinPlatzAmErscheinungspunkt(sprache, spieler, name);
             protokoll.warning("Keine Ankunft in " + ziel.key().asString()
                     + ": am Erscheinungspunkt " + ziel.getSpawnLocation().getBlockX() + "/"
                     + ziel.getSpawnLocation().getBlockZ() + " steht in " + Ankunftspunkt.RINGE
@@ -135,9 +132,9 @@ final class Reise {
         if (aufwaermzeit.laeuft(spieler.getUniqueId())) {
             return;
         }
-        Optional<Component> klage = pruefe(spieler, ziel);
+        Optional<Hindernis> klage = pruefe(spieler, ziel);
         if (klage.isPresent()) {
-            spieler.sendMessage(klage.get());
+            hindernisZeilen(sprache, klage.get()).forEach(spieler::sendMessage);
             return;
         }
         if (zuSchnellHintereinander(spieler)) {
@@ -145,8 +142,7 @@ final class Reise {
         }
         World welt = ziel.getWorld();
         if (!welt.equals(spieler.getWorld()) && fuehrtEinTier(spieler)) {
-            spieler.sendMessage(Component.text("Angeleinte Tiere bleiben zurueck - eine"
-                    + " Leine reisst beim Weltwechsel.", NamedTextColor.YELLOW));
+            leineReisstZeilen(sprache).forEach(spieler::sendMessage);
         }
         Quader bereich = bleibeIn != null ? bleibeIn : Aufwaermzeit.seinBlock(spieler);
         aufwaermzeit.beginne(spieler, name, bereich, () -> springe(spieler, ziel, name));
@@ -159,47 +155,42 @@ final class Reise {
      * wieder, wenn es losgeht. In drei Sekunden kann der Boden am Ziel abgebaut, Lava
      * geflossen oder die Welt entladen worden sein.
      */
-    private Optional<Component> pruefe(Player spieler, Location ziel) {
+    private Optional<Hindernis> pruefe(Player spieler, Location ziel) {
         if (ziel == null || !ziel.isWorldLoaded()) {
-            return Optional.of(Component.text("Dorthin geht es nicht mehr - die Welt ist"
-                    + " nicht geladen.", NamedTextColor.RED));
+            return Optional.of(Hindernis.WELT_NICHT_GELADEN);
         }
         World welt = ziel.getWorld();
         // Zu Pferd geht es nicht, und das sagt man besser vorher als nachher:
         // teleportAsync gibt ueber Weltgrenzen hinweg false zurueck, und RETAIN_VEHICLE
         // ist seit 1.21.10 abgekuendigt und wirkt nicht.
         if (spieler.getVehicle() != null) {
-            return Optional.of(Component.text("Nicht zu Pferd - absteigen, dann reisen."
-                    + " Das Reittier bleibt zurueck.", NamedTextColor.RED));
+            return Optional.of(Hindernis.ZU_PFERD);
         }
         // Zwei Pruefungen gegen PaperMC/Paper#13186: Ein Teleport jenseits der
         // Weltkoordinaten hat Paper noch 2025 zum Absturz gebracht, und ein gemerkter Ort
         // aus einer Sicherung oder ein vertippter Quader reicht dafuer.
         if (ziel.getBlockY() < welt.getMinHeight()
                 || ziel.getBlockY() > welt.getMaxHeight() - 2) {
-            return Optional.of(Component.text("Dorthin geht es nicht - der Ort liegt"
-                    + " ausserhalb der Welthoehe.", NamedTextColor.RED));
+            return Optional.of(Hindernis.AUSSERHALB_DER_WELTHOEHE);
         }
         if (!welt.getWorldBorder().isInside(ziel)) {
-            return Optional.of(Component.text("Dorthin geht es nicht - der Ort liegt"
-                    + " ausserhalb der Weltgrenze.", NamedTextColor.RED));
+            return Optional.of(Hindernis.AUSSERHALB_DER_WELTGRENZE);
         }
         if (!Ankunftspunkt.taugt(Ankunftspunkt.griffAuf(welt), ziel.getBlockX(),
                 ziel.getBlockY(), ziel.getBlockZ())) {
             // Abgesagt und nicht verschoben: Der Ort war gemeint. Hat sich dort etwas
             // geaendert - Boden abgebaut, Wasser gelaufen, Lava geflossen -, ist das eine
             // Nachricht und kein Grund, woanders hinzuspringen.
-            return Optional.of(Component.text("Dort ist kein Platz zum Stehen mehr.",
-                    NamedTextColor.RED));
+            return Optional.of(Hindernis.KEIN_PLATZ_MEHR);
         }
         return Optional.empty();
     }
 
     /** Der Sprung selbst - nach der Wartezeit, und erst nach einer zweiten Pruefung. */
     private void springe(Player spieler, Location ziel, String name) {
-        Optional<Component> klage = pruefe(spieler, ziel);
+        Optional<Hindernis> klage = pruefe(spieler, ziel);
         if (klage.isPresent()) {
-            spieler.sendMessage(klage.get());
+            hindernisZeilen(sprache, klage.get()).forEach(spieler::sendMessage);
             return;
         }
         // Der Rueckweg, an der einen Stelle, an der jeder Teleport vorbeikommt - und erst
@@ -210,8 +201,7 @@ final class Reise {
                     if (!Boolean.TRUE.equals(geklappt)) {
                         // Ohne diese Auswertung bliebe der Spieler stehen und haette
                         // „stehen bleiben" gelesen.
-                        spieler.sendMessage(Component.text("Die Reise nach " + name
-                                + " hat nicht geklappt.", NamedTextColor.RED));
+                        sendeNichtGeklappt(sprache, spieler, name);
                         protokoll.warning("Teleport von " + spieler.getName() + " nach "
                                 + ziel.getWorld().key().asString() + " abgelehnt.");
                     }
@@ -251,8 +241,134 @@ final class Reise {
             return false;
         }
         long sekunden = (rest + 999_999_999L) / 1_000_000_000L;
-        spieler.sendMessage(Component.text("Einen Augenblick - noch " + sekunden
-                + (sekunden == 1 ? " Sekunde." : " Sekunden."), NamedTextColor.GRAY));
+        zuSchnellZeilen(sprache, sekunden).forEach(spieler::sendMessage);
         return true;
+    }
+
+    // --- Die Naht: was gesendet wird, ohne Player und ohne Bukkit ---------------
+    //
+    // Je Zweig eine reine Methode. Der Zweig entscheidet und sendet, der Satz entsteht
+    // hier - und nur hier kann eine Probe ihn ohne laufenden Server ansehen. Ohne diese
+    // Trennung gibt es fuer diese Datei ueberhaupt keinen Zeugen: Es gibt keinen
+    // Stellvertreter fuer Reise, und keine Probe des Projekts nannte bis zu diesem
+    // Schritt einen ihrer Wortlaute.
+    //
+    // Die drei Methoden mit {ziel} tragen zusaetzlich einen EIGENEN Sendeweg
+    // (sendeSchonDa, sendeKeinPlatzAmErscheinungspunkt, sendeNichtGeklappt). Der Grund
+    // ist derselbe wie bei AnfragenBefehle.sendeStellen, nur spiegelbildlich: Dort lesen
+    // ZWEI Spieler je eine Zeile, hier liest EINER eine Zeile, in der der Name eines
+    // ANDEREN steht. Bei /tpaccept reist Anna und liest Berts Namen - wer Empfaenger und
+    // Name vertauscht, laesst sie ihren eigenen lesen. Eine reine Zeilen-Methode allein
+    // sieht den Empfaenger nicht; mit dem Sendeweg kann AufrufstelleTest 34p zwei
+    // getrennte Mitschriften fuehren und festhalten, dass GENAU EINER liest.
+
+    /**
+     * Woran eine Reise scheitert - ohne ein einziges Wort.
+     *
+     * <p>Eine Aufzaehlung und nicht fuenf Rueckgaben von Components: {@link #pruefe}
+     * entscheidet damit nur noch, WAS im Weg ist, und {@link #hindernisZeilen} allein
+     * sagt es. Das ist dieselbe Trennung, mit der {@code Besitzbuch.Bescheid} und
+     * {@code ParzellenBefehle.absageZeilen} arbeiten, und sie bringt denselben Zeugen
+     * mit: Eine Probe kann ueber {@code values()} laufen und faengt damit einen
+     * weggefallenen Zweig des {@code switch} ({@code SendewegTest} 33ac).
+     *
+     * <p>Fuenf Konstanten fuer fuenf Wachen, obwohl zwei der Saetze sich in genau einem
+     * Wort unterscheiden ({@link #AUSSERHALB_DER_WELTHOEHE} gegen
+     * {@link #AUSSERHALB_DER_WELTGRENZE}): Es sind zwei verschiedene Sachverhalte, und
+     * ein gemeinsamer Satz mit einem Wortstueck liesse den Betreiber ihn faerben, aber
+     * nicht umstellen - so entschieden im Javadoc von
+     * {@link AnfragenSatz#ABLEHNEN_ABGELEHNT}.
+     */
+    enum Hindernis {
+        /** Die Welt ist entladen. Der Satz sagt „nicht mehr" - sie WAR da. */
+        WELT_NICHT_GELADEN,
+        /** Der Spieler sitzt auf etwas. */
+        ZU_PFERD,
+        /** Ueber oder unter der Welthoehe - EIN Satz fuer beide Richtungen. */
+        AUSSERHALB_DER_WELTHOEHE,
+        /** Jenseits der Weltgrenze. */
+        AUSSERHALB_DER_WELTGRENZE,
+        /** Am Zielort steht kein tragfaehiger Boden mehr mit Platz darueber. */
+        KEIN_PLATZ_MEHR
+    }
+
+    /** {@link ReiseSatz#SCHON_DA} - nur aus der WELT-Fassung erreichbar. */
+    static List<Component> schonDaZeilen(Sprache sprache, String ziel) {
+        return sprache.bau(ReiseSatz.SCHON_DA, 1L, Einsatz.von("ziel", ziel));
+    }
+
+    /**
+     * Am Erscheinungspunkt der Zielwelt ist kein Platz - ein BETREIBERFEHLER.
+     *
+     * <p>Nicht zu verwechseln mit {@link Hindernis#KEIN_PLATZ_MEHR}: Dort hat sich an
+     * einem gewollten Ort etwas geaendert, hier taugt der Erscheinungspunkt einer ganzen
+     * Welt nicht. Darum sagt dieser Satz „das kannst du nicht beheben", und darum steht
+     * neben seinem Sendeort ein {@code protokoll.warning} mit dem Rat zu
+     * {@code /setworldspawn} - die Diagnose bleibt im Programm.
+     */
+    static List<Component> keinPlatzAmErscheinungspunktZeilen(Sprache sprache,
+                                                              String ziel) {
+        return sprache.bau(ReiseSatz.KEIN_PLATZ_AM_ERSCHEINUNGSPUNKT, 1L,
+                Einsatz.von("ziel", ziel));
+    }
+
+    /**
+     * Der Satz zu einem {@link Hindernis} - EINE Stelle fuer ZWEI Sendeorte.
+     *
+     * <p>{@link #pruefe} laeuft zweimal, und beide Aufrufer schicken ihr Ergebnis hier
+     * durch. Darum tragen die fuenf Saetze je GENAU EINEN Schluessel: Zehn waeren derselbe
+     * Satz an zwei Orten, und keine Probe faende das - {@code GrenzeTest} 30 bliebe gruen,
+     * weil beide benutzt wuerden.
+     */
+    static List<Component> hindernisZeilen(Sprache sprache, Hindernis hindernis) {
+        return sprache.bau(switch (hindernis) {
+            case WELT_NICHT_GELADEN -> ReiseSatz.HINDERNIS_WELT_NICHT_GELADEN;
+            case ZU_PFERD -> ReiseSatz.HINDERNIS_ZU_PFERD;
+            case AUSSERHALB_DER_WELTHOEHE ->
+                    ReiseSatz.HINDERNIS_AUSSERHALB_DER_WELTHOEHE;
+            case AUSSERHALB_DER_WELTGRENZE ->
+                    ReiseSatz.HINDERNIS_AUSSERHALB_DER_WELTGRENZE;
+            case KEIN_PLATZ_MEHR -> ReiseSatz.HINDERNIS_KEIN_PLATZ_MEHR;
+        }, 1L, Einsatz.keine());
+    }
+
+    /** Keine Absage - die Reise laeuft danach weiter. Nur bei Weltwechsel MIT Tier. */
+    static List<Component> leineReisstZeilen(Sprache sprache) {
+        return sprache.bau(ReiseSatz.LEINE_REISST, 1L, Einsatz.keine());
+    }
+
+    /** Der Server hat den Teleport abgelehnt - gesendet aus dem Rueckruf von teleportAsync. */
+    static List<Component> nichtGeklapptZeilen(Sprache sprache, String ziel) {
+        return sprache.bau(ReiseSatz.NICHT_GEKLAPPT, 1L, Einsatz.von("ziel", ziel));
+    }
+
+    /**
+     * Die Abklingzeit, mit Einzahl und Mehrzahl.
+     *
+     * <p>Die Null kann hier nicht ankommen, und die Wache dafuer bleibt in
+     * {@link #zuSchnellHintereinander}: Sie entscheidet dort nicht nur ueber den Satz,
+     * sondern auch darueber, ob die Reise weiterlaeuft. Anders als bei
+     * {@code ParzellenBefehle.zuSchnellZeilen} kann sie darum nicht mit in die reine
+     * Methode wandern.
+     */
+    static List<Component> zuSchnellZeilen(Sprache sprache, long sekunden) {
+        return sprache.bau(ReiseSatz.ABKLINGZEIT, sekunden,
+                Einsatz.von("anzahl", String.valueOf(sekunden)));
+    }
+
+    // --- Die Sendewege: genau EIN Leser, und der reist ------------------------
+
+    static void sendeSchonDa(Sprache sprache, Player spieler, String ziel) {
+        schonDaZeilen(sprache, ziel).forEach(spieler::sendMessage);
+    }
+
+    static void sendeKeinPlatzAmErscheinungspunkt(Sprache sprache, Player spieler,
+                                                  String ziel) {
+        keinPlatzAmErscheinungspunktZeilen(sprache, ziel)
+                .forEach(spieler::sendMessage);
+    }
+
+    static void sendeNichtGeklappt(Sprache sprache, Player spieler, String ziel) {
+        nichtGeklapptZeilen(sprache, ziel).forEach(spieler::sendMessage);
     }
 }

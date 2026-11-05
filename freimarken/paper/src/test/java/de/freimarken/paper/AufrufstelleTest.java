@@ -13,11 +13,13 @@ import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.Stadtgrenze;
 import de.freimarken.kern.Wirtschaftsstand;
+import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftswerte;
 import de.freimarken.kern.Zeitwerte;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -574,6 +576,12 @@ class AufrufstelleTest {
     // zwei Spielerobjekten geworden; die Begruendung steht im Javadoc von
     // AnfragenBefehle.sendeStellen.
     //
+    // Was in diesem Zweig NEBEN den drei Sendestellen steht, bleibt damit ausserhalb
+    // dieser drei Proben: die Weiterreise, die nimmAn danach ausloest. Sie bekommt den
+    // einen Spieler als Empfaenger und den Namen des ANDEREN mitgegeben, und auch das ist
+    // vertauschbar - festgenagelt am Quelltext von GrenzeTest 31m, seit das Reisen seine
+    // Saetze aus der Sprachdatei liest.
+    //
     // Was diese drei Proben halten und SendewegTest 33y bis 33ab NICHT halten koennen:
     // dort werden die Zeilen-Methoden unmittelbar aufgerufen, der Empfaenger kommt gar
     // nicht vor, und der Name wird als Wert hereingegeben. Hier kommt der Name aus dem
@@ -685,5 +693,200 @@ class AufrufstelleTest {
 
         assertEquals("&71 Anfrage abgelehnt.\n", mitschrift(annaLiest));
         assertEquals("", mitschrift(bertLiest));
+    }
+
+    // --- Reise und Aufwaermzeit: EIN Leser, und der Name gehoert einem ANDEREN --
+    //
+    // Die gespiegelte Lage zu /tpa, und sie braucht dasselbe Werkzeug. Bei /tpaccept
+    // berechnet AnfragenBefehle zwei Spieler - "wandert" und "bleibt" - und ruft dann
+    // reise.fuehre(wandert, bleibt.getLocation(), bleibt.getName()): Gesendet wird an den
+    // WANDERNDEN, genannt wird der Name des BLEIBENDEN. Anna reist und liest "geht es
+    // nach Bert"; Bert liest aus diesen zwei Dateien NICHTS.
+    //
+    // Vertauscht man Empfaenger und Name dort, liest der Reisende seinen EIGENEN Namen -
+    // und wird ausserdem der falsche Spieler teleportiert. Diese zwei Proben halten die
+    // eine Haelfte: dass GENAU EINER liest und dass der uebergebene Wert im Satz steht.
+    // Die andere Haelfte - dass die Aufrufstelle die zwei nicht vertauscht - nagelt
+    // GrenzeTest 31m am Quelltext fest, denn der Zweig selbst ist ohne laufenden Server
+    // nicht aufrufbar (Bukkit.getPlayer, und fuer Reise gibt es keinen Stellvertreter:
+    // sie braucht eine Aufwaermzeit, und die einen JavaPlugin - eine KLASSE, kein
+    // Stellvertreter).
+    //
+    // JE SPIELER EINE EIGENE MITSCHRIFT, und das ist hier der ganze Punkt: Mit einer
+    // gemeinsamen Liste waere "Bert liest nichts" kein Befund, weil die Vereinigung
+    // beider Zeilen dieselbe bleibt.
+
+    @Test
+    @DisplayName("34p - Reise sendet an den Reisenden, und nennt den Namen des anderen")
+    void reiseSendetNurAnDenReisenden() {
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        Player anna = spielerDoppel(NAME_ANNA, annaLiest);
+        Player bert = spielerDoppel(NAME_BERT, bertLiest);
+
+        // Anna liest, Berts Name steht im Satz - die gespiegelte Lage von /tpaccept,
+        // hier mit dem Satz nachgestellt, den die Probe ohne Server erreichen kann.
+        // Aus /tpaccept ist DIESE Zeile nicht erreichbar: Sie haengt an der
+        // WELT-Fassung von fuehre, und die rufen nur WarpBefehle und Torwache. Darum
+        // sagt ReiseSatz.SCHON_DA auch, "Du bist schon in Bert." koenne es im Spiel
+        // nicht geben - was diese Probe hier nachstellt, ist der Empfaengerweg und
+        // nicht der Spielfall.
+        Reise.sendeSchonDa(sprache, anna, NAME_BERT);
+
+        assertEquals("&7Du bist schon in Bert.\n", mitschrift(annaLiest));
+        assertEquals("", mitschrift(bertLiest), "aus diesen zwei Dateien liest der"
+                + " Bleibende NICHTS - eine Zeile an ihn waere ein neuer Satz");
+
+        // Diese Zeile ist nur aus der WELT-Fassung erreichbar, der Wert also immer ein
+        // Weltname. Dass der Satz auch mit einem Spielernamen uebersetzt, ist genau der
+        // Grund, warum der Platzhalter nicht {welt} heisst.
+        Reise.sendeKeinPlatzAmErscheinungspunkt(sprache, anna, "kornmark");
+
+        assertEquals("&cIn kornmark ist am Erscheinungspunkt kein Platz zum Stehen. Das"
+                + " ist nichts, was du beheben kannst - melde es.\n",
+                mitschrift(annaLiest));
+        assertEquals("", mitschrift(bertLiest));
+
+        // Aus dem Rueckruf von teleportAsync - aus allen fuenf Aufrufern erreichbar, und
+        // darum mit der Wendung von /zurueck geprueft.
+        Reise.sendeNichtGeklappt(sprache, anna, "deinen letzten Ort");
+
+        assertEquals("&cDie Reise nach deinen letzten Ort hat nicht geklappt.\n",
+                mitschrift(annaLiest));
+        assertEquals("", mitschrift(bertLiest));
+
+        // Und derselbe Weg mit dem ANDEREN als Reisendem. Das prueft das Werkzeug:
+        // Fuellten beide Stellvertreter in Wahrheit DIESELBE Liste, waeren die leeren
+        // Mitschriften darueber kein Befund.
+        Reise.sendeSchonDa(sprache, bert, NAME_ANNA);
+
+        assertEquals("&7Du bist schon in Anna.\n", mitschrift(bertLiest));
+        assertEquals("", mitschrift(annaLiest));
+    }
+
+    @Test
+    @DisplayName("34q - Aufwaermzeit sendet an den Reisenden, Wartezeit und Abbruch")
+    void aufwaermzeitSendetNurAnDenReisenden() {
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        Player anna = spielerDoppel(NAME_ANNA, annaLiest);
+        Player bert = spielerDoppel(NAME_BERT, bertLiest);
+
+        // Die drei Sekunden kommen aus Aufwaermzeit.DAUER und sind ein WERT. Wer sie als
+        // Wort in die Sprachdatei schreibt, laesst den Satz an dem Tag luegen, an dem die
+        // Konstante sich aendert - darum geht hier eine andere Zahl durch denselben Satz.
+        Aufwaermzeit.sendeWartezeit(sprache, anna, Aufwaermzeit.DAUER.toSeconds(),
+                NAME_BERT);
+
+        assertEquals("&7Nach 3 Sekunden geht es nach Bert - bis dahin stehen bleiben.\n",
+                mitschrift(annaLiest));
+        assertEquals("", mitschrift(bertLiest));
+
+        Aufwaermzeit.sendeWartezeit(sprache, anna, 10L, NAME_BERT);
+
+        assertEquals("&7Nach 10 Sekunden geht es nach Bert - bis dahin stehen bleiben.\n",
+                mitschrift(annaLiest));
+
+        // Beide Abbruchgruende, und beide an den Reisenden. Der Bleibende erfaehrt nichts
+        // davon, dass die Reise zu ihm abgebrochen ist - heute so, und das bleibt so.
+        Aufwaermzeit.sendeAbbruch(sprache, anna, Aufwaermzeit.Abbruchgrund.BEWEGT,
+                NAME_BERT);
+
+        assertEquals("&cBewegt - die Reise nach Bert ist abgebrochen.\n",
+                mitschrift(annaLiest));
+        assertEquals("", mitschrift(bertLiest));
+
+        Aufwaermzeit.sendeAbbruch(sprache, anna, Aufwaermzeit.Abbruchgrund.SCHADEN,
+                NAME_BERT);
+
+        assertEquals("&cSchaden genommen - die Reise nach Bert ist abgebrochen.\n",
+                mitschrift(annaLiest));
+        assertEquals("", mitschrift(bertLiest));
+
+        // Das Werkzeug gegengeprueft, wie in 34p.
+        Aufwaermzeit.sendeAbbruch(sprache, bert, Aufwaermzeit.Abbruchgrund.SCHADEN,
+                NAME_ANNA);
+
+        assertEquals("&cSchaden genommen - die Reise nach Anna ist abgebrochen.\n",
+                mitschrift(bertLiest));
+        assertEquals("", mitschrift(annaLiest));
+    }
+
+    // --- /warp und /zurueck: hier wird der ZWEIG wirklich durchlaufen -----------
+    //
+    // Der Unterschied zu 34p und 34q, und er ist der ganze Gewinn des zweiten Zuges von
+    // Schritt 5: Dort erreichen die Proben nur die Sendewege, weil Reise und Aufwaermzeit
+    // ohne Server nicht zu bauen sind. Diese zwei Befehle dagegen sind in ihren ABSAGEN
+    // vollstaendig ohne Server erreichbar - keiner der vier Zweige, die etwas sagen,
+    // fasst Reise an, und was sie sonst brauchen (Warpverzeichnis, Rueckweg) sind reine
+    // Klassen ohne Bukkit. Darum geht hier der ECHTE Zweig durch, mit dem echten
+    // Warpverzeichnis und dem echten Rueckweg.
+
+    @Test
+    @DisplayName("34r - Zweig /warp: der Tipper liest die drei Antworten, und zwar diese")
+    void warpZweigeSendenAnDenTipper() {
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        var verzeichnis = Warpverzeichnis.ausWelten(
+                List.of("marktstadt", "kornmark", "nether"));
+        // Die Weltenkarte ist LEER, die Liste nicht: Genau die Lage des dritten Zweiges -
+        // der Name steht in der config.yml, die Welt ist nicht entstanden. reise bleibt
+        // null, weil kein Zweig dieser Probe sie anfasst; ein Stellvertreter fuer eine
+        // KLASSE ist ohne Bukkit.setServer nicht baubar.
+        var befehle = new WarpBefehle(verzeichnis, Map.of(), null, sprache);
+        Player anna = spielerDoppel(ANNA, auf(0, 0));
+
+        befehle.zeigeZiele(anna);
+
+        assertEquals("&6Reiseziele\n"
+                + "&bmarktstadt  kornmark  nether\n"
+                + "&7/warp <ziel> - oder durch ein Tor am Bundesmarkt.\n",
+                mitschrift());
+
+        befehle.reiseAn(anna, "mordor");
+
+        assertEquals("&cDorthin geht keine Reise: mordor\n"
+                + "&7Moeglich sind: marktstadt, kornmark, nether\n", mitschrift());
+
+        // GROSS getippt, und das ist der Zweck dieser Zeile: aufgeloest() nimmt jede
+        // Schreibweise an und gibt den KLEINEN Namen aus der config.yml zurueck. Im
+        // Zweig von WarpBefehle.reiseAn sind die getippte Eingabe und der aufgeloeste
+        // Name gleichzeitig im Geltungsbereich und vom selben Typ - wer die Eingabe in
+        // die Absage gibt, uebersetzt anstandslos, und keine Zaehltafel und keine
+        // Platzhalterprobe sieht es. SICHTBAR wird es allein an der Schreibweise, und
+        // darum steht hier KORNMARK und nicht kornmark.
+        befehle.reiseAn(anna, "KORNMARK");
+
+        assertEquals("&cDie Welt kornmark gibt es gerade nicht.\n", mitschrift(),
+                "KLEIN geschrieben, obwohl GROSS getippt wurde - genannt wird der Name"
+                        + " aus der config.yml und nicht die Eingabe. Steht hier"
+                        + " dagegen GAR NICHTS, dann sendet der Zweig den Satz"
+                        + " ueberhaupt nicht mehr - zwei Fehler, eine Probe, und der"
+                        + " Vergleich darunter sagt, welcher es ist.");
+
+        // Die drei stillen Rueckkehren: Ein Nicht-Spieler liest nichts. Durch requires
+        // praktisch unerreichbar, aber vorhanden - und eine Probe, die den Zweig ruft,
+        // soll nicht an einer Ausnahme scheitern.
+        befehle.zeigeZiele("die Konsole");
+        befehle.reiseAn("die Konsole", "mordor");
+
+        assertEquals("", mitschrift(), "ein Nicht-Spieler bekommt keine Zeile");
+    }
+
+    @Test
+    @DisplayName("34s - Zweig /zurueck: ohne gemerkten Ort liest der Tipper die Absage")
+    void rueckwegZweigSendetAnDenTipper() {
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        // Der ECHTE Rueckweg und keine Attrappe: Die Klasse ist eine Karte im Speicher
+        // und braucht keinen Server. Leer, also greift der Zweig der Absage - und der
+        // fasst reise nicht an.
+        var befehle = new RueckwegBefehle(new Rueckweg(), null, sprache);
+        Player anna = spielerDoppel(ANNA, auf(0, 0));
+
+        befehle.fuehreZurueck(anna);
+
+        assertEquals("&7Es ist kein Ort gemerkt - du bist noch nirgends gewesen, wohin"
+                + " es zurueckgeht.\n", mitschrift());
+
+        befehle.fuehreZurueck("die Konsole");
+
+        assertEquals("", mitschrift(), "ein Nicht-Spieler bekommt keine Zeile");
     }
 }

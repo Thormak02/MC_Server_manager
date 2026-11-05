@@ -28,7 +28,9 @@
 # NEUE CHATZEILE: \n im Satz - EIN Backslash, anders als bei der spitzen
 #   Klammer. Der Unterschied: Die Folge \n kennt YAML als Umbruch, \< kennt es
 #   nicht - darum braucht die Klammer zwei und der Umbruch einen. Jede Zeile wird
-#   einzeln gesendet, mit derselben Farbe.
+#   einzeln gesendet. Eine Farbe gilt ueber den Umbruch hinweg weiter - du kannst
+#   aber auch je Zeile ein eigenes Tag setzen, und das tun mehrere Zeilen dieser
+#   Datei schon: warp.ziele traegt gold, aqua und grau in EINER Zeile.
 #   BEISPIEL UMBRUCH: zeile: "<gray>Erste Zeile\nZweite Zeile</gray>"
 #   BEISPIEL ZWEI ZEILEN: Erste Zeile | Zweite Zeile
 # ZAEHLT: ein Satz mit einer Zahl hat zwei Formen, eins und viele. BEIDE Pflicht.
@@ -562,11 +564,202 @@ spielzeit:
   # zeit.verlauf-muster: Eine Spielzeit ist die eines Tages und nicht einer Liste.
   tag-muster: "dd.MM.yyyy"
 
-# /mark, /parzelle, die vier Teleportbefehle und die Spielzeit stehen jetzt
-# vollstaendig hier.
-# Noch nicht hier: /warp, /zurueck, die drei Wachen und /freimarken
-# selbst. Sie stehen bis zu ihrem Bauschritt im Programm - ein Satz steht immer an
-# genau einem Ort, nie an keinem. Die eine Ausnahme sagt es oben selbst:
-# waehrung.betrag traegt die Marke HALB IN KRAFT, weil die zwei Preiszeilen von
-# /freimarken bis zu ihrem Bauschritt weiter aus dem Programm kommen. Innerhalb von
-# /mark, /parzelle und den Teleportbefehlen gibt es diese zweite Quelle nicht mehr.
+# DAS REISEN SELBST - jeder Teleport laeuft hier durch.
+#
+# Dieser Abschnitt steht unter reise und NICHT unter einem Befehl, anders als anfrage
+# und spielzeit. Der Grund: Dieselbe Reise loesen FUENF Befehle aus - /warp, das Tor
+# am Bundesmarkt, /zurueck, /tpaccept und /freimarken parzelle -, und alle fuenf
+# laufen durch dieselben zwei Pruefungen und dieselbe Wartezeit. Ein Abschnitt je
+# Befehl waere derselbe Satz an fuenf Orten: Du aendertest einen und wundertest dich,
+# warum die anderen vier weiter das Alte sagen. Die eigenen Absagen von /warp und
+# /zurueck gehoeren dagegen unter ihren Befehl und stehen weiter unten unter warp und
+# zurueck.
+#
+# {ziel} IST DERSELBE WERT IN ALLEN SECHS SAETZEN, die ihn einsetzen. Er heisst nicht
+# {welt}, weil er fuenferlei sein kann: ein kleingeschriebener Weltname (/warp, Tor),
+# ein SPIELERNAME (/tpaccept - dann liest der Reisende den Namen des anderen), die
+# Wendung aus zurueck.letzter-ort (/zurueck) oder die Aufschrift "Parzelle 3/-4"
+# (/freimarken parzelle). NUR schon-da und kein-platz-am-erscheinungspunkt tragen
+# garantiert einen Weltnamen; die uebrigen vier nicht. Schreibe darum nichts in sie
+# hinein, was nur zu einem Weltnamen passt.
+#
+# HALB IN KRAFT (Reiseziel): EINE dieser fuenf Fuellungen ist selbst noch Spielertext
+#   AUS DEM PROGRAMM und nicht aus dieser Datei - die Aufschrift "Parzelle 3/-4" bei
+#   /freimarken parzelle. Du kannst die Saetze hier also umstellen und faerben, diese
+#   eine Aufschrift aber nicht aendern. Sie zieht mit ihrem eigenen Bauschritt um, und
+#   VorlageTest 10f laesst diese Warnung dann nicht stehen. Die Wendung von /zurueck
+#   stand bis zum zweiten Zug von Schritt 5 ebenfalls hier - sie steht jetzt unter
+#   zurueck.letzter-ort, samt der Erklaerung ihrer schiefen Grammatik.
+reise:
+  # {ziel} - du bist schon in der Zielwelt, es geht nirgends hin. Grau und nicht rot:
+  # Es ist nichts kaputt.
+  schon-da: "<gray>Du bist schon in {ziel}.</gray>"
+  # {ziel} - am Erscheinungspunkt der Zielwelt steht kein tragfaehiger Boden mit Platz
+  # darueber. Der EINZIGE Satz dieses Abschnitts, der sagt "du kannst nichts tun" -
+  # darum nimm ihm diesen Teil nicht weg. Daneben schreibt das Plugin eine Zeile ins
+  # Serverprotokoll, mit dem Weltschluessel und dem Rat zu /setworldspawn; die bleibt
+  # im Programm, denn eine Diagnose darf nicht von dieser Datei abhaengen.
+  kein-platz-am-erscheinungspunkt: "<red>In {ziel} ist am Erscheinungspunkt kein Platz zum Stehen. Das ist nichts, was du beheben kannst - melde es.</red>"
+
+  # WAS GEGEN DIESEN EINEN TELEPORT SPRICHT. Jede dieser fuenf Zeilen wird ZWEIMAL
+  # geprueft - einmal, bevor gewartet wird, und einmal, wenn es losgeht: In drei
+  # Sekunden kann der Boden abgebaut, Lava geflossen oder die Welt entladen worden
+  # sein. Darum steht jeder Satz EINMAL hier und gilt fuer beide Pruefungen.
+  hindernis:
+    # Die Welt ist entladen. Das Wort "mehr" ist Absicht: Sie WAR da, als der Ort
+    # gemerkt wurde - anders als bei den zwei Zeilen darunter.
+    welt-nicht-geladen: "<red>Dorthin geht es nicht mehr - die Welt ist nicht geladen.</red>"
+    # Er sitzt auf einem Reittier. Gesagt wird es vorher und nicht nachher, weil ein
+    # Teleport mit Reittier ueber Weltgrenzen hinweg ohnehin fehlschlaegt.
+    zu-pferd: "<red>Nicht zu Pferd - absteigen, dann reisen. Das Reittier bleibt zurueck.</red>"
+    # Ueber ODER unter der Welthoehe - EIN Satz fuer beide Richtungen, weil "zu tief"
+    # und "zu hoch" heute zeichengleich dasselbe lesen. Zwei Zeilen daraus zu machen
+    # waere ein Satz, den das Spiel nicht hat.
+    ausserhalb-der-welthoehe: "<red>Dorthin geht es nicht - der Ort liegt ausserhalb der Welthoehe.</red>"
+    # Jenseits der Weltgrenze. Unterscheidet sich von der Zeile darueber in GENAU EINEM
+    # Wort, und das ist Absicht: zwei Wachen, zwei Sachverhalte. Beide tragen den
+    # GANZEN Satz und nicht bloss das unterscheidende Wort - nur so kannst du sie
+    # umstellen und nicht bloss faerben.
+    ausserhalb-der-weltgrenze: "<red>Dorthin geht es nicht - der Ort liegt ausserhalb der Weltgrenze.</red>"
+    # Am Zielort hat sich etwas geaendert - Boden abgebaut, Wasser gelaufen, Lava
+    # geflossen. Abgesagt und NICHT woanders hin verschoben: Der Ort war gemeint.
+    # Teilt die Woerter "kein Platz zum Stehen" mit kein-platz-am-erscheinungspunkt
+    # oben, ist aber ein anderer Fall: dort eine ganze Welt, hier ein einzelner Ort.
+    kein-platz-mehr: "<red>Dort ist kein Platz zum Stehen mehr.</red>"
+
+  # Die einzige gelbe Zeile des Reisens, und die einzige, nach der es WEITERGEHT: Die
+  # Reise laeuft danach durch. Nur bei einem Weltwechsel mit einem angeleinten Tier -
+  # ohne Weltwechsel und ohne Tier sagt niemand etwas.
+  leine-reisst: "<yellow>Angeleinte Tiere bleiben zurueck - eine Leine reisst beim Weltwechsel.</yellow>"
+  # {ziel} - der Server hat den Teleport abgelehnt, nachdem der Spieler brav
+  # stillgestanden hat. Daneben geht eine Zeile ins Serverprotokoll. Teilt die Wendung
+  # "Reise nach {ziel}" mit den zwei Zeilen unter abbruch, ist aber ein anderer Fall:
+  # hier hat der SERVER abgelehnt, dort hat der SPIELER die Wartezeit verloren.
+  nicht-geklappt: "<red>Die Reise nach {ziel} hat nicht geklappt.</red>"
+  # {anzahl} ZAEHLT - zwei Reisen zu schnell hintereinander. Nicht gegen Missbrauch,
+  # sondern gegen die Platte: Jede Reise liest den Zielchunk. Die Zahl liegt zwischen
+  # 1 und 3 und ist aufgerundet; eine Nullform gibt es nicht und braucht es nicht,
+  # denn bei 0 reist man einfach.
+  # NICHT ZU VERWECHSELN mit parzelle.abklingzeit, das mit denselben drei Woertern
+  # beginnt: Das ist die Abklingzeit der Wegabschaetzung und eine andere Sache. Zwei
+  # Zeilen und nicht eine - sonst laese ein Reisender den Satz ueber die Abschaetzung.
+  abklingzeit:
+    eins: "<gray>Einen Augenblick - noch {anzahl} Sekunde.</gray>"
+    viele: "<gray>Einen Augenblick - noch {anzahl} Sekunden.</gray>"
+
+  # {sekunden} {ziel} - die Wartezeit hat begonnen. Drei Sekunden, in denen der
+  # Spieler bleiben muss, wo er ist; sonst ist jeder Teleport ein Fluchtweg aus einem
+  # Kampf. Ein Tor verhaelt sich damit wie ein Netherportal.
+  # {sekunden} ist ein WERT und keine Zahl zum Hineinschreiben: Dieselbe Einstellung
+  #   im Programm bestimmt, wie lange wirklich gewartet wird. Schreib die 3 als Wort
+  #   hinein, und der Satz luegt an dem Tag, an dem die Wartezeit sich aendert.
+  # KEINE Zaehlform, und das ist das heutige Bild: "Nach 1 Sekunden" waere falsch,
+  #   kommt aber nicht vor, weil es immer drei Sekunden sind. Eine Einzahlform waere
+  #   hier erfunden.
+  wartezeit: "<gray>Nach {sekunden} Sekunden geht es nach {ziel} - bis dahin stehen bleiben.</gray>"
+
+  # {ziel} - die Wartezeit ist abgebrochen. ZWEI Gruende, zwei Zeilen, und beide
+  # tragen den ganzen Satz: nur so kannst du sie umstellen. Beim ABMELDEN wird
+  # ebenfalls abgebrochen, aber ohne Meldung - es liest sie dann niemand mehr, und
+  # darum gibt es dafuer hier keine dritte Zeile.
+  abbruch:
+    # Er hat den Bereich verlassen, in dem er angefangen hat. Bei einem Befehl ist das
+    # sein eigener Block, bei einem Tor der ganze Torquader - wer sich darin dreht,
+    # bricht nicht ab.
+    bewegt: "<red>Bewegt - die Reise nach {ziel} ist abgebrochen.</red>"
+    # Er hat Schaden genommen. Ein eigener Grund, weil Bewegung allein eine Luecke
+    # liesse: Wer eingekeilt in einer Ecke steht, bewegt sich durch Rueckstoss nicht
+    # immer einen ganzen Block weit - und genau dann waere der Teleport doch ein
+    # Fluchtweg.
+    schaden: "<red>Schaden genommen - die Reise nach {ziel} ist abgebrochen.</red>"
+
+# /WARP - was NUR dieser Befehl sagt.
+#
+# Unter warp und nicht unter reise, anders als der Abschnitt darueber: Den liest jeder,
+# der irgendwie reist, diesen Abschnitt nur, wer /warp tippt. Wer ihn umformuliert, trifft
+# damit nicht die Absage des Tores am Bundesmarkt.
+#
+# DER TRENNER DER WELTENLISTE STEHT HIER, die REIHENFOLGE nicht. Wie die Namen getrennt
+#   werden, ist Aufbau und gehoert in diese Datei; in welcher Reihenfolge sie kommen, ist
+#   die Reihenfolge der config.yml - oben steht die Marktstadt, und wer /warp m tippt,
+#   meint fast immer sie.
+# DIE ZWEI TRENNER SIND VERSCHIEDEN, und das ist eine Entscheidung und kein Versehen:
+#   ziele steht fuer sich und darf breit sein, kein-ziel haengt an einer roten Absage und
+#   soll eine Zeile bleiben. Willst du sie gleich, mach sie gleich - niemand haelt dich
+#   ab.
+# DIE ZWEI TRENNER DUERFEN LEER BLEIBEN. Sie sind die EINZIGEN Zeilen dieser ganzen Datei,
+#   die das duerfen, denn ein Trenner sendet keine Chatzeile - leer stossen die Namen
+#   aneinander, und das ist haesslich und nicht kaputt. Jede andere Zeile dieser Datei
+#   wird, wenn du sie leer laesst, eine Klage - auch zurueck.letzter-ort gleich darunter.
+warp:
+  # {liste} - DREI Chatzeilen in einer Zeile dieser Datei, getrennt von der Umbruchmarke.
+  # Jede traegt ihre eigene Farbe: die Ueberschrift gold, die Liste aqua, der Hinweis
+  # grau. EIN Schluessel und nicht drei, weil sie immer zusammen hinausgehen - so kannst
+  # du sie umstellen und nicht bloss umfaerben.
+  # Die spitze Klammer um ziel ist ein ZEICHEN und keine Farbe, darum ZWEI Backslashes
+  # davor. Das Wort darin ist der Name des Befehlsarguments: Wird es im Programm
+  # umbenannt, gehoert es hier mitgeaendert.
+  # HALB IN KRAFT (Torhinweis): DER SCHWANZ " - oder durch ein Tor am Bundesmarkt."
+  # steht WORTGLEICH noch in einem zweiten Satz, naemlich in der Absage am Nether- und
+  # Endportal - und DIESER kommt bis zu seinem Bauschritt weiter aus dem Programm. Wer
+  # den Schwanz hier aendert, liest ihn am Portal weiter im Alten. Das sind zwei
+  # Saetze mit zwei verschiedenen Anfaengen und bleiben zwei - aber wer den zweiten
+  # hierher holt, nimmt fuer den Schwanz diesen Wortlaut und erfindet keinen neuen.
+  ziele: "<gold>Reiseziele</gold>\n<aqua>{liste}</aqua>\n<gray>/warp \\<ziel> - oder durch ein Tor am Bundesmarkt.</gray>"
+  # Was zwischen zwei Weltnamen der Zeile darueber steht: ZWEI Leerzeichen. Kein Farbtag -
+  # der Trenner geht als WERT in den Satz und ist dort ein Blatt. Darf leer sein.
+  ziele-trenner: "  "
+  # {eingabe} {liste} - ZWEI Chatzeilen, rot und grau, und ebenfalls EIN Schluessel: Die
+  # Absage und die Liste darunter gehen immer zusammen hinaus.
+  # {eingabe} ist der GETIPPTE Name und KEIN Weltname - in diesem Fall gibt es keinen. Er
+  # kommt roh herein und bleibt Text: Ein Farbtag darin steht dem Spieler woertlich im
+  # Chat und wirkt nicht, denn zuerst wird dieser Satz gelesen und der Wert erst danach
+  # eingesetzt.
+  # DIESER SATZ BEGINNT MIT "Dorthin geht" wie drei Zeilen unter reise.hindernis. Vier
+  # Ursachen, vier Zeilen - aber derselbe Anfang, damit ein Spieler sie als dieselbe Art
+  # von Absage liest. Wenn du den Anfang aenderst, aendere alle vier.
+  kein-ziel: "<red>Dorthin geht keine Reise: {eingabe}</red>\n<gray>Moeglich sind: {liste}</gray>"
+  # Was zwischen zwei Weltnamen der Zeile darueber steht: KOMMA und Leerzeichen, anders als
+  # bei ziele-trenner. Darf leer sein.
+  kein-ziel-trenner: ", "
+  # {welt} - der Name steht in der Weltenliste der config.yml, die Welt ist aber nicht
+  # entstanden; das hat beim Start geklagt, hier steht nur die Absage.
+  # {welt} heisst nicht {eingabe}, und das ist ein Riegel und keine Laune: Hier steht der
+  # AUFGELOESTE Name - immer klein, immer aus der config.yml. Wer /warp KORNMARK tippt,
+  # liest "Die Welt kornmark gibt es gerade nicht."
+  # NICHT ZU VERWECHSELN mit reise.hindernis.welt-nicht-geladen: Fuer den Spieler ist
+  # beides "das Ziel ist nicht zu haben", fuer dich sind es zwei Ursachen - hier ein
+  # Eintrag ohne Welt, dort eine Welt, die zur Laufzeit entladen ist. An diesem Unterschied
+  # entscheidest du, ob du in die config.yml oder in den laufenden Server schaust.
+  welt-fehlt: "<red>Die Welt {welt} gibt es gerade nicht.</red>"
+
+# /ZURUECK - und /back, weil viele Spieler das tippen. Eine Absage und ein Wortstueck.
+zurueck:
+  # Es ist nichts gemerkt. Grau und nicht rot: Es ist nichts kaputt, der Spieler war nur
+  # noch nirgends. Eine Zeile gegen KEINE Zeile - hat er einen gemerkten Ort, sagt dieser
+  # Befehl gar nichts und reist.
+  kein-ort-gemerkt: "<gray>Es ist kein Ort gemerkt - du bist noch nirgends gewesen, wohin es zurueckgeht.</gray>"
+  # KEIN gesendeter Satz, sondern das Wortstueck, das dieser Befehl als Reiseziel
+  # durchgibt: Es wird in die vier Zeilen unter reise EINGESETZT, die {ziel} nennen - die
+  # Wartezeit, die zwei Abbrueche und "hat nicht geklappt". Kein Farbtag, ein eingesetzter
+  # Wert ist dort ein Blatt. Darf NICHT leer sein, sonst liest der Spieler "geht es nach
+  # - bis dahin stehen bleiben".
+  # HIER STEHT DIE SCHIEFHEIT, und ab jetzt kannst DU sie beheben: Mit dieser Wendung
+  # liest ein Spieler "Nach 3 Sekunden geht es nach deinen letzten Ort" - grammatisch
+  # schief, und genau so ausgeliefert. Der Umzug hat daran nichts geaendert, weil ein
+  # Umzug nichts aendern darf. Wer es gerade haben will, aendert entweder dieses
+  # Wortstueck oder die vier Zeilen unter reise - und dann beides zusammen.
+  letzter-ort: "deinen letzten Ort"
+
+# /mark, /parzelle, die vier Teleportbefehle, die Spielzeit, das Reisen selbst sowie
+# /warp und /zurueck stehen jetzt vollstaendig hier.
+# Noch nicht hier: die drei Wachen und /freimarken selbst. Sie stehen bis zu ihrem
+# Bauschritt im Programm - ein Satz steht immer an genau einem Ort, nie an keinem. Die
+# drei Ausnahmen sagen es selbst: waehrung.betrag traegt die Marke HALB IN KRAFT, weil die
+# zwei Preiszeilen von /freimarken bis zu ihrem Bauschritt weiter aus dem Programm kommen,
+# der Kopf von reise traegt die Marke HALB IN KRAFT (Reiseziel), weil eine der fuenf
+# Aufschriften eines Reiseziels noch im Programm steht, und warp.ziele traegt die Marke
+# HALB IN KRAFT (Torhinweis), weil der Hinweis auf das Tor am Bundesmarkt wortgleich auch
+# in der Absage am Nether- und Endportal steht und die noch im Programm sitzt. Innerhalb von /mark, /parzelle,
+# den Teleportbefehlen, der Spielzeit, dem Reisen, /warp und /zurueck gibt es sonst keine
+# zweite Quelle mehr.

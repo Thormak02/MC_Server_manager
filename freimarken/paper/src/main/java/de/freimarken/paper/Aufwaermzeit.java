@@ -3,10 +3,10 @@ package de.freimarken.paper;
 import de.freimarken.kern.Quader;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -98,9 +98,7 @@ final class Aufwaermzeit implements Listener {
             tat.run();
         }, takte);
         laufende.put(wer, new Lauf(aufgabe, bleibeIn, wohin));
-        spieler.sendMessage(Component.text("Nach " + DAUER.toSeconds()
-                + " Sekunden geht es nach " + wohin + " - bis dahin stehen bleiben.",
-                NamedTextColor.GRAY));
+        sendeWartezeit(sprache, spieler, DAUER.toSeconds(), wohin);
     }
 
     /**
@@ -130,8 +128,7 @@ final class Aufwaermzeit implements Listener {
         if (lauf.bleibeIn().enthaelt(zu.getBlockX(), zu.getBlockY(), zu.getBlockZ())) {
             return;
         }
-        brichAb(ereignis.getPlayer(), "Bewegt - die Reise nach " + lauf.wohin()
-                + " ist abgebrochen.");
+        brichAb(ereignis.getPlayer(), Abbruchgrund.BEWEGT);
     }
 
     /**
@@ -150,8 +147,7 @@ final class Aufwaermzeit implements Listener {
         if (lauf == null) {
             return;
         }
-        brichAb(spieler, "Schaden genommen - die Reise nach " + lauf.wohin()
-                + " ist abgebrochen.");
+        brichAb(spieler, Abbruchgrund.SCHADEN);
     }
 
     /** Beim Abmelden ohne Meldung - es liest sie niemand mehr. */
@@ -163,11 +159,20 @@ final class Aufwaermzeit implements Listener {
         }
     }
 
-    private void brichAb(Player spieler, String grund) {
+    /**
+     * Bricht ab und sagt, warum.
+     *
+     * <p>Der Parameter war bis zu diesem Schritt ein fertiger {@code String grund}, den
+     * die zwei Zweige hereingaben - genau dieser handgeschriebene Satz ist das, was der
+     * Umzug wegnimmt. Jetzt ist es ein {@link Abbruchgrund}, und das Ziel holt sich die
+     * Methode aus ihrem eigenen {@code Lauf}: Wer den Satz baut, soll ihn nicht auch noch
+     * uebergeben bekommen.
+     */
+    private void brichAb(Player spieler, Abbruchgrund grund) {
         Lauf lauf = laufende.remove(spieler.getUniqueId());
         if (lauf != null) {
             lauf.aufgabe().cancel();
-            spieler.sendMessage(Component.text(grund, NamedTextColor.RED));
+            sendeAbbruch(sprache, spieler, grund, lauf.wohin());
         }
     }
 
@@ -175,5 +180,76 @@ final class Aufwaermzeit implements Listener {
     void brichAllesAb() {
         laufende.values().forEach(lauf -> lauf.aufgabe().cancel());
         laufende.clear();
+    }
+
+    // --- Die Naht: was gesendet wird, ohne Player und ohne Bukkit ---------------
+    //
+    // Dieselbe Naht wie in Reise, aus demselben Grund: Diese Klasse ist ohne laufenden
+    // Server nicht baubar (sie braucht einen JavaPlugin, und das ist eine KLASSE und
+    // keine Schnittstelle - ein Stellvertreter dafuer gibt es nicht). Reine Methoden sind
+    // damit der einzige Griff, an dem eine Probe den Wortlaut ueberhaupt ansehen kann.
+
+    /**
+     * Warum eine Wartezeit abgebrochen wurde - ohne ein einziges Wort.
+     *
+     * <p>Zwei Konstanten und nicht ein Satz mit einem {@code {grund}}-Wortstueck: Es sind
+     * zwei Ereignisse ({@link PlayerMoveEvent}, {@link EntityDamageEvent}) und zwei
+     * Sachverhalte. Ein Wortstueck liesse den Betreiber das Wort faerben, aber den Satz
+     * nicht umstellen - dieselbe Entscheidung wie im Javadoc von
+     * {@link AnfragenSatz#ABLEHNEN_ABGELEHNT}.
+     *
+     * <p>Das Abmelden hat ABSICHTLICH keine Konstante: Dort wird ohne Meldung
+     * abgebrochen, denn es liest sie niemand mehr ({@link #beimAbmelden}). Eine dritte
+     * Konstante hier waere ein Satz, den das Spiel nicht hat.
+     */
+    enum Abbruchgrund {
+        /** Der Spieler hat seinen Bereich verlassen. */
+        BEWEGT,
+        /** Der Spieler hat Schaden genommen. */
+        SCHADEN
+    }
+
+    /**
+     * „Nach {sekunden} Sekunden geht es nach {ziel} - bis dahin stehen bleiben."
+     *
+     * <p>{@code sekunden} ist ein WERT und keine Zahl im Wort: Dieselbe {@link #DAUER}
+     * rechnet in {@link #beginne} die Takte aus. Wer die 3 als Wort in die Sprachdatei
+     * schreibt, spaltet eine Wahrheit in zwei - der Satz luegt an dem Tag, an dem
+     * {@code DAUER} sich aendert, waehrend die Wartezeit gehorcht.
+     *
+     * <p><b>Kein {@code Art.GEZAEHLT}</b>, und das ist das heutige Bild: „Nach 1
+     * Sekunden" waere falsch, kommt aber nicht vor, weil {@code DAUER} fest auf drei
+     * Sekunden steht. Eine erfundene Einzahlform waere eine Aenderung am Spielbild, die
+     * niemand bestellt hat.
+     */
+    static List<Component> wartezeitZeilen(Sprache sprache, long sekunden, String ziel) {
+        return sprache.bau(ReiseSatz.WARTEZEIT, 1L,
+                Einsatz.von("sekunden", String.valueOf(sekunden)).mit("ziel", ziel));
+    }
+
+    /** Der Satz zu einem {@link Abbruchgrund} - EINE Stelle fuer beide Ereignisse. */
+    static List<Component> abbruchZeilen(Sprache sprache, Abbruchgrund grund,
+                                         String ziel) {
+        return sprache.bau(switch (grund) {
+            case BEWEGT -> ReiseSatz.ABBRUCH_BEWEGT;
+            case SCHADEN -> ReiseSatz.ABBRUCH_SCHADEN;
+        }, 1L, Einsatz.von("ziel", ziel));
+    }
+
+    // --- Die Sendewege: genau EIN Leser, und der reist ------------------------
+    //
+    // Warum ueberhaupt ein eigener Sendeweg, steht in Reise: Der Name im Satz kann einem
+    // ANDEREN Spieler gehoeren, der selbst nichts liest. Nur mit diesem Griff kann
+    // AufrufstelleTest 34q zwei getrennte Mitschriften fuehren und festhalten, dass
+    // GENAU EINER liest - und zwar der, der reist.
+
+    static void sendeWartezeit(Sprache sprache, Player spieler, long sekunden,
+                               String ziel) {
+        wartezeitZeilen(sprache, sekunden, ziel).forEach(spieler::sendMessage);
+    }
+
+    static void sendeAbbruch(Sprache sprache, Player spieler, Abbruchgrund grund,
+                             String ziel) {
+        abbruchZeilen(sprache, grund, ziel).forEach(spieler::sendMessage);
     }
 }

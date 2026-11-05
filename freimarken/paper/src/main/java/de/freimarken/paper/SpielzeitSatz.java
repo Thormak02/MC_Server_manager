@@ -36,11 +36,14 @@ import java.util.Set;
  * Einheitenzeichen und keine Wortstuecke, die man umstellen will.
  *
  * <p><b>Keine Marke {@code HALB IN KRAFT:}</b>, und zwar nachgezaehlt: Nach diesem Schritt
- * steht kein Wort dieser Anzeige noch im Programm. Die zwei anderen Spielerstellen mit
- * Zeiteinheiten ({@code Aufwaermzeit}, {@code Reise}) sagen "Sekunden" und nicht "s" - ein
- * anderer Wortlaut und damit kein zweiter Ort desselben Satzes. Wird daraus spaeter eine
- * gemeinsame Einheit, braucht sie die Marke; heute waere sie eine Warnung vor nichts und
- * ausserdem eine Zeitbombe in {@code VorlageTest} 10e, die den GANZEN Vorlagentext liest.
+ * steht kein Wort dieser Anzeige noch im Programm. Die zwei anderen Stellen mit
+ * Zeiteinheiten - {@link ReiseSatz#ABKLINGZEIT} und {@link ReiseSatz#WARTEZEIT} - sagen
+ * "Sekunden" und nicht "s", ein anderer Wortlaut und damit kein zweiter Ort desselben
+ * Satzes. Seit dem ersten Teil von Schritt 5 stehen auch sie in derselben Datei, nur
+ * unter {@code reise} statt unter {@code spielzeit}; vorher waren es Stellen im Programm.
+ * Wird daraus spaeter eine gemeinsame Einheit, braucht sie die Marke; heute waere sie eine
+ * Warnung vor nichts und ausserdem eine Zeitbombe in {@code VorlageTest} 10e, die den
+ * GANZEN Vorlagentext liest.
  */
 enum SpielzeitSatz implements Satz {
 
@@ -96,8 +99,10 @@ enum SpielzeitSatz implements Satz {
      *
      * <p>{@code {abwesenheit}} wird mit einem LEEREN Wert eingesetzt, solange die
      * Untaetigkeitsregel an ist. Ein leerer WERT und kein leerer Schluessel -
-     * {@link #darfLeerSein} bleibt hier wie ueberall {@code false}, denn in der DATEI muss
-     * ein Wortlaut stehen.
+     * {@link #darfLeerSein} bleibt in diesem Bereich durchweg {@code false}, denn in der
+     * DATEI muss ein Wortlaut stehen. Die einzige Ausnahme des Projekts sind die zwei
+     * TRENNER der Weltenliste in {@link ReiseSatz} - ein Trenner sendet keine Zeile,
+     * sondern laesst zwei Eintraege aneinanderstossen.
      */
     ZUSTAND_GEZAEHLT("spielzeit.zustand.gezaehlt", Art.SATZ,
             "menge", "abstand", "abwesenheit"),

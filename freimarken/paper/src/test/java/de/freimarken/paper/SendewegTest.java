@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.mojang.brigadier.StringReader;
 import de.freimarken.kern.Art;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Buchung;
@@ -1054,5 +1055,271 @@ class SendewegTest {
         assertEquals(4, bilder.size(), "vier Faelle, vier Saetze - zwei gleiche hiessen,"
                 + " dass eine Richtung oder ein Empfaenger keinen eigenen Satz hat: "
                 + bilder);
+    }
+
+    // --- Bauschritt 5, erster Teil: Reise und Aufwaermzeit ---------------------
+    //
+    // Die Lage dieser zwei Dateien ist das GEGENTEIL von /tpa. Dort lesen zwei Spieler je
+    // eine Zeile; hier liest GENAU EINER - der Reisende -, aber der Name im Satz kann
+    // einem ANDEREN gehoeren, der selbst nichts liest. Bei /tpaccept reist Anna und liest
+    // Berts Namen. Dass nur einer liest, nagelt AufrufstelleTest 34p/34q mit zwei
+    // getrennten Mitschriften fest; dass jeder Satz das Richtige SAGT, diese drei Tafeln.
+    //
+    // DIE ZWEI ZIELWERTE SIND ABSICHTLICH VERSCHIEDEN GEARTET. Dieselbe Stelle bekommt
+    // heute fuenferlei: einen kleingeschriebenen Weltnamen (/warp, Tor), einen
+    // Spielernamen (/tpaccept), die Wendung "deinen letzten Ort" (/zurueck) und die
+    // Aufschrift "Parzelle 3/-4" (/freimarken parzelle). Mit der Wendung liest ein
+    // Spieler heute "geht es nach deinen letzten Ort" - grammatisch schief, aber das ist
+    // der AUSGELIEFERTE Wortlaut. Der Massstab ist zeichengleich, also steht die
+    // Schiefheit hier als Zusicherung: Wer sie beim Umzug stillschweigend begradigt,
+    // aendert das Spielbild, und ohne diese Zeile haette er dafuer keinen Zeugen.
+
+    /** Ein Weltname, wie {@code /warp} und das Tor ihn durchgeben - aus der config.yml. */
+    private static final String ZIEL_WELT = "kornmark";
+
+    /** Das Satzstueck, das {@code /zurueck} durchgibt. Heute schief, und so bleibt es. */
+    private static final String ZIEL_WENDUNG = "deinen letzten Ort";
+
+    @Test
+    @DisplayName("33ac - Zweig Reise: JEDES Hindernis, nicht eine Auswahl")
+    void hindernisZweig() {
+        Tafel tafel = new Tafel();
+        // Die ganze Aufzaehlung und nicht eine Auswahl - dasselbe Muster wie 33t: Faellt
+        // ein Zweig des switch weg oder tauschen zwei ihre Saetze, ist genau diese Tafel
+        // rot. Zwei der fuenf unterscheiden sich in GENAU EINEM Wort (Welthoehe gegen
+        // Weltgrenze), und einer sagt "nicht MEHR" statt "nicht" - drei Stellen, an denen
+        // ein Abschreiben ohne Zeugen stillschweigend angleicht.
+        for (Reise.Hindernis hindernis : Reise.Hindernis.values()) {
+            tafel.fall(hindernis.name(), Reise.hindernisZeilen(sprache, hindernis));
+        }
+
+        assertEquals("""
+                == WELT_NICHT_GELADEN
+                &cDorthin geht es nicht mehr - die Welt ist nicht geladen.
+                == ZU_PFERD
+                &cNicht zu Pferd - absteigen, dann reisen. Das Reittier bleibt zurueck.
+                == AUSSERHALB_DER_WELTHOEHE
+                &cDorthin geht es nicht - der Ort liegt ausserhalb der Welthoehe.
+                == AUSSERHALB_DER_WELTGRENZE
+                &cDorthin geht es nicht - der Ort liegt ausserhalb der Weltgrenze.
+                == KEIN_PLATZ_MEHR
+                &cDort ist kein Platz zum Stehen mehr.
+                """, tafel.ganz());
+    }
+
+    @Test
+    @DisplayName("33ad - Zweig Reise: die Saetze mit Ziel, die Leine und die Abklingzeit")
+    void reiseZweig() {
+        Tafel tafel = new Tafel();
+        // Je Satz mit {ziel} ZWEI Faelle, mit den zwei verschiedenen Arten von Fuellung.
+        tafel.fall("schon-da/welt", Reise.schonDaZeilen(sprache, ZIEL_WELT));
+        tafel.fall("schon-da/wendung", Reise.schonDaZeilen(sprache, ZIEL_WENDUNG));
+        tafel.fall("kein-platz-am-erscheinungspunkt", Reise
+                .keinPlatzAmErscheinungspunktZeilen(sprache, ZIEL_WELT));
+        tafel.fall("leine-reisst", Reise.leineReisstZeilen(sprache));
+        tafel.fall("nicht-geklappt/welt", Reise.nichtGeklapptZeilen(sprache, ZIEL_WELT));
+        tafel.fall("nicht-geklappt/wendung",
+                Reise.nichtGeklapptZeilen(sprache, ZIEL_WENDUNG));
+        // Eins gegen viele, und die Drei als obere Grenze: ZWISCHEN_ZWEI_REISEN sind drei
+        // Sekunden, der aufgerundete Rest liegt also zwischen 1 und 3. Die Null steht
+        // nicht in dieser Tafel, weil sie hier nicht ankommen kann - ihre Wache sitzt in
+        // zuSchnellHintereinander und entscheidet dort auch, ob die Reise weiterlaeuft.
+        // Was eine 0 ergaebe, haelt BildGleichTest fest.
+        tafel.fall("abklingzeit/eine", Reise.zuSchnellZeilen(sprache, 1L));
+        tafel.fall("abklingzeit/drei", Reise.zuSchnellZeilen(sprache, 3L));
+
+        assertEquals("""
+                == schon-da/welt
+                &7Du bist schon in kornmark.
+                == schon-da/wendung
+                &7Du bist schon in deinen letzten Ort.
+                == kein-platz-am-erscheinungspunkt
+                &cIn kornmark ist am Erscheinungspunkt kein Platz zum Stehen. Das ist nichts, was du beheben kannst - melde es.
+                == leine-reisst
+                &eAngeleinte Tiere bleiben zurueck - eine Leine reisst beim Weltwechsel.
+                == nicht-geklappt/welt
+                &cDie Reise nach kornmark hat nicht geklappt.
+                == nicht-geklappt/wendung
+                &cDie Reise nach deinen letzten Ort hat nicht geklappt.
+                == abklingzeit/eine
+                &7Einen Augenblick - noch 1 Sekunde.
+                == abklingzeit/drei
+                &7Einen Augenblick - noch 3 Sekunden.
+                """, tafel.ganz());
+    }
+
+    @Test
+    @DisplayName("33ae - Zweig Aufwaermzeit: die Wartezeit und JEDER Abbruchgrund")
+    void aufwaermzeitZweig() {
+        Tafel tafel = new Tafel();
+        // Die Sekunden kommen als WERT herein, nicht als Wort im Satz: Dieselbe Konstante
+        // DAUER rechnet in beginne() die Takte aus. Darum stehen hier ZWEI Dauern - mit
+        // einer einzigen waere eine hart in die Datei geschriebene 3 gruen.
+        tafel.fall("wartezeit/drei-welt",
+                Aufwaermzeit.wartezeitZeilen(sprache, 3L, ZIEL_WELT));
+        tafel.fall("wartezeit/drei-wendung",
+                Aufwaermzeit.wartezeitZeilen(sprache, 3L, ZIEL_WENDUNG));
+        tafel.fall("wartezeit/zehn-welt",
+                Aufwaermzeit.wartezeitZeilen(sprache, 10L, ZIEL_WELT));
+        // Die ganze Aufzaehlung, wie in 33ac. Die zwei Saetze teilen die letzten 39
+        // Zeichen - ein gemeinsamer Satz mit einem {grund}-Wortstueck waere die bequeme,
+        // vom Projekt aber verworfene Loesung, und ein Tausch der zwei ist hier rot.
+        for (Aufwaermzeit.Abbruchgrund grund : Aufwaermzeit.Abbruchgrund.values()) {
+            tafel.fall("abbruch/" + grund.name(),
+                    Aufwaermzeit.abbruchZeilen(sprache, grund, ZIEL_WELT));
+        }
+
+        assertEquals("""
+                == wartezeit/drei-welt
+                &7Nach 3 Sekunden geht es nach kornmark - bis dahin stehen bleiben.
+                == wartezeit/drei-wendung
+                &7Nach 3 Sekunden geht es nach deinen letzten Ort - bis dahin stehen bleiben.
+                == wartezeit/zehn-welt
+                &7Nach 10 Sekunden geht es nach kornmark - bis dahin stehen bleiben.
+                == abbruch/BEWEGT
+                &cBewegt - die Reise nach kornmark ist abgebrochen.
+                == abbruch/SCHADEN
+                &cSchaden genommen - die Reise nach kornmark ist abgebrochen.
+                """, tafel.ganz());
+    }
+
+    /**
+     * Die Weltenliste, wie sie aus der {@code config.yml} kommt.
+     *
+     * <p>DREI Namen und die Marktstadt zuerst, denn die Reihenfolge der Datei ist eine
+     * Zusage ({@code Warpverzeichnis}, Plan 4.3) und bleibt im Programm. Mit nur einem
+     * Namen waere jeder Trenner gruen, auch ein falscher - darum drei.
+     */
+    private static final List<String> WELTEN = List.of("marktstadt", "kornmark", "nether");
+
+    @Test
+    @DisplayName("33af - Zweig /warp: die drei Antworten, mit beiden Trennern")
+    void warpZweig() {
+        Tafel tafel = new Tafel();
+        // Die Auskunft auf das nackte /warp - DREI Chatzeilen aus einem Griff, in drei
+        // Farben. Der Trenner ist hier ZWEI LEERZEICHEN; eines allein oder ein Komma ist
+        // in dieser Tafel rot.
+        tafel.fall("ziele", WarpBefehle.zieleZeilen(sprache, WELTEN));
+        // Dieselbe Liste in der ANDEREN Lage: zwei Chatzeilen, rot und grau, und der
+        // Trenner ist KOMMA UND LEERZEICHEN. Dass die zwei Trenner verschieden sind, ist
+        // das heutige Bild und eine Entscheidung - hier steht sie als Zusicherung.
+        tafel.fall("kein-ziel", WarpBefehle.keinZielZeilen(sprache, "mordor", WELTEN));
+        // Der aufgeloeste Name, nicht die Eingabe: immer klein, immer aus der Datei.
+        tafel.fall("welt-fehlt", WarpBefehle.weltFehltZeilen(sprache, "kornmark"));
+
+        assertEquals("""
+                == ziele
+                &6Reiseziele
+                &bmarktstadt  kornmark  nether
+                &7/warp <ziel> - oder durch ein Tor am Bundesmarkt.
+                == kein-ziel
+                &cDorthin geht keine Reise: mordor
+                &7Moeglich sind: marktstadt, kornmark, nether
+                == welt-fehlt
+                &cDie Welt kornmark gibt es gerade nicht.
+                """, tafel.ganz());
+    }
+
+    @Test
+    @DisplayName("33ag - Zweig /zurueck: die Absage, und die Aufschrift als Wortstueck")
+    void rueckwegZweig() {
+        Tafel tafel = new Tafel();
+        tafel.fall("kein-ort-gemerkt", RueckwegBefehle.keinOrtGemerktZeilen(sprache));
+
+        // Das Wortstueck steht MIT in dieser Tafel und nicht in einem zweiten Vergleich:
+        // Es ist der einzige Wert, der diese Datei verlaesst, und ein roter Lauf soll
+        // beide Haelften auf einmal zeigen.
+        assertEquals("""
+                == kein-ort-gemerkt
+                &7Es ist kein Ort gemerkt - du bist noch nirgends gewesen, wohin es \
+                zurueckgeht.
+                == letzter-ort
+                deinen letzten Ort
+                """, tafel.ganz() + "== letzter-ort\n"
+                + RueckwegBefehle.letzterOrtWort(sprache) + "\n");
+
+        // Und die Verbindung zu 33ad und 33ae: Genau diese Wendung schicken sie durch die
+        // vier Saetze unter reise, die {ziel} einsetzen. Weicht sie ab, liest ein Spieler
+        // nach /zurueck vier Saetze, die keine Probe je gesehen hat.
+        assertEquals(ZIEL_WENDUNG, RueckwegBefehle.letzterOrtWort(sprache),
+                "die Aufschrift von /zurueck ist die, mit der 33ad und 33ae pruefen");
+    }
+
+    @Test
+    @DisplayName("33ah - der getippte Name kommt als TEXT an, nicht als Farbe")
+    void getippterNameBleibtText() {
+        Tafel tafel = new Tafel();
+        // Der EINZIGE Wert dieser zwei Dateien, der vom Spieler kommt. Er geht ROH in den
+        // Satz, und das ist gefahrlos, weil zuerst der WORTLAUT geparst wird und der Wert
+        // DANACH als Blatt eingesetzt wird (Sprache.ersetze). Haette man ihn vorher in
+        // die Zeichenkette gespleisst, faerbte ein Spieler seinen eigenen Chat - und mit
+        // einem <click> liefe ein Befehl in seinem Namen.
+        tafel.fall("farbtag",
+                WarpBefehle.keinZielZeilen(sprache, "<red>boese</red>", WELTEN));
+        // Dasselbe fuer eine Wertmarke: Sie darf nicht ein zweites Mal gelesen werden,
+        // sonst nennt ein Spieler mit {liste} den Inhalt eines anderen Platzhalters.
+        tafel.fall("wertmarke", WarpBefehle.keinZielZeilen(sprache, "{liste}", WELTEN));
+
+        assertEquals("""
+                == farbtag
+                &cDorthin geht keine Reise: <red>boese</red>
+                &7Moeglich sind: marktstadt, kornmark, nether
+                == wertmarke
+                &cDorthin geht keine Reise: {liste}
+                &7Moeglich sind: marktstadt, kornmark, nether
+                """, tafel.ganz());
+
+        // Die zweite Haelfte, und sie ist ein eigener Riegel: Brigadier laesst die zwei
+        // Zeichen schon gar nicht durch. word() liest nur Buchstaben, Ziffern und
+        // _ - . + - die spitze Klammer beendet das Wort, und die Umbruchmarke kann gar
+        // nicht getippt werden. Das ist wichtig, weil Sprache.teile am Zeilenumbruch IM
+        // WERT teilen WUERDE: Gegen Farbe schuetzt die Sprachmaschine, gegen eine zweite
+        // Chatzeile schuetzt hier der Befehlsleser.
+        assertEquals("", gelesenesWort("<red>boese</red>"),
+                "eine spitze Klammer darf gar nicht in das Befehlsargument kommen");
+        assertEquals("", gelesenesWort("{liste}"),
+                "eine geschweifte Klammer ebenso");
+        assertEquals("kornmark", gelesenesWort("kornmark\nzweite Zeile"),
+                "und das Wort endet VOR der Umbruchmarke");
+    }
+
+    /** Was {@code StringArgumentType.word()} aus einer Eingabe wirklich liest. */
+    private static String gelesenesWort(String getippt) {
+        return new StringReader(getippt).readUnquotedString();
+    }
+
+    @Test
+    @DisplayName("33ai - die leere Weltenliste: eine leere Chatzeile, wie bisher")
+    void leereWeltenliste() {
+        // Der entartete Fall, und er wird beim Umzug NICHT repariert: Sind alle Eintraege
+        // der Weltenliste leer oder fehlen sie, ueberspringt Warpverzeichnis.ausWelten sie
+        // still, und /warp zeigt eine Ueberschrift mit einer leeren Zeile darunter.
+        // Geklagt wird darueber beim Lesen der config.yml und nicht hier.
+        //
+        // Eine EIGENE Probe und keine Zeile in 33af, weil dieser entartete Fall die
+        // einzige Stelle ist, an der eine Umbruchmarke eine LEERE Chatzeile erzeugt -
+        // und weil der Verzicht auf einen Textblock das abschliessende Leerzeichen
+        // hinter "Moeglich sind: " sichert, das ein Editor sonst wegputzt.
+        //
+        // Das Alt-Bild IST hier gleich, nachgemessen: Component.text("", AQUA) und
+        // Component.empty() werden beide zur leeren Zeichenkette - der Farbcode
+        // entfaellt bei leerem Inhalt. Diese Probe war vor dem Umzug gruen und ist es
+        // danach; sie haelt den Fall fest, sie repariert ihn nicht.
+        Tafel tafel = new Tafel();
+        tafel.fall("ziele/leer", WarpBefehle.zieleZeilen(sprache, List.of()));
+        tafel.fall("kein-ziel/leer",
+                WarpBefehle.keinZielZeilen(sprache, "mordor", List.of()));
+
+        // KEIN Textblock, und das ist der Grund, warum diese Probe ueberhaupt etwas
+        // zusichert: Ein Textblock streicht abschliessende Leerzeichen, und genau eines
+        // steht hier hinter "Moeglich sind: ". Mit einem Textblock waere die Zusicherung
+        // stumm um ein Zeichen schwaecher.
+        assertEquals("== ziele/leer\n"
+                + "&6Reiseziele\n"
+                + "\n"
+                + "&7/warp <ziel> - oder durch ein Tor am Bundesmarkt.\n"
+                + "== kein-ziel/leer\n"
+                + "&cDorthin geht keine Reise: mordor\n"
+                + "&7Moeglich sind: \n", tafel.ganz());
     }
 }

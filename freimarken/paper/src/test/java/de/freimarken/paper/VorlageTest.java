@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -372,7 +373,107 @@ class VorlageTest {
         }
     }
 
+    @Test
+    @DisplayName("10g - ein Satzschwanz, der auch im Programm steht, sagt das in der"
+            + " Vorlage")
+    void halbWirkenderTorhinweisWarntInDerVorlage() {
+        // Dieselbe Bauart wie 10e und 10f, fuer den dritten halb wirkenden Satz: Der
+        // Hinweis " - oder durch ein Tor am Bundesmarkt." steht als Schwanz in
+        // warp.ziele - und wortgleich noch in der Absage am Nether- und Endportal,
+        // die bis zu ihrem Bauschritt im Programm sitzt. Wer ihn in der Datei
+        // aendert, liest ihn am Portal weiter im Alten.
+        //
+        // Die Probe haelt BEIDE Richtungen, wie 10e: Solange der Schwanz im Programm
+        // steht, MUSS die Marke in der Vorlage stehen - und sobald er dort verschwindet,
+        // MUSS die Marke heraus. Damit kann der Zwischenstand nicht stumm bleiben und
+        // die Warnung nicht ueberleben; Schritt 6 wird von dieser Probe daran
+        // erinnert, auch wenn niemand mehr an diesen Kommentar denkt.
+        int imProgramm = 0;
+        for (Path datei : Quellen.alle()) {
+            imProgramm += Quellen.zaehle(Quellen.text(datei), TORHINWEIS);
+        }
+        boolean gewarnt = Sprachprobe.vorlagentext().contains(WARNUNG_TORHINWEIS);
+        if (imProgramm > 0) {
+            assertTrue(gewarnt, "der Hinweis auf das Tor steht noch an " + imProgramm
+                    + " Stellen hart im Programm. Solange das so ist, MUSS der Kopf von"
+                    + " warp.ziele die Marke " + WARNUNG_TORHINWEIS + " tragen - sonst"
+                    + " aendert der Betreiber den Schwanz und liest ihn am Portal"
+                    + " weiter im Alten.");
+        } else {
+            assertFalse(gewarnt, "der Hinweis kommt nirgends mehr aus dem Programm -"
+                    + " die Marke " + WARNUNG_TORHINWEIS + " gehoert aus der Vorlage"
+                    + " heraus, sonst warnt sie vor nichts.");
+        }
+    }
+
+    @Test
+    @DisplayName("10f - eine Reiseaufschrift aus dem Programm sagt das in der Vorlage")
+    void halbWirkendeReiseaufschriftWarntInDerVorlage() {
+        // Dieselbe Bauart wie 10e, fuer den zweiten halb wirkenden Satz des Projekts.
+        // Sechs Saetze unter reise setzen {ziel} ein, und EINE von fuenf Fuellungen ist
+        // selbst noch SPIELERTEXT aus dem Programm: "Parzelle 3/-4" bei
+        // /freimarken parzelle. "deinen letzten Ort" bei /zurueck ist im zweiten Zug
+        // von Schritt 5 umgezogen und steht jetzt unter zurueck.letzter-ort - der Kopf
+        // der Vorlage sagt an derselben Sache darum "EINE dieser fuenf Fuellungen".
+        // Der Betreiber kann die Saetze umstellen und faerben, diese eine Aufschrift
+        // aber nicht - und eine halb wirkende Einstellung ist schlimmer als keine.
+        //
+        // Gesucht wird nicht nach den WORTEN, sondern nach einem Zeichenkettenliteral im
+        // Aufruf von reise.fuehre: So haelt die Probe auch dann, wenn ein kuenftiger
+        // Aufrufer eine dritte Aufschrift erfindet - und sie wird von sich aus rot,
+        // sobald die letzte umgezogen ist und die Warnung vor nichts mehr warnt.
+        int ausDemProgramm = 0;
+        for (Path datei : Quellen.alle()) {
+            var treffer = AUFSCHRIFT_IM_PROGRAMM.matcher(Quellen.text(datei));
+            while (treffer.find()) {
+                ausDemProgramm++;
+            }
+        }
+        boolean gewarnt = Sprachprobe.vorlagentext().contains(WARNUNG_REISEZIEL);
+        if (ausDemProgramm > 0) {
+            assertTrue(gewarnt, "An " + ausDemProgramm + " Stellen geht eine Aufschrift"
+                    + " als Zeichenkette aus dem Programm in eine Reise. Solange das so"
+                    + " ist, MUSS der Kopf von reise die Marke \"" + WARNUNG_REISEZIEL
+                    + "\" tragen - sonst verspricht die Datei eine Wirkung, die sie nicht"
+                    + " hat.");
+        } else {
+            assertFalse(gewarnt, "keine Aufschrift mehr im Programm - die Warnung \""
+                    + WARNUNG_REISEZIEL + "\" gehoert aus der Vorlage heraus, sonst warnt"
+                    + " sie vor nichts.");
+        }
+    }
+
     private static final String WARNUNG = "HALB IN KRAFT:";
+
+    /**
+     * Die Marke fuer die Aufschrift eines Reiseziels.
+     *
+     * <p>Eine EIGENE Marke und nicht dieselbe wie {@link #WARNUNG}: Es sind zwei
+     * unabhaengige Sachverhalte, und mit einer gemeinsamen Marke koennte 10e nicht mehr
+     * zusichern, dass sie verschwindet, sobald ihr Grund weg ist. Der Doppelpunkt steht
+     * HINTER der Klammer, damit {@code contains(WARNUNG)} diese Marke nicht trifft.
+     */
+    private static final String WARNUNG_REISEZIEL = "HALB IN KRAFT (Reiseziel):";
+
+    /** Die Marke fuer den Hinweis, der auch noch im Programm steht. */
+    private static final String WARNUNG_TORHINWEIS = "HALB IN KRAFT (Torhinweis):";
+
+    /**
+     * Der Satzschwanz, der an zwei Orten wortgleich steht.
+     *
+     * <p>Mit dem fuehrenden Gedankenstrich und dem Punkt am Ende: So trifft die Suche
+     * den Schwanz und nicht jede Erwaehnung des Bundesmarktes.
+     */
+    private static final String TORHINWEIS = " - oder durch ein Tor am Bundesmarkt.";
+
+    /**
+     * Eine Aufschrift, die als Zeichenkette aus dem Programm in eine Reise geht.
+     *
+     * <p>{@code [^;]} und nicht {@code .}: So kann ein Treffer nicht vom Aufruf in eine
+     * ganz andere Anweisung mit einer Zeichenkette laufen.
+     */
+    private static final Pattern AUFSCHRIFT_IM_PROGRAMM = Pattern.compile(
+            "reise\\s*[.]\\s*fuehre\\s*\\([^;]*\"");
 
     private static String hinter(String marke) {
         for (String zeile : Sprachprobe.vorlagentext().lines().toList()) {
