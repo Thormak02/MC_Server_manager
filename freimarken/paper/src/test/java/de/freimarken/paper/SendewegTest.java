@@ -1322,4 +1322,81 @@ class SendewegTest {
                 + "&cDorthin geht keine Reise: mordor\n"
                 + "&7Moeglich sind: \n", tafel.ganz());
     }
+
+    /** Der Name eines Eigentuemers, wie der Benutzerzwischenspeicher ihn liefert. */
+    private static final String EIGENTUEMER = "Bert";
+
+    /** Was statt des Namens steht, wenn der Server ihn nicht kennt: acht Hexzeichen. */
+    private static final String EIGENTUEMER_UNBEKANNT = "0f1e2d3c";
+
+    @Test
+    @DisplayName("33aj - Handbalken der Schutzwache: alle VIER Wortlaute")
+    void schutzwacheZweig() {
+        Tafel tafel = new Tafel();
+        tafel.fall("weg-und-mauer",
+                List.of(Schutztext.wegUndMauerBalken(sprache)));
+        tafel.fall("parzelle-frei",
+                List.of(Schutztext.parzelleFreiBalken(sprache)));
+        tafel.fall("ausserhalb", List.of(Schutztext.ausserhalbBalken(sprache)));
+        tafel.fall("fremde-parzelle/name",
+                List.of(Schutztext.fremdeParzelleBalken(sprache, EIGENTUEMER)));
+        tafel.fall("fremde-parzelle/unbekannt",
+                List.of(Schutztext.fremdeParzelleBalken(sprache,
+                        EIGENTUEMER_UNBEKANNT)));
+
+        // Der Textblock schadet hier nicht: Keine dieser Zeilen endet auf einem
+        // Leerzeichen, anders als in 33ai.
+        assertEquals("""
+                == weg-und-mauer
+                &eWeg und Mauer gehoeren allen
+                == parzelle-frei
+                &eDiese Parzelle ist frei - /parzelle nehmen
+                == ausserhalb
+                &eHier endet die Marktstadt
+                == fremde-parzelle/name
+                &cDiese Parzelle gehoert &fBert
+                == fremde-parzelle/unbekannt
+                &cDiese Parzelle gehoert &f0f1e2d3c
+                """, tafel.ganz());
+    }
+
+    @Test
+    @DisplayName("33ak - die zwei Saetze der Ankunftswache, je EINE Chatzeile")
+    void ankunftswacheZweige() {
+        // Beide Saetze stehen im Quelltext ueber mehrere Zeilen, mit +
+        // zusammengesetzt - und das ist KEIN Umbruch im Chat. Dass wirklich je eine
+        // Zeile herauskommt, steht nirgends sonst: Eine Tafel mit zwei Faellen und
+        // je einer Zeile sagt es, und eine Umbruchmarke in der Vorlage macht sie rot.
+        Tafel tafel = new Tafel();
+        tafel.fall("kein-spawnpunkt", Ankunftswache.keinSpawnpunktZeilen(sprache));
+        tafel.fall("abenteuer", Ankunftswache.abenteuerZeilen(sprache));
+
+        assertEquals("""
+                == kein-spawnpunkt
+                &7Hier wird kein Spawnpunkt gesetzt - gestorben wird immer nach Altfurt. Schlafen geht weiter.
+                == abenteuer
+                &7Hier ist Abenteuer: ansehen und benutzen, aber nicht abbauen. Gebaut wird in der Marktstadt.
+                """, tafel.ganz());
+    }
+
+    @Test
+    @DisplayName("33al - die Absage am Portal: ZWEI Chatzeilen aus EINEM Griff")
+    void portalwacheZweig() {
+        // Der Gegenfall zu 33ak, und der Grund fuer die Umbruchmarke: Hier sind es
+        // zwei Chatzeilen mit zwei Farben, und sie gehen immer zusammen hinaus.
+        // Dieselbe Lage wie warp.kein-ziel - rote Absage, grauer Weg darunter.
+        //
+        // Der Schwanz " - oder durch ein Tor am Bundesmarkt." steht hier zum zweiten
+        // Mal in dieser Datei: 33af traegt ihn in warp.ziele. Bis zu diesem Zug kam
+        // er dort aus der Vorlage und hier aus dem Programm; danach aus zwei
+        // Blaettern, die der Betreiber auseinanderentwickeln darf.
+        Tafel tafel = new Tafel();
+        tafel.fall("kein-ausgang", Portalwache.keinAusgangZeilen(sprache));
+
+        assertEquals("""
+                == kein-ausgang
+                &cHier fuehrt kein Portal hinaus.
+                &7Nether und Ende erreichst du mit /warp nether und /warp end - oder durch ein Tor am Bundesmarkt.
+                """, tafel.ganz());
+    }
 }

@@ -377,8 +377,10 @@ class SprachlisteTest {
     @Test
     @DisplayName("21b - eine Umbruchmarke im Handbalken ist eine Klage")
     void handbalkenMitUmbruchIstKlage() {
-        // sendActionBar nimmt ein Component und keine Liste (Schutzwache:210) - die zweite
-        // Zeile verschwindet stumm oder erscheint als Zeichen.
+        // sendActionBar nimmt ein Component und keine Liste - die zweite Zeile
+        // verschwindet stumm oder erscheint als Zeichen. Ein PROBESATZ und kein echter:
+        // So ist dieser Fehlerfall schon rot zu bekommen, wenn es den Bereich noch
+        // nicht gibt. Am echten Schluessel haelt ihn 21c fest.
         Satz balken = Sprachprobe.Probesatz.von("probe.balken", Satz.Art.HANDBALKEN);
         List<Satz> schluessel = List.of(balken);
         Sprachbuch vorlage = Sprachprobe.buch(schluessel,
@@ -397,5 +399,88 @@ class SprachlisteTest {
         var heil = Sprachliste.ausQuelle(
                 "probe:\n  balken: \"<red>Nicht hier</red>\"\n", vorlage, schluessel);
         assertEquals(List.of(), heil.klagen());
+    }
+
+    @Test
+    @DisplayName("21c - dieselbe Sperre am ECHTEN Handbalken der Schutzwache")
+    void handbalkenDerSchutzwacheMitUmbruchIstKlage() {
+        // 21b prueft die Regel an einem Probesatz und kann das auch, wenn es den
+        // Bereich noch nicht gibt. Diese Probe geht dagegen durch die ECHTE
+        // Schluesselliste und das ausgelieferte Buch - und sie ist der Grund, warum
+        // die Zusage jetzt mehr als eine Theorie ist: Bis Bauschritt 6 trug KEINE
+        // Konstante des Projekts Art.HANDBALKEN, die Sperre lief also an keinem
+        // einzigen wirklich ausgelieferten Satz.
+        String mitUmbruch = "wache:\n  schutz:\n    "
+                + kurz(WacheSatz.SCHUTZ_WEG_UND_MAUER)
+                + ": \"<red>Erste\\nZweite</red>\"\n";
+
+        var gelesen = Sprachliste.ausQuelle(mitUmbruch, Sprachprobe.ausDemJar());
+
+        assertNull(gelesen.buch(), "eine Klage blockiert den ganzen Tausch - sonst"
+                + " waere nur dieser eine Satz zurueckgefallen");
+        assertTrue(gelesen.klagen().stream().anyMatch(klage
+                        -> klage.contains(WacheSatz.SCHUTZ_WEG_UND_MAUER.pfad())
+                        && klage.contains("Umbruchmarke")),
+                "bekommen: " + gelesen.klagen());
+
+        // In die andere Richtung, wie in 21b: ohne Umbruch geht derselbe Satz
+        // durch. Ohne diese Haelfte waere eine Sperre, die JEDEN Handbalken
+        // abweist, ebenfalls gruen.
+        String ohneUmbruch = "wache:\n  schutz:\n    "
+                + kurz(WacheSatz.SCHUTZ_WEG_UND_MAUER)
+                + ": \"<red>Nicht hier</red>\"\n";
+
+        var heilerBalken = Sprachliste.ausQuelle(ohneUmbruch,
+                Sprachprobe.ausDemJar());
+
+        assertEquals(List.of(), heilerBalken.klagen());
+    }
+
+    /**
+     * Das letzte Stueck eines Pfades - der Name der Zeile in ihrer Ebene.
+     *
+     * <p>Aus der Konstante gerechnet und nicht getippt: So wird diese Probe rot,
+     * wenn der Pfad umbenannt wird, statt stumm gegen einen Schluessel zu pruefen,
+     * den es nicht mehr gibt.
+     */
+    @Test
+    @DisplayName("21d - ein leerer Wachensatz ist eine Klage, ein leerer Trenner nicht")
+    void leererWachensatzIstKlageLeererTrennerNicht() {
+        // Die Erlaubnis selbst festgenagelt. 16b prueft die Regel an einem Probesatz,
+        // und die Richtung der Auslieferung greift nachweislich - aber das
+        // {@code return false} in WacheSatz liess sich auf {@code true} drehen, ohne
+        // dass eine Probe rot wurde (gemessen 05.11.2026: 852 Proben, 0 rot). Dann
+        // duerfen alle sieben Wachensaetze leer werden: Ein Spieler legt sich schlafen,
+        // liest eine leere Chatzeile und erfaehrt erst beim naechsten Tod, dass kein
+        // Spawnpunkt gesetzt wurde - die Meldung von Vanilla ist vorher abgeschaltet.
+        String leer = "wache:\n  ankunft:\n    "
+                + kurz(WacheSatz.ANKUNFT_KEIN_SPAWNPUNKT) + ": \"\"\n";
+
+        var gelesen = Sprachliste.ausQuelle(leer, Sprachprobe.ausDemJar());
+
+        assertNull(gelesen.buch(), "eine Klage blockiert den ganzen Tausch");
+        assertTrue(gelesen.klagen().stream().anyMatch(klage
+                        -> klage.contains(WacheSatz.ANKUNFT_KEIN_SPAWNPUNKT.pfad())
+                        && klage.contains("leer")),
+                "bekommen: " + gelesen.klagen());
+
+        // Die andere Richtung am ECHTEN Gegenstueck und nicht an einem Probesatz: Der
+        // Trenner der Reiseziele DARF leer bleiben, er wird sogar als zwei Leerzeichen
+        // ausgeliefert. Eine Sperre, die JEDES leere Blatt abweist, waere hier rot -
+        // und ohne diese Haelfte waere der Riegel oben nicht von einer Sperre gegen
+        // alles zu unterscheiden.
+        String trennerLeer = "warp:\n  "
+                + kurz(ReiseSatz.WARP_ZIELE_TRENNER) + ": \"\"\n";
+
+        var mitTrenner = Sprachliste.ausQuelle(trennerLeer,
+                Sprachprobe.ausDemJar());
+
+        assertEquals(List.of(), mitTrenner.klagen(), "der Trenner traegt LEER_ERLAUBT"
+                + " und darf leer bleiben");
+    }
+
+    private static String kurz(Satz satz) {
+        String pfad = satz.pfad();
+        return pfad.substring(pfad.lastIndexOf('.') + 1);
     }
 }

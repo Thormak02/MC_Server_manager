@@ -97,6 +97,34 @@ import org.junit.jupiter.api.Test;
  * {@link #AUFRUFE_IN_RUECKWEGBEFEHLE}) fuer das eine, was eine durchlaufende Probe nicht
  * sieht: einen handgeschriebenen Satz mit demselben Wortlaut.
  *
+ * <p><b>Schritt 6 brachte die Lage, in der eine Zaehltafel von vornherein nichts
+ * sagen KANN:</b> {@code Schutzwache} hat VIER Wortlaute und genau EINE Sendestelle.
+ * Ihre Zahl in {@link #SENDESTELLEN} ist darum gemessen gleich geblieben - eine Eins,
+ * vorher wie nachher -, und sie bleibt eine Eins, was auch vertauscht wird. Dagegen
+ * steht fuer die Wahl des Wortlauts EINE Tafel, {@link #WACHENPAARE_IN_SCHUTZWACHE},
+ * und sie traegt zwei Fehlerklassen in vier Zeilen: welche Wache welchen Satz waehlt
+ * (mit BEIDEN Seiten des Grenzternaers, denn genau dessen Drehung lief in Schritt 5
+ * gruen durch) und woher der genannte NAME kommt. Beide sind durch je einen Eingriff
+ * belegt, der sonst gruen blieb.
+ *
+ * <p>Fuer den ganzen Schritt wurden es mehr: {@link #SENDEPAARE_IN_ANKUNFTSWACHE} fuer
+ * die zweite Wache, vier Muster fuer ihre Formen, und im Nachzug noch
+ * {@link #ARTEN_IN_WACHESATZ}, {@link #DROSSEL_UND_BALKEN_IN_SCHUTZWACHE} und
+ * {@link #FARBTAG_ERLAUBT} - jede fuer einen Eingriff, der ohne sie gruen durchlief.
+ *
+ * <p><b>Der zweite Zug von Schritt 6 zeigte dieselbe Luecke bei ZWEI Sendestellen</b>,
+ * und das ist die Lehre daraus: Nicht die ZAHL der Sendestellen entscheidet, ob eine
+ * Zaehltafel genuegt, sondern ob zwei Saetze derselben Datei vertauschbar sind.
+ * {@code Ankunftswache} hat zwei Saetze und zwei Sendestellen - gemessen zwei vorher
+ * und zwei nachher -, aber beide sind grau, gehen an denselben Empfaengertyp und ihre
+ * Methoden tragen dieselbe Signatur. Dagegen steht {@link #SENDEPAARE_IN_ANKUNFTSWACHE},
+ * belegt durch einen Eingriff, bei dem ausser 31s keine einzige Probe rot wurde.
+ * {@code Portalwache} brauchte dagegen KEINE Paartafel: Seine zwei Chatzeilen sind EIN
+ * Schluessel mit einer Umbruchmarke geworden, es gibt also nur noch einen Satz, und
+ * seine Zahl hier ist von 2 auf 1 gefallen. Was dort zu vertauschen bliebe - die
+ * Reihenfolge der zwei Zeilen - liegt jetzt in der Datei und wird von
+ * {@code BildGleichTest} 11 in EINER Tabellenzeile gehalten.
+ *
  * <p><b>Gelesen wird der Quelltext OHNE Kommentare</b> ({@link Quellen#ohneKommentare}).
  * Vorher nahm {@link #jederSchluesselWirdGesendet} eine Nennung im Javadoc als Benutzung,
  * und ein Schluessel konnte aus dem Programm verschwinden, solange sein Name in einem
@@ -123,12 +151,6 @@ class GrenzeTest {
      * Anzeige der Spielzeit danach Einzug, Spaltenbreite UND Farbe aus
      * {@code sprache-vorlage.yml} holt, ist damit auf zwei Dateien gleichzeitig
      * festgenagelt.
-     *
-     * <p>Dazu {@code Sprachstand.java}: Dort entsteht die Antwort auf
-     * {@code /freimarken neuladen}, und das ist BETREIBERTEXT. Der bleibt nach
-     * der Grenze dieses Umbaus im Programm, denn eine Diagnose darf nicht von der Datei
-     * abhaengen, deren Zustand sie meldet. {@code Sprachstand.java} wird aus dieser Menge
-     * also nie gestrichen.
      *
      * <p>Mit dem ersten Teil von Schritt 5 sind wieder ZWEI heraus: {@code Reise.java}
      * und {@code Aufwaermzeit.java}, also das REISEN selbst. Sie waren die zwei Dateien,
@@ -164,14 +186,49 @@ class GrenzeTest {
      * abhaengen, deren Zustand sie meldet. {@code Sprachstand.java} wird aus dieser Menge
      * also nie gestrichen.
      *
+     * <p>Mit dem ersten Zug von Schritt 6 ist {@code Schutzwache.java} heraus - die
+     * erste WACHE und damit der erste Text des Projekts, den ein Spieler liest, ohne
+     * etwas getippt zu haben. Seine vier Wortlaute stehen jetzt unter
+     * {@code wache.schutz}, und mit ihnen der erste Farbwechsel MITTEN in einem
+     * Handbalken. {@code Schutztext.java} war dabei nie in dieser Menge: Die Naht
+     * dieses Zuges kam schon ohne Farbe auf die Welt, weil der Umzug im selben Zug
+     * folgte. Dass sie eine EIGENE Datei ist, war gemessen und keine Geschmacksfrage -
+     * der Klasseninitialisierer der Wache fragt {@code Bukkit.server}, und eine Probe,
+     * die eine reine Methode dort aufruft, stirbt im
+     * {@code ExceptionInInitializerError}.
+     *
+     * <p>Mit dem zweiten Zug von Schritt 6 sind die letzten zwei Wachen heraus:
+     * {@code Ankunftswache.java} und {@code Portalwache.java}. <b>Damit nennt keine der
+     * drei Wachen mehr eine Farbe</b> - und was ein Spieler liest, ohne etwas getippt zu
+     * haben, kommt vollstaendig aus der Datei. Dass {@code FreimarkenPlugin.java} weiter
+     * Farbe nennt, ist kein Widerspruch dazu: Seine Saetze gehoeren dem Befehl
+     * {@code /freimarken} und ziehen in dessen Bauschritt um; seine Betreiberzeilen
+     * bleiben dort fuer immer. Die drei Saetze dieses Zuges stehen unter
+     * {@code wache.ankunft} und {@code wache.portal}, und mit dem am Portal auch der
+     * ZEILENBAU: Zwei Chatzeilen in einem Schluessel, getrennt von einer Umbruchmarke.
+     * Von den je drei Nennungen in beiden Dateien war wieder je eine das
+     * {@code import net.kyori.adventure.text.format.NamedTextColor;} - gestrichen
+     * werden durfte ein Name erst, als auch sein Import weg war.
+     *
      * <p>{@code FreimarkenPlugin.java} bleibt ebenfalls darin, und das ist ein Loch, das
      * offen bleibt - nur nicht unbewacht. Seine Betreiberzeilen muessen dort bleiben, also
      * faengt diese Probe einen dort neu geschriebenen Spielersatz nicht. Dafuer gibt es
      * die Tafel in {@link #jedeDateiSendetGenauSoOft}: ein Tor und kein Beweis.
      */
     private static final Set<String> FARBE_ERLAUBT = new TreeSet<>(List.of(
-            "Ankunftswache.java", "FreimarkenPlugin.java", "Portalwache.java",
-            "Schutzwache.java", "Sprachstand.java"));
+            "FreimarkenPlugin.java", "Sprachstand.java"));
+
+    /**
+     * Wo ein Farbtag als ZEICHEN stehen darf - eine Datei, und dort ist er eine
+     * Fehlermeldung.
+     *
+     * <p>{@code Sprachliste} zaehlt dem Betreiber auf, welche Tags er benutzen darf
+     * ({@code <gray> <dark_gray> <white> ...}) und welche nicht ({@code <click>},
+     * {@code <hover>}). Die stehen dort als Text fuer einen Menschen und gehen durch
+     * keinen Satz. Jede zweite Datei in dieser Menge spleisst ein Tag in einen Wert.
+     */
+    private static final Set<String> FARBTAG_ERLAUBT = new TreeSet<>(List.of(
+            "Sprachliste.java"));
 
     /**
      * Die Dateien, die noch senden duerfen.
@@ -281,6 +338,28 @@ class GrenzeTest {
      * die Zahl wieder steigen sieht, sieht einen Satz, der aus dem Zeilenbau der Datei
      * heraus und in das Programm zurueckgewandert ist. {@code RueckwegBefehle} bleibt
      * dabei auf 1: Es hatte nur eine Sendung und hat sie noch.
+     *
+     * <p><b>{@code Schutzwache} ist im ersten Zug von Schritt 6 gemessen bei 1
+     * geblieben</b>, und diese Eins ist der Grund fuer {@link #WACHENPAARE_IN_SCHUTZWACHE}:
+     * Die Wache holt ihren Handbalken jetzt bei {@link Sprache#eineZeile}, schickt
+     * ihn aber weiter selbst hinaus. Vier Wortlaute hinter einer Zahl heisst, dass
+     * diese Tafel ueber den Umzug gar nichts sagt. {@code Schutztext.java} steht
+     * hier NICHT: Es baut die Zeile und gibt sie zurueck, gesendet wird sie vom
+     * Aufrufer - genau so ist sie ohne Server pruefbar.
+     *
+     * <p><b>Der zweite Zug von Schritt 6 hat die zwei Zahlen VERSCHIEDEN bewegt, und
+     * das ist dieselbe Entscheidung, nur zweimal anders ausgefallen.</b>
+     * {@code Portalwache} ist von 2 auf 1 gefallen: Die rote Absage und der graue Weg
+     * darunter gehen immer zusammen hinaus - zwischen den zwei Sendungen steht kein
+     * {@code if}, kein {@code return} und keine Schleife, die Abklingzeit wird EINMAL
+     * davor gefragt. Sie sind EIN Satz mit einer Umbruchmarke geworden, dieselbe
+     * Senkung wie bei {@code warp.kein-ziel}. {@code Ankunftswache} ist dagegen bei 2
+     * geblieben: Ihre zwei Saetze haengen an zwei verschiedenen Ereignissen - einem
+     * gesetzten Spawnpunkt und einer betretenen Abenteuerwelt - und gehen nie zusammen
+     * hinaus. Wer die Eins am Portal wieder steigen sieht, sieht einen Satz, der aus
+     * dem Zeilenbau der Datei heraus und in das Programm zurueckgewandert ist; und
+     * dass die Zwei der Ankunftswache nichts darueber sagt, WELCHES Ereignis welchen
+     * Satz waehlt, ist der Grund fuer {@link #SENDEPAARE_IN_ANKUNFTSWACHE}.
      */
     private static final Map<String, Integer> SENDESTELLEN = Map.ofEntries(
             Map.entry("AnfragenBefehle.java", 11),
@@ -288,7 +367,7 @@ class GrenzeTest {
             Map.entry("Aufwaermzeit.java", 2),
             Map.entry("FreimarkenPlugin.java", 40),
             Map.entry("ParzellenBefehle.java", 44),
-            Map.entry("Portalwache.java", 2),
+            Map.entry("Portalwache.java", 1),
             Map.entry("Reise.java", 7),
             Map.entry("RueckwegBefehle.java", 1),
             Map.entry("Schutzwache.java", 1),
@@ -691,6 +770,117 @@ class GrenzeTest {
             "lehneAbZeilen -> annehmer");
 
     /**
+     * Welche Wache der {@code Schutzwache} welchen Handbalken waehlt - in
+     * Quellreihenfolge, gemessen.
+     *
+     * <p><b>VIER Wortlaute hinter EINER Sendestelle</b>, und das ist genau die Lage,
+     * die eine Zaehltafel nicht deckt: {@link #SENDESTELLEN} fuehrt {@code Schutzwache}
+     * mit einer Eins, vorher wie nachher, und eine Eins bleibt eine Eins, wenn zwei
+     * Gruende die Plaetze tauschen. Alle vier Methoden der Naht tragen ausserdem fast
+     * dieselbe Signatur ({@code (Sprache)} dreimal), tauschen also widerstandslos.
+     *
+     * <p><b>Der Grenzternaer steht mit ZWEI Zeilen darin, und das ist die Lehre aus
+     * Schritt 5.</b> Dort liess sich ein Ternaer drehen, ohne dass eine Probe rot wurde;
+     * eine Zeile fuer die Wache allein saehe nur die DANN-Seite. Vertauscht liest ein
+     * Spieler auf einer freien Parzelle innerhalb der Stadt "Hier endet die
+     * Marktstadt" - und draussen, wo nie etwas vergeben wird, die Aufforderung, sie
+     * mit {@code /parzelle nehmen} zu holen.
+     *
+     * <p><b>Die letzte Zeile ist die ANDERE Frage: woher der Name kommt.</b> Der
+     * Spieler liest den Namen des EIGENTUEMERS und nicht seinen eigenen - dieselbe
+     * Fehlerklasse wie {@link #REISEPAARE_IN_ANFRAGENBEFEHLE}, nur spiegelbildlich.
+     * Heute ist der Tausch in {@code grund} nicht moeglich, weil dort gar kein
+     * {@code Player} im Blickfeld steht; diese Zeile nagelt fest, dass es so bleibt.
+     * Wer die Naht einen Leser mitgeben laesst und {@code spieler.getName()} einsetzt,
+     * verliert diesen Treffer und wird rot - ein Besucher laese sonst seinen eigenen
+     * Namen und hielte die Parzelle fuer seine.
+     *
+     * <p>Gepaart wird ueber den Namen der gefragten METHODE, wie bei
+     * {@link #HINDERNISPAARE_IN_REISE} und aus demselben Grund: {@code feldBei} steht
+     * nur in der Wegwache, {@code enthaelt} nur in der Grenzwache, und ein umgestellter
+     * Vergleich macht diese Probe nicht rot.
+     */
+    private static final List<String> WACHENPAARE_IN_SCHUTZWACHE = List.of(
+            "feldBei -> wegUndMauerBalken",
+            "enthaelt/dann -> parzelleFreiBalken",
+            "enthaelt/sonst -> ausserhalbBalken",
+            "fremdeParzelleBalken <- eigentuemer()");
+
+    /**
+     * Welches Ereignis der {@code Ankunftswache} welchen Satz waehlt - in
+     * Quellreihenfolge, gemessen.
+     *
+     * <p><b>Zwei Saetze, zwei Sendestellen - und gerade darum eine Paartafel.</b>
+     * {@link #SENDESTELLEN} fuehrt diese Datei mit einer Zwei, vorher wie nachher, und
+     * eine Zwei bleibt eine Zwei, wenn die zwei Blaetter die Methoden tauschen. Beide
+     * Saetze sind grau, gehen an denselben Empfaengertyp und stehen in derselben Datei;
+     * beide Methoden der Naht tragen dieselbe Signatur {@code (Sprache)} und tauschen
+     * also widerstandslos. Auch {@link #FARBE} und {@link #SENDEWEG} bleiben davon
+     * unberuehrt, und {@code SendewegTest} 33ak ruft die zwei Methoden unmittelbar auf -
+     * es sieht das waehlende Ereignis gar nicht.
+     *
+     * <p>Vertauscht liest ein Spieler, der in einem Bett schlaeft, "Hier ist Abenteuer:
+     * ansehen und benutzen" - und wer Altfurt betritt, sein Spawnpunkt sei nicht
+     * gesetzt worden, obwohl er gar keinen setzen wollte. Das ist dieselbe Fehlerklasse
+     * wie {@link #ABBRUCHPAARE_IN_AUFWAERMZEIT}, nur zwischen Ereignissen statt
+     * zwischen Wachen.
+     *
+     * <p>Gepaart wird ueber den NAMEN DES ANLASSES und nicht ueber den der Methode, in
+     * der er steht: {@code RESPAWN_ANCHOR} steht nur in der Wache des gesetzten
+     * Spawnpunkts, {@code ADVENTURE} nur im Zweig des Spielmodus. Ein umgestellter
+     * Vergleich macht diese Probe damit nicht rot, ein vertauschter Satz schon.
+     */
+    private static final List<String> SENDEPAARE_IN_ANKUNFTSWACHE = List.of(
+            "RESPAWN_ANCHOR -> keinSpawnpunktZeilen",
+            "ADVENTURE -> abenteuerZeilen");
+
+    /**
+     * Welche Art jeder Wachensatz traegt - in der Reihenfolge der Aufzaehlung.
+     *
+     * <p>Eine Tafel und keine Zahl, und das ist gemessen. {@code SprachlisteTest} 21c
+     * nagelt die Umbruchsperre an EINEM Handbalken fest, weil sie ihn namentlich nennt;
+     * faellt die Art eines der drei anderen auf {@link Satz.Art#SATZ}, bleibt der ganze
+     * Lauf gruen - mit einem Eingriff genau dieser Form belegt: 852 Proben, 0 rot.
+     * Dann darf der Betreiber dort eine Umbruchmarke setzen, und die zweite Zeile
+     * verschwindet stumm ueber dem Gegenstandsgurt.
+     *
+     * <p>Die LISTE und keine Menge, wie bei den Paartafeln: Ein Tausch zwischen zwei
+     * Konstanten liesse die Menge unveraendert.
+     */
+    private static final List<String> ARTEN_IN_WACHESATZ = List.of(
+            "SCHUTZ_WEG_UND_MAUER -> HANDBALKEN",
+            "SCHUTZ_PARZELLE_FREI -> HANDBALKEN",
+            "SCHUTZ_AUSSERHALB -> HANDBALKEN",
+            "SCHUTZ_FREMDE_PARZELLE -> HANDBALKEN",
+            "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
+            "ANKUNFT_ABENTEUER -> SATZ",
+            "PORTAL_KEIN_AUSGANG -> SATZ");
+
+    /**
+     * Wessen Drossel gilt und wer den Handbalken liest - vier Stellen in
+     * {@code Schutzwache}, in Quellreihenfolge.
+     *
+     * <p>Beides ist unsichtbar, solange keine Probe den Zweig DURCHLAEUFT, und beides
+     * ist mit einem Eingriff belegt, der sonst gruen blieb. Geht der Balken an
+     * {@code Bukkit.getOnlinePlayers().iterator().next()}, liest ein Unbeteiligter
+     * "Diese Parzelle gehoert Bert", waehrend der Abgewiesene nicht erfaehrt, warum
+     * sein Block nicht bricht. Und liest die Drossel {@code letzteMeldung.values()}
+     * statt des eigenen Schluessels, macht ein einziger Spieler die Wache fuer ALLE
+     * zwei Sekunden stumm - beides im Spiel sofort sichtbar, beides von jeder
+     * Zahltafel ungesehen.
+     *
+     * <p>Ein echter Durchlauf braucht einen Server-Stellvertreter unter
+     * {@code Bukkit.setServer} samt Tag-Fassade, weil der Klasseninitialisierer der
+     * Wache {@code Tag.FLOWER_POTS} fragt. Das ist ein eigener Arbeitsschritt; bis
+     * dahin ist diese Tafel der Riegel.
+     */
+    private static final List<String> DROSSEL_UND_BALKEN_IN_SCHUTZWACHE = List.of(
+            "letzteMeldung.get <- spieler",
+            "letzteMeldung.put <- spieler",
+            "letzteMeldung.remove <- ereignis.getPlayer()",
+            "spieler liest grund");
+
+    /**
      * Ein Sendeort mit seinem Empfaenger: der Aufruf einer Zeilen-Methode, und an wen
      * die Liste geht.
      *
@@ -707,6 +897,33 @@ class GrenzeTest {
             "[.]send(Message|ActionBar)\\(|::send(Message|ActionBar)");
 
     private static final Pattern FARBE = Pattern.compile("NamedTextColor|TextColor");
+
+    /**
+     * Ein Farbtag als Zeichen im Programm - nicht der Name einer Adventure-Klasse.
+     *
+     * <p><b>Die DRITTE Frage neben {@link #FARBE} und {@link #MINIMESSAGE_LESEN}, und
+     * sie stand bis zum 05.11.2026 offen.</b> Ein {@code "<green>" + name} nennt keine
+     * Adventure-Klasse und liest keinen Satz - beide Muster sehen es nicht. Gemessen mit
+     * einem Eingriff genau dieser Form am Wert von {@link Schutztext}: 852 Proben,
+     * 0 rot.
+     *
+     * <p>Im Spiel ist der Schaden sichtbar. Ein Wert geht ROH als Blatt in den Satz und
+     * wird nicht ein zweites Mal gelesen - das ist so gewollt und in {@code Sprache}
+     * begruendet, weil sonst ein {@code <red>} aus einer Spielereingabe wirklich rot
+     * ankaeme. Die Kehrseite: Das Tag steht dem Spieler woertlich im Handbalken,
+     * {@code Diese Parzelle gehoert <green>Bert</green>}.
+     *
+     * <p>Gesucht werden nur die Namen, die MiniMessage als Farbe oder Schriftform kennt,
+     * dazu die Hexform und die zwei verbotenen Tags. Darum trifft es weder
+     * {@code <ziel>} in einem Hilfetext noch {@code <p>} im Javadoc - Kommentare liest
+     * {@link Quellen#text} ohnehin nicht mit, und genau darauf beruht die enge Menge.
+     */
+    private static final Pattern FARBTAG_IM_SATZ = Pattern.compile(
+            "<(?:black|dark_blue|dark_green|dark_aqua|dark_red|dark_purple|gold|gray"
+                    + "|dark_gray|blue|green|aqua|red|light_purple|yellow|white|bold"
+                    + "|italic|underlined|strikethrough|obfuscated)>"
+                    + "|<#[0-9a-fA-F]{6}>"
+                    + "|<(?:click|hover|gradient|rainbow)[:>]");
 
     /**
      * Das LESEN eines Satzes aus MiniMessage - nicht die Farbe darin.
@@ -800,6 +1017,15 @@ class GrenzeTest {
     @DisplayName("31q - ein Satz wird nur noch in DIESEN Dateien gelesen")
     void minimessageNurNochInDiesenDateien() {
         assertEquals(MINIMESSAGE_ERLAUBT, dateienMit(MINIMESSAGE_LESEN));
+    }
+
+    @Test
+    @DisplayName("31t - ein Farbtag steht als Zeichen nur noch in DIESER Datei")
+    void farbtagAlsZeichenNurNochInDieserDatei() {
+        assertEquals(FARBTAG_ERLAUBT, dateienMit(FARBTAG_IM_SATZ), "Ein Farbtag in"
+                + " einem WERT wirkt nicht - er steht dem Spieler woertlich da. Farbe"
+                + " gehoert in den Satz in der Sprachdatei, nicht an den Wert im"
+                + " Programm.");
     }
 
     @Test
@@ -1109,6 +1335,125 @@ class GrenzeTest {
                 + " fuehre wird weiter genau einmal gerufen.");
     }
 
+    @Test
+    @DisplayName("31r - jede Wache der Schutzwache waehlt ihren eigenen Handbalken")
+    void jedeWacheDerSchutzwacheWaehltIhrenHandbalken() {
+        String quelle = Quellen.text(datei("Schutzwache.java"));
+        List<String> gefunden = new ArrayList<>();
+        // Drei Muster fuer drei Formen, in der Reihenfolge des Quelltextes: die eine
+        // Wache mit einem if, der Ternaer mit seinen ZWEI Antworten und der Satz mit
+        // dem fremden Namen. Ein Muster ueber alles koennte den Ternaer nicht in zwei
+        // Zeilen zerlegen - und genau dort sass in Schritt 5 der gruene Tausch.
+        var weg = WEGWACHE.matcher(quelle);
+        while (weg.find()) {
+            gefunden.add(weg.group(1) + " -> " + weg.group(2));
+        }
+        var grenze = GRENZWACHE.matcher(quelle);
+        while (grenze.find()) {
+            gefunden.add(grenze.group(1) + "/dann -> " + grenze.group(2));
+            gefunden.add(grenze.group(1) + "/sonst -> " + grenze.group(3));
+        }
+        var fremd = EIGENTUEMERWACHE.matcher(quelle);
+        while (fremd.find()) {
+            gefunden.add(fremd.group(1) + " <- " + fremd.group(2) + "()");
+        }
+        // Die Zahl eigens, wie in 31m: Findet ein Muster seine Form nicht mehr, waere
+        // der Vergleich darunter zwar auch rot - die Meldung sagte aber nicht, dass ein
+        // MUSTER nachzuziehen ist und nicht das Programm.
+        assertEquals(4, gefunden.size(), "gesucht werden VIER Stellen - die Wegwache,"
+                + " die zwei Seiten des Grenzternaers und der Satz mit dem fremden"
+                + " Namen. Fehlt eine, hat ein Muster sie nicht gefunden; dann gehoert"
+                + " das Muster nachgezogen und nicht die Probe gestrichen. Fehlt die"
+                + " LETZTE Zeile, kann es auch umgekehrt sein: Dann steht im Programm"
+                + " statt eigentuemer() etwas anderes - etwa der Leser -, und dann"
+                + " gehoert das PROGRAMM geaendert und nicht dieses Muster. GEMESSEN am"
+                + " 05.11.2026 mit genau diesem Eingriff: " + gefunden);
+        // Die LISTE in Quellreihenfolge und keine Menge: Genau der Tausch, den diese
+        // Probe faengt, laesst die Menge unveraendert.
+        //
+        // Was diese Probe NICHT deckt, und das ist gemessen: Zeigt der Koerper einer
+        // Methode in Schutztext auf den falschen Schluessel, bleibt die Wahl hier
+        // richtig. Diese NAHTLAGE haelt SendewegTest 33aj, das die vier Wortlaute
+        // einzeln ruft und ihr Bild liest. Probe 30 wird dabei mit rot, sagt aber nur
+        // die Folge (ein Schluessel wird nirgends mehr geholt) und nicht die Ursache.
+        assertEquals(WACHENPAARE_IN_SCHUTZWACHE, gefunden, "Vier Wortlaute gehen durch"
+                + " EINE Sendestelle, also bleibt SENDESTELLEN bei einer Eins, was auch"
+                + " vertauscht wird. Vertauscht liest ein Spieler auf einer freien"
+                + " Parzelle mitten in der Stadt, hier ende die Marktstadt - und"
+                + " draussen, er solle sie mit /parzelle nehmen holen. Und in der"
+                + " letzten Zeile steht die andere Frage: Der genannte Name gehoert dem"
+                + " EIGENTUEMER und nicht dem Leser.");
+    }
+
+    @Test
+    @DisplayName("31s - jedes Ereignis der Ankunftswache waehlt seinen eigenen Satz")
+    void jedesEreignisDerAnkunftswacheWaehltSeinenSatz() {
+        String quelle = Quellen.text(datei("Ankunftswache.java"));
+        List<String> gefunden = new ArrayList<>();
+        var paar = ANKUNFTSANLASS.matcher(quelle);
+        while (paar.find()) {
+            gefunden.add(paar.group(1) + " -> " + paar.group(2));
+        }
+        // Die Zahl eigens, wie in 31m und 31r: Findet das Muster einen Anlass nicht
+        // mehr, waere der Vergleich darunter zwar auch rot - die Meldung sagte aber
+        // nicht, dass ein MUSTER nachzuziehen ist und nicht das Programm.
+        assertEquals(2, gefunden.size(), "gesucht werden ZWEI Anlaesse - der gesetzte"
+                + " Spawnpunkt und die betretene Abenteuerwelt. Fehlt einer, hat das"
+                + " Muster ihn nicht gefunden; dann gehoert das Muster nachgezogen und"
+                + " nicht die Probe gestrichen: " + gefunden);
+        // Die LISTE in Quellreihenfolge und keine Menge: Genau der Tausch, den diese
+        // Probe faengt, laesst die Menge unveraendert.
+        assertEquals(SENDEPAARE_IN_ANKUNFTSWACHE, gefunden, "Zwei Saetze, zwei"
+                + " Sendestellen - und die Zwei in SENDESTELLEN bleibt eine Zwei, was"
+                + " auch vertauscht wird. Vertauscht liest ein Spieler, der in einem"
+                + " Bett schlaeft, Hier ist Abenteuer - und wer Altfurt betritt, sein"
+                + " Spawnpunkt sei nicht gesetzt worden, obwohl er keinen setzen"
+                + " wollte.");
+    }
+
+    @Test
+    @DisplayName("31u - jeder Wachensatz traegt die Art, die sein Sendeweg braucht")
+    void jederWachensatzTraegtSeineArt() {
+        List<String> gefunden = new ArrayList<>();
+        for (WacheSatz satz : WacheSatz.values()) {
+            gefunden.add(satz.name() + " -> " + satz.art().name());
+        }
+        // Die Aufzaehlung selbst und kein Quelltext: Die Art ist eine Zusicherung des
+        // Vertrags, und so ist auch eine mehrzeilige Deklaration mitgenommen.
+        assertEquals(ARTEN_IN_WACHESATZ, gefunden, "Ein Handbalken nimmt EINE Zeile."
+                + " Traegt er Art.SATZ, laedt eine Umbruchmarke darin ohne Klage, und"
+                + " die zweite Zeile verschwindet stumm. Umgekehrt wirft eine Chatzeile"
+                + " mit Art.HANDBALKEN, sobald sie zwei Zeilen hat - dann liest der"
+                + " Spieler an dieser Stelle gar nichts.");
+    }
+
+    @Test
+    @DisplayName("31v - die Schutzwache drosselt je Spieler und sendet an ihn selbst")
+    void dieSchutzwacheDrosseltUndSendetJeSpieler() {
+        String quelle = Quellen.text(datei("Schutzwache.java"));
+        List<String> gefunden = new ArrayList<>();
+        var drossel = DROSSELWACHE.matcher(quelle);
+        while (drossel.find()) {
+            gefunden.add("letzteMeldung." + drossel.group(1) + " <- "
+                    + drossel.group(2));
+        }
+        var balken = BALKENWACHE.matcher(quelle);
+        while (balken.find()) {
+            gefunden.add(balken.group(1) + " liest " + balken.group(2));
+        }
+        // Die Zahl eigens, wie in 31m, 31r und 31s: Findet ein Muster seine Form nicht
+        // mehr, sagt die Meldung sonst nicht, dass ein MUSTER nachzuziehen ist.
+        assertEquals(4, gefunden.size(), "gesucht werden VIER Stellen - die drei"
+                + " Griffe in die Drossel und der Handbalken selbst. Fehlt eine, hat ein"
+                + " Muster sie nicht gefunden; dann gehoert das Muster nachgezogen und"
+                + " nicht die Probe gestrichen: " + gefunden);
+        assertEquals(DROSSEL_UND_BALKEN_IN_SCHUTZWACHE, gefunden, "Die Drossel gilt JE"
+                + " SPIELER und der Balken geht an den, dessen Hand abgewiesen wurde."
+                + " Eine gemeinsame Drossel macht die Wache fuer alle stumm, sobald"
+                + " einer anschlaegt; ein fremder Empfaenger laesst den Abgewiesenen"
+                + " ratlos vor einem Block stehen, der nicht bricht.");
+    }
+
     /**
      * Wie oft jede Methode der Naht einer Datei in ihr selbst gerufen wird.
      *
@@ -1246,6 +1591,64 @@ class GrenzeTest {
     /** Der Aufruf einer Ueberschrift - qualifiziert, weil er auswaerts steht. */
     private static final Pattern UEBERSCHRIFT = Pattern.compile(
             "Spielzeittext\\s*[.]\\s*(kopf\\w+)\\s*\\(");
+
+    /**
+     * Die Wegwache der {@code Schutzwache} mit dem Handbalken, den sie waehlt.
+     *
+     * <p>{@code [^;]} und nicht {@code .}, wie bei {@link #HINDERNISWACHE}: So kann
+     * ein Treffer keine zwei Anweisungen ueberspannen und nicht in die Antwort der
+     * naechsten Wache laufen.
+     */
+    private static final Pattern WEGWACHE = Pattern.compile(
+            "(feldBei)[^;]*?Schutztext[.](\\w+)\\s*\\(");
+
+    /**
+     * Der Grenzternaer mit BEIDEN Antworten - erst die dann-Seite, dann die sonst-Seite.
+     *
+     * <p>Beide Seiten in EINEM Muster, und das ist der ganze Zweck: Ein Muster, das nur
+     * die erste nimmt, sagt nichts darueber, was auf der anderen steht - und genau
+     * dieser Tausch lief in Schritt 5 gruen durch. Der Ternaer traegt bis zu seinem
+     * Semikolon keines, also kann {@code [^;]} ihn ganz lesen und nicht weiter.
+     */
+    private static final Pattern GRENZWACHE = Pattern.compile(
+            "(enthaelt)[^;]*?[?][^;]*?Schutztext[.](\\w+)\\s*\\([^;]*?:[^;]*?"
+                    + "Schutztext[.](\\w+)\\s*\\(");
+
+    /**
+     * Der Handbalken, der einen FREMDEN Namen einsetzt - mit der Quelle des Namens.
+     *
+     * <p>Gesucht wird der Weg vom Aufruf zum Wert und nicht bloss der Aufruf: Der
+     * Name muss aus {@code eigentuemer()} kommen. Ein {@code spieler.getName()} an
+     * derselben Stelle laesst dieses Muster leer laufen, und dann ist 31r schon an
+     * der Zahl der Treffer rot.
+     */
+    private static final Pattern EIGENTUEMERWACHE = Pattern.compile(
+            "Schutztext[.](\\w+)\\s*\\([^;]*?(eigentuemer)\\s*\\(\\s*\\)");
+
+    /**
+     * Ein Anlass der {@code Ankunftswache} mit dem Satz, den er waehlt.
+     *
+     * <p>{@code [^;]} und nicht {@code .}, wie bei {@link #HINDERNISWACHE}: So kann ein
+     * Treffer keine zwei Anweisungen ueberspannen. Das ist hier mehr als Vorsicht - es
+     * ist der Grund, warum das Muster genau zwei Treffer findet und nicht drei:
+     * {@code RESPAWN_ANCHOR} steht ein zweites Mal in der Wache {@code gesperrt}, dort
+     * aber in einem Zweig, dem unmittelbar ein Semikolon folgt.
+     *
+     * <p>Der Name des Anlasses und nicht der der umgebenden Methode: Eine Suche von der
+     * Deklaration bis zur Wahl muesste abschnittsweise arbeiten (wie 31h und 31l), und
+     * die zwei reinen Methoden der Naht waeren selbst Abschnitte - sie nennen ihren
+     * eigenen Namen und wuerden sich selbst zugeordnet.
+     */
+    private static final Pattern ANKUNFTSANLASS = Pattern.compile(
+            "(RESPAWN_ANCHOR|ADVENTURE)[^;]*?(\\w+Zeilen)\\s*\\(");
+
+    /** Ein Griff in die Drossel, mit dem Spieler, dessen Schluessel er nimmt. */
+    private static final Pattern DROSSELWACHE = Pattern.compile(
+            "letzteMeldung\\.(get|put|remove)\\(\\s*([\\w.()]+)\\.getUniqueId\\(\\)");
+
+    /** Der Handbalken mit seinem Empfaenger und dem Wortlaut, den er bekommt. */
+    private static final Pattern BALKENWACHE = Pattern.compile(
+            "(\\w+)\\.sendActionBar\\((\\w+)\\(");
 
     private static Path datei(String name) {
         for (Path datei : Quellen.alle()) {

@@ -31,9 +31,11 @@ interface Satz {
         MUSTER,
         /**
          * Ein Satz fuer den Handbalken ueber dem Gegenstandsgurt. Traegt Farbtags, aber
-         * GENAU EINE Zeile: {@code sendActionBar} nimmt ein Component und keine Liste
-         * (Schutzwache:210). Eine Umbruchmarke darin ist eine KLAGE mit Zeilennummer -
-         * sonst verschwindet die zweite Zeile stumm.
+         * GENAU EINE Zeile: {@code sendActionBar} nimmt ein Component und keine Liste.
+         * Eine Umbruchmarke darin ist eine KLAGE mit Zeilennummer - sonst verschwindet
+         * die zweite Zeile stumm. Seit Bauschritt 6 tragen die vier Handbalken der
+         * Schutzwache in {@link WacheSatz} diese Art; bis dahin benutzte sie keine
+         * einzige Konstante.
          */
         HANDBALKEN
     }

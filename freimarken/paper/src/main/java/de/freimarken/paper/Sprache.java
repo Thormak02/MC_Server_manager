@@ -100,9 +100,16 @@ final class Sprache {
     /**
      * Der Handbalken ueber dem Gegenstandsgurt - genau eine Zeile.
      *
-     * <p>{@code sendActionBar} nimmt ein Component und keine Liste (Schutzwache:210).
-     * Dass der Satz nur eine Zeile ergibt, ist beim LADEN entschieden
-     * ({@code Art.HANDBALKEN}) - hier kann es also nicht mehr schiefgehen.
+     * <p>{@code sendActionBar} nimmt ein Component und keine Liste. Dass der Satz nur
+     * eine Zeile ergibt, ist beim LADEN entschieden ({@code Art.HANDBALKEN}) - hier
+     * kann es also nicht mehr schiefgehen.
+     *
+     * <p><b>Ohne Aufrufer, und das ist nach Bauschritt 6 kein Versehen mehr:</b> Die
+     * {@code Schutzwache} sendet ihren Handbalken weiter selbst und holt sich die
+     * fertige Zeile bei {@link #eineZeile} - so bleibt sie in der Tafel
+     * {@code GrenzeTest.SENDESTELLEN} zaehlbar, und in {@code grund} steht kein
+     * {@code Player} neben dem Namen des Eigentuemers. Dieser Weg hier bleibt fuer
+     * einen Sendeort, der nichts weiter zu entscheiden hat.
      */
     void sendeHandbalken(Player an, Satz schluessel, Einsatz werte) {
         an.sendActionBar(eineZeile(schluessel, werte));

@@ -559,7 +559,56 @@ class BildGleichTest {
                         "&cDie Welt kornmark gibt es gerade nicht."),
                 new Zeile(ReiseSatz.ZURUECK_KEIN_ORT_GEMERKT, 1L, Einsatz.keine(),
                         "&7Es ist kein Ort gemerkt - du bist noch nirgends gewesen, wohin"
-                                + " es zurueckgeht."));
+                                + " es zurueckgeht."),
+
+                // Bauschritt 6, erster Zug: der Handbalken der Schutzwache. Die
+                // erwarteten Bilder kommen aus dem ROTEN Lauf von SendewegTest
+                // 33aj, der VOR dem Umzug gegen den committeten Stand lief - dort
+                // stehen dieselben Zeichen ein zweites Mal.
+                //
+                // Die ERSTEN VIER Art.HANDBALKEN des Projekts, und damit die
+                // ersten Zeilen dieser Tabelle, bei denen ein zweiter Zeilenbau
+                // gar nicht moeglich ist: Eine Umbruchmarke darin ist schon beim
+                // Laden eine Klage.
+                new Zeile(WacheSatz.SCHUTZ_WEG_UND_MAUER, 1L, Einsatz.keine(),
+                        "&eWeg und Mauer gehoeren allen"),
+                new Zeile(WacheSatz.SCHUTZ_PARZELLE_FREI, 1L, Einsatz.keine(),
+                        "&eDiese Parzelle ist frei - /parzelle nehmen"),
+                new Zeile(WacheSatz.SCHUTZ_AUSSERHALB, 1L, Einsatz.keine(),
+                        "&eHier endet die Marktstadt"),
+                // Der Farbwechsel MITTEN im Satz, und das Leerzeichen davor: Es
+                // gehoert zum roten Stueck. Hinter dem Wechsel saehe der Spieler
+                // dasselbe, diese Zeile aber nicht - genau dafuer vergleicht sie
+                // die Alt-Serialisierung und nicht den Baum.
+                new Zeile(WacheSatz.SCHUTZ_FREMDE_PARZELLE, 1L,
+                        Einsatz.von("eigentuemer", "Bert"),
+                        "&cDiese Parzelle gehoert &fBert"),
+
+                // Bauschritt 6, zweiter Zug: die Ankunftswache und die Portalwache.
+                // Die erwarteten Bilder kommen aus dem ROTEN Lauf von SendewegTest
+                // 33ak und 33al, der VOR dem Umzug gegen den committeten Stand lief.
+                //
+                // Die ZWEI ersten Zeilen sind einzeilig, obwohl ihr Wortlaut im
+                // Programm ueber drei bzw. zwei Quellzeilen mit + zusammengesetzt war:
+                // Ein Umbruch im Quelltext ist keiner im Chat. Genau diese
+                // Unterscheidung ist hier festgenagelt - wer eine Umbruchmarke
+                // hineinschreibt, bekommt eine rote Zeile.
+                new Zeile(WacheSatz.ANKUNFT_KEIN_SPAWNPUNKT, 1L, Einsatz.keine(),
+                        "&7Hier wird kein Spawnpunkt gesetzt - gestorben wird immer nach"
+                                + " Altfurt. Schlafen geht weiter."),
+                new Zeile(WacheSatz.ANKUNFT_ABENTEUER, 1L, Einsatz.keine(),
+                        "&7Hier ist Abenteuer: ansehen und benutzen, aber nicht abbauen."
+                                + " Gebaut wird in der Marktstadt."),
+                // Und der Gegenfall: ZWEI Chatzeilen aus EINEM Schluessel, rot und
+                // grau. Der Schwanz " - oder durch ein Tor am Bundesmarkt." steht
+                // damit zum zweiten Mal in dieser Tabelle - oben in
+                // ReiseSatz.WARP_ZIELE. Die zwei duerfen ab jetzt auseinanderlaufen;
+                // bis zu diesem Zug kam dieser hier aus dem Programm, und darum trug
+                // warp.ziele die Marke HALB IN KRAFT (Torhinweis).
+                new Zeile(WacheSatz.PORTAL_KEIN_AUSGANG, 1L, Einsatz.keine(),
+                        "&cHier fuehrt kein Portal hinaus.\n&7Nether und Ende erreichst"
+                                + " du mit /warp nether und /warp end - oder durch ein"
+                                + " Tor am Bundesmarkt."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

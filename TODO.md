@@ -582,9 +582,10 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - ~~Sprachdatei Schritt 2: /parzelle.~~ 4.11.: 104 Schluessel dazu, die Datei traegt jetzt 122 Saetze. /parzelle nennt keine Farbe mehr selbst.
 - ~~Sprachdatei Schritt 3 und 4: /tpa und /freimarken spielzeit.~~ 5.11.: 36 Schluessel dazu, die Datei traegt jetzt 158 Saetze. Einzug und Spaltenbreite stehen mit drin.
 - ~~Sprachdatei Schritt 5: die Reisen.~~ 5.11.: 21 Schluessel dazu, die Datei traegt jetzt 179 Saetze. /warp fasst drei Chatzeilen in einem Schluessel zusammen, Umbruch und Trenner stehen mit drin.
+- ~~Sprachdatei Schritt 6: die Wachen.~~ 5.11.: 7 Schluessel dazu, die Datei traegt jetzt 186 Saetze. Erster Handbalken, und ein Satz wechselt mitten drin die Farbe.
 - Entscheidung, Sprachdatei: Sechs Saetze sagen bei der Anzahl 1 die Mehrzahl ('aus 1 Feldern') - so sieht es heute aus. Eine Einzahlform waere besser, aendert aber das Bild.
 - Warnung: waehrung.betrag steht an ZWEI Orten - in der Datei und, fuer die zwei Preiszeilen von /freimarken, im Programm. Wer das Wort aendert, liest im Spiel beides nebeneinander.
-- Offen, Sprachdatei: die Textumzuege in den Schritten 6 bis 8 - die Wachen und /freimarken selbst. Ein Satz steht immer an genau einem Ort - nie an keinem und nie an zwei.
+- Offen, Sprachdatei: die Textumzuege in den Schritten 7 und 8 - /freimarken selbst. Ein Satz steht immer an genau einem Ort - nie an keinem und nie an zwei.
 - Pruefen, Sprachdatei: Nach dem ersten Start liegen beide Dateien im Plugin-Ordner, /mark verlauf sieht aus wie vorher. Dann eine Zeile samt aller Ebenen darueber nach sprache.yml kopieren, Farbe aendern, /freimarken neuladen: die Antwort nennt, wie viele Saetze von dir sind.
 - Pruefen, Sprachdatei: Eine kaputte Zeile in sprache.yml, etwa ein offenes <gold> - GAR NICHTS wird uebernommen, die Klage nennt Zeile und Spalte, die bisherigen Saetze gelten weiter.
 - Pruefen, Sprachdatei: Die neun Befehlsbeschreibungen in /help kommen aus der Datei, aendern sich aber erst nach einem Neustart.

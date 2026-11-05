@@ -50,6 +50,9 @@ final class ParzellenBefehle {
     /** Dasselbe fuer die Felderzahl einer Gruppe: {@code freimarken.gruppe.4}. */
     private static final String RECHT_GRUPPE = "freimarken.gruppe.";
 
+    /** Wie viele Buchungen {@code /mark verlauf} zeigt. */
+    private static final int VERLAUF_ZEILEN = 10;
+
     /**
      * Ein ZUSCHLAG auf die Parzellenzahl: {@code freimarken.extra.parzellen.2}.
      *
@@ -63,9 +66,6 @@ final class ParzellenBefehle {
      * Recht mit dem Text des anderen an, und die Auswertung dort haengt allein daran,
      * dass "extra.2" sich nicht als Zahl lesen laesst. Das ist kein Riegel, das ist Glueck.
      */
-    /** Wie viele Buchungen {@code /mark verlauf} zeigt. */
-    private static final int VERLAUF_ZEILEN = 10;
-
     private static final String RECHT_EXTRA_ANZAHL = "freimarken.extra.parzellen.";
 
     /** Derselbe Zuschlag fuer die Felderzahl: {@code freimarken.extra.gruppe.1}. */

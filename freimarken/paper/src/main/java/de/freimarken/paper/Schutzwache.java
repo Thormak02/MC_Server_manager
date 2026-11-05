@@ -10,7 +10,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -229,15 +228,13 @@ public final class Schutzwache implements Listener {
             int x = ort.getBlockX();
             int z = ort.getBlockZ();
             if (buch.plan().feldBei(x, z) != Rasterplan.Feld.PARZELLE) {
-                return Component.text("Weg und Mauer gehoeren allen", NamedTextColor.YELLOW);
+                return Schutztext.wegUndMauerBalken(sprache);
             }
             return buch.grenze().enthaelt(x, z)
-                    ? Component.text("Diese Parzelle ist frei - /parzelle nehmen",
-                            NamedTextColor.YELLOW)
-                    : Component.text("Hier endet die Marktstadt", NamedTextColor.YELLOW);
+                    ? Schutztext.parzelleFreiBalken(sprache)
+                    : Schutztext.ausserhalbBalken(sprache);
         }
-        return Component.text("Diese Parzelle gehoert ", NamedTextColor.RED)
-                .append(Component.text(namen(parzelle.get().eigentuemer()), NamedTextColor.WHITE));
+        return Schutztext.fremdeParzelleBalken(sprache, namen(parzelle.get().eigentuemer()));
     }
 
     private static String namen(UUID spieler) {

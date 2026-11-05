@@ -377,17 +377,24 @@ class VorlageTest {
     @DisplayName("10g - ein Satzschwanz, der auch im Programm steht, sagt das in der"
             + " Vorlage")
     void halbWirkenderTorhinweisWarntInDerVorlage() {
-        // Dieselbe Bauart wie 10e und 10f, fuer den dritten halb wirkenden Satz: Der
-        // Hinweis " - oder durch ein Tor am Bundesmarkt." steht als Schwanz in
-        // warp.ziele - und wortgleich noch in der Absage am Nether- und Endportal,
-        // die bis zu ihrem Bauschritt im Programm sitzt. Wer ihn in der Datei
-        // aendert, liest ihn am Portal weiter im Alten.
+        // Dieselbe Bauart wie 10e und 10f, und sie hat ihre Arbeit getan: Der Hinweis
+        // " - oder durch ein Tor am Bundesmarkt." stand als Schwanz in warp.ziele und
+        // wortgleich noch in der Absage am Nether- und Endportal, die bis zum zweiten
+        // Zug von Schritt 6 im Programm sass. Darum trug warp.ziele die Marke.
         //
         // Die Probe haelt BEIDE Richtungen, wie 10e: Solange der Schwanz im Programm
         // steht, MUSS die Marke in der Vorlage stehen - und sobald er dort verschwindet,
-        // MUSS die Marke heraus. Damit kann der Zwischenstand nicht stumm bleiben und
-        // die Warnung nicht ueberleben; Schritt 6 wird von dieser Probe daran
-        // erinnert, auch wenn niemand mehr an diesen Kommentar denkt.
+        // MUSS die Marke heraus. GEMESSEN am 05.11.2026: Als der Satz in die Datei zog,
+        // wurde diese Probe von sich aus rot und verlangte die Marke heraus, und sie war
+        // dabei die EINZIGE rote Probe des Zuges, die das tat. Das ist der Grund, sie
+        // auch jetzt stehen zu lassen: Heute haelt sie die andere Richtung, und eine
+        // Marke, die ohne zweiten Ort im Programm zurueckkaeme, waere sofort rot.
+        //
+        // Der Schwanz steht jetzt in ZWEI Blaettern derselben Datei, warp.ziele und
+        // wache.portal.kein-ausgang. Dass die beide dasselbe sagen, prueft niemand mehr
+        // - und das ist Absicht: Zwei Saetze mit zwei verschiedenen Anfaengen darf der
+        // Betreiber auseinanderentwickeln. In beiden Blaettern steht ein Querverweis
+        // auf das andere.
         int imProgramm = 0;
         for (Path datei : Quellen.alle()) {
             imProgramm += Quellen.zaehle(Quellen.text(datei), TORHINWEIS);
@@ -455,7 +462,12 @@ class VorlageTest {
      */
     private static final String WARNUNG_REISEZIEL = "HALB IN KRAFT (Reiseziel):";
 
-    /** Die Marke fuer den Hinweis, der auch noch im Programm steht. */
+    /**
+     * Die Marke fuer den Hinweis, der auch im Programm stand.
+     *
+     * <p>Seit dem zweiten Zug von Schritt 6 steht sie in der Vorlage NICHT mehr, und
+     * genau darauf besteht 10g: Der zweite Ort ist jetzt ein Blatt derselben Datei.
+     */
     private static final String WARNUNG_TORHINWEIS = "HALB IN KRAFT (Torhinweis):";
 
     /**
@@ -463,6 +475,14 @@ class VorlageTest {
      *
      * <p>Mit dem fuehrenden Gedankenstrich und dem Punkt am Ende: So trifft die Suche
      * den Schwanz und nicht jede Erwaehnung des Bundesmarktes.
+     *
+     * <p>Gemessen und darum aufgeschrieben: Diese Suche sieht den Schwanz nur, wenn er
+     * in EINEM Zeichenkettenliteral steht. Ein Satz, der im Quelltext mit {@code +} auf
+     * zwei Zeilen verteilt wird und dabei mitten im Schwanz bricht, bleibt fuer 10g
+     * unsichtbar - belegt durch einen Eingriff am 05.11.2026, bei dem ein
+     * handgeschriebener Rueckfall in {@code Portalwache} nur 31q rot machte und diese
+     * Probe gruen liess. Fuer die Richtung, die heute gilt, ist das harmlos; wer den
+     * Schwanz je wieder in das Programm holt, verlaesst sich besser nicht darauf.
      */
     private static final String TORHINWEIS = " - oder durch ein Tor am Bundesmarkt.";
 

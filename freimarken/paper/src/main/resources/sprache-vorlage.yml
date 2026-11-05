@@ -192,6 +192,9 @@ parzelle:
     # es um, und nichts bricht.
     zu-wenig: "<red>Die kostet <gold>{betrag}</gold>, du hast {guthaben}.</red>"
     # {von} {bis} - beide kommen ZWEIMAL vor, das ist erlaubt und Absicht.
+    # DIE ERSTEN 25 ZEICHEN stehen auch in wache.schutz.ausserhalb - dort gelb und
+    # ohne die Grenzen, weil der Spieler dort nichts getippt hat. Zwei Zeilen, zwei
+    # Lagen; aenderst du den Anfang, sieh dir die andere an.
     ausserhalb: "<red>Hier endet die Marktstadt. Parzellen gibt es von {von}/{von} bis {bis}/{bis}.</red>"
     # {bescheid} - der Programmname des Falls, den dieser Zweig nicht eigens benennt.
     # Er steht als WERT im Satz, damit du ihn einem Operator weitergeben kannst.
@@ -218,6 +221,10 @@ parzelle:
   bescheid:
     erteilt: "<red>Erledigt.</red>"
     keine-parzelle: "<red>Hier ist keine Parzelle.</red>"
+    # TEILT DEN ANFANG "Diese Parzelle gehoert " mit wache.schutz.fremde-parzelle und
+    # den Befehl /parzelle nehmen mit wache.schutz.parzelle-frei. Vier Zeilen mit
+    # demselben Anfang (mit den zwei Formen von noch-frei-am-limit darunter) - wer
+    # einen aendert, sieht sich die anderen an.
     noch-frei: "<red>Diese Parzelle gehoert noch niemandem - nimm sie mit /parzelle nehmen.</red>"
     # {anzahl} ZAEHLT - derselbe Fall, wenn dein Rang schon ausgeschoepft ist. Danach
     # steht rang-werbung.
@@ -699,12 +706,13 @@ warp:
   # Die spitze Klammer um ziel ist ein ZEICHEN und keine Farbe, darum ZWEI Backslashes
   # davor. Das Wort darin ist der Name des Befehlsarguments: Wird es im Programm
   # umbenannt, gehoert es hier mitgeaendert.
-  # HALB IN KRAFT (Torhinweis): DER SCHWANZ " - oder durch ein Tor am Bundesmarkt."
-  # steht WORTGLEICH noch in einem zweiten Satz, naemlich in der Absage am Nether- und
-  # Endportal - und DIESER kommt bis zu seinem Bauschritt weiter aus dem Programm. Wer
-  # den Schwanz hier aendert, liest ihn am Portal weiter im Alten. Das sind zwei
-  # Saetze mit zwei verschiedenen Anfaengen und bleiben zwei - aber wer den zweiten
-  # hierher holt, nimmt fuer den Schwanz diesen Wortlaut und erfindet keinen neuen.
+  # QUERVERWEIS: DER SCHWANZ " - oder durch ein Tor am Bundesmarkt." steht WORTGLEICH
+  # noch in einem zweiten Satz, naemlich in wache.portal.kein-ausgang - der Absage am
+  # Nether- und Endportal. Bis zu dessen Bauschritt kam dieser zweite aus dem Programm,
+  # und hier stand darum eine Warnung; jetzt stehen beide in dieser Datei. Das sind zwei
+  # Saetze mit zwei verschiedenen Anfaengen und bleiben zwei: Aenderst du den Schwanz
+  # hier, aendert er sich dort NICHT mit. Das ist ab jetzt deine Entscheidung und kein
+  # Fehler mehr - willst du sie gleich halten, aendere beide.
   ziele: "<gold>Reiseziele</gold>\n<aqua>{liste}</aqua>\n<gray>/warp \\<ziel> - oder durch ein Tor am Bundesmarkt.</gray>"
   # Was zwischen zwei Weltnamen der Zeile darueber steht: ZWEI Leerzeichen. Kein Farbtag -
   # der Trenner geht als WERT in den Satz und ist dort ein Blatt. Darf leer sein.
@@ -751,15 +759,110 @@ zurueck:
   # Wortstueck oder die vier Zeilen unter reise - und dann beides zusammen.
   letzter-ort: "deinen letzten Ort"
 
-# /mark, /parzelle, die vier Teleportbefehle, die Spielzeit, das Reisen selbst sowie
-# /warp und /zurueck stehen jetzt vollstaendig hier.
-# Noch nicht hier: die drei Wachen und /freimarken selbst. Sie stehen bis zu ihrem
-# Bauschritt im Programm - ein Satz steht immer an genau einem Ort, nie an keinem. Die
-# drei Ausnahmen sagen es selbst: waehrung.betrag traegt die Marke HALB IN KRAFT, weil die
-# zwei Preiszeilen von /freimarken bis zu ihrem Bauschritt weiter aus dem Programm kommen,
-# der Kopf von reise traegt die Marke HALB IN KRAFT (Reiseziel), weil eine der fuenf
-# Aufschriften eines Reiseziels noch im Programm steht, und warp.ziele traegt die Marke
-# HALB IN KRAFT (Torhinweis), weil der Hinweis auf das Tor am Bundesmarkt wortgleich auch
-# in der Absage am Nether- und Endportal steht und die noch im Programm sitzt. Innerhalb von /mark, /parzelle,
-# den Teleportbefehlen, der Spielzeit, dem Reisen, /warp und /zurueck gibt es sonst keine
-# zweite Quelle mehr.
+# DIE WACHEN - was ein Spieler liest, ohne etwas getippt zu haben.
+#
+# Unter wache und nicht unter einem Befehl: Diese Saetze kommen von selbst, weil eine
+# Hand etwas angefasst hat, nicht weil jemand etwas gefragt hat.
+#
+# DER HANDBALKEN IST KEINE CHATZEILE. Die vier Zeilen unter schutz stehen ueber dem
+#   Gegenstandsgurt und nicht im Chat. Dort ist nur EINE Zeile moeglich, darum ist ein
+#   \n in diesen vier Zeilen eine KLAGE mit Zeilennummer und kein Umbruch - der Rest
+#   dahinter wuerde sonst stumm verschwinden. Worte und Farbe darfst du frei waehlen,
+#   auch mehrere Farben in einer Zeile (siehe fremde-parzelle). Die drei Zeilen unter
+#   ankunft und portal sind dagegen gewoehnliche Chatzeilen, und eine von ihnen traegt
+#   eine Umbruchmarke.
+# GEDROSSELT KOMMEN ZWEI VON DREI. Der Handbalken hoechstens einer je Spieler und zwei
+#   Sekunden, sonst wird aus einer festgehaltenen Maustaste ein Flackern; die Absage am
+#   Portal hoechstens eine je Spieler und acht Sekunden, denn sie feuert, solange der
+#   Spieler im Portalblock steht. Die zwei Zeilen unter ankunft brauchen keine Drossel -
+#   ihre Anlaesse kommen von selbst nur einmal.
+# BEIM DARAUFTRETEN - fremdes Ackerland zum Beispiel - kommt gar kein Handbalken: Das
+#   hatte der Spieler nicht vor.
+wache:
+  # DER BAUSCHUTZ. Vier Lagen, vier Zeilen, eine Sendestelle - welche Zeile ein Spieler
+  # liest, entscheidet das Programm am Ort seiner Hand.
+  schutz:
+    # Er steht auf Weg oder Mauer. Gelb und nicht rot, und das ist Absicht: Es ist
+    # nichts kaputt und niemand abgewiesen, der Ort gehoert einfach allen.
+    weg-und-mauer: "<yellow>Weg und Mauer gehoeren allen</yellow>"
+    # Die Parzelle ist zu haben. Die EINZIGE der vier Zeilen, die einen Befehl nennt -
+    # dieselben Worte stehen in parzelle.bescheid.noch-frei. Benennt das Programm den
+    # Befehl eines Tages um, gehoeren beide Zeilen geaendert.
+    parzelle-frei: "<yellow>Diese Parzelle ist frei - /parzelle nehmen</yellow>"
+    # Hier ist Bauland im Raster, aber jenseits der Stadtgrenze - es wird nie vergeben.
+    # BEGINNT MIT DENSELBEN 25 ZEICHEN wie parzelle.nehmen.ausserhalb, hat aber eine
+    # andere Farbe und einen anderen Fall: Dort hat jemand /parzelle nehmen getippt und
+    # bekommt die Grenzen genannt, hier hat er bloss eine Hand gehoben. Aenderst du den
+    # Anfang, sieh dir die andere Zeile an.
+    ausserhalb: "<yellow>Hier endet die Marktstadt</yellow>"
+    # {eigentuemer} - die Parzelle gehoert einem anderen Menschen, und er wird genannt.
+    # ZWEI FARBEN IN EINER ZEILE, und der Farbwechsel steht MITTEN im Satz: rot der
+    #   Kopf, weiss der Name. Das Leerzeichen vor dem Namen steht VOR dem <white> und
+    #   gehoert damit zum roten Stueck. Schiebst du es dahinter, sieht der Spieler
+    #   dasselbe - die Bildprobe des Projekts aber nicht. Lass es, wo es ist.
+    # {eigentuemer} IST EIN FREMDER NAME. Der Leser ist der Besucher, genannt wird der
+    #   Eigentuemer - schreib also nichts hinein, was den Leser selbst anspricht.
+    # KENNT DER SERVER DEN NAMEN NICHT, stehen dort acht Zeichen einer UUID. Einen
+    #   eigenen Satz dafuer gibt es nicht, weil es ihn vor dem Umzug auch nicht gab.
+    # DERSELBE ANFANG steht in parzelle.bescheid.noch-frei und in den zwei Formen von
+    #   parzelle.bescheid.noch-frei-am-limit: "Diese Parzelle gehoert ". Vier Zeilen mit
+    #   demselben Anfang, damit ein Spieler sie als dieselbe Art von Auskunft liest -
+    #   aenderst du den Anfang, sieh dir alle vier an.
+    fremde-parzelle: "<red>Diese Parzelle gehoert <white>{eigentuemer}</white></red>"
+  # DIE ANKUNFT. Zwei Saetze an zwei verschiedenen Anlaessen: Der eine kommt, weil jemand
+  # einen Spawnpunkt setzen wollte, der andere, weil jemand eine Abenteuerwelt betritt.
+  # Sie gehen nie zusammen hinaus, darum sind es zwei Zeilen und nicht eine mit beidem
+  # darin. Beide sind grau - eine Auskunft, keine Absage.
+  ankunft:
+    # Ein Bett oder ein Anker hat KEINEN Spawnpunkt gesetzt. Geschlafen werden darf
+    # weiter; gesperrt ist allein das Setzen des Punktes, und gestorben wird immer nach
+    # Altfurt.
+    # DIESER SATZ IST DER EINZIGE HINWEIS. Die Meldung des Spiels ("Respawn point set")
+    #   wird vorher ausdruecklich abgeschaltet, weil sie hier eine Luege waere. Laesst du
+    #   die Zeile leer, ist das eine Klage beim Laden - und das ist Absicht: Ohne Hinweis
+    #   tut ein Bett scheinbar nichts, und der Spieler merkt es erst beim naechsten Tod.
+    # "Altfurt" STEHT HART IM SATZ und kommt nicht aus der config.yml - genauso wie
+    #   "Marktstadt" in sechs Zeilen dieser Datei. Diese Zeile hier ist die einzige der
+    #   ganzen Datei, die Altfurt nennt; benennst du die Welt in der config.yml um,
+    #   gehoert dieser Satz mitgeaendert, und sonst keiner.
+    kein-spawnpunkt: "<gray>Hier wird kein Spawnpunkt gesetzt - gestorben wird immer nach Altfurt. Schlafen geht weiter.</gray>"
+    # Die betretene Welt ist Abenteuer: ansehen und benutzen, aber nicht abbauen.
+    # NUR IN DIESE RICHTUNG. Der Weg zurueck nach Ueberleben sagt nichts, weil dort
+    #   nichts verboten wird - einen Satz dafuer gibt es nicht, und es gab ihn nie.
+    # WELCHE Welten Abenteuer sind, steht in der config.yml und nicht hier; heute ist es
+    #   allein Altfurt. Dieser Satz gilt fuer jede davon - schreib also nichts hinein,
+    #   was nur fuer eine stimmt.
+    abenteuer: "<gray>Hier ist Abenteuer: ansehen und benutzen, aber nicht abbauen. Gebaut wird in der Marktstadt.</gray>"
+  # DAS PORTAL. Ein selbstgebautes Nether- oder Endportal fuehrt nirgends hin: Es laesst
+  # sich nicht anzuenden, und ein bestehendes laesst niemanden durch. Ohne diese Absage
+  # waere das Fehlerbild ein Rahmen, der nicht brennt - und das sieht wie ein
+  # Serverfehler aus.
+  portal:
+    # ZWEI Chatzeilen in einer Zeile dieser Datei, getrennt von der Umbruchmarke: die
+    # Absage rot, der Weg darunter grau. EIN Schluessel und nicht zwei, weil sie immer
+    # zusammen hinausgehen: Es gibt keinen Fall, in dem der Spieler nur eine von beiden
+    # liest. Dieselbe Lage wie warp.kein-ziel, und derselbe Gewinn: So kannst du sie
+    # umstellen und nicht bloss umfaerben. Und derselbe Preis - einzeln abschalten kannst
+    # du sie nicht; wer nur die Absage will, loescht Umbruchmarke und zweite Zeile mit.
+    # QUERVERWEIS: Der Schwanz " - oder durch ein Tor am Bundesmarkt." steht wortgleich
+    #   auch am Ende von warp.ziele. Zwei Saetze mit zwei verschiedenen Anfaengen bleiben
+    #   zwei - aenderst du ihn hier, aendert er sich DORT NICHT mit. Das ist ab jetzt
+    #   deine Entscheidung und kein Fehler mehr, denn beide stehen in dieser Datei.
+    # /warp nether UND /warp end STEHEN HART IM SATZ, wie der Befehl in
+    #   wache.schutz.parzelle-frei. Benennt das Programm sie um, gehoert diese Zeile
+    #   geaendert.
+    kein-ausgang: "<red>Hier fuehrt kein Portal hinaus.</red>\n<gray>Nether und Ende erreichst du mit /warp nether und /warp end - oder durch ein Tor am Bundesmarkt.</gray>"
+
+# /mark, /parzelle, die vier Teleportbefehle, die Spielzeit, das Reisen selbst,
+# /warp und /zurueck sowie ALLE DREI WACHEN stehen jetzt vollstaendig hier.
+# Noch nicht hier: /freimarken selbst. Seine Saetze stehen bis zu ihrem Bauschritt im
+# Programm - ein Satz steht immer an genau einem Ort, nie an keinem. Die zwei
+# Ausnahmen sagen es selbst: waehrung.betrag traegt die Marke HALB IN KRAFT, weil die
+# zwei Preiszeilen von /freimarken bis zu ihrem Bauschritt weiter aus dem Programm
+# kommen, und der Kopf von reise traegt die Marke HALB IN KRAFT (Reiseziel), weil eine
+# der fuenf Aufschriften eines Reiseziels noch im Programm steht.
+# Der Torhinweis am Ende von warp.ziele war die dritte Ausnahme und ist es nicht mehr:
+# Der zweite Ort ist jetzt wache.portal.kein-ausgang, also eine Zeile dieser Datei.
+# Dort steht ein Querverweis, keine Warnung - zwei Blaetter, beide aenderbar.
+# Innerhalb von /mark, /parzelle, den Teleportbefehlen, der Spielzeit, dem Reisen,
+# /warp, /zurueck und den drei Wachen gibt es sonst keine zweite Quelle mehr.

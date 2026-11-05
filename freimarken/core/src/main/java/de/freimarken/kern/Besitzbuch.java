@@ -255,18 +255,6 @@ public final class Besitzbuch {
         }
     }
 
-    /**
-     * Was einer Aenderung an dieser Stelle entgegensteht - leer heisst: nichts.
-     *
-     * <p>Die eine Stelle fuer den Dreischritt, den Mitbauer-Eintragen, Mitbauer-Austragen
-     * und Aufgeben vorher jeweils fuer sich erledigt haben. Sobald es Kindzeilen gibt,
-     * braucht jeder dieser Wege dieselbe Pruefung - und einer von dreien wuerde sie
-     * vergessen. Genau das ist hier schon einmal passiert: Zwei von sieben Befehlen hatten
-     * die Weltpruefung nicht, bis sie in {@code ortInMarktstadt} zusammengezogen wurde.
-     *
-     * <p>Gibt nur das HINDERNIS zurueck, nie eine Erlaubnis. Ein durchgereichter Entscheid
-     * mit {@code ERTEILT} meldete dem Spieler "Erledigt.", ohne dass etwas geschehen waere.
-     */
     /** Ob eine Tat auf einem Gruppenkind erlaubt ist oder dort verweigert wird. */
     private enum AufGruppe {
         /** Die Tat wirkt auf die ganze Gruppe - das Lager schreibt auf alle Kinder durch. */
@@ -286,6 +274,18 @@ public final class Besitzbuch {
         return parzelle.hatElternteil() ? parzelle.elternId() : parzelle.id();
     }
 
+    /**
+     * Was einer Aenderung an dieser Stelle entgegensteht - leer heisst: nichts.
+     *
+     * <p>Die eine Stelle fuer den Dreischritt, den Mitbauer-Eintragen, Mitbauer-Austragen
+     * und Aufgeben vorher jeweils fuer sich erledigt haben. Sobald es Kindzeilen gibt,
+     * braucht jeder dieser Wege dieselbe Pruefung - und einer von dreien wuerde sie
+     * vergessen. Genau das ist hier schon einmal passiert: Zwei von sieben Befehlen hatten
+     * die Weltpruefung nicht, bis sie in {@code ortInMarktstadt} zusammengezogen wurde.
+     *
+     * <p>Gibt nur das HINDERNIS zurueck, nie eine Erlaubnis. Ein durchgereichter Entscheid
+     * mit {@code ERTEILT} meldete dem Spieler "Erledigt.", ohne dass etwas geschehen waere.
+     */
     private Optional<Entscheid> hindernis(Optional<Parzelle> gefunden, UUID handelnder,
                                           AufGruppe aufGruppe, int weltX, int weltZ) {
         if (gefunden.isEmpty()) {

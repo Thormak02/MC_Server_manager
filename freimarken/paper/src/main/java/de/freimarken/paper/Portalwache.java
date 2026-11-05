@@ -1,11 +1,10 @@
 package de.freimarken.paper;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Set;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.World;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -113,10 +112,27 @@ final class Portalwache implements Listener {
         if (meldungen.restNs(spieler.getUniqueId(), System.nanoTime()) > 0L) {
             return;
         }
-        spieler.sendMessage(Component.text("Hier fuehrt kein Portal hinaus.",
-                NamedTextColor.RED));
-        spieler.sendMessage(Component.text("Nether und Ende erreichst du mit /warp nether"
-                + " und /warp end - oder durch ein Tor am Bundesmarkt.",
-                NamedTextColor.GRAY));
+        keinAusgangZeilen(sprache).forEach(spieler::sendMessage);
+    }
+
+    // --- Die Naht: eine Absage, ohne Player und ohne Bukkit --------------------
+
+    /**
+     * Die Absage am Portal - ZWEI Chatzeilen aus EINEM Griff.
+     *
+     * <p>Rot die Absage, grau der Weg darunter, und sie gehen immer zusammen hinaus:
+     * Zwischen den zwei Sendungen stand kein {@code if}, kein {@code return} und keine
+     * Schleife - die Abklingzeit wird EINMAL davor gefragt, und danach gibt es keinen
+     * Zweig mehr, der nur eine der beiden Zeilen schickt. Darum ist der Zeilenbau hier
+     * ein Stueck des Satzes und nicht eine Folge von zwei Sendeaufrufen, genau wie bei
+     * {@code warp.kein-ziel}.
+     *
+     * <p>Gemessen zwei Chatzeilen und nicht drei: Die zweite stand im Quelltext ueber
+     * zwei Zeilen, mit {@code +} zusammengesetzt - die Verkettung zerreisst den Satz
+     * nicht. Jetzt steht der Umbruch als Marke in der Datei und damit beim Betreiber;
+     * {@code SendewegTest} 33al haelt ihn fest.
+     */
+    static List<Component> keinAusgangZeilen(Sprache sprache) {
+        return sprache.bau(WacheSatz.PORTAL_KEIN_AUSGANG, 1L, Einsatz.keine());
     }
 }

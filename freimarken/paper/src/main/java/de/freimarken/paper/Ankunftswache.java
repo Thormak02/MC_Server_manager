@@ -2,10 +2,10 @@ package de.freimarken.paper;
 
 import com.destroystokyo.paper.event.player.PlayerSetSpawnEvent;
 import io.papermc.paper.event.player.AsyncPlayerSpawnLocationEvent;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import de.freimarken.kern.Kasse;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -130,9 +130,7 @@ final class Ankunftswache implements Listener {
         ereignis.setNotifyPlayer(false);
         if (ereignis.getCause() == PlayerSetSpawnEvent.Cause.BED
                 || ereignis.getCause() == PlayerSetSpawnEvent.Cause.RESPAWN_ANCHOR) {
-            ereignis.getPlayer().sendMessage(Component.text("Hier wird kein Spawnpunkt"
-                    + " gesetzt - gestorben wird immer nach Altfurt. Schlafen geht"
-                    + " weiter.", NamedTextColor.GRAY));
+            keinSpawnpunktZeilen(sprache).forEach(ereignis.getPlayer()::sendMessage);
         }
     }
 
@@ -215,10 +213,42 @@ final class Ankunftswache implements Listener {
         }
         spieler.setGameMode(angabe.spielmodus());
         if (angabe.spielmodus() == GameMode.ADVENTURE) {
-            spieler.sendMessage(Component.text("Hier ist Abenteuer: ansehen und benutzen,"
-                    + " aber nicht abbauen. Gebaut wird in der Marktstadt.",
-                    NamedTextColor.GRAY));
+            abenteuerZeilen(sprache).forEach(spieler::sendMessage);
         }
     }
 
+    // --- Die Naht: zwei Saetze, ohne Player und ohne Bukkit --------------------
+
+    /**
+     * Ein Bett oder ein Anker hat keinen Spawnpunkt gesetzt - und sagt es.
+     *
+     * <p>Der EINZIGE Hinweis an dieser Stelle, denn der Zweig darueber schaltet die
+     * Vanilla-Meldung ausdruecklich ab ({@code setNotifyPlayer(false)}). Faellt dieser
+     * Satz weg, tut ein Bett scheinbar nichts - darum ist er in {@link WacheSatz} ein
+     * Satz, der nicht leer sein darf.
+     *
+     * <p>Gemessen genau EINE Chatzeile: Der Wortlaut stand im Quelltext ueber drei
+     * Zeilen, mit {@code +} zusammengesetzt, und trug dabei kein {@code \n} - ein
+     * Umbruch im Quelltext ist keiner im Chat. Dass es eine bleibt, haelt
+     * {@code SendewegTest} 33ak.
+     */
+    static List<Component> keinSpawnpunktZeilen(Sprache sprache) {
+        return sprache.bau(WacheSatz.ANKUNFT_KEIN_SPAWNPUNKT, 1L, Einsatz.keine());
+    }
+
+    /**
+     * Die betretene Welt ist Abenteuer - was dort gilt und wo gebaut wird.
+     *
+     * <p>Nur in DIESE Richtung: Der Weg zurueck nach Ueberleben sagt nichts, weil dort
+     * nichts verboten wird. Heute trifft das allein Altfurt; welche Welten Abenteuer
+     * sind, steht in der {@code config.yml} und nicht hier.
+     *
+     * <p>Ebenfalls genau eine Chatzeile, aus zwei Quellzeilen zusammengesetzt - und
+     * derselbe Empfaengertyp, dieselbe Farbe und dieselbe Signatur wie
+     * {@link #keinSpawnpunktZeilen}. Darum sind die zwei vertauschbar, und darum paart
+     * {@code GrenzeTest} 31s jeden Anlass mit dem Satz, den er waehlt.
+     */
+    static List<Component> abenteuerZeilen(Sprache sprache) {
+        return sprache.bau(WacheSatz.ANKUNFT_ABENTEUER, 1L, Einsatz.keine());
+    }
 }
