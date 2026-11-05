@@ -70,14 +70,13 @@ waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
   # deines; die Zahlform bleibt im Programm, damit ein Tippfehler keine Preise
   # verbiegt. Kein Farbtag - der Betrag wird in andere Saetze eingesetzt.
-  # HALB IN KRAFT: Dieses Wort wirkt noch nicht an allen Stellen. VON HIER kommt
-  #   jeder Betrag in /mark und /parzelle - Stand, Verlauf, Preise, Gebuehren und
-  #   Rest. NOCH NICHT von hier kommen die zwei Preiszeilen von /freimarken
-  #   ("Parzelle Nr. N kostet ..." und "Bisher ausgegeben: ..."); die sagen bis zu
-  #   ihrem Bauschritt weiter hart "Mark". Aenderst du das Wort jetzt, steht im
-  #   Spiel beides nebeneinander - aber nicht mehr in zwei Zeilen desselben
-  #   Befehls. Diese Warnung verschwindet, sobald die letzte Stelle umgezogen ist -
-  #   sie kann auch nicht stehenbleiben, eine Probe haelt beide Richtungen.
+  # VON HIER KOMMT JEDER BETRAG, DEN EIN SPIELER LIEST: Stand und Verlauf in
+  #   /mark, Preise, Gebuehren und Rest in /parzelle, und die zwei Preiszeilen
+  #   von /freimarken preis. Aenderst du das Wort, aendert es sich in allen.
+  # EINE STELLE SAGT WEITER HART Mark, und sie geht an keinen Spieler: Die
+  #   Antwort von /freimarken neuladen nennt bei einer unbrauchbaren Zahl die
+  #   Einheit selbst - hoechstens 1000000000 Mark. Wer das Wort hier aendert,
+  #   liest sie dort unveraendert, im Chat des Betreibers und nicht im Spiel.
   betrag: "{zahl} Mark"
 
 zeit:
@@ -853,16 +852,75 @@ wache:
     #   geaendert.
     kein-ausgang: "<red>Hier fuehrt kein Portal hinaus.</red>\n<gray>Nether und Ende erreichst du mit /warp nether und /warp end - oder durch ein Tor am Bundesmarkt.</gray>"
 
-# /mark, /parzelle, die vier Teleportbefehle, die Spielzeit, das Reisen selbst,
-# /warp und /zurueck sowie ALLE DREI WACHEN stehen jetzt vollstaendig hier.
-# Noch nicht hier: /freimarken selbst. Seine Saetze stehen bis zu ihrem Bauschritt im
-# Programm - ein Satz steht immer an genau einem Ort, nie an keinem. Die zwei
-# Ausnahmen sagen es selbst: waehrung.betrag traegt die Marke HALB IN KRAFT, weil die
-# zwei Preiszeilen von /freimarken bis zu ihrem Bauschritt weiter aus dem Programm
-# kommen, und der Kopf von reise traegt die Marke HALB IN KRAFT (Reiseziel), weil eine
-# der fuenf Aufschriften eines Reiseziels noch im Programm steht.
-# Der Torhinweis am Ende von warp.ziele war die dritte Ausnahme und ist es nicht mehr:
-# Der zweite Ort ist jetzt wache.portal.kein-ausgang, also eine Zeile dieser Datei.
-# Dort steht ein Querverweis, keine Warnung - zwei Blaetter, beide aenderbar.
-# Innerhalb von /mark, /parzelle, den Teleportbefehlen, der Spielzeit, dem Reisen,
-# /warp, /zurueck und den drei Wachen gibt es sonst keine zweite Quelle mehr.
+# /FREIMARKEN - was der Befehl ueber sich selbst sagt.
+#
+# Der letzte Umzug der SPIELERSAETZE. Die vier Verwaltungszweige - neuladen,
+# welt, parzelle und vorgenerieren - bleiben im Programm: Ihre Antworten gehen
+# in den Chat eines Betreibers mit dem Recht freimarken.verwalten und an keinen
+# Spieler. Sie stehen darum nicht in dieser Datei und sind nicht aenderbar.
+# ZWEI EBENEN UND NICHT EINE: stand gehoert dem nackten /freimarken, preis dem
+#   Zweig /freimarken preis. Es sind zwei Sendestellen, und wer die eine
+#   umschreibt, soll die andere nicht treffen.
+# DIE SPITZEN KLAMMERN SIND ZEICHEN und keine Farben - darum zwei Backslashes
+#   davor, so wie bei parzelle.mitbauer.befehle. Sie zeigen dem Spieler, wo eine
+#   Zahl oder eine Koordinate hingehoert.
+stand:
+  # Die Ueberschrift der Antwort auf das nackte /freimarken.
+  kopf: "<gold>Der Freimarkenbund</gold>"
+  # {version} {java} {minecraft} - alle drei nennt der laufende Server und nicht
+  # diese Datei. Deines ist nur, was dazwischen steht.
+  version: "<gray>Stand {version} · Java {java} · {minecraft}</gray>"
+  # Ohne Datenbank ueberlebt keine Buchung den Neustart. Rot, und das ist Absicht:
+  # Wer das liest, soll es nicht ueberlesen.
+  # WELCHE DER ZWEI ZEILEN ein Spieler sieht, entscheidet das Programm am Zustand
+  #   der Ablage - abschalten kannst du keine von beiden.
+  ablage-fluechtig: "<red>Ablage fluechtig - nichts ueberlebt den Neustart</red>"
+  # Der gute Fall, und darum dunkelgrau: Er muss nicht auffallen.
+  ablage-mariadb: "<dark_gray>Ablage MariaDB</dark_gray>"
+  # Die Befehle, die JEDER Spieler hat. Mit /freimarken spielzeit darin, weil ein
+  # Zweig, den niemand nennt, ein Befehl ist, auf den niemand kommt.
+  # <anzahl> IST EIN HILFETEXT und nicht der Name des Arguments - beim Tippen
+  #   nennt der Befehlsbaum es besessen. Aenderst du das Wort hier, aendert sich
+  #   nur diese Zeile.
+  befehle: "<gray>/parzelle · /mark · /freimarken preis \\<anzahl> · /freimarken spielzeit</gray>"
+  # Nur fuer freimarken.verwalten - wer das Recht nicht hat, liest diese Zeile
+  # nie.
+  # DREI DER VIER ZWEIGE unter diesem Recht: vorgenerieren steht mit Absicht in
+  #   keiner Spielerzeile. Und nimmst du einen hier heraus, bleibt er trotzdem
+  #   tippbar - der Befehlsbaum steht im Programm, nicht in dieser Datei.
+  befehle-verwaltung: "<dark_gray>/freimarken welt · parzelle \\<x> \\<z> · neuladen</dark_gray>"
+
+# /FREIMARKEN PREIS - was die naechste Parzelle kostet.
+#
+# Drei Zeilen fuer zwei Lagen: Hat der Spieler noch keine Parzelle, ist sie
+# gratis, sonst kostet sie. Die Summe darunter kommt in beiden Lagen.
+# DER BETRAG KOMMT AUS waehrung.betrag und traegt dort sein Wort - aenderst du es
+#   dort, aendert es sich auch in diesen zwei Zeilen.
+preis:
+  # Die erste Parzelle ist umsonst.
+  gratis: "<green>Die erste Parzelle ist gratis.</green>"
+  # {nummer} {betrag} - der Preis der NAECHSTEN Parzelle. Die Nummer ist eine
+  # nackte Zahl ohne Tausenderpunkt, hoeher als 65 kann sie nicht werden.
+  # ZWEI FARBEN IN EINER ZEILE, und der Farbwechsel steht MITTEN im Satz: grau
+  #   der Kopf, gold der Betrag, grau wieder der Punkt dahinter. Das Leerzeichen
+  #   vor dem Betrag steht VOR dem Goldtag, der Punkt NACH dem Schlusstag - wer
+  #   sie verschiebt, verschiebt sie im Spiel.
+  kostet: "<gray>Parzelle Nr. {nummer} kostet <gold>{betrag}</gold>.</gray>"
+  # {betrag} - was der Spieler fuer seine bisherigen Parzellen zusammen bezahlt
+  # hat. Steht immer, auch wenn er noch keine hat: dann 0.
+  ausgegeben: "<dark_gray>Bisher ausgegeben: {betrag}</dark_gray>"
+
+# VOLLSTAENDIG FUER ALLES, WAS EIN SPIELER LIEST: /mark, /parzelle, die vier
+# Teleportbefehle, die Spielzeit, das Reisen selbst, /warp, /zurueck, alle drei
+# Wachen und /freimarken. Jeder dieser Saetze steht an genau einem Ort - nie an
+# keinem und nie an zwei.
+# NICHT HIER STEHT BETREIBERTEXT: Die Antworten der vier Verwaltungszweige von
+#   /freimarken - neuladen, welt, parzelle, vorgenerieren - gehen in den Chat
+#   eines Betreibers mit dem Recht freimarken.verwalten und bleiben im Programm.
+#   Eine dieser Zeilen sagt ihr Geldwort selbst; der Kopf von waehrung nennt sie.
+# DIE EINE AUSNAHME unter den Spielersaetzen sagt es selbst: Der Kopf von reise
+#   traegt die Marke HALB IN KRAFT (Reiseziel), weil eine der fuenf Aufschriften
+#   eines Reiseziels noch im Programm steht.
+# Eine fruehere Ausnahme ist keine mehr: Der Torhinweis am Ende von warp.ziele
+#   hat seinen zweiten Ort in wache.portal.kein-ausgang, also in einer Zeile
+#   dieser Datei; dort steht ein Querverweis und keine Warnung.

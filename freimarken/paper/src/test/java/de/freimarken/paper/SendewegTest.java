@@ -1399,4 +1399,78 @@ class SendewegTest {
                 &7Nether und Ende erreichst du mit /warp nether und /warp end - oder durch ein Tor am Bundesmarkt.
                 """, tafel.ganz());
     }
+
+    /** Der Stand des Plugins, wie {@code getPluginMeta()} ihn liefern wuerde. */
+    private static final String VERSION = "0.1.0";
+
+    /** Die Hauptnummer der Java-Ausgabe, wie {@code Runtime.version()} sie nennt. */
+    private static final String JAVA = "25";
+
+    /** Die Fassung des Servers, wie {@code getServer()} sie nennt. */
+    private static final String MINECRAFT = "1.21.4";
+
+    @Test
+    @DisplayName("33am - /freimarken: alle VIER Lagen von stand und BEIDE von preis")
+    void bundZweige() {
+        // Die drei Werte sind PROBEWERTE: getPluginMeta(), Runtime.version() und
+        // getServer() gibt es ohne laufenden Server nicht. Festgenagelt ist damit
+        // nicht ihr Inhalt, sondern der RAHMEN um sie - das Wort Stand, das Wort
+        // Java und die zwei Mittelpunkte dazwischen.
+        //
+        // Alle vier Lagen von standZeilen, und nicht drei: Die zwei Wahrheitswerte
+        // sind unabhaengig voneinander, und eine Naht, die sie vertauscht, bliebe
+        // bei drei Faellen in einem davon gruen.
+        Tafel tafel = new Tafel();
+        tafel.fall("stand/fluechtig-ohne-recht",
+                Bundtext.standZeilen(sprache, VERSION, JAVA, MINECRAFT, true,
+                        false));
+        tafel.fall("stand/fluechtig-mit-recht",
+                Bundtext.standZeilen(sprache, VERSION, JAVA, MINECRAFT, true,
+                        true));
+        tafel.fall("stand/mariadb-ohne-recht",
+                Bundtext.standZeilen(sprache, VERSION, JAVA, MINECRAFT, false,
+                        false));
+        tafel.fall("stand/mariadb-mit-recht",
+                Bundtext.standZeilen(sprache, VERSION, JAVA, MINECRAFT, false,
+                        true));
+        // Die gratis-Lage und die Preislage. Der Betrag der zweiten Zeile ist in
+        // beiden derselbe Wert, und das ist kein Zufall: Wer noch keine Parzelle
+        // hat, hat auch noch nichts ausgegeben - darum steht in der gratis-Lage
+        // eine Null.
+        tafel.fall("preis/gratis",
+                Bundtext.preisZeilen(sprache, 0, 0L, 0L));
+        tafel.fall("preis/kostet",
+                Bundtext.preisZeilen(sprache, 1, 50_000L, 25_000L));
+
+        assertEquals("""
+                == stand/fluechtig-ohne-recht
+                &6Der Freimarkenbund
+                &7Stand 0.1.0 · Java 25 · 1.21.4
+                &cAblage fluechtig - nichts ueberlebt den Neustart
+                &7/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
+                == stand/fluechtig-mit-recht
+                &6Der Freimarkenbund
+                &7Stand 0.1.0 · Java 25 · 1.21.4
+                &cAblage fluechtig - nichts ueberlebt den Neustart
+                &7/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
+                &8/freimarken welt · parzelle <x> <z> · neuladen
+                == stand/mariadb-ohne-recht
+                &6Der Freimarkenbund
+                &7Stand 0.1.0 · Java 25 · 1.21.4
+                &8Ablage MariaDB
+                &7/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
+                == stand/mariadb-mit-recht
+                &6Der Freimarkenbund
+                &7Stand 0.1.0 · Java 25 · 1.21.4
+                &8Ablage MariaDB
+                &7/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
+                &8/freimarken welt · parzelle <x> <z> · neuladen
+                == preis/gratis
+                &aDie erste Parzelle ist gratis.
+                &8Bisher ausgegeben: 0 Mark
+                == preis/kostet
+                &7Parzelle Nr. 2 kostet &650.000 Mark&7.
+                &8Bisher ausgegeben: 25.000 Mark
+                """, tafel.ganz());
+    }
 }

@@ -42,7 +42,7 @@ final class Sprachstand {
      * bei den Wirtschaftswerten einmal passiert.
      *
      * <p>Der Grund ist derselbe wie dort beim Zeitgeber: Die neun Befehlsbeschreibungen
-     * gehen in {@code FreimarkenPlugin:427-458} bei der ANMELDUNG an
+     * gehen in {@code FreimarkenPlugin:529-564} bei der ANMELDUNG an
      * {@code verzeichnis.register()}. Ein Neuladen meldet keinen Befehl neu an - das ist
      * der ganze Trick dieser Form -, also wirkt eine geaenderte Beschreibung erst nach
      * einem Neustart. {@code /help} zeigt bis dahin die alte.

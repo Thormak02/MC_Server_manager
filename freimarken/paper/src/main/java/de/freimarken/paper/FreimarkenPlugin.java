@@ -638,41 +638,36 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 .build();
     }
 
+    /**
+     * Die Antwort auf das nackte {@code /freimarken} - gebaut in {@link Bundtext}.
+     *
+     * <p>Seit Bauschritt 7 stehen die Worte unter {@code stand} in
+     * {@code sprache-vorlage.yml}, und hier wird nur noch gesendet. WELCHE der zwei
+     * Ablagezeilen kommt und ob die Verwaltungszeile dazugehoert, entscheidet die Naht
+     * an den zwei Wahrheitswerten - und dort prueft {@code SendewegTest} jede Lage als
+     * Bild, ohne Server.
+     */
     private void zeigeStand(Audience empfaenger) {
-        empfaenger.sendMessage(Component.text("Der Freimarkenbund", NamedTextColor.GOLD));
-        empfaenger.sendMessage(Component.text(
-                "Stand " + getPluginMeta().getVersion()
-                        + " · Java " + Runtime.version().feature()
-                        + " · " + getServer().getMinecraftVersion(),
-                NamedTextColor.GRAY));
-        empfaenger.sendMessage(fluechtig
-                ? Component.text("Ablage fluechtig - nichts ueberlebt den Neustart",
-                        NamedTextColor.RED)
-                : Component.text("Ablage MariaDB", NamedTextColor.DARK_GRAY));
-        // Mit /freimarken spielzeit in der Zeile, weil ein Zweig, den niemand nennt, ein
-        // Befehl ist, auf den niemand kommt.
-        empfaenger.sendMessage(Component.text(
-                "/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit",
-                NamedTextColor.GRAY));
-        if (empfaenger instanceof Permissible darf
-                && darf.hasPermission(RECHT_VERWALTEN)) {
-            empfaenger.sendMessage(Component.text(
-                    "/freimarken welt · parzelle <x> <z> · neuladen",
-                    NamedTextColor.DARK_GRAY));
-        }
+        Bundtext.standZeilen(sprache, getPluginMeta().getVersion(),
+                        String.valueOf(Runtime.version().feature()),
+                        getServer().getMinecraftVersion(), fluechtig,
+                        empfaenger instanceof Permissible darf
+                                && darf.hasPermission(RECHT_VERWALTEN))
+                .forEach(empfaenger::sendMessage);
     }
 
+    /**
+     * Was die naechste Parzelle kostet - gebaut in {@link Bundtext}.
+     *
+     * <p>Die Staffel kommt aus den Wirtschaftswerten und bleibt hier; die zwei Zahlen
+     * gehen als nackte {@code long} in die Naht, und das Geldwort holt sie bei
+     * {@link Sprache#betrag}. Hier stand bis Bauschritt 7 das Wort hart im Programm.
+     */
     private void zeigePreis(Audience empfaenger, int besessen) {
         Preisstaffel preise = wirtschaft.werte().preise();
-        long preis = preise.preisFuerNaechste(besessen);
-        empfaenger.sendMessage(preis == 0L
-                ? Component.text("Die erste Parzelle ist gratis.", NamedTextColor.GREEN)
-                : Component.text("Parzelle Nr. " + (besessen + 1) + " kostet ", NamedTextColor.GRAY)
-                        .append(Component.text(Betraege.mark(preis), NamedTextColor.GOLD))
-                        .append(Component.text(".", NamedTextColor.GRAY)));
-        empfaenger.sendMessage(Component.text(
-                "Bisher ausgegeben: " + Betraege.mark(preise.gesamtpreisFuer(besessen)),
-                NamedTextColor.DARK_GRAY));
+        Bundtext.preisZeilen(sprache, besessen, preise.preisFuerNaechste(besessen),
+                        preise.gesamtpreisFuer(besessen))
+                .forEach(empfaenger::sendMessage);
     }
 
     /**

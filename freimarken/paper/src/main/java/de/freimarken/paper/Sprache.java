@@ -186,11 +186,6 @@ final class Sprache {
         return wort(MarkSatz.WAEHRUNG_BETRAG, Einsatz.von("zahl", mark));
     }
 
-    /** Nur die Zahl, ohne Waehrung. */
-    String zahl(long wert) {
-        return deutscheZahl(wert);
-    }
-
     DateTimeFormatter muster(Satz schluessel) {
         return stand.buch().muster(schluessel);
     }
@@ -198,10 +193,11 @@ final class Sprache {
     /**
      * Die EINE Zahlform des Plugins - deutsche Tausenderpunkte.
      *
-     * <p><b>Ein neues {@link NumberFormat} JE AUFRUF, und das steht so schon in
-     * {@code Betraege.java:13-18}:</b> "Nicht nebenlaeufig benutzbar - NumberFormat ist das
-     * nie. Alles hier laeuft im Serverhauptfaden, und wenn das einmal nicht mehr stimmt,
-     * gehoert hier ein neues Exemplar je Aufruf her." Es stimmt nicht mehr: Die
+     * <p><b>Ein neues {@link NumberFormat} JE AUFRUF, und so stand es schon in der mit
+     * Bauschritt 8 geloeschten Hilfsklasse {@code Betraege}:</b> "Nicht nebenlaeufig
+     * benutzbar - NumberFormat ist das nie. Alles hier laeuft im Serverhauptfaden, und
+     * wenn das einmal nicht mehr stimmt, gehoert hier ein neues Exemplar je Aufruf
+     * her." Es stimmt nicht mehr: Die
      * Vervollstaendigung von Befehlen laeuft ausdruecklich nebenlaeufig
      * ({@code Wirtschaftsstand}, Javadoc 17-25), und {@code ParzellenBefehle} hat schon
      * {@code suggests()}. Sobald eine Vervollstaendigung einen Preis anzeigt, formatieren

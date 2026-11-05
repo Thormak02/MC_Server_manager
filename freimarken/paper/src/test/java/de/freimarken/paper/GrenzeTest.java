@@ -365,7 +365,7 @@ class GrenzeTest {
             Map.entry("AnfragenBefehle.java", 11),
             Map.entry("Ankunftswache.java", 2),
             Map.entry("Aufwaermzeit.java", 2),
-            Map.entry("FreimarkenPlugin.java", 40),
+            Map.entry("FreimarkenPlugin.java", 35),
             Map.entry("ParzellenBefehle.java", 44),
             Map.entry("Portalwache.java", 1),
             Map.entry("Reise.java", 7),
@@ -855,6 +855,105 @@ class GrenzeTest {
             "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
             "ANKUNFT_ABENTEUER -> SATZ",
             "PORTAL_KEIN_AUSGANG -> SATZ");
+
+    /**
+     * Welche Art JEDE Konstante von {@code BundSatz} traegt - in
+     * Deklarationsreihenfolge.
+     *
+     * <p>Dieselbe Bauart wie {@link #ARTEN_IN_WACHESATZ} - und hier ist sie noetig,
+     * weil die zwei Arten von {@code BundSatz} zwei verschiedene WEGE sind und nicht
+     * bloss zwei Formen desselben: Die neun Befehlsbeschreibungen gehen als nackter
+     * Text an den Befehlsbaum, die neun Spielerzeilen als Component in den Chat.
+     * Bei {@code WacheSatz} liegen HANDBALKEN und SATZ naeher beieinander. Dass mehrere
+     * Aufzaehlungen zwei oder drei Arten tragen, ist der Normalfall - diese Tafel
+     * steht nicht fuer eine Besonderheit, sondern fuer den Schaden.
+     *
+     * <p>Beide Richtungen sind im Spiel sichtbar, und zwar verschieden:
+     * Wird eine Spielerzeile zu {@code WORT}, ist schon ihr Farbtag beim LADEN
+     * eine Klage und es gilt wieder der ausgelieferte Satz; wird eine
+     * Befehlsbeschreibung zu {@code SATZ}, wirft {@link Sprache#wort} beim
+     * Anmelden der Befehle - und dann steht der Server ohne {@code /help}-Text da.
+     *
+     * <p>Die LISTE und keine Menge, wie bei den Paartafeln: Ein Tausch zwischen
+     * zwei Konstanten liesse die Menge unveraendert.
+     */
+    private static final List<String> ARTEN_IN_BUNDSATZ = List.of(
+            "BEFEHL_FREIMARKEN -> WORT",
+            "BEFEHL_PARZELLE -> WORT",
+            "BEFEHL_MARK -> WORT",
+            "BEFEHL_WARP -> WORT",
+            "BEFEHL_ZURUECK -> WORT",
+            "BEFEHL_TPA -> WORT",
+            "BEFEHL_TPAHERE -> WORT",
+            "BEFEHL_TPACCEPT -> WORT",
+            "BEFEHL_TPDENY -> WORT",
+            "STAND_KOPF -> SATZ",
+            "STAND_VERSION -> SATZ",
+            "STAND_ABLAGE_FLUECHTIG -> SATZ",
+            "STAND_ABLAGE_MARIADB -> SATZ",
+            "STAND_BEFEHLE -> SATZ",
+            "STAND_BEFEHLE_VERWALTUNG -> SATZ",
+            "PREIS_GRATIS -> SATZ",
+            "PREIS_KOSTET -> SATZ",
+            "PREIS_AUSGEGEBEN -> SATZ");
+
+    /**
+     * Wie oft jede Methode von {@code Bundtext} AUFGERUFEN wird - nachgezaehlt,
+     * nicht geschaetzt.
+     *
+     * <p>Derselbe Nagel wie {@link #AUFRUFE_VON_SPIELZEITTEXT}, gegen dieselbe
+     * Luecke: {@code Bundtext} sendet nicht, also sagt {@link #SENDESTELLEN} ueber
+     * seine zwei Methoden gar nichts. Schreibt {@code zeigeStand} seine Zeilen
+     * wieder selbst, faellt die Zahl hier auf 0, waehrend die 35 dort unveraendert
+     * stehen bleibt - ein Spieler liest dann weiter dieselben Worte, und der
+     * Betreiber aendert seine {@code sprache.yml} ohne jede Wirkung.
+     *
+     * <p>Und die andere Richtung: Ruft ein Zweig die Methode des anderen, steht
+     * eine Zahl auf 2 und die andere auf 0.
+     */
+    private static final Map<String, Integer> AUFRUFE_VON_BUNDTEXT = Map.ofEntries(
+            Map.entry("preisZeilen", 1),
+            Map.entry("standZeilen", 1));
+
+    /**
+     * WOHER jedes Argument der zwei Nahtaufrufe kommt - in Quellreihenfolge,
+     * gemessen.
+     *
+     * <p><b>Erst Bauschritt 7 hat diesen Fehler ueberhaupt moeglich gemacht.</b>
+     * Im Zeugen c8bd801 standen die drei Fassungen inline in EINER Zeichenkette,
+     * die Ablage in einem Ternaer und das Recht in einem eigenen {@code if} - ein
+     * Tausch war nicht formulierbar. Jetzt stehen drei {@code String} nebeneinander,
+     * dann zwei {@code boolean}, und im zweiten Aufruf zwei {@code long}. Jeder
+     * Tausch innerhalb einer Gruppe uebersetzt fehlerfrei.
+     *
+     * <p>Und keine andere Probe sieht ihn: {@link #AUFRUFE_VON_BUNDTEXT} zaehlt nur
+     * die Aufrufe, {@code SendewegTest} 33am und die Bildtafel rufen die Naht mit
+     * EIGENEN Probewerten auf und kennen den Aufrufort nicht, und {@code AufrufstelleTest}
+     * erreicht die Zweige ohne Server gar nicht.
+     *
+     * <p>Im Spiel: Ein Server mit Datenbank sagt rot "Ablage fluechtig" - oder, was
+     * schlimmer ist, ein fluechtiger sagt "Ablage MariaDB", die Spieler bauen darauf
+     * und verlieren beim Neustart alles. Bei den zwei Betraegen nennt {@code /freimarken}
+     * {@code preis} als Preis die Summe des Bisherigen, und der Spieler rechnet falsch.
+     */
+    private static final List<String> QUELLEN_IN_FREIMARKENPLUGIN = List.of(
+            "standZeilen: getPluginMeta, Runtime.version, getMinecraftVersion,"
+                    + " fluechtig, hasPermission",
+            "preisZeilen: preisFuerNaechste, gesamtpreisFuer");
+
+    /**
+     * Wer die zwei Listen von {@code /freimarken} bekommt - in Quellreihenfolge.
+     *
+     * <p>Das Werkzeug stand schon da: {@link #SENDEPAAR} ist seit Schritt 3 in Gebrauch
+     * (31e fuer {@code AnfragenBefehle}), nur nicht auf dieser Datei. Ginge das
+     * {@code forEach} an einen anderen {@code Audience} - etwa an
+     * {@code getServer().getConsoleSender()} -, blieben 35 Sendestellen, 1/1 Aufrufe,
+     * 0 Farben und jedes Bild gruen, und der Spieler bekaeme auf {@code /freimarken}
+     * keine Antwort.
+     */
+    private static final List<String> SENDEPAARE_IN_FREIMARKENPLUGIN = List.of(
+            "standZeilen -> empfaenger",
+            "preisZeilen -> empfaenger");
 
     /**
      * Wessen Drossel gilt und wer den Handbalken liest - vier Stellen in
@@ -1454,6 +1553,105 @@ class GrenzeTest {
                 + " ratlos vor einem Block stehen, der nicht bricht.");
     }
 
+    @Test
+    @DisplayName("31w - jede Satzmethode von Bundtext wird genau so oft gerufen")
+    void jedeSatzmethodeVonBundtextWirdGenauSoOftAufgerufen() {
+        String eigen = Quellen.text(datei("Bundtext.java"));
+        Map<String, Integer> gezaehlt = new TreeMap<>();
+        var deklaration = SATZMETHODE.matcher(eigen);
+        while (deklaration.find()) {
+            String name = deklaration.group(1);
+            // Wie in 31g: im eigenen Quelltext steht der Aufruf nackt, auswaerts
+            // mit dem Klassennamen davor. Minus eins: die Deklaration selbst.
+            int anzahl = treffer(Pattern.compile(
+                    "(?<![\\w$.])" + name + "\\s*\\("), eigen) - 1;
+            for (Path datei : Quellen.alle()) {
+                if (!datei.getFileName().toString().equals("Bundtext.java")) {
+                    anzahl += treffer(Pattern.compile(
+                                    "Bundtext\\s*[.]\\s*" + name + "\\s*\\("),
+                            Quellen.text(datei));
+                }
+            }
+            gezaehlt.put(name, anzahl);
+        }
+        assertFalse(gezaehlt.isEmpty(), "die Suche hat die Satzmethoden von Bundtext"
+                + " nicht gefunden - dann waere diese Tafel gruen, ohne etwas"
+                + " gesehen zu haben");
+        assertEquals(new TreeMap<>(AUFRUFE_VON_BUNDTEXT), gezaehlt,
+                "Bundtext sendet nicht, also sagt SENDESTELLEN ueber seine zwei"
+                        + " Methoden nichts: Schreibt ein Zweig seine Zeilen wieder"
+                        + " selbst, bleibt die Zahl dort stehen, und der Spieler"
+                        + " liest einen Satz, den seine sprache.yml nicht mehr"
+                        + " aendert.");
+    }
+
+    @Test
+    @DisplayName("31x - jeder Bundsatz traegt die Art, die sein Weg braucht")
+    void jederBundsatzTraegtSeineArt() {
+        List<String> gefunden = new ArrayList<>();
+        for (BundSatz satz : BundSatz.values()) {
+            gefunden.add(satz.name() + " -> " + satz.art().name());
+        }
+        // Die Aufzaehlung selbst und kein Quelltext, wie in 31u: Die Art ist eine
+        // Zusicherung des Vertrags, und so ist auch eine mehrzeilige Deklaration
+        // mitgenommen.
+        assertEquals(ARTEN_IN_BUNDSATZ, gefunden, "Die zwei Arten von BundSatz"
+                + " sind zwei verschiedene Wege, und beide Richtungen sind"
+                + " im Spiel sichtbar: Eine Spielerzeile mit Art.WORT laedt wegen"
+                + " ihres Farbtags gar nicht erst, und eine Befehlsbeschreibung mit"
+                + " Art.SATZ laesst Sprache.wort beim Anmelden der Befehle werfen."
+                + " Die Reihenfolge zaehlt mit - ein Tausch zwischen zwei"
+                + " Konstanten liesse eine Menge unveraendert.");
+    }
+
+    @Test
+    @DisplayName("31y - jeder Nahtaufruf von /freimarken nimmt seine Quellen in der"
+            + " richtigen Reihenfolge")
+    void jederNahtaufrufNimmtSeineQuellenInDerRichtigenReihenfolge() {
+        String quelle = Quellen.text(datei("FreimarkenPlugin.java"));
+        List<String> gefunden = new ArrayList<>();
+        var aufruf = BUNDAUFRUF.matcher(quelle);
+        while (aufruf.find()) {
+            List<String> quellen = new ArrayList<>();
+            var marke = BUNDQUELLE.matcher(aufruf.group(2));
+            while (marke.find()) {
+                quellen.add(marke.group());
+            }
+            gefunden.add(aufruf.group(1) + ": " + String.join(", ", quellen));
+        }
+        // Die Zahl eigens, wie in 31m, 31r und 31s: Findet das Muster seine Form
+        // nicht mehr, sagt die Meldung sonst nicht, dass ein MUSTER nachzuziehen
+        // ist - eine leere Liste gegen eine leere Liste bliebe gruen.
+        assertEquals(2, gefunden.size(), "gesucht werden ZWEI Nahtaufrufe in"
+                + " FreimarkenPlugin. Fehlt einer, hat das Muster ihn nicht"
+                + " gefunden; dann gehoert das Muster nachgezogen und nicht die"
+                + " Probe gestrichen: " + gefunden);
+        assertEquals(QUELLEN_IN_FREIMARKENPLUGIN, gefunden, "Drei String, zwei"
+                        + " boolean und zwei long stehen hier nebeneinander, und"
+                        + " jeder Tausch innerhalb einer Gruppe uebersetzt"
+                        + " fehlerfrei. Die Naht selbst prueft SendewegTest mit"
+                        + " eigenen Probewerten und sieht den Aufrufort nicht.");
+    }
+
+    @Test
+    @DisplayName("31z - die zwei Antworten von /freimarken gehen an den, der gefragt hat")
+    void dieAntwortenVonFreimarkenGehenAnDenFragenden() {
+        String quelle = Quellen.text(datei("FreimarkenPlugin.java"));
+        List<String> gefunden = new ArrayList<>();
+        var paar = SENDEPAAR.matcher(quelle);
+        while (paar.find()) {
+            gefunden.add(paar.group(1) + " -> " + paar.group(2));
+        }
+        // Die LISTE in Quellreihenfolge und keine Menge, wie in 31e: Ein
+        // verdoppelter Sendeort und zwei getauschte Empfaenger bleiben in einer
+        // Menge beide gruen.
+        assertEquals(SENDEPAARE_IN_FREIMARKENPLUGIN, gefunden, "Dieselbe Tafel"
+                + " wie fuer /tpa, nur spaeter: Ginge eine der zwei Listen an"
+                + " einen anderen Audience, blieben die 35 Sendestellen, die"
+                + " Aufrufzahlen und alle Bilder gruen - und der Spieler bekaeme"
+                + " auf /freimarken keine Antwort.");
+    }
+
     /**
      * Wie oft jede Methode der Naht einer Datei in ihr selbst gerufen wird.
      *
@@ -1568,12 +1766,17 @@ class GrenzeTest {
             "static (?:List<Component>|Component) (\\w+)\\s*\\(");
 
     /**
-     * Die Deklaration einer Satzmethode von {@code Spielzeittext}.
+     * Die Deklaration einer Satzmethode einer Nahtdatei.
      *
-     * <p>Weiter als {@link #ZEILENMETHODE}, weil die halbe Klasse {@code String}
-     * zurueckgibt: Der Takt-Abstand und die vier Zahlformen werden in eine andere Zeile
-     * EINGESETZT und sind keine Zeile fuer sich. Und ohne Ruecksicht auf {@code private},
-     * damit {@code zustandZeile} mitgezaehlt wird.
+     * <p>Weiter als {@link #ZEILENMETHODE}, weil bei {@code Spielzeittext} die halbe
+     * Klasse {@code String} zurueckgibt: Der Takt-Abstand und die vier Zahlformen
+     * werden in eine andere Zeile EINGESETZT und sind keine Zeile fuer sich. Und ohne
+     * Ruecksicht auf {@code private}, damit {@code zustandZeile} mitgezaehlt wird.
+     *
+     * <p>Seit Bauschritt 7 zaehlt 31w mit demselben Muster auch {@code Bundtext},
+     * obwohl dort keine Methode {@code String} liefert. Das ist Absicht: Das weitere
+     * Muster bleibt rot, falls dort je ein Wortstueck entsteht - das engere waere
+     * stumm.
      */
     private static final Pattern SATZMETHODE = Pattern.compile(
             "static (?:List<Component>|Component|String) (\\w+)\\s*\\(");
@@ -1647,6 +1850,29 @@ class GrenzeTest {
             "letzteMeldung\\.(get|put|remove)\\(\\s*([\\w.()]+)\\.getUniqueId\\(\\)");
 
     /** Der Handbalken mit seinem Empfaenger und dem Wortlaut, den er bekommt. */
+    /**
+     * Ein Nahtaufruf von {@code Bundtext} mit allem, was in seinen Klammern steht.
+     *
+     * <p>{@code [^;]} und nicht {@code .}: So kann ein Treffer keine zweite
+     * Anweisung ueberspannen. Das {@code .forEach} am Ende ist der Anker, an dem
+     * die sparsame Suche haltmacht - ohne ihn endete sie an der ersten inneren
+     * Klammer.
+     */
+    private static final Pattern BUNDAUFRUF = Pattern.compile(
+            "Bundtext\\s*[.]\\s*(\\w+)\\s*\\(([^;]*?)\\)\\s*[.]\\s*forEach");
+
+    /**
+     * Die Quellen, die am Aufrufort vorkommen DUERFEN - ein enger Wortvorrat.
+     *
+     * <p>Nicht jeder Bezeichner, sondern genau die sieben, die die Reihenfolge
+     * entscheiden. Ein weiter Vorrat faende auch {@code sprache} und {@code besessen},
+     * und {@code besessen} steht INNERHALB der zwei Preisaufrufe - die Liste
+     * stuende dann voller Glieder, die nichts zusichern.
+     */
+    private static final Pattern BUNDQUELLE = Pattern.compile(
+            "getPluginMeta|Runtime[.]version|getMinecraftVersion|fluechtig"
+                    + "|hasPermission|preisFuerNaechste|gesamtpreisFuer");
+
     private static final Pattern BALKENWACHE = Pattern.compile(
             "(\\w+)\\.sendActionBar\\((\\w+)\\(");
 

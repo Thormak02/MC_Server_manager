@@ -426,11 +426,17 @@ final class Sprachliste {
     /**
      * Die Zeichenwache: ASCII 0x20..0x7E, U+00B7 und genau ein Steuerzeichen.
      *
-     * <p>U+00B7 ist ausdruecklich erlaubt und gemessen: Der Trenner kommt 18-mal in
-     * {@code FreimarkenPlugin} und {@code ParzellenBefehle} vor. Alles andere faellt - jeder
-     * Umlaut, jedes scharfe s, jedes Paragrafenzeichen und jeder alte {@code &}-Code. Ein
-     * {@code &}-Code wuerde als Zeichen beim Spieler ankommen, und das ist genau die
-     * Gattung Fehler, die niemand mehr zuordnet.
+     * <p>U+00B7 ist ausdruecklich erlaubt und gemessen: Der Trenner steht 17-mal in der
+     * ausgelieferten {@code sprache-vorlage.yml} und seit Bauschritt 7 nur noch
+     * dreimal im Programm - alle drei in den Chatzeilen von {@code /freimarken welt}
+     * an den Betreiber. Einer davon steht dort NICHT als Zeichen, sondern als
+     * Fluchtfolge geschrieben, und eine Zeichensuche findet ihn nicht; das ist die
+     * Stelle, an der eine solche Zaehlung blind wird.
+     *
+     * <p>Alles andere faellt - jeder Umlaut, jedes scharfe s, jedes Paragrafenzeichen
+     * und jeder alte {@code &}-Code. Ein {@code &}-Code wuerde als Zeichen beim
+     * Spieler ankommen, und das ist genau die Gattung Fehler, die niemand mehr
+     * zuordnet.
      */
     static String zeichenklage(String pfad, int zeile, String wert) {
         for (int i = 0; i < wert.length(); i++) {

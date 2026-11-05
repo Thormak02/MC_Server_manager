@@ -479,6 +479,27 @@ class SprachlisteTest {
                 + " und darf leer bleiben");
     }
 
+    @Test
+    @DisplayName("21e - ein leerer Bundsatz ist eine Klage")
+    void leererBundsatzIstKlage() {
+        // Dasselbe Loch wie bei WacheSatz vor 21d, einen Bauschritt spaeter:
+        // Das {@code return false} in BundSatz liess sich auf {@code true}
+        // drehen, ohne dass eine Probe rot wurde. Dann darf der Betreiber
+        // stand.kopf leeren, und ein Spieler bekommt auf /freimarken eine leere
+        // Chatzeile - er sieht, dass etwas geschieht, aber nicht was. Bei einer
+        // leeren Befehlsbeschreibung steht in /help nichts neben dem Befehl.
+        String leer = "stand:\n  "
+                + kurz(BundSatz.STAND_KOPF) + ": \"\"\n";
+
+        var gelesen = Sprachliste.ausQuelle(leer, Sprachprobe.ausDemJar());
+
+        assertNull(gelesen.buch(), "eine Klage blockiert den ganzen Tausch");
+        assertTrue(gelesen.klagen().stream().anyMatch(klage
+                        -> klage.contains(BundSatz.STAND_KOPF.pfad())
+                        && klage.contains("leer")),
+                "bekommen: " + gelesen.klagen());
+    }
+
     private static String kurz(Satz satz) {
         String pfad = satz.pfad();
         return pfad.substring(pfad.lastIndexOf('.') + 1);

@@ -345,32 +345,40 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("10e - ein Wort, das nur halb wirkt, sagt das in der Vorlage")
-    void halbWirkendesWortWarntInDerVorlage() {
-        // waehrung.betrag ist der erste Schluessel, dessen Wortlaut noch an einer zweiten
-        // Stelle steht: Betraege.mark(...) baut "<zahl> Mark" weiter im Programm, und nur
-        // die Verlaufszeile fragt heute die Datei. Wer das Wort hier auf "Taler" aendert,
-        // liest im Spiel beides nebeneinander - eine halb wirkende Einstellung ist
-        // schlimmer als keine. Diese Probe laesst genau zwei Zustaende zu: entweder steht
-        // die Warnung im Kopf, oder es gibt keinen zweiten Ort mehr. Sie faellt also auch
-        // dann, wenn der letzte Umzug die Warnung STEHEN laesst.
-        int zweiterOrt = 0;
+    @DisplayName("10e - das Geldwort steht nur noch dort, wo kein Spieler es liest")
+    void hartesGeldwortNurNochBeimBetreiber() {
+        // DIE NACHFOLGERIN DER ZAEHLUNG AUF Betraege.mark(. Jene Hilfsklasse ist
+        // mit Bauschritt 8 geloescht, und eine Probe, die einen Namen sucht, den
+        // es nicht mehr gibt, bewacht nur noch sich selbst: Ihre Zahl kann gar
+        // nicht mehr steigen. Gesucht wird darum das WORT in einem
+        // Zeichenkettenliteral - so faengt sie auch einen neu erfundenen
+        // Rueckfall: ein + " Mark", eine Klasse Geld, ein String.format.
+        //
+        // Dieselbe Bauart wie 10f, und aus demselben Grund (Javadoc dort): Die
+        // GESTALT der Stelle ueberlebt eine Umbenennung, der Name nicht.
+        List<String> gefunden = new ArrayList<>();
         for (Path datei : Quellen.alle()) {
-            if (datei.getFileName().toString().equals("Betraege.java")) {
-                continue;
+            var suche = GELDWORT.matcher(Quellen.text(datei));
+            while (suche.find()) {
+                // Der getroffene TEXT und nicht eine Zahl je Datei: Eine Zahl
+                // laesst sich hochdrehen, und dann traegt die Tafel die Erlaubnis
+                // fuer einen Satz, den niemand gelesen hat. So kostet jede
+                // Anpassung das Einfuegen des Satzes selbst - im Diff sichtbar.
+                gefunden.add(datei.getFileName() + " -> " + suche.group());
             }
-            zweiterOrt += Quellen.zaehle(Quellen.text(datei), "Betraege.mark(");
         }
-        boolean gewarnt = Sprachprobe.vorlagentext().contains(WARNUNG);
-        if (zweiterOrt > 0) {
-            assertTrue(gewarnt, "Betraege.mark(...) steht noch an " + zweiterOrt
-                    + " Stellen und sagt dort hart \"Mark\". Solange das so ist, MUSS der"
-                    + " Kopf von waehrung.betrag die Marke \"" + WARNUNG + "\" tragen -"
-                    + " sonst verspricht die Datei eine Wirkung, die sie nicht hat.");
-        } else {
-            assertFalse(gewarnt, "kein zweiter Ort mehr - die Warnung \"" + WARNUNG
-                    + "\" gehoert aus der Vorlage heraus, sonst warnt sie vor nichts.");
-        }
+        assertEquals(GELDWORT_IM_PROGRAMM, gefunden,
+                "Das Wort fuer einen Geldbetrag steht in waehrung.betrag, und ueberall"
+                        + " dort, wo ein SPIELER es liest, kommt es von da. Eine Zahl zu"
+                        + " hoch heisst, ein Satz sagt sein Geldwort wieder selbst -"
+                        + " dann aendert der Betreiber die Datei, und im Spiel steht"
+                        + " beides nebeneinander. Die erlaubten Stellen gehen alle an"
+                        + " den Betreiber und in die Konsole.");
+        // Und die zweite Richtung, die 10e von Anfang an hielt: Die Marke
+        // verschwindet, sobald ihr Grund weg ist - sie kann nicht stehenbleiben.
+        assertFalse(Sprachprobe.vorlagentext().contains(WARNUNG),
+                "waehrung.betrag wirkt seit Bauschritt 7 ueberall - die Marke " + WARNUNG
+                        + " gehoert aus der Vorlage heraus, sonst warnt sie vor nichts.");
     }
 
     @Test
@@ -451,6 +459,50 @@ class VorlageTest {
     }
 
     private static final String WARNUNG = "HALB IN KRAFT:";
+
+    /**
+     * Wo das Geldwort im Programm stehen DARF - in Quellreihenfolge, gemessen.
+     *
+     * <p>Fuenf Stellen in zwei Dateien, und an keine kommt ein SPIELER:
+     * {@code FreimarkenPlugin} nennt beim Start das Startguthaben und warnt vor
+     * zu billig verkaufter Flaeche - zwei Zeilen an {@code getLogger()}, also nur
+     * in die Konsole. {@code Wirtschaftsliste} haengt die Einheit an drei KLAGEN
+     * ueber unbrauchbare Zahlen, und die gehen ueber {@code lehneAb} in den Chat
+     * eines Betreibers mit {@code freimarken.verwalten} - nicht in den eines Spielers,
+     * aber eben doch in einen Chat. Der Kopf von {@code waehrung} in der Vorlage
+     * sagt dem Betreiber darum ausdruecklich, dass DIESE Zeile sein Wort nicht
+     * uebernimmt.
+     *
+     * <p><b>Die Grenze dieser Probe:</b> {@link Quellen#alle} listet FLACH nur
+     * {@code paper/src/main/java/de/freimarken/paper}. Ein Geldwort in {@code core}
+     * oder {@code daten} saehe sie nicht; heute steht dort keines.
+     *
+     * <p><b>Diese Tafel ist noetig, weil die anderen Tore hier nichts sehen.</b>
+     * Ein Betrag, der als fertiger Text in einen Satz eingesetzt wird, nennt keine
+     * Adventure-Klasse und liest keinen Satz: {@code GrenzeTest.FARBE} und
+     * {@code MINIMESSAGE_LESEN} lassen ihn durch. Ein {@code Einsatz.von(}
+     * {@code "betrag", zahl + " Mark")} in irgendeiner Befehlsdatei waere ohne diese
+     * Tafel unsichtbar.
+     */
+    private static final List<String> GELDWORT_IM_PROGRAMM = List.of(
+            "FreimarkenPlugin.java -> \" Minuten als Mark auf vielen"
+                    + " Konten. Lieber kein Parzellensystem\"",
+            "FreimarkenPlugin.java -> \" Mark - friert bei der"
+                    + " Eroeffnung eines Kontos ein.\"",
+            "Wirtschaftsliste.java -> \"Mark\"",
+            "Wirtschaftsliste.java -> \"Mark je Feld\"",
+            "Wirtschaftsliste.java -> \"Mark\"");
+
+    /**
+     * Das Geldwort in einem Zeichenkettenliteral - und nur dort.
+     *
+     * <p>Die Wortgrenzen sind die Sache selbst: Ohne sie traefe die Suche
+     * {@code Marktstadt}, {@code Marke} und {@code Markierung}, und die Tafel
+     * stuende voller Stellen, die mit Geld nichts zu tun haben. Kommentare liest
+     * {@link Quellen#text} ohnehin nicht mit.
+     */
+    private static final Pattern GELDWORT = Pattern.compile(
+            "\"[^\"]*\\bMark\\b[^\"]*\"");
 
     /**
      * Die Marke fuer die Aufschrift eines Reiseziels.

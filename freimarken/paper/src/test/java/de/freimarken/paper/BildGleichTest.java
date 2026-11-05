@@ -83,7 +83,7 @@ class BildGleichTest {
                                 + "  (Stand 25.000 Mark)"),
 
                 // geteilt
-                new Zeile(ParzellenSatz.BEZAHLT, 1L, Einsatz.von("betrag", Betraege.mark(25_000L)).mit("rest", Betraege.mark(75_000L)),
+                new Zeile(ParzellenSatz.BEZAHLT, 1L, Einsatz.von("betrag", sprache.betrag(25_000L)).mit("rest", sprache.betrag(75_000L)),
                         "&7  Bezahlt: 25.000 Mark · Rest: 75.000 Mark"),
                 new Zeile(ParzellenSatz.RANG_WERBUNG, 1L, Einsatz.von("werbung", Wirtschaftswerte.VORGABE_RANG_WERBUNG),
                         "&eMehr erlaubt ein hoeherer Rang."),
@@ -99,9 +99,9 @@ class BildGleichTest {
                         "&6Parzelle 3/-4"),
                 new Zeile(ParzellenSatz.INFO_AUSSERHALB, 1L, Einsatz.keine(),
                         "&7  ausserhalb der Marktstadt - wird nicht vergeben"),
-                new Zeile(ParzellenSatz.INFO_FREI, 1L, Einsatz.von("preis", Betraege.mark(25_000L)),
+                new Zeile(ParzellenSatz.INFO_FREI, 1L, Einsatz.von("preis", sprache.betrag(25_000L)),
                         "&7  frei · &a25.000 Mark&8 · /parzelle nehmen"),
-                new Zeile(ParzellenSatz.INFO_FREI_AM_LIMIT, 1L, Einsatz.von("preis", Betraege.mark(25_000L)),
+                new Zeile(ParzellenSatz.INFO_FREI_AM_LIMIT, 1L, Einsatz.von("preis", sprache.betrag(25_000L)),
                         "&7  frei · 25.000 Mark"),
                 new Zeile(ParzellenSatz.INFO_AM_LIMIT, 1L, Einsatz.von("anzahl", "1"),
                         "&c  Dein Rang erlaubt 1 Parzelle, und so viele hast du schon."),
@@ -111,7 +111,7 @@ class BildGleichTest {
                         "&c  Dein Rang erlaubt 0 Parzellen, und so viele hast du schon."),
                 new Zeile(ParzellenSatz.INFO_EIGENTUEMER, 1L, Einsatz.von("name", "Anna"),
                         "&7  Eigentuemer: &fAnna"),
-                new Zeile(ParzellenSatz.INFO_GEKAUFT_FUER, 1L, Einsatz.von("preis", Betraege.mark(25_000L)),
+                new Zeile(ParzellenSatz.INFO_GEKAUFT_FUER, 1L, Einsatz.von("preis", sprache.betrag(25_000L)),
                         "&7  Gekauft fuer: &f25.000 Mark"),
                 new Zeile(ParzellenSatz.INFO_MITBAUER, 1L, Einsatz.von("namen", "Bert, Cara"),
                         "&7  Mitbauer: &fBert, Cara"),
@@ -137,7 +137,7 @@ class BildGleichTest {
                         "&cDu hast schon 2 Parzellen - mehr erlaubt dein Rang nicht."),
                 new Zeile(ParzellenSatz.NEHMEN_GRENZE, 0L, Einsatz.von("anzahl", "0"),
                         "&cDu hast schon 0 Parzellen - mehr erlaubt dein Rang nicht."),
-                new Zeile(ParzellenSatz.NEHMEN_ZU_WENIG, 1L, Einsatz.von("betrag", Betraege.mark(25_000L)).mit("guthaben", Betraege.mark(1_000L)),
+                new Zeile(ParzellenSatz.NEHMEN_ZU_WENIG, 1L, Einsatz.von("betrag", sprache.betrag(25_000L)).mit("guthaben", sprache.betrag(1_000L)),
                         "&cDie kostet &625.000 Mark&c, du hast 1.000 Mark."),
                 new Zeile(ParzellenSatz.NEHMEN_AUSSERHALB, 1L, Einsatz.von("von", "-8").mit("bis", "8"),
                         "&cHier endet die Marktstadt. Parzellen gibt es von -8/-8 bis 8"
@@ -153,14 +153,14 @@ class BildGleichTest {
                         "&6Deine Parzellen (1 von 4)"),
                 new Zeile(ParzellenSatz.LISTE_ZEILE, 1L, listenzeile(sprache, "0", "0", sprache.wort(ParzellenSatz.GRATIS, Einsatz.keine()), "", ""),
                         "&7  0/0 · gratis"),
-                new Zeile(ParzellenSatz.LISTE_ZEILE, 1L, listenzeile(sprache, "1", "0", Betraege.mark(25_000L),
+                new Zeile(ParzellenSatz.LISTE_ZEILE, 1L, listenzeile(sprache, "1", "0", sprache.betrag(25_000L),
                         sprache.wort(ParzellenSatz.LISTE_MITBAUER,
                                 Einsatz.von("anzahl", "1")), ""),
                         "&7  1/0 · 25.000 Mark · 1 Mitbauer"),
-                new Zeile(ParzellenSatz.LISTE_ZEILE, 1L, listenzeile(sprache, "2", "0", Betraege.mark(50_000L), "",
+                new Zeile(ParzellenSatz.LISTE_ZEILE, 1L, listenzeile(sprache, "2", "0", sprache.betrag(50_000L), "",
                         sprache.wort(ParzellenSatz.LISTE_GRUPPE, Einsatz.keine())),
                         "&7  2/0 · 50.000 Mark · Gruppe"),
-                new Zeile(ParzellenSatz.LISTE_NAECHSTE, 1L, Einsatz.von("betrag", Betraege.mark(25_000L)),
+                new Zeile(ParzellenSatz.LISTE_NAECHSTE, 1L, Einsatz.von("betrag", sprache.betrag(25_000L)),
                         "&8Die naechste kostet 25.000 Mark"),
 
                 // Die neunzehn Bescheide
@@ -225,7 +225,7 @@ class BildGleichTest {
                                 + "s am Rand heraus."),
 
                 // /mark - Stand und Verlauf
-                new Zeile(MarkSatz.STAND, 1L, Einsatz.von("betrag", Betraege.mark(25_000L)),
+                new Zeile(MarkSatz.STAND, 1L, Einsatz.von("betrag", sprache.betrag(25_000L)),
                         "&7Du hast &625.000 Mark&7."),
                 new Zeile(MarkSatz.VERLAUF_HINWEIS, 1L, Einsatz.keine(),
                         "&8/mark verlauf zeigt die letzten Buchungen."),
@@ -287,8 +287,8 @@ class BildGleichTest {
                 // /parzelle zusammenlegen - die Warnung ist EIN Satz mit fuenf Zeilen
                 new Zeile(ParzellenSatz.ZUSAMMENLEGEN_WARNUNG, 1L, Einsatz.von("x", "3").mit("z", "-4").mit("nachbar-x", "3")
                         .mit("nachbar-z", "-5")
-                        .mit("betrag", Betraege.mark(10_000L))
-                        .mit("guthaben", Betraege.mark(25_000L)),
+                        .mit("betrag", sprache.betrag(10_000L))
+                        .mit("guthaben", sprache.betrag(25_000L)),
                         "&eParzelle 3/-4 mit 3/-5 zusammenlegen?\n&7  Gebuehr: &610.000 Mark&7 · d"
                                 + "u hast 25.000 Mark\n&7  Der Weg dazwischen wird dein Bauland.\n&7"
                                 + "  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was da"
@@ -608,7 +608,46 @@ class BildGleichTest {
                 new Zeile(WacheSatz.PORTAL_KEIN_AUSGANG, 1L, Einsatz.keine(),
                         "&cHier fuehrt kein Portal hinaus.\n&7Nether und Ende erreichst"
                                 + " du mit /warp nether und /warp end - oder durch ein"
-                                + " Tor am Bundesmarkt."));
+                                + " Tor am Bundesmarkt."),
+
+                // Bauschritt 7, der letzte Textumzug: /freimarken und
+                // /freimarken preis. Die neun erwarteten Bilder kommen aus dem
+                // ROTEN Lauf dieser Tabelle gegen den committeten Stand c8bd801;
+                // abgeschrieben wurde keines.
+                //
+                // Die drei Werte von stand.version sind PROBEWERTE und nicht die
+                // des laufenden Servers: getPluginMeta(), Runtime.version() und
+                // getServer() sind ohne Server nicht zu haben. Was diese Zeile
+                // festnagelt, ist der Rahmen um sie herum - Stand, die zwei
+                // Mittelpunkte und das Wort Java.
+                new Zeile(BundSatz.STAND_KOPF, 1L, Einsatz.keine(),
+                        "&6Der Freimarkenbund"),
+                new Zeile(BundSatz.STAND_VERSION, 1L, Einsatz.von("version", "0.1.0")
+                        .mit("java", "25").mit("minecraft", "1.21.4"),
+                        "&7Stand 0.1.0 · Java 25 · 1.21.4"),
+                new Zeile(BundSatz.STAND_ABLAGE_FLUECHTIG, 1L, Einsatz.keine(),
+                        "&cAblage fluechtig - nichts ueberlebt den Neustart"),
+                new Zeile(BundSatz.STAND_ABLAGE_MARIADB, 1L, Einsatz.keine(),
+                        "&8Ablage MariaDB"),
+                // Die zwei Zeilen mit woertlichen spitzen Klammern. In der Vorlage
+                // stehen sie maskiert; ankommen muss die blanke Klammer.
+                new Zeile(BundSatz.STAND_BEFEHLE, 1L, Einsatz.keine(),
+                        "&7/parzelle · /mark · /freimarken preis <anzahl>"
+                                + " · /freimarken spielzeit"),
+                new Zeile(BundSatz.STAND_BEFEHLE_VERWALTUNG, 1L, Einsatz.keine(),
+                        "&8/freimarken welt · parzelle <x> <z> · neuladen"),
+                new Zeile(BundSatz.PREIS_GRATIS, 1L, Einsatz.keine(),
+                        "&aDie erste Parzelle ist gratis."),
+                // Der zweite Farbwechsel MITTEN im Satz nach der Schutzwache - und
+                // der erste, bei dem die Farbe danach wieder zurueckschlaegt: grau,
+                // gold, grau. Das Leerzeichen gehoert zum grauen Kopf, der Punkt
+                // dahinter wieder dem grauen Schwanz.
+                new Zeile(BundSatz.PREIS_KOSTET, 1L, Einsatz.von("nummer", "2")
+                        .mit("betrag", sprache.betrag(25_000L)),
+                        "&7Parzelle Nr. 2 kostet &625.000 Mark&7."),
+                new Zeile(BundSatz.PREIS_AUSGEGEBEN, 1L,
+                        Einsatz.von("betrag", sprache.betrag(25_000L)),
+                        "&8Bisher ausgegeben: 25.000 Mark"));
     }
 
     @ParameterizedTest(name = "11 - {0}")

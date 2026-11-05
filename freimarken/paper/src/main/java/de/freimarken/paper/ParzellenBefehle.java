@@ -230,7 +230,8 @@ final class ParzellenBefehle {
      * Der Stand und der Hinweis auf den Verlauf - die zwei Zeilen von {@code /mark}.
      *
      * <p>Der Betrag kommt ueber {@link Sprache#betrag} aus {@code waehrung.betrag} - wie
-     * jeder Betrag dieser Datei. Hier stand das Wort hart aus {@link Betraege}, und damit
+     * jeder Betrag dieser Datei. Hier stand das Wort hart aus der Hilfsklasse
+     * {@code Betraege}, die es seit Bauschritt 8 nicht mehr gibt, und damit
      * trugen die zwei Zeilen desselben Befehls zwei verschiedene Geldwege: Zeile 1 das Wort
      * aus dem Programm, die Verlaufszeile darunter das aus der Datei. Zeichengleich war es
      * nur, solange niemand das Wort aendert - und wer es aendert, liest "25.000 Mark" ueber
