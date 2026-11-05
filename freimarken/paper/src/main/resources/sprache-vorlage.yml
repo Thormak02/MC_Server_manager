@@ -371,10 +371,202 @@ parzelle:
     # und der Spieler darf trotzdem bauen.
     fehler: "<red>  Der Boden liess sich nicht aendern. Die Parzellen stimmen - sag einem Operator Bescheid.</red>"
 
-# /parzelle und /mark stehen jetzt vollstaendig hier. Noch nicht hier: /tpa und
-# /tpahere, /warp, /zurueck, die drei Wachen, die Spielzeit und /freimarken selbst.
-# Sie stehen bis zu ihrem Bauschritt im Programm - ein Satz steht immer an genau
-# einem Ort, nie an keinem. Die eine Ausnahme sagt es oben selbst: waehrung.betrag
-# traegt die Marke HALB IN KRAFT, weil die zwei Preiszeilen von /freimarken bis zu
-# ihrem Bauschritt weiter aus dem Programm kommen. Innerhalb von /mark und
-# /parzelle gibt es diese zweite Quelle nicht mehr.
+# /tpa, /tpahere, /tpaccept und /tpdeny - eine Reise nur mit Zustimmung.
+#
+# DAS BESONDERE AN DIESEM ABSCHNITT: Hier lesen ZWEI Spieler. Wer fragt, bekommt
+# eine Zeile; wer gefragt wird, bekommt zwei. Beim Annehmen bekommen beide eine.
+# Darum traegt jeder Satz genau EINEN Namen, und zwar immer den des ANDEREN - wer
+# {name} aus einem dieser Saetze nimmt, laesst den Leser raten, um wen es geht.
+# Welcher Satz an wen geht, steht im Kommentar darueber.
+anfrage:
+  # Es steht keine Anfrage offen. DIESELBE Zeile bei /tpaccept und bei /tpdeny, und
+  # darum steht sie eine Ebene hoeher als annehmen und ablehnen: Du aenderst sie
+  # einmal, und beide Befehle sagen das Neue. Keine Zahl darin - "0 Anfragen
+  # abgelehnt." gibt es nicht und soll es nicht geben.
+  niemand: "<gray>Es fragt niemand.</gray>"
+
+  # /tpa <spieler> und /tpahere <spieler> - die Frage stellen.
+  frage:
+    # {name} - den gibt es nicht, ODER er ist unsichtbar. EIN Satz fuer beide
+    # Faelle, und das ist Absicht: Zwei Saetze verrieten, dass da jemand ist, den
+    # du nicht sehen sollst. {name} ist darum das GETIPPTE Wort und nicht der echte
+    # Name. Schreibe hier nichts hinein, was den Unterschied verraet.
+    # NICHT ZU VERWECHSELN: /spielzeit hat eine eigene, laengere Absage, die mit
+    # denselben vier Woertern beginnt ("... ist nicht da. Gezeigt werden kann nur
+    # die Spielzeit eines anwesenden Spielers."). Die steht unter
+    # spielzeit.nicht-da in derselben Datei. Dieser Satz hier gilt NUR fuer /tpa
+    # und /tpahere - er ist also nicht halb in Kraft, sondern ganz, und der andere
+    # ist ein anderer Satz.
+    nicht-da: "<red>{name} ist nicht da.</red>"
+    # Er hat sich selbst gefragt. Ohne {name} - seinen eigenen kennt er.
+    bei-dir: "<gray>Du bist schon bei dir.</gray>"
+    # {name} - dieselbe Frage steht schon offen, es ist nichts hinzugekommen.
+    steht-noch: "<gray>Diese Anfrage an {name} steht noch.</gray>"
+    # {name} - die Quittung an den FRAGENDEN. {name} ist der Angefragte.
+    gestellt: "<gray>Angefragt bei {name} - er oder sie muss zustimmen.</gray>"
+    # {name} - die Frage an den ANGEFRAGTEN, Zweig /tpahere. {name} ist der
+    # Fragende. Ein eigener Satz und nicht ein Wortstueck in moechte-kommen: Es
+    # sind zwei verschiedene Sachverhalte, nicht Einzahl gegen Mehrzahl - hier
+    # kommt der Leser, dort der Fragende.
+    eingeladen: "<gold>{name} laedt dich ein zu kommen.</gold>"
+    # {name} - dieselbe Frage, Zweig /tpa: der Fragende will selbst kommen.
+    moechte-kommen: "<gold>{name} moechte zu dir kommen.</gold>"
+    # Die zweite Zeile an den Angefragten - sie steht unter BEIDEN Fragen oben.
+    # Ein eigener Satz und keine Umbruchmarke an eingeladen/moechte-kommen: Eine
+    # Umbruchmarke sendet beide Zeilen in DERSELBEN Farbe, und diese ist grau,
+    # waehrend die Frage golden ist. Die Minute ist die Gueltigkeit aus dem
+    # Programm - aenderst du das Wort, aendert sich die Frist nicht.
+    hinweis: "<gray>/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.</gray>"
+
+  # /tpaccept - annehmen. Hier lesen beide Spieler, je eine eigene Zeile.
+  annehmen:
+    # Wer gefragt hatte, ist inzwischen abgemeldet.
+    fragender-weg: "<red>Wer gefragt hatte, ist nicht mehr da.</red>"
+    # {name} - an den ANNEHMER, wenn er selbst reist (/tpahere). {name} ist der
+    # Fragende. Das Gegenstueck dazu ist quittung-er-kommt darunter: dasselbe
+    # Ereignis, der andere Leser. Aendere die beiden gemeinsam, sonst erzaehlen
+    # zwei Spieler einander verschiedene Dinge.
+    du-kommst: "<green>Du kommst zu {name}.</green>"
+    # {name} - an den ANNEHMER, wenn der Fragende reist (/tpa). Gegenstueck:
+    # quittung-du-kommst.
+    er-kommt: "<green>{name} kommt zu dir.</green>"
+    # {name} - an den FRAGENDEN, wenn er selbst reist (/tpa). {name} ist der
+    # Annehmer. Gegenstueck: er-kommt darueber.
+    quittung-du-kommst: "<green>{name} hat angenommen - du kommst.</green>"
+    # {name} - an den FRAGENDEN, wenn der Annehmer reist (/tpahere). Gegenstueck:
+    # du-kommst darueber.
+    quittung-er-kommt: "<green>{name} hat angenommen und kommt zu dir.</green>"
+    # {anzahl} ZAEHLT - wie viele Anfragen nach dem Annehmen noch warten. Die
+    # angenommene ist nicht mehr dabei. Die Zahl ist NACKT, ohne Tausenderpunkt -
+    # den tragen nur Geldbetraege. Bei NULL wird gar nichts gesendet; das
+    # entscheidet das Programm, nicht diese Datei.
+    weitere:
+      eins: "<gray>Es warten noch {anzahl} Anfrage.</gray>"
+      viele: "<gray>Es warten noch {anzahl} Anfragen.</gray>"
+
+  # /tpdeny - alle offenen Anfragen ablehnen.
+  ablehnen:
+    # {anzahl} ZAEHLT - wie viele weggenommen wurden. Der GANZE Satz steht in
+    # beiden Formen und nicht nur das Zaehlwort: nur so kannst du ihn umstellen und
+    # nicht bloss faerben. Die Zahl ist NACKT, ohne Tausenderpunkt. War nichts da,
+    # steht oben anfrage.niemand - nicht eine dritte Form hier.
+    abgelehnt:
+      eins: "<gray>{anzahl} Anfrage abgelehnt.</gray>"
+      viele: "<gray>{anzahl} Anfragen abgelehnt.</gray>"
+
+spielzeit:
+  # Die Ueberschrift ueber der Anzeige. Sie ist die EINZIGE goldene Zeile dieses
+  # Befehls - daran erkennt der Spieler, wo seine Antwort anfaengt.
+  kopf:
+    # KEIN {name}, und das mit Absicht: Bei
+    # /execute as <spieler> run freimarken spielzeit liest die KONSOLE diese Zeile
+    # ueber den Zahlen eines fremden Spielers. "Deine Spielzeit, {name}" waere dort
+    # eine Luege.
+    selbst: "<gold>Deine Spielzeit</gold>"
+    # {name} - die Ueberschrift ueber der Anzeige eines ANDEREN Spielers.
+    fremd: "<gold>Spielzeit von {name}</gold>"
+  # {dauer} {tag} {zone} - die erste der vier Zeilen unter der Ueberschrift.
+  #
+  # DIE SPALTE STEHT HIER UND NICHT IM PROGRAMM. "heute" plus DREI Leerzeichen und
+  #   "gesamt" plus ZWEI Leerzeichen sind beide acht Zeichen breit; mit dem Einzug
+  #   von zwei Zeichen beginnt die Dauer in BEIDEN Zeilen in Spalte 11. Nimm hier
+  #   ein Leerzeichen heraus, und die Spalte rutscht - aendere die zwei Zeilen
+  #   gemeinsam. Die DREI Leerzeichen vor der Klammer sind ein zweiter, eigener
+  #   Abstand und haben mit der Spalte nichts zu tun.
+  # {dauer} kommt aus dauer.* weiter unten, {tag} aus tag-muster, {zone} ist die
+  #   eingestellte Tagesgrenze aus der config.yml - eine technische Kennung wie
+  #   Europe/Berlin und kein Wort.
+  heute: "<gray>  heute   {dauer}   ({tag}, Tagesgrenze {zone})</gray>"
+  # {dauer} - die zweite Zeile. Die Spaltenbreite steht bei heute darueber erklaert.
+  gesamt: "<gray>  gesamt  {dauer}</gray>"
+  zustand:
+    # {dauer} {grenze} - die dritte Zeile, solange gerade NICHT gezaehlt wird.
+    # {grenze} ist die eingestellte Untaetigkeitsgrenze in Minuten; das Wort "min"
+    # dahinter steht HIER und nicht in dauer.minuten, damit du diese Zeile umstellen
+    # kannst, ohne die Dauerformen mitzuaendern. Dieser Satz und abwesenheit weiter
+    # unten koennen sich NIE begegnen: Ist die Regel aus, gibt es keinen untaetigen
+    # Zustand.
+    untaetig: "<gray>  wird gerade NICHT gezaehlt - untaetig seit {dauer}, gezaehlt wird bis {grenze} min. Ein Schritt oder ein Tastendruck zaehlt wieder.</gray>"
+    # {menge} {abstand} {abwesenheit} - dieselbe dritte Zeile, solange gezaehlt wird.
+    # {abstand} ist eine der zwei Zeilen aus abstand darunter. {abwesenheit} ist der
+    # Zusatz darunter und bleibt LEER, solange die Untaetigkeitsregel an ist - das
+    # entscheidet das Programm und nicht diese Datei.
+    gezaehlt: "<gray>  wird gezaehlt - die letzten {menge} sind noch nicht geschrieben, {abstand}{abwesenheit}</gray>"
+    # Wie die Zeile darueber endet. KEINE Farbtags: Die zwei Formen werden in
+    # gezaehlt EINGESETZT und sind dort ein Blatt - ein Tag darin stuende dem
+    # Spieler woertlich im Chat.
+    abstand:
+      # {takt} - der eingestellte Schreibtakt in Sekunden. Der normale Fall.
+      takt: "das geschieht alle {takt} s."
+      # Nach einem Fehlschlag der Datenbank: Der Takt rechnet weiter und schreibt
+      # mehrere Taktlaengen lang nicht. KEINE Zahl darin, und das ist Absicht - wie
+      # viele Schlaege ausgesetzt werden, leitet das Programm aus seiner eigenen
+      # Klemmenregel ab. Eine Zahl hier waere beim naechsten Aendern dort still
+      # falsch, und keine Probe wuerde rot.
+      wartet: "der naechste Schreibzug wartet auf die Datenbank - gezaehlt wird weiter, nachgeschrieben wird alles."
+    # {pfad} - angehaengt an gezaehlt, solange die Untaetigkeitsregel AUS ist. Das
+    # FUEHRENDE Leerzeichen gehoert dazu: Der Zusatz haengt an derselben Chatzeile.
+    # {pfad} ist der Ort in der config.yml, an dem die Regel steht - er wird
+    # eingesetzt und nicht hier getippt, damit er beim Umbenennen nicht still falsch
+    # wird. Die 0 dahinter ist der Wert, bei dem die Regel aus ist, und steht darum
+    # fest im Satz. Kein Farbtag: eingesetzter Wert.
+    abwesenheit: " Abwesenheit zaehlt auf diesem Server mit ({pfad}: 0)."
+  # Die vierte und letzte Zeile - ohne sie meldet ein Spieler mit 200 Stunden einen
+  # Fehler, weil er eine kleine Zahl liest. Sie ist heute grau wie die Zeilen
+  # darueber; du kannst ihr jetzt eine eigene Farbe geben, zum Beispiel
+  # <dark_gray>, ohne dass eine Zeile Programm geaendert wird.
+  hinweis: "<gray>  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.</gray>"
+  # Statt der vier Zeilen, wenn die Ablage gerade nicht antwortet. Grau und MIT
+  # Einzug, weil sie an ihrer Stelle steht - eine rote Zeile mitten in einer grauen
+  # Liste sieht nach einem Absturz aus. Willst du sie rot, ist das deine
+  # Entscheidung: tausche <gray> gegen <red>.
+  nicht-lesbar: "<gray>  Die Spielzeit ist gerade nicht lesbar - gezaehlt wird trotzdem. Sag einem Operator Bescheid.</gray>"
+  # Die Absage an die Konsole. OHNE Einzug - sie steht nicht unter einer
+  # Ueberschrift, sondern allein. Die spitze Klammer um spieler ist ein ZEICHEN und
+  # keine Farbe, darum ZWEI Backslashes davor. Das Wort darin ist der Name des
+  # Befehlsarguments: Wird es im Programm umbenannt, gehoert es hier mitgeaendert.
+  keine-konsole: "<gray>Die Konsole spielt nicht. /freimarken spielzeit \\<spieler> nennt die Zeit eines anwesenden Spielers.</gray>"
+  # {name} - die Absage, wenn der gesuchte Spieler nicht da ist. Die EINZIGE rote
+  # Zeile dieses Befehls, und ohne Einzug. Nicht zu verwechseln mit nicht-lesbar
+  # darueber: Diese hier soll der Spieler wirklich als Fehler lesen.
+  nicht-da: "<red>{name} ist nicht da. Gezeigt werden kann nur die Spielzeit eines anwesenden Spielers.</red>"
+  dauer:
+    # Die fuenf Formen einer Dauer. KEINE Farbtags: Sie werden in heute, gesamt,
+    # zustand.untaetig und zustand.gezaehlt EINGESETZT und sind dort ein Blatt.
+    #
+    # WELCHE Form genommen wird, entscheidet das Programm an der Zahl - und die
+    #   zweistellige Auffuellung der Minuten hinter einer Stunde ebenfalls: "3 h
+    #   5 min" ist von "3 h 50 min" auf einen Blick nicht zu unterscheiden. Du
+    #   bekommst {minuten} also schon aufgefuellt. Dieselbe Trennung wie bei
+    #   waehrung.betrag: Das WORT ist deines, die Zahlform bleibt im Programm.
+    # DIE EINHEITEN stehen in JEDER Form einzeln, und das ist Absicht: So kannst du
+    #   eine Zeile umstellen, ohne die anderen mitzuaendern. Der Preis ist, dass
+    #   "min" an vier Stellen dieses Abschnitts steht - dreimal hier und einmal in
+    #   zustand.untaetig. Wer die Einheit aendern will, muss alle vier finden.
+    # {stunden} {minuten} - ab einer Stunde.
+    stunden-minuten: "{stunden} h {minuten} min"
+    # {minuten} - unter einer Stunde.
+    minuten: "{minuten} min"
+    # Unter einer Minute, wo Sekunden nicht gezeigt werden. Die 1 steht fest im
+    # Wort: Es ist eine feststehende Wendung und keine Zahlform.
+    unter-einer-minute: "unter 1 min"
+    # Gar nichts. Die 0 steht fest im Wort, aus demselben Grund.
+    nichts: "0 min"
+    # {sekunden} - unter einer Minute, wo Sekunden gezeigt werden: bei der laufenden
+    # Sitzung und bei der Untaetigkeit. Dort sieht ein Spieler zu, ob die Zahl
+    # waechst, und "unter 1 min" waere genau da unbrauchbar.
+    sekunden: "{sekunden} s"
+  # Muster fuer DateTimeFormatter, kein Satz - der Tag in der Zeile heute. Wird beim
+  # LADEN uebersetzt, ein unbrauchbares Muster ist also eine Klage und kein Absturz
+  # mitten im Befehl. Das Jahr steht hier mit drin, anders als bei
+  # zeit.verlauf-muster: Eine Spielzeit ist die eines Tages und nicht einer Liste.
+  tag-muster: "dd.MM.yyyy"
+
+# /mark, /parzelle, die vier Teleportbefehle und die Spielzeit stehen jetzt
+# vollstaendig hier.
+# Noch nicht hier: /warp, /zurueck, die drei Wachen und /freimarken
+# selbst. Sie stehen bis zu ihrem Bauschritt im Programm - ein Satz steht immer an
+# genau einem Ort, nie an keinem. Die eine Ausnahme sagt es oben selbst:
+# waehrung.betrag traegt die Marke HALB IN KRAFT, weil die zwei Preiszeilen von
+# /freimarken bis zu ihrem Bauschritt weiter aus dem Programm kommen. Innerhalb von
+# /mark, /parzelle und den Teleportbefehlen gibt es diese zweite Quelle nicht mehr.

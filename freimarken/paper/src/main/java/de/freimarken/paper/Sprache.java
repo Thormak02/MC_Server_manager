@@ -118,7 +118,9 @@ final class Sprache {
         } catch (IllegalStateException fehlt) {
             // Nicht abbrechen: Der Spieler sieht {z} und weiss, dass etwas kaputt ist; bei
             // einem abgebrochenen Befehl wuesste er nur, dass nichts geschieht. Dieselbe
-            // Abwaegung wie Spielzeittext:172-174.
+            // Abwaegung wie im Javadoc von Spielzeittext.dauer - ein Name, der einen
+            // Umzug uebersteht, anders als die Zeilennummern, die hier vor dem Umbau
+            // von /spielzeit standen und seitdem auf eine Rechenschleife zeigten.
             PROTOKOLL.severe(fehlt.getMessage() + " - gesendet wird der Satz mit"
                     + " sichtbaren Klammern. Ein abgebrochener Befehl liesse den Spieler"
                     + " ratlos; eine sichtbare Klammer sagt ihm, dass etwas kaputt ist.");

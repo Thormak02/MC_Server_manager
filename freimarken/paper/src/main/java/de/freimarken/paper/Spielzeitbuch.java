@@ -315,7 +315,14 @@ final class Spielzeitbuch {
      * {@link #offeneMarken()}. Und die ANZEIGE: Sie nennt dem Spieler, in welchem Abstand
      * geschrieben wird, und waehrend der Sperre ist das nicht der eingestellte Takt. Ein
      * oeffentlicher Zustand, den nur Proben lesen, waere eine Falle fuer den naechsten;
-     * den Satz dazu haelt {@code Spielzeittext.SCHREIBZUG_WARTET}.
+     * den Satz dazu holt {@code Spielzeittext.schreibzugWartet(Sprache)} aus der
+     * Sprachdatei. Ein pruefbarer Verweis - link-Tag statt code-Tag - wuerde hier nichts
+     * sichern: gesperrt() ist paketprivat, javadoc sieht mit der Vorgabe -protected gar
+     * nicht hierher, und der Bau ruft javadoc ohnehin nicht. Beides gemessen am
+     * 05.11.2026, mit einem absichtlich falschen link-Tag an genau dieser Stelle: Bau
+     * und javadoc-Aufgabe blieben still, erst javadoc mit -private meldete
+     * "Referenz nicht gefunden". Wer den Namen aendert, muss diesen Satz von Hand
+     * nachziehen.
      */
     boolean gesperrt() {
         return aussetzerUebrig > 0;

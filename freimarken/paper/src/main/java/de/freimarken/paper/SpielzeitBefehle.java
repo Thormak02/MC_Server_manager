@@ -19,7 +19,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -38,6 +37,13 @@ import org.bukkit.entity.Player;
  * die Untaetigkeit - gibt es fuer einen abgemeldeten Spieler nicht, und ein Namensabgleich
  * ueber abgemeldete Spieler holt im Zweifel bei Mojang nach und haelt dabei den ganzen
  * Server an. Wer in alte Staende sehen will, nimmt den Manager (Plan 12a).
+ *
+ * <p><b>Kein Wort steht mehr hier.</b> Seit dem 04.11.2026 sind die drei Absagen dieses
+ * Befehls reine Methoden, die eine Liste von {@link Component} aus {@link Sprache} holen;
+ * ihr Wortlaut steht unter {@code spielzeit:} in {@code sprache-vorlage.yml} und ihr
+ * Vertrag in {@link SpielzeitSatz}. Der Zweig schickt die Liste nur noch hinaus - derselbe
+ * Griff wie bei {@code ParzellenBefehle} und {@code AnfragenBefehle}: So ist jeder Satz
+ * ohne Server pruefbar, und eine Bildprobe haelt ihn zeichengenau fest.
  */
 final class SpielzeitBefehle {
 
@@ -54,42 +60,49 @@ final class SpielzeitBefehle {
     static final String RECHT_ANDERE = "freimarken.spielzeit.andere";
 
     /**
-     * Die Absage an die Konsole - erste der drei Saetze dieses Befehls.
+     * Die Absage an die Konsole - erste der drei Absagen dieses Befehls.
      *
-     * <p><b>Alle Saetze, die dieser Befehl selbst sendet, stehen hier beieinander</b> und
-     * nicht in den Verzweigungen, die sie senden. Die ZEILEN der Anzeige stehen in
-     * {@link Spielzeittext}, weil in ihnen gerechnet wird; hier stehen die drei Absagen, in
-     * denen nichts zu rechnen ist. Zusammen ist das alles, was ein Spieler von diesem Befehl
-     * liest - der Umzug in die Sprachdatei aus Plan Abschnitt 13 ist damit an beiden Stellen
-     * ein Verschieben und keine Suche.
+     * <p><b>Alle drei stehen hier beieinander</b> und nicht in den Verzweigungen, die sie
+     * senden. Die ZEILEN der Anzeige stehen in {@link Spielzeittext}, weil in ihnen
+     * gerechnet wird; hier stehen die Absagen, in denen nichts zu rechnen ist. Zusammen ist
+     * das alles, was ein Spieler von diesem Befehl liest.
      *
      * <p>Die Konsole bekommt keine Absage, die wie ein unbekannter Befehl klingt, sondern
-     * den Weg: Sie hat keine eigene Spielzeit, kann aber die eines Spielers nennen.
+     * den Weg: Sie hat keine eigene Spielzeit, kann aber die eines Spielers nennen. Ohne
+     * Einzug, weil sie nicht unter einer Ueberschrift steht, und grau, weil es kein Fehler
+     * ist - beides steht jetzt im Satz und kann vom Betreiber geaendert werden.
      */
-    static final String KEINE_KONSOLE = "Die Konsole spielt nicht. /freimarken spielzeit"
-            + " <spieler> nennt die Zeit eines anwesenden Spielers.";
+    static List<Component> keineKonsoleZeilen(Sprache sprache) {
+        return sprache.bau(SpielzeitSatz.KEINE_KONSOLE, 1L, Einsatz.keine());
+    }
 
     /**
-     * Die Absage, wenn die Ablage nicht antwortet.
+     * Die Absage fuer einen Spieler, der nicht da ist - die zweite.
      *
-     * <p>Steht als Konstante da, weil {@link #zeilen} sie ZURUECKGIBT, statt sie einzeln zu
-     * senden - und eine Probe sie darum gegen die ausgegebene Zeile halten kann. Eine
-     * einzeln gesendete Absage prueft keine Probe: Sie faellt beim naechsten Umbau heraus,
-     * der Spieler liest nach der Ueberschrift gar nichts mehr und haelt den Befehl fuer
-     * kaputt, und die Suite bleibt gruen.
+     * <p><b>Die einzige ROTE Zeile dieses Befehls</b>, und ohne Einzug: Sie steht nicht
+     * unter einer Ueberschrift, sondern allein, und der Spieler soll sie als Fehler lesen.
+     * Nicht zu verwechseln mit {@link #nichtLesbarZeilen} - die ist grau wie die Anzeige,
+     * weil sie an deren Stelle steht.
      */
-    static final String NICHT_LESBAR = "Die Spielzeit ist gerade nicht lesbar - gezaehlt"
-            + " wird trotzdem. Sag einem Operator Bescheid.";
+    static List<Component> nichtDaZeilen(Sprache sprache, String name) {
+        return sprache.bau(SpielzeitSatz.NICHT_DA, 1L, Einsatz.von("name", name));
+    }
 
     /**
-     * Die Absage fuer einen Spieler, der nicht da ist - der dritte Satz dieses Befehls.
+     * Die Absage, wenn die Ablage nicht antwortet - die dritte, MIT Einzug und grau.
      *
-     * <p>Eine Methode und keine Konstante, weil der Name davorsteht; der Satz selbst bleibt
-     * damit bei den anderen zwei.
+     * <p>{@link #zeilen} GIBT sie zurueck, statt sie einzeln zu senden - und eine Probe kann
+     * sie darum gegen die ausgegebene Zeile halten. Eine einzeln gesendete Absage prueft
+     * keine Probe: Sie faellt beim naechsten Umbau heraus, der Spieler liest nach der
+     * Ueberschrift gar nichts mehr und haelt den Befehl fuer kaputt, und die Suite bleibt
+     * gruen.
+     *
+     * <p>Sie sieht aus wie die vier Zeilen, weil sie an ihrer Stelle steht: Ein roter
+     * Ausreisser mitten in einer grauen Liste sieht nach einem Absturz aus. Wer sie rot
+     * will, aendert sie in der Sprachdatei - dafuer ist sie dort.
      */
-    static String nichtDa(String name) {
-        return name + " ist nicht da. Gezeigt werden kann nur die Spielzeit eines"
-                + " anwesenden Spielers.";
+    static List<Component> nichtLesbarZeilen(Sprache sprache) {
+        return sprache.bau(SpielzeitSatz.NICHT_LESBAR, 1L, Einsatz.keine());
     }
 
     private final Spielzeitbuch buch;
@@ -99,7 +112,7 @@ final class SpielzeitBefehle {
     private final Logger protokoll;
 
     /**
-     * Die Saetze dieses Plugins - verdrahtet, bevor der erste Satz umzieht.
+     * Die Saetze dieses Plugins.
      *
      * <p>Warum alle elf Sender dieses Feld in EINEM Zug bekommen und nicht je
      * Bauschritt, steht dort, wo sie gebaut werden: {@code FreimarkenPlugin.onEnable}.
@@ -119,6 +132,10 @@ final class SpielzeitBefehle {
     /**
      * Der Zweig, wie {@code ParzellenBefehle.zusammenlegenZweig()} - noch nicht gebaut,
      * damit der Aufrufer ihn einhaengen kann.
+     *
+     * <p>Der Argumentname {@code spieler} steht WOERTLICH in
+     * {@code spielzeit.keine-konsole}: Wer ihn hier umbenennt, laesst den Satz in der
+     * Sprachdatei still falsch stehen.
      */
     LiteralArgumentBuilder<CommandSourceStack> spielzeit() {
         return Commands.literal("spielzeit")
@@ -146,21 +163,20 @@ final class SpielzeitBefehle {
     /** Die eigene Spielzeit. */
     private void zeigeEigene(CommandSourceStack quelle) {
         if (!(quelle.getExecutor() instanceof Player spieler)) {
-            quelle.getSender().sendMessage(Component.text(KEINE_KONSOLE,
-                    NamedTextColor.GRAY));
+            keineKonsoleZeilen(sprache).forEach(quelle.getSender()::sendMessage);
             return;
         }
-        zeige(quelle.getSender(), spieler, Spielzeittext.kopfSelbst());
+        zeige(quelle.getSender(), spieler, Spielzeittext.kopfSelbst(sprache));
     }
 
     private void zeigeFremde(CommandSourceStack quelle, String name) {
         Player gesucht = Bukkit.getPlayerExact(name);
         if (gesucht == null) {
-            quelle.getSender().sendMessage(Component.text(nichtDa(name),
-                    NamedTextColor.RED));
+            nichtDaZeilen(sprache, name).forEach(quelle.getSender()::sendMessage);
             return;
         }
-        zeige(quelle.getSender(), gesucht, Spielzeittext.kopfFuer(gesucht.getName()));
+        zeige(quelle.getSender(), gesucht,
+                Spielzeittext.kopfFuer(sprache, gesucht.getName()));
     }
 
     /**
@@ -177,7 +193,7 @@ final class SpielzeitBefehle {
      * keiner Probe beruehrt, und seine Schleife koennte ganz herausfallen, ohne dass etwas
      * rot wird.
      */
-    private void zeige(Audience empfaenger, Player spieler, String kopf) {
+    private void zeige(Audience empfaenger, Player spieler, Component kopf) {
         Zeitwerte zeit = wirtschaft.werte().zeit();
         LocalDate heute = Tagesgrenze.tagVon(uhr.instant(), zeit.zone());
         Duration untaetig = Spielzeitwache.untaetigkeitVon(spieler);
@@ -195,16 +211,23 @@ final class SpielzeitBefehle {
      * das erste, was herausfallen kann, und dann liest der Spieler die goldene Ueberschrift
      * und darunter nichts.
      *
-     * <p>Der Preis steht in der Farbe: Die Absage ist grau wie die Anzeige und nicht mehr
-     * rot. Eine Farbe je Zeile waere eine Verzweigung ueber den Inhalt - dieselbe Abwaegung
-     * wie beim Hinweis zum Einbau. Der Einzug von zwei Zeichen haengt ebenfalls hier und
-     * nicht in den Saetzen: Er ist Darstellung und kein Text.
+     * <p><b>Berichtigt am 04.11.2026 - der alte Satz an dieser Stelle ist ueberholt.</b> Er
+     * begruendete: "Eine Farbe je Zeile waere eine Verzweigung ueber den Inhalt ... Der
+     * Einzug von zwei Zeichen haengt ebenfalls hier und nicht in den Saetzen: Er ist
+     * Darstellung und kein Text." Es ist eine Entscheidung des NUTZERS, dass das nicht
+     * gilt: In die Sprachdatei gehoeren Worte, Farben UND Aufbau - Einzug, Spaltenbreite
+     * und Umbruch -, aehnlich zu einem MOTD-Editor. Diese Methode faerbt und zieht darum
+     * nichts mehr ein; jede Zeile bringt beides selbst mit, und was hier bleibt, ist die
+     * REIHENFOLGE.
+     *
+     * <p>Der Gewinn ist unmittelbar: Der Betreiber kann dem Hinweis zum Altbestand eine
+     * eigene Farbe geben - in der Roadmap steht offen, ob er abgesetzt bleiben soll -, ohne
+     * dass eine Zeile Programm geaendert wird. Eine Farbe JE ZEILE war vorher gar nicht
+     * moeglich.
      */
-    static void sende(Audience empfaenger, String kopf, List<String> zeilen) {
-        empfaenger.sendMessage(Component.text(kopf, NamedTextColor.GOLD));
-        for (String zeile : zeilen) {
-            empfaenger.sendMessage(Component.text("  " + zeile, NamedTextColor.GRAY));
-        }
+    static void sende(Audience empfaenger, Component kopf, List<Component> zeilen) {
+        empfaenger.sendMessage(kopf);
+        zeilen.forEach(empfaenger::sendMessage);
     }
 
     /**
@@ -222,20 +245,20 @@ final class SpielzeitBefehle {
      * Protokoll steht die UUID und nicht der Name, wie in {@link Spielzeitbuch}: Diese
      * Methode kennt bewusst kein Spielerobjekt.
      */
-    List<String> zeilen(UUID wer, Duration untaetig, LocalDate heute, Zeitwerte zeit) {
+    List<Component> zeilen(UUID wer, Duration untaetig, LocalDate heute, Zeitwerte zeit) {
         Spielzeitstand stand;
         try {
             stand = ablage.lies(wer, heute);
         } catch (RuntimeException fehler) {
             protokoll.log(Level.SEVERE, "Spielzeit nicht lesbar fuer " + wer, fehler);
-            return List.of(NICHT_LESBAR);
+            return nichtLesbarZeilen(sprache);
         }
         // JEDE Zeile kommt aus Spielzeittext, auch der Hinweis zum Einbau. Der Stapel der
         // noch nicht geschriebenen Zuschlaege muss mit: Sonst zeigte die Anzeige waehrend
         // der Sperre eine zu kleine Zahl, obwohl die Sekunden gemessen sind. Und die
         // Sperre selbst muss mit, sonst waere die MENGE richtig und der genannte ABSTAND
         // falsch - waehrend der Sperre wird nicht alle takt-sekunden geschrieben.
-        return Spielzeittext.werte(stand, buch.offeneSitzung(wer, untaetig),
+        return Spielzeittext.werte(sprache, stand, buch.offeneSitzung(wer, untaetig),
                 buch.wartende(wer), buch.gesperrt(), untaetig, zeit);
     }
 }

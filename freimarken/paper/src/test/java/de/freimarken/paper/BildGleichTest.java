@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Richtung;
 import de.freimarken.kern.Wirtschaftswerte;
+import de.freimarken.kern.Zeitwerte;
+import java.time.LocalDate;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -361,7 +363,105 @@ class BildGleichTest {
                         "&7  Der Weg ist zurueck (448 Bloecke geaendert)."),
                 new Zeile(ParzellenSatz.BODEN_FEHLER, 1L, Einsatz.keine(),
                         "&c  Der Boden liess sich nicht aendern. Die Parzellen stimmen - sag einem"
-                                + " Operator Bescheid."));
+                                + " Operator Bescheid."),
+
+                // Bauschritt 3: /tpa, /tpahere, /tpaccept, /tpdeny. ANNA fragt, BERT
+                // wird gefragt - zwei verschiedene Namen, weil jeder Satz dieses
+                // Bereichs den des ANDEREN traegt.
+                new Zeile(AnfragenSatz.NIEMAND, 1L, Einsatz.keine(),
+                        "&7Es fragt niemand."),
+                new Zeile(AnfragenSatz.FRAGE_NICHT_DA, 1L, Einsatz.von("name", "Bert"),
+                        "&cBert ist nicht da."),
+                new Zeile(AnfragenSatz.FRAGE_BEI_DIR, 1L, Einsatz.keine(),
+                        "&7Du bist schon bei dir."),
+                new Zeile(AnfragenSatz.FRAGE_STEHT_NOCH, 1L, Einsatz.von("name", "Bert"),
+                        "&7Diese Anfrage an Bert steht noch."),
+                new Zeile(AnfragenSatz.FRAGE_GESTELLT, 1L, Einsatz.von("name", "Bert"),
+                        "&7Angefragt bei Bert - er oder sie muss zustimmen."),
+                new Zeile(AnfragenSatz.FRAGE_EINGELADEN, 1L, Einsatz.von("name", "Anna"),
+                        "&6Anna laedt dich ein zu kommen."),
+                new Zeile(AnfragenSatz.FRAGE_MOECHTE_KOMMEN, 1L,
+                        Einsatz.von("name", "Anna"),
+                        "&6Anna moechte zu dir kommen."),
+                new Zeile(AnfragenSatz.FRAGE_HINWEIS, 1L, Einsatz.keine(),
+                        "&7/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab."),
+                new Zeile(AnfragenSatz.ANNEHMEN_FRAGENDER_WEG, 1L, Einsatz.keine(),
+                        "&cWer gefragt hatte, ist nicht mehr da."),
+                new Zeile(AnfragenSatz.ANNEHMEN_DU_KOMMST, 1L, Einsatz.von("name", "Anna"),
+                        "&aDu kommst zu Anna."),
+                new Zeile(AnfragenSatz.ANNEHMEN_ER_KOMMT, 1L, Einsatz.von("name", "Anna"),
+                        "&aAnna kommt zu dir."),
+                new Zeile(AnfragenSatz.ANNEHMEN_QUITTUNG_DU_KOMMST, 1L,
+                        Einsatz.von("name", "Bert"),
+                        "&aBert hat angenommen - du kommst."),
+                new Zeile(AnfragenSatz.ANNEHMEN_QUITTUNG_ER_KOMMT, 1L,
+                        Einsatz.von("name", "Bert"),
+                        "&aBert hat angenommen und kommt zu dir."),
+                // Die Zahlen sind NACKT, ohne Tausenderpunkt - darum steht in der
+                // Mehrzahlform die 1000 und nicht noch eine 2.
+                new Zeile(AnfragenSatz.ANNEHMEN_WEITERE, 1L, Einsatz.von("anzahl", "1"),
+                        "&7Es warten noch 1 Anfrage."),
+                new Zeile(AnfragenSatz.ANNEHMEN_WEITERE, 2L, Einsatz.von("anzahl", "1000"),
+                        "&7Es warten noch 1000 Anfragen."),
+                new Zeile(AnfragenSatz.ANNEHMEN_WEITERE, 0L, Einsatz.von("anzahl", "0"),
+                        "&7Es warten noch 0 Anfragen."),
+                new Zeile(AnfragenSatz.ABLEHNEN_ABGELEHNT, 1L, Einsatz.von("anzahl", "1"),
+                        "&71 Anfrage abgelehnt."),
+                new Zeile(AnfragenSatz.ABLEHNEN_ABGELEHNT, 2L,
+                        Einsatz.von("anzahl", "1000"),
+                        "&71000 Anfragen abgelehnt."),
+                new Zeile(AnfragenSatz.ABLEHNEN_ABGELEHNT, 0L, Einsatz.von("anzahl", "0"),
+                        "&70 Anfragen abgelehnt."),
+                // /freimarken spielzeit - Einzug, Spaltenbreite und Farbe stehen seit dem
+                // 04.11.2026 IM Satz. Die erwarteten Bilder kommen aus dem ROTEN Lauf von
+                // SpielzeitBefehleTest 33a-33h, der VOR dem Umzug gegen den committeten
+                // Stand lief. Die eingesetzten Werte holt diese Tafel ueber Sprache#wort
+                // und Sprache#muster aus derselben Datei - damit haengen auch die acht
+                // Art.WORT und das Art.MUSTER dieses Bereichs an einer Bildprobe.,
+                new Zeile(SpielzeitSatz.KOPF_SELBST, 1L,
+                        Einsatz.keine(),
+                        "&6Deine Spielzeit"),
+                new Zeile(SpielzeitSatz.KOPF_FREMD, 1L,
+                        Einsatz.von("name", "Anna"),
+                        "&6Spielzeit von Anna"),
+                new Zeile(SpielzeitSatz.HEUTE, 1L,
+                        Einsatz.von("dauer", sprache.wort(SpielzeitSatz.DAUER_MINUTEN,
+                                Einsatz.von("minuten", "10")))
+                        .mit("tag", sprache.muster(SpielzeitSatz.TAG_MUSTER)
+                                .format(LocalDate.of(2026, 11, 3)))
+                        .mit("zone", Zeitwerte.VORGABE_ZONE.getId()),
+                        "&7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)"),
+                new Zeile(SpielzeitSatz.GESAMT, 1L,
+                        Einsatz.von("dauer", sprache.wort(SpielzeitSatz.DAUER_MINUTEN,
+                                Einsatz.von("minuten", "10"))),
+                        "&7  gesamt  10 min"),
+                new Zeile(SpielzeitSatz.ZUSTAND_UNTAETIG, 1L,
+                        Einsatz.von("dauer", sprache.wort(SpielzeitSatz.DAUER_MINUTEN,
+                                Einsatz.von("minuten", "12")))
+                        .mit("grenze", "10"),
+                        "&7  wird gerade NICHT gezaehlt - untaetig seit 12 min, gezaehlt wird bis 10 min. Ein Schritt oder ein Tastendruck zaehlt wieder."),
+                new Zeile(SpielzeitSatz.ZUSTAND_GEZAEHLT, 1L,
+                        Einsatz.von("menge", sprache.wort(SpielzeitSatz.DAUER_SEKUNDEN,
+                                Einsatz.von("sekunden", "0")))
+                        .mit("abstand", sprache.wort(
+                                SpielzeitSatz.ZUSTAND_ABSTAND_TAKT,
+                                Einsatz.von("takt", "60")))
+                        .mit("abwesenheit", sprache.wort(
+                                SpielzeitSatz.ZUSTAND_ABWESENHEIT,
+                                Einsatz.von("pfad", Zeitwerte.PFAD_UNTAETIG))),
+                        "&7  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s. Abwesenheit zaehlt auf diesem Server mit (zeit.untaetig-minuten: 0)."),
+                new Zeile(SpielzeitSatz.HINWEIS, 1L,
+                        Einsatz.keine(),
+                        "&7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an."),
+                new Zeile(SpielzeitSatz.NICHT_LESBAR, 1L,
+                        Einsatz.keine(),
+                        "&7  Die Spielzeit ist gerade nicht lesbar - gezaehlt wird trotzdem. Sag einem Operator Bescheid."),
+                new Zeile(SpielzeitSatz.KEINE_KONSOLE, 1L,
+                        Einsatz.keine(),
+                        "&7Die Konsole spielt nicht. /freimarken spielzeit <spieler> nennt die Zeit eines anwesenden Spielers."),
+                new Zeile(SpielzeitSatz.NICHT_DA, 1L,
+                        Einsatz.von("name", "Anna"),
+                        "&cAnna ist nicht da. Gezeigt werden kann nur die Spielzeit eines anwesenden Spielers."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

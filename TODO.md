@@ -574,15 +574,16 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Pruefen, Teil C: Proxy-Neustart oder vierzig Abgaenge auf einmal mit toter Datenbank - der Server darf nicht vom Waechter abgeschossen werden, hoechstens EINE Verlustzeile.
 - Pruefen, Teil C: Start mit unpassendem Paar (takt-sekunden 600, untaetig-minuten 1) - Klage mit "mindestens 10 Minuten", es bleibt bei 10. Dann beides gemeinsam auf 60/1 verkuerzen und neuladen: der Block nennt zeit.untaetig-minuten als nicht uebernommen.
 - Pruefen, Teil C: /freimarken neuladen mit fehlendem zeit.zone - der Block sagt "es gilt weiter <laufende Zone>, neu gelesen wurde Europe/Berlin". Mit fehlendem parzellen.hoechstzahl "es gilt 4".
-- Pruefen, Teil C: /freimarken spielzeit - der Hinweis zum Altbestand ist jetzt grau wie die Zeilen darueber. Soll er abgesetzt bleiben, braucht es eine Farbe je Zeile - eine Entscheidung.
+- Pruefen, Teil C: /freimarken spielzeit - der Hinweis zum Altbestand ist grau wie die Zeilen darueber. Eine eigene Farbe dafuer steht jetzt in der Sprachdatei (spielzeit.hinweis).
 - Pruefen, Teil C: Nach einem Fehlschlag /freimarken spielzeit - die dritte Zeile muss auf "wartet auf die Datenbank" enden und NICHT auf "das geschieht alle 60 s".
 - Pruefen, Teil C: Die Verlustzeile nennt jetzt den Absturz; eine NEU angelegte config.yml nennt die Stillstandsdauer nicht mehr als Zahl und den Absturzverlust mit Bedingung - eine schon ausgelieferte Datei bekommt den neuen Text nicht.
 - Sprachdatei vorgezogen [entschieden]: Worte, Farben und Aufbau wie im MOTD-Editor. sprache-vorlage.yml wird bei jedem Start neu geschrieben, sprache.yml nimmt nur die eigenen Aenderungen. Alles oder nichts.
 - ~~Sprachdatei Schritt 1: Fundament.~~ 4.11.: MiniMessage, erlaubt sind nur Farbe und Hervorhebung (<click> und <hover> koennten einen Befehl im Namen des Spielers ausloesen). 18 Schluessel sind umgezogen.
 - ~~Sprachdatei Schritt 2: /parzelle.~~ 4.11.: 104 Schluessel dazu, die Datei traegt jetzt 122 Saetze. /parzelle nennt keine Farbe mehr selbst.
+- ~~Sprachdatei Schritt 3 und 4: /tpa und /freimarken spielzeit.~~ 5.11.: 36 Schluessel dazu, die Datei traegt jetzt 158 Saetze. Einzug und Spaltenbreite stehen mit drin.
 - Entscheidung, Sprachdatei: Sechs Saetze sagen bei der Anzahl 1 die Mehrzahl ('aus 1 Feldern') - so sieht es heute aus. Eine Einzahlform waere besser, aendert aber das Bild.
 - Warnung: waehrung.betrag steht an ZWEI Orten - in der Datei und, fuer die zwei Preiszeilen von /freimarken, im Programm. Wer das Wort aendert, liest im Spiel beides nebeneinander.
-- Offen, Sprachdatei: die Textumzuege in den Schritten 3 bis 8 - /tpa, /spielzeit, die Reisen, die Wachen und /freimarken selbst. Ein Satz steht immer an genau einem Ort - nie an keinem und nie an zwei.
+- Offen, Sprachdatei: die Textumzuege in den Schritten 5 bis 8 - die Reisen, die Wachen und /freimarken selbst. Ein Satz steht immer an genau einem Ort - nie an keinem und nie an zwei.
 - Pruefen, Sprachdatei: Nach dem ersten Start liegen beide Dateien im Plugin-Ordner, /mark verlauf sieht aus wie vorher. Dann eine Zeile samt aller Ebenen darueber nach sprache.yml kopieren, Farbe aendern, /freimarken neuladen: die Antwort nennt, wie viele Saetze von dir sind.
 - Pruefen, Sprachdatei: Eine kaputte Zeile in sprache.yml, etwa ein offenes <gold> - GAR NICHTS wird uebernommen, die Klage nennt Zeile und Spalte, die bisherigen Saetze gelten weiter.
 - Pruefen, Sprachdatei: Die neun Befehlsbeschreibungen in /help kommen aus der Datei, aendern sich aber erst nach einem Neustart.

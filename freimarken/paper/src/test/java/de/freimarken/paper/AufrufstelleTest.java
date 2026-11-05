@@ -70,6 +70,29 @@ import org.junit.jupiter.api.Test;
  * <p><b>Hoechstzahl 7 und Gruppenfelder 3 sind ABSICHTLICH verschieden</b>, aus demselben
  * Grund wie in {@code SendewegTest} 33t: Mit zwei gleichen Zahlen waere ein Vertauschen der
  * Quellen gruen. Die Vorgabe des Kerns hat fuer beide die 4.
+ *
+ * <p><b>Seit dem 05.11.2026 stehen die drei Zweige von {@code /tpa} daneben</b> (34m bis
+ * 34o). Dieselbe Luecke, nur schaerfer: Dort hat EIN Zug ZWEI Empfaenger, und
+ * {@code GrenzeTest} 31e nagelt mit seiner Tafel der Sendepaare fest, welche
+ * Zeilen-Methode an welche EMPFAENGERVARIABLE geht - nicht, WAS sie als Wert bekommt.
+ * Gemessen blieben darum alle 418 Proben des Moduls gruen bei:
+ *
+ * <ul>
+ *   <li>Die zwei Namen in {@code sendeAnnahme} getauscht: Gespielt las Bert nach
+ *       {@code /tpaccept} "Bert kommt zu dir." - seinen eigenen Namen -, und Anna las
+ *       "Anna hat angenommen - du kommst."</li>
+ *   <li>Dasselbe in {@code sendeStellen}: Die Fragende las ihren eigenen Namen, und der
+ *       Angefragte den seinen.</li>
+ *   <li>Die Wache {@code weitere > 0} auf {@code weitere > 1} geaendert: Ein Spieler mit
+ *       GENAU EINER weiteren offenen Anfrage erfuhr nichts mehr von ihr und liess sie
+ *       ablaufen.</li>
+ * </ul>
+ *
+ * <p>Fuer diese drei Proben gilt beides, was die zwoelf darueber stark macht: ZWEI
+ * absichtlich verschiedene Namen (Anna und Bert - jeder Satz dieses Zweiges traegt genau
+ * einen, und zwar den des ANDEREN) und JE SPIELER eine EIGENE Mitschrift. Mit einer
+ * gemeinsamen Mitschrift waere ein vertauschter Empfaenger gruen, weil die Vereinigung
+ * beider Zeilen dieselbe bleibt.
  */
 class AufrufstelleTest {
 
@@ -91,6 +114,20 @@ class AufrufstelleTest {
     private final Probewelt boden = new Probewelt(plan, UNTEN);
 
     private final List<Component> gesendet = new ArrayList<>();
+
+    /**
+     * Zwei Namen und zwei Mitschriften - fuer die Zweige mit ZWEI Empfaengern.
+     *
+     * <p>Getrennt und nicht in {@link #gesendet}: Nur so prueft eine Probe, WER welche
+     * Zeile liest, und nicht bloss, dass alle Zeilen irgendwo angekommen sind.
+     */
+    private static final String NAME_ANNA = "Anna";
+
+    private static final String NAME_BERT = "Bert";
+
+    private final List<Component> annaLiest = new ArrayList<>();
+
+    private final List<Component> bertLiest = new ArrayList<>();
 
     private World welt;
     private SpeicherKasse kasse;
@@ -188,6 +225,34 @@ class AufrufstelleTest {
                 });
     }
 
+    /**
+     * Ein Spieler mit NAMEN und eigener Mitschrift - fuer die drei Zweige von
+     * {@code /tpa}.
+     *
+     * <p>Genau zwei Aufrufe, und das ist die Grenze dieser Naht: Die drei Sendemethoden
+     * von {@code AnfragenBefehle} fragen ein Spielerobjekt nach seinem NAMEN und
+     * schreiben ihm, nichts weiter. Keine UUID und kein Ort - was hier fehlt, braucht die
+     * gepruefte Stelle nicht, und wer es doch braucht, bekommt den Namen des Aufrufs
+     * geworfen statt einer stummen Null.
+     */
+    private static Player spielerDoppel(String name, List<Component> mitschrift) {
+        return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(),
+                new Class<?>[]{Player.class}, (ding, methode, werte) -> switch (
+                        methode.getName()) {
+                    case "getName" -> name;
+                    case "sendMessage" -> {
+                        mitschrift.add((Component) werte[0]);
+                        yield null;
+                    }
+                    case "equals" -> ding == werte[0];
+                    case "hashCode" -> System.identityHashCode(ding);
+                    case "toString" -> "Spielerdoppel " + name;
+                    default -> throw new UnsupportedOperationException("Player."
+                            + methode.getName() + " - diese Probe kennt den Aufruf nicht."
+                            + " Wer ihn braucht, schreibt ihn hier auf.");
+                });
+    }
+
     // --- Kleinteile ------------------------------------------------------------
 
     /** Ein Ort INNERHALB der Parzelle - aus dem Plan gerechnet, nicht geraten. */
@@ -208,8 +273,18 @@ class AufrufstelleTest {
 
     /** Was der Spieler seit dem letzten Abruf gelesen hat - als &-Bild, Zeile fuer Zeile. */
     private String mitschrift() {
-        String bild = Sprachprobe.bild(List.copyOf(gesendet));
-        gesendet.clear();
+        return mitschrift(gesendet);
+    }
+
+    /**
+     * Dasselbe fuer EINE von mehreren Mitschriften.
+     *
+     * <p>Geleert wird beim Abruf, wie oben: So ist jede Zusicherung die Zeilenfolge SEIT
+     * dem letzten Abruf, und eine Probe mit zwei Zuegen kann beide trennen.
+     */
+    private static String mitschrift(List<Component> eigene) {
+        String bild = Sprachprobe.bild(List.copyOf(eigene));
+        eigene.clear();
         return bild.isEmpty() ? "" : bild + "\n";
     }
 
@@ -489,5 +564,126 @@ class AufrufstelleTest {
                 &7  1/2 · 25.000 Mark
                 &8Die naechste kostet 50.000 Mark
                 """, mitschrift());
+    }
+
+    // --- Die drei Zweige von /tpa: ZWEI Empfaenger in EINEM Zug -----------------
+    //
+    // Anna fragt, Bert entscheidet. Der Zweig selbst ist hier nicht aufrufbar - er haengt
+    // an Bukkit.getPlayerExact, Bukkit.getPlayer und Reise, und beides gibt es ohne
+    // laufenden Server nicht. Genau darum sind die drei Sendestellen reine Methoden ueber
+    // zwei Spielerobjekten geworden; die Begruendung steht im Javadoc von
+    // AnfragenBefehle.sendeStellen.
+    //
+    // Was diese drei Proben halten und SendewegTest 33y bis 33ab NICHT halten koennen:
+    // dort werden die Zeilen-Methoden unmittelbar aufgerufen, der Empfaenger kommt gar
+    // nicht vor, und der Name wird als Wert hereingegeben. Hier kommt der Name aus dem
+    // Spielerobjekt, und jeder der beiden hat seine eigene Mitschrift.
+
+    @Test
+    @DisplayName("34m - Zweig frage: die zwei Namen gehen GEGENLAEUFIG hinaus")
+    void frageSetztDieNamenGegenlaeufigEin() {
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        Player anna = spielerDoppel(NAME_ANNA, annaLiest);
+        Player bert = spielerDoppel(NAME_BERT, bertLiest);
+
+        AnfragenBefehle.sendeStellen(sprache, anna, bert, Anfragen.Richtung.ZU_DIR);
+
+        // Jeder liest den Namen des ANDEREN. Wer die zwei Werte an der Aufrufstelle
+        // tauscht, laesst Anna "Angefragt bei Anna" lesen und Bert "Bert moechte zu dir
+        // kommen" - die Empfaenger bleiben dabei richtig, und das ist alles, was
+        // GrenzeTest 31e sieht.
+        assertEquals("&7Angefragt bei Bert - er oder sie muss zustimmen.\n",
+                mitschrift(annaLiest));
+        assertEquals("""
+                &6Anna moechte zu dir kommen.
+                &7/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
+                """, mitschrift(bertLiest));
+
+        // /tpahere: EIN anderer Satz an den Angefragten, und der Fragende liest weiter
+        // genau seine eine Quittung. Waehlt die Aufrufstelle die Richtung nach Augenmass,
+        // ist eine der zwei Zeilen hier rot.
+        AnfragenBefehle.sendeStellen(sprache, anna, bert, Anfragen.Richtung.HIERHER);
+
+        assertEquals("&7Angefragt bei Bert - er oder sie muss zustimmen.\n",
+                mitschrift(annaLiest));
+        assertEquals("""
+                &6Anna laedt dich ein zu kommen.
+                &7/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
+                """, mitschrift(bertLiest));
+    }
+
+    @Test
+    @DisplayName("34n - Zweig nimmAn: beide Richtungen, und die Wache ueber die uebrigen")
+    void nimmAnSetztDieNamenEinUndMeldetDieEineWeitere() {
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        Player anna = spielerDoppel(NAME_ANNA, annaLiest);
+        Player bert = spielerDoppel(NAME_BERT, bertLiest);
+
+        // /tpa: Anna hatte gefragt, also wandert SIE - Bert tippt /tpaccept und bleibt
+        // stehen. annehmerWandert ist damit false. Und weitere == 0: Es wartet nichts
+        // mehr, und dann gibt es die dritte Zeile ueberhaupt nicht.
+        AnfragenBefehle.sendeAnnahme(sprache, bert, anna, false, 0L);
+
+        assertEquals(1, bertLiest.size(), "bei Null wartenden Anfragen liest der Annehmer"
+                + " GENAU seine eine Zeile - eine zweite waere ein Hinweis auf nichts");
+        assertEquals(1, annaLiest.size(), "der Fragende liest genau seine Quittung");
+        assertEquals("&aAnna kommt zu dir.\n", mitschrift(bertLiest));
+        assertEquals("&aBert hat angenommen - du kommst.\n", mitschrift(annaLiest));
+
+        // /tpahere: dieselben zwei Spieler, dieselben zwei Empfaenger - aber der Annehmer
+        // wandert selbst. Vier Faelle, vier Saetze; dass es wirklich vier verschiedene
+        // sind, haelt SendewegTest 33ab.
+        AnfragenBefehle.sendeAnnahme(sprache, bert, anna, true, 0L);
+
+        assertEquals("&aDu kommst zu Anna.\n", mitschrift(bertLiest));
+        assertEquals("&aBert hat angenommen und kommt zu dir.\n", mitschrift(annaLiest));
+
+        // GENAU EINE weitere Anfrage - der Fall, den die Wache festhalten muss. Auf
+        // "weitere > 1" geaendert erfaehrt Bert nichts von ihr und laesst sie ablaufen,
+        // und ohne diese Zeilen bleiben 418 Proben gruen. Der Hinweis geht an den
+        // ANNEHMER und nicht an den Fragenden: Es sind Anfragen an Bert.
+        AnfragenBefehle.sendeAnnahme(sprache, bert, anna, false, 1L);
+
+        assertEquals(2, bertLiest.size(), "der Annehmer liest seine Zeile UND den Hinweis"
+                + " auf die eine Anfrage, die noch wartet");
+        assertEquals(1, annaLiest.size(), "der Fragende liest nur seine Quittung - wie"
+                + " viele Anfragen an BERT noch offen sind, geht ihn nichts an");
+        assertEquals("""
+                &aAnna kommt zu dir.
+                &7Es warten noch 1 Anfrage.
+                """, mitschrift(bertLiest));
+        assertEquals("&aBert hat angenommen - du kommst.\n", mitschrift(annaLiest));
+    }
+
+    @Test
+    @DisplayName("34o - Zweig lehneAb: an den Ablehnenden, und an niemanden sonst")
+    void lehneAbSendetNurAnDenAblehnenden() {
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        Player anna = spielerDoppel(NAME_ANNA, annaLiest);
+        Player bert = spielerDoppel(NAME_BERT, bertLiest);
+
+        // Zwei weggenommene Anfragen - und Anna, die eine davon gestellt hatte, liest
+        // NICHTS. Das ist Absicht: Wer ablehnt, muss das nicht rechtfertigen, und eine
+        // Zeile an den Fragenden waere ein neuer Satz und kein Umzug.
+        AnfragenBefehle.sendeAblehnung(sprache, bert, 2L);
+
+        assertEquals("&72 Anfragen abgelehnt.\n", mitschrift(bertLiest));
+        assertEquals("", mitschrift(annaLiest));
+
+        // Die Null ist KEIN stummer Fall: Gesendet wird in beiden Faellen, nur ein
+        // anderer Satz - die Wache dafuer steht in lehneAbZeilen und nicht hier.
+        AnfragenBefehle.sendeAblehnung(sprache, bert, 0L);
+
+        assertEquals("&7Es fragt niemand.\n", mitschrift(bertLiest));
+        assertEquals("", mitschrift(annaLiest));
+
+        // Und derselbe Weg mit dem ANDEREN Spieler als Ablehnendem. Das prueft das
+        // Werkzeug dieser drei Proben: Fuellten beide Stellvertreter in Wahrheit
+        // DIESELBE Liste, waere die leere Mitschrift darueber kein Befund - hier liest
+        // nun Anna und Bert nichts, also sind sie wirklich getrennt.
+        AnfragenBefehle.sendeAblehnung(sprache, anna, 1L);
+
+        assertEquals("&71 Anfrage abgelehnt.\n", mitschrift(annaLiest));
+        assertEquals("", mitschrift(bertLiest));
     }
 }

@@ -898,4 +898,161 @@ class SendewegTest {
                 &cParzellen gibt es nur in der Marktstadt.
                 """, tafel.ganz());
     }
+
+    // --- Bauschritt 3: /tpa, /tpahere, /tpaccept, /tpdeny ----------------------
+    //
+    // ANNA fragt, BERT wird gefragt - zwei verschiedene Namen, und das ist hier keine
+    // Zierde: Jeder Satz dieses Zweiges traegt GENAU EINEN Namen, und zwar den des
+    // ANDEREN. Mit einem Namen fuer beide waere ein vertauschter Empfaenger gruen.
+    //
+    // Je Empfaenger ein eigener Fall und nicht die Vereinigung: "an-frager" und
+    // "an-angefragten" stehen getrennt in der Tafel, weil beide Zeilen in einer
+    // gemeinsamen Liste auch dann vollstaendig waeren, wenn sie an die falschen Spieler
+    // gehen. WELCHE Methode an WEN geht, nagelt GrenzeTest 31e fest; dass jede von ihnen
+    // das Richtige SAGT, nagelt diese Tafel fest.
+
+    /** Wer fragt. */
+    private static final String FRAGER = "Anna";
+
+    /** Wer gefragt wird und entscheidet. */
+    private static final String ANGEFRAGTER = "Bert";
+
+    @Test
+    @DisplayName("33y - Zweig stellen: je Empfaenger eine eigene Liste, beide Richtungen")
+    void stellenZweig() {
+        Tafel tafel = new Tafel();
+        tafel.fall("nicht-da", AnfragenBefehle.nichtDaZeilen(sprache, ANGEFRAGTER));
+        tafel.fall("bei-dir", AnfragenBefehle.beiDirZeilen(sprache));
+        tafel.fall("steht-noch", AnfragenBefehle.stehtNochZeilen(sprache, ANGEFRAGTER));
+        // Der Fragende liest den Namen des Angefragten, der Angefragte den des
+        // Fragenden - gegenlaeufig, und genau darum stehen hier zwei Namen.
+        tafel.fall("zu-dir/an-frager",
+                AnfragenBefehle.stellenFragerZeilen(sprache, ANGEFRAGTER));
+        tafel.fall("zu-dir/an-angefragten", AnfragenBefehle.stellenAngefragtZeilen(
+                sprache, FRAGER, Anfragen.Richtung.ZU_DIR));
+        tafel.fall("hierher/an-frager",
+                AnfragenBefehle.stellenFragerZeilen(sprache, ANGEFRAGTER));
+        tafel.fall("hierher/an-angefragten", AnfragenBefehle.stellenAngefragtZeilen(
+                sprache, FRAGER, Anfragen.Richtung.HIERHER));
+
+        assertEquals("""
+                == nicht-da
+                &cBert ist nicht da.
+                == bei-dir
+                &7Du bist schon bei dir.
+                == steht-noch
+                &7Diese Anfrage an Bert steht noch.
+                == zu-dir/an-frager
+                &7Angefragt bei Bert - er oder sie muss zustimmen.
+                == zu-dir/an-angefragten
+                &6Anna moechte zu dir kommen.
+                &7/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
+                == hierher/an-frager
+                &7Angefragt bei Bert - er oder sie muss zustimmen.
+                == hierher/an-angefragten
+                &6Anna laedt dich ein zu kommen.
+                &7/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
+                """, tafel.ganz());
+    }
+
+    @Test
+    @DisplayName("33z - Zweig nimmAn: die zwei Paare, und was danach noch wartet")
+    void nimmAnZweig() {
+        Tafel tafel = new Tafel();
+        tafel.fall("niemand", AnfragenBefehle.niemandFragtZeilen(sprache));
+        tafel.fall("fragender-weg", AnfragenBefehle.fragenderWegZeilen(sprache));
+        // Das PAAR von /tpa: Der Fragende hatte gefragt, also wandert er - der Annehmer
+        // bleibt stehen. annehmerWandert ist hier false.
+        tafel.fall("zu-dir/an-annehmer",
+                AnfragenBefehle.nimmAnAnnehmerZeilen(sprache, FRAGER, false));
+        tafel.fall("zu-dir/an-frager",
+                AnfragenBefehle.nimmAnFragerZeilen(sprache, ANGEFRAGTER, false));
+        // Das PAAR von /tpahere: Der Eingeladene nimmt an und wandert selbst.
+        tafel.fall("hierher/an-annehmer",
+                AnfragenBefehle.nimmAnAnnehmerZeilen(sprache, FRAGER, true));
+        tafel.fall("hierher/an-frager",
+                AnfragenBefehle.nimmAnFragerZeilen(sprache, ANGEFRAGTER, true));
+        tafel.fall("weitere-eins", AnfragenBefehle.weitereZeilen(sprache, 1L));
+        tafel.fall("weitere-drei", AnfragenBefehle.weitereZeilen(sprache, 3L));
+        // Eine NACKTE Zahl ohne Tausenderpunkt - so ist es heute im Spiel, und nur
+        // Geldbetraege tragen ihn. Ohne diesen Fall waere der Weg ueber Einsatz.mit(long)
+        // gruen, und der Spieler lese "Es warten noch 1.000 Anfragen."
+        tafel.fall("weitere-tausend", AnfragenBefehle.weitereZeilen(sprache, 1_000L));
+
+        assertEquals("""
+                == niemand
+                &7Es fragt niemand.
+                == fragender-weg
+                &cWer gefragt hatte, ist nicht mehr da.
+                == zu-dir/an-annehmer
+                &aAnna kommt zu dir.
+                == zu-dir/an-frager
+                &aBert hat angenommen - du kommst.
+                == hierher/an-annehmer
+                &aDu kommst zu Anna.
+                == hierher/an-frager
+                &aBert hat angenommen und kommt zu dir.
+                == weitere-eins
+                &7Es warten noch 1 Anfrage.
+                == weitere-drei
+                &7Es warten noch 3 Anfragen.
+                == weitere-tausend
+                &7Es warten noch 1000 Anfragen.
+                """, tafel.ganz());
+    }
+
+    @Test
+    @DisplayName("33aa - Zweig lehneAb: nichts da, eins, viele - und die nackte Zahl")
+    void lehneAbZweig() {
+        Tafel tafel = new Tafel();
+        // Null ist KEINE Zaehlform, sondern derselbe Satz wie bei /tpaccept ohne
+        // Anfrage: Art.GEZAEHLT kennt nur eins und viele.
+        tafel.fall("nichts-da", AnfragenBefehle.lehneAbZeilen(sprache, 0L));
+        tafel.fall("eins", AnfragenBefehle.lehneAbZeilen(sprache, 1L));
+        tafel.fall("vier", AnfragenBefehle.lehneAbZeilen(sprache, 4L));
+        tafel.fall("tausend", AnfragenBefehle.lehneAbZeilen(sprache, 1_000L));
+
+        assertEquals("""
+                == nichts-da
+                &7Es fragt niemand.
+                == eins
+                &71 Anfrage abgelehnt.
+                == vier
+                &74 Anfragen abgelehnt.
+                == tausend
+                &71000 Anfragen abgelehnt.
+                """, tafel.ganz());
+    }
+
+    @Test
+    @DisplayName("33ab - die zwei Paare sind wirklich vier verschiedene Saetze")
+    void dieZweiPaareSindVierSaetze() {
+        // Gemessen traegt die Zeile an den Annehmer in BEIDEN Richtungen genau 20
+        // Zeichen - Zufall, und kein Halt. Darum vergleicht diese Probe die Bilder und
+        // nicht ihre Laenge: Wer die Richtung dreht, bekommt dasselbe Mass und einen
+        // anderen Satz.
+        //
+        // Und darum steht hier KEINE Zusicherung ueber die Laenge. Dass keine andere
+        // Probe die zwei Formen an der Laenge auseinanderhaelt, ist eine Aussage ueber
+        // die ANDEREN Proben und gehoert in diesen Kommentar - geprueft am 05.11.2026:
+        // keine Probe im Baum vergleicht diese zwei Bilder ueber ihre Laenge. Stuende
+        // die Gleichheit als assertEquals da, machte schon eine erlaubte
+        // Betreiberaenderung - du-kommst von "Du kommst zu {name}." auf "Du reist zu
+        // {name}." - diese Probe rot, mit einer Meldung ueber die Probe statt ueber den
+        // Fehler, und der Betreiber, der die Datei aendern DARF, schloesse daraus, er
+        // muesse sein Wort zuruecknehmen. Gemessen: Genau diese Aenderung macht 33z,
+        // BildGleichTest 11 und AufrufstelleTest 34n rot - die drei Proben, die wirklich
+        // ueber das Bild sprechen. Sie geht also nicht unbemerkt durch.
+        var zuDirAnnehmer = AnfragenBefehle.nimmAnAnnehmerZeilen(sprache, FRAGER, false);
+        var hierherAnnehmer = AnfragenBefehle.nimmAnAnnehmerZeilen(sprache, FRAGER, true);
+        var zuDirFrager = AnfragenBefehle.nimmAnFragerZeilen(sprache, ANGEFRAGTER, false);
+        var hierherFrager = AnfragenBefehle.nimmAnFragerZeilen(sprache, ANGEFRAGTER, true);
+
+        Set<String> bilder = new TreeSet<>(List.of(Sprachprobe.bild(zuDirAnnehmer),
+                Sprachprobe.bild(hierherAnnehmer), Sprachprobe.bild(zuDirFrager),
+                Sprachprobe.bild(hierherFrager)));
+        assertEquals(4, bilder.size(), "vier Faelle, vier Saetze - zwei gleiche hiessen,"
+                + " dass eine Richtung oder ein Empfaenger keinen eigenen Satz hat: "
+                + bilder);
+    }
 }
