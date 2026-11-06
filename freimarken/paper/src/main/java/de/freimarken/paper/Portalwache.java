@@ -92,8 +92,15 @@ final class Portalwache implements Listener {
      * Und die Reise selbst.
      *
      * <p>Zwei Riegel fuer einen Weg: Welches der beiden Ereignisse eine Portalreise
-     * wirklich verhindert, ist nicht dokumentiert, und ein Spieler in der Haupt-Nether ist
-     * nicht zurueckzuholen. Der zweite Riegel kostet nichts.
+     * wirklich verhindert, ist nicht dokumentiert, und ein Spieler in der
+     * Haupt-Nether ist nicht zurueckzuholen. Der zweite Riegel kostet nichts.
+     *
+     * <p>Dass wirklich BEIDE abbrechen, hielt bis zum 06.11.2026 keine Probe fest:
+     * Beide Zweige rufen dieselbe private Methode, also zaehlt
+     * {@code GrenzeTest.SENDESTELLEN} eine Sendestelle und sagt ueber den zweiten
+     * Riegel nichts. Jetzt sagt es {@code PortalwacheTest} 38c - belegt mit einem
+     * Eingriff, der das {@code setCancelled} hier wegnahm und nur jene Probe rot
+     * machte.
      */
     @EventHandler(ignoreCancelled = true)
     public void beiDerPortalreise(PlayerPortalEvent ereignis) {

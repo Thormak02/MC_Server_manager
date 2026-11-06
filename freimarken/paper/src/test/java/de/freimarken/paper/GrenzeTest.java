@@ -829,6 +829,14 @@ class GrenzeTest {
      * der er steht: {@code RESPAWN_ANCHOR} steht nur in der Wache des gesetzten
      * Spawnpunkts, {@code ADVENTURE} nur im Zweig des Spielmodus. Ein umgestellter
      * Vergleich macht diese Probe damit nicht rot, ein vertauschter Satz schon.
+     *
+     * <p><b>Seit dem 06.11.2026 sieht {@code AnkunftswacheTest} 37 und 37d das
+     * waehlende Ereignis doch</b> - es baut die zwei Ereignisse und liest, was beim
+     * Spieler ankommt. Diese Tafel bleibt und bewacht weiter, was ein Durchlauf
+     * nicht sieht: dass der Anlass {@code RESPAWN_ANCHOR} UEBERHAUPT noch im
+     * Quelltext steht. Gemessen am 06.11.2026 machten fuenf Eingriffe an den zwei
+     * Wachen nur die Durchlaufproben rot und liessen diese Tafel gruen - umgekehrt
+     * faengt sie einen Anlass, der ganz verschwindet.
      */
     private static final List<String> SENDEPAARE_IN_ANKUNFTSWACHE = List.of(
             "RESPAWN_ANCHOR -> keinSpawnpunktZeilen",

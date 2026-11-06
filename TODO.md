@@ -587,7 +587,8 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Entscheidung, Sprachdatei: Sechs Saetze sagen bei der Anzahl 1 die Mehrzahl ('aus 1 Feldern') - so sieht es heute aus. Eine Einzahlform waere besser, aendert aber das Bild.
 - ~~Warnung: waehrung.betrag steht an ZWEI Orten.~~ 5.11. behoben: Die zwei Preiszeilen von /freimarken holen das Wort jetzt aus der Datei, die Marke HALB IN KRAFT ist aus der Vorlage heraus.
 - ~~Kein Probenlauf durchlaeuft einen Ereigniszweig.~~ 6.11.: SchutzwacheTest 36-36d laeuft die vier Lagen, die Drossel und den Namensrueckfall wirklich durch - ueber einen Server-Stellvertreter.
-- Offen: Die BEFEHLSzweige sind weiter nicht durchlaufen - Brigadier braucht einen CommandSourceStack. Die Wachen Ankunft und Portal waeren als naechste billig zu haben.
+- ~~Ankunfts- und Portalwache durchlaufen.~~ 6.11.: AnkunftswacheTest 37-37e und PortalwacheTest 38-38d; damit ist die Gattung Ereigniszweig zu.
+- Offen: Die BEFEHLSzweige sind weiter nicht durchlaufen - Brigadier braucht einen CommandSourceStack-Stellvertreter. Groesster Posten: ParzellenBefehle mit 44 Sendestellen.
 - Entscheidung, Sprachdatei: Sprache.sende, sendeGezaehlt und sendeHandbalken haben keinen Aufrufer - jeder Zweig holt seine Zeilen und sendet selbst. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.
 - Offen, Sprachdatei: Eine Umbruchmarke in einem Satz, der ueber Sprache.eineZeile geht, laesst den Aufbau werfen - der Spieler liest dann GAR NICHTS. Braucht ein eigenes Merkmal am Satz.

@@ -15,6 +15,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.Server;
 import org.bukkit.Tag;
+import org.bukkit.World;
 
 /**
  * Ein Server-Stellvertreter unter {@code Bukkit.setServer} - damit eine Probe einen Zweig
@@ -86,6 +87,39 @@ final class Serverprobe {
      */
     static void gruppe(String pfad, Set<Material> mitglieder) {
         GRUPPEN.put(pfad, Set.copyOf(mitglieder));
+    }
+
+    /**
+     * Eine Welt, wie die Wachen sie sehen - nur ihr Schluessel zaehlt.
+     *
+     * <p>Hier und nicht in einer eigenen Datei, weil {@code Probewelt} schon
+     * vergeben ist: Jene ist ein {@link Weltgriff} mit Bloecken darin und hat mit
+     * Bukkit nichts zu tun. Diese hier ist ein Stellvertreter wie der Server
+     * selbst und gehoert darum zu ihm.
+     *
+     * <p>{@code Portalwache} und {@code Ankunftswache} fragen beide nur
+     * {@code welt.key().asString()}. Mehr zu beantworten waere geraten.
+     *
+     * @param schluessel etwa {@code "minecraft:altfurt"}
+     */
+    static World welt(String schluessel) {
+        NamespacedKey name = NamespacedKey.fromString(schluessel);
+        if (name == null) {
+            throw new IllegalArgumentException("kein Weltschluessel: "
+                    + schluessel);
+        }
+        return (World) Proxy.newProxyInstance(Serverprobe.class.getClassLoader(),
+                new Class<?>[] {World.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "key", "getKey" -> name;
+                    case "getName" -> name.getKey();
+                    case "toString" -> "Weltprobe " + schluessel;
+                    case "hashCode" -> schluessel.hashCode();
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Serverprobe beantwortet World."
+                                    + methode.getName() + " nicht");
+                });
     }
 
     private static Server bau() {

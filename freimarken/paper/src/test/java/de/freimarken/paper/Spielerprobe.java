@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
+import org.bukkit.GameMode;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 /**
@@ -34,6 +36,14 @@ final class Spielerprobe {
     private final List<Component> handbalken = new ArrayList<>();
     private final List<Component> chat = new ArrayList<>();
 
+    /** In welcher Welt er steht - nur fuer die Wachen, die danach fragen. */
+    private String weltschluessel;
+
+    /** Sein Spielmodus. {@code setGameMode} aendert ihn UND schreibt mit. */
+    private GameMode modus = GameMode.SURVIVAL;
+
+    private final List<GameMode> moduswechsel = new ArrayList<>();
+
     Spielerprobe(String name, UUID kennung, String... rechte) {
         this.name = name;
         this.kennung = kennung;
@@ -43,6 +53,23 @@ final class Spielerprobe {
     /** Eine UUID, die nur von der Zahl abhaengt - damit zwei Laeufe dieselbe ergeben. */
     static UUID kennungAus(int zahl) {
         return new UUID(0L, zahl);
+    }
+
+    /** Stellt ihn in eine Welt - gibt sich selbst zurueck, fuer die Kette. */
+    Spielerprobe inWelt(String schluessel) {
+        this.weltschluessel = schluessel;
+        return this;
+    }
+
+    /** Setzt seinen Spielmodus OHNE Mitschrift - das ist der Ausgangsstand. */
+    Spielerprobe imModus(GameMode anfang) {
+        this.modus = anfang;
+        return this;
+    }
+
+    /** Jeder Spielmodus, in den ihn ein Zweig gesetzt hat, in der Reihenfolge. */
+    List<GameMode> moduswechsel() {
+        return List.copyOf(moduswechsel);
     }
 
     UUID kennung() {
@@ -60,6 +87,9 @@ final class Spielerprobe {
                 new Class<?>[] {Player.class},
                 (eigen, methode, werte) -> switch (methode.getName()) {
                     case "getUniqueId" -> kennung;
+                    case "getWorld" -> welt();
+                    case "getGameMode" -> modus;
+                    case "setGameMode" -> setzeModus(werte[0]);
                     case "getName" -> name;
                     case "hasPermission" -> rechte.contains(String.valueOf(werte[0]));
                     case "sendActionBar" -> merke(handbalken, werte[0]);
@@ -73,6 +103,23 @@ final class Spielerprobe {
                                     + " sie - also gehoert sie hierher, mit einer"
                                     + " Antwort, die die Probe mitgibt.");
                 });
+    }
+
+    private World welt() {
+        if (weltschluessel == null) {
+            throw new UnsupportedOperationException("Dieser Spieler steht in keiner"
+                    + " Welt. Der Zweig, den du durchlaeufst, fragt danach - also"
+                    + " gehoert inWelt(...) in die Probe. Eine erfundene Welt waere"
+                    + " schlimmer: Dann haengt das Ergebnis an einem Namen, den die"
+                    + " Probe nie genannt hat.");
+        }
+        return Serverprobe.welt(weltschluessel);
+    }
+
+    private Object setzeModus(Object neuer) {
+        modus = (GameMode) neuer;
+        moduswechsel.add(modus);
+        return null;
     }
 
     private static Object merke(List<Component> liste, Object gesendet) {
