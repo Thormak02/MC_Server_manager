@@ -8,8 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Blockort;
 import de.freimarken.kern.SpeicherBlockmarken;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.BlockState;
 import org.bukkit.event.EventHandler;
@@ -42,9 +44,48 @@ class SetzwacheTest {
     private static final String HOCHWALD = "freimarken:hochwald";
     private static final String FREMD = "freimarken:anderswo";
 
+    /**
+     * Eine Welt, in der ueberall Stein liegt.
+     *
+     * <p>Mehr braucht diese Probe nicht: Die Wache liest die ART des gesetzten Blocks und
+     * gibt sie dem Zahlmeister weiter. Ein ganzer Rasterplan waere hier Beiwerk - was
+     * geprueft wird, ist die Weitergabe und nicht der Boden.
+     */
+    private static final Weltgriff EIN_STEIN = new Weltgriff() {
+        @Override
+        public int unten() {
+            return -64;
+        }
+
+        @Override
+        public int oben(int x, int z) {
+            return 64;
+        }
+
+        @Override
+        public Material bei(int x, int y, int z) {
+            return Material.STONE;
+        }
+
+        @Override
+        public void setze(int x, int y, int z, Material block) {
+            throw new UnsupportedOperationException("Diese Probe setzt keine Bloecke -"
+                    + " sie prueft, was die Wache mit einem gesetzten tut.");
+        }
+    };
+
     private SpeicherBlockmarken marken;
     private Setzwache wache;
     private World marktstadt;
+
+    /**
+     * Was der Zahlmeister zu sehen bekam - "<art> x<neueMarken>".
+     *
+     * <p>Mitgeschrieben und nicht weggeworfen: Die Zahl der NEUEN Marken ist das, was
+     * Teil E bezahlt. Ein Zahlmeister, der nichts bekommt, waere eine Marke ohne Lohn -
+     * und eine Marke, die zweimal gezahlt wird, waere die Gelddruckmaschine.
+     */
+    private final List<String> gezahlt = new ArrayList<>();
 
     @BeforeAll
     static void serverStellen() {
@@ -54,9 +95,18 @@ class SetzwacheTest {
     @BeforeEach
     void vorher() {
         Serverprobe.keineWeltenMehr();
-        marktstadt = Serverprobe.welt(MARKTSTADT);
+        // MIT Bloecken, seit die Wache die Blockart an den Zahlmeister weitergibt: Ohne
+        // Griff klagt der Blockstellvertreter - und das ist richtig so, denn ein Zweig,
+        // der den Boden liest, soll es gesagt bekommen.
+        marktstadt = Serverprobe.welt(MARKTSTADT, EIN_STEIN);
         marken = new SpeicherBlockmarken();
-        wache = new Setzwache(marken, Set.of(MARKTSTADT, HOCHWALD));
+        gezahlt.clear();
+        wache = new Setzwache(marken, Set.of(MARKTSTADT, HOCHWALD), this::merkeLohn);
+    }
+
+    private void merkeLohn(org.bukkit.entity.Player wer, org.bukkit.Material art,
+                           int neueMarken) {
+        gezahlt.add(art + " x" + neueMarken);
     }
 
     private static Blockort ort(String welt, int x, int y, int z) {
@@ -77,6 +127,9 @@ class SetzwacheTest {
 
         assertTrue(marken.istMarkiert(ort(MARKTSTADT, 7, 71, 13)));
         assertEquals(1, marken.anzahl(), "und nur der eine");
+        // Und der Zahlmeister hat es erfahren: EINE neue Marke, Art STONE. Ohne diese
+        // Zeile waere die Marke gesetzt und das erste Setzen unbezahlt.
+        assertEquals(List.of("STONE x1"), gezahlt);
     }
 
     @Test
@@ -85,8 +138,10 @@ class SetzwacheTest {
         // Das Ereignis, das es nur hier gibt. Ohne getReplacedBlockStates waere die obere
         // Haelfte unmarkiert, und sie brachte beim Abbauen Geld: ein halber Block aus
         // jeder Tuer, aus jedem Bett, aus jeder grossen Blume.
-        BlockState unten = Serverprobe.zustand(marktstadt, null, 7, 71, 13);
-        BlockState oben = Serverprobe.zustand(marktstadt, null, 7, 72, 13);
+        // MIT Griff: Der Konstruktor von BlockMultiPlaceEvent holt sich den gesetzten
+        // Block aus dem ersten Zustand, und die Wache fragt danach seine ART.
+        BlockState unten = Serverprobe.zustand(marktstadt, EIN_STEIN, 7, 71, 13);
+        BlockState oben = Serverprobe.zustand(marktstadt, EIN_STEIN, 7, 72, 13);
         Spielerprobe cara = new Spielerprobe("Cara", Spielerprobe.kennungAus(1));
         var ereignis = new BlockMultiPlaceEvent(List.of(unten, oben),
                 marktstadt.getBlockAt(7, 70, 13), null, cara.spieler(), true);
@@ -96,6 +151,10 @@ class SetzwacheTest {
         assertTrue(marken.istMarkiert(ort(MARKTSTADT, 7, 71, 13)), "untere Haelfte");
         assertTrue(marken.istMarkiert(ort(MARKTSTADT, 7, 72, 13)), "obere Haelfte");
         assertEquals(2, marken.anzahl());
+        // ZWEI neue Marken in EINEM Aufruf: Eine Tuer sind zwei Bloecke, und sie zahlt
+        // zweimal. Zwei Aufrufe mit je einer waeren dasselbe Geld, aber der Zahlmeister
+        // koennte die Minderung dann nicht in einem Zug rechnen.
+        assertEquals(List.of("STONE x2"), gezahlt);
     }
 
     @Test
@@ -105,6 +164,9 @@ class SetzwacheTest {
         wache.beimSetzen(setzen(7, 71, 13));
 
         assertEquals(1, marken.anzahl());
+        // Und bezahlt wurde genau EINMAL: Das zweite Setzen bringt keine neue Marke, also
+        // auch keinen Lohn. Sonst waere Setzen-Abbauen-Setzen die Gelddruckmaschine.
+        assertEquals(List.of("STONE x1"), gezahlt);
     }
 
     // --- Der Hals, mit einfachen Werten ---------------------------------------
@@ -162,13 +224,17 @@ class SetzwacheTest {
     @DisplayName("Ohne Marken und ohne Welten gibt es keine Wache")
     void pflichtenGelten() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Setzwache(null, Set.of(MARKTSTADT)));
+                () -> new Setzwache(null, Set.of(MARKTSTADT), this::merkeLohn));
         assertThrows(IllegalArgumentException.class,
-                () -> new Setzwache(marken, null));
+                () -> new Setzwache(marken, null, this::merkeLohn));
         // Eine leere Menge waere ein Zweig, der nie etwas tut - und das faellt erst mit
         // Teil E auf: Dann zahlt jeder Block jedes Mal.
         assertThrows(IllegalArgumentException.class,
-                () -> new Setzwache(marken, Set.of()));
+                () -> new Setzwache(marken, Set.of(), this::merkeLohn));
+        // Und ohne Zahlmeister waere die Marke nur halb: Sie entwertete die Position,
+        // ohne das erste Setzen zu bezahlen.
+        assertThrows(IllegalArgumentException.class,
+                () -> new Setzwache(marken, Set.of(MARKTSTADT), null));
     }
 
     // --- Die Verdrahtung, aus der Annotation gelesen -------------------------

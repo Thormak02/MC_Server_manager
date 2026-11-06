@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Berufswerte;
+import de.freimarken.kern.Verdienstwerte;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Parzelle;
@@ -158,12 +159,14 @@ class AufrufstelleTest {
                 new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
                         REICH, HOECHSTZAHL, GRUPPENFELDER,
                         Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                        Berufswerte.VORGABE)));
+                        Berufswerte.VORGABE,
+                        Verdienstwerte.VORGABE)));
         befehle = new ParzellenBefehle(buch, welt,
                 new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
                         REICH, HOECHSTZAHL, GRUPPENFELDER,
                         Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                        Berufswerte.VORGABE)),
+                        Berufswerte.VORGABE,
+                        Verdienstwerte.VORGABE)),
                 Logger.getLogger("probe"), Sprachprobe.spracheAusDemJar());
         kasse.eroeffne(ANNA);
         kasse.eroeffne(BERT);

@@ -127,7 +127,8 @@ public final class Wirtschaftsstand {
                         : alt.zeit().untaetigNach());
         Wirtschaftswerte neu = new Wirtschaftswerte(ausDerDatei.preise(),
                 alt.startguthaben(), ausDerDatei.hoechstzahl(), ausDerDatei.gruppenFelder(),
-                ausDerDatei.rangWerbung(), zeit, ausDerDatei.berufe());
+                ausDerDatei.rangWerbung(), zeit, ausDerDatei.berufe(),
+                ausDerDatei.verdienst());
 
         List<String> geaendert = new ArrayList<>();
         nenneZahl(geaendert, Wirtschaftswerte.PFAD_GRUNDPREIS,
@@ -153,6 +154,30 @@ public final class Wirtschaftsstand {
                 alt.berufe().grundberufe(), neu.berufe().grundberufe());
         nenneZahl(geaendert, Berufswerte.PFAD_SPEZIALISIERUNGEN,
                 alt.berufe().spezialisierungen(), neu.berufe().spezialisierungen());
+        // Die Verdienstzahlen ebenso vollstaendig getauscht, und die LOHNTAFEL mit: Sie
+        // ist der Hebel, mit dem der Betreiber auf 2.000 bis 5.000 Mark je Spielstunde
+        // einstellt, und er soll das im Betrieb tun koennen. Genannt wird nur ihre
+        // ZEILENZAHL - vierzig Zeilen "alt -> neu" waeren keine Antwort mehr, sondern
+        // eine Wand.
+        nenneZahl(geaendert, Verdienstwerte.PFAD_TAGESDECKEL,
+                alt.verdienst().tagesdeckel(), neu.verdienst().tagesdeckel());
+        nenneZahl(geaendert, Verdienstwerte.PFAD_VOLL_BIS,
+                alt.verdienst().vollBis(), neu.verdienst().vollBis());
+        nenneZahl(geaendert, Verdienstwerte.PFAD_STUFE,
+                alt.verdienst().stufe(), neu.verdienst().stufe());
+        nenneZahl(geaendert, Verdienstwerte.PFAD_FAKTOR,
+                alt.verdienst().faktorProzent(), neu.verdienst().faktorProzent());
+        nenneZahl(geaendert, Verdienstwerte.PFAD_BODEN,
+                alt.verdienst().bodenProzent(), neu.verdienst().bodenProzent());
+        // Die Tafel selbst wird VERGLICHEN und nicht gezaehlt: Eine Zeile mit einem
+        // anderen Lohn laesst die Zeilenzahl gleich, und genau das ist die Aenderung, die
+        // der Betreiber gerade gemacht hat. Genannt wird die Zahl der Zeilen - vierzig
+        // Zeilen "alt -> neu" waeren keine Antwort mehr, sondern eine Wand.
+        if (!alt.verdienst().loehne().equals(neu.verdienst().loehne())) {
+            geaendert.add(Verdienstwerte.PFAD_LOEHNE + ": "
+                    + alt.verdienst().loehne().anzahl() + " -> "
+                    + neu.verdienst().loehne().anzahl() + " Zeilen (geaendert)");
+        }
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");

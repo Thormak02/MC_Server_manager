@@ -595,8 +595,10 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - ~~Drei Stellvertreter standen doppelt.~~ 6.11.: AufrufstelleTest gibt nur noch weiter, Serverprobe und Spielerprobe sind der eine Ort. Alle 918 Proben gruen, fuenf Importe weg.
 - ~~Schritt 7, Teil D: Berufe waehlen.~~ 6.11.: /beruf liste|stand|waehlen|verlassen; zwei Grundberufe und eine Spezialisierung, Aufgeben kostet 5.000 Mark und sperrt 24 h. Plan 9.1.
 - ~~Blockmarken: ein Block zahlt nur einmal.~~ 6.11.: Ein Bit je Blockposition IM CHUNK, nie geloescht - eine markierte Stelle zahlt weder beim Abbauen noch beim zweiten Setzen.
-- Offen, Berufe: Verdient wird noch nichts (Teil E). Offen bleibt der Kolben, der einen markierten Block weiterschiebt, und der Pflastersteingenerator - Weltregeln, eigener Schritt.
-- Entscheidung, Sprachdatei: Sprache.sende, sendeGezaehlt und sendeHandbalken haben keinen Aufrufer - jeder Zweig holt seine Zeilen und sendet selbst. Entfernen oder beim naechsten Sendeort nutzen?
+- ~~Schritt 7, Teil E: Verdienen.~~ 6.11.: 84 Lohnsaetze in der config.yml, Pfennige je Block, Minderung in Stufen je Stunde, Tagesdeckel 20.000 Mark; gebucht wird gesammelt im Takt. Plan 9.1.
+- Offen, Verdienen: nur Abbauen und Setzen. Fischen, Toeten, Zucht und Ernte brauchen je ein eigenes Ereignis - eigener Schritt.
+- Offen, Berufe: der Kolben, der einen markierten Block weiterschiebt, und der Pflastersteingenerator - Weltregeln, eigener Schritt.
+- Entscheidung, Sprachdatei: sendeHandbalken hat seit Teil E zwei Aufrufer; Sprache.sende und sendeGezaehlt haben weiter keinen. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.
 - Offen, Sprachdatei: Eine Umbruchmarke in einem Satz, der ueber Sprache.eineZeile geht, laesst den Aufbau werfen - der Spieler liest dann GAR NICHTS. Braucht ein eigenes Merkmal am Satz.
 - Pruefen, Sprachdatei: Nach dem ersten Start liegen beide Dateien im Plugin-Ordner, /mark verlauf sieht aus wie vorher. Dann eine Zeile samt aller Ebenen darueber nach sprache.yml kopieren, Farbe aendern, /freimarken neuladen: die Antwort nennt, wie viele Saetze von dir sind.

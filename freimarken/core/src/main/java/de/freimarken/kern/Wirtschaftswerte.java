@@ -3,9 +3,9 @@ package de.freimarken.kern;
 /**
  * Alle Stammwerte der Wirtschaft in einem Stueck - ein Schnappschuss.
  *
- * <p>Unveraenderlich und als EIN Satz und nicht als sieben einzelne Werte: Wer rechnet,
+ * <p>Unveraenderlich und als EIN Satz und nicht als acht einzelne Werte: Wer rechnet,
  * sieht immer einen in sich stimmigen Stand, auch wenn mitten in der Rechnung neu geladen
- * wird. Mit sieben Feldern koennte eine Abbuchung den alten Preis nehmen und die Meldung
+ * wird. Mit acht Feldern koennte eine Abbuchung den alten Preis nehmen und die Meldung
  * danach den neuen nennen - ein Fehlerbild, das niemand meldet, weil es nur aussieht wie
  * ein Rechenfehler.
  *
@@ -24,10 +24,15 @@ package de.freimarken.kern;
  * @param berufe        Wechselgebuehr, Sperrfrist und die Zahl der Plaetze je Rolle; sie
  *                      liegen hier aus demselben Grund wie die Zeitwerte - sie werden bei
  *                      JEDEM Berufsbefehl gebraucht, siehe {@link Berufswerte}
+ * @param verdienst     Tagesdeckel, abnehmender Ertrag und die ganze Lohntafel. Hier aus
+ *                      demselben Grund wie die zwei davor - und mit dem schaerfsten: Die
+ *                      Tafel wird bei JEDEM abgebauten und JEDEM gesetzten Block
+ *                      gefragt. Zwei Zellen fuer Lohn und Minderung koennten mitten in
+ *                      einer Rechnung auseinanderlaufen
  */
 public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoechstzahl,
                                int gruppenFelder, String rangWerbung, Zeitwerte zeit,
-                               Berufswerte berufe) {
+                               Berufswerte berufe, Verdienstwerte verdienst) {
 
     /**
      * Die Schluessel in der Einstellungsdatei - hier und nicht an jeder Stelle, die klagt.
@@ -75,7 +80,8 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
     /** Genau das, was ohne Einstellungsdatei gelten wuerde. */
     public static final Wirtschaftswerte VORGABE = new Wirtschaftswerte(Preisstaffel.VORGABE,
             VORGABE_STARTGUTHABEN, VORGABE_HOECHSTZAHL, VORGABE_GRUPPEN_FELDER,
-            VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE, Berufswerte.VORGABE);
+            VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE, Berufswerte.VORGABE,
+            Verdienstwerte.VORGABE);
 
     public Wirtschaftswerte {
         if (preise == null) {
@@ -87,6 +93,10 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         if (berufe == null) {
             throw new IllegalArgumentException("Ohne Berufswerte gibt es keine"
                     + " Wechselgebuehr und keine Sperrfrist");
+        }
+        if (verdienst == null) {
+            throw new IllegalArgumentException("Ohne Verdienstwerte gibt es keinen Lohn"
+                    + " und keinen Tagesdeckel");
         }
         if (!brauchbaresStartguthaben(startguthaben)) {
             throw new IllegalArgumentException("Startguthaben " + startguthaben

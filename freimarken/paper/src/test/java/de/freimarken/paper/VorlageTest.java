@@ -497,6 +497,22 @@ class VorlageTest {
                     + " Konten. Lieber kein Parzellensystem\"",
             "FreimarkenPlugin.java -> \" Mark - friert bei der"
                     + " Eroeffnung eines Kontos ein.\"",
+            // Die Startzeile, die den Tagesdeckel nennt - sie geht in die Konsole.
+            "FreimarkenPlugin.java -> \" Mark je Spieler. Gebucht wird gesammelt,"
+                    + " nicht je Block.\"",
+            // Die Klage ueber einen verlorenen Verdienst: Serverprotokoll, nie ein
+            // Spieler.
+            "Verdienstbuch.java -> \" Mark sind verloren. Es wird NICHT wiederholt:"
+                    + " Ein zweiter Versuch\"",
+            // Die Einheit und die zwei Erklaerzeilen des Lesers - alle drei gehen an den
+            // Betreiber, der seine config.yml liest.
+            "Verdienstliste.java -> \"Mark\"",
+            "Verdienstliste.java -> \" steht in PFENNIGEN, also in Hundertsteln einer"
+                    + " Mark: 40 heisst\"",
+            "Verdienstliste.java -> \" 0,40 Mark. Ein Punkt trennt in YAML keine"
+                    + " Tausender, sondern die\"",
+            // Die Zeile beim Abschalten - Konsole.
+            "Verdienstwache.java -> \" Mark Verdienst\"",
             "Wirtschaftsliste.java -> \"Mark\"",
             "Wirtschaftsliste.java -> \"Mark je Feld\"",
             "Wirtschaftsliste.java -> \"Mark\"");

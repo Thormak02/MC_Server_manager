@@ -19,6 +19,7 @@ import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherBerufe;
+import de.freimarken.kern.ZwischenspeicherBerufe;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.SpeicherSpielzeit;
 import de.freimarken.kern.Spielzeitablage;
@@ -49,6 +50,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.generator.BiomeProvider;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 /**
  * Einstiegspunkt des Freimarken-Plugins.
@@ -133,8 +135,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * {@code /freimarken neuladen} sagt es in jeder Antwort.
      */
     private Berufsverzeichnis berufe;
-    /** Zuhoerer UND Zeitgeber der Spielzeit - der einzige wiederkehrende des Plugins. */
+    /** Zuhoerer UND Zeitgeber der Spielzeit. */
     private Spielzeitwache spielzeitwache;
+    /**
+     * Zuhoerer UND Zeitgeber des Verdienens - der zweite wiederkehrende des Plugins.
+     *
+     * <p>Ein Feld, weil {@code onDisable} ihn abmelden und ein letztes Mal abrechnen
+     * muss: Was im Arbeitsspeicher gesammelt ist, waere sonst verloren.
+     */
+    private Verdienstwache verdienstwache;
     private SpielzeitBefehle spielzeitBefehle;
     private Stadtgrenze grenze;
     /**
@@ -385,11 +394,37 @@ public final class FreimarkenPlugin extends JavaPlugin {
         marken = Chunkmarken.ueberBukkit();
         Set<String> markierteWelten = new TreeSet<>();
         welten.values().forEach(eine -> markierteWelten.add(eine.key().asString()));
+        // Der Sammler und die Wache VOR der Setzwache: Jene braucht ihn als Zahlmeister.
+        // Das Buch ist eine lokale Variable und kein Feld - gehalten wird es von der
+        // Wache und sonst von niemandem, und als Feld blieb es beim Abschalten mit allen
+        // gesammelten Pfennigen stehen (dieselbe Begruendung wie beim Spielzeitbuch).
+        Verdienstbuch verdienstbuch = new Verdienstbuch(kasse, wirtschaft, uhr,
+                getLogger());
+        // Der Zeitgeber kommt als Naht herein und nicht als this: So ist der Zweig, in
+        // dem Geld entsteht, ohne laufenden Server pruefbar. Gestellt wird er im
+        // HAUPTFADEN und nicht nebenlaeufig - die Datenschicht haelt EINE Verbindung, und
+        // MariaKasse schaltet darauf autoCommit um; ein zweiter Faden committete dort die
+        // halbe Buchung des Hauptfadens mit.
+        verdienstwache = new Verdienstwache((schlag, abstand) -> {
+            BukkitTask aufgabe = getServer().getScheduler()
+                    .runTaskTimer(this, schlag, abstand, abstand);
+            return aufgabe::cancel;
+        }, verdienstbuch, marken, berufsablage, markierteWelten, sprache, getLogger());
+        getServer().getPluginManager().registerEvents(verdienstwache, this);
+        verdienstwache.starte();
+        // DIESELBE Weltmenge fuer Markieren und Zahlen: Zwei Listen liefen auseinander,
+        // und dann waere eine Welt dabei, in der verdient und nicht markiert wird - das
+        // ist die Gelddruckmaschine.
         getServer().getPluginManager().registerEvents(
-                new Setzwache(marken, markierteWelten), this);
-        getLogger().info("Blockmarken aktiv in " + markierteWelten.size()
+                new Setzwache(marken, markierteWelten, verdienstwache::zahleFuerSetzen),
+                this);
+        getLogger().info("Blockmarken und Verdienst aktiv in " + markierteWelten.size()
                 + " Welten - ein gesetzter Block zahlt beim Abbauen nichts. Die Marken"
                 + " liegen im Chunk, nicht in der Datenbank.");
+        getLogger().info("Lohnliste: "
+                + wirtschaft.werte().verdienst().loehne().anzahl() + " Saetze,"
+                + " Tagesdeckel " + wirtschaft.werte().verdienst().tagesdeckel()
+                + " Mark je Spieler. Gebucht wird gesammelt, nicht je Block.");
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
         registriereBefehle();
@@ -451,6 +486,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
             spielzeitwache.beende();
             spielzeitwache = null;
         }
+        // Derselbe Grund, dieselbe Reihenfolge: erst abmelden, dann das Gesammelte
+        // buchen, und beides VOR datenbank.close() - sonst ist der letzte Verdienst jedes
+        // anwesenden Spielers verloren.
+        if (verdienstwache != null) {
+            verdienstwache.beende();
+            verdienstwache = null;
+        }
         if (datenbank != null) {
             datenbank.close();
             datenbank = null;
@@ -502,7 +544,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // aussen. Eine Uhr hier waere eine zweite Quelle fuer die Tagesgrenze.
             spielzeit = new SpeicherSpielzeit();
             // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von aussen.
-            berufsablage = new SpeicherBerufe();
+            berufsablage = new ZwischenspeicherBerufe(new SpeicherBerufe());
             getLogger().warning("Keine Datenbank eingetragen: Parzellen und Guthaben gelten "
                     + "nur bis zum naechsten Neustart.");
             getLogger().warning("Zum Festhalten datenbank.url in plugins/"
@@ -526,7 +568,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // KEIN Zwischenspeicher: /beruf ist kein heisser Lesepfad. Mit Teil E, wenn
             // jeder Verdienst den Beruf fragt, wird das neu bedacht - und dann als eigene
             // Schicht wie ZwischenspeicherLager, nicht als Feld hier drin.
-            berufsablage = new MariaBerufe(datenbank);
+            // ZwischenspeicherBerufe darum: Seit Teil E fragt der Verdienst bei JEDEM
+            // abgebauten und JEDEM gesetzten Block, welche Berufe ein Spieler haelt. Eine
+            // Datenbankabfrage je Block waere derselbe Fehler, den der Zwischenspeicher
+            // vor dem Lager schon geloest hat. Dass ein /beruf waehlen sofort wirkt,
+            // besorgt dessen Leerung bei jedem Schreibzug - und weil /beruf durch
+            // DIESELBE Ablage geht, kann das nicht auseinanderlaufen.
+            berufsablage = new ZwischenspeicherBerufe(new MariaBerufe(datenbank));
             getLogger().info("Datenbank bereit: " + ohneGeheimnis(url));
             return true;
         } catch (SQLException | RuntimeException fehler) {

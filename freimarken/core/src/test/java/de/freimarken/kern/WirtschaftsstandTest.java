@@ -30,14 +30,29 @@ class WirtschaftsstandTest {
                                          int hoechstzahl, int gruppenFelder, String werbung,
                                          Zeitwerte zeit) {
         return satz(grundpreis, jeFeld, startguthaben, hoechstzahl, gruppenFelder, werbung,
-                zeit, Berufswerte.VORGABE);
+                zeit, Berufswerte.VORGABE, Verdienstwerte.VORGABE);
     }
 
     private static Wirtschaftswerte satz(long grundpreis, long jeFeld, long startguthaben,
                                          int hoechstzahl, int gruppenFelder, String werbung,
                                          Zeitwerte zeit, Berufswerte berufe) {
+        return satz(grundpreis, jeFeld, startguthaben, hoechstzahl, gruppenFelder, werbung,
+                zeit, berufe, Verdienstwerte.VORGABE);
+    }
+
+    private static Wirtschaftswerte satz(long grundpreis, long jeFeld, long startguthaben,
+                                         int hoechstzahl, int gruppenFelder, String werbung,
+                                         Zeitwerte zeit, Berufswerte berufe,
+                                         Verdienstwerte verdienst) {
         return new Wirtschaftswerte(new Preisstaffel(grundpreis, jeFeld), startguthaben,
-                hoechstzahl, gruppenFelder, werbung, zeit, berufe);
+                hoechstzahl, gruppenFelder, werbung, zeit, berufe, verdienst);
+    }
+
+    /** Ein Verdienstsatz, bei dem alle fuenf Zahlen von der Vorgabe abweichen. */
+    private static Verdienstwerte andereverdienste() {
+        return new Verdienstwerte(9_000L, 50, 25, 75, 20,
+                Lohntafel.ausLoehnen(java.util.List.of(new Lohntafel.Lohn("bergmann",
+                        Taetigkeit.ABBAUEN, "stone", 99L))));
     }
 
     /** Ein Berufssatz, bei dem alle vier Zahlen von der Vorgabe abweichen. */
@@ -124,6 +139,69 @@ class WirtschaftsstandTest {
         assertTrue(uebernahme.geaendert().contains(
                 Berufswerte.PFAD_SPEZIALISIERUNGEN + ": 1 -> 2"),
                 uebernahme.geaendert().toString());
+    }
+
+    @Test
+    @DisplayName("Alle Verdienstzahlen UND die Lohntafel werden getauscht")
+    void verdienstzahlenWerdenGetauscht() {
+        // Die Lohntafel ist der Hebel, mit dem der Betreiber auf 2.000 bis 5.000 Mark je
+        // Spielstunde einstellt - er soll das im Betrieb tun koennen. Ohne diese Probe
+        // aenderte er einen Lohn, /freimarken neuladen meldete gruen "nichts geaendert",
+        // und im Spiel gaelte der alte Satz weiter.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, 4, 4,
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
+                Berufswerte.VORGABE, andereverdienste()));
+
+        assertEquals(9_000L, stand.werte().verdienst().tagesdeckel());
+        assertEquals(50, stand.werte().verdienst().vollBis());
+        assertEquals(25, stand.werte().verdienst().stufe());
+        assertEquals(75, stand.werte().verdienst().faktorProzent());
+        assertEquals(20, stand.werte().verdienst().bodenProzent());
+        assertEquals(1, stand.werte().verdienst().loehne().anzahl());
+
+        assertEquals(6, uebernahme.geaendert().size(),
+                "fuenf Zahlen und die Tafel: " + uebernahme.geaendert());
+        assertTrue(uebernahme.geaendert().contains(
+                Verdienstwerte.PFAD_TAGESDECKEL + ": 20000 -> 9000"),
+                uebernahme.geaendert().toString());
+        // Die Tafel wird VERGLICHEN und nicht gezaehlt: Eine Zeile mit einem anderen Lohn
+        // laesst die Zeilenzahl gleich, und genau das ist die haeufigste Aenderung.
+        assertTrue(uebernahme.geaendert().stream().anyMatch(zeile
+                        -> zeile.startsWith(Verdienstwerte.PFAD_LOEHNE)
+                        && zeile.contains("geaendert")),
+                uebernahme.geaendert().toString());
+    }
+
+    @Test
+    @DisplayName("Eine Lohntafel mit gleicher Zeilenzahl, aber anderem Lohn faellt auf")
+    void andererLohnGleicheZahl() {
+        // Der Fall, den eine Zaehlung nicht sieht - und der haeufigste beim Einstellen.
+        var eineZeile = new Verdienstwerte(Verdienstwerte.VORGABE_TAGESDECKEL,
+                Verdienstwerte.VORGABE_VOLL_BIS, Verdienstwerte.VORGABE_STUFE,
+                Verdienstwerte.VORGABE_FAKTOR_PROZENT,
+                Verdienstwerte.VORGABE_BODEN_PROZENT,
+                Lohntafel.ausLoehnen(java.util.List.of(new Lohntafel.Lohn("bergmann",
+                        Taetigkeit.ABBAUEN, "stone", 40L))));
+        var andererLohn = new Verdienstwerte(Verdienstwerte.VORGABE_TAGESDECKEL,
+                Verdienstwerte.VORGABE_VOLL_BIS, Verdienstwerte.VORGABE_STUFE,
+                Verdienstwerte.VORGABE_FAKTOR_PROZENT,
+                Verdienstwerte.VORGABE_BODEN_PROZENT,
+                Lohntafel.ausLoehnen(java.util.List.of(new Lohntafel.Lohn("bergmann",
+                        Taetigkeit.ABBAUEN, "stone", 41L))));
+        var stand = new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
+                50_000L, 4, 4, Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
+                Berufswerte.VORGABE, eineZeile));
+
+        var uebernahme = stand.uebernimm(new Wirtschaftswerte(Preisstaffel.VORGABE,
+                50_000L, 4, 4, Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
+                Berufswerte.VORGABE, andererLohn));
+
+        assertEquals(41L, stand.werte().verdienst().loehne()
+                .pfennige("bergmann", Taetigkeit.ABBAUEN, "stone"));
+        assertEquals(1, uebernahme.geaendert().size(), uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().getFirst().contains("1 -> 1 Zeilen (geaendert)"),
+                uebernahme.geaendert().getFirst());
     }
 
     @Test

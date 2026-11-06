@@ -1,5 +1,6 @@
 package de.freimarken.kern;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -78,6 +79,27 @@ public interface Kasse {
      *                   niemand gewollt hat
      */
     List<Buchung> verlauf(UUID spieler, int hoechstens);
+
+    /**
+     * Was dieser Spieler seit diesem Zeitpunkt aus ARBEIT bekommen hat.
+     *
+     * <p>Genau {@link Buchungsgrund#BERUF_VERDIENST} und kein anderer Grund - der
+     * Tagesdeckel deckelt Arbeit und nicht ein Geschenk, eine Erstattung oder das
+     * Startguthaben.
+     *
+     * <p><b>Warum das Buchungsbuch der Zeuge ist und keine eigene Tabelle:</b> Die Summe
+     * steht dort schon. Eine zweite Tabelle daneben waere eine zweite Wahrheit, die nach
+     * dem ersten Absturz von der ersten abweicht - und dann deckelt der Server einen
+     * Spieler, dessen Konto etwas anderes sagt. Gefragt wird einmal je Sitzung, nicht je
+     * Block; die Antwort haelt der Sammler im Arbeitsspeicher.
+     *
+     * <p>Gezaehlt werden nur GEBUCHTE Mark. Was als Pfennigrest beim Sammler liegt, ist
+     * noch nicht gebucht und zaehlt darum nicht mit - das ist weniger als eine Mark je
+     * Spieler, und der Deckel ist auf Tausende gestellt.
+     *
+     * @param ab der Zeitpunkt, ab dem gezaehlt wird - einschliesslich
+     */
+    long verdientSeit(UUID spieler, Instant ab);
 
     /**
      * Die Betragspruefung, die beide Buchungswege schulden.

@@ -40,7 +40,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
  *
  * <p><b>Sieben Helfer sind paketweit und nicht privat</b>: {@code betrag},
  * {@code ganzeZahl}, beide {@code esBleibt}, {@code wieGetippt} und {@code fehltText}
- * benutzt auch {@link Berufsliste}. Sie sind nicht abgeschrieben, sondern geteilt -
+ * benutzen auch {@link Berufsliste} und {@link Verdienstliste}. Sie sind nicht abgeschrieben, sondern geteilt -
  * {@code ganzeZahl} faengt den Punkt, der in YAML keine Tausender trennt, und
  * {@code fehltText} entscheidet je Schluessel, ob ein "es gilt" dazu stimmt. Zweimal
  * gebaut wichen die beiden eines Tages ab, und dann klagte die eine Haelfte der Datei
@@ -132,6 +132,12 @@ final class Wirtschaftsliste {
         klagen.addAll(beruf.klagen());
         bericht.addAll(beruf.bericht());
 
+        // Der Verdienst ebenso: eigene Schranken, eigene Querpruefung gegen das
+        // Verzeichnis, eigener Zaehlsatz - und EINE Antwort fuer den Aufrufer.
+        Verdienstliste.Ergebnis verdienst = Verdienstliste.ausKonfiguration(wurzel, gilt);
+        klagen.addAll(verdienst.klagen());
+        bericht.addAll(verdienst.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -161,7 +167,8 @@ final class Wirtschaftsliste {
         // ist aber nicht neuladbar. Beim Neuladen nennte eine Zeile hier die Zone aus der
         // Datei, waehrend eine andere darunter sagt, dass die alte weiter gilt.
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
-                gruppenFelder, werbung, zeit, beruf.werte()), klagen, bericht);
+                gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte()), klagen,
+                bericht);
     }
 
     /**

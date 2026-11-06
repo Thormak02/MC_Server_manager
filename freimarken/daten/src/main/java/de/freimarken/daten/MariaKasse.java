@@ -7,6 +7,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -156,6 +158,35 @@ public final class MariaKasse implements Kasse {
             });
         } catch (SQLException fehler) {
             throw new IllegalStateException("Gutschreiben fehlgeschlagen: " + spieler, fehler);
+        }
+    }
+
+    @Override
+    public long verdientSeit(UUID spieler, Instant ab) {
+        if (spieler == null || ab == null) {
+            throw new IllegalArgumentException("Ohne Spieler und Zeitpunkt gibt es keine"
+                    + " Tagessumme");
+        }
+        // Dieselbe Spaltenfolge wie der Verlauf: (spieler, zeitpunkt, id). Die Abfrage
+        // laeuft damit ueber denselben Index, und der Grund wird erst danach gefiltert -
+        // ein eigener Index fuer eine Abfrage, die einmal je Sitzung laeuft, waere derselbe
+        // Fehler wie ein Einstellschluessel fuer einen Wert, den es nicht gibt.
+        String sql = "SELECT COALESCE(SUM(betrag), 0) FROM buchungen"
+                + " WHERE spieler = ? AND zeitpunkt >= ? AND grund = ?";
+        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
+            anfrage.setString(1, spieler.toString());
+            // Mit Kalender in UTC: Die Spalte haelt UTC, und ohne Zone legte der Treiber
+            // die der JVM darueber - dann begaenne der Tag um den Ortsversatz verschoben,
+            // und der Deckel griffe eine Stunde zu frueh oder zu spaet.
+            anfrage.setTimestamp(2, Timestamp.from(ab), utcKalender());
+            anfrage.setString(3, Buchungsgrund.BERUF_VERDIENST.schluessel());
+            try (ResultSet ergebnis = anfrage.executeQuery()) {
+                ergebnis.next();
+                return ergebnis.getLong(1);
+            }
+        } catch (SQLException fehler) {
+            throw new IllegalStateException("Tagessumme nicht lesbar: " + spieler,
+                    fehler);
         }
     }
 

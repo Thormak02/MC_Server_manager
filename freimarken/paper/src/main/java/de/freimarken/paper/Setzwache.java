@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.event.EventHandler;
@@ -13,6 +14,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockMultiPlaceEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.entity.Player;
 
 /**
  * Merkt sich jede Position, an der ein Spieler einen Block gesetzt hat.
@@ -56,7 +58,21 @@ import org.bukkit.event.block.BlockPlaceEvent;
  */
 final class Setzwache implements Listener {
 
+    /**
+     * Was nach einer NEUEN Marke zu zahlen ist - hier haengt Teil E ein.
+     *
+     * <p>Eine Naht und nicht die Verdienstwache selbst: Diese Wache markiert, und das
+     * Zahlen ist eine andere Sache. Umgekehrt muss es aber DIESER Zweig sein, der zahlt -
+     * ein zweiter Hoerer auf MONITOR laese die Marke erst nach dem Schreibzug hier und
+     * zahlte nie. Die Naht loest beides: eine Aufgabe je Klasse, ein Zweig je Ereignis.
+     */
+    interface Zahlmeister {
+        void zahle(Player wer, Material art, int neueMarken);
+    }
+
     private final Blockmarken marken;
+
+    private final Zahlmeister zahlmeister;
 
     /**
      * In welchen Welten markiert wird - die Weltschluessel, nicht die Namen.
@@ -73,9 +89,14 @@ final class Setzwache implements Listener {
      */
     private final Set<String> welten;
 
-    Setzwache(Blockmarken marken, Set<String> welten) {
+    Setzwache(Blockmarken marken, Set<String> welten, Zahlmeister zahlmeister) {
         if (marken == null) {
             throw new IllegalArgumentException("Ohne Marken gibt es nichts zu merken");
+        }
+        if (zahlmeister == null) {
+            throw new IllegalArgumentException("Ohne Zahlmeister waere die Marke nur"
+                    + " halb: Sie entwertete die Position, ohne das erste Setzen zu"
+                    + " bezahlen");
         }
         if (welten == null || welten.isEmpty()) {
             throw new IllegalArgumentException("Ohne Welten markiert diese Wache nichts -"
@@ -84,6 +105,7 @@ final class Setzwache implements Listener {
         }
         this.marken = marken;
         this.welten = Set.copyOf(welten);
+        this.zahlmeister = zahlmeister;
     }
 
     /**
@@ -95,7 +117,18 @@ final class Setzwache implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void beimSetzen(BlockPlaceEvent ereignis) {
-        merke(orteAus(ereignis));
+        int neue = merke(orteAus(ereignis));
+        if (neue <= 0) {
+            // Nichts Neues - und darum wird auch nicht nach der Blockart gefragt. Der
+            // Zahlmeister bekaeme sonst eine Null und muesste sie wegwerfen, und die Art
+            // eines Blocks zu lesen ist Arbeit fuer nichts.
+            return;
+        }
+        // Die Zahl der NEUEN Marken ist die Zahl der Positionen, die noch nie bezahlt
+        // wurden - genau das, was Teil E braucht. Erst markieren, dann zahlen: Andersherum
+        // zahlte ein Absturz zwischen beiden Schritten fuer eine Position, die danach
+        // unmarkiert dasteht, und sie zahlte noch einmal.
+        zahlmeister.zahle(ereignis.getPlayer(), ereignis.getBlock().getType(), neue);
     }
 
     /**

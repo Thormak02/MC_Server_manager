@@ -275,6 +275,10 @@ class GrenzeTest {
      * {@link #AUFRUFE_IN_SPIELZEITBEFEHLE} fest, und fuer die Zeilen der Anzeige
      * {@link #AUFRUFE_VON_SPIELZEITTEXT}.
      */
+    // Die Verdienstwache steht hier mit Absicht NICHT: Sie sendet ueber
+    // Sprache.sendeHandbalken und damit nicht selbst - jene Methode hatte bis Teil E
+    // keinen einzigen Aufrufer und zaehlt in Sprache.java mit. Wer sie eines Tages durch
+    // ein eigenes sendActionBar ersetzt, wird von dieser Tafel gefragt, warum.
     private static final Set<String> SENDEN_ERLAUBT = new TreeSet<>(List.of(
             "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
             "BerufeBefehle.java",

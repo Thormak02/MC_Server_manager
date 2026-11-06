@@ -64,6 +64,7 @@ enum MarkSatz implements Satz {
             Art.WORT),
     VERLAUF_GRUND_BERUF_VERLASSEN("mark.verlauf.grund.beruf-verlassen", Art.WORT),
     VERLAUF_GRUND_BERUF_ERSTATTET("mark.verlauf.grund.beruf-erstattet", Art.WORT),
+    VERLAUF_GRUND_BERUF_VERDIENST("mark.verlauf.grund.beruf-verdienst", Art.WORT),
 
     /**
      * Die Zeitform des Verlaufs - beim LADEN uebersetzt.
@@ -81,7 +82,22 @@ enum MarkSatz implements Satz {
      * fehlerhafte Eingabe stumm und liefert {@code ROOT} - eine Klage dazu ist nicht
      * herstellbar, und eine Probe, die nicht rot werden kann, ist keine.
      */
-    WAEHRUNG_BETRAG("waehrung.betrag", Art.WORT, "zahl");
+    WAEHRUNG_BETRAG("waehrung.betrag", Art.WORT, "zahl"),
+
+    /**
+     * Dasselbe Wort fuer einen Betrag UNTER einer Mark - zum Beispiel {@code "0,40 Mark"}.
+     *
+     * <p>Ein zweiter Schluessel und nicht derselbe, obwohl das Wort gleich lautet: Der
+     * Verdienst wird in PFENNIGEN gerechnet, und der Handbalken zeigt, was die letzten
+     * Sekunden gebracht haben - meistens weniger als eine Mark. Mit
+     * {@link #WAEHRUNG_BETRAG} stuende dort "0 Mark", und ein Spieler, der arbeitet,
+     * laese, dass er nichts verdient.
+     *
+     * <p>Die Zahlform bleibt im Programm, wie bei jedem Betrag: das Komma und die zwei
+     * Stellen dahinter. Nur das WORT ist des Betreibers - wer seine Waehrung umbenennt,
+     * muss es an ZWEI Stellen tun, und diese Zeile sagt es ihm.
+     */
+    WAEHRUNG_PFENNIGE("waehrung.pfennige", Art.WORT, "zahl");
 
     private final String pfad;
     private final Art art;

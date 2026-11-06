@@ -67,6 +67,9 @@ mark:
       zusammenlegung-erstattet: "Zusammenlegen gescheitert - erstattet"
       beruf-verlassen: "Beruf aufgegeben"
       beruf-erstattet: "Beruf aufgeben gescheitert - erstattet"
+      # Eine Zeile je Takt und nicht je Block: Gebucht wird, was der Zeitgeber gesammelt
+      # hat. Was ein Spieler dafuer getan hat, steht im Logbuch und nicht im Geldbuch.
+      beruf-verdienst: "Verdienst aus Arbeit"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -80,6 +83,12 @@ waehrung:
   #   Einheit selbst - hoechstens 1000000000 Mark. Wer das Wort hier aendert,
   #   liest sie dort unveraendert, im Chat des Betreibers und nicht im Spiel.
   betrag: "{zahl} Mark"
+  # Dasselbe Wort fuer einen Betrag UNTER einer Mark - zum Beispiel 0,40 Mark. Das
+  # Komma und die zwei Stellen dahinter kommen aus dem Programm, wie der Tausenderpunkt
+  # oben. Gebraucht wird es vom Handbalken des Verdienens: Dort sind es meistens
+  # Pfennige, und "0 Mark" waere die falsche Antwort an einen, der gerade arbeitet.
+  # AENDERST DU DEIN WAEHRUNGSWORT, aendere es an BEIDEN Stellen.
+  pfennige: "{zahl} Mark"
 
 zeit:
   # Muster fuer DateTimeFormatter, kein Satz. Wird beim LADEN uebersetzt - ein
@@ -680,6 +689,20 @@ beruf:
     gleichzeitig: "<yellow>Dein Berufsstand hat sich eben geaendert - versuch es noch einmal.</yellow>"
     # Die Ablage antwortet nicht. Daneben steht die Ausnahme im Serverprotokoll.
     nicht-lesbar: "<gray>Deine Berufe sind gerade nicht lesbar - im Serverprotokoll steht, warum.</gray>"
+  verdienst:
+    # ZWEI HANDBALKEN - sie stehen ueber dem Gegenstandsgurt und nicht im Chat. GENAU
+    # EINE Zeile je Satz: sendActionBar nimmt ein Component und keine Liste, eine
+    # Umbruchmarke darin ist eine Klage mit Zeilennummer.
+    #
+    # {betrag} - was die letzten Sekunden eingebracht haben, als Pfennigbetrag aus
+    # waehrung.pfennige. Gesendet wird hoechstens einmal je Sekunde: Eine Chatzeile je
+    # Auszahlung waere ein Regen, und gar nichts zu zeigen liesse einen neuen Spieler
+    # den Fehler bei sich suchen.
+    handbalken: "<green>+{betrag}</green>"
+    # Der Tagesdeckel ist erreicht - ab hier bringt Arbeit nichts mehr, und was
+    # gesammelt war, verfaellt. Diese Zeile MUSS es geben: Ohne sie arbeitete ein
+    # Spieler weiter fuer nichts. Sie loest die andere ab, solange der Deckel haelt.
+    deckel: "<yellow>Heute ist genug verdient - morgen zahlt die Arbeit wieder.</yellow>"
   # DAS WORT ZU JEDEM BERUF. Ein Eintrag je Schluessel aus berufe.liste in der
   # config.yml - und zwar in BEIDE Richtungen: Ein Beruf ohne Wort laesst Freimarken
   # nicht starten, ein Wort ohne Beruf ist eine Zeile, die nicht wirkt (sie steht dann

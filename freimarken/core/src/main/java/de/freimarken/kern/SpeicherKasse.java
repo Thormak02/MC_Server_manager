@@ -1,6 +1,7 @@
 package de.freimarken.kern;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -97,6 +98,23 @@ public final class SpeicherKasse implements Kasse {
                 .sorted(Comparator.comparingLong(Buchung::id).reversed())
                 .limit(hoechstens)
                 .toList();
+    }
+
+    @Override
+    public synchronized long verdientSeit(UUID spieler, Instant ab) {
+        if (spieler == null || ab == null) {
+            throw new IllegalArgumentException("Ohne Spieler und Zeitpunkt gibt es keine"
+                    + " Tagessumme");
+        }
+        long summe = 0L;
+        for (Buchung zeile : buch) {
+            if (zeile.spieler().equals(spieler)
+                    && zeile.grund() == Buchungsgrund.BERUF_VERDIENST
+                    && !zeile.zeitpunkt().isBefore(ab)) {
+                summe += zeile.betrag();
+            }
+        }
+        return summe;
     }
 
     private void schreibe(UUID spieler, long betrag, Buchungsgrund grund, long nachher) {

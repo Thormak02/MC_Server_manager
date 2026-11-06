@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -238,6 +240,98 @@ public abstract class KasseVertrag {
 
         assertThrows(IllegalArgumentException.class, () -> kasse.verlauf(anna, 0));
         assertThrows(IllegalArgumentException.class, () -> kasse.verlauf(anna, -1));
+    }
+
+    // --- Die Tagessumme aus Arbeit --------------------------------------------
+
+    @Test
+    @DisplayName("Ohne Arbeit ist die Tagessumme 0")
+    void ohneArbeitKeineTagessumme() {
+        Kasse kasse = kasse();
+        UUID anna = UUID.randomUUID();
+        kasse.gutschreiben(anna, 5_000L, ERSTATTUNG);
+        assertTrue(kasse.abbuchen(anna, 1_000L, KAUF));
+
+        // Genau BERUF_VERDIENST und kein anderer Grund: Der Tagesdeckel deckelt Arbeit
+        // und nicht ein Geschenk, eine Erstattung oder das Startguthaben. Zaehlte er
+        // alles, waere ein Spieler nach einer Parzellenerstattung fuer den Rest des Tages
+        // gesperrt.
+        assertEquals(0L, kasse.verdientSeit(anna, Instant.EPOCH));
+    }
+
+    @Test
+    @DisplayName("Was aus Arbeit kam, zaehlt die Tagessumme - und nur das")
+    void arbeitZaehlt() {
+        Kasse kasse = kasse();
+        UUID anna = UUID.randomUUID();
+
+        kasse.gutschreiben(anna, 300L, Buchungsgrund.BERUF_VERDIENST);
+        kasse.gutschreiben(anna, 200L, Buchungsgrund.BERUF_VERDIENST);
+        kasse.gutschreiben(anna, 9_000L, ERSTATTUNG);
+
+        assertEquals(500L, kasse.verdientSeit(anna, Instant.EPOCH));
+    }
+
+    @Test
+    @DisplayName("Jeder Spieler hat seine eigene Tagessumme")
+    void jederSeineTagessumme() {
+        Kasse kasse = kasse();
+        UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
+
+        kasse.gutschreiben(anna, 700L, Buchungsgrund.BERUF_VERDIENST);
+
+        assertEquals(700L, kasse.verdientSeit(anna, Instant.EPOCH));
+        assertEquals(0L, kasse.verdientSeit(bert, Instant.EPOCH));
+    }
+
+    @Test
+    @DisplayName("Der Zeitpunkt grenzt ab - was davor liegt, zaehlt nicht mehr")
+    void derZeitpunktGrenztAb() {
+        // Daran haengt die Tagesgrenze: Gefragt wird ab Mitternacht Ortszeit, und was
+        // gestern verdient wurde, darf den heutigen Deckel nicht fuellen. Ein Zeitpunkt
+        // in der Zukunft muss darum 0 ergeben und nicht alles.
+        Kasse kasse = kasse();
+        UUID anna = UUID.randomUUID();
+        kasse.gutschreiben(anna, 400L, Buchungsgrund.BERUF_VERDIENST);
+
+        assertEquals(400L, kasse.verdientSeit(anna, Instant.EPOCH));
+        assertEquals(0L, kasse.verdientSeit(anna,
+                Instant.now().plus(Duration.ofDays(1L))));
+    }
+
+    @Test
+    @DisplayName("Die Abgrenzung liegt auf der Minute - nicht auf dem Ortsversatz")
+    void abgrenzungAufDieMinute() {
+        // Eine halbe Stunde statt eines ganzen Tages, und das ist der Zweck: Legte die
+        // Datenschicht die Zone der JVM ueber die UTC-Spalte, verschobe sich die Grenze
+        // um den Ortsversatz - in Europa um eine oder zwei Stunden. Dann griffe der
+        // Tagesdeckel eine Stunde zu frueh oder zu spaet, und zwar nur fuer die Spieler,
+        // die in dieser Stunde arbeiten. Mit einem Tag Abstand faellt das nicht auf.
+        //
+        // Gefragt wird um den Zeitpunkt der BUCHUNG und nicht um Instant.now(): Die
+        // Kasse in MariaDB bekommt ihre Zeit von der Datenbank, und zwei Uhren, die
+        // nicht genau gleich stehen, machten diese Probe wackelig statt scharf.
+        Kasse kasse = kasse();
+        UUID anna = UUID.randomUUID();
+        kasse.gutschreiben(anna, 400L, Buchungsgrund.BERUF_VERDIENST);
+        Instant gebuchtUm = kasse.verlauf(anna, 1).get(0).zeitpunkt();
+
+        assertEquals(400L,
+                kasse.verdientSeit(anna, gebuchtUm.minus(Duration.ofMinutes(30L))));
+        assertEquals(0L,
+                kasse.verdientSeit(anna, gebuchtUm.plus(Duration.ofMinutes(30L))));
+    }
+
+    @Test
+    @DisplayName("Ohne Spieler und ohne Zeitpunkt gibt es keine Tagessumme")
+    void tagessummePflichten() {
+        Kasse kasse = kasse();
+
+        assertThrows(IllegalArgumentException.class,
+                () -> kasse.verdientSeit(null, Instant.EPOCH));
+        assertThrows(IllegalArgumentException.class,
+                () -> kasse.verdientSeit(UUID.randomUUID(), null));
     }
 
     @Test

@@ -9,7 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import de.freimarken.kern.Berufsangabe;
 import de.freimarken.kern.Berufsverzeichnis;
 import de.freimarken.kern.Berufswerte;
+import de.freimarken.kern.Lohntafel;
 import de.freimarken.kern.Preisstaffel;
+import de.freimarken.kern.Taetigkeit;
+import de.freimarken.kern.Verdienstwerte;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
 import de.freimarken.kern.Zeitwerte;
@@ -54,7 +57,43 @@ class WirtschaftslisteTest {
               zone: "Europe/Berlin"
               takt-sekunden: 60
               untaetig-minuten: 10
+            verdienst:
+              tagesdeckel: 20000
+              minderung:
+                voll-bis: 200
+                stufe: 200
+                faktor-prozent: 50
+                boden-prozent: 10
+              loehne:
+                bergmann:
+                  abbauen:
+                    stone: 40
             """;
+
+    /**
+      * Die Lohntafel, die in VOLLSTAENDIG steht - eine Zeile.
+      *
+      * <p>Gebraucht, weil {@code Wirtschaftswerte.VORGABE} eine LEERE Tafel traegt: Die
+      * Lohnliste hat mit Absicht keinen Rueckfall im Programm, denn sie waere dort eine
+      * zweite Abschrift der ausgelieferten Datei. Jede Probe, die hier gegen die Vorgabe
+      * vergleicht, muss diesen einen Unterschied also selbst mitbringen.
+      */
+    private static final Verdienstwerte VERDIENST_AUS_VOLLSTAENDIG = new Verdienstwerte(
+            Verdienstwerte.VORGABE_TAGESDECKEL, Verdienstwerte.VORGABE_VOLL_BIS,
+            Verdienstwerte.VORGABE_STUFE, Verdienstwerte.VORGABE_FAKTOR_PROZENT,
+            Verdienstwerte.VORGABE_BODEN_PROZENT,
+            Lohntafel.ausLoehnen(List.of(new Lohntafel.Lohn("bergmann",
+                    Taetigkeit.ABBAUEN, "stone", 40L))));
+
+    /** Dieselben Werte wie die Vorgabe, nur mit der Lohntafel aus VOLLSTAENDIG. */
+    private static Wirtschaftswerte vorgabeMitLoehnen() {
+        return new Wirtschaftswerte(Preisstaffel.VORGABE,
+                Wirtschaftswerte.VORGABE_STARTGUTHABEN,
+                Wirtschaftswerte.VORGABE_HOECHSTZAHL,
+                Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
+                Berufswerte.VORGABE, VERDIENST_AUS_VOLLSTAENDIG);
+    }
 
     /**
       * Ein Verzeichnis, das genau die Vorgabezahlen hergibt: zwei Grundberufe, eine
@@ -117,7 +156,7 @@ class WirtschaftslisteTest {
         var ergebnis = lies(VOLLSTAENDIG);
 
         assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
-        assertEquals(Wirtschaftswerte.VORGABE, ergebnis.werte());
+        assertEquals(vorgabeMitLoehnen(), ergebnis.werte());
         assertFalse(ergebnis.bericht().isEmpty(), "die Rechenprobe muss dabei sein");
         assertTrue(ergebnis.bericht().stream()
                 .anyMatch(zeile -> zeile.contains("2. 25000")),
@@ -312,6 +351,10 @@ class WirtschaftslisteTest {
 
         assertTrue(ergebnis.klagen().isEmpty(),
                 "Vorgaben sind richtig, also kein Grund zur Klage: " + ergebnis.klagen());
+        // Die VORGABE und nicht die Fassung mit Loehnen: Diese Datei hat keinen Abschnitt
+        // verdienst, also auch keine Lohnliste - und die hat mit Absicht keinen Rueckfall
+        // im Programm. Ohne Liste verdient niemand etwas, und das ist die sichere
+        // Richtung: Ein geratener Lohn macht Geld.
         assertEquals(Wirtschaftswerte.VORGABE, ergebnis.werte());
         assertTrue(ergebnis.bericht().stream()
                 .anyMatch(zeile -> zeile.contains("9 von 9 Wirtschaftszeilen")),
@@ -371,9 +414,35 @@ class WirtschaftslisteTest {
                     ausDerDatei.verzeichnis());
 
             assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
-            assertEquals(Wirtschaftswerte.VORGABE, ergebnis.werte(),
+            // Alles gegen die Vorgabe des Programms - MIT der Lohntafel aus der Datei.
+            // Jene hat mit Absicht keinen Rueckfall im Programm: Eine Tabelle mit
+            // vierundachtzig Zeilen dort waere eine zweite Abschrift dieser Datei, und
+            // zwei Abschriften laufen auseinander. Alles ANDERE muss uebereinstimmen,
+            // sonst gilt bei einem Erststart etwas anderes als beim Rueckfall.
+            Lohntafel ausDerDateiTafel = ergebnis.werte().verdienst().loehne();
+            assertEquals(new Wirtschaftswerte(Preisstaffel.VORGABE,
+                            Wirtschaftswerte.VORGABE_STARTGUTHABEN,
+                            Wirtschaftswerte.VORGABE_HOECHSTZAHL,
+                            Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
+                            Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
+                            Berufswerte.VORGABE, new Verdienstwerte(
+                                    Verdienstwerte.VORGABE_TAGESDECKEL,
+                                    Verdienstwerte.VORGABE_VOLL_BIS,
+                                    Verdienstwerte.VORGABE_STUFE,
+                                    Verdienstwerte.VORGABE_FAKTOR_PROZENT,
+                                    Verdienstwerte.VORGABE_BODEN_PROZENT,
+                                    ausDerDateiTafel)),
+                    ergebnis.werte(),
                     "die Datei muss genau die Vorgaben des Programms enthalten - sonst"
                             + " gilt bei einem Erststart etwas anderes als beim Rueckfall");
+            // Und die Tafel selbst: Sie muss Saetze tragen, sonst verdient auf einem
+            // frischen Server niemand etwas - und das faellt erst auf, wenn jemand eine
+            // Stunde gegraben hat.
+            assertFalse(ausDerDateiTafel.leer(),
+                    "die ausgelieferte config.yml muss eine Lohnliste tragen");
+            assertEquals(84, ausDerDateiTafel.anzahl(),
+                    "vierundachtzig Saetze - jede Zahl darin ist gegen 2.000 bis 5.000"
+                            + " Mark je Spielstunde gerechnet");
             // Und jeder Schluessel muss WIRKLICH darin stehen. Ohne diese Zeile beweist
             // der Vergleich darueber zu wenig: Fuer eine Zeile, die in der Vorlage fehlt,
             // holt der Leser dieselbe Vorgabe aus dem Programm, der Vergleich bleibt
@@ -791,6 +860,14 @@ class WirtschaftslisteTest {
                         + " auf die Datei: " + gelesen.klagen());
         assertEquals(Wirtschaftswerte.VORGABE, gelesen.werte(),
                 "und er liest die ausgelieferten Werte als die des Betreibers");
+        // EIN BEFUND, und ein guter: Die Lohnliste kommt NICHT durch die Vorgaben. Ein
+        // Abschnitt, der nur in den Vorgaben steht, antwortet auf
+        // getConfigurationSection mit null - anders als ein einzelner Schluessel, den
+        // get stumm aus der Jar holt. Nach einem Lesefehler verdient darum NIEMAND etwas,
+        // statt dass heimlich die ausgelieferten Loehne gelten. Das ist genau die
+        // Richtung, die man sich wuenscht - und gemessen, nicht gehofft.
+        assertTrue(gelesen.werte().verdienst().loehne().leer(),
+                "nach einem Lesefehler gibt es keine Loehne - niemand verdient etwas");
     }
 
     @Test

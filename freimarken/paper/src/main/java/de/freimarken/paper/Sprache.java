@@ -186,6 +186,34 @@ final class Sprache {
         return wort(MarkSatz.WAEHRUNG_BETRAG, Einsatz.von("zahl", mark));
     }
 
+    /**
+     * Zum Beispiel {@code "0,40 Mark"} - ein Betrag unter einer Mark.
+     *
+     * <p>Das Komma und die zwei Stellen kommen aus dem Programm, wie der Tausenderpunkt
+     * bei {@link #betrag}. Eine Einstellzeile dazu waere eine Zusage, die keine Probe
+     * halten kann.
+     */
+    String pfennige(long pfennige) {
+        return wort(MarkSatz.WAEHRUNG_PFENNIGE,
+                Einsatz.von("zahl", deutschePfennige(pfennige)));
+    }
+
+    /**
+     * Die EINE Zahlform fuer Pfennige - mit Komma und genau zwei Stellen.
+     *
+     * <p>Von Hand gesetzt und nicht ueber ein {@code NumberFormat} mit zwei
+     * Nachkommastellen: Die ganzen Mark sollen denselben Tausenderpunkt tragen wie jeder
+     * andere Betrag, und das liefert {@link #deutscheZahl} schon. Zwei verschiedene
+     * Zahlformen fuer dasselbe Geld waeren im Spiel sofort zu sehen.
+     */
+    static String deutschePfennige(long pfennige) {
+        if (pfennige < 0L) {
+            throw new IllegalArgumentException("Negative Pfennige: " + pfennige);
+        }
+        long rest = pfennige % 100L;
+        return deutscheZahl(pfennige / 100L) + "," + (rest < 10L ? "0" : "") + rest;
+    }
+
     DateTimeFormatter muster(Satz schluessel) {
         return stand.buch().muster(schluessel);
     }

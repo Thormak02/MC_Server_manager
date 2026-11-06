@@ -748,7 +748,16 @@ class BildGleichTest {
                                 + " einmal."),
                 new Zeile(BerufSatz.ABSAGE_NICHT_LESBAR, 1L, Einsatz.keine(),
                         "&7Deine Berufe sind gerade nicht lesbar - im Serverprotokoll"
-                                + " steht, warum."));
+                                + " steht, warum."),
+
+                // --- Der Verdienst: zwei Handbalken ------------------------------
+                // Sie stehen ueber dem Gegenstandsgurt und nicht im Chat, und sie tragen
+                // GENAU EINE Zeile - sendActionBar nimmt ein Component und keine Liste.
+                new Zeile(BerufSatz.VERDIENST_HANDBALKEN, 1L,
+                        Einsatz.von("betrag", sprache.pfennige(240L)),
+                        "&a+2,40 Mark"),
+                new Zeile(BerufSatz.VERDIENST_DECKEL, 1L, Einsatz.keine(),
+                        "&eHeute ist genug verdient - morgen zahlt die Arbeit wieder."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

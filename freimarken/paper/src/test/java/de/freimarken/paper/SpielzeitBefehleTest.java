@@ -10,6 +10,7 @@ import de.freimarken.kern.Spielzeitablage;
 import de.freimarken.kern.Spielzeitstand;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
+import de.freimarken.kern.Verdienstwerte;
 import de.freimarken.kern.Zeitwerte;
 import java.time.Duration;
 import java.time.Instant;
@@ -143,7 +144,7 @@ class SpielzeitBefehleTest {
                 Wirtschaftswerte.VORGABE_STARTGUTHABEN, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
                 Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                Berufswerte.VORGABE));
+                Berufswerte.VORGABE, Verdienstwerte.VORGABE));
     }
 
     private Spielzeitbuch buch(Spielzeitablage ablage) {

@@ -83,6 +83,7 @@ wirtschaft:
     zusammenlegung-je-feld: ""
     startguthaben: ""
     wechselgebuehr: ""
+    tagesdeckel: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
@@ -284,6 +285,236 @@ berufe:
     # Auftragsbau.
     baumeister:
       spezialisierungen: [architekt]
+
+# WAS ARBEIT EINBRINGT - die wichtigste Geldquelle dieser Wirtschaft.
+#
+# Die Zielzahl steht im Plan und gilt JE SPIELER, nicht je Beruf: 2.000 bis 5.000 Mark
+# in einer Spielstunde. Dann ist die zweite Parzelle nach 5 bis 10 Stunden erreichbar,
+# eine Meerinsel nach 15 bis 35, eine Freistadt nach 80 bis 200. Wer an diesen Zahlen
+# dreht, dreht an der ganzen Besitzleiter - die Spanne ist der Hebel, mit dem sich das
+# einstellen laesst.
+#
+# GERECHNET WIRD IN PFENNIGEN, also in Hundertsteln einer Mark: 40 heisst 0,40 Mark.
+#   Der Grund ist eine Rechnung: In einer Stunde Arbeit faellt ein bis zweieinhalb Mark
+#   je Block an, und die Kasse kennt nur ganze Mark. Ohne Hundertstel muesste
+#   gewoehnlicher Stein 0 zahlen. Gesammelt wird je Spieler, gebucht werden nur ganze
+#   Mark - der Rest bleibt stehen und wartet.
+#
+# GEBUCHT WIRD GESAMMELT, nicht je Block. Im Kontobuch steht darum eine Zeile je Takt
+#   mit dem Grund beruf_verdienst und nicht eine je Erzbrocken. Wer wissen will, WAS
+#   jemand getan hat, fragt das Logbuch; dieses Buch ist das Geldbuch.
+#
+# EIN BLOCK ZAHLT NUR EINMAL. Ein von einem Spieler gesetzter Block traegt eine Marke
+#   und bringt beim Abbauen nichts - und ein zweites Setzen an derselben Stelle auch
+#   nicht. Sonst waere Setzen-Abbauen die Gelddruckmaschine, die jeder in der ersten
+#   Stunde findet.
+#
+# /freimarken neuladen uebernimmt ALLES in diesem Abschnitt, auch die Lohnliste. Das ist
+#   Absicht: Einstellen heisst ausprobieren.
+verdienst:
+  # Wie viele Mark ein Spieler an einem Tag hoechstens AUS ARBEIT bekommt.
+  #
+  # Je Spieler und nicht je Beruf - sonst kaeme der Deckel ueber zwei Grundberufe
+  # doppelt. Gezaehlt wird ab Mitternacht Ortszeit (zeit.zone), und gezaehlt wird, was
+  # gebucht ist: Die Summe steht im Kontobuch, es gibt keine zweite Liste daneben.
+  #
+  # 20.000 sind vier bis zehn Stunden Arbeit AN EINEM TAG. Wer das erreicht, farmt - der
+  # Deckel soll grosszuegig genug sein, dass normales Spielen ihn nicht erreicht. Was
+  # darueber anfaellt, VERFAELLT; es wandert nicht in den naechsten Tag, sonst waere der
+  # Deckel nur eine Verzoegerung. Der Spieler erfaehrt es ueber dem Gegenstandsgurt.
+  #
+  # Ganze Zahl ab 1. Mehr als Faktor 2 gegenueber 20.000 braucht die Bestaetigung unter
+  # wirtschaft.sprung-bestaetigt.tagesdeckel.
+  tagesdeckel: 20000
+
+  # DER ABNEHMENDE ERTRAG. Derselbe Block bringt innerhalb einer Stunde immer weniger -
+  # ohne das ist jede Mobfarm eine Gelddruckmaschine.
+  #
+  # Gezaehlt wird je Spieler und je BLOCKART, nicht je Ort: Eine Farm liefert immer
+  # dieselbe Art an wechselnden Stellen, und genau sie ist der Grund fuer die Regel.
+  # Das Fenster ist eine Stunde und springt - nach einer Stunde zaehlt es neu.
+  #
+  # Mit den Werten unten ergibt sich:
+  #     Bloecke 1-200    voll        (Stein: 0,40 Mark)
+  #     Bloecke 201-400  die Haelfte (0,20)
+  #     Bloecke 401-600  ein Viertel (0,10)
+  #     Bloecke 601-800  ein Achtel  (0,05)
+  #     ab 801           ein Zehntel (0,04 - der Boden)
+  #
+  # Ein Haus sind einige hundert Bloecke, aber selten zweihundert derselben ART in einer
+  # Stunde; ein Stollen in den Stein geht darueber hinaus. Genau dort soll es greifen.
+  minderung:
+    # Wie viele Bloecke einer Art voll zahlen. Ganze Zahl ab 1 - eine 0 hiesse, dass
+    # schon der erste Block gemindert ist. Hochsetzen schaltet die Regel faktisch aus.
+    voll-bis: 200
+    # Wie breit eine Stufe ist. Ganze Zahl ab 1.
+    stufe: 200
+    # Auf wie viel Prozent des vorherigen Satzes jede Stufe senkt. 1 bis 99.
+    # Bei 100 mindert nichts - wer das will, setzt voll-bis hoch. Bei 0 faellt der Satz
+    # in einem Schritt auf den Boden, und die Stufen waeren Zierde.
+    faktor-prozent: 50
+    # Unter welchen Anteil des vollen Satzes es NIE faellt. 1 bis 100.
+    # Keine 0: Das waere eine unsichtbare Wand - ab einer Zahl, die niemand kennt,
+    # passiert gar nichts mehr, und der Spieler sucht den Fehler bei sich.
+    boden-prozent: 10
+
+  # DIE LOHNLISTE: Beruf, dann Taetigkeit, dann Material, dann Pfennige.
+  #
+  # ES GIBT KEINEN RUECKFALL IM PROGRAMM. Fehlt dieser Abschnitt, verdient niemand
+  #   etwas, und das Protokoll sagt es laut. Jede andere Vorgabe steht im Programm,
+  #   damit sie nicht fehlen kann - eine Lohnliste dort waere aber eine zweite
+  #   Abschrift dieser Datei, und zwei Abschriften derselben Tabelle laufen
+  #   auseinander. Ausserdem ist das die sichere Richtung: Ein geratener Lohn macht
+  #   Geld, das keine Ruecksicherung zurueckholt.
+  #
+  # TAETIGKEITEN: abbauen und setzen. Mehr gibt es noch nicht - fangen, toeten,
+  #   zuechten und ernten brauchen je ein eigenes Ereignis im Programm und kommen mit
+  #   ihrem eigenen Bauschritt. Eine unbekannte Taetigkeit ist eine Klage mit Zeile.
+  #
+  # DER BERUF muss in berufe.liste stehen, sonst ist der ganze Block uebersprungen -
+  #   ein Lohn fuer einen Beruf, den es nicht gibt, ist eine Zeile, die nie wirkt.
+  #
+  # DAS MATERIAL ist der nackte Name, wie Minecraft ihn kennt: stone, deepslate,
+  #   coal_ore. Ohne minecraft: davor. Ein unbekannter Name ist eine Klage mit dem
+  #   Namen - ohne diese Pruefung stuende der Tippfehler stumm in der Liste.
+  #
+  # HAELT EIN SPIELER ZWEI BERUFE, die denselben Satz tragen, gilt der HOECHSTE und
+  #   nicht die Summe: Ein Block zahlt einmal. Die zwei Grundberufe teilen sich das
+  #   Einkommen, sie verdoppeln es nicht.
+  #
+  # WAS HIER NICHT STEHT, bringt nichts. Die Liste nennt die Materialien, die zahlen,
+  #   und nicht die tausend, die es nicht tun.
+  loehne:
+    # Erze, Stein, Tiefe. Der Stein traegt die Spanne NICHT - er ist die Grundlast,
+    # verdient wird an dem, was man dabei findet.
+    bergmann:
+      abbauen:
+        stone: 40
+        cobblestone: 20
+        deepslate: 55
+        andesite: 40
+        diorite: 40
+        granite: 40
+        tuff: 45
+        coal_ore: 150
+        deepslate_coal_ore: 170
+        copper_ore: 170
+        deepslate_copper_ore: 190
+        iron_ore: 260
+        deepslate_iron_ore: 290
+        gold_ore: 600
+        deepslate_gold_ore: 650
+        redstone_ore: 300
+        deepslate_redstone_ore: 330
+        lapis_ore: 650
+        deepslate_lapis_ore: 700
+        emerald_ore: 1800
+        deepslate_emerald_ore: 1900
+        diamond_ore: 2200
+        deepslate_diamond_ore: 2400
+        nether_quartz_ore: 220
+        nether_gold_ore: 400
+        ancient_debris: 9000
+    # Veredelter Stein und Statuen. Spezialisierung des Bergmanns - sie zahlt auf
+    # andere Materialien als er, nicht mehr fuer dieselben.
+    steinmetz:
+      abbauen:
+        amethyst_cluster: 800
+      setzen:
+        stone_bricks: 60
+        chiseled_stone_bricks: 90
+        polished_andesite: 70
+        polished_diorite: 70
+        polished_granite: 70
+        polished_deepslate: 80
+        quartz_block: 110
+    # Holz und Aufforstung. Setzen zahlt hier mit - das ist die Aufforstung, und sie
+    # ist eine eigene Taetigkeit am selben Beruf.
+    holzfaeller:
+      abbauen:
+        oak_log: 90
+        birch_log: 90
+        spruce_log: 90
+        jungle_log: 110
+        acacia_log: 110
+        dark_oak_log: 110
+        cherry_log: 130
+        mangrove_log: 120
+      setzen:
+        oak_sapling: 60
+        birch_sapling: 60
+        spruce_sapling: 60
+        jungle_sapling: 70
+        acacia_sapling: 70
+        dark_oak_sapling: 70
+    # Balken, Tueren, Fachwerk. Spezialisierung des Holzfaellers.
+    zimmermann:
+      setzen:
+        oak_planks: 45
+        oak_door: 140
+        oak_fence: 70
+        oak_stairs: 60
+        oak_trapdoor: 90
+    # Acker und Ernte. Geerntet wird mit dem ABBAUEN der reifen Pflanze.
+    bauer:
+      abbauen:
+        wheat: 70
+        carrots: 70
+        potatoes: 70
+        beetroots: 70
+        pumpkin: 120
+        melon: 120
+        sugar_cane: 50
+        cocoa: 110
+      setzen:
+        wheat_seeds: 20
+        farmland: 25
+    # Nahrung und Vorratshaltung. Spezialisierung des Bauern.
+    mueller:
+      setzen:
+        hay_block: 130
+        composter: 90
+    # Fang. Das Angeln selbst braucht sein eigenes Ereignis und kommt mit dem naechsten
+    # Schritt - heute zahlt nur, was am Wasser gebaut und geholt wird.
+    fischer:
+      abbauen:
+        kelp: 40
+        seagrass: 35
+        sea_pickle: 120
+    # Seehandel und Bootsrennen. Spezialisierung des Fischers.
+    reeder:
+      setzen:
+        barrel: 110
+    # Monster und Beute. Das Toeten braucht sein eigenes Ereignis - heute zahlt nur,
+    # was in Hoehlen und Festungen abgebaut wird.
+    jaeger:
+      abbauen:
+        cobweb: 160
+        spawner: 4000
+    # Leder und Ruestung. Spezialisierung des Jaegers.
+    gerber:
+      setzen:
+        cauldron: 100
+    # GESETZTE Bloecke, und nur die. Der Baumeister ist der eine Beruf, der fuers Setzen
+    # bezahlt wird - darum traegt er die niedrigsten Saetze: Baumaterial ist billig zu
+    # bekommen, und ein Block zahlt nur einmal.
+    baumeister:
+      setzen:
+        stone: 15
+        cobblestone: 10
+        stone_bricks: 20
+        bricks: 25
+        oak_planks: 15
+        glass: 30
+        white_concrete: 25
+        terracotta: 25
+        copper_block: 60
+    # Grosse Bauten und Auftragsbau. Spezialisierung des Baumeisters.
+    architekt:
+      setzen:
+        chiseled_quartz_block: 70
+        polished_blackstone_bricks: 70
+        copper_grate: 80
 
 # Wie Spielzeit gemessen wird und wann ein Tag endet.
 #

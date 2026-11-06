@@ -223,6 +223,31 @@ enum BerufSatz implements Satz {
      */
     ABSAGE_GLEICHZEITIG("beruf.absage.gleichzeitig", Art.SATZ),
 
+    // --- Der Verdienst: zwei Handbalken ----------------------------------------
+
+    /**
+     * Was die letzten Sekunden eingebracht haben - ueber dem Gegenstandsgurt.
+     *
+     * <p>{@link Art#HANDBALKEN} und nicht SATZ, und das ist die Entscheidung dieses
+     * Schrittes: Eine Chatzeile je Auszahlung waere ein Regen, und gar nichts zu zeigen
+     * liesse einen neuen Spieler den Fehler bei sich suchen. Der Handbalken sagt es
+     * sofort und verschwindet von selbst; gesendet wird hoechstens einmal je Sekunde.
+     *
+     * <p>Der Betrag kommt aus {@code waehrung.pfennige} und nicht aus
+     * {@code waehrung.betrag}: Es sind meistens Pfennige, und "0 Mark" waere die falsche
+     * Antwort an einen, der gerade arbeitet.
+     */
+    VERDIENST_HANDBALKEN("beruf.verdienst.handbalken", Art.HANDBALKEN, "betrag"),
+
+    /**
+     * Der Tagesdeckel ist erreicht - ab hier bringt Arbeit nichts mehr.
+     *
+     * <p>Diese Zeile MUSS es geben: Am Deckel verfaellt, was gesammelt ist, und ohne eine
+     * Meldung arbeitete ein Spieler weiter fuer nichts. Sie steht auf demselben
+     * Handbalken und loest die andere ab, solange der Deckel haelt.
+     */
+    VERDIENST_DECKEL("beruf.verdienst.deckel", Art.HANDBALKEN),
+
     /**
      * Die Ablage antwortet nicht.
      *

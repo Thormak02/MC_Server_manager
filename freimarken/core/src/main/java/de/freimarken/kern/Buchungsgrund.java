@@ -20,7 +20,7 @@ import java.util.Locale;
  * Meldungen im Paper-Teil; wer die deutschen Woerter hier einfrieren wuerde, koennte sie
  * spaeter nicht mehr aendern, ohne alte Zeilen unlesbar zu machen.
  *
- * <p>Acht Gruende und nicht mehr. Ladenmiete, Marktgebuehr und Tagesbonus kommen mit
+ * <p>Neun Gruende und nicht mehr. Ladenmiete, Marktgebuehr und Tagesbonus kommen mit
  * ihrem eigenen Bauschritt - sie hier schon einzutragen waere Vorbauen, und ein Grund,
  * den niemand bucht, sieht im Bericht aus wie eine Senke, die nicht funktioniert.
  */
@@ -60,7 +60,22 @@ public enum Buchungsgrund {
     BERUF_VERLASSEN("beruf_verlassen", Richtung.AUSGABE),
 
     /** Das Ablegen ist gescheitert - die Gebuehr kommt zurueck. */
-    BERUF_ERSTATTET("beruf_erstattet", Richtung.EINNAHME);
+    BERUF_ERSTATTET("beruf_erstattet", Richtung.EINNAHME),
+
+    /**
+     * Was ein Beruf eingebracht hat - die erste und wichtigste QUELLE dieser Wirtschaft.
+     *
+     * <p><b>Gesammelt und nicht je Block.</b> Eine Buchung je abgebautem Block waere bei
+     * fuenfzig Spielern eine Viertelmillion Zeilen in der Stunde und 30 bis 150 Prozent
+     * des Hauptfadens nur fuer das Buchen - gerechnet am 6.11.2026. Gebucht wird darum,
+     * was ein Zeitgeber gesammelt hat; die einzelne Taetigkeit steht in keiner Zeile.
+     *
+     * <p>Wer wissen will, WAS ein Spieler getan hat, fragt das Logbuch - es ist ein
+     * austauschbarer Nachbar, und dieses Buch ist das Geldbuch. Hier steht nur, dass Geld
+     * aus Arbeit kam, und genau das braucht der Verdienstdeckel: Er rechnet seine
+     * Tagessumme aus DIESEN Zeilen, statt eine zweite Wahrheit daneben zu fuehren.
+     */
+    BERUF_VERDIENST("beruf_verdienst", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {

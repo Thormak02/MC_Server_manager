@@ -11,6 +11,7 @@ import de.freimarken.kern.Spielzeitregel;
 import de.freimarken.kern.Spielzeitstand;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
+import de.freimarken.kern.Verdienstwerte;
 import de.freimarken.kern.Zeitwerte;
 import java.time.Clock;
 import java.time.Duration;
@@ -140,7 +141,7 @@ class SpielzeitbuchTest {
                 Wirtschaftswerte.VORGABE_STARTGUTHABEN, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
                 Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG, zeit,
-                Berufswerte.VORGABE));
+                Berufswerte.VORGABE, Verdienstwerte.VORGABE));
     }
 
     /** Wie viel fuer diesen Spieler insgesamt geschrieben ist. */

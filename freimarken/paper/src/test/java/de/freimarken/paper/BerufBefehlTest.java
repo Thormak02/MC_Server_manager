@@ -20,6 +20,7 @@ import de.freimarken.kern.SpeicherBerufe;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
+import de.freimarken.kern.Verdienstwerte;
 import de.freimarken.kern.Zeitwerte;
 import java.time.Clock;
 import java.time.Duration;
@@ -84,7 +85,8 @@ class BerufBefehlTest {
                 new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
                         REICH, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
                         Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
-                        Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE, werte)),
+                        Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE, werte,
+                        Verdienstwerte.VORGABE)),
                 kasse, Clock.fixed(MITTAGS, ZoneOffset.UTC),
                 Logger.getLogger(BerufBefehlTest.class.getName()),
                 Sprachprobe.spracheAusDemJar());
