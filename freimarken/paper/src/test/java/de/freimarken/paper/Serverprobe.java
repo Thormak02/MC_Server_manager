@@ -43,14 +43,13 @@ import org.bukkit.World;
  * und die naechste Probe, die mehr braucht, bekommt den Namen gesagt, statt ein
  * {@code null} zu lesen.
  *
- * <p><b>Es gibt einen AELTEREN Satz derselben Stellvertreter.</b>
- * {@code AufrufstelleTest} hat private {@code weltDoppel}, {@code blockDoppel} und
- * {@code spielerDoppel} - gebaut mit demselben {@link Proxy}-Gedanken und
- * teilweise fuer dieselben Methoden. Gefunden wurde das erst, als diese Datei
- * schon stand; sie ist damit der zweite Ort fuer eine Sache. Zusammengelegt ist
- * noch nichts, weil der Umbau eine Probendatei mit vierunddreissig Proben
- * anfasst - er steht als eigener Punkt im TODO. Bis dahin gilt: Wer hier eine
- * Antwort ergaenzt, sieht dort nach, ob sie schon steht.
+ * <p><b>Es gab einen AELTEREN Satz derselben Stellvertreter</b>, privat in
+ * {@code AufrufstelleTest} und mit demselben {@link Proxy}-Gedanken gebaut, nur
+ * frueher. Gefunden wurde er erst, als diese Datei schon stand. Seit dem
+ * 06.11.2026 sind beide zusammengelegt: Jene Datei gibt nur noch weiter, und was
+ * sie braucht, steht hier. <b>Darum ist dies der EINE Ort</b> - wer eine Antwort
+ * ergaenzt, ergaenzt sie fuer alle Proben, und wer eine aendert, aendert sie fuer
+ * alle. Die vierunddreissig Proben jener Datei sind dabei das Netz.
  *
  * <p><b>Einmal je JVM.</b> {@code Bukkit.setServer} wirft beim zweiten Aufruf, und Gradle
  * faehrt alle Probenklassen in EINER JVM. Darum {@link #einmalSetzen}, und darum ist der

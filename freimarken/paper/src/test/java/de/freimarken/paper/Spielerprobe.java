@@ -58,6 +58,27 @@ final class Spielerprobe {
 
     private final List<GameMode> moduswechsel = new ArrayList<>();
 
+    /**
+     * Eine zweite Liste, in die die Chatzeilen AUCH geschrieben werden.
+     *
+     * <p>Fuer Proben, die mehrere Spieler in EINE Mitschrift lesen -
+     * {@code AufrufstelleTest} tut das, weil es die REIHENFOLGE ueber zwei
+     * Empfaenger hinweg prueft. Die eigene Liste bleibt daneben gefuellt; eine
+     * geteilte Mitschrift ist eine Ergaenzung und kein Ersatz.
+     */
+    private List<Component> geteilt;
+
+    /**
+     * Der Stellvertreter, EINMAL gebaut.
+     *
+     * <p>Nicht Sparsamkeit: Ein neues Exemplar je Aufruf waere mit
+     * {@code equals} nicht mit sich selbst gleich, und mehrere Zweige dieses
+     * Projekts vergleichen Spieler so - {@code angefragter.equals(fragender)}
+     * in {@code AnfragenBefehle} zum Beispiel. Dort wuerde eine Selbstanfrage
+     * sonst nicht erkannt.
+     */
+    private Player stellvertreter;
+
     Spielerprobe(String name, UUID kennung, String... rechte) {
         this.name = name;
         this.kennung = kennung;
@@ -80,6 +101,12 @@ final class Spielerprobe {
      */
     Spielerprobe inWelt(World wo) {
         this.welt = wo;
+        return this;
+    }
+
+    /** Schreibt seine Chatzeilen AUCH in diese Liste - gibt sich selbst zurueck. */
+    Spielerprobe schreibtNach(List<Component> mitschrift) {
+        this.geteilt = mitschrift;
         return this;
     }
 
@@ -111,7 +138,11 @@ final class Spielerprobe {
      * eigenen Namen. Dieselbe Entscheidung und derselbe Grund wie in {@link Serverprobe}.
      */
     Player spieler() {
-        return (Player) Proxy.newProxyInstance(Spielerprobe.class.getClassLoader(),
+        if (stellvertreter != null) {
+            return stellvertreter;
+        }
+        stellvertreter = (Player) Proxy.newProxyInstance(
+                Spielerprobe.class.getClassLoader(),
                 new Class<?>[] {Player.class},
                 (eigen, methode, werte) -> switch (methode.getName()) {
                     case "getUniqueId" -> kennung;
@@ -137,6 +168,7 @@ final class Spielerprobe {
                                     + " sie - also gehoert sie hierher, mit einer"
                                     + " Antwort, die die Probe mitgibt.");
                 });
+        return stellvertreter;
     }
 
     private World welt() {
@@ -189,7 +221,7 @@ final class Spielerprobe {
         return null;
     }
 
-    private static Object merke(List<Component> liste, Object gesendet) {
+    private Object merke(List<Component> liste, Object gesendet) {
         if (!(gesendet instanceof Component zeile)) {
             throw new UnsupportedOperationException("Gesendet wurde kein Component,"
                     + " sondern " + (gesendet == null ? "null" : gesendet.getClass())
@@ -198,6 +230,12 @@ final class Spielerprobe {
                     + " gebaut hat.");
         }
         liste.add(zeile);
+        if (geteilt != null && liste == chat) {
+            // NUR der Chat, nicht der Handbalken: Eine geteilte Mitschrift
+            // dient der Reihenfolge von CHATzeilen; ein Handbalken darin stuende
+            // in einer Reihe, in die er nicht gehoert.
+            geteilt.add(zeile);
+        }
         return null;
     }
 

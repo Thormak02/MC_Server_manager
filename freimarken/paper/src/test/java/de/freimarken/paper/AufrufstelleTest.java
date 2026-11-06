@@ -16,19 +16,14 @@ import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftswerte;
 import de.freimarken.kern.Zeitwerte;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
-import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -71,19 +66,21 @@ import org.junit.jupiter.api.Test;
  * falschen Wort.
  *
  * <p><b>Ohne Server, ohne Bukkit-Laufzeit.</b> Das Besitzbuch ist das ECHTE, ueber
- * {@code SpeicherLager} und {@code SpeicherKasse}; die Welt ist {@link Probewelt}, dieselbe
- * Marktstadt in einer Map, mit der {@code WegbauTest} rechnet. Nur {@code World},
- * {@code Block} und {@code Player} sind Stellvertreter: Es sind Schnittstellen, und die
- * paar Methoden, die diese Zweige von ihnen brauchen, sind hier aufgeschrieben. Ein Aufruf,
- * der hier nicht steht, wirft mit seinem Namen - eine stumme Null waere schlimmer als eine
+ * {@code SpeicherLager} und {@code SpeicherKasse}; die Welt ist {@link Probewelt},
+ * dieselbe Marktstadt in einer Map, mit der {@code WegbauTest} rechnet. Nur
+ * {@code World}, {@code Block} und {@code Player} sind Stellvertreter: Es sind
+ * Schnittstellen, und die paar Methoden, die diese Zweige von ihnen brauchen,
+ * stehen in {@link Serverprobe} und {@link Spielerprobe}. Ein Aufruf, der dort
+ * nicht steht, wirft mit seinem Namen - eine stumme Null waere schlimmer als eine
  * rote Probe.
  *
- * <p><b>Diese Stellvertreter sind die AELTEREN, und sie stehen jetzt doppelt.</b>
- * {@link Serverprobe} und {@link Spielerprobe} beantworten seit dem 06.11.2026
- * dieselben Fragen fuer die Wachen und die Befehle, mit derselben Bauart und
- * teilweise denselben Methoden. Zwei Orte fuer eine Sache sind einer zu viel - wer
- * hier eine Antwort ergaenzt, soll sie dort auch ergaenzen, bis jemand die drei
- * privaten Doppel durch die geteilten ersetzt. Das steht als eigener Punkt im TODO.
+ * <p><b>Hier standen bis zum 06.11.2026 eigene private Doppel</b> - gebaut mit
+ * demselben {@code Proxy}-Gedanken wie {@link Serverprobe}, nur frueher. Als die
+ * Wachen und die Befehle ihre Durchlaufproben bekamen, entstand derselbe Satz ein
+ * zweites Mal, und erst danach fiel es auf. Jetzt gibt es einen Satz: Die drei
+ * Methoden unten geben nur noch weiter, und was sie beantworten, steht dort.
+ * Dass der Tausch nichts verschoben hat, sagen die vierunddreissig Proben dieser
+ * Datei - sie liefen vorher und nachher gruen durch.
  *
  * <p><b>Hoechstzahl 7 und Gruppenfelder 3 sind ABSICHTLICH verschieden</b>, aus demselben
  * Grund wie in {@code SendewegTest} 33t: Mit zwei gleichen Zahlen waere ein Vertauschen der
@@ -172,103 +169,57 @@ class AufrufstelleTest {
     // --- Die Stellvertreter ----------------------------------------------------
 
     /**
-     * Die Welt, soweit diese Zweige sie anfassen.
+     * Die Welt, soweit diese Zweige sie anfassen - aus dem geteilten Stellvertreter.
      *
-     * <p>Vier Dinge: ihr Schluessel (daraus wird der Weltname der Ablage), der Vergleich
-     * mit dem Ort des Spielers, und die zwei Blockfragen, die {@code Weltgriff.AufDerWelt}
-     * weitergibt. Letztere laufen in die {@link Probewelt} - damit rechnet die Bodenarbeit
-     * mit derselben Stadt, mit der {@code WegbauTest} rechnet.
+     * <p>Vier Dinge: ihr Schluessel (daraus wird der Weltname der Ablage), der
+     * Vergleich mit dem Ort des Spielers, und die zwei Blockfragen, die
+     * {@code Weltgriff.AufDerWelt} weitergibt. Letztere laufen in die
+     * {@link Probewelt} - damit rechnet die Bodenarbeit mit derselben Stadt, mit der
+     * {@code WegbauTest} rechnet.
+     *
+     * <p><b>Bis zum 06.11.2026 stand hier ein eigenes Doppel</b>, gebaut mit demselben
+     * {@code Proxy}-Gedanken wie {@link Serverprobe}. Zwei Orte fuer eine Sache waren
+     * einer zu viel: Wer dem einen eine Antwort ergaenzte, musste an den anderen
+     * denken. Jetzt gibt es nur noch einen, und was diese Probe braucht, steht dort.
      */
     private World weltDoppel() {
-        return (World) Proxy.newProxyInstance(World.class.getClassLoader(),
-                new Class<?>[]{World.class}, (ding, methode, werte) -> switch (
-                        methode.getName()) {
-                    case "key" -> Key.key("freimarken", "marktstadt");
-                    case "getMinHeight" -> boden.unten();
-                    case "getHighestBlockYAt" -> boden.oben((Integer) werte[0],
-                            (Integer) werte[1]);
-                    case "getBlockAt" -> blockDoppel((Integer) werte[0],
-                            (Integer) werte[1], (Integer) werte[2]);
-                    case "equals" -> ding == werte[0];
-                    case "hashCode" -> System.identityHashCode(ding);
-                    case "toString" -> "Weltdoppel";
-                    default -> throw new UnsupportedOperationException("World."
-                            + methode.getName() + " - diese Probe kennt den Aufruf nicht."
-                            + " Wer ihn braucht, schreibt ihn hier auf; stumm null"
-                            + " zurueckzugeben waere ein gruener Lauf ueber einem Loch.");
-                });
-    }
-
-    private Block blockDoppel(int x, int y, int z) {
-        return (Block) Proxy.newProxyInstance(Block.class.getClassLoader(),
-                new Class<?>[]{Block.class}, (ding, methode, werte) -> switch (
-                        methode.getName()) {
-                    case "getType" -> boden.bei(x, y, z);
-                    case "setType" -> {
-                        boden.setze(x, y, z, (Material) werte[0]);
-                        yield null;
-                    }
-                    case "equals" -> ding == werte[0];
-                    case "hashCode" -> System.identityHashCode(ding);
-                    case "toString" -> "Blockdoppel " + x + "/" + y + "/" + z;
-                    default -> throw new UnsupportedOperationException("Block."
-                            + methode.getName() + " - diese Probe kennt den Aufruf nicht.");
-                });
+        return Serverprobe.welt("freimarken:marktstadt", boden);
     }
 
     /**
      * Ein Spieler, der mitschreibt statt zu lesen.
      *
-     * <p>{@code getEffectivePermissions} gibt NICHTS zurueck: Die Grenzen kommen damit aus
-     * der Wirtschaft und nicht aus einem Recht, und das sind die zwei verschiedenen Zahlen
+     * <p>{@code getEffectivePermissions} gibt NICHTS zurueck - die {@link Spielerprobe}
+     * baut die Eintraege aus den uebergebenen Rechten, und hier werden keine
+     * uebergeben. Das ist die Sache selbst: Die Grenzen kommen damit aus der
+     * Wirtschaft und nicht aus einem Recht, und das sind die zwei verschiedenen Zahlen
      * oben. Ein Recht hier waere eine zweite Quelle fuer dieselbe Zahl.
+     *
+     * <p>{@code schreibtNach(gesendet)}: Diese Probe liest die REIHENFOLGE ueber
+     * mehrere Empfaenger hinweg, darum eine gemeinsame Mitschrift.
      */
     private Player spielerDoppel(UUID wer, Location wo) {
-        return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(),
-                new Class<?>[]{Player.class}, (ding, methode, werte) -> switch (
-                        methode.getName()) {
-                    case "getUniqueId" -> wer;
-                    case "getLocation" -> wo.clone();
-                    case "getEffectivePermissions" -> Set.of();
-                    case "sendMessage" -> {
-                        gesendet.add((Component) werte[0]);
-                        yield null;
-                    }
-                    case "equals" -> ding == werte[0];
-                    case "hashCode" -> System.identityHashCode(ding);
-                    case "toString" -> "Spielerdoppel " + wer;
-                    default -> throw new UnsupportedOperationException("Player."
-                            + methode.getName() + " - diese Probe kennt den Aufruf nicht."
-                            + " Wer ihn braucht, schreibt ihn hier auf.");
-                });
+        return new Spielerprobe("Spielerdoppel", wer)
+                .anOrt(wo)
+                .schreibtNach(gesendet)
+                .spieler();
     }
 
     /**
      * Ein Spieler mit NAMEN und eigener Mitschrift - fuer die drei Zweige von
      * {@code /tpa}.
      *
-     * <p>Genau zwei Aufrufe, und das ist die Grenze dieser Naht: Die drei Sendemethoden
-     * von {@code AnfragenBefehle} fragen ein Spielerobjekt nach seinem NAMEN und
-     * schreiben ihm, nichts weiter. Keine UUID und kein Ort - was hier fehlt, braucht die
-     * gepruefte Stelle nicht, und wer es doch braucht, bekommt den Namen des Aufrufs
-     * geworfen statt einer stummen Null.
+     * <p>Die drei Sendemethoden von {@code AnfragenBefehle} fragen ein Spielerobjekt
+     * nach seinem NAMEN und schreiben ihm, nichts weiter. Die UUID wird aus dem Namen
+     * gerechnet und von keiner dieser Stellen gelesen - sie steht nur da, weil eine
+     * {@link Spielerprobe} nicht ohne auskommt, und sie ist dabei bei jedem Lauf
+     * dieselbe.
      */
     private static Player spielerDoppel(String name, List<Component> mitschrift) {
-        return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(),
-                new Class<?>[]{Player.class}, (ding, methode, werte) -> switch (
-                        methode.getName()) {
-                    case "getName" -> name;
-                    case "sendMessage" -> {
-                        mitschrift.add((Component) werte[0]);
-                        yield null;
-                    }
-                    case "equals" -> ding == werte[0];
-                    case "hashCode" -> System.identityHashCode(ding);
-                    case "toString" -> "Spielerdoppel " + name;
-                    default -> throw new UnsupportedOperationException("Player."
-                            + methode.getName() + " - diese Probe kennt den Aufruf nicht."
-                            + " Wer ihn braucht, schreibt ihn hier auf.");
-                });
+        return new Spielerprobe(name, UUID.nameUUIDFromBytes(name.getBytes(
+                        java.nio.charset.StandardCharsets.UTF_8)))
+                .schreibtNach(mitschrift)
+                .spieler();
     }
 
     // --- Kleinteile ------------------------------------------------------------
@@ -320,13 +271,10 @@ class AufrufstelleTest {
     @Test
     @DisplayName("34 - die Welt wird geprueft, und zwar BEVOR irgendetwas geschieht")
     void derZweigPrueftDieWeltZuerst() {
-        World andere = (World) Proxy.newProxyInstance(World.class.getClassLoader(),
-                new Class<?>[]{World.class}, (ding, methode, werte) ->
-                        "key".equals(methode.getName())
-                                ? Key.key("freimarken", "anderswo")
-                                : "equals".equals(methode.getName()) ? ding == werte[0]
-                                : "hashCode".equals(methode.getName())
-                                        ? System.identityHashCode(ding) : "Fremdwelt");
+        // Eine Fremdwelt OHNE Bloecke, und das ist die Zusicherung selbst: Liest
+        // der Zweig hier doch den Boden, wirft der Stellvertreter mit Grund statt
+        // eine Antwort zu erfinden - die Weltpruefung kommt also wirklich zuerst.
+        World andere = Serverprobe.welt("freimarken:anderswo");
         Player draussen = spielerDoppel(ANNA, new Location(andere, 1, 70, 1));
 
         befehle.zeigeInfo(draussen);
