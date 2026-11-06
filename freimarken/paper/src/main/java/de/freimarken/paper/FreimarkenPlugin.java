@@ -7,6 +7,7 @@ import de.freimarken.daten.MariaBerufe;
 import de.freimarken.daten.MariaSpielzeit;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
+import de.freimarken.kern.Blockmarken;
 import de.freimarken.kern.Berufswerte;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
@@ -113,6 +114,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Kasse kasse;
     private Spielzeitablage spielzeit;
     private Berufsablage berufsablage;
+    /**
+     * Welche Blockpositionen ein Spieler gesetzt hat - fuer Teil E.
+     *
+     * <p>Kein Halter wie {@link #wirtschaft}: Es gibt nichts zu tauschen. Die Marken
+     * liegen im Chunk, also in der Weltdatei, und ein Neuladen der Einstellungen aendert
+     * daran nichts.
+     */
+    private Blockmarken marken;
     /**
      * Welche Berufe es gibt - NUR BEIM START gelesen.
      *
@@ -365,6 +374,22 @@ public final class FreimarkenPlugin extends JavaPlugin {
         befehle = new ParzellenBefehle(buch, marktstadt, wirtschaft, getLogger(), sprache);
         getServer().getPluginManager().registerEvents(
                 new Schutzwache(buch, welt, sprache), this);
+        // Die Markierung MUSS stehen, bevor die erste Mark aus Arbeit fliesst: Alles, was
+        // vorher gesetzt wurde, gilt danach fuer immer als gewachsener Boden (Plan 9.1).
+        // Heute zahlt noch nichts - genau darum steht sie hier und nicht erst mit Teil E.
+        //
+        // EIGENE Weltmenge und nicht die eine Welt der Schutzwache: Bergmann, Holzfaeller,
+        // Bauer und Jaeger arbeiten gar nicht in der Marktstadt. Die Menge kommt aus den
+        // Welten, die Freimarken selbst gebaut hat - eine zweite Liste in der config.yml
+        // liefe auseinander, sobald jemand eine Welt hinzufuegt.
+        marken = Chunkmarken.ueberBukkit();
+        Set<String> markierteWelten = new TreeSet<>();
+        welten.values().forEach(eine -> markierteWelten.add(eine.key().asString()));
+        getServer().getPluginManager().registerEvents(
+                new Setzwache(marken, markierteWelten), this);
+        getLogger().info("Blockmarken aktiv in " + markierteWelten.size()
+                + " Welten - ein gesetzter Block zahlt beim Abbauen nichts. Die Marken"
+                + " liegen im Chunk, nicht in der Datenbank.");
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
         registriereBefehle();

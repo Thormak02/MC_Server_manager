@@ -11,6 +11,12 @@ dependencies {
     // brauchen keinen Server, nur die Material-Aufzaehlung - und genau dort sassen
     // zwei Fehler, die kein Kerntest finden konnte.
     testImplementation("io.papermc.paper:paper-api:26.3.build.231-stable")
+
+    // Der geteilte Vertrag aus dem Kern. Dieselbe Zeile steht in daten/build.gradle.kts,
+    // und aus demselben Grund: Eine Ablage, die der Kern beschreibt, soll in JEDER
+    // Umsetzung von denselben Proben geprueft werden. Hier ist es Chunkmarken - die eine
+    // Ablage dieses Projekts, die nicht in der Datenbank liegt, sondern in der Weltdatei.
+    testImplementation(testFixtures(project(":core")))
 }
 
 tasks.jar {
