@@ -1,0 +1,3 @@
+# Nur fuer die Proben: Bukkit.setServer holt hier die Serverfassung.
+# In die ausgelieferte Jar kommt diese Datei nicht - sie liegt in test/resources.
+de.freimarken.paper.Baustandprobe

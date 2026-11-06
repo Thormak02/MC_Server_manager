@@ -9,7 +9,11 @@ import net.kyori.adventure.text.Component;
  * gemessen und keine Geschmacksfrage.</b> Der Klasseninitialisierer der Wache baut
  * {@code HEIKLE_GRUPPEN} aus {@code Tag.FLOWER_POTS} und fragt damit
  * {@code Bukkit.server}; eine Probe, die eine reine Methode DORT aufruft, stirbt im
- * {@code ExceptionInInitializerError}, bevor sie ein Zeichen vergleichen kann. Genau so
+ * {@code ExceptionInInitializerError}, bevor sie ein Zeichen vergleichen kann - es sei
+ * denn, ein Stellvertreter steht unter {@code Bukkit.setServer}, und genau den baut
+ * seit dem 06.11.2026 {@code Serverprobe} fuer {@code SchutzwacheTest}. Der Grund
+ * fuer diese Datei bleibt davon unberuehrt: {@code SendewegTest} 33aj prueft ihr
+ * Bild OHNE jeden Server, und das ist der billigere und schaerfere Weg. Genau so
  * lief der erste Versuch am 05.11.2026. Damit folgt dieser Zug dem Muster von
  * {@link Spielzeittext} und {@link Verlaufszeile}: Die Wache entscheidet, diese Klasse
  * baut, und {@code SendewegTest} 33aj liest das Bild ohne Server mit.

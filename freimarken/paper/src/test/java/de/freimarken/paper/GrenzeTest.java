@@ -959,7 +959,7 @@ class GrenzeTest {
      * Wessen Drossel gilt und wer den Handbalken liest - vier Stellen in
      * {@code Schutzwache}, in Quellreihenfolge.
      *
-     * <p>Beides ist unsichtbar, solange keine Probe den Zweig DURCHLAEUFT, und beides
+     * <p>Beides war unsichtbar, solange keine Probe den Zweig DURCHLIEF, und beides
      * ist mit einem Eingriff belegt, der sonst gruen blieb. Geht der Balken an
      * {@code Bukkit.getOnlinePlayers().iterator().next()}, liest ein Unbeteiligter
      * "Diese Parzelle gehoert Bert", waehrend der Abgewiesene nicht erfaehrt, warum
@@ -968,10 +968,20 @@ class GrenzeTest {
      * zwei Sekunden stumm - beides im Spiel sofort sichtbar, beides von jeder
      * Zahltafel ungesehen.
      *
-     * <p>Ein echter Durchlauf braucht einen Server-Stellvertreter unter
-     * {@code Bukkit.setServer} samt Tag-Fassade, weil der Klasseninitialisierer der
-     * Wache {@code Tag.FLOWER_POTS} fragt. Das ist ein eigener Arbeitsschritt; bis
-     * dahin ist diese Tafel der Riegel.
+     * <p><b>Seit dem 06.11.2026 gibt es den echten Durchlauf</b>, und diese Tafel
+     * ist nicht mehr der einzige Riegel: {@code SchutzwacheTest} 36c laesst zwei
+     * Spieler wirklich abweisen und liest, was bei ihnen ankommt. Moeglich wurde
+     * das durch {@code Serverprobe} - einen Stellvertreter unter
+     * {@code Bukkit.setServer}, denn der Klasseninitialisierer der Wache fragt
+     * ueber {@code Tag.FLOWER_POTS} nach {@code Bukkit.server}.
+     *
+     * <p><b>Die Tafel bleibt trotzdem, und das ist kein Doppel.</b> Sie liest den
+     * Quelltext und faengt damit eine andere Gattung: einen Griff in die Drossel,
+     * der ganz verschwindet, und einen Empfaenger, der ein anderer wird. Gemessen
+     * am 06.11.2026: Drei Eingriffe - die Grenzfrage verdreht, die Meldepause auf
+     * null, der Namensrueckfall halbiert - liessen diese Tafel und 31r GRUEN und
+     * machten nur die Durchlaufproben rot. Umgekehrt sieht der Durchlauf nicht,
+     * ob ein Zugang die Wache ueberhaupt noch ruft. Zwei Fragen, zwei Riegel.
      */
     private static final List<String> DROSSEL_UND_BALKEN_IN_SCHUTZWACHE = List.of(
             "letzteMeldung.get <- spieler",
@@ -1849,7 +1859,6 @@ class GrenzeTest {
     private static final Pattern DROSSELWACHE = Pattern.compile(
             "letzteMeldung\\.(get|put|remove)\\(\\s*([\\w.()]+)\\.getUniqueId\\(\\)");
 
-    /** Der Handbalken mit seinem Empfaenger und dem Wortlaut, den er bekommt. */
     /**
      * Ein Nahtaufruf von {@code Bundtext} mit allem, was in seinen Klammern steht.
      *
@@ -1873,6 +1882,7 @@ class GrenzeTest {
             "getPluginMeta|Runtime[.]version|getMinecraftVersion|fluechtig"
                     + "|hasPermission|preisFuerNaechste|gesamtpreisFuer");
 
+    /** Der Handbalken mit seinem Empfaenger und dem Wortlaut, den er bekommt. */
     private static final Pattern BALKENWACHE = Pattern.compile(
             "(\\w+)\\.sendActionBar\\((\\w+)\\(");
 
