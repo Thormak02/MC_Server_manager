@@ -647,7 +647,108 @@ class BildGleichTest {
                         "&7Parzelle Nr. 2 kostet &625.000 Mark&7."),
                 new Zeile(BundSatz.PREIS_AUSGEGEBEN, 1L,
                         Einsatz.von("betrag", sprache.betrag(25_000L)),
-                        "&8Bisher ausgegeben: 25.000 Mark"));
+                        "&8Bisher ausgegeben: 25.000 Mark"),
+                // --- /beruf ------------------------------------------------------
+                // Die Berufsnamen kommen aus beruf.name.<schluessel> und werden hier als
+                // fertiges Wort eingesetzt - genau so, wie Beruftext es tut. Der
+                // Schluessel erscheint nur in der Befehlszeile der Warnung.
+                new Zeile(BerufSatz.LISTE_KOPF, 1L, Einsatz.keine(),
+                        "&6Berufe im Freimarkenbund"),
+                new Zeile(BerufSatz.LISTE_BERUF, 1L, Einsatz.von("name", "Bergmann"),
+                        "&7  &fBergmann"),
+                new Zeile(BerufSatz.LISTE_BERUF_MIT, 1L, Einsatz.von("name", "Bergmann")
+                        .mit("spezialisierungen", "Steinmetz"),
+                        "&7  &fBergmann&7 · dazu: Steinmetz"),
+                new Zeile(BerufSatz.LISTE_LEER, 1L, Einsatz.keine(),
+                        "&7Es sind keine Berufe eingetragen."),
+                // Die woertliche spitze Klammer - in der Vorlage maskiert, hier blank.
+                new Zeile(BerufSatz.LISTE_FUSS, 1L, Einsatz.keine(),
+                        "&7  /beruf waehlen <beruf> · /beruf stand"),
+                new Zeile(BerufSatz.STAND_KOPF, 1L, Einsatz.keine(),
+                        "&6Dein Beruf"),
+                new Zeile(BerufSatz.STAND_KEINER, 1L, Einsatz.keine(),
+                        "&7Du hast noch keinen Beruf gewaehlt."),
+                new Zeile(BerufSatz.STAND_GRUNDBERUF, 1L, Einsatz.von("name", "Bergmann"),
+                        "&7  &fBergmann"),
+                new Zeile(BerufSatz.STAND_SPEZIALISIERUNG, 1L,
+                        Einsatz.von("name", "Steinmetz").mit("grundberuf", "Bergmann"),
+                        "&7  &fSteinmetz&7 · baut auf Bergmann auf"),
+                // Die zwei Zeilen halten mit sieben und mit einem Leerzeichen dieselbe
+                // Spalte. Die Zahl steht in der DATEI und nicht im Programm - wie bei
+                // spielzeit.heute und spielzeit.gesamt. Zwei Zeilen muessen gemeinsam
+                // geaendert werden, und nur diese Bildprobe faengt es, wenn nicht.
+                new Zeile(BerufSatz.STAND_PLAETZE_GRUNDBERUFE, 1L,
+                        Einsatz.von("gehalten", "1").mit("erlaubt", "2"),
+                        "&7  Grundberufe:       1 von 2"),
+                new Zeile(BerufSatz.STAND_PLAETZE_SPEZIALISIERUNGEN, 1L,
+                        Einsatz.von("gehalten", "0").mit("erlaubt", "1"),
+                        "&7  Spezialisierungen: 0 von 1"),
+                new Zeile(BerufSatz.STAND_FRIST, 1L,
+                        Einsatz.von("dauer", "23 h 00 min"),
+                        "&e  Du kannst in 23 h 00 min wieder wechseln."),
+                new Zeile(BerufSatz.STAND_GEBUEHR, 1L,
+                        Einsatz.von("betrag", sprache.betrag(5_000L)),
+                        "&7  Ein Beruf aufgeben kostet 5.000 Mark."),
+                new Zeile(BerufSatz.GEWAEHLT, 1L, Einsatz.von("name", "Bergmann"),
+                        "&aDu bist jetzt Bergmann."),
+                // Farbwechsel mitten im Satz und zurueck: grau, gold, grau.
+                new Zeile(BerufSatz.VERLASSEN, 1L, Einsatz.von("name", "Bergmann")
+                        .mit("betrag", sprache.betrag(5_000L)),
+                        "&7Du hast Bergmann aufgegeben. Gebucht: &65.000 Mark&7."),
+                // Drei Zeilen in EINEM Satz, und der Beruf zweimal darin: als Wort im
+                // Text und als Schluessel in der Befehlszeile zum Abschreiben.
+                new Zeile(BerufSatz.VERLASSEN_WARNUNG, 1L, Einsatz.von("name", "Bergmann")
+                        .mit("schluessel", "bergmann")
+                        .mit("betrag", sprache.betrag(5_000L))
+                        .mit("dauer", "24 h 00 min"),
+                        "&eBergmann aufgeben?\n&7  Es kostet &65.000 Mark&7, und danach"
+                                + " kannst du 24 h 00 min lang nicht wechseln.\n&c  /beruf"
+                                + " verlassen bergmann bestaetigen"),
+                // Die ROHE Eingabe, nicht kleingeschrieben: Der Spieler soll lesen, was
+                // er getippt hat.
+                new Zeile(BerufSatz.ABSAGE_UNBEKANNT, 1L,
+                        Einsatz.von("eingabe", "Holzfaeler"),
+                        "&cDen Beruf \"Holzfaeler\" gibt es nicht. /beruf liste zeigt"
+                                + " alle."),
+                new Zeile(BerufSatz.ABSAGE_SCHON_GEHALTEN, 1L,
+                        Einsatz.von("name", "Bergmann"),
+                        "&7Du bist schon Bergmann."),
+                new Zeile(BerufSatz.ABSAGE_NICHT_GEHALTEN, 1L,
+                        Einsatz.von("name", "Bergmann"),
+                        "&7Du bist nicht Bergmann."),
+                // Die Zahl in der Klammer und nicht an einem gezaehlten Hauptwort: So
+                // liest sich der Satz auch bei 1 richtig, ohne zweite Dateizeile.
+                new Zeile(BerufSatz.ABSAGE_GRUNDBERUFE_VOLL, 1L,
+                        Einsatz.von("erlaubt", "2"),
+                        "&cDu hast keinen Platz mehr fuer einen Grundberuf (erlaubt: 2)."
+                                + " Gib einen auf, dann geht ein neuer."),
+                new Zeile(BerufSatz.ABSAGE_SPEZIALISIERUNG_VOLL, 1L,
+                        Einsatz.von("erlaubt", "1"),
+                        "&cDu hast keinen Platz mehr fuer eine Spezialisierung (erlaubt:"
+                                + " 1)."),
+                new Zeile(BerufSatz.ABSAGE_OHNE_RECHT, 1L, Einsatz.keine(),
+                        "&cSpezialisierungen sind noch nicht fuer dich freigegeben."),
+                new Zeile(BerufSatz.ABSAGE_GRUNDBERUF_FEHLT, 1L,
+                        Einsatz.von("name", "Bergmann"),
+                        "&cDafuer musst du zuerst Bergmann sein."),
+                new Zeile(BerufSatz.ABSAGE_TRAEGT_SPEZIALISIERUNG, 1L,
+                        Einsatz.von("name", "Steinmetz"),
+                        "&cDafuer musst du zuerst Steinmetz aufgeben."),
+                new Zeile(BerufSatz.ABSAGE_SPERRFRIST, 1L,
+                        Einsatz.von("dauer", "23 h 00 min"),
+                        "&cDu kannst erst in 23 h 00 min wieder wechseln."),
+                new Zeile(BerufSatz.ABSAGE_GELD_FEHLT, 1L,
+                        Einsatz.von("betrag", sprache.betrag(5_000L))
+                                .mit("guthaben", sprache.betrag(1_200L)),
+                        "&cAufgeben kostet 5.000 Mark, du hast 1.200 Mark."),
+                new Zeile(BerufSatz.ABSAGE_KEINE_KONSOLE, 1L, Einsatz.keine(),
+                        "&7Ein Beruf gehoert zu einem Spieler - die Konsole hat keinen."),
+                new Zeile(BerufSatz.ABSAGE_GLEICHZEITIG, 1L, Einsatz.keine(),
+                        "&eDein Berufsstand hat sich eben geaendert - versuch es noch"
+                                + " einmal."),
+                new Zeile(BerufSatz.ABSAGE_NICHT_LESBAR, 1L, Einsatz.keine(),
+                        "&7Deine Berufe sind gerade nicht lesbar - im Serverprotokoll"
+                                + " steht, warum."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

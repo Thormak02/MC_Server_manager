@@ -48,14 +48,14 @@ class SprachstandTest {
     }
 
     @Test
-    @DisplayName("23 - NUR_BEIM_START ist GENAU diese neun")
-    void nurBeimStartIstGenauDieseNeun() {
+    @DisplayName("23 - NUR_BEIM_START ist GENAU diese zehn")
+    void nurBeimStartIstGenauDieseZehn() {
         Set<String> erwartet = new LinkedHashSet<>(List.of(
                 "befehl.beschreibung.freimarken", "befehl.beschreibung.parzelle",
                 "befehl.beschreibung.mark", "befehl.beschreibung.warp",
                 "befehl.beschreibung.zurueck", "befehl.beschreibung.tpa",
                 "befehl.beschreibung.tpahere", "befehl.beschreibung.tpaccept",
-                "befehl.beschreibung.tpdeny"));
+                "befehl.beschreibung.tpdeny", "befehl.beschreibung.beruf"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachstand.NUR_BEIM_START.forEach(satz -> gefuehrt.add(satz.pfad()));
         // assertEquals auf Groesse UND Inhalt: contains haette auch eine Liste mit einem
@@ -100,7 +100,7 @@ class SprachstandTest {
                 + " schiefging, nicht, dass die Beschreibungen ohnehin nicht neuladbar"
                 + " sind - und sucht den Fehler an der falschen Zeile");
         assertTrue(ohne.get(0).contains("befehl.beschreibung.*"), ohne.get(0));
-        assertTrue(ohne.get(0).contains("9 Saetze"), ohne.get(0));
+        assertTrue(ohne.get(0).contains("10 Saetze"), ohne.get(0));
     }
 
     @Test

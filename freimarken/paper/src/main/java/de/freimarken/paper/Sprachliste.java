@@ -145,11 +145,24 @@ final class Sprachliste {
                 }
             }
         }
-        for (String pfad : gefunden.keySet()) {
-            if (Sprachschluessel.zuPfad(pfad) == null) {
-                maengel.add(VORLAGE + ", Zeile " + gefunden.get(pfad).zeile() + ": " + pfad
+        for (Map.Entry<String, Fund> eintrag : gefunden.entrySet()) {
+            String pfad = eintrag.getKey();
+            Satz satz = Sprachschluessel.zuPfad(pfad);
+            if (satz == null) {
+                maengel.add(VORLAGE + ", Zeile " + eintrag.getValue().zeile() + ": " + pfad
                         + " gehoert zu keinem Satz dieses Plugins - in der ausgelieferten"
                         + " Datei ist das ein Tippfehler beim Abschreiben.");
+                continue;
+            }
+            // Ein Berufsname steht NICHT in alle(): Es gibt einen Schluessel je Beruf der
+            // config.yml, und welche das sind, weiss diese Datei nicht. Die Schleife
+            // darueber hat ihn also nicht geprueft und nicht eingetragen - beides
+            // passiert hier. Ohne diese drei Zeilen waere ein Farbtag in einem
+            // Berufsnamen ungeprueft, und das Wort fehlte im Buch: Der erste /beruf
+            // liefe in einen Wurf, und zwar mitten im Spiel.
+            if (satz instanceof Berufsname && !saetze.containsKey(pfad)) {
+                maengel.addAll(maengelAmWert(satz, pfad, eintrag.getValue()));
+                saetze.put(pfad, eintrag.getValue().wert());
             }
         }
         if (!maengel.isEmpty()) {
@@ -278,7 +291,11 @@ final class Sprachliste {
         for (Map.Entry<String, Fund> eintrag : gefunden.entrySet()) {
             String pfad = eintrag.getKey();
             Fund fund = eintrag.getValue();
-            Satz satz = verzeichnis.get(pfad);
+            // Ueber ausVerzeichnis und nicht ueber get: Sonst waere ein Berufsname in
+            // der ausgelieferten Vorlage ein Satz und in der Datei des Betreibers eine
+            // Zeile, die zu keinem Satz gehoert - er koennte seinem eigenen Beruf kein
+            // Wort geben.
+            Satz satz = Sprachschluessel.ausVerzeichnis(verzeichnis, pfad);
             if (satz == null) {
                 String aehnlich = Sprachschluessel.aehnlichster(pfad);
                 bericht.add(DATEI + ", Zeile " + fund.zeile() + ": " + pfad + " gehoert zu"

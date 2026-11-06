@@ -82,6 +82,7 @@ wirtschaft:
     grundpreis: ""
     zusammenlegung-je-feld: ""
     startguthaben: ""
+    wechselgebuehr: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
@@ -151,6 +152,138 @@ kasse:
   # Eroeffnungsbuchung am 02.11.2026 behoben hat. Der Betrag friert im Augenblick der
   # Eroeffnung ein (Beitritt oder erste Buchung, je was zuerst kommt).
   startguthaben: 50000
+
+# DIE BERUFE - was ein Spieler waehlen darf, was ein Wechsel kostet und was ihn bremst.
+#
+# Ein Spieler haelt zwei Grundberufe und eine Spezialisierung. Das WAEHLEN ist gratis,
+# solange ein Platz frei ist - ein Neuling soll seine ersten drei Berufe nicht bezahlen
+# muessen. Bezahlt wird das AUFGEBEN, und danach laeuft eine Sperrfrist. Andersherum
+# waere beides umgehbar: erst aufgeben, einen Tag warten, dann gratis etwas anderes
+# waehlen.
+#
+# Was ein Beruf EINBRINGT, steht noch nirgends - das kommt mit seinem eigenen Bauschritt.
+# Heute wirkt allein die Wahl.
+#
+# DIE WORTE zu den Berufen stehen NICHT hier, sondern in der sprache.yml unter
+# beruf.name.<schluessel>. Worte gehoeren in die Sprachdatei; hier stehen die Schluessel,
+# und die stehen in der Datenbank.
+berufe:
+  # Was das Aufgeben eines Berufs kostet.
+  #
+  # Ganze Zahl von 0 bis 4611686018427387903 Mark. 0 heisst: Aufgeben ist gratis, und von
+  # den zwei Bremsen bleibt allein die Sperrfrist. Mehr als Faktor 2 gegenueber 5.000
+  # braucht die Bestaetigung unter wirtschaft.sprung-bestaetigt.wechselgebuehr.
+  #
+  # Mit 5.000 kostet ein Wechsel etwa zwei Spielstunden Arbeit - zu teuer fuers Umschalten
+  # zwischen zwei Aufgaben, zu billig, um jemanden auf einem Beruf festzuhalten, der ihm
+  # nicht gefaellt.
+  #
+  # /freimarken neuladen uebernimmt diesen Wert.
+  wechselgebuehr: 5000
+
+  # Wie lange nach dem Aufgeben kein weiterer Zug geht - weder aufgeben noch waehlen.
+  #
+  # Ganze Zahl von 0 bis 720 Stunden, und zwar in GANZEN Stunden. 0 heisst ausdruecklich:
+  # keine Sperrfrist, der ehrliche Ausschalter fuer die Regel; dann bremst allein die
+  # Gebuehr. Gemessen wird ab dem Augenblick des Aufgebens, in UTC. Ein Neustart
+  # verlaengert und verkuerzt sie nicht: In der Datenbank steht der Zeitpunkt und kein
+  # laufender Zaehler.
+  #
+  # Die Frist ist die wirksamere der zwei Bremsen. Gegen eine Gebuehr hilft Geld, gegen
+  # eine Frist hilft nichts. Mit 24 Stunden kann jeder einmal am Tag umdenken.
+  #
+  # /freimarken neuladen uebernimmt diesen Wert. Eine kuerzere Frist gilt sofort auch fuer
+  # einen Spieler, der schon wartet - gerechnet wird bei jedem Versuch neu, und es steht
+  # dafuer kein Zeitgeber.
+  sperrfrist-stunden: 24
+
+  # Wie viele Grundberufe und wie viele Spezialisierungen ein Spieler gleichzeitig halten
+  # darf.
+  #
+  # hoechstens-grundberufe ist eine ganze Zahl ab 1. Keine 0: Sie hiesse, niemand darf
+  # einen Beruf - und das sieht in einer Einstellungsdatei aus wie ein Tippfehler, weil es
+  # einer ist. Wer die Berufe abschalten will, nimmt das Recht freimarken.beruf weg.
+  #
+  # hoechstens-spezialisierungen darf 0 sein und heisst dann: keine Spezialisierungen.
+  # Das ist ein echter Betriebsfall - dann braucht niemand das Recht
+  # freimarken.beruf.spezialisierung.
+  #
+  # Keine der beiden Zahlen darf groesser sein, als die Liste unten hergibt: Wer drei
+  # Grundberufe erlaubt und nur zwei eintraegt, verspricht einen Platz, den niemand
+  # fuellen kann. Das wird abgewiesen, und die Klage nennt beide Zahlen.
+  #
+  # SPEZIALISIERUNGEN BRAUCHEN EIN RECHT: freimarken.beruf.spezialisierung. Ein Recht und
+  # keine Rangzahl hier - Raenge sind auf diesem Server Rechte, und eine zweite Quelle
+  # dafuer antwortete eines Tages anders.
+  #
+  # /freimarken neuladen uebernimmt beide Werte. Ein kleinerer Wert nimmt niemandem einen
+  # Beruf weg, den er schon hat - er verhindert nur den naechsten.
+  hoechstens-grundberufe: 2
+  hoechstens-spezialisierungen: 1
+
+  liste:
+    # NUR BEIM START GELESEN - /freimarken neuladen aendert hier nichts. An dieser Liste
+    # haengen die Vervollstaendigung von /beruf, die im Befehlsbaum steckt und genau
+    # einmal angemeldet wird, und die Zuordnung Grundberuf/Spezialisierung, mit der jede
+    # Berufszeile in der Datenbank gelesen wird.
+    #
+    # EIN EINTRAG JE GRUNDBERUF - die Reihenfolge hier ist die Reihenfolge in /beruf liste
+    # und bei der Vervollstaendigung. Alphabetisch sortiert waere eine Entscheidung, die
+    # dir niemand gesagt hat.
+    #
+    # spezialisierungen: Die Berufe, die diesen Grundberuf voraussetzen, als Liste in
+    #           eckigen Klammern. Leere Klammern sind erlaubt und heissen: Zu diesem
+    #           Grundberuf gibt es keine Spezialisierung. Die Zeile MUSS dann trotzdem da
+    #           sein - ein Eintrag ganz ohne Inhalt ("bergmann:" und nichts darunter) wird
+    #           beim Laden der Datei weggeworfen, und der Beruf fehlt dann stumm. Welche
+    #           Berufe wirklich gelten, nennt das Protokoll beim Start in einer Zeile.
+    #           Eine ZWEITE Spezialisierung je Grundberuf ist ein Eintrag und kein Umbau -
+    #           der Spieler waehlt dann eine von beiden.
+    #           Die Liste steht am Grundberuf und nicht als eigener Abschnitt: So ist ein
+    #           neuer Beruf ein Eintrag und nicht ein Eintrag plus eine vergessene
+    #           Zuordnung. Dieselbe Entscheidung wie beim tor: der Welten unten.
+    #           Steht derselbe Name unter zwei Grundberufen oder traegt er den Namen eines
+    #           Grundberufs, fallen ALLE Nennungen weg - sonst entschiede die Reihenfolge
+    #           der Eintraege, was er voraussetzt. Die Klage nennt jede Stelle.
+    #           Eine Spezialisierung auf eine Spezialisierung gibt es nicht: Es sind genau
+    #           zwei Rollen, und ein Beruf in der Mitte zaehlte in beiden Platztoepfen.
+    #
+    # DER SCHLUESSEL darf nur Kleinbuchstaben, Ziffern und Bindestrich tragen und muss mit
+    # einem Buchstaben beginnen; hoechstens 32 Zeichen. KEIN Punkt und kein Unterstrich,
+    # anders als bei einem Weltnamen: Der Punkt ist in der sprache.yml der Trenner, und
+    # beruf.name.berg.mann waere dort eine Ebene tiefer statt ein Name. Hier geprueft und
+    # nicht erst beim Gebrauch: Der Schluessel steht in einer Datenbankspalte, und ein zu
+    # langer Name wuerde dort stumm abgeschnitten - zwei Berufe fielen zusammen, und ein
+    # Spieler verloere einen.
+    #
+    # DAS WORT, das ein Spieler liest, steht in der sprache.yml unter
+    # beruf.name.<schluessel>. Wer hier einen Schluessel hinzufuegt, braucht dort eine
+    # Zeile dazu, sonst startet Freimarken nicht. Lieber ein verweigerter Start als ein
+    # Zunfthaus, in dem "bergmann" steht.
+    #
+    # Neue Berufe kommen beim Update NICHT von selbst in diese Datei - eine vorhandene
+    # config.yml wird nie ueberschrieben. Was hier fehlt, nennt das Protokoll beim Start.
+    # Verdient wird an: Erze, Stein, Tiefe - der Steinmetz zusaetzlich an veredelten
+    # Bausteinen und Statuen.
+    bergmann:
+      spezialisierungen: [steinmetz]
+    # Holz und Aufforstung - der Zimmermann an Balken, Tueren, Fachwerk.
+    holzfaeller:
+      spezialisierungen: [zimmermann]
+    # Acker, Tiere, Zucht - der Mueller an Nahrung und Vorratshaltung.
+    bauer:
+      spezialisierungen: [mueller]
+    # Fang, mit einem Bonus auf Hafenwerder - der Reeder an Seehandel und Bootsrennen.
+    fischer:
+      spezialisierungen: [reeder]
+    # Monster und Beute - der Gerber an Leder und Ruestung.
+    jaeger:
+      spezialisierungen: [gerber]
+    # GESETZTE Bloecke, und nur die: Ein Block zahlt nur einmal, und die Markierung dafuer
+    # kommt mit ihrem eigenen Bauschritt. Der Architekt verdient an grossen Bauten und am
+    # Auftragsbau.
+    baumeister:
+      spezialisierungen: [architekt]
 
 # Wie Spielzeit gemessen wird und wann ein Tag endet.
 #

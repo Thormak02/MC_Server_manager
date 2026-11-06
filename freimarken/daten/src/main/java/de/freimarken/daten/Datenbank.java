@@ -241,6 +241,60 @@ public final class Datenbank implements AutoCloseable {
               sekunden BIGINT   NOT NULL,
               PRIMARY KEY (spieler, tag)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 10: die Berufe - eine Zeile je Spieler und Beruf.
+            //
+            // KEINE Spalte fuer die Rolle. Ob "steinmetz" ein Grundberuf oder eine
+            // Spezialisierung ist, entscheidet die Liste in der config.yml und sonst
+            // niemand; eine zweite Fassung davon hier waeren zwei Stellen, die dasselbe
+            // entscheiden - dieselbe Begruendung wie bei grund in Schritt 7.
+            //
+            // zustand statt DELETE. Eine abgelegte Zeile bleibt stehen, denn Teil G will
+            // die Geschichte, und ein geloeschter Satz nimmt sie mit.
+            //
+            // ZWEI Zeitspalten, und das ist der Kern dieses Schrittes. geaendert_am traegt
+            // die juengste WAHL und gibt die Reihenfolge, in der /beruf stand die Berufe
+            // zeigt. abgelegt_am traegt das juengste ABLEGEN und ist die Sperrfrist
+            // selbst. Eine Spalte fuer beides waere falsch, und zwar zweimal: Die Frist
+            // haenge dann am Waehlen und sperrte einen neuen Spieler einen Tag lang aus
+            // seinem zweiten Grundberuf, und ein spaeter wiedergewaehlter Beruf loeschte
+            // mit seinem neuen Zeitpunkt die Frist, die er ausgeloest hat - Aufgeben,
+            // warten, wiederwaehlen waere der Weg um beide Bremsen herum. Darum bleibt
+            // abgelegt_am beim Wiederwaehlen unberuehrt.
+            //
+            // Beide sind UTC, wie jede DATETIME-Spalte dieses Schemas; gerechnet wird mit
+            // ihnen nur eine DAUER, also brauchen sie keine Zone. Der Zeitpunkt kommt aus
+            // Java und nie aus UTC_TIMESTAMP(3): Die Regel im Kern urteilt auf derselben
+            // eingespeisten Uhr, und zwei Zeitquellen in einer Frist sind eine Frist, die
+            // sich nicht nachrechnen laesst.
+            //
+            // KEIN Fremdschluessel auf kassen - derselbe Grund wie bei spielzeit (Schritt
+            // 9): Ein Beruf haengt an niemandes Konto. Ein RESTRICT brachte das Waehlen
+            // zum Scheitern, sobald eine Kontoeroeffnung einmal fehlgeschlagen ist, ein
+            // CASCADE loeschte Berufe stumm mit.
+            //
+            // KEIN zweiter Index. Es gibt genau eine Abfrage - alle Zeilen eines Spielers
+            // -, und die laeuft ueber das linke Glied des Primaerschluessels. Ein Index
+            // fuer die Frage "wie viele Bergmaenner gibt es" ist nachgeruestet ein
+            // einzeiliger Schemaschritt, und die Frage stellt erst Teil G.
+            //
+            // beruf VARCHAR(32) wie grund in Schritt 7. Der Leser der config.yml weist
+            // einen laengeren Schluessel ab (Berufsangabe.HOECHSTENS_ZEICHEN); ohne diese
+            // Pruefung schnitte MariaDB ihn stumm ab, und zwei Berufe fielen zusammen.
+            //
+            // IF NOT EXISTS wie bei Schritt 7 und 9: migriere() legt keine Transaktion um
+            // Anweisung und Standfortschreibung, also muss der Satz einen zweiten Lauf
+            // folgenlos ueberstehen.
+            """
+            CREATE TABLE IF NOT EXISTS berufe (
+              spieler      CHAR(36)    NOT NULL,
+              beruf        VARCHAR(32) NOT NULL,
+              zustand      ENUM('aktiv','abgelegt') NOT NULL DEFAULT 'aktiv',
+              geaendert_am DATETIME(3) NOT NULL,
+              abgelegt_am  DATETIME(3) NULL,
+              PRIMARY KEY (spieler, beruf)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -442,6 +496,11 @@ public final class Datenbank implements AutoCloseable {
             // Tabelle je einen Fremdschluessel gibt, muss die Zeile einordnen; ohne sie
             // wandern gemessene Sekunden von einem Test in den naechsten.
             anweisung.execute("DELETE FROM spielzeit");
+            // Die Berufe haengen an keinem Fremdschluessel, ihre Stelle in dieser Liste
+            // ist also frei - sie stehen hier, damit sie nicht uebersehen werden. Ohne
+            // diese Zeile wandern gewaehlte Berufe von einem Test in den naechsten, und
+            // der geteilte Vertrag wird sporadisch rot.
+            anweisung.execute("DELETE FROM berufe");
             anweisung.execute("DELETE FROM kassen");
         }
     }

@@ -5,7 +5,7 @@ import java.util.Set;
 /**
  * Die Saetze von {@code /tpa}, {@code /tpahere}, {@code /tpaccept} und {@code /tpdeny}.
  *
- * <p>Sieben Dateien statt einer, eine je Bauschritt: So teilen zwei gleichzeitig
+ * <p>Acht Dateien statt einer, eine je Bauschritt: So teilen zwei gleichzeitig
  * arbeitende Haende nie dieselbe Datei. Die Datei dieses Schrittes ist
  * {@code AnfragenBefehle}.
  *

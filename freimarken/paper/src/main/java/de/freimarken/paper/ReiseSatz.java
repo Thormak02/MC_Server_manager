@@ -5,7 +5,7 @@ import java.util.Set;
 /**
  * Die Saetze des Reisens - {@code /warp}, {@code /zurueck} und die Aufwaermzeit.
  *
- * <p>Sieben Dateien statt einer, eine je Bauschritt: So teilen zwei gleichzeitig
+ * <p>Acht Dateien statt einer, eine je Bauschritt: So teilen zwei gleichzeitig
  * arbeitende Haende nie dieselbe Datei. Die vier Dateien dieses Schrittes sind
  * {@code Reise}, {@code Aufwaermzeit}, {@code RueckwegBefehle} und {@code WarpBefehle},
  * und alle vier sind umgezogen.

@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Berufsverzeichnis;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Sprungregel;
 import de.freimarken.kern.Wirtschaftsstand;
@@ -37,6 +38,15 @@ import org.bukkit.configuration.file.YamlConfiguration;
  * naemlich in {@link #fehltText}, und die Liste dazu an EINER Stelle, naemlich in der
  * Klasse, die es entscheidet.
  *
+ * <p><b>Sieben Helfer sind paketweit und nicht privat</b>: {@code betrag},
+ * {@code ganzeZahl}, beide {@code esBleibt}, {@code wieGetippt} und {@code fehltText}
+ * benutzt auch {@link Berufsliste}. Sie sind nicht abgeschrieben, sondern geteilt -
+ * {@code ganzeZahl} faengt den Punkt, der in YAML keine Tausender trennt, und
+ * {@code fehltText} entscheidet je Schluessel, ob ein "es gilt" dazu stimmt. Zweimal
+ * gebaut wichen die beiden eines Tages ab, und dann klagte die eine Haelfte der Datei
+ * anders als die andere. {@code nenneFehlende} bleibt privat: Zwei Berichte, die dieselbe
+ * Zahl verschieden nennen, sind schlimmer als zwei Zeilen, also zaehlt Berufsliste selbst.
+ *
  * <p>Gelesen wird ROH ueber {@code get}. Bei einer Weltkante faengt das einen fehlenden
  * Rand; bei einem Preis faengt es ein tausendfach zu billiges Grundstueck:
  * {@code getLong} macht aus {@code grundpreis: 25.000} eine 25 und aus {@code "25000"}
@@ -69,9 +79,15 @@ final class Wirtschaftsliste {
 
     /**
      * @param wurzel die ganze Konfiguration, darf {@code null} sein - die Schluessel
-     *               liegen in vier verschiedenen Abschnitten
+     *               liegen in fuenf verschiedenen Abschnitten
+     * @param gilt   das Berufsverzeichnis, das JETZT gilt. Es gehoert nicht in diesen
+     *               Leser und wird deshalb hereingegeben: Die Liste der Berufe ist nicht
+     *               neuladbar, aber die Platzzahlen muessen gegen sie geprueft werden -
+     *               und zwar gegen die LAUFENDE, nicht gegen die in der Datei. Dieselbe
+     *               Trennung wie bei Takt und Untaetigkeitsgrenze
      */
-    static Ergebnis ausKonfiguration(ConfigurationSection wurzel) {
+    static Ergebnis ausKonfiguration(ConfigurationSection wurzel,
+                                     Berufsverzeichnis gilt) {
         List<String> klagen = new ArrayList<>();
         List<String> bericht = new ArrayList<>();
         if (wurzel == null) {
@@ -108,6 +124,14 @@ final class Wirtschaftsliste {
         Zeitwerte zeit = new Zeitwerte(zone, Duration.ofSeconds(taktSekunden),
                 Duration.ofMinutes(untaetigMinuten));
 
+        // Die Berufe liest ein eigener Leser: Er hat eigene Schranken, eine eigene
+        // Querpruefung gegen die Liste und einen eigenen Zaehlsatz fuer fehlende Zeilen.
+        // Seine Klagen und sein Bericht kommen hier dazu, denn der Aufrufer soll EINE
+        // Antwort bekommen und nicht zwei.
+        Berufsliste.Werte beruf = Berufsliste.werteAus(wurzel, gilt);
+        klagen.addAll(beruf.klagen());
+        bericht.addAll(beruf.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -137,7 +161,7 @@ final class Wirtschaftsliste {
         // ist aber nicht neuladbar. Beim Neuladen nennte eine Zeile hier die Zone aus der
         // Datei, waehrend eine andere darunter sagt, dass die alte weiter gilt.
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
-                gruppenFelder, werbung, zeit), klagen, bericht);
+                gruppenFelder, werbung, zeit, beruf.werte()), klagen, bericht);
     }
 
     /**
@@ -148,9 +172,9 @@ final class Wirtschaftsliste {
      * @param vorgabe der ausgelieferte Wert - zugleich der Rueckfall UND der Vergleichswert
      *                fuer den Sprung
      */
-    private static long betrag(ConfigurationSection wurzel, String pfad, String name,
-                               long vorgabe, long hoechstens, String einheit,
-                               List<String> klagen, List<String> bericht) {
+    static long betrag(ConfigurationSection wurzel, String pfad, String name,
+                       long vorgabe, long hoechstens, String einheit,
+                       List<String> klagen, List<String> bericht) {
         Long gelesen = ganzeZahl(wurzel, pfad, vorgabe, klagen, bericht);
         if (gelesen == null) {
             return vorgabe;
@@ -368,8 +392,8 @@ final class Wirtschaftsliste {
      * Tausender selbst mit Punkt. Eine Fliesskommazahl entsteht in YAML nur dort, wo ein
      * Punkt oder ein Exponent steht; als Betrag war sie nie gemeint.
      */
-    private static Long ganzeZahl(ConfigurationSection wurzel, String pfad, long vorgabe,
-                                  List<String> klagen, List<String> bericht) {
+    static Long ganzeZahl(ConfigurationSection wurzel, String pfad, long vorgabe,
+                          List<String> klagen, List<String> bericht) {
         Object roh = wurzel.get(pfad);
         if (roh == null) {
             bericht.add(fehltText(pfad, String.valueOf(vorgabe)));
@@ -401,12 +425,12 @@ final class Wirtschaftsliste {
      * Was gilt, sagt der Aufrufer: beim Start die Rechenprobe, beim Neuladen die Zeile
      * "Es gilt unveraendert weiter".
      */
-    private static String esBleibt(long vorgabe) {
+    static String esBleibt(long vorgabe) {
         return esBleibt(String.valueOf(vorgabe));
     }
 
     /** Dasselbe fuer einen Wert, der keine Zahl ist - die Zone. */
-    private static String esBleibt(String vorgabe) {
+    static String esBleibt(String vorgabe) {
         return "Es bleibt bei dem Wert, der bisher galt (ausgeliefert: " + vorgabe + ").";
     }
 
@@ -417,7 +441,7 @@ final class Wirtschaftsliste {
      * genau so, wie eine Zahl aussieht. Der Unterschied, um den die ganze Klage geht,
      * war damit unsichtbar.
      */
-    private static String wieGetippt(Object roh) {
+    static String wieGetippt(Object roh) {
         return roh instanceof String text ? "\"" + text + "\"" : String.valueOf(roh);
     }
 
@@ -441,7 +465,7 @@ final class Wirtschaftsliste {
      * @param wert der ausgelieferte Wert - fuer einen neuladbaren Schluessel zugleich der,
      *             der gilt
      */
-    private static String fehltText(String pfad, String wert) {
+    static String fehltText(String pfad, String wert) {
         String nachsatz = " Eine vorhandene Datei wird beim Update nie ueberschrieben; die"
                 + " Zeile muss von Hand hinein, sonst ist der Wert nicht einstellbar.";
         if (Wirtschaftsstand.NUR_BEIM_START.contains(pfad)) {

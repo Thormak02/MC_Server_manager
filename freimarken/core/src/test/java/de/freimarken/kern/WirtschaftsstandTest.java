@@ -29,8 +29,20 @@ class WirtschaftsstandTest {
     private static Wirtschaftswerte satz(long grundpreis, long jeFeld, long startguthaben,
                                          int hoechstzahl, int gruppenFelder, String werbung,
                                          Zeitwerte zeit) {
+        return satz(grundpreis, jeFeld, startguthaben, hoechstzahl, gruppenFelder, werbung,
+                zeit, Berufswerte.VORGABE);
+    }
+
+    private static Wirtschaftswerte satz(long grundpreis, long jeFeld, long startguthaben,
+                                         int hoechstzahl, int gruppenFelder, String werbung,
+                                         Zeitwerte zeit, Berufswerte berufe) {
         return new Wirtschaftswerte(new Preisstaffel(grundpreis, jeFeld), startguthaben,
-                hoechstzahl, gruppenFelder, werbung, zeit);
+                hoechstzahl, gruppenFelder, werbung, zeit, berufe);
+    }
+
+    /** Ein Berufssatz, bei dem alle vier Zahlen von der Vorgabe abweichen. */
+    private static Berufswerte andereberufe() {
+        return new Berufswerte(7_500L, Duration.ofHours(48L), 3, 2);
     }
 
     /** Ein Zeitsatz, bei dem alle drei Werte von der Vorgabe abweichen. */
@@ -79,6 +91,55 @@ class WirtschaftsstandTest {
         assertTrue(zeile.contains("999000"), "die Datei muss genannt werden: " + zeile);
         assertTrue(zeile.contains("50000"), "und was weiter gilt: " + zeile);
         assertTrue(zeile.contains("Neustart"), zeile);
+    }
+
+    @Test
+    @DisplayName("Alle vier Berufszahlen werden getauscht")
+    void berufszahlenWerdenGetauscht() {
+        // Anders als bei den Zeitwerten bleibt hier KEINE stehen: Alle vier werden beim
+        // Gebrauch gefragt, es wird nichts gebaut und nichts angemeldet. Ohne diese Probe
+        // aenderte der Betreiber die Gebuehr, /freimarken neuladen meldete gruen "nichts
+        // geaendert", und im Spiel gaelte die alte Zahl weiter.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, 4, 4,
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
+                andereberufe()));
+
+        assertEquals(7_500L, stand.werte().berufe().wechselgebuehr());
+        assertEquals(48L, stand.werte().berufe().sperrfristStunden());
+        assertEquals(3, stand.werte().berufe().grundberufe());
+        assertEquals(2, stand.werte().berufe().spezialisierungen());
+
+        assertEquals(4, uebernahme.geaendert().size(),
+                "vier Zeilen haben sich geaendert: " + uebernahme.geaendert());
+        assertTrue(uebernahme.geaendert().contains(
+                Berufswerte.PFAD_WECHSELGEBUEHR + ": 5000 -> 7500"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(
+                Berufswerte.PFAD_SPERRFRIST + ": 24 -> 48"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(
+                Berufswerte.PFAD_GRUNDBERUFE + ": 2 -> 3"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(
+                Berufswerte.PFAD_SPEZIALISIERUNGEN + ": 1 -> 2"),
+                uebernahme.geaendert().toString());
+    }
+
+    @Test
+    @DisplayName("Die Berufszahlen stehen nicht im Block dessen, was nicht angefasst wird")
+    void berufszahlenStehenNichtImBlock() {
+        // Sie sind neuladbar, also hat dieser Block ueber sie nichts zu sagen. Stuenden
+        // sie darin, lernte der Betreiber, dass eine Aenderung erst mit dem Neustart
+        // gilt - und wartete auf etwas, das schon passiert ist.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var zeilen = stand.nichtAngefasst(satz(25_000L, 10_000L, 50_000L, 4, 4,
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
+                andereberufe()));
+
+        for (String zeile : zeilen) {
+            assertFalse(zeile.contains("berufe."), zeile);
+        }
     }
 
     @Test

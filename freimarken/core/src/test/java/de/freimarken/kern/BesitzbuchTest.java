@@ -850,7 +850,8 @@ class BesitzbuchTest {
 
         stand.uebernimm(new Wirtschaftswerte(new Preisstaffel(60_000L, 10_000L),
                 Wirtschaftswerte.VORGABE_STARTGUTHABEN, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
-                Wirtschaftswerte.VORGABE_GRUPPEN_FELDER, "", Zeitwerte.VORGABE));
+                Wirtschaftswerte.VORGABE_GRUPPEN_FELDER, "", Zeitwerte.VORGABE,
+                Berufswerte.VORGABE));
 
         // Dritte Parzelle: 60.000 mal 2 - der neue Grundpreis, nicht der alte.
         assertEquals(120_000L, eigenesBuch.nehmen(WELT, anna, 200, 10, VIELE).kosten(),

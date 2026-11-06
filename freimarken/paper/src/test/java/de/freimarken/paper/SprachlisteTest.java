@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -498,6 +499,73 @@ class SprachlisteTest {
                         -> klage.contains(BundSatz.STAND_KOPF.pfad())
                         && klage.contains("leer")),
                 "bekommen: " + gelesen.klagen());
+    }
+
+    @Test
+    @DisplayName("21f - ein Beruf, den die Vorlage nicht kennt, bekommt hier sein Wort")
+    void eigenerBerufsnameWirktUEBERNOMMEN() {
+        // Die EINZIGE offene Familie dieses Plugins. Jeder andere Satz ist eine Konstante
+        // in einer der acht Bereichsaufzaehlungen, und die Vorlage muss ihn tragen. Welche
+        // BERUFE es gibt, entscheidet aber die config.yml - der Betreiber darf dort einen
+        // eintragen, und dann braucht er hier eine Zeile, die die Vorlage nicht kennt.
+        //
+        // Ohne diese Probe waere das nicht gesichert: Der Leser der Betreiberdatei
+        // meldete die Zeile als "gehoert zu keinem Satz dieses Plugins", der Start
+        // verweigerte sich wegen des fehlenden Wortes, und der Betreiber koennte seinen
+        // eigenen Beruf nie benennen.
+        String eigen = "beruf:\n  name:\n    holzknecht: \"Holzknecht\"\n";
+
+        var gelesen = Sprachliste.ausQuelle(eigen, Sprachprobe.ausDemJar());
+
+        assertEquals(List.of(), gelesen.klagen(), "bekommen: " + gelesen.klagen());
+        assertNotNull(gelesen.buch());
+        assertEquals("Holzknecht",
+                gelesen.buch().wortlaut(new Berufsname("holzknecht")));
+        // Im Bericht steht sie unter "deine" - das ist richtig und gewollt. Was NICHT
+        // dastehen darf, ist der Satz ueber eine Zeile, die zu keinem Satz gehoert: Genau
+        // den bekam der Betreiber vor der offenen Familie.
+        assertTrue(gelesen.bericht().stream().noneMatch(z
+                        -> z.contains("gehoert zu keinem Satz")),
+                "bekommen: " + gelesen.bericht());
+    }
+
+    @Test
+    @DisplayName("21g - ein Berufsname mit Farbtag ist eine Klage")
+    void berufsnameMitFarbtagIstKlage() {
+        // Ein Name wird in andere Saetze EINGESETZT - in die Liste, in den Stand, in jede
+        // Zusage und jede Absage. Ein Tag darin ueberschriebe die Farbe der Zeile, in der
+        // er landet, und zwar je Zeile anders. Darum ist er Art.WORT, und das muss auch
+        // fuer die offene Familie gelten: Sie laeuft nicht durch die Schleife ueber
+        // Sprachschluessel.alle(), also waere sie ohne diese Probe die einzige
+        // ungepruefte Zeile der Datei.
+        String bunt =
+                "beruf:\n  name:\n    bergmann: \"<gold>Bergmann</gold>\"\n";
+
+        var gelesen = Sprachliste.ausQuelle(bunt, Sprachprobe.ausDemJar());
+
+        assertNull(gelesen.buch(), "eine Klage blockiert den ganzen Tausch");
+        assertTrue(gelesen.klagen().stream().anyMatch(klage
+                        -> klage.contains("beruf.name.bergmann")),
+                "bekommen: " + gelesen.klagen());
+    }
+
+    @Test
+    @DisplayName("21h - ein Schluessel, den es als Beruf nie geben kann, gehoert zu keinem Satz")
+    void unmoeglicherBerufsnameGehoertZuKeinemSatz() {
+        // Die Familie prueft auch den REST hinter der Vorsilbe, und zwar mit derselben
+        // Regel, die der Leser der config.yml anwendet. Sonst waere beruf.name.Bergmann
+        // ein gueltiger Pfad fuer einen Beruf, den es nie geben kann - eine Zeile, die
+        // nicht wirkt, und niemand sagt es.
+        String gross = "beruf:\n  name:\n    Bergmann: \"Bergmann\"\n";
+
+        var gelesen = Sprachliste.ausQuelle(gross, Sprachprobe.ausDemJar());
+
+        assertEquals(List.of(), gelesen.klagen(), "keine Klage - die Zeile wirkt nur"
+                + " nicht: " + gelesen.klagen());
+        assertTrue(gelesen.bericht().stream().anyMatch(z
+                        -> z.contains("beruf.name.Bergmann")
+                        && z.contains("gehoert zu keinem Satz")),
+                "bekommen: " + gelesen.bericht());
     }
 
     private static String kurz(Satz satz) {

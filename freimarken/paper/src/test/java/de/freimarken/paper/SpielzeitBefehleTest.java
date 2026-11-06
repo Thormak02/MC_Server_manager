@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.freimarken.kern.Berufswerte;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.SpeicherSpielzeit;
 import de.freimarken.kern.Spielzeitablage;
@@ -141,7 +142,8 @@ class SpielzeitBefehleTest {
         return new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
                 Wirtschaftswerte.VORGABE_STARTGUTHABEN, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
                 Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
-                Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE));
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
+                Berufswerte.VORGABE));
     }
 
     private Spielzeitbuch buch(Spielzeitablage ablage) {

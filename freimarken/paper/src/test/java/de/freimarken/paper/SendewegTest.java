@@ -1,10 +1,13 @@
 package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.brigadier.StringReader;
 import de.freimarken.kern.Art;
+import de.freimarken.kern.Berufsregel;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Buchungsgrund;
@@ -12,6 +15,7 @@ import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Richtung;
 import de.freimarken.kern.Wirtschaftswerte;
 import de.freimarken.kern.Zustand;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
@@ -1408,6 +1412,55 @@ class SendewegTest {
 
     /** Die Fassung des Servers, wie {@code getServer()} sie nennt. */
     private static final String MINECRAFT = "1.21.4";
+
+    @Test
+    @DisplayName("33an - JEDER Ausgang des Berufsurteils hat seine eigene Absage")
+    void jederAusgangHatSeineAbsage() {
+        // Die dritte mechanische Familie dieses Projekts, und die erste, die NICHT in
+        // Sprachschluessel steht: Beruftext.absageZeilen waehlt mit einem switch ueber
+        // die Aufzaehlung, und ein switch ohne default muss vollstaendig sein. Kommt ein
+        // Ausgang hinzu, bricht der BAU - und nicht das Spiel.
+        //
+        // Was diese Probe darueber hinaus faengt: dass jeder Ausgang eine Zeile ERGIBT,
+        // und zwar eine andere als die anderen. Ein switch, der zweimal auf denselben
+        // Satz zeigt, ist vollstaendig und trotzdem falsch - der Spieler liest dann bei
+        // zwei verschiedenen Absagen dasselbe und sucht den Fehler bei sich.
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        var bilder = new TreeSet<String>();
+        for (Berufsregel.Ausgang ausgang : Berufsregel.Ausgang.values()) {
+            if (ausgang == Berufsregel.Ausgang.ANGENOMMEN) {
+                // Ein angenommenes Urteil hat keine Absage - es hat eine Zusage, und die
+                // prueft BerufBefehlTest am getippten Befehl.
+                continue;
+            }
+            var urteil = new Berufsregel.Urteil(ausgang, "bergmann", 5_000L,
+                    Duration.ofHours(3L), 2);
+            List<Component> zeilen = Beruftext.absageZeilen(sprache, urteil, 1_200L);
+
+            assertEquals(1, zeilen.size(), ausgang + " muss GENAU eine Zeile ergeben");
+            String bild = Sprachprobe.bild(zeilen.getFirst());
+            assertFalse(bild.isBlank(), ausgang + " ergibt eine leere Zeile - dann sieht"
+                    + " der Spieler, dass etwas geschieht, aber nicht was");
+            assertTrue(bilder.add(bild), ausgang + " sagt dasselbe wie eine andere"
+                    + " Absage: " + bild);
+        }
+        assertEquals(Berufsregel.Ausgang.values().length - 1, bilder.size(),
+                "zehn Ausgaenge, zehn verschiedene Saetze: " + bilder);
+    }
+
+    @Test
+    @DisplayName("33ao - ein angenommenes Urteil hat keine Absage, und das wirft")
+    void angenommenHatKeineAbsage() {
+        // Die Gegenprobe zu 33an. Ein stilles leeres Ergebnis waere hier das Schlimmste:
+        // Der Zweig haelt sein Urteil fuer eine Absage, sendet nichts, und der Spieler
+        // tippt /beruf waehlen und liest GAR NICHTS.
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        var angenommen = new Berufsregel.Urteil(Berufsregel.Ausgang.ANGENOMMEN,
+                "bergmann", 0L, Duration.ZERO, 2);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> Beruftext.absageZeilen(sprache, angenommen, 0L));
+    }
 
     @Test
     @DisplayName("33am - /freimarken: alle VIER Lagen von stand und BEIDE von preis")

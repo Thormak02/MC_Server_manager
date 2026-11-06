@@ -5,7 +5,7 @@ import java.util.Set;
 /**
  * Die Saetze der Wachen - Bauschutz, Ankunft und Portale.
  *
- * <p>Sieben Dateien statt einer, eine je Bauschritt: So teilen zwei gleichzeitig
+ * <p>Acht Dateien statt einer, eine je Bauschritt: So teilen zwei gleichzeitig
  * arbeitende Haende nie dieselbe Datei. Die Dateien dieses Schrittes sind
  * {@code Schutzwache}, {@code Ankunftswache} und {@code Portalwache}; umgezogen ist die
  * erste im ersten Zug, die zwei anderen im zweiten. Dazu kam eine vierte,

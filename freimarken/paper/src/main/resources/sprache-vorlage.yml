@@ -65,6 +65,8 @@ mark:
       parzelle-erstattet: "Parzelle nicht eingetragen - erstattet"
       zusammenlegung: "Grundstueck zusammengelegt"
       zusammenlegung-erstattet: "Zusammenlegen gescheitert - erstattet"
+      beruf-verlassen: "Beruf aufgegeben"
+      beruf-erstattet: "Beruf aufgeben gescheitert - erstattet"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -101,6 +103,7 @@ befehl:
     tpahere: "Lade einen Spieler ein, zu dir zu kommen"
     tpaccept: "Eine Teleportanfrage annehmen"
     tpdeny: "Teleportanfragen ablehnen"
+    beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
 parzelle:
   # Das Wort fuer den Preis 0 - es wird in info.frei, info.frei-am-limit und
@@ -569,6 +572,139 @@ spielzeit:
   # mitten im Befehl. Das Jahr steht hier mit drin, anders als bei
   # zeit.verlauf-muster: Eine Spielzeit ist die eines Tages und nicht einer Liste.
   tag-muster: "dd.MM.yyyy"
+
+# DIE BERUFE - was ein Spieler waehlt, was es kostet und was ihn bremst.
+#
+# Dieser Abschnitt steht unter beruf, also unter dem BEFEHL, den du tippst - wie
+# anfrage und spielzeit und anders als reise. Der Grund ist derselbe wie dort, nur
+# umgekehrt: Diese Saetze loest genau EIN Befehl aus, naemlich /beruf. Es gibt keinen
+# zweiten Weg zu einem Beruf.
+#
+# WELCHE Berufe es gibt, steht NICHT hier, sondern in der config.yml unter
+# berufe.liste. Hier stehen nur die WORTE dazu - unter beruf.name, ein Wort je
+# Schluessel. Traegst du dort einen Beruf ein, brauchst du hier eine Zeile dazu, sonst
+# startet Freimarken nicht: Lieber ein verweigerter Start als ein Zunfthaus, in dem
+# "bergmann" steht.
+#
+# DIE DAUER in beruf.stand.frist und beruf.absage.sperrfrist kommt aus demselben
+# Rechenweg wie jede andere Dauer dieses Plugins - die Formen dafuer stehen oben unter
+# spielzeit.dauer. Aenderst du sie dort, aendern sie sich auch hier. Das ist Absicht:
+# Zwei Rechnungen fuer dieselbe Frist liefen eines Tages auseinander, und dann lies du
+# an einer Stelle "2 h 05 min" und an der anderen "2 Stunden" fuer dieselbe Zahl.
+#
+# HALB IN KRAFT (Verdienst): Kein Satz hier sagt, was ein Beruf EINBRINGT, und zwar
+#   weil es noch nichts einbringt. Das kommt mit seinem eigenen Bauschritt; dann
+#   stehen die Zeilen dazu hier, und diese Warnung ist weg. Was heute wirkt, ist
+#   allein das WAEHLEN: wer was halten darf, was ein Wechsel kostet und wie lange er
+#   danach warten muss.
+beruf:
+  liste:
+    # Die Ueberschrift von /beruf liste.
+    kopf: "<gold>Berufe im Freimarkenbund</gold>"
+    # {name} - ein Grundberuf, zu dem es keine Spezialisierung gibt.
+    beruf: "<gray>  <white>{name}</white></gray>"
+    # {name} {spezialisierungen} - ein Grundberuf MIT seinen Spezialisierungen. Zwei
+    # Saetze und nicht einer mit leerem Wert: Sonst stuende hinter einem Grundberuf
+    # ohne Spezialisierung ein Gedankenstrich und dahinter nichts.
+    beruf-mit: "<gray>  <white>{name}</white> · dazu: {spezialisierungen}</gray>"
+    # Was zwischen zwei Spezialisierungen steht. DARF LEER SEIN - dann stossen die
+    # Namen aneinander. Ein Trenner sendet keine eigene Zeile.
+    trenner: ", "
+    # Es gibt gar keinen Beruf in der config.yml. Du liest das nur, wenn du die Liste
+    # gerade leerst - ohne Berufe bleibt Freimarken aus.
+    leer: "<gray>Es sind keine Berufe eingetragen.</gray>"
+    # Die letzte Zeile der Liste.
+    fuss: "<gray>  /beruf waehlen \\<beruf> · /beruf stand</gray>"
+  stand:
+    # Die Ueberschrift von /beruf stand.
+    kopf: "<gold>Dein Beruf</gold>"
+    # Er hat noch NIE einen gewaehlt. Nicht dasselbe wie "haelt gerade keinen": Wer
+    # alles abgelegt hat, liest stattdessen die Zeile frist darunter.
+    keiner: "<gray>Du hast noch keinen Beruf gewaehlt.</gray>"
+    # {name} - ein gehaltener Grundberuf.
+    grundberuf: "<gray>  <white>{name}</white></gray>"
+    # {name} {grundberuf} - eine gehaltene Spezialisierung und der Beruf, auf dem sie
+    # aufbaut.
+    spezialisierung: "<gray>  <white>{name}</white> · baut auf {grundberuf} auf</gray>"
+    plaetze:
+      # {gehalten} {erlaubt} - je Rolle eine eigene Zeile, damit du sie umstellen und
+      # eine davon weglassen kannst. Auf einem Server ohne Spezialisierungen ist die
+      # zweite Zeile ohnehin eine Null von Null.
+      grundberufe: "<gray>  Grundberufe:       {gehalten} von {erlaubt}</gray>"
+      spezialisierungen: "<gray>  Spezialisierungen: {gehalten} von {erlaubt}</gray>"
+    # {dauer} - die Sperrfrist laeuft noch. Dieselbe Zahl, die auch die Absage nennt.
+    frist: "<yellow>  Du kannst in {dauer} wieder wechseln.</yellow>"
+    # {betrag} - was ein Wechsel kostet. Steht hier, damit es nicht erst in der Absage
+    # steht.
+    gebuehr: "<gray>  Ein Beruf aufgeben kostet {betrag}.</gray>"
+  # {name} - gewaehlt. Ohne Betrag: Waehlen ist immer gratis, bezahlt wird das
+  # Aufgeben.
+  gewaehlt: "<green>Du bist jetzt {name}.</green>"
+  verlassen:
+    # {name} {betrag} - abgelegt, und was dafuer gebucht wurde.
+    getan: "<gray>Du hast {name} aufgegeben. Gebucht: <gold>{betrag}</gold>.</gray>"
+    # {name} {schluessel} {betrag} {dauer} - die Rueckfrage VOR dem Aufgeben, wie bei
+    # /parzelle aufgeben. ZWEI Werte fuer denselben Beruf: {name} ist das Wort von
+    # unten, {schluessel} das, was in der Befehlszeile zum Abschreiben stehen muss.
+    warnung: "<yellow>{name} aufgeben?</yellow>\n<gray>  Es kostet <gold>{betrag}</gold>, und danach kannst du {dauer} lang nicht wechseln.</gray>\n<red>  /beruf verlassen {schluessel} bestaetigen</red>"
+  absage:
+    # {eingabe} - diesen Beruf gibt es nicht. Hier steht, was DU getippt hast, und
+    # kein Wort von unten: Es gibt ja keines dafuer.
+    unbekannt: "<red>Den Beruf \"{eingabe}\" gibt es nicht. /beruf liste zeigt alle.</red>"
+    # {name} - er haelt ihn schon.
+    schon-gehalten: "<gray>Du bist schon {name}.</gray>"
+    # {name} - er haelt ihn nicht, es gibt nichts aufzugeben.
+    nicht-gehalten: "<gray>Du bist nicht {name}.</gray>"
+    # {erlaubt} - alle Grundberufsplaetze sind besetzt.
+    grundberufe-voll: "<red>Du hast keinen Platz mehr fuer einen Grundberuf (erlaubt: {erlaubt}). Gib einen auf, dann geht ein neuer.</red>"
+    # {erlaubt} - alle Spezialisierungsplaetze sind besetzt.
+    spezialisierung-voll: "<red>Du hast keinen Platz mehr fuer eine Spezialisierung (erlaubt: {erlaubt}).</red>"
+    # Ihm fehlt das Recht fuer Spezialisierungen. OHNE den Namen des Rechts - damit
+    # kann ein Spieler nichts anfangen. Willst du hier auf einen Rang hinweisen,
+    # schreib es in diesen Satz.
+    ohne-recht: "<red>Spezialisierungen sind noch nicht fuer dich freigegeben.</red>"
+    # {name} - ihm fehlt der Grundberuf, den diese Spezialisierung voraussetzt. Im
+    # Satz steht der GEBRAUCHTE Beruf, nicht der gewuenschte.
+    grundberuf-fehlt: "<red>Dafuer musst du zuerst {name} sein.</red>"
+    # {name} - der Grundberuf bleibt, solange seine Spezialisierung steht. Im Satz
+    # steht die SPEZIALISIERUNG: Sie ist das, was zuerst weg muss.
+    traegt-spezialisierung: "<red>Dafuer musst du zuerst {name} aufgeben.</red>"
+    # {dauer} - die Sperrfrist laeuft noch.
+    sperrfrist: "<red>Du kannst erst in {dauer} wieder wechseln.</red>"
+    # {betrag} {guthaben} - das Geld reicht nicht.
+    geld-fehlt: "<red>Aufgeben kostet {betrag}, du hast {guthaben}.</red>"
+    # Die Konsole hat keinen Beruf. Grau und nicht rot: Es ist nichts kaputt.
+    keine-konsole: "<gray>Ein Beruf gehoert zu einem Spieler - die Konsole hat keinen.</gray>"
+    # Zwei Befehle in derselben Sekunde. Es ist NICHTS passiert, und ein zweiter Versuch
+    # geht durch.
+    gleichzeitig: "<yellow>Dein Berufsstand hat sich eben geaendert - versuch es noch einmal.</yellow>"
+    # Die Ablage antwortet nicht. Daneben steht die Ausnahme im Serverprotokoll.
+    nicht-lesbar: "<gray>Deine Berufe sind gerade nicht lesbar - im Serverprotokoll steht, warum.</gray>"
+  # DAS WORT ZU JEDEM BERUF. Ein Eintrag je Schluessel aus berufe.liste in der
+  # config.yml - und zwar in BEIDE Richtungen: Ein Beruf ohne Wort laesst Freimarken
+  # nicht starten, ein Wort ohne Beruf ist eine Zeile, die nicht wirkt (sie steht dann
+  # im Bericht von /freimarken neuladen).
+  #
+  # Kein Farbtag: Diese Worte werden in andere Saetze eingesetzt, und ein Tag darin
+  # ueberschriebe die Farbe der Zeile, in der er landet - je Zeile anders.
+  #
+  # Hier stehen die Berufsnamen und nicht in der config.yml, weil Worte in die
+  # Sprachdatei gehoeren: Dieselbe Trennung wie ueberall sonst in diesem Plugin. Der
+  # Schluessel links ist technisch und steht in der Datenbank; das Wort rechts ist
+  # deines.
+  name:
+    bergmann: "Bergmann"
+    steinmetz: "Steinmetz"
+    holzfaeller: "Holzfaeller"
+    zimmermann: "Zimmermann"
+    bauer: "Bauer"
+    mueller: "Mueller"
+    fischer: "Fischer"
+    reeder: "Reeder"
+    jaeger: "Jaeger"
+    gerber: "Gerber"
+    baumeister: "Baumeister"
+    architekt: "Architekt"
 
 # DAS REISEN SELBST - jeder Teleport laeuft hier durch.
 #

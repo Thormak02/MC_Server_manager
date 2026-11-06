@@ -253,11 +253,15 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle sieben Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - alle acht Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
+        // BerufSatz ist der achte. Berufsname steht mit Absicht NICHT dabei: Es ist kein
+        // Bereich, sondern eine offene Familie - es gibt einen Schluessel je Beruf der
+        // config.yml, und diese Liste verlangt, dass jeder Satz in der ausgelieferten
+        // Vorlage steht.
         Set<String> erwartet = new LinkedHashSet<>(List.of("BundSatz", "MarkSatz",
                 "ParzellenSatz", "AnfragenSatz", "SpielzeitSatz", "ReiseSatz",
-                "WacheSatz"));
+                "WacheSatz", "BerufSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -485,6 +489,10 @@ class VorlageTest {
      * Tafel unsichtbar.
      */
     private static final List<String> GELDWORT_IM_PROGRAMM = List.of(
+            // Die Einheit in der Klage ueber eine unbrauchbare Wechselgebuehr. Sie geht
+            // an den Betreiber und in die Konsole, nie an einen Spieler - wie die drei
+            // Stellen in Wirtschaftsliste, deren Helfer sie benutzt.
+            "Berufsliste.java -> \"Mark\"",
             "FreimarkenPlugin.java -> \" Minuten als Mark auf vielen"
                     + " Konten. Lieber kein Parzellensystem\"",
             "FreimarkenPlugin.java -> \" Mark - friert bei der"

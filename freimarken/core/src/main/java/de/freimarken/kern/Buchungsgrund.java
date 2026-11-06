@@ -20,9 +20,9 @@ import java.util.Locale;
  * Meldungen im Paper-Teil; wer die deutschen Woerter hier einfrieren wuerde, koennte sie
  * spaeter nicht mehr aendern, ohne alte Zeilen unlesbar zu machen.
  *
- * <p>Sechs Gruende und nicht mehr. Beruf, Ladenmiete, Marktgebuehr und Tagesbonus kommen
- * mit ihrem eigenen Bauschritt - sie hier schon einzutragen waere Vorbauen, und ein
- * Grund, den niemand bucht, sieht im Bericht aus wie eine Senke, die nicht funktioniert.
+ * <p>Acht Gruende und nicht mehr. Ladenmiete, Marktgebuehr und Tagesbonus kommen mit
+ * ihrem eigenen Bauschritt - sie hier schon einzutragen waere Vorbauen, und ein Grund,
+ * den niemand bucht, sieht im Bericht aus wie eine Senke, die nicht funktioniert.
  */
 public enum Buchungsgrund {
 
@@ -48,7 +48,19 @@ public enum Buchungsgrund {
     ZUSAMMENLEGUNG("zusammenlegung", Richtung.AUSGABE),
 
     /** Das Zusammenlegen ist gescheitert - die Gebuehr kommt zurueck. */
-    ZUSAMMENLEGUNG_ERSTATTET("zusammenlegung_erstattet", Richtung.EINNAHME);
+    ZUSAMMENLEGUNG_ERSTATTET("zusammenlegung_erstattet", Richtung.EINNAHME),
+
+    /**
+     * Einen Beruf abgelegt - die Wechselgebuehr.
+     *
+     * <p>Das WAEHLEN bucht nicht und hat darum keinen Grund: Ein freier Platz kostet
+     * nichts. Bezahlt wird das Verlassen, denn andersherum waere die Gebuehr umgehbar -
+     * erst aufgeben, einen Tag warten, dann gratis etwas anderes waehlen.
+     */
+    BERUF_VERLASSEN("beruf_verlassen", Richtung.AUSGABE),
+
+    /** Das Ablegen ist gescheitert - die Gebuehr kommt zurueck. */
+    BERUF_ERSTATTET("beruf_erstattet", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {

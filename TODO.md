@@ -593,6 +593,8 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - ~~/freimarken getippt.~~ 6.11.: Befehlsbaum nach BundBefehle ausgezogen, jetzt hat jede der sieben Befehlsgruppen ihre eigene Klasse. 47 Durchlaufproben in neun Dateien.
 - Offen: Die Reise selbst bleibt aussen vor - Reise.fuehre fragt als Erstes die Aufwaermzeit, und die braucht eine JavaPlugin-Instanz. Erreichbar sind nur die Absagen davor.
 - ~~Drei Stellvertreter standen doppelt.~~ 6.11.: AufrufstelleTest gibt nur noch weiter, Serverprobe und Spielerprobe sind der eine Ort. Alle 918 Proben gruen, fuenf Importe weg.
+- ~~Schritt 7, Teil D: Berufe waehlen.~~ 6.11.: /beruf liste|stand|waehlen|verlassen; zwei Grundberufe und eine Spezialisierung, Aufgeben kostet 5.000 Mark und sperrt 24 h. Plan 9.1.
+- Offen, Berufe: Verdient wird noch nichts (Teil E). Ein Block zahlt nur einmal - die Markierung dafuer ist ein eigener Schritt zwischen D und E.
 - Entscheidung, Sprachdatei: Sprache.sende, sendeGezaehlt und sendeHandbalken haben keinen Aufrufer - jeder Zweig holt seine Zeilen und sendet selbst. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.
 - Offen, Sprachdatei: Eine Umbruchmarke in einem Satz, der ueber Sprache.eineZeile geht, laesst den Aufbau werfen - der Spieler liest dann GAR NICHTS. Braucht ein eigenes Merkmal am Satz.

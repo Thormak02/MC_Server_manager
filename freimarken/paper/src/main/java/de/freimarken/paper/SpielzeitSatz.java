@@ -5,7 +5,7 @@ import java.util.Set;
 /**
  * Die Saetze von {@code /freimarken spielzeit}.
  *
- * <p>Sieben Dateien statt einer, eine je Bauschritt: So teilen zwei gleichzeitig
+ * <p>Acht Dateien statt einer, eine je Bauschritt: So teilen zwei gleichzeitig
  * arbeitende Haende nie dieselbe Datei. Die Dateien dieses Schrittes sind
  * {@code Spielzeittext} und {@code SpielzeitBefehle}.
  *

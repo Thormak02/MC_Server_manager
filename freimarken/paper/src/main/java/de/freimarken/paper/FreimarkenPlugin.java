@@ -3,7 +3,11 @@ package de.freimarken.paper;
 import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
+import de.freimarken.daten.MariaBerufe;
 import de.freimarken.daten.MariaSpielzeit;
+import de.freimarken.kern.Berufsablage;
+import de.freimarken.kern.Berufsverzeichnis;
+import de.freimarken.kern.Berufswerte;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Chunkfeld;
@@ -13,6 +17,7 @@ import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherKasse;
+import de.freimarken.kern.SpeicherBerufe;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.SpeicherSpielzeit;
 import de.freimarken.kern.Spielzeitablage;
@@ -107,6 +112,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private BesitzLager lager;
     private Kasse kasse;
     private Spielzeitablage spielzeit;
+    private Berufsablage berufsablage;
+    /**
+     * Welche Berufe es gibt - NUR BEIM START gelesen.
+     *
+     * <p>Kein Halter wie {@link #wirtschaft} und {@link #sprachstand}, und das ist kein
+     * Versehen: An dieser Liste haengen die Vervollstaendigung von {@code /beruf}, die im
+     * Befehlsbaum steckt und genau einmal angemeldet wird, und die ROLLE jedes Berufes,
+     * mit der jede Zeile der Datenbank gelesen wird. Ein Neuladen koennte den Baum nicht
+     * austauschen - also waere ein Halter ein Versprechen, das er nicht halten kann.
+     * {@code /freimarken neuladen} sagt es in jeder Antwort.
+     */
+    private Berufsverzeichnis berufe;
     /** Zuhoerer UND Zeitgeber der Spielzeit - der einzige wiederkehrende des Plugins. */
     private Spielzeitwache spielzeitwache;
     private SpielzeitBefehle spielzeitBefehle;
@@ -220,11 +237,45 @@ public final class FreimarkenPlugin extends JavaPlugin {
             return;
         }
 
+        // Die BERUFE vor den Wirtschaftswerten, und das ist keine Geschmacksfrage:
+        // Deren Platzzahlen werden gegen die Liste geprueft - wer drei Grundberufe
+        // erlaubt und zwei eintraegt, verspricht einen Platz, den niemand fuellen kann.
+        // Geprueft wird gegen die LAUFENDE Liste, und das ist beim Start dieselbe.
+        var berufsliste = Berufsliste.listeAus(
+                getConfig().getConfigurationSection(Berufswerte.PFAD_LISTE));
+        berufsliste.klagen().forEach(getLogger()::severe);
+        berufe = berufsliste.verzeichnis();
+        if (berufe.berufe().isEmpty()) {
+            // Wie bei einer fehlenden Marktstadt: Ohne Berufe hat /beruf nichts zu tun,
+            // und Teil E haette keine Grundlage. Lieber kein Berufssystem als eines, das
+            // einen leeren Zunftsaal zeigt.
+            getLogger().severe("Freimarken bleibt aus: Es gibt keinen einzigen brauchbaren"
+                    + " Beruf in " + Berufswerte.PFAD_LISTE + ". Die Klagen darueber"
+                    + " stehen in den Zeilen davor.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+        String ohneWort = ersterBerufOhneWort();
+        if (ohneWort != null) {
+            // BEIM START und nicht beim ersten /beruf: Sonst faellt es mitten im Spiel
+            // auf, und zwar als Ausnahme im Chat eines Spielers.
+            getLogger().severe("Freimarken bleibt aus: Zum Beruf \"" + ohneWort + "\" gibt"
+                    + " es kein Wort. In der Sprachdatei fehlt die Zeile "
+                    + new Berufsname(ohneWort).pfad() + " - sprache-vorlage.yml zeigt, wie"
+                    + " sie aussieht. Lieber ein verweigerter Start als ein Zunfthaus, in"
+                    + " dem \"" + ohneWort + "\" steht.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+        getLogger().info("Berufe: " + berufe.anzahlDerRolle(false) + " Grundberufe und "
+                + berufe.anzahlDerRolle(true) + " Spezialisierungen - "
+                + String.join(", ", berufe.berufe()) + ". NUR BEIM START gelesen.");
+
         // Die Wirtschaftswerte vor der Ablage: Das Lesen ist reine Dateiarbeit und
         // braucht weder Datenbank noch Welt - und das Startguthaben steckt darin, das die
         // Kasse zum Bauen braucht. Die Reihenfolge "Ablage vor den Welten" bleibt davon
         // unberuehrt; die Begruendung unten gilt weiter.
-        var werte = Wirtschaftsliste.ausKonfiguration(getConfig());
+        var werte = Wirtschaftsliste.ausKonfiguration(getConfig(), berufe);
         werte.klagen().forEach(getLogger()::severe);
         werte.bericht().forEach(getLogger()::info);
         wirtschaft = new Wirtschaftsstand(werte.werte());
@@ -425,6 +476,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // Braucht keine Uhr: Der Tag kommt mit dem Zuschlag herein und bei lies() von
             // aussen. Eine Uhr hier waere eine zweite Quelle fuer die Tagesgrenze.
             spielzeit = new SpeicherSpielzeit();
+            // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von aussen.
+            berufsablage = new SpeicherBerufe();
             getLogger().warning("Keine Datenbank eingetragen: Parzellen und Guthaben gelten "
                     + "nur bis zum naechsten Neustart.");
             getLogger().warning("Zum Festhalten datenbank.url in plugins/"
@@ -445,6 +498,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // zwischengespeicherter additiver Schreibzug ist entweder verloren oder
             // doppelt. Gelesen wird nur auf Befehl, also auch nichts zu sparen.
             spielzeit = new MariaSpielzeit(datenbank);
+            // KEIN Zwischenspeicher: /beruf ist kein heisser Lesepfad. Mit Teil E, wenn
+            // jeder Verdienst den Beruf fragt, wird das neu bedacht - und dann als eigene
+            // Schicht wie ZwischenspeicherLager, nicht als Feld hier drin.
+            berufsablage = new MariaBerufe(datenbank);
             getLogger().info("Datenbank bereit: " + ohneGeheimnis(url));
             return true;
         } catch (SQLException | RuntimeException fehler) {
@@ -510,6 +567,38 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 || klein.endsWith("\\" + MARKTSTADT);
     }
 
+    /**
+     * Baut den Befehlsbaum von {@code /beruf} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Dieselbe Form wie {@link #bundBefehle}: Der Baum wird genau einmal gebraucht, und
+     * zwar in dem Ereignis, das ihn anmeldet. Ein Feld dafuer waere ein zweiter Ort, an dem
+     * derselbe Baum stehen koennte - und bei zwei Anmeldungen haette der Server zwei
+     * Baeume mit einem Namen.
+     */
+    private BerufeBefehle berufeBefehle() {
+        return new BerufeBefehle(berufsablage, berufe, wirtschaft, kasse, uhr,
+                getLogger(), sprache);
+    }
+
+    /**
+     * Der erste Beruf der Einstellungsdatei, zu dem die Sprachdatei kein Wort hat.
+     *
+     * <p>In EINE Richtung geprueft und nicht in beide: Ein Wort ohne Beruf ist harmlos -
+     * es ist eine Zeile, die nicht wirkt, und der Bericht von {@code /freimarken neuladen}
+     * nennt sie. Ein Beruf ohne Wort dagegen laesst den ersten {@code /beruf} in einen
+     * Wurf laufen, mitten im Spiel.
+     *
+     * @return der Schluessel, oder {@code null}, wenn jeder Beruf ein Wort hat
+     */
+    private String ersterBerufOhneWort() {
+        for (String beruf : berufe.berufe()) {
+            if (!sprachstand.buch().saetze().containsKey(new Berufsname(beruf).pfad())) {
+                return beruf;
+            }
+        }
+        return null;
+    }
+
     private void registriereBefehle() {
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, ereignis -> {
             var verzeichnis = ereignis.registrar();
@@ -556,6 +645,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.addAll(verzeichnis.register(anfragenBefehle.tpdeny(),
                     sprache.wort(BundSatz.BEFEHL_TPDENY, Einsatz.keine()),
                     List.of("tpdecline", "ablehnen")));
+            // /job als zweiter Name, derselbe Grund wie bei /plot und /balance: Wer von
+            // einem englischsprachigen Server kommt, tippt ihn, bevor er /beruf liest.
+            angemeldet.addAll(verzeichnis.register(berufeBefehle().beruf(),
+                    sprache.wort(BundSatz.BEFEHL_BERUF, Einsatz.keine()),
+                    List.of("job")));
 
             // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
             // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein
@@ -662,7 +756,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
             return;
         }
         reloadConfig();
-        var gelesen = Wirtschaftsliste.ausKonfiguration(getConfig());
+        // Das LAUFENDE Verzeichnis und nicht das der Datei: Gegen die Datei geprueft
+        // ginge hoechstens-grundberufe: 7 durch, sobald die Datei sieben Berufe nennt -
+        // der laufende Server kennt sechs, und der siebte Platz ist nie fuellbar.
+        var gelesen = Wirtschaftsliste.ausKonfiguration(getConfig(), berufe);
 
         if (!gelesen.klagen().isEmpty()) {
             lehneAb(empfaenger, wer, gelesen.klagen());

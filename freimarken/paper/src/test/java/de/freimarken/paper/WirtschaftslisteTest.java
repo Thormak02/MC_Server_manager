@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.freimarken.kern.Berufsangabe;
+import de.freimarken.kern.Berufsverzeichnis;
+import de.freimarken.kern.Berufswerte;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
@@ -53,9 +56,23 @@ class WirtschaftslisteTest {
               untaetig-minuten: 10
             """;
 
+    /**
+      * Ein Verzeichnis, das genau die Vorgabezahlen hergibt: zwei Grundberufe, eine
+      * Spezialisierung.
+      *
+      * <p>Die erfundenen Dateien dieser Probe tragen keinen Abschnitt berufe.liste. Ohne
+      * dieses Verzeichnis kuerzte die Querpruefung die Platzzahlen auf eine leere Liste,
+      * und jede Probe, die {@code Wirtschaftswerte.VORGABE} erwartet, waere aus einem
+      * Grund rot, der mit ihrer Frage nichts zu tun hat.
+      */
+    private static final Berufsverzeichnis BERUFE = Berufsverzeichnis.ausAngaben(List.of(
+            new Berufsangabe("bergmann", null),
+            new Berufsangabe("bauer", null),
+            new Berufsangabe("steinmetz", "bergmann")));
+
     private static Wirtschaftsliste.Ergebnis lies(String yaml) {
         return Wirtschaftsliste.ausKonfiguration(
-                YamlConfiguration.loadConfiguration(new StringReader(yaml)));
+                YamlConfiguration.loadConfiguration(new StringReader(yaml)), BERUFE);
     }
 
     /** Ob irgendeine Klage diesen Schluessel nennt. */
@@ -302,9 +319,34 @@ class WirtschaftslisteTest {
     }
 
     @Test
+    @DisplayName("Die Klagen und der Bericht der BERUFE kommen in derselben Antwort an")
+    void berufsklagenKommenMit() {
+        // Der Aufrufer soll EINE Antwort bekommen und nicht zwei. Ohne diese Probe
+        // koennte die Zeile, die Berufsliste.klagen() anhaengt, wegfallen: Der Leser der
+        // Berufe klagte weiter, niemand hoerte es, und /freimarken neuladen meldete
+        // Erfolg - mit der Vorgabe statt der eingetragenen Gebuehr.
+        var ergebnis = lies(VOLLSTAENDIG + """
+                berufe:
+                  wechselgebuehr: -1
+                """);
+
+        assertTrue(ergebnis.klagen().stream().anyMatch(klage
+                        -> klage.contains(Berufswerte.PFAD_WECHSELGEBUEHR)),
+                "bekommen: " + ergebnis.klagen());
+        assertEquals(Berufswerte.VORGABE_WECHSELGEBUEHR,
+                ergebnis.werte().berufe().wechselgebuehr(),
+                "und es gilt die Vorgabe");
+        // Und der Bericht ebenso: Die Zeile ueber fehlende Berufszeilen gehoert in
+        // dieselbe Antwort wie die ueber fehlende Wirtschaftszeilen.
+        assertTrue(ergebnis.bericht().stream().anyMatch(z
+                        -> z.contains("Berufszeilen")),
+                "bekommen: " + ergebnis.bericht());
+    }
+
+    @Test
     @DisplayName("Ohne jede Konfiguration gelten die Vorgaben")
     void garNichts() {
-        var ergebnis = Wirtschaftsliste.ausKonfiguration(null);
+        var ergebnis = Wirtschaftsliste.ausKonfiguration(null, BERUFE);
 
         assertTrue(ergebnis.klagen().isEmpty());
         assertEquals(Wirtschaftswerte.VORGABE, ergebnis.werte());
@@ -322,7 +364,11 @@ class WirtschaftslisteTest {
             assertNotNull(strom, "die config.yml muss im Jar liegen");
             var datei = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(strom, StandardCharsets.UTF_8));
-            var ergebnis = Wirtschaftsliste.ausKonfiguration(datei);
+            var ausDerDatei = Berufsliste.listeAus(
+                    datei.getConfigurationSection(Berufswerte.PFAD_LISTE));
+            assertTrue(ausDerDatei.klagen().isEmpty(), ausDerDatei.klagen().toString());
+            var ergebnis = Wirtschaftsliste.ausKonfiguration(datei,
+                    ausDerDatei.verzeichnis());
 
             assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
             assertEquals(Wirtschaftswerte.VORGABE, ergebnis.werte(),
@@ -739,7 +785,7 @@ class WirtschaftslisteTest {
         var wieNachDemFehler = new YamlConfiguration();
         wieNachDemFehler.setDefaults(
                 YamlConfiguration.loadConfiguration(new StringReader(VOLLSTAENDIG)));
-        var gelesen = Wirtschaftsliste.ausKonfiguration(wieNachDemFehler);
+        var gelesen = Wirtschaftsliste.ausKonfiguration(wieNachDemFehler, BERUFE);
         assertTrue(gelesen.klagen().isEmpty(),
                 "der Leser findet nichts zu klagen - genau deshalb braucht es den Blick"
                         + " auf die Datei: " + gelesen.klagen());

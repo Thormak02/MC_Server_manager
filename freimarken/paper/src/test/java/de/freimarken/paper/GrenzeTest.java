@@ -277,6 +277,7 @@ class GrenzeTest {
      */
     private static final Set<String> SENDEN_ERLAUBT = new TreeSet<>(List.of(
             "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
+            "BerufeBefehle.java",
             "BundBefehle.java", "FreimarkenPlugin.java", "ParzellenBefehle.java",
             "Portalwache.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
@@ -373,6 +374,11 @@ class GrenzeTest {
             Map.entry("AnfragenBefehle.java", 11),
             Map.entry("Ankunftswache.java", 2),
             Map.entry("Aufwaermzeit.java", 2),
+            // EINS, und das ist eine Entscheidung: Alle fuenf Zweige von /beruf laufen
+            // durch denselben Sendeweg. Der Listenzweig sendete anfangs selbst - dann
+            // stuende hier eine Zwei, und eine zweite Stelle koennte wegfallen, ohne dass
+            // die Zahl faellt.
+            Map.entry("BerufeBefehle.java", 1),
             Map.entry("BundBefehle.java", 2),
             Map.entry("FreimarkenPlugin.java", 33),
             Map.entry("ParzellenBefehle.java", 44),
@@ -521,7 +527,11 @@ class GrenzeTest {
      * nicht mehr, ob seine Zeit gerade gezaehlt wird.
      */
     private static final Map<String, Integer> AUFRUFE_VON_SPIELZEITTEXT = Map.ofEntries(
-            Map.entry("dauer", 3),
+            // Drei davon stehen in Beruftext: die Restfrist im Stand, die ganze
+            // Frist in der Warnung und die Restfrist in der Absage. Dieselbe Rechnung
+            // und nicht eine eigene - sonst liest ein Spieler an einer Stelle
+            // "2 h 05 min" und an der anderen "2 Stunden" fuer dieselbe Frist.
+            Map.entry("dauer", 6),
             Map.entry("genaueDauer", 2),
             Map.entry("hinweisZeile", 1),
             Map.entry("kopfFuer", 1),
@@ -904,6 +914,7 @@ class GrenzeTest {
             "BEFEHL_TPAHERE -> WORT",
             "BEFEHL_TPACCEPT -> WORT",
             "BEFEHL_TPDENY -> WORT",
+            "BEFEHL_BERUF -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",
@@ -928,6 +939,39 @@ class GrenzeTest {
      * <p>Und die andere Richtung: Ruft ein Zweig die Methode des anderen, steht
      * eine Zahl auf 2 und die andere auf 0.
      */
+    /**
+     * Wie oft jede Satzmethode von {@code Beruftext} AUFGERUFEN wird - die dritte
+     * Zahltafel dieser Art.
+     *
+     * <p>Derselbe Nagel wie {@link #AUFRUFE_VON_SPIELZEITTEXT} und
+     * {@link #AUFRUFE_VON_BUNDTEXT}, gegen dieselbe Fehlerklasse: {@code Beruftext}
+     * SENDET nicht, also sagt {@link #SENDESTELLEN} ueber seine Methoden nichts.
+     * Schreibt ein Zweig von {@code /beruf} seine Zeile wieder selbst, bleibt die 1 bei
+     * {@code BerufeBefehle.java} stehen - und der Betreiber aendert danach seine
+     * {@code sprache.yml}, ohne dass sich im Spiel etwas aendert.
+     *
+     * <p>Die beiden grossen Zahlen sind die interessanten. {@code name} steht zehnmal,
+     * und zwar weil JEDER Satz, der einen Beruf nennt, sein Wort aus der Sprachdatei
+     * holt: Faellt ein Aufruf weg, liest ein Spieler an genau einer Stelle den
+     * technischen Schluessel - "du bist jetzt bergmann". {@code mitNamen} steht viermal,
+     * fuer die vier Absagen, die einen Beruf nennen.
+     *
+     * <p>{@code absageZeilen} steht dreimal und nicht einmal: Der Zweig {@code waehlen},
+     * der Zweig {@code verlassen} und die Stelle, an der zwischen Urteil und Buchung
+     * etwas anderes gebucht hat. Die dritte ist die unauffaelligste - ohne sie laese ein
+     * Spieler, dessen Geld gerade weggebucht wurde, gar nichts.
+     */
+    private static final Map<String, Integer> AUFRUFE_VON_BERUFTEXT = Map.ofEntries(
+            Map.entry("absageZeilen", 3),
+            Map.entry("aufgezaehlt", 1),
+            Map.entry("gewaehltZeilen", 1),
+            Map.entry("listeZeilen", 1),
+            Map.entry("mitNamen", 4),
+            Map.entry("name", 10),
+            Map.entry("standZeilen", 1),
+            Map.entry("verlassenZeilen", 1),
+            Map.entry("warnungZeilen", 1));
+
     private static final Map<String, Integer> AUFRUFE_VON_BUNDTEXT = Map.ofEntries(
             Map.entry("preisZeilen", 1),
             Map.entry("standZeilen", 1));
@@ -1248,27 +1292,8 @@ class GrenzeTest {
     @Test
     @DisplayName("31g - jede Satzmethode von Spielzeittext wird genau so oft gerufen")
     void jedeSatzmethodeVonSpielzeittextWirdGenauSoOftAufgerufen() {
-        String eigen = Quellen.text(datei("Spielzeittext.java"));
-        Map<String, Integer> gezaehlt = new TreeMap<>();
-        var deklaration = SATZMETHODE.matcher(eigen);
-        while (deklaration.find()) {
-            String name = deklaration.group(1);
-            // Im eigenen Quelltext steht der Aufruf nackt, auswaerts mit dem Klassennamen
-            // davor. Minus eins: die Deklaration selbst.
-            int anzahl = treffer(Pattern.compile(
-                    "(?<![\\w$.])" + name + "\\s*\\("), eigen) - 1;
-            for (Path datei : Quellen.alle()) {
-                if (!datei.getFileName().toString().equals("Spielzeittext.java")) {
-                    anzahl += treffer(Pattern.compile(
-                                    "Spielzeittext\\s*[.]\\s*" + name + "\\s*\\("),
-                            Quellen.text(datei));
-                }
-            }
-            gezaehlt.put(name, anzahl);
-        }
-        assertFalse(gezaehlt.isEmpty(), "die Suche hat die Satzmethoden nicht gefunden -"
-                + " dann waere diese Tafel gruen, ohne etwas gesehen zu haben");
-        assertEquals(new TreeMap<>(AUFRUFE_VON_SPIELZEITTEXT), gezaehlt,
+        assertEquals(new TreeMap<>(AUFRUFE_VON_SPIELZEITTEXT),
+                zaehleSatzmethoden("Spielzeittext.java"),
                 "Keine dieser Methoden sendet selbst, also sagt SENDESTELLEN ueber sie"
                         + " nichts: Ein weggelassener Aufruf laesst jede Zahl dort"
                         + " unveraendert, und der Spieler liest die Zeile einfach nicht"
@@ -1585,31 +1610,62 @@ class GrenzeTest {
                 + " ratlos vor einem Block stehen, der nicht bricht.");
     }
 
-    @Test
-    @DisplayName("31w - jede Satzmethode von Bundtext wird genau so oft gerufen")
-    void jedeSatzmethodeVonBundtextWirdGenauSoOftAufgerufen() {
-        String eigen = Quellen.text(datei("Bundtext.java"));
+    /**
+     * Zaehlt die Aufrufe jeder Satzmethode EINER Satzdatei - der eine Zaehler.
+     *
+     * <p>Drei Tafeln benutzen ihn ({@code Spielzeittext}, {@code Bundtext},
+     * {@code Beruftext}), und bis zum 06.11.2026 stand die Schleife dreimal da. Das ist
+     * genau die Falle, gegen die diese Tafeln gebaut sind: Die dritte Abschrift bekommt
+     * die naechste Verschaerfung nicht mit, und dann zaehlt eine Tafel anders als die
+     * anderen zwei.
+     *
+     * <p>Im eigenen Quelltext steht der Aufruf nackt, auswaerts mit dem Klassennamen
+     * davor. Minus eins: die Deklaration selbst. Die Ruecksicht auf das Zeichen VOR dem
+     * Namen trennt {@code dauer} von {@code genaueDauer} - sonst stuende die Zahl von
+     * {@code dauer} um die Aufrufe der genauen Form zu hoch.
+     */
+    private static Map<String, Integer> zaehleSatzmethoden(String dateiname) {
+        String eigen = Quellen.text(datei(dateiname));
+        String klasse = dateiname.substring(0, dateiname.length() - ".java".length());
         Map<String, Integer> gezaehlt = new TreeMap<>();
         var deklaration = SATZMETHODE.matcher(eigen);
         while (deklaration.find()) {
             String name = deklaration.group(1);
-            // Wie in 31g: im eigenen Quelltext steht der Aufruf nackt, auswaerts
-            // mit dem Klassennamen davor. Minus eins: die Deklaration selbst.
             int anzahl = treffer(Pattern.compile(
                     "(?<![\\w$.])" + name + "\\s*\\("), eigen) - 1;
-            for (Path datei : Quellen.alle()) {
-                if (!datei.getFileName().toString().equals("Bundtext.java")) {
+            for (Path andere : Quellen.alle()) {
+                if (!andere.getFileName().toString().equals(dateiname)) {
                     anzahl += treffer(Pattern.compile(
-                                    "Bundtext\\s*[.]\\s*" + name + "\\s*\\("),
-                            Quellen.text(datei));
+                                    klasse + "\\s*[.]\\s*" + name + "\\s*\\("),
+                            Quellen.text(andere));
                 }
             }
             gezaehlt.put(name, anzahl);
         }
-        assertFalse(gezaehlt.isEmpty(), "die Suche hat die Satzmethoden von Bundtext"
-                + " nicht gefunden - dann waere diese Tafel gruen, ohne etwas"
-                + " gesehen zu haben");
-        assertEquals(new TreeMap<>(AUFRUFE_VON_BUNDTEXT), gezaehlt,
+        assertFalse(gezaehlt.isEmpty(), "die Suche hat die Satzmethoden von " + dateiname
+                + " nicht gefunden - dann waere diese Tafel gruen, ohne etwas gesehen zu"
+                + " haben");
+        return gezaehlt;
+    }
+
+    @Test
+    @DisplayName("31aa - jede Satzmethode von Beruftext wird genau so oft gerufen")
+    void jedeSatzmethodeVonBeruftextWirdGenauSoOftAufgerufen() {
+        assertEquals(new TreeMap<>(AUFRUFE_VON_BERUFTEXT),
+                zaehleSatzmethoden("Beruftext.java"),
+                "Beruftext sendet nicht, also sagt SENDESTELLEN ueber seine Methoden"
+                        + " nichts: Schreibt ein Zweig von /beruf seine Zeilen wieder"
+                        + " selbst, bleibt die 1 dort stehen, und der Spieler liest einen"
+                        + " Satz, den seine sprache.yml nicht mehr aendert. Eine zu"
+                        + " niedrige Zahl bei name heisst, dass an einer Stelle der"
+                        + " technische Schluessel steht - \"du bist jetzt bergmann\".");
+    }
+
+    @Test
+    @DisplayName("31w - jede Satzmethode von Bundtext wird genau so oft gerufen")
+    void jedeSatzmethodeVonBundtextWirdGenauSoOftAufgerufen() {
+        assertEquals(new TreeMap<>(AUFRUFE_VON_BUNDTEXT),
+                zaehleSatzmethoden("Bundtext.java"),
                 "Bundtext sendet nicht, also sagt SENDESTELLEN ueber seine zwei"
                         + " Methoden nichts: Schreibt ein Zweig seine Zeilen wieder"
                         + " selbst, bleibt die Zahl dort stehen, und der Spieler"

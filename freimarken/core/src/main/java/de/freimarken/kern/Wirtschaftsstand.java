@@ -127,7 +127,7 @@ public final class Wirtschaftsstand {
                         : alt.zeit().untaetigNach());
         Wirtschaftswerte neu = new Wirtschaftswerte(ausDerDatei.preise(),
                 alt.startguthaben(), ausDerDatei.hoechstzahl(), ausDerDatei.gruppenFelder(),
-                ausDerDatei.rangWerbung(), zeit);
+                ausDerDatei.rangWerbung(), zeit, ausDerDatei.berufe());
 
         List<String> geaendert = new ArrayList<>();
         nenneZahl(geaendert, Wirtschaftswerte.PFAD_GRUNDPREIS,
@@ -140,6 +140,19 @@ public final class Wirtschaftsstand {
                 alt.gruppenFelder(), neu.gruppenFelder());
         nenneZahl(geaendert, Zeitwerte.PFAD_UNTAETIG,
                 alt.zeit().untaetigMinuten(), neu.zeit().untaetigMinuten());
+        // Die vier Berufszahlen werden VOLLSTAENDIG getauscht, keine steht in
+        // NUR_BEIM_START: Alle vier werden beim Gebrauch gefragt, und es wird nichts
+        // gebaut und nichts angemeldet. Eine kuerzere Frist gilt sofort, eine kleinere
+        // Platzzahl nimmt niemandem einen Beruf weg - er kann nur keinen neuen mehr
+        // waehlen, bis er unter der Zahl liegt.
+        nenneZahl(geaendert, Berufswerte.PFAD_WECHSELGEBUEHR,
+                alt.berufe().wechselgebuehr(), neu.berufe().wechselgebuehr());
+        nenneZahl(geaendert, Berufswerte.PFAD_SPERRFRIST,
+                alt.berufe().sperrfristStunden(), neu.berufe().sperrfristStunden());
+        nenneZahl(geaendert, Berufswerte.PFAD_GRUNDBERUFE,
+                alt.berufe().grundberufe(), neu.berufe().grundberufe());
+        nenneZahl(geaendert, Berufswerte.PFAD_SPEZIALISIERUNGEN,
+                alt.berufe().spezialisierungen(), neu.berufe().spezialisierungen());
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");

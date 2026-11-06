@@ -11,7 +11,7 @@ import java.util.Map;
 /**
  * Das eine Verzeichnis aller Saetze - die Entsprechung zu {@code Wirtschaftsliste.SCHLUESSEL}.
  *
- * <p>Sieben Bereichsaufzaehlungen, EINE Liste. Die Liste der Bereiche steht einmal und
+ * <p>Acht Bereichsaufzaehlungen, EINE Liste. Die Liste der Bereiche steht einmal und
  * wird zweimal gebraucht: fuer {@link #alle()} und fuer die Probe, die nachsieht, ob ein
  * Bauschritt seinen Bereich auch angemeldet hat. Gab es sie zweimal, koennte ein Bereich in
  * der einen stehen und in der anderen fehlen.
@@ -23,17 +23,24 @@ import java.util.Map;
 final class Sprachschluessel {
 
     /**
-     * Die sieben Bereiche, in der Reihenfolge der Bauschritte.
+     * Die acht Bereiche, in der Reihenfolge der Bauschritte.
      *
      * <p>Als {@code Class} und nicht als {@code values()}: So braucht ein noch leerer
      * Bereich keinen Platzhalterschluessel, und die Probe kann trotzdem nachsehen, dass
-     * alle sieben gefuehrt werden.
+     * alle acht gefuehrt werden.
+     *
+     * <p><b>{@link Berufsname} steht hier NICHT</b>, und das ist der Unterschied zwischen
+     * einem Bereich und einer offenen Familie: Diese Liste verlangt, dass jeder Satz in
+     * der ausgelieferten Vorlage steht. Welche Berufe es gibt, entscheidet aber die
+     * {@code config.yml}, und einen Beruf, den der Betreiber morgen eintraegt, kann die
+     * Vorlage nicht kennen. Darum wird er ueber {@link #zuPfad} erkannt und nicht
+     * aufgezaehlt - siehe dort.
      */
     private static final List<Class<? extends Satz>> BEREICHE = List.of(
             BundSatz.class, MarkSatz.class, ParzellenSatz.class, AnfragenSatz.class,
-            SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class);
+            SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class);
 
-    /** Alle Saetze, aus allen sieben Bereichen - einmal gebaut, unveraenderlich. */
+    /** Alle Saetze, aus allen acht Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
 
     /** Jeder Pfad der Datei auf seinen Satz - auch {@code .eins} und {@code .viele}. */
@@ -76,19 +83,40 @@ final class Sprachschluessel {
         return Map.copyOf(nachPfad);
     }
 
-    /** Alle Saetze, aus allen sieben Bereichen - die EINE Liste. */
+    /** Alle Saetze, aus allen acht Bereichen - die EINE Liste. */
     static List<Satz> alle() {
         return ALLE;
     }
 
-    /** Die sieben Bereiche - fuer die Probe, die ihre Vollstaendigkeit zusichert. */
+    /** Die acht Bereiche - fuer die Probe, die ihre Vollstaendigkeit zusichert. */
     static List<Class<? extends Satz>> bereiche() {
         return BEREICHE;
     }
 
     /** Der Satz zu einem Pfad aus der Datei, oder {@code null} fuer einen unbekannten. */
     static Satz zuPfad(String pfad) {
-        return NACH_PFAD.get(pfad);
+        return ausVerzeichnis(NACH_PFAD, pfad);
+    }
+
+    /**
+     * Derselbe Nachschlag in einem eigenen Verzeichnis - die EINE Stelle fuer die Regel.
+     *
+     * <p>Zwei Leser brauchen ihn: der fuer die ausgelieferte Vorlage (ueber
+     * {@link #zuPfad}) und der fuer die Datei des Betreibers (ueber ein Verzeichnis aus
+     * einer eigenen Satzliste). Stuende die Familienregel nur in einem von beiden, waere
+     * ein Berufsname in der einen Datei ein Satz und in der anderen eine Zeile, die zu
+     * keinem Satz gehoert - und der Betreiber koennte seinem Beruf kein Wort geben.
+     *
+     * <p>Die Familie wird NACH dem Verzeichnis gefragt: Ein Pfad, den eine Aufzaehlung
+     * fuehrt, gewinnt immer. So kann eine spaetere Konstante {@code beruf.name.etwas}
+     * nicht stumm von der Familie verdeckt werden.
+     */
+    static Satz ausVerzeichnis(Map<String, Satz> verzeichnis, String pfad) {
+        Satz satz = verzeichnis.get(pfad);
+        if (satz != null) {
+            return satz;
+        }
+        return Berufsname.passt(pfad) ? Berufsname.ausPfad(pfad) : null;
     }
 
     /** Alle Pfade, die in der Datei stehen duerfen - mit {@code .eins}/{@code .viele}. */

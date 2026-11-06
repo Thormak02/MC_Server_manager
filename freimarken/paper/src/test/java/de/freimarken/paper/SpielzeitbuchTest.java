@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.freimarken.kern.Berufswerte;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.SpeicherSpielzeit;
 import de.freimarken.kern.Spielzeitablage;
@@ -138,7 +139,8 @@ class SpielzeitbuchTest {
         return new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
                 Wirtschaftswerte.VORGABE_STARTGUTHABEN, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
                 Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
-                Wirtschaftswerte.VORGABE_RANG_WERBUNG, zeit));
+                Wirtschaftswerte.VORGABE_RANG_WERBUNG, zeit,
+                Berufswerte.VORGABE));
     }
 
     /** Wie viel fuer diesen Spieler insgesamt geschrieben ist. */

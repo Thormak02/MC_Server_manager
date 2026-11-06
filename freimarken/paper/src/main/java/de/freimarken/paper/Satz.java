@@ -13,8 +13,8 @@ import java.util.Set;
  * beim Abschreiben einem Satz seinen {@code {betrag}} wegnimmt, bekommt eine rote Probe
  * und keinen stummen Fehler.
  *
- * <p>Eine Schnittstelle und sieben Aufzaehlungen dahinter, nicht eine Liste: Was
- * {@code values()} aufzaehlt, kann man nicht vergessen, und sieben Dateien teilen sich
+ * <p>Eine Schnittstelle und acht Aufzaehlungen dahinter, nicht eine Liste: Was
+ * {@code values()} aufzaehlt, kann man nicht vergessen, und acht Dateien teilen sich
  * zwei gleichzeitig arbeitende Haende nie.
  */
 interface Satz {
