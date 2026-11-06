@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -15,6 +16,8 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.Server;
 import org.bukkit.Tag;
+import org.bukkit.block.Block;
+import org.bukkit.entity.Player;
 import org.bukkit.World;
 
 /**
@@ -40,6 +43,15 @@ import org.bukkit.World;
  * und die naechste Probe, die mehr braucht, bekommt den Namen gesagt, statt ein
  * {@code null} zu lesen.
  *
+ * <p><b>Es gibt einen AELTEREN Satz derselben Stellvertreter.</b>
+ * {@code AufrufstelleTest} hat private {@code weltDoppel}, {@code blockDoppel} und
+ * {@code spielerDoppel} - gebaut mit demselben {@link Proxy}-Gedanken und
+ * teilweise fuer dieselben Methoden. Gefunden wurde das erst, als diese Datei
+ * schon stand; sie ist damit der zweite Ort fuer eine Sache. Zusammengelegt ist
+ * noch nichts, weil der Umbau eine Probendatei mit vierunddreissig Proben
+ * anfasst - er steht als eigener Punkt im TODO. Bis dahin gilt: Wer hier eine
+ * Antwort ergaenzt, sieht dort nach, ob sie schon steht.
+ *
  * <p><b>Einmal je JVM.</b> {@code Bukkit.setServer} wirft beim zweiten Aufruf, und Gradle
  * faehrt alle Probenklassen in EINER JVM. Darum {@link #einmalSetzen}, und darum ist der
  * Stellvertreter zustandsarm: Was eine Probe braucht, gibt sie beim Aufruf mit, statt es
@@ -60,6 +72,17 @@ final class Serverprobe {
     /** Die Namen hinter den UUIDs - was {@code Bukkit.getOfflinePlayer} ausgibt. */
     private static final Map<UUID, String> NAMEN = new LinkedHashMap<>();
 
+    /**
+     * Wer online ist - was {@code Bukkit.getPlayerExact} findet.
+     *
+     * <p><b>Geteilt zwischen allen Probenklassen, und darum gibt es {@link #niemandMehrDa}.</b>
+     * Gradle faehrt alle Proben in EINER JVM; ein Spieler, den eine Probe hier
+     * eintraegt, waere sonst auch in der naechsten noch da, und zwar in einer
+     * Reihenfolge, die von der Probenreihenfolge abhaengt. Jede Probe, die
+     * {@code getPlayerExact} braucht, raeumt darum vorher auf.
+     */
+    private static final Map<String, Player> ANWESEND = new LinkedHashMap<>();
+
     private Serverprobe() {
     }
 
@@ -73,6 +96,17 @@ final class Serverprobe {
         if (Bukkit.getServer() == null) {
             Bukkit.setServer(bau());
         }
+    }
+
+    /** Meldet einen Spieler an - und gibt ihm seinen Namen fuer die UUID mit. */
+    static void anmelden(Spielerprobe spieler, String name) {
+        ANWESEND.put(name, spieler.spieler());
+        nenne(spieler.kennung(), name);
+    }
+
+    /** Raeumt die Anwesenden weg - gehoert in das Vorher jeder Probe, die sie nutzt. */
+    static void niemandMehrDa() {
+        ANWESEND.clear();
     }
 
     /** Gibt dieser UUID einen Namen - sonst liefert {@code getName()} {@code null}. */
@@ -103,6 +137,24 @@ final class Serverprobe {
      * @param schluessel etwa {@code "minecraft:altfurt"}
      */
     static World welt(String schluessel) {
+        return welt(schluessel, null);
+    }
+
+    /**
+     * Eine Welt MIT Bloecken - fuer die Zweige, die den Boden lesen.
+     *
+     * <p><b>Die Bloecke kommen aus {@link Probewelt} und nicht aus einem dritten
+     * Modell.</b> Jene Klasse ist die Blockquelle, die dieses Projekt fuer seine
+     * Proben schon hat: Was nie gesetzt wurde, liefert sie aus derselben Tabelle,
+     * aus der auch der Weltgenerator schreibt. Ein eigenes Blockdoppel hier waere
+     * ein zweiter Ort fuer dieselbe Frage - und bei der naechsten Aenderung am
+     * Stadtboden liefen die zwei auseinander.
+     *
+     * <p>Ohne Griff wirft {@code getBlockAt}, statt Luft zu liefern: Ein Zweig,
+     * der den Boden liest, soll es gesagt bekommen und nicht stumm durch den
+     * falschen Fall laufen.
+     */
+    static World welt(String schluessel, Weltgriff griff) {
         NamespacedKey name = NamespacedKey.fromString(schluessel);
         if (name == null) {
             throw new IllegalArgumentException("kein Weltschluessel: "
@@ -113,11 +165,64 @@ final class Serverprobe {
                 (eigen, methode, werte) -> switch (methode.getName()) {
                     case "key", "getKey" -> name;
                     case "getName" -> name.getKey();
+                    case "getBlockAt" -> block(griff, (Integer) werte[0],
+                            (Integer) werte[1], (Integer) werte[2]);
+                    case "getMinHeight" -> griffOderKlage(griff).unten();
+                    case "getHighestBlockYAt" ->
+                            griffOderKlage(griff).oben((Integer) werte[0],
+                                    (Integer) werte[1]);
                     case "toString" -> "Weltprobe " + schluessel;
                     case "hashCode" -> schluessel.hashCode();
                     case "equals" -> eigen == (werte == null ? null : werte[0]);
                     default -> throw new UnsupportedOperationException(
                             "Serverprobe beantwortet World."
+                                    + methode.getName() + " nicht");
+                });
+    }
+
+    /** Der Griff oder eine Klage mit Grund - nie stumm Luft. */
+    private static Weltgriff griffOderKlage(Weltgriff griff) {
+        if (griff == null) {
+            throw new UnsupportedOperationException("Diese Welt hat keine Bloecke."
+                    + " Der Zweig, den du durchlaeufst, liest den Boden - also"
+                    + " gehoert ein Weltgriff in Serverprobe.welt(schluessel, griff),"
+                    + " am besten eine Probewelt.");
+        }
+        return griff;
+    }
+
+    /**
+     * Ein Block, der seine Art kennt und sie annimmt - mehr fragt kein Zweig.
+     *
+     * <p>{@code getType} liest aus dem Griff, {@code setType} schreibt dorthin
+     * zurueck: Ein Zweig, der Boden legt, soll ihn danach auch wiederfinden.
+     * Alles andere wirft; was ein Zweig wirklich braucht, soll in dieser Liste
+     * stehen und nicht geraten sein.
+     */
+    private static Block block(Weltgriff griff, int x, int y, int z) {
+        if (griff == null) {
+            throw new UnsupportedOperationException("Diese Welt hat keine Bloecke."
+                    + " Der Zweig, den du durchlaeufst, liest den Boden - also"
+                    + " gehoert ein Weltgriff in Serverprobe.welt(schluessel, griff),"
+                    + " am besten eine Probewelt. Luft zu liefern waere schlimmer:"
+                    + " Dann liefe der Zweig stumm durch den falschen Fall.");
+        }
+        return (Block) Proxy.newProxyInstance(Serverprobe.class.getClassLoader(),
+                new Class<?>[] {Block.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "getType" -> griff.bei(x, y, z);
+                    case "setType" -> {
+                        griff.setze(x, y, z, (Material) werte[0]);
+                        yield null;
+                    }
+                    case "getX" -> x;
+                    case "getY" -> y;
+                    case "getZ" -> z;
+                    case "toString" -> "Blockprobe " + x + "/" + y + "/" + z;
+                    case "hashCode" -> (x * 31 + y) * 31 + z;
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Serverprobe beantwortet Block."
                                     + methode.getName() + " nicht");
                 });
     }
@@ -139,6 +244,8 @@ final class Serverprobe {
                 case "getTag" -> new Blockgruppe((NamespacedKey) werte[1]);
                 // Fuer Schutzwache.namen: der Eigentuemer einer fremden Parzelle.
                 case "getOfflinePlayer" -> offlineSpieler(werte[0]);
+                case "getPlayerExact" -> ANWESEND.get(String.valueOf(werte[0]));
+                case "getOnlinePlayers" -> List.copyOf(ANWESEND.values());
                 case "getLogger" -> protokoll;
                 case "isPrimaryThread" -> true;
                 case "getName" -> "Serverprobe";

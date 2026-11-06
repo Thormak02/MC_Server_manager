@@ -1,8 +1,5 @@
 package de.freimarken.paper;
 
-import com.mojang.brigadier.Command;
-import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
@@ -25,8 +22,6 @@ import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Zeitwerte;
 import de.freimarken.kern.ZwischenspeicherLager;
-import io.papermc.paper.command.brigadier.CommandSourceStack;
-import io.papermc.paper.command.brigadier.Commands;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -47,7 +42,6 @@ import org.bukkit.WorldBorder;
 import org.bukkit.entity.Player;
 import org.bukkit.generator.BiomeProvider;
 import org.bukkit.generator.ChunkGenerator;
-import org.bukkit.permissions.Permissible;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -526,7 +520,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // Feld sprache steht also. Dass eine Aenderung daran erst nach einem Neustart
             // wirkt, steht in Sprachstand.NUR_BEIM_START - und /freimarken neuladen sagt
             // es in jeder Antwort.
-            angemeldet.addAll(verzeichnis.register(freimarken(),
+            angemeldet.addAll(verzeichnis.register(bundBefehle().freimarken(),
                     sprache.wort(BundSatz.BEFEHL_FREIMARKEN, Einsatz.keine()),
                     List.of("fm")));
             // /p und /konto stehen so im Plan (Abschnitt 11, [entschieden]); /pz bleibt
@@ -573,101 +567,40 @@ public final class FreimarkenPlugin extends JavaPlugin {
         });
     }
 
-    /** Wer nachsehen und sich versetzen darf - nicht jeder Spieler. */
-    private static final String RECHT_VERWALTEN = "freimarken.verwalten";
-
-    private LiteralCommandNode<CommandSourceStack> freimarken() {
-        return Commands.literal("freimarken")
-                .executes(z -> {
-                    zeigeStand(z.getSource().getSender());
-                    return Command.SINGLE_SUCCESS;
-                })
-                .then(Commands.literal("preis")
-                        .then(Commands.argument("besessen",
-                                        IntegerArgumentType.integer(0, 64))
-                                .executes(z -> {
-                                    zeigePreis(z.getSource().getSender(),
-                                            IntegerArgumentType.getInteger(z, "besessen"));
-                                    return Command.SINGLE_SUCCESS;
-                                })))
-                // Rechte je Zweig: Stand und Preise sind fuer alle, Nachsehen und
-                // Versetzen nicht. Ohne das hatte jeder Spieler einen kostenlosen Teleport
-                // quer durch die Marktstadt - und das unterlaeuft die Rangleiter, an der
-                // Heimatpunkte und Warps spaeter haengen sollen, bevor sie gebaut ist.
-                // Ein Zweig und kein eigener Befehl: Plan 11.1 fuehrt sechzehn Befehle, und
-                // /spielzeit steht nicht darunter. Das eigene Recht steckt im Zweig.
-                .then(spielzeitBefehle.spielzeit())
-                .then(Commands.literal("welt")
-                        .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
-                        .executes(z -> {
-                            zeigeWelt(z.getSource().getSender());
-                            return Command.SINGLE_SUCCESS;
-                        }))
-                .then(Commands.literal("vorgenerieren")
-                        .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
-                        .executes(z -> {
-                            zeigeVorgenerierung(z.getSource().getSender());
-                            return Command.SINGLE_SUCCESS;
-                        }))
-                // Kein eigenes Recht: Plan 1544-1547 begruendet, warum es keinen zweiten
-                // Ort fuer Rechte geben soll. Der Befehl kann Werte austauschen, keine
-                // Buchung aendern - und wer die Datei nicht aendern kann, aendert damit
-                // auch nichts.
-                .then(Commands.literal("neuladen")
-                        .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
-                        .executes(z -> {
-                            neulade(z.getSource().getSender(),
-                                    z.getSource().getSender().getName());
-                            return Command.SINGLE_SUCCESS;
-                        }))
-                .then(Commands.literal("parzelle")
-                        .requires(quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN))
-                        // Die Grenzen kommen aus der Stadt, nicht aus einer geratenen
-                        // Zahl: mitteX(64) laege 3.085 Bloecke jenseits der Weltgrenze.
-                        .then(Commands.argument("x",
-                                        IntegerArgumentType.integer(grenze.von(), grenze.bis()))
-                                .then(Commands.argument("z",
-                                                IntegerArgumentType.integer(grenze.von(),
-                                                        grenze.bis()))
-                                        .executes(z -> {
-                                            bringeZurParzelle(z.getSource().getSender(),
-                                                    IntegerArgumentType.getInteger(z, "x"),
-                                                    IntegerArgumentType.getInteger(z, "z"));
-                                            return Command.SINGLE_SUCCESS;
-                                        }))))
-                .build();
-    }
-
     /**
-     * Die Antwort auf das nackte {@code /freimarken} - gebaut in {@link Bundtext}.
+     * Baut den Befehlsbaum von {@code /freimarken} - im Ereignis, nicht im onEnable.
      *
-     * <p>Seit Bauschritt 7 stehen die Worte unter {@code stand} in
-     * {@code sprache-vorlage.yml}, und hier wird nur noch gesendet. WELCHE der zwei
-     * Ablagezeilen kommt und ob die Verwaltungszeile dazugehoert, entscheidet die Naht
-     * an den zwei Wahrheitswerten - und dort prueft {@code SendewegTest} jede Lage als
-     * Bild, ohne Server.
-     */
-    private void zeigeStand(Audience empfaenger) {
-        Bundtext.standZeilen(sprache, getPluginMeta().getVersion(),
-                        String.valueOf(Runtime.version().feature()),
-                        getServer().getMinecraftVersion(), fluechtig,
-                        empfaenger instanceof Permissible darf
-                                && darf.hasPermission(RECHT_VERWALTEN))
-                .forEach(empfaenger::sendMessage);
-    }
-
-    /**
-     * Was die naechste Parzelle kostet - gebaut in {@link Bundtext}.
+     * <p>Seit dem 06.11.2026 steht der Baum in {@link BundBefehle} und nicht mehr
+     * hier, und der Grund ist eine Probe: Ein {@code JavaPlugin} laesst sich ohne
+     * Paper-Klassenlader nicht bauen, also war {@code /freimarken} der einzige
+     * Befehl, den keine Probe TIPPEN konnte. Alle sechs anderen Befehlsgruppen haben
+     * laengst ihre eigene Klasse; dies war die letzte Ausnahme.
      *
-     * <p>Die Staffel kommt aus den Wirtschaftswerten und bleibt hier; die zwei Zahlen
-     * gehen als nackte {@code long} in die Naht, und das Geldwort holt sie bei
-     * {@link Sprache#betrag}. Hier stand bis Bauschritt 7 das Wort hart im Programm.
+     * <p><b>Was hierbleibt, sind die vier Verwaltungszweige.</b> Sie lesen die
+     * laufende Welt, die Vorgenerierung und die Einstellungsdatei - also genau das,
+     * was an diesem Plugin haengt - und gehen als Griffe hinein. Ihr Text ist
+     * Betreibertext und bleibt im Programm; so sagt es auch der Kopf der
+     * Sprachdatei.
+     *
+     * <p>Gerufen wird das erst im Lebenslauf-Ereignis {@code COMMANDS}, und darum
+     * stehen {@code fluechtig}, {@code grenze} und {@code spielzeitBefehle} zu
+     * diesem Zeitpunkt alle schon.
      */
-    private void zeigePreis(Audience empfaenger, int besessen) {
-        Preisstaffel preise = wirtschaft.werte().preise();
-        Bundtext.preisZeilen(sprache, besessen, preise.preisFuerNaechste(besessen),
-                        preise.gesamtpreisFuer(besessen))
-                .forEach(empfaenger::sendMessage);
+    private BundBefehle bundBefehle() {
+        // Eine EIGENE Anweisung und kein Argument mitten im Aufruf: So steht die
+        // Reihenfolge der vier Angaben fuer sich, und GrenzeTest 31y kann sie
+        // lesen, ohne an der ersten inneren Klammer haltzumachen.
+        BundBefehle.Stand stand = new BundBefehle.Stand(
+                getPluginMeta().getVersion(),
+                String.valueOf(Runtime.version().feature()),
+                getServer().getMinecraftVersion(), fluechtig);
+        return new BundBefehle(sprache, stand,
+                wirtschaft, spielzeitBefehle.spielzeit(),
+                (empfaenger, wer) -> zeigeWelt(empfaenger),
+                (empfaenger, wer) -> zeigeVorgenerierung(empfaenger),
+                this::neulade,
+                this::bringeZurParzelle,
+                grenze.von(), grenze.bis());
     }
 
     /**

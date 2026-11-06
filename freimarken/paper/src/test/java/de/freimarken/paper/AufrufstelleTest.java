@@ -61,6 +61,15 @@ import org.junit.jupiter.api.Test;
  * ankommen." {@code SendewegTest} zitiert {@code SpielzeitBefehle.sende} als Vorbild, hat
  * aber nur die reine Haelfte uebernommen.
  *
+ * <p><b>Was hier NICHT geprueft wird, ist der Weg vom getippten Wort zum Zweig.</b>
+ * Diese Probe ruft die Zweige unmittelbar auf - darum sind sie paketweit sichtbar.
+ * Ob {@code /parzelle liste} wirklich bei {@code zeigeListe} landet, stand bis zum
+ * 06.11.2026 nirgends; seitdem sagen es {@code MarkBefehlTest} und
+ * {@code ParzelleBefehlTest}, die den echten Befehlsbaum ueber einen eigenen
+ * {@code CommandDispatcher} laufen lassen. Zwei Fragen, zwei Proben: Diese hier
+ * faengt die falsche Methode am richtigen Wort, jene die richtige Methode am
+ * falschen Wort.
+ *
  * <p><b>Ohne Server, ohne Bukkit-Laufzeit.</b> Das Besitzbuch ist das ECHTE, ueber
  * {@code SpeicherLager} und {@code SpeicherKasse}; die Welt ist {@link Probewelt}, dieselbe
  * Marktstadt in einer Map, mit der {@code WegbauTest} rechnet. Nur {@code World},
@@ -68,6 +77,13 @@ import org.junit.jupiter.api.Test;
  * paar Methoden, die diese Zweige von ihnen brauchen, sind hier aufgeschrieben. Ein Aufruf,
  * der hier nicht steht, wirft mit seinem Namen - eine stumme Null waere schlimmer als eine
  * rote Probe.
+ *
+ * <p><b>Diese Stellvertreter sind die AELTEREN, und sie stehen jetzt doppelt.</b>
+ * {@link Serverprobe} und {@link Spielerprobe} beantworten seit dem 06.11.2026
+ * dieselben Fragen fuer die Wachen und die Befehle, mit derselben Bauart und
+ * teilweise denselben Methoden. Zwei Orte fuer eine Sache sind einer zu viel - wer
+ * hier eine Antwort ergaenzt, soll sie dort auch ergaenzen, bis jemand die drei
+ * privaten Doppel durch die geteilten ersetzt. Das steht als eigener Punkt im TODO.
  *
  * <p><b>Hoechstzahl 7 und Gruppenfelder 3 sind ABSICHTLICH verschieden</b>, aus demselben
  * Grund wie in {@code SendewegTest} 33t: Mit zwei gleichen Zahlen waere ein Vertauschen der
@@ -829,7 +845,11 @@ class AufrufstelleTest {
         // Die Weltenkarte ist LEER, die Liste nicht: Genau die Lage des dritten Zweiges -
         // der Name steht in der config.yml, die Welt ist nicht entstanden. reise bleibt
         // null, weil kein Zweig dieser Probe sie anfasst; ein Stellvertreter fuer eine
-        // KLASSE ist ohne Bukkit.setServer nicht baubar.
+        // KLASSE ist ohne Bukkit.setServer nicht baubar. Seit dem 06.11.2026 gibt
+        // es einen Server-Stellvertreter (Serverprobe), und der Befehlsbaum von
+        // /freimarken steht in BundBefehle - FreimarkenBefehlTest tippt ihn.
+        // Die Aufwaermzeit bleibt davon unberuehrt: Sie braucht eine
+        // JavaPlugin-INSTANZ, und die prueft im Konstruktor den Klassenlader.
         var befehle = new WarpBefehle(verzeichnis, Map.of(), null, sprache);
         Player anna = spielerDoppel(ANNA, auf(0, 0));
 

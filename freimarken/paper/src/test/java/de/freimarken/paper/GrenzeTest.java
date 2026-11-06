@@ -201,9 +201,10 @@ class GrenzeTest {
      * {@code Ankunftswache.java} und {@code Portalwache.java}. <b>Damit nennt keine der
      * drei Wachen mehr eine Farbe</b> - und was ein Spieler liest, ohne etwas getippt zu
      * haben, kommt vollstaendig aus der Datei. Dass {@code FreimarkenPlugin.java} weiter
-     * Farbe nennt, ist kein Widerspruch dazu: Seine Saetze gehoeren dem Befehl
-     * {@code /freimarken} und ziehen in dessen Bauschritt um; seine Betreiberzeilen
-     * bleiben dort fuer immer. Die drei Saetze dieses Zuges stehen unter
+     * Farbe nennt, ist kein Widerspruch dazu: Seine Spielersaetze sind mit
+     * Bauschritt 7 umgezogen und mit dem Auszug am 06.11.2026 auch sein
+     * Befehlsbaum - was dort noch Farbe nennt, ist Betreibertext und bleibt.
+     * Die drei Saetze dieses Zuges stehen unter
      * {@code wache.ankunft} und {@code wache.portal}, und mit dem am Portal auch der
      * ZEILENBAU: Zwei Chatzeilen in einem Schluessel, getrennt von einer Umbruchmarke.
      * Von den je drei Nennungen in beiden Dateien war wieder je eine das
@@ -214,6 +215,12 @@ class GrenzeTest {
      * offen bleibt - nur nicht unbewacht. Seine Betreiberzeilen muessen dort bleiben, also
      * faengt diese Probe einen dort neu geschriebenen Spielersatz nicht. Dafuer gibt es
      * die Tafel in {@link #jedeDateiSendetGenauSoOft}: ein Tor und kein Beweis.
+     *
+     * <p><b>Das Loch ist am 06.11.2026 kleiner geworden.</b> Der Befehlsbaum von
+     * {@code /freimarken} steht seitdem in {@code BundBefehle.java}, und DIE Datei
+     * ist nicht in dieser Menge - ein Farbname dort macht diese Probe sofort rot.
+     * Im Plugin bleiben die Betreiberzeilen und die vier Verwaltungszweige, die sie
+     * senden; was ein SPIELER liest, liegt nicht mehr dort.
      */
     private static final Set<String> FARBE_ERLAUBT = new TreeSet<>(List.of(
             "FreimarkenPlugin.java", "Sprachstand.java"));
@@ -270,7 +277,8 @@ class GrenzeTest {
      */
     private static final Set<String> SENDEN_ERLAUBT = new TreeSet<>(List.of(
             "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
-            "FreimarkenPlugin.java", "ParzellenBefehle.java", "Portalwache.java",
+            "BundBefehle.java", "FreimarkenPlugin.java", "ParzellenBefehle.java",
+            "Portalwache.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
 
@@ -365,7 +373,8 @@ class GrenzeTest {
             Map.entry("AnfragenBefehle.java", 11),
             Map.entry("Ankunftswache.java", 2),
             Map.entry("Aufwaermzeit.java", 2),
-            Map.entry("FreimarkenPlugin.java", 35),
+            Map.entry("BundBefehle.java", 2),
+            Map.entry("FreimarkenPlugin.java", 33),
             Map.entry("ParzellenBefehle.java", 44),
             Map.entry("Portalwache.java", 1),
             Map.entry("Reise.java", 7),
@@ -944,10 +953,15 @@ class GrenzeTest {
      * und verlieren beim Neustart alles. Bei den zwei Betraegen nennt {@code /freimarken}
      * {@code preis} als Preis die Summe des Bisherigen, und der Spieler rechnet falsch.
      */
-    private static final List<String> QUELLEN_IN_FREIMARKENPLUGIN = List.of(
-            "standZeilen: getPluginMeta, Runtime.version, getMinecraftVersion,"
-                    + " fluechtig, hasPermission",
-            "preisZeilen: preisFuerNaechste, gesamtpreisFuer");
+    private static final List<String> QUELLEN_DER_BUNDNAHT = List.of(
+            "standZeilen: stand.version, stand.javaFassung, stand.minecraft,"
+                    + " stand.fluechtig, hasPermission",
+            "preisZeilen: preisFuerNaechste, gesamtpreisFuer",
+            "BundBefehle.Stand: getPluginMeta, Runtime.version,"
+                    + " getMinecraftVersion, fluechtig",
+            "BundBefehle: spielzeitBefehle.spielzeit, zeigeWelt,"
+                    + " zeigeVorgenerierung, neulade, bringeZurParzelle,"
+                    + " grenze.von, grenze.bis");
 
     /**
      * Wer die zwei Listen von {@code /freimarken} bekommt - in Quellreihenfolge.
@@ -959,7 +973,7 @@ class GrenzeTest {
      * 0 Farben und jedes Bild gruen, und der Spieler bekaeme auf {@code /freimarken}
      * keine Antwort.
      */
-    private static final List<String> SENDEPAARE_IN_FREIMARKENPLUGIN = List.of(
+    private static final List<String> SENDEPAARE_IN_BUNDBEFEHLE = List.of(
             "standZeilen -> empfaenger",
             "preisZeilen -> empfaenger");
 
@@ -1626,7 +1640,7 @@ class GrenzeTest {
     @DisplayName("31y - jeder Nahtaufruf von /freimarken nimmt seine Quellen in der"
             + " richtigen Reihenfolge")
     void jederNahtaufrufNimmtSeineQuellenInDerRichtigenReihenfolge() {
-        String quelle = Quellen.text(datei("FreimarkenPlugin.java"));
+        String quelle = Quellen.text(datei("BundBefehle.java"));
         List<String> gefunden = new ArrayList<>();
         var aufruf = BUNDAUFRUF.matcher(quelle);
         while (aufruf.find()) {
@@ -1637,14 +1651,26 @@ class GrenzeTest {
             }
             gefunden.add(aufruf.group(1) + ": " + String.join(", ", quellen));
         }
+        // Und die zweite Stelle, eine Datei weiter: der Bau des Standwerts.
+        var bau = STANDBAU.matcher(Quellen.text(datei("FreimarkenPlugin.java")));
+        while (bau.find()) {
+            List<String> quellen = new ArrayList<>();
+            var marke = STANDQUELLE.matcher(bau.group(2));
+            while (marke.find()) {
+                quellen.add(marke.group());
+            }
+            gefunden.add(bau.group(1) + ": " + String.join(", ", quellen));
+        }
         // Die Zahl eigens, wie in 31m, 31r und 31s: Findet das Muster seine Form
         // nicht mehr, sagt die Meldung sonst nicht, dass ein MUSTER nachzuziehen
         // ist - eine leere Liste gegen eine leere Liste bliebe gruen.
-        assertEquals(2, gefunden.size(), "gesucht werden ZWEI Nahtaufrufe in"
-                + " FreimarkenPlugin. Fehlt einer, hat das Muster ihn nicht"
+        assertEquals(4, gefunden.size(), "gesucht werden ZWEI Nahtaufrufe in"
+                + " BundBefehle und ZWEI Zusammenbauten in FreimarkenPlugin."
+                + " Fehlt einer,"
+                + " hat das Muster ihn nicht"
                 + " gefunden; dann gehoert das Muster nachgezogen und nicht die"
                 + " Probe gestrichen: " + gefunden);
-        assertEquals(QUELLEN_IN_FREIMARKENPLUGIN, gefunden, "Drei String, zwei"
+        assertEquals(QUELLEN_DER_BUNDNAHT, gefunden, "Drei String, zwei"
                         + " boolean und zwei long stehen hier nebeneinander, und"
                         + " jeder Tausch innerhalb einer Gruppe uebersetzt"
                         + " fehlerfrei. Die Naht selbst prueft SendewegTest mit"
@@ -1654,7 +1680,7 @@ class GrenzeTest {
     @Test
     @DisplayName("31z - die zwei Antworten von /freimarken gehen an den, der gefragt hat")
     void dieAntwortenVonFreimarkenGehenAnDenFragenden() {
-        String quelle = Quellen.text(datei("FreimarkenPlugin.java"));
+        String quelle = Quellen.text(datei("BundBefehle.java"));
         List<String> gefunden = new ArrayList<>();
         var paar = SENDEPAAR.matcher(quelle);
         while (paar.find()) {
@@ -1663,7 +1689,7 @@ class GrenzeTest {
         // Die LISTE in Quellreihenfolge und keine Menge, wie in 31e: Ein
         // verdoppelter Sendeort und zwei getauschte Empfaenger bleiben in einer
         // Menge beide gruen.
-        assertEquals(SENDEPAARE_IN_FREIMARKENPLUGIN, gefunden, "Dieselbe Tafel"
+        assertEquals(SENDEPAARE_IN_BUNDBEFEHLE, gefunden, "Dieselbe Tafel"
                 + " wie fuer /tpa, nur spaeter: Ginge eine der zwei Listen an"
                 + " einen anderen Audience, blieben die 35 Sendestellen, die"
                 + " Aufrufzahlen und alle Bilder gruen - und der Spieler bekaeme"
@@ -1887,8 +1913,45 @@ class GrenzeTest {
      * stuende dann voller Glieder, die nichts zusichern.
      */
     private static final Pattern BUNDQUELLE = Pattern.compile(
+            "stand[.]version|stand[.]javaFassung|stand[.]minecraft"
+                    + "|stand[.]fluechtig|hasPermission|preisFuerNaechste"
+                    + "|gesamtpreisFuer");
+
+    /**
+     * Der Bau des Standwerts im Plugin - vier Angaben nebeneinander.
+     *
+     * <p><b>Der Auszug hat die Gefahr VERSCHOBEN, nicht beseitigt.</b> Vorher
+     * standen die drei Fassungen und der Ablagezustand als Argumente am
+     * Nahtaufruf; jetzt stehen sie als Komponenten eines {@code record}.
+     * Drei {@code String} nebeneinander tauschen so widerstandslos wie vorher,
+     * nur eine Datei weiter. Darum liest diese Probe BEIDE Stellen.
+     *
+     * <p><b>Gierig und nicht sparsam</b>, anders als {@link #BUNDAUFRUF}: Dort
+     * macht das {@code .forEach} am Ende die Suche fest, hier gibt es keinen
+     * solchen Anker. Sparsam gesucht endete der Treffer an der ersten inneren
+     * Klammer - bei {@code getPluginMeta()} -, und die Tafel sah nur die erste
+     * der vier Angaben. Gemessen am 06.11.2026. Gierig endet sie an der letzten
+     * Klammer vor dem Semikolon, und darum steht der Bau des Standwerts im
+     * Plugin als EIGENE Anweisung.
+     */
+    private static final Pattern STANDBAU = Pattern.compile(
+            "new (BundBefehle(?:[.]Stand)?)\\(([^;]*)\\)");
+
+    /**
+     * Was in den zwei Zusammenbauten vorkommen DARF - wieder ein enger Vorrat.
+     *
+     * <p>Die vier Angaben des Standwerts, die vier Griffe der Verwaltungszweige,
+     * der Spielzeitzweig und die zwei Grenzen. <b>Die Griffe stehen mit drin,</b>
+     * weil der Auszug gerade dort eine neue Gelegenheit geschaffen hat: Vorher
+     * stand jeder Zweig an seinem Wort im Baum, jetzt gehen vier gleich geformte
+     * Lambdas in einen Konstruktor. Vertauscht sagt {@code /freimarken welt} die
+     * Vorgenerierung auf, und jede Zahltafel bleibt gruen.
+     */
+    private static final Pattern STANDQUELLE = Pattern.compile(
             "getPluginMeta|Runtime[.]version|getMinecraftVersion|fluechtig"
-                    + "|hasPermission|preisFuerNaechste|gesamtpreisFuer");
+                    + "|spielzeitBefehle[.]spielzeit|zeigeWelt"
+                    + "|zeigeVorgenerierung|neulade|bringeZurParzelle"
+                    + "|grenze[.]von|grenze[.]bis");
 
     /** Der Handbalken mit seinem Empfaenger und dem Wortlaut, den er bekommt. */
     private static final Pattern BALKENWACHE = Pattern.compile(

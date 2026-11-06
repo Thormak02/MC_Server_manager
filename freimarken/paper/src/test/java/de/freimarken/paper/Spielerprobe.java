@@ -2,13 +2,16 @@ package de.freimarken.paper;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.permissions.PermissionAttachmentInfo;
 
 /**
  * Ein Spieler-Stellvertreter, der mitschreibt, was bei ihm ankommt.
@@ -36,8 +39,19 @@ final class Spielerprobe {
     private final List<Component> handbalken = new ArrayList<>();
     private final List<Component> chat = new ArrayList<>();
 
-    /** In welcher Welt er steht - nur fuer die Wachen, die danach fragen. */
-    private String weltschluessel;
+    /**
+     * In welcher Welt er steht - und zwar als OBJEKT, einmal gebaut.
+     *
+     * <p>Das ist nicht Sparsamkeit: {@code ParzellenBefehle.inDerMarktstadt}
+     * vergleicht die Welt des Spielers mit {@code equals} gegen die Welt, die der
+     * Befehl im Konstruktor bekam. Ein Stellvertreter antwortet darauf mit
+     * Identitaet - gaebe {@code getWorld()} bei jedem Aufruf ein neues Exemplar,
+     * stuende der Spieler nie in der Marktstadt, und der Zweig kehrte stumm um.
+     */
+    private World welt;
+
+    /** Wo er steht. Ein Zweig, der danach fragt, braucht ihn gesetzt. */
+    private Location ort;
 
     /** Sein Spielmodus. {@code setGameMode} aendert ihn UND schreibt mit. */
     private GameMode modus = GameMode.SURVIVAL;
@@ -55,9 +69,23 @@ final class Spielerprobe {
         return new UUID(0L, zahl);
     }
 
-    /** Stellt ihn in eine Welt - gibt sich selbst zurueck, fuer die Kette. */
+    /** Stellt ihn in eine Welt ohne Bloecke - gibt sich selbst zurueck. */
     Spielerprobe inWelt(String schluessel) {
-        this.weltschluessel = schluessel;
+        return inWelt(Serverprobe.welt(schluessel));
+    }
+
+    /**
+     * Stellt ihn in DIESE Welt - fuer jeden Zweig, der sie mit {@code equals}
+     * gegen seine eigene prueft.
+     */
+    Spielerprobe inWelt(World wo) {
+        this.welt = wo;
+        return this;
+    }
+
+    /** Stellt ihn an einen Ort - gibt sich selbst zurueck, fuer die Kette. */
+    Spielerprobe anOrt(Location wo) {
+        this.ort = wo;
         return this;
     }
 
@@ -88,10 +116,16 @@ final class Spielerprobe {
                 (eigen, methode, werte) -> switch (methode.getName()) {
                     case "getUniqueId" -> kennung;
                     case "getWorld" -> welt();
+                    case "getLocation" -> ortOderKlage();
                     case "getGameMode" -> modus;
                     case "setGameMode" -> setzeModus(werte[0]);
                     case "getName" -> name;
                     case "hasPermission" -> rechte.contains(String.valueOf(werte[0]));
+                    case "getEffectivePermissions" -> wirksameRechte();
+                    // Sichtbar ist jeder: Unsichtbarkeit kommt im Spiel von
+                    // einem anderen Plugin, und keine Probe stellt sie bisher
+                    // her. Wer sie braucht, macht daraus eine Menge.
+                    case "canSee" -> true;
                     case "sendActionBar" -> merke(handbalken, werte[0]);
                     case "sendMessage" -> merke(chat, werte[0]);
                     case "toString" -> "Spielerprobe " + name;
@@ -106,14 +140,47 @@ final class Spielerprobe {
     }
 
     private World welt() {
-        if (weltschluessel == null) {
+        if (welt == null) {
             throw new UnsupportedOperationException("Dieser Spieler steht in keiner"
                     + " Welt. Der Zweig, den du durchlaeufst, fragt danach - also"
                     + " gehoert inWelt(...) in die Probe. Eine erfundene Welt waere"
                     + " schlimmer: Dann haengt das Ergebnis an einem Namen, den die"
                     + " Probe nie genannt hat.");
         }
-        return Serverprobe.welt(weltschluessel);
+        return welt;
+    }
+
+    /**
+     * Die gesetzten Rechte als Eintraege - fuer jeden Zweig, der sie DURCHSUCHT.
+     *
+     * <p>{@code hasPermission} genuegt nicht ueberall: Die Zuschlaege auf die
+     * Hoechstzahl stehen als {@code freimarken.extra.parzellen.3} im Recht selbst,
+     * und {@code ParzellenBefehle.hoechsteAus} liest die ZAHL aus dem Namen. Dazu
+     * muss es die Rechte aufzaehlen koennen.
+     *
+     * <p>{@code PermissionAttachmentInfo} ist eine Klasse und keine Schnittstelle,
+     * also kein Stellvertreter: Sie wird gebaut. Der Anhang und der Traeger bleiben
+     * {@code null} - gelesen werden nur Name und Wert.
+     */
+    private Set<PermissionAttachmentInfo> wirksameRechte() {
+        Set<PermissionAttachmentInfo> eintraege = new LinkedHashSet<>();
+        for (String recht : rechte) {
+            eintraege.add(new PermissionAttachmentInfo(null, recht, null, true));
+        }
+        return eintraege;
+    }
+
+    private Location ortOderKlage() {
+        if (ort == null) {
+            throw new UnsupportedOperationException("Dieser Spieler steht nirgends."
+                    + " Der Zweig fragt nach seinem Ort - also gehoert anOrt(...) in"
+                    + " die Probe. Ein erfundener Ort waere schlimmer: Dann haengt"
+                    + " das Ergebnis an einer Koordinate, die die Probe nie genannt"
+                    + " hat.");
+        }
+        // Wie im Spiel eine Kopie: Ein Zweig, der den Ort veraendert, soll den
+        // des Spielers nicht mit veraendern.
+        return ort.clone();
     }
 
     private Object setzeModus(Object neuer) {
