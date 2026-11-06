@@ -64,10 +64,25 @@ class VerdienstbuchTest {
     private static final Set<String> BERGMANN = Set.of("bergmann");
 
     /** Gewoehnlicher Stein: 40 Pfennige, also 0,40 Mark - der Fall mit Rest. */
-    private static final String STEIN = "stone";
+    static final String STEIN = "stone";
 
     /** Ein teurer Block: 1000 Pfennige - an ihm ist jede Minderungsstufe zu sehen. */
-    private static final String ERZ = "diamond_ore";
+    static final String ERZ = "diamond_ore";
+
+    /** Eine Erntepflanze MIT Alter - reif erst am Hoechstalter. */
+    static final String WEIZEN = "wheat";
+
+    /** Eine Hoehlenranke - bei ihr entscheiden die BEEREN und nicht das Alter. */
+    static final String RANKE = "cave_vines";
+
+    /** Eine Wesensart zum Zuechten. */
+    static final String KALB = "cow";
+
+    /** Eine Wesensart zum Toeten. */
+    static final String MONSTER = "zombie";
+
+    /** Ein Fang. */
+    static final String FISCH = "cod";
 
     private final List<LogRecord> protokollzeilen = new ArrayList<>();
     private SpielzeitbuchTest.StellUhr uhr;
@@ -117,12 +132,21 @@ class VerdienstbuchTest {
      * des Sammlers.
      */
     static Verdienstwerte werte(long tagesdeckel) {
-        return new Verdienstwerte(tagesdeckel, 2, 2, 50, 10,
-                Lohntafel.ausLoehnen(List.of(
+        return Verdienstwerte.VORGABE.mitMinderung(tagesdeckel, 2, 2, 50, 10)
+                .mitLoehnen(Lohntafel.ausLoehnen(List.of(
                         new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, STEIN, 40L),
                         new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, ERZ, 1000L),
                         new Lohntafel.Lohn("bergmann", Taetigkeit.SETZEN, STEIN, 10L),
-                        new Lohntafel.Lohn("steinmetz", Taetigkeit.ABBAUEN, ERZ, 300L))));
+                        new Lohntafel.Lohn("steinmetz", Taetigkeit.ABBAUEN, ERZ, 300L),
+                        // Je neue Taetigkeit eine Zeile - sonst hat die Probe der Wache
+                        // nichts zu zahlen, und ihr Zweig liefe am Lohn vorbei ins
+                        // Leere.
+                        new Lohntafel.Lohn("bauer", Taetigkeit.ERNTEN, WEIZEN, 150L),
+                        new Lohntafel.Lohn("bauer", Taetigkeit.ERNTEN, RANKE, 180L),
+                        new Lohntafel.Lohn("bauer", Taetigkeit.ZUECHTEN, KALB, 3500L),
+                        new Lohntafel.Lohn("fischer", Taetigkeit.FISCHEN, FISCH, 800L),
+                        new Lohntafel.Lohn("jaeger", Taetigkeit.TOETEN, MONSTER,
+                                2000L))));
     }
 
     /**
@@ -304,19 +328,97 @@ class VerdienstbuchTest {
     }
 
     @Test
-    @DisplayName("Der Minderungszaehler haengt an der Blockart, nicht an der Taetigkeit")
-    void zaehlerHaengtAnDerArt() {
-        // Gemessen aufgeschrieben und nicht geraten: Gesetzte und abgebaute Steine zaehlen
-        // in EINEN Zaehler. Das ist die sichere Richtung - zwei getrennte Zaehler gaeben
-        // einer Schleife aus Setzen und Abbauen zweimal den vollen Satz. Wer das trennt,
-        // aendert eine Zahl zugunsten des Spielers und muss es wollen.
+    @DisplayName("Der Minderungszaehler haengt an TAETIGKEIT UND Name")
+    void zaehlerHaengtAnTaetigkeitUndName() {
+        // Nicht am Namen allein, und das ist eine Entscheidung mit Grund: Sonst
+        // entschiede ein Namenszufall darueber, was zusammen zaehlt. "fischen cod" und
+        // "abbauen cod" teilten ein Fenster, "zuechten cow" und "toeten cow" ebenso - und
+        // bei "ernten wheat" gegen "abbauen wheat" fiele derselbe Zufall zugunsten des
+        // Spielers aus.
+        //
+        // Dass eine Schleife aus Setzen und Abbauen damit zwei Fenster hat, ist kein Loch:
+        // Ein gesetzter Block traegt eine Marke und zahlt beim Abbauen gar nichts.
         var buch = buch();
         buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN);
         buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN);
 
-        assertEquals(20L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN),
-                "der dritte Stein ist gemindert, obwohl die ersten zwei gesetzt waren");
-        assertEquals(1, buch.gezaehlteArten(ANNA).size());
+        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN),
+                "das Abbauen hat sein eigenes Fenster - voller Satz");
+        assertEquals(2, buch.gezaehlteArten(ANNA).size());
+        assertTrue(buch.gezaehlteArten(ANNA).contains("setzen/" + STEIN),
+                buch.gezaehlteArten(ANNA).toString());
+        assertTrue(buch.gezaehlteArten(ANNA).contains("abbauen/" + STEIN),
+                buch.gezaehlteArten(ANNA).toString());
+    }
+
+    @Test
+    @DisplayName("Die harte Stundenmenge haelt eine Farm an - ueber ALLE Namen")
+    void stundenmengeHaeltAn() {
+        // Die einzige der drei Bremsen, die wirklich anhaelt. Die Stufen DAEMPFEN nur:
+        // Ihre Pauschale vervielfacht sich mit jeder weiteren Art, die eine Farm
+        // ausspuckt - fuenf Monsterarten waeren fuenf Pauschalen. Darum zaehlt diese
+        // Grenze ueber alle Namen EINER Taetigkeit zusammen.
+        var buch = new Verdienstbuch(kasse, stand(werte(
+                Verdienstwerte.VORGABE_TAGESDECKEL)
+                .mitStundenmenge(Taetigkeit.ABBAUEN, 3)), uhr, protokoll);
+
+        // Drei zahlen - und zwar auf ZWEI verschiedene Namen verteilt.
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ) > 0L);
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN) > 0L);
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ) > 0L);
+
+        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN),
+                "der vierte bringt nichts, obwohl es erst der zweite Stein ist");
+        assertEquals(Taetigkeit.ABBAUEN, buch.anDerGrenze(ANNA),
+                "und der Spieler erfaehrt, WELCHE Arbeit zu ist");
+
+        // Eine ANDERE Taetigkeit zahlt weiter - die Grenze gilt je Taetigkeit.
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN) > 0L);
+        assertEquals(null, buch.anDerGrenze(ANNA),
+                "nach einer zahlenden Tat steht er nicht mehr an der Grenze");
+    }
+
+    @Test
+    @DisplayName("Nach einer Stunde zahlt die Taetigkeit wieder - und beginnt an der Grenze")
+    void stundenmengeSpringtNachEinerStunde() {
+        var buch = new Verdienstbuch(kasse, stand(werte(
+                Verdienstwerte.VORGABE_TAGESDECKEL)
+                .mitStundenmenge(Taetigkeit.ABBAUEN, 2)), uhr, protokoll);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ));
+
+        uhr.weiter(Verdienstbuch.FENSTER);
+
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ) > 0L,
+                "die neue Stunde zahlt wieder");
+    }
+
+    @Test
+    @DisplayName("Die Grenze gilt in JEDER neuen Stunde wieder - und zwar ab eins")
+    void grenzeGiltJedeStundeNeu() {
+        // Wer eine Stunde lang gegen die Grenze haut, hat in der naechsten wieder genau
+        // sein Soll frei - nicht weniger und nicht mehr. Fuenfzig Schlaege ins Leere
+        // aendern daran nichts.
+        //
+        // Der frueheren Fassung dieser Probe lag eine falsche Begruendung bei ("sonst
+        // begaenne die naechste Stunde bei einer gewachsenen Zahl"). Das ist nicht so:
+        // imFenster setzt den Zaehler beim Fensterwechsel ohnehin auf 0. Gezeigt hat es
+        // eine Einspritzung, die den Zaehler an der Grenze weiterzaehlen liess und von
+        // keiner Probe bemerkt wurde.
+        var buch = new Verdienstbuch(kasse, stand(werte(
+                Verdienstwerte.VORGABE_TAGESDECKEL)
+                .mitStundenmenge(Taetigkeit.ABBAUEN, 1)), uhr, protokoll);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        for (int mal = 0; mal < 50; mal++) {
+            assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ));
+        }
+
+        uhr.weiter(Verdienstbuch.FENSTER);
+
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ) > 0L);
+        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ),
+                "und dann ist wieder zu - genau nach einem");
     }
 
     @Test

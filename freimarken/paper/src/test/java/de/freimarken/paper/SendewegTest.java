@@ -11,6 +11,7 @@ import de.freimarken.kern.Berufsregel;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Buchungsgrund;
+import de.freimarken.kern.Taetigkeit;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Richtung;
 import de.freimarken.kern.Wirtschaftswerte;
@@ -199,11 +200,20 @@ class SendewegTest {
         // Familien: Wird ein dritter Satz selbstbescheinigend, ohne dass jemand es hier
         // aufschreibt, ist diese Probe rot - und nicht erst Probe 30 mit einer Meldung,
         // die niemand mehr zuordnet.
-        var beide = new TreeSet<String>(ausDenBescheiden);
+        var alle = new TreeSet<String>(ausDenBescheiden);
         for (Buchungsgrund grund : Buchungsgrund.values()) {
-            beide.add(Sprachschluessel.grund(grund).pfad());
+            alle.add(Sprachschluessel.grund(grund).pfad());
         }
-        assertEquals(beide, new TreeSet<>(Sprachschluessel.familienDeckung()),
+        // DRITTE Familie seit Teil E2: die Worte der Taetigkeiten. Sie werden von keinem
+        // Zweig namentlich geholt, sondern ueber BerufSatz.taetigkeitswort - und gedeckt
+        // sind sie nicht hier, sondern in VerdienstwacheTest: Dort geht JEDE Taetigkeit
+        // durch die echte Zeile der ausgelieferten Vorlage. Hier steht sie, weil DIESE
+        // Probe die Liste der Ausnahmen fuehrt; wer eine vierte Familie baut, laeuft
+        // hier auf und nicht erst bei Probe 30 mit einer Meldung, die niemand zuordnet.
+        for (Taetigkeit taetigkeit : Taetigkeit.values()) {
+            alle.add(BerufSatz.taetigkeitswort(taetigkeit).pfad());
+        }
+        assertEquals(alle, new TreeSet<>(Sprachschluessel.familienDeckung()),
                 "genau die Menge, die GrenzeTest als selbstbescheinigend durchlaesst");
     }
 

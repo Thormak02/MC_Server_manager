@@ -12,7 +12,9 @@ import de.freimarken.kern.Blockort;
 import de.freimarken.kern.SpeicherBerufe;
 import de.freimarken.kern.SpeicherBlockmarken;
 import de.freimarken.kern.SpeicherKasse;
+import de.freimarken.kern.Taetigkeit;
 import de.freimarken.kern.Verdienstwerte;
+import de.freimarken.kern.Wirtschaftsstand;
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -25,9 +27,14 @@ import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.entity.EntityType;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.EntityBreedEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -159,6 +166,19 @@ class VerdienstwacheTest {
         return eigener;
     }
 
+    /**
+     * Derselbe Stand, den der Sammler bekommt - mit den Saetzen aus VerdienstbuchTest.
+     *
+     * <p>Die Wache braucht ihn seit E2 selbst: An ihm haengen die Weissliste der
+     * Entstehungsgruende und die Frage, ob fuer ein Material ein Erntesatz vorliegt.
+     * DERSELBE Stand und keine zweite Abschrift - sonst prueefte diese Probe eine andere
+     * Wirtschaft als die, in der gebucht wird.
+     */
+    private Wirtschaftsstand stand() {
+        return VerdienstbuchTest.stand(VerdienstbuchTest.werte(
+                Verdienstwerte.VORGABE_TAGESDECKEL));
+    }
+
     private Verdienstbuch buch(long tagesdeckel) {
         return new Verdienstbuch(kasse, VerdienstbuchTest.stand(
                 VerdienstbuchTest.werte(tagesdeckel)), uhr, protokoll);
@@ -169,8 +189,63 @@ class VerdienstwacheTest {
     }
 
     private Verdienstwache wache(Verdienstbuch buch, Berufsablage ablage) {
-        return new Verdienstwache(takt, buch, marken, ablage,
+        return new Verdienstwache(takt, buch, marken, ablage, stand(),
                 Set.of(MARKTSTADT, HOCHWALD), Sprachprobe.spracheAusDemJar(), protokoll);
+    }
+
+    /**
+     * Eine Berufsablage, in der Anna genau diese Berufe haelt.
+     *
+     * <p>Je Probe eine eigene: Welcher Beruf welche Taetigkeit bezahlt, ist der Kern
+     * dessen, was hier geprueft wird - eine gemeinsame Ablage mit allen Berufen liesse
+     * nicht sehen, ob der Lohn wirklich am richtigen Beruf haengt.
+     */
+    private Berufsablage berufe(String... welche) {
+        SpeicherBerufe eigene = new SpeicherBerufe();
+        for (String beruf : welche) {
+            eigene.waehle(new Berufsablage.Antrag(anna.kennung(), beruf, uhr.instant()),
+                    eigene.lies(anna.kennung()));
+        }
+        return eigene;
+    }
+
+    /** Ein Angelereignis - was die Wache nicht liest, ist null. */
+    private PlayerFishEvent angeln(PlayerFishEvent.State zustand, boolean offenesWasser,
+                                   org.bukkit.entity.Entity gefangen) {
+        return new PlayerFishEvent(anna.spieler(), gefangen,
+                Wesenprobe.angel(offenesWasser), zustand);
+    }
+
+    /**
+     * Ein Todesereignis.
+     *
+     * <p>Die Schadensquelle ist {@code null}, und das ist kein Mangel: Diese Wache liest
+     * sie NIE. {@code getDamageSource().getDamageType()} waere ohne laufenden Server
+     * nicht zu lesen - die Konstanten von {@code DamageType} schlagen in der Registry
+     * nach und werfen -, und dann liesse sich genau dieser Zweig nicht pruefen. Der
+     * Toeter kommt aus {@code getEntity().getKiller()}.
+     */
+    private EntityDeathEvent sterben(EntityType art, org.bukkit.entity.Player toeter,
+                                     CreatureSpawnEvent.SpawnReason grund) {
+        return new EntityDeathEvent(Wesenprobe.wesen(art, toeter, grund), null,
+                new ArrayList<>());
+    }
+
+    /**
+     * Ein Zuchtereignis - mit VERSCHIEDENEN Arten fuer das Junge und die Eltern.
+     *
+     * <p>Verschieden, damit die Probe wirklich prueeft, welches Wesen den Namen gibt:
+     * Waeren beide eine Kuh, blieben {@code getEntity()} und {@code getMother()}
+     * ununterscheidbar - und eine Verwechslung im Zweig faellt nie auf. Pferd und Esel
+     * ergeben wirklich ein Maultier, und das traegt seinen eigenen Satz.
+     */
+    private EntityBreedEvent zuechten(EntityType jung, EntityType eltern,
+                                      org.bukkit.entity.Player zuechter) {
+        return new EntityBreedEvent(Wesenprobe.wesen(jung, null,
+                        CreatureSpawnEvent.SpawnReason.BREEDING),
+                Wesenprobe.wesen(eltern, null, CreatureSpawnEvent.SpawnReason.NATURAL),
+                Wesenprobe.wesen(eltern, null, CreatureSpawnEvent.SpawnReason.NATURAL),
+                zuechter, null, 0);
     }
 
     /** Ein Abbauereignis an dieser Stelle - die Art kommt aus dem Weltgriff. */
@@ -341,6 +416,294 @@ class VerdienstwacheTest {
                 anna.handbalkenBild());
     }
 
+    // --- ERNTEN: dieselbe Marke, aber eine eigene Taetigkeit ----------------
+
+    @Test
+    @DisplayName("Eine REIFE Pflanze zahlt als ERNTE und nicht als Abbau")
+    void reifePflanzeZahltAlsErnte() {
+        // Welche der beiden Taetigkeiten gilt, entscheidet die LOHNLISTE: Steht fuer
+        // dieses Material ein Erntesatz darin, ist es eine Ernte. So haengt die
+        // Entscheidung an der Datei, die der Betreiber pflegt, und nicht an einer
+        // Abschrift daneben.
+        griff.art = Material.WHEAT;
+        Serverprobe.alter(MARKTSTADT, 7, 71, 13, 7, 7);
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("bauer"));
+
+        wache.beimAbbauen(abbauen(7, 71, 13));
+
+        assertEquals(150L, buch.rest(anna.kennung()), "der Erntesatz, nicht der Abbau");
+        // Und das Fenster traegt die TAETIGKEIT im Schluessel - daran haengt, dass
+        // Ernten und Abbauen nicht denselben Zaehler teilen.
+        assertEquals(List.of("ernten/" + VerdienstbuchTest.WEIZEN),
+                buch.gezaehlteArten(anna.kennung()));
+    }
+
+    @Test
+    @DisplayName("Eine UNREIFE Pflanze bringt nichts - auch nicht als Abbau")
+    void unreifePflanzeZahltNichts() {
+        // Wer gesaeten Weizen umschlaegt, hat nichts geerntet. Und er hat auch nichts
+        // abgebaut: Ein Rueckfall auf den Abbausatz waere die Maschine, gegen die die
+        // Reifepruefung gebaut ist - saeen, umschlagen, saeen.
+        griff.art = Material.WHEAT;
+        Serverprobe.alter(MARKTSTADT, 7, 71, 13, 3, 7);
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("bauer"));
+
+        wache.beimAbbauen(abbauen(7, 71, 13));
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+        assertEquals(List.of(), anna.handbalkenBild());
+        assertEquals(List.of(), buch.gezaehlteArten(anna.kennung()),
+                "und es entsteht kein Zaehler fuer etwas, das nichts einbringt");
+    }
+
+    @Test
+    @DisplayName("Eine MARKIERTE Erntepflanze zahlt nichts - der Kuerbis im Loch")
+    void markierteErnteZahltNichts() {
+        // Die wichtigste Probe dieses Schrittes. Der naheliegende Entwurf - "Ernten
+        // fragt die Marke nicht, weil Saat gesetzt wird" - macht einen einzigen Kuerbis
+        // in einem Ein-Block-Loch zur Maschine: setzen (zahlt einmal), abbauen (die
+        // Ernte zahlt), wieder setzen (Marke steht, zahlt nichts), wieder abbauen (die
+        // Ernte zahlt erneut) - unbegrenzt, ohne Farm, ohne Werkzeug, ohne Weg.
+        //
+        // Dass ein von Hand gesaetes Feld trotzdem zahlt, besorgt die andere Seite:
+        // Die Setzwache markiert Saatgut nicht. Geprueft wird das dort.
+        griff.art = Material.WHEAT;
+        Serverprobe.alter(MARKTSTADT, 7, 71, 13, 7, 7);
+        marken.markiere(new Blockort(MARKTSTADT, 7, 71, 13));
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("bauer"));
+
+        wache.beimAbbauen(abbauen(7, 71, 13));
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+        assertEquals(List.of(), anna.handbalkenBild());
+    }
+
+    @Test
+    @DisplayName("Bei einer Hoehlenranke entscheiden die BEEREN, nicht das Alter")
+    void beerenVorAlter() {
+        // CaveVines ist BEIDES - Ageable und CaveVinesPlant -, und sein Alter ist die
+        // LAENGE der Ranke, nicht die Reife. Wer das Alter zuerst fragt, zahlt fuer eine
+        // Ranke ohne Gluehbeeren. Die Reihenfolge im Zweig ist darum keine Geschmacksfrage.
+        griff.art = Material.CAVE_VINES;
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("bauer"));
+
+        // Volles Alter, aber KEINE Beeren: Eine Alterspruefung allein wuerde hier zahlen.
+        Serverprobe.beeren(MARKTSTADT, 7, 71, 13, false, 25, 25);
+        wache.beimAbbauen(abbauen(7, 71, 13));
+        assertEquals(0L, buch.rest(anna.kennung()), "ohne Beeren ist nichts zu ernten");
+
+        // Beeren bei KLEINEM Alter: Eine Alterspruefung allein wuerde hier nicht zahlen.
+        Serverprobe.beeren(MARKTSTADT, 8, 71, 13, true, 3, 25);
+        wache.beimAbbauen(abbauen(8, 71, 13));
+        assertEquals(180L, buch.rest(anna.kennung()), "mit Beeren zahlt sie");
+    }
+
+    @Test
+    @DisplayName("Ein Block OHNE Alter ist reif - dort ist die Marke die Bremse")
+    void ohneAlterIstReif() {
+        // Kuerbis, Melone, Zuckerrohr, Bambus, Kaktus und Seetang haben keinen
+        // Reifezustand. Eine Pruefung, die dort "unreif" annahm, liesse sie nie zahlen -
+        // und der halbe Acker waere stumm wertlos.
+        griff.art = Material.STONE;
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch);
+
+        wache.beimAbbauen(abbauen(7, 71, 13));
+
+        assertEquals(40L, buch.rest(anna.kennung()),
+                "kein Alter heisst nicht unreif - hier zahlt der Abbausatz");
+    }
+
+    // --- FISCHEN: drei Tore, und jedes schliesst etwas anderes ---------------
+
+    @Test
+    @DisplayName("Ein Fang im offenen Wasser zahlt")
+    void fangZahlt() {
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("fischer"));
+
+        wache.beimFischen(angeln(PlayerFishEvent.State.CAUGHT_FISH, true,
+                Wesenprobe.gegenstand(Material.COD)));
+
+        assertEquals(800L, buch.rest(anna.kennung()));
+        assertEquals(List.of("&a+8,00 Mark"), anna.handbalkenBild());
+    }
+
+    @Test
+    @DisplayName("Im Ein-Block-Loch zahlt kein Fang")
+    void nichtImOffenenWasser() {
+        // Das Tor gegen den Klickautomaten am Wasserloch: Ein 1x1-Loch ist kein offenes
+        // Wasser. Dass ein Automat auch im Meer angeln kann, faengt die Stundenmenge -
+        // eine Bremse allein reicht hier nicht.
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("fischer"));
+
+        wache.beimFischen(angeln(PlayerFishEvent.State.CAUGHT_FISH, false,
+                Wesenprobe.gegenstand(Material.COD)));
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+    }
+
+    @Test
+    @DisplayName("Die sieben anderen Angelzustaende zahlen nichts - und werfen nicht")
+    void andereAngelzustaende() {
+        // In sechs der acht Zustaende ist getCaught() null, und bei CAUGHT_ENTITY ist es
+        // ein Wesen. Ein Zweig, der ohne Pruefung castet, wirft aus einem MONITOR-Zweig -
+        // je Angelwurf eine Stapelspur im Serverprotokoll, von aussen unsichtbar.
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("fischer"));
+
+        for (PlayerFishEvent.State zustand : PlayerFishEvent.State.values()) {
+            if (zustand == PlayerFishEvent.State.CAUGHT_FISH) {
+                continue;
+            }
+            wache.beimFischen(angeln(zustand, true, null));
+        }
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+
+        // UND der Fall, den NUR das Zustandstor faengt: ein richtiger Gegenstand in
+        // einem anderen Zustand. Ohne diese Zeile war das Tor ungeprueft - gegen ein
+        // null schuetzt schon das instanceof darunter, und eine Einspritzung, die das
+        // Tor entfernte, blieb gruen. Gefunden hat das die Einspritzung E6.
+        for (PlayerFishEvent.State zustand : PlayerFishEvent.State.values()) {
+            if (zustand == PlayerFishEvent.State.CAUGHT_FISH) {
+                continue;
+            }
+            wache.beimFischen(angeln(zustand, true,
+                    Wesenprobe.gegenstand(Material.COD)));
+        }
+
+        assertEquals(0L, buch.rest(anna.kennung()),
+                "nur CAUGHT_FISH ist ein Fang - alles andere zahlt nichts, auch wenn ein"
+                        + " Gegenstand daran haengt");
+    }
+
+    @Test
+    @DisplayName("Ein gehakter Tintenfisch ist kein Fang")
+    void tintenfischIstKeinFang() {
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("fischer"));
+
+        wache.beimFischen(angeln(PlayerFishEvent.State.CAUGHT_FISH, true,
+                Wesenprobe.wesenAmHaken()));
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+    }
+
+    // --- TOETEN: der Entstehungsgrund ist die Marke fuer Wesen ---------------
+
+    @Test
+    @DisplayName("Ein natuerliches Monster zahlt")
+    void natuerlichesMonsterZahlt() {
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("jaeger"));
+
+        wache.beimToeten(sterben(EntityType.ZOMBIE, anna.spieler(),
+                CreatureSpawnEvent.SpawnReason.NATURAL));
+
+        assertEquals(2000L, buch.rest(anna.kennung()));
+        assertEquals(List.of("toeten/" + VerdienstbuchTest.MONSTER),
+                buch.gezaehlteArten(anna.kennung()));
+    }
+
+    @Test
+    @DisplayName("Ohne Toeter zahlt niemand - Fall, Lava, Kaktus")
+    void ohneToeterNichts() {
+        // getKiller() ist null, wenn kein Spieler zugeschrieben wird. Das ist dieselbe
+        // Zuschreibung, nach der das Spiel selbst Beute und Erfahrung verteilt.
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("jaeger"));
+
+        wache.beimToeten(sterben(EntityType.ZOMBIE, null,
+                CreatureSpawnEvent.SpawnReason.NATURAL));
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+    }
+
+    @Test
+    @DisplayName("Eine SPAWNERFARM zahlt nichts")
+    void spawnerfarmZahltNichts() {
+        // Die Marke fuer Wesen. Ohne sie waere jede Spawnerfarm eine Gelddruckmaschine:
+        // Die Stufen daempfen nur, und ihr Boden zahlt unbegrenzt weiter.
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("jaeger"));
+
+        for (CreatureSpawnEvent.SpawnReason grund
+                : new CreatureSpawnEvent.SpawnReason[] {
+                        CreatureSpawnEvent.SpawnReason.SPAWNER,
+                        CreatureSpawnEvent.SpawnReason.TRIAL_SPAWNER,
+                        CreatureSpawnEvent.SpawnReason.SPAWNER_EGG}) {
+            wache.beimToeten(sterben(EntityType.ZOMBIE, anna.spieler(), grund));
+        }
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+    }
+
+    @Test
+    @DisplayName("Ein GEZUECHTETES Tier zahlt beim Tod nichts - es ist schon bezahlt")
+    void gezuechtetesTierZahltNichtZweimal() {
+        // Die Zuchtschleife, und sie ist die lukrativste der gefundenen: Zuechten zahlt
+        // bei der Geburt, Toeten beim Tod DESSELBEN Tieres - zwei Loehne fuer eine
+        // Handlung, zwoelf Mal je Stunde und Paar. Der Grund breeding steht nicht in der
+        // Weissliste, und damit ist sie zu.
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("jaeger", "bauer"));
+
+        wache.beimToeten(sterben(EntityType.COW, anna.spieler(),
+                CreatureSpawnEvent.SpawnReason.BREEDING));
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+    }
+
+    @Test
+    @DisplayName("Ein unbekannter Entstehungsgrund zahlt nichts")
+    void ohneGrundNichts() {
+        // Die sichere Richtung: Wer den Grund nicht kennt, kann nicht wissen, ob das
+        // Wesen schon bezahlt wurde.
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("jaeger"));
+
+        wache.beimToeten(sterben(EntityType.ZOMBIE, anna.spieler(), null));
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+    }
+
+    // --- ZUECHTEN -----------------------------------------------------------
+
+    @Test
+    @DisplayName("Eine Zucht zahlt - und der Name ist das JUNGE")
+    void zuchtZahlt() {
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("bauer"));
+
+        // Das JUNGE ist die Kuh, die Eltern sind Pferde. Nur die Kuh steht in der
+        // Lohnliste dieser Probe - ein Zweig, der ein Elternteil liest, bekommt hier
+        // also NULL und nicht denselben Betrag.
+        wache.beimZuechten(zuechten(EntityType.COW, EntityType.HORSE, anna.spieler()));
+
+        assertEquals(3500L, buch.rest(anna.kennung()));
+        assertEquals(List.of("zuechten/" + VerdienstbuchTest.KALB),
+                buch.gezaehlteArten(anna.kennung()));
+    }
+
+    @Test
+    @DisplayName("Eine Zucht ohne Spieler zahlt nichts - Dorfbewohner vermehren sich selbst")
+    void zuchtOhneSpieler() {
+        // getBreeder() ist dann null, und der Rueckgabetyp ist nur ein LivingEntity -
+        // ein Cast auf Player waere eine ClassCastException mit Ansage.
+        var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
+        var wache = wache(buch, berufe("bauer"));
+
+        wache.beimZuechten(zuechten(EntityType.COW, EntityType.HORSE, null));
+
+        assertEquals(0L, buch.rest(anna.kennung()));
+    }
+
     @Test
     @DisplayName("Ein Abgang rechnet sofort ab")
     void abgangRechnetAb() {
@@ -451,7 +814,7 @@ class VerdienstwacheTest {
         // Ein stilles null hiesse: Die Wache hoert weiter auf Bloecke, sammelt Pfennige -
         // und bucht nie. Der Spieler sieht seinen Handbalken und ein leeres Konto.
         var wache = new Verdienstwache((schlag, abstand) -> null,
-                buch(Verdienstwerte.VORGABE_TAGESDECKEL), marken, berufe,
+                buch(Verdienstwerte.VORGABE_TAGESDECKEL), marken, berufe, stand(),
                 Set.of(MARKTSTADT), Sprachprobe.spracheAusDemJar(), protokoll);
 
         assertThrows(IllegalStateException.class, wache::starte);
@@ -493,11 +856,11 @@ class VerdienstwacheTest {
     }
 
     @Test
-    @DisplayName("Genau ZWEI Ereigniszweige - Fischen und Toeten kommen spaeter")
-    void genauZweiZweige() {
+    @DisplayName("Genau FUENF Ereigniszweige, und jeder ist benannt")
+    void genauFuenfZweige() {
         // Eine Zahl, die mitwachsen MUSS: Wer hier einen Zweig hinzufuegt, ohne eine
-        // Probe dafuer zu schreiben, laeuft hier auf. Das ist der Zweck - in diesem Zweig
-        // entsteht Geld.
+        // Probe dafuer zu schreiben, laeuft hier auf. Das ist der Zweck - in diesen
+        // Zweigen entsteht Geld.
         List<String> zweige = new ArrayList<>();
         for (Method zweig : Verdienstwache.class.getDeclaredMethods()) {
             if (zweig.getAnnotation(EventHandler.class) != null) {
@@ -505,9 +868,49 @@ class VerdienstwacheTest {
             }
         }
 
-        assertEquals(2, zweige.size(), zweige.toString());
-        assertTrue(zweige.contains("beimAbbauen") && zweige.contains("beimAbgang"),
-                zweige.toString());
+        assertEquals(5, zweige.size(), zweige.toString());
+        for (String name : new String[] {"beimAbbauen", "beimFischen", "beimToeten",
+                                         "beimZuechten", "beimAbgang"}) {
+            assertTrue(zweige.contains(name), name + " fehlt: " + zweige);
+        }
+    }
+
+    @Test
+    @DisplayName("Jeder ZAHLENDE Zweig laeuft auf MONITOR mit ignoreCancelled")
+    void jederZahlendeZweigAufMonitor() {
+        // Nicht nur der Abbauzweig: Die Schutzwache laeuft auf NORMAL und bricht ab, und
+        // nach ihr kann ein anderer Hoerer noch abbrechen. Auf NORMAL bezahlte diese
+        // Wache Arbeit, die gar nicht stattfand - und zwar in JEDEM der vier zahlenden
+        // Zweige. Der Abgang ist ausgenommen: Er laesst sich nicht abbrechen.
+        for (Method zweig : Verdienstwache.class.getDeclaredMethods()) {
+            EventHandler haken = zweig.getAnnotation(EventHandler.class);
+            if (haken == null || zweig.getName().equals("beimAbgang")) {
+                continue;
+            }
+            assertEquals(EventPriority.MONITOR, haken.priority(), zweig.getName());
+            assertTrue(haken.ignoreCancelled(), zweig.getName()
+                    + " muss ignoreCancelled tragen - ein abgebrochenes Ereignis darf"
+                    + " nichts zahlen");
+        }
+    }
+
+    @Test
+    @DisplayName("JEDE Taetigkeit hat ihr Wort in der AUSGELIEFERTEN Vorlage")
+    void jedeTaetigkeitHatEinWort() {
+        // Die Deckung fuer die Wortfamilie beruf.taetigkeit: Sie wird von keinem Zweig
+        // namentlich geholt, sondern ueber BerufSatz.taetigkeitswort - und darum steht
+        // sie in Sprachschluessel.familienDeckung(), also auf der Ausnahmeliste von
+        // GrenzeTest 30. Diese Probe ist der Gegenwert dafuer: Sie holt JEDES Wort aus
+        // der echten Datei. Ohne sie koennte eine Zeile dort fehlen, und der Handbalken
+        // an der Stundenmenge bliebe stumm - bei genau der Taetigkeit, die neu ist.
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        for (Taetigkeit taetigkeit : Taetigkeit.values()) {
+            BerufSatz satz = BerufSatz.taetigkeitswort(taetigkeit);
+            assertEquals("beruf.taetigkeit." + taetigkeit.schluessel(), satz.pfad());
+            String wort = sprache.wort(satz, Einsatz.keine());
+            assertFalse(wort.isBlank(), taetigkeit.schluessel()
+                    + " hat kein Wort in der Vorlage");
+        }
     }
 
     @Test
@@ -518,23 +921,31 @@ class VerdienstwacheTest {
         Set<String> welten = Set.of(MARKTSTADT);
 
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(null, buch,
-                marken, berufe, welten, sprache, protokoll));
+                marken, berufe, stand(), welten, sprache,
+                protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, null,
-                marken, berufe, welten, sprache, protokoll));
+                marken, berufe, stand(), welten, sprache,
+                protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                null, berufe, welten, sprache, protokoll));
+                null, berufe, stand(), welten, sprache,
+                protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, null, welten, sprache, protokoll));
+                marken, null, stand(), welten, sprache,
+                protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, berufe, welten, null, protokoll));
+                marken, berufe, stand(), welten, null,
+                protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, berufe, welten, sprache, null));
+                marken, berufe, stand(), welten, sprache,
+                null));
         // Und die Welten: Eine leere Menge ist ein Zweig, der nie etwas tut - niemand
         // verdiente etwas, und niemand merkte es, bis jemand nach einer Stunde fragt.
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, berufe, null, sprache, protokoll));
+                marken, berufe, stand(), null, sprache,
+                protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, berufe, Set.of(), sprache, protokoll));
+                marken, berufe, stand(), Set.of(), sprache,
+                protokoll));
     }
 
     @Test
@@ -545,8 +956,8 @@ class VerdienstwacheTest {
         // Weltmenge gebaut ist.
         Set<String> veraenderlich = new java.util.HashSet<>(Set.of(MARKTSTADT));
         var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
-        var wache = new Verdienstwache(takt, buch, marken, berufe, veraenderlich,
-                Sprachprobe.spracheAusDemJar(), protokoll);
+        var wache = new Verdienstwache(takt, buch, marken, berufe, stand(),
+                veraenderlich, Sprachprobe.spracheAusDemJar(), protokoll);
         World fremde = Serverprobe.welt(FREMD, griff);
         veraenderlich.add(FREMD);
 

@@ -29,10 +29,21 @@ class VerdienstregelTest {
     private static final Set<String> BERGMANN = Set.of("bergmann");
 
     /** Eine Tafel mit 40 Pfennigen fuer Stein und 500 fuer Diamant. */
-    private static final Verdienstwerte MIT_LOEHNEN = new Verdienstwerte(
-            Verdienstwerte.VORGABE_TAGESDECKEL, Verdienstwerte.VORGABE_VOLL_BIS,
-            Verdienstwerte.VORGABE_STUFE, Verdienstwerte.VORGABE_FAKTOR_PROZENT,
-            Verdienstwerte.VORGABE_BODEN_PROZENT,
+    /**
+      * Minderung UND Tafel in einem - die zwei Stellen, die beides setzen.
+      *
+      * <p>Ueber die Abwandler und nicht ueber den Konstruktor: Dieser Satz waechst mit
+      * jedem Bauschritt um einen Teil, und eine Probe soll nur das nennen, was ihre
+      * Frage betrifft.
+      */
+    private static Verdienstwerte werteMitTafel(long deckel, int bisVoll, int breite,
+                                                int faktor, int boden, Lohntafel tafel) {
+        return Verdienstwerte.VORGABE.mitMinderung(deckel, bisVoll, breite, faktor, boden)
+                .mitLoehnen(tafel);
+    }
+
+    private static final Verdienstwerte MIT_LOEHNEN = Verdienstwerte.VORGABE
+            .mitLoehnen(
             Lohntafel.ausLoehnen(List.of(
                     new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, "stone", 40L),
                     new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, "diamond_ore",
@@ -81,8 +92,8 @@ class VerdienstregelTest {
     @Test
     @DisplayName("Andere Zahlen ergeben andere Kanten - die Form steht in der Datei")
     void andereZahlenAndereKanten() {
-        Verdienstwerte scharf = new Verdienstwerte(1_000L, 10, 10, 25, 1,
-                Lohntafel.ausLoehnen(List.of()));
+        Verdienstwerte scharf = Verdienstwerte.VORGABE
+                .mitMinderung(1_000L, 10, 10, 25, 1);
 
         assertEquals(100, Verdienstregel.anteilProzent(scharf, 9));
         assertEquals(25, Verdienstregel.anteilProzent(scharf, 10));
@@ -137,7 +148,7 @@ class VerdienstregelTest {
     void kleinerLohnFaelltAufNull() {
         // Vier Pfennige mal ein Zehntel sind null. Wer das nicht will, setzt den Lohn
         // hoeher oder den Boden; die Rechnung erfindet keinen Pfennig.
-        Verdienstwerte knapp = new Verdienstwerte(1_000L, 10, 10, 50, 10,
+        Verdienstwerte knapp = werteMitTafel(1_000L, 10, 10, 50, 10,
                 Lohntafel.ausLoehnen(List.of(
                         new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, "stone", 4L))));
 
@@ -153,7 +164,7 @@ class VerdienstregelTest {
         // Der Plan sagt, die zwei Grundberufe TEILEN sich das Einkommen. Summiert waere
         // ein Block zweimal bezahlt. Der hoechste Satz ist die freundliche Lesart: Wer
         // zwei passende Berufe haelt, bekommt den besseren.
-        Verdienstwerte beide = new Verdienstwerte(1_000L, 200, 200, 50, 10,
+        Verdienstwerte beide = werteMitTafel(1_000L, 200, 200, 50, 10,
                 Lohntafel.ausLoehnen(List.of(
                         new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, "stone", 40L),
                         new Lohntafel.Lohn("steinmetz", Taetigkeit.ABBAUEN, "stone",

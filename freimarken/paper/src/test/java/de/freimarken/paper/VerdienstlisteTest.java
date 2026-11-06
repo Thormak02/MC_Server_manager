@@ -49,6 +49,11 @@ class VerdienstlisteTest {
      * <p>Genau die Vorgabezahlen bei Deckel und Minderung: So muss jede Probe, die etwas
      * anderes erwartet, ihren Unterschied selbst hineinschreiben, und eine Probe, die
      * nichts aendert, bekommt die Vorgabe.
+     *
+     * <p>Der Weizen steht unter ERNTEN und nicht unter abbauen, und das ist kein
+     * Geschmack: Weizen ist Saatgut, und Saatgut unter abbauen wird VERWORFEN - saeen und
+     * sofort umschlagen waere dort eine Maschine. Diese Vorlage stand bis zur
+     * Einfuehrung jener Regel selbst falsch, und die Regel hat es sofort gefangen.
      */
     private static final String VOLLSTAENDIG = """
             verdienst:
@@ -66,14 +71,22 @@ class VerdienstlisteTest {
                   setzen:
                     stone_bricks: 10
                 bauer:
-                  abbauen:
+                  ernten:
                     wheat: 60
             """;
 
-    /** Dieselben drei Berufe wie in {@link WirtschaftslisteTest} - zwei Grund, eine Spez. */
+    /**
+      * Die Berufe, gegen die diese Proben pruefen - vier Grundberufe, eine Spez.
+      *
+      * <p>Mehr als die drei von {@link WirtschaftslisteTest}: Seit E2 braucht der Leser
+      * auch einen Beruf, der TOETET, und einen, der FISCHT - sonst prueefte keine Probe
+      * die Namensart WESEN, und eine Zeile unter {@code toeten} waere still verworfen.
+      */
     private static final Berufsverzeichnis BERUFE = Berufsverzeichnis.ausAngaben(List.of(
             new Berufsangabe("bergmann", null),
             new Berufsangabe("bauer", null),
+            new Berufsangabe("jaeger", null),
+            new Berufsangabe("fischer", null),
             new Berufsangabe("steinmetz", "bergmann")));
 
     private static Verdienstliste.Ergebnis lies(String yaml) {
@@ -103,7 +116,7 @@ class VerdienstlisteTest {
                 "stone"));
         assertEquals(10L, werte.loehne().pfennige("bergmann", Taetigkeit.SETZEN,
                 "stone_bricks"));
-        assertEquals(60L, werte.loehne().pfennige("bauer", Taetigkeit.ABBAUEN, "wheat"));
+        assertEquals(60L, werte.loehne().pfennige("bauer", Taetigkeit.ERNTEN, "wheat"));
     }
 
     @Test
@@ -293,14 +306,17 @@ class VerdienstlisteTest {
         // Die Einrueckung ist die des FERTIGEN Textblocks und nicht die im Quelltext:
         // Java zieht den gemeinsamen Einzug ab, also stehen hier sechs und acht Leerzeichen.
         var ergebnis = lies(VOLLSTAENDIG.replace("      abbauen:\n        stone: 40",
-                "      fischen:\n        stone: 40"));
+                "      handeln:\n        stone: 40"));
 
-        assertTrue(klagtUeber(ergebnis, Verdienstwerte.PFAD_LOEHNE + ".bergmann.fischen"),
+        assertTrue(klagtUeber(ergebnis, Verdienstwerte.PFAD_LOEHNE + ".bergmann.handeln"),
                 ergebnis.klagen().toString());
         // Die Klage nennt, was es gibt, und sagt, dass mehr kommt: Sonst suchte der
         // Betreiber den Fehler in seiner Schreibweise, obwohl die Taetigkeit noch fehlt.
         String klage = ergebnis.klagen().get(0);
-        assertTrue(klage.contains("abbauen") && klage.contains("setzen"), klage);
+        for (Taetigkeit taetigkeit : Taetigkeit.values()) {
+            assertTrue(klage.contains(taetigkeit.schluessel()),
+                    taetigkeit.schluessel() + " fehlt in der Klage: " + klage);
+        }
         assertTrue(klage.contains("Bauschritt"), klage);
     }
 
@@ -397,7 +413,7 @@ class VerdienstlisteTest {
 
         assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
         assertTrue(ergebnis.bericht().stream().anyMatch(zeile ->
-                        zeile.startsWith("6 von 6 Verdienstzeilen")),
+                        zeile.startsWith("9 von 9 Verdienstzeilen")),
                 ergebnis.bericht().toString());
         // Jeder Schluessel muss NAMENTLICH dastehen - eine Zahl allein sagt dem
         // Betreiber nicht, welche Zeile er nachtragen soll.
@@ -406,23 +422,369 @@ class VerdienstlisteTest {
                                          Verdienstwerte.PFAD_STUFE,
                                          Verdienstwerte.PFAD_FAKTOR,
                                          Verdienstwerte.PFAD_BODEN,
+                                         Verdienstwerte.PFAD_STUNDENMENGE,
+                                         Verdienstwerte.PFAD_SPAWNGRUENDE,
+                                         Verdienstwerte.PFAD_SAATGUT,
                                          Verdienstwerte.PFAD_LOEHNE}) {
             assertTrue(ergebnis.bericht().toString().contains(pfad), pfad);
         }
     }
 
     @Test
-    @DisplayName("Der Bericht nennt die Zahl der Saetze und beide Taetigkeiten")
+    @DisplayName("Der Bericht nennt die Zahl der Saetze und JEDE Taetigkeit")
     void berichtNenntDieZahlen() {
         // Damit der Betreiber nach einem Neuladen sieht, dass seine Aenderung angekommen
         // ist. Eine Zahl, die er nicht sieht, kann er nicht pruefen.
+        //
+        // JEDE Taetigkeit und nicht zwei abgeschriebene: Sonst schweigt der Bericht ueber
+        // genau die, die jemand neu dazubaut - und das ist die eine, bei der man es
+        // wissen will.
         var ergebnis = lies(VOLLSTAENDIG);
 
+        String zeile = ergebnis.bericht().stream()
+                .filter(eine -> eine.startsWith("Lohnliste: "))
+                .findFirst().orElse("");
+        assertTrue(zeile.startsWith("Lohnliste: 4 Saetze"), zeile);
+        for (Taetigkeit taetigkeit : Taetigkeit.values()) {
+            assertTrue(zeile.contains(taetigkeit.schluessel()),
+                    taetigkeit.schluessel() + " fehlt im Bericht: " + zeile);
+        }
+    }
+
+    @Test
+    @DisplayName("Eine WESENSART wird gegen EntityType geprueft, nicht gegen Material")
+    void wesensartWirdGeprueft() {
+        // Ohne die Namensart verwirft der Leser JEDE Zeile unter toeten und zuechten:
+        // Es gibt kein Material cow und keines zombie. Und zwar STILL - keine andere
+        // Probe dieses Projekts bemerkt das, weil jeder Beruf noch andere Zeilen hat.
+        var ergebnis = lies("""
+                verdienst:
+                  loehne:
+                    jaeger:
+                      toeten:
+                        zombie: 2000
+                        cow: 900
+                    bauer:
+                      zuechten:
+                        cow: 3500
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+        assertEquals(3, ergebnis.werte().loehne().anzahl());
+        assertEquals(2000L, ergebnis.werte().loehne().pfennige("jaeger",
+                Taetigkeit.TOETEN, "zombie"));
+        assertEquals(3500L, ergebnis.werte().loehne().pfennige("bauer",
+                Taetigkeit.ZUECHTEN, "cow"));
+    }
+
+    @Test
+    @DisplayName("Ein Material unter toeten ist eine Klage - und umgekehrt")
+    void namensartWirdVerwechselt() {
+        // Der haeufigste Fehler beim Eintragen: stone unter toeten, cow unter abbauen.
+        // Beides waere eine Zeile, die nie wirkt - und ohne Klage sucht der Betreiber
+        // den Lohn, den er eingetragen hat.
+        var wesenFalsch = lies("""
+                verdienst:
+                  loehne:
+                    jaeger:
+                      toeten:
+                        stone: 2000
+                """);
+        assertTrue(klagtUeber(wesenFalsch,
+                        Verdienstwerte.PFAD_LOEHNE + ".jaeger.toeten.stone"),
+                wesenFalsch.klagen().toString());
+        assertTrue(wesenFalsch.klagen().get(0).contains("Wesensart"),
+                wesenFalsch.klagen().get(0));
+
+        var materialFalsch = lies("""
+                verdienst:
+                  loehne:
+                    bergmann:
+                      abbauen:
+                        cow: 2000
+                """);
+        assertTrue(klagtUeber(materialFalsch,
+                        Verdienstwerte.PFAD_LOEHNE + ".bergmann.abbauen.cow"),
+                materialFalsch.klagen().toString());
+        assertTrue(materialFalsch.klagen().get(0).contains("Material"),
+                materialFalsch.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Eine Wesensart, die nicht LEBT, wird beklagt")
+    void nichtLebendeWesensart() {
+        // Ein Pfeil und ein Boot sind EntityType, aber sie sterben nicht und werden
+        // nicht gezuechtet. Ein Lohn dafuer ist eine Zeile, die nie wirkt.
+        for (String name : new String[] {"arrow", "acacia_boat", "item"}) {
+            var ergebnis = lies("""
+                    verdienst:
+                      loehne:
+                        jaeger:
+                          toeten:
+                            NAME: 2000
+                    """.replace("NAME", name));
+
+            assertTrue(klagtUeber(ergebnis,
+                            Verdienstwerte.PFAD_LOEHNE + ".jaeger.toeten." + name),
+                    name + " muss beklagt werden: " + ergebnis.klagen());
+            assertTrue(ergebnis.klagen().get(0).contains("LEBENDE"),
+                    ergebnis.klagen().get(0));
+        }
+    }
+
+    @Test
+    @DisplayName("Dasselbe Material unter abbauen UND ernten ist eine Klage")
+    void abbauenUndErntenZugleich() {
+        // Je Block zahlt GENAU EINE Taetigkeit, und sobald ein Erntesatz vorliegt, ist
+        // es die Ernte. Die Zeile unter abbauen wirkt dann nur noch fuer eine UNREIFE
+        // Pflanze - und die zahlt nichts. Also ist sie tot, und das sieht man an der
+        // Datei nicht.
+        // KUERBIS und nicht Weizen: Ein Kuerbis ist Bauwerk und kein Saatgut. Bei
+        // Saatgut greift die Regel eine Zeile vorher (die abbauen-Zeile wird verworfen),
+        // und dann prueefte diese Probe nicht, was sie behauptet.
+        var ergebnis = lies("""
+                verdienst:
+                  loehne:
+                    bauer:
+                      abbauen:
+                        pumpkin: 70
+                      ernten:
+                        pumpkin: 150
+                """);
+
+        assertTrue(klagtUeber(ergebnis, Verdienstwerte.PFAD_LOEHNE + ": \"pumpkin\""),
+                ergebnis.klagen().toString());
+        assertTrue(ergebnis.klagen().get(0).contains("GENAU EINE"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Saatgut unter ABBAUEN wird verworfen - das waere eine Maschine")
+    void saatgutUnterAbbauen() {
+        // Der Uebergangsfall, und er ist kein gedachter: Genau so sieht jede config.yml
+        // aus, die beim Update nicht nachgezogen wurde - bauer/abbauen/wheat stand bis
+        // Teil E1 darin, und eine vorhandene Datei wird NIE ueberschrieben.
+        //
+        // Seit E2 bekommt Saatgut keine Marke, damit ein gesaetes Feld zahlen kann. Unter
+        // ABBAUEN fehlt dann aber die Reifepruefung: saeen und sofort umschlagen zahlte
+        // jedes Mal. Darum wird die Zeile VERWORFEN und nicht nur beklagt - eine Klage
+        // allein liesse das Geld fliessen, bis jemand das Protokoll liest.
+        var ergebnis = lies("""
+                verdienst:
+                  saatgut: [wheat]
+                  loehne:
+                    bauer:
+                      abbauen:
+                        wheat: 70
+                        stone: 40
+                """);
+
+        assertTrue(klagtUeber(ergebnis,
+                        Verdienstwerte.PFAD_LOEHNE + ".bauer.abbauen.wheat"),
+                ergebnis.klagen().toString());
+        assertTrue(ergebnis.klagen().get(0).contains("VERWORFEN"),
+                ergebnis.klagen().get(0));
+        assertEquals(0L, ergebnis.werte().loehne().pfennige("bauer",
+                Taetigkeit.ABBAUEN, "wheat"), "die Zeile darf NICHT in der Tafel stehen");
+        // Die Nachbarzeile bleibt: Eine kaputte Zeile laesst die uebrigen stehen.
+        assertEquals(40L, ergebnis.werte().loehne().pfennige("bauer",
+                Taetigkeit.ABBAUEN, "stone"));
+    }
+
+    @Test
+    @DisplayName("Saatgut unter ERNTEN ist richtig - dort greift die Reife")
+    void saatgutUnterErnten() {
+        // Die Gegenrichtung, damit die Probe oben nicht einfach jedes Saatgut verbietet:
+        // Unter ernten gehoert es hin, und dort ist es die Reifepruefung, die aus dem
+        // Saeen keine Maschine macht.
+        var ergebnis = lies("""
+                verdienst:
+                  saatgut: [wheat]
+                  loehne:
+                    bauer:
+                      ernten:
+                        wheat: 150
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+        assertEquals(150L, ergebnis.werte().loehne().pfennige("bauer",
+                Taetigkeit.ERNTEN, "wheat"));
+    }
+
+    @Test
+    @DisplayName("Saatgut unter setzen ist eine Klage - die Zeile wirkt nie")
+    void saatgutUnterSetzen() {
+        // Die Setzwache kehrt bei Saatgut um, BEVOR sie den Zahlmeister ruft - mit
+        // Absicht, denn sonst waere saeen-umschlagen-saeen die kleine Maschine. Ein Satz
+        // dafuer wirkt also nie, und an der Datei sieht man das nicht. Genau so eine
+        // Zeile stand bis zu diesem Schritt in der ausgelieferten config.yml
+        // (wheat_seeds: 20).
+        var ergebnis = lies("""
+                verdienst:
+                  saatgut: [wheat]
+                  loehne:
+                    baumeister:
+                      setzen:
+                        wheat: 20
+                """.replace("baumeister", "bauer"));
+
+        assertTrue(klagtUeber(ergebnis, Verdienstwerte.PFAD_LOEHNE + ": \"wheat\""),
+                ergebnis.klagen().toString());
+        assertTrue(ergebnis.klagen().get(0).contains("Saatgut"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Dieselbe Wesensart unter toeten UND zuechten ist ERLAUBT")
+    void toetenUndZuechtenZugleich() {
+        // Benannt statt stillschweigend: Hier gibt es KEINE Klage, und das ist kein
+        // Vergessen. Dasselbe Tier zahlt nicht zweimal, dafuer sorgt die Weissliste der
+        // Entstehungsgruende - ein gezuechtetes Kalb traegt breeding und bringt beim Tod
+        // nichts. Ein Schaf zuechten und ein wildes Schaf erschlagen sind zwei
+        // verschiedene Taten, und beide duerfen zahlen.
+        var ergebnis = lies("""
+                verdienst:
+                  loehne:
+                    bauer:
+                      zuechten:
+                        cow: 3500
+                    jaeger:
+                      toeten:
+                        cow: 900
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+        assertEquals(2, ergebnis.werte().loehne().anzahl());
+    }
+
+    @Test
+    @DisplayName("Die Stundenmenge wird je Taetigkeit gelesen - Fehlendes gefuellt")
+    void stundenmengeWirdGelesen() {
+        var ergebnis = lies("""
+                verdienst:
+                  minderung:
+                    stundenmenge:
+                      abbauen: 1234
+                      toeten: 7
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+        assertEquals(1234, ergebnis.werte().stundenmenge(Taetigkeit.ABBAUEN));
+        assertEquals(7, ergebnis.werte().stundenmenge(Taetigkeit.TOETEN));
+        // Die vier fehlenden bekommen die Zahl aus dem Programm, und es steht im
+        // Bericht: Eine Taetigkeit ohne Obergrenze waere die eine ohne Bremse.
+        assertEquals(Verdienstwerte.VORGABE_STUNDENMENGEN.get(Taetigkeit.FISCHEN),
+                ergebnis.werte().stundenmenge(Taetigkeit.FISCHEN));
         assertTrue(ergebnis.bericht().stream().anyMatch(zeile ->
-                        zeile.startsWith("Lohnliste: 4 Saetze")
-                                && zeile.contains("3 Materialien beim Abbauen")
-                                && zeile.contains("1 beim Setzen")),
+                        zeile.startsWith("4 Stundenmengen stehen nicht")),
                 ergebnis.bericht().toString());
+    }
+
+    @Test
+    @DisplayName("Eine Stundenmenge von 0 ist eine Klage und keine Abschaltung")
+    void stundenmengeNullGiltNicht() {
+        // Wer eine Taetigkeit nicht bezahlen will, laesst ihre Lohnzeilen weg. Eine 0
+        // sieht dagegen aus wie ein Vertipper - und ein Vertipper darf nicht stumm eine
+        // ganze Arbeit abschalten.
+        for (String getippt : new String[] {"0", "-1"}) {
+            var ergebnis = lies("""
+                    verdienst:
+                      minderung:
+                        stundenmenge:
+                          abbauen: GETIPPT
+                    """.replace("GETIPPT", getippt));
+
+            assertTrue(klagtUeber(ergebnis,
+                            Verdienstwerte.PFAD_STUNDENMENGE + ".abbauen"),
+                    getippt + " muss beklagt werden: " + ergebnis.klagen());
+            assertEquals(Verdienstwerte.VORGABE_STUNDENMENGEN.get(Taetigkeit.ABBAUEN),
+                    ergebnis.werte().stundenmenge(Taetigkeit.ABBAUEN));
+        }
+    }
+
+    @Test
+    @DisplayName("Die Weissliste der Entstehungsgruende wird gelesen und geprueft")
+    void spawngruendeWerdenGelesen() {
+        var ergebnis = lies("""
+                verdienst:
+                  spawngruende: [natural, breeding, gibtsnicht]
+                """);
+
+        assertTrue(klagtUeber(ergebnis, Verdienstwerte.PFAD_SPAWNGRUENDE),
+                ergebnis.klagen().toString());
+        assertTrue(ergebnis.werte().zahltAusGrund("natural"));
+        // breeding ist ein echter Grund - der Betreiber DARF ihn eintragen, auch wenn er
+        // damit die Zuchtschleife wieder aufmacht. Das ist seine Entscheidung; das
+        // Programm raet ihm nicht hinein.
+        assertTrue(ergebnis.werte().zahltAusGrund("breeding"));
+        assertFalse(ergebnis.werte().zahltAusGrund("gibtsnicht"));
+        assertFalse(ergebnis.werte().zahltAusGrund("spawner"));
+    }
+
+    @Test
+    @DisplayName("Eine LEERE Liste ist erlaubt und heisst etwas")
+    void leereListenSindErlaubt() {
+        // Beides ist die sichere Richtung, also kein Rueckfall auf die Vorgabe: ohne
+        // Gruende zahlt kein getoetetes Wesen, ohne Saatgut bekommt jeder gesetzte Block
+        // seine Marke.
+        var ergebnis = lies("""
+                verdienst:
+                  spawngruende: []
+                  saatgut: []
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+        assertFalse(ergebnis.werte().zahltAusGrund("natural"));
+        assertFalse(ergebnis.werte().istSaatgut("wheat"));
+    }
+
+    @Test
+    @DisplayName("Die Saatgutliste wird gegen Material geprueft")
+    void saatgutWirdGeprueft() {
+        var ergebnis = lies("""
+                verdienst:
+                  saatgut: [wheat, kein_block_dieser_art]
+                """);
+
+        assertTrue(klagtUeber(ergebnis, Verdienstwerte.PFAD_SAATGUT),
+                ergebnis.klagen().toString());
+        assertTrue(ergebnis.werte().istSaatgut("wheat"));
+        assertTrue(ergebnis.werte().istSaatgut("WHEAT"),
+                "gross geschrieben ist derselbe Block");
+        assertFalse(ergebnis.werte().istSaatgut("pumpkin"));
+    }
+
+    @Test
+    @DisplayName("Die AUSGELIEFERTE Saatgutliste nennt nur Bloecke, die es gibt")
+    void ausgelieferteSaatgutliste() {
+        // Ein Tippfehler darin ist still: Der Block bekommt dann seine Marke, das Feld
+        // zahlt nie, und niemand sieht den Grund.
+        try (InputStream strom =
+                     Verdienstliste.class.getResourceAsStream("/config.yml")) {
+            assertNotNull(strom, "die config.yml muss im Jar liegen");
+            var datei = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(strom, StandardCharsets.UTF_8));
+            var berufe = Berufsliste.listeAus(
+                    datei.getConfigurationSection(Berufswerte.PFAD_LISTE));
+            var ergebnis = Verdienstliste.ausKonfiguration(datei, berufe.verzeichnis());
+
+            assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+            assertFalse(ergebnis.werte().saatgut().isEmpty(),
+                    "ohne Saatgutliste brachte kein Acker etwas ein");
+            assertTrue(ergebnis.werte().istSaatgut("wheat"),
+                    "der haeufigste Acker ueberhaupt");
+            assertFalse(ergebnis.werte().istSaatgut("pumpkin"),
+                    "ein Kuerbis ist Bauwerk - stuende er darin, waere er in einem"
+                            + " Ein-Block-Loch beliebig oft erntbar");
+            assertFalse(ergebnis.werte().zahltAusGrund("breeding"),
+                    "sonst zahlt ein gezuechtetes Tier zweimal");
+            assertFalse(ergebnis.werte().zahltAusGrund("spawner"),
+                    "sonst ist jede Spawnerfarm eine Gelddruckmaschine");
+            assertTrue(ergebnis.werte().zahltAusGrund("natural"),
+                    "sonst zahlt kein Monster etwas");
+        } catch (IOException fehler) {
+            throw new AssertionError(fehler);
+        }
     }
 
     @Test
@@ -452,9 +814,11 @@ class VerdienstlisteTest {
             Lohntafel tafel = ergebnis.werte().loehne();
             assertFalse(tafel.leer(),
                     "die ausgelieferte config.yml muss eine Lohnliste tragen");
-            assertEquals(84, tafel.anzahl(),
-                    "vierundachtzig Saetze - jede Zahl darin ist gegen 2.000 bis 5.000"
-                            + " Mark je Spielstunde gerechnet");
+            assertEquals(154, tafel.anzahl(),
+                    "einhundertvierundfuenfzig Saetze - jede Zahl darin ist gegen 2.000"
+                            + " bis 5.000 Mark je Spielstunde gerechnet, und zwar gegen"
+                            + " die MENSCHLICHE Rate; die Maschine faengt die"
+                            + " Stundenmenge");
             // Alles ANDERE muss die Vorgabe des Programms sein, sonst gilt bei einem
             // Erststart etwas anderes als beim Rueckfall.
             assertEquals(Verdienstwerte.VORGABE_TAGESDECKEL,

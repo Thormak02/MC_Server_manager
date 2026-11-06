@@ -596,7 +596,9 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - ~~Schritt 7, Teil D: Berufe waehlen.~~ 6.11.: /beruf liste|stand|waehlen|verlassen; zwei Grundberufe und eine Spezialisierung, Aufgeben kostet 5.000 Mark und sperrt 24 h. Plan 9.1.
 - ~~Blockmarken: ein Block zahlt nur einmal.~~ 6.11.: Ein Bit je Blockposition IM CHUNK, nie geloescht - eine markierte Stelle zahlt weder beim Abbauen noch beim zweiten Setzen.
 - ~~Schritt 7, Teil E: Verdienen.~~ 6.11.: 84 Lohnsaetze in der config.yml, Pfennige je Block, Minderung in Stufen je Stunde, Tagesdeckel 20.000 Mark; gebucht wird gesammelt im Takt. Plan 9.1.
-- Offen, Verdienen: nur Abbauen und Setzen. Fischen, Toeten, Zucht und Ernte brauchen je ein eigenes Ereignis - eigener Schritt.
+- ~~Verdienen, Teil 2: Fischen, Toeten, Zuechten, Ernten.~~ 6.11.: 154 Lohnsaetze; neu einstellbar sind eine harte Stundenmenge je Taetigkeit, die Weissliste der Spawngruende und das Saatgut.
+- Die Stundenmenge ist der wirksame Hebel gegen Farmen - die Minderungsstufen daempfen nur. Saatgut bekommt keine Marke und zahlt nichts; bezahlt wird die Ernte.
+- Offen, Verdienen: Seehandel, Bootsrennen, Vorratshaltung und Auftragsbau sind keine Ereignisse, sondern eigene Systeme - eigener Schritt.
 - Offen, Berufe: der Kolben, der einen markierten Block weiterschiebt, und der Pflastersteingenerator - Weltregeln, eigener Schritt.
 - Entscheidung, Sprachdatei: sendeHandbalken hat seit Teil E zwei Aufrufer; Sprache.sende und sendeGezaehlt haben weiter keinen. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.

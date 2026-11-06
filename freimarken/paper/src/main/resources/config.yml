@@ -357,33 +357,108 @@ verdienst:
     # Keine 0: Das waere eine unsichtbare Wand - ab einer Zahl, die niemand kennt,
     # passiert gar nichts mehr, und der Spieler sucht den Fehler bei sich.
     boden-prozent: 10
+    # DIE HARTE OBERGRENZE je Taetigkeit und Stunde - ueber ALLE Namen zusammen.
+    #
+    # Sie ist die einzige der drei Bremsen, die eine Farm wirklich anhaelt. Die Stufen
+    # darueber DAEMPFEN nur: Mit 200/200/50/10 ist die Summe der ersten 800 Ereignisse
+    # eine feste Pauschale von 374 vollen Saetzen, und danach zahlt jedes weitere
+    # unbegrenzt ein Zehntel. Eine Mobfarm nimmt beides mit.
+    #
+    # UEBER ALLE NAMEN, und das ist der Kern: Sonst vervielfacht eine Farm ihre Pauschale
+    # durch Artenvielfalt - fuenf Monsterarten waeren fuenf Pauschalen, ein Dutzend
+    # Angelfunde ein Dutzend.
+    #
+    # Jede Zahl ist gegen die MENSCHLICHE Rate gerechnet, nicht gegen die der Maschine:
+    #   abbauen/setzen 4000 - ein Stollen oder eine Hauswand in einer Stunde. Hoch mit
+    #           Absicht: Diese zwei sind kalibriert, und dort tun die Stufen ihre Arbeit.
+    #   ernten 2000 - ein grosses Feld. Faengt die Kuerbisstiele, die ohne Spieler
+    #           nachwachsen und an einer nie markierten Position stehen.
+    #   fischen 300 - mit Koeder III liegt der Biss bei etwa fuenf Sekunden, also bei 650
+    #           Faengen je Stunde als Obergrenze fuer Mensch UND Klickautomat. 300 laesst
+    #           den Fischer verdienen und laesst den Automaten nach einer halben Stunde
+    #           leerlaufen.
+    #   toeten 300 - im Hoehlengang faellt ein Mob alle halbe Minute, also 60 bis 150 je
+    #           Stunde. Eine natuerliche Mobfarm liegt um Zehnerpotenzen darueber.
+    #   zuechten 150 - die Abklingzeit je Elterntier sind fuenf Minuten, also zwoelf
+    #           Zuchten je Stunde und Paar. 150 sind rund ein Dutzend Paare.
+    #
+    # Wer eine Zeile weglaesst, bekommt die Zahl aus dem Programm und eine Zeile im
+    # Bericht. Eine 0 ist KEINE Abschaltung, sondern eine Klage - wer eine Taetigkeit
+    # nicht bezahlen will, laesst ihre Lohnzeilen weg.
+    stundenmenge:
+      abbauen: 4000
+      setzen: 4000
+      ernten: 2000
+      fischen: 300
+      toeten: 300
+      zuechten: 150
 
-  # DIE LOHNLISTE: Beruf, dann Taetigkeit, dann Material, dann Pfennige.
+  # AUS WELCHEN GRUENDEN ein getoetetes Wesen zahlt - die Marke fuer Wesen.
   #
-  # ES GIBT KEINEN RUECKFALL IM PROGRAMM. Fehlt dieser Abschnitt, verdient niemand
-  #   etwas, und das Protokoll sagt es laut. Jede andere Vorgabe steht im Programm,
-  #   damit sie nicht fehlen kann - eine Lohnliste dort waere aber eine zweite
-  #   Abschrift dieser Datei, und zwei Abschriften derselben Tabelle laufen
-  #   auseinander. Ausserdem ist das die sichere Richtung: Ein geratener Lohn macht
-  #   Geld, das keine Ruecksicherung zurueckholt.
+  # Dasselbe, was die Blockmarke fuer Bloecke tut: Sie trennt, was gewachsen ist, von dem,
+  # was ein Spieler selbst hergestellt hat. Zwei Maschen fallen damit auf einmal:
+  #   - Ein GEZUECHTETES Kalb zahlt nicht zweimal (einmal die Zucht, einmal der Tod) - es
+  #     traegt den Grund breeding, und der steht nicht in der Liste.
+  #   - Eine SPAWNERFARM zahlt gar nichts (spawner, trial_spawner, spawner_egg).
   #
-  # TAETIGKEITEN: abbauen und setzen. Mehr gibt es noch nicht - fangen, toeten,
-  #   zuechten und ernten brauchen je ein eigenes Ereignis im Programm und kommen mit
-  #   ihrem eigenen Bauschritt. Eine unbekannte Taetigkeit ist eine Klage mit Zeile.
+  # Es ist eine WEISSLISTE: Was hier nicht steht, zahlt nicht. Minecraft bringt mit jeder
+  # Fassung neue Gruende mit, und ein neuer Grund soll kein neues Geld bedeuten. Die
+  # vollstaendige Liste der Gruende nennt die Spielfassung; ein Name, den dieser Server
+  # nicht kennt, ist eine Klage mit Zeilennummer.
   #
-  # DER BERUF muss in berufe.liste stehen, sonst ist der ganze Block uebersprungen -
-  #   ein Lohn fuer einen Beruf, den es nicht gibt, ist eine Zeile, die nie wirkt.
+  # Eine LEERE Liste ist erlaubt und heisst: kein getoetetes Wesen zahlt etwas.
+  spawngruende: [natural, chunk_gen, jockey, raid, patrol, village_invasion, trap]
+
+  # WELCHE GESETZTEN BLOECKE KEINE MARKE BEKOMMEN - die eine Ausnahme von "ein Block zahlt
+  # nur einmal".
   #
-  # DAS MATERIAL ist der nackte Name, wie Minecraft ihn kennt: stone, deepslate,
-  #   coal_ore. Ohne minecraft: davor. Ein unbekannter Name ist eine Klage mit dem
-  #   Namen - ohne diese Pruefung stuende der Tippfehler stumm in der Liste.
+  # Sie ist noetig, weil Saatgut auf DERSELBEN Position liegt wie die reife Pflanze: Mit
+  # Marke brachte ein von Hand gesaetes Feld nie etwas ein, und der Bauer verdiente an
+  # seinem Acker gar nichts.
   #
-  # HAELT EIN SPIELER ZWEI BERUFE, die denselben Satz tragen, gilt der HOECHSTE und
-  #   nicht die Summe: Ein Block zahlt einmal. Die zwei Grundberufe teilen sich das
-  #   Einkommen, sie verdoppeln es nicht.
+  # Was hier steht, zahlt auch beim SETZEN nichts - sonst waere das Saeen selbst die kleine
+  # Maschine: saeen, umschlagen, saeen. Bezahlt wird die ERNTE.
   #
-  # WAS HIER NICHT STEHT, bringt nichts. Die Liste nennt die Materialien, die zahlen,
-  #   und nicht die tausend, die es nicht tun.
+  # Es sind die BLOCKNAMEN und nicht die Gegenstaende in der Hand: Gesaeter Weizen ist
+  # wheat und nicht wheat_seeds, eine Karotte carrots, eine Melonensaat melon_stem.
+  #
+  # SETZLINGE stehen mit Absicht nicht darin: Ein Setzling wird kein geerntetes Feld,
+  # sondern ein Baum, und dessen Stamm steht an neuen, unmarkierten Positionen. Darum zahlt
+  # das Aufforsten weiter (holzfaeller/setzen).
+  #
+  # Wer hier etwas hinzufuegt, macht diesen Block beliebig oft bezahlbar, wenn er zugleich
+  # unter ernten steht. Eine LEERE Liste ist erlaubt und heisst: jeder gesetzte Block
+  # bekommt eine Marke.
+  saatgut: [wheat, carrots, potatoes, beetroots, melon_stem, pumpkin_stem, sugar_cane,
+            bamboo_sapling, bamboo, cactus, kelp, cocoa, nether_wart, sweet_berry_bush,
+            torchflower_crop, pitcher_crop]
+
+    # DIE LOHNLISTE: Beruf, dann Taetigkeit, dann Material, dann Pfennige.
+    #
+    # ES GIBT KEINEN RUECKFALL IM PROGRAMM. Fehlt dieser Abschnitt, verdient niemand
+    #   etwas, und das Protokoll sagt es laut. Jede andere Vorgabe steht im Programm,
+    #   damit sie nicht fehlen kann - eine Lohnliste dort waere aber eine zweite
+    #   Abschrift dieser Datei, und zwei Abschriften derselben Tabelle laufen
+    #   auseinander. Ausserdem ist das die sichere Richtung: Ein geratener Lohn macht
+    #   Geld, das keine Ruecksicherung zurueckholt.
+    #
+    # TAETIGKEITEN: abbauen und setzen. Mehr gibt es noch nicht - fangen, toeten,
+    #   zuechten und ernten brauchen je ein eigenes Ereignis im Programm und kommen mit
+    #   ihrem eigenen Bauschritt. Eine unbekannte Taetigkeit ist eine Klage mit Zeile.
+    #
+    # DER BERUF muss in berufe.liste stehen, sonst ist der ganze Block uebersprungen -
+    #   ein Lohn fuer einen Beruf, den es nicht gibt, ist eine Zeile, die nie wirkt.
+    #
+    # DAS MATERIAL ist der nackte Name, wie Minecraft ihn kennt: stone, deepslate,
+    #   coal_ore. Ohne minecraft: davor. Ein unbekannter Name ist eine Klage mit dem
+    #   Namen - ohne diese Pruefung stuende der Tippfehler stumm in der Liste.
+    #
+    # HAELT EIN SPIELER ZWEI BERUFE, die denselben Satz tragen, gilt der HOECHSTE und
+    #   nicht die Summe: Ein Block zahlt einmal. Die zwei Grundberufe teilen sich das
+    #   Einkommen, sie verdoppeln es nicht.
+    #
+    # WAS HIER NICHT STEHT, bringt nichts. Die Liste nennt die Materialien, die zahlen,
+    #   und nicht die tausend, die es nicht tun.
   loehne:
     # Erze, Stein, Tiefe. Der Stein traegt die Spanne NICHT - er ist die Grundlast,
     # verdient wird an dem, was man dabei findet.
@@ -455,44 +530,164 @@ verdienst:
         oak_fence: 70
         oak_stairs: 60
         oak_trapdoor: 90
-    # Acker und Ernte. Geerntet wird mit dem ABBAUEN der reifen Pflanze.
+    # Acker, Tiere, Zucht.
+    #
+    # ERNTEN und nicht abbauen: Eine reife Pflanze ist eine eigene Taetigkeit mit eigener
+    # Stundenmenge, und eine UNREIFE bringt nichts - wer gesaeten Weizen umschlaegt, hat
+    # nichts geerntet. Dass der Acker trotzdem zahlt, obwohl die Saat gesetzt wurde,
+    # besorgt die Liste saatgut weiter oben: Saatgut bekommt keine Marke.
+    #
+    # Gerechnet: Ein Bauer erntet 1.000 bis 2.000 Halme je Stunde, bei 150 Pfennigen sind
+    # das 1.500 bis 3.000 Mark. Die Stundenmenge von 2.000 faengt die Kuerbisstiele, die
+    # ohne Spieler nachwachsen.
+    #
+    # Saeen zahlt NICHT (kein wheat_seeds unter setzen): Sonst waere saeen-umschlagen-
+    # saeen die kleine Maschine. farmland bleibt - Ackerland ist kein Saatgut, es bekommt
+    # seine Marke und zahlt einmal.
     bauer:
-      abbauen:
-        wheat: 70
-        carrots: 70
-        potatoes: 70
-        beetroots: 70
+      ernten:
+        wheat: 150
+        carrots: 150
+        potatoes: 150
+        beetroots: 150
         pumpkin: 120
         melon: 120
         sugar_cane: 50
-        cocoa: 110
       setzen:
-        wheat_seeds: 20
         farmland: 25
-    # Nahrung und Vorratshaltung. Spezialisierung des Bauern.
+      # ZUCHT. Gerechnet: zwoelf Zuchten je Stunde und Paar, ein halbes Dutzend Paare
+      # sind rund 60 Zuchten - bei 3.500 Pfennigen also gut 2.000 Mark je Stunde. Die
+      # Stundenmenge von 150 faengt die Grossherde.
+      #
+      # Der Name ist das JUNGE: Pferd und Esel ergeben ein Maultier, und das traegt seine
+      # eigene Zahl - es ist selbst nie wieder zuchtfaehig und darum mehr wert.
+      zuechten:
+        cow: 3500
+        sheep: 3000
+        pig: 3000
+        chicken: 2000
+        goat: 3500
+        rabbit: 2000
+        horse: 6000
+        donkey: 5000
+        mule: 7000
+        llama: 5000
+        bee: 4000
+        cat: 3000
+        wolf: 3000
+        fox: 4000
+        panda: 8000
+        turtle: 5000
+        axolotl: 6000
+        frog: 4000
+        sniffer: 10000
+        armadillo: 4000
+    # Nahrung und Vorratshaltung. Spezialisierung des Bauern - sie zahlt auf ANDERE
+    # Namen als er, nicht mehr fuer dieselben.
     mueller:
+      ernten:
+        nether_wart: 200
+        sweet_berry_bush: 180
+        cocoa: 160
       setzen:
         hay_block: 130
         composter: 90
-    # Fang. Das Angeln selbst braucht sein eigenes Ereignis und kommt mit dem naechsten
-    # Schritt - heute zahlt nur, was am Wasser gebaut und geholt wird.
+    # Fang.
+    #
+    # Gerechnet gegen die Fangverteilung im offenen Wasser (Glueck des Meeres III): etwa
+    # 60 Prozent Kabeljau, 25 Lachs, 13 Kugelfisch, 2 Tropenfisch. Im Mittel sind das
+    # rund 950 Pfennige je Fang; bei 300 Faengen - der Stundenmenge - also 2.850 Mark.
+    #
+    # Gezahlt wird nur im OFFENEN WASSER: Ein Ein-Block-Loch mit Klickautomat zaehlt
+    # nicht. Dass ein Automat auch im Meer angeln kann, faengt die Stundenmenge.
+    #
+    # SCHROTT zahlt nichts (kein string, bone, stick): Er faellt beim Angeln an, ohne
+    # dass jemand etwas kann. Was hier fehlt, bringt nichts ein - das ist kein Vergessen.
     fischer:
-      abbauen:
+      fischen:
+        cod: 800
+        salmon: 1200
+        pufferfish: 900
+        tropical_fish: 2500
+      ernten:
         kelp: 40
         seagrass: 35
         sea_pickle: 120
-    # Seehandel und Bootsrennen. Spezialisierung des Fischers.
+    # Seehandel und Bootsrennen. Spezialisierung des Fischers - sie zahlt die SCHAETZE,
+    # nicht die Fische.
+    #
+    # Seehandel und Bootsrennen selbst sind keine Ereignisse, sondern eigene Systeme; sie
+    # kommen mit ihrem eigenen Bauschritt. Bis dahin verdient der Reeder an dem, was das
+    # Meer hergibt.
     reeder:
+      fischen:
+        nautilus_shell: 3000
+        enchanted_book: 4000
+        name_tag: 3500
+        saddle: 3500
+        bow: 1500
+        fishing_rod: 1500
       setzen:
         barrel: 110
-    # Monster und Beute. Das Toeten braucht sein eigenes Ereignis - heute zahlt nur,
-    # was in Hoehlen und Festungen abgebaut wird.
+    # Monster und Beute.
+    #
+    # Gerechnet: Im Hoehlengang faellt ein Mob alle halbe Minute, also 60 bis 150 je
+    # Stunde. Bei 2.500 Pfennigen im Mittel sind das 1.500 bis 3.750 Mark - und die
+    # Stundenmenge von 300 deckelt die natuerliche Mobfarm bei gut 7.500.
+    #
+    # Nur ein NATUERLICH entstandenes Wesen zahlt (siehe spawngruende): Eine Spawnerfarm
+    # bringt nichts, und ein gezuechtetes Tier ist schon bei der Zucht bezahlt worden.
     jaeger:
+      toeten:
+        zombie: 2000
+        skeleton: 2000
+        spider: 1800
+        cave_spider: 2000
+        creeper: 2500
+        husk: 2200
+        stray: 2200
+        bogged: 2200
+        drowned: 2200
+        witch: 4000
+        enderman: 3500
+        blaze: 4000
+        wither_skeleton: 6000
+        ghast: 6000
+        magma_cube: 1500
+        slime: 1200
+        phantom: 3000
+        pillager: 2500
+        vindicator: 3000
+        evoker: 6000
+        ravager: 7000
+        guardian: 3000
+        elder_guardian: 9000
+        piglin_brute: 4500
+        shulker: 4000
+        breeze: 3500
+        creaking: 3000
+        warden: 25000
       abbauen:
         cobweb: 160
         spawner: 4000
-    # Leder und Ruestung. Spezialisierung des Jaegers.
+    # Leder und Ruestung. Spezialisierung des Jaegers - sie zahlt die NUTZTIERE, nicht
+    # die Monster.
+    #
+    # Ein gezuechtetes Tier zahlt hier nicht: Es traegt den Grund breeding. Bezahlt wird
+    # das wilde Tier - und einmal, nicht zweimal.
     gerber:
+      toeten:
+        cow: 900
+        mooshroom: 900
+        sheep: 700
+        pig: 700
+        chicken: 400
+        rabbit: 500
+        goat: 900
+        horse: 1200
+        donkey: 1100
+        llama: 1000
+        hoglin: 1500
       setzen:
         cauldron: 100
     # GESETZTE Bloecke, und nur die. Der Baumeister ist der eine Beruf, der fuers Setzen

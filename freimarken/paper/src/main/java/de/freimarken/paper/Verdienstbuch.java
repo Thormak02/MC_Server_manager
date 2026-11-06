@@ -123,8 +123,48 @@ final class Verdienstbuch {
         }
         Instant jetzt = uhr.instant();
         Stand stand = staende.computeIfAbsent(wer, spieler -> new Stand());
-        Zaehler zaehler = stand.arten.computeIfAbsent(material,
-                art -> new Zaehler(jetzt));
+
+        // Die HARTE Obergrenze zuerst: Sie zaehlt ueber alle Namen einer Taetigkeit
+        // zusammen und ist die einzige Bremse, die eine Farm wirklich anhaelt. Die Stufen
+        // darunter daempfen nur - ihre Pauschale vervielfacht sich sonst mit jeder
+        // weiteren Art, die eine Farm ausspuckt.
+        Zaehler jeTaetigkeit = imFenster(stand.taetigkeiten, taetigkeit.schluessel(),
+                jetzt);
+        if (jeTaetigkeit.anzahl >= werte.stundenmenge(taetigkeit)) {
+            // Nicht weiterzaehlen - aber ohne Versprechen: Die naechste Stunde beginnt
+            // ohnehin bei 0, dafuer sorgt imFenster. Dass der Zaehler hier stehenbleibt,
+            // ist darum von aussen NICHT zu beobachten, und keine Probe behauptet es.
+            // Ein frueherer Kommentar an dieser Stelle versprach mehr; eine Einspritzung
+            // hat gezeigt, dass das Versprechen von keiner Probe gedeckt war.
+            stand.anDerGrenze = taetigkeit;
+            return 0L;
+        }
+
+        // Die Stufen je TAETIGKEIT UND Name. Nicht je Name allein: Sonst teilten
+        // "fischen cod" und "abbauen cod" ein Fenster, und bei "ernten wheat" gegen
+        // "abbauen wheat" fiele derselbe Namenszufall zugunsten des Spielers aus.
+        Zaehler jeName = imFenster(stand.arten,
+                taetigkeit.schluessel() + "/" + material, jetzt);
+        long pfennige = Verdienstregel.pfennige(werte, berufe, taetigkeit, material,
+                jeName.anzahl);
+        jeName.anzahl++;
+        jeTaetigkeit.anzahl++;
+        stand.anDerGrenze = null;
+        stand.rest += pfennige;
+        stand.seitAnzeige += pfennige;
+        return pfennige;
+    }
+
+    /**
+     * Der Zaehler zu diesem Schluessel, mit frischem Fenster, wenn die Stunde um ist.
+     *
+     * <p>Die eine Stelle fuer die gleitende Stunde - beide Zaehler gehen durch sie. Zwei
+     * Abschriften derselben Fensterrechnung liefen auseinander, und zwar lautlos: Die
+     * Minderung griffe dann zu einem anderen Zeitpunkt als die Obergrenze.
+     */
+    private static Zaehler imFenster(Map<String, Zaehler> wo, String schluessel,
+                                     Instant jetzt) {
+        Zaehler zaehler = wo.computeIfAbsent(schluessel, egal -> new Zaehler(jetzt));
         if (Duration.between(zaehler.fensterBeginn, jetzt).compareTo(FENSTER) >= 0) {
             // Ein neues Fenster. Auch bei einer zurueckgestellten Uhr: Eine negative
             // Dauer ist kleiner als eine Stunde, also bleibt das Fenster stehen - das ist
@@ -132,12 +172,7 @@ final class Verdienstbuch {
             zaehler.anzahl = 0;
             zaehler.fensterBeginn = jetzt;
         }
-        long pfennige = Verdienstregel.pfennige(werte, berufe, taetigkeit, material,
-                zaehler.anzahl);
-        zaehler.anzahl++;
-        stand.rest += pfennige;
-        stand.seitAnzeige += pfennige;
-        return pfennige;
+        return zaehler;
     }
 
     /**
@@ -168,6 +203,17 @@ final class Verdienstbuch {
     boolean amDeckel(UUID wer) {
         Stand stand = staende.get(wer);
         return stand != null && stand.amDeckel;
+    }
+
+    /**
+     * Welche Taetigkeit zuletzt an ihrer Stundenmenge stand - oder {@code null}.
+     *
+     * <p>Fuer den Handbalken: Ein Spieler, der weiterhaut und nichts mehr bekommt, soll
+     * den Grund lesen und nicht den Fehler bei sich suchen.
+     */
+    Taetigkeit anDerGrenze(UUID wer) {
+        Stand stand = staende.get(wer);
+        return stand == null ? null : stand.anDerGrenze;
     }
 
     /**
@@ -314,7 +360,21 @@ final class Verdienstbuch {
         private LocalDate tag;
         private long heuteGebucht = -1L;
         private boolean amDeckel;
+
+        /**
+         * Welche Taetigkeit zuletzt an ihrer Stundenmenge stand - oder {@code null}.
+         *
+         * <p>Gemerkt und nicht verworfen: Ein Spieler, der weiterarbeitet, ohne etwas zu
+         * bekommen, muss es erfahren. Dieselbe Begruendung wie beim Tagesdeckel, nur
+         * eine Ebene darunter.
+         */
+        private Taetigkeit anDerGrenze;
+
+        /** Je "taetigkeit/name" die Stufenminderung. */
         private final Map<String, Zaehler> arten = new HashMap<>();
+
+        /** Je Taetigkeit die harte Stundenmenge. */
+        private final Map<String, Zaehler> taetigkeiten = new HashMap<>();
     }
 
     /** Wie viele Bloecke einer Art in diesem Fenster schon gezaehlt wurden. */
@@ -327,7 +387,11 @@ final class Verdienstbuch {
         }
     }
 
-    /** Nur fuer die Proben: welche Blockarten ein Spieler gerade gezaehlt hat. */
+    /**
+     * Nur fuer die Proben: welche Fenster ein Spieler gerade offen hat.
+     *
+     * <p>Die Schluessel sind "taetigkeit/name" - siehe {@link #verdiene}.
+     */
     List<String> gezaehlteArten(UUID wer) {
         Stand stand = staende.get(wer);
         return stand == null ? List.of() : List.copyOf(new ArrayList<>(

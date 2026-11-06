@@ -78,12 +78,9 @@ class WirtschaftslisteTest {
       * zweite Abschrift der ausgelieferten Datei. Jede Probe, die hier gegen die Vorgabe
       * vergleicht, muss diesen einen Unterschied also selbst mitbringen.
       */
-    private static final Verdienstwerte VERDIENST_AUS_VOLLSTAENDIG = new Verdienstwerte(
-            Verdienstwerte.VORGABE_TAGESDECKEL, Verdienstwerte.VORGABE_VOLL_BIS,
-            Verdienstwerte.VORGABE_STUFE, Verdienstwerte.VORGABE_FAKTOR_PROZENT,
-            Verdienstwerte.VORGABE_BODEN_PROZENT,
-            Lohntafel.ausLoehnen(List.of(new Lohntafel.Lohn("bergmann",
-                    Taetigkeit.ABBAUEN, "stone", 40L))));
+    private static final Verdienstwerte VERDIENST_AUS_VOLLSTAENDIG =
+            Verdienstwerte.VORGABE.mitLoehnen(Lohntafel.ausLoehnen(List.of(
+                    new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, "stone", 40L))));
 
     /** Dieselben Werte wie die Vorgabe, nur mit der Lohntafel aus VOLLSTAENDIG. */
     private static Wirtschaftswerte vorgabeMitLoehnen() {
@@ -425,13 +422,8 @@ class WirtschaftslisteTest {
                             Wirtschaftswerte.VORGABE_HOECHSTZAHL,
                             Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
                             Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                            Berufswerte.VORGABE, new Verdienstwerte(
-                                    Verdienstwerte.VORGABE_TAGESDECKEL,
-                                    Verdienstwerte.VORGABE_VOLL_BIS,
-                                    Verdienstwerte.VORGABE_STUFE,
-                                    Verdienstwerte.VORGABE_FAKTOR_PROZENT,
-                                    Verdienstwerte.VORGABE_BODEN_PROZENT,
-                                    ausDerDateiTafel)),
+                            Berufswerte.VORGABE,
+                            Verdienstwerte.VORGABE.mitLoehnen(ausDerDateiTafel)),
                     ergebnis.werte(),
                     "die Datei muss genau die Vorgaben des Programms enthalten - sonst"
                             + " gilt bei einem Erststart etwas anderes als beim Rueckfall");
@@ -440,9 +432,12 @@ class WirtschaftslisteTest {
             // Stunde gegraben hat.
             assertFalse(ausDerDateiTafel.leer(),
                     "die ausgelieferte config.yml muss eine Lohnliste tragen");
-            assertEquals(84, ausDerDateiTafel.anzahl(),
-                    "vierundachtzig Saetze - jede Zahl darin ist gegen 2.000 bis 5.000"
-                            + " Mark je Spielstunde gerechnet");
+            // Die Zahl steht hier UND in VerdienstlisteTest, und das ist Absicht: Die
+            // eine prueft den Leser der Loehne, die andere den Leser der ganzen Datei.
+            // Wer eine Lohnzeile loescht, soll an beiden Stellen auflaufen.
+            assertEquals(154, ausDerDateiTafel.anzahl(),
+                    "einhundertvierundfuenfzig Saetze - jede Zahl darin ist gegen 2.000"
+                            + " bis 5.000 Mark je Spielstunde gerechnet");
             // Und jeder Schluessel muss WIRKLICH darin stehen. Ohne diese Zeile beweist
             // der Vergleich darueber zu wenig: Fuer eine Zeile, die in der Vorlage fehlt,
             // holt der Leser dieselbe Vorgabe aus dem Programm, der Vergleich bleibt

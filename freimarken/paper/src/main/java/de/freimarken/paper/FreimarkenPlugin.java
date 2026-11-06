@@ -409,14 +409,20 @@ public final class FreimarkenPlugin extends JavaPlugin {
             BukkitTask aufgabe = getServer().getScheduler()
                     .runTaskTimer(this, schlag, abstand, abstand);
             return aufgabe::cancel;
-        }, verdienstbuch, marken, berufsablage, markierteWelten, sprache, getLogger());
+        }, verdienstbuch, marken, berufsablage, wirtschaft, markierteWelten, sprache,
+                getLogger());
         getServer().getPluginManager().registerEvents(verdienstwache, this);
         verdienstwache.starte();
         // DIESELBE Weltmenge fuer Markieren und Zahlen: Zwei Listen liefen auseinander,
         // und dann waere eine Welt dabei, in der verdient und nicht markiert wird - das
         // ist die Gelddruckmaschine.
         getServer().getPluginManager().registerEvents(
-                new Setzwache(marken, markierteWelten, verdienstwache::zahleFuerSetzen),
+                new Setzwache(marken, markierteWelten,
+                        verdienstwache::zahleFuerSetzen,
+                        // Bei JEDEM Setzen neu gefragt und nicht einmal gemerkt: So wirkt
+                        // eine Aenderung an verdienst.saatgut sofort nach dem Neuladen.
+                        art -> wirtschaft.werte().verdienst().istSaatgut(
+                                art.name().toLowerCase(Locale.ROOT))),
                 this);
         getLogger().info("Blockmarken und Verdienst aktiv in " + markierteWelten.size()
                 + " Welten - ein gesetzter Block zahlt beim Abbauen nichts. Die Marken"

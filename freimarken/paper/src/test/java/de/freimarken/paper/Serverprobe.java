@@ -19,6 +19,9 @@ import org.bukkit.Server;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.data.Ageable;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.type.CaveVines;
 import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
@@ -111,6 +114,16 @@ final class Serverprobe {
     private static final Map<String, World> WELTEN = new LinkedHashMap<>();
 
     /**
+     * Je Welt und Position die Blockdaten, die eine Probe angemeldet hat.
+     *
+     * <p>Gebraucht seit Teil E2: Die Verdienstwache fragt eine Erntepflanze nach ihrer
+     * REIFE, und die steht in den Blockdaten. Ohne Server gibt es keine -
+     * {@code Bukkit.createBlockData} wirft, gemessen gegen das echte Jar -, also schiebt
+     * die Probe einen Stellvertreter unter.
+     */
+    private static final Map<String, BlockData> BLOCKDATEN = new LinkedHashMap<>();
+
+    /**
      * Die Datenbehaelter der Chunks, nach Welt und Chunkkoordinate.
      *
      * <p>Sie muessen ueber Aufrufe hinweg BESTEHEN: Eine Marke, die in den Chunk
@@ -132,8 +145,99 @@ final class Serverprobe {
     private static int schreibzuege;
 
     /** Raeumt Welten, Chunkdaten und den Schreibzaehler weg. */
+    /**
+     * Meldet die Blockdaten an dieser Stelle an.
+     *
+     * <p>Fuer eine REIFE Pflanze: {@code alter == hoechstalter}. Fuer eine unreife eine
+     * kleinere Zahl. Wer nichts anmeldet, bekommt Blockdaten OHNE Alter - so wie Stein
+     * und Erde sie haben.
+     */
+    static void alter(String welt, int x, int y, int z, int alter, int hoechstalter) {
+        BLOCKDATEN.put(stelle(welt, x, y, z), reifbar(alter, hoechstalter));
+    }
+
+    /** Meldet eine Hoehlenranke an - bei ihr entscheiden die BEEREN und nicht das Alter. */
+    static void beeren(String welt, int x, int y, int z, boolean hatBeeren, int alter,
+                       int hoechstalter) {
+        BLOCKDATEN.put(stelle(welt, x, y, z), ranke(hatBeeren, alter, hoechstalter));
+    }
+
+    private static String stelle(String welt, int x, int y, int z) {
+        return welt + "/" + x + "/" + y + "/" + z;
+    }
+
+    /**
+     * Blockdaten MIT Alter.
+     *
+     * <p>Ein Stellvertreter auf {@code Ageable} und kein echtes BlockData: Jenes gibt es
+     * ohne Server nicht. Beantwortet werden die drei Methoden der Schnittstelle, alles
+     * andere wirft - auch hier gilt, dass ein stilles null den Zweig danebenlaufen
+     * liesse.
+     */
+    private static BlockData reifbar(int alter, int hoechstalter) {
+        return (BlockData) Proxy.newProxyInstance(Serverprobe.class.getClassLoader(),
+                new Class<?>[] {Ageable.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "getAge" -> alter;
+                    case "getMaximumAge" -> hoechstalter;
+                    case "toString" -> "Alterprobe " + alter + "/" + hoechstalter;
+                    case "hashCode" -> alter * 31 + hoechstalter;
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Serverprobe beantwortet Ageable." + methode.getName()
+                                    + " nicht");
+                });
+    }
+
+    /**
+     * Blockdaten einer Hoehlenranke - Beeren UND Alter.
+     *
+     * <p>Beides, weil {@code CaveVines} wirklich beides ist: {@code Ageable} UND
+     * {@code CaveVinesPlant}. Sein Alter ist die LAENGE der Ranke und nicht ihre Reife -
+     * ein Zweig, der das Alter zuerst fragt, zahlt fuer eine Ranke ohne Beeren. Darum
+     * traegt dieser Stellvertreter beide Schnittstellen: So kann eine Probe die
+     * Reihenfolge wirklich pruefen.
+     */
+    private static BlockData ranke(boolean hatBeeren, int alter, int hoechstalter) {
+        return (BlockData) Proxy.newProxyInstance(Serverprobe.class.getClassLoader(),
+                new Class<?>[] {CaveVines.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "hasBerries", "isBerries" -> hatBeeren;
+                    case "getAge" -> alter;
+                    case "getMaximumAge" -> hoechstalter;
+                    case "toString" -> "Rankenprobe beeren=" + hatBeeren;
+                    case "hashCode" -> Boolean.hashCode(hatBeeren);
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Serverprobe beantwortet CaveVines." + methode.getName()
+                                    + " nicht");
+                });
+    }
+
+    /**
+     * Blockdaten OHNE Alter - was Stein, Erde und ein Kuerbis haben.
+     *
+     * <p>Beantwortet nichts ausser sich selbst: Wer mehr fragt, soll es gesagt bekommen.
+     * Fuer die Reifefrage ist genau das die richtige Antwort - kein Alter heisst "die
+     * Marke ist die Bremse".
+     */
+    private static BlockData ohneAlter() {
+        return (BlockData) Proxy.newProxyInstance(Serverprobe.class.getClassLoader(),
+                new Class<?>[] {BlockData.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "toString" -> "Blockdatenprobe ohne Alter";
+                    case "hashCode" -> 17;
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Serverprobe beantwortet BlockData." + methode.getName()
+                                    + " nicht. Diese Stelle hat kein Alter angemeldet -"
+                                    + " mit Serverprobe.alter(...) bekommt sie eines.");
+                });
+    }
+
     static void keineWeltenMehr() {
         WELTEN.clear();
+        BLOCKDATEN.clear();
         BEHAELTER.clear();
         schreibzuege = 0;
     }
@@ -379,6 +483,10 @@ final class Serverprobe {
                     // der Hand hat, nicht von einer zweiten Quelle.
                     case "getWorld" -> welt;
                     case "getType" -> griffOderKlage(griff).bei(x, y, z);
+                    // Ohne Anmeldung: Blockdaten OHNE Alter. Das ist die ehrliche
+                    // Antwort und kein null - Stein HAT Blockdaten, nur keine Reife.
+                    case "getBlockData" -> BLOCKDATEN.getOrDefault(
+                            stelle(welt.key().asString(), x, y, z), ohneAlter());
                     case "setType" -> {
                         griffOderKlage(griff).setze(x, y, z, (Material) werte[0]);
                         yield null;

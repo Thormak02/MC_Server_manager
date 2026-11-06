@@ -21,8 +21,8 @@ class VerdienstwerteTest {
 
     private static Verdienstwerte satz(long deckel, int vollBis, int stufe, int faktor,
                                        int boden) {
-        return new Verdienstwerte(deckel, vollBis, stufe, faktor, boden,
-                Lohntafel.ausLoehnen(List.of()));
+        return Verdienstwerte.VORGABE.mitMinderung(deckel, vollBis, stufe, faktor,
+                boden);
     }
 
     @Test
@@ -102,7 +102,7 @@ class VerdienstwerteTest {
     @DisplayName("Ohne Lohntafel gibt es keine Verdienstwerte")
     void tafelIstPflicht() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Verdienstwerte(100L, 200, 200, 50, 10, null));
+                () -> Verdienstwerte.VORGABE.mitLoehnen(null));
     }
 
     @Test

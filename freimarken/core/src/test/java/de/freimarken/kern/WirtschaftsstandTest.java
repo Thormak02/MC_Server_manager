@@ -50,9 +50,10 @@ class WirtschaftsstandTest {
 
     /** Ein Verdienstsatz, bei dem alle fuenf Zahlen von der Vorgabe abweichen. */
     private static Verdienstwerte andereverdienste() {
-        return new Verdienstwerte(9_000L, 50, 25, 75, 20,
-                Lohntafel.ausLoehnen(java.util.List.of(new Lohntafel.Lohn("bergmann",
-                        Taetigkeit.ABBAUEN, "stone", 99L))));
+        return Verdienstwerte.VORGABE.mitMinderung(9_000L, 50, 25, 75, 20)
+                .mitLoehnen(Lohntafel.ausLoehnen(java.util.List.of(
+                        new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, "stone",
+                                99L))));
     }
 
     /** Ein Berufssatz, bei dem alle vier Zahlen von der Vorgabe abweichen. */
@@ -177,18 +178,12 @@ class WirtschaftsstandTest {
     @DisplayName("Eine Lohntafel mit gleicher Zeilenzahl, aber anderem Lohn faellt auf")
     void andererLohnGleicheZahl() {
         // Der Fall, den eine Zaehlung nicht sieht - und der haeufigste beim Einstellen.
-        var eineZeile = new Verdienstwerte(Verdienstwerte.VORGABE_TAGESDECKEL,
-                Verdienstwerte.VORGABE_VOLL_BIS, Verdienstwerte.VORGABE_STUFE,
-                Verdienstwerte.VORGABE_FAKTOR_PROZENT,
-                Verdienstwerte.VORGABE_BODEN_PROZENT,
-                Lohntafel.ausLoehnen(java.util.List.of(new Lohntafel.Lohn("bergmann",
-                        Taetigkeit.ABBAUEN, "stone", 40L))));
-        var andererLohn = new Verdienstwerte(Verdienstwerte.VORGABE_TAGESDECKEL,
-                Verdienstwerte.VORGABE_VOLL_BIS, Verdienstwerte.VORGABE_STUFE,
-                Verdienstwerte.VORGABE_FAKTOR_PROZENT,
-                Verdienstwerte.VORGABE_BODEN_PROZENT,
-                Lohntafel.ausLoehnen(java.util.List.of(new Lohntafel.Lohn("bergmann",
-                        Taetigkeit.ABBAUEN, "stone", 41L))));
+        var eineZeile = Verdienstwerte.VORGABE.mitLoehnen(Lohntafel.ausLoehnen(
+                java.util.List.of(new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN,
+                        "stone", 40L))));
+        var andererLohn = Verdienstwerte.VORGABE.mitLoehnen(Lohntafel.ausLoehnen(
+                java.util.List.of(new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN,
+                        "stone", 41L))));
         var stand = new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
                 50_000L, 4, 4, Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
                 Berufswerte.VORGABE, eineZeile));

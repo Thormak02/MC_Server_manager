@@ -87,6 +87,15 @@ class SetzwacheTest {
      */
     private final List<String> gezahlt = new ArrayList<>();
 
+    /**
+     * Was in dieser Probe als Saatgut gilt.
+     *
+     * <p>Eine Menge und kein fester Name: Welche Bloecke nachwachsen, steht in der
+     * {@code config.yml}, und diese Wache fragt nur. Die Probe stellt also die Frage,
+     * nicht die Antwort.
+     */
+    private final Set<Material> saatgut = new java.util.HashSet<>();
+
     @BeforeAll
     static void serverStellen() {
         Serverprobe.einmalSetzen();
@@ -101,7 +110,9 @@ class SetzwacheTest {
         marktstadt = Serverprobe.welt(MARKTSTADT, EIN_STEIN);
         marken = new SpeicherBlockmarken();
         gezahlt.clear();
-        wache = new Setzwache(marken, Set.of(MARKTSTADT, HOCHWALD), this::merkeLohn);
+        saatgut.clear();
+        wache = new Setzwache(marken, Set.of(MARKTSTADT, HOCHWALD), this::merkeLohn,
+                saatgut::contains);
     }
 
     private void merkeLohn(org.bukkit.entity.Player wer, org.bukkit.Material art,
@@ -221,20 +232,70 @@ class SetzwacheTest {
     }
 
     @Test
+    @DisplayName("SAATGUT bekommt keine Marke - und zahlt auch nichts")
+    void saatgutBleibtOhneMarke() {
+        // Die eine Ausnahme von "ein Block zahlt nur einmal", und sie ist noetig, weil
+        // Saatgut auf DERSELBEN Position liegt wie die reife Pflanze: Mit Marke brachte
+        // ein von Hand gesaetes Feld nie etwas ein, und der Bauer verdiente an seinem
+        // Acker gar nichts.
+        //
+        // KEIN Lohn fuers Saeen ist die zweite Haelfte derselben Entscheidung: Sonst
+        // waere saeen-umschlagen-saeen die kleine Maschine. Bezahlt wird die ERNTE.
+        // STONE und nicht WHEAT: Der Weltgriff dieser Probe legt ueberall Stein, und
+        // die Wache liest die Art des GESETZTEN Blocks. Was Saatgut ist, entscheidet
+        // ohnehin die Liste und nicht der Name - geprueft wird die Frage, nicht die
+        // Antwort.
+        saatgut.add(Material.STONE);
+
+        wache.beimSetzen(setzen(7, 71, 13));
+
+        assertFalse(marken.istMarkiert(ort(MARKTSTADT, 7, 71, 13)),
+                "Saatgut bekommt keine Marke");
+        assertEquals(0, marken.anzahl());
+        assertEquals(List.of(), gezahlt, "und der Zahlmeister hoert nichts davon");
+    }
+
+    @Test
+    @DisplayName("Was NICHT Saatgut ist, bekommt seine Marke wie bisher")
+    void anderesWirdMarkiert() {
+        // Die Gegenrichtung, und sie ist die wichtigere: Ein Kuerbis ist Bauwerk und
+        // kein Saatgut. Stuende er in der Liste, waere er in einem Ein-Block-Loch
+        // beliebig oft erntbar - die Maschine, gegen die die Marke gebaut ist.
+        saatgut.add(Material.STONE);
+
+        wache.beimSetzen(setzen(7, 71, 13));
+        assertEquals(0, marken.anzahl());
+
+        saatgut.clear();
+        wache.beimSetzen(setzen(8, 71, 13));
+
+        assertTrue(marken.istMarkiert(ort(MARKTSTADT, 8, 71, 13)));
+        assertEquals(1, gezahlt.size(), gezahlt.toString());
+    }
+
+    @Test
     @DisplayName("Ohne Marken und ohne Welten gibt es keine Wache")
     void pflichtenGelten() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Setzwache(null, Set.of(MARKTSTADT), this::merkeLohn));
+                () -> new Setzwache(null, Set.of(MARKTSTADT), this::merkeLohn,
+                        saatgut::contains));
         assertThrows(IllegalArgumentException.class,
-                () -> new Setzwache(marken, null, this::merkeLohn));
+                () -> new Setzwache(marken, null, this::merkeLohn,
+                        saatgut::contains));
         // Eine leere Menge waere ein Zweig, der nie etwas tut - und das faellt erst mit
         // Teil E auf: Dann zahlt jeder Block jedes Mal.
         assertThrows(IllegalArgumentException.class,
-                () -> new Setzwache(marken, Set.of(), this::merkeLohn));
+                () -> new Setzwache(marken, Set.of(), this::merkeLohn,
+                        saatgut::contains));
         // Und ohne Zahlmeister waere die Marke nur halb: Sie entwertete die Position,
         // ohne das erste Setzen zu bezahlen.
         assertThrows(IllegalArgumentException.class,
-                () -> new Setzwache(marken, Set.of(MARKTSTADT), null));
+                () -> new Setzwache(marken, Set.of(MARKTSTADT), null,
+                        saatgut::contains));
+        // Und ohne die Saatgutfrage bekaeme jeder gesaete Halm eine Marke - ein Acker
+        // brachte dann nie etwas ein, und zwar stumm.
+        assertThrows(IllegalArgumentException.class,
+                () -> new Setzwache(marken, Set.of(MARKTSTADT), this::merkeLohn, null));
     }
 
     // --- Die Verdrahtung, aus der Annotation gelesen -------------------------

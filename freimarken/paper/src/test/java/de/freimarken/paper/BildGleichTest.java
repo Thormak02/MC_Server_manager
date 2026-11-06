@@ -757,7 +757,17 @@ class BildGleichTest {
                         Einsatz.von("betrag", sprache.pfennige(240L)),
                         "&a+2,40 Mark"),
                 new Zeile(BerufSatz.VERDIENST_DECKEL, 1L, Einsatz.keine(),
-                        "&eHeute ist genug verdient - morgen zahlt die Arbeit wieder."));
+                        "&eHeute ist genug verdient - morgen zahlt die Arbeit wieder."),
+
+                // Die Grenze EINER Taetigkeit, nicht die des Tages. Das eingesetzte Wort
+                // kommt ueber Sprache#wort aus derselben Datei - damit haengt auch die
+                // Wortfamilie beruf.taetigkeit an einer Bildprobe, obwohl ein Art.WORT
+                // selbst keine Zeile haben kann.
+                new Zeile(BerufSatz.VERDIENST_STUNDENMENGE, 1L,
+                        Einsatz.von("taetigkeit", sprache.wort(
+                                BerufSatz.TAETIGKEIT_ABBAUEN, Einsatz.keine())),
+                        "&eMit Graben ist fuer diese Stunde genug - etwas anderes zahlt"
+                                + " weiter."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

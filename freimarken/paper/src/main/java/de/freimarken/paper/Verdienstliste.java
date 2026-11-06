@@ -6,10 +6,16 @@ import de.freimarken.kern.Lohntafel;
 import de.freimarken.kern.Taetigkeit;
 import de.freimarken.kern.Verdienstwerte;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.entity.EntityType;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 
 /**
  * Liest den Verdienst aus der {@code config.yml} - Deckel, Minderung und die Lohnliste.
@@ -24,15 +30,23 @@ import org.bukkit.configuration.ConfigurationSection;
  * wie beim Abschnitt {@code welten:}. Ausserdem ist das die sichere Richtung: Ein
  * geratener Lohn macht Geld, das keine Ruecksicherung zurueckholt.
  *
- * <p><b>Jedes Material wird gegen {@link Material} geprueft</b>, und ein unbekanntes ist
- * eine Klage mit dem Namen. Ohne diese Pruefung stuende ein Tippfehler stumm in der Liste,
- * und der Betreiber suchte den Lohn, den er eingetragen hat.
+ * <p><b>Jeder Name wird geprueft</b>, und ein unbekannter ist eine Klage mit dem Namen.
+ * Ohne diese Pruefung stuende ein Tippfehler stumm in der Liste, und der Betreiber suchte
+ * den Lohn, den er eingetragen hat.
  *
- * <p>Geprueft wird mit {@link Material#getMaterial(String)} und NICHT mit
- * {@code matchMaterial}: Jenes fragt die Registry des Servers, und dieser Leser soll ohne
- * Server pruefbar bleiben - er ist reine Dateiarbeit. Der Preis ist, dass ein Name mit
- * Bereichsvorsatz ({@code minecraft:stone}) nicht erkannt wird; die ausgelieferte Datei
- * schreibt darum nur den nackten Namen, und die Klage sagt es.
+ * <p><b>Wogegen geprueft wird, sagt die Taetigkeit</b> ({@code Taetigkeit.Namensart}):
+ * Unter {@code abbauen} steht ein Material, unter {@code toeten} eine Wesensart. Die
+ * Zuordnung steht an der Aufzaehlung und nicht hier - so ist eine neue Taetigkeit eine
+ * Konstante mit zwei Angaben und keine vergessene Verzweigung in diesem Leser.
+ *
+ * <p>Geprueft wird mit {@link Material#getMaterial(String)} und
+ * {@link EntityType#fromName(String)}, NICHT mit {@code matchMaterial} oder der Registry:
+ * Jene fragen den laufenden Server, und dieser Leser soll ohne Server pruefbar bleiben -
+ * er ist reine Dateiarbeit. Gemessen gegen das echte Jar gilt dasselbe fuer
+ * {@code Material.isBlock()} und {@code isItem()}; es gibt hier also keine Pruefung
+ * "ist das auch ein Block". Der Preis ist, dass ein Name mit Bereichsvorsatz
+ * ({@code minecraft:stone}) nicht erkannt wird; die ausgelieferte Datei schreibt darum nur
+ * den nackten Namen, und die Klage sagt es.
  *
  * <p><b>Jeder Beruf wird gegen das laufende Verzeichnis geprueft</b> - dieselbe Trennung
  * wie bei den Platzzahlen in {@link Berufsliste}: Ein Lohn fuer einen Beruf, den es nicht
@@ -47,6 +61,9 @@ final class Verdienstliste {
             Verdienstwerte.PFAD_STUFE,
             Verdienstwerte.PFAD_FAKTOR,
             Verdienstwerte.PFAD_BODEN,
+            Verdienstwerte.PFAD_STUNDENMENGE,
+            Verdienstwerte.PFAD_SPAWNGRUENDE,
+            Verdienstwerte.PFAD_SAATGUT,
             Verdienstwerte.PFAD_LOEHNE);
 
     /** Was in der Datei stand - und woran es gehapert hat. */
@@ -82,11 +99,18 @@ final class Verdienstliste {
                 Verdienstwerte.VORGABE_FAKTOR_PROZENT, false, klagen, bericht);
         int boden = anteil(wurzel, Verdienstwerte.PFAD_BODEN,
                 Verdienstwerte.VORGABE_BODEN_PROZENT, true, klagen, bericht);
+        Map<Taetigkeit, Integer> mengen = stundenmengen(wurzel, klagen, bericht);
+        Set<String> gruende = namensliste(wurzel, Verdienstwerte.PFAD_SPAWNGRUENDE,
+                Verdienstwerte.VORGABE_SPAWNGRUENDE, Verdienstliste::warumKeinGrund,
+                klagen, bericht);
+        Set<String> saat = namensliste(wurzel, Verdienstwerte.PFAD_SAATGUT,
+                Verdienstwerte.VORGABE_SAATGUT, Verdienstliste::warumKeinMaterial,
+                klagen, bericht);
         Lohntafel tafel = tafel(wurzel.getConfigurationSection(
-                Verdienstwerte.PFAD_LOEHNE), gilt, klagen, bericht);
+                Verdienstwerte.PFAD_LOEHNE), gilt, saat, klagen, bericht);
 
         return new Ergebnis(new Verdienstwerte(deckel, vollBis, stufe, faktor, boden,
-                tafel), klagen, bericht);
+                mengen, gruende, saat, tafel), klagen, bericht);
     }
 
     /**
@@ -167,8 +191,8 @@ final class Verdienstliste {
      * startet, ist schlimmer als einer mit neununddreissig.
      */
     private static Lohntafel tafel(ConfigurationSection abschnitt,
-                                   Berufsverzeichnis gilt, List<String> klagen,
-                                   List<String> bericht) {
+                                   Berufsverzeichnis gilt, Set<String> saat,
+                                   List<String> klagen, List<String> bericht) {
         if (abschnitt == null) {
             // BERICHT und keine Klage, und der Unterschied ist wichtig: Eine Klage
             // verhindert das ganze Neuladen. Auf einem Server, dessen config.yml den
@@ -205,9 +229,10 @@ final class Verdienstliste {
                         + " darunter die Materialien.");
                 continue;
             }
-            loehne.addAll(jeBeruf(jeTaetigkeit, sauber, berufpfad, klagen));
+            loehne.addAll(jeBeruf(jeTaetigkeit, sauber, berufpfad, saat, klagen));
         }
         Lohntafel tafel = Lohntafel.ausLoehnen(loehne);
+        nenneDoppelte(tafel, saat, klagen);
         if (tafel.leer()) {
             // Auch hier Bericht und nicht Klage: Jede einzelne unbrauchbare Zeile hat
             // schon ihre eigene Klage: Dies ist nur die Summe, und sie darf kein
@@ -215,16 +240,66 @@ final class Verdienstliste {
             bericht.add(Verdienstwerte.PFAD_LOEHNE + " ist leer - damit verdient NIEMAND"
                     + " etwas. Die Gruende stehen in den Zeilen davor.");
         } else {
+            // Jede Taetigkeit aus der Aufzaehlung und nicht zwei abgeschriebene: Sonst
+            // schweigt der Bericht ueber genau die Taetigkeit, die jemand neu dazubaut.
+            List<String> teile = new ArrayList<>();
+            for (Taetigkeit taetigkeit : Taetigkeit.values()) {
+                teile.add(tafel.materialien(taetigkeit).size() + " "
+                        + taetigkeit.schluessel());
+            }
             bericht.add("Lohnliste: " + tafel.anzahl() + " Saetze - "
-                    + tafel.materialien(Taetigkeit.ABBAUEN).size()
-                    + " Materialien beim Abbauen, "
-                    + tafel.materialien(Taetigkeit.SETZEN).size() + " beim Setzen.");
+                    + String.join(", ", teile) + ".");
         }
         return tafel;
     }
 
+    /**
+     * Klagt ueber ein Material, das unter {@code abbauen} UND {@code ernten} steht.
+     *
+     * <p>Der Ereigniszweig zahlt je Block GENAU EINE Taetigkeit, und er entscheidet sich
+     * fuer die Ernte, sobald ein Erntesatz vorliegt. Eine Zeile unter {@code abbauen}
+     * waere damit entweder tot oder sie zahlte fuer eine UNREIFE Pflanze - beides ist
+     * nicht, was der Betreiber meint, und beides sieht man an der Datei nicht.
+     *
+     * <p><b>Fuer {@code toeten} und {@code zuechten} gilt das NICHT</b>, und das ist kein
+     * Vergessen: Dasselbe Tier zahlt dort schon durch die Weissliste der
+     * Entstehungsgruende nicht zweimal - ein gezuechtetes Kalb traegt den Grund
+     * {@code breeding} und bringt beim Tod nichts. Ein Schaf zuechten und ein wildes
+     * Schaf erschlagen sind zwei verschiedene Taten, und beide duerfen zahlen.
+     *
+     * <p>Die zweite tote Zeile, die hier auffaellt: SAATGUT unter {@code setzen}.
+     */
+    private static void nenneDoppelte(Lohntafel tafel, Set<String> saat,
+                                      List<String> klagen) {
+        List<String> ernten = tafel.materialien(Taetigkeit.ERNTEN);
+        for (String material : tafel.materialien(Taetigkeit.ABBAUEN)) {
+            if (ernten.contains(material)) {
+                klagen.add(Verdienstwerte.PFAD_LOEHNE + ": \"" + material + "\" steht"
+                        + " unter abbauen UND unter ernten. Je Block zahlt GENAU EINE"
+                        + " Taetigkeit, und sobald ein Erntesatz vorliegt, ist es die"
+                        + " Ernte - die Zeile unter abbauen wirkt dann nur noch fuer eine"
+                        + " UNREIFE Pflanze. Entscheide dich fuer eine der beiden.");
+            }
+        }
+        // Und die zweite tote Zeile: SAATGUT unter setzen. Die Setzwache kehrt bei
+        // Saatgut um, bevor sie den Zahlmeister ruft - mit Absicht, denn sonst waere
+        // saeen-umschlagen-saeen die kleine Maschine. Ein Satz dafuer wirkt also nie,
+        // und an der Datei sieht man das nicht.
+        for (String material : tafel.materialien(Taetigkeit.SETZEN)) {
+            if (saat.contains(material)) {
+                klagen.add(Verdienstwerte.PFAD_LOEHNE + ": \"" + material + "\" steht"
+                        + " unter setzen, ist aber Saatgut ("
+                        + Verdienstwerte.PFAD_SAATGUT + "). Saatgut bekommt keine Marke"
+                        + " und zahlt beim Setzen nichts - sonst waere Saeen selbst eine"
+                        + " kleine Maschine. Bezahlt wird die ERNTE; diese Zeile wirkt"
+                        + " nie.");
+            }
+        }
+    }
+
     private static List<Lohntafel.Lohn> jeBeruf(ConfigurationSection jeTaetigkeit,
                                                 String beruf, String berufpfad,
+                                                Set<String> saat,
                                                 List<String> klagen) {
         List<Lohntafel.Lohn> gefunden = new ArrayList<>();
         for (String name : jeTaetigkeit.getKeys(false)) {
@@ -247,8 +322,8 @@ final class Verdienstliste {
                 continue;
             }
             for (String material : jeMaterial.getKeys(false)) {
-                Lohntafel.Lohn lohn = einLohn(jeMaterial, beruf, taetigkeit, material,
-                        pfad + "." + material, klagen);
+                Lohntafel.Lohn lohn = einLohn(jeMaterial, beruf, taetigkeit,
+                        material, saat, pfad + "." + material, klagen);
                 if (lohn != null) {
                     gefunden.add(lohn);
                 }
@@ -259,13 +334,35 @@ final class Verdienstliste {
 
     private static Lohntafel.Lohn einLohn(ConfigurationSection jeMaterial, String beruf,
                                           Taetigkeit taetigkeit, String material,
-                                          String pfad, List<String> klagen) {
-        if (Material.getMaterial(material.trim().toUpperCase(Locale.ROOT)) == null) {
-            klagen.add(pfad + ": \"" + material + "\" ist kein Material, das dieser"
-                    + " Server kennt - uebersprungen. Ohne diese Pruefung stuende der"
-                    + " Tippfehler stumm in der Liste, und du suchtest den Lohn, den du"
-                    + " eingetragen hast. Erwartet wird der nackte Name wie stone oder"
-                    + " coal_ore, ohne minecraft: davor.");
+                                          Set<String> saat, String pfad,
+                                          List<String> klagen) {
+        // SAATGUT unter abbauen wird VERWORFEN und nicht nur beklagt, und das ist der
+        // eine Satz dieses Lesers, der eine Zeile wegen GEFAHR wegwirft: Saatgut bekommt
+        // keine Marke, und unter abbauen greift keine Reifepruefung - saeen und sofort
+        // umschlagen zahlte damit jedes Mal, unbegrenzt bis zur Stundenmenge.
+        //
+        // Der Fall ist nicht gedacht: Genau so sieht jede config.yml aus, die beim
+        // Update nicht nachgezogen wurde (bauer/abbauen/wheat aus Teil E1), und eine
+        // vorhandene Datei wird NIE ueberschrieben. Eine Klage allein liesse das Geld
+        // fliessen, bis jemand das Protokoll liest; verworfen wird nichts erfunden.
+        // Die sichere Richtung, wie ueberall sonst in diesem Leser.
+        if (taetigkeit == Taetigkeit.ABBAUEN
+                && saat.contains(material.trim().toLowerCase(Locale.ROOT))) {
+            klagen.add(pfad + ": \"" + material + "\" ist Saatgut ("
+                    + Verdienstwerte.PFAD_SAATGUT + ") und steht unter abbauen -"
+                    + " VERWORFEN. Saatgut bekommt keine Marke, damit ein gesaetes Feld"
+                    + " zahlen kann; unter abbauen fehlt dann aber die Reifepruefung, und"
+                    + " saeen-umschlagen-saeen waere eine Maschine. Trage den Satz unter"
+                    + " ernten ein - dort zahlt nur die reife Pflanze.");
+            return null;
+        }
+        String warum = taetigkeit.namensart() == Taetigkeit.Namensart.WESEN
+                ? warumKeinWesen(material)
+                : warumKeinMaterial(material);
+        if (warum != null) {
+            klagen.add(pfad + ": \"" + material + "\" " + warum + " - uebersprungen."
+                    + " Ohne diese Pruefung stuende der Tippfehler stumm in der Liste,"
+                    + " und du suchtest den Lohn, den du eingetragen hast.");
             return null;
         }
         Object roh = jeMaterial.get(material);
@@ -286,6 +383,149 @@ final class Verdienstliste {
             return null;
         }
         return new Lohntafel.Lohn(beruf, taetigkeit, material, pfennige);
+    }
+
+    /**
+     * Warum dieser Name kein Material ist - oder {@code null}, wenn er eines ist.
+     *
+     * <p>Ein SATZTEIL und kein Wahrheitswert: Die Klage soll sagen, WAS falsch ist, und
+     * eine Pruefung, die nur "nein" sagt, laesst den Betreiber raten.
+     */
+    private static String warumKeinMaterial(String name) {
+        if (Material.getMaterial(name.trim().toUpperCase(Locale.ROOT)) == null) {
+            return "ist kein Material, das dieser Server kennt. Erwartet wird der nackte"
+                    + " Name wie stone oder coal_ore, ohne minecraft: davor";
+        }
+        return null;
+    }
+
+    /**
+     * Warum dieser Name keine lebende Wesensart ist - oder {@code null}.
+     *
+     * <p>Die zweite Pruefung ({@code isAlive}) faengt den Eintrag, der ein Material waere,
+     * aber kein Wesen: Ein Lohn fuer {@code arrow} oder {@code acacia_boat} ist eine
+     * Zeile, die nie wirkt, denn ein Boot stirbt nicht und wird nicht gezuechtet.
+     */
+    private static String warumKeinWesen(String name) {
+        EntityType art = EntityType.fromName(name.trim());
+        if (art == null) {
+            return "ist keine Wesensart, die dieser Server kennt. Erwartet wird der"
+                    + " nackte Name wie cow oder zombie, ohne minecraft: davor";
+        }
+        if (!art.isAlive()) {
+            return "ist keine LEBENDE Wesensart - ein Pfeil und ein Boot sterben nicht"
+                    + " und werden nicht gezuechtet";
+        }
+        return null;
+    }
+
+    /** Warum dieser Name kein Entstehungsgrund ist - oder {@code null}. */
+    private static String warumKeinGrund(String name) {
+        for (CreatureSpawnEvent.SpawnReason grund
+                : CreatureSpawnEvent.SpawnReason.values()) {
+            if (grund.name().equalsIgnoreCase(name.trim())) {
+                return null;
+            }
+        }
+        return "ist kein Entstehungsgrund, den dieser Server kennt. Es gibt natural,"
+                + " spawner, breeding und etliche weitere - die vollstaendige Liste"
+                + " nennt die Spielfassung";
+    }
+
+    /** Was ein Name taugt, oder warum nicht. */
+    private interface Namenspruefer {
+        String warum(String name);
+    }
+
+    /**
+     * Eine Liste von Namen - jede Zeile geprueft, eine kaputte uebersprungen.
+     *
+     * <p>Geteilt von Entstehungsgruenden und Saatgut, denn es ist dieselbe Arbeit: lesen,
+     * jeden Namen pruefen, kleinschreiben. Fehlt die Liste ganz, gilt die Vorgabe des
+     * Programms - anders als bei der Lohnliste sind das wenige Namen, und eine fehlende
+     * Weissliste waere keine Weissliste.
+     */
+    private static Set<String> namensliste(ConfigurationSection wurzel, String pfad,
+                                           Set<String> vorgabe, Namenspruefer pruefer,
+                                           List<String> klagen, List<String> bericht) {
+        if (!wurzel.contains(pfad, true)) {
+            bericht.add(pfad + " steht nicht in deiner config.yml - es gelten die "
+                    + vorgabe.size() + " Namen aus dem Programm.");
+            return vorgabe;
+        }
+        List<?> gelesen = wurzel.getList(pfad);
+        if (gelesen == null) {
+            klagen.add(pfad + " ist keine Liste ("
+                    + Wirtschaftsliste.wieGetippt(wurzel.get(pfad)) + ") - verworfen."
+                    + " Erwartet wird eine Liste in eckigen Klammern oder mit"
+                    + " Strichen. " + Wirtschaftsliste.esBleibt(vorgabe.size())
+                    + " Namen aus dem Programm.");
+            return vorgabe;
+        }
+        Set<String> sauber = new LinkedHashSet<>();
+        for (Object eintrag : gelesen) {
+            if (!(eintrag instanceof String name) || name.isBlank()) {
+                klagen.add(pfad + ": " + Wirtschaftsliste.wieGetippt(eintrag)
+                        + " ist kein Name - uebersprungen.");
+                continue;
+            }
+            String warum = pruefer.warum(name);
+            if (warum != null) {
+                klagen.add(pfad + ": \"" + name + "\" " + warum + " - uebersprungen.");
+                continue;
+            }
+            sauber.add(name.trim().toLowerCase(Locale.ROOT));
+        }
+        // Eine LEERE Liste ist erlaubt und heisst etwas: beim Saatgut "jeder gesetzte
+        // Block bekommt eine Marke", bei den Gruenden "kein getoetetes Wesen zahlt".
+        // Beides ist die sichere Richtung, also kein Rueckfall auf die Vorgabe.
+        bericht.add(pfad + ": " + sauber.size() + " Namen.");
+        return sauber;
+    }
+
+    /**
+     * Je Taetigkeit die harte Stundenmenge.
+     *
+     * <p>Eine fehlende Zeile wird mit der Vorgabe GEFUELLT und im Bericht genannt, nicht
+     * beklagt: Der Satz verlangt eine Zahl zu jeder Taetigkeit, und eine Taetigkeit ohne
+     * Obergrenze waere die eine ohne Bremse. Ein unbrauchbarer Wert ist dagegen eine
+     * Klage - wer eine 0 eintraegt, meint nicht die Vorgabe.
+     */
+    private static Map<Taetigkeit, Integer> stundenmengen(ConfigurationSection wurzel,
+                                                          List<String> klagen,
+                                                          List<String> bericht) {
+        Map<Taetigkeit, Integer> mengen = new LinkedHashMap<>();
+        List<String> gefuellt = new ArrayList<>();
+        for (Taetigkeit taetigkeit : Taetigkeit.values()) {
+            String pfad = Verdienstwerte.PFAD_STUNDENMENGE + "."
+                    + taetigkeit.schluessel();
+            int vorgabe = Verdienstwerte.VORGABE_STUNDENMENGEN.get(taetigkeit);
+            if (!wurzel.contains(pfad, true)) {
+                gefuellt.add(taetigkeit.schluessel() + " " + vorgabe);
+                mengen.put(taetigkeit, vorgabe);
+                continue;
+            }
+            Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel, pfad, vorgabe, klagen,
+                    bericht);
+            if (gelesen == null || !Verdienstwerte.brauchbareAnzahl(gelesen)) {
+                if (gelesen != null) {
+                    klagen.add(pfad + " ist " + gelesen + " - verworfen. Erlaubt ist 1"
+                            + " bis " + Verdienstwerte.HOECHSTE_STUFE + "; eine 0 hiesse,"
+                            + " dass diese Taetigkeit nie etwas einbringt - wer das will,"
+                            + " laesst ihre Lohnzeilen weg. "
+                            + Wirtschaftsliste.esBleibt(vorgabe));
+                }
+                mengen.put(taetigkeit, vorgabe);
+                continue;
+            }
+            mengen.put(taetigkeit, (int) (long) gelesen);
+        }
+        if (!gefuellt.isEmpty()) {
+            bericht.add(gefuellt.size() + " Stundenmengen stehen nicht in deiner"
+                    + " config.yml - es gelten die Zahlen aus dem Programm: "
+                    + String.join(", ", gefuellt) + ".");
+        }
+        return mengen;
     }
 
     /** Die Taetigkeiten, die es gibt - fuer die Klage, aus der Aufzaehlung gebaut. */

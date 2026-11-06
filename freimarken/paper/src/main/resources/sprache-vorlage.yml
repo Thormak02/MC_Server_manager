@@ -703,6 +703,29 @@ beruf:
     # gesammelt war, verfaellt. Diese Zeile MUSS es geben: Ohne sie arbeitete ein
     # Spieler weiter fuer nichts. Sie loest die andere ab, solange der Deckel haelt.
     deckel: "<yellow>Heute ist genug verdient - morgen zahlt die Arbeit wieder.</yellow>"
+    # Nicht derselbe Satz wie deckel: Diese Grenze gilt nur fuer EINE Arbeit und nur
+    # fuer diese Stunde. Wer sie erreicht hat, darf etwas anderes tun - und soll das
+    # auch lesen, sonst legt er das Werkzeug ganz weg.
+    #
+    # {taetigkeit} - das Wort aus beruf.taetigkeit darunter.
+    stundenmenge: "<yellow>Mit {taetigkeit} ist fuer diese Stunde genug - etwas anderes zahlt weiter.</yellow>"
+  # DAS WORT ZU JEDER TAETIGKEIT. Eingesetzt in beruf.verdienst.stundenmenge, und sonst
+  # nirgends - darum keine Farbe: Ein Tag hier ueberschriebe die Farbe jener Zeile.
+  #
+  # Anders als bei den Berufen ist diese Liste GESCHLOSSEN: Welche Taetigkeiten es gibt,
+  # entscheidet das Programm, denn jede braucht einen eigenen Ereigniszweig. Du kannst
+  # die Worte aendern, aber keines hinzufuegen - ein siebter Eintrag hier waere eine
+  # Zeile, die nicht wirkt, und das Protokoll sagt es beim Start.
+  #
+  # Die Worte stehen im WERKZEUGFALL ("mit Graben ist genug"), nicht im Infinitiv: Sie
+  # werden in einen Satz mit "Mit ..." eingesetzt.
+  taetigkeit:
+    abbauen: "Graben"
+    setzen: "Bauen"
+    ernten: "Ernten"
+    fischen: "Angeln"
+    toeten: "Jagen"
+    zuechten: "Zuechten"
   # DAS WORT ZU JEDEM BERUF. Ein Eintrag je Schluessel aus berufe.liste in der
   # config.yml - und zwar in BEIDE Richtungen: Ein Beruf ohne Wort laesst Freimarken
   # nicht starten, ein Wort ohne Beruf ist eine Zeile, die nicht wirkt (sie steht dann

@@ -70,9 +70,30 @@ final class Setzwache implements Listener {
         void zahle(Player wer, Material art, int neueMarken);
     }
 
+    /**
+     * Was von dem Gesetzten nachwaechst - und darum KEINE Marke bekommt.
+     *
+     * <p>Die eine Ausnahme von "ein Block zahlt nur einmal", und sie ist noetig, weil
+     * Saatgut auf DERSELBEN Position liegt wie die reife Pflanze: Ein von Hand gesaetes
+     * Feld wuerde mit Marke nie etwas einbringen, und der Bauer verdiente an seinem Acker
+     * gar nichts.
+     *
+     * <p>Eine Naht und keine Liste hier: WELCHE Bloecke nachwachsen, steht in der
+     * {@code config.yml} ({@code verdienst.saatgut}) und ist neuladbar. Diese Wache fragt
+     * bei jedem Setzen neu - so wirkt eine Aenderung sofort, ohne dass sie einen Stand
+     * haelt, der veralten kann.
+     */
+    interface Saatgut {
+
+        /** Ob dieser gesetzte Block ohne Marke bleibt. */
+        boolean waechstNach(Material art);
+    }
+
     private final Blockmarken marken;
 
     private final Zahlmeister zahlmeister;
+
+    private final Saatgut saatgut;
 
     /**
      * In welchen Welten markiert wird - die Weltschluessel, nicht die Namen.
@@ -89,7 +110,8 @@ final class Setzwache implements Listener {
      */
     private final Set<String> welten;
 
-    Setzwache(Blockmarken marken, Set<String> welten, Zahlmeister zahlmeister) {
+    Setzwache(Blockmarken marken, Set<String> welten, Zahlmeister zahlmeister,
+              Saatgut saatgut) {
         if (marken == null) {
             throw new IllegalArgumentException("Ohne Marken gibt es nichts zu merken");
         }
@@ -97,6 +119,10 @@ final class Setzwache implements Listener {
             throw new IllegalArgumentException("Ohne Zahlmeister waere die Marke nur"
                     + " halb: Sie entwertete die Position, ohne das erste Setzen zu"
                     + " bezahlen");
+        }
+        if (saatgut == null) {
+            throw new IllegalArgumentException("Ohne die Saatgutfrage bekaeme jeder"
+                    + " gesaete Halm eine Marke, und ein Acker brachte nie etwas ein");
         }
         if (welten == null || welten.isEmpty()) {
             throw new IllegalArgumentException("Ohne Welten markiert diese Wache nichts -"
@@ -106,6 +132,7 @@ final class Setzwache implements Listener {
         this.marken = marken;
         this.welten = Set.copyOf(welten);
         this.zahlmeister = zahlmeister;
+        this.saatgut = saatgut;
     }
 
     /**
@@ -117,6 +144,13 @@ final class Setzwache implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void beimSetzen(BlockPlaceEvent ereignis) {
+        if (saatgut.waechstNach(ereignis.getBlock().getType())) {
+            // KEINE Marke und KEIN Lohn, und beides aus einem Grund: Saatgut liegt auf
+            // derselben Position wie die reife Pflanze. Mit Marke brachte der Acker
+            // nichts ein; mit Lohn fuers Saeen waere das Saeen selbst die kleine
+            // Maschine - saeen, umschlagen, saeen. Bezahlt wird die ERNTE.
+            return;
+        }
         int neue = merke(orteAus(ereignis));
         if (neue <= 0) {
             // Nichts Neues - und darum wird auch nicht nach der Blockart gefragt. Der

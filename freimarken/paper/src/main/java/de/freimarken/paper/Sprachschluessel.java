@@ -2,6 +2,7 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Buchungsgrund;
+import de.freimarken.kern.Taetigkeit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -301,6 +302,13 @@ final class Sprachschluessel {
         for (Besitzbuch.Bescheid bescheid : Besitzbuch.Bescheid.values()) {
             pfade.add(bescheid(bescheid, false).pfad());
             pfade.add(bescheid(bescheid, true).pfad());
+        }
+        // Die Taetigkeitsworte: Sie werden von keinem Zweig namentlich geholt, sondern
+        // ueber BerufSatz.taetigkeitswort - so wie die Buchungsgruende ueber grundpfad.
+        // Gedeckt sind sie in VerdienstwacheTest: Dort geht JEDE Taetigkeit durch die
+        // echte Zeile aus der ausgelieferten Vorlage.
+        for (Taetigkeit taetigkeit : Taetigkeit.values()) {
+            pfade.add(BerufSatz.taetigkeitswort(taetigkeit).pfad());
         }
         return List.copyOf(pfade);
     }

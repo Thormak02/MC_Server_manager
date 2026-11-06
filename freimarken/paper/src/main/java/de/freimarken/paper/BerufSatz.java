@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Taetigkeit;
 import java.util.Set;
 
 /**
@@ -249,6 +250,37 @@ enum BerufSatz implements Satz {
     VERDIENST_DECKEL("beruf.verdienst.deckel", Art.HANDBALKEN),
 
     /**
+     * Diese EINE Taetigkeit bringt in dieser Stunde nichts mehr ein.
+     *
+     * <p>Nicht dasselbe wie der Tagesdeckel, und darum ein eigener Satz: Der Deckel gilt
+     * fuer alles und den ganzen Tag, die Stundenmenge nur fuer diese Arbeit und nur fuer
+     * diese Stunde - wer sie erreicht hat, kann etwas anderes tun. Ein gemeinsamer Satz
+     * schickte den Spieler ins Bett, obwohl er noch ernten darf.
+     */
+    VERDIENST_STUNDENMENGE("beruf.verdienst.stundenmenge", Art.HANDBALKEN,
+            "taetigkeit"),
+
+    /**
+     * Die sechs Taetigkeiten als WORT - eingesetzt in den Satz darueber.
+     *
+     * <p><b>Konstanten und keine offene Familie</b>, anders als bei {@link Berufsname}:
+     * Welche Taetigkeiten es gibt, entscheidet das PROGRAMM und nicht die
+     * {@code config.yml} - jede braucht einen eigenen Ereigniszweig. Was man nicht
+     * eintragen kann, soll auch nicht aussehen wie ein Eintrag.
+     *
+     * <p>Gefunden werden sie ueber {@link #taetigkeitswort}, also ueber den Namen der
+     * Aufzaehlung und nicht ueber eine Zuordnungstabelle daneben. Dass zu JEDER
+     * Taetigkeit eine Konstante gehoert, prueft {@code BerufslisteTest} - sonst faellt
+     * eine fehlende erst dann auf, wenn ein Spieler die Grenze erreicht.
+     */
+    TAETIGKEIT_ABBAUEN("beruf.taetigkeit.abbauen", Art.WORT),
+    TAETIGKEIT_SETZEN("beruf.taetigkeit.setzen", Art.WORT),
+    TAETIGKEIT_ERNTEN("beruf.taetigkeit.ernten", Art.WORT),
+    TAETIGKEIT_FISCHEN("beruf.taetigkeit.fischen", Art.WORT),
+    TAETIGKEIT_TOETEN("beruf.taetigkeit.toeten", Art.WORT),
+    TAETIGKEIT_ZUECHTEN("beruf.taetigkeit.zuechten", Art.WORT),
+
+    /**
      * Die Ablage antwortet nicht.
      *
      * <p>Wie {@code spielzeit.nicht-lesbar} und aus demselben Grund: Die Zahl fehlt, der
@@ -291,5 +323,37 @@ enum BerufSatz implements Satz {
     @Override
     public boolean darfLeerSein() {
         return leerErlaubt;
+    }
+
+    /**
+     * Das Wort zu einer Taetigkeit.
+     *
+     * <p><b>Ein erschoepfender {@code switch} und kein zusammengebauter Name.</b> Der
+     * naheliegende Weg - {@code valueOf("TAETIGKEIT_" + taetigkeit.name())} - hat zwei
+     * Nachteile, und beide sind handfest: Eine fehlende Konstante faellt erst auf, wenn
+     * ein Spieler die Grenze erreicht, und keine der Konstanten steht dann woertlich im
+     * Quelltext - {@code GrenzeTest} meldet sie als unbenutzt und kann einen echten
+     * Fund nicht mehr von diesem unterscheiden.
+     *
+     * <p>So ist eine neue Taetigkeit ein BAUFEHLER: Der {@code switch} ist ein Ausdruck
+     * ohne {@code default}, und der Uebersetzer verlangt jeden Fall. Das ist die
+     * frueheste Stelle, an der dieser Fehler auffallen kann.
+     *
+     * <p>Das ist auch der Unterschied zu den BERUFEN: Jene stehen in der
+     * {@code config.yml} und koennen darum nicht abgezaehlt werden ({@link Berufsname}).
+     * Taetigkeiten stehen im Programm.
+     */
+    static BerufSatz taetigkeitswort(Taetigkeit taetigkeit) {
+        if (taetigkeit == null) {
+            throw new IllegalArgumentException("Ohne Taetigkeit gibt es kein Wort");
+        }
+        return switch (taetigkeit) {
+            case ABBAUEN -> TAETIGKEIT_ABBAUEN;
+            case SETZEN -> TAETIGKEIT_SETZEN;
+            case ERNTEN -> TAETIGKEIT_ERNTEN;
+            case FISCHEN -> TAETIGKEIT_FISCHEN;
+            case TOETEN -> TAETIGKEIT_TOETEN;
+            case ZUECHTEN -> TAETIGKEIT_ZUECHTEN;
+        };
     }
 }
