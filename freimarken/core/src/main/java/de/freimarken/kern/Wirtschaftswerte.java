@@ -37,11 +37,14 @@ package de.freimarken.kern;
  * @param messung       woran die Messstelle Taetigkeit erkennt. Hier und nicht
  *                      daneben, aus demselben Grund wie bei Zeit, Berufen und
  *                      Markt: Ein Neuladen tauscht den ganzen Satz als EIN Stueck
+ * @param bonus         was der Tagesbonus gibt und wie die Serie ihn wachsen laesst -
+ *                      aus demselben Grund im selben Satz
  */
 public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoechstzahl,
                                int gruppenFelder, String rangWerbung, Zeitwerte zeit,
                                Berufswerte berufe, Verdienstwerte verdienst,
-                               Marktwerte markt, Messwerte messung) {
+                               Marktwerte markt, Messwerte messung,
+                               Bonuswerte bonus) {
 
     /**
      * Die Schluessel in der Einstellungsdatei - hier und nicht an jeder Stelle, die klagt.
@@ -90,7 +93,8 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
     public static final Wirtschaftswerte VORGABE = new Wirtschaftswerte(Preisstaffel.VORGABE,
             VORGABE_STARTGUTHABEN, VORGABE_HOECHSTZAHL, VORGABE_GRUPPEN_FELDER,
             VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE, Berufswerte.VORGABE,
-            Verdienstwerte.VORGABE, Marktwerte.VORGABE, Messwerte.VORGABE);
+            Verdienstwerte.VORGABE, Marktwerte.VORGABE, Messwerte.VORGABE,
+            Bonuswerte.VORGABE);
 
     public Wirtschaftswerte {
         if (preise == null) {
@@ -113,6 +117,10 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         }
         if (messung == null) {
             throw new IllegalArgumentException("Ohne Messwerte gibt es keine Messstelle");
+        }
+        if (bonus == null) {
+            throw new IllegalArgumentException("Ohne Bonuswerte gibt es keinen"
+                    + " Tagesbonus");
         }
         if (!brauchbaresStartguthaben(startguthaben)) {
             throw new IllegalArgumentException("Startguthaben " + startguthaben
@@ -144,61 +152,67 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
      */
     public Wirtschaftswerte mitPreisen(Preisstaffel andere) {
         return new Wirtschaftswerte(andere, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, berufe, verdienst, markt, messung);
+                rangWerbung, zeit, berufe, verdienst, markt, messung, bonus);
     }
 
     /** Dieselben Werte mit anderem Startguthaben. */
     public Wirtschaftswerte mitStartguthaben(long anderes) {
         return new Wirtschaftswerte(preise, anderes, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, berufe, verdienst, markt, messung);
+                rangWerbung, zeit, berufe, verdienst, markt, messung, bonus);
     }
 
     /** Dieselben Werte mit anderer Parzellenhoechstzahl. */
     public Wirtschaftswerte mitHoechstzahl(int andere) {
         return new Wirtschaftswerte(preise, startguthaben, andere, gruppenFelder,
-                rangWerbung, zeit, berufe, verdienst, markt, messung);
+                rangWerbung, zeit, berufe, verdienst, markt, messung, bonus);
     }
 
     /** Dieselben Werte mit anderer Gruppengroesse. */
     public Wirtschaftswerte mitGruppenFeldern(int andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, andere,
-                rangWerbung, zeit, berufe, verdienst, markt, messung);
+                rangWerbung, zeit, berufe, verdienst, markt, messung, bonus);
     }
 
     /** Dieselben Werte mit anderer Rangwerbung. */
     public Wirtschaftswerte mitWerbung(String andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                andere, zeit, berufe, verdienst, markt, messung);
+                andere, zeit, berufe, verdienst, markt, messung, bonus);
     }
 
     /** Dieselben Werte mit anderen Zeitwerten. */
     public Wirtschaftswerte mitZeit(Zeitwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, andere, berufe, verdienst, markt, messung);
+                rangWerbung, andere, berufe, verdienst, markt, messung, bonus);
     }
 
     /** Dieselben Werte mit anderen Berufswerten. */
     public Wirtschaftswerte mitBerufen(Berufswerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, andere, verdienst, markt, messung);
+                rangWerbung, zeit, andere, verdienst, markt, messung, bonus);
     }
 
     /** Dieselben Werte mit anderen Verdienstwerten. */
     public Wirtschaftswerte mitVerdienst(Verdienstwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, berufe, andere, markt, messung);
+                rangWerbung, zeit, berufe, andere, markt, messung, bonus);
     }
 
     /** Dieselben Werte mit anderen Marktwerten. */
     public Wirtschaftswerte mitMarkt(Marktwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, berufe, verdienst, andere, messung);
+                rangWerbung, zeit, berufe, verdienst, andere, messung, bonus);
     }
 
     /** Dieselben Werte mit anderen Messwerten. */
     public Wirtschaftswerte mitMessung(Messwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, berufe, verdienst, markt, andere);
+                rangWerbung, zeit, berufe, verdienst, markt, andere, bonus);
+    }
+
+    /** Dieselben Werte mit anderen Bonuswerten. */
+    public Wirtschaftswerte mitBonus(Bonuswerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, markt, messung, andere);
     }
 
     /** Ob aus dieser Zahl ein Startguthaben werden kann; 0 heisst: mit nichts anfangen. */

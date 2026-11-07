@@ -218,6 +218,19 @@ public final class Wirtschaftsstand {
                 alt.messung().mindestStrecke(), neu.messung().mindestStrecke());
         nenneMenge(geaendert, Messwerte.PFAD_ARTEN, schluessel(alt.messung().arten()),
                 schluessel(neu.messung().arten()));
+        // Der Tagesbonus: vier Zahlen, jede mit ihrem Pfad. Keine Zusammenfassung wie
+        // "der Bonus hat sich geaendert" - wer die Serie verstellt, soll lesen, WELCHE
+        // Zahl jetzt gilt, und nicht beim naechsten Mal weiterdrehen.
+        nenneZahl(geaendert, Bonuswerte.PFAD_GRUNDBETRAG,
+                alt.bonus().grundbetrag(), neu.bonus().grundbetrag());
+        nenneZahl(geaendert, Bonuswerte.PFAD_JE_SERIENTAG,
+                alt.bonus().jeSerientag(), neu.bonus().jeSerientag());
+        nenneZahl(geaendert, Bonuswerte.PFAD_HOECHSTBETRAG,
+                alt.bonus().hoechstbetrag(), neu.bonus().hoechstbetrag());
+        nenneZahl(geaendert, Bonuswerte.PFAD_LUECKE,
+                alt.bonus().reisstAbLuecke(), neu.bonus().reisstAbLuecke());
+        nenneZahl(geaendert, Bonuswerte.PFAD_MINDEST_MINUTEN,
+                alt.bonus().mindestMinuten(), neu.bonus().mindestMinuten());
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");

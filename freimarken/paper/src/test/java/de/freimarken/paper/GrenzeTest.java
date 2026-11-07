@@ -281,7 +281,7 @@ class GrenzeTest {
     // ein eigenes sendActionBar ersetzt, wird von dieser Tafel gefragt, warum.
     private static final Set<String> SENDEN_ERLAUBT = new TreeSet<>(List.of(
             "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
-            "BerufeBefehle.java",
+            "BerufeBefehle.java", "Bonuswache.java",
             "BundBefehle.java", "FreimarkenPlugin.java", "MarktBefehle.java",
             "ParzellenBefehle.java", "Portalwache.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
@@ -383,6 +383,8 @@ class GrenzeTest {
             // stuende hier eine Zwei, und eine zweite Stelle koennte wegfallen, ohne dass
             // die Zahl faellt.
             Map.entry("BerufeBefehle.java", 1),
+            // Teil H: EINE Sendestelle - die Nachricht ueber den gezahlten Bonus.
+            Map.entry("Bonuswache.java", 1),
             Map.entry("BundBefehle.java", 2),
             Map.entry("FreimarkenPlugin.java", 39),
             // ZWEI: die Zeile fuer die Konsole (sie hat keine Hand und steht in keiner

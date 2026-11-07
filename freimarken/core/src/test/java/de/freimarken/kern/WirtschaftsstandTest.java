@@ -51,7 +51,8 @@ class WirtschaftsstandTest {
         // Alle anderen Proben nehmen die Abwandler und nennen nur ihren Unterschied.
         return new Wirtschaftswerte(new Preisstaffel(grundpreis, jeFeld), startguthaben,
                 hoechstzahl, gruppenFelder, werbung, zeit, berufe, verdienst,
-                Marktwerte.VORGABE, Messwerte.VORGABE);
+                Marktwerte.VORGABE, Messwerte.VORGABE,
+                Bonuswerte.VORGABE);
     }
 
     /**
@@ -540,6 +541,50 @@ class WirtschaftsstandTest {
                         -> zeile.startsWith(Messwerte.PFAD_ARTEN + ":")
                         && zeile.contains("dazu: benutzen")
                         && zeile.contains("weg: kaempfen")),
+                uebernahme.geaendert().toString());
+    }
+
+    @Test
+    @DisplayName("Das Neuladen nennt JEDE geaenderte Zeile des Tagesbonus")
+    void neuladenNenntDenTagesbonus() {
+        // Der TEXT jeder erwarteten Zeile und nicht ihre Zahl: Wer die Serie verstellt,
+        // ohne eine Zeile darueber zu lesen, dreht beim naechsten Mal weiter, obwohl sie
+        // schon gilt. Keine Zusammenfassung wie "der Bonus hat sich geaendert" - dann
+        // weiss er nicht, WELCHE Zahl jetzt gilt.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitBonus(
+                new Bonuswerte(800L, 50L, 3_000L, 4, 15L)));
+
+        assertTrue(uebernahme.geaendert().contains(
+                        Bonuswerte.PFAD_GRUNDBETRAG + ": 500 -> 800"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(
+                        Bonuswerte.PFAD_JE_SERIENTAG + ": 100 -> 50"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(
+                        Bonuswerte.PFAD_HOECHSTBETRAG + ": 2000 -> 3000"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(Bonuswerte.PFAD_LUECKE + ": 2 -> 4"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(
+                        Bonuswerte.PFAD_MINDEST_MINUTEN + ": 0 -> 15"),
+                uebernahme.geaendert().toString());
+        assertEquals(800L, stand.werte().bonus().grundbetrag());
+        assertEquals(15L, stand.werte().bonus().mindestMinuten());
+    }
+
+    @Test
+    @DisplayName("Ein unveraenderter Tagesbonus steht NICHT in der Meldung")
+    void bonusUnveraendertSchweigt() {
+        // Die Gegenprobe: Waere die Zeile immer da, sagte sie nichts. Eine Meldung, in
+        // der jede Zeile steht, liest niemand mehr.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE);
+
+        assertTrue(uebernahme.geaendert().stream().noneMatch(zeile
+                        -> zeile.startsWith("tagesbonus.")),
                 uebernahme.geaendert().toString());
     }
 

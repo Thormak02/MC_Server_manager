@@ -942,6 +942,83 @@ zeit:
   # naechsten Neustart gilt beides zusammen.
   untaetig-minuten: 10
 
+# Der Tagesbonus (Plan 8.2, Teil H): Die dritte und kleinste Quelle neben Arbeit und
+# Bundesmarkt. Er belohnt ZWEI verschiedene Dinge, und das ist der ganze Entwurf:
+#
+#   - das taegliche EINLOGGEN mit dem Grundbetrag,
+#   - das REGELMAESSIGE Spielen mit der Serie, die jeden Tag in Folge mehr gibt.
+#
+# Gezahlt wird hoechstens EINMAL am Tag, und darueber wacht das Buchungsbuch und nicht
+# eine Merkzeile: Gefragt wird, ob seit dem Tagesbeginn eine Buchung mit dem Grund
+# tagesbonus steht. Darum kann kein Absturz und kein Neustart eine zweite Zahlung am
+# selben Tag erzeugen - und darum braucht dieser Bonus keinen eigenen Tagesdeckel.
+#
+# Welcher Tag gemeint ist, sagt zeit.zone weiter unten - Mitternacht Ortszeit, nicht UTC.
+#
+# /freimarken neuladen uebernimmt alle fuenf Zeilen.
+tagesbonus:
+  # Was der ERSTE Tag einer Serie bringt, in ganzen Mark. Erlaubt ist 1 bis 1.000.000.
+  #
+  # 500 Mark sind rund zehn Minuten Arbeit (Plan 8.2 rechnet mit 2.000 bis 5.000 Mark je
+  # Spielstunde) - sichtbar genug, dass das Einloggen sich lohnt, und zu wenig, um einen
+  # Arbeitstag zu ersetzen. Der Bonus soll Regelmaessigkeit belohnen und keine zweite
+  # Arbeit sein.
+  #
+  # Eine 0 wird abgewiesen: Sie hiesse, dass der Bonus eine Nachricht ueber 0 Mark
+  # schickt. Wer ihn nicht will, soll das sagen muessen und nicht eine 0 einsetzen.
+  grundbetrag: 500
+
+  # Was jeder WEITERE Tag der Serie dazulegt, in ganzen Mark. Erlaubt ist 0 bis
+  # 1.000.000; eine 0 ist erlaubt und heisst: jeder Tag bringt dasselbe.
+  #
+  # Mit 100 Mark je Tag und dem Hoechstbetrag darunter ist die Staffel: Tag 1 gibt 500,
+  # Tag 2 gibt 600, ab Tag 16 dann 2.000. Sechzehn Tage sind lang genug, dass die Serie
+  # sich wie ein Ziel anfuehlt, und kurz genug, dass ein Spieler sie erlebt.
+  je-serientag: 100
+
+  # Woran die Serie aufhoert zu wachsen, in ganzen Mark. Erlaubt ist der Grundbetrag
+  # bis 1.000.000.
+  #
+  # 2.000 Mark sind ein Zehntel des Verdienstdeckels (verdienst.tagesdeckel). Strenger
+  # als beim Bundesmarkt, der ein Viertel sein darf: Der Markt verwertet Erarbeitetes,
+  # der Bonus verlangt gar nichts.
+  #
+  # DIESE ZEILE BRAUCHT ES. Ohne sie liefe eine lange Serie davon: Bei 100 Mark je Tag
+  # waere der Bonus nach einem Jahr groesser als ein Tagesverdienst - und eingestellt
+  # hat man ihn, als die Serien kurz waren.
+  #
+  # Ein Hoechstbetrag UNTER dem Grundbetrag wird abgewiesen, nicht abgeschnitten: Dann
+  # gaelte der Grundbetrag nie, und seine Zeile hier waere eine Angabe ohne Wirkung.
+  hoechstbetrag: 2000
+
+  # Ab welcher LUECKE in Tagen die Serie reisst. Erlaubt ist 2 bis 366.
+  #
+  # Die Luecke ist der Abstand zwischen dem letzten Bonustag und heute. Bei 2 haelt die
+  # Serie nur, wer gestern da war - wer einen Tag verpasst, faengt bei Tag 1 an. Das ist
+  # die strenge und uebliche Lesart.
+  #
+  # Bei 3 wird ein verpasster Tag verziehen: Wer vorgestern da war, setzt fort. Das ist
+  # freundlicher und nimmt der Serie etwas von ihrer Haerte - deine Entscheidung.
+  #
+  # Eine 1 wird abgewiesen: Sie liesse die Serie fuer JEDEN reissen, auch fuer den, der
+  # gestern da war. Die Serie stuende dann immer auf 1, und man suchte den Fehler in der
+  # Belohnung statt in dieser Zahl.
+  serie-reisst-ab-luecke: 2
+
+  # Wie viele TAETIGE Minuten des Tages vor dem Bonus liegen. Erlaubt ist 0 bis 1440.
+  #
+  # 0 heisst: Der Bonus faellt beim EINLOGGEN. So ist es gewollt - das taegliche
+  # Einloggen soll belohnt werden, und eine Wartezeit davor macht aus einer Belohnung
+  # eine Auflage.
+  #
+  # Wer das Einloggen allein nicht belohnen will, setzt hier Minuten ein. Dann zaehlen
+  # TAETIGE Minuten aus dem Abschnitt messstelle und NICHT Anwesenheit: Anwesenheit ist
+  # im Stehen zu haben, und genau dagegen ist diese Zahl gedacht. Gezahlt wird dann beim
+  # ersten Taktschlag, der die Zahl erreicht - also bis zu zeit.takt-sekunden spaeter.
+  #
+  # Ein ganzer Tag (1440) wird abgewiesen: Der Bonus faellt dann genau am Tageswechsel,
+  # also nie.
+  mindest-minuten: 0
 # Die Messstelle (Plan 8.8, Teil G): Woran das Plugin erkennt, dass ein Spieler nicht nur
 # ANWESEND war, sondern auch TAETIG.
 #

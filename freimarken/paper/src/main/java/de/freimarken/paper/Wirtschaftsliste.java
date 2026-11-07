@@ -149,6 +149,12 @@ final class Wirtschaftsliste {
         Messliste.Ergebnis messung = Messliste.ausKonfiguration(wurzel);
         klagen.addAll(messung.klagen());
         bericht.addAll(messung.bericht());
+        // Der Tagesbonus ebenso: eigene Schranken, ein eigenes Wertepaar (der
+        // Hoechstbetrag wird gegen den Grundbetrag geprueft) und eine eigene Rechenprobe,
+        // die die Staffel im Klartext nennt.
+        Bonusliste.Ergebnis bonus = Bonusliste.ausKonfiguration(wurzel);
+        klagen.addAll(bonus.klagen());
+        bericht.addAll(bonus.bericht());
 
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
@@ -180,7 +186,7 @@ final class Wirtschaftsliste {
         // Datei, waehrend eine andere darunter sagt, dass die alte weiter gilt.
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
                 gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
-                markt.werte(), messung.werte()), klagen, bericht);
+                markt.werte(), messung.werte(), bonus.werte()), klagen, bericht);
     }
 
     /**

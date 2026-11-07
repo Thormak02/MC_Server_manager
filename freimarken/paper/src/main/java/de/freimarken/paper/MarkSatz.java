@@ -68,6 +68,9 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_BUNDESMARKT_VERKAUF("mark.verlauf.grund.bundesmarkt-verkauf",
             Art.WORT),
 
+    /** Das Wort fuer {@code Buchungsgrund.TAGESBONUS} im Verlauf. */
+    VERLAUF_GRUND_TAGESBONUS("mark.verlauf.grund.tagesbonus", Art.WORT),
+
     /**
      * Die Zeitform des Verlaufs - beim LADEN uebersetzt.
      *

@@ -832,7 +832,42 @@ class BildGleichTest {
                         "&eHeute ist genug verkauft - morgen kauft der Bund wieder."),
                 new Zeile(MarktSatz.ABSAGE_NICHT_BUCHBAR, 1L, Einsatz.keine(),
                         "&cDer Verkauf ist gerade nicht buchbar - deine Ware hast du"
-                                + " noch. Im Serverprotokoll steht, warum."));
+                                + " noch. Im Serverprotokoll steht, warum."),
+
+                // --- Der Tagesbonus [Teil H] ---------------------------------
+                //
+                // Drei Zahlungssaetze, und sie unterscheiden sich NICHT im Betrag,
+                // sondern in dem, was sie ueber die Serie sagen. Darum stehen in diesen
+                // drei Zeilen DERSELBE Betrag und VERSCHIEDENE Worte: Wer zwei von ihnen
+                // vertauscht, bekommt hier eine rote Probe und nicht eine Nachricht, die
+                // einem neuen Spieler seine Bestmarke meldet.
+                new Zeile(BonusSatz.GEZAHLT_ERSTER, 1L,
+                        Einsatz.von("betrag", "500 Mark").mit("morgen", "600 Mark"),
+                        "&aTagesbonus: +500 Mark&7 - komm morgen wieder, dann sind es"
+                                + " 600 Mark."),
+                new Zeile(BonusSatz.GEZAHLT_SERIE, 1L,
+                        Einsatz.von("betrag", "900 Mark").mit("serie", "5"),
+                        "&aTagesbonus: +900 Mark&7 - 5 Tage in Folge."),
+                // GOLD und nicht grau: Die Bestmarke ist der Augenblick, in dem die
+                // Serie etwas bedeutet. Die Farbe steht in der Datei, und diese Zeile
+                // haelt sie fest.
+                new Zeile(BonusSatz.GEZAHLT_BESTMARKE, 1L,
+                        Einsatz.von("betrag", "900 Mark").mit("serie", "5"),
+                        "&aTagesbonus: +900 Mark&6 - 5 Tage in Folge, so lange wie noch"
+                                + " nie!"),
+                new Zeile(BonusSatz.STAND_SERIE, 1L,
+                        Einsatz.von("serie", "5").mit("laengste", "12")
+                                .mit("morgen", "1.000 Mark"),
+                        "&7Tagesbonus: 5 Tage in Folge (am laengsten 12), morgen"
+                                + " 1.000 Mark."),
+                new Zeile(BonusSatz.STAND_OFFEN, 1L,
+                        Einsatz.von("betrag", "500 Mark").mit("serie", "1"),
+                        "&7Tagesbonus: heute noch offen - Tag 1 bringt 500 Mark."),
+                new Zeile(BonusSatz.STAND_WARTET, 1L,
+                        Einsatz.von("minuten", "8").mit("betrag", "600 Mark")
+                                .mit("serie", "2"),
+                        "&7Tagesbonus: noch 8 taetige Minuten, dann bringt Tag 2"
+                                + " 600 Mark."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

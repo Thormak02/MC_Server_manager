@@ -70,7 +70,10 @@ class ParzelleBefehlTest {
                 kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
         ParzellenBefehle befehle = new ParzellenBefehle(buch, welt,
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE),
-                Logger.getLogger("ParzelleBefehlTest"), Sprachprobe.spracheAusDemJar());
+                Logger.getLogger("ParzelleBefehlTest"), Sprachprobe.spracheAusDemJar(),
+                // Keine Bonuszeile: Diese Proben halten /mark ohne Teil H.
+                // Dass die Zeile dazukommt, prueft BonusBefehlTest.
+                wer -> null);
         baum = new Befehlsprobe(List.of(befehle.parzelle()));
     }
 

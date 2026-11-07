@@ -74,7 +74,10 @@ class MarkBefehlTest {
                 kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
         ParzellenBefehle befehle = new ParzellenBefehle(buch, Serverprobe.welt(WELT),
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE),
-                Logger.getLogger("MarkBefehlTest"), Sprachprobe.spracheAusDemJar());
+                Logger.getLogger("MarkBefehlTest"), Sprachprobe.spracheAusDemJar(),
+                // Keine Bonuszeile: Diese Proben halten /mark ohne Teil H.
+                // Dass die Zeile dazukommt, prueft BonusBefehlTest.
+                wer -> null);
         return new Stand(new Befehlsprobe(List.of(befehle.mark())), kasse);
     }
 

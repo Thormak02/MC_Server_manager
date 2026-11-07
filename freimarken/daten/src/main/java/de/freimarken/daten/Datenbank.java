@@ -321,6 +321,43 @@ public final class Datenbank implements AutoCloseable {
             """
             ALTER TABLE spielzeit
               ADD COLUMN IF NOT EXISTS taetig_sekunden BIGINT NOT NULL DEFAULT 0
+            """,
+
+            // Schritt 12: die Serien des Tagesbonus - eine Zeile je Spieler.
+            //
+            // KEINE Spalte fuer "heute schon bezahlt". Das entscheidet allein das
+            // Buchungsbuch: Dort ist die Wahrheit ueber Geld, und nur dort kann keine
+            // Reihenfolge von Abstuerzen eine zweite Zahlung am selben Tag erzeugen. Was
+            // hier liegt, ist eine Zaehlung von Tagen - geht sie verloren, ist eine Serie
+            // zu kurz und kein Geld entstanden.
+            //
+            // letzter_tag ist ein DATE und kein DATETIME (Plan 8.8: "gespeichert wird je
+            // Spieler ein Datum und kein Zeitpunkt"). Ein Zeitpunkt haette eine zweite
+            // Zone neben der eingestellten Tagesgrenze, und der Vergleich zweier Tage
+            // waere genau die Falle, gegen die sie gebaut ist.
+            //
+            // NULL ist erlaubt und heisst "noch kein Bonus gehabt" - zusammen mit serie 0.
+            // Die beiden gehoeren zusammen, und Bonusstand verweigert jede halbe Fassung.
+            //
+            // laengste_serie bleibt stehen, wenn die laufende reisst: Aus einem Datum und
+            // einer Zahl ist nicht mehr herauszulesen, wie lang eine frueher gerissene
+            // Serie war.
+            //
+            // Kein Fremdschluessel auf kassen, wie bei spielzeit und berufe: Eine Serie
+            // kann entstehen, bevor ein Konto eroeffnet ist, und ein Fremdschluessel
+            // machte aus der Reihenfolge zweier Schreibzuege eine Zusage.
+            //
+            // IF NOT EXISTS wie bei den Schritten 7, 9 und 10: migriere() legt keine
+            // Transaktion um Anweisung und Standfortschreibung, also muss der Satz einen
+            // zweiten Lauf folgenlos ueberstehen.
+            """
+            CREATE TABLE IF NOT EXISTS tagesbonus (
+              spieler        CHAR(36) NOT NULL,
+              letzter_tag    DATE     NULL,
+              serie          INT      NOT NULL DEFAULT 0,
+              laengste_serie INT      NOT NULL DEFAULT 0,
+              PRIMARY KEY (spieler)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -522,6 +559,11 @@ public final class Datenbank implements AutoCloseable {
             // Tabelle je einen Fremdschluessel gibt, muss die Zeile einordnen; ohne sie
             // wandern gemessene Sekunden von einem Test in den naechsten.
             anweisung.execute("DELETE FROM spielzeit");
+            // Der Tagesbonus haengt an keinem Fremdschluessel, seine Stelle in dieser
+            // Liste ist also frei - er steht hier, damit er nicht uebersehen wird. Ohne
+            // ihn wandern Serien von einem Test in den naechsten, und eine Probe ueber
+            // den ersten Bonus eines Spielers faende dort schon eine Serie.
+            anweisung.execute("DELETE FROM tagesbonus");
             // Die Berufe haengen an keinem Fremdschluessel, ihre Stelle in dieser Liste
             // ist also frei - sie stehen hier, damit sie nicht uebersehen werden. Ohne
             // diese Zeile wandern gewaehlte Berufe von einem Test in den naechsten, und

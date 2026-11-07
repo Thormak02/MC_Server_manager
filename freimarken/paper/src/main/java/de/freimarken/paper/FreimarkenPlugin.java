@@ -1,10 +1,13 @@
 package de.freimarken.paper;
 
 import de.freimarken.daten.Datenbank;
+import de.freimarken.daten.MariaBonus;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
 import de.freimarken.daten.MariaBerufe;
 import de.freimarken.daten.MariaSpielzeit;
+import de.freimarken.kern.Bonusablage;
+import de.freimarken.kern.SpeicherBonus;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
 import de.freimarken.kern.Blockmarken;
@@ -116,6 +119,23 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private BesitzLager lager;
     private Kasse kasse;
     private Spielzeitablage spielzeit;
+
+    /**
+     * Die Serien des Tagesbonus - ein Feld, weil der Takt und der Beitritt sie brauchen.
+     *
+     * <p>Hier liegt kein Geld: Ob heute schon gezahlt wurde, entscheidet das Buchungsbuch.
+     * Siehe {@link de.freimarken.kern.Bonusablage}.
+     */
+    private Bonusablage bonusablage;
+
+    /**
+     * Der Tagesbonus - ein Feld, obwohl ihn nur zwei Stellen halten.
+     *
+     * <p>Der Grund ist die REIHENFOLGE: Die Befehle entstehen vor dem Spielzeittakt, und
+     * der Bonus entsteht mit dem Takt. Die Auskunft fuer {@code /mark} liest darum das
+     * Feld beim Aufruf und nicht beim Bauen - zu diesem Zeitpunkt steht es.
+     */
+    private Tagesbonus tagesbonus;
     private Berufsablage berufsablage;
     /**
      * Welche Blockpositionen ein Spieler gesetzt hat - fuer Teil E.
@@ -390,7 +410,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // jeder Umzugsschritt diese Datei und teils dieselbe Methode anfassen -
         // benachbarte Zeilen, zwei Haende, ein verlorener Schreibzug. So fasst nach diesem
         // Schritt kein Umzug FreimarkenPlugin mehr an.
-        befehle = new ParzellenBefehle(buch, marktstadt, wirtschaft, getLogger(), sprache);
+        befehle = new ParzellenBefehle(buch, marktstadt, wirtschaft, getLogger(),
+                sprache,
+                // Das FELD wird beim Aufruf gelesen und nicht beim Bauen: Die Befehle
+                // entstehen vor dem Spielzeittakt, mit dem der Bonus entsteht. Die
+                // Pruefung auf null faengt den Fall, dass der Start davor abgebrochen
+                // ist - dann zeigt /mark seine uebrigen Zeilen.
+                wer -> tagesbonus == null ? null : tagesbonus.standZeile(wer, sprache));
         getServer().getPluginManager().registerEvents(
                 new Schutzwache(buch, welt, sprache), this);
         // Die Markierung MUSS stehen, bevor die erste Mark aus Arbeit fliesst: Alles, was
@@ -554,7 +580,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 new Messwache(this, messstelle), this);
         Spielzeitbuch buch = new Spielzeitbuch(wirtschaft, spielzeit, messstelle, uhr,
                 getLogger());
-        spielzeitwache = new Spielzeitwache(this, buch, wirtschaft, getLogger());
+        // Der Tagesbonus VOR der Spielzeitwache: Sie nimmt ihn in ihrem Takt mit.
+        tagesbonus = new Tagesbonus(wirtschaft, bonusablage, kasse, spielzeit,
+                uhr, getLogger());
+        Bonuswache bonuswache = new Bonuswache(tagesbonus, wirtschaft, sprache);
+        getServer().getPluginManager().registerEvents(bonuswache, this);
+        spielzeitwache = new Spielzeitwache(this, buch, bonuswache, wirtschaft,
+                getLogger());
         getServer().getPluginManager().registerEvents(spielzeitwache, this);
         spielzeitwache.starte();
         // Jeder Wert, den dieser Satz verspricht, steht auch darin. Eine halbe Zusage -
@@ -582,6 +614,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // Braucht keine Uhr: Der Tag kommt mit dem Zuschlag herein und bei lies() von
             // aussen. Eine Uhr hier waere eine zweite Quelle fuer die Tagesgrenze.
             spielzeit = new SpeicherSpielzeit();
+            bonusablage = new SpeicherBonus();
             // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von aussen.
             berufsablage = new ZwischenspeicherBerufe(new SpeicherBerufe());
             getLogger().warning("Keine Datenbank eingetragen: Parzellen und Guthaben gelten "
@@ -604,6 +637,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // zwischengespeicherter additiver Schreibzug ist entweder verloren oder
             // doppelt. Gelesen wird nur auf Befehl, also auch nichts zu sparen.
             spielzeit = new MariaSpielzeit(datenbank);
+            bonusablage = new MariaBonus(datenbank);
             // KEIN Zwischenspeicher: /beruf ist kein heisser Lesepfad. Mit Teil E, wenn
             // jeder Verdienst den Beruf fragt, wird das neu bedacht - und dann als eigene
             // Schicht wie ZwischenspeicherLager, nicht als Feld hier drin.

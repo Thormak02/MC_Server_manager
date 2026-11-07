@@ -53,16 +53,30 @@ final class Spielzeitwache implements Listener {
 
     private final JavaPlugin plugin;
     private final Spielzeitbuch buch;
+
+    /**
+     * Wer im Takt mitfaehrt - heute allein der Tagesbonus [Teil H].
+     *
+     * <p>Hier und nicht mit einem eigenen Zeitgeber: Plan 8.8 schliesst "ein zweiter
+     * Zeitgeber fuer irgendetwas anderes" ausdruecklich aus. Der Bonus braucht auch kein
+     * eigenes Fenster - er fragt nur, ob heute schon gezahlt ist.
+     *
+     * <p>Eine Klasse und keine Schnittstelle: Es gibt genau einen Mitfahrer, und eine
+     * Schnittstelle fuer eine Umsetzung waere eine Zusage auf einen zweiten, den niemand
+     * bestellt hat.
+     */
+    private final Bonuswache bonuswache;
     private final Wirtschaftsstand wirtschaft;
     private final Logger protokoll;
 
     /** Der laufende Zeitgeber - {@code null}, solange keiner steht. */
     private BukkitTask zeitgeber;
 
-    Spielzeitwache(JavaPlugin plugin, Spielzeitbuch buch, Wirtschaftsstand wirtschaft,
+    Spielzeitwache(JavaPlugin plugin, Spielzeitbuch buch, Bonuswache bonuswache, Wirtschaftsstand wirtschaft,
                    Logger protokoll) {
         this.plugin = plugin;
         this.buch = buch;
+        this.bonuswache = bonuswache;
         this.wirtschaft = wirtschaft;
         this.protokoll = protokoll;
     }
@@ -192,6 +206,17 @@ final class Spielzeitwache implements Listener {
     private void schlag() {
         try {
             buch.schreibeFort(untaetigkeiten());
+            // NACH dem Abrechnen: Ist eine Mindestzeit eingestellt, zaehlt sie taetige
+            // Minuten, und die entstehen genau in diesem Abrechnen. Davor gefragt, fehlte
+            // dem Bonus immer der letzte Taktschlag.
+            //
+            // In DEMSELBEN try: Eine Ausnahme aus dem Bonus darf den Zeitgeber nicht
+            // beenden - der Verlust waere dann nicht ein Bonus, sondern die Spielzeit
+            // aller Spieler bis zum naechsten Neustart. Tagesbonus.pruefe faengt seine
+            // Fehler selbst; dies ist die zweite Schranke.
+            for (Player spieler : plugin.getServer().getOnlinePlayers()) {
+                bonuswache.imTakt(spieler);
+            }
         } catch (Throwable fehler) {
             protokoll.log(Level.SEVERE, "Der Spielzeittakt ist in einen Fehler gelaufen."
                     + " Die Zeit dieses Taktes ist verloren; der Zeitgeber laeuft weiter.",

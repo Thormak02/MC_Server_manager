@@ -221,8 +221,8 @@ class SendewegTest {
     @DisplayName("33d - Zweig /mark: Stand und Hinweis, ganze Liste")
     void markZweig() {
         Tafel tafel = new Tafel();
-        tafel.fall("stand-25000", ParzellenBefehle.markZeilen(sprache, 25_000L));
-        tafel.fall("stand-0", ParzellenBefehle.markZeilen(sprache, 0L));
+        tafel.fall("stand-25000", ParzellenBefehle.markZeilen(sprache, 25_000L, null));
+        tafel.fall("stand-0", ParzellenBefehle.markZeilen(sprache, 0L, null));
 
         assertEquals("""
                 == stand-25000

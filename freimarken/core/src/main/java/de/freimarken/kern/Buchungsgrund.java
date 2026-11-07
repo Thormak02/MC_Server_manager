@@ -90,7 +90,19 @@ public enum Buchungsgrund {
      * <p>WAS verkauft wurde, steht nicht hier: Dieses Buch ist das Geldbuch. Hier steht,
      * dass Geld aus einem Verkauf an den Bund kam - dieselbe Trennung wie bei der Arbeit.
      */
-    BUNDESMARKT_VERKAUF("bundesmarkt_verkauf", Richtung.EINNAHME);
+    BUNDESMARKT_VERKAUF("bundesmarkt_verkauf", Richtung.EINNAHME),
+
+    /**
+     * Der Tagesbonus - die dritte und kleinste Quelle (Plan 8.2).
+     *
+     * <p><b>Dieser Grund ist der Waechter ueber "heute schon bezahlt".</b> Nicht die
+     * Serienzeile in der Datenbank, sondern DIESE Buchung: Das Buchungsbuch ist die
+     * Wahrheit ueber Geld, und nur hier kann keine Reihenfolge von Abstuerzen eine zweite
+     * Zahlung am selben Tag erzeugen. Wer den Schluessel aendert, macht jeden heute schon
+     * gezahlten Bonus unsichtbar - und am naechsten Tageswechsel wird er ein zweites Mal
+     * gezahlt.
+     */
+    TAGESBONUS("tagesbonus", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {

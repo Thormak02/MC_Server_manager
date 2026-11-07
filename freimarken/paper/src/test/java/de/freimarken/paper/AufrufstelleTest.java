@@ -163,7 +163,10 @@ class AufrufstelleTest {
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                         .mitStartguthaben(REICH).mitHoechstzahl(HOECHSTZAHL)
                         .mitGruppenFeldern(GRUPPENFELDER)),
-                Logger.getLogger("probe"), Sprachprobe.spracheAusDemJar());
+                Logger.getLogger("probe"), Sprachprobe.spracheAusDemJar(),
+                // Keine Bonuszeile: Diese Proben halten /mark ohne Teil H.
+                // Dass die Zeile dazukommt, prueft BonusBefehlTest.
+                wer -> null);
         kasse.eroeffne(ANNA);
         kasse.eroeffne(BERT);
     }
@@ -294,7 +297,7 @@ class AufrufstelleTest {
         kasse.gutschreiben(ANNA, 25_000L, Buchungsgrund.EROEFFNUNG);
         long stand = kasse.guthaben(ANNA);
 
-        ParzellenBefehle.markZeilen(Sprachprobe.spracheAusDemJar(), stand)
+        ParzellenBefehle.markZeilen(Sprachprobe.spracheAusDemJar(), stand, null)
                 .forEach(anna(auf(0, 0))::sendMessage);
 
         assertEquals("""

@@ -636,6 +636,21 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Pruefen, Teil G: verlangte-arten 7 bei sechs Arten, neuladen - Klage mit BEIDEN Zahlen, es gilt 6. Eine leere arten-Liste wird ebenso verworfen.
 - Pruefen, Teil G: Chat schreiben (nicht Befehl) und etwas abbauen, eine Taktlaenge warten - taetig. Der Umweg ueber den Zeitgeber ist nur hier pruefbar.
 - ~~Entschieden: Tagesbonus kommt als Teil H nach G~~ 7.11.: Die Schritt-7-Uebersicht verlangt ihn, und kein Teil A-G deckt ihn. Betrag und Rhythmus in die config.yml.
+- ~~Schritt 7, Teil H: Tagesbonus.~~ 7.11.: taeglich Einloggen bringt 500 Mark, jeder Tag der SERIE 100 mehr, hoechstens 2.000 (ab Tag 16). Damit ist Schritt 7 durch.
+- Zwei Dinge belohnt: das EINLOGGEN mit dem Grundbetrag, das REGELMAESSIGE Spielen mit der Serie. Die Serie reisst, wer einen Tag verpasst (serie-reisst-ab-luecke: 2).
+- Drei Nachrichten fuer eine Zahlung: erster Tag (nennt, was morgen kaeme), Serientag, und ein EIGENER Satz fuer die eingestellte Bestmarke. /mark zeigt die Serie.
+- Der Waechter ueber "heute schon bezahlt" ist das BUCHUNGSBUCH und nicht die Serienzeile: kein Absturz, kein Neustart und keine kaputte Zeile zahlt zweimal.
+- Gezahlt wird ZUERST, die Serie danach. Bricht es dazwischen ab, hat der Spieler sein Geld und verliert einen Serientag - das steht laut im Protokoll.
+- Die Bestmarke bleibt stehen, wenn die Serie reisst. Aus einem Datum und einer Zahl ist nicht herauszulesen, wie lang eine frueher gerissene Serie war.
+- tagesbonus.mindest-minuten (Vorgabe 0 = beim Einloggen): Wer mehr verlangt, zaehlt TAETIGE Minuten aus Teil G - Anwesenheit ist im Stehen zu haben.
+- Schemaschritt 12: Tabelle tagesbonus (spieler, letzter_tag DATE, serie, laengste_serie). Kein Geld darin, kein Fremdschluessel, letzter_tag darf NULL sein.
+- Gemessen: Der Sprungschutz von wirtschaft.sprung-bestaetigt greift in BEIDE Richtungen - 2000 auf 800 braucht dieselbe Bestaetigung wie 500 auf 5000.
+- Pruefen, Teil H: Start - das Protokoll nennt "Tagesbonus: Tag 1 gibt 500 Mark, Tag 2 600 Mark, ab Tag 16 dann 2000 Mark. Die Serie reisst, wer 1 Tag verpasst".
+- Pruefen, Teil H: einloggen - "Tagesbonus: +500 Mark - komm morgen wieder, dann sind es 600 Mark." /mark zeigt die Serie, /mark verlauf die Zeile "Tagesbonus".
+- Pruefen, Teil H: ab- und wieder anmelden - KEINE zweite Zahlung. Auch nicht nach /freimarken neuladen oder einem Neustart des Servers.
+- Pruefen, Teil H: in der Datenbank letzter_tag auf vorgestern setzen, neu einloggen - die Serie faengt bei 1 an, laengste_serie bleibt stehen.
+- Pruefen, Teil H: mindest-minuten auf 2, neuladen, einloggen - erst nichts, /mark sagt "noch 2 taetige Minuten". Dann zwei Minuten ABBAUEN UND LAUFEN: der Bonus faellt.
+- Pruefen, Teil H: grundbetrag 0 und serie-reisst-ab-luecke 1 eintragen, neuladen - beide werden mit Grund beklagt, die Vorgaben gelten weiter.
 - Offen, Berufe: der Kolben, der einen markierten Block weiterschiebt, und der Pflastersteingenerator - Weltregeln, eigener Schritt.
 - Entscheidung, Sprachdatei: sendeHandbalken hat seit Teil E zwei Aufrufer; Sprache.sende und sendeGezaehlt haben weiter keinen. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.

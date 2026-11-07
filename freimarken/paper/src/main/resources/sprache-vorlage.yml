@@ -73,6 +73,7 @@ mark:
       # Eine Zeile je Verkauf. WAS verkauft wurde, steht nicht im Geldbuch -
       # dieselbe Trennung wie beim Verdienst.
       bundesmarkt-verkauf: "Verkauf an den Bundesmarkt"
+      tagesbonus: "Tagesbonus"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -1171,3 +1172,41 @@ markt:
     zu-wenig: "<yellow>Fuer so wenig {material} gibt es keine ganze Mark - der Bund zahlt nur in ganzen Mark.</yellow>"
     deckel: "<yellow>Heute ist genug verkauft - morgen kauft der Bund wieder.</yellow>"
     nicht-buchbar: "<red>Der Verkauf ist gerade nicht buchbar - deine Ware hast du noch. Im Serverprotokoll steht, warum.</red>"
+
+# Der Tagesbonus (Plan 8.2, Teil G/H): Das taegliche Einloggen bringt den
+# Grundbetrag, das regelmaessige Spielen die SERIE - jeder Tag in Folge gibt mehr.
+# Die Zahlen stehen im Abschnitt tagesbonus der config.yml.
+#
+# Drei Nachrichten fuer eine Zahlung, und sie unterscheiden sich NICHT im Betrag,
+#   sondern in dem, was sie ueber die Serie sagen. Welche zutrifft, entscheidet das
+#   Programm; die Worte gehoeren dir.
+tagesbonus:
+  gezahlt:
+    # {betrag} {morgen} - der erste Tag einer Serie: entweder der allererste Bonus
+    #   oder ein Neuanfang nach einer gerissenen Serie.
+    # KEIN {serie}, denn sie ist 1 - "Tag 1 deiner Serie" liest sich wie eine
+    #   Zaehlung, die nichts bedeutet. {morgen} ist der Betrag des ZWEITEN Tages und
+    #   damit der Grund, morgen wiederzukommen.
+    erster: "<green>Tagesbonus: +{betrag}</green><gray> - komm morgen wieder, dann sind es {morgen}.</gray>"
+    # {betrag} {serie} - ein fortgesetzter Serientag. {serie} ist immer mindestens 2;
+    #   den ersten Tag traegt erster darueber.
+    serie: "<green>Tagesbonus: +{betrag}</green><gray> - {serie} Tage in Folge.</gray>"
+    # {betrag} {serie} - derselbe Tag, aber es ist seine LAENGSTE Serie. Ein eigener
+    #   Satz, damit der Spieler seinen Rekord liest und ihn nicht aus zwei gleichen
+    #   Zahlen schliessen muss.
+    bestmarke: "<green>Tagesbonus: +{betrag}</green><gold> - {serie} Tage in Folge, so lange wie noch nie!</gold>"
+  # Die Zeile unter /mark. Drei Faelle, drei Saetze - welcher zutrifft, weiss das
+  #   Programm.
+  stand:
+    # {serie} {laengste} {morgen} - heute schon bekommen. Die laufende Serie sagt, was
+    #   morgen auf dem Spiel steht; die laengste, was zu schlagen waere.
+    serie: "<gray>Tagesbonus: {serie} Tage in Folge (am laengsten {laengste}), morgen {morgen}.</gray>"
+    # {betrag} {serie} - heute noch offen. Ohne eingestellte Mindestzeit faellt der
+    #   Bonus beim Einloggen, also sieht ein Spieler diese Zeile kaum; wenn die Kasse
+    #   ihn nicht annehmen konnte, ist sie seine einzige Auskunft.
+    offen: "<gray>Tagesbonus: heute noch offen - Tag {serie} bringt {betrag}.</gray>"
+    # {minuten} {betrag} {serie} - nur erreichbar, wenn tagesbonus.mindest-minuten
+    #   gesetzt ist. Gezaehlt werden TAETIGE Minuten (siehe messstelle), nicht
+    #   Anwesenheit. Ohne diese Zeile liest ein Spieler nichts von einem Bonus und
+    #   haelt ihn fuer abgeschafft.
+    wartet: "<gray>Tagesbonus: noch {minuten} taetige Minuten, dann bringt Tag {serie} {betrag}.</gray>"

@@ -116,9 +116,27 @@ final class ParzellenBefehle {
      */
     private final Sprache sprache;
 
+    /**
+     * Woher die Bonuszeile von {@code /mark} kommt [Teil H].
+     *
+     * <p>Eine Naht und keine Abhaengigkeit auf {@code Tagesbonus}: Diese Klasse ist die
+     * groesste des Plugins und hat mit dem Bonus nichts zu tun - sie zeigt eine Zeile, die
+     * woanders entsteht. Dieselbe Entscheidung wie bei {@code Verdienstwache.Taktquelle}.
+     *
+     * <p>Darf {@code null} geben, und das heisst: Die Datenbank hat die Serie nicht
+     * hergegeben. Dann schweigt {@code /mark} ueber den Bonus statt eine Absage zu
+     * zeigen - gefragt war nach dem Guthaben, und das steht schon da.
+     */
+    interface Bonusauskunft {
+        Component zeileFuer(UUID wer);
+    }
+
+    private final Bonusauskunft bonusauskunft;
+
     ParzellenBefehle(Besitzbuch buch, World marktstadt, Wirtschaftsstand wirtschaft,
-                     Logger protokoll, Sprache sprache) {
+                     Logger protokoll, Sprache sprache, Bonusauskunft bonusauskunft) {
         this.sprache = sprache;
+        this.bonusauskunft = bonusauskunft;
         this.buch = buch;
         this.marktstadt = marktstadt;
         // Aus der Welt gelesen und nicht daneben uebergeben: Zwei Angaben fuer dieselbe
@@ -196,7 +214,8 @@ final class ParzellenBefehle {
         return Commands.literal("mark")
                 .requires(quelle -> quelle.getExecutor() instanceof Player)
                 .executes(fuerSpieler(spieler -> markZeilen(sprache,
-                        buch.kasse().guthaben(spieler.getUniqueId()))
+                        buch.kasse().guthaben(spieler.getUniqueId()),
+                        bonusauskunft.zeileFuer(spieler.getUniqueId()))
                         .forEach(spieler::sendMessage)))
                 // Der Verlauf haengt am vorhandenen /mark und bekommt keinen eigenen
                 // Befehl: Zwei Befehle, die denselben Stand zeigen, laufen eines Tages
@@ -239,9 +258,19 @@ final class ParzellenBefehle {
      *
      * @param guthaben was der Spieler hat, schon aus der Kasse geholt
      */
-    static List<Component> markZeilen(Sprache sprache, long guthaben) {
+    static List<Component> markZeilen(Sprache sprache, long guthaben,
+                                      Component bonuszeile) {
         List<Component> zeilen = new ArrayList<>(sprache.bau(MarkSatz.STAND, 1L,
                 Einsatz.von("betrag", sprache.betrag(guthaben))));
+        // Die Bonuszeile ZWISCHEN Stand und Hinweis: Sie gehoert zum Geld und nicht zum
+        // Verlauf, und der Hinweis auf /mark verlauf soll die letzte Zeile bleiben.
+        //
+        // null ist erlaubt und heisst: Die Datenbank hat die Serie nicht hergegeben.
+        // Dann schweigt /mark ueber den Bonus, statt eine Absage zu zeigen - gefragt war
+        // nach dem Guthaben, und das steht schon da.
+        if (bonuszeile != null) {
+            zeilen.add(bonuszeile);
+        }
         zeilen.addAll(sprache.bau(MarkSatz.VERLAUF_HINWEIS, 1L, Einsatz.keine()));
         return List.copyOf(zeilen);
     }

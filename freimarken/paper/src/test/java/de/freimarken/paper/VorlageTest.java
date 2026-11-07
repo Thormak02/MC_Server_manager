@@ -253,7 +253,7 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle neun Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - alle zehn Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
         // MarktSatz ist der neunte. Berufsname steht mit Absicht NICHT dabei: Es ist kein
         // Bereich, sondern eine offene Familie - es gibt einen Schluessel je Beruf der
@@ -261,7 +261,7 @@ class VorlageTest {
         // Vorlage steht.
         Set<String> erwartet = new LinkedHashSet<>(List.of("BundSatz", "MarkSatz",
                 "ParzellenSatz", "AnfragenSatz", "SpielzeitSatz", "ReiseSatz",
-                "WacheSatz", "BerufSatz", "MarktSatz"));
+                "WacheSatz", "BerufSatz", "MarktSatz", "BonusSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -493,6 +493,16 @@ class VorlageTest {
             // an den Betreiber und in die Konsole, nie an einen Spieler - wie die drei
             // Stellen in Wirtschaftsliste, deren Helfer sie benutzt.
             "Berufsliste.java -> \"Mark\"",
+            // Teil H: Der Leser des Tagesbonus und seine Klagen gehen an den
+            // BETREIBER, nicht an einen Spieler. Was ein Spieler liest, kommt
+            // aus Bonustext und damit aus waehrung.betrag.
+            "Bonusliste.java -> \"Mark je Serientag\"",
+            "Bonusliste.java -> \" Mark\"",
+            "Bonusliste.java -> \" Mark\"",
+            "Bonusliste.java -> \" Mark\"",
+            "Bonusliste.java -> \"Mark\"",
+            "Bonusliste.java -> \" Bonus eine Nachricht ueber 0 Mark schickt. \"",
+            "Bonusliste.java -> \"Mark\"",
             "FreimarkenPlugin.java -> \" Minuten als Mark auf vielen"
                     + " Konten. Lieber kein Parzellensystem\"",
             "FreimarkenPlugin.java -> \" Mark - friert bei der"
@@ -510,6 +520,11 @@ class VorlageTest {
             "Marktliste.java -> \"Mark\"",
             "Marktliste.java -> \" Mark: 40 heisst 0,40 Mark. Ein Punkt trennt in"
                     + " YAML keine\"",
+            // Zwei Protokollzeilen: der Wurf eines Programmfehlers und die
+            // Verlustzeile, wenn die Serie nach einer Zahlung nicht geschrieben
+            // werden konnte. Beide liest nur der Betreiber.
+            "Tagesbonus.java -> \" Mark ist keine - wo nichts gezahlt wurde, steht null\"",
+            "Tagesbonus.java -> \" Mark, Serientag \"",
             "Verdienstbuch.java -> \" Mark sind verloren. Es wird NICHT wiederholt:"
                     + " Ein zweiter Versuch\"",
             // Die Einheit und die zwei Erklaerzeilen des Lesers - alle drei gehen an den
