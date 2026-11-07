@@ -503,6 +503,19 @@ spielzeit:
   heute: "<gray>  heute   {dauer}   ({tag}, Tagesgrenze {zone})</gray>"
   # {dauer} - die zweite Zeile. Die Spaltenbreite steht bei heute darueber erklaert.
   gesamt: "<gray>  gesamt  {dauer}</gray>"
+  # {dauer} {heute} {prozent} - die dritte Zeile: wie viel von der gemessenen Zeit
+  #   TAETIG war. "taetig" ist wie "gesamt" sechs Zeichen lang und braucht darum
+  #   ZWEI Leerzeichen, damit die Dauer in derselben Spalte 11 beginnt wie darueber.
+  # {dauer} ist die taetige Zeit ueber alle Tage, {heute} die von heute, {prozent}
+  #   ihr Anteil an der gemessenen Zeit in Prozent - abgerundet, damit die Zahl eine
+  #   Untergrenze ist. Das Zeichen % steht HIER und nicht im Programm.
+  # Warum der Anteil dabeisteht: Eine nackte Dauer ohne ihren Bezug ist nicht zu
+  #   lesen - "40 h taetig" heisst bei 45 h Anwesenheit etwas anderes als bei 400.
+  # Der LAUFENDE Takt ist hier noch nicht mitgezaehlt: Ob er taetig war, entscheidet
+  #   sich erst, wenn er abgerechnet wird. Darum steht hier kurz nach dem Beitritt
+  #   eine 0, obwohl der Spieler spielt. Woran die Messstelle Taetigkeit erkennt,
+  #   steht im Abschnitt messstelle der config.yml.
+  taetig: "<gray>  taetig  {dauer}   ({heute} heute, {prozent} % der Zeit)</gray>"
   zustand:
     # {dauer} {grenze} - die dritte Zeile, solange gerade NICHT gezaehlt wird.
     # {grenze} ist die eingestellte Untaetigkeitsgrenze in Minuten; das Wort "min"

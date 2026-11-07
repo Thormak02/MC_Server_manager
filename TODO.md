@@ -618,6 +618,24 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Pruefen, Teil F: sieben Stein in der Hand, /markt verkaufen - fuenf weg, eine Mark, zwei bleiben. In Hochwald dieselbe Eingabe: Absage, Ware bleibt.
 - Pruefen, Teil F: vier Stein (zu wenig fuer eine Mark) und Erde (nicht im Sortiment) haben VERSCHIEDENE Absagen. /mark verlauf zeigt "Verkauf an den Bundesmarkt".
 - Pruefen, Teil F: bundesmarkt.tagesdeckel auf 1 samt Bestaetigung - nach einer Mark "Heute ist genug verkauft". Arbeit geht danach WEITER (eigener Deckel).
+- ~~Schritt 7, Teil G: Messstelle.~~ 7.11.: zweite Zahl neben der Anwesenheit - TAETIGE Sekunden je Spieler und Tag. /playtime zeigt beide, /freimarken messstelle zeigt warum.
+- Sie GREIFT IN NICHTS EIN: kein Verdienst gesperrt, keine Zeit verworfen, kein Spieler gemeldet. Erkennung statt Verhinderung - eine Sperre traefe auch eintoenige ehrliche Arbeit.
+- Gemessen wird VIELFALT und nicht Menge: Ein Makro gibt immer DASSELBE Zeichen. Zwei von sechs Arten je Taktschlag machen ihn taetig (messstelle.verlangte-arten).
+- Sieben Arten: bewegen, abbauen, setzen, oeffnen, benutzen, kaempfen, sprechen. benutzen ist ab Werk AUS - es ist die halbe Art zum Setzen (derselbe rechte Knopf).
+- Der Linksklick zaehlt NIE als benutzen: Er feuert bei jedem Schlag, und ein Makro am Generator bekaeme sonst abbauen UND benutzen und waere taetig.
+- Das Bewegen wird aus dem ABSTAND gemessen, nicht aus Ereignissen - eine gewackelte Maus traegt niemanden acht Bloecke weit. Im Kreis laufen ist keine Strecke, Weltwechsel zaehlt immer.
+- Kein Ausschalter in der config.yml - das waere ein Schalter, mit dem man sich stumm die eigene Messung wegwirft. Milde geht ueber verlangte-arten: 1.
+- Untermessen ist die sichere Richtung: Wer einen Takt lang nur segelt, zaehlt nicht als taetig. Zu viel Spielzeit gibt einen Rang zu frueh, zu wenig nur zu spaet.
+- Schemaschritt 11: spielzeit bekommt taetig_sekunden (DEFAULT 0), gleiche Zeile, gleicher Schreibweg. Alte Zeilen bleiben 0 - geraten wird nichts.
+- Offen, gewollt: Mit benutzen IN der Liste gibt ein Setzmakro zwei Zeichen aus einer Taste. Darum ab Werk aus; wer es dazunimmt, kennt das Paar (steht in der config.yml).
+- Noch ohne Probe: der Chatzweig. Paper liefert Chat ausserhalb des Hauptfadens, die Meldung geht ueber den Zeitgeber - ohne Server nicht pruefbar, nur im Spiel.
+- Pruefen, Teil G: Start - das Protokoll nennt "Messstelle: 2 von 6 Arten je Taktschlag machen ihn taetig (bewegen, abbauen, setzen, oeffnen, kaempfen, sprechen), Bewegen ab 8 Bloecken".
+- Pruefen, Teil G: Stein abbauen ohne zu laufen, eine Taktlaenge warten - /playtime zeigt "taetig 0 min". Dann abbauen UND zwanzig Bloecke laufen: die taetige Zeit waechst.
+- Pruefen, Teil G: /freimarken messstelle nennt je anwesendem Spieler, wie viele von zwei Arten er im laufenden Schlag gegeben hat - und sagt, dass das Bewegen fehlt.
+- Pruefen, Teil G: messstelle.arten um benutzen erweitern, neuladen - die Antwort nennt "messstelle.arten: 6 -> 7 Arten, dazu: benutzen". Eine Zaehlung allein saehe das nicht.
+- Pruefen, Teil G: verlangte-arten 7 bei sechs Arten, neuladen - Klage mit BEIDEN Zahlen, es gilt 6. Eine leere arten-Liste wird ebenso verworfen.
+- Pruefen, Teil G: Chat schreiben (nicht Befehl) und etwas abbauen, eine Taktlaenge warten - taetig. Der Umweg ueber den Zeitgeber ist nur hier pruefbar.
+- ~~Entschieden: Tagesbonus kommt als Teil H nach G~~ 7.11.: Die Schritt-7-Uebersicht verlangt ihn, und kein Teil A-G deckt ihn. Betrag und Rhythmus in die config.yml.
 - Offen, Berufe: der Kolben, der einen markierten Block weiterschiebt, und der Pflastersteingenerator - Weltregeln, eigener Schritt.
 - Entscheidung, Sprachdatei: sendeHandbalken hat seit Teil E zwei Aufrufer; Sprache.sende und sendeGezaehlt haben weiter keinen. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.

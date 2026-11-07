@@ -80,8 +80,8 @@ class MariaSpielzeitTest extends SpielzeitVertrag {
     void zweiZuschlaegeEineZeile() throws SQLException {
         UUID anna = UUID.randomUUID();
 
-        spielzeit.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 60L)));
-        spielzeit.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 30L)));
+        spielzeit.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 60L)));
+        spielzeit.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 30L)));
 
         assertEquals(1, zeilenVon(anna),
                 "ON DUPLICATE KEY UPDATE schlaegt auf die vorhandene Zeile auf; zwei Zeilen"
@@ -99,7 +99,7 @@ class MariaSpielzeitTest extends SpielzeitVertrag {
         // Wer hier einmal eine Wiederholung einbaut, soll an dieser Probe vorbeimuessen.
         UUID anna = UUID.randomUUID();
         List<Spielzeitablage.Zuschlag> einTakt =
-                List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 60L));
+                List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 60L));
 
         spielzeit.schreibeFort(einTakt);
         spielzeit.schreibeFort(einTakt);
@@ -123,7 +123,7 @@ class MariaSpielzeitTest extends SpielzeitVertrag {
 
         for (LocalDate tag : tage) {
             UUID wer = UUID.randomUUID();
-            spielzeit.schreibeFort(List.of(new Spielzeitablage.Zuschlag(wer, tag, 42L)));
+            spielzeit.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(wer, tag, 42L)));
 
             assertEquals(tag.toString(), tagAlsTextVon(wer),
                     "der Tag muss genau so in der Spalte stehen, wie der Kern ihn gerechnet"
@@ -141,7 +141,7 @@ class MariaSpielzeitTest extends SpielzeitVertrag {
         // sobald ein einziger von ihnen noch keine Kassenzeile hat.
         UUID ohneKonto = UUID.randomUUID();
 
-        spielzeit.schreibeFort(List.of(new Spielzeitablage.Zuschlag(ohneKonto, HEUTE, 60L)));
+        spielzeit.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(ohneKonto, HEUTE, 60L)));
 
         assertEquals(60L, sekundenIn(ohneKonto, HEUTE));
         assertEquals(0, kassenzeilenVon(ohneKonto), "und es entsteht dabei auch keines");
@@ -157,7 +157,7 @@ class MariaSpielzeitTest extends SpielzeitVertrag {
         LocalDate erster = HEUTE.minusDays(399);
         List<Spielzeitablage.Zuschlag> alles = new ArrayList<>();
         for (int i = 0; i < 400; i++) {
-            alles.add(new Spielzeitablage.Zuschlag(anna, erster.plusDays(i), 3_600L));
+            alles.add(Spielzeitablage.Zuschlag.nurAnwesend(anna, erster.plusDays(i), 3_600L));
         }
 
         spielzeit.schreibeFort(alles);
@@ -174,7 +174,7 @@ class MariaSpielzeitTest extends SpielzeitVertrag {
         // Fehlte die Tabelle in leereAlles(), wanderten gemessene Sekunden von einem Test
         // in den naechsten, und die Datentests waeren voneinander abhaengig.
         UUID anna = UUID.randomUUID();
-        spielzeit.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 600L)));
+        spielzeit.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 600L)));
 
         datenbank.leereAlles();
 

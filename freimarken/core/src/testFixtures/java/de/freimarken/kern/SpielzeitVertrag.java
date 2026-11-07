@@ -58,8 +58,8 @@ public abstract class SpielzeitVertrag {
         Spielzeitablage ablage = ablage();
         UUID anna = UUID.randomUUID();
 
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 60L)));
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 45L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 60L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 45L)));
 
         assertEquals(105L, ablage.lies(anna, HEUTE).sekundenHeute(),
                 "additiv und nicht lesen-rechnen-schreiben: sonst verschluckt ein zweiter"
@@ -71,9 +71,9 @@ public abstract class SpielzeitVertrag {
     void neuerTagNeueZeile() {
         Spielzeitablage ablage = ablage();
         UUID anna = UUID.randomUUID();
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, GESTERN, 3_600L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, GESTERN, 3_600L)));
 
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 120L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 120L)));
 
         Spielzeitstand stand = ablage.lies(anna, HEUTE);
         assertEquals(3_720L, stand.sekundenGesamt(), "gesamt ist die Summe aller Tage");
@@ -90,9 +90,9 @@ public abstract class SpielzeitVertrag {
         UUID bert = UUID.randomUUID();
 
         ablage.schreibeFort(List.of(
-                new Spielzeitablage.Zuschlag(anna, GESTERN, 30L),
-                new Spielzeitablage.Zuschlag(anna, HEUTE, 30L),
-                new Spielzeitablage.Zuschlag(bert, HEUTE, 90L)));
+                Spielzeitablage.Zuschlag.nurAnwesend(anna, GESTERN, 30L),
+                Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 30L),
+                Spielzeitablage.Zuschlag.nurAnwesend(bert, HEUTE, 90L)));
 
         assertEquals(60L, ablage.lies(anna, HEUTE).sekundenGesamt());
         assertEquals(90L, ablage.lies(bert, HEUTE).sekundenGesamt());
@@ -108,8 +108,8 @@ public abstract class SpielzeitVertrag {
         UUID anna = UUID.randomUUID();
 
         ablage.schreibeFort(List.of(
-                new Spielzeitablage.Zuschlag(anna, HEUTE, 20L),
-                new Spielzeitablage.Zuschlag(anna, HEUTE, 22L)));
+                Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 20L),
+                Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 22L)));
 
         assertEquals(42L, ablage.lies(anna, HEUTE).sekundenHeute());
     }
@@ -121,7 +121,7 @@ public abstract class SpielzeitVertrag {
         UUID anna = UUID.randomUUID();
         UUID bert = UUID.randomUUID();
 
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 600L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 600L)));
 
         assertEquals(600L, ablage.lies(anna, HEUTE).sekundenGesamt());
         assertEquals(0L, ablage.lies(bert, HEUTE).sekundenGesamt());
@@ -132,7 +132,7 @@ public abstract class SpielzeitVertrag {
     void tagOhneZeile() {
         Spielzeitablage ablage = ablage();
         UUID anna = UUID.randomUUID();
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, GESTERN, 500L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, GESTERN, 500L)));
 
         Spielzeitstand stand = ablage.lies(anna, HEUTE);
 
@@ -147,7 +147,7 @@ public abstract class SpielzeitVertrag {
         // schreiben - und darf deshalb nicht klagen.
         Spielzeitablage ablage = ablage();
         UUID anna = UUID.randomUUID();
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 10L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 10L)));
 
         ablage.schreibeFort(List.of());
 
@@ -160,7 +160,7 @@ public abstract class SpielzeitVertrag {
         Spielzeitablage ablage = ablage();
         UUID anna = UUID.randomUUID();
 
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 0L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 0L)));
 
         assertEquals(0L, ablage.lies(anna, HEUTE).sekundenGesamt());
     }
@@ -173,7 +173,7 @@ public abstract class SpielzeitVertrag {
         UUID anna = UUID.randomUUID();
 
         assertThrows(IllegalArgumentException.class,
-                () -> new Spielzeitablage.Zuschlag(anna, HEUTE, -1L));
+                () -> Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, -1L));
     }
 
     @Test
@@ -199,7 +199,7 @@ public abstract class SpielzeitVertrag {
         Spielzeitablage ablage = ablage();
         UUID anna = UUID.randomUUID();
         List<Spielzeitablage.Zuschlag> mitLuecke = new ArrayList<>();
-        mitLuecke.add(new Spielzeitablage.Zuschlag(anna, HEUTE, 60L));
+        mitLuecke.add(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 60L));
         mitLuecke.add(null);
 
         assertThrows(IllegalArgumentException.class, () -> ablage.schreibeFort(mitLuecke));
@@ -222,10 +222,10 @@ public abstract class SpielzeitVertrag {
         Spielzeitablage ablage = ablage();
         UUID anna = UUID.randomUUID();
         ablage.schreibeFort(List.of(
-                new Spielzeitablage.Zuschlag(anna, HEUTE, Long.MAX_VALUE)));
+                Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, Long.MAX_VALUE)));
 
         assertThrows(IllegalStateException.class, () -> ablage.schreibeFort(
-                List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 1L))));
+                List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 1L))));
 
         assertEquals(Long.MAX_VALUE, ablage.lies(anna, HEUTE).sekundenHeute(),
                 "und der vorhandene Wert bleibt stehen, als waere nichts geschrieben");
@@ -250,8 +250,8 @@ public abstract class SpielzeitVertrag {
         Spielzeitablage ablage = ablage();
         UUID anna = UUID.randomUUID();
         ablage.schreibeFort(List.of(
-                new Spielzeitablage.Zuschlag(anna, GESTERN, Long.MAX_VALUE),
-                new Spielzeitablage.Zuschlag(anna, HEUTE, Long.MAX_VALUE)));
+                Spielzeitablage.Zuschlag.nurAnwesend(anna, GESTERN, Long.MAX_VALUE),
+                Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, Long.MAX_VALUE)));
 
         assertThrows(IllegalStateException.class, () -> ablage.lies(anna, HEUTE));
     }
@@ -263,9 +263,150 @@ public abstract class SpielzeitVertrag {
         UUID anna = UUID.randomUUID();
 
         for (int i = 0; i < 40; i++) {
-            ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 60L)));
+            ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 60L)));
         }
 
         assertEquals(2_400L, ablage.lies(anna, HEUTE).sekundenHeute());
+    }
+
+    // --- Die taetige Zeit [Teil G] --------------------------------------------
+    //
+    // Dieselbe Zeile, zweite Zahl. Jede Zusage darueber steht HIER und nicht in einer der
+    // zwei Umsetzungen: Die eine schreibt ein Paar in eine HashMap, die andere zwei
+    // Spalten mit ON DUPLICATE KEY, und genau an so einer Stelle laufen zwei Fassungen
+    // auseinander, ohne dass eine Probe rot wird.
+
+    @Test
+    @DisplayName("Die taetige Zeit wird genauso AUFGESCHLAGEN wie die gemessene")
+    void taetigIstAuchAdditiv() {
+        Spielzeitablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+
+        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 60L, 60L)));
+        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 60L, 0L)));
+        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 60L, 60L)));
+
+        Spielzeitstand stand = ablage.lies(anna, HEUTE);
+
+        // Drei Schlaege gemessen, zwei davon taetig. Die Zahlen sind VERSCHIEDEN - bei
+        // 180 zu 180 waere ein vertauschtes Platzhalterpaar nicht zu sehen.
+        assertEquals(180L, stand.sekundenHeute());
+        assertEquals(120L, stand.taetigSekundenHeute());
+        assertEquals(180L, stand.sekundenGesamt());
+        assertEquals(120L, stand.taetigSekundenGesamt());
+    }
+
+    @Test
+    @DisplayName("Heute und gesamt werden auch bei der taetigen Zeit getrennt gefuehrt")
+    void taetigHeuteUndGesamtGetrennt() {
+        Spielzeitablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+
+        // Gestern ganz taetig, heute nur ein Drittel. VIER verschiedene Zahlen, damit
+        // keine Verwechslung der vier Werte gruen bleibt.
+        ablage.schreibeFort(List.of(
+                new Spielzeitablage.Zuschlag(anna, GESTERN, 600L, 600L),
+                new Spielzeitablage.Zuschlag(anna, HEUTE, 300L, 100L)));
+
+        Spielzeitstand stand = ablage.lies(anna, HEUTE);
+
+        assertEquals(900L, stand.sekundenGesamt());
+        assertEquals(300L, stand.sekundenHeute());
+        assertEquals(700L, stand.taetigSekundenGesamt());
+        assertEquals(100L, stand.taetigSekundenHeute());
+    }
+
+    @Test
+    @DisplayName("Ein Zuschlag ohne taetige Zeit laesst die taetige Summe stehen")
+    void nurAnwesendAendertDieTaetigeSummeNicht() {
+        Spielzeitablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna, HEUTE, 60L, 60L)));
+
+        ablage.schreibeFort(List.of(
+                Spielzeitablage.Zuschlag.nurAnwesend(anna, HEUTE, 600L)));
+
+        Spielzeitstand stand = ablage.lies(anna, HEUTE);
+
+        assertEquals(660L, stand.sekundenHeute());
+        assertEquals(60L, stand.taetigSekundenHeute(),
+                "ein untaetiger Schlag darf die taetige Summe nicht zuruecksetzen -"
+                        + " aufschlagen heisst aufschlagen, auch mit einer 0");
+    }
+
+    @Test
+    @DisplayName("Ein Spieler ohne taetige Zeile hat 0 und nicht die Zeit eines anderen")
+    void taetigIstJeSpielerGetrennt() {
+        Spielzeitablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
+
+        ablage.schreibeFort(List.of(
+                new Spielzeitablage.Zuschlag(anna, HEUTE, 600L, 600L),
+                Spielzeitablage.Zuschlag.nurAnwesend(bert, HEUTE, 600L)));
+
+        assertEquals(600L, ablage.lies(anna, HEUTE).taetigSekundenHeute());
+        assertEquals(0L, ablage.lies(bert, HEUTE).taetigSekundenHeute());
+        assertEquals(600L, ablage.lies(bert, HEUTE).sekundenHeute(),
+                "Bert war da - nur nicht taetig");
+    }
+
+    @Test
+    @DisplayName("Zwei Zuschlaege in EINEM Aufruf addieren beide Zahlen")
+    void beideZahlenImSelbenAufruf() {
+        // Der Fall ueber Mitternacht mit dem Nachtrag eines abgemeldeten Spielers: Der
+        // Stapel traegt denselben Spieler und Tag zweimal, und das zweite
+        // ON DUPLICATE KEY addiert auf das erste.
+        Spielzeitablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+
+        ablage.schreibeFort(List.of(
+                new Spielzeitablage.Zuschlag(anna, HEUTE, 60L, 60L),
+                new Spielzeitablage.Zuschlag(anna, HEUTE, 30L, 0L)));
+
+        Spielzeitstand stand = ablage.lies(anna, HEUTE);
+
+        assertEquals(90L, stand.sekundenHeute());
+        assertEquals(60L, stand.taetigSekundenHeute());
+    }
+
+    @Test
+    @DisplayName("Taetiger als gemessen faellt beim BAUEN auf, nicht erst beim Schreiben")
+    void taetigNieMehrAlsGemessen() {
+        UUID anna = UUID.randomUUID();
+
+        // Geprueft beim Bauen und nicht beim Schreiben, aus demselben Grund wie beim
+        // negativen Zuschlag: So kann keine Umsetzung es anders behandeln als die andere,
+        // und der Fehler faellt an seiner Quelle auf. Steht er erst in der Datenbank, ist
+        // er aus der Summe nicht mehr herauszurechnen.
+        assertThrows(IllegalArgumentException.class,
+                () -> new Spielzeitablage.Zuschlag(anna, HEUTE, 60L, 61L));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Spielzeitablage.Zuschlag(anna, HEUTE, 0L, 1L));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Spielzeitablage.Zuschlag(anna, HEUTE, 60L, -1L));
+    }
+
+    @Test
+    @DisplayName("Ein gelesener Stand haelt die Zusage taetig nie mehr als gemessen")
+    void gelesenerStandHaeltDieZusage() {
+        // Die Zusage steht im Konstruktor von Spielzeitstand, also wuerde eine Ablage,
+        // die die zwei Summen aus verschiedenen Zeilen oder Augenblicken holt, hier mit
+        // einer Ausnahme auffallen statt mit einer falschen Zahl.
+        Spielzeitablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+
+        for (int i = 0; i < 20; i++) {
+            ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(anna,
+                    i % 2 == 0 ? HEUTE : GESTERN, 60L, i % 3 == 0 ? 60L : 0L)));
+        }
+
+        Spielzeitstand stand = ablage.lies(anna, HEUTE);
+
+        assertEquals(1_200L, stand.sekundenGesamt());
+        // Durch 3 teilbar sind 0, 3, 6, 9, 12, 15, 18 - sieben Schlaege. Gerade davon
+        // sind 0, 6, 12, 18, also vier heute.
+        assertEquals(420L, stand.taetigSekundenGesamt());
+        assertEquals(240L, stand.taetigSekundenHeute());
     }
 }

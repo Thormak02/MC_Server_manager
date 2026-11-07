@@ -21,8 +21,10 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
@@ -93,15 +95,60 @@ class SpielzeitbuchTest {
         }
     }
 
+    /**
+     * Eine steuerbare Messstelle - der Stellvertreter fuer Teil G.
+     *
+     * <p>Zaehlt ausserdem MIT, wie oft sie gefragt und wie oft sie vergessen wurde: Die
+     * Zusage "einmal je abgerechnetem Schlag, auch bei einem verworfenen" ist eine Zusage
+     * ueber den AUFRUF und nicht ueber eine Zahl im Ergebnis, und ohne Zaehlung waere sie
+     * nicht zu pruefen.
+     */
+    static final class Messprobe implements Spielzeitbuch.Taetigkeitsquelle {
+
+        /** Wen sie als taetig meldet - leer heisst niemanden. */
+        final Set<UUID> taetige = new LinkedHashSet<>();
+
+        /** Jede Frage, in der Reihenfolge der Fragen. */
+        final List<UUID> gefragt = new ArrayList<>();
+
+        /** Jedes Vergessen. */
+        final List<UUID> vergessen = new ArrayList<>();
+
+        /**
+         * Fragen und Vergessen in EINER Spur - fuer die Zusagen ueber die Reihenfolge.
+         *
+         * <p>Zwei getrennte Listen halten keine Reihenfolge zueinander: Eine Probe, die
+         * nur prueft, dass beide Namen vorkommen, bleibt gruen, wenn das Vergessen VOR
+         * das Urteil rutscht - und dann verliert jeder Abgang seine letzte Minute
+         * taetige Zeit.
+         */
+        final List<String> ablauf = new ArrayList<>();
+
+        @Override
+        public boolean nimmUndLeere(UUID wer) {
+            gefragt.add(wer);
+            ablauf.add("fragt " + wer);
+            return taetige.contains(wer);
+        }
+
+        @Override
+        public void vergiss(UUID wer) {
+            vergessen.add(wer);
+            ablauf.add("vergisst " + wer);
+        }
+    }
+
     private final List<LogRecord> protokollzeilen = new ArrayList<>();
     private StellUhr uhr;
     private SpeicherSpielzeit ablage;
+    private Messprobe messstelle;
     private Logger protokoll;
 
     @BeforeEach
     void vorher() {
         uhr = new StellUhr(START);
         ablage = new SpeicherSpielzeit();
+        messstelle = new Messprobe();
         protokollzeilen.clear();
         protokoll = eigenesProtokoll();
     }
@@ -129,11 +176,11 @@ class SpielzeitbuchTest {
     }
 
     private Spielzeitbuch buch(Zeitwerte zeit) {
-        return new Spielzeitbuch(stand(zeit), ablage, uhr, protokoll);
+        return new Spielzeitbuch(stand(zeit), ablage, messstelle, uhr, protokoll);
     }
 
     private Spielzeitbuch buch(Zeitwerte zeit, Spielzeitablage andere) {
-        return new Spielzeitbuch(stand(zeit), andere, uhr, protokoll);
+        return new Spielzeitbuch(stand(zeit), andere, messstelle, uhr, protokoll);
     }
 
     private static Wirtschaftsstand stand(Zeitwerte zeit) {
@@ -770,5 +817,233 @@ class SpielzeitbuchTest {
         assertTrue(protokollNennt("60 Sekunden von 1 Spieler(n)"),
                 protokollzeilen.toString());
         assertEquals(0, buch.offeneMarken(), "die Karte ist trotzdem leer");
+    }
+
+    // --- Die taetige Zeit [Teil G] --------------------------------------------
+
+    @Test
+    @DisplayName("Ein taetiger Takt schreibt seine Sekunden auch als TAETIG")
+    void taetigerTaktSchreibtBeides() {
+        messstelle.taetige.add(ANNA);
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schreibeFort(aktiv(ANNA));
+
+        Spielzeitstand stand = ablage.lies(ANNA, TAG);
+        assertEquals(60L, stand.sekundenHeute());
+        assertEquals(60L, stand.taetigSekundenHeute());
+    }
+
+    @Test
+    @DisplayName("Ein untaetiger Takt schreibt die Sekunden, aber keine taetige Zeit")
+    void nichtTaetigerTaktSchreibtNurAnwesenheit() {
+        // Die Messstelle meldet nichts - der Spieler war DA und nicht taetig. Zwei
+        // VERSCHIEDENE Zahlen in derselben Zeile; bei 60 zu 60 waere eine Verwechslung
+        // der beiden Werte nicht zu sehen.
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schreibeFort(aktiv(ANNA));
+
+        Spielzeitstand stand = ablage.lies(ANNA, TAG);
+        assertEquals(60L, stand.sekundenHeute());
+        assertEquals(0L, stand.taetigSekundenHeute());
+    }
+
+    @Test
+    @DisplayName("Jeder Spieler bekommt sein eigenes Urteil im selben Takt")
+    void jederSeinUrteil() {
+        messstelle.taetige.add(ANNA);
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        buch.beginne(BERT);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schreibeFort(aktiv(ANNA, BERT));
+
+        assertEquals(60L, ablage.lies(ANNA, TAG).taetigSekundenHeute());
+        assertEquals(0L, ablage.lies(BERT, TAG).taetigSekundenHeute());
+        assertEquals(60L, ablage.lies(BERT, TAG).sekundenHeute(),
+                "Bert war da - nur nicht taetig");
+    }
+
+    @Test
+    @DisplayName("Ein taetiger Takt ueber Mitternacht teilt AUCH die taetige Zeit")
+    void mitternachtTeiltAuchDieTaetigeZeit() {
+        // Der Grund, warum im Zuschlag eine ZAHL steht und kein ja/nein: Ein Schlag ist
+        // ganz taetig oder gar nicht, aber ueber Mitternacht wird er zu zwei Zuschlaegen,
+        // und jeder traegt seinen Anteil. Stuende dort urteil.sekunden(), waere in der
+        // ersten Zeile mehr taetige Zeit als gemessene - und der Zuschlag verweigert das.
+        messstelle.taetige.add(ANNA);
+        uhr.setze(Instant.parse("2026-11-03T22:59:30Z"));
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schreibeFort(aktiv(ANNA));
+
+        Spielzeitstand neuerTag = ablage.lies(ANNA, LocalDate.of(2026, 11, 4));
+        Spielzeitstand alterTag = ablage.lies(ANNA, LocalDate.of(2026, 11, 3));
+        assertEquals(30L, neuerTag.taetigSekundenHeute());
+        assertEquals(30L, alterTag.taetigSekundenHeute());
+        assertEquals(60L, neuerTag.taetigSekundenGesamt(), "verloren geht nichts");
+    }
+
+    @Test
+    @DisplayName("Die Messstelle wird EINMAL je abgerechnetem Schlag gefragt")
+    void einmalJeSchlag() {
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schreibeFort(aktiv(ANNA));
+        buch.schreibeFort(aktiv(ANNA));
+
+        assertEquals(List.of(ANNA, ANNA), messstelle.gefragt,
+                "zweimal gefragt bei zwei Schlaegen - und nicht einmal je Tageshaelfte"
+                        + " oder einmal je Zuschlag");
+    }
+
+    @Test
+    @DisplayName("Auch ein Takt ueber Mitternacht fragt nur EINMAL")
+    void mitternachtFragtNurEinmal() {
+        // Gefragt wird VOR der Teilung. Fragte jede Tageshaelfte, wuerde die Messstelle
+        // mitten im Schlag geleert, und die zweite Haelfte waere nie taetig.
+        messstelle.taetige.add(ANNA);
+        uhr.setze(Instant.parse("2026-11-03T22:59:30Z"));
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schreibeFort(aktiv(ANNA));
+
+        assertEquals(List.of(ANNA), messstelle.gefragt);
+    }
+
+    @Test
+    @DisplayName("Ein VERWORFENER Takt fragt trotzdem - sonst traegt ein Zeichen hinueber")
+    void verworfenerTaktFragtTrotzdem() {
+        // Der Weg um die Untaetigkeitsgrenze herum, wenn hier nicht gefragt wuerde: Ein
+        // Spieler gibt zwei Zeichen, laesst den Takt untaetig verfallen, und im naechsten
+        // Takt zaehlen dieselben Zeichen noch - obwohl der Takt, in dem er sie gab, gar
+        // nicht gezaehlt wurde.
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schreibeFort(Map.of(ANNA, Duration.ofMinutes(12)));
+
+        assertEquals(0L, gesamt(ANNA), "der Takt ist verworfen");
+        assertEquals(List.of(ANNA), messstelle.gefragt,
+                "und die Messstelle ist trotzdem gefragt - ihre Antwort beginnt den"
+                        + " naechsten Schlag");
+    }
+
+    @Test
+    @DisplayName("Ein Takt unter einer Sekunde fragt auch - er rueckt die Marke nicht")
+    void kurzerTaktFragtAuch() {
+        // Hier entsteht gar kein Zuschlag (Tagesgrenze.teile gibt eine leere Liste), und
+        // trotzdem muss der Schlag beginnen - sonst sammelte ein Spieler bei sehr kurzen
+        // Takten Zeichen ueber viele Schlaege hinweg an.
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofMillis(500));
+
+        buch.schreibeFort(aktiv(ANNA));
+
+        assertEquals(0L, gesamt(ANNA));
+        assertEquals(List.of(ANNA), messstelle.gefragt);
+    }
+
+    @Test
+    @DisplayName("Abmelden vergisst den Spieler - NACH seinem letzten Urteil")
+    void abmeldenVergisst() {
+        messstelle.taetige.add(ANNA);
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schliesse(ANNA, Duration.ZERO);
+
+        assertEquals(60L, ablage.lies(ANNA, TAG).taetigSekundenHeute(),
+                "der letzte Schlag bekommt noch sein Urteil");
+        // Die REIHENFOLGE und nicht nur, dass beides geschehen ist: Rutscht das
+        // Vergessen vor das Urteil, verliert jeder Abgang seine letzte Minute taetige
+        // Zeit - und zwar stumm, denn eine Minute faellt niemandem auf.
+        assertEquals(List.of("fragt " + ANNA, "vergisst " + ANNA), messstelle.ablauf,
+                "erst das Urteil, dann das Vergessen");
+    }
+
+    @Test
+    @DisplayName("Das Abschalten vergisst JEDE offene Sitzung")
+    void abschaltenVergisstAlle() {
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        buch.beginne(BERT);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schliesseAlles(aktiv(ANNA, BERT));
+
+        assertEquals(Set.of(ANNA, BERT), new LinkedHashSet<>(messstelle.vergessen));
+        assertEquals(2, messstelle.vergessen.size(), "jeder genau einmal");
+    }
+
+    @Test
+    @DisplayName("Ein Fehlschlag der Ablage nimmt dem Spieler auch seine taetige Zeit mit")
+    void fehlschlagVerliertBeides() {
+        // Keine eigene Zusage, sondern die Folge einer bekannten: Der Stapel wird VOR dem
+        // Schreibzug geleert, damit kein Zuschlag zweimal ankommt. Die Probe steht hier,
+        // damit niemand spaeter glaubt, die taetige Zeit haette einen zweiten Weg.
+        messstelle.taetige.add(ANNA);
+        Spielzeitablage tot = new Spielzeitablage() {
+            @Override
+            public void schreibeFort(List<Zuschlag> zuschlaege) {
+                throw new IllegalStateException("Datenbank weg");
+            }
+
+            @Override
+            public Spielzeitstand lies(UUID spieler, LocalDate heute) {
+                return Spielzeitstand.leer(spieler, heute);
+            }
+        };
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE, tot);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        buch.schreibeFort(aktiv(ANNA));
+
+        assertTrue(buch.gesperrt());
+        assertTrue(buch.wartende(ANNA).isEmpty(),
+                "der Stapel ist geleert, und mit ihm ist die taetige Zeit dieses"
+                        + " Schlages weg - genau wie die gemessene");
+    }
+
+    @Test
+    @DisplayName("Ein Blick in die offene Sitzung LEERT die Messstelle nicht")
+    void nachsehenLeertNicht() {
+        // Die Anzeige fragt offeneSitzung() und wartende(). Leerte einer dieser Wege die
+        // Messstelle, verloere ein Spieler durch das NACHSEHEN seine taetige Zeit - und
+        // zwar genau dann, wenn er nachsieht, ob sie gezaehlt wird. Darum ruft nur
+        // rechneFort in die Quelle hinein.
+        messstelle.taetige.add(ANNA);
+        Spielzeitbuch buch = buch(Zeitwerte.VORGABE);
+        buch.beginne(ANNA);
+        uhr.weiter(Duration.ofSeconds(60));
+
+        Spielzeitregel.Urteil offen = buch.offeneSitzung(ANNA, Duration.ZERO);
+        buch.wartende(ANNA);
+
+        assertEquals(60L, offen.sekunden(), "die offene Spanne ist eine Minute");
+        assertEquals(List.of(), messstelle.gefragt,
+                "und die Messstelle ist dabei NICHT gefragt worden");
+
+        uhr.weiter(Duration.ofSeconds(60));
+        buch.schreibeFort(aktiv(ANNA));
+
+        assertEquals(120L, ablage.lies(ANNA, TAG).taetigSekundenHeute(),
+                "beide Minuten sind taetig - der Blick hat nichts genommen");
     }
 }

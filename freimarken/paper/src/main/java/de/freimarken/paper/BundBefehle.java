@@ -76,6 +76,7 @@ final class BundBefehle {
     private final Betreiberzweig welt;
     private final Betreiberzweig vorgenerieren;
     private final Betreiberzweig neuladen;
+    private final Betreiberzweig messstelle;
     private final Versetzung versetzung;
     private final int von;
     private final int bis;
@@ -91,7 +92,7 @@ final class BundBefehle {
     BundBefehle(Sprache sprache, Stand stand, Wirtschaftsstand wirtschaft,
                 LiteralArgumentBuilder<CommandSourceStack> spielzeit, Betreiberzweig welt,
                 Betreiberzweig vorgenerieren, Betreiberzweig neuladen,
-                Versetzung versetzung, int von, int bis) {
+                Betreiberzweig messstelle, Versetzung versetzung, int von, int bis) {
         this.sprache = sprache;
         this.stand = stand;
         this.wirtschaft = wirtschaft;
@@ -99,6 +100,7 @@ final class BundBefehle {
         this.welt = welt;
         this.vorgenerieren = vorgenerieren;
         this.neuladen = neuladen;
+        this.messstelle = messstelle;
         this.versetzung = versetzung;
         this.von = von;
         this.bis = bis;
@@ -138,6 +140,13 @@ final class BundBefehle {
                 .then(Commands.literal("neuladen")
                         .requires(darfVerwalten())
                         .executes(z -> rufe(z, neuladen)))
+                // Die Messstelle aus Teil G: Sie ZEIGT und greift nicht ein, also ist der
+                // Zweig eine Auskunft wie "welt". Beim Verwalter und nicht bei allen: Er
+                // nennt, was jeder anwesende Spieler gerade tut, und das ist nichts, was
+                // ein Mitspieler lesen soll.
+                .then(Commands.literal("messstelle")
+                        .requires(darfVerwalten())
+                        .executes(z -> rufe(z, messstelle)))
                 .then(Commands.literal("parzelle")
                         .requires(darfVerwalten())
                         // Die Grenzen kommen aus der Stadt, nicht aus einer geratenen

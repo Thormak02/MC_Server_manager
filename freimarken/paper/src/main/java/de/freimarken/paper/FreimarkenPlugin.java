@@ -14,6 +14,7 @@ import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Grenzregel;
 import de.freimarken.kern.Kasse;
+import de.freimarken.kern.Messwerte;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
@@ -137,6 +138,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Berufsverzeichnis berufe;
     /** Zuhoerer UND Zeitgeber der Spielzeit. */
     private Spielzeitwache spielzeitwache;
+
+    /**
+     * Die Messstelle aus Teil G - ein Feld, weil der Bericht sie liest.
+     *
+     * <p>Anders als das {@link Spielzeitbuch}, das eine lokale Variable bleibt: Das Buch
+     * halten die Wache und die Befehle, die Messstelle haelt ausserdem der Zweig
+     * {@code /freimarken messstelle}, und der entsteht erst beim Anmelden der Befehle.
+     */
+    private Messstelle messstelle;
     /**
      * Zuhoerer UND Zeitgeber des Verdienens - der zweite wiederkehrende des Plugins.
      *
@@ -528,10 +538,29 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * dem neuen, ohne dass jemand es abgeraeumt hat.
      */
     private void richteSpielzeitEin() {
-        Spielzeitbuch buch = new Spielzeitbuch(wirtschaft, spielzeit, uhr, getLogger());
+        // Die Messstelle VOR dem Buch: Das Buch haelt sie als seine Taetigkeitsquelle.
+        // Ihre eine Frage ans Spiel ist der Ort eines Spielers; ein abgemeldeter hat
+        // keinen, und ohne Ort zaehlt das Bewegen nicht - die sichere Richtung.
+        messstelle = new Messstelle(wirtschaft, wer -> {
+            Player spieler = getServer().getPlayer(wer);
+            if (spieler == null) {
+                return null;
+            }
+            Location ort = spieler.getLocation();
+            return new Messstelle.Ort(ort.getWorld().getName(), ort.getX(), ort.getY(),
+                    ort.getZ());
+        });
+        getServer().getPluginManager().registerEvents(
+                new Messwache(this, messstelle), this);
+        Spielzeitbuch buch = new Spielzeitbuch(wirtschaft, spielzeit, messstelle, uhr,
+                getLogger());
         spielzeitwache = new Spielzeitwache(this, buch, wirtschaft, getLogger());
         getServer().getPluginManager().registerEvents(spielzeitwache, this);
         spielzeitwache.starte();
+        // Jeder Wert, den dieser Satz verspricht, steht auch darin. Eine halbe Zusage -
+        // "verlangt sind mehrere Arten" ohne die Zahl - liest sich wie eine Angabe und
+        // traegt keine; genau das ist der Lesezeile des Bundesmarktes passiert.
+        getLogger().info(Messliste.startzeile(wirtschaft.werte().messung()));
         // spielzeitBefehle MUSS ein Feld bleiben: registriereBefehle() liest es.
         spielzeitBefehle = new SpielzeitBefehle(buch, spielzeit, wirtschaft, uhr,
                 getLogger(), sprache);
@@ -798,6 +827,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 (empfaenger, wer) -> zeigeWelt(empfaenger),
                 (empfaenger, wer) -> zeigeVorgenerierung(empfaenger),
                 this::neulade,
+                (empfaenger, wer) -> zeigeMessstelle(empfaenger),
                 this::bringeZurParzelle,
                 grenze.von(), grenze.bis());
     }
@@ -913,6 +943,60 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
     /** Wie viele Preisstufen eine Antwort im Klartext nennt. */
     private static final int VIER_STUFEN = 4;
+
+    /**
+     * Was die Messstelle gerade sieht - der Bericht aus Teil G.
+     *
+     * <p>Die Haelfte von Teil G, die "Erkennung" heisst: Die andere Haelfte ist die zweite
+     * Zahl in {@code /playtime}. Hier steht, WARUM sie so aussieht, wie sie aussieht - je
+     * anwesender Spieler die Lebenszeichen des laufenden Taktschlages.
+     *
+     * <p>Diese Zeilen bleiben im PROGRAMM und nicht in der Sprachdatei, wie die anderen
+     * Verwaltungszweige von {@code /freimarken}: Sie gehen an einen Betreiber mit dem
+     * Recht und nie an einen Spieler.
+     *
+     * <p>Das BEWEGEN fehlt in jeder Spielerzeile, und der Satz sagt es: Es entsteht erst
+     * beim Abrechnen des Schlages aus dem Abstand zweier Orte. Eine Zeile, die es stumm
+     * wegliesse, behauptete "dieser Spieler hat sich nicht bewegt" - und das weiss diese
+     * Stelle nicht.
+     */
+    private void zeigeMessstelle(Audience empfaenger) {
+        Messwerte werte = wirtschaft.werte().messung();
+        empfaenger.sendMessage(Component.text("Messstelle: " + werte.verlangteArten()
+                + " von " + werte.arten().size() + " Arten machen einen Taktschlag"
+                + " taetig, Bewegen ab " + werte.mindestStrecke() + " Bloecken.",
+                NamedTextColor.GRAY));
+        empfaenger.sendMessage(Component.text("  Es zaehlen: "
+                + Messliste.nenne(werte.arten()) + ". Gemessen wird neben der"
+                + " Anwesenheit und greift in nichts ein.", NamedTextColor.DARK_GRAY));
+        if (messstelle == null) {
+            // Erreichbar: Der Befehlsbaum steht, bevor richteSpielzeitEin gelaufen ist,
+            // wenn eine eingetragene Datenbank fehlt und der Start abbricht.
+            empfaenger.sendMessage(Component.text("  Die Messstelle laeuft nicht - der"
+                    + " Start ist nicht bis zum Spielzeittakt gekommen.",
+                    NamedTextColor.RED));
+            return;
+        }
+        var anwesende = getServer().getOnlinePlayers();
+        if (anwesende.isEmpty()) {
+            empfaenger.sendMessage(Component.text("  Niemand ist anwesend.",
+                    NamedTextColor.DARK_GRAY));
+            return;
+        }
+        for (Player spieler : anwesende) {
+            var gegeben = messstelle.bericht(spieler.getUniqueId());
+            empfaenger.sendMessage(Component.text("  " + spieler.getName() + ": "
+                    + messstelle.zaehlendeBisher(spieler.getUniqueId()) + " von "
+                    + werte.verlangteArten() + " im laufenden Schlag"
+                    + (gegeben.isEmpty() ? " - noch nichts"
+                            : " - " + Messliste.nenne(gegeben)),
+                    NamedTextColor.DARK_GRAY));
+        }
+        empfaenger.sendMessage(Component.text("  Das Bewegen steht hier nicht: Es"
+                + " entsteht erst beim Abrechnen des Schlages aus dem Abstand zweier"
+                + " Orte, kann also jede dieser Zahlen noch um eins erhoehen.",
+                NamedTextColor.DARK_GRAY));
+    }
 
     /**
      * Was ein Neuladen ausdruecklich NICHT anfasst - mit einem Grund je Gruppe.

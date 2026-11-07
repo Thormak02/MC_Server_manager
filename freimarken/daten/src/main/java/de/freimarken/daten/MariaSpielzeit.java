@@ -19,6 +19,12 @@ import java.util.UUID;
  * oder doppelten Minute nichts. Was sich nicht nachrechnen laesst, muss an einer festen
  * Zusage haengen - und die ist aufschlagen, nie setzen.
  *
+ * <p><b>Zwei Zahlen in einer Zeile</b> [Teil G]: die gemessenen Sekunden und die davon
+ * taetigen. Beide werden im selben Satz aufgeschlagen und in derselben Abfrage gelesen -
+ * die Zusage {@code taetig <= gemessen} aus {@link Spielzeitstand} haelt nur so. Eine
+ * zweite Tabelle oder eine zweite Abfrage waere ein zweiter Augenblick, und zwischen zwei
+ * Augenblicken laeuft ein Takt durch.
+ *
  * <p><b>Geschrieben wird ADDITIV</b>, mit {@code ON DUPLICATE KEY UPDATE sekunden =
  * sekunden + ?}, nie gesetzt und nie lesen-rechnen-schreiben. Zwei Gruende: Nur so fuellen
  * zwei Backend-Server dieselbe Zeile widerspruchsfrei - ein Lesen in Java und
@@ -59,8 +65,10 @@ public final class MariaSpielzeit implements Spielzeitablage {
      * und laeuft auf beiden.
      */
     private static final String FORTSCHREIBEN =
-            "INSERT INTO spielzeit (spieler, tag, sekunden) VALUES (?, ?, ?)"
-                    + " ON DUPLICATE KEY UPDATE sekunden = sekunden + ?";
+            "INSERT INTO spielzeit (spieler, tag, sekunden, taetig_sekunden)"
+                    + " VALUES (?, ?, ?, ?)"
+                    + " ON DUPLICATE KEY UPDATE sekunden = sekunden + ?,"
+                    + " taetig_sekunden = taetig_sekunden + ?";
 
     /**
      * Gesamtzeit und Tageszeit in EINER Abfrage.
@@ -80,7 +88,10 @@ public final class MariaSpielzeit implements Spielzeitablage {
      */
     private static final String LESEN =
             "SELECT COALESCE(SUM(CASE WHEN tag = ? THEN sekunden END), 0) AS heute,"
-                    + " COALESCE(SUM(sekunden), 0) AS gesamt"
+                    + " COALESCE(SUM(sekunden), 0) AS gesamt,"
+                    + " COALESCE(SUM(CASE WHEN tag = ? THEN taetig_sekunden END), 0)"
+                    + " AS taetig_heute,"
+                    + " COALESCE(SUM(taetig_sekunden), 0) AS taetig_gesamt"
                     + " FROM spielzeit WHERE spieler = ?";
 
     private final Datenbank datenbank;
@@ -126,7 +137,13 @@ public final class MariaSpielzeit implements Spielzeitablage {
                         // LocalDateTime statt Timestamp in MariaLager.
                         anfrage.setObject(2, zuschlag.tag());
                         anfrage.setLong(3, zuschlag.sekunden());
-                        anfrage.setLong(4, zuschlag.sekunden());
+                        anfrage.setLong(4, zuschlag.taetigSekunden());
+                        // Beide Zahlen ein zweites Mal - Platzhalter 3 und 4 fuer eine neue
+                        // Zeile, 5 und 6 fuer den Aufschlag auf eine vorhandene. Die
+                        // Begruendung steht am Satz: VALUES() ist in MySQL 8 abgekuendigt
+                        // und die ersetzende Zeilen-Benennung kennt MariaDB nicht.
+                        anfrage.setLong(5, zuschlag.sekunden());
+                        anfrage.setLong(6, zuschlag.taetigSekunden());
                         // Ein Stapel und eine Anweisung: Kommt derselbe Spieler und Tag
                         // zweimal in der Liste vor - ein Takt ueber Mitternacht mit dem
                         // Nachtrag eines abgemeldeten Spielers -, addiert das zweite
@@ -171,7 +188,11 @@ public final class MariaSpielzeit implements Spielzeitablage {
         }
         try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(LESEN)) {
             anfrage.setObject(1, heute);
-            anfrage.setString(2, spieler.toString());
+            // Der Tag ZWEIMAL, fuer die zwei CASE-Zweige. Nicht ein Platzhalter fuer beide:
+            // JDBC bindet je Vorkommen einmal, und ein benannter Parameter waere eine
+            // Treibereigenheit in einer Klasse, die ohne sie auskommt.
+            anfrage.setObject(2, heute);
+            anfrage.setString(3, spieler.toString());
             try (ResultSet ergebnis = anfrage.executeQuery()) {
                 // Eine Aufsummierung ohne GROUP BY liefert immer genau eine Zeile, auch
                 // ohne einen einzigen Treffer. Der unbekannte Spieler braucht deshalb
@@ -179,7 +200,9 @@ public final class MariaSpielzeit implements Spielzeitablage {
                 // derselbe Wert, den Spielzeitstand.leer liefert. Jeder faengt bei 0 an.
                 ergebnis.next();
                 return new Spielzeitstand(spieler, heute,
-                        ergebnis.getLong("gesamt"), ergebnis.getLong("heute"));
+                        ergebnis.getLong("gesamt"), ergebnis.getLong("heute"),
+                        ergebnis.getLong("taetig_gesamt"),
+                        ergebnis.getLong("taetig_heute"));
             }
         } catch (SQLException fehler) {
             throw new IllegalStateException("Spielzeit nicht lesbar: " + spieler, fehler);

@@ -384,7 +384,7 @@ class GrenzeTest {
             // die Zahl faellt.
             Map.entry("BerufeBefehle.java", 1),
             Map.entry("BundBefehle.java", 2),
-            Map.entry("FreimarkenPlugin.java", 33),
+            Map.entry("FreimarkenPlugin.java", 39),
             // ZWEI: die Zeile fuer die Konsole (sie hat keine Hand und steht in keiner
             // Welt) und der eine Sendeweg fuer alle Spielerzeilen. Eine Zahl weniger
             // hiesse, dass ein Zweig von /markt stumm bleibt; eine mehr, dass neben
@@ -540,7 +540,7 @@ class GrenzeTest {
             // Frist in der Warnung und die Restfrist in der Absage. Dieselbe Rechnung
             // und nicht eine eigene - sonst liest ein Spieler an einer Stelle
             // "2 h 05 min" und an der anderen "2 Stunden" fuer dieselbe Frist.
-            Map.entry("dauer", 6),
+            Map.entry("dauer", 8),
             Map.entry("genaueDauer", 2),
             Map.entry("hinweisZeile", 1),
             Map.entry("kopfFuer", 1),

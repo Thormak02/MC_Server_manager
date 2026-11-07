@@ -89,7 +89,7 @@ class SpielzeittextTest {
     void laufendeSitzungKommtDazu() {
         // lies() kennt nur, was geschrieben ist. Ohne diese Rechnung laese ein Spieler,
         // der gerade beigetreten ist, eine 0 neben "wird gezaehlt" - und meldete das.
-        var stand = new Spielzeitstand(ANNA, HEUTE, 3600L, 120L);
+        var stand = new Spielzeitstand(ANNA, HEUTE, 3600L, 120L, 0L, 0L);
         var offen = gezaehlt(Instant.parse("2026-11-03T12:00:00Z"), Duration.ofMinutes(5));
 
         List<Component> zeilen = Spielzeittext.werte(sprache, stand, offen, NICHTS_WARTET,
@@ -110,13 +110,13 @@ class SpielzeittextTest {
         // stehen nur noch nicht in der Ablage. Fehlten sie in der Anzeige, laese der
         // Spieler mitten im Ausfall eine um bis zu fuenf Taktlaengen zu kleine Zahl und
         // meldete einen Verlust, den es nicht gibt.
-        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L);
+        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L, 0L, 0L);
         var offen = gezaehlt(Instant.parse("2026-11-03T12:00:00Z"), Duration.ofSeconds(30));
         // Zwei Schlaege von je einer Minute warten, einer davon vom VORTAG - er zaehlt
         // darum zu "gesamt" und nicht zu "heute".
         List<Spielzeitablage.Zuschlag> wartend = List.of(
-                new Spielzeitablage.Zuschlag(ANNA, HEUTE, 60L),
-                new Spielzeitablage.Zuschlag(ANNA, HEUTE.minusDays(1), 60L));
+                Spielzeitablage.Zuschlag.nurAnwesend(ANNA, HEUTE, 60L),
+                Spielzeitablage.Zuschlag.nurAnwesend(ANNA, HEUTE.minusDays(1), 60L));
 
         List<Component> zeilen = Spielzeittext.werte(sprache, stand, offen, wartend,
                 NICHT_GESPERRT, Duration.ZERO, Zeitwerte.VORGABE);
@@ -126,9 +126,40 @@ class SpielzeittextTest {
                         + text(zeilen, 0));
         assertTrue(text(zeilen, 1).contains("12 min"),
                 "gesamt zaehlt auch die wartende Minute des Vortags: " + text(zeilen, 1));
-        assertTrue(text(zeilen, 2).contains("2 min"),
+        assertTrue(text(zeilen, 3).contains("2 min"),
                 "ungeschrieben sind beide wartenden Minuten und die offenen 30 s, nicht"
-                        + " nur der letzte Takt: " + text(zeilen, 2));
+                        + " nur der letzte Takt: " + text(zeilen, 3));
+    }
+
+    @Test
+    @DisplayName("Auch die WARTENDE taetige Zeit steht in der Anzeige")
+    void wartendeTaetigeZeitKommtDazu() {
+        // Dieselbe Begruendung wie fuer die gemessene Zeit: lies() kennt nur das
+        // Geschriebene, und hinter der Sperre liegen bis zu fuenf Taktlaengen im Stapel.
+        // Fehlte die taetige Zeit darin, laese der Spieler mitten im Ausfall eine zu
+        // kleine Zahl - und zwar nur bei DIESER einen der drei Dauern.
+        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L, 300L, 300L);
+        var offen = gezaehlt(Instant.parse("2026-11-03T12:00:00Z"), Duration.ZERO);
+        // Zwei wartende Minuten, beide taetig - eine von heute, eine vom Vortag.
+        List<Spielzeitablage.Zuschlag> wartend = List.of(
+                Spielzeitablage.Zuschlag.ganzTaetig(ANNA, HEUTE, 60L),
+                Spielzeitablage.Zuschlag.ganzTaetig(ANNA, HEUTE.minusDays(1), 60L));
+
+        List<Component> zeilen = Spielzeittext.werte(sprache, stand, offen, wartend,
+                NICHT_GESPERRT, Duration.ZERO, Zeitwerte.VORGABE);
+
+        // 300 + 60 + 60 = 420 s = 7 min taetig insgesamt, davon 300 + 60 = 6 min heute.
+        assertTrue(text(zeilen, 2).contains("7 min"),
+                "die wartende Minute des Vortags zaehlt zur Gesamtzeit: "
+                        + text(zeilen, 2));
+        assertTrue(text(zeilen, 2).contains("6 min"),
+                "und nur die heutige zu heute: " + text(zeilen, 2));
+        // Und der Anteil steht auf DERSELBEN Grundlage wie die Dauern darueber:
+        // 720 s gemessen, 420 s taetig - das sind 58 Prozent.
+        assertTrue(text(zeilen, 2).contains("58"),
+                "der Anteil muss aus den ANGEZEIGTEN Zahlen kommen und nicht aus dem"
+                        + " Stand allein, sonst widersprechen sich zwei Zahlen einer"
+                        + " Zeile: " + text(zeilen, 2));
     }
 
     @Test
@@ -139,15 +170,15 @@ class SpielzeittextTest {
         // angezeigte MENGE ist dabei richtig - der wartende Stapel steht darin -, aber
         // "das geschieht alle 60 s" ist um das Mehrfache falsch, und zwar vorgelesen
         // genau dem Spieler, der nachsieht, ob seine Zeit gesichert wird.
-        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L);
+        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L, 0L, 0L);
         var offen = gezaehlt(Instant.parse("2026-11-03T12:00:00Z"), Duration.ZERO);
         List<Spielzeitablage.Zuschlag> wartend = List.of(
-                new Spielzeitablage.Zuschlag(ANNA, HEUTE, 60L));
+                Spielzeitablage.Zuschlag.nurAnwesend(ANNA, HEUTE, 60L));
         String abstand = Spielzeittext.taktAbstand(sprache,
                 Zeitwerte.VORGABE.taktSekunden());
 
         String gesperrt = text(Spielzeittext.werte(sprache, stand, offen, wartend, GESPERRT,
-                Duration.ZERO, Zeitwerte.VORGABE), 2);
+                Duration.ZERO, Zeitwerte.VORGABE), 3);
 
         assertTrue(gesperrt.endsWith(Spielzeittext.schreibzugWartet(sprache)),
                 "die Zeile muss den Zustand nennen: " + gesperrt);
@@ -162,7 +193,7 @@ class SpielzeittextTest {
         // nirgends mehr steht: Ohne Sperre liest der Spieler genau daran ab, wann seine
         // Zeit gesichert ist.
         String offenGeschrieben = text(Spielzeittext.werte(sprache, stand, offen, wartend,
-                NICHT_GESPERRT, Duration.ZERO, Zeitwerte.VORGABE), 2);
+                NICHT_GESPERRT, Duration.ZERO, Zeitwerte.VORGABE), 3);
 
         assertTrue(offenGeschrieben.contains(abstand), offenGeschrieben);
     }
@@ -172,7 +203,7 @@ class SpielzeittextTest {
     void mitternachtTeiltAuchDieAnzeige() {
         // 23:00 UTC ist in Europe/Berlin Mitternacht. Die halbe Minute davor gehoert dem
         // Vortag und darf nicht in der Zeile "heute" stehen.
-        var stand = new Spielzeitstand(ANNA, LocalDate.of(2026, 11, 4), 600L, 0L);
+        var stand = new Spielzeitstand(ANNA, LocalDate.of(2026, 11, 4), 600L, 0L, 0L, 0L);
         var offen = gezaehlt(Instant.parse("2026-11-03T22:59:30Z"), Duration.ofSeconds(60));
 
         List<Component> zeilen = Spielzeittext.werte(sprache, stand, offen, NICHTS_WARTET,
@@ -188,23 +219,23 @@ class SpielzeittextTest {
     @Test
     @DisplayName("Die Zeile sagt, wenn gerade nicht gezaehlt wird - und bis wohin gezaehlt wird")
     void untaetigStehtDa() {
-        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L);
+        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L, 0L, 0L);
         var offen = verworfen(Instant.parse("2026-11-03T12:00:00Z"));
 
         List<Component> zeilen = Spielzeittext.werte(sprache, stand, offen, NICHTS_WARTET,
                 NICHT_GESPERRT, Duration.ofMinutes(12), Zeitwerte.VORGABE);
 
-        assertTrue(text(zeilen, 2).contains("NICHT gezaehlt"), text(zeilen, 2));
-        assertTrue(text(zeilen, 2).contains("12 min"),
-                "wie lange schon: " + text(zeilen, 2));
-        assertTrue(text(zeilen, 2).contains("10 min"),
-                "und bis wohin gezaehlt wird: " + text(zeilen, 2));
+        assertTrue(text(zeilen, 3).contains("NICHT gezaehlt"), text(zeilen, 3));
+        assertTrue(text(zeilen, 3).contains("12 min"),
+                "wie lange schon: " + text(zeilen, 3));
+        assertTrue(text(zeilen, 3).contains("10 min"),
+                "und bis wohin gezaehlt wird: " + text(zeilen, 3));
     }
 
     @Test
     @DisplayName("Ist die Untaetigkeitsregel aus, sagt die Anzeige das")
     void ausgeschalteteRegelStehtDa() {
-        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L);
+        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L, 0L, 0L);
         var offen = gezaehlt(Instant.parse("2026-11-03T12:00:00Z"), Duration.ofSeconds(30));
         Zeitwerte aus = new Zeitwerte(Zeitwerte.VORGABE_ZONE, Duration.ofSeconds(60),
                 Duration.ZERO);
@@ -212,11 +243,11 @@ class SpielzeittextTest {
         List<Component> zeilen = Spielzeittext.werte(sprache, stand, offen, NICHTS_WARTET,
                 NICHT_GESPERRT, Duration.ofHours(3), aus);
 
-        assertTrue(text(zeilen, 2).contains("zaehlt auf diesem Server mit"),
+        assertTrue(text(zeilen, 3).contains("zaehlt auf diesem Server mit"),
                 "sonst wundert sich jemand, warum drei Stunden Abwesenheit zaehlen: "
-                        + text(zeilen, 2));
-        assertTrue(text(zeilen, 2).contains(Zeitwerte.PFAD_UNTAETIG),
-                "und wo das steht: " + text(zeilen, 2));
+                        + text(zeilen, 3));
+        assertTrue(text(zeilen, 3).contains(Zeitwerte.PFAD_UNTAETIG),
+                "und wo das steht: " + text(zeilen, 3));
     }
 
     @Test
@@ -224,7 +255,7 @@ class SpielzeittextTest {
     void heuteNenntTagUndZone() {
         // Bei einer Tagesgrenze, die nicht UTC ist, ist genau das die Frage, um die es
         // geht: welcher Tag ist mit "heute" gemeint.
-        var stand = new Spielzeitstand(ANNA, HEUTE, 0L, 0L);
+        var stand = new Spielzeitstand(ANNA, HEUTE, 0L, 0L, 0L, 0L);
         var offen = gezaehlt(Instant.parse("2026-11-03T12:00:00Z"), Duration.ZERO);
 
         String zeile = text(Spielzeittext.werte(sprache, stand, offen, NICHTS_WARTET,
@@ -241,19 +272,20 @@ class SpielzeittextTest {
         // Solange der Befehl den Satz einzeln sendete, blieb diese Probe gruen, wenn jemand
         // die eine Sendezeile verlor - und genau dann sieht ein Spieler mit 200 Stunden auf
         // dem Server eine kleine Zahl ohne Erklaerung und meldet einen Fehler.
-        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L);
+        var stand = new Spielzeitstand(ANNA, HEUTE, 600L, 600L, 0L, 0L);
         var offen = gezaehlt(Instant.parse("2026-11-03T12:00:00Z"), Duration.ofSeconds(30));
 
         List<Component> zeilen = Spielzeittext.werte(sprache, stand, offen, NICHTS_WARTET,
                 NICHT_GESPERRT, Duration.ZERO, Zeitwerte.VORGABE);
 
-        assertEquals(4, zeilen.size(), "heute, gesamt, Zustand und der Hinweis: "
-                + Sprachprobe.bild(zeilen));
+        assertEquals(5, zeilen.size(),
+                "heute, gesamt, davon taetig, Zustand und der Hinweis: "
+                        + Sprachprobe.bild(zeilen));
         // Gegen den SATZ und nicht gegen einen abgeschriebenen Wortlaut: Der Anker fuer das
         // Bild ist die festgenagelte Tafel in SpielzeitBefehleTest, hier wird zugesichert,
         // dass genau DIESER Satz die letzte Zeile ist.
         assertEquals(Sprachprobe.bild(Spielzeittext.hinweisZeile(sprache)),
-                Sprachprobe.bild(zeilen.get(3)),
+                Sprachprobe.bild(zeilen.get(4)),
                 "der Hinweis ist die letzte Zeile der Anzeige: "
                         + Sprachprobe.bild(zeilen));
     }

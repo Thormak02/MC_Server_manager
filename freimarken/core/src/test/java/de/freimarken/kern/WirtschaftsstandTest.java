@@ -7,6 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -48,7 +51,7 @@ class WirtschaftsstandTest {
         // Alle anderen Proben nehmen die Abwandler und nennen nur ihren Unterschied.
         return new Wirtschaftswerte(new Preisstaffel(grundpreis, jeFeld), startguthaben,
                 hoechstzahl, gruppenFelder, werbung, zeit, berufe, verdienst,
-                Marktwerte.VORGABE);
+                Marktwerte.VORGABE, Messwerte.VORGABE);
     }
 
     /**
@@ -477,5 +480,80 @@ class WirtschaftsstandTest {
     void zeitIstPflicht() {
         assertThrows(IllegalArgumentException.class,
                 () -> satz(25_000L, 10_000L, 50_000L, 4, 4, "", null));
+    }
+
+    @Test
+    @DisplayName("Ein Stand ohne Messwerte kommt nicht zustande")
+    void messungIstPflicht() {
+        assertThrows(IllegalArgumentException.class,
+                () -> Wirtschaftswerte.VORGABE.mitMessung(null));
+    }
+
+    @Test
+    @DisplayName("Das Neuladen nennt JEDE geaenderte Zeile der Messstelle")
+    void neuladenNenntDieMessstelle() {
+        // Geprueft wird der TEXT jeder erwarteten Zeile und nicht ihre Zahl: Eine
+        // Zaehltafel laesst sich hochdrehen und wird blind, sobald ein Teil dazukommt.
+        // Wer eine Messzeile verstellt, ohne eine Zeile darueber zu lesen, dreht beim
+        // naechsten Mal weiter, obwohl sie schon gilt.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        Set<Lebenszeichen> andere = new LinkedHashSet<>(List.of(Lebenszeichen.ABBAUEN,
+                Lebenszeichen.BEWEGEN, Lebenszeichen.BENUTZEN));
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitMessung(
+                new Messwerte(1, 40, andere)));
+
+        assertTrue(uebernahme.geaendert().contains(
+                        Messwerte.PFAD_VERLANGTE_ARTEN + ": 2 -> 1"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(Messwerte.PFAD_STRECKE + ": 8 -> 40"),
+                uebernahme.geaendert().toString());
+        // Die Liste mit "dazu:" und "weg:", nicht nur ihre Laenge.
+        assertTrue(uebernahme.geaendert().stream().anyMatch(zeile
+                        -> zeile.startsWith(Messwerte.PFAD_ARTEN + ":")
+                        && zeile.contains("dazu: benutzen")
+                        && zeile.contains("weg: ")),
+                "die Artenliste muss mit dem Unterschied genannt werden: "
+                        + uebernahme.geaendert());
+        assertEquals(1, stand.werte().messung().verlangteArten());
+        assertEquals(40, stand.werte().messung().mindestStrecke());
+        assertEquals(andere, stand.werte().messung().arten());
+    }
+
+    @Test
+    @DisplayName("Eine getauschte Art bei GLEICHER Laenge wird auch genannt")
+    void getauschteArtWirdGenannt() {
+        // Der Fall, den eine Zaehlung nie sieht: sechs Arten vorher, sechs nachher - und
+        // eine andere Messung. Wer kaempfen gegen benutzen tauscht, macht ein Setzmakro
+        // taetig, und das darf nicht stumm geschehen.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        Set<Lebenszeichen> getauscht = new LinkedHashSet<>(Messwerte.VORGABE_ARTEN);
+        getauscht.remove(Lebenszeichen.KAEMPFEN);
+        getauscht.add(Lebenszeichen.BENUTZEN);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitMessung(
+                Messwerte.VORGABE.mitArten(getauscht, 2)));
+
+        assertEquals(Messwerte.VORGABE_ARTEN.size(), getauscht.size(),
+                "die Laengen muessen GLEICH sein, sonst prueft diese Probe die Zaehlung");
+        assertTrue(uebernahme.geaendert().stream().anyMatch(zeile
+                        -> zeile.startsWith(Messwerte.PFAD_ARTEN + ":")
+                        && zeile.contains("dazu: benutzen")
+                        && zeile.contains("weg: kaempfen")),
+                uebernahme.geaendert().toString());
+    }
+
+    @Test
+    @DisplayName("Eine unveraenderte Messstelle steht NICHT in der Meldung")
+    void unveraendertSchweigt() {
+        // Die Gegenprobe: Waere die Zeile immer da, sagte sie nichts. Eine Meldung, in
+        // der jede Zeile steht, liest niemand mehr.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE);
+
+        assertTrue(uebernahme.geaendert().stream().noneMatch(zeile
+                        -> zeile.startsWith("messstelle.")),
+                uebernahme.geaendert().toString());
     }
 }

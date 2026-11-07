@@ -142,6 +142,13 @@ final class Wirtschaftsliste {
         Marktliste.Ergebnis markt = Marktliste.ausKonfiguration(wurzel);
         klagen.addAll(markt.klagen());
         bericht.addAll(markt.bericht());
+        // Die Messstelle braucht es ebenso nicht: Sie zaehlt Lebenszeichen und fragt
+        // weder nach einem Beruf noch nach einem Lohn. Dass sie trotzdem einen eigenen
+        // Leser hat, liegt an ihrem Wertepaar - die verlangte Artenzahl wird gegen die
+        // Laenge der Artenliste geprueft.
+        Messliste.Ergebnis messung = Messliste.ausKonfiguration(wurzel);
+        klagen.addAll(messung.klagen());
+        bericht.addAll(messung.bericht());
 
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
@@ -173,7 +180,7 @@ final class Wirtschaftsliste {
         // Datei, waehrend eine andere darunter sagt, dass die alte weiter gilt.
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
                 gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
-                markt.werte()), klagen, bericht);
+                markt.werte(), messung.werte()), klagen, bericht);
     }
 
     /**

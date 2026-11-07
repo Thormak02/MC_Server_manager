@@ -435,6 +435,17 @@ class BildGleichTest {
                         Einsatz.von("dauer", sprache.wort(SpielzeitSatz.DAUER_MINUTEN,
                                 Einsatz.von("minuten", "10"))),
                         "&7  gesamt  10 min"),
+                // Die Spalte: "taetig" ist wie "gesamt" sechs Zeichen lang, also ZWEI
+                // Leerzeichen - die Dauer beginnt in allen drei Zeilen in Spalte 11.
+                // Genau das haelt diese Zeile fest; eine Zaehlung der Zeilen wuerde ein
+                // verrutschtes Leerzeichen nie sehen.
+                new Zeile(SpielzeitSatz.TAETIG, 1L,
+                        Einsatz.von("dauer", sprache.wort(SpielzeitSatz.DAUER_MINUTEN,
+                                Einsatz.von("minuten", "6")))
+                        .mit("heute", sprache.wort(SpielzeitSatz.DAUER_MINUTEN,
+                                Einsatz.von("minuten", "4")))
+                        .mit("prozent", "60"),
+                        "&7  taetig  6 min   (4 min heute, 60 % der Zeit)"),
                 new Zeile(SpielzeitSatz.ZUSTAND_UNTAETIG, 1L,
                         Einsatz.von("dauer", sprache.wort(SpielzeitSatz.DAUER_MINUTEN,
                                 Einsatz.von("minuten", "12")))

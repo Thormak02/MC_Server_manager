@@ -31,6 +31,13 @@ import java.util.UUID;
  *       Schnittstelle, waere gegen den laufenden Takt rennbar und haette keinen Zeugen: Anders
  *       als beim Geld, wo die Summe aller Buchungen den Stand ergeben muss, widerspricht einer
  *       verfaelschten Spielzeit nichts.</li>
+ *   <li><b>Die taetige Zeit ist eine ZWEITE Zahl in derselben Zeile.</b> Jeder Zuschlag
+ *       nennt neben den gemessenen Sekunden, wie viele davon taetig waren, und beide werden
+ *       im selben Zug aufgeschlagen. Keine zweite Tabelle und kein zweiter Schreibweg: Die
+ *       Zusage {@code taetig <= gesamt} muss in EINER Zeile stehen, sonst haelt sie kein
+ *       Zurueckrollen zusammen - und Plan 8.8 verbietet einen zweiten Schreibweg fuer
+ *       Spielzeit ausdruecklich. Was "taetig" heisst, entscheidet
+ *       {@link Messregel#taetig} und nicht die Ablage.</li>
  *   <li><b>Die Ablage entscheidet nie, was "heute" ist.</b> {@link #lies} bekommt den Tag von
  *       aussen. Sonst braeuchte sie eine zweite Zone oder ein {@code CURDATE()} - und dann
  *       waere die eingestellte Tagesgrenze stumm wirkungslos, weil die Datenbanksitzung auf
@@ -50,11 +57,17 @@ public interface Spielzeitablage {
      * <p>Der Tag ist Pflicht und kommt aus {@link Tagesgrenze#tagVon} - nie aus der
      * Datenbank und nie aus der Systemzone.
      *
-     * @param spieler  wessen Zeit
-     * @param tag      der Tag in der eingestellten Zone
-     * @param sekunden volle Sekunden, nie negativ; 0 ist erlaubt und aendert nichts
+     * @param spieler        wessen Zeit
+     * @param tag            der Tag in der eingestellten Zone
+     * @param sekunden       volle Sekunden, nie negativ; 0 ist erlaubt und aendert nichts
+     * @param taetigSekunden wie viele dieser Sekunden taetig waren - nie negativ und nie
+     *                       mehr als {@code sekunden}. Ein Taktschlag ist ganz taetig oder
+     *                       gar nicht ({@link Messregel#taetig}); dass hier trotzdem eine
+     *                       eigene Zahl steht und kein ja/nein, liegt an Mitternacht: Ein
+     *                       geteilter Takt wird zu zwei Zuschlaegen, und jeder traegt seinen
+     *                       ANTEIL
      */
-    record Zuschlag(UUID spieler, LocalDate tag, long sekunden) {
+    record Zuschlag(UUID spieler, LocalDate tag, long sekunden, long taetigSekunden) {
 
         public Zuschlag {
             if (spieler == null) {
@@ -70,6 +83,35 @@ public interface Spielzeitablage {
                 throw new IllegalArgumentException("Ein negativer Zuschlag waere ein Abzug,"
                         + " und den gibt es nicht: " + sekunden);
             }
+            if (taetigSekunden < 0) {
+                throw new IllegalArgumentException("Negative taetige Zeit waere ein Abzug,"
+                        + " und den gibt es nicht: " + taetigSekunden);
+            }
+            // Die Zusage, auf die sich jede Anzeige und jede kuenftige Rangschwelle
+            // verlaesst. Hier und nicht in der Ablage: Ein Satz, der sie bricht, soll an
+            // seiner Quelle auffallen und nicht erst, wenn die Summe aus vielen Zeilen
+            // schon in der Datenbank steht - dort ist sie nicht mehr zurueckzurechnen.
+            if (taetigSekunden > sekunden) {
+                throw new IllegalArgumentException("Taetig kann nicht mehr sein als"
+                        + " gemessen: " + taetigSekunden + " > " + sekunden);
+            }
+        }
+
+        /**
+         * Ein Zuschlag, von dem nichts taetig war.
+         *
+         * <p>Ein NAME und kein zweiter Konstruktor mit drei Argumenten: Ein Aufruf, der
+         * aussieht wie der alte und stumm eine 0 einsetzt, ist genau die Falle, die beim
+         * Wachsen dieses Satzes entsteht. So steht an jeder Stelle, die keine taetige Zeit
+         * meint, dass sie keine meint.
+         */
+        public static Zuschlag nurAnwesend(UUID spieler, LocalDate tag, long sekunden) {
+            return new Zuschlag(spieler, tag, sekunden, 0L);
+        }
+
+        /** Ein Zuschlag, dessen ganze Zeit taetig war - das Gegenstueck. */
+        public static Zuschlag ganzTaetig(UUID spieler, LocalDate tag, long sekunden) {
+            return new Zuschlag(spieler, tag, sekunden, sekunden);
         }
     }
 

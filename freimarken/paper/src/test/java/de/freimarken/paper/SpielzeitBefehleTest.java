@@ -145,7 +145,12 @@ class SpielzeitBefehleTest {
     }
 
     private Spielzeitbuch buch(Spielzeitablage ablage) {
-        return new Spielzeitbuch(stand(), ablage, uhr, protokoll);
+        return new Spielzeitbuch(stand(), ablage,
+                // KEINE Messstelle: Diese Proben halten das BILD der Anzeige fest. Dass
+                // die taetige Zeile ihre Zahlen aus der Ablage nimmt, prueft
+                // SpielzeittextTest; eine Quelle, die hier taetig meldete, machte die
+                // Bildtafeln von Teil G abhaengig, ohne eine Zusage von Teil G zu pruefen.
+                Spielzeitbuch.Taetigkeitsquelle.KEINE, uhr, protokoll);
     }
 
     private SpielzeitBefehle befehle(Spielzeitablage ablage, Spielzeitbuch buch) {
@@ -181,20 +186,21 @@ class SpielzeitBefehleTest {
     }
 
     @Test
-    @DisplayName("Sonst sind es die vier Zeilen der Anzeige")
-    void dieVierZeilenKommenAusDemText() {
+    @DisplayName("Sonst sind es die fuenf Zeilen der Anzeige")
+    void dieFuenfZeilenKommenAusDemText() {
         SpeicherSpielzeit ablage = new SpeicherSpielzeit();
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(ANNA, HEUTE, 600L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(ANNA, HEUTE, 600L)));
         SpielzeitBefehle befehle = befehle(ablage, buch(ablage));
 
         List<Component> zeilen = zeilen(befehle);
 
-        assertEquals(4, zeilen.size(), "heute, gesamt, Zustand und der Hinweis: "
-                + Sprachprobe.bild(zeilen));
+        assertEquals(5, zeilen.size(),
+                "heute, gesamt, davon taetig, Zustand und der Hinweis: "
+                        + Sprachprobe.bild(zeilen));
         assertTrue(text(zeilen, 0).contains("10 min"),
                 "die geschriebenen zehn Minuten: " + text(zeilen, 0));
         assertEquals(Sprachprobe.bild(Spielzeittext.hinweisZeile(sprache)),
-                Sprachprobe.bild(zeilen.get(3)),
+                Sprachprobe.bild(zeilen.get(4)),
                 "auch der Hinweis kommt aus der Anzeige und nicht aus dem Befehl: "
                         + Sprachprobe.bild(zeilen));
     }
@@ -213,14 +219,14 @@ class SpielzeitBefehleTest {
         assertTrue(text(zeilen, 0).contains("2 min"),
                 "die wartende und die offene Minute sind gemessen und gehoeren beide in"
                         + " die Anzeige: " + text(zeilen, 0));
-        assertTrue(text(zeilen, 2).contains("2 min"),
+        assertTrue(text(zeilen, 3).contains("2 min"),
                 "und zusammen sind sie genau das, was noch nicht geschrieben ist: "
-                        + text(zeilen, 2));
+                        + text(zeilen, 3));
         // Und der Befehl muss die SPERRE durchreichen, nicht nur den Stapel: Sonst waere
         // die Menge richtig und der genannte Abstand falsch - "das geschieht alle 60 s",
         // waehrend der naechste Schreibzug noch Taktlaengen entfernt ist.
-        assertTrue(text(zeilen, 2).endsWith(Spielzeittext.schreibzugWartet(sprache)),
-                "die Zeile muss den Zustand des Buchs nennen: " + text(zeilen, 2));
+        assertTrue(text(zeilen, 3).endsWith(Spielzeittext.schreibzugWartet(sprache)),
+                "die Zeile muss den Zustand des Buchs nennen: " + text(zeilen, 3));
     }
 
     /**
@@ -265,10 +271,10 @@ class SpielzeitBefehleTest {
 
         List<Component> zeilen = befehle.zeilen(ANNA, untaetig, HEUTE, Zeitwerte.VORGABE);
 
-        assertTrue(text(zeilen, 2).contains("NICHT gezaehlt"),
-                "die Zustandszeile muss den untaetigen Zustand nennen: " + text(zeilen, 2));
-        assertTrue(text(zeilen, 2).contains("12 min"),
-                "und sagen, seit wann er steht: " + text(zeilen, 2));
+        assertTrue(text(zeilen, 3).contains("NICHT gezaehlt"),
+                "die Zustandszeile muss den untaetigen Zustand nennen: " + text(zeilen, 3));
+        assertTrue(text(zeilen, 3).contains("12 min"),
+                "und sagen, seit wann er steht: " + text(zeilen, 3));
         assertTrue(text(zeilen, 0).contains("10 min"),
                 "die untaetige Spanne darf NICHT in die Zahl des Tages wandern - gezaehlt"
                         + " ist nur, was geschrieben ist: " + text(zeilen, 0));
@@ -277,7 +283,7 @@ class SpielzeitBefehleTest {
     /** Ein Spieler mit zehn geschriebenen Minuten, der seit der genannten Spanne steht. */
     private SpielzeitBefehle untaetigSeit(Duration untaetig) {
         SpeicherSpielzeit ablage = new SpeicherSpielzeit();
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(ANNA, HEUTE, 600L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(ANNA, HEUTE, 600L)));
         Spielzeitbuch buch = buch(ablage);
         SpielzeitBefehle befehle = befehle(ablage, buch);
         buch.beginne(ANNA);
@@ -350,7 +356,7 @@ class SpielzeitBefehleTest {
     /** Zehn geschriebene Minuten, nichts offen - der Normalfall der Anzeige. */
     private SpielzeitBefehle zehnMinutenGeschrieben() {
         SpeicherSpielzeit ablage = new SpeicherSpielzeit();
-        ablage.schreibeFort(List.of(new Spielzeitablage.Zuschlag(ANNA, HEUTE, 600L)));
+        ablage.schreibeFort(List.of(Spielzeitablage.Zuschlag.nurAnwesend(ANNA, HEUTE, 600L)));
         return befehle(ablage, buch(ablage));
     }
 
@@ -370,6 +376,7 @@ class SpielzeitBefehleTest {
                 &6Deine Spielzeit
                 &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
                 &7  gesamt  10 min
+                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
                 &7  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s.
                 &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
                 gesendetesBild(Spielzeittext.kopfSelbst(sprache), zeilen(befehle)));
@@ -384,6 +391,7 @@ class SpielzeitBefehleTest {
                 &6Spielzeit von Anna
                 &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
                 &7  gesamt  10 min
+                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
                 &7  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s.
                 &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
                 gesendetesBild(Spielzeittext.kopfFuer(sprache, "Anna"), zeilen(befehle)));
@@ -413,6 +421,7 @@ class SpielzeitBefehleTest {
                 &6Deine Spielzeit
                 &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
                 &7  gesamt  10 min
+                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
                 &7  wird gerade NICHT gezaehlt - untaetig seit 12 min, gezaehlt wird bis 10 min. Ein Schritt oder ein Tastendruck zaehlt wieder.
                 &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""", gesendetesBild(Spielzeittext.kopfSelbst(sprache),
                 befehle.zeilen(ANNA, untaetig, HEUTE, Zeitwerte.VORGABE)));
@@ -427,6 +436,7 @@ class SpielzeitBefehleTest {
                 &6Deine Spielzeit
                 &7  heute   2 min   (03.11.2026, Tagesgrenze Europe/Berlin)
                 &7  gesamt  2 min
+                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
                 &7  wird gezaehlt - die letzten 2 min sind noch nicht geschrieben, der naechste Schreibzug wartet auf die Datenbank - gezaehlt wird weiter, nachgeschrieben wird alles.
                 &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
                 gesendetesBild(Spielzeittext.kopfSelbst(sprache), zeilen(befehle)));
@@ -445,6 +455,7 @@ class SpielzeitBefehleTest {
                 &6Deine Spielzeit
                 &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
                 &7  gesamt  10 min
+                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
                 &7  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s. Abwesenheit zaehlt auf diesem Server mit (zeit.untaetig-minuten: 0).
                 &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""", gesendetesBild(Spielzeittext.kopfSelbst(sprache),
                 befehle.zeilen(ANNA, Duration.ZERO, HEUTE, aus)));
@@ -471,7 +482,7 @@ class SpielzeitBefehleTest {
     }
 
     @Test
-    @DisplayName("33i - heute und gesamt beginnen in derselben Spalte")
+    @DisplayName("33i - heute, gesamt und taetig beginnen in derselben Spalte")
     void spaltenStehenUntereinander() {
         // Die Spaltenbreite ist seit dem 04.11.2026 Inhalt der Sprachdatei: "heute" mit
         // drei und "gesamt" mit zwei Leerzeichen. Diese Probe sagt, WARUM diese Zahlen so
@@ -482,6 +493,7 @@ class SpielzeitBefehleTest {
         List<Component> zeilen = zeilen(befehle);
         String heute = text(zeilen, 0);
         String gesamt = text(zeilen, 1);
+        String taetig = text(zeilen, 2);
         String wert = "10 min";
 
         assertEquals(heute.indexOf(wert), gesamt.indexOf(wert),
@@ -490,5 +502,36 @@ class SpielzeitBefehleTest {
         assertEquals(10, heute.indexOf(wert),
                 "und zwar in Spalte 11, also mit dem Einzug von zwei Zeichen und einer"
                         + " Spaltenbreite von acht: [" + heute + "]");
+        // Die dritte Zeile haelt dieselbe Spalte: "taetig" hat sechs Zeichen wie "gesamt"
+        // und braucht darum ZWEI Leerzeichen. Geprueft wird der Ort der Dauer und nicht
+        // die Zahl der Leerzeichen - wer das Wort uebersetzt, aendert die Zahl mit.
+        assertEquals(10, taetig.indexOf("0 min"),
+                "auch die taetige Zeit beginnt in Spalte 11: [" + taetig + "]");
+    }
+
+    @Test
+    @DisplayName("33j - das Bild mit WIRKLICH taetiger Zeit - nicht nur Nullen")
+    void bildMitTaetigerZeit() {
+        // Die anderen Bilder zeigen 0 min und 0 Prozent, weil ihre Zuschlaege mit
+        // nurAnwesend gebaut sind. Eine Anzeige, die nur mit Nullen festgenagelt ist,
+        // haelt nichts: Ein vertauschtes Argumentpaar - heute statt gesamt - gibt
+        // zweimal 0 und bleibt gruen. Hier stehen darum drei VERSCHIEDENE Zahlen.
+        SpeicherSpielzeit ablage = new SpeicherSpielzeit();
+        ablage.schreibeFort(List.of(
+                // Gestern: 10 Minuten da, 6 davon taetig.
+                new Spielzeitablage.Zuschlag(ANNA, HEUTE.minusDays(1), 600L, 360L),
+                // Heute: 10 Minuten da, 4 davon taetig. Zusammen 20 da und 10 taetig,
+                // also 50 Prozent - und 4 min heute neben 10 min insgesamt.
+                new Spielzeitablage.Zuschlag(ANNA, HEUTE, 600L, 240L)));
+        SpielzeitBefehle befehle = befehle(ablage, buch(ablage));
+
+        assertEquals("""
+                &6Deine Spielzeit
+                &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
+                &7  gesamt  20 min
+                &7  taetig  10 min   (4 min heute, 50 % der Zeit)
+                &7  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s.
+                &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
+                gesendetesBild(Spielzeittext.kopfSelbst(sprache), zeilen(befehle)));
     }
 }

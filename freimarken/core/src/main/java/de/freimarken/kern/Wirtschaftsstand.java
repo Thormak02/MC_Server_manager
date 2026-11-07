@@ -209,6 +209,15 @@ public final class Wirtschaftsstand {
                     + alt.markt().ankauf().anzahl() + " -> "
                     + neu.markt().ankauf().anzahl() + " Materialien (geaendert)");
         }
+        // Die Messstelle: beide Zahlen und die Artenliste. Die Liste wird VERGLICHEN und
+        // nicht gezaehlt, aus demselben Grund wie beim Sortiment - wer "benutzen" gegen
+        // "kaempfen" tauscht, hat weiter sechs Arten und eine andere Messung.
+        nenneZahl(geaendert, Messwerte.PFAD_VERLANGTE_ARTEN,
+                alt.messung().verlangteArten(), neu.messung().verlangteArten());
+        nenneZahl(geaendert, Messwerte.PFAD_STRECKE,
+                alt.messung().mindestStrecke(), neu.messung().mindestStrecke());
+        nenneMenge(geaendert, Messwerte.PFAD_ARTEN, schluessel(alt.messung().arten()),
+                schluessel(neu.messung().arten()));
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");
@@ -322,6 +331,21 @@ public final class Wirtschaftsstand {
             satz.append(", weg: ").append(String.join(", ", weg));
         }
         geaendert.add(satz.toString());
+    }
+
+    /**
+     * Die Schluessel einer Artenmenge - damit {@link #nenneMenge} sie vergleichen kann.
+     *
+     * <p>Die Schluessel und nicht {@code name()}: In der Antwort an den Betreiber soll
+     * stehen, was in SEINER Datei steht. Ein {@code LinkedHashSet} haelt dabei die
+     * Reihenfolge der Datei - nenneMenge sortiert den Unterschied ohnehin selbst.
+     */
+    private static Set<String> schluessel(Set<Lebenszeichen> arten) {
+        Set<String> namen = new java.util.LinkedHashSet<>();
+        for (Lebenszeichen art : arten) {
+            namen.add(art.schluessel());
+        }
+        return namen;
     }
 
     private static void nenneZahl(List<String> hinein, String pfad, long alt, long neu) {

@@ -25,7 +25,33 @@ import java.util.UUID;
  */
 public final class SpeicherSpielzeit implements Spielzeitablage {
 
-    private final Map<UUID, Map<LocalDate, Long>> sekunden = new HashMap<>();
+    /**
+     * Was je Spieler und Tag gemessen ist - gemessene UND taetige Sekunden in einem Paar.
+     *
+     * <p>Ein Paar und nicht zwei Karten: In der Datenbank stehen beide Zahlen in derselben
+     * Zeile, und die Zusage {@code taetig <= gemessen} haengt daran. Zwei Karten koennten
+     * auseinanderlaufen, und dann verhielte sich diese Fassung anders als die andere -
+     * genau das, was der {@code SpielzeitVertrag} verhindern soll.
+     */
+    private final Map<UUID, Map<LocalDate, Zeile>> sekunden = new HashMap<>();
+
+    /** Eine Tageszeile - dasselbe Paar wie eine Zeile der Tabelle {@code spielzeit}. */
+    private record Zeile(long sekunden, long taetig) {
+
+        static final Zeile LEER = new Zeile(0L, 0L);
+
+        /**
+         * Dieses Paar plus jenes - beide Zahlen mit {@code addExact}.
+         *
+         * <p>Eine Methode und nicht zwei {@code merge}-Aufrufe: Ein Ueberlauf in der
+         * zweiten Zahl darf die erste nicht schon veraendert haben, sonst steht in der Karte
+         * eine Zeile, deren taetige Zeit nicht zu ihrer gemessenen passt.
+         */
+        Zeile plus(long mehr, long mehrTaetig) {
+            return new Zeile(Math.addExact(sekunden, mehr),
+                    Math.addExact(taetig, mehrTaetig));
+        }
+    }
 
     @Override
     public synchronized void schreibeFort(List<Zuschlag> zuschlaege) {
@@ -37,12 +63,12 @@ public final class SpeicherSpielzeit implements Spielzeitablage {
         // nichts". Bei einem Ueberlauf mitten in der Liste blieben sonst die ersten Zuschlaege
         // stehen, und die beiden Umsetzungen verhielten sich verschieden - die eine mit
         // Transaktion, die andere halb geschrieben.
-        Map<UUID, Map<LocalDate, Long>> nachher = new HashMap<>();
+        Map<UUID, Map<LocalDate, Zeile>> nachher = new HashMap<>();
         for (Zuschlag zuschlag : zuschlaege) {
             if (zuschlag == null) {
                 throw new IllegalArgumentException("Ein Zuschlag in der Liste ist null");
             }
-            Map<LocalDate, Long> tage = nachher.computeIfAbsent(zuschlag.spieler(),
+            Map<LocalDate, Zeile> tage = nachher.computeIfAbsent(zuschlag.spieler(),
                     wer -> new HashMap<>(sekunden.getOrDefault(wer, Map.of())));
             // addExact und nicht +: Ein Ueberlauf wuerde aus viel Spielzeit lautlos eine
             // negative machen. MariaDB bricht an derselben Stelle ab ("BIGINT value is out
@@ -59,7 +85,8 @@ public final class SpeicherSpielzeit implements Spielzeitablage {
             // gehalten ist. Umgekehrt kostet es diese drei Zeilen. Entschieden wird das im
             // SpielzeitVertrag (ueberlaufBrichtAb), der beide Fassungen daran prueft.
             try {
-                tage.merge(zuschlag.tag(), zuschlag.sekunden(), Math::addExact);
+                tage.put(zuschlag.tag(), tage.getOrDefault(zuschlag.tag(), Zeile.LEER)
+                        .plus(zuschlag.sekunden(), zuschlag.taetigSekunden()));
             } catch (ArithmeticException ueberlauf) {
                 throw new IllegalStateException("Spielzeit nicht fortschreibbar ("
                         + zuschlaege.size() + " Zuschlaege, nicht geschrieben)", ueberlauf);
@@ -76,14 +103,19 @@ public final class SpeicherSpielzeit implements Spielzeitablage {
         if (heute == null) {
             throw new IllegalArgumentException("Ohne Tag ist 'heute' nicht zu beantworten");
         }
-        Map<LocalDate, Long> tage = sekunden.get(spieler);
+        Map<LocalDate, Zeile> tage = sekunden.get(spieler);
         if (tage == null) {
             return Spielzeitstand.leer(spieler, heute);
         }
         long gesamt = 0L;
+        long taetigGesamt = 0L;
         try {
-            for (long wert : tage.values()) {
-                gesamt = Math.addExact(gesamt, wert);
+            for (Zeile wert : tage.values()) {
+                gesamt = Math.addExact(gesamt, wert.sekunden());
+                // Beide Summen im SELBEN Durchgang: Laufen sie in zwei Schleifen, bricht
+                // die erste beim Ueberlauf ab, und die zweite liefe nie - dann waere der
+                // Fehlertext derselbe, aber die Zahl, an der es lag, eine andere.
+                taetigGesamt = Math.addExact(taetigGesamt, wert.taetig());
             }
         } catch (ArithmeticException ueberlauf) {
             // Dieselbe Hausform wie beim Schreiben, und aus demselben Grund: MariaDB
@@ -100,6 +132,8 @@ public final class SpeicherSpielzeit implements Spielzeitablage {
             throw new IllegalStateException("Spielzeit nicht lesbar: " + spieler,
                     ueberlauf);
         }
-        return new Spielzeitstand(spieler, heute, gesamt, tage.getOrDefault(heute, 0L));
+        Zeile heutige = tage.getOrDefault(heute, Zeile.LEER);
+        return new Spielzeitstand(spieler, heute, gesamt, heutige.sekunden(),
+                taetigGesamt, heutige.taetig());
     }
 }

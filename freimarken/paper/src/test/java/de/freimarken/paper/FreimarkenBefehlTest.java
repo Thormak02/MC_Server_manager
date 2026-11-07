@@ -70,6 +70,7 @@ class FreimarkenBefehlTest {
                 (empfaenger, wer) -> gerufen.add("welt"),
                 (empfaenger, wer) -> gerufen.add("vorgenerieren"),
                 (empfaenger, wer) -> gerufen.add("neuladen:" + wer),
+                (empfaenger, wer) -> gerufen.add("messstelle"),
                 (empfaenger, x, z) -> gerufen.add("parzelle " + x + "/" + z),
                 VON, BIS);
     }

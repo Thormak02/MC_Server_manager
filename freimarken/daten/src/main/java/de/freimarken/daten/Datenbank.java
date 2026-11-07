@@ -295,6 +295,32 @@ public final class Datenbank implements AutoCloseable {
               abgelegt_am  DATETIME(3) NULL,
               PRIMARY KEY (spieler, beruf)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 11: die TAETIGE Zeit - eine zweite Zahl in derselben Zeile.
+            //
+            // In dieselbe Zeile und nicht in eine zweite Tabelle. Die Zusage, auf die sich
+            // jede Anzeige verlaesst, ist "taetig <= gemessen"; sie haelt nur, wenn beide
+            // Zahlen in EINER Zeile stehen und EIN Zurueckrollen sie zusammen trifft. Zwei
+            // Tabellen waeren ausserdem ein zweiter Schreibweg fuer Spielzeit, und den
+            // verbietet Plan 8.8 ausdruecklich ("kein Setzen von Hand ... nicht einen
+            // zweiten Schreibweg").
+            //
+            // DEFAULT 0 fuer alles, was schon gemessen ist: Von der Vergangenheit ist nicht
+            // bekannt, wie viel davon taetig war, und eine geratene Zahl waere schlimmer
+            // als eine 0. Die 0 ist dabei die sichere Richtung - sie gibt keinen Rang zu
+            // frueh. Wer alte Zeilen daran erkennen will, erkennt sie an genau dieser 0.
+            //
+            // IF NOT EXISTS ist hier MariaDB-eigen, anders als bei den Schritten 7, 9 und
+            // 10, wo es auch MySQL kennt. Das ist hingenommen: migriere() legt keine
+            // Transaktion um Anweisung und Standfortschreibung, ein Schritt MUSS also einen
+            // zweiten Lauf folgenlos ueberstehen, und das ist eine Bedingung - die
+            // Dialektfreiheit von MariaSpielzeit.FORTSCHREIBEN ist eine Hoeflichkeit. Wer
+            // dieses Schema auf MySQL fuehrt, laesst das IF NOT EXISTS weg und traegt
+            // dafuer das Risiko des zweiten Laufs.
+            """
+            ALTER TABLE spielzeit
+              ADD COLUMN IF NOT EXISTS taetig_sekunden BIGINT NOT NULL DEFAULT 0
             """);
 
     /**

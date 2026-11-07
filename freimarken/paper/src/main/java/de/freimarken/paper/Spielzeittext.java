@@ -42,7 +42,7 @@ import net.kyori.adventure.text.Component;
  *
  * <p>Jede Methode gibt genau EINE Zeile zurueck und keine Liste, darum
  * {@link Sprache#eineZeile}: Die Spalte von {@link #werte} haelt nur in einer Zeile, und
- * zwei Proben nageln fest, dass die Anzeige GENAU VIER Zeilen hat. Eine Umbruchmarke in
+ * zwei Proben nageln fest, dass die Anzeige GENAU FUENF Zeilen hat. Eine Umbruchmarke in
  * einem dieser Saetze ist deshalb ein Wurf, der den Pfad nennt, und kein stumm verschobenes
  * Bild. Was der Betreiber hier gewinnt, ist die Farbe JE ZEILE - die war vorher nicht
  * moeglich.
@@ -117,7 +117,7 @@ final class Spielzeittext {
     }
 
     /**
-     * Die vier Zeilen: heute, gesamt, ob gerade gezaehlt wird, und der Hinweis zum Einbau.
+     * Die fuenf Zeilen: heute, gesamt, davon taetig, ob gezaehlt wird, der Hinweis.
      *
      * <p>Die offene Sitzung wird dazugerechnet. {@code lies()} kennt nur, was GESCHRIEBEN
      * ist - wer beitritt und sofort nachsieht, laese sonst 0 neben "wird gezaehlt" und
@@ -157,6 +157,8 @@ final class Spielzeittext {
                                  Duration untaetig, Zeitwerte zeit) {
         long heuteDazu = 0L;
         long gesamtDazu = 0L;
+        long taetigHeuteDazu = 0L;
+        long taetigGesamtDazu = 0L;
         // Geteilt wie beim Schreiben, mit derselben Regel: Eine Sitzung ueber Mitternacht
         // gehoert zu zwei Tagen, und nur der heutige Anteil darf in die Zeile "heute".
         for (Tagesgrenze.Tagesanteil anteil
@@ -168,17 +170,37 @@ final class Spielzeittext {
         }
         for (Spielzeitablage.Zuschlag zuschlag : wartend) {
             gesamtDazu += zuschlag.sekunden();
+            taetigGesamtDazu += zuschlag.taetigSekunden();
             if (zuschlag.tag().equals(stand.tag())) {
                 heuteDazu += zuschlag.sekunden();
+                taetigHeuteDazu += zuschlag.taetigSekunden();
             }
         }
+        // Die OFFENE Spanne bringt keine taetige Zeit mit, und das ist keine Luecke: Ob
+        // dieser Schlag taetig war, entscheidet die Messstelle erst, wenn er abgerechnet
+        // wird. Ihn hier schon als taetig zu zeigen waere eine Zusage, die noch niemand
+        // gegeben hat - und sie waere nach dem naechsten Takt vielleicht falsch.
+        //
+        // EIN zusammengefasster Stand und keine drei Rechnungen daneben: Daran haengt die
+        // Prozentzahl. Rechnete sie der Satz unten selbst, stuende sie auf einer anderen
+        // Grundlage als die Dauern darueber, und zwei Zahlen derselben Zeile widersprachen
+        // sich. Der Konstruktor haelt dabei die Zusage taetig <= gemessen nach, also faellt
+        // ein Rechenfehler hier auf und nicht erst dem Spieler.
+        Spielzeitstand zusammen = new Spielzeitstand(stand.spieler(), stand.tag(),
+                stand.sekundenGesamt() + gesamtDazu, stand.sekundenHeute() + heuteDazu,
+                stand.taetigSekundenGesamt() + taetigGesamtDazu,
+                stand.taetigSekundenHeute() + taetigHeuteDazu);
         Component heute = sprache.eineZeile(SpielzeitSatz.HEUTE, Einsatz
-                .von("dauer", dauer(sprache, stand.heute().plusSeconds(heuteDazu)))
+                .von("dauer", dauer(sprache, zusammen.heute()))
                 .mit("tag", sprache.muster(SpielzeitSatz.TAG_MUSTER).format(stand.tag()))
                 .mit("zone", zeit.zone().getId()));
         Component gesamt = sprache.eineZeile(SpielzeitSatz.GESAMT, Einsatz
-                .von("dauer", dauer(sprache, stand.gesamt().plusSeconds(gesamtDazu))));
-        return List.of(heute, gesamt,
+                .von("dauer", dauer(sprache, zusammen.gesamt())));
+        Component taetig = sprache.eineZeile(SpielzeitSatz.TAETIG, Einsatz
+                .von("dauer", dauer(sprache, zusammen.taetigGesamt()))
+                .mit("heute", dauer(sprache, zusammen.taetigHeute()))
+                .mit("prozent", String.valueOf(zusammen.taetigAnteilProzent())));
+        return List.of(heute, gesamt, taetig,
                 zustandZeile(sprache, offen, Duration.ofSeconds(gesamtDazu), gesperrt,
                         untaetig, zeit),
                 hinweisZeile(sprache));

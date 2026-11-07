@@ -63,7 +63,7 @@ enum SpielzeitSatz implements Satz {
     /** Dieselbe Ueberschrift fuer einen anderen Spieler - mit seinem Namen. */
     KOPF_FREMD("spielzeit.kopf.fremd", Art.SATZ, "name"),
 
-    // --- Die vier Zeilen der Anzeige ------------------------------------------
+    // --- Die fuenf Zeilen der Anzeige -----------------------------------------
 
     /**
      * Die erste Zeile: was heute zusammengekommen ist, der Tag und die Tagesgrenze.
@@ -76,6 +76,23 @@ enum SpielzeitSatz implements Satz {
 
     /** Die zweite Zeile: alles. Haelt mit {@link #HEUTE} dieselbe Spalte. */
     GESAMT("spielzeit.gesamt", Art.SATZ, "dauer"),
+
+    /**
+     * Die dritte Zeile: wie viel von der gemessenen Zeit TAETIG war [Teil G].
+     *
+     * <p>Haelt mit {@link #HEUTE} und {@link #GESAMT} dieselbe Spalte - "taetig" hat sechs
+     * Zeichen und braucht darum ZWEI Leerzeichen, wie "gesamt". Wer die drei Zeilen
+     * umstellt, stellt sie gemeinsam um.
+     *
+     * <p>Drei Werte und nicht einer: {@code {dauer}} ist die taetige Zeit ueber alle Tage,
+     * {@code {heute}} die von heute, {@code {prozent}} ihr Anteil an der gemessenen Zeit.
+     * Der Anteil steht dabei, weil eine nackte Dauer ohne ihren Bezug nicht zu lesen ist -
+     * "40 h taetig" heisst bei 45 h Anwesenheit etwas anderes als bei 400.
+     *
+     * <p>Kein {@link Art#GEZAEHLT} fuer das Prozent: Es ist eine Zahl mit einem Zeichen
+     * dahinter und keine Mehrzahlform, genau wie {@code {minuten} min}.
+     */
+    TAETIG("spielzeit.taetig", Art.SATZ, "dauer", "heute", "prozent"),
 
     /**
      * Die dritte Zeile, solange gerade NICHT gezaehlt wird.

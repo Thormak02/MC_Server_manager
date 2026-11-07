@@ -942,6 +942,96 @@ zeit:
   # naechsten Neustart gilt beides zusammen.
   untaetig-minuten: 10
 
+# Die Messstelle (Plan 8.8, Teil G): Woran das Plugin erkennt, dass ein Spieler nicht nur
+# ANWESEND war, sondern auch TAETIG.
+#
+# Warum es die ueberhaupt gibt: zeit.untaetig-minuten schliesst den Nachtlang im
+# Startbildschirm aus, der ohne Absicht passiert. Gegen Absicht ist sie keine Mauer - ein
+# Makro oder ein beschwertes Tastenbrett erzeugt Lebenszeichen, und damit sind die vierzig
+# Stunden bis Buerger IM STEHEN erreichbar. Gemessen wird dort Anwesenheit. Die Messstelle
+# misst daneben eine zweite Zahl, damit spaeter eine Rangschwelle daran haengen kann, die
+# nicht im Stehen erreichbar ist.
+#
+# Sie GREIFT IN NICHTS EIN. Kein Verdienst wird gesperrt, keine Spielzeit verworfen, kein
+# Spieler gemeldet. Sie zaehlt eine zweite Zahl neben der ersten, und /playtime zeigt
+# beide. Erkennung statt Verhinderung: Eine Schranke traefe zwangslaeufig auch den
+# ehrlichen Spieler mit einer eintoenigen Arbeit, und was sie ihm wegnimmt, holt ihm
+# niemand zurueck.
+#
+# Gemessen wird VIELFALT und nicht Menge. Eine Menge - wie viele Bloecke in der Stunde -
+# laesst sich von einem Makro beliebig hochdrehen und trifft dabei genau die ehrlichen
+# Spieler, die viel arbeiten. Die Vielfalt laesst sich nicht hochdrehen: Ein Makro gibt
+# immer DASSELBE Zeichen, weil es genau eine Tastenfolge wiederholt.
+#
+# Es gibt KEINEN Ausschalter, und das ist Absicht - dieselbe Begruendung wie bei der Zahl
+# der ausgesetzten Taktschlaege: Ein Schalter dafuer waere einer, mit dem man sich stumm
+# die eigene Messung wegwirft, und sie ist spaeter die Grundlage einer Rangschwelle. Wer
+# milde messen will, setzt verlangte-arten auf 1; dann genuegt EIN Zeichen.
+#
+# /freimarken neuladen uebernimmt alle drei Zeilen.
+messstelle:
+  # Wie viele VERSCHIEDENE Arten von Lebenszeichen ein Taktschlag braucht, um als taetig zu
+  # zaehlen. Erlaubt ist 1 bis zur Laenge der Liste arten (siehe unten).
+  #
+  # Gerechnet gegen den Fall, den es treffen soll: Ein Makro am Pflastersteingenerator gibt
+  # genau ein Zeichen (abbauen), eine Angelfarm ebenso (benutzen), ein beschwertes
+  # Tastenbrett im Startbildschirm keines. Ein Mensch, der denselben Generator abbaut, geht
+  # dabei hin und her, raeumt in eine Truhe oder setzt einen Block - er kommt auf zwei.
+  #
+  # Nicht 3: Beim kuerzesten erlaubten Takt von 10 Sekunden sind drei verschiedene
+  # Taetigkeiten auch fuer einen Menschen nicht selbstverstaendlich, und die Messung soll
+  # nicht an der Taktlaenge haengen.
+  #
+  # Eine Zahl GROESSER als die Laenge der Liste arten wird abgewiesen und nicht
+  # abgeschnitten: Damit waere kein Taktschlag jemals taetig, und eine Null sieht in jeder
+  # Anzeige aus wie ein leerer Server. Das Protokoll klagt dann mit Grund und nennt die
+  # groesste passende Zahl.
+  verlangte-arten: 2
+
+  # Wie viele Bloecke ein Spieler in einem Taktschlag zuruecklegen muss, damit das Bewegen
+  # als Lebenszeichen zaehlt. Erlaubt ist 1 bis 1000.
+  #
+  # Gemessen wird der ABSTAND zwischen Anfang und Ende des Schlages und nicht der gelaufene
+  # Weg: Wer im Kreis laeuft, legt Weg zurueck und kommt nicht weiter - und genau das tut
+  # ein Laufmakro an einer Wand. Die Hoehe zaehlt mit; ein Weltwechsel zaehlt immer, denn
+  # ein Abstand zwischen zwei Welten hat keine Bedeutung.
+  #
+  # Acht Bloecke sind gerechnet gegen beide Richtungen: Eine gewackelte Maus und ein
+  # beschwerter Taster tragen null bis zwei Bloecke weit (Rueckstoss, Rutschen auf Eis).
+  # Nach oben ist es wenig - wer in 10 Sekunden normal laeuft, kommt gut vierzig weit.
+  #
+  # Eine 0 wird abgewiesen: Sie hiesse, dass auch Stillstehen als Bewegung zaehlt.
+  mindest-strecke: 8
+
+  # Welche Arten von Lebenszeichen ueberhaupt zaehlen. Es gibt sieben:
+  #
+  #   bewegen   mindest-strecke weit gekommen (wird gemessen, nicht gemeldet)
+  #   abbauen   einen Block abgebaut
+  #   setzen    einen Block gesetzt
+  #   oeffnen   eine Oberflaeche geoeffnet - Truhe, Werkbank, Ofen, Trichter
+  #   benutzen  einen Block oder Gegenstand mit dem RECHTEN Knopf benutzt
+  #   kaempfen  ein Wesen angegriffen
+  #   sprechen  geschrieben oder einen Befehl gegeben
+  #
+  # benutzen fehlt ab Werk, und das ist der wichtigste Satz dieses Abschnitts: Es ist keine
+  # Art fuer sich, sondern die halbe Art zum Setzen - ein Block wird mit dem rechten Knopf
+  # gesetzt, und derselbe Knopfdruck IST das Benutzen. Ein Makro, das Bloecke setzt, gaebe
+  # damit zwei Zeichen aus einer Taste und zaehlte als taetig. Wer die Art dazunimmt, hat
+  # eine mildere Messung - und dieses Paar.
+  #
+  # Der linke Knopf zaehlt NICHT als benutzen, auch wenn die Art dabei ist: Er feuert bei
+  # jedem Schlag, und ein Makro am Generator bekaeme sonst abbauen UND benutzen.
+  #
+  # Eine LEERE Liste wird abgewiesen - sie hiesse, dass kein Taktschlag jemals taetig ist,
+  # und das ist der stumme Ausschalter, den es nicht geben soll. Ein unbekannter Name wird
+  # beklagt und uebersprungen, die uebrigen gelten weiter.
+  arten:
+    - bewegen
+    - abbauen
+    - setzen
+    - oeffnen
+    - kaempfen
+    - sprechen
 # Reisen zwischen den Welten (Plan 4.3): zwei Wege, kein dritter - die Tore am
 # Bundesmarkt und /warp <name>. Selbstgebaute Nether- und Endportale werden gesperrt:
 # Sie fuehren nicht in freimarken:nether, sondern in die Haupt-Nether des Servers, eine

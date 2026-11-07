@@ -34,11 +34,14 @@ package de.freimarken.kern;
  *                      ein Stueck, und wer mitten in einem Verkauf einen neuen Preis aus
  *                      einem alten Deckel bekaeme, verkaufte zu etwas, das niemand
  *                      eingestellt hat
+ * @param messung       woran die Messstelle Taetigkeit erkennt. Hier und nicht
+ *                      daneben, aus demselben Grund wie bei Zeit, Berufen und
+ *                      Markt: Ein Neuladen tauscht den ganzen Satz als EIN Stueck
  */
 public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoechstzahl,
                                int gruppenFelder, String rangWerbung, Zeitwerte zeit,
                                Berufswerte berufe, Verdienstwerte verdienst,
-                               Marktwerte markt) {
+                               Marktwerte markt, Messwerte messung) {
 
     /**
      * Die Schluessel in der Einstellungsdatei - hier und nicht an jeder Stelle, die klagt.
@@ -87,7 +90,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
     public static final Wirtschaftswerte VORGABE = new Wirtschaftswerte(Preisstaffel.VORGABE,
             VORGABE_STARTGUTHABEN, VORGABE_HOECHSTZAHL, VORGABE_GRUPPEN_FELDER,
             VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE, Berufswerte.VORGABE,
-            Verdienstwerte.VORGABE, Marktwerte.VORGABE);
+            Verdienstwerte.VORGABE, Marktwerte.VORGABE, Messwerte.VORGABE);
 
     public Wirtschaftswerte {
         if (preise == null) {
@@ -107,6 +110,9 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         if (markt == null) {
             throw new IllegalArgumentException("Ohne Marktwerte gibt es keinen Ankauf"
                     + " und keinen zweiten Tagesdeckel");
+        }
+        if (messung == null) {
+            throw new IllegalArgumentException("Ohne Messwerte gibt es keine Messstelle");
         }
         if (!brauchbaresStartguthaben(startguthaben)) {
             throw new IllegalArgumentException("Startguthaben " + startguthaben
@@ -138,55 +144,61 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
      */
     public Wirtschaftswerte mitPreisen(Preisstaffel andere) {
         return new Wirtschaftswerte(andere, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, berufe, verdienst, markt);
+                rangWerbung, zeit, berufe, verdienst, markt, messung);
     }
 
     /** Dieselben Werte mit anderem Startguthaben. */
     public Wirtschaftswerte mitStartguthaben(long anderes) {
         return new Wirtschaftswerte(preise, anderes, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, berufe, verdienst, markt);
+                rangWerbung, zeit, berufe, verdienst, markt, messung);
     }
 
     /** Dieselben Werte mit anderer Parzellenhoechstzahl. */
     public Wirtschaftswerte mitHoechstzahl(int andere) {
         return new Wirtschaftswerte(preise, startguthaben, andere, gruppenFelder,
-                rangWerbung, zeit, berufe, verdienst, markt);
+                rangWerbung, zeit, berufe, verdienst, markt, messung);
     }
 
     /** Dieselben Werte mit anderer Gruppengroesse. */
     public Wirtschaftswerte mitGruppenFeldern(int andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, andere,
-                rangWerbung, zeit, berufe, verdienst, markt);
+                rangWerbung, zeit, berufe, verdienst, markt, messung);
     }
 
     /** Dieselben Werte mit anderer Rangwerbung. */
     public Wirtschaftswerte mitWerbung(String andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                andere, zeit, berufe, verdienst, markt);
+                andere, zeit, berufe, verdienst, markt, messung);
     }
 
     /** Dieselben Werte mit anderen Zeitwerten. */
     public Wirtschaftswerte mitZeit(Zeitwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, andere, berufe, verdienst, markt);
+                rangWerbung, andere, berufe, verdienst, markt, messung);
     }
 
     /** Dieselben Werte mit anderen Berufswerten. */
     public Wirtschaftswerte mitBerufen(Berufswerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, andere, verdienst, markt);
+                rangWerbung, zeit, andere, verdienst, markt, messung);
     }
 
     /** Dieselben Werte mit anderen Verdienstwerten. */
     public Wirtschaftswerte mitVerdienst(Verdienstwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, berufe, andere, markt);
+                rangWerbung, zeit, berufe, andere, markt, messung);
     }
 
     /** Dieselben Werte mit anderen Marktwerten. */
     public Wirtschaftswerte mitMarkt(Marktwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
-                rangWerbung, zeit, berufe, verdienst, andere);
+                rangWerbung, zeit, berufe, verdienst, andere, messung);
+    }
+
+    /** Dieselben Werte mit anderen Messwerten. */
+    public Wirtschaftswerte mitMessung(Messwerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, markt, andere);
     }
 
     /** Ob aus dieser Zahl ein Startguthaben werden kann; 0 heisst: mit nichts anfangen. */

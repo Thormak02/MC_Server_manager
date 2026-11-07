@@ -75,6 +75,66 @@ import java.util.logging.Logger;
 final class Spielzeitbuch {
 
     /**
+     * Woher das Urteil kommt, ob ein Schlag TAETIG war - die Messstelle aus Teil G.
+     *
+     * <p>Eine Schnittstelle und nicht die Klasse selbst, aus demselben Grund wie bei
+     * {@code Verdienstwache.Taktquelle}: Was dieses Buch rechnet, soll ohne Server pruefbar
+     * bleiben, und eine Probe soll "taetig" und "nicht taetig" setzen koennen, ohne Orte und
+     * Ereignisse nachzustellen.
+     *
+     * <p>Der Name sagt beides, weil die Methode beides tut: Sie antwortet UND beginnt den
+     * naechsten Schlag. Siehe {@code Messstelle.nimmUndLeere} - zwei getrennte Aufrufe
+     * muesste jeder Aufrufer paaren, und wer das Zuruecksetzen vergisst, faerbt mit einem
+     * Zeichen den ganzen Abend taetig.
+     */
+    interface Taetigkeitsquelle {
+
+        /**
+         * Ob dieser Spieler im abgelaufenen Schlag taetig war, und beginnt den naechsten.
+         *
+         * <p>Wird fuer JEDEN abgerechneten Schlag genau einmal gefragt - auch fuer einen,
+         * der nicht zaehlt. Sonst truege ein Zeichen aus einem verworfenen Schlag in den
+         * naechsten hinein.
+         */
+        boolean nimmUndLeere(UUID wer);
+
+        /**
+         * Vergisst diesen Spieler - seine Sitzung ist zu Ende.
+         *
+         * <p>Gehoert in diese Schnittstelle und nicht in die Wache, damit es nur EINE
+         * Stelle gibt, an der eine Sitzung endet: {@link Spielzeitbuch#schliesse} nimmt
+         * die Marke weg und sagt es im selben Zug hierher. Haenge das Vergessen an einem
+         * zweiten Zuhoerer auf {@code PlayerQuitEvent}, entschiede die Reihenfolge zweier
+         * Prioritaeten darueber, ob der letzte Schlag noch sein Urteil bekommt.
+         */
+        void vergiss(UUID wer);
+
+        /**
+         * Eine Quelle, die nie taetig meldet - fuer Proben, die von Teil G nichts wissen.
+         *
+         * <p>Gibt immer {@code false} und nicht immer {@code true}: Untermessen ist die
+         * sichere Richtung, und eine Probe, die versehentlich an dieser Quelle haengt, soll
+         * keine taetige Zeit erfinden.
+         *
+         * <p>Eine ausgeschriebene Fassung und kein Lambda, obwohl eines kuerzer waere: Eine
+         * Schnittstelle mit zwei Methoden laesst sich nicht als Lambda schreiben, und ein
+         * {@code default}-Rumpf fuer das Vergessen waere eine Falle - eine echte Umsetzung
+         * koennte ihn erben und stumm nichts vergessen.
+         */
+        Taetigkeitsquelle KEINE = new Taetigkeitsquelle() {
+
+            @Override
+            public boolean nimmUndLeere(UUID wer) {
+                return false;
+            }
+
+            @Override
+            public void vergiss(UUID wer) {
+            }
+        };
+    }
+
+    /**
      * Wie viele Taktschlaege nach einem Fehlschlag nicht geschrieben werden.
      *
      * <p>Keine Einstellung in der {@code config.yml}, sondern eine Eigenschaft dieses
@@ -123,6 +183,7 @@ final class Spielzeitbuch {
 
     private final Wirtschaftsstand wirtschaft;
     private final Spielzeitablage ablage;
+    private final Taetigkeitsquelle taetigkeit;
     private final Clock uhr;
     private final Logger protokoll;
 
@@ -142,10 +203,11 @@ final class Spielzeitbuch {
      *                   Neustart keinen Bezugspunkt. Gegen eine verstellte Wanduhr steht die
      *                   Klemme in {@link Spielzeitregel}
      */
-    Spielzeitbuch(Wirtschaftsstand wirtschaft, Spielzeitablage ablage, Clock uhr,
-                  Logger protokoll) {
+    Spielzeitbuch(Wirtschaftsstand wirtschaft, Spielzeitablage ablage,
+                  Taetigkeitsquelle taetigkeit, Clock uhr, Logger protokoll) {
         this.wirtschaft = wirtschaft;
         this.ablage = ablage;
+        this.taetigkeit = taetigkeit;
         this.uhr = uhr;
         this.protokoll = protokoll;
     }
@@ -221,6 +283,10 @@ final class Spielzeitbuch {
         Zeitwerte zeit = wirtschaft.werte().zeit();
         rechneFort(wer, untaetig, uhr.instant(), zeit);
         marken.remove(wer);
+        // NACH dem Abrechnen: Der letzte Schlag soll noch sein Urteil bekommen, und
+        // rechneFort fragt die Quelle. Davor vergessen hiesse, die Zeichen der letzten
+        // Minute wegzuwerfen.
+        taetigkeit.vergiss(wer);
         if (aussetzerUebrig > 0) {
             return;
         }
@@ -260,6 +326,12 @@ final class Spielzeitbuch {
             rechneFort(wer, untaetigkeiten.getOrDefault(wer, Duration.ZERO), jetzt, zeit);
         }
         marken.clear();
+        // Auch hier nach dem Abrechnen, und fuer JEDE offene Sitzung: Beim Wiedereinschalten
+        // im Betrieb entsteht ein neues Buch, aber die Messstelle koennte dieselbe sein -
+        // dann waere ein stehengebliebener Ort der Anfang eines Schlages, den es nie gab.
+        for (UUID wer : offene) {
+            taetigkeit.vergiss(wer);
+        }
         Set<UUID> geschrieben = schreibe();
         geschrieben.retainAll(offene);
         return geschrieben.size();
@@ -348,10 +420,21 @@ final class Spielzeitbuch {
                     + " jetzt auf " + urteil.neueMarke() + ". Die Wanduhr des Servers"
                     + " wurde verstellt oder der Takt lief lange nicht.");
         }
+        // Die Messstelle wird BEDINGUNGSLOS gefragt, auch wenn dieser Schlag nichts
+        // zaehlt: Sie beginnt mit derselben Antwort den naechsten Schlag, und ein Zeichen,
+        // das aus einem verworfenen Schlag in den naechsten hineintruege, waere ein Weg um
+        // die Untaetigkeitsgrenze aus Teil C herum. Vor der Teilung und nicht darin -
+        // gefragt wird einmal je Schlag und nicht einmal je Tageshaelfte.
+        boolean warTaetig = taetigkeit.nimmUndLeere(wer);
         // Ein Takt ueber Mitternacht wird GETEILT und nicht ganz dem neuen Tag gegeben.
         for (Tagesgrenze.Tagesanteil anteil
                 : Tagesgrenze.teile(urteil.von(), urteil.bis(), zeit.zone())) {
-            wartend.add(new Spielzeitablage.Zuschlag(wer, anteil.tag(), anteil.sekunden()));
+            // Ein Schlag ist ganz taetig oder gar nicht; ueber Mitternacht erbt jede
+            // Haelfte ihren eigenen Anteil. Darum anteil.sekunden() und nicht
+            // urteil.sekunden() - sonst stuende in der ersten Zeile mehr taetige Zeit als
+            // gemessene, und der Zuschlag verweigert genau das.
+            wartend.add(new Spielzeitablage.Zuschlag(wer, anteil.tag(), anteil.sekunden(),
+                    warTaetig ? anteil.sekunden() : 0L));
         }
     }
 
