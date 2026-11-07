@@ -8,9 +8,12 @@ import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
+import org.bukkit.Material;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.permissions.PermissionAttachmentInfo;
 
 /**
@@ -52,6 +55,15 @@ final class Spielerprobe {
 
     /** Wo er steht. Ein Zweig, der danach fragt, braucht ihn gesetzt. */
     private Location ort;
+
+    /**
+     * Was er in der Haupthand haelt - oder {@code null}.
+     *
+     * <p>Gebraucht seit dem Bundesmarkt: {@code /markt verkaufen} liest die Hand und
+     * nimmt Stuecke daraus. Ein {@code null} heisst LEERE Hand, und der Stellvertreter
+     * gibt dann einen Stapel Luft zurueck - so wie Bukkit es tut.
+     */
+    private ItemStack inDerHand;
 
     /** Sein Spielmodus. {@code setGameMode} aendert ihn UND schreibt mit. */
     private GameMode modus = GameMode.SURVIVAL;
@@ -110,6 +122,23 @@ final class Spielerprobe {
         return this;
     }
 
+    /**
+     * Gibt ihm etwas in die Hand - gibt sich selbst zurueck, fuer die Kette.
+     *
+     * <p>Ein {@link Wesenprobe.Probestapel} und kein echter {@code ItemStack}: Jener
+     * laesst sich ohne laufenden Server nicht bauen, und seine Menge nicht setzen -
+     * gemessen gegen das echte Jar.
+     */
+    Spielerprobe mitInDerHand(Material art, int menge) {
+        this.inDerHand = new Wesenprobe.Probestapel(art, menge);
+        return this;
+    }
+
+    /** Was er jetzt noch in der Hand haelt - fuer die Probe NACH dem Verkauf. */
+    int mengeInDerHand() {
+        return inDerHand == null ? 0 : inDerHand.getAmount();
+    }
+
     /** Stellt ihn an einen Ort - gibt sich selbst zurueck, fuer die Kette. */
     Spielerprobe anOrt(Location wo) {
         this.ort = wo;
@@ -129,6 +158,36 @@ final class Spielerprobe {
 
     UUID kennung() {
         return kennung;
+    }
+
+    /**
+     * Das Inventar, wie ein Zweig es sieht - beantwortet wird NUR die Haupthand.
+     *
+     * <p>Derselbe Grundsatz wie beim Spieler selbst: Was gemessen gebraucht wird, wird
+     * beantwortet; alles andere wirft mit seinem eigenen Namen. Ein stilles null waere
+     * schlimmer - dann liefe die Probe durch einen anderen Zweig und waere gruen, ohne
+     * etwas gesehen zu haben.
+     */
+    private PlayerInventory inventar() {
+        return (PlayerInventory) Proxy.newProxyInstance(
+                Spielerprobe.class.getClassLoader(),
+                new Class<?>[] {PlayerInventory.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    // Eine LEERE Hand ist ein Stapel Luft - so gibt Bukkit es zurueck,
+                    // und der Zweig prueft darauf.
+                    case "getItemInMainHand" -> inDerHand == null
+                            ? new Wesenprobe.Probestapel(Material.AIR, 0)
+                            : inDerHand;
+                    case "toString" -> "Inventarprobe " + name;
+                    case "hashCode" -> kennung.hashCode();
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Spielerprobe beantwortet PlayerInventory."
+                                    + methode.getName() + " nicht. Der Zweig, den du"
+                                    + " gerade durchlaeufst, braucht sie - also gehoert"
+                                    + " sie hierher, mit einer Antwort, die die Probe"
+                                    + " selbst mitgibt.");
+                });
     }
 
     /**
@@ -159,6 +218,7 @@ final class Spielerprobe {
                     case "canSee" -> true;
                     case "sendActionBar" -> merke(handbalken, werte[0]);
                     case "sendMessage" -> merke(chat, werte[0]);
+                    case "getInventory" -> inventar();
                     case "toString" -> "Spielerprobe " + name;
                     case "hashCode" -> kennung.hashCode();
                     case "equals" -> eigen == (werte == null ? null : werte[0]);

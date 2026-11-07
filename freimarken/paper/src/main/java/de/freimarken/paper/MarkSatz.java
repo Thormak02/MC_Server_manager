@@ -65,6 +65,8 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_BERUF_VERLASSEN("mark.verlauf.grund.beruf-verlassen", Art.WORT),
     VERLAUF_GRUND_BERUF_ERSTATTET("mark.verlauf.grund.beruf-erstattet", Art.WORT),
     VERLAUF_GRUND_BERUF_VERDIENST("mark.verlauf.grund.beruf-verdienst", Art.WORT),
+    VERLAUF_GRUND_BUNDESMARKT_VERKAUF("mark.verlauf.grund.bundesmarkt-verkauf",
+            Art.WORT),
 
     /**
      * Die Zeitform des Verlaufs - beim LADEN uebersetzt.

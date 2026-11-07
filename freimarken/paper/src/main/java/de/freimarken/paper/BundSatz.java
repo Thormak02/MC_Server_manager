@@ -40,6 +40,7 @@ enum BundSatz implements Satz {
     BEFEHL_TPACCEPT("befehl.beschreibung.tpaccept", Art.WORT),
     BEFEHL_TPDENY("befehl.beschreibung.tpdeny", Art.WORT),
     BEFEHL_BERUF("befehl.beschreibung.beruf", Art.WORT),
+    BEFEHL_MARKT("befehl.beschreibung.markt", Art.WORT),
 
     // --- Das nackte /freimarken: vier oder fuenf Chatzeilen -----------------
     STAND_KOPF("stand.kopf", Art.SATZ),

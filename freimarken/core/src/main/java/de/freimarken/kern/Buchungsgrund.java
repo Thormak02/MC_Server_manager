@@ -75,7 +75,22 @@ public enum Buchungsgrund {
      * aus Arbeit kam, und genau das braucht der Verdienstdeckel: Er rechnet seine
      * Tagessumme aus DIESEN Zeilen, statt eine zweite Wahrheit daneben zu fuehren.
      */
-    BERUF_VERDIENST("beruf_verdienst", Richtung.EINNAHME);
+    BERUF_VERDIENST("beruf_verdienst", Richtung.EINNAHME),
+
+    /**
+     * Verkauf an den Bundesmarkt.
+     *
+     * <p>Die zweite gedeckelte Quelle (Plan 8.2: "Verkauf an den Bundesmarkt - kleines
+     * Sortiment, niedrige Preise"). Ein EIGENER Grund und nicht derselbe wie die Arbeit,
+     * und das ist die tragende Entscheidung dieses Schrittes: Beide Quellen haben einen
+     * Tagesdeckel, und beide rechnen ihre Tagessumme aus diesen Zeilen. Mit einem
+     * gemeinsamen Grund waere jeder der zwei Deckel durch die ANDERE Taetigkeit zu
+     * fuellen - wer am Markt verkauft, koennte danach nicht mehr arbeiten.
+     *
+     * <p>WAS verkauft wurde, steht nicht hier: Dieses Buch ist das Geldbuch. Hier steht,
+     * dass Geld aus einem Verkauf an den Bund kam - dieselbe Trennung wie bei der Arbeit.
+     */
+    BUNDESMARKT_VERKAUF("bundesmarkt_verkauf", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {

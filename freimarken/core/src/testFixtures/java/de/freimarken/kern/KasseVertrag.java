@@ -21,6 +21,15 @@ import org.junit.jupiter.api.Test;
  */
 public abstract class KasseVertrag {
 
+    /**
+     * Der Grund, nach dem die Tagessumme meistens gefragt wird.
+     *
+     * <p>Eine Abkuerzung und kein zweiter Begriff: {@code summeSeit} nimmt den Grund von
+     * aussen, weil es ZWEI Tagesdeckel gibt - einen auf die Arbeit (Teil E) und einen auf
+     * den Verkauf an den Bundesmarkt (Teil F).
+     */
+    protected static final Buchungsgrund ARBEIT = Buchungsgrund.BERUF_VERDIENST;
+
     /** Das Startguthaben, mit dem die geprueften Kassen aufgesetzt werden. */
     protected static final long START = 50_000L;
 
@@ -256,7 +265,7 @@ public abstract class KasseVertrag {
         // und nicht ein Geschenk, eine Erstattung oder das Startguthaben. Zaehlte er
         // alles, waere ein Spieler nach einer Parzellenerstattung fuer den Rest des Tages
         // gesperrt.
-        assertEquals(0L, kasse.verdientSeit(anna, Instant.EPOCH));
+        assertEquals(0L, kasse.summeSeit(anna, Instant.EPOCH, ARBEIT));
     }
 
     @Test
@@ -269,7 +278,7 @@ public abstract class KasseVertrag {
         kasse.gutschreiben(anna, 200L, Buchungsgrund.BERUF_VERDIENST);
         kasse.gutschreiben(anna, 9_000L, ERSTATTUNG);
 
-        assertEquals(500L, kasse.verdientSeit(anna, Instant.EPOCH));
+        assertEquals(500L, kasse.summeSeit(anna, Instant.EPOCH, ARBEIT));
     }
 
     @Test
@@ -281,8 +290,8 @@ public abstract class KasseVertrag {
 
         kasse.gutschreiben(anna, 700L, Buchungsgrund.BERUF_VERDIENST);
 
-        assertEquals(700L, kasse.verdientSeit(anna, Instant.EPOCH));
-        assertEquals(0L, kasse.verdientSeit(bert, Instant.EPOCH));
+        assertEquals(700L, kasse.summeSeit(anna, Instant.EPOCH, ARBEIT));
+        assertEquals(0L, kasse.summeSeit(bert, Instant.EPOCH, ARBEIT));
     }
 
     @Test
@@ -295,9 +304,9 @@ public abstract class KasseVertrag {
         UUID anna = UUID.randomUUID();
         kasse.gutschreiben(anna, 400L, Buchungsgrund.BERUF_VERDIENST);
 
-        assertEquals(400L, kasse.verdientSeit(anna, Instant.EPOCH));
-        assertEquals(0L, kasse.verdientSeit(anna,
-                Instant.now().plus(Duration.ofDays(1L))));
+        assertEquals(400L, kasse.summeSeit(anna, Instant.EPOCH, ARBEIT));
+        assertEquals(0L, kasse.summeSeit(anna,
+                Instant.now().plus(Duration.ofDays(1L)), ARBEIT));
     }
 
     @Test
@@ -318,9 +327,36 @@ public abstract class KasseVertrag {
         Instant gebuchtUm = kasse.verlauf(anna, 1).get(0).zeitpunkt();
 
         assertEquals(400L,
-                kasse.verdientSeit(anna, gebuchtUm.minus(Duration.ofMinutes(30L))));
+                kasse.summeSeit(anna, gebuchtUm.minus(Duration.ofMinutes(30L)),
+                        ARBEIT));
         assertEquals(0L,
-                kasse.verdientSeit(anna, gebuchtUm.plus(Duration.ofMinutes(30L))));
+                kasse.summeSeit(anna, gebuchtUm.plus(Duration.ofMinutes(30L)),
+                        ARBEIT));
+    }
+
+    @Test
+    @DisplayName("Jeder Grund hat seine EIGENE Tagessumme")
+    void jederGrundSeineSumme() {
+        // Die Zusage, auf der der zweite Tagesdeckel steht: Teil E deckelt die Arbeit,
+        // Teil F den Verkauf an den Bundesmarkt. Zaehlte eine Summe beide, waere jeder
+        // der zwei Deckel durch die ANDERE Taetigkeit zu fuellen - wer am Markt verkauft,
+        // koennte danach nicht mehr arbeiten.
+        Kasse kasse = kasse();
+        UUID anna = UUID.randomUUID();
+
+        kasse.gutschreiben(anna, 300L, Buchungsgrund.BERUF_VERDIENST);
+        kasse.gutschreiben(anna, 700L, Buchungsgrund.BUNDESMARKT_VERKAUF);
+        kasse.gutschreiben(anna, 5_000L, ERSTATTUNG);
+
+        assertEquals(300L, kasse.summeSeit(anna, Instant.EPOCH,
+                Buchungsgrund.BERUF_VERDIENST));
+        assertEquals(700L, kasse.summeSeit(anna, Instant.EPOCH,
+                Buchungsgrund.BUNDESMARKT_VERKAUF));
+        // Und ein Grund ohne Buchung ist 0 und nicht die Summe der anderen. NICHT
+        // EROEFFNUNG: Darunter steht das Startguthaben, und das ist eine Buchung -
+        // gemessen, nicht vermutet.
+        assertEquals(0L, kasse.summeSeit(anna, Instant.EPOCH,
+                Buchungsgrund.PARZELLE_GEKAUFT));
     }
 
     @Test
@@ -329,9 +365,13 @@ public abstract class KasseVertrag {
         Kasse kasse = kasse();
 
         assertThrows(IllegalArgumentException.class,
-                () -> kasse.verdientSeit(null, Instant.EPOCH));
+                () -> kasse.summeSeit(null, Instant.EPOCH, ARBEIT));
         assertThrows(IllegalArgumentException.class,
-                () -> kasse.verdientSeit(UUID.randomUUID(), null));
+                () -> kasse.summeSeit(UUID.randomUUID(), null, ARBEIT));
+        // Und ohne Grund: Eine Tagessumme ueber ALLE Gruende waere ein Deckel, den ein
+        // Geschenk fuellt.
+        assertThrows(IllegalArgumentException.class,
+                () -> kasse.summeSeit(UUID.randomUUID(), Instant.EPOCH, null));
     }
 
     @Test

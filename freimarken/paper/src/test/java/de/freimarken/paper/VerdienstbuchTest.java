@@ -156,14 +156,10 @@ class VerdienstbuchTest {
      * umrechnen muss, prueft am Ende die Umrechnung und nicht den Deckel.
      */
     static Wirtschaftsstand stand(Verdienstwerte verdienst) {
-        return new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
-                Wirtschaftswerte.VORGABE_STARTGUTHABEN,
-                Wirtschaftswerte.VORGABE_HOECHSTZAHL,
-                Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
-                Wirtschaftswerte.VORGABE_RANG_WERBUNG,
-                new Zeitwerte(ZoneOffset.UTC, Duration.ofSeconds(60L),
-                        Duration.ofMinutes(10L)),
-                Berufswerte.VORGABE, verdienst));
+        return new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                .mitZeit(new Zeitwerte(ZoneOffset.UTC, Duration.ofSeconds(60L),
+                        Duration.ofMinutes(10L)))
+                .mitVerdienst(verdienst));
     }
 
     private Verdienstbuch buch(long tagesdeckel) {
@@ -764,7 +760,7 @@ class VerdienstbuchTest {
         }
 
         @Override
-        public long verdientSeit(UUID spieler, Instant ab) {
+        public long summeSeit(UUID spieler, Instant ab, Buchungsgrund grund) {
             return 0L;
         }
     }
@@ -784,7 +780,7 @@ class VerdienstbuchTest {
         }
 
         @Override
-        public long verdientSeit(UUID spieler, Instant ab) {
+        public long summeSeit(UUID spieler, Instant ab, Buchungsgrund grund) {
             gelesen++;
             return 0L;
         }

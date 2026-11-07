@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Berufsangabe;
 import de.freimarken.kern.Berufsverzeichnis;
+import de.freimarken.kern.Ankaufliste;
+import de.freimarken.kern.Marktwerte;
 import de.freimarken.kern.Berufswerte;
 import de.freimarken.kern.Lohntafel;
 import de.freimarken.kern.Preisstaffel;
@@ -84,12 +86,7 @@ class WirtschaftslisteTest {
 
     /** Dieselben Werte wie die Vorgabe, nur mit der Lohntafel aus VOLLSTAENDIG. */
     private static Wirtschaftswerte vorgabeMitLoehnen() {
-        return new Wirtschaftswerte(Preisstaffel.VORGABE,
-                Wirtschaftswerte.VORGABE_STARTGUTHABEN,
-                Wirtschaftswerte.VORGABE_HOECHSTZAHL,
-                Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
-                Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                Berufswerte.VORGABE, VERDIENST_AUS_VOLLSTAENDIG);
+        return Wirtschaftswerte.VORGABE.mitVerdienst(VERDIENST_AUS_VOLLSTAENDIG);
     }
 
     /**
@@ -417,13 +414,14 @@ class WirtschaftslisteTest {
             // zwei Abschriften laufen auseinander. Alles ANDERE muss uebereinstimmen,
             // sonst gilt bei einem Erststart etwas anderes als beim Rueckfall.
             Lohntafel ausDerDateiTafel = ergebnis.werte().verdienst().loehne();
-            assertEquals(new Wirtschaftswerte(Preisstaffel.VORGABE,
-                            Wirtschaftswerte.VORGABE_STARTGUTHABEN,
-                            Wirtschaftswerte.VORGABE_HOECHSTZAHL,
-                            Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
-                            Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                            Berufswerte.VORGABE,
-                            Verdienstwerte.VORGABE.mitLoehnen(ausDerDateiTafel)),
+            // Auch die MARKTliste kommt aus der Datei und hat mit Absicht keinen
+            // Rueckfall im Programm - dieselbe Entscheidung wie bei der Lohnliste.
+            Ankaufliste ausDerDateiAnkauf = ergebnis.werte().markt().ankauf();
+            assertEquals(Wirtschaftswerte.VORGABE
+                            .mitVerdienst(Verdienstwerte.VORGABE
+                                    .mitLoehnen(ausDerDateiTafel))
+                            .mitMarkt(Marktwerte.VORGABE
+                                    .mitAnkauf(ausDerDateiAnkauf)),
                     ergebnis.werte(),
                     "die Datei muss genau die Vorgaben des Programms enthalten - sonst"
                             + " gilt bei einem Erststart etwas anderes als beim Rueckfall");

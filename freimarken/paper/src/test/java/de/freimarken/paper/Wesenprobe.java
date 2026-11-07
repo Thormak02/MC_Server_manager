@@ -47,8 +47,23 @@ final class Wesenprobe {
 
         private final Material art;
 
+        /**
+         * Die Menge, selbst gehalten.
+         *
+         * <p>Gemessen und nicht gewaehlt: {@code ItemStack.setAmount} wirft ohne
+         * laufenden Server eine NullPointerException - sein {@code craftDelegate} ist
+         * null. Ein Zweig, der Stuecke aus der Hand nimmt, waere damit nicht pruefbar;
+         * also haelt dieser Stapel seine Menge selbst.
+         */
+        private int menge;
+
         Probestapel(Material art) {
+            this(art, 1);
+        }
+
+        Probestapel(Material art, int menge) {
             this.art = art;
+            this.menge = menge;
         }
 
         @Override
@@ -57,8 +72,18 @@ final class Wesenprobe {
         }
 
         @Override
+        public int getAmount() {
+            return menge;
+        }
+
+        @Override
+        public void setAmount(int andere) {
+            this.menge = andere;
+        }
+
+        @Override
         public String toString() {
-            return "Probestapel " + art;
+            return "Probestapel " + menge + " x " + art;
         }
     }
 

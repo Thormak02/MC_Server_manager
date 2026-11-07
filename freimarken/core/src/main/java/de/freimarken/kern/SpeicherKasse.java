@@ -101,15 +101,15 @@ public final class SpeicherKasse implements Kasse {
     }
 
     @Override
-    public synchronized long verdientSeit(UUID spieler, Instant ab) {
-        if (spieler == null || ab == null) {
-            throw new IllegalArgumentException("Ohne Spieler und Zeitpunkt gibt es keine"
-                    + " Tagessumme");
+    public synchronized long summeSeit(UUID spieler, Instant ab,
+                                      Buchungsgrund grund) {
+        if (spieler == null || ab == null || grund == null) {
+            throw new IllegalArgumentException("Ohne Spieler, Zeitpunkt und Grund gibt es"
+                    + " keine Tagessumme");
         }
         long summe = 0L;
         for (Buchung zeile : buch) {
-            if (zeile.spieler().equals(spieler)
-                    && zeile.grund() == Buchungsgrund.BERUF_VERDIENST
+            if (zeile.spieler().equals(spieler) && zeile.grund() == grund
                     && !zeile.zeitpunkt().isBefore(ab)) {
                 summe += zeile.betrag();
             }

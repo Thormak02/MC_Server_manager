@@ -2,6 +2,8 @@ package de.freimarken.kern;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeSet;
+import java.util.Set;
 
 /**
  * Die einzige veraenderliche Zelle des Plugins - was die Wirtschaft gerade kostet.
@@ -125,10 +127,11 @@ public final class Wirtschaftsstand {
         Zeitwerte zeit = new Zeitwerte(alt.zeit().zone(), alt.zeit().takt(),
                 grenzePasst ? ausDerDatei.zeit().untaetigNach()
                         : alt.zeit().untaetigNach());
-        Wirtschaftswerte neu = new Wirtschaftswerte(ausDerDatei.preise(),
-                alt.startguthaben(), ausDerDatei.hoechstzahl(), ausDerDatei.gruppenFelder(),
-                ausDerDatei.rangWerbung(), zeit, ausDerDatei.berufe(),
-                ausDerDatei.verdienst());
+        // Alles aus der Datei - mit ZWEI Ausnahmen, und beide sind in NUR_BEIM_START
+        // begruendet: das Startguthaben (es wuerde sonst rueckwirkend gelten) und der
+        // Takt samt Zone (die stecken im gestellten Zeitgeber).
+        Wirtschaftswerte neu = ausDerDatei.mitStartguthaben(alt.startguthaben())
+                .mitZeit(zeit);
 
         List<String> geaendert = new ArrayList<>();
         nenneZahl(geaendert, Wirtschaftswerte.PFAD_GRUNDPREIS,
@@ -169,6 +172,24 @@ public final class Wirtschaftsstand {
                 alt.verdienst().faktorProzent(), neu.verdienst().faktorProzent());
         nenneZahl(geaendert, Verdienstwerte.PFAD_BODEN,
                 alt.verdienst().bodenProzent(), neu.verdienst().bodenProzent());
+        // Die STUNDENMENGE je Taetigkeit. Sie gehoert genannt, weil sie der wirksame
+        // Hebel gegen Farmen ist: Wer sie verstellt und keine Zeile darueber liest,
+        // weiss nicht, ob seine Aenderung angekommen ist - und dreht beim naechsten Mal
+        // weiter, obwohl sie schon gilt.
+        for (Taetigkeit taetigkeit : Taetigkeit.values()) {
+            nenneZahl(geaendert, Verdienstwerte.PFAD_STUNDENMENGE + "."
+                            + taetigkeit.schluessel(),
+                    alt.verdienst().stundenmenge(taetigkeit),
+                    neu.verdienst().stundenmenge(taetigkeit));
+        }
+        // Die zwei Listen werden VERGLICHEN und nicht gezaehlt: Ein ausgetauschter Name
+        // bei gleicher Laenge ist genau die Aenderung, die der Betreiber gerade gemacht
+        // hat - und beide Listen entscheiden ueber Geld. Bei der Weissliste haengt daran,
+        // ob eine Spawnerfarm zahlt; beim Saatgut, ob ein Acker etwas einbringt.
+        nenneMenge(geaendert, Verdienstwerte.PFAD_SPAWNGRUENDE,
+                alt.verdienst().spawngruende(), neu.verdienst().spawngruende());
+        nenneMenge(geaendert, Verdienstwerte.PFAD_SAATGUT,
+                alt.verdienst().saatgut(), neu.verdienst().saatgut());
         // Die Tafel selbst wird VERGLICHEN und nicht gezaehlt: Eine Zeile mit einem
         // anderen Lohn laesst die Zeilenzahl gleich, und genau das ist die Aenderung, die
         // der Betreiber gerade gemacht hat. Genannt wird die Zahl der Zeilen - vierzig
@@ -177,6 +198,16 @@ public final class Wirtschaftsstand {
             geaendert.add(Verdienstwerte.PFAD_LOEHNE + ": "
                     + alt.verdienst().loehne().anzahl() + " -> "
                     + neu.verdienst().loehne().anzahl() + " Zeilen (geaendert)");
+        }
+        // Der Bundesmarkt: Deckel und Sortiment. Das Sortiment wird VERGLICHEN und
+        // nicht gezaehlt - ein geaenderter Preis bei gleicher Laenge ist genau die
+        // Aenderung, die der Betreiber gerade gemacht hat.
+        nenneZahl(geaendert, Marktwerte.PFAD_TAGESDECKEL,
+                alt.markt().tagesdeckel(), neu.markt().tagesdeckel());
+        if (!alt.markt().ankauf().equals(neu.markt().ankauf())) {
+            geaendert.add(Marktwerte.PFAD_ANKAUF + ": "
+                    + alt.markt().ankauf().anzahl() + " -> "
+                    + neu.markt().ankauf().anzahl() + " Materialien (geaendert)");
         }
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
@@ -262,6 +293,35 @@ public final class Wirtschaftsstand {
         }
         zeilen.add(pfad + ": es gilt weiter " + gilt + ", neu gelesen wurde " + gelesen
                 + " - erst ein Neustart uebernimmt das. " + grund);
+    }
+
+    /**
+     * Nennt eine Namensmenge, die sich geaendert hat - mit ihrer Laenge und dem
+     * Unterschied.
+     *
+     * <p>Nicht die ganze Liste: Sechzehn Namen "alt -> neu" waeren keine Antwort mehr,
+     * sondern eine Wand. Aber auch nicht nur die Laenge - ein ausgetauschter Name bei
+     * gleicher Laenge ist genau die Aenderung, die gerade gemacht wurde. Genannt wird
+     * darum die Laenge UND was hinzukam oder wegfiel.
+     */
+    private static void nenneMenge(List<String> geaendert, String pfad,
+                                   Set<String> alt, Set<String> neu) {
+        if (alt.equals(neu)) {
+            return;
+        }
+        Set<String> dazu = new TreeSet<>(neu);
+        dazu.removeAll(alt);
+        Set<String> weg = new TreeSet<>(alt);
+        weg.removeAll(neu);
+        StringBuilder satz = new StringBuilder(pfad + ": " + alt.size() + " -> "
+                + neu.size() + " Namen");
+        if (!dazu.isEmpty()) {
+            satz.append(", dazu: ").append(String.join(", ", dazu));
+        }
+        if (!weg.isEmpty()) {
+            satz.append(", weg: ").append(String.join(", ", weg));
+        }
+        geaendert.add(satz.toString());
     }
 
     private static void nenneZahl(List<String> hinein, String pfad, long alt, long neu) {

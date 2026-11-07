@@ -309,8 +309,10 @@ final class Verdienstbuch {
             if (stand.tag == null || !stand.tag.equals(heute) || stand.heuteGebucht < 0L) {
                 // Einmal je Spieler und Tag, und zwar HIER im Takt: Im Blockereignis
                 // waere das eine Abfrage je Block.
-                stand.heuteGebucht = kasse.verdientSeit(wer,
-                        Tagesgrenze.tagesbeginn(heute, wirtschaft.werte().zeit().zone()));
+                stand.heuteGebucht = kasse.summeSeit(wer,
+                        Tagesgrenze.tagesbeginn(heute,
+                                wirtschaft.werte().zeit().zone()),
+                        Buchungsgrund.BERUF_VERDIENST);
                 stand.tag = heute;
             }
             long erlaubt = Verdienstregel.unterDemDeckel(werte, stand.heuteGebucht, mark);

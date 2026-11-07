@@ -140,11 +140,8 @@ class SpielzeitBefehleTest {
     }
 
     private static Wirtschaftsstand stand() {
-        return new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
-                Wirtschaftswerte.VORGABE_STARTGUTHABEN, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
-                Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
-                Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                Berufswerte.VORGABE, Verdienstwerte.VORGABE));
+        // Genau die Vorgabe - diese Probe variiert nichts am Wirtschaftssatz.
+        return new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
     }
 
     private Spielzeitbuch buch(Spielzeitablage ablage) {

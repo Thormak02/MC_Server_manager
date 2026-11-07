@@ -162,10 +162,10 @@ public final class MariaKasse implements Kasse {
     }
 
     @Override
-    public long verdientSeit(UUID spieler, Instant ab) {
-        if (spieler == null || ab == null) {
-            throw new IllegalArgumentException("Ohne Spieler und Zeitpunkt gibt es keine"
-                    + " Tagessumme");
+    public long summeSeit(UUID spieler, Instant ab, Buchungsgrund grund) {
+        if (spieler == null || ab == null || grund == null) {
+            throw new IllegalArgumentException("Ohne Spieler, Zeitpunkt und Grund gibt es"
+                    + " keine Tagessumme");
         }
         // Dieselbe Spaltenfolge wie der Verlauf: (spieler, zeitpunkt, id). Die Abfrage
         // laeuft damit ueber denselben Index, und der Grund wird erst danach gefiltert -
@@ -179,7 +179,7 @@ public final class MariaKasse implements Kasse {
             // die der JVM darueber - dann begaenne der Tag um den Ortsversatz verschoben,
             // und der Deckel griffe eine Stunde zu frueh oder zu spaet.
             anfrage.setTimestamp(2, Timestamp.from(ab), utcKalender());
-            anfrage.setString(3, Buchungsgrund.BERUF_VERDIENST.schluessel());
+            anfrage.setString(3, grund.schluessel());
             try (ResultSet ergebnis = anfrage.executeQuery()) {
                 ergebnis.next();
                 return ergebnis.getLong(1);

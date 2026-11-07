@@ -253,15 +253,15 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle acht Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - alle neun Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
-        // BerufSatz ist der achte. Berufsname steht mit Absicht NICHT dabei: Es ist kein
+        // MarktSatz ist der neunte. Berufsname steht mit Absicht NICHT dabei: Es ist kein
         // Bereich, sondern eine offene Familie - es gibt einen Schluessel je Beruf der
         // config.yml, und diese Liste verlangt, dass jeder Satz in der ausgelieferten
         // Vorlage steht.
         Set<String> erwartet = new LinkedHashSet<>(List.of("BundSatz", "MarkSatz",
                 "ParzellenSatz", "AnfragenSatz", "SpielzeitSatz", "ReiseSatz",
-                "WacheSatz", "BerufSatz"));
+                "WacheSatz", "BerufSatz", "MarktSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -502,6 +502,14 @@ class VorlageTest {
                     + " nicht je Block.\"",
             // Die Klage ueber einen verlorenen Verdienst: Serverprotokoll, nie ein
             // Spieler.
+            // Die Startzeile zum Bundesmarkt - Konsole.
+            "FreimarkenPlugin.java -> \" Mark je Spieler. Verkauft wird nur in der"
+                    + " Ankunftswelt.\"",
+            // Die Einheit und die zwei Erklaerzeilen des Marktlesers - alle drei gehen
+            // an den Betreiber, der seine config.yml liest, und nie an einen Spieler.
+            "Marktliste.java -> \"Mark\"",
+            "Marktliste.java -> \" Mark: 40 heisst 0,40 Mark. Ein Punkt trennt in"
+                    + " YAML keine\"",
             "Verdienstbuch.java -> \" Mark sind verloren. Es wird NICHT wiederholt:"
                     + " Ein zweiter Versuch\"",
             // Die Einheit und die zwei Erklaerzeilen des Lesers - alle drei gehen an den

@@ -137,11 +137,7 @@ class SpielzeitbuchTest {
     }
 
     private static Wirtschaftsstand stand(Zeitwerte zeit) {
-        return new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
-                Wirtschaftswerte.VORGABE_STARTGUTHABEN, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
-                Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
-                Wirtschaftswerte.VORGABE_RANG_WERBUNG, zeit,
-                Berufswerte.VORGABE, Verdienstwerte.VORGABE));
+        return new Wirtschaftsstand(Wirtschaftswerte.VORGABE.mitZeit(zeit));
     }
 
     /** Wie viel fuer diesen Spieler insgesamt geschrieben ist. */

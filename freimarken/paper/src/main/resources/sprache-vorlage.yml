@@ -70,6 +70,9 @@ mark:
       # Eine Zeile je Takt und nicht je Block: Gebucht wird, was der Zeitgeber gesammelt
       # hat. Was ein Spieler dafuer getan hat, steht im Logbuch und nicht im Geldbuch.
       beruf-verdienst: "Verdienst aus Arbeit"
+      # Eine Zeile je Verkauf. WAS verkauft wurde, steht nicht im Geldbuch -
+      # dieselbe Trennung wie beim Verdienst.
+      bundesmarkt-verkauf: "Verkauf an den Bundesmarkt"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -112,6 +115,7 @@ befehl:
     tpahere: "Lade einen Spieler ein, zu dir zu kommen"
     tpaccept: "Eine Teleportanfrage annehmen"
     tpdeny: "Teleportanfragen ablehnen"
+    markt: "Was der Bundesmarkt ankauft - und verkaufen"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
 parzelle:
@@ -1106,3 +1110,51 @@ preis:
 # Eine fruehere Ausnahme ist keine mehr: Der Torhinweis am Ende von warp.ziele
 #   hat seinen zweiten Ort in wache.portal.kein-ausgang, also in einer Zeile
 #   dieser Datei; dort steht ein Querverweis und keine Warnung.
+
+# DER BUNDESMARKT - was der Bund ankauft und was er dafuer zahlt.
+#
+# Der Markt ist ein ORT: Er steht in Altfurt, und nur dort kann verkauft werden. Die
+# LISTE darf man ueberall ansehen - wer wissen will, ob sich der Weg lohnt, soll nicht
+# erst hingehen muessen.
+#
+# DIE MATERIALNAMEN stehen NICHT hier, sondern kommen aus der config.yml: Ein Sortiment
+# aus vierzig Materialien braeuchte hier vierzig Worte, und das waere eine zweite
+# Abschrift jener Liste. Zwei Abschriften derselben Tabelle laufen auseinander. Gezeigt
+# wird der technische Name (cobblestone) - derselbe, den du eintraegst.
+markt:
+  # Die Ueberschrift von /markt.
+  kopf: "<gold>Der Bundesmarkt kauft</gold>"
+  # {liste} - das ganze Sortiment in EINER Zeile. Vierzig Chatzeilen waeren eine Wand.
+  sortiment: "<gray>{liste}</gray>"
+  # {material} {preis} - ein Stueck des Sortiments. Der Preis kommt aus
+  # waehrung.pfennige, denn Ankaufpreise sind meistens Pfennige.
+  #
+  # KEIN Farbtag: Dieses Wort wird in markt.sortiment eingesetzt, und ein Tag darin
+  # ueberschriebe die Farbe jener Zeile - ab der Einsetzung und bis zum Ende. Die Farbe
+  # der ganzen Liste steht in markt.sortiment.
+  zeile: "{material} {preis}"
+  # Was zwischen zwei Stuecken steht. Darf leer sein - dann stossen sie aneinander.
+  # Auch hier kein Farbtag, aus demselben Grund.
+  zeilen-trenner: ", "
+  # {betrag} - was heute noch aus Verkaeufen zu holen ist. In ganzen Mark: Der Deckel
+  # haengt am Gebuchten, und gebucht werden nur ganze Mark.
+  frei: "<gray>Heute kannst du noch <gold>{betrag}</gold> aus Verkaeufen bekommen.</gray>"
+  # Der Bund kauft derzeit gar nichts - die Liste in der config.yml ist leer.
+  leer: "<yellow>Der Bundesmarkt kauft derzeit nichts.</yellow>"
+  # {material} {betrag} - ein Verkauf ist durch. GEZAEHLT nach den Stuecken: Der Bund
+  # nimmt nur so viele, wie eine ganze Mark ergeben, und wer sieben anbietet und fuenf
+  # losgeworden ist, soll das lesen statt nachzuzaehlen.
+  verkauft:
+    eins: "<green>1 {material} verkauft - <gold>{betrag}</gold>.</green>"
+    viele: "<green>{anzahl} {material} verkauft - <gold>{betrag}</gold>.</green>"
+  absage:
+    # Der Markt ist ein Ort. Wer nicht in Altfurt ist, kann nicht verkaufen.
+    falsche-welt: "<red>Der Bundesmarkt steht in Altfurt - dort kauft der Bund.</red>"
+    leere-hand: "<red>Du haeltst nichts in der Hand.</red>"
+    # {material} - das kauft der Bund nicht.
+    kauft-nicht: "<red>Der Bund kauft {material} nicht.</red>\n<gray>/markt zeigt, was er kauft.</gray>"
+    # {material} - zu wenig fuer eine ganze Mark. Diese Zeile MUSS es geben: Sonst tippt
+    # jemand /markt verkaufen, es passiert nichts, und er haelt es fuer einen Fehler.
+    zu-wenig: "<yellow>Fuer so wenig {material} gibt es keine ganze Mark - der Bund zahlt nur in ganzen Mark.</yellow>"
+    deckel: "<yellow>Heute ist genug verkauft - morgen kauft der Bund wieder.</yellow>"
+    nicht-buchbar: "<red>Der Verkauf ist gerade nicht buchbar - deine Ware hast du noch. Im Serverprotokoll steht, warum.</red>"

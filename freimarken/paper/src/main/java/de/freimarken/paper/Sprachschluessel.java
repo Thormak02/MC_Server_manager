@@ -39,7 +39,8 @@ final class Sprachschluessel {
      */
     private static final List<Class<? extends Satz>> BEREICHE = List.of(
             BundSatz.class, MarkSatz.class, ParzellenSatz.class, AnfragenSatz.class,
-            SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class);
+            SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class,
+            MarktSatz.class);
 
     /** Alle Saetze, aus allen acht Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();

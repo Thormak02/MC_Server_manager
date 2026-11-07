@@ -599,6 +599,25 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - ~~Verdienen, Teil 2: Fischen, Toeten, Zuechten, Ernten.~~ 6.11.: 154 Lohnsaetze; neu einstellbar sind eine harte Stundenmenge je Taetigkeit, die Weissliste der Spawngruende und das Saatgut.
 - Die Stundenmenge ist der wirksame Hebel gegen Farmen - die Minderungsstufen daempfen nur. Saatgut bekommt keine Marke und zahlt nichts; bezahlt wird die Ernte.
 - Offen, Verdienen: Seehandel, Bootsrennen, Vorratshaltung und Auftragsbau sind keine Ereignisse, sondern eigene Systeme - eigener Schritt.
+- Pruefen, Teil E: Start - das Protokoll nennt "Lohnliste: 154 Saetze, Tagesdeckel 20000 Mark" und "Blockmarken und Verdienst aktiv in 8 Welten". Keine severe-Zeile.
+- Pruefen, Teil E: Bergmann im Hochwald - gewachsener Stein gibt den Handbalken "+0,40 Mark", ein selbst gesetzter Stein gibt beim Abbauen NICHTS. Nach dem Neustart gilt die Marke weiter.
+- Pruefen, Teil E: Bauer - gesaeten Weizen sofort umschlagen bringt nichts, reifer Weizen "+1,50 Mark". Saeen selbst zahlt nie.
+- Pruefen, Teil E: Toeten - ein per summon gerufener Zombie zahlt NICHTS (Grund command), ein nachts selbst erschienener zahlt. Ein gezuechtetes Kalb zahlt beim Tod nichts.
+- Pruefen, Teil E: Zucht - zwei Kuehe fuettern gibt "+35,00 Mark". Angeln im offenen Wasser zahlt, in einem Ein-Block-Loch nicht.
+- Pruefen, Teil E: Stundenmenge - verdienst.minderung.stundenmenge.abbauen auf 5, neuladen, sechs Steine: der sechste bringt "Mit Graben ist fuer diese Stunde genug".
+- Pruefen, Teil E: Tagesdeckel - tagesdeckel auf 1 samt Sprungbestaetigung, dann weiterarbeiten: "Heute ist genug verdient". Was darueber anfiel, ist am naechsten Tag NICHT nachgezahlt.
+- Pruefen, Teil E: /freimarken neuladen nennt JEDE geaenderte Verdienstzeile - auch die sechs Stundenmengen und die zwei Listen mit "dazu:" und "weg:".
+- Pruefen, Teil E: /mark verlauf zeigt "Verdienst aus Arbeit"; die Summe der Zeilen stimmt mit /mark.
+- Pruefen, Teil E: eine kaputte Lohnzeile (toeten: stone: 100) wird beim Neuladen beklagt, der Rest der Liste gilt weiter. Saatgut unter abbauen wird VERWORFEN.
+- ~~Schritt 7, Teil F: Bundesmarkt-Ankauf.~~ 7.11.: /markt zeigt 56 Materialien, /markt verkaufen nimmt die Hand. Eigener Tagesdeckel 5.000 Mark. Plan 8.2.
+- Der Bund nimmt nur STUECKE, die eine ganze Mark ergeben: Von sieben Stein zu 20 Pfennigen nimmt er fuenf fuer eine Mark, zwei bleiben. Nichts verfaellt.
+- Verkauft wird nur in der Ankunftswelt - der Markt ist ein Ort. Die LISTE darf man ueberall ansehen.
+- Keine Marktgebuehr beim Bund: Die niedrigen Preise SIND die Senke. Die 5 % aus Plan 8.2 gehoeren zum Spielerhandel in der Markthalle (Schritt 8).
+- Pruefen, Teil F: Start - das Protokoll nennt "Bundesmarkt: 56 Materialien im Sortiment." und darunter "Tagesdeckel 5000 Mark je Spieler". Keine severe-Zeile.
+- Pruefen, Teil F: /markt in Altfurt - 56 Materialien in der Reihenfolge der config.yml, darunter "Heute kannst du noch 5.000 Mark aus Verkaeufen bekommen".
+- Pruefen, Teil F: sieben Stein in der Hand, /markt verkaufen - fuenf weg, eine Mark, zwei bleiben. In Hochwald dieselbe Eingabe: Absage, Ware bleibt.
+- Pruefen, Teil F: vier Stein (zu wenig fuer eine Mark) und Erde (nicht im Sortiment) haben VERSCHIEDENE Absagen. /mark verlauf zeigt "Verkauf an den Bundesmarkt".
+- Pruefen, Teil F: bundesmarkt.tagesdeckel auf 1 samt Bestaetigung - nach einer Mark "Heute ist genug verkauft". Arbeit geht danach WEITER (eigener Deckel).
 - Offen, Berufe: der Kolben, der einen markierten Block weiterschiebt, und der Pflastersteingenerator - Weltregeln, eigener Schritt.
 - Entscheidung, Sprachdatei: sendeHandbalken hat seit Teil E zwei Aufrufer; Sprache.sende und sendeGezaehlt haben weiter keinen. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.

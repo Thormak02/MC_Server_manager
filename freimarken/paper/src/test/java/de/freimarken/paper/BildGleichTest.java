@@ -767,7 +767,61 @@ class BildGleichTest {
                         Einsatz.von("taetigkeit", sprache.wort(
                                 BerufSatz.TAETIGKEIT_ABBAUEN, Einsatz.keine())),
                         "&eMit Graben ist fuer diese Stunde genug - etwas anderes zahlt"
-                                + " weiter."));
+                                + " weiter."),
+
+                // --- Der Bundesmarkt: dreizehn Zeilen ----------------------------
+                // Die MATERIALNAMEN stehen mit Absicht nicht in der Sprachdatei - ein
+                // Sortiment aus vierzig Materialien waere dort eine zweite Abschrift der
+                // config.yml. Gezeigt wird der technische Name, und genau den prueeft
+                // diese Tafel mit.
+                new Zeile(MarktSatz.KOPF, 1L, Einsatz.keine(),
+                        "&6Der Bundesmarkt kauft"),
+                new Zeile(MarktSatz.SORTIMENT, 1L,
+                        Einsatz.von("liste", "stone 0,20 Mark, cod 4,00 Mark"),
+                        "&7stone 0,20 Mark, cod 4,00 Mark"),
+                new Zeile(MarktSatz.FREI, 1L,
+                        Einsatz.von("betrag", sprache.betrag(5_000L)),
+                        "&7Heute kannst du noch &65.000 Mark&7 aus Verkaeufen"
+                                + " bekommen."),
+                new Zeile(MarktSatz.LEER, 1L, Einsatz.keine(),
+                        "&eDer Bundesmarkt kauft derzeit nichts."),
+
+                // GEZAEHLT: eins und viele. Die Null steht mit dabei, weil ein Verkauf
+                // von null Stueck gar nicht gebucht wird - die Zeile darf es trotzdem
+                // geben, und ihr Bild soll festliegen.
+                // {anzahl} wird MITGEGEBEN und nicht von bau() eingesetzt - gemessen:
+                // Fehlt es, faellt Sprache auf den rohen Wortlaut zurueck, und im Bild
+                // stehen die Klammern. Die "eins"-Form nennt es nicht, darum faellt das
+                // erst bei zwei und null auf.
+                new Zeile(MarktSatz.VERKAUFT, 1L,
+                        Einsatz.von("anzahl", "1").mit("material", "stone")
+                                .mit("betrag", sprache.betrag(1L)),
+                        "&a1 stone verkauft - &61 Mark&a."),
+                new Zeile(MarktSatz.VERKAUFT, 2L,
+                        Einsatz.von("anzahl", "2").mit("material", "stone")
+                                .mit("betrag", sprache.betrag(1L)),
+                        "&a2 stone verkauft - &61 Mark&a."),
+                new Zeile(MarktSatz.VERKAUFT, 0L,
+                        Einsatz.von("anzahl", "0").mit("material", "stone")
+                                .mit("betrag", sprache.betrag(0L)),
+                        "&a0 stone verkauft - &60 Mark&a."),
+
+                new Zeile(MarktSatz.ABSAGE_FALSCHE_WELT, 1L, Einsatz.keine(),
+                        "&cDer Bundesmarkt steht in Altfurt - dort kauft der Bund."),
+                new Zeile(MarktSatz.ABSAGE_LEERE_HAND, 1L, Einsatz.keine(),
+                        "&cDu haeltst nichts in der Hand."),
+                new Zeile(MarktSatz.ABSAGE_KAUFT_NICHT, 1L,
+                        Einsatz.von("material", "dirt"),
+                        "&cDer Bund kauft dirt nicht.\n&7/markt zeigt, was er kauft."),
+                new Zeile(MarktSatz.ABSAGE_ZU_WENIG, 1L,
+                        Einsatz.von("material", "stone"),
+                        "&eFuer so wenig stone gibt es keine ganze Mark - der Bund zahlt"
+                                + " nur in ganzen Mark."),
+                new Zeile(MarktSatz.ABSAGE_DECKEL, 1L, Einsatz.keine(),
+                        "&eHeute ist genug verkauft - morgen kauft der Bund wieder."),
+                new Zeile(MarktSatz.ABSAGE_NICHT_BUCHBAR, 1L, Einsatz.keine(),
+                        "&cDer Verkauf ist gerade nicht buchbar - deine Ware hast du"
+                                + " noch. Im Serverprotokoll steht, warum."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

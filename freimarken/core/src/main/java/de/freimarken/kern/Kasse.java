@@ -81,11 +81,16 @@ public interface Kasse {
     List<Buchung> verlauf(UUID spieler, int hoechstens);
 
     /**
-     * Was dieser Spieler seit diesem Zeitpunkt aus ARBEIT bekommen hat.
+     * Was dieser Spieler seit diesem Zeitpunkt aus EINEM Grund bekommen hat.
      *
-     * <p>Genau {@link Buchungsgrund#BERUF_VERDIENST} und kein anderer Grund - der
-     * Tagesdeckel deckelt Arbeit und nicht ein Geschenk, eine Erstattung oder das
-     * Startguthaben.
+     * <p><b>Der Grund kommt von aussen</b>, und das ist die Lehre aus dem zweiten
+     * Tagesdeckel: Teil E deckelt die ARBEIT ({@link Buchungsgrund#BERUF_VERDIENST}),
+     * Teil F den Verkauf an den Bundesmarkt - und beide stellen dieselbe Frage. Eine
+     * zweite Methode daneben waere eine zweite Abschrift derselben Abfrage, und die
+     * laeuft mit der ersten auseinander, lautlos.
+     *
+     * <p>GENAU ein Grund und nicht alle Einnahmen: Ein Deckel auf die Arbeit darf nicht
+     * durch ein Geschenk, eine Erstattung oder das Startguthaben gefuellt werden.
      *
      * <p><b>Warum das Buchungsbuch der Zeuge ist und keine eigene Tabelle:</b> Die Summe
      * steht dort schon. Eine zweite Tabelle daneben waere eine zweite Wahrheit, die nach
@@ -97,9 +102,10 @@ public interface Kasse {
      * noch nicht gebucht und zaehlt darum nicht mit - das ist weniger als eine Mark je
      * Spieler, und der Deckel ist auf Tausende gestellt.
      *
-     * @param ab der Zeitpunkt, ab dem gezaehlt wird - einschliesslich
+     * @param ab    der Zeitpunkt, ab dem gezaehlt wird - einschliesslich
+     * @param grund welche Buchungen zaehlen - genau dieser, kein anderer
      */
-    long verdientSeit(UUID spieler, Instant ab);
+    long summeSeit(UUID spieler, Instant ab, Buchungsgrund grund);
 
     /**
      * Die Betragspruefung, die beide Buchungswege schulden.

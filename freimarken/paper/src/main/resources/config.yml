@@ -711,6 +711,121 @@ verdienst:
         polished_blackstone_bricks: 70
         copper_grate: 80
 
+# DER BUNDESMARKT - was der Bund ankauft und zu welchem Preis.
+#
+# Die zweite gedeckelte Quelle (Plan 8.2: "Verkauf an den Bundesmarkt - kleines
+# Sortiment, niedrige Preise"). Er ist mit Absicht KEINE zweite Arbeit, sondern die
+# Verwertung des Erarbeiteten: Wer nur verkauft, soll nicht so viel bekommen wie wer
+# arbeitet.
+#
+# DIE NIEDRIGEN PREISE SIND DIE SENKE. Der Bund zahlt weniger als ein Spieler im Laden,
+# und genau diese Spanne ist der Anreiz, miteinander zu handeln statt mit dem Server.
+# Darum gibt es hier KEINE Marktgebuehr - die fuenf Prozent aus dem Plan gehoeren zum
+# Spielerhandel in der Markthalle, und zwei Senken auf denselben Verkauf waeren eine zu
+# viel.
+#
+# GEZAHLT WIRD IN GANZEN MARK, gerechnet in PFENNIGEN. Der Bund nimmt nur so viele
+# Stueck, wie eine ganze Mark ergeben: Von sieben Stein zu 20 Pfennigen nimmt er fuenf
+# und zahlt eine Mark, zwei bleiben dir. Nichts geht verloren, und die Rechnung laesst
+# sich nachvollziehen.
+#
+# EIN ORT: Verkauft wird nur in der Ankunftswelt (reisen.ankunftswelt), wo der
+# Bundesmarkt steht. Die Liste darf man ueberall ansehen.
+bundesmarkt:
+  # Wie viele Mark ein Spieler an einem Tag hoechstens aus VERKAEUFEN bekommt.
+  #
+  # Ein EIGENER Deckel und nicht derselbe wie beim Verdienen: Mit einem gemeinsamen waere
+  # jede der zwei Quellen durch die andere zu verschliessen - wer vormittags verkauft,
+  # koennte nachmittags nicht mehr arbeiten.
+  #
+  # 5.000 ist ein Viertel des Verdienstdeckels. Bei 2.000 bis 5.000 Mark je Spielstunde
+  # aus Arbeit ist das etwa eine Stunde: genug, damit Verkaufen sich lohnt, zu wenig,
+  # damit es die Arbeit ersetzt. Die Ware ist beim Erarbeiten schon einmal bezahlt
+  # worden; wer sie auch noch zum halben Tagessatz verwertet, verdient am selben Block
+  # zweimal.
+  #
+  # Mehr als Faktor 2 gegen diesen Wert braucht eine Bestaetigung unter
+  # wirtschaft.sprung-bestaetigt.markt-tagesdeckel - es ist ein Geldwert.
+  tagesdeckel: 5000
+  # DAS SORTIMENT - Material und Preis je STUECK in Pfennigen.
+  #
+  # Kleines Sortiment mit Absicht: Was hier nicht steht, kauft der Bund nicht. Das ist
+  # die sichere Richtung - ein Grundpreis fuer alles machte jeden Gegenstand zu Geld,
+  # auch den, der nur in einer Farm anfaellt.
+  #
+  # Die Preise liegen unter dem, was die Arbeit einbringt (verdienst.loehne): Stein
+  # bringt beim Abbauen 40 Pfennige und am Markt 20. Der Markt ist die Verwertung, nicht
+  # die Quelle.
+  #
+  # Die REIHENFOLGE hier ist die Reihenfolge in /markt. Alphabetisch sortiert waere eine
+  # Entscheidung, die dir niemand gesagt hat.
+  ankauf:
+    # Steine und Erden - die Grundlast jedes Bergmanns.
+    cobblestone: 10
+    stone: 20
+    deepslate: 25
+    andesite: 20
+    diorite: 20
+    granite: 20
+    tuff: 22
+    sand: 15
+    gravel: 15
+    clay_ball: 30
+    # Erze und Metalle, als verhuettetes Gut.
+    coal: 80
+    raw_copper: 90
+    raw_iron: 130
+    raw_gold: 300
+    redstone: 150
+    lapis_lazuli: 320
+    emerald: 900
+    diamond: 1100
+    quartz: 110
+    ancient_debris: 4500
+    # Holz - der Holzfaeller und der Zimmermann.
+    oak_log: 45
+    birch_log: 45
+    spruce_log: 45
+    jungle_log: 55
+    acacia_log: 55
+    dark_oak_log: 55
+    cherry_log: 65
+    mangrove_log: 60
+    # Acker und Ernte - der Bauer und der Mueller.
+    wheat: 75
+    carrot: 75
+    potato: 75
+    beetroot: 75
+    pumpkin: 60
+    melon_slice: 15
+    sugar_cane: 25
+    cocoa_beans: 80
+    nether_wart: 100
+    sweet_berries: 90
+    # Fang - der Fischer und der Reeder.
+    cod: 400
+    salmon: 600
+    pufferfish: 450
+    tropical_fish: 1250
+    nautilus_shell: 1500
+    # Beute - der Jaeger und der Gerber.
+    rotten_flesh: 60
+    bone: 90
+    string: 110
+    spider_eye: 140
+    gunpowder: 350
+    ender_pearl: 900
+    blaze_rod: 1200
+    ghast_tear: 2000
+    leather: 450
+    feather: 80
+    # Vom Vieh - was der Bauer am lebenden Tier gewinnt.
+    # Wolle ist farbig - es gibt kein blosses wool. Weiss steht hier fuer die
+    # Schafschur; wer weitere Farben ankaufen will, traegt sie als eigene Zeilen ein.
+    white_wool: 120
+    egg: 70
+    milk_bucket: 200
+
 # Wie Spielzeit gemessen wird und wann ein Tag endet.
 #
 # Gezaehlt wird Anwesenheit mit Lebenszeichen, in Sekunden, und zwar aus der Differenz

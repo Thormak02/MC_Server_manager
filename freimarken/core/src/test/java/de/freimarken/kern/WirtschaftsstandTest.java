@@ -44,13 +44,31 @@ class WirtschaftsstandTest {
                                          int hoechstzahl, int gruppenFelder, String werbung,
                                          Zeitwerte zeit, Berufswerte berufe,
                                          Verdienstwerte verdienst) {
+        // Die eine Stelle, die den VOLLEN Satz baut, weil sie jeden Teil variiert.
+        // Alle anderen Proben nehmen die Abwandler und nennen nur ihren Unterschied.
         return new Wirtschaftswerte(new Preisstaffel(grundpreis, jeFeld), startguthaben,
-                hoechstzahl, gruppenFelder, werbung, zeit, berufe, verdienst);
+                hoechstzahl, gruppenFelder, werbung, zeit, berufe, verdienst,
+                Marktwerte.VORGABE);
     }
 
-    /** Ein Verdienstsatz, bei dem alle fuenf Zahlen von der Vorgabe abweichen. */
+    /**
+     * Ein Verdienstsatz, bei dem JEDER Teil von der Vorgabe abweicht.
+     *
+     * <p>Jeder, und das ist der Zweck: An dieser Methode haengt die Probe, die prueft,
+     * dass das Neuladen jede Aenderung NENNT. Ein Teil, der hier gleich bleibt, wird dort
+     * nie vermisst - und der Betreiber verstellt ihn, liest keine Zeile darueber und
+     * dreht beim naechsten Mal weiter, obwohl es schon gilt.
+     */
     private static Verdienstwerte andereverdienste() {
         return Verdienstwerte.VORGABE.mitMinderung(9_000L, 50, 25, 75, 20)
+                .mitStundenmenge(Taetigkeit.ABBAUEN, 123)
+                .mitStundenmenge(Taetigkeit.SETZEN, 124)
+                .mitStundenmenge(Taetigkeit.ERNTEN, 125)
+                .mitStundenmenge(Taetigkeit.FISCHEN, 126)
+                .mitStundenmenge(Taetigkeit.TOETEN, 127)
+                .mitStundenmenge(Taetigkeit.ZUECHTEN, 128)
+                .mitSpawngruenden(java.util.Set.of("natural", "raid"))
+                .mitSaatgut(java.util.Set.of("wheat"))
                 .mitLoehnen(Lohntafel.ausLoehnen(java.util.List.of(
                         new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, "stone",
                                 99L))));
@@ -161,10 +179,41 @@ class WirtschaftsstandTest {
         assertEquals(20, stand.werte().verdienst().bodenProzent());
         assertEquals(1, stand.werte().verdienst().loehne().anzahl());
 
-        assertEquals(6, uebernahme.geaendert().size(),
-                "fuenf Zahlen und die Tafel: " + uebernahme.geaendert());
+        // Geprueft wird der TEXT jeder erwarteten Zeile und nicht ihre ZAHL: Eine
+        // Zaehltafel laesst sich hochdrehen, und sie wird blind, sobald ein Teil
+        // dazukommt - genau dann, wenn man sie braucht. Jeder Teil des Satzes muss hier
+        // namentlich auftauchen, sonst wird er beim Neuladen stumm uebernommen.
         assertTrue(uebernahme.geaendert().contains(
                 Verdienstwerte.PFAD_TAGESDECKEL + ": 20000 -> 9000"),
+                uebernahme.geaendert().toString());
+        for (String pfad : new String[] {Verdienstwerte.PFAD_VOLL_BIS,
+                                         Verdienstwerte.PFAD_STUFE,
+                                         Verdienstwerte.PFAD_FAKTOR,
+                                         Verdienstwerte.PFAD_BODEN}) {
+            assertTrue(uebernahme.geaendert().stream().anyMatch(zeile
+                            -> zeile.startsWith(pfad + ":")),
+                    pfad + " fehlt in der Meldung: " + uebernahme.geaendert());
+        }
+        // JEDE Taetigkeit mit ihrer Stundenmenge - sie ist der wirksame Hebel gegen
+        // Farmen, und wer sie verstellt, ohne eine Zeile darueber zu lesen, dreht beim
+        // naechsten Mal weiter, obwohl sie schon gilt.
+        for (Taetigkeit taetigkeit : Taetigkeit.values()) {
+            String pfad = Verdienstwerte.PFAD_STUNDENMENGE + "."
+                    + taetigkeit.schluessel();
+            assertTrue(uebernahme.geaendert().stream().anyMatch(zeile
+                            -> zeile.startsWith(pfad + ":")),
+                    pfad + " fehlt in der Meldung: " + uebernahme.geaendert());
+        }
+        // Die zwei Listen MIT dem Unterschied: An der Weissliste haengt, ob eine
+        // Spawnerfarm zahlt, am Saatgut, ob ein Acker etwas einbringt. Eine nackte
+        // Laenge liesse einen ausgetauschten Namen durch.
+        assertTrue(uebernahme.geaendert().stream().anyMatch(zeile
+                        -> zeile.startsWith(Verdienstwerte.PFAD_SPAWNGRUENDE + ":")
+                        && zeile.contains("weg: ")),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().stream().anyMatch(zeile
+                        -> zeile.startsWith(Verdienstwerte.PFAD_SAATGUT + ":")
+                        && zeile.contains("weg: ")),
                 uebernahme.geaendert().toString());
         // Die Tafel wird VERGLICHEN und nicht gezaehlt: Eine Zeile mit einem anderen Lohn
         // laesst die Zeilenzahl gleich, und genau das ist die haeufigste Aenderung.
@@ -184,13 +233,11 @@ class WirtschaftsstandTest {
         var andererLohn = Verdienstwerte.VORGABE.mitLoehnen(Lohntafel.ausLoehnen(
                 java.util.List.of(new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN,
                         "stone", 41L))));
-        var stand = new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
-                50_000L, 4, 4, Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                Berufswerte.VORGABE, eineZeile));
+        var stand = new Wirtschaftsstand(
+                Wirtschaftswerte.VORGABE.mitVerdienst(eineZeile));
 
-        var uebernahme = stand.uebernimm(new Wirtschaftswerte(Preisstaffel.VORGABE,
-                50_000L, 4, 4, Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                Berufswerte.VORGABE, andererLohn));
+        var uebernahme = stand.uebernimm(
+                Wirtschaftswerte.VORGABE.mitVerdienst(andererLohn));
 
         assertEquals(41L, stand.werte().verdienst().loehne()
                 .pfennige("bergmann", Taetigkeit.ABBAUEN, "stone"));

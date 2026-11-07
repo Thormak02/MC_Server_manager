@@ -137,6 +137,11 @@ final class Wirtschaftsliste {
         Verdienstliste.Ergebnis verdienst = Verdienstliste.ausKonfiguration(wurzel, gilt);
         klagen.addAll(verdienst.klagen());
         bericht.addAll(verdienst.bericht());
+        // Der Bundesmarkt braucht das Berufsverzeichnis NICHT: Was der Bund kauft, haengt
+        // an keinem Beruf - jeder darf alles verkaufen, was im Sortiment steht.
+        Marktliste.Ergebnis markt = Marktliste.ausKonfiguration(wurzel);
+        klagen.addAll(markt.klagen());
+        bericht.addAll(markt.bericht());
 
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
@@ -167,8 +172,8 @@ final class Wirtschaftsliste {
         // ist aber nicht neuladbar. Beim Neuladen nennte eine Zeile hier die Zone aus der
         // Datei, waehrend eine andere darunter sagt, dass die alte weiter gilt.
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
-                gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte()), klagen,
-                bericht);
+                gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
+                markt.werte()), klagen, bericht);
     }
 
     /**

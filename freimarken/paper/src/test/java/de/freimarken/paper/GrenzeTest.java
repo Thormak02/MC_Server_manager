@@ -282,8 +282,8 @@ class GrenzeTest {
     private static final Set<String> SENDEN_ERLAUBT = new TreeSet<>(List.of(
             "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
             "BerufeBefehle.java",
-            "BundBefehle.java", "FreimarkenPlugin.java", "ParzellenBefehle.java",
-            "Portalwache.java",
+            "BundBefehle.java", "FreimarkenPlugin.java", "MarktBefehle.java",
+            "ParzellenBefehle.java", "Portalwache.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
 
@@ -385,6 +385,11 @@ class GrenzeTest {
             Map.entry("BerufeBefehle.java", 1),
             Map.entry("BundBefehle.java", 2),
             Map.entry("FreimarkenPlugin.java", 33),
+            // ZWEI: die Zeile fuer die Konsole (sie hat keine Hand und steht in keiner
+            // Welt) und der eine Sendeweg fuer alle Spielerzeilen. Eine Zahl weniger
+            // hiesse, dass ein Zweig von /markt stumm bleibt; eine mehr, dass neben
+            // Markttext eine zweite Sendestelle gebaut wurde.
+            Map.entry("MarktBefehle.java", 2),
             Map.entry("ParzellenBefehle.java", 44),
             Map.entry("Portalwache.java", 1),
             Map.entry("Reise.java", 7),
@@ -919,6 +924,7 @@ class GrenzeTest {
             "BEFEHL_TPACCEPT -> WORT",
             "BEFEHL_TPDENY -> WORT",
             "BEFEHL_BERUF -> WORT",
+            "BEFEHL_MARKT -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",

@@ -848,10 +848,9 @@ class BesitzbuchTest {
 
         assertEquals(25_000L, eigenesBuch.nehmen(WELT, anna, 100, 10, VIELE).kosten());
 
-        stand.uebernimm(new Wirtschaftswerte(new Preisstaffel(60_000L, 10_000L),
-                Wirtschaftswerte.VORGABE_STARTGUTHABEN, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
-                Wirtschaftswerte.VORGABE_GRUPPEN_FELDER, "", Zeitwerte.VORGABE,
-                Berufswerte.VORGABE, Verdienstwerte.VORGABE));
+        stand.uebernimm(Wirtschaftswerte.VORGABE
+                .mitPreisen(new Preisstaffel(60_000L, 10_000L))
+                .mitWerbung(""));
 
         // Dritte Parzelle: 60.000 mal 2 - der neue Grundpreis, nicht der alte.
         assertEquals(120_000L, eigenesBuch.nehmen(WELT, anna, 200, 10, VIELE).kosten(),

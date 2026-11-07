@@ -29,10 +29,16 @@ package de.freimarken.kern;
  *                      Tafel wird bei JEDEM abgebauten und JEDEM gesetzten Block
  *                      gefragt. Zwei Zellen fuer Lohn und Minderung koennten mitten in
  *                      einer Rechnung auseinanderlaufen
+ * @param markt         Tagesdeckel und Sortiment des Bundesmarktes. Hier aus demselben
+ *                      Grund wie die drei davor: Ein Neuladen tauscht den GANZEN Satz als
+ *                      ein Stueck, und wer mitten in einem Verkauf einen neuen Preis aus
+ *                      einem alten Deckel bekaeme, verkaufte zu etwas, das niemand
+ *                      eingestellt hat
  */
 public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoechstzahl,
                                int gruppenFelder, String rangWerbung, Zeitwerte zeit,
-                               Berufswerte berufe, Verdienstwerte verdienst) {
+                               Berufswerte berufe, Verdienstwerte verdienst,
+                               Marktwerte markt) {
 
     /**
      * Die Schluessel in der Einstellungsdatei - hier und nicht an jeder Stelle, die klagt.
@@ -81,7 +87,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
     public static final Wirtschaftswerte VORGABE = new Wirtschaftswerte(Preisstaffel.VORGABE,
             VORGABE_STARTGUTHABEN, VORGABE_HOECHSTZAHL, VORGABE_GRUPPEN_FELDER,
             VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE, Berufswerte.VORGABE,
-            Verdienstwerte.VORGABE);
+            Verdienstwerte.VORGABE, Marktwerte.VORGABE);
 
     public Wirtschaftswerte {
         if (preise == null) {
@@ -98,6 +104,10 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
             throw new IllegalArgumentException("Ohne Verdienstwerte gibt es keinen Lohn"
                     + " und keinen Tagesdeckel");
         }
+        if (markt == null) {
+            throw new IllegalArgumentException("Ohne Marktwerte gibt es keinen Ankauf"
+                    + " und keinen zweiten Tagesdeckel");
+        }
         if (!brauchbaresStartguthaben(startguthaben)) {
             throw new IllegalArgumentException("Startguthaben " + startguthaben
                     + " liegt nicht zwischen 0 und " + HOECHSTES_STARTGUTHABEN);
@@ -113,6 +123,70 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         // Hier getrimmt und nicht beim Gebrauch: Sonst geschieht es an jeder Stelle, die
         // den Text anzeigt, und eine davon wird es vergessen.
         rangWerbung = rangWerbung == null ? "" : rangWerbung.trim();
+    }
+
+    /**
+     * Dieselben Werte mit einer anderen Preisstaffel.
+     *
+     * <p><b>Warum es diese neun Abwandler gibt:</b> Dieser Satz ist mit jedem Bauschritt
+     * um einen Teil gewachsen - erst die Zeitwerte, dann die Berufe, dann der Verdienst,
+     * jetzt der Markt. Jede Probe, die ihn mit ALLEN Teilen baut, bricht bei jedem
+     * weiteren, und zwar nicht, weil ihre Frage falsch waere, sondern weil ein Teil
+     * dazugekommen ist, der sie nichts angeht. Beim Verdienst waren das elf Stellen in
+     * fuenf Dateien; mit einem Abwandler nennt eine Probe genau das, was sie veraendert,
+     * und schweigt ueber den Rest.
+     */
+    public Wirtschaftswerte mitPreisen(Preisstaffel andere) {
+        return new Wirtschaftswerte(andere, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, markt);
+    }
+
+    /** Dieselben Werte mit anderem Startguthaben. */
+    public Wirtschaftswerte mitStartguthaben(long anderes) {
+        return new Wirtschaftswerte(preise, anderes, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, markt);
+    }
+
+    /** Dieselben Werte mit anderer Parzellenhoechstzahl. */
+    public Wirtschaftswerte mitHoechstzahl(int andere) {
+        return new Wirtschaftswerte(preise, startguthaben, andere, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, markt);
+    }
+
+    /** Dieselben Werte mit anderer Gruppengroesse. */
+    public Wirtschaftswerte mitGruppenFeldern(int andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, andere,
+                rangWerbung, zeit, berufe, verdienst, markt);
+    }
+
+    /** Dieselben Werte mit anderer Rangwerbung. */
+    public Wirtschaftswerte mitWerbung(String andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                andere, zeit, berufe, verdienst, markt);
+    }
+
+    /** Dieselben Werte mit anderen Zeitwerten. */
+    public Wirtschaftswerte mitZeit(Zeitwerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, andere, berufe, verdienst, markt);
+    }
+
+    /** Dieselben Werte mit anderen Berufswerten. */
+    public Wirtschaftswerte mitBerufen(Berufswerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, andere, verdienst, markt);
+    }
+
+    /** Dieselben Werte mit anderen Verdienstwerten. */
+    public Wirtschaftswerte mitVerdienst(Verdienstwerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, andere, markt);
+    }
+
+    /** Dieselben Werte mit anderen Marktwerten. */
+    public Wirtschaftswerte mitMarkt(Marktwerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, andere);
     }
 
     /** Ob aus dieser Zahl ein Startguthaben werden kann; 0 heisst: mit nichts anfangen. */

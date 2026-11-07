@@ -82,11 +82,8 @@ class BerufBefehlTest {
                                                            Kasse kasse,
                                                            Berufswerte werte) {
         return new BerufeBefehle(ablage, VERZEICHNIS,
-                new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
-                        REICH, Wirtschaftswerte.VORGABE_HOECHSTZAHL,
-                        Wirtschaftswerte.VORGABE_GRUPPEN_FELDER,
-                        Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE, werte,
-                        Verdienstwerte.VORGABE)),
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                        .mitStartguthaben(REICH).mitBerufen(werte)),
                 kasse, Clock.fixed(MITTAGS, ZoneOffset.UTC),
                 Logger.getLogger(BerufBefehlTest.class.getName()),
                 Sprachprobe.spracheAusDemJar());

@@ -156,17 +156,13 @@ class AufrufstelleTest {
         welt = weltDoppel();
         kasse = new SpeicherKasse(REICH);
         buch = new Besitzbuch(Stadtgrenze.marktstadt(), new SpeicherLager(), kasse,
-                new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
-                        REICH, HOECHSTZAHL, GRUPPENFELDER,
-                        Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                        Berufswerte.VORGABE,
-                        Verdienstwerte.VORGABE)));
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                        .mitStartguthaben(REICH).mitHoechstzahl(HOECHSTZAHL)
+                        .mitGruppenFeldern(GRUPPENFELDER)));
         befehle = new ParzellenBefehle(buch, welt,
-                new Wirtschaftsstand(new Wirtschaftswerte(Preisstaffel.VORGABE,
-                        REICH, HOECHSTZAHL, GRUPPENFELDER,
-                        Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
-                        Berufswerte.VORGABE,
-                        Verdienstwerte.VORGABE)),
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                        .mitStartguthaben(REICH).mitHoechstzahl(HOECHSTZAHL)
+                        .mitGruppenFeldern(GRUPPENFELDER)),
                 Logger.getLogger("probe"), Sprachprobe.spracheAusDemJar());
         kasse.eroeffne(ANNA);
         kasse.eroeffne(BERT);

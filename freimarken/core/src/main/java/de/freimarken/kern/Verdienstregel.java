@@ -105,16 +105,9 @@ public final class Verdienstregel {
         if (werte == null) {
             throw new IllegalArgumentException("Ohne Werte gibt es keinen Deckel");
         }
-        if (heuteSchon < 0L || wunsch < 0L) {
-            throw new IllegalArgumentException("Weder " + heuteSchon + " noch " + wunsch
-                    + " kann negativ sein - ein negativer Verdienst waere eine Abbuchung"
-                    + " auf dem Weg einer Einnahme");
-        }
-        long frei = werte.tagesdeckel() - heuteSchon;
-        if (frei <= 0L) {
-            return 0L;
-        }
-        return Math.min(wunsch, frei);
+        // Gerechnet wird in Deckelregel und nicht hier: Seit Teil F gibt es ZWEI
+        // gedeckelte Quellen, und zwei Abschriften derselben Rechnung liefen auseinander.
+        return Deckelregel.erlaubt(werte.tagesdeckel(), heuteSchon, wunsch);
     }
 
     /** Wie viele ganze Mark in einer Pfennigsumme stecken. */

@@ -431,6 +431,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + wirtschaft.werte().verdienst().loehne().anzahl() + " Saetze,"
                 + " Tagesdeckel " + wirtschaft.werte().verdienst().tagesdeckel()
                 + " Mark je Spieler. Gebucht wird gesammelt, nicht je Block.");
+        getLogger().info("Bundesmarkt: "
+                + wirtschaft.werte().markt().ankauf().anzahl() + " Materialien im"
+                + " Sortiment, Tagesdeckel " + wirtschaft.werte().markt().tagesdeckel()
+                + " Mark je Spieler. Verkauft wird nur in der Ankunftswelt.");
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
         registriereBefehle();
@@ -660,6 +664,23 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Baut den Befehlsbaum von {@code /markt} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Dieselbe Form und derselbe Grund wie bei {@link #berufeBefehle}.
+     *
+     * <p>Die ANKUNFTSWELT ist der Ort des Bundesmarktes: Dort steht er laut Plan 2.1,
+     * und dort kommt jeder Spieler zuerst an. Sie wird nur beim Start gelesen, also
+     * haengt der Befehl an derselben Entscheidung wie die Ankunft und nicht an einer
+     * zweiten Abschrift davon.
+     */
+    private MarktBefehle marktBefehle() {
+        String ankunftswelt = getConfig()
+                .getString("reisen.ankunftswelt", ANKUNFTSWELT_VORGABE).trim();
+        return new MarktBefehle(wirtschaft, kasse, uhr, sprache,
+                "freimarken:" + ankunftswelt, getLogger());
+    }
+
+    /**
      * Der erste Beruf der Einstellungsdatei, zu dem die Sprachdatei kein Wort hat.
      *
      * <p>In EINE Richtung geprueft und nicht in beide: Ein Wort ohne Beruf ist harmlos -
@@ -729,6 +750,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.addAll(verzeichnis.register(berufeBefehle().beruf(),
                     sprache.wort(BundSatz.BEFEHL_BERUF, Einsatz.keine()),
                     List.of("job")));
+            // /bundesmarkt als zweiter Name: Der Ort heisst so, und wer ihn sucht, tippt
+            // seinen Namen und nicht die Abkuerzung.
+            angemeldet.addAll(verzeichnis.register(marktBefehle().markt(),
+                    sprache.wort(BundSatz.BEFEHL_MARKT, Einsatz.keine()),
+                    List.of("bundesmarkt")));
 
             // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
             // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein
