@@ -1312,6 +1312,129 @@ Ereignisse, das Wachsen, die Doppelkiste, der Trichter. Dafür stehen Quelltextt
 (`ShopwacheTafel`), und die sagen selbst, dass sie Text prüfen und nicht Wirkung. Eine
 wirkliche Probe bräuchte einen Probeserver mit Blöcken, einem Spieler und einem Trichter.
 
+#### Der Handel [gebaut 08.11.2026]
+
+Rechtsklick kauft, Linksklick verkauft, Sneak handelt einen ganzen Stapel. So hat Lumia
+es gemacht, und das ist der Grund für die zwei Maustasten: kein Befehl, kein Menü, keine
+zweite Kiste je Richtung.
+
+**Die Reihenfolge ist in beiden Richtungen dieselbe**, und das ist die teuerste
+Entscheidung dieses Schritts:
+
+```
+Zahler abbuchen (shop_gekauft)  →  Ware von der Geberseite nehmen
+→ Ware auf die Nehmerseite legen → Empfänger gutschreiben (shop_verkauft)
+→ Gebühr vom Empfänger (shop_gebuehr, nur wenn > 0)
+```
+
+Beim Kauf ist der Zahler der Kunde und die Geberseite die Kiste, beim Verkauf genau
+umgekehrt. Dass es trotzdem **eine** Abfolge ist und nicht zwei, ist der Grund für
+`Shophandel.Seite` — zwei Abfolgen wären zwei Gelegenheiten, eine Zeile zu vergessen.
+
+Der Kopf von `Mietbuch` hält die Hausregel fest: „Die Reihenfolge der Schritte ist in
+JEDER Tat die, die kein Geld erzeugen kann." Dort fließt Geld nur in eine Richtung, hier
+in beide gleichzeitig — die Regel brauchte also eine Fassung, die beide deckt. **Der
+Zahler kommt zuerst**, weil nur das Abbuchen die Deckung prüft und ganz oder gar nicht
+geschieht. Fängt man mit der Ware an, hat der Kunde sie einen Augenblick in der Hand,
+ohne gezahlt zu haben — und am Bundshop kommt sie aus dem Nichts, dort wäre es wirklich
+erzeugte Ware.
+
+**Die drei Buchungen gingen nicht auf, und das war ein Widerspruch im geschriebenen
+Vertrag.** `SHOP_VERKAUFT` sagte „der Erlös, NACH Abzug der Gebühr", `SHOP_GEBUEHR` sagte
+„eine EIGENE Zeile und kein stiller Abzug". Beides zusammen zieht die Gebühr **zweimal**
+ab: bei 1.000 Mark und 7 % bekäme der Verkäufer 930 gutgeschrieben und 70 abgebucht, also
+860 statt 930. Die Zusage „die Summe aller Buchungen eines Kontos ist sein Stand" fängt
+das **nicht** — sie gilt je Konto, und auf beiden Konten stimmt die Summe. Gleichzeitig
+wahr können beide Sätze nur sein, wenn die Gebührzeile auf einem **dritten** Konto liegt,
+und ein Staatskonto gibt es nicht; hier so wenig wie bei `LADEN_MIETE`. Haltbar ist also
+nur eine Fassung: **voller Preis gutschreiben, Gebühr davon abbuchen** — zwei Konten und
+eine Senke. Die Reihenfolge ist dabei zwingend, denn umgekehrt würde die Gebühr eines
+leeren Kontos abgelehnt und der Verkäufer behielte den ganzen Preis.
+
+**`SHOP_ERSTATTET` ist neu**, und es ist die etablierte Antwort des Projekts für genau
+diesen Fall (`PARZELLE_ERSTATTET`, `BERUF_ERSTATTET`, `LADEN_ERSTATTET`). Weil der Zahler
+zuerst abgebucht wird, braucht der Fall „gezahlt und nichts bekommen" eine Gegenbuchung.
+**Nur die Zahlung wird gedreht, nie die Gutschrift**: Scheitert jene, hat der Kunde seine
+Ware schon, und was fehlt, ist der Erlös — der wird *nach*gebucht, nicht gegengebucht.
+Dieser Fall bekommt darum eine SEVERE-Zeile und keine Buchung, dieselbe Entscheidung wie
+in `Mietbuch.kuendigen`.
+
+**Je Lage ein Gebührensatz** [Entscheidung des Nutzers]: Auch *wann* eine Gebühr fällt,
+soll in der Datei stehen und nicht im Programm. Vorher gab es zwei Zeilen, die das nicht
+sagen konnten — die `config.yml` meinte „beim Verkauf", der Javadoc meinte „bei jedem
+Handel", und beides stand da. Jetzt sind es drei: Kauf am Spielershop (der **Besitzer**
+zahlt), Verkauf an einen Spielershop (der **Kunde** zahlt), Verkauf an einen Bundshop.
+Die vierte Lage — Kauf am Bundshop — hat **absichtlich keinen Schlüssel**: Dort bekommt
+niemand Geld, dem eine Gebühr abzuziehen wäre, und ein Schlüssel dafür wäre eine
+Einstellung, die nie wirkt. Die zwei alten Zeilen werden **beklagt** und nicht übergangen:
+Eine Zahl, die in der Datei steht und nicht wirkt, ist die schlimmste Art Einstellung.
+
+**Am eigenen Shop wird nicht gehandelt** [Entscheidung des Nutzers]. Der wichtigere Grund
+ist nicht, dass Geld an sich selbst sinnlos wäre, sondern der Linksklick: Er ist in
+Minecraft der *Anfang eines Abbaus*, und am eigenen Schild verbietet der Schutz nichts.
+Hätten wir ihn zum Verkauf gemacht, müsste der Schutz des eigenen Schildes umgebaut
+werden — und ein unzerbrechliches Schild ist schlimmer als ein Shop, an dem man nicht
+selbst kauft. Darum wird der Klick dort auch nicht verbraucht.
+
+**Das `!werkzeugHeikel` ist aus der Handelstür heraus.** Es sollte heißen: Wer mit einer
+Axt auf ein Schild klickt, will nicht kaufen. `aendertBlock` sagt aber bei *jedem*
+Gegenstand ja, der ein Block ist — und wer Stein, Erde oder Holz verkaufen will, hält
+genau das in der Hand. Die Tür wäre für die häufigste Ware überhaupt zu geblieben, und
+der Spielbericht hieße „der Shop geht manchmal nicht", weil die Absage am Inhalt der Hand
+hing und nicht am Shop. Der Schutz liegt jetzt in der **Wirkung**: `Shopklick` setzt nach
+einem Shopklick beide Ergebnisse auf `DENY` — der Handel findet statt, die Hand bleibt
+untätig, und aus dem Linksklick wird kein Abbau. Die halbe Zusage („mit einer Axt in jedem
+fremden Laden arbeiten") hält weiter, aber über `istHandel`: Die Tür geht nur an einem
+**Shopschild** auf.
+
+**Die Tür antwortet nur am Schild, nie an der Kiste.** Das ist der teuerste Fehler, der
+hier möglich wäre: Die naheliegenden Umsetzungen — `Shopbuch.istShopkiste` und
+`anDerKiste` — antworten beide für die Kiste ja, und `istShopkiste` sagt bei einer Störung
+sogar ja. Wäre die Tür damit zufrieden, öffnete jeder Kunde mit einem Rechtsklick die
+fremde Shopkiste und räumte den Bestand aus; in der Markthalle am Ladenschutz vorbei.
+
+**Platz und Vorrat in STÜCK und nicht in Plätzen.** `Ladenware.freiePlaetze` zählt Slots —
+ein Shop mit Menge 64 bekäme damit `36/64 = 0` und meldete „kein Platz", immer. Und
+angefangene Stapel zählen **mit**, anders als beim Abholfach: Dort ist jedes Abholgut ein
+beliebiger ganzer Stapel unbekannter Art, hier ist die Ware eine bekannte — die genaue
+Zahl ist also berechenbar, und eine Unterschätzung wäre keine Vorsicht, sondern eine
+falsche Absage. Und zwar im häufigsten Kauffall überhaupt: Wer Erde kauft, trägt meistens
+schon Erde.
+
+**Die Stapelgröße wird gemessen, nicht geraten.** Die feste 64 galt nur für gewöhnliche
+Ware; Enderperle und Schneeball stapeln zu 16, Werkzeug, Rüstung und jedes verzauberte
+Stück zu 1 — und verzauberte Ausrüstung ist seit dem Fragezeichen auf dem Schild der
+Normalfall. Mit der festen 64 forderte ein Sneak-Klick an einem Spitzhacken-Shop mit
+Menge 1 vierundsechzig Stufen an, und die Zusage „nie mehr als ein Stapel je Klick" wäre
+eine Zeile Doku ohne Deckung gewesen.
+
+**`getStorageContents` und nicht `getContents`**, und das ist Geld aus nichts: Beim
+Spieler enthält jenes auch vier Rüstungsplätze und die zweite Hand, und `removeItem`
+bedient nur die Lagerplätze. Mit `getContents` gezählt ist Ware in der zweiten Hand
+*vorhanden* und *nicht entnehmbar* — der Spieler bekommt Geld und behält die Ware,
+beliebig wiederholbar. An einer Kiste sind beide dasselbe; der Unterschied zählt nur beim
+Spieler, und genau darum wird er verwechselt.
+
+**Nur die Haupthand handelt.** Ein Klick kann zweimal gemeldet werden, einmal je Hand.
+Sicher erreichbar ist das beim **Sneak-Klick** — also genau bei der Geste für den ganzen
+Stapel, wo die Doppelbuchung am teuersten wäre.
+
+**Was nicht geprüft ist:** dass ein Klick wirklich zweimal kommt, dass `DENY` den Abbau
+verhindert, dass `addItem` und `removeItem` sich so verhalten wie zugesagt, die
+Doppelkiste beim Zählen. Dafür stehen Quelltexttafeln in `ShopwacheTafel`, und die sagen
+selbst, dass sie Text prüfen und nicht Wirkung.
+
+**Zwei benannte Lücken**, beide aufgeschrieben statt verschwiegen:
+
+1. Ein **Bundshop mit Verkaufspreis** ist eine Geldquelle ohne Tagesdeckel — der Deckel
+   des Bundesmarkts rechnet über `bundesmarkt_verkauf`, der Shop bucht `shop_verkauft`.
+   Keine Spielerlücke (es braucht `freimarken.shop.bund`), aber eine Falle für den
+   Betreiber. Gehört mit dem Bundesmarkt-Schild zusammen entschieden.
+2. Eine **Shopkiste ist nicht gegen eine Hand geschützt**. `Schutzwache.darfHandeln` gibt
+   `true`, sobald die Welt nicht die Parzellenwelt ist — in hochwald, kornmark, nether und
+   end ist jede Shopkiste von jedem zu öffnen. Wer die Kiste öffnen kann, braucht nicht zu
+   kaufen.
+
 ---
 
 ## 8. Wirtschaft

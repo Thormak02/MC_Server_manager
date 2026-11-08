@@ -178,6 +178,23 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Schutzwache schutzwache;
 
     /**
+     * Der Handelszuhoerer - und damit die Handelstuer der {@link Schutzwache}.
+     *
+     * <p><b>Ein Feld und nicht ein Konstruktorwert</b>, und das ist eine
+     * Notwendigkeit und keine Bequemlichkeit: Die Wache entsteht in
+     * {@code richteSchutzEin}, der Shopklick erst in {@link #richteShopsEin} - denn
+     * dessen {@code Shopzugriff} braucht die schon fertige Wache. Jeder von beiden
+     * braucht also den anderen. Geloest wie beim Tagesbonus zwanzig Zeilen weiter
+     * oben: Die Wache bekommt einen Lambda, der das FELD beim Aufruf liest.
+     *
+     * <p>{@code null} heisst nein, und das deckt genau den Fall, den die
+     * Startmeldung von {@code richteShopsEin} schon verspricht: Bei stummer
+     * Datenbank gibt es keine Shops, also auch keinen Handel - und dann ist jedes
+     * Schild wieder ein gewoehnlicher heikler Block.
+     */
+    private Shopklick shopklick;
+
+    /**
      * Die Ladenmiete - entsteht erst, wenn Verzeichnis UND Ablage stehen.
      *
      * <p>Ein Feld und keine lokale Variable, weil zwei Stellen sie brauchen: der Befehl
@@ -518,19 +535,27 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // UND die Mietablage (steht seit richteAblageEin, das weiter oben lief). Dies ist
         // die erste Stelle, an der beide da sind.
         //
-        // KEIN_HANDEL, solange es keine Kistenshops gibt: Handeln darf jeder, immer und
-        // ueberall (entschieden 08.11.2026), aber heute gibt es nichts zu handeln. Die
-        // Tuer steht da, damit der Kistenshop-Schritt sie nicht erst in einen fertigen
-        // Schutz schneiden muss.
+        // Die HANDELSTUER [08.11.2026]: Handeln darf jeder, immer und ueberall.
+        //
+        // Das FELD wird beim Aufruf gelesen und nicht beim Bauen - dieselbe Form wie
+        // beim Tagesbonus zwanzig Zeilen weiter oben, und hier aus einem zwingenden
+        // Grund: Der Shopklick entsteht erst in richteShopsEin, weil sein
+        // Shopzugriff DIESE Wache braucht. Ein Zirkel, den nur ein spaet gelesenes
+        // Feld aufloest.
+        //
+        // Der Lambda reicht NUR weiter und prueft nichts selbst: Was ein Handel ist,
+        // entscheidet Shopklick.istHandelsschild an einer Stelle. Eine zweite Pruefung
+        // hier waere die zweite Wahrheit, vor der Shopzugriff ausdruecklich warnt.
         schutzwache = new Schutzwache(buch, welt, sprache,
                 new Ladenschutz(ladenverzeichnis, mietablage, ladenwelt, sprache,
                         getLogger()),
-                Schutzwache.KEIN_HANDEL);
+                (spieler, block) -> shopklick != null
+                        && shopklick.istHandel(spieler, block));
         getServer().getPluginManager().registerEvents(schutzwache, this);
         getLogger().info("Ladenschutz aktiv: " + ladenverzeichnis.anzahl()
                 + " Einheiten in " + ladenwelt + " - darin baut, bearbeitet und oeffnet"
                 + " Kisten nur der Mieter. Ein freier Stand ist fuer JEDEN gesperrt."
-                + " Handeln darf jeder ueberall; Kistenshops gibt es noch nicht.");
+                + " Am Schild eines Kistenshops darf jeder handeln, auch hier.");
         // Die Markierung MUSS stehen, bevor die erste Mark aus Arbeit fliesst: Alles, was
         // vorher gesetzt wurde, gilt danach fuer immer als gewachsener Boden (Plan 9.1).
         // Heute zahlt noch nichts - genau darum steht sie hier und nicht erst mit Teil E.
@@ -775,6 +800,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 wirtschaft.werte().handel().bundWort(),
                 tat -> getServer().getScheduler().runTask(this, tat), getLogger());
         getServer().getPluginManager().registerEvents(shopwache, this);
+        // Der HANDEL, und er wird ZULETZT gesetzt: Das Feld ist die Tuer der
+        // Schutzwache, und die steht schon. Solange es null war, galt an jedem
+        // Shopschild der gewoehnliche Bauschutz - also genau der Zustand, den die
+        // Startmeldung oben fuer eine stumme Datenbank verspricht.
+        Shophandel shophandel = new Shophandel(shopbuch, shopware, kasse,
+                wirtschaft.werte().handel(), getLogger());
+        shopklick = new Shopklick(shophandel, sprache);
+        getServer().getPluginManager().registerEvents(shopklick, this);
         getLogger().info("Kistenshops aktiv: " + gefunden + " im Speicher, "
                 + Shopliste.startzeile(wirtschaft.werte().handel()));
     }

@@ -85,6 +85,11 @@ import org.bukkit.inventory.ItemStack;
  * geht nur, wenn der HANDELSKLICK vor der Besitzfrage abbiegt - und genau das tut
  * {@link #beimKlicken}.
  *
+ * <p><b>In BEIDEN Klickrichtungen</b> [08.11.2026]: Ein Kauf ist ein Rechtsklick, ein
+ * Verkauf ein Linksklick, und die Tuer stand zuerst nur im Rechtsklickzweig. Damit war
+ * der Verkauf in jedem fremden Laden und auf jeder fremden Parzelle abgewiesen - also
+ * genau dort, wo Kistenshops stehen.
+ *
  * <p>Gueltig nur in der eigenen Welt - was die Parzellen angeht. Die {@link Ortsregel}
  * bringt ihre eigene Welt mit; alles andere geht diese Wache nichts an.
  */
@@ -154,11 +159,20 @@ public final class Schutzwache implements Listener {
     public interface Handelsklick {
 
         /**
-         * Ist dieser Rechtsklick ein Handel an einem Kistenshop?
+         * Ist dieser Klick ein Handel an einem Kistenshop?
+         *
+         * <p>JEDER Klick, nicht nur der Rechtsklick [08.11.2026]: Ein Kauf ist ein
+         * Rechtsklick, ein Verkauf ein Linksklick, und beide Zweige fragen hier.
          *
          * <p>Gefragt wird VOR jeder Besitzfrage. Eine Umsetzung, die hier zu leicht ja
          * sagt, macht den ganzen Schutz auf - sie muss also sicher sein, dass an dieser
-         * Stelle wirklich ein Shop steht. Wirft nicht; im Zweifel nein.
+         * Stelle wirklich ein Shop steht, und zwar an seinem SCHILD und nicht an seiner
+         * Kiste. Wirft nicht; im Zweifel nein.
+         *
+         * <p>Ueber die RICHTUNG entscheidet sie nicht: Ob dieser Shop in dieser
+         * Richtung ueberhaupt handelt - ein Ankaufstand verkauft nichts -, sagt der
+         * Handelszuhoerer dem Kunden selbst. Eine zweite Stelle, die die Richtung
+         * kennt, waere eine zweite Wahrheit darueber, was ein Shop tut.
          */
         boolean istHandel(Player spieler, Block block);
     }
@@ -531,24 +545,37 @@ public final class Schutzwache implements Listener {
     }
 
     /**
-     * Ob ein Rechtsklick als HANDEL durchgeht - die Bedingung der benannten Tuer.
+     * Ob ein Klick als HANDEL durchgeht - die Bedingung der benannten Tuer.
      *
      * <p>Eine eigene Methode und kein Zweig in {@link #beimKlicken}, und das ist ein
      * Befund der Einspritzungskampagne vom 08.11.2026: Im Zweig war die Bedingung nur
      * ueber ein {@code PlayerInteractEvent} mit einem Schildblock erreichbar, also blieb
-     * jede Einspritzung darauf gruen - auch die, die das {@code !werkzeugHeikel}
-     * wegnahm. Hier ist sie ohne Server und ohne Ereignis zu pruefen.
+     * jede Einspritzung darauf gruen. Hier ist sie ohne Server und ohne Ereignis zu
+     * pruefen - und seit dem 08.11.2026 rufen sie ZWEI Zweige, also trifft eine
+     * Einspritzung darauf beide.
      *
-     * <p><b>Das {@code !werkzeugHeikel} ist die halbe Zusage.</b> Wer mit einer Axt, einer
-     * Hacke oder einem Eimer auf ein Schild klickt, will nicht kaufen - er aendert etwas.
-     * Ohne diese Haelfte waere die Handelstuer der Weg, mit einem Werkzeug in der Hand in
-     * jedem fremden Laden zu arbeiten.
+     * <p><b>Das {@code !werkzeugHeikel} ist hier WEG</b> [08.11.2026], und das ist die
+     * wichtigste Aenderung an dieser Tuer. Es sollte heissen: Wer mit einer Axt auf ein
+     * Schild klickt, will nicht kaufen. {@code aendertBlock} sagt aber bei JEDEM
+     * Gegenstand ja, der ein Block ist - und wer Stein, Erde oder Holz verkaufen will,
+     * haelt genau das in der Hand. Die Tuer waere also fuer die haeufigste Ware
+     * ueberhaupt zu geblieben, und der Spielbericht hiesse "der Shop geht manchmal
+     * nicht", weil die Absage am Inhalt der Hand hing und nicht am Shop.
      *
-     * @param werkzeugHeikel ob der Gegenstand in der Hand selbst etwas aendert
+     * <p><b>Der Schutz liegt jetzt in der WIRKUNG und nicht in der Verweigerung:</b>
+     * Der Handelszuhoerer setzt nach einem Shopklick beide Ergebnisse auf
+     * {@code DENY} - der Handel findet statt, die Hand bleibt untaetig, und aus dem
+     * Linksklick wird kein Abbau. Siehe {@code Shopklick}. Die halbe Zusage - mit
+     * einer Axt in jedem fremden Laden arbeiten - haelt weiter, aber ueber
+     * {@link Handelsklick#istHandel}: Die Tuer geht nur an einem SHOPSCHILD auf und
+     * an keinem anderen Block.
+     *
+     * <p>Damit ist die Methode eine Durchreiche, und sie bleibt trotzdem: Sie ist die
+     * benannte Stelle, an der zwei Zweige dieselbe Frage stellen.
      */
-    static boolean alsHandelDurchlassen(Handelsklick handel, Player spieler, Block block,
-            boolean werkzeugHeikel) {
-        return !werkzeugHeikel && handel.istHandel(spieler, block);
+    static boolean alsHandelDurchlassen(Handelsklick handel, Player spieler,
+            Block block) {
+        return handel.istHandel(spieler, block);
     }
 
     /**
@@ -651,6 +678,16 @@ public final class Schutzwache implements Listener {
             // BlockBreakEvent, aber nicht alles am Linksklick ist ein Abbau: Ein Drachenei
             // springt weg, ein Feuer wird ausgeschlagen, ein Gemaelde faellt. Nur bei
             // heiklen Bloecken eingreifen, sonst bliebe kein normales Abbauen moeglich.
+            //
+            // Die benannte Tuer steht hier GENAUSO wie im Rechtsklick [08.11.2026]:
+            // Lumias Verkauf ist ein Linksklick, und ein Schild ist heikel. Ohne
+            // diese Zeile wird jeder Verkauf auf fremdem Grund und in jeder
+            // Markthalle vom Bauschutz abgewiesen - also genau dort, wo Kistenshops
+            // stehen. Ein Werkzeugtestat gibt es hier nicht und im Rechtsklick auch
+            // nicht mehr: siehe alsHandelDurchlassen.
+            if (alsHandelDurchlassen(handel, ereignis.getPlayer(), block)) {
+                return;
+            }
             if (istHeikel(block) && unterbinden(ereignis.getPlayer(), block.getLocation())) {
                 ereignis.setCancelled(true);
             }
@@ -670,10 +707,10 @@ public final class Schutzwache implements Listener {
         // verbietet derselbe Schutz dem Kunden den Klick auf das Kistenshop-Schild, und
         // der Laden hat keine Kunden.
         //
-        // NUR fuer den reinen Klick auf den Block: Ein werkzeugHeikel-Klick aendert
-        // etwas und ist kein Handel, auch nicht an einem Shop. Wer mit der Axt auf ein
-        // Schild schlaegt, will nicht kaufen.
-        if (alsHandelDurchlassen(handel, ereignis.getPlayer(), block, werkzeugHeikel)) {
+        // DIESELBE Zeile wie im Linksklickzweig und mit denselben Argumenten: Der
+        // Kauf ist ein Rechtsklick, der Verkauf ein Linksklick, und was ein Handel
+        // IST, darf nicht zweimal verschieden beantwortet werden.
+        if (alsHandelDurchlassen(handel, ereignis.getPlayer(), block)) {
             return;
         }
         if (darfHandeln(ereignis.getPlayer(), block.getLocation())) {

@@ -21,61 +21,73 @@ import org.junit.jupiter.api.Test;
  * uebrigen gelten weiter, und am Ende wird die MITGELIEFERTE Datei selbst gelesen - sonst
  * waere jede Zusage ueber sie eine Behauptung.
  *
- * <p><b>Die Vorgaben dieses Lesers sind beide 0</b>, und das macht jede Probe besonders
+ * <p><b>Die Vorgaben dieses Lesers sind alle 0</b>, und das macht jede Probe besonders
  * anfaellig fuer die Falle aus der Kampagne vom 08.11.2026: Eine Probe, die zufaellig den
  * Vorgabewert einsetzt, prueft nichts - sie waere auch gruen, wenn der ganze Leseaufruf
  * durch die Vorgabe ersetzt waere. Darum steht in keiner dieser Proben eine 0, wo eine
  * Zahl aus der Datei kommen soll.
+ *
+ * <p><b>DREI Gebuehrenzeilen und nicht zwei</b> [08.11.2026]: Auch WANN eine Gebuehr
+ * faellt, ist eine Einstellung. Darum stehen hier drei VERSCHIEDENE Zahlen - 7, 13 und
+ * 23 -, und keine ist die Vorgabe: Mit gleichen Zahlen waere ein Tausch zweier Pfade
+ * nicht zu sehen, und alle drei gehen durch dieselbe Lesemethode.
  */
 @DisplayName("Der Handel aus der config.yml")
 class ShoplisteTest {
 
     private static final String VOLLSTAENDIG = """
             handel:
-              marktgebuehr-spieler-prozent: 7
-              marktgebuehr-bund-prozent: 13
+              marktgebuehr-spielershop-kauf-prozent: 7
+              marktgebuehr-spielershop-verkauf-prozent: 13
+              marktgebuehr-bundshop-verkauf-prozent: 23
               bundshop-wort: Staat
             """;
 
     @Test
-    @DisplayName("Alle drei Zeilen werden gelesen - und keine ist die Vorgabe")
-    void alleDreiZeilen() {
+    @DisplayName("Alle vier Zeilen werden gelesen - und keine ist die Vorgabe")
+    void alleVierZeilen() {
         var ergebnis = lies(VOLLSTAENDIG);
 
         assertTrue(ergebnis.klagen().isEmpty(), "" + ergebnis.klagen());
-        assertEquals(7, ergebnis.werte().spielerProzent());
-        assertEquals(13, ergebnis.werte().bundProzent());
+        assertEquals(7, ergebnis.werte().spielershopKauf());
+        assertEquals(13, ergebnis.werte().spielershopVerkauf());
+        assertEquals(23, ergebnis.werte().bundshopVerkauf());
         assertEquals("Staat", ergebnis.werte().bundWort());
     }
 
     @Test
-    @DisplayName("Die zwei Gebuehren werden NICHT vertauscht")
+    @DisplayName("Die drei Gebuehren werden NICHT vertauscht")
     void gebuehrenWerdenNichtVertauscht() {
-        // Zwei Zahlen im selben Abschnitt, derselbe Typ, dieselbe Schranke - und beide
-        // gehen durch DIESELBE Methode. Genau da ist ein Tausch der zwei Pfade nicht zu
-        // sehen, solange eine Probe gleiche Zahlen einsetzt. 7 und 13 sind verschieden,
-        // und keine von beiden ist die Vorgabe.
+        // Drei Zahlen im selben Abschnitt, derselbe Typ, dieselbe Schranke - und alle
+        // drei gehen durch DIESELBE Methode. Genau da ist ein Tausch zweier Pfade nicht
+        // zu sehen, solange eine Probe gleiche Zahlen einsetzt. 7, 13 und 23 sind
+        // verschieden, und keine von ihnen ist die Vorgabe.
         var ergebnis = lies(VOLLSTAENDIG);
 
-        assertEquals(7, ergebnis.werte().spielerProzent(),
-                "7 steht unter " + Shopwerte.PFAD_SPIELER);
-        assertEquals(13, ergebnis.werte().bundProzent(),
-                "13 steht unter " + Shopwerte.PFAD_BUND);
+        assertEquals(7, ergebnis.werte().spielershopKauf(),
+                "7 steht unter " + Shopwerte.PFAD_SPIELER_KAUF);
+        assertEquals(13, ergebnis.werte().spielershopVerkauf(),
+                "13 steht unter " + Shopwerte.PFAD_SPIELER_VERKAUF);
+        assertEquals(23, ergebnis.werte().bundshopVerkauf(),
+                "23 steht unter " + Shopwerte.PFAD_BUND_VERKAUF);
     }
 
     @Test
-    @DisplayName("Eine Gebuehr ueber der Haelfte wird verworfen, die andere gilt weiter")
+    @DisplayName("Eine Gebuehr ueber der Haelfte wird verworfen, die anderen gelten weiter")
     void zuHoheGebuehrWirdVerworfen() {
         var ergebnis = lies(String.join(System.lineSeparator(),
                 "handel:",
-                "  marktgebuehr-spieler-prozent: 51",
-                "  marktgebuehr-bund-prozent: 13"));
+                "  marktgebuehr-spielershop-kauf-prozent: 51",
+                "  marktgebuehr-spielershop-verkauf-prozent: 13",
+                "  marktgebuehr-bundshop-verkauf-prozent: 23"));
 
-        assertTrue(klagtUeber(ergebnis, Shopwerte.PFAD_SPIELER),
+        assertTrue(klagtUeber(ergebnis, Shopwerte.PFAD_SPIELER_KAUF),
                 "" + ergebnis.klagen());
-        assertEquals(Shopwerte.VORGABE_SPIELER, ergebnis.werte().spielerProzent());
-        assertEquals(13, ergebnis.werte().bundProzent(),
+        assertEquals(Shopwerte.VORGABE_SPIELER_KAUF,
+                ergebnis.werte().spielershopKauf());
+        assertEquals(13, ergebnis.werte().spielershopVerkauf(),
                 "eine kaputte Zeile kostet nur sich selbst");
+        assertEquals(23, ergebnis.werte().bundshopVerkauf());
     }
 
     @Test
@@ -83,9 +95,9 @@ class ShoplisteTest {
     void negativeGebuehrWirdVerworfen() {
         var ergebnis = lies(String.join(System.lineSeparator(),
                 "handel:",
-                "  marktgebuehr-bund-prozent: -1"));
+                "  marktgebuehr-bundshop-verkauf-prozent: -1"));
 
-        assertTrue(klagtUeber(ergebnis, Shopwerte.PFAD_BUND));
+        assertTrue(klagtUeber(ergebnis, Shopwerte.PFAD_BUND_VERKAUF));
     }
 
     @Test
@@ -96,11 +108,54 @@ class ShoplisteTest {
         // Gebuehr, die er nicht gesetzt hat. Geprueft wird darum der LONG.
         var ergebnis = lies(String.join(System.lineSeparator(),
                 "handel:",
-                "  marktgebuehr-spieler-prozent: 4294967296"));
+                "  marktgebuehr-spielershop-kauf-prozent: 4294967296"));
 
-        assertTrue(klagtUeber(ergebnis, Shopwerte.PFAD_SPIELER),
+        assertTrue(klagtUeber(ergebnis, Shopwerte.PFAD_SPIELER_KAUF),
                 "eine verkuerzte Zahl darf nicht stillschweigend die Vorgabe werden: "
                         + ergebnis.klagen());
+    }
+
+    @Test
+    @DisplayName("Die ALTEN Zeilen werden beklagt und nicht uebergangen")
+    void alteZeilenWerdenBeklagt() {
+        // Bis zum 08.11.2026 hiessen die Zeilen marktgebuehr-spieler-prozent und
+        // marktgebuehr-bund-prozent. Wer sie stehen laesst, hat eine Zahl in der Datei,
+        // die niemand mehr liest - und das ist die schlimmste Art Einstellung: Der
+        // Betreiber stellt sie ein, wartet auf ihre Wirkung und sucht den Fehler
+        // ueberall sonst.
+        //
+        // Eine KLAGE und kein Bericht: Die Folge ist dieselbe wie bei einer verworfenen
+        // Zahl - der Server tut etwas anderes, als in der Datei steht.
+        var ergebnis = lies(String.join(System.lineSeparator(),
+                "handel:",
+                "  marktgebuehr-spieler-prozent: 7",
+                "  marktgebuehr-bund-prozent: 13"));
+
+        assertTrue(klagtUeber(ergebnis, "handel.marktgebuehr-spieler-prozent"),
+                "" + ergebnis.klagen());
+        assertTrue(klagtUeber(ergebnis, "handel.marktgebuehr-bund-prozent"),
+                "" + ergebnis.klagen());
+        // Und die Klage sagt, WOHIN die Zahl jetzt gehoert - sonst sucht er drei neue
+        // Namen, die er nicht kennt.
+        assertTrue(ergebnis.klagen().stream()
+                        .anyMatch(k -> k.contains(Shopwerte.PFAD_SPIELER_KAUF)
+                                && k.contains(Shopwerte.PFAD_SPIELER_VERKAUF)
+                                && k.contains(Shopwerte.PFAD_BUND_VERKAUF)),
+                "die Klage muss die drei neuen Zeilen nennen: " + ergebnis.klagen());
+        // Die Zahlen von damals gelten NICHT weiter: Sie standen fuer eine Lage, die es
+        // so nicht mehr gibt.
+        assertEquals(Shopwerte.VORGABE, ergebnis.werte());
+    }
+
+    @Test
+    @DisplayName("Die AUSGELIEFERTE Datei nennt keine alte Zeile mehr")
+    void ausgelieferteDateiOhneAlteZeilen() {
+        // Die Gegenprobe zur Probe darueber: Haette die mitgelieferte config.yml eine
+        // der alten Zeilen behalten, klagte das Plugin bei JEDEM Start ueber sich
+        // selbst - und ein Betreiber lernte, Klagen zu uebersehen.
+        var ergebnis = Shopliste.ausKonfiguration(ausgelieferteDatei());
+
+        assertTrue(ergebnis.klagen().isEmpty(), "" + ergebnis.klagen());
     }
 
     @Test
@@ -159,10 +214,10 @@ class ShoplisteTest {
     @DisplayName("Fehlende Zeilen werden gezaehlt genannt")
     void fehlendeZeilenWerdenGenannt() {
         var ergebnis = lies("handel:" + System.lineSeparator()
-                + "  marktgebuehr-spieler-prozent: 7");
+                + "  marktgebuehr-spielershop-kauf-prozent: 7");
 
         assertTrue(ergebnis.bericht().stream()
-                        .anyMatch(z -> z.startsWith("2 von 3") && z.contains("Handels")),
+                        .anyMatch(z -> z.startsWith("3 von 4") && z.contains("Handels")),
                 "" + ergebnis.bericht());
     }
 
@@ -176,17 +231,33 @@ class ShoplisteTest {
     }
 
     @Test
-    @DisplayName("Die Rechenprobe rechnet die Gebuehr an einem Beispiel vor")
+    @DisplayName("Die Rechenprobe rechnet jede der drei Gebuehren an einem Beispiel vor")
     void rechenprobeRechnetVor() {
         // 0 Prozent ist eine Zahl, die niemandem etwas sagt; "von 1.000 bleiben 1.000"
-        // schon. Geprueft wird mit 7 und 13, damit die Zeile wirklich RECHNET - mit zwei
+        // schon. Geprueft wird mit 7, 13 und 23, damit die Zeile wirklich RECHNET - mit
         // Nullen waere eine Rechnung, die immer 1.000 ergibt, nicht von einer
         // abgeschriebenen Zahl zu unterscheiden.
         String probe = rechenprobe(lies(VOLLSTAENDIG));
 
         assertTrue(probe.contains("930"), "1.000 minus 7 Prozent = 930: " + probe);
         assertTrue(probe.contains("870"), "1.000 minus 13 Prozent = 870: " + probe);
+        assertTrue(probe.contains("770"), "1.000 minus 23 Prozent = 770: " + probe);
         assertTrue(probe.contains("Staat"), "und das Bundwort: " + probe);
+    }
+
+    @Test
+    @DisplayName("Die Rechenprobe sagt, WER die Gebuehr zahlt")
+    void rechenprobeSagtWerZahlt() {
+        // Das ist der Unterschied der drei Lagen, und eine Zeile, die nur Prozente
+        // nennt, liest sich wie eine Zahl und nicht wie eine Entscheidung: Beim Kauf
+        // zahlt der BESITZER, beim Verkauf der KUNDE.
+        String probe = rechenprobe(lies(VOLLSTAENDIG));
+
+        assertTrue(probe.contains("Besitzer"), probe);
+        assertTrue(probe.contains("Kunde"), probe);
+        // Und sie nennt die vierte Lage, die KEINEN Schluessel hat - sonst sucht ein
+        // Betreiber ewig nach der Zeile fuer den Kauf am Bundshop.
+        assertTrue(probe.contains("Bundshop faellt keine Gebuehr"), probe);
     }
 
     @Test
@@ -203,11 +274,13 @@ class ShoplisteTest {
     @DisplayName("Die Startzeile nennt JEDE Zahl, die sie verspricht")
     void startzeileNenntJedeZahl() {
         // Der Befund vom Bundesmarkt: Eine halbe Zusage - "es wird eine Gebuehr erhoben"
-        // ohne die Zahl - liest sich wie eine Angabe und traegt keine.
-        String zeile = Shopliste.startzeile(new Shopwerte(7, 13, "Staat"));
+        // ohne die Zahl - liest sich wie eine Angabe und traegt keine. Mit drei Saetzen
+        // gilt das dreifach.
+        String zeile = Shopliste.startzeile(new Shopwerte(7, 13, 23, "Staat"));
 
-        assertTrue(zeile.contains("7 Prozent"), zeile);
-        assertTrue(zeile.contains("13 Prozent"), zeile);
+        assertTrue(zeile.contains("7"), zeile);
+        assertTrue(zeile.contains("13"), zeile);
+        assertTrue(zeile.contains("23"), zeile);
         assertTrue(zeile.contains("Staat"), zeile);
     }
 
@@ -216,12 +289,13 @@ class ShoplisteTest {
     void startzeileOhneGebuehr() {
         // Der ausgelieferte Zustand, also die Zeile, die ein Betreiber am haeufigsten
         // liest. Sie muss die Pfade nennen: Sonst weiss er nicht, wo er die Gebuehr
-        // einschaltet.
+        // einschaltet - und bei drei Zeilen erst recht.
         String zeile = Shopliste.startzeile(Shopwerte.VORGABE);
 
         assertTrue(zeile.contains("ohne Marktgebuehr"), zeile);
-        assertTrue(zeile.contains(Shopwerte.PFAD_SPIELER), zeile);
-        assertTrue(zeile.contains(Shopwerte.PFAD_BUND), zeile);
+        assertTrue(zeile.contains(Shopwerte.PFAD_SPIELER_KAUF), zeile);
+        assertTrue(zeile.contains(Shopwerte.PFAD_SPIELER_VERKAUF), zeile);
+        assertTrue(zeile.contains(Shopwerte.PFAD_BUND_VERKAUF), zeile);
     }
 
     @Test
@@ -234,13 +308,13 @@ class ShoplisteTest {
         // Konstruktor wuerfe beim Start).
         int hoechste = Shopregel.HOECHSTE_GEBUEHR_PROZENT;
         var gerade = lies("handel:" + System.lineSeparator()
-                + "  marktgebuehr-spieler-prozent: " + hoechste);
+                + "  marktgebuehr-spielershop-kauf-prozent: " + hoechste);
         var darueber = lies("handel:" + System.lineSeparator()
-                + "  marktgebuehr-spieler-prozent: " + (hoechste + 1));
+                + "  marktgebuehr-spielershop-kauf-prozent: " + (hoechste + 1));
 
         assertTrue(gerade.klagen().isEmpty(), "" + gerade.klagen());
-        assertEquals(hoechste, gerade.werte().spielerProzent());
-        assertTrue(klagtUeber(darueber, Shopwerte.PFAD_SPIELER));
+        assertEquals(hoechste, gerade.werte().spielershopKauf());
+        assertTrue(klagtUeber(darueber, Shopwerte.PFAD_SPIELER_KAUF));
     }
 
     @Test
@@ -249,7 +323,7 @@ class ShoplisteTest {
         // Ohne diese Probe waere jede Zusage ueber die ausgelieferte Datei eine
         // Behauptung: Ein YAML-Einzug an der falschen Stelle beendet den Abschnitt
         // darueber, und der Leser sieht die Zeilen nie. Genau das faengt sie - und bei
-        // diesem Abschnitt noch mehr als bei anderen, denn beide Vorgaben sind 0, und
+        // diesem Abschnitt noch mehr als bei anderen, denn alle Vorgaben sind 0, und
         // eine nie gelesene Zeile waere nicht von einer gelesenen zu unterscheiden.
         var ergebnis = Shopliste.ausKonfiguration(ausgelieferteDatei());
 

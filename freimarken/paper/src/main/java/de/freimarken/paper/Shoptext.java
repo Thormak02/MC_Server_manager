@@ -1,6 +1,8 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Shopregel;
 import java.util.ArrayList;
 import java.util.List;
 import net.kyori.adventure.text.Component;
@@ -180,6 +182,77 @@ final class Shoptext {
                 ? ShopSatz.SHOP_SCHUTZ_SCHILD
                 : ShopSatz.SHOP_SCHUTZ_KISTE;
         return sprache.eineZeile(satz, Einsatz.von("besitzer", besitzername));
+    }
+
+    /**
+     * Der Handbalken zu einem Handelsklick - eine Zeile, oder keine.
+     *
+     * <p><b>Eine LISTE, obwohl ein Handbalken nur eine Zeile nimmt</b>, und zwar aus
+     * demselben Grund wie bei {@link #abbauZeilen}: Ein Klick, an dem kein Shop
+     * haengt, muss SCHWEIGEN - und das ist eine Entscheidung, die hier geprueft werden
+     * soll und nicht im Ereigniszweig. Ein Spieler, der auf ein Wegweiserschild
+     * klickt, bekaeme sonst eine Absage dafuer, dass dort kein Laden ist.
+     *
+     * <p>Alle Werte werden IMMER gesetzt, auch die, die dieser Satz nicht braucht -
+     * dieselbe Entscheidung und derselbe Grund wie bei {@link #absagewerte}:
+     * Ueberzaehlige Werte sieht {@code Sprache.ersetze} nie, fehlende stehen dem Leser
+     * als Klammer im Satz. Welche ein Satz einsetzen DARF, steht in
+     * {@code ShopSatz.platzhalter()} und wird beim Laden gegen die Vorlage geprueft.
+     *
+     * <p>{@code sprache.betrag} und nicht die nackte Zahl: Jede Geldangabe des
+     * Projekts geht durch dieselbe Stelle, damit "1.000 Mark" ueberall gleich
+     * aussieht.
+     */
+    static List<Component> handelBalken(Sprache sprache,
+            Shophandel.Ausgang ausgang) {
+        if (ausgang.bescheid() == Shophandel.Bescheid.KEIN_SHOP) {
+            return List.of();
+        }
+        // Am eigenen Shop nur beim RECHTSklick ein Hinweis. Der Linksklick des
+        // Besitzers ist sein Abbau - eine Meldung daneben waere eine zweite Antwort
+        // auf eine Tat, die gerade stattfindet, und der Spieler las beides gleichzeitig.
+        if (ausgang.bescheid() == Shophandel.Bescheid.EIGENER_SHOP
+                && ausgang.art() == Handelsart.KUNDE_VERKAUFT) {
+            return List.of();
+        }
+        Shopregel.Handel handel = ausgang.handel();
+        boolean mitGebuehr = handel != null && handel.kostetGebuehr();
+        return List.of(sprache.eineZeile(
+                Sprachschluessel.shopHandel(ausgang.bescheid(), ausgang.art(),
+                        mitGebuehr),
+                handelswerte(sprache, ausgang, handel)));
+    }
+
+    /**
+     * Die fuenf Werte eines Handelsbalkens.
+     *
+     * <p><b>{@code menge} ist nicht immer dasselbe</b>, und das ist der einzige Wert
+     * hier, der verzweigt: Bei einem gelungenen Handel ist es, was WIRKLICH bewegt
+     * wurde ({@code handel.stueck()}, beim Sneak-Klick ein ganzer Stapel); bei einer
+     * Absage ist es, was der Shop je Handel VERLANGT ({@code shop.menge()}). Ein
+     * Kunde, der "du brauchst 16x STONE" liest, soll die Zahl des Shops sehen und
+     * nicht die, die er gerade nicht zusammenbekommen hat.
+     *
+     * <p>Die drei Geldzahlen stehen alle drei da, auch wenn nur der Verkaufssatz mit
+     * Gebuehr sie alle nennt. Bei einer Absage ist {@code handel} {@code null}, und dann
+     * ist der Preis der einer EINEN Stufe - das ist die Zahl, die der Satz
+     * {@code kein-geld} braucht: Was dem Kunden fehlt, ist der Preis fuer einen
+     * Handel, nicht fuer den Stapel, den er nicht bekommt.
+     */
+    private static Einsatz handelswerte(Sprache sprache, Shophandel.Ausgang ausgang,
+            Shopregel.Handel handel) {
+        Kistenshop shop = ausgang.shop();
+        long preis = handel != null
+                ? handel.preis()
+                : ausgang.art().stufenpreis(shop);
+        return Einsatz
+                .von("menge", handel != null ? handel.stueck() : shop.menge())
+                .mit("ware", shop.ware().name())
+                .mit("preis", sprache.betrag(preis))
+                .mit("gebuehr", sprache.betrag(handel == null ? 0L
+                        : handel.gebuehr()))
+                .mit("erloes", sprache.betrag(handel == null ? 0L
+                        : handel.erloes()));
     }
 
     /**

@@ -571,6 +571,19 @@ class VorlageTest {
             // 1.000" sagt ihm, was 0 Prozent bedeuten; die Zahl 0 allein sagt
             // niemandem etwas. Die Startzeile daneben nennt kein Geld, nur
             // Prozente - darum steht sie hier nicht.
+            // SIEBEN Protokollzeilen des Handels, und alle sieben sind ein
+            // Stoerfall: ein gescheitertes Abbuchen, ein Erloes, der nicht
+            // angekommen ist, eine Gebuehr, die nicht abzubuchen war, und die
+            // Erstattung. Jede nennt ihren Betrag, damit ein Betreiber sie von
+            // Hand nachbuchen kann - ohne die Zahl ist die Zeile ein Hinweis und
+            // keine Anweisung. Ein SPIELER liest keine davon.
+            "Shophandel.java -> \" Mark bei \"",
+            "Shophandel.java -> \" Mark NICHT\"",
+            "Shophandel.java -> \" Mark liess sich bei \"",
+            "Shophandel.java -> \" Mark bekommen hat. Das kann\"",
+            "Shophandel.java -> \" Mark fehlt im Buch.\"",
+            "Shophandel.java -> \" Mark zurueck.\"",
+            "Shophandel.java -> \" Mark an \"",
             "Shopliste.java -> \" Mark Umsatz bleiben\"",
             // Zwei Protokollzeilen: der Wurf eines Programmfehlers und die
             // Verlustzeile, wenn die Serie nach einer Zahlung nicht geschrieben

@@ -282,6 +282,235 @@ class ShopwacheTafel {
         throw new AssertionError(name + " nicht gefunden");
     }
 
+    // ================================================== der HANDEL [08.11.2026]
+
+    @Test
+    @DisplayName("Gezaehlt wird auf getStorageContents - nie auf getContents")
+    void gezaehltWirdAufDenLagerplaetzen() {
+        // DIE ZWEITE-HAND-FALLE, und sie ist Geld aus nichts. Beim Spieler sind
+        // getContents 41 Plaetze (36 Lager, 4 Ruestung, 1 zweite Hand), getStorageContents
+        // 36 - und removeItem bedient nur die Lagerplaetze. Mit getContents gezaehlt ist
+        // Ware in der zweiten Hand VORHANDEN und nicht ENTNEHMBAR: Der Spieler bekommt
+        // Geld und behaelt die Ware, beliebig wiederholbar.
+        //
+        // Umgekehrt beim Kauf: Ein freier Helmplatz, als Platz gezaehlt, nimmt keinen
+        // Stapel Holz auf - und der Rest ginge verloren. Dieselbe Lehre steht schon in
+        // Ladenware.freiePlaetze.
+        //
+        // An einer KISTE sind beide dasselbe. Der Unterschied zaehlt nur beim Spieler,
+        // und genau darum wird er verwechselt.
+        String bestand = methode("Shopware.java", "bestand");
+
+        assertTrue(bestand.contains("getStorageContents()"), bestand);
+        assertFalse(bestand.contains("getContents()"),
+                "getContents enthaelt Ruestung und die zweite Hand - fuenf Faecher, aus"
+                        + " denen removeItem nichts nimmt: " + bestand);
+    }
+
+    @Test
+    @DisplayName("isSimilar steht an GENAU EINER Stelle")
+    void isSimilarAnEinerStelle() {
+        // Die Frage "ist dieser Stapel DIESE Ware" wird beim Zaehlen, beim Entnehmen und
+        // beim Anlegen gestellt. Drei Abschriften laufen auseinander, und dann nimmt der
+        // Ausgabegang anderes an, als der Zaehlgang hergibt - so wird aus einem
+        // Zaehlfehler eine Buchung ohne Lieferung.
+        //
+        // Gezaehlt wird NICHT, sondern festgenagelt, WO es steht: Eine Zahl liesse sich
+        // hochdrehen, der Rumpf von passt() nicht.
+        String quelle = quelle("Shopware.java");
+        String passt = methode("Shopware.java", "passt");
+
+        assertTrue(passt.contains("isSimilar"), passt);
+        assertEquals(1, quelle.split("isSimilar", -1).length - 1,
+                "isSimilar darf NUR in passt() stehen - sonst gibt es zwei Antworten"
+                        + " auf die Frage, was diese Ware ist");
+    }
+
+    @Test
+    @DisplayName("Der BASE64-Text der Warenprobe wird nirgends verglichen")
+    void derWarentextWirdNichtVerglichen() {
+        // Die andere Richtung derselben Falle: Die Bytes der Warenprobe gehen durch den
+        // DATENFIXER, wenn ein Update die Gegenstandsform aendert. Der gespeicherte Text
+        // traegt dann die alte Fassung, ein heute aus der Kiste gelesener Gegenstand die
+        // neue - die Texte sind verschieden, obwohl die Ware dieselbe ist.
+        //
+        // Dann meldete JEDER Shop der Welt nach dem Update "ausverkauft", gleichzeitig
+        // und ohne Fehlermeldung. Der Text wird nur AUFGELOEST (ausText), nie verglichen.
+        String quelle = quelle("Shopware.java");
+
+        assertFalse(quelle.contains("inhalt().equals"), quelle);
+        assertFalse(quelle.contains(".equals(shop.ware().inhalt())"), quelle);
+        // Aufgeloest wird er an genau einer Stelle, und die liegt in einer eigenen
+        // Methode: Sonst entschluesselt der Zaehlgang die Probe je FACH - bei einer
+        // Doppelkiste vierundfuenfzigmal je Klick.
+        assertEquals(1, quelle.split("ausText\\(", -1).length - 1,
+                "die Warenprobe wird EINMAL je Gang aufgeloest, nicht je Fach: "
+                        + quelle);
+    }
+
+    @Test
+    @DisplayName("Bewegt wird mit einer KOPIE, und gelesen wird nur die Restliste")
+    void bewegtWirdMitEinerKopie() {
+        // Zwei Fallen in einer Zeile. Erstens: addItem und removeItem setzen die Menge
+        // des UEBERGEBENEN Stapels herunter, waehrend sie arbeiten - wer hinterher die
+        // Warenprobe weiterverwendet, hat eine Probe mit Menge 0. Darum asQuantity, das
+        // eine Kopie liefert.
+        //
+        // Zweitens: "alles gepasst" und "nichts gepasst" lassen die Menge BEIDE
+        // unveraendert. Nur die Restliste sagt, was wirklich fehlte - und ihr Schluessel
+        // ist der INDEX im Aufruf, nicht ein Inventarplatz. Darum wird sie ueber values()
+        // gelesen und nie ueber ihre Schluessel.
+        String bewege = methode("Shopware.java", "bewege");
+        String portionen = methode("Shopware.java", "portionen");
+
+        assertTrue(portionen.contains("asQuantity("), portionen);
+        assertTrue(bewege.contains(".values()"), bewege);
+        assertFalse(bewege.contains("keySet()"),
+                "der Schluessel der Restliste ist der INDEX im Aufruf und kein"
+                        + " Inventarplatz: " + bewege);
+    }
+
+    @Test
+    @DisplayName("Das Inventar kommt ueber getState(false) - nie als Schnappschuss")
+    void inventarOhneSchnappschuss() {
+        // DER KUERZESTE WEG ZUR VERDOPPLUNG. getSnapshotInventory() liefert eine KOPIE
+        // des Kisteninhalts; ein update() danach schreibt den vorher gelesenen Stand
+        // zurueck. Nimmt der Besitzer mit offener Kiste einen Stapel heraus, waehrend ein
+        // Kunde kauft, liegt der Stapel danach in der Kiste UND im Rucksack.
+        //
+        // getState(false) baut gar keinen Schnappschuss, und getInventory() darauf ist
+        // das LEBENDE Inventar. Auf dieser Zusage steht schon Ladenware.leere, die eine
+        // Truhe wirklich raeumt.
+        String quelle = quelle("Shopware.java");
+        String inventarAn = methode("Shopware.java", "inventarAn");
+
+        assertTrue(inventarAn.contains("getState(false)"), inventarAn);
+        assertFalse(quelle.contains("getSnapshotInventory"), quelle);
+        assertFalse(quelle.contains(".update("),
+                "ein update() an einer Kiste schreibt einen veralteten Inhalt zurueck -"
+                        + " das Wachsen des SCHILDES ist der einzige erlaubte Fall, und"
+                        + " der steht in Shopwache: " + quelle);
+        // Und der Weg zum Inventar steht an EINER Stelle: Auch das Anlegen geht
+        // hindurch, sonst bliebe dort ein getState() ohne Argument stehen.
+        assertTrue(methode("Shopware.java", "ausKiste").contains("inventarAn("),
+                "auch ausKiste muss durch inventarAn gehen - sonst baut das Anlegen"
+                        + " einen Schnappschuss und ist ein falsches Vorbild");
+    }
+
+    @Test
+    @DisplayName("Die Stapelgroesse wird GEMESSEN, nicht geraten")
+    void stapelgroesseWirdGemessen() {
+        // Enderperle und Schneeball stapeln zu 16, Werkzeug, Ruestung und jedes
+        // verzauberte Stueck zu 1 - und verzauberte Ausruestung ist seit dem 08.11.2026
+        // der Normalfall. Seit 1.20.5 kann ausserdem jeder Gegenstand seine eigene
+        // Groesse tragen, also ist auch das Material nicht die Quelle.
+        //
+        // Eine feste 64 machte aus einem Sneak-Klick an einem Spitzhacken-Shop
+        // vierundsechzig Stufen.
+        String quelle = quelle("Shopware.java");
+
+        assertTrue(quelle.contains("getMaxStackSize()"), quelle);
+        assertFalse(quelle.contains("64"),
+                "keine feste 64 in dieser Datei - die Stapelgroesse kommt vom"
+                        + " Gegenstand: " + quelle);
+        // UND die Grenze des BEHAELTERS. Dass sie heute nichts aendert, ist
+        // gemessen: Die Nachspritzung N4 vom 08.11.2026 nahm sie weg, und keine
+        // Probe wurde rot - in Vanilla stapeln alle Behaelter gleich. Eine
+        // Verhaltensprobe dafuer waere also eine, die nichts messen KANN.
+        //
+        // Sie bleibt trotzdem, und darum bleibt auch diese Tafel: Die Richtung
+        // ist die sichere. Ein Behaelter, der kleiner stapelt als der
+        // Gegenstand, macht aus der genauen Platzzahl eine UEBERschaetzung -
+        // und dann liegt Ware auf dem Boden, die bezahlt ist.
+        assertTrue(methode("Shopware.java", "aufEinenPlatz")
+                        .contains("inventar.getMaxStackSize()"),
+                "die Platzzahl nimmt die KLEINERE der zwei Grenzen");
+    }
+
+    // ================================================== der Klickzweig
+
+    @Test
+    @DisplayName("Der Klickzweig fragt die HAND - ein Klick kommt bis zu zweimal")
+    void derKlickzweigFragtDieHand() {
+        // Ohne diese Zeile buchte ein Klick zweimal und bewegte zweimal die Ware. Der
+        // sicher erreichbare Weg dorthin ist der SNEAK-Klick, also genau die Geste, mit
+        // der ein ganzer Stapel gehandelt wird - dann waere die Doppelbuchung am
+        // teuersten.
+        String zweig = methode("Shopklick.java", "beimKlicken");
+
+        assertTrue(zweig.contains("nurHaupthand(ereignis.getHand())"), zweig);
+    }
+
+    @Test
+    @DisplayName("Nach einem Shopklick sind BEIDE Ergebnisse auf DENY")
+    void nachDemHandelBeideErgebnisseDeny() {
+        // Zwei Dinge auf einmal. Der Linksklick ist in Minecraft der ANFANG eines
+        // Abbaus - ohne das Deny schlaegt Lumias Verkaeufer bei jedem Verkauf auf das
+        // Schild, und mit dem Teamrecht bricht es wirklich. Und der Rechtsklick mit einem
+        // Block in der Hand SETZT einen Block; darum darf die Tuer in der Schutzwache
+        // nicht mehr nach der Hand fragen, denn wer Stein verkaufen will, haelt Stein.
+        //
+        // Der Schutz liegt damit in der WIRKUNG und nicht in der Verweigerung: Der
+        // Handel findet statt, die Hand bleibt untaetig.
+        String zweig = methode("Shopklick.java", "beimKlicken");
+
+        assertTrue(zweig.contains("setUseInteractedBlock(Event.Result.DENY)"), zweig);
+        assertTrue(zweig.contains("setUseItemInHand(Event.Result.DENY)"), zweig);
+        // Und sie stehen NACH dem Handel: Ein Deny davor waere auch am eigenen Schild
+        // gesetzt, und dann waere das eigene Shopschild unzerbrechlich.
+        int handelt = zweig.indexOf("handel.handle(");
+        int deny = zweig.indexOf("setUseInteractedBlock");
+        assertTrue(handelt > 0 && deny > handelt,
+                "das Deny gehoert HINTER den Handel - sonst ist das eigene Schild nicht"
+                        + " mehr abzubauen: handle=" + handelt + ", deny=" + deny);
+        // Gesetzt wird es nur, wenn der Ausgang es sagt - die Entscheidung steht in
+        // Shophandel.Ausgang.verbraucht und ist dort ohne Server geprueft.
+        assertTrue(zweig.contains("ausgang.verbraucht()"), zweig);
+    }
+
+    @Test
+    @DisplayName("Der Klickzweig laeuft NACH der Schutzwache und fragt ihr Ergebnis")
+    void klickzweigLaeuftNachDerWache() {
+        // Die Reihenfolge haengt an einer PRIORITAET und nicht an der Zeilenlage zweier
+        // registerEvents - eine Reihenfolge, die am Startablauf haengt, faellt beim
+        // ersten Umstellen um. So macht es das ganze Projekt (Setzwache, Messwache,
+        // Verdienstwache).
+        //
+        // Der Gurt dazu: Auch wenn ein anderes Plugin den Block abgesagt hat, wird hier
+        // nicht gehandelt. Das haengt an keiner Annahme darueber, wie isCancelled auf die
+        // zwei Ergebnisse abbildet - es fragt sie selbst.
+        String quelle = quelle("Shopklick.java");
+        String zweig = methode("Shopklick.java", "beimKlicken");
+
+        assertTrue(quelle.contains("priority = EventPriority.HIGH"), quelle);
+        assertTrue(quelle.contains("ignoreCancelled = true"), quelle);
+        assertTrue(zweig.contains("useInteractedBlock() == Event.Result.DENY"), zweig);
+        // EIN Ereignis und kein zweites: Jeder weitere Zweig hier waere eine zweite
+        // Stelle, die ueber einen Shopklick entscheidet.
+        assertEquals(1, quelle.split("@EventHandler", -1).length - 1,
+                "der Handel hoert auf GENAU ein Ereignis: " + quelle);
+    }
+
+    @Test
+    @DisplayName("Die Handelstuer fragt nach dem SCHILD und nie nach der Kiste")
+    void dieTuerFragtNurDasSchild() {
+        // Der teuerste Fehler dieses Bereichs. Die naheliegenden Umsetzungen -
+        // Shopbuch.istShopkiste und .anDerKiste - antworten beide fuer die KISTE ja, und
+        // istShopkiste sagt bei einer Stoerung sogar ja. Waere die Tuer damit zufrieden,
+        // oeffnete jeder Kunde mit einem Rechtsklick die fremde Shopkiste und raeumte den
+        // Bestand aus; in der Markthalle am Ladenschutz vorbei.
+        //
+        // Das NEIN an der Kiste haelt ShopklickTest ohne Server fest. Hier steht die
+        // andere Haelfte: dass die zwei verfuehrerischen Methoden hier gar nicht
+        // vorkommen.
+        String quelle = quelle("Shopklick.java");
+
+        assertFalse(quelle.contains("istShopkiste"), quelle);
+        assertFalse(quelle.contains("anDerKiste"), quelle);
+        assertTrue(quelle.contains("Tag.ALL_SIGNS.isTagged"),
+                "gefragt wird die Blockart des SCHILDES: " + quelle);
+    }
+
     /**
      * Der Rumpf einer Methode - vom Namen bis zur schliessenden Klammer auf ihrer Ebene.
      *
@@ -325,19 +554,51 @@ class ShopwacheTafel {
      *
      * <p>Der Unterschied ist der RUECKGABETYP: Vor einer Deklaration steht mindestens ein
      * Wort ({@code void}, {@code private static String}), vor einem Aufruf nur Einzug.
+     *
+     * <p><b>ZWEIMAL nachgeschaerft, und beide Male am selben Tag gemessen</b>
+     * (08.11.2026). Die erste Fassung verwarf jedes Praefix mit einem PUNKT, um
+     * {@code waren.bestand(} auszuschliessen - damit fiel aber auch
+     * {@code public Shophandel.Bestand bestand(} heraus, denn ein qualifizierter
+     * Rueckgabetyp hat einen Punkt. Und sie liess {@code return bewege(} durch:
+     * {@code return} ist ein Wort ohne Klammer, Punkt und Gleichheitszeichen, also
+     * sah es wie ein Rueckgabetyp aus. Der Rumpf, den sie dann zurueckgab, war der
+     * des Aufrufers.
+     *
+     * <p>Die tragenden Unterschiede sind darum zwei: Vor einem Aufruf steht der
+     * Punkt UNMITTELBAR am Namen (nicht irgendwo im Praefix), und ein
+     * Schluesselwort kann nie ein Typ sein.
      */
     private static int deklaration(String quelle, String name) {
         int i = quelle.indexOf(name + "(");
         while (i >= 0) {
             int zeilenanfang = quelle.lastIndexOf('\n', i) + 1;
-            String davor = quelle.substring(zeilenanfang, i);
-            if (!davor.isBlank() && !davor.contains("(") && !davor.contains(".")
-                    && !davor.contains("=")) {
+            if (istDeklaration(quelle.substring(zeilenanfang, i))) {
                 return i;
             }
             i = quelle.indexOf(name + "(", i + 1);
         }
         return -1;
+    }
+
+    /**
+     * Worte, die vor einem Namen stehen koennen und doch kein Typ sind.
+     *
+     * <p>{@code return} ist der, der die Probe getaeuscht hat. Die uebrigen stehen
+     * daneben, weil sie in derselben Lage denselben Fehler machen wuerden - und
+     * weil eine Liste, die nur den einen gemessenen Fall nennt, beim naechsten
+     * wieder falsch ist.
+     */
+    private static final java.util.Set<String> KEIN_TYP = java.util.Set.of(
+            "return", "new", "throw", "assert", "else", "yield");
+
+    /** Ob dieses Praefix vor einer DEKLARATION steht - siehe {@link #deklaration}. */
+    private static boolean istDeklaration(String davor) {
+        if (davor.isBlank() || davor.contains("(") || davor.contains("=")
+                || davor.endsWith(".")) {
+            return false;
+        }
+        String letztes = davor.trim();
+        return !KEIN_TYP.contains(letztes.substring(letztes.lastIndexOf(' ') + 1));
     }
 
     private static int zaehle(String text, String stueck) {

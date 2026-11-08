@@ -37,9 +37,22 @@ import java.util.Set;
  * Grenze aendert, aendert eine Zahl im Programm und nicht zwei Worte in einer Datei.
  *
  * <p><b>Kein {@link Art#GEZAEHLT}, kein {@link Art#WORT}, kein {@link Art#MUSTER}:</b> In
- * diesem Zug gibt es keine Ein-/Mehrzahl, kein eingesetztes Wortstueck und kein Datum. Die
- * Mengen- und Preiszeilen tragen Zahlen, aber keine, die den Satzbau aendert - "3456" ist
- * eine Grenze und keine Anzahl von Dingen.
+ * diesem Bereich gibt es keine Ein-/Mehrzahl, kein eingesetztes Wortstueck und kein
+ * Datum. Die Mengen- und Preiszeilen tragen Zahlen, aber keine, die den Satzbau
+ * aendert - "3456" ist eine Grenze und "16x STONE" eine Angabe, keine Anzahl von
+ * Dingen.
+ *
+ * <p><b>Der HANDEL redet im Handbalken und nicht im Chat</b> [08.11.2026], und das ist
+ * dieselbe Begruendung wie beim Schutz, nur von der anderen Seite: Ein Spieler, der
+ * zwanzig Stapel kauft, klickt zwanzigmal. Zwanzig Chatzeilen waeren ein Regen, und der
+ * Handbalken ist genau die Stelle, auf die er dabei schaut. Was dauerhaft nachzulesen
+ * sein muss, steht ohnehin woanders - jeder Handel ist eine Zeile unter
+ * {@code /mark verlauf}.
+ *
+ * <p><b>Elf Absagen fuer den Handel</b>, aus demselben Grund wie die acht fuer das
+ * Schild: Jede nennt, WAS fehlt. "Ausverkauft", "kein Platz" und "zu wenig Geld"
+ * sind drei verschiedene Taten des Spielers, und wer statt dessen "das geht nicht"
+ * liest, klickt noch dreimal und hoert dann auf.
  */
 enum ShopSatz implements Satz {
 
@@ -237,7 +250,125 @@ enum ShopSatz implements Satz {
      * nicht mehr gibt. ChestShop faengt diesen Fall mit einem eigenen
      * {@code handlePhysicsBreak} NACH dem Fall; hier faellt nichts.
      */
-    SHOP_SCHUTZ_TRAEGER("shop.schutz.traeger", Art.HANDBALKEN);
+    SHOP_SCHUTZ_TRAEGER("shop.schutz.traeger", Art.HANDBALKEN),
+
+    // --- Der Handel ist gelungen ----------------------------------------------
+
+    /**
+     * Gekauft - was, wie viel und was es gekostet hat.
+     *
+     * <p>{@code {ware}} ist derselbe Kurzname wie auf der vierten Schildzeile, aus
+     * demselben Grund wie bei {@link #SHOP_ANGELEGT}: Der Spieler soll die Meldung mit
+     * dem Schild vor sich vergleichen koennen.
+     *
+     * <p><b>Keine Gebuehr in dieser Zeile.</b> Beim Kauf zahlt sie der SHOPBESITZER -
+     * der Kunde zahlt den Preis, der auf dem Schild steht, und nichts darueber. Eine
+     * Zeile, die ihm die Gebuehr eines anderen nennt, liest sich wie ein Abzug bei ihm.
+     */
+    SHOP_KAUF_GELUNGEN("shop.handel.gekauft", Art.HANDBALKEN, "menge", "ware",
+            "preis"),
+
+    /** Verkauft, ohne Gebuehr - der Kunde bekommt den ganzen Preis. */
+    SHOP_VERKAUF_GELUNGEN("shop.handel.verkauft", Art.HANDBALKEN, "menge", "ware",
+            "preis"),
+
+    /**
+     * Verkauft, und der Staat hat etwas genommen - ein EIGENER Satz.
+     *
+     * <p>Nicht derselbe mit einer Gebuehr von 0 darin: "fuer 100 Mark (100 minus 0
+     * Gebuehr)" ist eine Zeile, die sich wie ein Fehler liest. Und nicht ein stiller
+     * Abzug: Wer 100 auf dem Schild liest und 95 bekommt, sucht den Fehler beim Shop.
+     *
+     * <p>Alle drei Zahlen stehen darin, damit der Betreiber den Satz so bauen kann, wie
+     * er will - und damit die Zeile nachrechenbar ist. Eine Zusage, die eine ihrer
+     * Zahlen nicht nennt, traegt keine.
+     */
+    SHOP_VERKAUF_GEBUEHR("shop.handel.verkauft-gebuehr", Art.HANDBALKEN, "menge",
+            "ware", "preis", "gebuehr", "erloes"),
+
+    // --- Elf Absagen des Handels ----------------------------------------------
+
+    /**
+     * Rechtsklick an einem Shop, der nur ankauft.
+     *
+     * <p>Sagt auch, was stattdessen GEHT - der Linksklick. Ein Shop mit nur einem
+     * Preis sieht aus wie jeder andere, und ohne diesen Hinweis probiert der Kunde die
+     * andere Maustaste nicht.
+     */
+    SHOP_VERKAUFT_NICHT("shop.handel.verkauft-nicht", Art.HANDBALKEN),
+
+    /** Linksklick an einem Shop, der nur verkauft - mit demselben Hinweis. */
+    SHOP_KAUFT_NICHT_AN("shop.handel.kauft-nicht-an", Art.HANDBALKEN),
+
+    /**
+     * Der eigene Shop - hier wird nicht gehandelt [entschieden 08.11.2026].
+     *
+     * <p>Und der Satz sagt, was stattdessen geht: die Kiste aufmachen. Ohne diesen
+     * Hinweis liest sich die Absage wie eine Stoerung, denn ein Besitzer, der sein
+     * eigenes Schild anklickt, will meistens nur nachsehen, ob es geht.
+     */
+    SHOP_EIGENER_SHOP("shop.handel.eigener-shop", Art.HANDBALKEN),
+
+    /**
+     * Die Warenprobe des Shops ist nicht mehr zu deuten.
+     *
+     * <p>Der einzige Fall, in dem ein Spieler etwas liest, das NUR der Besitzer
+     * beheben kann - darum sagt der Satz, dass er ihm das sagen soll. Entsteht, wenn ein
+     * Spielupdate die Form der Gegenstaende so aendert, dass der gespeicherte Text nicht
+     * mehr passt; die Ware steht dann noch in der Kiste, der Shop handelt sie aber nicht
+     * mehr. Das Protokoll nennt den Warennamen, damit ein Betreiber sie ersetzen kann.
+     */
+    SHOP_WARE_UNLESBAR("shop.handel.ware-unlesbar", Art.HANDBALKEN),
+
+    /** Die Shopkiste hat nicht genug - mit der Ware, damit der Kunde sie kennt. */
+    SHOP_AUSVERKAUFT("shop.handel.ausverkauft", Art.HANDBALKEN, "ware"),
+
+    /**
+     * Der Kunde hat nicht genug von der Ware.
+     *
+     * <p>Mit der MENGE darin, und das ist der Unterschied zu "du hast die Ware nicht":
+     * Ein Shop, der 16 Stueck je Handel nimmt, lehnt auch 15 ab. Ohne die Zahl sieht
+     * der Kunde seine Ware im Rucksack und die Absage auf dem Schirm.
+     */
+    SHOP_KEINE_WARE("shop.handel.keine-ware", Art.HANDBALKEN, "menge", "ware"),
+
+    /** Im Rucksack des Kunden ist kein Platz. */
+    SHOP_KEIN_PLATZ("shop.handel.kein-platz", Art.HANDBALKEN),
+
+    /**
+     * Die Shopkiste ist voll.
+     *
+     * <p>Ein eigener Satz und nicht derselbe wie beim Rucksack: Der Kunde kann daran
+     * nichts aendern, und ein Satz, der ihn zum Aufraeumen auffordert, schickt ihn ins
+     * Leere. Er soll lesen, dass es am Shop liegt.
+     */
+    SHOP_KISTE_VOLL("shop.handel.kiste-voll", Art.HANDBALKEN),
+
+    /** Der Kunde kann nicht zahlen - mit dem Preis, den er braucht. */
+    SHOP_KEIN_GELD("shop.handel.kein-geld", Art.HANDBALKEN, "preis"),
+
+    /**
+     * Der Shopbesitzer kann nicht zahlen.
+     *
+     * <p>Ein Ankaufstand ohne Guthaben seines Besitzers - der haeufigste Fall, in dem
+     * ein Shop dasteht und nicht handelt. Der Satz nennt den Besitzer NICHT: Wer wie
+     * viel Geld hat, ist nicht die Sache eines Kunden, und der Shopname steht am
+     * Schild.
+     */
+    SHOP_PLEITE("shop.handel.shop-pleite", Art.HANDBALKEN),
+
+    /**
+     * Etwas ist schiefgegangen - und zwar MITTEN im Handel.
+     *
+     * <p>Ein eigener Satz und nicht {@link #SHOP_GESTOERT}: Jener sagt "der Shop liess
+     * sich nicht anlegen, das Schild bleibt stehen", und das hat mit einem Handelsklick
+     * nichts zu tun. Dieselbe Regel wie bei den zwei Platzabsagen - ein Satz, der auf
+     * zwei Lagen passt, passt auf keine.
+     *
+     * <p>Sagt ausdruecklich, dass kein Geld verloren ist. Das ist die Zusage, die der
+     * Handel wirklich haelt: Was nach dem Zahlen scheitert, wird erstattet.
+     */
+    SHOP_HANDEL_GESTOERT("shop.handel.gestoert", Art.HANDBALKEN);
 
     private final String pfad;
     private final Art art;

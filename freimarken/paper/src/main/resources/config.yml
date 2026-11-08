@@ -1260,23 +1260,45 @@ laeden:
 # Wegesrand, wo keine Parzelle greift - sonst waere ein Shop in der Wildnis von jedem
 # abbaubar.
 handel:
-  # Die Marktgebuehr auf einen Verkauf an einen SPIELERSHOP, in Prozent des Umsatzes.
-  # Abgezogen wird sie dem Verkaeufer, also dem Kunden, der Ware in den Shop gibt.
+  # DIE MARKTGEBUEHR - je LAGE ein eigener Satz.
   #
-  # 0 heisst: keine Gebuehr. Das ist die ausgelieferte Einstellung und die Entscheidung
-  # des Nutzers vom 08.11.2026 - erst soll der Handel laufen, die Senke kommt spaeter.
-  # Erlaubt ist 0 bis 50. Ueber der Haelfte waere die Gebuehr hoeher als der Erloes, und
-  # dann verkauft niemand mehr: eine Steuer, die ihre eigene Grundlage abschafft.
+  # Eine Lage ist Shopart mal Richtung, und das sind drei Zeilen und nicht eine. Der
+  # Grund ist die Entscheidung des Nutzers vom 08.11.2026: Auch WANN eine Gebuehr faellt,
+  # soll hier stehen und nicht im Programm. Vorher gab es zwei Zeilen, die das nicht
+  # sagen konnten - diese Datei meinte "beim Verkauf", der Quelltext meinte "bei jedem
+  # Handel", und beides stand da.
   #
-  # Gerundet wird ABGERUNDET und auf die GANZE Summe, nicht je Stueck. Bei 5 Prozent auf
-  # 19 Mark sind das 0 Mark - wer rundet, rundet zugunsten des Spielers.
-  marktgebuehr-spieler-prozent: 0
+  # Fuer alle drei gilt dasselbe:
+  #
+  #   * 0 heisst: keine Gebuehr. Das ist die ausgelieferte Einstellung - erst soll der
+  #     Handel laufen, die Senke kommt spaeter.
+  #   * Erlaubt ist 0 bis 50. Ueber der Haelfte waere die Gebuehr hoeher als der Erloes,
+  #     und dann verkauft niemand mehr: eine Steuer, die ihre eigene Grundlage abschafft.
+  #   * Abgezogen wird sie IMMER dem, der das Geld BEKOMMT - nie als Aufschlag auf den
+  #     Preis. Der Preis auf dem Schild ist, was der Kunde zahlt.
+  #   * Gerundet wird ABGERUNDET und auf die GANZE Summe, nicht je Stueck. Bei 5 Prozent
+  #     auf 19 Mark sind das 0 Mark - wer rundet, rundet zugunsten des Spielers. Und wo
+  #     die gerechnete Gebuehr 0 ist, faellt auch keine Gebuehrzeile im Buchungsbuch.
 
-  # Dieselbe Gebuehr am BUNDESMARKT, also an einem Shop ohne Besitzer. Getrennt, weil es
-  # zwei verschiedene Dinge sind: Beim Spielershop zahlt der Verkaeufer etwas an den
-  # Staat, am Bundesmarkt verkauft er AN den Staat. Plan 7.4 sieht hier spaeter 5 Prozent
-  # vor; bis dahin steht auch diese auf 0.
-  marktgebuehr-bund-prozent: 0
+  # KUNDE KAUFT bei einem Spielershop (Rechtsklick). Das Geld bekommt der BESITZER, also
+  # zahlt er die Gebuehr - von 1.000 Mark Umsatz bleiben ihm bei 5 Prozent 950.
+  marktgebuehr-spielershop-kauf-prozent: 0
+
+  # KUNDE VERKAUFT an einen Spielershop (Linksklick). Das Geld bekommt der KUNDE, also
+  # zahlt er die Gebuehr. Das war die Lage, die vorher als die einzige dastand.
+  marktgebuehr-spielershop-verkauf-prozent: 0
+
+  # KUNDE VERKAUFT an einen BUNDSHOP, also an einen Shop ohne Besitzer. Getrennt, weil es
+  # etwas anderes ist: Beim Spielershop zahlt jemand etwas an den Staat, hier verkauft er
+  # AN den Staat. Die Gebuehr senkt also den Ankaufpreis, ohne die Tafel in
+  # bundesmarkt.ankauf anzufassen. Plan 7.4 sieht hier spaeter 5 Prozent vor; bis dahin
+  # steht auch diese auf 0.
+  marktgebuehr-bundshop-verkauf-prozent: 0
+
+  # Die vierte Lage - KUNDE KAUFT bei einem Bundshop - hat ABSICHTLICH keinen Schluessel.
+  # Dort bekommt niemand Geld, dem eine Gebuehr abzuziehen waere: Der Bund hat kein Konto,
+  # sein Geld kommt aus dem Nichts und verschwindet dorthin. Ein Schluessel dafuer waere
+  # eine Zahl, die du einstellen koenntest und die nie wirkt.
 
   # Das Wort in der ERSTEN Schildzeile, das aus einem Shop einen Bundshop macht: ohne
   # Besitzer, mit unbegrenztem Vorrat, unbegrenztem Platz und unbegrenztem Geld.

@@ -11,6 +11,7 @@ import de.freimarken.kern.Berufsregel;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Buchungsgrund;
+import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Taetigkeit;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Richtung;
@@ -228,6 +229,25 @@ class SendewegTest {
         }
         for (Shopschild.Fehler schildfehler : Shopschild.Fehler.values()) {
             shops.add(Sprachschluessel.schildfehler(schildfehler).pfad());
+        }
+        // FUENFTE Familie seit dem 08.11.2026: die Saetze des HANDELS, ueber
+        // Sprachschluessel.shopHandel gewaehlt. Drei Achsen, und darum drei
+        // Schleifen in einer: Bescheid mal Richtung mal Gebuehrlage. Mit nur
+        // einem Durchlauf fehlten genau die zwei Saetze, die ein Spieler am
+        // oeftesten liest - die gelungene Kauf- und die gelungene Verkaufzeile.
+        //
+        // KEIN_SHOP fehlt, weil shopHandel dafuer wirft: Auf einen Klick, an dem
+        // kein Shop haengt, wird geschwiegen. Ein Satz dafuer waere einer, den
+        // nie jemand liest, und jeder Klick auf jedes Wegweiserschild
+        // beantwortet.
+        for (Shophandel.Bescheid bescheid : Shophandel.Bescheid.values()) {
+            if (bescheid == Shophandel.Bescheid.KEIN_SHOP) {
+                continue;
+            }
+            for (Handelsart art : Handelsart.values()) {
+                shops.add(Sprachschluessel.shopHandel(bescheid, art, false).pfad());
+                shops.add(Sprachschluessel.shopHandel(bescheid, art, true).pfad());
+            }
         }
         // DREI davon werden AUCH namentlich gesendet und gehoeren darum NICHT in die
         // Deckung - Probe 30 vergleicht die zwei Mengen auf Gleichheit, und ein doppelt

@@ -9,7 +9,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/** Die zwei Gebuehrensaetze des Kistenhandels. */
+/** Die drei Gebuehrensaetze des Kistenhandels - einer je Lage. */
 @DisplayName("Die Handelsgebuehren")
 class ShopwerteTest {
 
@@ -21,71 +21,140 @@ class ShopwerteTest {
     }
 
     @Test
-    @DisplayName("Ab Werk sind BEIDE Saetze 0")
+    @DisplayName("Ab Werk sind ALLE DREI Saetze 0")
     void vorgabeIstNull() {
         // Entschieden am 08.11.2026: Der Spielermarkt soll zuerst laufen. Die Zahlen
         // stehen trotzdem in der Datei - eine, die erst eingebaut wird, wenn man sie
         // braucht, wird unter Druck eingebaut.
-        assertEquals(0, Shopwerte.VORGABE.spielerProzent());
-        assertEquals(0, Shopwerte.VORGABE.bundProzent());
+        assertEquals(0, Shopwerte.VORGABE.spielershopKauf());
+        assertEquals(0, Shopwerte.VORGABE.spielershopVerkauf());
+        assertEquals(0, Shopwerte.VORGABE.bundshopVerkauf());
         assertFalse(Shopwerte.VORGABE.erhebtGebuehr());
     }
 
     @Test
     @DisplayName("Die Pfade heissen wie in der config.yml")
     void pfade() {
-        assertEquals("handel.marktgebuehr-spieler-prozent", Shopwerte.PFAD_SPIELER);
-        assertEquals("handel.marktgebuehr-bund-prozent", Shopwerte.PFAD_BUND);
+        assertEquals("handel.marktgebuehr-spielershop-kauf-prozent",
+                Shopwerte.PFAD_SPIELER_KAUF);
+        assertEquals("handel.marktgebuehr-spielershop-verkauf-prozent",
+                Shopwerte.PFAD_SPIELER_VERKAUF);
+        assertEquals("handel.marktgebuehr-bundshop-verkauf-prozent",
+                Shopwerte.PFAD_BUND_VERKAUF);
     }
 
     @Test
-    @DisplayName("prozentFuer waehlt den Satz nach dem BESITZER - die eine Stelle")
-    void prozentFuerWaehltDenSatz() {
-        // Zwei Stellen waeren zwei Gelegenheiten, die Saetze zu vertauschen - und das
-        // faellt niemandem auf, solange beide 0 sind. Darum stehen hier VERSCHIEDENE
-        // Zahlen: Ein Tausch ist sofort zu sehen.
-        Shopwerte werte = new Shopwerte(7, 13, "Bund");
+    @DisplayName("prozentFuer waehlt nach Shopart UND Richtung - alle vier Lagen")
+    void prozentFuerKenntAlleVierLagen() {
+        // DREI VERSCHIEDENE ZAHLEN, und das ist die Sache selbst: Eine Probe mit
+        // gleichen Saetzen waere auch gruen, wenn zwei Lagen vertauscht sind - und das
+        // faellt niemandem auf, solange alle 0 sind. So ist ein Tausch sofort zu sehen.
+        //
+        // Die Richtung ist seit dem 08.11.2026 eine EINSTELLUNG und keine Regel des
+        // Programms: Auch WANN eine Gebuehr faellt, soll der Betreiber entscheiden.
+        Shopwerte werte = new Shopwerte(7, 13, 23, "Bund");
+        Kistenshop spielershop = shop(UUID.randomUUID());
+        Kistenshop bundshop = shop(null);
 
-        assertEquals(7, werte.prozentFuer(shop(UUID.randomUUID())),
-                "ein Spielershop zahlt den Spielersatz");
-        assertEquals(13, werte.prozentFuer(shop(null)),
-                "ein Bundshop zahlt den Bundsatz");
-        assertThrows(IllegalArgumentException.class, () -> werte.prozentFuer(null));
+        assertEquals(7, werte.prozentFuer(spielershop, Handelsart.KUNDE_KAUFT),
+                "kauft ein Kunde beim Spielershop, zahlt der BESITZER");
+        assertEquals(13, werte.prozentFuer(spielershop, Handelsart.KUNDE_VERKAUFT),
+                "verkauft ein Kunde an einen Spielershop, zahlt ER");
+        assertEquals(23, werte.prozentFuer(bundshop, Handelsart.KUNDE_VERKAUFT),
+                "verkauft ein Kunde an einen Bundshop, zahlt er den Bundsatz");
+        // DIE VIERTE LAGE HAT KEINEN SATZ, und das ist die Zusage: Am Bundshop bekommt
+        // beim Kauf niemand Geld, dem eine Gebuehr abzuziehen waere. Eine Zahl dafuer
+        // waere eine Einstellung, die nie wirkt.
+        assertEquals(0, werte.prozentFuer(bundshop, Handelsart.KUNDE_KAUFT),
+                "am Bundshop kauft man ohne Gebuehr - es gibt keinen Zahler");
+    }
+
+    @Test
+    @DisplayName("Ohne Shop oder ohne Richtung gibt es keine Gebuehr")
+    void prozentFuerBrauchtBeides() {
+        Shopwerte werte = new Shopwerte(7, 13, 23, "Bund");
+
+        assertThrows(IllegalArgumentException.class,
+                () -> werte.prozentFuer(null, Handelsart.KUNDE_KAUFT));
+        assertThrows(IllegalArgumentException.class,
+                () -> werte.prozentFuer(shop(null), null));
     }
 
     @Test
     @DisplayName("Jeder Wither aendert GENAU seinen Wert")
     void witherAendernNurEinen() {
-        // Vier Zusicherungen und nicht zwei: Bei einem Wither, der die falsche Stelle
-        // belegt, waere eine Probe, die nur den geaenderten Wert liest, gruen.
-        Shopwerte spieler = Shopwerte.VORGABE.mitSpieler(7);
-        assertEquals(7, spieler.spielerProzent());
-        assertEquals(0, spieler.bundProzent());
+        // Drei Zusicherungen je Wither und nicht eine: Bei einem Wither, der die falsche
+        // Stelle belegt, waere eine Probe, die nur den geaenderten Wert liest, gruen.
+        Shopwerte kauf = Shopwerte.VORGABE.mitSpielerKauf(7);
+        assertEquals(7, kauf.spielershopKauf());
+        assertEquals(0, kauf.spielershopVerkauf());
+        assertEquals(0, kauf.bundshopVerkauf());
 
-        Shopwerte bund = Shopwerte.VORGABE.mitBund(13);
-        assertEquals(0, bund.spielerProzent());
-        assertEquals(13, bund.bundProzent());
+        Shopwerte verkauf = Shopwerte.VORGABE.mitSpielerVerkauf(13);
+        assertEquals(0, verkauf.spielershopKauf());
+        assertEquals(13, verkauf.spielershopVerkauf());
+        assertEquals(0, verkauf.bundshopVerkauf());
+
+        Shopwerte bund = Shopwerte.VORGABE.mitBundVerkauf(23);
+        assertEquals(0, bund.spielershopKauf());
+        assertEquals(0, bund.spielershopVerkauf());
+        assertEquals(23, bund.bundshopVerkauf());
     }
 
     @Test
-    @DisplayName("erhebtGebuehr sieht BEIDE Saetze")
-    void erhebtGebuehrSiehtBeide() {
-        // Eine Fassung, die nur den Spielersatz prueft, liesse die Startzeile schweigen,
-        // waehrend am Bundesmarkt eine Gebuehr erhoben wird.
-        assertTrue(Shopwerte.VORGABE.mitSpieler(1).erhebtGebuehr());
-        assertTrue(Shopwerte.VORGABE.mitBund(1).erhebtGebuehr());
+    @DisplayName("erhebtGebuehr sieht ALLE DREI Saetze")
+    void erhebtGebuehrSiehtAlle() {
+        // Eine Fassung, die nur einen Satz prueft, liesse die Startzeile schweigen,
+        // waehrend an einer der anderen Lagen eine Gebuehr erhoben wird.
+        assertTrue(Shopwerte.VORGABE.mitSpielerKauf(1).erhebtGebuehr());
+        assertTrue(Shopwerte.VORGABE.mitSpielerVerkauf(1).erhebtGebuehr());
+        assertTrue(Shopwerte.VORGABE.mitBundVerkauf(1).erhebtGebuehr());
         assertFalse(Shopwerte.VORGABE.erhebtGebuehr());
     }
 
     @Test
-    @DisplayName("Eine Gebuehr ueber der Haelfte wird abgewiesen")
+    @DisplayName("Eine Gebuehr ueber der Haelfte wird abgewiesen - an jeder der drei")
     void gebuehrHatGrenzen() {
-        assertThrows(IllegalArgumentException.class, () -> new Shopwerte(51, 0, "Bund"));
-        assertThrows(IllegalArgumentException.class, () -> new Shopwerte(0, 51, "Bund"));
-        assertThrows(IllegalArgumentException.class, () -> new Shopwerte(-1, 0, "Bund"));
-        assertThrows(IllegalArgumentException.class, () -> new Shopwerte(0, -1, "Bund"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(51, 0, 0, "Bund"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(0, 51, 0, "Bund"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(0, 0, 51, "Bund"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(-1, 0, 0, "Bund"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(0, -1, 0, "Bund"));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(0, 0, -1, "Bund"));
         // Der Rand geht durch.
-        assertEquals(50, new Shopwerte(50, 50, "Bund").spielerProzent());
+        assertEquals(50, new Shopwerte(50, 50, 50, "Bund").spielershopKauf());
+    }
+
+    @Test
+    @DisplayName("Jede Klage nennt, WELCHE der drei Lagen gemeint ist")
+    void klageNenntDieLage() {
+        // Drei Saetze mit derselben Schranke und derselben Klage - dann muss die Klage
+        // sagen, welcher gemeint ist. Sonst sucht ein Betreiber mit einer 60 in der
+        // Datei an drei Stellen.
+        String kauf = assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(60, 0, 0, "Bund")).getMessage();
+        String verkauf = assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(0, 60, 0, "Bund")).getMessage();
+        String bund = assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(0, 0, 60, "Bund")).getMessage();
+
+        assertTrue(kauf.contains("Kauf"), kauf);
+        assertTrue(verkauf.contains("Verkauf"), verkauf);
+        assertTrue(bund.contains("Bundshop"), bund);
+        // Und sie sind VERSCHIEDEN. Ohne diese Zeile waere eine Fassung gruen, in der
+        // dreimal derselbe Satz steht und das Wort nur zufaellig passt.
+        assertNotEqualsDrei(kauf, verkauf, bund);
+    }
+
+    private static void assertNotEqualsDrei(String a, String b, String c) {
+        assertTrue(!a.equals(b) && !b.equals(c) && !a.equals(c),
+                "die drei Klagen muessen verschieden sein: " + a + " / " + b + " / " + c);
     }
 
     @Test
@@ -93,7 +162,7 @@ class ShopwerteTest {
     void imWirtschaftssatz() {
         assertEquals(Shopwerte.VORGABE, Wirtschaftswerte.VORGABE.handel());
 
-        Shopwerte andere = new Shopwerte(5, 3, "Bund");
+        Shopwerte andere = new Shopwerte(5, 3, 2, "Bund");
         Wirtschaftswerte mit = Wirtschaftswerte.VORGABE.mitHandel(andere);
         assertEquals(andere, mit.handel());
         // Der Wither fasst GENAU seinen Wert an - geprueft an drei Nachbarn.
@@ -108,6 +177,7 @@ class ShopwerteTest {
         assertThrows(IllegalArgumentException.class,
                 () -> Wirtschaftswerte.VORGABE.mitHandel(null));
     }
+
     // --- Das Bundwort: der Satz prueft es, nicht nur der Leser ---------------
 
     @Test
@@ -125,7 +195,7 @@ class ShopwerteTest {
         String zuLang = "x".repeat(Shopwerte.LAENGSTES_WORT + 1);
 
         assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(0, 0, zuLang));
+                () -> new Shopwerte(0, 0, 0, zuLang));
         // Und auf dem zweiten Weg hinein, denn mitWort prueft selbst nichts: Es
         // verlaesst sich auf den Konstruktor, und genau darum muss der es tun.
         assertThrows(IllegalArgumentException.class,
@@ -139,7 +209,7 @@ class ShopwerteTest {
         // gruen - und dann passte das laengste erlaubte Wort nicht mehr.
         String grenze = "x".repeat(Shopwerte.LAENGSTES_WORT);
 
-        assertEquals(grenze, new Shopwerte(0, 0, grenze).bundWort());
+        assertEquals(grenze, new Shopwerte(0, 0, 0, grenze).bundWort());
     }
 
     @Test
@@ -149,9 +219,8 @@ class ShopwerteTest {
         // bedeuten dasselbe - Bundshops sind ueber ein Schild nicht anzulegen. Zwei
         // Schreibweisen fuer dieselbe Einstellung sind zwei Vergleiche, die irgendwann
         // auseinandergehen.
-        assertEquals("", new Shopwerte(0, 0, null).bundWort());
-        assertEquals("", new Shopwerte(0, 0, "   ").bundWort());
-        assertEquals("Bund", new Shopwerte(0, 0, "  Bund  ").bundWort());
+        assertEquals("", new Shopwerte(0, 0, 0, null).bundWort());
+        assertEquals("", new Shopwerte(0, 0, 0, "   ").bundWort());
+        assertEquals("Bund", new Shopwerte(0, 0, 0, "  Bund  ").bundWort());
     }
-
 }

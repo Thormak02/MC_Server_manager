@@ -396,29 +396,36 @@ class SchutzwacheTest {
     }
 
     @Test
-    @DisplayName("36l - die Handelstuer oeffnet NUR ohne Werkzeug in der Hand")
-    void handelstuerNurOhneWerkzeug() {
+    @DisplayName("36l - die Handelstuer fragt NUR den Handelsklick, nicht die Hand")
+    void handelstuerFragtNurDenHandelsklick() {
         // Befund der Einspritzungskampagne vom 08.11.2026: Diese Bedingung stand als
         // Zweig in beimKlicken und war damit nur ueber ein PlayerInteractEvent mit einem
         // Schildblock erreichbar - zwei Einspritzungen darauf liefen gruen durch. Jetzt
         // steht sie in einer eigenen Methode und ist ohne Server zu pruefen.
         //
-        // Die Tuer ist die Stelle, die den ganzen Schutz oeffnet: Handeln darf jeder,
-        // immer und ueberall, auch im Laden eines anderen. Wer sie zu weit aufmacht,
-        // macht den Laden auf.
+        // DIESE PROBE HAT IHRE ZUSAGE GETAUSCHT [08.11.2026], und zwar mit Grund: Vorher
+        // stand hier "die Tuer oeffnet NUR ohne Werkzeug in der Hand". Das sollte
+        // heissen: Wer mit einer Axt auf ein Schild klickt, will nicht kaufen.
+        // aendertBlock sagt aber bei JEDEM Gegenstand ja, der ein Block ist - und wer
+        // Stein, Erde oder Holz verkaufen will, haelt genau das in der Hand. Die Tuer
+        // waere also fuer die haeufigste Ware ueberhaupt zu geblieben, und das erst
+        // recht beim Linksklick, denn Lumias Verkauf IST ein Linksklick.
+        //
+        // Der Schutz liegt jetzt in der WIRKUNG und nicht in der Verweigerung: Shopklick
+        // setzt nach einem Shopklick beide Ergebnisse auf DENY - der Handel findet statt,
+        // die Hand bleibt untaetig. Die halbe Zusage haelt damit weiter, aber ueber
+        // istHandel: Die Tuer geht nur an einem SHOPSCHILD auf (ShopklickTest haelt das
+        // fest) und an keinem anderen Block.
         Schutzwache.Handelsklick immerJa = (spieler, block) -> true;
 
-        assertTrue(Schutzwache.alsHandelDurchlassen(immerJa, null, null, false),
-                "ein reiner Klick auf einen Shop ist ein Handel");
-        // Die HALBE Zusage, und sie ist die wichtigere: Wer mit einer Axt, einer Hacke
-        // oder einem Eimer auf ein Schild klickt, will nicht kaufen. Ohne dieses Nein
-        // waere die Handelstuer der Weg, mit einem Werkzeug in der Hand in jedem fremden
-        // Laden zu arbeiten.
-        assertFalse(Schutzwache.alsHandelDurchlassen(immerJa, null, null, true),
-                "mit einem Werkzeug in der Hand ist es KEIN Handel");
-        // Und heute bleibt die Tuer zu, weil es keine Kistenshops gibt.
-        assertFalse(Schutzwache.alsHandelDurchlassen(Schutzwache.KEIN_HANDEL, null, null,
-                false));
+        assertTrue(Schutzwache.alsHandelDurchlassen(immerJa, null, null),
+                "ein Klick auf einen Shop ist ein Handel - egal, was in der Hand liegt");
+        // Die tragende Zusage: Was der Handelsklick ablehnt, geht nicht durch. Die Tuer
+        // ist die Stelle, die den ganzen Schutz oeffnet - handeln darf jeder, immer und
+        // ueberall, auch im Laden eines anderen -, also darf sie NIE von sich aus ja
+        // sagen.
+        assertFalse(Schutzwache.alsHandelDurchlassen(Schutzwache.KEIN_HANDEL, null,
+                null), "ohne Shop am Block ist es kein Handel");
     }
 
     /**

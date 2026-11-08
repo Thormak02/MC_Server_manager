@@ -1197,7 +1197,92 @@ class BildGleichTest {
                 // ein Stein unter einem Stehschild. Der Satz muss den Grund nennen, sonst
                 // haelt der Spieler ihn fuer kaputt.
                 new Zeile(ShopSatz.SHOP_SCHUTZ_TRAEGER, 1L, Einsatz.keine(),
-                        "&cDaran haengt ein fremdes Shopschild"));
+                        "&cDaran haengt ein fremdes Shopschild"),
+
+                // DER HANDEL [08.11.2026]. Alles Handbalken, genau EINE Zeile -
+                // ein Spieler, der zwanzig Stapel kauft, klickt zwanzigmal, und
+                // zwanzig Chatzeilen waeren ein Regen.
+                //
+                // KEINE GEBUEHR IN DER KAUFZEILE: Beim Kauf zahlt sie der
+                // SHOPBESITZER. Der Kunde zahlt den Preis vom Schild und nichts
+                // darueber - eine Zeile, die ihm den Abzug eines anderen nennt,
+                // liest sich wie ein Abzug bei ihm.
+                new Zeile(ShopSatz.SHOP_KAUF_GELUNGEN, 1L, Einsatz
+                        .von("menge", 16L)
+                        .mit("ware", "STONE")
+                        .mit("preis", "100 Mark"),
+                        "&aGekauft: 16x STONE&7 fuer &f100 Mark"),
+                new Zeile(ShopSatz.SHOP_VERKAUF_GELUNGEN, 1L, Einsatz
+                        .von("menge", 16L)
+                        .mit("ware", "STONE")
+                        .mit("preis", "80 Mark"),
+                        "&aVerkauft: 16x STONE&7 fuer &f80 Mark"),
+                // DREI ZAHLEN IN EINER ZEILE, und das ist Absicht: Wer 100 am
+                // Schild liest und 95 bekommt, sucht den Fehler beim Shop. Eine
+                // Zusage, die eine ihrer Zahlen nicht nennt, traegt keine.
+                new Zeile(ShopSatz.SHOP_VERKAUF_GEBUEHR, 1L, Einsatz
+                        .von("menge", 16L)
+                        .mit("ware", "STONE")
+                        .mit("preis", "100 Mark")
+                        .mit("gebuehr", "7 Mark")
+                        .mit("erloes", "93 Mark"),
+                        "&aVerkauft: 16x STONE&7 fuer &f93 Mark&7 von 100 Mark,"
+                                + " 7 Mark Marktgebuehr"),
+
+                // DIE ELF ABSAGEN DES HANDELS. Jede nennt, WAS fehlt - "das geht
+                // nicht" laesst einen Kunden dreimal klicken und dann aufhoeren.
+                //
+                // Die zwei Richtungsabsagen sagen, was STATTDESSEN geht: Ein Shop
+                // mit nur einem Preis sieht aus wie jeder andere, und ohne den
+                // Hinweis probiert niemand die andere Maustaste.
+                new Zeile(ShopSatz.SHOP_VERKAUFT_NICHT, 1L, Einsatz.keine(),
+                        "&cDieser Shop verkauft nichts&7 - mit Linksklick kannst"
+                                + " du ihm etwas verkaufen."),
+                new Zeile(ShopSatz.SHOP_KAUFT_NICHT_AN, 1L, Einsatz.keine(),
+                        "&cDieser Shop kauft nichts an&7 - mit Rechtsklick kaufst"
+                                + " du bei ihm."),
+                // NICHT ROT: Das ist kein Fehler des Spielers, sondern eine
+                // Auskunft. Und sie kommt nur beim Rechtsklick - beim Linksklick
+                // baut der Besitzer sein Schild ab, und zwei Antworten auf eine
+                // Tat liest niemand als zwei.
+                new Zeile(ShopSatz.SHOP_EIGENER_SHOP, 1L, Einsatz.keine(),
+                        "&7Das ist dein eigener Shop - nimm die Ware aus der"
+                                + " Kiste."),
+                // DER EINZIGE FALL, DEN NUR DER BESITZER BEHEBEN KANN - darum
+                // sagt der Satz, dass man es ihm sagen soll.
+                new Zeile(ShopSatz.SHOP_WARE_UNLESBAR, 1L, Einsatz.keine(),
+                        "&cDieser Shop handelt nicht mehr&7 - sag es seinem"
+                                + " Besitzer."),
+                new Zeile(ShopSatz.SHOP_AUSVERKAUFT, 1L,
+                        Einsatz.von("ware", "STONE"),
+                        "&cAusverkauft: STONE"),
+                // MIT DER MENGE DES SHOPS: Ein Shop, der 16 Stueck je Handel
+                // nimmt, lehnt auch 15 ab - ohne die Zahl sieht der Kunde seine
+                // Ware im Rucksack und die Absage auf dem Schirm.
+                new Zeile(ShopSatz.SHOP_KEINE_WARE, 1L, Einsatz
+                        .von("menge", 16L)
+                        .mit("ware", "STONE"),
+                        "&cDu brauchst 16x STONE"),
+                new Zeile(ShopSatz.SHOP_KEIN_PLATZ, 1L, Einsatz.keine(),
+                        "&cIn deinem Rucksack ist kein Platz"),
+                // EIN EIGENER SATZ und nicht derselbe wie beim Rucksack: Der
+                // Kunde kann daran nichts aendern, und ein Satz, der ihn zum
+                // Aufraeumen auffordert, schickt ihn ins Leere.
+                new Zeile(ShopSatz.SHOP_KISTE_VOLL, 1L, Einsatz.keine(),
+                        "&cDie Kiste dieses Shops ist voll"),
+                new Zeile(ShopSatz.SHOP_KEIN_GELD, 1L,
+                        Einsatz.von("preis", "100 Mark"),
+                        "&cDafuer brauchst du 100 Mark"),
+                // NENNT DEN BESITZER NICHT: Wer wie viel Geld hat, ist nicht die
+                // Sache eines Kunden, und der Name steht am Schild.
+                new Zeile(ShopSatz.SHOP_PLEITE, 1L, Einsatz.keine(),
+                        "&cDieser Shop kann das nicht zahlen"),
+                // SAGT AUSDRUECKLICH, DASS KEIN GELD WEG IST. Das ist die Zusage,
+                // die der Handel wirklich haelt: Was nach dem Zahlen scheitert,
+                // wird erstattet.
+                new Zeile(ShopSatz.SHOP_HANDEL_GESTOERT, 1L, Einsatz.keine(),
+                        "&cDer Handel ist nicht zustande gekommen&7 - dein Geld"
+                                + " ist nicht weg."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

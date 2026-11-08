@@ -291,6 +291,10 @@ class GrenzeTest {
             // Plan 7.4: die Zeilen des Anlegens und die Handbalken des Schutzes -
             // zwei Wege, weil Chat und Handbalken zwei verschiedene Aufrufe sind.
             "Shopwache.java",
+            // Plan 7.4, der HANDEL: ein sendActionBar im Klickzweig. Ein Handel
+            // redet nie im Chat - ein Spieler, der zwanzig Stapel kauft, klickt
+            // zwanzigmal, und zwanzig Chatzeilen waeren ein Regen.
+            "Shopklick.java",
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
 
     /**
@@ -419,6 +423,11 @@ class GrenzeTest {
             // nimmt ein Component und keine Liste, und er geht durch die Drossel.
             // Eine Drei hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat.
             Map.entry("Shopwache.java", 2),
+            // Plan 7.4, der HANDEL: EINE Sendestelle, und sie ist ein
+            // sendActionBar. Eine Zwei hiesse, dass der Handel sich einen Weg in
+            // den Chat gebaut hat - und damit die Entscheidung umgedreht, dass ein
+            // Klick im Handbalken antwortet.
+            Map.entry("Shopklick.java", 1),
             Map.entry("SpielzeitBefehle.java", 4),
             Map.entry("Sprache.java", 3),
             Map.entry("WarpBefehle.java", 3));
@@ -1200,10 +1209,25 @@ class GrenzeTest {
         assertFalse(plugin.contains("KEINE_ORTSREGEL"),
                 "KEINE_ORTSREGEL ist die Antwort fuer einen Server OHNE Markthalle -"
                         + " dieser hat eine");
-        // Und der Handelsklick: Heute KEIN_HANDEL, und das soll man im Diff sehen, wenn
-        // der Kistenshop-Schritt ihn ersetzt.
-        assertTrue(plugin.contains("Schutzwache.KEIN_HANDEL"),
-                "solange es keine Kistenshops gibt, steht hier KEIN_HANDEL");
+        // Und der Handelsklick: Seit dem 08.11.2026 steht hier der ECHTE, und die
+        // Zusage ist umgedreht - KEIN_HANDEL darf NICHT mehr dastehen. Waere diese
+        // Zeile beim Umbau einfach geloescht worden, bewachte nichts mehr, dass
+        // die Tuer verdrahtet ist.
+        assertFalse(plugin.contains("Schutzwache.KEIN_HANDEL"),
+                "KEIN_HANDEL ist die Antwort fuer einen Server OHNE Kistenshops -"
+                        + " dieser hat sie");
+        // Das FELD wird beim Aufruf gelesen und nicht beim Bauen, und das ist eine
+        // Notwendigkeit: Der Shopklick entsteht erst in richteShopsEin, weil sein
+        // Shopzugriff diese Wache braucht. Ein Zirkel, den nur ein spaet gelesenes
+        // Feld aufloest - und ein null darin heisst nein, also gilt bei stummer
+        // Datenbank genau das, was die Startmeldung dort verspricht.
+        assertTrue(plugin.contains("shopklick != null"),
+                "die Tuer muss das FELD lesen - ein beim Bauen uebergebener"
+                        + " Shopklick waere ein Zirkel, und ein null darin wuerfe"
+                        + " bei jedem Klick");
+        assertTrue(plugin.contains("shopklick = new Shopklick("),
+                "und er muss auch gesetzt werden - sonst ist die Tuer fuer immer"
+                        + " zu");
     }
 
     @Test
@@ -1219,9 +1243,18 @@ class GrenzeTest {
         // benannt statt verschwiegen: beimKlicken durchlaufen heisst, ein
         // PlayerInteractEvent mit einem Block zu bauen, fuer den istHeikel wahr ist -
         // und das braucht von der Serverprobe Antworten auf getState, getBlockData und
-        // die Blockgruppen, die heute keine andere Probe verlangt. Der
-        // Kistenshop-Schritt benutzt die Tuer ohnehin; dort gehoert die echte Probe hin,
-        // und dann kann diese hier weg.
+        // die Blockgruppen, die heute keine andere Probe verlangt.
+        //
+        // EINE ZUSAGE JE ZWEIG [08.11.2026], und das ist der Befund an dieser Probe
+        // selbst: Ein blosses contains war vom Rechtsklick-Aufruf erfuellt und blieb
+        // gruen, auch wenn der Linksklick-Aufruf fehlte oder wieder verschwand. Genau
+        // das ist derselbe Mangel wie bei contains("B 100") in der Sprachdatei - eine
+        // Textsuche, die nicht sagt, WO der Text steht, bewacht den zweiten Ort nicht.
+        //
+        // Der Linksklick ist der teurere der zwei: Lumias VERKAUF ist ein Linksklick,
+        // und ein Schild ist heikel. Ohne die Tuer dort wird jeder Verkauf auf fremdem
+        // Grund und in jeder Markthalle vom Bauschutz abgewiesen - also genau dort, wo
+        // Kistenshops stehen.
         String wache = Quellen.text(Quellen.alle().stream()
                 .filter(datei -> datei.getFileName().toString()
                         .equals("Schutzwache.java"))
@@ -1229,11 +1262,25 @@ class GrenzeTest {
                 .orElseThrow(() -> new AssertionError(
                         "Schutzwache.java nicht gefunden - dann prueft diese Probe"
                                 + " nichts")));
+        String aufruf = "alsHandelDurchlassen(handel, ereignis.getPlayer(), block)";
+        int links = wache.indexOf("Action.LEFT_CLICK_BLOCK");
+        int rechts = wache.indexOf("Action.RIGHT_CLICK_BLOCK");
+        assertTrue(links > 0 && rechts > links,
+                "die zwei Klickzweige muessen in dieser Reihenfolge stehen - sonst"
+                        + " schneidet diese Probe an der falschen Stelle: links=" + links
+                        + ", rechts=" + rechts);
 
-        assertTrue(wache.contains(
-                        "alsHandelDurchlassen(handel, ereignis.getPlayer(), block,"),
-                "beimKlicken muss die Handelstuer rufen - sonst ist sie zu, und kein"
-                        + " Kunde kauft im fremden Laden");
+        assertTrue(wache.substring(links, rechts).contains(aufruf),
+                "der LINKSKLICK-Zweig muss die Handelstuer rufen - sonst kann niemand"
+                        + " auf fremdem Grund verkaufen, und das ist Lumias ganzer"
+                        + " Verkauf");
+        assertTrue(wache.substring(rechts).contains(aufruf),
+                "der RECHTSKLICK-Zweig muss sie auch rufen - sonst kauft niemand im"
+                        + " fremden Laden");
+        // Und GENAU zweimal: Ein dritter Aufruf waere ein Zweig, der sich seine eigene
+        // Tuerbedingung gebaut hat.
+        assertEquals(2, wache.split(java.util.regex.Pattern.quote(aufruf), -1).length - 1,
+                "die Tuer wird genau zweimal gerufen - einmal je Klickrichtung");
     }
 
     @Test

@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Shopregel;
 import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Warenprobe;
 import java.util.List;
@@ -376,4 +378,224 @@ class ShoptextTest {
         }
     }
 
+    // ================================================== der Handel
+
+    @Test
+    @DisplayName("Der gelungene Kauf nennt Menge, Ware und Preis - keine Gebuehr")
+    void kaufzeile() {
+        // Beim Kauf zahlt die Gebuehr der SHOPBESITZER. Der Kunde zahlt den Preis vom
+        // Schild und nichts darueber - eine Zeile, die ihm den Abzug eines anderen
+        // nennt, liest sich wie ein Abzug bei ihm.
+        var zeilen = Shoptext.handelBalken(sprache, gehandelt(Handelsart.KUNDE_KAUFT,
+                16, 100L, 0L));
+
+        assertEquals(1, zeilen.size(), "ein Handbalken ist EINE Zeile");
+        assertEquals("&aGekauft: 16x STONE&7 fuer &f100 Mark", bild(zeilen.get(0)));
+    }
+
+    @Test
+    @DisplayName("Der gelungene Verkauf ohne Gebuehr nennt den ganzen Preis")
+    void verkaufzeileOhneGebuehr() {
+        var zeilen = Shoptext.handelBalken(sprache,
+                gehandelt(Handelsart.KUNDE_VERKAUFT, 16, 80L, 0L));
+
+        assertEquals("&aVerkauft: 16x STONE&7 fuer &f80 Mark", bild(zeilen.get(0)));
+    }
+
+    @Test
+    @DisplayName("Mit Gebuehr steht die Rechnung in der Zeile - alle drei Zahlen")
+    void verkaufzeileMitGebuehr() {
+        // EIN EIGENER SATZ und nicht derselbe mit einer 0 darin: "fuer 100 Mark (100
+        // minus 0 Gebuehr)" liest sich wie ein Fehler. Und kein stiller Abzug: Wer 100
+        // am Schild liest und 93 bekommt, sucht den Fehler beim Shop.
+        //
+        // Alle drei Zahlen, damit die Zeile NACHRECHENBAR ist - eine Zusage, die eine
+        // ihrer Zahlen nicht nennt, traegt keine.
+        var zeilen = Shoptext.handelBalken(sprache,
+                gehandelt(Handelsart.KUNDE_VERKAUFT, 16, 100L, 7L));
+
+        assertEquals("&aVerkauft: 16x STONE&7 fuer &f93 Mark&7 von 100 Mark, 7 Mark"
+                + " Marktgebuehr", bild(zeilen.get(0)));
+    }
+
+    @Test
+    @DisplayName("Ohne Shop am Schild wird GESCHWIEGEN")
+    void keinShopSchweigtBeimHandel() {
+        // Ein Spieler, der auf ein Wegweiserschild klickt, bekaeme sonst eine Meldung
+        // dafuer, dass dort kein Laden ist. Die Entscheidung steht in der Naht und nicht
+        // im Ereigniszweig, damit sie hier zu lesen ist.
+        assertEquals(List.of(), Shoptext.handelBalken(sprache,
+                new Shophandel.Ausgang(Shophandel.Bescheid.KEIN_SHOP,
+                        Handelsart.KUNDE_KAUFT, null, null)));
+    }
+
+    @Test
+    @DisplayName("Am eigenen Shop redet nur der RECHTSklick")
+    void eigenerShopNurRechts() {
+        // Beim Linksklick baut der Besitzer sein Schild ab, und zwei Antworten auf eine
+        // Tat liest niemand als zwei. Beim Rechtsklick geschieht nichts, da ist die
+        // Auskunft das einzige, was er bekommt - und sie sagt, was stattdessen geht.
+        var rechts = Shoptext.handelBalken(sprache, absage(
+                Shophandel.Bescheid.EIGENER_SHOP, Handelsart.KUNDE_KAUFT));
+        var links = Shoptext.handelBalken(sprache, absage(
+                Shophandel.Bescheid.EIGENER_SHOP, Handelsart.KUNDE_VERKAUFT));
+
+        assertEquals("&7Das ist dein eigener Shop - nimm die Ware aus der Kiste.",
+                bild(rechts.get(0)));
+        assertEquals(List.of(), links, "beim Linksklick baut er ab - kein Wort dazu");
+    }
+
+    @Test
+    @DisplayName("Derselbe Mangel heisst auf den zwei Seiten verschieden")
+    void derselbeMangelZweiSaetze() {
+        // Die Kiste ist "ausverkauft", der Spieler "hat die Ware nicht" - und wer beides
+        // mit einem Satz beantwortet, schickt den Kunden zum Aufraeumen eines Rucksacks,
+        // der nicht das Problem ist. Dasselbe bei Platz und Geld.
+        assertEquals("&cAusverkauft: STONE", bild(Shoptext.handelBalken(sprache,
+                absage(Shophandel.Bescheid.AUSVERKAUFT,
+                        Handelsart.KUNDE_KAUFT)).get(0)));
+        assertEquals("&cDu brauchst 16x STONE", bild(Shoptext.handelBalken(sprache,
+                absage(Shophandel.Bescheid.KEINE_WARE,
+                        Handelsart.KUNDE_VERKAUFT)).get(0)));
+        assertEquals("&cIn deinem Rucksack ist kein Platz",
+                bild(Shoptext.handelBalken(sprache, absage(
+                        Shophandel.Bescheid.KEIN_PLATZ,
+                        Handelsart.KUNDE_KAUFT)).get(0)));
+        assertEquals("&cDie Kiste dieses Shops ist voll",
+                bild(Shoptext.handelBalken(sprache, absage(
+                        Shophandel.Bescheid.KISTE_VOLL,
+                        Handelsart.KUNDE_VERKAUFT)).get(0)));
+    }
+
+    @Test
+    @DisplayName("Die Geldabsage nennt den Preis EINER Stufe")
+    void geldabsageNenntDenStufenpreis() {
+        // Was dem Kunden fehlt, ist der Preis fuer EINEN Handel - nicht fuer den Stapel,
+        // den er nicht bekommt. Bei einer Absage gibt es keinen gerechneten Handel, also
+        // kommt die Zahl aus dem Shop: 100 beim Kauf, 80 beim Verkauf. Zwei
+        // verschiedene Zahlen, damit ein Tausch zu sehen ist.
+        assertEquals("&cDafuer brauchst du 100 Mark",
+                bild(Shoptext.handelBalken(sprache, absage(
+                        Shophandel.Bescheid.KEIN_GELD,
+                        Handelsart.KUNDE_KAUFT)).get(0)));
+        // Und in der anderen Richtung ist es der Verkaufpreis - die Zahl, die der Shop
+        // nicht zahlen kann.
+        assertEquals("&cDieser Shop kann das nicht zahlen",
+                bild(Shoptext.handelBalken(sprache, absage(
+                        Shophandel.Bescheid.SHOP_PLEITE,
+                        Handelsart.KUNDE_VERKAUFT)).get(0)));
+    }
+
+    @Test
+    @DisplayName("Die Stoerung sagt, dass kein Geld weg ist")
+    void stoerungSagtDassGeldDaIst() {
+        // Das ist die Zusage, die der Handel wirklich haelt: Was nach dem Zahlen
+        // scheitert, wird erstattet. Ein eigener Satz und nicht absage.gestoert - jener
+        // sagt "der Shop liess sich nicht anlegen, das Schild bleibt stehen".
+        String zeile = bild(Shoptext.handelBalken(sprache, absage(
+                Shophandel.Bescheid.GESTOERT, Handelsart.KUNDE_KAUFT)).get(0));
+
+        assertEquals("&cDer Handel ist nicht zustande gekommen&7 - dein Geld ist nicht"
+                + " weg.", zeile);
+    }
+
+    @Test
+    @DisplayName("JEDER Bescheid bekommt eine Zeile - ausser KEIN_SHOP")
+    void jederBescheidEineZeile() {
+        // Die Vollstaendigkeitsprobe. Ohne sie fehlte einem neuen Bescheid der Satz, und
+        // der Spieler bekaeme einen stummen Klick - genau die Lage, von der die acht
+        // Schildabsagen handeln.
+        for (Shophandel.Bescheid bescheid : Shophandel.Bescheid.values()) {
+            for (Handelsart art : Handelsart.values()) {
+                var zeilen = Shoptext.handelBalken(sprache,
+                        bescheid == Shophandel.Bescheid.GEHANDELT
+                                ? gehandelt(art, 16, 100L, 0L)
+                                : absage(bescheid, art));
+                boolean stumm = bescheid == Shophandel.Bescheid.KEIN_SHOP
+                        || (bescheid == Shophandel.Bescheid.EIGENER_SHOP
+                                && art == Handelsart.KUNDE_VERKAUFT);
+                assertEquals(stumm ? 0 : 1, zeilen.size(), bescheid + " / " + art);
+                if (!stumm) {
+                    assertTrue(bild(zeilen.get(0)).length() > 5,
+                            bescheid + " / " + art + " darf nicht leer sein: "
+                                    + bild(zeilen.get(0)));
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Keine Handelszeile traegt eine offene Klammer")
+    void keineOffeneKlammer() {
+        // Die Gegenprobe zu "alle Werte werden IMMER gesetzt": Ueberzaehlige Werte sieht
+        // Sprache.ersetze nie, fehlende stehen dem Leser als Klammer im Satz. Diese
+        // Probe sucht sie - durch JEDEN Bescheid und JEDE Richtung.
+        for (Shophandel.Bescheid bescheid : Shophandel.Bescheid.values()) {
+            for (Handelsart art : Handelsart.values()) {
+                for (Component zeile : Shoptext.handelBalken(sprache,
+                        bescheid == Shophandel.Bescheid.GEHANDELT
+                                ? gehandelt(art, 16, 100L, 7L)
+                                : absage(bescheid, art))) {
+                    assertTrue(!bild(zeile).contains("{") && !bild(zeile).contains("}"),
+                            bescheid + " / " + art + ": " + bild(zeile));
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("shopHandel wirft fuer KEIN_SHOP und ohne Richtung")
+    void shopHandelWirftWoEsNichtsZuWaehlenGibt() {
+        // Dieselbe Entscheidung wie bei shopAnlage fuer ABGEBAUT: Auf einen Klick ohne
+        // Shop wird geschwiegen, dafuer gibt es keinen Satz - und wer hier danach fragt,
+        // hat die Pruefung auf KEIN_SHOP vergessen. Ein Satz, den nie jemand liest,
+        // muesste der Betreiber trotzdem uebersetzen.
+        assertThrows(IllegalArgumentException.class,
+                () -> Sprachschluessel.shopHandel(Shophandel.Bescheid.KEIN_SHOP,
+                        Handelsart.KUNDE_KAUFT, false));
+        assertThrows(IllegalArgumentException.class,
+                () -> Sprachschluessel.shopHandel(Shophandel.Bescheid.GEHANDELT, null,
+                        false));
+    }
+
+    @Test
+    @DisplayName("Die Zuordnung kennt alle drei Erfolgssaetze - auch ohne Shoptext")
+    void zuordnungKenntDieDreiErfolgssaetze() {
+        // Derselbe Befund wie bei shopAnlage(ANGELEGT) am 08.11.2026: Eine Zuordnung,
+        // die der Aufrufer teilweise selbst verzweigt, bleibt ohne Zeugen. Hier wird sie
+        // unmittelbar gefragt - und sie IST das Verzeichnis, also soll sie vollstaendig
+        // sein, gleich wer sie fragt.
+        assertEquals(ShopSatz.SHOP_KAUF_GELUNGEN,
+                Sprachschluessel.shopHandel(Shophandel.Bescheid.GEHANDELT,
+                        Handelsart.KUNDE_KAUFT, false));
+        assertEquals(ShopSatz.SHOP_KAUF_GELUNGEN,
+                Sprachschluessel.shopHandel(Shophandel.Bescheid.GEHANDELT,
+                        Handelsart.KUNDE_KAUFT, true),
+                "beim KAUF gibt es keine Gebuehrzeile - der Besitzer zahlt sie");
+        assertEquals(ShopSatz.SHOP_VERKAUF_GELUNGEN,
+                Sprachschluessel.shopHandel(Shophandel.Bescheid.GEHANDELT,
+                        Handelsart.KUNDE_VERKAUFT, false));
+        assertEquals(ShopSatz.SHOP_VERKAUF_GEBUEHR,
+                Sprachschluessel.shopHandel(Shophandel.Bescheid.GEHANDELT,
+                        Handelsart.KUNDE_VERKAUFT, true));
+    }
+
+    // --- Werkzeug fuer den Handel ---------------------------------------------
+
+    /** Ein gelungener Handel mit diesen Zahlen. */
+    private static Shophandel.Ausgang gehandelt(Handelsart art, int stueck, long preis,
+            long gebuehr) {
+        return new Shophandel.Ausgang(Shophandel.Bescheid.GEHANDELT, art, shop(),
+                new Shopregel.Handel(preis, gebuehr, preis - gebuehr, stueck));
+    }
+
+    /** Eine Absage - ohne gerechneten Handel, wie im Betrieb. */
+    private static Shophandel.Ausgang absage(Shophandel.Bescheid bescheid,
+            Handelsart art) {
+        return new Shophandel.Ausgang(bescheid, art, shop(), null);
+    }
+
+    private static Kistenshop shop() {
+        return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, ANNA, 16, 100L, 80L, STEIN);
+    }
 }

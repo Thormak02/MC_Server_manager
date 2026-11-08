@@ -87,13 +87,21 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_LADEN_MIETE("mark.verlauf.grund.laden-miete", Art.WORT),
 
     /**
-     * Die drei Worte des Handels an Kistenshops (Plan 7.4).
+     * Die Worte des Handels an Kistenshops (Plan 7.4).
      *
      * <p><b>DREI Zeilen fuer EINEN Handel, und das ist die Entscheidung dahinter:</b> Was
      * der Kunde zahlt, was der Verkaeufer bekommt und was der Staat nimmt, sind drei
-     * verschiedene Fluesse zwischen drei verschiedenen Konten. Ein stiller Abzug vom
-     * Erloes waere nur als Differenz zweier Zahlen zu sehen - und dann ist die Summe
-     * aller Buchungen eines Kontos nicht mehr sein Stand.
+     * verschiedene Fluesse - aber zwischen ZWEI Konten und einer Senke [berichtigt
+     * 08.11.2026]. Hier stand "drei verschiedene Konten", und ein drittes gibt es
+     * nicht: Der Staat hat kein Konto, hier so wenig wie bei der Ladenmiete. Die
+     * Gebuehrzeile liegt darum auf dem Konto DESSEN, der das Geld bekommt, und zieht
+     * es ihm wieder ab - netto bleibt der Erloes.
+     *
+     * <p>Am Bundshop ist es noch einfacher: Dort ist nur EIN Spielerkonto beteiligt,
+     * und die andere Seite ist eine Quelle oder eine Senke ohne Zeile. Ein stiller
+     * Abzug vom Erloes waere trotzdem falsch - er waere nur als Differenz zweier
+     * Zahlen zu sehen, und ein Betreiber, der wissen will, was seine Senke einbringt,
+     * muesste sie aus zwei Gruenden zusammenrechnen.
      *
      * <p><b>WAS gehandelt wurde, steht in keinem dieser Worte.</b> Dieselbe Trennung wie
      * bei {@link #VERLAUF_GRUND_BERUF_VERDIENST} und
@@ -101,9 +109,18 @@ enum MarkSatz implements Satz {
      * welcher Kiste lag, ist eine andere Frage und gehoert nicht in eine Zeile, die ein
      * Spieler unter {@code /mark verlauf} liest.
      *
-     * <p>{@link #VERLAUF_GRUND_SHOP_GEBUEHR} faellt heute nie: Beide Gebuehrensaetze
-     * stehen ab Werk auf 0. Das Wort steht da, damit es nicht fehlt, wenn der erste Satz
-     * hochgeht - und damit eine Probe heute schon pruefen kann, dass es da ist.
+     * <p>{@link #VERLAUF_GRUND_SHOP_GEBUEHR} faellt nur, wenn die GERECHNETE Gebuehr
+     * ueber 0 liegt - entschieden an einer Stelle,
+     * {@code Shopregel.Handel.kostetGebuehr}. Nicht der Satz ist die Frage: Bei 5
+     * Prozent auf 19 Mark ist die Gebuehr abgerundet 0, und eine Zeile ueber 0 Mark
+     * waere eine Zeile ohne Geldbewegung. Weil ab Werk alle Saetze auf 0 stehen, faellt
+     * sie heute nie; das Wort steht da, damit es nicht fehlt, wenn der erste Satz
+     * hochgeht.
+     *
+     * <p>{@link #VERLAUF_GRUND_SHOP_ERSTATTET} faellt noch seltener: nur, wenn ein
+     * Handel NACH dem Zahlen gescheitert ist. Nach einer genauen Platzrechnung ist
+     * der Fall nicht erreichbar - und das Wort steht da, weil "nicht erreichbar" kein
+     * Zustand ist, auf den man Geld setzt.
      */
     VERLAUF_GRUND_SHOP_GEKAUFT("mark.verlauf.grund.shop-gekauft", Art.WORT),
 
@@ -112,6 +129,9 @@ enum MarkSatz implements Satz {
 
     /** Das Wort fuer {@code Buchungsgrund.SHOP_GEBUEHR} - siehe oben. */
     VERLAUF_GRUND_SHOP_GEBUEHR("mark.verlauf.grund.shop-gebuehr", Art.WORT),
+
+    /** Das Wort fuer {@code Buchungsgrund.SHOP_ERSTATTET} - siehe oben. */
+    VERLAUF_GRUND_SHOP_ERSTATTET("mark.verlauf.grund.shop-erstattet", Art.WORT),
 
     /**
      * Die Zeitform des Verlaufs - beim LADEN uebersetzt.

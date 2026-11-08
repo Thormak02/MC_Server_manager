@@ -1,45 +1,71 @@
 package de.freimarken.kern;
 
 /**
- * Die Zahlen des Kistenhandels - zwei Gebuehrensaetze.
+ * Die Zahlen des Kistenhandels - drei Gebuehrensaetze und das Bundwort.
  *
  * <p>Dieselbe Bauart wie {@link Mietwerte} und {@link Bonuswerte}: ein Satz, eine Vorgabe
  * im Programm, zu jedem Wert eine Frage, die der Leser stellen kann, ohne zu werfen.
  *
- * <p><b>Beide Saetze sind ab Werk 0</b> [entschieden 08.11.2026], und sie stehen trotzdem
+ * <p><b>Alle Saetze sind ab Werk 0</b> [entschieden 08.11.2026], und sie stehen trotzdem
  * in der Datei. Plan 8.2 fuehrt die Marktgebuehr als laufende Senke mit 5 %; ob sie
  * gebraucht wird, zeigt erst der Betrieb. Eine Zahl, die erst eingebaut wird, wenn man
- * sie braucht, wird unter Druck eingebaut - diese hier ist da, geprueft und auf 0.
+ * sie braucht, wird unter Druck eingebaut - diese hier sind da, geprueft und auf 0.
  *
- * <p><b>Zwei Saetze und nicht einer</b>, und das ist der Grund: Der Spielerhandel und der
- * Ankauf durch den Bund sind zwei verschiedene Senken. Der Bundesmarkt ist die
- * Verwertung des Erarbeiteten - eine Gebuehr dort trifft jeden, der etwas abgibt. Der
- * Spielerhandel ist ein Umlauf zwischen Spielern - eine Gebuehr dort nimmt Geld aus dem
- * Kreis. Wer beides mit einer Zahl stellen muesste, koennte das eine nicht ohne das
- * andere aendern.
+ * <p><b>Je LAGE ein Satz und nicht einer fuer alles</b> [entschieden 08.11.2026]. Eine
+ * Lage ist Shopart mal {@link Handelsart}, und die Lagen sind wirtschaftlich verschieden:
  *
- * @param spielerProzent was der Staat bei einem Handel zwischen Spielern abzieht - vom
- *                       VERKAEUFER, nie als Aufschlag (siehe {@link Shopregel})
- * @param bundProzent    was der Staat abzieht, wenn ein Spieler an einen BUNDSHOP
- *                       verkauft. Das ist eine Gebuehr auf die eigene Quelle und darum
- *                       getrennt: Sie senkt den Ankaufpreis, ohne die Tafel in
- *                       {@code bundesmarkt.ankauf} anzufassen
+ * <ul>
+ *   <li>Der Spielerhandel ist ein UMLAUF zwischen Spielern - eine Gebuehr dort nimmt
+ *       Geld aus dem Kreis. Und sie trifft je Richtung einen anderen: Wer am Shop kauft,
+ *       laesst den BESITZER zahlen; wer an den Shop verkauft, zahlt selbst.</li>
+ *   <li>Der Ankauf durch den Bund ist die VERWERTUNG des Erarbeiteten - eine Gebuehr
+ *       dort trifft jeden, der etwas abgibt, und sie senkt den Ankaufpreis, ohne die
+ *       Tafel in {@code bundesmarkt.ankauf} anzufassen.</li>
+ * </ul>
+ *
+ * <p>Wer das mit einer Zahl stellen muesste, koennte das eine nicht ohne das andere
+ * aendern - und WANN eine Gebuehr faellt, waere eine Entscheidung des Programms und
+ * nicht des Betreibers.
+ *
+ * <p><b>Fuer den KAUF an einem Bundshop gibt es keinen Satz, und das ist kein
+ * Versehen.</b> Die Gebuehr wird dem abgezogen, der das Geld BEKOMMT ({@link Shopregel}:
+ * "vom VERKAEUFER, nie als Aufschlag"), und am Bundshop bekommt es niemand - der Bund
+ * hat kein Konto. Ein vierter Schluessel waere eine Einstellung, die nie wirkt; dass es
+ * ihn nicht gibt, steht als Satz in der {@code config.yml}.
+ *
+ * @param spielershopKauf    was der Staat dem SHOPBESITZER abzieht, wenn ein Kunde bei
+ *                           ihm kauft
+ * @param spielershopVerkauf was der Staat dem KUNDEN abzieht, wenn er an einen
+ *                           Spielershop verkauft
+ * @param bundshopVerkauf    was der Staat dem KUNDEN abzieht, wenn er an einen BUNDSHOP
+ *                           verkauft - eine Gebuehr auf die eigene Quelle und darum
+ *                           getrennt
+ * @param bundWort           das Wort in der ersten Schildzeile, das einen Bundshop
+ *                           anzeigt
  */
-public record Shopwerte(int spielerProzent, int bundProzent,
-                        String bundWort) {
+public record Shopwerte(int spielershopKauf, int spielershopVerkauf,
+                        int bundshopVerkauf, String bundWort) {
 
-    public static final String PFAD_SPIELER = "handel.marktgebuehr-spieler-prozent";
+    public static final String PFAD_SPIELER_KAUF =
+            "handel.marktgebuehr-spielershop-kauf-prozent";
 
-    public static final String PFAD_BUND = "handel.marktgebuehr-bund-prozent";
+    public static final String PFAD_SPIELER_VERKAUF =
+            "handel.marktgebuehr-spielershop-verkauf-prozent";
+
+    public static final String PFAD_BUND_VERKAUF =
+            "handel.marktgebuehr-bundshop-verkauf-prozent";
 
     /**
-     * 0 Prozent beim Spielerhandel [entschieden 08.11.2026].
+     * 0 Prozent, wenn ein Kunde bei einem Spielershop kauft.
      *
      * <p>Der Spielermarkt soll zuerst laufen. Eine Gebuehr auf den ersten Handel des
      * ersten Tages bremst genau das, was sie besteuern soll - und die Ladenmiete ist
      * ohnehin die staerkere Senke (Plan 7.1: "laufend, sichtbar, freiwillig").
      */
-    public static final int VORGABE_SPIELER = 0;
+    public static final int VORGABE_SPIELER_KAUF = 0;
+
+    /** 0 Prozent, wenn ein Kunde an einen Spielershop verkauft - derselbe Grund. */
+    public static final int VORGABE_SPIELER_VERKAUF = 0;
 
     /**
      * 0 Prozent am Bundesmarkt.
@@ -49,7 +75,7 @@ public record Shopwerte(int spielerProzent, int bundProzent,
      * darauf waere ein zweiter Abzug an derselben Stelle, und ein Betreiber, der den
      * Ankauf senken will, hat dafuer die Tafel.
      */
-    public static final int VORGABE_BUND = 0;
+    public static final int VORGABE_BUND_VERKAUF = 0;
 
     /**
      * Das Wort in der ersten Schildzeile, das einen Bundshop anzeigt.
@@ -78,20 +104,13 @@ public record Shopwerte(int spielerProzent, int bundProzent,
     /** So lang darf das Wort werden - eine Schildzeile. */
     public static final int LAENGSTES_WORT = Warenprobe.LAENGSTER_NAME;
 
-    public static final Shopwerte VORGABE =
-            new Shopwerte(VORGABE_SPIELER, VORGABE_BUND, VORGABE_WORT);
+    public static final Shopwerte VORGABE = new Shopwerte(VORGABE_SPIELER_KAUF,
+            VORGABE_SPIELER_VERKAUF, VORGABE_BUND_VERKAUF, VORGABE_WORT);
 
     public Shopwerte {
-        if (!Shopregel.brauchbareGebuehr(spielerProzent)) {
-            throw new IllegalArgumentException("Die Marktgebuehr fuer Spielerhandel ist "
-                    + spielerProzent + " Prozent - erlaubt ist 0 bis "
-                    + Shopregel.HOECHSTE_GEBUEHR_PROZENT + ".");
-        }
-        if (!Shopregel.brauchbareGebuehr(bundProzent)) {
-            throw new IllegalArgumentException("Die Marktgebuehr am Bundesmarkt ist "
-                    + bundProzent + " Prozent - erlaubt ist 0 bis "
-                    + Shopregel.HOECHSTE_GEBUEHR_PROZENT + ".");
-        }
+        pruefe("Die Marktgebuehr beim Kauf an einem Spielershop", spielershopKauf);
+        pruefe("Die Marktgebuehr beim Verkauf an einen Spielershop", spielershopVerkauf);
+        pruefe("Die Marktgebuehr beim Verkauf an einen Bundshop", bundshopVerkauf);
         // Das Wort wird HIER normalisiert und nicht in jedem Aufrufer: null und ein
         // leeres Wort bedeuten dasselbe - Bundshops sind ueber ein Schild nicht
         // anzulegen -, und zwei Schreibweisen fuer dieselbe Einstellung sind zwei
@@ -105,6 +124,14 @@ public record Shopwerte(int spielerProzent, int bundProzent,
         }
     }
 
+    private static void pruefe(String was, int prozent) {
+        if (!Shopregel.brauchbareGebuehr(prozent)) {
+            throw new IllegalArgumentException(was + " ist " + prozent
+                    + " Prozent - erlaubt ist 0 bis "
+                    + Shopregel.HOECHSTE_GEBUEHR_PROZENT + ".");
+        }
+    }
+
     /**
      * Dieselben Werte mit einem anderen Bundwort.
      *
@@ -113,35 +140,49 @@ public record Shopwerte(int spielerProzent, int bundProzent,
      * Methode - jene gaelte nur fuer den, der sie ruft.
      */
     public Shopwerte mitWort(String andere) {
-        return new Shopwerte(spielerProzent, bundProzent, andere);
+        return new Shopwerte(spielershopKauf, spielershopVerkauf, bundshopVerkauf,
+                andere);
     }
 
-    /** Dieselben Werte mit anderer Spielergebuehr - fuer die Proben und den Leser. */
-    public Shopwerte mitSpieler(int andere) {
-        return new Shopwerte(andere, bundProzent, bundWort);
+    /** Dieselben Werte mit anderer Gebuehr beim Kauf am Spielershop. */
+    public Shopwerte mitSpielerKauf(int andere) {
+        return new Shopwerte(andere, spielershopVerkauf, bundshopVerkauf, bundWort);
     }
 
-    /** Dieselben Werte mit anderer Bundgebuehr. */
-    public Shopwerte mitBund(int andere) {
-        return new Shopwerte(spielerProzent, andere, bundWort);
+    /** Dieselben Werte mit anderer Gebuehr beim Verkauf an einen Spielershop. */
+    public Shopwerte mitSpielerVerkauf(int andere) {
+        return new Shopwerte(spielershopKauf, andere, bundshopVerkauf, bundWort);
+    }
+
+    /** Dieselben Werte mit anderer Gebuehr beim Verkauf an einen Bundshop. */
+    public Shopwerte mitBundVerkauf(int andere) {
+        return new Shopwerte(spielershopKauf, spielershopVerkauf, andere, bundWort);
     }
 
     /**
-     * Welcher Satz fuer diesen Shop gilt.
+     * Welcher Satz fuer diese Lage gilt.
      *
-     * <p>Die EINE Stelle, an der zwischen den zwei Saetzen gewaehlt wird. Zwei Stellen
-     * waeren zwei Gelegenheiten, die Saetze zu vertauschen - und das faellt niemandem
-     * auf, solange beide 0 sind.
+     * <p>Die EINE Stelle, an der zwischen den Saetzen gewaehlt wird. Zwei Stellen waeren
+     * zwei Gelegenheiten, die Saetze zu vertauschen - und das faellt niemandem auf,
+     * solange alle 0 sind.
+     *
+     * <p><b>Der Kauf am Bundshop gibt 0</b>, und das ist keine vierte Einstellung,
+     * sondern eine Tatsache: Die Gebuehr geht dem ab, der das Geld bekommt, und das ist
+     * dort der Bund. Siehe den Klassenkopf.
      */
-    public int prozentFuer(Kistenshop shop) {
-        if (shop == null) {
-            throw new IllegalArgumentException("Ohne Shop gibt es keine Gebuehr");
+    public int prozentFuer(Kistenshop shop, Handelsart art) {
+        if (shop == null || art == null) {
+            throw new IllegalArgumentException("Ohne Shop und Handelsart gibt es keine"
+                    + " Gebuehr");
         }
-        return shop.demBund() ? bundProzent : spielerProzent;
+        if (shop.demBund()) {
+            return art == Handelsart.KUNDE_KAUFT ? 0 : bundshopVerkauf;
+        }
+        return art == Handelsart.KUNDE_KAUFT ? spielershopKauf : spielershopVerkauf;
     }
 
     /** Ob ueberhaupt eine Gebuehr erhoben wird - fuer die Startzeile. */
     public boolean erhebtGebuehr() {
-        return spielerProzent > 0 || bundProzent > 0;
+        return spielershopKauf > 0 || spielershopVerkauf > 0 || bundshopVerkauf > 0;
     }
 }

@@ -84,18 +84,28 @@ mark:
       # Ein Mieter liest ihn oefter als jeden anderen, darum ist das Wort kurz.
       laden-miete: "Ladenmiete"
       # DER HANDEL AN KISTENSHOPS: drei Zeilen fuer EINEN Handel, weil drei verschiedene
-      #   Fluesse zwischen drei Konten laufen. Was der Kunde zahlt, steht in seiner
-      #   Zeile; was der Verkaeufer bekommt, in seiner; was der Staat nimmt, in der
-      #   dritten. So ist die Summe aller Buchungen eines Kontos immer sein Stand.
+      #   Fluesse laufen - aber zwischen ZWEI Konten und einer Senke. Was gezahlt wurde,
+      #   steht in der Zeile des Zahlers; was ankam, in der des Empfaengers; was der
+      #   Staat nimmt, in einer dritten auf DEMSELBEN Konto wie die zweite, weil der
+      #   Staat kein Konto hat. Netto bleibt dem Empfaenger der Erloes, und die Summe
+      #   aller Buchungen eines Kontos ist weiterhin sein Stand.
+      # BEIDE RICHTUNGEN unter denselben zwei Worten: Beim Kauf zahlt der Kunde, beim
+      #   Verkauf der Shopbesitzer. Es ist dieselbe Zahlung und darum dasselbe Wort.
       # WAS gehandelt wurde, steht in keinem dieser Worte - dieselbe Trennung wie bei
       #   beruf-verdienst und bundesmarkt-verkauf. Das Geldbuch fuehrt Geld.
       # DIE HAEUFIGSTEN WORTE DES GANZEN VERLAUFS, sobald die Mall steht: Ein Spieler,
       #   der zwanzigmal einkauft, liest sie zwanzigmal. Darum kurz.
       shop-gekauft: "Einkauf"
       shop-verkauft: "Verkauf"
-      # Faellt HEUTE NIE: Beide Gebuehrensaetze in handel: stehen ab Werk auf 0. Die
-      #   Zeile steht da, damit sie nicht fehlt, wenn der erste Satz hochgeht.
+      # Faellt nur, wenn die GERECHNETE Gebuehr ueber 0 liegt - nicht schon, wenn ein
+      #   Satz ueber 0 steht: Bei 5 Prozent auf 19 Mark ist die Gebuehr abgerundet 0,
+      #   und eine Zeile ueber 0 Mark waere eine Zeile ohne Geldbewegung. Weil in
+      #   handel: ab Werk alle Saetze auf 0 stehen, faellt sie heute nie.
       shop-gebuehr: "Marktgebuehr"
+      # Faellt noch seltener: nur, wenn ein Handel NACH dem Zahlen gescheitert ist.
+      #   Nach einer genauen Platzrechnung ist der Fall nicht erreichbar - das Wort
+      #   steht da, weil "nicht erreichbar" kein Zustand ist, auf den man Geld setzt.
+      shop-erstattet: "Handel erstattet"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -1524,3 +1534,70 @@ shop:
     #   Stehschild. Der Satz muss den Grund nennen, sonst haelt der Spieler ihn fuer
     #   kaputt.
     traeger: "<red>Daran haengt ein fremdes Shopschild</red>"
+  # DER HANDEL. Rechtsklick kauft, Linksklick verkauft, mit Schleichtaste ein
+  #   ganzer Stapel - so hat Lumia es gemacht.
+  # ALLES HANDBALKEN, genau EINE Zeile, keine Umbruchmarke. Der Grund ist derselbe wie
+  #   beim Schutz, nur von der anderen Seite: Ein Spieler, der zwanzig Stapel kauft,
+  #   klickt zwanzigmal, und zwanzig Chatzeilen waeren ein Regen. Nachzulesen ist jeder
+  #   Handel ohnehin unter /mark verlauf.
+  # {preis}, {gebuehr} und {erloes} kommen fertig mit ihrer Waehrung - schreib kein
+  #   zweites "Mark" dahinter.
+  handel:
+    # {menge} {ware} {preis} - gekauft.
+    # KEINE GEBUEHR IN DIESER ZEILE: Beim Kauf zahlt sie der SHOPBESITZER. Der Kunde
+    #   zahlt den Preis, der am Schild steht, und nichts darueber - eine Zeile, die ihm
+    #   den Abzug eines anderen nennt, liest sich wie ein Abzug bei ihm.
+    gekauft: "<green>Gekauft: {menge}x {ware}</green><gray> fuer </gray><white>{preis}</white>"
+    # {menge} {ware} {preis} - verkauft, ohne Gebuehr.
+    verkauft: "<green>Verkauft: {menge}x {ware}</green><gray> fuer </gray><white>{preis}</white>"
+    # {menge} {ware} {preis} {gebuehr} {erloes} - verkauft, und der Staat hat etwas
+    #   genommen. EIN EIGENER SATZ und nicht der darueber mit einer 0 darin: "fuer 100
+    #   Mark (100 minus 0)" liest sich wie ein Fehler.
+    # UND KEIN STILLER ABZUG: Wer 100 am Schild liest und 95 bekommt, sucht den Fehler
+    #   beim Shop. Alle drei Zahlen stehen darin, damit die Zeile nachzurechnen ist -
+    #   eine Zusage, die eine ihrer Zahlen nicht nennt, traegt keine.
+    verkauft-gebuehr: "<green>Verkauft: {menge}x {ware}</green><gray> fuer </gray><white>{erloes}</white><gray> von {preis}, {gebuehr} Marktgebuehr</gray>"
+    # DIE ABSAGEN. Jede nennt, WAS fehlt - "das geht nicht" laesst einen Kunden dreimal
+    #   klicken und dann aufhoeren. Genau daran haben die Vorbilder ihre Forenfragen.
+    # Rechtsklick an einem Shop, der nur ankauft. SAGT, WAS STATTDESSEN GEHT: Ein Shop
+    #   mit nur einem Preis sieht aus wie jeder andere, und ohne diesen Hinweis probiert
+    #   niemand die andere Maustaste.
+    verkauft-nicht: "<red>Dieser Shop verkauft nichts</red><gray> - mit Linksklick kannst du ihm etwas verkaufen.</gray>"
+    # Linksklick an einem Shop, der nur verkauft - mit demselben Hinweis.
+    kauft-nicht-an: "<red>Dieser Shop kauft nichts an</red><gray> - mit Rechtsklick kaufst du bei ihm.</gray>"
+    # Der eigene Shop - hier wird nicht gehandelt. Kommt NUR beim Rechtsklick: Beim
+    #   Linksklick baut der Besitzer sein Schild ab, und zwei Antworten auf eine Tat
+    #   liest niemand als zwei.
+    # NICHT ROT: Das ist kein Fehler des Spielers, sondern eine Auskunft.
+    eigener-shop: "<gray>Das ist dein eigener Shop - nimm die Ware aus der Kiste.</gray>"
+    # Die Warenprobe des Shops ist nicht mehr zu deuten. DER EINZIGE FALL, DEN NUR DER
+    #   BESITZER BEHEBEN KANN - darum sagt der Satz, dass man es ihm sagen soll.
+    #   Entsteht, wenn ein Spielupdate die Form der Gegenstaende aendert; die Ware liegt
+    #   dann noch in der Kiste, der Shop handelt sie aber nicht mehr.
+    ware-unlesbar: "<red>Dieser Shop handelt nicht mehr</red><gray> - sag es seinem Besitzer.</gray>"
+    # {ware} - die Shopkiste hat nicht genug. MIT DER WARE DARIN, damit der Kunde weiss,
+    #   was er wiederholen soll.
+    ausverkauft: "<red>Ausverkauft: {ware}</red>"
+    # {menge} {ware} - der Kunde hat nicht genug. MIT DER MENGE DES SHOPS: Ein Shop, der
+    #   16 Stueck je Handel nimmt, lehnt auch 15 ab - ohne die Zahl sieht der Kunde
+    #   seine Ware im Rucksack und die Absage auf dem Schirm.
+    keine-ware: "<red>Du brauchst {menge}x {ware}</red>"
+    # Im Rucksack des Kunden ist kein Platz.
+    kein-platz: "<red>In deinem Rucksack ist kein Platz</red>"
+    # Die Shopkiste ist voll. EIN EIGENER SATZ und nicht derselbe wie beim Rucksack: Der
+    #   Kunde kann daran nichts aendern, und ein Satz, der ihn zum Aufraeumen auffordert,
+    #   schickt ihn ins Leere.
+    kiste-voll: "<red>Die Kiste dieses Shops ist voll</red>"
+    # {preis} - der Kunde kann nicht zahlen. Der Preis ist der fuer EINEN Handel, nicht
+    #   fuer den Stapel, den er nicht bekommt.
+    kein-geld: "<red>Dafuer brauchst du {preis}</red>"
+    # Der Shopbesitzer kann nicht zahlen - der haeufigste Fall, in dem ein Ankaufstand
+    #   dasteht und nicht handelt. NENNT DEN BESITZER NICHT: Wer wie viel Geld hat, ist
+    #   nicht die Sache eines Kunden, und der Name steht am Schild.
+    shop-pleite: "<red>Dieser Shop kann das nicht zahlen</red>"
+    # Etwas ist MITTEN im Handel schiefgegangen. EIN EIGENER SATZ und nicht
+    #   absage.gestoert: Jener sagt "der Shop liess sich nicht anlegen, das Schild bleibt
+    #   stehen", und das hat mit einem Handelsklick nichts zu tun.
+    # SAGT AUSDRUECKLICH, DASS KEIN GELD WEG IST. Das ist die Zusage, die der Handel
+    #   wirklich haelt: Was nach dem Zahlen scheitert, wird erstattet.
+    gestoert: "<red>Der Handel ist nicht zustande gekommen</red><gray> - dein Geld ist nicht weg.</gray>"

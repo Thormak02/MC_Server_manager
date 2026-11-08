@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Buchungsgrund;
+import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Taetigkeit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -275,6 +276,61 @@ final class Sprachschluessel {
     }
 
     /**
+     * Statt eines {@code switch} im Klickzweig - der Satz zu einem Handelsbescheid.
+     *
+     * <p><b>Drei Achsen und darum drei Argumente.</b> Welcher Satz ein Spieler liest,
+     * haengt am Bescheid, an der Richtung und - bei einem gelungenen Verkauf - daran,
+     * ob eine Gebuehr angefallen ist. Derselbe Mangel heisst auf den zwei Seiten
+     * verschieden: Die Kiste ist "ausverkauft", der Spieler "hat die Ware nicht",
+     * und wer beides mit einem Satz beantwortet, schickt den Kunden zum Aufraeumen
+     * eines Rucksacks, der nicht das Problem ist.
+     *
+     * <p>Die Zuordnung steht HIER und nicht im Klickzweig - derselbe Schnitt wie bei
+     * {@link #shopAnlage} und aus demselben Grund: Eine Probe soll sie aufrufen
+     * koennen, ohne einen Server zu starten. Der {@code switch} nennt jeden Bescheid
+     * ohne {@code default}, also bricht ein neuer Bescheid den Bau und nicht erst das
+     * Spielbild.
+     *
+     * <p>{@code KEIN_SHOP} wirft, wie {@code ABGEBAUT} bei {@link #shopAnlage}: Auf einen
+     * Klick, an dem kein Shop haengt, wird GESCHWIEGEN - ein Satz dafuer waere ein Satz,
+     * den nie jemand liest, und jeder Klick auf jedes Wegweiserschild beantwortet.
+     *
+     * @param art         Rechtsklick kauft, Linksklick verkauft
+     * @param mitGebuehr  nur bei {@code GEHANDELT} von Bedeutung
+     */
+    static Satz shopHandel(Shophandel.Bescheid bescheid, Handelsart art,
+            boolean mitGebuehr) {
+        if (art == null) {
+            throw new IllegalArgumentException("Ohne Handelsart gibt es keinen Satz -"
+                    + " derselbe Mangel heisst beim Kauf und beim Verkauf"
+                    + " verschieden.");
+        }
+        boolean kauf = art == Handelsart.KUNDE_KAUFT;
+        return switch (bescheid) {
+            case GEHANDELT -> kauf
+                    ? ShopSatz.SHOP_KAUF_GELUNGEN
+                    : (mitGebuehr
+                            ? ShopSatz.SHOP_VERKAUF_GEBUEHR
+                            : ShopSatz.SHOP_VERKAUF_GELUNGEN);
+            case VERKAUFT_NICHT -> ShopSatz.SHOP_VERKAUFT_NICHT;
+            case KAUFT_NICHT_AN -> ShopSatz.SHOP_KAUFT_NICHT_AN;
+            case EIGENER_SHOP -> ShopSatz.SHOP_EIGENER_SHOP;
+            case WARE_UNLESBAR -> ShopSatz.SHOP_WARE_UNLESBAR;
+            case AUSVERKAUFT -> ShopSatz.SHOP_AUSVERKAUFT;
+            case KEINE_WARE -> ShopSatz.SHOP_KEINE_WARE;
+            case KEIN_PLATZ -> ShopSatz.SHOP_KEIN_PLATZ;
+            case KISTE_VOLL -> ShopSatz.SHOP_KISTE_VOLL;
+            case KEIN_GELD -> ShopSatz.SHOP_KEIN_GELD;
+            case SHOP_PLEITE -> ShopSatz.SHOP_PLEITE;
+            case GESTOERT -> ShopSatz.SHOP_HANDEL_GESTOERT;
+            case KEIN_SHOP -> throw new IllegalArgumentException("Auf einen Klick"
+                    + " ohne Shop wird geschwiegen - dafuer gibt es keinen Satz,"
+                    + " und wer hier danach fragt, hat die Pruefung auf KEIN_SHOP"
+                    + " vergessen.");
+        };
+    }
+
+    /**
      * Der Satz zu einem Schildfehler - acht Fehler, acht Hilfen.
      *
      * <p>Warum acht Saetze und nicht einer mit einem eingesetzten Grund, steht im Kopf
@@ -398,6 +454,19 @@ final class Sprachschluessel {
         }
         for (Shopschild.Fehler fehler : Shopschild.Fehler.values()) {
             nurFamilie.add(schildfehler(fehler).pfad());
+        }
+        // Die Saetze des HANDELS, ueber shopHandel gewaehlt - und zwar ueber alle
+        // drei Achsen: KEIN_SHOP faellt weg (es wirft dort), und GEHANDELT hat je
+        // Richtung und Gebuehrlage einen eigenen Satz. Mit nur einem Durchlauf
+        // fehlten genau die zwei, die ein Spieler am oeftesten liest.
+        for (Shophandel.Bescheid bescheid : Shophandel.Bescheid.values()) {
+            if (bescheid == Shophandel.Bescheid.KEIN_SHOP) {
+                continue;
+            }
+            for (Handelsart art : Handelsart.values()) {
+                nurFamilie.add(shopHandel(bescheid, art, false).pfad());
+                nurFamilie.add(shopHandel(bescheid, art, true).pfad());
+            }
         }
         // DREI DAVON WERDEN AUCH NAMENTLICH GESENDET, und darum muessen sie hier wieder
         // heraus: Diese Liste nennt die Pfade, deren Benutzung NUR eine Familienprobe

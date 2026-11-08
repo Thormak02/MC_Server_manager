@@ -157,7 +157,12 @@ public enum Buchungsgrund {
     LADEN_MIETE("laden_miete", Richtung.AUSGABE),
 
     /**
-     * Was ein Kunde an einem Kistenshop bezahlt hat (Plan 7.4).
+     * Was bei einem Handel am Kistenshop GEZAHLT wurde (Plan 7.4).
+     *
+     * <p><b>Beide Richtungen, nicht nur der Kunde.</b> Beim Kauf zahlt der Kunde, beim
+     * Ankauf der Shopbesitzer - es ist dieselbe Senke und darum derselbe Grund. Ein vierter
+     * Grund fuer die zweite Richtung spaltete dieselbe Zahlung in zwei Schluessel, und
+     * genau das soll der Kopf dieser Aufzaehlung verhindern.
      *
      * <p>Jeder Handel ist eine Buchung im Buchungsbuch, und das ist mehr als ChestShop
      * hat: Jenes fuehrt nur Logzeilen und kein abfragbares Protokoll. Der belegte Fall
@@ -168,12 +173,24 @@ public enum Buchungsgrund {
     SHOP_GEKAUFT("shop_gekauft", Richtung.AUSGABE),
 
     /**
-     * Was ein Verkaeufer an einem Kistenshop bekommen hat - NACH Abzug der Gebuehr.
+     * Was ein Verkaeufer an einem Kistenshop bekommen hat - der VOLLE Preis.
      *
-     * <p>Der Erloes und nicht der Preis: Was der Kunde zahlt, steht in seiner eigenen
-     * Zeile, und die Gebuehr in ihrer. Drei Zeilen fuer einen Handel, und jede nennt, was
-     * WIRKLICH geflossen ist - dann ist die Summe aller Buchungen eines Kontos immer sein
-     * Stand, und genau das hat der Spieltest vom 07.11.2026 gemessen.
+     * <p><b>Der Preis und nicht der Erloes</b> [berichtigt 08.11.2026]. Hier stand bis
+     * dahin das Gegenteil, und zusammen mit {@link #SHOP_GEBUEHR} - "eine EIGENE Zeile
+     * und kein stiller Abzug" - zog das die Gebuehr ZWEIMAL ab: Bei 1000 Mark und 7
+     * Prozent bekaeme der Verkaeufer 930 gutgeschrieben und 70 abgebucht, also 860 statt
+     * 930. Beide Saetze koennten nur gleichzeitig gelten, wenn die Gebuehrzeile auf einem
+     * DRITTEN Konto laege - und ein Staatskonto gibt es nicht, hier so wenig wie bei
+     * {@link #LADEN_MIETE}.
+     *
+     * <p>Also: zwei Konten und eine Senke. Der Kunde zahlt (Zeile eins), der Verkaeufer
+     * bekommt den vollen Preis (Zeile zwei), der Staat nimmt seinen Teil davon (Zeile
+     * drei). Netto bleibt der Erloes, die Gebuehr ist sichtbar, und die Summe aller
+     * Buchungen eines Kontos ist weiterhin sein Stand.
+     *
+     * <p>Die Reihenfolge ist zwingend: erst gutschreiben, dann die Gebuehr abbuchen.
+     * Umgekehrt scheiterte das Abbuchen bei einem Verkaeufer ohne Guthaben, und er
+     * behielte den ganzen Preis.
      */
     SHOP_VERKAUFT("shop_verkauft", Richtung.EINNAHME),
 
@@ -182,11 +199,42 @@ public enum Buchungsgrund {
      *
      * <p>Eine EIGENE Zeile und kein stiller Abzug vom Erloes. Ohne sie waere die Gebuehr
      * nur als Differenz zweier Zahlen zu sehen, und ein Betreiber, der wissen will, was
-     * seine Senke einbringt, muesste sie aus zwei Gruenden zusammenrechnen. Ab Werk
-     * stehen beide Saetze auf 0, also faellt diese Buchung heute nie - sie steht da,
-     * damit sie nicht fehlt, wenn der erste Satz hochgeht.
+     * seine Senke einbringt, muesste sie aus zwei Gruenden zusammenrechnen.
+     *
+     * <p>Auf dem Konto des EMPFAENGERS und nicht auf einem dritten - siehe
+     * {@link #SHOP_VERKAUFT}. Netto bleibt damit der Erloes.
+     *
+     * <p><b>Die Zeile faellt nur, wenn die GERECHNETE Gebuehr ueber 0 liegt</b>, und das
+     * entscheidet {@code Shopregel.Handel.kostetGebuehr} an einer Stelle. Nicht der SATZ
+     * ist die Frage: Bei 5 Prozent auf 19 Mark ist die Gebuehr abgerundet 0, und eine
+     * Zeile ueber 0 Mark waere genau das, was {@link Kasse} verbietet - "Keine Zeile im
+     * Buch ohne Geldbewegung". Ab Werk stehen alle Saetze auf 0, diese Buchung faellt
+     * also heute nie; sie steht da, damit sie nicht fehlt, wenn der erste Satz
+     * hochgeht.
      */
     SHOP_GEBUEHR("shop_gebuehr", Richtung.AUSGABE),
+
+    /**
+     * Ein Handel ist nach dem Zahlen gescheitert - das Geld kommt zurueck.
+     *
+     * <p>Dieselbe Antwort wie {@link #PARZELLE_ERSTATTET}, {@link #BERUF_ERSTATTET} und
+     * {@link #LADEN_ERSTATTET}, und sie wird hier aus demselben Grund gebraucht: Der
+     * Zahler wird ZUERST abgebucht - das ist die Reihenfolge, die kein Geld erzeugen
+     * kann -, und wenn danach die Ware nicht kommt, hat er gezahlt und nichts
+     * bekommen. Ohne diesen Grund gaebe es dafuer keine Buchung, denn
+     * {@link Kasse} verlangt zu jeder Bewegung einen Grund und kennt keinen
+     * Vorgabewert.
+     *
+     * <p><b>Nur die ZAHLUNG wird gedreht, nie die Gutschrift.</b> Scheitert die
+     * Gutschrift an den Empfaenger, hat der Kunde seine Ware schon; was dann fehlt,
+     * ist der Erloes, und der wird NACHgebucht und nicht gegengebucht. Dieser Fall
+     * bekommt darum keine Buchung, sondern eine SEVERE-Zeile - dieselbe Entscheidung
+     * wie in {@code Mietbuch.kuendigen}.
+     *
+     * <p>Nach einer genauen Platzrechnung ist der Fall nicht erreichbar. Er steht da,
+     * weil "nicht erreichbar" kein Zustand ist, auf den man Geld setzt.
+     */
+    SHOP_ERSTATTET("shop_erstattet", Richtung.EINNAHME),
 
     /**
      * Ein Abschluss ist gescheitert - die KAUTION kommt zurueck.

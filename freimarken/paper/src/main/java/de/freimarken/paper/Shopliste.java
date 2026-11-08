@@ -14,22 +14,42 @@ import org.bukkit.configuration.ConfigurationSection;
  * gelassen. Dieser Leser darf nicht werfen - er laeuft beim Start, und ein Wurf hiesse
  * ein Server, der wegen einer Zahl in einer Datei nicht hochkommt.
  *
- * <p><b>Drei Zeilen und zwei Arten von Zeile.</b> Die zwei Gebuehren sind Zahlen mit
+ * <p><b>Vier Zeilen und zwei Arten von Zeile.</b> Die drei Gebuehren sind Zahlen mit
  * einer Schranke, das Bundwort ist Text. Dass beides in EINEM Leser steht, ist kein
  * Zufall: Es ist derselbe Abschnitt der Datei, und zwei Leser darauf haetten zwei
  * Berichtszeilen, die gleich anfangen - und zwei Zeilen, die gleich anfangen, liest
  * niemand als zwei.
  *
- * <p><b>Beide Gebuehren sind vorgegeben 0</b>, und das ist die Entscheidung des Nutzers
+ * <p><b>Alle Gebuehren sind vorgegeben 0</b>, und das ist die Entscheidung des Nutzers
  * vom 08.11.2026: "erstmal keine gebuehr bei spielershops, aber anpassbar, markt gebuehr
  * auch". Deshalb steht hier auch kein Wort, das eine Gebuehr empfiehlt - die
  * Rechenprobe nennt die Zahlen und sonst nichts.
+ *
+ * <p><b>Je LAGE ein Schluessel</b> [entschieden 08.11.2026]: Auch WANN eine Gebuehr
+ * faellt, ist eine Einstellung und nicht eine Entscheidung des Programms. Die zwei
+ * Schluessel von vorher - einer fuer Spielershops, einer fuer den Bund - konnten nicht
+ * sagen, ob die Gebuehr beim Kauf oder beim Verkauf greift; die {@code config.yml} sagte
+ * "beim Verkauf", der Javadoc von {@link Shopwerte} sagte "bei jedem Handel". Jetzt sagt
+ * es der Betreiber, und {@link #nenneAlte} weist ihn auf die alten Zeilen hin, damit
+ * keine Zahl in der Datei steht, die niemand mehr liest.
  */
 final class Shopliste {
 
     /** Jede Zeile, die das Plugin mitbringt - fuer den Bericht ueber Fehlende. */
     private static final List<String> SCHLUESSEL = List.of(
-            Shopwerte.PFAD_SPIELER, Shopwerte.PFAD_BUND, Shopwerte.PFAD_WORT);
+            Shopwerte.PFAD_SPIELER_KAUF, Shopwerte.PFAD_SPIELER_VERKAUF,
+            Shopwerte.PFAD_BUND_VERKAUF, Shopwerte.PFAD_WORT);
+
+    /**
+     * Die Zeilen von vor dem 08.11.2026 - sie werden nicht mehr gelesen.
+     *
+     * <p>Eine Zahl, die in der Datei steht und nicht wirkt, ist die schlimmste Art
+     * Einstellung: Der Betreiber stellt sie ein, wartet auf ihre Wirkung und sucht den
+     * Fehler ueberall sonst. Darum klagt der Leser darueber, statt sie zu uebergehen -
+     * derselbe Nutzergrundsatz wie bei einem halb umgezogenen Schluessel.
+     */
+    private static final List<String> ALTE = List.of(
+            "handel.marktgebuehr-spieler-prozent", "handel.marktgebuehr-bund-prozent");
 
     record Ergebnis(Shopwerte werte, List<String> klagen, List<String> bericht) {
     }
@@ -37,7 +57,7 @@ final class Shopliste {
     private Shopliste() {
     }
 
-    /** Die drei Zeilen aus dem Abschnitt {@code handel:}. */
+    /** Die vier Zeilen aus dem Abschnitt {@code handel:}. */
     static Ergebnis ausKonfiguration(ConfigurationSection wurzel) {
         List<String> klagen = new ArrayList<>();
         List<String> bericht = new ArrayList<>();
@@ -45,14 +65,17 @@ final class Shopliste {
             return new Ergebnis(Shopwerte.VORGABE, klagen, bericht);
         }
         nenneFehlende(wurzel, bericht);
+        nenneAlte(wurzel, klagen);
 
-        int spieler = gebuehr(wurzel, Shopwerte.PFAD_SPIELER, Shopwerte.VORGABE_SPIELER,
-                klagen, bericht);
-        int bund = gebuehr(wurzel, Shopwerte.PFAD_BUND, Shopwerte.VORGABE_BUND, klagen,
-                bericht);
+        int spielerKauf = gebuehr(wurzel, Shopwerte.PFAD_SPIELER_KAUF,
+                Shopwerte.VORGABE_SPIELER_KAUF, klagen, bericht);
+        int spielerVerkauf = gebuehr(wurzel, Shopwerte.PFAD_SPIELER_VERKAUF,
+                Shopwerte.VORGABE_SPIELER_VERKAUF, klagen, bericht);
+        int bundVerkauf = gebuehr(wurzel, Shopwerte.PFAD_BUND_VERKAUF,
+                Shopwerte.VORGABE_BUND_VERKAUF, klagen, bericht);
         String wort = bundwort(wurzel, klagen, bericht);
 
-        Shopwerte werte = new Shopwerte(spieler, bund, wort);
+        Shopwerte werte = new Shopwerte(spielerKauf, spielerVerkauf, bundVerkauf, wort);
         bericht.add(rechenprobe(werte));
         return new Ergebnis(werte, klagen, bericht);
     }
@@ -64,31 +87,43 @@ final class Shopliste {
      * wirklich liest, ist die mit seinen eigenen Zahlen darin. Sie rechnet an einem
      * Beispiel vor, was die Gebuehr bedeutet - 0 Prozent ist eine Zahl, die niemandem
      * etwas sagt, "von 1.000 Mark bleiben 1.000" schon.
+     *
+     * <p><b>Und sie nennt, WER zahlt.</b> Das ist der Unterschied der drei Lagen: Beim
+     * Kauf am Spielershop zahlt der BESITZER die Gebuehr, beim Verkauf der KUNDE. Eine
+     * Zeile, die nur Prozente nennt, liest sich wie eine Zahl und nicht wie eine
+     * Entscheidung.
      */
     private static String rechenprobe(Shopwerte werte) {
         long beispiel = 1_000L;
-        Shopregel.Handel spieler = Shopregel.rechne(1, beispiel, 1,
-                werte.spielerProzent());
-        Shopregel.Handel bund = Shopregel.rechne(1, beispiel, 1, werte.bundProzent());
         return "Handel: Von " + Sprache.deutscheZahl(beispiel) + " Mark Umsatz bleiben"
-                + " dem Verkaeufer bei einem Spielershop "
-                + Sprache.deutscheZahl(spieler.erloes()) + " ("
-                + werte.spielerProzent() + " Prozent Gebuehr), bei einem Bundshop "
-                + Sprache.deutscheZahl(bund.erloes()) + " (" + werte.bundProzent()
-                + " Prozent). Bundshops heissen auf dem Schild "
+                + " dem, der das Geld bekommt, beim Kauf an einem Spielershop "
+                + bleibt(beispiel, werte.spielershopKauf()) + " (das zahlt der"
+                + " Besitzer), beim Verkauf an einen Spielershop "
+                + bleibt(beispiel, werte.spielershopVerkauf()) + " (das zahlt der Kunde)"
+                + " und beim Verkauf an einen Bundshop "
+                + bleibt(beispiel, werte.bundshopVerkauf()) + ". Beim Kauf an einem"
+                + " Bundshop faellt keine Gebuehr - dort bekommt niemand Geld, dem sie"
+                + " abzuziehen waere. Bundshops heissen auf dem Schild "
                 + (werte.bundWort().isBlank()
                         ? "gar nicht - ueber ein Schild sind sie nicht anzulegen."
                         : "\"" + werte.bundWort() + "\".");
     }
 
+    /** Was von einem Umsatz bleibt, samt Satz in Klammern. */
+    private static String bleibt(long umsatz, int prozent) {
+        Shopregel.Handel handel = Shopregel.rechne(1, umsatz, 1, prozent);
+        return Sprache.deutscheZahl(handel.erloes()) + " (" + prozent + " Prozent"
+                + " Gebuehr)";
+    }
+
     /**
-     * Eine Gebuehr in Prozent - beide Zeilen gehen durch dieselbe Methode.
+     * Eine Gebuehr in Prozent - alle drei Zeilen gehen durch dieselbe Methode.
      *
-     * <p>Eine Methode fuer beide und nicht zwei, anders als bei {@code Mietliste.dauer}
+     * <p>Eine Methode fuer alle und nicht drei, anders als bei {@code Mietliste.dauer}
      * und {@code ausfaelle}: Dort hat jede Zahl eine eigene Schranke und einen eigenen
      * Grund. Hier ist es dieselbe Schranke, dieselbe Bedeutung und dieselbe Klage - nur
-     * ein anderer Pfad. Zwei Methoden daraus zu machen hiesse, die Schranke zweimal
-     * hinzuschreiben, und dann aendert jemand eine von beiden.
+     * ein anderer Pfad. Drei Methoden daraus zu machen hiesse, die Schranke dreimal
+     * hinzuschreiben, und dann aendert jemand eine davon.
      *
      * <p>Der LONG wird geprueft und nicht der verkuerzte int - dieselbe Falle wie bei der
      * Mietdauer: Aus {@code (int) 4294967296} wird 0, und das waere zufaellig die
@@ -179,11 +214,14 @@ final class Shopliste {
      */
     static String startzeile(Shopwerte werte) {
         return (werte.erhebtGebuehr()
-                        ? "Marktgebuehr " + werte.spielerProzent()
-                                + " Prozent auf Spielershops und " + werte.bundProzent()
-                                + " Prozent am Bundesmarkt"
-                        : "ohne Marktgebuehr (" + Shopwerte.PFAD_SPIELER + " und "
-                                + Shopwerte.PFAD_BUND + " stehen auf 0)")
+                        ? "Marktgebuehr " + werte.spielershopKauf() + "/"
+                                + werte.spielershopVerkauf()
+                                + " Prozent auf Kauf/Verkauf am Spielershop und "
+                                + werte.bundshopVerkauf()
+                                + " Prozent beim Verkauf an einen Bundshop"
+                        : "ohne Marktgebuehr (" + Shopwerte.PFAD_SPIELER_KAUF + ", "
+                                + Shopwerte.PFAD_SPIELER_VERKAUF + " und "
+                                + Shopwerte.PFAD_BUND_VERKAUF + " stehen auf 0)")
                 + ", Bundshops heissen "
                 + (werte.bundWort().isBlank()
                         ? "gar nicht und sind ueber ein Schild nicht anzulegen."
@@ -203,6 +241,27 @@ final class Shopliste {
                     + " Handels fehlen in deiner config.yml: "
                     + String.join(", ", fehlen)
                     + ". Dafuer gelten die Vorgaben des Programms.");
+        }
+    }
+
+    /**
+     * Klagt ueber jede Zeile, die es nicht mehr gibt - siehe {@link #ALTE}.
+     *
+     * <p>Eine KLAGE und kein Bericht: Der Betreiber hat dort eine Zahl eingestellt, und
+     * sie wirkt nicht mehr. Das ist derselbe Rang wie eine verworfene Zahl, denn die
+     * Folge ist dieselbe - der Server tut etwas anderes, als in der Datei steht.
+     */
+    private static void nenneAlte(ConfigurationSection wurzel, List<String> klagen) {
+        for (String alt : ALTE) {
+            if (wurzel.contains(alt, true)) {
+                klagen.add(alt + " wird nicht mehr gelesen. Seit dem 08.11.2026 hat"
+                        + " jede LAGE ihren eigenen Satz, denn auch WANN eine Gebuehr"
+                        + " faellt, soll einstellbar sein: "
+                        + Shopwerte.PFAD_SPIELER_KAUF + ", "
+                        + Shopwerte.PFAD_SPIELER_VERKAUF + " und "
+                        + Shopwerte.PFAD_BUND_VERKAUF + ". Trage deine Zahl dort ein"
+                        + " und loesche diese Zeile.");
+            }
         }
     }
 }

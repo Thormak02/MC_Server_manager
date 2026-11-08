@@ -25,6 +25,12 @@ package de.freimarken.kern;
  * Rundung koennte bei kleinen Betraegen den ganzen Erloes verschlucken - 5 % von 1 Mark
  * aufgerundet ist 1, und der Verkaeufer bekaeme 0 fuer seine Ware. Das ist genau die
  * Form, in der ChestShops Rundung zum Nulltarif wurde, nur in der anderen Richtung.
+ *
+ * <p><b>Vorrat und Platz kommen als ZAHLEN herein, in STUECK.</b> Was wirklich in einer
+ * Kiste liegt und was in einen Rucksack passt, kann nur die Bukkit-Schicht sehen; wie
+ * daraus Stufen werden, steht hier und ist ohne Server pruefbar. Die Umrechnung von
+ * Faechern in Stueck ist deshalb auch hier - {@link #platzInStueck} -, und nicht droben:
+ * Ob ein angefangener Stapel mitzaehlt, ist eine Regel, die falsch sein kann.
  */
 public final class Shopregel {
 
@@ -37,6 +43,15 @@ public final class Shopregel {
      * hoch und laesst den Vertipper auffallen.
      */
     public static final int HOECHSTE_GEBUEHR_PROZENT = 50;
+
+    /**
+     * Die groesste Stapelgroesse, die Minecraft kennt - 99 seit 1.21.
+     *
+     * <p>Als Schranke gegen den Programmfehler und nicht als Spielregel: Gemessen wird
+     * die wirkliche Groesse am Gegenstand, denn seit 1.20.5 kann jeder Gegenstand seine
+     * eigene tragen. Eine Zahl ueber dieser waere ein Lesefehler und nicht ein Stapel.
+     */
+    public static final int GROESSTER_STAPEL = 99;
 
     private Shopregel() {
     }
@@ -74,6 +89,58 @@ public final class Shopregel {
             if (stueck < 1) {
                 throw new IllegalArgumentException("Ein Handel ueber " + stueck
                         + " Stueck ist keiner");
+            }
+        }
+
+        /**
+         * Ob dieser Handel eine Gebuehrzeile im Buch bekommt.
+         *
+         * <p><b>Eine benannte Frage und nicht ein Vergleich an der Buchungsstelle</b>, und
+         * das ist eine Zusage, die an zwei Stellen gebraucht wird: Die Buchung laesst die
+         * Gebuehrzeile aus, und der Satz am Schild laesst die Gebuehrzeile aus. Zwei
+         * Vergleiche daneben liefen auseinander, und dann sieht ein Spieler eine Zeile,
+         * die nicht gebucht wurde - oder umgekehrt.
+         *
+         * <p>Gefragt wird die GERECHNETE Gebuehr und nicht der Satz: Bei 5 Prozent auf 19
+         * Mark ist die Gebuehr abgerundet 0, und eine Zeile ueber 0 Mark ist genau das,
+         * was {@code Kasse} verbietet ("Keine Zeile im Buch ohne Geldbewegung").
+         */
+        public boolean kostetGebuehr() {
+            return gebuehr > 0L;
+        }
+    }
+
+    /**
+     * Die zwei Mengen, nach denen ein Klick gestuft wird.
+     *
+     * <p>Beide gehoeren zusammen und werden darum zusammen uebergeben: Die eine kommt vom
+     * SHOP, die andere von der WARE, und erst aus beiden ergibt sich, was ein Sneak-Klick
+     * hoechstens bewegt. Als zwei weitere Zahlen in einer Argumentliste von sechs waeren
+     * sie die naechste Gelegenheit, zwei gleich aussehende Werte zu vertauschen.
+     *
+     * <p><b>Warum {@link #rechne} sie nicht nimmt:</b> Dort geht es um Preise, und ein
+     * Preis weiss von Stapeln nichts. Die Stapelgroesse begrenzt den KLICK und nicht den
+     * Handel.
+     *
+     * @param shopmenge    wie viele Stueck eine Stufe umfasst - steht in der Shopzeile
+     * @param stapelgroesse wie viele Stueck dieser Ware auf einen Platz gehen. Gemessen
+     *                     am Gegenstand und nicht geraten: Enderperlen stapeln zu 16,
+     *                     Werkzeug und jedes verzauberte Stueck zu 1 - und verzauberte
+     *                     Ausruestung ist seit dem 08.11.2026 der Normalfall
+     */
+    public record Stufung(int shopmenge, int stapelgroesse) {
+
+        public Stufung {
+            if (shopmenge < 1 || shopmenge > Kistenshop.GROESSTE_MENGE) {
+                throw new IllegalArgumentException("Eine Shopmenge von " + shopmenge
+                        + " ist keine - erlaubt ist 1 bis " + Kistenshop.GROESSTE_MENGE);
+            }
+            if (stapelgroesse < 1 || stapelgroesse > GROESSTER_STAPEL) {
+                throw new IllegalArgumentException("Eine Stapelgroesse von "
+                        + stapelgroesse + " ist keine - erlaubt ist 1 bis "
+                        + GROESSTER_STAPEL + ". Wer sie nicht messen konnte, handelt"
+                        + " nicht: Ein geratener Stapel macht aus einem unbekannten"
+                        + " Gegenstand den groesstmoeglichen Handel.");
             }
         }
     }
@@ -135,12 +202,17 @@ public final class Shopregel {
     }
 
     /**
-     * Wie viele STUFEN in diesen Handel passen - fuer den Sneak-Klick.
+     * Wie viele STUFEN in diesen Handel passen - fuer JEDEN Klick.
      *
      * <p>Lumia handelte beim Sneak-Klick "einen ganzen Stack". Was das genau ist, haengt
-     * an drei Grenzen: wie viel der Kunde bezahlen kann, wie viel der Shop hat und wie
-     * viel noch Platz findet. Diese Rechnung nimmt die KLEINSTE davon - und nie mehr als
-     * ein Stapel, weil mehr in keinen Klick gehoert.
+     * an drei Grenzen: wie viel der Zahler bezahlen kann, wie viel der Gebende hat und
+     * wie viel beim Nehmenden noch Platz findet. Diese Rechnung nimmt die KLEINSTE davon
+     * - und nie mehr als ein Stapel, weil mehr in keinen Klick gehoert.
+     *
+     * <p><b>Auch der EINFACHE Klick geht hier durch</b> und wird danach auf eine Stufe
+     * begrenzt. Ein eigenes "reicht der Vorrat?" fuer den haeufigeren Weg waere die
+     * zweite Wahrheit: Zwei Pruefungen derselben Frage laufen auseinander, und dann
+     * verkauft der einfache Klick, was der Sneak-Klick abgelehnt haette.
      *
      * <p>Gibt 0 zurueck, wenn nicht einmal eine Stufe geht. Der Aufrufer macht daraus
      * eine Absage, die sagt, WAS fehlt; diese Rechnung sagt nur, wie viel geht.
@@ -148,15 +220,19 @@ public final class Shopregel {
      * @param stufenpreis was eine Stufe kostet
      * @param guthaben    was der Zahler hat
      * @param vorrat      wie viele STUECK der Gebende hat
-     * @param platz       wie viele STUECK der Nehmende aufnehmen kann
-     * @param shopmenge   wie viele Stueck eine Stufe umfasst
+     * @param platz       wie viele STUECK der Nehmende aufnehmen kann - siehe
+     *                    {@link #platzInStueck}
+     * @param stufung     die zwei Mengen des Klicks
      */
     public static int passendeStufen(long stufenpreis, long guthaben, int vorrat,
-            int platz, int shopmenge) {
-        if (stufenpreis < 1L || shopmenge < 1) {
-            throw new IllegalArgumentException("Ohne Stufenpreis und Shopmenge gibt es"
-                    + " keine Stufen");
+            int platz, Stufung stufung) {
+        if (stufenpreis < 1L) {
+            throw new IllegalArgumentException("Ohne Stufenpreis gibt es keine Stufen");
         }
+        if (stufung == null) {
+            throw new IllegalArgumentException("Ohne Stufung gibt es keine Stufen");
+        }
+        int shopmenge = stufung.shopmenge();
         long nachGeld = guthaben / stufenpreis;
         int nachVorrat = Math.max(0, vorrat) / shopmenge;
         int nachPlatz = Math.max(0, platz) / shopmenge;
@@ -164,7 +240,79 @@ public final class Shopregel {
         // Nie mehr als ein Stapel je Klick. Ohne diese Grenze raeumte ein Sneak-Klick
         // eine volle Doppelkiste in einem Zug - und der Kunde haette 54 Stapel, von denen
         // 18 in seinem Inventar Platz finden und der Rest auf dem Boden laege.
-        return (int) Math.min(moeglich, einStapelInStufen(shopmenge));
+        return (int) Math.min(moeglich, einStapelInStufen(stufung));
+    }
+
+    /**
+     * Wie viele STUECK dieser Ware noch hineinpassen - die Platzzahl des Handels.
+     *
+     * <p><b>Angefangene Stapel zaehlen MIT, und das ist der Unterschied zum
+     * Abholfach.</b> {@code Ladenware.freiePlaetze} zaehlt nur ganz freie Plaetze und
+     * unterschaetzt absichtlich: Dort ist jedes Abholgut ein beliebiger ganzer Stapel
+     * unbekannter Art, und es laesst sich nicht vorhersagen, worauf er sich legen liesse.
+     * Hier ist die Ware EINE bekannte Art - die genaue Zahl ist also berechenbar, und
+     * eine Unterschaetzung waere keine Vorsicht, sondern eine falsche Absage.
+     *
+     * <p>Das ist der haeufigste Kauffall ueberhaupt: Wer Erde kauft, traegt meistens
+     * schon Erde. Mit nur ganz freien Plaetzen gezaehlt bekaeme ein Spieler mit 35 vollen
+     * Erdeplaetzen und einem halben die Absage "kein Platz", obwohl 32 Stueck hineingehen.
+     *
+     * <p><b>Zwei verschieden benannte Zaehler und kein zusammengelegter</b> - die Frage
+     * ist eine andere, nicht dieselbe in zwei Fassungen. Wer sie eines Tages
+     * vereinheitlicht, nimmt dem Abholfach seine sichere Richtung und verliert
+     * Gegenstaende.
+     *
+     * @param freieFaecher wie viele Plaetze ganz leer sind
+     * @param stapelgroesse wie viele Stueck auf einen Platz gehen
+     * @param angefangene  die Mengen der Plaetze, auf denen schon DIESE Ware liegt
+     */
+    public static int platzInStueck(int freieFaecher, int stapelgroesse,
+            int[] angefangene) {
+        if (freieFaecher < 0) {
+            throw new IllegalArgumentException("Es gibt keine " + freieFaecher
+                    + " freien Faecher");
+        }
+        if (stapelgroesse < 1 || stapelgroesse > GROESSTER_STAPEL) {
+            throw new IllegalArgumentException("Eine Stapelgroesse von " + stapelgroesse
+                    + " ist keine - erlaubt ist 1 bis " + GROESSTER_STAPEL);
+        }
+        long stueck = (long) freieFaecher * stapelgroesse;
+        for (int menge : nichtNull(angefangene)) {
+            if (menge < 1) {
+                throw new IllegalArgumentException("Ein angefangener Stapel ueber "
+                        + menge + " Stueck ist keiner - leere Plaetze gehoeren in"
+                        + " freieFaecher");
+            }
+            // Was noch darauf passt. Ein Stapel, der schon ueber der Groesse liegt, gibt
+            // 0 und nicht eine negative Zahl: Eine solche Kiste gibt es nur nach einem
+            // Spielupdate, das die Groesse gesenkt hat, und dann ist kein Platz die
+            // sichere Antwort.
+            stueck += Math.max(0, stapelgroesse - menge);
+        }
+        return gedeckelt(stueck);
+    }
+
+    /**
+     * Wie viele STUECK insgesamt da liegen - die Vorratszahl des Handels.
+     *
+     * <p>Die Gegenrichtung zu {@link #platzInStueck} und in derselben Bauart: Droben wird
+     * nur abgelesen, welche Plaetze diese Ware halten und wie viel darauf liegt;
+     * gerechnet wird hier. Dass es die Methode ueberhaupt gibt und nicht eine Summe im
+     * Bukkit-Zweig, ist der Grund: So steht der Vorrat in derselben Schicht wie der Platz
+     * und wird von derselben Probe gelesen.
+     *
+     * @param mengen die Mengen der Plaetze, auf denen DIESE Ware liegt
+     */
+    public static int vorratInStueck(int[] mengen) {
+        long stueck = 0L;
+        for (int menge : nichtNull(mengen)) {
+            if (menge < 1) {
+                throw new IllegalArgumentException("Ein Stapel ueber " + menge
+                        + " Stueck ist keiner - leere Plaetze kommen nicht herein");
+            }
+            stueck += menge;
+        }
+        return gedeckelt(stueck);
     }
 
     /** Ob diese Gebuehr eine ist - 0 bis {@link #HOECHSTE_GEBUEHR_PROZENT}. */
@@ -172,14 +320,41 @@ public final class Shopregel {
         return prozent >= 0 && prozent <= HOECHSTE_GEBUEHR_PROZENT;
     }
 
+    private static int[] nichtNull(int[] mengen) {
+        return mengen == null ? new int[0] : mengen;
+    }
+
     /**
-     * Wie viele Stufen ein Stapel von 64 Stueck umfasst - mindestens eine.
+     * Kein Vorrat und kein Platz ueber einer Doppelkiste.
      *
-     * <p>Bei einer Shopmenge ueber 64 ist eine Stufe schon mehr als ein Stapel. Dann ist
-     * die Antwort 1 und nicht 0: Ein Sneak-Klick soll nie WENIGER handeln als ein
-     * einfacher.
+     * <p>Gedeckelt und nicht geworfen: Die Zahl ist eine MESSUNG und keine Einstellung,
+     * und ein voller Rucksack samt voller Doppelkiste liegt schon in der Groessenordnung.
+     * Der Deckel ist die sichere Richtung - er kann einen Handel kleiner machen, nie
+     * groesser.
      */
-    private static int einStapelInStufen(int shopmenge) {
-        return Math.max(1, 64 / shopmenge);
+    private static int gedeckelt(long stueck) {
+        return (int) Math.min(stueck, Kistenshop.GROESSTE_MENGE);
+    }
+
+    /**
+     * Wie viele Stufen ein Stapel umfasst - mindestens eine.
+     *
+     * <p><b>Die Stapelgroesse der WARE und nicht die 64.</b> Enderperle und Schneeball
+     * stapeln zu 16, Werkzeug, Ruestung und jedes verzauberte Stueck zu 1 - und
+     * verzauberte Ausruestung ist seit der Entscheidung vom 08.11.2026 der Normalfall.
+     * Mit einer festen 64 forderte ein Sneak-Klick an einem Spitzhacken-Shop mit Menge 1
+     * vierundsechzig Stufen an, und die Zusage "nie mehr als ein Stapel je Klick" waere
+     * falsch.
+     *
+     * <p>Bei einer Shopmenge ueber der Stapelgroesse ist eine Stufe schon mehr als ein
+     * Stapel. Dann ist die Antwort 1 und nicht 0: Ein Sneak-Klick soll nie WENIGER
+     * handeln als ein einfacher.
+     *
+     * <p>Bei Stapelgroesse 1 und Shopmenge 1 handelt der Sneak-Klick genau eine Stufe -
+     * also so viel wie ein einfacher Klick. Das ist richtig und soll nicht als Fehler
+     * gesucht werden: Ein Stapel Spitzhacken IST eine Spitzhacke.
+     */
+    private static int einStapelInStufen(Stufung stufung) {
+        return Math.max(1, stufung.stapelgroesse() / stufung.shopmenge());
     }
 }
