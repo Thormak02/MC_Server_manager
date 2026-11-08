@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Test;
 class ShopwacheTafel {
 
     /**
-     * Die neun Ereignisse, auf die {@link Shopwache} hoert - und nur diese.
+     * Die elf Ereignisse, auf die {@link Shopwache} hoert - und nur diese.
      *
      * <p>Eine Zahl zu klein ist ein verlorener Schutzweg: Faellt {@code BlockBurnEvent}
      * weg, genuegt ein Feuerzeug neben einer Markthalle. Eine Zahl zu gross ist ein neuer
@@ -60,7 +60,8 @@ class ShopwacheTafel {
             Map.entry("beimKolbenEin", "BlockPistonRetractEvent"),
             Map.entry("beimWesenBlock", "EntityChangeBlockEvent"),
             Map.entry("beimLaubfall", "LeavesDecayEvent"),
-            Map.entry("beimGegenstandWandern", "InventoryMoveItemEvent")));
+            Map.entry("beimGegenstandWandern", "InventoryMoveItemEvent"),
+            Map.entry("beimOeffnen", "InventoryOpenEvent")));
 
     @Test
     @DisplayName("Jedes Ereignis hat seinen Zuhoerer - und keiner ist dazugekommen")
@@ -73,11 +74,12 @@ class ShopwacheTafel {
                 gefunden.put(paar.getKey(), paar.getValue());
             }
         }
-        assertEquals(EREIGNISSE, gefunden, "Jeder dieser Zuhoerer ist ein Weg, auf dem"
-                + " ein Shopblock verschwinden kann. Faellt einer weg, verschwindet er"
-                + " still - und der Shop steht danach in der Datenbank, waehrend sein"
-                + " Schild weg ist.");
-        // Und die ZAHL der Anmerkungen: Ein zehnter Zuhoerer, der nicht in der Tafel
+        assertEquals(EREIGNISSE, gefunden, "Jeder dieser Zuhoerer ist ein Weg zu einem"
+                + " Shop: acht, auf denen ein Block verschwinden kann, der Trichter und"
+                + " die Hand am Kistendeckel, dazu das Anlegen. Faellt einer weg,"
+                + " verschwindet er still - und dann steht der Shop in der Datenbank,"
+                + " waehrend sein Schild weg ist, oder die Kiste steht offen.");
+        // Und die ZAHL der Anmerkungen: Ein zwoelfter Zuhoerer, der nicht in der Tafel
         // steht, ist ein Zweig, den niemand begruendet hat.
         assertEquals(EREIGNISSE.size(), zaehle(quelle, "@EventHandler"),
                 "genau so viele @EventHandler wie Ereignisse in der Tafel");
@@ -186,6 +188,87 @@ class ShopwacheTafel {
         assertFalse(quelle.contains("inventar.getLocation()"),
                 "getLocation gibt bei einer Doppelkiste die MITTE zwischen den Haelften,"
                         + " also eine Stelle ohne Block - dort haengt nie ein Shop");
+    }
+
+    @Test
+    @DisplayName("Das Oeffnen fragt die KISTE und nicht den Traegerblock")
+    void oeffnenFragtDieKisteUndNichtDenTraeger() {
+        // betroffen() faellt bis zum TRAEGER-Zweig durch, und dann waere eine Kiste
+        // gesperrt, die bloss ein fremdes Shopschild TRAEGT, obwohl in ihr keine
+        // Shopware liegt. Beim Abbauen ist der Traeger richtig (wer ihn bricht, nimmt
+        // das Schild mit), beim Oeffnen zaehlt nur, wessen Ware drin liegt. Der
+        // Dreher ist in einer Zeile gemacht und sieht wie eine Vereinfachung aus.
+        String zweig = methode("Shopwache.java", "beimOeffnen");
+
+        assertTrue(zweig.contains("shopsAn(ereignis.getInventory())"),
+                "gefragt wird das INVENTAR: " + zweig);
+        assertFalse(zweig.contains("betroffen("),
+                "betroffen() sperrte auch den Block, der bloss ein Schild traegt");
+    }
+
+    @Test
+    @DisplayName("Das Oeffnen fragt BEIDE Richtungen der Ablage")
+    void oeffnenFragtBeideRichtungen() {
+        // Die zwei Fragen haben absichtlich verschiedene Richtungen: istShopkiste
+        // gibt bei stummer Ablage TRUE ("schuetze sie"), anDerKiste eine LEERE Liste
+        // ("erfinde keinen Besitzer"). Nur die zweite zu fragen ist die naheliegende
+        // Vereinfachung - und sie schliesst bei einer schweigenden Datenbank jede
+        // Shopkiste der Welt auf, denn eine leere Liste heisst "niemand fremd".
+        String frage = methode("Shopwache.java", "shopsAn");
+
+        assertTrue(frage.contains("buch.istShopkiste("),
+                "die schuetzende Richtung MUSS gefragt werden: " + frage);
+        assertTrue(frage.contains("buch.anDerKiste("),
+                "und die nennende, sonst gibt es keinen Namen: " + frage);
+        assertTrue(frage.contains("Shopware.bloeckeVon("),
+                "der Weg zum Block geht ueber bloeckeVon - getLocation gaebe bei"
+                        + " einer Doppelkiste die Mitte ohne Block: " + frage);
+    }
+
+    @Test
+    @DisplayName("Das Oeffnen sagt wirklich ab - und niemals auf MONITOR")
+    void oeffnenSagtAbUndNichtAufMonitor() {
+        String zweig = methode("Shopwache.java", "beimOeffnen");
+
+        assertTrue(zweig.contains("setCancelled(true)"),
+                "ohne das steht die Kiste offen: " + zweig);
+        // MONITOR waere die naheliegende Wahl, weil Messwache.beimOeffnen als
+        // einziges Vorbild am selben Ereignis dort haengt. Auf MONITOR darf ein Zweig
+        // das Ereignis aber nur noch BEOBACHTEN - ein setCancelled dort ist ein
+        // Vertragsbruch, den spaetere Plugins nie mehr sehen.
+        assertFalse(zweig.contains("MONITOR"),
+                "auf MONITOR darf nicht mehr abgesagt werden");
+        assertTrue(zweig.contains("instanceof Player spieler"),
+                "getPlayer gibt eine HumanEntity - ohne Spieler keine Rechte");
+    }
+
+    @Test
+    @DisplayName("Die Zutrittsregel steht NUR im Kern - an drei Wegen dieselbe")
+    void zutrittsregelStehtNurImKern() {
+        // DREI Wege fuehren an die Ware eines fremden Shops: das Abbauen von Schild,
+        // Kiste oder Traeger, das OEFFNEN der Kiste und das Anlegen eines zweiten
+        // Schildes an derselben Kiste. Drei Kopien der Rechtefrage laufen
+        // auseinander, und dann ist eine Kiste gegen das eine geschuetzt und gegen
+        // das andere offen.
+        //
+        // Die Regel selbst steht in Kistenshop.offenFuer und ist dort ohne Server
+        // geprueft (KistenshopTest). Hier wird nur gehalten, dass niemand sie
+        // nachbaut: Die drei Stufen sind drei Zeilen, und sie sind in jeder Klasse
+        // schnell wieder hingeschrieben.
+        String wache = quelle("Shopwache.java");
+        String buch = quelle("Shopbuch.java");
+
+        assertTrue(wache.contains("Kistenshop.ersterFremder("),
+                "die Wache MUSS die Regel des Kerns rufen");
+        assertTrue(buch.contains("Kistenshop.ersterFremder("),
+                "und das Buch beim Anlegen ebenso - es sieht keinen Player, und"
+                        + " genau darum bekommt es die zwei Rechte herein");
+        assertFalse(wache.contains("demBund()"),
+                "die Wache fragt NIE selbst, ob ein Shop dem Bund gehoert - ein"
+                        + " Bundshop hat besitzer == null, und wer ihn am Besitz"
+                        + " prueft, schliesst ihn fuer alle zu");
+        assertFalse(wache.contains(".gehoert("),
+                "und auch nicht nach dem Besitz - beides steht in offenFuer");
     }
 
     @Test

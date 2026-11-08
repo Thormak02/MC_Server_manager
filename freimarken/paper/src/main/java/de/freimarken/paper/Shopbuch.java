@@ -43,6 +43,15 @@ final class Shopbuch {
         KEINE_KISTE,
         /** An der Kiste darf dieser Spieler nicht handeln - sie gehoert einem anderen. */
         FREMDE_KISTE,
+        /**
+         * An dieser Kiste haengt schon der Shop eines anderen.
+         *
+         * <p>Ein anderer Fall als {@link #FREMDE_KISTE}: Dort gehoert der ORT einem
+         * anderen, hier die KISTE. Draussen vor der Stadt gehoert kein Ort jemandem,
+         * und dann ist das Shopschild die einzige Besitzerklaerung, die eine Kiste
+         * tragen kann.
+         */
+        FREMDER_SHOP,
         /** An diesem Schild haengt schon ein Shop. */
         SCHON_EIN_SHOP,
         /** Das Fragezeichen, aber die Kiste ist leer oder haelt mehrere Arten. */
@@ -141,16 +150,28 @@ final class Shopbuch {
      * Ablage. Ein Spieler, der sich vertippt hat, bekommt seine Absage, ohne dass die
      * Datenbank gefragt wurde.
      *
+     * <p><b>Eine Ausnahme davon ist die WARE, und sie steht zuletzt</b> [08.11.2026]:
+     * Die zwei Ablagefragen sind eine Map im Arbeitsspeicher, das Lesen der Kiste ist ein
+     * Griff in die Welt - und viel wichtiger ist, welche Absage der Spieler LIEST. Haengt
+     * an der Kiste schon ein fremder Shop, soll das dastehen und nicht "die Kiste sagt
+     * nicht, was du handeln willst", bloss weil der fremde Shop gerade ausverkauft ist.
+     *
      * @param wer        wer das Schild beschrieben hat
      * @param welt       die Welt des Schildes
      * @param kisteX     wo die Kiste steht - von der Wache gefunden, weil nur sie die
      *                   sechs Nachbarn des Schildes ansehen kann
      * @param darfBund   ob dieser Spieler Bundshops anlegen darf
+     * @param darfUeberall ob er {@code freimarken.bauen.ueberall} hat. Das Teamrecht
+     *                   darf ein zweites Schild an eine fremde Shopkiste haengen,
+     *                   damit ein verlassener Shop erreichbar bleibt. Hereingegeben
+     *                   und nicht hier erfragt: Diese Klasse sieht keinen
+     *                   {@code Player}, und genau deshalb ist sie ohne Server
+     *                   pruefbar
      * @param bundWort   das Wort fuer einen Bundshop aus der {@code config.yml}
      */
     Anlage anlege(UUID wer, String welt, int schildX, int schildY, int schildZ,
             int kisteX, int kisteY, int kisteZ, String[] zeilen, boolean darfBund,
-            String bundWort) {
+            boolean darfUeberall, String bundWort) {
         Shopschild.Ergebnis gelesen = Shopschild.lies(zeilen, bundWort);
         if (!gelesen.gelungen()) {
             return new Anlage(Bescheid.SCHILD_FEHLERHAFT, null, gelesen.fehler(),
@@ -171,6 +192,48 @@ final class Shopbuch {
         if (!schild.bundshop() && !zugriff.darf(wer, welt, kisteX, kisteY, kisteZ)) {
             return absage(Bescheid.FREMDE_KISTE);
         }
+        // DIE ZWEI ABLAGEFRAGEN - und sie stehen beide VOR der Warenpruefung.
+        //
+        // Die zweite ist neu [08.11.2026] und die andere Haelfte des Kistenschutzes:
+        // Wer die Kiste nicht OEFFNEN kann, haengt sonst einfach ein eigenes Schild
+        // daneben und verkauft die fremde Ware auf sein Konto; mit dem Fragezeichen
+        // sogar automatisch die, die drin liegt. Die Pruefung darueber sieht das
+        // nicht: zugriff.darf fragt den ORT, und draussen vor der Stadt gehoert kein
+        // Ort jemandem - das Shopschild ist dort die einzige Besitzerklaerung, die
+        // eine Kiste tragen kann.
+        //
+        // DIE REIHENFOLGE IST DIE DER LAGE DES SPIELERS, nicht die der Kosten (beide
+        // Fragen sind eine Map im Arbeitsspeicher - dahinter liegt
+        // ZwischenspeicherShops). Wer sein EIGENES Schild ueberschreibt, soll "hier
+        // haengt schon ein Shop" lesen und nicht "da haengt ein fremder": Das Schild
+        // ist das, worauf er gerade tippt.
+        //
+        // UND BEIDE VOR DER WARE, aus demselben Grund: Sonst liest das Fragezeichen
+        // die fremde Kiste, und wenn Annas Shop gerade ausverkauft ist, bekaeme Bert
+        // "die Kiste sagt nicht, was du handeln willst" zu lesen. Dann wartet er auf
+        // Ware, wo kein Warten hilft.
+        //
+        // Direkt an der Ablage und mit eigenem Fang: Ein Wurf gibt GESTOERT, und dann
+        // entsteht kein Shop. Das ist hier die sichere Richtung - ein Schild tippt er
+        // neu, eine gekaperte Kiste bekommt niemand zurueck. Die milderen Wege
+        // anDemSchild und anDerKiste dieser Klasse passen dafuer NICHT: Jener gibt
+        // bei einer Stoerung null und dieser eine leere Liste, und beides heisst hier
+        // "nur zu".
+        try {
+            if (ablage.anDemSchild(welt, schildX, schildY, schildZ) != null) {
+                return absage(Bescheid.SCHON_EIN_SHOP);
+            }
+            if (Kistenshop.ersterFremder(
+                    ablage.anDerKiste(welt, kisteX, kisteY, kisteZ), wer, darfUeberall,
+                    darfBund) != null) {
+                return absage(Bescheid.FREMDER_SHOP);
+            }
+        } catch (RuntimeException fehler) {
+            protokoll.log(Level.WARNING, "Shops an " + welt + " " + kisteX + "/"
+                    + kisteY + "/" + kisteZ + " nicht lesbar - es entsteht kein"
+                    + " Shop", fehler);
+            return absage(Bescheid.GESTOERT);
+        }
         Warenprobe ware = schild.warenangabe() == Shopschild.Warenangabe.AUS_KISTE
                 ? waren.ausKiste(welt, kisteX, kisteY, kisteZ)
                 : waren.ausNamen(schild.material());
@@ -180,9 +243,6 @@ final class Shopbuch {
                     : Bescheid.WARE_UNBEKANNT);
         }
         try {
-            if (ablage.anDemSchild(welt, schildX, schildY, schildZ) != null) {
-                return absage(Bescheid.SCHON_EIN_SHOP);
-            }
             Kistenshop shop = new Kistenshop(welt, schildX, schildY, schildZ, kisteX,
                     kisteY, kisteZ, schild.bundshop() ? null : wer, schild.menge(),
                     schild.kaufpreis(), schild.verkaufpreis(), ware);

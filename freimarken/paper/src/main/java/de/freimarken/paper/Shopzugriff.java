@@ -18,9 +18,17 @@ import org.bukkit.Server;
  *
  * <p><b>{@code Schutzwache.darfHandeln} und keine eigene Rechtefrage.</b> Das ist der
  * Grund, warum diese Klasse existiert: Dahinter liegt genau der Entscheid, der ueber
- * jeden gesetzten Block, jede geoeffnete Kiste und jeden Hebel faellt - Parzellen,
- * Weg und Mauer, Stadtgrenze, Ladenschutz und das Teamrecht. Eine zweite Frage daneben
- * liefe auseinander, und dann duerfte jemand einen Shop anlegen, wo er nicht bauen darf.
+ * jeden gesetzten Block und jeden Hebel faellt - Parzellen, Weg und Mauer,
+ * Stadtgrenze, Ladenschutz und das Teamrecht. Eine zweite Frage daneben liefe
+ * auseinander, und dann duerfte jemand einen Shop anlegen, wo er nicht bauen darf.
+ *
+ * <p><b>Nicht mehr "jede geoeffnete Kiste" - das stand hier und war zu viel
+ * versprochen</b> [berichtigt 08.11.2026]. {@code darfHandeln} entscheidet ueber den
+ * KLICK auf eine Kiste, und nur in der Parzellenwelt: Ausserhalb gibt es keinen Ort,
+ * der jemandem gehoert, und die Methode gibt dort {@code true}. Ueber das OEFFNEN einer
+ * Shopkiste entscheidet seitdem {@code Shopwache.beimOeffnen} am
+ * {@code InventoryOpenEvent}, und zwar nach {@link Kistenshop#offenFuer} - also am
+ * Shop und nicht am Ort. Diese Klasse bleibt die Frage fuer das ANLEGEN.
  *
  * <p><b>Gefragt wird nach der KISTENSTELLE</b>, nicht nach dem Schild - siehe den Kopf
  * von {@link Shopbuch}. Dass er am Schild bauen durfte, hat die Wache schon entschieden,

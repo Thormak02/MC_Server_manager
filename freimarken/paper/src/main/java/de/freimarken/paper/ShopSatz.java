@@ -198,6 +198,21 @@ enum ShopSatz implements Satz {
      */
     SHOP_WARE_UNBEKANNT("shop.absage.ware-unbekannt", Art.SATZ, "getippt"),
 
+    /**
+     * An dieser Kiste haengt schon der Shop eines anderen.
+     *
+     * <p>Ein anderer Satz als {@link #SHOP_FREMDE_KISTE}: Dort gehoert der ORT einem
+     * anderen ("sie steht auf fremdem Grund"), hier die KISTE. Draussen vor der
+     * Stadt gehoert kein Ort jemandem, und dann ist das Shopschild die einzige
+     * Besitzerklaerung, die eine Kiste tragen kann - ein Spieler, der dort "fremder
+     * Grund" liest, sucht eine Parzelle, die es nicht gibt.
+     *
+     * <p>Der Satz NENNT KEINEN MENSCHEN, anders als der Schutzbalken: Wer hier
+     * abgewiesen wird, steht direkt vor dem anderen Schild und liest den Namen darauf.
+     * Ein Platzhalter mehr waere ein Platzhalter, der beim Bundshop leer bliebe.
+     */
+    SHOP_FREMDER_SHOP("shop.absage.fremder-shop", Art.SATZ),
+
     /** Ein Bundshop, aber das Recht dafuer fehlt. */
     SHOP_KEIN_BUNDRECHT("shop.absage.kein-bundrecht", Art.SATZ),
 
@@ -210,7 +225,7 @@ enum ShopSatz implements Satz {
      */
     SHOP_GESTOERT("shop.absage.gestoert", Art.SATZ),
 
-    // --- Der Schutz: vier Handbalken ------------------------------------------
+    // --- Der Schutz: fuenf Handbalken -----------------------------------------
 
     /**
      * Das Schild eines anderen - der Handbalken des Shopschutzes.
@@ -251,6 +266,22 @@ enum ShopSatz implements Satz {
      * {@code handlePhysicsBreak} NACH dem Fall; hier faellt nichts.
      */
     SHOP_SCHUTZ_TRAEGER("shop.schutz.traeger", Art.HANDBALKEN),
+
+    /**
+     * Geschuetzt, aber niemand nennbar - die Ablage hat geschwiegen.
+     *
+     * <p>Der fuenfte Satz fuer den einen Fall, in dem die zwei Richtungen der Ablage
+     * auseinandergehen: {@code Shopbuch.istShopkiste} gibt bei einer Stoerung
+     * {@code true} ("schuetze sie"), {@code anDerKiste} eine leere Liste ("erfinde
+     * keinen Besitzer"). Beides ist richtig, und zusammen heisst es: zu, aber ohne
+     * Namen.
+     *
+     * <p>Darum ein eigener Satz und nicht der Kistensatz mit einem leeren Namen:
+     * {@code Spielername.von(null)} gibt einen Bindestrich, und "Diese Kiste ist der
+     * Shop von -" liest sich wie ein Programmfehler. Dieser Satz sagt, was wirklich
+     * los ist, und nennt den Ausweg - denselben wie {@link #SHOP_GESTOERT}.
+     */
+    SHOP_SCHUTZ_UNLESBAR("shop.schutz.nicht-lesbar", Art.HANDBALKEN),
 
     // --- Der Handel ist gelungen ----------------------------------------------
 

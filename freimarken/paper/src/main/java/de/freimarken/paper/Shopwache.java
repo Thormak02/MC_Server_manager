@@ -5,7 +5,6 @@ import de.freimarken.kern.Shopschild;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -26,10 +25,11 @@ import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.Inventory;
 
 /**
- * Der Schutz und das Anlegen der Kistenshops - neun Bukkit-Ereignisse.
+ * Der Schutz und das Anlegen der Kistenshops - elf Bukkit-Ereignisse.
  *
  * <p><b>Was hier entschieden wird, ist nichts.</b> Jeder Zweig stellt eine Frage an
  * {@link #betroffen}, holt seinen Wortlaut bei {@link Shoptext} und laesst
@@ -79,8 +79,8 @@ import org.bukkit.inventory.Inventory;
  *
  * <p>{@code BlockPhysicsEvent} ebenso, und aus demselben Grund: Es ist das allgemeine
  * Ereignis fuer "ein Block hat sich geaendert" und feuert vielhundertfach je Sekunde. Die
- * neun Ereignisse hier nennen jeden Weg einzeln, auf dem ein Block verschwinden kann,
- * und das ist der billigere Weg zum selben Schutz.
+ * acht Zerstoerungszweige hier nennen jeden Weg einzeln, auf dem ein Block
+ * verschwinden kann, und das ist der billigere Weg zum selben Schutz.
  */
 final class Shopwache implements Listener {
 
@@ -200,7 +200,8 @@ final class Shopwache implements Listener {
         Block kiste = kisteNeben(schild);
         Shopbuch.Anlage anlage = buch.anlege(spieler.getUniqueId(), welt, schild.getX(),
                 schild.getY(), schild.getZ(), kiste.getX(), kiste.getY(), kiste.getZ(),
-                zeilen, spieler.hasPermission(RECHT_BUNDSHOP), bundWort);
+                zeilen, spieler.hasPermission(RECHT_BUNDSHOP),
+                spieler.hasPermission(Schutzwache.UEBERALL), bundWort);
         sende(spieler, Shoptext.anlageZeilen(sprache, anlage, zeilen[3]));
         if (anlage.bescheid() != Shopbuch.Bescheid.ANGELEGT) {
             // Das Schild bleibt stehen, wie er es getippt hat - und unbewachst. So sieht
@@ -451,6 +452,68 @@ final class Shopwache implements Listener {
         }
     }
 
+    /**
+     * Die HAND an einer fremden Shopkiste - und dieser Zweig ist der EINZIGE Riegel
+     * auf diesem Weg.
+     *
+     * <p><b>Warum er gebraucht wird:</b> Eine Shopkiste war gegen Trichter, Abbau,
+     * Feuer und Kolben geschuetzt, aber nicht gegen eine Hand.
+     * {@code Schutzwache.darfHandeln} gibt {@code true}, sobald die Welt nicht die
+     * Parzellenwelt ist - in hochwald, kornmark, nether und end war also jede
+     * Shopkiste von jedem zu oeffnen. Wer die Kiste oeffnen kann, braucht nicht zu
+     * kaufen. In der Marktstadt und in der Markthalle greift schon der Klickzweig der
+     * Schutzwache (eine Kiste ist dort heikel, weil ihr Blockzustand ein
+     * {@code InventoryHolder} ist), und dann kommt dieses Ereignis gar nicht an -
+     * darum gibt es auch keine zwei Handbalken aus zwei Drosseln.
+     *
+     * <p><b>Das Oeffnen kennt keine Richtung, und das ist eine Entscheidung.</b> Die
+     * Trichterregel ist unsymmetrisch (siehe {@link #beimGegenstandWandern}:
+     * Hineinlegen bleibt erlaubt, denn so wird ein Laden beliefert) - eine
+     * Oeffnungsabsage schliesst dagegen BEIDE Richtungen. Ein Fremder kann einem Shop
+     * danach auch nichts schenken. Entschieden am 08.11.2026 so: Das Nehmen hat nicht
+     * einen Weg, sondern zehn (Linksklick, Rechtsklick, Umschaltklick, Ziehen ueber
+     * mehrere Faecher, Zahlentasten, Tausch mit der zweiten Hand, Doppelklick zum
+     * Einsammeln, Wurf) - und jede Art, die ein Zweig vergisst, ist ein Loch. EIN
+     * Ereignis ohne Ausnahme ist dicht; zehn Klickarten sind es irgendwann. Wer einen
+     * fremden Shop beliefern will, nimmt bis zum geplanten {@code /shop freigeben}
+     * den Trichter.
+     *
+     * <p><b>Nicht {@link #betroffen}, sondern die Kistenfrage.</b> Jene Methode faellt
+     * bis zum TRAEGER-Zweig durch, und dann waere eine Kiste gesperrt, die bloss ein
+     * fremdes Shopschild TRAEGT, obwohl in ihr keine Shopware liegt. Beim Abbauen ist
+     * der Traeger richtig (wer ihn bricht, nimmt das Schild mit), beim Oeffnen zaehlt
+     * nur, wessen Ware drin liegt.
+     *
+     * <p>{@code getPlayer()} gibt eine {@code HumanEntity} und keinen
+     * {@code Player} - ein Inventar kann auch fuer ein anderes Wesen offen sein.
+     * Ohne Spieler gibt es keine Rechte, also keine Entscheidung, also wird
+     * durchgelassen: Dieselbe Pruefung und derselbe Grund wie in
+     * {@code Messwache.beimOeffnen}.
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void beimOeffnen(InventoryOpenEvent ereignis) {
+        if (!(ereignis.getPlayer() instanceof Player spieler)) {
+            return;
+        }
+        AnDerKiste kiste = shopsAn(ereignis.getInventory());
+        if (!kiste.shopkiste()) {
+            return;
+        }
+        if (kiste.gestoert()) {
+            // Geschuetzt, aber niemand nennbar. Die Absage steht trotzdem - siehe
+            // AnDerKiste.gestoert - und melde() faengt den fehlenden Shop ab.
+            ereignis.setCancelled(true);
+            melde(spieler, Shoptext.Teil.KISTE, null);
+            return;
+        }
+        Kistenshop fremd = ersterFremder(spieler, kiste.shops());
+        if (fremd == null) {
+            return;
+        }
+        ereignis.setCancelled(true);
+        melde(spieler, Shoptext.Teil.KISTE, fremd);
+    }
+
     // --- Die eine Frage -------------------------------------------------------
 
     /**
@@ -526,6 +589,48 @@ final class Shopwache implements Listener {
         return false;
     }
 
+    /**
+     * Was an diesem Inventar haengt - und ob es ueberhaupt eine Shopkiste ist.
+     *
+     * <p><b>Zwei Fragen und nicht eine, weil die Ablage zwei RICHTUNGEN hat.</b>
+     * {@code Shopbuch.istShopkiste} gibt bei stummer Ablage {@code true} ("schuetze
+     * sie"), {@code Shopbuch.anDerKiste} gibt eine LEERE Liste ("erfinde keinen
+     * Besitzer"). Beim Oeffnen sind beide gebraucht: die erste entscheidet, OB
+     * abgesagt wird, die zweite, WER genannt wird. Nur die zweite zu fragen waere ein
+     * Schutz, der bei einer schweigenden Datenbank jede Kiste der Welt aufschliesst.
+     *
+     * <p><b>{@link Shopware#bloeckeVon} und nicht {@code inventar.getLocation()}.</b>
+     * Jenes gibt bei einer Doppelkiste die MITTE mit halben Koordinaten, an der kein
+     * Block steht - der Zweig waere dort stumm offen. Darum geht diese Methode
+     * denselben Weg wie {@link #istShopinventar}: Der WEG zum Block ist einer, die
+     * FRAGE daran ist eine andere.
+     *
+     * <p>Warum {@link #istShopinventar} trotzdem bleibt: Jenes ist der heisse Pfad
+     * (achtmal je Sekunde je Trichter) und braucht nur eine der beiden Fragen. Diese
+     * hier laeuft, wenn ein Mensch eine Kiste aufmacht.
+     *
+     * <p>Eine LEERE Blockliste ist kein Fehler: Rucksack, Pferd und Trichterwagen
+     * haben keinen Block und koennen keine Shopkiste sein.
+     */
+    private AnDerKiste shopsAn(Inventory inventar) {
+        boolean shopkiste = false;
+        List<Kistenshop> shops = new ArrayList<>();
+        for (Block block : Shopware.bloeckeVon(inventar)) {
+            String welt = weltVon(block);
+            if (welt == null) {
+                continue;
+            }
+            int x = block.getX();
+            int y = block.getY();
+            int z = block.getZ();
+            if (buch.istShopkiste(welt, x, y, z)) {
+                shopkiste = true;
+            }
+            shops.addAll(buch.anDerKiste(welt, x, y, z));
+        }
+        return new AnDerKiste(shopkiste, shops);
+    }
+
     /** Ob unter diesen Bloecken ein Shopblock ist - fuer die Zweige, die ganz absagen. */
     private boolean trifftShop(List<Block> bloecke) {
         for (Block block : bloecke) {
@@ -569,27 +674,19 @@ final class Shopwache implements Listener {
     /**
      * Der erste dieser Shops, an den dieser Spieler nicht darf - oder {@code null}.
      *
-     * <p>ALLE muessen erlaubt sein, nicht einer: An einer Doppelkiste koennen zwei
-     * Schilder zweier Menschen haengen, und wer seine eigene Haelfte abbaut, nimmt dem
-     * anderen die Ware mit. Gepruefte Reihenfolge heisst hier, dass der Spieler den
-     * genannt bekommt, dem er in die Quere kommt.
+     * <p><b>Hier stehen nur die zwei Rechtefragen, die Regel steht im Kern</b>
+     * ({@link Kistenshop#ersterFremder}). Das ist nicht Ordnungsliebe: Dieselbe Frage
+     * wird beim Abbauen, beim Oeffnen der Kiste UND beim Anlegen eines zweiten
+     * Schildes gestellt, und die dritte Stelle sitzt in {@link Shopbuch}, das keinen
+     * {@code Player} sieht. Eine zweite Fassung dort liefe auseinander.
+     *
+     * <p>{@code hasPermission} ist der einzige Grund, warum diese Methode ueberhaupt
+     * noch hier steht - nur eine Klasse mit Server kann ein Recht erfragen.
      */
     private static Kistenshop ersterFremder(Player spieler, List<Kistenshop> shops) {
-        // Das Teamrecht zuerst: Wer ueberall bauen darf, raeumt auch einen Shop weg,
-        // dessen Besitzer nicht mehr spielt. Ohne das stuende ein verlassener Shop fuer
-        // immer in der Welt, denn niemand koennte ihn abbauen.
-        if (spieler.hasPermission(Schutzwache.UEBERALL)) {
-            return null;
-        }
-        boolean bundrecht = spieler.hasPermission(RECHT_BUNDSHOP);
-        UUID wer = spieler.getUniqueId();
-        for (Kistenshop shop : shops) {
-            boolean darf = shop.demBund() ? bundrecht : shop.gehoert(wer);
-            if (!darf) {
-                return shop;
-            }
-        }
-        return null;
+        return Kistenshop.ersterFremder(shops, spieler.getUniqueId(),
+                spieler.hasPermission(Schutzwache.UEBERALL),
+                spieler.hasPermission(RECHT_BUNDSHOP));
     }
 
     /**
@@ -651,5 +748,25 @@ final class Shopwache implements Listener {
      */
     private record Betroffen(Shoptext.Teil teil, List<Kistenshop> shops,
                              List<Block> schilder) {
+    }
+
+    /**
+     * Das Ergebnis von {@link #shopsAn} - siehe dort, warum es zwei Felder sind.
+     *
+     * @param shopkiste ob hier eine Shopkiste steht; bei stummer Ablage ja
+     * @param shops     die Shops daran; leer, wenn die Ablage geschwiegen hat
+     */
+    private record AnDerKiste(boolean shopkiste, List<Kistenshop> shops) {
+        /**
+         * Geschuetzt, aber niemand nennbar - die Ablage hat geschwiegen.
+         *
+         * <p>Dieser Zustand ist kein Programmfehler, sondern die einzige Lage, in der
+         * die zwei Richtungen der Ablage auseinandergehen. Abgesagt wird trotzdem:
+         * Eine leergeraeumte Kiste bekommt niemand zurueck, ein nicht geoeffneter
+         * Deckel kostet einen zweiten Versuch.
+         */
+        boolean gestoert() {
+            return shopkiste && shops.isEmpty();
+        }
     }
 }

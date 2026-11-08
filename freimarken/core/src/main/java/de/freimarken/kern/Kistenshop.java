@@ -1,5 +1,6 @@
 package de.freimarken.kern;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -129,6 +130,67 @@ public record Kistenshop(String schildWelt, int schildX, int schildY, int schild
     /** Ob dieser Shop diesem Spieler gehoert. Ein Bundshop gehoert niemandem. */
     public boolean gehoert(UUID wer) {
         return besitzer != null && besitzer.equals(wer);
+    }
+
+    /**
+     * Ob dieser Shop fuer diesen Menschen offen ist - die EINE Zutrittsregel.
+     *
+     * <p><b>Drei Stufen, und jede ist die Antwort auf einen Fall, der ohne sie
+     * schieflaeuft.</b> Das Teamrecht zuerst: Wer ueberall bauen darf, kommt auch an
+     * den Shop eines Spielers, der nicht mehr spielt - ohne das stuende ein
+     * verlassener Shop fuer immer in der Welt, denn niemand koennte ihn abbauen. Dann
+     * der Bundshop, und zwar an {@link #demBund()} und NICHT am Besitzerfeld: Ein
+     * Bundshop hat keinen Besitzer, {@link #gehoert} gibt dort fuer JEDEN false, und
+     * eine Frage nach dem Besitz allein schloesse jeden Bundshop fuer alle zu.
+     *
+     * <p><b>Die Regel steht hier und nicht in der Spielschicht</b>, weil sie an DREI
+     * Stellen gebraucht wird: beim Abbauen von Schild, Kiste und Traeger, beim
+     * OEFFNEN der Kiste und beim Anlegen eines zweiten Schildes an derselben Kiste.
+     * Drei Kopien derselben Rechtefrage laufen auseinander - und dann ist eine Kiste
+     * gegen das eine geschuetzt und gegen das andere offen. Hier ist sie ausserdem
+     * ohne laufenden Server pruefbar; die zwei Rechte kommen als Wahrheitswerte
+     * herein, weil nur die Spielschicht sie erfragen kann.
+     *
+     * <p><b>Hier haengt spaeter die Mitbenutzerliste ein</b> - der Schluessel, der als
+     * {@code /shop freigeben <spieler>} geplant ist (entschieden 08.11.2026). Ein
+     * vierter Fall in dieser Methode gilt dann sofort fuer alle drei Wege. Daran, dass
+     * es nur diese eine Stelle gibt, haengt, dass der Schluessel nicht ein Schloss
+     * offen laesst.
+     *
+     * @param wer       wer an den Shop will
+     * @param teamrecht ob er {@code freimarken.bauen.ueberall} hat
+     * @param bundrecht ob er {@code freimarken.shop.bund} hat
+     */
+    public boolean offenFuer(UUID wer, boolean teamrecht, boolean bundrecht) {
+        if (teamrecht) {
+            return true;
+        }
+        return demBund() ? bundrecht : gehoert(wer);
+    }
+
+    /**
+     * Der erste dieser Shops, der fuer diesen Menschen NICHT offen ist - oder
+     * {@code null}.
+     *
+     * <p><b>ALLE muessen offen sein, nicht einer.</b> An einer Doppelkiste koennen
+     * zwei Schilder zweier Menschen haengen, und die beiden Haelften teilen EIN
+     * Inventar: Wer seine eigene Haelfte abbaut oder oeffnet, kommt an die Ware des
+     * anderen.
+     *
+     * <p>Zurueck kommt der Shop und kein {@code boolean}, damit die Absage den nennen
+     * kann, dem der Spieler in die Quere kommt. Eine LEERE Liste gibt {@code null},
+     * also "offen" - die Unterscheidung zwischen "hier ist gar keine Shopkiste" und
+     * "hier ist eine fremde" trifft der Aufrufer, denn nur er weiss, ob er
+     * ueberhaupt an einer Kiste steht.
+     */
+    public static Kistenshop ersterFremder(List<Kistenshop> shops, UUID wer,
+            boolean teamrecht, boolean bundrecht) {
+        for (Kistenshop shop : shops) {
+            if (!shop.offenFuer(wer, teamrecht, bundrecht)) {
+                return shop;
+            }
+        }
+        return null;
     }
 
     /** Ob hier gekauft werden kann - also ob der Shop verkauft. */

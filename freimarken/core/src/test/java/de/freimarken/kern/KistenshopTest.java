@@ -2,9 +2,11 @@ package de.freimarken.kern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,6 +25,9 @@ class KistenshopTest {
 
     private static final UUID ANNA =
             UUID.fromString("0000a44a-0000-0000-0000-000000000001");
+
+    private static final UUID BERT =
+            UUID.fromString("0000b55b-0000-0000-0000-000000000002");
 
     private static Warenprobe stein() {
         return new Warenprobe("Stein", "inhalt-von-stein");
@@ -122,7 +127,7 @@ class KistenshopTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new Kistenshop(WELT, 60, 71, 6, 61, 72, 6, ANNA, 16, 100L, 80L,
                         stein()));
-        // Zwei Blöcke weit auch nicht.
+        // Zwei Bloecke weit auch nicht.
         assertThrows(IllegalArgumentException.class,
                 () -> new Kistenshop(WELT, 60, 71, 6, 62, 71, 6, ANNA, 16, 100L, 80L,
                         stein()));
@@ -244,6 +249,81 @@ class KistenshopTest {
         assertEquals(grenze, new Warenprobe("Kiste", grenze).inhalt());
         assertThrows(IllegalArgumentException.class,
                 () -> new Warenprobe("Kiste", grenze + "A"));
+    }
+
+    // ================================================================ Zutritt
+
+    @Test
+    @DisplayName("Der Besitzer darf an seinen Shop, ein anderer nicht")
+    void besitzerDarf() {
+        Kistenshop shop = shop(100L, 80L);
+
+        assertTrue(shop.offenFuer(ANNA, false, false));
+        assertFalse(shop.offenFuer(BERT, false, false));
+    }
+
+    @Test
+    @DisplayName("Ein Bundshop haengt am Bundrecht und NICHT am Besitzerfeld")
+    void bundshopHaengtAmRecht() {
+        // DIE TRAGENDE UNTERSCHEIDUNG: Ein Bundshop hat besitzer == null, und
+        // gehoert() gibt dort fuer JEDEN false. Wer den Zutritt am Besitz allein
+        // prueft, schliesst jeden Bundshop fuer alle zu - auch fuer das Team, das
+        // ihn nachfuellen und abbauen muss.
+        Kistenshop bundshop = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16,
+                100L, 80L, stein());
+
+        assertFalse(bundshop.gehoert(ANNA), "ein Bundshop gehoert NIEMANDEM");
+        assertFalse(bundshop.offenFuer(ANNA, false, false), "ohne Bundrecht zu");
+        assertTrue(bundshop.offenFuer(ANNA, false, true), "mit Bundrecht offen");
+    }
+
+    @Test
+    @DisplayName("Das Bundrecht oeffnet NUR Bundshops, nie den Shop eines Spielers")
+    void bundrechtOeffnetKeinenSpielershop() {
+        // Sonst waere freimarken.shop.bund ein Generalschluessel: Wer Preise des
+        // Servers festlegen darf, duerfte damit auch in jede Spielerkiste greifen.
+        // Das sind zwei Vollmachten, und die eine ist nicht die andere.
+        assertFalse(shop(100L, 80L).offenFuer(BERT, false, true));
+    }
+
+    @Test
+    @DisplayName("Das Teamrecht oeffnet beides - sonst bleibt ein verlassener Shop"
+            + " fuer immer stehen")
+    void teamrechtOeffnetAlles() {
+        Kistenshop bundshop = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16,
+                100L, 80L, stein());
+
+        assertTrue(shop(100L, 80L).offenFuer(BERT, true, false));
+        assertTrue(bundshop.offenFuer(BERT, true, false));
+    }
+
+    @Test
+    @DisplayName("ALLE Shops an einer Kiste muessen offen sein, nicht einer")
+    void alleMuessenOffenSein() {
+        // An einer DOPPELKISTE koennen zwei Schilder zweier Menschen haengen, und
+        // die beiden Haelften teilen EIN Inventar. Wer seine eigene Haelfte oeffnet,
+        // kommt an die Ware des anderen - darum genuegt ein eigener Shop nicht.
+        Kistenshop meiner = shop(100L, 80L);
+        Kistenshop fremder = new Kistenshop(WELT, 60, 71, 7, 61, 71, 7, BERT, 16,
+                100L, 80L, stein());
+
+        assertNull(Kistenshop.ersterFremder(List.of(meiner), ANNA, false, false));
+        assertEquals(fremder,
+                Kistenshop.ersterFremder(List.of(meiner, fremder), ANNA, false,
+                        false),
+                "gemeldet wird der Shop, dem der Spieler in die Quere kommt - und"
+                        + " nicht der eigene, an dem er stehen darf");
+    }
+
+    @Test
+    @DisplayName("Eine leere Liste ist OFFEN - die Unterscheidung trifft der"
+            + " Aufrufer")
+    void leereListeIstOffen() {
+        // "Hier ist gar keine Shopkiste" und "hier ist eine fremde" sind zwei
+        // Lagen, und nur der Aufrufer kann sie trennen: Er allein weiss, ob er
+        // ueberhaupt an einer Kiste steht. Gaebe diese Methode bei einer leeren
+        // Liste eine Absage, waere jeder Blick in den eigenen Rucksack verboten.
+        assertNull(Kistenshop.ersterFremder(List.of(), ANNA, false, false));
     }
 
     private static Kistenshop mitMenge(int menge) {

@@ -1491,6 +1491,14 @@ shop:
     #   weiter auf fremdem. Ohne diese Pruefung verkaufte der Shop die Ware eines
     #   anderen.
     fremde-kiste: "<red>An dieser Kiste darfst du nicht.</red><gray>\nSie steht auf fremdem Grund - ein Shop braucht eine Kiste, an die du selbst herankommst.</gray>"
+    # An der Kiste haengt schon der Shop eines ANDEREN. DIE ANDERE HAELFTE DES
+    #   KISTENSCHUTZES: Wer die Kiste nicht oeffnen kann, haengt sonst ein eigenes
+    #   Schild daneben und verkauft die fremde Ware auf sein Konto. Die Zeile
+    #   darueber passt hier NICHT - draussen vor der Stadt gehoert kein Ort jemandem,
+    #   und wer "fremder Grund" liest, sucht eine Parzelle, die es nicht gibt.
+    # NENNT KEINEN NAMEN: Wer das liest, steht vor dem anderen Schild und liest ihn
+    #   dort.
+    fremder-shop: "<red>An dieser Kiste haengt schon ein fremder Shop.</red><gray>\nZwei Schilder an einer Kiste handeln mit derselben Ware - nimm eine eigene Kiste.</gray>"
     # An diesem Schild haengt schon ein Shop. KOMMT AUCH DEM BESITZER: Preise aendert
     #   man durch Abbauen und neu Setzen, denn nur so geht die Aenderung durch die
     #   Datenbank. Ein umgeschriebenes Schild zeigte etwas anderes an, als der Shop
@@ -1510,7 +1518,7 @@ shop:
     #   Absage ohne Ausweg liest ein Spieler als Verbot, baut sein Schild ab und kommt
     #   nicht wieder.
     gestoert: "<red>Der Shop liess sich nicht anlegen.</red><gray>\nDas Schild bleibt stehen - versuch es noch einmal. Bleibt es dabei, sieh im Serverprotokoll nach.</gray>"
-  # DER SCHUTZ. Vier Handbalken - genau EINE Zeile, keine Umbruchmarke. Welchen ein
+  # DER SCHUTZ. Fuenf Handbalken - genau EINE Zeile, keine Umbruchmarke. Welchen ein
   #   Spieler liest, entscheidet das Programm daran, WAS er angefasst hat und WEM der
   #   Shop gehoert.
   # GILT UEBERALL, auch in der Wildnis: Hier entscheidet nicht der Ort, sondern der
@@ -1534,6 +1542,15 @@ shop:
     #   Stehschild. Der Satz muss den Grund nennen, sonst haelt der Spieler ihn fuer
     #   kaputt.
     traeger: "<red>Daran haengt ein fremdes Shopschild</red>"
+    # Geschuetzt, aber niemand nennbar - die Datenbank hat geschwiegen. DER FUENFTE
+    #   SATZ FUER EINEN SELTENEN FALL: Das Programm fragt zwei Dinge, "ist hier eine
+    #   Shopkiste" (bei Stoerung JA, also schuetzen) und "wem gehoert sie" (bei
+    #   Stoerung niemandem, also keinen Namen erfinden). Gehen die zwei auseinander,
+    #   bleibt die Kiste zu - und dieser Satz sagt es. Ohne ihn stuende dort "Diese
+    #   Kiste ist der Shop von -", und das liest sich wie ein kaputtes Programm.
+    # NENNT DEN AUSWEG wie absage.gestoert: eine Absage ohne Ausweg liest ein
+    #   Spieler als Verbot.
+    nicht-lesbar: "<red>Diese Kiste ist geschuetzt - versuch es noch einmal</red>"
   # DER HANDEL. Rechtsklick kauft, Linksklick verkauft, mit Schleichtaste ein
   #   ganzer Stapel - so hat Lumia es gemacht.
   # ALLES HANDBALKEN, genau EINE Zeile, keine Umbruchmarke. Der Grund ist derselbe wie

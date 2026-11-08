@@ -1430,10 +1430,22 @@ selbst, dass sie Text prüfen und nicht Wirkung.
    des Bundesmarkts rechnet über `bundesmarkt_verkauf`, der Shop bucht `shop_verkauft`.
    Keine Spielerlücke (es braucht `freimarken.shop.bund`), aber eine Falle für den
    Betreiber. Gehört mit dem Bundesmarkt-Schild zusammen entschieden.
-2. Eine **Shopkiste ist nicht gegen eine Hand geschützt**. `Schutzwache.darfHandeln` gibt
-   `true`, sobald die Welt nicht die Parzellenwelt ist — in hochwald, kornmark, nether und
-   end ist jede Shopkiste von jedem zu öffnen. Wer die Kiste öffnen kann, braucht nicht zu
-   kaufen.
+2. ~~Eine **Shopkiste ist nicht gegen eine Hand geschützt**.~~ **Geschlossen am 08.11.2026**
+   mit `Shopwache.beimOeffnen` am `InventoryOpenEvent`. Dabei kam ein zweites Loch heraus
+   und wurde mitgeschlossen: Wer die Kiste nicht öffnen kann, hängt sonst ein eigenes
+   Schild daneben und verkauft die fremde Ware auf sein Konto — `Shopbuch.anlege` prüfte
+   nur das Schild, nie die Kiste. Die Zutrittsregel liegt seitdem an einer Stelle im Kern
+   (`Kistenshop.offenFuer`) und trägt alle drei Wege: Abbauen, Öffnen, zweites Schild.
+
+   Entschieden wurde, das Öffnen **ganz** zu verweigern und nicht nur das Herausnehmen:
+   Das Nehmen hat zehn Wege (Links-, Rechts-, Umschaltklick, Ziehen, Zahlentasten, zweite
+   Hand, Doppelklick, Wurf), und jede vergessene Art ist ein Loch. Der Preis ist, dass ein
+   Fremder einem Shop auch nichts schenken kann — dafür kommt `/shop freigeben <spieler>`
+   als eigener Schritt.
+
+   **Neu benannt dabei:** Eine fremde Shopkiste lässt sich per Trichter mit Müll füllen,
+   bis sie keinen Platz mehr für Ankauf hat. Das ist die Kehrseite der bewussten
+   Unsymmetrie der Trichterregel — kein Diebstahl, aber Ärger.
 
 ---
 

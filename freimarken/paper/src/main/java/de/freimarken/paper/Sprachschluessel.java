@@ -263,6 +263,7 @@ final class Sprachschluessel {
             case SCHILD_FEHLERHAFT -> schildfehler(fehler);
             case KEINE_KISTE -> ShopSatz.SHOP_KEINE_KISTE;
             case FREMDE_KISTE -> ShopSatz.SHOP_FREMDE_KISTE;
+            case FREMDER_SHOP -> ShopSatz.SHOP_FREMDER_SHOP;
             case SCHON_EIN_SHOP -> ShopSatz.SHOP_SCHON_EIN_SHOP;
             case WARE_UNKLAR -> ShopSatz.SHOP_WARE_UNKLAR;
             case WARE_UNBEKANNT -> ShopSatz.SHOP_WARE_UNBEKANNT;

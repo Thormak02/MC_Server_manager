@@ -1144,6 +1144,16 @@ class BildGleichTest {
                                 + " du selbst herankommst."),
                 // KOMMT AUCH DEM BESITZER: Preise aendert man durch Abbauen und neu
                 // Setzen, denn nur so geht die Aenderung durch die Datenbank.
+                // DIE ANDERE HAELFTE DES KISTENSCHUTZES [08.11.2026]: Wer die Kiste
+                // nicht oeffnen kann, haengt sonst ein eigenes Schild daneben. Sagt
+                // ausdruecklich NICHT "fremder Grund" - draussen gehoert kein Ort
+                // jemandem, und der Spieler suchte eine Parzelle, die es nicht gibt.
+                new Zeile(ShopSatz.SHOP_FREMDER_SHOP, 1L, Einsatz.keine(),
+                        "&cAn dieser Kiste haengt schon ein fremder Shop.\n&7Zwei"
+                                + " Schilder an einer Kiste handeln mit derselben"
+                                + " Ware - nimm eine eigene Kiste."),
+                // KOMMT AUCH DEM BESITZER: Preise aendert man durch Abbauen und neu
+                // Setzen, denn nur so geht die Aenderung durch die Datenbank.
                 new Zeile(ShopSatz.SHOP_SCHON_EIN_SHOP, 1L, Einsatz.keine(),
                         "&cHier haengt schon ein Shop.\n&7Zum Aendern bau das"
                                 + " Schild ab und setz ein neues - so bleibt das Schild"
@@ -1193,11 +1203,16 @@ class BildGleichTest {
                 // manchmal eine Einrichtung steht, zwingt zu einem Satz fuer beide.
                 new Zeile(ShopSatz.SHOP_SCHUTZ_BUND, 1L, Einsatz.keine(),
                         "&cDas ist ein Shop des Bundes"),
-                // DIE UEBERRASCHENDSTE DER VIER: Der Traegerblock sieht nach nichts aus -
+                // DIE UEBERRASCHENDSTE DER FUENF: Der Traegerblock sieht nach nichts aus -
                 // ein Stein unter einem Stehschild. Der Satz muss den Grund nennen, sonst
                 // haelt der Spieler ihn fuer kaputt.
                 new Zeile(ShopSatz.SHOP_SCHUTZ_TRAEGER, 1L, Einsatz.keine(),
                         "&cDaran haengt ein fremdes Shopschild"),
+                // DER FUENFTE [08.11.2026], fuer den einen Fall, in dem die zwei
+                // Richtungen der Ablage auseinandergehen: geschuetzt ja, Besitzer
+                // unbekannt. Ohne ihn stuende hier "der Shop von -".
+                new Zeile(ShopSatz.SHOP_SCHUTZ_UNLESBAR, 1L, Einsatz.keine(),
+                        "&cDiese Kiste ist geschuetzt - versuch es noch einmal"),
 
                 // DER HANDEL [08.11.2026]. Alles Handbalken, genau EINE Zeile -
                 // ein Spieler, der zwanzig Stapel kauft, klickt zwanzigmal, und

@@ -172,7 +172,7 @@ class ShopbuchTest {
         wachmann.verboten.add(stelle(11, 64, 10));
 
         Shopbuch.Anlage anlage = buch.anlege(ANNA, WELT, 10, 64, 10, 11, 64, 10,
-                zeilen("", "16", "B 100", "STONE"), false, BUNDWORT);
+                zeilen("", "16", "B 100", "STONE"), false, false, BUNDWORT);
 
         assertEquals(Shopbuch.Bescheid.FREMDE_KISTE, anlage.bescheid());
         assertEquals(List.of(stelle(11, 64, 10)), wachmann.gefragt,
@@ -300,18 +300,104 @@ class ShopbuchTest {
         assertTrue(buch.anDerKiste(WELT, 99, 64, 99).isEmpty());
     }
 
+    // --- Das ZWEITE Schild an derselben Kiste [08.11.2026] --------------------
+
+    @Test
+    @DisplayName("An der Kiste eines anderen entsteht kein zweiter Shop")
+    void keinZweitesSchildAnFremderKiste() {
+        // DIE ANDERE HAELFTE DES KISTENSCHUTZES: Wer die Kiste nicht OEFFNEN kann,
+        // haengt sonst einfach ein eigenes Schild daneben und verkauft die fremde
+        // Ware auf sein Konto. Die Pruefung ueber den Zugriff sieht das nicht - sie
+        // fragt den ORT, und draussen vor der Stadt gehoert kein Ort jemandem.
+        //
+        // Der Wachmann erlaubt hier ALLES, genau wie Schutzwache.darfHandeln
+        // ausserhalb der Parzellenwelt. Waere die neue Pruefung nur eine zweite
+        // Frage an ihn, waere diese Probe gruen und der Shop trotzdem zu kapern.
+        anlege(ANNA, "", "16", "B 100", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.FREMDER_SHOP,
+                zweitesSchild(BERT, "", "STONE", false, false).bescheid());
+        assertEquals(1, ablage.vonSpieler(ANNA).size(),
+                "und der Shop von Anna ist unveraendert einer");
+    }
+
+    @Test
+    @DisplayName("An der EIGENEN Kiste entsteht ein zweiter Shop")
+    void zweitesSchildAnEigenerKiste() {
+        // Zwei Schilder an einer Kiste sind kein Fehler, sondern der Weg zu zwei
+        // Mengen oder zwei Preisen derselben Ware. Verboten ist nur das FREMDE.
+        anlege(ANNA, "", "16", "B 100", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT,
+                zweitesSchild(ANNA, "", "STONE", false, false).bescheid());
+    }
+
+    @Test
+    @DisplayName("Das Teamrecht darf an die fremde Kiste - sonst bleibt ein"
+            + " verlassener Shop fuer immer stehen")
+    void teamrechtDarfAnDieFremdeKiste() {
+        anlege(ANNA, "", "16", "B 100", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT,
+                zweitesSchild(BERT, "", "STONE", false, true).bescheid());
+    }
+
+    @Test
+    @DisplayName("An der Kiste eines BUNDSHOPS braucht es das Bundrecht")
+    void anBundshopkisteBrauchtDasBundrecht() {
+        // Und zwar an demBund() und nicht am Besitzerfeld: Ein Bundshop gehoert
+        // niemandem, gehoert() gibt dort fuer jeden false. Eine Frage nach dem
+        // Besitz allein liesse hier NIEMANDEN mehr ein zweites Schild haengen -
+        // auch den nicht, der den Bundshop gerade selbst gebaut hat.
+        anlegeMitBund(ANNA, "Bund", "16", "B 100", "STONE", true);
+
+        assertEquals(Shopbuch.Bescheid.FREMDER_SHOP,
+                zweitesSchild(BERT, "", "STONE", false, false).bescheid());
+        assertEquals(Shopbuch.Bescheid.ANGELEGT,
+                zweitesSchild(BERT, "", "STONE", true, false).bescheid());
+    }
+
+    @Test
+    @DisplayName("Die Kistenfrage kommt VOR der Warenpruefung")
+    void kistenfrageVorDerWarenpruefung() {
+        // Sonst liest das Fragezeichen die fremde Kiste, und bei einer unklaren
+        // Ware bekaeme Bert "die Kiste sagt nicht, was du handeln willst" zu lesen -
+        // eine Absage, die ihn an seinem Schild suchen laesst, waehrend das Problem
+        // einen Block weiter haengt. Der Unterschied ist genau die Reihenfolge.
+        anlege(ANNA, "", "16", "B 100", "STONE");
+        leser.inDerKiste = null;
+
+        assertEquals(Shopbuch.Bescheid.FREMDER_SHOP,
+                zweitesSchild(BERT, "", "?", false, false).bescheid(),
+                "der fremde Shop wird gemeldet, nicht die unklare Ware");
+    }
+
     // --- Werkzeug -------------------------------------------------------------
 
     private Shopbuch.Anlage anlege(UUID wer, String erste, String menge, String preise,
             String ware) {
         return buch.anlege(wer, WELT, 10, 64, 10, 11, 64, 10,
-                zeilen(erste, menge, preise, ware), false, BUNDWORT);
+                zeilen(erste, menge, preise, ware), false, false, BUNDWORT);
     }
 
     private Shopbuch.Anlage anlegeMitBund(UUID wer, String erste, String menge,
             String preise, String ware, boolean darfBund) {
         return buch.anlege(wer, WELT, 10, 64, 10, 11, 64, 10,
-                zeilen(erste, menge, preise, ware), darfBund, BUNDWORT);
+                zeilen(erste, menge, preise, ware), darfBund, false, BUNDWORT);
+    }
+
+    /**
+     * Ein ZWEITES Schild an derselben Kiste - es sitzt UEBER ihr.
+     *
+     * <p>Die Kiste steht bei 11/64/10, das erste Schild daneben bei 10/64/10, dieses
+     * bei 11/65/10. Beide sind Nachbarn der Kiste (ein Block Abstand auf einer
+     * Achse), und genau darum ist der Fall ueberhaupt moeglich.
+     */
+    private Shopbuch.Anlage zweitesSchild(UUID wer, String erste, String ware,
+            boolean darfBund, boolean darfUeberall) {
+        return buch.anlege(wer, WELT, 11, 65, 10, 11, 64, 10,
+                zeilen(erste, "16", "B 100", ware), darfBund, darfUeberall,
+                BUNDWORT);
     }
 
     private static String[] zeilen(String a, String b, String c, String d) {

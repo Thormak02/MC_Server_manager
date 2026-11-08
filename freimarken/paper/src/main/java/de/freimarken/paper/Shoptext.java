@@ -164,7 +164,11 @@ final class Shoptext {
      *
      * @param teil         was angefasst wurde
      * @param shop         der Shop, der schuetzt - bei {@link Teil#TRAEGER} ohne
-     *                     Bedeutung, denn der Traegersatz nennt keinen Menschen
+     *                     Bedeutung, denn der Traegersatz nennt keinen Menschen.
+     *                     {@code null} heisst "geschuetzt, aber niemand nennbar"
+     *                     und gibt {@link ShopSatz#SHOP_SCHUTZ_UNLESBAR}; das ist
+     *                     kein Versehen des Aufrufers, sondern die Lage bei stummer
+     *                     Ablage
      * @param besitzername der Name, den der Satz einsetzt. Darf bei einem Bundshop und
      *                     beim Traeger beliebig sein - diese zwei Saetze nennen keinen
      */
@@ -173,7 +177,12 @@ final class Shoptext {
         if (teil == Teil.TRAEGER) {
             return sprache.eineZeile(ShopSatz.SHOP_SCHUTZ_TRAEGER, Einsatz.keine());
         }
-        if (shop != null && shop.demBund()) {
+        if (shop == null) {
+            // Geschuetzt, aber niemand nennbar - die Ablage hat geschwiegen. Siehe
+            // Shopwache.AnDerKiste.gestoert; der Satz erklaert, warum er eigen ist.
+            return sprache.eineZeile(ShopSatz.SHOP_SCHUTZ_UNLESBAR, Einsatz.keine());
+        }
+        if (shop.demBund()) {
             // Ein Bundshop hat keinen Besitzer, den man nennen koennte - darum ein
             // eigener Satz und kein eingesetztes Wort "der Bund". Siehe ShopSatz.
             return sprache.eineZeile(ShopSatz.SHOP_SCHUTZ_BUND, Einsatz.keine());
