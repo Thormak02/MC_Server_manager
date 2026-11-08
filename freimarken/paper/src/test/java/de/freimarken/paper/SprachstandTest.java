@@ -48,7 +48,7 @@ class SprachstandTest {
     }
 
     @Test
-    @DisplayName("23 - NUR_BEIM_START ist GENAU diese zehn")
+    @DisplayName("23 - NUR_BEIM_START ist GENAU diese zwoelf")
     void nurBeimStartIstGenauDieseZehn() {
         Set<String> erwartet = new LinkedHashSet<>(List.of(
                 "befehl.beschreibung.freimarken", "befehl.beschreibung.parzelle",
@@ -56,7 +56,7 @@ class SprachstandTest {
                 "befehl.beschreibung.zurueck", "befehl.beschreibung.tpa",
                 "befehl.beschreibung.tpahere", "befehl.beschreibung.tpaccept",
                 "befehl.beschreibung.tpdeny", "befehl.beschreibung.beruf",
-                "befehl.beschreibung.markt"));
+                "befehl.beschreibung.markt", "befehl.beschreibung.laden"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachstand.NUR_BEIM_START.forEach(satz -> gefuehrt.add(satz.pfad()));
         // assertEquals auf Groesse UND Inhalt: contains haette auch eine Liste mit einem
@@ -101,9 +101,9 @@ class SprachstandTest {
                 + " schiefging, nicht, dass die Beschreibungen ohnehin nicht neuladbar"
                 + " sind - und sucht den Fehler an der falschen Zeile");
         assertTrue(ohne.get(0).contains("befehl.beschreibung.*"), ohne.get(0));
-        // ELF seit dem Bundesmarkt: Die Zahl waechst mit jedem Befehl, und sie gehoert
-        // in die Zeile - der Betreiber sieht daran, ob seine Aenderung dabei ist.
-        assertTrue(ohne.get(0).contains("11 Saetze"), ohne.get(0));
+        // ZWOELF seit /laden: Die Zahl waechst mit jedem Befehl, und sie gehoert in
+        // die Zeile - der Betreiber sieht daran, ob seine Aenderung dabei ist.
+        assertTrue(ohne.get(0).contains("12 Saetze"), ohne.get(0));
     }
 
     @Test

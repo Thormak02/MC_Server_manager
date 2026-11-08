@@ -1109,6 +1109,113 @@ messstelle:
     - oeffnen
     - kaempfen
     - sprechen
+# Die Markthalle (Plan 7.1, Schritt 8 Teil A): Welche Ladeneinheiten es gibt.
+#
+# Eine Ladeneinheit ist ein ORT - ein kleiner Raum in der Markthalle und die Truhe darin.
+# Wer sie mietet und wie lange, kommt mit Teil B; hier stehen nur die Staende.
+#
+# WARUM HIER KEINE EINHEIT STEHT: Die Markthalle ist eine der zehn Gebaeude, die von Hand
+# in Altfurt entstehen (Plan 2.1) - das Programm setzt dort keine Bloecke. Eine erfundene
+# Koordinate waere ein Laden mitten im Wasser. Wenn die Halle steht, miss ihre Staende ein
+# und trag sie unten ein; bis dahin sagt das Protokoll beim Start, dass es keine gibt.
+#
+# WARUM EIN QUADER UND KEIN RASTERFELD: Altfurt hat kein Raster, es ist gewachsenes
+# Gelaende. Plan 6.1 hat genau diesen Fall vorgesehen - fuer Besitz, der nicht am Raster
+# haengt, kommt der Quader als eigene Angabe.
+#
+# WARUM DIE TRUHE DAZUGEHOERT: In Altfurt stehen alle Spieler im Abenteuermodus, und der
+# verbietet das Setzen von Bloecken - ein Mieter kann sich keine Truhe hinstellen. Die
+# Einheit kommt darum mit ihrer Truhe aus dem Bauwerk, und der Mieter fuellt sie nur.
+# Die Truhe MUSS innerhalb ihrer Einheit stehen, sonst waere sie ungeschuetzt.
+#
+# NUR BEIM START GELESEN. /freimarken neuladen verschiebt keinen Laden: Ein Mieter haette
+# sonst von einem Augenblick auf den anderen einen anderen Raum, und seine Truhe stuende
+# beim Nachbarn. Die Antwort auf neuladen sagt das ausdruecklich.
+laeden:
+  # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.
+  # Die Welt muss im Abschnitt welten: weiter unten stehen, sonst gilt keine Einheit.
+  welt: altfurt
+
+  # Die Miete je Tag. Plan 7.1 nennt sie die STAERKSTE Geldsenke des Servers: laufend,
+  # sichtbar, freiwillig. Abgebucht wird taeglich, nicht beim Abschluss.
+  #
+  # ANPASSBAR MIT BESTANDSSCHUTZ: Jeder Vertrag traegt die Miete, die bei SEINEM
+  # Abschluss galt. Eine Erhoehung hier trifft nur neue Vertraege - wer fuer 500
+  # gemietet hat, zahlt 500 weiter, auch nach einer Verlaengerung. Wer den neuen Satz
+  # will, kuendigt und mietet neu.
+  #
+  # Eine 0 ist NICHT erlaubt: Das waere ein Laden, den der taegliche Lauf nie beruehrt -
+  # also einer, der nie wegen Zahlungsausfall frei wird. Wer Laeden verschenken will,
+  # nimmt eine 1.
+  miete-je-tag: 500
+
+  # Die Kaution, hinterlegt beim Abschluss. Bei ORDENTLICHER Kuendigung kommt sie
+  # zurueck, bei Raeumung wegen Zahlungsausfall nicht - das ist ihr ganzer Zweck: Sie
+  # macht das Weglaufen teurer als das Kuendigen.
+  #
+  # Auch sie steht in der Vertragszeile: Wer mit 5.000 gemietet hat, bekommt 5.000
+  # zurueck, auch wenn hier inzwischen 9.000 steht.
+  #
+  # 0 ist erlaubt und heisst: ohne Kaution. Ein Wert ZWISCHEN 0 und miete-je-tag wird
+  # verworfen - darunter kostet das Weglaufen weniger als ein Miettag, und die Kaution
+  # bewirkt das Gegenteil von dem, wofuer sie da ist.
+  kaution: 5000
+
+  # Die Ladenlizenz - EINMALIG je Spieler, nicht je Laden. Wer sie bezahlt hat, mietet
+  # danach beliebig oft, ohne sie erneut zu zahlen.
+  #
+  # Dass sie bezahlt ist, steht im Buchungsbuch und nirgends sonst (Grund laden_lizenz
+  # in /mark verlauf). Es gibt keine Spalte dafuer - eine zweite Wahrheit wuerde nach
+  # dem ersten Absturz von der ersten abweichen, und dann zahlt ein Spieler 50.000 Mark
+  # ein zweites Mal.
+  #
+  # 0 ist erlaubt und heisst: wer das Recht freimarken.laden.mieten hat, darf mieten.
+  lizenz: 50000
+
+  # Wie viele Tage ein Abschluss und jede Verlaengerung gelten. Das ist NICHT der
+  # Zahlungstakt - gezahlt wird taeglich. Die Dauer sagt, wann ein Vertrag OHNE ZUTUN
+  # endet; sie ist der Griff gegen den Spieler, der aufhoert zu spielen und noch Geld
+  # auf dem Konto hat.
+  #
+  # Verlaengern kostet nichts und geht, sobald weniger als diese Zahl an Tagen uebrig
+  # ist. Damit liegt das Ende nie weiter als zwei Mietdauern voraus - ohne diese
+  # Schranke koennte ein reicher Spieler einen Stand fuer Jahre binden, ohne ihn zu
+  # benutzen. Eine eigene Zeile dafuer gibt es nicht: Die Schranke IST diese Zahl.
+  mietdauer-tage: 30
+
+  # Je Einheit ein Block mit drei Zeilen. Der Name steht auch im Befehl
+  # /laden mieten <name>, also nur kleine Buchstaben, Ziffern und Striche.
+  #
+  #   von / bis  die zwei Ecken des Raumes, je drei ganze Zahlen, BEIDE eingeschlossen
+  #   truhe      wo die Ladentruhe steht - drei ganze Zahlen, INNERHALB von von/bis
+  #
+  # So sieht ein Eintrag aus, wenn die Halle steht:
+  #
+  #   einheiten:
+  #     halle-1:
+  #       von: [60, 71, 4]
+  #       bis: [64, 75, 8]
+  #       truhe: [62, 71, 6]
+  #     halle-2:
+  #       von: [66, 71, 4]
+  #       bis: [70, 75, 8]
+  #       truhe: [68, 71, 6]
+  #
+  # Was geprueft wird und was dann geschieht:
+  #
+  #   - Eine Einheit ueber 4.096 Bloecken (16 Kantenlaenge) wird verworfen. Das ist kein
+  #     Marktstand mehr; wer eine Null zu viel tippt, vermietet sonst halb Altfurt.
+  #   - Eine Truhe ausserhalb ihrer Einheit wird verworfen - sie waere ungeschuetzt.
+  #   - Zwei Einheiten, die sich Bloecke teilen, werden BEIDE verworfen. Welche gilt,
+  #     entschiede sonst die Reihenfolge dieser Datei, und dann koennte ein Mieter in der
+  #     Truhe seines Nachbarn stehen. Dieselbe Antwort wie bei den Toren.
+  #   - Eine Einheit hinter der Weltgrenze wird verworfen - dort kaeme niemand hin.
+  #   - Eine kaputte Einheit kostet nur sich selbst. Die uebrigen gelten weiter; ein
+  #     Server, der wegen eines Tippfehlers in einem von zwanzig Staenden nicht startet,
+  #     ist schlimmer als einer mit neunzehn.
+  #
+  # Die Reihenfolge dieser Eintraege ist die Reihenfolge in /laden liste - hier ordnest du.
+  einheiten: {}
 # Reisen zwischen den Welten (Plan 4.3): zwei Wege, kein dritter - die Tore am
 # Bundesmarkt und /warp <name>. Selbstgebaute Nether- und Endportale werden gesperrt:
 # Sie fuehren nicht in freimarken:nether, sondern in die Haupt-Nether des Servers, eine

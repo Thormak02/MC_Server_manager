@@ -42,6 +42,9 @@ enum BundSatz implements Satz {
     BEFEHL_BERUF("befehl.beschreibung.beruf", Art.WORT),
     BEFEHL_MARKT("befehl.beschreibung.markt", Art.WORT),
 
+    /** Die Beschreibung von {@code /laden} in der Befehlsliste. */
+    BEFEHL_LADEN("befehl.beschreibung.laden", Art.WORT),
+
     // --- Das nackte /freimarken: vier oder fuenf Chatzeilen -----------------
     STAND_KOPF("stand.kopf", Art.SATZ),
     STAND_VERSION("stand.version", Art.SATZ, "version", "java", "minecraft"),

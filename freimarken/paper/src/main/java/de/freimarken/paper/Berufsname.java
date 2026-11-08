@@ -7,7 +7,7 @@ import java.util.Set;
 /**
  * Der Name EINES Berufes - der einzige Satz, der kein Platz in einer Aufzaehlung hat.
  *
- * <p>Alle anderen Saetze stehen als Konstante in einer der acht Bereichsaufzaehlungen, und
+ * <p>Alle anderen Saetze stehen als Konstante in einer der zwoelf Bereichsaufzaehlungen, und
  * das geht hier nicht: Welche Berufe es gibt, steht in der {@code config.yml}, und der
  * Betreiber darf dort einen hinzufuegen. Ein {@code enum} kann das nicht - es waere ein
  * Satz, den niemand anlegen kann, ohne das Plugin neu zu bauen.

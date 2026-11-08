@@ -2,12 +2,14 @@ package de.freimarken.paper;
 
 import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaBonus;
+import de.freimarken.daten.MariaMiete;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
 import de.freimarken.daten.MariaBerufe;
 import de.freimarken.daten.MariaSpielzeit;
 import de.freimarken.kern.Bonusablage;
 import de.freimarken.kern.SpeicherBonus;
+import de.freimarken.kern.SpeicherMiete;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
 import de.freimarken.kern.Blockmarken;
@@ -17,6 +19,8 @@ import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Grenzregel;
 import de.freimarken.kern.Kasse;
+import de.freimarken.kern.Ladenverzeichnis;
+import de.freimarken.kern.Mietablage;
 import de.freimarken.kern.Messwerte;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Quader;
@@ -127,6 +131,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * Siehe {@link de.freimarken.kern.Bonusablage}.
      */
     private Bonusablage bonusablage;
+    private Mietablage mietablage;
+    /**
+     * Die Ladenmiete - entsteht erst, wenn Verzeichnis UND Ablage stehen.
+     *
+     * <p>Ein Feld und keine lokale Variable, weil zwei Stellen sie brauchen: der Befehl
+     * {@code /laden} und - ab Teil C - der taegliche Lauf.
+     */
+    private Mietbuch mietbuch;
 
     /**
      * Der Tagesbonus - ein Feld, obwohl ihn nur zwei Stellen halten.
@@ -136,6 +148,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * Feld beim Aufruf und nicht beim Bauen - zu diesem Zeitpunkt steht es.
      */
     private Tagesbonus tagesbonus;
+
+    /**
+     * Die Ladeneinheiten der Markthalle - NUR BEIM START gelesen.
+     *
+     * <p>Ein Ort und kein Wert: Verschiebt ein Neuladen den Bereich einer Einheit, haette
+     * ein Mieter von einem Augenblick auf den anderen einen anderen Raum. Dieselbe
+     * Entscheidung wie bei den Welten und ihren Toren.
+     */
+    private Ladenverzeichnis ladenverzeichnis = Ladenverzeichnis.ohneEinheiten();
+
+    /** In welcher Welt die Markthalle steht - ohne Namensraum, wie in der config.yml. */
+    private String ladenwelt = Ladenliste.VORGABE_WELT;
     private Berufsablage berufsablage;
     /**
      * Welche Blockpositionen ein Spieler gesetzt hat - fuer Teil E.
@@ -363,6 +387,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Die Angaben mit, nicht nur die Welten: Spielmodus und Tor stehen dort, und ein
         // zweites Lesen der config.yml waere eine zweite Wahrheit.
         liste.welten().forEach(angabe -> angaben.put(angabe.name(), angabe));
+        // Die Ladeneinheiten NACH den Welten: Sie werden gegen die Kante ihrer Welt
+        // geprueft, und die steht in deren Angabe. Ein zweites Lesen des Abschnitts
+        // welten: waere eine zweite Wahrheit.
+        Map<String, Integer> kanten = new LinkedHashMap<>();
+        liste.welten().forEach(angabe -> kanten.put(angabe.name(), angabe.kante()));
+        Ladenliste.Ergebnis laeden = Ladenliste.ausKonfiguration(getConfig(), kanten);
+        laeden.klagen().forEach(getLogger()::severe);
+        laeden.bericht().forEach(getLogger()::info);
+        ladenwelt = laeden.welt();
+        ladenverzeichnis = laeden.verzeichnis();
         marktstadt = gebaut.welten().get(MARKTSTADT);
         // Dieselbe Angabe, aus der die Welt entstand, entscheidet auch ueber ihre Grenze.
         // Vorher las richteWeltgrenzeEin die Einstellung ein zweites Mal und ungefiltert
@@ -583,6 +617,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Der Tagesbonus VOR der Spielzeitwache: Sie nimmt ihn in ihrem Takt mit.
         tagesbonus = new Tagesbonus(wirtschaft, bonusablage, kasse, spielzeit,
                 uhr, getLogger());
+        // Das Mietbuch hier und nicht in richteAblageEin: Es braucht das
+        // Ladenverzeichnis aus der config.yml UND die Ablage, und die entstehen in zwei
+        // verschiedenen Schritten des Starts.
+        mietbuch = new Mietbuch(wirtschaft, ladenverzeichnis, mietablage, kasse, uhr,
+                getLogger());
         Bonuswache bonuswache = new Bonuswache(tagesbonus, wirtschaft, sprache);
         getServer().getPluginManager().registerEvents(bonuswache, this);
         spielzeitwache = new Spielzeitwache(this, buch, bonuswache, wirtschaft,
@@ -615,6 +654,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // aussen. Eine Uhr hier waere eine zweite Quelle fuer die Tagesgrenze.
             spielzeit = new SpeicherSpielzeit();
             bonusablage = new SpeicherBonus();
+            // Braucht keine Uhr: Beginn und Ende kommen mit dem Vertrag herein.
+            mietablage = new SpeicherMiete();
             // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von aussen.
             berufsablage = new ZwischenspeicherBerufe(new SpeicherBerufe());
             getLogger().warning("Keine Datenbank eingetragen: Parzellen und Guthaben gelten "
@@ -638,6 +679,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // doppelt. Gelesen wird nur auf Befehl, also auch nichts zu sparen.
             spielzeit = new MariaSpielzeit(datenbank);
             bonusablage = new MariaBonus(datenbank);
+            // KEIN Zwischenspeicher: Gelesen wird auf Befehl und - ab Teil C - einmal je
+            // Tageslauf. Ein Zwischenspeicher haette hier nichts zu sparen und waere ein
+            // zweiter Ort fuer die Frage, wem ein Laden gehoert.
+            mietablage = new MariaMiete(datenbank);
             // KEIN Zwischenspeicher: /beruf ist kein heisser Lesepfad. Mit Teil E, wenn
             // jeder Verdienst den Beruf fragt, wird das neu bedacht - und dann als eigene
             // Schicht wie ZwischenspeicherLager, nicht als Feld hier drin.
@@ -818,6 +863,17 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.addAll(verzeichnis.register(marktBefehle().markt(),
                     sprache.wort(BundSatz.BEFEHL_MARKT, Einsatz.keine()),
                     List.of("bundesmarkt")));
+            // /laden - die Einheiten ansehen, mieten, verlaengern, kuendigen. Kein
+            // Zweitname: Plan 11.1 fuehrt genau einen Namen, und "markthalle" waere ein
+            // zweiter Ort fuer dieselbe Liste.
+            //
+            // Die Mietdauer kommt als Abfrage und nicht als Zahl: Sie steht in der
+            // Absage "noch zu frueh", und ein Neuladen muss sie erreichen.
+            angemeldet.addAll(verzeichnis.register(
+                    new LadenBefehle(ladenverzeichnis, mietbuch, sprache, ladenwelt,
+                            () -> wirtschaft.werte().laeden().dauerTage()).laden(),
+                    sprache.wort(BundSatz.BEFEHL_LADEN, Einsatz.keine()),
+                    List.of()));
 
             // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
             // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein
@@ -1057,6 +1113,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + grenze.von() + " bis " + grenze.bis() + " - Welten entstehen einmal,"
                 + " und die Zahlenbereiche von /freimarken parzelle stecken im"
                 + " Befehlsbaum", NamedTextColor.DARK_GRAY));
+        empfaenger.sendMessage(Component.text("  laeden: "
+                + ladenverzeichnis.anzahl() + " Einheiten in " + ladenwelt
+                + " - ein Neuladen verschiebt keinen Laden, sonst stuende die Truhe eines"
+                + " Mieters ploetzlich beim Nachbarn", NamedTextColor.DARK_GRAY));
         empfaenger.sendMessage(Component.text("  reisen.ankunftswelt - setzt die"
                 + " Respawn-Welt dauerhaft in der level.dat der Hauptwelt",
                 NamedTextColor.DARK_GRAY));

@@ -959,7 +959,13 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
 
 ### 7.1 Die Markthalle
 
-- Ladeneinheit = Besitz der Art `ladeneinheit` mit Mietzins und Ablaufdatum.
+- Ladeneinheit = ein Quader in `laeden.einheiten` der `config.yml`, der Mietvertrag
+  eine Zeile in der Tabelle `ladenmiete` [präzisiert 08.11.2026]. **Nicht** als Besitz der
+  Art `ladeneinheit` in `parzellen`, wie hier zuerst stand: Die Einheit ist von Hand
+  gebaute Einrichtung und kein gekaufter Besitz, und eine Parzellenzeile daneben wäre ein
+  zweiter Ort für dieselbe Geometrie. Der Vertrag braucht zudem Spalten, die `parzellen`
+  nicht hat — Miete, Kaution und Ablauftag —, und 99 von 100 Zeilen dort bräuchten sie
+  nie.
 - Miete wird täglich abgebucht. Bei Zahlungsausfall: Warnung, dann Rückgabe. Der
   Kisteninhalt wandert in ein **Abholfach** und wird **nie** gelöscht. [empfohlen]
 - Ein Laden je Spieler, damit nicht drei Leute die Halle besitzen.
@@ -973,8 +979,32 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
 | Ladenmiete | 500 Mark/Tag [empfohlen] |
 | Kaution | 5.000 Mark, bei ordentlicher Rückgabe zurück [empfohlen] |
 | Ladenlizenz (einmalig) | 50.000 Mark [belegt] |
+| Mietdauer je Abschluss | 30 Tage, Verlängerung kostenlos [entschieden 07.11.2026] |
 
 Die Ladenmiete ist die **stärkste Geldsenke des Servers**: laufend, sichtbar, freiwillig.
+
+Alle vier Zahlen stehen seit dem 08.11.2026 in der `config.yml` unter `laeden:`
+[erledigt]. Drei Festlegungen kamen beim Bauen dazu, und jede hat einen Grund, den die
+Tafel nicht hergibt:
+
+- **Miete und Kaution stehen in der VERTRAGSZEILE**, nicht nur in der Datei. Das ist der
+  Bestandsschutz, den [8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026)
+  verlangt: Eine Erhöhung trifft nur neue Verträge — auch über eine Verlängerung hinweg.
+  Bei der Kaution kommt ein zweiter Grund dazu: Sie **verfällt** bei Räumung, ohne
+  zurückgezahlt zu werden. Wäre die gehaltene Summe nur als „eingezahlt minus
+  zurückgezahlt" aus dem Buchungsbuch zu rechnen, bliebe die verfallene stehen — und beim
+  nächsten ordentlichen Kündigen bekäme der Spieler sie mit heraus.
+- **Dass die Lizenz bezahlt ist, belegt das Buchungsbuch** (Grund `laden_lizenz`) und
+  keine Spalte. Eine zweite Wahrheit wiche nach dem ersten Absturz von der ersten ab, und
+  dann zahlt ein Spieler 50.000 Mark ein zweites Mal. Scheitert ein Abschluss nach dem
+  Abbuchen, kommt darum nur die **Kaution** zurück: Sie hängt an dem Vertrag, der nicht
+  zustande kam, die Lizenz hängt an keinem Laden.
+- **Verlängern kostet nichts** und geht, sobald weniger als eine Mietdauer übrig ist.
+  Gezahlt wird täglich; eine Gebühr auf das Verlängern wäre eine zweite Miete für dieselben
+  Tage. Die Dauer sagt nicht, wofür bezahlt ist, sondern wann ein Vertrag **ohne Zutun**
+  endet — sie ist der Griff gegen den Spieler, der aufhört zu spielen und noch Geld auf dem
+  Konto hat. Dieselbe Zahl ist zugleich die Schranke, also liegt das Ende nie weiter als
+  59 Tage voraus, und es braucht keine zweite Einstellung dafür.
 
 ### 7.2 Die Freie Truhe [entschieden]
 
@@ -2194,7 +2224,7 @@ Jeder Schritt endet mit etwas, in dem man herumlaufen kann. Keine Fristen.
 | 4 | ~~**Weltgenerator für die Marktstadt** — Raster, Wege, Grenzen~~ **erledigt 31.10.2026** | ~~das Raster steht~~ — `Rasterplan` im Kern (8 Tests ohne Server), `MarktstadtGenerator` im Plugin; am Testserver geprüft: Parzellenmitte Gras, Mauer Steinziegel, Weg glatter Stein, Krone Halbstufe |
 | 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer — **fertig 31.10.2026** | zwei Spieler, einer baut, der andere nicht — *Code steht: `Besitzbuch` mit allen Regeln (Preisstaffel, Obergrenze, Mitbauer, Aufgeben ohne Rückzahlung), `Schutzwache` mit einer Regel für alle 14 Schutzereignisse, `/parzelle` und `/mark`. 89 Tests grün, Startprobe auf einem echten Paper-26.3-Server durch. Danach eine adversariale Prüfung mit 41 Agenten: 9 bestätigte Befunde, alle behoben — darunter fehlender Schutz gegen Schaden an Rüstungsständern und Rahmeninhalt, Kisten-Loren, ein Besitzschutz, der bei Datenbankausfall nach außen offen scheiterte, und Tests, die das Spielschema leerten. Durchgang mit zwei Spielern am 31.10. gelaufen: Der Schutz greift auf fremdem Grund und sagt es in der Aktionsleiste, Mitbauer schaltet frei und wieder zu, die zweite Parzelle wurde fuer 25.000 Mark bezahlt, und Parzelle -1/0 beweist die negative Seite der Rasterrechnung. Jeder Schritt in der Datenbank gegengeprueft* |
 | 6 | ~~Zusammenlegen und Auftrennen mit Gebühr~~ **erledigt 01.11.2026** | ~~zwei Parzellen werden eine, der Weg verschwindet~~ — `/parzelle zusammenlegen <richtung>` und `/parzelle auftrennen [alles]`, Gebühr 10.000 je Feld der neuen Gruppe. Die Geometrie liegt im Kern (`Gruppenflaeche`), die Blocktabelle an einer Stelle (`Stadtboden`), die Weltarbeit hinter einem 4-Methoden-Griff (`Weltgriff`), damit sie ohne Server prüfbar ist. Vier Runden Fix-und-Nachweis mit je einem adversarialen Prüflauf: elf bestätigte Befunde, alle behoben, jeder mit Probe und Mutationsnachweis. Drei Spieltests am 1.11. bestanden — zuletzt das Quadrat mit 19 von 19 nachgemessenen Koordinaten. 231 Tests |
-| 7 | Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus — in sieben Teilen; **Teil A (Buchungsbuch) und Teil B (Stammwerte) erledigt 02.11.2026, Teil C (Spielzeit und Tagesgrenze) erledigt 03.11.2026**, siehe [8.6](#86-das-buchungsbuch-erledigt-02112026), [8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026) und [8.8](#88-die-spielzeit-und-die-tagesgrenze-erledigt-03112026) — *es fehlen Berufe (D), Verdienen (E), Bundesmarkt (F), Messstelle (G)* | man kann Mark verdienen und ausgeben — *jede Geldbewegung steht im Buch, `/mark verlauf` zeigt sie; die Spielzeit wird gezählt, aber noch von nichts benutzt* |
+| 7 | ~~Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus~~ **erledigt 07.11.2026** — in ACHT Teilen und nicht sieben: A Buchungsbuch und B Stammwerte (02.11.), C Spielzeit und Tagesgrenze (03.11.), D Berufe waehlen (06.11.), E Verdienen samt Blockmarken (06.11.), F Bundesmarkt-Ankauf, G Messstelle und H Tagesbonus (07.11.). Siehe [8.6](#86-das-buchungsbuch-erledigt-02112026), [8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026), [8.8](#88-die-spielzeit-und-die-tagesgrenze-erledigt-03112026) und [9.1](#91-berufe-im-zunfthaus-entschieden) | ~~man kann Mark verdienen und ausgeben~~ — 154 Lohnsaetze mit drei Bremsen (Stufenminderung, harte Stundenmenge, Tagesdeckel), 56 Ankaufpreise am Bundesmarkt mit eigenem Deckel, eine Messstelle, die neben der Anwesenheit die TAETIGE Zeit zaehlt, und ein Tagesbonus mit Serie. 1.662 Proben; 117 Einspritzungen, alle gefangen. Spieltest am 07.11. bestanden: Kontostand 50.548 Mark, und die Summe aller Buchungen ergibt ihn genau |
 | 8 | Markthalle, Mietverträge, Abholfach, Freie Truhe | ein Laden läuft ab und wird sauber zurückgegeben |
 | 9 | Freistädte: gründen, Grundstücke vergeben, Bürger, Kasse | ein Spieler verkauft einem anderen ein Grundstück |
 | 10 | Hafenwerder mit eigener Angeltabelle | eine Insel lässt sich sichern, der Fang unterscheidet sich |

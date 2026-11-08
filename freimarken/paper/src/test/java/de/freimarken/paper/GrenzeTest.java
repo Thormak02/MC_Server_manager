@@ -282,7 +282,7 @@ class GrenzeTest {
     private static final Set<String> SENDEN_ERLAUBT = new TreeSet<>(List.of(
             "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
             "BerufeBefehle.java", "Bonuswache.java",
-            "BundBefehle.java", "FreimarkenPlugin.java", "MarktBefehle.java",
+            "BundBefehle.java", "LadenBefehle.java", "FreimarkenPlugin.java", "MarktBefehle.java",
             "ParzellenBefehle.java", "Portalwache.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
@@ -386,7 +386,12 @@ class GrenzeTest {
             // Teil H: EINE Sendestelle - die Nachricht ueber den gezahlten Bonus.
             Map.entry("Bonuswache.java", 1),
             Map.entry("BundBefehle.java", 2),
-            Map.entry("FreimarkenPlugin.java", 39),
+            Map.entry("FreimarkenPlugin.java", 40),
+            // EINE Sendestelle, und das BLEIBT so, obwohl Teil B drei Taten dazugebracht
+            // hat: Alle vier Zweige von /laden laufen durch dasselbe sende(). Eine Zwei
+            // hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat - und der waere
+            // der erste, dessen Zeilen keine Tafel haelt.
+            Map.entry("LadenBefehle.java", 1),
             // ZWEI: die Zeile fuer die Konsole (sie hat keine Hand und steht in keiner
             // Welt) und der eine Sendeweg fuer alle Spielerzeilen. Eine Zahl weniger
             // hiesse, dass ein Zweig von /markt stumm bleibt; eine mehr, dass neben
@@ -927,6 +932,7 @@ class GrenzeTest {
             "BEFEHL_TPDENY -> WORT",
             "BEFEHL_BERUF -> WORT",
             "BEFEHL_MARKT -> WORT",
+            "BEFEHL_LADEN -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",

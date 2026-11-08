@@ -36,6 +36,16 @@ permissions:
     # sie sind kein Werkzeug des Betreibers, sondern eine abgeschaltete Spielmechanik.
     description: Darf trotz der Sperre einen Spawnpunkt setzen
     default: op
+  freimarken.laden:
+    description: Darf die Ladeneinheiten der Markthalle sehen
+    default: true
+  freimarken.laden.mieten:
+    # Ein zweites Recht und nicht freimarken.laden: Die Liste ist eine Auskunft, das
+    # Mieten bewegt Geld. Plan 9 haengt "Laden mieten" am Rang Siedler - bis Schritt 12
+    # den Aufstieg bringt, steht es hier auf true. Wer schon heute staffeln will, nimmt
+    # es weg und gibt es einer Gruppe.
+    description: Darf einen Laden mieten, verlaengern und kuendigen
+    default: true
   freimarken.spielzeit:
     description: Darf die eigene gemessene Spielzeit sehen
     default: true

@@ -651,6 +651,34 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Pruefen, Teil H: in der Datenbank letzter_tag auf vorgestern setzen, neu einloggen - die Serie faengt bei 1 an, laengste_serie bleibt stehen.
 - Pruefen, Teil H: mindest-minuten auf 2, neuladen, einloggen - erst nichts, /mark sagt "noch 2 taetige Minuten". Dann zwei Minuten ABBAUEN UND LAUFEN: der Bonus faellt.
 - Pruefen, Teil H: grundbetrag 0 und serie-reisst-ab-luecke 1 eintragen, neuladen - beide werden mit Grund beklagt, die Vorgaben gelten weiter.
+- ~~Schritt 8 erfasst~~ 7.11.: Bauplan A-F (A Ladeneinheiten, B Mietvertrag, C taeglicher Lauf samt Abholfach, D Freie Truhe, E der einfache Laden, F Marktgebuehr).
+- Abnahme laut Plan 15: "ein Laden laeuft ab und wird sauber zurueckgegeben" - also der VERTRAG, nicht das Verkaufen. Der Laden kommt dazu, weil du ihn wolltest.
+- ~~Entschieden: Mietdauer BEFRISTET mit Verlaengerung~~ 7.11. (Vorgabe 30 Tage). Der Plantext kennt keine Dauer; befristet ist die haertere Senke - wer nicht verlaengert, verliert.
+- ~~Entschieden: Die Miete laeuft am vorhandenen Spielzeittakt~~ 7.11. Dreht sich der Tag, laeuft sie einmal ueber alle Vertraege - auch ohne Spieler. KEIN zweiter Zeitgeber (Plan 8.8).
+- Ein Server, der ueber Nacht aus war, holt die Abbuchung beim naechsten Start nach - genau einmal je versaeumtem Tag, nicht alles auf einmal und nicht gar nicht.
+- BEFUND: Altfurt ist vom Besitzschutz NICHT gedeckt - die Schutzwache haengt an EINER Welt (Marktstadt). Was dort heute das Bauen verhindert, ist nur der Abenteuermodus.
+- Der Abenteuermodus erlaubt aber das OEFFNEN von Truhen. Schritt 8 braucht darum einen Truhenschutz fuer Altfurt auf Quader-Grundlage - Plan 6.1 hat ihn vorhergesehen.
+- Daraus folgt: Ladeneinheiten werden von HAND vorgebaut (samt Truhe und Schild), der Mieter fuellt und preist nur. Minecraft kennt keinen Spielmodus je Region.
+- ~~Die Ladeneinheit ist eine Zeile in parzellen~~ 7.11. ANDERS entschieden: Die EINHEIT steht in der config.yml (von Hand gebaute Einrichtung, kein gekaufter Besitz), der VERTRAG in der eigenen Tabelle ladenmiete. Eine Parzellenzeile daneben waere ein zweiter Ort fuer dieselbe Geometrie.
+- ~~Zahlen aus dem Plan in die config.yml~~ 8.11.: laeden.miete-je-tag 500, kaution 5000, lizenz 50000, mietdauer-tage 30. Offen bleiben Marktgebuehr 5 % (Teil F) und Freie Truhe ~16 Gegenstaende je Spieler/Tag (Teil D).
+- Die Kaution wird GEBUCHT und nicht gehalten: Das Buchungsbuch ist die Wahrheit ueber Geld, ein gehaltener Betrag waere eine zweite Quelle. Zurueck nur bei Kuendigung.
+- Die Marktgebuehr 5 % gehoert hierher und nicht zum Bundesmarkt: Sie liegt auf dem SPIELERHANDEL, und den bringt Teil E. Die config.yml verschiebt sie heute ausdruecklich.
+- BEFUND, Senken-Bilanz 7.11.: Einnahme 27.000/Tag (20.000 Arbeit + 5.000 Markt + 2.000 Bonus), dauerhafte Ausgabe 5.000/Tag (nur Berufswechsel). Sieben von neun Senken fehlen.
+- Alles Kaufbare zusammen ist 265.000 Mark (Parzellen 2-4 und Zusammenlegen bis zur Vierergruppe) - nach zehn Tagen erreicht, mit Startguthaben nach acht.
+- Danach wachsen 22.000 Mark je Tag ungebremst, rund 660.000 im Monat. Die Ladenmiete von 500 ist dagegen 2 % - Schritt 8 macht die Wirtschaft NICHT gesund.
+- Offen, gewollt: Die Bilanz bleibt erst einmal so. Zu entscheiden, wenn die uebrigen Senken stehen (Freistadt 400.000, Meerinsel 75.000, Flags, Hochwald-Sicherung).
+- ~~"Laden mieten" als Recht~~ 8.11.: freimarken.laden.mieten, Vorgabe fuer alle. Schritt 12 haengt den Rang Siedler daran - keine zweite Pruefung daneben.
+- Offen: Wo die Markthalle in Altfurt steht, ist nicht eingemessen - nur der Bundesmarkt (72/12 auf y 71). Die Ladeneinheiten kommen als Quader in die config.yml.
+- ~~Schritt 8, Teil A: Ladeneinheiten.~~ 7.11.: laeden.welt und laeden.einheiten (Quader + Truhe je Stand), /laden zeigt sie. Hoechstens 4.096 Bloecke je Einheit; Ueberschneidung verwirft BEIDE.
+- ~~Schritt 8, Teil B: Mietvertrag.~~ 8.11.: /laden mieten <name>, verlaengern, kuendigen. Schemaschritt 13 (Tabelle ladenmiete), vier neue Buchungsgruende.
+- Der Vertrag traegt Miete UND Kaution eingefroren (Plan 1943, Bestandsschutz): Eine Erhoehung trifft nur NEUE Vertraege, auch ueber eine Verlaengerung hinweg.
+- Ein Laden je Spieler (Plan 7.1) wacht die ABLAGE, nicht der Befehl: uq_ladenmiete_mieter. Ein Befehl, der erst fragt und dann schreibt, hat dazwischen eine Luecke.
+- Die Lizenz ist einmalig, und der BELEG dafuer ist das Buchungsbuch (Grund laden_lizenz) - keine Spalte. Eine zweite Wahrheit liesse sie ein zweites Mal zahlen.
+- Scheitert ein Abschluss nach dem Abbuchen, kommt nur die KAUTION zurueck. Die Lizenz bleibt bezahlt - sie haengt an keinem Laden.
+- Verlaengern kostet nichts (gezahlt wird taeglich) und geht, sobald weniger als eine Mietdauer uebrig ist. Damit liegt das Ende nie weiter als 59 Tage voraus.
+- Nur das MIETEN haengt an Altfurt; verlaengern und kuendigen gehen von ueberall - sie beruehren nur den eigenen Vertrag.
+- Offen in Teil C: der taegliche Lauf (Abbuchung, Warnung, Raeumung) und das Abholfach. Erst dort verfaellt eine Kaution, und erst dort braucht die Zeile eine Spalte fuer Warnungen.
+- Noch von Hand zu tun, bevor jemand mieten kann: die Markthalle in Altfurt bauen und ihre Staende als Quader in laeden.einheiten eintragen.
 - Offen, Berufe: der Kolben, der einen markierten Block weiterschiebt, und der Pflastersteingenerator - Weltregeln, eigener Schritt.
 - Entscheidung, Sprachdatei: sendeHandbalken hat seit Teil E zwei Aufrufer; Sprache.sende und sendeGezaehlt haben weiter keinen. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.

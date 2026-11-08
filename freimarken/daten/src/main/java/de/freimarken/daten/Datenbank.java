@@ -358,6 +358,61 @@ public final class Datenbank implements AutoCloseable {
               laengste_serie INT      NOT NULL DEFAULT 0,
               PRIMARY KEY (spieler)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 13: die Mietvertraege ueber Ladeneinheiten.
+            //
+            // EINE EIGENE TABELLE und keine Zeile in parzellen, obwohl Plan 7.1 die
+            // Ladeneinheit als "Besitz der Art ladeneinheit" nennt. Der Grund ist, dass
+            // die EINHEIT inzwischen in der config.yml steht (Schritt 8, Teil A): Ihr
+            // Quader und ihre Truhe sind von Hand gebaute Einrichtung und kein
+            // gekaufter Besitz. Eine Parzellenzeile daneben waere ein zweiter Ort fuer
+            // dieselbe Geometrie - und dann entscheidet die Reihenfolge zweier Lesevorgaenge,
+            // wo ein Laden liegt. Was hier steht, ist der VERTRAG, und den gibt es in
+            // parzellen nicht: Miete und Ablauftag haben dort keine Spalte, und 99 von
+            // 100 Zeilen braeuchten sie nie.
+            //
+            // miete steht in der ZEILE und nicht nur in der config.yml. Das ist der
+            // Bestandsschutz aus Plan 1943 ("anpassbar mit Bestandsschutz - gilt nur fuer
+            // NEUE Vertraege"): Ohne diese Spalte traefe jede Erhoehung sofort jeden
+            // laufenden Mieter, und zwar stumm.
+            //
+            // kaution steht aus einem ZWEITEN Grund in der Zeile: Bei einer Raeumung
+            // wegen Zahlungsausfall verfaellt sie (Plan 7.1: zurueck nur "bei
+            // ordentlicher Rueckgabe"), ohne dass eine Rueckzahlung gebucht wird. Waere
+            // die gehaltene Kaution nur als "eingezahlt minus zurueckgezahlt" aus dem
+            // Buchungsbuch zu rechnen, bliebe die verfallene Summe dort stehen - und
+            // beim naechsten ordentlichen Kuendigen bekaeme der Spieler sie mit heraus.
+            //
+            // uq_ladenmiete_mieter ist "ein Laden je Spieler" (Plan 7.1), und zwar als
+            // Zusage der Datenbank. Eine Pruefung im Befehl hat zwischen Fragen und
+            // Schreiben eine Luecke; dieser Schluessel hat keine. MariaMiete.schreibe
+            // darf darum KEIN ON DUPLICATE KEY UPDATE nehmen: Das feuert bei JEDEM
+            // eindeutigen Schluessel, also auch bei diesem, und wuerde statt zu scheitern
+            // stillschweigend die fremde Zeile aendern.
+            //
+            // Der Einheitenname kommt kleingeschrieben an (Mietvertrag normiert ihn), die
+            // Kollation der Spalte entscheidet also nichts. VARCHAR(32), weil
+            // Ladeneinheit.brauchbarerName hoechstens 32 Zeichen zulaesst.
+            //
+            // Kein Fremdschluessel auf kassen, wie bei spielzeit, berufe und tagesbonus:
+            // Ein Vertrag kann entstehen, bevor ein Konto eroeffnet ist, und ein
+            // Fremdschluessel machte aus der Reihenfolge zweier Schreibzuege eine Zusage.
+            //
+            // IF NOT EXISTS wie bei den Schritten 7, 9, 10 und 12: migriere() legt keine
+            // Transaktion um Anweisung und Standfortschreibung, also muss der Satz einen
+            // zweiten Lauf folgenlos ueberstehen.
+            """
+            CREATE TABLE IF NOT EXISTS ladenmiete (
+              einheit    VARCHAR(32) NOT NULL,
+              mieter     CHAR(36)    NOT NULL,
+              beginn     DATE        NOT NULL,
+              laeuft_bis DATE        NOT NULL,
+              miete      BIGINT      NOT NULL,
+              kaution    BIGINT      NOT NULL,
+              PRIMARY KEY (einheit),
+              UNIQUE KEY uq_ladenmiete_mieter (mieter)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -564,6 +619,13 @@ public final class Datenbank implements AutoCloseable {
             // ihn wandern Serien von einem Test in den naechsten, und eine Probe ueber
             // den ersten Bonus eines Spielers faende dort schon eine Serie.
             anweisung.execute("DELETE FROM tagesbonus");
+            // Die Mietvertraege haengen an keinem Fremdschluessel, ihre Stelle in dieser
+            // Liste ist also frei - sie stehen hier, damit sie nicht uebersehen werden.
+            // Ohne diese Zeile wandern Vertraege von einem Test in den naechsten, und
+            // weil "ein Laden je Spieler" ein eindeutiger Schluessel ist, waere die
+            // Folge nicht nur ein falscher Stand, sondern ein harter Wurf im naechsten
+            // Test.
+            anweisung.execute("DELETE FROM ladenmiete");
             // Die Berufe haengen an keinem Fremdschluessel, ihre Stelle in dieser Liste
             // ist also frei - sie stehen hier, damit sie nicht uebersehen werden. Ohne
             // diese Zeile wandern gewaehlte Berufe von einem Test in den naechsten, und

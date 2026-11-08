@@ -24,11 +24,11 @@ import java.util.Map;
 final class Sprachschluessel {
 
     /**
-     * Die acht Bereiche, in der Reihenfolge der Bauschritte.
+     * Die zwoelf Bereiche, in der Reihenfolge der Bauschritte.
      *
      * <p>Als {@code Class} und nicht als {@code values()}: So braucht ein noch leerer
      * Bereich keinen Platzhalterschluessel, und die Probe kann trotzdem nachsehen, dass
-     * alle acht gefuehrt werden.
+     * alle zwoelf gefuehrt werden.
      *
      * <p><b>{@link Berufsname} steht hier NICHT</b>, und das ist der Unterschied zwischen
      * einem Bereich und einer offenen Familie: Diese Liste verlangt, dass jeder Satz in
@@ -40,9 +40,9 @@ final class Sprachschluessel {
     private static final List<Class<? extends Satz>> BEREICHE = List.of(
             BundSatz.class, MarkSatz.class, ParzellenSatz.class, AnfragenSatz.class,
             SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class,
-            MarktSatz.class, BonusSatz.class);
+            MarktSatz.class, BonusSatz.class, LadenSatz.class, MietSatz.class);
 
-    /** Alle Saetze, aus allen acht Bereichen - einmal gebaut, unveraenderlich. */
+    /** Alle Saetze, aus allen zwoelf Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
 
     /** Jeder Pfad der Datei auf seinen Satz - auch {@code .eins} und {@code .viele}. */
@@ -85,12 +85,12 @@ final class Sprachschluessel {
         return Map.copyOf(nachPfad);
     }
 
-    /** Alle Saetze, aus allen acht Bereichen - die EINE Liste. */
+    /** Alle Saetze, aus allen zwoelf Bereichen - die EINE Liste. */
     static List<Satz> alle() {
         return ALLE;
     }
 
-    /** Die acht Bereiche - fuer die Probe, die ihre Vollstaendigkeit zusichert. */
+    /** Die zwoelf Bereiche - fuer die Probe, die ihre Vollstaendigkeit zusichert. */
     static List<Class<? extends Satz>> bereiche() {
         return BEREICHE;
     }

@@ -867,7 +867,106 @@ class BildGleichTest {
                         Einsatz.von("minuten", "8").mit("betrag", "600 Mark")
                                 .mit("serie", "2"),
                         "&7Tagesbonus: noch 8 taetige Minuten, dann bringt Tag 2"
-                                + " 600 Mark."));
+                                + " 600 Mark."),
+
+                // --- Die Markthalle [Schritt 8 Teil A] -----------------------
+                //
+                // Der NAME der Einheit kommt aus der config.yml und nicht aus der
+                // Sprachdatei - dieselbe Entscheidung wie bei den Materialnamen des
+                // Bundesmarktes. Diese Zeile haelt darum fest, dass er UNVERAENDERT
+                // durchgeht: Wer ihn eines Tages uebersetzen laesst, bekommt hier eine
+                // rote Probe und nicht einen Befehl, der seinen eigenen Namen nicht
+                // mehr findet.
+                new Zeile(LadenSatz.KOPF, 1L, Einsatz.keine(),
+                        "&6Die Markthalle"),
+                new Zeile(LadenSatz.ZEILE, 1L,
+                        Einsatz.von("name", "halle-1").mit("ort", "62/71/6"),
+                        "&7  halle-1&8 - Truhe bei 62/71/6"),
+                new Zeile(LadenSatz.LEER, 1L, Einsatz.keine(),
+                        "&7  Es gibt noch keine Ladeneinheiten - die Markthalle wird"
+                                + " noch gebaut."),
+
+                // Teil B: die Ladenmiete. Jeder Betrag kommt als FERTIGER Text herein -
+                // er ist schon durch waehrung.betrag gegangen, und diese Tafel haelt
+                // nur, wie der Satz ihn einsetzt.
+                new Zeile(MietSatz.STAND, 1L,
+                        Einsatz.von("laden", "halle-1").mit("bis", "06.12.2026")
+                                .mit("tage", "29").mit("miete", "500 Mark"),
+                        "&7Dein Laden: halle-1, bis 06.12.2026 (29 Tage), 500 Mark"
+                                + " je Tag."),
+                new Zeile(MietSatz.STAND_KEINER, 1L, Einsatz.keine(),
+                        "&7Du hast noch keinen Laden - mit /laden mieten und dem Namen"
+                                + " eines Standes nimmst du einen."),
+                // GRUEN fuer die Zusage, GRAU fuer das, was sie kostet: Die Farbe steht
+                // in der Datei, und diese Zeile haelt sie fest.
+                new Zeile(MietSatz.GEMIETET_KOPF, 1L,
+                        Einsatz.von("laden", "halle-1").mit("bis", "06.12.2026")
+                                .mit("tage", "30"),
+                        "&aDu hast halle-1 gemietet.&7 Der Vertrag laeuft bis"
+                                + " 06.12.2026 - 30 Tage."),
+                new Zeile(MietSatz.GEMIETET_KOSTEN, 1L,
+                        Einsatz.von("betrag", "5.000 Mark"),
+                        "&7Abgebucht: 5.000 Mark Kaution."),
+                // BEIDE Zahlen, und das ist der Zweck dieses zweiten Satzes: Wer 55.000
+                // abgebucht sieht und 5.000 Kaution erwartet hat, soll in DERSELBEN
+                // Zeile lesen, warum. Wer die zwei Werte vertauscht, bekommt hier eine
+                // rote Probe und nicht eine Zeile, die sich selbst widerspricht.
+                new Zeile(MietSatz.GEMIETET_ERSTMALS, 1L,
+                        Einsatz.von("betrag", "55.000 Mark")
+                                .mit("lizenz", "50.000 Mark"),
+                        "&7Abgebucht: 55.000 Mark - darin die einmalige Ladenlizenz"
+                                + " ueber 50.000 Mark."),
+                new Zeile(MietSatz.GEMIETET_TAEGLICH, 1L,
+                        Einsatz.von("miete", "500 Mark"),
+                        "&7Taeglich faellig: 500 Mark. Verlaengern mit"
+                                + " /laden verlaengern."),
+                new Zeile(MietSatz.VERLAENGERT, 1L,
+                        Einsatz.von("laden", "halle-1").mit("bis", "05.01.2027")
+                                .mit("tage", "59"),
+                        "&ahalle-1 ist verlaengert - bis 05.01.2027, das sind"
+                                + " 59 Tage."),
+                // GELB und nicht gruen: Kuendigen ist keine Zusage, sondern ein
+                // Verlust - der Laden ist weg. Die Kaution darunter ist gruen, denn sie
+                // kommt zurueck.
+                new Zeile(MietSatz.GEKUENDIGT, 1L, Einsatz.von("laden", "halle-1"),
+                        "&eDu hast halle-1 gekuendigt."),
+                new Zeile(MietSatz.GEKUENDIGT_KAUTION, 1L,
+                        Einsatz.von("betrag", "5.000 Mark"),
+                        "&aKaution zurueck: +5.000 Mark"),
+                new Zeile(MietSatz.ABSAGE_KEINE_EINHEIT, 1L,
+                        Einsatz.von("laden", "halle-9"),
+                        "&cEinen Stand namens halle-9 gibt es nicht.\n&7/laden zeigt,"
+                                + " welche es gibt."),
+                new Zeile(MietSatz.ABSAGE_SCHON_VERMIETET, 1L,
+                        Einsatz.von("laden", "halle-1"),
+                        "&challe-1 ist schon vermietet."),
+                // {laden} ist SEIN Laden und nicht der gewuenschte. Wer die zwei
+                // vertauscht, laesst einen Spieler suchen, welchen er eigentlich hat -
+                // und diese Zeile allein sieht das nicht; dafuer steht MiettextTest.
+                new Zeile(MietSatz.ABSAGE_SCHON_EIN_LADEN, 1L,
+                        Einsatz.von("laden", "halle-1"),
+                        "&cDu hast schon einen Laden: halle-1.\n&7Mit /laden kuendigen"
+                                + " gibst du ihn zurueck."),
+                // DREI Zahlen: was es kostet, was da ist, was fehlt. Die dritte rechnet
+                // das Programm - ein Spieler soll nicht subtrahieren muessen.
+                new Zeile(MietSatz.ABSAGE_ZU_WENIG_GELD, 1L,
+                        Einsatz.von("kosten", "55.000 Mark")
+                                .mit("guthaben", "50.000 Mark")
+                                .mit("fehlt", "5.000 Mark"),
+                        "&cDer Abschluss kostet 55.000 Mark, du hast 50.000 Mark - es"
+                                + " fehlen 5.000 Mark."),
+                new Zeile(MietSatz.ABSAGE_NOCH_ZU_FRUEH, 1L,
+                        Einsatz.von("laden", "halle-1").mit("tage", "40")
+                                .mit("dauer", "30"),
+                        "&ehalle-1 laeuft noch 40 Tage - verlaengern geht, sobald"
+                                + " weniger als 30 Tage uebrig sind."),
+                new Zeile(MietSatz.ABSAGE_KEIN_LADEN, 1L, Einsatz.keine(),
+                        "&cDu hast keinen Laden.\n&7/laden zeigt, welche Staende frei"
+                                + " sind."),
+                new Zeile(MietSatz.ABSAGE_FALSCHE_WELT, 1L, Einsatz.keine(),
+                        "&cDie Markthalle steht in Altfurt - dort wird gemietet."),
+                new Zeile(MietSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine(),
+                        "&cDas hat gerade nicht geklappt - versuch es noch einmal."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

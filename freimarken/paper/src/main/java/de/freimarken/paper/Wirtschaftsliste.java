@@ -155,6 +155,14 @@ final class Wirtschaftsliste {
         Bonusliste.Ergebnis bonus = Bonusliste.ausKonfiguration(wurzel);
         klagen.addAll(bonus.klagen());
         bericht.addAll(bonus.bericht());
+        // Die Ladenmiete zuletzt: eigene Schranken, ein eigenes Wertepaar (die Kaution
+        // wird gegen die Tagesmiete geprueft) und eine eigene Rechenprobe, die den
+        // vollen Mietzeitraum ausrechnet. Die EINHEITEN im selben Abschnitt liest
+        // Ladenliste - sie braucht die Weltgrenzen, die der Aufrufer hat, und dieser
+        // Leser nicht.
+        Mietliste.Ergebnis laeden = Mietliste.ausKonfiguration(wurzel);
+        klagen.addAll(laeden.klagen());
+        bericht.addAll(laeden.bericht());
 
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
@@ -186,7 +194,8 @@ final class Wirtschaftsliste {
         // Datei, waehrend eine andere darunter sagt, dass die alte weiter gilt.
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
                 gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
-                markt.werte(), messung.werte(), bonus.werte()), klagen, bericht);
+                markt.werte(), messung.werte(), bonus.werte(), laeden.werte()),
+                klagen, bericht);
     }
 
     /**

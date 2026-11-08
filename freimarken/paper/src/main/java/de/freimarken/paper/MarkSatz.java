@@ -71,6 +71,12 @@ enum MarkSatz implements Satz {
     /** Das Wort fuer {@code Buchungsgrund.TAGESBONUS} im Verlauf. */
     VERLAUF_GRUND_TAGESBONUS("mark.verlauf.grund.tagesbonus", Art.WORT),
 
+    VERLAUF_GRUND_LADEN_LIZENZ("mark.verlauf.grund.laden-lizenz", Art.WORT),
+    VERLAUF_GRUND_LADEN_KAUTION("mark.verlauf.grund.laden-kaution", Art.WORT),
+    VERLAUF_GRUND_LADEN_KAUTION_ZURUECK("mark.verlauf.grund.laden-kaution-zurueck",
+            Art.WORT),
+    VERLAUF_GRUND_LADEN_ERSTATTET("mark.verlauf.grund.laden-erstattet", Art.WORT),
+
     /**
      * Die Zeitform des Verlaufs - beim LADEN uebersetzt.
      *

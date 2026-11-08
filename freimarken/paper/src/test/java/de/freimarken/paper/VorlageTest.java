@@ -253,15 +253,18 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle zehn Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - alle zwoelf Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
-        // MarktSatz ist der neunte. Berufsname steht mit Absicht NICHT dabei: Es ist kein
-        // Bereich, sondern eine offene Familie - es gibt einen Schluessel je Beruf der
-        // config.yml, und diese Liste verlangt, dass jeder Satz in der ausgelieferten
-        // Vorlage steht.
+        // MietSatz ist der zwoelfte - und der ZWEITE Bereich desselben Befehls: Er und
+        // LadenSatz schreiben beide Pfade unter laden., damit der Betreiber unter dem
+        // Befehl sucht, den er tippt, und trotzdem zwei Haende nie dieselbe Datei teilen.
+        // Berufsname steht mit Absicht NICHT dabei: Es ist kein Bereich, sondern eine
+        // offene Familie - es gibt einen Schluessel je Beruf der config.yml, und diese
+        // Liste verlangt, dass jeder Satz in der ausgelieferten Vorlage steht.
         Set<String> erwartet = new LinkedHashSet<>(List.of("BundSatz", "MarkSatz",
                 "ParzellenSatz", "AnfragenSatz", "SpielzeitSatz", "ReiseSatz",
-                "WacheSatz", "BerufSatz", "MarktSatz", "BonusSatz"));
+                "WacheSatz", "BerufSatz", "MarktSatz", "BonusSatz", "LadenSatz",
+                "MietSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -520,6 +523,25 @@ class VorlageTest {
             "Marktliste.java -> \"Mark\"",
             "Marktliste.java -> \" Mark: 40 heisst 0,40 Mark. Ein Punkt trennt in"
                     + " YAML keine\"",
+            // Teil B: Zwei Protokollzeilen des Mietbuchs - die Kaution, die nach dem
+            // Loeschen des Vertrags nicht zurueckgezahlt werden konnte, und eine
+            // gescheiterte Erstattung. Beide sind SEVERE und von Hand zu heilen; sie
+            // liest nur der Betreiber.
+            "Mietbuch.java -> \" Mark fuer \"",
+            "Mietbuch.java -> \" Mark an \"",
+            // Der Leser der Ladenmiete: die Einheiten seiner Klagen und die
+            // Rechenprobe, die beim Start und bei jedem Neuladen im Protokoll steht.
+            // Alles an den BETREIBER, der seine config.yml liest. Was ein SPIELER
+            // liest, kommt aus Miettext und damit aus waehrung.betrag - dass von dort
+            // keine Zeile in dieser Tafel steht, ist die Zusage dieses Teils.
+            "Mietliste.java -> \"Mark einmalig\"",
+            "Mietliste.java -> \" Mark je Tag, \"",
+            "Mietliste.java -> \" Mark voller Zeitraum). \"",
+            "Mietliste.java -> \" Mark - zurueck nur bei ordentlicher Kuendigung,"
+                    + " nicht beim\"",
+            "Mietliste.java -> \" Mark einmalig. \"",
+            "Mietliste.java -> \"Mark je Tag\"",
+            "Mietliste.java -> \"Mark\"",
             // Zwei Protokollzeilen: der Wurf eines Programmfehlers und die
             // Verlustzeile, wenn die Serie nach einer Zahlung nicht geschrieben
             // werden konnte. Beide liest nur der Betreiber.

@@ -74,6 +74,12 @@ mark:
       # dieselbe Trennung wie beim Verdienst.
       bundesmarkt-verkauf: "Verkauf an den Bundesmarkt"
       tagesbonus: "Tagesbonus"
+      # Die Ladenlizenz steht nur EINMAL im Verlauf, und diese Zeile ist ihr Beleg -
+      # eine eigene Spalte dafuer gibt es nicht.
+      laden-lizenz: "Ladenlizenz"
+      laden-kaution: "Kaution"
+      laden-kaution-zurueck: "Kaution zurueck"
+      laden-erstattet: "Ladenmiete erstattet"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -117,6 +123,7 @@ befehl:
     tpaccept: "Eine Teleportanfrage annehmen"
     tpdeny: "Teleportanfragen ablehnen"
     markt: "Was der Bundesmarkt ankauft - und verkaufen"
+    laden: "Die Markthalle und ihre Ladeneinheiten"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
 parzelle:
@@ -1172,6 +1179,90 @@ markt:
     zu-wenig: "<yellow>Fuer so wenig {material} gibt es keine ganze Mark - der Bund zahlt nur in ganzen Mark.</yellow>"
     deckel: "<yellow>Heute ist genug verkauft - morgen kauft der Bund wieder.</yellow>"
     nicht-buchbar: "<red>Der Verkauf ist gerade nicht buchbar - deine Ware hast du noch. Im Serverprotokoll steht, warum.</red>"
+
+# Die Markthalle (Plan 7.1, Schritt 8 Teil A): /laden zeigt die Ladeneinheiten.
+#
+# Die NAMEN der Einheiten stehen NICHT hier - sie kommen aus dem Abschnitt laeden der
+#   config.yml. Zwanzig Staende braeuchten hier zwanzig Worte, also eine zweite
+#   Abschrift derselben Liste, und zwei Abschriften laufen auseinander. Dieselbe
+#   Entscheidung wie bei den Materialnamen des Bundesmarktes und bei der Lohnliste.
+laden:
+  # Die Ueberschrift ueber der Liste - die EINZIGE goldene Zeile dieses Befehls.
+  kopf: "<gold>Die Markthalle</gold>"
+  # {name} {ort} - eine Zeile je Ladeneinheit. {ort} ist die Stelle der Ladentruhe als
+  #   x/y/z, damit ein Spieler hingehen kann, bevor er mietet.
+  zeile: "<gray>  {name}</gray><dark_gray> - Truhe bei {ort}</dark_gray>"
+  # Es gibt noch keine Einheiten. Diese Zeile MUSS es geben: Wer nur die Ueberschrift
+  #   sieht, haelt es fuer einen Fehler. Ab Werk ist das der Normalfall - die
+  #   Markthalle ist von Hand zu bauen (Plan 2.1).
+  leer: "<gray>  Es gibt noch keine Ladeneinheiten - die Markthalle wird noch gebaut.</gray>"
+
+  # Die LETZTE Zeile von /laden: der eigene Laden. Zwei Faelle, zwei Saetze -
+  #   welcher zutrifft, weiss das Programm.
+  stand:
+    # {laden} {bis} {tage} {miete} - der eigene Laden. Die Miete ist die VEREINBARTE
+    #   und nicht die aus der config.yml: Wer fuer 500 gemietet hat, liest 500.
+    eigener: "<gray>Dein Laden: {laden}, bis {bis} ({tage} Tage), {miete} je Tag.</gray>"
+    # Diese Zeile MUSS es geben: Wer die Liste sieht und keinen Laden hat, soll
+    #   erfahren, wie man mietet. Ohne sie waere /laden mieten nur in der Hilfe
+    #   zu finden.
+    keiner: "<gray>Du hast noch keinen Laden - mit /laden mieten und dem Namen eines Standes nimmst du einen.</gray>"
+
+  # Drei Zeilen fuer einen Abschluss, und jede bindet etwas anderes: den Ort, das Geld
+  #   jetzt, das Geld taeglich. Die dritte nennt den Befehl zum Verlaengern.
+  gemietet:
+    # {laden} {bis} {tage} - was gemietet wurde und bis wann der Vertrag laeuft.
+    kopf: "<green>Du hast {laden} gemietet.</green><gray> Der Vertrag laeuft bis {bis} - {tage} Tage.</gray>"
+    # {betrag} - abgebucht, ohne Lizenz: Der Spieler hatte sie schon.
+    # KEIN {lizenz}: Sie ist nicht geflossen, und eine 0 in der Zeile liesse ihn
+    #   glauben, er haette sie geschenkt bekommen.
+    kosten: "<gray>Abgebucht: {betrag} Kaution.</gray>"
+    # {betrag} {lizenz} - abgebucht, MIT der einmaligen Lizenz darin. Beide Zahlen:
+    #   Wer 55.000 abgebucht sieht und 5.000 Kaution erwartet hat, soll in derselben
+    #   Zeile lesen, warum.
+    erstmals: "<gray>Abgebucht: {betrag} - darin die einmalige Ladenlizenz ueber {lizenz}.</gray>"
+    # {miete} - was taeglich faellig wird, und wie man verlaengert.
+    taeglich: "<gray>Taeglich faellig: {miete}. Verlaengern mit /laden verlaengern.</gray>"
+
+  # {laden} {bis} {tage} - verlaengert. Kostet nichts: Gezahlt wird taeglich.
+  verlaengert: "<green>{laden} ist verlaengert - bis {bis}, das sind {tage} Tage.</green>"
+
+  gekuendigt:
+    # {laden} - gekuendigt.
+    kopf: "<yellow>Du hast {laden} gekuendigt.</yellow>"
+    # {betrag} - die Kaution zurueck. Eine eigene Zeile, weil es sein kann, dass
+    #   keine hinterlegt war (laeden.kaution auf 0) - dann waere "0 Mark zurueck"
+    #   eine Zeile, die nach einem Fehler aussieht.
+    kaution: "<green>Kaution zurueck: +{betrag}</green>"
+
+  absage:
+    # {laden} - diesen Namen gibt es in laeden.einheiten nicht.
+    keine-einheit: "<red>Einen Stand namens {laden} gibt es nicht.</red>\n<gray>/laden zeigt, welche es gibt.</gray>"
+    # {laden} - der Stand gehoert jemand anderem.
+    schon-vermietet: "<red>{laden} ist schon vermietet.</red>"
+    # {laden} ist SEIN Laden und nicht der gewuenschte - sonst sucht er, welchen er hat.
+    #   Plan 7.1: ein Laden je Spieler, damit nicht drei Leute die Halle besitzen.
+    schon-ein-laden: "<red>Du hast schon einen Laden: {laden}.</red>\n<gray>Mit /laden kuendigen gibst du ihn zurueck.</gray>"
+    # {kosten} {guthaben} {fehlt} - das Guthaben reicht nicht. Die dritte Zahl rechnet
+    #   das Programm: Ein Spieler soll nicht subtrahieren muessen, um zu wissen, wie
+    #   viel er noch verdienen muss.
+    zu-wenig-geld: "<red>Der Abschluss kostet {kosten}, du hast {guthaben} - es fehlen {fehlt}.</red>"
+    # {laden} {tage} {dauer} - noch zu frueh. BEIDE Zahlen: "noch 40 Tage" allein sagt
+    #   nicht, dass bei 30 Tagen Mietdauer erst ab Tag 11 verlaengert werden kann.
+    noch-zu-frueh: "<yellow>{laden} laeuft noch {tage} Tage - verlaengern geht, sobald weniger als {dauer} Tage uebrig sind.</yellow>"
+    kein-laden: "<red>Du hast keinen Laden.</red>\n<gray>/laden zeigt, welche Staende frei sind.</gray>"
+    # Die Markthalle ist ein ORT. Nur das Mieten haengt daran; verlaengern und
+    #   kuendigen gehen von ueberall, sie beruehren nur den eigenen Vertrag.
+    falsche-welt: "<red>Die Markthalle steht in Altfurt - dort wird gemietet.</red>"
+    # Die Datenbank hat geschwiegen. Was geschah, steht im Serverprotokoll.
+    gestoert: "<red>Das hat gerade nicht geklappt - versuch es noch einmal.</red>"
+
+  # Muster fuer DateTimeFormatter, kein Satz - der Tag in den Mietzeilen. Wird beim
+  # LADEN uebersetzt, ein unbrauchbares Muster ist also eine Klage und kein Absturz
+  # mitten in einem Abschluss, der gerade Geld gekostet hat. Ein EIGENES Muster neben
+  # spielzeit.tag-muster: Jenes ist der Tag einer Zeile ueber die heutige Spielzeit,
+  # dies ein Vertragsende - eine Aenderung am einen soll das andere nicht mitdrehen.
+  tag-muster: "dd.MM.yyyy"
 
 # Der Tagesbonus (Plan 8.2, Teil G/H): Das taegliche Einloggen bringt den
 # Grundbetrag, das regelmaessige Spielen die SERIE - jeder Tag in Folge gibt mehr.

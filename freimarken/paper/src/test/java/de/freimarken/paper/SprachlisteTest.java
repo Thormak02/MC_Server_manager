@@ -505,7 +505,7 @@ class SprachlisteTest {
     @DisplayName("21f - ein Beruf, den die Vorlage nicht kennt, bekommt hier sein Wort")
     void eigenerBerufsnameWirktUEBERNOMMEN() {
         // Die EINZIGE offene Familie dieses Plugins. Jeder andere Satz ist eine Konstante
-        // in einer der acht Bereichsaufzaehlungen, und die Vorlage muss ihn tragen. Welche
+        // in einer der zwoelf Bereichsaufzaehlungen, und die Vorlage muss ihn tragen. Welche
         // BERUFE es gibt, entscheidet aber die config.yml - der Betreiber darf dort einen
         // eintragen, und dann braucht er hier eine Zeile, die die Vorlage nicht kennt.
         //

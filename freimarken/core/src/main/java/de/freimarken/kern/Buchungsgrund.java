@@ -20,9 +20,10 @@ import java.util.Locale;
  * Meldungen im Paper-Teil; wer die deutschen Woerter hier einfrieren wuerde, koennte sie
  * spaeter nicht mehr aendern, ohne alte Zeilen unlesbar zu machen.
  *
- * <p>Neun Gruende und nicht mehr. Ladenmiete, Marktgebuehr und Tagesbonus kommen mit
- * ihrem eigenen Bauschritt - sie hier schon einzutragen waere Vorbauen, und ein Grund,
- * den niemand bucht, sieht im Bericht aus wie eine Senke, die nicht funktioniert.
+ * <p>Nur Gruende, die auch gebucht werden. Die Ladenmiete kommt mit dem taeglichen
+ * Lauf und die Marktgebuehr mit dem Laden selbst - sie hier schon einzutragen waere
+ * Vorbauen, und ein Grund, den niemand bucht, sieht im Bericht aus wie eine Senke, die
+ * nicht funktioniert.
  */
 public enum Buchungsgrund {
 
@@ -102,7 +103,38 @@ public enum Buchungsgrund {
      * gezahlten Bonus unsichtbar - und am naechsten Tageswechsel wird er ein zweites Mal
      * gezahlt.
      */
-    TAGESBONUS("tagesbonus", Richtung.EINNAHME);
+    TAGESBONUS("tagesbonus", Richtung.EINNAHME),
+
+    /**
+     * Die Ladenlizenz - einmalig (Plan 7.1: 50.000 Mark, [belegt]).
+     *
+     * <p><b>Diese Buchung IST der Beleg, dass die Lizenz bezahlt ist.</b> Es gibt keine
+     * Spalte dafuer und keinen zweiten Ort: Gefragt wird mit
+     * {@link Kasse#summeSeit}, genau wie beim Tagesbonus nach "heute schon bezahlt". Wer
+     * den Schluessel aendert, laesst jeden Spieler seine Lizenz ein zweites Mal zahlen -
+     * und das sind 50.000 Mark, die niemand zurueckbekommt, weil niemand es merkt.
+     */
+    LADEN_LIZENZ("laden_lizenz", Richtung.AUSGABE),
+
+    /**
+     * Die Kaution beim Abschluss eines Mietvertrags.
+     *
+     * <p>Sie wird GEBUCHT und nicht gehalten. Ein gehaltener Betrag waere eine zweite
+     * Quelle neben dem Buchungsbuch, und bei Geld gibt es nur eine. Was der Spieler
+     * zurueckbekommt, rechnet der Vertrag aus seiner Miete - nicht aus einem Topf.
+     */
+    LADEN_KAUTION("laden_kaution", Richtung.AUSGABE),
+
+    /**
+     * Die Kaution zurueck - nur bei ordentlicher Rueckgabe (Plan 7.1).
+     *
+     * <p>Beim Raeumen wegen Zahlungsausfall faellt diese Buchung ausdruecklich NICHT. Das
+     * ist der ganze Zweck der Kaution: Sie macht das Weglaufen teurer als das Kuendigen.
+     */
+    LADEN_KAUTION_ZURUECK("laden_kaution_zurueck", Richtung.EINNAHME),
+
+    /** Ein Abschluss ist gescheitert - Lizenz und Kaution kommen zurueck. */
+    LADEN_ERSTATTET("laden_erstattet", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {
