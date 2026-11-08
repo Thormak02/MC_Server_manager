@@ -1018,6 +1018,26 @@ wache:
     #   demselben Anfang, damit ein Spieler sie als dieselbe Art von Auskunft liest -
     #   aenderst du den Anfang, sieh dir alle vier an.
     fremde-parzelle: "<red>Diese Parzelle gehoert <white>{eigentuemer}</white></red>"
+    # {laden} {mieter} - der Ladenschutz [Teil C]. BEIDE Werte: In einer Markthalle
+    #   stehen die Staende nebeneinander, und ein Besucher soll lesen, an welchem er
+    #   steht. Derselbe Aufbau wie fremde-parzelle darueber - Absage rot, der fremde
+    #   Name weiss.
+    #
+    # HANDELN darf er hier trotzdem: Am Schild eines Kistenshops kauft jeder, auch im
+    #   Laden eines anderen. Diese Zeile kommt nur, wenn er BAUT, ABBAUT oder die KISTE
+    #   oeffnen will.
+    fremder-laden: "<red>{laden} ist der Laden von <white>{mieter}</white></red>"
+    # Ein Stand, den niemand gemietet hat - hier darf AUCH niemand bauen. Eine freie
+    #   Einheit gehoert niemandem und damit nicht jedem: Was ein Spieler dort
+    #   hinterlaesst, hinterlaesst er dem naechsten Mieter. Der Satz nennt darum den Weg,
+    #   wie wache.schutz.parzelle-frei es tut.
+    # /laden mieten STEHT HART IM SATZ. Benennt das Programm den Befehl um, gehoert
+    #   diese Zeile geaendert.
+    laden-frei: "<yellow>Dieser Stand ist frei - /laden mieten</yellow>"
+    # Die Mietvertraege sind gerade nicht nachsehbar. Ein EIGENER Satz: Bei einer stummen
+    #   Datenbank weiss niemand, wem der Stand gehoert, und die zwei Zeilen darueber
+    #   waeren beide eine Behauptung.
+    laden-gestoert: "<red>Die Markthalle ist gerade nicht nachsehbar - versuch es noch einmal.</red>"
   # DIE ANKUNFT. Zwei Saetze an zwei verschiedenen Anlaessen: Der eine kommt, weil jemand
   # einen Spawnpunkt setzen wollte, der andere, weil jemand eine Abenteuerwelt betritt.
   # Sie gehen nie zusammen hinaus, darum sind es zwei Zeilen und nicht eine mit beidem

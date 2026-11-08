@@ -476,8 +476,29 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 // Pruefung auf null faengt den Fall, dass der Start davor abgebrochen
                 // ist - dann zeigt /mark seine uebrigen Zeilen.
                 wer -> tagesbonus == null ? null : tagesbonus.standZeile(wer, sprache));
+        // Der Ladenschutz als ZWEITE Frage derselben Wache [Teil C] - nicht als zweite
+        // Wache. Jene deckt fuenfzehn Ereignisarten ab, dreizehn davon ueber dasselbe
+        // unterbinden(); eine zweite Liste liefe auseinander, und genau davor warnt ihre
+        // eigene Doku.
+        //
+        // Hier und nicht in richteAblageEin oder richteSpielzeitEin: Gebraucht werden das
+        // Ladenverzeichnis aus der config.yml (steht seit dem Lesen der Einstellungen)
+        // UND die Mietablage (steht seit richteAblageEin, das weiter oben lief). Dies ist
+        // die erste Stelle, an der beide da sind.
+        //
+        // KEIN_HANDEL, solange es keine Kistenshops gibt: Handeln darf jeder, immer und
+        // ueberall (entschieden 08.11.2026), aber heute gibt es nichts zu handeln. Die
+        // Tuer steht da, damit der Kistenshop-Schritt sie nicht erst in einen fertigen
+        // Schutz schneiden muss.
         getServer().getPluginManager().registerEvents(
-                new Schutzwache(buch, welt, sprache), this);
+                new Schutzwache(buch, welt, sprache,
+                        new Ladenschutz(ladenverzeichnis, mietablage, ladenwelt, sprache,
+                                getLogger()),
+                        Schutzwache.KEIN_HANDEL), this);
+        getLogger().info("Ladenschutz aktiv: " + ladenverzeichnis.anzahl()
+                + " Einheiten in " + ladenwelt + " - darin baut, bearbeitet und oeffnet"
+                + " Kisten nur der Mieter. Ein freier Stand ist fuer JEDEN gesperrt."
+                + " Handeln darf jeder ueberall; Kistenshops gibt es noch nicht.");
         // Die Markierung MUSS stehen, bevor die erste Mark aus Arbeit fliesst: Alles, was
         // vorher gesetzt wurde, gilt danach fuer immer als gewachsener Boden (Plan 9.1).
         // Heute zahlt noch nichts - genau darum steht sie hier und nicht erst mit Teil E.

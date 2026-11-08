@@ -111,6 +111,37 @@ enum WacheSatz implements Satz {
      */
     SCHUTZ_FREMDE_PARZELLE("wache.schutz.fremde-parzelle", Art.HANDBALKEN, "eigentuemer"),
 
+    /**
+     * Der Laden eines anderen - der Handbalken des Ladenschutzes [Teil C].
+     *
+     * <p>ZWEI Werte, und der Name der Einheit ist der wichtigere: In einer Markthalle
+     * stehen die Staende nebeneinander, und ein Besucher soll lesen, an welchem er steht.
+     * "Das ist der Laden von Anna" allein liesse ihn raten, ob er gerade an halle-3 oder
+     * halle-4 greift.
+     */
+    SCHUTZ_FREMDER_LADEN("wache.schutz.fremder-laden", Art.HANDBALKEN, "laden",
+            "mieter"),
+
+    /**
+     * Ein Stand, den niemand gemietet hat.
+     *
+     * <p>Hier darf AUCH niemand bauen, und das ist die Entscheidung, die dieser Satz
+     * tragen muss: Eine freie Einheit gehoert niemandem und damit nicht jedem. Der Satz
+     * nennt darum den Weg - mieten -, sonst liest ein Spieler eine Absage ohne Ausweg.
+     */
+    SCHUTZ_LADEN_FREI("wache.schutz.laden-frei", Art.HANDBALKEN),
+
+    /**
+     * Die Mietvertraege sind gerade nicht nachsehbar.
+     *
+     * <p>Ein EIGENER Satz und nicht "der Laden ist frei": Bei einer stummen Datenbank
+     * weiss niemand, wem der Stand gehoert, und beide anderen Saetze waeren eine
+     * Behauptung. Ein Spieler, der das liest, weiss, dass er es spaeter noch einmal
+     * versuchen kann - und ein Betreiber, der es gemeldet bekommt, sieht im Protokoll
+     * nach.
+     */
+    SCHUTZ_LADEN_GESTOERT("wache.schutz.laden-gestoert", Art.HANDBALKEN),
+
     // --- Die Ankunftswache: zwei Anlaesse, zwei Chatzeilen ---------------------
 
     /**

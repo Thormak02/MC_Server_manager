@@ -902,6 +902,13 @@ class GrenzeTest {
             "SCHUTZ_PARZELLE_FREI -> HANDBALKEN",
             "SCHUTZ_AUSSERHALB -> HANDBALKEN",
             "SCHUTZ_FREMDE_PARZELLE -> HANDBALKEN",
+            // Teil C: die drei Handbalken des Ladenschutzes. HANDBALKEN und nicht SATZ -
+            // ein Handbalken nimmt EINE Zeile, und eine Umbruchmarke darin verschwindet
+            // stumm. Gerade bei "der Laden von X" waere das schlimm: Der Spieler saehe
+            // die Absage und nicht, wem der Stand gehoert.
+            "SCHUTZ_FREMDER_LADEN -> HANDBALKEN",
+            "SCHUTZ_LADEN_FREI -> HANDBALKEN",
+            "SCHUTZ_LADEN_GESTOERT -> HANDBALKEN",
             "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
             "ANKUNFT_ABENTEUER -> SATZ",
             "PORTAL_KEIN_AUSGANG -> SATZ");
@@ -951,20 +958,6 @@ class GrenzeTest {
             "PREIS_AUSGEGEBEN -> SATZ");
 
     /**
-     * Wie oft jede Methode von {@code Bundtext} AUFGERUFEN wird - nachgezaehlt,
-     * nicht geschaetzt.
-     *
-     * <p>Derselbe Nagel wie {@link #AUFRUFE_VON_SPIELZEITTEXT}, gegen dieselbe
-     * Luecke: {@code Bundtext} sendet nicht, also sagt {@link #SENDESTELLEN} ueber
-     * seine zwei Methoden gar nichts. Schreibt {@code zeigeStand} seine Zeilen
-     * wieder selbst, faellt die Zahl hier auf 0, waehrend die 35 dort unveraendert
-     * stehen bleibt - ein Spieler liest dann weiter dieselben Worte, und der
-     * Betreiber aendert seine {@code sprache.yml} ohne jede Wirkung.
-     *
-     * <p>Und die andere Richtung: Ruft ein Zweig die Methode des anderen, steht
-     * eine Zahl auf 2 und die andere auf 0.
-     */
-    /**
      * Wie oft jede Satzmethode von {@code Beruftext} AUFGERUFEN wird - die dritte
      * Zahltafel dieser Art.
      *
@@ -997,6 +990,20 @@ class GrenzeTest {
             Map.entry("verlassenZeilen", 1),
             Map.entry("warnungZeilen", 1));
 
+    /**
+     * Wie oft jede Methode von {@code Bundtext} AUFGERUFEN wird - nachgezaehlt,
+     * nicht geschaetzt.
+     *
+     * <p>Derselbe Nagel wie {@link #AUFRUFE_VON_SPIELZEITTEXT}, gegen dieselbe
+     * Luecke: {@code Bundtext} sendet nicht, also sagt {@link #SENDESTELLEN} ueber
+     * seine zwei Methoden gar nichts. Schreibt {@code zeigeStand} seine Zeilen
+     * wieder selbst, faellt die Zahl hier auf 0, waehrend die 35 dort unveraendert
+     * stehen bleibt - ein Spieler liest dann weiter dieselben Worte, und der
+     * Betreiber aendert seine {@code sprache.yml} ohne jede Wirkung.
+     *
+     * <p>Und die andere Richtung: Ruft ein Zweig die Methode des anderen, steht
+     * eine Zahl auf 2 und die andere auf 0.
+     */
     private static final Map<String, Integer> AUFRUFE_VON_BUNDTEXT = Map.ofEntries(
             Map.entry("preisZeilen", 1),
             Map.entry("standZeilen", 1));
@@ -1141,11 +1148,8 @@ class GrenzeTest {
      * die Bildproben sind gruen, weil der Text zeichengleich ist - und der Betreiber
      * aendert seine {@code sprache.yml}, ohne dass im Spiel etwas geschieht. Einen
      * Satz bauen kann man aber nicht, ohne ihn zu lesen.
-     */
-    /**
-     * Wer einen Satz aus Text macht.
      *
-     * <p>Das {@code deserialize} traegt eine KLAMMER, und die ist am 08.11.2026
+     * <p><b>Das {@code deserialize} traegt eine KLAMMER</b>, und die ist am 08.11.2026
      * nachgetragen worden: Ohne sie traf das Muster auch
      * {@code ItemStack.deserializeBytes} in {@code Ladenware} - ein Zufallstreffer, der
      * nichts mit MiniMessage zu tun hat. Die Datei auszunehmen waere der falsche Weg
@@ -1156,6 +1160,71 @@ class GrenzeTest {
      */
     private static final Pattern MINIMESSAGE_LESEN = Pattern.compile(
             "MiniMessage|deserialize\\(");
+
+    @Test
+    @DisplayName("31w - das Plugin stellt den LADENSCHUTZ ein, nicht die leere Regel")
+    void pluginStelltDenLadenschutzEin() {
+        // Befund der Einspritzungskampagne vom 08.11.2026: Der Tausch von
+        // new Ladenschutz(...) gegen Schutzwache.KEINE_ORTSREGEL in FreimarkenPlugin
+        // liess alle 2064 Proben gruen - und im Spiel waere damit JEDER Laden offen,
+        // ohne dass irgendetwas auffaellt. Das Plugin startet in keiner Probe, also ist
+        // der Quelltext das einzige, was diese Zeile halten kann.
+        //
+        // Festgehalten wird der TEXT und keine Zahl: Eine Zaehltafel laesst sich
+        // hochdrehen, und bei einer Fluchtfolge wird sie blind.
+        // Quellen.text liest OHNE Kommentare - genau richtig: Ein Name, der nur in
+        // einem Javadoc steht, ist keine Verdrahtung.
+        String plugin = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("FreimarkenPlugin.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "FreimarkenPlugin.java nicht gefunden - dann prueft diese Probe"
+                                + " nichts")));
+
+        assertTrue(plugin.contains("new Ladenschutz(ladenverzeichnis, mietablage,"),
+                "FreimarkenPlugin muss den Ladenschutz an die Schutzwache geben -"
+                        + " sonst ist in der Markthalle jede Hand erlaubt");
+        // Die andere Haelfte, und sie ist der eigentliche Fang: Die leere Regel darf dort
+        // NICHT stehen. Ohne diese Zeile waere der Tausch unsichtbar.
+        assertFalse(plugin.contains("KEINE_ORTSREGEL"),
+                "KEINE_ORTSREGEL ist die Antwort fuer einen Server OHNE Markthalle -"
+                        + " dieser hat eine");
+        // Und der Handelsklick: Heute KEIN_HANDEL, und das soll man im Diff sehen, wenn
+        // der Kistenshop-Schritt ihn ersetzt.
+        assertTrue(plugin.contains("Schutzwache.KEIN_HANDEL"),
+                "solange es keine Kistenshops gibt, steht hier KEIN_HANDEL");
+    }
+
+    @Test
+    @DisplayName("31x - beimKlicken RUFT die Handelstuer, bevor es den Besitz fragt")
+    void beimKlickenRuftDieHandelstuer() {
+        // Die letzte der einundzwanzig Einspritzungen vom 08.11.2026, die durchlief:
+        // Die BEDINGUNG der Handelstuer ist in SchutzwacheTest 36l geprueft, aber dass
+        // beimKlicken sie ueberhaupt ruft, war von nichts gedeckt. Wer den Aufruf
+        // wegnimmt, schliesst die Tuer - und sobald es Kistenshops gibt, kauft dann
+        // niemand mehr im Laden eines anderen.
+        //
+        // <b>Das ist eine TEXTPRUEFUNG und keine Verhaltensprobe</b>, und das ist
+        // benannt statt verschwiegen: beimKlicken durchlaufen heisst, ein
+        // PlayerInteractEvent mit einem Block zu bauen, fuer den istHeikel wahr ist -
+        // und das braucht von der Serverprobe Antworten auf getState, getBlockData und
+        // die Blockgruppen, die heute keine andere Probe verlangt. Der
+        // Kistenshop-Schritt benutzt die Tuer ohnehin; dort gehoert die echte Probe hin,
+        // und dann kann diese hier weg.
+        String wache = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("Schutzwache.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "Schutzwache.java nicht gefunden - dann prueft diese Probe"
+                                + " nichts")));
+
+        assertTrue(wache.contains(
+                        "alsHandelDurchlassen(handel, ereignis.getPlayer(), block,"),
+                "beimKlicken muss die Handelstuer rufen - sonst ist sie zu, und kein"
+                        + " Kunde kauft im fremden Laden");
+    }
 
     @Test
     @DisplayName("32 - die Quellen wurden ueberhaupt gefunden")

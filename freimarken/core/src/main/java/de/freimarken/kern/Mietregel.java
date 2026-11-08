@@ -1,6 +1,7 @@
 package de.freimarken.kern;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
  * Die EINE Stelle, an der ueber Laufzeiten von Mietvertraegen entschieden wird.
@@ -127,6 +128,46 @@ public final class Mietregel {
 
     public static boolean brauchbareDauer(int tage) {
         return tage >= 1 && tage <= HOECHSTE_DAUER;
+    }
+
+    /**
+     * Ob dieser Spieler in einer Ladeneinheit handeln darf - der Ladenschutz.
+     *
+     * <p>Zwei Zeilen, und beide tragen eine Entscheidung:
+     *
+     * <ul>
+     *   <li><b>Eine FREIE Einheit gehoert niemandem - auch nicht jedem.</b> Ohne Vertrag
+     *       darf dort kein Spieler bauen, abbauen oder eine Kiste oeffnen. Der Quader ist
+     *       von Hand gebaute Einrichtung des Betreibers (Teil A), und wer dort etwas
+     *       hinterlaesst, hinterlaesst es dem naechsten Mieter. Das ist zugleich die
+     *       Stelle, an der die Truhe einer geraeumten Einheit unerreichbar bleibt, bis
+     *       sie neu vermietet wird - und genau darauf stuetzt sich die Reihenfolge der
+     *       Raeumung in {@code Mietlauf}.</li>
+     *   <li><b>Sonst nur der Mieter.</b> Nicht "der Mieter und seine Freunde": Eine
+     *       Mitbauerliste wie bei den Parzellen gibt es hier NICHT, und das ist kein
+     *       Versehen. Ein Laden ist ein Geschaeft und kein Grundstueck; wer mithelfen
+     *       soll, bekommt Waren in die Hand und nicht den Schluessel. Sollte sie doch
+     *       einmal kommen, gehoert sie in die Vertragszeile und nicht neben diese
+     *       Regel.</li>
+     * </ul>
+     *
+     * <p><b>Was diese Regel NICHT entscheidet, ist das HANDELN.</b> Am Schild eines
+     * Kistenshops darf jeder kaufen, auch im Laden eines anderen - sonst haette ein
+     * Kistenshop keine Kunden, und die Markthalle waere eine Reihe verschlossener Raeume
+     * (entschieden 08.11.2026). Diese Regel wird fuer einen Handelsklick also gar nicht
+     * gefragt; wer sie fragt und wann, entscheidet die Wache. Eine Regel, die das selbst
+     * unterscheiden wollte, muesste wissen, was ein Schild ist - und damit waere der Kern
+     * bei Bukkit.
+     *
+     * @param vertrag der Vertrag ueber die Einheit, an der gehandelt wird, oder
+     *                {@code null}, wenn sie frei ist
+     * @param wer     wer handeln will
+     */
+    public static boolean darfInDerEinheit(Mietvertrag vertrag, UUID wer) {
+        if (wer == null) {
+            throw new IllegalArgumentException("Ohne Spieler gibt es nichts zu erlauben");
+        }
+        return vertrag != null && vertrag.gehoert(wer);
     }
 
     /**

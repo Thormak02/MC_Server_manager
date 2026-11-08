@@ -991,21 +991,52 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
     UND in der Datenbank — in einer Wirtschaft mit Bundesmarkt ist ein verdoppelter
     Diamantblock sofort Geld. Geholt wird Stapel für Stapel: erst löschen, dann geben,
     und was sich nicht zurückverwandeln lässt, bleibt liegen und steht im Protokoll.
-- **Noch offen und wichtig: es gibt keinen Ladenschutz.** Die Ladeneinheiten sind seit
-  Teil A reine Geometrie — jeder kann in jedem Stand bauen und jede Ladentruhe leeren.
-  Die `Schutzwache` gilt nur für die Marktstadt, und Altfurt ist eine andere Welt. Der
-  Schutz gehört als zweite Frage an `darfHandeln` und nicht in eine eigene Wache: Jene
-  deckt schon rund zwanzig Ereignisarten ab (Blöcke, Eimer, Feuer, Bilderrahmen,
-  Türklinken), und eine zweite Liste daneben liefe auseinander. Zusammen damit ist die
-  Truhe beim VERMIETEN zu leeren — das schließt das letzte Duplikationsfenster und ist
-  ohnehin richtig, denn ein neuer Mieter soll die Ware des Vorgängers nicht erben.
+- **Der Ladenschutz** [erledigt 08.11.2026]. Bis dahin waren die Ladeneinheiten reine
+  Geometrie: Jeder konnte in jedem Stand bauen und jede Ladentruhe leerräumen, denn die
+  `Schutzwache` gilt nur für die Marktstadt und Altfurt ist eine andere Welt. Damit war
+  das Mieten eine Buchung ohne Wirkung. Gebaut als **zweite Frage an `darfHandeln`** und
+  nicht als eigene Wache: Jene deckt fünfzehn Ereignisarten ab — Blöcke setzen und
+  abbauen, Eimer, Feuer, Bilderrahmen, Rüstungsständer, Fahrzeuge, Leinen, Türklinken,
+  Behälter —, dreizehn davon über dasselbe `unterbinden()`. Eine zweite Liste wäre
+  irgendwann anders, und genau davor warnt die Doku der Schutzwache im ersten Absatz.
+  Vier Entscheidungen:
+  - **Ein freier Stand ist für JEDEN gesperrt**, nicht für jeden offen. Der Quader ist von
+    Hand gebaute Einrichtung; was ein Spieler dort hinterlässt, hinterlässt er dem
+    nächsten Mieter. Das trägt zugleich die Räumungsreihenfolge aus Teil C: An eine Truhe
+    ohne Vertrag kommt niemand heran.
+  - **Keine Mitbauerliste** wie bei den Parzellen. Ein Laden ist ein Geschäft und kein
+    Grundstück; wer mithelfen soll, bekommt Waren in die Hand und nicht den Schlüssel.
+  - **Das Teamrecht `freimarken.bauen.ueberall` gilt auch im Laden** — sonst müsste ein
+    Betreiber kündigen, um aufzuräumen.
+  - **Das Erlaubnis-Urteil der Ortsregel ist in ihrer Welt endgültig.** Steht die
+    Markthalle in der Marktstadt — `laeden.welt` erlaubt das —, liegt eine Ladeneinheit
+    auf einer Parzelle, und zwei Regeln sagen etwas über dieselbe Stelle. Dann gilt die
+    Einheit: Der Betreiber hat sie dort hingesetzt.
+- **Noch offen: die Truhe beim VERMIETEN leeren.** Das schließt das letzte
+  Duplikationsfenster (ein Absturz zwischen dem Löschen des Vertrags und dem Leeren der
+  Truhe) und ist ohnehin richtig, denn ein neuer Mieter soll die Ware des Vorgängers nicht
+  erben.
 - Ein Laden je Spieler, damit nicht drei Leute die Halle besitzen.
 - **Ladenverzeichnis**: `/markt suchen <Gegenstand>` zeigt Anbieter, Preis und Weg. Ohne das
   läuft man durch 80 Läden — der häufigste Grund, warum Einkaufszentren sterben.
 - **Verkauft wird am SCHILD und nicht per Befehl** [entschieden 08.11.2026]. Ein Schild
-  je Gegenstand, an einer Kiste, wie ein gewöhnlicher Shop. Das gilt für den Ankauf des
-  Bundes (`/markt verkaufen` fällt damit weg; `/markt liste` bleibt) und ist die Linie
-  für jeden Handel, den ein Spieler anbietet. Der Grund ist kein technischer: Ein Markt,
+  je Gegenstand, an einer Kiste, wie ein gewöhnlicher Shop — der **Kistenshop** ist damit
+  die Standardform des Verkaufs, in der Markthalle und überall sonst. Das gilt für den
+  Ankauf des Bundes (`/markt verkaufen` fällt damit weg; `/markt liste` bleibt) und ist
+  die Linie für jeden Handel, den ein Spieler anbietet.
+- **Handeln darf jeder, immer und überall** [entschieden 08.11.2026]. Kein Rang, kein
+  Recht und kein Ort beschränkt den Handel: Wer vor einem Kistenshop steht, kauft dort.
+  Das ist **keine Nebenbemerkung, sondern die Vorgabe für den Ladenschutz** — und die
+  Unterscheidung, die er treffen muss:
+  - **Am Schild handeln**: jeder, auch im Laden eines anderen. Sonst hätte ein
+    Kistenshop keine Kunden, und die ganze Markthalle wäre eine Reihe verschlossener
+    Räume.
+  - **Die Kiste öffnen, füllen oder leeren**: nur der Mieter. Es ist sein Warenlager;
+    wer hineingreifen darf, braucht den Shop nicht.
+  - **Bauen, abbauen und Blöcke bearbeiten**: nur der Mieter, in seiner Einheit.
+  Ein Schutz, der pauschal „nichts in fremden Einheiten" sagt, erfüllt die dritte Zeile
+  und bricht die erste — und das fällt erst auf, wenn der erste Kunde nichts kaufen
+  kann. Der Grund ist kein technischer: Ein Markt,
   den man von überall bedienen kann, ist ein Menü. Wer einmal weiß, dass der Befehl
   geht, geht nie wieder hin — und damit ist das gebaute Gebäude Zierde und niemand
   trifft dort jemanden. Der Markt soll **beliebig erweiterbar und anpassbar** sein: ein

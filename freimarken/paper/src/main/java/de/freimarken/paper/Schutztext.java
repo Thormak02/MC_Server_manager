@@ -71,4 +71,26 @@ final class Schutztext {
         return sprache.eineZeile(WacheSatz.SCHUTZ_FREMDE_PARZELLE,
                 Einsatz.von("eigentuemer", eigentuemer));
     }
+
+    /**
+     * Der Laden eines anderen - mit Einheit UND Mieter [Teil C].
+     *
+     * <p>Wie bei {@link #fremdeParzelleBalken} ist der eingesetzte Name die Sache selbst:
+     * Er kommt von einem anderen Spieler, und ein Farbtag darin stuende dem Leser
+     * woertlich im Handbalken. Darum geht er als BLATT hinein und nicht in einen Satz.
+     */
+    static Component fremderLadenBalken(Sprache sprache, String laden, String mieter) {
+        return sprache.eineZeile(WacheSatz.SCHUTZ_FREMDER_LADEN,
+                Einsatz.von("laden", laden).mit("mieter", mieter));
+    }
+
+    /** Ein Stand, den niemand gemietet hat - hier darf AUCH niemand bauen. */
+    static Component ladenFreiBalken(Sprache sprache) {
+        return sprache.eineZeile(WacheSatz.SCHUTZ_LADEN_FREI, Einsatz.keine());
+    }
+
+    /** Die Vertraege sind nicht nachsehbar - dann ist jede andere Auskunft erfunden. */
+    static Component ladenGestoertBalken(Sprache sprache) {
+        return sprache.eineZeile(WacheSatz.SCHUTZ_LADEN_GESTOERT, Einsatz.keine());
+    }
 }

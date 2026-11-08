@@ -1,6 +1,8 @@
 package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Besitzbuch;
@@ -13,6 +15,8 @@ import de.freimarken.kern.Wirtschaftswerte;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import net.kyori.adventure.text.Component;
+import org.bukkit.entity.Player;
 import org.bukkit.Location;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -90,6 +94,42 @@ class SchutzwacheTest {
     /** Eine Stelle in der Welt. Die Hoehe ist der Wache gleich, sie liest nur x und z. */
     private static Location ort(int x, int z) {
         return new Location(null, x, 64, z);
+    }
+
+    /**
+     * Die Welt als VOLLER Schluessel - so, wie {@code World.key().asString()} sie nennt.
+     *
+     * <p>Die Konstante {@link #WELT} daneben ist der Text, mit dem Lager und Besitzbuch
+     * rechnen; sie taugt nicht fuer den Vergleich in {@code darfHandeln}, weil
+     * {@code NamespacedKey.fromString("marktstadt")} daraus {@code minecraft:marktstadt}
+     * macht. Die Proben, die {@code darfHandeln} rufen, fahren darum DURCHGEHEND mit
+     * diesem Text - Lager, Wache und Stelle.
+     */
+    private static final String WELT_SCHLUESSEL = "freimarken:marktstadt";
+
+    /**
+     * Eine Stelle in einer ECHTEN Welt - fuer die Proben, die {@code darfHandeln} rufen.
+     *
+     * <p>Ein Befund beim Bauen von Teil C: {@link #ort} liefert eine Stelle OHNE Welt,
+     * und {@code darfHandeln} gibt dafuer sofort {@code true} zurueck - noch vor dem
+     * Teamrecht und vor jeder Regel. Die vier Proben von Bauschritt 6 gehen durch
+     * {@code verweigere} und merken das nie; eine Probe ueber {@code darfHandeln} waere
+     * damit gruen, ohne etwas gesehen zu haben.
+     */
+    private static Location ortInDerWelt(int x, int z) {
+        return new Location(Serverprobe.welt(WELT_SCHLUESSEL), x, 64, z);
+    }
+
+    /** Eine Wache auf dem VOLLEN Weltschluessel, mit Ortsregel und Handelsklick. */
+    private static Schutzwache wacheMitRegel(Besitzbuch buch,
+            Schutzwache.Ortsregel.Urteil immer) {
+        return new Schutzwache(buch, WELT_SCHLUESSEL, Sprachprobe.spracheAusDemJar(),
+                festeRegel(immer), Schutzwache.KEIN_HANDEL);
+    }
+
+    /** Dieselbe Wache OHNE die zwei neuen Fragen - fuer den Vergleich davor. */
+    private static Schutzwache wacheOhneRegel(Besitzbuch buch) {
+        return new Schutzwache(buch, WELT_SCHLUESSEL, Sprachprobe.spracheAusDemJar());
     }
 
     /**
@@ -225,5 +265,182 @@ class SchutzwacheTest {
         String bild = besucher.handbalkenBild().get(0);
         assertTrue(bild.endsWith(NAMENLOS.toString().substring(0, 8)),
                 "statt des Namens stehen acht Zeichen der UUID: " + bild);
+    }
+
+    // ================================ Teil C: die zwei zusaetzlichen Fragen
+
+    @Test
+    @DisplayName("36e - die ORTSREGEL wird gefragt, und ihr Ja ist endgueltig")
+    void ortsregelWirdGefragt() {
+        // Die Verdrahtung, nicht die Regel: Dass darfHandeln die Ortsregel ueberhaupt
+        // fragt, und dass ihr ERLAUBT das Besitzbuch NICHT mehr zu Wort kommen laesst.
+        //
+        // Die Stelle ist eine FREMDE Parzelle - ohne die Ortsregel waere sie verboten.
+        // Sagt die Regel ja, muss die Hand durchgehen; sonst waere "die Einheit
+        // entscheidet" nur ein Kommentar.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        Besitzbuch buch = stand.buch();
+        stand.lager().anlegen(WELT_SCHLUESSEL, 0, 0, EIGENTUEMER, 25_000L);
+        Location fremd = ortInDerWelt(buch.plan().mitteX(0), buch.plan().mitteZ(0));
+        Spielerprobe besucher = new Spielerprobe("Cara", BESUCHER);
+
+        assertFalse(wacheOhneRegel(buch).darfHandeln(besucher.spieler(), fremd),
+                "ohne Ortsregel ist die fremde Parzelle verboten");
+
+        assertTrue(wacheMitRegel(buch, Schutzwache.Ortsregel.Urteil.ERLAUBT)
+                        .darfHandeln(besucher.spieler(), fremd),
+                "das ERLAUBT der Ortsregel ist endgueltig");
+    }
+
+    @Test
+    @DisplayName("36f - ein VERBOTEN der Ortsregel gilt auch auf EIGENEM Grund")
+    void ortsregelVerbietetAuchDemEigentuemer() {
+        // Die andere Richtung, und sie ist der Fall, der im Spiel vorkommt: Steht die
+        // Markthalle in der Marktstadt - laeden.welt erlaubt das -, liegt eine
+        // Ladeneinheit auf einer Parzelle. Dann gilt die Einheit, auch gegen den
+        // Eigentuemer der Parzelle darunter.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        Besitzbuch buch = stand.buch();
+        stand.lager().anlegen(WELT_SCHLUESSEL, 0, 0, EIGENTUEMER, 25_000L);
+        Location eigen = ortInDerWelt(buch.plan().mitteX(0), buch.plan().mitteZ(0));
+        Spielerprobe eigentuemer = new Spielerprobe("Bert", EIGENTUEMER);
+
+        assertTrue(wacheOhneRegel(buch).darfHandeln(eigentuemer.spieler(), eigen),
+                "auf seiner eigenen Parzelle darf er - sonst prueft diese Probe nichts");
+
+        assertFalse(wacheMitRegel(buch, Schutzwache.Ortsregel.Urteil.VERBOTEN)
+                .darfHandeln(eigentuemer.spieler(), eigen));
+    }
+
+    @Test
+    @DisplayName("36g - der Handbalken kommt von der ORTSREGEL, wenn sie verboten hat")
+    void handbalkenKommtVonDerOrtsregel() {
+        // Sonst stuende auf dem Balken eines Ladenbesuchers "Diese Parzelle ist noch
+        // frei" - eine Auskunft ueber eine Parzelle, die ihn nichts angeht, und zwar in
+        // einer Welt, in der es gar keine gibt.
+        Stand stand = stand();
+        Spielerprobe besucher = new Spielerprobe("Cara", BESUCHER);
+        Schutzwache mitNein = new Schutzwache(stand.buch(), WELT,
+                Sprachprobe.spracheAusDemJar(),
+                festeRegel(Schutzwache.Ortsregel.Urteil.VERBOTEN),
+                Schutzwache.KEIN_HANDEL);
+
+        mitNein.verweigere(besucher.spieler(), ort(0, 0));
+
+        assertEquals("EIGENER GRUND DER ORTSREGEL",
+                besucher.handbalkenBild().get(0));
+    }
+
+    @Test
+    @DisplayName("36h - das Teamrecht gilt AUCH gegen die Ortsregel")
+    void teamrechtSchlaegtAuchDieOrtsregel() {
+        // Haenge freimarken.bauen.ueberall nur an den Parzellen, muesste ein Betreiber
+        // den Laden eines Spielers kuendigen, um darin aufzuraeumen.
+        // Die ECHTE Welt, und das ist hier der Unterschied zwischen einer Probe und
+        // keiner: Mit der weltlosen Stelle war diese Probe gruen, ohne dass das
+        // Teamrecht ueberhaupt gefragt wurde - darfHandeln kehrt bei fehlender Welt
+        // sofort um. Sie behauptete dann etwas ueber das Recht und bewies etwas ueber
+        // eine Stelle ohne Welt.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        Besitzbuch buch = stand.buch();
+        Location drin = ortInDerWelt(buch.plan().mitteX(0), buch.plan().mitteZ(0));
+        Spielerprobe team = new Spielerprobe("Team", BESUCHER, Schutzwache.UEBERALL);
+        Spielerprobe ohneRecht = new Spielerprobe("Cara", BESUCHER);
+
+        assertTrue(wacheMitRegel(buch, Schutzwache.Ortsregel.Urteil.VERBOTEN)
+                .darfHandeln(team.spieler(), drin));
+        // Die Gegenprobe am SELBEN Ort und mit derselben Wache: Ohne sie waere auch eine
+        // Fassung gruen, die ueberall ja sagt.
+        assertFalse(wacheMitRegel(buch, Schutzwache.Ortsregel.Urteil.VERBOTEN)
+                .darfHandeln(ohneRecht.spieler(), drin));
+    }
+
+    @Test
+    @DisplayName("36i - KEINE_ORTSREGEL ist zustaendigkeitsfrei und verbietet nichts")
+    void keineOrtsregelIstStill() {
+        // Der Stand jedes Servers ohne Markthalle, und die Vorgabe des kurzen
+        // Konstruktors. Sagt sie je etwas anderes als NICHT_ZUSTAENDIG, waere jede
+        // Parzellenprobe dieser Datei stumm durch einen anderen Zweig gelaufen.
+        assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
+                Schutzwache.KEINE_ORTSREGEL.pruefe(null, ort(0, 0)));
+        // Und ihr grund() WIRFT, statt einen leeren Balken zu liefern: Wer ihn holt, hat
+        // die Reihenfolge in darfHandeln umgestellt und soll es sofort merken.
+        assertThrows(IllegalStateException.class,
+                () -> Schutzwache.KEINE_ORTSREGEL.grund(ort(0, 0)));
+    }
+
+    @Test
+    @DisplayName("36j - KEIN_HANDEL sagt ueberall nein")
+    void keinHandelSagtNein() {
+        // Der heutige Stand: Es gibt keine Kistenshops. Die Tuer steht trotzdem schon
+        // da - haette sie ein Ja darin, waere der ganze Schutz offen.
+        assertFalse(Schutzwache.KEIN_HANDEL.istHandel(
+                new Spielerprobe("Cara", BESUCHER).spieler(), null));
+    }
+
+    @Test
+    @DisplayName("36k - Ortsregel und Handelsklick sind PFLICHT")
+    void ortsregelUndHandelSindPflicht() {
+        // Ein null waere eine Wache, die bei jedem Klick wirft - und ein Wurf aus einem
+        // Blockereignis trifft jeden Spieler, nicht nur den, der geklickt hat.
+        Stand stand = stand();
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+
+        assertThrows(IllegalArgumentException.class, () -> new Schutzwache(stand.buch(),
+                WELT, sprache, null, Schutzwache.KEIN_HANDEL));
+        assertThrows(IllegalArgumentException.class, () -> new Schutzwache(stand.buch(),
+                WELT, sprache, Schutzwache.KEINE_ORTSREGEL, null));
+    }
+
+    @Test
+    @DisplayName("36l - die Handelstuer oeffnet NUR ohne Werkzeug in der Hand")
+    void handelstuerNurOhneWerkzeug() {
+        // Befund der Einspritzungskampagne vom 08.11.2026: Diese Bedingung stand als
+        // Zweig in beimKlicken und war damit nur ueber ein PlayerInteractEvent mit einem
+        // Schildblock erreichbar - zwei Einspritzungen darauf liefen gruen durch. Jetzt
+        // steht sie in einer eigenen Methode und ist ohne Server zu pruefen.
+        //
+        // Die Tuer ist die Stelle, die den ganzen Schutz oeffnet: Handeln darf jeder,
+        // immer und ueberall, auch im Laden eines anderen. Wer sie zu weit aufmacht,
+        // macht den Laden auf.
+        Schutzwache.Handelsklick immerJa = (spieler, block) -> true;
+
+        assertTrue(Schutzwache.alsHandelDurchlassen(immerJa, null, null, false),
+                "ein reiner Klick auf einen Shop ist ein Handel");
+        // Die HALBE Zusage, und sie ist die wichtigere: Wer mit einer Axt, einer Hacke
+        // oder einem Eimer auf ein Schild klickt, will nicht kaufen. Ohne dieses Nein
+        // waere die Handelstuer der Weg, mit einem Werkzeug in der Hand in jedem fremden
+        // Laden zu arbeiten.
+        assertFalse(Schutzwache.alsHandelDurchlassen(immerJa, null, null, true),
+                "mit einem Werkzeug in der Hand ist es KEIN Handel");
+        // Und heute bleibt die Tuer zu, weil es keine Kistenshops gibt.
+        assertFalse(Schutzwache.alsHandelDurchlassen(Schutzwache.KEIN_HANDEL, null, null,
+                false));
+    }
+
+    /**
+     * Eine Ortsregel, die ueberall dasselbe sagt - fuer die Proben der VERDRAHTUNG.
+     *
+     * <p>Was der Ladenschutz WIRKLICH antwortet, prueft {@code LadenschutzTest}. Hier
+     * geht es nur darum, dass die Wache die Antwort ueberhaupt holt und richtig
+     * einordnet - und dafuer ist eine feste Antwort die klarere Probe als eine echte
+     * Regel mit Verzeichnis und Ablage.
+     */
+    private static Schutzwache.Ortsregel festeRegel(
+            Schutzwache.Ortsregel.Urteil immer) {
+        return new Schutzwache.Ortsregel() {
+            @Override
+            public Urteil pruefe(Player spieler, Location ort) {
+                return immer;
+            }
+
+            @Override
+            public Component grund(Location ort) {
+                return Component.text("EIGENER GRUND DER ORTSREGEL");
+            }
+        };
     }
 }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -223,5 +224,69 @@ class MietregelTest {
         assertFalse(Mietregel.raeumungsreif(0, 1), "ohne Ausfall aber nicht");
         assertTrue(Mietregel.brauchbareSchranke(Mietregel.HOECHSTE_SCHRANKE));
         assertFalse(Mietregel.brauchbareSchranke(Mietregel.HOECHSTE_SCHRANKE + 1));
+    }
+
+    @Test
+    @DisplayName("Im Laden darf nur der MIETER - und in einer freien Einheit NIEMAND")
+    void nurDerMieterDarfImLaden() {
+        // Die zweite Zeile ist die, die nicht offensichtlich ist: Eine FREIE Einheit
+        // gehoert niemandem und damit auch nicht jedem. Der Quader ist von Hand gebaute
+        // Einrichtung des Betreibers; wer dort etwas hinterlaesst, hinterlaesst es dem
+        // naechsten Mieter.
+        //
+        // Darauf stuetzt sich ausserdem die Reihenfolge der Raeumung in Mietlauf: Bricht
+        // der Server zwischen dem Loeschen des Vertrags und dem Leeren der Truhe ab,
+        // steht die Ware im Fach UND in der Truhe - aber an eine Truhe ohne Vertrag kommt
+        // niemand heran.
+        UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
+        Mietvertrag annas = new Mietvertrag("halle-1", anna, HEUTE, HEUTE.plusDays(6),
+                500L, 5_000L);
+
+        assertTrue(Mietregel.darfInDerEinheit(annas, anna));
+        assertFalse(Mietregel.darfInDerEinheit(annas, bert), "Bert ist nicht der Mieter");
+        assertFalse(Mietregel.darfInDerEinheit(null, anna), "eine freie Einheit");
+        assertFalse(Mietregel.darfInDerEinheit(null, bert));
+    }
+
+    @Test
+    @DisplayName("Ein Vertrag in Verzug schuetzt noch - geraeumt ist er nicht")
+    void verzugSchuetztNochImmer() {
+        // Solange die Zeile steht, ist es sein Laden. Erst die Raeumung loescht sie, und
+        // bis dahin darf er sein Warenlager behalten - sonst koennte beim ersten Ausfall
+        // jeder seine Truhe leerraeumen, und die verfallende Kaution waere die kleinere
+        // Strafe.
+        UUID anna = UUID.randomUUID();
+        Mietvertrag inVerzug = new Mietvertrag("halle-1", anna, HEUTE,
+                HEUTE.plusDays(6), 500L, 5_000L, 2);
+
+        assertTrue(Mietregel.darfInDerEinheit(inVerzug, anna));
+        assertFalse(Mietregel.darfInDerEinheit(inVerzug, UUID.randomUUID()));
+    }
+
+    @Test
+    @DisplayName("Ein ABGELAUFENER Vertrag schuetzt auch noch")
+    void abgelaufenSchuetztNochImmer() {
+        // Zwischen dem Ablauf und dem taeglichen Lauf steht die Zeile noch da - dasselbe
+        // Fenster, in dem der Spieler seinen Laden noch retten kann (siehe
+        // darfVerlaengern). In diesem Fenster darf kein Fremder hinein: Sonst waere der
+        // Weg zu einem fremden Warenlager, bis zum naechsten Takt zu warten.
+        UUID anna = UUID.randomUUID();
+        Mietvertrag abgelaufen = new Mietvertrag("halle-1", anna, HEUTE.minusDays(10),
+                HEUTE.minusDays(1), 500L, 5_000L);
+
+        assertTrue(Mietregel.abgelaufen(abgelaufen.laeuftBis(), HEUTE),
+                "der Vertrag IST abgelaufen - sonst prueft diese Probe das Falsche");
+        assertTrue(Mietregel.darfInDerEinheit(abgelaufen, anna));
+        assertFalse(Mietregel.darfInDerEinheit(abgelaufen, UUID.randomUUID()));
+    }
+
+    @Test
+    @DisplayName("Ohne Spieler gibt es nichts zu erlauben")
+    void ohneSpielerKeinUrteil() {
+        // Hart und nicht "false": Ein null kommt hier nur aus einem Programmierfehler,
+        // und ein stilles false daraus waere eine Wache, die lautlos alles verbietet.
+        assertThrows(IllegalArgumentException.class,
+                () -> Mietregel.darfInDerEinheit(null, null));
     }
 }

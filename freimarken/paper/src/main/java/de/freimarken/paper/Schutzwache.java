@@ -71,9 +71,116 @@ import org.bukkit.inventory.ItemStack;
  * dass der Rahmen selbst entfernt wird. Beides war mit der Faust zu holen. Daher jetzt
  * {@link #beimWesenSchaden} und {@link #beimFahrzeugSchaden}.
  *
- * <p>Gueltig nur in der eigenen Welt. Andere Welten des Servers gehen diese Wache nichts an.
+ * <p><b>Seit dem 08.11.2026 beantwortet sie ZWEI Fragen</b>, und beide an derselben
+ * Stelle: den Besitz einer Parzelle in ihrer Welt und - ueber {@link Ortsregel} - den
+ * Ladenschutz in der Markthalle. Eine zweite Wache daneben waere der naheliegende Weg
+ * und der falsche: Die fuenfzehn Zugaenge oben muessten dort alle noch einmal stehen,
+ * und einer von ihnen waere irgendwann anders. Genau davor warnt der erste Absatz dieser
+ * Doku.
+ *
+ * <p><b>Und eine dritte Frage in der Gegenrichtung: {@link Handelsklick}.</b> Handeln
+ * darf jeder, immer und ueberall (entschieden 08.11.2026) - auch im Laden eines anderen,
+ * sonst haette ein Kistenshop keine Kunden. Ein Schild ist aber {@link #istHeikel}
+ * (ueber {@code Tag.ALL_SIGNS}), damit niemand fremde Preise umschreibt. Beides zugleich
+ * geht nur, wenn der HANDELSKLICK vor der Besitzfrage abbiegt - und genau das tut
+ * {@link #beimKlicken}.
+ *
+ * <p>Gueltig nur in der eigenen Welt - was die Parzellen angeht. Die {@link Ortsregel}
+ * bringt ihre eigene Welt mit; alles andere geht diese Wache nichts an.
  */
 public final class Schutzwache implements Listener {
+
+    /**
+     * Eine zweite Frage zu einem Ort - heute der Ladenschutz [08.11.2026].
+     *
+     * <p>Sie wird VOR dem Besitzbuch gestellt und ist in ihrer Welt das letzte Wort. Das
+     * ist kein Vorrang aus Bequemlichkeit: Steht die Markthalle in der Marktstadt - und
+     * {@code laeden.welt} erlaubt das -, dann liegt eine Ladeneinheit auf einer Parzelle,
+     * und zwei Regeln sagen etwas ueber dieselbe Stelle. Dann gilt die Einheit, denn der
+     * Betreiber hat sie dort hingesetzt; die Parzelle regelt, was AUSSERHALB von ihr
+     * liegt.
+     *
+     * <p>Eine Schnittstelle und keine Klasse, anders als bei den Mitfahrern der
+     * {@link Spielzeitwache}: Diese Wache liegt im Besitzschutz und soll von der
+     * Ladenmiete nichts wissen. Sie fragt, die Umsetzung antwortet.
+     */
+    public interface Ortsregel {
+
+        /** Was eine Ortsregel ueber eine Stelle sagt. */
+        enum Urteil {
+            /** Erlaubt, und zwar ENDGUELTIG - das Besitzbuch wird nicht mehr gefragt. */
+            ERLAUBT,
+            /** Diese Stelle geht die Regel nichts an. Dann entscheidet der Besitz. */
+            NICHT_ZUSTAENDIG,
+            /** Verboten. Der Handbalken kommt dann aus {@link #grund}. */
+            VERBOTEN
+        }
+
+        /**
+         * Darf dieser Spieler hier handeln?
+         *
+         * <p>Wirft NICHT. Was eine Umsetzung nicht beantworten kann - eine stumme
+         * Datenbank etwa -, beantwortet sie mit {@link Urteil#VERBOTEN} und einer Zeile
+         * im Protokoll. Die sichere Richtung: Im Zweifel bleibt fremder Besitz
+         * unberuehrt.
+         */
+        Urteil pruefe(Player spieler, Location ort);
+
+        /**
+         * Der Handbalken zu einem {@link Urteil#VERBOTEN} - nur dann gerufen.
+         *
+         * <p>Die Regel liefert ihn SELBST und nicht die Wache. Sonst muesste die Wache
+         * wissen, warum eine fremde Regel nein gesagt hat - und das ist genau das
+         * Wissen, das sie nicht haben soll.
+         */
+        Component grund(Location ort);
+    }
+
+    /**
+     * Ob ein Klick ein HANDEL ist - der darf immer und ueberall [08.11.2026].
+     *
+     * <p>Die Gegenrichtung zur {@link Ortsregel}, und sie steht hier, bevor es
+     * Kistenshops gibt. Das ist Absicht: Ein Schild ist {@link #istHeikel}, damit niemand
+     * fremde Preise umschreibt - also wuerde der Ladenschutz einem Kunden den Klick auf
+     * das Kistenshop-Schild verbieten, und der Laden haette keine Kunden. Eine Luecke,
+     * die erst mit den Kistenshops eingebaut wird, bricht den Schutz an einer Stelle auf,
+     * die dann niemand mehr ueberblickt; eine, die von Anfang an dasteht, ist eine
+     * benannte Tuer.
+     *
+     * <p>Heute antwortet sie ueberall {@link #KEIN_HANDEL} - es gibt noch keine
+     * Kistenshops. Dass die Tuer trotzdem traegt, haelt
+     * {@code SchutzwacheTest} fest.
+     */
+    public interface Handelsklick {
+
+        /**
+         * Ist dieser Rechtsklick ein Handel an einem Kistenshop?
+         *
+         * <p>Gefragt wird VOR jeder Besitzfrage. Eine Umsetzung, die hier zu leicht ja
+         * sagt, macht den ganzen Schutz auf - sie muss also sicher sein, dass an dieser
+         * Stelle wirklich ein Shop steht. Wirft nicht; im Zweifel nein.
+         */
+        boolean istHandel(Player spieler, Block block);
+    }
+
+    /** Keine Ortsregel - fuer jeden Server ohne Markthalle und fuer die Proben. */
+    public static final Ortsregel KEINE_ORTSREGEL = new Ortsregel() {
+        @Override
+        public Urteil pruefe(Player spieler, Location ort) {
+            return Urteil.NICHT_ZUSTAENDIG;
+        }
+
+        @Override
+        public Component grund(Location ort) {
+            // Wird nie gerufen: pruefe sagt nie VERBOTEN. Ein Wurf statt eines leeren
+            // Balkens, damit ein Aufrufer, der das doch tut, es sofort merkt.
+            throw new IllegalStateException("KEINE_ORTSREGEL verbietet nichts - wer hier"
+                    + " einen Grund will, hat die Reihenfolge in darfHandeln umgestellt");
+        }
+    };
+
+    /** Kein Handel - der heutige Stand, solange es keine Kistenshops gibt. */
+    public static final Handelsklick KEIN_HANDEL = (spieler, block) -> false;
 
     /** Wer das hat, baut ueberall. Fuer das Team - die Regel selbst bleibt unangetastet. */
     public static final String UEBERALL = "freimarken.bauen.ueberall";
@@ -146,10 +253,39 @@ public final class Schutzwache implements Listener {
      */
     private final Sprache sprache;
 
+    /**
+     * Die zweite Frage - siehe {@link Ortsregel}. Nie {@code null}:
+     * {@link #KEINE_ORTSREGEL} ist die Antwort fuer einen Server ohne Markthalle.
+     */
+    private final Ortsregel ortsregel;
+
+    /** Die Gegenrichtung - siehe {@link Handelsklick}. Nie {@code null}. */
+    private final Handelsklick handel;
+
+    /**
+     * Die alte Form mit zwei Fragen weniger - fuer Proben, die nur Parzellen messen.
+     *
+     * <p>Sie setzt {@link #KEINE_ORTSREGEL} und {@link #KEIN_HANDEL} ein und ist damit
+     * genau die Wache von vor dem 08.11.2026. Es gibt sie, damit die Proben des
+     * Parzellenschutzes unveraendert bleiben: Eine Probe, die mitgeaendert wird, waehrend
+     * das Geprueefte sich aendert, sagt hinterher nicht mehr, was vorher galt.
+     */
     public Schutzwache(Besitzbuch buch, String welt, Sprache sprache) {
+        this(buch, welt, sprache, KEINE_ORTSREGEL, KEIN_HANDEL);
+    }
+
+    public Schutzwache(Besitzbuch buch, String welt, Sprache sprache, Ortsregel ortsregel,
+                       Handelsklick handel) {
+        if (ortsregel == null || handel == null) {
+            throw new IllegalArgumentException("Ortsregel und Handelsklick sind Pflicht -"
+                    + " wer keine hat, nimmt KEINE_ORTSREGEL und KEIN_HANDEL. Ein null"
+                    + " waere eine Wache, die bei jedem Klick wirft.");
+        }
         this.sprache = sprache;
         this.buch = buch;
         this.welt = welt;
+        this.ortsregel = ortsregel;
+        this.handel = handel;
     }
 
     // --- Die eine Regel ---------------------------------------------------------
@@ -169,10 +305,23 @@ public final class Schutzwache implements Listener {
      */
     public boolean darfHandeln(Player spieler, Location ort) {
         World gewaehlt = ort.getWorld();
-        if (gewaehlt == null || !welt.equals(gewaehlt.key().asString())) {
+        if (gewaehlt == null) {
             return true;
         }
+        // Das Teamrecht VOR beiden Fragen: Es gilt ueberall, und "ueberall" heisst seit
+        // dem 08.11.2026 auch in der Markthalle. Haenge es nur an den Parzellen, muesste
+        // ein Betreiber den Laden eines Spielers kuendigen, um darin aufzuraeumen.
         if (spieler.hasPermission(UEBERALL)) {
+            return true;
+        }
+        // Die Ortsregel ZUERST und in ihrer Welt endgueltig - die Begruendung steht an
+        // Ortsregel selbst. NICHT_ZUSTAENDIG ist der Normalfall: Die meisten Orte des
+        // Servers sind keine Ladeneinheit.
+        Ortsregel.Urteil urteil = ortsregel.pruefe(spieler, ort);
+        if (urteil != Ortsregel.Urteil.NICHT_ZUSTAENDIG) {
+            return urteil == Ortsregel.Urteil.ERLAUBT;
+        }
+        if (!welt.equals(gewaehlt.key().asString())) {
             return true;
         }
         try {
@@ -215,10 +364,24 @@ public final class Schutzwache implements Listener {
             return;
         }
         letzteMeldung.put(spieler.getUniqueId(), jetzt);
-        spieler.sendActionBar(grund(ort));
+        spieler.sendActionBar(grund(spieler, ort));
     }
 
-    private Component grund(Location ort) {
+    private Component grund(Player spieler, Location ort) {
+        // Hat die ORTSREGEL verboten, liefert sie auch den Grund. Sonst stuende auf dem
+        // Handbalken eines Ladenbesuchers "Diese Parzelle ist noch frei" - eine Auskunft
+        // ueber eine Parzelle, die ihn nichts angeht, und zwar in einer Welt, in der es
+        // gar keine gibt.
+        //
+        // Der SPIELER wird mitgegeben und die Frage noch einmal gestellt, statt die
+        // Zustaendigkeit als zweite Methode zu fuehren: Zwei Methoden, die
+        // uebereinstimmen MUESSEN, sind eine Stelle, an der eine Umsetzung sie eines
+        // Tages verschieden beantwortet. Die zweite Frage kostet eine Abfrage, und sie
+        // faellt nur bei einer Verweigerung an - die ohnehin auf eine je zwei Sekunden
+        // und Spieler gedrosselt ist.
+        if (ortsregel.pruefe(spieler, ort) == Ortsregel.Urteil.VERBOTEN) {
+            return ortsregel.grund(ort);
+        }
         // Derselbe Leseweg wie darfBauen. Mit parzelleAn hiess die Begruendung auf
         // einer gefuellten Wegflaeche "Weg und Mauer gehoeren allen" - waehrend
         // dieselbe Wache die Hand gerade abgewiesen hatte, weil sie jemandem gehoert.
@@ -372,6 +535,27 @@ public final class Schutzwache implements Listener {
     }
 
     /**
+     * Ob ein Rechtsklick als HANDEL durchgeht - die Bedingung der benannten Tuer.
+     *
+     * <p>Eine eigene Methode und kein Zweig in {@link #beimKlicken}, und das ist ein
+     * Befund der Einspritzungskampagne vom 08.11.2026: Im Zweig war die Bedingung nur
+     * ueber ein {@code PlayerInteractEvent} mit einem Schildblock erreichbar, also blieb
+     * jede Einspritzung darauf gruen - auch die, die das {@code !werkzeugHeikel}
+     * wegnahm. Hier ist sie ohne Server und ohne Ereignis zu pruefen.
+     *
+     * <p><b>Das {@code !werkzeugHeikel} ist die halbe Zusage.</b> Wer mit einer Axt, einer
+     * Hacke oder einem Eimer auf ein Schild klickt, will nicht kaufen - er aendert etwas.
+     * Ohne diese Haelfte waere die Handelstuer der Weg, mit einem Werkzeug in der Hand in
+     * jedem fremden Laden zu arbeiten.
+     *
+     * @param werkzeugHeikel ob der Gegenstand in der Hand selbst etwas aendert
+     */
+    static boolean alsHandelDurchlassen(Handelsklick handel, Player spieler, Block block,
+            boolean werkzeugHeikel) {
+        return !werkzeugHeikel && handel.istHandel(spieler, block);
+    }
+
+    /**
      * Schaden an dem, was auf der Parzelle steht.
      *
      * <p>Das war die groesste Luecke: Ein Ruestungsstaender erbt von LivingEntity, ist also
@@ -482,6 +666,18 @@ public final class Schutzwache implements Listener {
         boolean blockHeikel = istHeikel(block);
         boolean werkzeugHeikel = aendertBlock(ereignis.getItem());
         if (!blockHeikel && !werkzeugHeikel) {
+            return;
+        }
+        // Die benannte Tuer fuer den Handel [08.11.2026], und sie steht VOR der
+        // Besitzfrage: Handeln darf jeder, immer und ueberall. Ein Schild ist heikel
+        // (Tag.ALL_SIGNS), damit niemand fremde Preise umschreibt - ohne diese Zeile
+        // verbietet derselbe Schutz dem Kunden den Klick auf das Kistenshop-Schild, und
+        // der Laden hat keine Kunden.
+        //
+        // NUR fuer den reinen Klick auf den Block: Ein werkzeugHeikel-Klick aendert
+        // etwas und ist kein Handel, auch nicht an einem Shop. Wer mit der Axt auf ein
+        // Schild schlaegt, will nicht kaufen.
+        if (alsHandelDurchlassen(handel, ereignis.getPlayer(), block, werkzeugHeikel)) {
             return;
         }
         if (darfHandeln(ereignis.getPlayer(), block.getLocation())) {

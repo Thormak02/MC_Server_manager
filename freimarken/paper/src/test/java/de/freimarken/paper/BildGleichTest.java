@@ -595,6 +595,28 @@ class BildGleichTest {
                         Einsatz.von("eigentuemer", "Bert"),
                         "&cDiese Parzelle gehoert &fBert"),
 
+                // Teil C: die drei Handbalken des Ladenschutzes. DERSELBE Aufbau wie
+                // fremde-parzelle darueber - Absage rot, der fremde Name weiss: Ein
+                // Spieler soll die zwei als dieselbe Art von Auskunft lesen.
+                //
+                // BEIDE Werte in der ersten Zeile, und der Name des Standes steht
+                // VORN: In einer Markthalle stehen die Staende nebeneinander, und wer
+                // nur "der Laden von Anna" liest, raet, an welchem er gerade greift.
+                new Zeile(WacheSatz.SCHUTZ_FREMDER_LADEN, 1L,
+                        Einsatz.von("laden", "halle-1").mit("mieter", "Anna"),
+                        "&challe-1 ist der Laden von &fAnna"),
+                // GELB wie parzelle-frei und mit dem Weg darin: Hier darf AUCH niemand
+                // bauen, aber es gibt etwas zu tun. Eine Absage ohne Ausweg liest sich
+                // wie ein Fehler.
+                new Zeile(WacheSatz.SCHUTZ_LADEN_FREI, 1L, Einsatz.keine(),
+                        "&eDieser Stand ist frei - /laden mieten"),
+                // ROT und OHNE Behauptung darueber, wem der Stand gehoert: Bei einer
+                // stummen Datenbank weiss das niemand, und beide anderen Zeilen waeren
+                // erfunden.
+                new Zeile(WacheSatz.SCHUTZ_LADEN_GESTOERT, 1L, Einsatz.keine(),
+                        "&cDie Markthalle ist gerade nicht nachsehbar - versuch es noch"
+                                + " einmal."),
+
                 // Bauschritt 6, zweiter Zug: die Ankunftswache und die Portalwache.
                 // Die erwarteten Bilder kommen aus dem ROTEN Lauf von SendewegTest
                 // 33ak und 33al, der VOR dem Umzug gegen den committeten Stand lief.

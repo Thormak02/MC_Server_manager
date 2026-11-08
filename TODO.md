@@ -427,6 +427,7 @@ MOTD editor in Server einstellungen mit Farben, allen optionen usw. mit einer vo
 
 eigener minecraft launcher mit manager server integriert mit curseforge und modrinth integration
 
+citibuild: wenn server neustart oder offline warte raum mit automatischen reconnect und evtl. kleinen minigames wie jump and runs
 
 ~~KI-gestützte Funktionen nur ondemand, local ai ohne externe api?~~
 ~~Beantwortet: externe Claude-API gesetzt, lokale Modelle nur als Rückfall.~~
@@ -684,8 +685,16 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Reihenfolge der Raeumung: Truhe lesen, ins Fach legen, Vertrag loeschen, Truhe leeren. Scheitert das Einlegen, bleibt ALLES stehen - darum prueft raeumungsreif mit >= und nicht ==.
 - Das Abholfach wird mit einem BEFEHL geleert und nicht in einem Fenster: Ein offenes Fenster ist ein Zustand zwischen Spieler und Datenbank, und wer es im falschen Augenblick schliesst, haette die Ware zweimal.
 - jedes Loeschen im Fach fragt nach empfaenger UND id: Der AUTO_INCREMENT von MariaDB beginnt nach einem Neustart bei MAX(id)+1, eine Nummer kann also ein zweites Mal vergeben werden.
-- OFFEN und wichtig: Es gibt KEINEN Ladenschutz. Die Ladeneinheiten sind seit Teil A reine Geometrie - jeder kann in jedem Stand bauen und jede Ladentruhe leeren. Die Schutzwache gilt nur fuer die Marktstadt, Altfurt ist eine andere Welt. Gehoert als Frage an darfHandeln und nicht als zweite Wache: Jene deckt schon ~20 Ereignisarten ab, eine zweite Liste liefe auseinander.
-- Mit dem Ladenschutz zusammen: Beim VERMIETEN die Truhe leeren. Das schliesst das letzte Duplikationsfenster (Absturz zwischen Vertragsloeschen und Truhe-Leeren) und ist ohnehin richtig - ein neuer Mieter soll die Ware des Vorgaengers nicht erben.
+- ~~Es gibt KEINEN Ladenschutz.~~ 8.11. GEBAUT: Mietregel.darfInDerEinheit als Regel, Ladenschutz als Schutzwache.Ortsregel - also als zweite Frage an darfHandeln und nicht als zweite Wache. Damit gelten alle 15 Ereignisarten der Wache auch im Laden (Bloecke, Eimer, Feuer, Bilderrahmen, Kisten, Tuerklinken).
+- Ein FREIER Stand ist fuer JEDEN gesperrt, nicht fuer jeden offen. Der Quader ist Einrichtung des Betreibers; was ein Spieler dort hinterlaesst, hinterlaesst er dem naechsten Mieter. Das traegt zugleich die Raeumungsreihenfolge: An eine Truhe ohne Vertrag kommt niemand heran.
+- Das Teamrecht freimarken.bauen.ueberall gilt AUCH im Laden - sonst muesste ein Betreiber kuendigen, um aufzuraeumen.
+- Das ERLAUBT der Ortsregel ist in ihrer Welt endgueltig: Steht die Markthalle in der Marktstadt (laeden.welt erlaubt das), liegt eine Einheit auf einer Parzelle. Dann gilt die Einheit.
+- Drei eigene Handbalken: fremder Laden (mit Stand UND Mieter), freier Stand (gelb, mit /laden mieten darin), Datenbank stumm. Letzterer eigens, weil "frei" dann falsch und "gehoert X" erfunden waere.
+- Die HANDELSTUER (Schutzwache.Handelsklick) steht schon da, obwohl es keine Kistenshops gibt: Ein Schild ist heikel (Tag.ALL_SIGNS), also wuerde der Schutz dem Kunden den Klick auf das Shop-Schild verbieten. Heute KEIN_HANDEL; der Kistenshop-Schritt ersetzt es. Nur beim reinen Klick - mit Werkzeug in der Hand ist es kein Handel.
+- Beim VERMIETEN die Truhe leeren - noch OFFEN. Schliesst das letzte Duplikationsfenster (Absturz zwischen Vertragsloeschen und Truhe-Leeren) und ist ohnehin richtig: Ein neuer Mieter soll die Ware des Vorgaengers nicht erben.
+- 8.11. ENTSCHIEDEN, drei Saetze, die zusammen gelten: HANDELN darf jeder, immer und ueberall (kein Rang, kein Recht, kein Ort). Verkauft wird standardmaessig ueber KISTENSHOPS - Schild an einer Kiste. Im Laden darf nur der MIETER bauen, bearbeiten und Kisten befuellen oder leeren.
+- Daraus folgt die Trennlinie des Ladenschutzes: Am SCHILD handeln darf jeder, auch im fremden Laden; die KISTE oeffnen nur der Mieter. Ein Schutz, der pauschal nichts in fremden Einheiten zulaesst, macht Kistenshops unmoeglich - und das faellt erst auf, wenn der erste Kunde nichts kaufen kann.
+- Der Schutz braucht darum von Anfang an eine BENANNTE Luecke fuer den Handelsklick, die der Kistenshop-Schritt fuellt. Eine Luecke, die erst spaeter eingebaut wird, bricht den Schutz an einer Stelle auf, die dann niemand mehr ueberblickt.
 - Offen in Teil D: die Freie Truhe (Entnahme ~16 Gegenstaende je Spieler und Tag, taeglich geleert).
 - Noch von Hand zu tun, bevor jemand mieten kann: die Markthalle in Altfurt bauen und ihre Staende als Quader in laeden.einheiten eintragen.
 - 8.11. ENTSCHIEDEN, Bundesmarkt: Verkauft wird NUR am Schild, nicht per Befehl. Ein Schild je Gegenstand, an einer Kiste, wie ein gewoehnlicher Shop. /markt verkaufen faellt damit weg, /markt liste bleibt. Der Markt soll beliebig erweiterbar und anpassbar sein: ein neues Schild hinstellen genuegt, das Sortiment steht weiter in bundesmarkt.ankauf.
