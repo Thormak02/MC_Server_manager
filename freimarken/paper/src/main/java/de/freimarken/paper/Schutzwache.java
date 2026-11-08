@@ -397,12 +397,8 @@ public final class Schutzwache implements Listener {
                     ? Schutztext.parzelleFreiBalken(sprache)
                     : Schutztext.ausserhalbBalken(sprache);
         }
-        return Schutztext.fremdeParzelleBalken(sprache, namen(parzelle.get().eigentuemer()));
-    }
-
-    private static String namen(UUID spieler) {
-        String name = Bukkit.getOfflinePlayer(spieler).getName();
-        return name != null ? name : spieler.toString().substring(0, 8);
+        return Schutztext.fremdeParzelleBalken(sprache,
+                Spielername.von(parzelle.get().eigentuemer()));
     }
 
     /**

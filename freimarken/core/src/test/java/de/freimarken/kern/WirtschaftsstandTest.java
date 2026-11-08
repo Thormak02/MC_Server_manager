@@ -52,7 +52,7 @@ class WirtschaftsstandTest {
         return new Wirtschaftswerte(new Preisstaffel(grundpreis, jeFeld), startguthaben,
                 hoechstzahl, gruppenFelder, werbung, zeit, berufe, verdienst,
                 Marktwerte.VORGABE, Messwerte.VORGABE,
-                Bonuswerte.VORGABE, Mietwerte.VORGABE);
+                Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE);
     }
 
     /**

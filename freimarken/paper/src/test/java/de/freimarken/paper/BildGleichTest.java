@@ -290,7 +290,8 @@ class BildGleichTest {
                         .mit("betrag", sprache.betrag(10_000L))
                         .mit("guthaben", sprache.betrag(25_000L)),
                         "&eParzelle 3/-4 mit 3/-5 zusammenlegen?\n&7  Gebuehr: &610.000 Mark&7 · d"
-                                + "u hast 25.000 Mark\n&7  Der Weg dazwischen wird dein Bauland.\n&7"
+                                + "u hast 25.000 Mark\n"
+                                        + "&7  Der Weg dazwischen wird dein Bauland.\n&7"
                                 + "  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was da"
                                 + "nn\n&7  darauf steht."),
                 new Zeile(ParzellenSatz.ZUSAMMENLEGEN_ZU_WENIG, 1L, Einsatz.keine(),
@@ -304,7 +305,8 @@ class BildGleichTest {
                 // /parzelle auftrennen - ganz und feldweise
                 new Zeile(ParzellenSatz.AUFTRENNEN_ALLES_WARNUNG, 1L, Einsatz.von("anzahl", "3"),
                         "&eGrundstueck aus 3 Feldern ganz auftrennen?\n&7  ALLE Wege zwischen den "
-                                + "Feldern kommen zurueck. Geld gibt es keines zurueck.\n&7  Fuer ei"
+                                + "Feldern kommen zurueck. Geld gibt es keines zurueck.\n"
+                                        + "&7  Fuer ei"
                                 + "n einzelnes Feld: stell dich darauf und nimm /parzelle auftrennen"
                                 + " ohne \"alles\"."),
                 new Zeile(ParzellenSatz.AUFTRENNEN_ALLES_BESTAETIGEN, 1L, Einsatz.von("x", "3").mit("z", "-4"),
@@ -315,7 +317,8 @@ class BildGleichTest {
                         "&7  Der Weg dorthin kommt zurueck. Geld gibt es keines zurueck."),
                 new Zeile(ParzellenSatz.AUFTRENNEN_FELD_WARNUNG_ZWEI, 1L, Einsatz.von("anzahl", "2"),
                         "&eGrundstueck aus 2 Feldern auftrennen?\n&7  Es hat nur zwei Felder - ein"
-                                + "es allein geht nicht heraus, also wird\n&7  es ganz aufgetrennt."),
+                                + "es allein geht nicht heraus, also wird\n"
+                                        + "&7  es ganz aufgetrennt."),
                 new Zeile(ParzellenSatz.AUFTRENNEN_FELD_WARNUNG, 1L, Einsatz.von("x", "3").mit("z", "-4").mit("anzahl", "3"),
                         "&eDas Feld 3/-4 aus dem Grundstueck herausloesen?\n&7  Die anderen 3 Feld"
                                 + "er bleiben ein Grundstueck."),
@@ -1045,7 +1048,156 @@ class BildGleichTest {
                 new Zeile(MietSatz.ABSAGE_FALSCHE_WELT, 1L, Einsatz.keine(),
                         "&cDie Markthalle steht in Altfurt - dort wird gemietet."),
                 new Zeile(MietSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine(),
-                        "&cDas hat gerade nicht geklappt - versuch es noch einmal."));
+                        "&cDas hat gerade nicht geklappt - versuch es noch einmal."),
+
+                // ===== Plan 7.4: die Kistenshops =====
+                // {ware} ist der KURZNAME aus Shopware.kurzname, also dasselbe Wort, das
+                // auf der vierten Schildzeile steht. Ein Plus davor heisst: die Ware ist
+                // mehr als ihr Material. Diese Tafel setzt ihn als fertigen Text ein -
+                // dass er wirklich so entsteht, ist eine andere Frage und steht in
+                // ShopwareTafel.
+                new Zeile(ShopSatz.SHOP_ANGELEGT, 1L,
+                        Einsatz.von("menge", 16L).mit("ware", "STONE"),
+                        "&aShop angelegt: 16x STONE"),
+                // GOLD und nicht gruen: Die Zeile ist keine Zusage, sondern eine
+                // Eigenschaft - und zwar eine, die auffallen soll. Sie kommt HINTER den
+                // anderen und ersetzt keine.
+                new Zeile(ShopSatz.SHOP_ANGELEGT_BUND, 1L, Einsatz.keine(),
+                        "&6Bundshop: unbegrenzter Vorrat, unbegrenzter Platz,"
+                                + " unbegrenztes Geld."),
+                // GRAU mit WEISSEM Betrag, und der Punkt gehoert wieder zum grauen
+                // Stueck: Derselbe Aufbau wie bei den Preiszeilen der Ladenmiete.
+                new Zeile(ShopSatz.SHOP_PREIS_KAUF, 1L,
+                        Einsatz.von("preis", "100 Mark"),
+                        "&7Kunden kaufen fuer &f100 Mark&7."),
+                new Zeile(ShopSatz.SHOP_PREIS_VERKAUF, 1L,
+                        Einsatz.von("preis", "80 Mark"),
+                        "&7Kunden verkaufen fuer &f80 Mark&7."),
+                // GELB und nicht rot: Ein abgebauter Shop ist kein Fehler. Die zweite
+                // Haelfte ist die wichtigere - dass die WARE IN DER KISTE BLEIBT, weiss
+                // nur, wer es gesagt bekommt.
+                new Zeile(ShopSatz.SHOP_ABGEBAUT, 1L, Einsatz.von("ware", "STONE"),
+                        "&eShop abgebaut: STONE&7 - die Ware bleibt in der Kiste."),
+
+                // DIE ACHT SCHILDABSAGEN. Jede hat ZWEI Zeilen: rot, was falsch ist,
+                // grau, wie es richtig geht. Faellt die zweite weg, bleibt ein Spieler
+                // am Schild stehen und weiss nicht, was er tippen soll - und genau das
+                // ist der Zustand, in dem die Vorbilder ihre Nutzer lassen.
+                // {zeile} ist eine Zahl AUS DEM PROGRAMM: Welche Schildzeile falsch ist,
+                // weiss nur Shopschild.lies.
+                new Zeile(ShopSatz.SHOP_MENGE_KEINE_ZAHL, 1L, Einsatz.von("zeile", 2L),
+                        "&cZeile 2 ist keine Zahl.\n&7Dort gehoert die Menge hin,"
+                                + " die ein Kunde je Klick bekommt - zum Beispiel 16."),
+                new Zeile(ShopSatz.SHOP_MENGE_AUSSERHALB, 1L,
+                        Einsatz.von("zeile", 2L).mit("hoechstmenge", 3_456L),
+                        "&cZeile 2: die Menge geht von 1 bis 3.456.\n&7Mehr als"
+                                + " eine volle Kiste kann ein Handel nicht hergeben."),
+                // DIE ABSAGE, DIE AM MEISTEN ERKLAEREN MUSS: Die Preisform ist nicht zu
+                // erraten. Darum stehen alle DREI Formen in der Zeile, und zwar weiss
+                // hervorgehoben - ein Spieler soll sie abtippen koennen.
+                new Zeile(ShopSatz.SHOP_PREIS_FORM, 1L, Einsatz.von("zeile", 3L),
+                        "&cZeile 3 ist keine Preiszeile.\n&7So geht es: &fB 100"
+                                + "&7 (Kunden kaufen), &fS 80&7 (Kunden verkaufen) oder"
+                                + " &fB 100 : S 80&7 (beides)."),
+                // NENNT, WAS NICHT GEHT: Punkt, Komma und ein angehaengtes Wort sind die
+                // drei Versuche, die jeder macht. Das Programm nimmt NUR Ziffern, und
+                // zwar weil die Vorbilder mehr angenommen haben - ChestShop PR #522 zum
+                // Nullpreis und #30 zum E als Exponent.
+                new Zeile(ShopSatz.SHOP_PREIS_KEINE_ZAHL, 1L, Einsatz.von("zeile", 3L),
+                        "&cZeile 3: der Preis ist keine ganze Zahl.\n&7Nur"
+                                + " Ziffern - kein Punkt, kein Komma, kein k und kein"
+                                + " Mio."),
+                new Zeile(ShopSatz.SHOP_PREIS_AUSSERHALB, 1L,
+                        Einsatz.von("zeile", 3L).mit("hoechstpreis", 10_000_000L),
+                        "&cZeile 3: der Preis geht von 0 bis 10.000.000.\n&7Eine"
+                                + " 0 bedeutet: diese Richtung gibt es nicht."),
+                // EINE EIGENE ABSAGE und nicht die darueber: Null ist fuer EINE der
+                // beiden Richtungen erlaubt, nur beide zusammen sind der Fehler.
+                new Zeile(ShopSatz.SHOP_PREIS_BEIDE_NULL, 1L, Einsatz.von("zeile", 3L),
+                        "&cZeile 3: beide Preise sind 0.\n&7Einer von beiden"
+                                + " genuegt - aber einer muss es sein, sonst ist es ein"
+                                + " Geschenk und kein Shop."),
+                // DIE ABSAGE, DIE AM MEISTEN GELD RETTET, und sie sagt WARUM. Ein
+                // Spieler, der nur "nicht erlaubt" liest, haelt es fuer Willkuer.
+                new Zeile(ShopSatz.SHOP_PREIS_VERDREHT, 1L, Einsatz.von("zeile", 3L),
+                        "&cZeile 3: du kaufst teurer an, als du verkaufst.\n"
+                                + "&7Das ist eine Maschine, die dein Guthaben an jeden"
+                                + " Kunden ausschuettet. S darf nicht ueber B liegen."),
+                new Zeile(ShopSatz.SHOP_WARE_FEHLT, 1L, Einsatz.von("zeile", 4L),
+                        "&cZeile 4 ist leer.\n&7Dort gehoert die Ware hin - ihr"
+                                + " Name, oder ein &f?&7 fuer das, was in der Kiste"
+                                + " liegt."),
+
+                // DIE WELT SAGT NEIN. Dieselbe zweiteilige Form.
+                // NENNT DIE DREI ERLAUBTEN BEHAELTER: Ein Ofen, ein Spender und eine
+                // Shulkerkiste sehen aus wie Behaelter und sind ausgeschlossen. Ohne
+                // diese Zeile sucht der Spieler den Fehler bei seinem Schild.
+                new Zeile(ShopSatz.SHOP_KEINE_KISTE, 1L, Einsatz.keine(),
+                        "&cNeben dem Schild steht keine Kiste.\n&7Es geht eine"
+                                + " Kiste, eine Redstonetruhe oder ein Fass - direkt"
+                                + " daneben, darueber oder darunter, nicht diagonal."),
+                // DER FALL, DEN KEIN VORBILD SELBST SCHLIESST: Das Schild auf eigenem
+                // Grund, die Kiste einen Block weiter auf fremdem.
+                new Zeile(ShopSatz.SHOP_FREMDE_KISTE, 1L, Einsatz.keine(),
+                        "&cAn dieser Kiste darfst du nicht.\n&7Sie steht auf"
+                                + " fremdem Grund - ein Shop braucht eine Kiste, an die"
+                                + " du selbst herankommst."),
+                // KOMMT AUCH DEM BESITZER: Preise aendert man durch Abbauen und neu
+                // Setzen, denn nur so geht die Aenderung durch die Datenbank.
+                new Zeile(ShopSatz.SHOP_SCHON_EIN_SHOP, 1L, Einsatz.keine(),
+                        "&cHier haengt schon ein Shop.\n&7Zum Aendern bau das"
+                                + " Schild ab und setz ein neues - so bleibt das Schild"
+                                + " bei dem, was der Shop wirklich tut."),
+                // NENNT BEIDE FAELLE - leer und mehrere Arten -, weil der Spieler von
+                // aussen nicht sieht, welcher vorliegt. UND dass verzaubert eine eigene
+                // Art ist: Das ist die Folge der Entscheidung vom 08.11.2026 und von
+                // aussen nicht zu erraten.
+                new Zeile(ShopSatz.SHOP_WARE_UNKLAR, 1L, Einsatz.keine(),
+                        "&cDie Kiste sagt nicht, was du handeln willst.\n&7Fuer"
+                                + " ein &f?&7 muss genau EINE Art darin liegen. Eine"
+                                + " verzauberte und eine gewoehnliche Spitzhacke sind"
+                                + " zwei Arten."),
+                // GIBT IHM SEINE EIGENE EINGABE ZURUECK, weiss hervorgehoben: Oft ist es
+                // ein Leerzeichen zu viel, und das sieht nur, wer liest, was das
+                // Programm gelesen hat.
+                new Zeile(ShopSatz.SHOP_WARE_UNBEKANNT, 1L,
+                        Einsatz.von("getippt", "STEIN"),
+                        "&cDen Gegenstand &fSTEIN&c gibt es nicht.\n&7Leg die"
+                                + " Ware in die Kiste und schreib ein &f?&7 - das geht"
+                                + " immer, auch bei verzauberten Sachen."),
+                new Zeile(ShopSatz.SHOP_KEIN_BUNDRECHT, 1L, Einsatz.keine(),
+                        "&cBundshops darfst du nicht anlegen.\n&7Lass die erste"
+                                + " Zeile leer, dann wird es dein eigener Shop."),
+                // SAGT AUSDRUECKLICH "NOCH EINMAL VERSUCHEN": Eine Absage ohne Ausweg
+                // liest ein Spieler als Verbot, baut sein Schild ab und kommt nicht
+                // wieder. Dieselbe Linie wie wache.schutz.laden-gestoert.
+                new Zeile(ShopSatz.SHOP_GESTOERT, 1L, Einsatz.keine(),
+                        "&cDer Shop liess sich nicht anlegen.\n&7Das Schild"
+                                + " bleibt stehen - versuch es noch einmal. Bleibt es"
+                                + " dabei, sieh im Serverprotokoll nach."),
+
+                // DIE VIER HANDBALKEN. Genau EINE Zeile - keine Umbruchmarke, denn
+                // sendActionBar nimmt ein Component. Derselbe Aufbau wie
+                // wache.schutz.fremde-parzelle: Absage rot, der fremde Name weiss, und
+                // das Leerzeichen davor gehoert zum ROTEN Stueck.
+                new Zeile(ShopSatz.SHOP_SCHUTZ_SCHILD, 1L,
+                        Einsatz.von("besitzer", "Anna"),
+                        "&cDieser Shop gehoert &fAnna"),
+                // EIN EIGENER SATZ und nicht derselbe wie beim Schild: Der Spieler soll
+                // lesen, WARUM eine gewoehnlich aussehende Kiste geschuetzt ist.
+                new Zeile(ShopSatz.SHOP_SCHUTZ_KISTE, 1L,
+                        Einsatz.von("besitzer", "Anna"),
+                        "&cDiese Kiste ist der Shop von &fAnna"),
+                // DER DRITTE SATZ OHNE PLATZHALTER: Ein Bundshop hat keinen Besitzer, den
+                // man nennen koennte, und ein Wert, in dem manchmal ein Mensch und
+                // manchmal eine Einrichtung steht, zwingt zu einem Satz fuer beide.
+                new Zeile(ShopSatz.SHOP_SCHUTZ_BUND, 1L, Einsatz.keine(),
+                        "&cDas ist ein Shop des Bundes"),
+                // DIE UEBERRASCHENDSTE DER VIER: Der Traegerblock sieht nach nichts aus -
+                // ein Stein unter einem Stehschild. Der Satz muss den Grund nennen, sonst
+                // haelt der Spieler ihn fuer kaputt.
+                new Zeile(ShopSatz.SHOP_SCHUTZ_TRAEGER, 1L, Einsatz.keine(),
+                        "&cDaran haengt ein fremdes Shopschild"));
     }
 
     @ParameterizedTest(name = "11 - {0}")

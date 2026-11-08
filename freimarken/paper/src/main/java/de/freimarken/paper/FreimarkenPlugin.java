@@ -4,6 +4,7 @@ import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaBonus;
 import de.freimarken.daten.MariaAbholfach;
 import de.freimarken.daten.MariaMiete;
+import de.freimarken.daten.MariaShops;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
 import de.freimarken.daten.MariaBerufe;
@@ -30,6 +31,7 @@ import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherBerufe;
+import de.freimarken.kern.SpeicherShops;
 import de.freimarken.kern.ZwischenspeicherBerufe;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.SpeicherSpielzeit;
@@ -40,6 +42,7 @@ import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Zeitwerte;
 import de.freimarken.kern.ZwischenspeicherLager;
+import de.freimarken.kern.ZwischenspeicherShops;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -145,6 +148,35 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * geloescht.
      */
     private Abholablage abholablage;
+
+    /**
+     * Die Kistenshops - als {@link ZwischenspeicherShops} und nicht als
+     * {@code Shopablage}.
+     *
+     * <p><b>Der Typ ist hier die Sache selbst.</b> Dieses Feld muss {@code fuellen()}
+     * koennen, und das steht nur am Zwischenspeicher. Haette es den Schnittstellentyp,
+     * braeuchte der Start einen Abwaertstest - und ein vergessenes {@code fuellen()}
+     * waere kein Baufehler, sondern ein Wurf beim ersten Blockklick: Der
+     * Zwischenspeicher antwortet nicht "ich kenne keinen Shop", sondern wirft, solange er
+     * ungefuellt ist. Das ist dort Absicht, denn "hier ist kein Shop" und "ich weiss es
+     * noch nicht" sind verschiedene Dinge.
+     */
+    private ZwischenspeicherShops shopablage;
+
+    /**
+     * Die Bauschutzwache - als FELD, seit es Kistenshops gibt.
+     *
+     * <p>Vorher wurde sie unmittelbar angemeldet und nie wieder gebraucht. Jetzt braucht
+     * {@link Shopzugriff} sie: Ob ein Spieler an einer Kistenstelle darf, entscheidet
+     * DIESELBE Wache, die ueber jeden Blockklick entscheidet - eine zweite Rechtefrage
+     * daneben liefe auseinander.
+     *
+     * <p>Sie entsteht in einem FRUEHEREN Startschritt als die Shops, und das ist der
+     * ganze Grund fuer das Feld: Zwischen den beiden Schritten gibt es keine lokale
+     * Variable, die beide sehen.
+     */
+    private Schutzwache schutzwache;
+
     /**
      * Die Ladenmiete - entsteht erst, wenn Verzeichnis UND Ablage stehen.
      *
@@ -490,11 +522,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // ueberall (entschieden 08.11.2026), aber heute gibt es nichts zu handeln. Die
         // Tuer steht da, damit der Kistenshop-Schritt sie nicht erst in einen fertigen
         // Schutz schneiden muss.
-        getServer().getPluginManager().registerEvents(
-                new Schutzwache(buch, welt, sprache,
-                        new Ladenschutz(ladenverzeichnis, mietablage, ladenwelt, sprache,
-                                getLogger()),
-                        Schutzwache.KEIN_HANDEL), this);
+        schutzwache = new Schutzwache(buch, welt, sprache,
+                new Ladenschutz(ladenverzeichnis, mietablage, ladenwelt, sprache,
+                        getLogger()),
+                Schutzwache.KEIN_HANDEL);
+        getServer().getPluginManager().registerEvents(schutzwache, this);
         getLogger().info("Ladenschutz aktiv: " + ladenverzeichnis.anzahl()
                 + " Einheiten in " + ladenwelt + " - darin baut, bearbeitet und oeffnet"
                 + " Kisten nur der Mieter. Ein freier Stand ist fuer JEDEN gesperrt."
@@ -683,6 +715,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         mietwache = new Mietwache(getServer(), mietlauf, mietbuch, abholbuch, wirtschaft,
                 sprache);
         getServer().getPluginManager().registerEvents(mietwache, this);
+        richteShopsEin();
         Bonuswache bonuswache = new Bonuswache(tagesbonus, wirtschaft, sprache);
         getServer().getPluginManager().registerEvents(bonuswache, this);
         spielzeitwache = new Spielzeitwache(this, buch, bonuswache, mietwache,
@@ -696,6 +729,54 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // spielzeitBefehle MUSS ein Feld bleiben: registriereBefehle() liest es.
         spielzeitBefehle = new SpielzeitBefehle(buch, spielzeit, wirtschaft, uhr,
                 getLogger(), sprache);
+    }
+
+    /**
+     * Die Kistenshops: Zwischenspeicher fuellen, Wache anmelden.
+     *
+     * <p><b>Das Fuellen ist die erste Zeile und muss es sein.</b> Der Zwischenspeicher
+     * wirft, solange er ungefuellt ist - und zwar absichtlich, denn "hier ist kein Shop"
+     * und "ich weiss es noch nicht" sind verschiedene Antworten. Eine Wache, die auf
+     * einen ungefuellten Speicher angemeldet waere, haette beim ersten Blockklick
+     * geworfen und den Schutz fuer alle Shops aufgehoben.
+     *
+     * <p>Schlaegt das Fuellen fehl, wird KEINE Wache angemeldet und der Fehler gemeldet.
+     * Das ist die sichere Richtung: Ohne Wache laesst sich kein Shop anlegen und keiner
+     * handeln - aber auch keiner abbauen, denn ohne die Wache greift nur der gewoehnliche
+     * Bauschutz. Ein Shop in der Markthalle bleibt damit durch den {@link Ladenschutz}
+     * gedeckt; einer in der Wildnis ist offen, und genau das steht in der Meldung.
+     *
+     * <p><b>Der {@link Shopwache.Nachtrag} ist der Taktgeber fuer das Wachsen.</b> Am
+     * {@code SignChangeEvent} ist der Text noch nicht geschrieben; gewachst wird einen
+     * Takt spaeter. {@code runTask} und nicht {@code runTaskLater} mit einem Takt: Der
+     * naechste Takt ist genau das, was gebraucht wird, und eine Zahl waere eine Annahme
+     * darueber, wie lange Bukkit mit dem Schreiben braucht.
+     */
+    private void richteShopsEin() {
+        int gefunden;
+        try {
+            gefunden = shopablage.fuellen();
+        } catch (RuntimeException fehler) {
+            getLogger().log(java.util.logging.Level.SEVERE, "Die Kistenshops sind nicht"
+                    + " zu lesen - es gibt in diesem Lauf KEINE Shops: kein Anlegen,"
+                    + " kein Handeln, und kein eigener Shopschutz. Was in der Markthalle"
+                    + " steht, deckt weiter der Ladenschutz; ein Shop in der Wildnis ist"
+                    + " offen, bis dieser Server mit lesbarer Datenbank neu startet.",
+                    fehler);
+            return;
+        }
+        Shopware shopware = new Shopware(getServer(), getLogger());
+        Shopbuch shopbuch = new Shopbuch(shopablage, shopware,
+                // Die Zugriffsfrage geht an DIESELBE Wache, die ueber jeden Blockklick
+                // entscheidet - siehe Shopzugriff.
+                new Shopzugriff(getServer(), shopware, schutzwache),
+                getLogger());
+        Shopwache shopwache = new Shopwache(shopbuch, shopware, sprache,
+                wirtschaft.werte().handel().bundWort(),
+                tat -> getServer().getScheduler().runTask(this, tat), getLogger());
+        getServer().getPluginManager().registerEvents(shopwache, this);
+        getLogger().info("Kistenshops aktiv: " + gefunden + " im Speicher, "
+                + Shopliste.startzeile(wirtschaft.werte().handel()));
     }
 
     /**
@@ -722,6 +803,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // verkraften als bei den anderen - ein vergessenes Abholfach ist verlorener
             // Besitz. Die Warnung darunter nennt es.
             abholablage = new SpeicherAbholfach();
+            // Derselbe Zwischenspeicher wie mit Datenbank, nur mit einer anderen
+            // Wahrheit darunter: So laeuft der Betrieb durch GENAU denselben Code, ob
+            // eine Datenbank da ist oder nicht. Eine Fassung ohne Zwischenspeicher waere
+            // ein zweiter Weg zu der Frage, wo ein Shop haengt.
+            shopablage = new ZwischenspeicherShops(new SpeicherShops());
             // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von aussen.
             berufsablage = new ZwischenspeicherBerufe(new SpeicherBerufe());
             getLogger().warning("Keine Datenbank eingetragen: Parzellen, Guthaben und das"
@@ -754,6 +840,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // darueber waere viel Arbeitsspeicher fuer nichts - und ein zweiter Ort fuer
             // Besitz.
             abholablage = new MariaAbholfach(datenbank);
+            // ZWISCHENSPEICHER, und hier ist er keine Ersparnis, sondern die Sache:
+            // betroffen() fragt bei JEDER Explosion fuer JEDEN Block und bei jedem
+            // Trichtertakt, ob dort ein Shop haengt. Eine Datenbankabfrage an dieser
+            // Stelle waere derselbe Fehler, den QuickShop #2165 mit einem Puffer von drei
+            // Minuten Verfallszeit zu loesen versuchte - und dessen veraltete Antwort war
+            // genau die Luecke. Dieser hier ist eine VOLLSTAENDIGE Kopie ohne
+            // Verfallszeit: Es gibt keinen Augenblick, in dem er etwas Falsches sagt.
+            shopablage = new ZwischenspeicherShops(new MariaShops(datenbank));
             // KEIN Zwischenspeicher: /beruf ist kein heisser Lesepfad. Mit Teil E, wenn
             // jeder Verdienst den Beruf fragt, wird das neu bedacht - und dann als eigene
             // Schicht wie ZwischenspeicherLager, nicht als Feld hier drin.

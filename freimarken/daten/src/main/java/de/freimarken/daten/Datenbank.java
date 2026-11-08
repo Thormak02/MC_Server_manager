@@ -480,6 +480,68 @@ public final class Datenbank implements AutoCloseable {
               PRIMARY KEY (id),
               KEY ix_abholfach_empfaenger (empfaenger, id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 15: die Kistenshops - Plan 7.4.
+            //
+            // Der HAUPTSCHLUESSEL ist die SCHILDSTELLE und nicht die Kiste. An einer
+            // Doppelkiste koennen zwei Schilder haengen, die zwei verschiedene Waren
+            // handeln - eines auf jeder Haelfte. Mit der Kiste als Schluessel waere das
+            // unmoeglich, und ein Laden mit einer Ware je Kiste braeuchte doppelt so
+            // viel Platz.
+            //
+            // ix_kistenshop_kiste traegt die Gegenrichtung, und das ist der HEISSE PFAD:
+            // "ist das eine Shopkiste" wird bei jedem Trichtertakt gefragt. Im Betrieb
+            // laeuft diese Frage nicht ueber die Datenbank, sondern ueber
+            // ZwischenspeicherShops - eine vollstaendige Kopie im Arbeitsspeicher. Der
+            // Index steht trotzdem, denn genau diese Kopie wird beim Start aus dieser
+            // Tabelle gefuellt, und ein Betreiber, der von Hand nachsieht, fragt mit
+            // derselben Bedingung.
+            //
+            // besitzer ist NULL beim BUNDSHOP - er gehoert niemandem, hat unbegrenzten
+            // Bestand und sein Geld kommt aus dem Nichts. Dieselbe Loesung wie
+            // ChestShops Adminshop, nur ueber ein fehlendes Feld statt ueber den Namen
+            // "Admin Shop" in der ersten Schildzeile: Ein Spieler, der sich so nennt,
+            // kann damit nichts anfangen.
+            //
+            // ware ist MEDIUMTEXT, aus demselben Grund wie beim Abholfach (Schritt 14):
+            // Eine voll verzauberte Spitzhacke wird zu einigen hundert Zeichen, eine
+            // Kiste in einer Kiste zu mehr. Ein TEXT haelt 64 KB und SCHNEIDET darueber
+            // stumm ab - und eine abgeschnittene Warenprobe ist eine Ware, die kein
+            // Kunde mehr bekommt, weil der Vergleich mit dem Kisteninhalt immer
+            // fehlschlaegt. Dass verzauberte Ausruestung handelbar ist, ist eine
+            // Entscheidung vom 08.11.2026; diese Spalte ist ihre Folge.
+            //
+            // warenname steht NEBEN der Ware und ist nicht die Wahrheit ueber sie - wie
+            // beschriftung beim Abholfach. Er steht auf dem Schild, und er ist das
+            // Einzige, was noch sagt, was eine Ware war, wenn sie sich nach einem
+            // Minecraft-Update nicht mehr zurueckverwandeln laesst. VARCHAR(32) bei
+            // hoechstens 15 Zeichen Schildbreite: Luft fuer einen spaeter breiteren
+            // Namen, ohne die Zeile zu sprengen.
+            //
+            // Kein Fremdschluessel auf kassen - derselbe Grund wie ueberall: Ein Shop
+            // haengt an niemandes Konto, und ein Bundshop an gar keinem.
+            //
+            // IF NOT EXISTS wie bei den Schritten 7, 9, 10, 12, 13 und 14.
+            """
+            CREATE TABLE IF NOT EXISTS kistenshop (
+              welt         VARCHAR(64) NOT NULL,
+              schild_x     INT         NOT NULL,
+              schild_y     INT         NOT NULL,
+              schild_z     INT         NOT NULL,
+              kiste_x      INT         NOT NULL,
+              kiste_y      INT         NOT NULL,
+              kiste_z      INT         NOT NULL,
+              besitzer     CHAR(36)    NULL,
+              menge        INT         NOT NULL,
+              kaufpreis    BIGINT      NOT NULL,
+              verkaufpreis BIGINT      NOT NULL,
+              warenname    VARCHAR(32) NOT NULL,
+              ware         MEDIUMTEXT  NOT NULL,
+              PRIMARY KEY (welt, schild_x, schild_y, schild_z),
+              KEY ix_kistenshop_kiste (welt, kiste_x, kiste_y, kiste_z),
+              KEY ix_kistenshop_besitzer (besitzer)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -700,6 +762,11 @@ public final class Datenbank implements AutoCloseable {
             // nicht mehr nachzurechnen. Dass leereAlles() jedes Schema ohne _test am Ende
             // verweigert, ist genau fuer solche Zeilen da.
             anweisung.execute("DELETE FROM abholfach");
+            // Die Kistenshops. Ohne diese Zeile wandern Shops von einem Test in den
+            // naechsten, und weil die Schildstelle der Hauptschluessel ist, waere die
+            // Folge nicht nur ein falscher Stand, sondern ein harter Wurf beim naechsten
+            // Anlegen an derselben Stelle.
+            anweisung.execute("DELETE FROM kistenshop");
             // Die Berufe haengen an keinem Fremdschluessel, ihre Stelle in dieser Liste
             // ist also frei - sie stehen hier, damit sie nicht uebersehen werden. Ohne
             // diese Zeile wandern gewaehlte Berufe von einem Test in den naechsten, und

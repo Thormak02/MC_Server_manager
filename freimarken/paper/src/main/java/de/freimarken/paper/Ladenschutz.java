@@ -126,7 +126,7 @@ final class Ladenschutz implements Schutzwache.Ortsregel {
             return Schutztext.ladenFreiBalken(sprache);
         }
         return Schutztext.fremderLadenBalken(sprache, einheit.name(),
-                namen(vertrag.mieter()));
+                Spielername.von(vertrag.mieter()));
     }
 
     /**
@@ -147,17 +147,6 @@ final class Ladenschutz implements Schutzwache.Ortsregel {
         // wenn hier eine Einheit steht, wird die Datenbank gefragt.
         return verzeichnis.anDerStelle(ort.getBlockX(), ort.getBlockY(),
                 ort.getBlockZ());
-    }
-
-    /**
-     * Der Name des Mieters, oder acht Zeichen seiner Kennung.
-     *
-     * <p>Dieselbe Form wie in {@code Schutzwache.namen}: Ein Spieler, den der Server
-     * noch nie gesehen hat, hat keinen Namen, und "null" auf dem Handbalken sagt nichts.
-     */
-    private static String namen(UUID wer) {
-        String name = org.bukkit.Bukkit.getOfflinePlayer(wer).getName();
-        return name != null ? name : wer.toString().substring(0, 8);
     }
 
     /**

@@ -288,6 +288,9 @@ class GrenzeTest {
             "Mietwache.java",
             "ParzellenBefehle.java", "Portalwache.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
+            // Plan 7.4: die Zeilen des Anlegens und die Handbalken des Schutzes -
+            // zwei Wege, weil Chat und Handbalken zwei verschiedene Aufrufe sind.
+            "Shopwache.java",
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
 
     /**
@@ -409,6 +412,13 @@ class GrenzeTest {
             Map.entry("Reise.java", 7),
             Map.entry("RueckwegBefehle.java", 1),
             Map.entry("Schutzwache.java", 1),
+            // Plan 7.4: ZWEI, und beide sind eine Entscheidung. Die erste ist das private
+            // sende() fuer alle Chatzeilen - Anlegen, Abbauen und jede Absage laufen
+            // durch dieselbe Stelle, so wie bei LadenBefehle und Mietwache. Die zweite
+            // ist sendActionBar in melde(), und sie MUSS getrennt sein: Ein Handbalken
+            // nimmt ein Component und keine Liste, und er geht durch die Drossel.
+            // Eine Drei hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat.
+            Map.entry("Shopwache.java", 2),
             Map.entry("SpielzeitBefehle.java", 4),
             Map.entry("Sprache.java", 3),
             Map.entry("WarpBefehle.java", 3));

@@ -14,6 +14,7 @@ import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Taetigkeit;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Richtung;
+import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Wirtschaftswerte;
 import de.freimarken.kern.Zustand;
 import java.time.Duration;
@@ -213,8 +214,64 @@ class SendewegTest {
         for (Taetigkeit taetigkeit : Taetigkeit.values()) {
             alle.add(BerufSatz.taetigkeitswort(taetigkeit).pfad());
         }
+        // VIERTE Familie seit Plan 7.4: die Saetze der Kistenshops. Sie werden ueber
+        // Sprachschluessel.shopAnlage und .schildfehler gewaehlt, nicht namentlich
+        // getippt. ABGEBAUT und KEIN_SHOP fehlen, weil shopAnlage fuer sie wirft - sie
+        // kommen vom Abbauen, und dort gibt es keine Wahl zu treffen.
+        var shops = new TreeSet<String>();
+        for (Shopbuch.Bescheid bescheid : Shopbuch.Bescheid.values()) {
+            if (bescheid != Shopbuch.Bescheid.ABGEBAUT
+                    && bescheid != Shopbuch.Bescheid.KEIN_SHOP) {
+                shops.add(Sprachschluessel.shopAnlage(bescheid,
+                        Shopschild.Fehler.MENGE_KEINE_ZAHL).pfad());
+            }
+        }
+        for (Shopschild.Fehler schildfehler : Shopschild.Fehler.values()) {
+            shops.add(Sprachschluessel.schildfehler(schildfehler).pfad());
+        }
+        // DREI davon werden AUCH namentlich gesendet und gehoeren darum NICHT in die
+        // Deckung - Probe 30 vergleicht die zwei Mengen auf Gleichheit, und ein doppelt
+        // belegter Pfad machte sie rot, obwohl nichts fehlt.
+        //
+        // DASS sie namentlich gesendet werden, wird hier NACHGESEHEN und nicht
+        // behauptet. Das ist der ganze Unterschied: Stuende hier bloss dieselbe Liste
+        // wie in Sprachschluessel, waeren beide gemeinsam falsch, sobald einer dieser
+        // Saetze seinen zweiten Weg verliert - und dann stuende er in der Vorlage, der
+        // Betreiber aenderte ihn, und kein Spieler laese ihn je.
+        for (ShopSatz satz : List.of(ShopSatz.SHOP_ANGELEGT,
+                ShopSatz.SHOP_SCHON_EIN_SHOP, ShopSatz.SHOP_GESTOERT)) {
+            assertTrue(irgendwoGenannt("ShopSatz." + satz.name()),
+                    satz + " steht in der Deckungsliste als namentlich gesendet, wird"
+                            + " aber in keiner Quelldatei genannt - entweder ist der"
+                            + " zweite Sendeweg weggefallen, oder er gehoert in die"
+                            + " Deckung (Sprachschluessel.familienDeckung).");
+            shops.remove(satz.pfad());
+        }
+        alle.addAll(shops);
         assertEquals(alle, new TreeSet<>(Sprachschluessel.familienDeckung()),
                 "genau die Menge, die GrenzeTest als selbstbescheinigend durchlaesst");
+    }
+
+    /**
+     * Ob diese qualifizierte Nennung in einer Quelldatei des Programms steht.
+     *
+     * <p>Dieselbe Suche wie {@code GrenzeTest.jederSchluesselWirdGesendet}, mit denselben
+     * zwei Ausnahmen: Die eigene Aufzaehlung zaehlt nicht - dort steht der Name nur
+     * deshalb, weil es die Konstante gibt -, und {@code Sprachschluessel} auch nicht,
+     * denn dort stehen die Familien selbst.
+     */
+    private static boolean irgendwoGenannt(String marke) {
+        String eigenerBereich = marke.substring(0, marke.indexOf('.')) + ".java";
+        for (java.nio.file.Path datei : Quellen.alle()) {
+            String name = datei.getFileName().toString();
+            if (name.equals(eigenerBereich) || name.equals("Sprachschluessel.java")) {
+                continue;
+            }
+            if (Quellen.text(datei).contains(marke)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Test

@@ -87,6 +87,33 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_LADEN_MIETE("mark.verlauf.grund.laden-miete", Art.WORT),
 
     /**
+     * Die drei Worte des Handels an Kistenshops (Plan 7.4).
+     *
+     * <p><b>DREI Zeilen fuer EINEN Handel, und das ist die Entscheidung dahinter:</b> Was
+     * der Kunde zahlt, was der Verkaeufer bekommt und was der Staat nimmt, sind drei
+     * verschiedene Fluesse zwischen drei verschiedenen Konten. Ein stiller Abzug vom
+     * Erloes waere nur als Differenz zweier Zahlen zu sehen - und dann ist die Summe
+     * aller Buchungen eines Kontos nicht mehr sein Stand.
+     *
+     * <p><b>WAS gehandelt wurde, steht in keinem dieser Worte.</b> Dieselbe Trennung wie
+     * bei {@link #VERLAUF_GRUND_BERUF_VERDIENST} und
+     * {@link #VERLAUF_GRUND_BUNDESMARKT_VERKAUF}: Das Geldbuch fuehrt Geld. Was in
+     * welcher Kiste lag, ist eine andere Frage und gehoert nicht in eine Zeile, die ein
+     * Spieler unter {@code /mark verlauf} liest.
+     *
+     * <p>{@link #VERLAUF_GRUND_SHOP_GEBUEHR} faellt heute nie: Beide Gebuehrensaetze
+     * stehen ab Werk auf 0. Das Wort steht da, damit es nicht fehlt, wenn der erste Satz
+     * hochgeht - und damit eine Probe heute schon pruefen kann, dass es da ist.
+     */
+    VERLAUF_GRUND_SHOP_GEKAUFT("mark.verlauf.grund.shop-gekauft", Art.WORT),
+
+    /** Das Wort fuer {@code Buchungsgrund.SHOP_VERKAUFT} - siehe oben. */
+    VERLAUF_GRUND_SHOP_VERKAUFT("mark.verlauf.grund.shop-verkauft", Art.WORT),
+
+    /** Das Wort fuer {@code Buchungsgrund.SHOP_GEBUEHR} - siehe oben. */
+    VERLAUF_GRUND_SHOP_GEBUEHR("mark.verlauf.grund.shop-gebuehr", Art.WORT),
+
+    /**
      * Die Zeitform des Verlaufs - beim LADEN uebersetzt.
      *
      * <p>Beim Laden und nicht beim ersten {@code /mark verlauf}: Ein unbrauchbares Muster

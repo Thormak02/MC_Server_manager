@@ -17,6 +17,12 @@ permissions:
   freimarken.verwalten:
     description: Darf die Welt nachsehen, sich zu einer Parzelle versetzen und die Einstellungen neu laden
     default: op
+  # Ein EIGENES Recht und nicht freimarken.bauen.ueberall: Wer einen Bundshop anlegt,
+  # legt einen Preis des Servers fest - mit unbegrenztem Vorrat und unbegrenztem Geld.
+  # Das ist eine andere Vollmacht als die, einen Block auf fremdem Grund zu setzen.
+  freimarken.shop.bund:
+    description: Legt Bundshops an und baut sie ab - ohne Besitzer, mit unbegrenztem Vorrat
+    default: op
   freimarken.reisen:
     description: Darf mit /warp zwischen den Welten reisen
     default: true

@@ -164,6 +164,14 @@ final class Wirtschaftsliste {
         klagen.addAll(laeden.klagen());
         bericht.addAll(laeden.bericht());
 
+        // Und der Handel: ein eigener Abschnitt (handel:), eine eigene Schranke fuer
+        // beide Gebuehren und ein Wort, das auf ein Schild passen muss. Ein eigener
+        // Leser und nicht drei Zeilen hier, aus demselben Grund wie bei der Ladenmiete:
+        // Seine drei Zeilen haben eine gemeinsame Rechenprobe, und die gehoert zu ihnen.
+        Shopliste.Ergebnis handel = Shopliste.ausKonfiguration(wurzel);
+        klagen.addAll(handel.klagen());
+        bericht.addAll(handel.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -194,8 +202,8 @@ final class Wirtschaftsliste {
         // Datei, waehrend eine andere darunter sagt, dass die alte weiter gilt.
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
                 gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
-                markt.werte(), messung.werte(), bonus.werte(), laeden.werte()),
-                klagen, bericht);
+                markt.werte(), messung.werte(), bonus.werte(), laeden.werte(),
+                handel.werte()), klagen, bericht);
     }
 
     /**

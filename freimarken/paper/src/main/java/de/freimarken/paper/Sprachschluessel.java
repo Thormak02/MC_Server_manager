@@ -1,13 +1,16 @@
 package de.freimarken.paper;
 
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Taetigkeit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Das eine Verzeichnis aller Saetze - die Entsprechung zu {@code Wirtschaftsliste.SCHLUESSEL}.
@@ -24,11 +27,11 @@ import java.util.Map;
 final class Sprachschluessel {
 
     /**
-     * Die zwoelf Bereiche, in der Reihenfolge der Bauschritte.
+     * Die dreizehn Bereiche, in der Reihenfolge der Bauschritte.
      *
      * <p>Als {@code Class} und nicht als {@code values()}: So braucht ein noch leerer
      * Bereich keinen Platzhalterschluessel, und die Probe kann trotzdem nachsehen, dass
-     * alle zwoelf gefuehrt werden.
+     * alle dreizehn gefuehrt werden.
      *
      * <p><b>{@link Berufsname} steht hier NICHT</b>, und das ist der Unterschied zwischen
      * einem Bereich und einer offenen Familie: Diese Liste verlangt, dass jeder Satz in
@@ -40,9 +43,10 @@ final class Sprachschluessel {
     private static final List<Class<? extends Satz>> BEREICHE = List.of(
             BundSatz.class, MarkSatz.class, ParzellenSatz.class, AnfragenSatz.class,
             SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class,
-            MarktSatz.class, BonusSatz.class, LadenSatz.class, MietSatz.class);
+            MarktSatz.class, BonusSatz.class, LadenSatz.class, MietSatz.class,
+            ShopSatz.class);
 
-    /** Alle Saetze, aus allen zwoelf Bereichen - einmal gebaut, unveraenderlich. */
+    /** Alle Saetze, aus allen dreizehn Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
 
     /** Jeder Pfad der Datei auf seinen Satz - auch {@code .eins} und {@code .viele}. */
@@ -85,12 +89,12 @@ final class Sprachschluessel {
         return Map.copyOf(nachPfad);
     }
 
-    /** Alle Saetze, aus allen zwoelf Bereichen - die EINE Liste. */
+    /** Alle Saetze, aus allen dreizehn Bereichen - die EINE Liste. */
     static List<Satz> alle() {
         return ALLE;
     }
 
-    /** Die zwoelf Bereiche - fuer die Probe, die ihre Vollstaendigkeit zusichert. */
+    /** Die dreizehn Bereiche - fuer die Probe, die ihre Vollstaendigkeit zusichert. */
     static List<Class<? extends Satz>> bereiche() {
         return BEREICHE;
     }
@@ -230,6 +234,76 @@ final class Sprachschluessel {
     }
 
     /**
+     * Statt eines {@code switch} in {@link Shoptext} - der Satz zu einem Anlagebescheid.
+     *
+     * <p>Dieselbe Bauart wie {@link #bescheid} und aus demselben Grund: Die Zuordnung
+     * steht dort, wo sie entschieden wird, und eine Probe kann sie unmittelbar aufrufen.
+     * Der {@code switch} nennt jeden Bescheid und jeden Schildfehler, ohne
+     * {@code default} - ein neuer von beiden bricht damit den Bau und nicht erst das
+     * Spielbild.
+     *
+     * <p><b>Zwei Aufzaehlungen in einer Funktion</b>, und das ist nicht Bequemlichkeit:
+     * {@code SCHILD_FEHLERHAFT} ist gar kein Bescheid fuer einen Menschen, sondern die
+     * Ansage, dass die Antwort im Fehler steckt. Stuenden die beiden Verzweigungen
+     * getrennt, muesste der Sendeort entscheiden, welche er fragt - und das ist dieselbe
+     * Verzweigung ein zweites Mal.
+     *
+     * <p><b>Drei Bescheide werfen</b>, und sie sind der Grund, warum diese Funktion
+     * {@code Anlage} und nicht {@code Bescheid} heisst: {@code ABGEBAUT} und
+     * {@code KEIN_SHOP} kommen nur von {@code Shopbuch.baueAb}, und dort gibt es keine
+     * Wahl zu treffen - ein abgebauter Shop hat einen Satz, ein nicht vorhandener hat
+     * absichtlich keinen. Sie hier mitzufuehren hiesse, eine Wahl vorzutaeuschen.
+     *
+     * @param fehler bei {@code SCHILD_FEHLERHAFT} Pflicht, sonst ohne Bedeutung
+     */
+    static Satz shopAnlage(Shopbuch.Bescheid bescheid, Shopschild.Fehler fehler) {
+        return switch (bescheid) {
+            case ANGELEGT -> ShopSatz.SHOP_ANGELEGT;
+            case SCHILD_FEHLERHAFT -> schildfehler(fehler);
+            case KEINE_KISTE -> ShopSatz.SHOP_KEINE_KISTE;
+            case FREMDE_KISTE -> ShopSatz.SHOP_FREMDE_KISTE;
+            case SCHON_EIN_SHOP -> ShopSatz.SHOP_SCHON_EIN_SHOP;
+            case WARE_UNKLAR -> ShopSatz.SHOP_WARE_UNKLAR;
+            case WARE_UNBEKANNT -> ShopSatz.SHOP_WARE_UNBEKANNT;
+            case KEIN_BUNDRECHT -> ShopSatz.SHOP_KEIN_BUNDRECHT;
+            case GESTOERT -> ShopSatz.SHOP_GESTOERT;
+            case ABGEBAUT, KEIN_SHOP -> throw new IllegalArgumentException(bescheid
+                    + " kommt vom Abbauen und nicht vom Anlegen - dort waehlt niemand"
+                    + " zwischen Saetzen. Wer hier danach fragt, hat die beiden Taten"
+                    + " verwechselt.");
+        };
+    }
+
+    /**
+     * Der Satz zu einem Schildfehler - acht Fehler, acht Hilfen.
+     *
+     * <p>Warum acht Saetze und nicht einer mit einem eingesetzten Grund, steht im Kopf
+     * von {@link ShopSatz}. Was hier steht, ist der Grund fuer die NEUNTE Zeile:
+     * {@code KEIN_SCHILD} bekommt die Stoerungsmeldung und keinen eigenen Satz. Dieser
+     * Fehler heisst "es wurden weniger als vier Zeilen uebergeben", und am
+     * {@code SignChangeEvent} sind immer vier da - er ist also kein Fall des Spielers,
+     * sondern ein Fehler des Programms. Ein eigener Wortlaut dafuer waere ein Satz, den
+     * nie jemand liest, und der Betreiber muesste ihn trotzdem uebersetzen.
+     */
+    static Satz schildfehler(Shopschild.Fehler fehler) {
+        if (fehler == null) {
+            throw new IllegalArgumentException("Ein fehlerhaftes Schild ohne Fehler gibt"
+                    + " es nicht - Shopschild.lies liefert beides zusammen oder keines.");
+        }
+        return switch (fehler) {
+            case KEIN_SCHILD -> ShopSatz.SHOP_GESTOERT;
+            case MENGE_KEINE_ZAHL -> ShopSatz.SHOP_MENGE_KEINE_ZAHL;
+            case MENGE_AUSSERHALB -> ShopSatz.SHOP_MENGE_AUSSERHALB;
+            case PREIS_FORM -> ShopSatz.SHOP_PREIS_FORM;
+            case PREIS_KEINE_ZAHL -> ShopSatz.SHOP_PREIS_KEINE_ZAHL;
+            case PREIS_AUSSERHALB -> ShopSatz.SHOP_PREIS_AUSSERHALB;
+            case PREIS_BEIDE_NULL -> ShopSatz.SHOP_PREIS_BEIDE_NULL;
+            case PREIS_VERDREHT -> ShopSatz.SHOP_PREIS_VERDREHT;
+            case WARE_FEHLT -> ShopSatz.SHOP_WARE_FEHLT;
+        };
+    }
+
+    /**
      * Der aehnlichste bekannte Pfad zu einem unbekannten - fuer "meintest du ...?".
      *
      * <p>Die Levenshtein-Abstandsrechnung, und zwar auf dem GANZEN Pfad: Ein Tippfehler
@@ -311,6 +385,35 @@ final class Sprachschluessel {
         for (Taetigkeit taetigkeit : Taetigkeit.values()) {
             pfade.add(BerufSatz.taetigkeitswort(taetigkeit).pfad());
         }
+        // Die Saetze der Kistenshops, ueber shopAnlage und schildfehler gewaehlt.
+        // ABGEBAUT und KEIN_SHOP fehlen mit Absicht: Sie werfen dort, siehe die
+        // Begruendung an der Funktion.
+        Set<String> nurFamilie = new LinkedHashSet<>();
+        for (Shopbuch.Bescheid bescheid : Shopbuch.Bescheid.values()) {
+            if (bescheid != Shopbuch.Bescheid.ABGEBAUT
+                    && bescheid != Shopbuch.Bescheid.KEIN_SHOP) {
+                nurFamilie.add(shopAnlage(bescheid,
+                        Shopschild.Fehler.MENGE_KEINE_ZAHL).pfad());
+            }
+        }
+        for (Shopschild.Fehler fehler : Shopschild.Fehler.values()) {
+            nurFamilie.add(schildfehler(fehler).pfad());
+        }
+        // DREI DAVON WERDEN AUCH NAMENTLICH GESENDET, und darum muessen sie hier wieder
+        // heraus: Diese Liste nennt die Pfade, deren Benutzung NUR eine Familienprobe
+        // belegt. Ein Pfad, den auch die Textsuche findet, gehoert nicht hinein - die
+        // Probe vergleicht die zwei Mengen auf GLEICHHEIT, und ein doppelt belegter Pfad
+        // machte sie rot, obwohl nichts fehlt.
+        //
+        // Dass es genau diese drei sind, ist kein Zufall: Jeder von ihnen hat einen
+        // zweiten Weg hinaus, der nicht durch shopAnlage geht. SHOP_ANGELEGT baut
+        // Shoptext mit zwei bis vier Zeilen selbst; SHOP_SCHON_EIN_SHOP sendet die Wache
+        // auch dann, wenn ein BESTEHENDES Shopschild umgeschrieben wird (da gibt es
+        // keine Anlage); SHOP_GESTOERT kommt auch vom ABBAUEN.
+        nurFamilie.remove(ShopSatz.SHOP_ANGELEGT.pfad());
+        nurFamilie.remove(ShopSatz.SHOP_SCHON_EIN_SHOP.pfad());
+        nurFamilie.remove(ShopSatz.SHOP_GESTOERT.pfad());
+        pfade.addAll(nurFamilie);
         return List.copyOf(pfade);
     }
 

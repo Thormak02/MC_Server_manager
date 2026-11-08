@@ -264,7 +264,11 @@ class VorlageTest {
         Set<String> erwartet = new LinkedHashSet<>(List.of("BundSatz", "MarkSatz",
                 "ParzellenSatz", "AnfragenSatz", "SpielzeitSatz", "ReiseSatz",
                 "WacheSatz", "BerufSatz", "MarktSatz", "BonusSatz", "LadenSatz",
-                "MietSatz"));
+                "MietSatz",
+                // Plan 7.4 ist der DREIZEHNTE Bereich - der erste, der nicht zu einem
+                // Befehl gehoert: Seine Saetze kommen von einem beschriebenen Schild und
+                // von einer Hand an einem fremden Block, nicht von einem getippten Wort.
+                "ShopSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -562,6 +566,12 @@ class VorlageTest {
             // Kaution unter dem Verlust bis zur Raeumung benennt. Erlaubt ist
             // sie, aber der Betreiber soll die Folge kennen.
             "Mietliste.java -> \" Mark Miete, die bis zur Raeumung\"",
+            // Plan 7.4: die Rechenprobe des Handels. EINE Nennung, und sie steht in
+            // einer Zeile, die nur der Betreiber liest - "von 1.000 Mark bleiben
+            // 1.000" sagt ihm, was 0 Prozent bedeuten; die Zahl 0 allein sagt
+            // niemandem etwas. Die Startzeile daneben nennt kein Geld, nur
+            // Prozente - darum steht sie hier nicht.
+            "Shopliste.java -> \" Mark Umsatz bleiben\"",
             // Zwei Protokollzeilen: der Wurf eines Programmfehlers und die
             // Verlustzeile, wenn die Serie nach einer Zahlung nicht geschrieben
             // werden konnte. Beide liest nur der Betreiber.

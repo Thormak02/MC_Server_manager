@@ -83,6 +83,19 @@ mark:
       # Der einzige WIEDERKEHRENDE Grund dieses Bereichs - einmal je Tag und Laden.
       # Ein Mieter liest ihn oefter als jeden anderen, darum ist das Wort kurz.
       laden-miete: "Ladenmiete"
+      # DER HANDEL AN KISTENSHOPS: drei Zeilen fuer EINEN Handel, weil drei verschiedene
+      #   Fluesse zwischen drei Konten laufen. Was der Kunde zahlt, steht in seiner
+      #   Zeile; was der Verkaeufer bekommt, in seiner; was der Staat nimmt, in der
+      #   dritten. So ist die Summe aller Buchungen eines Kontos immer sein Stand.
+      # WAS gehandelt wurde, steht in keinem dieser Worte - dieselbe Trennung wie bei
+      #   beruf-verdienst und bundesmarkt-verkauf. Das Geldbuch fuehrt Geld.
+      # DIE HAEUFIGSTEN WORTE DES GANZEN VERLAUFS, sobald die Mall steht: Ein Spieler,
+      #   der zwanzigmal einkauft, liest sie zwanzigmal. Darum kurz.
+      shop-gekauft: "Einkauf"
+      shop-verkauft: "Verkauf"
+      # Faellt HEUTE NIE: Beide Gebuehrensaetze in handel: stehen ab Werk auf 0. Die
+      #   Zeile steht da, damit sie nicht fehlt, wenn der erste Satz hochgeht.
+      shop-gebuehr: "Marktgebuehr"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -1386,3 +1399,128 @@ tagesbonus:
     #   Anwesenheit. Ohne diese Zeile liest ein Spieler nichts von einem Bonus und
     #   haelt ihn fuer abgeschafft.
     wartet: "<gray>Tagesbonus: noch {minuten} taetige Minuten, dann bringt Tag {serie} {betrag}.</gray>"
+# DIE KISTENSHOPS (Plan 7.4). Ein Shop ist eine Kiste mit einem Schild daran: erste
+# Zeile der Besitzer, zweite die Menge je Handel, dritte die Preise in der Form
+# "B 100 : S 80", vierte die Ware oder ein Fragezeichen. B ist, was ein Kunde ZAHLT,
+# S, was er BEKOMMT - diese zwei Buchstaben stehen im Programm und sind hier nicht zu
+# aendern, weil jedes Wiki seit zehn Jahren sie nennt.
+#
+# ACHT ABSAGEN FUER DAS SCHILD, nicht eine. Das ist die teuerste Entscheidung dieses
+#   Abschnitts und die wichtigste: Jede nennt, WAS falsch ist, und die naechste Haelfte
+#   des Satzes sagt, wie es richtig geht. Ein Spieler, der am Schild steht und bloss
+#   "das geht nicht" liest, bricht nach dem zweiten Versuch ab. Die Vorbilder haben hier
+#   genau einen Satz und dafuer ein Forum voller Fragen.
+# {zeile} IST EINE ZAHL AUS DEM PROGRAMM, nicht aus diesem Wort. Welche Schildzeile
+#   falsch ist, weiss nur der Leser des Schildes. Schreib also nicht "Zeile 2" in den
+#   Satz - setz {zeile} ein, dann stimmt die Zahl auch, wenn das Schildformat sich
+#   einmal aendert.
+# {hoechstmenge} und {hoechstpreis} KOMMEN EBENFALLS AUS DEM PROGRAMM. Dieselbe Regel:
+#   Tipp die Zahl nicht ab.
+# DIE VIER ZEILEN UNTER schutz: SIND HANDBALKEN ueber dem Gegenstandsgurt, wie bei
+#   wache.schutz. Genau EINE Zeile, keine Umbruchmarke - eine zweite verschwaende sich
+#   stumm, und darum ist sie beim Laden eine Klage mit Zeilennummer.
+shop:
+  # {menge} {ware} - der Shop steht. {ware} ist derselbe Kurzname, der auf der vierten
+  #   Schildzeile landet: Der Spieler soll die Meldung mit dem Schild vor sich
+  #   vergleichen koennen.
+  # EIN PLUS VOR DEM NAMEN heisst: die Ware ist mehr als ihr Material - verzaubert,
+  #   benannt, beschaedigt oder mit Inhalt. Fuenfzehn Zeichen tragen nicht mehr, und
+  #   ganz zu schliessen ist diese Luecke auf einer Schildzeile nicht; ein Kunde soll
+  #   aber SEHEN, dass hier nicht die gewoehnliche Ware liegt.
+  angelegt: "<green>Shop angelegt: {menge}x {ware}</green>"
+  # Die ZUSATZZEILE fuer einen Bundshop - sie kommt HINTER die anderen und ersetzt
+  #   keine. Ein Bundshop ist ein gewoehnlicher Shop mit einer Eigenschaft mehr.
+  angelegt-bund: "<gold>Bundshop: unbegrenzter Vorrat, unbegrenzter Platz, unbegrenztes Geld.</gold>"
+  # {preis} - was ein Kunde zahlt. Kommt nur, wenn es einen Kaufpreis gibt.
+  preis-kauf: "<gray>Kunden kaufen fuer <white>{preis}</white>.</gray>"
+  # {preis} - was ein Kunde bekommt. Kommt nur, wenn es einen Verkaufspreis gibt.
+  # ZWEI ZEILEN UND NICHT EINE MIT BEIDEN ZAHLEN: Ein Shop kann nur kaufen, nur
+  #   verkaufen oder beides. Eine gemeinsame Zeile muesste im Nurverkaufsfall eine Null
+  #   nennen, und eine Null als Preis weist das Programm ausdruecklich ab.
+  preis-verkauf: "<gray>Kunden verkaufen fuer <white>{preis}</white>.</gray>"
+  # {ware} - das Schild ist weg, der Shop damit auch. SAGT AUSDRUECKLICH, DASS DIE WARE
+  #   IN DER KISTE BLEIBT: Ein abgebauter Shop ist kein Verlust, aber das weiss nur, wer
+  #   es gesagt bekommt. Wer es nicht liest, baut sein Schild nie wieder ab.
+  abgebaut: "<yellow>Shop abgebaut: {ware}</yellow><gray> - die Ware bleibt in der Kiste.</gray>"
+  # DIE ABSAGEN. Jede zweite Haelfte ist die Hilfe - lass sie stehen, auch wenn du die
+  #   erste umschreibst.
+  absage:
+    # {zeile} - in der Mengenzeile steht keine Zahl.
+    menge-keine-zahl: "<red>Zeile {zeile} ist keine Zahl.</red><gray>\nDort gehoert die Menge hin, die ein Kunde je Klick bekommt - zum Beispiel 16.</gray>"
+    # {zeile} {hoechstmenge} - eine Zahl, aber keine moegliche. Die Obergrenze ist ein
+    #   voller Kisteninhalt: mehr liesse sich nicht ausgeben.
+    menge-ausserhalb: "<red>Zeile {zeile}: die Menge geht von 1 bis {hoechstmenge}.</red><gray>\nMehr als eine volle Kiste kann ein Handel nicht hergeben.</gray>"
+    # {zeile} - die Preiszeile hat nicht die eine Form. DER SATZ, DER AM MEISTEN
+    #   ERKLAEREN MUSS: Die Form ist nicht zu erraten. Lass das Beispiel darin stehen.
+    preis-form: "<red>Zeile {zeile} ist keine Preiszeile.</red><gray>\nSo geht es: <white>B 100</white> (Kunden kaufen), <white>S 80</white> (Kunden verkaufen) oder <white>B 100 : S 80</white> (beides).</gray>"
+    # {zeile} - die Form stimmt, aber hinter dem Buchstaben steht keine ganze Zahl.
+    # NENNT, WAS NICHT GEHT: Punkt, Komma und ein angehaengtes Wort sind die drei
+    #   Versuche, die jeder macht. Das Programm nimmt NUR Ziffern - genau darum, weil
+    #   die Vorbilder mehr angenommen haben und daran zwei Geldfehler hatten.
+    preis-keine-zahl: "<red>Zeile {zeile}: der Preis ist keine ganze Zahl.</red><gray>\nNur Ziffern - kein Punkt, kein Komma, kein k und kein Mio.</gray>"
+    # {zeile} {hoechstpreis} - der Preis liegt ausserhalb.
+    preis-ausserhalb: "<red>Zeile {zeile}: der Preis geht von 0 bis {hoechstpreis}.</red><gray>\nEine 0 bedeutet: diese Richtung gibt es nicht.</gray>"
+    # {zeile} - beide Preise sind null. EINE EIGENE ABSAGE und nicht die darueber: Null
+    #   ist fuer EINE der beiden Richtungen erlaubt, nur beide zusammen sind der Fehler.
+    preis-beide-null: "<red>Zeile {zeile}: beide Preise sind 0.</red><gray>\nEiner von beiden genuegt - aber einer muss es sein, sonst ist es ein Geschenk und kein Shop.</gray>"
+    # {zeile} - der Ankaufspreis liegt ueber dem Verkaufspreis. DIE ABSAGE, DIE AM
+    #   MEISTEN GELD RETTET, und sie muss WARUM sagen: Ein Spieler, der nur "nicht
+    #   erlaubt" liest, haelt es fuer Willkuer. Wer fuer 100 verkauft und fuer 120
+    #   ankauft, schenkt jedem Kunden bei jedem Durchlauf 20 Mark - aus seinem eigenen
+    #   Guthaben, bis es leer ist.
+    preis-verdreht: "<red>Zeile {zeile}: du kaufst teurer an, als du verkaufst.</red><gray>\nDas ist eine Maschine, die dein Guthaben an jeden Kunden ausschuettet. S darf nicht ueber B liegen.</gray>"
+    # {zeile} - die vierte Zeile ist leer.
+    ware-fehlt: "<red>Zeile {zeile} ist leer.</red><gray>\nDort gehoert die Ware hin - ihr Name, oder ein <white>?</white> fuer das, was in der Kiste liegt.</gray>"
+    # Neben dem Schild steht keine Kiste, in der ein Shop sein darf. NENNT DIE DREI:
+    #   Ein Ofen, ein Spender und eine Shulkerkiste sehen aus wie Behaelter und sind
+    #   ausgeschlossen, jedes aus einem eigenen Grund. Ohne diese Zeile sucht der
+    #   Spieler den Fehler bei seinem Schild.
+    keine-kiste: "<red>Neben dem Schild steht keine Kiste.</red><gray>\nEs geht eine Kiste, eine Redstonetruhe oder ein Fass - direkt daneben, darueber oder darunter, nicht diagonal.</gray>"
+    # An der Kiste darf dieser Spieler nicht. DER FALL, DEN KEIN VORBILD SELBST
+    #   SCHLIESST: Das Schild haengt auf eigenem Grund, die Kiste steht einen Block
+    #   weiter auf fremdem. Ohne diese Pruefung verkaufte der Shop die Ware eines
+    #   anderen.
+    fremde-kiste: "<red>An dieser Kiste darfst du nicht.</red><gray>\nSie steht auf fremdem Grund - ein Shop braucht eine Kiste, an die du selbst herankommst.</gray>"
+    # An diesem Schild haengt schon ein Shop. KOMMT AUCH DEM BESITZER: Preise aendert
+    #   man durch Abbauen und neu Setzen, denn nur so geht die Aenderung durch die
+    #   Datenbank. Ein umgeschriebenes Schild zeigte etwas anderes an, als der Shop
+    #   handelt.
+    schon-ein-shop: "<red>Hier haengt schon ein Shop.</red><gray>\nZum Aendern bau das Schild ab und setz ein neues - so bleibt das Schild bei dem, was der Shop wirklich tut.</gray>"
+    # Das Fragezeichen, aber die Kiste sagt nicht, was gemeint ist. NENNT BEIDE FAELLE:
+    #   Der Spieler sieht von aussen nicht, welcher vorliegt. UND SAGT, DASS VERZAUBERT
+    #   ZWEI ARTEN SIND - das ist von aussen nicht zu erraten.
+    ware-unklar: "<red>Die Kiste sagt nicht, was du handeln willst.</red><gray>\nFuer ein <white>?</white> muss genau EINE Art darin liegen. Eine verzauberte und eine gewoehnliche Spitzhacke sind zwei Arten.</gray>"
+    # {getippt} - den getippten Gegenstand gibt es nicht. GIBT IHM SEINE EIGENE EINGABE
+    #   ZURUECK: Oft ist es ein Leerzeichen zu viel, und das sieht nur, wer liest, was
+    #   das Programm gelesen hat.
+    ware-unbekannt: "<red>Den Gegenstand <white>{getippt}</white> gibt es nicht.</red><gray>\nLeg die Ware in die Kiste und schreib ein <white>?</white> - das geht immer, auch bei verzauberten Sachen.</gray>"
+    # Ein Bundshop, aber das Recht dafuer fehlt.
+    kein-bundrecht: "<red>Bundshops darfst du nicht anlegen.</red><gray>\nLass die erste Zeile leer, dann wird es dein eigener Shop.</gray>"
+    # Die Datenbank hat geschwiegen. SAGT AUSDRUECKLICH "NOCH EINMAL VERSUCHEN": Eine
+    #   Absage ohne Ausweg liest ein Spieler als Verbot, baut sein Schild ab und kommt
+    #   nicht wieder.
+    gestoert: "<red>Der Shop liess sich nicht anlegen.</red><gray>\nDas Schild bleibt stehen - versuch es noch einmal. Bleibt es dabei, sieh im Serverprotokoll nach.</gray>"
+  # DER SCHUTZ. Vier Handbalken - genau EINE Zeile, keine Umbruchmarke. Welchen ein
+  #   Spieler liest, entscheidet das Programm daran, WAS er angefasst hat und WEM der
+  #   Shop gehoert.
+  # GILT UEBERALL, auch in der Wildnis: Hier entscheidet nicht der Ort, sondern der
+  #   Shop. Ein Shop am Wegesrand waere sonst von jedem abbaubar.
+  schutz:
+    # {besitzer} - das Schild eines anderen. Derselbe Aufbau wie
+    #   wache.schutz.fremde-parzelle: Absage rot, der fremde Name weiss. Das Leerzeichen
+    #   vor dem Namen gehoert zum roten Stueck - lass es, wo es ist.
+    fremdes-schild: "<red>Dieser Shop gehoert <white>{besitzer}</white></red>"
+    # {besitzer} - die Kiste eines fremden Shops. EIN EIGENER SATZ und nicht derselbe:
+    #   Der Spieler soll lesen, WARUM eine gewoehnlich aussehende Kiste geschuetzt ist -
+    #   naemlich weil ein Schild daran haengt. Sonst sucht er den Fehler bei sich.
+    fremde-kiste: "<red>Diese Kiste ist der Shop von <white>{besitzer}</white></red>"
+    # Ein Bundshop - der hat keinen Besitzer, den man nennen koennte. DER DRITTE SATZ
+    #   OHNE PLATZHALTER: Ein Wert, in dem manchmal ein Mensch und manchmal eine
+    #   Einrichtung steht, zwingt zu einem Satz, der fuer beide passt - und solche
+    #   Saetze lesen sich wie eine Fehlermeldung.
+    bundshop: "<red>Das ist ein Shop des Bundes</red>"
+    # Der Block, der ein fremdes Shopschild TRAEGT. DIE UEBERRASCHENDSTE DER VIER
+    #   ABSAGEN, denn der Block sieht nach nichts aus - ein Stein unter einem
+    #   Stehschild. Der Satz muss den Grund nennen, sonst haelt der Spieler ihn fuer
+    #   kaputt.
+    traeger: "<red>Daran haengt ein fremdes Shopschild</red>"

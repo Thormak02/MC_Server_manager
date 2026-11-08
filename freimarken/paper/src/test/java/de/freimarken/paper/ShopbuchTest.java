@@ -1,0 +1,412 @@
+package de.freimarken.paper;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Shopablage;
+import de.freimarken.kern.Shopschild;
+import de.freimarken.kern.SpeicherShops;
+import de.freimarken.kern.Warenprobe;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.logging.Logger;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Das Anlegen und Abbauen von Kistenshops - ohne Server.
+ *
+ * <p>Die Bukkit-Seite kommt ueber zwei Stellvertreter herein: ein {@link Warenleser}, der
+ * sagt, was wo liegt, und ein {@link Zugriff}, der sagt, wer wo darf. Dadurch ist jeder
+ * Bescheid, jede Reihenfolge und jede Absage hier pruefbar - und das ist der ganze Grund,
+ * warum {@link Shopbuch} kein Bukkit kennt.
+ *
+ * <p><b>Die Reihenfolge der Absagen wird mit einer WERFENDEN Ablage geprueft und nicht
+ * mit einem Zaehler.</b> Eine Zaehltafel liesse sich hochdrehen, und bei einer
+ * Fluchtfolge waere sie blind. Eine Ablage, die bei jeder Frage wirft, macht die Zusage
+ * hart: Kommt {@code SCHILD_FEHLERHAFT} heraus, wurde sie nicht gefragt - sonst stuende
+ * dort {@code GESTOERT}.
+ */
+@DisplayName("Kistenshops anlegen und abbauen")
+class ShopbuchTest {
+
+    private static final String WELT = "freimarken:altfurt";
+    private static final UUID ANNA = UUID.fromString("00000000-0000-0000-0000-00000000a111");
+    private static final UUID BERT = UUID.fromString("00000000-0000-0000-0000-00000000b222");
+    private static final String BUNDWORT = "Bund";
+
+    /** Ein gewoehnlicher Stapel Stein als Ware - derselbe in jeder Probe. */
+    private static final Warenprobe STEIN = new Warenprobe("STONE", "ZWVpbi1zdGVpbg==");
+
+    private Shopablage ablage;
+    private Leser leser;
+    private Wachmann wachmann;
+    private Shopbuch buch;
+
+    @BeforeEach
+    void bauen() {
+        ablage = new SpeicherShops();
+        leser = new Leser();
+        wachmann = new Wachmann();
+        buch = new Shopbuch(ablage, leser, wachmann, Logger.getAnonymousLogger());
+    }
+
+    // --- Das Anlegen gelingt --------------------------------------------------
+
+    @Test
+    @DisplayName("Ein gelesenes Schild wird ein Shop - mit allen Werten")
+    void anlegenGelingt() {
+        Shopbuch.Anlage anlage = anlege(ANNA, "", "16", "B 100 : S 80", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, anlage.bescheid());
+        Kistenshop shop = anlage.shop();
+        assertNotNull(shop);
+        assertEquals(ANNA, shop.besitzer());
+        assertEquals(16, shop.menge());
+        assertEquals(100L, shop.kaufpreis());
+        assertEquals(80L, shop.verkaufpreis());
+        assertEquals(STEIN, shop.ware());
+        // Und er steht WIRKLICH in der Ablage: Ein Bescheid allein ist eine Behauptung.
+        assertEquals(shop, ablage.anDemSchild(WELT, 10, 64, 10));
+    }
+
+    @Test
+    @DisplayName("Das Fragezeichen holt die Ware aus der Kiste")
+    void fragezeichenLiestDieKiste() {
+        // Der NORMALWEG seit der Entscheidung vom 08.11.2026: Verzauberte Ausruestung
+        // passt auf keine Schildzeile, also legt man sie in die Kiste.
+        leser.inDerKiste = new Warenprobe("+PICKAXE", "dmVyemF1YmVydA==");
+
+        Shopbuch.Anlage anlage = anlege(ANNA, "", "1", "B 5000", "?");
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, anlage.bescheid());
+        assertEquals("+PICKAXE", anlage.shop().ware().name());
+        assertEquals("dmVyemF1YmVydA==", anlage.shop().ware().inhalt());
+    }
+
+    @Test
+    @DisplayName("Ein Bundshop hat keinen Besitzer - und wird NICHT nach Zugriff gefragt")
+    void bundshopGehoertNiemandem() {
+        // Die Kiste eines Bundshops gehoert dem Staat, nicht dem Spieler, der das Schild
+        // schreibt. Wer das Recht hat, legt ihn auch dort an, wo er selbst nicht bauen
+        // darf - und genau das ist der Sinn des eigenen Rechts. Der Wachmann sagt hier
+        // ueberall nein, und der Shop entsteht trotzdem.
+        wachmann.erlaubt = false;
+
+        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "64", "S 1", "STONE",
+                true);
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, anlage.bescheid());
+        assertTrue(anlage.shop().demBund());
+        assertNull(anlage.shop().besitzer());
+        assertTrue(wachmann.gefragt.isEmpty(), "ein Bundshop fragt den Zugriff gar nicht");
+    }
+
+    // --- Das Schild ist falsch: und die Ablage wird NICHT gefragt -------------
+
+    @Test
+    @DisplayName("Ein falsches Schild kostet keine Abfrage - die Ablage wirft und schweigt")
+    void falschesSchildFragtDieAblageNicht() {
+        // Die harte Form der Reihenfolgezusage: Die Ablage wirft bei JEDER Frage. Kommt
+        // SCHILD_FEHLERHAFT heraus, wurde sie nicht gefragt - sonst stuende GESTOERT da.
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+                Logger.getAnonymousLogger());
+
+        Shopbuch.Anlage anlage = anlege(ANNA, "", "keine zahl", "B 100", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.SCHILD_FEHLERHAFT, anlage.bescheid());
+        assertEquals(Shopschild.Fehler.MENGE_KEINE_ZAHL, anlage.fehler());
+        assertEquals(2, anlage.zeile(), "der Spieler soll lesen, WO er nachsehen muss");
+    }
+
+    @Test
+    @DisplayName("Jeder Schildfehler kommt mit seiner Zeilennummer durch")
+    void jederSchildfehlerKommtDurch() {
+        // Nicht alle acht, aber je Zeile einer: Dass Shopschild sie richtig unterscheidet,
+        // ist dort geprueft - hier geht es darum, dass das Buch Fehler UND Zeile
+        // weitergibt und nicht bloss "geht nicht" sagt.
+        assertEquals(3, anlege(ANNA, "", "16", "Hallo", "STONE").zeile());
+        assertEquals(Shopschild.Fehler.PREIS_VERDREHT,
+                anlege(ANNA, "", "16", "B 80 : S 100", "STONE").fehler());
+        assertEquals(4, anlege(ANNA, "", "16", "B 100", "").zeile());
+    }
+
+    @Test
+    @DisplayName("Ohne Bundrecht kein Bundshop - und auch das kostet keine Abfrage")
+    void ohneBundrechtKeinBundshop() {
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+                Logger.getAnonymousLogger());
+
+        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "16", "B 100", "STONE",
+                false);
+
+        assertEquals(Shopbuch.Bescheid.KEIN_BUNDRECHT, anlage.bescheid());
+    }
+
+    // --- Die Welt sagt nein ---------------------------------------------------
+
+    @Test
+    @DisplayName("Ohne Kiste neben dem Schild entsteht kein Shop")
+    void ohneKisteKeinShop() {
+        leser.istKiste = false;
+
+        assertEquals(Shopbuch.Bescheid.KEINE_KISTE,
+                anlege(ANNA, "", "16", "B 100", "STONE").bescheid());
+    }
+
+    @Test
+    @DisplayName("Gefragt wird nach der KISTENSTELLE und nicht nach dem Schild")
+    void gefragtWirdNachDerKistenstelle() {
+        // DIE LUECKE, DIE KEIN VORBILD SELBST SCHLIESST: Das Schild haengt auf eigenem
+        // Grund, die Kiste steht einen Block weiter auf fremdem. Ohne diese Pruefung
+        // verkaufte der Shop die Ware eines anderen.
+        //
+        // Geprueft wird am ORT, nicht an einer Zahl: Der Wachmann erlaubt die
+        // Schildstelle und verbietet die Kistenstelle. Faellt die Pruefung auf die
+        // falsche Stelle zurueck, entsteht der Shop - und die Probe ist rot.
+        wachmann.verboten.add(stelle(11, 64, 10));
+
+        Shopbuch.Anlage anlage = buch.anlege(ANNA, WELT, 10, 64, 10, 11, 64, 10,
+                zeilen("", "16", "B 100", "STONE"), false, BUNDWORT);
+
+        assertEquals(Shopbuch.Bescheid.FREMDE_KISTE, anlage.bescheid());
+        assertEquals(List.of(stelle(11, 64, 10)), wachmann.gefragt,
+                "gefragt wurde GENAU die Kistenstelle, und zwar nur sie");
+    }
+
+    @Test
+    @DisplayName("Das Fragezeichen ohne eindeutige Ware ist WARE_UNKLAR")
+    void fragezeichenOhneWare() {
+        leser.inDerKiste = null;
+
+        assertEquals(Shopbuch.Bescheid.WARE_UNKLAR,
+                anlege(ANNA, "", "16", "B 100", "?").bescheid());
+    }
+
+    @Test
+    @DisplayName("Ein getippter Gegenstand, den es nicht gibt, ist WARE_UNBEKANNT")
+    void getippteWareUnbekannt() {
+        // ZWEI verschiedene Bescheide fuer "keine Ware", und das ist der Grund, warum es
+        // sie beide gibt: Der eine Spieler muss in die Kiste sehen, der andere auf sein
+        // Schild. Eine gemeinsame Absage liesse beide beim Falschen suchen.
+        leser.ausNamen = null;
+
+        assertEquals(Shopbuch.Bescheid.WARE_UNBEKANNT,
+                anlege(ANNA, "", "16", "B 100", "STEIN").bescheid());
+    }
+
+    @Test
+    @DisplayName("An einem Schild mit Shop entsteht kein zweiter")
+    void keinZweiterShopAmSelbenSchild() {
+        anlege(ANNA, "", "16", "B 100", "STONE");
+
+        Shopbuch.Anlage zweite = anlege(BERT, "", "32", "B 200", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.SCHON_EIN_SHOP, zweite.bescheid());
+        assertEquals(ANNA, ablage.anDemSchild(WELT, 10, 64, 10).besitzer(),
+                "der erste Shop bleibt unveraendert");
+    }
+
+    @Test
+    @DisplayName("Eine stumme Ablage gibt GESTOERT und keinen halben Shop")
+    void stummeAblageGibtGestoert() {
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+                Logger.getAnonymousLogger());
+
+        Shopbuch.Anlage anlage = anlege(ANNA, "", "16", "B 100", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.GESTOERT, anlage.bescheid());
+        assertNull(anlage.shop(), "ein gestoerter Versuch hat keinen Shop");
+    }
+
+    // --- Das Abbauen ----------------------------------------------------------
+
+    @Test
+    @DisplayName("Abbauen loescht die Zeile und nennt den Shop, der weg ist")
+    void abbauenLoescht() {
+        anlege(ANNA, "", "16", "B 100", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.ABGEBAUT, buch.baueAb(WELT, 10, 64, 10));
+        assertNull(ablage.anDemSchild(WELT, 10, 64, 10));
+    }
+
+    @Test
+    @DisplayName("Abbauen, wo kein Shop war, ist KEIN Fehler")
+    void abbauenOhneShop() {
+        // Dieselbe Stelle wird von zwei Seiten gemeldet - vom Schild und von der Kiste -,
+        // und die zweite Meldung soll nicht klagen. Darum KEIN_SHOP und nicht GESTOERT.
+        assertEquals(Shopbuch.Bescheid.KEIN_SHOP, buch.baueAb(WELT, 10, 64, 10));
+    }
+
+    @Test
+    @DisplayName("Zweimal abbauen gibt beim zweiten Mal KEIN_SHOP")
+    void zweimalAbbauen() {
+        anlege(ANNA, "", "16", "B 100", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.ABGEBAUT, buch.baueAb(WELT, 10, 64, 10));
+        assertEquals(Shopbuch.Bescheid.KEIN_SHOP, buch.baueAb(WELT, 10, 64, 10));
+    }
+
+    @Test
+    @DisplayName("Eine stumme Ablage macht aus dem Abbauen GESTOERT")
+    void abbauenGestoert() {
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+                Logger.getAnonymousLogger());
+
+        assertEquals(Shopbuch.Bescheid.GESTOERT, buch.baueAb(WELT, 10, 64, 10));
+    }
+
+    // --- Die zwei Fragen fuer die Wache, und ihre GEGENSAETZLICHEN Ausfaelle ---
+
+    @Test
+    @DisplayName("anDemSchild gibt bei einer Stoerung NULL - der Klick bewirkt nichts")
+    void anDemSchildGibtNullBeiStoerung() {
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+                Logger.getAnonymousLogger());
+
+        assertNull(buch.anDemSchild(WELT, 10, 64, 10));
+    }
+
+    @Test
+    @DisplayName("istShopkiste gibt bei einer Stoerung TRUE - die Kiste wird geschuetzt")
+    void istShopkisteGibtTrueBeiStoerung() {
+        // DIE UMGEKEHRTE RICHTUNG, und sie ist die wichtigere von beiden: Hier heisst die
+        // Antwort "schuetze diese Kiste". Ein stilles Nein waere eine Markthalle, aus der
+        // jeder Trichter abzieht, solange die Datenbank schweigt - und eine leergezogene
+        // Kiste bekommt niemand zurueck.
+        //
+        // Die zwei Proben zusammen sind der Punkt: Waeren beide gleich, waere eine von
+        // ihnen falsch.
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+                Logger.getAnonymousLogger());
+
+        assertTrue(buch.istShopkiste(WELT, 11, 64, 10));
+        assertTrue(buch.anDerKiste(WELT, 11, 64, 10).isEmpty(),
+                "die LISTE bleibt leer - eine erfundene Zeile waere schlimmer als keine");
+    }
+
+    @Test
+    @DisplayName("istShopkiste findet den Shop an seiner Kiste")
+    void istShopkisteFindet() {
+        anlege(ANNA, "", "16", "B 100", "STONE");
+
+        assertTrue(buch.istShopkiste(WELT, 11, 64, 10));
+        assertEquals(1, buch.anDerKiste(WELT, 11, 64, 10).size());
+        assertTrue(buch.anDerKiste(WELT, 99, 64, 99).isEmpty());
+    }
+
+    // --- Werkzeug -------------------------------------------------------------
+
+    private Shopbuch.Anlage anlege(UUID wer, String erste, String menge, String preise,
+            String ware) {
+        return buch.anlege(wer, WELT, 10, 64, 10, 11, 64, 10,
+                zeilen(erste, menge, preise, ware), false, BUNDWORT);
+    }
+
+    private Shopbuch.Anlage anlegeMitBund(UUID wer, String erste, String menge,
+            String preise, String ware, boolean darfBund) {
+        return buch.anlege(wer, WELT, 10, 64, 10, 11, 64, 10,
+                zeilen(erste, menge, preise, ware), darfBund, BUNDWORT);
+    }
+
+    private static String[] zeilen(String a, String b, String c, String d) {
+        return new String[] {a, b, c, d};
+    }
+
+    private static String stelle(int x, int y, int z) {
+        return WELT + " " + x + "/" + y + "/" + z;
+    }
+
+    /** Ein Warenleser, dessen drei Antworten je Probe einstellbar sind. */
+    private static final class Leser implements Shopbuch.Warenleser {
+
+        private Warenprobe ausNamen = STEIN;
+        private Warenprobe inDerKiste = STEIN;
+        private boolean istKiste = true;
+
+        @Override
+        public Warenprobe ausNamen(String getippt) {
+            return ausNamen;
+        }
+
+        @Override
+        public Warenprobe ausKiste(String welt, int x, int y, int z) {
+            return inDerKiste;
+        }
+
+        @Override
+        public boolean taugtAlsShopkiste(String welt, int x, int y, int z) {
+            return istKiste;
+        }
+    }
+
+    /**
+     * Ein Zugriff, der jede Frage AUFSCHREIBT - mit der Stelle, nicht als Zahl.
+     *
+     * <p>Eine Zahl sagte nur, dass gefragt wurde; der Ort sagt, WO. Genau daran haengt
+     * die Zusage, dass nach der Kistenstelle gefragt wird und nicht nach der des
+     * Schildes - und das ist eine Luecke der Vorbilder.
+     */
+    private static final class Wachmann implements Shopbuch.Zugriff {
+
+        private final List<String> gefragt = new ArrayList<>();
+        private final List<String> verboten = new ArrayList<>();
+        private boolean erlaubt = true;
+
+        @Override
+        public boolean darf(UUID wer, String welt, int x, int y, int z) {
+            String ort = welt + " " + x + "/" + y + "/" + z;
+            gefragt.add(ort);
+            return erlaubt && !verboten.contains(ort);
+        }
+    }
+
+    /**
+     * Eine Ablage, die bei JEDER Frage wirft.
+     *
+     * <p>Sie ist zweierlei auf einmal: die stumme Datenbank fuer die Stoerungsproben UND
+     * die Reihenfolgezusage. Fuer die zweite ist sie staerker als jede Zaehltafel - wer
+     * sie fragt, bekommt GESTOERT, und das ist nicht hochzudrehen und nicht blind.
+     */
+    private static final class StolperndeAblage implements Shopablage {
+
+        private static IllegalStateException stumm() {
+            return new IllegalStateException("Die Datenbank antwortet nicht");
+        }
+
+        @Override
+        public Kistenshop anDemSchild(String welt, int x, int y, int z) {
+            throw stumm();
+        }
+
+        @Override
+        public List<Kistenshop> anDerKiste(String welt, int x, int y, int z) {
+            throw stumm();
+        }
+
+        @Override
+        public List<Kistenshop> vonSpieler(UUID besitzer) {
+            throw stumm();
+        }
+
+        @Override
+        public List<Kistenshop> alle() {
+            throw stumm();
+        }
+
+        @Override
+        public void schreibe(Kistenshop shop) {
+            throw stumm();
+        }
+
+        @Override
+        public boolean loesche(String welt, int x, int y, int z) {
+            throw stumm();
+        }
+    }
+}

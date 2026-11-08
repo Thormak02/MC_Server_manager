@@ -1248,6 +1248,49 @@ laeden:
   #
   # Die Reihenfolge dieser Eintraege ist die Reihenfolge in /laden liste - hier ordnest du.
   einheiten: {}
+# Der Handel an Kistenshops (Plan 7.4). Ein Kistenshop ist eine Kiste mit einem Schild
+# daran: erste Zeile der Besitzer, zweite die Menge je Handel, dritte die Preise in der
+# Form "B 100 : S 80", vierte die Ware oder ein Fragezeichen. Rechtsklick kauft,
+# Linksklick verkauft. Dieselbe Form wie auf dem Lumia-Vorbild, belegt fuer den
+# 11.01.2016.
+#
+# HANDELN DARF JEDER, IMMER UND UEBERALL (entschieden 08.11.2026). Wo ein Shop STEHEN
+# darf, entscheidet dagegen der Bauschutz: auf der eigenen Parzelle, im gemieteten Laden,
+# in der Wildnis. Ein Shopschild und seine Kiste sind danach UEBERALL geschuetzt, auch am
+# Wegesrand, wo keine Parzelle greift - sonst waere ein Shop in der Wildnis von jedem
+# abbaubar.
+handel:
+  # Die Marktgebuehr auf einen Verkauf an einen SPIELERSHOP, in Prozent des Umsatzes.
+  # Abgezogen wird sie dem Verkaeufer, also dem Kunden, der Ware in den Shop gibt.
+  #
+  # 0 heisst: keine Gebuehr. Das ist die ausgelieferte Einstellung und die Entscheidung
+  # des Nutzers vom 08.11.2026 - erst soll der Handel laufen, die Senke kommt spaeter.
+  # Erlaubt ist 0 bis 50. Ueber der Haelfte waere die Gebuehr hoeher als der Erloes, und
+  # dann verkauft niemand mehr: eine Steuer, die ihre eigene Grundlage abschafft.
+  #
+  # Gerundet wird ABGERUNDET und auf die GANZE Summe, nicht je Stueck. Bei 5 Prozent auf
+  # 19 Mark sind das 0 Mark - wer rundet, rundet zugunsten des Spielers.
+  marktgebuehr-spieler-prozent: 0
+
+  # Dieselbe Gebuehr am BUNDESMARKT, also an einem Shop ohne Besitzer. Getrennt, weil es
+  # zwei verschiedene Dinge sind: Beim Spielershop zahlt der Verkaeufer etwas an den
+  # Staat, am Bundesmarkt verkauft er AN den Staat. Plan 7.4 sieht hier spaeter 5 Prozent
+  # vor; bis dahin steht auch diese auf 0.
+  marktgebuehr-bund-prozent: 0
+
+  # Das Wort in der ERSTEN Schildzeile, das aus einem Shop einen Bundshop macht: ohne
+  # Besitzer, mit unbegrenztem Vorrat, unbegrenztem Platz und unbegrenztem Geld.
+  # Gross- und Kleinschreibung sind gleich - "bund" wirkt wie "Bund".
+  #
+  # Anlegen darf das nur, wer das Recht freimarken.shop.bund hat. Das ist ein eigenes
+  # Recht und nicht das Teamrecht freimarken.bauen.ueberall: Wer einen Bundshop anlegt,
+  # legt einen Preis des Servers fest, und das ist eine andere Vollmacht als die, einen
+  # Block auf fremdem Grund zu setzen.
+  #
+  # LEER lassen heisst: Bundshops sind ueber ein Schild nicht anzulegen. Das ist erlaubt.
+  # Hoechstens 15 Zeichen - laenger liesse sich das Wort in eine Schildzeile gar nicht
+  # tippen, und die Einstellung wirkte nie.
+  bundshop-wort: Bund
 # Reisen zwischen den Welten (Plan 4.3): zwei Wege, kein dritter - die Tore am
 # Bundesmarkt und /warp <name>. Selbstgebaute Nether- und Endportale werden gesperrt:
 # Sie fuehren nicht in freimarken:nether, sondern in die Haupt-Nether des Servers, eine

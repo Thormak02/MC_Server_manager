@@ -157,6 +157,38 @@ public enum Buchungsgrund {
     LADEN_MIETE("laden_miete", Richtung.AUSGABE),
 
     /**
+     * Was ein Kunde an einem Kistenshop bezahlt hat (Plan 7.4).
+     *
+     * <p>Jeder Handel ist eine Buchung im Buchungsbuch, und das ist mehr als ChestShop
+     * hat: Jenes fuehrt nur Logzeilen und kein abfragbares Protokoll. Der belegte Fall
+     * dazu ist ChestShop #465 - eine Dupe-Meldung wurde geschlossen, WEIL der Melder kein
+     * Log liefern konnte. Diese Lage kann hier nicht entstehen: Das Buch ist die Wahrheit
+     * ueber Geld und beantwortet jede Frage nach einem Handel.
+     */
+    SHOP_GEKAUFT("shop_gekauft", Richtung.AUSGABE),
+
+    /**
+     * Was ein Verkaeufer an einem Kistenshop bekommen hat - NACH Abzug der Gebuehr.
+     *
+     * <p>Der Erloes und nicht der Preis: Was der Kunde zahlt, steht in seiner eigenen
+     * Zeile, und die Gebuehr in ihrer. Drei Zeilen fuer einen Handel, und jede nennt, was
+     * WIRKLICH geflossen ist - dann ist die Summe aller Buchungen eines Kontos immer sein
+     * Stand, und genau das hat der Spieltest vom 07.11.2026 gemessen.
+     */
+    SHOP_VERKAUFT("shop_verkauft", Richtung.EINNAHME),
+
+    /**
+     * Die Marktgebuehr - was der Staat von einem Handel nimmt.
+     *
+     * <p>Eine EIGENE Zeile und kein stiller Abzug vom Erloes. Ohne sie waere die Gebuehr
+     * nur als Differenz zweier Zahlen zu sehen, und ein Betreiber, der wissen will, was
+     * seine Senke einbringt, muesste sie aus zwei Gruenden zusammenrechnen. Ab Werk
+     * stehen beide Saetze auf 0, also faellt diese Buchung heute nie - sie steht da,
+     * damit sie nicht fehlt, wenn der erste Satz hochgeht.
+     */
+    SHOP_GEBUEHR("shop_gebuehr", Richtung.AUSGABE),
+
+    /**
      * Ein Abschluss ist gescheitert - die KAUTION kommt zurueck.
      *
      * <p>Nur sie, und das ist wichtig: Die Lizenz bleibt bezahlt, denn sie haengt an

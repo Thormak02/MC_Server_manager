@@ -1102,6 +1102,216 @@ bestätigen, die Übergabe passiert in einem Schritt. Fallen, gegen die ausdrüc
 wird: Angebot nach der Bestätigung ändern, Verbindungsabbruch mitten im Tausch, volles
 Inventar beim Empfänger, Fenster offen lassen und die Gegenstände anderweitig loswerden.
 
+### 7.4 Kistenshops [entschieden 08.11.2026]
+
+**Die Standardform des Verkaufs**: ein Schild an einer Kiste, in der Markthalle und
+überall sonst, wo ein Spieler bauen darf. Kein Befehl, kein Menü — man geht hin und
+klickt.
+
+#### Das Vorbild, belegt
+
+Lumia nutzte **ChestShop-3**; die Wikiseite vom 11.01.2016 (`w09_chestshops.html`) nennt
+das Format genau [belegt]:
+
+| Zeile | Inhalt |
+|---|---|
+| 1 | nichts oder der eigene Name |
+| 2 | Anzahl der Gegenstände je Handel |
+| 3 | `B[Preis]:S[Preis]` |
+| 4 | die Item-ID — oder `?`, um sie aus der Kiste zu erkennen |
+
+Bedienung [belegt]: **Rechtsklick kauft, Linksklick verkauft, Sneak handelt einen ganzen
+Stapel.** Truhe oder Redstonetruhe, einzeln oder doppelt; das Schild an, über, unter oder
+neben der Kiste, nicht diagonal und höchstens einen Block entfernt. Zum Handeln war kein
+Befehl nötig — nur `/iinfo`, um die Item-ID nachzusehen.
+
+**Das wird übernommen, mit drei Abweichungen**, und jede hat einen Grund aus dem heutigen
+Spiel:
+
+- **Die Item-ID wird ein Materialname.** IDs gibt es seit 1.13 nicht mehr.
+- **Das `?` ist der Normalweg, nicht die Ausnahme.** Siehe unten: Verzauberte Ausrüstung
+  passt nicht auf ein Schild.
+- **Preise sind ganze Mark.** Keine Dezimalstellen, kein `K`/`M`-Suffix, keine
+  wissenschaftliche Notation — siehe die Dupe-Abwehr.
+
+#### Was handelbar ist [entschieden]
+
+**Auch verzauberte, benannte und beschädigte Gegenstände.** Voll verzauberte Ausrüstung
+und verzauberte Bücher sollen verkäuflich sein — das ist der halbe Reiz eines
+Spielermarktes.
+
+Daraus folgt die tragende Entscheidung dieses Abschnitts: **Die Ware steht in der
+Datenbankzeile, nicht auf dem Schild.** ChestShop schreibt einen Itemcode in Zeile 4 und
+führt dafür vier offene Fehler („Not enough space in sign for some Enchanted Book",
+#416; #606, #611 Fehler beim Erzeugen des Namens für verzauberte Items; #305 die
+Verzauberung steht gar nicht auf dem Schild). Ein Schild hat fünfzehn Zeichen je Zeile;
+eine Spitzhacke mit fünf Verzauberungen passt dort nie hinein.
+
+Stattdessen: **Ein Exemplar der Ware in die Kiste legen, `?` aufs Schild.** Das Plugin
+nimmt den Stapel als **Warenprobe**, speichert ihn in der Zeile — dieselbe Technik, mit
+der das Abholfach aus [Teil C](#71-die-markthalle) seine Stapel hält — und schreibt einen
+lesbaren Namen aufs Schild. Das Schild ist dann Bedienoberfläche, die Zeile ist die
+Wahrheit. Ein getippter Materialname bleibt möglich für einfache Waren (`STONE`); dann
+ist die Probe ein unverändertes Exemplar.
+
+#### Die Marktgebühr [entschieden]
+
+**Erst einmal keine** — beim Spielerhandel und am Bundesmarkt. Beide Sätze stehen aber in
+der `config.yml` und sind einstellbar, denn [8.2](#82-quellen-und-senken) führt die
+Marktgebühr als laufende Senke, und ob sie gebraucht wird, zeigt erst der Betrieb.
+
+Steht ein Satz über 0, trägt ihn der **Verkäufer**: Das Schild sagt 100, der Käufer zahlt
+100, der Verkäufer bekommt 95. Der Preis auf dem Schild ist, was man zahlt — ein
+Aufschlag an der Kasse wäre die häufigste Beschwerde.
+
+#### Die Dupe-Abwehr
+
+Das ist der Teil, der aus fremden Fehlern gelernt ist. Die dokumentierten
+Vervielfältigungen von ChestShop, QuickShop und ShopChest entstehen fast **nie** in der
+Handelsrechnung, sondern an drei Rändern:
+
+**1. Jedes echte Ding, das zur Zierde in die Welt gesetzt wird.** QuickShop warnt in der
+eigenen `config.yml`: „Display items above shop containers. WARNING: May cause item
+duplication in some environments." Belegte Fälle: ein Hopper-Minecart saugt die
+schwebenden Items ein und sie sind „exactly the same as the original" (#1736); mit
+Wasserstrom lassen sie sich farmen (#1840); sie vermehren sich über Wochen auf sieben bis
+acht je Shop und bleiben nach dem Entfernen liegen (#2086); dasselbe Muster bei
+ShopChest (#11). Und die Abwehr bekam ihren eigenen Schaden: Die Erkennung markierter
+Display-Items löschte **echte** Items aus Spielerinventaren (#1594).
+
+→ **Es gibt keine Display-Items und keine Hologramme.** Das Schild trägt den Text, und
+damit entfällt diese ganze Fehlerklasse. Was ein Shop anbietet, liest man auf dem Schild.
+
+**2. Jeder Weg zur Kiste, der nicht durch den Shop-Code läuft.** ChestShop #538: Der
+Trichterschutz hängt an `InventoryMoveItemEvent`, und mit Papers
+`disable-move-event: true` feuert das Event nicht — **nichts** wird blockiert.
+QuickShop #2165: Ein Cache hielt bis zu drei Minuten die alte Antwort „hier ist kein
+Shop", also zogen Trichter, die **vor** der Shop-Erstellung lagen, weiter ab. #2069: Ein
+per Redstone abgeschalteter Trichter galt nach `getState()` wieder als aktiv. #2041 und
+#2539: Hopper-Minecarts und untergeschobene Trichter leeren Shops, an deren Kiste der
+Spieler über das Claim-Plugin gar nicht herankäme.
+
+→ **Kein Trichter zieht aus einer Shopkiste — nie, auch nicht der des Besitzers.**
+Hineinlegen bleibt erlaubt: Eine Farm, die den eigenen Laden füllt, ist gewollt. Die
+Richtung ist asymmetrisch und damit ohne Sonderfall zu prüfen. Dazu gehört die
+Weltregelseite, die [6](#6-schutz) als offen benennt: Explosion, Kolben und Fluss.
+
+**3. Rundung und Zahlenparsing.** ChestShop PR #522 „Fix zero partial price exploit": Bei
+Teilhandel wurde der skalierte Preis auf zwei Stellen gerundet und konnte **0** werden —
+kostenlos kaufen. ChestShop #30 (2014): das `E` in einem Preis als Dupe; die
+Preis-Regex erlaubt `[.e]` bis heute. QuickShop #1902: `1E99` legte das Schild, aber
+keinen Shop dahinter — Schild abbaubar, also ein freies Schild; und sehr hohe Preise
+fielen auf **10** zurück, zu dem Spieler dann kauften.
+
+→ **Preise sind ganze Mark zwischen 1 und einer Obergrenze, als Ziffern geschrieben.**
+Kein `e`, kein `K`, kein Punkt, kein Komma. **Kein Teilhandel**: Was nicht ganz geht,
+geht nicht — die Absage nennt, was fehlt. Dieselbe Linie wie beim Mieten
+([7.1](#71-die-markthalle)): Eine Rechnung, die kein Geld erzeugen kann, ist einer
+bequemen vorzuziehen.
+
+**Dazu drei Schranken, die sich bei den Vorbildern bewährt haben:**
+
+- **Verkaufspreis nie über dem Kaufpreis.** ChestShop:
+  `BLOCK_SHOPS_WITH_SELL_PRICE_HIGHER_THAN_BUY_PRICE: true`, Begründung in der eigenen
+  Config: „This prevents newbies from creating shops that would be exploited." Wäre S
+  über B, kauft man im selben Shop billig und verkauft teuer zurück — eine
+  Gelddruckmaschine aus Versehen.
+- **Klick-Entprellung**, 250 ms je Spieler (ChestShops Wert). Ohne sie wird aus einem
+  gehaltenen Mausknopf eine Reihe halber Buchungen.
+- **Shulker-Kisten und Bündel sind kein Shop-Block.** QuickShop #1889: Ein Ankaufshop für
+  Shulker-Boxen **mit einer Shulker-Box als Shopblock** ließ bei anderer Farbe Shulker in
+  Shulker — gegen das Vanilla-Verhalten. Shop-Blöcke sind Kiste, Redstonetruhe und Fass;
+  Ofen und Spender nicht (QuickShops eigene Warnliste nennt sie: mehrere Slots,
+  Redstone-Zugriff).
+
+#### Was es NICHT gibt, und warum
+
+- **Kein Ankauf und Verkauf getrennt.** Beide Preise stehen auf einem Schild (`B … : S …`),
+  wie bei Lumia. QuickShop verlangt für beides zwei Shops — das ist eine Doppelkiste je
+  Ware und in einer Markthalle mit wenigen Ständen nicht tragbar.
+- **Keine Shop-Rollen.** QuickShop #2539 ist eine Sicherheitslücke aus genau diesem
+  Gedanken: Die Rolle `staff` durfte `set_shoptype`, konnte den Shop von Verkauf auf
+  Ankauf umstellen und das Konto des Besitzers leeren. Ein Laden hat einen Besitzer;
+  wer mithelfen soll, bekommt Waren in die Hand.
+- **Kein eigenes Handelsprotokoll.** Jeder Handel ist eine Buchung im Buchungsbuch
+  ([8.6](#86-das-buchungsbuch-erledigt-02112026)), und das ist mehr als ChestShop hat
+  (nur Logzeilen) und sauberer als eine zweite Tabelle. ChestShop #465 wurde
+  geschlossen, **weil der Melder kein Log liefern konnte** — diese Lage kann hier nicht
+  entstehen.
+
+#### Die Spielschicht [gebaut 08.11.2026]
+
+Das Anlegen, der Schutz und der Trichter. Der **Handel selbst** — kaufen und verkaufen am
+Schild — kommt im nächsten Schritt; die Handelstür in `Schutzwache.Handelsklick` steht
+darum weiter auf `KEIN_HANDEL`.
+
+**Anlegen am `SignChangeEvent`.** Davor steht eine Vorfrage, `Shopschild.istGemeint`: Ein
+`B` oder `S` mit etwas dahinter in Zeile 3 heißt „hier ist ein Shop gemeint". Ohne sie
+bekäme jedes Wegweiserschild die Absage „Zeile 2 ist keine Zahl" — `lies` antwortet auf
+ein gewöhnliches Schild mit einem Fehler, denn es hat keine Menge. Die **Zahl** dahinter
+ist absichtlich *nicht* Teil der Vorfrage: Wer sich vertippt hat, soll seine Absage mit
+der Hilfe lesen und nicht ein stumm stehengelassenes Schild bekommen.
+
+**Acht Absagen für das Schild, nicht eine.** Jede nennt, was falsch ist, und die zweite
+Zeile sagt, wie es richtig geht. ChestShops „You don't have permission" deckt sieben
+verschiedene Fälle ab und hat dafür ein Forum voller Fragen. Die Zeilennummer kommt aus
+`Shopschild.lies` und steht nicht im Wortlaut.
+
+**Drei Lücken der Vorbilder, geschlossen:**
+
+1. **Die Kistenstelle wird eigens geprüft.** Ein Schild hängt auf eigenem Grund, die Kiste
+   steht einen Block weiter auf fremdem — dann verkaufte dieser Shop die Ware eines
+   anderen. ChestShop deckt das nur über Fremdplugins ab (`CHECK_ACCESS_FOR_SHOP_USE`,
+   LWC, WorldGuard); QuickShop #2539 nennt denselben Fall von der anderen Seite. Hier ist
+   die Frage Teil des Anlegens, und sie geht an **dieselbe** `Schutzwache`, die über jeden
+   Blockklick entscheidet (`Shopzugriff`) — eine zweite Rechtefrage daneben liefe
+   auseinander.
+2. **Der Trägerblock ist mitgeschützt.** Ein Schild fällt, wenn sein Träger verschwindet,
+   und dann steht ein Shop in der Datenbank, dessen Schild es nicht mehr gibt. ChestShop
+   fasst das mit einem eigenen `handlePhysicsBreak` **nach** dem Fall nach; hier fällt
+   nichts. Weniger Code und kein Zeitfenster.
+3. **Das Schild wird gewachst** (`setWaxed`). Seit Minecraft 1.20 darf jeder ein
+   unbewachstes Schild bearbeiten — ein Kunde könnte an einem fremden Shop den Preis
+   ändern. Wachs ist Vanilla: Es wirkt auch ohne dieses Plugin und gegen den Besitzer
+   selbst. Der zweite Riegel ist, dass die Wache jedes Beschreiben einer Stelle mit Shop
+   abweist, gleich von wem — die Wahrheit steht in der Datenbank, nicht auf dem Holz. Das
+   ist auch QuickShops eigene Warnung zu `allow-owner-break-shop-sign`.
+
+**Neun Ereignisse**, und jedes nennt einen Weg, auf dem ein Shopblock verschwinden kann:
+`SignChangeEvent`, `BlockBreakEvent`, `EntityExplodeEvent`, `BlockExplodeEvent`,
+`BlockBurnEvent` (Schilder und Kisten sind aus Holz), `BlockPistonExtendEvent`,
+`BlockPistonRetractEvent`, `EntityChangeBlockEvent`, `LeavesDecayEvent` und
+`InventoryMoveItemEvent`. Explosionen **kürzen die Blockliste** statt abzubrechen: Ein
+abgebrochenes Explosionsereignis wäre ein Schutzzauber für das halbe Viertel.
+`BlockFromToEvent` und `BlockPhysicsEvent` fehlen mit Begründung — Flüssigkeiten entfernen
+weder Schild noch Kiste, und das allgemeine Physikereignis feuert vielhundertfach je
+Sekunde.
+
+**Der Trichter ist unsymmetrisch.** Nur `getSource()` wird geprüft: Kein Trichter zieht aus
+einer Shopkiste — nie, auch nicht der des Besitzers. Hineinlegen bleibt erlaubt, denn so
+wird ein Laden beliefert. Eine Ausnahme für den Besitzer wäre genau die Lücke aus
+QuickShop #2539 („they can place a hopper underneath it") mit einer Besitzerprüfung davor,
+und die läuft ins Leere, sobald jemand die Kiste des Nachbarn beliefert.
+
+**Beide Hälften einer Doppelkiste sind geschützt**, auch die ohne Schild. Sie teilen ein
+Inventar: Ein Trichter unter der anderen Hälfte zieht dieselben Gegenstände, und wer die
+freie Hälfte abbaut, bekommt deren Hälfte der Ware. Die Falle dabei ist
+`Inventory.getLocation()` — bei einer Doppelkiste gibt es die **Mitte** zwischen den
+Hälften, also eine Stelle mit halben Koordinaten, an der kein Block steht und nie ein Shop
+hängt. Der Weg geht über `getHolder(false)`.
+
+**Der Warenname wird gekürzt, aber nie verglichen.** `NETHERITE_PICKAXE` hat siebzehn
+Zeichen; hart gekürzt stünde „NETHERITE_PICKA" auf dem Schild, also wird das letzte
+Wortstück genommen („PICKAXE"). Dass dabei zwei Materialien denselben Kurznamen bekommen
+können, ist harmlos — *solange niemand den Namen zum Vergleichen benutzt*. Was eine Ware
+ist, entscheidet `Warenprobe.inhalt`. Ein `+` davor heißt „mehr als ihr Material"
+(verzaubert, benannt, beschädigt) und ist die halbe Antwort auf ChestShop #305.
+
+**Was nicht geprüft ist:** alles mit Bukkit — `Shopware` (Gegenstand ↔ Text), die neun
+Ereignisse, das Wachsen, die Doppelkiste, der Trichter. Dafür stehen Quelltexttafeln
+(`ShopwacheTafel`), und die sagen selbst, dass sie Text prüfen und nicht Wirkung. Eine
+wirkliche Probe bräuchte einen Probeserver mit Blöcken, einem Spieler und einem Trichter.
+
 ---
 
 ## 8. Wirtschaft
