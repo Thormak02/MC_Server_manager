@@ -78,6 +78,15 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_LADEN_ERSTATTET("mark.verlauf.grund.laden-erstattet", Art.WORT),
 
     /**
+     * Das Wort fuer {@code Buchungsgrund.LADEN_MIETE} [Teil C].
+     *
+     * <p>Der einzige WIEDERKEHRENDE Grund dieses Bereichs: Er steht einmal je Tag und
+     * Laden im Verlauf, und ein Mieter sieht ihn oefter als jeden anderen. Darum ist das
+     * Wort kurz.
+     */
+    VERLAUF_GRUND_LADEN_MIETE("mark.verlauf.grund.laden-miete", Art.WORT),
+
+    /**
      * Die Zeitform des Verlaufs - beim LADEN uebersetzt.
      *
      * <p>Beim Laden und nicht beim ersten {@code /mark verlauf}: Ein unbrauchbares Muster

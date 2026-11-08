@@ -534,14 +534,34 @@ class VorlageTest {
             // Alles an den BETREIBER, der seine config.yml liest. Was ein SPIELER
             // liest, kommt aus Miettext und damit aus waehrung.betrag - dass von dort
             // keine Zeile in dieser Tafel steht, ist die Zusage dieses Teils.
+            // Teil C: fuenf Protokollzeilen des taeglichen Laufs. Jede geht an den
+            // BETREIBER: eine erledigte Zahlung mit ihren Ausfaellen, ein Ausfall mit
+            // seiner Zahl, die Kaution beim Ablauf, die verfallene Kaution bei der
+            // Raeumung und die SEVERE-Zeile, wenn die Rueckzahlung scheitert. Was der
+            // MIETER liest, kommt aus Miettext und damit aus waehrung.betrag - dass von
+            // dort keine Zeile in dieser Tafel steht, ist die Zusage dieses Teils.
+            "Mietlauf.java -> \" Mark bezahlt - die \"",
+            "Mietlauf.java -> \" Mark fehlen (\"",
+            "Mietlauf.java -> \" Mark zurueck)\"",
+            "Mietlauf.java -> \" Mark verfallen)\"",
+            "Mietlauf.java -> \" Mark fuer \"",
             "Mietliste.java -> \"Mark einmalig\"",
             "Mietliste.java -> \" Mark je Tag, \"",
             "Mietliste.java -> \" Mark voller Zeitraum). \"",
-            "Mietliste.java -> \" Mark - zurueck nur bei ordentlicher Kuendigung,"
-                    + " nicht beim\"",
+            "Mietliste.java -> \" Mark - zurueck beim Kuendigen und beim"
+                    + " Ablaufen, nicht\"",
             "Mietliste.java -> \" Mark einmalig. \"",
+            // Teil C: der Verlust bis zur Raeumung, NEBEN der Kaution. Genau
+            // diese Gegenueberstellung ist der Zweck der Zeile - wer "1.500
+            // Mark bis zur Raeumung" neben einer Kaution von 500 liest, sieht,
+            // dass das Weglaufen billiger ist als das Zahlen.
+            "Mietliste.java -> \" Mark Miete auf. \"",
             "Mietliste.java -> \"Mark je Tag\"",
             "Mietliste.java -> \"Mark\"",
+            // Teil C, Befund aus dem gelesenen Startlauf: Die Zeile, die eine
+            // Kaution unter dem Verlust bis zur Raeumung benennt. Erlaubt ist
+            // sie, aber der Betreiber soll die Folge kennen.
+            "Mietliste.java -> \" Mark Miete, die bis zur Raeumung\"",
             // Zwei Protokollzeilen: der Wurf eines Programmfehlers und die
             // Verlustzeile, wenn die Serie nach einer Zahlung nicht geschrieben
             // werden konnte. Beide liest nur der Betreiber.

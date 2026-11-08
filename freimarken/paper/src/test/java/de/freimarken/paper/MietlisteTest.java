@@ -92,9 +92,16 @@ class MietlisteTest {
 
         assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
         assertEquals(Mietwerte.VORGABE, ergebnis.werte());
-        assertTrue(ergebnis.bericht().stream().anyMatch(z -> z.contains("4 von 4")),
-                "der Bericht muss sagen, dass alle vier Zeilen fehlen: "
+        // Seit Teil C sind es FUENF Zeilen - die Ausfallschranke kam dazu. Die Zahl
+        // steht hier als Text und nicht als SCHLUESSEL.size(): Eine Probe, die dieselbe
+        // Liste zaehlt wie das Programm, ist auch dann gruen, wenn beide eine Zeile
+        // vergessen haben.
+        assertTrue(ergebnis.bericht().stream().anyMatch(z -> z.contains("5 von 5")),
+                "der Bericht muss sagen, dass alle fuenf Zeilen fehlen: "
                         + ergebnis.bericht());
+        assertTrue(ergebnis.bericht().stream()
+                        .anyMatch(z -> z.contains("laeden.ausfaelle-bis-raeumung")),
+                "und die neue Zeile NAMENTLICH nennen: " + ergebnis.bericht());
     }
 
     @Test
@@ -286,7 +293,8 @@ class MietlisteTest {
     @Test
     @DisplayName("Eine Dauer, die als int zur VORGABE verkuerzt, wird beklagt")
     void dauerVerkuerztNichtStill() {
-        // 4294967326 wird als int genau 30 - und das ist zufaellig die Vorgabe. Eine
+        // 4294967326 wird als int genau 30. Bis zum 08.11.2026 war das zufaellig die
+        // Vorgabe und die Probe damit zahnlos; seit die Vorgabe 7 ist, trennt sie. Eine
         // Fassung, die den verkuerzten int prueft, bekaeme hier keinen Anlass zu klagen,
         // und der Betreiber erfuehre nie, dass seine Zahl nicht gilt.
         var ergebnis = lies("laeden:" + System.lineSeparator()
@@ -375,6 +383,151 @@ class MietlisteTest {
                 "Datei und Programm muessen dieselben Zahlen nennen");
         assertTrue(ergebnis.bericht().stream().noneMatch(z -> z.contains("fehlen")),
                 "und keine Zeile darf fehlen: " + ergebnis.bericht());
+    }
+
+    @Test
+    @DisplayName("Die Ausfallschranke wird WIRKLICH aus der Datei gelesen")
+    void schrankeKommtAusDerDatei() {
+        // Befund der Einspritzungskampagne vom 08.11.2026: Der ganze Leseaufruf liess
+        // sich durch die Vorgabe ersetzen, ohne dass eine Probe rot wurde - jede Probe,
+        // die die Schranke beruehrte, setzte zufaellig genau die 3 aus der Vorgabe.
+        // Dieselbe Falle wie beim Sprungschutz, nur ohne Sprungschutz: Eine Probe, die
+        // den Vorgabewert einsetzt, prueft nichts.
+        //
+        // 5 ist weder die Vorgabe noch eine Zahl, die anderswo in dieser Datei steht.
+        var ergebnis = lies(String.join(System.lineSeparator(),
+                "laeden:",
+                "  ausfaelle-bis-raeumung: 5"));
+
+        assertEquals(5, ergebnis.werte().ausfaelleBisRaeumung(),
+                ergebnis.bericht().toString());
+        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+    }
+
+    @Test
+    @DisplayName("Eine Schranke, die als int ueberlaeuft, wird abgewiesen")
+    void schrankeUeberlauf() {
+        // Dieselbe Falle wie bei der Mietdauer, und sie war fuer die Schranke ungeprueft:
+        // Aus (int) 4294967299 wird 3 - und das ist genau die Vorgabe, der Betreiber
+        // bekaeme also keine Klage und die Probe keinen Unterschied zu sehen. Geprueft
+        // wird darum die KLAGE und nicht nur der Wert.
+        var ergebnis = lies(String.join(System.lineSeparator(),
+                "laeden:",
+                "  ausfaelle-bis-raeumung: 4294967299"));
+
+        assertEquals(3, ergebnis.werte().ausfaelleBisRaeumung());
+        assertTrue(ergebnis.klagen().stream()
+                        .anyMatch(zeile -> zeile.contains("4294967299")),
+                "die Klage muss die getippte Zahl nennen: " + ergebnis.klagen());
+    }
+
+    @Test
+    @DisplayName("Die Schranke 1 geht durch und bekommt ihre Zeile im Bericht")
+    void schrankeEinsWirdGenannt() {
+        // Befund der Einspritzungskampagne: Diese Zeile war im gelesenen Startlauf zu
+        // sehen, aber von keiner Probe gehalten - sie liess sich wegnehmen, ohne dass
+        // etwas rot wurde. Sie ist der ganze Sinn von "Erkennung statt Verhinderung":
+        // Bei 1 liest der Spieler NIE eine Warnung, weil Warnung und Raeumung in
+        // denselben Augenblick fallen, und das bedenkt ein Betreiber kaum mit.
+        var ergebnis = lies(String.join(System.lineSeparator(),
+                "laeden:",
+                "  ausfaelle-bis-raeumung: 1"));
+
+        assertEquals(1, ergebnis.werte().ausfaelleBisRaeumung());
+        assertTrue(ergebnis.klagen().isEmpty(), "verboten ist die 1 NICHT: "
+                + ergebnis.klagen());
+        assertTrue(ergebnis.bericht().stream()
+                        .anyMatch(zeile -> zeile.contains("nie eine Warnung")),
+                ergebnis.bericht().toString());
+    }
+
+    @Test
+    @DisplayName("Eine Schranke ab 2 bekommt KEINE solche Zeile")
+    void schrankeZweiSchweigt() {
+        // Die Gegenprobe: Ohne sie waere eine Fassung gruen, die die Zeile immer
+        // schreibt - und dann liest der Betreiber sie bei jedem Start und glaubt
+        // irgendwann nicht mehr daran.
+        var ergebnis = lies(String.join(System.lineSeparator(),
+                "laeden:",
+                "  ausfaelle-bis-raeumung: 2"));
+
+        assertTrue(ergebnis.bericht().stream()
+                        .noneMatch(zeile -> zeile.contains("nie eine Warnung")),
+                ergebnis.bericht().toString());
+    }
+
+    @Test
+    @DisplayName("Die Rechenprobe sagt, dass die Kaution beim ABLAUFEN zurueckkommt")
+    void rechenprobeNenntBeideRueckwege() {
+        // Der erste Befund aus dem gelesenen Startlauf vom 08.11.2026: Hier stand "nur
+        // bei ordentlicher Kuendigung", und das war ab diesem Tag falsch - seit Teil C
+        // kommt die Kaution auch beim ABLAUF zurueck. Ein Betreiber liest diese Zeile und
+        // sagt seinen Spielern, was darin steht.
+        //
+        // Geprueft wird der TEXT und nicht eine Zahl: Eine Zahl hat hier nie gefehlt, und
+        // genau darum sah keine der 2020 gruenen Proben den Fehler.
+        String satz = Mietliste.rechenprobe(Mietwerte.VORGABE);
+
+        assertTrue(satz.contains("zurueck beim Kuendigen und beim Ablaufen"), satz);
+        assertTrue(satz.contains("nicht beim Raeumen"), satz);
+        assertFalse(satz.contains("nur bei ordentlicher"), satz);
+    }
+
+    @Test
+    @DisplayName("Die Rechenprobe nennt das Abholfach - die Ware ist NICHT weg")
+    void rechenprobeNenntDasAbholfach() {
+        // Der zweite Befund: Die zentrale Zusage dieses Teils stand in KEINER Startzeile.
+        // Ein Betreiber, der sie nicht kennt, sagt dem Spieler, dessen Laden geraeumt
+        // wurde, seine Ware sei weg - und das ist das Gegenteil von dem, was passiert.
+        String satz = Mietliste.rechenprobe(Mietwerte.VORGABE);
+
+        assertTrue(satz.contains("Abholfach"), satz);
+        assertTrue(satz.contains("NIE geloescht"), satz);
+        assertTrue(satz.contains("/laden abholfach"), satz);
+    }
+
+    @Test
+    @DisplayName("Eine Kaution UNTER dem Verlust bis zur Raeumung bekommt eine Zeile")
+    void schwacheKautionWirdGenannt() {
+        // Der dritte Befund. Die Paarregel prueft gegen EINEN Miettag; mit drei
+        // Ausfaellen laeuft dreimal so viel auf. Bei Kaution 1.000 und Verlust 1.500
+        // verliert der Saeumige weniger als der Zahler - verboten ist das nicht, aber es
+        // muss dastehen.
+        //
+        // Der Sprungschutz braucht seine Bestaetigung, sonst liest dieser Leser die
+        // Vorgabe 5.000 und die Probe prueft gar nichts.
+        var ergebnis = lies(String.join(System.lineSeparator(),
+                "wirtschaft:",
+                "  sprung-bestaetigt:",
+                "    laden-kaution: 5000 -> 1000",
+                "laeden:",
+                "  miete-je-tag: 500",
+                "  kaution: 1000",
+                "  ausfaelle-bis-raeumung: 3"));
+
+        assertEquals(1_000L, ergebnis.werte().kaution(),
+                "ohne die Bestaetigung prueft diese Probe die Vorgabe: "
+                        + ergebnis.bericht());
+        assertTrue(ergebnis.klagen().isEmpty(), "verboten ist es NICHT: "
+                + ergebnis.klagen());
+        assertTrue(ergebnis.bericht().stream()
+                        .anyMatch(zeile -> zeile.contains("bremst das Weglaufen dann"
+                                + " nicht mehr")),
+                ergebnis.bericht().toString());
+    }
+
+    @Test
+    @DisplayName("Eine ausreichende Kaution bekommt KEINE solche Zeile")
+    void starkeKautionSchweigt() {
+        // Die Gegenprobe. Ohne sie waere eine Fassung gruen, die die Zeile IMMER
+        // schreibt - und dann liest der Betreiber sie bei jedem Start und glaubt
+        // irgendwann nicht mehr daran.
+        var ergebnis = Mietliste.ausKonfiguration(ausgelieferteDatei());
+
+        assertTrue(ergebnis.bericht().stream()
+                        .noneMatch(zeile -> zeile.contains("bremst das Weglaufen")),
+                "die ausgelieferten 5.000 reichen gegen 1.500 Verlust: "
+                        + ergebnis.bericht());
     }
 
     @Test

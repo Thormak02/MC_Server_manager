@@ -126,14 +126,43 @@ public enum Buchungsgrund {
     LADEN_KAUTION("laden_kaution", Richtung.AUSGABE),
 
     /**
-     * Die Kaution zurueck - nur bei ordentlicher Rueckgabe (Plan 7.1).
+     * Die Kaution zurueck - bei ordentlicher Rueckgabe (Plan 7.1).
+     *
+     * <p>Ordentlich sind ZWEI Wege: das Kuendigen und das Ablaufen ohne Verlaengerung
+     * [entschieden 08.11.2026]. Wer abgelaufen ist, hat jeden Tag gezahlt und nichts
+     * falsch gemacht - die Kaution ist das Pfand gegen das Weglaufen, nicht gegen das
+     * Nicht-Verlaengern.
      *
      * <p>Beim Raeumen wegen Zahlungsausfall faellt diese Buchung ausdruecklich NICHT. Das
      * ist der ganze Zweck der Kaution: Sie macht das Weglaufen teurer als das Kuendigen.
      */
     LADEN_KAUTION_ZURUECK("laden_kaution_zurueck", Richtung.EINNAHME),
 
-    /** Ein Abschluss ist gescheitert - Lizenz und Kaution kommen zurueck. */
+    /**
+     * Die taegliche Ladenmiete - die staerkste Geldsenke des Servers (Plan 7.1).
+     *
+     * <p><b>Diese Buchung IST der Beleg, dass heute bezahlt ist.</b> Gefragt wird mit
+     * {@link Kasse#summeSeit} seit dem Tagesbeginn, genau wie beim {@link #TAGESBONUS}
+     * und bei der {@link #LADEN_LIZENZ}: Steht eine Zeile da, ist der Tag erledigt -
+     * unabhaengig davon, was sonst wo steht. Und wie dort gilt die Vorzeichenfalle: Die
+     * Summe ist fuer eine AUSGABE negativ, also wird auf {@code == 0} gefragt und nie auf
+     * ein Vorzeichen.
+     *
+     * <p><b>Es wird hoechstens ein Tag berechnet, nie nachgefordert.</b> Ein Server, der
+     * drei Tage aus war, bucht beim naechsten Start EINE Miete und nicht drei. Das ist
+     * eine Entscheidung und kein Versehen: In diesen drei Tagen konnte niemand seinen
+     * Laden benutzen, und eine Nachforderung traefe genau den Spieler, der nichts dafuer
+     * kann - samt der Ausfaelle, die ihn dann raeumen.
+     */
+    LADEN_MIETE("laden_miete", Richtung.AUSGABE),
+
+    /**
+     * Ein Abschluss ist gescheitert - die KAUTION kommt zurueck.
+     *
+     * <p>Nur sie, und das ist wichtig: Die Lizenz bleibt bezahlt, denn sie haengt an
+     * keinem Laden. Stuende sie hier mit drin, zaehlte sie danach als bezahlt, ohne dass
+     * Geld geblieben waere - und der naechste Laden desselben Spielers waere umsonst.
+     */
     LADEN_ERSTATTET("laden_erstattet", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */

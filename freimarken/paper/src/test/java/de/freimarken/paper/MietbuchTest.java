@@ -72,7 +72,14 @@ class MietbuchTest {
     @BeforeEach
     void vorher() {
         uhr = new SpielzeitbuchTest.StellUhr(START);
-        wirtschaft = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        // Die Dauer steht HIER und nicht in der ausgelieferten Vorgabe, und das ist
+        // der Grund: Zwei Dutzend Zahlen dieser Datei - 29 Resttage, 59 nach dem
+        // Verlaengern, der Deckel - sind aus ihr gerechnet. Haengen sie an der Datei,
+        // wird bei jeder Aenderung der Mietdauer ein halbes Dutzend Proben rot, ohne
+        // dass sich am Geprueften etwas geaendert hat. Gemessen am 08.11.2026 bei der
+        // Umstellung von 30 auf 7 Tage.
+        wirtschaft = new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                .mitLaeden(Mietwerte.VORGABE.mitDauer(30)));
         verzeichnis = Ladenverzeichnis.ausEinheiten(List.of(
                 einheit("halle-1", 60), einheit("halle-2", 70)));
         ablage = new SpeicherMiete();

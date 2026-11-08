@@ -16,13 +16,21 @@ package de.freimarken.kern;
  * Kaution 5.000 [empfohlen], Lizenz 50.000 einmalig [belegt].
  *
  * @param miete     was ein Ladentag kostet, in ganzen Mark
- * @param kaution   was beim Mieten hinterlegt wird. Bei ordentlicher Rueckgabe kommt sie
- *                  zurueck, bei Raeumung wegen Zahlungsausfall nicht (Plan 7.1)
+ * @param kaution   was beim Mieten hinterlegt wird. Beim Kuendigen und beim Ablaufen
+ *                  kommt sie zurueck, bei Raeumung wegen Zahlungsausfall nicht
+ *                  (Plan 7.1)
  * @param lizenz    was die Ladenlizenz EINMALIG kostet - danach darf der Spieler immer
  *                  wieder mieten, ohne sie erneut zu zahlen
  * @param dauerTage wie viele Tage ein Abschluss und jede Verlaengerung gelten
+ * @param ausfaelleBisRaeumung bei wie vielen Tagen ohne Zahlung IN FOLGE der Laden
+ *                  geraeumt wird. Bei 3 also: erster Ausfall warnt, zweiter warnt,
+ *                  dritter raeumt - es gibt zwei Warnungen und nicht drei. Die Zahl
+ *                  heisst nach dem, was sie zaehlt, und nicht nach der Wirkung; "drei
+ *                  Warnungen" waere die haeufigste Fehllesung einer Einstellung, die
+ *                  darueber entscheidet, wann jemand seinen Laden verliert
  */
-public record Mietwerte(long miete, long kaution, long lizenz, int dauerTage) {
+public record Mietwerte(long miete, long kaution, long lizenz, int dauerTage,
+                        int ausfaelleBisRaeumung) {
 
     public static final String PFAD_MIETE = "laeden.miete-je-tag";
 
@@ -31,6 +39,8 @@ public record Mietwerte(long miete, long kaution, long lizenz, int dauerTage) {
     public static final String PFAD_LIZENZ = "laeden.lizenz";
 
     public static final String PFAD_DAUER = "laeden.mietdauer-tage";
+
+    public static final String PFAD_AUSFAELLE = "laeden.ausfaelle-bis-raeumung";
 
     /** 500 Mark am Tag - die Zahl aus Plan 7.1. */
     public static final long VORGABE_MIETE = 500L;
@@ -42,20 +52,47 @@ public record Mietwerte(long miete, long kaution, long lizenz, int dauerTage) {
     public static final long VORGABE_LIZENZ = 50_000L;
 
     /**
-     * 30 Tage - lang genug, dass niemand alle zwei Tage verlaengern muss, und kurz
-     * genug, dass ein verlassener Laden nicht ein Jahr lang blockiert steht.
+     * 7 Tage [entschieden 08.11.2026 - vorher 30].
      *
-     * <p>Die Dauer ist NICHT der Zahlungstakt: Gezahlt wird taeglich (Plan 7.1, Teil C).
-     * Die Dauer sagt, wann der Vertrag ohne Zutun endet - das ist der Griff gegen den
-     * Spieler, der aufhoert zu spielen, aber noch Geld auf dem Konto hat.
+     * <p><b>Die Dauer ist NICHT der Zahlungstakt und auch nicht der Preis.</b> Gezahlt
+     * wird taeglich (Plan 7.1, Teil C), und die Miete steht je TAG in der Datei: Ein
+     * Abschluss ueber 7 Tage kostet dieselben 500 Mark am Tag wie einer ueber 30, und
+     * Kaution und Lizenz aendern sich nicht. Kuerzer heisst also nicht guenstiger,
+     * sondern nur: Der Vertrag endet frueher OHNE ZUTUN.
+     *
+     * <p>Genau darum ist die Zahl klein. Sie ist der Griff gegen den Spieler, der
+     * aufhoert zu spielen und noch Geld auf dem Konto hat - der zahlt weiter und haelt
+     * seinen Stand, bis die Dauer ablaeuft. Bei 30 Tagen stand eine Markthalle mit
+     * wenigen Staenden einen Monat lang voll mit Laeden, in denen nichts passiert; bei 7
+     * wird ein verlassener Stand nach einer Woche wieder mietbar. Wer spielt, merkt die
+     * Zahl nicht: Verlaengern kostet nichts und geht ab dem zweiten Tag.
+     *
+     * <p>Der Preis dafuer ist genannt und gewollt: Wer eine Woche nicht hereinschaut,
+     * verliert seinen Laden. Weg ist deswegen nichts - die Kaution kommt bei Ablauf
+     * zurueck, und seine Ware liegt im Abholfach (Teil C).
      */
-    public static final int VORGABE_DAUER = 30;
+    public static final int VORGABE_DAUER = 7;
+
+    /**
+     * Drei Tage ohne Zahlung, dann ist der Laden weg.
+     *
+     * <p>Gerechnet gegen die Mietdauer von 7 Tagen: Drei Ausfaelle sind knapp die Haelfte
+     * eines Vertrags, also merkt ein Spieler, der jeden zweiten Tag hereinschaut, die
+     * Warnung noch rechtzeitig. Eine 1 raeumte den Laden am ersten Tag mit knapper Kasse,
+     * und zwar ohne dass der Spieler die Warnung je gelesen haette - Warnung und Raeumung
+     * fielen in denselben Augenblick. Eine 7 waere die ganze Mietdauer: Dann raeumt
+     * immer der Ablauf, und der Verzug waere eine Regel ohne Wirkung.
+     *
+     * <p>Wer nie online ist, verliert seinen Stand so nach drei Tagen statt nach sieben -
+     * und das ist der Zweck. Verloren ist dabei nichts: Die Ware liegt im Abholfach.
+     */
+    public static final int VORGABE_AUSFAELLE = 3;
 
     /** Dieselbe Obergrenze wie bei allen Geldzahlen - dieselbe Rechnung. */
     public static final long HOECHSTER_BETRAG = Verdienstwerte.HOECHSTER_TAGESDECKEL;
 
     public static final Mietwerte VORGABE = new Mietwerte(VORGABE_MIETE, VORGABE_KAUTION,
-            VORGABE_LIZENZ, VORGABE_DAUER);
+            VORGABE_LIZENZ, VORGABE_DAUER, VORGABE_AUSFAELLE);
 
     public Mietwerte {
         if (miete < 1L || miete > HOECHSTER_BETRAG) {
@@ -79,6 +116,12 @@ public record Mietwerte(long miete, long kaution, long lizenz, int dauerTage) {
                     + " Tagen ist keine - erlaubt ist 1 bis " + Mietregel.HOECHSTE_DAUER
                     + ".");
         }
+        if (!Mietregel.brauchbareSchranke(ausfaelleBisRaeumung)) {
+            throw new IllegalArgumentException("Eine Schranke von " + ausfaelleBisRaeumung
+                    + " Ausfaellen ist keine - erlaubt ist 1 bis "
+                    + Mietregel.HOECHSTE_SCHRANKE + ". Bei 0 waere jeder Vertrag"
+                    + " raeumungsreif, auch der heute abgeschlossene.");
+        }
         // Zwei Werte, die JEDER FUER SICH erlaubt sind und zusammen nicht - dieselbe
         // Bauart wie Grund- und Hoechstbetrag in Bonuswerte.
         //
@@ -101,22 +144,27 @@ public record Mietwerte(long miete, long kaution, long lizenz, int dauerTage) {
 
     /** Dieselben Werte mit anderer Miete - fuer die Proben und den Leser. */
     public Mietwerte mitMiete(long andere) {
-        return new Mietwerte(andere, kaution, lizenz, dauerTage);
+        return new Mietwerte(andere, kaution, lizenz, dauerTage, ausfaelleBisRaeumung);
     }
 
     /** Dieselben Werte mit anderer Kaution. */
     public Mietwerte mitKaution(long andere) {
-        return new Mietwerte(miete, andere, lizenz, dauerTage);
+        return new Mietwerte(miete, andere, lizenz, dauerTage, ausfaelleBisRaeumung);
     }
 
     /** Dieselben Werte mit anderer Lizenz. */
     public Mietwerte mitLizenz(long andere) {
-        return new Mietwerte(miete, kaution, andere, dauerTage);
+        return new Mietwerte(miete, kaution, andere, dauerTage, ausfaelleBisRaeumung);
     }
 
     /** Dieselben Werte mit anderer Dauer. */
     public Mietwerte mitDauer(int andere) {
-        return new Mietwerte(miete, kaution, lizenz, andere);
+        return new Mietwerte(miete, kaution, lizenz, andere, ausfaelleBisRaeumung);
+    }
+
+    /** Dieselben Werte mit anderer Ausfallschranke. */
+    public Mietwerte mitAusfaellen(int andere) {
+        return new Mietwerte(miete, kaution, lizenz, dauerTage, andere);
     }
 
     /** Ob eine Kaution hinterlegt wird - fuer die Meldungen und die Startzeile. */
@@ -132,6 +180,17 @@ public record Mietwerte(long miete, long kaution, long lizenz, int dauerTage) {
     /** Was ein ganzer Mietzeitraum an Miete kostet - fuer die Auskunft vor dem Mieten. */
     public long vollerZeitraum() {
         return Mietregel.vollerZeitraum(miete, dauerTage);
+    }
+
+    /**
+     * Was der Spieler an Miete verliert, bevor geraeumt wird.
+     *
+     * <p>Fuer die Startzeile und fuer die Rechenprobe: Wer hier "1.500 Mark bis zur
+     * Raeumung" neben einer Kaution von 500 liest, sieht, dass die Kaution das Weglaufen
+     * nicht teurer macht als das Zahlen - und keine Zahlengrenze sieht das.
+     */
+    public long verlustBisRaeumung() {
+        return Math.multiplyExact(miete, (long) ausfaelleBisRaeumung);
     }
 
     /** Was ein Abschluss im Augenblick kostet: Kaution, und die Lizenz nur beim ersten. */

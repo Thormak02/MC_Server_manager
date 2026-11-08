@@ -29,7 +29,7 @@ final class Mietliste {
     /** Jede Zeile, die das Plugin mitbringt - fuer den Bericht ueber Fehlende. */
     private static final List<String> SCHLUESSEL = List.of(
             Mietwerte.PFAD_MIETE, Mietwerte.PFAD_KAUTION, Mietwerte.PFAD_LIZENZ,
-            Mietwerte.PFAD_DAUER);
+            Mietwerte.PFAD_DAUER, Mietwerte.PFAD_AUSFAELLE);
 
     record Ergebnis(Mietwerte werte, List<String> klagen, List<String> bericht) {
     }
@@ -38,7 +38,7 @@ final class Mietliste {
     }
 
     /**
-     * Die vier Zahlen aus dem Abschnitt {@code laeden:}.
+     * Die fuenf Zahlen aus dem Abschnitt {@code laeden:}.
      *
      * @param wurzel die ganze Konfiguration, darf {@code null} sein
      */
@@ -56,8 +56,10 @@ final class Mietliste {
                 "laden-lizenz", Mietwerte.VORGABE_LIZENZ, Mietwerte.HOECHSTER_BETRAG,
                 "Mark einmalig", klagen, bericht);
         int dauer = dauer(wurzel, klagen, bericht);
+        int ausfaelle = ausfaelle(wurzel, klagen, bericht);
 
-        Mietwerte werte = new Mietwerte(miete, kaution, lizenz, dauer);
+        Mietwerte werte = new Mietwerte(miete, kaution, lizenz, dauer, ausfaelle);
+        nenneSchwacheKaution(werte, bericht);
         bericht.add(rechenprobe(werte));
         return new Ergebnis(werte, klagen, bericht);
     }
@@ -67,7 +69,7 @@ final class Mietliste {
      *
      * <p>Dieselbe Antwort wie bei der Preisstaffel und beim Tagesbonus: die einzige
      * Schranke gegen den Wert, der im erlaubten Bereich liegt und trotzdem falsch ist. Wer
-     * hier "30 Tage je Abschluss (150 Mark voller Zeitraum)" liest, sieht die Miete von 5
+     * hier "7 Tage je Abschluss (35 Mark voller Zeitraum)" liest, sieht die Miete von 5
      * Mark - keine Zahlengrenze sieht sie.
      *
      * <p>Paketprivat, damit eine Probe denselben Text nehmen kann: Zwei Stellen, die
@@ -81,8 +83,13 @@ final class Mietliste {
                 .append(" Mark voller Zeitraum). ");
         if (werte.mitKaution()) {
             satz.append("Kaution ").append(werte.kaution())
-                    .append(" Mark - zurueck nur bei ordentlicher Kuendigung, nicht beim"
-                            + " Raeumen. ");
+                    // "nur bei ordentlicher Kuendigung" stand hier bis zum 08.11.2026
+                    // und war ab diesem Tag falsch: Seit Teil C kommt die Kaution auch
+                    // beim ABLAUF zurueck, und Ablauf ist keine Kuendigung. Gefunden
+                    // beim Lesen des Startlaufs - keine der 2020 gruenen Proben sah es,
+                    // weil keine den Wortlaut dieser Zeile mit der Regel verglich.
+                    .append(" Mark - zurueck beim Kuendigen und beim Ablaufen, nicht"
+                            + " beim Raeumen. ");
         } else {
             satz.append("Ohne Kaution - das Weglaufen kostet dann nichts. ");
         }
@@ -91,6 +98,21 @@ final class Mietliste {
         } else {
             satz.append("Ohne Lizenzgebuehr - wer das Recht hat, darf mieten. ");
         }
+        // Was der Spieler an Miete verliert, bis geraeumt wird - NEBEN der Kaution, und
+        // genau das ist der Zweck dieser Zahl im Bericht: Wer "1.500 Mark bis zur
+        // Raeumung" neben einer Kaution von 500 liest, sieht, dass das Weglaufen
+        // billiger ist als das Zahlen. Keine Zahlengrenze sieht das - die Paarregel
+        // prueft die Kaution gegen EINEN Miettag, nicht gegen alle, die ein Saeumiger
+        // noch bekommt.
+        satz.append("Geraeumt wird beim ").append(werte.ausfaelleBisRaeumung())
+                .append(". Ausfall in Folge - bis dahin laufen ")
+                .append(werte.verlustBisRaeumung())
+                .append(" Mark Miete auf. ");
+        // Die zentrale Zusage dieses Teils, und sie stand bis zum 08.11.2026 in KEINER
+        // Startzeile: Ein Betreiber, der sie nicht kennt, sagt dem Spieler, dessen Laden
+        // geraeumt wurde, seine Ware sei weg. Gefunden beim Lesen des Startlaufs.
+        satz.append("Der Inhalt der Ladentruhe wandert dabei ins Abholfach und wird NIE"
+                + " geloescht (/laden abholfach). ");
         // Die Verlaengerungsschranke braucht keine eigene Zeile in der Datei (sie faellt
         // aus der Mietdauer), aber sie muss im Bericht stehen: Sonst erfaehrt der
         // Betreiber erst von einem Spieler, dass Verlaengern "noch nicht" geht.
@@ -196,6 +218,79 @@ final class Mietliste {
                     + " Tag seines Abschlusses schon abgelaufen ist. "
                     + Wirtschaftsliste.esBleibt(Mietwerte.VORGABE_DAUER));
             return Mietwerte.VORGABE_DAUER;
+        }
+        return (int) wert;
+    }
+
+    /**
+     * Sagt es, wenn die Kaution den Saeumigen weniger kostet als das Zahlen.
+     *
+     * <p>Der dritte Befund aus dem gelesenen Startlauf vom 08.11.2026. Die Paarregel in
+     * {@link Mietwerte} prueft die Kaution gegen EINEN Miettag, und das ist die Schranke
+     * gegen die offensichtlich unsinnige Zahl. Mit drei Ausfaellen bis zur Raeumung
+     * laeuft aber dreimal so viel auf: Bei Kaution 500 und einem Verlust von 1.500 ist
+     * das Weglaufen billiger als das Zahlen - und dann bewirkt die Kaution wieder das
+     * Gegenteil von dem, wofuer sie da ist.
+     *
+     * <p>VERBOTEN wird das nicht, und das ist der Unterschied zur Paarregel: Ein
+     * Betreiber darf eine milde Kaution wollen, und beide Zahlen sind je einzeln
+     * zulaessig. Was er nicht darf, ist es nicht zu WISSEN. Dasselbe Mittel wie bei der
+     * Schranke 1 und bei {@code Tagesgrenze.tageswechselText} - Erkennung statt
+     * Verhinderung.
+     */
+    private static void nenneSchwacheKaution(Mietwerte werte, List<String> bericht) {
+        if (werte.mitKaution() && werte.kaution() < werte.verlustBisRaeumung()) {
+            bericht.add("Die Kaution " + werte.kaution() + " liegt UNTER den "
+                    + werte.verlustBisRaeumung() + " Mark Miete, die bis zur Raeumung"
+                    + " auflaufen. Wer einfach nicht mehr zahlt, verliert damit weniger"
+                    + " als wer zahlt - die Kaution bremst das Weglaufen dann nicht"
+                    + " mehr. Das ist erlaubt; wer es anders will, setzt die Kaution auf"
+                    + " mindestens " + werte.verlustBisRaeumung() + ".");
+        }
+    }
+
+    /**
+     * Wie viele Ausfaelle in Folge geraeumt werden - die Schranke aus Teil C.
+     *
+     * <p>Dieselbe Bauart wie {@link #dauer}, samt der Pruefung am LONG: Aus
+     * {@code (int) 4294967299} wird 3, und das waere zufaellig die Vorgabe - der
+     * Betreiber bekaeme keine Klage.
+     *
+     * <p><b>Die 1 geht durch und bekommt eine Zeile im BERICHT.</b> Erkennung statt
+     * Verhinderung, wie bei {@code Preisstaffel.alsText}: "Wer nicht zahlt, ist sofort
+     * weg" ist eine zulaessige Serverregel, aber sie hat eine Folge, die ein Betreiber
+     * kaum mitbedenkt - bei 1 liest der Spieler NIE eine Warnung, denn Warnung und
+     * Raeumung fallen in denselben Augenblick. Diese Zeile sagt es ihm, bevor der erste
+     * Spieler sich beschwert.
+     *
+     * <p>Verboten ist nur die 0, und sie waere nicht bloss hart: Bei 0 ist jeder Vertrag
+     * raeumungsreif, auch der heute abgeschlossene mit 0 Ausfaellen - der erste Lauf
+     * raeumte die ganze Halle.
+     */
+    private static int ausfaelle(ConfigurationSection wurzel, List<String> klagen,
+                                 List<String> bericht) {
+        String pfad = Mietwerte.PFAD_AUSFAELLE;
+        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel, pfad,
+                Mietwerte.VORGABE_AUSFAELLE, klagen, bericht);
+        if (gelesen == null) {
+            return Mietwerte.VORGABE_AUSFAELLE;
+        }
+        long wert = gelesen;
+        // Der LONG wird geprueft und nicht der verkuerzte int - dieselbe Falle wie bei
+        // der Dauer: Aus (int) 4294967299 wird 3, und das waere zufaellig die Vorgabe.
+        if (wert < 1L || wert > Mietregel.HOECHSTE_SCHRANKE) {
+            klagen.add(pfad + " ist " + wert + " - verworfen. Erlaubt ist 1 bis "
+                    + Mietregel.HOECHSTE_SCHRANKE + ". Bei 0 waere jeder Vertrag"
+                    + " raeumungsreif, auch der heute abgeschlossene mit 0 Ausfaellen -"
+                    + " der erste Lauf raeumte die ganze Halle. "
+                    + Wirtschaftsliste.esBleibt(Mietwerte.VORGABE_AUSFAELLE));
+            return Mietwerte.VORGABE_AUSFAELLE;
+        }
+        if (wert == 1L) {
+            bericht.add(pfad + " ist 1: Der ERSTE Ausfall raeumt, der Spieler liest also"
+                    + " nie eine Warnung - Warnung und Raeumung fallen in denselben"
+                    + " Augenblick. Das ist erlaubt; wer eine Warnung will, nimmt"
+                    + " mindestens 2.");
         }
         return (int) wert;
     }

@@ -2,6 +2,7 @@ package de.freimarken.paper;
 
 import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaBonus;
+import de.freimarken.daten.MariaAbholfach;
 import de.freimarken.daten.MariaMiete;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
@@ -9,6 +10,8 @@ import de.freimarken.daten.MariaBerufe;
 import de.freimarken.daten.MariaSpielzeit;
 import de.freimarken.kern.Bonusablage;
 import de.freimarken.kern.SpeicherBonus;
+import de.freimarken.kern.Abholablage;
+import de.freimarken.kern.SpeicherAbholfach;
 import de.freimarken.kern.SpeicherMiete;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
@@ -132,6 +135,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     private Bonusablage bonusablage;
     private Mietablage mietablage;
+
+    /**
+     * Das Abholfach [Teil C] - wo Ware wartet, die ihrem Besitzer nicht zugestellt
+     * werden konnte.
+     *
+     * <p>Hier liegt BESITZ, und zwar der einzige dauerhafte dieses Plugins neben den
+     * Parzellen. Was Plan 7.1 ueber ihn sagt, kennt keine Ausnahme: Er wird nie
+     * geloescht.
+     */
+    private Abholablage abholablage;
     /**
      * Die Ladenmiete - entsteht erst, wenn Verzeichnis UND Ablage stehen.
      *
@@ -139,6 +152,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * {@code /laden} und - ab Teil C - der taegliche Lauf.
      */
     private Mietbuch mietbuch;
+
+    /**
+     * Das Abholfach als Naht - ein Feld, weil zwei Stellen es brauchen: der Befehl
+     * {@code /laden abholfach} und die {@link Mietwache} beim Beitritt.
+     */
+    private Abholbuch abholbuch;
+
+    /**
+     * Der Mitfahrer im Spielzeittakt [Teil C] - ein Feld, weil der Takt ihn braucht und
+     * er VOR der Spielzeitwache entstehen muss.
+     */
+    private Mietwache mietwache;
 
     /**
      * Der Tagesbonus - ein Feld, obwohl ihn nur zwei Stellen halten.
@@ -622,10 +647,25 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // verschiedenen Schritten des Starts.
         mietbuch = new Mietbuch(wirtschaft, ladenverzeichnis, mietablage, kasse, uhr,
                 getLogger());
+        // Das Abholbuch und der taegliche Lauf [Teil C]. Beide HIER und nicht in
+        // richteAblageEin: Sie brauchen das Ladenverzeichnis aus der config.yml, die
+        // Ablagen und - beim Lauf - den Zugang zur Welt, und das sind drei verschiedene
+        // Schritte des Starts.
+        abholbuch = new Abholbuch(abholablage, uhr, getLogger());
+        // Ladenware ist die einzige Stelle, die Bukkit und das Abholfach zusammenbringt.
+        // Derselbe Weltschluessel wie bei LadenBefehle, aus demselben Feld: Zwei
+        // Einstellungen daneben waeren eine Welt, in der gemietet, und eine andere, in
+        // der geraeumt wird.
+        Mietlauf mietlauf = new Mietlauf(wirtschaft, mietablage, abholablage, kasse,
+                new Ladenware(getServer(), ladenverzeichnis, ladenwelt, getLogger()),
+                uhr, getLogger());
+        mietwache = new Mietwache(getServer(), mietlauf, mietbuch, abholbuch, wirtschaft,
+                sprache);
+        getServer().getPluginManager().registerEvents(mietwache, this);
         Bonuswache bonuswache = new Bonuswache(tagesbonus, wirtschaft, sprache);
         getServer().getPluginManager().registerEvents(bonuswache, this);
-        spielzeitwache = new Spielzeitwache(this, buch, bonuswache, wirtschaft,
-                getLogger());
+        spielzeitwache = new Spielzeitwache(this, buch, bonuswache, mietwache,
+                wirtschaft, getLogger());
         getServer().getPluginManager().registerEvents(spielzeitwache, this);
         spielzeitwache.starte();
         // Jeder Wert, den dieser Satz verspricht, steht auch darin. Eine halbe Zusage -
@@ -656,10 +696,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
             bonusablage = new SpeicherBonus();
             // Braucht keine Uhr: Beginn und Ende kommen mit dem Vertrag herein.
             mietablage = new SpeicherMiete();
+            // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt beim Einlegen herein.
+            // Dass diese Fassung beim Neustart alles vergisst, ist hier schwerer zu
+            // verkraften als bei den anderen - ein vergessenes Abholfach ist verlorener
+            // Besitz. Die Warnung darunter nennt es.
+            abholablage = new SpeicherAbholfach();
             // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von aussen.
             berufsablage = new ZwischenspeicherBerufe(new SpeicherBerufe());
-            getLogger().warning("Keine Datenbank eingetragen: Parzellen und Guthaben gelten "
-                    + "nur bis zum naechsten Neustart.");
+            getLogger().warning("Keine Datenbank eingetragen: Parzellen, Guthaben und das"
+                    + " Abholfach gelten nur bis zum naechsten Neustart.");
             getLogger().warning("Zum Festhalten datenbank.url in plugins/"
                     + getName() + "/config.yml ausfuellen.");
             return true;
@@ -683,6 +728,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // Tageslauf. Ein Zwischenspeicher haette hier nichts zu sparen und waere ein
             // zweiter Ort fuer die Frage, wem ein Laden gehoert.
             mietablage = new MariaMiete(datenbank);
+            // KEIN Zwischenspeicher: Gelesen wird auf Befehl und einmal je Beitritt, und
+            // die Inhaltsspalte haelt bis zu ein Megabyte je Zeile. Ein Zwischenspeicher
+            // darueber waere viel Arbeitsspeicher fuer nichts - und ein zweiter Ort fuer
+            // Besitz.
+            abholablage = new MariaAbholfach(datenbank);
             // KEIN Zwischenspeicher: /beruf ist kein heisser Lesepfad. Mit Teil E, wenn
             // jeder Verdienst den Beruf fragt, wird das neu bedacht - und dann als eigene
             // Schicht wie ZwischenspeicherLager, nicht als Feld hier drin.
@@ -870,7 +920,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // Die Mietdauer kommt als Abfrage und nicht als Zahl: Sie steht in der
             // Absage "noch zu frueh", und ein Neuladen muss sie erreichen.
             angemeldet.addAll(verzeichnis.register(
-                    new LadenBefehle(ladenverzeichnis, mietbuch, sprache, ladenwelt,
+                    new LadenBefehle(ladenverzeichnis, mietbuch, abholbuch, sprache,
+                            ladenwelt,
                             () -> wirtschaft.werte().laeden().dauerTage()).laden(),
                     sprache.wort(BundSatz.BEFEHL_LADEN, Einsatz.keine()),
                     List.of()));

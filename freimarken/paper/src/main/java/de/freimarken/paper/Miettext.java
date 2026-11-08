@@ -80,8 +80,8 @@ final class Miettext {
      *
      * <p>Bei {@link Mietbuch.Bescheid#NOCH_ZU_FRUEH} stehen ZWEI Zahlen in der Zeile: wie
      * viele Tage noch laufen und wie lang eine Mietdauer ist. Nur mit beiden ist die
-     * Absage zu verstehen - "noch 59 Tage" allein sagt nicht, dass bei 30 Tagen Mietdauer
-     * erst unter 30 Resttagen verlaengert werden kann.
+     * Absage zu verstehen - "noch 13 Tage" allein sagt nicht, dass bei 7 Tagen Mietdauer
+     * erst unter 7 Resttagen verlaengert werden kann.
      */
     static List<Component> verlaengernZeilen(Sprache sprache,
                                              Mietbuch.Verlaengerung ergebnis,
@@ -156,6 +156,156 @@ final class Miettext {
                 // Die VEREINBARTE Miete und nicht die aus der config.yml - der
                 // Bestandsschutz wird hier sichtbar, und genau hier muss er es sein.
                 .mit("miete", sprache.betrag(vertrag.miete())));
+    }
+
+    /**
+     * Die Zeilen zu einem Posten des taeglichen Laufs - fuer den Mieter, wenn er da ist.
+     *
+     * <p>Eine LEERE Liste fuer alles, was ihn nichts angeht: Wer bezahlt hat, bekommt
+     * keine Nachricht. Das ist eine Entscheidung und keine Sparsamkeit - eine taegliche
+     * Zeile "500 Mark Ladenmiete abgebucht" liest beim dritten Mal niemand mehr, und
+     * dann liest er auch die Warnung nicht. Was zaehlt, steht in {@code /mark verlauf}.
+     *
+     * <p>Ein {@code switch} als AUSDRUCK ohne {@code default}, wie in dieser Datei
+     * ueberall: Ein neuer Ausgang bricht den Bau und nicht erst das Spielbild.
+     */
+    static List<Component> laufZeilen(Sprache sprache, Mietlauf.Posten posten) {
+        return switch (posten.ausgang()) {
+            // Drei Ausgaenge, die den Spieler nichts angehen. GESTOERT ausdruecklich
+            // auch nicht: Was dort schiefging, ist seine Sache nicht, es steht im
+            // Protokoll, und der naechste Lauf versucht es erneut. Eine Zeile darueber
+            // waere eine Sorge, die er nicht ausraeumen kann.
+            case BEZAHLT, SCHON_BEZAHLT, GESTOERT -> List.of();
+            case GEWARNT -> List.of(sprache.eineZeile(MietSatz.MIETE_GEWARNT, Einsatz
+                    .von("laden", posten.vertrag().einheit())
+                    .mit("betrag", sprache.betrag(posten.betrag()))
+                    .mit("ausfall", String.valueOf(posten.ausfaelle()))
+                    .mit("schranke", String.valueOf(
+                            posten.ausfaelle() + posten.bisRaeumung()))));
+            case GERAEUMT -> endeZeilen(sprache, posten,
+                    sprache.eineZeile(MietSatz.MIETE_GERAEUMT, Einsatz
+                            .von("laden", posten.vertrag().einheit())
+                            .mit("ausfall", String.valueOf(posten.ausfaelle()))
+                            .mit("schranke", String.valueOf(posten.ausfaelle()))
+                            .mit("kaution",
+                                    sprache.betrag(posten.vertrag().kaution()))));
+            case ABGELAUFEN -> endeZeilen(sprache, posten,
+                    sprache.eineZeile(MietSatz.MIETE_ABGELAUFEN, Einsatz
+                            .von("laden", posten.vertrag().einheit())
+                            .mit("bis", tag(sprache, posten.vertrag()))));
+        };
+    }
+
+    /**
+     * Die Zeile beim Beitritt, wenn der Laden in Verzug ist - oder keine.
+     *
+     * <p>Die einzige Stelle, an der ein Spieler von einem Ausfall erfaehrt, den er
+     * verschlafen hat: Der taegliche Lauf laeuft, waehrend er offline ist. Ohne diese
+     * Zeile kaeme er zurueck und faende seinen Laden weg, ohne je gewarnt worden zu sein.
+     *
+     * @param vertrag der eigene Vertrag, oder {@code null}
+     */
+    static List<Component> verzugZeilen(Sprache sprache, Mietvertrag vertrag,
+                                        int schranke) {
+        if (vertrag == null || !vertrag.inVerzug()) {
+            return List.of();
+        }
+        return List.of(sprache.eineZeile(MietSatz.MIETE_VERZUG, Einsatz
+                .von("laden", vertrag.einheit())
+                .mit("betrag", sprache.betrag(vertrag.miete()))
+                .mit("ausfall", String.valueOf(vertrag.ausfaelle()))
+                .mit("schranke", String.valueOf(schranke))));
+    }
+
+    /**
+     * Die Zeile ueber das Abholfach - oder keine, wenn es leer ist.
+     *
+     * <p>Gerufen beim Beitritt und von der Liste. Ein leeres Fach sagt NICHTS: Der
+     * haeufigste Fall ist, dass noch nie etwas drin lag, und eine Zeile "dein Abholfach
+     * ist leer" bei jedem Beitritt waere Laerm. Wer ausdruecklich fragt
+     * ({@code /laden abholfach}), bekommt die Antwort - das ist {@link #abholZeilen}.
+     */
+    static List<Component> fachstandZeilen(Sprache sprache, int stapel) {
+        if (stapel < 1) {
+            return List.of();
+        }
+        return List.of(sprache.eineZeile(MietSatz.ABHOLFACH_STAND,
+                Einsatz.von("stapel", String.valueOf(stapel))));
+    }
+
+    /**
+     * Die Antwort auf {@code /laden abholfach} - eine bis drei Zeilen.
+     *
+     * <p>Drei im schlechtesten Fall: was geholt wurde, was noch wartet, und was sich
+     * nicht zurueckverwandeln liess. Jede davon ist eine andere Nachricht, und
+     * zusammengelegt waere keine davon zu verstehen.
+     */
+    static List<Component> abholZeilen(Sprache sprache, Abholbuch.Griff griff) {
+        return switch (griff.bescheid()) {
+            case GEHOLT -> {
+                List<Component> zeilen = new ArrayList<>();
+                zeilen.add(sprache.eineZeile(MietSatz.ABHOLFACH_GEHOLT,
+                        Einsatz.von("stapel", String.valueOf(griff.geholt()))));
+                // Nur, wenn wirklich was uebrig ist - "noch 0 Stapel" sieht nach einem
+                // Fehler aus.
+                if (griff.bleibt() > 0) {
+                    zeilen.add(sprache.eineZeile(MietSatz.ABHOLFACH_BLEIBT,
+                            Einsatz.von("stapel", String.valueOf(griff.bleibt()))));
+                }
+                unlesbar(sprache, griff, zeilen);
+                yield List.copyOf(zeilen);
+            }
+            case FACH_LEER -> List.of(sprache.eineZeile(MietSatz.ABHOLFACH_LEER,
+                    Einsatz.keine()));
+            case KEIN_PLATZ -> List.of(sprache.eineZeile(MietSatz.ABHOLFACH_KEIN_PLATZ,
+                    Einsatz.von("stapel", String.valueOf(griff.bleibt()))));
+            case GESTOERT -> {
+                // Bei einer Stoerung ist der unlesbare Stapel der WAHRSCHEINLICHE Grund,
+                // und dann soll die Zeile ihn nennen statt "das hat nicht geklappt". Nur
+                // wenn auch das nicht zutrifft, bleibt die allgemeine Absage.
+                List<Component> zeilen = new ArrayList<>();
+                unlesbar(sprache, griff, zeilen);
+                if (zeilen.isEmpty()) {
+                    yield absage(sprache, MietSatz.ABSAGE_GESTOERT, Einsatz.keine());
+                }
+                yield List.copyOf(zeilen);
+            }
+        };
+    }
+
+    /** Die Zeile ueber unlesbare Stapel - an EINER Stelle, weil zwei Zweige sie brauchen. */
+    private static void unlesbar(Sprache sprache, Abholbuch.Griff griff,
+                                 List<Component> hinein) {
+        if (griff.unlesbar() > 0) {
+            hinein.add(sprache.eineZeile(MietSatz.ABHOLFACH_UNLESBAR,
+                    Einsatz.von("stapel", String.valueOf(griff.unlesbar()))));
+        }
+    }
+
+    /**
+     * Die zwei bis drei Zeilen zu einem beendeten Vertrag - Raeumung und Ablauf.
+     *
+     * <p>EINE Stelle fuer beide, weil beide dasselbe anhaengen: die Kaution (nur beim
+     * Ablauf) und das Abholfach (nur, wenn etwas darin landete). Zwei Stellen liefen
+     * auseinander, und dann erfuehre ein Spieler nach der einen Art von Ende nicht, wo
+     * seine Ware liegt.
+     */
+    private static List<Component> endeZeilen(Sprache sprache, Mietlauf.Posten posten,
+                                              Component kopf) {
+        List<Component> zeilen = new ArrayList<>();
+        zeilen.add(kopf);
+        // DERSELBE Satz wie beim Kuendigen, und das ist richtig: Es ist dieselbe Tat -
+        // die hinterlegte Kaution kommt zurueck. Ein eigener Satz daneben waere ein
+        // zweiter Wortlaut fuer dieselbe Gutschrift.
+        if (posten.kautionZurueck() > 0L) {
+            zeilen.add(sprache.eineZeile(MietSatz.GEKUENDIGT_KAUTION, Einsatz
+                    .von("betrag", sprache.betrag(posten.kautionZurueck()))));
+        }
+        if (posten.insFach() > 0) {
+            zeilen.add(sprache.eineZeile(MietSatz.MIETE_INS_FACH,
+                    Einsatz.von("stapel", String.valueOf(posten.insFach()))));
+        }
+        return List.copyOf(zeilen);
     }
 
     /**

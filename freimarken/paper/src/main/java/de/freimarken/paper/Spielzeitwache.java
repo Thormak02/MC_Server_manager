@@ -55,28 +55,41 @@ final class Spielzeitwache implements Listener {
     private final Spielzeitbuch buch;
 
     /**
-     * Wer im Takt mitfaehrt - heute allein der Tagesbonus [Teil H].
+     * Der erste Mitfahrer: der Tagesbonus [Teil H].
      *
      * <p>Hier und nicht mit einem eigenen Zeitgeber: Plan 8.8 schliesst "ein zweiter
      * Zeitgeber fuer irgendetwas anderes" ausdruecklich aus. Der Bonus braucht auch kein
      * eigenes Fenster - er fragt nur, ob heute schon gezahlt ist.
      *
-     * <p>Eine Klasse und keine Schnittstelle: Es gibt genau einen Mitfahrer, und eine
-     * Schnittstelle fuer eine Umsetzung waere eine Zusage auf einen zweiten, den niemand
-     * bestellt hat.
+     * <p>Klassen und keine Schnittstelle, auch jetzt mit zwei Mitfahrern: Eine
+     * Schnittstelle waere erst richtig, wenn ein Mitfahrer austauschbar WERDEN soll, und
+     * das will keiner von beiden. Was sie unterscheidet, ist ohnehin zu viel fuer eine
+     * gemeinsame Form - der eine wird je anwesendem Spieler gerufen, der andere einmal
+     * je Schlag.
      */
     private final Bonuswache bonuswache;
+
+    /**
+     * Der zweite Mitfahrer: der taegliche Lauf der Ladenmiete [Teil C].
+     *
+     * <p>EINMAL je Taktschlag und nicht je Spieler, anders als der Bonus. Der Bonus
+     * gehoert einem Spieler; die Ladenmiete gehoert allen Vertraegen, und die laufen
+     * weiter, ob ihr Mieter da ist oder nicht. Genau das ist ihr Zweck - waere sie an
+     * Anwesenheit gebunden, waere Wegbleiben der Weg, einen Stand kostenlos zu halten.
+     */
+    private final Mietwache mietwache;
     private final Wirtschaftsstand wirtschaft;
     private final Logger protokoll;
 
     /** Der laufende Zeitgeber - {@code null}, solange keiner steht. */
     private BukkitTask zeitgeber;
 
-    Spielzeitwache(JavaPlugin plugin, Spielzeitbuch buch, Bonuswache bonuswache, Wirtschaftsstand wirtschaft,
-                   Logger protokoll) {
+    Spielzeitwache(JavaPlugin plugin, Spielzeitbuch buch, Bonuswache bonuswache,
+                   Mietwache mietwache, Wirtschaftsstand wirtschaft, Logger protokoll) {
         this.plugin = plugin;
         this.buch = buch;
         this.bonuswache = bonuswache;
+        this.mietwache = mietwache;
         this.wirtschaft = wirtschaft;
         this.protokoll = protokoll;
     }
@@ -217,6 +230,16 @@ final class Spielzeitwache implements Listener {
             for (Player spieler : plugin.getServer().getOnlinePlayers()) {
                 bonuswache.imTakt(spieler);
             }
+            // EINMAL und nicht je Spieler [Teil C]: Der Lauf geht ueber alle Vertraege,
+            // nicht ueber alle Anwesenden. Nach dem Bonus, weil er Geld ABBUCHT - wer
+            // heute seinen Bonus bekommt, soll ihn fuer die Miete einsetzen koennen, und
+            // nicht geraeumt werden, waehrend das Geld schon unterwegs ist.
+            //
+            // In DEMSELBEN try: Eine Ausnahme von hier darf den Zeitgeber nicht beenden -
+            // der Verlust waere dann die Spielzeit aller Spieler bis zum naechsten
+            // Neustart. Mietlauf faengt seine Fehler selbst; dies ist die zweite
+            // Schranke.
+            mietwache.imTakt();
         } catch (Throwable fehler) {
             protokoll.log(Level.SEVERE, "Der Spielzeittakt ist in einen Fehler gelaufen."
                     + " Die Zeit dieses Taktes ist verloren; der Zeitgeber laeuft weiter.",

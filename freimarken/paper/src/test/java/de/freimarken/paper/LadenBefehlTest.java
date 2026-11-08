@@ -12,6 +12,8 @@ import de.freimarken.kern.Ladeneinheit;
 import de.freimarken.kern.Ladenverzeichnis;
 import de.freimarken.kern.Quader;
 import de.freimarken.kern.SpeicherKasse;
+import de.freimarken.kern.Abholgut;
+import de.freimarken.kern.SpeicherAbholfach;
 import de.freimarken.kern.SpeicherMiete;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
@@ -53,6 +55,7 @@ class LadenBefehlTest {
     private final List<LogRecord> protokollzeilen = new ArrayList<>();
     private SpeicherKasse kasse;
     private SpeicherMiete ablage;
+    private SpeicherAbholfach fach;
     private Spielerprobe anna;
     private World altfurt;
     private Logger protokoll;
@@ -68,6 +71,7 @@ class LadenBefehlTest {
         altfurt = Serverprobe.welt(ALTFURT);
         kasse = new SpeicherKasse(1_000_000L, UHR);
         ablage = new SpeicherMiete();
+        fach = new SpeicherAbholfach();
         protokollzeilen.clear();
         protokoll = eigenesProtokoll();
         anna = new Spielerprobe("Anna", Spielerprobe.kennungAus(1),
@@ -110,10 +114,21 @@ class LadenBefehlTest {
     private Befehlsprobe probe(Ladenverzeichnis verzeichnis, Wirtschaftsstand stand) {
         Mietbuch mietbuch = new Mietbuch(stand, verzeichnis, ablage, kasse, UHR,
                 protokoll);
-        var befehle = new LadenBefehle(verzeichnis, mietbuch,
+        var befehle = new LadenBefehle(verzeichnis, mietbuch, abholbuch(),
                 Sprachprobe.spracheAusDemJar(), ALTFURT,
                 () -> stand.werte().laeden().dauerTage());
         return new Befehlsprobe(List.of(befehle.laden()));
+    }
+
+    /**
+     * Ein Abholbuch auf dem Fach dieser Probe [Teil C].
+     *
+     * <p>Ein eigenes Feld fuer das Fach, damit eine Probe etwas hineinlegen kann, bevor
+     * sie den Befehl tippt. Ohne das wuerde der Zweig abholfach nur seinen leeren Fall
+     * zeigen - und der sagt ueber den Rest nichts.
+     */
+    private Abholbuch abholbuch() {
+        return new Abholbuch(fach, UHR, protokoll);
     }
 
     /** Was Anna gelesen hat, als Bild. */
@@ -333,6 +348,98 @@ class LadenBefehlTest {
         assertEquals(0L, gebucht(Buchungsgrund.LADEN_LIZENZ));
     }
 
+    // --------------------------------------------------------------- Abholfach
+
+    @Test
+    @DisplayName("/laden abholfach sagt bei leerem Fach, dass es leer ist")
+    void abholfachLeer() throws Exception {
+        probe().tippe("laden abholfach", anna);
+
+        assertEquals(List.of("&7Dein Abholfach ist leer."), gelesen());
+    }
+
+    @Test
+    @DisplayName("/laden abholfach braucht das Mietrecht NICHT")
+    void abholfachOhneMietrecht() throws Exception {
+        // Darin liegt die Ware von Spielern, deren Laden geraeumt wurde. Haenge der
+        // Zweig am Mietrecht, dann sperrte ein Betreiber, der dieses Recht einer Gruppe
+        // entzieht, genau diesen Spielern den Zugang zu ihrem eigenen Besitz.
+        Spielerprobe ohneMietrecht = new Spielerprobe("Carla",
+                Spielerprobe.kennungAus(3), LadenBefehle.RECHT).inWelt(altfurt);
+
+        probe().tippe("laden abholfach", ohneMietrecht);
+
+        assertEquals(List.of("&7Dein Abholfach ist leer."), ohneMietrecht.chatBild());
+    }
+
+    @Test
+    @DisplayName("/laden abholfach geht von UEBERALL - nicht nur in Altfurt")
+    void abholfachVonUeberall() throws Exception {
+        // Niemand soll nach Altfurt reisen muessen, um an seine eigenen Sachen zu
+        // kommen. Nur das MIETEN haengt am Ort.
+        anna.inWelt(Serverprobe.welt(HOCHWALD));
+
+        probe().tippe("laden abholfach", anna);
+
+        assertEquals(List.of("&7Dein Abholfach ist leer."), gelesen());
+    }
+
+    @Test
+    @DisplayName("Ein Stapel, den das Spiel nicht lesen kann, BLEIBT liegen")
+    void unlesbarerStapelBleibtLiegen() throws Exception {
+        // Der ganze Weg einmal durch: Befehl, Abholbuch, Ladenware, Satz. Der Inhalt ist
+        // kein echter Gegenstand - ohne laufenden Server gibt es keine Registry, an der
+        // sich Bytes in einen ItemStack zurueckverwandeln liessen. Genau das macht diese
+        // Probe wertvoll: Sie durchlaeuft den Zweig, in dem ein unlesbarer Stapel LIEGEN
+        // bleibt, und das ist die Zusage, die das Versprechen des Fachs haelt ("wird nie
+        // geloescht").
+        fach.lege(anna.kennung(), "Laden halle-1", UHR.instant(),
+                List.of(new Abholgut("64x STONE", "kein-echter-gegenstand")));
+
+        probe().tippe("laden abholfach", anna);
+
+        assertEquals(List.of("&cNicht herausgegeben: 1 Stapel. Das bleibt liegen -"
+                + " bitte sag es dem Team."), gelesen());
+        assertEquals(1, fach.anzahlFuer(anna.kennung()), "der Stapel liegt noch da");
+    }
+
+    @Test
+    @DisplayName("/laden zeigt am Ende, was im Abholfach wartet")
+    void listeZeigtDasFach() throws Exception {
+        // NACH der Standzeile und nur, wenn etwas drin liegt. Ein Fach kann voll sein,
+        // ohne dass der Spieler je einen Laden hatte - ein Betreiber kann ihm etwas
+        // hineinlegen.
+        fach.lege(anna.kennung(), "Laden halle-1", UHR.instant(),
+                List.of(new Abholgut("64x STONE", "x"), new Abholgut("12x OAK_LOG", "y")));
+
+        probe().tippe("laden", anna);
+
+        List<String> bild = gelesen();
+        assertEquals("&7Abholfach: 2 Stapel. /laden abholfach holt sie.",
+                bild.get(bild.size() - 1), bild.toString());
+        // Und die Standzeile steht DAVOR - zwei Dinge in einer festen Reihenfolge.
+        assertTrue(bild.get(bild.size() - 2).contains("noch keinen Laden"),
+                bild.toString());
+    }
+
+    @Test
+    @DisplayName("/laden sagt NICHTS ueber ein leeres Abholfach")
+    void listeSchweigtUeberLeeresFach() throws Exception {
+        probe().tippe("laden", anna);
+
+        assertTrue(gelesen().stream().noneMatch(zeile -> zeile.contains("Abholfach")),
+                gelesen().toString());
+    }
+
+    @Test
+    @DisplayName("Auf der Konsole gibt es kein Abholfach")
+    void abholfachBrauchtEinenSpieler() throws Exception {
+        probe().tippeAufDerKonsole("laden abholfach");
+
+        // Nichts gesendet und nichts geholt: Der Konsole gehoert kein Inventar.
+        assertEquals(List.of(), gelesen());
+    }
+
     // ---------------------------------------------------------------- Pflichten
 
     @Test
@@ -344,8 +451,8 @@ class LadenBefehlTest {
         var sprache = Sprachprobe.spracheAusDemJar();
 
         assertThrows(IllegalArgumentException.class, () -> new LadenBefehle(leer,
-                mietbuch, sprache, null, () -> 30));
+                mietbuch, abholbuch(), sprache, null, () -> 30));
         assertThrows(IllegalArgumentException.class, () -> new LadenBefehle(leer,
-                mietbuch, sprache, "  ", () -> 30));
+                mietbuch, abholbuch(), sprache, "  ", () -> 30));
     }
 }

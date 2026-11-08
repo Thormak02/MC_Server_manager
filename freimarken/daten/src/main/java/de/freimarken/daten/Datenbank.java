@@ -410,8 +410,75 @@ public final class Datenbank implements AutoCloseable {
               laeuft_bis DATE        NOT NULL,
               miete      BIGINT      NOT NULL,
               kaution    BIGINT      NOT NULL,
+              ausfaelle  INT         NOT NULL DEFAULT 0,
               PRIMARY KEY (einheit),
               UNIQUE KEY uq_ladenmiete_mieter (mieter)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 14: das Abholfach - Teil C.
+            //
+            // Die Antwort auf den einen Satz aus Plan 7.1, der keine Ausnahme kennt: "Der
+            // Kisteninhalt wandert in ein Abholfach und wird NIE geloescht." Eine
+            // Raeumung darf einen Spieler Geld kosten - dafuer ist die verfallende
+            // Kaution da -, aber niemals seine Gegenstaende.
+            //
+            // EINE EIGENE TABELLE und keine Spalte an ladenmiete, obwohl das Fach dort
+            // entsteht. Das Fach UEBERLEBT den Vertrag: Es wird in dem Augenblick
+            // gefuellt, in dem die Vertragszeile geloescht wird, und muss noch da sein,
+            // wenn der Spieler Wochen spaeter wiederkommt und laengst einen anderen Laden
+            // hat. Eine Spalte an einer geloeschten Zeile kann das nicht.
+            //
+            // AUTO_INCREMENT fuer die Nummer, und daraus folgt eine Zusage, die
+            // Abholablage.nimm halten MUSS: Der Zaehler von InnoDB ueberlebt in MariaDB
+            // einen Neustart nicht zuverlaessig, er beginnt dann bei MAX(id) + 1. Wurde
+            // die hoechste Zeile vorher abgeholt, wird ihre Nummer ein zweites Mal
+            // vergeben. Darum fragt jedes Loeschen nach empfaenger UND id - sonst holte
+            // ein alt gewordenes Fenster die Ware eines fremden Spielers.
+            //
+            // MEDIUMTEXT fuer den Inhalt, nicht TEXT. Ein TEXT haelt 64 KB, und ein
+            // Stapel mit viel Beschriftung - eine Kiste voller beschriebener Buecher -
+            // kann darueber liegen. MariaDB schnitte ihn dann ab, und ein abgeschnittener
+            // Stapel ist ein Gegenstand, der nicht mehr zu lesen ist. Abholgut weist
+            // alles ueber 1 MB vorher ab; die Spalte haelt 16 MB, damit die Grenze IM
+            // PROGRAMM greift und nicht in der Datenbank. Faellt ein Stapel erst hier
+            // auf, scheitert nicht ein Stapel, sondern die ganze Raeumung.
+            //
+            // beschriftung steht NEBEN dem Inhalt und ist nicht die Wahrheit ueber ihn.
+            // Sie steht da fuer den Tag, an dem sich ein Stapel nach einem
+            // Minecraft-Update nicht mehr zurueckverwandeln laesst: Dann ist sie das
+            // Einzige, was noch sagt, was verloren geht. "64x Eichenholz, nicht lesbar"
+            // ist von Hand zu ersetzen, "ein Stapel, nicht lesbar" nicht.
+            //
+            // ix_abholfach_empfaenger traegt die id als zweites Glied, und das ist die
+            // ganze Abfrage dieser Tabelle: alle Stuecke eines Spielers, aelteste zuerst.
+            // Mit der id im Index liest MariaDB sie in der richtigen Reihenfolge, ohne zu
+            // sortieren. Das ORDER BY in MariaAbholfach bleibt trotzdem stehen - eine
+            // Reihenfolge, die nur aus dem Ausfuehrungsplan folgt, ist keine Zusage.
+            //
+            // eingelegt ist DATETIME(3) und UTC, wie jede Zeitspalte dieses Schemas. Der
+            // Zeitpunkt kommt aus Java und nie aus UTC_TIMESTAMP(3) - dieselbe Regel wie
+            // bei berufe (Schritt 10): zwei Zeitquellen in einer Reihenfolge sind eine
+            // Reihenfolge, die sich nicht nachrechnen laesst.
+            //
+            // Kein Fremdschluessel auf kassen und keiner auf ladenmiete. Auf kassen aus
+            // demselben Grund wie ueberall (ein Fach haengt an niemandes Konto), auf
+            // ladenmiete aus einem staerkeren: Das Fach entsteht GENAU DANN, wenn die
+            // Vertragszeile verschwindet. Ein Fremdschluessel darauf waere die Zusage,
+            // dass das Fach ohne seinen Vertrag nicht existieren kann - und das Gegenteil
+            // ist sein Zweck.
+            //
+            // IF NOT EXISTS wie bei den Schritten 7, 9, 10, 12 und 13.
+            """
+            CREATE TABLE IF NOT EXISTS abholfach (
+              id           BIGINT      NOT NULL AUTO_INCREMENT,
+              empfaenger   CHAR(36)    NOT NULL,
+              herkunft     VARCHAR(48) NOT NULL,
+              eingelegt    DATETIME(3) NOT NULL,
+              beschriftung VARCHAR(96) NOT NULL,
+              inhalt       MEDIUMTEXT  NOT NULL,
+              PRIMARY KEY (id),
+              KEY ix_abholfach_empfaenger (empfaenger, id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
@@ -626,6 +693,13 @@ public final class Datenbank implements AutoCloseable {
             // Folge nicht nur ein falscher Stand, sondern ein harter Wurf im naechsten
             // Test.
             anweisung.execute("DELETE FROM ladenmiete");
+            // Das Abholfach, und hier steht eine Ausnahme von seiner eigenen Regel: Im
+            // Betrieb wird nie geleert, in der Probenreihe MUSS geleert werden. Ohne
+            // diese Zeile zaehlt die naechste Probe die Stuecke der vorigen mit, und die
+            // Nummern steigen ueber Probenlaeufe hinweg - dann ist "das aelteste zuerst"
+            // nicht mehr nachzurechnen. Dass leereAlles() jedes Schema ohne _test am Ende
+            // verweigert, ist genau fuer solche Zeilen da.
+            anweisung.execute("DELETE FROM abholfach");
             // Die Berufe haengen an keinem Fremdschluessel, ihre Stelle in dieser Liste
             // ist also frei - sie stehen hier, damit sie nicht uebersehen werden. Ohne
             // diese Zeile wandern gewaehlte Berufe von einem Test in den naechsten, und

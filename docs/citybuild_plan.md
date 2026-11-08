@@ -967,10 +967,52 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
   nicht hat — Miete, Kaution und Ablauftag —, und 99 von 100 Zeilen dort bräuchten sie
   nie.
 - Miete wird täglich abgebucht. Bei Zahlungsausfall: Warnung, dann Rückgabe. Der
-  Kisteninhalt wandert in ein **Abholfach** und wird **nie** gelöscht. [empfohlen]
+  Kisteninhalt wandert in ein **Abholfach** und wird **nie** gelöscht. [erledigt
+  08.11.2026 — Teil C]. Vier Entscheidungen kamen beim Bauen dazu:
+  - **Abgebucht wird unabhängig von der Anwesenheit.** Wäre die Zahlung an das
+    Einloggen gebunden, wäre Wegbleiben der Weg, einen Stand kostenlos zu halten — und
+    die Halle stünde voll mit Läden, die niemand bezahlt. Der Lauf fährt im
+    Spielzeittakt mit (Plan 8.8 verbietet einen zweiten Zeitgeber) und geht über ALLE
+    Verträge. Nachgefordert wird nie: Ein Server, der drei Tage aus war, bucht beim
+    nächsten Start eine Miete und nicht drei.
+  - **Gezählt werden Ausfälle IN FOLGE, und die Zahl steht am VERTRAG** — nicht im
+    Buchungsbuch, das sonst immer die Wahrheit über Geld ist. Aus dem Buch wäre sie zu
+    rechnen („an wie vielen der letzten Tage fehlt eine Mietzeile"), und ein Server, der
+    fünf Tage aus war, hat fünf Tage ohne Mietzeile: Die Rechnung räumte danach jeden
+    Laden der Halle. Drei Ausfälle räumen (`laeden.ausfaelle-bis-raeumung`), eine
+    Zahlung setzt auf 0 zurück.
+  - **Die Kaution kommt beim ABLAUF zurück** und verfällt nur beim Räumen wegen
+    Zahlungsausfall. Wer abgelaufen ist, hat jeden Tag gezahlt und nichts falsch
+    gemacht; die Kaution ist das Pfand gegen das Weglaufen, nicht gegen das
+    Nicht-Verlängern.
+  - **Das Abholfach wird mit einem BEFEHL geleert** (`/laden abholfach`) und nicht in
+    einem Truhenfenster. Ein offenes Fenster ist ein Zustand zwischen Spieler und
+    Datenbank, und wer es im falschen Augenblick schließt, hätte die Ware im Inventar
+    UND in der Datenbank — in einer Wirtschaft mit Bundesmarkt ist ein verdoppelter
+    Diamantblock sofort Geld. Geholt wird Stapel für Stapel: erst löschen, dann geben,
+    und was sich nicht zurückverwandeln lässt, bleibt liegen und steht im Protokoll.
+- **Noch offen und wichtig: es gibt keinen Ladenschutz.** Die Ladeneinheiten sind seit
+  Teil A reine Geometrie — jeder kann in jedem Stand bauen und jede Ladentruhe leeren.
+  Die `Schutzwache` gilt nur für die Marktstadt, und Altfurt ist eine andere Welt. Der
+  Schutz gehört als zweite Frage an `darfHandeln` und nicht in eine eigene Wache: Jene
+  deckt schon rund zwanzig Ereignisarten ab (Blöcke, Eimer, Feuer, Bilderrahmen,
+  Türklinken), und eine zweite Liste daneben liefe auseinander. Zusammen damit ist die
+  Truhe beim VERMIETEN zu leeren — das schließt das letzte Duplikationsfenster und ist
+  ohnehin richtig, denn ein neuer Mieter soll die Ware des Vorgängers nicht erben.
 - Ein Laden je Spieler, damit nicht drei Leute die Halle besitzen.
 - **Ladenverzeichnis**: `/markt suchen <Gegenstand>` zeigt Anbieter, Preis und Weg. Ohne das
   läuft man durch 80 Läden — der häufigste Grund, warum Einkaufszentren sterben.
+- **Verkauft wird am SCHILD und nicht per Befehl** [entschieden 08.11.2026]. Ein Schild
+  je Gegenstand, an einer Kiste, wie ein gewöhnlicher Shop. Das gilt für den Ankauf des
+  Bundes (`/markt verkaufen` fällt damit weg; `/markt liste` bleibt) und ist die Linie
+  für jeden Handel, den ein Spieler anbietet. Der Grund ist kein technischer: Ein Markt,
+  den man von überall bedienen kann, ist ein Menü. Wer einmal weiß, dass der Befehl
+  geht, geht nie wieder hin — und damit ist das gebaute Gebäude Zierde und niemand
+  trifft dort jemanden. Der Markt soll **beliebig erweiterbar und anpassbar** sein: ein
+  neues Schild hinstellen genügt, das Sortiment steht weiter in `bundesmarkt.ankauf`.
+  Zahlen, Tagesdeckel und Buchung bleiben, wie [7, Teil F](#7-markthalle-läden-und-handel)
+  sie gebaut hat; dazu kommen eine Wache auf das Anklicken und das Lesen der zwei
+  Schildzeilen. Eigener Schritt.
 - Die **Jobwand** im Zunfthaus: Spieler hängen private Aufträge aus. Billige Idee mit viel
   Wirkung [belegt].
 
@@ -979,7 +1021,7 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
 | Ladenmiete | 500 Mark/Tag [empfohlen] |
 | Kaution | 5.000 Mark, bei ordentlicher Rückgabe zurück [empfohlen] |
 | Ladenlizenz (einmalig) | 50.000 Mark [belegt] |
-| Mietdauer je Abschluss | 30 Tage, Verlängerung kostenlos [entschieden 07.11.2026] |
+| Mietdauer je Abschluss | 7 Tage, Verlängerung kostenlos [entschieden 08.11.2026] |
 
 Die Ladenmiete ist die **stärkste Geldsenke des Servers**: laufend, sichtbar, freiwillig.
 
@@ -1004,7 +1046,13 @@ Tafel nicht hergibt:
   Tage. Die Dauer sagt nicht, wofür bezahlt ist, sondern wann ein Vertrag **ohne Zutun**
   endet — sie ist der Griff gegen den Spieler, der aufhört zu spielen und noch Geld auf dem
   Konto hat. Dieselbe Zahl ist zugleich die Schranke, also liegt das Ende nie weiter als
-  59 Tage voraus, und es braucht keine zweite Einstellung dafür.
+  zwei Dauern minus einen Tag voraus, und es braucht keine zweite Einstellung dafür.
+- **Die Dauer ist 7 Tage und nicht 30** [entschieden 08.11.2026]. Sie ist kein Preis: Die
+  Miete steht je TAG, also kosten 7 Tage dieselben 500 Mark am Tag wie 30, und Kaution und
+  Lizenz bleiben. Kurz ist sie, weil die Markthalle wenige Stände hat — bei 30 Tagen stünde
+  sie einen Monat lang voll mit Läden, in denen nichts passiert. Wer spielt, merkt die Zahl
+  nicht; wer eine Woche wegbleibt, verliert den Stand, bekommt aber die Kaution zurück und
+  seine Ware aus dem Abholfach. Die Schranke liegt damit bei 13 Tagen.
 
 ### 7.2 Die Freie Truhe [entschieden]
 
@@ -1728,8 +1776,8 @@ Zweig. Umlautfrei, damit sie sich tippen lassen; kurze Alias daneben.
 | `/parzelle` (`/p`) | `nehmen`, `info`, `mitbauer <spieler>`, `zusammenlegen <richtung>`, `auftrennen`, `verkaufen <preis>`, `aufgeben` |
 | `/freistadt` (`/stadt`) | `gruenden <name>`, `einladen <spieler>`, `grundstueck anbieten <preis>`, `kasse`, `steuer`, `bund <name>` *(Formular im Bundesratshaus)* |
 | `/werder` | `hafen nehmen`, `wolke nehmen`, `stufe`, `besuchen <spieler>` |
-| `/laden` | `mieten`, `verlaengern`, `kuendigen`, `abholfach` |
-| `/markt` | `suchen <gegenstand>`, `anbieten <preis>`, `meine` |
+| `/laden` | `mieten`, `verlaengern`, `kuendigen`, `abholfach` *(alle vier erledigt 08.11.2026)* |
+| `/markt` | `suchen <gegenstand>`, `anbieten <preis>`, `meine` — **kein `verkaufen`**: verkauft wird am Schild ([7.1](#71-die-markthalle)) |
 | `/konto` | (Stand), `verlauf`, `zahlen <spieler> <betrag>`, `tauschen <betrag>` |
 | `/zuhause` (`/home`) | `<name>`, `setzen <name>`, `entfernen <name>`, `liste` |
 | `/warp` | `<name>`, `setzen <name>`, `entfernen <name>` |

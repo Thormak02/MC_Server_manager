@@ -3,6 +3,7 @@ package de.freimarken.kern;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -153,5 +154,69 @@ class MietvertragTest {
                 () -> new Mietvertrag("stand-1", ANNA, HEUTE, ENDE, 0L, 5_000L));
         assertThrows(IllegalArgumentException.class,
                 () -> new Mietvertrag("stand-1", ANNA, HEUTE, ENDE, -1L, 5_000L));
+    }
+
+    @Test
+    @DisplayName("Ein frischer Vertrag hat 0 Ausfaelle und ist nicht in Verzug")
+    void frischOhneAusfaelle() {
+        Mietvertrag frisch = new Mietvertrag("stand-1", ANNA, HEUTE, ENDE, 500L, 5_000L);
+
+        assertEquals(0, frisch.ausfaelle());
+        assertFalse(frisch.inVerzug());
+    }
+
+    @Test
+    @DisplayName("mitAusfall zaehlt um EINS hoch und laesst alles andere stehen")
+    void mitAusfallZaehltHoch() {
+        Mietvertrag frisch = new Mietvertrag("stand-1", ANNA, HEUTE, ENDE, 777L, 4_321L);
+
+        Mietvertrag einmal = frisch.mitAusfall();
+
+        assertEquals(1, einmal.ausfaelle());
+        assertEquals(2, einmal.mitAusfall().ausfaelle());
+        assertTrue(einmal.inVerzug());
+        // Sechs Zusicherungen daneben: Ein Ausfall ist eine Warnung und keine
+        // Vertragsaenderung. Wer dabei versehentlich laeuftBis oder die Miete anfasst,
+        // verschiebt dem Spieler sein Ende oder seinen Preis - und eine Probe, die nur
+        // die Zahl liest, waere gruen.
+        assertEquals("stand-1", einmal.einheit());
+        assertEquals(ANNA, einmal.mieter());
+        assertEquals(HEUTE, einmal.beginn());
+        assertEquals(ENDE, einmal.laeuftBis());
+        assertEquals(777L, einmal.miete());
+        assertEquals(4_321L, einmal.kaution());
+    }
+
+    @Test
+    @DisplayName("ohneAusfaelle setzt zurueck und gibt sonst DASSELBE Stueck zurueck")
+    void ohneAusfaelleSetztZurueck() {
+        Mietvertrag frisch = new Mietvertrag("stand-1", ANNA, HEUTE, ENDE, 500L, 5_000L);
+
+        assertEquals(0, frisch.mitAusfall().mitAusfall().ohneAusfaelle().ausfaelle());
+        // Dieselbe Kennung und nicht nur ein gleiches Stueck: Darauf baut der taegliche
+        // Lauf, wenn er den Schreibzug sparen will. Eine Fassung, die hier immer ein
+        // neues Stueck baut, laesst ihn an jedem Tag, an dem alle zahlen, jede Zeile der
+        // Halle neu schreiben.
+        assertSame(frisch, frisch.ohneAusfaelle());
+    }
+
+    @Test
+    @DisplayName("Verlaengern nimmt die Ausfaelle MIT")
+    void verlaengernBehaeltDieAusfaelle() {
+        // Verlaengern ist kein Bezahlen. Wuerde es die Ausfaelle loeschen, waere es der
+        // kostenlose Weg, die Raeumung beliebig weit wegzuschieben, ohne je Miete zu
+        // zahlen - und das Verlaengern kostet nichts.
+        Mietvertrag inVerzug = new Mietvertrag("stand-1", ANNA, HEUTE, ENDE, 500L,
+                5_000L).mitAusfall().mitAusfall();
+
+        assertEquals(2, inVerzug.bis(ENDE.plusDays(7)).ausfaelle());
+    }
+
+    @Test
+    @DisplayName("Eine negative Ausfallzahl wird abgewiesen")
+    void negativeAusfaelleGehenNicht() {
+        // Negative Ausfaelle waeren ein Guthaben an Tagen, und das gibt es nicht.
+        assertThrows(IllegalArgumentException.class,
+                () -> new Mietvertrag("stand-1", ANNA, HEUTE, ENDE, 500L, 5_000L, -1));
     }
 }

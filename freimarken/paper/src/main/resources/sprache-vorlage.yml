@@ -80,6 +80,9 @@ mark:
       laden-kaution: "Kaution"
       laden-kaution-zurueck: "Kaution zurueck"
       laden-erstattet: "Ladenmiete erstattet"
+      # Der einzige WIEDERKEHRENDE Grund dieses Bereichs - einmal je Tag und Laden.
+      # Ein Mieter liest ihn oefter als jeden anderen, darum ist das Wort kurz.
+      laden-miete: "Ladenmiete"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -1235,6 +1238,67 @@ laden:
     #   eine Zeile, die nach einem Fehler aussieht.
     kaution: "<green>Kaution zurueck: +{betrag}</green>"
 
+  # Der taegliche Lauf (Plan 7.1, Teil C): Die Miete wird jeden Tag abgebucht, auch
+  #   wenn der Mieter nicht da ist - sonst waere Wegbleiben der Weg, einen Stand
+  #   kostenlos zu halten. Diese Zeilen liest er, wenn er gerade online ist; sonst beim
+  #   naechsten Beitritt die Zeile verzug.
+  #
+  # Es gibt KEINE Zeile fuer die gelungene Abbuchung, und das ist Absicht: Eine
+  #   taegliche Meldung "500 Mark Ladenmiete abgebucht" liest beim dritten Mal niemand
+  #   mehr - und dann liest er auch die Warnung nicht. Was gebucht wurde, steht in
+  #   /mark verlauf.
+  #
+  # Alle fuenf Saetze sind EINZEILIG: Sie gehen ueber eineZeile hinaus, und die wirft
+  #   bei einem Umbruch. Zwei Gedanken trennt der Farbwechsel, wie bei gemietet.kopf.
+  miete:
+    # {laden} {betrag} {ausfall} {schranke} - das Geld fehlte. BEIDE Zahlen: "Ausfall 2
+    #   von 3" sagt, wie viel Luft noch ist; "zweiter Ausfall" allein kann der zweite
+    #   von zwanzig sein. Als Ordnungszahl und nicht als "noch 1 Tage" - eine Mehrzahl
+    #   laesst sich hier nicht beugen.
+    gewarnt: "<yellow>Die Miete fuer {laden} ({betrag}) konnte nicht abgebucht werden.</yellow><gray> Das war Ausfall {ausfall} von {schranke} - beim letzten wird geraeumt, und die Kaution verfaellt.</gray>"
+    # {laden} {ausfall} {schranke} {kaution} - der Laden ist weg. Die Kaution STEHT in
+    #   der Zeile: Sie soll das Weglaufen teurer machen als das Kuendigen, und das
+    #   wirkt nur, wenn der Spieler die Zahl sieht.
+    geraeumt: "<red>{laden} ist geraeumt - Ausfall {ausfall} von {schranke}.</red><gray> Die Kaution ueber {kaution} ist verfallen.</gray>"
+    # {laden} {bis} - die Mietdauer war um, ohne dass verlaengert wurde. Kein Vorwurf:
+    #   Er hat jeden Tag gezahlt, und darum kommt die Kaution zurueck - die Zeile
+    #   darunter ist gekuendigt.kaution, dieselbe Gutschrift mit demselben Satz.
+    abgelaufen: "<yellow>Dein Vertrag ueber {laden} ist abgelaufen - er lief bis {bis}.</yellow><gray> Mit /laden mieten nimmst du wieder einen Stand.</gray>"
+    # {stapel} - was aus der Ladentruhe wurde. Steht unter jeder Raeumung und jedem
+    #   Ablauf, bei dem etwas in der Truhe lag. Nach dem Doppelpunkt und ohne Verb,
+    #   damit die Zeile auch bei einem einzigen Stapel richtig steht.
+    ins-fach: "<gray>Die Ladentruhe ist ins Abholfach gewandert: {stapel} Stapel. Hol sie mit /laden abholfach.</gray>"
+    # {laden} {betrag} {ausfall} {schranke} - beim Beitritt, wenn Ausfaelle offen sind.
+    #   Die einzige Stelle, an der ein Spieler von einem Ausfall erfaehrt, den er
+    #   verschlafen hat: Der Lauf laeuft, waehrend er offline ist.
+    verzug: "<yellow>Dein Laden {laden} ist in Verzug - Ausfall {ausfall} von {schranke}.</yellow><gray> Sorge fuer {betrag} auf dem Konto, sonst wird geraeumt.</gray>"
+
+  # Das Abholfach (Plan 7.1, Teil C): Was in der Truhe eines geraeumten Ladens lag,
+  #   wird NIE geloescht. Es wartet hier, beliebig lange, ohne Verfall und ohne
+  #   Obergrenze.
+  #
+  # Geholt wird mit einem BEFEHL und nicht in einem Fenster, und das ist kein
+  #   Schoenheitsfehler: Ein offenes Fenster ist ein Zustand zwischen Spieler und
+  #   Datenbank, und wer es im falschen Augenblick schliesst, haette die Ware zweimal.
+  abholfach:
+    # {stapel} - was wartet. Beim Beitritt und unter /laden. Ein LEERES Fach sagt hier
+    #   nichts: Der haeufigste Fall ist, dass noch nie etwas drin lag.
+    stand: "<gray>Abholfach: {stapel} Stapel. /laden abholfach holt sie.</gray>"
+    # Nur wer ausdruecklich fragt, bekommt diese Antwort.
+    leer: "<gray>Dein Abholfach ist leer.</gray>"
+    # {stapel} - geholt.
+    geholt: "<green>{stapel} Stapel aus dem Abholfach geholt.</green>"
+    # {stapel} - es ist etwas uebrig, weil das Inventar vollgelaufen ist. Eine eigene
+    #   Zeile: Der haeufigste Fall ist, dass alles passt, und dann waere "noch 0
+    #   Stapel" eine Zeile, die nach einem Fehler aussieht.
+    bleibt: "<gray>Noch im Fach: {stapel} Stapel - dein Inventar hat keinen Platz mehr.</gray>"
+    # {stapel} - gar kein Platz, es ist nichts herausgegangen.
+    kein-platz: "<red>Dein Inventar ist voll. Im Abholfach: {stapel} Stapel.</red>"
+    # {stapel} - ein Stapel liess sich nicht in einen Gegenstand zurueckverwandeln,
+    #   etwa nach einem Minecraft-Update. Er LIEGT NOCH DA und ist nicht verloren; was
+    #   es war, steht mit Beschriftung im Serverprotokoll.
+    unlesbar: "<red>Nicht herausgegeben: {stapel} Stapel. Das bleibt liegen - bitte sag es dem Team.</red>"
+
   absage:
     # {laden} - diesen Namen gibt es in laeden.einheiten nicht.
     keine-einheit: "<red>Einen Stand namens {laden} gibt es nicht.</red>\n<gray>/laden zeigt, welche es gibt.</gray>"
@@ -1248,7 +1312,8 @@ laden:
     #   viel er noch verdienen muss.
     zu-wenig-geld: "<red>Der Abschluss kostet {kosten}, du hast {guthaben} - es fehlen {fehlt}.</red>"
     # {laden} {tage} {dauer} - noch zu frueh. BEIDE Zahlen: "noch 40 Tage" allein sagt
-    #   nicht, dass bei 30 Tagen Mietdauer erst ab Tag 11 verlaengert werden kann.
+    #   nicht, dass bei 7 Tagen Mietdauer erst ab dem zweiten Tag verlaengert werden
+    #   kann.
     noch-zu-frueh: "<yellow>{laden} laeuft noch {tage} Tage - verlaengern geht, sobald weniger als {dauer} Tage uebrig sind.</yellow>"
     kein-laden: "<red>Du hast keinen Laden.</red>\n<gray>/laden zeigt, welche Staende frei sind.</gray>"
     # Die Markthalle ist ein ORT. Nur das Mieten haengt daran; verlaengern und

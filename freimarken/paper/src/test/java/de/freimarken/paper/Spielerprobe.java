@@ -178,6 +178,11 @@ final class Spielerprobe {
                     case "getItemInMainHand" -> inDerHand == null
                             ? new Wesenprobe.Probestapel(Material.AIR, 0)
                             : inDerHand;
+                    // Ein LEERES Inventar mit 36 Plaetzen [Teil C]: Ladenware zaehlt
+                    // damit die freien Plaetze fuer /laden abholfach. 36 ist die Zahl
+                    // des Spielerinventars ohne Ruestung und zweite Hand - genau das,
+                    // was getStorageContents in Bukkit liefert.
+                    case "getStorageContents" -> new org.bukkit.inventory.ItemStack[36];
                     case "toString" -> "Inventarprobe " + name;
                     case "hashCode" -> kennung.hashCode();
                     case "equals" -> eigen == (werte == null ? null : werte[0]);

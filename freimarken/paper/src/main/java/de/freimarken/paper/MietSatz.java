@@ -55,7 +55,7 @@ enum MietSatz implements Satz {
     GEKUENDIGT("laden.gekuendigt.kopf", Art.SATZ, "laden"),
 
     /**
-     * Die Kaution kommt zurueck - nur bei ordentlicher Kuendigung.
+     * Die Kaution kommt zurueck - beim Kuendigen und beim Ablaufen.
      *
      * <p>Eine eigene Zeile und nicht ein Teil von {@link #GEKUENDIGT}: Es kann sein, dass
      * keine Kaution hinterlegt war (der Betreiber hatte sie auf 0 gestellt), und dann
@@ -104,6 +104,89 @@ enum MietSatz implements Satz {
 
     /** Die Datenbank hat geschwiegen. Was geschah, steht im Protokoll. */
     ABSAGE_GESTOERT("laden.absage.gestoert", Art.SATZ),
+
+    /**
+     * Die Miete konnte nicht abgebucht werden - die Warnung [Teil C].
+     *
+     * <p>Vier Werte, und {@code ausfall} und {@code schranke} stehen BEIDE darin: "Das
+     * war Ausfall 2 von 3" sagt dem Spieler, wie viel Luft er noch hat. Eine Zeile mit
+     * nur einer der zwei Zahlen sagt es nicht - "zweiter Ausfall" allein kann der dritte
+     * von zwanzig sein.
+     *
+     * <p>Als ORDNUNGSZAHL formuliert und nicht als "noch 2 Tage", und das ist kein
+     * Geschmack: Eine Mehrzahlform laesst sich in MiniMessage nicht beugen, und "noch 1
+     * Tage" ist genau der Fehler, der in Teil A schon einmal entstanden ist. "Ausfall 1
+     * von 3" steht in jeder Zahl richtig da.
+     */
+    MIETE_GEWARNT("laden.miete.gewarnt", Art.SATZ, "laden", "betrag", "ausfall",
+            "schranke"),
+
+    /**
+     * Der Laden ist weg, die Kaution verfallen.
+     *
+     * <p>Die Kaution steht in der Zeile, und das ist der Zweck der Kaution: Sie soll das
+     * Weglaufen teurer machen als das Kuendigen, und das wirkt nur, wenn der Spieler die
+     * Zahl SIEHT. Eine Raeumung ohne genannten Verlust ist eine Lehre, die niemand zieht.
+     */
+    MIETE_GERAEUMT("laden.miete.geraeumt", Art.SATZ, "laden", "ausfall", "schranke",
+            "kaution"),
+
+    /**
+     * Die Mietdauer ist um, ohne dass verlaengert wurde.
+     *
+     * <p>Ein eigener Satz neben {@link #MIETE_GERAEUMT}, obwohl beide den Laden
+     * wegnehmen: Der Unterschied ist die Kaution, und er ist fuer den Spieler der ganze
+     * Unterschied. Wer abgelaufen ist, hat nichts falsch gemacht - er hat jeden Tag
+     * gezahlt. Dieselbe Zeile fuer beides machte aus einem ordentlichen Ende einen
+     * Vorwurf.
+     */
+    MIETE_ABGELAUFEN("laden.miete.abgelaufen", Art.SATZ, "laden", "bis"),
+
+    /**
+     * Was aus der Ladentruhe geworden ist - die Zeile unter jeder Raeumung.
+     *
+     * <p>"Stapel" bleibt im Plural gleich, also braucht diese Zahl keine Beugung.
+     */
+    MIETE_INS_FACH("laden.miete.ins-fach", Art.SATZ, "stapel"),
+
+    /**
+     * Beim Beitritt: Dein Laden ist in Verzug.
+     *
+     * <p>Die einzige Stelle, an der ein Spieler von einem Ausfall erfaehrt, den er
+     * verschlafen hat - der taegliche Lauf laeuft, waehrend er offline ist. Ohne diese
+     * Zeile kaeme er zurueck und faende seinen Laden weg, ohne je gewarnt worden zu sein.
+     */
+    MIETE_VERZUG("laden.miete.verzug", Art.SATZ, "laden", "betrag", "ausfall",
+            "schranke"),
+
+    /** Was im Abholfach wartet - beim Beitritt und in der Liste. */
+    ABHOLFACH_STAND("laden.abholfach.stand", Art.SATZ, "stapel"),
+
+    /** Nichts da - die haeufigste Antwort auf {@code /laden abholfach}. */
+    ABHOLFACH_LEER("laden.abholfach.leer", Art.SATZ),
+
+    /** Geholt. */
+    ABHOLFACH_GEHOLT("laden.abholfach.geholt", Art.SATZ, "stapel"),
+
+    /**
+     * Es ist noch was uebrig - die zweite Zeile, wenn das Inventar voll wurde.
+     *
+     * <p>Eine eigene Zeile und nicht ein Teil von {@link #ABHOLFACH_GEHOLT}: Der
+     * haeufigste Fall ist, dass alles auf einmal passt, und dann waere "es warten noch 0
+     * Stapel" eine Zeile, die nach einem Fehler aussieht.
+     */
+    ABHOLFACH_BLEIBT("laden.abholfach.bleibt", Art.SATZ, "stapel"),
+
+    /** Gar kein Platz - es ist nichts herausgegangen. */
+    ABHOLFACH_KEIN_PLATZ("laden.abholfach.kein-platz", Art.SATZ, "stapel"),
+
+    /**
+     * Ein Stapel liess sich nicht zurueckverwandeln.
+     *
+     * <p>Der Spieler soll es ERFAHREN und nicht raten, warum sein Fach nicht leer wird.
+     * Die Stapel liegen noch da; was genau fehlt, steht mit Beschriftung im Protokoll.
+     */
+    ABHOLFACH_UNLESBAR("laden.abholfach.unlesbar", Art.SATZ, "stapel"),
 
     /** Der eigene Laden in der Liste - die letzte Zeile von {@code /laden}. */
     STAND("laden.stand.eigener", Art.SATZ, "laden", "bis", "tage", "miete"),

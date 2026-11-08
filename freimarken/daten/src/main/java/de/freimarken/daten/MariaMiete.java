@@ -49,7 +49,7 @@ import java.util.UUID;
 public final class MariaMiete implements Mietablage {
 
     private static final String SPALTEN =
-            "einheit, mieter, beginn, laeuft_bis, miete, kaution";
+            "einheit, mieter, beginn, laeuft_bis, miete, kaution, ausfaelle";
 
     private static final String LESEN_EINHEIT =
             "SELECT " + SPALTEN + " FROM ladenmiete WHERE einheit = ?";
@@ -84,7 +84,7 @@ public final class MariaMiete implements Mietablage {
     private static final String RAEUMEN = "DELETE FROM ladenmiete WHERE einheit = ?";
 
     private static final String EINFUEGEN =
-            "INSERT INTO ladenmiete (" + SPALTEN + ") VALUES (?, ?, ?, ?, ?, ?)";
+            "INSERT INTO ladenmiete (" + SPALTEN + ") VALUES (?, ?, ?, ?, ?, ?, ?)";
 
     private final Datenbank datenbank;
 
@@ -240,6 +240,7 @@ public final class MariaMiete implements Mietablage {
             anfrage.setObject(4, vertrag.laeuftBis());
             anfrage.setLong(5, vertrag.miete());
             anfrage.setLong(6, vertrag.kaution());
+            anfrage.setInt(7, vertrag.ausfaelle());
             anfrage.executeUpdate();
         }
     }
@@ -252,7 +253,14 @@ public final class MariaMiete implements Mietablage {
                 zeile.getObject("beginn", LocalDate.class),
                 zeile.getObject("laeuft_bis", LocalDate.class),
                 zeile.getLong("miete"),
-                zeile.getLong("kaution"));
+                zeile.getLong("kaution"),
+                // Die Ausfaelle MUESSEN hier stehen, und das ist der eine Grund, aus dem
+                // diese Zeile gefaehrlich ist: Es gibt einen kurzen Konstruktor ohne sie,
+                // und er uebersetzt sich. Wer ihn nimmt, setzt die Zahl bei jedem Lesen
+                // stumm auf 0 - dann zaehlt nichts jemals hoch, und kein Laden wird je
+                // geraeumt. Der taegliche Lauf laeuft, warnt jeden Tag neu und bewirkt
+                // nie etwas. Dagegen steht MietVertrag.ausfaelleUeberlebenDieAblage.
+                zeile.getInt("ausfaelle"));
     }
 
     private static String schluessel(String einheit) {

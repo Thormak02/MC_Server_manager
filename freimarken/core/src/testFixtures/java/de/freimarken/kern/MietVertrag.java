@@ -260,6 +260,44 @@ public abstract class MietVertrag {
     }
 
     @Test
+    @DisplayName("Die Ausfaelle ueberleben die Ablage - hin und zurueck")
+    void ausfaelleUeberlebenDieAblage() {
+        // Die Probe gegen den naheliegenden Fehler in JEDER Fassung [Teil C]: Weil es
+        // einen kurzen Konstruktor OHNE Ausfaelle gibt, nimmt eine Ablage, die eine
+        // gespeicherte Zeile zurueckbaut, leicht den kurzen - und setzt die Zahl stumm
+        // auf 0. Dann zaehlt nichts jemals hoch, und kein Laden wird je geraeumt: Der
+        // taegliche Lauf laeuft, warnt jeden Tag neu und bewirkt nie etwas.
+        Mietablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+
+        ablage.schreibe(new Mietvertrag("stand-1", anna, HEUTE, IN_DREISSIG, 500L,
+                5_000L, 2));
+
+        assertEquals(2, ablage.fuerEinheit("stand-1").ausfaelle());
+        assertEquals(2, ablage.fuerMieter(anna).ausfaelle());
+        assertEquals(2, ablage.alle().get(0).ausfaelle());
+        assertTrue(ablage.fuerEinheit("stand-1").inVerzug());
+    }
+
+    @Test
+    @DisplayName("Ein Ausfall mehr ersetzt die Zeile und legt keine zweite dazu")
+    void ausfallUeberschreibtDieZeile() {
+        // Der taegliche Lauf schreibt denselben Vertrag mit einer hoeheren Zahl zurueck.
+        // Eine Fassung, die dabei einfuegt statt zu ersetzen, hat zwei Zeilen zu einer
+        // Einheit - und das erste Versprechen der Ablage ist gebrochen, ohne dass
+        // irgendetwas wirft.
+        Mietablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibe(new Mietvertrag("stand-1", anna, HEUTE, IN_DREISSIG, 500L,
+                5_000L));
+
+        ablage.schreibe(ablage.fuerEinheit("stand-1").mitAusfall());
+
+        assertEquals(1, ablage.alle().size());
+        assertEquals(1, ablage.fuerEinheit("stand-1").ausfaelle());
+    }
+
+    @Test
     @DisplayName("Ohne Einheit, ohne Spieler und ohne Vertrag geht nichts")
     void pflichtangaben() {
         Mietablage ablage = ablage();

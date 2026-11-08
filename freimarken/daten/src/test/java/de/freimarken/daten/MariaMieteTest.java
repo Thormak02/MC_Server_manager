@@ -75,16 +75,34 @@ class MariaMieteTest extends MietVertrag {
         // Faellt der UNIQUE KEY aus dem Schemaschritt, ist diese Probe rot und jede
         // andere gruen - denn jede andere geht durch MariaMiete.schreibe, und das fragt
         // vorher nach.
+        //
+        // ZWEIMAL dasselbe INSERT, einmal mit fremdem und einmal mit demselben Mieter,
+        // und das ist am 08.11.2026 beim Bauen von Teil C nachgebessert worden: Vorher
+        // nannte der Satz die Spalte kaution nicht, und die ist NOT NULL ohne DEFAULT.
+        // Die Probe war gruen, weil MariaDB die fehlende Spalte verweigerte - nicht, weil
+        // der eindeutige Schluessel stand. Wer ihn aus dem Schemaschritt nahm, haette es
+        // nie gemerkt. Jetzt unterscheiden sich die zwei Saetze NUR im Mieter, also ist
+        // er der einzige moegliche Grund fuer den Unterschied.
         UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
         miete.schreibe(new Mietvertrag("stand-1", anna, HEUTE, IN_DREISSIG, 500L, 5_000L));
 
         try (Statement anweisung = datenbank.verbindung().createStatement()) {
-            assertThrows(SQLException.class, () -> anweisung.executeUpdate(
-                    "INSERT INTO ladenmiete (einheit, mieter, beginn, laeuft_bis, miete)"
-                            + " VALUES ('stand-2', '" + anna + "', '2026-11-07',"
-                            + " '2026-12-06', 500)"),
-                    "die Datenbank selbst muss das verweigern");
+            assertEquals(1, anweisung.executeUpdate(rohesEinfuegen("stand-2", bert)),
+                    "mit einem FREMDEN Mieter muss derselbe Satz durchgehen - sonst"
+                            + " scheitert die zweite Haelfte an etwas anderem");
+            assertThrows(SQLException.class,
+                    () -> anweisung.executeUpdate(rohesEinfuegen("stand-3", anna)),
+                    "die Datenbank selbst muss den zweiten Laden desselben Mieters"
+                            + " verweigern");
         }
+    }
+
+    /** Ein vollstaendiges INSERT von Hand - alle Pflichtspalten, nur Name und Mieter frei. */
+    private static String rohesEinfuegen(String einheit, UUID mieter) {
+        return "INSERT INTO ladenmiete (einheit, mieter, beginn, laeuft_bis, miete,"
+                + " kaution) VALUES ('" + einheit + "', '" + mieter + "',"
+                + " '2026-11-07', '2026-12-06', 500, 5000)";
     }
 
     @Test
@@ -243,6 +261,34 @@ class MariaMieteTest extends MietVertrag {
             // zwei gleiche Werte liessen ein Vertauschen offen.
             assertEquals(500L, ergebnis.getLong("miete"));
             assertEquals(4_321L, ergebnis.getLong("kaution"));
+        }
+    }
+
+    @Test
+    @DisplayName("Die Ausfaelle stehen in der Zeile - und ein frischer Vertrag hat 0")
+    void ausfaelleStehenInDerZeile() throws SQLException {
+        // Die Spalte aus Teil C, an der Datenbank geprueft. Sie steht hier und nicht im
+        // Buchungsbuch, weil sie aus dem Buch nicht zu rechnen ist: Ein Server, der fuenf
+        // Tage aus war, hat fuenf Tage ohne Mietzeile - und die Rechnung aus dem Buch
+        // raeumte danach jeden Laden der Halle.
+        //
+        // Zwei Zeilen mit VERSCHIEDENEN Zahlen, 0 und 2: Eine Fassung, die die Spalte gar
+        // nicht schreibt, liefert ueberall die 0 aus dem DEFAULT - und waere mit einer
+        // einzigen Zeile ueber 0 gruen.
+        miete.schreibe(new Mietvertrag("stand-1", UUID.randomUUID(), HEUTE, IN_DREISSIG,
+                500L, 5_000L));
+        miete.schreibe(new Mietvertrag("stand-2", UUID.randomUUID(), HEUTE, IN_DREISSIG,
+                500L, 5_000L, 2));
+
+        try (Statement anweisung = datenbank.verbindung().createStatement();
+             ResultSet ergebnis = anweisung.executeQuery("SELECT einheit, ausfaelle FROM"
+                     + " ladenmiete ORDER BY einheit")) {
+            assertTrue(ergebnis.next());
+            assertEquals("stand-1", ergebnis.getString("einheit"));
+            assertEquals(0, ergebnis.getInt("ausfaelle"));
+            assertTrue(ergebnis.next());
+            assertEquals("stand-2", ergebnis.getString("einheit"));
+            assertEquals(2, ergebnis.getInt("ausfaelle"));
         }
     }
 

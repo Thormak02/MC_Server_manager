@@ -29,6 +29,16 @@ public final class Mietregel {
      */
     public static final int HOECHSTE_DAUER = 366;
 
+    /**
+     * Hoechstens 366 Ausfaelle bis zur Raeumung - dieselbe Zahl wie bei der Dauer.
+     *
+     * <p>Eine Schranke ueber einem Jahr waere keine: Der Vertrag laeuft vorher ab, und
+     * dann raeumt ihn der Ablauf und nicht der Verzug. Die Zahl steht trotzdem so hoch,
+     * weil "nachsichtig" eine zulaessige Einstellung ist - ein Betreiber darf 30 setzen,
+     * wenn er einen Monat Geduld haben will.
+     */
+    public static final int HOECHSTE_SCHRANKE = 366;
+
     private Mietregel() {
     }
 
@@ -56,9 +66,11 @@ public final class Mietregel {
      *
      * <p><b>Nur, wenn weniger als eine ganze Mietdauer uebrig ist.</b> Das ist die
      * Entscheidung dieser Regel, und sie braucht keine eigene Zahl in der
-     * {@code config.yml}: Ohne sie koennte ein reicher Spieler dreissigmal verlaengern und
-     * eine Ladeneinheit fuer Jahre binden, obwohl er sie nicht benutzt. Mit ihr liegt das
-     * Ende immer hoechstens zwei Mietdauern voraus - bei 30 Tagen also hoechstens 60.
+     * {@code config.yml}: Ohne sie koennte ein reicher Spieler beliebig oft verlaengern
+     * und eine Ladeneinheit fuer Jahre binden, obwohl er sie nicht benutzt. Mit ihr liegt
+     * das Ende immer hoechstens zwei Mietdauern MINUS einen Tag voraus - bei 7 Tagen also
+     * hoechstens 13, nicht 14. Das Minus kommt daher, dass {@code laeuftBis}
+     * eingeschlossen ist; gezaehlt ist es in {@code MietregelTest.nieWeiterAlsZweiDauern}.
      *
      * <p><b>Ein abgelaufener Vertrag darf verlaengert werden</b>, und das ist gewollt:
      * Zwischen dem Ablauf und dem taeglichen Lauf steht die Zeile noch da. Wer in diesem
@@ -115,5 +127,46 @@ public final class Mietregel {
 
     public static boolean brauchbareDauer(int tage) {
         return tage >= 1 && tage <= HOECHSTE_DAUER;
+    }
+
+    /**
+     * Ob dieser Vertrag geraeumt werden muss - die Schranke gegen den Zahlungsausfall.
+     *
+     * <p><b>{@code >=} und nicht {@code ==}</b>, und das ist nicht Vorsicht, sondern ein
+     * gemessener Fall: Der Betreiber darf {@code laeden.ausfaelle-bis-raeumung} im
+     * Betrieb senken. Dann stehen Vertraege da, deren Ausfallzahl die neue Schranke
+     * schon ueberschritten hat. Mit {@code ==} ginge der Lauf an ihnen vorbei, und sie
+     * stuenden fuer immer in Verzug, ohne je geraeumt zu werden - die Halle waere voll
+     * mit Laeden, die niemand bezahlt und niemand bekommt.
+     *
+     * @param ausfaelle die gezaehlten Tage ohne Zahlung, nach dem heutigen Ausfall
+     * @param schranke  wie viele Ausfaelle in Folge die Raeumung ausloesen
+     */
+    public static boolean raeumungsreif(int ausfaelle, int schranke) {
+        if (!brauchbareSchranke(schranke)) {
+            throw new IllegalArgumentException("Eine Schranke von " + schranke
+                    + " Ausfaellen ist keine - erlaubt ist 1 bis " + HOECHSTE_SCHRANKE
+                    + ". Bei 0 waere JEDER Vertrag raeumungsreif, auch der heute"
+                    + " abgeschlossene mit 0 Ausfaellen: Der erste Lauf raeumte die ganze"
+                    + " Halle.");
+        }
+        return ausfaelle >= schranke;
+    }
+
+    /**
+     * Ob diese Schranke eine ist - 1 bis {@link #HOECHSTE_SCHRANKE}.
+     *
+     * <p><b>Die 1 ist ERLAUBT</b>, und das ist eine Entscheidung: "Wer nicht zahlt, ist
+     * sofort weg" ist eine zulaessige Serverregel, auch wenn sie hart ist. Der Spieler
+     * bekommt dabei keine Warnung, sondern gleich die Raeumung - das ist die Folge, nicht
+     * ein Fehler, und {@code Mietliste} schreibt sie dem Betreiber in den Bericht.
+     *
+     * <p><b>Die 0 ist es nicht</b>, und zwar aus einem anderen Grund als Haerte: Bei 0
+     * ist {@code raeumungsreif(0, 0)} wahr, also waere JEDER Vertrag raeumungsreif - auch
+     * der heute abgeschlossene, an dem kein einziger Ausfall steht. Der erste Lauf
+     * raeumte die ganze Halle.
+     */
+    public static boolean brauchbareSchranke(int schranke) {
+        return schranke >= 1 && schranke <= HOECHSTE_SCHRANKE;
     }
 }

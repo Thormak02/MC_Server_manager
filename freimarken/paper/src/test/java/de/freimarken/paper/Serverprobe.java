@@ -503,6 +503,22 @@ final class Serverprobe {
                 });
     }
 
+    /**
+     * Der anwesende Spieler mit dieser Kennung - oder {@code null}.
+     *
+     * <p>Durchsucht die Anwesenden, statt eine zweite Tabelle zu fuehren: Zwei Tabellen
+     * ueber dieselbe Menge liefen auseinander, und dann faende getPlayerExact jemanden,
+     * den getPlayer nicht kennt.
+     */
+    private static Player nachKennung(UUID gesucht) {
+        for (Player einer : ANWESEND.values()) {
+            if (gesucht.equals(einer.getUniqueId())) {
+                return einer;
+            }
+        }
+        return null;
+    }
+
     private static Server bau() {
         return (Server) Proxy.newProxyInstance(Serverprobe.class.getClassLoader(),
                 new Class<?>[] {Server.class}, new Serverhand());
@@ -521,6 +537,14 @@ final class Serverprobe {
                 // Fuer Schutzwache.namen: der Eigentuemer einer fremden Parzelle.
                 case "getOfflinePlayer" -> offlineSpieler(werte[0]);
                 case "getPlayerExact" -> ANWESEND.get(String.valueOf(werte[0]));
+                // getPlayer nimmt in Bukkit einen Namen ODER eine UUID, und
+                // Mietwache.imTakt sucht nach der UUID des Mieters. Unterschieden
+                // wird am TYP und nicht an der Laenge: Ein Spielername darf keine
+                // 36 Zeichen haben, aber sich darauf zu verlassen waere eine
+                // Zusage von Mojang und nicht von uns.
+                case "getPlayer" -> werte[0] instanceof UUID gesucht
+                        ? nachKennung(gesucht)
+                        : ANWESEND.get(String.valueOf(werte[0]));
                 case "getOnlinePlayers" -> List.copyOf(ANWESEND.values());
                 // Ueber den Schluessel, nicht ueber den Namen: Chunkmarken sucht so,
                 // und Bukkit.getWorld(NamespacedKey) landet hier.

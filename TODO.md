@@ -677,8 +677,20 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Scheitert ein Abschluss nach dem Abbuchen, kommt nur die KAUTION zurueck. Die Lizenz bleibt bezahlt - sie haengt an keinem Laden.
 - Verlaengern kostet nichts (gezahlt wird taeglich) und geht, sobald weniger als eine Mietdauer uebrig ist. Damit liegt das Ende nie weiter als 59 Tage voraus.
 - Nur das MIETEN haengt an Altfurt; verlaengern und kuendigen gehen von ueberall - sie beruehren nur den eigenen Vertrag.
-- Offen in Teil C: der taegliche Lauf (Abbuchung, Warnung, Raeumung) und das Abholfach. Erst dort verfaellt eine Kaution, und erst dort braucht die Zeile eine Spalte fuer Warnungen.
+- ~~Schritt 8, Teil C: taeglicher Lauf und Abholfach.~~ 8.11.: Miete wird taeglich abgebucht, auch wenn der Mieter offline ist; 3 Ausfaelle in Folge raeumen (laeden.ausfaelle-bis-raeumung). Schemaschritt 14 (Tabelle abholfach), Buchungsgrund laden_miete, /laden abholfach.
+- ~~Spalte fuer Warnungen~~ 8.11. heisst ausfaelle (Tage ohne Zahlung IN FOLGE, zurueck auf 0 bei Zahlung). Sie steht am VERTRAG und nicht im Buchungsbuch - aus dem Buch gerechnet raeumte ein Serverausfall von fuenf Tagen die ganze Halle.
+- Mietdauer 8.11. von 30 auf 7 Tage GEAENDERT. Kein Preis: Die Miete steht je Tag, Kaution und Lizenz bleiben. Kurz, damit ein verlassener Stand nach einer Woche wieder mietbar ist. Schranke beim Verlaengern damit 13 Tage.
+- Kaution 8.11. ENTSCHIEDEN: Beim Ablauf ohne Verlaengerung kommt sie zurueck (er hat jeden Tag gezahlt), nur beim Raeumen wegen Zahlungsausfall verfaellt sie.
+- Reihenfolge der Raeumung: Truhe lesen, ins Fach legen, Vertrag loeschen, Truhe leeren. Scheitert das Einlegen, bleibt ALLES stehen - darum prueft raeumungsreif mit >= und nicht ==.
+- Das Abholfach wird mit einem BEFEHL geleert und nicht in einem Fenster: Ein offenes Fenster ist ein Zustand zwischen Spieler und Datenbank, und wer es im falschen Augenblick schliesst, haette die Ware zweimal.
+- jedes Loeschen im Fach fragt nach empfaenger UND id: Der AUTO_INCREMENT von MariaDB beginnt nach einem Neustart bei MAX(id)+1, eine Nummer kann also ein zweites Mal vergeben werden.
+- OFFEN und wichtig: Es gibt KEINEN Ladenschutz. Die Ladeneinheiten sind seit Teil A reine Geometrie - jeder kann in jedem Stand bauen und jede Ladentruhe leeren. Die Schutzwache gilt nur fuer die Marktstadt, Altfurt ist eine andere Welt. Gehoert als Frage an darfHandeln und nicht als zweite Wache: Jene deckt schon ~20 Ereignisarten ab, eine zweite Liste liefe auseinander.
+- Mit dem Ladenschutz zusammen: Beim VERMIETEN die Truhe leeren. Das schliesst das letzte Duplikationsfenster (Absturz zwischen Vertragsloeschen und Truhe-Leeren) und ist ohnehin richtig - ein neuer Mieter soll die Ware des Vorgaengers nicht erben.
+- Offen in Teil D: die Freie Truhe (Entnahme ~16 Gegenstaende je Spieler und Tag, taeglich geleert).
 - Noch von Hand zu tun, bevor jemand mieten kann: die Markthalle in Altfurt bauen und ihre Staende als Quader in laeden.einheiten eintragen.
+- 8.11. ENTSCHIEDEN, Bundesmarkt: Verkauft wird NUR am Schild, nicht per Befehl. Ein Schild je Gegenstand, an einer Kiste, wie ein gewoehnlicher Shop. /markt verkaufen faellt damit weg, /markt liste bleibt. Der Markt soll beliebig erweiterbar und anpassbar sein: ein neues Schild hinstellen genuegt, das Sortiment steht weiter in bundesmarkt.ankauf.
+- Folgt daraus: eine Wache auf das Anklicken des Schildes, das Lesen der zwei Schildzeilen (Gegenstand und Preis) und die Pruefung, dass das Schild in der Ankaufliste steht. Der Tagesdeckel und die Buchung bleiben, wie sie sind - Schritt 7 Teil F hat sie schon.
+- Eigener Schritt, NICHT Teil C. Beruehrt MarktBefehle (verkaufen entfernen) und braucht eine neue Wache; die Zahlen aendern sich nicht.
 - Offen, Berufe: der Kolben, der einen markierten Block weiterschiebt, und der Pflastersteingenerator - Weltregeln, eigener Schritt.
 - Entscheidung, Sprachdatei: sendeHandbalken hat seit Teil E zwei Aufrufer; Sprache.sende und sendeGezaehlt haben weiter keinen. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.

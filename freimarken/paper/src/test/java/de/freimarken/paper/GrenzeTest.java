@@ -283,6 +283,9 @@ class GrenzeTest {
             "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
             "BerufeBefehle.java", "Bonuswache.java",
             "BundBefehle.java", "LadenBefehle.java", "FreimarkenPlugin.java", "MarktBefehle.java",
+            // Teil C: die zwei Beitrittszeilen und die Zeilen des taeglichen
+            // Laufs - alle durch dasselbe private sende().
+            "Mietwache.java",
             "ParzellenBefehle.java", "Portalwache.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
@@ -397,6 +400,10 @@ class GrenzeTest {
             // hiesse, dass ein Zweig von /markt stumm bleibt; eine mehr, dass neben
             // Markttext eine zweite Sendestelle gebaut wurde.
             Map.entry("MarktBefehle.java", 2),
+            // Teil C: EINE Stelle fuer drei Zweige - Beitritt (zweimal) und Takt gehen
+            // alle durch dasselbe private sende(). Haette jeder Zweig sein eigenes,
+            // stuende hier eine 3, und eine verlorene Sendung waere nicht zu sehen.
+            Map.entry("Mietwache.java", 1),
             Map.entry("ParzellenBefehle.java", 44),
             Map.entry("Portalwache.java", 1),
             Map.entry("Reise.java", 7),
@@ -1135,8 +1142,20 @@ class GrenzeTest {
      * aendert seine {@code sprache.yml}, ohne dass im Spiel etwas geschieht. Einen
      * Satz bauen kann man aber nicht, ohne ihn zu lesen.
      */
+    /**
+     * Wer einen Satz aus Text macht.
+     *
+     * <p>Das {@code deserialize} traegt eine KLAMMER, und die ist am 08.11.2026
+     * nachgetragen worden: Ohne sie traf das Muster auch
+     * {@code ItemStack.deserializeBytes} in {@code Ladenware} - ein Zufallstreffer, der
+     * nichts mit MiniMessage zu tun hat. Die Datei auszunehmen waere der falsche Weg
+     * gewesen: Eine ausgenommene Datei ist fuer immer blind, auch wenn dort eines Tages
+     * wirklich ein Satz gebaut wird. MiniMessage heisst die Methode
+     * {@code deserialize(String)}, Bukkit nennt sie {@code deserializeBytes} - die
+     * Klammer trennt beide genau.
+     */
     private static final Pattern MINIMESSAGE_LESEN = Pattern.compile(
-            "MiniMessage|deserialize");
+            "MiniMessage|deserialize\\(");
 
     @Test
     @DisplayName("32 - die Quellen wurden ueberhaupt gefunden")

@@ -1178,10 +1178,42 @@ laeden:
   # auf dem Konto hat.
   #
   # Verlaengern kostet nichts und geht, sobald weniger als diese Zahl an Tagen uebrig
-  # ist. Damit liegt das Ende nie weiter als zwei Mietdauern voraus - ohne diese
-  # Schranke koennte ein reicher Spieler einen Stand fuer Jahre binden, ohne ihn zu
-  # benutzen. Eine eigene Zeile dafuer gibt es nicht: Die Schranke IST diese Zahl.
-  mietdauer-tage: 30
+  # ist. Damit liegt das Ende nie weiter als zwei Mietdauern MINUS einen Tag voraus -
+  # bei 7 also 13, weil der letzte Tag mitzaehlt. Ohne diese Schranke koennte ein
+  # reicher Spieler einen Stand fuer Jahre binden, ohne ihn zu benutzen. Eine eigene
+  # Zeile dafuer gibt es nicht: Die Schranke IST diese Zahl.
+  #
+  # Diese Zahl ist KEIN Preis. Die Miete steht oben je TAG - 7 Tage kosten dieselben
+  # 500 Mark am Tag wie 30, und Kaution und Lizenz bleiben, wie sie sind. Eine kleine
+  # Zahl macht Laeden also nicht guenstiger, sondern nur schneller wieder frei: Wer
+  # aufhoert zu spielen, gibt seinen Stand nach einer Woche her und nicht nach einem
+  # Monat. Seine Ware ist dabei nicht verloren - sie wandert ins Abholfach, und die
+  # Kaution kommt bei Ablauf zurueck.
+  mietdauer-tage: 7
+
+  # Nach wie vielen Tagen OHNE ZAHLUNG IN FOLGE der Laden geraeumt wird.
+  #
+  # Bei 3 heisst das: Der erste Ausfall warnt, der zweite warnt, der dritte raeumt. Es
+  # gibt also ZWEI Warnungen und nicht drei - die Zahl heisst nach dem, was sie zaehlt,
+  # und nicht nach ihrer Wirkung.
+  #
+  # Was beim Raeumen passiert: Der Vertrag ist weg, die Kaution VERFAELLT, und der
+  # Inhalt der Ladentruhe wandert ins Abholfach - der wird NIE geloescht und wartet
+  # beliebig lange auf /laden abholfach. Zahlt der Spieler vorher wieder, sind die
+  # Ausfaelle erledigt; gezaehlt werden nur die in Folge.
+  #
+  # Eine 1 ist erlaubt und heisst: Der erste Ausfall raeumt. Dann liest der Spieler
+  # NIE eine Warnung, weil Warnung und Raeumung in denselben Augenblick fallen - der
+  # Startbericht sagt es noch einmal, wenn hier eine 1 steht. Wer eine Warnung will,
+  # nimmt mindestens 2.
+  #
+  # Eine 0 wird abgewiesen, und zwar nicht wegen Haerte: Bei 0 waere JEDER Vertrag
+  # raeumungsreif, auch der heute abgeschlossene mit 0 Ausfaellen. Der erste Lauf
+  # raeumte die ganze Halle.
+  #
+  # Eine Zahl ab der Mietdauer (oben 7) macht die Regel wirkungslos: Dann laeuft der
+  # Vertrag immer vorher ab, und beim Ablauf kommt die Kaution zurueck.
+  ausfaelle-bis-raeumung: 3
 
   # Je Einheit ein Block mit drei Zeilen. Der Name steht auch im Befehl
   # /laden mieten <name>, also nur kleine Buchstaben, Ziffern und Striche.

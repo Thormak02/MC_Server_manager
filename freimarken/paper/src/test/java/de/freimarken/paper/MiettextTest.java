@@ -38,6 +38,10 @@ class MiettextTest {
     private static final Mietvertrag HALLE_1 = new Mietvertrag("halle-1", ANNA, HEUTE,
             HEUTE.plusDays(29), 500L, 5_000L);
 
+    /** Derselbe Laden mit zwei offenen Ausfaellen - fuer die Zeilen aus Teil C. */
+    private static final Mietvertrag HALLE_1_VERZUG = new Mietvertrag("halle-1", ANNA,
+            HEUTE, HEUTE.plusDays(29), 500L, 5_000L, 2);
+
     private Sprache sprache;
 
     @BeforeEach
@@ -374,12 +378,214 @@ class MiettextTest {
         zusagen.addAll(Miettext.verlaengernZeilen(sprache, new Mietbuch.Verlaengerung(
                 Mietbuch.Bescheid.VERLAENGERT, HALLE_1, 30L), 30));
         zusagen.add(Miettext.standZeile(sprache, HALLE_1, 29L));
+        // Teil C: Jede dieser Zeilen geht ueber eineZeile, und die WIRFT bei einem
+        // Umbruch - die Probe faellt also schon beim Bauen und nicht erst hier. Sie steht
+        // trotzdem da, denn der Wurf kaeme sonst erst im Spiel, mitten in einer Raeumung.
+        zusagen.addAll(Miettext.laufZeilen(sprache, posten(Mietlauf.Ausgang.GEWARNT)));
+        zusagen.addAll(Miettext.laufZeilen(sprache, posten(Mietlauf.Ausgang.GERAEUMT)));
+        zusagen.addAll(Miettext.laufZeilen(sprache,
+                posten(Mietlauf.Ausgang.ABGELAUFEN)));
+        zusagen.addAll(Miettext.verzugZeilen(sprache, HALLE_1_VERZUG, 3));
+        zusagen.addAll(Miettext.fachstandZeilen(sprache, 5));
+        zusagen.addAll(Miettext.abholZeilen(sprache, griff(
+                Abholbuch.Bescheid.GEHOLT, 3, 2, 1)));
+        zusagen.addAll(Miettext.abholZeilen(sprache, griff(
+                Abholbuch.Bescheid.FACH_LEER, 0, 0, 0)));
+        zusagen.addAll(Miettext.abholZeilen(sprache, griff(
+                Abholbuch.Bescheid.KEIN_PLATZ, 0, 5, 0)));
 
         for (Component zeile : zusagen) {
             String text = Sprachprobe.bild(zeile);
             assertEquals(1, text.split(System.lineSeparator()).length, text);
         }
-        assertEquals(7, zusagen.size(), "alle Zusagen geprueft, nicht nur ein paar");
+        assertEquals(20, zusagen.size(), "alle Zusagen geprueft, nicht nur ein paar");
+    }
+
+    // ==================================================== Teil C: der taegliche Lauf
+
+    @Test
+    @DisplayName("Wer BEZAHLT hat, liest GAR NICHTS")
+    void bezahltSchweigt() {
+        // Eine taegliche Zeile "500 Mark Ladenmiete abgebucht" liest beim dritten Mal
+        // niemand mehr - und dann liest er auch die WARNUNG nicht. Was gebucht wurde,
+        // steht in /mark verlauf. Drei Ausgaenge schweigen, und GESTOERT ist der
+        // wichtigste davon: Was dort schiefging, kann der Spieler nicht ausraeumen.
+        assertTrue(Miettext.laufZeilen(sprache, posten(Mietlauf.Ausgang.BEZAHLT))
+                .isEmpty());
+        assertTrue(Miettext.laufZeilen(sprache, posten(Mietlauf.Ausgang.SCHON_BEZAHLT))
+                .isEmpty());
+        assertTrue(Miettext.laufZeilen(sprache, posten(Mietlauf.Ausgang.GESTOERT))
+                .isEmpty());
+    }
+
+    @Test
+    @DisplayName("Die Warnung nennt den Laden, den Betrag UND Ausfall von Schranke")
+    void warnungNenntVier() {
+        // Alle vier Werte, und die zwei Zahlen muessen BEIDE da sein: "zweiter Ausfall"
+        // allein kann der zweite von zwanzig sein.
+        List<String> zeilen = bild(Miettext.laufZeilen(sprache,
+                new Mietlauf.Posten(Mietlauf.Ausgang.GEWARNT, HALLE_1, 500L, 2, 1, 0L,
+                        0)));
+
+        assertEquals(1, zeilen.size());
+        assertTrue(zeilen.get(0).contains("halle-1"), zeilen.get(0));
+        assertTrue(zeilen.get(0).contains("500 Mark"), zeilen.get(0));
+        // 2 von 3: Die Schranke wird aus Ausfall PLUS Rest gerechnet - eine Fassung, die
+        // hier die Resttage oder die 1 einsetzt, faellt auf.
+        assertTrue(zeilen.get(0).contains("2 von 3"), zeilen.get(0));
+    }
+
+    @Test
+    @DisplayName("Die Raeumung nennt die VERFALLENE Kaution und das Abholfach")
+    void raeumungNenntKautionUndFach() {
+        // Die Kaution aus der VERTRAGSZEILE, und sie steht da, weil sie verfaellt: Die
+        // Kaution soll das Weglaufen teurer machen als das Kuendigen, und das wirkt nur,
+        // wenn der Spieler die Zahl liest.
+        List<String> zeilen = bild(Miettext.laufZeilen(sprache,
+                new Mietlauf.Posten(Mietlauf.Ausgang.GERAEUMT, HALLE_1, 0L, 3, 0, 0L,
+                        4)));
+
+        assertEquals(2, zeilen.size(), "Kopf und Abholfach, KEINE Kaution zurueck");
+        assertTrue(zeilen.get(0).contains("5.000 Mark"), zeilen.get(0));
+        assertTrue(zeilen.get(0).contains("3 von 3"), zeilen.get(0));
+        assertTrue(zeilen.get(1).contains("4 Stapel"), zeilen.get(1));
+    }
+
+    @Test
+    @DisplayName("Der Ablauf gibt die Kaution ZURUECK - mit demselben Satz wie Kuendigen")
+    void ablaufGibtKautionZurueck() {
+        // Der einzige Unterschied zwischen Raeumung und Ablauf, und er ist fuer den
+        // Spieler der ganze Unterschied. DERSELBE Satz wie beim Kuendigen: Es ist
+        // dieselbe Tat, und ein zweiter Wortlaut dafuer liefe auseinander.
+        List<String> zeilen = bild(Miettext.laufZeilen(sprache,
+                new Mietlauf.Posten(Mietlauf.Ausgang.ABGELAUFEN, HALLE_1, 0L, 0, 3,
+                        5_000L, 2)));
+
+        assertEquals(3, zeilen.size(), "Kopf, Kaution, Abholfach");
+        assertTrue(zeilen.get(0).contains("abgelaufen"), zeilen.get(0));
+        assertTrue(zeilen.get(1).contains("+5.000 Mark"), zeilen.get(1));
+        assertTrue(zeilen.get(2).contains("2 Stapel"), zeilen.get(2));
+    }
+
+    @Test
+    @DisplayName("Ohne Kaution und ohne Ware bleibt EINE Zeile")
+    void endeOhneAnhang() {
+        // "0 Mark zurueck" und "0 Stapel im Fach" sehen beide nach einem Fehler aus.
+        List<String> zeilen = bild(Miettext.laufZeilen(sprache,
+                new Mietlauf.Posten(Mietlauf.Ausgang.ABGELAUFEN, HALLE_1, 0L, 0, 3, 0L,
+                        0)));
+
+        assertEquals(1, zeilen.size(), zeilen.toString());
+    }
+
+    @Test
+    @DisplayName("Die Verzugszeile kommt nur, wenn WIRKLICH Ausfaelle stehen")
+    void verzugNurBeiVerzug() {
+        assertTrue(Miettext.verzugZeilen(sprache, null, 3).isEmpty(),
+                "kein Laden, keine Zeile");
+        assertTrue(Miettext.verzugZeilen(sprache, HALLE_1, 3).isEmpty(),
+                "ein Laden ohne Ausfaelle sagt beim Beitritt nichts");
+
+        List<String> zeilen = bild(Miettext.verzugZeilen(sprache, HALLE_1_VERZUG, 3));
+
+        assertEquals(1, zeilen.size());
+        assertTrue(zeilen.get(0).contains("2 von 3"), zeilen.get(0));
+        assertTrue(zeilen.get(0).contains("500 Mark"), zeilen.get(0));
+    }
+
+    // ==================================================== Teil C: das Abholfach
+
+    @Test
+    @DisplayName("Ein leeres Fach sagt beim Beitritt NICHTS")
+    void leeresFachSchweigtBeimBeitritt() {
+        // Der haeufigste Fall ist, dass noch nie etwas drin lag. Eine Zeile "dein
+        // Abholfach ist leer" bei jedem Beitritt waere Laerm. Wer ausdruecklich fragt,
+        // bekommt die Antwort - das ist abholZeilen.
+        assertTrue(Miettext.fachstandZeilen(sprache, 0).isEmpty());
+        assertTrue(Miettext.fachstandZeilen(sprache, -1).isEmpty());
+
+        List<String> zeilen = bild(Miettext.fachstandZeilen(sprache, 5));
+        assertEquals(1, zeilen.size());
+        assertTrue(zeilen.get(0).contains("5 Stapel"), zeilen.get(0));
+    }
+
+    @Test
+    @DisplayName("Geholt: eine Zeile, wenn alles passte - drei im schlechtesten Fall")
+    void abholZeilenWachsenMitDemFall() {
+        assertEquals(1, Miettext.abholZeilen(sprache,
+                griff(Abholbuch.Bescheid.GEHOLT, 3, 0, 0)).size(),
+                "alles geholt, nichts uebrig, nichts kaputt");
+
+        List<String> zwei = bild(Miettext.abholZeilen(sprache,
+                griff(Abholbuch.Bescheid.GEHOLT, 3, 2, 0)));
+        assertEquals(2, zwei.size());
+        assertTrue(zwei.get(0).contains("3 Stapel"), zwei.get(0));
+        assertTrue(zwei.get(1).contains("2 Stapel"), zwei.get(1));
+
+        List<String> drei = bild(Miettext.abholZeilen(sprache,
+                griff(Abholbuch.Bescheid.GEHOLT, 3, 2, 1)));
+        assertEquals(3, drei.size());
+        assertTrue(drei.get(2).contains("1 Stapel"), drei.get(2));
+    }
+
+    @Test
+    @DisplayName("Jeder Bescheid des Fachs hat seine eigene Zeile")
+    void jederFachbescheidHatSeineZeile() {
+        assertTrue(bild(Miettext.abholZeilen(sprache,
+                griff(Abholbuch.Bescheid.FACH_LEER, 0, 0, 0))).get(0).contains("leer"));
+        // KEIN_PLATZ nennt, was wartet - sonst weiss der Spieler nicht, wie viel Platz
+        // er machen muss.
+        assertTrue(bild(Miettext.abholZeilen(sprache,
+                        griff(Abholbuch.Bescheid.KEIN_PLATZ, 0, 5, 0))).get(0)
+                .contains("5 Stapel"));
+    }
+
+    @Test
+    @DisplayName("Bei GESTOERT nennt die Zeile den unlesbaren Stapel, wenn es einen gibt")
+    void gestoertNenntDenGrund() {
+        // "Das hat nicht geklappt" ist die schlechteste Auskunft, die es gibt - wenn der
+        // Grund bekannt ist, soll er dastehen. Nur wenn auch der fehlt, bleibt die
+        // allgemeine Absage.
+        List<String> mitGrund = bild(Miettext.abholZeilen(sprache,
+                griff(Abholbuch.Bescheid.GESTOERT, 0, 1, 1)));
+        assertEquals(1, mitGrund.size());
+        assertTrue(mitGrund.get(0).contains("1 Stapel"), mitGrund.get(0));
+
+        List<String> ohneGrund = bild(Miettext.abholZeilen(sprache,
+                griff(Abholbuch.Bescheid.GESTOERT, 0, 1, 0)));
+        assertEquals(1, ohneGrund.size());
+        assertTrue(ohneGrund.get(0).contains("noch einmal"), ohneGrund.get(0));
+    }
+
+    @Test
+    @DisplayName("Die Listen aus Teil C sind unveraenderlich")
+    void neueListenSindFest() {
+        List<Component> ausLauf = Miettext.laufZeilen(sprache,
+                posten(Mietlauf.Ausgang.GERAEUMT));
+        List<Component> ausFach = Miettext.abholZeilen(sprache,
+                griff(Abholbuch.Bescheid.GEHOLT, 1, 0, 0));
+        List<Component> ausVerzug = Miettext.verzugZeilen(sprache, HALLE_1_VERZUG, 3);
+        List<Component> ausStand = Miettext.fachstandZeilen(sprache, 5);
+
+        assertThrows(UnsupportedOperationException.class,
+                () -> ausLauf.add(Component.empty()));
+        assertThrows(UnsupportedOperationException.class,
+                () -> ausFach.add(Component.empty()));
+        assertThrows(UnsupportedOperationException.class,
+                () -> ausVerzug.add(Component.empty()));
+        assertThrows(UnsupportedOperationException.class,
+                () -> ausStand.add(Component.empty()));
+    }
+
+    /** Ein Posten mit plausiblen Zahlen - fuer die Faelle, die keine bestimmten brauchen. */
+    private static Mietlauf.Posten posten(Mietlauf.Ausgang ausgang) {
+        return new Mietlauf.Posten(ausgang, HALLE_1, 500L, 2, 1,
+                ausgang == Mietlauf.Ausgang.ABGELAUFEN ? 5_000L : 0L, 3);
+    }
+
+    private static Abholbuch.Griff griff(Abholbuch.Bescheid bescheid, int geholt,
+                                         int bleibt, int unlesbar) {
+        return new Abholbuch.Griff(bescheid, geholt, bleibt, unlesbar);
     }
 
     @Test

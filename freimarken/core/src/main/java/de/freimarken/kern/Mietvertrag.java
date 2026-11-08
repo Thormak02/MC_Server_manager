@@ -17,9 +17,13 @@ import java.util.UUID;
  * (Plan 8.8): Gespeichert wird je Zeile ein Datum. Die Tagesgrenze ist eine eingestellte
  * Zone, und ein Zeitpunkt haette eine zweite daneben.
  *
- * <p>Was NICHT hier steht: die Zahl der Warnungen nach einem Zahlungsausfall. Die gehoert
- * zum taeglichen Lauf und kommt mit Teil C - samt ihrer eigenen Spalte. Eine Zahl, die
- * heute immer 0 waere, ist eine Zusage ohne Inhalt.
+ * <p><b>Die Ausfallzahl steht am Vertrag und nicht im Buchungsbuch</b> [Teil C], und das
+ * ist die zweite tragende Entscheidung. Aus dem Buch waere sie zu rechnen - "an wie vielen
+ * der letzten Tage fehlt eine Mietzeile" -, und bei Geld ist das Buch sonst immer die
+ * Wahrheit. Hier aber nicht: Ein Server, der fuenf Tage aus war, hat fuenf Tage ohne
+ * Mietzeile, und die Rechnung aus dem Buch raeumte danach jeden Laden der Halle. Die
+ * gezaehlte Zahl entsteht nur, wenn ein Lauf wirklich stattgefunden hat und das Geld
+ * wirklich fehlte. Ein Serverausfall kostet damit niemanden seinen Stand.
  *
  * @param einheit   der Name der Ladeneinheit - klein, wie in der {@code config.yml}
  * @param mieter    wem der Laden gehoert
@@ -35,9 +39,29 @@ import java.util.UUID;
  *                  zurueckgezahlt), bliebe diese Differenz stehen - und beim naechsten
  *                  ordentlichen Kuendigen bekaeme der Spieler die verfallene Kaution mit
  *                  heraus. 0 ist erlaubt und heisst: ohne Kaution gemietet
+ * @param ausfaelle wie viele Tage die Miete nicht bezahlt werden konnte. Jeder Ausfall
+ *                  ist eine Warnung; beim Erreichen von
+ *                  {@code laeden.ausfaelle-bis-raeumung} wird geraeumt. Eine erfolgreiche
+ *                  Zahlung setzt die Zahl auf 0 zurueck - gezaehlt werden Ausfaelle IN
+ *                  FOLGE und nicht die des ganzen Vertrags. Wer einmal knapp war und
+ *                  danach wieder zahlt, soll nicht Wochen spaeter dafuer geraeumt werden
  */
 public record Mietvertrag(String einheit, UUID mieter, LocalDate beginn,
-                          LocalDate laeuftBis, long miete, long kaution) {
+                          LocalDate laeuftBis, long miete, long kaution, int ausfaelle) {
+
+    /**
+     * Ein frischer Vertrag - ohne Ausfaelle.
+     *
+     * <p>Die Abkuerzung fuer den Abschluss und fuer jede Probe, die sich fuer die
+     * Ausfaelle nicht interessiert. <b>Nicht</b> fuer eine Ablage, die eine gespeicherte
+     * Zeile zurueckbaut: Die muss den vollen Weg nehmen, sonst setzt sie die Ausfaelle
+     * jedes Mal stumm auf 0 - und dann zaehlt nichts jemals hoch, und kein Laden wird je
+     * geraeumt. Dagegen steht {@code MietVertrag.ausfaelleUeberlebenDieAblage}.
+     */
+    public Mietvertrag(String einheit, UUID mieter, LocalDate beginn, LocalDate laeuftBis,
+            long miete, long kaution) {
+        this(einheit, mieter, beginn, laeuftBis, miete, kaution, 0);
+    }
 
     public Mietvertrag {
         if (einheit == null || einheit.isBlank()) {
@@ -72,9 +96,17 @@ public record Mietvertrag(String einheit, UUID mieter, LocalDate beginn,
             throw new IllegalArgumentException("Eine Kaution von " + kaution
                     + " ist keine. 0 heisst: ohne Kaution gemietet.");
         }
+        // Negative Ausfaelle waeren ein Guthaben an Tagen, und das gibt es nicht. Eine
+        // Obergrenze steht hier NICHT: Die Schranke ist die eingestellte Zahl, und die
+        // kann der Betreiber im Betrieb erhoehen - dann stehen Vertraege da, deren
+        // Ausfaelle ueber der alten Schranke liegen. Die wirft dann nicht, sie raeumt.
+        if (ausfaelle < 0) {
+            throw new IllegalArgumentException("Eine Ausfallzahl von " + ausfaelle
+                    + " ist keine - 0 heisst: alles bezahlt.");
+        }
     }
 
-    /** Was bei ordentlicher Kuendigung zurueckgeht - genau das Hinterlegte. */
+    /** Was beim Kuendigen und beim Ablaufen zurueckgeht - genau das Hinterlegte. */
     public boolean mitKaution() {
         return kaution > 0L;
     }
@@ -93,6 +125,44 @@ public record Mietvertrag(String einheit, UUID mieter, LocalDate beginn,
      * Satz, und das ist seine Entscheidung.
      */
     public Mietvertrag bis(LocalDate neuesEnde) {
-        return new Mietvertrag(einheit, mieter, beginn, neuesEnde, miete, kaution);
+        // Die Ausfaelle reisen MIT, und das ist gewollt: Verlaengern ist kein Bezahlen.
+        // Wer zwei Tage nicht zahlen konnte und dann verlaengert, hat damit keinen Tag
+        // gutgemacht - sonst waere das Verlaengern der kostenlose Weg, die Raeumung
+        // beliebig weit wegzuschieben, ohne je Miete zu zahlen.
+        return new Mietvertrag(einheit, mieter, beginn, neuesEnde, miete, kaution,
+                ausfaelle);
+    }
+
+    /**
+     * Derselbe Vertrag mit einem Ausfall mehr - die Warnung.
+     *
+     * <p>Ob damit geraeumt wird, entscheidet nicht der Vertrag, sondern
+     * {@link Mietregel#raeumungsreif}: Die Schranke steht in der {@code config.yml}, und
+     * eine Zahl, die sich selbst fuer zu hoch erklaert, haette sie doppelt.
+     */
+    public Mietvertrag mitAusfall() {
+        return new Mietvertrag(einheit, mieter, beginn, laeuftBis, miete, kaution,
+                ausfaelle + 1);
+    }
+
+    /**
+     * Derselbe Vertrag ohne Ausfaelle - nach einer erfolgreichen Zahlung.
+     *
+     * <p>Gibt {@code this} zurueck, wenn schon keine da sind. Das ist kein Sparen an
+     * Objekten, sondern die Erlaubnis fuer den Aufrufer, den Rueckgabewert auf
+     * Gleichheit zu pruefen und den Schreibzug zu sparen: Der haeufigste Tag ist der, an
+     * dem alle zahlen, und dann soll der taegliche Lauf nicht jede Zeile der Halle neu
+     * schreiben.
+     */
+    public Mietvertrag ohneAusfaelle() {
+        if (ausfaelle == 0) {
+            return this;
+        }
+        return new Mietvertrag(einheit, mieter, beginn, laeuftBis, miete, kaution, 0);
+    }
+
+    /** Ob gegen diesen Vertrag Ausfaelle stehen. */
+    public boolean inVerzug() {
+        return ausfaelle > 0;
     }
 }

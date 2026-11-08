@@ -933,6 +933,63 @@ class BildGleichTest {
                 new Zeile(MietSatz.GEKUENDIGT_KAUTION, 1L,
                         Einsatz.von("betrag", "5.000 Mark"),
                         "&aKaution zurueck: +5.000 Mark"),
+                // ===== Teil C: der taegliche Lauf =====
+                // GELB fuer die Warnung und GRAU fuer die Folge: Die erste Haelfte ist
+                // die Nachricht, die zweite sagt, was daraus wird. Die Ausfallzahl steht
+                // als ORDNUNGSZAHL da ("Ausfall 1 von 3") - eine Mehrzahl liesse sich in
+                // MiniMessage nicht beugen, und "noch 1 Tage" waere der Fehler, der in
+                // Teil A schon einmal entstanden ist.
+                new Zeile(MietSatz.MIETE_GEWARNT, 1L,
+                        Einsatz.von("laden", "halle-1").mit("betrag", "500 Mark")
+                                .mit("ausfall", "1").mit("schranke", "3"),
+                        "&eDie Miete fuer halle-1 (500 Mark) konnte nicht abgebucht"
+                                + " werden.&7 Das war Ausfall 1 von 3 - beim letzten wird"
+                                + " geraeumt, und die Kaution verfaellt."),
+                // ROT: Der Laden ist weg. Die Kaution STEHT in der Zeile - sie soll das
+                // Weglaufen teurer machen als das Kuendigen, und das wirkt nur, wenn der
+                // Spieler die Zahl sieht.
+                new Zeile(MietSatz.MIETE_GERAEUMT, 1L,
+                        Einsatz.von("laden", "halle-1").mit("ausfall", "3")
+                                .mit("schranke", "3").mit("kaution", "5.000 Mark"),
+                        "&challe-1 ist geraeumt - Ausfall 3 von 3.&7 Die Kaution ueber"
+                                + " 5.000 Mark ist verfallen."),
+                // GELB und nicht rot: Wer abgelaufen ist, hat jeden Tag gezahlt und
+                // nichts falsch gemacht. Seine Kaution kommt zurueck, und zwar mit
+                // DERSELBEN Zeile wie beim Kuendigen (GEKUENDIGT_KAUTION oben).
+                new Zeile(MietSatz.MIETE_ABGELAUFEN, 1L,
+                        Einsatz.von("laden", "halle-1").mit("bis", "14.11.2026"),
+                        "&eDein Vertrag ueber halle-1 ist abgelaufen - er lief bis"
+                                + " 14.11.2026.&7 Mit /laden mieten nimmst du wieder"
+                                + " einen Stand."),
+                // Die Zahl steht NACH dem Doppelpunkt und ohne Verb, damit die Zeile
+                // auch bei einem einzigen Stapel richtig steht.
+                new Zeile(MietSatz.MIETE_INS_FACH, 1L, Einsatz.von("stapel", "5"),
+                        "&7Die Ladentruhe ist ins Abholfach gewandert: 5 Stapel. Hol sie"
+                                + " mit /laden abholfach."),
+                new Zeile(MietSatz.MIETE_VERZUG, 1L,
+                        Einsatz.von("laden", "halle-1").mit("betrag", "500 Mark")
+                                .mit("ausfall", "2").mit("schranke", "3"),
+                        "&eDein Laden halle-1 ist in Verzug - Ausfall 2 von 3.&7 Sorge"
+                                + " fuer 500 Mark auf dem Konto, sonst wird geraeumt."),
+                // ===== Teil C: das Abholfach =====
+                new Zeile(MietSatz.ABHOLFACH_STAND, 1L, Einsatz.von("stapel", "5"),
+                        "&7Abholfach: 5 Stapel. /laden abholfach holt sie."),
+                new Zeile(MietSatz.ABHOLFACH_LEER, 1L, Einsatz.keine(),
+                        "&7Dein Abholfach ist leer."),
+                // GRUEN: Das Einzige in diesem Bereich, bei dem der Spieler etwas
+                // BEKOMMT.
+                new Zeile(MietSatz.ABHOLFACH_GEHOLT, 1L, Einsatz.von("stapel", "3"),
+                        "&a3 Stapel aus dem Abholfach geholt."),
+                new Zeile(MietSatz.ABHOLFACH_BLEIBT, 1L, Einsatz.von("stapel", "2"),
+                        "&7Noch im Fach: 2 Stapel - dein Inventar hat keinen Platz"
+                                + " mehr."),
+                new Zeile(MietSatz.ABHOLFACH_KEIN_PLATZ, 1L, Einsatz.von("stapel", "5"),
+                        "&cDein Inventar ist voll. Im Abholfach: 5 Stapel."),
+                // ROT, obwohl nichts verloren ist: Der Spieler soll es dem Team sagen,
+                // und dafuer muss die Zeile auffallen.
+                new Zeile(MietSatz.ABHOLFACH_UNLESBAR, 1L, Einsatz.von("stapel", "2"),
+                        "&cNicht herausgegeben: 2 Stapel. Das bleibt liegen - bitte sag"
+                                + " es dem Team."),
                 new Zeile(MietSatz.ABSAGE_KEINE_EINHEIT, 1L,
                         Einsatz.von("laden", "halle-9"),
                         "&cEinen Stand namens halle-9 gibt es nicht.\n&7/laden zeigt,"

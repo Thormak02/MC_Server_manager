@@ -176,4 +176,52 @@ class MietregelTest {
         assertThrows(IllegalArgumentException.class,
                 () -> Mietregel.laeuftBisAb(null, 30));
     }
+
+    @Test
+    @DisplayName("Geraeumt wird, sobald die Ausfaelle die Schranke ERREICHEN")
+    void raeumungsreifAbDerSchranke() {
+        // Bei 3 gibt es ZWEI Warnungen und nicht drei: Der dritte Ausfall raeumt. Genau
+        // diese Lesung steht am Namen der Einstellung, und hier ist sie gezaehlt.
+        assertFalse(Mietregel.raeumungsreif(0, 3));
+        assertFalse(Mietregel.raeumungsreif(1, 3));
+        assertFalse(Mietregel.raeumungsreif(2, 3));
+        assertTrue(Mietregel.raeumungsreif(3, 3));
+    }
+
+    @Test
+    @DisplayName("Eine gesenkte Schranke raeumt auch, was schon darueber liegt")
+    void gesenkteSchrankeRaeumtAuchDarueber() {
+        // Der gemessene Fall fuer das >= statt ==: Der Betreiber senkt
+        // laeden.ausfaelle-bis-raeumung von 5 auf 3, und ein Vertrag steht bei 4. Mit ==
+        // ginge der Lauf an ihm vorbei - er stuende fuer immer in Verzug und wuerde nie
+        // geraeumt, und die Halle waere voll mit Laeden, die niemand zahlt und niemand
+        // bekommt.
+        assertTrue(Mietregel.raeumungsreif(4, 3));
+        assertTrue(Mietregel.raeumungsreif(99, 1));
+    }
+
+    @Test
+    @DisplayName("Eine Schranke von 0 wird abgewiesen, die 1 nicht")
+    void schrankeNullGehtNicht() {
+        // Der Grund fuer das Verbot der 0 ist NICHT Haerte, sondern dass sie jeden
+        // Vertrag trifft: raeumungsreif(0, 0) waere wahr, also auch fuer den heute
+        // abgeschlossenen Vertrag ohne einen einzigen Ausfall. Der erste Lauf raeumte die
+        // ganze Halle. Der TEXT wird geprueft und nicht nur der Wurf - eine Meldung, die
+        // den falschen Grund nennt, schickt den Betreiber an die falsche Stelle.
+        IllegalArgumentException fehler = assertThrows(IllegalArgumentException.class,
+                () -> Mietregel.raeumungsreif(0, 0));
+
+        assertTrue(fehler.getMessage().contains("auch der heute abgeschlossene"),
+                fehler.getMessage());
+        assertFalse(Mietregel.brauchbareSchranke(0));
+        assertFalse(Mietregel.brauchbareSchranke(-1));
+        // Die 1 IST erlaubt: "wer nicht zahlt, ist sofort weg" ist eine zulaessige
+        // Serverregel. Dass der Spieler dann nie eine Warnung liest, steht als Zeile im
+        // Bericht von Mietliste - Erkennung statt Verhinderung.
+        assertTrue(Mietregel.brauchbareSchranke(1));
+        assertTrue(Mietregel.raeumungsreif(1, 1), "bei 1 raeumt der erste Ausfall");
+        assertFalse(Mietregel.raeumungsreif(0, 1), "ohne Ausfall aber nicht");
+        assertTrue(Mietregel.brauchbareSchranke(Mietregel.HOECHSTE_SCHRANKE));
+        assertFalse(Mietregel.brauchbareSchranke(Mietregel.HOECHSTE_SCHRANKE + 1));
+    }
 }

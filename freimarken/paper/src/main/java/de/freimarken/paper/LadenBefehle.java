@@ -38,6 +38,13 @@ import org.bukkit.entity.Player;
  * <p><b>Die Liste darf jeder sehen, auch von ueberall.</b> Sie ist eine Auskunft und keine
  * Tat: Wer wissen will, welche Staende es gibt, muss nicht erst nach Altfurt reisen.
  *
+ * <p><b>Das Abholfach haengt am Recht fuer die LISTE und nicht am Mieten</b> [Teil C], und
+ * das ist kein Versehen: Darin liegt die Ware von Spielern, deren Laden geraeumt wurde.
+ * Haenge es am Mietrecht, dann sperrte ein Betreiber, der dieses Recht einer Gruppe
+ * entzieht, genau diesen Spielern den Zugang zu ihrem eigenen Besitz. Von ueberall
+ * erreichbar, aus demselben Grund: Niemand soll nach Altfurt reisen muessen, um an seine
+ * eigenen Sachen zu kommen.
+ *
  * <p><b>Spielerpflichtig</b>, wie {@code /markt}: Die Zeilen tragen Farben und einen
  * Einzug fuer ein Chatfenster, und drei der vier Taten brauchen einen Spieler, dem Geld
  * gehoert. Die Konsole liest die Einheiten beim Start im Protokoll, und zwar
@@ -72,6 +79,7 @@ final class LadenBefehle {
 
     private final Ladenverzeichnis verzeichnis;
     private final Mietbuch mietbuch;
+    private final Abholbuch abholbuch;
     private final Sprache sprache;
     private final String weltschluessel;
     private final IntSupplier dauerTage;
@@ -89,14 +97,15 @@ final class LadenBefehle {
      *                       erreicht. Sie nennt die Dauer, und eine veraltete Zahl darin
      *                       waere eine Absage, die sich nicht nachrechnen laesst
      */
-    LadenBefehle(Ladenverzeichnis verzeichnis, Mietbuch mietbuch, Sprache sprache,
-                 String weltschluessel, IntSupplier dauerTage) {
+    LadenBefehle(Ladenverzeichnis verzeichnis, Mietbuch mietbuch, Abholbuch abholbuch,
+                 Sprache sprache, String weltschluessel, IntSupplier dauerTage) {
         if (weltschluessel == null || weltschluessel.isBlank()) {
             throw new IllegalArgumentException("Ohne Welt ist die Markthalle kein Ort,"
                     + " sondern ein Menue - und von jeder Welt aus zu mieten");
         }
         this.verzeichnis = verzeichnis;
         this.mietbuch = mietbuch;
+        this.abholbuch = abholbuch;
         this.sprache = sprache;
         this.weltschluessel = weltschluessel;
         this.dauerTage = dauerTage;
@@ -123,6 +132,10 @@ final class LadenBefehle {
                 .then(Commands.literal("kuendigen")
                         .requires(quelle -> quelle.getSender().hasPermission(RECHT_MIETEN))
                         .executes(this::kuendige))
+                // KEIN requires(RECHT_MIETEN): Siehe den Kopf der Klasse - darin liegt
+                // der Besitz von Spielern, deren Laden geraeumt wurde.
+                .then(Commands.literal("abholfach")
+                        .executes(this::holeAb))
                 .build();
     }
 
@@ -141,6 +154,12 @@ final class LadenBefehle {
         // Die Standzeile wird MITGEGEBEN und nicht angehaengt: So steht das ganze Bild in
         // einer Naht, und eine Probe sieht die Reihenfolge, die der Spieler sieht.
         sende(spieler, Ladentext.listeZeilen(sprache, verzeichnis, standZeile(spieler)));
+        // Das Abholfach DANACH und nur, wenn etwas darin liegt [Teil C]. Nicht in
+        // listeZeilen hinein: Jene Naht zeigt die Markthalle, und ein Fach kann voll
+        // sein, ohne dass der Spieler je einen Laden hatte - ein Betreiber kann ihm etwas
+        // hineinlegen. Zwei Dinge in einer Naht waeren zwei Gruende, sie zu aendern.
+        sende(spieler, Miettext.fachstandZeilen(sprache,
+                abholbuch.stand(spieler.getUniqueId())));
         return Command.SINGLE_SUCCESS;
     }
 
@@ -176,6 +195,24 @@ final class LadenBefehle {
         }
         sende(spieler, Miettext.kuendigenZeilen(sprache,
                 mietbuch.kuendigen(spieler.getUniqueId())));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * {@code /laden abholfach} - holt, was ins Inventar passt.
+     *
+     * <p>Die Plaetze werden HIER gezaehlt und nicht im {@link Abholbuch}: Das Inventar ist
+     * Bukkit, und die Naht soll ohne Server pruefbar bleiben. Was mit der Zahl geschieht,
+     * entscheidet das Abholbuch.
+     */
+    private int holeAb(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        sende(spieler, Miettext.abholZeilen(sprache,
+                abholbuch.hole(spieler.getUniqueId(), Ladenware.fuer(spieler),
+                        Ladenware.freiePlaetze(spieler))));
         return Command.SINGLE_SUCCESS;
     }
 
