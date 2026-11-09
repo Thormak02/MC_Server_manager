@@ -27,7 +27,7 @@ import java.util.Set;
 enum MietSatz implements Satz {
 
     /** Was gemietet wurde und bis wann - die erste Zeile jedes Abschlusses. */
-    GEMIETET_KOPF("laden.gemietet.kopf", Art.SATZ, "laden", "bis", "tage"),
+    GEMIETET_KOPF("laden.gemietet.kopf", Art.SATZ, "laden", "bis", "miettage"),
 
     /**
      * Was abgebucht wurde, wenn die Lizenz schon bezahlt war.
@@ -49,7 +49,7 @@ enum MietSatz implements Satz {
     GEMIETET_TAEGLICH("laden.gemietet.taeglich", Art.SATZ, "miete"),
 
     /** Verlaengert - bis wann und wie viele Tage das sind. */
-    VERLAENGERT("laden.verlaengert", Art.SATZ, "laden", "bis", "tage"),
+    VERLAENGERT("laden.verlaengert", Art.SATZ, "laden", "bis", "resttage"),
 
     /** Gekuendigt. */
     GEKUENDIGT("laden.gekuendigt.kopf", Art.SATZ, "laden"),
@@ -88,7 +88,7 @@ enum MietSatz implements Satz {
             "fehlt"),
 
     /** Noch zu frueh zum Verlaengern - es ist mehr als eine Mietdauer uebrig. */
-    ABSAGE_NOCH_ZU_FRUEH("laden.absage.noch-zu-frueh", Art.SATZ, "laden", "tage",
+    ABSAGE_NOCH_ZU_FRUEH("laden.absage.noch-zu-frueh", Art.SATZ, "laden", "resttage",
             "dauer"),
 
     /** Kein Laden da - nichts zu verlaengern und nichts zu kuendigen. */
@@ -189,7 +189,7 @@ enum MietSatz implements Satz {
     ABHOLFACH_UNLESBAR("laden.abholfach.unlesbar", Art.SATZ, "stapel"),
 
     /** Der eigene Laden in der Liste - die letzte Zeile von {@code /laden}. */
-    STAND("laden.stand.eigener", Art.SATZ, "laden", "bis", "tage", "miete"),
+    STAND("laden.stand.eigener", Art.SATZ, "laden", "bis", "resttage", "miete"),
 
     /**
      * Noch kein Laden - die letzte Zeile von {@code /laden} fuer alle anderen.

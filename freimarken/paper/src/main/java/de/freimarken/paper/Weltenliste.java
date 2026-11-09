@@ -66,7 +66,7 @@ final class Weltenliste {
                 // machen, mitten in den Parzellen. Lieber laut aussteigen.
                 klagen.add("welten." + name + ".art fehlt oder ist unbekannt ("
                         + eintrag.getString("art") + "). Erlaubt sind raster, gewoehnlich,"
-                        + " leer - uebersprungen.");
+                        + " leer, flach - uebersprungen.");
                 continue;
             }
             if (art == Weltangabe.Art.RASTER != name.equals(rasterwelt)) {
@@ -342,12 +342,12 @@ final class Weltenliste {
                                          List<String> klagen) {
         for (int i = 0; i < welten.size(); i++) {
             Weltangabe eine = welten.get(i);
-            if (!eine.wiederholbar() || eine.art() == Weltangabe.Art.RASTER) {
+            if (!eine.wiederholbar()) {
                 continue;
             }
             for (int j = i + 1; j < welten.size(); j++) {
                 Weltangabe andere = welten.get(j);
-                if (andere.art() != Weltangabe.Art.RASTER
+                if (andere.wiederholbar()
                         && eine.startwert().equals(andere.startwert())
                         && eine.umgebung() == andere.umgebung()) {
                     klagen.add("welten." + eine.name() + " und welten."
@@ -469,6 +469,7 @@ final class Weltenliste {
             case "raster" -> Weltangabe.Art.RASTER;
             case "gewoehnlich", "gewöhnlich" -> Weltangabe.Art.GEWOEHNLICH;
             case "leer" -> Weltangabe.Art.LEER;
+            case "flach" -> Weltangabe.Art.FLACH;
             default -> null;
         };
     }

@@ -39,7 +39,22 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
         /** Gewoehnliches Minecraft - Gelaende, Erze, Baeume, Tiere. */
         GEWOEHNLICH,
         /** Leere. Fuer Wolkenwerder, dessen Startinsel mit Schritt 11 kommt. */
-        LEER
+        LEER,
+        /**
+         * Superflach - eine Grasebene ohne Berge, Hoehlen und Wasser.
+         *
+         * <p><b>Fuer Welten, in denen das Gelaende stoert</b> [09.11.2026]. Jeder von
+         * Hand eingemessene Quader - die sieben Tore, die Ladeneinheiten - braucht
+         * ebenen Boden, und gewoehnliches Gelaende gibt ihn nur mit Glueck: Ein
+         * gewuerfelter Startwert gab am 02.11.2026 eine rote Wueste mit 2 Bloecken
+         * Spanne, ein anderer am 09.11. Bergland mit 29. Auf einer flachen Welt ist
+         * die Frage gar nicht da.
+         *
+         * <p>Der Startwert ist hier ohne Wirkung - wie bei {@link #RASTER} und
+         * {@link #LEER}: Eine Ebene ist eine Ebene, gleich welche Zahl darueber
+         * steht. {@code Weltenliste.pruefeStartwerte} nimmt diese Arten darum aus.
+         */
+        FLACH
     }
 
     /** Ob fuer diese Welt ueberhaupt eine Grenze gesetzt werden soll. */
@@ -64,7 +79,24 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
      * und mit ihr die Grundlage der sieben Torquader.
      */
     boolean wiederholbar() {
-        return startwert != null;
+        return startwert != null && startwertWirkt();
+    }
+
+    /**
+     * Ob bei dieser Art ein Startwert ueberhaupt etwas aendert.
+     *
+     * <p>Beim {@link Art#RASTER} kommt das Gelaende aus dem Parzellengenerator, bei
+     * {@link Art#LEER} aus der Leere, und eine {@link Art#FLACH}e Ebene ist eine
+     * Ebene - gleich welche Zahl darueber steht.
+     *
+     * <p><b>Diese Frage steht hier und nicht an ihren drei Aufrufstellen</b>, und das
+     * ist am 09.11.2026 im Startlauf teuer geworden: Der Startwert wurde fuer eine
+     * flache Welt richtig NICHT gesetzt, die Abweichungsklage kam aber trotzdem -
+     * "die Welt hat 8765839788193927876, die Liste sagt 110926001". Eine Klage ueber
+     * etwas, das Absicht ist, nimmt jeder Leser beim naechsten Mal nicht mehr ernst.
+     */
+    boolean startwertWirkt() {
+        return art != Art.RASTER && art != Art.LEER && art != Art.FLACH;
     }
 
     /**

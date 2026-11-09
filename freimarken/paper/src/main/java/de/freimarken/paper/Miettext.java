@@ -90,10 +90,10 @@ final class Miettext {
             case VERLAENGERT -> List.of(sprache.eineZeile(MietSatz.VERLAENGERT, Einsatz
                     .von("laden", ergebnis.vertrag().einheit())
                     .mit("bis", tag(sprache, ergebnis.vertrag()))
-                    .mit("tage", String.valueOf(ergebnis.restTage()))));
+                    .mit("resttage", String.valueOf(ergebnis.restTage()))));
             case NOCH_ZU_FRUEH -> absage(sprache, MietSatz.ABSAGE_NOCH_ZU_FRUEH, Einsatz
                     .von("laden", ergebnis.vertrag().einheit())
-                    .mit("tage", String.valueOf(ergebnis.restTage()))
+                    .mit("resttage", String.valueOf(ergebnis.restTage()))
                     .mit("dauer", String.valueOf(dauerTage)));
             case KEIN_LADEN -> absage(sprache, MietSatz.ABSAGE_KEIN_LADEN,
                     Einsatz.keine());
@@ -152,7 +152,7 @@ final class Miettext {
         return sprache.eineZeile(MietSatz.STAND, Einsatz
                 .von("laden", vertrag.einheit())
                 .mit("bis", tag(sprache, vertrag))
-                .mit("tage", String.valueOf(restTage))
+                .mit("resttage", String.valueOf(restTage))
                 // Die VEREINBARTE Miete und nicht die aus der config.yml - der
                 // Bestandsschutz wird hier sichtbar, und genau hier muss er es sein.
                 .mit("miete", sprache.betrag(vertrag.miete())));
@@ -337,7 +337,12 @@ final class Miettext {
         zeilen.add(sprache.eineZeile(MietSatz.GEMIETET_KOPF, Einsatz
                 .von("laden", vertrag.einheit())
                 .mit("bis", tag(sprache, vertrag))
-                .mit("tage", String.valueOf(
+                // Die LAENGE des Vertrags, beide Tage eingeschlossen - nicht die
+                // Restlaufzeit. Am Abschlusstag sind das zwei verschiedene Zahlen
+                // fuer dasselbe Datum, und bis zum 09.11.2026 hiessen beide {tage}:
+                // "laeuft bis 15.11. - 7 Tage" neben "bis 15.11. (6 Tage)" sah aus
+                // wie ein Fehler und war keiner.
+                .mit("miettage", String.valueOf(
                         vertrag.laeuftBis().toEpochDay() - vertrag.beginn().toEpochDay()
                                 + 1L))));
         if (abschluss.lizenz()) {

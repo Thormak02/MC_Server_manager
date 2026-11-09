@@ -914,11 +914,15 @@ class BildGleichTest {
                 // Teil B: die Ladenmiete. Jeder Betrag kommt als FERTIGER Text herein -
                 // er ist schon durch waehrung.betrag gegangen, und diese Tafel haelt
                 // nur, wie der Satz ihn einsetzt.
+                // NOCH 29 und nicht 29: Hier steht die RESTLAUFZEIT, in
+                // laden.gemietet.kopf die Vertragslaenge - am Abschlusstag zwei
+                // verschiedene Zahlen fuer dasselbe Datum. Bis zum 09.11.2026 hiess
+                // beides {tage}, und im Spiel sah es wie ein Fehler aus.
                 new Zeile(MietSatz.STAND, 1L,
                         Einsatz.von("laden", "halle-1").mit("bis", "06.12.2026")
-                                .mit("tage", "29").mit("miete", "500 Mark"),
-                        "&7Dein Laden: halle-1, bis 06.12.2026 (29 Tage), 500 Mark"
-                                + " je Tag."),
+                                .mit("resttage", "29").mit("miete", "500 Mark"),
+                        "&7Dein Laden: halle-1, bis 06.12.2026 (noch 29 Tage),"
+                                + " 500 Mark je Tag."),
                 new Zeile(MietSatz.STAND_KEINER, 1L, Einsatz.keine(),
                         "&7Du hast noch keinen Laden - mit /laden mieten und dem Namen"
                                 + " eines Standes nimmst du einen."),
@@ -926,9 +930,9 @@ class BildGleichTest {
                 // in der Datei, und diese Zeile haelt sie fest.
                 new Zeile(MietSatz.GEMIETET_KOPF, 1L,
                         Einsatz.von("laden", "halle-1").mit("bis", "06.12.2026")
-                                .mit("tage", "30"),
-                        "&aDu hast halle-1 gemietet.&7 Der Vertrag laeuft bis"
-                                + " 06.12.2026 - 30 Tage."),
+                                .mit("miettage", "30"),
+                        "&aDu hast halle-1 gemietet.&7 Der Vertrag laeuft"
+                                + " 30 Tage, bis zum 06.12.2026."),
                 new Zeile(MietSatz.GEMIETET_KOSTEN, 1L,
                         Einsatz.von("betrag", "5.000 Mark"),
                         "&7Abgebucht: 5.000 Mark Kaution."),
@@ -945,10 +949,14 @@ class BildGleichTest {
                         Einsatz.von("miete", "500 Mark"),
                         "&7Taeglich faellig: 500 Mark. Verlaengern mit"
                                 + " /laden verlaengern."),
+                // "das sind 59 Tage" stand hier und war das schiefste von allen:
+                // Die Zahl ist die RESTLAUFZEIT, klingt aber nach Laenge. Wer frueh
+                // verlaengert, las "das sind 59 Tage" nach einer Verlaengerung um
+                // 30.
                 new Zeile(MietSatz.VERLAENGERT, 1L,
                         Einsatz.von("laden", "halle-1").mit("bis", "05.01.2027")
-                                .mit("tage", "59"),
-                        "&ahalle-1 ist verlaengert - bis 05.01.2027, das sind"
+                                .mit("resttage", "59"),
+                        "&ahalle-1 ist verlaengert - bis 05.01.2027, noch"
                                 + " 59 Tage."),
                 // GELB und nicht gruen: Kuendigen ist keine Zusage, sondern ein
                 // Verlust - der Laden ist weg. Die Kaution darunter ist gruen, denn sie
@@ -1038,7 +1046,7 @@ class BildGleichTest {
                         "&cDer Abschluss kostet 55.000 Mark, du hast 50.000 Mark - es"
                                 + " fehlen 5.000 Mark."),
                 new Zeile(MietSatz.ABSAGE_NOCH_ZU_FRUEH, 1L,
-                        Einsatz.von("laden", "halle-1").mit("tage", "40")
+                        Einsatz.von("laden", "halle-1").mit("resttage", "40")
                                 .mit("dauer", "30"),
                         "&ehalle-1 laeuft noch 40 Tage - verlaengern geht, sobald"
                                 + " weniger als 30 Tage uebrig sind."),

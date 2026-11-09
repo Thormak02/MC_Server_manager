@@ -2288,4 +2288,113 @@ class GrenzeTest {
                 "die Abweichung zwischen Datei und bestehender Welt MUSS gemeldet"
                         + " werden - sonst wirkt eine Aenderung scheinbar und nicht");
     }
+    @Test
+    @DisplayName("31ad - ein Weltschluessel wird nie von Hand zusammengesetzt")
+    void weltschluesselNieVonHand() {
+        // DER FEHLER, DEN DIESE PROBE FAENGT, ist am 09.11.2026 IM SPIEL gefunden
+        // worden - keine der 2.421 Proben sah ihn:
+        //
+        // Die config.yml schreibt NAMEN (laeden.welt: altfurt), die Welt traegt
+        // SCHLUESSEL (World.key().asString() = freimarken:altfurt). Drei Stellen
+        // verglichen das eine mit dem anderen und bekamen immer "ungleich". Sichtbar war
+        // nur eine davon: "/laden mieten" sagte "Die Markthalle steht in Altfurt - dort
+        // wird gemietet", mitten in Altfurt. Die anderen zwei schwiegen, und das ist das
+        // Schlimmere - der Ladenschutz hielt sich ueberall fuer nicht zustaendig (also
+        // durfte in jedem gemieteten Laden jeder bauen), und Ladenware fand die Ladenwelt
+        // nie, raeumte also keine Truhe.
+        //
+        // WARUM KEINE PROBE ES SAH: Jede Probe dieser Klassen gibt den Schluessel schon
+        // fertig herein ("freimarken:altfurt"). Sie prueft damit eine andere Eingabe als
+        // die Wirklichkeit - die Naht zwischen Datei und Welt liegt davor, in
+        // FreimarkenPlugin, und das ist ohne Server nicht zu betreten.
+        //
+        // MarktBefehle machte es seit jeher richtig, aber von Hand: "freimarken:" + name.
+        // Genau diese Handarbeit ist der Fehler - sie wird an der naechsten Stelle
+        // vergessen, und dann schweigt es.
+        String plugin = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("FreimarkenPlugin.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("FreimarkenPlugin.java fehlt")));
+
+        assertFalse(plugin.contains("\"freimarken:\" +"),
+                "ein Weltschluessel gehoert nicht von Hand zusammengesetzt - dafuer gibt"
+                        + " es weltschluessel(name), und nur so gilt dieselbe Regel auch"
+                        + " an der naechsten Stelle");
+        assertTrue(plugin.contains("new NamespacedKey(this, name).asString()"),
+                "die eine Stelle, an der aus einem Namen ein Schluessel wird, MUSS es"
+                        + " geben - sonst steht die Handarbeit nur woanders");
+    }
+    @Test
+    @DisplayName("31ae - jeder Verbraucher eines Weltschluessels bekommt ihn umgewandelt")
+    void jederVerbraucherBekommtDenSchluessel() {
+        // DIE ANDERE HAELFTE VON 31ad, und sie fehlte: Jene Probe verbietet das
+        // Handkleben ("freimarken:" + name). Diese hier verbietet das WEGLASSEN - und
+        // das war der Fehler, der am 09.11.2026 im Spiel auffiel.
+        //
+        // Gemessen mit einer Einspritzung (W2): LadenBefehle bekam wieder ladenwelt
+        // statt weltschluessel(ladenwelt) - alle 2.422 Proben blieben gruen, und der
+        // ganze Ladenbereich war wieder tot (Mieten abgewiesen, Ladenschutz ueberall
+        // nicht zustaendig, keine Truhe gefunden). Ein Waechter, der nur die eine
+        // Haelfte haelt, ist kein Waechter.
+        //
+        // DIE LISTE DER VERBRAUCHER KOMMT AUS DEM QUELLTEXT: Wer ein Feld
+        // "private final String weltschluessel" hat, erwartet einen Schluessel. Eine
+        // handgeschriebene Liste bliebe beim naechsten Verbraucher stehen, und dann ist
+        // genau der ungeschuetzt - derselbe Grund wie bei 31ab.
+        //
+        // NICHT geprueft wird jedes Vorkommen eines Weltnamens: "welten.get(ladenwelt)"
+        // ist richtig, denn jene Karte ist nach NAMEN geschluesselt, und
+        // "... in " + ladenwelt + ..." ist eine Meldung. Der Name selbst ist nicht
+        // falsch - falsch ist, ihn dort zu uebergeben, wo ein Schluessel erwartet wird.
+        var verbraucher = new java.util.TreeSet<String>();
+        for (java.nio.file.Path datei : Quellen.alle()) {
+            if (Quellen.text(datei).contains("private final String weltschluessel")) {
+                String name = datei.getFileName().toString();
+                verbraucher.add(name.substring(0, name.length() - ".java".length()));
+            }
+        }
+        assertFalse(verbraucher.isEmpty(),
+                "keine einzige Klasse mit einem weltschluessel-Feld gefunden - dann"
+                        + " prueft diese Probe nichts");
+
+        String plugin = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("FreimarkenPlugin.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("FreimarkenPlugin.java fehlt")));
+
+        var ohneUmwandlung = new java.util.TreeSet<String>();
+        for (String klasse : verbraucher) {
+            int stelle = plugin.indexOf("new " + klasse + "(");
+            if (stelle < 0) {
+                ohneUmwandlung.add(klasse + " (wird gar nicht gebaut)");
+                continue;
+            }
+            // Die Argumentliste: von der oeffnenden Klammer bis zu ihrer schliessenden.
+            int tiefe = 0;
+            int ende = stelle;
+            for (int i = plugin.indexOf('(', stelle); i < plugin.length(); i++) {
+                if (plugin.charAt(i) == '(') {
+                    tiefe++;
+                } else if (plugin.charAt(i) == ')') {
+                    tiefe--;
+                    if (tiefe == 0) {
+                        ende = i;
+                        break;
+                    }
+                }
+            }
+            if (!plugin.substring(stelle, ende).contains("weltschluessel(")) {
+                ohneUmwandlung.add(klasse);
+            }
+        }
+        assertEquals(java.util.Set.of(), ohneUmwandlung,
+                "diese Klassen erwarten einen Weltschluessel und bekommen ihn nicht aus"
+                        + " weltschluessel(name): Die config.yml schreibt \"altfurt\","
+                        + " die Welt traegt \"freimarken:altfurt\", und der Vergleich der"
+                        + " beiden ist immer ungleich - eine Absage, die niemand"
+                        + " versteht, oder ein Schutz, der schweigend nicht greift: "
+                        + ohneUmwandlung);
+    }
 }

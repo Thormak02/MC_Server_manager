@@ -1383,6 +1383,15 @@ welten:
   # art:      raster      das Parzellenraster der Marktstadt
   #           gewoehnlich gewoehnliches Minecraft: Gelaende, Erze, Baeume, Tiere
   #           leer        Leere, ohne einen einzigen Block
+  #           flach       Superflach - eine Grasebene ohne Berge, Hoehlen und
+  #                       Wasser [09.11.2026]. Fuer Welten, in denen das Gelaende
+  #                       STOERT: Jeder von Hand eingemessene Quader - die sieben
+  #                       Tore, die Ladeneinheiten - braucht ebenen Boden, und
+  #                       gewoehnliches Gelaende gibt ihn nur mit Glueck. Ein
+  #                       gewuerfelter Startwert gab am 02.11. eine rote Wueste mit
+  #                       2 Bloecken Spanne, ein anderer am 09.11. Bergland mit 29.
+  #                       Auf einer flachen Welt ist die Frage nicht da. Der
+  #                       startwert wirkt hier nicht - eine Ebene ist eine Ebene.
   #           Pflichtangabe. Eine fehlende Art wird NICHT geraten: "gewoehnlich" als
   #           Vorgabe wuerde aus der Marktstadt beim naechsten Start eine Welt mit
   #           Huegeln und Baeumen machen, mitten in den bezahlten Parzellen.

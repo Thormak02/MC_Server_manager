@@ -177,6 +177,68 @@ class WeltenlisteTest {
         assertEquals(1, ergebnis.klagen().size());
     }
 
+    @Test
+    @DisplayName("Die vierte Art ist flach - und ihr Startwert wird nicht verglichen")
+    void flacheWeltKommtAn() {
+        // Fuer Welten, in denen das Gelaende STOERT: Jeder von Hand eingemessene Quader
+        // braucht ebenen Boden, und gewoehnliches Gelaende gibt ihn nur mit Glueck - ein
+        // gewuerfelter Startwert gab am 02.11.2026 eine rote Wueste mit 2 Bloecken
+        // Spanne, ein anderer am 09.11. Bergland mit 29.
+        //
+        // Der Startwert wirkt bei FLACH so wenig wie beim Raster, darum darf er auch
+        // nicht verglichen werden: Zwei flache Welten mit derselben Zahl sind kein
+        // Fehler, sie waeren auch mit verschiedenen Zahlen gleich.
+        var ergebnis = lies("""
+                welten:
+                  marktstadt:
+                    art: raster
+                  probewelt:
+                    art: flach
+                    startwert: 42
+                  zweite:
+                    art: flach
+                    startwert: 42
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), "unerwartete Klagen: " + ergebnis.klagen());
+        assertEquals(Weltangabe.Art.FLACH, ergebnis.welten().get(1).art());
+        assertEquals(3, ergebnis.welten().size());
+        // Der Startwert STEHT in der Zeile und WIRKT NICHT. Beides muss stimmen:
+        // Dass er gelesen wird, soll keine Klage geben (er stoert ja nicht), und
+        // dass er nicht wirkt, darf nicht verschwiegen werden - sonst setzt
+        // Weltenbau ihn doch, oder die Abweichungsklage kommt fuer einen
+        // Unterschied, der Absicht ist. Genau das ist am 09.11.2026 im Startlauf
+        // passiert, als die Ausnahme nur an EINER der zwei Stellen stand.
+        assertEquals(42L, ergebnis.welten().get(1).startwert(),
+                "gelesen wird er trotzdem");
+        assertFalse(ergebnis.welten().get(1).startwertWirkt(),
+                "eine Ebene ist eine Ebene, gleich welche Zahl darueber steht");
+        assertFalse(ergebnis.welten().get(1).wiederholbar(),
+                "und darum ist sie auch nicht \"wiederholbar\" im Sinne des"
+                        + " Startwerts - Weltenbau setzt ihn dann nicht und die"
+                        + " Abweichungsklage schweigt");
+    }
+
+    @Test
+    @DisplayName("Eine unbekannte Art nennt in der Klage alle vier")
+    void unbekannteArtNenntAlleVier() {
+        // Die Klage ist das einzige, was der Betreiber von der Liste zu sehen bekommt -
+        // sie muss darum vollstaendig sein. Eine vergessene Art in dieser Zeile ist eine,
+        // die niemand findet.
+        var ergebnis = lies("""
+                welten:
+                  marktstadt:
+                    art: raster
+                  sumpf:
+                    art: huegelig
+                """);
+
+        assertTrue(ergebnis.klagen().stream()
+                        .anyMatch(k -> k.contains("raster") && k.contains("gewoehnlich")
+                                && k.contains("leer") && k.contains("flach")),
+                "die Klage muss alle vier Arten nennen: " + ergebnis.klagen());
+    }
+
     // --- Der Startwert [09.11.2026] -------------------------------------------
 
     @Test

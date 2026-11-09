@@ -1246,9 +1246,12 @@ laden:
   # Die LETZTE Zeile von /laden: der eigene Laden. Zwei Faelle, zwei Saetze -
   #   welcher zutrifft, weiss das Programm.
   stand:
-    # {laden} {bis} {tage} {miete} - der eigene Laden. Die Miete ist die VEREINBARTE
+    # {laden} {bis} {resttage} {miete} - der eigene Laden. Die Miete ist die VEREINBARTE
     #   und nicht die aus der config.yml: Wer fuer 500 gemietet hat, liest 500.
-    eigener: "<gray>Dein Laden: {laden}, bis {bis} ({tage} Tage), {miete} je Tag.</gray>"
+    # NOCH: {resttage} zaehlt die RESTLAUFZEIT und nicht die Vertragslaenge - am
+    #   Abschlusstag steht hier eine andere Zahl als in laden.gemietet.kopf, und das
+    #   ist richtig. Ohne das Wort "noch" sah es am 09.11.2026 wie ein Fehler aus.
+    eigener: "<gray>Dein Laden: {laden}, bis {bis} (noch {resttage} Tage), {miete} je Tag.</gray>"
     # Diese Zeile MUSS es geben: Wer die Liste sieht und keinen Laden hat, soll
     #   erfahren, wie man mietet. Ohne sie waere /laden mieten nur in der Hilfe
     #   zu finden.
@@ -1257,8 +1260,11 @@ laden:
   # Drei Zeilen fuer einen Abschluss, und jede bindet etwas anderes: den Ort, das Geld
   #   jetzt, das Geld taeglich. Die dritte nennt den Befehl zum Verlaengern.
   gemietet:
-    # {laden} {bis} {tage} - was gemietet wurde und bis wann der Vertrag laeuft.
-    kopf: "<green>Du hast {laden} gemietet.</green><gray> Der Vertrag laeuft bis {bis} - {tage} Tage.</gray>"
+    # {laden} {bis} {miettage} - was gemietet wurde und bis wann der Vertrag laeuft.
+    # MIETTAGE ist die LAENGE des Vertrags, beide Tage eingeschlossen - nicht die
+    #   Restlaufzeit. Die steht in laden.stand.eigener und ist am Abschlusstag um
+    #   eins kleiner.
+    kopf: "<green>Du hast {laden} gemietet.</green><gray> Der Vertrag laeuft {miettage} Tage, bis zum {bis}.</gray>"
     # {betrag} - abgebucht, ohne Lizenz: Der Spieler hatte sie schon.
     # KEIN {lizenz}: Sie ist nicht geflossen, und eine 0 in der Zeile liesse ihn
     #   glauben, er haette sie geschenkt bekommen.
@@ -1270,8 +1276,11 @@ laden:
     # {miete} - was taeglich faellig wird, und wie man verlaengert.
     taeglich: "<gray>Taeglich faellig: {miete}. Verlaengern mit /laden verlaengern.</gray>"
 
-  # {laden} {bis} {tage} - verlaengert. Kostet nichts: Gezahlt wird taeglich.
-  verlaengert: "<green>{laden} ist verlaengert - bis {bis}, das sind {tage} Tage.</green>"
+  # {laden} {bis} {resttage} - verlaengert. Kostet nichts: Gezahlt wird taeglich.
+  # NOCH: Hier stand die RESTLAUFZEIT und das Wort "das sind" - wer frueh
+  #   verlaengert, las "das sind 13 Tage" nach einer Verlaengerung um 7. Die Zahl
+  #   war richtig, das Wort falsch.
+  verlaengert: "<green>{laden} ist verlaengert - bis {bis}, noch {resttage} Tage.</green>"
 
   gekuendigt:
     # {laden} - gekuendigt.
@@ -1354,10 +1363,10 @@ laden:
     #   das Programm: Ein Spieler soll nicht subtrahieren muessen, um zu wissen, wie
     #   viel er noch verdienen muss.
     zu-wenig-geld: "<red>Der Abschluss kostet {kosten}, du hast {guthaben} - es fehlen {fehlt}.</red>"
-    # {laden} {tage} {dauer} - noch zu frueh. BEIDE Zahlen: "noch 40 Tage" allein sagt
+    # {laden} {resttage} {dauer} - noch zu frueh. BEIDE Zahlen: "noch 40 Tage" allein sagt
     #   nicht, dass bei 7 Tagen Mietdauer erst ab dem zweiten Tag verlaengert werden
     #   kann.
-    noch-zu-frueh: "<yellow>{laden} laeuft noch {tage} Tage - verlaengern geht, sobald weniger als {dauer} Tage uebrig sind.</yellow>"
+    noch-zu-frueh: "<yellow>{laden} laeuft noch {resttage} Tage - verlaengern geht, sobald weniger als {dauer} Tage uebrig sind.</yellow>"
     kein-laden: "<red>Du hast keinen Laden.</red>\n<gray>/laden zeigt, welche Staende frei sind.</gray>"
     # Die Markthalle ist ein ORT. Nur das Mieten haengt daran; verlaengern und
     #   kuendigen gehen von ueberall, sie beruehren nur den eigenen Vertrag.

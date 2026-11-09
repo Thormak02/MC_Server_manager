@@ -59,6 +59,7 @@ import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
 import org.bukkit.block.Block;
@@ -236,6 +237,33 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
     /** In welcher Welt die Markthalle steht - ohne Namensraum, wie in der config.yml. */
     private String ladenwelt = Ladenliste.VORGABE_WELT;
+
+    /**
+     * Der Weltschluessel zu einem NAMEN aus der {@code config.yml}.
+     *
+     * <p><b>Die Datei schreibt Namen, die Welt traegt Schluessel.</b> In der
+     * {@code config.yml} steht {@code laeden.welt: altfurt} und
+     * {@code reisen.ankunftswelt: altfurt}; {@code World.key().asString()} gibt
+     * dagegen {@code freimarken:altfurt}. Wer das eine mit dem anderen vergleicht,
+     * bekommt IMMER "ungleich" - und je nach Stelle heisst das: eine Absage, die
+     * niemand versteht, oder ein Schutz, der schweigend nicht greift.
+     *
+     * <p><b>Gefunden am 09.11.2026 im Spiel</b>, nicht in einer Probe: {@code /laden
+     * mieten} sagte "Die Markthalle steht in Altfurt - dort wird gemietet", mitten
+     * in Altfurt. Dahinter steckten noch zwei stumme Fehler derselben Art - der
+     * Ladenschutz hielt sich ueberall fuer nicht zustaendig, und {@code Ladenware}
+     * fand die Ladenwelt nie, raeumte also keine Truhe. Die Proben sahen nichts: Sie
+     * geben den Schluessel schon fertig herein, und damit pruefen sie eine andere
+     * Eingabe als die Wirklichkeit.
+     *
+     * <p>Darum entsteht der Schluessel HIER und an keiner zweiten Stelle. Ein
+     * handgeschriebenes {@code "freimarken:" + name} stand vorher bei
+     * {@link MarktBefehle} und war richtig - aber genau diese Handarbeit ist es, die
+     * an der naechsten Stelle vergessen wird.
+     */
+    private String weltschluessel(String name) {
+        return new NamespacedKey(this, name).asString();
+    }
     private Berufsablage berufsablage;
     /**
      * Welche Blockpositionen ein Spieler gesetzt hat - fuer Teil E.
@@ -549,7 +577,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // entscheidet Shopklick.istHandelsschild an einer Stelle. Eine zweite Pruefung
         // hier waere die zweite Wahrheit, vor der Shopzugriff ausdruecklich warnt.
         schutzwache = new Schutzwache(buch, welt, sprache,
-                new Ladenschutz(ladenverzeichnis, mietablage, ladenwelt, sprache,
+                new Ladenschutz(ladenverzeichnis, mietablage,
+                        weltschluessel(ladenwelt), sprache,
                         getLogger()),
                 (spieler, block) -> shopklick != null
                         && shopklick.istHandel(spieler, block));
@@ -737,7 +766,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Einstellungen daneben waeren eine Welt, in der gemietet, und eine andere, in
         // der geraeumt wird.
         Mietlauf mietlauf = new Mietlauf(wirtschaft, mietablage, abholablage, kasse,
-                new Ladenware(getServer(), ladenverzeichnis, ladenwelt, getLogger()),
+                new Ladenware(getServer(), ladenverzeichnis,
+                        weltschluessel(ladenwelt), getLogger()),
                 uhr, getLogger());
         mietwache = new Mietwache(getServer(), mietlauf, mietbuch, abholbuch, wirtschaft,
                 sprache);
@@ -985,7 +1015,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         String ankunftswelt = getConfig()
                 .getString("reisen.ankunftswelt", ANKUNFTSWELT_VORGABE).trim();
         return new MarktBefehle(wirtschaft, kasse, uhr, sprache,
-                "freimarken:" + ankunftswelt, getLogger());
+                weltschluessel(ankunftswelt), getLogger());
     }
 
     /**
@@ -1071,7 +1101,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // Absage "noch zu frueh", und ein Neuladen muss sie erreichen.
             angemeldet.addAll(verzeichnis.register(
                     new LadenBefehle(ladenverzeichnis, mietbuch, abholbuch, sprache,
-                            ladenwelt,
+                            weltschluessel(ladenwelt),
                             () -> wirtschaft.werte().laeden().dauerTage()).laden(),
                     sprache.wort(BundSatz.BEFEHL_LADEN, Einsatz.keine()),
                     List.of()));

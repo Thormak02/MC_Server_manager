@@ -14,6 +14,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
 import org.bukkit.WorldCreator;
+import org.bukkit.WorldType;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.generator.WorldInfo;
 import org.bukkit.persistence.PersistentDataType;
@@ -179,6 +180,13 @@ final class Weltenbau {
                     .biomeProvider(raster.getDefaultBiomeProvider(null))
                     .generateStructures(false);
             case LEER -> bauplan.generator(new Leere()).generateStructures(false);
+            // FLACH heisst Vanillas Superflach und KEIN eigener Generator: Der
+            // Weltentyp sagt es Minecraft, und die Ebene kommt mitsamt Gras,
+            // Dreck und Grundgestein. Ein selbstgebauter Flachgenerator waere eine
+            // Abschrift davon - und eine, die bei jedem Spielupdate nachzuziehen
+            // waere. Bauwerke bleiben aus: Ein Dorf auf einem Marktplatz ist genau
+            // das, was eine flache Probewelt nicht haben soll.
+            case FLACH -> bauplan.type(WorldType.FLAT).generateStructures(false);
             // Gewoehnlich heisst: gar nichts angeben. Jeder eigene Generator schaltet das
             // Gelaende ab, das hier ausdruecklich gewollt ist - Erze, Baeume, Tiere.
             case GEWOEHNLICH -> bauplan.generateStructures(true);
