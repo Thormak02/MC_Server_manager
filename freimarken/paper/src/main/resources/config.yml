@@ -1114,10 +1114,11 @@ messstelle:
 # Eine Ladeneinheit ist ein ORT - ein kleiner Raum in der Markthalle und die Truhe darin.
 # Wer sie mietet und wie lange, kommt mit Teil B; hier stehen nur die Staende.
 #
-# WARUM HIER KEINE EINHEIT STEHT: Die Markthalle ist eine der zehn Gebaeude, die von Hand
-# in Altfurt entstehen (Plan 2.1) - das Programm setzt dort keine Bloecke. Eine erfundene
-# Koordinate waere ein Laden mitten im Wasser. Wenn die Halle steht, miss ihre Staende ein
-# und trag sie unten ein; bis dahin sagt das Protokoll beim Start, dass es keine gibt.
+# WARUM HIER DREI PROBESTAENDE STEHEN UND KEINE HALLE: Die Markthalle ist eines der zehn
+# Gebaeude, die von Hand in Altfurt entstehen (Plan 2.1) - das Programm setzt dort keine
+# Bloecke. Entschieden am 08.11.2026: Drei kleine Staende genuegen, um Mieten, Verlaengern,
+# Kuendigen, den taeglichen Lauf und den Ladenschutz im Spiel zu pruefen; die Halle kann
+# spaeter drumherum wachsen, die Quader bleiben stehen.
 #
 # WARUM EIN QUADER UND KEIN RASTERFELD: Altfurt hat kein Raster, es ist gewachsenes
 # Gelaende. Plan 6.1 hat genau diesen Fall vorgesehen - fuer Besitz, der nicht am Raster
@@ -1247,7 +1248,48 @@ laeden:
   #     ist schlimmer als einer mit neunzehn.
   #
   # Die Reihenfolge dieser Eintraege ist die Reihenfolge in /laden liste - hier ordnest du.
-  einheiten: {}
+  #
+  # WOHER DIE ZAHLEN KOMMEN, und das gehoert hierher und nicht in ein Protokoll:
+  # Gemessen wurden sie am 02.11.2026 an den Regionsdateien von Altfurt, nicht heute -
+  # der Probeserver von damals ist aufgeraeumt, seine Weltdaten gibt es nicht mehr.
+  # Belegt ist damit: Das Feld x 56..87 / z -4..27 ist das flachste trockene Feld in
+  # der Naehe des Nullpunkts, sein Boden liegt durchgehend zwischen y 70 und y 72, und
+  # alle 1.024 Deckbloecke sind red_sand - kein Baum, kein Fels, kein Bauwerk. Auf der
+  # Linie z=12 ist der Boden an x 56/60/64/68/72/76/80/84 ueberall genau y=71.
+  #
+  # WAS DAS HEISST: Die Hoehe JEDES EINZELNEN Blockes unter den Staenden ist nicht
+  # gemessen, nur die Spanne des ganzen Feldes auf einem Raster von vier Bloecken. Wo
+  # der Boden y=70 ist, ist die unterste Quaderschicht Luft; wo er y=72 ist, steht ein
+  # Block darin. Beides ist kein Fehler - beim Bauen der Halle planiert man das. Pruefen
+  # kostet einen Befehl: /tp 62 73 8 und hinsehen.
+  #
+  # UND DIE WARNUNG DAZU: Altfurt hat KEINEN festen Startwert (welten.altfurt.art ist
+  # gewoehnlich, ein Startwert steht nirgends). Legt ein Server Altfurt NEU an, ist das
+  # Gelaende anders - dann sind diese Quader wertlos, und zwar genauso die sieben
+  # Torquader unter reisen.tore. Fuer die vorhandene Welt stimmen sie.
+  #
+  # Der Quader beginnt bei y=71, schliesst also den FUSSBODEN selbst ein. Das ist
+  # Absicht: So deckt der Ladenschutz auch den Boden, und niemand hackt dem Mieter den
+  # Block unter seiner Truhe weg. Die Truhe steht darum eine Ebene hoeher, auf y=72.
+  einheiten:
+    # Westreihe, sechs Bloecke hinter der Torreihe bei z=0.
+    stand-1:
+      von: [60, 71, 6]
+      bis: [64, 75, 10]
+      truhe: [62, 72, 8]
+    # Dieselbe Reihe, mit einer LUECKE von fuenf Bloecken zu stand-1 (z 11..15).
+    # Die Luecke ist die eigentliche Probe fuer den Ladenschutz: Dort darf jeder
+    # bauen, in den beiden Quadern nur der Mieter.
+    stand-2:
+      von: [60, 71, 16]
+      bis: [64, 75, 20]
+      truhe: [62, 72, 18]
+    # Ostseite, gegenueber von stand-2. Die Mittelachse x 65..79 zwischen Torreihe
+    # und Spawn (72/72/12) bleibt damit frei - dort laeuft jeder Ankommende durch.
+    stand-3:
+      von: [80, 71, 16]
+      bis: [84, 75, 20]
+      truhe: [82, 72, 18]
 # Der Handel an Kistenshops (Plan 7.4). Ein Kistenshop ist eine Kiste mit einem Schild
 # daran: erste Zeile der Besitzer, zweite die Menge je Handel, dritte die Preise in der
 # Form "B 100 : S 80", vierte die Ware oder ein Fragezeichen. Rechtsklick kauft,
@@ -1417,8 +1459,32 @@ welten:
 
   # Gebaut, nicht gewachsen: Hier stehen Bundesmarkt und die Gebaeude aus Plan 2.1.
   # Spielmodus Abenteuer setzt Schritt 3, Teil C - heute ist es eine gewoehnliche Welt.
+  # DER STARTWERT DES GELAENDES - und das ist die Zeile, die ein Einmessen
+  #   dauerhaft macht [eingefuehrt 09.11.2026]. Jeder von Hand eingemessene Quader
+  #   (die sieben Tore unten, die Ladeneinheiten weiter oben) ist eine Zahl in
+  #   dieser Datei, und das Gelaende ist es nicht. OHNE Startwert gehoeren diese
+  #   Zahlen zu genau EINER zufaellig erzeugten Welt: Wird sie geloescht, sind sie
+  #   wertlos, und niemand kann sie nachmessen. Am 09.11.2026 war genau das der
+  #   Fall - die am 02.11. eingemessene Welt war weg, und mit ihr die Grundlage der
+  #   Torquader.
+  # WIRKT NUR BEIM ANLEGEN. Eine Welt, die schon da ist, behaelt ihren Startwert -
+  #   genau wie ihre Umgebung. Der Startbericht klagt laut, wenn beides
+  #   auseinandergeht; wer das Gelaende dieser Zeile wirklich will, muss die Welt
+  #   loeschen und verliert alles Gebaute darin.
+  # JE WELT EIN ANDERER WERT. Gleicher Startwert und gleiche Umgebung heisst in
+  #   Minecraft dasselbe Gelaende, Block fuer Block - zwei Welten waeren dann zwei
+  #   Namen fuer eine Landschaft. Die Liste klagt darueber.
+  # DIE ZAHLEN SIND BELIEBIG GEWAEHLT und duerfen geaendert werden, solange die Welt
+  #   noch nicht existiert. Danach nicht mehr - siehe oben. Eine ganze Zahl, auch
+  #   negativ; 0 ist erlaubt und ist ein Startwert wie jeder andere. KEIN Wort:
+  #   Minecraft rechnet im Menue Woerter selbst in Zahlen um, hier wird das nicht
+  #   nachgebaut - weicht die Rechnung eines Tages ab, liegt jeder eingemessene
+  #   Quader daneben. Und kein Punkt als Tausendertrenner: YAML liest 1.000 als 1.0.
+  # Die Marktstadt hat KEINEN: Ihr Gelaende kommt aus dem Parzellengenerator, ein
+  #   Startwert waere dort eine Zahl, die nie wirkt.
   altfurt:
     art: gewoehnlich
+    startwert: 110926001
     kante: 800
     # Abenteuer in ganz Altfurt [entschieden 02.11.2026]. Altfurt wird nie
     # zurueckgesetzt - solange hier Ueberleben gilt, kann jeder Besucher im Rohbau
@@ -1430,6 +1496,7 @@ welten:
   # ~320 Freistaedte auf natuerlichem Gelaende.
   freistaedte:
     art: gewoehnlich
+    startwert: 110926002
     kante: 6000
     tor:
       von: [62, 71, 0]
@@ -1438,6 +1505,7 @@ welten:
   # Archipel mit eigenem Angelgut (Plan 4.1).
   hafenwerder:
     art: gewoehnlich
+    startwert: 110926003
     kante: 5000
     # Plan 2.1: "Hafen von Altfurt - Tor nach Hafenwerder".
     tor:
@@ -1447,6 +1515,7 @@ welten:
   # Freibau; eine Sicherung kostet 5.000 Mark.
   hochwald:
     art: gewoehnlich
+    startwert: 110926004
     kante: 5000
     # Plan 2.1: "Forsttor - Tor zum Hochwald".
     tor:
@@ -1457,6 +1526,7 @@ welten:
   # vorgeneriert - deshalb haengt an ihr kein Besitz (Plan 4.2).
   kornmark:
     art: gewoehnlich
+    startwert: 110926005
     kante: 2000
     # Plan 2.1: "Kornpforte - Tor nach Kornmark".
     tor:
@@ -1465,6 +1535,7 @@ welten:
 
   nether:
     art: gewoehnlich
+    startwert: 110926006
     umgebung: nether
     kante: 2000
     tor:
@@ -1476,6 +1547,7 @@ welten:
   # Sicherungen und spaeter Datensaetze. Die Umgebung heisst dagegen deutsch.
   end:
     art: gewoehnlich
+    startwert: 110926007
     umgebung: ende
     kante: 2000
     tor:

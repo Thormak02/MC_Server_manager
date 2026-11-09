@@ -27,6 +27,7 @@ import de.freimarken.kern.Ladenverzeichnis;
 import de.freimarken.kern.Mietablage;
 import de.freimarken.kern.Messwerte;
 import de.freimarken.kern.Preisstaffel;
+import de.freimarken.kern.Ladeneinheit;
 import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherKasse;
@@ -60,6 +61,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.generator.BiomeProvider;
 import org.bukkit.generator.ChunkGenerator;
@@ -1487,7 +1489,79 @@ public final class FreimarkenPlugin extends JavaPlugin {
         } else {
             getLogger().info("Keine Tore eingetragen - gereist wird nur mit /warp.");
         }
+        World ladenweltOder = welten.get(ladenwelt);
+        if (ladenverzeichnis.leer()) {
+            getLogger().info("Keine Ladeneinheiten eingetragen - die Markthalle wartet.");
+        } else if (ladenweltOder == null) {
+            getLogger().severe("Die Ladenwelt \"" + ladenwelt + "\" ist nicht geladen - die "
+                    + ladenverzeichnis.anzahl() + " Ladeneinheiten sind nicht zu pruefen.");
+        } else {
+            pruefeLadeneinheiten(ladenweltOder);
+        }
     }
+
+    /**
+     * Prueft, ob jede Ladeneinheit ueberhaupt benutzbar ist.
+     *
+     * <p>Noetig aus demselben Grund wie {@link #pruefeTore}: Die Quader sind Zahlen in
+     * einer Datei, und das Gelaende ist es nicht. {@code Ladenliste} prueft beim Lesen
+     * Groesse, Ueberschneidung, Truhe-innerhalb und Weltgrenze - alles vier an den
+     * ZAHLEN. Ob an der eingetragenen Stelle wirklich eine Truhe steht, sieht man nur in
+     * der Welt, und bis zum 09.11.2026 sah es niemand: Die Klage kam erst beim taeglichen
+     * Lauf, also fruehestens einen Tag nach dem ersten Mieter - und der hat dann Miete
+     * gezahlt fuer einen Stand, in den er nichts legen kann.
+     *
+     * <p><b>Die Truhe ist die harte Bedingung</b>, denn ohne sie ist der Stand
+     * unbenutzbar. Der leere Raum ist nur ein Hinweis: Eine Halle wird von Hand gebaut,
+     * und was darin an Regalen und Mauern steht, ist Sache des Betreibers. Nur wenn GAR
+     * NICHTS frei ist, liegt der Stand im Berg, und das ist wieder sicher falsch.
+     *
+     * <p>Gefragt wird ueber {@link Ladenware#inventarAn} - dieselbe Stelle, die der
+     * taegliche Lauf fragt. Eine eigene Fassung hier meldete sonst einen Stand als in
+     * Ordnung, den der Lauf nicht raeumen kann.
+     */
+    private void pruefeLadeneinheiten(World ladenweltOder) {
+        for (Ladeneinheit einheit : ladenverzeichnis.alle()) {
+            Block truhe = ladenweltOder.getBlockAt(einheit.truheX(), einheit.truheY(),
+                    einheit.truheZ());
+            if (Ladenware.inventarAn(truhe) == null) {
+                getLogger().severe("Ladeneinheit \"" + einheit.name() + "\": bei "
+                        + einheit.truheAlsText() + " steht keine Truhe (dort steht "
+                        + truhe.getType() + "). Der Stand ist nicht benutzbar - ein"
+                        + " Mieter zahlt Miete und kann nichts hineinlegen. Setz dort eine"
+                        + " Kiste, ein Fass oder eine Redstonetruhe.");
+                continue;
+            }
+            long frei = freieBloecke(ladenweltOder, einheit);
+            if (frei == 0L) {
+                getLogger().severe("Ladeneinheit \"" + einheit.name() + "\" ("
+                        + einheit.bereich().alsText() + ") ist vollstaendig massiv - sie"
+                        + " liegt im Berg, und niemand kommt hinein. Die Truhe steht, der"
+                        + " Raum nicht.");
+            } else {
+                getLogger().info("Ladeneinheit \"" + einheit.name() + "\": Truhe bei "
+                        + einheit.truheAlsText() + ", " + frei + " von "
+                        + einheit.bereich().bloecke() + " Bloecken frei.");
+            }
+        }
+    }
+
+    /** Wie viele Bloecke dieses Quaders Luft sind - der Hinweis, nicht die Regel. */
+    private long freieBloecke(World welt, Ladeneinheit einheit) {
+        Quader bereich = einheit.bereich();
+        long frei = 0L;
+        for (int x = bereich.vonX(); x <= bereich.bisX(); x++) {
+            for (int y = bereich.vonY(); y <= bereich.bisY(); y++) {
+                for (int z = bereich.vonZ(); z <= bereich.bisZ(); z++) {
+                    if (welt.getBlockAt(x, y, z).getType().isAir()) {
+                        frei++;
+                    }
+                }
+            }
+        }
+        return frei;
+    }
+
 
     /**
      * Prueft, ob durch jedes Tor ueberhaupt jemand gehen kann.

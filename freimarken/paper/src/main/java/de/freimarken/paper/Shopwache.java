@@ -439,6 +439,17 @@ final class Shopwache implements Listener {
      * waere genau diese Luecke mit einer Besitzerpruefung davor, und die Besitzerpruefung
      * laeuft ins Leere, sobald jemand die Kiste des Nachbarn beliefert.
      *
+     * <p><b>Am ZIEL ist die Regel seit dem 09.11.2026 feiner als ein Ja oder Nein:</b>
+     * Hineinlegen bleibt erlaubt, aber nur die WARE des Shops
+     * ({@link Shopware#istWareVon}). Vorher war das Ziel ganz ungeprueft, und damit
+     * liess sich eine fremde Shopkiste mit Muell fuellen, bis sie keinen Platz mehr
+     * fuer einen Ankauf hatte. Der automatische Shop - Farm, Trichter, Shopkiste -
+     * bleibt damit moeglich, und auch das Nachfuellen aus einer Lagerkiste.
+     *
+     * <p>Eine pauschale Sperre des Ziels waere die naheliegende Loesung gewesen und
+     * haette den automatischen Shop mitgenommen - auch den eigenen, denn ein Trichter
+     * fragt nicht, wem er gehoert. Entschieden am 09.11.2026 so.
+     *
      * <p>Das Ereignis deckt auch den Trichterwagen: Bukkit meldet ihn mit dem Inventar des
      * Wagens als Ziel und der Kiste als Quelle. Das war ChestShop #538 - dort feuerte das
      * Ereignis mit Papers {@code disable-move-event: true} ueberhaupt nicht mehr, und
@@ -448,6 +459,22 @@ final class Shopwache implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void beimGegenstandWandern(InventoryMoveItemEvent ereignis) {
         if (istShopinventar(ereignis.getSource())) {
+            ereignis.setCancelled(true);
+            return;
+        }
+        AnDerKiste ziel = shopsAn(ereignis.getDestination());
+        if (!ziel.shopkiste()) {
+            return;
+        }
+        // Schweigt die Ablage, ist die Ware unbekannt - dann kommt nichts hinein.
+        // Ein stockender Trichter ist zu beheben, eine verstopfte Kiste muss jemand
+        // ausraeumen. Getragen wird das von istWareVon SELBST: Eine leere Shopliste
+        // heisst dort "nichts passt". Hier stand erst ein zweiter Riegel
+        // (ziel.gestoert()), und eine Einspritzung hat gezeigt, dass die beiden sich
+        // GEGENSEITIG decken - jeder allein entfernt aenderte nichts, also hielt
+        // keine Probe mehr, welcher von beiden traegt. Ein Riegel mit Probe ist mehr
+        // wert als zwei ohne.
+        if (!Shopware.istWareVon(ziel.shops(), ereignis.getItem())) {
             ereignis.setCancelled(true);
         }
     }

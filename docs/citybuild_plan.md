@@ -1424,6 +1424,20 @@ verhindert, dass `addItem` und `removeItem` sich so verhalten wie zugesagt, die
 Doppelkiste beim Zählen. Dafür stehen Quelltexttafeln in `ShopwacheTafel`, und die sagen
 selbst, dass sie Text prüfen und nicht Wirkung.
 
+**Der Startwert der Welten** [09.11.2026]. Jeder von Hand eingemessene Quader — die
+sieben Tore am Bundesmarkt, die Ladeneinheiten der Markthalle — ist eine Zahl in der
+`config.yml`, und das Gelände ist es nicht. Ohne festen Startwert gehören diese Zahlen
+zu genau **einer** zufällig erzeugten Welt: Wird sie gelöscht, sind sie wertlos, und
+niemand kann sie nachmessen. Genau das war am 09.11.2026 der Fall — die am 02.11.
+eingemessene Welt war mit ihrem Probeserver aufgeräumt worden, und mit ihr die
+Grundlage der Torquader.
+
+Seitdem trägt jede Welt `welten.<name>.startwert`, sieben verschiedene Werte; die
+Rasterwelt hat keinen, ihr Gelände kommt aus dem Generator. **Folge, die noch
+aussteht:** Die heutigen Tor- und Ladenquader passen zu keinem bekannten Startwert.
+Beim ersten Start mit dem festen Wert entsteht ein anderes Altfurt, und beides muss
+einmal neu eingemessen werden — danach gilt es dauerhaft.
+
 **Zwei benannte Lücken**, beide aufgeschrieben statt verschwiegen:
 
 1. Ein **Bundshop mit Verkaufspreis** ist eine Geldquelle ohne Tagesdeckel — der Deckel
@@ -1443,9 +1457,18 @@ selbst, dass sie Text prüfen und nicht Wirkung.
    Fremder einem Shop auch nichts schenken kann — dafür kommt `/shop freigeben <spieler>`
    als eigener Schritt.
 
-   **Neu benannt dabei:** Eine fremde Shopkiste lässt sich per Trichter mit Müll füllen,
-   bis sie keinen Platz mehr für Ankauf hat. Das ist die Kehrseite der bewussten
-   Unsymmetrie der Trichterregel — kein Diebstahl, aber Ärger.
+   **Neu benannt dabei und am 09.11.2026 gleich geschlossen:** Eine fremde Shopkiste ließ
+   sich per Trichter mit Müll füllen, bis sie keinen Platz mehr für Ankauf hatte. Der
+   Zweig prüft jetzt auch das Ziel — aber nicht pauschal, sondern an der WARE
+   (`Shopware.istWareVon`). Eine pauschale Sperre hätte den automatischen Shop
+   mitgenommen (Farm → Trichter → Shopkiste), auch den eigenen, denn ein Trichter fragt
+   nicht, wem er gehört. Was bleibt und benannt ist: Wer die echte Ware verschenkt, kann
+   die Kiste trotzdem füllen — das kostet ihn mehr als den Besitzer.
+
+   Die Einspritzung dazu hat einen **doppelten Riegel** aufgedeckt: Zwei Prüfungen
+   deckten sich gegenseitig, jede allein entfernt änderte nichts — also hielt keine
+   Probe mehr, welche von beiden trägt. Der zweite ist heraus, und erst damit fängt die
+   Verhaltensprobe den Fall.
 
 ---
 

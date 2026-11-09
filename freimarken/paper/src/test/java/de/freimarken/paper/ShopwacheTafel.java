@@ -86,22 +86,58 @@ class ShopwacheTafel {
     }
 
     @Test
-    @DisplayName("Der Trichter prueft die QUELLE und niemals das Ziel")
-    void trichterPrueftNurDieQuelle() {
-        // DIE UNSYMMETRIE, und sie ist die tragende Entscheidung des ganzen Zuges: Kein
-        // Trichter zieht aus einer Shopkiste - nie, auch nicht der des Besitzers.
-        // Hineinlegen bleibt erlaubt, denn so wird ein Laden beliefert.
+    @DisplayName("Der Trichter sperrt die QUELLE immer, das ZIEL nur bei fremder"
+            + " Ware")
+    void trichterSperrtQuelleImmerUndZielNurBeiFremderWare() {
+        // DIE UNSYMMETRIE, und sie ist die tragende Entscheidung des ganzen Zuges:
+        // Kein Trichter zieht aus einer Shopkiste - nie, auch nicht der des
+        // Besitzers. Hineinlegen bleibt erlaubt, denn so wird ein Laden beliefert.
         //
-        // Eine Pruefung des ZIELS waere das Gegenteil: Sie verboete das Beliefern und
-        // liesse das Abziehen zu. Genau dieser Dreher ist bei einer Umarbeitung in einer
-        // Zeile gemacht, und keine Probe ohne Server saehe ihn.
+        // Ein TAUSCH der beiden waere das Gegenteil: Er verboete das Beliefern und
+        // liesse das Abziehen zu. Genau dieser Dreher ist bei einer Umarbeitung in
+        // einer Zeile gemacht, und keine Probe ohne Server saehe ihn - darum steht
+        // hier, welche Seite WIE geprueft wird und nicht bloss, dass sie es wird.
+        //
+        // Seit dem 09.11.2026 ist die Zielseite nicht mehr ganz ungeprueft: Damit
+        // liess sich eine fremde Shopkiste mit MUELL fuellen, bis sie keinen Platz
+        // mehr fuer einen Ankauf hatte. Geprueft wird jetzt die WARE - eine pauschale
+        // Sperre haette den automatischen Shop mitgenommen, auch den eigenen.
         String zweig = methode("Shopwache.java", "beimGegenstandWandern");
 
-        assertTrue(zweig.contains("ereignis.getSource()"),
-                "die Quelle MUSS geprueft werden: " + zweig);
-        assertFalse(zweig.contains("getDestination"),
-                "das Ziel darf NICHT geprueft werden - sonst ist die Regel verdreht und"
-                        + " ein Laden nicht mehr zu beliefern: " + zweig);
+        assertTrue(zweig.contains("if (istShopinventar(ereignis.getSource())) {"),
+                "die QUELLE wird ohne Bedingung gesperrt: " + zweig);
+        assertTrue(zweig.contains("Shopware.istWareVon(ziel.shops(),"),
+                "das ZIEL wird an der Ware geprueft und nicht am Ja-oder-Nein: "
+                        + zweig);
+        assertFalse(zweig.contains("istShopinventar(ereignis.getDestination())"),
+                "eine pauschale Sperre des Ziels nimmt den automatischen Shop mit -"
+                        + " auch den eigenen, denn ein Trichter fragt nicht, wem er"
+                        + " gehoert: " + zweig);
+        // Kein zweiter Riegel fuer die stumme Ablage: Den traegt istWareVon selbst
+        // (leere Shopliste heisst "nichts passt"), und dort haelt ihn eine
+        // Verhaltensprobe. Zwei Riegel deckten sich gegenseitig - gemessen am
+        // 09.11.2026 mit zwei Einspritzungen, von denen KEINE gefangen wurde.
+    }
+
+    @Test
+    @DisplayName("Die Warenfrage am Ziel loest EINMAL je Ereignis auf, nicht je"
+            + " Fach")
+    void warenfrageLoestEinmalAuf() {
+        // Dieselbe Falle wie beim Zaehlgang, nur an der anderen Seite: Die
+        // Warenprobe ist BASE64, ihre Aufloesung kostet. Je Shop eine ist richtig
+        // (eine Doppelkiste kann zwei Waren tragen), je FACH waere der Fehler - und
+        // dieser Pfad laeuft bei jedem Trichtertakt.
+        String frage = methode("Shopware.java", "istWareVon");
+
+        assertTrue(frage.contains("vorbildVon(shop)"),
+                "aufgeloest wird ueber vorbildVon, die EINE Stelle: " + frage);
+        assertTrue(frage.contains("return true;"),
+                "und abgebrochen, sobald eine Ware passt: " + frage);
+        // EINES dieser Shops, nicht des ersten: An einer Doppelkiste koennen zwei
+        // Schilder mit zwei Waren haengen. Wer nur den ersten fragt, sperrt dem
+        // zweiten die Belieferung.
+        assertTrue(frage.contains("for (Kistenshop shop : shops)"),
+                "ALLE Shops an der Kiste, nicht der erste: " + frage);
     }
 
     @Test

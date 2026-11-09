@@ -2207,4 +2207,85 @@ class GrenzeTest {
         assertFalse(dateien.isEmpty(), "die Suche hat keine einzige Datei gefunden");
         return dateien;
     }
+    @Test
+    @DisplayName("31ab - jede Startpruefung des Plugins wird auch GERUFEN")
+    void jedeStartpruefungWirdGerufen() {
+        // DER FEHLER, DEN DIESE PROBE FAENGT, ist am 09.11.2026 wirklich passiert: Die
+        // Pruefung der Ladeneinheiten war fertig gebaut, mit Javadoc und Klagetexten -
+        // und niemand rief sie. Ein Probenlauf meldet so etwas nie: Die Methode ist
+        // richtig, sie ist nur tot. Erst im Spiel faellt es auf, und zwar dadurch, dass
+        // ein Fehler NICHT gemeldet wird - also gar nicht.
+        //
+        // FreimarkenPlugin ist ohne laufenden Server nicht zu starten, pruefeTore und
+        // pruefeLadeneinheiten haben darum keine Verhaltensprobe. Was der Quelltext
+        // hergibt, ist diese eine Zusage - und sie ist die wichtigste von ihnen.
+        //
+        // Quellen.text liest OHNE Kommentare: Ein Aufruf, der nur in einem Javadoc
+        // steht, ruft nichts.
+        String plugin = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("FreimarkenPlugin.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("FreimarkenPlugin.java fehlt")));
+
+        // Die Namen aus dem Quelltext holen und nicht hier auflisten: Eine Liste von
+        // Hand bliebe beim naechsten Zuwachs stehen, und dann ist die neue Pruefung
+        // genauso tot wie die alte - nur dass jetzt eine gruene Probe daneben steht.
+        var namen = new java.util.TreeSet<String>();
+        var sucher = java.util.regex.Pattern
+                .compile("private (?:void|String) (pruefe[A-Z][A-Za-z]*)\\(")
+                .matcher(plugin);
+        while (sucher.find()) {
+            namen.add(sucher.group(1));
+        }
+        assertFalse(namen.isEmpty(),
+                "keine einzige pruefe-Methode gefunden - dann prueft diese Probe nichts");
+
+        var tot = new java.util.TreeSet<String>();
+        for (String name : namen) {
+            // Zweimal: die Deklaration und mindestens ein Aufruf. Eine Methode, die nur
+            // einmal im Text steht, ist nur erklaert.
+            if (plugin.split(name + "\\(", -1).length - 1 < 2) {
+                tot.add(name);
+            }
+        }
+        assertEquals(java.util.Set.of(), tot,
+                "diese Pruefmethoden werden nirgends gerufen - sie sind gebaut,"
+                        + " begruendet und tot: " + tot);
+    }
+    @Test
+    @DisplayName("31ac - der Startwert wird beim Anlegen WIRKLICH gesetzt")
+    void startwertWirdBeimAnlegenGesetzt() {
+        // DIE EINSPRITZUNG, DIE KEINE PROBE FING (gemessen am 09.11.2026, Fall S6):
+        // bauplan.seed(...) aus Weltenbau entfernt - alle 2.418 Proben blieben gruen.
+        // Der Grund ist, dass Weltenbau ohne laufenden Server nicht zu betreten ist:
+        // WorldCreator, createWorld, getServer. Es gibt dort keine Verhaltensprobe und
+        // kann keine geben.
+        //
+        // Was dann passiert, ist das Schlimmste aus der Reihe der stillen Fehler: Der
+        // Schluessel welten.<name>.startwert steht in der config.yml, der Leser liest
+        // ihn, die Weltenliste klagt sogar ueber doppelte Werte - und das Gelaende wird
+        // trotzdem gewuerfelt. Der Betreiber glaubt an eine wiederholbare Welt und misst
+        // seine Tore und Ladeneinheiten in eine ein, die er nie wieder herstellen kann.
+        // Genau diese Lage gab es am 09.11.2026 schon einmal, und sie ist der Grund,
+        // warum es den Startwert ueberhaupt gibt.
+        //
+        // Quellen.text liest OHNE Kommentare: Eine Zusage im Javadoc setzt keinen Seed.
+        String bau = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString().equals("Weltenbau.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Weltenbau.java fehlt")));
+
+        assertTrue(bau.contains("bauplan.seed(angabe.startwert())"),
+                "ohne diese Zeile ist welten.<name>.startwert eine Zahl, die nie wirkt -"
+                        + " und jeder eingemessene Quader haengt wieder an einer Welt,"
+                        + " die niemand wiederherstellen kann");
+        // Und die zweite Haelfte derselben Sache: Eine BESTEHENDE Welt behaelt ihren
+        // Startwert, WorldCreator.seed wird fuer sie stillschweigend uebergangen. Ohne
+        // diesen Vergleich glaubte der Betreiber, eine Aenderung in der Datei habe
+        // gewirkt - dieselbe Falle wie bei der Umgebung, die daneben schon geprueft wird.
+        assertTrue(bau.contains("welt.getSeed()"),
+                "die Abweichung zwischen Datei und bestehender Welt MUSS gemeldet"
+                        + " werden - sonst wirkt eine Aenderung scheinbar und nicht");
+    }
 }

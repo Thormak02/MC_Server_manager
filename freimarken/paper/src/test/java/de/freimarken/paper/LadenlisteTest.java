@@ -429,20 +429,30 @@ class LadenlisteTest {
     }
 
     @Test
-    @DisplayName("Die MITGELIEFERTE config.yml traegt keine Einheit - und klagt nicht")
-    void ausgelieferteDateiTraegtKeineEinheit() {
-        // Die Markthalle existiert noch nicht; eine erfundene Koordinate waere ein Laden
-        // mitten im Wasser. Diese Probe haelt fest, dass die Datei das sagt und nicht
-        // etwas behauptet.
+    @DisplayName("Die MITGELIEFERTE config.yml traegt drei gueltige Probestaende")
+    void ausgelieferteDateiTraegtDieProbestaende() {
+        // Bis zum 09.11.2026 hielt diese Probe das Gegenteil: dass die Datei KEINE
+        // Einheit traegt, weil eine erfundene Koordinate ein Laden mitten im Wasser
+        // waere. Seit der Entscheidung vom 08.11.2026 stehen drei Probestaende drin -
+        // eingemessen und nicht erfunden -, und damit haelt die Probe MEHR als
+        // vorher: Sie laeuft den Leser mit wirklichen Zahlen durch.
+        //
+        // Was keine Probe sehen kann, ist die Lage im Gelaende. Die config.yml
+        // schreibt daneben, woher die Zahlen kommen und wann sie wertlos werden
+        // (Altfurt hat keinen festen Startwert). Hier wird geprueft, was der LESER
+        // zusagt - und das Tragende ist die Zahl DREI neben der leeren Klagenliste:
+        // Eine Ueberschneidung oder eine Truhe ausserhalb kostet ihre Einheit, und
+        // zwar OHNE dass die Datei dafuer unlesbar wird. Mit zwei Staenden und einer
+        // leeren Klagenliste sieht ein verworfener Stand genau wie Absicht aus.
         var ergebnis = Ladenliste.ausKonfiguration(ausgelieferteDatei(), KANTEN);
 
         assertTrue(ergebnis.klagen().isEmpty(),
                 "die mitgelieferte Datei darf nicht klagen: " + ergebnis.klagen());
-        assertEquals(0, ergebnis.verzeichnis().anzahl());
+        assertEquals(3, ergebnis.verzeichnis().anzahl(),
+                "drei Staende, und keiner davon verworfen: "
+                        + ergebnis.bericht());
         assertEquals("altfurt", ergebnis.welt(),
                 "Plan 2.1 setzt die Markthalle in die Hauptstadt");
-        assertTrue(ergebnis.bericht().stream().anyMatch(z -> z.contains("ist leer")),
-                ergebnis.bericht().toString());
     }
 
     @Test

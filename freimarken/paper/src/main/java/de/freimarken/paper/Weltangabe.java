@@ -14,13 +14,17 @@ import org.bukkit.World;
  * @param name             der Schluessel unter {@code freimarken:}, etwa {@code marktstadt}
  * @param umgebung         Oberwelt, Nether oder Ende
  * @param art              woher die Bloecke kommen
+ * @param startwert        der Startwert des Gelaendes, oder {@code null} fuer einen
+ *                         zufaelligen. Wirkt NUR beim Anlegen - eine bestehende Welt
+ *                         behaelt ihren, und das ist nicht zu aendern
  * @param kante            Wunschkante der Weltgrenze in Bloecken; 0 heisst: keine setzen
  * @param sprungBestaetigt der Text, der einen Sprung ueber das Doppelte freigibt
  * @param spielmodus       in welchem Modus ein Spieler diese Welt betritt
  * @param tor              das Tor am Bundesmarkt, das HIERHER fuehrt - oder {@code null}
  */
 record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
-                  int kante, String sprungBestaetigt, GameMode spielmodus, Quader tor) {
+                  Long startwert, int kante, String sprungBestaetigt,
+                  GameMode spielmodus, Quader tor) {
 
     /**
      * Woher die Bloecke kommen.
@@ -41,6 +45,26 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
     /** Ob fuer diese Welt ueberhaupt eine Grenze gesetzt werden soll. */
     boolean hatGrenze() {
         return kante > 0;
+    }
+
+    /**
+     * Ob das Gelaende dieser Welt WIEDERHOLBAR ist.
+     *
+     * <p><b>Ein {@code Long} und kein {@code long}, denn 0 ist ein gueltiger
+     * Startwert.</b> Bei {@link #kante} heisst 0 "keine Grenze"; hier waere dasselbe
+     * ein Gelaende, das niemand mehr einstellen kann. {@code null} heisst "kein
+     * Startwert gesetzt", und dann wuerfelt Minecraft einen.
+     *
+     * <p><b>Warum das ueberhaupt gebraucht wird.</b> Jeder von Hand eingemessene
+     * Quader - die sieben Tore am Bundesmarkt, die Ladeneinheiten der Markthalle -
+     * ist eine Zahl in einer Datei, und das Gelaende ist es nicht. Ohne festen
+     * Startwert gehoeren diese Zahlen zu GENAU EINER zufaellig erzeugten Welt: Wird
+     * sie geloescht, sind sie wertlos, und niemand kann sie nachmessen. Am
+     * 09.11.2026 war genau das der Fall - die am 02.11. eingemessene Welt war weg,
+     * und mit ihr die Grundlage der sieben Torquader.
+     */
+    boolean wiederholbar() {
+        return startwert != null;
     }
 
     /**

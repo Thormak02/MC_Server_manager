@@ -95,12 +95,14 @@ final class Weltenliste {
                         + " ende - uebersprungen.");
                 continue;
             }
-            welten.add(new Weltangabe(name, umgebung, art, kante(eintrag, name, klagen),
+            welten.add(new Weltangabe(name, umgebung, art,
+                    startwert(eintrag, name, klagen), kante(eintrag, name, klagen),
                     eintrag.getString("sprung-bestaetigt", "").trim(),
                     spielmodus(eintrag, name, klagen),
                     tor(eintrag, name, klagen)));
         }
         pruefeTore(welten, ankunftswelt, klagen);
+        pruefeStartwerte(welten, klagen);
         return new Ergebnis(welten, klagen);
     }
 
@@ -270,8 +272,93 @@ final class Weltenliste {
     }
 
     private static Weltangabe ohneTor(Weltangabe welt) {
-        return new Weltangabe(welt.name(), welt.umgebung(), welt.art(), welt.kante(),
-                welt.sprungBestaetigt(), welt.spielmodus(), null);
+        return new Weltangabe(welt.name(), welt.umgebung(), welt.art(),
+                welt.startwert(), welt.kante(), welt.sprungBestaetigt(),
+                welt.spielmodus(), null);
+    }
+
+    /**
+     * Der Startwert - oder {@code null}, wenn aus dem Eintrag keiner werden kann.
+     *
+     * <p>Roh gelesen und nicht mit {@code getLong}, aus demselben Grund wie bei
+     * {@link #kante}: Jenes gibt bei allem, was keine Zahl ist, stillschweigend 0
+     * zurueck - und 0 ist hier ein GUELTIGER Startwert. Ein Tippfehler waere damit
+     * nicht "kein Startwert", sondern ein ganz bestimmtes Gelaende, und niemand
+     * saehe es.
+     *
+     * <p><b>Nur ganze Zahlen, kein Text.</b> Minecraft nimmt im Spielmenue auch
+     * Woerter als Startwert und rechnet sie selbst in eine Zahl um; Bukkits
+     * {@code WorldCreator.seed} nimmt nur einen {@code long}. Diesen Umweg hier
+     * nachzubauen waere eine Abschrift des Spiels - weicht sie eines Tages ab,
+     * entsteht aus demselben Wort ein anderes Gelaende, und alle eingemessenen
+     * Quader liegen daneben. Darum wird Text beklagt und nicht umgerechnet.
+     *
+     * <p>Die Welt bleibt in jedem Fall; nur die Wiederholbarkeit faellt weg - wie
+     * bei der Kante nur die Grenze.
+     */
+    private static Long startwert(ConfigurationSection eintrag, String name,
+                                  List<String> klagen) {
+        Object roh = eintrag.get("startwert");
+        if (roh == null) {
+            return null;
+        }
+        String pfad = "welten." + name + ".startwert";
+        if (!(roh instanceof Number zahl)) {
+            klagen.add(pfad + " ist keine Zahl (" + roh + ") - verworfen, das"
+                    + " Gelaende dieser Welt wird gewuerfelt und ist nicht mehr"
+                    + " herzustellen. Minecraft nimmt im Menue auch Woerter; hier"
+                    + " gehoert eine ganze Zahl hin.");
+            return null;
+        }
+        double wert = zahl.doubleValue();
+        // Am TYP und nicht am Nachkommarest - dieselbe Falle wie bei der Kante: YAML
+        // macht aus 1.234 eine 1.234, und wer Tausender mit Punkt schreibt, bekommt
+        // ein ganz anderes Gelaende als gemeint.
+        if (zahl instanceof Double || zahl instanceof Float || wert != Math.floor(wert)) {
+            klagen.add(pfad + " ist keine ganze Zahl (" + roh + ") - verworfen. Ein"
+                    + " Punkt trennt in YAML keine Tausender, sondern die"
+                    + " Nachkommastellen.");
+            return null;
+        }
+        return zahl.longValue();
+    }
+
+    /**
+     * Klagt ueber zwei Welten, die dasselbe Gelaende bekommen wuerden.
+     *
+     * <p>Gleicher Startwert UND gleiche Umgebung heisst in Minecraft: dasselbe
+     * Gelaende, Block fuer Block. Hochwald und Kornmark waeren dann zwei Namen fuer
+     * eine Landschaft - ein Spieler, der von einer in die andere reist, stuende in
+     * derselben Gegend, und keine Zeile im Protokoll sagte warum.
+     *
+     * <p>Nur eine KLAGE und kein Verwerfen: Die Welten entstehen trotzdem, denn
+     * zweimal dasselbe Gelaende ist kein Fehler, der etwas kaputt macht. Es ist nur
+     * mit Sicherheit nicht gewollt.
+     *
+     * <p>Die Rasterwelt ist ausgenommen: Ihr Gelaende kommt aus dem
+     * {@code MarktstadtGenerator} und nicht aus einem Startwert.
+     */
+    private static void pruefeStartwerte(List<Weltangabe> welten,
+                                         List<String> klagen) {
+        for (int i = 0; i < welten.size(); i++) {
+            Weltangabe eine = welten.get(i);
+            if (!eine.wiederholbar() || eine.art() == Weltangabe.Art.RASTER) {
+                continue;
+            }
+            for (int j = i + 1; j < welten.size(); j++) {
+                Weltangabe andere = welten.get(j);
+                if (andere.art() != Weltangabe.Art.RASTER
+                        && eine.startwert().equals(andere.startwert())
+                        && eine.umgebung() == andere.umgebung()) {
+                    klagen.add("welten." + eine.name() + " und welten."
+                            + andere.name() + " haben denselben Startwert ("
+                            + eine.startwert() + ") und dieselbe Umgebung - sie"
+                            + " bekommen damit DASSELBE Gelaende, Block fuer Block."
+                            + " Beide entstehen trotzdem; gewollt ist das mit"
+                            + " Sicherheit nicht.");
+                }
+            }
+        }
     }
 
     /**

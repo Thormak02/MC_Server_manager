@@ -69,7 +69,7 @@ class AnkunftswacheTest {
     /** Eine Weltangabe, von der nur der Spielmodus zaehlt - der Rest ist Beiwerk. */
     private static Weltangabe angabe(String name, GameMode modus) {
         return new Weltangabe(name, World.Environment.NORMAL, Weltangabe.Art.GEWOEHNLICH,
-                0, null, modus, null);
+                null, 0, null, modus, null);
     }
 
     /** Ein Ereignis, wie Paper es der Wache gibt - nur Spieler und Anlass zaehlen. */

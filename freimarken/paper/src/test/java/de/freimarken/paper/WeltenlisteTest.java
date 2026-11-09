@@ -1,6 +1,8 @@
 package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Quader;
@@ -175,6 +177,173 @@ class WeltenlisteTest {
         assertEquals(1, ergebnis.klagen().size());
     }
 
+    // --- Der Startwert [09.11.2026] -------------------------------------------
+
+    @Test
+    @DisplayName("Ein Startwert kommt an - auch 0 und auch negativ")
+    void startwertKommtAn() {
+        // NULL IST EIN GUELTIGER STARTWERT, und darum ist das Feld ein Long: Bei der
+        // Kante heisst 0 "keine Grenze", hier waere dasselbe ein Gelaende, das niemand
+        // mehr einstellen kann. Negativ geht auch - Minecraft nimmt den ganzen
+        // Zahlenbereich.
+        var ergebnis = lies("""
+                welten:
+                  marktstadt:
+                    art: raster
+                  altfurt:
+                    art: gewoehnlich
+                    startwert: 110926001
+                  hochwald:
+                    art: gewoehnlich
+                    startwert: 0
+                  kornmark:
+                    art: gewoehnlich
+                    startwert: -7
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), "unerwartete Klagen: " + ergebnis.klagen());
+        assertEquals(110926001L, ergebnis.welten().get(1).startwert());
+        assertEquals(0L, ergebnis.welten().get(2).startwert(),
+                "0 ist ein Startwert wie jeder andere und nicht \"keiner\"");
+        assertEquals(-7L, ergebnis.welten().get(3).startwert());
+        assertTrue(ergebnis.welten().get(2).wiederholbar(),
+                "auch mit 0 ist das Gelaende wiederholbar");
+    }
+
+    @Test
+    @DisplayName("Ohne Startwert ist das Gelaende NICHT wiederholbar")
+    void ohneStartwertNichtWiederholbar() {
+        // Die Lage, in der jeder von Hand eingemessene Quader an genau einer zufaellig
+        // erzeugten Welt haengt: Wird sie geloescht, sind die Zahlen wertlos. Am
+        // 09.11.2026 war das der Fall - darum gibt es diese Zeile ueberhaupt.
+        var ergebnis = lies("""
+                welten:
+                  marktstadt:
+                    art: raster
+                  altfurt:
+                    art: gewoehnlich
+                """);
+
+        assertNull(ergebnis.welten().get(1).startwert());
+        assertFalse(ergebnis.welten().get(1).wiederholbar());
+    }
+
+    @Test
+    @DisplayName("Ein Startwert als WORT wird beklagt und nicht umgerechnet")
+    void startwertAlsWortWirdBeklagt() {
+        // Minecraft nimmt im Spielmenue auch Woerter und rechnet sie selbst in eine Zahl
+        // um. Das hier nachzubauen waere eine Abschrift des Spiels - weicht sie eines
+        // Tages ab, entsteht aus demselben Wort ein anderes Gelaende, und JEDER
+        // eingemessene Quader liegt daneben. Darum: Klage, keine Umrechnung.
+        var ergebnis = lies("""
+                welten:
+                  marktstadt:
+                    art: raster
+                  altfurt:
+                    art: gewoehnlich
+                    startwert: freimarken
+                """);
+
+        assertNull(ergebnis.welten().get(1).startwert(),
+                "ein Wort darf nicht stillschweigend zu einer Zahl werden");
+        assertTrue(ergebnis.klagen().stream()
+                        .anyMatch(k -> k.contains("welten.altfurt.startwert")
+                                && k.contains("keine Zahl")),
+                "die Klage muss den Pfad nennen: " + ergebnis.klagen());
+    }
+
+    @Test
+    @DisplayName("Ein Punkt im Startwert wird beklagt - YAML liest 1.000 als 1.0")
+    void startwertMitPunktWirdBeklagt() {
+        // Dieselbe Falle wie bei der Kante, und sie ist hier schlimmer: Eine falsche
+        // Kante ist eine fehlende Grenze, ein falscher Startwert ist ein ANDERES
+        // Gelaende - und das merkt niemand, denn eine Welt sieht immer nach etwas aus.
+        var ergebnis = lies("""
+                welten:
+                  marktstadt:
+                    art: raster
+                  altfurt:
+                    art: gewoehnlich
+                    startwert: 1.000
+                """);
+
+        assertNull(ergebnis.welten().get(1).startwert());
+        assertTrue(ergebnis.klagen().stream()
+                        .anyMatch(k -> k.contains("keine ganze Zahl")),
+                "die Klage muss den Punkt erklaeren: " + ergebnis.klagen());
+    }
+
+    @Test
+    @DisplayName("Zwei Welten mit demselben Startwert und derselben Umgebung werden"
+            + " beklagt")
+    void gleicherStartwertWirdBeklagt() {
+        // Gleicher Startwert UND gleiche Umgebung heisst in Minecraft dasselbe Gelaende,
+        // Block fuer Block. Hochwald und Kornmark waeren zwei Namen fuer eine
+        // Landschaft - ein Spieler, der von einer in die andere reist, stuende in
+        // derselben Gegend, und ohne diese Klage sagte keine Zeile warum.
+        var ergebnis = lies("""
+                welten:
+                  marktstadt:
+                    art: raster
+                  hochwald:
+                    art: gewoehnlich
+                    startwert: 42
+                  kornmark:
+                    art: gewoehnlich
+                    startwert: 42
+                """);
+
+        assertTrue(ergebnis.klagen().stream()
+                        .anyMatch(k -> k.contains("hochwald") && k.contains("kornmark")
+                                && k.contains("DASSELBE Gelaende")),
+                "die Klage muss BEIDE Welten nennen: " + ergebnis.klagen());
+        // Nur eine Klage, kein Verwerfen: Zweimal dasselbe Gelaende macht nichts kaputt,
+        // es ist nur mit Sicherheit nicht gewollt.
+        assertEquals(42L, ergebnis.welten().get(2).startwert(),
+                "die Welt entsteht trotzdem, mit ihrem Startwert");
+    }
+
+    @Test
+    @DisplayName("Derselbe Startwert in einer ANDEREN Umgebung ist keine Klage")
+    void gleicherStartwertAndereUmgebung() {
+        // Oberwelt und Nether aus derselben Zahl sind zwei verschiedene Gelaende - in
+        // Vanilla ist das sogar der Normalfall. Wer hier pauschal auf den Startwert
+        // pruefte, klagte ueber den haeufigsten richtigen Fall.
+        var ergebnis = lies("""
+                welten:
+                  marktstadt:
+                    art: raster
+                  altfurt:
+                    art: gewoehnlich
+                    startwert: 42
+                  nether:
+                    art: gewoehnlich
+                    umgebung: nether
+                    startwert: 42
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), "unerwartete Klagen: " + ergebnis.klagen());
+    }
+
+    @Test
+    @DisplayName("Die Rasterwelt wird vom Startwertvergleich ausgenommen")
+    void rasterweltOhneStartwertvergleich() {
+        // Ihr Gelaende kommt aus dem MarktstadtGenerator und nicht aus einem Startwert.
+        // Eine Klage ueber "dasselbe Gelaende" waere dort falsch - das Raster ist
+        // dasselbe, ganz gleich welche Zahl darueber steht.
+        var ergebnis = lies("""
+                welten:
+                  marktstadt:
+                    art: raster
+                    startwert: 42
+                  altfurt:
+                    art: gewoehnlich
+                    startwert: 42
+                """);
+
+        assertTrue(ergebnis.klagen().isEmpty(), "unerwartete Klagen: " + ergebnis.klagen());
+    }
+
     @Test
     @DisplayName("Die ausgelieferte config.yml ergibt eine Liste ohne Klagen")
     void dieAusgelieferteDatei() throws Exception {
@@ -190,6 +359,26 @@ class WeltenlisteTest {
 
             assertTrue(ergebnis.klagen().isEmpty(),
                     "die ausgelieferte Datei klagt: " + ergebnis.klagen());
+            // JEDE gewoehnliche Welt hat einen Startwert, und zwar einen EIGENEN.
+            // Ohne diese Zeile faellt ein versehentlich kopierter Wert nicht auf:
+            // Die Liste klagt darueber, aber die Klage traegt nur, wenn jemand sie
+            // liest - und ein Startbericht mit sieben Welten ist lang.
+            var gewoehnliche = ergebnis.welten().stream()
+                    .filter(w -> w.art() != Weltangabe.Art.RASTER)
+                    .toList();
+            assertTrue(gewoehnliche.stream().allMatch(Weltangabe::wiederholbar),
+                    "ohne Startwert haengt jeder eingemessene Quader an einer"
+                            + " Welt, die niemand wiederherstellen kann: "
+                            + gewoehnliche.stream().filter(w -> !w.wiederholbar())
+                                    .map(Weltangabe::name).toList());
+            assertEquals(gewoehnliche.size(),
+                    gewoehnliche.stream().map(Weltangabe::startwert).distinct()
+                            .count(),
+                    "je Welt ein ANDERER Startwert - gleicher Wert und gleiche"
+                            + " Umgebung heisst dasselbe Gelaende, Block fuer"
+                            + " Block: " + gewoehnliche.stream()
+                                    .map(w -> w.name() + "=" + w.startwert())
+                                    .toList());
             assertEquals("marktstadt", ergebnis.welten().get(0).name(),
                     "die Marktstadt steht zuerst - an ihr haengt alles Weitere");
             assertEquals(Weltangabe.Art.RASTER, ergebnis.welten().get(0).art());

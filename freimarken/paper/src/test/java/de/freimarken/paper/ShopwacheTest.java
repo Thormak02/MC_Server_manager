@@ -12,11 +12,13 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.DoubleChest;
 import org.bukkit.entity.HumanEntity;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.DoubleChestInventory;
 import org.bukkit.inventory.Inventory;
@@ -251,6 +253,85 @@ class ShopwacheTest {
                 bert.handbalkenBild(),
                 "und ein eigener Satz: \"der Shop von -\" sieht aus wie ein"
                         + " Programmfehler");
+    }
+
+    // --- Der Trichter am ZIEL [09.11.2026] ------------------------------------
+
+    @Test
+    @DisplayName("Kein Trichter zieht aus einer Shopkiste - das bleibt ohne Bedingung")
+    void trichterZiehtNichtAusDerShopkiste() {
+        // Die aeltere Haelfte der Regel, und sie gilt auch dem BESITZER: Wer unter seine
+        // eigene Shopkiste einen Trichter setzt, hat einen Shop gebaut, der sich selbst
+        // leert - und der naechste Kunde kauft Ware, die schon weg ist.
+        //
+        // WAS DIESE PROBE NICHT HAELT, und das ist gemessen: Werden Quelle und Ziel
+        // im Zweig VERTAUSCHT, bleibt sie gruen. Solange keine Warenprobe aufloesbar
+        // ist, sagt der Zweig in jeder Lage mit einer Shopkiste ab - gleich auf
+        // welcher Seite sie steht, und der Dreher ist verhaltensgleich. Erst eine
+        // PASSENDE Ware wuerde die Seiten unterscheiden, und isSimilar gibt es ohne
+        // Server nicht. Den Dreher haelt darum allein die Quelltexttafel
+        // (ShopwacheTafel: "Der Trichter sperrt die QUELLE immer") - und der
+        // Spieltest.
+        ablage.schreibe(shopVon(ANNA));
+
+        InventoryMoveItemEvent ereignis = new InventoryMoveItemEvent(
+                einzelkiste(X, Y, Z), new Wesenprobe.Probestapel(Material.STONE),
+                inventarMit(null), true);
+        wache.beimGegenstandWandern(ereignis);
+
+        assertTrue(ereignis.isCancelled());
+    }
+
+    @Test
+    @DisplayName("In eine Shopkiste mit UNLESBARER Warenprobe kommt nichts hinein")
+    void trichterLegtNichtsInUnlesbareWare() {
+        // Die Warenprobe dieser Proben ist absichtlich kein gueltiges BASE64, also gibt
+        // vorbildVon null - und was nicht zu vergleichen ist, kommt nicht hinein. Das ist
+        // hier die sichere Richtung: Ein stockender Trichter ist zu beheben, eine
+        // verstopfte Kiste muss jemand ausraeumen.
+        //
+        // Dass PASSENDE Ware hineinkommt, ist hier NICHT zu pruefen: isSimilar ist eine
+        // echte ItemStack-Methode und ohne Server nicht zu haben (Probestapel
+        // ueberschreibt nur getType). Das steht als Spieltestpunkt in TODO.md, und die
+        // Verdrahtung haelt ShopwacheTafel.
+        ablage.schreibe(shopVon(ANNA));
+
+        InventoryMoveItemEvent ereignis = new InventoryMoveItemEvent(
+                inventarMit(null), new Wesenprobe.Probestapel(Material.DIRT),
+                einzelkiste(X, Y, Z), true);
+        wache.beimGegenstandWandern(ereignis);
+
+        assertTrue(ereignis.isCancelled(),
+                "unbekannte Ware heisst NEIN - sonst war der Muell wieder drin");
+    }
+
+    @Test
+    @DisplayName("In eine gewoehnliche Kiste legt der Trichter weiter alles")
+    void trichterLegtInGewoehnlicheKiste() {
+        // Die Ablage ist leer, es haengt kein Shop daran. Ohne diese Probe waere nicht
+        // gehalten, dass die neue Zielpruefung nur SHOPkisten betrifft - und eine
+        // Zielpruefung fuer jede Kiste der Welt waere das Ende jeder Sortieranlage.
+        InventoryMoveItemEvent ereignis = new InventoryMoveItemEvent(
+                inventarMit(null), new Wesenprobe.Probestapel(Material.DIRT),
+                einzelkiste(X, Y, Z), true);
+        wache.beimGegenstandWandern(ereignis);
+
+        assertFalse(ereignis.isCancelled());
+    }
+
+    @Test
+    @DisplayName("Schweigt die Ablage, kommt auch per Trichter nichts hinein")
+    void stummeAblageNimmtNichtsAn() {
+        // Dasselbe Auseinandergehen wie beim Oeffnen: istShopkiste sagt "schuetze sie",
+        // anDerKiste nennt niemanden - und ohne Shop ist die Ware unbekannt.
+        wache = wacheMit(new StummeAblage());
+
+        InventoryMoveItemEvent ereignis = new InventoryMoveItemEvent(
+                inventarMit(null), new Wesenprobe.Probestapel(Material.DIRT),
+                einzelkiste(X, Y, Z), true);
+        wache.beimGegenstandWandern(ereignis);
+
+        assertTrue(ereignis.isCancelled());
     }
 
     // --- Kein Spieler ----------------------------------------------------------

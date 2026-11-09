@@ -343,6 +343,58 @@ final class Shopware implements Shopbuch.Warenleser, Shophandel.Warenhand {
         return vorbild.isSimilar(stapel);
     }
 
+    /**
+     * Ob dieser Stapel die Ware EINES dieser Shops ist - fuer den Trichter am ZIEL.
+     *
+     * <p><b>Warum es diese Frage gibt.</b> Die Trichterregel laesst Ware in eine
+     * Shopkiste HINEIN, denn so wird ein Laden beliefert - auch ein fremder, und das
+     * ist gewollt. Damit liess sich eine fremde Shopkiste aber mit MUELL fuellen, bis
+     * sie keinen Platz mehr fuer einen Ankauf hatte. Seit dem 09.11.2026 kommt nur
+     * noch die Ware des Shops hinein: Nachfuellen und der automatische Shop (Farm,
+     * Trichter, Shopkiste) bleiben, das Verstopfen ist weg.
+     *
+     * <p><b>Was bleibt, und es ist benannt:</b> Wer die ECHTE Ware verschenkt, kann
+     * die Kiste trotzdem fuellen. Das kostet ihn aber mehr als den Besitzer, der sie
+     * nur ausraeumen muss - der Angriff bestraft sich selbst.
+     *
+     * <p><b>EINES dieser Shops, nicht des ersten.</b> An einer Doppelkiste koennen
+     * zwei Schilder mit zwei Waren haengen, und beide Haelften teilen ein Inventar.
+     * Wer nur den ersten Shop fragt, sperrt dem zweiten die Belieferung.
+     *
+     * <p><b>Der Preis.</b> Je Shop eine Aufloesung der Warenprobe - also hoechstens
+     * eine je Ereignis, denn es wird abgebrochen, sobald eine passt. Gerufen wird das
+     * erst, wenn das Ziel ueberhaupt eine Shopkiste ist (eine Map im
+     * Arbeitsspeicher), und ein Trichterereignis feuert nur, wenn wirklich ein
+     * Gegenstand wandert. Die Aufloesung je FACH, vor der
+     * {@link #vorbildVon} warnt, entsteht hier nicht.
+     *
+     * <p><b>Ein {@code null}-Stapel heisst NEIN, eine unlesbare Warenprobe auch -
+     * und eine LEERE Shopliste ebenso.</b> Was nicht zu vergleichen ist, kommt nicht
+     * hinein; das ist hier die sichere Richtung, denn ein abgewiesener Trichter
+     * stockt, eine verstopfte Kiste muss jemand ausraeumen.
+     *
+     * <p>Die leere Liste ist dabei nicht nebenbei, sondern TRAGEND: Sie ist der
+     * Stoerfall. Schweigt die Ablage, sagt {@code Shopbuch.istShopkiste} "hier steht
+     * eine Shopkiste" und {@code anDerKiste} gibt nichts - der Aufrufer weiss dann,
+     * dass eine zu schuetzende Kiste da ist, aber nicht, was hineindarf. Im
+     * Trichterzweig stand dafuer erst ein eigener Riegel; eine Einspritzung hat
+     * gezeigt, dass die zwei sich gegenseitig deckten und darum keiner mehr geprueft
+     * war. Jetzt steht die Zusage hier, einmal, und
+     * {@code ShopwacheTest.stummeAblageNimmtNichtsAn} haelt sie.
+     */
+    static boolean istWareVon(List<Kistenshop> shops, ItemStack stapel) {
+        if (stapel == null) {
+            return false;
+        }
+        for (Kistenshop shop : shops) {
+            ItemStack vorbild = vorbildVon(shop);
+            if (vorbild != null && passt(vorbild, stapel)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Wie viele Stueck dieser Ware auf einen Platz DIESES Behaelters gehen. */
     private static int aufEinenPlatz(ItemStack vorbild, Inventory inventar) {
         return Math.min(vorbild.getMaxStackSize(), inventar.getMaxStackSize());

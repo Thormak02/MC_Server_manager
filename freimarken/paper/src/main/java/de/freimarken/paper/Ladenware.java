@@ -210,12 +210,35 @@ final class Ladenware implements Mietlauf.Truhe {
         // Lauf faehrt im Hauptfaden, und eine Markthalle, deren Chunks gerade nicht
         // geladen sind, soll trotzdem geraeumt werden koennen.
         Block block = welt.getBlockAt(eine.truheX(), eine.truheY(), eine.truheZ());
-        if (!(block.getState() instanceof Container behaelter)) {
+        Inventory inventar = inventarAn(block);
+        if (inventar == null) {
             protokoll.warning("Bei " + eine.truheAlsText() + " steht keine Truhe, obwohl"
                     + " laeden.einheiten sie fuer \"" + einheit + "\" dort eintraegt"
                     + " (dort steht " + block.getType() + ").");
-            return null;
         }
-        return behaelter.getInventory();
+        return inventar;
+    }
+
+    /**
+     * Das Inventar der Ladentruhe an dieser Stelle - oder {@code null}.
+     *
+     * <p><b>Die EINE Stelle, die "ist das eine Ladentruhe" beantwortet</b>, und darum
+     * statisch und paketweit sichtbar: Gefragt wird sie beim taeglichen Lauf (zum Lesen
+     * und Leeren) UND beim Start, wo {@code FreimarkenPlugin.pruefeLadeneinheiten} wissen
+     * will, ob der Stand ueberhaupt benutzbar ist. Zwei Fassungen derselben Frage liefen
+     * auseinander, und dann meldete der Start einen Stand als in Ordnung, den der Lauf
+     * nicht raeumen kann.
+     *
+     * <p><b>{@code getState(false)} und nicht {@code getState()}.</b> Jenes baut einen
+     * Schnappschuss des Behaelters samt Inhalt - eine Kopie, die hier verschwendet ist.
+     * {@code getInventory()} gibt auf beiden das LEBENDE Inventar (nur
+     * {@code getSnapshotInventory()} waere das kopierte), das Leeren wirkt also so oder
+     * so; es kostet bloss nichts mehr. Dieselbe Entscheidung und derselbe Grund wie bei
+     * {@code Shopware.inventarAn}, wo derselbe Pfad heiss ist.
+     */
+    static Inventory inventarAn(Block block) {
+        return block.getState(false) instanceof Container behaelter
+                ? behaelter.getInventory()
+                : null;
     }
 }

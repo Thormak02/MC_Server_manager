@@ -99,6 +99,18 @@ final class Weltenbau {
                     + " bestehenden Welt ist nicht mehr zu aendern. Es gilt, was in der"
                     + " Welt steht.");
         }
+        if (angabe.wiederholbar() && welt.getSeed() != angabe.startwert()) {
+            // Dieselbe Lage wie bei der Umgebung, und sie muss GENAUSO laut sein: Wer
+            // den Startwert aendert, aendert nichts - die Welt steht schon. Ohne
+            // diese Zeile glaubte der Betreiber an ein wiederholbares Gelaende und
+            // messe seine Quader in eines ein, das er nie wieder herstellen kann.
+            protokoll.severe("Welt " + angabe.name() + " hat den Startwert "
+                    + welt.getSeed() + ", die Liste sagt " + angabe.startwert()
+                    + " - der Startwert einer bestehenden Welt ist nicht mehr zu"
+                    + " aendern. Es gilt, was in der Welt steht. Wer das Gelaende der"
+                    + " Liste will, muss die Welt loeschen - und verliert alles"
+                    + " Gebaute darin.");
+        }
         boolean frisch = frischUndAusgewiesen(welt, angabe);
         welten.put(angabe.name(), welt);
         if (frisch) {
@@ -156,6 +168,12 @@ final class Weltenbau {
         }
         WorldCreator bauplan = WorldCreator.ofKey(schluessel)
                 .environment(angabe.umgebung());
+        if (angabe.wiederholbar()) {
+            // NUR hier, also nur beim Anlegen: Eine bestehende Welt behaelt ihren
+            // Startwert, und WorldCreator.seed wird fuer sie stillschweigend
+            // uebergangen - genau wie environment. Die Abweichung meldet baueEine.
+            bauplan.seed(angabe.startwert());
+        }
         switch (angabe.art()) {
             case RASTER -> bauplan.generator(raster)
                     .biomeProvider(raster.getDefaultBiomeProvider(null))
