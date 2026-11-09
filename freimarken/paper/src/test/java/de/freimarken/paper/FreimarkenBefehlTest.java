@@ -67,6 +67,13 @@ class FreimarkenBefehlTest {
                     gerufen.add("spielzeit");
                     return Command.SINGLE_SUCCESS;
                 }),
+                // Derselbe Platzhalter fuer den Zweig von BlockBefehle: Diese Probe
+                // fragt, ob /freimarken blockbuch DORT landet - was der Zweig dann tut,
+                // haelt BlockBefehlTest.
+                Commands.literal("blockbuch").executes(z -> {
+                    gerufen.add("blockbuch");
+                    return Command.SINGLE_SUCCESS;
+                }),
                 (empfaenger, wer) -> gerufen.add("welt"),
                 (empfaenger, wer) -> gerufen.add("vorgenerieren"),
                 (empfaenger, wer) -> gerufen.add("neuladen:" + wer),

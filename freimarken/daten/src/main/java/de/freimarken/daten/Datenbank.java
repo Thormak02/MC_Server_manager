@@ -542,6 +542,64 @@ public final class Datenbank implements AutoCloseable {
               KEY ix_kistenshop_kiste (welt, kiste_x, kiste_y, kiste_z),
               KEY ix_kistenshop_besitzer (besitzer)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Das Blockbuch - wer wann wo was getan hat, fuer die Moderation.
+            //
+            // DIE GROESSTE TABELLE DIESES PROJEKTS, und darum ist jede Entscheidung hier
+            // eine ueber Schreiblast. Eine Welt mit "benutzen" in der Auswahl sammelt
+            // Zehntausende Zeilen am Tag; alle uebrigen Tabellen zusammen wachsen um
+            // Dutzende.
+            //
+            // KEIN FREMDSCHLUESSEL AUF kassen, und hier ist der Grund zwingender als
+            // ueberall sonst: Ein RESTRICT liesse den Schreibzug scheitern, sobald ein
+            // Spieler noch keine Kassenzeile hat - also beim allerersten Block eines
+            // neuen Spielers, und das ist der haeufigste Fall von allen. Ein CASCADE
+            // loeschte umgekehrt das Protokoll eines Spielers stumm mit, dessen Konto
+            // je aufgeraeumt wird - und genau dann will die Moderation es lesen. Eine
+            // Protokollzeile haengt an niemandem.
+            //
+            // DREI INDIZES, und jeder beantwortet eine Frage, die wirklich gestellt
+            // wird. Auf einer Tabelle dieser Groesse ist das Schreiblast, die man
+            // begruenden muss:
+            //   ix_blockbuch_ort      "wer hat dieses Loch gegraben" - der Befehl auf
+            //                         den Block im Blick
+            //   ix_blockbuch_spieler  "wo war dieser Spieler" - die andere Richtung, die
+            //                         ein Dutzend abgewiesener Versuche sichtbar macht
+            //   ix_blockbuch_zeit     das Aufraeumen. Ohne ihn liefe jeder Tageswechsel
+            //                         ueber die ganze Tabelle, im Hauptfaden, auf der
+            //                         einen Verbindung - also genau der Stillstand,
+            //                         gegen den der begrenzte Happen gebaut ist.
+            //
+            // zeitpunkt UND id in den beiden Lese-Indizes: Die Spalte ist DATETIME(3),
+            // also millisekundengenau, und zwanzig Bloecke in einem Tick sind ein
+            // normaler Abbau mit Effizienz V. Ohne die id als Tiebreaker waere die
+            // Reihenfolge gleichzeitiger Zeilen beliebig, und eine Abfrage mit Grenze
+            // liefe zweimal verschieden aus - dieselbe Zusage, die SpeicherBlockbuch mit
+            // seinem Vergleicher haelt.
+            //
+            // gelungen als TINYINT(1) und nicht als zweiter Wert in der Spalte tat: Ein
+            // "setzen-abgewiesen" verloere die Angabe, WAS abgewiesen wurde, und eine
+            // Abfrage nach allen Setzungen muesste zwei Werte kennen.
+            //
+            // IF NOT EXISTS wie bei den Schritten 7, 9, 10, 12, 13, 14 und 15.
+            """
+            CREATE TABLE IF NOT EXISTS blockbuch (
+              id        BIGINT      NOT NULL AUTO_INCREMENT,
+              zeitpunkt DATETIME(3) NOT NULL,
+              spieler   CHAR(36)    NOT NULL,
+              welt      VARCHAR(64) NOT NULL,
+              x         INT         NOT NULL,
+              y         INT         NOT NULL,
+              z         INT         NOT NULL,
+              tat       VARCHAR(16) NOT NULL,
+              gelungen  TINYINT(1)  NOT NULL,
+              block     VARCHAR(64) NOT NULL,
+              PRIMARY KEY (id),
+              KEY ix_blockbuch_ort (welt, x, y, z, zeitpunkt, id),
+              KEY ix_blockbuch_spieler (spieler, zeitpunkt, id),
+              KEY ix_blockbuch_zeit (zeitpunkt)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -772,6 +830,14 @@ public final class Datenbank implements AutoCloseable {
             // diese Zeile wandern gewaehlte Berufe von einem Test in den naechsten, und
             // der geteilte Vertrag wird sporadisch rot.
             anweisung.execute("DELETE FROM berufe");
+            // Das Blockbuch haengt an keinem Fremdschluessel - mit Absicht, siehe den
+            // Schemaschritt -, seine Stelle in dieser Liste ist also frei. Es steht hier,
+            // damit es nicht uebersehen wird. Ohne diese Zeile wandern Protokollzeilen
+            // von einem Test in den naechsten, und das trifft gerade die Proben dieser
+            // Tabelle hart: Sie zaehlen, was eine Abfrage mit Grenze zurueckgibt, und
+            // fremde Zeilen am selben Ort schieben die eigenen aus der Antwort heraus -
+            // ein Fehlschlag, der von der Reihenfolge der Proben abhaengt.
+            anweisung.execute("DELETE FROM blockbuch");
             anweisung.execute("DELETE FROM kassen");
         }
     }

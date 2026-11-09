@@ -1627,3 +1627,60 @@ shop:
     # SAGT AUSDRUECKLICH, DASS KEIN GELD WEG IST. Das ist die Zusage, die der Handel
     #   wirklich haelt: Was nach dem Zahlen scheitert, wird erstattet.
     gestoert: "<red>Der Handel ist nicht zustande gekommen</red><gray> - dein Geld ist nicht weg.</gray>"
+
+blockbuch:
+  # Die Saetze der Moderationsauskunft /freimarken blockbuch. Sie reden NICHT mit einem
+  #   Spieler ueber sein eigenes Tun, sondern mit einem Moderator ueber das Tun eines
+  #   anderen - darum nennen sie Namen, Zeiten und Orte, und darum unterscheiden sie
+  #   gelungene von ABGEWIESENEN Versuchen.
+  # Muster fuer DateTimeFormatter, kein Satz. Wird beim LADEN uebersetzt.
+  # Das Jahr steht HIER mit Absicht drin, anders als bei zeit.verlauf-muster: Die Frist
+  #   ist einstellbar bis zu zehn Jahren, und dann ist das Jahr genau die Angabe, die
+  #   fehlt.
+  zeit-muster: "dd.MM.yyyy HH:mm"
+  # Die Ueberschrift der Abfrage an einem Block. {ort} ist kurz - Weltname ohne
+  #   freimarken: davor, dann x/y/z. {anzahl} ist die Zahl der gezeigten Zeilen, nicht
+  #   die Zahl aller: Mehr als blockbuch.zeilen-je-abfrage kommen nie.
+  kopf-ort: "<gold>Blockbuch</gold><gray> an {ort} - {anzahl} Eintraege:</gray>"
+  # Die Ueberschrift der Abfrage nach einem Spieler.
+  kopf-spieler: "<gold>Blockbuch</gold><gray> von {spieler} - {anzahl} Eintraege:</gray>"
+  # Eine GELUNGENE Tat. {zeit} {spieler} {tat} {block} - der Ort fehlt, er steht in der
+  #   Ueberschrift; zwanzig Zeilen mit derselben Koordinate waeren zwanzigmal dasselbe.
+  # Einzug und Farbe stehen HIER, nicht am Sendeort.
+  zeile: "<gray>  {zeit}  {spieler} {tat} {block}</gray>"
+  # Eine ABGEWIESENE Tat - ein eigener Satz und nicht ein eingesetztes Wort.
+  # DAS ZEICHEN UND DIE FARBE SIND DER ZWECK: Ein Dutzend dieser Zeilen an einer fremden
+  #   Parzelle ist der Fund, nach dem die Moderation sucht - und es ist einer, bei dem
+  #   gar nichts passiert ist. Eine Zeile, die sich nur in einem Wort unterscheidet,
+  #   faellt beim Durchlesen nicht auf.
+  zeile-abgewiesen: "<dark_gray>  {zeit}</dark_gray><red>  x {spieler} {tat} {block}</red>"
+  # Dieselben zwei Zeilen fuer die Abfrage nach einem SPIELER: Dort ist der Ort die
+  #   wichtigste Angabe - "wo war der" ist die ganze Frage -, und der Name steht in der
+  #   Ueberschrift.
+  zeile-mit-ort: "<gray>  {zeit}  {ort} {tat} {block}</gray>"
+  zeile-mit-ort-abgewiesen: "<dark_gray>  {zeit}</dark_gray><red>  x {ort} {tat} {block}</red>"
+  # An diesem Block steht nichts. SAGT, WARUM das sein kann - ohne diesen Hinweis sucht
+  #   der Moderator den Fehler im Plugin, obwohl die Welt abgewaehlt oder die Frist um
+  #   sein kann.
+  leer-ort: "<gray>Zu {ort} steht nichts im Blockbuch - die Welt kann abgewaehlt sein, oder die Frist hat es geholt.</gray>"
+  leer-spieler: "<gray>Zu {spieler} steht nichts im Blockbuch.</gray>"
+  # Der Blick ging ins Leere. NENNT DIE REICHWEITE: Wer einen Block weit weg anschaut,
+  #   soll nicht raten, ob das Buch leer ist oder der Blick zu weit ging.
+  kein-block: "<gray>Du siehst keinen Block an</gray><dark_gray> (Reichweite {reichweite} Bloecke). Nach einem Spieler fragt /freimarken blockbuch spieler \\<name>.</dark_gray>"
+  # Das Buch schreibt in dieser Welt nichts. EIN EIGENER SATZ und nicht leer-ort: Hier
+  #   steht nichts, weil nichts aufgeschrieben WIRD - nicht weil nichts geschehen ist.
+  #   Genau den Unterschied muss ein Moderator kennen, bevor er jemanden freispricht.
+  aus: "<yellow>In dieser Welt schreibt das Blockbuch nichts</yellow><gray> - was hier geschah, steht nirgends. Einstellbar unter blockbuch.welten in der config.yml.</gray>"
+  # Die Ablage hat geschwiegen. AUCH DAS ist nicht "hier steht nichts": Ein Netzfehler
+  #   darf nicht aussehen wie ein Freispruch.
+  gestoert: "<red>Das Blockbuch antwortet nicht</red><gray> - der Grund steht im Serverprotokoll. Das ist KEIN Freispruch.</gray>"
+  # Den Namen kennt der Server nicht. Wichtig, damit ein Tippfehler nicht als leeres
+  #   Buch durchgeht - sonst waere die Antwort ein Freispruch fuer einen Namen, den
+  #   niemand traegt.
+  unbekannt: "<red>Den Spieler {name} kennt dieser Server nicht.</red>"
+  # Die Woerter fuer die drei Taten. KEINE Farbtags: Sie werden in die Zeilen darueber
+  #   eingesetzt und sind dort ein Blatt - ein Tag darin stuende woertlich im Chat.
+  tat:
+    setzen: "setzte"
+    abbauen: "baute ab"
+    benutzen: "benutzte"

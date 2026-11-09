@@ -1373,6 +1373,123 @@ reisen:
   # nur lesbar.
   ankunftswelt: altfurt
 
+# Das Blockbuch (Moderation): wer wann wo was getan hat.
+#
+# NUR BEIM START GELESEN - /freimarken neuladen aendert hier nichts. Was aufgeschrieben
+# wird, aendert sich im Betrieb nicht sinnvoll: Ein Umschalten mitten im Lauf
+# hinterliesse ein Buch, dessen Luecken niemand mehr erklaeren kann. Das Protokoll nennt
+# beim Start, was WIRKLICH gilt - je Welt eine Zeile.
+#
+# ES GIBT HIER KEIN true UND KEIN false, und das ist kein Versehen: Bukkit liest jedes
+# andere Wort stumm als false. Aus einem "benutzen: ja" wuerde ein abgeschaltetes
+# Blockbuch ohne eine Zeile Klage, und du suchtest Monate spaeter nach Zeilen, die es nie
+# gab. Darum stehen hier LISTEN VON NAMEN - eine unbekannte Zeile wird beklagt, mit dem
+# Namen, den du getippt hast.
+blockbuch:
+  # Wie lange eine Zeile bleibt, in Tagen. Erlaubt ist 1 bis 3650.
+  #
+  # Dreissig Tage sind lang genug fuer die Moderation - eine Beschwerde kommt selten am
+  # selben Tag - und kurz genug, dass die Tabelle nicht unbegrenzt waechst. Aufgeraeumt
+  # wird am taeglichen Lauf, zusammen mit der Ladenmiete.
+  aufbewahrung-tage: 30
+
+  # Wie viele Zeilen EIN Aufraeumschlag hoechstens loescht. Erlaubt ist 1 bis 20000.
+  #
+  # Begrenzt, weil das Aufraeumen im Hauptfaden des Spielservers laeuft, auf der einen
+  # Datenbankverbindung. Ein unbegrenztes Loeschen auf der groessten Tabelle dieses
+  # Plugins haelt den Server an - und zwar genau am ersten faelligen Tageswechsel, wenn
+  # Wochen auf einmal weggehen. Was ein Schlag nicht schafft, nimmt der naechste; die
+  # Zeilen laufen nicht weg.
+  je-aufraeumen: 500
+
+  # DIE VORGABE: Was eine Welt aufschreibt, die unten keine eigene Liste hat.
+  #
+  # Erlaubt sind vier Namen:
+  #   setzen      ein Block wurde gesetzt
+  #   abbauen     ein Block wurde abgebaut
+  #   benutzen    ein Block wurde benutzt - Truhe, Ofen, Trichter (siehe
+  #               benutzbare-bloecke weiter unten)
+  #   abgewiesen  AUCH die misslungenen Versuche. Das ist keine Tat, sondern ihr Ausgang:
+  #               Das Wort wirkt QUER zu den drei Taten und schaltet keine davon zu. Ein
+  #               Dutzend abgewiesener Versuche an einer fremden Parzelle in zwei Minuten
+  #               ist der Fund, nach dem du suchst - und es ist einer, bei dem gar nichts
+  #               passiert ist.
+  #
+  # Eine LEERE Liste [] heisst: nichts aufschreiben. Das ist der Weg, das Blockbuch
+  # abzuschalten; es wird dann auch kein Zuhoerer angemeldet.
+  #
+  # benutzen fehlt hier mit Absicht - es ist die mit Abstand haeufigste Tat. Wer eine
+  # Minute durch sein Haus laeuft, oeffnet ein Dutzend Tueren, und niemand fragt je
+  # danach. Gib es der Welt, in der die Frage "wer war in meiner Truhe" wirklich
+  # gestellt wird.
+  taten: [setzen, abbauen, abgewiesen]
+
+  # Welche Bloecke die Tat "benutzen" ueberhaupt aufschreibt.
+  #
+  # Ohne diese Liste schriebe jeder Rechtsklick auf Erde eine Zeile - und wer mit einem
+  # Block in der Hand baut, erzeugt beides: einen Rechtsklick UND eine Setzung, also
+  # zwei Zeilen fuer eine Tat. Die Vorgabe nennt, was man abschliesst.
+  #
+  # Nackte Namen, ohne minecraft: davor. Ein unbekannter Name wird beklagt. Fuer setzen
+  # und abbauen gilt diese Liste NICHT - wer ein Haus abreisst, reisst Bretter ab, keine
+  # Truhen.
+  #
+  # Eine leere Liste [] schaltet "benutzen" ganz ab, auch wenn es oben eingetragen ist;
+  # das Protokoll sagt es dann beim Start.
+  benutzbare-bloecke:
+    - chest
+    - trapped_chest
+    - barrel
+    - shulker_box
+    - ender_chest
+    - hopper
+    - dispenser
+    - dropper
+    - furnace
+    - blast_furnace
+    - smoker
+    - brewing_stand
+    - beacon
+    - lectern
+    - decorated_pot
+
+  # Wie weit der Blick von /freimarken blockbuch reicht, in Bloecken. Erlaubt ist 1 bis
+  # 100.
+  #
+  # Etwas mehr als die Reichweite, in der ein Spieler bauen kann: Ein Moderator steht
+  # oft nicht genau an dem Loch, das er untersucht, und soll nicht erst heranlaufen
+  # muessen. Ueber hundert trifft der Strahl irgendetwas, und niemand wuesste mehr,
+  # welchen Block er gefragt hat - darum die Grenze.
+  #
+  # Siehst du keinen Block an, sagt der Befehl es und nennt diese Zahl. Nach einem
+  # Spieler fragt /freimarken blockbuch spieler <name> - das geht auch von der Konsole.
+  reichweite: 6
+
+  # Wie viele Zeilen EINE Abfrage hoechstens zeigt. Erlaubt ist 1 bis 100.
+  #
+  # Zehn ist, was der Chat auf einen Blick zeigt. Mehr hiesse, dass die ersten Zeilen
+  # nach oben herauslaufen - und das sind bei "neueste zuerst" genau die, auf die es
+  # ankommt. Die Ueberschrift nennt die Zahl der GEZEIGTEN Zeilen, nicht die aller
+  # vorhandenen.
+  zeilen-je-abfrage: 10
+
+  # JE WELT eine eigene Liste - sie gilt STATT der Vorgabe und nicht zusaetzlich.
+  #
+  # Eine Welt, die hier nicht steht, folgt der Vorgabe oben. Das ist Absicht: Eine neu
+  # gebaute Welt soll nicht stumm ohne Buch dastehen. Eine Welt, die es laut welten:
+  # nicht gibt, wird beklagt - eine Auswahl fuer eine Welt, die es nicht gibt, ist eine
+  # Zeile, die nie wirkt.
+  welten:
+    # Die Marktstadt ist die eine Welt, in der die Truhenfrage wirklich gestellt wird:
+    # Hier stehen die Laeden, hier liegt fremde Ware, und hier ist "wer war in meiner
+    # Kiste" der ganze Zweck des Buchs.
+    marktstadt: [setzen, abbauen, benutzen, abgewiesen]
+    # Der Nether und das End sind ausgenommen: Dort baut niemand dauerhaft, es gibt
+    # keine Parzellen, und eine Zeile je abgebautem Netherrack ist die groesste
+    # Schreiblast fuer die geringste Frage.
+    nether: []
+    end: []
+
 welten:
   # NUR BEIM START GELESEN - /freimarken neuladen aendert hier nichts. Welten entstehen
   # einmal, eine bestehende behaelt ihre Umgebung, und die Zahlenbereiche von

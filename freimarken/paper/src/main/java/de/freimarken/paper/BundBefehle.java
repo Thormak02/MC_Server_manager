@@ -73,6 +73,21 @@ final class BundBefehle {
     private final Stand stand;
     private final Wirtschaftsstand wirtschaft;
     private final LiteralArgumentBuilder<CommandSourceStack> spielzeit;
+
+    /**
+     * Der Zweig des Blockbuchs - ebenfalls als BAUER, dieselbe Bauart wie
+     * {@link #spielzeit}.
+     *
+     * <p>Ein Zweig und kein eigener Befehl, aus demselben Grund: Plan 11.1 fuehrt eine
+     * feste Liste von Befehlen, und {@code /blockbuch} steht nicht darunter.
+     *
+     * <p>Sein eigenes Recht steckt im Zweig, und es ist ausdruecklich NICHT
+     * {@link #darfVerwalten()}: Das Blockbuch zu lesen ist eine Moderationsaufgabe, keine
+     * Verwaltung. Wer es bekommen soll, soll nicht gleichzeitig Welten anlegen und
+     * Spieler quer durch die Stadt versetzen koennen.
+     */
+    private final LiteralArgumentBuilder<CommandSourceStack> blockbuch;
+
     private final Betreiberzweig welt;
     private final Betreiberzweig vorgenerieren;
     private final Betreiberzweig neuladen;
@@ -85,14 +100,18 @@ final class BundBefehle {
      * @param spielzeit der Zweig von {@code SpielzeitBefehle} als BAUER und nicht als
      *                  Knoten - so gibt jene Klasse ihn heraus; er haengt
      *                  hier und bekommt keinen eigenen Befehl (Plan 11.1)
+     * @param blockbuch der Zweig von {@code BlockBefehle}, ebenso als Bauer
      * @param von       kleinste Parzellennummer, die {@code parzelle} annimmt
      * @param bis       groesste - die Grenzen kommen aus der Stadt und nicht aus einer
      *                  geratenen Zahl
      */
     BundBefehle(Sprache sprache, Stand stand, Wirtschaftsstand wirtschaft,
-                LiteralArgumentBuilder<CommandSourceStack> spielzeit, Betreiberzweig welt,
+                LiteralArgumentBuilder<CommandSourceStack> spielzeit,
+                LiteralArgumentBuilder<CommandSourceStack> blockbuch,
+                Betreiberzweig welt,
                 Betreiberzweig vorgenerieren, Betreiberzweig neuladen,
                 Betreiberzweig messstelle, Versetzung versetzung, int von, int bis) {
+        this.blockbuch = blockbuch;
         this.sprache = sprache;
         this.stand = stand;
         this.wirtschaft = wirtschaft;
@@ -127,6 +146,11 @@ final class BundBefehle {
                 // Ein Zweig und kein eigener Befehl: Plan 11.1 fuehrt sechzehn Befehle, und
                 // /spielzeit steht nicht darunter. Das eigene Recht steckt im Zweig.
                 .then(spielzeit)
+                // Das Blockbuch, mit eigenem Recht im Zweig - siehe das Feld. Es steht
+                // hier und nicht bei den Verwaltungszweigen darunter, weil es eine
+                // AUSKUNFT ist und nichts aendert: dieselbe Art Zweig wie /spielzeit,
+                // nur fuer eine andere Frage.
+                .then(blockbuch)
                 .then(Commands.literal("welt")
                         .requires(darfVerwalten())
                         .executes(z -> rufe(z, welt)))

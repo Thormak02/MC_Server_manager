@@ -281,7 +281,13 @@ class GrenzeTest {
     // ein eigenes sendActionBar ersetzt, wird von dieser Tafel gefragt, warum.
     private static final Set<String> SENDEN_ERLAUBT = new TreeSet<>(List.of(
             "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
-            "BerufeBefehle.java", "Bonuswache.java",
+            "BerufeBefehle.java",
+            // Das Blockbuch: EINE Sendestelle fuer beide Zweige und jede Absage. Sie
+            // antwortet dem SENDER und nicht dem Executor - bei
+            // /execute as <spieler> run freimarken blockbuch schaut der Spieler den
+            // Block an, lesen will es der, der getippt hat.
+            "BlockBefehle.java",
+            "Bonuswache.java",
             "BundBefehle.java", "LadenBefehle.java", "FreimarkenPlugin.java", "MarktBefehle.java",
             // Teil C: die zwei Beitrittszeilen und die Zeilen des taeglichen
             // Laufs - alle durch dasselbe private sende().
@@ -393,6 +399,15 @@ class GrenzeTest {
             // stuende hier eine Zwei, und eine zweite Stelle koennte wegfallen, ohne dass
             // die Zahl faellt.
             Map.entry("BerufeBefehle.java", 1),
+            // EINE Sendestelle fuer BEIDE Zweige des Blockbuchs und fuer jede seiner
+            // sieben Absagen: alles geht durch dasselbe private sende(). Eine Zwei
+            // hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat - und der waere
+            // der erste, dessen Zeilen keine Bildtafel haelt.
+            //
+            // Geantwortet wird darin dem SENDER und nicht dem Executor: Bei
+            // /execute as <spieler> run freimarken blockbuch schaut der Spieler den
+            // Block an, lesen will es der, der getippt hat.
+            Map.entry("BlockBefehle.java", 1),
             // Teil H: EINE Sendestelle - die Nachricht ueber den gezahlten Bonus.
             Map.entry("Bonuswache.java", 1),
             Map.entry("BundBefehle.java", 2),
@@ -2396,5 +2411,298 @@ class GrenzeTest {
                         + " beiden ist immer ungleich - eine Absage, die niemand"
                         + " versteht, oder ein Schutz, der schweigend nicht greift: "
                         + ohneUmwandlung);
+    }
+    @Test
+    @DisplayName("31af - jede Einrichtmethode des Plugins wird auch GERUFEN")
+    void jedeEinrichtmethodeWirdGerufen() {
+        // DIE ZWEITE HAELFTE VON 31ab, und sie fehlte. Jene Probe sichert die
+        // pruefe-Methoden; dieselbe Falle steht aber bei den richte-Methoden offen, und
+        // dort ist der Schaden groesser: Eine ungerufene Pruefung meldet einen Fehler
+        // nicht, eine ungerufene EINRICHTUNG laesst einen ganzen Bereich gar nicht
+        // entstehen. Beim Blockbuch waeren Tabelle, Ablage, Leser, Sammler und Wache
+        // gebaut, begruendet, geprueft - und kein Zuhoerer angemeldet. Jede Probe bliebe
+        // gruen, und im Spiel waere das Buch fuer immer leer.
+        //
+        // Quellen.text liest OHNE Kommentare: Ein Aufruf, der nur in einem Javadoc
+        // steht, ruft nichts.
+        String plugin = plugintext();
+
+        // Die Namen aus dem Quelltext holen und nicht hier auflisten - derselbe Grund
+        // wie bei 31ab: Eine Liste von Hand bliebe beim naechsten Zuwachs stehen, und
+        // dann ist genau der neue Bereich tot.
+        var namen = new java.util.TreeSet<String>();
+        var sucher = java.util.regex.Pattern
+                .compile("private void (richte[A-Z][A-Za-z]*)\\(")
+                .matcher(plugin);
+        while (sucher.find()) {
+            namen.add(sucher.group(1));
+        }
+        assertFalse(namen.isEmpty(),
+                "keine einzige richte-Methode gefunden - dann prueft diese Probe nichts");
+
+        var tot = new java.util.TreeSet<String>();
+        for (String name : namen) {
+            if (plugin.split(name + "\\(", -1).length - 1 < 2) {
+                tot.add(name);
+            }
+        }
+        assertEquals(java.util.Set.of(), tot,
+                "diese Einrichtmethoden werden nirgends gerufen - der ganze Bereich"
+                        + " dahinter entsteht nie, und keine Probe sieht es: " + tot);
+    }
+
+    @Test
+    @DisplayName("31ag - jeder Zeitgeber wird gestartet und VOR der Datenbank beendet")
+    void jederZeitgeberWirdGestartetUndVorhalbBeendet() {
+        // DREI ZUSAGEN IN EINER PROBE, weil sie dieselbe Naht betreffen: Eine Wache mit
+        // starte() und beende() ist ein wiederkehrender Zeitgeber, und davon haengt
+        // Geschriebenes ab.
+        //
+        // Die dritte ist die, die kein Probenlauf je zeigen koennte: beende() MUSS vor
+        // datenbank.close() stehen. Steht es danach, laeuft alles weiter wie bisher -
+        // nur dass beim Abschalten das Gesammelte verloren geht, weil die Ablage auf
+        // eine geschlossene Verbindung schreibt. Sichtbar ist das nur an Zeilen, die
+        // fehlen, und zwar genau in der letzten Sekunde vor dem Herunterfahren: der
+        // Sekunde, nach der jemand fragt.
+        //
+        // DIE LISTE DER WACHEN KOMMT AUS DEM QUELLTEXT: Wer starte() UND beende() hat,
+        // ist ein Zeitgeber. Eine handgeschriebene Liste bliebe beim naechsten stehen.
+        String plugin = plugintext();
+        var wachen = new java.util.TreeSet<String>();
+        for (java.nio.file.Path datei : Quellen.alle()) {
+            String text = Quellen.text(datei);
+            if (text.contains("void starte()") && text.contains("void beende()")) {
+                String name = datei.getFileName().toString();
+                wachen.add(name.substring(0, name.length() - ".java".length()));
+            }
+        }
+        assertFalse(wachen.isEmpty(),
+                "keine einzige Wache mit starte() und beende() gefunden - dann prueft"
+                        + " diese Probe nichts");
+
+        // Der Koerper von onDisable, und nur er: datenbank.close() steht auch in einem
+        // Fehlerzweig beim Aufbau, und dort ist die Reihenfolge eine andere Frage.
+        int anfang = plugin.indexOf("public void onDisable()");
+        assertTrue(anfang >= 0, "onDisable fehlt in FreimarkenPlugin");
+        String abschalten = plugin.substring(anfang);
+        int schluss = abschalten.indexOf("datenbank.close()");
+        assertTrue(schluss >= 0,
+                "onDisable schliesst die Datenbank nicht - dann prueft der Teil dieser"
+                        + " Probe nichts, der die Reihenfolge sichert");
+
+        var ungestartet = new java.util.TreeSet<String>();
+        var unbeendet = new java.util.TreeSet<String>();
+        var zuSpaet = new java.util.TreeSet<String>();
+        for (String wache : wachen) {
+            String feld = Character.toLowerCase(wache.charAt(0)) + wache.substring(1);
+            if (!plugin.contains(feld + ".starte()")) {
+                ungestartet.add(wache);
+            }
+            int beendet = abschalten.indexOf(feld + ".beende()");
+            if (beendet < 0) {
+                unbeendet.add(wache);
+            } else if (beendet > schluss) {
+                zuSpaet.add(wache);
+            }
+        }
+        assertEquals(java.util.Set.of(), ungestartet,
+                "diese Wachen werden nie gestartet - ihr Zeitgeber laeuft nicht, und"
+                        + " alles, was sie sammeln, bleibt fuer immer im"
+                        + " Arbeitsspeicher: " + ungestartet);
+        assertEquals(java.util.Set.of(), unbeendet,
+                "diese Wachen werden in onDisable nicht beendet - ihr letzter Stapel"
+                        + " ist beim Herunterfahren verloren, und ihr Zeitgeber laeuft"
+                        + " nach dem Abschalten weiter: " + unbeendet);
+        assertEquals(java.util.Set.of(), zuSpaet,
+                "diese Wachen werden NACH datenbank.close() beendet - sie schreiben"
+                        + " dann auf eine geschlossene Verbindung, und das Gesammelte"
+                        + " ist verloren. Nichts bricht, nichts wird rot; es fehlen nur"
+                        + " Zeilen, und zwar die der letzten Sekunde: " + zuSpaet);
+    }
+
+    /** Der Quelltext des Plugins, ohne Kommentare - geteilt von 31ab, 31af und 31ag. */
+    private static String plugintext() {
+        return Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("FreimarkenPlugin.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("FreimarkenPlugin.java fehlt")));
+    }
+    @Test
+    @DisplayName("31ah - jede Schluessel-Naht bekommt weltschluessel und nichts anderes")
+    void jedeSchluesselnahtBekommtWeltschluessel() {
+        // DIE DRITTE HAELFTE DES WELTSCHLUESSELS, und sie fehlte. 31ad verbietet das
+        // Handkleben, 31ae das Weglassen bei einem FELD - aber das Blockbuch bekommt den
+        // Schluessel ueber eine NAHT (Blockbuchliste.Schluesselmacher), und die hat kein
+        // Feld. Gemessen mit einer Einspritzung (B11 am 09.11.2026): "this::weltschluessel"
+        // gegen "name -> name" getauscht, und alle 2.516 Proben blieben gruen.
+        //
+        // Der Schaden ist derselbe wie damals im Ladenbereich: Die config.yml schreibt
+        // "altfurt", die Welt traegt "freimarken:altfurt", der Vergleich ist immer
+        // ungleich - und das Blockbuch bliebe fuer jede eingetragene Welt stumm leer.
+        // Nichts bricht, nichts wird rot, und niemand koennte sagen, warum.
+        //
+        // DIE LISTE DER NAEHTE KOMMT AUS DEM QUELLTEXT: Wer eine Schnittstelle
+        // "Schluesselmacher" erklaert, erwartet eine Umwandlung. Eine handgeschriebene
+        // Liste bliebe bei der naechsten Naht stehen, und dann ist genau die
+        // ungeschuetzt - derselbe Grund wie bei 31ab, 31ae und 31af.
+        var naehte = new java.util.TreeSet<String>();
+        for (java.nio.file.Path datei : Quellen.alle()) {
+            if (Quellen.text(datei).contains("interface Schluesselmacher")) {
+                String name = datei.getFileName().toString();
+                naehte.add(name.substring(0, name.length() - ".java".length()));
+            }
+        }
+        assertFalse(naehte.isEmpty(),
+                "keine einzige Schluesselmacher-Naht gefunden - dann prueft diese Probe"
+                        + " nichts");
+
+        String plugin = plugintext();
+        var falschVersorgt = new java.util.TreeSet<String>();
+        for (String naht : naehte) {
+            // Die Aufrufstelle: der Klassenname, gefolgt von einem Punkt. Gesucht wird
+            // die ganze Argumentliste, denn der Macher kann an jeder Stelle stehen.
+            int stelle = plugin.indexOf(naht + ".");
+            if (stelle < 0) {
+                falschVersorgt.add(naht + " (wird nirgends gerufen)");
+                continue;
+            }
+            int klammer = plugin.indexOf('(', stelle);
+            if (klammer < 0) {
+                falschVersorgt.add(naht + " (kein Aufruf gefunden)");
+                continue;
+            }
+            int tiefe = 0;
+            int ende = klammer;
+            for (int i = klammer; i < plugin.length(); i++) {
+                if (plugin.charAt(i) == '(') {
+                    tiefe++;
+                } else if (plugin.charAt(i) == ')') {
+                    tiefe--;
+                    if (tiefe == 0) {
+                        ende = i;
+                        break;
+                    }
+                }
+            }
+            if (!plugin.substring(stelle, ende).contains("weltschluessel")) {
+                falschVersorgt.add(naht);
+            }
+        }
+        assertEquals(java.util.Set.of(), falschVersorgt,
+                "diese Naehte wandeln einen Weltnamen in einen Schluessel um und"
+                        + " bekommen die Umwandlung nicht aus weltschluessel(...). Die"
+                        + " config.yml schreibt \"altfurt\", die Welt traegt"
+                        + " \"freimarken:altfurt\", und der Vergleich der beiden ist"
+                        + " immer ungleich - der ganze Bereich dahinter bleibt dann stumm"
+                        + " leer: " + falschVersorgt);
+    }
+    @Test
+    @DisplayName("31ai - wer ein Feld fuellt, wird vor dem gerufen, der es braucht")
+    void einrichtungInDerRichtigenReihenfolge() {
+        // DER FEHLER, GEGEN DEN DIESE PROBE STEHT: richteBlockbuchEin() baut die
+        // Blockraeumung, richteSpielzeitEin() gibt sie dem Takt mit. Standen die beiden
+        // in der anderen Reihenfolge, bekaeme der Takt ein null - und weil das ein
+        // erlaubter Wert ist (ohne Datenbank gibt es nichts zu raeumen), faellt NICHTS
+        // auf. Das Blockbuch wuechse fuer immer, die Frist waere stumm wirkungslos, und
+        // keine Probe und keine Meldung sagte es.
+        //
+        // Geprueft wird die STELLE der Aufrufe in onEnable, nicht die Reihenfolge der
+        // Methoden im Quelltext: Was zaehlt, ist, wann sie laufen.
+        String plugin = plugintext();
+        int anfang = plugin.indexOf("public void onEnable()");
+        assertTrue(anfang >= 0, "onEnable fehlt in FreimarkenPlugin");
+        String start = plugin.substring(anfang);
+
+        int baut = start.indexOf("richteBlockbuchEin();");
+        int braucht = start.indexOf("richteSpielzeitEin();");
+        assertTrue(baut >= 0,
+                "richteBlockbuchEin() wird in onEnable nicht gerufen - 31af sagt das"
+                        + " schon, aber dann prueft diese Probe nichts");
+        assertTrue(braucht >= 0,
+                "richteSpielzeitEin() wird in onEnable nicht gerufen - dann prueft diese"
+                        + " Probe nichts");
+        assertTrue(baut < braucht,
+                "richteBlockbuchEin() MUSS vor richteSpielzeitEin() laufen: Jene baut die"
+                        + " Blockraeumung, diese gibt sie dem Spielzeittakt mit."
+                        + " Andersherum bekommt der Takt ein null - ein ERLAUBTER Wert,"
+                        + " also faellt nichts auf -, und das Blockbuch wird nie wieder"
+                        + " aufgeraeumt. Die Frist waere stumm wirkungslos.");
+    }
+    @Test
+    @DisplayName("31aj - jeder Mitfahrer des Spielzeittakts wird auch GERUFEN")
+    void jederMitfahrerWirdGerufen() {
+        // DIE DRITTE GESTALT DESSELBEN FEHLERS. 31ab sichert die pruefe-Methoden, 31af
+        // die richte-Methoden - und hier sitzt sie eine Ebene tiefer: Ein Mitfahrer des
+        // Spielzeittakts ist ein FELD, das gehalten, aber nicht gerufen wird.
+        //
+        // Gemessen mit einer Einspritzung (C5 am 09.11.2026): den Aufruf
+        // blockraeumung.imTakt() aus schlag() entfernt, und alle 2.555 Proben blieben
+        // gruen. Das Blockbuch wuechse dann fuer immer, die Frist waere stumm
+        // wirkungslos, und keine Meldung sagte es - der Zeitgeber laeuft ja, er ruft nur
+        // einen weniger.
+        //
+        // DIE LISTE DER MITFAHRER KOMMT AUS DEM QUELLTEXT: Wer ein Feld der
+        // Spielzeitwache ist und eine Methode imTakt() hat, faehrt mit. Eine
+        // handgeschriebene Liste bliebe beim naechsten Mitfahrer stehen, und dann ist
+        // genau der ungerufen - derselbe Grund wie bei 31ab, 31ae, 31af und 31ah.
+        String wache = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("Spielzeitwache.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Spielzeitwache.java fehlt")));
+
+        // Die Felder, deren Typ ein imTakt() hat - das macht sie zu Mitfahrern.
+        var mitfahrer = new java.util.TreeMap<String, String>();
+        var sucher = java.util.regex.Pattern
+                .compile("private final ([A-Z][A-Za-z]*) ([a-z][A-Za-z]*);")
+                .matcher(wache);
+        while (sucher.find()) {
+            String typ = sucher.group(1);
+            String feld = sucher.group(2);
+            for (java.nio.file.Path datei : Quellen.alle()) {
+                if (!datei.getFileName().toString().equals(typ + ".java")) {
+                    continue;
+                }
+                // JEDER Rueckgabetyp und nicht nur void - und das ist gemessen: Hier
+                // stand zuerst "void imTakt(", und damit fand die Probe die
+                // Blockraeumung NICHT, denn jene gibt ein Ergebnis zurueck. Sie blieb
+                // gruen, weil zwei andere Mitfahrer void sind: Sie prueefte also zwei
+                // und schwieg ueber den dritten, und die Einspritzung C5 kam durch.
+                // Ein Waechter, der nur einen Teil sieht, ist schlimmer als keiner -
+                // er bescheinigt, was er nie angesehen hat.
+                if (java.util.regex.Pattern
+                        .compile("[A-Za-z][A-Za-z.<>]* imTakt\\(")
+                        .matcher(Quellen.text(datei)).find()) {
+                    mitfahrer.put(feld, typ);
+                }
+            }
+        }
+        assertFalse(mitfahrer.isEmpty(),
+                "kein einziger Mitfahrer mit imTakt() gefunden - dann prueft diese Probe"
+                        + " nichts");
+
+        // Der Koerper von schlag(), und nur er: Ein Aufruf in starte() oder beende()
+        // waere kein Mitfahren.
+        int anfang = wache.indexOf("private void schlag()");
+        assertTrue(anfang >= 0, "schlag() fehlt in Spielzeitwache");
+        String takt = wache.substring(anfang);
+        int schluss = takt.indexOf("catch (Throwable");
+        assertTrue(schluss >= 0,
+                "der Takt faengt kein Throwable mehr - dann ist nicht nur diese Probe"
+                        + " kaputt, sondern eine Ausnahme beendet den Zeitgeber");
+        String koerper = takt.substring(0, schluss);
+
+        var stumm = new java.util.TreeSet<String>();
+        for (var eintrag : mitfahrer.entrySet()) {
+            if (!koerper.contains(eintrag.getKey() + ".imTakt(")) {
+                stumm.add(eintrag.getValue());
+            }
+        }
+        assertEquals(java.util.Set.of(), stumm,
+                "diese Mitfahrer haelt die Spielzeitwache, ruft sie aber nicht in"
+                        + " schlag() - sie sind gebaut, verdrahtet und tot. Der"
+                        + " Zeitgeber laeuft weiter, es faellt also nichts auf; was"
+                        + " ausbleibt, ist nur ihre Arbeit: " + stumm);
     }
 }

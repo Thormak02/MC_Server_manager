@@ -253,7 +253,7 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle zwoelf Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - alle vierzehn Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
         // MietSatz ist der zwoelfte - und der ZWEITE Bereich desselben Befehls: Er und
         // LadenSatz schreiben beide Pfade unter laden., damit der Betreiber unter dem
@@ -268,7 +268,13 @@ class VorlageTest {
                 // Plan 7.4 ist der DREIZEHNTE Bereich - der erste, der nicht zu einem
                 // Befehl gehoert: Seine Saetze kommen von einem beschriebenen Schild und
                 // von einer Hand an einem fremden Block, nicht von einem getippten Wort.
-                "ShopSatz"));
+                "ShopSatz",
+                // Das Blockbuch ist der VIERZEHNTE - und der erste, dessen Saetze nicht
+                // einem Spieler etwas ueber sein eigenes Tun sagen, sondern einem
+                // Moderator etwas ueber das Tun eines anderen. Darum traegt er eigene
+                // Zeilensaetze fuer den ABGEWIESENEN Versuch: Der soll sich im ganzen
+                // Bild unterscheiden, nicht nur in einem eingesetzten Wort.
+                "BlockSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));

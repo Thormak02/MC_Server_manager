@@ -66,6 +66,17 @@ permissions:
     # beim Betreten Altfurts mitten im Bauen auf Abenteuer heruntergestuft.
     description: Behaelt den eigenen Spielmodus in jeder Welt
     default: op
+  freimarken.blockbuch:
+    # Ein eigenes Recht und NICHT freimarken.verwalten - dieselbe Begruendung wie bei
+    # freimarken.spielzeit.andere: Das Blockbuch zu lesen ist Moderation und keine
+    # Verwaltung. Wer es bekommen soll, soll nicht gleichzeitig Welten anlegen und
+    # Spieler quer durch die Stadt versetzen koennen.
+    #
+    # default: op, weil die Auskunft nennt, wer wann wo war. Ein Spieler, der sie frei
+    # lesen koennte, saehe damit auch, wann ein anderer nicht da ist und wo er baut -
+    # und das ist die Vorarbeit fuer einen Einbruch, nicht seine Aufklaerung.
+    description: Darf das Blockbuch lesen - wer wann wo was getan hat
+    default: op
   # Zwei Obergrenzen kommen ueber ein Recht mit Zahl: freimarken.parzellen.8 erlaubt acht
   # Parzellen, freimarken.gruppe.4 vier Felder je zusammengelegter Gruppe. Die hoechste
   # Zahl gewinnt, der Wert aus der config.yml ist die Untergrenze. Hier steht kein Eintrag

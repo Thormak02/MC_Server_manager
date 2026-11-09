@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Blocktat;
 import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Handelsart;
@@ -28,11 +29,11 @@ import java.util.Set;
 final class Sprachschluessel {
 
     /**
-     * Die dreizehn Bereiche, in der Reihenfolge der Bauschritte.
+     * Die vierzehn Bereiche, in der Reihenfolge der Bauschritte.
      *
      * <p>Als {@code Class} und nicht als {@code values()}: So braucht ein noch leerer
      * Bereich keinen Platzhalterschluessel, und die Probe kann trotzdem nachsehen, dass
-     * alle dreizehn gefuehrt werden.
+     * alle vierzehn gefuehrt werden.
      *
      * <p><b>{@link Berufsname} steht hier NICHT</b>, und das ist der Unterschied zwischen
      * einem Bereich und einer offenen Familie: Diese Liste verlangt, dass jeder Satz in
@@ -45,9 +46,9 @@ final class Sprachschluessel {
             BundSatz.class, MarkSatz.class, ParzellenSatz.class, AnfragenSatz.class,
             SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class,
             MarktSatz.class, BonusSatz.class, LadenSatz.class, MietSatz.class,
-            ShopSatz.class);
+            ShopSatz.class, BlockSatz.class);
 
-    /** Alle Saetze, aus allen dreizehn Bereichen - einmal gebaut, unveraenderlich. */
+    /** Alle Saetze, aus allen vierzehn Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
 
     /** Jeder Pfad der Datei auf seinen Satz - auch {@code .eins} und {@code .viele}. */
@@ -441,6 +442,13 @@ final class Sprachschluessel {
         // echte Zeile aus der ausgelieferten Vorlage.
         for (Taetigkeit taetigkeit : Taetigkeit.values()) {
             pfade.add(BerufSatz.taetigkeitswort(taetigkeit).pfad());
+        }
+        // Die Tatworte des Blockbuchs - dieselbe Bauart und derselbe Grund: Sie werden
+        // ueber BlockSatz.tatwort gewaehlt und nirgends namentlich getippt. Gedeckt sind
+        // sie in BlockBefehlTest: Dort geht JEDE Tat durch die echte Zeile aus der
+        // ausgelieferten Vorlage.
+        for (Blocktat tat : Blocktat.values()) {
+            pfade.add(BlockSatz.tatwort(tat).pfad());
         }
         // Die Saetze der Kistenshops, ueber shopAnlage und schildfehler gewaehlt.
         // ABGEBAUT und KEIN_SHOP fehlen mit Absicht: Sie werfen dort, siehe die

@@ -78,6 +78,25 @@ final class Spielzeitwache implements Listener {
      * Anwesenheit gebunden, waere Wegbleiben der Weg, einen Stand kostenlos zu halten.
      */
     private final Mietwache mietwache;
+
+    /**
+     * Der dritte Mitfahrer: das Aufraeumen des Blockbuchs.
+     *
+     * <p>EINMAL je Taktschlag, wie die Ladenmiete, und aus demselben Grund: Geraeumt wird
+     * eine Tabelle, nicht ein Spieler.
+     *
+     * <p><b>Darf {@code null} sein</b> - der einzige Mitfahrer, bei dem das erlaubt ist.
+     * Das Blockbuch braucht eine Ablage, und ohne Datenbank und ohne eingetragene Taten
+     * gibt es nichts zu raeumen. Ein Pflichtfeld zwaenge das Plugin, eine Raeumung zu
+     * bauen, die nie etwas tut.
+     *
+     * <p>Hier und nicht an der {@link Blockwache}, obwohl die ihren eigenen Zeitgeber
+     * hat: Jene wird bei einer leeren Auswahl GAR NICHT angemeldet. Wer das Buch
+     * abschaltet, will seine alten Zeilen trotzdem nicht fuer immer behalten - und sie
+     * waeren sonst unloeschbar, weil niemand mehr aufraeumt.
+     */
+    private final Blockraeumung blockraeumung;
+
     private final Wirtschaftsstand wirtschaft;
     private final Logger protokoll;
 
@@ -85,11 +104,13 @@ final class Spielzeitwache implements Listener {
     private BukkitTask zeitgeber;
 
     Spielzeitwache(JavaPlugin plugin, Spielzeitbuch buch, Bonuswache bonuswache,
-                   Mietwache mietwache, Wirtschaftsstand wirtschaft, Logger protokoll) {
+                   Mietwache mietwache, Blockraeumung blockraeumung,
+                   Wirtschaftsstand wirtschaft, Logger protokoll) {
         this.plugin = plugin;
         this.buch = buch;
         this.bonuswache = bonuswache;
         this.mietwache = mietwache;
+        this.blockraeumung = blockraeumung;
         this.wirtschaft = wirtschaft;
         this.protokoll = protokoll;
     }
@@ -240,6 +261,21 @@ final class Spielzeitwache implements Listener {
             // Neustart. Mietlauf faengt seine Fehler selbst; dies ist die zweite
             // Schranke.
             mietwache.imTakt();
+            // ZULETZT, und das ist Absicht: Aufraeumen ist das einzige hier, dessen
+            // Ausfall nichts kostet - der naechste Takt holt es nach. Alles davor
+            // schreibt Zeit oder bucht Geld, und das soll nicht hinter einem DELETE
+            // warten, das bei einem Rueckstand von Wochen hunderte Zeilen loescht.
+            //
+            // In DEMSELBEN try, aus demselben Grund wie bei den beiden davor: Eine
+            // Ausnahme von hier darf den Zeitgeber nicht beenden - der Verlust waere
+            // dann die Spielzeit aller Spieler bis zum naechsten Neustart. Blockraeumung
+            // faengt ihre Fehler selbst; dies ist die zweite Schranke.
+            //
+            // Der null-Fall ist der Normalbetrieb ohne Datenbank, nicht ein Versehen:
+            // Ohne Ablage gibt es kein Blockbuch und nichts zu raeumen.
+            if (blockraeumung != null) {
+                blockraeumung.imTakt();
+            }
         } catch (Throwable fehler) {
             protokoll.log(Level.SEVERE, "Der Spielzeittakt ist in einen Fehler gelaufen."
                     + " Die Zeit dieses Taktes ist verloren; der Zeitgeber laeuft weiter.",

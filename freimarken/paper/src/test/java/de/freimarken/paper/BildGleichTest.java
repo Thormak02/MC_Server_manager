@@ -7,6 +7,7 @@ import de.freimarken.kern.Richtung;
 import de.freimarken.kern.Wirtschaftswerte;
 import de.freimarken.kern.Zeitwerte;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -70,7 +71,18 @@ class BildGleichTest {
                 .mit("gruppe", gruppe);
     }
 
-    static List<Zeile> tabelle() {
+    /**
+     * Die Zeit in den Zeilen des Blockbuchs.
+     *
+     * <p>Mit Uhrzeit, denn {@code blockbuch.zeit-muster} traegt Tag UND Stunde - anders
+     * als {@code spielzeit.tag-muster}. Eine Protokollzeile ohne Uhrzeit beantwortet
+     * "wann" nicht, und bei zwanzig Taten an einem Tag ist genau die Stunde die Angabe,
+     * auf die es ankommt.
+     */
+    private static final LocalDateTime BLOCKBUCH_ZEIT =
+            LocalDateTime.of(2026, 11, 9, 14, 30);
+
+    private static List<Zeile> tabelle() {
         Sprache sprache = Sprachprobe.spracheAusDemJar();
         return List.of(
                 // ParzellenBefehle:225-226 vor dem Umzug, gemessen am alten Zweig.
@@ -1305,7 +1317,79 @@ class BildGleichTest {
                 // wird erstattet.
                 new Zeile(ShopSatz.SHOP_HANDEL_GESTOERT, 1L, Einsatz.keine(),
                         "&cDer Handel ist nicht zustande gekommen&7 - dein Geld"
-                                + " ist nicht weg."));
+                                + " ist nicht weg."),
+
+                // Das Blockbuch (Moderation). Die ZEIT kommt aus dem eigenen Muster und
+                // die TAT aus dem eigenen Wort, nicht als getippte Zeichenkette: Beide
+                // haben keine eigene Tafelzeile - ein Art.MUSTER und ein Art.WORT
+                // koennen keine haben -, und so haengen sie trotzdem an einer Bildprobe.
+                new Zeile(BlockSatz.KOPF_ORT, 1L,
+                        Einsatz.von("ort", "altfurt 62/-60/8").mit("anzahl", 3L),
+                        "&6Blockbuch&7 an altfurt 62/-60/8 - 3 Eintraege:"),
+                new Zeile(BlockSatz.KOPF_SPIELER, 1L,
+                        Einsatz.von("spieler", "Anna").mit("anzahl", 2L),
+                        "&6Blockbuch&7 von Anna - 2 Eintraege:"),
+                new Zeile(BlockSatz.ZEILE, 1L,
+                        Einsatz.von("zeit", sprache.muster(BlockSatz.ZEIT_MUSTER)
+                                        .format(BLOCKBUCH_ZEIT))
+                                .mit("spieler", "Anna")
+                                .mit("tat", sprache.wort(BlockSatz.TAT_ABBAUEN,
+                                        Einsatz.keine()))
+                                .mit("block", "oak_log"),
+                        "&7  09.11.2026 14:30  Anna baute ab oak_log"),
+                // DER FUND, BEI DEM NICHTS PASSIERT IST. Ein eigener Satz und nicht ein
+                // eingesetztes Wort: Ein Dutzend dieser Zeilen an einer fremden Parzelle
+                // soll beim Durchlesen auffallen, und eine Zeile, die sich nur in einem
+                // Wort unterscheidet, tut das nicht.
+                new Zeile(BlockSatz.ZEILE_ABGEWIESEN, 1L,
+                        Einsatz.von("zeit", sprache.muster(BlockSatz.ZEIT_MUSTER)
+                                        .format(BLOCKBUCH_ZEIT))
+                                .mit("spieler", "Bert")
+                                .mit("tat", sprache.wort(BlockSatz.TAT_SETZEN,
+                                        Einsatz.keine()))
+                                .mit("block", "stone"),
+                        "&8  09.11.2026 14:30&c  x Bert setzte stone"),
+                new Zeile(BlockSatz.ZEILE_MIT_ORT, 1L,
+                        Einsatz.von("zeit", sprache.muster(BlockSatz.ZEIT_MUSTER)
+                                        .format(BLOCKBUCH_ZEIT))
+                                .mit("ort", "altfurt 62/-60/8")
+                                .mit("tat", sprache.wort(BlockSatz.TAT_BENUTZEN,
+                                        Einsatz.keine()))
+                                .mit("block", "chest"),
+                        "&7  09.11.2026 14:30  altfurt 62/-60/8 benutzte chest"),
+                new Zeile(BlockSatz.ZEILE_MIT_ORT_ABGEWIESEN, 1L,
+                        Einsatz.von("zeit", sprache.muster(BlockSatz.ZEIT_MUSTER)
+                                        .format(BLOCKBUCH_ZEIT))
+                                .mit("ort", "marktstadt 7/71/13")
+                                .mit("tat", sprache.wort(BlockSatz.TAT_BENUTZEN,
+                                        Einsatz.keine()))
+                                .mit("block", "chest"),
+                        "&8  09.11.2026 14:30&c  x marktstadt 7/71/13 benutzte chest"),
+                // SAGT, WARUM nichts da sein kann. Ohne den Hinweis sucht der Moderator
+                // den Fehler im Plugin, obwohl die Welt abgewaehlt oder die Frist um
+                // sein kann.
+                new Zeile(BlockSatz.LEER_ORT, 1L,
+                        Einsatz.von("ort", "altfurt 62/-60/8"),
+                        "&7Zu altfurt 62/-60/8 steht nichts im Blockbuch - die Welt kann"
+                                + " abgewaehlt sein, oder die Frist hat es geholt."),
+                new Zeile(BlockSatz.LEER_SPIELER, 1L, Einsatz.von("spieler", "Anna"),
+                        "&7Zu Anna steht nichts im Blockbuch."),
+                // NENNT DIE REICHWEITE: Wer einen Block weit weg anschaut, soll nicht
+                // raten, ob das Buch leer ist oder der Blick zu weit ging.
+                new Zeile(BlockSatz.KEIN_BLOCK, 1L, Einsatz.von("reichweite", 6L),
+                        "&7Du siehst keinen Block an&8 (Reichweite 6 Bloecke). Nach"
+                                + " einem Spieler fragt /freimarken blockbuch"
+                                + " spieler <name>."),
+                // "Nichts aufgeschrieben" ist NICHT "nichts geschehen" - genau den
+                // Unterschied muss ein Moderator kennen, bevor er jemanden freispricht.
+                new Zeile(BlockSatz.AUS, 1L, Einsatz.keine(), "&eIn dieser Welt schreibt das Blockbuch nichts&7 - was hier"
+                                + " geschah, steht nirgends. Einstellbar unter"
+                                + " blockbuch.welten in der config.yml."),
+                // Und ein Netzfehler darf nicht aussehen wie ein Freispruch.
+                new Zeile(BlockSatz.GESTOERT, 1L, Einsatz.keine(), "&cDas Blockbuch antwortet nicht&7 - der Grund steht im"
+                                + " Serverprotokoll. Das ist KEIN Freispruch."),
+                new Zeile(BlockSatz.UNBEKANNT, 1L, Einsatz.von("name", "annna"),
+                        "&cDen Spieler annna kennt dieser Server nicht."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

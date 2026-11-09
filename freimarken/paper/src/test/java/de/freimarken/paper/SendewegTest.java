@@ -9,6 +9,7 @@ import com.mojang.brigadier.StringReader;
 import de.freimarken.kern.Art;
 import de.freimarken.kern.Berufsregel;
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Blocktat;
 import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Handelsart;
@@ -214,6 +215,14 @@ class SendewegTest {
         // hier auf und nicht erst bei Probe 30 mit einer Meldung, die niemand zuordnet.
         for (Taetigkeit taetigkeit : Taetigkeit.values()) {
             alle.add(BerufSatz.taetigkeitswort(taetigkeit).pfad());
+        }
+        // SECHSTE Familie: die Tatworte des Blockbuchs, ueber BlockSatz.tatwort gewaehlt.
+        // Dieselbe Bauart wie die Taetigkeitsworte darueber, und dieselbe Deckung an
+        // anderer Stelle: In BlockBefehlTest geht JEDE Tat durch die echte Zeile der
+        // ausgelieferten Vorlage. Hier steht sie, weil DIESE Probe die Liste der
+        // Ausnahmen fuehrt.
+        for (Blocktat tat : Blocktat.values()) {
+            alle.add(BlockSatz.tatwort(tat).pfad());
         }
         // VIERTE Familie seit Plan 7.4: die Saetze der Kistenshops. Sie werden ueber
         // Sprachschluessel.shopAnlage und .schildfehler gewaehlt, nicht namentlich

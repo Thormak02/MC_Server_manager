@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaBonus;
 import de.freimarken.daten.MariaAbholfach;
+import de.freimarken.daten.MariaBlockbuch;
 import de.freimarken.daten.MariaMiete;
 import de.freimarken.daten.MariaShops;
 import de.freimarken.daten.MariaKasse;
@@ -12,7 +13,10 @@ import de.freimarken.daten.MariaSpielzeit;
 import de.freimarken.kern.Bonusablage;
 import de.freimarken.kern.SpeicherBonus;
 import de.freimarken.kern.Abholablage;
+import de.freimarken.kern.Blockbuchablage;
+import de.freimarken.kern.Blockbuchwerte;
 import de.freimarken.kern.SpeicherAbholfach;
+import de.freimarken.kern.SpeicherBlockbuch;
 import de.freimarken.kern.SpeicherMiete;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
@@ -151,6 +155,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * geloescht.
      */
     private Abholablage abholablage;
+
+    /**
+     * Das Blockbuch - wer wann wo was getan hat.
+     *
+     * <p><b>KEIN Zwischenspeicher darum</b>, und das ist die Umkehrung des Falls
+     * {@link ZwischenspeicherShops}: Dort ist die Frage "haengt hier ein Shop" ein heisser
+     * LESEpfad bei jeder Explosion. Hier ist jede Tat ein SCHREIBzug und wird nur auf
+     * Befehl gelesen - ein Zwischenspeicher haette nichts zu sparen und waere eine zweite
+     * Wahrheit ueber ein Protokoll. Das Sammeln besorgt {@link Blockbuch}, und zwar vor
+     * der Ablage, nicht darin.
+     */
+    private Blockbuchablage blockbuchablage;
 
     /**
      * Die Kistenshops - als {@link ZwischenspeicherShops} und nicht als
@@ -302,6 +318,33 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * muss: Was im Arbeitsspeicher gesammelt ist, waere sonst verloren.
      */
     private Verdienstwache verdienstwache;
+    /**
+     * Zuhoerer UND Zeitgeber des Blockbuchs - der dritte wiederkehrende des Plugins.
+     *
+     * <p>Ein Feld aus demselben Grund wie {@link #verdienstwache}: {@code onDisable} muss
+     * ihn abmelden und den Stapel ein letztes Mal wegschreiben. Der haelt bis zu eine
+     * Sekunde Spielgeschehen, und gerade die letzte Sekunde ist die, nach der jemand
+     * fragt, wenn ein Server unerwartet herunterfaehrt.
+     */
+    private Blockwache blockwache;
+    /**
+     * Das Aufraeumen des Blockbuchs - Mitfahrer im Spielzeittakt.
+     *
+     * <p>Ein Feld, weil {@link #richteSpielzeitEin} es braucht und
+     * {@link #richteBlockbuchEin} es baut - in dieser Reihenfolge. Es entsteht AUCH, wenn
+     * das Buch nichts schreibt: Alte Zeilen muessen auch dann noch weggehen, sonst waeren
+     * sie unloeschbar.
+     */
+    private Blockraeumung blockraeumung;
+    /**
+     * Die gelesenen Blockbuchwerte - fuer den Befehlszweig.
+     *
+     * <p>Ein Feld, weil {@link #registriereBefehle} sie braucht und das in einem
+     * SPAETEREN Ereignis laeuft als {@link #richteBlockbuchEin}. Nie {@code null}: Jene
+     * Methode setzt sie als erstes, auch wenn das Buch nichts schreibt - der Befehl muss
+     * dann "ist abgeschaltet" sagen koennen, und dafuer braucht er die Werte.
+     */
+    private Blockbuchwerte blockbuchwerte = Blockbuchwerte.VORGABE;
     private SpielzeitBefehle spielzeitBefehle;
     private Stadtgrenze grenze;
     /**
@@ -639,6 +682,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + wirtschaft.werte().markt().ankauf().anzahl() + " Materialien im"
                 + " Sortiment, Tagesdeckel " + wirtschaft.werte().markt().tagesdeckel()
                 + " Mark je Spieler. Verkauft wird nur in der Ankunftswelt.");
+        richteBlockbuchEin();
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
         registriereBefehle();
@@ -649,6 +693,59 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
         nenneNichtVorgenerierte();
         nenneSchlechteAnkunft();
+    }
+
+    /**
+     * Richtet das Blockbuch ein - Leser, Sammler, Wache, Zeitgeber.
+     *
+     * <p><b>Die Welten kommen als NAME herein und werden hier zum SCHLUESSEL.</b> Das ist
+     * genau die Umwandlung, deren Fehlen am 09.11.2026 den ganzen Ladenbereich tot legte:
+     * Die {@code config.yml} schreibt {@code altfurt}, die Welt traegt
+     * {@code freimarken:altfurt}. Uebergeben wird darum {@link #weltschluessel} als Naht
+     * und nicht der rohe Name - so bleibt die Umwandlung an EINER Stelle, und der Leser
+     * ist trotzdem ohne laufenden Server pruefbar.
+     *
+     * <p><b>Der Zeitgeber kommt als Naht herein und nicht als {@code this}</b>, wie bei
+     * {@link Verdienstwache}: Gestellt wird er im HAUPTFADEN und nicht nebenlaeufig - die
+     * Datenschicht haelt EINE Verbindung, und MariaKasse schaltet darauf
+     * {@code autoCommit} um; ein zweiter Faden committete dort die halbe Buchung des
+     * Hauptfadens mit.
+     *
+     * <p>Schreibt das Buch in keiner Welt etwas, wird die Wache GAR NICHT angemeldet: Ein
+     * Hoerer an jedem Blockereignis, der nur vergleicht und verwirft, ist Arbeit fuer
+     * nichts - und ein Zeitgeber, der jede Sekunde einen leeren Stapel abgibt, auch. Der
+     * Leser hat diesen Zustand schon laut gesagt.
+     */
+    private void richteBlockbuchEin() {
+        var gelesen = Blockbuchliste.ausKonfiguration(getConfig(), welten.keySet(),
+                this::weltschluessel);
+        gelesen.klagen().forEach(getLogger()::severe);
+        gelesen.bericht().forEach(getLogger()::info);
+        // DIE RAEUMUNG ZUERST, und zwar AUCH wenn nichts geschrieben wird. Wer das Buch
+        // abschaltet, will seine alten Zeilen nicht fuer immer behalten - und sie waeren
+        // sonst unloeschbar, weil niemand mehr aufraeumt. Sie haengt am Spielzeittakt und
+        // nicht an der Wache darunter, genau aus diesem Grund.
+        blockbuchwerte = gelesen.werte();
+        blockraeumung = new Blockraeumung(blockbuchablage, gelesen.werte(), wirtschaft,
+                uhr, getLogger());
+        if (!gelesen.werte().schreibtIrgendwo()) {
+            return;
+        }
+        // Das Buch ist eine lokale Variable und kein Feld - gehalten wird es von der
+        // Wache und sonst von niemandem. Als Feld blieb es beim Abschalten mit allen
+        // gesammelten Zeilen stehen (dieselbe Begruendung wie beim Verdienstbuch).
+        Blockbuch buch = new Blockbuch(blockbuchablage, getLogger());
+        blockwache = new Blockwache((schlag, abstand) -> {
+            BukkitTask aufgabe = getServer().getScheduler()
+                    .runTaskTimer(this, schlag, abstand, abstand);
+            return aufgabe::cancel;
+        }, buch, gelesen.werte(), uhr, getLogger());
+        getServer().getPluginManager().registerEvents(blockwache, this);
+        blockwache.starte();
+        getLogger().info("Blockbuch aktiv - geschrieben wird gesammelt, nicht je Block."
+                + " Abgewiesene Versuche kommen mit, wo sie eingetragen sind: Ein Dutzend"
+                + " davon an einer fremden Parzelle ist der Fund, bei dem nichts"
+                + " passiert ist.");
     }
 
     /**
@@ -706,6 +803,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
         if (verdienstwache != null) {
             verdienstwache.beende();
             verdienstwache = null;
+        }
+        // Und das Blockbuch, aus genau demselben Grund und immer noch VOR
+        // datenbank.close(): Der Stapel haelt bis zu eine Sekunde Spielgeschehen. Gerade
+        // die letzte Sekunde ist die, nach der jemand fragt, wenn ein Server unerwartet
+        // herunterfaehrt - und ein Buch, dem genau dort eine Zeile fehlt, beantwortet die
+        // eine Frage nicht, fuer die es gebaut ist.
+        if (blockwache != null) {
+            blockwache.beende();
+            blockwache = null;
         }
         if (datenbank != null) {
             datenbank.close();
@@ -775,8 +881,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
         richteShopsEin();
         Bonuswache bonuswache = new Bonuswache(tagesbonus, wirtschaft, sprache);
         getServer().getPluginManager().registerEvents(bonuswache, this);
+        // blockraeumung darf null sein - ohne Datenbank gibt es kein Blockbuch und
+        // nichts zu raeumen. richteBlockbuchEin() laeuft VOR dieser Methode und hat es
+        // dann gesetzt; die Reihenfolge sichert 31ai.
         spielzeitwache = new Spielzeitwache(this, buch, bonuswache, mietwache,
-                wirtschaft, getLogger());
+                blockraeumung, wirtschaft, getLogger());
         getServer().getPluginManager().registerEvents(spielzeitwache, this);
         spielzeitwache.starte();
         // Jeder Wert, den dieser Satz verspricht, steht auch darin. Eine halbe Zusage -
@@ -868,6 +977,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // verkraften als bei den anderen - ein vergessenes Abholfach ist verlorener
             // Besitz. Die Warnung darunter nennt es.
             abholablage = new SpeicherAbholfach();
+            // Dass diese Fassung beim Neustart alles vergisst, ist beim Blockbuch leicht
+            // zu verkraften: Es ist ein Protokoll und kein Besitz. Fuer einen Probelauf
+            // ist es trotzdem die richtige Fassung - der Befehl und das Aufraeumen laufen
+            // durch GENAU denselben Code wie mit Datenbank.
+            blockbuchablage = new SpeicherBlockbuch();
             // Derselbe Zwischenspeicher wie mit Datenbank, nur mit einer anderen
             // Wahrheit darunter: So laeuft der Betrieb durch GENAU denselben Code, ob
             // eine Datenbank da ist oder nicht. Eine Fassung ohne Zwischenspeicher waere
@@ -905,6 +1019,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // darueber waere viel Arbeitsspeicher fuer nichts - und ein zweiter Ort fuer
             // Besitz.
             abholablage = new MariaAbholfach(datenbank);
+            // KEIN Zwischenspeicher: Dies ist die groesste Tabelle des Projekts und ein
+            // reiner Schreibpfad. Gelesen wird auf Befehl, also auch nichts zu sparen -
+            // und ein Zwischenspeicher darueber waere eine zweite Wahrheit ueber ein
+            // Protokoll. Gesammelt wird VOR der Ablage, in Blockbuch.
+            blockbuchablage = new MariaBlockbuch(datenbank);
             // ZWISCHENSPEICHER, und hier ist er keine Ersparnis, sondern die Sache:
             // betroffen() fragt bei JEDER Explosion fuer JEDEN Block und bei jedem
             // Trichtertakt, ob dort ein Shop haengt. Eine Datenbankabfrage an dieser
@@ -1143,8 +1262,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 getPluginMeta().getVersion(),
                 String.valueOf(Runtime.version().feature()),
                 getServer().getMinecraftVersion(), fluechtig);
+        // Der Blockbuchzweig wird HIER gebaut und nicht in richteBlockbuchEin(): Jene
+        // Methode laeuft in onEnable, dieser Aufruf im Befehlsereignis danach - und die
+        // Werte, die der Zweig braucht, stehen im Feld blockbuchwerte. Ein Feld fuer den
+        // fertigen Zweig waere ein zweiter Ort, an dem er entstehen koennte.
         return new BundBefehle(sprache, stand,
                 wirtschaft, spielzeitBefehle.spielzeit(),
+                BlockBefehle.ueberBukkit(blockbuchablage, blockbuchwerte, wirtschaft,
+                        sprache, getLogger()).blockbuch(),
                 (empfaenger, wer) -> zeigeWelt(empfaenger),
                 (empfaenger, wer) -> zeigeVorgenerierung(empfaenger),
                 this::neulade,
