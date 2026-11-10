@@ -127,6 +127,15 @@ final class Mietbuch {
     private final Wirtschaftsstand wirtschaft;
     private final Ladenverzeichnis verzeichnis;
     private final Mietablage ablage;
+
+    /**
+     * Dieselbe Naht wie beim taeglichen Lauf, denn es ist dieselbe Truhe.
+     *
+     * <p>Eine zweite Schnittstelle fuer "in die Ladentruhe sehen" waere ein zweiter Weg
+     * zur selben Kiste, und einer von beiden wuerde eines Tages anders mit einer nicht
+     * geladenen Welt umgehen.
+     */
+    private final Mietlauf.Truhe truhe;
     private final Kasse kasse;
     private final Clock uhr;
     private final Logger protokoll;
@@ -138,13 +147,55 @@ final class Mietbuch {
      *                    gelesen und danach unveraenderlich
      */
     Mietbuch(Wirtschaftsstand wirtschaft, Ladenverzeichnis verzeichnis,
-             Mietablage ablage, Kasse kasse, Clock uhr, Logger protokoll) {
+             Mietablage ablage, Kasse kasse, Mietlauf.Truhe truhe, Clock uhr,
+             Logger protokoll) {
         this.wirtschaft = wirtschaft;
         this.verzeichnis = verzeichnis;
         this.ablage = ablage;
         this.kasse = kasse;
+        this.truhe = truhe;
         this.uhr = uhr;
         this.protokoll = protokoll;
+    }
+
+    /**
+     * Leert die Truhe der frisch vermieteten Einheit - das letzte Duplikationsfenster.
+     *
+     * <p><b>Was hier liegen kann, ist eine KOPIE.</b> Die Raeumung eines abgelaufenen
+     * Ladens geht in dieser Reihenfolge: Truhe lesen, Inhalt ins Abholfach legen, Vertrag
+     * loeschen, Truhe leeren. Stuerzt der Server zwischen den letzten zwei Schritten ab,
+     * ist die Einheit frei und die Ware liegt noch in der Kiste - dieselbe Ware, die
+     * schon im Abholfach des Vorgaengers liegt. Ohne diese Zeilen erbte der naechste
+     * Mieter sie ein zweites Mal.
+     *
+     * <p><b>Gelesen wird vorher, und das ist nicht Vorsicht:</b> Eine leere Truhe ist der
+     * Normalfall und bekommt keine Zeile. Eine volle bekommt eine Warnung mit Einheit und
+     * Zahl - eine Kopie, die so still verschwindet, wie sie entstanden ist, waere ein
+     * Vorgang, den niemand nachweisen kann.
+     *
+     * <p><b>NACH dem Vertrag und in einem eigenen Fang.</b> Der Mieter hat bezahlt; eine
+     * Truhe, die sich nicht leeren laesst (Welt nicht geladen, keine Kiste mehr an der
+     * Stelle), darf ihm den Laden nicht wieder wegnehmen. Umgekehrt waere das Leeren vor
+     * dem Vertrag ein Griff in eine Kiste, die noch keinem gehoert.
+     */
+    private void leereAlteWare(String einheit) {
+        try {
+            int stapel = truhe.lese(einheit).size();
+            if (stapel < 1) {
+                return;
+            }
+            protokoll.warning("Die Truhe von \"" + einheit + "\" war beim Vermieten"
+                    + " nicht leer: " + stapel + " Stapel. Das ist der Rest einer"
+                    + " Raeumung, die zwischen Vertrag und Truhe abgebrochen ist - die"
+                    + " Ware liegt im Abholfach des Vorgaengers, hier lag eine Kopie."
+                    + " Sie ist entfernt worden.");
+            truhe.leere(einheit);
+        } catch (RuntimeException fehler) {
+            protokoll.log(Level.SEVERE, "Die Truhe von \"" + einheit + "\" liess sich"
+                    + " beim Vermieten nicht leeren. Steht noch etwas darin, gehoert es"
+                    + " dem Vorgaenger und liegt in dessen Abholfach - von Hand zu"
+                    + " leeren, sonst bekommt der neue Mieter eine Kopie.", fehler);
+        }
     }
 
     /**
@@ -232,6 +283,7 @@ final class Mietbuch {
                     Mietregel.laeuftBisAb(heute, werte.dauerTage()), werte.miete(),
                     werte.kaution());
             ablage.schreibe(vertrag);
+            leereAlteWare(einheit);
             return new Abschluss(Bescheid.GEMIETET, vertrag, kosten, lizenzFaellig,
                     kasse.guthaben(wer));
         } catch (RuntimeException fehler) {

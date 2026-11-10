@@ -929,8 +929,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Das Mietbuch hier und nicht in richteAblageEin: Es braucht das
         // Ladenverzeichnis aus der config.yml UND die Ablage, und die entstehen in zwei
         // verschiedenen Schritten des Starts.
-        mietbuch = new Mietbuch(wirtschaft, ladenverzeichnis, mietablage, kasse, uhr,
-                getLogger());
+        // EINE Ladenware fuer beide: Das Mietbuch leert die Truhe beim Vermieten, der
+        // taegliche Lauf raeumt sie beim Ablaufen. Zwei Exemplare waeren zwei Zugaenge
+        // zur selben Kiste - und eines Tages behandelt eines davon eine nicht geladene
+        // Welt anders als das andere.
+        Ladenware ladenware = new Ladenware(getServer(), ladenverzeichnis,
+                weltschluessel(ladenwelt), getLogger());
+        mietbuch = new Mietbuch(wirtschaft, ladenverzeichnis, mietablage, kasse,
+                ladenware, uhr, getLogger());
         // Das Abholbuch und der taegliche Lauf [Teil C]. Beide HIER und nicht in
         // richteAblageEin: Sie brauchen das Ladenverzeichnis aus der config.yml, die
         // Ablagen und - beim Lauf - den Zugang zur Welt, und das sind drei verschiedene
@@ -941,9 +947,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Einstellungen daneben waeren eine Welt, in der gemietet, und eine andere, in
         // der geraeumt wird.
         Mietlauf mietlauf = new Mietlauf(wirtschaft, mietablage, abholablage, kasse,
-                new Ladenware(getServer(), ladenverzeichnis,
-                        weltschluessel(ladenwelt), getLogger()),
-                uhr, getLogger());
+                ladenware, uhr, getLogger());
         mietwache = new Mietwache(getServer(), mietlauf, mietbuch, abholbuch, wirtschaft,
                 sprache);
         getServer().getPluginManager().registerEvents(mietwache, this);

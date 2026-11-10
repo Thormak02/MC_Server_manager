@@ -117,11 +117,19 @@ class MietbuchTest {
     }
 
     private Mietbuch buch() {
-        return new Mietbuch(wirtschaft, verzeichnis, ablage, kasse, uhr, protokoll);
+        return new Mietbuch(wirtschaft, verzeichnis, ablage, kasse,
+                new Probentruhe(), uhr, protokoll);
+    }
+
+    /** Dasselbe Buch mit einer Truhe, die die Probe in der Hand hat. */
+    private Mietbuch buch(Mietlauf.Truhe truhe) {
+        return new Mietbuch(wirtschaft, verzeichnis, ablage, kasse, truhe, uhr,
+                protokoll);
     }
 
     private Mietbuch buch(Mietablage andere) {
-        return new Mietbuch(wirtschaft, verzeichnis, andere, kasse, uhr, protokoll);
+        return new Mietbuch(wirtschaft, verzeichnis, andere, kasse,
+                new Probentruhe(), uhr, protokoll);
     }
 
     private void stelleWerte(Mietwerte werte) {
@@ -144,6 +152,77 @@ class MietbuchTest {
     }
 
     // ------------------------------------------------------------------- mieten
+
+    @Test
+    @DisplayName("Beim VERMIETEN wird die Truhe geleert - sonst erbt der Neue eine Kopie")
+    void vermietenLeertDieTruhe() {
+        // DAS LETZTE DUPLIKATIONSFENSTER. Die Raeumung legt die Ware ins Abholfach,
+        // loescht den Vertrag und leert dann die Truhe. Bricht sie zwischen den letzten
+        // zwei Schritten ab, liegt die Ware zweimal da - im Fach des Vorgaengers und in
+        // der Kiste. Der naechste Mieter faende sie vor.
+        Probentruhe truhe = new Probentruhe();
+        truhe.lege("halle-1", "64 x Stein", "12 x Eisenbarren");
+        Mietbuch buch = buch(truhe);
+
+        var abschluss = buch.mieten(ANNA, "halle-1");
+
+        assertEquals(Mietbuch.Bescheid.GEMIETET, abschluss.bescheid());
+        assertEquals(List.of(), truhe.inhalt("halle-1"), "die Kopie ist weg");
+        assertEquals(List.of("lese halle-1", "leere halle-1"), truhe.griffe(),
+                "GELESEN wird vor dem Leeren - sonst verschwindet die Kopie so still,"
+                        + " wie sie entstanden ist");
+        assertTrue(protokollNennt(Level.WARNING, "2 Stapel"),
+                protokollzeilen.toString());
+    }
+
+    @Test
+    @DisplayName("Eine LEERE Truhe wird nicht angefasst und nicht gemeldet")
+    void leereTruheSchweigt() {
+        // Der Normalfall, und er darf keine Zeile kosten: Jede Vermietung schriebe sonst
+        // eine Warnung ueber nichts, und die Zeilen, die etwas sagen, gingen darin unter.
+        Probentruhe truhe = new Probentruhe();
+
+        assertEquals(Mietbuch.Bescheid.GEMIETET,
+                buch(truhe).mieten(ANNA, "halle-1").bescheid());
+        assertEquals(List.of("lese halle-1"), truhe.griffe(),
+                "gelesen ja, geleert nein - es war nichts zu leeren");
+        assertEquals(List.of(), protokollzeilen, protokollzeilen.toString());
+    }
+
+    @Test
+    @DisplayName("Eine Truhe, die WIRFT, nimmt dem Mieter den Laden nicht wieder weg")
+    void werfendeTruheHaeltDenVertrag() {
+        // Die Welt ist nicht geladen, oder an der Stelle steht keine Kiste mehr. Der
+        // Mieter hat bezahlt - ein Rueckgaengig waere der schlimmste Ausgang: Geld weg,
+        // Laden weg, und als Grund eine Kiste, die ihn nichts angeht.
+        var abschluss = buch(new Probentruhe().wirftBeiJedemGriff())
+                .mieten(ANNA, "halle-1");
+
+        assertEquals(Mietbuch.Bescheid.GEMIETET, abschluss.bescheid(),
+                "der Vertrag steht");
+        assertNotNull(ablage.fuerMieter(ANNA), "und er steht auch in der Ablage");
+        assertTrue(protokollNennt(Level.SEVERE, "von Hand zu"),
+                protokollzeilen.toString());
+    }
+
+    @Test
+    @DisplayName("Scheitert das Vermieten, bleibt die Truhe UNANGETASTET")
+    void gescheitertesVermietenLaesstDieTruhe() {
+        // DIE REIHENFOLGE IST DIE ZUSAGE: erst der Vertrag, dann die Truhe. Andersherum
+        // waere die Kopie geloescht, obwohl die Einheit frei bleibt - und der Vorgaenger
+        // haette nichts mehr in der Hand, falls sein Abholfach sie doch nicht trug.
+        Probentruhe truhe = new Probentruhe();
+        truhe.lege("halle-1", "64 x Stein");
+        Mietbuch buch = new Mietbuch(wirtschaft, verzeichnis,
+                new NichtSchreibbar(ablage), kasse, truhe, uhr, protokoll);
+
+        var abschluss = buch.mieten(ANNA, "halle-1");
+
+        assertEquals(Mietbuch.Bescheid.GESTOERT, abschluss.bescheid());
+        assertEquals(List.of(), truhe.griffe(), "die Truhe wird gar nicht gefragt");
+        assertEquals(List.of("64 x Stein"), truhe.inhalt("halle-1"),
+                "und nichts geleert");
+    }
 
     @Test
     @DisplayName("Der erste Laden kostet Kaution UND Lizenz")
@@ -289,7 +368,8 @@ class MietbuchTest {
         // scheitert, haette ihm 50.000 Mark fuer nichts genommen.
         SpeicherKasse arm = new SpeicherKasse(54_999L, uhr);
         arm.eroeffne(ANNA);
-        Mietbuch buch = new Mietbuch(wirtschaft, verzeichnis, ablage, arm, uhr, protokoll);
+        Mietbuch buch = new Mietbuch(wirtschaft, verzeichnis, ablage, arm,
+                new Probentruhe(), uhr, protokoll);
 
         Mietbuch.Abschluss abschluss = buch.mieten(ANNA, "halle-1");
 
@@ -306,7 +386,7 @@ class MietbuchTest {
     void genauGenug() {
         SpeicherKasse knapp = new SpeicherKasse(55_000L, uhr);
         knapp.eroeffne(ANNA);
-        Mietbuch buch = new Mietbuch(wirtschaft, verzeichnis, ablage, knapp, uhr,
+        Mietbuch buch = new Mietbuch(wirtschaft, verzeichnis, ablage, knapp, new Probentruhe(), uhr,
                 protokoll);
 
         assertEquals(Mietbuch.Bescheid.GEMIETET, buch.mieten(ANNA, "halle-1").bescheid());
@@ -552,7 +632,7 @@ class MietbuchTest {
         ablage.schreibe(new Mietvertrag("halle-1", ANNA, TAG, TAG.plusDays(29), 500L,
                 5_000L));
         Mietbuch buch = new Mietbuch(wirtschaft, verzeichnis, ablage,
-                new StolperndeKasse(kasse), uhr, protokoll);
+                new StolperndeKasse(kasse), new Probentruhe(), uhr, protokoll);
 
         Mietbuch.Kuendigung ergebnis = buch.kuendigen(ANNA);
 

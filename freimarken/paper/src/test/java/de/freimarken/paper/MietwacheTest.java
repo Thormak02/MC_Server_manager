@@ -238,7 +238,7 @@ class MietwacheTest {
                         6)));
         Mietlauf lauf = new Mietlauf(wirtschaft, ablage, fach, welche, new LeereTruhe(),
                 UHR, protokoll);
-        Mietbuch buch = new Mietbuch(wirtschaft, verzeichnis, ablage, welche, UHR,
+        Mietbuch buch = new Mietbuch(wirtschaft, verzeichnis, ablage, welche, new Probentruhe(), UHR,
                 protokoll);
         Abholbuch abholbuch = new Abholbuch(fach, UHR, protokoll);
         return new Mietwache(Bukkit.getServer(), lauf, buch, abholbuch, wirtschaft,

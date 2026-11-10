@@ -112,7 +112,7 @@ class LadenBefehlTest {
     }
 
     private Befehlsprobe probe(Ladenverzeichnis verzeichnis, Wirtschaftsstand stand) {
-        Mietbuch mietbuch = new Mietbuch(stand, verzeichnis, ablage, kasse, UHR,
+        Mietbuch mietbuch = new Mietbuch(stand, verzeichnis, ablage, kasse, new Probentruhe(), UHR,
                 protokoll);
         var befehle = new LadenBefehle(verzeichnis, mietbuch, abholbuch(),
                 Sprachprobe.spracheAusDemJar(), ALTFURT,
@@ -447,7 +447,7 @@ class LadenBefehlTest {
     void pflichtenGelten() {
         Wirtschaftsstand stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
         Ladenverzeichnis leer = Ladenverzeichnis.ohneEinheiten();
-        Mietbuch mietbuch = new Mietbuch(stand, leer, ablage, kasse, UHR, protokoll);
+        Mietbuch mietbuch = new Mietbuch(stand, leer, ablage, kasse, new Probentruhe(), UHR, protokoll);
         var sprache = Sprachprobe.spracheAusDemJar();
 
         assertThrows(IllegalArgumentException.class, () -> new LadenBefehle(leer,

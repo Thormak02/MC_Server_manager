@@ -598,52 +598,6 @@ class MietlaufTest {
         return eigener;
     }
 
-    /** Eine Ladentruhe im Arbeitsspeicher, die mitschreibt, wann sie gerufen wurde. */
-    private static final class Probentruhe implements Mietlauf.Truhe {
-
-        private final java.util.Map<String, List<String>> inhalte =
-                new java.util.LinkedHashMap<>();
-        private java.util.function.BooleanSupplier vertragDa;
-        private List<String> beobachtet;
-
-        void lege(String einheit, String... beschriftungen) {
-            inhalte.put(einheit, new ArrayList<>(List.of(beschriftungen)));
-        }
-
-        List<String> inhalt(String einheit) {
-            return inhalte.getOrDefault(einheit, List.of());
-        }
-
-        /** Von jetzt an wird jeder Griff samt Vertragslage aufgeschrieben. */
-        void merkeVertragslage(java.util.function.BooleanSupplier lage,
-                List<String> hinein) {
-            this.vertragDa = lage;
-            this.beobachtet = hinein;
-        }
-
-        @Override
-        public List<Abholgut> lese(String einheit) {
-            notiere("lese");
-            List<Abholgut> gut = new ArrayList<>();
-            for (String name : inhalt(einheit)) {
-                gut.add(new Abholgut(name, "inhalt-von-" + name));
-            }
-            return gut;
-        }
-
-        @Override
-        public void leere(String einheit) {
-            notiere("leere");
-            inhalte.remove(einheit);
-        }
-
-        private void notiere(String was) {
-            if (beobachtet != null) {
-                beobachtet.add(was + ", Vertrag da: " + vertragDa.getAsBoolean());
-            }
-        }
-    }
-
     /** Ein Fach, in das nichts hineingeht - fuer den Abbruch der Raeumung. */
     private static final class NichtEinlegbar implements Abholablage {
         @Override
