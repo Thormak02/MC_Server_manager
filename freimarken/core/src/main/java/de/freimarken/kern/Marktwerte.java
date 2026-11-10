@@ -1,37 +1,53 @@
 package de.freimarken.kern;
 
-import java.util.List;
-
 /**
- * Die Zahlen des Bundesmarktes - der Tagesdeckel und das Sortiment.
+ * Die Zahlen des Bundesmarktes - der Tagesdeckel.
  *
- * <p>Dieselbe Bauart wie {@link Verdienstwerte}: ein Satz, eine Vorgabe im PROGRAMM fuer
- * die Zahlen und KEINE fuer die Tabelle, und zu jeder Zahl eine Frage, die der Leser
- * stellen kann, ohne zu werfen.
+ * <p>Dieselbe Bauart wie {@link Verdienstwerte}: ein Satz, eine Vorgabe im PROGRAMM, und
+ * zu jeder Zahl eine Frage, die der Leser stellen kann, ohne zu werfen.
  *
- * <p><b>Der Bundesmarkt ist die zweite gedeckelte Quelle</b> (Plan 8.2: "Verkauf an den
- * Bundesmarkt - kleines Sortiment, niedrige Preise"). Er ist mit Absicht KEINE zweite
- * Arbeit, sondern die Verwertung des Erarbeiteten: Wer nur verkauft, soll nicht so viel
- * bekommen wie wer arbeitet.
+ * <p><b>Das SORTIMENT stand bis zum 10.11.2026 hier</b>, als Tafel {@code Ankaufliste}
+ * aus {@code bundesmarkt.ankauf}: je Material ein Ankaufpreis in Pfennigen, und was dort
+ * nicht stand, kaufte der Bund nicht. Die Tafel ist weg, und das ist eine Entscheidung
+ * des Betreibers mit einem Satz, der sie ganz traegt: <b>"es kann ja nur ge- und verkauft
+ * werden, wofuer es ein Schild gibt"</b>.
  *
- * <p><b>Ein EIGENER Tagesdeckel und nicht derselbe wie beim Verdienen</b>, und das ist die
- * tragende Entscheidung: Mit einem gemeinsamen Deckel waere jede der zwei Quellen durch
- * die andere zu verschliessen - wer vormittags am Markt verkauft, koennte nachmittags
- * nicht mehr arbeiten. Beide rechnen ueber {@link Deckelregel} und beide zaehlen aus dem
- * Buchungsbuch, jede nach ihrem eigenen {@link Buchungsgrund}.
+ * <p>Damit ist das SCHILD das Tor und nicht die Datei. Ein Ankaufstand des Bundes ist seit
+ * diesem Tag ein gewoehnlicher {@link Kistenshop} ohne Besitzer: Der Preis steht in seiner
+ * Zeile, wie bei jedem anderen Laden, und wer einen Gegenstand ankaufen will, stellt ein
+ * Schild dafuer hin. Eine zweite Liste daneben waere ein Tor hinter einem Tor - und sie
+ * verbot dem Betreiber genau das, was er wollte: alles freizugeben.
+ *
+ * <p>Was damit WEGFAELLT, steht hier, weil es sonst niemand mehr findet: die Pfennige als
+ * Einheit (ein Schildpreis ist immer eine ganze Mark), die Pruefung, dass Menge mal Preis
+ * glatt aufgeht, die Absage "das kauft der Bund nicht", und die Regel, dass ein Bundschild
+ * nur eine Richtung tragen darf. Jene Regel war der Riegel gegen einen Rundlauf zwischen
+ * Tafelpreis und Schildpreis; ohne Tafel haelt {@link Kistenshop} beide Preise selbst
+ * ("der Verkaufspreis darf nie ueber dem Kaufpreis liegen"), und der Rundlauf ist damit
+ * unmoeglich.
  *
  * @param tagesdeckel wie viele Mark ein Spieler an einem Tag hoechstens aus VERKAEUFEN an
- *                    den Bund bekommt. Je Spieler, wie beim Verdienen
- * @param ankauf      was der Bund kauft und zu welchem Preis. Die TABELLE gehoert in
- *                    denselben Satz wie die Zahl, nicht daneben: Ein Neuladen tauscht
- *                    beides als EIN Stueck
+ *                    den Bund bekommt - je Spieler, wie beim Verdienen. <b>0 heisst: kein
+ *                    Deckel</b> [entschieden 10.11.2026]
  */
-public record Marktwerte(long tagesdeckel, Ankaufliste ankauf) {
+public record Marktwerte(long tagesdeckel) {
 
     public static final String PFAD_TAGESDECKEL = "bundesmarkt.tagesdeckel";
 
-    /** Der Abschnitt mit dem Sortiment - je Material ein Preis in Pfennigen. */
-    public static final String PFAD_ANKAUF = "bundesmarkt.ankauf";
+    /**
+     * Die Zahl, die KEIN Deckel bedeutet.
+     *
+     * <p><b>Eine 0 und kein {@code true}/{@code false}</b> - dieselbe Hausregel wie bei
+     * {@code handel.zeilen-je-seite}: Das Projekt kennt kein {@code getBoolean}, denn
+     * Bukkit liest jedes Wort ausser {@code true} stumm als {@code false}.
+     *
+     * <p><b>Bis zum 10.11.2026 war die 0 verboten</b>, mit der Begruendung "eine 0 hiesse,
+     * niemand kann verkaufen - wer den Ankauf abschalten will, laesst die Liste leer".
+     * Die Liste gibt es nicht mehr, und damit ist die 0 frei fuer die Bedeutung, die der
+     * Betreiber braucht: ER entscheidet, ob es einen Deckel gibt, und nicht das Programm.
+     * Abgeschaltet wird der Ankauf jetzt dadurch, dass kein Schild dafuer steht.
+     */
+    public static final long KEIN_DECKEL = 0L;
 
     /**
      * 5.000 Mark am Tag - ein Viertel des Verdienstdeckels.
@@ -50,42 +66,35 @@ public record Marktwerte(long tagesdeckel, Ankaufliste ankauf) {
     /** Derselbe Hoechstwert wie beim Verdienstdeckel - dieselbe Rechnung dahinter. */
     public static final long HOECHSTER_TAGESDECKEL = Verdienstwerte.HOECHSTER_TAGESDECKEL;
 
-    /**
-     * Die Vorgabe traegt eine LEERE Ankaufliste - und das ist Absicht.
-     *
-     * <p>Dieselbe Entscheidung wie bei der Lohnliste und mit demselben Grund: Eine
-     * Tabelle im Programm waere eine zweite Abschrift der ausgelieferten Datei, und zwei
-     * Abschriften laufen auseinander. Fehlt die Liste, kauft der Bund nichts - das ist die
-     * sichere Richtung, denn ein geratener Ankaufpreis macht Geld, das keine
-     * Ruecksicherung zurueckholt.
-     */
-    public static final Marktwerte VORGABE = new Marktwerte(VORGABE_TAGESDECKEL,
-            Ankaufliste.ausAnkaeufen(List.of()));
+    public static final Marktwerte VORGABE = new Marktwerte(VORGABE_TAGESDECKEL);
 
     public Marktwerte {
-        if (ankauf == null) {
-            throw new IllegalArgumentException("Ohne Ankaufliste gibt es keinen Markt;"
-                    + " eine leere Liste ist erlaubt und heisst: der Bund kauft nichts");
-        }
         if (!brauchbarerDeckel(tagesdeckel)) {
             throw new IllegalArgumentException("Der Markt-Tagesdeckel ist " + tagesdeckel
-                    + " und liegt nicht zwischen 1 und " + HOECHSTER_TAGESDECKEL
-                    + ". Eine 0 hiesse, niemand kann verkaufen - wer den Ankauf"
-                    + " abschalten will, laesst die Liste leer.");
+                    + " und liegt nicht zwischen " + KEIN_DECKEL + " und "
+                    + HOECHSTER_TAGESDECKEL + ". Eine " + KEIN_DECKEL + " heisst: kein"
+                    + " Deckel; abgeschaltet wird der Ankauf dadurch, dass kein Schild"
+                    + " dafuer steht.");
         }
+    }
+
+    /**
+     * Ob ueberhaupt ein Deckel gilt.
+     *
+     * <p>Eine benannte Frage und kein {@code > 0} an den Stellen, die sie brauchen: Die
+     * Bedeutung der 0 steht damit an EINER Stelle. Drei Vergleiche daneben liefen
+     * auseinander, und dann deckelt der Handel, was die Auskunft fuer unbegrenzt erklaert.
+     */
+    public boolean gedeckelt() {
+        return tagesdeckel > KEIN_DECKEL;
     }
 
     /** Dieselben Werte mit anderem Deckel - fuer die Proben und den Leser. */
     public Marktwerte mitDeckel(long anderer) {
-        return new Marktwerte(anderer, ankauf);
-    }
-
-    /** Dieselben Werte mit einer anderen Ankaufliste. */
-    public Marktwerte mitAnkauf(Ankaufliste andere) {
-        return new Marktwerte(tagesdeckel, andere);
+        return new Marktwerte(anderer);
     }
 
     public static boolean brauchbarerDeckel(long mark) {
-        return mark >= 1L && mark <= HOECHSTER_TAGESDECKEL;
+        return mark >= KEIN_DECKEL && mark <= HOECHSTER_TAGESDECKEL;
     }
 }

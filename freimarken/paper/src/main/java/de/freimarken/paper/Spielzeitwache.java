@@ -97,6 +97,21 @@ final class Spielzeitwache implements Listener {
      */
     private final Blockraeumung blockraeumung;
 
+    /**
+     * Der vierte Mitfahrer: das taegliche Leeren der Freien Truhe.
+     *
+     * <p>EINMAL je Taktschlag, wie die Ladenmiete und das Aufraeumen, und aus demselben
+     * Grund: Geleert wird eine Kiste, nicht ein Spieler.
+     *
+     * <p><b>Darf ebenfalls {@code null} sein</b>, aus demselben Grund wie die
+     * {@link Blockraeumung}: Ohne Ablage gibt es keinen Tagesstand und nichts zu raeumen.
+     *
+     * <p>Hier und nicht an der {@link Truhenwache}: Jene wird ohne eingetragene Stelle
+     * GAR NICHT angemeldet. Wer die letzte Stelle aus der {@code config.yml} nimmt, will
+     * seine alten Tageszeilen trotzdem nicht fuer immer behalten.
+     */
+    private final Truhenlauf truhenlauf;
+
     private final Wirtschaftsstand wirtschaft;
     private final Logger protokoll;
 
@@ -105,12 +120,13 @@ final class Spielzeitwache implements Listener {
 
     Spielzeitwache(JavaPlugin plugin, Spielzeitbuch buch, Bonuswache bonuswache,
                    Mietwache mietwache, Blockraeumung blockraeumung,
-                   Wirtschaftsstand wirtschaft, Logger protokoll) {
+                   Truhenlauf truhenlauf, Wirtschaftsstand wirtschaft, Logger protokoll) {
         this.plugin = plugin;
         this.buch = buch;
         this.bonuswache = bonuswache;
         this.mietwache = mietwache;
         this.blockraeumung = blockraeumung;
+        this.truhenlauf = truhenlauf;
         this.wirtschaft = wirtschaft;
         this.protokoll = protokoll;
     }
@@ -275,6 +291,13 @@ final class Spielzeitwache implements Listener {
             // Ohne Ablage gibt es kein Blockbuch und nichts zu raeumen.
             if (blockraeumung != null) {
                 blockraeumung.imTakt();
+            }
+            // Und die Freie Truhe, ganz am Ende: Sie leert eine Kiste und loescht
+            // Tageszeilen, und beides holt der naechste Takt nach. In DEMSELBEN try,
+            // aus demselben Grund wie die drei davor - Truhenlauf faengt seine Fehler
+            // selbst, dies ist die zweite Schranke.
+            if (truhenlauf != null) {
+                truhenlauf.imTakt();
             }
         } catch (Throwable fehler) {
             protokoll.log(Level.SEVERE, "Der Spielzeittakt ist in einen Fehler gelaufen."

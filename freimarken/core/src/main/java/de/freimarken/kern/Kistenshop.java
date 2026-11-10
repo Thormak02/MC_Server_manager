@@ -79,13 +79,21 @@ public record Kistenshop(String schildWelt, int schildX, int schildY, int schild
     public static final int GROESSTE_MENGE = 54 * 64;
 
     /**
-     * Der hoechste Preis - dieselbe Obergrenze wie bei allen Geldzahlen des Projekts.
+     * Der hoechste Preis - hunderttausend Mark je Handel.
      *
      * <p>Die Zahl ist die Schranke gegen den Vertipper, nicht gegen den Reichen: Ein
      * Preis von einer Milliarde ist in einer Wirtschaft mit 5.000 Mark Tagesdeckel kein
      * Angebot, sondern ein verrutschtes Komma.
+     *
+     * <p><b>Sie stand bis zum 10.11.2026 in {@code Verkaufsregel}</b>, der Rechnung des
+     * alten Befehls {@code /markt verkaufen} - mit einer Begruendung, die dort gerechnet
+     * war: Ein Angebot kann die ganze Last eines Inventars sein, und Anzahl mal Preis
+     * muss in einen {@code long} passen, ohne ueberzulaufen; ein uebergelaufener Betrag
+     * ist NEGATIV, und ein negativer Betrag auf dem Weg einer Einnahme ist eine
+     * Abbuchung. Jene Klasse ist mit ihrem Befehl gefallen, die Rechnung gilt weiter -
+     * hier haelt sie {@code Shopregel.rechne} mit {@code Math.multiplyExact}.
      */
-    public static final long HOECHSTER_PREIS = Verkaufsregel.HOECHSTER_PREIS;
+    public static final long HOECHSTER_PREIS = 10_000_000L;
 
     public Kistenshop {
         if (schildWelt == null || schildWelt.isBlank()) {

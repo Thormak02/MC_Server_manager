@@ -5,9 +5,7 @@ import de.freimarken.kern.Bundankauf;
 import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Kistenshop;
-import de.freimarken.kern.Marktwerte;
 import de.freimarken.kern.Shopregel;
-import de.freimarken.kern.Warenprobe;
 import de.freimarken.kern.Wirtschaftsstand;
 import java.time.Clock;
 import java.util.UUID;
@@ -69,24 +67,30 @@ import java.util.logging.Logger;
  * <h2>Der ANKAUF DES BUNDES ist seit dem 10.11.2026 derselbe Weg</h2>
  *
  * <p>Ein Bundshop, an den ein Kunde verkauft, IST der Bundesmarkt - und damit faellt
- * {@code /markt verkaufen} weg (Plan 7.1, entschieden 08.11.2026). Drei Dinge sind an
- * diesem Stand anders, und alle drei stehen in {@link Bundankauf} begruendet:
+ * {@code /markt verkaufen} weg (Plan 7.1, entschieden 08.11.2026). ZWEI Dinge sind an
+ * diesem Stand anders, und beide stehen in {@link Bundankauf} begruendet:
  *
  * <ul>
- *   <li><b>Der Preis kommt aus {@code bundesmarkt.ankauf}</b> und nicht aus der
- *       Shopzeile. Nur so wirkt eine Preisaenderung an jedem Stand, ohne dass einer neu
- *       beschrieben wird - die Zusage des Plans. Nennt das Schild eine andere Zahl,
- *       wird zur Zahl der TAFEL gehandelt und das Protokoll sagt es.</li>
  *   <li><b>Der Tagesdeckel des Bundesmarkts gilt</b>, gezaehlt aus dem Buchungsbuch
  *       ({@link Markttag}). Das schliesst die benannte Luecke aus Plan 7.4: Ein Bundshop
- *       mit Verkaufspreis war eine Geldquelle ohne Deckel.</li>
+ *       mit Verkaufspreis war eine Geldquelle ohne Deckel. OB gedeckelt wird,
+ *       entscheidet der Betreiber - {@code bundesmarkt.tagesdeckel: 0} heisst
+ *       nein.</li>
  *   <li><b>Gebucht wird {@link Buchungsgrund#BUNDESMARKT_VERKAUF}</b> und nicht
  *       {@code SHOP_VERKAUFT} - sonst zaehlt der Deckel seine eigenen Zeilen nicht
  *       mit, und er waere nach dem ersten Stand wieder offen.</li>
  * </ul>
  *
- * <p>Die andere Richtung - ein Kunde KAUFT am Bundshop - bleibt unberuehrt: Sie ist eine
- * Senke, braucht keinen Deckel, und was der Bund verkauft, steht in keiner Tafel.
+ * <p><b>Ein DRITTES stand hier einen halben Tag lang und ist wieder gegangen:</b> Der
+ * Preis kam aus einer Tafel {@code bundesmarkt.ankauf}, und was dort nicht stand, kaufte
+ * der Bund nicht. Die Tafel ist gefallen [entschieden 10.11.2026], weil sie ein zweites
+ * Tor war: "es kann ja nur ge- und verkauft werden, wofuer es ein Schild gibt." Der Preis
+ * steht damit wieder in der Shopzeile, wie bei jedem anderen Laden - und mit der Tafel
+ * sind die Absagen "das kauft der Bund nicht", "die Menge geht nicht glatt auf" und "ein
+ * Bundschild traegt eine Richtung" gegangen.
+ *
+ * <p>Die andere Richtung - ein Kunde KAUFT am Bundshop - war schon vorher unberuehrt:
+ * Sie ist eine Senke und braucht keinen Deckel.
  *
  * <p><b>Der STAND und kein Schnappschuss</b> [Fund vom 10.11.2026]. Diese Klasse hielt
  * bis dahin ein {@code Shopwerte} als Feld, also die Zahlen des Starts. Ein
@@ -136,33 +140,14 @@ final class Shophandel {
          * die Ware aus {@code bundesmarkt.ankauf} genommen wurde - mit der anderen
          * Maustaste wird es nicht besser.
          */
-        BUND_KAUFT_NICHT,
-        /**
-         * Ein Schild des Bundes mit BEIDEN Preisen - es kauft nicht an.
-         *
-         * <p><b>Der Riegel gegen eine Gelddruckmaschine aus einem ALTEN Schild.</b> Beim
-         * Anlegen ist der Fall seit dem 10.11.2026 abgewiesen
-         * ({@code Shopbuch.Bescheid.BUND_ZWEI_RICHTUNGEN}), aber ein Schild, das vorher
-         * entstanden ist, traegt beides weiter. Der Ankaufpreis kommt jetzt aus
-         * {@code bundesmarkt.ankauf} - steigt er ueber den Kaufpreis auf dem Schild,
-         * kauft man an demselben Stand billig und verkauft teurer zurueck, beliebig oft.
-         *
-         * <p>Die Schranke des Satzes {@link Kistenshop} hilft hier NICHT: Sie gilt beim
-         * Bauen der Zeile, und damals stimmte sie. Darum wird vor jedem Ankauf gefragt.
-         */
-        BUND_ZWEI_RICHTUNGEN,
-        /** Der Tagesdeckel des Bundesmarkts ist erreicht - morgen wieder. */
         BUND_DECKEL,
-        /**
-         * Die Menge dieses Standes ergibt keinen ganzen Mark-Betrag mehr.
-         *
-         * <p>Erreichbar nur NACH einer Preisaenderung: Beim Anlegen wird genau das
-         * geprueft ({@code Shopbuch.anlege}). Wird {@code bundesmarkt.ankauf} spaeter
-         * geaendert, kann die Rechnung an einem bestehenden Stand aufhoeren
-         * aufzugehen - und dann verschwaende jeder Handel denselben Pfennigrest
-         * ({@link Bundankauf}). Lieber kein Handel und eine Zeile im Protokoll.
-         */
-        BUND_UNEBEN,
+        // DREI WEITERE BESCHEIDE STANDEN HIER einen halben Tag lang:
+        // BUND_KAUFT_NICHT, BUND_ZWEI_RICHTUNGEN und BUND_UNEBEN. Sie gehoerten zur
+        // Tafel bundesmarkt.ankauf, und die ist am 10.11.2026 gefallen - der Preis steht
+        // auf dem Schild. Ein Stand kann damit nicht mehr "aus dem Sortiment genommen"
+        // werden, seine Menge geht immer glatt auf (ein Schildpreis IST eine ganze
+        // Mark), und ein Rundlauf ist unmoeglich, weil der Satz Kistenshop beide Preise
+        // selbst haelt.
         /** Etwas ist schiefgegangen. Steht im Protokoll. */
         GESTOERT
     }
@@ -273,25 +258,6 @@ final class Shophandel {
          * Sneak-Klick an einem Spitzhacken-Shop vierundsechzig Stufen.
          */
         int stapelgroesse(Kistenshop shop);
-
-        /**
-         * Das MATERIAL dieser Ware, kleingeschrieben - oder {@code null}.
-         *
-         * <p>Gebraucht fuer den Ankauf des Bundes: {@code bundesmarkt.ankauf} ist eine
-         * Tafel je MATERIAL, und was eine Warenprobe ist, weiss nur das Spiel.
-         *
-         * <p><b>Nicht aus {@code ware().name()} zu lesen</b>, und das ist keine
-         * Bequemlichkeit, sondern eine gemessene Falle: Jener Name ist GEKUERZT - aus
-         * {@code NETHERITE_PICKAXE} wird "PICKAXE", und ein besonderer Gegenstand
-         * bekommt ein Zeichen davor. Zwei Materialien koennen denselben Kurznamen
-         * haben, und {@code ShopwareTafel} haelt genau die Zusage, dass nirgends im
-         * Programm {@code ware().name()} verglichen wird.
-         *
-         * <p>{@code null} heisst: Die Probe ist nicht zu deuten. Das ist dieselbe Lage
-         * wie bei {@link #lesbar} - und wenn jene ja sagt und diese {@code null}
-         * gibt, widerspricht sich die Naht; dann wird nicht gehandelt.
-         */
-        String material(Warenprobe ware);
 
         /** Was auf dieser Seite liegt und hineinpasst - frisch gezaehlt. */
         Bestand bestand(Seite seite, UUID kunde, Kistenshop shop);
@@ -410,17 +376,10 @@ final class Shophandel {
         UUID zahler = art == Handelsart.KUNDE_KAUFT ? kunde : shop.besitzer();
         UUID empfaenger = art == Handelsart.KUNDE_KAUFT ? shop.besitzer() : kunde;
 
-        // DER ANKAUFSTAND DES BUNDES - die eine Stelle, an der der Preis nicht aus der
-        // Shopzeile kommt. Alles danach ist fuer beide Shoparten dasselbe.
+        // DER ANKAUFSTAND DES BUNDES - der einzige Unterschied ist der Tagesdeckel
+        // weiter unten. Der Preis kommt bei JEDEM Shop aus seiner Zeile.
         boolean bundankauf = Bundankauf.istAnkaufstand(shop, art);
         long stufenpreis = art.stufenpreis(shop);
-        if (bundankauf) {
-            Standpreis stand = standpreis(shop);
-            if (stand.mangel() != null) {
-                return absage(stand.mangel(), art, shop, stand.stufenpreis());
-            }
-            stufenpreis = stand.stufenpreis();
-        }
         // Der Bund hat unbegrenztes Geld - und hoechstens so viel, dass die Rechnung
         // nicht ueberlaeuft. Die Stapelgrenze deckelt die Stufen ohnehin.
         long guthaben = zahler == null ? Long.MAX_VALUE : kasse.guthaben(zahler);
@@ -441,8 +400,7 @@ final class Shophandel {
             // UND JETZT DER DECKEL. Er steht NACH der Stufenrechnung, weil er deren
             // Ergebnis braucht: Der Wunsch ist, was dieser Klick sonst buchen wuerde,
             // und nur dann sieht der Deckel genau die Summe, die auf dem Konto landet.
-            int imDeckel = Bundankauf.stufenImDeckel(
-                    wirtschaft.werte().markt().tagesdeckel(),
+            int imDeckel = Bundankauf.stufenImDeckel(wirtschaft.werte().markt(),
                     Markttag.heuteSchon(kasse, wirtschaft, uhr, kunde), stufenpreis,
                     moeglich);
             if (imDeckel < 1) {
@@ -460,80 +418,6 @@ final class Shophandel {
         return vollziehe(kunde, shop, art, handel, gibt, nimmt, zahler, empfaenger,
                 bundankauf ? Buchungsgrund.BUNDESMARKT_VERKAUF
                         : Buchungsgrund.SHOP_VERKAUFT, stufenpreis);
-    }
-
-    /**
-     * Was ein Ankaufstand JETZT zahlt - oder warum er nicht handelt.
-     *
-     * @param stufenpreis bei Erfolg der Preis aus der Tafel, sonst 0
-     * @param mangel      bei Misserfolg der Bescheid, sonst {@code null}
-     */
-    private record Standpreis(long stufenpreis, Bescheid mangel) {
-    }
-
-    /**
-     * Holt den Ankaufpreis dieses Standes aus {@code bundesmarkt.ankauf}.
-     *
-     * <p><b>Die Tafel entscheidet und nicht das Schild</b> - siehe den Klassenkopf und
-     * {@link Bundankauf}. Weicht die Zahl auf dem Schild ab, wird sie NICHT genommen,
-     * sondern gemeldet: Gehandelt wird zur Tafel, und das Protokoll nennt beide Zahlen
-     * samt Stelle, damit ein Betreiber weiss, welches Schild neu zu beschreiben ist.
-     *
-     * <p>Das ist die Stelle, an der eine Preisaenderung wirkt, ohne dass ein Schild
-     * angefasst wird - und die Zusage des Plans ("beliebig anpassbar") steht damit an
-     * einer Stelle und nicht auf fuenfzig Schildern.
-     */
-    private Standpreis standpreis(Kistenshop shop) {
-        if (shop.verkauftWare()) {
-            // EIN ALTES SCHILD mit beiden Preisen - siehe Bescheid.BUND_ZWEI_RICHTUNGEN.
-            // Seit dem 10.11.2026 entsteht so eines nicht mehr; eines, das vorher stand,
-            // waere ein Rundlauf, sobald der Ankaufpreis ueber seinen Kaufpreis steigt.
-            protokoll.warning("Der Bundshop " + shop.schluessel() + " traegt BEIDE"
-                    + " Preise (Kauf " + shop.kaufpreis() + ", Ankauf "
-                    + shop.verkaufpreis() + "). Er kauft nicht an: Was der Bund ankauft,"
-                    + " steht in bundesmarkt.ankauf, und sobald diese Zahl ueber den"
-                    + " Kaufpreis steigt, waere der Stand ein Rundlauf. Zu teilen in"
-                    + " zwei Schilder - eines je Richtung.");
-            return new Standpreis(0L, Bescheid.BUND_ZWEI_RICHTUNGEN);
-        }
-        String material = waren.material(shop.ware());
-        if (material == null) {
-            // lesbar() hat gerade ja gesagt - dann widerspricht sich die Naht. Nicht
-            // handeln ist hier die sichere Richtung: Ohne Material gibt es keinen Preis,
-            // und ein geratener waere Geld aus nichts.
-            protokoll.warning("Der Ankaufstand " + shop.schluessel() + " haelt eine Ware,"
-                    + " deren Material nicht zu lesen ist, obwohl die Ware selbst lesbar"
-                    + " ist. Dieser Stand kauft nicht an, bis die Ware neu eingelegt"
-                    + " wird.");
-            return new Standpreis(0L, Bescheid.WARE_UNLESBAR);
-        }
-        Marktwerte markt = wirtschaft.werte().markt();
-        long pfennige = markt.ankauf().pfennige(material);
-        if (pfennige <= 0L) {
-            // Nicht (mehr) im Sortiment. Beim Anlegen war es da - sonst stuende der
-            // Stand nicht -, also hat jemand die Tafel geaendert. Kein Protokoll: Das
-            // ist eine Entscheidung des Betreibers und kein Fehler.
-            return new Standpreis(0L, Bescheid.BUND_KAUFT_NICHT);
-        }
-        if (!Bundankauf.gehtGlattAuf(pfennige, shop.menge())
-                || !Bundankauf.brauchbarerStufenpreis(pfennige, shop.menge())) {
-            protokoll.warning("Der Ankaufstand " + shop.schluessel() + " handelt "
-                    + shop.menge() + " Stueck, und bei " + pfennige + " Pfennigen je"
-                    + " Stueck ergibt das keinen brauchbaren ganzen Mark-Betrag. Dieser"
-                    + " Stand kauft nicht an, bis seine Menge ein Vielfaches von "
-                    + Bundankauf.kleinsteMenge(pfennige) + " ist.");
-            return new Standpreis(0L, Bescheid.BUND_UNEBEN);
-        }
-        long preis = Bundankauf.stufenpreis(pfennige, shop.menge());
-        if (preis != shop.verkaufpreis()) {
-            protokoll.warning("Der Ankaufstand " + shop.schluessel() + " nennt auf dem"
-                    + " Schild " + shop.verkaufpreis() + " Mark fuer " + shop.menge()
-                    + " Stueck, die Tafel bundesmarkt.ankauf ergibt " + preis + " Mark ("
-                    + pfennige + " Pfennige je Stueck). GEHANDELT WIRD ZUR TAFEL - das"
-                    + " Schild ist neu zu beschreiben, damit es nicht laenger eine"
-                    + " andere Zahl anzeigt.");
-        }
-        return new Standpreis(preis, null);
     }
 
     /**

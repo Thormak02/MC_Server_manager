@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Berufsangabe;
 import de.freimarken.kern.Berufsverzeichnis;
-import de.freimarken.kern.Ankaufliste;
 import de.freimarken.kern.Marktwerte;
 import de.freimarken.kern.Berufswerte;
 import de.freimarken.kern.Lohntafel;
@@ -414,14 +413,13 @@ class WirtschaftslisteTest {
             // zwei Abschriften laufen auseinander. Alles ANDERE muss uebereinstimmen,
             // sonst gilt bei einem Erststart etwas anderes als beim Rueckfall.
             Lohntafel ausDerDateiTafel = ergebnis.werte().verdienst().loehne();
-            // Auch die MARKTliste kommt aus der Datei und hat mit Absicht keinen
-            // Rueckfall im Programm - dieselbe Entscheidung wie bei der Lohnliste.
-            Ankaufliste ausDerDateiAnkauf = ergebnis.werte().markt().ankauf();
+            // Die MARKTliste stand hier bis zum 10.11.2026 mit: Auch sie kam aus der
+            // Datei und hatte mit Absicht keinen Rueckfall im Programm. Sie ist
+            // gefallen - der Bundesmarkt hat nur noch eine Zahl, und die hat eine
+            // Vorgabe wie jede andere.
             assertEquals(Wirtschaftswerte.VORGABE
                             .mitVerdienst(Verdienstwerte.VORGABE
-                                    .mitLoehnen(ausDerDateiTafel))
-                            .mitMarkt(Marktwerte.VORGABE
-                                    .mitAnkauf(ausDerDateiAnkauf)),
+                                    .mitLoehnen(ausDerDateiTafel)),
                     ergebnis.werte(),
                     "die Datei muss genau die Vorgaben des Programms enthalten - sonst"
                             + " gilt bei einem Erststart etwas anderes als beim Rueckfall");

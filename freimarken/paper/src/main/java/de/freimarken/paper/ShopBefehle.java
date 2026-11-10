@@ -7,6 +7,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Seitenregel;
 import de.freimarken.kern.Shopablage;
 import de.freimarken.kern.Wirtschaftsstand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
@@ -326,10 +327,15 @@ final class ShopBefehle {
             sende(zusammenhang, ShopSatz.SHOP_LISTE_LEER, Einsatz.keine());
             return Command.SINGLE_SUCCESS;
         }
+        // DIE SEITENRECHNUNG STEHT IM KERN [10.11.2026]. Sie stand bis dahin hier, in
+        // vier Zeilen - und vier der zwoelf Einspritzungen gegen diesen Befehl sassen
+        // genau in ihnen: abgerundete Seitenzahl, verschobener Anfang, abgewiesene
+        // letzte Seite, Schnitt ueber das Ende. Seit es eine ZWEITE blaetternde Liste
+        // gibt (/markt), waeren es zwei Abschriften - und die zweite kaeme ohne die
+        // Proben der ersten.
         int jeSeite = wirtschaft.werte().handel().zeilenJeSeite();
-        // Aufgerundet, ohne Gleitkomma: 11 Laeden auf 10 je Seite sind zwei Seiten.
-        int seiten = (meine.size() + jeSeite - 1) / jeSeite;
-        if (seite > seiten) {
+        int seiten = Seitenregel.seiten(meine.size(), jeSeite);
+        if (!Seitenregel.gibtEs(seite, meine.size(), jeSeite)) {
             sende(zusammenhang, ShopSatz.SHOP_LISTE_KEINE_SEITE,
                     Einsatz.von("seite", seite).mit("seiten", seiten));
             return 0;
@@ -338,12 +344,12 @@ final class ShopBefehle {
         zeilen.add(sprache.eineZeile(ShopSatz.SHOP_LISTE_KOPF,
                 Einsatz.von("anzahl", meine.size()).mit("seite", seite)
                         .mit("seiten", seiten)));
-        int erste = (seite - 1) * jeSeite;
-        for (Kistenshop shop : meine.subList(erste,
-                Math.min(erste + jeSeite, meine.size()))) {
+        for (Kistenshop shop : meine.subList(
+                Seitenregel.ersteZeile(seite, meine.size(), jeSeite),
+                Seitenregel.letzteZeile(seite, meine.size(), jeSeite))) {
             zeilen.add(zeileFuer(shop));
         }
-        if (seite < seiten) {
+        if (Seitenregel.gehtWeiter(seite, meine.size(), jeSeite)) {
             zeilen.add(sprache.eineZeile(ShopSatz.SHOP_LISTE_WEITER,
                     Einsatz.von("naechste", seite + 1)));
         }

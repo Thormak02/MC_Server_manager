@@ -277,21 +277,19 @@ final class Shopliste {
      * @param markt   die Zahlen des Bundesmarktes - Sortiment und Tagesdeckel
      */
     static String bundzeile(int staende, Marktwerte markt) {
+        String deckel = markt.gedeckelt()
+                ? "Tagesdeckel " + markt.tagesdeckel() + " Mark je Spieler und Tag"
+                : "OHNE Tagesdeckel (" + Marktwerte.PFAD_TAGESDECKEL + " steht auf "
+                        + Marktwerte.KEIN_DECKEL + ")";
         if (staende == 0) {
-            return markt.ankauf().leer()
-                    ? "Ankaufstaende des Bundes: keiner, und das Sortiment "
-                            + Marktwerte.PFAD_ANKAUF + " ist leer - der Bund kauft"
-                            + " nichts an. Das ist eine zulaessige Einstellung."
-                    : "Ankaufstaende des Bundes: KEINER, obwohl "
-                            + markt.ankauf().anzahl() + " Materialien im Sortiment"
-                            + " stehen. Niemand kann derzeit an den Bund verkaufen -"
-                            + " dafuer braucht es ein Bundschild mit S-Preis, und"
-                            + " /markt verkaufen gibt es seit dem 10.11.2026 nicht mehr.";
+            return "Staende des Bundes: KEINER. Es wird nichts an den Bund verkauft und"
+                    + " nichts von ihm gekauft, bis ein Schild dafuer steht - ein"
+                    + " gewoehnliches Shopschild mit dem Bundwort in der ersten Zeile."
+                    + " Ein Sortiment in der config.yml gibt es nicht mehr; " + deckel
+                    + ".";
         }
-        return "Ankaufstaende des Bundes: " + staende + " am Schild, Tagesdeckel "
-                + markt.tagesdeckel() + " Mark je Spieler und Tag. Die Preise kommen aus "
-                + Marktwerte.PFAD_ANKAUF + " und nicht vom Schild - eines, das eine"
-                + " andere Zahl nennt, wird beim ersten Klick im Protokoll gemeldet.";
+        return "Staende des Bundes: " + staende + " am Schild, " + deckel
+                + ". Die Preise stehen auf den Schildern - /markt zeigt sie samt Ort.";
     }
 
     private static void nenneFehlende(ConfigurationSection wurzel,

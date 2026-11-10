@@ -1189,29 +1189,44 @@ preis:
 # aus vierzig Materialien braeuchte hier vierzig Worte, und das waere eine zweite
 # Abschrift jener Liste. Zwei Abschriften derselben Tabelle laufen auseinander. Gezeigt
 # wird der technische Name (cobblestone) - derselbe, den du eintraegst.
+# Der Bundesmarkt - seine STAENDE, nicht mehr eine Tafel.
+#
+# Zweimal umgebaut am 10.11.2026: Erst fiel /markt verkaufen weg (verkauft wird am
+#   Schild), dann die Tafel bundesmarkt.ankauf - "es kann ja nur ge- und verkauft werden,
+#   wofuer es ein Schild gibt". Was /markt zeigt, ist seither die Liste der Staende aus
+#   der Datenbank: wo sie stehen, was sie handeln, zu welchem Preis.
+#
+# Die MATERIALNAMEN stehen nicht hier, sondern kommen von der Ware selbst (STONE) -
+#   dieselbe Entscheidung wie bei der Lohnliste und beim alten Sortiment.
 markt:
-  # Die Ueberschrift von /markt.
-  kopf: "<gold>Der Bundesmarkt kauft</gold>"
-  # {liste} - das ganze Sortiment in EINER Zeile. Vierzig Chatzeilen waeren eine Wand.
-  sortiment: "<gray>{liste}</gray>"
-  # {material} {preis} - ein Stueck des Sortiments. Der Preis kommt aus
-  # waehrung.pfennige, denn Ankaufpreise sind meistens Pfennige.
-  #
-  # KEIN Farbtag: Dieses Wort wird in markt.sortiment eingesetzt, und ein Tag darin
-  # ueberschriebe die Farbe jener Zeile - ab der Einsetzung und bis zum Ende. Die Farbe
-  # der ganzen Liste steht in markt.sortiment.
-  zeile: "{material} {preis}"
-  # Was zwischen zwei Stuecken steht. Darf leer sein - dann stossen sie aneinander.
-  # Auch hier kein Farbtag, aus demselben Grund.
-  zeilen-trenner: ", "
+  # {anzahl} {seite} {seiten} - die Seite steht auch bei einer einzigen da: Wer
+  #   "Seite 1 von 1" liest, weiss sofort, dass nichts fehlt.
+  kopf: "<gold>Die Staende des Bundes ({anzahl}) - Seite {seite} von {seiten}</gold>"
+  # {welt} {x} {y} {z} {menge} {ware} {kauf} {verkauf} - eine Zeile je Stand. Die STELLE
+  #   steht vorn, denn der Bundesmarkt ist ein Ort: Wer wissen will, wo der Stand fuer
+  #   seinen Stein steht, soll hingehen koennen. {kauf} und {verkauf} sind die beiden
+  #   Wortstuecke darunter ODER NICHTS - ein leerer Wert verschwindet rueckstandslos,
+  #   darum stehen die Trenner in den Stuecken.
+  zeile: "<gray>  {welt} {x}/{y}/{z} · {menge}x {ware}{kauf}{verkauf}</gray>"
+  # {preis} - ein Wortstueck fuer die Zeile darueber, kein Satz. Kein Farbtag.
+  #   KUNDEN KAUFEN zu diesem Preis, der Bund verkauft also.
+  kauf: " · Kauf {preis}"
+  # {preis} - das Gegenstueck: Kunden verkaufen an den Bund.
+  verkauf: " · Ankauf {preis}"
+  # {naechste} - nur, wenn es eine naechste Seite gibt.
+  weiter: "<dark_gray>/markt liste {naechste} zeigt die naechste Seite</dark_gray>"
+  # {seite} {seiten} - und nennt, wie viele es gibt.
+  keine-seite: "<gray>Seite {seite} gibt es nicht - die Staende stehen auf {seiten} Seiten.</gray>"
+  # Es steht kein Schild. Das ist der Weg, auf dem der Ankauf abgeschaltet wird - und
+  #   fuer einen Spieler die Auskunft, dass er nicht sucht, sondern wartet.
+  leer: "<yellow>Der Bund hat noch keinen Stand. Gehandelt wird nur, wofuer ein Schild steht.</yellow>"
   # {betrag} - was heute noch aus Verkaeufen zu holen ist. In ganzen Mark: Der Deckel
-  # haengt am Gebuchten, und gebucht werden nur ganze Mark.
+  #   haengt am Gebuchten, und gebucht werden nur ganze Mark.
   frei: "<gray>Heute kannst du noch <gold>{betrag}</gold> aus Verkaeufen bekommen.</gray>"
-  # Der Bund kauft derzeit gar nichts - die Liste in der config.yml ist leer.
-  leer: "<yellow>Der Bundesmarkt kauft derzeit nichts.</yellow>"
-  # SIEBEN ZEILEN STANDEN HIER BIS ZUM 10.11.2026 - markt.verkauft und markt.absage.*.
-  #   Sie gehoerten zu /markt verkaufen, und der ist weggefallen: Verkauft wird am
-  #   SCHILD (Plan 7.1). Was dort schiefgehen kann, steht unter shop.bund.
+  # Ein EIGENER Satz und keine Zahl: bundesmarkt.tagesdeckel: 0 heisst kein Deckel, und
+  #   "noch 0 Mark" waere das Gegenteil der Wahrheit.
+  ohne-deckel: "<gray>Es gibt keinen Tagesdeckel - du kannst beliebig viel an den Bund verkaufen.</gray>"
+  gestoert: "<red>Die Staende des Bundes liessen sich nicht lesen</red><gray> - sie sind deswegen NICHT weg. Der Grund steht im Serverprotokoll.</gray>"
 
 # Die Markthalle (Plan 7.1, Schritt 8 Teil A): /laden zeigt die Ladeneinheiten.
 #
@@ -1676,21 +1691,53 @@ shop:
   # Die ersten drei Zeilen liest ein BETREIBER beim Beschreiben eines Schildes (nur er
   #   hat freimarken.shop.bund), die letzten drei ein KUNDE am fertigen Stand.
   bund:
-    zwei-richtungen: "<red>Ein Schild des Bundes handelt in EINER Richtung.</red>\n<gray>Entweder verkauft der Bund (B-Preis) oder er kauft an (S-Preis) - fuer beides zwei Schilder. Der Ankaufpreis kommt aus bundesmarkt.ankauf, der Verkaufspreis vom Schild; auf einem Schild waere jede Preiserhoehung ein Rundlauf.</gray>"
-    nicht-im-sortiment: "<red>Diese Ware kauft der Bund nicht an.</red>\n<gray>/markt zeigt sein Sortiment - was dort nicht steht, bekommt keinen Stand.</gray>"
-    # {vorschlag} - die kleinste Menge, mit der die Rechnung glatt aufgeht. Jedes
-    #   Vielfache davon geht ebenfalls.
-    menge-uneben: "<red>Bei dieser Menge kommt kein ganzer Mark-Betrag heraus.</red>\n<gray>Der Bund zahlt nur in ganzen Mark - nimm {vorschlag} Stueck oder ein Vielfaches davon.</gray>"
-    # {ware} - der Stand steht, aber die Ware ist aus dem Sortiment genommen worden.
-    kauft-nicht: "<red>Der Bund kauft {ware} nicht mehr an.</red>"
-    # Ein ALTES Schild mit beiden Preisen. Seit dem 10.11.2026 entsteht keines mehr;
-    #   eines, das vorher stand, kauft nicht mehr an - sonst waere es ein Rundlauf,
-    #   sobald der Ankaufpreis ueber seinen Kaufpreis steigt.
-    zwei-preise: "<red>Dieser Stand des Bundes traegt beide Preise und kauft darum nicht an.</red><gray> Das Team muss ihn teilen: ein Schild zum Kaufen, eines zum Ankaufen.</gray>"
+    # SECHS ZEILEN STANDEN HIER am Mittag des 10.11.2026 und sind am Nachmittag wieder
+    #   gegangen - mit der Tafel bundesmarkt.ankauf. Sie sagten, was an einer Tafel
+    #   schiefgehen kann; ohne Tafel gibt es keinen dieser Faelle: Der Preis steht auf
+    #   dem Schild, ein Schildpreis ist eine ganze Mark, und beide Preise auf einem
+    #   Schild halten die Regeln des Kistenshops selbst.
+    #
+    # Geblieben ist der Deckel - der Grund des ganzen Schrittes (Plan 7.4). Er kommt nur,
+    #   wenn bundesmarkt.tagesdeckel ueber 0 steht.
     deckel: "<yellow>Heute ist genug verkauft - morgen kauft der Bund wieder.</yellow>"
-    # {menge} {ware} - nach einer Preisaenderung geht die Rechnung dieses Standes nicht
-    #   mehr glatt auf. Welche Menge wieder passt, steht im Serverprotokoll.
-    uneben: "<red>Dieser Stand kauft gerade nicht an</red><gray> - {menge}x {ware} ergeben keinen ganzen Mark-Betrag. Das Team muss sein Schild neu beschreiben.</gray>"
+
+# Die Freie Truhe (Plan 7.2, Schritt 8 Teil D): eine offene Kiste in der Markthalle, aus
+#   der jeder nehmen und in die jeder legen darf.
+#
+# ZWEI PAARE MIT ZWEI BLICKWINKELN stehen hier, und beide sind eine Entscheidung vom
+#   10.11.2026: offen/offen-frei - mit Deckel eine Zahl, ohne Deckel ein eigener Satz,
+#   denn "noch 0 Stueck" waere das Gegenteil der Wahrheit. Und zurueck/behalten: Das eine
+#   sagt, was dableibt, das andere, was mitkommt. Die Rueckgabezeile steht VOR der
+#   Bilanz - erst der Grund, dann die Zahl.
+#
+# WER NICHTS GENOMMEN HAT, LIEST NICHTS. Hineinlegen ist der halbe Zweck dieser Truhe und
+#   kein Vorgang, der eine Meldung braucht.
+truhe:
+  # {frei} - beim Oeffnen, VOR dem Nehmen. Wer erst beim Schliessen erfaehrt, dass er am
+  #   Deckel ist, hat die Ware schon in der Hand und bekommt sie weggenommen.
+  offen: "<gray>Freie Truhe - heute kannst du noch <gold>{frei}</gold> Gegenstaende behalten. Hineinlegen darfst du immer.</gray>"
+  # Ohne Deckel (freie-truhe.entnahme-je-tag: 0) - ein eigener Satz und keine Zahl.
+  offen-frei: "<gray>Freie Truhe - nimm, was du brauchst, und lege hinein, was du nicht brauchst.</gray>"
+  # {deckel} - die Truhe bleibt zu. Nennt den DECKEL und nicht den Rest: Der Rest ist 0,
+  #   und eine 0 beantwortet die Frage nicht, die der Spieler jetzt hat.
+  deckel: "<yellow>Heute hast du deine {deckel} Gegenstaende aus der Freien Truhe</yellow><gray> - morgen ist sie wieder voll.</gray>"
+  # Einer zur Zeit: Gezaehlt wird die Differenz zwischen Oeffnen und Schliessen, und bei
+  #   zwei Zuschauern waere sie nicht die Entnahme eines Spielers.
+  # NUR WENN GEZAEHLT WIRD geht dieser Satz heraus - also bei einem Deckel
+  #   (freie-truhe.entnahme-je-tag) oder einer Verbotsliste. Ab Werk steht beides auf
+  #   "aus", und dann sehen alle gemeinsam hinein und niemand liest diese Zeile.
+  besetzt: "<yellow>Jemand sieht gerade in die Freie Truhe</yellow><gray> - einen Augenblick.</gray>"
+  # Der Tagesstand liess sich nicht lesen. Beim Oeffnen heisst das: bleibt zu. Beim
+  #   Schliessen: alles geht zurueck. Beides ist die sichere Seite.
+  gestoert: "<red>Die Freie Truhe antwortet gerade nicht</red><gray> - dein Tagesstand liess sich nicht lesen. Der Grund steht im Serverprotokoll.</gray>"
+  # {stueck} {frei} - beim Schliessen, nur mit Deckel und nur, wenn er etwas genommen hat.
+  behalten: "<gray>{stueck} Gegenstaende behalten - heute noch <gold>{frei}</gold> frei.</gray>"
+  # {stueck} {deckel} - was ueber dem Deckel lag. MIT der Zahl des Deckels: Wer liest
+  #   "7 gehen zurueck", sucht den Fehler; wer die Regel liest, kennt sie.
+  zurueck: "<yellow>{stueck} Gegenstaende gehen zurueck in die Truhe</yellow><gray> - mehr als {deckel} am Tag nimmt niemand mit.</gray>"
+  # {ware} - der Materialname, wie der Spieler ihn im Tooltip liest. Erkannt wird beim
+  #   SCHLIESSEN: In eine offene Kiste legt man auf sieben verschiedene Weisen.
+  verboten: "<yellow>{ware} gehoert nicht in die Freie Truhe</yellow><gray> - du bekommst es zurueck.</gray>"
 
 blockbuch:
   # Die Saetze der Moderationsauskunft /freimarken blockbuch. Sie reden NICHT mit einem

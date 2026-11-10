@@ -48,7 +48,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                                Berufswerte berufe, Verdienstwerte verdienst,
                                Marktwerte markt, Messwerte messung,
                                Bonuswerte bonus, Mietwerte laeden,
-                               Shopwerte handel) {
+                               Shopwerte handel, Truhenwerte truhe) {
 
     /**
      * Die Schluessel in der Einstellungsdatei - hier und nicht an jeder Stelle, die klagt.
@@ -98,7 +98,8 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
             VORGABE_STARTGUTHABEN, VORGABE_HOECHSTZAHL, VORGABE_GRUPPEN_FELDER,
             VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE, Berufswerte.VORGABE,
             Verdienstwerte.VORGABE, Marktwerte.VORGABE, Messwerte.VORGABE,
-            Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE);
+            Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE,
+            Truhenwerte.VORGABE);
 
     public Wirtschaftswerte {
         if (preise == null) {
@@ -150,14 +151,20 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                     + " Wirtschaftsstand - wer keine erheben will, nimmt"
                     + " Shopwerte.VORGABE mit zwei Nullen");
         }
+        if (truhe == null) {
+            throw new IllegalArgumentException("Ohne Truhenwerte gibt es keinen"
+                    + " Tagesdeckel der Freien Truhe - wer nicht deckeln will, nimmt"
+                    + " Truhenwerte.VORGABE.mitEntnahme(Truhenwerte.KEIN_DECKEL)");
+        }
     }
 
     /**
      * Dieselben Werte mit einer anderen Preisstaffel.
      *
-     * <p><b>Warum es diese dreizehn Abwandler gibt:</b> Dieser Satz ist mit jedem
+     * <p><b>Warum es diese vierzehn Abwandler gibt:</b> Dieser Satz ist mit jedem
      * Bauschritt um einen Teil gewachsen - erst die Zeitwerte, dann die Berufe, dann der
-     * Verdienst, der Markt, die Messung, der Bonus, die Laeden, jetzt der Handel. Jede Probe, die ihn
+     * Verdienst, der Markt, die Messung, der Bonus, die Laeden, der Handel, jetzt die
+     * Freie Truhe. Jede Probe, die ihn
      * mit ALLEN Teilen baut, bricht bei jedem
      * weiteren, und zwar nicht, weil ihre Frage falsch waere, sondern weil ein Teil
      * dazugekommen ist, der sie nichts angeht. Beim Verdienst waren das elf Stellen in
@@ -167,91 +174,98 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
     public Wirtschaftswerte mitPreisen(Preisstaffel andere) {
         return new Wirtschaftswerte(andere, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderem Startguthaben. */
     public Wirtschaftswerte mitStartguthaben(long anderes) {
         return new Wirtschaftswerte(preise, anderes, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderer Parzellenhoechstzahl. */
     public Wirtschaftswerte mitHoechstzahl(int andere) {
         return new Wirtschaftswerte(preise, startguthaben, andere, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderer Gruppengroesse. */
     public Wirtschaftswerte mitGruppenFeldern(int andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, andere,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderer Rangwerbung. */
     public Wirtschaftswerte mitWerbung(String andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 andere, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderen Zeitwerten. */
     public Wirtschaftswerte mitZeit(Zeitwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, andere, berufe, verdienst, markt, messung, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderen Berufswerten. */
     public Wirtschaftswerte mitBerufen(Berufswerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, andere, verdienst, markt, messung, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderen Verdienstwerten. */
     public Wirtschaftswerte mitVerdienst(Verdienstwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, andere, markt, messung, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderen Marktwerten. */
     public Wirtschaftswerte mitMarkt(Marktwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, andere, messung, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderen Messwerten. */
     public Wirtschaftswerte mitMessung(Messwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, andere, bonus, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderen Bonuswerten. */
     public Wirtschaftswerte mitBonus(Bonuswerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, andere, laeden,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderen Mietwerten. */
     public Wirtschaftswerte mitLaeden(Mietwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, andere,
-                handel);
+                handel, truhe);
     }
 
     /** Dieselben Werte mit anderen Handelsgebuehren. */
     public Wirtschaftswerte mitHandel(Shopwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                andere);
+                andere, truhe);
+    }
+
+    /** Dieselben Werte mit anderen Zahlen der Freien Truhe. */
+    public Wirtschaftswerte mitTruhe(Truhenwerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
+                handel, andere);
     }
 
     /** Ob aus dieser Zahl ein Startguthaben werden kann; 0 heisst: mit nichts anfangen. */

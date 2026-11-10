@@ -761,106 +761,28 @@ bundesmarkt:
   # worden; wer sie auch noch zum halben Tagessatz verwertet, verdient am selben Block
   # zweimal.
   #
+  # EINE 0 HEISST: KEIN DECKEL [10.11.2026]. Dann kann ein Spieler beliebig viel am Tag
+  # an den Bund verkaufen - begrenzt nur dadurch, was er zusammentraegt und welche
+  # Schilder stehen. Bis zu diesem Tag war die 0 verboten (sie hiesse "niemand kann
+  # verkaufen"); den Ankauf abzuschalten geht jetzt dadurch, dass kein Schild dafuer
+  # steht, und darum ist die Zahl frei fuer die Einstellung, um die es wirklich geht.
+  #
   # Mehr als Faktor 2 gegen diesen Wert braucht eine Bestaetigung unter
-  # wirtschaft.sprung-bestaetigt.markt-tagesdeckel - es ist ein Geldwert.
+  # wirtschaft.sprung-bestaetigt.markt-tagesdeckel - es ist ein Geldwert. Das gilt auch
+  # fuer die 0: Wer den Deckel abschaltet, traegt die Bestaetigung ein.
   tagesdeckel: 5000
-  # DAS SORTIMENT - Material und Preis je STUECK in Pfennigen.
+  # DAS SORTIMENT STAND HIER BIS ZUM 10.11.2026 - eine Tafel mit 56 Materialien und
+  # je einem Ankaufpreis in Pfennigen. Sie ist gefallen, und der Satz, der sie
+  # ersetzt, ist einer des Betreibers: "es kann ja nur ge- und verkauft werden,
+  # wofuer es ein Schild gibt."
   #
-  # Kleines Sortiment mit Absicht: Was hier nicht steht, kauft der Bund nicht. Das ist
-  # die sichere Richtung - ein Grundpreis fuer alles machte jeden Gegenstand zu Geld,
-  # auch den, der nur in einer Farm anfaellt.
+  # WAS DER BUND HANDELT, ENTSCHEIDEN SEINE SCHILDER. Ein Stand ist ein
+  # gewoehnliches Shopschild mit dem Bundwort (handel.bundshop-wort) in der ersten
+  # Zeile; der Preis steht darauf wie bei jedem anderen Laden. Damit ist alles
+  # freigegeben - und abgeschaltet wird der Ankauf dadurch, dass kein Schild steht.
   #
-  # VERKAUFT WIRD AM SCHILD [10.11.2026]. Ein Ankaufstand des Bundes ist ein gewoehnliches
-  # Shopschild mit dem Bundwort (handel.bundshop-wort) in der ersten Zeile und NUR einem
-  # S-Preis. Der Preis, den er zahlt, kommt aus DIESER Tafel und nicht vom Schild: Eine
-  # Aenderung hier wirkt also sofort an jedem Stand, ohne dass einer neu beschrieben
-  # wird. Das Schild zeigt dann noch die alte Zahl, und der erste Klick danach schreibt
-  # eine Zeile ins Serverprotokoll, die sagt, welches Schild neu zu beschreiben ist.
-  #
-  # DIE MENGE EINES STANDES MUSS MIT DEM PREIS EINE GANZE MARK ERGEBEN: menge mal
-  # pfennige muss durch 100 teilbar sein. Bei 20 Pfennigen gehen 5, 10, 15, ... Stueck;
-  # bei 16 waeren es 3,20 Mark, und die 20 Pfennige verschwaenden bei JEDEM Handel - der
-  # Spieler saehe nur, dass seine Ware weg ist. Ein solcher Stand entsteht darum nicht,
-  # und die Absage nennt die kleinste passende Menge. Wer einen Preis hier aendert, soll
-  # danach die Startzeile lesen: Sie nennt die Zahl der Ankaufstaende.
-  #
-  # EIN Schild je Richtung. Was der Bund VERKAUFT, steht auf dem Schild (ein B-Preis) und
-  # in keiner Tafel; ein Schild mit beiden Zahlen entsteht nicht und kauft auch nicht an.
-  # Der Grund ist eine Gelddruckmaschine: Steigt der Ankaufpreis hier ueber den Kaufpreis
-  # auf dem Schild, kauft man an demselben Stand billig und verkauft teurer zurueck.
-  #
-  # Die Preise liegen unter dem, was die Arbeit einbringt (verdienst.loehne): Stein
-  # bringt beim Abbauen 40 Pfennige und am Markt 20. Der Markt ist die Verwertung, nicht
-  # die Quelle.
-  #
-  # Die REIHENFOLGE hier ist die Reihenfolge in /markt. Alphabetisch sortiert waere eine
-  # Entscheidung, die dir niemand gesagt hat.
-  ankauf:
-    # Steine und Erden - die Grundlast jedes Bergmanns.
-    cobblestone: 10
-    stone: 20
-    deepslate: 25
-    andesite: 20
-    diorite: 20
-    granite: 20
-    tuff: 22
-    sand: 15
-    gravel: 15
-    clay_ball: 30
-    # Erze und Metalle, als verhuettetes Gut.
-    coal: 80
-    raw_copper: 90
-    raw_iron: 130
-    raw_gold: 300
-    redstone: 150
-    lapis_lazuli: 320
-    emerald: 900
-    diamond: 1100
-    quartz: 110
-    ancient_debris: 4500
-    # Holz - der Holzfaeller und der Zimmermann.
-    oak_log: 45
-    birch_log: 45
-    spruce_log: 45
-    jungle_log: 55
-    acacia_log: 55
-    dark_oak_log: 55
-    cherry_log: 65
-    mangrove_log: 60
-    # Acker und Ernte - der Bauer und der Mueller.
-    wheat: 75
-    carrot: 75
-    potato: 75
-    beetroot: 75
-    pumpkin: 60
-    melon_slice: 15
-    sugar_cane: 25
-    cocoa_beans: 80
-    nether_wart: 100
-    sweet_berries: 90
-    # Fang - der Fischer und der Reeder.
-    cod: 400
-    salmon: 600
-    pufferfish: 450
-    tropical_fish: 1250
-    nautilus_shell: 1500
-    # Beute - der Jaeger und der Gerber.
-    rotten_flesh: 60
-    bone: 90
-    string: 110
-    spider_eye: 140
-    gunpowder: 350
-    ender_pearl: 900
-    blaze_rod: 1200
-    ghast_tear: 2000
-    leather: 450
-    feather: 80
-    # Vom Vieh - was der Bauer am lebenden Tier gewinnt.
-    # Wolle ist farbig - es gibt kein blosses wool. Weiss steht hier fuer die
-    # Schafschur; wer weitere Farben ankaufen will, traegt sie als eigene Zeilen ein.
-    white_wool: 120
-    egg: 70
-    milk_bucket: 200
+  # /markt zeigt die Staende samt Ort und Preis. Wie viele es sind, sagt der
+  # Startbericht in der Zeile der Kistenshops.
 
 # Wie Spielzeit gemessen wird und wann ein Tag endet.
 #
@@ -1406,6 +1328,140 @@ handel:
   #   mehr zeigt, sieht aus wie ein kaputter Server. Wer die Liste nicht will, nimmt
   #   das Recht freimarken.shop.
   zeilen-je-seite: 10
+# DIE FREIE TRUHE (Plan 7.2, Schritt 8 Teil D): eine offene Kiste in der Markthalle.
+# Jeder darf hineinlegen, jeder darf herausnehmen. Kostet nichts, schafft Gemeinschaft,
+# entsorgt Ueberschuss - und sie ist die einzige Kiste dieses Servers, an der der
+# Besitzschutz nicht gilt.
+#
+# GEZAEHLT WIRD DIE DIFFERENZ UND NICHT DER KLICK. Aus einer offenen Truhe nimmt man mit
+# Linksklick, Rechtsklick, Shift-Klick, Doppelklick auf einen Stapel, mit der
+# Zahlentaste, durch Ziehen ueber mehrere Felder und mit Q aus dem offenen Fenster
+# heraus. Das sind sieben Wege zur selben Tat, und ein Programm, das sechs davon kennt,
+# hat keinen Deckel. Darum wird beim Oeffnen der Inhalt gezaehlt, beim Schliessen wieder,
+# und die Differenz ist die Entnahme.
+#
+# GEZAEHLT WIRD ABER NUR, WENN ES EINEN GRUND GIBT: einen Deckel (entnahme-je-tag) oder
+# eine Verbotsliste (verbotene-gegenstaende). Ab Werk steht beides auf "aus", und dann ist
+# die Freie Truhe eine gewoehnliche offene Kiste, die jede Nacht geleert wird: Alle duerfen
+# GEMEINSAM hineinsehen, und kein Tagesstand wird gelesen oder geschrieben. Sobald eines
+# von beiden eingetragen ist, wird gezaehlt - und weil die Differenz dann genau EINEM
+# Spieler gehoeren muss, sieht auch nur EINER zur Zeit hinein. Welche von beiden
+# Betriebsarten gilt, sagt der Startbericht in einer Zeile.
+#
+# DER TRICHTERSCHUTZ GILT IMMER: Ein Trichter an der Truhe wird nicht bedient, in beiden
+# Richtungen. Er haengt nicht an der Zaehlung, sondern daran, dass die Truhe Spielern
+# gehoert und nicht Maschinen.
+#
+# ANGERECHNET WIRD, WAS ER BEHAELT. Wer ueber dem Deckel liegt, bekommt den Ueberschuss
+# beim Schliessen zurueck in die Truhe gelegt - die Plaetze sind frei, er hat sie gerade
+# geleert. Wer die Sachen vorher wegwirft, hat darum keinen Tagesstand ohne Ware.
+#
+# HINEINLEGEN ZAEHLT GAR NICHT. Ein Deckel auf das Schenken machte aus der
+# Gemeinschaftstruhe eine Abgabestelle mit Quote.
+freie-truhe:
+  # Wie viele Stueck ein Spieler an einem TAG behalten darf.
+  #
+  # AUSGELIEFERT WIRD 0, ALSO KEIN DECKEL [entschieden 10.11.2026]. Plan 7.2
+  # empfiehlt "etwa 16 Gegenstaende je Spieler und Tag"; der Betreiber hat anders
+  # entschieden: Die Truhe steht am Spawn, wo niemand bauen darf, und was darin
+  # liegt, hat jemand freiwillig hineingelegt. Der Deckel ist gebaut und geprueft -
+  # wer ihn braucht, traegt hier eine Zahl ein.
+  #
+  # 0 HEISST KEIN DECKEL - dieselbe Form und derselbe Grund wie bei
+  # bundesmarkt.tagesdeckel: eine ZAHL und kein true/false, denn Bukkit liest jedes
+  # Wort ausser "true" stumm als false. Abgeschaltet wird die Truhe nicht hiermit,
+  # sondern dadurch, dass unter truhen: keine Stelle steht.
+  #
+  # Der Deckel gilt je SPIELER und nicht je Truhe: Wer zwei Truhen aufstellt,
+  # verschenkt damit nicht zwei Tagesmengen. Er gilt bis zur Tagesgrenze aus
+  # zeit.zone - dieselbe, nach der auch Tagesbonus, Verdienstdeckel und Ladenmiete
+  # rechnen.
+  #
+  # Erlaubt ist 0 bis 3456 - eine volle Doppelkiste, also mehr, als in der Truhe
+  # ueberhaupt liegen kann. Eine groessere Zahl waere ein Deckel, den niemand
+  # erreicht; dafuer gibt es die 0.
+  #
+  # EINE ZAHL HIER SCHALTET AUCH DAS "EINER ZUR ZEIT" EIN: Gezaehlt wird der
+  # Unterschied zwischen Oeffnen und Schliessen, und der muss GENAU EINEM Spieler
+  # gehoeren - sonst bekommt der, der zuletzt schliesst, die Entnahme des anderen
+  # angerechnet. Solange hier 0 steht UND verbotene-gegenstaende leer ist, wird nichts
+  # gezaehlt: Dann duerfen alle gemeinsam hineinsehen, und kein Tagesstand wird
+  # gelesen oder geschrieben. Der Startbericht sagt, was gilt.
+  entnahme-je-tag: 0
+  # WO die Freien Truhen stehen - je Truhe drei ganze Zahlen (x, y, z) in der Ladenwelt
+  # aus laeden.welt.
+  #
+  # KEINE VORGABE, und das ist Absicht: Eine Truhe steht dort, wo jemand sie hingestellt
+  # hat. Eine geratene Koordinate zeigte in unerschlossenes Gelaende, und dort stuende
+  # dann eine Kiste, aus der jeder nehmen darf. Ohne Eintrag gibt es keine Freie Truhe,
+  # und die Wache wird gar nicht angemeldet.
+  #
+  # DIESE STELLEN GELTEN NUR FUER DIE VORHANDENE WELT - genauso wie die Quader der
+  # Ladeneinheiten weiter oben und die sieben Torquader unter reisen.tore. Wer Altfurt
+  # neu anlegt, hat anderes Gelaende; dann steht die Truhe im Boden.
+  #
+  # EINE DOPPELKISTE braucht BEIDE Haelften, je eine Zeile: Welche Haelfte angeklickt
+  # wird, entscheidet der Spieler. Eine Stelle in einer LADENEINHEIT wird abgewiesen -
+  # dort kaeme niemand ausser dem Mieter heran, und der nimmt ohne Deckel.
+  #
+  # Ab Werk steht hier keine Zeile. Eine Truhe in der Halle von Altfurt saehe etwa so
+  # aus (die Stelle ist ein Beispiel und keine Empfehlung):
+  #   truhen:
+  #     - [72, 72, 20]
+  #
+  # NUR BEIM START GELESEN - /freimarken neuladen verschiebt keine Truhe. Die beiden
+  # Nachbarschluessel dieses Abschnitts sind neuladbar, dieser nicht: Eine Stelle,
+  # die sich waehrend eines offenen Fensters aendert, rechnete die Entnahme eines
+  # Spielers gegen den Inhalt einer anderen Kiste ab. Dieselbe Trennung wie bei den
+  # Ladeneinheiten weiter oben.
+  truhen: []
+  # Was NICHT heraus darf.
+  #
+  # AUSGELIEFERT WIRD EINE LEERE LISTE: NICHTS ist verboten [entschieden
+  # 10.11.2026]. Plan 7.2 empfiehlt "keine geschriebenen Buecher und keine
+  # Shulkerkisten - sonst wandert Besitz hinein, der dort nicht hingehoert"; der
+  # Betreiber stellt die Truhe selbst auf, und wer am Spawn etwas hineinlegt, hat es
+  # hineinlegen wollen.
+  #
+  # Was ein Verbot bewirkt, wenn eines eingetragen ist: Der Gegenstand wird beim
+  # SCHLIESSEN aus der Truhe genommen und dem Spieler zurueckgegeben, mit einer
+  # Zeile dazu. Hineinlegen wird NICHT abgewiesen - in eine offene Kiste legt man
+  # auf ebenso vielen Wegen, wie man herausnimmt. Zurueck geht nur, was DIESER
+  # Spieler neu hineingelegt hat; was schon vorher darin lag, raeumt der taegliche
+  # Lauf.
+  #
+  # Erwartet wird der nackte Materialname, klein oder gross, ohne minecraft: davor.
+  # Ein Name, den dieser Server nicht kennt, wird beklagt und uebersprungen - ein
+  # Tippfehler soll nicht stumm in der Liste stehen.
+  #
+  # Die Namen aus dem Plan, falls du sie doch willst (das LEERE Buch
+  # writable_book steht mit Absicht nicht dabei: Es traegt keinen Verfasser und ist
+  # ein gewoehnlicher Gegenstand):
+  #   verbotene-gegenstaende:
+  #     - written_book
+  #     - shulker_box
+  #     - white_shulker_box
+  #     - orange_shulker_box
+  #     - magenta_shulker_box
+  #     - light_blue_shulker_box
+  #     - yellow_shulker_box
+  #     - lime_shulker_box
+  #     - pink_shulker_box
+  #     - gray_shulker_box
+  #     - light_gray_shulker_box
+  #     - cyan_shulker_box
+  #     - purple_shulker_box
+  #     - blue_shulker_box
+  #     - brown_shulker_box
+  #     - green_shulker_box
+  #     - red_shulker_box
+  #     - black_shulker_box
+  #
+  # AUCH EIN VERBOT SCHALTET DIE ZAEHLUNG EIN, und damit das "einer zur Zeit":
+  # Zurueck geht nur, was NEU hineingekommen ist, und das ist derselbe Unterschied,
+  # auf dem der Deckel rechnet. Sehen zwei zugleich hinein, bekaeme der Schliessende
+  # die Einlage des anderen in die Hand.
+  verbotene-gegenstaende: []
 # Reisen zwischen den Welten (Plan 4.3): zwei Wege, kein dritter - die Tore am
 # Bundesmarkt und /warp <name>. Selbstgebaute Nether- und Endportale werden gesperrt:
 # Sie fuehren nicht in freimarken:nether, sondern in die Haupt-Nether des Servers, eine

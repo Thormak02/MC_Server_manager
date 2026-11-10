@@ -2,8 +2,10 @@ package de.freimarken.paper;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
@@ -41,6 +43,15 @@ final class Spielerprobe {
     private final Set<String> rechte;
     private final List<Component> handbalken = new ArrayList<>();
     private final List<Component> chat = new ArrayList<>();
+
+    /**
+     * Der Rucksack - sechsunddreissig Plaetze, von der Probe selbst gehalten.
+     *
+     * <p>EIN Feld und nicht je Frage ein frisches Array: Ein Zweig, der etwas hineinlegt
+     * und es danach wieder herausnimmt, braucht zweimal denselben Rucksack. Ein jedes Mal
+     * neuer waere immer leer - also immer gruen, ohne etwas gesehen zu haben.
+     */
+    private final ItemStack[] rucksack = new ItemStack[36];
 
     /**
      * In welcher Welt er steht - und zwar als OBJEKT, einmal gebaut.
@@ -161,7 +172,7 @@ final class Spielerprobe {
     }
 
     /**
-     * Das Inventar, wie ein Zweig es sieht - beantwortet wird NUR die Haupthand.
+     * Das Inventar, wie ein Zweig es sieht - Haupthand und Rucksack.
      *
      * <p>Derselbe Grundsatz wie beim Spieler selbst: Was gemessen gebraucht wird, wird
      * beantwortet; alles andere wirft mit seinem eigenen Namen. Ein stilles null waere
@@ -178,11 +189,18 @@ final class Spielerprobe {
                     case "getItemInMainHand" -> inDerHand == null
                             ? new Wesenprobe.Probestapel(Material.AIR, 0)
                             : inDerHand;
-                    // Ein LEERES Inventar mit 36 Plaetzen [Teil C]: Ladenware zaehlt
-                    // damit die freien Plaetze fuer /laden abholfach. 36 ist die Zahl
-                    // des Spielerinventars ohne Ruestung und zweite Hand - genau das,
-                    // was getStorageContents in Bukkit liefert.
-                    case "getStorageContents" -> new org.bukkit.inventory.ItemStack[36];
+                    // 36 Plaetze [Teil C]: Ladenware zaehlt damit die freien Plaetze
+                    // fuer /laden abholfach. 36 ist die Zahl des Spielerinventars ohne
+                    // Ruestung und zweite Hand - genau das, was getStorageContents in
+                    // Bukkit liefert. DIESELBE Reihe wie getContents, denn es ist
+                    // derselbe Rucksack: Zwei Reihen waeren zwei Wahrheiten darueber,
+                    // was der Spieler bei sich hat.
+                    case "getStorageContents", "getContents" -> rucksack;
+                    case "setItem" -> {
+                        rucksack[(Integer) werte[0]] = (ItemStack) werte[1];
+                        yield null;
+                    }
+                    case "addItem" -> hinein((ItemStack[]) werte[0]);
                     case "toString" -> "Inventarprobe " + name;
                     case "hashCode" -> kennung.hashCode();
                     case "equals" -> eigen == (werte == null ? null : werte[0]);
@@ -193,6 +211,57 @@ final class Spielerprobe {
                                     + " sie hierher, mit einer Antwort, die die Probe"
                                     + " selbst mitgibt.");
                 });
+    }
+
+    /**
+     * Legt Stapel in den Rucksack und gibt zurueck, was nicht hineinpasste - genau die
+     * Form, in der Bukkit antwortet. {@code addItem} nimmt Stapel und keine Zahl.
+     *
+     * <p>Zusammengelegt wird NICHT: Jeder Stapel bekommt einen eigenen Platz. Das ist
+     * groeber als das Spiel, aber in die vorsichtige Richtung - hier ist der Rucksack
+     * eher voll als dort.
+     */
+    private Map<Integer, ItemStack> hinein(ItemStack[] stapel) {
+        Map<Integer, ItemStack> blieben = new HashMap<>();
+        for (int i = 0; i < stapel.length; i++) {
+            int platz = freierPlatz();
+            if (platz < 0) {
+                blieben.put(i, stapel[i]);
+                continue;
+            }
+            rucksack[platz] = stapel[i];
+        }
+        return blieben;
+    }
+
+    /** Legt der Probe etwas in den Rucksack - er hat es schon in der Hand. */
+    Spielerprobe mitImRucksack(ItemStack stapel) {
+        int platz = freierPlatz();
+        if (platz < 0) {
+            throw new IllegalStateException("der Rucksack dieser Probe ist voll");
+        }
+        rucksack[platz] = stapel;
+        return this;
+    }
+
+    /** Wie viele STUECK dieses Materials im Rucksack liegen. */
+    int imRucksack(Material art) {
+        int stueck = 0;
+        for (ItemStack stapel : rucksack) {
+            if (stapel != null && stapel.getType() == art) {
+                stueck += stapel.getAmount();
+            }
+        }
+        return stueck;
+    }
+
+    private int freierPlatz() {
+        for (int i = 0; i < rucksack.length; i++) {
+            if (rucksack[i] == null) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**

@@ -817,27 +817,55 @@ class BildGleichTest {
                         "&eMit Graben ist fuer diese Stunde genug - etwas anderes zahlt"
                                 + " weiter."),
 
-                // --- Der Bundesmarkt: VIER Zeilen -------------------------------
-                // Neun standen hier bis zum 10.11.2026: markt.verkauft (drei Formen) und
-                // sechs Absagen von /markt verkaufen. Der Zweig ist weggefallen -
-                // verkauft wird am Schild -, und seine Saetze stehen jetzt unter
-                // shop.bund, weiter unten bei den Kistenshops.
+                // --- Der Bundesmarkt: NEUN Zeilen -------------------------------
                 //
-                // Die MATERIALNAMEN stehen mit Absicht nicht in der Sprachdatei - ein
-                // Sortiment aus vierzig Materialien waere dort eine zweite Abschrift der
-                // config.yml. Gezeigt wird der technische Name, und genau den prueeft
-                // diese Tafel mit.
-                new Zeile(MarktSatz.KOPF, 1L, Einsatz.keine(),
-                        "&6Der Bundesmarkt kauft"),
-                new Zeile(MarktSatz.SORTIMENT, 1L,
-                        Einsatz.von("liste", "stone 0,20 Mark, cod 4,00 Mark"),
-                        "&7stone 0,20 Mark, cod 4,00 Mark"),
+                // Zweimal umgebaut am 10.11.2026. Erst fielen neun Zeilen mit
+                // /markt verkaufen (markt.verkauft in drei Formen und sechs Absagen).
+                // Dann fiel das SORTIMENT: markt.sortiment, markt.zeile und
+                // markt.zeilen-trenner zeigten eine Liste aus der config.yml, und die
+                // gibt es nicht mehr - "es kann ja nur ge- und verkauft werden, wofuer
+                // es ein Schild gibt".
+                //
+                // Was jetzt hier steht, ist eine LISTE AUF SEITEN wie shop.liste: Kopf,
+                // Zeile je Stand, zwei Preisstuecke, Weiter-Hinweis, keine-Seite, und
+                // die zwei Formen der letzten Zeile (Deckel oder kein Deckel).
+                new Zeile(MarktSatz.KOPF, 1L,
+                        Einsatz.von("anzahl", 7).mit("seite", 2).mit("seiten", 4),
+                        "&6Die Staende des Bundes (7) - Seite 2 von 4"),
+                new Zeile(MarktSatz.ZEILE, 1L,
+                        Einsatz.von("welt", "freimarken:altfurt").mit("x", 100)
+                                .mit("y", -60).mit("z", 19).mit("menge", 5)
+                                .mit("ware", "STONE")
+                                .mit("kauf", " · Kauf 2 Mark")
+                                .mit("verkauf", " · Ankauf 1 Mark"),
+                        "&7  freimarken:altfurt 100/-60/19 · 5x STONE · Kauf"
+                                + " 2 Mark · Ankauf 1 Mark"),
+                // Die zwei PREISSTUECKE (markt.kauf, markt.verkauf) stehen hier
+                // NICHT, und das ist die Regel dieser Tafel: Ein Satz der Art WORT
+                // traegt kein eigenes Bild - er wird eingesetzt, und Probe 11b
+                // verlangt darum ausdruecklich keine Zeile fuer ihn. Dass die zwei
+                // Stuecke richtig eingesetzt werden, prueeft MarktBefehlTest an der
+                // fertigen Zeile ("nennt NUR den Ankauf"), und ein LEERES Stueck
+                // verschwindet dort rueckstandslos.
+                new Zeile(MarktSatz.WEITER, 1L, Einsatz.von("naechste", 3),
+                        "&8/markt liste 3 zeigt die naechste Seite"),
+                new Zeile(MarktSatz.KEINE_SEITE, 1L,
+                        Einsatz.von("seite", 9).mit("seiten", 4),
+                        "&7Seite 9 gibt es nicht - die Staende stehen auf 4 Seiten."),
                 new Zeile(MarktSatz.FREI, 1L,
                         Einsatz.von("betrag", sprache.betrag(5_000L)),
                         "&7Heute kannst du noch &65.000 Mark&7 aus Verkaeufen"
                                 + " bekommen."),
+                new Zeile(MarktSatz.OHNE_DECKEL, 1L, Einsatz.keine(),
+                        "&7Es gibt keinen Tagesdeckel - du kannst beliebig viel an den"
+                                + " Bund verkaufen."),
                 new Zeile(MarktSatz.LEER, 1L, Einsatz.keine(),
-                        "&eDer Bundesmarkt kauft derzeit nichts."),
+                        "&eDer Bund hat noch keinen Stand. Gehandelt wird nur, wofuer"
+                                + " ein Schild steht."),
+                new Zeile(MarktSatz.GESTOERT, 1L, Einsatz.keine(),
+                        "&cDie Staende des Bundes liessen sich nicht lesen&7 - sie sind"
+                                + " deswegen NICHT weg. Der Grund steht im"
+                                + " Serverprotokoll."),
 
 
                 // --- Der Tagesbonus [Teil H] ---------------------------------
@@ -1427,43 +1455,49 @@ class BildGleichTest {
                                 + " sind deswegen NICHT weg. Der Grund steht im"
                                 + " Serverprotokoll."),
 
-                // --- Der ANKAUF DES BUNDES am Schild: sechs Zeilen [10.11.2026] ---
+                // --- Der ANKAUF DES BUNDES am Schild [10.11.2026] ---------------
                 //
-                // Die ersten drei liest ein BETREIBER beim Beschreiben eines Schildes,
-                // die letzten drei ein KUNDE am fertigen Stand. Zwei von ihnen sind die
-                // Nachfolger weggefallener Marktsaetze, und ihr Wortlaut ist darum NICHT
-                // derselbe: "der Bund kauft das nicht" heisst mit einem Stein in der Hand
-                // etwas anderes als vor einem Stand, der aufgehoert hat anzukaufen.
-                new Zeile(ShopSatz.SHOP_BUND_ZWEI_RICHTUNGEN, 1L, Einsatz.keine(),
-                        "&cEin Schild des Bundes handelt in EINER Richtung.\n&7Entweder verkauft der Bund (B-Preis) oder er kauft an"
-                                + " (S-Preis) - fuer beides zwei Schilder. Der"
-                                + " Ankaufpreis kommt aus bundesmarkt.ankauf, der"
-                                + " Verkaufspreis vom Schild; auf einem Schild waere"
-                                + " jede Preiserhoehung ein Rundlauf."),
-                new Zeile(ShopSatz.SHOP_BUND_NICHT_IM_SORTIMENT, 1L, Einsatz.keine(),
-                        "&cDiese Ware kauft der Bund nicht an.\n&7/markt zeigt sein Sortiment - was dort nicht steht,"
-                                + " bekommt keinen Stand."),
-                // Die FUENF ist die kleinste Menge, mit der 20 Pfennige je Stueck einen
-                // ganzen Mark-Betrag ergeben - und sie steht in der Absage, damit ein
-                // Betreiber nicht Mengen durchprobiert.
-                new Zeile(ShopSatz.SHOP_BUND_MENGE_UNEBEN, 1L,
-                        Einsatz.von("vorschlag", 5),
-                        "&cBei dieser Menge kommt kein ganzer Mark-Betrag heraus.\n&7Der Bund zahlt nur in ganzen Mark - nimm 5 Stueck oder"
-                                + " ein Vielfaches davon."),
-                new Zeile(ShopSatz.SHOP_BUND_KAUFT_NICHT, 1L,
-                        Einsatz.von("ware", "STONE"),
-                        "&cDer Bund kauft STONE nicht mehr an."),
-                new Zeile(ShopSatz.SHOP_BUND_ZWEI_PREISE, 1L, Einsatz.keine(),
-                        "&cDieser Stand des Bundes traegt beide Preise und kauft darum"
-                                + " nicht an.&7 Das Team muss ihn teilen: ein Schild zum"
-                                + " Kaufen, eines zum Ankaufen."),
+                // SIEBEN Zeilen standen hier am Mittag und sechs sind am Nachmittag
+                // wieder gegangen - mit der Tafel bundesmarkt.ankauf. Sie sagten, was an
+                // einer Tafel schiefgeht; ohne Tafel gibt es keinen dieser Faelle.
+                // Geblieben ist der DECKEL, und der ist der Grund des ganzen Schrittes.
                 new Zeile(ShopSatz.SHOP_BUND_DECKEL, 1L, Einsatz.keine(),
                         "&eHeute ist genug verkauft - morgen kauft der Bund wieder."),
-                new Zeile(ShopSatz.SHOP_BUND_UNEBEN, 1L,
-                        Einsatz.von("menge", 16).mit("ware", "STONE"),
-                        "&cDieser Stand kauft gerade nicht an&7 - 16x STONE ergeben"
-                                + " keinen ganzen Mark-Betrag. Das Team muss sein Schild"
-                                + " neu beschreiben."));
+
+                // --- Die Freie Truhe [Teil D]: ACHT Zeilen -------------------
+                //
+                // ZWEI PAARE MIT ZWEI BLICKWINKELN, und in beiden Paaren stehen hier
+                // darum verschiedene WORTE und nicht verschiedene Zahlen: offen gegen
+                // offen-frei (mit Deckel eine Zahl, ohne Deckel ein eigener Satz) und
+                // zurueck gegen behalten (was dableibt, was mitkommt). Wer zwei von
+                // ihnen vertauscht, bekommt hier eine rote Probe - und nicht einen
+                // Spieler, der "nimm, was du brauchst" liest und am Deckel steht.
+                new Zeile(TruheSatz.OFFEN, 1L, Einsatz.von("frei", 11),
+                        "&7Freie Truhe - heute kannst du noch &611&7 Gegenstaende"
+                                + " behalten. Hineinlegen darfst du immer."),
+                new Zeile(TruheSatz.OFFEN_FREI, 1L, Einsatz.keine(),
+                        "&7Freie Truhe - nimm, was du brauchst, und lege hinein, was du"
+                                + " nicht brauchst."),
+                new Zeile(TruheSatz.DECKEL, 1L, Einsatz.von("deckel", 16),
+                        "&eHeute hast du deine 16 Gegenstaende aus der Freien"
+                                + " Truhe&7 - morgen ist sie wieder voll."),
+                new Zeile(TruheSatz.BESETZT, 1L, Einsatz.keine(),
+                        "&eJemand sieht gerade in die Freie Truhe&7 - einen"
+                                + " Augenblick."),
+                new Zeile(TruheSatz.GESTOERT, 1L, Einsatz.keine(),
+                        "&cDie Freie Truhe antwortet gerade nicht&7 - dein Tagesstand"
+                                + " liess sich nicht lesen. Der Grund steht im"
+                                + " Serverprotokoll."),
+                new Zeile(TruheSatz.BEHALTEN, 1L,
+                        Einsatz.von("stueck", 9).mit("frei", 7),
+                        "&79 Gegenstaende behalten - heute noch &67&7 frei."),
+                new Zeile(TruheSatz.ZURUECK, 1L,
+                        Einsatz.von("stueck", 14).mit("deckel", 16),
+                        "&e14 Gegenstaende gehen zurueck in die Truhe&7 - mehr als 16"
+                                + " am Tag nimmt niemand mit."),
+                new Zeile(TruheSatz.VERBOTEN, 1L, Einsatz.von("ware", "WRITTEN_BOOK"),
+                        "&eWRITTEN_BOOK gehoert nicht in die Freie Truhe&7 - du"
+                                + " bekommst es zurueck."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

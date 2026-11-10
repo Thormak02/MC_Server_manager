@@ -1,9 +1,8 @@
 package de.freimarken.paper;
 
-import de.freimarken.kern.Ankaufliste;
-import de.freimarken.kern.Deckelregel;
+import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Marktwerte;
-import de.freimarken.kern.Verkaufsregel;
+import de.freimarken.kern.Seitenregel;
 import java.util.ArrayList;
 import java.util.List;
 import net.kyori.adventure.text.Component;
@@ -12,12 +11,18 @@ import net.kyori.adventure.text.Component;
  * Die Zeilen von {@code /markt} - reine Rechnung, kein Bukkit, kein Senden.
  *
  * <p><b>Das ist DIE NAHT dieses Bereichs</b>, wie {@link Beruftext} fuer die Berufe:
- * Jeder Zweig von {@link MarktBefehle} holt sich hier seine Zeilen und schickt sie nur
- * hinaus. Dadurch ist jedes Wort, jede Farbe und jede Reihenfolge ohne Server pruefbar -
- * und {@code BildGleichTest} haengt genau an diesen Methoden.
+ * {@link MarktBefehle} holt sich hier seine Zeilen und schickt sie nur hinaus. Dadurch
+ * ist jedes Wort, jede Farbe und jede Reihenfolge ohne Server pruefbar - und
+ * {@code BildGleichTest} haengt genau an diesen Methoden.
  *
  * <p>Kein Wort steht hier: Der Wortlaut kommt aus {@code sprache-vorlage.yml} ueber
  * {@link MarktSatz}.
+ *
+ * <p><b>Gezeigt werden die STAENDE und nicht eine Liste aus der Datei</b> [10.11.2026].
+ * Die Tafel {@code bundesmarkt.ankauf} ist gefallen: "es kann ja nur ge- und verkauft
+ * werden, wofuer es ein Schild gibt." Diese Naht bekommt darum Kistenshops herein und
+ * keine Materialtabelle - und die Rechnung, welche davon auf welche Seite fallen, steht
+ * in {@link Seitenregel}, geteilt mit {@code /shop liste}.
  */
 final class Markttext {
 
@@ -25,44 +30,84 @@ final class Markttext {
     }
 
     /**
-     * Das Sortiment mit Preisen und was heute noch frei ist.
+     * Eine Seite der Staende des Bundes - Kopf, Zeilen, Hinweis.
      *
+     * <p><b>Die LEERE Liste kommt zuerst</b>, und sie ist hier keine Randerscheinung:
+     * Solange kein Schild steht, kauft und verkauft der Bund nichts, und das ist der
+     * Normalzustand eines frischen Servers. Ein Kopf mit "0 Staende" und nichts darunter
+     * liesse einen Spieler nach der Liste suchen.
+     *
+     * @param staende  alle Staende, geordnet - die Reihenfolge ist die der Ablage
+     *                 ({@code Kistenshop.NACH_STELLE})
+     * @param seite    welche Seite gewuenscht ist, ab 1
+     * @param jeSeite  wie viele Staende auf eine Seite gehen
      * @param heuteSchon was dieser Spieler heute schon aus Verkaeufen bekommen hat
      */
-    static List<Component> listeZeilen(Sprache sprache, Marktwerte werte,
-                                       long heuteSchon) {
+    static List<Component> listeZeilen(Sprache sprache, List<Kistenshop> staende,
+            int seite, int jeSeite, Marktwerte werte, long heuteSchon) {
         List<Component> zeilen = new ArrayList<>();
-        zeilen.add(sprache.eineZeile(MarktSatz.KOPF, Einsatz.keine()));
-        Ankaufliste ankauf = werte.ankauf();
-        if (ankauf.leer()) {
-            // Eine eigene Zeile und nicht eine leere Liste: Ein Spieler, der nur die
-            // Ueberschrift sieht, haelt es fuer einen Fehler.
+        if (staende.isEmpty()) {
             zeilen.add(sprache.eineZeile(MarktSatz.LEER, Einsatz.keine()));
             return zeilen;
         }
-        // EINE Zeile aus Worten, zusammengefuegt mit dem Trenner aus der Datei -
-        // dasselbe Muster wie bei den Spezialisierungen in Beruftext. Der Trenner darf
-        // leer sein; dann stossen die Namen aneinander. Haesslich, aber die Entscheidung
-        // des Betreibers, und dabei verstummt nichts.
-        String trenner = sprache.wort(MarktSatz.ZEILEN_TRENNER, Einsatz.keine());
-        List<String> stuecke = new ArrayList<>();
-        for (String material : ankauf.materialien()) {
-            stuecke.add(sprache.wort(MarktSatz.ZEILE, Einsatz.von("material", material)
-                    .mit("preis", sprache.pfennige(ankauf.pfennige(material)))));
+        int seiten = Seitenregel.seiten(staende.size(), jeSeite);
+        if (!Seitenregel.gibtEs(seite, staende.size(), jeSeite)) {
+            zeilen.add(sprache.eineZeile(MarktSatz.KEINE_SEITE,
+                    Einsatz.von("seite", seite).mit("seiten", seiten)));
+            return zeilen;
         }
-        zeilen.add(sprache.eineZeile(MarktSatz.SORTIMENT,
-                Einsatz.von("liste", String.join(trenner, stuecke))));
-        // Was heute noch geht - in MARK, denn der Deckel haengt am Gebuchten. Gerechnet
-        // von Deckelregel und nicht hier: Dieselbe Rechnung wie beim Buchen, sonst nennt
-        // die Anzeige einen anderen Rest als der Verkauf zulaesst.
-        long frei = Deckelregel.erlaubt(werte.tagesdeckel(), heuteSchon,
-                werte.tagesdeckel());
-        zeilen.add(sprache.eineZeile(MarktSatz.FREI,
-                Einsatz.von("betrag", sprache.betrag(frei))));
+        zeilen.add(sprache.eineZeile(MarktSatz.KOPF,
+                Einsatz.von("anzahl", staende.size()).mit("seite", seite)
+                        .mit("seiten", seiten)));
+        int von = Seitenregel.ersteZeile(seite, staende.size(), jeSeite);
+        int bis = Seitenregel.letzteZeile(seite, staende.size(), jeSeite);
+        for (Kistenshop stand : staende.subList(von, bis)) {
+            zeilen.add(sprache.eineZeile(MarktSatz.ZEILE, zeilenwerte(sprache, stand)));
+        }
+        if (Seitenregel.gehtWeiter(seite, staende.size(), jeSeite)) {
+            zeilen.add(sprache.eineZeile(MarktSatz.WEITER,
+                    Einsatz.von("naechste", seite + 1)));
+        }
+        // Und was heute noch zu holen ist - oder dass es keine Grenze gibt. ZWEI Saetze
+        // und nicht eine Zahl: "noch 0 Mark" waere bei einem abgeschalteten Deckel das
+        // Gegenteil der Wahrheit, und eine riesige Zahl liest niemand.
+        zeilen.add(werte.gedeckelt()
+                ? sprache.eineZeile(MarktSatz.FREI, Einsatz.von("betrag",
+                        sprache.betrag(Math.max(0L, werte.tagesdeckel() - heuteSchon))))
+                : sprache.eineZeile(MarktSatz.OHNE_DECKEL, Einsatz.keine()));
         return zeilen;
     }
 
-    // VERKAUFT UND ABSAGE SIND AM 10.11.2026 WEGGEFALLEN - mit /markt verkaufen. Was
-    // am Schild schiefgehen kann, baut Shoptext; dort stehen alle Antworten eines
-    // Kistenshops, und der Ankauf des Bundes ist seit diesem Schritt einer.
+    /** Die acht Werte einer Standzeile - die zwei Preisstuecke eingesetzt. */
+    private static Einsatz zeilenwerte(Sprache sprache, Kistenshop stand) {
+        return Einsatz.von("welt", stand.schildWelt())
+                .mit("x", stand.schildX())
+                .mit("y", stand.schildY())
+                .mit("z", stand.schildZ())
+                .mit("menge", stand.menge())
+                .mit("ware", stand.ware().name())
+                // DIE ZWEI BLICKWINKEL, und sie sind hier schon einmal vertauscht
+                // worden (Shoptext, 08.11.2026): verkauftWare() heisst "der Shop
+                // verkauft", also KAUFT der Kunde. Wer die zwei tauscht, bekommt an
+                // einem Stand, der nur ankauft, die Zeile "Kauf 0 Mark".
+                .mit("kauf", preisstueck(sprache, MarktSatz.KAUF,
+                        stand.verkauftWare(), stand.kaufpreis()))
+                .mit("verkauf", preisstueck(sprache, MarktSatz.VERKAUF,
+                        stand.kauftWare(), stand.verkaufpreis()));
+    }
+
+    /**
+     * Ein Preisstueck - oder NICHTS, wenn der Stand in dieser Richtung nicht handelt.
+     *
+     * <p>Dasselbe Mittel wie {@code parzelle.liste.mitbauer}: Ein leerer Wert
+     * verschwindet rueckstandslos, und darum stehen die Trenner in den Stuecken. Ein
+     * Stand, der nur ankauft, hat so gar keine Kaufangabe - statt einer "0 Mark", die
+     * {@code Shopschild} als {@code PREIS_BEIDE_NULL} abweist.
+     */
+    private static String preisstueck(Sprache sprache, MarktSatz satz, boolean handelt,
+            long preis) {
+        return handelt
+                ? sprache.wort(satz, Einsatz.von("preis", sprache.betrag(preis)))
+                : "";
+    }
 }

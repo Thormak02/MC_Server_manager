@@ -29,11 +29,11 @@ import java.util.Set;
 final class Sprachschluessel {
 
     /**
-     * Die vierzehn Bereiche, in der Reihenfolge der Bauschritte.
+     * Die fuenfzehn Bereiche, in der Reihenfolge der Bauschritte.
      *
      * <p>Als {@code Class} und nicht als {@code values()}: So braucht ein noch leerer
      * Bereich keinen Platzhalterschluessel, und die Probe kann trotzdem nachsehen, dass
-     * alle vierzehn gefuehrt werden.
+     * alle fuenfzehn gefuehrt werden.
      *
      * <p><b>{@link Berufsname} steht hier NICHT</b>, und das ist der Unterschied zwischen
      * einem Bereich und einer offenen Familie: Diese Liste verlangt, dass jeder Satz in
@@ -46,9 +46,9 @@ final class Sprachschluessel {
             BundSatz.class, MarkSatz.class, ParzellenSatz.class, AnfragenSatz.class,
             SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class,
             MarktSatz.class, BonusSatz.class, LadenSatz.class, MietSatz.class,
-            ShopSatz.class, BlockSatz.class);
+            ShopSatz.class, BlockSatz.class, TruheSatz.class);
 
-    /** Alle Saetze, aus allen vierzehn Bereichen - einmal gebaut, unveraenderlich. */
+    /** Alle Saetze, aus allen fuenfzehn Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
 
     /** Jeder Pfad der Datei auf seinen Satz - auch {@code .eins} und {@code .viele}. */
@@ -269,9 +269,6 @@ final class Sprachschluessel {
             case WARE_UNKLAR -> ShopSatz.SHOP_WARE_UNKLAR;
             case WARE_UNBEKANNT -> ShopSatz.SHOP_WARE_UNBEKANNT;
             case KEIN_BUNDRECHT -> ShopSatz.SHOP_KEIN_BUNDRECHT;
-            case BUND_ZWEI_RICHTUNGEN -> ShopSatz.SHOP_BUND_ZWEI_RICHTUNGEN;
-            case BUND_KAUFT_NICHT -> ShopSatz.SHOP_BUND_NICHT_IM_SORTIMENT;
-            case BUND_MENGE_UNEBEN -> ShopSatz.SHOP_BUND_MENGE_UNEBEN;
             case GESTOERT -> ShopSatz.SHOP_GESTOERT;
             case ABGEBAUT, KEIN_SHOP -> throw new IllegalArgumentException(bescheid
                     + " kommt vom Abbauen und nicht vom Anlegen - dort waehlt niemand"
@@ -327,10 +324,7 @@ final class Sprachschluessel {
             case KISTE_VOLL -> ShopSatz.SHOP_KISTE_VOLL;
             case KEIN_GELD -> ShopSatz.SHOP_KEIN_GELD;
             case SHOP_PLEITE -> ShopSatz.SHOP_PLEITE;
-            case BUND_KAUFT_NICHT -> ShopSatz.SHOP_BUND_KAUFT_NICHT;
-            case BUND_ZWEI_RICHTUNGEN -> ShopSatz.SHOP_BUND_ZWEI_PREISE;
             case BUND_DECKEL -> ShopSatz.SHOP_BUND_DECKEL;
-            case BUND_UNEBEN -> ShopSatz.SHOP_BUND_UNEBEN;
             case GESTOERT -> ShopSatz.SHOP_HANDEL_GESTOERT;
             case KEIN_SHOP -> throw new IllegalArgumentException("Auf einen Klick"
                     + " ohne Shop wird geschwiegen - dafuer gibt es keinen Satz,"

@@ -210,6 +210,20 @@ public record Shopwerte(int spielershopKauf, int spielershopVerkauf,
     }
 
     /**
+     * Dieselben Werte mit anderer Seitengroesse.
+     *
+     * <p>Die fuenfte {@code mitX}-Methode, und sie fehlte bis zum 10.11.2026: Solange
+     * nur {@code /shop liste} blaetterte, setzte jede Probe ihre Seitengroesse ueber den
+     * ganzen Satz. Seit {@code /markt liste} dieselbe Zahl benutzt, braucht es sie - und
+     * eine Probe, die dafuer den ganzen Satz neu baut, verliert die Vorgaben, die sie
+     * nicht nennt.
+     */
+    public Shopwerte mitZeilen(int andere) {
+        return new Shopwerte(spielershopKauf, spielershopVerkauf, bundshopVerkauf,
+                bundWort, andere);
+    }
+
+    /**
      * Welcher Satz fuer diese Lage gilt.
      *
      * <p>Die EINE Stelle, an der zwischen den Saetzen gewaehlt wird. Zwei Stellen waeren

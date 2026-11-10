@@ -712,7 +712,11 @@ class VerdienstwacheTest {
         var wache = wache(buch);
         wache.beimAbbauen(abbauen(7, 71, 13));
 
-        wache.beimAbgang(new PlayerQuitEvent(anna.spieler(), (Component) null));
+        // MIT Abgangsgrund: Der Bauplan ohne ihn ist veraltet und zum Entfernen
+        // markiert. Die Warnung war bis zum 10.11.2026 unsichtbar, weil die
+        // Uebersetzung der Proben UP-TO-DATE gemeldet hatte.
+        wache.beimAbgang(new PlayerQuitEvent(anna.spieler(), (Component) null,
+                PlayerQuitEvent.QuitReason.DISCONNECTED));
 
         assertEquals(10L, kasse.guthaben(anna.kennung()),
                 "sofort und nicht erst im naechsten Takt");

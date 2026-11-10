@@ -303,6 +303,11 @@ class GrenzeTest {
             "Shopklick.java",
             // /shop: EINE Sendestelle fuer vier Zweige und alle ihre Absagen.
             "ShopBefehle.java",
+            // Plan 7.2, die Freie Truhe: EINE Sendestelle fuer Oeffnen, Abweisen und
+            // Abrechnen. Sie redet im CHAT und nicht im Handbalken, anders als der
+            // Handel - eine Rueckgabe ueber dem Tagesdeckel muss lesbar bleiben,
+            // nachdem die Kiste zu ist.
+            "Truhenwache.java",
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
 
     /**
@@ -453,6 +458,13 @@ class GrenzeTest {
             // den Chat gebaut hat - und damit die Entscheidung umgedreht, dass ein
             // Klick im Handbalken antwortet.
             Map.entry("Shopklick.java", 1),
+            // Plan 7.2, die Freie Truhe: EINE Sendestelle fuer alle drei Lagen -
+            // Oeffnen, Abweisen und Abrechnen laufen durch dasselbe private sende(). Eine
+            // Zwei hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat, und der
+            // waere der erste, dessen Zeilen keine Bildtafel haelt. Die Zahl ist dabei
+            // nur die halbe Zusage: WAS gesendet wird, halten die Bildtafel und
+            // TruhenwacheTest.
+            Map.entry("Truhenwache.java", 1),
             Map.entry("SpielzeitBefehle.java", 4),
             Map.entry("Sprache.java", 3),
             Map.entry("WarpBefehle.java", 3));
@@ -2620,25 +2632,174 @@ class GrenzeTest {
         //
         // Geprueft wird die STELLE der Aufrufe in onEnable, nicht die Reihenfolge der
         // Methoden im Quelltext: Was zaehlt, ist, wann sie laufen.
+        // DIE LISTE DER MITFAHRER WIRD NICHT VON HAND GEFUEHRT, sondern im Aufruf des
+        // Taktes GELESEN. Vorher stand hier genau EIN Paar (Blockbuch und Spielzeit), und
+        // am 10.11.2026 ist gemessen worden, was das wert ist: Der vierte Mitfahrer
+        // truhenlauf kam dazu, und richteTruheEin() hinter richteSpielzeitEin() zu
+        // schieben liess alle Proben gruen - dieselbe Fehlerklasse, gegen die diese Probe
+        // gebaut wurde, eine Methode weiter. Ein fuenfter Mitfahrer ist jetzt am Tag
+        // seiner Einfuehrung geprueft.
         String plugin = plugintext();
         int anfang = plugin.indexOf("public void onEnable()");
         assertTrue(anfang >= 0, "onEnable fehlt in FreimarkenPlugin");
         String start = plugin.substring(anfang);
-
-        int baut = start.indexOf("richteBlockbuchEin();");
         int braucht = start.indexOf("richteSpielzeitEin();");
-        assertTrue(baut >= 0,
-                "richteBlockbuchEin() wird in onEnable nicht gerufen - 31af sagt das"
-                        + " schon, aber dann prueft diese Probe nichts");
         assertTrue(braucht >= 0,
                 "richteSpielzeitEin() wird in onEnable nicht gerufen - dann prueft diese"
                         + " Probe nichts");
-        assertTrue(baut < braucht,
-                "richteBlockbuchEin() MUSS vor richteSpielzeitEin() laufen: Jene baut die"
-                        + " Blockraeumung, diese gibt sie dem Spielzeittakt mit."
-                        + " Andersherum bekommt der Takt ein null - ein ERLAUBTER Wert,"
-                        + " also faellt nichts auf -, und das Blockbuch wird nie wieder"
-                        + " aufgeraeumt. Die Frist waere stumm wirkungslos.");
+        int takt = start.indexOf(TAKTBAU);
+        assertTrue(takt >= 0, "new Spielzeitwache( steht nicht in onEnable");
+
+        List<String> geprueft = new ArrayList<>();
+        String taktmethode = methodentext("richteSpielzeitEin");
+        for (String roh : start.substring(takt + TAKTBAU.length(),
+                start.indexOf(");", takt)).split(",")) {
+            String feld = roh.trim();
+            if (oertlichIn(taktmethode, feld)) {
+                // EIN NAME KANN BEIDES SEIN. buch ist ein Feld der Klasse UND eine
+                // oertliche Groesse, die drei richte-Methoden je fuer sich fuehren -
+                // auch richteSpielzeitEin selbst. Was dort entsteht, verdeckt das Feld
+                // und wird in derselben Methode weitergegeben: Es hat keine
+                // Reihenfolge. Ohne diese Frage schrieb die Probe den Namen der
+                // erstbesten Methode zu, die ihn irgendwo verwendet.
+                continue;
+            }
+            if (!istFeld(plugin, feld)) {
+                // NUR FELDER HABEN EINE REIHENFOLGE. buch zum Beispiel ist ein
+                // oertlicher Name, den mehrere richte-Methoden fuehren - jede baut ihr
+                // eigenes und gibt es in derselben Methode weiter. Ein solcher Name sagt
+                // ueber den Startablauf nichts, und ohne diese Frage haette die Probe
+                // ihn der erstbesten Methode zugeschrieben, die ihn verwendet.
+                continue;
+            }
+            String fueller = fuellendeMethode(plugin, feld);
+            if (fueller == null || fueller.equals("richteSpielzeitEin")) {
+                // Ein Feld, das richteSpielzeitEin SELBST fuellt, steht in der richtigen
+                // Reihenfolge, weil es dieselbe Methode ist - und ein Wert, den keine
+                // richte-Methode setzt, hat keine Reihenfolge.
+                continue;
+            }
+            int baut = start.indexOf(fueller + "(");
+            assertTrue(baut >= 0 && baut < braucht,
+                    fueller + "() fuellt das Feld " + feld + ", das new Spielzeitwache()"
+                            + " mitbekommt - es MUSS vor richteSpielzeitEin() laufen."
+                            + " Andersherum bekommt der Takt ein null, und weil null dort"
+                            + " ein ERLAUBTER Wert ist, faellt nichts auf: Der Mitfahrer"
+                            + " laeuft nie, und keine Meldung sagt es.");
+            geprueft.add(feld);
+        }
+        assertEquals(List.of("blockraeumung", "truhenlauf"), geprueft,
+                "GEPRUEFT werden muessen alle Mitfahrer, die aus einer eigenen"
+                        + " richte-Methode kommen. Diese Liste steht hier, damit ein Lauf"
+                        + " ohne Messung nicht gruen meldet: Fiele die Erkennung aus,"
+                        + " waere die Schleife leer und die Probe stumm zufrieden."
+                        + " Kommt ein Mitfahrer dazu, gehoert er HIER hinein.");
+    }
+
+    /** Der Aufruf, aus dem die Mitfahrer des Taktes gelesen werden. */
+    private static final String TAKTBAU = "new Spielzeitwache(";
+
+    /**
+     * Ob dieser Methodentext den Namen als eigene, oertliche Groesse fuehrt.
+     *
+     * <p>Erkannt am Typ davor: Eine oertliche Deklaration faengt mit ihrem Typ an und
+     * der ist grossgeschrieben, eine Zuweisung an ein Feld mit dem Namen selbst.
+     */
+    private static boolean oertlichIn(String text, String feld) {
+        for (String zeile : text.lines().toList()) {
+            String nackt = zeile.strip();
+            if (!nackt.isEmpty() && Character.isUpperCase(nackt.charAt(0))
+                    && nackt.contains(" " + feld + " = ")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Ob {@code FreimarkenPlugin} ein FELD dieses Namens hat.
+     *
+     * <p>Erkannt an der Deklaration ohne Zuweisung auf Klassenebene: Ein oertlicher Name
+     * steht immer mit seinem Typ in derselben Zeile wie seine Zuweisung.
+     */
+    private static boolean istFeld(String plugin, String feld) {
+        for (String zeile : plugin.lines().toList()) {
+            String nackt = zeile.strip();
+            if (nackt.startsWith("private ") && nackt.endsWith(" " + feld + ";")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Die {@code richteXEin}-Methode, die dieses Feld fuellt - oder {@code null}.
+     *
+     * <p>Gelesen und nicht gepflegt: Eine Liste von Paaren im Quelltext dieser Probe
+     * waere eine zweite Abschrift des Startablaufs, und die zweite Abschrift ist immer
+     * die, die niemand nachzieht.
+     */
+    private static String fuellendeMethode(String plugin, String feld) {
+        // Mit einem Leerzeichen davor, und das ist kein Schoenheitsfehler: Ohne es
+        // endet "mietbuch = " auf "buch = ", und das Feld buch - eine oertliche Groesse
+        // von richteSpielzeitEin - waere der Blockbuchmethode zugeschrieben worden.
+        String zuweisung = " " + feld + " = ";
+        for (int stelle = plugin.indexOf(zuweisung); stelle >= 0;
+                stelle = plugin.indexOf(zuweisung, stelle + 1)) {
+            int kopf = plugin.lastIndexOf("private void richte", stelle);
+            if (kopf < 0) {
+                continue;
+            }
+            // Nur wenn die Zuweisung WIRKLICH in jener Methode steht: Faengt dazwischen
+            // schon die naechste an, gehoert sie einer anderen - oder gar keiner.
+            if (plugin.substring(kopf + 1, stelle).contains("    private ")) {
+                continue;
+            }
+            return plugin.substring(kopf + "private void ".length(),
+                    plugin.indexOf("(", kopf));
+        }
+        return null;
+    }
+
+    @Test
+    @DisplayName("31an - die Truhenwache wird angemeldet, sobald eine Stelle eingetragen"
+            + " ist")
+    void truhenwacheWirdAngemeldet() {
+        // DIE ZEILEN, DIE KEIN LAUF ERREICHT: Der Start des Plugins braucht einen
+        // laufenden Server. Kehrt sich die Frage nach den Stellen um, wird die Wache NIE
+        // angemeldet - und dann ist die Freie Truhe eine gewoehnliche Kiste: kein
+        // Tagesdeckel, kein Verbot, kein "einer zur Zeit". Der naechtliche Lauf leert sie
+        // weiter, als waere alles in Ordnung, und die Startzeile nennt einen Deckel, den
+        // es nicht mehr gibt.
+        String start = methodentext("richteTruheEin");
+
+        int lauf = start.indexOf("truhenlauf = new Truhenlauf(");
+        int abbruch = start.indexOf("if (!buch.gibtTruhen())");
+        int anmelden = start.indexOf("registerEvents(new Truhenwache(");
+        assertTrue(lauf >= 0, "der taegliche Lauf wird nicht gebaut: " + start);
+        assertTrue(abbruch > lauf,
+                "der Lauf entsteht VOR der Abkuerzung: Ohne Stelle gibt es nichts zu"
+                        + " leeren, aber die Zeilen von gestern muessen trotzdem geraeumt"
+                        + " werden - sonst waeren sie unloeschbar. " + start);
+        assertTrue(anmelden > abbruch,
+                "die Wache wird angemeldet, und zwar nach der Frage nach den Stellen: "
+                        + start);
+    }
+
+    /**
+     * Der Koerper einer Methode von {@code FreimarkenPlugin} - fuer die Zeilen, die kein
+     * Lauf erreicht.
+     *
+     * <p>Abgeschnitten wird am naechsten Mitglied der Klasse und nicht an einer
+     * geschweiften Klammer: Eine Klammer auf vier Leerzeichen steckt auch in jeder auf
+     * acht.
+     */
+    private static String methodentext(String name) {
+        String plugin = plugintext();
+        int anfang = plugin.indexOf("private void " + name + "()");
+        assertTrue(anfang >= 0, name + "() fehlt in FreimarkenPlugin");
+        int ende = plugin.indexOf("    private ", anfang + 1);
+        return plugin.substring(anfang, ende < 0 ? plugin.length() : ende);
     }
     @Test
     @DisplayName("31aj - jeder Mitfahrer des Spielzeittakts wird auch GERUFEN")

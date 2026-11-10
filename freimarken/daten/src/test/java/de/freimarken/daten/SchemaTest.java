@@ -70,6 +70,7 @@ class SchemaTest {
         1795794151, // Schritt 15
         -1684371841, // Schritt 16
         -1321860805, // Schritt 17
+        175182761, // Schritt 18
     };
 
     private static String datenbanktext() {

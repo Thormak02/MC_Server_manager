@@ -1047,32 +1047,45 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
   **Gebaut am 10.11.2026, und dabei kam eine Wache weniger heraus als geplant.** Hier
   stand „dazu kommen eine Wache auf das Anklicken und das Lesen der zwei Schildzeilen" —
   beides gab es schon: Ein Bundshop mit Ankaufpreis IST der Bundesmarkt, und ein Klick
-  auf sein Schild läuft seit dem 08.11.2026 durch `Shopklick`. Gebraucht wurden darum
-  nicht eine neue Wache, sondern **drei Regeln** an der Stelle, wo die Tafel des Marktes
-  auf eine Shopzeile trifft (`Bundankauf` im Kern):
+  auf sein Schild läuft seit dem 08.11.2026 durch `Shopklick`. Gebraucht wurde darum
+  keine neue Wache, sondern **zwei Dinge**, die den Bund von einem Spielerladen
+  unterscheiden (`Bundankauf` im Kern):
 
-  1. **Der Preis kommt aus der Tafel, nicht vom Schild.** Nur so wirkt eine
-     Preisänderung an jedem Stand, ohne dass einer neu beschrieben wird — das ist die
-     Zusage „beliebig anpassbar", und mit einer Zahl in der Shopzeile wäre
-     `bundesmarkt.ankauf` nach dem ersten Schild eine zweite Wahrheit. Nennt ein Schild
-     eine andere Zahl, wird zur Tafel gehandelt und das Protokoll sagt, welches Schild
-     neu zu beschreiben ist.
-  2. **Die Menge des Standes muss eine ganze Mark ergeben.** `Verkaufsregel` ließ beim
-     Befehl Stücke liegen, die keine ganze Mark ergaben; am Schild ist die Menge FEST,
-     und was nicht aufgeht, verschwände bei jedem Handel unsichtbar. Ein solcher Stand
-     entsteht nicht, und die Absage nennt die kleinste Menge, mit der er entstünde.
-  3. **Ein Bundschild trägt genau EINE Richtung.** Was der Bund ankauft, steht in der
-     Tafel, was er verkauft, auf dem Schild — auf einem Schild mit beiden Zahlen
-     entscheidet also die eine Hälfte der Betreiber und die andere die Tafel, und eine
-     spätere Erhöhung des Ankaufpreises machte den Stand zum Rundlauf. Geprüft wird das
-     beim Anlegen UND bei jedem Ankauf: Ein Schild von vorher trägt beides weiter.
+  1. **Der Tagesdeckel gilt**, gezählt aus dem Buchungsbuch, und gebucht wird
+     `bundesmarkt_verkauf`. Das schließt die benannte Lücke aus [7.4](#74-kistenshops-entschieden-08112026):
+     Ein Bundshop mit Verkaufspreis war eine Geldquelle ohne Deckel. Es gibt damit nur
+     noch EINEN Weg vom Spieler zum Geld des Bundes, und der ist gedeckelt.
+  2. **OB gedeckelt wird, entscheidet der Betreiber** [entschieden 10.11.2026]:
+     `bundesmarkt.tagesdeckel: 0` heißt kein Deckel. Bis dahin war die 0 verboten — sie
+     hätte „niemand kann verkaufen" bedeutet. Abgeschaltet wird der Ankauf jetzt dadurch,
+     dass kein Schild dafür steht, und damit ist die Zahl frei für die Einstellung, um
+     die es wirklich geht.
 
-  **Der Ort ist damit das Gebäude und keine Weltprüfung mehr.** `/markt verkaufen` hatte
-  eine Abfrage „bist du in Altfurt?", die den Ort nachbilden sollte; sie ist mit dem
-  Zweig gegangen. Ein Schild steht, wo es steht — eine schärfere Ortsangabe, als eine
-  Weltprüfung je war. Dafür sagt der Startbericht jetzt, **wie viele Ankaufstände
-  stehen**: Wer sein Sortiment einstellt und kein Schild stellt, hat einen Markt, der
-  nichts kauft, und nirgends fehlt etwas.
+  **Das SORTIMENT ist am selben Tag gefallen, und das war eine Umkehr.** Zwischen Mittag
+  und Nachmittag galt: Der Ankaufpreis steht in `bundesmarkt.ankauf`, das Schild nennt
+  ihn nur, und was nicht in der Liste steht, kauft der Bund nicht. Dazu gehörten die
+  Pfennige als Einheit, die Prüfung „Menge mal Preis muss eine ganze Mark ergeben" und
+  die Regel, dass ein Bundschild nur eine Richtung tragen darf (ein Riegel gegen einen
+  Rundlauf zwischen Tafelpreis und Schildpreis).
+
+  Der Betreiber hat das verworfen, und sein Satz trägt die Entscheidung ganz: **„einfach
+  alles freigeben, admins stellen die Schilder auf, es kann ja nur ge- und verkauft
+  werden, wofür es ein Schild gibt."** Die Tafel war ein Tor hinter einem Tor — und sie
+  verbot genau das, was er wollte. Was damit gilt:
+
+  - **Der Preis steht auf dem Schild**, wie bei jedem Kistenshop. Ein Stand des Bundes
+    ist ein Schild mit dem Bundwort in der ersten Zeile; ein Schildpreis ist immer eine
+    ganze Mark, und beide Preise auf einem Schild hält `Kistenshop` selbst („der
+    Verkaufspreis darf nie über dem Kaufpreis liegen") — der Rundlauf ist unmöglich, und
+    ein Bundschild darf wieder beide Richtungen tragen.
+  - **`/markt` zeigt die STÄNDE** und nicht mehr eine Liste aus der Datei: Welt,
+    Koordinaten, Menge, Ware und die beiden Preise, auf Seiten wie `/shop liste`. Damit
+    ist der Bundesmarkt erst wirklich ein Ort — die Weltprüfung von `/markt verkaufen`
+    sollte das nachbilden und ist mit dem Zweig gegangen.
+  - **Was verloren ist, steht im TODO:** Niemand prüft mehr, ob ein Bundschild mehr
+    zahlt als die Arbeit einbringt. Die Tafel wurde dafür gegen die Lohnliste gestellt
+    („der Markt darf nie mehr zahlen als die Arbeit"); am Schild müsste dieser Riegel
+    beim Anlegen sitzen.
 - Die **Jobwand** im Zunfthaus: Spieler hängen private Aufträge aus. Billige Idee mit viel
   Wirkung [belegt].
 
@@ -1119,10 +1132,130 @@ Tafel nicht hergibt:
 Eine offene Truhe in der Markthalle: jeder darf hineinlegen, jeder darf herausnehmen. Kostet
 nichts, schafft Gemeinschaft, entsorgt Überschuss.
 
+#### Ab Werk ohne Deckel und ohne Verbote [entschieden 10.11.2026]
+
+Nach dem Spieltest: **`entnahme-je-tag: 0` und eine leere Verbotsliste**. Die Truhe steht
+am Spawn, wo niemand bauen darf; was darin liegt, hat jemand freiwillig hineingelegt, und
+ein Deckel schützte dort nichts, kostete aber jeden Beschenkten eine Erklärung. Beides
+bleibt **gebaut, geprüft und einstellbar** — der Deckel in `entnahme-je-tag`, die Liste in
+`verbotene-gegenstaende`, die die Namen von unten als Beispiel mitführt. Die Empfehlung
+unten bleibt als Empfehlung stehen.
+
+**Damit fällt auch das „nur ein Zuschauer“ weg** [entschieden 10.11.2026]: „man soll auch
+gemeinsam hereinschauen können“. Die Zusage war nie Höflichkeit, sondern die Bedingung der
+Zählung — und gezählt wird nur für den Deckel und für die Rückgabe verbotener
+Gegenstände. Fehlen beide, wird nichts gezählt, kein Tagesstand gelesen oder geschrieben,
+und alle sehen gemeinsam hinein. Wer eines von beiden einträgt, bekommt die Zählung **und**
+das „einer zur Zeit“ zurück; die Rechenprobe im Startbericht nennt die Betriebsart. Der
+Trichterschutz bleibt in beiden Fällen — er hängt nicht an der Zählung, sondern daran, dass
+die Truhe Spielern gehört und nicht Maschinen.
+
 Damit sie nicht zum Müllhaufen oder zum Selbstbedienungsladen wird [empfohlen]: Entnahme
 gedeckelt (etwa 16 Gegenstände je Spieler und Tag), Inhalt wird täglich geleert, keine
 geschriebenen Bücher und keine Shulkerkisten — sonst wandert Besitz hinein, der dort nicht
 hingehört. Alles wird protokolliert.
+
+#### Gezählt wird die Differenz, nicht der Klick [entschieden 10.11.2026]
+
+Ein Deckel „16 Gegenstände je Tag" klingt wie eine Zählung von Klicks, und als Zählung von
+Klicks ist er in einer Minute umgangen: Aus einer offenen Truhe nimmt man mit Linksklick,
+Rechtsklick, Shift-Klick, Doppelklick auf einen Stapel, mit der Zahlentaste, durch Ziehen über
+mehrere Felder und mit `Q` aus dem offenen Fenster heraus. Das sind sieben Wege zur selben
+Tat, und ein Programm, das sechs davon kennt, hat keinen Deckel.
+
+Also wird **nicht gezählt, WAS geklickt wurde, sondern was am Ende FEHLT**: Beim Öffnen wird
+der Inhalt gezählt, beim Schließen wieder, und die Differenz ist die Entnahme. Dafür braucht
+die Truhe zwei Zusagen, die beide die Wache gibt:
+
+- **Nur ein Zuschauer zur Zeit.** Sonst ist die Differenz nicht die Entnahme eines Spielers,
+  sondern die von zweien, und angerechnet bekäme sie der, der zuletzt schließt.
+- **Keine Trichter an der Truhe.** Sonst nimmt eine Maschine, und die Differenz ist niemandes
+  Entnahme.
+
+#### Angerechnet wird, was er behält [entschieden 10.11.2026]
+
+Wer über dem Deckel liegt, bekommt den Überschuss beim Schließen **zurück in die Truhe gelegt**
+— die Plätze sind frei, er hat sie gerade geleert. Angerechnet wird darum nicht, was er genommen
+hat, sondern was nach dem Zurücklegen bei ihm **bleibt**. Der Unterschied ist nicht
+buchhalterisch: Wer nimmt, die Sachen vor dem Schließen wegwirft und dann schließt, hätte sonst
+einen Tagesstand ohne Ware, und der Deckel wäre eine Strafe für Unachtsamkeit statt einer
+Grenze.
+
+**Hineinlegen zählt gar nicht.** Die Differenz ist dann null oder negativ, und beides ist keine
+Entnahme. Ein Deckel auf das Schenken machte aus der Gemeinschaftstruhe eine Abgabestelle mit
+Quote.
+
+#### Was einstellbar ist [entschieden 10.11.2026]
+
+Nichts davon steht fest im Programm:
+
+| Schlüssel | Bedeutung |
+|---|---|
+| `freie-truhe.entnahme-je-tag` | der Deckel, 0 bis 3456; **0 heißt kein Deckel** — dieselbe Form wie beim Tagesdeckel des Bundesmarkts |
+| `freie-truhe.truhen` | wo die Truhen stehen, je Truhe drei ganze Zahlen — in der **Ladenwelt** (`laeden.welt`), denn die Freie Truhe steht in der Markthalle |
+| `freie-truhe.verbotene-gegenstaende` | Materialien, die nicht hineindürfen; **ab Werk leer**, also nichts verboten — die Namen der Empfehlung führt die `config.yml` als Beispiel mit |
+
+Der Deckel gilt je **Spieler**, nicht je Truhe: Wer zwei Truhen aufstellt, verschenkt damit
+nicht zwei Tagesmengen. **Keine Vorgabe für die Stellen** — eine geratene Koordinate zeigte in
+unerschlossenes Gelände, und dort stünde dann eine Kiste, aus der jeder nehmen darf; ohne
+Eintrag gibt es keine Freie Truhe, und die Wache wird gar nicht angemeldet. Eine Stelle
+**innerhalb einer Ladeneinheit** wird abgewiesen: Dort käme niemand außer dem Mieter heran, und
+der nimmt ohne Deckel.
+
+Die Zahlen sind **neuladbar**, die Stellen nicht. Der Grund ist kein Ordnungssinn: Eine Stelle,
+die sich während eines offenen Fensters ändert, rechnete die Entnahme gegen den Inhalt einer
+anderen Kiste ab. Derselbe Schnitt wie im Abschnitt `laeden:`, wo die Zahlen der Miete und die
+Einheiten zwei Leser haben.
+
+Die Liste der verbotenen Gegenstände ist eine **Liste** und kein `switch`: Welcher Besitz dort
+nicht hingehört, entscheidet der Betreiber, und morgen ist es ein anderer.
+
+#### Die Zeile je Spieler und Tag
+
+Eine Tabelle `freie_truhe` mit einer Zeile je Spieler und Tag, **aufschlagend** geschrieben:
+Wer dreimal am Tag an die Truhe geht, soll dreimal zählen. Ein setzendes Schreiben verlöre die
+vorigen Griffe, und der Deckel wäre so oft offen, wie man die Truhe schließt. Gefragt wird
+immer nur nach **heute**; der tägliche Lauf an der Tagesgrenze (siehe [8.8](#88-die-spielzeit-und-die-tagesgrenze-erledigt-03112026))
+leert die Truhe und räumt die Zeilen von vor heute — **ausschließend**, denn ein einschließendes
+Löschen öffnete jedem den Deckel genau in dem Augenblick, in dem die Truhe wieder voll ist.
+
+#### Der tägliche Lauf [gebaut 10.11.2026]
+
+Er fährt als Mitfahrer im Spielzeittakt mit, wie die Ladenmiete und das Aufräumen des
+Blockbuchs — Plan [8.8](#88-die-spielzeit-und-die-tagesgrenze-erledigt-03112026) schließt einen
+zweiten Zeitgeber aus. Drei Verneinungen tragen ihn:
+
+- **Eine offene Truhe wird nicht geleert**, und der Tagesmerker bleibt dann stehen. Sonst wäre
+  der ganze Inhalt die Entnahme des Spielers, der gerade hineinsieht — er bekäme einen
+  Tagesdeckel für Ware, die er nie gesehen hat.
+- **Geräumt wird erst, wenn alle Truhen leer sind.** Die Zeilen von gestern sind der Tagesdeckel
+  von gestern.
+- **Geräumt wird auch, wenn es keine Truhe mehr gibt.** Wer die letzte Stelle aus der Datei
+  nimmt, will seine alten Tageszeilen nicht für immer behalten.
+
+#### Was die Wache erzwingt
+
+**Ein Trichter bekommt nichts** — in beiden Richtungen, denn ein Trichter, der hineinlegt, füllte
+die Truhe mit dem, was eine Maschine auswirft, und der tägliche Lauf löschte es jede Nacht. Das
+gilt **immer**: Es hängt nicht an der Zählung, sondern daran, dass die Truhe Spielern gehört und
+nicht Maschinen.
+
+**Einer sieht zur Zeit hinein — aber nur, wenn gezählt wird** [entschieden 10.11.2026]. Die
+Zusage ist die Bedingung der Zählung und keine Höflichkeit; gezählt wird nur für den Deckel und
+für die Rückgabe verbotener Gegenstände. Fehlen beide, sehen alle gemeinsam hinein (siehe oben).
+Der Tagesstand gehört dabei allein dem **Deckel**: Ohne Deckel wird er nicht einmal gelesen —
+sonst hält eine Störung der Datenbank eine Truhe zu, die gar keinen Deckel hat.
+
+**Verbotene Gegenstände kommen beim Schließen zurück** und werden nicht beim Hineinlegen
+abgewiesen — aus demselben Grund wie die Zählung: In eine offene Kiste legt man auf ebenso vielen
+Wegen, wie man herausnimmt. Zurück geht nur, was *dieser* Spieler neu hineingelegt hat; was schon
+vorher darin lag, räumt der tägliche Lauf. Sonst bekäme der nächste Spieler, der nur hineinsieht,
+fremde Ware in die Hand, wenn der Betreiber ein Material nachträglich auf die Liste setzt.
+
+**Kein eigenes Recht.** Wer an der Truhe steht, darf hineinsehen; es gibt kein
+`freimarken.truhe`. Ein Recht für eine Kiste, die in der Halle steht, wäre eine Zeile in der
+`plugin.yml`, die niemand pflegt — gesperrt wird ein Spieler über den Bauschutz der Halle oder
+gar nicht.
 
 ### 7.3 Spielerhandel [entschieden]
 

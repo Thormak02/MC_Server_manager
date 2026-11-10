@@ -199,16 +199,12 @@ public final class Wirtschaftsstand {
                     + alt.verdienst().loehne().anzahl() + " -> "
                     + neu.verdienst().loehne().anzahl() + " Zeilen (geaendert)");
         }
-        // Der Bundesmarkt: Deckel und Sortiment. Das Sortiment wird VERGLICHEN und
-        // nicht gezaehlt - ein geaenderter Preis bei gleicher Laenge ist genau die
-        // Aenderung, die der Betreiber gerade gemacht hat.
+        // Der Bundesmarkt: nur noch der Deckel. Das SORTIMENT stand hier bis zum
+        // 10.11.2026 und wurde verglichen statt gezaehlt; es ist mit der Tafel
+        // bundesmarkt.ankauf gefallen - verkauft wird am Schild, und was es gibt,
+        // entscheidet, welche Schilder stehen.
         nenneZahl(geaendert, Marktwerte.PFAD_TAGESDECKEL,
                 alt.markt().tagesdeckel(), neu.markt().tagesdeckel());
-        if (!alt.markt().ankauf().equals(neu.markt().ankauf())) {
-            geaendert.add(Marktwerte.PFAD_ANKAUF + ": "
-                    + alt.markt().ankauf().anzahl() + " -> "
-                    + neu.markt().ankauf().anzahl() + " Materialien (geaendert)");
-        }
         // Die Messstelle: beide Zahlen und die Artenliste. Die Liste wird VERGLICHEN und
         // nicht gezaehlt, aus demselben Grund wie beim Sortiment - wer "benutzen" gegen
         // "kaempfen" tauscht, hat weiter sechs Arten und eine andere Messung.
@@ -231,6 +227,15 @@ public final class Wirtschaftsstand {
                 alt.bonus().reisstAbLuecke(), neu.bonus().reisstAbLuecke());
         nenneZahl(geaendert, Bonuswerte.PFAD_MINDEST_MINUTEN,
                 alt.bonus().mindestMinuten(), neu.bonus().mindestMinuten());
+        // Die Freie Truhe: der Deckel und die Verbotsliste. Die Liste wird VERGLICHEN
+        // und nicht gezaehlt, aus demselben Grund wie das Saatgut - wer eine
+        // Trankflasche gegen eine Karte tauscht, hat weiter einen Eintrag und ein
+        // anderes Verbot. Die STELLEN stehen nicht hier: Sie sind kein Teil dieses
+        // Standes, sondern werden nur beim Start gelesen (Truhenverzeichnis).
+        nenneZahl(geaendert, Truhenwerte.PFAD_ENTNAHME,
+                alt.truhe().entnahmeJeTag(), neu.truhe().entnahmeJeTag());
+        nenneMenge(geaendert, Truhenwerte.PFAD_VERBOTEN,
+                alt.truhe().verboten(), neu.truhe().verboten());
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");

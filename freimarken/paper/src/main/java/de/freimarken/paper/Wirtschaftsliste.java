@@ -172,6 +172,14 @@ final class Wirtschaftsliste {
         klagen.addAll(handel.klagen());
         bericht.addAll(handel.bericht());
 
+        // Die Freie Truhe: zwei neuladbare Angaben aus dem Abschnitt freie-truhe:. Die
+        // STELLEN im selben Abschnitt liest Truhenliste.stellen - sie braucht den
+        // Weltschluessel und die Ladeneinheiten, die der Aufrufer hat, und dieser Leser
+        // nicht. Derselbe Schnitt wie bei der Ladenmiete und ihren Einheiten.
+        Truhenliste.Ergebnis truhe = Truhenliste.ausKonfiguration(wurzel);
+        klagen.addAll(truhe.klagen());
+        bericht.addAll(truhe.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -203,7 +211,7 @@ final class Wirtschaftsliste {
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
                 gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
                 markt.werte(), messung.werte(), bonus.werte(), laeden.werte(),
-                handel.werte()), klagen, bericht);
+                handel.werte(), truhe.werte()), klagen, bericht);
     }
 
     /**

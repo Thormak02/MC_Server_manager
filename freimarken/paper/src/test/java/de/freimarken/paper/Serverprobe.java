@@ -144,7 +144,6 @@ final class Serverprobe {
      */
     private static int schreibzuege;
 
-    /** Raeumt Welten, Chunkdaten und den Schreibzaehler weg. */
     /**
      * Meldet die Blockdaten an dieser Stelle an.
      *
@@ -235,6 +234,7 @@ final class Serverprobe {
                 });
     }
 
+    /** Raeumt Welten, Chunkdaten und den Schreibzaehler weg. */
     static void keineWeltenMehr() {
         WELTEN.clear();
         BLOCKDATEN.clear();

@@ -1,37 +1,48 @@
 package de.freimarken.paper;
 
-import de.freimarken.kern.Ankaufliste;
 import de.freimarken.kern.Marktwerte;
-import de.freimarken.kern.Verkaufsregel;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 
 /**
- * Liest den Bundesmarkt aus der {@code config.yml} - den Tagesdeckel und das Sortiment.
+ * Liest den Bundesmarkt aus der {@code config.yml} - den Tagesdeckel.
  *
  * <p>Nach demselben Muster wie {@link Verdienstliste}: reine Dateiarbeit, gesammelte
- * Klagen statt Ausnahmen, und der Rueckfall steht im Programm - mit derselben Ausnahme,
- * und sie ist hier dieselbe Entscheidung: <b>Das SORTIMENT hat keinen Rueckfall.</b> Eine
- * Liste im Programm waere eine zweite Abschrift der ausgelieferten Datei, und zwei
- * Abschriften derselben Tabelle laufen auseinander. Fehlt sie, kauft der Bund nichts -
- * die sichere Richtung, denn ein geratener Ankaufpreis macht Geld, das keine
- * Ruecksicherung zurueckholt.
+ * Klagen statt Ausnahmen, und der Rueckfall steht im Programm.
  *
- * <p><b>Jedes Material wird gegen {@link Material} geprueft</b>, mit
- * {@link Material#getMaterial(String)} und NICHT mit {@code matchMaterial}: Jenes fragt
- * die Registry des Servers, und dieser Leser soll ohne Server pruefbar bleiben. Der Preis
- * ist, dass ein Name mit Bereichsvorsatz ({@code minecraft:stone}) nicht erkannt wird;
- * die ausgelieferte Datei schreibt darum nur den nackten Namen, und die Klage sagt es.
+ * <p><b>Das SORTIMENT stand hier bis zum 10.11.2026</b> - eine Tafel
+ * {@code bundesmarkt.ankauf} mit je Material einem Ankaufpreis in Pfennigen, samt Pruefung
+ * gegen {@link org.bukkit.Material} und einer Klage je unbrauchbarer Zeile. Sie ist
+ * gefallen, und die Begruendung ist ein Satz des Betreibers: <b>"es kann ja nur ge- und
+ * verkauft werden, wofuer es ein Schild gibt."</b> Ein zweites Tor hinter dem Schild
+ * verbot ihm genau das, was er wollte - alles freizugeben.
+ *
+ * <p>Damit ist dieser Leser fast leer, und das ist richtig so: Was der Bund ankauft, steht
+ * nicht mehr in einer Datei, sondern an seinen Schildern. Was der BERICHT davon noch
+ * nennen kann, nennt die Startzeile der Kistenshops - sie zaehlt die Staende, und sie
+ * kann es erst, wenn die Shops gelesen sind.
  */
 final class Marktliste {
 
     /** Alle Schluessel, die diese Klasse liest - fuer die Meldung ueber fehlende Zeilen. */
     private static final List<String> SCHLUESSEL = List.of(
-            Marktwerte.PFAD_TAGESDECKEL,
-            Marktwerte.PFAD_ANKAUF);
+            Marktwerte.PFAD_TAGESDECKEL);
+
+    /**
+     * Der Abschnitt, den es nicht mehr gibt - und ueber den geklagt wird.
+     *
+     * <p>Eine vorhandene {@code config.yml} wird beim Update NIE ueberschrieben: Wer von
+     * einer aelteren Fassung kommt, hat {@code bundesmarkt.ankauf} mit sechsundfuenfzig
+     * Zeilen in seiner Datei. Ohne diese Klage sagt ihm niemand, dass sie nicht mehr
+     * gelesen wird - er stellt dort Preise ein, wartet auf ihre Wirkung und sucht den
+     * Fehler ueberall sonst.
+     *
+     * <p>Dasselbe Mittel wie {@code Shopliste.nenneAlte} und derselbe Nutzergrundsatz:
+     * Eine Zahl, die in der Datei steht und nicht wirkt, ist die schlimmste Art
+     * Einstellung.
+     */
+    private static final String ALTE_TAFEL = "bundesmarkt.ankauf";
 
     /** Was in der Datei stand - und woran es gehapert hat. */
     record Ergebnis(Marktwerte werte, List<String> klagen, List<String> bericht) {
@@ -52,11 +63,9 @@ final class Marktliste {
             return new Ergebnis(Marktwerte.VORGABE, klagen, bericht);
         }
         nenneFehlende(wurzel, bericht);
-
-        long deckel = deckel(wurzel, klagen, bericht);
-        Ankaufliste ankauf = ankauf(wurzel.getConfigurationSection(
-                Marktwerte.PFAD_ANKAUF), klagen, bericht);
-        return new Ergebnis(new Marktwerte(deckel, ankauf), klagen, bericht);
+        nenneAlteTafel(wurzel, klagen);
+        return new Ergebnis(new Marktwerte(deckel(wurzel, klagen, bericht)), klagen,
+                bericht);
     }
 
     /**
@@ -66,6 +75,19 @@ final class Marktliste {
      * mehr als Faktor 2 verstellt, muss das bestaetigen. Ein Deckel, der aus einem
      * Vertipper fuenfzigtausend wird, ist kein Deckel mehr - und das Geld dahinter liegt
      * binnen Minuten auf vielen Konten.
+     *
+     * <p><b>Eine 0 ist seit dem 10.11.2026 erlaubt und heisst: kein Deckel.</b> Vorher
+     * wurde sie verworfen, mit der Begruendung "eine 0 hiesse, niemand kann verkaufen -
+     * wer den Ankauf abschalten will, laesst die Liste leer". Die Liste gibt es nicht
+     * mehr; abgeschaltet wird der Ankauf dadurch, dass kein Schild dafuer steht. Damit
+     * ist die 0 frei fuer die Einstellung, die der Betreiber braucht.
+     *
+     * <p><b>Der Sprungschutz greift bei der 0 nicht</b>, und das ist eine Folge und kein
+     * Versehen: {@code Wirtschaftsliste.betrag} vergleicht gegen die ausgelieferten
+     * 5.000, und von 5.000 auf 0 ist mehr als Faktor 2 - also verlangt er eine
+     * Bestaetigung. Wer den Deckel abschaltet, traegt sie ein; das ist dieselbe Huerde
+     * wie bei jeder anderen grossen Aenderung eines Geldwertes, und sie ist hier
+     * angebracht: Ohne Deckel ist der Ankauf des Bundes eine Quelle ohne Grenze.
      */
     private static long deckel(ConfigurationSection wurzel, List<String> klagen,
                                List<String> bericht) {
@@ -74,85 +96,42 @@ final class Marktliste {
                 Marktwerte.HOECHSTER_TAGESDECKEL, "Mark", klagen, bericht);
         if (!Marktwerte.brauchbarerDeckel(gelesen)) {
             klagen.add(Marktwerte.PFAD_TAGESDECKEL + " ist " + gelesen
-                    + " - verworfen. Eine 0 hiesse, niemand kann verkaufen; wer den"
-                    + " Ankauf abschalten will, laesst die Liste leer. "
+                    + " - verworfen. Erlaubt ist " + Marktwerte.KEIN_DECKEL + " bis "
+                    + Marktwerte.HOECHSTER_TAGESDECKEL + ", und eine "
+                    + Marktwerte.KEIN_DECKEL + " heisst: kein Deckel. "
                     + Wirtschaftsliste.esBleibt(Marktwerte.VORGABE_TAGESDECKEL));
             return Marktwerte.VORGABE_TAGESDECKEL;
+        }
+        if (gelesen == Marktwerte.KEIN_DECKEL) {
+            // Ein BERICHT und keine Klage: Es ist eine Einstellung. Aber eine, die man
+            // lesen soll - der Ankauf des Bundes ist damit eine Geldquelle ohne Grenze,
+            // und das ist eine Entscheidung und kein Zustand, in den man rutscht.
+            bericht.add(Marktwerte.PFAD_TAGESDECKEL + " ist "
+                    + Marktwerte.KEIN_DECKEL + ": KEIN Tagesdeckel. Wer an einem"
+                    + " Bundschild verkauft, kann beliebig viel Geld am Tag bekommen -"
+                    + " begrenzt nur dadurch, was er zusammentraegt und welche Schilder"
+                    + " stehen.");
         }
         return gelesen;
     }
 
     /**
-     * Das Sortiment: Material und Preis in Pfennigen.
+     * Klagt ueber die Tafel, die es nicht mehr gibt - siehe {@link #ALTE_TAFEL}.
      *
-     * <p>Eine kaputte Zeile laesst die uebrigen stehen - ein Server, der wegen eines
-     * Tippfehlers in einem von vierzig Preisen nicht startet, ist schlimmer als einer mit
-     * neununddreissig.
+     * <p>Eine KLAGE und kein Bericht: Der Betreiber hat dort Preise eingestellt, und sie
+     * wirken nicht mehr. Das ist derselbe Rang wie eine verworfene Zahl, denn die Folge
+     * ist dieselbe - der Server tut etwas anderes, als in der Datei steht.
      */
-    private static Ankaufliste ankauf(ConfigurationSection abschnitt,
-                                      List<String> klagen, List<String> bericht) {
-        if (abschnitt == null) {
-            // BERICHT und keine Klage, aus demselben Grund wie bei der Lohnliste: Eine
-            // Klage verhindert das ganze Neuladen, und eine vorhandene config.yml wird
-            // beim Update NIE ueberschrieben. Gefahrlos ist es, weil ohne Liste NICHTS
-            // gekauft wird - es entsteht kein Geld.
-            bericht.add("Es gibt keinen Abschnitt " + Marktwerte.PFAD_ANKAUF
-                    + " in der config.yml - der Bundesmarkt kauft dann NICHTS. Eine Liste"
-                    + " im Programm gibt es dafuer mit Absicht nicht: Sie waere eine"
-                    + " zweite Abschrift der ausgelieferten Datei. Zum Kopieren steht der"
-                    + " ganze Abschnitt in der config.yml, die das Plugin mitbringt.");
-            return Ankaufliste.ausAnkaeufen(List.of());
+    private static void nenneAlteTafel(ConfigurationSection wurzel,
+            List<String> klagen) {
+        if (!wurzel.contains(ALTE_TAFEL, true)) {
+            return;
         }
-        List<Ankaufliste.Ankauf> ankaeufe = new ArrayList<>();
-        for (String material : abschnitt.getKeys(false)) {
-            String pfad = Marktwerte.PFAD_ANKAUF + "." + material;
-            if (Material.getMaterial(material.trim().toUpperCase(Locale.ROOT)) == null) {
-                klagen.add(pfad + ": \"" + material + "\" ist kein Material, das dieser"
-                        + " Server kennt - uebersprungen. Erwartet wird der nackte Name"
-                        + " wie stone oder coal_ore, ohne minecraft: davor.");
-                continue;
-            }
-            Object roh = abschnitt.get(material);
-            if (!(roh instanceof Number zahl) || roh instanceof Double
-                    || roh instanceof Float) {
-                klagen.add(pfad + " ist keine ganze Zahl ("
-                        + Wirtschaftsliste.wieGetippt(roh) + ") - uebersprungen. Ein"
-                        + " Ankaufpreis steht in PFENNIGEN, also in Hundertsteln einer"
-                        + " Mark: 40 heisst 0,40 Mark. Ein Punkt trennt in YAML keine"
-                        + " Tausender, sondern die Nachkommastellen.");
-                continue;
-            }
-            long pfennige = zahl.longValue();
-            if (pfennige < 1L) {
-                klagen.add(pfad + " ist " + pfennige + " - uebersprungen. Unter 1 ist"
-                        + " kein Ankauf, sondern eine Annahme; was der Bund nicht kaufen"
-                        + " soll, steht gar nicht in der Liste.");
-                continue;
-            }
-            if (pfennige > Verkaufsregel.HOECHSTER_PREIS) {
-                klagen.add(pfad + " ist " + pfennige + " - uebersprungen. Ueber "
-                        + Verkaufsregel.HOECHSTER_PREIS + " Pfennigen laeuft die Rechnung"
-                        + " bei einem vollen Inventar ueber, und ein uebergelaufener"
-                        + " Betrag ist NEGATIV - also eine Abbuchung auf dem Weg einer"
-                        + " Einnahme.");
-                continue;
-            }
-            ankaeufe.add(new Ankaufliste.Ankauf(material, pfennige));
-        }
-        Ankaufliste liste = Ankaufliste.ausAnkaeufen(ankaeufe);
-        if (liste.leer()) {
-            // Auch hier Bericht und nicht Klage: Jede einzelne unbrauchbare Zeile hat
-            // schon ihre eigene Klage. Dies ist nur die Summe.
-            bericht.add(Marktwerte.PFAD_ANKAUF + " ist leer - der Bundesmarkt kauft"
-                    + " NICHTS. Die Gruende stehen in den Zeilen davor.");
-        } else {
-            // NUR das Sortiment. Der Tagesdeckel steht hier nicht: diese Stelle liest
-            // ihn nicht und kennt seine Zahl nicht, und eine halbe Zusage
-            // ("Tagesdeckel je Spieler.") ist schlimmer als keine. Seine Zahl nennt die
-            // Startmeldung des Plugins, seine Aenderung die Bestaetigungszeile.
-            bericht.add("Bundesmarkt: " + liste.anzahl() + " Materialien im Sortiment.");
-        }
-        return liste;
+        klagen.add(ALTE_TAFEL + " wird nicht mehr gelesen. Seit dem 10.11.2026 steht der"
+                + " Preis eines Bundstandes auf seinem SCHILD, wie bei jedem anderen"
+                + " Laden - was der Bund handelt, entscheiden seine Schilder und keine"
+                + " Liste. Loesche diesen Abschnitt; /markt zeigt dir, welche Staende"
+                + " stehen.");
     }
 
     /**

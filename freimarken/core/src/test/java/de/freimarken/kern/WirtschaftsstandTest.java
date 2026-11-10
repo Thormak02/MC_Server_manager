@@ -52,7 +52,8 @@ class WirtschaftsstandTest {
         return new Wirtschaftswerte(new Preisstaffel(grundpreis, jeFeld), startguthaben,
                 hoechstzahl, gruppenFelder, werbung, zeit, berufe, verdienst,
                 Marktwerte.VORGABE, Messwerte.VORGABE,
-                Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE);
+                Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE,
+                Truhenwerte.VORGABE);
     }
 
     /**
@@ -417,6 +418,35 @@ class WirtschaftsstandTest {
         assertEquals(1, uebernahme.geaendert().size(), uebernahme.geaendert().toString());
         assertTrue(uebernahme.geaendert().getFirst()
                 .startsWith(Wirtschaftswerte.PFAD_RANG_WERBUNG));
+    }
+
+    @Test
+    @DisplayName("Der Deckel der Freien Truhe und ihre Verbotsliste werden getauscht")
+    void truhenzahlenGetauscht() {
+        // Beide sind neuladbar, und beide muessen im Bericht stehen: Wer den Deckel
+        // verstellt, soll lesen, welche Zahl jetzt gilt, und nicht beim naechsten Mal
+        // weiterdrehen. Die Verbotsliste wird VERGLICHEN und nicht gezaehlt - ein
+        // getauschter Eintrag laesst die Laenge gleich.
+        // Angefangen wird mit einem WIRKLICHEN Verbot: Ab Werk ist nichts verboten, und
+        // dann hiesse "written_book ist nachher nicht verboten" nur, dass es vorher auch
+        // nicht verboten war - die Zeile unten prueefte nichts.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE.mitTruhe(
+                new Truhenwerte(16, Set.of("written_book"))));
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitTruhe(
+                new Truhenwerte(32, Set.of("elytra"))));
+
+        assertEquals(32, stand.werte().truhe().entnahmeJeTag());
+        assertTrue(stand.werte().truhe().istVerboten("elytra"));
+        assertFalse(stand.werte().truhe().istVerboten("written_book"),
+                "die Liste wird getauscht und nicht ergaenzt");
+        assertTrue(uebernahme.geaendert().stream()
+                        .anyMatch(zeile -> zeile.startsWith(Truhenwerte.PFAD_ENTNAHME
+                                + ": 16 -> 32")),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().stream()
+                        .anyMatch(zeile -> zeile.startsWith(Truhenwerte.PFAD_VERBOTEN)),
+                uebernahme.geaendert().toString());
     }
 
     @Test

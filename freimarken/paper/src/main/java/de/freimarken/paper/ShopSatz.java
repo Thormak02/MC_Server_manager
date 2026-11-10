@@ -558,71 +558,24 @@ enum ShopSatz implements Satz {
 
     // ================= der ANKAUF DES BUNDES am Schild [10.11.2026]
     //
-    // Sechs Saetze, und sie teilen sich in zwei Lagen: Die ersten drei liest ein
-    // BETREIBER, der ein Schild beschreibt (er allein hat freimarken.shop.bund), die
-    // letzten drei ein KUNDE, der an einem bestehenden Stand klickt. Derselbe Mangel
-    // heisst darum zweimal verschieden - "diese Ware kommt nicht ins Sortiment" ist
-    // eine Anweisung, "der Bund kauft das nicht mehr" eine Auskunft.
+    // SIEBEN Saetze standen hier am Mittag dieses Tages, und sechs sind am Nachmittag
+    // wieder gegangen - mit der Tafel bundesmarkt.ankauf. Sie sagten, was an einer Tafel
+    // schiefgehen kann: Ware nicht im Sortiment, Menge geht nicht glatt auf, Schild
+    // traegt beide Preise. Ohne Tafel gibt es keinen dieser Faelle mehr: Der Preis steht
+    // auf dem Schild, ein Schildpreis IST eine ganze Mark, und beide Preise haelt der
+    // Satz Kistenshop selbst.
+    //
+    // Geblieben ist der eine, der nicht von der Tafel kam, sondern vom DECKEL - und der
+    // ist der Grund des ganzen Schrittes: Ein Bundshop mit Verkaufspreis war eine
+    // Geldquelle ohne Tagesdeckel (Plan 7.4, benannte Luecke).
 
     /**
-     * Ein Schild des Bundes mit BEIDEN Preisen.
+     * Der Tagesdeckel des Bundesmarkts ist erreicht - morgen wieder.
      *
-     * <p>Die Absage nennt den Grund und nicht bloss die Regel: Der Ankaufpreis kommt aus
-     * {@code bundesmarkt.ankauf}, der Verkaufspreis vom Schild - und eine spaetere
-     * Erhoehung des Ankaufs machte aus einem Schild mit beiden Zahlen einen Rundlauf.
+     * <p>Gelesen nur, wenn ueberhaupt gedeckelt wird: {@code bundesmarkt.tagesdeckel: 0}
+     * heisst kein Deckel, und dann kommt dieser Satz nie.
      */
-    SHOP_BUND_ZWEI_RICHTUNGEN("shop.bund.zwei-richtungen", Art.SATZ),
-
-    /**
-     * Ein Ankaufstand fuer eine Ware, die nicht im Sortiment steht.
-     *
-     * <p><b>Ohne Warennamen</b>, und das ist gemessen und nicht gespart: Die einzige
-     * Ware, die dieser Satz einsetzen koennte, ist die vierte Schildzeile, wie sie
-     * getippt wurde - und die ist bei einem Stand mit Fragezeichen genau "?". Ein Satz,
-     * der "Der Bund kauft ? nicht" sagt, ist schlechter als einer ohne Namen. Der
-     * Betreiber steht vor dem Schild, das er gerade beschrieben hat.
-     */
-    SHOP_BUND_NICHT_IM_SORTIMENT("shop.bund.nicht-im-sortiment", Art.SATZ),
-
-    /**
-     * Die Menge dieses Standes ergibt keinen ganzen Mark-Betrag.
-     *
-     * <p>{@code vorschlag} ist die kleinste Menge, mit der die Rechnung aufgeht - jedes
-     * Vielfache davon geht ebenfalls. Die Zahl steht in der Absage, weil ein Betreiber
-     * sonst Mengen durchprobiert.
-     */
-    SHOP_BUND_MENGE_UNEBEN("shop.bund.menge-uneben", Art.SATZ, "vorschlag"),
-
-    /**
-     * Der Stand steht, aber die Ware ist aus dem Sortiment genommen worden.
-     *
-     * <p>Ein eigener Satz neben {@code shop.kauft-nicht-an}: Jener heisst "dieses Schild
-     * hat keinen Ankaufpreis, versuch die andere Maustaste". Hier steht ein Ankaufstand,
-     * der nicht mehr ankauft - mit der anderen Maustaste wird es nicht besser.
-     */
-    SHOP_BUND_KAUFT_NICHT("shop.bund.kauft-nicht", Art.SATZ, "ware"),
-
-    /**
-     * Ein Stand des Bundes mit beiden Preisen - er kauft nicht an.
-     *
-     * <p>Ein EIGENER Satz neben {@code shop.bund.zwei-richtungen}, obwohl es derselbe
-     * Sachverhalt ist: Jener geht an den Betreiber, der gerade ein Schild beschreibt und
-     * es anders schreiben kann. Dieser geht an einen Kunden, der davorsteht und nichts
-     * tun kann - er soll lesen, dass es nicht an ihm liegt.
-     */
-    SHOP_BUND_ZWEI_PREISE("shop.bund.zwei-preise", Art.SATZ),
-
-    /** Der Tagesdeckel des Bundesmarkts ist erreicht - morgen wieder. */
-    SHOP_BUND_DECKEL("shop.bund.deckel", Art.SATZ),
-
-    /**
-     * Die Rechnung dieses Standes geht nicht mehr auf - nach einer Preisaenderung.
-     *
-     * <p>Die Absage sagt dem Kunden, dass es NICHT an ihm liegt, und nennt das Team.
-     * Welche Menge wieder passte, steht im Serverprotokoll - das liest ein Kunde nicht,
-     * und eine Zahl, mit der er nichts anfangen kann, hilft ihm nicht.
-     */
-    SHOP_BUND_UNEBEN("shop.bund.uneben", Art.SATZ, "menge", "ware");
+    SHOP_BUND_DECKEL("shop.bund.deckel", Art.SATZ);
 
     private final String pfad;
     private final Art art;

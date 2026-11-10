@@ -404,59 +404,44 @@ class ShoplisteTest {
 
     // --- Die Startzeile ueber die Ankaufstaende des Bundes [10.11.2026] -------
 
+    // --- Die Startzeile ueber die Staende des Bundes [10.11.2026] -------------
+
     @Test
-    @DisplayName("Ohne Stand UND mit Sortiment ist die Startzeile eine WARNUNG")
-    void ohneStandMitSortiment() {
+    @DisplayName("Ohne Stand sagt die Startzeile, dass nichts gehandelt wird")
+    void ohneStand() {
         // DIE EIGENTLICHE ARBEIT DIESER ZEILE. Seit dem 10.11.2026 ist ein Bundschild
-        // mit S-Preis der einzige Weg, an den Bund zu verkaufen - /markt verkaufen gibt
-        // es nicht mehr. Ein Betreiber, der sein Sortiment eingestellt und kein Schild
-        // gestellt hat, hat also einen Markt, der nichts kauft, und nirgends fehlt
-        // etwas: Die Tafel ist da, die Zahlen stimmen, der Befehl zeigt sie an.
-        String zeile = Shopliste.bundzeile(0, markt(5_000L, 7));
+        // der EINZIGE Weg, mit dem Bund zu handeln - /markt verkaufen gibt es nicht mehr,
+        // und ein Sortiment in der config.yml auch nicht. Ein Betreiber, der kein Schild
+        // gestellt hat, hat damit einen Markt, der nichts tut, und nirgends fehlt etwas.
+        String zeile = Shopliste.bundzeile(0, de.freimarken.kern.Marktwerte.VORGABE);
 
         assertTrue(zeile.contains("KEINER"), zeile);
-        assertTrue(zeile.contains("7 Materialien"), zeile);
-        assertTrue(zeile.contains("/markt verkaufen"),
-                "die Zeile muss sagen, dass der alte Weg weg ist: " + zeile);
+        assertTrue(zeile.contains("Schild"), zeile);
+        assertTrue(zeile.contains("5000") || zeile.contains("5.000"), zeile);
     }
 
     @Test
-    @DisplayName("Ohne Stand und ohne Sortiment ist es eine Einstellung, keine Warnung")
-    void ohneStandOhneSortiment() {
-        // Wer die Liste leer laesst, schaltet den Ankauf ab - eine zulaessige
-        // Einstellung, die Marktwerte ausdruecklich erlaubt. Eine Warnung waere hier
-        // falsch, und zwei gleich klingende Zeilen fuer zwei verschiedene Lagen waeren
-        // schlimmer als keine.
-        String zeile = Shopliste.bundzeile(0, markt(5_000L, 0));
-
-        assertFalse(zeile.contains("KEINER"), zeile);
-        assertTrue(zeile.contains("ist leer"), zeile);
-        assertTrue(zeile.contains("zulaessige Einstellung"), zeile);
-    }
-
-    @Test
-    @DisplayName("Mit Staenden nennt die Zeile ihre Zahl, den Deckel und die Tafel")
+    @DisplayName("Mit Staenden nennt die Zeile ihre Zahl und den Deckel")
     void mitStaenden() {
-        // Die DREI Zahlen, auf die es ankommt: wie viele Staende stehen, wie viel ein
-        // Spieler am Tag bekommt, und woher die Preise kommen. Die letzte ist keine
-        // Zahl, sondern der Pfad - ein Betreiber, der ein Schild mit einer anderen Zahl
-        // sieht, soll wissen, wo die geltende steht.
-        String zeile = Shopliste.bundzeile(3, markt(1_234L, 7));
+        String zeile = Shopliste.bundzeile(3,
+                de.freimarken.kern.Marktwerte.VORGABE.mitDeckel(1_234L));
 
         assertTrue(zeile.contains("3 am Schild"), zeile);
-        assertTrue(zeile.contains("1.234") || zeile.contains("1234"), zeile);
-        assertTrue(zeile.contains("bundesmarkt.ankauf"), zeile);
+        assertTrue(zeile.contains("1234") || zeile.contains("1.234"), zeile);
+        assertTrue(zeile.contains("/markt"), zeile);
     }
 
-    /** Marktzahlen mit so vielen Materialien im Sortiment. */
-    private static de.freimarken.kern.Marktwerte markt(long deckel, int materialien) {
-        java.util.List<de.freimarken.kern.Ankaufliste.Ankauf> ankaeufe =
-                new java.util.ArrayList<>();
-        for (int i = 0; i < materialien; i++) {
-            ankaeufe.add(new de.freimarken.kern.Ankaufliste.Ankauf("ware_" + i, 20L));
-        }
-        return de.freimarken.kern.Marktwerte.VORGABE.mitDeckel(deckel)
-                .mitAnkauf(de.freimarken.kern.Ankaufliste.ausAnkaeufen(ankaeufe));
+    @Test
+    @DisplayName("OHNE Deckel sagt die Zeile das - und nennt den Schluessel")
+    void ohneDeckel() {
+        // bundesmarkt.tagesdeckel: 0 heisst kein Deckel [10.11.2026]. Dass die Zeile den
+        // SCHLUESSEL nennt, ist Absicht: Wer die Zeile liest und es nicht so wollte,
+        // soll wissen, wo er es aendert.
+        String zeile = Shopliste.bundzeile(2, de.freimarken.kern.Marktwerte.VORGABE
+                .mitDeckel(de.freimarken.kern.Marktwerte.KEIN_DECKEL));
+
+        assertTrue(zeile.contains("OHNE Tagesdeckel"), zeile);
+        assertTrue(zeile.contains("bundesmarkt.tagesdeckel"), zeile);
     }
 
     private static boolean klagtUeber(Shopliste.Ergebnis ergebnis, String pfad) {

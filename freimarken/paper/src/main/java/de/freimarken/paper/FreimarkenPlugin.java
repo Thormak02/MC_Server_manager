@@ -10,6 +10,7 @@ import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
 import de.freimarken.daten.MariaBerufe;
 import de.freimarken.daten.MariaSpielzeit;
+import de.freimarken.daten.MariaTruhe;
 import de.freimarken.kern.Bonusablage;
 import de.freimarken.kern.SpeicherBonus;
 import de.freimarken.kern.Abholablage;
@@ -43,6 +44,8 @@ import de.freimarken.kern.SpeicherShops;
 import de.freimarken.kern.ZwischenspeicherBerufe;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.SpeicherSpielzeit;
+import de.freimarken.kern.SpeicherTruhe;
+import de.freimarken.kern.Truhenablage;
 import de.freimarken.kern.Spielzeitablage;
 import de.freimarken.kern.Stadtgrenze;
 import de.freimarken.kern.Tagesgrenze;
@@ -170,6 +173,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * der Ablage, nicht darin.
      */
     private Blockbuchablage blockbuchablage;
+    /**
+     * Wer heute wie viel aus der Freien Truhe behalten hat.
+     *
+     * <p>KEIN Zwischenspeicher darueber, aus demselben Grund wie bei der Spielzeit:
+     * Geschrieben wird AUFSCHLAGEND, und ein zwischengespeicherter aufschlagender
+     * Schreibzug ist entweder verloren oder doppelt. Gelesen wird zweimal je Griff - beim
+     * Oeffnen und beim Schliessen -, und das sind zwei Abfragen je Kistenbesuch, nicht je
+     * Tick.
+     */
+    private Truhenablage truhenablage;
 
     /**
      * Die Kistenshops - als {@link ZwischenspeicherShops} und nicht als
@@ -339,6 +352,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * sie unloeschbar.
      */
     private Blockraeumung blockraeumung;
+    /**
+     * Das taegliche Leeren der Freien Truhe - Mitfahrer im Spielzeittakt.
+     *
+     * <p>Ein Feld aus demselben Grund wie {@link #blockraeumung}:
+     * {@link #richteSpielzeitEin} braucht es, {@link #richteTruheEin} baut es - in dieser
+     * Reihenfolge. Es entsteht AUCH ohne eingetragene Stelle: Alte Tageszeilen muessen
+     * auch dann noch weggehen, sonst waeren sie unloeschbar.
+     */
+    private Truhenlauf truhenlauf;
     /**
      * Die gelesenen Blockbuchwerte - fuer den Befehlszweig.
      *
@@ -681,17 +703,21 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + wirtschaft.werte().verdienst().loehne().anzahl() + " Saetze,"
                 + " Tagesdeckel " + wirtschaft.werte().verdienst().tagesdeckel()
                 + " Mark je Spieler. Gebucht wird gesammelt, nicht je Block.");
-        // "Verkauft wird nur in der Ankunftswelt" stand hier bis zum 10.11.2026, und
-        // das war ab diesem Tag falsch: Die Weltpruefung ist mit /markt verkaufen
-        // gegangen. Verkauft wird an den Schildern des Bundes, und WIE VIELE davon
-        // stehen, sagt die Zeile der Kistenshops weiter unten - sie kommt erst, wenn die
-        // Shops gelesen sind.
+        // Diese Zeile ist am 10.11.2026 zweimal falsch geworden und zweimal berichtigt:
+        // Erst stand hier "Verkauft wird nur in der Ankunftswelt" (die Weltpruefung war
+        // mit /markt verkaufen gegangen), dann nannte sie die Zahl der Materialien im
+        // Sortiment - und das Sortiment ist mit der Tafel gefallen. Geblieben ist der
+        // DECKEL; wie viele Staende stehen, sagt die Zeile der Kistenshops weiter unten,
+        // und die kann es erst, wenn die Shops gelesen sind.
         getLogger().info("Bundesmarkt: "
-                + wirtschaft.werte().markt().ankauf().anzahl() + " Materialien im"
-                + " Sortiment, Tagesdeckel " + wirtschaft.werte().markt().tagesdeckel()
-                + " Mark je Spieler. Verkauft wird an den Ankaufstaenden des Bundes -"
-                + " Bundschilder mit S-Preis, siehe die Zeile der Kistenshops.");
+                + (wirtschaft.werte().markt().gedeckelt()
+                        ? "Tagesdeckel " + wirtschaft.werte().markt().tagesdeckel()
+                                + " Mark je Spieler und Tag."
+                        : "OHNE Tagesdeckel - wer an einem Bundschild verkauft, kann"
+                                + " beliebig viel am Tag bekommen.")
+                + " Was der Bund handelt, entscheiden seine Schilder; /markt zeigt sie.");
         richteBlockbuchEin();
+        richteTruheEin();
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
         registriereBefehle();
@@ -829,6 +855,40 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Richtet die Freie Truhe ein - Stellen lesen, Lauf bauen, Wache anmelden.
+     *
+     * <p><b>Nach {@link #richteBlockbuchEin} und VOR {@link #richteSpielzeitEin}</b>: Der
+     * Lauf ist ein Mitfahrer im Spielzeittakt und muss stehen, bevor jener angelegt wird.
+     *
+     * <p><b>Die Stellen kommen aus dem Abschnitt {@code freie-truhe:}, die Welt aus
+     * {@code laeden.welt}.</b> Der Weltschluessel entsteht ueber {@link #weltschluessel}
+     * und nirgends sonst - genau diese Handarbeit hat am 09.11.2026 den ganzen
+     * Ladenbereich tot gelegt. Das Ladenverzeichnis geht mit herein, damit eine Stelle
+     * INNERHALB einer Ladeneinheit beklagt wird: Dort kaeme niemand ausser dem Mieter
+     * heran, und der nimmt ohne Deckel.
+     *
+     * <p><b>Der LAUF entsteht immer, die WACHE nur mit Stellen.</b> Ein Hoerer an jedem
+     * Inventarereignis, der nur vergleicht und verwirft, ist Arbeit fuer nichts; alte
+     * Tageszeilen muessen trotzdem weggehen.
+     */
+    private void richteTruheEin() {
+        var stellen = Truhenliste.stellen(getConfig(), weltschluessel(ladenwelt),
+                ladenverzeichnis);
+        stellen.klagen().forEach(getLogger()::severe);
+        stellen.bericht().forEach(getLogger()::info);
+        Truhenbuch buch = new Truhenbuch(stellen.verzeichnis(), truhenablage, wirtschaft,
+                uhr, getLogger());
+        truhenlauf = new Truhenlauf(buch,
+                new Truhenleerung(getServer(), getLogger()), getLogger());
+        if (!buch.gibtTruhen()) {
+            return;
+        }
+        getServer().getPluginManager().registerEvents(new Truhenwache(buch, sprache),
+                this);
+        getLogger().info(Truhenliste.rechenprobe(wirtschaft.werte().truhe()));
+    }
+
+    /**
      * Stellt den Spielzeittakt und meldet seine Wache an.
      *
      * <p>Hier und nicht in {@code neulade()}: Ein in {@code neulade()} gestellter Zeitgeber
@@ -894,7 +954,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // nichts zu raeumen. richteBlockbuchEin() laeuft VOR dieser Methode und hat es
         // dann gesetzt; die Reihenfolge sichert 31ai.
         spielzeitwache = new Spielzeitwache(this, buch, bonuswache, mietwache,
-                blockraeumung, wirtschaft, getLogger());
+                blockraeumung, truhenlauf, wirtschaft, getLogger());
         getServer().getPluginManager().registerEvents(spielzeitwache, this);
         spielzeitwache.starte();
         // Jeder Wert, den dieser Satz verspricht, steht auch darin. Eine halbe Zusage -
@@ -1007,6 +1067,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // ist es trotzdem die richtige Fassung - der Befehl und das Aufraeumen laufen
             // durch GENAU denselben Code wie mit Datenbank.
             blockbuchablage = new SpeicherBlockbuch();
+            // Dass diese Fassung beim Neustart alles vergisst, heisst bei der Freien
+            // Truhe: Nach einem Neustart darf jeder noch einmal seine Tagesmenge nehmen.
+            // Fuer einen Probelauf ist das tragbar - verloren ist nichts, nur verschenkt.
+            truhenablage = new SpeicherTruhe();
             // Derselbe Zwischenspeicher wie mit Datenbank, nur mit einer anderen
             // Wahrheit darunter: So laeuft der Betrieb durch GENAU denselben Code, ob
             // eine Datenbank da ist oder nicht. Eine Fassung ohne Zwischenspeicher waere
@@ -1049,6 +1113,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // und ein Zwischenspeicher darueber waere eine zweite Wahrheit ueber ein
             // Protokoll. Gesammelt wird VOR der Ablage, in Blockbuch.
             blockbuchablage = new MariaBlockbuch(datenbank);
+            // KEIN Zwischenspeicher: Gefragt wird zweimal je Truhengriff (beim Oeffnen
+            // und beim Schliessen), und geschrieben wird AUFSCHLAGEND - ein
+            // zwischengespeicherter aufschlagender Schreibzug ist entweder verloren oder
+            // doppelt. Dieselbe Begruendung wie bei der Spielzeit.
+            truhenablage = new MariaTruhe(datenbank);
             // ZWISCHENSPEICHER, und hier ist er keine Ersparnis, sondern die Sache:
             // betroffen() fragt bei JEDER Explosion fuer JEDEN Block und bei jedem
             // Trichtertakt, ob dort ein Shop haengt. Eine Datenbankabfrage an dieser
@@ -1155,9 +1224,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * jedem {@code /markt verkaufen}. Der Zweig ist weggefallen - verkauft wird am
      * Schild -, und ein Schild steht, wo es steht. Das ist eine schaerfere Ortsangabe,
      * als eine Weltpruefung je war.
+     *
+     * <p><b>Dafuer braucht er die SHOPABLAGE</b>: Seit die Tafel {@code bundesmarkt.ankauf}
+     * gefallen ist, zeigt {@code /markt} die Staende selbst - und die stehen in der
+     * Datenbank. Darum wird dieser Befehl erst gebaut, nachdem die Shops gelesen sind;
+     * {@code richteShopsEin} laeuft vorher, und ohne lesbare Shops ist das Feld leer.
      */
     private MarktBefehle marktBefehle() {
-        return new MarktBefehle(wirtschaft, kasse, uhr, sprache);
+        return new MarktBefehle(shopablage, wirtschaft, kasse, uhr, sprache,
+                getLogger());
     }
 
     /**

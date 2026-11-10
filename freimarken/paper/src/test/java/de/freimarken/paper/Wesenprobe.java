@@ -81,6 +81,31 @@ final class Wesenprobe {
             this.menge = andere;
         }
 
+        /**
+         * Ein Abbild - gemessen und nicht gewaehlt.
+         *
+         * <p>{@code ItemStack.clone()} legt ohne laufenden Server keinen brauchbaren
+         * Stapel vor: Es kopiert seinen Bauplan mit, und der ist hier keiner. Der
+         * Rueckweg der Freien Truhe leitet JEDEN Stapel aus einem vorhandenen ab - ohne
+         * diese Antwort laeuft kein Zweig, der etwas zurueckgibt.
+         */
+        @Override
+        public Probestapel clone() {
+            return new Probestapel(art, menge);
+        }
+
+        /**
+         * Vierundsechzig - die Zahl, die die Probe selbst mitgibt.
+         *
+         * <p>Die echte kommt aus der Registry und wirft ohne Server. Gebraucht wird sie,
+         * wo ein Zweig Stuecke in Stapel teilt; welche Zahl dort steht, darf die Probe
+         * entscheiden, solange sie es sagt.
+         */
+        @Override
+        public int getMaxStackSize() {
+            return 64;
+        }
+
         @Override
         public String toString() {
             return "Probestapel " + menge + " x " + art;

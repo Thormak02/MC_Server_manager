@@ -518,17 +518,15 @@ class ShopwacheTafel {
         // Aufgeloest wird er an genau einer Stelle, und die liegt in einer eigenen
         // Methode: Sonst entschluesselt der Zaehlgang die Probe je FACH - bei einer
         // Doppelkiste vierundfuenfzigmal je Klick.
-        // ZWEI Stellen seit dem 10.11.2026, und beide in einer EIGENEN Methode mit
-        // einer Zeile - das ist die Zusage, und sie ist staerker als die Zahl: vorbildVon
-        // fuer den Zaehlgang, material fuer die Ankauftafel des Bundes. Eine dritte
-        // Stelle irgendwo im Zaehlgang waere eine Aufloesung je FACH, und bei einer
-        // Doppelkiste vierundfuenfzig je Klick.
+        // EINE Stelle, und sie steht in einer eigenen Methode mit einer Zeile - das ist
+        // die Zusage, und sie ist staerker als die Zahl. Am Mittag des 10.11.2026 waren
+        // es ZWEI: Eine Naht material(Warenprobe) loeste das Material fuer die Tafel
+        // bundesmarkt.ankauf auf. Die Tafel ist am Nachmittag gefallen, und mit ihr die
+        // Naht - was niemand ruft, ist eine Zusage, die niemand haelt.
         assertTrue(methode("Shopware.java", "vorbildVon").contains("ausText("),
                 "der Zaehlgang loest EINMAL auf, in seiner eigenen Methode");
-        assertTrue(methode("Shopware.java", "material").contains("ausText("),
-                "und die Materialfrage des Bundes ebenso");
-        assertEquals(2, quelle.split("ausText\\(", -1).length - 1,
-                "genau diese ZWEI Stellen, keine dritte: " + quelle);
+        assertEquals(1, quelle.split("ausText\\(", -1).length - 1,
+                "genau diese EINE Stelle: " + quelle);
     }
 
     @Test

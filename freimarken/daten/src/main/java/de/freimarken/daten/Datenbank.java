@@ -651,6 +651,50 @@ public final class Datenbank implements AutoCloseable {
                 REFERENCES kistenshop (welt, schild_x, schild_y, schild_z)
                 ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 18: die Entnahmen aus der Freien Truhe - Plan 7.2.
+            //
+            // EINE ZEILE JE SPIELER UND TAG, aufschlagend geschrieben. Dieselbe Bauart
+            // wie spielzeit (Schritt 9), und der Grund ist derselbe: Wer dreimal am Tag
+            // an die Truhe geht, soll dreimal zaehlen. Ein setzendes Schreiben verloere
+            // die vorigen Griffe, und der Deckel waere so oft offen, wie man die Truhe
+            // schliesst.
+            //
+            // tag traegt wie dort das ORTSDATUM unter der eingestellten Tagesgrenze,
+            // gerechnet in Java (Tagesgrenze.tagVon) - nie CURDATE(). Die Sitzung steht
+            // fest auf UTC, also nennte die Datenbank zwischen 00:00 und 01:00 Ortszeit
+            // noch den Vortag.
+            //
+            // stueck als INT und nicht SMALLINT: Gedeckelt ist der Tag, aber der Deckel
+            // ist einstellbar und 0 heisst KEIN Deckel - dann sammelt die Zeile, was ein
+            // Spieler an einem Tag aus einer taeglich gefuellten Truhe traegt. Der Kern
+            // rechnet in int und bricht bei einem Ueberlauf ab; eine engere Spalte braeche
+            // frueher als die Speicherfassung, und dann verhielten sich zwei Umsetzungen
+            // hinter einer Schnittstelle verschieden.
+            //
+            // ix_freie_truhe_tag ist der Index fuer das RAEUMEN, und anders als bei
+            // spielzeit gibt es ihn wirklich: Der taegliche Lauf loescht alles von VOR
+            // heute, also ueber den Tag und nicht ueber den Spieler. Ohne ihn liefe jeder
+            // Tageswechsel ueber die ganze Tabelle, im Hauptfaden, auf der einen
+            // Verbindung - also genau der Stillstand, gegen den der begrenzte Happen des
+            // Blockbuchs gebaut ist.
+            //
+            // KEIN Fremdschluessel auf kassen: In der Truhe liegt kein Geld, sondern eine
+            // Zaehlung von Stueck. Ein RESTRICT liesse den Griff eines Spielers
+            // scheitern, der noch nie etwas verdient hat - und der nimmt aus einer freien
+            // Truhe am ehesten. Ein CASCADE loeschte umgekehrt den Tagesstand eines
+            // Spielers, dessen Konto je aufgeraeumt wird.
+            //
+            // IF NOT EXISTS wie bei den Schritten 7, 9, 10, 12, 13, 14, 15, 16 und 17.
+            """
+            CREATE TABLE IF NOT EXISTS freie_truhe (
+              spieler CHAR(36) NOT NULL,
+              tag     DATE     NOT NULL,
+              stueck  INT      NOT NULL,
+              PRIMARY KEY (spieler, tag),
+              KEY ix_freie_truhe_tag (tag)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -895,6 +939,12 @@ public final class Datenbank implements AutoCloseable {
             // fremde Zeilen am selben Ort schieben die eigenen aus der Antwort heraus -
             // ein Fehlschlag, der von der Reihenfolge der Proben abhaengt.
             anweisung.execute("DELETE FROM blockbuch");
+            // Die Entnahmen der Freien Truhe haengen an keinem Fremdschluessel, ihre
+            // Stelle in dieser Liste ist also frei - sie stehen hier, damit sie nicht
+            // uebersehen werden. Ohne diese Zeile wandern Tagesstaende von einer Probe
+            // in die naechste, und eine Probe ueber den ersten Griff eines Spielers
+            // faende dort schon einen Deckel.
+            anweisung.execute("DELETE FROM freie_truhe");
             anweisung.execute("DELETE FROM kassen");
         }
     }

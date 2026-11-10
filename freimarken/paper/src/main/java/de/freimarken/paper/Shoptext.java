@@ -117,10 +117,7 @@ final class Shoptext {
         return Einsatz.von("zeile", anlage.zeile())
                 .mit("hoechstmenge", Kistenshop.GROESSTE_MENGE)
                 .mit("hoechstpreis", Kistenshop.HOECHSTER_PREIS)
-                .mit("getippt", getippteWare == null ? "" : getippteWare)
-                // Die kleinste Menge, mit der die Rechnung eines Ankaufstandes aufgeht -
-                // 0 bei jeder anderen Absage, und dort setzt sie kein Satz ein.
-                .mit("vorschlag", anlage.bundmenge());
+                .mit("getippt", getippteWare == null ? "" : getippteWare);
     }
 
     /**

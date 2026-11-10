@@ -192,33 +192,16 @@ final class Shopware implements Shopbuch.Warenleser, Shophandel.Warenhand {
         return vorbild == null ? 0 : vorbild.getMaxStackSize();
     }
 
-    /**
-     * Das MATERIAL einer Warenprobe, kleingeschrieben - oder {@code null}.
-     *
-     * <p>Die Naht fuer den Ankauf des Bundes [10.11.2026]: {@code bundesmarkt.ankauf}
-     * ist eine Tafel je MATERIAL, und was eine Warenprobe ist, weiss nur das Spiel.
-     * Dieselbe Methode erfuellt {@code Shopbuch.Warenleser} und
-     * {@code Shophandel.Warenhand} - eine Frage, eine Antwort, eine Stelle.
-     *
-     * <p><b>Kleingeschrieben, weil die Tafel es ist.</b> {@code Ankaufliste} legt ihre
-     * Schluessel klein ab und schlaegt klein nach; ein grosser Name fiele dort nicht auf,
-     * sondern gaebe stumm "kauft der Bund nicht". Dieselbe Form wie der alte
-     * {@code /markt verkaufen}, der {@code getType().name().toLowerCase} nahm.
-     *
-     * <p><b>Und ausdruecklich NICHT {@code ware().name()}:</b> Jener ist gekuerzt - aus
-     * {@code NETHERITE_PICKAXE} wird "PICKAXE" -, und zwei Materialien koennen denselben
-     * Kurznamen tragen. {@code ShopwareTafel} haelt genau die Zusage, dass er nirgends im
-     * Programm verglichen wird; eine Tafelabfrage damit waere ihr erster Bruch.
-     */
-    @Override
-    public String material(Warenprobe ware) {
-        if (ware == null) {
-            return null;
-        }
-        ItemStack vorbild = Ladenware.ausText(ware.inhalt());
-        return vorbild == null ? null
-                : vorbild.getType().name().toLowerCase(Locale.ROOT);
-    }
+    // EINE NAHT material(Warenprobe) STAND HIER am Mittag des 10.11.2026 und ist am
+    // Nachmittag wieder gegangen. Sie loeste das Material einer Ware auf, weil die Tafel
+    // bundesmarkt.ankauf je MATERIAL einen Preis hielt. Ohne Tafel fragt niemand mehr
+    // danach - und eine Naht, die niemand ruft, ist eine Zusage, die niemand haelt.
+    //
+    // Was von ihr bleibt, ist die Begruendung, warum sie nicht ware().name() nahm: Jener
+    // Name ist GEKUERZT (aus NETHERITE_PICKAXE wird "PICKAXE"), zwei Materialien koennen
+    // denselben Kurznamen tragen, und ShopwareTafel haelt die Zusage, dass er nirgends im
+    // Programm verglichen wird. Wer die Naht eines Tages wieder braucht - etwa fuer einen
+    // Tagesdeckel JE MATERIAL -, findet sie im Verlauf dieses Tages.
 
     /**
      * Was auf dieser Seite liegt und was noch hineinpasst - in STUECK.

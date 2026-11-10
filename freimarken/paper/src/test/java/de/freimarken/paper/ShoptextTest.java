@@ -277,7 +277,7 @@ class ShoptextTest {
 
     private List<Component> anlageZeilen(Kistenshop shop) {
         return Shoptext.anlageZeilen(sprache,
-                new Shopbuch.Anlage(Shopbuch.Bescheid.ANGELEGT, shop, null, 0, 0),
+                new Shopbuch.Anlage(Shopbuch.Bescheid.ANGELEGT, shop, null, 0),
                 "");
     }
 
@@ -292,14 +292,11 @@ class ShoptextTest {
 
     private static Shopbuch.Anlage absage(Shopschild.Fehler fehler, int zeile) {
         return new Shopbuch.Anlage(Shopbuch.Bescheid.SCHILD_FEHLERHAFT, null, fehler,
-                zeile, 0);
+                zeile);
     }
 
     private static Shopbuch.Anlage bescheid(Shopbuch.Bescheid bescheid) {
-        // Die 5 ist die kleinste Menge, mit der die Rechnung eines Ankaufstandes
-        // aufgeht - nur shop.bund.menge-uneben setzt sie ein, und genau diese Probe
-        // liest sie mit.
-        return new Shopbuch.Anlage(bescheid, null, null, 0, 5);
+        return new Shopbuch.Anlage(bescheid, null, null, 0);
     }
 
     private static Kistenshop shop(UUID besitzer, int menge, long kauf, long verkauf) {

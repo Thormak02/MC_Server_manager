@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Marktwerte;
-import de.freimarken.kern.Verkaufsregel;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -19,13 +18,19 @@ import org.junit.jupiter.api.Test;
 /**
  * Der Leser des Abschnitts {@code bundesmarkt:} - ohne Server.
  *
- * <p>Moeglich, weil {@code YamlConfiguration} reine Dateiarbeit ist und der Leser mit
- * {@link org.bukkit.Material#getMaterial(String)} statt {@code matchMaterial} prueft.
+ * <p><b>Diese Datei war am Mittag des 10.11.2026 dreimal so lang.</b> Sie hielt das
+ * SORTIMENT: je Material eine Zeile, eine Klage je unbrauchbarem Preis, die Pruefung
+ * gegen {@code Material.getMaterial} - und eine Probe, die jeden Ankaufpreis der
+ * ausgelieferten Datei gegen den hoechsten LOHN fuer dasselbe Material stellte ("der
+ * Markt darf nie mehr zahlen als die Arbeit, sonst ist jeder Block zweimal Geld").
  *
- * <p><b>Die tragende Probe ist {@link #ausgelieferteDateiIstBrauchbar()}:</b> Das
- * Sortiment ist der eine Wert dieses Schrittes ohne Rueckfall im Programm. Ist es kaputt,
- * kauft der Bund nichts - und das faellt erst auf, wenn ein Spieler mit vollem Inventar
- * vor dem Markt steht.
+ * <p>All das ist mit der Tafel gefallen: "es kann ja nur ge- und verkauft werden, wofuer
+ * es ein Schild gibt." Der Preis steht auf dem Schild, und was dieser Leser noch liest,
+ * ist eine Zahl.
+ *
+ * <p><b>Die verlorene Probe ist aufgeschrieben und nicht vergessen</b> (TODO): Ohne
+ * zentrale Liste prueft niemand mehr, ob ein Bundschild mehr zahlt als die Arbeit
+ * einbringt. Der Riegel waere beim ANLEGEN eines Schildes zu bauen, nicht hier.
  */
 @DisplayName("Bundesmarkt aus der config.yml")
 class MarktlisteTest {
@@ -33,10 +38,6 @@ class MarktlisteTest {
     private static final String VOLLSTAENDIG = """
             bundesmarkt:
               tagesdeckel: 5000
-              ankauf:
-                cobblestone: 10
-                stone: 20
-                diamond: 1100
             """;
 
     private static Marktliste.Ergebnis lies(String yaml) {
@@ -49,250 +50,168 @@ class MarktlisteTest {
         return ergebnis.klagen().stream().anyMatch(klage -> klage.startsWith(pfad));
     }
 
+    private static boolean berichtetUeber(Marktliste.Ergebnis ergebnis, String stueck) {
+        return ergebnis.bericht().stream().anyMatch(zeile -> zeile.contains(stueck));
+    }
+
     @Test
     @DisplayName("Eine vollstaendige Datei kommt ganz an")
     void vollstaendigKommtAn() {
         var ergebnis = lies(VOLLSTAENDIG);
 
-        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
         assertEquals(5_000L, ergebnis.werte().tagesdeckel());
-        assertEquals(3, ergebnis.werte().ankauf().anzahl());
-        assertEquals(20L, ergebnis.werte().ankauf().pfennige("stone"));
-        // Die REIHENFOLGE der Datei - sie ist die Reihenfolge in /markt.
-        assertEquals(java.util.List.of("cobblestone", "stone", "diamond"),
-                ergebnis.werte().ankauf().materialien());
+        assertTrue(ergebnis.werte().gedeckelt());
+        assertEquals(java.util.List.of(), ergebnis.klagen(),
+                ergebnis.klagen().toString());
     }
 
     @Test
-    @DisplayName("Die Zeile zum Sortiment ist ein GANZER Satz")
-    void berichtzeileIstEinGanzerSatz() {
-        var ergebnis = lies(VOLLSTAENDIG);
-
-        // Der Wortlaut, nicht die Zahl der Zeilen: Diese Zeile hiess einmal
-        // "... im Sortiment, Tagesdeckel je Spieler." - ein Satz, der seine Zahl nie
-        // bekam, weil diese Stelle den Deckel nicht liest. Eine Zaehlung der
-        // Berichtzeilen hat das nicht gesehen, ein Startlauf schon.
-        assertTrue(ergebnis.bericht().contains(
-                        "Bundesmarkt: 3 Materialien im Sortiment."),
-                ergebnis.bericht().toString());
-        for (String zeile : ergebnis.bericht()) {
-            assertFalse(zeile.contains("Tagesdeckel")
-                            && zeile.chars().noneMatch(Character::isDigit),
-                    "nennt den Tagesdeckel ohne Zahl: " + zeile);
-        }
-    }
-
-    @Test
-    @DisplayName("Ohne Konfiguration gilt die Vorgabe - und das Sortiment ist leer")
-    void ohneKonfiguration() {
-        var ergebnis = Marktliste.ausKonfiguration(null);
-
-        assertEquals(Marktwerte.VORGABE, ergebnis.werte());
-        assertTrue(ergebnis.klagen().isEmpty());
-        assertTrue(ergebnis.werte().ankauf().leer());
-    }
-
-    @Test
-    @DisplayName("Ein fehlendes Sortiment ist ein BERICHT und keine Klage")
-    void fehlendesSortimentIstKeineKlage() {
-        // Der Unterschied entscheidet, ob ein Server neu laden kann: Eine Klage
-        // verhindert das ganze Neuladen, und eine vorhandene config.yml wird beim Update
-        // NIE ueberschrieben. Gefahrlos ist es, weil ohne Liste NICHTS gekauft wird.
-        var ergebnis = lies("""
+    @DisplayName("Eine 0 heisst KEIN Deckel - und wird berichtet, nicht beklagt")
+    void nullHeisstKeinDeckel() {
+        // ENTSCHIEDEN AM 10.11.2026. Bis dahin wurde die 0 VERWORFEN, mit einer Klage,
+        // die auf die Ankaufliste verwies ("wer den Ankauf abschalten will, laesst die
+        // Liste leer"). Die Liste gibt es nicht mehr.
+        //
+        // Ein BERICHT und keine Klage: Es ist eine Einstellung. Aber eine, die man lesen
+        // soll - der Ankauf des Bundes ist damit eine Geldquelle ohne Grenze, und das
+        // ist eine Entscheidung und kein Zustand, in den man rutscht.
+        //
+        // Die BESTAETIGUNG gehoert dazu: 5.000 auf 0 ist mehr als Faktor 2, und das ist
+        // ein Geldwert. Ohne sie bleibt es bei der Vorgabe - diese Probe zeigt beides.
+        var ohneBestaetigung = lies("""
                 bundesmarkt:
-                  tagesdeckel: 5000
+                  tagesdeckel: 0
                 """);
+        assertEquals(5_000L, ohneBestaetigung.werte().tagesdeckel(),
+                "ohne Sprungbestaetigung bleibt es bei der Vorgabe");
+        assertTrue(klagtUeber(ohneBestaetigung, Marktwerte.PFAD_TAGESDECKEL),
+                ohneBestaetigung.klagen().toString());
 
-        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
-        assertTrue(ergebnis.werte().ankauf().leer());
-        assertTrue(ergebnis.bericht().stream().anyMatch(zeile ->
-                        zeile.contains(Marktwerte.PFAD_ANKAUF)
-                                && zeile.contains("NICHTS")),
-                ergebnis.bericht().toString());
-    }
-
-    @Test
-    @DisplayName("Ein Deckel von 0 gilt nicht - abschalten geht ueber das Sortiment")
-    void deckelNullGiltNicht() {
-        for (String getippt : new String[] {"0", "-1"}) {
-            var ergebnis = lies(VOLLSTAENDIG.replace("tagesdeckel: 5000",
-                    "tagesdeckel: " + getippt));
-
-            assertTrue(klagtUeber(ergebnis, Marktwerte.PFAD_TAGESDECKEL),
-                    getippt + " muss beklagt werden: " + ergebnis.klagen());
-            assertEquals(Marktwerte.VORGABE_TAGESDECKEL, ergebnis.werte().tagesdeckel());
-            // Das Sortiment bleibt stehen: Ein kaputter Deckel ist kein Grund, es
-            // wegzuwerfen.
-            assertEquals(3, ergebnis.werte().ankauf().anzahl());
-        }
-    }
-
-    @Test
-    @DisplayName("Ein Deckelsprung um mehr als Faktor 2 braucht die Bestaetigung")
-    void grosserSprungBrauchtBestaetigung() {
-        var ohne = lies(VOLLSTAENDIG.replace("tagesdeckel: 5000",
-                "tagesdeckel: 50000"));
-        assertTrue(klagtUeber(ohne, Marktwerte.PFAD_TAGESDECKEL),
-                ohne.klagen().toString());
-        assertEquals(Marktwerte.VORGABE_TAGESDECKEL, ohne.werte().tagesdeckel());
-
-        var mit = lies(VOLLSTAENDIG.replace("tagesdeckel: 5000",
-                "tagesdeckel: 50000") + """
+        var mitBestaetigung = lies("""
                 wirtschaft:
                   sprung-bestaetigt:
-                    markt-tagesdeckel: "5000 -> 50000"
+                    markt-tagesdeckel: "5000 -> 0"
+                bundesmarkt:
+                  tagesdeckel: 0
                 """);
-        assertTrue(mit.klagen().isEmpty(), mit.klagen().toString());
-        assertEquals(50_000L, mit.werte().tagesdeckel());
+        assertEquals(0L, mitBestaetigung.werte().tagesdeckel());
+        assertFalse(mitBestaetigung.werte().gedeckelt(), "0 heisst: kein Deckel");
+        assertEquals(java.util.List.of(), mitBestaetigung.klagen(),
+                mitBestaetigung.klagen().toString());
+        assertTrue(berichtetUeber(mitBestaetigung, "KEIN Tagesdeckel"),
+                mitBestaetigung.bericht().toString());
     }
 
     @Test
-    @DisplayName("Ein unbekanntes Material wird mit seinem Namen beklagt")
-    void unbekanntesMaterial() {
-        var ergebnis = lies(VOLLSTAENDIG.replace("stone: 20", "stoen: 20"));
+    @DisplayName("Eine negative Zahl wird verworfen - die Vorgabe bleibt")
+    void negativWirdVerworfen() {
+        var ergebnis = lies("""
+                wirtschaft:
+                  sprung-bestaetigt:
+                    markt-tagesdeckel: "5000 -> -100"
+                bundesmarkt:
+                  tagesdeckel: -100
+                """);
 
-        assertTrue(klagtUeber(ergebnis, Marktwerte.PFAD_ANKAUF + ".stoen"),
+        assertEquals(5_000L, ergebnis.werte().tagesdeckel());
+        assertTrue(klagtUeber(ergebnis, Marktwerte.PFAD_TAGESDECKEL),
                 ergebnis.klagen().toString());
-        assertTrue(ergebnis.klagen().get(0).contains("\"stoen\""),
-                ergebnis.klagen().get(0));
-        assertEquals(2, ergebnis.werte().ankauf().anzahl(),
-                "eine kaputte Zeile laesst die uebrigen stehen");
     }
 
     @Test
-    @DisplayName("Ein Preis mit Nachkommastellen wird beklagt")
-    void kommazahlWirdBeklagt() {
-        // Der haeufigste Vertipper bei Geld in YAML: 1.000 ist dort KEINE Tausend,
-        // sondern eine Eins.
-        for (String getippt : new String[] {"10.5", "1.000", "nein", "true"}) {
-            var ergebnis = lies(VOLLSTAENDIG.replace("stone: 20", "stone: " + getippt));
+    @DisplayName("Eine fehlende Zeile wird berichtet, nicht beklagt")
+    void fehlendeZeileWirdBerichtet() {
+        // Eine vorhandene config.yml wird beim Update NIE ueberschrieben: Wer von einer
+        // aelteren Fassung kommt, hat die Zeile nicht - und dann gilt die Vorgabe, und
+        // der Bericht sagt es. Eine Klage wuerde das ganze Neuladen anhalten.
+        var ergebnis = lies("""
+                bundesmarkt:
+                  irgendwas: 1
+                """);
 
-            assertTrue(klagtUeber(ergebnis, Marktwerte.PFAD_ANKAUF + ".stone"),
-                    getippt + " muss beklagt werden: " + ergebnis.klagen());
-            assertTrue(ergebnis.klagen().get(0).contains("PFENNIGEN"),
-                    ergebnis.klagen().get(0));
-        }
-    }
-
-    @Test
-    @DisplayName("Ein Preis unter einem Pfennig wird beklagt")
-    void preisUnterEinemPfennig() {
-        // Unter 1 ist kein Ankauf, sondern eine Annahme - und was der Bund nicht kaufen
-        // soll, steht gar nicht in der Liste.
-        for (String getippt : new String[] {"0", "-20"}) {
-            var ergebnis = lies(VOLLSTAENDIG.replace("stone: 20", "stone: " + getippt));
-
-            assertTrue(klagtUeber(ergebnis, Marktwerte.PFAD_ANKAUF + ".stone"),
-                    getippt + " muss beklagt werden: " + ergebnis.klagen());
-            assertEquals(2, ergebnis.werte().ankauf().anzahl());
-        }
-    }
-
-    @Test
-    @DisplayName("Ein Preis ueber der Ueberlaufschranke wird beklagt")
-    void preisUeberDerSchranke() {
-        // Die Schranke ist gerechnet und nicht gewaehlt: Bei einem vollen Inventar laeuft
-        // die Rechnung darueber ueber, und ein uebergelaufener Betrag ist NEGATIV - also
-        // eine Abbuchung auf dem Weg einer Einnahme.
-        var ergebnis = lies(VOLLSTAENDIG.replace("stone: 20",
-                "stone: " + (Verkaufsregel.HOECHSTER_PREIS + 1L)));
-
-        assertTrue(klagtUeber(ergebnis, Marktwerte.PFAD_ANKAUF + ".stone"),
+        assertEquals(5_000L, ergebnis.werte().tagesdeckel());
+        assertEquals(java.util.List.of(), ergebnis.klagen(),
                 ergebnis.klagen().toString());
-        assertTrue(ergebnis.klagen().get(0).contains("NEGATIV"),
-                ergebnis.klagen().get(0));
-        assertEquals(2, ergebnis.werte().ankauf().anzahl());
-    }
-
-    @Test
-    @DisplayName("Fehlende Marktzeilen werden gezaehlt und genannt")
-    void fehlendeZeilenWerdenGenannt() {
-        var ergebnis = lies("datenbank:\n  url: \"\"\n");
-
-        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
-        assertTrue(ergebnis.bericht().stream().anyMatch(zeile ->
-                        zeile.startsWith("2 von 2 Marktzeilen")),
+        assertTrue(berichtetUeber(ergebnis, Marktwerte.PFAD_TAGESDECKEL),
                 ergebnis.bericht().toString());
-        for (String pfad : new String[] {Marktwerte.PFAD_TAGESDECKEL,
-                                         Marktwerte.PFAD_ANKAUF}) {
-            assertTrue(ergebnis.bericht().toString().contains(pfad), pfad);
-        }
     }
 
     @Test
-    @DisplayName("Die MITGELIEFERTE config.yml traegt ein brauchbares Sortiment")
+    @DisplayName("Kein Abschnitt heisst: die Vorgaben, und keine Klage")
+    void ohneAbschnitt() {
+        assertEquals(Marktwerte.VORGABE, Marktliste.ausKonfiguration(null).werte());
+        assertEquals(java.util.List.of(),
+                Marktliste.ausKonfiguration(null).klagen());
+    }
+
+    @Test
+    @DisplayName("Die AUSGELIEFERTE Datei nennt den Deckel und ist lesbar")
     void ausgelieferteDateiIstBrauchbar() {
+        // Die Datei, die das Plugin mitbringt, muss durch ihren eigenen Leser gehen -
+        // sonst ist jede Zusage ueber sie eine Behauptung. Dass das SORTIMENT hier nicht
+        // mehr geprueft wird, ist kein Vergessen: Es steht nicht mehr in der Datei.
         try (InputStream strom =
                      Marktliste.class.getResourceAsStream("/config.yml")) {
-            assertNotNull(strom, "die config.yml muss im Jar liegen");
-            var datei = YamlConfiguration.loadConfiguration(
-                    new InputStreamReader(strom, StandardCharsets.UTF_8));
+            assertNotNull(strom, "config.yml muss im Jar liegen");
+            var ergebnis = Marktliste.ausKonfiguration(
+                    YamlConfiguration.loadConfiguration(
+                            new InputStreamReader(strom, StandardCharsets.UTF_8)));
 
-            var ergebnis = Marktliste.ausKonfiguration(datei);
-
-            assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
-            assertFalse(ergebnis.werte().ankauf().leer(),
-                    "ohne Sortiment kauft der Bund nichts");
-            assertEquals(56, ergebnis.werte().ankauf().anzahl(),
-                    "sechsundfuenfzig Materialien - jeder Preis liegt unter dem, was die"
-                            + " Arbeit einbringt");
+            assertEquals(java.util.List.of(), ergebnis.klagen(),
+                    ergebnis.klagen().toString());
             assertEquals(Marktwerte.VORGABE_TAGESDECKEL,
-                    ergebnis.werte().tagesdeckel());
-            assertTrue(ergebnis.bericht().stream().noneMatch(zeile ->
-                            zeile.contains("stehen nicht in deiner config.yml")),
-                    "die ausgelieferte Datei darf keine Marktzeile schulden: "
-                            + ergebnis.bericht());
+                    ergebnis.werte().tagesdeckel(),
+                    "die ausgelieferte Zahl und die Vorgabe des Programms sind dieselbe"
+                            + " - zwei verschiedene waeren zwei Wahrheiten");
+            assertTrue(ergebnis.werte().gedeckelt());
         } catch (IOException fehler) {
             throw new AssertionError(fehler);
         }
     }
 
     @Test
-    @DisplayName("Der Bund zahlt WENIGER als die Arbeit einbringt - sonst zahlt ein Block zweimal")
-    void marktZahltWenigerAlsDieArbeit() {
-        // Die tragende Kalibrierung dieses Schrittes, und sie ist mit einer Probe zu
-        // halten: Der Markt ist die VERWERTUNG des Erarbeiteten. Zahlte er mehr als der
-        // Lohn, waere jeder abgebaute Block zweimal Geld - einmal beim Abbauen, einmal
-        // beim Verkaufen -, und die Spanne von 2.000 bis 5.000 Mark je Stunde waere
-        // Papier.
+    @DisplayName("Eine ALTE Ankauftafel in der Datei wird beklagt, nicht uebergangen")
+    void alteTafelWirdBeklagt() {
+        // Eine vorhandene config.yml wird beim Update NIE ueberschrieben: Wer von heute
+        // Mittag kommt, hat bundesmarkt.ankauf mit sechsundfuenfzig Zeilen in seiner
+        // Datei. Ohne diese Klage sagt ihm niemand, dass sie nicht mehr gelesen wird -
+        // er stellt dort Preise ein, wartet auf ihre Wirkung und sucht den Fehler
+        // ueberall sonst.
         //
-        // Geprueft an den Materialien, die in BEIDEN Listen stehen.
+        // Eine KLAGE und kein Bericht: Die Folge ist dieselbe wie bei einer verworfenen
+        // Zahl - der Server tut etwas anderes, als in der Datei steht.
+        var ergebnis = lies("""
+                bundesmarkt:
+                  tagesdeckel: 5000
+                  ankauf:
+                    stone: 20
+                """);
+
+        assertEquals(5_000L, ergebnis.werte().tagesdeckel(),
+                "die uebrigen Zeilen gelten weiter");
+        assertTrue(klagtUeber(ergebnis, "bundesmarkt.ankauf"),
+                ergebnis.klagen().toString());
+        assertTrue(ergebnis.klagen().get(0).contains("Schild"),
+                "die Klage sagt, WO der Preis jetzt steht: "
+                        + ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Die ausgelieferte Datei hat KEIN Sortiment mehr")
+    void ausgelieferteDateiOhneSortiment() {
+        // Die Gegenrichtung, und sie ist die eigentliche Probe dieses Umbaus: Eine
+        // Tafel, die noch in der Datei stuende, wuerde von niemandem mehr gelesen - und
+        // ein Betreiber traegt dort Preise ein, die nie wirken. Dasselbe Muster wie
+        // Shopliste.nenneAlte: Was es nicht mehr gibt, darf auch nicht mehr dastehen.
         try (InputStream strom =
                      Marktliste.class.getResourceAsStream("/config.yml")) {
             assertNotNull(strom);
             var datei = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(strom, StandardCharsets.UTF_8));
-            var markt = Marktliste.ausKonfiguration(datei).werte().ankauf();
-            var berufe = Berufsliste.listeAus(datei.getConfigurationSection(
-                    de.freimarken.kern.Berufswerte.PFAD_LISTE));
-            var loehne = Verdienstliste.ausKonfiguration(datei, berufe.verzeichnis())
-                    .werte().loehne();
 
-            java.util.List<String> zuTeuer = new java.util.ArrayList<>();
-            int verglichen = 0;
-            for (String material : markt.materialien()) {
-                long hoechsterLohn = 0L;
-                for (de.freimarken.kern.Taetigkeit taetigkeit
-                        : de.freimarken.kern.Taetigkeit.values()) {
-                    for (String beruf : berufe.verzeichnis().berufe()) {
-                        hoechsterLohn = Math.max(hoechsterLohn,
-                                loehne.pfennige(beruf, taetigkeit, material));
-                    }
-                }
-                if (hoechsterLohn == 0L) {
-                    continue;
-                }
-                verglichen++;
-                if (markt.pfennige(material) >= hoechsterLohn) {
-                    zuTeuer.add(material + ": Markt " + markt.pfennige(material)
-                            + " >= Lohn " + hoechsterLohn);
-                }
-            }
-
-            assertTrue(verglichen > 0, "ohne gemeinsame Materialien prueft diese Probe"
-                    + " nichts - dann ist sie selbst der Fehler");
-            assertEquals(java.util.List.of(), zuTeuer,
-                    "diese Materialien bringen am Markt mehr als die Arbeit");
+            assertFalse(datei.contains("bundesmarkt.ankauf", true),
+                    "bundesmarkt.ankauf ist am 10.11.2026 gefallen - wer es wieder"
+                            + " eintraegt, traegt eine Liste ein, die niemand liest");
         } catch (IOException fehler) {
             throw new AssertionError(fehler);
         }
