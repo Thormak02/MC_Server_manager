@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,11 +42,12 @@ class ShoplisteTest {
               marktgebuehr-spielershop-verkauf-prozent: 13
               marktgebuehr-bundshop-verkauf-prozent: 23
               bundshop-wort: Staat
+              zeilen-je-seite: 3
             """;
 
     @Test
-    @DisplayName("Alle vier Zeilen werden gelesen - und keine ist die Vorgabe")
-    void alleVierZeilen() {
+    @DisplayName("Alle fuenf Zeilen werden gelesen - und keine ist die Vorgabe")
+    void alleFuenfZeilen() {
         var ergebnis = lies(VOLLSTAENDIG);
 
         assertTrue(ergebnis.klagen().isEmpty(), "" + ergebnis.klagen());
@@ -53,6 +55,9 @@ class ShoplisteTest {
         assertEquals(13, ergebnis.werte().spielershopVerkauf());
         assertEquals(23, ergebnis.werte().bundshopVerkauf());
         assertEquals("Staat", ergebnis.werte().bundWort());
+        assertEquals(3, ergebnis.werte().zeilenJeSeite(),
+                "3 steht unter " + Shopwerte.PFAD_ZEILEN + " - und die Vorgabe ist "
+                        + Shopwerte.VORGABE_ZEILEN);
     }
 
     @Test
@@ -217,7 +222,7 @@ class ShoplisteTest {
                 + "  marktgebuehr-spielershop-kauf-prozent: 7");
 
         assertTrue(ergebnis.bericht().stream()
-                        .anyMatch(z -> z.startsWith("3 von 4") && z.contains("Handels")),
+                        .anyMatch(z -> z.startsWith("4 von 5") && z.contains("Handels")),
                 "" + ergebnis.bericht());
     }
 
@@ -276,7 +281,7 @@ class ShoplisteTest {
         // Der Befund vom Bundesmarkt: Eine halbe Zusage - "es wird eine Gebuehr erhoben"
         // ohne die Zahl - liest sich wie eine Angabe und traegt keine. Mit drei Saetzen
         // gilt das dreifach.
-        String zeile = Shopliste.startzeile(new Shopwerte(7, 13, 23, "Staat"));
+        String zeile = Shopliste.startzeile(new Shopwerte(7, 13, 23, "Staat", 7));
 
         assertTrue(zeile.contains("7"), zeile);
         assertTrue(zeile.contains("13"), zeile);
@@ -333,6 +338,52 @@ class ShoplisteTest {
                 "Datei und Programm muessen dieselben Zahlen nennen");
         assertTrue(ergebnis.bericht().stream().noneMatch(z -> z.contains("fehlen")),
                 "und keine Zeile darf fehlen: " + ergebnis.bericht());
+    }
+
+    @Test
+    @DisplayName("Eine 0 Zeilen je Seite wird verworfen und NICHT als Abschaltung gelesen")
+    void nullZeilenWirdVerworfen() {
+        // Eine 0 saehe wie eine Abschaltung aus, waere aber eine Liste, die nie etwas
+        // zeigt - fuer den Spieler nicht von einem kaputten Server zu unterscheiden.
+        // Darum Klage UND Vorgabe, nicht das eine ohne das andere.
+        var ergebnis = lies("handel:" + System.lineSeparator()
+                + "  zeilen-je-seite: 0");
+
+        assertEquals(Shopwerte.VORGABE_ZEILEN, ergebnis.werte().zeilenJeSeite(),
+                "es bleibt bei der Vorgabe");
+        assertTrue(ergebnis.klagen().stream()
+                        .anyMatch(z -> z.contains(Shopwerte.PFAD_ZEILEN)),
+                "und der Betreiber liest, dass seine Zahl verworfen wurde: "
+                        + ergebnis.klagen());
+    }
+
+    @Test
+    @DisplayName("Die Grenze selbst gilt, eine darueber nicht")
+    void grenzeDerZeilenGilt() {
+        // Die Grenze SELBST muss durchgehen: Wer sie im Leser um eins verschiebt, faellt
+        // nur hier auf. Eine Probe, die nur 101 prueft, bliebe bei <= statt < gruen.
+        var genau = lies("handel:" + System.lineSeparator()
+                + "  zeilen-je-seite: " + Shopwerte.HOECHSTE_ZEILEN);
+        var darueber = lies("handel:" + System.lineSeparator()
+                + "  zeilen-je-seite: " + (Shopwerte.HOECHSTE_ZEILEN + 1));
+
+        assertEquals(Shopwerte.HOECHSTE_ZEILEN, genau.werte().zeilenJeSeite(),
+                "die Grenze selbst ist erlaubt: " + genau.klagen());
+        assertTrue(genau.klagen().isEmpty(), "" + genau.klagen());
+        assertEquals(Shopwerte.VORGABE_ZEILEN, darueber.werte().zeilenJeSeite(),
+                "eine darueber nicht");
+        assertFalse(darueber.klagen().isEmpty(), "und das wird gesagt");
+    }
+
+    @Test
+    @DisplayName("Der Startbericht nennt die Seitengroesse")
+    void startzeileNenntDieSeitengroesse() {
+        // Eine Einstellung, die der Startbericht nicht nennt, wirkt fuer den Betreiber
+        // wie keine: Er stellt sie ein, liest keine Bestaetigung und sucht den Fehler.
+        String zeile = Shopliste.startzeile(new Shopwerte(7, 13, 23, "Staat", 3));
+
+        assertTrue(zeile.contains("3"), zeile);
+        assertTrue(zeile.contains("/shop liste"), zeile);
     }
 
     @Test

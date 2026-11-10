@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -171,7 +172,7 @@ class ShophandelTest {
         // Prozent ist die Lage erreichbar, OBWOHL ein Satz eingestellt ist.
         var werte = Shopwerte.VORGABE.mitSpielerKauf(5);
         Kistenshop billig = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, BESITZER, 1,
-                19L, 0L, ware());
+                19L, 0L, ware(), Set.of());
         var ausgang = handle(billig, Handelsart.KUNDE_KAUFT, false, werte);
 
         assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
@@ -293,9 +294,9 @@ class ShophandelTest {
         // Zwei Bescheide und nicht einer: Ein Shop mit nur einem Preis sieht aus wie
         // jeder andere, und der Kunde soll lesen, welche Maustaste geht.
         Kistenshop nurVerkauf = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, BESITZER, 16,
-                100L, 0L, ware());
+                100L, 0L, ware(), Set.of());
         Kistenshop nurAnkauf = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, BESITZER, 16,
-                0L, 80L, ware());
+                0L, 80L, ware(), Set.of());
 
         assertEquals(Shophandel.Bescheid.KAUFT_NICHT_AN,
                 handle(nurVerkauf, Handelsart.KUNDE_VERKAUFT, false).bescheid());
@@ -407,7 +408,7 @@ class ShophandelTest {
         // Wahrheit, und dann verkaufte der einfache Klick, was der Sneak-Klick abgelehnt
         // haette.
         Kistenshop shop = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, BESITZER, 16, 10L,
-                0L, ware());
+                0L, ware(), Set.of());
 
         var einfach = handle(shop, Handelsart.KUNDE_KAUFT, false);
         assertEquals(16, einfach.handel().stueck(), "ein Klick ist eine Stufe");
@@ -430,7 +431,7 @@ class ShophandelTest {
         // einem Spitzhacken-Shop mit Menge 1 vierundsechzig Stufen an.
         hand.stapel = 1;
         Kistenshop spitzhacken = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, BESITZER, 1,
-                10L, 0L, ware());
+                10L, 0L, ware(), Set.of());
 
         var sneak = handle(spitzhacken, Handelsart.KUNDE_KAUFT, true);
 
@@ -622,11 +623,11 @@ class ShophandelTest {
 
     private Kistenshop spielershop() {
         return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, BESITZER, 16, 100L, 80L,
-                ware());
+                ware(), Set.of());
     }
 
     private Kistenshop bundshop() {
-        return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16, 100L, 80L, ware());
+        return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16, 100L, 80L, ware(), Set.of());
     }
 
     private static Warenprobe ware() {

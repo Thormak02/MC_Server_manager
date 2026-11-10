@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -46,7 +47,7 @@ public abstract class ShopVertrag {
      */
     protected static Kistenshop shop(int x, UUID besitzer, String warenname) {
         return new Kistenshop(WELT, x, 71, 6, x + 1, 71, 6, besitzer, 16, 100L, 80L,
-                ware(warenname));
+                ware(warenname), Set.of());
     }
 
     @Test
@@ -70,7 +71,7 @@ public abstract class ShopVertrag {
         // gleichen Werten waere ein Vertauschen zweier Spalten nicht zu sehen - und
         // kaufpreis und verkaufpreis liegen in der Zeile nebeneinander.
         ablage.schreibe(new Kistenshop(WELT, 60, 71, 6, 60, 70, 6, anna, 7, 777L, 333L,
-                new Warenprobe("7x Stein", "besonderer-inhalt")));
+                new Warenprobe("7x Stein", "besonderer-inhalt"), Set.of()));
 
         Kistenshop zurueck = ablage.anDemSchild(WELT, 60, 71, 6);
         assertNotNull(zurueck);
@@ -113,9 +114,9 @@ public abstract class ShopVertrag {
         // Zwei Schilder, die beide auf die Kiste bei 61/71/6 zeigen: eines von links
         // (60), eines von rechts (62).
         ablage.schreibe(new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, anna, 16, 100L, 80L,
-                ware("Stein")));
+                ware("Stein"), Set.of()));
         ablage.schreibe(new Kistenshop(WELT, 62, 71, 6, 61, 71, 6, anna, 8, 200L, 150L,
-                ware("Holz")));
+                ware("Holz"), Set.of()));
 
         List<Kistenshop> dort = ablage.anDerKiste(WELT, 61, 71, 6);
 
@@ -209,6 +210,106 @@ public abstract class ShopVertrag {
     }
 
     @Test
+    @DisplayName("Die Reihenfolge ist in JEDER Ablage dieselbe - und zwar numerisch")
+    void reihenfolgeIstNumerisch() {
+        // DIE LUECKE, die diese Probe schliesst [10.11.2026]: Der Schluessel eines Shops
+        // ist TEXT (welt x y z), und beide Speicher-Ablagen gaben ihre Listen ueber die
+        // values() einer TreeMap darueber heraus. Lexikographisch steht "100" vor "9"
+        // und "-20" vor "8". MariaShops ordnete dagegen in allen drei Listenabfragen
+        // numerisch. Dieselbe Frage gab also je nach Ablage eine andere Reihenfolge.
+        //
+        // Gesehen hat es keine Probe: Der Vertrag vergleicht bei vonSpieler
+        // einelementige Listen, und bei alle() stand nur die Zusage "zweimal
+        // hintereinander dieselbe" - die hielten beide Ordnungen.
+        //
+        // Die Zahlen sind darum GENAU so gewaehlt, dass Text und Zahl auseinanderfallen:
+        // als Text geordnet waere es -20, 10, 100, 8 - als Zahl -20, 8, 10, 100. Mit
+        // vier Shops an aufsteigenden Stellen waere diese Probe gruen geblieben, und die
+        // Luecke stuende weiter offen.
+        Shopablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        for (int x : new int[] {100, -20, 10, 8}) {
+            ablage.schreibe(shop(x, anna, "x" + x));
+        }
+
+        List<String> erwartet = List.of("x-20", "x8", "x10", "x100");
+        assertEquals(erwartet, namen(ablage.vonSpieler(anna)),
+                "vonSpieler - die eigene Shopliste, und bei Seiten entscheidet die"
+                        + " Ordnung, WAS auf Seite eins steht");
+        assertEquals(erwartet, namen(ablage.alle()),
+                "alle - die Warensuche zeigt die ersten Treffer");
+    }
+
+    // --- Die FREIGABEN - der eine Wert, der NICHT in der Zeile steht ----------
+
+    @Test
+    @DisplayName("Die Freigaben kommen auf JEDEM Leseweg zurueck")
+    void freigabenAufJedemLeseweg() {
+        // Der dreizehnte Wert eines Shops ist der einzige, der nicht in seiner Zeile
+        // steht: Er liegt in einer zweiten Tabelle. Eine Ablage mit echter Datenbank
+        // liest ihn darum auf ZWEI Wegen - einzeln fuer anDemSchild und in EINER
+        // Abfrage fuer die drei Listen. Wird ein Weg vergessen, kommt ein Shop OHNE
+        // Freigaben zurueck, und der Freigegebene steht vor einer Kiste, die ihm
+        // gestern offenstand.
+        Shopablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
+        UUID cora = UUID.randomUUID();
+        ablage.schreibe(shop(60, anna, "Stein").mitFreigaben(Set.of(bert, cora)));
+
+        assertEquals(Set.of(bert, cora),
+                ablage.anDemSchild(WELT, 60, 71, 6).freigegeben(),
+                "anDemSchild - der Weg des Klicks und des Abbaus");
+        assertEquals(Set.of(bert, cora),
+                ablage.anDerKiste(WELT, 61, 71, 6).get(0).freigegeben(),
+                "anDerKiste - der Weg des Kistendeckels");
+        assertEquals(Set.of(bert, cora),
+                ablage.vonSpieler(anna).get(0).freigegeben(),
+                "vonSpieler - der Weg der eigenen Shopliste");
+        assertEquals(Set.of(bert, cora), ablage.alle().get(0).freigegeben(),
+                "alle - der Weg des Startberichts");
+    }
+
+    @Test
+    @DisplayName("Ein zweites Schreiben ERSETZT die Freigaben, es legt nicht dazu")
+    void freigabenWerdenErsetzt() {
+        // Genau das ist das SPERREN: Es gibt keinen eigenen Weg dafuer, sondern
+        // schreibt den Shop ohne den Gesperrten noch einmal. Wird beim Schreiben nur
+        // hinzugefuegt, bleibt jede einmal erteilte Freigabe fuer immer stehen - und
+        // der Befehl, der sie zuruecknehmen soll, meldet Erfolg und bewirkt nichts.
+        Shopablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
+        UUID cora = UUID.randomUUID();
+        ablage.schreibe(shop(60, anna, "Stein").mitFreigaben(Set.of(bert, cora)));
+
+        ablage.schreibe(shop(60, anna, "Stein").mitFreigaben(Set.of(cora)));
+
+        assertEquals(Set.of(cora), ablage.anDemSchild(WELT, 60, 71, 6).freigegeben(),
+                "Bert ist gesperrt - und gesperrt heisst: er steht nicht mehr da");
+    }
+
+    @Test
+    @DisplayName("Loeschen nimmt die Freigaben MIT - sonst erbt sie der naechste")
+    void loeschenNimmtDieFreigabenMit() {
+        // Der Schluessel eines Shops ist seine STELLE, und Stellen werden wieder
+        // bebaut. Bliebe eine Freigabe nach dem Abbau liegen, haette ein Fremder
+        // unbemerkt Zutritt zu einem Laden, den er nie geschenkt bekam - gebaut von
+        // jemandem, der seinen Namen nie gehoert hat.
+        Shopablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
+        UUID cora = UUID.randomUUID();
+        ablage.schreibe(shop(60, anna, "alt").mitFreigaben(Set.of(bert)));
+        assertTrue(ablage.loesche(WELT, 60, 71, 6));
+
+        ablage.schreibe(shop(60, cora, "neu"));
+
+        assertEquals(Set.of(), ablage.anDemSchild(WELT, 60, 71, 6).freigegeben(),
+                "der neue Laden von Cora hat KEINE Freigabe geerbt");
+    }
+
+    @Test
     @DisplayName("Ohne Welt, ohne Spieler und ohne Shop geht nichts")
     void pflichtangaben() {
         Shopablage ablage = ablage();
@@ -239,7 +340,7 @@ public abstract class ShopVertrag {
         }
         String inhalt = lang.toString();
         ablage.schreibe(new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, UUID.randomUUID(), 1,
-                5_000L, 0L, new Warenprobe("Spitzhacke", inhalt)));
+                5_000L, 0L, new Warenprobe("Spitzhacke", inhalt), Set.of()));
 
         assertEquals(inhalt, ablage.anDemSchild(WELT, 60, 71, 6).ware().inhalt());
     }

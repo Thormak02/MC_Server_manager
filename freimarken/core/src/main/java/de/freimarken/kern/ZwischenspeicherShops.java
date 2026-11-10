@@ -107,7 +107,12 @@ public final class ZwischenspeicherShops implements Shopablage {
         List<Kistenshop> dort = nachKiste.get(Kistenshop.schluesselVon(welt, x, y, z));
         // Eine eigene Liste: Gaebe diese Karte ihre innere heraus, koennte ein Aufrufer
         // einen Shop hinzufuegen, der in keiner Zeile steht.
-        return dort == null ? List.of() : List.copyOf(dort);
+        if (dort == null) {
+            return List.of();
+        }
+        List<Kistenshop> sortiert = new ArrayList<>(dort);
+        sortiert.sort(Kistenshop.NACH_STELLE);
+        return List.copyOf(sortiert);
     }
 
     @Override
@@ -122,13 +127,19 @@ public final class ZwischenspeicherShops implements Shopablage {
                 seine.add(shop);
             }
         }
+        seine.sort(Kistenshop.NACH_STELLE);
         return seine;
     }
 
     @Override
     public synchronized List<Kistenshop> alle() {
         pruefeGefuellt();
-        return new ArrayList<>(nachSchild.values());
+        // Sortiert und nicht einfach die values(): Die Karte ordnet nach dem
+        // TEXT-Schluessel, und dort steht 100 vor 9. Die Ordnung einer Shopliste steht
+        // an EINER Stelle, in Kistenshop.NACH_STELLE.
+        List<Kistenshop> alle = new ArrayList<>(nachSchild.values());
+        alle.sort(Kistenshop.NACH_STELLE);
+        return alle;
     }
 
     @Override

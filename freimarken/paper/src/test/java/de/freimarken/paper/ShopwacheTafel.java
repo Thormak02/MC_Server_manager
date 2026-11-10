@@ -308,6 +308,40 @@ class ShopwacheTafel {
     }
 
     @Test
+    @DisplayName("Jede der drei Stellen nennt ihren EIGENEN Weg - und nur den")
+    void jedeStelleNenntIhrenWeg() {
+        // Die Wege sind seit dem 09.11.2026 nicht mehr gleichwertig: Die Freigabe
+        // oeffnet und erlaubt das Abbauen, das zweite Schild bleibt verwehrt. Damit
+        // haengt am Weg, den eine Stelle nennt, ob das Loch vom 08.11.2026 zu ist -
+        // und ein vertauschtes Wort sieht aus wie ein Tippfehler.
+        //
+        // Gemessen am 10.11.2026: Dass die Stelle den Kern RUFT, hielten die Proben
+        // schon; WELCHEN Weg sie dabei nennt, hielt keine. Drei Einspritzungen, die
+        // nur dieses eine Wort tauschten, liefen alle drei gruen durch.
+        //
+        // Diese Tafel bindet Stelle an Weg. Dass der Weg dann auch WIRKT, steht in
+        // KistenshopTest - dort hat jeder der drei seine eigene Antwort. Zwei Proben,
+        // eine Kette: Hier die Zuordnung, dort die Wirkung.
+        record Stelle(String datei, String zweig, String weg) { }
+
+        for (Stelle stelle : List.of(
+                new Stelle("Shopwache.java", "beimOeffnen", "OEFFNEN"),
+                new Stelle("Shopwache.java", "beimAbbauen", "ABBAUEN"),
+                new Stelle("Shopbuch.java", "anlege", "ZWEITES_SCHILD"))) {
+            String zweig = methode(stelle.datei(), stelle.zweig());
+            assertTrue(zweig.contains("Shopweg." + stelle.weg()),
+                    stelle.zweig() + " MUSS nach Shopweg." + stelle.weg()
+                            + " fragen: " + zweig);
+            for (String andere : List.of("OEFFNEN", "ABBAUEN", "ZWEITES_SCHILD")) {
+                assertTrue(andere.equals(stelle.weg())
+                                || !zweig.contains("Shopweg." + andere),
+                        stelle.zweig() + " darf NUR seinen eigenen Weg nennen, nicht"
+                                + " auch Shopweg." + andere + ": " + zweig);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("Die Erlaubnisliste der Shopkisten nennt drei und keine Shulkerkiste")
     void erlaubnislisteNenntDrei() {
         // Eine ERLAUBNISLISTE und keine Verbotsliste: Eine Verbotsliste ist bei jedem

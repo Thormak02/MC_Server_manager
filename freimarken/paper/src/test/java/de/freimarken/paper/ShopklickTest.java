@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Warenprobe;
 import java.util.UUID;
+import java.util.Set;
 import org.bukkit.inventory.EquipmentSlot;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,7 @@ class ShopklickTest {
 
     private static final Kistenshop EIN_SHOP = new Kistenshop("freimarken:altfurt", 60,
             71, 6, 61, 71, 6, UUID.randomUUID(), 16, 100L, 80L,
-            new Warenprobe("STONE", "inhalt"));
+            new Warenprobe("STONE", "inhalt"), Set.of());
 
     @Test
     @DisplayName("Die Tuer geht NUR am Schildblock auf - nie an der Kiste")

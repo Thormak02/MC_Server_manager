@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -27,7 +28,7 @@ class HandelsartTest {
 
     private static Kistenshop shop(long kaufpreis, long verkaufpreis) {
         return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, UUID.randomUUID(), 16,
-                kaufpreis, verkaufpreis, new Warenprobe("STONE", "inhalt"));
+                kaufpreis, verkaufpreis, new Warenprobe("STONE", "inhalt"), Set.of());
     }
 
     @Test

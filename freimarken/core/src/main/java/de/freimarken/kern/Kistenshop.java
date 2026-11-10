@@ -1,6 +1,8 @@
 package de.freimarken.kern;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -51,10 +53,20 @@ import java.util.UUID;
  * @param verkaufpreis was der Shop einem Kunden zahlt, der die {@code menge} ANBIETET.
  *                    0 heisst: Es wird nicht angekauft
  * @param ware        was gehandelt wird - EIN Exemplar, siehe {@link Warenprobe}
+ * @param freigegeben wer ausser dem Besitzer an die Kiste darf - die Mitbenutzerliste
+ *                    aus {@code /shop freigeben} (gebaut 09.11.2026). Sie REIST MIT der
+ *                    Zeile, wie die Mitbauer einer {@link Parzelle}: Wer einen Shop
+ *                    liest, hat seine Freigaben schon dabei, und
+ *                    {@link #offenFuer} braucht keine zweite Abfrage - jene Methode
+ *                    laeuft bei jedem Trichtertakt und jeder Explosion.
+ *                    <p>Nie {@code null}; eine leere Menge heisst "niemand". Ein
+ *                    BUNDSHOP hat immer eine leere - er gehoert niemandem, also kann
+ *                    niemand ihn freigeben
  */
 public record Kistenshop(String schildWelt, int schildX, int schildY, int schildZ,
                          int kisteX, int kisteY, int kisteZ, UUID besitzer, int menge,
-                         long kaufpreis, long verkaufpreis, Warenprobe ware) {
+                         long kaufpreis, long verkaufpreis, Warenprobe ware,
+                         Set<UUID> freigegeben) {
 
     /**
      * Die groesste Menge je Handel: eine volle Doppelkiste.
@@ -83,6 +95,22 @@ public record Kistenshop(String schildWelt, int schildX, int schildY, int schild
         schildWelt = schildWelt.trim();
         if (ware == null) {
             throw new IllegalArgumentException("Ein Kistenshop ohne Ware ist keiner");
+        }
+        if (freigegeben == null) {
+            throw new IllegalArgumentException("Nichts ist keine Freigabeliste - eine"
+                    + " LEERE Menge heisst \"niemand ausser dem Besitzer\", und genau"
+                    + " die traegt jeder neue Shop");
+        }
+        // Eine EIGENE unveraenderliche Kopie, und das ist hier mehr als Ordnung: Diese
+        // Menge wird in offenFuer bei jedem Trichtertakt und jeder Explosion gefragt.
+        // Gaebe der Aufrufer eine Menge herein, die er danach weiter aendert, entschiede
+        // ueber den Zutritt zu einer fremden Kiste ein Wert, den niemand mehr ueberblickt.
+        freigegeben = Set.copyOf(freigegeben);
+        if (besitzer == null && !freigegeben.isEmpty()) {
+            throw new IllegalArgumentException("Ein BUNDSHOP hat " + freigegeben.size()
+                    + " Freigaben - er gehoert aber niemandem, also kann ihn auch"
+                    + " niemand freigeben. Wer an einen Bundshop darf, entscheidet das"
+                    + " Recht freimarken.shop.bund.");
         }
         if (menge < 1 || menge > GROESSTE_MENGE) {
             throw new IllegalArgumentException("Eine Handelsmenge von " + menge
@@ -151,21 +179,62 @@ public record Kistenshop(String schildWelt, int schildX, int schildY, int schild
      * ohne laufenden Server pruefbar; die zwei Rechte kommen als Wahrheitswerte
      * herein, weil nur die Spielschicht sie erfragen kann.
      *
-     * <p><b>Hier haengt spaeter die Mitbenutzerliste ein</b> - der Schluessel, der als
-     * {@code /shop freigeben <spieler>} geplant ist (entschieden 08.11.2026). Ein
-     * vierter Fall in dieser Methode gilt dann sofort fuer alle drei Wege. Daran, dass
-     * es nur diese eine Stelle gibt, haengt, dass der Schluessel nicht ein Schloss
-     * offen laesst.
+     * <p><b>Der VIERTE Fall ist die Freigabe</b> - der Schluessel, der als
+     * {@code /shop freigeben <spieler>} geplant war (entschieden 08.11.2026, gebaut
+     * 09.11.2026). Er steht hier und nirgends sonst; daran haengt, dass er nicht ein
+     * Schloss offen laesst.
+     *
+     * <p><b>Er gilt NICHT fuer alle drei Wege</b>, und das ist die eine Stelle, an der
+     * dieses Javadoc von seiner frueheren Fassung abweicht. Dort stand, ein vierter Fall
+     * gelte "sofort fuer alle drei Wege" - gebaut wurde es anders, weil der dritte Weg
+     * das Loch vom 08.11.2026 ist: Wer ein ZWEITES Schild an die Kiste haengen darf,
+     * verkauft fremde Ware auf sein eigenes Konto, und der Besitzer sieht nur, dass seine
+     * Kiste leerer wird. Die Stelle bleibt EINE; sie gibt nur je Weg eine eigene Antwort,
+     * und welcher Weg fragt, sagt {@link Shopweg}.
+     *
+     * <p>Oeffnen und Abbauen sind dem Freigegebenen erlaubt: Das Oeffnen ist der ganze
+     * Zweck (Plan 7.4: "dass ein Fremder einem Shop auch nichts schenken kann"), das
+     * Abbauen deshalb, weil Preise zu aendern heute nur ueber Schild abbauen und neu
+     * beschriften geht. Die WARE bleibt dabei in der Kiste - ein aufgeloester Shop kostet
+     * den Laden, nicht den Bestand.
      *
      * @param wer       wer an den Shop will
+     * @param weg       auf welchem Weg - die Freigabe traegt nicht jeden
      * @param teamrecht ob er {@code freimarken.bauen.ueberall} hat
      * @param bundrecht ob er {@code freimarken.shop.bund} hat
      */
-    public boolean offenFuer(UUID wer, boolean teamrecht, boolean bundrecht) {
+    public boolean offenFuer(UUID wer, Shopweg weg, boolean teamrecht,
+            boolean bundrecht) {
+        if (weg == null) {
+            throw new IllegalArgumentException("Ohne Weg gibt es keine Zutrittsfrage -"
+                    + " die Freigabe traegt nicht jeden, und ein null hiesse, dass der"
+                    + " Aufrufer nicht weiss, wonach er fragt");
+        }
         if (teamrecht) {
             return true;
         }
-        return demBund() ? bundrecht : gehoert(wer);
+        if (demBund()) {
+            return bundrecht;
+        }
+        if (gehoert(wer)) {
+            return true;
+        }
+        // DER VIERTE FALL. Das zweite Schild ist ausgenommen - siehe oben und
+        // Shopweg.ZWEITES_SCHILD. Die Reihenfolge ist Absicht: erst der Weg, dann die
+        // Liste. So kostet der dritte Weg gar keinen Nachschlag.
+        return weg != Shopweg.ZWEITES_SCHILD && freigegeben.contains(wer);
+    }
+
+    /**
+     * Ob dieser Spieler fuer diesen Shop freigegeben ist.
+     *
+     * <p>Die rohe Frage nach der Liste, ohne Besitz und ohne Rechte - fuer den Befehl,
+     * der eine Freigabe anzeigt oder zuruecknimmt. Die ENTSCHEIDUNG, ob jemand an den
+     * Shop darf, trifft immer {@link #offenFuer}: Ein Besitzer steht nicht in seiner
+     * eigenen Freigabeliste, und ein Bundshop hat gar keine.
+     */
+    public boolean istFreigegeben(UUID wer) {
+        return wer != null && freigegeben.contains(wer);
     }
 
     /**
@@ -184,13 +253,29 @@ public record Kistenshop(String schildWelt, int schildX, int schildY, int schild
      * ueberhaupt an einer Kiste steht.
      */
     public static Kistenshop ersterFremder(List<Kistenshop> shops, UUID wer,
-            boolean teamrecht, boolean bundrecht) {
+            Shopweg weg, boolean teamrecht, boolean bundrecht) {
         for (Kistenshop shop : shops) {
-            if (!shop.offenFuer(wer, teamrecht, bundrecht)) {
+            if (!shop.offenFuer(wer, weg, teamrecht, bundrecht)) {
                 return shop;
             }
         }
         return null;
+    }
+
+    /**
+     * Derselbe Shop mit einer anderen Freigabeliste.
+     *
+     * <p>Ein record ist unveraenderlich, und das soll er bleiben: Diese Zeile ist die
+     * Wahrheit ueber einen Shop, und eine Zeile, die sich unter der Hand aendert, waere
+     * genau an der Stelle unzuverlaessig, an der ueber fremde Ware entschieden wird.
+     * Wer freigibt, baut also einen neuen Shop und schreibt ihn.
+     *
+     * <p>Alle zwoelf uebrigen Angaben wandern unveraendert mit - auch der Besitzer.
+     * Freigeben aendert nie, wem der Laden gehoert.
+     */
+    public Kistenshop mitFreigaben(Set<UUID> neue) {
+        return new Kistenshop(schildWelt, schildX, schildY, schildZ, kisteX, kisteY,
+                kisteZ, besitzer, menge, kaufpreis, verkaufpreis, ware, neue);
     }
 
     /** Ob hier gekauft werden kann - also ob der Shop verkauft. */
@@ -214,6 +299,31 @@ public record Kistenshop(String schildWelt, int schildX, int schildY, int schild
     public String schluessel() {
         return schluesselVon(schildWelt, schildX, schildY, schildZ);
     }
+
+    /**
+     * Die Ordnung jeder Shopliste: Welt, dann x, dann y, dann z - und zwar als ZAHL.
+     *
+     * <p>Sie steht hier und nicht in den Ablagen, weil es sonst drei Fassungen davon
+     * gaebe. Gemessen am 10.11.2026 war es genau so: {@link #schluessel()} ist TEXT, und
+     * beide Speicher-Ablagen gaben ihre Listen ueber eine {@code TreeMap} darueber
+     * heraus. Lexikographisch steht dann {@code 100} vor {@code 9} und {@code -20} vor
+     * {@code 8} - waehrend {@code MariaShops} in allen drei Listenabfragen numerisch
+     * ordnet. Dieselbe Frage gab also je nach Ablage eine andere Reihenfolge, und die
+     * Zusage in {@link Shopablage#vonSpieler} beschrieb nur die eine Haelfte.
+     *
+     * <p>Numerisch und nicht als Text, weil ein Spieler seine Laeden an den Koordinaten
+     * wiederfindet: Eine Liste, in der der Shop bei x=100 vor dem bei x=9 steht, liest
+     * sich wie Unordnung - und bei einer Liste auf Seiten entscheidet die Ordnung auch
+     * darueber, WAS auf Seite eins landet.
+     *
+     * <p>Die Welt bleibt Text; dort ist die Buchstabenfolge die einzige Ordnung, die es
+     * gibt.
+     */
+    public static final Comparator<Kistenshop> NACH_STELLE =
+            Comparator.comparing(Kistenshop::schildWelt)
+                    .thenComparingInt(Kistenshop::schildX)
+                    .thenComparingInt(Kistenshop::schildY)
+                    .thenComparingInt(Kistenshop::schildZ);
 
     /** Derselbe Schluessel, ohne einen Shop in der Hand zu haben. */
     public static String schluesselVon(String welt, int x, int y, int z) {

@@ -66,6 +66,19 @@ permissions:
     # beim Betreten Altfurts mitten im Bauen auf Abenteuer heruntergestuft.
     description: Behaelt den eigenen Spielmodus in jeder Welt
     default: op
+  freimarken.shop:
+    # default: true, anders als freimarken.blockbuch - hier verschenkt jemand Zutritt zu
+    # SEINEM Laden, und das ist keine Verwaltungshandlung, sondern Teil des Handelns. Wer
+    # einen Shop anlegen darf, darf ihn auch teilen.
+    #
+    # Das Recht deckt nur den BEFEHL. Wer an welche Kiste darf, entscheidet weiterhin
+    # Kistenshop.offenFuer - und dort steht die Freigabe als vierter Fall.
+    #
+    # EIN Recht fuer den ganzen Baum, auch fuer /shop liste: Die Liste zeigt nur die
+    # eigenen Laeden, und wer einen Shop anlegen darf, darf wissen, welche er hat. Ein
+    # zweites Recht nur fuers Nachsehen waere eine Schranke ohne Gegenstand.
+    description: Darf eigene Kistenshops auflisten und fuer andere freigeben
+    default: true
   freimarken.blockbuch:
     # Ein eigenes Recht und NICHT freimarken.verwalten - dieselbe Begruendung wie bei
     # freimarken.spielzeit.andere: Das Blockbuch zu lesen ist Moderation und keine

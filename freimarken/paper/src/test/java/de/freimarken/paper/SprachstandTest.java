@@ -48,7 +48,7 @@ class SprachstandTest {
     }
 
     @Test
-    @DisplayName("23 - NUR_BEIM_START ist GENAU diese zwoelf")
+    @DisplayName("23 - NUR_BEIM_START ist GENAU diese dreizehn")
     void nurBeimStartIstGenauDieseZehn() {
         Set<String> erwartet = new LinkedHashSet<>(List.of(
                 "befehl.beschreibung.freimarken", "befehl.beschreibung.parzelle",
@@ -56,7 +56,8 @@ class SprachstandTest {
                 "befehl.beschreibung.zurueck", "befehl.beschreibung.tpa",
                 "befehl.beschreibung.tpahere", "befehl.beschreibung.tpaccept",
                 "befehl.beschreibung.tpdeny", "befehl.beschreibung.beruf",
-                "befehl.beschreibung.markt", "befehl.beschreibung.laden"));
+                "befehl.beschreibung.markt", "befehl.beschreibung.laden",
+                "befehl.beschreibung.shop"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachstand.NUR_BEIM_START.forEach(satz -> gefuehrt.add(satz.pfad()));
         // assertEquals auf Groesse UND Inhalt: contains haette auch eine Liste mit einem
@@ -103,7 +104,7 @@ class SprachstandTest {
         assertTrue(ohne.get(0).contains("befehl.beschreibung.*"), ohne.get(0));
         // ZWOELF seit /laden: Die Zahl waechst mit jedem Befehl, und sie gehoert in
         // die Zeile - der Betreiber sieht daran, ob seine Aenderung dabei ist.
-        assertTrue(ohne.get(0).contains("12 Saetze"), ohne.get(0));
+        assertTrue(ohne.get(0).contains("13 Saetze"), ohne.get(0));
     }
 
     @Test

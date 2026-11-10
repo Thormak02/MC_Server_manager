@@ -32,8 +32,21 @@ public final class Datenbank implements AutoCloseable {
      * Die Schema-Schritte, in Reihenfolge. Angehaengt wird unten, nie dazwischen -
      * die Nummer eines Schrittes ist das, woran eine bestehende Datenbank erkennt, was
      * sie schon hat.
+     *
+     * <p><b>Und ein Schritt, der einmal gelaufen ist, wird auch nicht GEAENDERT.</b>
+     * {@link #migriere()} fuehrt nur Schritte ab dem gespeicherten Stand aus; eine
+     * Aenderung an einem alten Schritt bewirkt auf einer bestehenden Datenbank nichts.
+     * Auf einer frischen - und die Probendatenbank ist beim ersten Lauf frisch - wirkt
+     * sie sofort, und dann sagen die Proben etwas ueber ein Schema, das auf keinem
+     * laufenden Server steht. Wer eine Spalte braucht, haengt einen Schritt mit
+     * {@code ALTER TABLE ... IF NOT EXISTS} an. {@code SchemaTest} haelt das mit einer
+     * Pruefsumme je Schritt.
+     *
+     * <p>Paketprivat und nicht {@code private}: Die Proben im selben Paket pruefen die
+     * ECHTEN Schritttexte. Ueber den Quelltext geschnitten waeren es die Texte, die
+     * jemand in der Datei sieht - nicht die, die die Datenbank bekommt.
      */
-    private static final List<String> SCHRITTE = List.of(
+    static final List<String> SCHRITTE = List.of(
             """
             CREATE TABLE parzellen (
               id           BIGINT       NOT NULL AUTO_INCREMENT,
@@ -600,6 +613,44 @@ public final class Datenbank implements AutoCloseable {
               KEY ix_blockbuch_spieler (spieler, zeitpunkt, id),
               KEY ix_blockbuch_zeit (zeitpunkt)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Die Mitbenutzerliste eines Kistenshops - /shop freigeben <spieler>.
+            //
+            // EINE EIGENE TABELLE und keine Spalte an kistenshop, genau wie
+            // parzellen_mitbauer beim Besitz: Es ist eine LISTE, und eine Liste in einer
+            // Spalte waere entweder eine Laengengrenze oder ein Text, den niemand
+            // abfragen kann. Dasselbe Muster, dieselbe Bauart - zusammengesetzter
+            // Hauptschluessel aus der Besitzzeile plus Spieler.
+            //
+            // MIT Fremdschluessel ON DELETE CASCADE, und hier anders als beim Blockbuch:
+            // Eine Freigabe OHNE ihren Shop ist sinnlos - sie koennte nie wieder
+            // befragt werden, denn gefragt wird immer ueber den Shop. Wird das Schild
+            // abgebaut, muessen die Freigaben mit weg; bliebe eine liegen und jemand
+            // baute spaeter an derselben Stelle ein neues Schild, haette ein Fremder
+            // unbemerkt Zutritt zu einem Laden, den er nie geschenkt bekam. Der
+            // vierteilige Schluessel macht das moeglich - die Tabelle kistenshop hat
+            // keine Ersatznummer, ihre Stelle IST der Schluessel.
+            //
+            // Kein eigener Index auf spieler: Gefragt wird immer "wer darf an DIESEN
+            // Shop", nie "wo darf dieser Spieler ueberall hin". Kaeme die zweite Frage
+            // je dazu - etwa fuer eine Anzeige "deine Freigaben" -, gehoert ein Index
+            // dazu und nicht ein Durchlauf ueber die ganze Tabelle.
+            //
+            // IF NOT EXISTS wie bei den Schritten 7, 9, 10, 12, 13, 14, 15 und 16.
+            """
+            CREATE TABLE IF NOT EXISTS kistenshop_freigabe (
+              welt     VARCHAR(64) NOT NULL,
+              schild_x INT         NOT NULL,
+              schild_y INT         NOT NULL,
+              schild_z INT         NOT NULL,
+              spieler  CHAR(36)    NOT NULL,
+              PRIMARY KEY (welt, schild_x, schild_y, schild_z, spieler),
+              CONSTRAINT fk_freigabe_shop
+                FOREIGN KEY (welt, schild_x, schild_y, schild_z)
+                REFERENCES kistenshop (welt, schild_x, schild_y, schild_z)
+                ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -824,6 +875,12 @@ public final class Datenbank implements AutoCloseable {
             // naechsten, und weil die Schildstelle der Hauptschluessel ist, waere die
             // Folge nicht nur ein falscher Stand, sondern ein harter Wurf beim naechsten
             // Anlegen an derselben Stelle.
+            // Die Freigaben VOR den Shops: fk_freigabe_shop steht auf CASCADE, nimmt sie
+            // also ohnehin mit - die Zeile steht trotzdem hier, und zwar aus demselben
+            // Grund, aus dem parzellen_mitbauer als erste geloescht wird: Wer den
+            // Fremdschluessel je auf RESTRICT aendert, soll nicht erst an einer roten
+            // Probenreihe merken, dass hier eine Zeile fehlt.
+            anweisung.execute("DELETE FROM kistenshop_freigabe");
             anweisung.execute("DELETE FROM kistenshop");
             // Die Berufe haengen an keinem Fremdschluessel, ihre Stelle in dieser Liste
             // ist also frei - sie stehen hier, damit sie nicht uebersehen werden. Ohne

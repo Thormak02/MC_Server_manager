@@ -59,10 +59,17 @@ public interface Shopablage {
     List<Kistenshop> anDerKiste(String welt, int x, int y, int z);
 
     /**
-     * Die Shops dieses Spielers, nach Schluessel geordnet.
+     * Die Shops dieses Spielers, geordnet nach {@link Kistenshop#NACH_STELLE}.
      *
      * <p>Fuer die Auskunft, was einem gehoert. Bundshops gehoeren niemandem und stehen in
      * keiner dieser Listen.
+     *
+     * <p><b>Nach der STELLE und nicht nach dem Schluessel.</b> Hier stand bis zum
+     * 10.11.2026 "nach Schluessel geordnet", und das war fuer die Speicher-Ablagen
+     * woertlich wahr und fuer die Datenbank falsch: Der Schluessel ist Text, also stand
+     * dort der Shop bei x=100 vor dem bei x=9, waehrend die Datenbank numerisch ordnete.
+     * Wer eine Liste auf Seiten schneidet, schneidet damit je nach Ablage etwas anderes
+     * ab. Die Ordnung ist jetzt in allen Ablagen dieselbe, und der Vertrag haelt sie.
      *
      * @throws IllegalArgumentException wenn der Spieler {@code null} ist
      * @throws IllegalStateException wenn nicht gelesen werden konnte
@@ -70,7 +77,7 @@ public interface Shopablage {
     List<Kistenshop> vonSpieler(UUID besitzer);
 
     /**
-     * Alle Shops, nach Schluessel geordnet - fuer die Suche nach einer Ware.
+     * Alle Shops, geordnet nach {@link Kistenshop#NACH_STELLE} - fuer die Warensuche.
      *
      * <p>Die Reihenfolge ist zweimal hintereinander dieselbe. Das ist keine Zierde: Die
      * Suche zeigt die ersten Treffer, und eine wechselnde Reihenfolge zeigte bei

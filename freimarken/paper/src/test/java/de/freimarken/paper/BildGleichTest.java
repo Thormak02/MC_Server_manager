@@ -1389,7 +1389,74 @@ class BildGleichTest {
                 new Zeile(BlockSatz.GESTOERT, 1L, Einsatz.keine(), "&cDas Blockbuch antwortet nicht&7 - der Grund steht im"
                                 + " Serverprotokoll. Das ist KEIN Freispruch."),
                 new Zeile(BlockSatz.UNBEKANNT, 1L, Einsatz.von("name", "annna"),
-                        "&cDen Spieler annna kennt dieser Server nicht."));
+                        "&cDen Spieler annna kennt dieser Server nicht."),
+
+                // /shop freigeben - der SCHLUESSEL zu einer fremden Shopkiste.
+                // Die Zusage-Zeile nennt AUSDRUECKLICH, was die Freigabe erlaubt und
+                // was nicht: Sonst muesste der Besitzer raten, wie weit er gerade
+                // Vertrauen verschenkt hat.
+                new Zeile(ShopSatz.SHOP_FREIGEGEBEN, 1L,
+                        Einsatz.von("spieler", "Bert"), "&aBert darf jetzt an diesen Shop&7 - Kiste oeffnen und abbauen."
+                                + " Ein eigenes Schild daran haengen kann er nicht."),
+                new Zeile(ShopSatz.SHOP_GESPERRT, 1L,
+                        Einsatz.von("spieler", "Bert"), "&eBert darf nicht mehr an diesen Shop."),
+                new Zeile(ShopSatz.SHOP_SCHON_FREI, 1L,
+                        Einsatz.von("spieler", "Bert"), "&7Bert darf schon an diesen Shop."),
+                new Zeile(ShopSatz.SHOP_NICHT_FREI, 1L,
+                        Einsatz.von("spieler", "Bert"), "&7Bert durfte ohnehin nicht an diesen Shop."),
+                new Zeile(ShopSatz.SHOP_FREIGABEN_KOPF, 1L,
+                        Einsatz.von("anzahl", 2L), "&6An diesem Shop duerfen 2 ausser dir:"),
+                new Zeile(ShopSatz.SHOP_FREIGABEN_ZEILE, 1L,
+                        Einsatz.von("spieler", "Bert"), "&7  Bert"),
+                new Zeile(ShopSatz.SHOP_FREIGABEN_LEER, 1L, Einsatz.keine(), "&7Ausser dir darf niemand an diesen Shop."),
+                new Zeile(ShopSatz.SHOP_KEIN_SCHILD, 1L,
+                        Einsatz.von("reichweite", 5L), "&7Du siehst kein Shopschild an&8 (Reichweite 5 Bloecke). Stell"
+                                + " dich vor dein Schild und tippe /shop freigeben"
+                                + " <name>."),
+                // Freigeben darf NUR der Besitzer - nicht das Team, nicht ein schon
+                // Freigegebener. Sonst waere der Schluessel selbst weitergebbar.
+                new Zeile(ShopSatz.SHOP_NICHT_DEINER, 1L, Einsatz.keine(), "&cDieser Shop gehoert dir nicht.&7 Freigeben darf nur, wem der"
+                                + " Laden gehoert."),
+                new Zeile(ShopSatz.SHOP_BUND_NICHT_FREIGEBBAR, 1L, Einsatz.keine(),
+                        "&7Ein Bundshop gehoert niemandem - freigeben kann ihn darum"
+                                + " auch niemand. Wer an ihn darf, entscheidet das"
+                                + " Recht freimarken.shop.bund."),
+                new Zeile(ShopSatz.SHOP_SELBST, 1L, Einsatz.keine(), "&7An deinen eigenen Shop darfst du ohnehin."),
+                new Zeile(ShopSatz.SHOP_UNBEKANNT, 1L, Einsatz.von("name", "bertt"),
+                        "&cDen Spieler bertt kennt dieser Server nicht."),
+                // SAGT, DASS SICH NICHTS GEAENDERT HAT. Beim Sperren ist das die
+                // wichtigere Haelfte: Wer glaubt, jemanden ausgesperrt zu haben, und
+                // der kommt weiter hinein, merkt es womoeglich nie.
+                new Zeile(ShopSatz.SHOP_FREIGABE_GESTOERT, 1L, Einsatz.keine(), "&cDie Freigabe liess sich nicht speichern&7 - es hat sich"
+                                + " NICHTS geaendert. Der Grund steht im"
+                                + " Serverprotokoll."),
+                // /shop liste - die eigenen Laeden, auf Seiten. Die Zeile traegt die
+                // STELLE vorn: Das ist der Zweck dieser Liste, nicht die Ware.
+                new Zeile(ShopSatz.SHOP_LISTE_LEER, 1L, Einsatz.keine(), "&7Du hast noch keinen Kistenshop. Einer entsteht aus einem"
+                                + " Schild an einer Kiste - die erste Zeile bleibt leer, dann"
+                                + " Menge, Preis und Ware."),
+                new Zeile(ShopSatz.SHOP_LISTE_KOPF, 1L,
+                        Einsatz.von("anzahl", 3L).mit("seite", 1L).mit("seiten", 2L),
+                        "&6Deine Kistenshops (3) - Seite 1 von 2"),
+                // Die beiden Preisstuecke sind Art.WORT und stehen darum NICHT in
+                // dieser Tafel - sie werden nie allein gesendet. Eingesetzt werden sie
+                // hier fertig, genau wie der Zweig sie baut.
+                new Zeile(ShopSatz.SHOP_LISTE_ZEILE, 1L,
+                        Einsatz.von("welt", "freimarken:altfurt").mit("x", 60L)
+                                .mit("y", 71L).mit("z", 6L).mit("menge", 16L)
+                                .mit("ware", "Stein")
+                                .mit("kauf", " \u00b7 Kauf 100 Mark")
+                                .mit("verkauf", " \u00b7 Ankauf 80 Mark"),
+                        "&7  freimarken:altfurt 60/71/6 · 16x Stein · Kauf 100 Mark"
+                                + " · Ankauf 80 Mark"),
+                new Zeile(ShopSatz.SHOP_LISTE_WEITER, 1L,
+                        Einsatz.von("naechste", 2L), "&8/shop liste 2 zeigt die naechste Seite"),
+                new Zeile(ShopSatz.SHOP_LISTE_KEINE_SEITE, 1L,
+                        Einsatz.von("seite", 9L).mit("seiten", 2L), "&7Seite 9 gibt es nicht - deine Shops stehen auf 2 Seiten."),
+                new Zeile(ShopSatz.SHOP_LISTE_GESTOERT, 1L, Einsatz.keine(),
+                        "&cDeine Shopliste liess sich nicht lesen&7 - deine Laeden"
+                                + " sind deswegen NICHT weg. Der Grund steht im"
+                                + " Serverprotokoll."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

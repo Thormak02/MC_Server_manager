@@ -38,7 +38,8 @@ final class Shopliste {
     /** Jede Zeile, die das Plugin mitbringt - fuer den Bericht ueber Fehlende. */
     private static final List<String> SCHLUESSEL = List.of(
             Shopwerte.PFAD_SPIELER_KAUF, Shopwerte.PFAD_SPIELER_VERKAUF,
-            Shopwerte.PFAD_BUND_VERKAUF, Shopwerte.PFAD_WORT);
+            Shopwerte.PFAD_BUND_VERKAUF, Shopwerte.PFAD_WORT,
+            Shopwerte.PFAD_ZEILEN);
 
     /**
      * Die Zeilen von vor dem 08.11.2026 - sie werden nicht mehr gelesen.
@@ -74,8 +75,10 @@ final class Shopliste {
         int bundVerkauf = gebuehr(wurzel, Shopwerte.PFAD_BUND_VERKAUF,
                 Shopwerte.VORGABE_BUND_VERKAUF, klagen, bericht);
         String wort = bundwort(wurzel, klagen, bericht);
+        int zeilen = zeilenJeSeite(wurzel, klagen, bericht);
 
-        Shopwerte werte = new Shopwerte(spielerKauf, spielerVerkauf, bundVerkauf, wort);
+        Shopwerte werte = new Shopwerte(spielerKauf, spielerVerkauf, bundVerkauf, wort,
+                zeilen);
         bericht.add(rechenprobe(werte));
         return new Ergebnis(werte, klagen, bericht);
     }
@@ -166,6 +169,34 @@ final class Shopliste {
      * genau der Fall, von dem der Nutzergrundsatz sagt, dass er es in der Datei SAGEN
      * muss.
      */
+    /**
+     * Wie viele Shops eine Seite von {@code /shop liste} zeigt.
+     *
+     * <p>KLAGE statt Wurf, wie bei jeder Zahl dieser Liste: Der Satz
+     * {@link Shopwerte} wirft bei einer unbrauchbaren Zahl, und das ist dort richtig -
+     * ein Shopwerte mit 0 Zeilen je Seite darf es nicht geben. Hier aber laeuft der
+     * Start, und ein Server, der wegen einer Zahl in einer Datei nicht hochkommt, ist
+     * die schlechtere Antwort als einer, der die Vorgabe nimmt und es sagt.
+     */
+    private static int zeilenJeSeite(ConfigurationSection wurzel, List<String> klagen,
+            List<String> bericht) {
+        String pfad = Shopwerte.PFAD_ZEILEN;
+        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel, pfad,
+                Shopwerte.VORGABE_ZEILEN, klagen, bericht);
+        if (gelesen == null) {
+            return Shopwerte.VORGABE_ZEILEN;
+        }
+        if (!Shopwerte.brauchbareZeilen(gelesen)) {
+            klagen.add(pfad + " ist " + gelesen + " - verworfen. Erlaubt ist 1 bis "
+                    + Shopwerte.HOECHSTE_ZEILEN + " Zeilen je Seite. Eine 0 hiesse:"
+                    + " Die Liste zeigt nie etwas, und der Befehl waere stumm"
+                    + " abgeschaltet. Es bleibt bei "
+                    + Shopwerte.VORGABE_ZEILEN + ".");
+            return Shopwerte.VORGABE_ZEILEN;
+        }
+        return (int) (long) gelesen;
+    }
+
     private static String bundwort(ConfigurationSection wurzel, List<String> klagen,
             List<String> bericht) {
         String pfad = Shopwerte.PFAD_WORT;
@@ -222,7 +253,8 @@ final class Shopliste {
                         : "ohne Marktgebuehr (" + Shopwerte.PFAD_SPIELER_KAUF + ", "
                                 + Shopwerte.PFAD_SPIELER_VERKAUF + " und "
                                 + Shopwerte.PFAD_BUND_VERKAUF + " stehen auf 0)")
-                + ", Bundshops heissen "
+                + ", eine Seite von /shop liste zeigt " + werte.zeilenJeSeite()
+                + " Shops, Bundshops heissen "
                 + (werte.bundWort().isBlank()
                         ? "gar nicht und sind ueber ein Schild nicht anzulegen."
                         : "\"" + werte.bundWort() + "\" in der ersten Schildzeile.");

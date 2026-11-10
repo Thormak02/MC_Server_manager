@@ -399,7 +399,162 @@ enum ShopSatz implements Satz {
      * <p>Sagt ausdruecklich, dass kein Geld verloren ist. Das ist die Zusage, die der
      * Handel wirklich haelt: Was nach dem Zahlen scheitert, wird erstattet.
      */
-    SHOP_HANDEL_GESTOERT("shop.handel.gestoert", Art.HANDBALKEN);
+    SHOP_HANDEL_GESTOERT("shop.handel.gestoert", Art.HANDBALKEN),
+
+    // ============================================================ /shop freigeben
+    //
+    // Die Saetze des SCHLUESSELS (Plan 7.4, gebaut 09.11.2026). Sie sind die ersten
+    // dieses Bereichs, die zu einem BEFEHL gehoeren - alles davor kommt von einem
+    // beschriebenen Schild oder einer Hand an einem fremden Block. Darum Art.SATZ und
+    // nicht HANDBALKEN: Wer einen Befehl tippt, schaut in den Chat, und die Antwort
+    // soll stehen bleiben.
+
+    /**
+     * Die Freigabe ist eingetragen.
+     *
+     * <p>Nennt AUSDRUECKLICH, was sie erlaubt und was nicht - sonst muesste der
+     * Besitzer raten, wie weit er gerade Vertrauen verschenkt hat. Das zweite Schild
+     * bleibt verwehrt, und das ist keine Feinheit: Es ist der Weg, auf dem jemand
+     * fremde Ware auf sein eigenes Konto verkaufen koennte.
+     */
+    SHOP_FREIGEGEBEN("shop.freigabe.erteilt", Art.SATZ, "spieler"),
+
+    /** Die Freigabe ist zurueckgenommen. */
+    SHOP_GESPERRT("shop.freigabe.gesperrt", Art.SATZ, "spieler"),
+
+    /**
+     * Der Genannte stand schon in der Liste.
+     *
+     * <p>Eine eigene Zeile und keine stille Wiederholung: Wer zweimal freigibt, soll
+     * wissen, dass beim ersten Mal schon alles stimmte - sonst sucht er den Fehler.
+     */
+    SHOP_SCHON_FREI("shop.freigabe.schon-frei", Art.SATZ, "spieler"),
+
+    /** Der Genannte stand gar nicht in der Liste. */
+    SHOP_NICHT_FREI("shop.freigabe.nicht-frei", Art.SATZ, "spieler"),
+
+    /** Die Ueberschrift von {@code /shop freigaben}. */
+    SHOP_FREIGABEN_KOPF("shop.freigabe.kopf", Art.SATZ, "anzahl"),
+
+    /** Eine Zeile der Freigabeliste. */
+    SHOP_FREIGABEN_ZEILE("shop.freigabe.zeile", Art.SATZ, "spieler"),
+
+    /**
+     * Niemand ist freigegeben.
+     *
+     * <p>Eine eigene Zeile und nicht eine leere Liste: Wer nur die Ueberschrift sieht,
+     * haelt es fuer einen Fehler - und hier ist die Auskunft "niemand" genau die, auf
+     * die es ankommt.
+     */
+    SHOP_FREIGABEN_LEER("shop.freigabe.leer", Art.SATZ),
+
+    /**
+     * Der Spieler sieht kein Shopschild an.
+     *
+     * <p>Nennt die REICHWEITE, wie {@code blockbuch.kein-block}: Wer auf ein Schild
+     * drei Meter weiter schaut, soll nicht raten, ob dort kein Shop ist oder der Blick
+     * zu weit ging.
+     */
+    SHOP_KEIN_SCHILD("shop.freigabe.kein-schild", Art.SATZ, "reichweite"),
+
+    /**
+     * Der Shop im Blick gehoert einem anderen.
+     *
+     * <p>Freigeben darf NUR der Besitzer - nicht das Team und nicht ein schon
+     * Freigegebener. Sonst waere der Schluessel selbst weitergebbar, und nach zwei
+     * Schritten wuesste niemand mehr, wer eigentlich Zutritt hat.
+     */
+    SHOP_NICHT_DEINER("shop.freigabe.nicht-deiner", Art.SATZ),
+
+    /**
+     * Ein BUNDSHOP laesst sich nicht freigeben.
+     *
+     * <p>Er gehoert niemandem, also kann ihn auch niemand freigeben. Wer an einen
+     * Bundshop darf, entscheidet allein {@code freimarken.shop.bund}.
+     */
+    SHOP_BUND_NICHT_FREIGEBBAR("shop.freigabe.bundshop", Art.SATZ),
+
+    /** Sich selbst freizugeben ergibt nichts - der Besitzer darf ohnehin. */
+    SHOP_SELBST("shop.freigabe.selbst", Art.SATZ),
+
+    /** Den genannten Spieler kennt der Server nicht. */
+    SHOP_UNBEKANNT("shop.freigabe.unbekannt", Art.SATZ, "name"),
+
+    /** Die Ablage hat beim Freigeben geschwiegen. */
+    SHOP_FREIGABE_GESTOERT("shop.freigabe.gestoert", Art.SATZ),
+
+    // ===================================== die eigene SHOPLISTE [10.11.2026]
+
+    /**
+     * {@code /shop liste} hat nichts zu zeigen.
+     *
+     * <p>Eine eigene Zeile und keine leere Liste: "du hast keine" ist hier genau die
+     * Auskunft, auf die es ankommt - und sie nennt gleich den Weg zum ersten Laden.
+     */
+    SHOP_LISTE_LEER("shop.liste.leer", Art.SATZ),
+
+    /**
+     * Die Ueberschrift: wie viele Laeden, und welche Seite davon.
+     *
+     * <p>Die Seite steht AUCH DANN da, wenn es nur eine gibt. Zwei Koepfe waeren zwei
+     * Zeilen in der Vorlage, die auseinandergehen; und wer "Seite 1 von 1" liest, weiss
+     * sofort, dass nichts fehlt.
+     */
+    SHOP_LISTE_KOPF("shop.liste.kopf", Art.SATZ, "anzahl", "seite", "seiten"),
+
+    /**
+     * Eine Zeile je Laden: Stelle, Menge, Ware und die beiden Preisstuecke.
+     *
+     * <p>Die STELLE steht vorn, denn das ist der Zweck dieser Liste - wer dreissig
+     * Laeden hat, sucht den einen wieder. Welt UND Koordinaten, weil zwei Laeden
+     * desselben Spielers in verschiedenen Welten sonst gleich aussehen.
+     *
+     * <p>{@code kauf} und {@code verkauf} sind die zwei Wortstuecke darunter ODER
+     * NICHTS. Dasselbe Mittel wie {@code parzelle.liste.mitbauer}: Ein leerer Wert
+     * verschwindet rueckstandslos, und darum stehen die Trenner in den Stuecken.
+     */
+    SHOP_LISTE_ZEILE("shop.liste.zeile", Art.SATZ, "welt", "x", "y", "z", "menge",
+            "ware", "kauf", "verkauf"),
+
+    /**
+     * Das Wortstueck fuer den Preis, zu dem KUNDEN KAUFEN - ein Wortstueck, kein Satz.
+     *
+     * <p><b>Es haengt an {@code verkauftWare()}, und das ist kein Vertipper.</b> Die
+     * Satznamen sind aus Kundensicht, die Methoden des Kerns aus Shopsicht: Wenn der
+     * Shop verkauft, kauft der Kunde. Genau diese Verdrehung war am 08.11.2026 schon
+     * einmal ein Fehler in {@link Shoptext} - vertauscht bekam ein Shop, der nur
+     * ankauft, die Zeile "Kunden kaufen fuer 0 Mark", und eine 0 als Preis ist das,
+     * was {@code Shopschild} als {@code PREIS_BEIDE_NULL} abweist.
+     */
+    SHOP_LISTE_KAUF("shop.liste.kauf", Art.WORT, "preis"),
+
+    /** Das Wortstueck fuer den Preis, zu dem Kunden VERKAUFEN - an {@code kauftWare()}. */
+    SHOP_LISTE_VERKAUF("shop.liste.verkauf", Art.WORT, "preis"),
+
+    /**
+     * Der Hinweis auf die naechste Seite - nur, wenn es eine gibt.
+     *
+     * <p>Er nennt die ZAHL der naechsten Seite und nicht bloss "es gibt mehr": Ein
+     * Hinweis, der den Befehl nicht mitgibt, laesst den Spieler raten, wie man
+     * blaettert.
+     */
+    SHOP_LISTE_WEITER("shop.liste.weiter", Art.SATZ, "naechste"),
+
+    /**
+     * Die gewuenschte Seite gibt es nicht.
+     *
+     * <p>Sie nennt, wie viele es GIBT. Eine Absage ohne diese Zahl schickt den Spieler
+     * ins Probieren, und bei dreissig Laeden probiert er lange.
+     */
+    SHOP_LISTE_KEINE_SEITE("shop.liste.keine-seite", Art.SATZ, "seite", "seiten"),
+
+    /**
+     * Die Ablage hat geschwiegen.
+     *
+     * <p>Ein eigener Satz und nicht die leere Liste: Eine Stoerung, die wie "du hast
+     * keine Shops" aussieht, laesst den Spieler glauben, seine Laeden seien weg.
+     */
+    SHOP_LISTE_GESTOERT("shop.liste.gestoert", Art.SATZ);
 
     private final String pfad;
     private final Art art;

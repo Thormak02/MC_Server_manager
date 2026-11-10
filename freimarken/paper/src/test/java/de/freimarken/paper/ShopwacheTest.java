@@ -12,6 +12,7 @@ import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
+import java.util.Set;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -128,6 +129,25 @@ class ShopwacheTest {
         assertEquals(List.of(), anna.handbalkenBild(),
                 "und KEIN Handbalken: Wer seine eigene Kiste aufmacht, bekommt keine"
                         + " Meldung darueber, dass sie ihm gehoert");
+    }
+
+    @Test
+    @DisplayName("Ein FREIGEGEBENER macht die fremde Shopkiste auf")
+    void freigegebenerOeffnetDieFremdeKiste() {
+        // Der Zweck der Freigabe: Drei Freunde fuehren einen Laden gemeinsam, und zwei
+        // davon sollen nachfuellen koennen. Welchen WEG dieser Zweig an den Kern
+        // weitergibt, sieht man nur hier - der Kern kennt alle drei Antworten, und
+        // zwei von ihnen wuerden Bert hier abweisen.
+        ablage.schreibe(shopVon(ANNA).mitFreigaben(Set.of(BERT)));
+
+        InventoryOpenEvent ereignis = oeffnet(bert, einzelkiste(X, Y, Z));
+        wache.beimOeffnen(ereignis);
+
+        assertFalse(ereignis.isCancelled(),
+                "Anna hat ihm den Schluessel gegeben - der Deckel geht auf");
+        assertEquals(List.of(), bert.handbalkenBild(),
+                "und schweigend: Eine Meldung waere hier die Absage, die gerade NICHT"
+                        + " stattfindet");
     }
 
     @Test
@@ -372,7 +392,7 @@ class ShopwacheTest {
     /** Ein Shop an der Kiste bei {@code kisteX} - das Schild haengt darueber. */
     private static Kistenshop shopVon(UUID besitzer, int kisteX) {
         return new Kistenshop(WELT, kisteX, Y + 1, Z, kisteX, Y, Z, besitzer, 16, 100L,
-                80L, new Warenprobe("STONE", "inhalt-von-stein"));
+                80L, new Warenprobe("STONE", "inhalt-von-stein"), Set.of());
     }
 
     private InventoryOpenEvent oeffnet(Spielerprobe wer, Inventory was) {

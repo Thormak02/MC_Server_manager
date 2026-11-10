@@ -1,10 +1,12 @@
 package de.freimarken.paper;
 
 import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Shopweg;
 import de.freimarken.kern.Shopablage;
 import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Warenprobe;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -223,9 +225,14 @@ final class Shopbuch {
             if (ablage.anDemSchild(welt, schildX, schildY, schildZ) != null) {
                 return absage(Bescheid.SCHON_EIN_SHOP);
             }
+            // ZWEITES_SCHILD, und das ist der eine Weg, den eine FREIGABE nicht
+            // oeffnet: Wer an einer fremden Kiste ein eigenes Schild anhaengen duerfte,
+            // verkaufte fremde Ware auf sein Konto - genau das Loch vom 08.11.2026, und
+            // der Besitzer saehe nur, dass seine Kiste leerer wird. Die Begruendung
+            // steht bei Shopweg.ZWEITES_SCHILD.
             if (Kistenshop.ersterFremder(
-                    ablage.anDerKiste(welt, kisteX, kisteY, kisteZ), wer, darfUeberall,
-                    darfBund) != null) {
+                    ablage.anDerKiste(welt, kisteX, kisteY, kisteZ), wer,
+                    Shopweg.ZWEITES_SCHILD, darfUeberall, darfBund) != null) {
                 return absage(Bescheid.FREMDER_SHOP);
             }
         } catch (RuntimeException fehler) {
@@ -243,9 +250,13 @@ final class Shopbuch {
                     : Bescheid.WARE_UNBEKANNT);
         }
         try {
+            // Ein neuer Shop hat KEINE Freigaben - niemand ausser dem Besitzer darf an
+            // die Kiste, bis er jemanden ausdruecklich eintraegt. Die leere Menge ist
+            // hier die sichere Richtung und zugleich die einzige, die ein BUNDSHOP haben
+            // darf: Er gehoert niemandem, also kann ihn auch niemand freigeben.
             Kistenshop shop = new Kistenshop(welt, schildX, schildY, schildZ, kisteX,
                     kisteY, kisteZ, schild.bundshop() ? null : wer, schild.menge(),
-                    schild.kaufpreis(), schild.verkaufpreis(), ware);
+                    schild.kaufpreis(), schild.verkaufpreis(), ware, Set.of());
             ablage.schreibe(shop);
             protokoll.info("Kistenshop angelegt: " + shop.schluessel() + " - "
                     + shop.menge() + "x " + ware.name() + ", "

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -312,7 +313,7 @@ class ShopschildTest {
         // schreibt, muss es selbst wieder lesen koennen. Sonst steht nach dem Anlegen
         // ein Schild da, das beim naechsten Bearbeiten als falsch gilt.
         Kistenshop shop = new Kistenshop("freimarken:altfurt", 60, 71, 6, 61, 71, 6,
-                UUID.randomUUID(), 16, 100L, 80L, new Warenprobe("Stein", "inhalt"));
+                UUID.randomUUID(), 16, 100L, 80L, new Warenprobe("Stein", "inhalt"), Set.of());
 
         String[] zeilen = Shopschild.schreibe("Anna", shop);
 
@@ -339,7 +340,7 @@ class ShopschildTest {
     @DisplayName("Ohne Namen und ohne Shop gibt es keine Schildzeilen")
     void schreibenBrauchtBeides() {
         Kistenshop shop = new Kistenshop("freimarken:altfurt", 60, 71, 6, 61, 71, 6,
-                UUID.randomUUID(), 16, 100L, 80L, new Warenprobe("Stein", "inhalt"));
+                UUID.randomUUID(), 16, 100L, 80L, new Warenprobe("Stein", "inhalt"), Set.of());
 
         assertThrows(IllegalArgumentException.class,
                 () -> Shopschild.schreibe(null, shop));

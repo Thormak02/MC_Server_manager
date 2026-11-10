@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -17,7 +18,7 @@ class ShopwerteTest {
 
     private static Kistenshop shop(UUID besitzer) {
         return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, besitzer, 16, 100L, 80L,
-                new Warenprobe("Stein", "inhalt"));
+                new Warenprobe("Stein", "inhalt"), Set.of());
     }
 
     @Test
@@ -52,7 +53,7 @@ class ShopwerteTest {
         //
         // Die Richtung ist seit dem 08.11.2026 eine EINSTELLUNG und keine Regel des
         // Programms: Auch WANN eine Gebuehr faellt, soll der Betreiber entscheiden.
-        Shopwerte werte = new Shopwerte(7, 13, 23, "Bund");
+        Shopwerte werte = new Shopwerte(7, 13, 23, "Bund", 7);
         Kistenshop spielershop = shop(UUID.randomUUID());
         Kistenshop bundshop = shop(null);
 
@@ -72,7 +73,7 @@ class ShopwerteTest {
     @Test
     @DisplayName("Ohne Shop oder ohne Richtung gibt es keine Gebuehr")
     void prozentFuerBrauchtBeides() {
-        Shopwerte werte = new Shopwerte(7, 13, 23, "Bund");
+        Shopwerte werte = new Shopwerte(7, 13, 23, "Bund", 7);
 
         assertThrows(IllegalArgumentException.class,
                 () -> werte.prozentFuer(null, Handelsart.KUNDE_KAUFT));
@@ -116,19 +117,19 @@ class ShopwerteTest {
     @DisplayName("Eine Gebuehr ueber der Haelfte wird abgewiesen - an jeder der drei")
     void gebuehrHatGrenzen() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(51, 0, 0, "Bund"));
+                () -> new Shopwerte(51, 0, 0, "Bund", 7));
         assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(0, 51, 0, "Bund"));
+                () -> new Shopwerte(0, 51, 0, "Bund", 7));
         assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(0, 0, 51, "Bund"));
+                () -> new Shopwerte(0, 0, 51, "Bund", 7));
         assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(-1, 0, 0, "Bund"));
+                () -> new Shopwerte(-1, 0, 0, "Bund", 7));
         assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(0, -1, 0, "Bund"));
+                () -> new Shopwerte(0, -1, 0, "Bund", 7));
         assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(0, 0, -1, "Bund"));
+                () -> new Shopwerte(0, 0, -1, "Bund", 7));
         // Der Rand geht durch.
-        assertEquals(50, new Shopwerte(50, 50, 50, "Bund").spielershopKauf());
+        assertEquals(50, new Shopwerte(50, 50, 50, "Bund", 7).spielershopKauf());
     }
 
     @Test
@@ -138,11 +139,11 @@ class ShopwerteTest {
         // sagen, welcher gemeint ist. Sonst sucht ein Betreiber mit einer 60 in der
         // Datei an drei Stellen.
         String kauf = assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(60, 0, 0, "Bund")).getMessage();
+                () -> new Shopwerte(60, 0, 0, "Bund", 7)).getMessage();
         String verkauf = assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(0, 60, 0, "Bund")).getMessage();
+                () -> new Shopwerte(0, 60, 0, "Bund", 7)).getMessage();
         String bund = assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(0, 0, 60, "Bund")).getMessage();
+                () -> new Shopwerte(0, 0, 60, "Bund", 7)).getMessage();
 
         assertTrue(kauf.contains("Kauf"), kauf);
         assertTrue(verkauf.contains("Verkauf"), verkauf);
@@ -162,7 +163,7 @@ class ShopwerteTest {
     void imWirtschaftssatz() {
         assertEquals(Shopwerte.VORGABE, Wirtschaftswerte.VORGABE.handel());
 
-        Shopwerte andere = new Shopwerte(5, 3, 2, "Bund");
+        Shopwerte andere = new Shopwerte(5, 3, 2, "Bund", 7);
         Wirtschaftswerte mit = Wirtschaftswerte.VORGABE.mitHandel(andere);
         assertEquals(andere, mit.handel());
         // Der Wither fasst GENAU seinen Wert an - geprueft an drei Nachbarn.
@@ -181,6 +182,50 @@ class ShopwerteTest {
     // --- Das Bundwort: der Satz prueft es, nicht nur der Leser ---------------
 
     @Test
+    @DisplayName("Eine unbrauchbare Seitengroesse wird im SATZ abgewiesen")
+    void unbrauchbareSeitengroesseWirdImSatzAbgewiesen() {
+        // Dieselbe Lage wie beim Bundwort (siehe die Probe darunter): Der Leser
+        // Shopliste hat seine EIGENE Pruefung und klagt statt zu werfen, weil er beim
+        // Start laeuft. Haette nur er eine, kaeme eine 0 ueber jeden anderen Weg herein -
+        // aus einer Probe, aus einem spaeteren Befehl, aus einer der mitX-Methoden.
+        //
+        // Eine 0 ist dabei das Schlimmste, was durchkommen koennte: Die Liste zeigte nie
+        // etwas, und fuer den Spieler ist das von einem kaputten Server nicht zu
+        // unterscheiden.
+        assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(0, 0, 0, "Bund", 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(0, 0, 0, "Bund", -1));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Shopwerte(0, 0, 0, "Bund", Shopwerte.HOECHSTE_ZEILEN + 1));
+        // Die Grenze SELBST geht durch, und das ist die andere Haelfte der Zusage: Wer
+        // sie um eins verschiebt, faellt nur an dieser Zeile auf.
+        assertEquals(Shopwerte.HOECHSTE_ZEILEN,
+                new Shopwerte(0, 0, 0, "Bund", Shopwerte.HOECHSTE_ZEILEN)
+                        .zeilenJeSeite());
+        assertEquals(1, new Shopwerte(0, 0, 0, "Bund", 1).zeilenJeSeite(),
+                "und eine einzige Zeile je Seite ist eine brauchbare Einstellung");
+    }
+
+    @Test
+    @DisplayName("Jede mitX-Methode gibt die Seitengroesse DURCH")
+    void mitMethodenGebenDieSeitengroesseDurch() {
+        // Vier Methoden aendern je eine Komponente und geben die anderen durch. Eine,
+        // die dabei auf die Vorgabe zurueckfaellt, ist nicht zu sehen: Die Vorgabe ist
+        // 10, und zehn Zeilen sehen richtig aus. Darum eine Zahl, die NICHT die Vorgabe
+        // ist - und alle vier Wege einzeln.
+        Shopwerte drei = new Shopwerte(1, 2, 3, "Staat", 3);
+
+        assertEquals(3, drei.mitWort("Reich").zeilenJeSeite(), "mitWort");
+        assertEquals(3, drei.mitSpielerKauf(9).zeilenJeSeite(),
+                "mitSpielerKauf");
+        assertEquals(3, drei.mitSpielerVerkauf(9).zeilenJeSeite(),
+                "mitSpielerVerkauf");
+        assertEquals(3, drei.mitBundVerkauf(9).zeilenJeSeite(),
+                "mitBundVerkauf");
+    }
+
+    @Test
     @DisplayName("Ein zu langes Bundwort wird im SATZ abgewiesen, nicht nur im Leser")
     void zuLangesBundwortWirdImSatzAbgewiesen() {
         // BEFUND DER EINSPRITZUNG N3 vom 08.11.2026: Die Laengenpruefung im Konstruktor
@@ -195,7 +240,7 @@ class ShopwerteTest {
         String zuLang = "x".repeat(Shopwerte.LAENGSTES_WORT + 1);
 
         assertThrows(IllegalArgumentException.class,
-                () -> new Shopwerte(0, 0, 0, zuLang));
+                () -> new Shopwerte(0, 0, 0, zuLang, 7));
         // Und auf dem zweiten Weg hinein, denn mitWort prueft selbst nichts: Es
         // verlaesst sich auf den Konstruktor, und genau darum muss der es tun.
         assertThrows(IllegalArgumentException.class,
@@ -209,7 +254,7 @@ class ShopwerteTest {
         // gruen - und dann passte das laengste erlaubte Wort nicht mehr.
         String grenze = "x".repeat(Shopwerte.LAENGSTES_WORT);
 
-        assertEquals(grenze, new Shopwerte(0, 0, 0, grenze).bundWort());
+        assertEquals(grenze, new Shopwerte(0, 0, 0, grenze, 7).bundWort());
     }
 
     @Test
@@ -219,8 +264,8 @@ class ShopwerteTest {
         // bedeuten dasselbe - Bundshops sind ueber ein Schild nicht anzulegen. Zwei
         // Schreibweisen fuer dieselbe Einstellung sind zwei Vergleiche, die irgendwann
         // auseinandergehen.
-        assertEquals("", new Shopwerte(0, 0, 0, null).bundWort());
-        assertEquals("", new Shopwerte(0, 0, 0, "   ").bundWort());
-        assertEquals("Bund", new Shopwerte(0, 0, 0, "  Bund  ").bundWort());
+        assertEquals("", new Shopwerte(0, 0, 0, null, 7).bundWort());
+        assertEquals("", new Shopwerte(0, 0, 0, "   ", 7).bundWort());
+        assertEquals("Bund", new Shopwerte(0, 0, 0, "  Bund  ", 7).bundWort());
     }
 }

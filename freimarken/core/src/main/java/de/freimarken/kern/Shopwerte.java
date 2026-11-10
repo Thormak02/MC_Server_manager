@@ -42,9 +42,10 @@ package de.freimarken.kern;
  *                           getrennt
  * @param bundWort           das Wort in der ersten Schildzeile, das einen Bundshop
  *                           anzeigt
+ * @param zeilenJeSeite      wie viele Shops EINE Seite von {@code /shop liste} zeigt
  */
 public record Shopwerte(int spielershopKauf, int spielershopVerkauf,
-                        int bundshopVerkauf, String bundWort) {
+                        int bundshopVerkauf, String bundWort, int zeilenJeSeite) {
 
     public static final String PFAD_SPIELER_KAUF =
             "handel.marktgebuehr-spielershop-kauf-prozent";
@@ -104,8 +105,43 @@ public record Shopwerte(int spielershopKauf, int spielershopVerkauf,
     /** So lang darf das Wort werden - eine Schildzeile. */
     public static final int LAENGSTES_WORT = Warenprobe.LAENGSTER_NAME;
 
+    /**
+     * Wie viele Shops EINE Seite von {@code /shop liste} zeigt.
+     *
+     * <p>Eine ZAHL und kein {@code true}/{@code false}: Das Projekt kennt kein
+     * {@code getBoolean}, denn Bukkit liest jedes Wort ausser {@code true} stumm als
+     * {@code false} - aus einem {@code liste-begrenzen: ja} waere eine unbegrenzte
+     * Liste geworden, ohne eine Zeile Klage.
+     *
+     * <p>Und SEITEN statt eines Schnitts: Ein Schnitt bei zehn Zeilen verfehlte genau
+     * den Zweck dieser Liste. Wer dreissig Laeden hat, findet seine Laeden nicht
+     * wieder - und von denen sind einundzwanzig dann gar nicht erreichbar. "Unbegrenzt"
+     * gibt es darum nicht: Der Chat ist kein Anzeigemittel fuer hundert Zeilen, und
+     * wer mehr sehen will, blaettert.
+     */
+    public static final String PFAD_ZEILEN = "handel.zeilen-je-seite";
+
+    /**
+     * Zehn Zeilen je Seite.
+     *
+     * <p>Dieselbe Zahl wie {@code blockbuch.zeilen-je-abfrage}, und aus demselben
+     * Grund: Der Chat zeigt etwa zehn Zeilen, ohne dass das Vorige weggescrollt ist.
+     * Wer den Kopf nicht mehr sieht, weiss nicht, welche Seite er liest.
+     */
+    public static final int VORGABE_ZEILEN = 10;
+
+    /**
+     * Hundert Zeilen, und keine mehr.
+     *
+     * <p>Die Grenze faengt den Vertipper: Wer sich bei der Zehn um eine Null vertut,
+     * bekaeme eine Seite, die den ganzen Chat fuellt - und zwar fuer jeden, der den
+     * Befehl tippt. Hundert ist schon unbrauchbar, aber nicht schaedlich.
+     */
+    public static final int HOECHSTE_ZEILEN = 100;
+
     public static final Shopwerte VORGABE = new Shopwerte(VORGABE_SPIELER_KAUF,
-            VORGABE_SPIELER_VERKAUF, VORGABE_BUND_VERKAUF, VORGABE_WORT);
+            VORGABE_SPIELER_VERKAUF, VORGABE_BUND_VERKAUF, VORGABE_WORT,
+            VORGABE_ZEILEN);
 
     public Shopwerte {
         pruefe("Die Marktgebuehr beim Kauf an einem Spielershop", spielershopKauf);
@@ -122,6 +158,17 @@ public record Shopwerte(int spielershopKauf, int spielershopVerkauf,
                     + LAENGSTES_WORT + ". Ein laengeres Wort liesse sich nie eintippen,"
                     + " und die Einstellung wirkte nie.");
         }
+        if (!brauchbareZeilen(zeilenJeSeite)) {
+            throw new IllegalArgumentException("Eine Seite der Shopliste soll "
+                    + zeilenJeSeite + " Zeilen zeigen - erlaubt ist 1 bis "
+                    + HOECHSTE_ZEILEN + ". Eine 0 hiesse: Die Liste zeigt nie etwas,"
+                    + " und der Befehl waere stumm abgeschaltet.");
+        }
+    }
+
+    /** Ob so viele Zeilen je Seite brauchbar sind - 1 bis {@link #HOECHSTE_ZEILEN}. */
+    public static boolean brauchbareZeilen(long zeilen) {
+        return zeilen >= 1 && zeilen <= HOECHSTE_ZEILEN;
     }
 
     private static void pruefe(String was, int prozent) {
@@ -141,22 +188,25 @@ public record Shopwerte(int spielershopKauf, int spielershopVerkauf,
      */
     public Shopwerte mitWort(String andere) {
         return new Shopwerte(spielershopKauf, spielershopVerkauf, bundshopVerkauf,
-                andere);
+                andere, zeilenJeSeite);
     }
 
     /** Dieselben Werte mit anderer Gebuehr beim Kauf am Spielershop. */
     public Shopwerte mitSpielerKauf(int andere) {
-        return new Shopwerte(andere, spielershopVerkauf, bundshopVerkauf, bundWort);
+        return new Shopwerte(andere, spielershopVerkauf, bundshopVerkauf, bundWort,
+                zeilenJeSeite);
     }
 
     /** Dieselben Werte mit anderer Gebuehr beim Verkauf an einen Spielershop. */
     public Shopwerte mitSpielerVerkauf(int andere) {
-        return new Shopwerte(spielershopKauf, andere, bundshopVerkauf, bundWort);
+        return new Shopwerte(spielershopKauf, andere, bundshopVerkauf, bundWort,
+                zeilenJeSeite);
     }
 
     /** Dieselben Werte mit anderer Gebuehr beim Verkauf an einen Bundshop. */
     public Shopwerte mitBundVerkauf(int andere) {
-        return new Shopwerte(spielershopKauf, spielershopVerkauf, andere, bundWort);
+        return new Shopwerte(spielershopKauf, spielershopVerkauf, andere, bundWort,
+                zeilenJeSeite);
     }
 
     /**

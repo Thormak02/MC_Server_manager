@@ -2,12 +2,15 @@ package de.freimarken.kern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -29,13 +32,17 @@ class KistenshopTest {
     private static final UUID BERT =
             UUID.fromString("0000b55b-0000-0000-0000-000000000002");
 
+    /** Ein dritter Mensch - fuer die Frage, ob eine Freigabe NUR dem Genannten gilt. */
+    private static final UUID CORA =
+            UUID.fromString("0000c66c-0000-0000-0000-000000000003");
+
     private static Warenprobe stein() {
         return new Warenprobe("Stein", "inhalt-von-stein");
     }
 
     private static Kistenshop shop(long kauf, long verkauf) {
         return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, ANNA, 16, kauf, verkauf,
-                stein());
+                stein(), Set.of());
     }
 
     // ==================================================================== Preise
@@ -118,7 +125,7 @@ class KistenshopTest {
         for (int[] richtung : new int[][] {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0},
                 {0, 0, 1}, {0, 0, -1}}) {
             Kistenshop nachbar = new Kistenshop(WELT, 60, 71, 6, 60 + richtung[0],
-                    71 + richtung[1], 6 + richtung[2], ANNA, 16, 100L, 80L, stein());
+                    71 + richtung[1], 6 + richtung[2], ANNA, 16, 100L, 80L, stein(), Set.of());
             assertEquals(60 + richtung[0], nachbar.kisteX(),
                     "Richtung " + richtung[0] + "/" + richtung[1] + "/" + richtung[2]);
         }
@@ -126,16 +133,16 @@ class KistenshopTest {
         // Diagonal nicht - das ist genau der Fall, den Lumia ausschliesst.
         assertThrows(IllegalArgumentException.class,
                 () -> new Kistenshop(WELT, 60, 71, 6, 61, 72, 6, ANNA, 16, 100L, 80L,
-                        stein()));
+                        stein(), Set.of()));
         // Zwei Bloecke weit auch nicht.
         assertThrows(IllegalArgumentException.class,
                 () -> new Kistenshop(WELT, 60, 71, 6, 62, 71, 6, ANNA, 16, 100L, 80L,
-                        stein()));
+                        stein(), Set.of()));
         // Und DIESELBE Stelle ist kein Nachbar: Ein Schild kann nicht in seiner eigenen
         // Kiste stehen, und die Abstandssumme 0 faellt mit derselben Pruefung auf.
         assertThrows(IllegalArgumentException.class,
                 () -> new Kistenshop(WELT, 60, 71, 6, 60, 71, 6, ANNA, 16, 100L, 80L,
-                        stein()));
+                        stein(), Set.of()));
     }
 
     @Test
@@ -155,7 +162,7 @@ class KistenshopTest {
     @DisplayName("Ein Bundshop gehoert niemandem - auch nicht dem, der danach fragt")
     void bundshopGehoertNiemandem() {
         Kistenshop bund = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16, 100L, 80L,
-                stein());
+                stein(), Set.of());
 
         assertTrue(bund.demBund());
         assertFalse(bund.gehoert(ANNA));
@@ -185,13 +192,13 @@ class KistenshopTest {
     void pflichtwerte() {
         assertThrows(IllegalArgumentException.class,
                 () -> new Kistenshop(null, 60, 71, 6, 61, 71, 6, ANNA, 16, 100L, 80L,
-                        stein()));
+                        stein(), Set.of()));
         assertThrows(IllegalArgumentException.class,
                 () -> new Kistenshop("  ", 60, 71, 6, 61, 71, 6, ANNA, 16, 100L, 80L,
-                        stein()));
+                        stein(), Set.of()));
         assertThrows(IllegalArgumentException.class,
                 () -> new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, ANNA, 16, 100L, 80L,
-                        null));
+                        null, Set.of()));
     }
 
     // ==================================================================== Warenprobe
@@ -258,8 +265,12 @@ class KistenshopTest {
     void besitzerDarf() {
         Kistenshop shop = shop(100L, 80L);
 
-        assertTrue(shop.offenFuer(ANNA, false, false));
-        assertFalse(shop.offenFuer(BERT, false, false));
+        for (Shopweg weg : Shopweg.values()) {
+            assertTrue(shop.offenFuer(ANNA, weg, false, false),
+                    "der Besitzer darf auf JEDEM Weg: " + weg);
+            assertFalse(shop.offenFuer(BERT, weg, false, false),
+                    "ein Fremder auf keinem: " + weg);
+        }
     }
 
     @Test
@@ -269,12 +280,13 @@ class KistenshopTest {
         // gehoert() gibt dort fuer JEDEN false. Wer den Zutritt am Besitz allein
         // prueft, schliesst jeden Bundshop fuer alle zu - auch fuer das Team, das
         // ihn nachfuellen und abbauen muss.
-        Kistenshop bundshop = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16,
-                100L, 80L, stein());
+        Kistenshop bundshop = bundshop();
 
         assertFalse(bundshop.gehoert(ANNA), "ein Bundshop gehoert NIEMANDEM");
-        assertFalse(bundshop.offenFuer(ANNA, false, false), "ohne Bundrecht zu");
-        assertTrue(bundshop.offenFuer(ANNA, false, true), "mit Bundrecht offen");
+        assertFalse(bundshop.offenFuer(ANNA, Shopweg.OEFFNEN, false, false),
+                "ohne Bundrecht zu");
+        assertTrue(bundshop.offenFuer(ANNA, Shopweg.OEFFNEN, false, true),
+                "mit Bundrecht offen");
     }
 
     @Test
@@ -283,18 +295,168 @@ class KistenshopTest {
         // Sonst waere freimarken.shop.bund ein Generalschluessel: Wer Preise des
         // Servers festlegen darf, duerfte damit auch in jede Spielerkiste greifen.
         // Das sind zwei Vollmachten, und die eine ist nicht die andere.
-        assertFalse(shop(100L, 80L).offenFuer(BERT, false, true));
+        assertFalse(shop(100L, 80L).offenFuer(BERT, Shopweg.OEFFNEN, false, true));
     }
 
     @Test
     @DisplayName("Das Teamrecht oeffnet beides - sonst bleibt ein verlassener Shop"
             + " fuer immer stehen")
     void teamrechtOeffnetAlles() {
-        Kistenshop bundshop = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16,
-                100L, 80L, stein());
+        // Auf JEDEM Weg, auch dem dritten: Wer ueberall bauen darf, raeumt auch den
+        // Shop eines Spielers weg, der nicht mehr spielt. Die Freigabe-Ausnahme gilt
+        // fuer ihn nicht - er kommt gar nicht erst bis dorthin.
+        for (Shopweg weg : Shopweg.values()) {
+            assertTrue(shop(100L, 80L).offenFuer(BERT, weg, true, false), "" + weg);
+            assertTrue(bundshop().offenFuer(BERT, weg, true, false), "" + weg);
+        }
+    }
 
-        assertTrue(shop(100L, 80L).offenFuer(BERT, true, false));
-        assertTrue(bundshop.offenFuer(BERT, true, false));
+    @Test
+    @DisplayName("NACH_STELLE ordnet Welt, dann x, dann y, dann z - jede Achse")
+    void nachStelleOrdnetJedeAchse() {
+        // BEFUND DER EINSPRITZUNG L12 vom 10.11.2026: x und z liessen sich im
+        // Comparator vertauschen, ohne dass eine Probe rot wurde. Die Vertragsprobe der
+        // Ablagen aendert nur x - alle ihre Shops liegen bei z=6, und dann entscheidet
+        // x auch nach der Vertauschung.
+        //
+        // Darum Stellen, bei denen JEDE Paarvertauschung die Reihenfolge aendert:
+        //   A 1/2/3, B 2/3/1, C 3/1/2 - verschieden in allen drei Achsen, also faellt
+        //     eine Vertauschung von x mit y oder z auf;
+        //   D 5/1/9 und E 5/9/1 - GLEICHES x, also entscheidet y vor z, und eine
+        //     Vertauschung dieser beiden faellt auf. Ohne dieses Paar waere sie blind,
+        //     denn bei lauter verschiedenen x entscheidet x allein.
+        // Dazu ein Laden in einer ANDEREN Welt, die alphabetisch vor allen steht: Die
+        // Welt ist die erste Stufe, und eine Ordnung, die sie uebergeht, mischt zwei
+        // Staedte ineinander.
+        List<Kistenshop> gemischt = new ArrayList<>(List.of(
+                stelle("freimarken:hochwald", 5, 9, 1, "E"),
+                stelle("freimarken:hochwald", 3, 1, 2, "C"),
+                stelle("freimarken:hochwald", 1, 2, 3, "A"),
+                stelle("freimarken:altfurt", 9, 9, 9, "ZUERST"),
+                stelle("freimarken:hochwald", 5, 1, 9, "D"),
+                stelle("freimarken:hochwald", 2, 3, 1, "B")));
+
+        gemischt.sort(Kistenshop.NACH_STELLE);
+
+        List<String> namen = new ArrayList<>();
+        for (Kistenshop shop : gemischt) {
+            namen.add(shop.ware().name());
+        }
+        assertEquals(List.of("ZUERST", "A", "B", "C", "D", "E"), namen,
+                "altfurt vor hochwald, dann 1/2/3 vor 2/3/1 vor 3/1/2, und 5/1/9 vor"
+                        + " 5/9/1 - bei gleichem x entscheidet y VOR z");
+    }
+
+    /** Ein Shop an genau dieser Stelle, mit der Ware als Merkzeichen. */
+    private static Kistenshop stelle(String welt, int x, int y, int z, String ware) {
+        return new Kistenshop(welt, x, y, z, x, y - 1, z, ANNA, 16, 100L, 80L,
+                new Warenprobe(ware, "inhalt-von-" + ware), Set.of());
+    }
+
+    @Test
+    @DisplayName("Ein FREIGEGEBENER darf oeffnen und abbauen")
+    void freigegebenerDarfOeffnenUndAbbauen() {
+        // Das Oeffnen ist der ganze Zweck (Plan 7.4: "dass ein Fremder einem Shop auch
+        // nichts schenken kann"), das Abbauen kam dazu, weil Preise zu aendern heute nur
+        // ueber Schild abbauen und neu beschriften geht.
+        Kistenshop shop = shop(100L, 80L).mitFreigaben(Set.of(BERT));
+
+        assertTrue(shop.offenFuer(BERT, Shopweg.OEFFNEN, false, false));
+        assertTrue(shop.offenFuer(BERT, Shopweg.ABBAUEN, false, false));
+    }
+
+    @Test
+    @DisplayName("Ein Freigegebener haengt KEIN zweites Schild an - das Loch bleibt zu")
+    void freigegebenerHaengtKeinZweitesSchildAn() {
+        // DIE WICHTIGSTE PROBE DER FREIGABE. Der dritte Weg ist das Loch vom
+        // 08.11.2026: Wer an einer fremden Kiste ein eigenes Schild anhaengen darf,
+        // verkauft fremde Ware auf SEIN Konto - und der Besitzer sieht nur, dass seine
+        // Kiste leerer wird. Waere er fuer Freigegebene offen, stuende das Loch fuer
+        // genau die Leute wieder auf, denen man gerade Vertrauen geschenkt hat.
+        Kistenshop shop = shop(100L, 80L).mitFreigaben(Set.of(BERT));
+
+        assertFalse(shop.offenFuer(BERT, Shopweg.ZWEITES_SCHILD, false, false),
+                "derselbe Spieler, derselbe Shop - NUR der Weg ist anders, und er"
+                        + " entscheidet");
+    }
+
+    @Test
+    @DisplayName("Eine Freigabe gilt nur dem Genannten, nicht jedem")
+    void freigabeGiltNurDemGenannten() {
+        Kistenshop shop = shop(100L, 80L).mitFreigaben(Set.of(BERT));
+
+        assertTrue(shop.offenFuer(BERT, Shopweg.OEFFNEN, false, false));
+        assertFalse(shop.offenFuer(CORA, Shopweg.OEFFNEN, false, false),
+                "wer nicht eingetragen ist, bleibt draussen");
+    }
+
+    @Test
+    @DisplayName("Ein neuer Shop hat KEINE Freigaben")
+    void neuerShopHatKeineFreigaben() {
+        // Die sichere Richtung: Niemand ausser dem Besitzer darf an die Kiste, bis er
+        // jemanden ausdruecklich eintraegt.
+        Kistenshop shop = shop(100L, 80L);
+
+        assertTrue(shop.freigegeben().isEmpty());
+        assertFalse(shop.istFreigegeben(BERT));
+    }
+
+    @Test
+    @DisplayName("Ein BUNDSHOP kann keine Freigaben haben")
+    void bundshopHatKeineFreigaben() {
+        // Er gehoert niemandem, also kann ihn auch niemand freigeben. Wer an einen
+        // Bundshop darf, entscheidet allein das Recht freimarken.shop.bund - eine
+        // Freigabe daneben waere ein zweiter Weg zu derselben Frage.
+        assertThrows(IllegalArgumentException.class,
+                () -> new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16, 100L, 80L,
+                        stein(), Set.of(BERT)));
+    }
+
+    @Test
+    @DisplayName("Die Freigabeliste ist unveraenderlich - auch nachtraeglich")
+    void freigabelisteIstUnveraenderlich() {
+        // Diese Menge wird in offenFuer bei jedem Trichtertakt gefragt. Gaebe der
+        // Aufrufer eine Menge herein, die er danach weiter aendert, entschiede ueber den
+        // Zutritt zu einer fremden Kiste ein Wert, den niemand mehr ueberblickt.
+        Set<UUID> veraenderlich = new java.util.HashSet<>();
+        veraenderlich.add(BERT);
+        Kistenshop shop = shop(100L, 80L).mitFreigaben(veraenderlich);
+
+        veraenderlich.add(CORA);
+
+        assertFalse(shop.istFreigegeben(CORA),
+                "die nachtraegliche Aenderung darf den Shop nicht erreichen");
+        assertThrows(UnsupportedOperationException.class,
+                () -> shop.freigegeben().add(CORA));
+    }
+
+    @Test
+    @DisplayName("mitFreigaben laesst alles andere unveraendert - auch den Besitzer")
+    void mitFreigabenAendertNurDieListe() {
+        // Freigeben aendert nie, wem der Laden gehoert. Eine Fassung, die den Besitzer
+        // mitnaehme, verschenkte den Shop statt den Schluessel.
+        Kistenshop vorher = shop(100L, 80L);
+
+        Kistenshop nachher = vorher.mitFreigaben(Set.of(BERT));
+
+        assertEquals(vorher.besitzer(), nachher.besitzer());
+        assertEquals(vorher.schluessel(), nachher.schluessel());
+        assertEquals(vorher.menge(), nachher.menge());
+        assertEquals(vorher.kaufpreis(), nachher.kaufpreis());
+        assertEquals(vorher.verkaufpreis(), nachher.verkaufpreis());
+        assertEquals(vorher.ware(), nachher.ware());
+        assertNotEquals(vorher.freigegeben(), nachher.freigegeben(),
+                "nur DAS unterscheidet die beiden");
+    }
+
+    @Test
+    @DisplayName("Ohne Weg wird die Zutrittsfrage abgewiesen")
+    void ohneWegWirdAbgewiesen() {
+        // Ein null hiesse, dass der Aufrufer nicht weiss, wonach er fragt - und die
+        // Freigabe traegt nicht jeden Weg. Stillschweigend den mildesten zu nehmen waere
+        // die unsichere Richtung.
+        assertThrows(IllegalArgumentException.class,
+                () -> shop(100L, 80L).offenFuer(BERT, null, false, false));
     }
 
     @Test
@@ -305,14 +467,32 @@ class KistenshopTest {
         // kommt an die Ware des anderen - darum genuegt ein eigener Shop nicht.
         Kistenshop meiner = shop(100L, 80L);
         Kistenshop fremder = new Kistenshop(WELT, 60, 71, 7, 61, 71, 7, BERT, 16,
-                100L, 80L, stein());
+                100L, 80L, stein(), Set.of());
 
-        assertNull(Kistenshop.ersterFremder(List.of(meiner), ANNA, false, false));
+        assertNull(Kistenshop.ersterFremder(List.of(meiner), ANNA, Shopweg.OEFFNEN,
+                false, false));
         assertEquals(fremder,
-                Kistenshop.ersterFremder(List.of(meiner, fremder), ANNA, false,
-                        false),
+                Kistenshop.ersterFremder(List.of(meiner, fremder), ANNA,
+                        Shopweg.OEFFNEN, false, false),
                 "gemeldet wird der Shop, dem der Spieler in die Quere kommt - und"
                         + " nicht der eigene, an dem er stehen darf");
+    }
+
+    @Test
+    @DisplayName("An einer Doppelkiste zaehlt auch die Freigabe der ANDEREN Haelfte")
+    void anDerDoppelkisteZaehltJedeHaelfte() {
+        // Die Freigabe loest die Doppelkisten-Regel nicht auf: Wer nur an der einen
+        // Haelfte freigegeben ist, kommt ueber das gemeinsame Inventar trotzdem an die
+        // Ware der anderen - und darum bleibt er draussen.
+        Kistenshop meiner = shop(100L, 80L).mitFreigaben(Set.of(CORA));
+        Kistenshop fremder = new Kistenshop(WELT, 60, 71, 7, 61, 71, 7, BERT, 16,
+                100L, 80L, stein(), Set.of());
+
+        assertEquals(fremder,
+                Kistenshop.ersterFremder(List.of(meiner, fremder), CORA,
+                        Shopweg.OEFFNEN, false, false),
+                "an der zweiten Haelfte ist CORA nicht freigegeben, also bleibt die"
+                        + " ganze Kiste zu");
     }
 
     @Test
@@ -323,11 +503,18 @@ class KistenshopTest {
         // Lagen, und nur der Aufrufer kann sie trennen: Er allein weiss, ob er
         // ueberhaupt an einer Kiste steht. Gaebe diese Methode bei einer leeren
         // Liste eine Absage, waere jeder Blick in den eigenen Rucksack verboten.
-        assertNull(Kistenshop.ersterFremder(List.of(), ANNA, false, false));
+        assertNull(Kistenshop.ersterFremder(List.of(), ANNA, Shopweg.OEFFNEN, false,
+                false));
+    }
+
+    /** Ein Bundshop - gehoert niemandem, haengt am Recht. */
+    private static Kistenshop bundshop() {
+        return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16, 100L, 80L,
+                stein(), Set.of());
     }
 
     private static Kistenshop mitMenge(int menge) {
         return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, ANNA, menge, 100L, 80L,
-                stein());
+                stein(), Set.of());
     }
 }

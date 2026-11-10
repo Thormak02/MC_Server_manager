@@ -1457,6 +1457,60 @@ einmal neu eingemessen werden — danach gilt es dauerhaft.
    Fremder einem Shop auch nichts schenken kann — dafür kommt `/shop freigeben <spieler>`
    als eigener Schritt.
 
+   **Der Schlüssel ist gebaut [09.11.2026].** `/shop freigeben <name>`,
+   `/shop sperren <name>` und `/shop freigaben`, jeweils auf den Shop im Blick. Die
+   Freigaben sind eine **Liste** je Shop (eigene Tabelle `kistenshop_freigabe`, nach dem
+   Muster von `parzellen_mitbauer`) — ein gemeinsamer Laden von drei Freunden geht nur so.
+
+   **Und die eigene Liste [10.11.2026]:** `/shop liste [seite]` — der einzige Zweig von
+   `/shop`, der **kein Schild im Blick** braucht, denn wer seine Läden sucht, steht nicht
+   vor ihnen. Die Zeile nennt Welt, Koordinaten, Menge, Ware und die beiden Preise.
+
+   **Seiten und kein Schnitt.** Ein Schnitt bei zehn Zeilen hätte genau den Zweck
+   verfehlt: Wer dreißig Läden hat, findet sie nicht wieder — und zwanzig davon wären
+   über diesen Befehl gar nicht erreichbar gewesen. Wie viele je Seite stehen, sagt
+   `handel.zeilen-je-seite` (Vorgabe 10, erlaubt 1 bis 100). *Unbegrenzt* gibt es nicht:
+   Der Chat ist kein Anzeigemittel für hundert Zeilen.
+
+   **Dabei kam ein Fund zutage, der alle Shoplisten betraf.** `Shopablage.vonSpieler`
+   versprach „nach Schlüssel geordnet" — und der Schlüssel ist *Text* (`welt x y z`).
+   Beide Speicher-Ablagen gaben ihre Listen über die `values()` einer `TreeMap` darüber
+   heraus, also lexikographisch: Der Laden bei x=100 stand vor dem bei x=9, der bei x=−20
+   vor dem bei x=8. Die Datenbank ordnete dagegen numerisch, und zur Laufzeit liest immer
+   der Zwischenspeicher. Bei einer Liste auf Seiten entscheidet die Ordnung, **was auf
+   Seite eins landet** — dieselbe Frage hätte je nach Ablage etwas anderes abgeschnitten.
+   Gesehen hat es keine Probe: Der geteilte Vertrag verglich bei `vonSpieler`
+   einelementige Listen. Die Ordnung steht jetzt als `Kistenshop.NACH_STELLE` an einer
+   Stelle, und der Vertrag hält sie mit Stellen, deren Text- und Zahlenordnung
+   auseinanderfallen.
+
+   **Die Freigabe trägt nicht alle drei Wege, und das ist die Entscheidung dieses
+   Schritts.** Hier stand vorher, ein vierter Fall in `Kistenshop.offenFuer` gelte „sofort
+   für alle drei Wege". Gebaut ist es anders:
+
+   | | Kiste öffnen | abbauen | zweites Schild |
+   |---|---|---|---|
+   | Besitzer | ja | ja | ja |
+   | **Freigegeben** | **ja** | **ja** | **nein** |
+   | Fremder | nein | nein | nein |
+
+   Das Öffnen ist der Zweck. Das Abbauen kam dazu, weil Preise zu ändern heute nur über
+   Schild abbauen und neu beschriften geht — die Ware bleibt dabei in der Kiste. Das
+   **zweite Schild** bleibt verwehrt, denn genau das war das Loch vom 08.11.2026: Wer an
+   einer fremden Kiste ein eigenes Schild anhängen darf, verkauft fremde Ware auf sein
+   Konto, und der Besitzer sieht nur, dass seine Kiste leerer wird. Wäre es für
+   Freigegebene offen, stünde das Loch für genau die Leute wieder auf, denen man gerade
+   Vertrauen geschenkt hat.
+
+   Die Regel bleibt an **einer** Stelle; sie gibt nur je Weg eine eigene Antwort. Welcher
+   Weg fragt, sagt die Aufzählung `Shopweg`.
+
+   **Freigeben darf nur der Besitzer** — nicht das Team, nicht ein schon Freigegebener.
+   Das Teamrecht öffnet eine Kiste, damit ein verlassener Laden abgebaut werden kann; es
+   macht niemanden zum Hausherrn. Und wäre der Schlüssel selbst weitergebbar, wüsste nach
+   zwei Schritten niemand mehr, wer Zutritt hat. Ein **Bundshop** lässt sich gar nicht
+   freigeben: Er gehört niemandem, also kann ihn niemand verschenken.
+
    **Neu benannt dabei und am 09.11.2026 gleich geschlossen:** Eine fremde Shopkiste ließ
    sich per Trichter mit Müll füllen, bis sie keinen Platz mehr für Ankauf hatte. Der
    Zweig prüft jetzt auch das Ziel — aber nicht pauschal, sondern an der WARE
@@ -2177,6 +2231,7 @@ Zweig. Umlautfrei, damit sie sich tippen lassen; kurze Alias daneben.
 | `/werder` | `hafen nehmen`, `wolke nehmen`, `stufe`, `besuchen <spieler>` |
 | `/laden` | `mieten`, `verlaengern`, `kuendigen`, `abholfach` *(alle vier erledigt 08.11.2026)* |
 | `/markt` | `suchen <gegenstand>`, `anbieten <preis>`, `meine` — **kein `verkaufen`**: verkauft wird am Schild ([7.1](#71-die-markthalle)) |
+| `/shop` | `liste [seite]` — die eigenen Läden, auf Seiten *(gebaut 10.11.2026)*; `freigeben <spieler>`, `sperren <spieler>`, `freigaben` — der SCHLÜSSEL zur eigenen Shopkiste *(gebaut 09.11.2026)*. Angelegt und bedient wird ein Kistenshop weiterhin ohne Befehl: Schild beschreiben, klicken ([7.4](#74-kistenshops-entschieden-08112026)) |
 | `/konto` | (Stand), `verlauf`, `zahlen <spieler> <betrag>`, `tauschen <betrag>` |
 | `/zuhause` (`/home`) | `<name>`, `setzen <name>`, `entfernen <name>`, `liste` |
 | `/warp` | `<name>`, `setzen <name>`, `entfernen <name>` |
@@ -2197,6 +2252,12 @@ Spieler kommen von englischsprachigen Servern und tippen `/plot` und `/balance`,
 `/parzelle` lesen; eine Fehlmeldung auf einen Befehl, den jeder kennt, kostet den ersten
 Eindruck, ein zweiter Name kostet eine Zeile. Gebaut: `/parzelle` auch als `/plot`, `/mark`
 auch als `/balance` und `/bal`, `/zurueck` auch als `/back`.
+
+`/shop` ist die eine Ausnahme, und sie ist keine Nachlässigkeit: Das Wort ist im Deutschen
+eingebürgert, beide Gruppen tippen es. Ein zweiter Name müsste erfunden werden —
+`/kistenshop` tippt niemand, der `/shop` sucht, und `/laden` ist an die Markthalle
+vergeben. Ein Alias, den keiner benutzt, ist kein zweiter Weg, sondern eine Zeile, die so
+aussieht.
 
 Davon unberührt ist die **Sprache der Meldungen**. Sie hängt an der Sprachdatei aus
 [13](#13-betrieb) — heute stehen über hundert Farb- und Textstellen direkt im Quelltext.
@@ -2593,6 +2654,23 @@ unterschiedliche Leute an, und niemand braucht beides.
 - **Stummschalten, kicken, bannen** — jeweils mit **Dauer und Grund**, und der Grund wird
   dem Betroffenen angezeigt. Eine Strafe, die niemand erklärt, erzeugt nur Wiederkehr.
 - **Einsehen** eines Grundstücks ohne Baurecht: hinsehen dürfen, anfassen nicht.
+- **Das Blockbuch** [gebaut 09.11.2026] beantwortet die Frage *wer war das*:
+  `/freimarken blockbuch` auf den Block im Blick, `/freimarken blockbuch spieler <name>`
+  für die andere Richtung. Es schreibt Setzen, Abbauen und das Benutzen von Behältern —
+  und ausdrücklich auch die **abgewiesenen** Versuche. Die sind der eigentliche Fund: Ein
+  Dutzend Fehlversuche an einer fremden Parzelle in zwei Minuten ist genau der Vorgang,
+  bei dem *nichts passiert ist* und den darum kein anderes Werkzeug zeigt.
+
+  Was aufgeschrieben wird, steht je Welt in der `config.yml` — als **Weißliste von
+  Namen**, nie als `true`/`false`. Der Grund ist gemessen: Bukkit liest jedes Wort außer
+  `true` stumm als `false`, und aus einem `benutzen: ja` wäre ein abgeschaltetes Buch
+  ohne eine Zeile Klage geworden.
+
+  **Das Blockbuch ersetzt Prism nicht.** Es zeigt, es rollt nicht zurück. Die Frage
+  *wer war das* ist damit beantwortet, die Frage *mach es rückgängig* nicht — dafür
+  bleibt es bei einem Logbuch mit Rollback-Weg (siehe [13](#13-betrieb)). Wer beides in
+  einem erwartet, wird den Tag erleben, an dem er einen Grief ansehen, aber nicht heilen
+  kann.
 - **Zurückrollen** eines Griefs über das Logbuch (Prism läuft als Nachbar,
   siehe [13](#13-betrieb)) — begrenzt auf Zeitraum und Spieler, nie flächig.
 - **Alles protokolliert**, mit Grund und Bearbeiter. Bei Besitzübertragungen und
@@ -2626,7 +2704,12 @@ Begründungen, die standhalten. Genau deshalb gehören sie dazu.
   und Minecrafts eigene Pause hält den Port offen — alles, was pingt, hält den Server dann
   für wach.
 - **Logbuch** mit Rollback-Weg. CoreProtect verweigert auf 26.3 den Start; Prism ist die
-  gepflegte Wahl [ungeprüft im Detail].
+  gepflegte Wahl [ungeprüft im Detail]. **Weiterhin offen, und zwar nur für das
+  Zurückrollen**: Das eigene [Blockbuch](#12c-moderation-entschieden) beantwortet seit
+  dem 09.11.2026 die Frage *wer war das*, aber es stellt nichts wieder her. Die beiden
+  sind kein Entweder-oder — das Blockbuch kennt die abgewiesenen Versuche, die ein
+  Rollback-Werkzeug gar nicht erst sieht, und ein Rollback-Werkzeug kennt den Zustand
+  vorher, den das Blockbuch nicht speichert.
 - **Anti-Cheat**, sobald Freunde von Freunden kommen — das sind Fremde. Läuft als Nachbar,
   nicht als Abhängigkeit.
 - **Sperrsystem** mit Begründung und Dauer.

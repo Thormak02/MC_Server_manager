@@ -301,6 +301,8 @@ class GrenzeTest {
             // redet nie im Chat - ein Spieler, der zwanzig Stapel kauft, klickt
             // zwanzigmal, und zwanzig Chatzeilen waeren ein Regen.
             "Shopklick.java",
+            // /shop: EINE Sendestelle fuer vier Zweige und alle ihre Absagen.
+            "ShopBefehle.java",
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
 
     /**
@@ -399,6 +401,14 @@ class GrenzeTest {
             // stuende hier eine Zwei, und eine zweite Stelle koennte wegfallen, ohne dass
             // die Zahl faellt.
             Map.entry("BerufeBefehle.java", 1),
+            // EINE Sendestelle fuer alle vier Zweige von /shop und jede ihrer Absagen:
+            // alles geht durch dasselbe private sende(). Eine Zwei hiesse, dass ein
+            // Zweig sich einen eigenen Weg gebaut hat - und der waere der erste, dessen
+            // Zeilen keine Bildtafel haelt.
+            //
+            // Die Zahl ist dabei nur die halbe Zusage: Sie sagt nichts darueber, WAS
+            // gesendet wird. Den Treffertext halten die Bildtafel und die Zweigproben.
+            Map.entry("ShopBefehle.java", 1),
             // EINE Sendestelle fuer BEIDE Zweige des Blockbuchs und fuer jede seiner
             // sieben Absagen: alles geht durch dasselbe private sende(). Eine Zwei
             // hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat - und der waere
@@ -981,6 +991,7 @@ class GrenzeTest {
             "BEFEHL_BERUF -> WORT",
             "BEFEHL_MARKT -> WORT",
             "BEFEHL_LADEN -> WORT",
+            "BEFEHL_SHOP -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",

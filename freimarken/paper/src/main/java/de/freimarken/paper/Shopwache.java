@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Shopweg;
 import de.freimarken.kern.Shopschild;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -288,7 +289,7 @@ final class Shopwache implements Listener {
             return;
         }
         Player spieler = ereignis.getPlayer();
-        Kistenshop fremder = ersterFremder(spieler, was.shops());
+        Kistenshop fremder = ersterFremder(spieler, was.shops(), Shopweg.ABBAUEN);
         if (fremder != null) {
             ereignis.setCancelled(true);
             melde(spieler, was.teil(), fremder);
@@ -533,7 +534,7 @@ final class Shopwache implements Listener {
             melde(spieler, Shoptext.Teil.KISTE, null);
             return;
         }
-        Kistenshop fremd = ersterFremder(spieler, kiste.shops());
+        Kistenshop fremd = ersterFremder(spieler, kiste.shops(), Shopweg.OEFFNEN);
         if (fremd == null) {
             return;
         }
@@ -709,9 +710,15 @@ final class Shopwache implements Listener {
      *
      * <p>{@code hasPermission} ist der einzige Grund, warum diese Methode ueberhaupt
      * noch hier steht - nur eine Klasse mit Server kann ein Recht erfragen.
+     *
+     * <p><b>Der WEG kommt seit dem 09.11.2026 als Parameter herein</b>, denn die
+     * Freigabe traegt nicht jeden: Ein Freigegebener darf oeffnen und abbauen, aber kein
+     * zweites Schild anhaengen. Diese Huelle wird von zwei Zweigen gerufen und reicht
+     * darum weiter, welcher fragt - entschieden wird es im Kern.
      */
-    private static Kistenshop ersterFremder(Player spieler, List<Kistenshop> shops) {
-        return Kistenshop.ersterFremder(shops, spieler.getUniqueId(),
+    private static Kistenshop ersterFremder(Player spieler, List<Kistenshop> shops,
+            Shopweg weg) {
+        return Kistenshop.ersterFremder(shops, spieler.getUniqueId(), weg,
                 spieler.hasPermission(Schutzwache.UEBERALL),
                 spieler.hasPermission(RECHT_BUNDSHOP));
     }

@@ -13,6 +13,7 @@ import de.freimarken.kern.Warenprobe;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 import java.util.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -314,6 +315,27 @@ class ShopbuchTest {
         // ausserhalb der Parzellenwelt. Waere die neue Pruefung nur eine zweite
         // Frage an ihn, waere diese Probe gruen und der Shop trotzdem zu kapern.
         anlege(ANNA, "", "16", "B 100", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.FREMDER_SHOP,
+                zweitesSchild(BERT, "", "STONE", false, false).bescheid());
+        assertEquals(1, ablage.vonSpieler(ANNA).size(),
+                "und der Shop von Anna ist unveraendert einer");
+    }
+
+    @Test
+    @DisplayName("Ein FREIGEGEBENER haengt kein zweites Schild an")
+    void freigegebenerHaengtKeinZweitesSchildAn() {
+        // Die Freigabe oeffnet die Kiste und erlaubt das Abbauen - das zweite Schild
+        // nicht, und darum muss das Anlegen nach genau DIESEM Weg fragen. Fragte es
+        // nach dem Oeffnen, stuende das Loch vom 08.11.2026 fuer genau die Leute
+        // wieder offen, denen man gerade Vertrauen geschenkt hat.
+        anlege(ANNA, "", "16", "B 100", "STONE");
+        ablage.schreibe(ablage.anDemSchild(WELT, 10, 64, 10)
+                .mitFreigaben(Set.of(BERT)));
+        assertTrue(ablage.anDemSchild(WELT, 10, 64, 10).istFreigegeben(BERT),
+                "Vorbedingung: Bert IST freigegeben - sonst prueft diese Probe nur,"
+                        + " dass ein voelliger Fremder abgewiesen wird, und das tut"
+                        + " keinZweitesSchildAnFremderKiste schon");
 
         assertEquals(Shopbuch.Bescheid.FREMDER_SHOP,
                 zweitesSchild(BERT, "", "STONE", false, false).bescheid());

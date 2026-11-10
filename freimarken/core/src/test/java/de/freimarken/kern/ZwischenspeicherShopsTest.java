@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -96,10 +97,10 @@ class ZwischenspeicherShopsTest {
         // der alten greift der Trichterschutz weiter, obwohl dort kein Shop ist.
         UUID anna = UUID.randomUUID();
         karte.schreibe(new Kistenshop(ShopVertrag.WELT, 60, 71, 6, 61, 71, 6, anna, 16,
-                100L, 80L, ShopVertrag.ware("Stein")));
+                100L, 80L, ShopVertrag.ware("Stein"), Set.of()));
 
         karte.schreibe(new Kistenshop(ShopVertrag.WELT, 60, 71, 6, 60, 70, 6, anna, 16,
-                100L, 80L, ShopVertrag.ware("Stein")));
+                100L, 80L, ShopVertrag.ware("Stein"), Set.of()));
 
         assertTrue(karte.anDerKiste(ShopVertrag.WELT, 61, 71, 6).isEmpty(),
                 "an der ALTEN Kiste haengt nichts mehr");
@@ -115,9 +116,9 @@ class ZwischenspeicherShopsTest {
         // muss den einen Eintrag verlieren und den anderen behalten.
         UUID anna = UUID.randomUUID();
         karte.schreibe(new Kistenshop(ShopVertrag.WELT, 60, 71, 6, 61, 71, 6, anna, 16,
-                100L, 80L, ShopVertrag.ware("Stein")));
+                100L, 80L, ShopVertrag.ware("Stein"), Set.of()));
         karte.schreibe(new Kistenshop(ShopVertrag.WELT, 62, 71, 6, 61, 71, 6, anna, 8,
-                200L, 150L, ShopVertrag.ware("Holz")));
+                200L, 150L, ShopVertrag.ware("Holz"), Set.of()));
 
         karte.loesche(ShopVertrag.WELT, 60, 71, 6);
 

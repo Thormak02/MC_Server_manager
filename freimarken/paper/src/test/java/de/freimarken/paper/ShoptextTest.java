@@ -11,6 +11,7 @@ import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Warenprobe;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 import net.kyori.adventure.text.Component;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -299,7 +300,7 @@ class ShoptextTest {
 
     private static Kistenshop shop(UUID besitzer, int menge, long kauf, long verkauf) {
         return new Kistenshop(WELT, 10, 64, 10, 11, 64, 10, besitzer, menge, kauf,
-                verkauf, STEIN);
+                verkauf, STEIN, Set.of());
     }
 
     /**
@@ -596,6 +597,6 @@ class ShoptextTest {
     }
 
     private static Kistenshop shop() {
-        return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, ANNA, 16, 100L, 80L, STEIN);
+        return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, ANNA, 16, 100L, 80L, STEIN, Set.of());
     }
 }

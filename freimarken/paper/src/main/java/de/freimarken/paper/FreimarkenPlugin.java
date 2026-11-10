@@ -1224,6 +1224,19 @@ public final class FreimarkenPlugin extends JavaPlugin {
                             () -> wirtschaft.werte().laeden().dauerTage()).laden(),
                     sprache.wort(BundSatz.BEFEHL_LADEN, Einsatz.keine()),
                     List.of()));
+            // /shop - der SCHLUESSEL zu einer fremden Shopkiste. Der erste Befehl des
+            // Shop-Bereichs ueberhaupt: Ein Kistenshop wird sonst durch ein Schild
+            // angelegt und durch einen Klick bedient. Eine Freigabe ist aber eine
+            // Abmachung zwischen zwei Menschen, und dafuer braucht es einen Namen, den
+            // man tippt.
+            //
+            // Kein Zweitname: "chestshop" waere der eines fremden Plugins, und
+            // "kistenshop" tippt niemand, der /shop sucht.
+            angemeldet.addAll(verzeichnis.register(
+                    ShopBefehle.ueberBukkit(shopablage, sprache, wirtschaft,
+                            getLogger()).shop(),
+                    sprache.wort(BundSatz.BEFEHL_SHOP, Einsatz.keine()),
+                    List.of()));
 
             // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
             // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein

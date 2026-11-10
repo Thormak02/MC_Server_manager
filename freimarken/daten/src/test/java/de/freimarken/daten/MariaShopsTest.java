@@ -13,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
@@ -109,10 +110,10 @@ class MariaShopsTest extends ShopVertrag {
         // dort die Ware liegt.
         UUID anna = UUID.randomUUID();
         shops.schreibe(new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, anna, 16, 100L, 80L,
-                ware("Stein")));
+                ware("Stein"), Set.of()));
 
         shops.schreibe(new Kistenshop(WELT, 60, 71, 6, 60, 70, 6, anna, 16, 100L, 80L,
-                ware("Stein")));
+                ware("Stein"), Set.of()));
 
         assertEquals(60, shops.anDemSchild(WELT, 60, 71, 6).kisteX());
         assertEquals(70, shops.anDemSchild(WELT, 60, 71, 6).kisteY(),
@@ -133,7 +134,7 @@ class MariaShopsTest extends ShopVertrag {
         assertTrue(inhalt.length() > 65_535, "muss ueber dem TEXT-Rand liegen: "
                 + inhalt.length());
         shops.schreibe(new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, UUID.randomUUID(), 1,
-                5_000L, 0L, new Warenprobe("Spitzhacke", inhalt)));
+                5_000L, 0L, new Warenprobe("Spitzhacke", inhalt), Set.of()));
 
         assertEquals(inhalt, shops.anDemSchild(WELT, 60, 71, 6).ware().inhalt());
     }
@@ -147,7 +148,7 @@ class MariaShopsTest extends ShopVertrag {
         UUID anna = UUID.randomUUID();
         shops.schreibe(shop(60, anna, "altfurt"));
         shops.schreibe(new Kistenshop("freimarken:marktstadt", 60, 71, 6, 61, 71, 6,
-                anna, 16, 100L, 80L, ware("marktstadt")));
+                anna, 16, 100L, 80L, ware("marktstadt"), Set.of()));
 
         assertEquals(2, zeilen());
         assertEquals("altfurt", shops.anDemSchild(WELT, 60, 71, 6).ware().name());
@@ -164,13 +165,55 @@ class MariaShopsTest extends ShopVertrag {
         // dort auf.
         UUID anna = UUID.randomUUID();
         shops.schreibe(new Kistenshop(WELT, -1_200, 64, -980, -1_200, 63, -980, anna, 16,
-                100L, 80L, ware("tief")));
+                100L, 80L, ware("tief"), Set.of()));
 
         Kistenshop zurueck = shops.anDemSchild(WELT, -1_200, 64, -980);
         assertNotNull(zurueck);
         assertEquals(-980, zurueck.schildZ());
         assertEquals(63, zurueck.kisteY());
         assertEquals(1, shops.anDerKiste(WELT, -1_200, 63, -980).size());
+    }
+
+    @Test
+    @DisplayName("Der Fremdschluessel nimmt die Freigaben MIT - frisch angelegt")
+    void fremdschluesselNimmtDieFreigabenMit() throws SQLException {
+        // Diese Probe legt die Tabelle NEU an, und das ist der ganze Punkt: migriere()
+        // fuehrt nur Schritte ab dem gespeicherten Stand aus, und diese Datenbank hat
+        // ihre Tabellen vom ersten Lauf. Was im Schemaschritt steht, erreicht sie
+        // sonst nie - eine Einspritzung, die ON DELETE CASCADE entfernte, lief am
+        // 10.11.2026 darum vollstaendig gruen durch.
+        //
+        // Ausgefuehrt wird der ECHTE Schritttext aus Datenbank.SCHRITTE und nicht eine
+        // zweite Fassung davon: Eine abgeschriebene Tabelle prueft sich selbst.
+        String schritt = Datenbank.SCHRITTE.stream()
+                .filter(s -> s.contains("CREATE TABLE IF NOT EXISTS kistenshop_freigabe"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("kein Schemaschritt legt"
+                        + " kistenshop_freigabe an"));
+        try (Statement anweisung = datenbank.verbindung().createStatement()) {
+            anweisung.execute("DROP TABLE IF EXISTS kistenshop_freigabe");
+            anweisung.execute(schritt);
+        }
+        UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
+        shops.schreibe(shop(60, anna, "Stein").mitFreigaben(Set.of(bert)));
+
+        // OHNE ON DELETE CASCADE wirft genau diese Zeile: Der Fremdschluessel stuende
+        // auf RESTRICT, und ein Shop mit einer Freigabe liesse sich nicht mehr
+        // abbauen - das Schild bliebe stehen und der Besitzer kaeme nicht an seine
+        // eigene Kiste.
+        assertTrue(shops.loesche(WELT, 60, 71, 6),
+                "ein Shop MIT Freigabe muss sich abbauen lassen");
+
+        try (Statement anweisung = datenbank.verbindung().createStatement();
+             ResultSet zeilen = anweisung.executeQuery(
+                     "SELECT COUNT(*) FROM kistenshop_freigabe")) {
+            assertTrue(zeilen.next());
+            assertEquals(0, zeilen.getInt(1),
+                    "und KEINE verwaiste Freigabe zurueckgelassen: Stellen werden wieder"
+                            + " bebaut, und der naechste Laden an derselben Kiste erbte"
+                            + " sie");
+        }
     }
 
     @Test

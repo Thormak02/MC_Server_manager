@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,7 @@ class SpeicherShopsTest {
         SpeicherShops erste = new SpeicherShops();
         erste.schreibe(new Kistenshop(ShopVertrag.WELT, 60, 71, 6, 61, 71, 6,
                 UUID.randomUUID(), 16, 100L, 80L,
-                new Warenprobe("Stein", "inhalt")));
+                new Warenprobe("Stein", "inhalt"), Set.of()));
 
         assertNull(new SpeicherShops().anDemSchild(ShopVertrag.WELT, 60, 71, 6));
         assertTrue(new SpeicherShops().alle().isEmpty());

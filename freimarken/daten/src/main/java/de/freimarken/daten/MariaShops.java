@@ -8,7 +8,11 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -84,6 +88,37 @@ public final class MariaShops implements Shopablage {
     private static final String LOESCHEN = "DELETE FROM kistenshop"
             + " WHERE welt = ? AND schild_x = ? AND schild_y = ? AND schild_z = ?";
 
+    /** Die Freigaben EINES Shops - fuer den Einzelschluessel. */
+    private static final String LESEN_FREIGABEN = "SELECT spieler"
+            + " FROM kistenshop_freigabe"
+            + " WHERE welt = ? AND schild_x = ? AND schild_y = ? AND schild_z = ?"
+            + " ORDER BY spieler";
+
+    /**
+     * ALLE Freigaben auf einmal - fuer jede Abfrage, die eine LISTE von Shops liefert.
+     *
+     * <p><b>Eine Abfrage statt einer je Shop</b>, und das ist der Grund, warum es sie
+     * gibt: Die naheliegende Fassung - je gelesener Shop ein {@code SELECT} auf seine
+     * Freigaben - ist das klassische N+1. Bei hundert Shops waeren das hunderteins
+     * Netzrunden beim Fuellen des {@code ZwischenspeicherShops}, und der wird im
+     * Hauptfaden gefuellt.
+     *
+     * <p><b>Warum ohne Einschraenkung auf die gesuchten Shops.</b> Ein {@code JOIN} auf
+     * dieselbe Bedingung waere sparsamer, braeuchte aber je Leseart eine eigene Fassung -
+     * vier Abschriften derselben Frage, die auseinanderlaufen koennen. Diese Tabelle
+     * bleibt klein: eine Zeile je freigegebenem Spieler je Shop, und jede ist eine
+     * bewusste Handlung eines Besitzers. Waechst sie je ueber ein paar Tausend Zeilen,
+     * gehoert hier der JOIN her - dann aber fuer alle vier Lesearten.
+     */
+    private static final String LESEN_FREIGABEN_ALLE = "SELECT welt, schild_x, schild_y,"
+            + " schild_z, spieler FROM kistenshop_freigabe ORDER BY spieler";
+
+    private static final String FREIGABEN_LOESCHEN = "DELETE FROM kistenshop_freigabe"
+            + " WHERE welt = ? AND schild_x = ? AND schild_y = ? AND schild_z = ?";
+
+    private static final String FREIGABE_SCHREIBEN = "INSERT INTO kistenshop_freigabe"
+            + " (welt, schild_x, schild_y, schild_z, spieler) VALUES (?, ?, ?, ?, ?)";
+
     private final Datenbank datenbank;
 
     public MariaShops(Datenbank datenbank) {
@@ -99,7 +134,12 @@ public final class MariaShops implements Shopablage {
             try (ResultSet ergebnis = anfrage.executeQuery()) {
                 // Kein Sonderweg und kein Fehler: Die allermeisten Schilder des Servers
                 // sind keine Shops.
-                return ergebnis.next() ? ausZeile(ergebnis) : null;
+                if (!ergebnis.next()) {
+                    return null;
+                }
+                // Die Freigaben GEZIELT und nicht ueber die Gesamtabfrage: Hier geht es
+                // um genau eine Stelle, und der Hauptschluessel trifft sie unmittelbar.
+                return ausZeile(ergebnis, freigabenEines(name, x, y, z));
             }
         } catch (SQLException fehler) {
             throw new IllegalStateException("Kistenshop nicht lesbar: " + name + " " + x
@@ -150,27 +190,99 @@ public final class MariaShops implements Shopablage {
         if (shop == null) {
             throw new IllegalArgumentException("Nichts zu schreiben ist kein Shop");
         }
-        try (PreparedStatement anfrage =
-                     datenbank.verbindung().prepareStatement(SCHREIBEN)) {
-            anfrage.setString(1, shop.schildWelt());
-            anfrage.setInt(2, shop.schildX());
-            anfrage.setInt(3, shop.schildY());
-            anfrage.setInt(4, shop.schildZ());
-            anfrage.setInt(5, shop.kisteX());
-            anfrage.setInt(6, shop.kisteY());
-            anfrage.setInt(7, shop.kisteZ());
-            // NULL beim Bundshop - setString nimmt null und schreibt echtes SQL-NULL.
-            anfrage.setString(8, shop.besitzer() == null ? null
-                    : shop.besitzer().toString());
-            anfrage.setInt(9, shop.menge());
-            anfrage.setLong(10, shop.kaufpreis());
-            anfrage.setLong(11, shop.verkaufpreis());
-            anfrage.setString(12, shop.ware().name());
-            anfrage.setString(13, shop.ware().inhalt());
-            anfrage.executeUpdate();
+        // EINE Transaktion fuer Shop UND Freigaben, und die Reihenfolge ist Pflicht:
+        // Der Fremdschluessel fk_freigabe_shop verlangt die Shopzeile, bevor eine
+        // Freigabe darauf zeigen darf. Und zusammen deshalb, weil ein Shop ohne seine
+        // Freigaben eine Kiste waere, die den Mitbenutzer nicht mehr kennt - der merkt
+        // es erst, wenn er davorsteht.
+        //
+        // Dieselbe Bauart wie MariaLager.mitbauerSetzen und MariaAbholfach.lege, samt
+        // der Erkenntnis von dort: Das rollback() im catch ist die tragende Zeile, nicht
+        // das commit() - denn setAutoCommit(true) im finally committet eine offene
+        // Transaktion ohnehin.
+        try {
+            Connection c = datenbank.verbindung();
+            boolean vorherAutomatisch = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                try (PreparedStatement anfrage = c.prepareStatement(SCHREIBEN)) {
+                    anfrage.setString(1, shop.schildWelt());
+                    anfrage.setInt(2, shop.schildX());
+                    anfrage.setInt(3, shop.schildY());
+                    anfrage.setInt(4, shop.schildZ());
+                    anfrage.setInt(5, shop.kisteX());
+                    anfrage.setInt(6, shop.kisteY());
+                    anfrage.setInt(7, shop.kisteZ());
+                    // NULL beim Bundshop - setString nimmt null und schreibt echtes
+                    // SQL-NULL.
+                    anfrage.setString(8, shop.besitzer() == null ? null
+                            : shop.besitzer().toString());
+                    anfrage.setInt(9, shop.menge());
+                    anfrage.setLong(10, shop.kaufpreis());
+                    anfrage.setLong(11, shop.verkaufpreis());
+                    anfrage.setString(12, shop.ware().name());
+                    anfrage.setString(13, shop.ware().inhalt());
+                    anfrage.executeUpdate();
+                }
+                schreibeFreigabenDurch(c, shop);
+                c.commit();
+            } catch (SQLException | RuntimeException fehler) {
+                try {
+                    c.rollback();
+                } catch (SQLException beimZuruecknehmen) {
+                    fehler.addSuppressed(beimZuruecknehmen);
+                }
+                throw fehler;
+            } finally {
+                try {
+                    c.setAutoCommit(vorherAutomatisch);
+                } catch (SQLException beimZuruecksetzen) {
+                    // Jetzt steht die Verbindung womoeglich dauerhaft auf
+                    // autoCommit=false, und jeder weitere Schreibvorgang landete in
+                    // einer Transaktion, die niemand committet - lieber weg damit.
+                    datenbank.verwerfen();
+                }
+            }
         } catch (SQLException fehler) {
             throw new IllegalStateException("Kistenshop nicht schreibbar: "
                     + shop.schluessel(), fehler);
+        }
+    }
+
+    /**
+     * Die Freigaben eines Shops - SETZEND, nicht ergaenzend.
+     *
+     * <p>Erst alles weg, dann die neuen hinein: Dasselbe Muster wie
+     * {@code MariaLager.schreibeMitbauerDurch}, und derselbe Grund - eine ergaenzende
+     * Fassung koennte eine Freigabe nie wieder zuruecknehmen. {@code /shop sperren}
+     * schreibt darum einfach die kuerzere Liste.
+     *
+     * <p>Laeuft INNERHALB der Transaktion des Aufrufers und oeffnet keine eigene: Zwei
+     * Transaktionen auf einer Verbindung gibt es nicht, und die zweite committete die
+     * erste stillschweigend mit.
+     */
+    private static void schreibeFreigabenDurch(Connection c, Kistenshop shop)
+            throws SQLException {
+        try (PreparedStatement weg = c.prepareStatement(FREIGABEN_LOESCHEN)) {
+            weg.setString(1, shop.schildWelt());
+            weg.setInt(2, shop.schildX());
+            weg.setInt(3, shop.schildY());
+            weg.setInt(4, shop.schildZ());
+            weg.executeUpdate();
+        }
+        if (shop.freigegeben().isEmpty()) {
+            return;
+        }
+        try (PreparedStatement hinein = c.prepareStatement(FREIGABE_SCHREIBEN)) {
+            for (UUID wer : shop.freigegeben()) {
+                hinein.setString(1, shop.schildWelt());
+                hinein.setInt(2, shop.schildX());
+                hinein.setInt(3, shop.schildY());
+                hinein.setInt(4, shop.schildZ());
+                hinein.setString(5, wer.toString());
+                hinein.addBatch();
+            }
+            hinein.executeBatch();
         }
     }
 
@@ -196,17 +308,69 @@ public final class MariaShops implements Shopablage {
         anfrage.setInt(4, z);
     }
 
-    private static List<Kistenshop> liste(PreparedStatement anfrage) throws SQLException {
+    /**
+     * Eine Liste von Shops, jeder mit seinen Freigaben.
+     *
+     * <p>ZWEI Abfragen und nicht eine je Shop - siehe {@link #LESEN_FREIGABEN_ALLE}. Die
+     * Reihenfolge ist dabei egal: Die Freigaben werden ueber den Schluessel zugeordnet,
+     * nicht ueber die Zeilenfolge.
+     */
+    private List<Kistenshop> liste(PreparedStatement anfrage) throws SQLException {
         List<Kistenshop> gefunden = new ArrayList<>();
+        Map<String, Set<UUID>> freigaben = alleFreigaben();
         try (ResultSet ergebnis = anfrage.executeQuery()) {
             while (ergebnis.next()) {
-                gefunden.add(ausZeile(ergebnis));
+                String schluessel = Kistenshop.schluesselVon(ergebnis.getString("welt"),
+                        ergebnis.getInt("schild_x"), ergebnis.getInt("schild_y"),
+                        ergebnis.getInt("schild_z"));
+                gefunden.add(ausZeile(ergebnis,
+                        freigaben.getOrDefault(schluessel, Set.of())));
             }
         }
         return gefunden;
     }
 
-    private static Kistenshop ausZeile(ResultSet zeile) throws SQLException {
+    /**
+     * Alle Freigaben, nach Shopschluessel geordnet.
+     *
+     * <p>Der Schluessel ist derselbe, den {@link Kistenshop#schluesselVon} baut - und
+     * das ist Absicht: Zwei Fassungen desselben Schluessels liefen auseinander, und dann
+     * bekaeme ein Shop die Freigaben eines anderen oder gar keine.
+     */
+    private Map<String, Set<UUID>> alleFreigaben() throws SQLException {
+        Map<String, Set<UUID>> karte = new HashMap<>();
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(LESEN_FREIGABEN_ALLE);
+             ResultSet ergebnis = anfrage.executeQuery()) {
+            while (ergebnis.next()) {
+                String schluessel = Kistenshop.schluesselVon(ergebnis.getString("welt"),
+                        ergebnis.getInt("schild_x"), ergebnis.getInt("schild_y"),
+                        ergebnis.getInt("schild_z"));
+                karte.computeIfAbsent(schluessel, egal -> new LinkedHashSet<>())
+                        .add(UUID.fromString(ergebnis.getString("spieler")));
+            }
+        }
+        return karte;
+    }
+
+    /** Die Freigaben genau EINER Stelle. */
+    private Set<UUID> freigabenEines(String welt, int x, int y, int z)
+            throws SQLException {
+        Set<UUID> gefunden = new LinkedHashSet<>();
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(LESEN_FREIGABEN)) {
+            setzeStelle(anfrage, welt, x, y, z);
+            try (ResultSet ergebnis = anfrage.executeQuery()) {
+                while (ergebnis.next()) {
+                    gefunden.add(UUID.fromString(ergebnis.getString("spieler")));
+                }
+            }
+        }
+        return gefunden;
+    }
+
+    private static Kistenshop ausZeile(ResultSet zeile, Set<UUID> freigegeben)
+            throws SQLException {
         String besitzer = zeile.getString("besitzer");
         return new Kistenshop(zeile.getString("welt"),
                 zeile.getInt("schild_x"), zeile.getInt("schild_y"),
@@ -218,7 +382,8 @@ public final class MariaShops implements Shopablage {
                 besitzer == null ? null : UUID.fromString(besitzer),
                 zeile.getInt("menge"), zeile.getLong("kaufpreis"),
                 zeile.getLong("verkaufpreis"),
-                new Warenprobe(zeile.getString("warenname"), zeile.getString("ware")));
+                new Warenprobe(zeile.getString("warenname"), zeile.getString("ware")),
+                freigegeben);
     }
 
     private static String weltname(String welt) {

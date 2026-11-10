@@ -50,6 +50,7 @@ public final class SpeicherShops implements Shopablage {
                 dort.add(shop);
             }
         }
+        dort.sort(Kistenshop.NACH_STELLE);
         return dort;
     }
 
@@ -64,12 +65,18 @@ public final class SpeicherShops implements Shopablage {
                 seine.add(shop);
             }
         }
+        seine.sort(Kistenshop.NACH_STELLE);
         return seine;
     }
 
     @Override
     public synchronized List<Kistenshop> alle() {
-        return new ArrayList<>(shops.values());
+        // Sortiert und nicht einfach die values(): Die Karte ordnet nach dem
+        // TEXT-Schluessel, und dort steht 100 vor 9. Die Ordnung einer Shopliste steht
+        // an EINER Stelle, in Kistenshop.NACH_STELLE.
+        List<Kistenshop> alle = new ArrayList<>(shops.values());
+        alle.sort(Kistenshop.NACH_STELLE);
+        return alle;
     }
 
     @Override

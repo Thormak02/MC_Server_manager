@@ -45,6 +45,33 @@ class SchemaTest {
      */
     private static final Set<String> NICHT_LEEREN = Set.of("schema_stand");
 
+    /**
+     * Je Schemaschritt eine Pruefsumme - MASCHINELL aus einem absichtlich roten Lauf
+     * und nicht abgeschrieben.
+     *
+     * <p>Angehaengt wird unten, nie dazwischen, genau wie bei den Schritten selbst.
+     * Warum es diese Liste gibt, steht in {@link #schritteSindUnveraenderlich}.
+     */
+    private static final int[] PRUEFSUMMEN = {
+        -1492321989, // Schritt 1
+        -1843925192, // Schritt 2
+        -2030805759, // Schritt 3
+        -1819239078, // Schritt 4
+        -306895694, // Schritt 5
+        1152151801, // Schritt 6
+        -1670142385, // Schritt 7
+        -1763604121, // Schritt 8
+        470625965, // Schritt 9
+        1364407328, // Schritt 10
+        1271430570, // Schritt 11
+        -670762847, // Schritt 12
+        -673074704, // Schritt 13
+        741949855, // Schritt 14
+        1795794151, // Schritt 15
+        -1684371841, // Schritt 16
+        -1321860805, // Schritt 17
+    };
+
     private static String datenbanktext() {
         Path hier = Path.of("").toAbsolutePath();
         for (Path kandidat = hier; kandidat != null; kandidat = kandidat.getParent()) {
@@ -141,6 +168,67 @@ class SchemaTest {
                 "leereAlles() leert Tabellen, die das Schema nie anlegt - vermutlich ein"
                         + " Vertipper. Sichtbar wird er nur auf einer echten Datenbank,"
                         + " und dort reisst er jede Probe mit: " + unbekannt);
+    }
+
+    @Test
+    @DisplayName("Ein gelaufener Schemaschritt ist UNVERAENDERLICH")
+    void schritteSindUnveraenderlich() {
+        // DER FUND VOM 10.11.2026, und er ist eine stille Falle: migriere() fuehrt nur
+        // Schritte ab dem gespeicherten Stand aus. Wer einen BESTEHENDEN Schritt
+        // aendert, aendert an einer laufenden Datenbank nichts - die Tabelle steht
+        // dort, wie sie am ersten Tag angelegt wurde. Auf einer frischen Datenbank
+        // wirkt dieselbe Aenderung sofort, und die Probendatenbank ist beim ersten
+        // Lauf frisch. Die Folge: Die Proben sagen etwas ueber ein Schema, das auf
+        // keinem laufenden Server steht.
+        //
+        // Gemessen: Eine Einspritzung, die ON DELETE CASCADE aus dem Schritt der
+        // Freigabetabelle entfernte, lief vollstaendig gruen durch - 2615 Proben, keine
+        // rot. Nicht weil die Regel ungeprueft war, sondern weil die Aenderung die
+        // Datenbank nie erreichte.
+        //
+        // Darum eine Pruefsumme je Schritt. Wer einen Schritt aendert, wird hier rot
+        // und liest, was stattdessen zu tun ist: einen NEUEN Schritt anhaengen. Wer
+        // einen anhaengt, fuegt eine Zeile zu - und zwar genau EINE, unten.
+        //
+        // Gehasht wird mit zusammengezogenem Leerraum: Eine Umformatierung aendert das
+        // SQL nicht und soll darum nicht rot werden. Jedes geaenderte WORT wird es.
+        // Erst ALLE fehlenden sammeln und dann einmal klagen: Wer zwei Schritte
+        // anhaengt, soll beide Zeilen bekommen und nicht zweimal bauen muessen.
+        if (Datenbank.SCHRITTE.size() > PRUEFSUMMEN.length) {
+            StringBuilder fehlende = new StringBuilder();
+            for (int nummer = PRUEFSUMMEN.length + 1;
+                    nummer <= Datenbank.SCHRITTE.size(); nummer++) {
+                fehlende.append(System.lineSeparator())
+                        .append("        ").append(summe(nummer))
+                        .append(", // Schritt ").append(nummer);
+            }
+            throw new AssertionError("Fuer "
+                    + (Datenbank.SCHRITTE.size() - PRUEFSUMMEN.length)
+                    + " Schemaschritt(e) fehlt die Pruefsumme. Diese Zeilen gehoeren"
+                    + " unten in SchemaTest.PRUEFSUMMEN:" + fehlende);
+        }
+        for (int nummer = 1; nummer <= Datenbank.SCHRITTE.size(); nummer++) {
+            assertEquals(PRUEFSUMMEN[nummer - 1], summe(nummer),
+                    "Schemaschritt " + nummer + " ist GEAENDERT worden. Das wirkt auf"
+                            + " keiner laufenden Datenbank: migriere() fuehrt nur"
+                            + " Schritte ab dem gespeicherten Stand aus, und dieser ist"
+                            + " dort erledigt. Wer eine Spalte, einen Schluessel oder"
+                            + " eine Regel braucht, haengt einen NEUEN Schritt an"
+                            + " (ALTER TABLE ... IF NOT EXISTS). Ist die Aenderung"
+                            + " trotzdem gewollt - etwa ein Schritt, der noch auf keinem"
+                            + " Server lief -, dann gehoert die neue Zahl hierher.");
+        }
+        assertEquals(Datenbank.SCHRITTE.size(), PRUEFSUMMEN.length,
+                "mehr Pruefsummen als Schritte: Ein Schritt ist ENTFERNT worden, und"
+                        + " damit verschieben sich alle Nummern danach. Eine bestehende"
+                        + " Datenbank haelt die alten Nummern fuer erledigt und"
+                        + " ueberspringt dann die falschen Schritte.");
+    }
+
+    /** Der Schritttext mit zusammengezogenem Leerraum - so, wie gehasht wird. */
+    private static int summe(int nummer) {
+        return Datenbank.SCHRITTE.get(nummer - 1)
+                .replaceAll("\\s+", " ").trim().hashCode();
     }
 
     @Test

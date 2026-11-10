@@ -150,6 +150,7 @@ befehl:
     tpdeny: "Teleportanfragen ablehnen"
     markt: "Was der Bundesmarkt ankauft - und verkaufen"
     laden: "Die Markthalle und ihre Ladeneinheiten"
+    shop: "Deine Kistenshops auflisten und fuer andere freigeben"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
 parzelle:
@@ -1627,6 +1628,60 @@ shop:
     # SAGT AUSDRUECKLICH, DASS KEIN GELD WEG IST. Das ist die Zusage, die der Handel
     #   wirklich haelt: Was nach dem Zahlen scheitert, wird erstattet.
     gestoert: "<red>Der Handel ist nicht zustande gekommen</red><gray> - dein Geld ist nicht weg.</gray>"
+  # Der SCHLUESSEL: /shop freigeben <spieler>. Seit dem 08.11.2026 ist das Oeffnen einer
+  #   fremden Shopkiste ganz verwehrt - der Preis dafuer ist, dass ein Fremder einem Shop
+  #   auch nichts schenken kann. Diese Saetze heben ihn auf.
+  freigabe:
+    # Die Freigabe ist eingetragen. NENNT AUSDRUECKLICH, was sie erlaubt und was nicht:
+    #   Sonst muesste der Besitzer raten, wie weit er gerade Vertrauen verschenkt hat.
+    #   Das zweite Schild bleibt verwehrt, und das ist keine Feinheit - es ist der Weg,
+    #   auf dem jemand fremde Ware auf SEIN Konto verkaufen koennte.
+    erteilt: "<green>{spieler} darf jetzt an diesen Shop</green><gray> - Kiste oeffnen und abbauen. Ein eigenes Schild daran haengen kann er nicht.</gray>"
+    gesperrt: "<yellow>{spieler} darf nicht mehr an diesen Shop.</yellow>"
+    # Eine eigene Zeile und keine stille Wiederholung: Wer zweimal freigibt, soll wissen,
+    #   dass beim ersten Mal schon alles stimmte - sonst sucht er den Fehler.
+    schon-frei: "<gray>{spieler} darf schon an diesen Shop.</gray>"
+    nicht-frei: "<gray>{spieler} durfte ohnehin nicht an diesen Shop.</gray>"
+    kopf: "<gold>An diesem Shop duerfen {anzahl} ausser dir:</gold>"
+    zeile: "<gray>  {spieler}</gray>"
+    # Eine eigene Zeile und nicht eine leere Liste: "niemand" ist hier genau die
+    #   Auskunft, auf die es ankommt.
+    leer: "<gray>Ausser dir darf niemand an diesen Shop.</gray>"
+    # NENNT DIE REICHWEITE, wie blockbuch.kein-block: Wer auf ein Schild drei Meter
+    #   weiter schaut, soll nicht raten, ob dort kein Shop ist oder der Blick zu weit
+    #   ging.
+    kein-schild: "<gray>Du siehst kein Shopschild an</gray><dark_gray> (Reichweite {reichweite} Bloecke). Stell dich vor dein Schild und tippe /shop freigeben \\<name>.</dark_gray>"
+    # Freigeben darf NUR der Besitzer - nicht das Team und nicht ein schon Freigegebener.
+    #   Sonst waere der Schluessel selbst weitergebbar, und nach zwei Schritten wuesste
+    #   niemand mehr, wer eigentlich Zutritt hat.
+    nicht-deiner: "<red>Dieser Shop gehoert dir nicht.</red><gray> Freigeben darf nur, wem der Laden gehoert.</gray>"
+    bundshop: "<gray>Ein Bundshop gehoert niemandem - freigeben kann ihn darum auch niemand. Wer an ihn darf, entscheidet das Recht freimarken.shop.bund.</gray>"
+    selbst: "<gray>An deinen eigenen Shop darfst du ohnehin.</gray>"
+    unbekannt: "<red>Den Spieler {name} kennt dieser Server nicht.</red>"
+    gestoert: "<red>Die Freigabe liess sich nicht speichern</red><gray> - es hat sich NICHTS geaendert. Der Grund steht im Serverprotokoll.</gray>"
+  # Die eigene Shopliste, /shop liste [seite]. Sie steht fuer sich und braucht keinen
+  #   Blick auf ein Schild - wer dreissig Laeden hat, sucht genau darum nach ihnen.
+  liste:
+    leer: "<gray>Du hast noch keinen Kistenshop. Einer entsteht aus einem Schild an einer Kiste - die erste Zeile bleibt leer, dann Menge, Preis und Ware.</gray>"
+    # {anzahl} {seite} {seiten} - die Seite steht auch bei einer einzigen da: Wer
+    #   "Seite 1 von 1" liest, weiss sofort, dass nichts fehlt.
+    kopf: "<gold>Deine Kistenshops ({anzahl}) - Seite {seite} von {seiten}</gold>"
+    # {welt} {x} {y} {z} {menge} {ware} {kauf} {verkauf} - eine Zeile je Laden. {kauf}
+    #   und {verkauf} sind die beiden Wortstuecke darunter ODER NICHTS: ein leerer Wert
+    #   verschwindet rueckstandslos. Darum stehen die Trenner in den Wortstuecken.
+    zeile: "<gray>  {welt} {x}/{y}/{z} · {menge}x {ware}{kauf}{verkauf}</gray>"
+    # {preis} - ein Wortstueck fuer die Zeile darueber, kein Satz. Kein Farbtag.
+    #   KUNDEN KAUFEN zu diesem Preis, der Shop verkauft also.
+    kauf: " · Kauf {preis}"
+    # {preis} - das Gegenstueck: Kunden verkaufen an diesen Laden.
+    verkauf: " · Ankauf {preis}"
+    # {naechste} - nur, wenn es eine naechste Seite gibt. Nennt die ZAHL, damit der
+    #   Spieler nicht raten muss, wie man blaettert.
+    weiter: "<dark_gray>/shop liste {naechste} zeigt die naechste Seite</dark_gray>"
+    # {seite} {seiten} - und nennt, wie viele es gibt: Eine Absage ohne diese Zahl
+    #   schickt den Spieler ins Probieren.
+    keine-seite: "<gray>Seite {seite} gibt es nicht - deine Shops stehen auf {seiten} Seiten.</gray>"
+    gestoert: "<red>Deine Shopliste liess sich nicht lesen</red><gray> - deine Laeden sind deswegen NICHT weg. Der Grund steht im Serverprotokoll.</gray>"
 
 blockbuch:
   # Die Saetze der Moderationsauskunft /freimarken blockbuch. Sie reden NICHT mit einem

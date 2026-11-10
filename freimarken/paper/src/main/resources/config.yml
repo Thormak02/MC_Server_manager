@@ -1355,6 +1355,21 @@ handel:
   # Hoechstens 15 Zeichen - laenger liesse sich das Wort in eine Schildzeile gar nicht
   # tippen, und die Einstellung wirkte nie.
   bundshop-wort: Bund
+
+  # Wie viele Shops EINE Seite von /shop liste zeigt. Erlaubt ist 1 bis 100.
+  #
+  # Zehn, weil der Chat etwa zehn Zeilen zeigt, ohne dass der Kopf der Liste
+  #   weggescrollt ist - wer den Kopf nicht mehr sieht, weiss nicht, welche Seite er
+  #   liest. Dieselbe Zahl und derselbe Grund wie bei blockbuch.zeilen-je-abfrage.
+  #
+  # Das ist eine SEITENGROESSE und kein Schnitt: Wer mehr Laeden hat, blaettert mit
+  #   /shop liste 2 weiter. Darum gibt es hier auch kein "unbegrenzt" - der Chat ist
+  #   kein Anzeigemittel fuer hundert Zeilen.
+  #
+  # Eine 0 ist KEINE Abschaltung, sondern eine Klage: Ein Befehl, der stumm nichts
+  #   mehr zeigt, sieht aus wie ein kaputter Server. Wer die Liste nicht will, nimmt
+  #   das Recht freimarken.shop.
+  zeilen-je-seite: 10
 # Reisen zwischen den Welten (Plan 4.3): zwei Wege, kein dritter - die Tore am
 # Bundesmarkt und /warp <name>. Selbstgebaute Nether- und Endportale werden gesperrt:
 # Sie fuehren nicht in freimarken:nether, sondern in die Haupt-Nether des Servers, eine
