@@ -23,6 +23,24 @@ permissions:
   freimarken.shop.bund:
     description: Legt Bundshops an und baut sie ab - ohne Besitzer, mit unbegrenztem Vorrat
     default: op
+  # ANGEMELDET SEIT DEM 10.11.2026, und das war ein Fund: Ein Recht, das hier fehlt,
+  # gehoert NUR Operatoren. Bukkit antwortet auf ein unangemeldetes Recht mit seiner
+  # Vorgabe, und die ist OP - der Zweig bleibt einem gewoehnlichen Spieler also verborgen
+  # und verwehrt. /beruf und /markt waren damit seit ihrem Bau fuer niemanden ausser dem
+  # Betreiber erreichbar, waehrend im Programm "jeder" steht; die Spieltests liefen als
+  # Operator und sahen es nicht. GrenzeTest.31al haelt das jetzt.
+  freimarken.beruf:
+    description: Waehlt einen Beruf und sieht die Lohnsaetze - jeder
+    default: true
+  freimarken.beruf.spezialisierung:
+    # Ein RECHT und keine Rangzahl: Raenge sind auf diesem Server Rechte, und eine
+    # Rangzahl hier waere eine zweite Quelle fuer dieselbe Frage. Wer den Rang Buerger
+    # vergibt, vergibt dieses Recht mit.
+    description: Darf eine Spezialisierung halten - ein Rangvorteil
+    default: op
+  freimarken.markt:
+    description: Sieht, was der Bundesmarkt ankauft, und was heute noch zu holen ist
+    default: true
   freimarken.reisen:
     description: Darf mit /warp zwischen den Welten reisen
     default: true

@@ -117,7 +117,10 @@ final class Shoptext {
         return Einsatz.von("zeile", anlage.zeile())
                 .mit("hoechstmenge", Kistenshop.GROESSTE_MENGE)
                 .mit("hoechstpreis", Kistenshop.HOECHSTER_PREIS)
-                .mit("getippt", getippteWare == null ? "" : getippteWare);
+                .mit("getippt", getippteWare == null ? "" : getippteWare)
+                // Die kleinste Menge, mit der die Rechnung eines Ankaufstandes aufgeht -
+                // 0 bei jeder anderen Absage, und dort setzt sie kein Satz ein.
+                .mit("vorschlag", anlage.bundmenge());
     }
 
     /**
@@ -251,9 +254,13 @@ final class Shoptext {
     private static Einsatz handelswerte(Sprache sprache, Shophandel.Ausgang ausgang,
             Shopregel.Handel handel) {
         Kistenshop shop = ausgang.shop();
-        long preis = handel != null
-                ? handel.preis()
-                : ausgang.art().stufenpreis(shop);
+        // DER PREIS KOMMT AUS DEM AUSGANG und wird hier nicht mehr aus dem Shop geholt
+        // [10.11.2026]. An einem Ankaufstand des Bundes steht er in
+        // bundesmarkt.ankauf und nicht in der Shopzeile - wer ihn hier aus dem Shop
+        // holte, nennte dem Kunden die Zahl des Schildes, also moeglicherweise eine
+        // alte. Die Entscheidung, WELCHE Zahl gilt, faellt an einer Stelle
+        // (Shophandel), und diese Naht setzt sie nur ein.
+        long preis = handel != null ? handel.preis() : ausgang.stufenpreis();
         return Einsatz
                 .von("menge", handel != null ? handel.stueck() : shop.menge())
                 .mit("ware", shop.ware().name())

@@ -526,8 +526,8 @@ class VorlageTest {
             // Die Klage ueber einen verlorenen Verdienst: Serverprotokoll, nie ein
             // Spieler.
             // Die Startzeile zum Bundesmarkt - Konsole.
-            "FreimarkenPlugin.java -> \" Mark je Spieler. Verkauft wird nur in der"
-                    + " Ankunftswelt.\"",
+            "FreimarkenPlugin.java -> \" Mark je Spieler. Verkauft wird an den"
+                    + " Ankaufstaenden des Bundes -\"",
             // Die Einheit und die zwei Erklaerzeilen des Marktlesers - alle drei gehen
             // an den Betreiber, der seine config.yml liest, und nie an einen Spieler.
             "Marktliste.java -> \"Mark\"",
@@ -583,6 +583,15 @@ class VorlageTest {
             // Erstattung. Jede nennt ihren Betrag, damit ein Betreiber sie von
             // Hand nachbuchen kann - ohne die Zahl ist die Zeile ein Hinweis und
             // keine Anweisung. Ein SPIELER liest keine davon.
+            // Die drei Klagen ueber einen Ankaufstand des Bundes [10.11.2026]: eine
+            // unebene Menge, und ein Schild, dessen Zahl von der Ankauftafel abweicht.
+            // Alle drei gehen ins Serverprotokoll an den Betreiber, der sein Schild neu
+            // beschreiben soll - ein Kunde liest davon nur den Bescheid, und der kommt
+            // aus shop.bund.
+            "Shophandel.java -> \" Stueck ergibt das keinen brauchbaren ganzen"
+                    + " Mark-Betrag. Dieser\"",
+            "Shophandel.java -> \" Mark fuer \"",
+            "Shophandel.java -> \" Mark (\"",
             "Shophandel.java -> \" Mark bei \"",
             "Shophandel.java -> \" Mark NICHT\"",
             "Shophandel.java -> \" Mark liess sich bei \"",
@@ -591,6 +600,9 @@ class VorlageTest {
             "Shophandel.java -> \" Mark zurueck.\"",
             "Shophandel.java -> \" Mark an \"",
             "Shopliste.java -> \" Mark Umsatz bleiben\"",
+            // Die Startzeile ueber die Ankaufstaende des Bundes - Konsole, wie die
+            // uebrigen Startzeilen.
+            "Shopliste.java -> \" Mark je Spieler und Tag. Die Preise kommen aus \"",
             // Zwei Protokollzeilen: der Wurf eines Programmfehlers und die
             // Verlustzeile, wenn die Serie nach einer Zahlung nicht geschrieben
             // werden konnte. Beide liest nur der Betreiber.

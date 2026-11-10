@@ -62,39 +62,7 @@ final class Markttext {
         return zeilen;
     }
 
-    /**
-     * Die Zeile zu einem geglueckten Verkauf.
-     *
-     * <p>GEZAEHLT nach den Stuecken: "1 Stein verkauft" und "5 Stein verkauft" sind zwei
-     * Formen, und der Satz entscheidet selbst, welche er nimmt.
-     */
-    static List<Component> verkauftZeilen(Sprache sprache, String material,
-                                          Verkaufsregel.Verkauf verkauf) {
-        // {anzahl} wird MITGEGEBEN und nicht von bau() eingesetzt - gemessen: Fehlt
-        // es, faellt Sprache auf den rohen Wortlaut zurueck, und der Spieler liest die
-        // Klammern. Die "eins"-Form nennt es nicht, darum faellt das erst bei zwei auf.
-        return sprache.bau(MarktSatz.VERKAUFT, verkauf.stuecke(),
-                Einsatz.von("anzahl", Sprache.deutscheZahl(verkauf.stuecke()))
-                        .mit("material", material)
-                        .mit("betrag", sprache.betrag(verkauf.mark())));
-    }
-
-    /**
-     * Warum nichts geschehen ist.
-     *
-     * <p>EIN Satz je Grund und nicht ein gemeinsamer: "Der Bund kauft das nicht" und
-     * "dafuer gibt es keine ganze Mark" sind zwei verschiedene Auskuenfte, und die
-     * zweite verlangt eine andere Tat als die erste.
-     */
-    static List<Component> absageZeilen(Sprache sprache, MarktSatz grund,
-                                        String material) {
-        Einsatz werte = grund.platzhalter().contains("material")
-                ? Einsatz.von("material", material)
-                : Einsatz.keine();
-        // bau und nicht eineZeile: markt.absage.kauft-nicht traegt eine Umbruchmarke -
-        // die Absage sagt WAS nicht geht und daneben, wo das Sortiment steht. Ein
-        // eineZeile daran waere ein Wurf, sobald der Betreiber die Datei so laesst, wie
-        // sie ausgeliefert ist.
-        return sprache.bau(grund, 1L, werte);
-    }
+    // VERKAUFT UND ABSAGE SIND AM 10.11.2026 WEGGEFALLEN - mit /markt verkaufen. Was
+    // am Schild schiefgehen kann, baut Shoptext; dort stehen alle Antworten eines
+    // Kistenshops, und der Ankauf des Bundes ist seit diesem Schritt einer.
 }

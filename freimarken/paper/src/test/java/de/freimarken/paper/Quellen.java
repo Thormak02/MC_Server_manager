@@ -45,6 +45,61 @@ final class Quellen {
         return null;
     }
 
+    /**
+     * Die Quellordner ALLER drei Module - fuer Proben, die das ganze Projekt lesen.
+     *
+     * <p>{@link #ordner()} findet nur diesen einen (das Paper-Modul), und das genuegt
+     * fuer jede Zusage ueber Farben, Sendeorte und Zahlformate: Die liegen alle hier.
+     * Ein Waechter ueber die GESTALT des Quelltextes - etwa ein Doku-Block, der an keiner
+     * Deklaration haengt - gilt dagegen fuer jede Datei des Projekts, und ein Waechter,
+     * der zwei Drittel davon nicht ansieht, waere dort blind, wo gerade gebaut wird.
+     *
+     * <p>Gesucht wird ueber den gefundenen Paper-Ordner und nicht erneut aufwaerts: Wenn
+     * der eine steht, steht auch das Wurzelprojekt darueber - und zwei Suchwege waeren
+     * zwei Gelegenheiten, leer und gruen zu laufen.
+     */
+    static List<Path> alleModule() {
+        Path paper = ordner();
+        if (paper == null) {
+            return List.of();
+        }
+        // .../freimarken/paper/src/main/java/de/freimarken/paper -> .../freimarken
+        Path wurzel = paper;
+        for (int schritt = 0; schritt < 7 && wurzel != null; schritt++) {
+            wurzel = wurzel.getParent();
+        }
+        if (wurzel == null) {
+            return List.of();
+        }
+        List<Path> ordner = new ArrayList<>();
+        for (String[] modul : new String[][] {
+                {"core", "kern"}, {"daten", "daten"}, {"paper", "paper"}}) {
+            Path versuch = wurzel.resolve(modul[0])
+                    .resolve("src/main/java/de/freimarken").resolve(modul[1]);
+            if (Files.isDirectory(versuch)) {
+                ordner.add(versuch);
+            }
+        }
+        return List.copyOf(ordner);
+    }
+
+    /** Jede {@code .java}-Datei des ganzen Projekts, nach Namen geordnet. */
+    static List<Path> alleDateien() {
+        List<Path> dateien = new ArrayList<>();
+        for (Path ordner : alleModule()) {
+            try (Stream<Path> lauf = Files.list(ordner)) {
+                dateien.addAll(lauf
+                        .filter(pfad -> pfad.getFileName().toString().endsWith(".java"))
+                        .sorted(Comparator.comparing(
+                                pfad -> pfad.getFileName().toString()))
+                        .toList());
+            } catch (IOException nichtLesbar) {
+                throw new UncheckedIOException(nichtLesbar);
+            }
+        }
+        return List.copyOf(dateien);
+    }
+
     /** Alle {@code .java}-Dateien des Moduls, nach Namen geordnet. */
     static List<Path> alle() {
         Path ordner = ordner();

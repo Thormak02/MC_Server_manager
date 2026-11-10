@@ -5,20 +5,29 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.freimarken.kern.Ankaufliste;
 import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Marktwerte;
 import de.freimarken.kern.Shopablage;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherShops;
 import de.freimarken.kern.Shopwerte;
 import de.freimarken.kern.Warenprobe;
+import de.freimarken.kern.Wirtschaftsstand;
+import de.freimarken.kern.Wirtschaftswerte;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -47,10 +56,23 @@ class ShophandelTest {
             "22222222-2222-2222-2222-222222222222");
     private static final long START = 1_000L;
 
+    /**
+     * Die Uhr, die KASSE und HANDEL teilen.
+     *
+     * <p>Dieselbe, und das ist keine Sparsamkeit - dieselbe Lehre wie in
+     * {@code MarktBefehlTest}: Der Tagesdeckel des Bundes fragt die Kasse nach den
+     * Buchungen SEIT dem Tagesbeginn. Haette die Kasse die Systemuhr und der Handel eine
+     * gestellte, laege eine vorgebuchte Zeile je nach Tageszeit vor oder nach jener
+     * Grenze - und die Probe waere nachts rot und mittags gruen.
+     */
+    private static final Clock UHR = Clock.fixed(
+            Instant.parse("2026-11-10T12:00:00Z"), ZoneOffset.UTC);
+
     private final List<String> schritte = new ArrayList<>();
+    private final List<String> protokollzeilen = new ArrayList<>();
     private final Hand hand = new Hand(schritte);
     private final Shopablage ablage = new SpeicherShops();
-    private final Kasse echteKasse = new SpeicherKasse(START);
+    private final Kasse echteKasse = new SpeicherKasse(START, UHR);
     private final Kasse kasse = new Mitschrift(echteKasse, schritte);
 
     // ================================================== die Reihenfolge
@@ -144,8 +166,10 @@ class ShophandelTest {
         // Gutschrift, ist das zweite Schrittpaar vertauscht und diese Probe rot.
         Kasse leer = new SpeicherKasse(0L);
         var werte = Shopwerte.VORGABE.mitSpielerKauf(7);
-        var handel = new Shophandel(buch(), hand,
-                new Mitschrift(leer, schritte), werte, Logger.getAnonymousLogger());
+        Wirtschaftsstand eigenerStand = stand(werte);
+        var handel = new Shophandel(buch(eigenerStand), hand,
+                new Mitschrift(leer, schritte), eigenerStand, UHR,
+                Logger.getAnonymousLogger());
         Kistenshop shop = spielershop();
         ablage.schreibe(shop);
         leer.eroeffne(KUNDE);
@@ -197,7 +221,7 @@ class ShophandelTest {
         // sie eine Regel in der einen Klasse, die ohne Server nicht pruefbar ist.
         hand.setzeBestand(0, 0, 999, 999);
 
-        var ausgang = handle(bundshop(), Handelsart.KUNDE_KAUFT, false);
+        var ausgang = handle(bundladen(), Handelsart.KUNDE_KAUFT, false);
 
         assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid(),
                 "eine LEERE Bundkiste verkauft trotzdem: " + schritte);
@@ -210,7 +234,7 @@ class ShophandelTest {
     @Test
     @DisplayName("Am Bundshop faellt keine Gegenbuchung - das Geld verschwindet")
     void bundshopHatKeineGegenbuchung() {
-        var ausgang = handle(bundshop(), Handelsart.KUNDE_KAUFT, false);
+        var ausgang = handle(bundladen(), Handelsart.KUNDE_KAUFT, false);
 
         assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
         assertEquals(START - 100L, echteKasse.guthaben(KUNDE));
@@ -232,14 +256,277 @@ class ShophandelTest {
     void verkaufAnBundshopZahltNiemand() {
         // Die Gegenrichtung: Der Zahler ist der Bund und hat kein Konto, also faellt der
         // erste Schritt weg. Das Geld kommt aus dem Nichts - die staerkste Quelle.
-        var ausgang = handle(bundshop(), Handelsart.KUNDE_VERKAUFT, false);
+        //
+        // UND DARUM STEHT HIER BUNDESMARKT_VERKAUF: Das ist die benannte Luecke aus Plan
+        // 7.4, Wort fuer Wort - "ein Bundshop mit Verkaufspreis ist eine Geldquelle ohne
+        // Tagesdeckel, denn der Deckel rechnet ueber bundesmarkt_verkauf und der Shop
+        // bucht shop_verkauft". Mit SHOP_VERKAUFT zaehlt der Deckel seine eigenen Zeilen
+        // nicht mit und ist nach dem ersten Stand wieder offen.
+        var ausgang = handle(bundstand(), Handelsart.KUNDE_VERKAUFT, false);
 
         assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
         assertEquals(List.of(
+                "nehme KUNDE 5",
+                "gutschreiben KUNDE 1 BUNDESMARKT_VERKAUF"), schritte,
+                "kein abbuchen, kein lege KISTE - und der Grund des BUNDESMARKTES");
+        assertEquals(START + 1L, echteKasse.guthaben(KUNDE));
+    }
+
+    @Test
+    @DisplayName("Der Preis kommt aus der TAFEL - nicht von dem, was auf dem Schild steht")
+    void preisKommtAusDerTafel() {
+        // DIE TRAGENDE PROBE DES BUNDESMARKTES AM SCHILD. Die Zusage des Plans lautet
+        // "beliebig erweiterbar und anpassbar - ein neues Schild hinstellen genuegt, das
+        // Sortiment steht weiter in bundesmarkt.ankauf". Anpassbar heisst: Eine
+        // Preisaenderung wirkt an JEDEM Stand, ohne dass einer neu beschrieben wird.
+        //
+        // Also muss die Tafel gewinnen, und zwar sichtbar: Auf dem Schild stehen hier 99
+        // Mark, die Tafel ergibt eine. Wer den Preis aus der Shopzeile nimmt, bekommt
+        // hier 99 - und ein Betreiber, der die Tafel senkt, haette fuenfzig Schilder, die
+        // weiter die alten Preise zahlen.
+        var ausgang = handle(bundstand(99L), Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
+        assertEquals(1L, ausgang.handel().preis(), "die TAFEL, nicht die 99 vom Schild");
+        assertEquals(1L, ausgang.stufenpreis());
+        assertEquals(START + 1L, echteKasse.guthaben(KUNDE));
+        // Und das Schild wird gemeldet, damit ein Betreiber es neu beschreiben kann -
+        // sonst zeigte es fuer immer eine Zahl, die niemand zahlt.
+        assertTrue(protokollzeilen.stream().anyMatch(zeile ->
+                        zeile.contains("GEHANDELT WIRD ZUR TAFEL")),
+                protokollzeilen.toString());
+    }
+
+    @Test
+    @DisplayName("Eine Preisaenderung wirkt sofort - am selben Schild, ohne Neustart")
+    void preisaenderungWirktSofort() {
+        // Die andere Haelfte derselben Zusage, und der Grund fuer den Halter statt eines
+        // Schnappschusses: Bis zum 10.11.2026 hielt Shophandel ein Shopwerte als Feld,
+        // also die Zahlen des SERVERSTARTS - ein /freimarken neuladen baut absichtlich
+        // kein Objekt neu, und darum wirkte eine Aenderung nie.
+        //
+        // Hier wird der Stand MITTEN IM LAUF getauscht, wie der Befehl es tut.
+        Wirtschaftsstand halter = stand(Shopwerte.VORGABE, 20L);
+        ablage.schreibe(bundstand());
+        neuerStand();
+
+        handel(halter).handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
+        assertEquals(START + 1L, echteKasse.guthaben(KUNDE), "erst eine Mark");
+
+        halter.uebernimm(halter.werte().mitMarkt(halter.werte().markt().mitAnkauf(
+                Ankaufliste.ausAnkaeufen(List.of(
+                        new Ankaufliste.Ankauf("stone", 40L))))));
+        handel(halter).handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(START + 3L, echteKasse.guthaben(KUNDE),
+                "nach der Verdoppelung zwei Mark - ohne dass das Schild angefasst wurde");
+    }
+
+    @Test
+    @DisplayName("Der Tagesdeckel beschneidet den Stapel - und zahlt genau bis an ihn")
+    void deckelBeschneidetDenStapel() {
+        // DIE ZUSAGE, DIE VOM BEFEHL HERUEBERKOMMT. /markt verkaufen hatte sie
+        // ("Kurz vor dem Deckel wird nur das Freie gekauft"), und mit dem Befehl waere
+        // sie verschwunden. Am Schild heisst sie: Der Sneak-Klick nimmt so viele Stufen,
+        // wie noch frei sind - nicht mehr und nicht weniger.
+        echteKasse.eroeffne(KUNDE);
+        echteKasse.gutschreiben(KUNDE, 8L, Buchungsgrund.BUNDESMARKT_VERKAUF);
+        ablage.schreibe(bundstand());
+        hand.setzeBestand(999, 999, 999, 999);
+
+        var ausgang = handel(stand(Shopwerte.VORGABE, 20L, 10L))
+                .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, true);
+
+        assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
+        assertEquals(2L, ausgang.handel().preis(),
+                "acht von zehn Mark sind verbraucht - also zwei Stufen zu einer Mark");
+        assertEquals(10, ausgang.handel().stueck(), "zwei Stufen sind zehn Stueck");
+    }
+
+    @Test
+    @DisplayName("OHNE WARE sagt der Stand das - und nicht, der Deckel sei erreicht")
+    void ohneWareNichtDerDeckel() {
+        // BEFUND DER EINSPRITZUNG B10 vom 10.11.2026: Die REIHENFOLGE von Deckel und
+        // gewoehnlichem Mangel hielt keine Probe. Vertauscht liest ein Spieler ohne Ware
+        // "heute ist genug verkauft" - und geht nach Hause, obwohl ihm nur die Ware
+        // fehlt. Der Deckel ist dabei gar nicht angetastet.
+        //
+        // Erreichbar ist der Unterschied nur so: Der Kunde hat NICHTS, und der Deckel
+        // ist OFFEN. Dann faengt stufenImDeckel(..., 0) ohnehin 0 Stufen, und wer die
+        // Reihenfolge tauscht, bekommt den Deckelbescheid fuer einen leeren Rucksack.
+        hand.setzeBestand(999, 999, 0, 999);
+        ablage.schreibe(bundstand());
+        echteKasse.eroeffne(KUNDE);
+
+        var ausgang = handel(stand(Shopwerte.VORGABE, 20L, 10L))
+                .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(Shophandel.Bescheid.KEINE_WARE, ausgang.bescheid(),
+                "was fehlt, ist die WARE - der Deckel hat damit nichts zu tun");
+        assertEquals(List.of(), schritte);
+    }
+
+    @Test
+    @DisplayName("Am Deckel wird nicht gehandelt - und nichts bewegt")
+    void amDeckelWirdNichtGehandelt() {
+        echteKasse.eroeffne(KUNDE);
+        echteKasse.gutschreiben(KUNDE, 10L, Buchungsgrund.BUNDESMARKT_VERKAUF);
+        ablage.schreibe(bundstand());
+        hand.setzeBestand(999, 999, 999, 999);
+        schritte.clear();
+
+        var ausgang = handel(stand(Shopwerte.VORGABE, 20L, 10L))
+                .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(Shophandel.Bescheid.BUND_DECKEL, ausgang.bescheid());
+        assertEquals(List.of(), schritte, "eine Absage bewegt nichts");
+    }
+
+    @Test
+    @DisplayName("Der Deckel zaehlt NUR Verkaeufe - Arbeit sperrt den Markt nicht")
+    void deckelZaehltNurVerkaeufe() {
+        // Die zweite Zusage, die vom Befehl herueberkommt. Mit einem gemeinsamen Grund
+        // waere jede der zwei Quellen durch die andere zu verschliessen: Wer vormittags
+        // arbeitet, koennte nachmittags nicht verkaufen.
+        echteKasse.eroeffne(KUNDE);
+        echteKasse.gutschreiben(KUNDE, 10_000L, Buchungsgrund.BERUF_VERDIENST);
+        ablage.schreibe(bundstand());
+        hand.setzeBestand(999, 999, 999, 999);
+
+        var ausgang = handel(stand(Shopwerte.VORGABE, 20L, 10L))
+                .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
+    }
+
+    @Test
+    @DisplayName("Was nicht mehr im Sortiment steht, kauft der Stand nicht mehr an")
+    void ausDemSortimentGenommen() {
+        // Beim Anlegen war die Ware in der Tafel - sonst stuende der Stand nicht. Wer sie
+        // herausnimmt, schaltet den Stand ab, und das ist eine Entscheidung des
+        // Betreibers und kein Fehler: darum kein Protokoll, aber ein eigener Bescheid.
+        // "Versuch die andere Maustaste" waere hier die falsche Auskunft.
+        ablage.schreibe(bundstand());
+        neuerStand();
+
+        var ausgang = handel(new Wirtschaftsstand(Wirtschaftswerte.VORGABE))
+                .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(Shophandel.Bescheid.BUND_KAUFT_NICHT, ausgang.bescheid());
+        assertEquals(List.of(), schritte);
+        assertEquals(List.of(), protokollzeilen,
+                "eine leere Tafel ist eine Einstellung und keine Stoerung");
+    }
+
+    @Test
+    @DisplayName("Eine unebene Menge nach einer Preisaenderung sagt ab - und klagt")
+    void unebeneMengeNachPreisaenderung() {
+        // Beim Anlegen ist das geprueft (ShopbuchTest). Wird die Tafel SPAETER geaendert,
+        // kann die Rechnung eines bestehenden Standes aufhoeren aufzugehen - und dann
+        // verschwaende jeder Handel denselben Pfennigrest. Lieber kein Handel und eine
+        // Zeile, die dem Betreiber die passende Menge nennt.
+        ablage.schreibe(bundstand());
+        neuerStand();
+
+        var ausgang = handel(stand(Shopwerte.VORGABE, 30L))
+                .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(Shophandel.Bescheid.BUND_UNEBEN, ausgang.bescheid());
+        assertEquals(List.of(), schritte);
+        assertTrue(protokollzeilen.stream().anyMatch(zeile ->
+                        zeile.contains("Vielfaches von 10")),
+                "die Klage nennt die passende Menge: " + protokollzeilen);
+    }
+
+    @Test
+    @DisplayName("Ein ALTES Schild mit beiden Preisen kauft nicht an - kein Rundlauf")
+    void beidePreiseAmBundschildKaufenNichtAn() {
+        // DER RIEGEL GEGEN EINE GELDDRUCKMASCHINE. Seit dem 10.11.2026 entsteht so ein
+        // Schild nicht mehr; eines, das vorher stand, traegt beides weiter. Hier kostet
+        // die Ware am Stand 2 Mark fuer fuenf Stueck, und die Tafel ergibt 2 Mark - noch
+        // harmlos. Steigt die Tafel, kauft man billig und verkauft teurer zurueck,
+        // beliebig oft. Die Schranke des Satzes Kistenshop hilft nicht: Sie galt beim
+        // Bauen der Zeile, und damals stimmte sie.
+        Kistenshop altesSchild = new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 5, 2L,
+                2L, ware(), Set.of());
+        ablage.schreibe(altesSchild);
+        neuerStand();
+
+        var ausgang = handel(stand(Shopwerte.VORGABE, 40L))
+                .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(Shophandel.Bescheid.BUND_ZWEI_RICHTUNGEN, ausgang.bescheid());
+        assertEquals(List.of(), schritte);
+        assertTrue(protokollzeilen.stream().anyMatch(zeile ->
+                        zeile.contains("Rundlauf")), protokollzeilen.toString());
+        // Die andere Richtung geht weiter: Ein Kunde darf dort KAUFEN. Der Riegel liegt
+        // am Ankauf und nicht am Schild - sonst waere ein alter Bundladen stillgelegt.
+        schritte.clear();
+        var kauf = handel(stand(Shopwerte.VORGABE, 40L))
+                .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_KAUFT, false);
+        assertEquals(Shophandel.Bescheid.GEHANDELT, kauf.bescheid());
+    }
+
+    @Test
+    @DisplayName("Eine Ware ohne lesbares Material kauft der Stand nicht an")
+    void ohneMaterialKeinAnkauf() {
+        // Die Naht widerspricht sich: lesbar() sagt ja, material() gibt null. Ohne
+        // Material gibt es keinen Preis, und ein geratener waere Geld aus nichts - also
+        // nicht handeln und laut sein. Erzwingbar nur ueber die Attrappe, und genau
+        // darum muss sie es koennen: Was nicht erzwingbar ist, ist nicht geprueft.
+        hand.material = null;
+        ablage.schreibe(bundstand());
+        neuerStand();
+
+        var ausgang = handle(bundstand(), Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(Shophandel.Bescheid.WARE_UNLESBAR, ausgang.bescheid());
+        assertEquals(List.of(), schritte);
+        assertTrue(protokollzeilen.stream().anyMatch(zeile ->
+                        zeile.contains("Material nicht zu lesen")),
+                protokollzeilen.toString());
+    }
+
+    @Test
+    @DisplayName("Ein SPIELERSHOP bleibt unberuehrt - er zahlt seinen Schildpreis")
+    void spielershopBleibtUnberuehrt() {
+        // Die Gegenprobe zur Tafel, und sie ist mehr als Vorsicht: Stein steht im
+        // Sortiment des Bundes, und Annas Laden handelt Stein. Wuerde die Tafel auch
+        // hier gelten, zahlte ein Spielershop ploetzlich den Ankaufpreis des Bundes -
+        // und sein Besitzer haette einen Preis, den er nie eingestellt hat.
+        var ausgang = handle(spielershop(), Handelsart.KUNDE_VERKAUFT, false);
+
+        assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid());
+        assertEquals(List.of(
+                "abbuchen BESITZER 80 SHOP_GEKAUFT -> true",
                 "nehme KUNDE 16",
+                "lege KISTE 16",
                 "gutschreiben KUNDE 80 SHOP_VERKAUFT"), schritte,
-                "kein abbuchen und kein lege KISTE");
-        assertEquals(START + 80L, echteKasse.guthaben(KUNDE));
+                "die 80 vom Schild, und SHOP_VERKAUFT - kein Deckel, keine Tafel");
+    }
+
+    @Test
+    @DisplayName("Eine geaenderte Gebuehr wirkt ohne Neustart - der Halter, kein Abbild")
+    void gebuehrWirktNachDemNeuladen() {
+        // DER FUND VOM 10.11.2026, als eigene Probe. Shophandel hielt ein Shopwerte als
+        // FELD - also die Zahlen des Serverstarts. Ein /freimarken neuladen baut
+        // absichtlich kein Objekt neu, und darum wirkte eine geaenderte Marktgebuehr
+        // nie, waehrend der Befehl "uebernommen" meldete.
+        Wirtschaftsstand halter = stand(Shopwerte.VORGABE, 20L);
+        ablage.schreibe(spielershop());
+        neuerStand();
+
+        handel(halter).handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_KAUFT, false);
+        assertEquals(List.of(), schritteMit("SHOP_GEBUEHR"), "ab Werk keine Gebuehr");
+
+        halter.uebernimm(halter.werte().mitHandel(
+                halter.werte().handel().mitSpielerKauf(10)));
+        schritte.clear();
+        handel(halter).handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_KAUFT, false);
+
+        assertEquals(List.of("abbuchen BESITZER 10 SHOP_GEBUEHR -> true"),
+                schritteMit("SHOP_GEBUEHR"),
+                "zehn Prozent von 100 Mark - ohne Neustart, am selben Handel");
     }
 
     @Test
@@ -252,17 +539,26 @@ class ShophandelTest {
         var werte = Shopwerte.VORGABE.mitSpielerKauf(7).mitSpielerVerkauf(11)
                 .mitBundVerkauf(23);
 
-        var kauf = handle(bundshop(), Handelsart.KUNDE_KAUFT, false, werte);
+        var kauf = handle(bundladen(), Handelsart.KUNDE_KAUFT, false, werte);
         assertEquals(0L, kauf.handel().gebuehr(), "am Bundshop kauft man ohne Gebuehr");
 
+        // Und der Ankauf mit einer TEUREN Ware: 20 Mark je Stueck, fuenf Stueck je
+        // Handel sind 100 Mark, und 23 Prozent davon sind 23. Mit dem gewoehnlichen
+        // Sortiment (eine Mark je Handel) waere die Gebuehr abgerundet 0 - und diese
+        // Probe sagte nichts ueber die Lage, die sie prueft.
         schritte.clear();
+        ablage.schreibe(bundstand());
         neuerStand();
-        var verkauf = handle(bundshop(), Handelsart.KUNDE_VERKAUFT, false, werte);
-        assertEquals(18L, verkauf.handel().gebuehr(), "23 Prozent von 80 Mark sind 18");
+        var verkauf = handel(stand(werte, 2_000L))
+                .handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT, false);
+        assertEquals(23L, verkauf.handel().gebuehr(), "23 Prozent von 100 Mark sind 23");
         assertEquals(List.of(
-                "nehme KUNDE 16",
-                "gutschreiben KUNDE 80 SHOP_VERKAUFT",
-                "abbuchen KUNDE 18 SHOP_GEBUEHR -> true"), schritte);
+                "nehme KUNDE 5",
+                "gutschreiben KUNDE 100 BUNDESMARKT_VERKAUF",
+                "abbuchen KUNDE 23 SHOP_GEBUEHR -> true"), schritte,
+                "die Gebuehr bleibt SHOP_GEBUEHR - sie ist eine Ausgabe des Kunden und"
+                        + " darum keine zweite Quelle. Gedeckelt wird, was gutgeschrieben"
+                        + " wird.");
     }
 
     // ================================================== die Absagen
@@ -576,10 +872,10 @@ class ShophandelTest {
         // Erstattungszeile auf irgendeinem Konto waere Geld aus nichts.
         hand.nimmtHoechstens = 0;
 
-        var ausgang = handle(bundshop(), Handelsart.KUNDE_VERKAUFT, false);
+        var ausgang = handle(bundstand(), Handelsart.KUNDE_VERKAUFT, false);
 
         assertEquals(Shophandel.Bescheid.GESTOERT, ausgang.bescheid());
-        assertEquals(List.of("nehme KUNDE 16"), schritte);
+        assertEquals(List.of("nehme KUNDE 5"), schritte);
         assertEquals(START, echteKasse.guthaben(KUNDE));
     }
 
@@ -600,7 +896,7 @@ class ShophandelTest {
             boolean erwartet = bescheid != Shophandel.Bescheid.KEIN_SHOP
                     && bescheid != Shophandel.Bescheid.EIGENER_SHOP;
             var ausgang = new Shophandel.Ausgang(bescheid, Handelsart.KUNDE_KAUFT, null,
-                    null);
+                    null, 0L);
             assertEquals(erwartet, ausgang.verbraucht(), bescheid.toString());
         }
     }
@@ -626,8 +922,39 @@ class ShophandelTest {
                 ware(), Set.of());
     }
 
-    private Kistenshop bundshop() {
-        return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16, 100L, 80L, ware(), Set.of());
+    /**
+     * Ein BUNDLADEN: Der Bund verkauft, der Kunde kauft. Nur ein B-Preis.
+     *
+     * <p><b>Zwei Bundshops und nicht einer</b> - seit dem 10.11.2026 traegt ein Schild
+     * des Bundes genau EINE Richtung. Vorher stand hier ein einziger mit beiden Preisen,
+     * und das ist genau die Gestalt, die es nicht mehr geben darf: Was der Bund ANKAUFT,
+     * steht in der Tafel, was er VERKAUFT, auf dem Schild - und sobald die Tafel ueber
+     * den Schildpreis steigt, waere so ein Stand ein Rundlauf.
+     */
+    private Kistenshop bundladen() {
+        return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 16, 100L, 0L, ware(),
+                Set.of());
+    }
+
+    /**
+     * Ein ANKAUFSTAND des Bundes: der Bundesmarkt am Schild. Nur ein S-Preis.
+     *
+     * <p>Menge FUENF, und das ist gerechnet: Das Sortiment dieser Proben nennt Stein mit
+     * 20 Pfennigen, und fuenf Stueck sind damit genau eine Mark. Bei 16 - der Menge der
+     * uebrigen Shops hier - waeren es 3,20 Mark, und ein solcher Stand entsteht gar
+     * nicht: Bei FESTER Menge verschwaende jeder Handel dieselben 20 Pfennige.
+     *
+     * <p>Der Preis in der Zeile ist dieselbe 1 - er MUSS es nicht sein, denn gehandelt
+     * wird zur Tafel. Dass er stimmt, ist der Normalfall nach dem Anlegen; die Proben
+     * zur Abweichung setzen ihn ausdruecklich anders.
+     */
+    private Kistenshop bundstand() {
+        return bundstand(1L);
+    }
+
+    private Kistenshop bundstand(long aufDemSchild) {
+        return new Kistenshop(WELT, 60, 71, 6, 61, 71, 6, null, 5, 0L, aufDemSchild,
+                ware(), Set.of());
     }
 
     private static Warenprobe ware() {
@@ -635,12 +962,76 @@ class ShophandelTest {
     }
 
     private Shopbuch buch() {
+        return buch(stand(Shopwerte.VORGABE));
+    }
+
+    private Shopbuch buch(Wirtschaftsstand wirtschaft) {
         return new Shopbuch(ablage, new Leser(), (wer, welt, x, y, z) -> true,
-                Logger.getAnonymousLogger());
+                wirtschaft, Logger.getAnonymousLogger());
+    }
+
+    /**
+     * Ein Halter mit diesen Handelszahlen - und einem Sortiment, das die Probe setzt.
+     *
+     * <p><b>Die Probe setzt ihre Zahlen selbst</b>, auch das Sortiment: Stein zu 20
+     * Pfennigen, und die Handelsmenge der Shops hier ist 16 - das sind glatte 3,20 Mark,
+     * also kein ganzer Betrag. Die Staende dieser Proben nehmen darum eigene Mengen. Wer
+     * sich hier auf die Vorgabe verliesse, haette eine LEERE Ankauftafel (Marktwerte
+     * liefert absichtlich keine mit) und jede Bundprobe waere "kauft der Bund nicht".
+     */
+    private Wirtschaftsstand stand(Shopwerte werte) {
+        return stand(werte, 20L);
+    }
+
+    /** Derselbe Halter mit einem anderen Ankaufpreis fuer Stein, in Pfennigen. */
+    private Wirtschaftsstand stand(Shopwerte werte, long pfennige) {
+        return stand(werte, pfennige, Marktwerte.VORGABE_TAGESDECKEL);
+    }
+
+    /**
+     * Derselbe Halter mit eigenem Ankaufpreis UND eigenem Tagesdeckel.
+     *
+     * <p>Der Deckel ab Werk ist 5.000 Mark, und ein Stand zu einer Mark je Handel kaeme
+     * nie in seine Naehe: Ein Sneak-Klick bewegt hoechstens einen Stapel. Die
+     * Deckelproben setzen ihn darum selbst auf zehn - die Probe setzt ihre Zahlen, nicht
+     * die Vorgabe.
+     */
+    private Wirtschaftsstand stand(Shopwerte werte, long pfennige, long deckel) {
+        return new Wirtschaftsstand(Wirtschaftswerte.VORGABE.mitHandel(werte)
+                .mitMarkt(Marktwerte.VORGABE.mitDeckel(deckel)
+                        .mitAnkauf(Ankaufliste.ausAnkaeufen(
+                                List.of(new Ankaufliste.Ankauf("stone", pfennige))))));
     }
 
     private Shophandel handel(Shopwerte werte) {
-        return new Shophandel(buch(), hand, kasse, werte, Logger.getAnonymousLogger());
+        return handel(stand(werte));
+    }
+
+    private Shophandel handel(Wirtschaftsstand wirtschaft) {
+        return new Shophandel(buch(wirtschaft), hand, kasse, wirtschaft, UHR,
+                protokollMit(protokollzeilen));
+    }
+
+    /** Ein Protokoll, das in eine Liste schreibt - fuer die Zeilen des Betreibers. */
+    private static Logger protokollMit(List<String> hinein) {
+        Logger eigener = Logger.getLogger("Shophandelprobe-" + UUID.randomUUID());
+        eigener.setUseParentHandlers(false);
+        eigener.addHandler(new Handler() {
+            @Override
+            public void publish(LogRecord satz) {
+                hinein.add(satz.getLevel() + ": " + satz.getMessage());
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        });
+        eigener.setLevel(Level.ALL);
+        return eigener;
     }
 
     private Shophandel.Ausgang handle(Kistenshop shop, Handelsart art,
@@ -676,10 +1067,12 @@ class ShophandelTest {
         Kasse eigeneKasse = new SpeicherKasse(guthaben);
         eigeneKasse.eroeffne(KUNDE);
         eigeneKasse.eroeffne(BESITZER);
+        Wirtschaftsstand eigenerStand = stand(Shopwerte.VORGABE);
         var handel = new Shophandel(
                 new Shopbuch(eigeneAblage, new Leser(),
-                        (wer, welt, x, y, z) -> true, Logger.getAnonymousLogger()),
-                eigeneHand, eigeneKasse, Shopwerte.VORGABE,
+                        (wer, welt, x, y, z) -> true, eigenerStand,
+                        Logger.getAnonymousLogger()),
+                eigeneHand, eigeneKasse, eigenerStand, UHR,
                 Logger.getAnonymousLogger());
 
         var ausgang = handel.handle(KUNDE, WELT, 60, 71, 6, art, false);
@@ -787,6 +1180,14 @@ class ShophandelTest {
         private int kundenPlatz = 999;
         private int stapel = 64;
         private boolean lesbar = true;
+        /**
+         * Das Material der Ware - fuer die Ankauftafel des Bundes.
+         *
+         * <p>Einstellbar, und {@code null} ist der eine Fall, der sonst nicht zu
+         * erreichen waere: eine Ware, die LESBAR ist und deren Material sich doch nicht
+         * deuten laesst. Dann widerspricht sich die Naht, und der Handel muss absagen.
+         */
+        private String material = "stone";
         private int nimmtHoechstens = Integer.MAX_VALUE;
         private int legtHoechstens = Integer.MAX_VALUE;
 
@@ -810,6 +1211,11 @@ class ShophandelTest {
         @Override
         public int stapelgroesse(Kistenshop shop) {
             return stapel;
+        }
+
+        @Override
+        public String material(Warenprobe ware) {
+            return material;
         }
 
         @Override
@@ -854,6 +1260,11 @@ class ShophandelTest {
 
         @Override
         public boolean taugtAlsShopkiste(String welt, int x, int y, int z) {
+            throw new AssertionError("der Handel fragt den Warenleser nicht");
+        }
+
+        @Override
+        public String material(Warenprobe ware) {
             throw new AssertionError("der Handel fragt den Warenleser nicht");
         }
     }

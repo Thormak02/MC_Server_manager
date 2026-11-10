@@ -315,7 +315,7 @@ class ShopschildTest {
         Kistenshop shop = new Kistenshop("freimarken:altfurt", 60, 71, 6, 61, 71, 6,
                 UUID.randomUUID(), 16, 100L, 80L, new Warenprobe("Stein", "inhalt"), Set.of());
 
-        String[] zeilen = Shopschild.schreibe("Anna", shop);
+        String[] zeilen = Shopschild.schreibe("Anna", "Bund", shop);
 
         assertArrayEquals(new String[] {"Anna", "16", "B 100 : S 80", "Stein"}, zeilen);
         Shopschild.Ergebnis zurueck = Shopschild.lies(zeilen, BUND);
@@ -324,6 +324,63 @@ class ShopschildTest {
         assertEquals(100L, zurueck.schild().kaufpreis());
         assertEquals(80L, zurueck.schild().verkaufpreis());
         assertEquals("Stein", zurueck.schild().material());
+    }
+
+    @Test
+    @DisplayName("Ein BUNDSHOP bekommt das Bundwort in die erste Zeile, kein Spielername")
+    void bundshopTraegtDasBundwort() {
+        // BEFUND DER EINSPRITZUNG B20 vom 10.11.2026, und zugleich der Fund desselben
+        // Tages: Die eine Aufrufstelle gab IMMER den Spielernamen, und ein frisch
+        // aufgestellter Bundshop trug in der ersten Zeile den Namen dessen, der ihn
+        // hingestellt hat. Er sah aus wie der Laden eines Spielers, waehrend er dem Bund
+        // gehoert - gehandelt wurde richtig, denn die Zeile in der Datenbank ist die
+        // Wahrheit und nicht das Holz, aber jeder Kunde las etwas Falsches.
+        //
+        // Gefangen hat es keine Probe: Das Zurueckschreiben war nur mit einem
+        // SPIELERSHOP geprueft, und dort ist der Spielername richtig. Die zwei Faelle
+        // stehen darum hier beieinander - der Unterschied zwischen ihnen IST die Regel.
+        Kistenshop bundstand = new Kistenshop("freimarken:altfurt", 60, 71, 6, 61, 71, 6,
+                null, 5, 0L, 1L, new Warenprobe("Stein", "inhalt"), Set.of());
+        Kistenshop annas = new Kistenshop("freimarken:altfurt", 60, 71, 6, 61, 71, 6,
+                UUID.randomUUID(), 16, 100L, 80L, new Warenprobe("Stein", "inhalt"),
+                Set.of());
+
+        assertEquals("Bund", Shopschild.schreibe("Anna", "Bund", bundstand)[0],
+                "ein Shop OHNE Besitzer traegt das Wort aus der config.yml");
+        assertEquals("Anna", Shopschild.schreibe("Anna", "Bund", annas)[0],
+                "und jeder andere den Namen dessen, der ihn angelegt hat");
+        // Und das geschriebene Schild ist wieder lesbar - als BUNDSHOP.
+        Shopschild.Ergebnis zurueck = Shopschild.lies(
+                Shopschild.schreibe("Anna", "Bund", bundstand), "Bund");
+        assertTrue(zurueck.gelungen(), String.valueOf(zurueck.fehler()));
+        assertTrue(zurueck.schild().bundshop(),
+                "sonst entstuende aus dem eigenen Schild beim naechsten Lesen ein"
+                        + " Spielerladen");
+    }
+
+    @Test
+    @DisplayName("Ohne BUNDWORT gibt es fuer einen Bundshop keine Schildzeilen")
+    void bundshopBrauchtDasWort() {
+        // Die Gegenrichtung: Ein leeres Bundwort ist eine zulaessige Einstellung (dann
+        // sind Bundshops ueber ein Schild nicht anzulegen), aber FUER EINEN BUNDSHOP ist
+        // es keine - er haette eine leere erste Zeile, und die liest sich beim naechsten
+        // Lesen als "der Ersteller". Erreichbar ist der Fall nur ueber einen
+        // Programmfehler, und darum ist ein Wurf richtig.
+        Kistenshop bundstand = new Kistenshop("freimarken:altfurt", 60, 71, 6, 61, 71, 6,
+                null, 5, 0L, 1L, new Warenprobe("Stein", "inhalt"), Set.of());
+
+        var fehler = assertThrows(IllegalArgumentException.class,
+                () -> Shopschild.schreibe("Anna", "  ", bundstand));
+
+        assertTrue(fehler.getMessage().contains("Bundwort"),
+                "die Meldung sagt, WELCHER der zwei Namen fehlt: "
+                        + fehler.getMessage());
+        // Und ein Spielershop kommt ohne Bundwort aus - ein Server ohne Bundshops
+        // braucht keines.
+        Kistenshop annas = new Kistenshop("freimarken:altfurt", 60, 71, 6, 61, 71, 6,
+                UUID.randomUUID(), 16, 100L, 80L, new Warenprobe("Stein", "inhalt"),
+                Set.of());
+        assertEquals("Anna", Shopschild.schreibe("Anna", "", annas)[0]);
     }
 
     @Test
@@ -343,11 +400,11 @@ class ShopschildTest {
                 UUID.randomUUID(), 16, 100L, 80L, new Warenprobe("Stein", "inhalt"), Set.of());
 
         assertThrows(IllegalArgumentException.class,
-                () -> Shopschild.schreibe(null, shop));
+                () -> Shopschild.schreibe(null, "Bund", shop));
         assertThrows(IllegalArgumentException.class,
-                () -> Shopschild.schreibe("  ", shop));
+                () -> Shopschild.schreibe("  ", "Bund", shop));
         assertThrows(IllegalArgumentException.class,
-                () -> Shopschild.schreibe("Anna", null));
+                () -> Shopschild.schreibe("Anna", "Bund", null));
     }
 
     @Test

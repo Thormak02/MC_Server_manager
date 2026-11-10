@@ -302,7 +302,9 @@ class ShopwacheTafel {
         assertFalse(wache.contains("demBund()"),
                 "die Wache fragt NIE selbst, ob ein Shop dem Bund gehoert - ein"
                         + " Bundshop hat besitzer == null, und wer ihn am Besitz"
-                        + " prueft, schliesst ihn fuer alle zu");
+                        + " prueft, schliesst ihn fuer alle zu. Auch nicht fuer die"
+                        + " erste Schildzeile: WELCHER Name dort steht, entscheidet"
+                        + " Shopschild.schreibe, und die Wache gibt beide hinein");
         assertFalse(wache.contains(".gehoert("),
                 "und auch nicht nach dem Besitz - beides steht in offenFuer");
     }
@@ -418,10 +420,30 @@ class ShopwacheTafel {
     void bundwortKommtAusDerDatei() {
         // Jedes Wort, das ein Spieler tippt, steht in einer Datei - derselbe
         // Nutzergrundsatz, nach dem Preise, Rangvorteile und Berufsloehne dort stehen.
-        String start = methode("FreimarkenPlugin.java", "richteShopsEin");
+        // SEIT DEM 10.11.2026 haelt es das SHOPBUCH, und das ist mehr als eine
+        // Verschiebung: Vorher gab das Plugin den TEXT beim Start mit, und weil ein
+        // Neuladen absichtlich kein Objekt neu baut, wirkte eine Aenderung von
+        // handel.bundshop-wort nie - waehrend /freimarken neuladen "uebernommen" meldete.
+        // Darum prueft diese Tafel jetzt BEIDE Seiten: dass das Buch den Halter fragt,
+        // und dass die Wache keinen eigenen Text mehr haelt.
+        String wort = methode("Shopbuch.java", "bundWort");
+        String wache = quelle("Shopwache.java");
 
-        assertTrue(start.contains("handel().bundWort()"),
-                "das Bundwort muss aus den Wirtschaftswerten kommen: " + start);
+        assertTrue(wort.contains("wirtschaft.werte().handel().bundWort()"),
+                "das Bundwort muss im Augenblick des Gebrauchs aus dem Halter kommen: "
+                        + wort);
+        assertFalse(wache.contains("private final String bundWort"),
+                "die Wache darf das Wort NICHT als Text halten - das war der"
+                        + " Schnappschuss vom Serverstart: " + wache);
+        // UND SIE MUSS ES HEREINGEBEN. Shopschild.schreibe entscheidet, welcher der zwei
+        // Namen in die erste Zeile kommt, und ohne das Wort kann es fuer einen Bundshop
+        // nur werfen - mitten im Schildschreiben, nachdem der Shop schon steht. Dass
+        // die Wahl im Kern liegt, prueft ShopschildTest; dass diese Stelle sie
+        // ueberhaupt treffen KANN, steht hier.
+        assertTrue(methode("Shopwache.java", "beimSchildSchreiben")
+                        .contains("Shopschild.schreibe(spieler.getName(),"
+                                + " buch.bundWort(),"),
+                "die Wache gibt BEIDE Namen hinein - den Spieler und das Bundwort");
     }
 
     // --- Werkzeug -------------------------------------------------------------
@@ -496,9 +518,17 @@ class ShopwacheTafel {
         // Aufgeloest wird er an genau einer Stelle, und die liegt in einer eigenen
         // Methode: Sonst entschluesselt der Zaehlgang die Probe je FACH - bei einer
         // Doppelkiste vierundfuenfzigmal je Klick.
-        assertEquals(1, quelle.split("ausText\\(", -1).length - 1,
-                "die Warenprobe wird EINMAL je Gang aufgeloest, nicht je Fach: "
-                        + quelle);
+        // ZWEI Stellen seit dem 10.11.2026, und beide in einer EIGENEN Methode mit
+        // einer Zeile - das ist die Zusage, und sie ist staerker als die Zahl: vorbildVon
+        // fuer den Zaehlgang, material fuer die Ankauftafel des Bundes. Eine dritte
+        // Stelle irgendwo im Zaehlgang waere eine Aufloesung je FACH, und bei einer
+        // Doppelkiste vierundfuenfzig je Klick.
+        assertTrue(methode("Shopware.java", "vorbildVon").contains("ausText("),
+                "der Zaehlgang loest EINMAL auf, in seiner eigenen Methode");
+        assertTrue(methode("Shopware.java", "material").contains("ausText("),
+                "und die Materialfrage des Bundes ebenso");
+        assertEquals(2, quelle.split("ausText\\(", -1).length - 1,
+                "genau diese ZWEI Stellen, keine dritte: " + quelle);
     }
 
     @Test

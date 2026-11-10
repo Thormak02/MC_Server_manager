@@ -134,13 +134,20 @@ final class Shopwache implements Listener {
     private final Shopbuch buch;
     private final Shopware waren;
     private final Sprache sprache;
-    private final String bundWort;
     private final Nachtrag nachtrag;
     private final Abklingzeit drossel = new Abklingzeit(MELDEPAUSE);
     private final Logger protokoll;
 
-    Shopwache(Shopbuch buch, Shopware waren, Sprache sprache, String bundWort,
-            Nachtrag nachtrag, Logger protokoll) {
+    /**
+     * <b>Kein Bundwort mehr im Feld</b> - FUND VOM 10.11.2026. Es stand hier als Text,
+     * also als Schnappschuss des Starts, und wurde an {@code Shopbuch.anlege}
+     * weitergegeben. Ein {@code /freimarken neuladen} baut absichtlich kein Objekt neu,
+     * und darum wirkte ein geaendertes {@code handel.bundshop-wort} nie - waehrend der
+     * Befehl "uebernommen" meldete. Das Wort haelt jetzt {@link Shopbuch}, und zwar als
+     * Halter; diese Wache fragt es im Augenblick des Schreibens.
+     */
+    Shopwache(Shopbuch buch, Shopware waren, Sprache sprache, Nachtrag nachtrag,
+            Logger protokoll) {
         if (nachtrag == null) {
             throw new IllegalArgumentException("Ohne Nachtrag bleibt jedes Shopschild"
                     + " unbewachst, und ein unbewachstes Schild darf seit Minecraft 1.20"
@@ -149,7 +156,6 @@ final class Shopwache implements Listener {
         this.buch = buch;
         this.waren = waren;
         this.sprache = sprache;
-        this.bundWort = bundWort;
         this.nachtrag = nachtrag;
         this.protokoll = protokoll;
     }
@@ -202,7 +208,7 @@ final class Shopwache implements Listener {
         Shopbuch.Anlage anlage = buch.anlege(spieler.getUniqueId(), welt, schild.getX(),
                 schild.getY(), schild.getZ(), kiste.getX(), kiste.getY(), kiste.getZ(),
                 zeilen, spieler.hasPermission(RECHT_BUNDSHOP),
-                spieler.hasPermission(Schutzwache.UEBERALL), bundWort);
+                spieler.hasPermission(Schutzwache.UEBERALL));
         sende(spieler, Shoptext.anlageZeilen(sprache, anlage, zeilen[3]));
         if (anlage.bescheid() != Shopbuch.Bescheid.ANGELEGT) {
             // Das Schild bleibt stehen, wie er es getippt hat - und unbewachst. So sieht
@@ -210,7 +216,14 @@ final class Shopwache implements Listener {
             // Schild liesse ihn alles neu tippen, ohne zu wissen, was falsch war.
             return;
         }
-        String[] fertig = Shopschild.schreibe(spieler.getName(), anlage.shop());
+        // BEIDE Namen hinein, und WELCHER genommen wird, entscheidet der Kern - FUND
+        // VOM 10.11.2026. Diese Stelle gab vorher immer den Spielernamen, auch bei
+        // einem Bundshop: Der trug dann in der ersten Zeile den Namen dessen, der ihn
+        // aufgestellt hat und sah aus wie ein Laden eines Spielers. Die Begruendung
+        // steht bei Shopschild.schreibe - samt dem Grund, warum die Wahl nicht hier
+        // steht.
+        String[] fertig = Shopschild.schreibe(spieler.getName(), buch.bundWort(),
+                anlage.shop());
         for (int i = 0; i < fertig.length; i++) {
             ereignis.line(i, Component.text(fertig[i]));
         }

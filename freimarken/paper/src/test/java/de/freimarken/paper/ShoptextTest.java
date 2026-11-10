@@ -277,7 +277,8 @@ class ShoptextTest {
 
     private List<Component> anlageZeilen(Kistenshop shop) {
         return Shoptext.anlageZeilen(sprache,
-                new Shopbuch.Anlage(Shopbuch.Bescheid.ANGELEGT, shop, null, 0), "");
+                new Shopbuch.Anlage(Shopbuch.Bescheid.ANGELEGT, shop, null, 0, 0),
+                "");
     }
 
     private String ersteZeile(Shopschild.Fehler fehler, int zeile) {
@@ -291,11 +292,14 @@ class ShoptextTest {
 
     private static Shopbuch.Anlage absage(Shopschild.Fehler fehler, int zeile) {
         return new Shopbuch.Anlage(Shopbuch.Bescheid.SCHILD_FEHLERHAFT, null, fehler,
-                zeile);
+                zeile, 0);
     }
 
     private static Shopbuch.Anlage bescheid(Shopbuch.Bescheid bescheid) {
-        return new Shopbuch.Anlage(bescheid, null, null, 0);
+        // Die 5 ist die kleinste Menge, mit der die Rechnung eines Ankaufstandes
+        // aufgeht - nur shop.bund.menge-uneben setzt sie ein, und genau diese Probe
+        // liest sie mit.
+        return new Shopbuch.Anlage(bescheid, null, null, 0, 5);
     }
 
     private static Kistenshop shop(UUID besitzer, int menge, long kauf, long verkauf) {
@@ -427,7 +431,7 @@ class ShoptextTest {
         // im Ereigniszweig, damit sie hier zu lesen ist.
         assertEquals(List.of(), Shoptext.handelBalken(sprache,
                 new Shophandel.Ausgang(Shophandel.Bescheid.KEIN_SHOP,
-                        Handelsart.KUNDE_KAUFT, null, null)));
+                        Handelsart.KUNDE_KAUFT, null, null, 0L)));
     }
 
     @Test
@@ -587,13 +591,17 @@ class ShoptextTest {
     private static Shophandel.Ausgang gehandelt(Handelsart art, int stueck, long preis,
             long gebuehr) {
         return new Shophandel.Ausgang(Shophandel.Bescheid.GEHANDELT, art, shop(),
-                new Shopregel.Handel(preis, gebuehr, preis - gebuehr, stueck));
+                new Shopregel.Handel(preis, gebuehr, preis - gebuehr, stueck), preis);
     }
 
     /** Eine Absage - ohne gerechneten Handel, wie im Betrieb. */
     private static Shophandel.Ausgang absage(Shophandel.Bescheid bescheid,
             Handelsart art) {
-        return new Shophandel.Ausgang(bescheid, art, shop(), null);
+        // Der Stufenpreis kommt bei einer Absage AUS DEM AUSGANG und nicht mehr aus dem
+        // Shop - an einem Ankaufstand des Bundes steht er in der Ankauftafel. Hier also
+        // derselbe Wert, den der Shop traegt, aber auf dem neuen Weg.
+        return new Shophandel.Ausgang(bescheid, art, shop(), null,
+                art.stufenpreis(shop()));
     }
 
     private static Kistenshop shop() {

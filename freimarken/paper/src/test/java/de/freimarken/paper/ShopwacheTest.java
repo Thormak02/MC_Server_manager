@@ -8,6 +8,8 @@ import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Shopablage;
 import de.freimarken.kern.SpeicherShops;
 import de.freimarken.kern.Warenprobe;
+import de.freimarken.kern.Wirtschaftsstand;
+import de.freimarken.kern.Wirtschaftswerte;
 import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.UUID;
@@ -380,8 +382,10 @@ class ShopwacheTest {
         // ist STATISCH. Was der gepruefte Zweig nicht anfasst, braucht keinen
         // Stellvertreter - dasselbe Muster wie in MesswacheTest.
         return new Shopwache(
-                new Shopbuch(welche, null, null, Logger.getAnonymousLogger()), null,
-                Sprachprobe.spracheAusDemJar(), "Bund", tat -> tat.run(),
+                new Shopbuch(welche, null, null,
+                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE),
+                        Logger.getAnonymousLogger()), null,
+                Sprachprobe.spracheAusDemJar(), tat -> tat.run(),
                 Logger.getAnonymousLogger());
     }
 

@@ -245,18 +245,38 @@ public final class Shopschild {
      * und sie ist kein Schmuck: Ein Kunde liest dort, was er bekommt, und der Besitzer
      * sieht, dass sein Shop steht.
      *
-     * @param besitzername was in Zeile 1 soll - der Spielername oder das Bundwort
+     * <p><b>WELCHER der zwei Namen in Zeile 1 kommt, entscheidet diese Methode</b> - und
+     * zwar seit dem 10.11.2026, als ein Fund zeigte, dass es niemand entschied: Die
+     * einzige Aufrufstelle gab IMMER den Spielernamen, auch bei einem Bundshop. Ein
+     * frisch aufgestellter Bundshop trug also in der ersten Zeile den Namen dessen, der
+     * ihn hingestellt hat - er sah aus wie der Laden eines Spielers, waehrend er dem Bund
+     * gehoert. Gehandelt wurde richtig (die Zeile in der Datenbank ist die Wahrheit, nicht
+     * das Holz), aber jeder Kunde las etwas Falsches.
+     *
+     * <p>Die Entscheidung steht HIER und nicht in der Wache, und das hat zwei Gruende.
+     * Erstens ist sie ohne Server pruefbar. Zweitens fragt die Wache damit nirgends
+     * selbst nach {@link Kistenshop#demBund()} - eine Quelltexttafel verlangt genau das,
+     * denn ein Bundshop hat keinen Besitzer, und wer ihn am Besitz prueft, schliesst ihn
+     * fuer alle zu.
+     *
+     * @param spielername wer den Shop angelegt hat - fuer jeden Shop ausser einem Bundshop
+     * @param bundWort    das Wort aus der {@code config.yml}, das einen Bundshop anzeigt.
+     *                    Pflicht nur bei einem Bundshop; bei jedem anderen darf es leer
+     *                    sein, denn ein Server ohne Bundshops braucht kein Wort dafuer
      */
-    public static String[] schreibe(String besitzername, Kistenshop shop) {
-        if (besitzername == null || besitzername.isBlank()) {
-            throw new IllegalArgumentException("Ohne Namen in der ersten Zeile ist das"
-                    + " Schild eines fertigen Shops unvollstaendig");
-        }
+    public static String[] schreibe(String spielername, String bundWort,
+            Kistenshop shop) {
         if (shop == null) {
             throw new IllegalArgumentException("Ohne Shop gibt es keine Schildzeilen");
         }
+        String erste = shop.demBund() ? bundWort : spielername;
+        if (erste == null || erste.isBlank()) {
+            throw new IllegalArgumentException("Ohne Namen in der ersten Zeile ist das"
+                    + " Schild eines fertigen Shops unvollstaendig. Gebraucht wird hier "
+                    + (shop.demBund() ? "das Bundwort" : "der Spielername") + ".");
+        }
         return new String[] {
-            besitzername.trim(),
+            erste.trim(),
             String.valueOf(shop.menge()),
             preistext(shop.kaufpreis(), shop.verkaufpreis()),
             shop.ware().name(),

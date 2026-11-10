@@ -78,12 +78,29 @@ wirtschaft:
   #
   # Die Bestaetigung gilt nur fuer genau diesen Sprung: Wer sie eintraegt und spaeter eine
   # andere Zahl setzt, wird erneut gefragt. Ein Dauerfreibrief waere keine Rueckfrage.
+  # NEUN Zeilen, eine je Geldwert mit Sprungschutz. Vier davon standen bis zum
+  # 10.11.2026 nicht hier, und das war keine Abschaltung - die Klage nennt den
+  # Schluessel samt fertiger Zeile, und wer sie liest, traegt ihn ein. Aber diese Datei
+  # IST die Dokumentation: Ein Abschnitt, der vier von neun verschweigt, laesst dich
+  # glauben, es gebe fuer deinen Wert keine Bestaetigung. GrenzeTest.31am haelt das jetzt.
   sprung-bestaetigt:
     grundpreis: ""
     zusammenlegung-je-feld: ""
     startguthaben: ""
     wechselgebuehr: ""
+    # Der Deckel des VERDIENENS (verdienst.tagesdeckel).
     tagesdeckel: ""
+    # Und der des Bundesmarktes (bundesmarkt.tagesdeckel) - ein eigener Deckel, darum
+    # ein eigener Schluessel.
+    markt-tagesdeckel: ""
+    # Die drei Zahlen der Markthalle (laeden.*).
+    laden-miete: ""
+    laden-kaution: ""
+    laden-lizenz: ""
+    # Und die drei des Tagesbonus (tagesbonus.*).
+    bonus-grundbetrag: ""
+    bonus-je-serientag: ""
+    bonus-hoechstbetrag: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
@@ -752,6 +769,25 @@ bundesmarkt:
   # Kleines Sortiment mit Absicht: Was hier nicht steht, kauft der Bund nicht. Das ist
   # die sichere Richtung - ein Grundpreis fuer alles machte jeden Gegenstand zu Geld,
   # auch den, der nur in einer Farm anfaellt.
+  #
+  # VERKAUFT WIRD AM SCHILD [10.11.2026]. Ein Ankaufstand des Bundes ist ein gewoehnliches
+  # Shopschild mit dem Bundwort (handel.bundshop-wort) in der ersten Zeile und NUR einem
+  # S-Preis. Der Preis, den er zahlt, kommt aus DIESER Tafel und nicht vom Schild: Eine
+  # Aenderung hier wirkt also sofort an jedem Stand, ohne dass einer neu beschrieben
+  # wird. Das Schild zeigt dann noch die alte Zahl, und der erste Klick danach schreibt
+  # eine Zeile ins Serverprotokoll, die sagt, welches Schild neu zu beschreiben ist.
+  #
+  # DIE MENGE EINES STANDES MUSS MIT DEM PREIS EINE GANZE MARK ERGEBEN: menge mal
+  # pfennige muss durch 100 teilbar sein. Bei 20 Pfennigen gehen 5, 10, 15, ... Stueck;
+  # bei 16 waeren es 3,20 Mark, und die 20 Pfennige verschwaenden bei JEDEM Handel - der
+  # Spieler saehe nur, dass seine Ware weg ist. Ein solcher Stand entsteht darum nicht,
+  # und die Absage nennt die kleinste passende Menge. Wer einen Preis hier aendert, soll
+  # danach die Startzeile lesen: Sie nennt die Zahl der Ankaufstaende.
+  #
+  # EIN Schild je Richtung. Was der Bund VERKAUFT, steht auf dem Schild (ein B-Preis) und
+  # in keiner Tafel; ein Schild mit beiden Zahlen entsteht nicht und kauft auch nicht an.
+  # Der Grund ist eine Gelddruckmaschine: Steigt der Ankaufpreis hier ueber den Kaufpreis
+  # auf dem Schild, kauft man an demselben Stand billig und verkauft teurer zurueck.
   #
   # Die Preise liegen unter dem, was die Arbeit einbringt (verdienst.loehne): Stein
   # bringt beim Abbauen 40 Pfennige und am Markt 20. Der Markt ist die Verwertung, nicht

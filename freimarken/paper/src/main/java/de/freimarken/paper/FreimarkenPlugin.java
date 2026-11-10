@@ -25,7 +25,10 @@ import de.freimarken.kern.Berufswerte;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Chunkfeld;
+import de.freimarken.kern.Bundankauf;
 import de.freimarken.kern.Grenzregel;
+import de.freimarken.kern.Handelsart;
+import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Ladenverzeichnis;
 import de.freimarken.kern.Mietablage;
@@ -678,10 +681,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + wirtschaft.werte().verdienst().loehne().anzahl() + " Saetze,"
                 + " Tagesdeckel " + wirtschaft.werte().verdienst().tagesdeckel()
                 + " Mark je Spieler. Gebucht wird gesammelt, nicht je Block.");
+        // "Verkauft wird nur in der Ankunftswelt" stand hier bis zum 10.11.2026, und
+        // das war ab diesem Tag falsch: Die Weltpruefung ist mit /markt verkaufen
+        // gegangen. Verkauft wird an den Schildern des Bundes, und WIE VIELE davon
+        // stehen, sagt die Zeile der Kistenshops weiter unten - sie kommt erst, wenn die
+        // Shops gelesen sind.
         getLogger().info("Bundesmarkt: "
                 + wirtschaft.werte().markt().ankauf().anzahl() + " Materialien im"
                 + " Sortiment, Tagesdeckel " + wirtschaft.werte().markt().tagesdeckel()
-                + " Mark je Spieler. Verkauft wird nur in der Ankunftswelt.");
+                + " Mark je Spieler. Verkauft wird an den Ankaufstaenden des Bundes -"
+                + " Bundschilder mit S-Preis, siehe die Zeile der Kistenshops.");
         richteBlockbuchEin();
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
@@ -936,9 +945,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 // Die Zugriffsfrage geht an DIESELBE Wache, die ueber jeden Blockklick
                 // entscheidet - siehe Shopzugriff.
                 new Shopzugriff(getServer(), shopware, schutzwache),
-                getLogger());
+                // Der HALTER und kein Schnappschuss: Hier stand bis zum 10.11.2026
+                // wirtschaft.werte().handel().bundWort(), also das Wort beim Start - und
+                // ein Neuladen wirkte nie. Seit dem Bundesmarkt am Schild braucht das
+                // Buch den Stand ohnehin, denn die Ankauftafel gehoert dazu.
+                wirtschaft, getLogger());
         Shopwache shopwache = new Shopwache(shopbuch, shopware, sprache,
-                wirtschaft.werte().handel().bundWort(),
                 tat -> getServer().getScheduler().runTask(this, tat), getLogger());
         getServer().getPluginManager().registerEvents(shopwache, this);
         // Der HANDEL, und er wird ZULETZT gesetzt: Das Feld ist die Tuer der
@@ -946,11 +958,24 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Shopschild der gewoehnliche Bauschutz - also genau der Zustand, den die
         // Startmeldung oben fuer eine stumme Datenbank verspricht.
         Shophandel shophandel = new Shophandel(shopbuch, shopware, kasse,
-                wirtschaft.werte().handel(), getLogger());
+                // Derselbe Fund: Hier stand der Schnappschuss der Gebuehren. Und die
+                // Uhr kommt dazu, weil der Tagesdeckel des Bundesmarktes den heutigen
+                // Tag braucht.
+                wirtschaft, uhr, getLogger());
         shopklick = new Shopklick(shophandel, sprache);
         getServer().getPluginManager().registerEvents(shopklick, this);
         getLogger().info("Kistenshops aktiv: " + gefunden + " im Speicher, "
                 + Shopliste.startzeile(wirtschaft.werte().handel()));
+        // Und die Ankaufstaende des Bundes - seit dem 10.11.2026 der einzige Weg, an
+        // den Bund zu verkaufen. Gezaehlt wird mit der EINEN Frage danach
+        // (Bundankauf.istAnkaufstand) und nicht mit einem eigenen Vergleich.
+        int staende = 0;
+        for (Kistenshop shop : shopablage.alle()) {
+            if (Bundankauf.istAnkaufstand(shop, Handelsart.KUNDE_VERKAUFT)) {
+                staende++;
+            }
+        }
+        getLogger().info(Shopliste.bundzeile(staende, wirtschaft.werte().markt()));
     }
 
     /**
@@ -1125,16 +1150,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
      *
      * <p>Dieselbe Form und derselbe Grund wie bei {@link #berufeBefehle}.
      *
-     * <p>Die ANKUNFTSWELT ist der Ort des Bundesmarktes: Dort steht er laut Plan 2.1,
-     * und dort kommt jeder Spieler zuerst an. Sie wird nur beim Start gelesen, also
-     * haengt der Befehl an derselben Entscheidung wie die Ankunft und nicht an einer
-     * zweiten Abschrift davon.
+     * <p><b>Die ANKUNFTSWELT braucht dieser Befehl seit dem 10.11.2026 nicht mehr.</b>
+     * Sie war der Ort des Bundesmarktes und damit die Pruefung "bist du in Altfurt?" vor
+     * jedem {@code /markt verkaufen}. Der Zweig ist weggefallen - verkauft wird am
+     * Schild -, und ein Schild steht, wo es steht. Das ist eine schaerfere Ortsangabe,
+     * als eine Weltpruefung je war.
      */
     private MarktBefehle marktBefehle() {
-        String ankunftswelt = getConfig()
-                .getString("reisen.ankunftswelt", ANKUNFTSWELT_VORGABE).trim();
-        return new MarktBefehle(wirtschaft, kasse, uhr, sprache,
-                weltschluessel(ankunftswelt), getLogger());
+        return new MarktBefehle(wirtschaft, kasse, uhr, sprache);
     }
 
     /**

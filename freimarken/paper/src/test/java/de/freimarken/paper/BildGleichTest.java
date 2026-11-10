@@ -817,7 +817,12 @@ class BildGleichTest {
                         "&eMit Graben ist fuer diese Stunde genug - etwas anderes zahlt"
                                 + " weiter."),
 
-                // --- Der Bundesmarkt: dreizehn Zeilen ----------------------------
+                // --- Der Bundesmarkt: VIER Zeilen -------------------------------
+                // Neun standen hier bis zum 10.11.2026: markt.verkauft (drei Formen) und
+                // sechs Absagen von /markt verkaufen. Der Zweig ist weggefallen -
+                // verkauft wird am Schild -, und seine Saetze stehen jetzt unter
+                // shop.bund, weiter unten bei den Kistenshops.
+                //
                 // Die MATERIALNAMEN stehen mit Absicht nicht in der Sprachdatei - ein
                 // Sortiment aus vierzig Materialien waere dort eine zweite Abschrift der
                 // config.yml. Gezeigt wird der technische Name, und genau den prueeft
@@ -834,42 +839,6 @@ class BildGleichTest {
                 new Zeile(MarktSatz.LEER, 1L, Einsatz.keine(),
                         "&eDer Bundesmarkt kauft derzeit nichts."),
 
-                // GEZAEHLT: eins und viele. Die Null steht mit dabei, weil ein Verkauf
-                // von null Stueck gar nicht gebucht wird - die Zeile darf es trotzdem
-                // geben, und ihr Bild soll festliegen.
-                // {anzahl} wird MITGEGEBEN und nicht von bau() eingesetzt - gemessen:
-                // Fehlt es, faellt Sprache auf den rohen Wortlaut zurueck, und im Bild
-                // stehen die Klammern. Die "eins"-Form nennt es nicht, darum faellt das
-                // erst bei zwei und null auf.
-                new Zeile(MarktSatz.VERKAUFT, 1L,
-                        Einsatz.von("anzahl", "1").mit("material", "stone")
-                                .mit("betrag", sprache.betrag(1L)),
-                        "&a1 stone verkauft - &61 Mark&a."),
-                new Zeile(MarktSatz.VERKAUFT, 2L,
-                        Einsatz.von("anzahl", "2").mit("material", "stone")
-                                .mit("betrag", sprache.betrag(1L)),
-                        "&a2 stone verkauft - &61 Mark&a."),
-                new Zeile(MarktSatz.VERKAUFT, 0L,
-                        Einsatz.von("anzahl", "0").mit("material", "stone")
-                                .mit("betrag", sprache.betrag(0L)),
-                        "&a0 stone verkauft - &60 Mark&a."),
-
-                new Zeile(MarktSatz.ABSAGE_FALSCHE_WELT, 1L, Einsatz.keine(),
-                        "&cDer Bundesmarkt steht in Altfurt - dort kauft der Bund."),
-                new Zeile(MarktSatz.ABSAGE_LEERE_HAND, 1L, Einsatz.keine(),
-                        "&cDu haeltst nichts in der Hand."),
-                new Zeile(MarktSatz.ABSAGE_KAUFT_NICHT, 1L,
-                        Einsatz.von("material", "dirt"),
-                        "&cDer Bund kauft dirt nicht.\n&7/markt zeigt, was er kauft."),
-                new Zeile(MarktSatz.ABSAGE_ZU_WENIG, 1L,
-                        Einsatz.von("material", "stone"),
-                        "&eFuer so wenig stone gibt es keine ganze Mark - der Bund zahlt"
-                                + " nur in ganzen Mark."),
-                new Zeile(MarktSatz.ABSAGE_DECKEL, 1L, Einsatz.keine(),
-                        "&eHeute ist genug verkauft - morgen kauft der Bund wieder."),
-                new Zeile(MarktSatz.ABSAGE_NICHT_BUCHBAR, 1L, Einsatz.keine(),
-                        "&cDer Verkauf ist gerade nicht buchbar - deine Ware hast du"
-                                + " noch. Im Serverprotokoll steht, warum."),
 
                 // --- Der Tagesbonus [Teil H] ---------------------------------
                 //
@@ -1456,7 +1425,45 @@ class BildGleichTest {
                 new Zeile(ShopSatz.SHOP_LISTE_GESTOERT, 1L, Einsatz.keine(),
                         "&cDeine Shopliste liess sich nicht lesen&7 - deine Laeden"
                                 + " sind deswegen NICHT weg. Der Grund steht im"
-                                + " Serverprotokoll."));
+                                + " Serverprotokoll."),
+
+                // --- Der ANKAUF DES BUNDES am Schild: sechs Zeilen [10.11.2026] ---
+                //
+                // Die ersten drei liest ein BETREIBER beim Beschreiben eines Schildes,
+                // die letzten drei ein KUNDE am fertigen Stand. Zwei von ihnen sind die
+                // Nachfolger weggefallener Marktsaetze, und ihr Wortlaut ist darum NICHT
+                // derselbe: "der Bund kauft das nicht" heisst mit einem Stein in der Hand
+                // etwas anderes als vor einem Stand, der aufgehoert hat anzukaufen.
+                new Zeile(ShopSatz.SHOP_BUND_ZWEI_RICHTUNGEN, 1L, Einsatz.keine(),
+                        "&cEin Schild des Bundes handelt in EINER Richtung.\n&7Entweder verkauft der Bund (B-Preis) oder er kauft an"
+                                + " (S-Preis) - fuer beides zwei Schilder. Der"
+                                + " Ankaufpreis kommt aus bundesmarkt.ankauf, der"
+                                + " Verkaufspreis vom Schild; auf einem Schild waere"
+                                + " jede Preiserhoehung ein Rundlauf."),
+                new Zeile(ShopSatz.SHOP_BUND_NICHT_IM_SORTIMENT, 1L, Einsatz.keine(),
+                        "&cDiese Ware kauft der Bund nicht an.\n&7/markt zeigt sein Sortiment - was dort nicht steht,"
+                                + " bekommt keinen Stand."),
+                // Die FUENF ist die kleinste Menge, mit der 20 Pfennige je Stueck einen
+                // ganzen Mark-Betrag ergeben - und sie steht in der Absage, damit ein
+                // Betreiber nicht Mengen durchprobiert.
+                new Zeile(ShopSatz.SHOP_BUND_MENGE_UNEBEN, 1L,
+                        Einsatz.von("vorschlag", 5),
+                        "&cBei dieser Menge kommt kein ganzer Mark-Betrag heraus.\n&7Der Bund zahlt nur in ganzen Mark - nimm 5 Stueck oder"
+                                + " ein Vielfaches davon."),
+                new Zeile(ShopSatz.SHOP_BUND_KAUFT_NICHT, 1L,
+                        Einsatz.von("ware", "STONE"),
+                        "&cDer Bund kauft STONE nicht mehr an."),
+                new Zeile(ShopSatz.SHOP_BUND_ZWEI_PREISE, 1L, Einsatz.keine(),
+                        "&cDieser Stand des Bundes traegt beide Preise und kauft darum"
+                                + " nicht an.&7 Das Team muss ihn teilen: ein Schild zum"
+                                + " Kaufen, eines zum Ankaufen."),
+                new Zeile(ShopSatz.SHOP_BUND_DECKEL, 1L, Einsatz.keine(),
+                        "&eHeute ist genug verkauft - morgen kauft der Bund wieder."),
+                new Zeile(ShopSatz.SHOP_BUND_UNEBEN, 1L,
+                        Einsatz.von("menge", 16).mit("ware", "STONE"),
+                        "&cDieser Stand kauft gerade nicht an&7 - 16x STONE ergeben"
+                                + " keinen ganzen Mark-Betrag. Das Team muss sein Schild"
+                                + " neu beschreiben."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

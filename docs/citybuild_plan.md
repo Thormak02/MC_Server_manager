@@ -1019,11 +1019,11 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
 - Ein Laden je Spieler, damit nicht drei Leute die Halle besitzen.
 - **Ladenverzeichnis**: `/markt suchen <Gegenstand>` zeigt Anbieter, Preis und Weg. Ohne das
   läuft man durch 80 Läden — der häufigste Grund, warum Einkaufszentren sterben.
-- **Verkauft wird am SCHILD und nicht per Befehl** [entschieden 08.11.2026]. Ein Schild
-  je Gegenstand, an einer Kiste, wie ein gewöhnlicher Shop — der **Kistenshop** ist damit
-  die Standardform des Verkaufs, in der Markthalle und überall sonst. Das gilt für den
-  Ankauf des Bundes (`/markt verkaufen` fällt damit weg; `/markt liste` bleibt) und ist
-  die Linie für jeden Handel, den ein Spieler anbietet.
+- **Verkauft wird am SCHILD und nicht per Befehl** [entschieden 08.11.2026,
+  **gebaut 10.11.2026**]. Ein Schild je Gegenstand, an einer Kiste, wie ein gewöhnlicher
+  Shop — der **Kistenshop** ist damit die Standardform des Verkaufs, in der Markthalle und
+  überall sonst. Das gilt für den Ankauf des Bundes (`/markt verkaufen` ist weggefallen;
+  `/markt liste` bleibt) und ist die Linie für jeden Handel, den ein Spieler anbietet.
 - **Handeln darf jeder, immer und überall** [entschieden 08.11.2026]. Kein Rang, kein
   Recht und kein Ort beschränkt den Handel: Wer vor einem Kistenshop steht, kauft dort.
   Das ist **keine Nebenbemerkung, sondern die Vorgabe für den Ladenschutz** — und die
@@ -1042,8 +1042,37 @@ bleibt ein Grundstück. `/parzelle auftrennen alles` trennt wie bisher die ganze
   trifft dort jemanden. Der Markt soll **beliebig erweiterbar und anpassbar** sein: ein
   neues Schild hinstellen genügt, das Sortiment steht weiter in `bundesmarkt.ankauf`.
   Zahlen, Tagesdeckel und Buchung bleiben, wie [7, Teil F](#7-markthalle-läden-und-handel)
-  sie gebaut hat; dazu kommen eine Wache auf das Anklicken und das Lesen der zwei
-  Schildzeilen. Eigener Schritt.
+  sie gebaut hat.
+
+  **Gebaut am 10.11.2026, und dabei kam eine Wache weniger heraus als geplant.** Hier
+  stand „dazu kommen eine Wache auf das Anklicken und das Lesen der zwei Schildzeilen" —
+  beides gab es schon: Ein Bundshop mit Ankaufpreis IST der Bundesmarkt, und ein Klick
+  auf sein Schild läuft seit dem 08.11.2026 durch `Shopklick`. Gebraucht wurden darum
+  nicht eine neue Wache, sondern **drei Regeln** an der Stelle, wo die Tafel des Marktes
+  auf eine Shopzeile trifft (`Bundankauf` im Kern):
+
+  1. **Der Preis kommt aus der Tafel, nicht vom Schild.** Nur so wirkt eine
+     Preisänderung an jedem Stand, ohne dass einer neu beschrieben wird — das ist die
+     Zusage „beliebig anpassbar", und mit einer Zahl in der Shopzeile wäre
+     `bundesmarkt.ankauf` nach dem ersten Schild eine zweite Wahrheit. Nennt ein Schild
+     eine andere Zahl, wird zur Tafel gehandelt und das Protokoll sagt, welches Schild
+     neu zu beschreiben ist.
+  2. **Die Menge des Standes muss eine ganze Mark ergeben.** `Verkaufsregel` ließ beim
+     Befehl Stücke liegen, die keine ganze Mark ergaben; am Schild ist die Menge FEST,
+     und was nicht aufgeht, verschwände bei jedem Handel unsichtbar. Ein solcher Stand
+     entsteht nicht, und die Absage nennt die kleinste Menge, mit der er entstünde.
+  3. **Ein Bundschild trägt genau EINE Richtung.** Was der Bund ankauft, steht in der
+     Tafel, was er verkauft, auf dem Schild — auf einem Schild mit beiden Zahlen
+     entscheidet also die eine Hälfte der Betreiber und die andere die Tafel, und eine
+     spätere Erhöhung des Ankaufpreises machte den Stand zum Rundlauf. Geprüft wird das
+     beim Anlegen UND bei jedem Ankauf: Ein Schild von vorher trägt beides weiter.
+
+  **Der Ort ist damit das Gebäude und keine Weltprüfung mehr.** `/markt verkaufen` hatte
+  eine Abfrage „bist du in Altfurt?", die den Ort nachbilden sollte; sie ist mit dem
+  Zweig gegangen. Ein Schild steht, wo es steht — eine schärfere Ortsangabe, als eine
+  Weltprüfung je war. Dafür sagt der Startbericht jetzt, **wie viele Ankaufstände
+  stehen**: Wer sein Sortiment einstellt und kein Schild stellt, hat einen Markt, der
+  nichts kauft, und nirgends fehlt etwas.
 - Die **Jobwand** im Zunfthaus: Spieler hängen private Aufträge aus. Billige Idee mit viel
   Wirkung [belegt].
 
@@ -1440,10 +1469,15 @@ einmal neu eingemessen werden — danach gilt es dauerhaft.
 
 **Zwei benannte Lücken**, beide aufgeschrieben statt verschwiegen:
 
-1. Ein **Bundshop mit Verkaufspreis** ist eine Geldquelle ohne Tagesdeckel — der Deckel
-   des Bundesmarkts rechnet über `bundesmarkt_verkauf`, der Shop bucht `shop_verkauft`.
-   Keine Spielerlücke (es braucht `freimarken.shop.bund`), aber eine Falle für den
-   Betreiber. Gehört mit dem Bundesmarkt-Schild zusammen entschieden.
+1. ~~Ein **Bundshop mit Verkaufspreis** ist eine Geldquelle ohne Tagesdeckel — der
+   Deckel des Bundesmarkts rechnet über `bundesmarkt_verkauf`, der Shop bucht
+   `shop_verkauft`.~~ **Geschlossen am 10.11.2026** mit dem Bundesmarkt am Schild, und
+   zwar nicht durch einen zweiten Deckel, sondern dadurch, dass es nur noch EINEN Weg
+   gibt: Ein Bundshop, an den ein Kunde verkauft, *ist* der Bundesmarkt. Er rechnet über
+   dieselbe `Deckelregel`, zählt sein Heute aus demselben `Buchungsgrund` und bucht ihn
+   auch — `BUNDESMARKT_VERKAUF`. Die Marktgebühr bleibt, wo sie war
+   (`handel.marktgebuehr-bundshop-verkauf-prozent`, ab Werk 0): Sie ist eine Ausgabe des
+   Kunden und darum keine zweite Quelle; gedeckelt wird, was gutgeschrieben wird.
 2. ~~Eine **Shopkiste ist nicht gegen eine Hand geschützt**.~~ **Geschlossen am 08.11.2026**
    mit `Shopwache.beimOeffnen` am `InventoryOpenEvent`. Dabei kam ein zweites Loch heraus
    und wurde mitgeschlossen: Wer die Kiste nicht öffnen kann, hängt sonst ein eigenes

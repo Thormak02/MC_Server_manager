@@ -5,6 +5,7 @@ import de.freimarken.kern.Shopregel;
 import de.freimarken.kern.Warenprobe;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -189,6 +190,34 @@ final class Shopware implements Shopbuch.Warenleser, Shophandel.Warenhand {
     public int stapelgroesse(Kistenshop shop) {
         ItemStack vorbild = vorbildVon(shop);
         return vorbild == null ? 0 : vorbild.getMaxStackSize();
+    }
+
+    /**
+     * Das MATERIAL einer Warenprobe, kleingeschrieben - oder {@code null}.
+     *
+     * <p>Die Naht fuer den Ankauf des Bundes [10.11.2026]: {@code bundesmarkt.ankauf}
+     * ist eine Tafel je MATERIAL, und was eine Warenprobe ist, weiss nur das Spiel.
+     * Dieselbe Methode erfuellt {@code Shopbuch.Warenleser} und
+     * {@code Shophandel.Warenhand} - eine Frage, eine Antwort, eine Stelle.
+     *
+     * <p><b>Kleingeschrieben, weil die Tafel es ist.</b> {@code Ankaufliste} legt ihre
+     * Schluessel klein ab und schlaegt klein nach; ein grosser Name fiele dort nicht auf,
+     * sondern gaebe stumm "kauft der Bund nicht". Dieselbe Form wie der alte
+     * {@code /markt verkaufen}, der {@code getType().name().toLowerCase} nahm.
+     *
+     * <p><b>Und ausdruecklich NICHT {@code ware().name()}:</b> Jener ist gekuerzt - aus
+     * {@code NETHERITE_PICKAXE} wird "PICKAXE" -, und zwei Materialien koennen denselben
+     * Kurznamen tragen. {@code ShopwareTafel} haelt genau die Zusage, dass er nirgends im
+     * Programm verglichen wird; eine Tafelabfrage damit waere ihr erster Bruch.
+     */
+    @Override
+    public String material(Warenprobe ware) {
+        if (ware == null) {
+            return null;
+        }
+        ItemStack vorbild = Ladenware.ausText(ware.inhalt());
+        return vorbild == null ? null
+                : vorbild.getType().name().toLowerCase(Locale.ROOT);
     }
 
     /**

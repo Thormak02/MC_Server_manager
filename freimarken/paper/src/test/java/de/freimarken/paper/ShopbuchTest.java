@@ -9,7 +9,12 @@ import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Shopablage;
 import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.SpeicherShops;
+import de.freimarken.kern.Ankaufliste;
+import de.freimarken.kern.Marktwerte;
+import de.freimarken.kern.Shopwerte;
 import de.freimarken.kern.Warenprobe;
+import de.freimarken.kern.Wirtschaftsstand;
+import de.freimarken.kern.Wirtschaftswerte;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -54,7 +59,8 @@ class ShopbuchTest {
         ablage = new SpeicherShops();
         leser = new Leser();
         wachmann = new Wachmann();
-        buch = new Shopbuch(ablage, leser, wachmann, Logger.getAnonymousLogger());
+        buch = new Shopbuch(ablage, leser, wachmann, wirtschaft,
+                Logger.getAnonymousLogger());
     }
 
     // --- Das Anlegen gelingt --------------------------------------------------
@@ -99,13 +105,160 @@ class ShopbuchTest {
         // ueberall nein, und der Shop entsteht trotzdem.
         wachmann.erlaubt = false;
 
-        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "64", "S 1", "STONE",
+        // MENGE FUENF, und das ist seit dem 10.11.2026 gerechnet: Ein Bundschild mit
+        // S-Preis ist der Bundesmarkt, sein Preis kommt aus bundesmarkt.ankauf (hier 20
+        // Pfennige je Stein), und die Menge muss einen ganzen Mark-Betrag ergeben. Bei
+        // 64 Stueck waeren es 12,80 Mark - so ein Stand entsteht nicht mehr, denn bei
+        // FESTER Menge verschwaenden 80 Pfennige bei jedem Handel.
+        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "5", "S 1", "STONE",
                 true);
 
         assertEquals(Shopbuch.Bescheid.ANGELEGT, anlage.bescheid());
         assertTrue(anlage.shop().demBund());
         assertNull(anlage.shop().besitzer());
         assertTrue(wachmann.gefragt.isEmpty(), "ein Bundshop fragt den Zugriff gar nicht");
+    }
+
+    // --- Der ANKAUFSTAND des Bundes [10.11.2026] ------------------------------
+
+    @Test
+    @DisplayName("Der Ankaufpreis kommt aus der TAFEL - nicht von dem, was getippt wurde")
+    void ankaufpreisKommtAusDerTafel() {
+        // DIE TRAGENDE PROBE DES ANLEGENS. Die Zusage des Plans lautet "beliebig
+        // erweiterbar und anpassbar - das Sortiment steht weiter in
+        // bundesmarkt.ankauf". Stuende der Preis in der Shopzeile, waere die Tafel nach
+        // dem ersten Schild eine zweite Wahrheit, und /markt liste nennte Preise, die
+        // kein Stand zahlt.
+        //
+        // Getippt werden hier 99 Mark; die Tafel ergibt eine. Was in der Zeile landet,
+        // ist die Zahl der TAFEL - und das Schild wird danach ohnehin vom Programm neu
+        // beschrieben, also liest der Betreiber sofort, was gilt.
+        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "5", "S 99", "STONE",
+                true);
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, anlage.bescheid());
+        assertEquals(1L, anlage.shop().verkaufpreis(), "fuenf mal 20 Pfennige");
+        assertEquals(0L, anlage.shop().kaufpreis(), "ein Ankaufstand verkauft nichts");
+    }
+
+    @Test
+    @DisplayName("Was nicht im Sortiment steht, bekommt keinen Stand")
+    void wareNichtImSortiment() {
+        // Was nicht in der Liste steht, kauft der Bund nicht - das ist die Aussage des
+        // Plans ("kleines Sortiment") und die sichere Richtung: Ein Stand ohne Eintrag
+        // haette gar keinen Preis, und ein geratener machte jeden Gegenstand zu Geld.
+        leser.material = "dirt";
+
+        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "5", "S 1", "DIRT", true);
+
+        assertEquals(Shopbuch.Bescheid.BUND_KAUFT_NICHT, anlage.bescheid());
+        assertNull(anlage.shop());
+        assertTrue(ablage.alle().isEmpty(), "und es entsteht nichts");
+    }
+
+    @Test
+    @DisplayName("Eine unebene Menge wird abgewiesen - mit der passenden Menge")
+    void unebeneMengeWirdAbgewiesen() {
+        // 16 Stein zu 20 Pfennigen sind 3,20 Mark. An einem Schild mit FESTER Menge
+        // verschwaenden also 20 Pfennige bei JEDEM Handel - unsichtbar. Verkaufsregel
+        // konnte beim Befehl Stuecke liegenlassen; ein Schild kann das nicht.
+        //
+        // Die Absage nennt die ZEILE (die zweite - dort steht die Menge) und die
+        // kleinste Menge, mit der es aufgeht. Ohne die Zahl probiert ein Betreiber
+        // Mengen durch.
+        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "16", "S 3", "STONE",
+                true);
+
+        assertEquals(Shopbuch.Bescheid.BUND_MENGE_UNEBEN, anlage.bescheid());
+        assertEquals(2, anlage.zeile(), "die MENGE steht in der zweiten Zeile");
+        assertEquals(5, anlage.bundmenge(), "fuenf Stueck sind genau eine Mark");
+        assertTrue(ablage.alle().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Ein Bundschild mit BEIDEN Preisen entsteht nicht - kein Rundlauf")
+    void beidePreiseAmBundschild() {
+        // Ein Bundschild handelt in genau EINER Richtung, und das ist keine
+        // Ordnungsliebe: Was der Bund ANKAUFT, steht in der Tafel, was er VERKAUFT, auf
+        // dem Schild. Auf einem Schild mit beiden Zahlen entscheidet also die eine
+        // Haelfte der Betreiber und die andere die Tafel - und eine spaetere Erhoehung
+        // des Ankaufpreises machte den Stand zum Rundlauf: billig kaufen, teurer
+        // zurueckverkaufen, beliebig oft. Zwei Schilder kosten nichts.
+        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "5", "B 100 : S 1",
+                "STONE", true);
+
+        assertEquals(Shopbuch.Bescheid.BUND_ZWEI_RICHTUNGEN, anlage.bescheid());
+        assertTrue(ablage.alle().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Ein BUNDLADEN mit nur einem Kaufpreis braucht die Tafel nicht")
+    void bundladenOhneTafel() {
+        // Die Gegenprobe: Was der Bund VERKAUFT, steht in keiner Tafel - der Betreiber
+        // setzt den Preis. Ein Bundladen fuer eine Ware, die der Bund nicht ankauft, ist
+        // also vollkommen in Ordnung. Wer die drei Pruefungen an "ist ein Bundshop"
+        // haengt statt an "hat einen Ankaufpreis", legt genau diesen Laden still.
+        leser.material = "dirt";
+
+        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "64", "B 100", "DIRT",
+                true);
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, anlage.bescheid());
+        assertEquals(100L, anlage.shop().kaufpreis());
+        assertEquals(0L, anlage.shop().verkaufpreis());
+    }
+
+    @Test
+    @DisplayName("Ein SPIELERSHOP geht die Tafel nichts an - auch mit unebener Menge")
+    void spielershopOhneTafel() {
+        // Annas Laden handelt Stein, und Stein steht im Sortiment des Bundes. Wuerde die
+        // Tafel auch hier gelten, entstuende ihr Laden nicht - obwohl der Bund mit ihm
+        // nichts zu tun hat. 16 Stueck zu 80 Mark sind ihre Zahlen.
+        Shopbuch.Anlage anlage = anlege(ANNA, "", "16", "B 100 : S 80", "STONE");
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, anlage.bescheid());
+        assertEquals(80L, anlage.shop().verkaufpreis(), "ihr Schildpreis, nicht die 3");
+        assertEquals(ANNA, anlage.shop().besitzer());
+    }
+
+    @Test
+    @DisplayName("Ohne lesbares Material entsteht kein Stand - und es wird laut")
+    void ohneMaterialKeinStand() {
+        // Die Ware wurde gerade aufgeloest, und ihr Material ist trotzdem nicht zu
+        // lesen - dann widerspricht sich die Naht. Kein Stand ist die sichere Richtung:
+        // Ohne Material gibt es keinen Preis.
+        leser.material = null;
+
+        Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "5", "S 1", "STONE", true);
+
+        assertEquals(Shopbuch.Bescheid.GESTOERT, anlage.bescheid());
+        assertTrue(ablage.alle().isEmpty());
+    }
+
+    @Test
+    @DisplayName("Das Bundwort kommt aus dem HALTER - eine Aenderung wirkt sofort")
+    void bundwortKommtAusDemHalter() {
+        // DER FUND VOM 10.11.2026. Das Wort kam vorher als Text in jeden Aufruf von
+        // anlege, also aus dem Stand beim SERVERSTART - und weil ein /freimarken
+        // neuladen absichtlich kein Objekt neu baut, wirkte eine Aenderung von
+        // handel.bundshop-wort nie, waehrend der Befehl "uebernommen" meldete.
+        //
+        // Hier wird der Halter MITTEN IM LAUF getauscht, wie der Befehl es tut: Das alte
+        // Wort macht danach keinen Bundshop mehr, das neue schon.
+        wirtschaft.uebernimm(wirtschaft.werte().mitHandel(
+                wirtschaft.werte().handel().mitWort("Staat")));
+
+        Shopbuch.Anlage mitAltem = anlegeMitBund(ANNA, BUNDWORT, "5", "S 1", "STONE",
+                true);
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, mitAltem.bescheid());
+        assertEquals(ANNA, mitAltem.shop().besitzer(),
+                "\"Bund\" ist jetzt ein gewoehnlicher Name in der ersten Zeile");
+
+        Shopbuch.Anlage mitNeuem = buch.anlege(ANNA, WELT, 11, 65, 10, 11, 64, 10,
+                zeilen("Staat", "5", "S 1", "STONE"), true, false);
+
+        assertEquals(Shopbuch.Bescheid.ANGELEGT, mitNeuem.bescheid());
+        assertTrue(mitNeuem.shop().demBund(), "das NEUE Wort wirkt ohne Neustart");
     }
 
     // --- Das Schild ist falsch: und die Ablage wird NICHT gefragt -------------
@@ -115,7 +268,7 @@ class ShopbuchTest {
     void falschesSchildFragtDieAblageNicht() {
         // Die harte Form der Reihenfolgezusage: Die Ablage wirft bei JEDER Frage. Kommt
         // SCHILD_FEHLERHAFT heraus, wurde sie nicht gefragt - sonst stuende GESTOERT da.
-        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
                 Logger.getAnonymousLogger());
 
         Shopbuch.Anlage anlage = anlege(ANNA, "", "keine zahl", "B 100", "STONE");
@@ -140,7 +293,7 @@ class ShopbuchTest {
     @Test
     @DisplayName("Ohne Bundrecht kein Bundshop - und auch das kostet keine Abfrage")
     void ohneBundrechtKeinBundshop() {
-        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
                 Logger.getAnonymousLogger());
 
         Shopbuch.Anlage anlage = anlegeMitBund(ANNA, BUNDWORT, "16", "B 100", "STONE",
@@ -173,7 +326,7 @@ class ShopbuchTest {
         wachmann.verboten.add(stelle(11, 64, 10));
 
         Shopbuch.Anlage anlage = buch.anlege(ANNA, WELT, 10, 64, 10, 11, 64, 10,
-                zeilen("", "16", "B 100", "STONE"), false, false, BUNDWORT);
+                zeilen("", "16", "B 100", "STONE"), false, false);
 
         assertEquals(Shopbuch.Bescheid.FREMDE_KISTE, anlage.bescheid());
         assertEquals(List.of(stelle(11, 64, 10)), wachmann.gefragt,
@@ -216,7 +369,7 @@ class ShopbuchTest {
     @Test
     @DisplayName("Eine stumme Ablage gibt GESTOERT und keinen halben Shop")
     void stummeAblageGibtGestoert() {
-        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
                 Logger.getAnonymousLogger());
 
         Shopbuch.Anlage anlage = anlege(ANNA, "", "16", "B 100", "STONE");
@@ -256,7 +409,7 @@ class ShopbuchTest {
     @Test
     @DisplayName("Eine stumme Ablage macht aus dem Abbauen GESTOERT")
     void abbauenGestoert() {
-        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
                 Logger.getAnonymousLogger());
 
         assertEquals(Shopbuch.Bescheid.GESTOERT, buch.baueAb(WELT, 10, 64, 10));
@@ -267,7 +420,7 @@ class ShopbuchTest {
     @Test
     @DisplayName("anDemSchild gibt bei einer Stoerung NULL - der Klick bewirkt nichts")
     void anDemSchildGibtNullBeiStoerung() {
-        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
                 Logger.getAnonymousLogger());
 
         assertNull(buch.anDemSchild(WELT, 10, 64, 10));
@@ -283,7 +436,7 @@ class ShopbuchTest {
         //
         // Die zwei Proben zusammen sind der Punkt: Waeren beide gleich, waere eine von
         // ihnen falsch.
-        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann,
+        buch = new Shopbuch(new StolperndeAblage(), leser, wachmann, wirtschaft,
                 Logger.getAnonymousLogger());
 
         assertTrue(buch.istShopkiste(WELT, 11, 64, 10));
@@ -396,16 +549,36 @@ class ShopbuchTest {
 
     // --- Werkzeug -------------------------------------------------------------
 
+    /**
+     * Der Halter, aus dem das Buch sein Bundwort UND seine Ankauftafel nimmt.
+     *
+     * <p>Veraenderlich, weil mehrere Proben eine andere Tafel brauchen - und weil GENAU
+     * DAS der Fund vom 10.11.2026 war: Das Bundwort kam vorher als Text in jeden
+     * Aufruf von {@code anlege} und war damit der Stand des Serverstarts.
+     *
+     * <p><b>Das Sortiment setzt die Probe selbst:</b> Stein zu 20 Pfennigen. Die Vorgabe
+     * von {@code Marktwerte} traegt absichtlich eine LEERE Tafel, und dann waere jede
+     * Bundprobe hier "kauft der Bund nicht" - auch die, die etwas anderes pruefen will.
+     */
+    private Wirtschaftsstand wirtschaft = standMit(20L);
+
+    private static Wirtschaftsstand standMit(long pfennigeFuerStein) {
+        return new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                .mitHandel(Shopwerte.VORGABE.mitWort(BUNDWORT))
+                .mitMarkt(Marktwerte.VORGABE.mitAnkauf(Ankaufliste.ausAnkaeufen(
+                        List.of(new Ankaufliste.Ankauf("stone", pfennigeFuerStein))))));
+    }
+
     private Shopbuch.Anlage anlege(UUID wer, String erste, String menge, String preise,
             String ware) {
         return buch.anlege(wer, WELT, 10, 64, 10, 11, 64, 10,
-                zeilen(erste, menge, preise, ware), false, false, BUNDWORT);
+                zeilen(erste, menge, preise, ware), false, false);
     }
 
     private Shopbuch.Anlage anlegeMitBund(UUID wer, String erste, String menge,
             String preise, String ware, boolean darfBund) {
         return buch.anlege(wer, WELT, 10, 64, 10, 11, 64, 10,
-                zeilen(erste, menge, preise, ware), darfBund, false, BUNDWORT);
+                zeilen(erste, menge, preise, ware), darfBund, false);
     }
 
     /**
@@ -418,8 +591,7 @@ class ShopbuchTest {
     private Shopbuch.Anlage zweitesSchild(UUID wer, String erste, String ware,
             boolean darfBund, boolean darfUeberall) {
         return buch.anlege(wer, WELT, 11, 65, 10, 11, 64, 10,
-                zeilen(erste, "16", "B 100", ware), darfBund, darfUeberall,
-                BUNDWORT);
+                zeilen(erste, "16", "B 100", ware), darfBund, darfUeberall);
     }
 
     private static String[] zeilen(String a, String b, String c, String d) {
@@ -436,10 +608,17 @@ class ShopbuchTest {
         private Warenprobe ausNamen = STEIN;
         private Warenprobe inDerKiste = STEIN;
         private boolean istKiste = true;
+        /** Das Material - {@code null} heisst: nicht zu deuten, also kein Ankaufstand. */
+        private String material = "stone";
 
         @Override
         public Warenprobe ausNamen(String getippt) {
             return ausNamen;
+        }
+
+        @Override
+        public String material(Warenprobe ware) {
+            return material;
         }
 
         @Override

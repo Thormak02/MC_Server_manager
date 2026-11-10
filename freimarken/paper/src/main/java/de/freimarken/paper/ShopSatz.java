@@ -554,7 +554,75 @@ enum ShopSatz implements Satz {
      * <p>Ein eigener Satz und nicht die leere Liste: Eine Stoerung, die wie "du hast
      * keine Shops" aussieht, laesst den Spieler glauben, seine Laeden seien weg.
      */
-    SHOP_LISTE_GESTOERT("shop.liste.gestoert", Art.SATZ);
+    SHOP_LISTE_GESTOERT("shop.liste.gestoert", Art.SATZ),
+
+    // ================= der ANKAUF DES BUNDES am Schild [10.11.2026]
+    //
+    // Sechs Saetze, und sie teilen sich in zwei Lagen: Die ersten drei liest ein
+    // BETREIBER, der ein Schild beschreibt (er allein hat freimarken.shop.bund), die
+    // letzten drei ein KUNDE, der an einem bestehenden Stand klickt. Derselbe Mangel
+    // heisst darum zweimal verschieden - "diese Ware kommt nicht ins Sortiment" ist
+    // eine Anweisung, "der Bund kauft das nicht mehr" eine Auskunft.
+
+    /**
+     * Ein Schild des Bundes mit BEIDEN Preisen.
+     *
+     * <p>Die Absage nennt den Grund und nicht bloss die Regel: Der Ankaufpreis kommt aus
+     * {@code bundesmarkt.ankauf}, der Verkaufspreis vom Schild - und eine spaetere
+     * Erhoehung des Ankaufs machte aus einem Schild mit beiden Zahlen einen Rundlauf.
+     */
+    SHOP_BUND_ZWEI_RICHTUNGEN("shop.bund.zwei-richtungen", Art.SATZ),
+
+    /**
+     * Ein Ankaufstand fuer eine Ware, die nicht im Sortiment steht.
+     *
+     * <p><b>Ohne Warennamen</b>, und das ist gemessen und nicht gespart: Die einzige
+     * Ware, die dieser Satz einsetzen koennte, ist die vierte Schildzeile, wie sie
+     * getippt wurde - und die ist bei einem Stand mit Fragezeichen genau "?". Ein Satz,
+     * der "Der Bund kauft ? nicht" sagt, ist schlechter als einer ohne Namen. Der
+     * Betreiber steht vor dem Schild, das er gerade beschrieben hat.
+     */
+    SHOP_BUND_NICHT_IM_SORTIMENT("shop.bund.nicht-im-sortiment", Art.SATZ),
+
+    /**
+     * Die Menge dieses Standes ergibt keinen ganzen Mark-Betrag.
+     *
+     * <p>{@code vorschlag} ist die kleinste Menge, mit der die Rechnung aufgeht - jedes
+     * Vielfache davon geht ebenfalls. Die Zahl steht in der Absage, weil ein Betreiber
+     * sonst Mengen durchprobiert.
+     */
+    SHOP_BUND_MENGE_UNEBEN("shop.bund.menge-uneben", Art.SATZ, "vorschlag"),
+
+    /**
+     * Der Stand steht, aber die Ware ist aus dem Sortiment genommen worden.
+     *
+     * <p>Ein eigener Satz neben {@code shop.kauft-nicht-an}: Jener heisst "dieses Schild
+     * hat keinen Ankaufpreis, versuch die andere Maustaste". Hier steht ein Ankaufstand,
+     * der nicht mehr ankauft - mit der anderen Maustaste wird es nicht besser.
+     */
+    SHOP_BUND_KAUFT_NICHT("shop.bund.kauft-nicht", Art.SATZ, "ware"),
+
+    /**
+     * Ein Stand des Bundes mit beiden Preisen - er kauft nicht an.
+     *
+     * <p>Ein EIGENER Satz neben {@code shop.bund.zwei-richtungen}, obwohl es derselbe
+     * Sachverhalt ist: Jener geht an den Betreiber, der gerade ein Schild beschreibt und
+     * es anders schreiben kann. Dieser geht an einen Kunden, der davorsteht und nichts
+     * tun kann - er soll lesen, dass es nicht an ihm liegt.
+     */
+    SHOP_BUND_ZWEI_PREISE("shop.bund.zwei-preise", Art.SATZ),
+
+    /** Der Tagesdeckel des Bundesmarkts ist erreicht - morgen wieder. */
+    SHOP_BUND_DECKEL("shop.bund.deckel", Art.SATZ),
+
+    /**
+     * Die Rechnung dieses Standes geht nicht mehr auf - nach einer Preisaenderung.
+     *
+     * <p>Die Absage sagt dem Kunden, dass es NICHT an ihm liegt, und nennt das Team.
+     * Welche Menge wieder passte, steht im Serverprotokoll - das liest ein Kunde nicht,
+     * und eine Zahl, mit der er nichts anfangen kann, hilft ihm nicht.
+     */
+    SHOP_BUND_UNEBEN("shop.bund.uneben", Art.SATZ, "menge", "ware");
 
     private final String pfad;
     private final Art art;

@@ -269,6 +269,9 @@ final class Sprachschluessel {
             case WARE_UNKLAR -> ShopSatz.SHOP_WARE_UNKLAR;
             case WARE_UNBEKANNT -> ShopSatz.SHOP_WARE_UNBEKANNT;
             case KEIN_BUNDRECHT -> ShopSatz.SHOP_KEIN_BUNDRECHT;
+            case BUND_ZWEI_RICHTUNGEN -> ShopSatz.SHOP_BUND_ZWEI_RICHTUNGEN;
+            case BUND_KAUFT_NICHT -> ShopSatz.SHOP_BUND_NICHT_IM_SORTIMENT;
+            case BUND_MENGE_UNEBEN -> ShopSatz.SHOP_BUND_MENGE_UNEBEN;
             case GESTOERT -> ShopSatz.SHOP_GESTOERT;
             case ABGEBAUT, KEIN_SHOP -> throw new IllegalArgumentException(bescheid
                     + " kommt vom Abbauen und nicht vom Anlegen - dort waehlt niemand"
@@ -324,6 +327,10 @@ final class Sprachschluessel {
             case KISTE_VOLL -> ShopSatz.SHOP_KISTE_VOLL;
             case KEIN_GELD -> ShopSatz.SHOP_KEIN_GELD;
             case SHOP_PLEITE -> ShopSatz.SHOP_PLEITE;
+            case BUND_KAUFT_NICHT -> ShopSatz.SHOP_BUND_KAUFT_NICHT;
+            case BUND_ZWEI_RICHTUNGEN -> ShopSatz.SHOP_BUND_ZWEI_PREISE;
+            case BUND_DECKEL -> ShopSatz.SHOP_BUND_DECKEL;
+            case BUND_UNEBEN -> ShopSatz.SHOP_BUND_UNEBEN;
             case GESTOERT -> ShopSatz.SHOP_HANDEL_GESTOERT;
             case KEIN_SHOP -> throw new IllegalArgumentException("Auf einen Klick"
                     + " ohne Shop wird geschwiegen - dafuer gibt es keinen Satz,"

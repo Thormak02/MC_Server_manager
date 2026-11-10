@@ -1,10 +1,12 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Bundankauf;
 import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Shopweg;
 import de.freimarken.kern.Shopablage;
 import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Warenprobe;
+import de.freimarken.kern.Wirtschaftsstand;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -62,6 +64,35 @@ final class Shopbuch {
         WARE_UNBEKANNT,
         /** Ein Bundshop, aber der Spieler hat das Recht dafuer nicht. */
         KEIN_BUNDRECHT,
+        /**
+         * Ein Schild des Bundes mit BEIDEN Preisen - das geht nicht.
+         *
+         * <p><b>Ein Bundschild handelt in genau EINER Richtung</b> [entschieden
+         * 10.11.2026], und das ist keine Ordnungsliebe, sondern der Riegel gegen eine
+         * Gelddruckmaschine. Was der Bund ANKAUFT, steht in {@code bundesmarkt.ankauf}
+         * und nicht in der Shopzeile ({@link Bundankauf}); was er VERKAUFT, schreibt der
+         * Betreiber auf das Schild. Auf einem Schild mit beiden Zahlen entscheidet also
+         * die eine Haelfte der Betreiber und die andere die Tafel - und eine spaetere
+         * Erhoehung des Ankaufpreises machte aus dem Stand einen Rundlauf: billig kaufen,
+         * teurer zurueckverkaufen, beliebig oft. Zwei Schilder kosten nichts.
+         */
+        BUND_ZWEI_RICHTUNGEN,
+        /**
+         * Ein Ankaufstand fuer eine Ware, die in {@code bundesmarkt.ankauf} nicht steht.
+         *
+         * <p>Was nicht in der Liste steht, kauft der Bund nicht - das ist die Aussage
+         * des Plans ("kleines Sortiment") und die sichere Richtung. Ein Stand ohne
+         * Eintrag haette gar keinen Preis, und ein geratener machte jeden Gegenstand zu
+         * Geld.
+         */
+        BUND_KAUFT_NICHT,
+        /**
+         * Die Menge dieses Standes ergibt keinen ganzen Mark-Betrag.
+         *
+         * <p>{@link Anlage#bundmenge} nennt die kleinste, mit der sie aufgeht, und
+         * {@link Anlage#zeile} zeigt auf die zweite Schildzeile - dort steht die Menge.
+         */
+        BUND_MENGE_UNEBEN,
         /** Hier haengt gar kein Shop - beim Abbauen. */
         KEIN_SHOP,
         /** Die Datenbank hat geschwiegen. Steht im Protokoll. */
@@ -74,10 +105,18 @@ final class Shopbuch {
      * @param shop   bei {@link Bescheid#ANGELEGT} der neue Shop, sonst {@code null}
      * @param fehler bei {@link Bescheid#SCHILD_FEHLERHAFT} der Grund, sonst {@code null}
      * @param zeile  bei {@link Bescheid#SCHILD_FEHLERHAFT} die Zeilennummer 1 bis 4,
-     *               sonst 0. Ein Spieler soll lesen, WO er nachsehen muss
+     *               sonst 0. Ein Spieler soll lesen, WO er nachsehen muss. Bei
+     *               {@link Bescheid#BUND_MENGE_UNEBEN} ist es die 2 - dort steht die
+     *               Menge, und die ist das, was zu aendern ist
+     * @param bundmenge bei {@link Bescheid#BUND_MENGE_UNEBEN} die kleinste Menge, mit der
+     *               die Rechnung glatt aufgeht, sonst 0. <b>Die Zahl steht in der
+     *               Absage</b>, und das ist mehr als Hoeflichkeit: Wer "diese Menge geht
+     *               nicht" liest, probiert sonst Zahlen durch. Dieselbe Form wie
+     *               {@code zeile} - eine Zahl, die nur ein Bescheid braucht, und 0 heisst
+     *               "hier nicht gemeint"
      */
     record Anlage(Bescheid bescheid, Kistenshop shop, Shopschild.Fehler fehler,
-                  int zeile) {
+                  int zeile, int bundmenge) {
     }
 
     /**
@@ -119,6 +158,21 @@ final class Shopbuch {
          * Shulker in Shulker, gegen das Vanilla-Verhalten.
          */
         boolean taugtAlsShopkiste(String welt, int x, int y, int z);
+
+        /**
+         * Das MATERIAL dieser Ware, kleingeschrieben - oder {@code null}.
+         *
+         * <p>Dieselbe Frage und dieselbe Form wie {@code Shophandel.Warenhand.material},
+         * und dieselbe Naht beantwortet beide: {@code bundesmarkt.ankauf} ist eine Tafel
+         * je MATERIAL, und was eine Warenprobe ist, weiss nur das Spiel. Gebraucht wird
+         * sie hier beim ANLEGEN eines Ankaufstandes - ob der Bund diese Ware ueberhaupt
+         * kauft, entscheidet sich, bevor das Schild steht.
+         *
+         * <p><b>Nicht aus {@code ware().name()} zu lesen:</b> Jener Name ist gekuerzt
+         * ("PICKAXE"), und {@code ShopwareTafel} haelt die Zusage, dass er nirgends
+         * verglichen wird.
+         */
+        String material(Warenprobe ware);
     }
 
     /**
@@ -135,12 +189,29 @@ final class Shopbuch {
     private final Shopablage ablage;
     private final Warenleser waren;
     private final Zugriff zugriff;
+    private final Wirtschaftsstand wirtschaft;
     private final Logger protokoll;
 
-    Shopbuch(Shopablage ablage, Warenleser waren, Zugriff zugriff, Logger protokoll) {
+    /**
+     * @param wirtschaft der Halter und kein Schnappschuss - FUND VOM 10.11.2026. Das
+     *                   Bundwort kam bis dahin als Text von der Wache herein, also aus
+     *                   dem Stand beim SERVERSTART. Ein {@code /freimarken neuladen} baut
+     *                   absichtlich kein Objekt neu, und darum wirkte ein geaendertes
+     *                   {@code handel.bundshop-wort} nie - waehrend der Befehl
+     *                   "uebernommen" meldete. Dieselbe Falle wie bei den Gebuehren in
+     *                   {@code Shophandel}, gefunden beim Bau des Bundesmarktes
+     */
+    Shopbuch(Shopablage ablage, Warenleser waren, Zugriff zugriff,
+            Wirtschaftsstand wirtschaft, Logger protokoll) {
+        if (wirtschaft == null) {
+            throw new IllegalArgumentException("Ohne Wirtschaftsstand gibt es kein"
+                    + " Bundwort und keine Ankauftafel - und beide werden im AUGENBLICK"
+                    + " des Schildschreibens gefragt, nicht beim Start");
+        }
         this.ablage = ablage;
         this.waren = waren;
         this.zugriff = zugriff;
+        this.wirtschaft = wirtschaft;
         this.protokoll = protokoll;
     }
 
@@ -169,15 +240,16 @@ final class Shopbuch {
      *                   und nicht hier erfragt: Diese Klasse sieht keinen
      *                   {@code Player}, und genau deshalb ist sie ohne Server
      *                   pruefbar
-     * @param bundWort   das Wort fuer einen Bundshop aus der {@code config.yml}
      */
     Anlage anlege(UUID wer, String welt, int schildX, int schildY, int schildZ,
             int kisteX, int kisteY, int kisteZ, String[] zeilen, boolean darfBund,
-            boolean darfUeberall, String bundWort) {
-        Shopschild.Ergebnis gelesen = Shopschild.lies(zeilen, bundWort);
+            boolean darfUeberall) {
+        // Das Bundwort aus dem HALTER und nicht als Argument - siehe den Konstruktor.
+        Shopschild.Ergebnis gelesen = Shopschild.lies(zeilen,
+                wirtschaft.werte().handel().bundWort());
         if (!gelesen.gelungen()) {
             return new Anlage(Bescheid.SCHILD_FEHLERHAFT, null, gelesen.fehler(),
-                    gelesen.zeile());
+                    gelesen.zeile(), 0);
         }
         Shopschild.Gelesen schild = gelesen.schild();
         if (schild.bundshop() && !darfBund) {
@@ -249,6 +321,14 @@ final class Shopbuch {
                     ? Bescheid.WARE_UNKLAR
                     : Bescheid.WARE_UNBEKANNT);
         }
+        // DER ANKAUFSTAND DES BUNDES - und damit der Bundesmarkt am Schild
+        // [entschieden 08.11.2026, gebaut 10.11.2026]. Erst hier, weil alle drei
+        // Pruefungen die aufgeloeste WARE brauchen: Die Tafel bundesmarkt.ankauf steht
+        // je Material, und welches Material eine Warenprobe ist, weiss nur das Spiel.
+        Ankaufstand stand = pruefeDenStand(schild, ware);
+        if (stand.absage() != null) {
+            return stand.absage();
+        }
         try {
             // Ein neuer Shop hat KEINE Freigaben - niemand ausser dem Besitzer darf an
             // die Kiste, bis er jemanden ausdruecklich eintraegt. Die leere Menge ist
@@ -256,13 +336,13 @@ final class Shopbuch {
             // darf: Er gehoert niemandem, also kann ihn auch niemand freigeben.
             Kistenshop shop = new Kistenshop(welt, schildX, schildY, schildZ, kisteX,
                     kisteY, kisteZ, schild.bundshop() ? null : wer, schild.menge(),
-                    schild.kaufpreis(), schild.verkaufpreis(), ware, Set.of());
+                    schild.kaufpreis(), stand.verkaufpreis(), ware, Set.of());
             ablage.schreibe(shop);
             protokoll.info("Kistenshop angelegt: " + shop.schluessel() + " - "
                     + shop.menge() + "x " + ware.name() + ", "
                     + Shopschild.preistext(shop.kaufpreis(), shop.verkaufpreis())
                     + (shop.demBund() ? " (Bund)" : " von " + wer));
-            return new Anlage(Bescheid.ANGELEGT, shop, null, 0);
+            return new Anlage(Bescheid.ANGELEGT, shop, null, 0, 0);
         } catch (RuntimeException fehler) {
             // Auch ein IllegalArgumentException aus dem Satz Kistenshop landet hier, und
             // das ist gewollt: Shopschild prueft dasselbe schon und laesst nichts durch,
@@ -360,7 +440,82 @@ final class Shopbuch {
         }
     }
 
+    /**
+     * Was aus der Pruefung eines Ankaufstandes wurde.
+     *
+     * @param verkaufpreis der Preis, der in die Shopzeile geschrieben wird. An einem
+     *                     Ankaufstand des Bundes ist es die Zahl AUS DER TAFEL und nicht
+     *                     die getippte - siehe {@link #pruefeDenStand}; sonst die
+     *                     getippte
+     * @param absage       wenn dieser Stand nicht entstehen darf, die fertige Antwort,
+     *                     sonst {@code null}
+     */
+    private record Ankaufstand(long verkaufpreis, Anlage absage) {
+    }
+
+    /**
+     * Prueft ein Schild des Bundes, das ANKAUFT - und holt seinen Preis aus der Tafel.
+     *
+     * <p><b>Der Preis kommt aus {@code bundesmarkt.ankauf} und nicht vom Schild</b>, und
+     * die ganze Begruendung steht in {@link Bundankauf}: Nur so wirkt eine
+     * Preisaenderung an jedem Stand, ohne dass einer neu beschrieben wird - die Zusage
+     * des Plans ("beliebig erweiterbar und anpassbar"). Was der Betreiber in die
+     * Preiszeile getippt hat, gilt hier also nicht; das Schild wird nach dem Anlegen
+     * ohnehin vom Programm neu beschrieben ({@code Shopschild.schreibe}), und dann steht
+     * die richtige Zahl darauf.
+     *
+     * <p>Drei Absagen, und jede sagt, was zu tun ist. Die Reihenfolge ist die der
+     * Kosten: erst die zwei Zahlen auf dem Schild, dann die Ware, dann die Tafel.
+     *
+     * <p>Fuer JEDES andere Schild gibt diese Methode den getippten Preis unveraendert
+     * zurueck - auch fuer einen Bundshop, der nur VERKAUFT. Was der Bund verkauft, steht
+     * in keiner Tafel.
+     */
+    private Ankaufstand pruefeDenStand(Shopschild.Gelesen schild, Warenprobe ware) {
+        if (!schild.bundshop() || schild.verkaufpreis() <= 0L) {
+            return new Ankaufstand(schild.verkaufpreis(), null);
+        }
+        if (schild.kaufpreis() > 0L) {
+            return new Ankaufstand(0L, absage(Bescheid.BUND_ZWEI_RICHTUNGEN));
+        }
+        String material = waren.material(ware);
+        if (material == null) {
+            // Die Ware wurde gerade aufgeloest, und ihr Material ist trotzdem nicht zu
+            // lesen - dann widerspricht sich die Naht. Kein Stand ist die sichere
+            // Richtung: Ohne Material gibt es keinen Preis.
+            protokoll.warning("Die Ware " + ware.name() + " liess sich aufloesen, ihr"
+                    + " Material aber nicht lesen - es entsteht kein Ankaufstand des"
+                    + " Bundes.");
+            return new Ankaufstand(0L, absage(Bescheid.GESTOERT));
+        }
+        long pfennige = wirtschaft.werte().markt().ankauf().pfennige(material);
+        if (pfennige <= 0L) {
+            return new Ankaufstand(0L, absage(Bescheid.BUND_KAUFT_NICHT));
+        }
+        if (!Bundankauf.gehtGlattAuf(pfennige, schild.menge())
+                || !Bundankauf.brauchbarerStufenpreis(pfennige, schild.menge())) {
+            // Die ZWEITE Zeile ist gemeint - dort steht die Menge, und die ist das, was
+            // zu aendern ist. Die kleinste passende Menge steht in der Absage; jedes
+            // Vielfache davon geht ebenfalls.
+            return new Ankaufstand(0L, new Anlage(Bescheid.BUND_MENGE_UNEBEN, null, null,
+                    2, Bundankauf.kleinsteMenge(pfennige)));
+        }
+        return new Ankaufstand(Bundankauf.stufenpreis(pfennige, schild.menge()), null);
+    }
+
+    /**
+     * Das Wort, das einen Bundshop anzeigt - JETZT.
+     *
+     * <p>Die EINE Stelle, die es haelt: Diese Klasse hat den Wirtschaftsstand, und die
+     * Wache braucht dasselbe Wort, um die erste Zeile eines fertigen Bundschildes zu
+     * schreiben. Ein zweiter Halter daneben waere die zweite Wahrheit - und genau die
+     * hat am 10.11.2026 dafuer gesorgt, dass ein Neuladen des Wortes nichts bewirkte.
+     */
+    String bundWort() {
+        return wirtschaft.werte().handel().bundWort();
+    }
+
     private static Anlage absage(Bescheid bescheid) {
-        return new Anlage(bescheid, null, null, 0);
+        return new Anlage(bescheid, null, null, 0, 0);
     }
 }

@@ -148,7 +148,7 @@ befehl:
     tpahere: "Lade einen Spieler ein, zu dir zu kommen"
     tpaccept: "Eine Teleportanfrage annehmen"
     tpdeny: "Teleportanfragen ablehnen"
-    markt: "Was der Bundesmarkt ankauft - und verkaufen"
+    markt: "Was der Bundesmarkt ankauft - verkauft wird an seinen Schildern"
     laden: "Die Markthalle und ihre Ladeneinheiten"
     shop: "Deine Kistenshops auflisten und fuer andere freigeben"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
@@ -1209,23 +1209,9 @@ markt:
   frei: "<gray>Heute kannst du noch <gold>{betrag}</gold> aus Verkaeufen bekommen.</gray>"
   # Der Bund kauft derzeit gar nichts - die Liste in der config.yml ist leer.
   leer: "<yellow>Der Bundesmarkt kauft derzeit nichts.</yellow>"
-  # {material} {betrag} - ein Verkauf ist durch. GEZAEHLT nach den Stuecken: Der Bund
-  # nimmt nur so viele, wie eine ganze Mark ergeben, und wer sieben anbietet und fuenf
-  # losgeworden ist, soll das lesen statt nachzuzaehlen.
-  verkauft:
-    eins: "<green>1 {material} verkauft - <gold>{betrag}</gold>.</green>"
-    viele: "<green>{anzahl} {material} verkauft - <gold>{betrag}</gold>.</green>"
-  absage:
-    # Der Markt ist ein Ort. Wer nicht in Altfurt ist, kann nicht verkaufen.
-    falsche-welt: "<red>Der Bundesmarkt steht in Altfurt - dort kauft der Bund.</red>"
-    leere-hand: "<red>Du haeltst nichts in der Hand.</red>"
-    # {material} - das kauft der Bund nicht.
-    kauft-nicht: "<red>Der Bund kauft {material} nicht.</red>\n<gray>/markt zeigt, was er kauft.</gray>"
-    # {material} - zu wenig fuer eine ganze Mark. Diese Zeile MUSS es geben: Sonst tippt
-    # jemand /markt verkaufen, es passiert nichts, und er haelt es fuer einen Fehler.
-    zu-wenig: "<yellow>Fuer so wenig {material} gibt es keine ganze Mark - der Bund zahlt nur in ganzen Mark.</yellow>"
-    deckel: "<yellow>Heute ist genug verkauft - morgen kauft der Bund wieder.</yellow>"
-    nicht-buchbar: "<red>Der Verkauf ist gerade nicht buchbar - deine Ware hast du noch. Im Serverprotokoll steht, warum.</red>"
+  # SIEBEN ZEILEN STANDEN HIER BIS ZUM 10.11.2026 - markt.verkauft und markt.absage.*.
+  #   Sie gehoerten zu /markt verkaufen, und der ist weggefallen: Verkauft wird am
+  #   SCHILD (Plan 7.1). Was dort schiefgehen kann, steht unter shop.bund.
 
 # Die Markthalle (Plan 7.1, Schritt 8 Teil A): /laden zeigt die Ladeneinheiten.
 #
@@ -1682,6 +1668,29 @@ shop:
     #   schickt den Spieler ins Probieren.
     keine-seite: "<gray>Seite {seite} gibt es nicht - deine Shops stehen auf {seiten} Seiten.</gray>"
     gestoert: "<red>Deine Shopliste liess sich nicht lesen</red><gray> - deine Laeden sind deswegen NICHT weg. Der Grund steht im Serverprotokoll.</gray>"
+  # DER ANKAUF DES BUNDES AM SCHILD (Plan 7.1, gebaut 10.11.2026). Ein Bundschild mit
+  #   S-Preis IST der Bundesmarkt: Der Preis kommt aus bundesmarkt.ankauf und nicht vom
+  #   Schild, der Tagesdeckel bundesmarkt.tagesdeckel gilt, und gebucht wird
+  #   bundesmarkt_verkauf. /markt verkaufen ist dafuer weggefallen.
+  #
+  # Die ersten drei Zeilen liest ein BETREIBER beim Beschreiben eines Schildes (nur er
+  #   hat freimarken.shop.bund), die letzten drei ein KUNDE am fertigen Stand.
+  bund:
+    zwei-richtungen: "<red>Ein Schild des Bundes handelt in EINER Richtung.</red>\n<gray>Entweder verkauft der Bund (B-Preis) oder er kauft an (S-Preis) - fuer beides zwei Schilder. Der Ankaufpreis kommt aus bundesmarkt.ankauf, der Verkaufspreis vom Schild; auf einem Schild waere jede Preiserhoehung ein Rundlauf.</gray>"
+    nicht-im-sortiment: "<red>Diese Ware kauft der Bund nicht an.</red>\n<gray>/markt zeigt sein Sortiment - was dort nicht steht, bekommt keinen Stand.</gray>"
+    # {vorschlag} - die kleinste Menge, mit der die Rechnung glatt aufgeht. Jedes
+    #   Vielfache davon geht ebenfalls.
+    menge-uneben: "<red>Bei dieser Menge kommt kein ganzer Mark-Betrag heraus.</red>\n<gray>Der Bund zahlt nur in ganzen Mark - nimm {vorschlag} Stueck oder ein Vielfaches davon.</gray>"
+    # {ware} - der Stand steht, aber die Ware ist aus dem Sortiment genommen worden.
+    kauft-nicht: "<red>Der Bund kauft {ware} nicht mehr an.</red>"
+    # Ein ALTES Schild mit beiden Preisen. Seit dem 10.11.2026 entsteht keines mehr;
+    #   eines, das vorher stand, kauft nicht mehr an - sonst waere es ein Rundlauf,
+    #   sobald der Ankaufpreis ueber seinen Kaufpreis steigt.
+    zwei-preise: "<red>Dieser Stand des Bundes traegt beide Preise und kauft darum nicht an.</red><gray> Das Team muss ihn teilen: ein Schild zum Kaufen, eines zum Ankaufen.</gray>"
+    deckel: "<yellow>Heute ist genug verkauft - morgen kauft der Bund wieder.</yellow>"
+    # {menge} {ware} - nach einer Preisaenderung geht die Rechnung dieses Standes nicht
+    #   mehr glatt auf. Welche Menge wieder passt, steht im Serverprotokoll.
+    uneben: "<red>Dieser Stand kauft gerade nicht an</red><gray> - {menge}x {ware} ergeben keinen ganzen Mark-Betrag. Das Team muss sein Schild neu beschreiben.</gray>"
 
 blockbuch:
   # Die Saetze der Moderationsauskunft /freimarken blockbuch. Sie reden NICHT mit einem

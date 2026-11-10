@@ -2716,4 +2716,208 @@ class GrenzeTest {
                         + " Zeitgeber laeuft weiter, es faellt also nichts auf; was"
                         + " ausbleibt, ist nur ihre Arbeit: " + stumm);
     }
+
+    /**
+     * Die Vorsilben dynamischer Rechte - sie lassen sich nicht anmelden.
+     *
+     * <p>Ein Rang vergibt {@code freimarken.parzellen.5}, und die Zahl dahinter kennt nur
+     * der Betreiber. Solche Knoten sind keine angemeldeten Rechte, sondern WERTE: Das
+     * Programm liest sie aus den Rechten des Spielers heraus
+     * ({@code ParzellenBefehle.hoechsteAus}), statt zu fragen, ob er eines hat. Sie
+     * gehoeren darum nicht in {@code plugin.yml} - und was man nicht anmelden kann, darf
+     * eine Probe nicht verlangen.
+     */
+    private static final List<String> RECHTE_VORSILBEN = List.of(
+            "freimarken.gruppe.", "freimarken.parzellen.",
+            "freimarken.extra.gruppe.", "freimarken.extra.parzellen.");
+
+    @Test
+    @DisplayName("31am - jeder Sprungschluessel steht in der ausgelieferten config.yml")
+    void jederSprungschluesselStehtInDerDatei() {
+        // FUND VOM 10.11.2026, beim Vorbereiten einer Spielprobe: Der Markt-Tagesdeckel
+        // sollte gesenkt werden, und der Kommentar an jener Zeile nennt dafuer
+        // wirtschaft.sprung-bestaetigt.markt-tagesdeckel - den es im Abschnitt
+        // sprung-bestaetigt nicht gab. Dasselbe fuer laden-lizenz, bonus-grundbetrag und
+        // bonus-je-serientag: vier von neun.
+        //
+        // Kaputt war dadurch nichts, und das ist der Grund, warum es niemandem auffiel:
+        // Die Klage nennt den Schluessel samt fertiger Zeile, und wer sie liest, traegt
+        // ihn von Hand ein. Im Probeserver steht laden-lizenz genau so da. Aber die
+        // ausgelieferte Datei IST die Dokumentation dieses Projekts - ein Abschnitt, der
+        // die Haelfte verschweigt, laesst einen Betreiber glauben, es gebe fuer seinen
+        // Wert keine Bestaetigung.
+        //
+        // Gelesen wird die GESTALT des Aufrufs und nicht eine Liste von Hand: Jeder
+        // Geldwert mit Sprungschutz geht durch betrag() oder pflichtbetrag(), und der
+        // erste Text darin ist sein Schluessel.
+        var muster = Pattern.compile("betrag\\(wurzel,[^\"]*\"([a-z-]+)\"");
+        var imProgramm = new java.util.TreeSet<String>();
+        for (Path datei : Quellen.alle()) {
+            var suche = muster.matcher(Quellen.text(datei));
+            while (suche.find()) {
+                imProgramm.add(suche.group(1));
+            }
+        }
+        assertTrue(imProgramm.size() >= 5,
+                "nur " + imProgramm.size() + " Sprungschluessel im Programm gefunden -"
+                        + " dann prueft diese Probe fast nichts: " + imProgramm);
+
+        var inDerDatei = new java.util.TreeSet<String>();
+        boolean imAbschnitt = false;
+        for (String zeile : ausgelieferte("config.yml").split("\n", -1)) {
+            if (zeile.startsWith("  sprung-bestaetigt:")) {
+                imAbschnitt = true;
+                continue;
+            }
+            if (imAbschnitt) {
+                if (zeile.startsWith("    #")) {
+                    continue;
+                }
+                if (!zeile.startsWith("    ")) {
+                    imAbschnitt = false;
+                    continue;
+                }
+                inDerDatei.add(zeile.strip().split(":", 2)[0]);
+            }
+        }
+
+        assertEquals(imProgramm, inDerDatei,
+                "jeder Geldwert mit Sprungschutz braucht seine Zeile im Abschnitt"
+                        + " wirtschaft.sprung-bestaetigt - und jede Zeile dort braucht"
+                        + " ihren Geldwert. Zu wenig heisst: Ein Betreiber findet die"
+                        + " Bestaetigung nicht, die seine Klage von ihm verlangt. Zu"
+                        + " viel heisst: Er traegt eine ein, die nie etwas deckt.");
+    }
+
+    @Test
+    @DisplayName("31al - jedes Recht aus dem Programm steht in der plugin.yml")
+    void jedesRechtIstAngemeldet() {
+        // FUND VOM 10.11.2026, und er lag ein halbes Dutzend Spieltests lang offen:
+        // freimarken.beruf und freimarken.markt waren nicht angemeldet.
+        //
+        // Bukkits PermissibleBase antwortet auf ein Recht, das kein Plugin angemeldet
+        // hat, mit Permission.DEFAULT_PERMISSION - und die ist OP. Ein gewoehnlicher
+        // Spieler bekommt also false; der Zweig bleibt ihm verborgen (requires) UND
+        // verwehrt. Im Programm stand dabei woertlich "jeder".
+        //
+        // Dass es niemand merkte, hat einen Grund, der sich wiederholen wird: Jeder
+        // Spieltest lief mit einem Operator. Ein Recht mit default true verhaelt sich
+        // fuer ihn genauso wie ein fehlendes - der Unterschied zeigt sich nur bei einem
+        // Spieler ohne Rechte, und der war nie dabei.
+        //
+        // Gelesen werden die STRING-LITERALE des Programms und die angemeldeten Namen
+        // der ausgelieferten plugin.yml. Beides ist die Wahrheit und keine Abschrift:
+        // Eine Tafel von Hand gefuehrter Rechte waere genau die zweite Liste, die
+        // irgendwann abweicht.
+        var imProgramm = new java.util.TreeSet<String>();
+        var muster = Pattern.compile("\"(freimarken\\.[a-z.]+)\"");
+        for (Path datei : Quellen.alle()) {
+            var suche = muster.matcher(Quellen.text(datei));
+            while (suche.find()) {
+                String recht = suche.group(1);
+                if (RECHTE_VORSILBEN.stream().noneMatch(recht::equals)) {
+                    imProgramm.add(recht);
+                }
+            }
+        }
+        assertTrue(imProgramm.size() > 10,
+                "nur " + imProgramm.size() + " Rechte im Programm gefunden - dann"
+                        + " prueft diese Probe fast nichts: " + imProgramm);
+
+        var angemeldet = new java.util.TreeSet<String>();
+        for (String zeile : ausgelieferte("plugin.yml").split("\n", -1)) {
+            if (zeile.startsWith("  freimarken.") && zeile.endsWith(":")) {
+                angemeldet.add(zeile.strip().substring(0, zeile.strip().length() - 1));
+            }
+        }
+        assertTrue(angemeldet.size() > 10,
+                "nur " + angemeldet.size() + " Rechte in der plugin.yml gelesen: "
+                        + angemeldet);
+
+        var fehlen = new java.util.TreeSet<>(imProgramm);
+        fehlen.removeAll(angemeldet);
+        // Die VORSILBEN fallen hier heraus und nicht oben: Oben wuerde ein Tippfehler
+        // in einer Vorsilbe unbemerkt zu einem fehlenden Recht, hier bleibt er sichtbar.
+        fehlen.removeIf(recht -> RECHTE_VORSILBEN.stream().anyMatch(recht::startsWith));
+        assertEquals(java.util.Set.of(), fehlen,
+                "diese Rechte fragt das Programm, und die plugin.yml meldet sie nicht an"
+                        + " - Bukkit gibt sie damit NUR Operatoren, und der Zweig"
+                        + " dahinter ist fuer jeden anderen verborgen und verwehrt: "
+                        + fehlen);
+
+        var ohneGrund = new java.util.TreeSet<>(angemeldet);
+        ohneGrund.removeAll(imProgramm);
+        assertEquals(java.util.Set.of(), ohneGrund,
+                "diese Rechte meldet die plugin.yml an, und kein Zweig fragt sie - ein"
+                        + " Betreiber vergibt sie und nichts geschieht: " + ohneGrund);
+    }
+
+    /** Eine ausgelieferte Datei aus dem Jar - fuer die Proben, die sie selbst lesen. */
+    private static String ausgelieferte(String name) {
+        try (var strom = GrenzeTest.class.getClassLoader()
+                .getResourceAsStream(name)) {
+            assertNotNull(strom, name + " muss im Jar liegen");
+            return new String(strom.readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException nichtLesbar) {
+            throw new IllegalStateException(name + " nicht lesbar", nichtLesbar);
+        }
+    }
+
+    @Test
+    @DisplayName("31ak - kein Dokumentationsblock haengt an einem anderen")
+    void keinDokublockOhneDeklaration() {
+        // FUND VOM 10.11.2026, und die Lehre steckt nicht im Fehler, sondern darin, wie
+        // lange er unsichtbar blieb.
+        //
+        // In Shopliste.java stand eine neue Methode samt eigenem Javadoc ZWISCHEN dem
+        // Doku-Block von bundwort und bundwort selbst. Damit dokumentierte jener Block
+        // nichts mehr, und bundwort hatte keine Dokumentation - zwei Verluste aus einer
+        // Einfuegung, und der Quelltext sieht an der Stelle vollkommen gewoehnlich aus.
+        //
+        // Javac MELDET das: -Xlint:all kennt dangling-doc-comments, und die Warnung stand
+        // im Bauprotokoll. Gesehen wurde sie trotzdem erst einen Tag spaeter, denn eine
+        // Warnung erscheint nur, wenn die Aufgabe wirklich laeuft - und :paper:compileJava
+        // war beim naechsten Lauf UP-TO-DATE. Eine Warnung, die nur im ersten Lauf
+        // sichtbar ist, ist keine Zusicherung; dieses Projekt uebersetzt ausserdem ohne
+        // -Werror, also haette sie den Bau nie angehalten.
+        //
+        // Diese Probe liest die GESTALT: Ein Block, der mit einer Zeile endet, auf die
+        // ein neuer Block folgt, kann unmoeglich an einer Deklaration haengen. Sie liest
+        // ALLE drei Module - der naechste Fall entsteht dort, wo gerade gebaut wird.
+        List<Path> dateien = Quellen.alleDateien();
+        assertTrue(dateien.size() > 100,
+                "nur " + dateien.size() + " Quelldateien gefunden - dann prueft diese"
+                        + " Probe fast nichts");
+
+        List<String> abgerissen = new ArrayList<>();
+        for (Path datei : dateien) {
+            String[] zeilen = Quellen.mitKommentaren(datei).split("\n", -1);
+            for (int i = 0; i < zeilen.length; i++) {
+                if (!zeilen[i].strip().equals("*/")) {
+                    continue;
+                }
+                // Die naechste Zeile, die etwas enthaelt. Leerzeilen zwischen zwei
+                // Bloecken aendern nichts daran, dass der erste an keiner Deklaration
+                // haengt.
+                for (int j = i + 1; j < zeilen.length; j++) {
+                    String naechste = zeilen[j].strip();
+                    if (naechste.isEmpty()) {
+                        continue;
+                    }
+                    if (naechste.startsWith("/**")) {
+                        abgerissen.add(datei.getFileName() + ":" + (i + 1));
+                    }
+                    break;
+                }
+            }
+        }
+        assertEquals(List.of(), abgerissen,
+                "an diesen Stellen endet ein Dokumentationsblock, und es folgt ein"
+                        + " ZWEITER - der erste haengt damit an keiner Deklaration und"
+                        + " dokumentiert nichts, und was er beschrieb, steht ohne"
+                        + " Dokumentation da. Javac meldet es als"
+                        + " dangling-doc-comments, aber nur im Lauf, in dem wirklich"
+                        + " uebersetzt wird: " + abgerissen);
+    }
 }

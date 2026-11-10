@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Marktwerte;
 import de.freimarken.kern.Shopregel;
 import de.freimarken.kern.Shopwerte;
 import java.util.ArrayList;
@@ -169,34 +170,6 @@ final class Shopliste {
      * genau der Fall, von dem der Nutzergrundsatz sagt, dass er es in der Datei SAGEN
      * muss.
      */
-    /**
-     * Wie viele Shops eine Seite von {@code /shop liste} zeigt.
-     *
-     * <p>KLAGE statt Wurf, wie bei jeder Zahl dieser Liste: Der Satz
-     * {@link Shopwerte} wirft bei einer unbrauchbaren Zahl, und das ist dort richtig -
-     * ein Shopwerte mit 0 Zeilen je Seite darf es nicht geben. Hier aber laeuft der
-     * Start, und ein Server, der wegen einer Zahl in einer Datei nicht hochkommt, ist
-     * die schlechtere Antwort als einer, der die Vorgabe nimmt und es sagt.
-     */
-    private static int zeilenJeSeite(ConfigurationSection wurzel, List<String> klagen,
-            List<String> bericht) {
-        String pfad = Shopwerte.PFAD_ZEILEN;
-        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel, pfad,
-                Shopwerte.VORGABE_ZEILEN, klagen, bericht);
-        if (gelesen == null) {
-            return Shopwerte.VORGABE_ZEILEN;
-        }
-        if (!Shopwerte.brauchbareZeilen(gelesen)) {
-            klagen.add(pfad + " ist " + gelesen + " - verworfen. Erlaubt ist 1 bis "
-                    + Shopwerte.HOECHSTE_ZEILEN + " Zeilen je Seite. Eine 0 hiesse:"
-                    + " Die Liste zeigt nie etwas, und der Befehl waere stumm"
-                    + " abgeschaltet. Es bleibt bei "
-                    + Shopwerte.VORGABE_ZEILEN + ".");
-            return Shopwerte.VORGABE_ZEILEN;
-        }
-        return (int) (long) gelesen;
-    }
-
     private static String bundwort(ConfigurationSection wurzel, List<String> klagen,
             List<String> bericht) {
         String pfad = Shopwerte.PFAD_WORT;
@@ -231,6 +204,34 @@ final class Shopliste {
     }
 
     /**
+     * Wie viele Shops eine Seite von {@code /shop liste} zeigt.
+     *
+     * <p>KLAGE statt Wurf, wie bei jeder Zahl dieser Liste: Der Satz
+     * {@link Shopwerte} wirft bei einer unbrauchbaren Zahl, und das ist dort richtig -
+     * ein Shopwerte mit 0 Zeilen je Seite darf es nicht geben. Hier aber laeuft der
+     * Start, und ein Server, der wegen einer Zahl in einer Datei nicht hochkommt, ist
+     * die schlechtere Antwort als einer, der die Vorgabe nimmt und es sagt.
+     */
+    private static int zeilenJeSeite(ConfigurationSection wurzel, List<String> klagen,
+            List<String> bericht) {
+        String pfad = Shopwerte.PFAD_ZEILEN;
+        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel, pfad,
+                Shopwerte.VORGABE_ZEILEN, klagen, bericht);
+        if (gelesen == null) {
+            return Shopwerte.VORGABE_ZEILEN;
+        }
+        if (!Shopwerte.brauchbareZeilen(gelesen)) {
+            klagen.add(pfad + " ist " + gelesen + " - verworfen. Erlaubt ist 1 bis "
+                    + Shopwerte.HOECHSTE_ZEILEN + " Zeilen je Seite. Eine 0 hiesse:"
+                    + " Die Liste zeigt nie etwas, und der Befehl waere stumm"
+                    + " abgeschaltet. Es bleibt bei "
+                    + Shopwerte.VORGABE_ZEILEN + ".");
+            return Shopwerte.VORGABE_ZEILEN;
+        }
+        return (int) (long) gelesen;
+    }
+
+    /**
      * Die Zeile fuer das Startprotokoll.
      *
      * <p>Getrennt von {@link #rechenprobe}, und dasselbe Maass wie bei
@@ -258,6 +259,39 @@ final class Shopliste {
                 + (werte.bundWort().isBlank()
                         ? "gar nicht und sind ueber ein Schild nicht anzulegen."
                         : "\"" + werte.bundWort() + "\" in der ersten Schildzeile.");
+    }
+
+    /**
+     * Die Startzeile ueber die Ankaufstaende des Bundes.
+     *
+     * <p><b>Warum sie eine eigene Zeile bekommt:</b> Seit dem 10.11.2026 ist ein
+     * Bundschild mit S-Preis der EINZIGE Weg, an den Bund zu verkaufen -
+     * {@code /markt verkaufen} ist weggefallen. Ein Betreiber, der sein Sortiment
+     * eingestellt hat und kein Schild gestellt hat, hat damit einen Markt, der nichts
+     * kauft, ohne dass irgendwo etwas fehlt. Diese Zeile sagt es ihm beim Start.
+     *
+     * <p>Sie steht hier und nicht bei der Startzeile des Bundesmarktes, weil die Zahl
+     * aus den SHOPS kommt: Jene Zeile wird gedruckt, bevor die Kistenshops gelesen sind.
+     *
+     * @param staende wie viele Bundshops einen Ankaufpreis tragen
+     * @param markt   die Zahlen des Bundesmarktes - Sortiment und Tagesdeckel
+     */
+    static String bundzeile(int staende, Marktwerte markt) {
+        if (staende == 0) {
+            return markt.ankauf().leer()
+                    ? "Ankaufstaende des Bundes: keiner, und das Sortiment "
+                            + Marktwerte.PFAD_ANKAUF + " ist leer - der Bund kauft"
+                            + " nichts an. Das ist eine zulaessige Einstellung."
+                    : "Ankaufstaende des Bundes: KEINER, obwohl "
+                            + markt.ankauf().anzahl() + " Materialien im Sortiment"
+                            + " stehen. Niemand kann derzeit an den Bund verkaufen -"
+                            + " dafuer braucht es ein Bundschild mit S-Preis, und"
+                            + " /markt verkaufen gibt es seit dem 10.11.2026 nicht mehr.";
+        }
+        return "Ankaufstaende des Bundes: " + staende + " am Schild, Tagesdeckel "
+                + markt.tagesdeckel() + " Mark je Spieler und Tag. Die Preise kommen aus "
+                + Marktwerte.PFAD_ANKAUF + " und nicht vom Schild - eines, das eine"
+                + " andere Zahl nennt, wird beim ersten Klick im Protokoll gemeldet.";
     }
 
     private static void nenneFehlende(ConfigurationSection wurzel,

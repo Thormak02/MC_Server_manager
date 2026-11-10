@@ -51,45 +51,29 @@ enum MarktSatz implements Satz {
     FREI("markt.frei", Art.SATZ, "betrag"),
 
     /** Der Bund kauft derzeit gar nichts - die Liste ist leer. */
-    LEER("markt.leer", Art.SATZ),
+    LEER("markt.leer", Art.SATZ);
 
-    /**
-     * Ein Verkauf ist durch.
-     *
-     * <p>Mit der Zahl der STUECKE, und das ist mehr als Hoeflichkeit: Der Bund nimmt nur
-     * so viele, wie eine ganze Mark ergeben, und wer sieben Stein anbietet und fuenf
-     * losgeworden ist, soll das lesen, statt nachzuzaehlen.
-     */
-    VERKAUFT("markt.verkauft", Art.GEZAEHLT, "anzahl", "material", "betrag"),
-
-    /** Der Bundesmarkt ist ein ORT - wer nicht dort ist, kann nicht verkaufen. */
-    ABSAGE_FALSCHE_WELT("markt.absage.falsche-welt", Art.SATZ),
-
-    /** Mit leerer Hand gibt es nichts zu verkaufen. */
-    ABSAGE_LEERE_HAND("markt.absage.leere-hand", Art.SATZ),
-
-    /** Das kauft der Bund nicht - mit dem Hinweis auf die Liste. */
-    ABSAGE_KAUFT_NICHT("markt.absage.kauft-nicht", Art.SATZ, "material"),
-
-    /**
-     * Zu wenig fuer eine ganze Mark.
-     *
-     * <p>Diese Zeile MUSS es geben: Sonst tippt ein Spieler {@code /markt verkaufen} mit
-     * einem Stein in der Hand, es passiert nichts, und er haelt es fuer einen Fehler.
-     */
-    ABSAGE_ZU_WENIG("markt.absage.zu-wenig", Art.SATZ, "material"),
-
-    /** Der Tagesdeckel des Marktes ist erreicht. */
-    ABSAGE_DECKEL("markt.absage.deckel", Art.SATZ),
-
-    /**
-     * Die Kasse antwortet nicht.
-     *
-     * <p>Wie {@code beruf.absage.nicht-lesbar} und aus demselben Grund: Die Ware ist noch
-     * da, der Server laeuft weiter, und der Spieler soll nicht raten, warum nichts
-     * geschieht. Im Protokoll steht daneben die Ausnahme.
-     */
-    ABSAGE_NICHT_BUCHBAR("markt.absage.nicht-buchbar", Art.SATZ);
+    // SIEBEN SAETZE SIND AM 10.11.2026 WEGGEFALLEN, und zwar mit ihrem Befehl:
+    // markt.verkauft und die sechs markt.absage.* gehoerten zu /markt verkaufen.
+    // Verkauft wird seit diesem Schritt am SCHILD (Plan 7.1, entschieden 08.11.2026),
+    // und was dort schiefgehen kann, sagen die Saetze unter shop.bund - an derselben
+    // Stelle wie jede andere Antwort eines Kistenshops.
+    //
+    // Zwei davon haben dort einen Nachfolger, und das ist kein Umbenennen: Der Kunde
+    // steht jetzt VOR einem Stand, also heisst "der Bund kauft das nicht" etwas anderes
+    // als vorher mit einem Stein in der Hand. Die anderen fuenf haben keinen, weil ihre
+    // Lage am Schild nicht mehr vorkommt:
+    //
+    //   falsche-welt   Der Markt ist jetzt ein ORT und keine Weltpruefung - das Schild
+    //                  steht, wo es steht. Genau das wollte der Plan.
+    //   leere-hand     Wer nichts hat, bekommt shop.keine-ware.
+    //   zu-wenig       Kann es nicht mehr geben: Die Menge eines Standes MUSS einen
+    //                  ganzen Mark-Betrag ergeben, sonst entsteht er nicht.
+    //   nicht-buchbar  Wird shop.handel-gestoert.
+    //
+    // Die Zeilen in sprache-vorlage.yml sind mit ihnen gegangen. Ein Satz ohne Sender
+    // ist eine Zeile, die ein Betreiber uebersetzt und die niemand liest - und
+    // GrenzeTest macht genau das rot.
 
     private final String pfad;
     private final Art art;
