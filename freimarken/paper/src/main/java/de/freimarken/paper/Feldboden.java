@@ -37,7 +37,7 @@ final class Feldboden {
      * gegen Springen zwei, gegen einen Sprung mit Trank und Schwung vier. Wer darueber
      * hinaus baut, um in die Leere zu kommen, will in die Leere - und dort faellt er.
      *
-     * <p><b>Ueber der Lauffläche, nicht ueber dem Bodenblock</b> [berichtigt 11.11.2026]:
+     * <p><b>Ueber der Laufflaeche, nicht ueber dem Bodenblock</b> [berichtigt 11.11.2026]:
      * Wer auf dem Gras bei {@link #BODEN} steht, hat die Fuesse einen Block darueber. Die
      * Wand von {@code BODEN} bis {@code BODEN + 4} liess ihm nur drei - gezaehlt wurde
      * vom falschen Block aus. Die Lesesuche hat es gefunden, keine Probe.

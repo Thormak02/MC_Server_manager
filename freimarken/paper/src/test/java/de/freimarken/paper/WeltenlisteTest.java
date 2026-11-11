@@ -24,7 +24,8 @@ class WeltenlisteTest {
     private static Weltenliste.Ergebnis lies(String yaml) {
         return Weltenliste.ausKonfiguration(
                 YamlConfiguration.loadConfiguration(new java.io.StringReader(yaml))
-                        .getConfigurationSection("welten"), "marktstadt", "altfurt");
+                        .getConfigurationSection("welten"), "marktstadt", "altfurt",
+                "freistaedte");
     }
 
     @Test
@@ -417,7 +418,8 @@ class WeltenlisteTest {
             var datei = YamlConfiguration.loadConfiguration(new java.io.InputStreamReader(
                     strom, java.nio.charset.StandardCharsets.UTF_8));
             var ergebnis = Weltenliste.ausKonfiguration(
-                    datei.getConfigurationSection("welten"), "marktstadt", "altfurt");
+                    datei.getConfigurationSection("welten"), "marktstadt", "altfurt",
+                "freistaedte");
 
             assertTrue(ergebnis.klagen().isEmpty(),
                     "die ausgelieferte Datei klagt: " + ergebnis.klagen());
@@ -499,6 +501,48 @@ class WeltenlisteTest {
     }
 
     @Test
+    @DisplayName("Eine zweite Stadtfelderwelt gibt es nicht")
+    void nurEineStadtfelderwelt() {
+        // Sie bekaeme Stadtfelder und eine Weltgrenze vom selben Generator, aber KEIN
+        // Freistadtbuch - Felder, die niemand gruenden und niemand schuetzen kann, und
+        // ein /warp freistadt, der sie nie findet. Der offene Punkt aus Teil A.
+        var ergebnis = lies("""
+                welten:
+                  freistaedte:
+                    art: stadtfelder
+                    kante: 6000
+                  freistaedte2:
+                    art: stadtfelder
+                    kante: 6000
+                """);
+
+        assertEquals(java.util.List.of("freistaedte"),
+                ergebnis.welten().stream().map(Weltangabe::name).toList());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("allein welten.freistaedte"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Die Freistaedtewelt MUSS stadtfelder tragen - die andere Richtung")
+    void freistadtweltMussStadtfelderSein() {
+        // Die Bindung gilt in BEIDE Richtungen. Ohne diese Haelfte entstuende die Welt,
+        // auf die freistaedte.welt zeigt, als gewoehnliche Welt mit Huegeln und Baeumen
+        // - und das Gruendungsbuch vergaebe darin Felder, die es gar nicht gibt.
+        var ergebnis = lies("""
+                welten:
+                  freistaedte:
+                    art: gewoehnlich
+                    kante: 6000
+                """);
+
+        assertTrue(ergebnis.welten().isEmpty(), ergebnis.welten().toString());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("muss stadtfelder sein"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
     @DisplayName("Eine zweite Rasterwelt gibt es nicht")
     void nurEineRasterwelt() {
         // Sie bekaeme Mauern und Wege vom selben Generator, aber kein Besitzbuch und
@@ -546,9 +590,12 @@ class WeltenlisteTest {
         // Die Kommentare der ausgelieferten Datei schreiben Tausender selbst mit Punkt
         // ("Plan Abschnitt 4 nennt 3.000"). Wer das in den Wert uebernimmt, bekommt 6 -
         // und ohne diese Klage eine Welt mit einer Grenze von sechs Bloecken.
+        // Eine Welt, die NICHT freistaedte heisst: Jener Name ist seit dem 11.11.2026
+        // an art: stadtfelder gebunden, und die Bindung klagt vor dem Tausenderpunkt.
+        // Diese Probe fragt nach dem Punkt und nicht nach der Bindung.
         var ergebnis = lies("""
                 welten:
-                  freistaedte:
+                  hochwald:
                     art: gewoehnlich
                     kante: 6.000
                 """);
@@ -625,7 +672,8 @@ class WeltenlisteTest {
         eigene.setDefaults(vorgabe);
 
         var ergebnis = Weltenliste.ausKonfiguration(
-                eigene.getConfigurationSection("welten"), "marktstadt", "altfurt");
+                eigene.getConfigurationSection("welten"), "marktstadt", "altfurt",
+                "freistaedte");
 
         assertEquals(java.util.List.of("marktstadt"),
                 ergebnis.welten().stream().map(Weltangabe::name).toList());

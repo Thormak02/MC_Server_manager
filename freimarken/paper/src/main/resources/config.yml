@@ -101,6 +101,8 @@ wirtschaft:
     bonus-grundbetrag: ""
     bonus-je-serientag: ""
     bonus-hoechstbetrag: ""
+    # Was eine eigene Stadt kostet (freistaedte.gruendungspreis).
+    freistadt-gruendung: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
@@ -1090,6 +1092,42 @@ messstelle:
 # NUR BEIM START GELESEN. /freimarken neuladen verschiebt keinen Laden: Ein Mieter haette
 # sonst von einem Augenblick auf den anderen einen anderen Raum, und seine Truhe stuende
 # beim Nachbarn. Die Antwort auf neuladen sagt das ausdruecklich.
+# Was eine eigene Stadt kostet - Plan 6.2 und 6.4, gebaut am 11.11.2026.
+#
+# NICHT zu verwechseln mit welten.freistaedte weiter unten: Jener Eintrag beschreibt die
+# WELT (ihre Art, ihre Kante, ihr Tor), dieser hier, was das Gruenden kostet. Zwei
+# gleichnamige Abschnitte auf zwei Ebenen - dieselbe Stolperstelle wie laeden: neben
+# welten.altfurt.
+#
+# gruendungspreis und hoechstzahl uebernimmt /freimarken neuladen; welt NICHT - eine
+# Welt ist zur Laufzeit nicht zu tauschen.
+freistaedte:
+  # In welcher Welt die Stadtfelder liegen - ohne Namensraum, wie bei laeden.welt.
+  # Die Welt muss im Abschnitt welten: weiter unten stehen UND dort art: stadtfelder
+  # tragen, sonst gilt keine Freistadt.
+  #
+  # NUR BEIM START GELESEN.
+  welt: freistaedte
+
+  # Was eine Freistadt kostet. Plan 6.2 nennt 400.000 Mark, und die Zahl steht dort neben
+  # der Preisstaffel: Die sechste Parzelle kostet genau so viel. Eine Stadt ist damit ein
+  # Ziel fuer achtzig bis zweihundert Spielstunden und nicht fuer einen Nachmittag.
+  #
+  # Ganze Zahl von 0 bis 8388607 Mark. 0 heisst: Wer das Recht hat, gruendet umsonst -
+  # erlaubt, braucht aber die Bestaetigung oben unter sprung-bestaetigt.
+  gruendungspreis: 400000
+
+  # Wie viele Staedte ein Spieler ohne besonderes Recht haelt.
+  # Mehr erlaubt spaeter das Recht freimarken.freistaedte.<zahl> (Schritt 12).
+  #
+  # Ganze Zahl von 0 bis 399 - mehr Felder hat die Welt nicht. Eine 0 heisst: Es wird gar
+  # nicht gegruendet; brauchbar, solange die Welt noch vorbereitet wird.
+  #
+  # Eine Eins, weil es nur 399 Felder gibt und eine Stadt 256x256 Bloecke ist. Wer zwei
+  # haelt, nimmt sie einem anderen weg - und zwei halbleere Staedte sind schlechter als
+  # eine volle.
+  hoechstzahl: 1
+
 laeden:
   # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.
   # Die Welt muss im Abschnitt welten: weiter unten stehen, sonst gilt keine Einheit.

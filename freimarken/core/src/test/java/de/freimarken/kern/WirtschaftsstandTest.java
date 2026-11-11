@@ -53,7 +53,7 @@ class WirtschaftsstandTest {
                 hoechstzahl, gruppenFelder, werbung, zeit, berufe, verdienst,
                 Marktwerte.VORGABE, Messwerte.VORGABE,
                 Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE,
-                Truhenwerte.VORGABE);
+                Truhenwerte.VORGABE, Freistadtwerte.VORGABE);
     }
 
     /**

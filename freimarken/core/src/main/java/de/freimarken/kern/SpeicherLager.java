@@ -80,6 +80,44 @@ public final class SpeicherLager implements BesitzLager {
     }
 
     @Override
+    public synchronized Parzelle freistadtAnlegen(String welt, int feldX, int feldZ,
+                                                  UUID eigentuemer, long preis,
+                                                  String name) {
+        String schluessel = ort(welt, feldX, feldZ);
+        if (nachOrt.containsKey(schluessel)) {
+            throw new IllegalStateException("Das Stadtfeld ist bereits vergeben: "
+                    + schluessel);
+        }
+        // Die Namenspruefung steht im SELBEN synchronized wie das Einhaengen. Zwei
+        // getrennte Bloecke waeren genau das Fenster, das der eindeutige Schluessel in
+        // der Datenbank nicht hat - und dann pruefte diese Fassung etwas anderes als
+        // jene, obwohl beide denselben Vertrag erfuellen sollen.
+        for (Parzelle stadt : staedteIn(welt)) {
+            if (stadt.name().equals(name)) {
+                throw new IllegalStateException("Der Stadtname ist vergeben: " + name);
+            }
+        }
+        Parzelle neu = new Parzelle(naechsteId.getAndIncrement(), welt, feldX, feldZ,
+                eigentuemer, Set.of(), preis, uhr.instant(),
+                Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV, name);
+        nachOrt.put(schluessel, neu);
+        orteNachId.put(neu.id(), schluessel);
+        return neu;
+    }
+
+    @Override
+    public synchronized List<Parzelle> staedteIn(String welt) {
+        List<Parzelle> treffer = new ArrayList<>();
+        for (Parzelle vorhanden : nachOrt.values()) {
+            if (vorhanden.welt().equals(welt) && vorhanden.istFreistadt()) {
+                treffer.add(vorhanden);
+            }
+        }
+        treffer.sort(Comparator.comparing(Parzelle::name));
+        return List.copyOf(treffer);
+    }
+
+    @Override
     public synchronized void mitbauerSetzen(long id, Set<UUID> mitbauer) {
         Gruppe gruppe = gruppen.get(id);
         if (gruppe != null) {

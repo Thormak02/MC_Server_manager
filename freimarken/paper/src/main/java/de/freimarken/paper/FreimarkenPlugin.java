@@ -52,6 +52,8 @@ import de.freimarken.kern.Truhenverzeichnis;
 import de.freimarken.kern.Spielzeitablage;
 import de.freimarken.kern.Stadtgrenze;
 import de.freimarken.kern.Tagesgrenze;
+import de.freimarken.kern.Feldgrenze;
+import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Zeitwerte;
@@ -282,6 +284,28 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
     /** In welcher Welt die Markthalle steht - ohne Namensraum, wie in der config.yml. */
     private String ladenwelt = Ladenliste.VORGABE_WELT;
+
+    /** In welcher Welt die Stadtfelder liegen - ohne Namensraum, wie in der config.yml. */
+    private String freistadtwelt = Freistadtliste.VORGABE_WELT;
+
+    /**
+     * Die Regel ueber das Gruenden - {@code null}, solange die Welt fehlt.
+     *
+     * <p>Ein fehlendes Buch kostet den Start NICHT, anders als bei der Marktstadt: Aus
+     * jener kommen die Parzellennummern, ohne sie gibt es kein Parzellensystem. Eine
+     * fehlende Freistaedtewelt macht nur {@code /freistadt} nutzlos, und das sagt der
+     * Befehl dann selbst. Dasselbe Vorgehen wie bei der Ladenwelt.
+     */
+    private Freistadtbuch freistadtbuch;
+
+    /**
+     * Die Ziele von {@code /warp} - ein FELD, weil zwei Stellen sie brauchen.
+     *
+     * <p>{@code richteReisenEin} baut daraus den Warpbefehl, das Freistadtbuch fragt sie,
+     * ob ein Stadtname einer Welt gehoert. Zwei Verzeichnisse waeren zwei Listen
+     * derselben Welten, und die zweite bekaeme eine neue Welt nicht mit.
+     */
+    private Warpverzeichnis warpverzeichnis = Warpverzeichnis.ausWelten(List.of());
 
     /**
      * Der Weltschluessel zu einem NAMEN aus der {@code config.yml}.
@@ -572,8 +596,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // warum - die uebrigen entstehen trotzdem.
         String ankunftswelt = getConfig()
                 .getString("reisen.ankunftswelt", ANKUNFTSWELT_VORGABE).trim();
+        // Der Name der Freistaedtewelt VOR dem Lesen der Welten: Weltenliste bindet
+        // die Art an ihn, genau wie beim Raster an den Marktstadtnamen.
+        freistadtwelt = Freistadtliste.ausKonfiguration(getConfig()).welt();
         var liste = Weltenliste.ausKonfiguration(
-                getConfig().getConfigurationSection("welten"), MARKTSTADT, ankunftswelt);
+                getConfig().getConfigurationSection("welten"), MARKTSTADT, ankunftswelt,
+                freistadtwelt);
         liste.klagen().forEach(getLogger()::severe);
         var gebaut = new Weltenbau(this, generator, stadtfelder, getLogger())
                 .baueAlle(liste.welten());
@@ -740,6 +768,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + " Was der Bund handelt, entscheiden seine Schilder; /markt zeigt sie.");
         richteBlockbuchEin();
         richteTruheEin();
+        // Das Verzeichnis der Warpziele zuerst: Das Freistadtbuch fragt es, ob ein
+        // Stadtname einer Welt gehoert, und richteReisenEin baut daraus den Warpbefehl.
+        // Ein Verzeichnis je Stelle waeren zwei Listen derselben Welten.
+        warpverzeichnis = Warpverzeichnis.ausWelten(List.copyOf(welten.keySet()));
+        // Dann das Buch, und ERST DANN die Reise: Der Warpbefehl traegt einen Zweig
+        // /warp freistadt <name>, und der braucht das Buch.
+        richteFreistaedteEin();
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
         registriereBefehle();
@@ -1405,6 +1440,20 @@ public final class FreimarkenPlugin extends JavaPlugin {
                             () -> wirtschaft.werte().laeden().dauerTage()).laden(),
                     sprache.wort(BundSatz.BEFEHL_LADEN, Einsatz.keine()),
                     List.of()));
+            // /freistadt - die Liste und das Gruenden. Das Buch kann null sein (die
+            // Welt fehlt); der Befehl wird trotzdem angemeldet und sagt es dann. Ein
+            // Befehl, den es je nach Einstellungsdatei gibt oder nicht, waere fuer einen
+            // Spieler ein Fehler ohne Erklaerung.
+            //
+            // Die Hoechstzahl kommt als Abfrage und nicht als Zahl: Sie steht in der
+            // Absage "du hast genug", und ein Neuladen muss sie erreichen.
+            angemeldet.addAll(verzeichnis.register(
+                    new FreistadtBefehle(freistadtbuch, kasse, sprache,
+                            freistadtbuch == null ? "" : weltschluessel(freistadtwelt),
+                            () -> wirtschaft.werte().freistaedte().hoechstzahl())
+                            .freistadt(),
+                    sprache.wort(BundSatz.BEFEHL_FREISTADT, Einsatz.keine()),
+                    List.of()));
             // /shop - der SCHLUESSEL zu einer fremden Shopkiste. Der erste Befehl des
             // Shop-Bereichs ueberhaupt: Ein Kistenshop wird sonst durch ein Schild
             // angelegt und durch einen Klick bedient. Eine Freigabe ist aber eine
@@ -1783,8 +1832,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
         aufwaermzeit = new Aufwaermzeit(this, sprache);
         getServer().getPluginManager().registerEvents(aufwaermzeit, this);
         reise = new Reise(getLogger(), rueckweg, aufwaermzeit, sprache);
-        var verzeichnis = Warpverzeichnis.ausWelten(List.copyOf(welten.keySet()));
-        warpBefehle = new WarpBefehle(verzeichnis, welten, reise, sprache);
+        warpBefehle = new WarpBefehle(warpverzeichnis, welten, reise, sprache,
+                freistadtbuch, welten.get(freistadtwelt));
         rueckwegBefehle = new RueckwegBefehle(rueckweg, reise, sprache);
         anfragenBefehle = new AnfragenBefehle(offeneAnfragen, reise, sprache);
         getServer().getPluginManager().registerEvents(
@@ -1847,6 +1896,70 @@ public final class FreimarkenPlugin extends JavaPlugin {
         } else {
             pruefeLadeneinheiten(ladenweltOder);
         }
+    }
+
+    /**
+     * Die Welt der Freistaedte und das Buch darueber.
+     *
+     * <p>Fehlt die Welt, bleibt das Buch {@code null} und {@code /freistadt} sagt es -
+     * der Server laeuft weiter. Das ist die Form der Ladenwelt und nicht die der
+     * Marktstadt: Jene kostet den Start, weil aus ihr die Parzellennummern kommen.
+     */
+    private void richteFreistaedteEin() {
+        World welt = welten.get(freistadtwelt);
+        if (welt == null) {
+            getLogger().severe("freistaedte.welt ist " + freistadtwelt + ", und diese"
+                    + " Welt steht nicht im Abschnitt welten: - /freistadt bleibt ohne"
+                    + " Wirkung. Trag sie dort mit art: stadtfelder ein.");
+            return;
+        }
+        Weltangabe angabe = angaben.get(freistadtwelt);
+        if (angabe == null || angabe.art() != Weltangabe.Art.STADTFELDER) {
+            getLogger().severe("freistaedte.welt ist " + freistadtwelt + ", aber dort"
+                    + " steht nicht art: stadtfelder - /freistadt bleibt ohne Wirkung."
+                    + " In einer Welt ohne Stadtfelder gaebe es keine Felder zu"
+                    + " vergeben.");
+            return;
+        }
+        // Die Grenze aus DERSELBEN Angabe, aus der die Welt entstand - und ueber
+        // Feldgrenze und nicht ueber die Zahl aus der Datei: Jene ist ein WUNSCH, aus
+        // 6000 werden 20 Felder je Achse. Wer das ueberspringt, vergibt eine Stadt,
+        // deren Mitte vor der eigenen Weltgrenze liegt.
+        Feldgrenze grenze = Feldgrenze.ausKante(stadtfelder.plan(),
+                Feldgrenze.wirksameKante(stadtfelder.plan(), angabe.kante(),
+                        welt.getWorldBorder().getSize(), false));
+        freistadtbuch = new Freistadtbuch(grenze, lager, kasse, warpverzeichnis,
+                wirtschaft);
+        // Das Verzeichnis der Stadtnamen fuellen, und die Zahl daraus in die
+        // Startzeile: Der Vorschlagsgeber von /warp freistadt <name> liest es bei
+        // jedem Tastendruck, und ein leeres Verzeichnis schluege nie etwas vor.
+        // Die Zeile ist zugleich der Beleg, dass gefuellt wurde.
+        //
+        // GEFANGEN, nach dem Vorbild von richteShopsEin: Das ist der erste Griff in
+        // die Ablage NACH dem Weltenbau, und der dauert bei einer neuen Welt Minuten.
+        // Faellt die Datenbank in dieser Zeit aus, riss die Ausnahme bisher den ganzen
+        // onEnable ab - also auch die Reisen, die Spielzeit und ALLE Befehle, und die
+        // Marktstadt staende geladen und ohne Schutzwache da. Das Verzeichnis ist
+        // nach seinem eigenen Javadoc das Harmloseste dieses Bereichs: Es traegt
+        // Vorschlaege und keine Taten. Der Preis eines Fangs ist darum ein leeres
+        // Vorschlagsfenster, waehrend /warp freistadt <name> weiter die Ablage fragt
+        // und ankommt.
+        int gegruendet;
+        try {
+            gegruendet = freistadtbuch.erneuereVerzeichnis(welt.key().asString());
+        } catch (RuntimeException fehler) {
+            getLogger().log(java.util.logging.Level.SEVERE, "Die Freistaedte sind nicht"
+                    + " zu lesen - das Vorschlagsfenster von /warp freistadt bleibt in"
+                    + " diesem Lauf LEER. Gegruendet und angereist wird weiter: Beides"
+                    + " fragt die Ablage unmittelbar. Wer den Namen seiner Stadt tippt,"
+                    + " kommt an.", fehler);
+            gegruendet = -1;
+        }
+        getLogger().info("Freistaedte: Welt " + welt.key().asString() + ", Felder "
+                + grenze.von() + ".." + grenze.bis() + " je Achse, bis zu "
+                + grenze.staedteZahl() + " Staedte, davon "
+                + (gegruendet < 0 ? "UNBEKANNT VIELE (die Ablage antwortete nicht)"
+                        : gegruendet + " gegruendet") + ".");
     }
 
     /**

@@ -49,7 +49,7 @@ import java.util.Set;
  * {@code sendActionBar} - das kommt erst mit {@code Schutzwache} und {@code WacheSatz}.
  * Kein {@link Art#MUSTER}: In diesen vier Dateien gibt es kein Datum.
  *
- * <p><b>DREI {@link Art#WORT}</b>, und alle drei im zweiten Zug: die zwei Trenner der
+ * <p><b>VIER {@link Art#WORT}</b>, drei davon aus dem zweiten Zug: die zwei Trenner der
  * Weltenliste ({@link #WARP_ZIELE_TRENNER}, {@link #WARP_KEIN_ZIEL_TRENNER}) und die
  * Aufschrift, die {@code /zurueck} durchgibt ({@link #ZURUECK_LETZTER_ORT}). Die zwei
  * Trenner sind die einzigen Schluessel des ganzen Projekts, die LEER sein duerfen - sie
@@ -263,6 +263,39 @@ enum ReiseSatz implements Satz {
      * 4.3 und kein Aussehen.
      */
     WARP_ZIELE("warp.ziele", Art.SATZ, "liste"),
+
+    /**
+     * Die Freistadt, die jemand mit {@code /warp freistadt <name>} sucht, gibt es nicht.
+     *
+     * <p>Ein EIGENER Schluessel und kein {@link #WARP_KEIN_ZIEL}: Jener zaehlt die Welten
+     * auf, und eine Liste der Welten hilft niemandem, der eine Stadt sucht. Der Wert
+     * heisst {@code name} und nicht {@code ziel} - eine Stadt ist kein Reiseziel der
+     * Weltenliste.
+     */
+    WARP_STADT_UNBEKANNT("warp.stadt-unbekannt", Art.SATZ, "name"),
+
+    /**
+     * Die Aufschrift, unter der eine Freistadt angereist wird - geht als {@code ziel} in
+     * die Zeilen der Reise.
+     *
+     * <p>Als WORT und aus der Datei, nicht als Zeichenkette im Aufruf: Sonst waere die
+     * Aufschrift eine Einstellung, die der Betreiber nicht aendern kann - genau die
+     * Schiefheit, die der zweite Zug von Schritt 5 fuer {@code /zurueck} beseitigt hat.
+     */
+    WARP_STADT_AUFSCHRIFT("warp.stadt-aufschrift", Art.WORT, "name"),
+
+    /**
+     * {@code /warp freistadt} ohne Namen - sagt, wo die Namen stehen.
+     *
+     * <p>Ein eigener Satz und nicht die Unbekannt-Absage mit leerem Namen: "Die Freistadt
+     * gibt es nicht" ist auf eine leere Eingabe hin keine Antwort, sondern ein Fehler,
+     * der nach einem Programmfehler aussieht.
+     */
+    WARP_STADT_OHNE_NAMEN("warp.stadt-ohne-namen", Art.SATZ),
+
+    /** Die Welt der Freistaedte fehlt - dann fuehrt dieser Zweig nirgendwohin. */
+    WARP_STADT_KEINE_WELT("warp.stadt-keine-welt", Art.SATZ),
+
 
     /**
      * Was zwischen zwei Weltnamen in {@link #WARP_ZIELE} steht - heute zwei Leerzeichen.

@@ -624,6 +624,20 @@ class BesitzbuchTest {
         private final BesitzLager echt;
         private long zuletztGeschriebenAuf = Parzelle.KEIN_ELTERNTEIL;
 
+        // Zwei Wege, die diese Attrappe nicht verbiegt: Sie prueft das Schreiben auf die Gruppe, und eine
+        // Freistadt kommt darin nicht vor. Durchgereicht und nicht geworfen, damit die
+        // Attrappe nur das aendert, wofuer sie gebaut ist.
+        @Override
+        public Parzelle freistadtAnlegen(String welt, int feldX, int feldZ,
+                                         UUID eigentuemer, long preis, String name) {
+            return echt.freistadtAnlegen(welt, feldX, feldZ, eigentuemer, preis, name);
+        }
+
+        @Override
+        public List<Parzelle> staedteIn(String welt) {
+            return echt.staedteIn(welt);
+        }
+
         private KindLager(BesitzLager echt) {
             this.echt = echt;
         }
@@ -702,6 +716,20 @@ class BesitzbuchTest {
         private final SpeicherLager echt = new SpeicherLager();
         private boolean geschrieben;
 
+        // Zwei Wege, die diese Attrappe nicht verbiegt: Sie prueft den Fehler NACH dem Schreiben, und eine
+        // Freistadt kommt darin nicht vor. Durchgereicht und nicht geworfen, damit die
+        // Attrappe nur das aendert, wofuer sie gebaut ist.
+        @Override
+        public Parzelle freistadtAnlegen(String welt, int feldX, int feldZ,
+                                         UUID eigentuemer, long preis, String name) {
+            return echt.freistadtAnlegen(welt, feldX, feldZ, eigentuemer, preis, name);
+        }
+
+        @Override
+        public List<Parzelle> staedteIn(String welt) {
+            return echt.staedteIn(welt);
+        }
+
         @Override
         public Optional<Parzelle> finde(String welt, int x, int z) {
             if (geschrieben) {
@@ -775,6 +803,20 @@ class BesitzbuchTest {
 
         private final SpeicherLager echt = new SpeicherLager();
         private boolean schonEinmal;
+
+        // Zwei Wege, die diese Attrappe nicht verbiegt: Sie prueft den Wettlauf beim zweiten Anlegen, und eine
+        // Freistadt kommt darin nicht vor. Durchgereicht und nicht geworfen, damit die
+        // Attrappe nur das aendert, wofuer sie gebaut ist.
+        @Override
+        public Parzelle freistadtAnlegen(String welt, int feldX, int feldZ,
+                                         UUID eigentuemer, long preis, String name) {
+            return echt.freistadtAnlegen(welt, feldX, feldZ, eigentuemer, preis, name);
+        }
+
+        @Override
+        public List<Parzelle> staedteIn(String welt) {
+            return echt.staedteIn(welt);
+        }
 
         @Override
         public Optional<Parzelle> finde(String welt, int x, int z) {

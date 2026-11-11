@@ -63,6 +63,8 @@ mark:
       bestand: "Stand bei Einfuehrung des Kontobuchs"
       parzelle-gekauft: "Parzelle genommen"
       parzelle-erstattet: "Parzelle nicht eingetragen - erstattet"
+      freistadt-gegruendet: "Freistadt gegruendet"
+      freistadt-erstattet: "Freistadt nicht eingetragen - erstattet"
       zusammenlegung: "Grundstueck zusammengelegt"
       zusammenlegung-erstattet: "Zusammenlegen gescheitert - erstattet"
       beruf-verlassen: "Beruf aufgegeben"
@@ -150,6 +152,7 @@ befehl:
     tpdeny: "Teleportanfragen ablehnen"
     markt: "Was der Bundesmarkt ankauft - verkauft wird an seinen Schildern"
     laden: "Die Markthalle und ihre Ladeneinheiten"
+    freistadt: "Die Freistaedte - Liste und eigene Stadt gruenden"
     shop: "Deine Kistenshops auflisten und fuer andere freigeben"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
@@ -946,6 +949,17 @@ warp:
   # Saetze mit zwei verschiedenen Anfaengen und bleiben zwei: Aenderst du den Schwanz
   # hier, aendert er sich dort NICHT mit. Das ist ab jetzt deine Entscheidung und kein
   # Fehler mehr - willst du sie gleich halten, aendere beide.
+  # {name} - die gesuchte Freistadt gibt es nicht. Ein eigener Satz und nicht
+  #   warp.kein-ziel: Jener zaehlt die WELTEN auf, und das hilft niemandem, der eine
+  #   Stadt sucht.
+  stadt-unbekannt: "<red>Die Freistadt {name} gibt es nicht.</red>\n<gray>Welche es gibt, zeigt /freistadt.</gray>"
+  # /warp freistadt ohne Namen.
+  stadt-ohne-namen: "<gray>Welche Freistadt? Die Namen zeigt /freistadt.</gray>"
+  # {name} - die Aufschrift, unter der die Reise gemeldet wird. KEIN Farbtag: Sie geht
+  #   als Wert in andere Saetze.
+  stadt-aufschrift: "Freistadt {name}"
+  # Die Welt der Freistaedte fehlt (freistaedte.welt).
+  stadt-keine-welt: "<red>Die Welt der Freistaedte fehlt - sag es dem Betreiber.</red>"
   ziele: "<gold>Reiseziele</gold>\n<aqua>{liste}</aqua>\n<gray>/warp \\<ziel> - oder durch ein Tor am Bundesmarkt.</gray>"
   # Was zwischen zwei Weltnamen der Zeile darueber steht: ZWEI Leerzeichen. Kein Farbtag -
   # der Trenner geht als WERT in den Satz und ist dort ein Blatt. Darf leer sein.
@@ -1241,6 +1255,46 @@ markt:
 #   config.yml. Zwanzig Staende braeuchten hier zwanzig Worte, also eine zweite
 #   Abschrift derselben Liste, und zwei Abschriften laufen auseinander. Dieselbe
 #   Entscheidung wie bei den Materialnamen des Bundesmarktes und bei der Lohnliste.
+freistadt:
+  # Die Ueberschrift ueber der Liste - die EINZIGE goldene Zeile dieses Befehls.
+  kopf: "<gold>Die Freistaedte</gold>"
+  # {name} {besitzer} {feld} - eine Zeile je Stadt. {feld} ist die Feldnummer als x/z,
+  #   also die Adresse der Stadt. Hin kommt man mit /warp freistadt <name>.
+  zeile: "<gray>  {name}</gray><dark_gray> - von {besitzer}, Feld {feld}</dark_gray>"
+  # Es gibt noch keine Freistadt. Diese Zeile MUSS es geben: Wer nur die Ueberschrift
+  #   sieht, haelt es fuer einen Fehler. Am ersten Tag ist das der Normalfall.
+  leer: "<gray>  Es gibt noch keine Freistadt - macht die erste: /freistadt gruenden deinname</gray>"
+  # {name} {preis} {danach} - die Rueckfrage VOR dem Gruenden. {danach} ist das
+  #   Guthaben, das uebrig bliebe: 400.000 liest man, ohne es zu fuehlen - was danach
+  #   bleibt, fuehlt man.
+  frage: "<yellow>{name} gruenden kostet {preis} Mark. Danach haettest du {danach} Mark.</yellow>\n<gray>Zum Gruenden: /freistadt gruenden {name} bestaetigen</gray>"
+  # {name} {feld} - gegruendet. Der Warp steht dabei, sonst steht der frischgebackene
+  #   Besitzer vor seiner Stadt und weiss nicht, wie er hineinkommt.
+  gegruendet: "<green>{name} ist gegruendet - Feld {feld}.</green>\n<gray>Hin kommst du mit /warp freistadt {name}.</gray>"
+
+  absage:
+    # {kleinstens} {groesstens} - die Laenge. Ein eigener Satz neben name-falsch, damit
+    #   die Absage sagt, WAS nicht stimmt.
+    name-zu-lang: "<red>Ein Stadtname hat {kleinstens} bis {groesstens} Zeichen.</red>"
+    # Die Zeichen. Kein Unterstrich und kein Punkt - der Punkt ist in der Sprachdatei
+    #   der Trenner.
+    name-falsch: "<red>Ein Stadtname traegt nur kleine Buchstaben, Ziffern und Bindestriche und faengt mit einem Buchstaben an.</red>"
+    # {name} - der Name gehoert einer Welt, /warp waere danach mehrdeutig.
+    name-reserviert: "<red>{name} ist der Name einer Welt - so darf keine Stadt heissen.</red>"
+    # {name} - den Namen gibt es schon.
+    name-vergeben: "<red>Die Freistadt {name} gibt es schon.</red>"
+    # {hoechstzahl} - so viele Staedte darf dieser Spieler halten.
+    grenze-erreicht: "<red>Du hast schon so viele Freistaedte, wie dein Rang erlaubt ({hoechstzahl}).</red>"
+    # Alle Felder der Welt sind vergeben. Ein eigener Satz neben grenze-erreicht: Jener
+    #   sagt "du hast genug", dieser sagt "es gibt keine mehr".
+    kein-freies-feld: "<red>In dieser Welt ist kein Stadtfeld mehr frei.</red>"
+    # {preis} {fehlt} - das Guthaben reicht nicht.
+    zu-wenig-mark: "<red>Eine Freistadt kostet {preis} Mark - dir fehlen {fehlt}.</red>"
+    # Die Ablage hat gestoert. Das Geld ist zurueck, gegruendet ist nichts.
+    gestoert: "<red>Das Gruenden hat nicht geklappt - dein Geld ist zurueck. Versuch es noch einmal.</red>"
+    # Die Welt fehlt oder ist falsch eingetragen (freistaedte.welt).
+    keine-welt: "<red>Die Welt der Freistaedte fehlt - sag es dem Betreiber.</red>"
+
 laden:
   # Die Ueberschrift ueber der Liste - die EINZIGE goldene Zeile dieses Befehls.
   kopf: "<gold>Die Markthalle</gold>"

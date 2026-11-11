@@ -53,6 +53,20 @@ class ZwischenspeicherLagerTest {
         private final BesitzLager echt = new SpeicherLager();
         final AtomicInteger abfragen = new AtomicInteger();
 
+        // Zwei Wege, die diese Attrappe nicht verbiegt: Sie prueft die Zahl der Abfragen, und eine
+        // Freistadt kommt darin nicht vor. Durchgereicht und nicht geworfen, damit die
+        // Attrappe nur das aendert, wofuer sie gebaut ist.
+        @Override
+        public Parzelle freistadtAnlegen(String welt, int feldX, int feldZ,
+                                         UUID eigentuemer, long preis, String name) {
+            return echt.freistadtAnlegen(welt, feldX, feldZ, eigentuemer, preis, name);
+        }
+
+        @Override
+        public List<Parzelle> staedteIn(String welt) {
+            return echt.staedteIn(welt);
+        }
+
         @Override
         public Optional<Parzelle> finde(String welt, int x, int z) {
             abfragen.incrementAndGet();

@@ -45,6 +45,18 @@ public enum Buchungsgrund {
     /** Eine Parzelle konnte nicht eingetragen werden - der Preis kommt zurueck. */
     PARZELLE_ERSTATTET("parzelle_erstattet", Richtung.EINNAHME),
 
+    /** Eine Freistadt gegruendet - Plan 6.2, 400.000 Mark. */
+    FREISTADT_GEGRUENDET("freistadt_gegruendet", Richtung.AUSGABE),
+
+    /**
+     * Die Stadt konnte nicht eingetragen werden - der Preis kommt zurueck.
+     *
+     * <p>Nicht theoretisch: Tippen zwei Spieler im selben Augenblick denselben Namen,
+     * laesst der eindeutige Schluessel uq_besitz_name den zweiten auflaufen. Ohne diese
+     * Gegenbuchung zahlte er 400.000 Mark fuer nichts.
+     */
+    FREISTADT_ERSTATTET("freistadt_erstattet", Richtung.EINNAHME),
+
     /** Zwei Parzellen zusammengelegt. */
     ZUSAMMENLEGUNG("zusammenlegung", Richtung.AUSGABE),
 

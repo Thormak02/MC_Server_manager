@@ -164,6 +164,10 @@ final class Wirtschaftsliste {
         klagen.addAll(laeden.klagen());
         bericht.addAll(laeden.bericht());
 
+        Freistadtliste.Ergebnis freistaedte = Freistadtliste.ausKonfiguration(wurzel);
+        klagen.addAll(freistaedte.klagen());
+        bericht.addAll(freistaedte.bericht());
+
         // Und der Handel: ein eigener Abschnitt (handel:), eine eigene Schranke fuer
         // beide Gebuehren und ein Wort, das auf ein Schild passen muss. Ein eigener
         // Leser und nicht drei Zeilen hier, aus demselben Grund wie bei der Ladenmiete:
@@ -211,7 +215,7 @@ final class Wirtschaftsliste {
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
                 gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
                 markt.werte(), messung.werte(), bonus.werte(), laeden.werte(),
-                handel.werte(), truhe.werte()), klagen, bericht);
+                handel.werte(), truhe.werte(), freistaedte.werte()), klagen, bericht);
     }
 
     /**

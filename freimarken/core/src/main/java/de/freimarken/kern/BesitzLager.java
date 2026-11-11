@@ -44,6 +44,47 @@ public interface BesitzLager {
     Parzelle anlegen(String welt, int x, int z, UUID eigentuemer, long preis);
 
     /**
+     * Eine Freistadt gruenden - ein ganzes Stadtfeld auf einmal.
+     *
+     * <p>Ein EIGENER Weg und kein {@code art}-Parameter an {@link #anlegen}: Beide
+     * Umsetzungen fuehren ihre Art als Literal und begruenden das im Quelltext. Ein
+     * durchgereichter Parameter kippte diese Entscheidung still - danach koennte jeder
+     * Aufrufer jede Art erzeugen, auch eine GRUPPE ohne Kinder.
+     *
+     * <p><b>x und z sind FELDnummern</b>, keine Blockkoordinaten - genau wie bei
+     * {@link #anlegen} Parzellennummern stehen. Die Umrechnung macht der
+     * {@link Stadtfeldplan}. Dadurch bleibt {@link #finde} auch fuer eine Freistadt eine
+     * Punktabfrage, und die Schutzwache braucht keinen zweiten Weg.
+     *
+     * @param name der genormte Stadtname, siehe {@link Stadtname#genormt}
+     * @throws IllegalStateException wenn das Feld schon vergeben oder der Name schon
+     *                               benutzt ist - BEIDES ist ein Riegel der Ablage und
+     *                               keine Pruefung des Aufrufers. Eine Pruefung davor
+     *                               haette zwischen Fragen und Schreiben eine Luecke,
+     *                               und zwei Spieler, die gleichzeitig tippen, bekaemen
+     *                               denselben Namen.
+     */
+    Parzelle freistadtAnlegen(String welt, int feldX, int feldZ, UUID eigentuemer,
+                              long preis, String name);
+
+    /**
+     * Alle Freistaedte dieser Welt, nach Namen sortiert.
+     *
+     * <p>Die EINE Frage, aus der alles Weitere faellt: welches Feld noch frei ist, wo ein
+     * Name hinfuehrt, was die Liste zeigt. Ein eigener Weg je Frage waere dreimal
+     * dieselbe Abfrage mit drei Gelegenheiten, auseinanderzulaufen.
+     *
+     * <p>Die Sortierung ist zugesagt, damit zwei Aufrufe dieselbe Reihenfolge geben -
+     * eine Liste, die mal so und mal anders kommt, ist im Spiel nicht zu lesen.
+     *
+     * <p><b>Ohne Filter auf den Zustand</b>, aus demselben Grund wie {@link #finde}: Eine
+     * verfallene Stadt belegt ihr Feld weiter. Wer bei der Zuteilung nur die aktiven
+     * zaehlt, vergibt ein belegtes Feld, und der Spieler zahlt in den eindeutigen
+     * Schluessel hinein.
+     */
+    List<Parzelle> staedteIn(String welt);
+
+    /**
      * Die Mitbauer setzen.
      *
      * <p>Ist die Nummer eine GRUPPE, wird dieselbe Liste in einem Zug auf die Gruppe und

@@ -3,6 +3,8 @@ package de.freimarken.paper;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import de.freimarken.kern.Freistadtbuch;
+import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Warpverzeichnis;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -40,12 +42,25 @@ final class WarpBefehle {
      */
     private final Sprache sprache;
 
+    /**
+     * Die Regel ueber die Freistaedte - {@code null}, solange die Welt fehlt.
+     *
+     * <p>Aus ihr kommen die Staedte UND der Stadtfeldplan, aus dem die Mitte eines Feldes
+     * folgt. Zwei Quellen dafuer waeren zwei Geometrien.
+     */
+    private final Freistadtbuch freistadtbuch;
+
+    /** Die Welt der Stadtfelder - {@code null}, wenn sie fehlt. */
+    private final World freistadtwelt;
+
     WarpBefehle(Warpverzeichnis verzeichnis, Map<String, World> welten, Reise reise,
-                Sprache sprache) {
+                Sprache sprache, Freistadtbuch freistadtbuch, World freistadtwelt) {
         this.sprache = sprache;
         this.verzeichnis = verzeichnis;
         this.welten = welten;
         this.reise = reise;
+        this.freistadtbuch = freistadtbuch;
+        this.freistadtwelt = freistadtwelt;
     }
 
     LiteralCommandNode<CommandSourceStack> warp() {
@@ -60,6 +75,42 @@ final class WarpBefehle {
                     zeigeZiele(z.getSource().getExecutor());
                     return Command.SINGLE_SUCCESS;
                 })
+                // Das Literal VOR dem Wortargument, und mit eigenem .executes.
+                // Brigadier gibt bei einem passenden Literal nur dieses zurueck
+                // (CommandNode.getRelevantNodes) - die Argumentknoten werden dann GAR
+                // NICHT mehr betrachtet. Ohne eigenes .executes faellt "/warp freistadt"
+                // ohne Namen nicht auf den Zweig darunter durch, sondern endet in
+                // Brigadiers englischem "Unknown or incomplete command".
+                //
+                // Dass dieses Literal jede Welt namens "freistadt" verschattet, ist der
+                // Preis - und er ist bezahlbar: Die Welt der Stadtfelder heisst
+                // "freistaedte", und Warpverzeichnis.reserviert ist die Stelle, an der
+                // ein Stadtname gegen einen Weltnamen abgewiesen wird.
+                .then(Commands.literal("freistadt")
+                        .executes(z -> {
+                            zeigeStaedte(z.getSource().getExecutor());
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.argument("stadt", StringArgumentType.word())
+                                .suggests((zusammenhang, bauer) -> {
+                                    // Aus dem Stadtverzeichnis und NICHT aus der
+                                    // Ablage: Ein Vorschlagsgeber laeuft bei jedem
+                                    // Tastendruck, und bis zu 399 Staedte stehen in
+                                    // der Datenbank. Ohne Buch gibt es nichts zu
+                                    // schlagen - dann faellt das Fenster leer aus,
+                                    // und die Absage kommt beim Tippen.
+                                    if (freistadtbuch != null) {
+                                        freistadtbuch.verzeichnis()
+                                                .vorschlaege(bauer.getRemainingLowerCase())
+                                                .forEach(bauer::suggest);
+                                    }
+                                    return bauer.buildFuture();
+                                })
+                                .executes(z -> {
+                                    reiseInStadt(z.getSource().getExecutor(),
+                                            StringArgumentType.getString(z, "stadt"));
+                                    return Command.SINGLE_SUCCESS;
+                                })))
                 .then(Commands.argument("ziel", StringArgumentType.word())
                         .suggests((zusammenhang, bauer) -> {
                             // Ein Vorschlagsgeber laeuft bei jedem Tastendruck: keine
@@ -74,6 +125,62 @@ final class WarpBefehle {
                             return Command.SINGLE_SUCCESS;
                         }))
                 .build();
+    }
+
+    /**
+     * {@code /warp freistadt} ohne Namen - zeigt, wo die Namen stehen.
+     *
+     * <p>Nicht {@code private}, wie jeder Zweig: Nur so ruft eine Probe ihn mit einem
+     * mitschreibenden Spieler auf. {@link Reise} bleibt dabei unberuehrt.
+     */
+    void zeigeStaedte(Object empfaenger) {
+        if (!(empfaenger instanceof Player spieler)) {
+            return;
+        }
+        (freistadtbuch == null
+                ? keineStadtweltZeilen(sprache)
+                : welcheStadtZeilen(sprache)).forEach(spieler::sendMessage);
+    }
+
+    /**
+     * {@code /warp freistadt <name>} - und seine zwei Absagen.
+     *
+     * <p>BEIDE Absagen lassen {@link Reise} unberuehrt; erst die letzte Zeile braucht
+     * sie. Nur so kommt eine Probe ohne Server bis hierher.
+     *
+     * <p>Das Ziel ist ein ORT und keine Welt: Es gibt 399 Staedte in EINER Welt, und
+     * {@code fuehre(spieler, World, ...)} landete bei allen am selben Punkt.
+     */
+    void reiseInStadt(Object empfaenger, String eingabe) {
+        if (!(empfaenger instanceof Player spieler)) {
+            return;
+        }
+        if (freistadtbuch == null || freistadtwelt == null) {
+            keineStadtweltZeilen(sprache).forEach(spieler::sendMessage);
+            return;
+        }
+        String gesucht = eingabe.trim().toLowerCase(java.util.Locale.ROOT);
+        Parzelle stadt = null;
+        for (Parzelle vorhandene
+                : freistadtbuch.staedte(freistadtwelt.key().asString())) {
+            if (vorhandene.name().equals(gesucht)) {
+                stadt = vorhandene;
+                break;
+            }
+        }
+        if (stadt == null) {
+            keineStadtZeilen(sprache, eingabe).forEach(spieler::sendMessage);
+            return;
+        }
+        // Mittig auf dem Block und auf Fusshoehe ueber dem Gras, wie der
+        // Erscheinungspunkt der Welt. Die Mitte kommt aus dem Stadtfeldplan des Buchs -
+        // nicht aus einer zweiten Rechnung hier.
+        var plan = freistadtbuch.plan();
+        reise.fuehre(spieler, new org.bukkit.Location(freistadtwelt,
+                        plan.feldMitte(stadt.x()) + 0.5, Feldboden.BODEN + 1,
+                        plan.feldMitte(stadt.z()) + 0.5),
+                sprache.wort(ReiseSatz.WARP_STADT_AUFSCHRIFT,
+                        Einsatz.von("name", stadt.name())));
     }
 
     /**
@@ -161,5 +268,42 @@ final class WarpBefehle {
      */
     static List<Component> weltFehltZeilen(Sprache sprache, String welt) {
         return sprache.bau(ReiseSatz.WARP_WELT_FEHLT, 1L, Einsatz.von("welt", welt));
+    }
+
+    /**
+     * Die Welt der Freistaedte fehlt - fuer BEIDE Zweige, die sie brauchen.
+     *
+     * <p>Eine Methode fuer zwei Aufrufer und nicht zwei gleichlautende: Es ist DIESELBE
+     * Lage, und zwei Stellen fuer eine Lage laufen beim naechsten Satzwechsel
+     * auseinander.
+     */
+    static List<Component> keineStadtweltZeilen(Sprache sprache) {
+        return sprache.bau(ReiseSatz.WARP_STADT_KEINE_WELT, 1L, Einsatz.keine());
+    }
+
+    /** {@code /warp freistadt} ohne Namen - der Hinweis, wo die Namen stehen. */
+    static List<Component> welcheStadtZeilen(Sprache sprache) {
+        return sprache.bau(ReiseSatz.WARP_STADT_OHNE_NAMEN, 1L, Einsatz.keine());
+    }
+
+    /**
+     * Die Absage auf einen Stadtnamen, den es nicht gibt - ZWEI Chatzeilen.
+     *
+     * <p><b>Diese drei Methoden sind ein Nachzug, und der Grund gehoert aufgeschrieben:
+     * </b> Die drei Zweige in die Freistaedte sendeten ihre Antwort anfangs mit
+     * {@code sprache.eineZeile} unmittelbar aus dem Zweig heraus - als einzige in dieser
+     * Datei, wo alles andere seit Schritt 5 ueber die Naht geht. Und {@code eineZeile}
+     * nimmt genau EINE Zeile: {@code warp.stadt-unbekannt} traegt aber eine Umbruchmarke,
+     * also WARF der Zweig, und der Spieler las eine rote Brigadier-Zeile statt seiner
+     * Absage. Keine Bildtafel sah das - sie ruft die Saetze selbst und kommt am Zweig
+     * vorbei. Gefunden hat es die Probe, die den Befehl tippt.
+     *
+     * <p>{@code eingabe} ist der GETIPPTE Name und nicht der genormte: In diesem Zweig
+     * gibt es keine Stadt, deren Name zu nennen waere. Wer sich vertippt, soll seinen
+     * eigenen Vertipper lesen.
+     */
+    static List<Component> keineStadtZeilen(Sprache sprache, String eingabe) {
+        return sprache.bau(ReiseSatz.WARP_STADT_UNBEKANNT, 1L,
+                Einsatz.von("name", eingabe));
     }
 }

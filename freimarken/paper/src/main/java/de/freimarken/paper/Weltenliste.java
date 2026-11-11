@@ -39,7 +39,7 @@ final class Weltenliste {
      * @param ankunftswelt die Welt, in der die Tore stehen - dort landet auch, wer neu ist
      */
     static Ergebnis ausKonfiguration(ConfigurationSection abschnitt, String rasterwelt,
-                                     String ankunftswelt) {
+                                     String ankunftswelt, String freistadtwelt) {
         List<Weltangabe> welten = new ArrayList<>();
         List<String> klagen = new ArrayList<>();
         if (abschnitt == null) {
@@ -86,6 +86,25 @@ final class Weltenliste {
                                 + " allein welten." + rasterwelt + " - uebersprungen."
                                 + " Eine zweite Rasterwelt haette Mauern und Wege, aber"
                                 + " keinen Besitz und keinen Schutz.");
+                continue;
+            }
+            if (art == Weltangabe.Art.STADTFELDER != name.equals(freistadtwelt)) {
+                // Dieselbe Bindung wie beim Raster, und aus demselben Grund - nur mit
+                // einer milderen Folge. Beim Raster kostet der Fehler den Start, weil
+                // aus der Marktstadt die Parzellennummern kommen. Hier wird die Welt
+                // uebersprungen und der Server laeuft weiter: Eine zweite
+                // Stadtfelderwelt bekaeme Stadtfelder und eine Weltgrenze, aber KEIN
+                // Freistadtbuch - Felder, die niemand gruenden und niemand schuetzen
+                // kann, und ein /warp freistadt, der sie nie findet.
+                klagen.add(name.equals(freistadtwelt)
+                        ? "welten." + name + ".art muss stadtfelder sein (steht: "
+                                + eintrag.getString("art") + ") - uebersprungen."
+                                + " freistaedte.welt zeigt auf diese Welt, und ohne"
+                                + " Stadtfelder gaebe es dort keine Felder zu vergeben."
+                        : "welten." + name + ".art ist stadtfelder, aber die Stadtfelder"
+                                + " traegt allein welten." + freistadtwelt
+                                + " - uebersprungen. Eine zweite Stadtfelderwelt haette"
+                                + " Felder, aber kein Gruendungsbuch und keinen Schutz.");
                 continue;
             }
             World.Environment umgebung = umgebung(eintrag.getString("umgebung", "normal"));

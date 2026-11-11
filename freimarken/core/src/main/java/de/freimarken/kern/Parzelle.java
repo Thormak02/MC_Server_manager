@@ -5,7 +5,11 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Eine vergebene Parzelle in der Marktstadt.
+ * Ein Stueck vergebener Besitz - eine Parzelle in der Marktstadt oder eine Freistadt.
+ *
+ * <p>Der Name sagt heute weniger, als die Zeile traegt, und das ist Absicht: Alle Arten
+ * liegen in derselben Tabelle, siehe {@link Art}. Umbenennen hiesse, 14 Aufrufstellen in
+ * sieben Dateien anzufassen, ohne dass dabei eine einzige Regel besser wuerde.
  *
  * <p>Die Flaeche steht nicht als Koordinatenpaar drin, sondern als Parzellennummer - die
  * Umrechnung in Weltkoordinaten macht der {@link Rasterplan}. Damit gibt es genau eine
@@ -27,6 +31,7 @@ import java.util.UUID;
  * @param art         was fuer ein Stueck Besitz das ist
  * @param elternId    Nummer des uebergeordneten Besitzes, sonst {@link #KEIN_ELTERNTEIL}
  * @param zustand     ob der Besitz laeuft, gekuendigt oder verfallen ist
+ * @param name        der Name einer Freistadt, sonst {@link #KEIN_NAME}
  */
 public record Parzelle(
         long id,
@@ -39,7 +44,8 @@ public record Parzelle(
         Instant erworbenAm,
         Art art,
         long elternId,
-        Zustand zustand) {
+        Zustand zustand,
+        String name) {
 
     /**
      * Keine Elternnummer.
@@ -49,6 +55,16 @@ public record Parzelle(
      * {@code ResultSet.getLong} liefert fuer SQL NULL genau diese Null.
      */
     public static final long KEIN_ELTERNTEIL = 0L;
+
+    /**
+     * Kein Name - alles ausser einer Freistadt.
+     *
+     * <p>{@code null} und keine leere Zeichenkette: In der Spalte steht NULL, und nur
+     * NULL zaehlt InnoDB im eindeutigen Schluessel {@code (welt, name)} als verschieden.
+     * Mit einer leeren Zeichenkette gaebe es genau eine namenlose Parzelle je Welt, und
+     * die zweite liefe in eine Schluesselverletzung, die niemand erwartet.
+     */
+    public static final String KEIN_NAME = null;
 
     public Parzelle {
         if (welt == null || welt.isBlank()) {
@@ -73,15 +89,50 @@ public record Parzelle(
             throw new IllegalArgumentException(
                     "Besitz kann nicht sein eigener Elternteil sein: " + id);
         }
+        // Der Name gehoert zur Art, und beide Richtungen sind ein Fehler. Eine
+        // Freistadt ohne Namen ist ueber keinen Warp erreichbar - 400.000 Mark fuer ein
+        // Feld, das niemand findet. Und eine Parzelle MIT Namen belegte einen Namen im
+        // eindeutigen Schluessel, ohne dass je eine Stadt dazu entstuende.
+        //
+        // Hier und nicht nur in der Datenbank: Ein CHECK auf zwei Spalten faellt erst beim
+        // Schreiben auf, und zwar als Treiberausnahme ohne Satz. Hier faellt er in der
+        // Probe auf, die das Objekt baut.
+        if (art == Art.FREISTADT && (name == null || name.isBlank())) {
+            throw new IllegalArgumentException("Eine Freistadt braucht einen Namen: " + id);
+        }
+        if (art != Art.FREISTADT && name != null) {
+            throw new IllegalArgumentException("Nur eine Freistadt traegt einen Namen,"
+                    + " nicht " + art.schluessel() + ": " + name);
+        }
         // Unveraenderlich kopieren: Sonst kann der Aufrufer die Mitbauer nachtraeglich
         // aendern, ohne dass das Lager etwas davon erfaehrt - und die Datenbank weiss
         // dann etwas anderes als der Speicher.
         mitbauer = mitbauer == null ? Set.of() : Set.copyOf(mitbauer);
     }
 
+    /**
+     * Besitz ohne Namen - jede Art ausser einer Freistadt.
+     *
+     * <p>Damit die vierzehn Aufrufstellen in sieben Dateien nicht alle ein {@code null}
+     * als zwoelftes Argument mitschleppen muessen. Das ist KEIN stiller Vorgabewert: Der
+     * kanonische Konstruktor darueber wirft, wenn eine {@link Art#FREISTADT} ohne Namen
+     * ankommt - dieser Weg kann eine Freistadt also gar nicht erzeugen.
+     */
+    public Parzelle(long id, String welt, int x, int z, UUID eigentuemer,
+                    Set<UUID> mitbauer, long preis, Instant erworbenAm, Art art,
+                    long elternId, Zustand zustand) {
+        this(id, welt, x, z, eigentuemer, mitbauer, preis, erworbenAm, art, elternId,
+                zustand, KEIN_NAME);
+    }
+
     /** Ob dieser Spieler Eigentuemer ist. */
     public boolean gehoert(UUID spieler) {
         return eigentuemer.equals(spieler);
+    }
+
+    /** Ob das eine Freistadt ist - dann und nur dann traegt die Zeile einen Namen. */
+    public boolean istFreistadt() {
+        return art == Art.FREISTADT;
     }
 
     /**

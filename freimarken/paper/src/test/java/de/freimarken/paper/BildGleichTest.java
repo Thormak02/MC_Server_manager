@@ -1502,7 +1502,46 @@ class BildGleichTest {
                                 + " am Tag nimmt niemand mit."),
                 new Zeile(TruheSatz.VERBOTEN, 1L, Einsatz.von("ware", "WRITTEN_BOOK"),
                         "&eWRITTEN_BOOK gehoert nicht in die Freie Truhe&7 - du"
-                                + " bekommst es zurueck."));
+                                + " bekommst es zurueck."),
+
+                // --- /freistadt [11.11.2026] ----------------------------------------
+                new Zeile(ReiseSatz.WARP_STADT_UNBEKANNT, 1L,
+                        Einsatz.von("name", "neustadt"),
+                        "&cDie Freistadt neustadt gibt es nicht.\n"
+                                + "&7Welche es gibt, zeigt /freistadt."),
+                new Zeile(ReiseSatz.WARP_STADT_OHNE_NAMEN, 1L, Einsatz.keine(),
+                        "&7Welche Freistadt? Die Namen zeigt /freistadt."),
+                new Zeile(ReiseSatz.WARP_STADT_KEINE_WELT, 1L, Einsatz.keine(),
+                        "&cDie Welt der Freistaedte fehlt - sag es dem Betreiber."),
+
+                new Zeile(FreistadtSatz.KOPF, 1L, Einsatz.keine(), "&6Die Freistaedte"),
+                new Zeile(FreistadtSatz.ZEILE, 1L,
+                        Einsatz.von("name", "neustadt").mit("besitzer", "Anna")
+                                .mit("feld", "3/-7"), "&7  neustadt&8 - von Anna, Feld 3/-7"),
+                new Zeile(FreistadtSatz.LEER, 1L, Einsatz.keine(), "&7  Es gibt noch keine Freistadt - macht die erste: /freistadt gruenden deinname"),
+                new Zeile(FreistadtSatz.FRAGE, 1L,
+                        Einsatz.von("name", "neustadt").mit("preis", 400_000L)
+                                .mit("danach", 123_456L), "&eneustadt gruenden kostet 400.000 Mark. Danach haettest du 123.456 Mark.\n"
+                        + "&7Zum Gruenden: /freistadt gruenden neustadt bestaetigen"),
+                new Zeile(FreistadtSatz.GEGRUENDET, 1L,
+                        Einsatz.von("name", "neustadt").mit("feld", "3/-7"), "&aneustadt ist gegruendet - Feld 3/-7.\n"
+                        + "&7Hin kommst du mit /warp freistadt neustadt."),
+                new Zeile(FreistadtSatz.NAME_ZU_LANG, 1L,
+                        Einsatz.von("kleinstens", 3L).mit("groesstens", 32L), "&cEin Stadtname hat 3 bis 32 Zeichen."),
+                new Zeile(FreistadtSatz.NAME_FALSCH, 1L, Einsatz.keine(), "&cEin Stadtname traegt nur kleine Buchstaben, Ziffern und"
+                        + " Bindestriche und faengt mit einem Buchstaben an."),
+                new Zeile(FreistadtSatz.NAME_RESERVIERT, 1L,
+                        Einsatz.von("name", "kornmark"), "&ckornmark ist der Name einer Welt - so darf keine Stadt heissen."),
+                new Zeile(FreistadtSatz.NAME_VERGEBEN, 1L,
+                        Einsatz.von("name", "neustadt"), "&cDie Freistadt neustadt gibt es schon."),
+                new Zeile(FreistadtSatz.GRENZE_ERREICHT, 1L,
+                        Einsatz.von("hoechstzahl", 1L), "&cDu hast schon so viele Freistaedte, wie dein Rang erlaubt (1)."),
+                new Zeile(FreistadtSatz.KEIN_FREIES_FELD, 1L, Einsatz.keine(), "&cIn dieser Welt ist kein Stadtfeld mehr frei."),
+                new Zeile(FreistadtSatz.ZU_WENIG_MARK, 1L,
+                        Einsatz.von("preis", 400_000L).mit("fehlt", 276_544L), "&cEine Freistadt kostet 400.000 Mark - dir fehlen 276.544."),
+                new Zeile(FreistadtSatz.GESTOERT, 1L, Einsatz.keine(), "&cDas Gruenden hat nicht geklappt - dein Geld ist zurueck."
+                        + " Versuch es noch einmal."),
+                new Zeile(FreistadtSatz.KEINE_WELT, 1L, Einsatz.keine(), "&cDie Welt der Freistaedte fehlt - sag es dem Betreiber."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

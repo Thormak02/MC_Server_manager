@@ -173,8 +173,14 @@ class ShopwacheTafel {
         // Und der ZWEITE Riegel: Auch wenn das Wachs ausfaellt, wird kein bestehendes
         // Shopschild umgeschrieben.
         String schreiben = methode("Shopwache.java", "beimSchildSchreiben");
+        // Gesucht wird die NAHTMETHODE und nicht mehr der Satzname: Seit dem 11.11.2026
+        // holt die Wache diese Absage ueber Shoptext.schonEinShopZeilen. Vorher stand
+        // hier sprache.eineZeile(ShopSatz.SHOP_SCHON_EIN_SHOP, ...) - und weil der Satz
+        // eine Umbruchmarke traegt, WARF der Zweig, statt die Absage zu senden. Diese
+        // Tafel war dabei gruen: Sie sieht den Namen im Quelltext und nicht, was beim
+        // Senden geschieht. Was sie hier haelt, ist allein, DASS der Riegel steht.
         assertTrue(schreiben.contains("anDemSchild(welt,")
-                        && schreiben.contains("SHOP_SCHON_EIN_SHOP"),
+                        && schreiben.contains("schonEinShopZeilen"),
                 "der zweite Riegel fehlt: " + schreiben);
     }
 

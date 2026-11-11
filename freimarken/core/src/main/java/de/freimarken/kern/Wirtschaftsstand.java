@@ -236,6 +236,13 @@ public final class Wirtschaftsstand {
                 alt.truhe().entnahmeJeTag(), neu.truhe().entnahmeJeTag());
         nenneMenge(geaendert, Truhenwerte.PFAD_VERBOTEN,
                 alt.truhe().verboten(), neu.truhe().verboten());
+        // Die Freistadtzahlen gehoeren NICHT in NUR_BEIM_START: Sie werden beim Gebrauch
+        // gefragt, es wird nichts gebaut und nichts angemeldet. Ohne diese zwei Zeilen
+        // aenderte sich der Preis einer Stadt beim Neuladen stumm.
+        nenneZahl(geaendert, Freistadtwerte.PFAD_GRUENDUNGSPREIS,
+                alt.freistaedte().gruendungspreis(), neu.freistaedte().gruendungspreis());
+        nenneZahl(geaendert, Freistadtwerte.PFAD_HOECHSTZAHL,
+                alt.freistaedte().hoechstzahl(), neu.freistaedte().hoechstzahl());
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");

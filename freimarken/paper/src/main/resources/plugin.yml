@@ -70,6 +70,16 @@ permissions:
     # es weg und gibt es einer Gruppe.
     description: Darf einen Laden mieten, verlaengern und kuendigen
     default: true
+  freimarken.freistadt:
+    description: Darf die Liste der Freistaedte sehen
+    default: true
+  freimarken.freistadt.gruenden:
+    # Ein zweites Recht und nicht freimarken.freistadt: Die Liste ist eine Auskunft, das
+    # Gruenden bewegt 400.000 Mark. Plan 9 haengt es spaeter am Rang Buerger - bis
+    # Schritt 12 den Aufstieg bringt, steht es hier auf true. Wer schon heute staffeln
+    # will, nimmt es weg und gibt es einer Gruppe.
+    description: Darf eine eigene Freistadt gruenden
+    default: true
   freimarken.spielzeit:
     description: Darf die eigene gemessene Spielzeit sehen
     default: true

@@ -803,7 +803,7 @@ class AufrufstelleTest {
         // /freimarken steht in BundBefehle - FreimarkenBefehlTest tippt ihn.
         // Die Aufwaermzeit bleibt davon unberuehrt: Sie braucht eine
         // JavaPlugin-INSTANZ, und die prueft im Konstruktor den Klassenlader.
-        var befehle = new WarpBefehle(verzeichnis, Map.of(), null, sprache);
+        var befehle = new WarpBefehle(verzeichnis, Map.of(), null, sprache, null, null);
         Player anna = spielerDoppel(ANNA, auf(0, 0));
 
         befehle.zeigeZiele(anna);

@@ -41,7 +41,8 @@ public final class MariaLager implements BesitzLager {
      * drei sie nicht bekommen, und welche, zeigte sich erst im Betrieb.
      */
     private static final String SPALTEN =
-            "id, welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand";
+            "id, welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand,"
+                    + " name";
 
     /**
      * Was auf dem Raster liegt - und damit alles, was als Parzelle zaehlt.
@@ -166,6 +167,74 @@ public final class MariaLager implements BesitzLager {
                     "Parzelle ist bereits vergeben: " + welt + "/" + x + "/" + z, schonDa);
         } catch (SQLException fehler) {
             throw weiterreichen("Anlegen einer Parzelle", fehler);
+        }
+    }
+
+    @Override
+    public Parzelle freistadtAnlegen(String welt, int feldX, int feldZ, UUID eigentuemer,
+                                     long preis, String name) {
+        // Auf Millisekunden kuerzen, derselbe Grund wie bei anlegen(): Die Spalte ist
+        // DATETIME(3), und ein genauerer Rueckgabewert waere eine zweite Wahrheit.
+        Instant jetzt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        // Art, Elternteil und Zustand wieder als Literale - dieser Schreibweg erzeugt
+        // genau eine Sorte, und das soll hier stehen und nicht im Schema.
+        //
+        // KEIN "ON DUPLICATE KEY UPDATE": Das feuerte bei JEDEM eindeutigen Schluessel,
+        // also auch beim Namen, und aenderte dann stillschweigend die fremde Zeile,
+        // statt zu scheitern. Scheitern ist hier die richtige Antwort.
+        String sql = "INSERT INTO parzellen "
+                + "(welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand,"
+                + " name) "
+                + "VALUES (?, ?, ?, ?, ?, ?, 'freistadt', NULL, 'aktiv', ?)";
+        try (PreparedStatement anfrage = datenbank.verbindung()
+                .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            anfrage.setString(1, welt);
+            anfrage.setInt(2, feldX);
+            anfrage.setInt(3, feldZ);
+            anfrage.setString(4, eigentuemer.toString());
+            anfrage.setLong(5, preis);
+            anfrage.setObject(6, LocalDateTime.ofInstant(jetzt, ZoneOffset.UTC));
+            anfrage.setString(7, name);
+            anfrage.executeUpdate();
+            try (ResultSet schluessel = anfrage.getGeneratedKeys()) {
+                schluessel.next();
+                return new Parzelle(schluessel.getLong(1), welt, feldX, feldZ,
+                        eigentuemer, Set.of(), preis, jetzt,
+                        Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV, name);
+            }
+        } catch (SQLIntegrityConstraintViolationException schonDa) {
+            // ZWEI Schluessel koennen hier zuschlagen - das Feld und der Name -, und der
+            // Treiber sagt in der Meldung, welcher. Die Ausnahme traegt beides, damit die
+            // Absage am Ende dem Spieler sagen kann, WAS nicht ging; sie heisst genauso
+            // wie bei der Speicherfassung, damit der gemeinsame Vertrag haelt.
+            throw new IllegalStateException("Stadtfeld oder Name ist bereits vergeben: "
+                    + welt + "/" + feldX + "/" + feldZ + " " + name, schonDa);
+        } catch (SQLException fehler) {
+            throw weiterreichen("Gruenden einer Freistadt", fehler);
+        }
+    }
+
+    @Override
+    public List<Parzelle> staedteIn(String welt) {
+        // Nach art und nicht nach der Lage gefragt: Eine Freistadt liegt sehr wohl auf
+        // einem Raster, nur auf einem anderen - AUF_DEM_RASTER traefe hier auch jede
+        // Parzelle, falls je beide in derselben Welt staenden.
+        //
+        // ORDER BY name, nicht nach der Nummer: Die Reihenfolge ist zugesagt, und eine
+        // Liste nach Gruendungsnummer waere fuer den Leser keine.
+        String sql = "SELECT " + SPALTEN + " FROM parzellen"
+                + " WHERE welt = ? AND art = 'freistadt' ORDER BY name";
+        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
+            anfrage.setString(1, welt);
+            try (ResultSet ergebnis = anfrage.executeQuery()) {
+                List<Parzelle> treffer = new ArrayList<>();
+                while (ergebnis.next()) {
+                    treffer.add(lies(ergebnis));
+                }
+                return List.copyOf(treffer);
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Lesen der Freistaedte", fehler);
         }
     }
 
@@ -523,7 +592,12 @@ public final class MariaLager implements BesitzLager {
                 // SQL NULL wird hier zu 0, und 0 ist KEIN_ELTERNTEIL. Die eine Stelle,
                 // an der sich die Wahl der Null auszahlt.
                 ergebnis.getLong("eltern_id"),
-                Zustand.ausSchluessel(ergebnis.getString("zustand")));
+                Zustand.ausSchluessel(ergebnis.getString("zustand")),
+                // getString gibt fuer SQL NULL ein echtes null zurueck - und genau das
+                // ist Parzelle.KEIN_NAME. Keine Umwandlung noetig, und keine erlaubt:
+                // Ein leerer Ersatz machte aus jeder Parzelle eine namenlose Freistadt,
+                // und der Kompaktkonstruktor wiese sie ab.
+                ergebnis.getString("name"));
     }
 
     private Set<UUID> mitbauerVon(long id) throws SQLException {

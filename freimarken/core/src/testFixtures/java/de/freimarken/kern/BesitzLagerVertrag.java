@@ -24,6 +24,17 @@ public abstract class BesitzLagerVertrag {
 
     protected static final String WELT = "freimarken:marktstadt";
 
+    /**
+     * Die Welt der Freistaedte - eine ANDERE als {@link #WELT}, und das ist tragend.
+     *
+     * <p>In MariaLager zaehlt {@code anzahlVon} alles, was auf dem Raster liegt, ohne
+     * nach der Art zu fragen. Staenden Staedte und Parzellen in derselben Welt, zaehlte
+     * eine Freistadt als Parzelle mit - die naechste Parzelle koestete das Doppelte und
+     * die Rangobergrenze waere frueher erreicht. Der Riegel ist der WELTSCHLUESSEL, nicht
+     * die Art, und diese Konstante ist die Stelle, an der das sichtbar bleibt.
+     */
+    protected static final String STADTWELT = "freimarken:freistaedte";
+
     /** Ein leeres Lager der zu pruefenden Art. */
     protected abstract BesitzLager lager();
 
@@ -64,6 +75,119 @@ public abstract class BesitzLagerVertrag {
         lager.anlegen(WELT, 2, 2, anna, 0L);
         assertTrue(lager.finde("freimarken:freistaedte", 2, 2).isEmpty());
         assertEquals(0, lager.anzahlVon("freimarken:freistaedte", anna));
+    }
+
+    @Test
+    @DisplayName("Eine gegruendete Freistadt traegt ihre Art, ihren Namen und ihr Feld")
+    void freistadtGruenden() {
+        BesitzLager lager = lager();
+        assertTrue(lager.staedteIn(STADTWELT).isEmpty());
+
+        // Lauter VERSCHIEDENE Werte, besonders feldX != feldZ: Waeren sie gleich, bliebe
+        // ein vertauschtes Paar in der Ablage unsichtbar.
+        Parzelle stadt = lager.freistadtAnlegen(STADTWELT, 3, -7, anna, 400_000L,
+                "neustadt");
+
+        assertEquals(Art.FREISTADT, stadt.art());
+        assertEquals("neustadt", stadt.name());
+        assertEquals(3, stadt.x());
+        assertEquals(-7, stadt.z(), "eine NEGATIVE Feldnummer - Feldgrenze.von() ist -10,"
+                + " und eine Ablage, die int als unsigned behandelt, faellt nur hier auf");
+        assertEquals(anna, stadt.eigentuemer());
+        assertEquals(400_000L, stadt.preis());
+        assertEquals(Zustand.AKTIV, stadt.zustand());
+        assertTrue(stadt.istFreistadt());
+    }
+
+    @Test
+    @DisplayName("Eine Freistadt ist ueber finde() erreichbar - sonst schuetzt sie niemand")
+    void freistadtLiegtAufDemFeld() {
+        // Die tragende Zusage des ganzen Entwurfs: Weil die Stadt in derselben Tabelle
+        // und auf einer Feldnummer liegt, findet die Schutzwache sie mit DERSELBEN
+        // Punktabfrage wie eine Parzelle. Gaebe es dafuer einen zweiten Weg, muesste sie
+        // bei jedem gesetzten Block zwei Orte fragen.
+        BesitzLager lager = lager();
+        Parzelle stadt = lager.freistadtAnlegen(STADTWELT, 3, -7, anna, 400_000L, "hain");
+
+        Parzelle gefunden = lager.finde(STADTWELT, 3, -7).orElseThrow();
+        assertEquals(stadt.id(), gefunden.id());
+        assertEquals("hain", gefunden.name());
+        assertEquals(Art.FREISTADT, gefunden.art());
+        assertTrue(gefunden.darfBauen(anna));
+        assertFalse(gefunden.darfBauen(bert));
+    }
+
+    @Test
+    @DisplayName("Dasselbe Stadtfeld zweimal zu vergeben ist ein Fehler")
+    void keinZweitesStadtfeld() {
+        BesitzLager lager = lager();
+        lager.freistadtAnlegen(STADTWELT, 1, 2, anna, 400_000L, "erste");
+
+        assertThrows(IllegalStateException.class, () -> lager.freistadtAnlegen(
+                STADTWELT, 1, 2, bert, 400_000L, "zweite"));
+        assertEquals(anna, lager.finde(STADTWELT, 1, 2).orElseThrow().eigentuemer());
+        assertEquals(1, lager.staedteIn(STADTWELT).size());
+    }
+
+    @Test
+    @DisplayName("Denselben Stadtnamen zweimal zu vergeben ist ein Fehler")
+    void keinZweiterName() {
+        // Der Riegel der ABLAGE und keine Pruefung des Aufrufers: Zwischen "ist der Name
+        // frei?" und dem Schreiben passt ein zweiter Spieler. Beide Umsetzungen muessen
+        // dieselbe Ausnahme werfen, sonst haelt der Vertrag nur in einer.
+        BesitzLager lager = lager();
+        lager.freistadtAnlegen(STADTWELT, 1, 2, anna, 400_000L, "doppelt");
+
+        assertThrows(IllegalStateException.class, () -> lager.freistadtAnlegen(
+                STADTWELT, 4, 5, bert, 400_000L, "doppelt"));
+        assertTrue(lager.finde(STADTWELT, 4, 5).isEmpty(),
+                "und das Feld bleibt frei - ein halb angelegter Besitz waere schlimmer"
+                        + " als gar keiner");
+        assertEquals(1, lager.staedteIn(STADTWELT).size());
+    }
+
+    @Test
+    @DisplayName("Eine Parzelle bekommt KEINEN Namen - und blockiert damit keinen")
+    void parzellenHabenKeinenNamen() {
+        // Zwei namenlose Parzellen nebeneinander: Traegt die Spalte eine leere
+        // Zeichenkette statt NULL, laeuft die zweite in den eindeutigen Schluessel.
+        BesitzLager lager = lager();
+        Parzelle eine = lager.anlegen(WELT, 7, 7, anna, 0L);
+        Parzelle andere = lager.anlegen(WELT, 8, 8, bert, 0L);
+
+        assertEquals(Parzelle.KEIN_NAME, eine.name());
+        assertEquals(Parzelle.KEIN_NAME, andere.name());
+        assertEquals(Parzelle.KEIN_NAME, lager.finde(WELT, 7, 7).orElseThrow().name());
+    }
+
+    @Test
+    @DisplayName("Die Staedteliste kommt nach Namen sortiert und immer gleich")
+    void staedteSindSortiert() {
+        // In UMGEKEHRTER Reihenfolge angelegt: Sonst waere eine Fassung gruen, die
+        // einfach die Einfuegereihenfolge zurueckgibt.
+        BesitzLager lager = lager();
+        lager.freistadtAnlegen(STADTWELT, 2, 2, anna, 400_000L, "zwiesel");
+        lager.freistadtAnlegen(STADTWELT, -1, 0, bert, 400_000L, "aue");
+        lager.freistadtAnlegen(STADTWELT, 5, -3, anna, 400_000L, "moor");
+
+        assertEquals(List.of("aue", "moor", "zwiesel"),
+                lager.staedteIn(STADTWELT).stream().map(Parzelle::name).toList());
+        assertEquals(lager.staedteIn(STADTWELT), lager.staedteIn(STADTWELT),
+                "zweimal gefragt, zweimal dasselbe");
+    }
+
+    @Test
+    @DisplayName("Die Staedteliste nennt nur Staedte und nur aus DIESER Welt")
+    void staedtelisteIstEng() {
+        BesitzLager lager = lager();
+        lager.anlegen(WELT, 1, 1, anna, 0L);
+        lager.freistadtAnlegen(STADTWELT, 1, 1, anna, 400_000L, "hier");
+        lager.freistadtAnlegen("freimarken:andere", 1, 1, bert, 400_000L, "dort");
+
+        assertEquals(List.of("hier"),
+                lager.staedteIn(STADTWELT).stream().map(Parzelle::name).toList());
+        assertTrue(lager.staedteIn(WELT).isEmpty(),
+                "in der Marktstadt steht eine Parzelle, aber keine Stadt");
     }
 
     @Test

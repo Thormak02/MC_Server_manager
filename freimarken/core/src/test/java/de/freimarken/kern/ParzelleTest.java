@@ -105,6 +105,49 @@ class ParzelleTest {
     }
 
     @Test
+    @DisplayName("Eine Freistadt OHNE Namen gibt es nicht - der Riegel greift")
+    void freistadtOhneNamenWirft() {
+        // Gefunden von der Einspritzungsrunde am 11.11.2026: Der Riegel stand da und
+        // war von keiner Probe gedeckt. Alle Proben legten Staedte MIT Namen an - und
+        // ein Riegel, den nie etwas ausloest, ist gruen mit und ohne.
+        //
+        // Was er verhindert: eine Stadt, die ueber keinen Warp erreichbar ist. 400.000
+        // Mark fuer ein Feld, das niemand findet.
+        var ohne = assertThrows(IllegalArgumentException.class,
+                () -> new Parzelle(1L, WELT, 3, -7, anna, Set.of(), 400_000L,
+                        Instant.EPOCH, Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL,
+                        Zustand.AKTIV, Parzelle.KEIN_NAME));
+        assertTrue(ohne.getMessage().contains("Freistadt"), ohne.getMessage());
+
+        // Auch der leere Name faellt - sonst stuende in der Spalte eine Zeichenkette,
+        // und der eindeutige Schluessel (welt, name) liesse genau eine davon zu.
+        assertThrows(IllegalArgumentException.class,
+                () -> new Parzelle(1L, WELT, 3, -7, anna, Set.of(), 400_000L,
+                        Instant.EPOCH, Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL,
+                        Zustand.AKTIV, "   "));
+    }
+
+    @Test
+    @DisplayName("Eine Parzelle MIT Namen gibt es auch nicht - die andere Richtung")
+    void parzelleMitNamenWirft() {
+        // Beide Richtungen, wie bei jeder Bindung in diesem Projekt. Eine Parzelle mit
+        // Namen belegte einen Namen im eindeutigen Schluessel, ohne dass je eine Stadt
+        // dazu entstuende - und der naechste Gruender bekaeme eine Absage, deren Grund
+        // nirgends zu sehen ist.
+        var mit = assertThrows(IllegalArgumentException.class,
+                () -> new Parzelle(1L, WELT, 0, 0, anna, Set.of(), 0L, Instant.EPOCH,
+                        Art.PARZELLE, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV,
+                        "neustadt"));
+        assertTrue(mit.getMessage().contains("neustadt"), mit.getMessage());
+
+        // Und der kurze Konstruktor kommt durch - er setzt KEIN_NAME und kann darum
+        // gar keine Freistadt erzeugen.
+        assertEquals(Parzelle.KEIN_NAME, new Parzelle(1L, WELT, 0, 0, anna, Set.of(), 0L,
+                Instant.EPOCH, Art.PARZELLE, Parzelle.KEIN_ELTERNTEIL,
+                Zustand.AKTIV).name());
+    }
+
+    @Test
     @DisplayName("Ein unbekannter Schluessel wirft und nennt den gelesenen Wert")
     void unbekannterSchluessel() {
         var artFehler = assertThrows(IllegalStateException.class,

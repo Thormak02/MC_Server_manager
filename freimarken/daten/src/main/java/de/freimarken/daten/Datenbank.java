@@ -698,6 +698,42 @@ public final class Datenbank implements AutoCloseable {
               PRIMARY KEY (spieler, tag),
               KEY ix_freie_truhe_tag (tag)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 19: der NAME einer Freistadt - Plan 6.4, gebaut am 11.11.2026.
+            //
+            // EINE SPALTE AN parzellen UND KEINE EIGENE TABELLE. Der Grund steht im Kopf
+            // von Art: Alle Arten liegen in derselben Tabelle, damit ein Grundstueck in
+            // einer Freistadt derselbe Datensatz ist wie eine Parzelle in der Marktstadt,
+            // nur mit einem Elternteil. Eine Freistadt-Tabelle daneben wuerde den zweiten
+            // Ort fuer "wem gehoert dieses Feld" erst SCHAFFEN - und die Schutzwache
+            // muesste dann bei jedem gesetzten Block zwei Orte fragen statt einen.
+            //
+            // Der Unterschied zur Ladeneinheit (Schritt 13), die sehr wohl eine eigene
+            // Tabelle bekam: Dort stand die Geometrie schon in der config.yml, und die
+            // Zeile trug einen VERTRAG mit Miete und Ablauftag. Hier steht die Geometrie
+            // nirgends sonst, und es kommt genau ein Feld dazu.
+            //
+            // NULL-faehig, weil 99 von 100 Zeilen keinen Namen haben. Und genau NULL und
+            // nicht die leere Zeichenkette: InnoDB zaehlt NULL im eindeutigen Schluessel
+            // als verschieden, also stoeren beliebig viele namenlose Parzellen einander
+            // nicht. Mit einer leeren Zeichenkette gaebe es genau eine namenlose Parzelle
+            // je Welt.
+            //
+            // VARCHAR(32) wie Ladeneinheit und wie Stadtname.HOECHSTENS_ZEICHEN. Eine
+            // Regel, die mehr zulaesst als die Spalte traegt, verschiebt die Absage in
+            // eine abgeschnittene Zeichenkette.
+            //
+            // uq_besitz_name IST DER RIEGEL und keine Bequemlichkeit: "Ist der Name schon
+            // vergeben?" im Befehl zu fragen hat zwischen Fragen und Schreiben eine
+            // Luecke, dieser Schluessel hat keine. Je WELT und nicht global - zwei
+            // Stadtfelderwelten sind zwei getrennte Raeume, genau wie bei ort (welt,x,z).
+            //
+            // IF NOT EXISTS wie bei jedem Schritt ab dem vierten.
+            """
+            ALTER TABLE parzellen
+              ADD COLUMN IF NOT EXISTS name VARCHAR(32) NULL DEFAULT NULL,
+              ADD UNIQUE KEY IF NOT EXISTS uq_besitz_name (welt, name)
             """);
 
     /**

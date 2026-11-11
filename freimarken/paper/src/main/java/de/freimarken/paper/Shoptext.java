@@ -121,6 +121,26 @@ final class Shoptext {
     }
 
     /**
+     * An diesem Schild haengt schon ein Shop - der zweite Riegel hinter dem Wachs.
+     *
+     * <p><b>Ueber {@code bau} und nicht ueber {@code eineZeile}, und das ist ein
+     * Nachzug:</b> Die Wache holte diesen Satz als EINE Zeile, und
+     * {@code shop.absage.schon-ein-shop} traegt eine Umbruchmarke - die rote Absage und
+     * darunter grau der Weg zum Aendern. {@code eineZeile} wirft bei zwei Zeilen, also
+     * warf der Zweig MITTEN im Schildschreiben: Der Spieler las gar nichts, und der
+     * Betreiber bekam je Versuch einen Stapelabzug ins Protokoll. Gefunden wurde es beim
+     * Nacharbeiten derselben Sache an {@code /warp freistadt}; dass es eine ganze
+     * Fehlerklasse ist, haelt jetzt {@code VorlageTest} 10h.
+     *
+     * <p>{@link Miettext#absage} hatte die Regel schon aufgeschrieben: "Eine Absage -
+     * ueber bau und nicht ueber eineZeile ... sonst entscheidet jeder Zweig fuer sich, ob
+     * eine Absage einen Hinweis tragen darf, und einer von ihnen wirft eines Tages."
+     */
+    static List<Component> schonEinShopZeilen(Sprache sprache) {
+        return sprache.bau(ShopSatz.SHOP_SCHON_EIN_SHOP, 1L, Einsatz.keine());
+    }
+
+    /**
      * Die Antwort auf ein abgebautes Schild - eine Zeile, oder keine.
      *
      * <p><b>{@code KEIN_SHOP} schweigt</b>, und das ist der Grund, warum diese Methode

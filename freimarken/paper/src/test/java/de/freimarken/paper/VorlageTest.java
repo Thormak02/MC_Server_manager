@@ -12,6 +12,7 @@ import java.io.StringReader;
 import java.nio.file.Path;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -253,7 +254,7 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle fuenfzehn Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - alle sechzehn Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
         // MietSatz ist der zwoelfte - und der ZWEITE Bereich desselben Befehls: Er und
         // LadenSatz schreiben beide Pfade unter laden., damit der Betreiber unter dem
@@ -280,7 +281,7 @@ class VorlageTest {
                 // mit zwei Blickwinkeln: mit Deckel eine Zahl, ohne Deckel ein eigener
                 // Satz, und beim Schliessen eine Zeile fuer das, was mitkommt, und eine
                 // fuer das, was dableibt.
-                "TruheSatz"));
+                "TruheSatz", "FreistadtSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -444,6 +445,201 @@ class VorlageTest {
         }
     }
 
+    /**
+     * Jeder {@code eineZeile}-Aufruf des Programms, mit dem Satz, den er holt.
+     *
+     * <p>Gesucht wird im Quelltext und nicht in einer Liste von Hand: Eine Liste bliebe
+     * beim naechsten Sendeort stehen, und genau dieser naechste Sendeort ist der
+     * gefaehrliche.
+     */
+    private record Holstelle(Path datei, int zeile, Satz satz) {
+    }
+
+    /**
+     * 10h - KEIN Satz mit Umbruchmarke wird als eine einzige Zeile geholt.
+     *
+     * <p><b>Diese Probe gibt es, weil derselbe Fehler am 11.11.2026 an ZWEI voellig
+     * verschiedenen Stellen stand</b> - und beide Male hatte die Bildtafel den Satz
+     * zeichengleich festgehalten, mitsamt seiner Umbruchmarke:
+     * <ul>
+     *   <li>{@code warp.stadt-unbekannt}: Wer sich bei {@code /warp freistadt <name>}
+     *       vertippte, bekam eine rote Brigadier-Zeile statt seiner Absage.</li>
+     *   <li>{@code shop.absage.schon-ein-shop}: Wer ein zweites Schild an einen Shop
+     *       schrieb, las GAR NICHTS, und der Betreiber bekam je Versuch einen
+     *       Stapelabzug.</li>
+     * </ul>
+     *
+     * <p><b>Warum keine Tafel das faengt und auch nicht faengen kann:</b> Eine Bildtafel
+     * ruft den Satz SELBST ueber {@code sprache.bau} und schreibt das Bild auf - sie
+     * sieht nie, was ein ZWEIG mit demselben Satz tut. Eine Zaehltafel zaehlt Aufrufe
+     * und kennt den Wortlaut nicht. Erst beides zusammen - der Aufruf AUS DEM QUELLTEXT
+     * und der Wortlaut AUS DER DATEI - ergibt die Frage, die hier gestellt wird.
+     *
+     * <p><b>Gebaut statt nach Backslash-n gesucht:</b> Geprueft wird die Bedingung, an
+     * der {@code Sprache.eineZeile} wirklich wirft - {@code bau(...).size() != 1}. Eine
+     * Zeichensuche nach der Umbruchmarke waere eine Abschrift dieser Bedingung, und zwei
+     * Abschriften laufen auseinander; sie wuerde ausserdem bei einer Fluchtform blind.
+     *
+     * <p>Die Umkehrung steht ausdruecklich NICHT hier: Ein Satz darf mehrzeilig sein,
+     * solange ihn niemand als eine Zeile holt. Ein Verbot mehrzeiliger Saetze naehme dem
+     * Betreiber den Aufbau, und der gehoert ihm (siehe Kopf dieser Datei).
+     */
+    @Test
+    @DisplayName("10h - kein Satz mit Umbruchmarke wird als EINE Zeile geholt")
+    void keinMehrzeiligerSatzWirdAlsEineZeileGeholt() {
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        List<String> kaputt = new ArrayList<>();
+        for (Holstelle stelle : holstellen()) {
+            int zeilen = sprache.bau(stelle.satz(), 1L, Einsatz.keine()).size();
+            if (zeilen != 1) {
+                kaputt.add(stelle.datei().getFileName() + ":" + stelle.zeile() + " holt "
+                        + stelle.satz().pfad() + " als EINE Zeile, und der Satz hat "
+                        + zeilen);
+            }
+        }
+        assertEquals(List.of(), kaputt, "Sprache.eineZeile WIRFT, wenn der Satz mehr als"
+                + " eine Zeile ergibt - und zwar mitten im Zweig, der ihn sendet. Der"
+                + " Spieler liest dann nichts und der Betreiber einen Stapelabzug."
+                + " Entweder diese Stelle holt den Satz ueber sprache.bau und sendet"
+                + " jede Zeile, oder die Umbruchmarke gehoert aus dem Satz heraus."
+                + " Fast immer ist das Erste richtig: Der zweite Teil eines Satzes ist"
+                + " meist der AUSWEG, und eine Absage ohne Ausweg liest sich wie eine"
+                + " Sackgasse.");
+    }
+
+    /**
+     * 10i - jede {@code eineZeile}-Stelle gibt ihren Satz im Quelltext preis.
+     *
+     * <p>Der Nachbar von 10h, und ohne ihn waere jene Probe eine Behauptung: Sie kann
+     * nur Stellen pruefen, deren Satz im Quelltext steht ({@code BundSatz.STAND_KOPF}).
+     * Wo er aus einer Variablen kommt, sieht sie nichts - und waere trotzdem gruen.
+     *
+     * <p>Darum werden diese Stellen hier AUFGESCHRIEBEN, mit Datei und Zeile. Kommt eine
+     * dazu, wird diese Probe rot, und wer sie anpasst, muss nachsehen, welche Saetze
+     * durch jene Variable laufen koennen. Eine blosse Zahl taete das nicht - sie liesse
+     * sich hochdrehen, ohne dass jemand den neuen Sendeort gelesen haette.
+     */
+    @Test
+    @DisplayName("10i - die eineZeile-Stellen ohne sichtbaren Satz sind aufgeschrieben")
+    void verdeckteHolstellenSindAufgeschrieben() {
+        List<String> verdeckt = new ArrayList<>();
+        for (Path datei : Quellen.alle()) {
+            String text = Quellen.ohneKommentare(Quellen.text(datei));
+            int ab = 0;
+            while ((ab = text.indexOf(RUF, ab)) >= 0) {
+                int anfang = ab + RUF.length();
+                String erstes = ersterWert(text, anfang);
+                ab = anfang;
+                if (SATZ_IM_TEXT.matcher(erstes).find()) {
+                    continue;
+                }
+                verdeckt.add(datei.getFileName() + " -> "
+                        + erstes.replaceAll("\\s+", " ").strip());
+            }
+        }
+        assertEquals(VERDECKTE_HOLSTELLEN, verdeckt, "An diesen Stellen steht der Satz"
+                + " nicht im Quelltext, also kann Probe 10h ihn nicht bauen. Kommt eine"
+                + " Zeile dazu, sieh nach, welche Saetze durch diese Variable laufen -"
+                + " traegt einer davon eine Umbruchmarke, wirft der Zweig im Betrieb.");
+    }
+
+    /**
+     * Die Stellen, an denen der Satz erst zur Laufzeit feststeht.
+     *
+     * <p><b>Jede einzeln nachgesehen am 11.11.2026, und alle fuenf sind tragbar - aber
+     * aus zwei ganz verschiedenen Gruenden:</b>
+     *
+     * <ul>
+     *   <li>{@code Bonustext -> satz} waehlt zwischen
+     *       {@code tagesbonus.gezahlt.bestmarke} und {@code .serie}. Beide sind
+     *       einzeilig, und beide sind {@link Satz.Art#SATZ} - hier schuetzt NICHTS
+     *       ausser dem Nachsehen. Das ist die eine Stelle, die bei einer Aenderung
+     *       wirklich geprueft werden muss.</li>
+     *   <li>Die vier anderen holen ausschliesslich {@link Satz.Art#HANDBALKEN}:
+     *       {@code Shoptext -> satz} waehlt zwischen {@code shop.schutz.fremdes-schild}
+     *       und {@code .fremde-kiste}, {@code Shoptext -> Sprachschluessel.shopHandel}
+     *       waehlt aus der Familie {@code shop.handel.*}, und die zwei Stellen in
+     *       {@code Sprache} sind {@code sendeHandbalken} und die Deklaration von
+     *       {@code eineZeile} selbst. Fuer den Handbalken klagt
+     *       {@code Sprachliste.maengelAmWert} schon beim LADEN ueber jede Umbruchmarke -
+     *       der Satz kaeme also gar nicht erst durch. Der Riegel liegt dort frueher und
+     *       enger als hier.</li>
+     * </ul>
+     *
+     * <p>Aufgeschrieben wird trotzdem jede, und zwar als TEXT: Eine Zahl liesse sich
+     * hochdrehen, ohne dass jemand den neuen Sendeort gelesen haette - und genau das ist
+     * bei dieser Fehlerklasse schon einmal passiert.
+     */
+    private static final List<String> VERDECKTE_HOLSTELLEN = List.of(
+            "Bonustext.java -> satz",
+            "Shoptext.java -> satz",
+            "Shoptext.java -> Sprachschluessel.shopHandel(ausgang.bescheid(),"
+                    + " ausgang.art(), mitGebuehr)",
+            "Sprache.java -> schluessel",
+            "Sprache.java -> Satz schluessel");
+
+    private static final String RUF = "eineZeile(";
+
+    /** {@code BundSatz.STAND_KOPF} - ein Satz, den der Quelltext selbst nennt. */
+    private static final Pattern SATZ_IM_TEXT =
+            Pattern.compile("([A-Z][A-Za-z]*Satz)\\.([A-Z][A-Z0-9_]*)");
+
+    /** Alle Stellen, deren Satz im Quelltext steht - die Grundlage von 10h. */
+    private static List<Holstelle> holstellen() {
+        Map<String, Satz> nachName = new HashMap<>();
+        for (Satz satz : Sprachschluessel.alle()) {
+            if (satz instanceof Enum<?> wert) {
+                nachName.put(wert.getDeclaringClass().getSimpleName() + "."
+                        + wert.name(), satz);
+            }
+        }
+        List<Holstelle> gefunden = new ArrayList<>();
+        for (Path datei : Quellen.alle()) {
+            String text = Quellen.ohneKommentare(Quellen.text(datei));
+            int ab = 0;
+            while ((ab = text.indexOf(RUF, ab)) >= 0) {
+                int anfang = ab + RUF.length();
+                Matcher suche = SATZ_IM_TEXT.matcher(ersterWert(text, anfang));
+                // Jeder Satz im ersten Wert, nicht nur der erste: Ein Fragezeichen
+                // waehlt zwischen zweien, und BEIDE werden als eine Zeile geholt.
+                while (suche.find()) {
+                    Satz satz = nachName.get(suche.group());
+                    if (satz != null) {
+                        gefunden.add(new Holstelle(datei,
+                                (int) text.chars().limit(ab).filter(z -> z == 10)
+                                        .count() + 1, satz));
+                    }
+                }
+                ab = anfang;
+            }
+        }
+        return gefunden;
+    }
+
+    /**
+     * Der erste Wert eines Aufrufs - bis zum Komma auf Klammertiefe null.
+     *
+     * <p>Gezaehlt und nicht bis zum ersten Komma gelesen: {@code eineZeile(satzVon(a, b),
+     * werte)} haette sonst beim Komma INNERHALB der Klammer aufgehoert.
+     */
+    private static String ersterWert(String text, int anfang) {
+        int tiefe = 0;
+        for (int stelle = anfang; stelle < text.length(); stelle++) {
+            char zeichen = text.charAt(stelle);
+            if (zeichen == '(') {
+                tiefe++;
+            } else if (zeichen == ')') {
+                if (tiefe == 0) {
+                    return text.substring(anfang, stelle);
+                }
+                tiefe--;
+            } else if (zeichen == ',' && tiefe == 0) {
+                return text.substring(anfang, stelle);
+            }
+        }
+        return text.substring(anfang);
+    }
+
     @Test
     @DisplayName("10f - eine Reiseaufschrift aus dem Programm sagt das in der Vorlage")
     void halbWirkendeReiseaufschriftWarntInDerVorlage() {
@@ -539,6 +735,8 @@ class VorlageTest {
             // Die Einheit des Marktlesers - sie geht an den Betreiber, der seine
             // config.yml liest, und nie an einen Spieler. Die zwei Erklaerzeilen ueber
             // PFENNIGE sind am 10.11.2026 mit dem Sortiment gegangen.
+            "Freistadtliste.java -> \"Mark einmalig\"",
+            "Freistadtliste.java -> \" Mark je Gruendung, \"",
             "Marktliste.java -> \"Mark\"",
             // Teil B: Zwei Protokollzeilen des Mietbuchs - die Kaution, die nach dem
             // Loeschen des Vertrags nicht zurueckgezahlt werden konnte, und eine

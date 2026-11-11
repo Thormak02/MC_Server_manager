@@ -28,7 +28,6 @@ class VerdienstregelTest {
 
     private static final Set<String> BERGMANN = Set.of("bergmann");
 
-    /** Eine Tafel mit 40 Pfennigen fuer Stein und 500 fuer Diamant. */
     /**
       * Minderung UND Tafel in einem - die zwei Stellen, die beides setzen.
       *
@@ -42,6 +41,7 @@ class VerdienstregelTest {
                 .mitLoehnen(tafel);
     }
 
+    /** Eine Tafel mit 40 Pfennigen fuer Stein und 500 fuer Diamant. */
     private static final Verdienstwerte MIT_LOEHNEN = Verdienstwerte.VORGABE
             .mitLoehnen(
             Lohntafel.ausLoehnen(List.of(

@@ -96,6 +96,27 @@ public final class ZwischenspeicherLager implements BesitzLager {
     }
 
     @Override
+    public Parzelle freistadtAnlegen(String welt, int feldX, int feldZ, UUID eigentuemer,
+                                     long preis, String name) {
+        Parzelle neu = wahrheit.freistadtAnlegen(welt, feldX, feldZ, eigentuemer, preis,
+                name);
+        leeren();
+        return neu;
+    }
+
+    /**
+     * Ungepuffert durchgereicht.
+     *
+     * <p>Diese Frage kommt aus einem Befehl und nicht aus einem Blockereignis - gegruendet
+     * wird einmal, gebaut wird millionenfach. Sie zu puffern braechte nichts und waere ein
+     * zweiter Eintrag, der veralten kann.
+     */
+    @Override
+    public List<Parzelle> staedteIn(String welt) {
+        return wahrheit.staedteIn(welt);
+    }
+
+    @Override
     public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
         wahrheit.mitbauerSetzen(id, mitbauer);
         leeren();

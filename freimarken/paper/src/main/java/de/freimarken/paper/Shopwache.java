@@ -196,8 +196,7 @@ final class Shopwache implements Listener {
             // Datenbank. Ein umgeschriebenes Schild zeigte etwas anderes an, als der Shop
             // handelt - und dann betruegt das Holz den Kunden.
             ereignis.setCancelled(true);
-            sende(spieler, List.of(sprache.eineZeile(ShopSatz.SHOP_SCHON_EIN_SHOP,
-                    Einsatz.keine())));
+            sende(spieler, Shoptext.schonEinShopZeilen(sprache));
             return;
         }
         String[] zeilen = alsText(ereignis.lines());

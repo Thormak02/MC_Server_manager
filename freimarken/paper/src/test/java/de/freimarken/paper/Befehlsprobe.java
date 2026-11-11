@@ -2,6 +2,7 @@ package de.freimarken.paper;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestion;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import java.lang.reflect.Proxy;
@@ -72,6 +73,26 @@ final class Befehlsprobe {
      */
     int tippe(String befehl, Spielerprobe spieler) throws CommandSyntaxException {
         return baum.execute(befehl, alsSpieler(spieler.spieler()));
+    }
+
+    /**
+     * Was im Vorschlagsfenster steht, waehrend dieser Spieler tippt.
+     *
+     * <p><b>Die dritte Sache, die keine Tafel sagen kann.</b> Ein Vorschlagsgeber
+     * haengt an EINEM Argumentknoten; haengt er am falschen, bleibt das Fenster leer
+     * oder zeigt die Welten statt der Staedte. Im Quelltext sieht beides gleich aus.
+     *
+     * <p>{@code join} ohne Wartezeit, und das ist kein Leichtsinn: Die Vorschlaege
+     * dieses Projekts rechnen auf dem rufenden Faden und geben ein fertiges Ergebnis
+     * zurueck. Haengt es doch, haengt die Probe - und das ist die richtige Antwort,
+     * denn im Spiel haengt dann der Spieler.
+     *
+     * @param angefangen der Befehl, so weit getippt - das letzte Wort darf halb sein
+     */
+    List<String> vorschlaege(String angefangen, Spielerprobe spieler) {
+        return baum.getCompletionSuggestions(
+                        baum.parse(angefangen, alsSpieler(spieler.spieler())))
+                .join().getList().stream().map(Suggestion::getText).toList();
     }
 
     /** Die Zeilen, die die Konsole gelesen hat - in der Reihenfolge. */

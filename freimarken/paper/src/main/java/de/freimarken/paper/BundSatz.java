@@ -44,6 +44,7 @@ enum BundSatz implements Satz {
 
     /** Die Beschreibung von {@code /laden} in der Befehlsliste. */
     BEFEHL_LADEN("befehl.beschreibung.laden", Art.WORT),
+    BEFEHL_FREISTADT("befehl.beschreibung.freistadt", Art.WORT),
 
     /** Die Beschreibung von {@code /shop} in der Befehlsliste. */
     BEFEHL_SHOP("befehl.beschreibung.shop", Art.WORT),

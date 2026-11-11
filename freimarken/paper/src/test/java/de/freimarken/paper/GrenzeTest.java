@@ -288,7 +288,8 @@ class GrenzeTest {
             // Block an, lesen will es der, der getippt hat.
             "BlockBefehle.java",
             "Bonuswache.java",
-            "BundBefehle.java", "LadenBefehle.java", "FreimarkenPlugin.java", "MarktBefehle.java",
+            "BundBefehle.java", "LadenBefehle.java", "FreistadtBefehle.java",
+            "FreimarkenPlugin.java", "MarktBefehle.java",
             // Teil C: die zwei Beitrittszeilen und die Zeilen des taeglichen
             // Laufs - alle durch dasselbe private sende().
             "Mietwache.java",
@@ -373,10 +374,16 @@ class GrenzeTest {
      * wirklich zu senken. Drei der sechs handgeschriebenen Sendungen waren die
      * Ueberschrift, die Liste und der Hinweis des nackten {@code /warp} - sie gehen immer
      * zusammen hinaus und sind EIN Satz mit zwei Umbruchmarken geworden; zwei weitere
-     * waren die rote Absage und die graue Liste darunter, ebenfalls immer zusammen. Wer
-     * die Zahl wieder steigen sieht, sieht einen Satz, der aus dem Zeilenbau der Datei
-     * heraus und in das Programm zurueckgewandert ist. {@code RueckwegBefehle} bleibt
-     * dabei auf 1: Es hatte nur eine Sendung und hat sie noch.
+     * waren die rote Absage und die graue Liste darunter, ebenfalls immer zusammen.
+     * {@code RueckwegBefehle} bleibt dabei auf 1: Es hatte nur eine Sendung und hat sie
+     * noch.
+     *
+     * <p><b>Mit Schritt 9 steht sie wieder auf 6, und der Weg dorthin war ein Fehler:</b>
+     * Die drei Zweige in die Freistaedte brachten je eine Sendung mit - und zwar genau
+     * die Art, vor der der Absatz darueber warnt, naemlich einen Satz, der aus dem
+     * Zeilenbau heraus und ins Programm zurueckgewandert war. Einer davon warf im
+     * Betrieb, weil sein Satz eine Umbruchmarke traegt. Heute gehen alle sechs ueber die
+     * Naht; was die Zahl allein nicht mehr sagt, sagt {@link #AUFRUFE_IN_WARPBEFEHLE}.
      *
      * <p><b>{@code Schutzwache} ist im ersten Zug von Schritt 6 gemessen bei 1
      * geblieben</b>, und diese Eins ist der Grund fuer {@link #WACHENPAARE_IN_SCHUTZWACHE}:
@@ -435,6 +442,7 @@ class GrenzeTest {
             // hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat - und der waere
             // der erste, dessen Zeilen keine Tafel haelt.
             Map.entry("LadenBefehle.java", 1),
+            Map.entry("FreistadtBefehle.java", 1),
             // ZWEI: die Zeile fuer die Konsole (sie hat keine Hand und steht in keiner
             // Welt) und der eine Sendeweg fuer alle Spielerzeilen. Eine Zahl weniger
             // hiesse, dass ein Zweig von /markt stumm bleibt; eine mehr, dass neben
@@ -471,7 +479,7 @@ class GrenzeTest {
             Map.entry("Einrichtungswache.java", 1),
             Map.entry("SpielzeitBefehle.java", 4),
             Map.entry("Sprache.java", 3),
-            Map.entry("WarpBefehle.java", 3));
+            Map.entry("WarpBefehle.java", 6));
 
     /**
      * Wie oft jede reine Zeilen-Methode von {@code ParzellenBefehle} AUFGERUFEN wird.
@@ -708,7 +716,15 @@ class GrenzeTest {
     private static final Map<String, Integer> AUFRUFE_IN_WARPBEFEHLE = Map.ofEntries(
             Map.entry("keinZielZeilen", 1),
             Map.entry("weltFehltZeilen", 1),
-            Map.entry("zieleZeilen", 1));
+            Map.entry("zieleZeilen", 1),
+            // Die drei Zweige in die Freistaedte, nachgezogen am 11.11. Sie sendeten
+            // anfangs mit sprache.eineZeile aus dem Zweig heraus - als einzige in dieser
+            // Datei -, und warp.stadt-unbekannt traegt eine Umbruchmarke: Der Zweig warf,
+            // statt die Absage zu senden. ZWEI fuer keineStadtweltZeilen, weil zwei
+            // Zweige dieselbe Lage haben: /warp freistadt ohne Namen und mit Namen.
+            Map.entry("keineStadtweltZeilen", 2),
+            Map.entry("welcheStadtZeilen", 1),
+            Map.entry("keineStadtZeilen", 1));
 
     /**
      * Dasselbe fuer {@code RueckwegBefehle} - EIN Satz und EIN Wortstueck.
@@ -1008,6 +1024,7 @@ class GrenzeTest {
             "BEFEHL_BERUF -> WORT",
             "BEFEHL_MARKT -> WORT",
             "BEFEHL_LADEN -> WORT",
+            "BEFEHL_FREISTADT -> WORT",
             "BEFEHL_SHOP -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
