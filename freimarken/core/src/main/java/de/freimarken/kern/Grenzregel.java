@@ -131,7 +131,16 @@ public final class Grenzregel {
         return brauchbar(kante, MINDESTKANTE);
     }
 
-    private static boolean brauchbar(long kante, long mindestens) {
+    /**
+     * Dasselbe mit einem eigenen Mindestmass - fuer Welten, die mehr brauchen als zwei
+     * Chunks.
+     *
+     * <p>Die Freistaedtewelt ist so eine: Unter zwei Stadtfeldern und einer Leere, also
+     * 608 Bloecken, ergibt {@code Feldgrenze.ausKante} keine Welt mehr und wirft. Ohne
+     * diese Fassung pruefte der Weltenbau gegen 32 und rechnete gegen 608 - und der
+     * Server bliebe mitten im Start stehen.
+     */
+    public static boolean brauchbar(long kante, long mindestens) {
         return kante >= mindestens && kante <= HOECHSTMASS;
     }
 }

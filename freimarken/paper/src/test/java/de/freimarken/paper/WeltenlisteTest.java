@@ -425,8 +425,14 @@ class WeltenlisteTest {
             // Ohne diese Zeile faellt ein versehentlich kopierter Wert nicht auf:
             // Die Liste klagt darueber, aber die Klage traegt nur, wenn jemand sie
             // liest - und ein Startbericht mit sieben Welten ist lang.
+            // GEFRAGT WIRD, OB DER STARTWERT WIRKT - und nicht, ob die Art zufaellig
+            // RASTER heisst [geaendert 11.11.2026]: Mit den Stadtfeldern sind es vier
+            // Arten, deren Gelaende aus einer Rechnung kommt und nicht aus einer Zahl.
+            // Eine handgeschriebene Ausnahmeliste bliebe beim naechsten Zuwachs stehen,
+            // und dann verlangte diese Probe einen Startwert fuer eine Welt, die keinen
+            // haben kann.
             var gewoehnliche = ergebnis.welten().stream()
-                    .filter(w -> w.art() != Weltangabe.Art.RASTER)
+                    .filter(Weltangabe::startwertWirkt)
                     .toList();
             assertTrue(gewoehnliche.stream().allMatch(Weltangabe::wiederholbar),
                     "ohne Startwert haengt jeder eingemessene Quader an einer"

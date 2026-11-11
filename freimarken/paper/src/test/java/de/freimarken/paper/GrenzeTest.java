@@ -2219,6 +2219,83 @@ class GrenzeTest {
     private static final Pattern BALKENWACHE = Pattern.compile(
             "(\\w+)\\.sendActionBar\\((\\w+)\\(");
 
+    @Test
+    @DisplayName("31v - die Spannen im Stadtfeldgenerator, Zeile fuer Zeile")
+    void dieSpannenImStadtfeldgenerator() {
+        // Keine Probe kann den Generator laufen lassen - dazu braucht er ein ChunkData
+        // vom Server. Also wird der Quelltext gelesen, und zwar die UNTERE und die OBERE
+        // Grenze jeder Spanne als TEXT: Genau dort sass der Fehler vom 11.11.2026. Die
+        // Wand begann bei Feldboden.BODEN statt bei unten und endete bei BODEN +
+        // BARRIERE_HOCH statt bei wandBis() - ein Loch darunter und ein Block zu wenig
+        // darueber, und beides sah in einer Zaehlung der Aufrufe voellig richtig aus.
+        String quelle = Quellen.text(datei("StadtfelderGenerator.java"));
+        List<String> gefunden = new ArrayList<>();
+        var spanne = Pattern.compile(
+                "setRegion[(]lx, ([^,]+), lz, lx [+] 1, ([^,]+), lz [+] 1,").matcher(quelle);
+        while (spanne.find()) {
+            gefunden.add(spanne.group(1) + " .. " + spanne.group(2));
+        }
+
+        assertEquals(List.of(
+                        "unten .. Feldboden.wandBis()",
+                        "unten .. unten + 1",
+                        "unten + 1 .. Feldboden.ERDE_AB",
+                        "Feldboden.ERDE_AB .. Feldboden.BODEN"),
+                gefunden,
+                "die erste Spanne ist die WAND und muss von der Weltunterkante bis"
+                        + " wandBis() reichen; die drei anderen sind Grundgestein, Stein"
+                        + " und Erde einer Feldspalte. Steht in der ersten wieder"
+                        + " Feldboden.BODEN, ist unter der Wand Luft - und wer am"
+                        + " Feldrand einen Block tief graebt und zur Seite tritt, faellt"
+                        + " in die Leere.");
+    }
+
+    @Test
+    @DisplayName("31w - was im Weltenbau wirklich an die Weltgrenze geht")
+    void wasImWeltenbauAnDieWeltgrenzeGeht() {
+        // Weltenbau braucht einen laufenden Server; keine Probe kann setzeGrenze rufen.
+        // Darum steht hier, was den beiden Setzern UEBERGEBEN wird, als Text. Bis zum
+        // 11.11.2026 hiess es setSize(wirksam) und setCenter(0.0, 0.0) - fuer die
+        // Stadtfelder beides falsch: 6000 um 0/0 schneidet 84 Felder an, und die Mitte
+        // der Freistaedtewelt ist -16, nicht 0.
+        String quelle = Quellen.text(datei("Weltenbau.java"));
+        List<String> gefunden = new ArrayList<>();
+        var setzer = Pattern.compile("rand[.](setCenter|setSize)[(]([^;]*)[)];")
+                .matcher(quelle);
+        while (setzer.find()) {
+            gefunden.add(setzer.group(1) + "(" + setzer.group(2) + ")");
+        }
+
+        assertEquals(List.of("setCenter(mitte, mitte)", "setSize(kante)"), gefunden,
+                "beide Werte muessen aus der abgeleiteten Grenze kommen und nicht aus"
+                        + " der Zahl in der Einstellungsdatei. Steht hier wieder"
+                        + " setSize(wirksam), laeuft die Weltgrenze der Freistaedte"
+                        + " mitten durch Stadtfelder - und ein /warp auf das aeusserste"
+                        + " Feld setzt den Spieler VOR die eigene Grenze.");
+    }
+
+    @Test
+    @DisplayName("31x - das Mindestmass der Weltgrenze steht im Weltenbau genau einmal")
+    void dasMindestmassStehtGenauEinmal() {
+        // Grenzregel.MINDESTKANTE sind 32 Bloecke. Fuer die Freistaedte gelten 608 - zwei
+        // Stadtfelder und eine Leere -, und darunter WIRFT Feldgrenze.ausKante, mitten im
+        // Serverstart. Das Mass darf darum nur an der einen Stelle stehen, an der nach
+        // der Weltart entschieden wird; alle drei Benutzer (brauchbar, wirksam, klage)
+        // bekommen danach dieselbe Variable.
+        //
+        // Aufgeschrieben wird die ZEILE und nicht ihre Zahl: Eine Zaehlung bliebe gruen,
+        // wenn jemand die eine Stelle entfernt und dafuer eine andere einsetzt.
+        List<String> zeilen = Quellen.text(datei("Weltenbau.java")).lines()
+                .filter(zeile -> zeile.contains("Grenzregel.MINDESTKANTE"))
+                .map(String::strip)
+                .toList();
+
+        assertEquals(List.of(": Grenzregel.MINDESTKANTE;"), zeilen,
+                "steht das Mass wieder unmittelbar in Grenzregel.wirksam oder"
+                        + " Grenzregel.brauchbar, prueft der Weltenbau gegen 32 und"
+                        + " rechnet gegen 608 - der Server bleibt beim Start stehen.");
+    }
+
     private static Path datei(String name) {
         for (Path datei : Quellen.alle()) {
             if (datei.getFileName().toString().equals(name)) {

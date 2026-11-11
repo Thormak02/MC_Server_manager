@@ -1618,6 +1618,13 @@ welten:
   #                       2 Bloecken Spanne, ein anderer am 09.11. Bergland mit 29.
   #                       Auf einer flachen Welt ist die Frage nicht da. Der
   #                       startwert wirkt hier nicht - eine Ebene ist eine Ebene.
+  #           stadtfelder Stadtfelder in der Leere [11.11.2026] - die Welt der
+  #                       Freistaedte. Ein festes Raster aus Feldern zu 256x256,
+  #                       durch 32 Bloecke Leere getrennt, am Feldrand eine
+  #                       unsichtbare Wand von der Weltunterkante aufwaerts. Eine
+  #                       Stadt ist damit ein ORT und kein Nachbar: hinein kommt man
+  #                       nur mit /warp freistadt <name>. Der startwert wirkt auch
+  #                       hier nicht - das Gelaende kommt aus der Rechnung.
   #           Pflichtangabe. Eine fehlende Art wird NICHT geraten: "gewoehnlich" als
   #           Vorgabe wuerde aus der Marktstadt beim naechsten Start eine Welt mit
   #           Huegeln und Baeumen machen, mitten in den bezahlten Parzellen.
@@ -1728,10 +1735,22 @@ welten:
     spielmodus: abenteuer
     # Kein tor: Hier stehen die Tore, ein Tor nach nebenan waere keines.
 
-  # ~320 Freistaedte auf natuerlichem Gelaende.
+  # Die Welt der Freistaedte: Stadtfelder in der Leere, eines je Stadt.
   freistaedte:
-    art: gewoehnlich
-    startwert: 110926002
+    # STADTFELDER [entschieden 11.11.2026, Plan 6.4]: ein festes Raster aus Feldern zu
+    # 256x256, durch 32 Bloecke Leere getrennt und mit unsichtbarem Rand aus
+    # Barrierebloecken. Eine Freistadt ist damit ein ORT und kein Nachbar - hinein kommt
+    # man nur mit /warp freistadt <name>, nicht zu Fuss.
+    #
+    # KEIN Startwert: Das Gelaende kommt aus der Rechnung (Stadtfeldplan) und nicht aus
+    # einer Zahl. Eine Zahl hier waere eine, die nie wirkt.
+    #
+    # Die Kante ist ein WUNSCH und kein Mass: Sie wird auf ganze Stadtfelder
+    # abgerundet, sonst schnitte die Grenze mitten durch Bauland. Aus 6000 werden
+    # 20 Felder je Achse (Nummern -10 bis 9) und die wirkliche Kante 5792 um -16/-16.
+    # Das sind 400 Felder, davon 399 zu gruenden: Feld 0/0 ist das ANKUNFTSFELD, dort
+    # landet das Tor aus Altfurt. Was wirklich gilt, steht beim Start im Protokoll.
+    art: stadtfelder
     kante: 6000
     tor:
       von: [62, 71, 0]

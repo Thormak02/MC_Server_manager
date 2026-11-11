@@ -1,6 +1,8 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Feldgrenze;
 import de.freimarken.kern.Grenzregel;
+import de.freimarken.kern.Stadtfeldplan;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -44,11 +46,14 @@ final class Weltenbau {
 
     private final JavaPlugin plugin;
     private final MarktstadtGenerator raster;
+    private final StadtfelderGenerator stadtfelder;
     private final Logger protokoll;
 
-    Weltenbau(JavaPlugin plugin, MarktstadtGenerator raster, Logger protokoll) {
+    Weltenbau(JavaPlugin plugin, MarktstadtGenerator raster,
+              StadtfelderGenerator stadtfelder, Logger protokoll) {
         this.plugin = plugin;
         this.raster = raster;
+        this.stadtfelder = stadtfelder;
         this.protokoll = protokoll;
     }
 
@@ -187,6 +192,13 @@ final class Weltenbau {
             // waere. Bauwerke bleiben aus: Ein Dorf auf einem Marktplatz ist genau
             // das, was eine flache Probewelt nicht haben soll.
             case FLACH -> bauplan.type(WorldType.FLAT).generateStructures(false);
+            // Wie beim Raster: eigener Generator UND eigener Biomgeber. Jener sorgt
+            // dafuer, dass auf einem Stadtfeld eine Wiese waechst und in der Leere
+            // nichts - die FARBE des Himmels aendert er nicht, anders als hier bis zum
+            // 11.11.2026 stand.
+            case STADTFELDER -> bauplan.generator(stadtfelder)
+                    .biomeProvider(stadtfelder.getDefaultBiomeProvider(null))
+                    .generateStructures(false);
             // Gewoehnlich heisst: gar nichts angeben. Jeder eigene Generator schaltet das
             // Gelaende ab, das hier ausdruecklich gewollt ist - Erze, Baeume, Tiere.
             case GEWOEHNLICH -> bauplan.generateStructures(true);
@@ -213,7 +225,19 @@ final class Weltenbau {
                     + " es bleibt, was in der Welt steht (" + (long) rand.getSize() + ").");
             return;
         }
-        if (!Grenzregel.brauchbar(angabe.kante())) {
+        // Bei den Stadtfeldern ist die Zahl in der Datei ein WUNSCH und kein Mass
+        // [11.11.2026]: Sie wird auf ganze Felder abgerundet, genau wie die Marktstadt
+        // ihre Kante aus dem Parzellenraster ableitet. 6000 ist kein Vielfaches von 288 -
+        // eine Grenze von 6000 um 0/0 schnitt 84 Felder an und lief mitten durch Feld 10,
+        // dessen Mitte bei 3007 liegt. Ein Warp dorthin haette den Spieler VOR die eigene
+        // Weltgrenze gesetzt.
+        Stadtfeldplan feldplan = angabe.art() == Weltangabe.Art.STADTFELDER
+                ? stadtfelder.plan()
+                : null;
+        long mindest = feldplan != null
+                ? Feldgrenze.mindestKante(feldplan)
+                : Grenzregel.MINDESTKANTE;
+        if (!Grenzregel.brauchbar(angabe.kante(), mindest)) {
             // Soll Weltenliste abgefangen haben. Ein Riegel, kein Rueckfall: Eine
             // unbrauchbare Kante an setSize zu geben, wirft - und zwar mitten im Start.
             protokoll.severe("welten." + angabe.name() + ".kante ist " + angabe.kante()
@@ -223,20 +247,36 @@ final class Weltenbau {
         double inDerWelt = rand.getSize();
         boolean bestaetigt = Grenzregel.sprungText(angabe.kante(), inDerWelt)
                 .equals(angabe.sprungBestaetigt());
-        long wirksam = Grenzregel.wirksam(angabe.kante(), inDerWelt,
-                Grenzregel.MINDESTKANTE, angabe.kante(), bestaetigt);
+        long wirksam = Grenzregel.wirksam(angabe.kante(), inDerWelt, mindest,
+                feldplan != null ? Feldgrenze.FREISTAEDTE_KANTE : angabe.kante(),
+                bestaetigt);
         String klage = Grenzregel.klage("welten." + angabe.name(), angabe.kante(),
-                inDerWelt, wirksam, Grenzregel.MINDESTKANTE);
+                inDerWelt, wirksam, mindest);
         if (klage != null) {
             protokoll.severe(klage);
         }
-        if (frisch) {
-            // Nur bei einer frischen Welt. Die Kante wird nie kleiner - aber ein
+        double kante = wirksam;
+        double mitte = 0.0;
+        if (feldplan != null) {
+            Feldgrenze feldgrenze = Feldgrenze.ausKante(feldplan, (int) wirksam);
+            kante = feldgrenze.kante();
+            mitte = feldgrenze.mitte();
+            protokoll.info("Freistaedte " + welt.key().asString() + ": Felder "
+                    + feldgrenze.von() + ".." + feldgrenze.bis() + " je Achse, "
+                    + feldgrenze.staedteZahl() + " Staedte moeglich, Bloecke "
+                    + feldgrenze.kleinsterBlock() + ".." + feldgrenze.groessterBlock());
+        }
+        if (frisch || feldplan != null) {
+            // Sonst nur bei einer frischen Welt. Die Kante wird nie kleiner - aber ein
             // verschobener Mittelpunkt schiebt die Grenze genauso nach innen, und wer ihn
             // mit /worldborder center gesetzt hat, hat das so gewollt.
-            rand.setCenter(0.0, 0.0);
+            //
+            // Bei den Stadtfeldern gilt das NICHT: Dort haengt die ganze Geometrie an der
+            // Mitte. Ein verschobener Mittelpunkt liesse die Grenze quer durch Stadtfelder
+            // laufen, und das ist kein Wunsch, sondern ein Unfall.
+            rand.setCenter(mitte, mitte);
         }
-        rand.setSize(wirksam);
+        rand.setSize(kante);
         // Eine Mauer, keine Falle: Wer heute weit draussen ausloggt, soll beim naechsten
         // Einloggen nicht am Grenzschaden sterben.
         rand.setDamageAmount(0.0);

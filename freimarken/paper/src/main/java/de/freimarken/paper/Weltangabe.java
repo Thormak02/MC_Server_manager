@@ -54,7 +54,21 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
          * {@link #LEER}: Eine Ebene ist eine Ebene, gleich welche Zahl darueber
          * steht. {@code Weltenliste.pruefeStartwerte} nimmt diese Arten darum aus.
          */
-        FLACH
+        FLACH,
+
+        /**
+         * Stadtfelder in der Leere - die Welt der Freistaedte [11.11.2026].
+         *
+         * <p>Ein festes Raster aus Feldern zu 256x256, durch Leere getrennt und mit
+         * unsichtbarem Rand: {@code StadtfelderGenerator} und {@code Stadtfeldplan}.
+         * Eine Stadt ist damit ein ORT und kein Nachbar - hinein kommt man nur mit
+         * {@code /warp freistadt <name>}.
+         *
+         * <p>Der Startwert ist hier ohne Wirkung - wie bei {@link #RASTER},
+         * {@link #LEER} und {@link #FLACH}: Das Gelaende kommt aus der Rechnung und
+         * nicht aus einer Zahl.
+         */
+        STADTFELDER
     }
 
     /** Ob fuer diese Welt ueberhaupt eine Grenze gesetzt werden soll. */
@@ -96,7 +110,8 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
      * etwas, das Absicht ist, nimmt jeder Leser beim naechsten Mal nicht mehr ernst.
      */
     boolean startwertWirkt() {
-        return art != Art.RASTER && art != Art.LEER && art != Art.FLACH;
+        return art != Art.RASTER && art != Art.LEER && art != Art.FLACH
+                && art != Art.STADTFELDER;
     }
 
     /**

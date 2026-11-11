@@ -46,6 +46,7 @@ import de.freimarken.kern.ZwischenspeicherBerufe;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.SpeicherSpielzeit;
 import de.freimarken.kern.SpeicherTruhe;
+import de.freimarken.kern.Stadtfeldplan;
 import de.freimarken.kern.Truhenablage;
 import de.freimarken.kern.Truhenverzeichnis;
 import de.freimarken.kern.Spielzeitablage;
@@ -119,6 +120,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
     private final Rasterplan plan = Rasterplan.marktstadt();
     private final MarktstadtGenerator generator = new MarktstadtGenerator(plan);
+
+    /**
+     * Der Generator der Freistaedte - Stadtfelder in der Leere [11.11.2026].
+     *
+     * <p>Ein Feld, kein neues Exemplar je Welt: Bukkit fragt den Generator aus mehreren
+     * Faeden, und er hat keinen veraenderlichen Zustand. Zwei Exemplare waeren zwei
+     * Rechnungen fuer dieselbe Welt.
+     */
+    private final StadtfelderGenerator stadtfelder =
+            new StadtfelderGenerator(Stadtfeldplan.freistaedte());
 
     /**
      * Die EINE Wanduhr des Plugins.
@@ -564,7 +575,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
         var liste = Weltenliste.ausKonfiguration(
                 getConfig().getConfigurationSection("welten"), MARKTSTADT, ankunftswelt);
         liste.klagen().forEach(getLogger()::severe);
-        var gebaut = new Weltenbau(this, generator, getLogger()).baueAlle(liste.welten());
+        var gebaut = new Weltenbau(this, generator, stadtfelder, getLogger())
+                .baueAlle(liste.welten());
         welten.putAll(gebaut.welten());
         // Die Angaben mit, nicht nur die Welten: Spielmodus und Tor stehen dort, und ein
         // zweites Lesen der config.yml waere eine zweite Wahrheit.

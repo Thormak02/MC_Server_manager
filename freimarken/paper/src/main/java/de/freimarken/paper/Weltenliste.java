@@ -66,7 +66,7 @@ final class Weltenliste {
                 // machen, mitten in den Parzellen. Lieber laut aussteigen.
                 klagen.add("welten." + name + ".art fehlt oder ist unbekannt ("
                         + eintrag.getString("art") + "). Erlaubt sind raster, gewoehnlich,"
-                        + " leer, flach - uebersprungen.");
+                        + " leer, flach, stadtfelder - uebersprungen.");
                 continue;
             }
             if (art == Weltangabe.Art.RASTER != name.equals(rasterwelt)) {
@@ -470,6 +470,7 @@ final class Weltenliste {
             case "gewoehnlich", "gewöhnlich" -> Weltangabe.Art.GEWOEHNLICH;
             case "leer" -> Weltangabe.Art.LEER;
             case "flach" -> Weltangabe.Art.FLACH;
+            case "stadtfelder" -> Weltangabe.Art.STADTFELDER;
             default -> null;
         };
     }

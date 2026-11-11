@@ -147,7 +147,7 @@ schieben, nach innen nicht — deshalb jetzt etwas Luft.
 |---|---|---|---|---|
 | `altfurt` | 400 | 800 | Abenteuer | Gebaut: Bundesmarkt und die Gebäude aus [2.1](#21-die-gebäude-in-altfurt), Farmen, Mine |
 | `marktstadt` | 1.494,5 | 2.989* | Überleben | 1.764 Parzellen zu 64×64, Weg 7, Nummern −21 bis 20 |
-| `freistaedte` | 3.000 | 6.000 | Überleben | ~320 Freistädte, natürliches Gelände |
+| `freistaedte` | 3.000 | 6.000 | Überleben | **Flaches Raster**: Stadtfelder zu 256×256, durch Leere getrennt — siehe [6.4](#64-wie-eine-freistadt-im-gelände-liegt-entschieden-11112026) |
 | `hafenwerder` | 2.500 | 5.000 | Überleben | Archipel, **eigenes Angelgut** |
 | `wolkenwerder` | Raster | — | Überleben | Leerwelt, **eigene Skyblock-Mechaniken** |
 | `hochwald` | 2.500 | 5.000 | Überleben | Freibau, Sicherung kostet |
@@ -683,6 +683,31 @@ zahlt nie etwas. [empfohlen]
 **Auflagen für eine Freistadt** [empfohlen, nach Lumias Regel]: Erst wenn sie Grundstücke
 *und* eine Regelwand hat, bekommt sie einen Teleporter im Bundesratshaus und darf Läden
 lizenzieren. Das verhindert Geisterstädte, die Fläche blockieren.
+
+### 6.4 Wie eine Freistadt im Gelände liegt [entschieden 11.11.2026]
+
+**Ein festes Raster auf einer flachen Welt**, wie die Marktstadt ihr Parzellenraster hat:
+eine Kachel von 256×256 ist eine Stadt. **Zwischen den Kacheln liegt Leere** — man kann
+nicht von einer Stadt zur nächsten laufen. Hinein kommt man nur mit `/warp freistadt
+<name>`.
+
+Das ersetzt das „natürliche Gelände“, das hier vorher stand. Drei Gründe:
+
+- **Eine Stadt ist dann ein ORT und kein Nachbar.** Ohne gemeinsame Kante gibt es keinen
+  Grenzstreit, kein Durchlaufen, kein Bauen an der fremden Mauer — und der Teleporter ist
+  der eine Weg hinein, so wie es [2.1](#21-die-gebäude-in-altfurt) für das Bundesratshaus
+  ohnehin vorsieht.
+- **Die Zugehörigkeit eines Blocks wird eine Punktabfrage**, genau wie bei den Parzellen
+  — `darfBauen` läuft bei jedem gesetzten Block, und ein Quadervergleich wäre dort
+  spürbar teurer ([6.1](#61-modell) sagt das schon für das Raster der Marktstadt).
+  Überschneidung zweier Städte ist damit nicht möglich, nicht nur verboten.
+- **Flach statt gewachsen**, weil jede Stadt sonst eine andere wäre: Die eine läge im Tal,
+  die nächste halb im Berg, und der Preis von 400.000 Mark könnte für beide nicht
+  derselbe sein. Wer Gelände will, baut es — das ist der Zweck einer eigenen Stadt.
+
+Was daraus folgt und beim Bauen zu entscheiden ist: der Weltgenerator (ein Geschwister des
+`MarktstadtGenerator`), die Breite der Leere zwischen den Feldern, und wohin das **Tor in
+Altfurt** führt — ein Tor braucht ein Ziel, und „irgendwo in der Leere“ ist keins.
 
 ### 6.3 Zusammenlegen [entschieden]
 
