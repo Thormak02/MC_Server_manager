@@ -308,6 +308,9 @@ class GrenzeTest {
             // Handel - eine Rueckgabe ueber dem Tagesdeckel muss lesbar bleiben,
             // nachdem die Kiste zu ist.
             "Truhenwache.java",
+            // Die Einrichtung der Stadt [11.11.2026]: EIN Handbalken, wenn eine Kiste
+            // zubleibt, die niemandem gehoert.
+            "Einrichtungswache.java",
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
 
     /**
@@ -465,6 +468,7 @@ class GrenzeTest {
             // nur die halbe Zusage: WAS gesendet wird, halten die Bildtafel und
             // TruhenwacheTest.
             Map.entry("Truhenwache.java", 1),
+            Map.entry("Einrichtungswache.java", 1),
             Map.entry("SpielzeitBefehle.java", 4),
             Map.entry("Sprache.java", 3),
             Map.entry("WarpBefehle.java", 3));
@@ -965,6 +969,7 @@ class GrenzeTest {
             "SCHUTZ_FREMDER_LADEN -> HANDBALKEN",
             "SCHUTZ_LADEN_FREI -> HANDBALKEN",
             "SCHUTZ_LADEN_GESTOERT -> HANDBALKEN",
+            "SCHUTZ_EINRICHTUNG -> HANDBALKEN",
             "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
             "ANKUNFT_ABENTEUER -> SATZ",
             "PORTAL_KEIN_AUSGANG -> SATZ");
@@ -2762,6 +2767,41 @@ class GrenzeTest {
     }
 
     @Test
+    @DisplayName("31ap - die Stellen der Freien Truhen werden auch GEFUELLT")
+    void truhenstellenWerdenGefuellt() {
+        // Das Feld traegt die Pruefung, und ein Feld, das niemand fuellt, ist null -
+        // dann kehrt pruefeFreieTruhen sofort zurueck und schweigt fuer immer. Genau
+        // diese Fehlerklasse hat 31ac und 31ai gefangen; sie hat hier eine dritte
+        // Gestalt, weil zwischen Fuellen und Lesen zwei Startschritte liegen.
+        //
+        // Dass richteTruheEin VOR richteSpielzeitEin laeuft (und damit vor
+        // richteShopsEin, das darin steckt), haelt schon 31ai ueber den Mitfahrer
+        // truhenlauf.
+        assertEquals("richteTruheEin", fuellendeMethode(plugintext(), "truhenstellen"),
+                "truhenstellen wird in keiner richte-Methode gesetzt - dann prueft"
+                        + " pruefeFreieTruhen nie etwas");
+    }
+
+    @Test
+    @DisplayName("31ao - die Shopschild-Pruefung fragt anDerKiste und NICHT istShopkiste")
+    void truhenpruefungFragtAnDerKiste() {
+        // DIE ZEILEN, DIE KEIN LAUF ERREICHT, und eine still umkehrbare Entscheidung:
+        // Shopbuch.anDerKiste gibt bei stummer Datenbank eine LEERE Liste ("erfinde
+        // keinen Besitzer"), Shopbuch.istShopkiste ein true ("schuetze die Kiste").
+        // Beide Antworten sind an ihrer Methode richtig begruendet - hier taugt nur die
+        // erste: Mit der zweiten klagte ein Datenbankausfall beim Start ueber JEDE
+        // eingetragene Truhenstelle, und eine Klage ueber etwas, das nicht da ist, nimmt
+        // der Leser beim naechsten Mal nicht mehr ernst.
+        String pruefung = methodentext("pruefeFreieTruhen");
+
+        assertTrue(pruefung.contains("anDerKiste("),
+                "ohne diese Frage prueft die Methode gar nichts: " + pruefung);
+        assertFalse(pruefung.contains("istShopkiste("),
+                "istShopkiste klagt bei stummer Datenbank ueber jede Stelle: "
+                        + pruefung);
+    }
+
+    @Test
     @DisplayName("31an - die Truhenwache wird angemeldet, sobald eine Stelle eingetragen"
             + " ist")
     void truhenwacheWirdAngemeldet() {
@@ -2796,7 +2836,7 @@ class GrenzeTest {
      */
     private static String methodentext(String name) {
         String plugin = plugintext();
-        int anfang = plugin.indexOf("private void " + name + "()");
+        int anfang = plugin.indexOf("private void " + name + "(");
         assertTrue(anfang >= 0, name + "() fehlt in FreimarkenPlugin");
         int ende = plugin.indexOf("    private ", anfang + 1);
         return plugin.substring(anfang, ende < 0 ? plugin.length() : ende);

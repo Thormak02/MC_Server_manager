@@ -1062,6 +1062,13 @@ wache:
     #   Datenbank weiss niemand, wem der Stand gehoert, und die zwei Zeilen darueber
     #   waeren beide eine Behauptung.
     laden-gestoert: "<red>Die Markthalle ist gerade nicht nachsehbar - versuch es noch einmal.</red>"
+    # Ein Behaelter in der Ladenwelt, der niemandem gehoert. Der Abenteuermodus
+    #   verhindert das Bauen, nicht das OEFFNEN - ohne diese Absage stuende jede Kiste
+    #   der Stadt offen.
+    # KEIN Ausweg im Satz, anders als bei laden-frei: Diese Kiste ist nicht zu mieten
+    #   und nicht freizugeben. Die Freie Truhe und die Kistenshops sind ausgenommen,
+    #   dort entscheiden ihre eigenen Wachen.
+    einrichtung: "<red>Diese Kiste gehoert zur Stadt</red>"
   # DIE ANKUNFT. Zwei Saetze an zwei verschiedenen Anlaessen: Der eine kommt, weil jemand
   # einen Spawnpunkt setzen wollte, der andere, weil jemand eine Abenteuerwelt betritt.
   # Sie gehen nie zusammen hinaus, darum sind es zwei Zeilen und nicht eine mit beidem

@@ -29,6 +29,7 @@ import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Bundankauf;
 import de.freimarken.kern.Grenzregel;
 import de.freimarken.kern.Handelsart;
+import de.freimarken.kern.Blockort;
 import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Ladenverzeichnis;
@@ -46,6 +47,7 @@ import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.SpeicherSpielzeit;
 import de.freimarken.kern.SpeicherTruhe;
 import de.freimarken.kern.Truhenablage;
+import de.freimarken.kern.Truhenverzeichnis;
 import de.freimarken.kern.Spielzeitablage;
 import de.freimarken.kern.Stadtgrenze;
 import de.freimarken.kern.Tagesgrenze;
@@ -361,6 +363,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * auch dann noch weggehen, sonst waeren sie unloeschbar.
      */
     private Truhenlauf truhenlauf;
+    /**
+     * Die Stellen der Freien Truhen - gehalten fuer {@link #pruefeFreieTruhen}.
+     *
+     * <p>Ein Feld, weil die Pruefung erst laufen kann, wenn die Shops gelesen sind, und
+     * das ist zwei Startschritte spaeter. {@code null} nur, wenn der Start davor
+     * abgebrochen ist.
+     */
+    private Truhenverzeichnis truhenstellen;
     /**
      * Die gelesenen Blockbuchwerte - fuer den Befehlszweig.
      *
@@ -874,6 +884,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private void richteTruheEin() {
         var stellen = Truhenliste.stellen(getConfig(), weltschluessel(ladenwelt),
                 ladenverzeichnis);
+        truhenstellen = stellen.verzeichnis();
         stellen.klagen().forEach(getLogger()::severe);
         stellen.bericht().forEach(getLogger()::info);
         Truhenbuch buch = new Truhenbuch(stellen.verzeichnis(), truhenablage, wirtschaft,
@@ -1040,6 +1051,62 @@ public final class FreimarkenPlugin extends JavaPlugin {
             }
         }
         getLogger().info(Shopliste.bundzeile(staende, wirtschaft.werte().markt()));
+        pruefeFreieTruhen(shopbuch);
+        // DIE EINRICHTUNG DER STADT, und sie steht HIER am Ende des Starts: Die Wache
+        // braucht die Truhenstellen (richteTruheEin, zwei Schritte vorher) UND die
+        // Shops. Frueher gebaut waere sie eine Wache, die die Freie Truhe zusperrt und
+        // jeden Kistenshop seinem Besitzer verschliesst.
+        getServer().getPluginManager().registerEvents(new Einrichtungswache(
+                weltschluessel(ladenwelt), truhenstellen, shopbuch::istShopkiste,
+                sprache), this);
+        getLogger().info("Einrichtungsschutz: Behaelter in "
+                + weltschluessel(ladenwelt) + " bleiben zu - ausser der Freien Truhe,"
+                + " den Kistenshops und den gemieteten Staenden. Der Abenteuermodus"
+                + " verhindert dort das Bauen, nicht das Oeffnen; " + Schutzwache.UEBERALL
+                + " oeffnet alles.");
+    }
+
+    /**
+     * Prueft, ob an einer Freien Truhe ein SHOPSCHILD haengt.
+     *
+     * <p><b>Ein Bundschild an der Gemeinschaftstruhe waere ein Stand, der die Ware aller
+     * verkauft</b>, ein Spielerschild einer, der sie auf ein eigenes Konto verkauft.
+     * Beides ist kein Spielerloch - ein Schild stellt nur auf, wer dort bauen darf -,
+     * aber es ist eine Falle fuer den Betreiber: In die Freie Truhe legt jeder hinein,
+     * und was darin liegt, waere dann verkaeuflich.
+     *
+     * <p><b>HIER und nicht in {@link #richteTruheEin}</b>: Dort sind die Shops noch nicht
+     * gelesen - sie entstehen in {@link #richteShopsEin} -, und eine Pruefung gegen einen
+     * leeren Zwischenspeicher findet nie etwas. Sie waere eine Zeile, die immer schweigt,
+     * und das ist schlimmer als keine.
+     *
+     * <p><b>Gefragt wird mit {@code anDerKiste} und NICHT mit {@code istShopkiste}</b>:
+     * Jene gibt bei stummer Datenbank eine LEERE Liste ("erfinde keinen Besitzer"), diese
+     * ein {@code true} ("schuetze die Kiste"). Mit der zweiten Frage klagte ein
+     * Datenbankausfall ueber JEDE eingetragene Stelle - und eine Klage ueber etwas, das
+     * nicht da ist, nimmt der Leser beim naechsten Mal nicht mehr ernst.
+     *
+     * <p>Eine Doppelkiste steht mit BEIDEN Haelften in {@code freie-truhe.truhen}, und
+     * ein Shopschild haengt an genau einer davon - gefragt wird darum je Stelle und nicht
+     * je Truhe.
+     */
+    private void pruefeFreieTruhen(Shopbuch shopbuch) {
+        if (truhenstellen == null) {
+            return;
+        }
+        for (Blockort stelle : truhenstellen.alle()) {
+            for (Kistenshop shop : shopbuch.anDerKiste(stelle.welt(), stelle.x(),
+                    stelle.y(), stelle.z())) {
+                getLogger().severe("An der Freien Truhe bei " + stelle.welt() + " "
+                        + stelle.x() + "/" + stelle.y() + "/" + stelle.z()
+                        + " haengt ein " + (shop.demBund() ? "BUNDSCHILD" : "SHOPSCHILD")
+                        + " bei " + shop.schildX() + "/" + shop.schildY() + "/"
+                        + shop.schildZ() + ". Damit wird die Gemeinschaftsware verkauft:"
+                        + " Jeder legt hinein, einer verkauft. Entweder das Schild"
+                        + " abbauen oder die Stelle aus " + Truhenverzeichnis.PFAD_TRUHEN
+                        + " nehmen.");
+            }
+        }
     }
 
     /**

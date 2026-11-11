@@ -11,28 +11,22 @@ import de.freimarken.kern.Truhenverzeichnis;
 import de.freimarken.kern.Truhenwerte;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
-import java.lang.reflect.Proxy;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Logger;
 import org.bukkit.Material;
 import org.bukkit.World;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.inventory.Inventory;
-import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.BeforeAll;
@@ -372,63 +366,9 @@ class TruhenwacheEreignisTest {
         return liste;
     }
 
-    /**
-     * Das Inventar einer Kiste an dieser Stelle - Plaetze, Zuschauer, Halter.
-     *
-     * <p>{@code getContents} gibt die LEBENDE Liste der Plaetze und nicht eine Kopie, wie
-     * echtes Bukkit es tut. Der Unterschied ist hier keiner: Gelesen wird daraus, und
-     * geschrieben wird ueber {@code setItem} - genau wie im gepruefen Zweig.
-     */
+    /** Die Kiste dieser Welt an dieser Stelle - die Attrappe steht in Kistenprobe. */
     private Inventory kiste(int x, ItemStack[] plaetze, List<HumanEntity> zuschauer) {
-        InventoryHolder haelt = kistenhalter(x);
-        return (Inventory) Proxy.newProxyInstance(
-                TruhenwacheEreignisTest.class.getClassLoader(),
-                new Class<?>[] {Inventory.class},
-                (eigen, methode, werte) -> switch (methode.getName()) {
-                    // getHolder() und getHolder(false) heissen gleich - der
-                    // Stellvertreter sieht den Unterschied nicht und braucht ihn nicht.
-                    case "getHolder" -> haelt;
-                    case "getContents" -> plaetze;
-                    case "getViewers" -> zuschauer;
-                    case "getSize" -> plaetze.length;
-                    case "setItem" -> {
-                        plaetze[(Integer) werte[0]] = (ItemStack) werte[1];
-                        yield null;
-                    }
-                    // Gebraucht vom Zuruecklegen ueber dem Deckel: Bukkit nimmt dort
-                    // einen Stapel und keine Zahl, also geht der Weg durch addItem.
-                    case "addItem" -> hinein((ItemStack[]) werte[0], plaetze);
-                    case "toString" -> "Kistenprobe " + x + "/" + Y + "/" + Z;
-                    case "hashCode" -> (x * 31 + Y) * 31 + Z;
-                    case "equals" -> eigen == (werte == null ? null : werte[0]);
-                    default -> throw new UnsupportedOperationException(
-                            "Die Kistenprobe beantwortet " + methode.getName()
-                                    + " nicht - gefragt werden darf nach Halter,"
-                                    + " Plaetzen und Zuschauern");
-                });
-    }
-
-    /**
-     * Legt Stapel in die Kiste und gibt zurueck, was nicht hineinpasste - die Form, in
-     * der Bukkit antwortet. Jeder Stapel bekommt einen eigenen Platz.
-     */
-    private static Map<Integer, ItemStack> hinein(ItemStack[] stapel,
-            ItemStack[] plaetze) {
-        Map<Integer, ItemStack> blieben = new HashMap<>();
-        for (int i = 0; i < stapel.length; i++) {
-            int frei = -1;
-            for (int platz = 0; platz < plaetze.length && frei < 0; platz++) {
-                if (plaetze[platz] == null) {
-                    frei = platz;
-                }
-            }
-            if (frei < 0) {
-                blieben.put(i, stapel[i]);
-                continue;
-            }
-            plaetze[frei] = stapel[i];
-        }
-        return blieben;
+        return Kistenprobe.kiste(welt, x, Y, Z, plaetze, zuschauer);
     }
 
     /** Wie viele STUECK dieses Materials in der Kiste liegen. */
@@ -442,60 +382,13 @@ class TruhenwacheEreignisTest {
         return stueck;
     }
 
-    /**
-     * Eine Kistenhaelfte: {@code BlockState} UND {@code InventoryHolder}.
-     *
-     * <p>Der Block kommt aus {@link Serverprobe} - die eine Wahrheit darueber, was ein
-     * Block beantwortet. Die Huelle darum traegt die zweite Schnittstelle, die echtes
-     * Bukkit mitbringt: Ohne sie wirft {@code getHolder} beim Umwandeln auf
-     * {@code InventoryHolder}.
-     */
-    private InventoryHolder kistenhalter(int x) {
-        Block block = Serverprobe.zustand(welt, null, x, Y, Z).getBlock();
-        return (InventoryHolder) Proxy.newProxyInstance(
-                TruhenwacheEreignisTest.class.getClassLoader(),
-                new Class<?>[] {BlockState.class, InventoryHolder.class},
-                (eigen, methode, werte) -> switch (methode.getName()) {
-                    case "getBlock" -> block;
-                    case "toString" -> "Halterprobe " + x + "/" + Y + "/" + Z;
-                    case "hashCode" -> (x * 31 + Y) * 31 + Z;
-                    case "equals" -> eigen == (werte == null ? null : werte[0]);
-                    default -> throw new UnsupportedOperationException(
-                            "Die Halterprobe beantwortet " + methode.getName()
-                                    + " nicht - gefragt werden darf nur, WO sie steht");
-                });
-    }
-
-    /** Die Sicht auf ein Inventar - mehr fragen die beiden Ereignisse nicht. */
+    /** Die Sicht auf ein Inventar - die Attrappe steht in Kistenprobe. */
     private static InventoryView sichtAuf(HumanEntity wer, Inventory oben) {
-        return (InventoryView) Proxy.newProxyInstance(
-                TruhenwacheEreignisTest.class.getClassLoader(),
-                new Class<?>[] {InventoryView.class},
-                (eigen, methode, werte) -> switch (methode.getName()) {
-                    case "getPlayer" -> wer;
-                    case "getTopInventory" -> oben;
-                    case "toString" -> "Sicht von " + wer;
-                    case "hashCode" -> 31;
-                    case "equals" -> eigen == (werte == null ? null : werte[0]);
-                    default -> throw new UnsupportedOperationException(
-                            "Die Sichtprobe beantwortet " + methode.getName()
-                                    + " nicht - gefragt werden darf, WER oeffnet und WAS");
-                });
+        return Kistenprobe.sichtAuf(wer, oben);
     }
 
-    /** Ein Wesen, das kein Spieler ist - nur dafuer da, keiner zu sein. */
+    /** Ein Wesen, das kein Spieler ist - die Attrappe steht in Kistenprobe. */
     private static HumanEntity keinSpieler() {
-        return (HumanEntity) Proxy.newProxyInstance(
-                TruhenwacheEreignisTest.class.getClassLoader(),
-                new Class<?>[] {HumanEntity.class},
-                (eigen, methode, werte) -> switch (methode.getName()) {
-                    case "toString" -> "Wesen ohne Spieler";
-                    case "hashCode" -> 37;
-                    case "equals" -> eigen == (werte == null ? null : werte[0]);
-                    default -> throw new UnsupportedOperationException(
-                            "Dieses Wesen soll GAR NICHTS beantworten - es ist nur dafuer"
-                                    + " da, kein Spieler zu sein. Gefragt wurde "
-                                    + methode.getName());
-                });
+        return Kistenprobe.keinSpieler();
     }
 }

@@ -631,6 +631,11 @@ class BildGleichTest {
                 new Zeile(WacheSatz.SCHUTZ_LADEN_GESTOERT, 1L, Einsatz.keine(),
                         "&cDie Markthalle ist gerade nicht nachsehbar - versuch es noch"
                                 + " einmal."),
+                // ROT und OHNE Ausweg, anders als laden-frei: Diese Kiste ist nicht zu
+                // mieten und nicht freizugeben. Ein "frag das Team" stuende hier als
+                // Aufforderung, die das Team nicht erfuellen kann.
+                new Zeile(WacheSatz.SCHUTZ_EINRICHTUNG, 1L, Einsatz.keine(),
+                        "&cDiese Kiste gehoert zur Stadt"),
 
                 // Bauschritt 6, zweiter Zug: die Ankunftswache und die Portalwache.
                 // Die erwarteten Bilder kommen aus dem ROTEN Lauf von SendewegTest

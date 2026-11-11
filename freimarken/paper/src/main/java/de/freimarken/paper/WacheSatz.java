@@ -142,6 +142,20 @@ enum WacheSatz implements Satz {
      */
     SCHUTZ_LADEN_GESTOERT("wache.schutz.laden-gestoert", Art.HANDBALKEN),
 
+    /**
+     * Ein Behaelter in der Ladenwelt, der niemandem gehoert - die Einrichtung der Stadt.
+     *
+     * <p>Altfurt steht im Abenteuermodus, und der verhindert das Bauen, nicht das
+     * OEFFNEN. Jede Kiste, jedes Fass und jeder Ofen in der Halle waere damit fuer jeden
+     * offen - und was der Betreiber hineinlegt, waere am ersten Abend weg.
+     *
+     * <p><b>Der Satz nennt KEINEN Ausweg</b>, anders als
+     * {@link #SCHUTZ_LADEN_FREI}: Es gibt keinen. Diese Kiste ist nicht zu mieten und
+     * nicht freizugeben; sie gehoert zur Stadt. Ein "frag das Team" stuende hier als
+     * Aufforderung, die das Team nicht erfuellen kann.
+     */
+    SCHUTZ_EINRICHTUNG("wache.schutz.einrichtung", Art.HANDBALKEN),
+
     // --- Die Ankunftswache: zwei Anlaesse, zwei Chatzeilen ---------------------
 
     /**
