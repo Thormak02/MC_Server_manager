@@ -156,6 +156,54 @@ enum WacheSatz implements Satz {
      */
     SCHUTZ_EINRICHTUNG("wache.schutz.einrichtung", Art.HANDBALKEN),
 
+    /**
+     * Zwischen den Staedten - oder auf der Barriere [11.11.2026].
+     *
+     * <p>KEIN Ausweg im Satz: Hier wird nie jemand bauen duerfen, auch nicht gegen Geld.
+     * Die Leere ist der Grund, aus dem eine Freistadt ein ORT und kein Nachbar ist.
+     */
+    SCHUTZ_STADT_LEERE("wache.schutz.stadt-leere", Art.HANDBALKEN),
+
+    /**
+     * Jenseits der Weltgrenze der Stadtfelder.
+     *
+     * <p>Ein eigener Satz neben {@link #SCHUTZ_AUSSERHALB}: Jener nennt die Marktstadt,
+     * und ein Spieler, der am Rand der Freistaedte steht, suchte den Fehler sonst in
+     * einer Welt, in der er gar nicht ist.
+     */
+    SCHUTZ_STADT_AUSSERHALB("wache.schutz.stadt-ausserhalb", Art.HANDBALKEN),
+
+    /**
+     * Das Ankunftsfeld - Feld 0/0, und es wird nie vergeben.
+     *
+     * <p>Ein eigener Satz neben {@link #SCHUTZ_STADT_FREI}, und zwar ein notwendiger:
+     * Dort stuende sonst "frei - /freistadt gruenden", und das waere eine Luege. Das
+     * Ankunftsfeld ist das Ziel des Tores aus Altfurt und gehoert allen.
+     */
+    SCHUTZ_ANKUNFTSFELD("wache.schutz.ankunftsfeld", Art.HANDBALKEN),
+
+    /**
+     * Ein Stadtfeld, auf dem noch keine Stadt steht.
+     *
+     * <p>MIT Ausweg, wie {@link #SCHUTZ_PARZELLE_FREI} und
+     * {@link #SCHUTZ_LADEN_FREI}: Wer hier steht, kann dieses Feld haben.
+     */
+    SCHUTZ_STADT_FREI("wache.schutz.stadt-frei", Art.HANDBALKEN),
+
+    /**
+     * Die Freistadt eines anderen - mit NAMEN und Eigentuemer.
+     *
+     * <p>Beide Werte, und das ist der Unterschied zu
+     * {@link #SCHUTZ_FREMDE_PARZELLE}: Eine Freistadt hat einen Namen, den ihr Besitzer
+     * selbst gewaehlt hat, und mit ihm findet ein Besucher den Weg zurueck
+     * ({@code /warp freistadt <name>}). Eine Parzelle hat nur eine Nummer.
+     */
+    SCHUTZ_FREMDE_STADT("wache.schutz.fremde-stadt", Art.HANDBALKEN, "stadt",
+            "eigentuemer"),
+
+    /** Die Freistaedte sind nicht nachsehbar - wie {@link #SCHUTZ_LADEN_GESTOERT}. */
+    SCHUTZ_STADT_GESTOERT("wache.schutz.stadt-gestoert", Art.HANDBALKEN),
+
     // --- Die Ankunftswache: zwei Anlaesse, zwei Chatzeilen ---------------------
 
     /**

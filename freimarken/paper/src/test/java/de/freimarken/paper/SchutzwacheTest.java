@@ -448,6 +448,15 @@ class SchutzwacheTest {
             public Component grund(Location ort) {
                 return Component.text("EIGENER GRUND DER ORTSREGEL");
             }
+
+            // Zustaendig, sobald sie ueberhaupt etwas sagt: Eine feste Regel, die
+            // NICHT_ZUSTAENDIG antwortet, haelt sich auch nicht fuer zustaendig -
+            // sonst liefen die beiden Antworten auseinander, und genau davor warnt
+            // das Javadoc von Ortsregel.zustaendig.
+            @Override
+            public boolean zustaendig(Location ort) {
+                return immer != Urteil.NICHT_ZUSTAENDIG;
+            }
         };
     }
 }

@@ -118,6 +118,29 @@ public abstract class BesitzLagerVertrag {
     }
 
     @Test
+    @DisplayName("Eine Freistadt behaelt ihren Namen, wenn Mitbauer gesetzt werden")
+    void freistadtBehaeltNamenBeiMitbauern() {
+        // FUND vom 11.11.2026, und ein Fehler mit Ansage: SpeicherLager baute die Zeile
+        // ueber den VERKUERZTEN Konstruktor neu, der KEIN_NAME setzt - und eine
+        // Freistadt ohne Namen wirft. Ein Stadtbesitzer konnte damit keinen einzigen
+        // Mitbauer eintragen. MariaLager traf es nicht, weil es nur die Nebentabelle
+        // schreibt; genau darum steht die Probe im VERTRAG und nicht bei einer
+        // Umsetzung - sonst haette sie den Fehler nur in einer von drei gesucht.
+        BesitzLager lager = lager();
+        Parzelle stadt = lager.freistadtAnlegen(STADTWELT, 3, -7, anna, 400_000L,
+                "annastadt");
+
+        lager.mitbauerSetzen(stadt.id(), Set.of(bert));
+
+        Parzelle danach = lager.finde(STADTWELT, 3, -7).orElseThrow();
+        assertEquals("annastadt", danach.name(), "der Name ueberlebt die Aenderung");
+        assertEquals(Art.FREISTADT, danach.art(), "und die Art auch");
+        assertEquals(Set.of(bert), danach.mitbauer());
+        assertTrue(danach.darfBauen(bert), "der Mitbauer darf jetzt in der Stadt bauen");
+        assertTrue(danach.darfBauen(anna), "die Eigentuemerin weiter auch");
+    }
+
+    @Test
     @DisplayName("Dasselbe Stadtfeld zweimal zu vergeben ist ein Fehler")
     void keinZweitesStadtfeld() {
         BesitzLager lager = lager();

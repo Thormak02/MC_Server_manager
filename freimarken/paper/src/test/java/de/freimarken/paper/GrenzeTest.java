@@ -986,6 +986,16 @@ class GrenzeTest {
             "SCHUTZ_LADEN_FREI -> HANDBALKEN",
             "SCHUTZ_LADEN_GESTOERT -> HANDBALKEN",
             "SCHUTZ_EINRICHTUNG -> HANDBALKEN",
+            // Die Stadtwache [11.11.2026]. ALLE SECHS Handbalken, und das ist
+            // keine Gewohnheit: Ein Satz, den ein Spieler liest, waehrend er
+            // baut, darf den Bau nicht unterbrechen - sendActionBar nimmt ein
+            // Component und keine Liste.
+            "SCHUTZ_STADT_LEERE -> HANDBALKEN",
+            "SCHUTZ_STADT_AUSSERHALB -> HANDBALKEN",
+            "SCHUTZ_ANKUNFTSFELD -> HANDBALKEN",
+            "SCHUTZ_STADT_FREI -> HANDBALKEN",
+            "SCHUTZ_FREMDE_STADT -> HANDBALKEN",
+            "SCHUTZ_STADT_GESTOERT -> HANDBALKEN",
             "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
             "ANKUNFT_ABENTEUER -> SATZ",
             "PORTAL_KEIN_AUSGANG -> SATZ");
@@ -2650,6 +2660,87 @@ class GrenzeTest {
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("FreimarkenPlugin.java fehlt")));
     }
+    @Test
+    @DisplayName("31aq - jede Ortsregel haengt wirklich an der Schutzwache")
+    void jedeOrtsregelHaengtAnDerWache() {
+        // DER RIEGEL GEGEN EINE TOTE WACHE, und er hat einen belegten Anlass: Die
+        // Ladeneinheiten waren in Teil A reine Geometrie - jeder konnte in jedem Stand
+        // bauen -, und in der Stadtfelderwelt griff bis zum 11.11.2026 GAR KEINE Wache.
+        // Beide Male war die REGEL richtig gebaut und nur nicht angeschlossen. Kein
+        // Probenlauf meldet so etwas: Die Regel hat ihre eigenen Proben, sie sind gruen,
+        // und im Spiel geschieht nichts.
+        //
+        // DIE LISTE KOMMT AUS DEM QUELLTEXT, wie bei 31ab und 31ah: Wer
+        // "implements Schutzwache.Ortsregel" schreibt, will geschuetzt haben. Eine
+        // handgeschriebene Liste bliebe bei der naechsten Regel stehen - und dann ist
+        // genau die ungeschuetzt.
+        var regeln = new TreeSet<String>();
+        for (Path datei : Quellen.alle()) {
+            if (Quellen.text(datei).contains("implements Schutzwache.Ortsregel")) {
+                String name = datei.getFileName().toString();
+                regeln.add(name.substring(0, name.length() - ".java".length()));
+            }
+        }
+        assertFalse(regeln.isEmpty(), "keine einzige Ortsregel gefunden - dann prueft"
+                + " diese Probe nichts");
+
+        String plugin = plugintext();
+        var nichtAngeschlossen = new TreeSet<String>();
+        for (String regel : regeln) {
+            // Gesucht wird das ERZEUGEN - "new Stadtwache(" -, nicht der blosse Name:
+            // Ein Feld vom Typ der Regel, das nie besetzt wird, waere sonst ein
+            // gueltiger Nachweis.
+            if (!plugin.contains("new " + regel + "(")) {
+                nichtAngeschlossen.add(regel + " (wird nie gebaut)");
+            }
+        }
+        assertEquals(Set.of(), nichtAngeschlossen,
+                "diese Ortsregeln gibt es im Quelltext, aber das Plugin baut sie nie -"
+                        + " dann sind sie fertige, gepruefte und WIRKUNGSLOSE Klassen,"
+                        + " und in ihrer Welt darf jeder alles: " + nichtAngeschlossen);
+
+        // Und die zweite Richtung: Was gebaut wird, muss auch an die Wache gehen. Die
+        // Schutzwache nimmt GENAU EINE Ortsregel; mehrere kommen ueber nacheinander(...)
+        // herein. Steht eine Regel im Quelltext, wird aber nicht in diesem Aufruf
+        // genannt, haengt sie an nichts.
+        int anfang = plugin.indexOf("new Schutzwache(");
+        assertTrue(anfang >= 0, "FreimarkenPlugin baut keine Schutzwache mehr");
+        int tiefe = 0;
+        int ende = anfang;
+        for (int i = plugin.indexOf('(', anfang); i < plugin.length(); i++) {
+            if (plugin.charAt(i) == '(') {
+                tiefe++;
+            } else if (plugin.charAt(i) == ')') {
+                tiefe--;
+                if (tiefe == 0) {
+                    ende = i;
+                    break;
+                }
+            }
+        }
+        String aufruf = plugin.substring(anfang, ende);
+        var nichtUebergeben = new TreeSet<String>();
+        String aufrufKlein = aufruf.toLowerCase(java.util.Locale.ROOT);
+        for (String regel : regeln) {
+            // Entweder unmittelbar gebaut ("new Stadtwache(") oder als spaet gelesenes
+            // Feld ("() -> stadtwache") - beide Formen nennen den Namen der Regel in
+            // diesem Aufruf, die zweite nur kleingeschrieben.
+            //
+            // OHNE Ruecksicht auf Gross- und Kleinschreibung, und die Annahme dahinter
+            // gehoert benannt: Ein Feld heisst in diesem Projekt wie seine Klasse, nur
+            // klein. Trifft das eines Tages nicht mehr zu, wird diese Probe rot und
+            // verlangt eine genauere Suche - das ist die sichere Richtung. Umgekehrt
+            // waere sie still blind.
+            if (!aufrufKlein.contains(regel.toLowerCase(java.util.Locale.ROOT))) {
+                nichtUebergeben.add(regel);
+            }
+        }
+        assertEquals(Set.of(), nichtUebergeben,
+                "diese Ortsregeln werden gebaut, aber nicht an die Schutzwache"
+                        + " uebergeben - die fuenfzehn Ereignisarten der Wache fragen"
+                        + " sie dann nie: " + nichtUebergeben);
+    }
+
     @Test
     @DisplayName("31ah - jede Schluessel-Naht bekommt weltschluessel und nichts anderes")
     void jedeSchluesselnahtBekommtWeltschluessel() {

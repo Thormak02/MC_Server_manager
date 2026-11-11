@@ -1083,6 +1083,35 @@ wache:
     #   und nicht freizugeben. Die Freie Truhe und die Kistenshops sind ausgenommen,
     #   dort entscheiden ihre eigenen Wachen.
     einrichtung: "<red>Diese Kiste gehoert zur Stadt</red>"
+    # --- Die Freistaedte [11.11.2026] -------------------------------------------
+    # Sechs Lagen, und sie stehen hier bei den anderen Wachsaetzen und nicht unter
+    # freistadt: Was ein Spieler im Handbalken liest, waehrend er irgendwo baut,
+    # gehoert zusammen - wer die Farbe der Absagen angleichen will, soll sie
+    # nebeneinander sehen.
+    #
+    # Zwischen den Staedten. KEIN Ausweg im Satz, anders als bei stadt-frei: Hier
+    # wird nie jemand bauen duerfen, auch nicht gegen Geld. Gelb und nicht rot, wie
+    # weg-und-mauer: Es ist kein Vergehen, nur der falsche Ort.
+    stadt-leere: "<yellow>Zwischen den Staedten gehoert nichts niemandem - und gebaut wird hier nicht</yellow>"
+    # Jenseits der Weltgrenze der Freistaedte. Ein EIGENER Satz neben ausserhalb:
+    # Jener nennt die Marktstadt, und wer am Rand der Freistaedte steht, suchte den
+    # Fehler sonst in einer Welt, in der er gar nicht ist.
+    stadt-ausserhalb: "<yellow>Hier enden die Freistaedte</yellow>"
+    # Feld 0/0 - das Ziel des Tores aus Altfurt. Es wird NIE vergeben, darum sagt der
+    # Satz, wem es gehoert, statt einen Ausweg zu nennen.
+    ankunftsfeld: "<yellow>Das Ankunftsfeld gehoert allen - deine eigene Stadt gruendest du mit /freistadt gruenden</yellow>"
+    # Ein freies Stadtfeld. MIT Ausweg, wie parzelle-frei und laden-frei.
+    stadt-frei: "<yellow>Dieses Stadtfeld ist frei - /freistadt gruenden</yellow>"
+    # {stadt} {eigentuemer} - die Stadt eines anderen. ZWEI Farben in einer Zeile wie
+    # bei fremde-parzelle, und BEIDE Werte: Mit dem Namen findet ein Besucher den Weg
+    # zurueck ueber /warp freistadt <name>. Der Stadtname ist Spielereingabe und geht
+    # darum als Blatt in den Satz - Stadtname laesst nur Kleinbuchstaben, Ziffern und
+    # Bindestriche durch.
+    fremde-stadt: "<red>Freistadt <white>{stadt}</white> gehoert <white>{eigentuemer}</white></red>"
+    # Die Freistaedte sind gerade nicht nachsehbar - wie laden-gestoert. Dann wird
+    # abgelehnt, und das ist die sichere Richtung: Ein stilles Ja liesse jeden in
+    # jeder fremden Stadt bauen.
+    stadt-gestoert: "<red>Die Freistaedte sind gerade nicht nachsehbar - versuch es noch einmal.</red>"
   # DIE ANKUNFT. Zwei Saetze an zwei verschiedenen Anlaessen: Der eine kommt, weil jemand
   # einen Spawnpunkt setzen wollte, der andere, weil jemand eine Abenteuerwelt betritt.
   # Sie gehen nie zusammen hinaus, darum sind es zwei Zeilen und nicht eine mit beidem

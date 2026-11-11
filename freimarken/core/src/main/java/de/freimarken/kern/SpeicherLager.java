@@ -143,7 +143,14 @@ public final class SpeicherLager implements BesitzLager {
                 alt.eigentuemer(), mitbauer, alt.preis(), alt.erworbenAm(),
                 // Durchtragen, nicht neu setzen: Feste Werte loeschten hier bei jeder
                 // Mitbauer-Aenderung still den Gruppenbezug und den Zustand.
-                alt.art(), alt.elternId(), alt.zustand()));
+                //
+                // Der NAME gehoert dazu, und sein Fehlen war ein Fehler [11.11.2026]:
+                // Hier stand der verkuerzte Konstruktor, der KEIN_NAME setzt - und eine
+                // Freistadt ohne Namen WIRFT. Ein Stadtbesitzer konnte damit keinen
+                // einzigen Mitbauer eintragen. Teil B hat das zwoelfte Feld angelegt
+                // und genau diese Stelle uebersehen; gefunden hat es die erste Probe,
+                // die Mitbauer auf einer FREISTADT setzt.
+                alt.art(), alt.elternId(), alt.zustand(), alt.name()));
     }
 
     @Override

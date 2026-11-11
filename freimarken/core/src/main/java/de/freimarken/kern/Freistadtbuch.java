@@ -76,6 +76,33 @@ public final class Freistadtbuch {
         }
     }
 
+    /**
+     * Was an einer Stelle der Stadtfelderwelt gilt.
+     *
+     * <p>Sechs Lagen und nicht zwei, weil der Spieler den Unterschied LESEN soll. Jede
+     * traegt ihren eigenen Handbalken; welchen, entscheidet {@code Sprachschluessel} und
+     * nicht die Wache.
+     */
+    public enum Bauurteil {
+        /** Die Stadt gehoert ihm, oder er steht als Mitbauer darin. */
+        ERLAUBT,
+        /**
+         * Zwischen den Staedten - oder auf der Barriere.
+         *
+         * <p>Fuer JEDEN verboten, auch fuer den Besitzer des Feldes nebenan: Ein Block
+         * in der Leere ist der erste Block einer Bruecke.
+         */
+        LEERE,
+        /** Jenseits der Weltgrenze - dort wird nie eine Stadt stehen. */
+        AUSSERHALB,
+        /** Das Ankunftsfeld. Gehoert niemandem und ist nicht zu gruenden. */
+        ANKUNFTSFELD,
+        /** Ein Stadtfeld, auf dem noch keine Stadt steht. */
+        FREIES_FELD,
+        /** Die Stadt eines anderen. */
+        FREMDE_STADT
+    }
+
     private final Feldgrenze grenze;
     private final Stadtfeldplan plan;
     private final BesitzLager lager;
@@ -167,6 +194,73 @@ public final class Freistadtbuch {
         }
         verzeichnis.erneuere(gefunden);
         return verzeichnis.anzahl();
+    }
+
+    /**
+     * Wer an dieser Stelle bauen darf - und wenn nicht, warum nicht.
+     *
+     * <p>Das Gegenstueck zu {@link Besitzbuch#darfBauen}, und es musste eines geben:
+     * Bis zum 11.11.2026 griff in der Welt der Stadtfelder <b>gar keine Wache</b>. Jeder
+     * konnte in jedem Feld jeder fremden Stadt bauen und abbauen - 400.000 Mark fuer ein
+     * Feld, das niemandem gehoerte. Und die Zusage im Javadoc von {@link Stadtfeldplan},
+     * bruecken koenne niemand, "weil ausserhalb eines Feldes das Bauen verboten ist",
+     * stand auf einem Verbot, das es nicht gab: Die Barriere ist vier Bloecke hoch, wer
+     * auf ihre Oberkante steigt, baut von dort aus weiter.
+     *
+     * <p><b>Mehr als ja und nein</b>, weil der Spieler lesen soll, WARUM: Zwischen den
+     * Staedten ist etwas anderes verboten als auf einem fremden Feld, und auf einem
+     * freien Feld steht ein Weg offen, den er sonst nicht findet. Dieselbe Entscheidung
+     * wie bei den Parzellen, wo {@code Schutztext} vier verschiedene Handbalken kennt.
+     *
+     * <p><b>Wirft</b>, wenn die Ablage stumm ist - wie {@link Besitzbuch#darfBauen} und
+     * aus demselben Grund: Die Wache faengt das und antwortet NEIN. Ein stilles Ja waere
+     * eine Welt, die bei jeder Netzstoerung offensteht.
+     *
+     * @param welt    Weltschluessel der Stadtfelderwelt
+     * @param spieler wer bauen will - {@code null} ergibt nie ERLAUBT
+     * @param blockX  BLOCKkoordinate, nicht Feldnummer
+     * @param blockZ  BLOCKkoordinate, nicht Feldnummer
+     */
+    public Bauurteil darfBauen(String welt, UUID spieler, int blockX, int blockZ) {
+        // Die LEERE zuerst, und zwar ohne jede Frage an die Ablage: Sie ist der
+        // haeufigste Fall am Feldrand, sie kostet nichts, und sie gilt fuer JEDEN -
+        // auch fuer den Besitzer des Feldes daneben. Wer in der Leere baut, baut eine
+        // Bruecke, und genau die soll es nicht geben.
+        if (plan.feldBei(blockX, blockZ) != Stadtfeldplan.Feld.STADTFELD) {
+            return Bauurteil.LEERE;
+        }
+        int feldX = plan.feldNummer(blockX);
+        int feldZ = plan.feldNummer(blockZ);
+        if (!grenze.enthaeltFeld(feldX, feldZ)) {
+            return Bauurteil.AUSSERHALB;
+        }
+        // Das Ankunftsfeld VOR dem Nachsehen: Es gehoert niemandem und wird nie
+        // vergeben, also waere "frei - gruende hier" dort eine Luege.
+        if (plan.istAnkunftsfeld(feldX, feldZ)) {
+            return Bauurteil.ANKUNFTSFELD;
+        }
+        Optional<Parzelle> stadt = lager.finde(welt, feldX, feldZ);
+        if (stadt.isEmpty()) {
+            return Bauurteil.FREIES_FELD;
+        }
+        return spieler != null && stadt.get().darfBauen(spieler)
+                ? Bauurteil.ERLAUBT
+                : Bauurteil.FREMDE_STADT;
+    }
+
+    /**
+     * Die Stadt an dieser Stelle - fuer die Begruendung, die der Spieler liest.
+     *
+     * <p>Getrennt von {@link #darfBauen} und erst DANACH gefragt: Der Handbalken wird
+     * hoechstens alle paar Sekunden gebaut, die Bauregel bei jedem gesetzten Block. Wer
+     * beides in einem Zug beantwortete, zahlte die Suche nach dem Besitzernamen auf dem
+     * heissen Pfad mit.
+     */
+    public Optional<Parzelle> stadtAn(String welt, int blockX, int blockZ) {
+        if (plan.feldBei(blockX, blockZ) != Stadtfeldplan.Feld.STADTFELD) {
+            return Optional.empty();
+        }
+        return lager.finde(welt, plan.feldNummer(blockX), plan.feldNummer(blockZ));
     }
 
     /**

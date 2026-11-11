@@ -77,6 +77,18 @@ final class Ladenschutz implements Schutzwache.Ortsregel {
         this.protokoll = protokoll;
     }
 
+    /**
+     * Ob an dieser Stelle eine Ladeneinheit liegt - ohne Spieler zu fragen.
+     *
+     * <p>Dieselbe Frage, mit der {@link #pruefe} beginnt, und genau darum darf sie kein
+     * zweites Mal gerechnet werden: Sie geht durch {@link #einheitAn}, die EINE Stelle,
+     * an der Welt und Quader geprueft werden.
+     */
+    @Override
+    public boolean zustaendig(Location ort) {
+        return einheitAn(ort) != null;
+    }
+
     @Override
     public Urteil pruefe(Player spieler, Location ort) {
         Ladeneinheit einheit = einheitAn(ort);

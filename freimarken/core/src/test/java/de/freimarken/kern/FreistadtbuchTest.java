@@ -257,6 +257,112 @@ class FreistadtbuchTest {
         assertEquals(0, buch.staedteVon(WELT, UUID.randomUUID()));
     }
 
+    // ---------------------------------------------------- Wer darf wo bauen (C1)
+
+    /**
+     * Die sechs Urteile der Bauregel - jedes an seiner eigenen Stelle im Gelaende.
+     *
+     * <p>Gerechnet wird mit dem ausgelieferten Mass: Felder von 256 Bloecken, dazwischen
+     * 32 Bloecke Leere, Feld n beginnt bei {@code feldAnfang(n)}. Die Zahlen stehen hier
+     * NICHT als Literale, sondern kommen aus dem Plan - sonst braeche jede Aenderung an
+     * der Feldkante ein halbes Dutzend Proben, die mit der Kante gar nichts zu tun haben.
+     */
+    @Test
+    @DisplayName("Jede Lage der Stadtfelderwelt hat ihr eigenes Urteil")
+    void jedeLageHatIhrUrteil() {
+        Stadtfeldplan plan = buch.plan();
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+        int innen = plan.feldMitte(stadt.x());
+        int innenZ = plan.feldMitte(stadt.z());
+
+        // 1. Die Eigentuemerin mitten in ihrer Stadt.
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT,
+                buch.darfBauen(WELT, anna, innen, innenZ));
+        // 2. Ein anderer an derselben Stelle.
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
+                buch.darfBauen(WELT, bert, innen, innenZ));
+        // 3. Die LEERE - einen Block hinter der Feldkante. Fuer JEDEN verboten, auch
+        //    fuer die Eigentuemerin des Feldes daneben: Ein Block dort ist der erste
+        //    Block einer Bruecke.
+        int hinterDemFeld = plan.feldAnfang(stadt.x()) + Stadtfeldplan.FELD_KANTE;
+        assertEquals(Freistadtbuch.Bauurteil.LEERE,
+                buch.darfBauen(WELT, anna, hinterDemFeld, innenZ));
+        // 4. Das Ankunftsfeld - gehoert niemandem und wird nie vergeben.
+        assertEquals(Freistadtbuch.Bauurteil.ANKUNFTSFELD,
+                buch.darfBauen(WELT, anna, plan.feldMitte(0), plan.feldMitte(0)));
+        // 5. Ein freies Stadtfeld.
+        int freiesFeld = stadt.x() == 1 ? 2 : 1;
+        assertEquals(Freistadtbuch.Bauurteil.FREIES_FELD,
+                buch.darfBauen(WELT, anna, plan.feldMitte(freiesFeld), innenZ));
+        // 6. Jenseits der Weltgrenze.
+        assertEquals(Freistadtbuch.Bauurteil.AUSSERHALB,
+                buch.darfBauen(WELT, anna,
+                        plan.feldMitte(buch.grenze().bis() + 1), innenZ));
+    }
+
+    @Test
+    @DisplayName("Ein Mitbauer der Stadt darf, ein Fremder nicht")
+    void mitbauerDarf() {
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+        int x = buch.plan().feldMitte(stadt.x());
+        int z = buch.plan().feldMitte(stadt.z());
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
+                buch.darfBauen(WELT, bert, x, z), "vorher");
+
+        lager.mitbauerSetzen(stadt.id(), java.util.Set.of(bert));
+
+        // Die Mitbauer kommen aus DERSELBEN Zeile wie der Eigentuemer - die Regel fragt
+        // Parzelle.darfBauen und nicht noch einmal selbst nach. Ein zweiter Ort fuer
+        // "wer darf hier" liefe irgendwann auseinander.
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT,
+                buch.darfBauen(WELT, bert, x, z));
+    }
+
+    @Test
+    @DisplayName("Ohne Spieler wird nie erlaubt - auch nicht in einer freien Stadt")
+    void ohneSpielerNieErlaubt() {
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+
+        // Der Handbalken fragt OHNE Spieler, weil er nicht wissen will, ob jemand darf,
+        // sondern WAS hier liegt. Dann muss FREMDE_STADT herauskommen und nicht ERLAUBT -
+        // sonst bekaeme der Eigentuemer seinen eigenen Balken nie zu sehen, und ein
+        // Programmierfehler in der Wache waere unsichtbar.
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
+                buch.darfBauen(WELT, null, buch.plan().feldMitte(stadt.x()),
+                        buch.plan().feldMitte(stadt.z())));
+    }
+
+    @Test
+    @DisplayName("Leere, Grenze und Ankunftsfeld fragen die Ablage GAR NICHT")
+    void dreiLagenOhneAblage() {
+        // GEZAEHLT und nicht behauptet. Diese drei Lagen sind die haeufigsten am
+        // Feldrand, und die Regel laeuft bei JEDEM gesetzten Block - eine Abfrage dort
+        // waere ein Gang zur Datenbank je Blockereignis. Die Zahl 0 ist die ganze
+        // Zusage; ohne sie koennte die Reihenfolge in darfBauen still umgestellt
+        // werden, und nichts wuerde rot.
+        Lagerattrappe zaehler = new Lagerattrappe();
+        Freistadtbuch gezaehlt = new Freistadtbuch(Feldgrenze.freistaedte(), zaehler,
+                kasse, WARPS, VORGABE);
+        Stadtfeldplan plan = gezaehlt.plan();
+
+        assertEquals(Freistadtbuch.Bauurteil.LEERE, gezaehlt.darfBauen(WELT, anna,
+                plan.feldAnfang(1) + Stadtfeldplan.FELD_KANTE, plan.feldMitte(1)));
+        assertEquals(Freistadtbuch.Bauurteil.AUSSERHALB, gezaehlt.darfBauen(WELT, anna,
+                plan.feldMitte(gezaehlt.grenze().bis() + 1), plan.feldMitte(1)));
+        assertEquals(Freistadtbuch.Bauurteil.ANKUNFTSFELD, gezaehlt.darfBauen(WELT, anna,
+                plan.feldMitte(0), plan.feldMitte(0)));
+        assertEquals(0, zaehler.gezaehlt(),
+                "keine dieser drei Lagen darf die Ablage anfassen");
+
+        // Und auf einem Stadtfeld GENAU EINMAL - dort ist die Frage unvermeidlich, aber
+        // eine zweite waere ein doppelter Gang auf dem heissen Pfad.
+        gezaehlt.darfBauen(WELT, anna, plan.feldMitte(1), plan.feldMitte(1));
+        assertEquals(1, zaehler.gezaehlt());
+    }
+
     // ------------------------------------------- Das Verzeichnis fuer die Vorschlaege
 
     @Test

@@ -637,6 +637,34 @@ class BildGleichTest {
                 new Zeile(WacheSatz.SCHUTZ_EINRICHTUNG, 1L, Einsatz.keine(),
                         "&cDiese Kiste gehoert zur Stadt"),
 
+                // --- Die Stadtwache [11.11.2026] ----------------------------------
+                // GELB fuer die vier Lagen, in denen niemand etwas falsch gemacht hat,
+                // ROT fuer die beiden, die eine fremde Sache oder einen Ausfall nennen -
+                // dieselbe Teilung wie oben bei Parzelle und Laden.
+                //
+                // Zwei davon tragen KEINEN Ausweg, und das ist Absicht: In der Leere
+                // wird nie jemand bauen duerfen, und das Ankunftsfeld ist nicht zu
+                // gruenden. Ein erfundener Ausweg waere dort schlimmer als keiner.
+                new Zeile(WacheSatz.SCHUTZ_STADT_LEERE, 1L, Einsatz.keine(),
+                        "&eZwischen den Staedten gehoert nichts niemandem - und gebaut"
+                                + " wird hier nicht"),
+                new Zeile(WacheSatz.SCHUTZ_STADT_AUSSERHALB, 1L, Einsatz.keine(),
+                        "&eHier enden die Freistaedte"),
+                new Zeile(WacheSatz.SCHUTZ_ANKUNFTSFELD, 1L, Einsatz.keine(),
+                        "&eDas Ankunftsfeld gehoert allen - deine eigene Stadt gruendest"
+                                + " du mit /freistadt gruenden"),
+                new Zeile(WacheSatz.SCHUTZ_STADT_FREI, 1L, Einsatz.keine(),
+                        "&eDieses Stadtfeld ist frei - /freistadt gruenden"),
+                // ZWEI Werte und zwei Farbwechsel - derselbe Aufbau wie
+                // fremde-parzelle, nur dass hier auch der NAME der Stadt steht. Mit ihm
+                // findet ein Besucher den Weg zurueck: /warp freistadt neustadt.
+                new Zeile(WacheSatz.SCHUTZ_FREMDE_STADT, 1L,
+                        Einsatz.von("stadt", "neustadt").mit("eigentuemer", "Bert"),
+                        "&cFreistadt &fneustadt&c gehoert &fBert"),
+                new Zeile(WacheSatz.SCHUTZ_STADT_GESTOERT, 1L, Einsatz.keine(),
+                        "&cDie Freistaedte sind gerade nicht nachsehbar - versuch es noch"
+                                + " einmal."),
+
                 // Bauschritt 6, zweiter Zug: die Ankunftswache und die Portalwache.
                 // Die erwarteten Bilder kommen aus dem ROTEN Lauf von SendewegTest
                 // 33ak und 33al, der VOR dem Umzug gegen den committeten Stand lief.

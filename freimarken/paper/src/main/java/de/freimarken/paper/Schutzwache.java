@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -139,6 +140,108 @@ public final class Schutzwache implements Listener {
          * Wissen, das sie nicht haben soll.
          */
         Component grund(Location ort);
+
+        /**
+         * Ob diese Regel ueber diese Stelle ueberhaupt etwas zu sagen hat.
+         *
+         * <p><b>Ohne Spieler, und das ist der ganze Zweck</b> [11.11.2026]: Sie trennt
+         * die Frage "geht mich das an" von der Frage "darf DIESER Spieler". Noetig wurde
+         * sie mit der zweiten Regel: {@link #nacheinander} muss in {@link #grund} die
+         * zustaendige Regel wiederfinden, und dort gibt es keinen Spieler mehr. Ein
+         * {@code pruefe(null, ort)} an dieser Stelle waere kein Ersatz - eine Umsetzung
+         * darf einen fehlenden Spieler als Programmierfehler behandeln und klagen.
+         *
+         * <p>Muss mit {@link #pruefe} zusammenpassen: Wo das hier {@code false} sagt,
+         * sagt jenes {@link Urteil#NICHT_ZUSTAENDIG}. Beides auseinanderlaufen zu lassen
+         * hiesse, dass ein Spieler eine Absage ohne Begruendung liest - oder eine
+         * Begruendung zu einer Absage, die eine andere Regel gegeben hat.
+         */
+        boolean zustaendig(Location ort);
+
+        /**
+         * Mehrere Regeln als EINE - die erste zustaendige entscheidet.
+         *
+         * <p>Gebraucht, seit es zwei gibt: den {@code Ladenschutz} in der Markthalle und
+         * die {@code Stadtwache} in den Freistaedten. Die Reihenfolge ist hier ohne
+         * Bedeutung, weil beide in verschiedenen WELTEN liegen und sich nie
+         * ueberschneiden - sie ist trotzdem festgelegt und nicht dem Zufall einer
+         * Menge ueberlassen, damit eine dritte Regel eines Tages an einer entschiedenen
+         * Stelle eingefuegt wird.
+         *
+         * <p>Kein Zustand zwischen {@link #pruefe} und {@link #grund}: Beide suchen die
+         * zustaendige Regel neu. Ein gemerkter Verweis waere bei zwei Spielern auf
+         * zwei Faeden die falsche Regel.
+         */
+        static Ortsregel nacheinander(Ortsregel... regeln) {
+            List<Ortsregel> kette = List.of(regeln);
+            return new Ortsregel() {
+                @Override
+                public Urteil pruefe(Player spieler, Location ort) {
+                    for (Ortsregel regel : kette) {
+                        Urteil urteil = regel.pruefe(spieler, ort);
+                        if (urteil != Urteil.NICHT_ZUSTAENDIG) {
+                            return urteil;
+                        }
+                    }
+                    return Urteil.NICHT_ZUSTAENDIG;
+                }
+
+                @Override
+                public Component grund(Location ort) {
+                    for (Ortsregel regel : kette) {
+                        if (regel.zustaendig(ort)) {
+                            return regel.grund(ort);
+                        }
+                    }
+                    throw new IllegalStateException("Keine der " + kette.size()
+                            + " Ortsregeln haelt sich fuer zustaendig, aber eine hat"
+                            + " VERBOTEN gesagt - pruefe und zustaendig sind"
+                            + " auseinandergelaufen");
+                }
+
+                @Override
+                public boolean zustaendig(Location ort) {
+                    return kette.stream().anyMatch(regel -> regel.zustaendig(ort));
+                }
+            };
+        }
+
+        /**
+         * Eine Regel, die es beim Bauen der Wache noch nicht gibt.
+         *
+         * <p>Loest denselben Zirkel wie das spaet gelesene Feld beim
+         * {@link Handelsklick}: Die {@code Stadtwache} braucht das Freistadtbuch, und
+         * das entsteht achtzig Zeilen nach dieser Wache. Liefert der Lieferant
+         * {@code null} - weil die Welt der Freistaedte fehlt oder der Start davor
+         * abgebrochen ist -, ist die Regel schlicht nie zustaendig.
+         */
+        static Ortsregel spaet(Supplier<Ortsregel> lieferant) {
+            return new Ortsregel() {
+                @Override
+                public Urteil pruefe(Player spieler, Location ort) {
+                    Ortsregel echte = lieferant.get();
+                    return echte == null
+                            ? Urteil.NICHT_ZUSTAENDIG
+                            : echte.pruefe(spieler, ort);
+                }
+
+                @Override
+                public Component grund(Location ort) {
+                    Ortsregel echte = lieferant.get();
+                    if (echte == null) {
+                        throw new IllegalStateException("Es gibt keine Regel, die diesen"
+                                + " Grund nennen koennte - zustaendig hat nein gesagt");
+                    }
+                    return echte.grund(ort);
+                }
+
+                @Override
+                public boolean zustaendig(Location ort) {
+                    Ortsregel echte = lieferant.get();
+                    return echte != null && echte.zustaendig(ort);
+                }
+            };
+        }
     }
 
     /**
@@ -190,6 +293,11 @@ public final class Schutzwache implements Listener {
             // Balkens, damit ein Aufrufer, der das doch tut, es sofort merkt.
             throw new IllegalStateException("KEINE_ORTSREGEL verbietet nichts - wer hier"
                     + " einen Grund will, hat die Reihenfolge in darfHandeln umgestellt");
+        }
+
+        @Override
+        public boolean zustaendig(Location ort) {
+            return false;
         }
     };
 

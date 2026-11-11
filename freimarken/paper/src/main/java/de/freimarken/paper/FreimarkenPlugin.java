@@ -299,6 +299,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Freistadtbuch freistadtbuch;
 
     /**
+     * Der Bauschutz der Freistaedte - {@code null}, solange es kein Freistadtbuch gibt.
+     *
+     * <p>Wird von der {@link Schutzwache} SPAET gelesen: Jene entsteht achtzig Zeilen
+     * vor {@link #richteFreistaedteEin()}, und ohne Buch gibt es keine Geometrie, nach
+     * der diese Regel urteilen koennte. Dieselbe Form wie beim Shopklick daneben, und
+     * aus demselben Grund - ein Zirkel, den nur ein spaet gelesenes Feld aufloest.
+     */
+    private Stadtwache stadtwache;
+
+    /**
      * Die Ziele von {@code /warp} - ein FELD, weil zwei Stellen sie brauchen.
      *
      * <p>{@code richteReisenEin} baut daraus den Warpbefehl, das Freistadtbuch fragt sie,
@@ -694,10 +704,17 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Der Lambda reicht NUR weiter und prueft nichts selbst: Was ein Handel ist,
         // entscheidet Shopklick.istHandelsschild an einer Stelle. Eine zweite Pruefung
         // hier waere die zweite Wahrheit, vor der Shopzugriff ausdruecklich warnt.
+        //
+        // ZWEI Ortsregeln seit dem 11.11.2026, und die zweite schliesst ein Loch: In der
+        // Welt der Stadtfelder griff bis dahin GAR KEINE Wache - jeder konnte in jedem
+        // Feld jeder fremden Stadt bauen. Die Stadtwache wird SPAET gelesen, weil ihr
+        // Buch erst in richteFreistaedteEin entsteht; bis dahin ist sie nie zustaendig.
         schutzwache = new Schutzwache(buch, welt, sprache,
-                new Ladenschutz(ladenverzeichnis, mietablage,
-                        weltschluessel(ladenwelt), sprache,
-                        getLogger()),
+                Schutzwache.Ortsregel.nacheinander(
+                        new Ladenschutz(ladenverzeichnis, mietablage,
+                                weltschluessel(ladenwelt), sprache,
+                                getLogger()),
+                        Schutzwache.Ortsregel.spaet(() -> stadtwache)),
                 (spieler, block) -> shopklick != null
                         && shopklick.istHandel(spieler, block));
         getServer().getPluginManager().registerEvents(schutzwache, this);
@@ -1955,6 +1972,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     + " kommt an.", fehler);
             gegruendet = -1;
         }
+        // Die Wache unmittelbar nach dem Buch, und aus DERSELBEN Instanz: Zwei Buecher
+        // waeren zwei Rechnungen darueber, wo ein Feld liegt - und die eine entschiede,
+        // wem es gehoert, die andere, wer darauf bauen darf.
+        stadtwache = new Stadtwache(freistadtbuch, weltschluessel(freistadtwelt),
+                sprache, getLogger());
+        getLogger().info("Stadtschutz aktiv in " + welt.key().asString()
+                + " - in einem Stadtfeld baut nur, wem die Stadt gehoert oder wer dort"
+                + " Mitbauer ist. Zwischen den Feldern baut NIEMAND, auch der Nachbar"
+                + " nicht: Ein Block in der Leere ist der erste Block einer Bruecke.");
         getLogger().info("Freistaedte: Welt " + welt.key().asString() + ", Felder "
                 + grenze.von() + ".." + grenze.bis() + " je Achse, bis zu "
                 + grenze.staedteZahl() + " Staedte, davon "

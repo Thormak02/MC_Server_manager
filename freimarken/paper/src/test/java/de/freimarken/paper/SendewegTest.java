@@ -12,6 +12,7 @@ import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Blocktat;
 import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Buchungsgrund;
+import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Taetigkeit;
 import de.freimarken.kern.Parzelle;
@@ -1428,6 +1429,59 @@ class SendewegTest {
 
     /** Was statt des Namens steht, wenn der Server ihn nicht kennt: acht Hexzeichen. */
     private static final String EIGENTUEMER_UNBEKANNT = "0f1e2d3c";
+
+    @Test
+    @DisplayName("33ap - Handbalken der Stadtwache: jedes Urteil, und zwei, die WERFEN")
+    void stadtwacheZweig() {
+        // NACHTRAG aus der Einspritzungsrunde (S8, 11.11.2026). Die Runde setzte in
+        // Stadtwache.grund eine zufaellige Kennung an die Stelle von null - und KEINE
+        // Probe wurde rot. Das war kein Fund: Eine fremde Kennung und keine Kennung
+        // ergeben beide FREMDE_STADT, der Eingriff war verhaltensneutral.
+        //
+        // Dahinter lag aber eine echte Luecke: Schutztext.stadtBalken wurde von keiner
+        // einzigen Probe gerufen. Die vier gueltigen Zweige erreichte nur
+        // StadtwacheTest mittelbar ueber einen Serverstellvertreter, und die beiden
+        // WERFENDEN Zweige gar nichts. Genau die tragen hier die Zusage: grund() darf
+        // nie ERLAUBT bekommen, sonst wirft es mitten im Handbalken.
+        Tafel tafel = new Tafel();
+        tafel.fall("leere", List.of(Schutztext.stadtBalken(sprache,
+                Freistadtbuch.Bauurteil.LEERE)));
+        tafel.fall("ausserhalb", List.of(Schutztext.stadtBalken(sprache,
+                Freistadtbuch.Bauurteil.AUSSERHALB)));
+        tafel.fall("ankunftsfeld", List.of(Schutztext.stadtBalken(sprache,
+                Freistadtbuch.Bauurteil.ANKUNFTSFELD)));
+        tafel.fall("frei", List.of(Schutztext.stadtBalken(sprache,
+                Freistadtbuch.Bauurteil.FREIES_FELD)));
+        tafel.fall("fremde-stadt", List.of(Schutztext.fremdeStadtBalken(sprache,
+                "neustadt", EIGENTUEMER)));
+        tafel.fall("gestoert", List.of(Schutztext.stadtGestoertBalken(sprache)));
+
+        assertEquals("""
+                == leere
+                &eZwischen den Staedten gehoert nichts niemandem - und gebaut wird hier nicht
+                == ausserhalb
+                &eHier enden die Freistaedte
+                == ankunftsfeld
+                &eDas Ankunftsfeld gehoert allen - deine eigene Stadt gruendest du mit /freistadt gruenden
+                == frei
+                &eDieses Stadtfeld ist frei - /freistadt gruenden
+                == fremde-stadt
+                &cFreistadt &fneustadt&c gehoert &fBert
+                == gestoert
+                &cDie Freistaedte sind gerade nicht nachsehbar - versuch es noch einmal.
+                """, tafel.ganz());
+
+        // Die zwei Zweige OHNE Balken, und beide mit Grund:
+        // ERLAUBT braucht keinen - wer bauen darf, liest nichts. FREMDE_STADT braucht
+        // zwei Werte und geht ueber fremdeStadtBalken. Wer einen von beiden hier
+        // beantwortet, zeigt dem Spieler einen Satz, der nicht zu seiner Lage passt.
+        assertThrows(IllegalArgumentException.class,
+                () -> Schutztext.stadtBalken(sprache,
+                        Freistadtbuch.Bauurteil.ERLAUBT));
+        assertThrows(IllegalArgumentException.class,
+                () -> Schutztext.stadtBalken(sprache,
+                        Freistadtbuch.Bauurteil.FREMDE_STADT));
+    }
 
     @Test
     @DisplayName("33aj - Handbalken der Schutzwache: alle VIER Wortlaute")

@@ -572,6 +572,12 @@ class VorlageTest {
      */
     private static final List<String> VERDECKTE_HOLSTELLEN = List.of(
             "Bonustext.java -> satz",
+            // Der switch in Schutztext.stadtBalken [11.11.2026]. Vier Saetze koennen
+            // hier durchlaufen, alle vier sind Art.HANDBALKEN - fuer die klagt
+            // Sprachliste.maengelAmWert schon beim LADEN ueber jede Umbruchmarke. Der
+            // switch hat ausserdem kein default: Kommt ein Bauurteil dazu, uebersetzt
+            // die Datei nicht mehr, statt still den falschen Balken zu zeigen.
+            "Schutztext.java -> satz",
             "Shoptext.java -> satz",
             "Shoptext.java -> Sprachschluessel.shopHandel(ausgang.bescheid(),"
                     + " ausgang.art(), mitGebuehr)",

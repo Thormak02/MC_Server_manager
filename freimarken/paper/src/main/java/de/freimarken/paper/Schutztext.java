@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Freistadtbuch;
 import net.kyori.adventure.text.Component;
 
 /**
@@ -92,5 +93,54 @@ final class Schutztext {
     /** Die Vertraege sind nicht nachsehbar - dann ist jede andere Auskunft erfunden. */
     static Component ladenGestoertBalken(Sprache sprache) {
         return sprache.eineZeile(WacheSatz.SCHUTZ_LADEN_GESTOERT, Einsatz.keine());
+    }
+
+    /**
+     * Der Handbalken zu einem Urteil der Stadtwache - ausser bei einer fremden Stadt.
+     *
+     * <p><b>Ein {@code switch} ueber das Urteil und keine Familienfunktion in
+     * {@code Sprachschluessel}</b>, anders als bei den Parzellenbescheiden: Jener Weg ist
+     * noetig, wo eine Familie waechst (jeder neue Beruf, jeder neue Buchungsgrund). Die
+     * Lagen in einer Stadtfelderwelt sind dagegen von der GEOMETRIE vorgegeben und
+     * vollzaehlig - Feld oder Leere, innerhalb oder ausserhalb, vergeben oder frei. Und
+     * ein {@code switch} ohne {@code default} ist hier der schaerfere Riegel: Kommt
+     * eines Tages ein Urteil dazu, uebersetzt diese Datei nicht mehr, statt still den
+     * falschen Balken zu zeigen.
+     *
+     * <p>{@link Freistadtbuch.Bauurteil#FREMDE_STADT} fehlt mit Absicht: Dieser Balken
+     * traegt zwei Werte und braucht einen eigenen Weg -
+     * {@link #fremdeStadtBalken}. {@link Freistadtbuch.Bauurteil#ERLAUBT} fehlt, weil es
+     * dazu nichts zu sagen gibt: Wer bauen darf, bekommt keinen Handbalken.
+     */
+    static Component stadtBalken(Sprache sprache, Freistadtbuch.Bauurteil urteil) {
+        WacheSatz satz = switch (urteil) {
+            case LEERE -> WacheSatz.SCHUTZ_STADT_LEERE;
+            case AUSSERHALB -> WacheSatz.SCHUTZ_STADT_AUSSERHALB;
+            case ANKUNFTSFELD -> WacheSatz.SCHUTZ_ANKUNFTSFELD;
+            case FREIES_FELD -> WacheSatz.SCHUTZ_STADT_FREI;
+            case ERLAUBT, FREMDE_STADT -> throw new IllegalArgumentException(
+                    "Fuer " + urteil + " gibt es hier keinen Balken - ERLAUBT braucht"
+                            + " keinen, FREMDE_STADT geht ueber fremdeStadtBalken");
+        };
+        return sprache.eineZeile(satz, Einsatz.keine());
+    }
+
+    /**
+     * Die Freistadt eines anderen - mit ihrem Namen und ihrem Eigentuemer.
+     *
+     * <p>Beide kommen als fertiger Text herein und sind im Satz BLAETTER, aus demselben
+     * Grund wie bei {@link #fremdeParzelleBalken}: Ein Farbtag darin stuende dem Leser
+     * woertlich im Handbalken. Beim STADTNAMEN ist das mehr als Vorsicht - er ist
+     * Spielereingabe, und {@code Stadtname} laesst ohnehin nur Kleinbuchstaben, Ziffern
+     * und Bindestriche durch.
+     */
+    static Component fremdeStadtBalken(Sprache sprache, String stadt, String eigentuemer) {
+        return sprache.eineZeile(WacheSatz.SCHUTZ_FREMDE_STADT,
+                Einsatz.von("stadt", stadt).mit("eigentuemer", eigentuemer));
+    }
+
+    /** Die Freistaedte sind nicht nachsehbar - wie {@link #ladenGestoertBalken}. */
+    static Component stadtGestoertBalken(Sprache sprache) {
+        return sprache.eineZeile(WacheSatz.SCHUTZ_STADT_GESTOERT, Einsatz.keine());
     }
 }
