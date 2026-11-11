@@ -1404,10 +1404,12 @@ freie-truhe:
   # wird, entscheidet der Spieler. Eine Stelle in einer LADENEINHEIT wird abgewiesen -
   # dort kaeme niemand ausser dem Mieter heran, und der nimmt ohne Deckel.
   #
-  # Ab Werk steht hier keine Zeile. Eine Truhe in der Halle von Altfurt saehe etwa so
-  # aus (die Stelle ist ein Beispiel und keine Empfehlung):
+  # Ab Werk steht hier keine Zeile. Eine DOPPELTRUHE in der Halle von Altfurt saehe
+  # etwa so aus - beide Haelften, je eine Zeile (die Stellen sind ein Beispiel und keine
+  # Empfehlung):
   #   truhen:
   #     - [72, 72, 20]
+  #     - [73, 72, 20]
   #
   # NUR BEIM START GELESEN - /freimarken neuladen verschiebt keine Truhe. Die beiden
   # Nachbarschluessel dieses Abschnitts sind neuladbar, dieser nicht: Eine Stelle,

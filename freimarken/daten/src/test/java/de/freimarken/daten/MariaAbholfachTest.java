@@ -12,6 +12,7 @@ import de.freimarken.kern.Abholstueck;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -235,4 +236,37 @@ class MariaAbholfachTest extends AbholVertrag {
         feld.setAccessible(true);
         return (String) feld.get(null);
     }
+
+    @Test
+    @DisplayName("Die Spalte haelt UTC - gelesen am ROHEN Text, nicht ueber den Treiber")
+    void spalteHaeltUtc() throws SQLException {
+        // Der Schemaschritt sagt es seit jeher ("eingelegt ist DATETIME(3) und UTC, wie
+        // jede Zeitspalte dieses Schemas") - der Quelltext hielt es bis zum 11.11.2026
+        // nicht. Eine Zusage in einem Kommentar, die keine Probe traegt, ist eine
+        // Behauptung.
+        Instant wann = Instant.parse("2026-11-09T00:00:00.123Z");
+
+        fach.lege(UUID.randomUUID(), "halle-1", wann,
+                List.of(new Abholgut("64 x Stein", "inhalt")));
+
+        assertEquals("2026-11-09 00:00:00.123",
+                rohesDatum(datenbank, "eingelegt", "abholfach"),
+                "in der Spalte steht UTC - wie es der Schemaschritt verspricht");
+    }
+    /**
+     * Liest den ROHEN Text einer Zeitspalte - ohne den Treiber dazwischen.
+     *
+     * <p>{@code getTimestamp} rechnet, und genau das soll hier nicht geschehen: Ein Hin
+     * und Zurueck durch denselben Treiber beweist nichts ueber den Inhalt der Spalte.
+     */
+    private static String rohesDatum(Datenbank bank, String spalte, String tabelle)
+            throws SQLException {
+        try (var anfrage = bank.verbindung().prepareStatement(
+                "SELECT CAST(" + spalte + " AS CHAR) FROM " + tabelle + " LIMIT 1");
+                var ergebnis = anfrage.executeQuery()) {
+            assertTrue(ergebnis.next(), "die Zeile muss da sein");
+            return ergebnis.getString(1);
+        }
+    }
+
 }

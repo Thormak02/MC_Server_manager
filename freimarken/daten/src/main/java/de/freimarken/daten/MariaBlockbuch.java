@@ -113,7 +113,11 @@ public final class MariaBlockbuch implements Blockbuchablage {
         try (PreparedStatement anfrage =
                      datenbank.verbindung().prepareStatement(EINFUEGEN)) {
             for (Blockzeile zeile : zeilen) {
-                anfrage.setTimestamp(1, Timestamp.from(zeile.zeitpunkt()));
+                // MIT KALENDER: Die Spalte haelt UTC wie jede Zeitspalte dieses
+                // Schemas. Ohne ihn schriebe der Treiber die Zone der JVM hinein, und
+                // dieselbe Sekunde staende in buchungen anders als hier.
+                anfrage.setTimestamp(1, Timestamp.from(zeile.zeitpunkt()),
+                        Datenbank.utcKalender());
                 anfrage.setString(2, zeile.spieler().toString());
                 anfrage.setString(3, zeile.ort().welt());
                 anfrage.setInt(4, zeile.ort().x());
@@ -180,7 +184,10 @@ public final class MariaBlockbuch implements Blockbuchablage {
         pruefeGrenze(hoechstens);
         try (PreparedStatement anfrage =
                      datenbank.verbindung().prepareStatement(AUFRAEUMEN)) {
-            anfrage.setTimestamp(1, Timestamp.from(aelterAls));
+            // Derselbe Kalender wie beim Schreiben - sonst raeumte der Vergleich
+            // ein Zeitfenster weg, das um den Zonenversatz verschoben ist.
+            anfrage.setTimestamp(1, Timestamp.from(aelterAls),
+                    Datenbank.utcKalender());
             anfrage.setInt(2, hoechstens);
             return anfrage.executeUpdate();
         } catch (SQLException fehler) {
@@ -219,7 +226,8 @@ public final class MariaBlockbuch implements Blockbuchablage {
                     + " sind " + Blocktat.erlaubteNamen() + ".");
         }
         return new Blockzeile(zeile.getLong("id"),
-                zeile.getTimestamp("zeitpunkt").toInstant(),
+                zeile.getTimestamp("zeitpunkt", Datenbank.utcKalender())
+                        .toInstant(),
                 UUID.fromString(zeile.getString("spieler")),
                 new Blockort(zeile.getString("welt"), zeile.getInt("x"),
                         zeile.getInt("y"), zeile.getInt("z")),

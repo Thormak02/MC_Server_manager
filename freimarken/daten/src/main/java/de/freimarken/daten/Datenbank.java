@@ -4,8 +4,11 @@ import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.ZoneOffset;
+import java.util.Calendar;
 import java.util.List;
 import java.util.Properties;
+import java.util.TimeZone;
 
 /**
  * Verbindung zur Datenbank und das Schema darin.
@@ -696,6 +699,27 @@ public final class Datenbank implements AutoCloseable {
               KEY ix_freie_truhe_tag (tag)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
+
+    /**
+     * Der Kalender fuer JEDE Zeitspalte dieses Schemas - UTC, ohne Ausnahme.
+     *
+     * <p><b>Die Regel in einer Methode</b>, und sie steht hier und nicht in den
+     * Tabellenklassen: Vorher hatte {@code MariaKasse} ihren eigenen Kalender, und
+     * {@code MariaBlockbuch} und {@code MariaAbholfach} hatten gar keinen. Ohne Kalender
+     * rechnet der Treiber in die Zone der JVM - jede Tabelle ist dann fuer sich stimmig
+     * (hin und zurueck dieselbe Zeit), aber wer zwei nebeneinander liest, liegt um den
+     * Zonenversatz daneben. Genau das ist am 10.11.2026 im Blockbuch aufgefallen.
+     *
+     * <p><b>Ein neuer Kalender je Aufruf</b>, denn {@link Calendar} ist nicht
+     * nebenlaeufigkeitsfest: Ein geteiltes Exemplar waere ein veraenderlicher Zustand
+     * zwischen zwei Datenbankfaeden.
+     *
+     * <p>Die EINE Ausnahme ist keine Zeitspalte: {@code spielzeit.tag} ist ein DATUM in
+     * Ortszeit, gerechnet aus {@code zeit.zone}. Das ist Absicht und steht dort.
+     */
+    static Calendar utcKalender() {
+        return Calendar.getInstance(TimeZone.getTimeZone(ZoneOffset.UTC));
+    }
 
     /**
      * Der Treiber, direkt gehalten statt ueber DriverManager gesucht.

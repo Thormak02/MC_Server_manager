@@ -89,6 +89,25 @@ class MariaBlockbuchTest extends BlockbuchVertrag {
     }
 
     @Test
+    @DisplayName("Die Spalte haelt UTC - gelesen am ROHEN Text, nicht ueber den Treiber")
+    void spalteHaeltUtc() throws SQLException {
+        // DIE PROBE, DIE GEFEHLT HAT [11.11.2026]. Die Probe darueber schreibt und liest
+        // durch denselben Treiber - schreibt der in Ortszeit und liest er in Ortszeit,
+        // kommt dieselbe Sekunde heraus, und in der Spalte steht trotzdem etwas anderes
+        // als in buchungen. Gefunden wurde es nicht von einer Probe, sondern beim Lesen
+        // zweier Tabellen nebeneinander.
+        Instant wann = Instant.parse("2026-11-09T00:00:00.123Z");
+
+        buch.schreibe(List.of(Blockzeile.neu(wann, UUID.randomUUID(), ORT,
+                Blocktat.ABBAUEN, true, "deepslate")));
+
+        assertEquals("2026-11-09 00:00:00.123",
+                rohesDatum(datenbank, "zeitpunkt", "blockbuch"),
+                "in der Spalte steht UTC - sonst liegt jede Gegenueberstellung mit"
+                        + " buchungen um den Zonenversatz daneben");
+    }
+
+    @Test
     @DisplayName("Die erste Tat eines Spielers OHNE Kassenzeile geht durch")
     void ersteTatOhneKasse() {
         // DIE PROBE ZUR BEGRUENDUNG IM SCHEMASCHRITT. Ein Fremdschluessel auf kassen
@@ -171,4 +190,20 @@ class MariaBlockbuchTest extends BlockbuchVertrag {
         assertEquals(0, buch.raeumeAuf(alleFaellig, 10));
         assertTrue(buch.amOrt(ORT, 20).isEmpty());
     }
+    /**
+     * Liest den ROHEN Text einer Zeitspalte - ohne den Treiber dazwischen.
+     *
+     * <p>{@code getTimestamp} rechnet, und genau das soll hier nicht geschehen: Ein Hin
+     * und Zurueck durch denselben Treiber beweist nichts ueber den Inhalt der Spalte.
+     */
+    private static String rohesDatum(Datenbank bank, String spalte, String tabelle)
+            throws SQLException {
+        try (var anfrage = bank.verbindung().prepareStatement(
+                "SELECT CAST(" + spalte + " AS CHAR) FROM " + tabelle + " LIMIT 1");
+                var ergebnis = anfrage.executeQuery()) {
+            assertTrue(ergebnis.next(), "die Zeile muss da sein");
+            return ergebnis.getString(1);
+        }
+    }
+
 }

@@ -9,11 +9,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.List;
-import java.util.TimeZone;
 import java.util.UUID;
 
 /**
@@ -178,7 +175,7 @@ public final class MariaKasse implements Kasse {
             // Mit Kalender in UTC: Die Spalte haelt UTC, und ohne Zone legte der Treiber
             // die der JVM darueber - dann begaenne der Tag um den Ortsversatz verschoben,
             // und der Deckel griffe eine Stunde zu frueh oder zu spaet.
-            anfrage.setTimestamp(2, Timestamp.from(ab), utcKalender());
+            anfrage.setTimestamp(2, Timestamp.from(ab), Datenbank.utcKalender());
             anfrage.setString(3, grund.schluessel());
             try (ResultSet ergebnis = anfrage.executeQuery()) {
                 ergebnis.next();
@@ -209,7 +206,8 @@ public final class MariaKasse implements Kasse {
                             // Mit Kalender in UTC lesen: Die Spalte haelt UTC, und ohne
                             // Zone legte der Treiber die der JVM darueber - dann waere
                             // jeder Zeitpunkt um den Ortsversatz verschoben.
-                            ergebnis.getTimestamp("zeitpunkt", utcKalender()).toInstant(),
+                            ergebnis.getTimestamp("zeitpunkt", Datenbank.utcKalender())
+                                    .toInstant(),
                             spieler,
                             Buchungsgrund.ausSchluessel(ergebnis.getString("grund")),
                             ergebnis.getLong("betrag"),
@@ -220,10 +218,6 @@ public final class MariaKasse implements Kasse {
         } catch (SQLException fehler) {
             throw new IllegalStateException("Verlauf nicht lesbar: " + spieler, fehler);
         }
-    }
-
-    private static Calendar utcKalender() {
-        return Calendar.getInstance(TimeZone.getTimeZone(ZoneOffset.UTC));
     }
 
     /**

@@ -13,6 +13,7 @@ import de.freimarken.kern.Truhenwerte;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -141,9 +142,79 @@ class TruhenlaufTest {
 
         var zweite = lauf.imTakt();
 
-        assertEquals(List.of(EINE, EINE), leerung.gerufen,
-                "ein zweites Leeren einer leeren Truhe kostet nichts");
+        assertEquals(List.of(EINE), leerung.gerufen,
+                "DIE TRUHE WIRD NICHT NOCH EINMAL GELEERT [geaendert 11.11.2026]. Hier"
+                        + " stand \"ein zweites Leeren einer leeren Truhe kostet"
+                        + " nichts\" - und genau das trifft nicht zu: Zwischen zwei"
+                        + " Takten liegen ab Werk 60 Sekunden, und was ein Spieler darin"
+                        + " hineinlegt, waere beim naechsten Takt weg. Geraeumt wird"
+                        + " nachgeholt, geleert nicht.");
         assertTrue(zweite.spaeter());
+    }
+
+    @Test
+    @DisplayName("Was zwischen zwei Takten hineingelegt wird, bleibt liegen")
+    void gabeZwischenZweiTaktenBleibt() {
+        // DER SCHADEN, den der Merker je Stelle verhindert. Der Lauf leert die Truhe,
+        // das Raeumen scheitert, der Tag bleibt offen - und bis Mitternacht laeuft der
+        // Takt jede Minute wieder an. Ohne den Merker fiele jede Gabe, die in diesen
+        // Stunden hineinkommt, dem naechsten Takt zum Opfer.
+        Leerprobe leerung = new Leerprobe(Map.of(EINE, 5));
+        Truhenlauf lauf = new Truhenlauf(buch(stolpernd(), EINE), leerung, protokoll());
+
+        lauf.imTakt();
+        // Jemand legt 64 Erde hinein - die Truhe wuerde beim naechsten Griff 64 melden.
+        leerung.wirdLeer(EINE, 64);
+        var zweite = lauf.imTakt();
+
+        assertEquals(0, zweite.geleert(), "die Gabe bleibt liegen");
+        assertEquals(List.of(EINE), leerung.gerufen, "sie wird gar nicht erst gefragt");
+    }
+
+    @Test
+    @DisplayName("AM NAECHSTEN TAG wird wieder geleert - der Merker gilt nur fuer heute")
+    void amNaechstenTagWirdWiederGeleert() {
+        // DIE ANDERE HAELFTE des Merkers je Stelle, und die schwerere: Bliebe eine
+        // Stelle fuer immer als "geleert" vermerkt, liefe die Freie Truhe ueber und
+        // niemand saehe, warum. Geprueft mit einer STELLBAREN Uhr - mit der festen
+        // koennte diese Probe den Tageswechsel gar nicht erreichen.
+        SpielzeitbuchTest.StellUhr uhr =
+                new SpielzeitbuchTest.StellUhr(Instant.parse("2026-11-10T12:00:00Z"));
+        Leerprobe leerung = new Leerprobe(Map.of(EINE, 5));
+        Truhenlauf lauf = new Truhenlauf(
+                new Truhenbuch(Truhenverzeichnis.ausStellen(List.of(EINE)), ablage,
+                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE.mitTruhe(WERTE)),
+                        uhr, protokoll()),
+                leerung, protokoll());
+
+        assertEquals(5, lauf.imTakt().geleert(), "heute");
+        leerung.wirdLeer(EINE, 9);
+        assertEquals(0, lauf.imTakt().geleert(), "noch heute - nichts mehr zu tun");
+
+        uhr.weiter(Duration.ofDays(1));
+        var morgen = lauf.imTakt();
+
+        assertEquals(9, morgen.geleert(), "morgen wird wieder geleert");
+        assertEquals(List.of(EINE, EINE), leerung.gerufen,
+                "zweimal gefragt - einmal je Tag");
+    }
+
+    @Test
+    @DisplayName("Der blockierte Lauf schreibt seine Zeile nur EINMAL am Tag")
+    void blockierterLaufMeldetSichEinmal() {
+        // Ohne Entprellung steht die Zeile bei takt-sekunden: 60 1.440-mal im Protokoll,
+        // Tag und Nacht, auch ohne einen einzigen Spieler - und die Zeilen, die etwas
+        // sagen, gehen darin unter. Genau das schliesst der Kopf von nenne() aus.
+        Leerprobe leerung = new Leerprobe(Map.of(EINE, Truhenlauf.SPAETER));
+        Truhenlauf lauf = lauf(leerung, EINE);
+
+        lauf.imTakt();
+        lauf.imTakt();
+        lauf.imTakt();
+
+        assertEquals(1, protokollzeilen.size(), protokollzeilen.toString());
+        assertTrue(protokollzeilen.getFirst().contains("NICHT fertig"),
+                protokollzeilen.toString());
     }
 
     @Test

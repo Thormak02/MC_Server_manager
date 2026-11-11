@@ -2,6 +2,8 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Blockort;
 import java.time.LocalDate;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.logging.Logger;
 
 /**
@@ -91,6 +93,39 @@ final class Truhenlauf {
      */
     private LocalDate zuletzt;
 
+    /**
+     * Auf welchen Tag sich die zwei Merker darunter beziehen.
+     *
+     * <p>Getrennt von {@link #zuletzt}: Jener heisst "heute ist ALLES erledigt", dieser
+     * nur "diese Merker gehoeren zu diesem Tag". Ein Tag, der angefangen und nicht
+     * fertig geworden ist, braucht beides.
+     */
+    private LocalDate tag;
+
+    /**
+     * Welche Stellen heute schon geleert sind - ein Merker JE STELLE.
+     *
+     * <p><b>Der Fund der Lesesuche vom 10.11.2026.</b> Vorher gab es nur den Tagesmerker
+     * fuer alle Stellen: Meldete EINE Stelle SPAETER, leerte der naechste Takt auch alle
+     * anderen erneut - und damit das, was Spieler seitdem hineingelegt haben. Die alte
+     * Begruendung ("ein zweites Leeren einer leeren Truhe kostet nichts") gilt nur, wenn
+     * zwischen zwei Takten nichts geschieht; der Takt steht ab Werk auf 60 Sekunden, und
+     * dazwischen liegt das halbe Spielgeschehen.
+     *
+     * <p>Eine Doppeltruhe steht mit BEIDEN Haelften darin und wird darum zweimal gefragt.
+     * Das ist richtig und kostet nichts: Die zweite Haelfte ist nach der ersten leer.
+     */
+    private final Set<Blockort> geleerteStellen = new HashSet<>();
+
+    /**
+     * Ob der "NICHT fertig"-Satz heute schon im Protokoll steht.
+     *
+     * <p>Ohne diese Entprellung schreibt ein dauerhaft blockierter Lauf bei jedem Takt
+     * eine Zeile - 1.440 am Tag, bei {@code takt-sekunden: 10} achttausend. Dieselbe
+     * Antwort wie {@code Truhenleerung.schonBeklagt} eine Schicht tiefer.
+     */
+    private boolean spaeterGemeldet;
+
     Truhenlauf(Truhenbuch buch, Leerung leerung, Logger protokoll) {
         if (buch == null || leerung == null || protokoll == null) {
             throw new IllegalArgumentException("Buch, Leerung und Protokoll sind Pflicht");
@@ -112,9 +147,15 @@ final class Truhenlauf {
         if (heute.equals(zuletzt)) {
             return Ergebnis.nichtsZuTun();
         }
+        neuerTag(heute);
         int geleert = 0;
         boolean spaeter = false;
         for (Blockort ort : buch.stellen()) {
+            if (geleerteStellen.contains(ort)) {
+                // HEUTE SCHON GELEERT. Ein zweites Leeren waere kein leerer Griff,
+                // sondern ein Griff in die Gaben, die seitdem hineingelegt wurden.
+                continue;
+            }
             int weg = leerung.leere(ort);
             if (weg == SPAETER) {
                 // Jemand sieht hinein, oder die Welt ist nicht geladen. Der naechste
@@ -123,6 +164,7 @@ final class Truhenlauf {
                 spaeter = true;
                 continue;
             }
+            geleerteStellen.add(ort);
             geleert += weg;
         }
         if (spaeter) {
@@ -134,15 +176,31 @@ final class Truhenlauf {
         }
         int zeilen = buch.raeume();
         if (zeilen < 0) {
-            // Geraeumt wurde nicht - also ist heute NICHT erledigt. Die Truhe ist zwar
+            // Geraeumt wurde nicht - also ist heute NICHT erledigt. Die Truhen sind zwar
             // leer, aber die Zeilen von gestern stehen noch; der naechste Takt raeumt
-            // sie, und ein zweites Leeren einer leeren Truhe kostet nichts.
+            // sie. Die Truhen laesst er dabei in Ruhe: Sie stehen in geleerteStellen.
             nenne(geleert, 0, true);
             return new Ergebnis(geleert, 0, true);
         }
         zuletzt = heute;
         nenne(geleert, zeilen, false);
         return new Ergebnis(geleert, zeilen, false);
+    }
+
+    /**
+     * Stellt die Merker auf diesen Tag - und raeumt die von gestern weg.
+     *
+     * <p>Gerufen bei JEDEM Takt, der ueberhaupt etwas tun will. Was gestern geleert war,
+     * ist heute wieder zu leeren; und die Zeile, die gestern schon geschrieben wurde,
+     * darf heute wieder geschrieben werden.
+     */
+    private void neuerTag(LocalDate heute) {
+        if (heute.equals(tag)) {
+            return;
+        }
+        tag = heute;
+        geleerteStellen.clear();
+        spaeterGemeldet = false;
     }
 
     /**
@@ -153,8 +211,15 @@ final class Truhenlauf {
      * gingen darin unter.
      */
     private void nenne(int geleert, int zeilen, boolean spaeter) {
-        if (geleert < 1 && zeilen < 1 && !spaeter) {
+        boolean getan = geleert > 0 || zeilen > 0;
+        if (!getan && (!spaeter || spaeterGemeldet)) {
+            // Nichts geschehen - und der "NICHT fertig"-Satz steht heute schon da. Ohne
+            // diese zweite Haelfte schreibt ein blockierter Lauf bei jedem Takt dieselbe
+            // Zeile, und die Zeilen, die etwas sagen, gehen darin unter.
             return;
+        }
+        if (spaeter) {
+            spaeterGemeldet = true;
         }
         protokoll.info("Freie Truhe geleert: " + geleert + " Stueck weg, " + zeilen
                 + " Tageszeilen geraeumt."

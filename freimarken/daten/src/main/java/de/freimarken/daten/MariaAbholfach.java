@@ -179,7 +179,10 @@ public final class MariaAbholfach implements Abholablage {
                     for (Abholgut gut : stapel) {
                         anfrage.setString(1, empfaenger.toString());
                         anfrage.setString(2, herkunft.trim());
-                        anfrage.setTimestamp(3, Timestamp.from(wann));
+                        // MIT KALENDER: Die Spalte haelt UTC wie jede Zeitspalte
+                        // dieses Schemas - siehe Datenbank.utcKalender().
+                        anfrage.setTimestamp(3, Timestamp.from(wann),
+                                Datenbank.utcKalender());
                         anfrage.setString(4, gut.beschriftung().trim());
                         anfrage.setString(5, gut.inhalt());
                         anfrage.addBatch();
@@ -258,7 +261,8 @@ public final class MariaAbholfach implements Abholablage {
         return new Abholstueck(zeile.getLong("id"),
                 UUID.fromString(zeile.getString("empfaenger")),
                 zeile.getString("herkunft"),
-                zeile.getTimestamp("eingelegt").toInstant(),
+                zeile.getTimestamp("eingelegt", Datenbank.utcKalender())
+                        .toInstant(),
                 new Abholgut(zeile.getString("beschriftung"),
                         zeile.getString("inhalt")));
     }

@@ -18,6 +18,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockMultiPlaceEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -127,8 +128,12 @@ class SetzwacheTest {
     /** Ein Setzereignis an dieser Stelle - was die Wache nicht liest, ist null. */
     private BlockPlaceEvent setzen(int x, int y, int z) {
         Spielerprobe cara = new Spielerprobe("Cara", Spielerprobe.kennungAus(1));
+        // MIT der Hand am Ende: Der Konstruktor ohne sie ist zum Entfernen markiert,
+        // und eine Probe, die veraltete API ruft, meldet den ganzen Lauf mit Warnung.
+        // Welche Hand es war, liest diese Wache nicht - HAND ist die gewoehnliche.
         return new BlockPlaceEvent(marktstadt.getBlockAt(x, y, z), null,
-                marktstadt.getBlockAt(x, y - 1, z), null, cara.spieler(), true);
+                marktstadt.getBlockAt(x, y - 1, z), null, cara.spieler(), true,
+                EquipmentSlot.HAND);
     }
 
     @Test
@@ -155,7 +160,8 @@ class SetzwacheTest {
         BlockState oben = Serverprobe.zustand(marktstadt, EIN_STEIN, 7, 72, 13);
         Spielerprobe cara = new Spielerprobe("Cara", Spielerprobe.kennungAus(1));
         var ereignis = new BlockMultiPlaceEvent(List.of(unten, oben),
-                marktstadt.getBlockAt(7, 70, 13), null, cara.spieler(), true);
+                marktstadt.getBlockAt(7, 70, 13), null, cara.spieler(), true,
+                EquipmentSlot.HAND);
 
         wache.beimSetzen(ereignis);
 
