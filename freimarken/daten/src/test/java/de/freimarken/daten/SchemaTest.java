@@ -74,6 +74,7 @@ class SchemaTest {
         -1457172908, // Schritt 19
         1133214650, // Schritt 20 - Tabelle grundstuecke
         -373186840, // Schritt 21 - Tabelle grundstuecke_mitbauer
+        -1682304398, // Schritt 22 - Spalte angebotspreis
     };
 
     private static String datenbanktext() {

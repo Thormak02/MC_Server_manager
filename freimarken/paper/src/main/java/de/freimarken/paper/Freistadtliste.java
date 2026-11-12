@@ -30,7 +30,8 @@ final class Freistadtliste {
     /** Jede Zeile, die das Plugin mitbringt - fuer den Bericht ueber Fehlende. */
     private static final List<String> SCHLUESSEL = List.of(
             PFAD_WELT, Freistadtwerte.PFAD_GRUENDUNGSPREIS,
-            Freistadtwerte.PFAD_HOECHSTZAHL, Freistadtwerte.PFAD_HOECHSTZELLEN);
+            Freistadtwerte.PFAD_HOECHSTZAHL, Freistadtwerte.PFAD_HOECHSTZELLEN,
+            Freistadtwerte.PFAD_VERKAUFSGEBUEHR);
 
     /**
      * @param welt der Weltname OHNE Namensraum, wie er in der Datei steht. Der Schluessel
@@ -66,9 +67,10 @@ final class Freistadtliste {
                 "Mark einmalig", klagen, bericht);
         int hoechstzahl = hoechstzahl(wurzel, klagen, bericht);
         int hoechstzellen = hoechstzellen(wurzel, klagen, bericht);
+        int gebuehr = verkaufsgebuehr(wurzel, klagen, bericht);
 
         Freistadtwerte werte = new Freistadtwerte(preis, hoechstzahl,
-                hoechstzellen);
+                hoechstzellen, gebuehr);
         bericht.add(rechenprobe(werte) + " Welt: " + welt + ".");
         return new Ergebnis(welt, werte, klagen, bericht);
     }
@@ -153,6 +155,44 @@ final class Freistadtliste {
         }
         if (wert != Freistadtwerte.VORGABE_HOECHSTZELLEN) {
             bericht.add(Freistadtwerte.PFAD_HOECHSTZELLEN + " = " + wert + " gilt.");
+        }
+        return (int) wert;
+    }
+
+    // --- Teil C3 ---------------------------------------------------------------
+
+    /**
+     * Die Verkaufsgebuehr in Prozent - 0 heisst keine.
+     *
+     * <p>Dieselbe Bauart wie {@link #hoechstzellen} und {@link #hoechstzahl}: Drei
+     * Zahlen aus demselben Abschnitt, die auf drei Weisen gelesen werden, verhalten sich
+     * bei einem Vertipper verschieden - und niemand kann sagen, warum.
+     *
+     * <p>Die Grenze kommt aus {@code Shopregel.brauchbareGebuehr} und nicht von hier:
+     * Es ist dieselbe Frage wie bei den Shopgebuehren, und eine zweite Zahl dafuer liefe
+     * bei der naechsten Verschaerfung auseinander.
+     */
+    private static int verkaufsgebuehr(ConfigurationSection wurzel, List<String> klagen,
+                                       List<String> bericht) {
+        if (!wurzel.contains(Freistadtwerte.PFAD_VERKAUFSGEBUEHR, true)) {
+            return Freistadtwerte.VORGABE_VERKAUFSGEBUEHR;
+        }
+        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel,
+                Freistadtwerte.PFAD_VERKAUFSGEBUEHR,
+                Freistadtwerte.VORGABE_VERKAUFSGEBUEHR, klagen, bericht);
+        if (gelesen == null) {
+            return Freistadtwerte.VORGABE_VERKAUFSGEBUEHR;
+        }
+        long wert = gelesen;
+        if (wert < 0L || wert > de.freimarken.kern.Shopregel.HOECHSTE_GEBUEHR_PROZENT) {
+            klagen.add(Freistadtwerte.PFAD_VERKAUFSGEBUEHR + " ist " + wert
+                    + " und liegt nicht zwischen 0 und "
+                    + de.freimarken.kern.Shopregel.HOECHSTE_GEBUEHR_PROZENT
+                    + " - es gilt " + Freistadtwerte.VORGABE_VERKAUFSGEBUEHR + ".");
+            return Freistadtwerte.VORGABE_VERKAUFSGEBUEHR;
+        }
+        if (wert != Freistadtwerte.VORGABE_VERKAUFSGEBUEHR) {
+            bericht.add(Freistadtwerte.PFAD_VERKAUFSGEBUEHR + " = " + wert + " gilt.");
         }
         return (int) wert;
     }

@@ -2,6 +2,7 @@ package de.freimarken.kern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -276,5 +277,171 @@ public abstract class GrundstuecksablageVertrag {
 
         assertEquals(5, Set.copyOf(nummern).size(), "fuenf verschiedene Nummern: "
                 + nummern);
+    }
+
+    // ------------------------------------------- Angebot und Verkauf [Teil C3]
+
+    @Test
+    @DisplayName("Ab Werk steht nichts zum Verkauf")
+    void abWerkKeinAngebot() {
+        Grundstuecksablage ablage = ablage();
+
+        Grundstueck neu = ablage.anlegen(WELT, stadt, Zellquader.eineZelle(1, 1),
+                anna, 0L);
+
+        assertNull(neu.angebotspreis(), "ein frisch zugeschnittenes Grundstueck ist"
+                + " nicht zu haben - erst zuschneiden, dann anbieten");
+        assertFalse(neu.stehtZumVerkauf());
+        assertTrue(ablage.angebote(WELT).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Angeboten, zurueckgezogen - und die Liste folgt beidem")
+    void angebotenUndZurueckgezogen() {
+        Grundstuecksablage ablage = ablage();
+        Grundstueck neu = ablage.anlegen(WELT, stadt, Zellquader.eineZelle(1, 1),
+                anna, 0L);
+
+        ablage.anbieten(neu.id(), 7_500L);
+
+        Grundstueck danach = ablage.anZelle(WELT, 1, 1).orElseThrow();
+        assertEquals(7_500L, danach.angebotspreis());
+        assertTrue(danach.stehtZumVerkauf());
+        assertEquals(1, ablage.angebote(WELT).size());
+        // DURCHTRAGEN: Alles andere bleibt, wie es war.
+        assertEquals(anna, danach.eigentuemer());
+        assertEquals(0L, danach.preis(), "was es gekostet hat, ist nicht, was es"
+                + " kosten soll - zwei Spalten, zwei Fragen");
+
+        ablage.anbieten(neu.id(), Grundstueck.KEIN_ANGEBOT);
+
+        assertNull(ablage.anZelle(WELT, 1, 1).orElseThrow().angebotspreis());
+        assertTrue(ablage.angebote(WELT).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Eine 0 heisst ZU VERSCHENKEN - und ist etwas anderes als kein Angebot")
+    void nullHeisstZuVerschenken() {
+        // Der Fall, den es geben MUSS: Ein Stadtbesitzer, der Buerger anwirbt, gibt die
+        // ersten Grundstuecke gratis. Mit einer 0 als "kein Angebot" waere genau das
+        // unmoeglich, und niemand koennte sagen warum.
+        Grundstuecksablage ablage = ablage();
+        Grundstueck neu = ablage.anlegen(WELT, stadt, Zellquader.eineZelle(1, 1),
+                anna, 0L);
+
+        ablage.anbieten(neu.id(), 0L);
+
+        Grundstueck danach = ablage.anZelle(WELT, 1, 1).orElseThrow();
+        assertEquals(0L, danach.angebotspreis());
+        assertTrue(danach.stehtZumVerkauf(), "zu verschenken ist AUCH ein Angebot");
+        assertEquals(1, ablage.angebote(WELT).size());
+    }
+
+    @Test
+    @DisplayName("Der Besitzerwechsel traegt Eigentuemer, Preis UND das Ende des Angebots")
+    void besitzerwechselTraegtDrei() {
+        Grundstuecksablage ablage = ablage();
+        Grundstueck neu = ablage.anlegen(WELT, stadt, new Zellquader(1, 1, 2, 2),
+                anna, 0L);
+        ablage.anbieten(neu.id(), 7_500L);
+
+        Grundstueck gemeldet = ablage.eigentuemerSetzen(neu.id(), bert, 7_500L);
+
+        Grundstueck danach = ablage.anZelle(WELT, 1, 1).orElseThrow();
+        assertEquals(bert, danach.eigentuemer(), "der neue Eigentuemer");
+        assertEquals(7_500L, danach.preis(), "was er gezahlt hat");
+        assertNull(danach.angebotspreis(), "und es steht nicht mehr zum Verkauf");
+        // Drei Aenderungen in EINEM Zug: Mit drei Aufrufen laege dazwischen ein
+        // Augenblick, in dem es Bert gehoert und noch zum alten Preis ausliegt.
+        assertEquals(stadt, danach.stadtId(), "die Stadt bleibt");
+        assertEquals(neu.flaeche(), danach.flaeche(), "die Flaeche bleibt");
+        // DER ZEITPUNKT WANDERT MIT, und genau WEIL die Verfallsregel aus Plan 16 mit
+        // ihm rechnet: Bliebe der des Zuschnitts stehen, haette Bert ein Grundstueck
+        // gekauft, das nach Annas Zeitpunkt schon verwirkt ist. Nicht VOR dem Zuschnitt
+        // und nicht in der Zukunft - mehr ist ohne verstellbare Uhr nicht zu sagen; die
+        // scharfe Probe dazu steht in SpeicherGrundstueckeTest.
+        assertFalse(danach.erworbenAm().isBefore(neu.erworbenAm()),
+                "der Zeitpunkt des Erwerbs liegt nicht vor dem des Zuschnitts");
+        // DER GEMELDETE STAND IST DER GESCHRIEBENE. Ein Aufrufer, der ihn selbst
+        // nachbaut, raet den neuen Zeitpunkt - und riet ihn am 12.11.2026 falsch.
+        assertEquals(danach, gemeldet,
+                "was eigentuemerSetzen meldet, muss das sein, was danach dasteht");
+        assertTrue(ablage.angebote(WELT).isEmpty());
+        assertEquals(1, ablage.vonSpieler(WELT, bert).size());
+        assertTrue(ablage.vonSpieler(WELT, anna).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Beim Verkauf werden die MITBAUER geleert")
+    void verkaufLeertDieMitbauer() {
+        // Wer verkauft, verkauft nicht die Leute mit, die darauf bauen durften: Der
+        // Kaeufer bekaeme eine Flaeche, auf der Fremde Rechte haben, die er nicht kennt.
+        Grundstuecksablage ablage = ablage();
+        Grundstueck neu = ablage.anlegen(WELT, stadt, Zellquader.eineZelle(1, 1),
+                anna, 0L);
+        java.util.UUID clara = java.util.UUID.randomUUID();
+        ablage.mitbauerSetzen(neu.id(), Set.of(clara));
+        ablage.anbieten(neu.id(), 100L);
+        assertEquals(Set.of(clara),
+                ablage.anZelle(WELT, 1, 1).orElseThrow().mitbauer(), "vorher");
+
+        ablage.eigentuemerSetzen(neu.id(), bert, 100L);
+
+        Grundstueck danach = ablage.anZelle(WELT, 1, 1).orElseThrow();
+        assertTrue(danach.mitbauer().isEmpty(), "nachher darf nur noch Bert");
+        assertFalse(danach.darfBauen(clara));
+        assertTrue(danach.darfBauen(bert));
+    }
+
+    @Test
+    @DisplayName("Ein Grundstueck OHNE Angebot laesst sich nicht uebertragen")
+    void ohneAngebotKeinWechsel() {
+        // DER RIEGEL GEGEN DEN DOPPELKAUF. Zwei Kaeufer, die gleichzeitig zugreifen,
+        // laufen hier auf: Der erste nimmt das Angebot mit demselben Zug zurueck, der
+        // zweite findet keines mehr. Eine Pruefung im Buch haette zwischen Lesen und
+        // Schreiben eine Luecke - diese Stelle hat keine.
+        Grundstuecksablage ablage = ablage();
+        Grundstueck neu = ablage.anlegen(WELT, stadt, Zellquader.eineZelle(1, 1),
+                anna, 0L);
+
+        assertThrows(IllegalStateException.class,
+                () -> ablage.eigentuemerSetzen(neu.id(), bert, 100L),
+                "es war nie angeboten");
+
+        ablage.anbieten(neu.id(), 100L);
+        ablage.eigentuemerSetzen(neu.id(), bert, 100L);
+
+        assertThrows(IllegalStateException.class,
+                () -> ablage.eigentuemerSetzen(neu.id(), anna, 100L),
+                "und ein ZWEITES Mal geht es auch nicht - das Angebot ist weg");
+        assertEquals(bert, ablage.anZelle(WELT, 1, 1).orElseThrow().eigentuemer(),
+                "es gehoert weiter dem ersten Kaeufer");
+    }
+
+    @Test
+    @DisplayName("Angebot und Wechsel auf einer unbekannten Nummer werfen")
+    void unbekannteNummerBeimAngebot() {
+        Grundstuecksablage ablage = ablage();
+
+        assertThrows(IllegalStateException.class, () -> ablage.anbieten(4711L, 100L));
+        assertThrows(IllegalStateException.class,
+                () -> ablage.eigentuemerSetzen(4711L, bert, 100L));
+    }
+
+    @Test
+    @DisplayName("Die Angebotsliste trennt die Welten")
+    void angeboteTrennenDieWelten() {
+        Grundstuecksablage ablage = ablage();
+        Grundstueck hier = ablage.anlegen(WELT, stadt, Zellquader.eineZelle(1, 1),
+                anna, 0L);
+        Grundstueck drueben = ablage.anlegen("freimarken:andere",
+                stadtAnlegen("freimarken:andere", 7, -7), Zellquader.eineZelle(1, 1),
+                anna, 0L);
+        ablage.anbieten(hier.id(), 100L);
+        ablage.anbieten(drueben.id(), 200L);
+
+        assertEquals(1, ablage.angebote(WELT).size());
+        assertEquals(hier.id(), ablage.angebote(WELT).get(0).id());
+        assertEquals(1, ablage.angebote("freimarken:andere").size());
     }
 }

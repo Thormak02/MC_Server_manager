@@ -837,6 +837,40 @@ public final class Datenbank implements AutoCloseable {
               CONSTRAINT fk_grundstueck_mitbauer FOREIGN KEY (grundstueck_id)
                 REFERENCES grundstuecke (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 22: der ANGEBOTSPREIS eines Grundstuecks - Plan 6.2, Teil C3,
+            // gebaut am 12.11.2026. Damit ist das Abnahmekriterium aus Plan 15
+            // erreichbar: "ein Spieler verkauft einem anderen ein Grundstueck".
+            //
+            // NULL-FAEHIG, UND NULL IST NICHT NULL MARK. Das ist die ganze Entscheidung
+            // dieser Spalte:
+            //
+            //   * NULL heisst "steht nicht zum Verkauf". Die meisten Zeilen sind das.
+            //   * 0 heisst "zu verschenken" - und das ist ein Fall, den es geben MUSS:
+            //     Ein Stadtbesitzer, der Buerger anwirbt, gibt die ersten Grundstuecke
+            //     gratis. Mit einer 0 als "kein Angebot" waere genau das unmoeglich, und
+            //     niemand koennte sagen warum.
+            //
+            // Darum Long und nicht long im Kern, und darum NULL DEFAULT NULL hier. Die
+            // Spalte preis daneben bleibt, was sie war: was es GEKOSTET hat. Zwei
+            // verschiedene Fragen, zwei Spalten - "was es wert sein soll" und "was
+            // bezahlt wurde" laufen nach dem ersten Weiterverkauf auseinander.
+            //
+            // KEIN CHECK auf eine Obergrenze: Plan 16 hat die Preisfreiheit ausdruecklich
+            // entschieden ("Der Stadtbesitzer setzt seine Preise frei; Wucher regelt sich
+            // von selbst, weil daneben die Marktstadt mit gratis erster Parzelle liegt").
+            // Die obere Grenze ist die des Geldes selbst und steht im Kern.
+            //
+            // ix_grundstueck_angebot auf (welt, angebotspreis): Die Liste der Angebote
+            // einer Welt ist die eine Abfrage, die diese Spalte filtert - und sie laeuft
+            // auf Befehl, nicht auf dem heissen Pfad. Ein Index ueber eine NULL-faehige
+            // Spalte hilft hier trotzdem: InnoDB kann die vielen NULL-Zeilen damit
+            // ueberspringen, und die sind die Mehrheit.
+            """
+            ALTER TABLE grundstuecke
+              ADD COLUMN IF NOT EXISTS angebotspreis BIGINT NULL DEFAULT NULL,
+              ADD KEY IF NOT EXISTS ix_grundstueck_angebot (welt, angebotspreis)
             """);
 
     /**

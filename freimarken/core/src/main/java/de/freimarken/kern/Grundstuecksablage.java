@@ -65,4 +65,49 @@ public interface Grundstuecksablage {
 
     /** Ein Grundstueck aufloesen. Die Flaeche faellt an die Stadt zurueck. */
     void entfernen(long id);
+
+    /**
+     * Den Angebotspreis setzen oder zuruecknehmen.
+     *
+     * @param angebotspreis was es kosten soll, oder {@link Grundstueck#KEIN_ANGEBOT}.
+     *                      Eine 0 heisst "zu verschenken" und ist etwas anderes als
+     *                      {@code null}
+     */
+    void anbieten(long id, Long angebotspreis);
+
+    /**
+     * Den Eigentuemer wechseln - der VERKAUF.
+     *
+     * <p><b>EINE Methode fuer drei Aenderungen</b>, und das ist der Kern der Sache: Der
+     * neue Eigentuemer, der bezahlte Preis und das Zuruecknehmen des Angebots gehoeren
+     * in einen Zug. Drei einzelne Aufrufe haetten zwei Augenblicke dazwischen, in denen
+     * das Grundstueck einem anderen gehoert und noch zum alten Preis ausliegt - ein
+     * zweiter Kaeufer koennte es ein zweites Mal kaufen.
+     *
+     * <p><b>Die Mitbauer werden GELEERT.</b> Wer ein Grundstueck verkauft, verkauft es
+     * nicht mitsamt den Leuten, die darauf bauen durften: Der Kaeufer bekaeme eine
+     * Flaeche, auf der Fremde Rechte haben, die er nicht kennt. Dass das hier geschieht
+     * und nicht beim Aufrufer, ist Absicht - eine Umsetzung, die es vergisst, waere eine
+     * Sicherheitsluecke, und keine Probe am Buch wuerde sie sehen.
+     *
+     * <p><b>{@code erworbenAm} wird NEU gesetzt</b>, und das ist keine Kosmetik: Die
+     * Verfallsregel aus Plan 16 rechnet mit diesem Zeitpunkt. Bliebe er stehen, kaufte
+     * jemand ein Grundstueck und haette es nach dem Zeitpunkt des VORBESITZERS schon
+     * verwirkt - bei einem alten Grundstueck sofort. Der Name sagt dasselbe: erworben
+     * hat es der, dem es jetzt gehoert.
+     *
+     * @param preis was der Kaeufer bezahlt hat - geht in die Spalte {@code preis}
+     * @return das Grundstueck, wie es NACHHER ist. Zurueckgegeben und nicht vom Aufrufer
+     *         zusammengebaut: Ein Aufrufer, der die Zeile selbst nachbildet, raet den
+     *         neuen Zeitpunkt - und raet ihn eines Tages falsch. Dieselbe Bauart wie
+     *         {@link #anlegen}
+     * @throws IllegalStateException wenn es das Grundstueck nicht gibt oder es nicht
+     *                               (mehr) zum Verkauf steht. Die zweite Bedingung ist
+     *                               der RIEGEL gegen den Doppelkauf: Zwei Kaeufer, die
+     *                               gleichzeitig zugreifen, laufen hier auf
+     */
+    Grundstueck eigentuemerSetzen(long id, UUID neuerEigentuemer, long preis);
+
+    /** Alle Grundstuecke einer Welt, die zum Verkauf stehen - fuer die Angebotsliste. */
+    List<Grundstueck> angebote(String welt);
 }

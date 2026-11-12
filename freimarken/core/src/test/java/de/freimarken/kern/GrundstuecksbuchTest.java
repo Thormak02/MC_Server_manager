@@ -1,18 +1,27 @@
 package de.freimarken.kern;
 
+import static de.freimarken.kern.Grundstuecksbuch.Bescheid.ANGEBOTEN;
+import static de.freimarken.kern.Grundstuecksbuch.Bescheid.EIGENES_GRUNDSTUECK;
 import static de.freimarken.kern.Grundstuecksbuch.Bescheid.ERTEILT;
+import static de.freimarken.kern.Grundstuecksbuch.Bescheid.GEKAUFT;
 import static de.freimarken.kern.Grundstuecksbuch.Bescheid.GESTOERT;
 import static de.freimarken.kern.Grundstuecksbuch.Bescheid.KEINE_STADT;
+import static de.freimarken.kern.Grundstuecksbuch.Bescheid.KEIN_ANGEBOT;
 import static de.freimarken.kern.Grundstuecksbuch.Bescheid.KEIN_GRUNDSTUECK;
 import static de.freimarken.kern.Grundstuecksbuch.Bescheid.NICHT_DEINE_STADT;
 import static de.freimarken.kern.Grundstuecksbuch.Bescheid.NICHT_DEIN_GRUNDSTUECK;
 import static de.freimarken.kern.Grundstuecksbuch.Bescheid.NICHT_EIN_FELD;
+import static de.freimarken.kern.Grundstuecksbuch.Bescheid.PREIS_UNGUELTIG;
 import static de.freimarken.kern.Grundstuecksbuch.Bescheid.UEBERSCHNEIDUNG;
 import static de.freimarken.kern.Grundstuecksbuch.Bescheid.ZU_GROSS;
+import static de.freimarken.kern.Grundstuecksbuch.Bescheid.ZU_WENIG_MARK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,6 +51,7 @@ class GrundstuecksbuchTest {
 
     private SpeicherLager lager;
     private SpeicherGrundstuecke ablage;
+    private SpeicherKasse kasse;
     private Grundstuecksbuch buch;
     private Parzelle annastadt;
 
@@ -49,7 +59,10 @@ class GrundstuecksbuchTest {
     void aufbauen() {
         lager = new SpeicherLager();
         ablage = new SpeicherGrundstuecke();
-        buch = new Grundstuecksbuch(Feldgrenze.freistaedte(), lager, ablage,
+        // REICH: Teil C2 bewegt kein Geld, aber ab C3 kauft hier jemand. Ein knappes
+        // Guthaben liesse Proben scheitern, die mit Geld nichts zu tun haben.
+        kasse = new SpeicherKasse(10_000_000L);
+        buch = new Grundstuecksbuch(Feldgrenze.freistaedte(), lager, ablage, kasse,
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
         annastadt = lager.freistadtAnlegen(WELT, FELD_X, FELD_Z, anna, 400_000L,
                 "annastadt");
@@ -224,7 +237,7 @@ class GrundstuecksbuchTest {
         // Die liegt bei 256, also ohne Grenze, und mit ihr waere diese Probe gruen,
         // ohne etwas zu pruefen.
         Grundstuecksbuch eng = new Grundstuecksbuch(Feldgrenze.freistaedte(), lager,
-                ablage, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                ablage, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                         .mitFreistaedten(Freistadtwerte.VORGABE.mitHoechstzellen(4))));
 
         Grundstuecksbuch.Entscheid entscheid =
@@ -243,7 +256,7 @@ class GrundstuecksbuchTest {
     @DisplayName("Eine 0 bei der Zellengrenze heisst OHNE Grenze")
     void nullHeisstOhneGrenze() {
         Grundstuecksbuch ohne = new Grundstuecksbuch(Feldgrenze.freistaedte(), lager,
-                ablage, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                ablage, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                         .mitFreistaedten(Freistadtwerte.VORGABE.mitHoechstzellen(0))));
         int letzte = ohne.plan().zellenJeKante() - 1;
 
@@ -300,7 +313,7 @@ class GrundstuecksbuchTest {
     @DisplayName("Eine stumme Ablage heisst GESTOERT - und nichts ist geschehen")
     void stummeAblageStoert() {
         Grundstuecksbuch stumm = new Grundstuecksbuch(Feldgrenze.freistaedte(),
-                new Lagerattrappe.Stumm(), ablage,
+                new Lagerattrappe.Stumm(), ablage, kasse,
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
 
         assertEquals(GESTOERT,
@@ -328,7 +341,7 @@ class GrundstuecksbuchTest {
         Feldgrenze schief = Feldgrenze.ausKante(new Stadtfeldplan(100, 32), 1000);
 
         assertThrows(IllegalArgumentException.class,
-                () -> new Grundstuecksbuch(schief, lager, ablage,
+                () -> new Grundstuecksbuch(schief, lager, ablage, kasse,
                         new Wirtschaftsstand(Wirtschaftswerte.VORGABE)));
     }
 
@@ -361,4 +374,310 @@ class GrundstuecksbuchTest {
         assertEquals(3, alle.size());
         assertTrue(alle.stream().allMatch(eines -> eines.gehoert(anna)));
     }
+
+    // ============================================ Anbieten und Kaufen [Teil C3]
+
+    /** Was der Kern meldet, wenn ein Erloes nicht ankommt - hier mitgeschrieben. */
+    private final List<String> verloreneErloese = new ArrayList<>();
+
+    /** Die Naht fuer verlorene Erloese, die alles aufschreibt. */
+    private Grundstuecksbuch.VerlorenerErloes mitschrift() {
+        return (wer, betrag, fehler) ->
+                verloreneErloese.add(wer + " fehlen " + betrag);
+    }
+
+    /** Ein zugeschnittenes Grundstueck von Anna, angeboten zu diesem Preis. */
+    private Grundstueck annasAngebot(long preis) {
+        Grundstuecksbuch.Entscheid zuschnitt =
+                buch.schneideZu(WELT, anna, ecke(0, 0), ecke(1, 1));
+        assertEquals(ERTEILT, zuschnitt.bescheid());
+        Grundstuecksbuch.Entscheid angebot = buch.biete(WELT, anna, ecke(0, 0).x(),
+                ecke(0, 0).z(), preis);
+        assertEquals(ANGEBOTEN, angebot.bescheid());
+        return ablage.anZelle(WELT, buch.plan().zelleVon(ecke(0, 0).x()),
+                buch.plan().zelleVon(ecke(0, 0).z())).orElseThrow();
+    }
+
+    @Test
+    @DisplayName("Angeboten, zurueckgezogen - und nur der Besitzer darf das")
+    void anbietenUndZurueckziehen() {
+        buch.schneideZu(WELT, anna, ecke(0, 0), ecke(1, 1));
+        int x = ecke(0, 0).x();
+        int z = ecke(0, 0).z();
+
+        Grundstuecksbuch.Entscheid angebot = buch.biete(WELT, anna, x, z, 7_500L);
+
+        assertEquals(ANGEBOTEN, angebot.bescheid());
+        assertEquals(7_500L, angebot.preis(), "der Entscheid nennt den Preis");
+        assertEquals(1, buch.angebote(WELT).size());
+
+        // Ein FREMDER zieht nicht zurueck und bietet nicht an.
+        assertEquals(NICHT_DEIN_GRUNDSTUECK,
+                buch.biete(WELT, bert, x, z, 1L).bescheid());
+        assertEquals(7_500L, buch.angebote(WELT).get(0).angebotspreis(),
+                "der Preis steht unveraendert");
+
+        assertEquals(ANGEBOTEN,
+                buch.biete(WELT, anna, x, z, Grundstueck.KEIN_ANGEBOT).bescheid());
+        assertTrue(buch.angebote(WELT).isEmpty());
+    }
+
+    /**
+     * Der Entscheid traegt das Grundstueck NACH der Schreibung.
+     *
+     * <p>Eine eigene Probe neben der darueber, weil sie eine andere Frage stellt: Jene
+     * prueft die ABLAGE, diese den ENTSCHEID. Beide koennen einzeln falsch sein, und
+     * eine von beiden war es: Der Entscheid gab das Grundstueck zurueck, wie es VORHER
+     * aussah. Die Naht unterscheidet an ihm, ob angeboten oder zurueckgezogen wurde, und
+     * las darum beides vertauscht - "zurueckgezogen" nach einem Angebot und umgekehrt.
+     * Keine Probe der Ablage haette das gesehen.
+     */
+    @Test
+    @DisplayName("Der Entscheid traegt das Grundstueck, wie es NACHHER ist")
+    void entscheidTraegtDenNeuenStand() {
+        buch.schneideZu(WELT, anna, ecke(0, 0), ecke(1, 1));
+        int x = ecke(0, 0).x();
+        int z = ecke(0, 0).z();
+
+        Grundstueck angeboten = buch.biete(WELT, anna, x, z, 7_500L)
+                .grundstueck().orElseThrow();
+
+        assertTrue(angeboten.stehtZumVerkauf(),
+                "nach dem Anbieten steht es zum Verkauf - auch im Entscheid");
+        assertEquals(7_500L, angeboten.angebotspreis());
+
+        Grundstueck zurueck = buch.biete(WELT, anna, x, z, Grundstueck.KEIN_ANGEBOT)
+                .grundstueck().orElseThrow();
+
+        assertFalse(zurueck.stehtZumVerkauf(),
+                "nach dem Zuruecknehmen steht es nicht mehr zum Verkauf");
+        // Und alles andere ist unveraendert: Ein Wandler, der nebenbei den Besitzer
+        // oder die Flaeche mitnimmt, waere an der Frage oben nicht zu merken.
+        assertEquals(angeboten.id(), zurueck.id());
+        assertEquals(angeboten.eigentuemer(), zurueck.eigentuemer());
+        assertEquals(angeboten.flaeche(), zurueck.flaeche());
+        assertEquals(angeboten.preis(), zurueck.preis());
+    }
+
+    @Test
+    @DisplayName("Ein negativer Preis ist keiner")
+    void negativerPreisIstKeiner() {
+        buch.schneideZu(WELT, anna, ecke(0, 0), ecke(1, 1));
+
+        // Ein Grundstueck, fuer dessen Abnahme der Verkaeufer ZAHLT, waere eine
+        // Geldquelle, die jeder beliebig oft anzapfen koennte.
+        assertEquals(PREIS_UNGUELTIG,
+                buch.biete(WELT, anna, ecke(0, 0).x(), ecke(0, 0).z(), -1L).bescheid());
+        assertTrue(buch.angebote(WELT).isEmpty());
+    }
+
+    @Test
+    @DisplayName("DAS ABNAHMEKRITERIUM: ein Spieler verkauft einem anderen ein Grundstueck")
+    void dasAbnahmekriterium() {
+        // Plan 15, Schritt 9. Der erste Kauf dieses Projekts, bei dem das Geld nicht
+        // beim Bund landet, sondern bei einem anderen Spieler.
+        annasAngebot(7_500L);
+        long annaVorher = kasse.guthaben(anna);
+        long bertVorher = kasse.guthaben(bert);
+
+        Grundstuecksbuch.Entscheid kauf = buch.kaufe(WELT, bert, ecke(0, 0).x(),
+                ecke(0, 0).z(), mitschrift());
+
+        assertEquals(GEKAUFT, kauf.bescheid());
+        assertEquals(7_500L, kauf.preis());
+        // Das GRUNDSTUECK ist uebertragen ...
+        Grundstueck danach = buch.anStelle(WELT, ecke(0, 0).x(), ecke(0, 0).z())
+                .orElseThrow();
+        assertEquals(bert, danach.eigentuemer());
+        assertFalse(danach.stehtZumVerkauf(), "und es steht nicht mehr zum Verkauf");
+        // ... und das GELD ist geflossen, in beide Richtungen.
+        assertEquals(bertVorher - 7_500L, kasse.guthaben(bert), "Bert hat gezahlt");
+        assertEquals(annaVorher + 7_500L, kasse.guthaben(anna), "Anna hat bekommen");
+        // Negativ im Buch, weil es eine AUSGABE ist - darum auf die Summe gefragt.
+        assertEquals(-7_500L, kasse.summeSeit(bert, Instant.EPOCH,
+                Buchungsgrund.GRUNDSTUECK_GEKAUFT));
+        assertEquals(7_500L, kasse.summeSeit(anna, Instant.EPOCH,
+                Buchungsgrund.GRUNDSTUECK_VERKAUFT));
+        assertTrue(verloreneErloese.isEmpty(), "nichts ist verloren gegangen");
+    }
+
+    @Test
+    @DisplayName("Ein verschenktes Grundstueck wechselt, ohne dass Geld fliesst")
+    void verschenktWechseltOhneGeld() {
+        annasAngebot(0L);
+        long annaVorher = kasse.guthaben(anna);
+        long bertVorher = kasse.guthaben(bert);
+
+        assertEquals(GEKAUFT, buch.kaufe(WELT, bert, ecke(0, 0).x(), ecke(0, 0).z(),
+                mitschrift()).bescheid());
+
+        assertEquals(bert, buch.anStelle(WELT, ecke(0, 0).x(), ecke(0, 0).z())
+                .orElseThrow().eigentuemer());
+        assertEquals(annaVorher, kasse.guthaben(anna));
+        assertEquals(bertVorher, kasse.guthaben(bert));
+    }
+
+    @Test
+    @DisplayName("Ohne Angebot, am eigenen Grundstueck und ohne Geld wird nicht gekauft")
+    void dreiAbsagenBeimKauf() {
+        buch.schneideZu(WELT, anna, ecke(0, 0), ecke(1, 1));
+        int x = ecke(0, 0).x();
+        int z = ecke(0, 0).z();
+
+        // 1. Es steht nicht zum Verkauf.
+        assertEquals(KEIN_ANGEBOT, buch.kaufe(WELT, bert, x, z, mitschrift())
+                .bescheid());
+
+        buch.biete(WELT, anna, x, z, 7_500L);
+
+        // 2. Am EIGENEN wird nicht gekauft - dieselbe Sperre wie am eigenen Shop.
+        assertEquals(EIGENES_GRUNDSTUECK, buch.kaufe(WELT, anna, x, z, mitschrift())
+                .bescheid());
+
+        // 3. Das Guthaben reicht nicht - und die Absage nennt den PREIS, damit der
+        //    Spieler ausrechnen kann, was ihm fehlt.
+        SpeicherKasse arm = new SpeicherKasse(100L);
+        Grundstuecksbuch armesBuch = new Grundstuecksbuch(Feldgrenze.freistaedte(),
+                lager, ablage, arm, new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+        Grundstuecksbuch.Entscheid zuWenig = armesBuch.kaufe(WELT, bert, x, z,
+                mitschrift());
+        assertEquals(ZU_WENIG_MARK, zuWenig.bescheid());
+        assertEquals(7_500L, zuWenig.preis());
+        assertEquals(100L, arm.guthaben(bert), "und sein Geld ist noch da");
+        assertEquals(anna, buch.anStelle(WELT, x, z).orElseThrow().eigentuemer(),
+                "das Grundstueck gehoert weiter Anna");
+    }
+
+    @Test
+    @DisplayName("Scheitert der Besitzerwechsel, kommt das Geld des Kaeufers ZURUECK")
+    void gescheiterterWechselErstattet() {
+        // SCHRITT 2 der Reihenfolge. Das Geld des Kaeufers ist dann schon weg - und muss
+        // zurueck, sonst zahlt er fuer nichts. Genau dieser Fall tritt im Betrieb ein,
+        // wenn zwei Kaeufer gleichzeitig zugreifen: Der zweite laeuft am Riegel auf.
+        Grundstuecksattrappe stumm = new Grundstuecksattrappe.StummBeimWechsel();
+        Grundstueck angeboten = stumm.anlegen(WELT, annastadt.id(),
+                Zellquader.eineZelle(buch.plan().zelleVon(ecke(0, 0).x()),
+                        buch.plan().zelleVon(ecke(0, 0).z())), anna, 0L);
+        stumm.anbieten(angeboten.id(), 7_500L);
+        Grundstuecksbuch stummesBuch = new Grundstuecksbuch(Feldgrenze.freistaedte(),
+                lager, stumm, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+        long bertVorher = kasse.guthaben(bert);
+
+        Grundstuecksbuch.Entscheid kauf = stummesBuch.kaufe(WELT, bert,
+                ecke(0, 0).x(), ecke(0, 0).z(), mitschrift());
+
+        assertEquals(GESTOERT, kauf.bescheid());
+        assertEquals(bertVorher, kasse.guthaben(bert),
+                "sein Geld ist zurueck - abgebucht UND erstattet");
+        assertEquals(-7_500L, kasse.summeSeit(bert, Instant.EPOCH,
+                Buchungsgrund.GRUNDSTUECK_GEKAUFT), "die Abbuchung steht im Buch");
+        assertEquals(7_500L, kasse.summeSeit(bert, Instant.EPOCH,
+                Buchungsgrund.GRUNDSTUECK_ERSTATTET), "und die Gegenbuchung auch");
+        assertTrue(verloreneErloese.isEmpty(),
+                "ein verlorener Erloes ist das NICHT - der Verkauf hat nie begonnen");
+    }
+
+    @Test
+    @DisplayName("Scheitert der ERLOES, gilt der Kauf trotzdem - und es wird gemeldet")
+    void gescheiterterErloesGiltTrotzdem() {
+        // SCHRITT 3, der schlimmste Fall. Zurueckgenommen wird er NICHT: Ein Rueckweg
+        // muesste den Wechsel aufheben und das Kaeufergeld zurueckbuchen, und scheitert
+        // dabei das Zuruecknehmen beim Verkaeufer, haetten BEIDE Geld und niemand das
+        // Grundstueck - Geld aus dem Nichts. Ein Verlust ist heilbar, eine Schoepfung
+        // nicht.
+        annasAngebot(7_500L);
+        Kassenattrappe.StummBeimGutschreiben stummeKasse =
+                new Kassenattrappe.StummBeimGutschreiben(10_000_000L);
+        Grundstuecksbuch mitStummerKasse = new Grundstuecksbuch(
+                Feldgrenze.freistaedte(), lager, ablage, stummeKasse,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+
+        Grundstuecksbuch.Entscheid kauf = mitStummerKasse.kaufe(WELT, bert,
+                ecke(0, 0).x(), ecke(0, 0).z(), mitschrift());
+
+        assertEquals(GEKAUFT, kauf.bescheid(), "der Kauf GILT");
+        assertEquals(bert, buch.anStelle(WELT, ecke(0, 0).x(), ecke(0, 0).z())
+                .orElseThrow().eigentuemer(), "das Grundstueck ist uebertragen");
+        assertEquals(1, verloreneErloese.size(),
+                "und der Aufrufer erfaehrt es - genau EINMAL: " + verloreneErloese);
+        assertTrue(verloreneErloese.get(0).contains("7500"), verloreneErloese.get(0));
+    }
+
+    @Test
+    @DisplayName("Die Gebuehr wird dem Verkaeufer abgezogen - und nur ueber null")
+    void gebuehrTraegtDerVerkaeufer() {
+        // Abgezogen wird IMMER dem, der das Geld bekommt - nie als Aufschlag auf den
+        // Preis. Der Preis im Angebot ist, was der Kaeufer zahlt.
+        Grundstuecksbuch mitGebuehr = new Grundstuecksbuch(Feldgrenze.freistaedte(),
+                lager, ablage, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                        .mitFreistaedten(Freistadtwerte.VORGABE
+                                .mitVerkaufsgebuehr(5))));
+        annasAngebot(1_000L);
+        long annaVorher = kasse.guthaben(anna);
+        long bertVorher = kasse.guthaben(bert);
+
+        Grundstuecksbuch.Entscheid kauf = mitGebuehr.kaufe(WELT, bert, ecke(0, 0).x(),
+                ecke(0, 0).z(), mitschrift());
+
+        assertEquals(GEKAUFT, kauf.bescheid());
+        assertEquals(50L, kauf.gebuehr(), "5 Prozent von 1.000");
+        assertEquals(bertVorher - 1_000L, kasse.guthaben(bert),
+                "der Kaeufer zahlt den PREIS, nicht Preis plus Gebuehr");
+        assertEquals(annaVorher + 950L, kasse.guthaben(anna),
+                "der Verkaeufer bekommt 1.000 und zahlt 50");
+        assertEquals(-50L, kasse.summeSeit(anna, Instant.EPOCH,
+                Buchungsgrund.GRUNDSTUECK_GEBUEHR));
+    }
+
+    @Test
+    @DisplayName("Eine ABGERUNDETE Gebuehr von null erzeugt KEINE Buchungszeile")
+    void abgerundeteNullOhneZeile() {
+        // Bei 5 Prozent auf 19 Mark ist die Gebuehr abgerundet 0 - und eine Zeile ueber
+        // 0 Mark waere eine Zeile ohne Geldbewegung. Geprueft wird die ZAHL der Zeilen
+        // und nicht die Summe: Eine Summe von 0 kaeme auch bei einer Zeile heraus.
+        Grundstuecksbuch mitGebuehr = new Grundstuecksbuch(Feldgrenze.freistaedte(),
+                lager, ablage, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                        .mitFreistaedten(Freistadtwerte.VORGABE
+                                .mitVerkaufsgebuehr(5))));
+        annasAngebot(19L);
+
+        Grundstuecksbuch.Entscheid kauf = mitGebuehr.kaufe(WELT, bert, ecke(0, 0).x(),
+                ecke(0, 0).z(), mitschrift());
+
+        assertEquals(0L, kauf.gebuehr());
+        assertEquals(0L, kasse.summeSeit(anna, Instant.EPOCH,
+                Buchungsgrund.GRUNDSTUECK_GEBUEHR));
+        assertTrue(kasse.verlauf(anna, 20).stream().noneMatch(
+                        zeile -> zeile.grund() == Buchungsgrund.GRUNDSTUECK_GEBUEHR),
+                "keine Zeile, nicht nur eine Summe von null");
+    }
+
+    @Test
+    @DisplayName("Ein zweiter Kauf auf derselben Flaeche findet kein Angebot mehr")
+    void keinZweiterKauf() {
+        annasAngebot(1_000L);
+        UUID clara = UUID.randomUUID();
+        assertEquals(GEKAUFT, buch.kaufe(WELT, bert, ecke(0, 0).x(), ecke(0, 0).z(),
+                mitschrift()).bescheid());
+        long claraVorher = kasse.guthaben(clara);
+
+        Grundstuecksbuch.Entscheid zweiter = buch.kaufe(WELT, clara, ecke(0, 0).x(),
+                ecke(0, 0).z(), mitschrift());
+
+        assertEquals(KEIN_ANGEBOT, zweiter.bescheid());
+        assertEquals(claraVorher, kasse.guthaben(clara), "sie hat nichts gezahlt");
+        assertEquals(bert, buch.anStelle(WELT, ecke(0, 0).x(), ecke(0, 0).z())
+                .orElseThrow().eigentuemer());
+    }
+
+    @Test
+    @DisplayName("Wo nichts liegt, ist nichts zu kaufen und nichts anzubieten")
+    void nichtsZuKaufen() {
+        assertEquals(KEIN_GRUNDSTUECK,
+                buch.kaufe(WELT, bert, ecke(0, 0).x(), ecke(0, 0).z(), mitschrift())
+                        .bescheid());
+        assertEquals(KEIN_GRUNDSTUECK,
+                buch.biete(WELT, anna, ecke(0, 0).x(), ecke(0, 0).z(), 1L).bescheid());
+    }
+
 }

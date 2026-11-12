@@ -738,6 +738,10 @@ class VorlageTest {
             // Ankunftswelt" (die Weltpruefung fiel), dann die Zahl der Materialien im
             // Sortiment (die Tafel fiel).
             "FreimarkenPlugin.java -> \" Mark je Spieler und Tag.\"",
+            // Teil C3: Die SEVERE-Zeile des verlorenen Erloeses. Sie geht in die
+            // Konsole und an niemanden sonst - ihr Zweck ist, dass der Betreiber von
+            // Hand gutschreiben kann, und dafuer muss die Einheit darin stehen.
+            "FreistadtBefehle.java -> \" Mark NICHT bekommen. Von\"",
             // Die Einheit des Marktlesers - sie geht an den Betreiber, der seine
             // config.yml liest, und nie an einen Spieler. Die zwei Erklaerzeilen ueber
             // PFENNIGE sind am 10.11.2026 mit dem Sortiment gegangen.

@@ -42,6 +42,25 @@ public final class Grundstuecksbuch {
         KEIN_GRUNDSTUECK,
         /** Es gehoert einem anderen - beim Aufloesen. */
         NICHT_DEIN_GRUNDSTUECK,
+        /** Angeboten oder zurueckgezogen - der Preis steht (oder steht nicht mehr). */
+        ANGEBOTEN,
+        /** Gekauft. Das Geld ist geflossen, das Grundstueck hat einen neuen Besitzer. */
+        GEKAUFT,
+        /** Dieses Grundstueck steht nicht zum Verkauf. */
+        KEIN_ANGEBOT,
+        /**
+         * Am EIGENEN Grundstueck wird nicht gekauft.
+         *
+         * <p>Dieselbe Sperre wie am eigenen Kistenshop ({@code Shophandel}, Bescheid
+         * EIGENER_SHOP), und hier mit einem zweiten Grund: Ein Kauf bei sich selbst
+         * waere eine Gebuehrzahlung ohne Gegenleistung - bei 0 Prozent folgenlos, bei
+         * 5 Prozent eine Geldvernichtung, die niemand beabsichtigt.
+         */
+        EIGENES_GRUNDSTUECK,
+        /** Das Guthaben reicht nicht fuer den Angebotspreis. */
+        ZU_WENIG_MARK,
+        /** Ein negativer Preis ist keiner. */
+        PREIS_UNGUELTIG,
         /** Die Ablage hat gestoert. Nichts ist geschehen. */
         GESTOERT
     }
@@ -57,17 +76,43 @@ public final class Grundstuecksbuch {
      *                    lesen, wie weit er darueber ist
      */
     public record Entscheid(Bescheid bescheid, Optional<Grundstueck> grundstueck,
-                            int zellen) {
+                            int zellen, long preis, long gebuehr) {
 
         static Entscheid nein(Bescheid grund) {
-            return new Entscheid(grund, Optional.empty(), 0);
+            return new Entscheid(grund, Optional.empty(), 0, 0L, 0L);
         }
 
         static Entscheid nein(Bescheid grund, int zellen) {
-            return new Entscheid(grund, Optional.empty(), zellen);
+            return new Entscheid(grund, Optional.empty(), zellen, 0L, 0L);
         }
 
-        /** Ob es geklappt hat - fuer den Aufrufer, der nur das wissen will. */
+        /**
+         * Eine Absage, die den PREIS nennt.
+         *
+         * <p>Genau fuer {@link Bescheid#ZU_WENIG_MARK}: Der Spieler soll lesen, was
+         * ihm fehlt - und das rechnet sich nur gegen den Preis, den er nicht hat.
+         */
+        static Entscheid nein(Bescheid grund, int zellen, long preis) {
+            return new Entscheid(grund, Optional.empty(), zellen, preis, 0L);
+        }
+
+        /** Der Kurzweg fuer alles, was kein Geld bewegt. */
+        static Entscheid ja(Bescheid grund, Grundstueck eines, int zellen) {
+            return new Entscheid(grund, Optional.of(eines), zellen, 0L, 0L);
+        }
+
+        /**
+         * NUR {@link Bescheid#ERTEILT} - der Zuschnitt und das Aufloesen.
+         *
+         * <p><b>Ein geglueckter KAUF ist hier falsch</b>, und das ist Absicht.
+         * {@link Bescheid#GEKAUFT} und {@link Bescheid#ANGEBOTEN} sind ebenfalls
+         * geglueckt, haben aber jeder eine eigene Folge: Beim Kauf erfaehrt es auch
+         * der VERKAEUFER, beim Angebot niemand sonst. Ein Wort fuer alle drei hiesse,
+         * dass ein Zweig die falsche Folge zieht - genau der Fehler, den FreistadtBefehle
+         * am 12.11.2026 trug: Er fragte hier und schickte dem Verkaeufer darum nie
+         * etwas. Wer die drei zusammenfassen will, muss vorher alle drei Folgen
+         * zusammenfuehren.
+         */
         public boolean erfolgreich() {
             return bescheid == Bescheid.ERTEILT;
         }
@@ -77,6 +122,14 @@ public final class Grundstuecksbuch {
     private final Feldgrenze grenze;
     private final BesitzLager lager;
     private final Grundstuecksablage ablage;
+
+    /**
+     * Die Kasse - erst mit Teil C3 gebraucht.
+     *
+     * <p>Teil C2 bewegte kein Geld: Der Stadtbesitzer teilt sein eigenes Feld, fuer das
+     * er schon gezahlt hat. Erst der KAUF braucht zwei Konten.
+     */
+    private final Kasse kasse;
 
     /**
      * Woher die Hoechstzahl der Zellen kommt.
@@ -96,7 +149,8 @@ public final class Grundstuecksbuch {
      *                                  zwei Staedten, und kein Zuschnitt waere eindeutig
      */
     public Grundstuecksbuch(Feldgrenze grenze, BesitzLager lager,
-                            Grundstuecksablage ablage, Wirtschaftsstand wirtschaft) {
+                            Grundstuecksablage ablage, Kasse kasse,
+                            Wirtschaftsstand wirtschaft) {
         this.grenze = grenze;
         this.plan = grenze.plan();
         // DER RIEGEL AM ENGSTEN VERBRAUCHER: Dieses Buch ist die einzige Stelle, die in
@@ -112,6 +166,7 @@ public final class Grundstuecksbuch {
         }
         this.lager = lager;
         this.ablage = ablage;
+        this.kasse = kasse;
         this.wirtschaft = wirtschaft;
     }
 
@@ -123,6 +178,11 @@ public final class Grundstuecksbuch {
     /** Wie viele Zellen ein Grundstueck hoechstens umfassen darf. */
     public int hoechstzellen() {
         return wirtschaft.werte().freistaedte().hoechstzellen();
+    }
+
+    /** Was der Staat von einem Verkauf nimmt - beim GEBRAUCH gefragt, nicht kopiert. */
+    public int verkaufsgebuehrProzent() {
+        return wirtschaft.werte().freistaedte().verkaufsgebuehrProzent();
     }
 
     /**
@@ -197,7 +257,7 @@ public final class Grundstuecksbuch {
             // ist. So kann er sie bebauen, bis ein Kaeufer kommt.
             Grundstueck neu = ablage.anlegen(welt, stadt.get().id(), flaeche, spieler,
                     0L);
-            return new Entscheid(Bescheid.ERTEILT, Optional.of(neu), flaeche.zellen());
+            return Entscheid.ja(Bescheid.ERTEILT, neu, flaeche.zellen());
         } catch (RuntimeException fehler) {
             // Nichts zurueckzunehmen: Es ist kein Geld geflossen, und geschrieben wurde
             // entweder alles oder nichts. Das ist der Vorteil daran, dass C2 nichts
@@ -239,8 +299,228 @@ public final class Grundstuecksbuch {
         } catch (RuntimeException fehler) {
             return Entscheid.nein(Bescheid.GESTOERT, eines.flaeche().zellen());
         }
-        return new Entscheid(Bescheid.ERTEILT, Optional.of(eines),
-                eines.flaeche().zellen());
+        return Entscheid.ja(Bescheid.ERTEILT, eines, eines.flaeche().zellen());
+    }
+
+    /**
+     * Ein Grundstueck zum Verkauf stellen - oder das Angebot zuruecknehmen.
+     *
+     * <p><b>Kein Preisdeckel</b>, und das ist die Entscheidung aus Plan 16 im Klartext:
+     * "Der Stadtbesitzer setzt seine Preise frei; Wucher regelt sich von selbst, weil
+     * daneben die Marktstadt mit gratis erster Parzelle liegt." Die einzige Grenze ist
+     * die des Geldes selbst.
+     *
+     * <p>Eine 0 ist erlaubt und heisst ZU VERSCHENKEN - ein Stadtbesitzer, der Buerger
+     * anwirbt, gibt die ersten Grundstuecke gratis. Nur {@code null} heisst "nicht zu
+     * haben", und das ist der Weg zum Zuruecknehmen.
+     *
+     * @param angebotspreis der Preis, oder {@link Grundstueck#KEIN_ANGEBOT} zum
+     *                      Zuruecknehmen
+     */
+    public Entscheid biete(String welt, UUID spieler, int blockX, int blockZ,
+                           Long angebotspreis) {
+        if (welt == null || welt.isBlank() || spieler == null) {
+            return Entscheid.nein(Bescheid.KEINE_STADTWELT);
+        }
+        if (angebotspreis != null && angebotspreis < 0L) {
+            return Entscheid.nein(Bescheid.PREIS_UNGUELTIG);
+        }
+        Optional<Grundstueck> gefunden;
+        try {
+            gefunden = ablage.anZelle(welt, plan.zelleVon(blockX), plan.zelleVon(blockZ));
+        } catch (RuntimeException fehler) {
+            return Entscheid.nein(Bescheid.GESTOERT);
+        }
+        if (gefunden.isEmpty()) {
+            return Entscheid.nein(Bescheid.KEIN_GRUNDSTUECK);
+        }
+        Grundstueck eines = gefunden.get();
+        if (!eines.gehoert(spieler)) {
+            return Entscheid.nein(Bescheid.NICHT_DEIN_GRUNDSTUECK,
+                    eines.flaeche().zellen());
+        }
+        try {
+            ablage.anbieten(eines.id(), angebotspreis);
+        } catch (RuntimeException fehler) {
+            return Entscheid.nein(Bescheid.GESTOERT, eines.flaeche().zellen());
+        }
+        // Das Grundstueck NACH der Schreibung und nicht davor: Der Entscheid sagt
+        // zu, das neue zu tragen (siehe dort), und die Naht unterscheidet an ihm,
+        // ob angeboten oder zurueckgezogen wurde. Mit dem alten Stand las sie
+        // beides vertauscht.
+        return new Entscheid(Bescheid.ANGEBOTEN,
+                Optional.of(eines.mitAngebot(angebotspreis)),
+                eines.flaeche().zellen(),
+                angebotspreis == null ? 0L : angebotspreis, 0L);
+    }
+
+    /**
+     * Ein angebotenes Grundstueck KAUFEN - das Abnahmekriterium aus Plan 15.
+     *
+     * <p><b>Der erste Kauf dieses Projekts, bei dem Geld von einem Spieler zu einem
+     * anderen fliesst.</b> Bisher kauft immer jemand vom Bund, und dessen Geld kommt aus
+     * dem Nichts: Ein Fehlschlag kostet dort nur eine Gegenbuchung. Hier gibt es zwei
+     * Konten und eine Ablage, und keine gemeinsame Transaktion darueber - Kasse und
+     * Grundstuecke sind zwei Schichten, und das soll so bleiben.
+     *
+     * <p><b>DIE REIHENFOLGE IST DIE GANZE ENTSCHEIDUNG</b>, und sie ist nach dem
+     * SCHLIMMSTEN Fall gewaehlt, nicht nach dem haeufigsten:
+     *
+     * <ol>
+     *   <li><b>Abbuchen beim Kaeufer.</b> Scheitert es, ist nichts geschehen - das ist
+     *       der Normalfall einer Absage.</li>
+     *   <li><b>Besitzerwechsel.</b> Scheitert er, kommt das Geld des Kaeufers zurueck.
+     *       Hier liegt auch der Riegel gegen den Doppelkauf: Die Ablage nimmt den
+     *       Wechsel nur an, solange das Angebot steht.</li>
+     *   <li><b>Gutschreiben beim Verkaeufer.</b> Scheitert es, ist der Kauf GESCHEHEN
+     *       und der Verkaeufer hat sein Geld nicht. Das ist der schlimmste Fall, und er
+     *       wird NICHT zurueckgenommen - siehe unten.</li>
+     *   <li><b>Gebuehr vom Verkaeufer.</b> Kann nach Schritt 3 nicht mehr scheitern: Die
+     *       Gebuehr ist nie groesser als der Preis, den er gerade bekommen hat.</li>
+     * </ol>
+     *
+     * <p><b>Warum Schritt 3 nicht zurueckgenommen wird</b>, obwohl das moeglich waere:
+     * Ein Rueckweg muesste den Besitzerwechsel aufheben UND das Kaeufergeld
+     * zurueckbuchen. Scheitert dabei das Zuruecknehmen beim Verkaeufer - weil er sein
+     * Geld in den Millisekunden dazwischen ausgegeben hat -, dann haben BEIDE Geld und
+     * niemand das Grundstueck: Geld aus dem Nichts. Der Verlust eines Betrages ist
+     * schlimm und vom Betreiber mit einer Gutschrift zu heilen; eine Geldschoepfung ist
+     * es nicht, denn sie ist nachher niemandem mehr zuzuordnen. Darum bleibt der Kauf
+     * stehen, und der Aufrufer protokolliert laut. Dieselbe Abwaegung wie bei
+     * {@code Shophandel.bezahle}, wo die Ware schon uebergeben ist.
+     *
+     * <p><b>Das Konto des Verkaeufers wird VOR Schritt 1 eroeffnet.</b> Damit kann
+     * Schritt 3 nur noch an einer stummen Ablage scheitern und nicht daran, dass es
+     * sein Konto nicht gibt - der haeufigere der beiden Gruende faellt weg.
+     *
+     * @param meldeVerlorenenErloes wird gerufen, wenn Schritt 3 scheitert. Der Aufrufer
+     *                              protokolliert dann; die Entscheidung, was das heisst,
+     *                              gehoert nicht in den Kern
+     */
+    public Entscheid kaufe(String welt, UUID kaeufer, int blockX, int blockZ,
+                           VerlorenerErloes meldeVerlorenenErloes) {
+        if (welt == null || welt.isBlank() || kaeufer == null) {
+            return Entscheid.nein(Bescheid.KEINE_STADTWELT);
+        }
+        Optional<Grundstueck> gefunden;
+        try {
+            gefunden = ablage.anZelle(welt, plan.zelleVon(blockX), plan.zelleVon(blockZ));
+        } catch (RuntimeException fehler) {
+            return Entscheid.nein(Bescheid.GESTOERT);
+        }
+        if (gefunden.isEmpty()) {
+            return Entscheid.nein(Bescheid.KEIN_GRUNDSTUECK);
+        }
+        Grundstueck eines = gefunden.get();
+        int zellen = eines.flaeche().zellen();
+        if (!eines.stehtZumVerkauf()) {
+            return Entscheid.nein(Bescheid.KEIN_ANGEBOT, zellen);
+        }
+        if (eines.gehoert(kaeufer)) {
+            return Entscheid.nein(Bescheid.EIGENES_GRUNDSTUECK, zellen);
+        }
+        long preis = eines.angebotspreis();
+        UUID verkaeufer = eines.eigentuemer();
+
+        // Das Konto des Verkaeufers ZUERST - siehe Javadoc.
+        try {
+            kasse.eroeffne(verkaeufer);
+        } catch (RuntimeException fehler) {
+            return Entscheid.nein(Bescheid.GESTOERT, zellen, preis);
+        }
+
+        // Schritt 1: abbuchen beim Kaeufer.
+        try {
+            if (!kasse.abbuchen(kaeufer, preis, Buchungsgrund.GRUNDSTUECK_GEKAUFT)) {
+                return Entscheid.nein(Bescheid.ZU_WENIG_MARK, zellen, preis);
+            }
+        } catch (RuntimeException fehler) {
+            return Entscheid.nein(Bescheid.GESTOERT, zellen, preis);
+        }
+
+        // Schritt 2: der Besitzerwechsel. Hier liegt der Riegel gegen den Doppelkauf.
+        Grundstueck neu;
+        try {
+            neu = ablage.eigentuemerSetzen(eines.id(), kaeufer, preis);
+        } catch (RuntimeException fehler) {
+            erstatte(kaeufer, preis, fehler);
+            return Entscheid.nein(Bescheid.GESTOERT, zellen, preis);
+        }
+
+        // Schritt 3: gutschreiben beim Verkaeufer. Ab hier GILT der Kauf.
+        try {
+            kasse.gutschreiben(verkaeufer, preis,
+                    Buchungsgrund.GRUNDSTUECK_VERKAUFT);
+        } catch (RuntimeException fehler) {
+            meldeVerlorenenErloes.melde(verkaeufer, preis, fehler);
+            return gekauft(neu, zellen, preis, 0L);
+        }
+
+        // Schritt 4: die Gebuehr. Nur, wenn die GERECHNETE ueber 0 liegt - nicht schon,
+        // wenn ein Satz ueber 0 steht. Bei 5 Prozent auf 19 Mark ist sie abgerundet 0,
+        // und eine Zeile ueber 0 Mark waere eine Zeile ohne Geldbewegung.
+        long gebuehr = Shopregel.gebuehrAuf(preis,
+                wirtschaft.werte().freistaedte().verkaufsgebuehrProzent());
+        if (gebuehr > 0L) {
+            try {
+                kasse.abbuchen(verkaeufer, gebuehr, Buchungsgrund.GRUNDSTUECK_GEBUEHR);
+            } catch (RuntimeException fehler) {
+                meldeVerlorenenErloes.melde(verkaeufer, gebuehr, fehler);
+            }
+        }
+        return gekauft(neu, zellen, preis, gebuehr);
+    }
+
+    /**
+     * Das verkaufte Grundstueck, wie es DANACH aussieht - fuer die Meldung.
+     *
+     * <p>Der Stand kommt aus der ABLAGE und wird nicht hier zusammengesetzt. Vorher
+     * baute diese Stelle die Zeile selbst nach, und damit raet sie zwei Dinge: dass die
+     * Mitbauer geleert wurden und welchen Zeitpunkt {@code erworbenAm} jetzt traegt. Das
+     * zweite war falsch - sie trug den des Vorbesitzers.
+     */
+    private Entscheid gekauft(Grundstueck neu, int zellen, long preis, long gebuehr) {
+        return new Entscheid(Bescheid.GEKAUFT, Optional.of(neu), zellen, preis,
+                gebuehr);
+    }
+
+    /**
+     * Das Geld zurueck, und zwar auch dann, wenn dabei etwas schiefgeht.
+     *
+     * <p>Wortgleich zu {@code Freistadtbuch.erstatte}, und aus demselben Grund: Die
+     * Ausnahme der Gutschrift wird an die urspruengliche GEHAENGT und nicht an ihre
+     * Stelle gesetzt. Sonst stuende im Logbuch der zweite Fehler, und der erste - der,
+     * der den Kauf gekostet hat - waere weg.
+     */
+    private void erstatte(UUID wer, long preis, RuntimeException ursache) {
+        try {
+            kasse.gutschreiben(wer, preis, Buchungsgrund.GRUNDSTUECK_ERSTATTET);
+        } catch (RuntimeException auchDas) {
+            ursache.addSuppressed(auchDas);
+        }
+    }
+
+    /**
+     * Was geschieht, wenn ein Erloes nicht ankommt.
+     *
+     * <p>Eine Naht und kein Protokoll im Kern: WAS eine verlorene Gutschrift bedeutet -
+     * eine Zeile im Serverprotokoll, eine Nachricht an das Team, ein Eintrag in einer
+     * Wiedervorlage - entscheidet der Betreiber und nicht die Regel. Der Kern weiss nur,
+     * DASS es geschehen ist.
+     */
+    public interface VerlorenerErloes {
+
+        /**
+         * @param wer     wem das Geld fehlt
+         * @param betrag  wie viel
+         * @param fehler  warum es nicht ankam
+         */
+        void melde(UUID wer, long betrag, RuntimeException fehler);
+    }
+
+    /** Die Grundstuecke dieser Welt, die zum Verkauf stehen. */
+    public List<Grundstueck> angebote(String welt) {
+        return ablage.angebote(welt);
     }
 
     /**

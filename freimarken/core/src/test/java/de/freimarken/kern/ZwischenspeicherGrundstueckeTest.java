@@ -59,12 +59,12 @@ class ZwischenspeicherGrundstueckeTest {
     @Test
     @DisplayName("Eine Zelle wird aus der KARTE beantwortet - ohne Gang zur Ablage")
     void zelleKommtAusDerKarte() {
-        ZaehlendeAblage zaehler = new ZaehlendeAblage();
-        zaehler.echte.anlegen(WELT, 1L, new Zellquader(0, 0, 3, 3), UUID.randomUUID(),
+        Grundstuecksattrappe zaehler = new Grundstuecksattrappe();
+        zaehler.anlegen(WELT, 1L, new Zellquader(0, 0, 3, 3), UUID.randomUUID(),
                 0L);
         ZwischenspeicherGrundstuecke karte = new ZwischenspeicherGrundstuecke(zaehler);
         karte.fuellen(WELT);
-        zaehler.gefragt = 0;
+        zaehler.zaehlerZuruecksetzen();
 
         // Hundert Fragen auf dem heissen Pfad - und kein einziger Gang zur Ablage.
         for (int lauf = 0; lauf < 100; lauf++) {
@@ -72,7 +72,7 @@ class ZwischenspeicherGrundstueckeTest {
             assertTrue(karte.anZelle(WELT, 9, 9).isEmpty());
         }
 
-        assertEquals(0, zaehler.gefragt, "die Karte antwortet selbst - sonst laege bei"
+        assertEquals(0, zaehler.gezaehlt(), "die Karte antwortet selbst - sonst laege bei"
                 + " jedem gesetzten Block ein Gang zur Datenbank");
     }
 
@@ -137,14 +137,14 @@ class ZwischenspeicherGrundstueckeTest {
     @Test
     @DisplayName("Eine FREMDE Welt geht ungepuffert durch - die Karte deckt eine")
     void fremdeWeltGehtDurch() {
-        ZaehlendeAblage zaehler = new ZaehlendeAblage();
+        Grundstuecksattrappe zaehler = new Grundstuecksattrappe();
         ZwischenspeicherGrundstuecke karte = new ZwischenspeicherGrundstuecke(zaehler);
         karte.fuellen(WELT);
-        zaehler.gefragt = 0;
+        zaehler.zaehlerZuruecksetzen();
 
         karte.anZelle("freimarken:andere", 0, 0);
 
-        assertEquals(1, zaehler.gefragt, "fuer eine Welt, die sie nicht deckt, fragt"
+        assertEquals(1, zaehler.gezaehlt(), "fuer eine Welt, die sie nicht deckt, fragt"
                 + " die Karte die Ablage - sonst antwortete sie 'gibt es nicht' ueber"
                 + " eine Welt, von der sie nichts weiss");
     }
@@ -183,48 +183,5 @@ class ZwischenspeicherGrundstueckeTest {
         assertTrue(karte.anZelle(WELT, 0, 0).isPresent());
         assertTrue(karte.anZelle(WELT, 5, 5).isPresent());
         assertTrue(karte.anZelle(WELT, 3, 3).isEmpty());
-    }
-
-    /** Eine Ablage, die mitzaehlt, wie oft nach einer Zelle gefragt wurde. */
-    private static final class ZaehlendeAblage implements Grundstuecksablage {
-        private final SpeicherGrundstuecke echte = new SpeicherGrundstuecke();
-        private int gefragt;
-
-        @Override
-        public Optional<Grundstueck> anZelle(String welt, int zelleX, int zelleZ) {
-            gefragt++;
-            return echte.anZelle(welt, zelleX, zelleZ);
-        }
-
-        @Override
-        public Grundstueck anlegen(String welt, long stadtId, Zellquader flaeche,
-                                   UUID eigentuemer, long preis) {
-            return echte.anlegen(welt, stadtId, flaeche, eigentuemer, preis);
-        }
-
-        @Override
-        public List<Grundstueck> inStadt(long stadtId) {
-            return echte.inStadt(stadtId);
-        }
-
-        @Override
-        public List<Grundstueck> alle(String welt) {
-            return echte.alle(welt);
-        }
-
-        @Override
-        public List<Grundstueck> vonSpieler(String welt, UUID spieler) {
-            return echte.vonSpieler(welt, spieler);
-        }
-
-        @Override
-        public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
-            echte.mitbauerSetzen(id, mitbauer);
-        }
-
-        @Override
-        public void entfernen(long id) {
-            echte.entfernen(id);
-        }
     }
 }

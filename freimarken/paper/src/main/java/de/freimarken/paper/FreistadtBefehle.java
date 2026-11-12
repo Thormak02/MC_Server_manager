@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.arguments.LongArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
@@ -43,6 +44,17 @@ final class FreistadtBefehle {
     static final String ARGUMENT_NAME = "name";
 
     /**
+     * Der Name des Preisarguments von {@code grundstueck anbieten}.
+     *
+     * <p>Als {@code longArg(0L)} und nicht als Wort: Brigadier weist damit alles ab, was
+     * keine Zahl ist, und zwar mit seiner eigenen Fehlermarkierung UNTER dem falschen
+     * Zeichen - besser als jede Absage, die wir danach schreiben koennten. Die untere
+     * Grenze 0 ist keine Spielregel, sondern dieselbe Zahl, die auch das Buch prueft:
+     * Ein Grundstueck, fuer dessen Abnahme der Verkaeufer zahlt, waere eine Geldquelle.
+     */
+    static final String ARGUMENT_PREIS = "preis";
+
+    /**
      * Das Recht fuer {@code /freistadt} - die Liste.
      *
      * <p>Vorgabe fuer alle, wie bei {@code /laden}: Die Liste ist eine Auskunft. Wer
@@ -73,6 +85,18 @@ final class FreistadtBefehle {
      */
     static final String RECHT_GRUNDSTUECK = "freimarken.freistadt.grundstueck";
 
+    /**
+     * Das Recht, ein angebotenes Grundstueck zu KAUFEN [Teil C3].
+     *
+     * <p>Ein viertes Recht, und es trennt die andere Seite ab: {@link #RECHT_GRUNDSTUECK}
+     * gehoert dem Stadtbesitzer, der sein Feld teilt und Preise setzt. Kaufen tut ein
+     * ANDERER - jemand, der (noch) keine Stadt hat. Schritt 12 haengt daran den Rang
+     * Buerger, und das ist genau der Weg, auf dem man Buerger wird.
+     *
+     * <p>Vorgabe fuer alle: Der eigentliche Riegel ist das Geld.
+     */
+    static final String RECHT_KAUFEN = "freimarken.freistadt.kaufen";
+
     private final Freistadtbuch buch;
     private final Kasse kasse;
     private final Sprache sprache;
@@ -93,6 +117,16 @@ final class FreistadtBefehle {
     private final Absteckbuch absteckbuch;
 
     /**
+     * Das Serverprotokoll - gebraucht fuer GENAU EINEN Fall.
+     *
+     * <p>Den verlorenen Erloes eines Grundstuecksverkaufs: Das Geld ist abgebucht, das
+     * Grundstueck uebertragen, und die Gutschrift an den Verkaeufer ist gescheitert.
+     * Dass das nur hier protokolliert wird und nicht im Kern, ist Absicht - WAS eine
+     * verlorene Gutschrift bedeutet, entscheidet der Betreiber.
+     */
+    private final java.util.logging.Logger protokoll;
+
+    /**
      * @param weltschluessel die Welt der Freistaedte, aus {@code freistaedte.welt}, schon
      *                       umgewandelt. Leer heisst: Die Welt fehlt, und dann sagt jeder
      *                       Zweig das - statt in einer namenlosen Welt zu gruenden
@@ -103,7 +137,8 @@ final class FreistadtBefehle {
      */
     FreistadtBefehle(Freistadtbuch buch, Kasse kasse, Sprache sprache,
                      String weltschluessel, IntSupplier hoechstzahl,
-                     Grundstuecksbuch grundstuecksbuch, Absteckbuch absteckbuch) {
+                     Grundstuecksbuch grundstuecksbuch, Absteckbuch absteckbuch,
+                     java.util.logging.Logger protokoll) {
         this.buch = buch;
         this.kasse = kasse;
         this.sprache = sprache;
@@ -111,6 +146,7 @@ final class FreistadtBefehle {
         this.hoechstzahl = hoechstzahl;
         this.grundstuecksbuch = grundstuecksbuch;
         this.absteckbuch = absteckbuch;
+        this.protokoll = protokoll;
     }
 
     LiteralCommandNode<CommandSourceStack> freistadt() {
@@ -145,7 +181,23 @@ final class FreistadtBefehle {
                         .then(Commands.literal("anlegen")
                                 .executes(this::schneideZu))
                         .then(Commands.literal("aufloesen")
-                                .executes(this::loeseAuf)))
+                                .executes(this::loeseAuf))
+                        // --- Teil C3 ---------------------------------------
+                        .then(Commands.literal("anbieten")
+                                .then(Commands.argument(ARGUMENT_PREIS,
+                                                LongArgumentType.longArg(0L))
+                                        .executes(this::biete)))
+                        .then(Commands.literal("zurueckziehen")
+                                .executes(this::zieheZurueck))
+                        .then(Commands.literal("kaufen")
+                                .requires(quelle -> quelle.getSender()
+                                        .hasPermission(RECHT_KAUFEN))
+                                .executes(this::kaufe)))
+                // Die Angebote stehen NEBEN dem Grundstueckszweig und nicht darin: Sie
+                // sind eine Auskunft fuer jeden, der etwas sucht - und dafuer soll
+                // niemand das Recht brauchen, das dem Stadtbesitzer gehoert.
+                .then(Commands.literal("angebote")
+                        .executes(this::zeigeAngebote))
                 .build();
     }
 
@@ -214,6 +266,134 @@ final class FreistadtBefehle {
         return Command.SINGLE_SUCCESS;
     }
 
+    // ------------------------------------ Angebot und Verkauf [Teil C3]
+
+    /** Das Grundstueck unter den Fuessen zum Verkauf stellen. */
+    private int biete(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (grundstuecksbuch == null) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        long preis = LongArgumentType.getLong(zusammenhang, ARGUMENT_PREIS);
+        antworteAufZuschnitt(spieler, grundstuecksbuch.biete(weltschluessel,
+                spieler.getUniqueId(), spieler.getLocation().getBlockX(),
+                spieler.getLocation().getBlockZ(), preis));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Das Angebot zuruecknehmen. */
+    private int zieheZurueck(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (grundstuecksbuch == null) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        antworteAufZuschnitt(spieler, grundstuecksbuch.biete(weltschluessel,
+                spieler.getUniqueId(), spieler.getLocation().getBlockX(),
+                spieler.getLocation().getBlockZ(),
+                de.freimarken.kern.Grundstueck.KEIN_ANGEBOT));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Das angebotene Grundstueck unter den Fuessen kaufen - das Abnahmekriterium.
+     *
+     * <p><b>Beide Seiten erfahren es</b>, und der Verkaeufer nur, wenn er online ist:
+     * Eine Nachricht an einen abgemeldeten Spieler gibt es in diesem Projekt nicht (das
+     * Abholfach ist fuer WARE, nicht fuer Worte). Wer offline verkauft, sieht es in
+     * {@code /mark verlauf} - und darum tragen die drei Buchungsgruende eigene Worte.
+     *
+     * <p>Der VERLORENE ERLOES wird hier protokolliert und nicht im Kern: Was eine
+     * gescheiterte Gutschrift bedeutet, entscheidet der Betreiber. Die Zeile nennt
+     * beide Namen und den Betrag, damit sie von Hand zu heilen ist.
+     */
+    private int kaufe(CommandContext<CommandSourceStack> zusammenhang) {
+        Player kaeufer = spielerAus(zusammenhang);
+        if (kaeufer == null) {
+            return 0;
+        }
+        if (grundstuecksbuch == null) {
+            sende(kaeufer, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        // Der Eigentuemer VOR dem Kauf: Danach ist es der Kaeufer selbst, und dann
+        // waere nicht mehr zu sagen, wem die Meldung gilt.
+        var vorher = grundstuecksbuch.anStelle(weltschluessel,
+                kaeufer.getLocation().getBlockX(), kaeufer.getLocation().getBlockZ());
+        long guthaben = kasse.guthaben(kaeufer.getUniqueId());
+        Grundstuecksbuch.Entscheid entscheid = grundstuecksbuch.kaufe(weltschluessel,
+                kaeufer.getUniqueId(), kaeufer.getLocation().getBlockX(),
+                kaeufer.getLocation().getBlockZ(),
+                (wer, betrag, fehler) -> protokoll.log(java.util.logging.Level.SEVERE,
+                        "Ein Grundstueck ist verkauft, aber " + Spielername.von(wer)
+                                + " hat seine " + betrag + " Mark NICHT bekommen. Von"
+                                + " Hand gutzuschreiben - der Besitzerwechsel ist"
+                                + " vollzogen, und ein Zuruecknehmen waere schlimmer:"
+                                + " Es koennte Geld aus dem Nichts schaffen.", fehler));
+
+        java.util.UUID verkaeufer = vorher.map(
+                de.freimarken.kern.Grundstueck::eigentuemer).orElse(null);
+        sende(kaeufer, Freistadttext.kaufZeilen(sprache, entscheid,
+                verkaeufer == null ? "?" : Spielername.von(verkaeufer), guthaben));
+
+        // NACH DEM BESCHEID gefragt und nicht nach erfolgreich(): Jenes Wort meint
+        // ERTEILT, also den Zuschnitt - ein Kauf traegt GEKAUFT. Mit erfolgreich()
+        // stand hier ein Zweig, der nie lief, und der Verkaeufer erfuhr nichts.
+        if (entscheid.bescheid() == Grundstuecksbuch.Bescheid.GEKAUFT
+                && verkaeufer != null) {
+            // Ueber Bukkit und nicht ueber kaeufer.getServer(): Jeder andere Zweig
+            // dieses Programms sucht so (AnfragenBefehle, BlockBefehle, ShopBefehle),
+            // und nur FreimarkenPlugin fragt getServer - weil es selbst das Plugin
+            // ist. Zwei Wege zu derselben Tat heisst hier auch: Der Spielerstellvertreter
+            // der Proben kennt den zweiten nicht, und dieser Zweig war darum nicht
+            // zu durchlaufen.
+            Player derAndere = org.bukkit.Bukkit.getPlayer(verkaeufer);
+            if (derAndere != null) {
+                sende(derAndere, Freistadttext.verkaufZeilen(sprache, entscheid,
+                        kaeufer.getName(),
+                        grundstuecksbuch.verkaufsgebuehrProzent()));
+            }
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Alle Angebote dieser Welt - ueber alle Staedte. */
+    private int zeigeAngebote(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (grundstuecksbuch == null || weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        sende(spieler, Freistadttext.angeboteZeilen(sprache,
+                grundstuecksbuch.angebote(weltschluessel), Spielername::von));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Die EINE Antwort auf einen Entscheid, der kein Kauf ist.
+     *
+     * <p>Zuschneiden, Aufloesen, Anbieten und Zuruecknehmen gehen alle hier hindurch:
+     * Vier Zweige mit vier eigenen Sendefolgen waeren vier Stellen, an denen das
+     * Guthaben vergessen wird - und die Absage "zu wenig Mark" nennt daraus den
+     * Fehlbetrag.
+     */
+    private void antworteAufZuschnitt(Player spieler,
+                                      Grundstuecksbuch.Entscheid entscheid) {
+        sende(spieler, Freistadttext.zuschnittZeilen(sprache, entscheid,
+                grundstuecksbuch.hoechstzellen(),
+                kasse.guthaben(spieler.getUniqueId())));
+    }
+
     // ----------------------------------------- Die Grundstuecke [Teil C2]
 
     /**
@@ -269,8 +449,7 @@ final class FreistadtBefehle {
             // "hier liegt schon ein Grundstueck" waere die eigene.
             absteckbuch.vergiss(spieler.getUniqueId());
         }
-        sende(spieler, Freistadttext.zuschnittZeilen(sprache, entscheid,
-                grundstuecksbuch.hoechstzellen()));
+        antworteAufZuschnitt(spieler, entscheid);
         return Command.SINGLE_SUCCESS;
     }
 
@@ -288,7 +467,8 @@ final class FreistadtBefehle {
                 spieler.getUniqueId(), spieler.getLocation().getBlockX(),
                 spieler.getLocation().getBlockZ());
         sende(spieler, Freistadttext.aufgeloestZeilen(sprache, entscheid,
-                grundstuecksbuch.hoechstzellen()));
+                grundstuecksbuch.hoechstzellen(),
+                kasse.guthaben(spieler.getUniqueId())));
         return Command.SINGLE_SUCCESS;
     }
 
@@ -310,11 +490,9 @@ final class FreistadtBefehle {
         var stadt = buch.stadtAn(weltschluessel, spieler.getLocation().getBlockX(),
                 spieler.getLocation().getBlockZ());
         if (stadt.isEmpty()) {
-            sende(spieler, Freistadttext.zuschnittZeilen(sprache,
-                    new Grundstuecksbuch.Entscheid(
-                            Grundstuecksbuch.Bescheid.KEINE_STADT,
-                            java.util.Optional.empty(), 0),
-                    grundstuecksbuch.hoechstzellen()));
+            antworteAufZuschnitt(spieler, new Grundstuecksbuch.Entscheid(
+                    Grundstuecksbuch.Bescheid.KEINE_STADT, java.util.Optional.empty(),
+                    0, 0L, 0L));
             return Command.SINGLE_SUCCESS;
         }
         sende(spieler, Freistadttext.grundstueckZeilen(sprache, stadt.get().name(),

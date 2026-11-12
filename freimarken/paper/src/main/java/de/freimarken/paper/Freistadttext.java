@@ -84,8 +84,8 @@ final class Freistadttext {
                                        long guthaben) {
         return sprache.bau(FreistadtSatz.FRAGE, 1L, Einsatz
                 .von("name", name)
-                .mit("preis", preis)
-                .mit("danach", guthaben - preis));
+                .mit("preis", sprache.betrag(preis))
+                .mit("danach", sprache.betrag(guthaben - preis)));
     }
 
     /**
@@ -118,8 +118,9 @@ final class Freistadttext {
             case KEIN_FREIES_FELD -> sprache.bau(FreistadtSatz.KEIN_FREIES_FELD, 1L,
                     Einsatz.keine());
             case ZU_WENIG_MARK -> sprache.bau(FreistadtSatz.ZU_WENIG_MARK, 1L, Einsatz
-                    .von("preis", entscheid.kosten())
-                    .mit("fehlt", entscheid.kosten() - guthaben));
+                    .von("preis", sprache.betrag(entscheid.kosten()))
+                    .mit("fehlt", sprache.betrag(entscheid.kosten()
+                            - guthaben)));
             case GESTOERT -> sprache.bau(FreistadtSatz.GESTOERT, 1L, Einsatz.keine());
         };
     }
@@ -166,7 +167,7 @@ final class Freistadttext {
      */
     static List<Component> zuschnittZeilen(Sprache sprache,
                                            Grundstuecksbuch.Entscheid entscheid,
-                                           int hoechstzellen) {
+                                           int hoechstzellen, long guthaben) {
         return switch (entscheid.bescheid()) {
             case ERTEILT -> erteiltZeilen(sprache, entscheid);
             case KEINE_STADTWELT -> keineWeltZeilen(sprache);
@@ -187,7 +188,138 @@ final class Freistadttext {
                     FreistadtSatz.NICHT_DEIN_GRUNDSTUECK, 1L, Einsatz.keine());
             case GESTOERT -> sprache.bau(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L,
                     Einsatz.keine());
+            // --- Angebot und Verkauf [Teil C3] ---------------------------------
+            case ANGEBOTEN -> angebotZeilen(sprache, entscheid);
+            case KEIN_ANGEBOT -> sprache.bau(FreistadtSatz.KEIN_ANGEBOT, 1L,
+                    Einsatz.keine());
+            case EIGENES_GRUNDSTUECK -> sprache.bau(FreistadtSatz.EIGENES_GRUNDSTUECK,
+                    1L, Einsatz.keine());
+            case ZU_WENIG_MARK -> sprache.bau(FreistadtSatz.GRUNDSTUECK_ZU_WENIG, 1L,
+                    Einsatz.von("preis", sprache.betrag(entscheid.preis()))
+                            .mit("fehlt", sprache.betrag(entscheid.preis()
+                                    - guthaben)));
+            case PREIS_UNGUELTIG -> sprache.bau(FreistadtSatz.PREIS_UNGUELTIG, 1L,
+                    Einsatz.keine());
+            // GEKAUFT fehlt hier mit Absicht und WIRFT: Dieser Satz nennt den
+            // VERKAEUFER beim Namen, und ein Name kommt nicht aus dem Kern - er kommt
+            // ueber Spielername.von von aussen herein. Dafuer gibt es kaufZeilen. Ein
+            // Platzhalter an dieser Stelle waere ein Fragezeichen im Chatfenster.
+            case GEKAUFT -> throw new IllegalArgumentException("GEKAUFT geht ueber"
+                    + " kaufZeilen - dieser Satz nennt den Verkaeufer beim Namen, und"
+                    + " den kennt der Kern nicht");
         };
+    }
+
+    /**
+     * Ein Angebot oder sein Rueckzug.
+     *
+     * <p><b>Drei Saetze fuer einen Bescheid</b>, und das ist eine Entscheidung ueber die
+     * SPRACHE: "zu 0 Mark angeboten" liest sich wie ein Fehler, und "zurueckgezogen" ist
+     * ueberhaupt kein Angebot. Ein Satz mit eingesetzter Null haette alle drei Faelle
+     * gleich klingen lassen.
+     *
+     * <p>Unterschieden wird am GRUNDSTUECK und nicht am Preis im Entscheid: Nach einem
+     * Rueckzug steht dort eine 0, und die heisst beim Anbieten "zu verschenken". Nur das
+     * Grundstueck selbst weiss, ob es noch ausliegt.
+     */
+    private static List<Component> angebotZeilen(Sprache sprache,
+                                                 Grundstuecksbuch.Entscheid entscheid) {
+        Grundstueck eines = entscheid.grundstueck().orElseThrow();
+        String zuschnitt = eines.flaeche().alsText();
+        if (!eines.stehtZumVerkauf()) {
+            return sprache.bau(FreistadtSatz.ZURUECKGEZOGEN, 1L,
+                    Einsatz.von("zuschnitt", zuschnitt));
+        }
+        return eines.angebotspreis() == 0L
+                ? sprache.bau(FreistadtSatz.ANGEBOTEN_GRATIS, 1L,
+                        Einsatz.von("zuschnitt", zuschnitt))
+                : sprache.bau(FreistadtSatz.ANGEBOTEN, 1L,
+                        Einsatz.von("zuschnitt", zuschnitt)
+                                .mit("preis",
+                                        sprache.betrag(eines.angebotspreis())));
+    }
+
+    /**
+     * Was der KAEUFER liest - mit dem Namen des Verkaeufers.
+     *
+     * <p>Ein eigener Weg neben {@link #zuschnittZeilen}, weil der NAME von aussen kommt:
+     * Der Kern kennt nur Kennungen, und {@code Spielername.von} ist Bukkit. Dieselbe
+     * Naht wie bei {@link #listeZeilen}.
+     *
+     * <p>Jede ABSAGE geht weiter durch {@code zuschnittZeilen} - sonst muesste dieser
+     * Weg alle zwoelf Bescheide ein zweites Mal kennen.
+     */
+    static List<Component> kaufZeilen(Sprache sprache,
+                                      Grundstuecksbuch.Entscheid entscheid,
+                                      String verkaeufer, long guthaben) {
+        if (entscheid.bescheid() != Grundstuecksbuch.Bescheid.GEKAUFT) {
+            return zuschnittZeilen(sprache, entscheid, 0, guthaben);
+        }
+        Grundstueck eines = entscheid.grundstueck().orElseThrow();
+        return entscheid.preis() == 0L
+                ? sprache.bau(FreistadtSatz.GEKAUFT_GRATIS, 1L,
+                        Einsatz.von("zuschnitt", eines.flaeche().alsText())
+                                .mit("verkaeufer", verkaeufer))
+                : sprache.bau(FreistadtSatz.GEKAUFT, 1L,
+                        Einsatz.von("zuschnitt", eines.flaeche().alsText())
+                                .mit("preis",
+                                        sprache.betrag(entscheid.preis()))
+                                .mit("verkaeufer", verkaeufer));
+    }
+
+    /**
+     * Was der VERKAEUFER liest, wenn er online ist.
+     *
+     * <p>Die Gebuehrzeile kommt NUR, wenn die gerechnete Gebuehr ueber 0 liegt - nicht
+     * schon, wenn ein Satz ueber 0 steht. Bei 5 Prozent auf 19 Mark ist sie abgerundet
+     * 0, und eine Zeile ueber 0 Mark Gebuehr waere eine Zeile ohne Geldbewegung.
+     */
+    static List<Component> verkaufZeilen(Sprache sprache,
+                                         Grundstuecksbuch.Entscheid entscheid,
+                                         String kaeufer, int prozent) {
+        Grundstueck eines = entscheid.grundstueck().orElseThrow();
+        String zuschnitt = eines.flaeche().alsText();
+        List<Component> zeilen = new ArrayList<>(entscheid.preis() == 0L
+                ? sprache.bau(FreistadtSatz.VERKAUFT_GRATIS, 1L,
+                        Einsatz.von("zuschnitt", zuschnitt).mit("kaeufer", kaeufer))
+                : sprache.bau(FreistadtSatz.VERKAUFT, 1L,
+                        Einsatz.von("zuschnitt", zuschnitt)
+                                .mit("preis",
+                                        sprache.betrag(entscheid.preis()))
+                                .mit("kaeufer", kaeufer)));
+        if (entscheid.gebuehr() > 0L) {
+            zeilen.addAll(sprache.bau(FreistadtSatz.VERKAUFT_GEBUEHR, 1L,
+                    Einsatz.von("gebuehr", sprache.betrag(entscheid.gebuehr()))
+                            .mit("prozent", String.valueOf(prozent))));
+        }
+        return zeilen;
+    }
+
+    /**
+     * Die Angebote einer Welt - ueber alle Staedte.
+     *
+     * <p>Wie {@link #listeZeilen}: Ueberschrift immer, dann je Angebot eine Zeile oder
+     * der eine Satz "keines". Ein Geschenk bekommt seine eigene Zeile, aus demselben
+     * Grund wie bei {@link #angebotZeilen}.
+     */
+    static List<Component> angeboteZeilen(Sprache sprache, List<Grundstueck> angebote,
+                                          Function<UUID, String> namenVon) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(
+                FreistadtSatz.ANGEBOT_KOPF, 1L, Einsatz.keine()));
+        if (angebote.isEmpty()) {
+            zeilen.addAll(sprache.bau(FreistadtSatz.ANGEBOT_LEER, 1L, Einsatz.keine()));
+            return zeilen;
+        }
+        for (Grundstueck eines : angebote) {
+            Einsatz werte = Einsatz.von("zuschnitt", eines.flaeche().alsText())
+                    .mit("besitzer", namenVon.apply(eines.eigentuemer()));
+            zeilen.addAll(eines.angebotspreis() == 0L
+                    ? sprache.bau(FreistadtSatz.ANGEBOT_ZEILE_GRATIS, 1L, werte)
+                    : sprache.bau(FreistadtSatz.ANGEBOT_ZEILE, 1L,
+                            werte.mit("preis",
+                                    sprache.betrag(eines.angebotspreis()))));
+        }
+        return zeilen;
     }
 
     /**
@@ -211,9 +343,9 @@ final class Freistadttext {
     /** Die Antwort auf ein Aufloesen - eigener Satz, weil die Flaeche zurueckfaellt. */
     static List<Component> aufgeloestZeilen(Sprache sprache,
                                             Grundstuecksbuch.Entscheid entscheid,
-                                            int hoechstzellen) {
+                                            int hoechstzellen, long guthaben) {
         if (!entscheid.erfolgreich()) {
-            return zuschnittZeilen(sprache, entscheid, hoechstzellen);
+            return zuschnittZeilen(sprache, entscheid, hoechstzellen, guthaben);
         }
         return sprache.bau(FreistadtSatz.AUFGELOEST, 1L, Einsatz.von("zuschnitt",
                 entscheid.grundstueck().orElseThrow().flaeche().alsText()));

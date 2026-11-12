@@ -246,6 +246,9 @@ public final class Wirtschaftsstand {
         nenneZahl(geaendert, Freistadtwerte.PFAD_HOECHSTZELLEN,
                 alt.freistaedte().hoechstzellen(),
                 neu.freistaedte().hoechstzellen());
+        nenneZahl(geaendert, Freistadtwerte.PFAD_VERKAUFSGEBUEHR,
+                alt.freistaedte().verkaufsgebuehrProzent(),
+                neu.freistaedte().verkaufsgebuehrProzent());
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");

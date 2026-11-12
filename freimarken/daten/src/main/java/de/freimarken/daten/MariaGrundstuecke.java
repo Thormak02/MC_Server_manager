@@ -45,7 +45,7 @@ public final class MariaGrundstuecke implements Grundstuecksablage {
 
     private static final String SPALTEN =
             "id, welt, stadt_id, eigentuemer, von_x, von_z, bis_x, bis_z, preis,"
-                    + " erworben_am";
+                    + " erworben_am, angebotspreis";
 
     private static final String EINFUEGEN =
             "INSERT INTO grundstuecke (welt, stadt_id, eigentuemer, von_x, von_z,"
@@ -71,6 +71,27 @@ public final class MariaGrundstuecke implements Grundstuecksablage {
                     + " AND bis_x >= ? AND von_z <= ? AND bis_z >= ? LIMIT 1";
 
     private static final String LOESCHEN = "DELETE FROM grundstuecke WHERE id = ?";
+
+    private static final String ANBIETEN =
+            "UPDATE grundstuecke SET angebotspreis = ? WHERE id = ?";
+
+    /**
+     * Der Besitzerwechsel - mit dem RIEGEL in der WHERE-Klausel.
+     *
+     * <p>{@code angebotspreis IS NOT NULL} macht aus dem Doppelkauf eine Unmoeglichkeit
+     * und nicht nur ein Verbot: Zwei Kaeufer, die gleichzeitig zugreifen, laufen beide
+     * durch diese Anweisung - und die zweite trifft keine Zeile mehr, weil der erste
+     * das Angebot mit demselben Zug zurueckgenommen hat. Eine Pruefung davor haette
+     * zwischen Lesen und Schreiben eine Luecke.
+     */
+    private static final String EIGENTUEMER_SETZEN =
+            "UPDATE grundstuecke SET eigentuemer = ?, preis = ?, angebotspreis = NULL,"
+                    + " erworben_am = ?"
+                    + " WHERE id = ? AND angebotspreis IS NOT NULL";
+
+    private static final String LESEN_ANGEBOTE =
+            "SELECT " + SPALTEN + " FROM grundstuecke WHERE welt = ?"
+                    + " AND angebotspreis IS NOT NULL ORDER BY angebotspreis, id";
 
     /**
      * Die Mitbauer zu MEHREREN Grundstuecken - der Anfang, die Fragezeichen folgen.
@@ -297,7 +318,7 @@ public final class MariaGrundstuecke implements Grundstuecksablage {
         for (Grundstueck eines : ohneMitbauer) {
             fertig.add(new Grundstueck(eines.id(), eines.welt(), eines.stadtId(),
                     eines.eigentuemer(), mitbauer.get(eines.id()), eines.flaeche(),
-                    eines.preis(), eines.erworbenAm()));
+                    eines.preis(), eines.erworbenAm(), eines.angebotspreis()));
         }
         return List.copyOf(fertig);
     }
@@ -330,6 +351,9 @@ public final class MariaGrundstuecke implements Grundstuecksablage {
             anfrage.setInt(6, flaeche.bisX());
             anfrage.setInt(7, flaeche.bisZ());
             anfrage.setLong(8, preis);
+            // Ein neues Grundstueck steht nie zum Verkauf: Erst zuschneiden, dann
+            // anbieten. Ein Preis schon beim Anlegen waere ein zweiter Weg zum
+            // Angebot - und der eine in anbieten() prueft dann nicht mehr alles.
             anfrage.setTimestamp(9,
                     new java.sql.Timestamp(System.currentTimeMillis()),
                     Datenbank.utcKalender());
@@ -426,6 +450,94 @@ public final class MariaGrundstuecke implements Grundstuecksablage {
                         ergebnis.getInt("bis_x"), ergebnis.getInt("bis_z")),
                 ergebnis.getLong("preis"),
                 ergebnis.getTimestamp("erworben_am", Datenbank.utcKalender())
-                        .toInstant());
+                        .toInstant(),
+                // Als OBJEKT gelesen und nicht mit getLong: Jenes gaebe bei NULL eine 0
+                // zurueck, und eine 0 heisst hier "zu verschenken". Aus "steht nicht zum
+                // Verkauf" wuerde damit jedes Grundstueck des Servers ein Geschenk.
+                ergebnis.getObject("angebotspreis", Long.class));
+    }
+
+    @Override
+    public void anbieten(long id, Long angebotspreis) {
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(ANBIETEN)) {
+            if (angebotspreis == null) {
+                anfrage.setNull(1, java.sql.Types.BIGINT);
+            } else {
+                anfrage.setLong(1, angebotspreis);
+            }
+            anfrage.setLong(2, id);
+            if (anfrage.executeUpdate() == 0) {
+                throw new IllegalStateException("Kein Grundstueck mit der Nummer " + id);
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Setzen des Angebotspreises", fehler);
+        }
+    }
+
+    @Override
+    public Grundstueck eigentuemerSetzen(long id, UUID neuerEigentuemer,
+                                         long preis) {
+        if (neuerEigentuemer == null) {
+            throw new IllegalArgumentException("Ohne neuen Eigentuemer gibt es keinen"
+                    + " Verkauf");
+        }
+        try {
+            Connection c = datenbank.verbindung();
+            boolean vorherAutomatisch = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                try (PreparedStatement anfrage =
+                             c.prepareStatement(EIGENTUEMER_SETZEN)) {
+                    anfrage.setString(1, neuerEigentuemer.toString());
+                    anfrage.setLong(2, preis);
+                    // erworben_am NEU - siehe die Schnittstelle. Aus der JVM und nicht
+                    // ueber NOW(): Dieselbe Uhr wie beim Einfuegen, sonst haengt der
+                    // Zeitpunkt an der Zeitzone des Datenbankservers.
+                    anfrage.setTimestamp(3,
+                            new java.sql.Timestamp(System.currentTimeMillis()),
+                            Datenbank.utcKalender());
+                    anfrage.setLong(4, id);
+                    if (anfrage.executeUpdate() == 0) {
+                        // KEINE Zeile getroffen: entweder gibt es sie nicht, oder sie
+                        // steht nicht mehr zum Verkauf. Beides ist derselbe Wurf wie in
+                        // SpeicherGrundstuecke - zwei Umsetzungen hinter einer
+                        // Schnittstelle muessen dasselbe tun.
+                        throw new IllegalStateException("Grundstueck " + id + " steht"
+                                + " nicht zum Verkauf - entweder war es nie angeboten,"
+                                + " oder ein anderer war schneller");
+                    }
+                }
+                // Die MITBAUER in DERSELBEN Transaktion: Ein Kaeufer, der eine Flaeche
+                // mit fremden Baurechten bekaeme, haette eine Luecke gekauft.
+                try (PreparedStatement raeumen =
+                             c.prepareStatement(MITBAUER_RAEUMEN)) {
+                    raeumen.setLong(1, id);
+                    raeumen.executeUpdate();
+                }
+                c.commit();
+                // Erst NACH dem commit gelesen - wie in anlegen, und aus demselben
+                // Grund: Vorher stuende die Zeile nur in dieser Transaktion, und der
+                // Zeitpunkt waere ein anderer als der, den ein zweiter Leser sieht.
+                return einesOder(c, id);
+            } catch (SQLException | RuntimeException fehler) {
+                try {
+                    c.rollback();
+                } catch (SQLException beimZuruecknehmen) {
+                    fehler.addSuppressed(beimZuruecknehmen);
+                }
+                throw fehler;
+            } finally {
+                c.setAutoCommit(vorherAutomatisch);
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Uebertragen eines Grundstuecks", fehler);
+        }
+    }
+
+    @Override
+    public List<Grundstueck> angebote(String welt) {
+        return liste(LESEN_ANGEBOTE, anfrage -> anfrage.setString(1, welt),
+                "Lesen der angebotenen Grundstuecke");
     }
 }

@@ -197,7 +197,7 @@ public final class Shopregel {
         int stueck = Math.multiplyExact(shopmenge, stufen);
         // Abgerundet - siehe den Klassenkopf. Erst vervielfachen, dann teilen: Die andere
         // Reihenfolge rundete je Stufe und verloere bei 20 Stufen bis zu 20 Mark.
-        long gebuehr = preis * gebuehrProzent / 100L;
+        long gebuehr = gebuehrAuf(preis, gebuehrProzent);
         return new Handel(preis, gebuehr, preis - gebuehr, stueck);
     }
 
@@ -318,6 +318,32 @@ public final class Shopregel {
     /** Ob diese Gebuehr eine ist - 0 bis {@link #HOECHSTE_GEBUEHR_PROZENT}. */
     public static boolean brauchbareGebuehr(int prozent) {
         return prozent >= 0 && prozent <= HOECHSTE_GEBUEHR_PROZENT;
+    }
+
+    /**
+     * Die Marktgebuehr auf einen Betrag - ABGERUNDET.
+     *
+     * <p><b>Hier und nicht zweimal</b>: Seit dem 12.11.2026 rechnet auch der
+     * Grundstuecksverkauf eine Gebuehr ({@code Grundstuecksbuch.kaufe}), und zwei
+     * Abschriften derselben Zeile liefen beim naechsten Rundungsstreit auseinander. Die
+     * REGEL steht im Kopf dieser Klasse: abgerundet, auf die ganze Summe, und wer
+     * rundet, rundet zugunsten des Spielers.
+     *
+     * <p>Bei 5 Prozent auf 19 Mark sind das 0 - und wo die gerechnete Gebuehr 0 ist,
+     * faellt auch keine Gebuehrzeile im Buchungsbuch. Das ist der Grund, aus dem der
+     * Aufrufer die ZAHL braucht und nicht nur den Satz.
+     */
+    public static long gebuehrAuf(long betrag, int prozent) {
+        if (betrag < 0L) {
+            throw new IllegalArgumentException("Eine Gebuehr auf einen negativen Betrag"
+                    + " gibt es nicht: " + betrag);
+        }
+        if (!brauchbareGebuehr(prozent)) {
+            throw new IllegalArgumentException("Eine Gebuehr von " + prozent
+                    + " Prozent ist keine - erlaubt ist 0 bis "
+                    + HOECHSTE_GEBUEHR_PROZENT);
+        }
+        return betrag * prozent / 100L;
     }
 
     private static int[] nichtNull(int[] mengen) {

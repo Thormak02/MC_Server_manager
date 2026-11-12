@@ -1143,6 +1143,26 @@ freistaedte:
   # Eine Aenderung trifft nur NEUE Grundstuecke - was schon zugeschnitten ist, bleibt.
   hoechstzellen: 256
 
+  # Was der Staat von einem GRUNDSTUECKSVERKAUF nimmt, in Prozent [12.11.2026].
+  #
+  # Dieselbe Lesart wie bei den drei Marktgebuehren im Abschnitt handel: unten:
+  #
+  #   * 0 heisst keine Gebuehr. Das ist die ausgelieferte Einstellung - erst soll der
+  #     Handel laufen, die Senke kommt spaeter.
+  #   * Erlaubt ist 0 bis 50. Ueber der Haelfte waere die Gebuehr hoeher als der
+  #     Erloes, und dann verkauft niemand mehr.
+  #   * Abgezogen wird sie dem VERKAEUFER, nie als Aufschlag auf den Preis. Der Preis
+  #     im Angebot ist, was der Kaeufer zahlt.
+  #   * Abgerundet und auf die ganze Summe: Bei 5 Prozent auf 19 Mark sind das 0 Mark,
+  #     und wo die gerechnete Gebuehr 0 ist, faellt auch keine Gebuehrzeile.
+  #
+  # Die Zahl steht HIER und nicht unter handel:, weil jener Abschnitt den Kistenshops
+  # gehoert und von Shopwerte gelesen wird - einer Klasse, die mit Grundstuecken nichts
+  # zu tun hat. Was beide Bereiche teilen, ist die RECHNUNG: Shopregel.gebuehrAuf.
+  #
+  # Neuladbar: Die Zahl wird beim Kauf gefragt und nicht beim Start kopiert.
+  verkaufsgebuehr-prozent: 0
+
 laeden:
   # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.
   # Die Welt muss im Abschnitt welten: weiter unten stehen, sonst gilt keine Einheit.

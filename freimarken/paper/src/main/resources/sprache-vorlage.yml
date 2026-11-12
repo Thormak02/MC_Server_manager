@@ -65,6 +65,13 @@ mark:
       parzelle-erstattet: "Parzelle nicht eingetragen - erstattet"
       freistadt-gegruendet: "Freistadt gegruendet"
       freistadt-erstattet: "Freistadt nicht eingetragen - erstattet"
+      # Teil C3: der Grundstueckshandel. VIER Worte, weil derselbe Betrag beim
+      # Kaeufer eine Ausgabe und beim Verkaeufer eine Einnahme ist - wer seinen
+      # Verlauf liest, muss beides auseinanderhalten koennen.
+      grundstueck-gekauft: "Grundstueck gekauft"
+      grundstueck-verkauft: "Grundstueck verkauft"
+      grundstueck-gebuehr: "Marktgebuehr auf den Verkauf"
+      grundstueck-erstattet: "Grundstueck nicht uebertragen - erstattet"
       zusammenlegung: "Grundstueck zusammengelegt"
       zusammenlegung-erstattet: "Zusammenlegen gescheitert - erstattet"
       beruf-verlassen: "Beruf aufgegeben"
@@ -114,8 +121,10 @@ waehrung:
   # deines; die Zahlform bleibt im Programm, damit ein Tippfehler keine Preise
   # verbiegt. Kein Farbtag - der Betrag wird in andere Saetze eingesetzt.
   # VON HIER KOMMT JEDER BETRAG, DEN EIN SPIELER LIEST: Stand und Verlauf in
-  #   /mark, Preise, Gebuehren und Rest in /parzelle, und die zwei Preiszeilen
-  #   von /freimarken preis. Aenderst du das Wort, aendert es sich in allen.
+  #   /mark, Preise, Gebuehren und Rest in /parzelle, die zwei Preiszeilen
+  #   von /freimarken preis, und seit Teil C3 jeder Betrag in /freistadt -
+  #   Gruendungspreis, Angebotspreis, Erloes und Marktgebuehr. Aenderst du
+  #   das Wort, aendert es sich in allen.
   # EINE STELLE SAGT WEITER HART Mark, und sie geht an keinen Spieler: Die
   #   Antwort von /freimarken neuladen nennt bei einer unbrauchbaren Zahl die
   #   Einheit selbst - hoechstens 1000000000 Mark. Wer das Wort hier aendert,
@@ -1304,7 +1313,7 @@ freistadt:
   # {name} {preis} {danach} - die Rueckfrage VOR dem Gruenden. {danach} ist das
   #   Guthaben, das uebrig bliebe: 400.000 liest man, ohne es zu fuehlen - was danach
   #   bleibt, fuehlt man.
-  frage: "<yellow>{name} gruenden kostet {preis} Mark. Danach haettest du {danach} Mark.</yellow>\n<gray>Zum Gruenden: /freistadt gruenden {name} bestaetigen</gray>"
+  frage: "<yellow>{name} gruenden kostet {preis}. Danach haettest du {danach}.</yellow>\n<gray>Zum Gruenden: /freistadt gruenden {name} bestaetigen</gray>"
   # {name} {feld} - gegruendet. Der Warp steht dabei, sonst steht der frischgebackene
   #   Besitzer vor seiner Stadt und weiss nicht, wie er hineinkommt.
   gegruendet: "<green>{name} ist gegruendet - Feld {feld}.</green>\n<gray>Hin kommst du mit /warp freistadt {name}.</gray>"
@@ -1326,7 +1335,7 @@ freistadt:
     #   sagt "du hast genug", dieser sagt "es gibt keine mehr".
     kein-freies-feld: "<red>In dieser Welt ist kein Stadtfeld mehr frei.</red>"
     # {preis} {fehlt} - das Guthaben reicht nicht.
-    zu-wenig-mark: "<red>Eine Freistadt kostet {preis} Mark - dir fehlen {fehlt}.</red>"
+    zu-wenig-mark: "<red>Eine Freistadt kostet {preis} - dir fehlen {fehlt}.</red>"
     # Die Ablage hat gestoert. Das Geld ist zurueck, gegruendet ist nichts.
     gestoert: "<red>Das Gruenden hat nicht geklappt - dein Geld ist zurueck. Versuch es noch einmal.</red>"
     # Die Welt fehlt oder ist falsch eingetragen (freistaedte.welt).
@@ -1388,6 +1397,58 @@ freistadt:
     # gezahlt.
     nicht-dein-grundstueck: "<red>Dieses Grundstueck gehoert jemand anderem.</red>\n<gray>Aufloesen darf nur sein Besitzer - auch der Stadtbesitzer nicht.</gray>"
     gestoert: "<red>Das hat gerade nicht geklappt - versuch es noch einmal.</red>"
+    # --- ANGEBOT UND VERKAUF [Teil C3, 12.11.2026] ------------------------------
+    #
+    # Das Abnahmekriterium des ganzen Projekts aus Plan 15: "ein Spieler verkauft
+    # einem anderen ein Grundstueck". Der erste Handel, bei dem das Geld nicht beim
+    # Bund landet.
+    #
+    # DREI PAARE VON SAETZEN, und jedes zweite ist das fuer ein GESCHENK. Das ist eine
+    # Entscheidung ueber die Sprache und keine Doppelung: "zu 0 Mark angeboten" liest
+    # sich wie ein Fehler, und ein Geschenk ist etwas anderes als ein Kauf zum Preis
+    # null. Ein Stadtbesitzer, der Buerger anwirbt, verschenkt die ersten
+    # Grundstuecke - dieser Fall soll sich auch so lesen.
+    #
+    # {zuschnitt} {preis} - zum Verkauf gestellt. MIT dem Weg, wie ein anderer kauft:
+    # Sonst muesste der Besitzer seinen Kunden erklaeren, wie es geht.
+    angeboten: "<green>Zum Verkauf gestellt</green><gray> - Zellen {zuschnitt} fuer {preis}.\nWer darauf steht, kauft mit /freistadt grundstueck kaufen.</gray>"
+    # {zuschnitt} - zu verschenken.
+    angeboten-gratis: "<green>Zu verschenken</green><gray> - Zellen {zuschnitt}, kostenlos.\nWer darauf steht, nimmt es mit /freistadt grundstueck kaufen.</gray>"
+    # {zuschnitt} - das Angebot ist zurueckgezogen.
+    zurueckgezogen: "<yellow>Angebot zurueckgezogen</yellow><gray> - die Zellen {zuschnitt} stehen nicht mehr zum Verkauf.</gray>"
+    # {zuschnitt} {preis} {verkaeufer} - was der KAEUFER liest.
+    gekauft: "<green>Gekauft!</green><gray> Die Zellen {zuschnitt} gehoeren jetzt dir - fuer {preis} von <white>{verkaeufer}</white>.</gray>"
+    # {zuschnitt} {verkaeufer} - geschenkt bekommen.
+    gekauft-gratis: "<green>Bekommen!</green><gray> Die Zellen {zuschnitt} gehoeren jetzt dir - geschenkt von <white>{verkaeufer}</white>.</gray>"
+    # {zuschnitt} {preis} {kaeufer} - was der VERKAEUFER liest, wenn er online ist.
+    # Wer offline verkauft, sieht es in /mark verlauf: Darum tragen die drei
+    # Buchungsgruende eigene Worte.
+    verkauft: "<green>Verkauft!</green><gray> <white>{kaeufer}</white> hat die Zellen {zuschnitt} fuer {preis} gekauft.</gray>"
+    # {zuschnitt} {kaeufer} - verschenkt.
+    verkauft-gratis: "<green>Uebergeben!</green><gray> <white>{kaeufer}</white> hat die Zellen {zuschnitt} von dir bekommen.</gray>"
+    # {gebuehr} {prozent} - die Marktgebuehr, NUR wenn sie ueber 0 liegt. Bei 5 Prozent
+    # auf 19 Mark ist sie abgerundet 0, und dann faellt diese Zeile ganz weg.
+    verkauft-gebuehr: "<gray>  Abzueglich {gebuehr} Marktgebuehr ({prozent} Prozent).</gray>"
+    # Es steht nicht zum Verkauf. MIT dem Weg zur Liste.
+    kein-angebot: "<red>Dieses Grundstueck steht nicht zum Verkauf.</red>\n<gray>Welche zu haben sind, zeigt /freistadt angebote.</gray>"
+    # Am eigenen wird nicht gekauft - dieselbe Sperre wie am eigenen Kistenshop.
+    eigenes: "<red>Das ist dein eigenes Grundstueck.</red>\n<gray>Zurueckziehen kannst du das Angebot mit /freistadt grundstueck zurueckziehen.</gray>"
+    # {preis} {fehlt} - das Guthaben reicht nicht. BEIDE Zahlen: Ohne den Fehlbetrag
+    # muesste der Spieler rechnen.
+    zu-wenig-mark: "<red>Das Grundstueck kostet {preis} - dir fehlen {fehlt}.</red>"
+    # Ein negativer Preis. Brigadier faengt das schon am Argument ab; dieser Satz ist
+    # der zweite Riegel fuer jeden anderen Weg ins Buch.
+    preis-ungueltig: "<red>Ein Preis unter null ist keiner.</red>\n<gray>Eine 0 ist erlaubt und heisst: zu verschenken.</gray>"
+  # DIE ANGEBOTSLISTE - ueber ALLE Staedte der Welt. Ein eigener Zweig neben
+  # grundstueck:, weil sie eine Auskunft fuer jeden ist, der etwas sucht: Dafuer soll
+  # niemand das Recht brauchen, das dem Stadtbesitzer gehoert.
+  angebot:
+    kopf: "<gold>Grundstuecke zu haben</gold>"
+    # {zuschnitt} {preis} {besitzer}
+    zeile: "<gray>  {zuschnitt} · <green>{preis}</green> · <white>{besitzer}</white></gray>"
+    # {zuschnitt} {besitzer} - ein Geschenk.
+    zeile-gratis: "<gray>  {zuschnitt} · <green>kostenlos</green> · <white>{besitzer}</white></gray>"
+    leer: "<gray>  keines - frag in den Staedten nach, wer etwas abgibt</gray>"
 
 laden:
   # Die Ueberschrift ueber der Liste - die EINZIGE goldene Zeile dieses Befehls.

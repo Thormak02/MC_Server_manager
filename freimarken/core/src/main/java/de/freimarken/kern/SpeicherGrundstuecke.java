@@ -68,7 +68,7 @@ public final class SpeicherGrundstuecke implements Grundstuecksablage {
         }
         long nummer = naechsteNummer++;
         Grundstueck neu = new Grundstueck(nummer, welt, stadtId, eigentuemer, Set.of(),
-                flaeche, preis, Instant.now(uhr));
+                flaeche, preis, Instant.now(uhr), Grundstueck.KEIN_ANGEBOT);
         nachNummer.put(nummer, neu);
         return neu;
     }
@@ -119,16 +119,66 @@ public final class SpeicherGrundstuecke implements Grundstuecksablage {
 
     @Override
     public synchronized void mitbauerSetzen(long id, Set<UUID> mitbauer) {
-        Grundstueck alt = nachNummer.get(id);
-        if (alt == null) {
-            throw new IllegalStateException("Kein Grundstueck mit der Nummer " + id);
-        }
+        Grundstueck alt = holeOderWirf(id);
         // DURCHTRAGEN, nicht neu setzen - die Lehre aus dem Fund vom 11.11.2026: Dort
         // baute SpeicherLager die Zeile ueber einen verkuerzten Konstruktor neu und
         // verlor dabei den Namen der Freistadt. Hier geht jedes Feld ausdruecklich mit.
         nachNummer.put(id, new Grundstueck(alt.id(), alt.welt(), alt.stadtId(),
                 alt.eigentuemer(), mitbauer, alt.flaeche(), alt.preis(),
-                alt.erworbenAm()));
+                alt.erworbenAm(), alt.angebotspreis()));
+    }
+
+    @Override
+    public synchronized void anbieten(long id, Long angebotspreis) {
+        Grundstueck alt = holeOderWirf(id);
+        nachNummer.put(id, new Grundstueck(alt.id(), alt.welt(), alt.stadtId(),
+                alt.eigentuemer(), alt.mitbauer(), alt.flaeche(), alt.preis(),
+                alt.erworbenAm(), angebotspreis));
+    }
+
+    @Override
+    public synchronized Grundstueck eigentuemerSetzen(long id, UUID neuerEigentuemer,
+                                                      long preis) {
+        Grundstueck alt = holeOderWirf(id);
+        // DER RIEGEL GEGEN DEN DOPPELKAUF, und er steht im SELBEN synchronized wie das
+        // Schreiben: Zwei Kaeufer, die gleichzeitig zugreifen, laufen hier auf - der
+        // zweite findet kein Angebot mehr. Im Buch liegt zwischen Frage und Schreiben
+        // eine Luecke, hier liegt beides in einer Tat.
+        if (!alt.stehtZumVerkauf()) {
+            throw new IllegalStateException("Grundstueck " + id + " steht nicht zum"
+                    + " Verkauf - entweder war es nie angeboten, oder ein anderer war"
+                    + " schneller");
+        }
+        // Die MITBAUER werden geleert, und das ist keine Nachlaessigkeit: Wer verkauft,
+        // verkauft nicht die Leute mit, die darauf bauen durften. Siehe Javadoc der
+        // Schnittstelle.
+        // erworbenAm NEU, nicht durchgetragen: Die Verfallsregel aus Plan 16 rechnet
+        // damit, und der neue Besitzer hat es jetzt erworben. Siehe die Schnittstelle.
+        Grundstueck neu = new Grundstueck(alt.id(), alt.welt(), alt.stadtId(),
+                neuerEigentuemer, Set.of(), alt.flaeche(), preis,
+                uhr.instant(), Grundstueck.KEIN_ANGEBOT);
+        nachNummer.put(id, neu);
+        return neu;
+    }
+
+    @Override
+    public synchronized List<Grundstueck> angebote(String welt) {
+        List<Grundstueck> gefunden = new ArrayList<>();
+        for (Grundstueck eines : nachNummer.values()) {
+            if (eines.welt().equals(welt) && eines.stehtZumVerkauf()) {
+                gefunden.add(eines);
+            }
+        }
+        return List.copyOf(gefunden);
+    }
+
+    /** Das Grundstueck zu dieser Nummer - oder ein Wurf. */
+    private Grundstueck holeOderWirf(long id) {
+        Grundstueck alt = nachNummer.get(id);
+        if (alt == null) {
+            throw new IllegalStateException("Kein Grundstueck mit der Nummer " + id);
+        }
+        return alt;
     }
 
     @Override

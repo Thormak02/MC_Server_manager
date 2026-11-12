@@ -150,7 +150,44 @@ public final class ZwischenspeicherGrundstuecke implements Grundstuecksablage {
         }
         vergiss(alt);
         merke(new Grundstueck(alt.id(), alt.welt(), alt.stadtId(), alt.eigentuemer(),
-                mitbauer, alt.flaeche(), alt.preis(), alt.erworbenAm()));
+                mitbauer, alt.flaeche(), alt.preis(), alt.erworbenAm(),
+                alt.angebotspreis()));
+    }
+
+    @Override
+    public synchronized void anbieten(long id, Long angebotspreis) {
+        wahrheit.anbieten(id, angebotspreis);
+        Grundstueck alt = nachNummer.get(id);
+        if (alt == null) {
+            return;
+        }
+        vergiss(alt);
+        merke(new Grundstueck(alt.id(), alt.welt(), alt.stadtId(), alt.eigentuemer(),
+                alt.mitbauer(), alt.flaeche(), alt.preis(), alt.erworbenAm(),
+                angebotspreis));
+    }
+
+    @Override
+    public synchronized Grundstueck eigentuemerSetzen(long id, UUID neuerEigentuemer,
+                                                      long preis) {
+        // ERST die Ablage - dort liegt der Riegel gegen den Doppelkauf. Scheitert sie,
+        // bleibt die Karte unveraendert und der Verkauf gilt als nicht geschehen.
+        Grundstueck neu = wahrheit.eigentuemerSetzen(id, neuerEigentuemer, preis);
+        Grundstueck alt = nachNummer.get(id);
+        if (alt != null) {
+            vergiss(alt);
+        }
+        // DIE ZEILE DER WAHRHEIT gemerkt und keine nachgebaute: Mitbauer geleert und
+        // erworbenAm neu gesetzt hat schon die Ablage darunter. Wer sie hier ein
+        // zweites Mal zusammensetzt, bekommt einen anderen Zeitpunkt als jeder, der
+        // nach einem Neustart aus der Datenbank liest.
+        merke(neu);
+        return neu;
+    }
+
+    @Override
+    public List<Grundstueck> angebote(String welt) {
+        return wahrheit.angebote(welt);
     }
 
     @Override

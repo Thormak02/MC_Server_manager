@@ -49,7 +49,8 @@ class FreistadtwerteTest {
     @DisplayName("Ein negativer Preis ist keiner")
     void negativerPreisWirft() {
         assertThrows(IllegalArgumentException.class,
-                () -> new Freistadtwerte(-1L, 1, Freistadtwerte.VORGABE_HOECHSTZELLEN));
+                () -> new Freistadtwerte(-1L, 1, Freistadtwerte.VORGABE_HOECHSTZELLEN,
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR));
     }
 
     @Test
@@ -63,10 +64,12 @@ class FreistadtwerteTest {
         // Ein Waechter mit > statt >= liesse genau diesen einen Wert durch.
         assertEquals(Freistadtwerte.HOECHSTER_BETRAG,
                 new Freistadtwerte(Freistadtwerte.HOECHSTER_BETRAG, 1,
-                        Freistadtwerte.VORGABE_HOECHSTZELLEN).gruendungspreis());
+                        Freistadtwerte.VORGABE_HOECHSTZELLEN,
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR).gruendungspreis());
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(Freistadtwerte.HOECHSTER_BETRAG + 1L, 1,
-                        Freistadtwerte.VORGABE_HOECHSTZELLEN));
+                        Freistadtwerte.VORGABE_HOECHSTZELLEN,
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR));
     }
 
     @Test
@@ -80,20 +83,24 @@ class FreistadtwerteTest {
                         + " es nicht geben kann");
 
         assertEquals(399, new Freistadtwerte(1L, 399,
-                Freistadtwerte.VORGABE_HOECHSTZELLEN).hoechstzahl());
+                Freistadtwerte.VORGABE_HOECHSTZELLEN,
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR).hoechstzahl());
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(1L, 400,
-                        Freistadtwerte.VORGABE_HOECHSTZELLEN));
+                        Freistadtwerte.VORGABE_HOECHSTZELLEN,
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR));
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(1L, -1,
-                        Freistadtwerte.VORGABE_HOECHSTZELLEN));
+                        Freistadtwerte.VORGABE_HOECHSTZELLEN,
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR));
     }
 
     @Test
     @DisplayName("Jeder Abwandler laesst die andere Zahl in Ruhe")
     void abwandlerSindEng() {
         Freistadtwerte eigen = new Freistadtwerte(12_345L, 7,
-                Freistadtwerte.VORGABE_HOECHSTZELLEN);
+                Freistadtwerte.VORGABE_HOECHSTZELLEN,
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR);
 
         assertEquals(7, eigen.mitGruendungspreis(1L).hoechstzahl());
         assertEquals(12_345L, eigen.mitHoechstzahl(3).gruendungspreis());

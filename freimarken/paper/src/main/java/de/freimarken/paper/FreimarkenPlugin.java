@@ -1504,7 +1504,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     new FreistadtBefehle(freistadtbuch, kasse, sprache,
                             freistadtbuch == null ? "" : weltschluessel(freistadtwelt),
                             () -> wirtschaft.werte().freistaedte().hoechstzahl(),
-                            grundstuecksbuch, absteckbuch)
+                            grundstuecksbuch, absteckbuch, getLogger())
                             .freistadt(),
                     sprache.wort(BundSatz.BEFEHL_FREISTADT, Einsatz.keine()),
                     List.of()));
@@ -2019,7 +2019,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         try {
             int zellen = grundstuecksablage.fuellen(welt.key().asString());
             grundstuecksbuch = new Grundstuecksbuch(grenze, lager, grundstuecksablage,
-                    wirtschaft);
+                    kasse, wirtschaft);
             freistadtbuch.gibGrundstuecke(grundstuecksablage);
             getLogger().info("Grundstuecke: " + zellen + " in "
                     + grundstuecksablage.belegteZellen() + " Zellen, hoechstens "

@@ -150,7 +150,76 @@ enum FreistadtSatz implements Satz {
     NICHT_DEIN_GRUNDSTUECK("freistadt.grundstueck.nicht-dein-grundstueck", Art.SATZ),
 
     /** Die Ablage hat gestoert. */
-    GRUNDSTUECK_GESTOERT("freistadt.grundstueck.gestoert", Art.SATZ);
+    GRUNDSTUECK_GESTOERT("freistadt.grundstueck.gestoert", Art.SATZ),
+
+    // --- Angebot und Verkauf [Teil C3, 12.11.2026] ------------------------------
+
+    /** Zum Verkauf gestellt - mit dem Preis und dem Weg, wie ein anderer kauft. */
+    ANGEBOTEN("freistadt.grundstueck.angeboten", Art.SATZ, "zuschnitt", "preis"),
+
+    /** Zu VERSCHENKEN - ein eigener Satz, denn "fuer 0 Mark" liest sich falsch. */
+    ANGEBOTEN_GRATIS("freistadt.grundstueck.angeboten-gratis", Art.SATZ, "zuschnitt"),
+
+    /** Das Angebot ist zurueckgezogen. */
+    ZURUECKGEZOGEN("freistadt.grundstueck.zurueckgezogen", Art.SATZ, "zuschnitt"),
+
+    /** GEKAUFT - was der Kaeufer liest. */
+    GEKAUFT("freistadt.grundstueck.gekauft", Art.SATZ, "zuschnitt", "preis",
+            "verkaeufer"),
+
+    /**
+     * Gekauft, aber zu VERSCHENKEN - ein eigener Satz.
+     *
+     * <p>Wie bei {@link #ANGEBOTEN_GRATIS}: "fuer 0 Mark gekauft" liest sich wie ein
+     * Fehler. Ein Geschenk ist etwas anderes als ein Kauf zum Preis null.
+     */
+    GEKAUFT_GRATIS("freistadt.grundstueck.gekauft-gratis", Art.SATZ, "zuschnitt",
+            "verkaeufer"),
+
+    /**
+     * VERKAUFT - was der Verkaeufer liest, wenn er online ist.
+     *
+     * <p>Die erste Meldung dieses Bereichs an einen ZWEITEN Spieler. Ohne sie erfuehre
+     * ein Verkaeufer nur aus {@code /mark verlauf}, dass sein Land weg ist - und das
+     * sieht er erst, wenn er nachsieht.
+     */
+    VERKAUFT("freistadt.grundstueck.verkauft", Art.SATZ, "zuschnitt", "preis",
+            "kaeufer"),
+
+    /** Dieselbe Meldung ohne Geld - siehe {@link #GEKAUFT_GRATIS}. */
+    VERKAUFT_GRATIS("freistadt.grundstueck.verkauft-gratis", Art.SATZ, "zuschnitt",
+            "kaeufer"),
+
+    /** Die Gebuehr, die dem Verkaeufer abgezogen wurde - nur wenn sie ueber 0 liegt. */
+    VERKAUFT_GEBUEHR("freistadt.grundstueck.verkauft-gebuehr", Art.SATZ, "gebuehr",
+            "prozent"),
+
+    /** Dieses Grundstueck steht nicht zum Verkauf. */
+    KEIN_ANGEBOT("freistadt.grundstueck.kein-angebot", Art.SATZ),
+
+    /** Am eigenen Grundstueck wird nicht gekauft. */
+    EIGENES_GRUNDSTUECK("freistadt.grundstueck.eigenes", Art.SATZ),
+
+    /** Das Guthaben reicht nicht - der Satz nennt Preis UND Fehlbetrag. */
+    GRUNDSTUECK_ZU_WENIG("freistadt.grundstueck.zu-wenig-mark", Art.SATZ, "preis",
+            "fehlt"),
+
+    /** Ein negativer Preis ist keiner. */
+    PREIS_UNGUELTIG("freistadt.grundstueck.preis-ungueltig", Art.SATZ),
+
+    /** Die Ueberschrift der Angebotsliste. */
+    ANGEBOT_KOPF("freistadt.angebot.kopf", Art.SATZ),
+
+    /** Eine Zeile der Angebotsliste - MIT Stadt, denn sie geht ueber alle Staedte. */
+    ANGEBOT_ZEILE("freistadt.angebot.zeile", Art.SATZ, "zuschnitt", "preis",
+            "besitzer"),
+
+    /** Eine Zeile der Angebotsliste fuer ein Geschenk. */
+    ANGEBOT_ZEILE_GRATIS("freistadt.angebot.zeile-gratis", Art.SATZ, "zuschnitt",
+            "besitzer"),
+
+    /** Es gibt kein einziges Angebot. */
+    ANGEBOT_LEER("freistadt.angebot.leer", Art.SATZ);
 
     private final String pfad;
     private final Art art;

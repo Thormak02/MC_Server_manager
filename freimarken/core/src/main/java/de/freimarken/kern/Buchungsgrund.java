@@ -57,6 +57,37 @@ public enum Buchungsgrund {
      */
     FREISTADT_ERSTATTET("freistadt_erstattet", Richtung.EINNAHME),
 
+    /**
+     * Ein Grundstueck in einer Freistadt GEKAUFT - Plan 15, das Abnahmekriterium.
+     *
+     * <p><b>Der erste Kauf dieses Projekts, bei dem das Geld nicht beim Bund landet.</b>
+     * Darum gibt es drei Gruende und nicht einen: Derselbe Betrag ist beim Kaeufer eine
+     * Ausgabe und beim Verkaeufer eine Einnahme, und im Verlauf beider muss die
+     * richtige Richtung stehen. Ein gemeinsamer Grund hiesse, dass einer von beiden
+     * seinen Kontostand nicht mehr nachrechnen kann.
+     */
+    GRUNDSTUECK_GEKAUFT("grundstueck_gekauft", Richtung.AUSGABE),
+
+    /** Die Gegenseite desselben Kaufs - der Erloes des Verkaeufers. */
+    GRUNDSTUECK_VERKAUFT("grundstueck_verkauft", Richtung.EINNAHME),
+
+    /**
+     * Die Marktgebuehr auf einen Grundstuecksverkauf.
+     *
+     * <p>Dem abgezogen, der das Geld BEKOMMT - wie bei den Kistenshops, und nie als
+     * Aufschlag auf den Preis. Der Preis im Angebot ist, was der Kaeufer zahlt.
+     */
+    GRUNDSTUECK_GEBUEHR("grundstueck_gebuehr", Richtung.AUSGABE),
+
+    /**
+     * Der Kauf ist nicht zustande gekommen - das Geld des Kaeufers kommt zurueck.
+     *
+     * <p>Nicht theoretisch: Zwei Kaeufer, die im selben Augenblick zugreifen, laufen am
+     * Riegel {@code angebotspreis IS NOT NULL} auf. Ohne diese Gegenbuchung haette der
+     * zweite den Preis gezahlt und nichts bekommen.
+     */
+    GRUNDSTUECK_ERSTATTET("grundstueck_erstattet", Richtung.EINNAHME),
+
     /** Zwei Parzellen zusammengelegt. */
     ZUSAMMENLEGUNG("zusammenlegung", Richtung.AUSGABE),
 

@@ -350,7 +350,7 @@ class FreistadtbuchTest {
         // Die Reihenfolge in darfBauen: Leere, Grenze, Ankunftsfeld, dann Stadt, dann
         // Grundstueck. Ein Grundstueck in der Leere kann es nicht geben - also darf die
         // Leere auch nicht danach fragen. Gezaehlt, nicht behauptet.
-        ZaehlendeGrundstuecke zaehler = new ZaehlendeGrundstuecke();
+        Grundstuecksattrappe zaehler = new Grundstuecksattrappe();
         buch.gruende(WELT, anna, "annastadt", VIELE);
         buch.gibGrundstuecke(zaehler);
         Parzelle stadt = buch.staedte(WELT).get(0);
@@ -359,54 +359,10 @@ class FreistadtbuchTest {
         buch.darfBauen(WELT, anna,
                 plan.feldAnfang(stadt.x()) + Stadtfeldplan.FELD_KANTE,
                 plan.feldMitte(stadt.z()));
-        assertEquals(0, zaehler.gefragt, "die Leere fragt die Grundstuecke nicht");
+        assertEquals(0, zaehler.gezaehlt(), "die Leere fragt die Grundstuecke nicht");
 
         buch.darfBauen(WELT, anna, plan.feldMitte(stadt.x()), plan.feldMitte(stadt.z()));
-        assertEquals(1, zaehler.gefragt, "auf dem Feld genau einmal");
-    }
-
-    /** Eine Grundstuecksablage, die mitzaehlt, wie oft nach einer Zelle gefragt wurde. */
-    private static final class ZaehlendeGrundstuecke implements Grundstuecksablage {
-        private final SpeicherGrundstuecke echte = new SpeicherGrundstuecke();
-        private int gefragt;
-
-        @Override
-        public java.util.Optional<Grundstueck> anZelle(String welt, int zelleX,
-                                                       int zelleZ) {
-            gefragt++;
-            return echte.anZelle(welt, zelleX, zelleZ);
-        }
-
-        @Override
-        public Grundstueck anlegen(String welt, long stadtId, Zellquader flaeche,
-                                   UUID eigentuemer, long preis) {
-            return echte.anlegen(welt, stadtId, flaeche, eigentuemer, preis);
-        }
-
-        @Override
-        public List<Grundstueck> inStadt(long stadtId) {
-            return echte.inStadt(stadtId);
-        }
-
-        @Override
-        public List<Grundstueck> alle(String welt) {
-            return echte.alle(welt);
-        }
-
-        @Override
-        public List<Grundstueck> vonSpieler(String welt, UUID spieler) {
-            return echte.vonSpieler(welt, spieler);
-        }
-
-        @Override
-        public void mitbauerSetzen(long id, java.util.Set<UUID> mitbauer) {
-            echte.mitbauerSetzen(id, mitbauer);
-        }
-
-        @Override
-        public void entfernen(long id) {
-            echte.entfernen(id);
-        }
+        assertEquals(1, zaehler.gezaehlt(), "auf dem Feld genau einmal");
     }
 
     // ---------------------------------------------------- Wer darf wo bauen (C1)

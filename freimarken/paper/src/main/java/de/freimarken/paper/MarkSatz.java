@@ -62,6 +62,23 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_FREISTADT_GEGRUENDET("mark.verlauf.grund.freistadt-gegruendet",
             Art.WORT),
     VERLAUF_GRUND_FREISTADT_ERSTATTET("mark.verlauf.grund.freistadt-erstattet", Art.WORT),
+
+    /**
+     * Die vier Worte des Grundstueckshandels [Teil C3].
+     *
+     * <p>VIER und nicht eines: Derselbe Betrag ist beim Kaeufer eine Ausgabe und beim
+     * Verkaeufer eine Einnahme, und wer seinen Verlauf liest, muss beides
+     * auseinanderhalten koennen. Die Gebuehr steht daneben, weil sie eine eigene Zeile
+     * ist - und die Erstattung, weil sie der Fall ist, in dem NICHTS geschehen ist.
+     */
+    VERLAUF_GRUND_GRUNDSTUECK_GEKAUFT("mark.verlauf.grund.grundstueck-gekauft",
+            Art.WORT),
+    VERLAUF_GRUND_GRUNDSTUECK_VERKAUFT("mark.verlauf.grund.grundstueck-verkauft",
+            Art.WORT),
+    VERLAUF_GRUND_GRUNDSTUECK_GEBUEHR("mark.verlauf.grund.grundstueck-gebuehr",
+            Art.WORT),
+    VERLAUF_GRUND_GRUNDSTUECK_ERSTATTET("mark.verlauf.grund.grundstueck-erstattet",
+            Art.WORT),
     VERLAUF_GRUND_ZUSAMMENLEGUNG("mark.verlauf.grund.zusammenlegung", Art.WORT),
     VERLAUF_GRUND_ZUSAMMENLEGUNG_ERSTATTET("mark.verlauf.grund.zusammenlegung-erstattet",
             Art.WORT),

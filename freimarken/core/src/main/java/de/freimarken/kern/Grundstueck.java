@@ -49,13 +49,27 @@ import java.util.UUID;
  * @param flaeche     der Zuschnitt in ZELLEN
  * @param preis       was es gekostet hat, in Mark. Beim Zuschneiden 0 - der Stadtbesitzer
  *                    zahlt fuer sein eigenes Feld nicht zweimal
+ * @param angebotspreis was es kosten SOLL - {@code null} heisst "steht nicht zum
+ *                      Verkauf". Eine 0 ist etwas anderes als {@code null}: Sie heisst
+ *                      "zu verschenken", und das ist ein Fall, den es geben muss - ein
+ *                      Stadtbesitzer, der Buerger anwirbt, gibt die ersten Grundstuecke
+ *                      gratis. Darum {@link Long} und nicht {@code long}
  */
 public record Grundstueck(long id, String welt, long stadtId, UUID eigentuemer,
                           Set<UUID> mitbauer, Zellquader flaeche, long preis,
-                          Instant erworbenAm) {
+                          Instant erworbenAm, Long angebotspreis) {
 
     /** Noch nicht geschrieben - die Nummer vergibt erst die Ablage. */
     public static final long OHNE_NUMMER = 0L;
+
+    /**
+     * Steht nicht zum Verkauf.
+     *
+     * <p>Eine Konstante und nicht ein nacktes {@code null} an den Aufrufstellen: So
+     * steht an jeder Stelle, die ein Angebot zurueckzieht, WAS das bedeutet - und
+     * niemand verwechselt es mit einer 0, die "zu verschenken" heisst.
+     */
+    public static final Long KEIN_ANGEBOT = null;
 
     public Grundstueck {
         if (welt == null || welt.isBlank()) {
@@ -81,6 +95,14 @@ public record Grundstueck(long id, String welt, long stadtId, UUID eigentuemer,
         if (erworbenAm == null) {
             throw new IllegalArgumentException("Ohne Zeitpunkt gibt es kein Grundstueck -"
                     + " die Verfallsregel aus Plan 16 rechnet damit");
+        }
+        // Eine 0 ist erlaubt (zu verschenken), ein negativer Preis nicht: Das waere ein
+        // Grundstueck, fuer dessen Abnahme der Verkaeufer ZAHLT - und damit eine
+        // Geldquelle, die jeder beliebig oft anzapfen koennte.
+        if (angebotspreis != null && angebotspreis < 0L) {
+            throw new IllegalArgumentException("Ein Angebotspreis unter null ist keiner:"
+                    + " " + angebotspreis + ". Eine 0 heisst zu verschenken, und das ist"
+                    + " erlaubt.");
         }
         // Wie bei Parzelle: null wird still zur leeren Menge, statt zu werfen. Eine
         // Ablage, die keine Mitbauer gefunden hat, meint genau das.
@@ -108,5 +130,33 @@ public record Grundstueck(long id, String welt, long stadtId, UUID eigentuemer,
     /** Ob diese Zelle dazugehoert - die Frage des heissen Pfades. */
     public boolean enthaelt(int zelleX, int zelleZ) {
         return flaeche.enthaelt(zelleX, zelleZ);
+    }
+
+    /**
+     * Ob es zum Verkauf steht.
+     *
+     * <p>Eine eigene Frage und kein {@code angebotspreis() != null} an den
+     * Aufrufstellen: Jene Schreibweise laedt dazu ein, sie als {@code > 0} zu
+     * verkuerzen - und dann waere ein verschenktes Grundstueck nicht mehr zu haben.
+     */
+    public boolean stehtZumVerkauf() {
+        return angebotspreis != null;
+    }
+
+    /**
+     * Dasselbe Grundstueck mit einem anderen Angebot.
+     *
+     * <p><b>Damit ein Buch den Zustand NACH seiner Schreibung melden kann.</b> Die
+     * Ablage gibt auf ein Schreiben nichts zurueck, und ein zweites Lesen danach waere
+     * eine zweite Abfrage fuer eine Zahl, die der Aufrufer schon hat. Ohne diesen
+     * Wandler meldete {@code Grundstuecksbuch.biete} das Grundstueck, wie es VORHER
+     * aussah - und die Naht, die am Grundstueck unterscheidet, ob angeboten oder
+     * zurueckgezogen wurde, las beides vertauscht. So geschehen am 12.11.2026.
+     *
+     * @param anderer der neue Preis, oder {@link #KEIN_ANGEBOT} fuer "nicht zu haben"
+     */
+    public Grundstueck mitAngebot(Long anderer) {
+        return new Grundstueck(id, welt, stadtId, eigentuemer, mitbauer, flaeche, preis,
+                erworbenAm, anderer);
     }
 }

@@ -1553,10 +1553,18 @@ class BildGleichTest {
                         Einsatz.von("name", "neustadt").mit("besitzer", "Anna")
                                 .mit("feld", "3/-7"), "&7  neustadt&8 - von Anna, Feld 3/-7"),
                 new Zeile(FreistadtSatz.LEER, 1L, Einsatz.keine(), "&7  Es gibt noch keine Freistadt - macht die erste: /freistadt gruenden deinname"),
+                // Der Betrag kommt als WORT herein und nicht als Zahl [Teil C3]:
+                // Seit die Einheit aus waehrung.betrag stammt, setzt die Naht
+                // sprache.betrag ein. Das Bild ist dasselbe wie vorher - und genau
+                // das ist die Zusage: Der Spieler liest unveraendert weiter.
                 new Zeile(FreistadtSatz.FRAGE, 1L,
-                        Einsatz.von("name", "neustadt").mit("preis", 400_000L)
-                                .mit("danach", 123_456L), "&eneustadt gruenden kostet 400.000 Mark. Danach haettest du 123.456 Mark.\n"
-                        + "&7Zum Gruenden: /freistadt gruenden neustadt bestaetigen"),
+                        Einsatz.von("name", "neustadt")
+                                .mit("preis", "400.000 Mark")
+                                .mit("danach", "123.456 Mark"),
+                        "&eneustadt gruenden kostet 400.000 Mark. Danach"
+                                + " haettest du 123.456 Mark.\n"
+                                + "&7Zum Gruenden: /freistadt gruenden neustadt"
+                                + " bestaetigen"),
                 new Zeile(FreistadtSatz.GEGRUENDET, 1L,
                         Einsatz.von("name", "neustadt").mit("feld", "3/-7"), "&aneustadt ist gegruendet - Feld 3/-7.\n"
                         + "&7Hin kommst du mit /warp freistadt neustadt."),
@@ -1571,8 +1579,14 @@ class BildGleichTest {
                 new Zeile(FreistadtSatz.GRENZE_ERREICHT, 1L,
                         Einsatz.von("hoechstzahl", 1L), "&cDu hast schon so viele Freistaedte, wie dein Rang erlaubt (1)."),
                 new Zeile(FreistadtSatz.KEIN_FREIES_FELD, 1L, Einsatz.keine(), "&cIn dieser Welt ist kein Stadtfeld mehr frei."),
+                // Der FEHLBETRAG traegt die Einheit jetzt mit [Teil C3]. Vorher
+                // stand sie nur am Preis, weil sie im Satz stand - "dir fehlen" 
+                // 276.544 liess offen, in was.
                 new Zeile(FreistadtSatz.ZU_WENIG_MARK, 1L,
-                        Einsatz.von("preis", 400_000L).mit("fehlt", 276_544L), "&cEine Freistadt kostet 400.000 Mark - dir fehlen 276.544."),
+                        Einsatz.von("preis", "400.000 Mark")
+                                .mit("fehlt", "276.544 Mark"),
+                        "&cEine Freistadt kostet 400.000 Mark - dir fehlen"
+                                + " 276.544 Mark."),
                 new Zeile(FreistadtSatz.GESTOERT, 1L, Einsatz.keine(), "&cDas Gruenden hat nicht geklappt - dein Geld ist zurueck."
                         + " Versuch es noch einmal."),
                 new Zeile(FreistadtSatz.KEINE_WELT, 1L, Einsatz.keine(),
@@ -1684,7 +1698,83 @@ class BildGleichTest {
                         "&cDieses Grundstueck gehoert jemand anderem.\n&7Aufloesen darf"
                                 + " nur sein Besitzer - auch der Stadtbesitzer nicht."),
                 new Zeile(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L, Einsatz.keine(),
-                        "&cDas hat gerade nicht geklappt - versuch es noch einmal."));
+                        "&cDas hat gerade nicht geklappt - versuch es noch einmal."),
+
+                // --- Angebot und Verkauf [Teil C3, 12.11.2026] -------------
+                //
+                // DREI PAARE, und jedes zweite gilt dem GESCHENK. Beide Formen
+                // stehen hier, weil der Unterschied nur in der Sprachdatei liegt:
+                // Wer eines Tages beide Saetze gleich schreibt, merkt es an keiner
+                // anderen Probe.
+                new Zeile(FreistadtSatz.ANGEBOTEN, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19")
+                                .mit("preis", "1.500 Mark"),
+                        "&aZum Verkauf gestellt&7 - Zellen 37/19 bis 38/19 fuer"
+                                + " 1.500 Mark.\n&7Wer darauf steht, kauft mit"
+                                + " /freistadt grundstueck kaufen."),
+                new Zeile(FreistadtSatz.ANGEBOTEN_GRATIS, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19"),
+                        "&aZu verschenken&7 - Zellen 37/19 bis 38/19, kostenlos."
+                                + "\n&7Wer darauf steht, nimmt es mit /freistadt"
+                                + " grundstueck kaufen."),
+                new Zeile(FreistadtSatz.ZURUECKGEZOGEN, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19"),
+                        "&eAngebot zurueckgezogen&7 - die Zellen 37/19 bis 38/19"
+                                + " stehen nicht mehr zum Verkauf."),
+                new Zeile(FreistadtSatz.GEKAUFT, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19")
+                                .mit("preis", "1.500 Mark")
+                                .mit("verkaeufer", "Bert"),
+                        "&aGekauft!&7 Die Zellen 37/19 bis 38/19 gehoeren jetzt"
+                                + " dir - fuer 1.500 Mark von &fBert&7."),
+                new Zeile(FreistadtSatz.GEKAUFT_GRATIS, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19")
+                                .mit("verkaeufer", "Bert"),
+                        "&aBekommen!&7 Die Zellen 37/19 bis 38/19 gehoeren jetzt"
+                                + " dir - geschenkt von &fBert&7."),
+                new Zeile(FreistadtSatz.VERKAUFT, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19")
+                                .mit("preis", "1.500 Mark")
+                                .mit("kaeufer", "Bert"),
+                        "&aVerkauft!&7 &fBert&7 hat die Zellen 37/19 bis 38/19"
+                                + " fuer 1.500 Mark gekauft."),
+                new Zeile(FreistadtSatz.VERKAUFT_GRATIS, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19")
+                                .mit("kaeufer", "Bert"),
+                        "&aUebergeben!&7 &fBert&7 hat die Zellen 37/19 bis 38/19"
+                                + " von dir bekommen."),
+                // Die Gebuehrzeile steht EINGERUECKT unter dem Erloes - sie
+                // gehoert zur Zeile darueber und ist keine eigene Meldung.
+                new Zeile(FreistadtSatz.VERKAUFT_GEBUEHR, 1L,
+                        Einsatz.von("gebuehr", "75 Mark").mit("prozent", "5"),
+                        "&7  Abzueglich 75 Mark Marktgebuehr (5 Prozent)."),
+                new Zeile(FreistadtSatz.KEIN_ANGEBOT, 1L, Einsatz.keine(),
+                        "&cDieses Grundstueck steht nicht zum Verkauf.\n&7Welche"
+                                + " zu haben sind, zeigt /freistadt angebote."),
+                new Zeile(FreistadtSatz.EIGENES_GRUNDSTUECK, 1L, Einsatz.keine(),
+                        "&cDas ist dein eigenes Grundstueck.\n&7Zurueckziehen"
+                                + " kannst du das Angebot mit /freistadt"
+                                + " grundstueck zurueckziehen."),
+                new Zeile(FreistadtSatz.GRUNDSTUECK_ZU_WENIG, 1L,
+                        Einsatz.von("preis", "1.500 Mark")
+                                .mit("fehlt", "400 Mark"),
+                        "&cDas Grundstueck kostet 1.500 Mark - dir fehlen 400 Mark."),
+                new Zeile(FreistadtSatz.PREIS_UNGUELTIG, 1L, Einsatz.keine(),
+                        "&cEin Preis unter null ist keiner.\n&7Eine 0 ist"
+                                + " erlaubt und heisst: zu verschenken."),
+                new Zeile(FreistadtSatz.ANGEBOT_KOPF, 1L, Einsatz.keine(),
+                        "&6Grundstuecke zu haben"),
+                new Zeile(FreistadtSatz.ANGEBOT_ZEILE, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19")
+                                .mit("preis", "1.500 Mark")
+                                .mit("besitzer", "Bert"),
+                        "&7  37/19 bis 38/19 \u00b7 &a1.500 Mark&7 \u00b7 &fBert"),
+                new Zeile(FreistadtSatz.ANGEBOT_ZEILE_GRATIS, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19")
+                                .mit("besitzer", "Bert"),
+                        "&7  37/19 bis 38/19 \u00b7 &akostenlos&7 \u00b7 &fBert"),
+                new Zeile(FreistadtSatz.ANGEBOT_LEER, 1L, Einsatz.keine(),
+                        "&7  keines - frag in den Staedten nach, wer etwas abgibt"));
     }
 
     @ParameterizedTest(name = "11 - {0}")

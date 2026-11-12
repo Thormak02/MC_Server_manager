@@ -87,6 +87,12 @@ permissions:
     # abschalten kann, ohne die Staedte anzutasten.
     description: Darf in der eigenen Freistadt Grundstuecke zuschneiden
     default: true
+  freimarken.freistadt.kaufen:
+    # Die ANDERE Seite: grundstueck gehoert dem Stadtbesitzer, der sein Feld teilt und
+    # Preise setzt. Kaufen tut jemand, der (noch) keine Stadt hat - und das ist der Weg,
+    # auf dem man Buerger wird. Schritt 12 haengt den Rang daran.
+    description: Darf ein angebotenes Grundstueck in einer Freistadt kaufen
+    default: true
   freimarken.spielzeit:
     description: Darf die eigene gemessene Spielzeit sehen
     default: true
