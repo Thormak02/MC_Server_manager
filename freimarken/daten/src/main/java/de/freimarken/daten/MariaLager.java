@@ -3,6 +3,7 @@ package de.freimarken.daten;
 import de.freimarken.kern.Art;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.Tat;
 import de.freimarken.kern.Zustand;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -200,7 +201,8 @@ public final class MariaLager implements BesitzLager {
                 schluessel.next();
                 return new Parzelle(schluessel.getLong(1), welt, feldX, feldZ,
                         eigentuemer, Set.of(), preis, jetzt,
-                        Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV, name);
+                                Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV,
+                        name, Parzelle.KEINE_RECHTE);
             }
         } catch (SQLIntegrityConstraintViolationException schonDa) {
             // ZWEI Schluessel koennen hier zuschlagen - das Feld und der Name -, und der
@@ -274,6 +276,95 @@ public final class MariaLager implements BesitzLager {
             }
         } catch (SQLException fehler) {
             throw weiterreichen("Setzen der Mitbauer", fehler);
+        }
+    }
+
+    @Override
+    public void buergerrechteSetzen(long id, Set<Tat> rechte) {
+        try {
+            Connection c = datenbank.verbindung();
+            boolean vorherAutomatisch = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                // ERST nachsehen, OB es die Zeile gibt und was sie ist: Ohne das waere
+                // ein Setzen auf eine unbekannte Nummer still erfolgreich - der
+                // Fremdschluessel wuerde zwar beim Einfuegen klagen, aber nicht bei einer
+                // LEEREN Menge, denn dann wird gar nichts eingefuegt. Und das
+                // Speicherlager wirft dort. Zwei Umsetzungen hinter einer Schnittstelle
+                // muessen dasselbe tun.
+                String art = artVon(c, id);
+                if (art == null) {
+                    throw new IllegalStateException("Keine Parzelle mit der Nummer "
+                            + id);
+                }
+                if (!Art.FREISTADT.schluessel().equals(art)) {
+                    throw new IllegalStateException("Nummer " + id + " ist keine"
+                            + " Freistadt, sondern " + art + " - Buergerrechte gelten"
+                            + " nur fuer eine Stadt");
+                }
+                // ERSETZEND: erst raeumen, dann schreiben, beides in EINER Transaktion.
+                // Zwei Zuege ohne Transaktion haetten einen Augenblick dazwischen, in
+                // dem die Stadt gar kein Recht hat - und faellt dann die Verbindung aus,
+                // bleibt es dabei.
+                try (PreparedStatement raeumen = c.prepareStatement(
+                        "DELETE FROM freistadt_rechte WHERE stadt_id = ?")) {
+                    raeumen.setLong(1, id);
+                    raeumen.executeUpdate();
+                }
+                if (!rechte.isEmpty()) {
+                    try (PreparedStatement setzen = c.prepareStatement(
+                            "INSERT INTO freistadt_rechte (stadt_id, recht)"
+                                    + " VALUES (?, ?)")) {
+                        for (Tat recht : rechte) {
+                            setzen.setLong(1, id);
+                            // Der SCHLUESSEL und nicht name(): In der Spalte steht
+                            // "behaelter", nicht "BEHAELTER" - und eine Umbenennung der
+                            // Konstante darf keine Zeile unlesbar machen.
+                            setzen.setString(2, recht.schluessel());
+                            setzen.addBatch();
+                        }
+                        setzen.executeBatch();
+                    }
+                }
+                c.commit();
+            } catch (SQLException fehler) {
+                try {
+                    c.rollback();
+                } catch (SQLException beimZuruecknehmen) {
+                    fehler.addSuppressed(beimZuruecknehmen);
+                }
+                throw fehler;
+            } catch (IllegalStateException keineStadt) {
+                // Auch der eigene Riegel muss zuruecknehmen: Das DELETE kann schon
+                // gelaufen sein, wenn die Pruefung danach klagt - sie tut es hier nicht,
+                // aber eine Umstellung der Reihenfolge waere sonst eine stille
+                // Leerung.
+                try {
+                    c.rollback();
+                } catch (SQLException beimZuruecknehmen) {
+                    keineStadt.addSuppressed(beimZuruecknehmen);
+                }
+                throw keineStadt;
+            } finally {
+                try {
+                    c.setAutoCommit(vorherAutomatisch);
+                } catch (SQLException beimZuruecksetzen) {
+                    datenbank.verwerfen();
+                }
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Setzen der Buergerrechte", fehler);
+        }
+    }
+
+    /** Die Art dieser Zeile als Schluessel - oder {@code null}, wenn es sie nicht gibt. */
+    private String artVon(Connection c, long id) throws SQLException {
+        try (PreparedStatement anfrage =
+                     c.prepareStatement("SELECT art FROM parzellen WHERE id = ?")) {
+            anfrage.setLong(1, id);
+            try (ResultSet ergebnis = anfrage.executeQuery()) {
+                return ergebnis.next() ? ergebnis.getString("art") : null;
+            }
         }
     }
 
@@ -597,7 +688,39 @@ public final class MariaLager implements BesitzLager {
                 // ist Parzelle.KEIN_NAME. Keine Umwandlung noetig, und keine erlaubt:
                 // Ein leerer Ersatz machte aus jeder Parzelle eine namenlose Freistadt,
                 // und der Kompaktkonstruktor wiese sie ab.
-                ergebnis.getString("name"));
+                ergebnis.getString("name"),
+                // Die Rechte aus der Nebentabelle, genau wie die Mitbauer darueber. Sie
+                // zu vergessen waere der lautlose Fehler dieses Bauschritts: Geworfen
+                // haette nichts, und jede Stadt haette nach einem Neustart keine
+                // Buergerrechte mehr - eingetragen in der Datenbank, wirkungslos im
+                // Spiel.
+                rechteVon(id));
+    }
+
+    /**
+     * Die Buergerrechte einer Stadt - aus {@code freistadt_rechte}.
+     *
+     * <p>Gelesen wird fuer JEDE Zeile, auch fuer Marktstadtparzellen: Eine Abfrage mehr
+     * auf einen Hauptschluessel ist billiger als eine Bedingung, die eines Tages auf die
+     * falsche Art trifft. Die Antwort ist dort leer, und der Kompaktkonstruktor von
+     * {@link Parzelle} nimmt nur das hin.
+     *
+     * <p>{@code Tat.ausSchluessel} WIRFT bei einem unbekannten Eintrag. Das ist gewollt:
+     * Eine Zeile, die ein neueres Freimarken geschrieben hat, stillschweigend zu
+     * ueberspringen hiesse, ein Recht wegzulassen, das der Betreiber gegeben hat.
+     */
+    private Set<Tat> rechteVon(long id) throws SQLException {
+        Set<Tat> rechte = new LinkedHashSet<>();
+        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(
+                "SELECT recht FROM freistadt_rechte WHERE stadt_id = ? ORDER BY recht")) {
+            anfrage.setLong(1, id);
+            try (ResultSet ergebnis = anfrage.executeQuery()) {
+                while (ergebnis.next()) {
+                    rechte.add(Tat.ausSchluessel(ergebnis.getString("recht")));
+                }
+            }
+        }
+        return rechte;
     }
 
     private Set<UUID> mitbauerVon(long id) throws SQLException {

@@ -208,6 +208,60 @@ public abstract class GrundstuecksablageVertrag {
     }
 
     @Test
+    @DisplayName("besitztIn fragt die STADT, den SPIELER und die WELT - alle drei")
+    void besitztInFragtAlleDrei() {
+        Grundstuecksablage ablage = ablage();
+        ablage.anlegen(WELT, stadt, Zellquader.eineZelle(1, 1), anna, 0L);
+
+        assertTrue(ablage.besitztIn(WELT, stadt, anna), "ihr gehoert dort eines");
+        assertFalse(ablage.besitztIn(WELT, stadt, bert),
+                "ihm nicht - und das ist der Fall, der im Spiel haeufig ist");
+        assertFalse(ablage.besitztIn(WELT, andereStadt, anna),
+                "in der NACHBARSTADT ist sie keine Buergerin. Ohne diese Zusage waere"
+                        + " jeder Grundbesitzer Buerger jeder Stadt der Welt");
+        assertFalse(ablage.besitztIn("freimarken:woanders", stadt, anna),
+                "und eine fremde Welt kennt diese Stadt nicht");
+        assertFalse(ablage.besitztIn(WELT, stadt, null),
+                "ohne Spieler ist die Antwort nein und keine Klage: Die Bauregel fragt"
+                        + " mit null, wenn niemand bekannt ist");
+    }
+
+    @Test
+    @DisplayName("ZWEI Grundstuecke, EINES verkauft: besitztIn sagt weiter ja")
+    void zweiGrundstueckeEinesWeg() {
+        // DER FALL, DER EINE ZAEHLUNG VERLANGT. Die gepufferte Umsetzung fuehrt je Stadt
+        // eine Karte, und ihr vergiss nimmt bedingungslos heraus. Mit einer blossen Menge
+        // von Eigentuemern verloere Anna hier ihre Buergerschaft, obwohl ihr noch ein
+        // Grundstueck gehoert - und eine Probe mit nur EINEM Grundstueck waere dabei
+        // gruen, mit Zaehlung wie ohne.
+        Grundstuecksablage ablage = ablage();
+        Grundstueck erstes = ablage.anlegen(WELT, stadt, Zellquader.eineZelle(1, 1),
+                anna, 0L);
+        ablage.anlegen(WELT, stadt, Zellquader.eineZelle(2, 2), anna, 0L);
+
+        ablage.anbieten(erstes.id(), 500L);
+        ablage.eigentuemerSetzen(erstes.id(), bert, 500L);
+
+        assertTrue(ablage.besitztIn(WELT, stadt, anna),
+                "ihr gehoert noch das zweite - wer eines von zwei verkauft, bleibt"
+                        + " Buerger");
+        assertTrue(ablage.besitztIn(WELT, stadt, bert), "und er ist jetzt auch einer");
+
+        // Und die Gegenrichtung bis zum Ende: Erst wenn das LETZTE weg ist, ist sie
+        // keine Buergerin mehr. Ohne diesen Schluss waere eine Zaehlung, die nie unter
+        // eins fiele, von der Probe oben nicht zu unterscheiden.
+        Grundstueck zweites = ablage.inStadt(stadt).stream()
+                .filter(eines -> anna.equals(eines.eigentuemer()))
+                .findFirst()
+                .orElseThrow();
+        ablage.entfernen(zweites.id());
+
+        assertFalse(ablage.besitztIn(WELT, stadt, anna),
+                "jetzt gehoert ihr dort nichts mehr");
+        assertTrue(ablage.besitztIn(WELT, stadt, bert), "ihm aber noch");
+    }
+
+    @Test
     @DisplayName("Mitbauer werden gesetzt, ersetzt und geleert - und sonst bleibt alles")
     void mitbauerSetzenUndLeeren() {
         Grundstuecksablage ablage = ablage();

@@ -1,6 +1,7 @@
 package de.freimarken.kern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -43,6 +44,34 @@ class ZwischenspeicherGrundstueckeTest {
         protected long stadtAnlegen(String welt, int feldX, int feldZ) {
             return naechste++;
         }
+    }
+
+    @Test
+    @DisplayName("Ein ZWEITES fuellen laesst keine Geisterbuerger stehen")
+    void zweitesFuellenRaeumtAlleKarten() {
+        // FUND DER EINSPRITZUNGSRUNDE ZU TEIL D [12.11.2026]: fuellen leert die
+        // Zellkarte und die Nummernkarte - die DRITTE, nachStadt, war dort nicht
+        // genannt, und nichts hat es gefangen. Im Spiel laeuft fuellen ein zweites Mal
+        // nach /freimarken neuladen: Dann waere jeder, dem je ein Grundstueck gehoerte,
+        // weiter Buerger - mit allen Rechten, die seine Stadt hergibt, auf einer Flaeche,
+        // die ihm nicht mehr gehoert.
+        SpeicherGrundstuecke wahrheit = new SpeicherGrundstuecke();
+        ZwischenspeicherGrundstuecke karte = new ZwischenspeicherGrundstuecke(wahrheit);
+        long stadt = 1L;
+        UUID anna = UUID.randomUUID();
+        Grundstueck annas = wahrheit.anlegen(WELT, stadt, Zellquader.eineZelle(1, 1),
+                anna, 0L);
+        karte.fuellen(WELT);
+        assertTrue(karte.besitztIn(WELT, stadt, anna), "vorher ist sie Buergerin");
+
+        // An der KARTE vorbei entfernt - so, wie es nach einem Neustart aussieht, wenn
+        // ein anderer Server oder ein Betreiber die Zeile weggenommen hat.
+        wahrheit.entfernen(annas.id());
+        karte.fuellen(WELT);
+
+        assertFalse(karte.besitztIn(WELT, stadt, anna),
+                "nach dem zweiten fuellen ist sie keine Buergerin mehr - eine Karte,"
+                        + " die nicht geleert wird, haelt sie fuer immer");
     }
 
     @Test

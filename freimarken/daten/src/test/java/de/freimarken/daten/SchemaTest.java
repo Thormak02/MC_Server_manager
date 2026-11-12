@@ -75,6 +75,7 @@ class SchemaTest {
         1133214650, // Schritt 20 - Tabelle grundstuecke
         -373186840, // Schritt 21 - Tabelle grundstuecke_mitbauer
         -1682304398, // Schritt 22 - Spalte angebotspreis
+        1916876671, // Schritt 23 - Tabelle freistadt_rechte
     };
 
     private static String datenbanktext() {

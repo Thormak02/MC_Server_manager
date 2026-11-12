@@ -97,9 +97,15 @@ public final class SpeicherLager implements BesitzLager {
                 throw new IllegalStateException("Der Stadtname ist vergeben: " + name);
             }
         }
+        // KEINE Buergerrechte beim Gruenden, und das ist die sichere Richtung: Eine
+        // frische Stadt gibt nichts her, bis ihr Besitzer es einstellt. Welche Rechte er
+        // ab Werk bekommt, entscheidet freistaedte.buergerrechte in der config.yml - und
+        // zwar im Freistadtbuch, das die Einstellung lesen kann. Ein Vorgabewert HIER
+        // waere eine zweite Quelle fuer dieselbe Frage.
         Parzelle neu = new Parzelle(naechsteId.getAndIncrement(), welt, feldX, feldZ,
                 eigentuemer, Set.of(), preis, uhr.instant(),
-                Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV, name);
+                Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV, name,
+                Parzelle.KEINE_RECHTE);
         nachOrt.put(schluessel, neu);
         orteNachId.put(neu.id(), schluessel);
         return neu;
@@ -139,18 +145,33 @@ public final class SpeicherLager implements BesitzLager {
             throw new IllegalStateException("Keine Parzelle mit der Nummer " + id);
         }
         Parzelle alt = nachOrt.get(schluessel);
-        nachOrt.put(schluessel, new Parzelle(alt.id(), alt.welt(), alt.x(), alt.z(),
-                alt.eigentuemer(), mitbauer, alt.preis(), alt.erworbenAm(),
-                // Durchtragen, nicht neu setzen: Feste Werte loeschten hier bei jeder
-                // Mitbauer-Aenderung still den Gruppenbezug und den Zustand.
-                //
-                // Der NAME gehoert dazu, und sein Fehlen war ein Fehler [11.11.2026]:
-                // Hier stand der verkuerzte Konstruktor, der KEIN_NAME setzt - und eine
-                // Freistadt ohne Namen WIRFT. Ein Stadtbesitzer konnte damit keinen
-                // einzigen Mitbauer eintragen. Teil B hat das zwoelfte Feld angelegt
-                // und genau diese Stelle uebersehen; gefunden hat es die erste Probe,
-                // die Mitbauer auf einer FREISTADT setzt.
-                alt.art(), alt.elternId(), alt.zustand(), alt.name()));
+        // DER WANDLER UND KEIN NACHBAU [12.11.2026]. Hier stand ein neues
+        // Parzelle(...) mit allen Feldern von Hand, und es hat sich zweimal als die
+        // falsche Bauart erwiesen: Teil B legte den NAMEN an und uebersah diese Stelle -
+        // eine Freistadt ohne Namen wirft, und ein Stadtbesitzer konnte keinen einzigen
+        // Mitbauer eintragen. Teil D legt die BUERGERRECHTE an, und dieselbe Stelle
+        // haette sie verloren, diesmal LAUTLOS: Geworfen haette nichts, nur waere nach
+        // jedem Mitbauer-Setzen jedes Recht der Stadt weg.
+        //
+        // mitMitbauern traegt jedes andere Feld durch, weil es an der Zeile selbst
+        // steht. Ein vierzehntes Feld kann hier nicht mehr verloren gehen.
+        nachOrt.put(schluessel, alt.mitMitbauern(mitbauer));
+    }
+
+    @Override
+    public synchronized void buergerrechteSetzen(long id, Set<Tat> rechte) {
+        String schluessel = orteNachId.get(id);
+        if (schluessel == null) {
+            throw new IllegalStateException("Keine Parzelle mit der Nummer " + id);
+        }
+        Parzelle alt = nachOrt.get(schluessel);
+        if (!alt.istFreistadt()) {
+            throw new IllegalStateException("Nummer " + id + " ist keine Freistadt,"
+                    + " sondern " + alt.art().schluessel() + " - Buergerrechte gelten"
+                    + " nur fuer eine Stadt");
+        }
+        // Der Wandler und kein Nachbau - die Begruendung steht an mitMitbauern.
+        nachOrt.put(schluessel, alt.mitBuergerrechten(rechte));
     }
 
     @Override

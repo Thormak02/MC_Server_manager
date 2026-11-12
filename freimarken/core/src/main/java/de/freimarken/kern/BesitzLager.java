@@ -99,6 +99,30 @@ public interface BesitzLager {
      */
     void mitbauerSetzen(long id, Set<UUID> mitbauer);
 
+    /**
+     * Die Buergerrechte einer FREISTADT setzen - ersetzend, nicht ergaenzend.
+     *
+     * <p>Ersetzend aus demselben Grund wie bei {@link #mitbauerSetzen}: Der Befehl, der
+     * sie aendert, kennt den Stand, den der Spieler sieht. Ein Ergaenzen braeuchte
+     * daneben ein Entfernen, und zwei Wege zu einer Menge sind zwei Wege, auf denen sie
+     * auseinanderlaufen kann.
+     *
+     * <p><b>Nur eine Freistadt hat Buergerrechte.</b> Auf einer Marktstadtparzelle wirft
+     * das - nicht, weil es technisch nicht gehen wuerde, sondern weil es dort nie eine
+     * Wirkung haette: Buerger hat nur eine Stadt. Ein stilles Hinnehmen waere eine
+     * Einstellung, die der Betreiber setzt und die lautlos nichts tut.
+     *
+     * <p>Gibt nichts zurueck, wie {@link #mitbauerSetzen}: Wer die neue Zeile braucht,
+     * liest sie mit {@link #finde}. Ein Rueckgabewert waere eine zweite Quelle fuer
+     * denselben Stand.
+     *
+     * @param rechte was die Stadtbuerger duerfen; leer heisst "nur ihr eigenes
+     *               Grundstueck" und ist die Vorgabe
+     * @throws IllegalStateException wenn es die Nummer nicht gibt oder sie keine
+     *                               Freistadt ist
+     */
+    void buergerrechteSetzen(long id, Set<Tat> rechte);
+
     /** Eine Parzelle freigeben. */
     void entfernen(long id);
 

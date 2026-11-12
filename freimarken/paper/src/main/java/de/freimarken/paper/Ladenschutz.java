@@ -5,6 +5,7 @@ import de.freimarken.kern.Ladenverzeichnis;
 import de.freimarken.kern.Mietablage;
 import de.freimarken.kern.Mietregel;
 import de.freimarken.kern.Mietvertrag;
+import de.freimarken.kern.Tat;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -89,8 +90,16 @@ final class Ladenschutz implements Schutzwache.Ortsregel {
         return einheitAn(ort) != null;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p><b>Die {@link Tat} wird hier bewusst nicht gelesen</b>
+     * [12.11.2026]: In einem fremden Laden ist auch die Tuer nicht fuer Besucher, und
+     * der Mieter hat an seiner Einheit alle drei Rechte. Eine Abstufung waere eine
+     * Einstellung, die es in der Markthalle nicht gibt - und die niemand setzen koennte.
+     */
     @Override
-    public Urteil pruefe(Player spieler, Location ort) {
+    public Urteil pruefe(Player spieler, Tat tat, Location ort) {
         Ladeneinheit einheit = einheitAn(ort);
         if (einheit == null) {
             return Urteil.NICHT_ZUSTAENDIG;
@@ -116,8 +125,16 @@ final class Ladenschutz implements Schutzwache.Ortsregel {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Ohne Spieler und ohne Tat gerechnet, aus demselben Grund wie bei
+     * {@link #pruefe}: Was hier gilt, gilt fuer jeden Besucher und fuer jeden Griff
+     * gleich. Der Satz nennt die Einheit und ihren Mieter, und das ist die ganze
+     * Auskunft.
+     */
     @Override
-    public Component grund(Location ort) {
+    public Component grund(Player spieler, Tat tat, Location ort) {
         Ladeneinheit einheit = einheitAn(ort);
         if (einheit == null) {
             // Zwischen dem Urteil und dieser Frage kann ein Neuladen die Einheiten

@@ -1,5 +1,7 @@
 package de.freimarken.kern;
 
+import java.util.Set;
+
 /**
  * Was eine Freistadt kostet und wie viele ein Spieler halten darf.
  *
@@ -13,9 +15,13 @@ package de.freimarken.kern;
  * @param hoechstzahl     wie viele Staedte ein Spieler ohne besonderes Recht haelt
  * @param hoechstzellen   wie viele Zellen ein einzelnes Grundstueck umfasst
  * @param verkaufsgebuehrProzent was der Staat von einem Grundstuecksverkauf nimmt
+ * @param buergerrechte   was die Stadtbuerger einer NEU GEGRUENDETEN Stadt im
+ *                        Gemeinschaftsgebiet duerfen - nur die Vorgabe, danach stellt
+ *                        jeder Stadtbesitzer seine Stadt selbst ein
  */
 public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
-                             int hoechstzellen, int verkaufsgebuehrProzent) {
+                             int hoechstzellen, int verkaufsgebuehrProzent,
+                             Set<Tat> buergerrechte) {
 
     public static final String PFAD_GRUENDUNGSPREIS = "freistaedte.gruendungspreis";
 
@@ -37,6 +43,25 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
      */
     public static final String PFAD_VERKAUFSGEBUEHR =
             "freistaedte.verkaufsgebuehr-prozent";
+
+    /**
+     * Der Pfad der Vorgabe-Buergerrechte.
+     *
+     * <p>Eine LISTE in der Datei und keine drei Ja-Nein-Zeilen: Ein viertes Recht ist
+     * dann ein Wort mehr und keine neue Zeile in der Vorlage - und ein Betreiber, der
+     * die Datei liest, sieht auf einen Blick, was gilt. Dieselbe Bauart wie
+     * {@code welten:} und {@code berufe:}, die ebenfalls Aufzaehlungen sind.
+     */
+    public static final String PFAD_BUERGERRECHTE = "freistaedte.buergerrechte";
+
+    /**
+     * KEINE Rechte ab Werk - die sichere Richtung.
+     *
+     * <p>Eine frische Stadt gibt nichts her, bis ihr Besitzer sich entscheidet. Die
+     * andere Vorgabe waere ein Recht, das ein Stadtbesitzer nie gegeben hat und das er
+     * erst bemerkt, wenn jemand in seinem Rathaus steht.
+     */
+    public static final Set<Tat> VORGABE_BUERGERRECHTE = Set.of();
 
     /**
      * 400.000 Mark - die Zahl aus Plan 6.2.
@@ -115,7 +140,7 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
 
     public static final Freistadtwerte VORGABE = new Freistadtwerte(
             VORGABE_GRUENDUNGSPREIS, VORGABE_HOECHSTZAHL, VORGABE_HOECHSTZELLEN,
-            VORGABE_VERKAUFSGEBUEHR);
+            VORGABE_VERKAUFSGEBUEHR, VORGABE_BUERGERRECHTE);
 
     public Freistadtwerte {
         if (gruendungspreis < 0L || gruendungspreis > HOECHSTER_BETRAG) {
@@ -144,28 +169,44 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
                     + verkaufsgebuehrProzent + " Prozent und liegt nicht zwischen 0 und "
                     + Shopregel.HOECHSTE_GEBUEHR_PROZENT + ".");
         }
+        // KEINE Pruefung auf die Zahl der Rechte: Jede Teilmenge der drei ist gueltig,
+        // die leere eingeschlossen - sie heisst "Buerger haben nur ihr eigenes
+        // Grundstueck". Ein unbekanntes WORT faellt schon beim Lesen der Datei auf, in
+        // Tat.ausSchluessel.
+        //
+        // Unveraenderlich kopieren, wie die Mitbauer in Parzelle: Sonst aendert ein
+        // Aufrufer die Vorgabe des Betreibers nachtraeglich, und die naechste gegruendete
+        // Stadt bekommt andere Rechte als die vorige.
+        buergerrechte = buergerrechte == null ? Set.of() : Set.copyOf(buergerrechte);
     }
 
     /** Dieselben Werte mit anderem Gruendungspreis. */
     public Freistadtwerte mitGruendungspreis(long anderer) {
         return new Freistadtwerte(anderer, hoechstzahl, hoechstzellen,
-                verkaufsgebuehrProzent);
+                verkaufsgebuehrProzent, buergerrechte);
     }
 
     /** Dieselben Werte mit anderer Hoechstzahl. */
     public Freistadtwerte mitHoechstzahl(int andere) {
         return new Freistadtwerte(gruendungspreis, andere, hoechstzellen,
-                verkaufsgebuehrProzent);
+                verkaufsgebuehrProzent, buergerrechte);
     }
 
     /** Dieselben Werte mit anderer Zellengrenze. */
     public Freistadtwerte mitHoechstzellen(int andere) {
         return new Freistadtwerte(gruendungspreis, hoechstzahl, andere,
-                verkaufsgebuehrProzent);
+                verkaufsgebuehrProzent, buergerrechte);
     }
 
     /** Dieselben Werte mit anderer Verkaufsgebuehr. */
     public Freistadtwerte mitVerkaufsgebuehr(int andere) {
-        return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen, andere);
+        return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen, andere,
+                buergerrechte);
+    }
+
+    /** Dieselben Werte mit anderen Vorgabe-Buergerrechten. */
+    public Freistadtwerte mitBuergerrechten(Set<Tat> andere) {
+        return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
+                verkaufsgebuehrProzent, andere);
     }
 }

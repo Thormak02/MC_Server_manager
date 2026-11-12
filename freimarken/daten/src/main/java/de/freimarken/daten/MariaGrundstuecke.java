@@ -66,6 +66,19 @@ public final class MariaGrundstuecke implements Grundstuecksablage {
             "SELECT " + SPALTEN + " FROM grundstuecke WHERE welt = ? AND eigentuemer = ?"
                     + " ORDER BY id";
 
+    /**
+     * Ob dem Spieler in dieser Stadt Grund gehoert - ein Ja oder Nein.
+     *
+     * <p>{@code SELECT 1 ... LIMIT 1} und keine Spaltenliste: Gefragt ist nur, OB es eine
+     * Zeile gibt. Der Index {@code nach_stadt} traegt die Einschraenkung auf die Stadt;
+     * dass auf {@code (stadt_id, eigentuemer)} KEIN eigener Index liegt, ist richtig - auf
+     * dem heissen Pfad steht der Zwischenspeicher davor, und diese Abfrage faellt nur
+     * ausserhalb der gedeckten Welt und in Proben.
+     */
+    private static final String BESITZT_IN =
+            "SELECT 1 FROM grundstuecke WHERE welt = ? AND stadt_id = ?"
+                    + " AND eigentuemer = ? LIMIT 1";
+
     private static final String LESEN_ZELLE =
             "SELECT " + SPALTEN + " FROM grundstuecke WHERE welt = ? AND von_x <= ?"
                     + " AND bis_x >= ? AND von_z <= ? AND bis_z >= ? LIMIT 1";
@@ -217,6 +230,25 @@ public final class MariaGrundstuecke implements Grundstuecksablage {
             anfrage.setString(1, welt);
             anfrage.setString(2, spieler.toString());
         }, "Lesen der Grundstuecke eines Spielers");
+    }
+
+    @Override
+    public boolean besitztIn(String welt, long stadtId, UUID spieler) {
+        if (spieler == null) {
+            return false;
+        }
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(BESITZT_IN)) {
+            anfrage.setString(1, welt);
+            anfrage.setLong(2, stadtId);
+            anfrage.setString(3, spieler.toString());
+            try (ResultSet ergebnis = anfrage.executeQuery()) {
+                return ergebnis.next();
+            }
+        } catch (SQLException fehler) {
+            throw new IllegalStateException("Nachsehen, ob " + spieler + " in Stadt "
+                    + stadtId + " Grund hat, ist gescheitert", fehler);
+        }
     }
 
     @Override

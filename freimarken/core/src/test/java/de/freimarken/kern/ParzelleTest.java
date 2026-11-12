@@ -116,7 +116,7 @@ class ParzelleTest {
         var ohne = assertThrows(IllegalArgumentException.class,
                 () -> new Parzelle(1L, WELT, 3, -7, anna, Set.of(), 400_000L,
                         Instant.EPOCH, Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL,
-                        Zustand.AKTIV, Parzelle.KEIN_NAME));
+                        Zustand.AKTIV, Parzelle.KEIN_NAME, Parzelle.KEINE_RECHTE));
         assertTrue(ohne.getMessage().contains("Freistadt"), ohne.getMessage());
 
         // Auch der leere Name faellt - sonst stuende in der Spalte eine Zeichenkette,
@@ -124,7 +124,39 @@ class ParzelleTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new Parzelle(1L, WELT, 3, -7, anna, Set.of(), 400_000L,
                         Instant.EPOCH, Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL,
-                        Zustand.AKTIV, "   "));
+                        Zustand.AKTIV, "   ", Parzelle.KEINE_RECHTE));
+    }
+
+    @Test
+    @DisplayName("Nur eine FREISTADT hat Buergerrechte - die andere Richtung auch")
+    void buergerrechteNurFuerFreistaedte() {
+        // FUND DER EINSPRITZUNGSRUNDE ZU TEIL D [12.11.2026]: Der Riegel im
+        // Kompaktkonstruktor war gebaut und von keiner Probe gedeckt. Was er verhindert:
+        // Zeilen in freistadt_rechte, die zu einer Marktstadtparzelle gehoeren - ein
+        // Betreiber findet sie dort und sucht nach einer Wirkung, die es nicht gibt.
+        var mit = assertThrows(IllegalArgumentException.class,
+                () -> new Parzelle(1L, WELT, 0, 0, anna, Set.of(), 0L, Instant.EPOCH,
+                        Art.PARZELLE, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV,
+                        Parzelle.KEIN_NAME, Set.of(Tat.BAUEN)));
+        assertTrue(mit.getMessage().contains("Freistadt"), mit.getMessage());
+
+        // Die LEERE Menge geht durch - sie ist die Vorgabe und bedeutet nichts anderes
+        // als "keine Rechte". Ein Riegel, der auch sie abweist, machte jede
+        // Marktstadtparzelle unbaubar.
+        assertEquals(Parzelle.KEINE_RECHTE,
+                new Parzelle(1L, WELT, 0, 0, anna, Set.of(), 0L, Instant.EPOCH,
+                        Art.PARZELLE, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV,
+                        Parzelle.KEIN_NAME, Parzelle.KEINE_RECHTE).buergerrechte());
+
+        // Und eine FREISTADT darf sie tragen - sonst prueft die Zeile darueber nur,
+        // dass der Riegel immer zuschlaegt.
+        Parzelle stadt = new Parzelle(1L, WELT, 3, -7, anna, Set.of(), 400_000L,
+                Instant.EPOCH, Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV,
+                "neustadt", Set.of(Tat.BENUTZEN));
+        assertTrue(stadt.buergerDuerfen(Tat.BENUTZEN));
+        assertFalse(stadt.buergerDuerfen(Tat.BAUEN),
+                "und nur DAS eine - buergerDuerfen fragt die Menge und nicht, ob"
+                        + " ueberhaupt etwas drinsteht");
     }
 
     @Test
@@ -137,7 +169,7 @@ class ParzelleTest {
         var mit = assertThrows(IllegalArgumentException.class,
                 () -> new Parzelle(1L, WELT, 0, 0, anna, Set.of(), 0L, Instant.EPOCH,
                         Art.PARZELLE, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV,
-                        "neustadt"));
+                        "neustadt", Parzelle.KEINE_RECHTE));
         assertTrue(mit.getMessage().contains("neustadt"), mit.getMessage());
 
         // Und der kurze Konstruktor kommt durch - er setzt KEIN_NAME und kann darum

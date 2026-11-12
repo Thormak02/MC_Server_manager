@@ -2,6 +2,7 @@ package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -10,12 +11,20 @@ import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.Stadtgrenze;
+import de.freimarken.kern.Tat;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Material;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.event.Event;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.Location;
 import org.junit.jupiter.api.BeforeAll;
@@ -51,6 +60,15 @@ import org.junit.jupiter.api.Test;
  */
 class SchutzwacheTest {
 
+    /**
+     * Die Tat, mit der diese Proben fahren.
+     *
+     * <p>Eine Abkuerzung und keine zweite Wahrheit: Was gemessen wird, ist der
+     * Bauschutz, und er gilt fuer alle drei Taten gleich, solange niemand Rechte
+     * abstuft. Welche Tat an welchem Block liegt, prueft {@code TatTest}.
+     */
+    private static final Tat BAUEN = Tat.BAUEN;
+
     /** Die Welt, in der die Wache zustaendig ist - ein Name, kein Weltobjekt. */
     private static final String WELT = "marktstadt";
 
@@ -62,6 +80,15 @@ class SchutzwacheTest {
     @BeforeAll
     static void serverStellen() {
         Serverprobe.einmalSetzen();
+        // Die sieben Blockgruppen aus HEIKLE_GRUPPEN, LEER angemeldet [Teil D4]: Seit
+        // 36p ein PlayerInteractEvent wirklich durchlaeuft, fragt tatAn sie - und eine
+        // Gruppe, die niemand angemeldet hat, WIRFT. Leer ist hier richtig: Diese Probe
+        // klickt auf Stein und auf eine Tuer, und beides steht in keiner von ihnen.
+        // Welche Art zu welcher Gruppe gehoert, prueft TatTest mit eigenen Mitgliedern.
+        for (String gruppe : java.util.List.of("flower_pots", "candles", "candle_cakes",
+                "cauldrons", "beds", "all_signs", "cave_vines")) {
+            Serverprobe.gruppe(gruppe, java.util.Set.of());
+        }
         Serverprobe.nenne(EIGENTUEMER, "Bert");
         // NAMENLOS bekommt mit Absicht keinen Namen: So geht Probe 36d durch den
         // Rueckfall auf die acht Zeichen der UUID.
@@ -191,7 +218,7 @@ class SchutzwacheTest {
     private static String balken(Schutzwache wache, int zahl, Location ort) {
         Spielerprobe spieler = new Spielerprobe("Probe" + zahl,
                 Spielerprobe.kennungAus(zahl));
-        wache.verweigere(spieler.spieler(), ort);
+        wache.verweigere(spieler.spieler(), BAUEN, ort);
         List<String> bilder = spieler.handbalkenBild();
         assertEquals(1, bilder.size(), "genau EIN Handbalken je Abweisung: " + bilder);
         assertEquals(List.of(), spieler.chatBild(), "ein Handbalken ist keine Chatzeile");
@@ -209,7 +236,7 @@ class SchutzwacheTest {
         Spielerprobe besucher = new Spielerprobe("Cara", BESUCHER);
         Spielerprobe unbeteiligter = new Spielerprobe("Dora", ZWEITER_BESUCHER);
 
-        wache.verweigere(besucher.spieler(),
+        wache.verweigere(besucher.spieler(), BAUEN,
                 ort(buch.plan().mitteX(0), buch.plan().mitteZ(0)));
 
         assertEquals(1, besucher.handbalkenBild().size(),
@@ -233,8 +260,8 @@ class SchutzwacheTest {
         Spielerprobe erster = new Spielerprobe("Cara", BESUCHER);
         Spielerprobe zweiter = new Spielerprobe("Dora", ZWEITER_BESUCHER);
 
-        wache.verweigere(erster.spieler(), ort);
-        wache.verweigere(erster.spieler(), ort);
+        wache.verweigere(erster.spieler(), BAUEN, ort);
+        wache.verweigere(erster.spieler(), BAUEN, ort);
 
         assertEquals(1, erster.handbalkenBild().size(),
                 "zweimal innerhalb der Meldepause ist EIN Hinweis - sonst flackert eine"
@@ -242,7 +269,7 @@ class SchutzwacheTest {
 
         // Und die andere Richtung, die eine gemeinsame Drossel gruen durchlaufen liesse:
         // Ein ZWEITER Spieler ist von der Pause des ersten nicht betroffen.
-        wache.verweigere(zweiter.spieler(), ort);
+        wache.verweigere(zweiter.spieler(), BAUEN, ort);
 
         assertEquals(1, zweiter.handbalkenBild().size(),
                 "eine gemeinsame Drossel macht die Wache fuer ALLE stumm, sobald einer"
@@ -259,7 +286,7 @@ class SchutzwacheTest {
         Schutzwache wache = wache(buch);
 
         Spielerprobe besucher = new Spielerprobe("Cara", BESUCHER);
-        wache.verweigere(besucher.spieler(),
+        wache.verweigere(besucher.spieler(), BAUEN,
                 ort(buch.plan().mitteX(0), buch.plan().mitteZ(0)));
 
         String bild = besucher.handbalkenBild().get(0);
@@ -285,11 +312,11 @@ class SchutzwacheTest {
         Location fremd = ortInDerWelt(buch.plan().mitteX(0), buch.plan().mitteZ(0));
         Spielerprobe besucher = new Spielerprobe("Cara", BESUCHER);
 
-        assertFalse(wacheOhneRegel(buch).darfHandeln(besucher.spieler(), fremd),
+        assertFalse(wacheOhneRegel(buch).darfHandeln(besucher.spieler(), BAUEN, fremd),
                 "ohne Ortsregel ist die fremde Parzelle verboten");
 
         assertTrue(wacheMitRegel(buch, Schutzwache.Ortsregel.Urteil.ERLAUBT)
-                        .darfHandeln(besucher.spieler(), fremd),
+                        .darfHandeln(besucher.spieler(), BAUEN, fremd),
                 "das ERLAUBT der Ortsregel ist endgueltig");
     }
 
@@ -307,11 +334,11 @@ class SchutzwacheTest {
         Location eigen = ortInDerWelt(buch.plan().mitteX(0), buch.plan().mitteZ(0));
         Spielerprobe eigentuemer = new Spielerprobe("Bert", EIGENTUEMER);
 
-        assertTrue(wacheOhneRegel(buch).darfHandeln(eigentuemer.spieler(), eigen),
+        assertTrue(wacheOhneRegel(buch).darfHandeln(eigentuemer.spieler(), BAUEN, eigen),
                 "auf seiner eigenen Parzelle darf er - sonst prueft diese Probe nichts");
 
         assertFalse(wacheMitRegel(buch, Schutzwache.Ortsregel.Urteil.VERBOTEN)
-                .darfHandeln(eigentuemer.spieler(), eigen));
+                .darfHandeln(eigentuemer.spieler(), BAUEN, eigen));
     }
 
     @Test
@@ -327,7 +354,7 @@ class SchutzwacheTest {
                 festeRegel(Schutzwache.Ortsregel.Urteil.VERBOTEN),
                 Schutzwache.KEIN_HANDEL);
 
-        mitNein.verweigere(besucher.spieler(), ort(0, 0));
+        mitNein.verweigere(besucher.spieler(), BAUEN, ort(0, 0));
 
         assertEquals("EIGENER GRUND DER ORTSREGEL",
                 besucher.handbalkenBild().get(0));
@@ -351,11 +378,11 @@ class SchutzwacheTest {
         Spielerprobe ohneRecht = new Spielerprobe("Cara", BESUCHER);
 
         assertTrue(wacheMitRegel(buch, Schutzwache.Ortsregel.Urteil.VERBOTEN)
-                .darfHandeln(team.spieler(), drin));
+                .darfHandeln(team.spieler(), BAUEN, drin));
         // Die Gegenprobe am SELBEN Ort und mit derselben Wache: Ohne sie waere auch eine
         // Fassung gruen, die ueberall ja sagt.
         assertFalse(wacheMitRegel(buch, Schutzwache.Ortsregel.Urteil.VERBOTEN)
-                .darfHandeln(ohneRecht.spieler(), drin));
+                .darfHandeln(ohneRecht.spieler(), BAUEN, drin));
     }
 
     @Test
@@ -365,11 +392,11 @@ class SchutzwacheTest {
         // Konstruktors. Sagt sie je etwas anderes als NICHT_ZUSTAENDIG, waere jede
         // Parzellenprobe dieser Datei stumm durch einen anderen Zweig gelaufen.
         assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
-                Schutzwache.KEINE_ORTSREGEL.pruefe(null, ort(0, 0)));
+                Schutzwache.KEINE_ORTSREGEL.pruefe(null, BAUEN, ort(0, 0)));
         // Und ihr grund() WIRFT, statt einen leeren Balken zu liefern: Wer ihn holt, hat
         // die Reihenfolge in darfHandeln umgestellt und soll es sofort merken.
         assertThrows(IllegalStateException.class,
-                () -> Schutzwache.KEINE_ORTSREGEL.grund(ort(0, 0)));
+                () -> Schutzwache.KEINE_ORTSREGEL.grund(null, BAUEN, ort(0, 0)));
     }
 
     @Test
@@ -428,6 +455,104 @@ class SchutzwacheTest {
                 null), "ohne Shop am Block ist es kein Handel");
     }
 
+    @Test
+    @DisplayName("36n - die benannte TAT kommt bei der Ortsregel an, und zwar jede")
+    void dieTatKommtAn() {
+        // DIE NAHT VON TEIL D1 [12.11.2026]. Die Wache gibt die Tat nur weiter, und
+        // genau das ist hier zu pruefen: Eine Regel, die sie beachtet - ab Teil D3 die
+        // Stadtwache -, kann nur richtig entscheiden, wenn sie ankommt. Eine Wache, die
+        // immer BAUEN durchreichte, waere in jeder anderen Probe dieses Projekts gruen:
+        // Solange niemand Rechte abstuft, antworten alle drei Taten gleich.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        Spielerprobe besucher = new Spielerprobe("Cara", BESUCHER);
+        List<String> mitschrift = new ArrayList<>();
+        Schutzwache wache = new Schutzwache(stand.buch(), WELT_SCHLUESSEL,
+                Sprachprobe.spracheAusDemJar(),
+                schreiberin(mitschrift, Schutzwache.Ortsregel.Urteil.ERLAUBT),
+                Schutzwache.KEIN_HANDEL);
+        Location irgendwo = ortInDerWelt(0, 0);
+
+        for (Tat tat : Tat.values()) {
+            wache.darfHandeln(besucher.spieler(), tat, irgendwo);
+        }
+
+        // Die Erwartung wird aus values() GERECHNET und nicht hingeschrieben: Eine
+        // vierte Tat waere sonst gebaut, aber auf diesem Weg ungeprueft.
+        List<String> erwartet = new ArrayList<>();
+        for (Tat tat : Tat.values()) {
+            erwartet.add("pruefe:" + tat);
+        }
+        assertEquals(erwartet, mitschrift,
+                "jede Tat muss unveraendert und in der Reihenfolge der Aufrufe"
+                        + " ankommen - eine Wache, die sie unterwegs ersetzt, gibt der"
+                        + " Stadtwache ab Teil D3 das falsche Recht");
+    }
+
+    @Test
+    @DisplayName("36o - auch der GRUND wird mit der Tat geholt, nicht ohne sie")
+    void derGrundBekommtDieTatAuch() {
+        // Der zweite Weg durch dieselbe Schnittstelle, und er war der uebersehene: Die
+        // Absage selbst ist eine Sache, die BEGRUENDUNG eine andere. Holte die Wache den
+        // Grund ohne die Tat, stuende auf dem Handbalken eines Stadtbuergers an einer
+        // Truhe der Satz fuer das Bauen - und die Zahl der Proben bliebe dieselbe.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        Spielerprobe besucher = new Spielerprobe("Cara", BESUCHER);
+        List<String> mitschrift = new ArrayList<>();
+        Schutzwache wache = new Schutzwache(stand.buch(), WELT_SCHLUESSEL,
+                Sprachprobe.spracheAusDemJar(),
+                schreiberin(mitschrift, Schutzwache.Ortsregel.Urteil.VERBOTEN),
+                Schutzwache.KEIN_HANDEL);
+
+        wache.verweigere(besucher.spieler(), Tat.BEHAELTER,
+                ortInDerWelt(0, 0));
+
+        // ZWEI Eintraege, und die Mitschrift nennt den AUFRUF: Eine Liste aus zwei
+        // gleichen Taten saehe nicht, WELCHER der beiden Wege sie bekommen hat - und
+        // genau einer von beiden war beim ersten Lauf dieser Probe stumm. Dass pruefe
+        // zweimal faellt, hat seinen eigenen Grund; er steht an Schutzwache.grund.
+        assertEquals(List.of("pruefe:BEHAELTER", "grund:BEHAELTER"), mitschrift,
+                "pruefe UND grund bekommen die Tat des Zugangs - und nicht eine"
+                        + " Vorgabe");
+    }
+
+    /**
+     * Eine Ortsregel, die jeden Aufruf MITSCHREIBT - mit Namen und Tat.
+     *
+     * <p>Geschrieben wird VOR der Antwort: Eine Mitschrift danach saehe einen Aufruf
+     * nicht, der wirft - und dieselbe Falle hat dieses Projekt schon einmal gestellt.
+     *
+     * <p><b>Der Name des Aufrufs gehoert in die Zeile</b> und nicht nur die Tat: Zwei
+     * gleiche Taten in einer Liste sagen nicht, WELCHER Weg sie gebracht hat. Beim ersten
+     * Lauf von 36o schrieb {@code grund} nicht mit, und eine Liste aus Taten allein haette
+     * das als "ein Aufruf zu wenig" gezeigt - nicht als "der falsche fehlt".
+     *
+     * @param immer was {@code pruefe} antwortet; {@code VERBOTEN} ist der einzige Weg, auf
+     *              dem {@code grund} ueberhaupt gerufen wird
+     */
+    private static Schutzwache.Ortsregel schreiberin(List<String> mitschrift,
+            Schutzwache.Ortsregel.Urteil immer) {
+        return new Schutzwache.Ortsregel() {
+            @Override
+            public Urteil pruefe(Player spieler, Tat tat, Location ort) {
+                mitschrift.add("pruefe:" + tat);
+                return immer;
+            }
+
+            @Override
+            public Component grund(Player spieler, Tat tat, Location ort) {
+                mitschrift.add("grund:" + tat);
+                return Component.text("MITGESCHRIEBEN");
+            }
+
+            @Override
+            public boolean zustaendig(Location ort) {
+                return true;
+            }
+        };
+    }
+
     /**
      * Eine Ortsregel, die ueberall dasselbe sagt - fuer die Proben der VERDRAHTUNG.
      *
@@ -440,12 +565,12 @@ class SchutzwacheTest {
             Schutzwache.Ortsregel.Urteil immer) {
         return new Schutzwache.Ortsregel() {
             @Override
-            public Urteil pruefe(Player spieler, Location ort) {
+            public Urteil pruefe(Player spieler, Tat tat, Location ort) {
                 return immer;
             }
 
             @Override
-            public Component grund(Location ort) {
+            public Component grund(Player spieler, Tat tat, Location ort) {
                 return Component.text("EIGENER GRUND DER ORTSREGEL");
             }
 
@@ -459,4 +584,134 @@ class SchutzwacheTest {
             }
         };
     }
+
+    @Test
+    @DisplayName("36p - ein Rechtsklick mit WERKZEUG auf einen harmlosen Block: beides"
+            + " abgesagt")
+    void werkzeugklickAufHarmlosemBlock() {
+        // FUND DER EINSPRITZUNGSRUNDE ZU TEIL D [12.11.2026], und zugleich die erste
+        // Probe dieses Projekts, die beimKlicken WIRKLICH durchlaeuft - moeglich, seit
+        // die Serverprobe fuer TatTest getState, getBlockData und die Blockgruppen
+        // beantwortet. Die Einschraenkung in GrenzeTest 31x ist damit fuer diesen Zweig
+        // aufgehoben.
+        //
+        // DER FALL: Der Block ist harmlos (Stein - tatAn gibt null), aber in der Hand
+        // liegt eine Schaufel. Dann wird der BLOCK trotzdem abgesagt, und zwar weil
+        // seine Tat UNBEKANNT ist: Die beiden Listen HEIKEL und HEIKLE_GRUPPEN koennen
+        // Luecken haben, und was dort fehlt, soll nicht reagieren. So stand es hier vor
+        // den Taten, und die Einspritzung hat gezeigt, dass es von nichts gedeckt war.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        stand.lager().anlegen(WELT_SCHLUESSEL, 0, 0, EIGENTUEMER, 25_000L);
+        Besitzbuch buch = stand.buch();
+        Spielerprobe besucher = new Spielerprobe("Cara", BESUCHER);
+        Block fremderStein = steinBlock(buch);
+
+        PlayerInteractEvent klick = new PlayerInteractEvent(besucher.spieler(),
+                Action.RIGHT_CLICK_BLOCK, new Wesenprobe.Probestapel(
+                        Material.DIAMOND_SHOVEL, 1),
+                fremderStein, BlockFace.UP);
+        wacheOhneRegel(buch).beimKlicken(klick);
+
+        assertEquals(Event.Result.DENY, klick.useItemInHand(),
+                "die Schaufel macht aus Gras einen Pfad - die HAND muss abgesagt sein");
+        assertEquals(Event.Result.DENY, klick.useInteractedBlock(),
+                "und der BLOCK auch, obwohl tatAn ihn nicht kennt: Was die beiden"
+                        + " Listen nicht fuehren, soll auf fremdem Grund nicht"
+                        + " reagieren. Ohne diese Zeile ist jede Luecke in HEIKEL ein"
+                        + " offener Griff, sobald ein Werkzeug in der Hand liegt.");
+    }
+
+    @Test
+    @DisplayName("36q - eine Tuer, die ERLAUBT ist, bleibt offen - auch mit Axt in der"
+            + " Hand")
+    void erlaubteTuerBleibtOffen() {
+        // DIE ANDERE HAELFTE, und sie ist der Grund, warum beimKlicken ZWEI Fragen
+        // stellt: Ein Stadtbuerger mit Benutzenrecht kaeme durch keine Tuer mehr, solange
+        // er eine Axt haelt - und eine Axt in der Hand hat fast jeder. Eine einzige
+        // Frage, die strengere von beiden, wuerde genau das tun.
+        Serverprobe.keineWeltenMehr();
+        Stand stand = stand();
+        stand.lager().anlegen(WELT_SCHLUESSEL, 0, 0, EIGENTUEMER, 25_000L);
+        Besitzbuch buch = stand.buch();
+        Spielerprobe besucher = new Spielerprobe("Cara", BESUCHER);
+        Block tuer = tuerBlock(buch);
+        // Eine Ortsregel wie eine Freistadt, die BENUTZEN hergibt und BAUEN nicht.
+        Schutzwache wache = new Schutzwache(buch, WELT_SCHLUESSEL,
+                Sprachprobe.spracheAusDemJar(), nurFuer(Tat.BENUTZEN),
+                Schutzwache.KEIN_HANDEL);
+
+        PlayerInteractEvent klick = new PlayerInteractEvent(besucher.spieler(),
+                Action.RIGHT_CLICK_BLOCK, new Wesenprobe.Probestapel(
+                        Material.DIAMOND_AXE, 1),
+                tuer, BlockFace.UP);
+        wache.beimKlicken(klick);
+
+        assertEquals(Event.Result.DENY, klick.useItemInHand(),
+                "die AXT bleibt abgesagt - sie wuerde den Block entrinden");
+        assertNotEquals(Event.Result.DENY, klick.useInteractedBlock(),
+                "die TUER aber nicht: Ihre Tat ist BENUTZEN, und die gibt diese Regel"
+                        + " her. Mit EINER Frage waere sie mit der Axt mitabgesagt - und"
+                        + " ein Stadtbuerger kaeme nie durch seine eigene Haustuer.");
+    }
+
+    /**
+     * Die Welt MIT Bloecken - fuer die zwei Klickproben.
+     *
+     * <p>{@link #ortInDerWelt} baut eine Welt OHNE Weltgriff, und die hat keine Bloecke:
+     * Ihr {@code getBlockAt} klagt, sobald ein Zweig die Art eines Blocks fragt. Das war
+     * bis zu den Klickproben richtig - keine andere Probe dieser Datei liest einen Block
+     * -, und darum legen diese zwei die Welt mit einer {@link Probewelt} neu an.
+     */
+    private static World weltMitBloecken(Besitzbuch buch) {
+        return Serverprobe.welt(WELT_SCHLUESSEL,
+                new Probewelt(buch.plan(), -64));
+    }
+
+    /** Ein Block aus Stein auf fremdem Grund - {@code tatAn} kennt ihn nicht. */
+    private static Block steinBlock(Besitzbuch buch) {
+        World welt = weltMitBloecken(buch);
+        Block block = welt.getBlockAt(buch.plan().mitteX(0), 64,
+                buch.plan().mitteZ(0));
+        block.setType(Material.STONE);
+        return block;
+    }
+
+    /** Eine Tuer auf fremdem Grund - {@code tatAn} gibt dafuer BENUTZEN. */
+    private static Block tuerBlock(Besitzbuch buch) {
+        World welt = weltMitBloecken(buch);
+        Block block = welt.getBlockAt(buch.plan().mitteX(0), 64, buch.plan().mitteZ(0));
+        Serverprobe.oeffenbar(WELT_SCHLUESSEL, block.getX(), block.getY(),
+                block.getZ());
+        block.setType(Material.OAK_DOOR);
+        return block;
+    }
+
+    /**
+     * Eine Ortsregel, die GENAU EINE Tat hergibt - wie eine Freistadt mit einem Recht.
+     *
+     * <p>Die Abstufung je Tat ist der ganze Zweck der Tat in der Schnittstelle, und
+     * ohne eine Regel, die sie wirklich nutzt, waere sie hier nicht messbar: Der
+     * Ladenschutz liest sie bewusst nicht, und die Stadtwache braucht eine ganze
+     * Stadtfelderwelt.
+     */
+    private static Schutzwache.Ortsregel nurFuer(Tat erlaubte) {
+        return new Schutzwache.Ortsregel() {
+            @Override
+            public Urteil pruefe(Player spieler, Tat tat, Location ort) {
+                return tat == erlaubte ? Urteil.ERLAUBT : Urteil.VERBOTEN;
+            }
+
+            @Override
+            public Component grund(Player spieler, Tat tat, Location ort) {
+                return Component.text("NUR " + erlaubte);
+            }
+
+            @Override
+            public boolean zustaendig(Location ort) {
+                return true;
+            }
+        };
+    }
+
 }

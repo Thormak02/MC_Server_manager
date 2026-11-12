@@ -74,6 +74,11 @@ public class Lagerattrappe implements BesitzLager {
     }
 
     @Override
+    public void buergerrechteSetzen(long id, Set<Tat> rechte) {
+        echtes.buergerrechteSetzen(id, rechte);
+    }
+
+    @Override
     public void entfernen(long id) {
         echtes.entfernen(id);
     }

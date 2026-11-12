@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Rasterplan;
+import de.freimarken.kern.Tat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,7 +82,7 @@ import org.bukkit.inventory.ItemStack;
  *
  * <p><b>Und eine dritte Frage in der Gegenrichtung: {@link Handelsklick}.</b> Handeln
  * darf jeder, immer und ueberall (entschieden 08.11.2026) - auch im Laden eines anderen,
- * sonst haette ein Kistenshop keine Kunden. Ein Schild ist aber {@link #istHeikel}
+ * sonst haette ein Kistenshop keine Kunden. Ein Schild ist aber eine {@link Tat}
  * (ueber {@code Tag.ALL_SIGNS}), damit niemand fremde Preise umschreibt. Beides zugleich
  * geht nur, wenn der HANDELSKLICK vor der Besitzfrage abbiegt - und genau das tut
  * {@link #beimKlicken}.
@@ -123,14 +124,19 @@ public final class Schutzwache implements Listener {
         }
 
         /**
-         * Darf dieser Spieler hier handeln?
+         * Darf dieser Spieler hier DIESES tun?
          *
          * <p>Wirft NICHT. Was eine Umsetzung nicht beantworten kann - eine stumme
          * Datenbank etwa -, beantwortet sie mit {@link Urteil#VERBOTEN} und einer Zeile
          * im Protokoll. Die sichere Richtung: Im Zweifel bleibt fremder Besitz
          * unberuehrt.
+         *
+         * <p>Die {@link Tat} darf eine Umsetzung ignorieren, und der {@code Ladenschutz}
+         * tut genau das: In einem fremden Laden ist auch die Tuer nicht fuer Besucher.
+         * Wer sie beachtet, muss sie bei JEDER Tat beantworten - ein Fall, der
+         * durchfaellt, ist eine Erlaubnis, die niemand gegeben hat.
          */
-        Urteil pruefe(Player spieler, Location ort);
+        Urteil pruefe(Player spieler, Tat tat, Location ort);
 
         /**
          * Der Handbalken zu einem {@link Urteil#VERBOTEN} - nur dann gerufen.
@@ -138,8 +144,16 @@ public final class Schutzwache implements Listener {
          * <p>Die Regel liefert ihn SELBST und nicht die Wache. Sonst muesste die Wache
          * wissen, warum eine fremde Regel nein gesagt hat - und das ist genau das
          * Wissen, das sie nicht haben soll.
+         *
+         * <p><b>Mit Spieler und Tat seit dem 12.11.2026</b>, und beides aus demselben
+         * Grund: Sobald an einem Ort fuer verschiedene Leute Verschiedenes gilt, ist "was
+         * liegt hier" keine Begruendung mehr. Ein Stadtbuerger, dem eine Truhe
+         * verschlossen bleibt, soll nicht lesen, dass die Stadt einem anderen gehoert -
+         * sie gehoert ihm ja mit. {@link #zustaendig} bleibt OHNE beides: Jene Frage
+         * trennt "geht mich das an" von "darf DIESER Spieler", und {@link #nacheinander}
+         * findet die Regel damit auch dann wieder, wenn hier noch kein Urteil steht.
          */
-        Component grund(Location ort);
+        Component grund(Player spieler, Tat tat, Location ort);
 
         /**
          * Ob diese Regel ueber diese Stelle ueberhaupt etwas zu sagen hat.
@@ -176,9 +190,9 @@ public final class Schutzwache implements Listener {
             List<Ortsregel> kette = List.of(regeln);
             return new Ortsregel() {
                 @Override
-                public Urteil pruefe(Player spieler, Location ort) {
+                public Urteil pruefe(Player spieler, Tat tat, Location ort) {
                     for (Ortsregel regel : kette) {
-                        Urteil urteil = regel.pruefe(spieler, ort);
+                        Urteil urteil = regel.pruefe(spieler, tat, ort);
                         if (urteil != Urteil.NICHT_ZUSTAENDIG) {
                             return urteil;
                         }
@@ -187,10 +201,10 @@ public final class Schutzwache implements Listener {
                 }
 
                 @Override
-                public Component grund(Location ort) {
+                public Component grund(Player spieler, Tat tat, Location ort) {
                     for (Ortsregel regel : kette) {
                         if (regel.zustaendig(ort)) {
-                            return regel.grund(ort);
+                            return regel.grund(spieler, tat, ort);
                         }
                     }
                     throw new IllegalStateException("Keine der " + kette.size()
@@ -218,21 +232,21 @@ public final class Schutzwache implements Listener {
         static Ortsregel spaet(Supplier<Ortsregel> lieferant) {
             return new Ortsregel() {
                 @Override
-                public Urteil pruefe(Player spieler, Location ort) {
+                public Urteil pruefe(Player spieler, Tat tat, Location ort) {
                     Ortsregel echte = lieferant.get();
                     return echte == null
                             ? Urteil.NICHT_ZUSTAENDIG
-                            : echte.pruefe(spieler, ort);
+                            : echte.pruefe(spieler, tat, ort);
                 }
 
                 @Override
-                public Component grund(Location ort) {
+                public Component grund(Player spieler, Tat tat, Location ort) {
                     Ortsregel echte = lieferant.get();
                     if (echte == null) {
                         throw new IllegalStateException("Es gibt keine Regel, die diesen"
                                 + " Grund nennen koennte - zustaendig hat nein gesagt");
                     }
-                    return echte.grund(ort);
+                    return echte.grund(spieler, tat, ort);
                 }
 
                 @Override
@@ -248,7 +262,7 @@ public final class Schutzwache implements Listener {
      * Ob ein Klick ein HANDEL ist - der darf immer und ueberall [08.11.2026].
      *
      * <p>Die Gegenrichtung zur {@link Ortsregel}, und sie steht hier, bevor es
-     * Kistenshops gibt. Das ist Absicht: Ein Schild ist {@link #istHeikel}, damit niemand
+     * Kistenshops gibt. Das ist Absicht: Ein Schild traegt eine {@link Tat}, damit niemand
      * fremde Preise umschreibt - also wuerde der Ladenschutz einem Kunden den Klick auf
      * das Kistenshop-Schild verbieten, und der Laden haette keine Kunden. Eine Luecke,
      * die erst mit den Kistenshops eingebaut wird, bricht den Schutz an einer Stelle auf,
@@ -283,12 +297,12 @@ public final class Schutzwache implements Listener {
     /** Keine Ortsregel - fuer jeden Server ohne Markthalle und fuer die Proben. */
     public static final Ortsregel KEINE_ORTSREGEL = new Ortsregel() {
         @Override
-        public Urteil pruefe(Player spieler, Location ort) {
+        public Urteil pruefe(Player spieler, Tat tat, Location ort) {
             return Urteil.NICHT_ZUSTAENDIG;
         }
 
         @Override
-        public Component grund(Location ort) {
+        public Component grund(Player spieler, Tat tat, Location ort) {
             // Wird nie gerufen: pruefe sagt nie VERBOTEN. Ein Wurf statt eines leeren
             // Balkens, damit ein Aufrufer, der das doch tut, es sofort merkt.
             throw new IllegalStateException("KEINE_ORTSREGEL verbietet nichts - wer hier"
@@ -413,10 +427,16 @@ public final class Schutzwache implements Listener {
     // --- Die eine Regel ---------------------------------------------------------
 
     /**
-     * Darf dieser Spieler an dieser Stelle etwas veraendern?
+     * Darf dieser Spieler an dieser Stelle DIESES tun?
      *
      * <p>Antwortet {@code true} fuer alles ausserhalb der eigenen Welt: Dort ist diese Wache
      * nicht zustaendig, und "nicht zustaendig" heisst nicht "verboten".
+     *
+     * <p><b>Die {@link Tat} geht nur an die {@link Ortsregel}</b> [12.11.2026]. Das
+     * Besitzbuch der Marktstadt bekommt sie nicht, und das ist keine Luecke: Auf einer
+     * fremden Parzelle ist alle drei dasselbe Nein, und ein Durchreichen waere eine
+     * Abstufung, die dort niemand einstellen kann. Wer sie eines Tages auch bei den
+     * Parzellen will, aendert EINE Zeile - und muss dann jede Tat beantworten.
      *
      * <p>Fehlt die Antwort, lautet sie nein. Wer nicht nachsehen kann, wem der Grund
      * gehoert, darf dort nicht bauen. Ohne diesen Fang flog eine Ausnahme aus der
@@ -425,7 +445,11 @@ public final class Schutzwache implements Listener {
      * Datenbank waere damit eine Luecke im Besitzschutz gewesen, und zwar die unauffaellige
      * Sorte: Gebaut wird, der Eintrag im Protokoll liest sich wie ein technisches Problem.
      */
-    public boolean darfHandeln(Player spieler, Location ort) {
+    public boolean darfHandeln(Player spieler, Tat tat, Location ort) {
+        if (tat == null) {
+            throw new IllegalArgumentException("Jeder Zugang benennt seine Tat - ein null"
+                    + " waere eine Frage, die keine Ortsregel beantworten kann");
+        }
         World gewaehlt = ort.getWorld();
         if (gewaehlt == null) {
             return true;
@@ -439,7 +463,7 @@ public final class Schutzwache implements Listener {
         // Die Ortsregel ZUERST und in ihrer Welt endgueltig - die Begruendung steht an
         // Ortsregel selbst. NICHT_ZUSTAENDIG ist der Normalfall: Die meisten Orte des
         // Servers sind keine Ladeneinheit.
-        Ortsregel.Urteil urteil = ortsregel.pruefe(spieler, ort);
+        Ortsregel.Urteil urteil = ortsregel.pruefe(spieler, tat, ort);
         if (urteil != Ortsregel.Urteil.NICHT_ZUSTAENDIG) {
             return urteil == Ortsregel.Urteil.ERLAUBT;
         }
@@ -479,17 +503,17 @@ public final class Schutzwache implements Listener {
      * immer kleiner als die Pause. Die Begruendung bliebe dann dauerhaft stumm, und der
      * Spieler saehe nur, dass nichts passiert.
      */
-    public void verweigere(Player spieler, Location ort) {
+    public void verweigere(Player spieler, Tat tat, Location ort) {
         long jetzt = System.nanoTime();
         Long zuletzt = letzteMeldung.get(spieler.getUniqueId());
         if (zuletzt != null && (jetzt - zuletzt) / 1_000_000L < MELDEPAUSE_MS) {
             return;
         }
         letzteMeldung.put(spieler.getUniqueId(), jetzt);
-        spieler.sendActionBar(grund(spieler, ort));
+        spieler.sendActionBar(grund(spieler, tat, ort));
     }
 
-    private Component grund(Player spieler, Location ort) {
+    private Component grund(Player spieler, Tat tat, Location ort) {
         // Hat die ORTSREGEL verboten, liefert sie auch den Grund. Sonst stuende auf dem
         // Handbalken eines Ladenbesuchers "Diese Parzelle ist noch frei" - eine Auskunft
         // ueber eine Parzelle, die ihn nichts angeht, und zwar in einer Welt, in der es
@@ -501,8 +525,8 @@ public final class Schutzwache implements Listener {
         // Tages verschieden beantwortet. Die zweite Frage kostet eine Abfrage, und sie
         // faellt nur bei einer Verweigerung an - die ohnehin auf eine je zwei Sekunden
         // und Spieler gedrosselt ist.
-        if (ortsregel.pruefe(spieler, ort) == Ortsregel.Urteil.VERBOTEN) {
-            return ortsregel.grund(ort);
+        if (ortsregel.pruefe(spieler, tat, ort) == Ortsregel.Urteil.VERBOTEN) {
+            return ortsregel.grund(spieler, tat, ort);
         }
         // Derselbe Leseweg wie darfBauen. Mit parzelleAn hiess die Begruendung auf
         // einer gefuellten Wegflaeche "Weg und Mauer gehoeren allen" - waehrend
@@ -532,12 +556,12 @@ public final class Schutzwache implements Listener {
      * wuerde nie erreicht, und Bukkit liesse das Ereignis unabgebrochen - der Block auf
      * fremdem Grund braeche, weil der Grund dafuer nicht zu beschaffen war.
      */
-    private boolean unterbinden(Player spieler, Location ort) {
-        if (darfHandeln(spieler, ort)) {
+    private boolean unterbinden(Player spieler, Tat tat, Location ort) {
+        if (darfHandeln(spieler, tat, ort)) {
             return false;
         }
         try {
-            verweigere(spieler, ort);
+            verweigere(spieler, tat, ort);
         } catch (RuntimeException besitzNichtNachsehbar) {
             klageUeberAblage(besitzNichtNachsehbar);
         }
@@ -545,8 +569,8 @@ public final class Schutzwache implements Listener {
     }
 
     /** Wie {@link #unterbinden}, nur ohne Meldung - fuer alles, was der Spieler nicht wollte. */
-    private boolean unterbindenLeise(Player spieler, Location ort) {
-        return !darfHandeln(spieler, ort);
+    private boolean unterbindenLeise(Player spieler, Tat tat, Location ort) {
+        return !darfHandeln(spieler, tat, ort);
     }
 
     /**
@@ -564,7 +588,8 @@ public final class Schutzwache implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void beimAbbauen(BlockBreakEvent ereignis) {
-        if (unterbinden(ereignis.getPlayer(), ereignis.getBlock().getLocation())) {
+        if (unterbinden(ereignis.getPlayer(), Tat.BAUEN,
+                ereignis.getBlock().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -572,21 +597,24 @@ public final class Schutzwache implements Listener {
     /** Faengt auch {@code BlockMultiPlaceEvent} - Betten, Tueren, grosse Blumen. */
     @EventHandler(ignoreCancelled = true)
     public void beimSetzen(BlockPlaceEvent ereignis) {
-        if (unterbinden(ereignis.getPlayer(), ereignis.getBlock().getLocation())) {
+        if (unterbinden(ereignis.getPlayer(), Tat.BAUEN,
+                ereignis.getBlock().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
 
     @EventHandler(ignoreCancelled = true)
     public void beimAusgiessen(PlayerBucketEmptyEvent ereignis) {
-        if (unterbinden(ereignis.getPlayer(), ereignis.getBlock().getLocation())) {
+        if (unterbinden(ereignis.getPlayer(), Tat.BAUEN,
+                ereignis.getBlock().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
 
     @EventHandler(ignoreCancelled = true)
     public void beimAufschoepfen(PlayerBucketFillEvent ereignis) {
-        if (unterbinden(ereignis.getPlayer(), ereignis.getBlock().getLocation())) {
+        if (unterbinden(ereignis.getPlayer(), Tat.BAUEN,
+                ereignis.getBlock().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -595,7 +623,8 @@ public final class Schutzwache implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void beimAnzuenden(BlockIgniteEvent ereignis) {
         Player spieler = ereignis.getPlayer();
-        if (spieler != null && unterbinden(spieler, ereignis.getBlock().getLocation())) {
+        if (spieler != null && unterbinden(spieler, Tat.BAUEN,
+                ereignis.getBlock().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -603,7 +632,7 @@ public final class Schutzwache implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void beimBildAbnehmen(HangingBreakByEntityEvent ereignis) {
         if (ereignis.getRemover() instanceof Player spieler
-                && unterbinden(spieler, ereignis.getEntity().getLocation())) {
+                && unterbinden(spieler, Tat.BAUEN, ereignis.getEntity().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -611,7 +640,8 @@ public final class Schutzwache implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void beimBildAufhaengen(HangingPlaceEvent ereignis) {
         Player spieler = ereignis.getPlayer();
-        if (spieler != null && unterbinden(spieler, ereignis.getEntity().getLocation())) {
+        if (spieler != null && unterbinden(spieler, Tat.BAUEN,
+                ereignis.getEntity().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -625,10 +655,31 @@ public final class Schutzwache implements Listener {
      */
     @EventHandler(ignoreCancelled = true)
     public void beimWesenAnklicken(PlayerInteractEntityEvent ereignis) {
-        if (gehoertZumGrundstueck(ereignis.getRightClicked())
-                && unterbinden(ereignis.getPlayer(), ereignis.getRightClicked().getLocation())) {
+        Entity wesen = ereignis.getRightClicked();
+        if (gehoertZumGrundstueck(wesen)
+                && unterbinden(ereignis.getPlayer(), tatAmWesen(wesen),
+                        wesen.getLocation())) {
             ereignis.setCancelled(true);
         }
+    }
+
+    /**
+     * Welche Tat ein RECHTSKLICK auf dieses Wesen ist.
+     *
+     * <p>Dieselbe Trennung wie bei {@link #tatAn}, und aus demselben Merkmal: Eine
+     * Kisten-Lore und ein Truhenboot sind {@link InventoryHolder}, also Behaelter. Ein
+     * Ruestungsstaender, ein Bilderrahmen und ein Tier sind es nicht - sie werden
+     * bestueckt, abgeraeumt oder gefuettert, und das veraendert, was dasteht.
+     *
+     * <p><b>Ein Spieler ist auch ein {@link InventoryHolder}</b>, und ein Dorfbewohner
+     * ebenso - beide fallen hier also auf BEHAELTER. Das ist nicht hergeholt: Wo
+     * {@link #gehoertZumGrundstueck} schon ja gesagt hat, ist der Klick auf einen
+     * Dorfbewohner ein Blick in sein Angebot. Bis heute war er schlicht abgewiesen.
+     *
+     * <p>Paketprivat aus demselben Grund wie {@link #tatAn}.
+     */
+    static Tat tatAmWesen(Entity wesen) {
+        return wesen instanceof InventoryHolder ? Tat.BEHAELTER : Tat.BAUEN;
     }
 
     /**
@@ -636,7 +687,7 @@ public final class Schutzwache implements Listener {
      *
      * <p>{@link InventoryHolder} ist der Grund, warum hier ueberhaupt etwas zu holen ist:
      * Eine Kisten-Lore und ein Truhenboot tragen genau dasselbe Merkmal, an dem
-     * {@link #istHeikel} einen Behaelterblock erkennt - nur sind sie Wesen und fielen
+     * {@link #tatAn} einen Behaelterblock erkennt - nur sind sie Wesen und fielen
      * deshalb durch einen Filter, der nur Hanging und ArmorStand kannte. Wer sie als Lager
      * auf seine Parzelle stellt, stellte sie jedem offen.
      *
@@ -704,7 +755,10 @@ public final class Schutzwache implements Listener {
             return;
         }
         Player taeter = urheber(ereignis.getDamager());
-        if (taeter != null && unterbinden(taeter, ereignis.getEntity().getLocation())) {
+        // BAUEN auch an einem Truhenboot: Ein Schlag nimmt etwas weg, und wer ein
+        // Behaelterwesen zerschlaegt, oeffnet es nicht - er raeumt es ab.
+        if (taeter != null && unterbinden(taeter, Tat.BAUEN,
+                ereignis.getEntity().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -713,7 +767,8 @@ public final class Schutzwache implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void beimFahrzeugSchaden(VehicleDamageEvent ereignis) {
         Player taeter = urheber(ereignis.getAttacker());
-        if (taeter != null && unterbinden(taeter, ereignis.getVehicle().getLocation())) {
+        if (taeter != null && unterbinden(taeter, Tat.BAUEN,
+                ereignis.getVehicle().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -721,7 +776,8 @@ public final class Schutzwache implements Listener {
     /** Tiere mit dem Eimer aus dem Teich schoepfen - Axolotl, Kaulquappe, Fisch. */
     @EventHandler(ignoreCancelled = true)
     public void beimWesenSchoepfen(PlayerBucketEntityEvent ereignis) {
-        if (unterbinden(ereignis.getPlayer(), ereignis.getEntity().getLocation())) {
+        if (unterbinden(ereignis.getPlayer(), Tat.BAUEN,
+                ereignis.getEntity().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -729,7 +785,8 @@ public final class Schutzwache implements Listener {
     /** Fremde Tiere fortleinen. */
     @EventHandler(ignoreCancelled = true)
     public void beimLeinen(PlayerLeashEntityEvent ereignis) {
-        if (unterbinden(ereignis.getPlayer(), ereignis.getEntity().getLocation())) {
+        if (unterbinden(ereignis.getPlayer(), Tat.BAUEN,
+                ereignis.getEntity().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -737,7 +794,8 @@ public final class Schutzwache implements Listener {
     /** Und fremde Tiere losmachen, damit sie weglaufen. */
     @EventHandler(ignoreCancelled = true)
     public void beimEntleinen(PlayerUnleashEntityEvent ereignis) {
-        if (unterbinden(ereignis.getPlayer(), ereignis.getEntity().getLocation())) {
+        if (unterbinden(ereignis.getPlayer(), Tat.BAUEN,
+                ereignis.getEntity().getLocation())) {
             ereignis.setCancelled(true);
         }
     }
@@ -776,7 +834,13 @@ public final class Schutzwache implements Listener {
             // Draufgetreten, nicht angeklickt - unterbinden, aber ohne Meldung. Sonst
             // bekommt ein Spieler, der ueber fremdes Ackerland laeuft, bei jedem Schritt
             // eine Absage fuer etwas, das er nicht vorhatte.
-            if (unterbindenLeise(ereignis.getPlayer(), block.getLocation())) {
+            // Die Tat kommt auch hier aus dem Block: Eine Druckplatte ist Powerable und
+            // damit BENUTZEN, fremdes Ackerland steht in HEIKEL und ist BAUEN. Wo die
+            // Listen nichts wissen, gilt BAUEN - geprueft wird dann wie bisher, nur mit
+            // der strengeren der drei Fragen.
+            Tat getreten = tatAn(block);
+            if (unterbindenLeise(ereignis.getPlayer(),
+                    getreten == null ? Tat.BAUEN : getreten, block.getLocation())) {
                 ereignis.setCancelled(true);
             }
             return;
@@ -796,7 +860,12 @@ public final class Schutzwache implements Listener {
             if (alsHandelDurchlassen(handel, ereignis.getPlayer(), block)) {
                 return;
             }
-            if (istHeikel(block) && unterbinden(ereignis.getPlayer(), block.getLocation())) {
+            // BAUEN, obwohl der Block auch eine Tuer sein kann: Ein Linksklick nimmt
+            // etwas weg - er schlaegt Feuer aus, loest ein Gemaelde, versetzt ein
+            // Drachenei. Die Frage, OB hier ueberhaupt etwas zu schuetzen ist, bleibt
+            // dieselbe wie vorher.
+            if (tatAn(block) != null
+                    && unterbinden(ereignis.getPlayer(), Tat.BAUEN, block.getLocation())) {
                 ereignis.setCancelled(true);
             }
             return;
@@ -804,9 +873,9 @@ public final class Schutzwache implements Listener {
         if (ereignis.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
-        boolean blockHeikel = istHeikel(block);
+        Tat amBlock = tatAn(block);
         boolean werkzeugHeikel = aendertBlock(ereignis.getItem());
-        if (!blockHeikel && !werkzeugHeikel) {
+        if (amBlock == null && !werkzeugHeikel) {
             return;
         }
         // Die benannte Tuer fuer den Handel [08.11.2026], und sie steht VOR der
@@ -821,38 +890,73 @@ public final class Schutzwache implements Listener {
         if (alsHandelDurchlassen(handel, ereignis.getPlayer(), block)) {
             return;
         }
-        if (darfHandeln(ereignis.getPlayer(), block.getLocation())) {
+        Player spieler = ereignis.getPlayer();
+        Location ort = block.getLocation();
+        // ZWEI FRAGEN UND NICHT EINE [12.11.2026]: Der Block und die Hand sind zwei
+        // verschiedene Taten an derselben Stelle, und seit es Rechte je Tat gibt, koennen
+        // sie verschieden ausgehen. Mit einer Frage - der strengeren von beiden - kaeme
+        // ein Stadtbuerger mit Benutzenrecht durch keine Tuer mehr, solange er eine Axt in
+        // der Hand haelt, und eine Axt in der Hand hat fast jeder.
+        boolean blockVerboten = amBlock != null && !darfHandeln(spieler, amBlock, ort);
+        boolean handVerboten = werkzeugHeikel && !darfHandeln(spieler, Tat.BAUEN, ort);
+        if (!blockVerboten && !handVerboten) {
             return;
         }
-        verweigere(ereignis.getPlayer(), block.getLocation());
-        // Getrennt abgesagt: Der Block bleibt in jedem Fall unberuehrt, die Hand nur dann,
-        // wenn sie etwas veraendert haette.
-        ereignis.setUseInteractedBlock(Event.Result.DENY);
-        if (werkzeugHeikel) {
+        verweigere(spieler, blockVerboten ? amBlock : Tat.BAUEN, ort);
+        // Getrennt abgesagt: die Hand nur, wenn sie etwas veraendert haette - und der
+        // Block auch dann, wenn seine Tat UNBEKANNT ist. Das zweite ist der Stand von
+        // vorher und deckt die Luecken der beiden Listen mit: Ein Block, der reagiert und
+        // dort nicht steht, reagiert dann trotzdem nicht. Steht er drin, ist die Frage
+        // beantwortet, und ein Ja soll auch wirken.
+        if (blockVerboten || amBlock == null) {
+            ereignis.setUseInteractedBlock(Event.Result.DENY);
+        }
+        if (handVerboten) {
             ereignis.setUseItemInHand(Event.Result.DENY);
         }
     }
 
-    private static boolean istHeikel(Block block) {
+    /**
+     * Welche {@link Tat} ein Klick auf diesen Block ist - oder {@code null} fuer keine.
+     *
+     * <p><b>Aus {@code istHeikel} geworden</b> [12.11.2026] und nicht daneben gestellt:
+     * Jene Frage und diese haetten dieselben vier Merkmale abgefragt, und zwei Stellen,
+     * die {@link InventoryHolder} pruefen, sind zwei Wahrheiten darueber, was ein
+     * Behaelter ist. Die Reihenfolge ist dieselbe wie vorher, also heisst "nicht
+     * {@code null}" buchstabengleich dasselbe wie das alte "heikel".
+     *
+     * <p>{@code null} und kein vierter Fall in der Aufzaehlung: "keine Tat" ist keine
+     * Tat, und eine NICHTS-Konstante wuerde eines Tages einer Ortsregel vorgelegt.
+     *
+     * <p><b>Paketprivat und nicht {@code private}</b>: An dieser Methode haengt, WELCHES
+     * Recht ein Zugang braucht, und sie war als {@code istHeikel} von keiner
+     * Verhaltensprobe gedeckt - der Grund stand in {@code GrenzeTest} 31x als
+     * Einschraenkung. {@code TatTest} fragt sie jetzt unmittelbar.
+     */
+    static Tat tatAn(Block block) {
         // getState(false): ohne Abbild des Blockzustands. Diese Pruefung laeuft bei jedem
         // Rechtsklick, da ist eine Kopie des Kisteninhalts zu viel Aufwand fuer eine Frage,
         // die nur "ist das ein Behaelter" lautet.
         if (block.getState(false) instanceof InventoryHolder) {
-            return true;
+            return Tat.BEHAELTER;
         }
         BlockData daten = block.getBlockData();
         if (daten instanceof Openable || daten instanceof Powerable) {
-            return true;
+            return Tat.BENUTZEN;
         }
+        // Alles Weitere veraendert den Block oder nimmt etwas aus ihm heraus - ein
+        // Komposter, ein Drachenei, ein Bett, ein Schild mit fremden Preisen darauf.
+        // BAUEN ist hier auch die sichere Richtung: Was die beiden Listen nicht
+        // auseinanderhalten, bleibt gesperrt, bis jemand es benennt.
         if (HEIKEL.contains(block.getType())) {
-            return true;
+            return Tat.BAUEN;
         }
         for (Tag<Material> gruppe : HEIKLE_GRUPPEN) {
             if (gruppe.isTagged(block.getType())) {
-                return true;
+                return Tat.BAUEN;
             }
         }
-        return false;
+        return null;
     }
 
     private static boolean aendertBlock(ItemStack gegenstand) {
@@ -865,15 +969,25 @@ public final class Schutzwache implements Listener {
         if (art == Material.MILK_BUCKET) {
             return false;
         }
-        if (art.isBlock() && !art.isAir()) {
-            return true;
-        }
+        // DIE BILLIGEN MERKMALE ZUERST, und das ist eine Umstellung mit zwei Gruenden
+        // [12.11.2026]: Diese Frage faellt bei jedem Rechtsklick, und eine Mengenabfrage
+        // und ein Namensvergleich kosten nichts. {@code Material.isBlock} dagegen geht
+        // ueber {@code asBlockType} in die Registry - und WIRFT ohne laufenden Server
+        // (gemessen gegen paper-api 26.3). Damit war beimKlicken fuer eine Probe
+        // unerreichbar; die Einspritzungsrunde zu Teil D hat gezeigt, was dadurch
+        // ungedeckt blieb.
+        //
+        // Das ERGEBNIS aendert sich nicht: Die drei Bedingungen sind ODER-verknuepft,
+        // und keine von ihnen hebt eine andere auf.
         if (WERKZEUG.contains(art)) {
             return true;
         }
         String name = art.name();
-        return name.endsWith("_HOE") || name.endsWith("_SHOVEL") || name.endsWith("_AXE")
+        if (name.endsWith("_HOE") || name.endsWith("_SHOVEL") || name.endsWith("_AXE")
                 || name.endsWith("_BUCKET") || name.endsWith("_SPAWN_EGG")
-                || name.endsWith("_DYE");
+                || name.endsWith("_DYE")) {
+            return true;
+        }
+        return art.isBlock() && !art.isAir();
     }
 }

@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Tat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -1000,6 +1001,7 @@ class GrenzeTest {
             // stumm verschwinden, und der Stadtbesitzer wuesste nicht, warum sein
             // Block nicht steht.
             "SCHUTZ_FREMDES_GRUNDSTUECK -> HANDBALKEN",
+            "SCHUTZ_BUERGER_DARF_NICHT -> HANDBALKEN",
             "SCHUTZ_STADT_GESTOERT -> HANDBALKEN",
             "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
             "ANKUNFT_ABENTEUER -> SATZ",
@@ -1316,7 +1318,7 @@ class GrenzeTest {
         //
         // <b>Das ist eine TEXTPRUEFUNG und keine Verhaltensprobe</b>, und das ist
         // benannt statt verschwiegen: beimKlicken durchlaufen heisst, ein
-        // PlayerInteractEvent mit einem Block zu bauen, fuer den istHeikel wahr ist -
+        // PlayerInteractEvent mit einem Block zu bauen, fuer den tatAn eine Tat nennt -
         // und das braucht von der Serverprobe Antworten auf getState, getBlockData und
         // die Blockgruppen, die heute keine andere Probe verlangt.
         //
@@ -2744,6 +2746,114 @@ class GrenzeTest {
                 "diese Ortsregeln werden gebaut, aber nicht an die Schutzwache"
                         + " uebergeben - die fuenfzehn Ereignisarten der Wache fragen"
                         + " sie dann nie: " + nichtUebergeben);
+    }
+
+    @Test
+    @DisplayName("31ar - jeder Zugang der Schutzwache benennt die Tat, die zu ihm passt")
+    void jederZugangBenenntSeineTat() {
+        // DIE TAFEL ZU TEIL D1 [12.11.2026]. Dass ein Zugang UEBERHAUPT eine Tat nennt,
+        // haelt der Compiler: darfHandeln nimmt sie als Wert, und ein Aufruf ohne sie
+        // uebersetzt nicht. Was kein Compiler und keine Verhaltensprobe faengt, ist die
+        // FALSCHE Tat - denn solange niemand Rechte abstuft, antworten alle drei gleich,
+        // und jede Probe dieses Projekts bliebe gruen. Erst in einer Freistadt, in der
+        // der Stadtbesitzer Tueren freigibt und das Bauen sperrt, zeigt sich der Tausch:
+        // Stellt jemand beimAbbauen auf BENUTZEN, bauen seine Buerger die Stadt ab.
+        //
+        // DIE LISTE DER ZUGAENGE KOMMT AUS DEM QUELLTEXT und nicht aus dieser Tabelle:
+        // Gesucht wird jedes @EventHandler. Ein neuer Zugang ist damit sofort rot - und
+        // zwar mit der Frage, welche Tat er meint, statt stumm durchzulaufen. Das ist der
+        // Unterschied zu einer Tafel, die nur ihre eigenen Zeilen prueft.
+        String wache = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("Schutzwache.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Schutzwache.java fehlt")));
+
+        // Was jeder Zugang nennen MUSS. Ein tatAn oder tatAmWesen steht fuer "die Tat
+        // kommt aus dem Block beziehungsweise aus dem Wesen" - diese zwei Methoden sind
+        // in TatTest gemessen, und darum genuegt hier ihr Name.
+        var erwartet = new java.util.LinkedHashMap<String, Set<String>>();
+        erwartet.put("beimVerlassen", Set.of());
+        erwartet.put("beimAbbauen", Set.of("BAUEN"));
+        erwartet.put("beimSetzen", Set.of("BAUEN"));
+        erwartet.put("beimAusgiessen", Set.of("BAUEN"));
+        erwartet.put("beimAufschoepfen", Set.of("BAUEN"));
+        erwartet.put("beimAnzuenden", Set.of("BAUEN"));
+        erwartet.put("beimBildAbnehmen", Set.of("BAUEN"));
+        erwartet.put("beimBildAufhaengen", Set.of("BAUEN"));
+        erwartet.put("beimWesenAnklicken", Set.of("tatAmWesen"));
+        erwartet.put("beimWesenSchaden", Set.of("BAUEN"));
+        erwartet.put("beimFahrzeugSchaden", Set.of("BAUEN"));
+        erwartet.put("beimWesenSchoepfen", Set.of("BAUEN"));
+        erwartet.put("beimLeinen", Set.of("BAUEN"));
+        erwartet.put("beimEntleinen", Set.of("BAUEN"));
+        // Der Klickzweig nennt beides: die Tat des BLOCKS aus tatAn, und BAUEN fuer die
+        // HAND und fuer den Linksklick. Dass es zwei getrennte Fragen sind, prueft
+        // SchutzwacheTest nicht - dafuer braeuchte es ein PlayerInteractEvent; die
+        // Begruendung dazu steht in 31x.
+        erwartet.put("beimKlicken", Set.of("tatAn", "BAUEN"));
+
+        var gefunden = new java.util.LinkedHashMap<String, Set<String>>();
+        int stelle = wache.indexOf("@EventHandler");
+        while (stelle >= 0) {
+            int kopf = wache.indexOf("public void ", stelle);
+            assertTrue(kopf > 0, "nach einem @EventHandler muss eine Methode kommen");
+            int klammer = wache.indexOf('(', kopf);
+            String name = wache.substring(kopf + "public void ".length(), klammer).trim();
+            gefunden.put(name, tatenIn(rumpf(wache, klammer)));
+            stelle = wache.indexOf("@EventHandler", klammer);
+        }
+
+        // Erst die MENGE der Zugaenge, dann ihr Inhalt: Faellt ein Zugang weg oder kommt
+        // einer dazu, soll die Klage das sagen und nicht an einer fehlenden Tat haengen.
+        assertEquals(erwartet.keySet(), gefunden.keySet(),
+                "die Zugaenge der Schutzwache und die Zeilen dieser Tafel muessen"
+                        + " dieselben sein - ein Zugang ohne Zeile ist ein Griff, dessen"
+                        + " Recht niemand festgelegt hat");
+        assertEquals(erwartet, gefunden,
+                "jeder Zugang muss GENAU die Tat nennen, die zu ihm passt. Ein Tausch"
+                        + " zwischen zwei Taten laesst jede andere Probe unveraendert:"
+                        + " Ohne abgestufte Rechte sagen alle drei dasselbe Nein.");
+    }
+
+    /** Der Rumpf der Methode, deren Klammer bei {@code klammer} beginnt. */
+    private static String rumpf(String text, int klammer) {
+        int anfang = text.indexOf('{', klammer);
+        int tiefe = 0;
+        for (int i = anfang; i < text.length(); i++) {
+            if (text.charAt(i) == '{') {
+                tiefe++;
+            } else if (text.charAt(i) == '}') {
+                tiefe--;
+                if (tiefe == 0) {
+                    return text.substring(anfang, i);
+                }
+            }
+        }
+        throw new AssertionError("Methodenrumpf ab Zeichen " + klammer
+                + " hat kein Ende - dann ist der Quelltext nicht lesbar");
+    }
+
+    /**
+     * Welche Taten in diesem Stueck Quelltext benannt werden.
+     *
+     * <p>Ueber {@code Tat.values()} und nicht mit drei Namen: Eine vierte Tat waere sonst
+     * baubar, ohne dass diese Tafel sie je bemerkt.
+     */
+    private static Set<String> tatenIn(String stueck) {
+        var benannt = new java.util.TreeSet<String>();
+        for (Tat tat : Tat.values()) {
+            if (stueck.contains("Tat." + tat)) {
+                benannt.add(tat.name());
+            }
+        }
+        if (stueck.contains("tatAn(")) {
+            benannt.add("tatAn");
+        }
+        if (stueck.contains("tatAmWesen(")) {
+            benannt.add("tatAmWesen");
+        }
+        return benannt;
     }
 
     @Test

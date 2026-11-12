@@ -21,8 +21,11 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Openable;
+import org.bukkit.block.data.Powerable;
 import org.bukkit.block.data.type.CaveVines;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.World;
@@ -124,6 +127,17 @@ final class Serverprobe {
     private static final Map<String, BlockData> BLOCKDATEN = new LinkedHashMap<>();
 
     /**
+     * Stellen, an denen ein BEHAELTER steht - was {@code getState} zu einem
+     * {@link InventoryHolder} macht.
+     *
+     * <p>Eine eigene Menge und kein Merkmal der Blockart [12.11.2026]: Welche Arten
+     * Behaelter sind, weiss ohne Server niemand - {@code Material.CHEST} allein sagt es
+     * nicht, und die Probe soll nicht die Bukkit-Tabelle nachbauen, sondern die FRAGE
+     * stellen, die {@code Schutzwache.tatAn} stellt. Angemeldet wird darum die Stelle.
+     */
+    private static final Set<String> BEHAELTERSTELLEN = new java.util.LinkedHashSet<>();
+
+    /**
      * Die Datenbehaelter der Chunks, nach Welt und Chunkkoordinate.
      *
      * <p>Sie muessen ueber Aufrufe hinweg BESTEHEN: Eine Marke, die in den Chunk
@@ -153,6 +167,40 @@ final class Serverprobe {
      */
     static void alter(String welt, int x, int y, int z, int alter, int hoechstalter) {
         BLOCKDATEN.put(stelle(welt, x, y, z), reifbar(alter, hoechstalter));
+    }
+
+    /**
+     * Meldet an dieser Stelle einen OEFFENBAREN Block an - Tuer, Falltuer, Zauntor.
+     *
+     * <p>Das ist das Merkmal, an dem {@code Schutzwache.tatAn} BENUTZEN erkennt.
+     */
+    static void oeffenbar(String welt, int x, int y, int z) {
+        BLOCKDATEN.put(stelle(welt, x, y, z), nurSchnittstelle(Openable.class,
+                "Tuerprobe"));
+    }
+
+    /**
+     * Meldet an dieser Stelle einen SCHALTBAREN Block an - Knopf, Hebel, Druckplatte.
+     *
+     * <p>Zweite Hand desselben Merkmals: {@code tatAn} fragt {@code Openable} ODER
+     * {@code Powerable}, und eine Probe, die nur das erste anmeldet, laesst die zweite
+     * Haelfte der Bedingung ungeprueft.
+     */
+    static void schaltbar(String welt, int x, int y, int z) {
+        BLOCKDATEN.put(stelle(welt, x, y, z), nurSchnittstelle(Powerable.class,
+                "Schalterprobe"));
+    }
+
+    /**
+     * Meldet an dieser Stelle einen BEHAELTER an - Truhe, Ofen, Trichter, Fass.
+     *
+     * <p>Wirkt auf {@code getState} und nicht auf die Blockdaten: Genau dort fragt
+     * {@code Schutzwache.tatAn} danach. Ein Fass ist beides - dann wird diese Stelle
+     * ZUSAETZLICH mit {@link #oeffenbar} angemeldet, und erst dann prueft eine Probe die
+     * REIHENFOLGE der beiden Fragen.
+     */
+    static void behaelter(String welt, int x, int y, int z) {
+        BEHAELTERSTELLEN.add(stelle(welt, x, y, z));
     }
 
     /** Meldet eine Hoehlenranke an - bei ihr entscheiden die BEEREN und nicht das Alter. */
@@ -214,6 +262,47 @@ final class Serverprobe {
     }
 
     /**
+     * Blockdaten, die NUR eine Schnittstelle tragen - und sonst nichts beantworten.
+     *
+     * <p>Fuer {@code instanceof}-Fragen ist das genug, und mehr soll es nicht sein: Wer
+     * an einer Tuerprobe nach dem Oeffnungszustand fragt, bekommt eine Klage mit Namen
+     * statt eines erfundenen {@code false}.
+     */
+    private static BlockData nurSchnittstelle(Class<?> welche, String name) {
+        return (BlockData) Proxy.newProxyInstance(Serverprobe.class.getClassLoader(),
+                new Class<?>[] {welche},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "toString" -> name;
+                    case "hashCode" -> name.hashCode();
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Serverprobe beantwortet " + welche.getSimpleName() + "."
+                                    + methode.getName() + " nicht - diese Stelle ist nur"
+                                    + " fuer die Frage angemeldet, OB sie das ist");
+                });
+    }
+
+    /**
+     * Der Blockzustand eines angemeldeten BEHAELTERS - ein nackter {@link InventoryHolder}.
+     *
+     * <p>Nackt und nicht die {@code Kistenprobe}: Gefragt ist hier nur, OB an der Stelle
+     * ein Behaelter steht. Wer den Inhalt braucht, nimmt jene - und zwei Attrappen fuer
+     * dieselbe Frage waeren zwei Antworten darauf, was ein Behaelter ist.
+     */
+    private static BlockState behaelterstand(int x, int y, int z) {
+        return (BlockState) Proxy.newProxyInstance(Serverprobe.class.getClassLoader(),
+                new Class<?>[] {InventoryHolder.class, BlockState.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "toString" -> "Behaelterprobe " + x + "/" + y + "/" + z;
+                    case "hashCode" -> (x * 31 + y) * 31 + z;
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Serverprobe beantwortet BlockState." + methode.getName()
+                                    + " an einem angemeldeten Behaelter nicht");
+                });
+    }
+
+    /**
      * Blockdaten OHNE Alter - was Stein, Erde und ein Kuerbis haben.
      *
      * <p>Beantwortet nichts ausser sich selbst: Wer mehr fragt, soll es gesagt bekommen.
@@ -238,6 +327,7 @@ final class Serverprobe {
     static void keineWeltenMehr() {
         WELTEN.clear();
         BLOCKDATEN.clear();
+        BEHAELTERSTELLEN.clear();
         BEHAELTER.clear();
         schreibzuege = 0;
     }
@@ -483,6 +573,14 @@ final class Serverprobe {
                     // der Hand hat, nicht von einer zweiten Quelle.
                     case "getWorld" -> welt;
                     case "getType" -> griffOderKlage(griff).bei(x, y, z);
+                    // getState deckt beide Formen - mit und ohne das Abbild-Kennzeichen.
+                    // Ohne Anmeldung ein Zustand OHNE Inventar: Stein ist kein Behaelter,
+                    // und ein null waere an dieser Stelle ein instanceof, das stumm
+                    // scheitert.
+                    case "getState" -> BEHAELTERSTELLEN.contains(
+                            stelle(welt.key().asString(), x, y, z))
+                            ? behaelterstand(x, y, z)
+                            : zustand(welt, griff, x, y, z);
                     // Ohne Anmeldung: Blockdaten OHNE Alter. Das ist die ehrliche
                     // Antwort und kein null - Stein HAT Blockdaten, nur keine Reife.
                     case "getBlockData" -> BLOCKDATEN.getOrDefault(
@@ -494,6 +592,10 @@ final class Serverprobe {
                     case "getX" -> x;
                     case "getY" -> y;
                     case "getZ" -> z;
+                    // Die STELLE des Blocks [Teil D4]: Jeder Zweig, der einen Block
+                    // schuetzt, baut daraus seine Frage an die Wache - und seit die
+                    // Klickproben beimKlicken wirklich durchlaufen, wird sie gefragt.
+                    case "getLocation" -> new org.bukkit.Location(welt, x, y, z);
                     case "toString" -> "Blockprobe " + x + "/" + y + "/" + z;
                     case "hashCode" -> (x * 31 + y) * 31 + z;
                     case "equals" -> eigen == (werte == null ? null : werte[0]);

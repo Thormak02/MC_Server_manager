@@ -100,6 +100,105 @@ public abstract class BesitzLagerVertrag {
     }
 
     @Test
+    @DisplayName("Buergerrechte werden gesetzt, ersetzt, geleert - und sie UEBERLEBEN")
+    void buergerrechteSetzenUndLesen() {
+        // DER RIEGEL GEGEN DEN LAUTLOSEN VERLUST. Die Rechte liegen in einer eigenen
+        // Tabelle und muessen beim Lesen der Zeile mitgeholt werden. Eine Umsetzung, die
+        // das vergisst, wirft nicht - sie liefert eine Stadt mit leeren Rechten. Im Spiel
+        // heisst das: Der Betreiber stellt etwas ein, es steht in der Datenbank, und nach
+        // dem naechsten Neustart gilt es nicht mehr. Kein anderer Probenlauf saehe das.
+        BesitzLager lager = lager();
+        Parzelle stadt = lager.freistadtAnlegen(STADTWELT, 3, -7, anna, 400_000L,
+                "rechtestadt");
+        assertEquals(Parzelle.KEINE_RECHTE, stadt.buergerrechte(),
+                "ab Werk gibt eine Stadt nichts her - die sichere Richtung");
+
+        lager.buergerrechteSetzen(stadt.id(), Set.of(Tat.BENUTZEN, Tat.BEHAELTER));
+
+        // Ueber finde() GELESEN und nicht am Rueckgabewert gemessen: Der Weg durch die
+        // Ablage und zurueck ist der, den das Spiel nach einem Neustart nimmt.
+        Parzelle danach = lager.finde(STADTWELT, 3, -7).orElseThrow();
+        assertEquals(Set.of(Tat.BENUTZEN, Tat.BEHAELTER), danach.buergerrechte());
+        assertTrue(danach.buergerDuerfen(Tat.BENUTZEN), "und die Frage an der Zeile");
+        assertTrue(danach.buergerDuerfen(Tat.BEHAELTER));
+        assertFalse(danach.buergerDuerfen(Tat.BAUEN),
+                "ZWEI von drei gesetzt, und das dritte darf nicht mitkommen - mit allen"
+                        + " drei waere eine Umsetzung, die einfach jedes Recht gibt,"
+                        + " nicht zu unterscheiden");
+
+        // ERSETZEND und nicht ergaenzend: Die neue Menge ist die ganze Menge.
+        lager.buergerrechteSetzen(stadt.id(), Set.of(Tat.BAUEN));
+        assertEquals(Set.of(Tat.BAUEN),
+                lager.finde(STADTWELT, 3, -7).orElseThrow().buergerrechte(),
+                "die beiden alten sind WEG - ein Ergaenzen waere ein Recht, das der"
+                        + " Betreiber wegnimmt und das bleibt");
+
+        // Und das Leeren, der Weg zurueck in den Zustand ab Werk.
+        lager.buergerrechteSetzen(stadt.id(), Parzelle.KEINE_RECHTE);
+        assertEquals(Parzelle.KEINE_RECHTE,
+                lager.finde(STADTWELT, 3, -7).orElseThrow().buergerrechte());
+    }
+
+    @Test
+    @DisplayName("Buergerrechte aendern SONST NICHTS an der Zeile")
+    void buergerrechteAendernSonstNichts() {
+        // Dieselbe Zusage wie bei den Mitbauern, und aus demselben Fund: Am 11.11.2026
+        // verlor eine Zeile beim Mitbauer-Setzen still ihren Namen, weil eine Umsetzung
+        // sie von Hand zusammensetzte. Eine Freistadt OHNE Namen wirft - das fiel auf.
+        // Ein verlorener Eigentuemer oder ein verlorener Preis faellt NICHT auf.
+        BesitzLager lager = lager();
+        Parzelle vorher = lager.freistadtAnlegen(STADTWELT, 4, -9, anna, 400_000L,
+                "bleibtstadt");
+        lager.mitbauerSetzen(vorher.id(), Set.of(bert));
+        Parzelle mitMitbauer = lager.finde(STADTWELT, 4, -9).orElseThrow();
+
+        lager.buergerrechteSetzen(vorher.id(), Set.of(Tat.BAUEN));
+
+        Parzelle danach = lager.finde(STADTWELT, 4, -9).orElseThrow();
+        assertEquals(mitMitbauer.id(), danach.id());
+        assertEquals(mitMitbauer.name(), danach.name(), "der Name bleibt");
+        assertEquals(mitMitbauer.eigentuemer(), danach.eigentuemer());
+        assertEquals(Set.of(bert), danach.mitbauer(), "und die Mitbauer bleiben");
+        assertEquals(mitMitbauer.preis(), danach.preis());
+        assertEquals(mitMitbauer.erworbenAm(), danach.erworbenAm());
+        assertEquals(mitMitbauer.art(), danach.art());
+        assertEquals(mitMitbauer.zustand(), danach.zustand());
+        assertEquals(mitMitbauer.elternId(), danach.elternId());
+
+        // Und die Gegenrichtung: Mitbauer zu setzen darf die Rechte nicht mitnehmen.
+        // Genau das tat der Nachbau in SpeicherLager, bis er zu mitMitbauern wurde.
+        lager.mitbauerSetzen(vorher.id(), Set.of());
+        assertEquals(Set.of(Tat.BAUEN),
+                lager.finde(STADTWELT, 4, -9).orElseThrow().buergerrechte(),
+                "nach einer Mitbauer-Aenderung muessen die Buergerrechte noch"
+                        + " dastehen - der Nachbau einer Zeile von Hand verliert genau"
+                        + " hier das jeweils neueste Feld");
+    }
+
+    @Test
+    @DisplayName("Buergerrechte auf etwas, das keine Freistadt ist - und auf nichts")
+    void buergerrechteNurFuerStaedte() {
+        BesitzLager lager = lager();
+        Parzelle parzelle = lager.anlegen(WELT, 0, 0, anna, 0L);
+
+        assertThrows(IllegalStateException.class,
+                () -> lager.buergerrechteSetzen(parzelle.id(), Set.of(Tat.BAUEN)),
+                "eine Marktstadtparzelle hat keine Buerger - ein stilles Hinnehmen"
+                        + " waere eine Einstellung, die lautlos nichts tut");
+        assertThrows(IllegalStateException.class,
+                () -> lager.buergerrechteSetzen(999_999L, Set.of(Tat.BAUEN)),
+                "und eine Nummer, die es nicht gibt, ist ein Fehler und keine Nulltat");
+
+        // AUCH DIE LEERE MENGE muss klagen, und das ist der Fall, der leicht durchfaellt:
+        // Wer nur das Einfuegen schreibt, fuegt bei einer leeren Menge gar nichts ein -
+        // und dann faellt kein Fremdschluessel auf, weil keine Zeile entsteht.
+        assertThrows(IllegalStateException.class,
+                () -> lager.buergerrechteSetzen(999_999L, Parzelle.KEINE_RECHTE),
+                "eine leere Menge auf eine unbekannte Nummer ist derselbe Fehler -"
+                        + " nur faellt dabei kein Fremdschluessel auf");
+    }
+
+    @Test
     @DisplayName("Eine Freistadt ist ueber finde() erreichbar - sonst schuetzt sie niemand")
     void freistadtLiegtAufDemFeld() {
         // Die tragende Zusage des ganzen Entwurfs: Weil die Stadt in derselben Tabelle

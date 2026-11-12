@@ -8,9 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import de.freimarken.kern.Feldgrenze;
 import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Lagerattrappe;
+import de.freimarken.kern.SpeicherGrundstuecke;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.Stadtfeldplan;
+import de.freimarken.kern.Tat;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
@@ -49,6 +51,15 @@ import org.junit.jupiter.api.Test;
  */
 @DisplayName("Der Stadtschutz")
 class StadtwacheTest {
+
+    /**
+     * Die Tat, mit der diese Proben fahren.
+     *
+     * <p>Eine Abkuerzung und keine zweite Wahrheit: Was gemessen wird, ist der
+     * Bauschutz, und er gilt fuer alle drei Taten gleich, solange niemand Rechte
+     * abstuft. Welche Tat an welchem Block liegt, prueft {@code TatTest}.
+     */
+    private static final Tat BAUEN = Tat.BAUEN;
 
     private static final String FREISTAEDTE = "freimarken:freistaedte";
 
@@ -100,7 +111,7 @@ class StadtwacheTest {
         Stadtwache wache = wache();
 
         assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
-                wache.pruefe(bert.spieler(), ort(MARKTSTADT, 100, 64, 100)));
+                wache.pruefe(bert.spieler(), BAUEN, ort(MARKTSTADT, 100, 64, 100)));
         assertTrue(!wache.zustaendig(ort(MARKTSTADT, 100, 64, 100)),
                 "und sie haelt sich dort auch nicht fuer zustaendig");
     }
@@ -118,7 +129,7 @@ class StadtwacheTest {
 
         assertTrue(wache.zustaendig(ort(FREISTAEDTE, inDerLeere, 64, inDerLeere)));
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                wache.pruefe(anna.spieler(), ort(FREISTAEDTE, inDerLeere, 64,
+                wache.pruefe(anna.spieler(), BAUEN, ort(FREISTAEDTE, inDerLeere, 64,
                         plan.feldMitte(1))));
     }
 
@@ -132,9 +143,9 @@ class StadtwacheTest {
         Location mitten = aufFeldVon("annastadt");
 
         assertEquals(Schutzwache.Ortsregel.Urteil.ERLAUBT,
-                wache.pruefe(anna.spieler(), mitten));
+                wache.pruefe(anna.spieler(), BAUEN, mitten));
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                wache.pruefe(bert.spieler(), mitten));
+                wache.pruefe(bert.spieler(), BAUEN, mitten));
     }
 
     @Test
@@ -150,7 +161,7 @@ class StadtwacheTest {
         int hinterDemFeld = buch.plan().feldAnfang(stadt.x()) + Stadtfeldplan.FELD_KANTE;
 
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                wache.pruefe(anna.spieler(), ort(FREISTAEDTE, hinterDemFeld, 64,
+                wache.pruefe(anna.spieler(), BAUEN, ort(FREISTAEDTE, hinterDemFeld, 64,
                         buch.plan().feldMitte(stadt.z()))),
                 "auch die Eigentuemerin des Feldes daneben darf hier nicht");
     }
@@ -163,7 +174,7 @@ class StadtwacheTest {
         Stadtwache wache = wache();
 
         assertEquals(Schutzwache.Ortsregel.Urteil.ERLAUBT,
-                wache.pruefe(bert.spieler(), aufFeldVon("annastadt")));
+                wache.pruefe(bert.spieler(), BAUEN, aufFeldVon("annastadt")));
     }
 
     // ============================================================ die Handbalken
@@ -177,13 +188,13 @@ class StadtwacheTest {
         var stadt = buch.staedte(FREISTAEDTE).get(0);
         int freiesFeld = stadt.x() == 1 ? 2 : 1;
 
-        String fremd = Sprachprobe.bild(wache.grund(aufFeldVon("annastadt")));
-        String leere = Sprachprobe.bild(wache.grund(ort(FREISTAEDTE,
+        String fremd = Sprachprobe.bild(wache.grund(null, BAUEN, aufFeldVon("annastadt")));
+        String leere = Sprachprobe.bild(wache.grund(null, BAUEN, ort(FREISTAEDTE,
                 plan.feldAnfang(stadt.x()) + Stadtfeldplan.FELD_KANTE, 64,
                 plan.feldMitte(stadt.z()))));
-        String frei = Sprachprobe.bild(wache.grund(ort(FREISTAEDTE,
+        String frei = Sprachprobe.bild(wache.grund(null, BAUEN, ort(FREISTAEDTE,
                 plan.feldMitte(freiesFeld), 64, plan.feldMitte(1))));
-        String ankunft = Sprachprobe.bild(wache.grund(ort(FREISTAEDTE,
+        String ankunft = Sprachprobe.bild(wache.grund(null, BAUEN, ort(FREISTAEDTE,
                 plan.feldMitte(0), 64, plan.feldMitte(0))));
 
         // Die STADT wird beim Namen genannt - mit ihm findet ein Besucher den Weg
@@ -211,7 +222,7 @@ class StadtwacheTest {
 
         // Annas eigene Stadt. Wuerde grund() mit dem Spieler fragen, kaeme ERLAUBT
         // heraus - und dafuer gibt es keinen Balken, also wuerfe stadtBalken.
-        String balken = Sprachprobe.bild(wache.grund(aufFeldVon("annastadt")));
+        String balken = Sprachprobe.bild(wache.grund(null, BAUEN, aufFeldVon("annastadt")));
 
         assertTrue(balken.contains("annastadt"), balken);
     }
@@ -231,11 +242,12 @@ class StadtwacheTest {
                 buch.plan().feldMitte(1));
 
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                wache.pruefe(anna.spieler(), aufDemFeld),
+                wache.pruefe(anna.spieler(), BAUEN, aufDemFeld),
                 "im Zweifel bleibt fremder Besitz unberuehrt");
         // Und der Handbalken sagt es, statt eine Lage zu erfinden.
-        assertTrue(Sprachprobe.bild(wache.grund(aufDemFeld)).contains("nicht nachsehbar"),
-                Sprachprobe.bild(wache.grund(aufDemFeld)));
+        assertTrue(Sprachprobe.bild(wache.grund(null, BAUEN, aufDemFeld))
+                        .contains("nicht nachsehbar"),
+                Sprachprobe.bild(wache.grund(null, BAUEN, aufDemFeld)));
         assertEquals(1, protokollzeilen.size(),
                 "gedrosselt: ein ausgefallener Datenbankrechner schriebe sonst in"
                         + " Sekunden das Protokoll voll - " + protokollzeilen.size());
@@ -264,13 +276,13 @@ class StadtwacheTest {
                 Schutzwache.KEINE_ORTSREGEL, wache());
 
         assertEquals(Schutzwache.Ortsregel.Urteil.ERLAUBT,
-                kette.pruefe(anna.spieler(), aufFeldVon("annastadt")));
+                kette.pruefe(anna.spieler(), BAUEN, aufFeldVon("annastadt")));
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                kette.pruefe(bert.spieler(), aufFeldVon("annastadt")));
+                kette.pruefe(bert.spieler(), BAUEN, aufFeldVon("annastadt")));
         // In einer dritten Welt sagt KEINE der beiden etwas - dann entscheidet das
         // Besitzbuch, wie vorher.
         assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
-                kette.pruefe(anna.spieler(), ort(MARKTSTADT, 100, 64, 100)));
+                kette.pruefe(anna.spieler(), BAUEN, ort(MARKTSTADT, 100, 64, 100)));
         assertTrue(!kette.zustaendig(ort(MARKTSTADT, 100, 64, 100)));
     }
 
@@ -283,7 +295,7 @@ class StadtwacheTest {
         Schutzwache.Ortsregel spaet = Schutzwache.Ortsregel.spaet(() -> null);
 
         assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
-                spaet.pruefe(anna.spieler(), ort(FREISTAEDTE, 0, 64, 0)));
+                spaet.pruefe(anna.spieler(), BAUEN, ort(FREISTAEDTE, 0, 64, 0)));
         assertTrue(!spaet.zustaendig(ort(FREISTAEDTE, 0, 64, 0)));
     }
 
@@ -296,7 +308,7 @@ class StadtwacheTest {
         Location mitten = aufFeldVon("annastadt");
 
         assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
-                spaet.pruefe(bert.spieler(), mitten), "vorher");
+                spaet.pruefe(bert.spieler(), BAUEN, mitten), "vorher");
 
         feld[0] = wache();
 
@@ -304,8 +316,8 @@ class StadtwacheTest {
         // gelesen und nicht beim Bauen. Waere es beim Bauen gelesen, bliebe die Regel
         // fuer immer stumm, und kein Probenlauf meldete es.
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                spaet.pruefe(bert.spieler(), mitten), "nachher");
-        assertNotEquals("", Sprachprobe.bild(spaet.grund(mitten)));
+                spaet.pruefe(bert.spieler(), BAUEN, mitten), "nachher");
+        assertNotEquals("", Sprachprobe.bild(spaet.grund(null, BAUEN, mitten)));
     }
 
     // ------------------------------------------------------------------ Werkzeug
@@ -349,4 +361,84 @@ class StadtwacheTest {
         eigener.setLevel(Level.ALL);
         return eigener;
     }
+
+    // ============================================================ Buergerrecht [D4]
+
+    /**
+     * Annastadt, ein Grundstueck fuer Bert darin - und die Stelle NEBEN seinem.
+     *
+     * @return eine Stelle im Gemeinschaftsgebiet der Stadt, also auf Annas Feld und
+     *         nicht auf Berts Grundstueck
+     */
+    private Location annastadtMitBuergerBert() {
+        buch.gruende(FREISTAEDTE, ANNA, "annastadt", 9);
+        var stadt = buch.staedte(FREISTAEDTE).get(0);
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        buch.gibGrundstuecke(grundstuecke);
+        Stadtfeldplan plan = buch.plan();
+        int zelleX = plan.ersteZelle(stadt.x());
+        int zelleZ = plan.ersteZelle(stadt.z());
+        grundstuecke.anlegen(FREISTAEDTE, stadt.id(),
+                de.freimarken.kern.Zellquader.eineZelle(zelleX, zelleZ), BERT, 0L);
+        return ort(FREISTAEDTE, plan.zellenAnfang(zelleX + 1) + 3, 64,
+                plan.zellenAnfang(zelleZ) + 3);
+    }
+
+    @Test
+    @DisplayName("Die Wache LAESST den Stadtbuerger durch - das dritte Ja darf nicht"
+            + " stumm ausfallen")
+    void wacheLaesstDenBuergerDurch() {
+        // DIE NAHT VON TEIL D4, und sie ist die Stelle, an der ein Buergerrecht lautlos
+        // verschwinden konnte: Die Wache fuehrte eine Positivliste zweier Urteile, und
+        // ERLAUBT_STADTBUERGER waere darin nicht vorgekommen. Das Recht waere gebaut,
+        // in FreistadtbuchTest gruen und im Spiel wirkungslos - genau der Fall, den
+        // GrenzeTest 31aq fuer eine ganze Wache abfaengt und den hier niemand gesehen
+        // haette.
+        Location imGemeinschaftsgebiet = annastadtMitBuergerBert();
+        Stadtwache wache = wache();
+
+        assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
+                wache.pruefe(bert.spieler(), BAUEN, imGemeinschaftsgebiet),
+                "ab Werk gibt die Stadt nichts her - sonst prueft die Zeile danach"
+                        + " nichts");
+
+        lager.buergerrechteSetzen(buch.staedte(FREISTAEDTE).get(0).id(),
+                Set.of(Tat.BENUTZEN));
+
+        assertEquals(Schutzwache.Ortsregel.Urteil.ERLAUBT,
+                wache.pruefe(bert.spieler(), Tat.BENUTZEN, imGemeinschaftsgebiet),
+                "jetzt geht seine Hand durch - und zwar durch die WACHE, nicht nur"
+                        + " durch das Buch");
+        assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
+                wache.pruefe(bert.spieler(), BAUEN, imGemeinschaftsgebiet),
+                "bauen hat Anna nicht hergegeben - dieselbe Stelle, derselbe Spieler,"
+                        + " ein anderer Griff");
+    }
+
+    @Test
+    @DisplayName("Der abgewiesene Buerger liest seinen EIGENEN Satz, nicht den der"
+            + " fremden Stadt")
+    void buergerLiestSeinenEigenenSatz() {
+        // DER GRUND, AUS DEM Ortsregel.grund seit Teil D1 einen Spieler hat. Bert hat
+        // ein Grundstueck in Annastadt - ihm sagt "Das ist die Stadt von Anna" nichts:
+        // Er weiss, wessen Stadt es ist. Er will wissen, was er dort darf.
+        Location imGemeinschaftsgebiet = annastadtMitBuergerBert();
+        Stadtwache wache = wache();
+
+        String seiner = Sprachprobe.bild(wache.grund(bert.spieler(), BAUEN,
+                imGemeinschaftsgebiet));
+        String fremder = Sprachprobe.bild(wache.grund(anna.spieler(), BAUEN,
+                imGemeinschaftsgebiet));
+
+        assertTrue(seiner.contains("Stadtbuerger duerfen hier nicht"), seiner);
+        assertTrue(seiner.contains("bauen"),
+                "und WELCHE Tat ihm fehlt - das Wort kommt aus derselben Zeile, die"
+                        + " /freistadt rechte liest: " + seiner);
+        assertNotEquals(seiner, fremder,
+                "wer KEIN Buerger ist, liest weiter den Satz der fremden Stadt -"
+                        + " laufen beide auf denselben Satz, ist der Spieler im Zweig"
+                        + " verloren");
+        assertTrue(fremder.contains("annastadt"), fremder);
+    }
+
 }

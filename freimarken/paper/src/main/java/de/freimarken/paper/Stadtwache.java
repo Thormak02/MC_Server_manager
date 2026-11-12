@@ -2,6 +2,7 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.Tat;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -73,23 +74,29 @@ final class Stadtwache implements Schutzwache.Ortsregel {
         this.protokoll = protokoll;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p><b>Die {@link Tat} geht an das Buch weiter</b> [12.11.2026, Teil
+     * D4]: An derselben Stelle kann fuer einen Stadtbuerger eine Tuer erlaubt und ein
+     * Block verboten sein, und was die Stadt hergibt, stellt ihr Besitzer ein. Ohne die
+     * Tat waere diese Abstufung nicht ausdrueckbar.
+     */
     @Override
-    public Urteil pruefe(Player spieler, Location ort) {
+    public Urteil pruefe(Player spieler, Tat tat, Location ort) {
         if (!zustaendig(ort)) {
             return Urteil.NICHT_ZUSTAENDIG;
         }
         UUID wer = spieler == null ? null : spieler.getUniqueId();
         try {
-            // BEIDE Erlaubnisse zaehlen gleich: ERLAUBT ist die eigene Stadt,
-            // ERLAUBT_GRUNDSTUECK das eigene Grundstueck darin. Dass das Buch sie
-            // unterscheidet, ist fuer Teil C3 gedacht - fuer das Bauen ist es dasselbe
-            // Ja, und zwei Zweige daraus zu machen waere zwei Wege zur selben Tat.
-            Freistadtbuch.Bauurteil urteil = buch.darfBauen(weltschluessel, wer,
+            // DAS URTEIL SAGT SELBST, ob es erlaubt [Teil D4]. Vorher stand hier eine
+            // Positivliste zweier Urteile, und sie war der stille Weg: Ein drittes Ja -
+            // und genau das ist ERLAUBT_STADTBUERGER - waere darin nicht vorgekommen und
+            // auf VERBOTEN gefallen. Das Buergerrecht waere gebaut, in eigenen Proben
+            // gruen und im Spiel wirkungslos gewesen; keine Klage haette es gesagt.
+            Freistadtbuch.Bauurteil urteil = buch.darfBauen(weltschluessel, wer, tat,
                     ort.getBlockX(), ort.getBlockZ());
-            return urteil == Freistadtbuch.Bauurteil.ERLAUBT
-                    || urteil == Freistadtbuch.Bauurteil.ERLAUBT_GRUNDSTUECK
-                    ? Urteil.ERLAUBT
-                    : Urteil.VERBOTEN;
+            return urteil.erlaubt() ? Urteil.ERLAUBT : Urteil.VERBOTEN;
         } catch (RuntimeException fehler) {
             klage(fehler);
             return Urteil.VERBOTEN;
@@ -97,7 +104,7 @@ final class Stadtwache implements Schutzwache.Ortsregel {
     }
 
     @Override
-    public Component grund(Location ort) {
+    public Component grund(Player spieler, Tat tat, Location ort) {
         if (!zustaendig(ort)) {
             // Zwischen dem Urteil und dieser Frage kann der Spieler die Welt gewechselt
             // haben. Dann ist der allgemeine Satz die ehrlichere Auskunft.
@@ -108,11 +115,24 @@ final class Stadtwache implements Schutzwache.Ortsregel {
             // OHNE Spieler: Der Grund fragt nicht mehr, OB er darf - das ist entschieden
             // -, sondern WAS hier liegt. Mit Spieler kaeme bei seiner eigenen Stadt
             // ERLAUBT heraus, und dafuer gibt es keinen Handbalken.
-            urteil = buch.darfBauen(weltschluessel, null,
+            urteil = buch.darfBauen(weltschluessel, null, tat,
                     ort.getBlockX(), ort.getBlockZ());
         } catch (RuntimeException fehler) {
             klage(fehler);
             return Schutztext.stadtGestoertBalken(sprache);
+        }
+        // DER STADTBUERGER BEKOMMT SEINEN EIGENEN SATZ [Teil D4], und das ist der Grund,
+        // aus dem diese Methode seit Teil D1 ueberhaupt einen Spieler hat: Wem die
+        // Stadt mitgehoert - weil er ein Grundstueck darin hat -, dem sagt "Das ist die
+        // Stadt von Anna" nichts. Er weiss, wessen Stadt es ist; er will wissen, was er
+        // dort darf.
+        //
+        // NACH dem Grundstueckszweig und VOR dem Stadtzweig: Auf einem fremden
+        // Grundstueck gilt dessen Besitzer, nicht die Buergerschaft - sonst waere Teil
+        // C2 fuer jeden Buerger der Stadt aufgehoben. Das steht gleich unten.
+        if (urteil == Freistadtbuch.Bauurteil.FREMDE_STADT && spieler != null
+                && istBuerger(spieler, ort)) {
+            return Schutztext.buergerDarfNichtBalken(sprache, tat);
         }
         // Das GRUNDSTUECK zuerst, in derselben Reihenfolge wie die Bauregel: Wer
         // auf einem vergebenen Grundstueck steht, soll dessen Besitzer lesen und nicht
@@ -182,4 +202,35 @@ final class Stadtwache implements Schutzwache.Ortsregel {
                 + " Das ist die sichere Richtung: Ein stilles Ja liesse jeden in jeder"
                 + " fremden Stadt bauen.", fehler);
     }
+
+    /**
+     * Ob dieser Spieler Stadtbuerger der Stadt an dieser Stelle ist.
+     *
+     * <p>NUR fuer den Handbalken, und das ist der Grund, warum sie hier stehen darf: Sie
+     * faellt hoechstens alle zwei Sekunden je Spieler (die Drossel in
+     * {@code Schutzwache.verweigere}) und nicht bei jedem Block. Auf dem heissen Pfad
+     * stellt {@code Freistadtbuch.darfBauen} dieselbe Frage selbst - und dort in der
+     * Reihenfolge, die sie billig macht.
+     *
+     * <p>Fragt DIESELBE Methode wie die Bauregel: {@code Freistadtbuch.istStadtbuerger}
+     * ist die eine Stelle, an der die Frage gestellt wird - und sie fragt
+     * {@code Stadtbuergerschaft}, wo steht, dass der Stadtbesitzer nicht mitzaehlt. Ein
+     * eigener Weg hierher waere der zweite Weg zur selben Tat.
+     */
+    private boolean istBuerger(Player spieler, Location ort) {
+        try {
+            Optional<Parzelle> stadt = buch.stadtAn(weltschluessel, ort.getBlockX(),
+                    ort.getBlockZ());
+            return stadt.isPresent() && buch.istStadtbuerger(weltschluessel,
+                    stadt.get(), spieler.getUniqueId());
+        } catch (RuntimeException fehler) {
+            // Eine stumme Ablage heisst hier NICHT "kein Buerger": Der Balken faellt
+            // dann auf den Satz der fremden Stadt zurueck, und das ist die mildere
+            // Falschaussage - ein Buerger liest einmal den falschen Grund, statt dass
+            // die Wache wirft, waehrend sie eine Absage begruenden soll.
+            klage(fehler);
+            return false;
+        }
+    }
+
 }

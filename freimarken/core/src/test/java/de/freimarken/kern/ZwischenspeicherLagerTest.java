@@ -93,6 +93,13 @@ class ZwischenspeicherLagerTest {
             echt.mitbauerSetzen(id, mitbauer);
         }
 
+        // Zwei Wege, die diese Attrappe nicht verbiegt - durchgereicht wie alles, was
+        // sie nicht prueft.
+        @Override
+        public void buergerrechteSetzen(long id, Set<Tat> rechte) {
+            echt.buergerrechteSetzen(id, rechte);
+        }
+
         @Override
         public void entfernen(long id) {
             echt.entfernen(id);

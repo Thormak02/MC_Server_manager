@@ -18,6 +18,7 @@ import de.freimarken.kern.Taetigkeit;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Richtung;
 import de.freimarken.kern.Shopschild;
+import de.freimarken.kern.Tat;
 import de.freimarken.kern.Wirtschaftswerte;
 import de.freimarken.kern.Zustand;
 import java.time.Duration;
@@ -224,6 +225,13 @@ class SendewegTest {
         // Ausnahmen fuehrt.
         for (Blocktat tat : Blocktat.values()) {
             alle.add(BlockSatz.tatwort(tat).pfad());
+        }
+        // SIEBTE Familie seit Teil D: die Worte der Buergerrechte, ueber
+        // FreistadtSatz.rechtewort gewaehlt. Dieselbe Bauart und dieselbe Deckung an
+        // anderer Stelle: In FreistadtBefehlTest geht JEDES Recht durch die echte Zeile
+        // der ausgelieferten Vorlage.
+        for (Tat recht : Tat.values()) {
+            alle.add(FreistadtSatz.rechtewort(recht).pfad());
         }
         // VIERTE Familie seit Plan 7.4: die Saetze der Kistenshops. Sie werden ueber
         // Sprachschluessel.shopAnlage und .schildfehler gewaehlt, nicht namentlich

@@ -9,9 +9,12 @@ import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Stadtfeldplan;
 import de.freimarken.kern.Stadtname;
 import de.freimarken.kern.Zellquader;
+import de.freimarken.kern.Stadtbuergerschaft;
+import de.freimarken.kern.Tat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 import java.util.function.Function;
 import net.kyori.adventure.text.Component;
 
@@ -389,5 +392,119 @@ final class Freistadttext {
     /** Die Welt der Freistaedte fehlt - dann kann dieser Befehl gar nichts. */
     static List<Component> keineWeltZeilen(Sprache sprache) {
         return sprache.bau(FreistadtSatz.KEINE_WELT, 1L, Einsatz.keine());
+    }
+
+    // --- Teil D3: die Buergerrechte --------------------------------------------
+
+    /**
+     * Die Rechteliste einer Stadt - Kopf, JEDES Recht, Fusszeile.
+     *
+     * <p><b>Jedes Recht steht da, auch das gesperrte</b>, und die Liste laeuft ueber
+     * {@code Tat.values()}: Eine Liste, die nur die erlaubten nennt, laesst den Besitzer
+     * raten, was es noch gibt - und ein viertes Recht waere darin unsichtbar.
+     *
+     * <p>Kein "leer"-Satz wie bei den anderen Listen: Diese Liste ist NIE leer. Es gibt
+     * genau drei Rechte, und jedes ist entweder erlaubt oder gesperrt.
+     */
+    static List<Component> rechteZeilen(Sprache sprache, String stadt,
+                                        Set<Tat> rechte) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(
+                FreistadtSatz.RECHTE_KOPF, 1L, Einsatz.von("stadt", stadt)));
+        for (Tat recht : Tat.values()) {
+            zeilen.addAll(sprache.bau(rechte.contains(recht)
+                            ? FreistadtSatz.RECHT_ERLAUBT
+                            : FreistadtSatz.RECHT_GESPERRT, 1L,
+                    Einsatz.von("recht", wortZu(sprache, recht))));
+        }
+        zeilen.addAll(sprache.bau(FreistadtSatz.RECHTE_HINWEIS, 1L, Einsatz.keine()));
+        return zeilen;
+    }
+
+    /**
+     * Die Antwort auf einen Rechtezug.
+     *
+     * <p>Ein {@code switch} OHNE Vorgabezweig, wie jede Antwortnaht dieses Bereichs: Ein
+     * neuer Bescheid bricht die Uebersetzung mit Zeilennummer, statt stillschweigend in
+     * einen fremden Satz zu laufen.
+     *
+     * @param an was gewollt war - der Satz unterscheidet Geben und Nehmen
+     */
+    static List<Component> rechteAntwortZeilen(Sprache sprache,
+                                               Freistadtbuch.Rechteentscheid entscheid,
+                                               Tat recht, boolean an,
+                                               Function<UUID, String> namenVon) {
+        return switch (entscheid.bescheid()) {
+            case GEAENDERT -> sprache.bau(an
+                            ? FreistadtSatz.RECHT_GEAENDERT
+                            : FreistadtSatz.RECHT_GENOMMEN, 1L,
+                    Einsatz.von("recht", wortZu(sprache, recht)));
+            case SCHON_SO -> sprache.bau(FreistadtSatz.RECHT_SCHON_SO, 1L,
+                    Einsatz.von("recht", wortZu(sprache, recht)));
+            case FREMDE_STADT -> sprache.bau(FreistadtSatz.RECHTE_NICHT_DEINE, 1L,
+                    Einsatz.von("stadt", entscheid.stadt().orElseThrow().name())
+                            .mit("besitzer", namenVon.apply(
+                                    entscheid.stadt().orElseThrow().eigentuemer())));
+            // Die zwei Faelle, die der Grundstueckszweig schon hat: Dort stehen ihre
+            // Saetze, und ein zweiter Satz fuer dasselbe waere ein zweites Wort fuer
+            // dieselbe Lage. GRUNDSTUECK_GESTOERT und nicht GESTOERT - jener Satz nennt
+            // ausdruecklich, dass das Geld zurueck ist, und hier war gar keines im Spiel.
+            case KEINE_STADT -> sprache.bau(FreistadtSatz.KEINE_STADT, 1L,
+                    Einsatz.keine());
+            case GESTOERT -> sprache.bau(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L,
+                    Einsatz.keine());
+        };
+    }
+
+    /** Ein Wort, das kein Buergerrecht ist. */
+    static List<Component> unbekanntesRechtZeilen(Sprache sprache, String wort) {
+        return sprache.bau(FreistadtSatz.RECHT_UNBEKANNT, 1L,
+                Einsatz.von("wort", wort));
+    }
+
+    /**
+     * Das WORT zu einem Recht - aus der Sprachdatei und nicht aus dem Quelltext.
+     *
+     * <p>Ueber {@link FreistadtSatz#rechtewort}: Dass der Spieler "Truhen und Oefen
+     * oeffnen" liest und nicht "BEHAELTER", ist eine Sache der Vorlage. Ein Wort hier im
+     * Programm waere genau die Stelle, an der ein Betreiber es nicht aendern kann.
+     */
+    private static String wortZu(Sprache sprache, Tat recht) {
+        return sprache.wort(FreistadtSatz.rechtewort(recht), Einsatz.keine());
+    }
+
+    // --- Teil D5: die Stadtbuergerliste ----------------------------------------
+
+    /**
+     * Die Stadtbuerger einer Stadt - Kopf, der Besitzer, dann je Buerger eine Zeile.
+     *
+     * <p><b>Der Stadtbesitzer steht in einer EIGENEN Zeile</b> und nicht in der Liste:
+     * Er ist kein Buerger seiner eigenen Stadt (siehe {@code Stadtbuergerschaft}), und
+     * genau daran haengt die Verfallsregel aus Plan 16. Ihn weglassen waere trotzdem
+     * falsch - wer die Liste liest, will wissen, wen er fragen muss.
+     *
+     * <p>Wie {@link #grundstueckZeilen}: Ueberschrift immer, dann die Zeilen oder der
+     * eine Satz "noch keine". Der leere Fall ist hier der Normalfall einer frischen
+     * Stadt, nicht die Ausnahme.
+     */
+    static List<Component> stadtbuergerZeilen(Sprache sprache, String stadt,
+                                              UUID besitzer,
+                                              List<Stadtbuergerschaft.Buerger> buerger,
+                                              Function<UUID, String> namenVon) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(
+                FreistadtSatz.STADTBUERGER_KOPF, 1L, Einsatz.von("stadt", stadt)));
+        zeilen.addAll(sprache.bau(FreistadtSatz.STADTBUERGER_BESITZER, 1L,
+                Einsatz.von("besitzer", namenVon.apply(besitzer))));
+        if (buerger.isEmpty()) {
+            zeilen.addAll(sprache.bau(FreistadtSatz.STADTBUERGER_LEER, 1L,
+                    Einsatz.keine()));
+            return zeilen;
+        }
+        for (Stadtbuergerschaft.Buerger einer : buerger) {
+            zeilen.addAll(sprache.bau(FreistadtSatz.STADTBUERGER_ZEILE,
+                    einer.grundstuecke(),
+                    Einsatz.von("name", namenVon.apply(einer.wer()))
+                            .mit("anzahl", String.valueOf(einer.grundstuecke()))));
+        }
+        return zeilen;
     }
 }

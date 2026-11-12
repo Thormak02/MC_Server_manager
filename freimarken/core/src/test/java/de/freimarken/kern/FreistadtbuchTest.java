@@ -9,9 +9,11 @@ import static de.freimarken.kern.Freistadtbuch.Bescheid.NAME_VERGEBEN;
 import static de.freimarken.kern.Freistadtbuch.Bescheid.NAME_ZU_LANG;
 import static de.freimarken.kern.Freistadtbuch.Bescheid.ZU_WENIG_MARK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Set;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -277,7 +279,7 @@ class FreistadtbuchTest {
 
         // Vorher: Annas Feld, Anna darf.
         assertEquals(Freistadtbuch.Bauurteil.ERLAUBT,
-                buch.darfBauen(WELT, anna, blockX, blockZ));
+                buch.darfBauen(WELT, anna, Tat.BAUEN, blockX, blockZ));
 
         // Das Grundstueck gehoert BERT - so, wie es nach einem Verkauf (Teil C3) sein
         // wird.
@@ -285,17 +287,19 @@ class FreistadtbuchTest {
                 bert, 5_000L);
 
         assertEquals(Freistadtbuch.Bauurteil.FREMDES_GRUNDSTUECK,
-                buch.darfBauen(WELT, anna, blockX, blockZ),
+                buch.darfBauen(WELT, anna, Tat.BAUEN, blockX, blockZ),
                 "die Stadtbesitzerin darf auf dem vergebenen Grundstueck NICHT mehr");
         assertEquals(Freistadtbuch.Bauurteil.ERLAUBT_GRUNDSTUECK,
-                buch.darfBauen(WELT, bert, blockX, blockZ),
+                buch.darfBauen(WELT, bert, Tat.BAUEN, blockX, blockZ),
                 "der Grundstuecksbesitzer darf");
         // Und EINE Zelle weiter gilt wieder die Stadt.
         assertEquals(Freistadtbuch.Bauurteil.ERLAUBT,
-                buch.darfBauen(WELT, anna, plan.zellenAnfang(zelleX + 1) + 3, blockZ),
+                buch.darfBauen(WELT, anna, Tat.BAUEN,
+                        plan.zellenAnfang(zelleX + 1) + 3, blockZ),
                 "daneben ist es weiter Annas Feld");
         assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
-                buch.darfBauen(WELT, bert, plan.zellenAnfang(zelleX + 1) + 3, blockZ),
+                buch.darfBauen(WELT, bert, Tat.BAUEN,
+                        plan.zellenAnfang(zelleX + 1) + 3, blockZ),
                 "und dort darf Bert nicht");
     }
 
@@ -318,7 +322,7 @@ class FreistadtbuchTest {
         int blockZ = plan.zellenAnfang(zelleZ) + 3;
 
         assertEquals(Freistadtbuch.Bauurteil.FREMDES_GRUNDSTUECK,
-                buch.darfBauen(WELT, clara, blockX, blockZ),
+                buch.darfBauen(WELT, clara, Tat.BAUEN, blockX, blockZ),
                 "Mitbauerin der STADT zu sein hilft auf einem vergebenen Grundstueck"
                         + " nicht - sonst koennte ein Stadtbesitzer sich selbst oder"
                         + " jeden Freund auf fremdes Land setzen");
@@ -326,7 +330,7 @@ class FreistadtbuchTest {
         grundstuecke.mitbauerSetzen(bertsLand.id(), java.util.Set.of(clara));
 
         assertEquals(Freistadtbuch.Bauurteil.ERLAUBT_GRUNDSTUECK,
-                buch.darfBauen(WELT, clara, blockX, blockZ),
+                buch.darfBauen(WELT, clara, Tat.BAUEN, blockX, blockZ),
                 "als Mitbauerin DES GRUNDSTUECKS darf sie");
     }
 
@@ -338,9 +342,9 @@ class FreistadtbuchTest {
         buch.gruende(WELT, anna, "annastadt", VIELE);
         Parzelle stadt = buch.staedte(WELT).get(0);
 
-        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT, buch.darfBauen(WELT, anna,
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT, buch.darfBauen(WELT, anna, Tat.BAUEN,
                 buch.plan().feldMitte(stadt.x()), buch.plan().feldMitte(stadt.z())));
-        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT, buch.darfBauen(WELT, bert,
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT, buch.darfBauen(WELT, bert, Tat.BAUEN,
                 buch.plan().feldMitte(stadt.x()), buch.plan().feldMitte(stadt.z())));
     }
 
@@ -356,12 +360,13 @@ class FreistadtbuchTest {
         Parzelle stadt = buch.staedte(WELT).get(0);
         Stadtfeldplan plan = buch.plan();
 
-        buch.darfBauen(WELT, anna,
+        buch.darfBauen(WELT, anna, Tat.BAUEN,
                 plan.feldAnfang(stadt.x()) + Stadtfeldplan.FELD_KANTE,
                 plan.feldMitte(stadt.z()));
         assertEquals(0, zaehler.gezaehlt(), "die Leere fragt die Grundstuecke nicht");
 
-        buch.darfBauen(WELT, anna, plan.feldMitte(stadt.x()), plan.feldMitte(stadt.z()));
+        buch.darfBauen(WELT, anna, Tat.BAUEN, plan.feldMitte(stadt.x()),
+                plan.feldMitte(stadt.z()));
         assertEquals(1, zaehler.gezaehlt(), "auf dem Feld genau einmal");
     }
 
@@ -386,26 +391,26 @@ class FreistadtbuchTest {
 
         // 1. Die Eigentuemerin mitten in ihrer Stadt.
         assertEquals(Freistadtbuch.Bauurteil.ERLAUBT,
-                buch.darfBauen(WELT, anna, innen, innenZ));
+                buch.darfBauen(WELT, anna, Tat.BAUEN, innen, innenZ));
         // 2. Ein anderer an derselben Stelle.
         assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
-                buch.darfBauen(WELT, bert, innen, innenZ));
+                buch.darfBauen(WELT, bert, Tat.BAUEN, innen, innenZ));
         // 3. Die LEERE - einen Block hinter der Feldkante. Fuer JEDEN verboten, auch
         //    fuer die Eigentuemerin des Feldes daneben: Ein Block dort ist der erste
         //    Block einer Bruecke.
         int hinterDemFeld = plan.feldAnfang(stadt.x()) + Stadtfeldplan.FELD_KANTE;
         assertEquals(Freistadtbuch.Bauurteil.LEERE,
-                buch.darfBauen(WELT, anna, hinterDemFeld, innenZ));
+                buch.darfBauen(WELT, anna, Tat.BAUEN, hinterDemFeld, innenZ));
         // 4. Das Ankunftsfeld - gehoert niemandem und wird nie vergeben.
         assertEquals(Freistadtbuch.Bauurteil.ANKUNFTSFELD,
-                buch.darfBauen(WELT, anna, plan.feldMitte(0), plan.feldMitte(0)));
+                buch.darfBauen(WELT, anna, Tat.BAUEN, plan.feldMitte(0), plan.feldMitte(0)));
         // 5. Ein freies Stadtfeld.
         int freiesFeld = stadt.x() == 1 ? 2 : 1;
         assertEquals(Freistadtbuch.Bauurteil.FREIES_FELD,
-                buch.darfBauen(WELT, anna, plan.feldMitte(freiesFeld), innenZ));
+                buch.darfBauen(WELT, anna, Tat.BAUEN, plan.feldMitte(freiesFeld), innenZ));
         // 6. Jenseits der Weltgrenze.
         assertEquals(Freistadtbuch.Bauurteil.AUSSERHALB,
-                buch.darfBauen(WELT, anna,
+                buch.darfBauen(WELT, anna, Tat.BAUEN,
                         plan.feldMitte(buch.grenze().bis() + 1), innenZ));
     }
 
@@ -417,7 +422,7 @@ class FreistadtbuchTest {
         int x = buch.plan().feldMitte(stadt.x());
         int z = buch.plan().feldMitte(stadt.z());
         assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
-                buch.darfBauen(WELT, bert, x, z), "vorher");
+                buch.darfBauen(WELT, bert, Tat.BAUEN, x, z), "vorher");
 
         lager.mitbauerSetzen(stadt.id(), java.util.Set.of(bert));
 
@@ -425,7 +430,7 @@ class FreistadtbuchTest {
         // Parzelle.darfBauen und nicht noch einmal selbst nach. Ein zweiter Ort fuer
         // "wer darf hier" liefe irgendwann auseinander.
         assertEquals(Freistadtbuch.Bauurteil.ERLAUBT,
-                buch.darfBauen(WELT, bert, x, z));
+                buch.darfBauen(WELT, bert, Tat.BAUEN, x, z));
     }
 
     @Test
@@ -439,7 +444,7 @@ class FreistadtbuchTest {
         // sonst bekaeme der Eigentuemer seinen eigenen Balken nie zu sehen, und ein
         // Programmierfehler in der Wache waere unsichtbar.
         assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
-                buch.darfBauen(WELT, null, buch.plan().feldMitte(stadt.x()),
+                buch.darfBauen(WELT, null, Tat.BAUEN, buch.plan().feldMitte(stadt.x()),
                         buch.plan().feldMitte(stadt.z())));
     }
 
@@ -456,18 +461,20 @@ class FreistadtbuchTest {
                 kasse, WARPS, VORGABE);
         Stadtfeldplan plan = gezaehlt.plan();
 
-        assertEquals(Freistadtbuch.Bauurteil.LEERE, gezaehlt.darfBauen(WELT, anna,
+        assertEquals(Freistadtbuch.Bauurteil.LEERE, gezaehlt.darfBauen(WELT, anna, Tat.BAUEN,
                 plan.feldAnfang(1) + Stadtfeldplan.FELD_KANTE, plan.feldMitte(1)));
-        assertEquals(Freistadtbuch.Bauurteil.AUSSERHALB, gezaehlt.darfBauen(WELT, anna,
+        assertEquals(Freistadtbuch.Bauurteil.AUSSERHALB,
+                gezaehlt.darfBauen(WELT, anna, Tat.BAUEN,
                 plan.feldMitte(gezaehlt.grenze().bis() + 1), plan.feldMitte(1)));
-        assertEquals(Freistadtbuch.Bauurteil.ANKUNFTSFELD, gezaehlt.darfBauen(WELT, anna,
+        assertEquals(Freistadtbuch.Bauurteil.ANKUNFTSFELD,
+                gezaehlt.darfBauen(WELT, anna, Tat.BAUEN,
                 plan.feldMitte(0), plan.feldMitte(0)));
         assertEquals(0, zaehler.gezaehlt(),
                 "keine dieser drei Lagen darf die Ablage anfassen");
 
         // Und auf einem Stadtfeld GENAU EINMAL - dort ist die Frage unvermeidlich, aber
         // eine zweite waere ein doppelter Gang auf dem heissen Pfad.
-        gezaehlt.darfBauen(WELT, anna, plan.feldMitte(1), plan.feldMitte(1));
+        gezaehlt.darfBauen(WELT, anna, Tat.BAUEN, plan.feldMitte(1), plan.feldMitte(1));
         assertEquals(1, zaehler.gezaehlt());
     }
 
@@ -529,4 +536,217 @@ class FreistadtbuchTest {
                 "eine Stadt aus einer anderen Welt waere ein Vorschlag, der in dieser"
                         + " Welt ins Leere fuehrt");
     }
+
+    @Test
+    @DisplayName("Eine neu gegruendete Stadt bekommt die VORGABE aus der config.yml")
+    void gruendenSetztDieVorgabe() {
+        // FUND DER EINSPRITZUNGSRUNDE ZU TEIL D [12.11.2026]: Dass gruende() die
+        // Vorgabe-Buergerrechte auf die frische Stadt schreibt, war von keiner Probe
+        // gedeckt. Ein Betreiber, der freistaedte.buergerrechte setzt, haette es nie
+        // bemerkt: Die Zeile steht in der Datei, der Startbericht nennt sie, und jede
+        // neue Stadt gibt trotzdem nichts her.
+        Wirtschaftsstand mitVorgabe = new Wirtschaftsstand(
+                Wirtschaftswerte.VORGABE.mitFreistaedten(
+                        Wirtschaftswerte.VORGABE.freistaedte()
+                                .mitBuergerrechten(Set.of(Tat.BENUTZEN))));
+        Freistadtbuch eigenes = new Freistadtbuch(Feldgrenze.freistaedte(), lager,
+                kasse, WARPS, mitVorgabe);
+
+        Freistadtbuch.Entscheid entscheid = eigenes.gruende(WELT, anna, "annastadt",
+                VIELE);
+
+        assertEquals(Set.of(Tat.BENUTZEN),
+                entscheid.stadt().orElseThrow().buergerrechte(),
+                "der ENTSCHEID traegt die Stadt, wie sie NACHHER ist - derselbe Fund"
+                        + " wie bei biete() in Teil C3");
+        assertEquals(Set.of(Tat.BENUTZEN),
+                lager.finde(WELT, entscheid.stadt().orElseThrow().x(),
+                        entscheid.stadt().orElseThrow().z()).orElseThrow()
+                        .buergerrechte(),
+                "und die ABLAGE auch - sonst stuende es nur im Satz an den Spieler");
+        assertFalse(entscheid.stadt().orElseThrow().buergerDuerfen(Tat.BAUEN),
+                "und nur DAS eine Recht aus der Vorgabe");
+    }
+
+    @Test
+    @DisplayName("Ohne Vorgabe wird beim Gruenden gar nichts gesetzt")
+    void ohneVorgabeNichts() {
+        // Die Gegenrichtung, und sie ist der ausgelieferte Zustand: Ab Werk ist die
+        // Liste leer, und dann faellt der zweite Schreibzug ganz weg.
+        Freistadtbuch.Entscheid entscheid = buch.gruende(WELT, anna, "annastadt", VIELE);
+
+        assertEquals(Parzelle.KEINE_RECHTE,
+                entscheid.stadt().orElseThrow().buergerrechte(),
+                "eine frische Stadt gibt nichts her, solange der Betreiber nichts"
+                        + " einstellt");
+    }
+
+    // ------------------------------------- Das Buergerrecht [Teil D4]
+
+    /**
+     * Annastadt mit einem Grundstueck, das BERT gehoert - und die Stelle darauf.
+     *
+     * @return Blockkoordinaten {x, z} MITTEN auf Berts Grundstueck und eine Zelle
+     *         daneben, also im Gemeinschaftsgebiet: {aufSeinem_x, aufSeinem_z,
+     *         daneben_x, daneben_z}
+     */
+    private int[] annastadtMitBertsGrundstueck(SpeicherGrundstuecke grundstuecke) {
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+        buch.gibGrundstuecke(grundstuecke);
+        Stadtfeldplan plan = buch.plan();
+        int zelleX = plan.ersteZelle(stadt.x());
+        int zelleZ = plan.ersteZelle(stadt.z());
+        grundstuecke.anlegen(WELT, stadt.id(), Zellquader.eineZelle(zelleX, zelleZ),
+                bert, 5_000L);
+        return new int[] {
+            plan.zellenAnfang(zelleX) + 3, plan.zellenAnfang(zelleZ) + 3,
+            plan.zellenAnfang(zelleX + 1) + 3, plan.zellenAnfang(zelleZ) + 3,
+        };
+    }
+
+    /** Die Rechte dieser Stadt neu setzen - ueber das Lager, wie im Spiel. */
+    private void stadtGibtHer(Set<Tat> rechte) {
+        lager.buergerrechteSetzen(buch.staedte(WELT).get(0).id(), rechte);
+    }
+
+    @Test
+    @DisplayName("Ein STADTBUERGER darf im Gemeinschaftsgebiet, was seine Stadt hergibt")
+    void stadtbuergerDarfWasDieStadtHergibt() {
+        // DIE TRAGENDE ZUSAGE VON TEIL D. Bert hat ein Grundstueck in Annastadt und ist
+        // damit Stadtbuerger. Was er AUSSERHALB seines Grundstuecks darf, stellt Anna
+        // ein - und ohne diese Probe waere das eine Einstellung, die nichts tut.
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        int[] orte = annastadtMitBertsGrundstueck(grundstuecke);
+        int danebenX = orte[2];
+        int danebenZ = orte[3];
+
+        // Ab Werk gibt die Stadt nichts her.
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
+                buch.darfBauen(WELT, bert, Tat.BAUEN, danebenX, danebenZ),
+                "eine frische Stadt gibt nichts her - auch nicht ihren Buergern");
+
+        stadtGibtHer(Set.of(Tat.BENUTZEN));
+
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT_STADTBUERGER,
+                buch.darfBauen(WELT, bert, Tat.BENUTZEN, danebenX, danebenZ),
+                "jetzt darf er die Tuer bedienen");
+        // JE TAT VERSCHIEDEN, und das ist der ganze Zweck der Tat im Urteil: Dieselbe
+        // Stelle, derselbe Spieler, ein anderer Griff - und ein anderes Urteil. Ohne
+        // diese Zeile waere eine Wache, die jedes Recht als "alles" liest, gruen.
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
+                buch.darfBauen(WELT, bert, Tat.BAUEN, danebenX, danebenZ),
+                "bauen hat Anna NICHT hergegeben");
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
+                buch.darfBauen(WELT, bert, Tat.BEHAELTER, danebenX, danebenZ),
+                "und Truhen auch nicht");
+    }
+
+    @Test
+    @DisplayName("Wer KEIN Grundstueck hat, ist kein Buerger - auch wenn die Stadt"
+            + " hergibt")
+    void fremderIstKeinBuerger() {
+        UUID clara = UUID.randomUUID();
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        int[] orte = annastadtMitBertsGrundstueck(grundstuecke);
+        stadtGibtHer(Set.of(Tat.BAUEN, Tat.BENUTZEN, Tat.BEHAELTER));
+
+        // Clara hat in Annastadt nichts. Mit allen drei Rechten offen muss sie trotzdem
+        // abgewiesen werden - sonst waere "Buergerrecht" nur ein anderes Wort fuer
+        // "offene Stadt".
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
+                buch.darfBauen(WELT, clara, Tat.BENUTZEN, orte[2], orte[3]),
+                "Buerger ist, wem hier Grund gehoert - nicht, wer vorbeikommt");
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT_STADTBUERGER,
+                buch.darfBauen(WELT, bert, Tat.BENUTZEN, orte[2], orte[3]),
+                "Bert dagegen schon - sonst prueft die Zeile darueber nichts");
+    }
+
+    @Test
+    @DisplayName("Das Buergerrecht sticht die STADT, aber nicht ein fremdes GRUNDSTUECK")
+    void buergerrechtStichtNichtDasGrundstueck() {
+        // DIE GRENZE DES BUERGERRECHTS, und sie ist die Zusage, fuer die ein Kaeufer
+        // zahlt: Clara bekommt ein zweites Grundstueck in derselben Stadt und ist damit
+        // auch Buergerin. Auf BERTS Grundstueck darf sie trotzdem nichts - sonst waere
+        // Teil C2 fuer jeden Buerger der Stadt aufgehoben, und das Grundstueck waere
+        // nichts mehr wert.
+        UUID clara = UUID.randomUUID();
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        int[] orte = annastadtMitBertsGrundstueck(grundstuecke);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+        Stadtfeldplan plan = buch.plan();
+        grundstuecke.anlegen(WELT, stadt.id(), Zellquader.eineZelle(
+                        plan.ersteZelle(stadt.x()) + 2, plan.ersteZelle(stadt.z())),
+                clara, 5_000L);
+        stadtGibtHer(Set.of(Tat.BAUEN, Tat.BENUTZEN, Tat.BEHAELTER));
+
+        assertEquals(Freistadtbuch.Bauurteil.FREMDES_GRUNDSTUECK,
+                buch.darfBauen(WELT, clara, Tat.BAUEN, orte[0], orte[1]),
+                "auf dem vergebenen Grundstueck eines anderen darf auch eine"
+                        + " Mitbuergerin nichts");
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT_STADTBUERGER,
+                buch.darfBauen(WELT, clara, Tat.BAUEN, orte[2], orte[3]),
+                "daneben, im Gemeinschaftsgebiet, darf sie - sonst prueft die Zeile"
+                        + " darueber nichts");
+    }
+
+    @Test
+    @DisplayName("Die STADTBESITZERIN bleibt ERLAUBT - ihr Recht kommt nicht aus der"
+            + " Buergerschaft")
+    void dieBesitzerinBleibtErlaubt() {
+        // Anna hat auf ihrem Feld jedes zugeschnittene, noch nicht verkaufte Grundstueck
+        // - sie waere nach der Ablagefrage also "Besitzerin von Grund in dieser Stadt".
+        // Ihr Urteil muss trotzdem ERLAUBT bleiben und nicht ERLAUBT_STADTBUERGER
+        // werden: Sonst haenge ihr Recht an einer Einstellung, die sie selbst setzt, und
+        // ein Stadtbesitzer koennte sich aus seiner eigenen Stadt aussperren.
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        int[] orte = annastadtMitBertsGrundstueck(grundstuecke);
+        stadtGibtHer(Set.of());
+
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT,
+                buch.darfBauen(WELT, anna, Tat.BAUEN, orte[2], orte[3]),
+                "auf ihrem eigenen Feld baut sie, ohne sich ein Recht zu geben");
+        assertFalse(Stadtbuergerschaft.istBuerger(buch.staedte(WELT).get(0), anna, true),
+                "und Buergerin ihrer eigenen Stadt ist sie nicht - daran haengt die"
+                        + " Verfallsregel aus Plan 16");
+    }
+
+    @Test
+    @DisplayName("istStadtbuerger ist die EINE Frage - und ohne Ablage ist niemand"
+            + " Buerger")
+    void istStadtbuergerIstDieEineFrage() {
+        // Dieselbe Methode fragt die Bauregel bei jedem Block und die Stadtwache fuer
+        // den Handbalken. Dass sie OHNE Grundstuecksablage nein sagt, ist der Stand vor
+        // Teil C2 und in jeder Probe, die das Buch ohne Ablage baut - ein Wurf dort
+        // waere eine Wache, die in einer alten Welt bei jedem Block stirbt.
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+
+        assertFalse(buch.istStadtbuerger(WELT, stadt, bert),
+                "ohne Ablage gibt es keine Grundstuecke, also auch keine Buerger");
+
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        buch.gibGrundstuecke(grundstuecke);
+        Stadtfeldplan plan = buch.plan();
+        grundstuecke.anlegen(WELT, stadt.id(), Zellquader.eineZelle(
+                plan.ersteZelle(stadt.x()), plan.ersteZelle(stadt.z())), bert, 0L);
+
+        assertTrue(buch.istStadtbuerger(WELT, stadt, bert));
+        assertFalse(buch.istStadtbuerger(WELT, stadt, null), "und niemand auch nicht");
+
+        // UND DIE STADTBESITZERIN - mit einem eigenen Grundstueck in der Hand. FUND DER
+        // EINSPRITZUNGSRUNDE [12.11.2026]: Hier stand dieselbe Zusage, aber Anna hatte
+        // in dieser Probe nichts. Dann sagt auch eine Fassung nein, die nur den BESITZ
+        // fragt und die Regel ueberspringt - das Gegenbeispiel kam nicht an. Erst mit
+        // Grund in der Hand prueft die Zeile, was sie behauptet.
+        grundstuecke.anlegen(WELT, stadt.id(), Zellquader.eineZelle(
+                plan.ersteZelle(stadt.x()) + 1, plan.ersteZelle(stadt.z())), anna, 0L);
+        assertTrue(grundstuecke.besitztIn(WELT, stadt.id(), anna),
+                "ihr gehoert jetzt Grund in ihrer Stadt - sonst prueft die Zeile"
+                        + " darunter wieder nichts");
+        assertFalse(buch.istStadtbuerger(WELT, stadt, anna),
+                "trotzdem ist sie keine Buergerin ihrer eigenen Stadt - die Frage geht"
+                        + " durch Stadtbuergerschaft.istBuerger und nicht an ihr vorbei");
+    }
+
 }

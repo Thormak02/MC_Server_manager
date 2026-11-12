@@ -6,6 +6,7 @@ import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Taetigkeit;
+import de.freimarken.kern.Tat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -450,6 +451,12 @@ final class Sprachschluessel {
         // ausgelieferten Vorlage.
         for (Blocktat tat : Blocktat.values()) {
             pfade.add(BlockSatz.tatwort(tat).pfad());
+        }
+        // Die Worte der Buergerrechte, ueber FreistadtSatz.rechtewort gewaehlt - und
+        // nirgends namentlich getippt. Gedeckt sind sie in FreistadtBefehlTest: Dort
+        // geht JEDES Recht durch die echte Zeile aus der ausgelieferten Vorlage.
+        for (Tat recht : Tat.values()) {
+            pfade.add(FreistadtSatz.rechtewort(recht).pfad());
         }
         // Die Saetze der Kistenshops, ueber shopAnlage und schildfehler gewaehlt.
         // ABGEBAUT und KEIN_SHOP fehlen mit Absicht: Sie werfen dort, siehe die

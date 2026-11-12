@@ -90,8 +90,23 @@ permissions:
   freimarken.freistadt.kaufen:
     # Die ANDERE Seite: grundstueck gehoert dem Stadtbesitzer, der sein Feld teilt und
     # Preise setzt. Kaufen tut jemand, der (noch) keine Stadt hat - und das ist der Weg,
-    # auf dem man Buerger wird. Schritt 12 haengt den Rang daran.
+    # auf dem man STADTBUERGER wird.
+    #
+    # BERICHTIGT [12.11.2026]: Hier stand, Schritt 12 haenge den Rang Buerger daran.
+    # Das war eine Zusage, die der Plan nicht gibt - und sie war in sich gedreht: Sie
+    # machte den RANG Buerger zur Voraussetzung fuer den Weg, auf dem man STADTBUERGER
+    # wird. Der Rang kommt aus Spielzeit, die Stadtbuergerschaft aus Grundbesitz.
     description: Darf ein angebotenes Grundstueck in einer Freistadt kaufen
+    default: true
+  freimarken.freistadt.rechte:
+    # Ein FUENFTES Recht, und es trennt eine neue Sache ab: Die drei davor gehen um Geld
+    # und um Flaechen, dieses um die REGELN eines Gebiets - was fremde Leute im
+    # Stadtgebiet duerfen. Wer es wegnimmt, laesst die Staedte ohne Buergerrechte laufen;
+    # alles bleibt dann beim Stadtbesitzer, und die Staedte selbst bleiben unberuehrt.
+    #
+    # Das ANZEIGEN haengt nicht daran: Was in einer Stadt gilt, liest jeder, der dort
+    # steht - ein Buerger muss wissen, was er darf, ohne den Besitzer zu fragen.
+    description: Darf die Buergerrechte der eigenen Freistadt einstellen
     default: true
   freimarken.spielzeit:
     description: Darf die eigene gemessene Spielzeit sehen

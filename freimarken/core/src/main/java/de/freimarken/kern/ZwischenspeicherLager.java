@@ -123,6 +123,16 @@ public final class ZwischenspeicherLager implements BesitzLager {
     }
 
     @Override
+    public void buergerrechteSetzen(long id, Set<Tat> rechte) {
+        wahrheit.buergerrechteSetzen(id, rechte);
+        // LEEREN und nicht nachtragen, wie bei jedem Schreibzug hier: Die Zeile liegt
+        // unter ihrem ORT in der Karte, und diese Methode kennt nur die Nummer. Die
+        // Rechte aendert ein Befehl, nicht ein Blockereignis - ein Leeren kostet dabei
+        // nichts, und ein Nachtragen waere der Weg, auf dem die Karte schief wird.
+        leeren();
+    }
+
+    @Override
     public void entfernen(long id) {
         wahrheit.entfernen(id);
         leeren();

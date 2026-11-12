@@ -118,6 +118,24 @@ public final class SpeicherGrundstuecke implements Grundstuecksablage {
     }
 
     @Override
+    public synchronized boolean besitztIn(String welt, long stadtId, UUID spieler) {
+        if (spieler == null) {
+            return false;
+        }
+        // Ein Durchlauf und kein zweiter Index: Diese Umsetzung ist die fuer Proben und
+        // fuer einen Server ohne Datenbank, und dort sind es ein paar Dutzend Zeilen. Ein
+        // Index daneben waere eine zweite Wahrheit, die eine Aenderung verpassen kann -
+        // die gepufferte Fassung fuehrt ihn, und ihr Javadoc sagt, was sie dafuer tut.
+        for (Grundstueck eines : nachNummer.values()) {
+            if (eines.stadtId() == stadtId && eines.welt().equals(welt)
+                    && spieler.equals(eines.eigentuemer())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     public synchronized void mitbauerSetzen(long id, Set<UUID> mitbauer) {
         Grundstueck alt = holeOderWirf(id);
         // DURCHTRAGEN, nicht neu setzen - die Lehre aus dem Fund vom 11.11.2026: Dort

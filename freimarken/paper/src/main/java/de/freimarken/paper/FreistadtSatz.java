@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Tat;
 import java.util.Set;
 
 /**
@@ -219,7 +220,94 @@ enum FreistadtSatz implements Satz {
             "besitzer"),
 
     /** Es gibt kein einziges Angebot. */
-    ANGEBOT_LEER("freistadt.angebot.leer", Art.SATZ);
+    ANGEBOT_LEER("freistadt.angebot.leer", Art.SATZ),
+
+    // --- Teil D: die Buergerrechte ---------------------------------------------
+
+    /** Die Ueberschrift der Rechteliste - {@code stadt}. */
+    RECHTE_KOPF("freistadt.rechte.kopf", Art.SATZ, "stadt"),
+
+    /** Ein Recht, das die Buerger haben - {@code recht}. */
+    RECHT_ERLAUBT("freistadt.rechte.erlaubt", Art.SATZ, "recht"),
+
+    /** Ein Recht, das sie nicht haben - {@code recht}. */
+    RECHT_GESPERRT("freistadt.rechte.gesperrt", Art.SATZ, "recht"),
+
+    /** Die Fusszeile mit dem Weg zum Aendern. */
+    RECHTE_HINWEIS("freistadt.rechte.hinweis", Art.SATZ),
+
+    /** Ein Recht ist dazugekommen - {@code recht}. */
+    RECHT_GEAENDERT("freistadt.rechte.geaendert", Art.SATZ, "recht"),
+
+    /** Ein Recht ist weggenommen - {@code recht}. */
+    RECHT_GENOMMEN("freistadt.rechte.genommen", Art.SATZ, "recht"),
+
+    /** Es war schon so eingestellt - {@code recht}. */
+    RECHT_SCHON_SO("freistadt.rechte.schon-so", Art.SATZ, "recht"),
+
+    /** Er steht in einer fremden Stadt - {@code stadt}, {@code besitzer}. */
+    RECHTE_NICHT_DEINE("freistadt.rechte.nicht-deine", Art.SATZ, "stadt", "besitzer"),
+
+    /** Das Wort ist kein Recht - {@code wort}. */
+    RECHT_UNBEKANNT("freistadt.rechte.unbekannt", Art.SATZ, "wort"),
+
+    /**
+     * Die drei Rechte als WORT - geholt ueber {@link #rechtewort(Tat)}.
+     *
+     * <p>Sie werden von keinem Zweig namentlich getippt, sondern ueber die
+     * Familienfunktion gewaehlt - dieselbe Bauart wie die Buchungsgruende in
+     * {@code MarkSatz.grundpfad}. Gedeckt sind sie darum in
+     * {@code Sprachschluessel.familienDeckung}, und dass jedes Wort wirklich durch die
+     * ausgelieferte Zeile geht, haelt {@code FreistadtBefehlTest}.
+     */
+    RECHTEWORT_BAUEN("freistadt.rechte.wort.bauen", Art.WORT),
+
+    /** Siehe {@link #RECHTEWORT_BAUEN}. */
+    RECHTEWORT_BENUTZEN("freistadt.rechte.wort.benutzen", Art.WORT),
+
+    /** Siehe {@link #RECHTEWORT_BAUEN}. */
+    RECHTEWORT_BEHAELTER("freistadt.rechte.wort.behaelter", Art.WORT),
+
+    // --- Teil D5: die Stadtbuergerliste ----------------------------------------
+
+    /** Die Ueberschrift der Buergerliste - {@code stadt}. */
+    STADTBUERGER_KOPF("freistadt.stadtbuerger.kopf", Art.SATZ, "stadt"),
+
+    /**
+     * Die Zeile des STADTBESITZERS - {@code besitzer}.
+     *
+     * <p>Eine eigene Zeile und keine Buergerzeile, und das ist die Festlegung von Teil
+     * D: Er ist kein Buerger seiner eigenen Stadt. Sein Recht kommt aus dem Besitz des
+     * Feldes, und die Verfallsregel aus Plan 16 zaehlt ihn darum nicht mit.
+     */
+    STADTBUERGER_BESITZER("freistadt.stadtbuerger.besitzer", Art.SATZ, "besitzer"),
+
+    /**
+     * Ein Buerger und die Zahl seiner Grundstuecke - {@code name}, {@code anzahl}.
+     *
+     * <p>{@code Art.GEZAEHLT}, weil sich der WORTLAUT aendert: ein Grundstueck, zwei
+     * GrundstueckE. Dieselbe Entscheidung wie bei {@link #GRUNDSTUECK_ZEILE}.
+     */
+    STADTBUERGER_ZEILE("freistadt.stadtbuerger.zeile", Art.GEZAEHLT, "name", "anzahl"),
+
+    /** Die Stadt hat noch keine Buerger. */
+    STADTBUERGER_LEER("freistadt.stadtbuerger.leer", Art.SATZ);
+
+    /**
+     * Das Wort zu einem Buergerrecht.
+     *
+     * <p>Ein {@code switch} OHNE Vorgabezweig, und das ist der Riegel: Ein viertes
+     * {@link Tat} bricht die Uebersetzung, und zwar an dieser Stelle mit Zeilennummer.
+     * Mit einem Vorgabezweig stuende dort eines Tages das Wort fuer "bauen" an einem
+     * Recht, das etwas anderes meint.
+     */
+    public static FreistadtSatz rechtewort(Tat recht) {
+        return switch (recht) {
+            case BAUEN -> RECHTEWORT_BAUEN;
+            case BENUTZEN -> RECHTEWORT_BENUTZEN;
+            case BEHAELTER -> RECHTEWORT_BEHAELTER;
+        };
+    }
 
     private final String pfad;
     private final Art art;

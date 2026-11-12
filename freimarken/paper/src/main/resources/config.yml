@@ -1163,6 +1163,36 @@ freistaedte:
   # Neuladbar: Die Zahl wird beim Kauf gefragt und nicht beim Start kopiert.
   verkaufsgebuehr-prozent: 0
 
+  # Was die STADTBUERGER einer NEU GEGRUENDETEN Stadt im Gemeinschaftsgebiet duerfen
+  # [12.11.2026, Teil D].
+  #
+  # Stadtbuerger ist, wem in der Stadt ein Grundstueck gehoert - nicht der Stadtbesitzer
+  # selbst, und kein Mitbauer. Auf seinem eigenen Grundstueck darf ein Buerger immer
+  # alles; diese Liste gilt fuer das UEBRIGE Stadtgebiet, also fuer alles, was der
+  # Stadtbesitzer noch nicht vergeben hat.
+  #
+  # Drei Rechte sind einstellbar, und sie stehen NEBENEINANDER - keines schliesst ein
+  # anderes ein:
+  #
+  #   * bauen     - Bloecke setzen und abbauen, Eimer, Feuer, Bilderrahmen, Tiere
+  #   * benutzen  - Tueren, Klinken, Zauntore, Knoepfe, Hebel, Druckplatten
+  #   * behaelter - Truhen, Oefen, Trichter, Fasser, Kistenloren
+  #
+  # NUR DIE VORGABE FUER NEUE STAEDTE. Jeder Stadtbesitzer stellt seine Stadt danach
+  # selbst ein, mit /freistadt rechte - eine Aenderung hier beruehrt bestehende Staedte
+  # nicht. Das ist dieselbe Lesart wie bei der Ladenmiete: Was einmal gilt, gilt weiter.
+  #
+  # LEER IST DIE AUSGELIEFERTE EINSTELLUNG, und das ist die sichere Richtung: Eine
+  # frische Stadt gibt nichts her, bis ihr Besitzer sich entscheidet. Wer seinen Spielern
+  # von Anfang an die Tueren oeffnen will, schreibt hier:
+  #
+  #   buergerrechte:
+  #     - benutzen
+  #
+  # Ein Wort, das keines der drei ist, bricht den Start mit Namen ab - lieber das als ein
+  # Recht, das der Betreiber gegeben hat und das lautlos nicht gilt.
+  buergerrechte: []
+
 laeden:
   # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.
   # Die Welt muss im Abschnitt welten: weiter unten stehen, sonst gilt keine Einheit.

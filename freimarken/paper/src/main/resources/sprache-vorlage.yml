@@ -161,7 +161,7 @@ befehl:
     tpdeny: "Teleportanfragen ablehnen"
     markt: "Was der Bundesmarkt ankauft - verkauft wird an seinen Schildern"
     laden: "Die Markthalle und ihre Ladeneinheiten"
-    freistadt: "Die Freistaedte - Liste und eigene Stadt gruenden"
+    freistadt: "Die Freistaedte - Liste, gruenden, Grundstuecke, Stadtbuerger"
     shop: "Deine Kistenshops auflisten und fuer andere freigeben"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
@@ -1125,6 +1125,17 @@ wache:
     # Stadt. Ihm fehlt nicht der Weg hinein, sondern der Name dessen, den er fragen
     # muss.
     fremdes-grundstueck: "<red>Dieses Grundstueck gehoert <white>{eigentuemer}</white></red>"
+    # {recht} - ein STADTBUERGER, dem seine Stadt diese Tat nicht hergibt [Teil D4].
+    #
+    # EIN EIGENER SATZ, und das ist der Grund, aus dem der Handbalken ueberhaupt einen
+    # Spieler kennt: Wem die Stadt mitgehoert, weil er ein Grundstueck darin hat, dem
+    # sagt "Das ist die Stadt von Anna" nichts. Er weiss, wessen Stadt es ist - er will
+    # wissen, was er dort darf.
+    #
+    # Das {recht} ist das WORT aus freistadt.rechte.wort - dieselbe Zeile, die auch
+    # /freistadt rechte liest. Zwei Worte fuer dasselbe Recht waeren zwei Antworten auf
+    # dieselbe Frage.
+    buerger-darf-nicht: "<red>Stadtbuerger duerfen hier nicht <white>{recht}</white></red>"
     # Die Freistaedte sind gerade nicht nachsehbar - wie laden-gestoert. Dann wird
     # abgelehnt, und das ist die sichere Richtung: Ein stilles Ja liesse jeden in
     # jeder fremden Stadt bauen.
@@ -1449,6 +1460,73 @@ freistadt:
     # {zuschnitt} {besitzer} - ein Geschenk.
     zeile-gratis: "<gray>  {zuschnitt} · <green>kostenlos</green> · <white>{besitzer}</white></gray>"
     leer: "<gray>  keines - frag in den Staedten nach, wer etwas abgibt</gray>"
+  # DIE BUERGERRECHTE [Teil D]. Was die STADTBUERGER im Gemeinschaftsgebiet duerfen -
+  # also auf dem Teil des Feldes, den der Stadtbesitzer noch nicht vergeben hat. Auf
+  # seinem EIGENEN Grundstueck darf ein Buerger immer alles; das regelt Teil C2.
+  #
+  # Stadtbuerger ist, wem in der Stadt ein Grundstueck gehoert - nicht der
+  # Stadtbesitzer selbst und kein Mitbauer. Der Rang Buerger aus Schritt 12 ist etwas
+  # ANDERES: Der kommt aus Spielzeit, dieser aus Grundbesitz. Darum heisst das hier
+  # ueberall Stadtbuerger.
+  rechte:
+    # {stadt} - die Ueberschrift. Lesen darf das JEDER, der in der Stadt steht: Ein
+    # Buerger muss wissen, was er darf, ohne den Besitzer zu fragen.
+    kopf: "<gold>Was die Stadtbuerger von {stadt} duerfen</gold>"
+    # {recht} - eine Zeile je Recht, und JEDES steht da, auch das gesperrte. Eine
+    # Liste, die nur die erlaubten nennt, laesst den Besitzer raten, was es noch gibt.
+    erlaubt: "<gray>  {recht} · <green>erlaubt</green></gray>"
+    gesperrt: "<gray>  {recht} · <red>gesperrt</red></gray>"
+    # Die Fusszeile, und sie steht fuer jeden da - auch fuer den Buerger. Wer das Recht
+    # nicht hat, bekommt bei einer Aenderung die Absage, und das ist die ehrlichere
+    # Auskunft als ein Hinweis, der je nach Leser verschwindet.
+    hinweis: "<gray>Aendern: /freistadt rechte an [recht] oder /freistadt rechte aus [recht]</gray>"
+    # {recht} - zwei Saetze, weil an und aus verschiedene Nachrichten sind: Der eine
+    # gibt etwas her, der andere nimmt es zurueck.
+    geaendert: "<green>Stadtbuerger duerfen jetzt {recht}.</green>"
+    genommen: "<yellow>Stadtbuerger duerfen nicht mehr {recht}.</yellow>"
+    # {recht} - es war schon so. Kein Fehler, nur eine Auskunft: Ein stilles Nichts
+    # liesse den Besitzer glauben, der Befehl sei nicht angekommen.
+    schon-so: "<gray>Das war schon eingestellt: {recht}.</gray>"
+    # {stadt} {besitzer} - er steht in einer FREMDEN Stadt.
+    nicht-deine: "<red>{stadt} gehoert {besitzer}.</red>\n<gray>Die Buergerrechte stellt ein, wem die Stadt gehoert.</gray>"
+    # {wort} - ein Wort, das kein Recht ist. Die Vorschlagsliste nennt die moeglichen;
+    # eine zweite Aufzaehlung HIER waere die Stelle, die beim vierten Recht vergessen
+    # wird.
+    unbekannt: "<red>{wort} ist kein Buergerrecht.</red>\n<gray>Die Vorschlagsliste nennt, was moeglich ist.</gray>"
+    wort:
+      # Die drei Rechte als WORT - sie gehen als Wert in die Saetze darueber. Ohne
+      # Farbtag, weil der umgebende Satz die Farbe setzt.
+      #
+      # Was ein Recht WIRKLICH umfasst, steht in Tat im Quelltext und nicht hier: Diese
+      # Zeilen sind die Worte, mit denen der Spieler es liest. Wer sie aendert, aendert
+      # die Anzeige und nicht die Regel.
+      bauen: "bauen"
+      benutzen: "Tueren und Knoepfe benutzen"
+      behaelter: "Truhen und Oefen oeffnen"
+  # DIE STADTBUERGERLISTE [Teil D5]. Wer in dieser Stadt ein Grundstueck hat, ist
+  # Stadtbuerger - und das ist eine ABLEITUNG und keine Mitgliedschaft: Es gibt keinen
+  # Beitritt, keinen Austritt und keine Liste zu pflegen. Wer kauft, steht drin; wer
+  # verkauft, nicht mehr.
+  #
+  # Der STADTBESITZER steht NICHT in dieser Liste, sondern in einer eigenen Zeile
+  # darueber: Jedes frisch zugeschnittene Grundstueck gehoert zunaechst ihm, und zaehlte
+  # er mit, haette jede Stadt nach dem ersten Schnitt fuer immer einen Buerger. Die
+  # Verfallsregel aus Plan 16 koennte dann nie greifen.
+  stadtbuerger:
+    # {stadt} - die Ueberschrift. Lesen darf das jeder, der in der Stadt steht.
+    kopf: "<gold>Die Stadtbuerger von {stadt}</gold>"
+    # {besitzer} - wem die Stadt gehoert. Eine eigene Zeile und keine Buergerzeile:
+    # Sein Recht kommt aus dem Besitz des Feldes und nicht aus einem Grundstueck.
+    besitzer: "<gray>  Stadtbesitzer: <white>{besitzer}</white></gray>"
+    # {name} {anzahl} - ein Buerger und die Zahl seiner Grundstuecke. GEZAEHLT, weil
+    # sich das Wort aendert: ein Grundstueck, zwei Grundstuecke.
+    zeile:
+      eins: "<gray>  <white>{name}</white> · {anzahl} Grundstueck</gray>"
+      viele: "<gray>  <white>{name}</white> · {anzahl} Grundstuecke</gray>"
+    # Noch niemand hat hier gekauft. Diese Zeile MUSS es geben: Wer nur die
+    # Ueberschrift und den Besitzer sieht, haelt es fuer einen Fehler - und ab Werk ist
+    # das der Normalfall, denn eine frische Stadt hat keine Buerger.
+    leer: "<gray>  noch keine - verkauf oder verschenk ein Grundstueck mit /freistadt grundstueck anbieten</gray>"
 
 laden:
   # Die Ueberschrift ueber der Liste - die EINZIGE goldene Zeile dieses Befehls.

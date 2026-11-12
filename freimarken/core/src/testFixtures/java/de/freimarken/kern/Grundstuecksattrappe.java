@@ -66,6 +66,11 @@ public class Grundstuecksattrappe implements Grundstuecksablage {
     }
 
     @Override
+    public boolean besitztIn(String welt, long stadtId, UUID spieler) {
+        return echte.besitztIn(welt, stadtId, spieler);
+    }
+
+    @Override
     public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
         echte.mitbauerSetzen(id, mitbauer);
     }

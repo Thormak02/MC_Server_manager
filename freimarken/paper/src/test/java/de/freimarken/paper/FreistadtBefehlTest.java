@@ -20,7 +20,9 @@ import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
 import java.time.Instant;
+import de.freimarken.kern.Tat;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Logger;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,7 +74,8 @@ class FreistadtBefehlTest {
         anna = new Spielerprobe("Anna", Spielerprobe.kennungAus(1),
                 FreistadtBefehle.RECHT, FreistadtBefehle.RECHT_GRUENDEN,
                 FreistadtBefehle.RECHT_GRUNDSTUECK,
-                FreistadtBefehle.RECHT_KAUFEN)
+                FreistadtBefehle.RECHT_KAUFEN,
+                FreistadtBefehle.RECHT_RECHTE)
                 .inWelt(Serverprobe.welt(WELT));
     }
 
@@ -512,7 +515,7 @@ class FreistadtBefehlTest {
     private Spielerprobe bert() {
         Spielerprobe bert = new Spielerprobe("Bert", Spielerprobe.kennungAus(2),
                 FreistadtBefehle.RECHT, FreistadtBefehle.RECHT_GRUNDSTUECK,
-                FreistadtBefehle.RECHT_KAUFEN)
+                FreistadtBefehle.RECHT_KAUFEN, FreistadtBefehle.RECHT_RECHTE)
                 .inWelt(Serverprobe.welt(WELT));
         Serverprobe.anmelden(bert, "Bert");
         Serverprobe.anmelden(anna, "Anna");
@@ -523,8 +526,7 @@ class FreistadtBefehlTest {
     private Wirtschaftsstand mitGebuehr(int prozent) {
         Freistadtwerte werte = Wirtschaftswerte.VORGABE.freistaedte();
         return new Wirtschaftsstand(Wirtschaftswerte.VORGABE.mitFreistaedten(
-                new Freistadtwerte(werte.gruendungspreis(), werte.hoechstzahl(),
-                        werte.hoechstzellen(), prozent)));
+                werte.mitVerkaufsgebuehr(prozent)));
     }
 
     /**
@@ -860,4 +862,225 @@ class FreistadtBefehlTest {
         assertEquals(ANGEBOTSPREIS,
                 grundstuecke.angebote(WELT).get(0).angebotspreis());
     }
+
+    // ------------------------------------- Die Buergerrechte [Teil D3]
+
+    @Test
+    @DisplayName("Die Rechteliste nennt ALLE drei - und jedes mit seinem Wort aus der"
+            + " Vorlage")
+    void rechtelisteNenntAlleDrei() throws CommandSyntaxException {
+        // DIE DECKUNG DER FAMILIE. Die drei Rechteworte werden ueber
+        // FreistadtSatz.rechtewort gewaehlt und nirgends namentlich getippt -
+        // Sprachschluessel.familienDeckung laesst sie darum als selbstbescheinigend
+        // durch. Was sie wirklich deckt, ist DIESE Probe: Hier geht jedes Wort durch die
+        // echte Zeile der ausgelieferten Vorlage.
+        annastadtMitAnnaDarin();
+        anna.vergessen();
+
+        probe().tippe("freistadt rechte", anna);
+
+        List<String> zeilen = gelesen();
+        assertEquals(5, zeilen.size(),
+                "Kopf, drei Rechte, Fusszeile - und zwar JEDES Recht, auch das"
+                        + " gesperrte: " + zeilen);
+        // KLEIN geschrieben, und das ist nicht hier zu beheben: Der Name ist der, den
+        // der Spieler getippt hat - /freistadt gruenden annastadt. Abgeschrieben aus dem
+        // roten Lauf dieser Probe.
+        assertTrue(zeilen.get(0).contains("annastadt"), zeilen.get(0));
+        // Die drei Worte aus der Vorlage, in der Reihenfolge von Tat.values().
+        assertTrue(zeilen.get(1).contains("bauen"), zeilen.get(1));
+        assertTrue(zeilen.get(2).contains("Tueren und Knoepfe benutzen"), zeilen.get(2));
+        assertTrue(zeilen.get(3).contains("Truhen und Oefen oeffnen"), zeilen.get(3));
+        // Ab Werk ist KEINES erlaubt - die sichere Richtung, und die Probe sagt es
+        // ausdruecklich: Eine Vorgabe, die etwas hergibt, waere hier gruen, wenn die
+        // Probe nur die Worte zaehlte.
+        for (int i = 1; i <= 3; i++) {
+            assertTrue(zeilen.get(i).contains("gesperrt"),
+                    "eine frische Stadt gibt nichts her: " + zeilen.get(i));
+        }
+    }
+
+    @Test
+    @DisplayName("an und aus wirken - und zwar in der Zeile der Stadt")
+    void rechtAnUndAus() throws CommandSyntaxException {
+        Parzelle stadt = annastadtMitAnnaDarin();
+        anna.vergessen();
+
+        probe().tippe("freistadt rechte an benutzen", anna);
+
+        assertEquals(Set.of(Tat.BENUTZEN),
+                lager.finde(WELT, stadt.x(), stadt.z()).orElseThrow().buergerrechte(),
+                "die Zeile der Stadt traegt es jetzt - nicht nur der Satz sagt es");
+        assertEquals(1, gelesen().size(), gelesen().toString());
+        assertTrue(gelesen().get(0).contains("duerfen jetzt"), gelesen().get(0));
+        assertTrue(gelesen().get(0).contains("Tueren und Knoepfe benutzen"),
+                gelesen().get(0));
+
+        anna.vergessen();
+        probe().tippe("freistadt rechte aus benutzen", anna);
+
+        assertEquals(Parzelle.KEINE_RECHTE,
+                lager.finde(WELT, stadt.x(), stadt.z()).orElseThrow().buergerrechte(),
+                "und wieder weg");
+        assertTrue(gelesen().get(0).contains("nicht mehr"), gelesen().get(0));
+    }
+
+    @Test
+    @DisplayName("Zweimal dasselbe: der zweite Zug sagt, dass nichts zu tun war")
+    void zweimalDasselbe() throws CommandSyntaxException {
+        annastadtMitAnnaDarin();
+        probe().tippe("freistadt rechte an bauen", anna);
+        anna.vergessen();
+
+        probe().tippe("freistadt rechte an bauen", anna);
+
+        // Kein stilles Nichts und kein zweites "duerfen jetzt": Ein Stadtbesitzer, der
+        // zweimal tippt, soll lesen, dass nichts zu tun war - sonst glaubt er, er habe
+        // gerade etwas umgestellt.
+        assertEquals(1, gelesen().size(), gelesen().toString());
+        assertTrue(gelesen().get(0).contains("war schon eingestellt"),
+                gelesen().get(0));
+    }
+
+    @Test
+    @DisplayName("In einer FREMDEN Stadt stellt niemand die Rechte ein")
+    void fremdeStadtBleibtUnberuehrt() throws CommandSyntaxException {
+        Parzelle stadt = annastadtMitAnnaDarin();
+        Spielerprobe fremder = bert();
+        stellDich(fremder, stadt, 0, 0);
+
+        probe().tippe("freistadt rechte an bauen", fremder);
+
+        assertEquals(Parzelle.KEINE_RECHTE,
+                lager.finde(WELT, stadt.x(), stadt.z()).orElseThrow().buergerrechte(),
+                "nichts geaendert - sonst koennte jeder Besucher die Regeln einer"
+                        + " fremden Stadt umstellen");
+        List<String> seine = fremder.chatBild();
+        assertTrue(seine.get(0).contains("annastadt"), seine.get(0));
+        assertTrue(seine.get(0).contains("Anna"),
+                "der Satz nennt den Besitzer, damit der Fremde weiss, wen er fragen"
+                        + " muss: " + seine.get(0));
+
+        // LESEN darf er trotzdem: Was in einer Stadt gilt, ist eine Auskunft fuer jeden,
+        // der dort steht - ein Buerger muss wissen, was er darf.
+        fremder.vergessen();
+        probe().tippe("freistadt rechte", fremder);
+        assertEquals(5, fremder.chatBild().size(), fremder.chatBild().toString());
+    }
+
+    @Test
+    @DisplayName("Ein Wort, das kein Recht ist, wird benannt und nicht verschluckt")
+    void unbekanntesWort() throws CommandSyntaxException {
+        annastadtMitAnnaDarin();
+        anna.vergessen();
+
+        probe().tippe("freistadt rechte an fliegen", anna);
+
+        assertTrue(gelesen().get(0).contains("fliegen"),
+                "das Wort steht im Satz - sonst sucht der Spieler seinen Vertipper"
+                        + " nicht: " + gelesen());
+        assertTrue(gelesen().get(0).contains("kein Buergerrecht"), gelesen().get(0));
+    }
+
+    @Test
+    @DisplayName("Ausserhalb einer Stadt gibt es keine Rechte zu stellen")
+    void ohneStadtKeineRechte() throws CommandSyntaxException {
+        // Anna steht auf einem FREIEN Feld - dort gibt es keine Stadt, und der Satz
+        // ist derselbe wie beim Zuschneiden. Gegruendet wird in dieser Probe nichts.
+        anna.anOrt(new org.bukkit.Location(Serverprobe.welt(WELT), 3, 64, 3));
+        anna.vergessen();
+
+        probe().tippe("freistadt rechte", anna);
+
+        assertTrue(gelesen().get(0).contains("keine Stadt"), gelesen().toString());
+    }
+
+
+    // ------------------------------------- Die Stadtbuergerliste [Teil D5]
+
+    @Test
+    @DisplayName("DAS ABNAHMEKRITERIUM VON TEIL D - Bert kauft und steht in der"
+            + " Buergerliste")
+    void werKauftIstStadtbuerger() throws CommandSyntaxException {
+        // DER GANZE WEG ueber die BEFEHLE und nicht an der Ablage vorbei: Anna gruendet,
+        // schneidet zu, bietet an - Bert kauft. Danach steht er in der Liste, und das
+        // ist die Zusage, die Teil D ueberhaupt erst zu etwas macht: Stadtbuerger ist
+        // eine ABLEITUNG. Niemand traegt ihn ein, es gibt keine Tabelle stadt_buerger,
+        // und trotzdem steht er da.
+        Parzelle stadt = annastadtMitEinemGrundstueck();
+        Spielerprobe bert = bert();
+        stellDich(bert, stadt, 0, 0);
+        probe().tippe("freistadt grundstueck anbieten " + ANGEBOTSPREIS, anna);
+        probe().tippe("freistadt grundstueck kaufen", bert);
+        bert.vergessen();
+
+        probe().tippe("freistadt stadtbuerger", bert);
+
+        List<String> zeilen = bert.chatBild();
+        assertEquals(3, zeilen.size(),
+                "Kopf, der Stadtbesitzer, EIN Buerger: " + zeilen);
+        assertTrue(zeilen.get(0).contains("annastadt"), zeilen.get(0));
+        assertTrue(zeilen.get(1).contains("Anna"),
+                "die Stadtbesitzerin in ihrer EIGENEN Zeile - sie ist keine Buergerin"
+                        + " ihrer Stadt: " + zeilen.get(1));
+        assertTrue(zeilen.get(2).contains("Bert"), zeilen.get(2));
+        assertTrue(zeilen.get(2).contains("1 Grundstueck"),
+                "die EINZAHLform, und sie kommt aus der gezaehlten Zeile: "
+                        + zeilen.get(2));
+    }
+
+    @Test
+    @DisplayName("Eine frische Stadt hat KEINE Buerger - und sagt es")
+    void frischeStadtOhneBuerger() throws CommandSyntaxException {
+        // Der Normalfall einer gegruendeten Stadt, und genau der Fall, von dem Teil E
+        // abhaengt: Anna hat ein Grundstueck zugeschnitten und noch nicht verkauft - es
+        // gehoert ihr selbst. Stuende sie darum in ihrer eigenen Buergerliste, haette
+        // jede Stadt nach dem ersten Schnitt fuer immer einen Buerger, und die
+        // Verfallsregel aus Plan 16 koennte nie greifen.
+        annastadtMitEinemGrundstueck();
+        anna.vergessen();
+
+        probe().tippe("freistadt stadtbuerger", anna);
+
+        List<String> zeilen = gelesen();
+        assertEquals(3, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(1).contains("Stadtbesitzer"), zeilen.get(1));
+        assertTrue(zeilen.get(2).contains("noch keine"),
+                "der leere Fall MUSS einen Satz haben - wer nur Kopf und Besitzer"
+                        + " sieht, haelt es fuer einen Fehler: " + zeilen.get(2));
+    }
+
+    @Test
+    @DisplayName("Zwei Grundstuecke, EINE Zeile - mit der Mehrzahlform")
+    void zweiGrundstueckeEineZeile() throws CommandSyntaxException {
+        // Entdoppelt: Wer zwei Grundstuecke hat, ist EIN Buerger. Eine Liste, die ihn
+        // zweimal nennt, laesst den Stadtbesitzer seine Einwohner falsch zaehlen - und
+        // die Verfallsregel aus Teil E rechnet mit derselben Zahl.
+        Parzelle stadt = annastadtMitEinemGrundstueck();
+        Spielerprobe bert = bert();
+        stellDich(bert, stadt, 0, 0);
+        probe().tippe("freistadt grundstueck anbieten " + ANGEBOTSPREIS, anna);
+        probe().tippe("freistadt grundstueck kaufen", bert);
+
+        // Ein ZWEITES Grundstueck, eine Zelle weiter - angelegt und verkauft wie das
+        // erste, also ueber die Befehle.
+        stellDich(anna, stadt, 1, 0);
+        probe().tippe("freistadt grundstueck ecke", anna);
+        probe().tippe("freistadt grundstueck ecke", anna);
+        probe().tippe("freistadt grundstueck anlegen", anna);
+        probe().tippe("freistadt grundstueck anbieten " + ANGEBOTSPREIS, anna);
+        stellDich(bert, stadt, 1, 0);
+        probe().tippe("freistadt grundstueck kaufen", bert);
+        bert.vergessen();
+
+        probe().tippe("freistadt stadtbuerger", bert);
+
+        List<String> zeilen = bert.chatBild();
+        assertEquals(3, zeilen.size(),
+                "EINE Buergerzeile und nicht zwei: " + zeilen);
+        assertTrue(zeilen.get(2).contains("2 Grundstuecke"),
+                "die MEHRZAHLform - sie steht als zweite Zeile in der Vorlage, und"
+                        + " ohne diese Probe waere sie ungelesen: " + zeilen.get(2));
+    }
+
 }

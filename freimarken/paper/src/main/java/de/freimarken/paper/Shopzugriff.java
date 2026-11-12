@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Tat;
 import java.util.UUID;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
@@ -69,6 +70,10 @@ final class Shopzugriff implements Shopbuch.Zugriff {
         if (block == null) {
             return false;
         }
-        return wache.darfHandeln(spieler, new Location(block.getWorld(), x, y, z));
+        // BAUEN und nicht BEHAELTER: Gefragt ist nicht, ob er die Kiste oeffnen darf,
+        // sondern ob er dort einen Shop ERRICHTEN darf. Das belegt die Kiste dauerhaft,
+        // und es ist dieselbe Tat wie das Setzen des Schildes daneben.
+        return wache.darfHandeln(spieler, Tat.BAUEN,
+                new Location(block.getWorld(), x, y, z));
     }
 }

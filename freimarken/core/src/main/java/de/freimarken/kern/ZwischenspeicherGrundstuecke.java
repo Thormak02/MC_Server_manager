@@ -64,6 +64,26 @@ public final class ZwischenspeicherGrundstuecke implements Grundstuecksablage {
     private final Map<Long, Grundstueck> nachNummer = new HashMap<>();
 
     /**
+     * Je Stadt, wem dort wie VIELE Grundstuecke gehoeren - fuer die Stadtbuergerschaft.
+     *
+     * <p><b>Eine ZAHL und keine Menge</b>, und das ist der ganze Grund, warum diese Karte
+     * so aussieht: {@link #vergiss} nimmt ein Grundstueck bedingungslos heraus. Mit einer
+     * blossen Menge von Eigentuemern verloere jemand mit ZWEI Grundstuecken in derselben
+     * Stadt seine Buergerschaft, sobald er EINES davon verkauft - und eine Probe mit nur
+     * einem Grundstueck waere dabei gruen, mit Riegel wie ohne.
+     *
+     * <p><b>Die Obergrenze</b>, gerechnet wie die der Zellkarte: In eine Stadt passen 256
+     * Zellen, also hoechstens 256 Grundstuecke und damit hoechstens 256 Eintraege je
+     * Stadt. Ueber 399 Staedte sind das 102.144 Paare - dieselbe Grenze wie bei
+     * {@link #nachZelle} und billiger, weil nur Zahlen und Verweise darin stehen.
+     *
+     * <p><b>Nur ein INDEX und keine zweite Wahrheit</b>: Gefuehrt wird sie allein in
+     * {@link #merke} und {@link #vergiss} - also an derselben EINEN Naht wie die beiden
+     * Karten darueber. Ein eigener Pflegeweg daneben koennte eine Aenderung verpassen.
+     */
+    private final Map<Long, Map<UUID, Integer>> nachStadt = new HashMap<>();
+
+    /**
      * Die Welt, die diese Karte deckt - {@code null}, solange nicht gefuellt wurde.
      *
      * <p><b>EINE Welt, und jede andere geht ungepuffert durch.</b> Das ist der Grund,
@@ -103,6 +123,10 @@ public final class ZwischenspeicherGrundstuecke implements Grundstuecksablage {
         List<Grundstueck> alle = wahrheit.alle(welt);
         nachZelle.clear();
         nachNummer.clear();
+        // Die DRITTE Karte gehoert hier mitgenannt: Ein zweites fuellen - nach einem
+        // /freimarken neuladen - liesse sonst jeden Eintrag von vorher stehen, und die
+        // Stadt haette Geisterbuerger, die kein Grundstueck mehr haben.
+        nachStadt.clear();
         for (Grundstueck eines : alle) {
             merke(eines);
         }
@@ -223,6 +247,25 @@ public final class ZwischenspeicherGrundstuecke implements Grundstuecksablage {
         return wahrheit.vonSpieler(welt, spieler);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Aus der Karte und nicht durchgereicht - anders als die drei Listen darueber:
+     * Diese Frage faellt auf dem heissen Pfad, bei jedem gesetzten Block in einer
+     * Freistadt. Genau dafuer gibt es {@link #nachStadt}.
+     */
+    @Override
+    public synchronized boolean besitztIn(String welt, long stadtId, UUID spieler) {
+        if (spieler == null) {
+            return false;
+        }
+        if (!deckt(welt)) {
+            return wahrheit.besitztIn(welt, stadtId, spieler);
+        }
+        Map<UUID, Integer> dort = nachStadt.get(stadtId);
+        return dort != null && dort.containsKey(spieler);
+    }
+
     // ------------------------------------------------------------------- innen
 
     /**
@@ -247,6 +290,8 @@ public final class ZwischenspeicherGrundstuecke implements Grundstuecksablage {
     /** Traegt ein Grundstueck in JEDE seiner Zellen ein. */
     private void merke(Grundstueck eines) {
         nachNummer.put(eines.id(), eines);
+        nachStadt.computeIfAbsent(eines.stadtId(), unbenutzt -> new HashMap<>())
+                .merge(eines.eigentuemer(), 1, Integer::sum);
         Zellquader flaeche = eines.flaeche();
         for (int x = flaeche.vonX(); x <= flaeche.bisX(); x++) {
             for (int z = flaeche.vonZ(); z <= flaeche.bisZ(); z++) {
@@ -258,6 +303,22 @@ public final class ZwischenspeicherGrundstuecke implements Grundstuecksablage {
     /** Nimmt es aus jeder seiner Zellen - das Gegenstueck zu {@link #merke}. */
     private void vergiss(Grundstueck eines) {
         nachNummer.remove(eines.id());
+        Map<UUID, Integer> inDerStadt = nachStadt.get(eines.stadtId());
+        if (inDerStadt != null) {
+            // HERUNTERZAEHLEN und erst bei null herausnehmen: Wer zwei Grundstuecke in
+            // derselben Stadt hat, bleibt nach dem Verkauf des einen Buerger.
+            Integer bisher = inDerStadt.get(eines.eigentuemer());
+            if (bisher != null && bisher > 1) {
+                inDerStadt.put(eines.eigentuemer(), bisher - 1);
+            } else {
+                inDerStadt.remove(eines.eigentuemer());
+                if (inDerStadt.isEmpty()) {
+                    // Die leere Stadt mitnehmen: Sonst waechst die Karte mit jeder Stadt,
+                    // die je ein Grundstueck hatte - langsam, aber unbegrenzt.
+                    nachStadt.remove(eines.stadtId());
+                }
+            }
+        }
         Zellquader flaeche = eines.flaeche();
         for (int x = flaeche.vonX(); x <= flaeche.bisX(); x++) {
             for (int z = flaeche.vonZ(); z <= flaeche.bisZ(); z++) {

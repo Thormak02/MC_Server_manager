@@ -32,6 +32,8 @@ import java.util.UUID;
  * @param elternId    Nummer des uebergeordneten Besitzes, sonst {@link #KEIN_ELTERNTEIL}
  * @param zustand     ob der Besitz laeuft, gekuendigt oder verfallen ist
  * @param name        der Name einer Freistadt, sonst {@link #KEIN_NAME}
+ * @param buergerrechte was die Stadtbuerger einer Freistadt im Gemeinschaftsgebiet
+ *                      duerfen - bei allem anderen leer, nie {@code null}
  */
 public record Parzelle(
         long id,
@@ -45,7 +47,8 @@ public record Parzelle(
         Art art,
         long elternId,
         Zustand zustand,
-        String name) {
+        String name,
+        Set<Tat> buergerrechte) {
 
     /**
      * Keine Elternnummer.
@@ -65,6 +68,16 @@ public record Parzelle(
      * die zweite liefe in eine Schluesselverletzung, die niemand erwartet.
      */
     public static final String KEIN_NAME = null;
+
+    /**
+     * Keine Buergerrechte - die Vorgabe, und bei allem ausser einer Freistadt die
+     * einzige erlaubte Besetzung.
+     *
+     * <p>Eine LEERE Menge und kein {@code null}: "niemand darf etwas" ist eine Aussage,
+     * "ich weiss es nicht" waere keine - und auf dem heissen Pfad muss die Wache sofort
+     * antworten koennen.
+     */
+    public static final Set<Tat> KEINE_RECHTE = Set.of();
 
     public Parzelle {
         if (welt == null || welt.isBlank()) {
@@ -104,10 +117,26 @@ public record Parzelle(
             throw new IllegalArgumentException("Nur eine Freistadt traegt einen Namen,"
                     + " nicht " + art.schluessel() + ": " + name);
         }
+        // DIE BUERGERRECHTE GEHOEREN ZUR ART, genau wie der Name: Buerger hat nur eine
+        // Freistadt. Ein Recht an einer Marktstadtparzelle waere eine Zeile in
+        // freistadt_rechte, die niemand je liest - und ein Betreiber, der sie dort
+        // findet, sucht nach einer Wirkung, die es nicht gibt.
+        //
+        // Die ANDERE Richtung ist kein Fehler: Eine Freistadt OHNE Rechte ist eine, in
+        // der Buerger nur ihr eigenes Grundstueck haben. Das ist die Vorgabe.
+        if (art != Art.FREISTADT && buergerrechte != null
+                && !buergerrechte.isEmpty()) {
+            throw new IllegalArgumentException("Nur eine Freistadt hat Stadtbuerger und"
+                    + " damit Buergerrechte, nicht " + art.schluessel() + ": "
+                    + buergerrechte);
+        }
         // Unveraenderlich kopieren: Sonst kann der Aufrufer die Mitbauer nachtraeglich
         // aendern, ohne dass das Lager etwas davon erfaehrt - und die Datenbank weiss
-        // dann etwas anderes als der Speicher.
+        // dann etwas anderes als der Speicher. Dasselbe gilt fuer die Rechte, und dort
+        // waere die Folge schwerer: ein Recht, das im Speicher gilt und in der Datenbank
+        // nicht steht.
         mitbauer = mitbauer == null ? Set.of() : Set.copyOf(mitbauer);
+        buergerrechte = buergerrechte == null ? Set.of() : Set.copyOf(buergerrechte);
     }
 
     /**
@@ -122,8 +151,19 @@ public record Parzelle(
                     Set<UUID> mitbauer, long preis, Instant erworbenAm, Art art,
                     long elternId, Zustand zustand) {
         this(id, welt, x, z, eigentuemer, mitbauer, preis, erworbenAm, art, elternId,
-                zustand, KEIN_NAME);
+                zustand, KEIN_NAME, KEINE_RECHTE);
     }
+
+    // KEIN Kurzweg mit Namen und ohne Rechte, und das ist eine Lehre aus dem 11.11.2026:
+    // Damals bekam diese Zeile ihr zwoelftes Feld, den Namen - und SpeicherLager baute
+    // beim Mitbauer-Setzen eine neue Zeile von Hand zusammen, mit dem kurzen Konstruktor.
+    // Der setzte KEIN_NAME, eine Freistadt ohne Namen wirft, und ein Stadtbesitzer konnte
+    // keinen einzigen Mitbauer eintragen. Mit einem stillen Kurzweg fuer die Rechte waere
+    // derselbe Fehler diesmal LEISE: Die Zeile verlor nur ihre Buergerrechte, geworfen
+    // haette nichts, und im Spiel waere nach jedem Mitbauer-Setzen jedes Recht weg.
+    //
+    // Darum gibt es ihn nicht. Wer eine Freistadt baut, nennt ihre Rechte - und wer eine
+    // Zeile aendert, nimmt einen der Wandler weiter unten.
 
     /** Ob dieser Spieler Eigentuemer ist. */
     public boolean gehoert(UUID spieler) {
@@ -145,6 +185,47 @@ public record Parzelle(
      */
     public boolean hatElternteil() {
         return elternId != KEIN_ELTERNTEIL;
+    }
+
+    /**
+     * Ob die Stadtbuerger dieser Stadt das duerfen.
+     *
+     * <p>Eine Frage an der Zeile und nicht an einer eigenen Ablage: Die Rechte reisen mit
+     * der Stadt, so wie die Mitbauer - und damit hat der heisse Pfad sie schon in der
+     * Hand, wenn er die Stadt gefunden hat. Null zusaetzliche Gaenge.
+     *
+     * <p>Sagt NICHTS darueber, ob der Fragende Buerger ist. Das entscheidet
+     * {@link Stadtbuergerschaft#istBuerger}, und die Trennung ist Absicht: Hier steht,
+     * was eine Stadt erlaubt, dort, wer dazugehoert.
+     */
+    public boolean buergerDuerfen(Tat tat) {
+        return buergerrechte.contains(tat);
+    }
+
+    /**
+     * Dieselbe Zeile mit anderen Mitbauern.
+     *
+     * <p><b>Es gibt ihn wegen eines Fundes</b>, nicht aus Geschmack: Das Speicherlager
+     * setzte die neue Zeile beim Mitbauer-Setzen von Hand zusammen und verlor am
+     * 11.11.2026 dabei den Namen. Jedes Feld, das diese Zeile kuenftig bekommt, ginge an
+     * derselben Stelle wieder verloren - und ab dem dreizehnten Feld lautlos, weil nicht
+     * jedes einen Riegel hat wie der Name.
+     */
+    public Parzelle mitMitbauern(Set<UUID> andere) {
+        return new Parzelle(id, welt, x, z, eigentuemer, andere, preis, erworbenAm,
+                art, elternId, zustand, name, buergerrechte);
+    }
+
+    /**
+     * Dieselbe Zeile mit anderen Buergerrechten.
+     *
+     * <p>Ein Wandler und kein Setzer - die Zeile ist ein Record. Dass es ihn gibt, hat
+     * denselben Grund wie {@code Grundstueck.mitAngebot}: Wer den neuen Stand von Hand
+     * zusammensetzt, vergisst eines Tages ein Feld, und niemand sieht es.
+     */
+    public Parzelle mitBuergerrechten(Set<Tat> andere) {
+        return new Parzelle(id, welt, x, z, eigentuemer, mitbauer, preis, erworbenAm,
+                art, elternId, zustand, name, andere);
     }
 
     /**

@@ -871,6 +871,40 @@ public final class Datenbank implements AutoCloseable {
             ALTER TABLE grundstuecke
               ADD COLUMN IF NOT EXISTS angebotspreis BIGINT NULL DEFAULT NULL,
               ADD KEY IF NOT EXISTS ix_grundstueck_angebot (welt, angebotspreis)
+            """,
+
+            // Schritt 23: die BUERGERRECHTE einer Freistadt - Teil D, 12.11.2026. Was
+            // die Stadtbuerger im Gemeinschaftsgebiet duerfen, stellt der Stadtbesitzer
+            // je Stadt ein.
+            //
+            // EINE ZEILE JE FREIGESCHALTETES RECHT und keine Spalte mit Flaggenbits, und
+            // das hat drei Gruende. Erstens: Ein viertes Recht braucht dann keinen
+            // Schemaschritt - es ist eine Zeile mehr, kein ALTER TABLE. Zweitens: Was
+            // dasteht, ist lesbar - ein Betreiber sieht in der Tabelle "behaelter" und
+            // nicht die Zahl 5. Drittens ist es die Bauart, die dieses Projekt fuer
+            // Mengen schon zweimal gewaehlt hat (parzellen_mitbauer,
+            // kistenshop_freigabe), und eine dritte Bauart fuer dieselbe Sache waere die
+            // Stelle, an der jemand die falsche Annahme mitbringt.
+            //
+            // ON DELETE CASCADE wie bei parzellen_mitbauer: Wird eine Stadt aufgeloest,
+            // sind ihre Buergerrechte gegenstandslos. Kein RESTRICT - ein Recht ist kein
+            // Besitz, der verloren gehen koennte.
+            //
+            // KEIN Fremdschluessel auf eine Rechtetabelle: Welche Rechte es gibt, steht
+            // in der Aufzaehlung Tat im Kern. Eine zweite Liste in der Datenbank waere
+            // eine zweite Wahrheit darueber - und bei jedem neuen Recht muessten beide
+            // gepflegt werden. Was hier steht und der Kern nicht kennt, faellt beim
+            // Lesen mit Namen auf (Tat.ausSchluessel wirft), und das ist die sichere
+            // Richtung: Ein stilles Ueberspringen waere ein Recht, das der Betreiber
+            // eingetragen hat und das lautlos nicht gilt.
+            """
+            CREATE TABLE IF NOT EXISTS freistadt_rechte (
+              stadt_id BIGINT      NOT NULL,
+              recht    VARCHAR(32) NOT NULL,
+              PRIMARY KEY (stadt_id, recht),
+              CONSTRAINT fk_freistadt_recht FOREIGN KEY (stadt_id)
+                REFERENCES parzellen (id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -1083,6 +1117,9 @@ public final class Datenbank implements AutoCloseable {
             // steht - und damit JEDE Datenbankprobe, auch die, die mit Grundstuecken
             // nichts zu tun hat. Die Mitbauer gehen ueber ON DELETE CASCADE mit; sie
             // stehen trotzdem hier, damit die Reihenfolge lesbar bleibt.
+            // VOR parzellen, wie jede Nebentabelle mit Fremdschluessel darauf: Ein
+            // DELETE auf die Elternzeile scheitert sonst an fk_freistadt_recht.
+            anweisung.execute("DELETE FROM freistadt_rechte");
             anweisung.execute("DELETE FROM grundstuecke_mitbauer");
             anweisung.execute("DELETE FROM grundstuecke");
             anweisung.execute("DELETE FROM parzellen_mitbauer");

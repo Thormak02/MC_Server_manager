@@ -60,6 +60,31 @@ public interface Grundstuecksablage {
     /** Die Grundstuecke eines Spielers in dieser Welt - fuer seine eigene Liste. */
     List<Grundstueck> vonSpieler(String welt, UUID spieler);
 
+    /**
+     * Ob diesem Spieler in dieser Stadt ueberhaupt Grund gehoert.
+     *
+     * <p><b>Die Punktfrage der Stadtbuergerschaft</b> [12.11.2026], und sie steht hier
+     * neben {@link #anZelle} aus demselben Grund: Sie faellt auf dem HEISSEN PFAD. Die
+     * Bauregel fragt bei jedem gesetzten Block, ob der Spieler Stadtbuerger ist, und
+     * {@link #inStadt} waere dafuer eine Abfrage auf alle Zeilen einer Stadt - genau die
+     * Richtung, gegen die der ganze Zwischenspeicher gebaut ist.
+     *
+     * <p><b>Ein Ja-oder-Nein und keine Liste</b>: Gefragt ist nicht, WAS ihm gehoert,
+     * sondern OB. Eine Liste waere auf diesem Pfad eine Antwort, von der die Wache
+     * neunundneunzig Hundertstel wegwirft - und bei einem Grossgrundbesitzer mit 256
+     * Grundstuecken waere das je Block eine Liste mit 256 Zeilen.
+     *
+     * <p><b>Die Buergerregel steht NICHT hier</b>, sondern in
+     * {@link Stadtbuergerschaft#istBuerger}: Ob der Stadtbesitzer als Buerger zaehlt, ist
+     * eine Regel und keine Ablagefrage. Diese Methode sagt nur, was in der Tabelle steht.
+     *
+     * @param welt    der Weltschluessel - er entscheidet, ob ein Zwischenspeicher
+     *                zustaendig ist
+     * @param stadtId die Stadt, also die Nummer ihrer Parzellenzeile
+     * @param spieler wer gefragt ist; {@code null} ist niemals Besitzer
+     */
+    boolean besitztIn(String welt, long stadtId, UUID spieler);
+
     /** Die Mitbauer eines Grundstuecks neu setzen - ersetzend, nicht ergaenzend. */
     void mitbauerSetzen(long id, Set<UUID> mitbauer);
 

@@ -10,6 +10,7 @@ import de.freimarken.kern.Mietablage;
 import de.freimarken.kern.Mietvertrag;
 import de.freimarken.kern.Quader;
 import de.freimarken.kern.SpeicherMiete;
+import de.freimarken.kern.Tat;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,6 +43,15 @@ import org.junit.jupiter.api.Test;
  */
 @DisplayName("Der Ladenschutz")
 class LadenschutzTest {
+
+    /**
+     * Die Tat, mit der diese Proben fahren.
+     *
+     * <p>Eine Abkuerzung und keine zweite Wahrheit: Was gemessen wird, ist der
+     * Bauschutz, und er gilt fuer alle drei Taten gleich, solange niemand Rechte
+     * abstuft. Welche Tat an welchem Block liegt, prueft {@code TatTest}.
+     */
+    private static final Tat BAUEN = Tat.BAUEN;
 
     private static final String ALTFURT = "freimarken:altfurt";
 
@@ -94,7 +104,7 @@ class LadenschutzTest {
         Ladenschutz schutz = schutz();
 
         assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
-                schutz.pruefe(bert.spieler(), ort(MARKTSTADT, 62, 71, 6)));
+                schutz.pruefe(bert.spieler(), BAUEN, ort(MARKTSTADT, 62, 71, 6)));
     }
 
     @Test
@@ -106,13 +116,13 @@ class LadenschutzTest {
         Ladenschutz schutz = schutz();
 
         assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
-                schutz.pruefe(bert.spieler(), ort(ALTFURT, 59, 71, 6)),
+                schutz.pruefe(bert.spieler(), BAUEN, ort(ALTFURT, 59, 71, 6)),
                 "einen Block vor dem Quader");
         assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
-                schutz.pruefe(bert.spieler(), ort(ALTFURT, 65, 71, 6)),
+                schutz.pruefe(bert.spieler(), BAUEN, ort(ALTFURT, 65, 71, 6)),
                 "einen Block dahinter");
         assertEquals(Schutzwache.Ortsregel.Urteil.NICHT_ZUSTAENDIG,
-                schutz.pruefe(bert.spieler(), ort(ALTFURT, 62, 70, 6)),
+                schutz.pruefe(bert.spieler(), BAUEN, ort(ALTFURT, 62, 70, 6)),
                 "einen Block darunter - der Quader hat auch eine Hoehe");
     }
 
@@ -125,7 +135,7 @@ class LadenschutzTest {
         Ladenschutz schutz = schutz();
 
         assertEquals(Schutzwache.Ortsregel.Urteil.ERLAUBT,
-                schutz.pruefe(anna.spieler(), ort(ALTFURT, 62, 73, 6)));
+                schutz.pruefe(anna.spieler(), BAUEN, ort(ALTFURT, 62, 73, 6)));
     }
 
     @Test
@@ -141,9 +151,9 @@ class LadenschutzTest {
                 HALLE_1.truheZ());
 
         assertEquals(Schutzwache.Ortsregel.Urteil.ERLAUBT,
-                schutz.pruefe(anna.spieler(), truhe));
+                schutz.pruefe(anna.spieler(), Tat.BEHAELTER, truhe));
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                schutz.pruefe(bert.spieler(), truhe));
+                schutz.pruefe(bert.spieler(), Tat.BEHAELTER, truhe));
     }
 
     @Test
@@ -156,9 +166,9 @@ class LadenschutzTest {
         Location drin = ort(ALTFURT, 62, 73, 6);
 
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                schutz.pruefe(bert.spieler(), drin));
+                schutz.pruefe(bert.spieler(), BAUEN, drin));
 
-        String balken = Sprachprobe.bild(schutz.grund(drin));
+        String balken = Sprachprobe.bild(schutz.grund(null, BAUEN, drin));
         assertTrue(balken.contains("halle-1"), balken);
         assertTrue(balken.contains("Anna"), balken);
     }
@@ -179,11 +189,11 @@ class LadenschutzTest {
         Location drin = ort(ALTFURT, 62, 73, 6);
 
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                schutz.pruefe(anna.spieler(), drin));
+                schutz.pruefe(anna.spieler(), BAUEN, drin));
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                schutz.pruefe(bert.spieler(), drin));
+                schutz.pruefe(bert.spieler(), BAUEN, drin));
 
-        String balken = Sprachprobe.bild(schutz.grund(drin));
+        String balken = Sprachprobe.bild(schutz.grund(null, BAUEN, drin));
         assertTrue(balken.contains("frei"), balken);
         // Der WEG steht darin: Eine Absage ohne Ausweg liest sich wie ein Fehler.
         assertTrue(balken.contains("/laden mieten"), balken);
@@ -202,11 +212,11 @@ class LadenschutzTest {
         Location drin = ort(ALTFURT, 62, 73, 6);
 
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                schutz.pruefe(anna.spieler(), drin));
+                schutz.pruefe(anna.spieler(), BAUEN, drin));
 
         // Ein EIGENER Balken: "frei" waere falsch und "gehoert X" erfunden. Der Spieler
         // soll wissen, dass er es spaeter noch einmal versuchen kann.
-        String balken = Sprachprobe.bild(schutz.grund(drin));
+        String balken = Sprachprobe.bild(schutz.grund(null, BAUEN, drin));
         assertTrue(balken.contains("nicht nachsehbar"), balken);
         assertTrue(protokollzeilen.stream().anyMatch(zeile
                         -> zeile.getLevel() == Level.WARNING
@@ -225,7 +235,7 @@ class LadenschutzTest {
         Location drin = ort(ALTFURT, 62, 73, 6);
 
         for (int mal = 0; mal < 20; mal++) {
-            schutz.pruefe(anna.spieler(), drin);
+            schutz.pruefe(anna.spieler(), BAUEN, drin);
         }
 
         assertEquals(1, protokollzeilen.size(),
@@ -242,7 +252,7 @@ class LadenschutzTest {
         ablage.schreibe(vertrag(ANNA));
 
         assertEquals(Schutzwache.Ortsregel.Urteil.VERBOTEN,
-                schutz.pruefe(null, ort(ALTFURT, 62, 73, 6)));
+                schutz.pruefe(null, BAUEN, ort(ALTFURT, 62, 73, 6)));
         assertTrue(protokollzeilen.stream()
                         .anyMatch(zeile -> zeile.getLevel() == Level.WARNING),
                 "und es steht im Protokoll: " + protokollzeilen);
@@ -257,7 +267,8 @@ class LadenschutzTest {
         Ladenschutz ohneEinheiten = new Ladenschutz(Ladenverzeichnis.ohneEinheiten(),
                 ablage, ALTFURT, Sprachprobe.spracheAusDemJar(), protokoll);
 
-        String balken = Sprachprobe.bild(ohneEinheiten.grund(ort(ALTFURT, 62, 73, 6)));
+        String balken = Sprachprobe.bild(ohneEinheiten.grund(null, BAUEN,
+                ort(ALTFURT, 62, 73, 6)));
 
         assertTrue(balken.contains("frei"), balken);
     }

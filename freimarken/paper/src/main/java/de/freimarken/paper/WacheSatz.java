@@ -215,6 +215,18 @@ enum WacheSatz implements Satz {
     SCHUTZ_FREMDES_GRUNDSTUECK("wache.schutz.fremdes-grundstueck", Art.HANDBALKEN,
             "eigentuemer"),
 
+    /**
+     * Ein STADTBUERGER, dem seine Stadt diese Tat nicht hergibt [Teil D4].
+     *
+     * <p>Der Satz, fuer den {@code Ortsregel.grund} seinen Spieler bekommen hat: Ein
+     * Buerger weiss, wessen Stadt es ist - ihm fehlt nicht der Name, sondern die
+     * Auskunft, was er dort darf. {@code recht} ist das Wort aus
+     * {@code freistadt.rechte.wort}, also dieselbe Zeile, die {@code /freistadt rechte}
+     * liest.
+     */
+    SCHUTZ_BUERGER_DARF_NICHT("wache.schutz.buerger-darf-nicht", Art.HANDBALKEN,
+            "recht"),
+
     /** Die Freistaedte sind nicht nachsehbar - wie {@link #SCHUTZ_LADEN_GESTOERT}. */
     SCHUTZ_STADT_GESTOERT("wache.schutz.stadt-gestoert", Art.HANDBALKEN),
 

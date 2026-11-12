@@ -1,9 +1,12 @@
 package de.freimarken.paper;
 
 import de.freimarken.kern.Freistadtwerte;
+import de.freimarken.kern.Tat;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.bukkit.configuration.ConfigurationSection;
 
 /**
@@ -31,7 +34,7 @@ final class Freistadtliste {
     private static final List<String> SCHLUESSEL = List.of(
             PFAD_WELT, Freistadtwerte.PFAD_GRUENDUNGSPREIS,
             Freistadtwerte.PFAD_HOECHSTZAHL, Freistadtwerte.PFAD_HOECHSTZELLEN,
-            Freistadtwerte.PFAD_VERKAUFSGEBUEHR);
+            Freistadtwerte.PFAD_VERKAUFSGEBUEHR, Freistadtwerte.PFAD_BUERGERRECHTE);
 
     /**
      * @param welt der Weltname OHNE Namensraum, wie er in der Datei steht. Der Schluessel
@@ -68,9 +71,10 @@ final class Freistadtliste {
         int hoechstzahl = hoechstzahl(wurzel, klagen, bericht);
         int hoechstzellen = hoechstzellen(wurzel, klagen, bericht);
         int gebuehr = verkaufsgebuehr(wurzel, klagen, bericht);
+        Set<Tat> rechte = buergerrechte(wurzel, klagen, bericht);
 
         Freistadtwerte werte = new Freistadtwerte(preis, hoechstzahl,
-                hoechstzellen, gebuehr);
+                hoechstzellen, gebuehr, rechte);
         bericht.add(rechenprobe(werte) + " Welt: " + welt + ".");
         return new Ergebnis(welt, werte, klagen, bericht);
     }
@@ -237,4 +241,71 @@ final class Freistadtliste {
                     + ". Dafuer gelten die Vorgaben des Programms.");
         }
     }
+
+    // --- Teil D3 ---------------------------------------------------------------
+
+    /**
+     * Die Vorgabe-Buergerrechte fuer NEU gegruendete Staedte.
+     *
+     * <p>Eine LISTE von Woertern und keine Zahl, also eine andere Bauart als die drei
+     * Zahlenleser darueber - und das liegt an der Sache: Was einstellbar ist, sind drei
+     * benannte Rechte, und ein viertes soll ein Wort mehr sein und keinen Schemaschritt
+     * brauchen.
+     *
+     * <p><b>Ein unbekanntes Wort wird BEKLAGT und das Recht weggelassen</b>, der Start
+     * laeuft weiter - dieselbe Lesart wie bei jeder anderen kaputten Zeile dieser Datei.
+     * Was NICHT geht, ist ein stilles Uebergehen: Der Betreiber hat ein Recht gegeben,
+     * und ohne Klage suchte er die Wirkung an der falschen Stelle.
+     *
+     * <p>Die Woerter sind die Schluessel aus {@link Tat} und nicht die Namen der
+     * Konstanten: In der Datei steht {@code behaelter}, nicht {@code BEHAELTER}. Welche
+     * es gibt, nennt die Klage selbst - eine zweite Liste hier waere die Stelle, die beim
+     * vierten Recht vergessen wird.
+     */
+    private static Set<Tat> buergerrechte(ConfigurationSection wurzel,
+                                          List<String> klagen, List<String> bericht) {
+        if (!wurzel.contains(Freistadtwerte.PFAD_BUERGERRECHTE, true)) {
+            return Freistadtwerte.VORGABE_BUERGERRECHTE;
+        }
+        List<String> woerter = wurzel.getStringList(Freistadtwerte.PFAD_BUERGERRECHTE);
+        Set<Tat> rechte = new LinkedHashSet<>();
+        for (String wort : woerter) {
+            // Kleingeschrieben und ohne Rand gelesen: "  Benutzen " in der Datei ist
+            // derselbe Wunsch wie "benutzen", und ein Betreiber soll nicht an einem
+            // Leerzeichen scheitern.
+            String sauber = wort == null ? "" : wort.trim().toLowerCase(Locale.ROOT);
+            try {
+                rechte.add(Tat.ausSchluessel(sauber));
+            } catch (IllegalArgumentException unbekannt) {
+                klagen.add(Freistadtwerte.PFAD_BUERGERRECHTE + " nennt " + wort
+                        + " - das ist kein Buergerrecht. " + unbekannt.getMessage()
+                        + " Dieses Wort gilt nicht.");
+            }
+        }
+        if (!rechte.equals(Freistadtwerte.VORGABE_BUERGERRECHTE)) {
+            bericht.add(Freistadtwerte.PFAD_BUERGERRECHTE + " = " + schluessel(rechte)
+                    + " gilt fuer neue Staedte.");
+        }
+        return rechte;
+    }
+
+    /** Die Schluessel einer Rechtemenge, in fester Reihenfolge - fuer den Bericht. */
+    private static String schluessel(Set<Tat> rechte) {
+        if (rechte.isEmpty()) {
+            return "keine";
+        }
+        StringBuilder gebaut = new StringBuilder();
+        // Ueber values() und nicht ueber die Menge: So steht die Reihenfolge fest, und
+        // zwei Starts mit derselben Einstellung schreiben dieselbe Zeile.
+        for (Tat tat : Tat.values()) {
+            if (rechte.contains(tat)) {
+                if (gebaut.length() > 0) {
+                    gebaut.append(", ");
+                }
+                gebaut.append(tat.schluessel());
+            }
+        }
+        return gebaut.toString();
+    }
+
 }

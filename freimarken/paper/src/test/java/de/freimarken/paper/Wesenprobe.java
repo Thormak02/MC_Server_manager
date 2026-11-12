@@ -10,6 +10,7 @@ import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -149,6 +150,48 @@ final class Wesenprobe {
                     default -> throw new UnsupportedOperationException(
                             "Wesenprobe beantwortet Entity." + methode.getName()
                                     + " nicht");
+                });
+    }
+
+    /**
+     * Ein Wesen MIT Inventar - eine Kisten-Lore, ein Truhenboot.
+     *
+     * <p>Das Merkmal, an dem {@code Schutzwache.tatAmWesen} einen Behaelter erkennt, und
+     * dasselbe, an dem {@code gehoertZumGrundstueck} ein Wesen ueberhaupt festhaelt. Es
+     * beantwortet keine Inventarmethode: Gefragt ist nur, OB es eines hat.
+     */
+    static Entity mitInventar() {
+        return (Entity) Proxy.newProxyInstance(Wesenprobe.class.getClassLoader(),
+                new Class<?>[] {Entity.class, InventoryHolder.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "getType" -> EntityType.CHEST_MINECART;
+                    case "toString" -> "Wesenprobe mit Inventar";
+                    case "hashCode" -> 4712;
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Wesenprobe beantwortet an einem Behaelterwesen "
+                                    + methode.getName() + " nicht - es ist nur fuer die"
+                                    + " Frage da, OB es ein Inventar hat");
+                });
+    }
+
+    /**
+     * Ein Wesen OHNE Inventar - ein Ruestungsstaender, ein Bilderrahmen, ein Tier.
+     *
+     * <p>Die Gegenprobe zu {@link #mitInventar}: Ohne sie waere jede Probe, die BEHAELTER
+     * erwartet, auch mit einer Methode gruen, die immer BEHAELTER sagt.
+     */
+    static Entity schlicht() {
+        return (Entity) Proxy.newProxyInstance(Wesenprobe.class.getClassLoader(),
+                new Class<?>[] {Entity.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "getType" -> EntityType.ARMOR_STAND;
+                    case "toString" -> "Wesenprobe schlicht";
+                    case "hashCode" -> 4713;
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Wesenprobe beantwortet an einem schlichten Wesen "
+                                    + methode.getName() + " nicht");
                 });
     }
 

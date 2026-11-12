@@ -9,6 +9,7 @@ import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Grundstuecksbuch;
 import de.freimarken.kern.Kasse;
+import de.freimarken.kern.Tat;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.List;
@@ -90,12 +91,43 @@ final class FreistadtBefehle {
      *
      * <p>Ein viertes Recht, und es trennt die andere Seite ab: {@link #RECHT_GRUNDSTUECK}
      * gehoert dem Stadtbesitzer, der sein Feld teilt und Preise setzt. Kaufen tut ein
-     * ANDERER - jemand, der (noch) keine Stadt hat. Schritt 12 haengt daran den Rang
-     * Buerger, und das ist genau der Weg, auf dem man Buerger wird.
+     * ANDERER - jemand, der (noch) keine Stadt hat. Und das ist genau der Weg, auf dem
+     * man STADTBUERGER wird.
+     *
+     * <p><b>BERICHTIGT [12.11.2026, Teil D5]</b>: Hier stand, Schritt 12 haenge daran
+     * den Rang Buerger. Das war eine Zusage, die der Plan nicht gibt - Plan 2318 nennt
+     * als Rangvorteil nur "Freistadt gruenden", nicht das Kaufen. Der Satz war in sich
+     * gedreht: Er machte den RANG Buerger zur Voraussetzung fuer den Weg, auf dem man
+     * STADTBUERGER wird. Mit dem Gatter koennte ein Siedler kein Grundstueck kaufen, und
+     * das verschenkte Grundstueck fuer angeworbene Buerger (Teil C3) haette keinen
+     * Adressaten mehr: Wer vierzig Stunden gespielt hat, nimmt eher die gratis erste
+     * Parzelle in der Marktstadt.
+     *
+     * <p>Zwei Buerger, zwei Dinge: Der RANG kommt aus Spielzeit (Schritt 12), der
+     * STADTBUERGER aus Grundbesitz (Teil D). Sie haben nichts miteinander zu tun, und
+     * darum traegt das Neue ueberall seinen eigenen Namen.
      *
      * <p>Vorgabe fuer alle: Der eigentliche Riegel ist das Geld.
      */
     static final String RECHT_KAUFEN = "freimarken.freistadt.kaufen";
+
+    /**
+     * Darf ein Stadtbesitzer die Buergerrechte seiner Stadt einstellen.
+     *
+     * <p><b>Ein fuenftes Recht</b>, und es trennt eine neue Sache ab: Die drei bisherigen
+     * gehen um Geld und um Flaechen, dieses um die REGELN eines Gebiets. Ein Betreiber,
+     * der die Staedte ohne Buergerrechte laufen lassen will - alles bleibt beim
+     * Stadtbesitzer -, nimmt es weg, und der ganze Zweig verschwindet; die Staedte
+     * selbst bleiben unberuehrt.
+     *
+     * <p>Das ANZEIGEN haengt NICHT daran: Was in einer Stadt gilt, darf jeder lesen, der
+     * dort steht. Ein Buerger muss wissen, was er darf, ohne den Besitzer zu fragen -
+     * und ein Recht darauf waere eine Auskunft, die man sich verdienen muss.
+     */
+    static final String RECHT_RECHTE = "freimarken.freistadt.rechte";
+
+    /** Das Argument des Rechtezweigs - der Name eines Buergerrechts. */
+    private static final String ARGUMENT_RECHT = "recht";
 
     private final Freistadtbuch buch;
     private final Kasse kasse;
@@ -198,6 +230,42 @@ final class FreistadtBefehle {
                 // niemand das Recht brauchen, das dem Stadtbesitzer gehoert.
                 .then(Commands.literal("angebote")
                         .executes(this::zeigeAngebote))
+                // DIE BUERGERRECHTE [Teil D3]. Der Zweig steht NEBEN grundstueck und
+                // nicht darin: Er geht nicht um eine Flaeche, sondern um die Regeln der
+                // ganzen Stadt - und das ANZEIGEN soll jeder duerfen, der dort steht.
+                //
+                // Eigenes .executes am Literal, aus demselben Grund wie bei
+                // grundstueck: Ein passendes Literal verdeckt in Brigadier jedes
+                // Geschwister vollstaendig.
+                //
+                // "an <recht>" und nicht "<recht> an": So liegen die zwei Literale
+                // unmittelbar unter rechte, und die Vorschlagsliste der drei Rechte
+                // kommt erst, wenn die Richtung klar ist. Umgekehrt haette ein Spieler,
+                // der "an" tippt, es als Wert des Rechte-Arguments gesetzt - und bekaeme
+                // "an ist kein Buergerrecht".
+                // DIE STADTBUERGERLISTE [Teil D5]. NEBEN rechte und nicht darin: Die
+                // eine Liste sagt, WER hier wohnt, die andere, WAS sie duerfen - zwei
+                // Fragen, und beide duerfen alle lesen, die in der Stadt stehen.
+                .then(Commands.literal("stadtbuerger")
+                        .executes(this::zeigeStadtbuerger))
+                .then(Commands.literal("rechte")
+                        .executes(this::zeigeRechte)
+                        .then(Commands.literal("an")
+                                .requires(quelle -> quelle.getSender()
+                                        .hasPermission(RECHT_RECHTE))
+                                .then(Commands.argument(ARGUMENT_RECHT,
+                                                StringArgumentType.word())
+                                        .suggests(FreistadtBefehle::schlageRechteVor)
+                                        .executes(zusammenhang ->
+                                                setzeRecht(zusammenhang, true))))
+                        .then(Commands.literal("aus")
+                                .requires(quelle -> quelle.getSender()
+                                        .hasPermission(RECHT_RECHTE))
+                                .then(Commands.argument(ARGUMENT_RECHT,
+                                                StringArgumentType.word())
+                                        .suggests(FreistadtBefehle::schlageRechteVor)
+                                        .executes(zusammenhang ->
+                                                setzeRecht(zusammenhang, false)))))
                 .build();
     }
 
@@ -498,6 +566,131 @@ final class FreistadtBefehle {
         sende(spieler, Freistadttext.grundstueckZeilen(sprache, stadt.get().name(),
                 grundstuecksbuch.inStadt(stadt.get().id()), Spielername::von));
         return Command.SINGLE_SUCCESS;
+    }
+
+    // --- Teil D5: die Stadtbuergerliste ----------------------------------------
+
+    /**
+     * Zeigt, wer in dieser Stadt Buerger ist.
+     *
+     * <p>Ohne Rechtepruefung und ohne Besitzfrage, wie {@code zeigeRechte} und
+     * {@code zeigeGrundstuecke}: Wer in einer Stadt steht, darf lesen, wer dort wohnt.
+     *
+     * <p><b>Die Liste wird GERECHNET und nicht gelesen</b>: Es gibt keine Tabelle
+     * stadt_buerger. {@code inStadt} gibt die Grundstuecke, und
+     * {@code Stadtbuergerschaft} macht daraus die Buerger - dieselbe Regel, nach der
+     * auch die Bauwache urteilt.
+     */
+    private int zeigeStadtbuerger(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (grundstuecksbuch == null || weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        var stadt = buch.stadtAn(weltschluessel, spieler.getLocation().getBlockX(),
+                spieler.getLocation().getBlockZ());
+        if (stadt.isEmpty()) {
+            sende(spieler, Freistadttext.rechteAntwortZeilen(sprache,
+                    new Freistadtbuch.Rechteentscheid(
+                            Freistadtbuch.Rechtebescheid.KEINE_STADT,
+                            java.util.Optional.empty(), java.util.Set.of()),
+                    Tat.BAUEN, true, Spielername::von));
+            return Command.SINGLE_SUCCESS;
+        }
+        sende(spieler, Freistadttext.stadtbuergerZeilen(sprache, stadt.get().name(),
+                stadt.get().eigentuemer(),
+                de.freimarken.kern.Stadtbuergerschaft.aus(stadt.get(),
+                        grundstuecksbuch.inStadt(stadt.get().id())),
+                Spielername::von));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // --- Teil D3: die Buergerrechte --------------------------------------------
+
+    /**
+     * Zeigt, was die Stadtbuerger hier duerfen.
+     *
+     * <p>Ohne Rechtepruefung und ohne Besitzfrage: Wer in einer Stadt steht, darf lesen,
+     * was dort gilt. Dieselbe Entscheidung wie bei {@code zeigeGrundstuecke}.
+     */
+    private int zeigeRechte(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        var stadt = buch.stadtAn(weltschluessel, spieler.getLocation().getBlockX(),
+                spieler.getLocation().getBlockZ());
+        if (stadt.isEmpty()) {
+            sende(spieler, Freistadttext.rechteAntwortZeilen(sprache,
+                    new Freistadtbuch.Rechteentscheid(
+                            Freistadtbuch.Rechtebescheid.KEINE_STADT,
+                            java.util.Optional.empty(), java.util.Set.of()),
+                    Tat.BAUEN, true, Spielername::von));
+            return Command.SINGLE_SUCCESS;
+        }
+        sende(spieler, Freistadttext.rechteZeilen(sprache, stadt.get().name(),
+                stadt.get().buergerrechte()));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Schaltet ein Buergerrecht an oder aus.
+     *
+     * <p>Das WORT wird hier gepruefet und nicht im Kern: {@code setzeRecht} nimmt eine
+     * {@link Tat}, und ein unbekanntes Wort ist eine Sache des Befehls - der Spieler hat
+     * sich vertippt, und die Vorschlagsliste nennt die drei.
+     */
+    private int setzeRecht(CommandContext<CommandSourceStack> zusammenhang, boolean an) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        String wort = StringArgumentType.getString(zusammenhang, ARGUMENT_RECHT);
+        Tat recht;
+        try {
+            recht = Tat.ausSchluessel(wort.toLowerCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException unbekannt) {
+            sende(spieler, Freistadttext.unbekanntesRechtZeilen(sprache, wort));
+            return Command.SINGLE_SUCCESS;
+        }
+        Freistadtbuch.Rechteentscheid entscheid = buch.setzeRecht(weltschluessel,
+                spieler.getUniqueId(), spieler.getLocation().getBlockX(),
+                spieler.getLocation().getBlockZ(), recht, an);
+        sende(spieler, Freistadttext.rechteAntwortZeilen(sprache, entscheid, recht, an,
+                Spielername::von));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Die drei Rechte als Vorschlag.
+     *
+     * <p>Aus {@code Tat.values()} und nicht aus einer Liste hier: Ein viertes Recht
+     * steht dann ohne Zutun in der Vorschlagsliste. Die SCHLUESSEL werden
+     * vorgeschlagen, nicht die Worte aus der Sprachdatei - getippt wird der Schluessel,
+     * und ein Vorschlag, den der Befehl nicht annimmt, ist schlimmer als keiner.
+     */
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier
+            .suggestion.Suggestions> schlageRechteVor(
+            CommandContext<CommandSourceStack> zusammenhang,
+            com.mojang.brigadier.suggestion.SuggestionsBuilder bauer) {
+        String angefangen = bauer.getRemaining().toLowerCase(java.util.Locale.ROOT);
+        for (Tat recht : Tat.values()) {
+            if (recht.schluessel().startsWith(angefangen)) {
+                bauer.suggest(recht.schluessel());
+            }
+        }
+        return bauer.buildFuture();
     }
 
     private static Player spielerAus(CommandContext<CommandSourceStack> zusammenhang) {

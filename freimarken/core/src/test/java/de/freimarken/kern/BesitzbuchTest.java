@@ -668,6 +668,13 @@ class BesitzbuchTest {
         }
 
         @Override
+        public void buergerrechteSetzen(long id, Set<Tat> rechte) {
+            // Durchgereicht: Diese Attrappe prueft, auf WELCHE Zeile Mitbauer
+            // geschrieben werden - Buergerrechte kommen darin nicht vor.
+            echt.buergerrechteSetzen(id, rechte);
+        }
+
+        @Override
         public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
             // Geschrieben werden darf - aber nur auf die GRUPPE, nie auf das Kind.
             if (id != GRUPPE) {
@@ -758,6 +765,13 @@ class BesitzbuchTest {
             echt.mitbauerSetzen(id, mitbauer);
         }
 
+        // Zwei Wege, die diese Attrappe nicht verbiegt - durchgereicht wie alles, was
+        // sie nicht prueft.
+        @Override
+        public void buergerrechteSetzen(long id, Set<Tat> rechte) {
+            echt.buergerrechteSetzen(id, rechte);
+        }
+
         @Override
         public void entfernen(long id) {
             echt.entfernen(id);
@@ -845,6 +859,13 @@ class BesitzbuchTest {
         @Override
         public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
             echt.mitbauerSetzen(id, mitbauer);
+        }
+
+        // Zwei Wege, die diese Attrappe nicht verbiegt - durchgereicht wie alles, was
+        // sie nicht prueft.
+        @Override
+        public void buergerrechteSetzen(long id, Set<Tat> rechte) {
+            echt.buergerrechteSetzen(id, rechte);
         }
 
         @Override

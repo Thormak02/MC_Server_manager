@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import de.freimarken.kern.Freistadtbuch;
+import de.freimarken.kern.Tat;
 import net.kyori.adventure.text.Component;
 
 /**
@@ -118,11 +119,16 @@ final class Schutztext {
             case AUSSERHALB -> WacheSatz.SCHUTZ_STADT_AUSSERHALB;
             case ANKUNFTSFELD -> WacheSatz.SCHUTZ_ANKUNFTSFELD;
             case FREIES_FELD -> WacheSatz.SCHUTZ_STADT_FREI;
-            case ERLAUBT, ERLAUBT_GRUNDSTUECK, FREMDE_STADT, FREMDES_GRUNDSTUECK ->
+            case ERLAUBT, ERLAUBT_GRUNDSTUECK, ERLAUBT_STADTBUERGER, FREMDE_STADT,
+                    FREMDES_GRUNDSTUECK ->
                     throw new IllegalArgumentException("Fuer " + urteil + " gibt es hier"
-                            + " keinen Balken - die beiden ERLAUBT brauchen keinen, und"
+                            + " keinen Balken - die DREI ERLAUBT brauchen keinen, und"
                             + " die beiden FREMD tragen einen Namen und gehen ueber"
-                            + " fremdeStadtBalken bzw. fremdesGrundstueckBalken");
+                            + " fremdeStadtBalken bzw. fremdesGrundstueckBalken. Ein"
+                            + " Buerger, dem seine Stadt eine Tat nicht hergibt,"
+                            + " bekommt FREMDE_STADT und daraus buergerDarfNichtBalken"
+                            + " - entschieden in Stadtwache.grund, wo der Spieler"
+                            + " bekannt ist.");
         };
         return sprache.eineZeile(satz, Einsatz.keine());
     }
@@ -151,6 +157,20 @@ final class Schutztext {
     static Component fremdesGrundstueckBalken(Sprache sprache, String eigentuemer) {
         return sprache.eineZeile(WacheSatz.SCHUTZ_FREMDES_GRUNDSTUECK,
                 Einsatz.von("eigentuemer", eigentuemer));
+    }
+
+    /**
+     * Ein Stadtbuerger, dem seine Stadt diese Tat nicht hergibt [Teil D4].
+     *
+     * <p>Das WORT kommt aus {@code freistadt.rechte.wort} und nicht von hier: Dieselbe
+     * Zeile liest auch {@code /freistadt rechte}, und zwei Worte fuer dasselbe Recht
+     * waeren zwei Antworten auf dieselbe Frage. Dass dieser Balken dafuer in den
+     * Freistadt-Bereich der Vorlage greift, ist der Preis - und er ist richtig gezahlt.
+     */
+    static Component buergerDarfNichtBalken(Sprache sprache, Tat recht) {
+        return sprache.eineZeile(WacheSatz.SCHUTZ_BUERGER_DARF_NICHT,
+                Einsatz.von("recht", sprache.wort(FreistadtSatz.rechtewort(recht),
+                        Einsatz.keine())));
     }
 
     /** Die Freistaedte sind nicht nachsehbar - wie {@link #ladenGestoertBalken}. */

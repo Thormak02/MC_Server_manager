@@ -50,7 +50,8 @@ class FreistadtwerteTest {
     void negativerPreisWirft() {
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(-1L, 1, Freistadtwerte.VORGABE_HOECHSTZELLEN,
-                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR));
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
+                        Freistadtwerte.VORGABE_BUERGERRECHTE));
     }
 
     @Test
@@ -65,11 +66,13 @@ class FreistadtwerteTest {
         assertEquals(Freistadtwerte.HOECHSTER_BETRAG,
                 new Freistadtwerte(Freistadtwerte.HOECHSTER_BETRAG, 1,
                         Freistadtwerte.VORGABE_HOECHSTZELLEN,
-                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR).gruendungspreis());
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
+                        Freistadtwerte.VORGABE_BUERGERRECHTE).gruendungspreis());
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(Freistadtwerte.HOECHSTER_BETRAG + 1L, 1,
                         Freistadtwerte.VORGABE_HOECHSTZELLEN,
-                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR));
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
+                        Freistadtwerte.VORGABE_BUERGERRECHTE));
     }
 
     @Test
@@ -84,15 +87,18 @@ class FreistadtwerteTest {
 
         assertEquals(399, new Freistadtwerte(1L, 399,
                 Freistadtwerte.VORGABE_HOECHSTZELLEN,
-                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR).hoechstzahl());
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
+                        Freistadtwerte.VORGABE_BUERGERRECHTE).hoechstzahl());
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(1L, 400,
                         Freistadtwerte.VORGABE_HOECHSTZELLEN,
-                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR));
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
+                        Freistadtwerte.VORGABE_BUERGERRECHTE));
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(1L, -1,
                         Freistadtwerte.VORGABE_HOECHSTZELLEN,
-                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR));
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
+                        Freistadtwerte.VORGABE_BUERGERRECHTE));
     }
 
     @Test
@@ -100,7 +106,8 @@ class FreistadtwerteTest {
     void abwandlerSindEng() {
         Freistadtwerte eigen = new Freistadtwerte(12_345L, 7,
                 Freistadtwerte.VORGABE_HOECHSTZELLEN,
-                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR);
+                        Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
+                        Freistadtwerte.VORGABE_BUERGERRECHTE);
 
         assertEquals(7, eigen.mitGruendungspreis(1L).hoechstzahl());
         assertEquals(12_345L, eigen.mitHoechstzahl(3).gruendungspreis());

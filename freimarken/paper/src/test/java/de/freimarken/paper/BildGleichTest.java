@@ -667,6 +667,13 @@ class BildGleichTest {
                 new Zeile(WacheSatz.SCHUTZ_FREMDES_GRUNDSTUECK, 1L,
                         Einsatz.von("eigentuemer", "Bert"),
                         "&cDieses Grundstueck gehoert &fBert"),
+                // Teil D4: der Buerger, dem seine Stadt diese Tat nicht hergibt. Das
+                // {recht} ist das WORT aus freistadt.rechte.wort - derselbe Wortlaut,
+                // den /freistadt rechte liest.
+                new Zeile(WacheSatz.SCHUTZ_BUERGER_DARF_NICHT, 1L,
+                        Einsatz.von("recht", "Truhen und Oefen oeffnen"),
+                        "&cStadtbuerger duerfen hier nicht &fTruhen und Oefen"
+                                + " oeffnen"),
                 new Zeile(WacheSatz.SCHUTZ_STADT_GESTOERT, 1L, Einsatz.keine(),
                         "&cDie Freistaedte sind gerade nicht nachsehbar - versuch es noch"
                                 + " einmal."),
@@ -1774,7 +1781,64 @@ class BildGleichTest {
                                 .mit("besitzer", "Bert"),
                         "&7  37/19 bis 38/19 \u00b7 &akostenlos&7 \u00b7 &fBert"),
                 new Zeile(FreistadtSatz.ANGEBOT_LEER, 1L, Einsatz.keine(),
-                        "&7  keines - frag in den Staedten nach, wer etwas abgibt"));
+                        "&7  keines - frag in den Staedten nach, wer etwas abgibt"),
+                // --- Teil D3: die Buergerrechte ---------------------------------
+                //
+                // Die drei RECHTEWORTE stehen hier NICHT: Sie sind Art.WORT und tragen
+                // kein Bild - sie gehen als Wert in die Saetze darunter. Dass jedes von
+                // ihnen durch die echte Zeile der Vorlage geht, haelt
+                // FreistadtBefehlTest.
+                new Zeile(FreistadtSatz.RECHTE_KOPF, 1L,
+                        Einsatz.von("stadt", "Annastadt"),
+                        "&6Was die Stadtbuerger von Annastadt duerfen"),
+                new Zeile(FreistadtSatz.RECHT_ERLAUBT, 1L,
+                        Einsatz.von("recht", "Tueren und Knoepfe benutzen"),
+                        "&7  Tueren und Knoepfe benutzen \u00b7 &aerlaubt"),
+                new Zeile(FreistadtSatz.RECHT_GESPERRT, 1L,
+                        Einsatz.von("recht", "bauen"),
+                        "&7  bauen \u00b7 &cgesperrt"),
+                new Zeile(FreistadtSatz.RECHTE_HINWEIS, 1L, Einsatz.keine(),
+                        "&7Aendern: /freistadt rechte an [recht] oder /freistadt rechte"
+                                + " aus [recht]"),
+                new Zeile(FreistadtSatz.RECHT_GEAENDERT, 1L,
+                        Einsatz.von("recht", "Truhen und Oefen oeffnen"),
+                        "&aStadtbuerger duerfen jetzt Truhen und Oefen oeffnen."),
+                new Zeile(FreistadtSatz.RECHT_GENOMMEN, 1L,
+                        Einsatz.von("recht", "bauen"),
+                        "&eStadtbuerger duerfen nicht mehr bauen."),
+                new Zeile(FreistadtSatz.RECHT_SCHON_SO, 1L,
+                        Einsatz.von("recht", "bauen"),
+                        "&7Das war schon eingestellt: bauen."),
+                new Zeile(FreistadtSatz.RECHTE_NICHT_DEINE, 1L,
+                        Einsatz.von("stadt", "Annastadt").mit("besitzer", "Anna"),
+                        "&cAnnastadt gehoert Anna.\n&7Die Buergerrechte stellt ein, wem"
+                                + " die Stadt gehoert."),
+                // --- Teil D5: die Stadtbuergerliste ------------------------------
+                new Zeile(FreistadtSatz.STADTBUERGER_KOPF, 1L,
+                        Einsatz.von("stadt", "annastadt"),
+                        "&6Die Stadtbuerger von annastadt"),
+                new Zeile(FreistadtSatz.STADTBUERGER_BESITZER, 1L,
+                        Einsatz.von("besitzer", "Anna"),
+                        "&7  Stadtbesitzer: &fAnna"),
+                // DREI Zeilen fuer den gezaehlten Satz - 1, 2 UND 0: Mit nur einer
+                // bliebe die zweite Form der Vorlage ungeprueft, und die 0 ist der
+                // Fall, der in keiner anderen Probe vorkommt.
+                new Zeile(FreistadtSatz.STADTBUERGER_ZEILE, 1L,
+                        Einsatz.von("name", "Bert").mit("anzahl", "1"),
+                        "&7  &fBert&7 \u00b7 1 Grundstueck"),
+                new Zeile(FreistadtSatz.STADTBUERGER_ZEILE, 2L,
+                        Einsatz.von("name", "Bert").mit("anzahl", "2"),
+                        "&7  &fBert&7 \u00b7 2 Grundstuecke"),
+                new Zeile(FreistadtSatz.STADTBUERGER_ZEILE, 0L,
+                        Einsatz.von("name", "Bert").mit("anzahl", "0"),
+                        "&7  &fBert&7 \u00b7 0 Grundstuecke"),
+                new Zeile(FreistadtSatz.STADTBUERGER_LEER, 1L, Einsatz.keine(),
+                        "&7  noch keine - verkauf oder verschenk ein Grundstueck"
+                                + " mit /freistadt grundstueck anbieten"),
+                new Zeile(FreistadtSatz.RECHT_UNBEKANNT, 1L,
+                        Einsatz.von("wort", "fliegen"),
+                        "&cfliegen ist kein Buergerrecht.\n&7Die Vorschlagsliste nennt,"
+                                + " was moeglich ist."));
     }
 
     @ParameterizedTest(name = "11 - {0}")
