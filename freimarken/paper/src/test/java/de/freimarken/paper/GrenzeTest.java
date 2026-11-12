@@ -995,6 +995,11 @@ class GrenzeTest {
             "SCHUTZ_ANKUNFTSFELD -> HANDBALKEN",
             "SCHUTZ_STADT_FREI -> HANDBALKEN",
             "SCHUTZ_FREMDE_STADT -> HANDBALKEN",
+            // Auch dieser ist ein Handbalken, und hier ist es besonders wichtig:
+            // Er erscheint, waehrend jemand BAUT - eine zweite Zeile wuerde dort
+            // stumm verschwinden, und der Stadtbesitzer wuesste nicht, warum sein
+            // Block nicht steht.
+            "SCHUTZ_FREMDES_GRUNDSTUECK -> HANDBALKEN",
             "SCHUTZ_STADT_GESTOERT -> HANDBALKEN",
             "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
             "ANKUNFT_ABENTEUER -> SATZ",
@@ -3280,15 +3285,25 @@ class GrenzeTest {
         for (Path datei : dateien) {
             String[] zeilen = Quellen.mitKommentaren(datei).split("\n", -1);
             for (int i = 0; i < zeilen.length; i++) {
-                if (!zeilen[i].strip().equals("*/")) {
+                // ZWEI Gestalten eines Blockendes, und die zweite war eine Luecke
+                // [12.11.2026]: Ein EINZEILIGES Javadoc (/** ... */ in einer Zeile)
+                // endet nicht mit einem "*/" auf eigener Zeile. Genau so eines ist in
+                // Freistadttext abgerissen, und diese Tafel sah es nicht - gefunden hat
+                // es der Uebersetzer im erzwungenen Lauf.
+                String hier = zeilen[i].strip();
+                boolean blockEndet = hier.equals("*/")
+                        || (hier.startsWith("/**") && hier.endsWith("*/"));
+                if (!blockEndet) {
                     continue;
                 }
-                // Die naechste Zeile, die etwas enthaelt. Leerzeilen zwischen zwei
-                // Bloecken aendern nichts daran, dass der erste an keiner Deklaration
-                // haengt.
+                // Die naechste Zeile, die eine DEKLARATION sein koennte. Leerzeilen
+                // zaehlen nicht, und ZEILENKOMMENTARE auch nicht - das war die zweite
+                // Luecke: Zwischen den zwei Bloecken in Freistadttext stand eine
+                // Abschnittsueberschrift mit zwei Schraegstrichen, und die Suche hielt
+                // sie fuer den Anfang von Code.
                 for (int j = i + 1; j < zeilen.length; j++) {
                     String naechste = zeilen[j].strip();
-                    if (naechste.isEmpty()) {
+                    if (naechste.isEmpty() || naechste.startsWith("//")) {
                         continue;
                     }
                     if (naechste.startsWith("/**")) {

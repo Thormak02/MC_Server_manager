@@ -257,6 +257,158 @@ class FreistadtbuchTest {
         assertEquals(0, buch.staedteVon(WELT, UUID.randomUUID()));
     }
 
+    // ------------------------------------- Das Grundstueck sticht die Stadt (C2)
+
+    @Test
+    @DisplayName("Ein vergebenes Grundstueck sticht die Stadt - AUCH beim Stadtbesitzer")
+    void grundstueckStichtDieStadt() {
+        // DIE TRAGENDE ZUSAGE VON TEIL C2. Ohne sie waere ein verkauftes Grundstueck
+        // eine Zeile in der Datenbank ohne jede Wirkung, und der Kaeufer haette fuer
+        // eine Flaeche gezahlt, auf der der Verkaeufer weiterbaut.
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        buch.gibGrundstuecke(grundstuecke);
+        Stadtfeldplan plan = buch.plan();
+        int zelleX = plan.ersteZelle(stadt.x());
+        int zelleZ = plan.ersteZelle(stadt.z());
+        int blockX = plan.zellenAnfang(zelleX) + 3;
+        int blockZ = plan.zellenAnfang(zelleZ) + 3;
+
+        // Vorher: Annas Feld, Anna darf.
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT,
+                buch.darfBauen(WELT, anna, blockX, blockZ));
+
+        // Das Grundstueck gehoert BERT - so, wie es nach einem Verkauf (Teil C3) sein
+        // wird.
+        grundstuecke.anlegen(WELT, stadt.id(), Zellquader.eineZelle(zelleX, zelleZ),
+                bert, 5_000L);
+
+        assertEquals(Freistadtbuch.Bauurteil.FREMDES_GRUNDSTUECK,
+                buch.darfBauen(WELT, anna, blockX, blockZ),
+                "die Stadtbesitzerin darf auf dem vergebenen Grundstueck NICHT mehr");
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT_GRUNDSTUECK,
+                buch.darfBauen(WELT, bert, blockX, blockZ),
+                "der Grundstuecksbesitzer darf");
+        // Und EINE Zelle weiter gilt wieder die Stadt.
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT,
+                buch.darfBauen(WELT, anna, plan.zellenAnfang(zelleX + 1) + 3, blockZ),
+                "daneben ist es weiter Annas Feld");
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT,
+                buch.darfBauen(WELT, bert, plan.zellenAnfang(zelleX + 1) + 3, blockZ),
+                "und dort darf Bert nicht");
+    }
+
+    @Test
+    @DisplayName("Ein MITBAUER des Grundstuecks darf - der der Stadt nicht")
+    void mitbauerDesGrundstuecks() {
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        buch.gibGrundstuecke(grundstuecke);
+        Stadtfeldplan plan = buch.plan();
+        int zelleX = plan.ersteZelle(stadt.x());
+        int zelleZ = plan.ersteZelle(stadt.z());
+        UUID clara = UUID.randomUUID();
+        Grundstueck bertsLand = grundstuecke.anlegen(WELT, stadt.id(),
+                Zellquader.eineZelle(zelleX, zelleZ), bert, 5_000L);
+        // Clara ist Mitbauerin DER STADT - das zaehlt auf dem Grundstueck nicht.
+        lager.mitbauerSetzen(stadt.id(), java.util.Set.of(clara));
+        int blockX = plan.zellenAnfang(zelleX) + 3;
+        int blockZ = plan.zellenAnfang(zelleZ) + 3;
+
+        assertEquals(Freistadtbuch.Bauurteil.FREMDES_GRUNDSTUECK,
+                buch.darfBauen(WELT, clara, blockX, blockZ),
+                "Mitbauerin der STADT zu sein hilft auf einem vergebenen Grundstueck"
+                        + " nicht - sonst koennte ein Stadtbesitzer sich selbst oder"
+                        + " jeden Freund auf fremdes Land setzen");
+
+        grundstuecke.mitbauerSetzen(bertsLand.id(), java.util.Set.of(clara));
+
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT_GRUNDSTUECK,
+                buch.darfBauen(WELT, clara, blockX, blockZ),
+                "als Mitbauerin DES GRUNDSTUECKS darf sie");
+    }
+
+    @Test
+    @DisplayName("Ohne Grundstuecksablage urteilt das Buch wie in Teil C1")
+    void ohneAblageWieC1() {
+        // Die Zusage fuer den Start: Faellt die Grundstuecksablage aus, soll der Server
+        // weiter Staedte schuetzen koennen. Weniger fein, aber er schuetzt.
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+
+        assertEquals(Freistadtbuch.Bauurteil.ERLAUBT, buch.darfBauen(WELT, anna,
+                buch.plan().feldMitte(stadt.x()), buch.plan().feldMitte(stadt.z())));
+        assertEquals(Freistadtbuch.Bauurteil.FREMDE_STADT, buch.darfBauen(WELT, bert,
+                buch.plan().feldMitte(stadt.x()), buch.plan().feldMitte(stadt.z())));
+    }
+
+    @Test
+    @DisplayName("Die LEERE wird auch MIT Grundstuecken nicht nach ihnen gefragt")
+    void leereFragtAuchJetztNicht() {
+        // Die Reihenfolge in darfBauen: Leere, Grenze, Ankunftsfeld, dann Stadt, dann
+        // Grundstueck. Ein Grundstueck in der Leere kann es nicht geben - also darf die
+        // Leere auch nicht danach fragen. Gezaehlt, nicht behauptet.
+        ZaehlendeGrundstuecke zaehler = new ZaehlendeGrundstuecke();
+        buch.gruende(WELT, anna, "annastadt", VIELE);
+        buch.gibGrundstuecke(zaehler);
+        Parzelle stadt = buch.staedte(WELT).get(0);
+        Stadtfeldplan plan = buch.plan();
+
+        buch.darfBauen(WELT, anna,
+                plan.feldAnfang(stadt.x()) + Stadtfeldplan.FELD_KANTE,
+                plan.feldMitte(stadt.z()));
+        assertEquals(0, zaehler.gefragt, "die Leere fragt die Grundstuecke nicht");
+
+        buch.darfBauen(WELT, anna, plan.feldMitte(stadt.x()), plan.feldMitte(stadt.z()));
+        assertEquals(1, zaehler.gefragt, "auf dem Feld genau einmal");
+    }
+
+    /** Eine Grundstuecksablage, die mitzaehlt, wie oft nach einer Zelle gefragt wurde. */
+    private static final class ZaehlendeGrundstuecke implements Grundstuecksablage {
+        private final SpeicherGrundstuecke echte = new SpeicherGrundstuecke();
+        private int gefragt;
+
+        @Override
+        public java.util.Optional<Grundstueck> anZelle(String welt, int zelleX,
+                                                       int zelleZ) {
+            gefragt++;
+            return echte.anZelle(welt, zelleX, zelleZ);
+        }
+
+        @Override
+        public Grundstueck anlegen(String welt, long stadtId, Zellquader flaeche,
+                                   UUID eigentuemer, long preis) {
+            return echte.anlegen(welt, stadtId, flaeche, eigentuemer, preis);
+        }
+
+        @Override
+        public List<Grundstueck> inStadt(long stadtId) {
+            return echte.inStadt(stadtId);
+        }
+
+        @Override
+        public List<Grundstueck> alle(String welt) {
+            return echte.alle(welt);
+        }
+
+        @Override
+        public List<Grundstueck> vonSpieler(String welt, UUID spieler) {
+            return echte.vonSpieler(welt, spieler);
+        }
+
+        @Override
+        public void mitbauerSetzen(long id, java.util.Set<UUID> mitbauer) {
+            echte.mitbauerSetzen(id, mitbauer);
+        }
+
+        @Override
+        public void entfernen(long id) {
+            echte.entfernen(id);
+        }
+    }
+
     // ---------------------------------------------------- Wer darf wo bauen (C1)
 
     /**

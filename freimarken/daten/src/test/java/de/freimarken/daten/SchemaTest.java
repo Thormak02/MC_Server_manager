@@ -72,6 +72,8 @@ class SchemaTest {
         -1321860805, // Schritt 17
         175182761, // Schritt 18
         -1457172908, // Schritt 19
+        1133214650, // Schritt 20 - Tabelle grundstuecke
+        -373186840, // Schritt 21 - Tabelle grundstuecke_mitbauer
     };
 
     private static String datenbanktext() {

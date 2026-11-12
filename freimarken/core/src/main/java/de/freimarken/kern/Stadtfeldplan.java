@@ -67,6 +67,19 @@ public final class Stadtfeldplan {
      */
     public static final int LEERE_BREITE = 32;
 
+    /**
+     * Die Kante einer GRUNDSTUECKSZELLE - die kleinste Einheit, die vergeben wird.
+     *
+     * <p><b>Sechzehn, also genau ein Chunk</b>, und das ist mehr als ein rundes Mass:
+     * Ein Grundstueck aus ganzen Zellen liegt damit nie halb in einem Chunk. Was das
+     * eines Tages wert ist, zeigt der Blick auf die Nachbarschaft - Chunkladen,
+     * Trichter ueber die Grenze, das Entladen eines Gebiets: alles rechnet in Chunks.
+     *
+     * <p>Und es ist die richtige Groesse fuer ein Stadthaus. Wer mehr will, bekommt
+     * mehrere Zellen in einem Rechteck; ein Feld traegt 16 x 16 = 256 davon.
+     */
+    public static final int ZELLE_KANTE = 16;
+
     private final int feldKante;
     private final int leereBreite;
 
@@ -168,6 +181,84 @@ public final class Stadtfeldplan {
      */
     public int feldMitte(int nummer) {
         return feldAnfang(nummer) + (feldKante - 1) / 2;
+    }
+
+    /**
+     * Ob die Grundstueckszellen in diesem Mass AUFGEHEN.
+     *
+     * <p><b>Eine Frage und kein Riegel im Konstruktor</b>, und das ist ein Nachtrag mit
+     * Grund [12.11.2026]: Ein Plan, in dem die Zellen nicht aufgehen, ist fuer die WELT
+     * voellig gueltig - die Barriere, die Leere und der Ankunftspunkt rechnen alle in
+     * Bloecken. Nur GRUNDSTUECKE kann er nicht tragen. Ein Wurf im Konstruktor nahm
+     * darum zwei Proben die Grundlage, die die Barriere bei kleinster Leere messen
+     * ({@code new Stadtfeldplan(256, 2)}), und das zu Recht: 258 ist kein Vielfaches
+     * von 16, aber jeder Block dieser Leere ist trotzdem richtig eingeordnet.
+     *
+     * <p>Gefragt wird sie dort, wo Grundstuecke entstehen - dann einmal beim Bauen und
+     * nicht bei jedem Zuschnitt. Das ist der Riegel am engsten Verbraucher.
+     *
+     * <p><b>Beide Masse muessen aufgehen, und zwar aus zwei verschiedenen Gruenden:</b>
+     * die Feldkante, sonst liegt die letzte Zelle eines Feldes halb auf der Barriere und
+     * ein Grundstueck darauf halb in der Leere; die Rasterweite, sonst beginnt das
+     * naechste Feld mitten in einer Zelle - und DIESE Zelle gehoerte zwei Staedten, also
+     * haetten zwei Besitzer auf denselben Bloecken Recht. Genau das koennte die
+     * Punktabfrage nicht mehr entscheiden.
+     */
+    public boolean zellenGehenAuf() {
+        return feldKante % ZELLE_KANTE == 0 && rasterWeite() % ZELLE_KANTE == 0;
+    }
+
+    /**
+     * Die Zellnummer dieser Weltkoordinate auf einer Achse.
+     *
+     * <p><b>Global gezaehlt und nicht je Feld</b>, und das ist eine Entscheidung: Eine
+     * feldrelative Nummer (0 bis 15) braeuchte bei jeder Frage das Feld dazu, und zwei
+     * Zahlen, die nur zusammen etwas bedeuten, werden irgendwann einzeln benutzt. Eine
+     * globale Zellnummer ist fuer sich eindeutig - wie die Feldnummer daneben.
+     *
+     * <p>In der Leere beantwortbar wie {@link #feldNummer}, und mit derselben Vorsicht:
+     * Wer wissen will, ob ueberhaupt Bauland gemeint ist, fragt {@link #feldBei}.
+     */
+    public int zelleVon(int wert) {
+        return Math.floorDiv(wert, ZELLE_KANTE);
+    }
+
+    /** Die kleinste Weltkoordinate dieser Zelle auf einer Achse. */
+    public int zellenAnfang(int zelle) {
+        return zelle * ZELLE_KANTE;
+    }
+
+    /** Die groesste Weltkoordinate dieser Zelle auf einer Achse - einschliesslich. */
+    public int zellenEnde(int zelle) {
+        return zellenAnfang(zelle) + ZELLE_KANTE - 1;
+    }
+
+    /** Wie viele Zellen auf eine Feldkante gehen. */
+    public int zellenJeKante() {
+        return feldKante / ZELLE_KANTE;
+    }
+
+    /** Die kleinste Zellnummer dieses Feldes auf einer Achse. */
+    public int ersteZelle(int feldNummer) {
+        return zelleVon(feldAnfang(feldNummer));
+    }
+
+    /** Die groesste Zellnummer dieses Feldes auf einer Achse - einschliesslich. */
+    public int letzteZelle(int feldNummer) {
+        return ersteZelle(feldNummer) + zellenJeKante() - 1;
+    }
+
+    /**
+     * Ob diese Zelle ganz im Bauland eines Feldes liegt.
+     *
+     * <p>Gefragt wird der ANFANG der Zelle und ihr Ende, nicht ihre Mitte: Eine Zelle,
+     * die halb auf der Barriere liegt, gaebe es nur bei einem Mass, das nicht passt -
+     * und genau das verbietet der Konstruktor. Die Frage bleibt trotzdem stehen, weil
+     * sie am Feldrand das Verlassen des Feldes faengt.
+     */
+    public boolean istBauzelle(int zelleX, int zelleZ) {
+        return feldBei(zellenAnfang(zelleX), zellenAnfang(zelleZ)) == Feld.STADTFELD
+                && feldBei(zellenEnde(zelleX), zellenEnde(zelleZ)) == Feld.STADTFELD;
     }
 
     /**

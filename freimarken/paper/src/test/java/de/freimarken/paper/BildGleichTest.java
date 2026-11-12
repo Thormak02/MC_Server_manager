@@ -661,6 +661,12 @@ class BildGleichTest {
                 new Zeile(WacheSatz.SCHUTZ_FREMDE_STADT, 1L,
                         Einsatz.von("stadt", "neustadt").mit("eigentuemer", "Bert"),
                         "&cFreistadt &fneustadt&c gehoert &fBert"),
+                // Teil C2: ein vergebenes Grundstueck. DERSELBE Aufbau wie
+                // fremde-parzelle - rot mit weissem Namen -, und ohne Stadtnamen: Wer
+                // hier steht, ist schon in der Stadt und sucht nur den Besitzer.
+                new Zeile(WacheSatz.SCHUTZ_FREMDES_GRUNDSTUECK, 1L,
+                        Einsatz.von("eigentuemer", "Bert"),
+                        "&cDieses Grundstueck gehoert &fBert"),
                 new Zeile(WacheSatz.SCHUTZ_STADT_GESTOERT, 1L, Einsatz.keine(),
                         "&cDie Freistaedte sind gerade nicht nachsehbar - versuch es noch"
                                 + " einmal."),
@@ -1569,7 +1575,116 @@ class BildGleichTest {
                         Einsatz.von("preis", 400_000L).mit("fehlt", 276_544L), "&cEine Freistadt kostet 400.000 Mark - dir fehlen 276.544."),
                 new Zeile(FreistadtSatz.GESTOERT, 1L, Einsatz.keine(), "&cDas Gruenden hat nicht geklappt - dein Geld ist zurueck."
                         + " Versuch es noch einmal."),
-                new Zeile(FreistadtSatz.KEINE_WELT, 1L, Einsatz.keine(), "&cDie Welt der Freistaedte fehlt - sag es dem Betreiber."));
+                new Zeile(FreistadtSatz.KEINE_WELT, 1L, Einsatz.keine(),
+                        "&cDie Welt der Freistaedte fehlt - sag es dem Betreiber."),
+
+                // --- Die Grundstuecke [Teil C2, 12.11.2026] ----------------------
+                // Die Eckensaetze nennen BEIDES, Blockstelle und Zelle: Wer drei
+                // Bloecke neben seiner Marke steht, trifft dieselbe Zelle und bekommt
+                // deshalb kein breiteres Grundstueck. Ohne die Zellnummer koennte er
+                // das nicht nachvollziehen.
+                new Zeile(FreistadtSatz.ECKE, 1L,
+                        Einsatz.von("nummer", "1").mit("x", "600").mit("z", "312")
+                                .mit("zelle", "37/19"),
+                        "&aEcke 1 steht&7 bei 600/312, Zelle 37/19."),
+                new Zeile(FreistadtSatz.ECKE_NEU, 1L,
+                        Einsatz.von("x", "600").mit("z", "312").mit("zelle", "37/19"),
+                        "&eNeue Absteckung&7 - Ecke 1 steht bei 600/312, Zelle 37/19."
+                                + " Die vorige ist weg."),
+                // GEZAEHLT: Bei einer Zelle steht die Eins im Satz, nicht als Wert.
+                new Zeile(FreistadtSatz.ECKEN_FERTIG, 1L, Einsatz.von("zellen", "1"),
+                        "&7  Das waere 1 Zelle. Anlegen mit /freistadt grundstueck"
+                                + " anlegen"),
+                new Zeile(FreistadtSatz.ECKEN_FERTIG, 2L, Einsatz.von("zellen", "2"),
+                        "&7  Das waeren 2 Zellen. Anlegen mit /freistadt grundstueck"
+                                + " anlegen"),
+                // Die NULL gehoert dazu, auch wo sie im Spiel nicht vorkommt:
+                // Ein Zuschnitt hat immer mindestens eine Zelle. Die Tafel verlangt sie
+                // trotzdem - sonst bliebe die Mehrzahlform fuer 0 ungeprueft, und ein
+                // Betreiber, der sie in der Datei aendert, merkte es nirgends.
+                new Zeile(FreistadtSatz.ECKEN_FERTIG, 0L, Einsatz.von("zellen", "0"),
+                        "&7  Das waeren 0 Zellen. Anlegen mit /freistadt grundstueck"
+                                + " anlegen"),
+                new Zeile(FreistadtSatz.KEINE_ECKEN, 1L, Einsatz.keine(),
+                        "&cDu hast nichts abgesteckt.\n&7Stell dich in eine Ecke und"
+                                + " tippe /freistadt grundstueck ecke, dann in die"
+                                + " andere."),
+                new Zeile(FreistadtSatz.EINE_ECKE, 1L, Einsatz.keine(),
+                        "&cEs fehlt die zweite Ecke.\n&7Geh zur anderen Ecke und tippe"
+                                + " /freistadt grundstueck ecke."),
+                new Zeile(FreistadtSatz.ZUGESCHNITTEN, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 37/19").mit("zellen", "1")
+                                .mit("bloecke", "256"),
+                        "&aGrundstueck zugeschnitten&7 - Zellen 37/19 bis 37/19, 1 Zelle,"
+                                + " 256 Bloecke."),
+                new Zeile(FreistadtSatz.ZUGESCHNITTEN, 2L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19").mit("zellen", "2")
+                                .mit("bloecke", "512"),
+                        "&aGrundstueck zugeschnitten&7 - Zellen 37/19 bis 38/19, 2"
+                                + " Zellen, 512 Bloecke."),
+                new Zeile(FreistadtSatz.ZUGESCHNITTEN, 0L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19").mit("zellen", "0")
+                                .mit("bloecke", "0"),
+                        "&aGrundstueck zugeschnitten&7 - Zellen 37/19 bis 38/19, 0"
+                                + " Zellen, 0 Bloecke."),
+                new Zeile(FreistadtSatz.AUFGELOEST, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 39/20"),
+                        "&aGrundstueck aufgeloest&7 - die Zellen 37/19 bis 39/20"
+                                + " gehoeren wieder der Stadt."),
+                new Zeile(FreistadtSatz.GRUNDSTUECK_KOPF, 1L,
+                        Einsatz.von("stadt", "neustadt"),
+                        "&6Grundstuecke in neustadt"),
+                new Zeile(FreistadtSatz.GRUNDSTUECK_ZEILE, 1L,
+                        Einsatz.von("zuschnitt", "37/19 bis 37/19")
+                                .mit("besitzer", "Bert").mit("zellen", "1"),
+                        "&7  37/19 bis 37/19 \u00b7 &fBert&7 \u00b7 1 Zelle"),
+                new Zeile(FreistadtSatz.GRUNDSTUECK_ZEILE, 2L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19")
+                                .mit("besitzer", "Bert").mit("zellen", "2"),
+                        "&7  37/19 bis 38/19 \u00b7 &fBert&7 \u00b7 2 Zellen"),
+                new Zeile(FreistadtSatz.GRUNDSTUECK_ZEILE, 0L,
+                        Einsatz.von("zuschnitt", "37/19 bis 38/19")
+                                .mit("besitzer", "Bert").mit("zellen", "0"),
+                        "&7  37/19 bis 38/19 \u00b7 &fBert&7 \u00b7 0 Zellen"),
+                new Zeile(FreistadtSatz.GRUNDSTUECK_LEER, 1L, Einsatz.keine(),
+                        "&7  noch keines - stell dich in eine Ecke und tippe /freistadt"
+                                + " grundstueck ecke"),
+                new Zeile(FreistadtSatz.NICHT_EIN_FELD, 1L, Einsatz.keine(),
+                        "&cBeide Ecken muessen im SELBEN Stadtfeld stehen.\n&7Zwischen"
+                                + " den Feldern liegt Leere, und auf dem Ankunftsfeld"
+                                + " wird nicht zugeschnitten."),
+                new Zeile(FreistadtSatz.KEINE_STADT, 1L, Einsatz.keine(),
+                        "&cAuf diesem Feld steht keine Stadt.\n&7Erst gruenden - der"
+                                + " Befehl dazu heisst /freistadt gruenden, dahinter der"
+                                + " Name."),
+                new Zeile(FreistadtSatz.NICHT_DEINE_STADT, 1L, Einsatz.keine(),
+                        "&cDas ist nicht deine Stadt.\n&7Zuschneiden darf nur, wem die"
+                                + " Stadt gehoert - auch ein Mitbauer nicht."),
+                new Zeile(FreistadtSatz.UEBERSCHNEIDUNG, 1L, Einsatz.keine(),
+                        "&cHier liegt schon ein Grundstueck.\n&7Welche es gibt, zeigt"
+                                + " /freistadt grundstueck."),
+                // Die Absage nennt BEIDE Zahlen - ohne die eigene weiss der Spieler
+                // nicht, wie weit er darueber ist.
+                new Zeile(FreistadtSatz.ZU_GROSS, 1L,
+                        Einsatz.von("zellen", "1").mit("hoechstens", "4"),
+                        "&cEin Grundstueck darf hoechstens 4 Zellen haben - dein"
+                                + " Zuschnitt hat 1."),
+                new Zeile(FreistadtSatz.ZU_GROSS, 2L,
+                        Einsatz.von("zellen", "2").mit("hoechstens", "1"),
+                        "&cEin Grundstueck darf hoechstens 1 Zellen haben - dein"
+                                + " Zuschnitt hat 2."),
+                new Zeile(FreistadtSatz.ZU_GROSS, 0L,
+                        Einsatz.von("zellen", "0").mit("hoechstens", "4"),
+                        "&cEin Grundstueck darf hoechstens 4 Zellen haben - dein"
+                                + " Zuschnitt hat 0."),
+                new Zeile(FreistadtSatz.KEIN_GRUNDSTUECK, 1L, Einsatz.keine(),
+                        "&cHier liegt kein Grundstueck.\n&7Stell dich darauf und tippe"
+                                + " den Befehl noch einmal."),
+                new Zeile(FreistadtSatz.NICHT_DEIN_GRUNDSTUECK, 1L, Einsatz.keine(),
+                        "&cDieses Grundstueck gehoert jemand anderem.\n&7Aufloesen darf"
+                                + " nur sein Besitzer - auch der Stadtbesitzer nicht."),
+                new Zeile(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L, Einsatz.keine(),
+                        "&cDas hat gerade nicht geklappt - versuch es noch einmal."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

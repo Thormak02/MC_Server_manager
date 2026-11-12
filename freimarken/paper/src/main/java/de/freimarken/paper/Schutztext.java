@@ -118,9 +118,11 @@ final class Schutztext {
             case AUSSERHALB -> WacheSatz.SCHUTZ_STADT_AUSSERHALB;
             case ANKUNFTSFELD -> WacheSatz.SCHUTZ_ANKUNFTSFELD;
             case FREIES_FELD -> WacheSatz.SCHUTZ_STADT_FREI;
-            case ERLAUBT, FREMDE_STADT -> throw new IllegalArgumentException(
-                    "Fuer " + urteil + " gibt es hier keinen Balken - ERLAUBT braucht"
-                            + " keinen, FREMDE_STADT geht ueber fremdeStadtBalken");
+            case ERLAUBT, ERLAUBT_GRUNDSTUECK, FREMDE_STADT, FREMDES_GRUNDSTUECK ->
+                    throw new IllegalArgumentException("Fuer " + urteil + " gibt es hier"
+                            + " keinen Balken - die beiden ERLAUBT brauchen keinen, und"
+                            + " die beiden FREMD tragen einen Namen und gehen ueber"
+                            + " fremdeStadtBalken bzw. fremdesGrundstueckBalken");
         };
         return sprache.eineZeile(satz, Einsatz.keine());
     }
@@ -137,6 +139,18 @@ final class Schutztext {
     static Component fremdeStadtBalken(Sprache sprache, String stadt, String eigentuemer) {
         return sprache.eineZeile(WacheSatz.SCHUTZ_FREMDE_STADT,
                 Einsatz.von("stadt", stadt).mit("eigentuemer", eigentuemer));
+    }
+
+    /**
+     * Ein vergebenes Grundstueck eines anderen - mit seinem Eigentuemer.
+     *
+     * <p>OHNE Stadtnamen, anders als {@link #fremdeStadtBalken}: Wer hier steht, ist
+     * schon in der Stadt. Ihm fehlt nicht der Weg hinein, sondern der Name dessen, den
+     * er fragen muss.
+     */
+    static Component fremdesGrundstueckBalken(Sprache sprache, String eigentuemer) {
+        return sprache.eineZeile(WacheSatz.SCHUTZ_FREMDES_GRUNDSTUECK,
+                Einsatz.von("eigentuemer", eigentuemer));
     }
 
     /** Die Freistaedte sind nicht nachsehbar - wie {@link #ladenGestoertBalken}. */

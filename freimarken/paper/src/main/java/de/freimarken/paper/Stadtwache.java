@@ -80,8 +80,14 @@ final class Stadtwache implements Schutzwache.Ortsregel {
         }
         UUID wer = spieler == null ? null : spieler.getUniqueId();
         try {
-            return buch.darfBauen(weltschluessel, wer, ort.getBlockX(), ort.getBlockZ())
-                    == Freistadtbuch.Bauurteil.ERLAUBT
+            // BEIDE Erlaubnisse zaehlen gleich: ERLAUBT ist die eigene Stadt,
+            // ERLAUBT_GRUNDSTUECK das eigene Grundstueck darin. Dass das Buch sie
+            // unterscheidet, ist fuer Teil C3 gedacht - fuer das Bauen ist es dasselbe
+            // Ja, und zwei Zweige daraus zu machen waere zwei Wege zur selben Tat.
+            Freistadtbuch.Bauurteil urteil = buch.darfBauen(weltschluessel, wer,
+                    ort.getBlockX(), ort.getBlockZ());
+            return urteil == Freistadtbuch.Bauurteil.ERLAUBT
+                    || urteil == Freistadtbuch.Bauurteil.ERLAUBT_GRUNDSTUECK
                     ? Urteil.ERLAUBT
                     : Urteil.VERBOTEN;
         } catch (RuntimeException fehler) {
@@ -107,6 +113,25 @@ final class Stadtwache implements Schutzwache.Ortsregel {
         } catch (RuntimeException fehler) {
             klage(fehler);
             return Schutztext.stadtGestoertBalken(sprache);
+        }
+        // Das GRUNDSTUECK zuerst, in derselben Reihenfolge wie die Bauregel: Wer
+        // auf einem vergebenen Grundstueck steht, soll dessen Besitzer lesen und nicht
+        // den der Stadt - sonst schickte ihn der Balken zum Falschen.
+        if (urteil == Freistadtbuch.Bauurteil.FREMDES_GRUNDSTUECK) {
+            Optional<de.freimarken.kern.Grundstueck> darauf;
+            try {
+                darauf = buch.grundstueckAn(weltschluessel, ort.getBlockX(),
+                        ort.getBlockZ());
+            } catch (RuntimeException fehler) {
+                klage(fehler);
+                return Schutztext.stadtGestoertBalken(sprache);
+            }
+            if (darauf.isPresent()) {
+                return Schutztext.fremdesGrundstueckBalken(sprache,
+                        Spielername.von(darauf.get().eigentuemer()));
+            }
+            // Zwischen zwei Fragen aufgeloest - dann gilt wieder die Stadt.
+            urteil = Freistadtbuch.Bauurteil.FREMDE_STADT;
         }
         if (urteil != Freistadtbuch.Bauurteil.FREMDE_STADT) {
             return Schutztext.stadtBalken(sprache, urteil);

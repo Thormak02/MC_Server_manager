@@ -11,12 +11,16 @@ package de.freimarken.kern;
  *
  * @param gruendungspreis was das Gruenden kostet, in Mark
  * @param hoechstzahl     wie viele Staedte ein Spieler ohne besonderes Recht haelt
+ * @param hoechstzellen   wie viele Zellen ein einzelnes Grundstueck umfasst
  */
-public record Freistadtwerte(long gruendungspreis, int hoechstzahl) {
+public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
+                             int hoechstzellen) {
 
     public static final String PFAD_GRUENDUNGSPREIS = "freistaedte.gruendungspreis";
 
     public static final String PFAD_HOECHSTZAHL = "freistaedte.hoechstzahl";
+
+    public static final String PFAD_HOECHSTZELLEN = "freistaedte.hoechstzellen";
 
     /**
      * 400.000 Mark - die Zahl aus Plan 6.2.
@@ -49,6 +53,29 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl) {
      */
     public static final int VORGABE_HOECHSTZAHL = 1;
 
+    /**
+     * 256 Zellen - ein ganzes Stadtfeld als EIN Grundstueck.
+     *
+     * <p>Also ab Werk KEINE Begrenzung, und das ist eine Entscheidung fuer die
+     * Preisfreiheit aus Plan 16: Wer eine Stadt kauft, soll sie zuschneiden duerfen, wie
+     * er will - auch als ein einziges grosses Anwesen. Die Zahl steht trotzdem da und
+     * nicht als fehlende Pruefung: Ein Betreiber, der kleinteilige Staedte will, traegt
+     * sie ein, ohne dass jemand das Programm anfasst.
+     *
+     * <p>Eine 0 heisst ausdruecklich "ohne Grenze" - dieselbe Lesart wie beim
+     * Tagesdeckel. Das ist mehr als eine Abkuerzung: Wer die Grenze abschalten will,
+     * soll nicht die groesste Zahl suchen muessen, die gerade noch passt.
+     */
+    public static final int VORGABE_HOECHSTZELLEN = 256;
+
+    /**
+     * Mehr Zellen als ein Feld hat, gibt es nicht.
+     *
+     * <p>Gegen den Vertipper wie {@link #HOECHSTE_ZAHL}: Ein Grundstueck kann nicht
+     * groesser sein als die Stadt, in der es liegt.
+     */
+    public static final int HOECHSTE_ZELLEN = 256;
+
     /** Dieselbe Obergrenze wie bei allen Geldzahlen - dieselbe Rechnung. */
     public static final long HOECHSTER_BETRAG = Verdienstwerte.HOECHSTER_TAGESDECKEL;
 
@@ -60,8 +87,8 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl) {
      */
     public static final int HOECHSTE_ZAHL = 399;
 
-    public static final Freistadtwerte VORGABE =
-            new Freistadtwerte(VORGABE_GRUENDUNGSPREIS, VORGABE_HOECHSTZAHL);
+    public static final Freistadtwerte VORGABE = new Freistadtwerte(
+            VORGABE_GRUENDUNGSPREIS, VORGABE_HOECHSTZAHL, VORGABE_HOECHSTZELLEN);
 
     public Freistadtwerte {
         if (gruendungspreis < 0L || gruendungspreis > HOECHSTER_BETRAG) {
@@ -76,15 +103,26 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl) {
                     + ". Eine 0 ist erlaubt und heisst: Gegruendet wird gar nicht -"
                     + " brauchbar, solange eine Welt noch vorbereitet wird.");
         }
+        if (hoechstzellen < 0 || hoechstzellen > HOECHSTE_ZELLEN) {
+            throw new IllegalArgumentException("Die Hoechstzahl der Zellen ist "
+                    + hoechstzellen + " und liegt nicht zwischen 0 und "
+                    + HOECHSTE_ZELLEN + ". Eine 0 ist erlaubt und heisst: ohne Grenze -"
+                    + " ein Grundstueck darf dann ein ganzes Feld sein.");
+        }
     }
 
     /** Dieselben Werte mit anderem Gruendungspreis. */
     public Freistadtwerte mitGruendungspreis(long anderer) {
-        return new Freistadtwerte(anderer, hoechstzahl);
+        return new Freistadtwerte(anderer, hoechstzahl, hoechstzellen);
     }
 
     /** Dieselben Werte mit anderer Hoechstzahl. */
     public Freistadtwerte mitHoechstzahl(int andere) {
-        return new Freistadtwerte(gruendungspreis, andere);
+        return new Freistadtwerte(gruendungspreis, andere, hoechstzellen);
+    }
+
+    /** Dieselben Werte mit anderer Zellengrenze. */
+    public Freistadtwerte mitHoechstzellen(int andere) {
+        return new Freistadtwerte(gruendungspreis, hoechstzahl, andere);
     }
 }

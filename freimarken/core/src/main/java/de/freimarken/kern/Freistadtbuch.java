@@ -100,7 +100,28 @@ public final class Freistadtbuch {
         /** Ein Stadtfeld, auf dem noch keine Stadt steht. */
         FREIES_FELD,
         /** Die Stadt eines anderen. */
-        FREMDE_STADT
+        FREMDE_STADT,
+        /**
+         * Ein vergebenes Grundstueck, das ihm gehoert (oder auf dem er Mitbauer ist).
+         *
+         * <p>Ein eigenes Urteil neben {@link #ERLAUBT}, obwohl beide ja sagen: Der
+         * Unterschied zaehlt fuer Teil C3. Wer auf seinem GEKAUFTEN Grundstueck baut,
+         * steht dort anders als der Stadtbesitzer auf seinem Feld - und eine Wache, die
+         * beides nicht unterscheiden kann, koennte spaeter auch nicht melden, WARUM
+         * jemand darf.
+         */
+        ERLAUBT_GRUNDSTUECK,
+        /**
+         * Ein vergebenes Grundstueck eines ANDEREN - mitten in der eigenen Stadt.
+         *
+         * <p><b>Das Urteil, das Teil C2 ueberhaupt erst wirksam macht</b>: Es sticht
+         * {@link #ERLAUBT}. Der Stadtbesitzer darf auf seinem Feld bauen - aber nicht
+         * mehr dort, wo er ein Grundstueck vergeben hat. Ohne diesen Fall waere ein
+         * verkauftes Grundstueck eine Zeile in der Datenbank ohne jede Wirkung, und der
+         * Kaeufer haette fuer eine Flaeche gezahlt, auf der der Verkaeufer
+         * weiterbaut.
+         */
+        FREMDES_GRUNDSTUECK
     }
 
     private final Feldgrenze grenze;
@@ -127,6 +148,21 @@ public final class Freistadtbuch {
      * Vorschlag zu jeder Stadt, die nach dem Start gegruendet wurde.
      */
     private final Stadtverzeichnis verzeichnis = new Stadtverzeichnis();
+
+    /**
+     * Die Grundstuecke in den Staedten - {@code null}, solange es keine gibt.
+     *
+     * <p><b>Null-faehig und das mit Absicht</b>: Teil A und B haben ohne Grundstuecke
+     * gelebt, und ein Server, dessen Grundstuecksablage beim Start ausfaellt, soll
+     * weiter Staedte gruenden und schuetzen koennen. Ist sie {@code null}, endet
+     * {@link #darfBauen} bei der Stadt - also genau beim Stand von Teil C1.
+     *
+     * <p>Hereingereicht und nicht selbst gebaut, anders als das
+     * {@link Stadtverzeichnis} darueber: Jenes ist eine Liste von Namen, die dieses
+     * Buch selbst fuellt. Die Grundstuecke sind eine ABLAGE mit eigener Tabelle und
+     * eigenem Zwischenspeicher - wer die baut, entscheidet der Start.
+     */
+    private Grundstuecksablage grundstuecke;
 
     public Freistadtbuch(Feldgrenze grenze, BesitzLager lager, Kasse kasse,
                          Warpverzeichnis warps, Wirtschaftsstand wirtschaft) {
@@ -171,6 +207,22 @@ public final class Freistadtbuch {
     /** Die Namen fuer den Vorschlagsgeber - siehe {@link Stadtverzeichnis}. */
     public Stadtverzeichnis verzeichnis() {
         return verzeichnis;
+    }
+
+    /**
+     * Die Grundstuecke hereingeben - einmal beim Start, nach dem Fuellen.
+     *
+     * <p>Ein Setzer und kein Konstruktorparameter, und der Grund ist die Reihenfolge im
+     * Start: Das Buch entsteht, damit {@code /freistadt} und {@code /warp} es haben;
+     * die Grundstuecksablage braucht erst ihren Zwischenspeicher, und der will gefuellt
+     * werden. Ein Parameter haette beides in eine Zeile gezwungen - dieselbe Lage wie
+     * beim spaet gelesenen Feld der Stadtwache.
+     *
+     * <p>Bis dahin urteilt {@link #darfBauen} ohne Grundstuecke, also wie in Teil C1.
+     * Das ist die sichere Richtung: Es schuetzt weniger fein, aber es schuetzt.
+     */
+    public void gibGrundstuecke(Grundstuecksablage ablage) {
+        this.grundstuecke = ablage;
     }
 
     /**
@@ -243,9 +295,38 @@ public final class Freistadtbuch {
         if (stadt.isEmpty()) {
             return Bauurteil.FREIES_FELD;
         }
+        // DAS GRUNDSTUECK STICHT DIE STADT, und erst das macht Teil C2 wirksam: Wer ein
+        // Grundstueck vergeben hat, darf dort selbst nicht mehr bauen. Gefragt wird es
+        // NACH der Stadt, weil die Stadtfrage billiger ist (eine Punktabfrage auf den
+        // eindeutigen Schluessel) und auf einem freien Feld schon alles entscheidet - und
+        // weil es ohne Stadt auch kein Grundstueck geben kann.
+        if (grundstuecke != null) {
+            Optional<Grundstueck> darauf = grundstuecke.anZelle(welt,
+                    plan.zelleVon(blockX), plan.zelleVon(blockZ));
+            if (darauf.isPresent()) {
+                return spieler != null && darauf.get().darfBauen(spieler)
+                        ? Bauurteil.ERLAUBT_GRUNDSTUECK
+                        : Bauurteil.FREMDES_GRUNDSTUECK;
+            }
+        }
         return spieler != null && stadt.get().darfBauen(spieler)
                 ? Bauurteil.ERLAUBT
                 : Bauurteil.FREMDE_STADT;
+    }
+
+    /**
+     * Das Grundstueck an dieser Stelle - fuer die Begruendung.
+     *
+     * <p>Getrennt von {@link #darfBauen} und erst DANACH gefragt, aus demselben Grund
+     * wie bei {@link #stadtAn}: Der Handbalken wird hoechstens alle paar Sekunden
+     * gebaut, die Bauregel bei jedem gesetzten Block. Wer beides in einem Zug
+     * beantwortete, zahlte die Suche nach dem Besitzernamen auf dem heissen Pfad mit.
+     */
+    public Optional<Grundstueck> grundstueckAn(String welt, int blockX, int blockZ) {
+        if (grundstuecke == null) {
+            return Optional.empty();
+        }
+        return grundstuecke.anZelle(welt, plan.zelleVon(blockX), plan.zelleVon(blockZ));
     }
 
     /**

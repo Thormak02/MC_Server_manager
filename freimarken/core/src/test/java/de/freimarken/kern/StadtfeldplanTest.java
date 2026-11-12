@@ -2,6 +2,7 @@ package de.freimarken.kern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -155,5 +156,105 @@ class StadtfeldplanTest {
         assertEquals(Stadtfeldplan.Feld.BARRIERE, eng.feldBei(256, 0));
         assertEquals(Stadtfeldplan.Feld.BARRIERE, eng.feldBei(257, 0));
         assertEquals(Stadtfeldplan.Feld.STADTFELD, eng.feldBei(258, 0));
+    }
+
+    // ----------------------------------------------- Die Grundstueckszellen (C2)
+
+    @Test
+    @DisplayName("Ein Feld besteht aus GANZEN Zellen - sonst laege eine halb in der Leere")
+    void feldBestehtAusGanzenZellen() {
+        Stadtfeldplan plan = Stadtfeldplan.freistaedte();
+
+        // 256 Bloecke zu 16 ergeben 16 Zellen. Die Zahlen stehen als Rechnung da und
+        // nicht als Literale: Wer die Feldkante aendert, soll die Probe nicht
+        // nachrechnen muessen - er soll sehen, ob sie noch aufgeht.
+        assertEquals(Stadtfeldplan.FELD_KANTE / Stadtfeldplan.ZELLE_KANTE,
+                plan.zellenJeKante());
+        assertEquals(16, plan.zellenJeKante(), "mit dem heutigen Mass sind es 16");
+        assertEquals(256, plan.zellenJeKante() * plan.zellenJeKante(),
+                "und damit 256 Grundstueckszellen je Stadt");
+    }
+
+    @Test
+    @DisplayName("Jedes Feld beginnt auf einer Zellkante - auch das negative")
+    void jedesFeldBeginntAufEinerZellkante() {
+        Stadtfeldplan plan = Stadtfeldplan.freistaedte();
+
+        // Die tragende Zusage: Begaenne ein Feld mitten in einer Zelle, gehoerte DIESE
+        // Zelle zu zwei Staedten - und zwei Besitzer haetten auf denselben Bloecken
+        // Recht. Geprueft auf beiden Seiten der Null, denn floorDiv ist dort die
+        // gefaehrliche Stelle.
+        for (int feld = -3; feld <= 3; feld++) {
+            assertEquals(0, Math.floorMod(plan.feldAnfang(feld),
+                            Stadtfeldplan.ZELLE_KANTE),
+                    "Feld " + feld + " beginnt bei " + plan.feldAnfang(feld));
+            assertEquals(plan.feldAnfang(feld),
+                    plan.zellenAnfang(plan.ersteZelle(feld)),
+                    "die erste Zelle von Feld " + feld + " beginnt mit dem Feld");
+        }
+    }
+
+    @Test
+    @DisplayName("Die Zellen eines Feldes sind GENAU seine Bauzellen")
+    void zellenEinesFeldesSindBauzellen() {
+        Stadtfeldplan plan = Stadtfeldplan.freistaedte();
+        int erste = plan.ersteZelle(1);
+        int letzte = plan.letzteZelle(1);
+
+        assertEquals(plan.zellenJeKante(), letzte - erste + 1);
+        // Jede Zelle DAZWISCHEN ist Bauland ...
+        for (int zelle = erste; zelle <= letzte; zelle++) {
+            assertTrue(plan.istBauzelle(zelle, erste),
+                    "Zelle " + zelle + " liegt im Feld");
+        }
+        // ... und die beiden daneben nicht. Das ist die Grenze, an der ein Grundstueck
+        // aufhoeren muss.
+        assertFalse(plan.istBauzelle(erste - 1, erste), "die Zelle vor dem Feld");
+        assertFalse(plan.istBauzelle(letzte + 1, erste), "die dahinter");
+        assertFalse(plan.istBauzelle(erste, erste - 1), "und auf der anderen Achse");
+    }
+
+    @Test
+    @DisplayName("Zelle und Block rechnen in beide Richtungen zusammen")
+    void zelleUndBlockPassenZusammen() {
+        Stadtfeldplan plan = Stadtfeldplan.freistaedte();
+
+        // Jeder Block einer Zelle nennt dieselbe Zelle - Anfang, Ende und einer
+        // dazwischen. Und das ueber die Null hinweg, wo floorDiv sich von einer
+        // Division unterscheidet.
+        for (int zelle : new int[] {-2, -1, 0, 1, 17}) {
+            int anfang = plan.zellenAnfang(zelle);
+            int ende = plan.zellenEnde(zelle);
+            assertEquals(Stadtfeldplan.ZELLE_KANTE - 1, ende - anfang);
+            assertEquals(zelle, plan.zelleVon(anfang), "der erste Block");
+            assertEquals(zelle, plan.zelleVon(ende), "der letzte");
+            assertEquals(zelle, plan.zelleVon(anfang + 7), "einer dazwischen");
+            assertNotEquals(zelle, plan.zelleVon(anfang - 1),
+                    "und der Block davor gehoert zur Zelle davor");
+        }
+    }
+
+    @Test
+    @DisplayName("Das ausgelieferte Mass traegt Grundstuecke - und ein schiefes sagt es")
+    void zellenGehenAufOderSagenEs() {
+        // Die Frage statt eines Wurfs im Konstruktor: Ein Plan, in dem die Zellen nicht
+        // aufgehen, ist fuer die WELT gueltig - er kann nur keine Grundstuecke tragen.
+        // Dass ein Wurf hier falsch waere, haben zwei Proben dieser Datei gezeigt: Sie
+        // messen die Barriere bei kleinster Leere, und 258 ist kein Vielfaches von 16.
+        assertTrue(Stadtfeldplan.freistaedte().zellenGehenAuf(),
+                "das AUSGELIEFERTE Mass muss aufgehen - sonst gehoerte eine Zelle am"
+                        + " Feldrand zwei Staedten, und Teil C stuende auf Sand");
+
+        // Beide Haelften einzeln, denn sie faengt zwei verschiedene Fehler.
+        assertFalse(new Stadtfeldplan(100, 32).zellenGehenAuf(),
+                "Feldkante 100 ist kein Vielfaches von 16 - die letzte Zelle eines"
+                        + " Feldes laege halb auf der Barriere");
+        assertFalse(new Stadtfeldplan(256, 24).zellenGehenAuf(),
+                "Rasterweite 280 ist keines - das naechste Feld begaenne mitten in"
+                        + " einer Zelle");
+        assertTrue(new Stadtfeldplan(64, 32).zellenGehenAuf(),
+                "und ein anderes passendes Mass geht durch - sonst waere die Probe eine"
+                        + " Zusage darueber, dass nur noch die Vorgabe erlaubt ist");
+        assertEquals(4, new Stadtfeldplan(64, 32).zellenJeKante());
     }
 }

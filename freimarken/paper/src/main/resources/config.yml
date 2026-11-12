@@ -1128,6 +1128,21 @@ freistaedte:
   # eine volle.
   hoechstzahl: 1
 
+  # Wie viele ZELLEN ein einzelnes Grundstueck umfassen darf [12.11.2026].
+  #
+  # Eine Zelle ist 16x16 Bloecke, also genau ein Chunk; ein Stadtfeld traegt 16x16 =
+  # 256 davon. Die 256 hier heisst darum: KEINE Begrenzung - ein Grundstueck darf ein
+  # ganzes Feld sein. Das ist die Entscheidung fuer die Preisfreiheit aus Plan 16: Wer
+  # 400.000 Mark fuer eine Stadt zahlt, soll sie zuschneiden duerfen, wie er will.
+  #
+  # Eine 0 heisst ebenfalls "ohne Grenze" - dieselbe Lesart wie beim Tagesdeckel. Wer
+  # kleinteilige Staedte will, traegt eine kleine Zahl ein: 4 ergibt hoechstens 32x32
+  # Bloecke je Grundstueck, 1 genau einen Chunk.
+  #
+  # Neuladbar: Die Zahl wird beim Zuschneiden gefragt und nicht beim Start kopiert.
+  # Eine Aenderung trifft nur NEUE Grundstuecke - was schon zugeschnitten ist, bleibt.
+  hoechstzellen: 256
+
 laeden:
   # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.
   # Die Welt muss im Abschnitt welten: weiter unten stehen, sonst gilt keine Einheit.

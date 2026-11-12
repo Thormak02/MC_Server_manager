@@ -30,7 +30,7 @@ final class Freistadtliste {
     /** Jede Zeile, die das Plugin mitbringt - fuer den Bericht ueber Fehlende. */
     private static final List<String> SCHLUESSEL = List.of(
             PFAD_WELT, Freistadtwerte.PFAD_GRUENDUNGSPREIS,
-            Freistadtwerte.PFAD_HOECHSTZAHL);
+            Freistadtwerte.PFAD_HOECHSTZAHL, Freistadtwerte.PFAD_HOECHSTZELLEN);
 
     /**
      * @param welt der Weltname OHNE Namensraum, wie er in der Datei steht. Der Schluessel
@@ -65,8 +65,10 @@ final class Freistadtliste {
                 Freistadtwerte.VORGABE_GRUENDUNGSPREIS, Freistadtwerte.HOECHSTER_BETRAG,
                 "Mark einmalig", klagen, bericht);
         int hoechstzahl = hoechstzahl(wurzel, klagen, bericht);
+        int hoechstzellen = hoechstzellen(wurzel, klagen, bericht);
 
-        Freistadtwerte werte = new Freistadtwerte(preis, hoechstzahl);
+        Freistadtwerte werte = new Freistadtwerte(preis, hoechstzahl,
+                hoechstzellen);
         bericht.add(rechenprobe(werte) + " Welt: " + welt + ".");
         return new Ergebnis(welt, werte, klagen, bericht);
     }
@@ -122,6 +124,37 @@ final class Freistadtliste {
 
     private static String staedte(int zahl) {
         return zahl == 1 ? "eine Stadt" : zahl + " Staedte";
+    }
+
+    /**
+     * Wie viele Zellen ein Grundstueck umfassen darf - 0 heisst ohne Grenze.
+     *
+     * <p>Wortgleich gebaut wie {@link #hoechstzahl} daneben, und das ist Absicht: Zwei
+     * Zahlen aus demselben Abschnitt, die auf zwei verschiedene Weisen gelesen werden,
+     * verhalten sich bei einem Vertipper verschieden - und niemand kann sagen, warum.
+     */
+    private static int hoechstzellen(ConfigurationSection wurzel, List<String> klagen,
+                                     List<String> bericht) {
+        if (!wurzel.contains(Freistadtwerte.PFAD_HOECHSTZELLEN, true)) {
+            return Freistadtwerte.VORGABE_HOECHSTZELLEN;
+        }
+        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel,
+                Freistadtwerte.PFAD_HOECHSTZELLEN,
+                Freistadtwerte.VORGABE_HOECHSTZELLEN, klagen, bericht);
+        if (gelesen == null) {
+            return Freistadtwerte.VORGABE_HOECHSTZELLEN;
+        }
+        long wert = gelesen;
+        if (wert < 0L || wert > Freistadtwerte.HOECHSTE_ZELLEN) {
+            klagen.add(Freistadtwerte.PFAD_HOECHSTZELLEN + " ist " + wert
+                    + " und liegt nicht zwischen 0 und " + Freistadtwerte.HOECHSTE_ZELLEN
+                    + " - es gilt " + Freistadtwerte.VORGABE_HOECHSTZELLEN + ".");
+            return Freistadtwerte.VORGABE_HOECHSTZELLEN;
+        }
+        if (wert != Freistadtwerte.VORGABE_HOECHSTZELLEN) {
+            bericht.add(Freistadtwerte.PFAD_HOECHSTZELLEN + " = " + wert + " gilt.");
+        }
+        return (int) wert;
     }
 
     private static int hoechstzahl(ConfigurationSection wurzel, List<String> klagen,

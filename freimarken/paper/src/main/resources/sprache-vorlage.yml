@@ -1108,6 +1108,14 @@ wache:
     # darum als Blatt in den Satz - Stadtname laesst nur Kleinbuchstaben, Ziffern und
     # Bindestriche durch.
     fremde-stadt: "<red>Freistadt <white>{stadt}</white> gehoert <white>{eigentuemer}</white></red>"
+    # {eigentuemer} - ein vergebenes Grundstueck mitten in einer Stadt
+    # [12.11.2026]. Dieser Satz trifft AUCH den Stadtbesitzer: Wer ein Grundstueck
+    # vergeben hat, baut dort nicht mehr - und genau dafuer zahlt ein Kaeufer.
+    #
+    # OHNE Stadtnamen, anders als fremde-stadt: Wer hier steht, ist schon in der
+    # Stadt. Ihm fehlt nicht der Weg hinein, sondern der Name dessen, den er fragen
+    # muss.
+    fremdes-grundstueck: "<red>Dieses Grundstueck gehoert <white>{eigentuemer}</white></red>"
     # Die Freistaedte sind gerade nicht nachsehbar - wie laden-gestoert. Dann wird
     # abgelehnt, und das ist die sichere Richtung: Ein stilles Ja liesse jeden in
     # jeder fremden Stadt bauen.
@@ -1323,6 +1331,63 @@ freistadt:
     gestoert: "<red>Das Gruenden hat nicht geklappt - dein Geld ist zurueck. Versuch es noch einmal.</red>"
     # Die Welt fehlt oder ist falsch eingetragen (freistaedte.welt).
     keine-welt: "<red>Die Welt der Freistaedte fehlt - sag es dem Betreiber.</red>"
+  # --- DIE GRUNDSTUECKE [Teil C2, 12.11.2026] ---------------------------------
+  #
+  # Zugeschnitten wird in ZELLEN von 16x16 Bloecken - genau ein Chunk. Ein Stadtfeld
+  # traegt 16x16 = 256 davon. Der Spieler steckt zwei Ecken ab, und die Zellen, in
+  # denen seine Ecken stehen, bilden das Rechteck: Wer drei Bloecke neben seiner
+  # ersten Marke steht, trifft dieselbe Zelle und bekommt deshalb kein breiteres
+  # Grundstueck. Darum nennen die Eckensaetze BEIDES, die Blockstelle und die Zelle.
+  grundstueck:
+    # {nummer} {x} {z} {zelle} - eine Ecke steht. EIN Satz fuer beide Ecken: Zwei
+    # waeren derselbe Satz mit einer anderen Zahl, und der Betreiber muesste sie
+    # gleich halten.
+    ecke: "<green>Ecke {nummer} steht</green><gray> bei {x}/{z}, Zelle {zelle}.</gray>"
+    # {x} {z} {zelle} - die DRITTE Ecke beginnt neu. Das muss er lesen, sonst sucht
+    # er beim Anlegen seine alte Absteckung.
+    ecke-neu: "<yellow>Neue Absteckung</yellow><gray> - Ecke 1 steht bei {x}/{z}, Zelle {zelle}. Die vorige ist weg.</gray>"
+    # {zellen} - beide Ecken stehen. Die Groesse SCHON JETZT, nicht erst beim
+    # Anlegen: Wer sieht, dass sein Zuschnitt zu gross ist, legt ihn nicht erst an.
+    ecken-fertig:
+      eins: "<gray>  Das waere 1 Zelle. Anlegen mit /freistadt grundstueck anlegen</gray>"
+      viele: "<gray>  Das waeren {zellen} Zellen. Anlegen mit /freistadt grundstueck anlegen</gray>"
+    # Anlegen ohne Absteckung - MIT dem Weg dorthin.
+    keine-ecken: "<red>Du hast nichts abgesteckt.</red>\n<gray>Stell dich in eine Ecke und tippe /freistadt grundstueck ecke, dann in die andere.</gray>"
+    # Anlegen mit nur einer Ecke.
+    eine-ecke: "<red>Es fehlt die zweite Ecke.</red>\n<gray>Geh zur anderen Ecke und tippe /freistadt grundstueck ecke.</gray>"
+    # {zuschnitt} {zellen} {bloecke} - zugeschnitten.
+    zugeschnitten:
+      eins: "<green>Grundstueck zugeschnitten</green><gray> - Zellen {zuschnitt}, 1 Zelle, {bloecke} Bloecke.</gray>"
+      viele: "<green>Grundstueck zugeschnitten</green><gray> - Zellen {zuschnitt}, {zellen} Zellen, {bloecke} Bloecke.</gray>"
+    # {zuschnitt} - aufgeloest. Die Flaeche faellt an die Stadt zurueck, und das
+    # sagt der Satz: Sonst koennte der Besitzer meinen, sie sei jetzt niemandes.
+    aufgeloest: "<green>Grundstueck aufgeloest</green><gray> - die Zellen {zuschnitt} gehoeren wieder der Stadt.</gray>"
+    # {stadt} - die Ueberschrift der Liste.
+    kopf: "<gold>Grundstuecke in {stadt}</gold>"
+    # {zuschnitt} {besitzer} {zellen} - eine Zeile der Liste.
+    zeile:
+      eins: "<gray>  {zuschnitt} · <white>{besitzer}</white> · 1 Zelle</gray>"
+      viele: "<gray>  {zuschnitt} · <white>{besitzer}</white> · {zellen} Zellen</gray>"
+    # Die Stadt hat noch kein Grundstueck. MIT dem Weg dorthin.
+    leer: "<gray>  noch keines - stell dich in eine Ecke und tippe /freistadt grundstueck ecke</gray>"
+    # Die beiden Ecken liegen nicht im selben Stadtfeld. Der Satz nennt BEIDE
+    # Gruende, denn der Spieler kann sie nicht auseinanderhalten: Zwischen zwei
+    # Feldern liegt Leere, und in der Leere nennt die Rechnung das Feld davor.
+    nicht-ein-feld: "<red>Beide Ecken muessen im SELBEN Stadtfeld stehen.</red>\n<gray>Zwischen den Feldern liegt Leere, und auf dem Ankunftsfeld wird nicht zugeschnitten.</gray>"
+    keine-stadt: "<red>Auf diesem Feld steht keine Stadt.</red>\n<gray>Erst gruenden - der Befehl dazu heisst /freistadt gruenden, dahinter der Name.</gray>"
+    nicht-deine-stadt: "<red>Das ist nicht deine Stadt.</red>\n<gray>Zuschneiden darf nur, wem die Stadt gehoert - auch ein Mitbauer nicht.</gray>"
+    ueberschneidung: "<red>Hier liegt schon ein Grundstueck.</red>\n<gray>Welche es gibt, zeigt /freistadt grundstueck.</gray>"
+    # {zellen} {hoechstens} - zu gross. Die Absage nennt BEIDE Zahlen: Ohne die
+    # eigene weiss der Spieler nicht, wie weit er darueber ist.
+    zu-gross:
+      eins: "<red>Ein Grundstueck darf hoechstens {hoechstens} Zellen haben - dein Zuschnitt hat 1.</red>"
+      viele: "<red>Ein Grundstueck darf hoechstens {hoechstens} Zellen haben - dein Zuschnitt hat {zellen}.</red>"
+    kein-grundstueck: "<red>Hier liegt kein Grundstueck.</red>\n<gray>Stell dich darauf und tippe den Befehl noch einmal.</gray>"
+    # NICHT der Stadtbesitzer loest auf, sondern der des Grundstuecks. Sonst koennte
+    # er ein verkauftes Grundstueck einziehen, und der Kaeufer haette fuer nichts
+    # gezahlt.
+    nicht-dein-grundstueck: "<red>Dieses Grundstueck gehoert jemand anderem.</red>\n<gray>Aufloesen darf nur sein Besitzer - auch der Stadtbesitzer nicht.</gray>"
+    gestoert: "<red>Das hat gerade nicht geklappt - versuch es noch einmal.</red>"
 
 laden:
   # Die Ueberschrift ueber der Liste - die EINZIGE goldene Zeile dieses Befehls.

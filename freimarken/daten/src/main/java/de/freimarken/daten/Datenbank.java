@@ -734,6 +734,109 @@ public final class Datenbank implements AutoCloseable {
             ALTER TABLE parzellen
               ADD COLUMN IF NOT EXISTS name VARCHAR(32) NULL DEFAULT NULL,
               ADD UNIQUE KEY IF NOT EXISTS uq_besitz_name (welt, name)
+            """,
+
+            // Schritt 20: die GRUNDSTUECKE in den Freistaedten - Plan 6.2, Teil C2,
+            // gebaut am 12.11.2026.
+            //
+            // EINE EIGENE TABELLE, UND DAMIT GEGEN DEN ERSTEN ABSATZ VON SCHRITT 19.
+            // Jener sagt: "Eine Freistadt-Tabelle daneben wuerde den zweiten Ort fuer
+            // 'wem gehoert dieses Feld' erst SCHAFFEN." Das stimmt weiter - und darum
+            // bleibt die FREISTADT in parzellen, mit ihren Feldnummern in x/z. Nur die
+            // GRUNDSTUECKE darin ziehen hier aus, und zwar aus fuenf Gruenden, die alle
+            // am freien Zuschnitt haengen (entschieden am 11.11.2026):
+            //
+            // 1. Parzelle.x und .z sind primitive int. Ein Besitz ohne Rasterzelle laesst
+            //    sich gar nicht als Parzelle LESEN - MariaLager.lies wirft dann
+            //    ausdruecklich ("liegt nicht auf dem Raster").
+            // 2. uq ort (welt, x, z) laesst je Zelle genau EINE Zeile, und die Freistadt
+            //    belegt dort schon ihre eigenen Feldnummern.
+            // 3. mitbauerSetzen schreibt vom Elternteil auf ALLE Kinder durch. Ein
+            //    Stadtbesitzer ueberschriebe damit die Mitbauer jedes VERKAUFTEN
+            //    Grundstuecks - und genau das verkauft er ja gerade nicht mit.
+            // 4. Jeder vorhandene Elternteil-Weg ist auf art='gruppe' festgenagelt:
+            //    ausGruppeLoesen, auftrennen, erweitereGruppe, istGruppe.
+            // 5. fk_besitz_elternteil steht auf ON DELETE RESTRICT. Eine Stadt mit
+            //    verkauften Grundstuecken liesse sich nicht mehr aufloesen, und die
+            //    Meldung dazu hiesse "erst auftrennen".
+            //
+            // DER GRUND, AUS DEM SCHRITT 19 AUF EINER TABELLE BESTAND, BLEIBT GEWAHRT.
+            // Es ging um den heissen Pfad: darfBauen laeuft bei jedem gesetzten Block.
+            // Deshalb stehen hier ZELLNUMMERN und keine Bloecke (eine Zelle ist 16x16,
+            // ein Stadtfeld traegt 16x16 davon), und deshalb liegt vor dieser Tabelle ein
+            // VOLLSTAENDIGER Zwischenspeicher ohne Verfall. Die Frage "wem gehoert dieser
+            // Block" fasst die Datenbank nie an - sie wird im Arbeitsspeicher aus
+            // hoechstens 256 Quadern je Stadt beantwortet.
+            //
+            // Die Ladeneinheit (Schritt 13) hat aus demselben Grund schon ihre eigene
+            // Tabelle: Dort trug die Zeile einen Vertrag, hier traegt sie eine Geometrie,
+            // die in parzellen keine Spalte hat.
+            //
+            // VON/BIS IN ZELLEN, und der CHECK haelt sie normiert: von <= bis. Ein
+            // verdrehter Quader waere eine Flaeche ohne Inhalt, und die
+            // Ueberschneidungspruefung liesse jede zweite Zeile daneben durch. Der Kern
+            // dreht in Zellquader.zwischen, aber ein Riegel in der Ablage kostet nichts
+            // und faengt jeden anderen Schreibweg.
+            //
+            // KEIN eindeutiger Schluessel ueber die Flaeche, und das ist kein Versaeumnis:
+            // Zwei Quader koennen sich UEBERSCHNEIDEN, ohne gleich zu sein - dagegen gibt
+            // es keinen Schluessel. Den Riegel stellt stattdessen ein SELECT ... FOR
+            // UPDATE auf die Grundstuecke der Stadt in DERSELBEN Transaktion wie das
+            // INSERT; siehe MariaGrundstuecke.anlegen. Das ist der Unterschied zum Namen
+            // in Schritt 19, wo ein Schluessel wirklich dichtmacht.
+            //
+            // fk_grundstueck_stadt auf parzellen mit ON DELETE RESTRICT: Eine Freistadt,
+            // in der Grundstuecke liegen, darf nicht verschwinden. Dieselbe Richtung wie
+            // beim Elternteil - und dieselbe Begruendung: Verweigern ist die
+            // zurueckholbare Antwort.
+            //
+            // nach_welt ist der Index fuer das FUELLEN des Zwischenspeichers, also fuer
+            // genau eine Abfrage je Serverstart. nach_stadt fuer die Liste des
+            // Stadtbesitzers, nach_eigentuemer fuer die eigene Liste eines Spielers. Fuer
+            // die Punktabfrage gibt es ABSICHTLICH keinen: Sie laeuft nie gegen die
+            // Datenbank.
+            """
+            CREATE TABLE IF NOT EXISTS grundstuecke (
+              id BIGINT NOT NULL AUTO_INCREMENT,
+              welt VARCHAR(128) NOT NULL,
+              stadt_id BIGINT NOT NULL,
+              eigentuemer CHAR(36) NOT NULL,
+              von_x INT NOT NULL,
+              von_z INT NOT NULL,
+              bis_x INT NOT NULL,
+              bis_z INT NOT NULL,
+              preis BIGINT NOT NULL DEFAULT 0,
+              erworben_am DATETIME(3) NOT NULL,
+              PRIMARY KEY (id),
+              KEY nach_welt (welt),
+              KEY nach_stadt (stadt_id),
+              KEY nach_eigentuemer (welt, eigentuemer),
+              CONSTRAINT fk_grundstueck_stadt FOREIGN KEY (stadt_id)
+                REFERENCES parzellen (id) ON DELETE RESTRICT,
+              CONSTRAINT ck_grundstueck_normiert
+                CHECK (von_x <= bis_x AND von_z <= bis_z)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 21: die Mitbauer eines Grundstuecks.
+            //
+            // EINE EIGENE NEBENTABELLE, wie parzellen_mitbauer (Schritt 2), und NICHT
+            // dieselbe: Die Fremdschluessel zeigen auf verschiedene Tabellen, und ein
+            // gemeinsamer Elternschluessel liesse sich gar nicht bilden. Zwei Zeilen mit
+            // derselben Nummer waeren sonst ein Grundstueck und eine Parzelle.
+            //
+            // ON DELETE CASCADE wie dort: Wird ein Grundstueck aufgeloest, sind seine
+            // Mitbauer gegenstandslos. Das ist die andere Richtung als beim
+            // Stadt-Fremdschluessel darueber, und beide sind richtig - ein Mitbauer ist
+            // kein Besitz, der verloren gehen koennte.
+            """
+            CREATE TABLE IF NOT EXISTS grundstuecke_mitbauer (
+              grundstueck_id BIGINT NOT NULL,
+              spieler CHAR(36) NOT NULL,
+              PRIMARY KEY (grundstueck_id, spieler),
+              CONSTRAINT fk_grundstueck_mitbauer FOREIGN KEY (grundstueck_id)
+                REFERENCES grundstuecke (id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -940,6 +1043,14 @@ public final class Datenbank implements AutoCloseable {
                             + "url.test, angelegt von skripte/mariadb_einrichten.bat.");
         }
         try (Statement anweisung = verbindung().createStatement()) {
+            // DIE GRUNDSTUECKE ZUERST, und zwar VOR den Parzellen [12.11.2026]:
+            // fk_grundstueck_stadt zeigt auf parzellen.id und steht auf RESTRICT. Ohne
+            // diese Zeile scheitert jedes leereAlles, sobald ein einziges Grundstueck
+            // steht - und damit JEDE Datenbankprobe, auch die, die mit Grundstuecken
+            // nichts zu tun hat. Die Mitbauer gehen ueber ON DELETE CASCADE mit; sie
+            // stehen trotzdem hier, damit die Reihenfolge lesbar bleibt.
+            anweisung.execute("DELETE FROM grundstuecke_mitbauer");
+            anweisung.execute("DELETE FROM grundstuecke");
             anweisung.execute("DELETE FROM parzellen_mitbauer");
             // Erst die Elternkette loesen. fk_besitz_elternteil steht auf RESTRICT und
             // zeigt auf dieselbe Tabelle; InnoDB prueft zeilenweise waehrend der

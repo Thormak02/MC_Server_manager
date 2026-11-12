@@ -86,7 +86,71 @@ enum FreistadtSatz implements Satz {
     GESTOERT("freistadt.absage.gestoert", Art.SATZ),
 
     /** Die Freistaedtewelt fehlt oder ist falsch eingetragen. */
-    KEINE_WELT("freistadt.absage.keine-welt", Art.SATZ);
+    KEINE_WELT("freistadt.absage.keine-welt", Art.SATZ),
+
+    // --- Die Grundstuecke [Teil C2, 12.11.2026] ---------------------------------
+
+    /**
+     * Eine Ecke ist abgesteckt - und was noch fehlt.
+     *
+     * <p>EIN Satz fuer beide Ecken, mit {@code nummer} und {@code fehlt}: Zwei Saetze
+     * waeren derselbe Satz mit einer anderen Zahl, und der Betreiber muesste beide
+     * gleich halten.
+     */
+    ECKE("freistadt.grundstueck.ecke", Art.SATZ, "nummer", "x", "z", "zelle"),
+
+    /** Die dritte Ecke beginnt eine NEUE Absteckung - das muss er lesen. */
+    ECKE_NEU("freistadt.grundstueck.ecke-neu", Art.SATZ, "x", "z", "zelle"),
+
+    /** Beide Ecken stehen - jetzt fehlt nur noch das Anlegen. */
+    ECKEN_FERTIG("freistadt.grundstueck.ecken-fertig", Art.GEZAEHLT, "zellen"),
+
+    /** Anlegen ohne Absteckung. */
+    KEINE_ECKEN("freistadt.grundstueck.keine-ecken", Art.SATZ),
+
+    /** Anlegen mit nur EINER Ecke. */
+    EINE_ECKE("freistadt.grundstueck.eine-ecke", Art.SATZ),
+
+    /** Zugeschnitten - mit Zuschnitt und Groesse. */
+    ZUGESCHNITTEN("freistadt.grundstueck.zugeschnitten", Art.GEZAEHLT, "zuschnitt",
+            "zellen", "bloecke"),
+
+    /** Aufgeloest - die Flaeche faellt an die Stadt zurueck. */
+    AUFGELOEST("freistadt.grundstueck.aufgeloest", Art.SATZ, "zuschnitt"),
+
+    /** Die Ueberschrift der Grundstuecksliste. */
+    GRUNDSTUECK_KOPF("freistadt.grundstueck.kopf", Art.SATZ, "stadt"),
+
+    /** Eine Zeile der Grundstuecksliste. */
+    GRUNDSTUECK_ZEILE("freistadt.grundstueck.zeile", Art.GEZAEHLT, "zuschnitt",
+            "besitzer", "zellen"),
+
+    /** Die Stadt hat noch kein Grundstueck. */
+    GRUNDSTUECK_LEER("freistadt.grundstueck.leer", Art.SATZ),
+
+    /** Die beiden Ecken liegen nicht im selben Stadtfeld. */
+    NICHT_EIN_FELD("freistadt.grundstueck.nicht-ein-feld", Art.SATZ),
+
+    /** Auf diesem Feld steht keine Stadt. */
+    KEINE_STADT("freistadt.grundstueck.keine-stadt", Art.SATZ),
+
+    /** Die Stadt gehoert einem anderen. */
+    NICHT_DEINE_STADT("freistadt.grundstueck.nicht-deine-stadt", Art.SATZ),
+
+    /** Die Flaeche ueberschneidet sich mit einem vorhandenen Grundstueck. */
+    UEBERSCHNEIDUNG("freistadt.grundstueck.ueberschneidung", Art.SATZ),
+
+    /** Mehr Zellen, als die Einstellung erlaubt. */
+    ZU_GROSS("freistadt.grundstueck.zu-gross", Art.GEZAEHLT, "zellen", "hoechstens"),
+
+    /** Hier liegt kein Grundstueck - beim Aufloesen. */
+    KEIN_GRUNDSTUECK("freistadt.grundstueck.kein-grundstueck", Art.SATZ),
+
+    /** Es gehoert einem anderen - beim Aufloesen. */
+    NICHT_DEIN_GRUNDSTUECK("freistadt.grundstueck.nicht-dein-grundstueck", Art.SATZ),
+
+    /** Die Ablage hat gestoert. */
+    GRUNDSTUECK_GESTOERT("freistadt.grundstueck.gestoert", Art.SATZ);
 
     private final String pfad;
     private final Art art;

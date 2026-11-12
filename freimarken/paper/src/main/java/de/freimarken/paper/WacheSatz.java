@@ -201,6 +201,20 @@ enum WacheSatz implements Satz {
     SCHUTZ_FREMDE_STADT("wache.schutz.fremde-stadt", Art.HANDBALKEN, "stadt",
             "eigentuemer"),
 
+    /**
+     * Ein vergebenes Grundstueck eines anderen - MITTEN in einer Stadt [12.11.2026].
+     *
+     * <p>Der Satz, der Teil C2 im Spiel sichtbar macht. Er trifft auch den
+     * STADTBESITZER: Wer ein Grundstueck vergeben hat, liest hier, dass er dort nicht
+     * mehr baut - und das ist die ganze Zusage, fuer die ein Kaeufer zahlt.
+     *
+     * <p>Mit {@code {eigentuemer}} und OHNE Stadtnamen, anders als
+     * {@link #SCHUTZ_FREMDE_STADT}: Wer hier steht, ist schon in der Stadt. Ihm fehlt
+     * nicht der Weg hinein, sondern der Name dessen, den er fragen muss.
+     */
+    SCHUTZ_FREMDES_GRUNDSTUECK("wache.schutz.fremdes-grundstueck", Art.HANDBALKEN,
+            "eigentuemer"),
+
     /** Die Freistaedte sind nicht nachsehbar - wie {@link #SCHUTZ_LADEN_GESTOERT}. */
     SCHUTZ_STADT_GESTOERT("wache.schutz.stadt-gestoert", Art.HANDBALKEN),
 

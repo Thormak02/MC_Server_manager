@@ -1,62 +1,67 @@
 package de.freimarken.paper;
 
 import de.freimarken.daten.Datenbank;
-import de.freimarken.daten.MariaBonus;
 import de.freimarken.daten.MariaAbholfach;
+import de.freimarken.daten.MariaBerufe;
 import de.freimarken.daten.MariaBlockbuch;
-import de.freimarken.daten.MariaMiete;
-import de.freimarken.daten.MariaShops;
+import de.freimarken.daten.MariaBonus;
+import de.freimarken.daten.MariaGrundstuecke;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
-import de.freimarken.daten.MariaBerufe;
+import de.freimarken.daten.MariaMiete;
+import de.freimarken.daten.MariaShops;
 import de.freimarken.daten.MariaSpielzeit;
 import de.freimarken.daten.MariaTruhe;
-import de.freimarken.kern.Bonusablage;
-import de.freimarken.kern.SpeicherBonus;
 import de.freimarken.kern.Abholablage;
-import de.freimarken.kern.Blockbuchablage;
-import de.freimarken.kern.Blockbuchwerte;
-import de.freimarken.kern.SpeicherAbholfach;
-import de.freimarken.kern.SpeicherBlockbuch;
-import de.freimarken.kern.SpeicherMiete;
+import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
-import de.freimarken.kern.Blockmarken;
 import de.freimarken.kern.Berufswerte;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
-import de.freimarken.kern.Chunkfeld;
-import de.freimarken.kern.Bundankauf;
-import de.freimarken.kern.Grenzregel;
-import de.freimarken.kern.Handelsart;
+import de.freimarken.kern.Blockbuchablage;
+import de.freimarken.kern.Blockbuchwerte;
+import de.freimarken.kern.Blockmarken;
 import de.freimarken.kern.Blockort;
-import de.freimarken.kern.Kistenshop;
-import de.freimarken.kern.Kasse;
-import de.freimarken.kern.Ladenverzeichnis;
-import de.freimarken.kern.Mietablage;
-import de.freimarken.kern.Messwerte;
-import de.freimarken.kern.Preisstaffel;
-import de.freimarken.kern.Ladeneinheit;
-import de.freimarken.kern.Quader;
-import de.freimarken.kern.Rasterplan;
-import de.freimarken.kern.SpeicherKasse;
-import de.freimarken.kern.SpeicherBerufe;
-import de.freimarken.kern.SpeicherShops;
-import de.freimarken.kern.ZwischenspeicherBerufe;
-import de.freimarken.kern.SpeicherLager;
-import de.freimarken.kern.SpeicherSpielzeit;
-import de.freimarken.kern.SpeicherTruhe;
-import de.freimarken.kern.Stadtfeldplan;
-import de.freimarken.kern.Truhenablage;
-import de.freimarken.kern.Truhenverzeichnis;
-import de.freimarken.kern.Spielzeitablage;
-import de.freimarken.kern.Stadtgrenze;
-import de.freimarken.kern.Tagesgrenze;
+import de.freimarken.kern.Bonusablage;
+import de.freimarken.kern.Bundankauf;
+import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Feldgrenze;
 import de.freimarken.kern.Freistadtbuch;
+import de.freimarken.kern.Grenzregel;
+import de.freimarken.kern.Grundstuecksbuch;
+import de.freimarken.kern.Handelsart;
+import de.freimarken.kern.Kasse;
+import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Ladeneinheit;
+import de.freimarken.kern.Ladenverzeichnis;
+import de.freimarken.kern.Messwerte;
+import de.freimarken.kern.Mietablage;
+import de.freimarken.kern.Preisstaffel;
+import de.freimarken.kern.Quader;
+import de.freimarken.kern.Rasterplan;
+import de.freimarken.kern.SpeicherAbholfach;
+import de.freimarken.kern.SpeicherBerufe;
+import de.freimarken.kern.SpeicherBlockbuch;
+import de.freimarken.kern.SpeicherBonus;
+import de.freimarken.kern.SpeicherGrundstuecke;
+import de.freimarken.kern.SpeicherKasse;
+import de.freimarken.kern.SpeicherLager;
+import de.freimarken.kern.SpeicherMiete;
+import de.freimarken.kern.SpeicherShops;
+import de.freimarken.kern.SpeicherSpielzeit;
+import de.freimarken.kern.SpeicherTruhe;
+import de.freimarken.kern.Spielzeitablage;
+import de.freimarken.kern.Stadtfeldplan;
+import de.freimarken.kern.Stadtgrenze;
+import de.freimarken.kern.Tagesgrenze;
+import de.freimarken.kern.Truhenablage;
+import de.freimarken.kern.Truhenverzeichnis;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Zeitwerte;
+import de.freimarken.kern.ZwischenspeicherBerufe;
+import de.freimarken.kern.ZwischenspeicherGrundstuecke;
 import de.freimarken.kern.ZwischenspeicherLager;
 import de.freimarken.kern.ZwischenspeicherShops;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
@@ -307,6 +312,28 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * aus demselben Grund - ein Zirkel, den nur ein spaet gelesenes Feld aufloest.
      */
     private Stadtwache stadtwache;
+
+    /**
+     * Die Grundstuecke in den Staedten - mit Zwischenspeicher davor.
+     *
+     * <p>Wie beim Lager: {@code darfBauen} laeuft bei jedem gesetzten Block, und das
+     * darf keine Abfrage ueber das Netz werden. Anders als dort ist dieser
+     * Zwischenspeicher VOLLSTAENDIG und ohne Verfall - die Rechnung dazu steht an
+     * {@link ZwischenspeicherGrundstuecke}.
+     */
+    private ZwischenspeicherGrundstuecke grundstuecksablage;
+
+    /** Das Buch der Grundstuecke - {@code null}, wenn die Welt oder das Mass fehlt. */
+    private Grundstuecksbuch grundstuecksbuch;
+
+    /**
+     * Die abgesteckten Ecken je Spieler - fluechtig.
+     *
+     * <p>Hier und nicht in den Befehlen: Beim Abmelden wird {@code vergiss} gerufen, und
+     * das braucht einen Zuhoerer. Zwei Buecher waeren zwei Absteckungen, und der Spieler
+     * saehe seine Ecken je nach Befehl.
+     */
+    private final Absteckbuch absteckbuch = new Absteckbuch();
 
     /**
      * Die Ziele von {@code /warp} - ein FELD, weil zwei Stellen sie brauchen.
@@ -1211,6 +1238,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // eine Datenbank da ist oder nicht. Eine Fassung ohne Zwischenspeicher waere
             // ein zweiter Weg zu der Frage, wo ein Shop haengt.
             shopablage = new ZwischenspeicherShops(new SpeicherShops());
+            // Dieselbe Bauart wie bei den Shops, und aus demselben Grund: Der Betrieb
+            // laeuft durch GENAU denselben Code, ob eine Datenbank da ist oder nicht.
+            grundstuecksablage =
+                    new ZwischenspeicherGrundstuecke(new SpeicherGrundstuecke());
             // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von aussen.
             berufsablage = new ZwischenspeicherBerufe(new SpeicherBerufe());
             getLogger().warning("Keine Datenbank eingetragen: Parzellen, Guthaben und das"
@@ -1261,6 +1292,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // genau die Luecke. Dieser hier ist eine VOLLSTAENDIGE Kopie ohne
             // Verfallszeit: Es gibt keinen Augenblick, in dem er etwas Falsches sagt.
             shopablage = new ZwischenspeicherShops(new MariaShops(datenbank));
+            // VOLLSTAENDIG und ohne Verfall, wie die Shops - und mit einer Obergrenze,
+            // die aus der Weltgeometrie folgt: 399 Felder zu 256 Zellen. Die Rechnung
+            // steht an ZwischenspeicherGrundstuecke.
+            grundstuecksablage =
+                    new ZwischenspeicherGrundstuecke(new MariaGrundstuecke(datenbank));
             // KEIN Zwischenspeicher: /beruf ist kein heisser Lesepfad. Mit Teil E, wenn
             // jeder Verdienst den Beruf fragt, wird das neu bedacht - und dann als eigene
             // Schicht wie ZwischenspeicherLager, nicht als Feld hier drin.
@@ -1467,7 +1503,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.addAll(verzeichnis.register(
                     new FreistadtBefehle(freistadtbuch, kasse, sprache,
                             freistadtbuch == null ? "" : weltschluessel(freistadtwelt),
-                            () -> wirtschaft.werte().freistaedte().hoechstzahl())
+                            () -> wirtschaft.werte().freistaedte().hoechstzahl(),
+                            grundstuecksbuch, absteckbuch)
                             .freistadt(),
                     sprache.wort(BundSatz.BEFEHL_FREISTADT, Einsatz.keine()),
                     List.of()));
@@ -1972,6 +2009,32 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     + " kommt an.", fehler);
             gegruendet = -1;
         }
+        // DIE GRUNDSTUECKE [Teil C2] - vor der Wache, denn die fragt sie mit.
+        //
+        // GEFANGEN wie das Verzeichnis darueber: Faellt die Grundstuecksablage aus,
+        // laeuft der Server mit dem Schutz von Teil C1 weiter - jede Stadt ist dann als
+        // Ganzes geschuetzt, nur die Grundstuecke darin nicht. Ein Abbruch waere hier
+        // falsch: Ohne Grundstuecke ist eine Stadt weniger fein geschuetzt, OHNE WACHE
+        // ist sie gar nicht geschuetzt.
+        try {
+            int zellen = grundstuecksablage.fuellen(welt.key().asString());
+            grundstuecksbuch = new Grundstuecksbuch(grenze, lager, grundstuecksablage,
+                    wirtschaft);
+            freistadtbuch.gibGrundstuecke(grundstuecksablage);
+            getLogger().info("Grundstuecke: " + zellen + " in "
+                    + grundstuecksablage.belegteZellen() + " Zellen, hoechstens "
+                    + wirtschaft.werte().freistaedte().hoechstzellen()
+                    + " Zellen je Grundstueck. In einem vergebenen Grundstueck baut nur"
+                    + " sein Besitzer - auch der Stadtbesitzer nicht.");
+        } catch (RuntimeException fehler) {
+            getLogger().log(java.util.logging.Level.SEVERE, "Die Grundstuecke sind nicht"
+                    + " zu lesen - in diesem Lauf gibt es KEINE: kein Zuschneiden, und"
+                    + " in jeder Stadt baut wieder nur ihr Besitzer (auch dort, wo er"
+                    + " Grundstuecke vergeben hat). Die Staedte selbst bleiben"
+                    + " geschuetzt.", fehler);
+            grundstuecksbuch = null;
+        }
+
         // Die Wache unmittelbar nach dem Buch, und aus DERSELBEN Instanz: Zwei Buecher
         // waeren zwei Rechnungen darueber, wo ein Feld liegt - und die eine entschiede,
         // wem es gehoert, die andere, wer darauf bauen darf.

@@ -80,6 +80,13 @@ permissions:
     # will, nimmt es weg und gibt es einer Gruppe.
     description: Darf eine eigene Freistadt gruenden
     default: true
+  freimarken.freistadt.grundstueck:
+    # Ein DRITTES Recht: Gruenden bewegt 400.000 Mark, Zuschneiden bewegt nichts und
+    # arbeitet nur auf dem eigenen Feld. Der eigentliche Riegel ist der Besitz der
+    # Stadt - dieses Recht ist die Stelle, an der ein Betreiber den ganzen Zweig
+    # abschalten kann, ohne die Staedte anzutasten.
+    description: Darf in der eigenen Freistadt Grundstuecke zuschneiden
+    default: true
   freimarken.spielzeit:
     description: Darf die eigene gemessene Spielzeit sehen
     default: true
