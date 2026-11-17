@@ -857,8 +857,11 @@ class ShophandelTest {
     }
 
     private Shopbuch buch(Wirtschaftsstand wirtschaft) {
+        // null FUER DAS FREISTADTBUCH: Diese Proben HANDELN, sie legen nichts an -
+        // das Ladenrecht sitzt allein im Anlegeweg. Mit einem Buch braeuchte jede
+        // Handelsprobe eine Stadt, die mit dem Handel nichts zu tun hat.
         return new Shopbuch(ablage, new Leser(), (wer, welt, x, y, z) -> true,
-                wirtschaft, Logger.getAnonymousLogger());
+                wirtschaft, null, Logger.getAnonymousLogger());
     }
 
     /** Ein Halter mit diesen Handelszahlen und dem Tagesdeckel ab Werk. */
@@ -949,7 +952,7 @@ class ShophandelTest {
         Wirtschaftsstand eigenerStand = stand(Shopwerte.VORGABE);
         var handel = new Shophandel(
                 new Shopbuch(eigeneAblage, new Leser(),
-                        (wer, welt, x, y, z) -> true, eigenerStand,
+                        (wer, welt, x, y, z) -> true, eigenerStand, null,
                         Logger.getAnonymousLogger()),
                 eigeneHand, eigeneKasse, eigenerStand, UHR,
                 Logger.getAnonymousLogger());

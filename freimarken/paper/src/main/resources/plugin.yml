@@ -106,8 +106,40 @@ permissions:
     #
     # Das ANZEIGEN haengt nicht daran: Was in einer Stadt gilt, liest jeder, der dort
     # steht - ein Buerger muss wissen, was er darf, ohne den Besitzer zu fragen.
-    description: Darf die Buergerrechte der eigenen Freistadt einstellen
+    description: Darf Buergerrechte und Regeln der eigenen Freistadt einstellen
     default: true
+  freimarken.freistadt.kasse:
+    # Ein SECHSTES Recht, und es trennt das Geld ab: Buergerrechte setzen heisst
+    # entscheiden, was Fremde duerfen; abheben heisst Geld bewegen. Ein Betreiber, der
+    # das eine erlauben und das andere sperren will, soll das koennen - mit einem
+    # gemeinsamen Recht waere jede Einschraenkung eine doppelte.
+    #
+    # Das ANSEHEN haengt nicht daran: Was eine Freistadt einnimmt, liest jeder, der
+    # dort steht. In einer Freistadt ist der Haushalt keine Privatsache - und ein
+    # Buerger, der eine Marktgebuehr gezahlt hat, soll sehen, wo sie geblieben ist.
+    description: Darf Geld aus der Kasse der eigenen Freistadt nehmen
+    default: true
+  freimarken.freistadt.aufgeben:
+    # Ein SIEBTES Recht und nicht freimarken.freistadt.gruenden [Teil E6]: Ein
+    # Betreiber kann das Gruenden offen lassen und das Aufgeben schliessen - etwa
+    # auf einem Server, der Staedte nur vom Team beenden lassen will.
+    #
+    # Ab Werk erlaubt: Wer 400.000 Mark eingesetzt hat, soll aussteigen koennen.
+    # Was er zurueckbekommt, stellt freistaedte.erstattung-prozent ein - und eine
+    # Stadt, in der jemand anderem ein Grundstueck gehoert, laesst sich ohnehin
+    # nicht aufloesen.
+    description: Darf die eigene Freistadt aufgeben
+    default: true
+  freimarken.freistadt.raeumen:
+    # Das EINZIGE Recht dieses Befehls, das ueber eigenen Besitz hinausgeht, und
+    # darum nur fuer Operatoren: Wer es hat, loescht eine Stadt, fuer die ein
+    # anderer gezahlt hat. Die Erstattung geht an DESSEN Konto, nicht an das
+    # eigene - auch wenn er gerade nicht da ist.
+    #
+    # Gebraucht wird es fuer VERFALLENE Staedte: Die verschwinden nicht von selbst,
+    # weil ein Zeitgeber keine Stadt mit 400.000 Mark Einsatz loeschen soll.
+    description: Darf fremde Freistaedte raeumen
+    default: op
   freimarken.spielzeit:
     description: Darf die eigene gemessene Spielzeit sehen
     default: true

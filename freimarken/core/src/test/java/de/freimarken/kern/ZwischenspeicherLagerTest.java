@@ -101,6 +101,20 @@ class ZwischenspeicherLagerTest {
         }
 
         @Override
+        public void regelnSetzen(long id, String regeln) {
+            echt.regelnSetzen(id, regeln);
+        }
+
+        @Override
+        public void besuchSetzen(long id, java.time.LocalDate tag) {
+            echt.besuchSetzen(id, tag);
+        }
+        @Override
+        public void zustandSetzen(long id, de.freimarken.kern.Zustand zustand) {
+            echt.zustandSetzen(id, zustand);
+        }
+
+        @Override
         public void entfernen(long id) {
             echt.entfernen(id);
         }

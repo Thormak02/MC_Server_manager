@@ -9,14 +9,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import de.freimarken.kern.Feldgrenze;
 import de.freimarken.kern.Freistadtbuch;
+import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.SpeicherGrundstuecke;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
+import de.freimarken.kern.Stadtkasse;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
+import de.freimarken.kern.Zellquader;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.logging.Logger;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,6 +68,14 @@ class WarpBefehlTest {
 
     @BeforeEach
     void vorher() {
+        // DIE FREISTAEDTEWELT MIT BODEN [Teil E3]: Reise.pruefe liest am Ziel den
+        // Boden, und eine griff-lose Welt hat keine Bloecke. Das fiel bis Teil E nicht
+        // auf, weil keine Probe je gereist ist - alle pruefen eine Absage.
+        //
+        // keineWeltenMehr zuerst, damit die Welt WIRKLICH neu mit Griff entsteht: Ein
+        // Rest aus einer Probe davor waere die griff-lose, und sie bliebe es.
+        Serverprobe.keineWeltenMehr();
+        Serverprobe.welt(FREISTAEDTE, stadtfeldboden());
         nether = Serverprobe.welt(NETHER);
         Warpverzeichnis verzeichnis = Warpverzeichnis.ausWelten(
                 List.of("nether", "ende"));
@@ -79,8 +93,11 @@ class WarpBefehlTest {
     }
 
     private Spielerprobe reisender(int zahl) {
+        // RECHT_SOFORT dazu [Teil E3]: Damit laeuft die Aufwaermzeit sofort los und
+        // fasst den Zeitplaner nie an - das macht den Erfolgsfall einer Reise ohne
+        // Server ueberhaupt pruefbar. Siehe sofortigeAufwaermzeit().
         return new Spielerprobe("Cara", Spielerprobe.kennungAus(zahl),
-                WarpBefehle.RECHT_REISEN);
+                WarpBefehle.RECHT_REISEN, Aufwaermzeit.RECHT_SOFORT);
     }
 
     @Test
@@ -157,17 +174,36 @@ class WarpBefehlTest {
         SpeicherLager lager = new SpeicherLager();
         SpeicherKasse kasse = new SpeicherKasse(1_000_000L, UHR);
         Freistadtbuch buch = new Freistadtbuch(Feldgrenze.freistaedte(), lager, kasse,
+                new Stadtkasse(new SpeicherKasse(0L)),
                 Warpverzeichnis.ausWelten(List.of("nether", "ende")),
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
         buch.gruende(FREISTAEDTE, Spielerprobe.kennungAus(90), "neustadt", 9);
         buch.gruende(FREISTAEDTE, Spielerprobe.kennungAus(91), "altdorf", 9);
         Reise reise = new Reise(Logger.getLogger("WarpBefehlTest"), new Rueckweg(),
-                null, Sprachprobe.spracheAusDemJar());
+                sofortigeAufwaermzeit(), Sprachprobe.spracheAusDemJar());
         WarpBefehle befehle = new WarpBefehle(
                 Warpverzeichnis.ausWelten(List.of("nether", "ende")),
                 Map.of("nether", nether), reise, Sprachprobe.spracheAusDemJar(),
-                buch, Serverprobe.welt(FREISTAEDTE));
+                buch, Serverprobe.welt(FREISTAEDTE, stadtfeldboden()));
         return new Befehlsprobe(List.of(befehle.warp()));
+    }
+
+    /**
+     * Eine Aufwaermzeit OHNE Plugin - und warum das geht [Teil E3].
+     *
+     * <p>Bis Teil E stand hier {@code null}, und das fiel zehn Proben lang nicht auf:
+     * Keine von ihnen hat je {@code reise.fuehre} erreicht, denn alle pruefen eine
+     * ABSAGE. Der erste Erfolgsfall (41k) lief sofort in eine
+     * {@code NullPointerException} - das ist der eigentliche Grund, aus dem es ihn
+     * vorher nicht gab.
+     *
+     * <p>Das {@code null} als Plugin bleibt, und es ist hier ungefaehrlich:
+     * {@code laeuft} fragt nur eine Karte, und {@code beginne} laeuft fuer einen
+     * Spieler mit {@link Aufwaermzeit#RECHT_SOFORT} sofort los, ohne den Zeitplaner
+     * anzufassen. Darum traegt jeder Reisende dieser Probe dieses Recht.
+     */
+    private Aufwaermzeit sofortigeAufwaermzeit() {
+        return new Aufwaermzeit(null, Sprachprobe.spracheAusDemJar());
     }
 
     @Test
@@ -258,4 +294,160 @@ class WarpBefehlTest {
         // saehe nichts als eine haengende Eingabezeile.
         assertEquals(List.of(), baum.vorschlaege("warp freistadt ", reisender(93)));
     }
+
+    // ============================================== Teil E3: die Auflage
+
+    /**
+     * Derselbe Baum wie {@link #mitStaedten}, aber die Stadt erfuellt die AUFLAGE.
+     *
+     * <p>Beides wird hergestellt: ein Regeltext und ein Grundstueck, das einem ANDEREN
+     * gehoert als der Besitzerin. Das zweite ist der Punkt - ihr eigener Zuschnitt
+     * zaehlt nach Teil D nicht.
+     */
+    private Befehlsprobe mitErfuellterAuflage(UUID besucher) {
+        SpeicherLager lager = new SpeicherLager();
+        SpeicherKasse kasse = new SpeicherKasse(1_000_000L, UHR);
+        SpeicherGrundstuecke grundstuecke = new SpeicherGrundstuecke();
+        Freistadtbuch buch = new Freistadtbuch(Feldgrenze.freistaedte(), lager, kasse,
+                new Stadtkasse(new SpeicherKasse(0L)),
+                Warpverzeichnis.ausWelten(List.of("nether", "ende")),
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+        buch.gibGrundstuecke(grundstuecke);
+        UUID besitzerin = Spielerprobe.kennungAus(90);
+        buch.gruende(FREISTAEDTE, besitzerin, "neustadt", 9);
+        Parzelle stadt = buch.staedte(FREISTAEDTE).get(0);
+        lager.regelnSetzen(stadt.id(), "Kein PvP.");
+        // Das Grundstueck gehoert dem BESUCHER - damit ist er Stadtbuerger, und die
+        // Auflage ist erfuellt. Ein Zuschnitt der Besitzerin taete das nicht.
+        grundstuecke.anlegen(FREISTAEDTE, stadt.id(), Zellquader.eineZelle(
+                buch.plan().ersteZelle(stadt.x()),
+                buch.plan().ersteZelle(stadt.z())), besucher, 5_000L);
+        Reise reise = new Reise(Logger.getLogger("WarpBefehlTest"), new Rueckweg(),
+                sofortigeAufwaermzeit(), Sprachprobe.spracheAusDemJar());
+        WarpBefehle befehle = new WarpBefehle(
+                Warpverzeichnis.ausWelten(List.of("nether", "ende")),
+                Map.of("nether", nether), reise, Sprachprobe.spracheAusDemJar(),
+                buch, Serverprobe.welt(FREISTAEDTE, stadtfeldboden()));
+        return new Befehlsprobe(List.of(befehle.warp()));
+    }
+
+    // 41k GAB ES, UND SIE IST WIEDER HERAUS [Teil E3]. Der Erfolgsfall eines
+    // Stadtwarps ist ohne laufenden Server NICHT herstellbar: Reise.pruefe fragt
+    // ueber Ankunftspunkt.taugt den Boden, und Material.isSolid geht in die
+    // Bukkit-Registry - die wirft ohne Server (dieselbe Grenze wie bei
+    // Material.isBlock in Teil D).
+    //
+    // Auf dem Weg dorthin sind vier echte Luecken der Proben geschlossen worden, und
+    // die bleiben: Serverprobe beantwortet jetzt World.getUID, World.getWorldBorder
+    // und World.getMaxHeight, Spielerprobe getVehicle, getNearbyEntities und
+    // teleportAsync. Jede kuenftige Reiseprobe kommt damit weiter als diese.
+    //
+    // Was an 41k wirklich zu pruefen war - dass der Riegel den Berechtigten DURCHLAESST
+    // und VOR der Reise sitzt -, steht jetzt an zwei Stellen: sechs Proben in
+    // FreistadtbuchTest messen die Entscheidung selbst, und GrenzeTest 31at haelt die
+    // VERDRAHTUNG fest. Eine Regel ohne Anschluss waere gruen geprueft und im Spiel
+    // wirkungslos.
+
+    @Test
+    @DisplayName("41l - eine Stadt OHNE Auflage sagt es - und nennt, was fehlt")
+    void ohneAuflageSagtWasFehlt() throws CommandSyntaxException {
+        // Die andere Richtung, und sie ist der Grund fuer den neuen Satz: Ohne ihn
+        // erschien diese Stadt als warp.stadt-unbekannt, also als Tippfehler - eine
+        // Luege ueber einen Namen, den es gibt.
+        Spielerprobe spieler = reisender(93).inWelt(nether);
+
+        // MIT Ablage und OHNE Regeln: Nur so ist die Auflage wirklich offen. Mit
+        // mitStaedten() faellt sie AUS - dann darf jeder hinein, und diese Probe
+        // pruefte das Gegenteil von dem, was ihr Name sagt.
+        mitStadtOhneAuflage().tippe("warp freistadt neustadt", spieler);
+
+        List<String> zeilen = spieler.chatBild();
+        assertEquals(2, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(0).contains("noch keinen Teleporter"),
+                "und NICHT 'diesen Namen gibt es nicht' - den Namen gibt es: "
+                        + zeilen.get(0));
+        assertTrue(zeilen.get(1).contains("ein Regeltext und ein vergebenes"
+                + " Grundstueck"),
+                "der Satz nennt BEIDES, was fehlt - sonst weiss der Stadtbesitzer nur,"
+                        + " dass etwas fehlt: " + zeilen.get(1));
+        assertNotEquals(Serverprobe.welt(FREISTAEDTE, stadtfeldboden()),
+                spieler.spieler().getWorld(),
+                "und gereist wurde NICHT. Ohne diese Zeile waere die Probe gruen, auch"
+                        + " wenn der Zweig die Absage sendet UND trotzdem reist.");
+    }
+
+    // 41m GAB ES AUCH, und sie ist aus demselben Grund heraus wie 41k: Dass die
+    // Besitzerin DURCHGELASSEN wird, ist nur zu sehen, wenn der Zweig bis in die Reise
+    // laeuft - und die laeuft ohne Server nicht. Gemessen wird dieselbe Zusage jetzt in
+    // FreistadtbuchTest ("Besitzer, Mitbauer und Stadtbuerger duerfen IMMER hinein"),
+    // wo sie ohne Bukkit auskommt.
+
+    /**
+     * Eine Stadt MIT Grundstuecksablage und OHNE erfuellte Auflage.
+     *
+     * <p>Der Unterschied zu {@link #mitStaedten} ist die ABLAGE, und er entscheidet:
+     * Ohne sie faellt die Auflage aus, und dann darf jeder hinein - eine Probe mit
+     * {@code mitStaedten} pruefte also das Gegenteil von dem, was ihr Name sagt.
+     */
+    private Befehlsprobe mitStadtOhneAuflage() {
+        SpeicherLager lager = new SpeicherLager();
+        SpeicherKasse kasse = new SpeicherKasse(1_000_000L, UHR);
+        Freistadtbuch buch = new Freistadtbuch(Feldgrenze.freistaedte(), lager, kasse,
+                new Stadtkasse(new SpeicherKasse(0L)),
+                Warpverzeichnis.ausWelten(List.of("nether", "ende")),
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+        // DIE ABLAGE IST DA und leer - die Auflage ist damit pruefbar und offen.
+        buch.gibGrundstuecke(new SpeicherGrundstuecke());
+        buch.gruende(FREISTAEDTE, Spielerprobe.kennungAus(90), "neustadt", 9);
+        Reise reise = new Reise(Logger.getLogger("WarpBefehlTest"), new Rueckweg(),
+                sofortigeAufwaermzeit(), Sprachprobe.spracheAusDemJar());
+        WarpBefehle befehle = new WarpBefehle(
+                Warpverzeichnis.ausWelten(List.of("nether", "ende")),
+                Map.of("nether", nether), reise, Sprachprobe.spracheAusDemJar(),
+                buch, Serverprobe.welt(FREISTAEDTE, stadtfeldboden()));
+        return new Befehlsprobe(List.of(befehle.warp()));
+    }
+
+
+    /**
+     * Der Boden einer Stadtfeldwelt - Gras bei {@link Feldboden#BODEN}, darueber Luft.
+     *
+     * <p><b>Eigener Griff und nicht {@code Probewelt}</b>: Jene rechnet mit einem
+     * {@code Rasterplan}, und die Freistaedtewelt hat einen {@code Stadtfeldplan} -
+     * zwei verschiedene Geometrien. Ein Griff, der nur den Boden kennt, reicht hier:
+     * {@code Reise.pruefe} fragt ueber {@code Ankunftspunkt.taugt} nach festem Boden
+     * und Luft darueber, und nichts sonst.
+     *
+     * <p>Ueber das GANZE Feld derselbe Boden, ohne Barriere und Leere: Was die
+     * Feldgeometrie entscheidet, prueft {@code FeldbodenTest} mit eigenen Mitteln -
+     * diese Attrappe soll den Weg nicht an einer Stelle verschliessen, die mit der
+     * Reise nichts zu tun hat.
+     */
+    private static Weltgriff stadtfeldboden() {
+        return new Weltgriff() {
+            @Override
+            public int unten() {
+                return -64;
+            }
+
+            @Override
+            public int oben(int x, int z) {
+                return Feldboden.BODEN;
+            }
+
+            @Override
+            public Material bei(int x, int y, int z) {
+                if (y > Feldboden.BODEN) {
+                    return Material.AIR;
+                }
+                return y == Feldboden.BODEN ? Material.GRASS_BLOCK : Material.STONE;
+            }
+
+            @Override
+            public void setze(int x, int y, int z, Material block) {
+                throw new UnsupportedOperationException("Diese Probe baut nicht");
+            }
+        };
+    }
+
 }

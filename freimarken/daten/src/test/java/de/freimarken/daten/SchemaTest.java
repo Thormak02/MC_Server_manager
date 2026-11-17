@@ -76,6 +76,10 @@ class SchemaTest {
         -373186840, // Schritt 21 - Tabelle grundstuecke_mitbauer
         -1682304398, // Schritt 22 - Spalte angebotspreis
         1916876671, // Schritt 23 - Tabelle freistadt_rechte
+        1062071338, // Schritt 24 - Spalte parzellen.kasse
+        -956832920, // Schritt 25 - Kontonummern fuer die bestehenden Staedte
+        411330449, // Schritt 26 - Spalte parzellen.regeln
+        -316665461, // Schritt 27 - Spalte parzellen.besucht
     };
 
     private static String datenbanktext() {

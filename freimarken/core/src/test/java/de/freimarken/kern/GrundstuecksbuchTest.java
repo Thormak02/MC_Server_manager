@@ -52,6 +52,11 @@ class GrundstuecksbuchTest {
     private SpeicherLager lager;
     private SpeicherGrundstuecke ablage;
     private SpeicherKasse kasse;
+
+    /** Die Kasse der STAEDTE - ohne Startguthaben, siehe den Aufbau. */
+    private SpeicherKasse staedtekasse;
+
+    private Stadtkasse stadtkasse;
     private Grundstuecksbuch buch;
     private Parzelle annastadt;
 
@@ -62,8 +67,13 @@ class GrundstuecksbuchTest {
         // REICH: Teil C2 bewegt kein Geld, aber ab C3 kauft hier jemand. Ein knappes
         // Guthaben liesse Proben scheitern, die mit Geld nichts zu tun haben.
         kasse = new SpeicherKasse(10_000_000L);
+        // Die Staedtekasse OHNE Startguthaben - mit einem Startguthaben wirft die
+        // Stadtkasse schon im Konstruktor, und das ist ihr Riegel gegen geschenktes
+        // Geld [Teil E1].
+        staedtekasse = new SpeicherKasse(0L);
+        stadtkasse = new Stadtkasse(staedtekasse);
         buch = new Grundstuecksbuch(Feldgrenze.freistaedte(), lager, ablage, kasse,
-                new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+                stadtkasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
         annastadt = lager.freistadtAnlegen(WELT, FELD_X, FELD_Z, anna, 400_000L,
                 "annastadt");
     }
@@ -237,7 +247,8 @@ class GrundstuecksbuchTest {
         // Die liegt bei 256, also ohne Grenze, und mit ihr waere diese Probe gruen,
         // ohne etwas zu pruefen.
         Grundstuecksbuch eng = new Grundstuecksbuch(Feldgrenze.freistaedte(), lager,
-                ablage, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                ablage, kasse, stadtkasse,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                         .mitFreistaedten(Freistadtwerte.VORGABE.mitHoechstzellen(4))));
 
         Grundstuecksbuch.Entscheid entscheid =
@@ -256,7 +267,8 @@ class GrundstuecksbuchTest {
     @DisplayName("Eine 0 bei der Zellengrenze heisst OHNE Grenze")
     void nullHeisstOhneGrenze() {
         Grundstuecksbuch ohne = new Grundstuecksbuch(Feldgrenze.freistaedte(), lager,
-                ablage, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                ablage, kasse, stadtkasse,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                         .mitFreistaedten(Freistadtwerte.VORGABE.mitHoechstzellen(0))));
         int letzte = ohne.plan().zellenJeKante() - 1;
 
@@ -313,7 +325,7 @@ class GrundstuecksbuchTest {
     @DisplayName("Eine stumme Ablage heisst GESTOERT - und nichts ist geschehen")
     void stummeAblageStoert() {
         Grundstuecksbuch stumm = new Grundstuecksbuch(Feldgrenze.freistaedte(),
-                new Lagerattrappe.Stumm(), ablage, kasse,
+                new Lagerattrappe.Stumm(), ablage, kasse, stadtkasse,
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
 
         assertEquals(GESTOERT,
@@ -341,7 +353,7 @@ class GrundstuecksbuchTest {
         Feldgrenze schief = Feldgrenze.ausKante(new Stadtfeldplan(100, 32), 1000);
 
         assertThrows(IllegalArgumentException.class,
-                () -> new Grundstuecksbuch(schief, lager, ablage, kasse,
+                () -> new Grundstuecksbuch(schief, lager, ablage, kasse, stadtkasse,
                         new Wirtschaftsstand(Wirtschaftswerte.VORGABE)));
     }
 
@@ -538,7 +550,8 @@ class GrundstuecksbuchTest {
         //    Spieler ausrechnen kann, was ihm fehlt.
         SpeicherKasse arm = new SpeicherKasse(100L);
         Grundstuecksbuch armesBuch = new Grundstuecksbuch(Feldgrenze.freistaedte(),
-                lager, ablage, arm, new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+                lager, ablage, arm, stadtkasse,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
         Grundstuecksbuch.Entscheid zuWenig = armesBuch.kaufe(WELT, bert, x, z,
                 mitschrift());
         assertEquals(ZU_WENIG_MARK, zuWenig.bescheid());
@@ -560,7 +573,8 @@ class GrundstuecksbuchTest {
                         buch.plan().zelleVon(ecke(0, 0).z())), anna, 0L);
         stumm.anbieten(angeboten.id(), 7_500L);
         Grundstuecksbuch stummesBuch = new Grundstuecksbuch(Feldgrenze.freistaedte(),
-                lager, stumm, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+                lager, stumm, kasse, stadtkasse,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
         long bertVorher = kasse.guthaben(bert);
 
         Grundstuecksbuch.Entscheid kauf = stummesBuch.kaufe(WELT, bert,
@@ -589,7 +603,7 @@ class GrundstuecksbuchTest {
         Kassenattrappe.StummBeimGutschreiben stummeKasse =
                 new Kassenattrappe.StummBeimGutschreiben(10_000_000L);
         Grundstuecksbuch mitStummerKasse = new Grundstuecksbuch(
-                Feldgrenze.freistaedte(), lager, ablage, stummeKasse,
+                Feldgrenze.freistaedte(), lager, ablage, stummeKasse, stadtkasse,
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
 
         Grundstuecksbuch.Entscheid kauf = mitStummerKasse.kaufe(WELT, bert,
@@ -609,7 +623,8 @@ class GrundstuecksbuchTest {
         // Abgezogen wird IMMER dem, der das Geld bekommt - nie als Aufschlag auf den
         // Preis. Der Preis im Angebot ist, was der Kaeufer zahlt.
         Grundstuecksbuch mitGebuehr = new Grundstuecksbuch(Feldgrenze.freistaedte(),
-                lager, ablage, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                lager, ablage, kasse, stadtkasse,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                         .mitFreistaedten(Freistadtwerte.VORGABE
                                 .mitVerkaufsgebuehr(5))));
         annasAngebot(1_000L);
@@ -627,6 +642,18 @@ class GrundstuecksbuchTest {
                 "der Verkaeufer bekommt 1.000 und zahlt 50");
         assertEquals(-50L, kasse.summeSeit(anna, Instant.EPOCH,
                 Buchungsgrund.GRUNDSTUECK_GEBUEHR));
+
+        // DIE EMPFAENGERSEITE [Teil E1]: Bis heute war die Gebuehr eine reine Senke -
+        // abgebucht und niemandem gutgeschrieben. Jetzt faellt sie der Stadt zu, in
+        // deren Feld das Grundstueck liegt. Ohne diese Zeile waere die ganze Umleitung
+        // ungedeckt: Die Probe darueber ist mit und ohne sie gruen, denn dem Verkaeufer
+        // wird so oder so abgezogen.
+        assertEquals(50L, stadtkasse.stand(annastadt),
+                "die Gebuehr liegt in der Stadtkasse von Annastadt");
+        assertEquals(Buchungsgrund.STADTKASSE_GEBUEHR,
+                stadtkasse.verlauf(annastadt, 1).get(0).grund(),
+                "und sie steht dort mit ihrem EIGENEN Grund im Buch - nicht mit dem des"
+                        + " Verkaeufers, denn auf diesem Konto ist sie eine Einnahme");
     }
 
     @Test
@@ -636,7 +663,8 @@ class GrundstuecksbuchTest {
         // 0 Mark waere eine Zeile ohne Geldbewegung. Geprueft wird die ZAHL der Zeilen
         // und nicht die Summe: Eine Summe von 0 kaeme auch bei einer Zeile heraus.
         Grundstuecksbuch mitGebuehr = new Grundstuecksbuch(Feldgrenze.freistaedte(),
-                lager, ablage, kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                lager, ablage, kasse, stadtkasse,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                         .mitFreistaedten(Freistadtwerte.VORGABE
                                 .mitVerkaufsgebuehr(5))));
         annasAngebot(19L);
@@ -647,6 +675,9 @@ class GrundstuecksbuchTest {
         assertEquals(0L, kauf.gebuehr());
         assertEquals(0L, kasse.summeSeit(anna, Instant.EPOCH,
                 Buchungsgrund.GRUNDSTUECK_GEBUEHR));
+        assertTrue(stadtkasse.verlauf(annastadt, 10).isEmpty(),
+                "und in der Stadtkasse steht auch nichts - eine Zeile ueber 0 Mark"
+                        + " waere dort genauso eine Zeile ohne Geldbewegung");
         assertTrue(kasse.verlauf(anna, 20).stream().noneMatch(
                         zeile -> zeile.grund() == Buchungsgrund.GRUNDSTUECK_GEBUEHR),
                 "keine Zeile, nicht nur eine Summe von null");
@@ -678,6 +709,80 @@ class GrundstuecksbuchTest {
                         .bescheid());
         assertEquals(KEIN_GRUNDSTUECK,
                 buch.biete(WELT, anna, ecke(0, 0).x(), ecke(0, 0).z(), 1L).bescheid());
+    }
+
+
+    @Test
+    @DisplayName("Ohne Stadt faellt die Gebuehr AUS - statt ins Nichts zu gehen")
+    void ohneStadtFaelltDieGebuehrAus() {
+        // DIE ENTSCHEIDUNG DIESES ZWEIGES [Teil E1]: Ein Grundstueck liegt immer in
+        // einer Stadt - stadt_id ist Pflicht. Findet sich die Stadt trotzdem nicht, ist
+        // der Datenstand kaputt, und dann ist die Frage: Gebuehr trotzdem einziehen
+        // (also vernichten, wie bis Teil D) oder ausfallen lassen?
+        //
+        // Ausfallen. Bei einem kaputten Stand lieber keine Gebuehr als Geld, das
+        // verschwindet - und der Aufrufer erfaehrt davon, statt dass es lautlos
+        // geschieht.
+        //
+        // Die Lagerattrappe traegt ein EIGENES, leeres Speicherlager - finde() gibt
+        // dort nichts. Ein Zuschnitt ohne Stadt
+        // ist ueber das Buch nicht herzustellen - schneideZu weist ihn vorher ab -,
+        // darum wird das Angebot mit dem ECHTEN Lager gebaut und erst fuer den Kauf
+        // umgehaengt.
+        annasAngebot(1_000L);
+        Grundstuecksbuch ohneStadt = new Grundstuecksbuch(Feldgrenze.freistaedte(),
+                new Lagerattrappe(), ablage, kasse, stadtkasse,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                        .mitFreistaedten(Freistadtwerte.VORGABE
+                                .mitVerkaufsgebuehr(5))));
+        long annaVorher = kasse.guthaben(anna);
+
+        Grundstuecksbuch.Entscheid kauf = ohneStadt.kaufe(WELT, bert, ecke(0, 0).x(),
+                ecke(0, 0).z(), mitschrift());
+
+        assertEquals(GEKAUFT, kauf.bescheid(), "der Kauf selbst GILT - die Gebuehr ist"
+                + " nicht seine Voraussetzung");
+        assertEquals(0L, kauf.gebuehr(),
+                "und der Entscheid nennt 0. Eine Gebuehr, die im Satz steht und nicht"
+                        + " im Buch, waere eine Luege im Augenblick des Sendens.");
+        assertEquals(annaVorher + 1_000L, kasse.guthaben(anna),
+                "dem Verkaeufer wurde NICHTS abgezogen");
+        assertEquals(0L, kasse.summeSeit(anna, Instant.EPOCH,
+                Buchungsgrund.GRUNDSTUECK_GEBUEHR), "keine Zeile beim Verkaeufer");
+        assertEquals(1, verloreneErloese.size(),
+                "und der Aufrufer erfaehrt es: " + verloreneErloese);
+    }
+
+    @Test
+    @DisplayName("Eine stumme Stadtkasse: abgebucht, nicht angekommen - und LAUT")
+    void stummeStadtkasseMeldet() {
+        // Der schlimmste Fall dieser Strecke, und er ist bewusst so gewaehlt: Die
+        // Reihenfolge ist ABBUCHEN, dann GUTSCHREIBEN. Scheitert das Gutschreiben, ist
+        // Geld verschwunden - das kann ein Betreiber mit einer Gutschrift heilen.
+        // Scheiterte umgekehrt das Abbuchen, haette die Stadt Geld, das niemand bezahlt
+        // hat, und das ist nachher niemandem mehr zuzuordnen. Dieselbe Abwaegung wie
+        // beim Kauf selbst.
+        Stadtkasse stumme = new Stadtkasse(
+                new Kassenattrappe.StummBeimGutschreiben(0L));
+        Grundstuecksbuch mitStummer = new Grundstuecksbuch(Feldgrenze.freistaedte(),
+                lager, ablage, kasse, stumme,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE
+                        .mitFreistaedten(Freistadtwerte.VORGABE
+                                .mitVerkaufsgebuehr(5))));
+        annasAngebot(1_000L);
+        long annaVorher = kasse.guthaben(anna);
+
+        Grundstuecksbuch.Entscheid kauf = mitStummer.kaufe(WELT, bert, ecke(0, 0).x(),
+                ecke(0, 0).z(), mitschrift());
+
+        assertEquals(GEKAUFT, kauf.bescheid());
+        assertEquals(50L, kauf.gebuehr(),
+                "erhoben wurde sie - der Entscheid sagt die Wahrheit ueber das, was dem"
+                        + " Verkaeufer abgezogen ist");
+        assertEquals(annaVorher + 950L, kasse.guthaben(anna), "und abgezogen ist sie");
+        assertEquals(1, verloreneErloese.size(),
+                "nur angekommen ist sie nicht - und das steht im Protokoll, statt"
+                        + " lautlos zu geschehen: " + verloreneErloese);
     }
 
 }

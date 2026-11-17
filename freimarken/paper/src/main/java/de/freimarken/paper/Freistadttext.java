@@ -2,15 +2,18 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Blockecke;
+import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Grundstueck;
 import de.freimarken.kern.Grundstuecksbuch;
 import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.Verfallsregel;
 import de.freimarken.kern.Stadtfeldplan;
 import de.freimarken.kern.Stadtname;
 import de.freimarken.kern.Zellquader;
 import de.freimarken.kern.Stadtbuergerschaft;
 import de.freimarken.kern.Tat;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -44,6 +47,109 @@ final class Freistadttext {
      */
     static String feldAlsText(Parzelle stadt) {
         return stadt.x() + "/" + stadt.z();
+    }
+
+    /**
+     * Die Rueckfrage beim Aufgeben [Teil E6].
+     *
+     * <p>ALLE DREI Zahlen, nicht nur die Summe: Ein Besitzer soll nachrechnen koennen,
+     * woher sie kommt. Mit einer einzigen haelt er die Stadtkasse fuer vergessen oder
+     * die Erstattung fuer hoeher als sie ist.
+     */
+    static List<Component> aufgabeFrageZeilen(Sprache sprache, Parzelle stadt,
+            long erstattung, long kasse) {
+        return sprache.bau(FreistadtSatz.AUFGABE_FRAGE, 1L, frageWerte(sprache, stadt,
+                erstattung, kasse, "/freistadt aufgeben bestaetigen"));
+    }
+
+    /** Dieselbe Rueckfrage fuer das Team - mit dem Namen der Stadt im Befehl. */
+    static List<Component> raeumungFrageZeilen(Sprache sprache, Parzelle stadt,
+            long erstattung, long kasse) {
+        return sprache.bau(FreistadtSatz.RAEUMUNG_FRAGE, 1L, frageWerte(sprache, stadt,
+                erstattung, kasse,
+                "/freistadt raeumen " + stadt.name() + " bestaetigen"));
+    }
+
+    /**
+     * Die Werte beider Rueckfragen - an EINER Stelle.
+     *
+     * <p>Zwei Saetze, dieselben fuenf Werte: Zweimal zusammengestellt liefe die eine
+     * Fassung beim naechsten Zuwachs der anderen hinterher, und das Team laese eine
+     * Zahl, die der Besitzer nicht sieht.
+     */
+    private static Einsatz frageWerte(Sprache sprache, Parzelle stadt, long erstattung,
+            long kasse, String danach) {
+        return Einsatz.von("stadt", stadt.name())
+                .mit("erstattung", sprache.betrag(erstattung))
+                .mit("kasse", sprache.betrag(kasse))
+                .mit("zusammen", sprache.betrag(erstattung + kasse))
+                .mit("danach", danach);
+    }
+
+    /**
+     * Die Antwort auf ein Ende - genau eine Lage je Bescheid [Teil E6].
+     *
+     * <p>Ein {@code switch} ohne {@code default}, wie bei {@link #antwortZeilen}: Kommt
+     * ein Bescheid dazu, meldet der Uebersetzer die fehlende Zeile.
+     *
+     * @param getippt der Name, den das Team getippt hat - nur fuer KEINE_STADT
+     *                gebraucht, denn dort gibt es keine Stadt, die ihren nennen koennte
+     */
+    static List<Component> endeZeilen(Sprache sprache,
+            Freistadtbuch.Endeentscheid entscheid, String getippt) {
+        return switch (entscheid.bescheid()) {
+            case BEENDET -> sprache.bau(FreistadtSatz.AUFGABE_BEENDET, 1L,
+                    Einsatz.von("stadt", entscheid.stadt().orElseThrow().name())
+                            .mit("zusammen", sprache.betrag(entscheid.zusammen())));
+            case KEINE_STADT -> getippt == null || getippt.isEmpty()
+                    ? sprache.bau(FreistadtSatz.KEINE_STADT, 1L, Einsatz.keine())
+                    : sprache.bau(FreistadtSatz.AUFGABE_NAME_UNBEKANNT, 1L,
+                            Einsatz.von("name", getippt));
+            case FREMDE_STADT -> sprache.bau(FreistadtSatz.NICHT_DEINE_STADT, 1L,
+                    Einsatz.keine());
+            case NOCH_BUERGER -> sprache.bau(FreistadtSatz.AUFGABE_NOCH_BUERGER, 1L,
+                    Einsatz.von("stadt", entscheid.stadt().orElseThrow().name()));
+            case GELD_HAENGT -> sprache.bau(FreistadtSatz.AUFGABE_GELD_HAENGT, 1L,
+                    Einsatz.von("stadt", entscheid.stadt().orElseThrow().name())
+                            .mit("zusammen", sprache.betrag(entscheid.zusammen())));
+            case GESTOERT -> sprache.bau(FreistadtSatz.GESTOERT, 1L, Einsatz.keine());
+        };
+    }
+
+    /**
+     * Die Zeilen zur Verfallswarnung beim Beitritt [Teil E5].
+     *
+     * <p>Ein {@code switch} ohne {@code default} ueber den Stand, und er nennt auch die
+     * zwei Staende, die hier NICHT ankommen: {@code AKTIV} faengt der Aufrufer ab (wer
+     * nicht gewarnt wird, bekommt keine Zeile), und {@code FAELLIG} sieht ein Spieler
+     * nie - der taegliche Lauf macht daraus {@code VERFALLEN}, bevor jemand sich
+     * anmelden kann. Dass beide trotzdem dastehen, ist der Riegel: Ein sechster Stand
+     * bricht hier die Uebersetzung und nicht erst das Spielbild.
+     *
+     * <p><b>Die ZAHL kommt herein und wird nicht hier gerechnet</b>: Die Frist ist eine
+     * Rechnung aus Tag, Zone und Einstellung, und die steht in {@code Verfallsregel}.
+     * Eine zweite hier gaebe dem Satz irgendwann eine andere Zahl als dem Lauf.
+     */
+    static List<Component> verfallszeilen(Sprache sprache, String stadt,
+            Verfallsregel.Stand stand, long resttage) {
+        return switch (stand) {
+            case WARNUNG_FRUEH -> sprache.bau(FreistadtSatz.VERFALL_WARNUNG_FRUEH,
+                    resttage, Einsatz.von("stadt", stadt).mit("tage", resttage));
+            case WARNUNG_SPAET -> sprache.bau(FreistadtSatz.VERFALL_WARNUNG_SPAET,
+                    resttage, Einsatz.von("stadt", stadt).mit("tage", resttage));
+            case VERFALLEN -> sprache.bau(FreistadtSatz.VERFALL_VERFALLEN, 1L,
+                    Einsatz.von("stadt", stadt));
+            case AKTIV, FAELLIG -> throw new IllegalArgumentException("Fuer " + stand
+                    + " gibt es hier keine Zeile: AKTIV faengt der Aufrufer ab, und"
+                    + " FAELLIG sieht ein Spieler nie - der taegliche Lauf macht daraus"
+                    + " VERFALLEN, bevor sich jemand anmelden kann.");
+        };
+    }
+
+    /** Die Zeile, mit der eine verfallene Stadt wieder aufwacht [Teil E5]. */
+    static List<Component> aufgewachtZeilen(Sprache sprache, String stadt) {
+        return sprache.bau(FreistadtSatz.VERFALL_AUFGEWACHT, 1L,
+                Einsatz.von("stadt", stadt));
     }
 
     /**
@@ -448,6 +554,122 @@ final class Freistadttext {
             // Saetze, und ein zweiter Satz fuer dasselbe waere ein zweites Wort fuer
             // dieselbe Lage. GRUNDSTUECK_GESTOERT und nicht GESTOERT - jener Satz nennt
             // ausdruecklich, dass das Geld zurueck ist, und hier war gar keines im Spiel.
+            case KEINE_STADT -> sprache.bau(FreistadtSatz.KEINE_STADT, 1L,
+                    Einsatz.keine());
+            case GESTOERT -> sprache.bau(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L,
+                    Einsatz.keine());
+        };
+    }
+
+    // --- Teil E1: die Stadtkasse ----------------------------------------------
+
+    /**
+     * Die Kasse einer Stadt mit ihrem Verlauf.
+     *
+     * <p><b>Die Verlaufszeilen kommen aus {@link Verlaufszeile}</b> und nicht aus einem
+     * eigenen Satz: Eine Buchung soll ueberall gleich aussehen. Mit einer zweiten Form
+     * derselben Zeile bekaeme die zweite die naechste Verbesserung nicht mit - und ein
+     * Spieler, der beide Verlaeufe liest, saehe dieselbe Bewegung zweimal anders.
+     *
+     * @param zone die Zone, in der der Spieler liest - sie kommt von aussen, wie bei
+     *             {@code /mark verlauf}, und aus derselben Stelle: {@code zeit.zone}
+     */
+    static List<Component> kassenZeilen(Sprache sprache, String stadt, long stand,
+                                        List<Buchung> verlauf, ZoneId zone) {
+        List<Component> zeilen = new ArrayList<>(
+                sprache.bau(FreistadtSatz.KASSE_KOPF, 1L,
+                        Einsatz.von("stadt", stadt)
+                                .mit("stand", sprache.betrag(stand))));
+        if (verlauf.isEmpty()) {
+            // DIESE ZEILE MUSS ES GEBEN: Ab Werk steht verkaufsgebuehr-prozent auf 0,
+            // eine Stadt nimmt also nichts ein. Wer nur die Ueberschrift sieht, haelt
+            // es fuer einen Fehler - und das ist der Normalfall, nicht die Ausnahme.
+            zeilen.addAll(sprache.bau(FreistadtSatz.KASSE_LEER, 1L, Einsatz.keine()));
+            return List.copyOf(zeilen);
+        }
+        for (Buchung buchung : verlauf) {
+            zeilen.add(Verlaufszeile.zeile(sprache, buchung, zone));
+        }
+        return List.copyOf(zeilen);
+    }
+
+    /** Wie ein Abhebezug ausgegangen ist. */
+    static List<Component> abhebenZeilen(Sprache sprache,
+                                         Freistadtbuch.Kassenentscheid entscheid,
+                                         Function<UUID, String> namenVon) {
+        return switch (entscheid.bescheid()) {
+            case ABGEHOBEN -> sprache.bau(FreistadtSatz.KASSE_ABGEHOBEN, 1L,
+                    Einsatz.von("betrag", sprache.betrag(entscheid.betrag()))
+                            .mit("rest", sprache.betrag(entscheid.stand())));
+            case ZU_WENIG -> sprache.bau(FreistadtSatz.KASSE_ZU_WENIG, 1L,
+                    Einsatz.von("stand", sprache.betrag(entscheid.stand())));
+            case FREMDE_STADT -> sprache.bau(FreistadtSatz.KASSE_NICHT_DEINE, 1L,
+                    Einsatz.von("stadt", entscheid.stadt().orElseThrow().name())
+                            .mit("besitzer", namenVon.apply(
+                                    entscheid.stadt().orElseThrow().eigentuemer())));
+            // Die zwei Faelle, die der Grundstueckszweig schon hat - dieselbe
+            // Entscheidung wie bei rechteAntwortZeilen: Ein zweiter Satz fuer dieselbe
+            // Lage waere ein zweites Wort dafuer.
+            case KEINE_STADT -> sprache.bau(FreistadtSatz.KEINE_STADT, 1L,
+                    Einsatz.keine());
+            case GESTOERT -> sprache.bau(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L,
+                    Einsatz.keine());
+        };
+    }
+
+    // --- Teil E2: der Regeltext -----------------------------------------------
+
+    /**
+     * Die Regeln einer Stadt, wie ein Besucher sie liest.
+     *
+     * <p><b>Der Text wird EINGESETZT und nicht in den Wortlaut gespleisst</b>, und das
+     * ist bei Spielereingabe kein Stilfrage: Die Sprache parst erst und ersetzt dann,
+     * also wird ein eingesetzter Wert von keinem MiniMessage-Lauf mehr angesehen. Ein
+     * {@code <red>} im Regeltext kommt damit zeichengleich beim Leser an. Gespleisst
+     * waere es wirklich rot - und ein Stadtbesitzer koennte sich eine Durchsage bauen,
+     * die wie eine Servermeldung aussieht.
+     */
+    static List<Component> regelnZeilen(Sprache sprache, Parzelle stadt) {
+        List<Component> zeilen = new ArrayList<>(
+                sprache.bau(FreistadtSatz.REGELN_KOPF, 1L,
+                        Einsatz.von("stadt", stadt.name())));
+        if (!stadt.hatRegeln()) {
+            // DIESE ZEILE MUSS ES GEBEN: Ab Werk hat jede Stadt keine Regeln, und wer
+            // nur die Ueberschrift sieht, haelt es fuer einen Fehler.
+            zeilen.addAll(sprache.bau(FreistadtSatz.REGELN_LEER, 1L,
+                    Einsatz.von("stadt", stadt.name())));
+            return List.copyOf(zeilen);
+        }
+        zeilen.addAll(sprache.bau(FreistadtSatz.REGELN_ZEILE, 1L,
+                Einsatz.von("text", stadt.regeln())));
+        return List.copyOf(zeilen);
+    }
+
+    /** Wie ein Regelzug ausgegangen ist. */
+    static List<Component> regelAntwortZeilen(Sprache sprache,
+                                              Freistadtbuch.Regelentscheid entscheid,
+                                              int hatZeichen,
+                                              Function<UUID, String> namenVon) {
+        return switch (entscheid.bescheid()) {
+            case GESETZT -> sprache.bau(FreistadtSatz.REGELN_GESETZT, 1L,
+                    Einsatz.keine());
+            case GELOESCHT -> sprache.bau(FreistadtSatz.REGELN_GELOESCHT, 1L,
+                    Einsatz.keine());
+            case SCHON_SO -> sprache.bau(FreistadtSatz.REGELN_SCHON_SO, 1L,
+                    Einsatz.keine());
+            case WAR_SCHON_LEER -> sprache.bau(FreistadtSatz.REGELN_WAR_LEER, 1L,
+                    Einsatz.keine());
+            // BEIDE Zahlen im Satz: Ein Spieler soll wissen, wie viel er kuerzen muss -
+            // dieselbe Entscheidung wie bei jeder Grenze dieses Projekts.
+            case ZU_LANG -> sprache.bau(FreistadtSatz.REGELN_ZU_LANG, 1L,
+                    Einsatz.von("groesstens", String.valueOf(
+                                    Parzelle.REGELN_GROESSTENS))
+                            .mit("hat", String.valueOf(hatZeichen)));
+            case FREMDE_STADT -> sprache.bau(FreistadtSatz.REGELN_NICHT_DEINE, 1L,
+                    Einsatz.von("stadt", entscheid.stadt().orElseThrow().name())
+                            .mit("besitzer", namenVon.apply(
+                                    entscheid.stadt().orElseThrow().eigentuemer())));
+            // Die zwei vorhandenen Saetze - kein zweites Wort fuer dieselbe Lage.
             case KEINE_STADT -> sprache.bau(FreistadtSatz.KEINE_STADT, 1L,
                     Einsatz.keine());
             case GESTOERT -> sprache.bau(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L,

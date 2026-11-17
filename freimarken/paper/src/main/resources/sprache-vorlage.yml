@@ -89,6 +89,29 @@ mark:
       laden-kaution: "Kaution"
       laden-kaution-zurueck: "Kaution zurueck"
       laden-erstattet: "Ladenmiete erstattet"
+      # DIE STADTKASSE: drei Woerter, und zwei davon sind dieselbe Bewegung auf zwei
+      #   Konten. Im Verlauf der STADT heisst das Abheben "abgehoben", im Verlauf des
+      #   Besitzers "aus der Stadtkasse" - wer nur eine der beiden Zeilen sieht, soll
+      #   trotzdem wissen, woher das Geld kam oder wohin es ging.
+      # Die Marktgebuehr steht hier ein zweites Mal: oben als grundstueck-gebuehr beim
+      #   Verkaeufer, der sie zahlt, hier als Einnahme der Stadt, die sie bekommt.
+      #   Dieselben Mark, zwei Zeilen, zwei Konten.
+      # Was der Besitzer beim AUFGEBEN seiner Stadt zurueckbekommt [Teil E6]. Ein
+      #   eigenes Wort und nicht freistadt-erstattet: Jenes erzaehlt von einer
+      #   Gruendung, die schiefging.
+      freistadt-aufgegeben: "Stadt aufgegeben"
+      # Die Ladengebuehr - beim Shopbesitzer eine Ausgabe, in der Stadtkasse eine
+      #   Einnahme. Zwei Worte fuer eine Bewegung, weil ein Konto nur seine eigenen
+      #   Zeilen traegt.
+      freistadt-ladengebuehr: "Ladengebuehr"
+      stadtkasse-ladengebuehr: "Ladengebuehr einer Stadt"
+      stadtkasse-gebuehr: "Marktgebuehr einer Stadt"
+      stadtkasse-abgehoben: "vom Besitzer abgehoben"
+      stadtkasse-ausgezahlt: "aus der Stadtkasse"
+      # Selten, aber nicht nie: Das Abbuchen bei der Stadt gelang, die Gutschrift
+      #   beim Besitzer nicht. Eigenes Wort, weil diese Zeile von einem Fehler
+      #   erzaehlt und nicht von einem Verkauf.
+      stadtkasse-zurueck: "Auszahlung zurueckgenommen"
       # Der einzige WIEDERKEHRENDE Grund dieses Bereichs - einmal je Tag und Laden.
       # Ein Mieter liest ihn oefter als jeden anderen, darum ist das Wort kurz.
       laden-miete: "Ladenmiete"
@@ -161,7 +184,7 @@ befehl:
     tpdeny: "Teleportanfragen ablehnen"
     markt: "Was der Bundesmarkt ankauft - verkauft wird an seinen Schildern"
     laden: "Die Markthalle und ihre Ladeneinheiten"
-    freistadt: "Die Freistaedte - Liste, gruenden, Grundstuecke, Stadtbuerger"
+    freistadt: "Die Freistaedte - Liste, gruenden, Grundstuecke, Stadtbuerger, Regeln, Kasse"
     shop: "Deine Kistenshops auflisten und fuer andere freigeben"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
@@ -969,6 +992,16 @@ warp:
   stadt-aufschrift: "Freistadt {name}"
   # Die Welt der Freistaedte fehlt (freistaedte.welt).
   stadt-keine-welt: "<red>Die Welt der Freistaedte fehlt - sag es dem Betreiber.</red>"
+  # {name} {was} - diese Stadt hat noch keinen Teleporter [Plan 16]. OHNE diesen Satz
+  #   erschiene sie als stadt-unbekannt, also als Tippfehler - eine Luege ueber einen
+  #   Namen, den es gibt. {was} nennt, WAS fehlt; ohne die Angabe weiss der
+  #   Stadtbesitzer nur, dass etwas fehlt, und nicht, was er tun soll.
+  # Der Stadtbesitzer, seine Mitbauer und die Stadtbuerger lesen diesen Satz NIE - sie
+  #   duerfen immer hinein.
+  stadt-ohne-auflage: "<red>{name} hat noch keinen Teleporter</red>\n<gray>Es fehlt: {was}. Das stellt der Stadtbesitzer ein.</gray>"
+  # DIE DREI WORTE FUER {was} STANDEN HIER und stehen seit dem 17.11.2026 unter
+  #   freistadt.auflage - seit E3b liest sie ein zweiter Satz, shop.absage.kein-
+  #   ladenrecht. Worte, die zwei Saetze teilen, gehoeren keinem der beiden.
   ziele: "<gold>Reiseziele</gold>\n<aqua>{liste}</aqua>\n<gray>/warp \\<ziel> - oder durch ein Tor am Bundesmarkt.</gray>"
   # Was zwischen zwei Weltnamen der Zeile darueber steht: ZWEI Leerzeichen. Kein Farbtag -
   # der Trenner geht als WERT in den Satz und ist dort ein Blatt. Darf leer sein.
@@ -1110,6 +1143,14 @@ wache:
     # Satz, wem es gehoert, statt einen Ausweg zu nennen.
     ankunftsfeld: "<yellow>Das Ankunftsfeld gehoert allen - deine eigene Stadt gruendest du mit /freistadt gruenden</yellow>"
     # Ein freies Stadtfeld. MIT Ausweg, wie parzelle-frei und laden-frei.
+    # Die Stadt ist VERFALLEN [Plan 16, Teil E5]. EIN EIGENER SATZ und nicht
+    #   stadt-frei: Jener sagt "hier ist noch nichts, gruende" - eine Luege ueber ein
+    #   Feld, das vergeben ist. Der Spieler tippte /freistadt gruenden und laese "Name
+    #   vergeben".
+    # SAGT DEM BESITZER, WAS ZU TUN IST, denn genau sein Fall ist heilbar: Er muss nur
+    #   bleiben, dann weckt der Besuchsstempel die Stadt im naechsten Minutentakt. Ohne
+    #   den Hinweis stuende er vor seiner eigenen Stadt und hielte sie fuer verloren.
+    stadt-verfallen: "<red>Diese Stadt ist verfallen - hier baut niemand.</red><gray> Gehoert sie dir, bleib einen Augenblick: Sie wacht von selbst wieder auf.</gray>"
     stadt-frei: "<yellow>Dieses Stadtfeld ist frei - /freistadt gruenden</yellow>"
     # {stadt} {eigentuemer} - die Stadt eines anderen. ZWEI Farben in einer Zeile wie
     # bei fremde-parzelle, und BEIDE Werte: Mit dem Namen findet ein Besucher den Weg
@@ -1327,7 +1368,19 @@ freistadt:
   frage: "<yellow>{name} gruenden kostet {preis}. Danach haettest du {danach}.</yellow>\n<gray>Zum Gruenden: /freistadt gruenden {name} bestaetigen</gray>"
   # {name} {feld} - gegruendet. Der Warp steht dabei, sonst steht der frischgebackene
   #   Besitzer vor seiner Stadt und weiss nicht, wie er hineinkommt.
-  gegruendet: "<green>{name} ist gegruendet - Feld {feld}.</green>\n<gray>Hin kommst du mit /warp freistadt {name}.</gray>"
+  # DIE ZUSAGE BLEIBT WAHR [Teil E3]: Der Besitzer darf immer hinein, auch ohne
+  #   erfuellte Auflage - sonst waere die Gruendung eine Falle. Die dritte Zeile nennt
+  #   die zwei Dinge, die bis dahin NICHT gehen. Ohne sie wartet er auf Besucher, die
+  #   abgewiesen werden, und sucht den Fehler im Programm.
+  # ACHTUNG, DIE ZWEI HAELFTEN SIND NICHT GLEICH: "kommen keine Fremden" trifft nur
+  #   andere - er selbst darf immer. "Es entstehen keine Laeden" trifft IHN AUCH: Das
+  #   Ladenrecht kennt keine Ausnahme fuer den Besitzer, weil ihn nichts einsperrt.
+  # WENN DU EINEN DER ZWEI SCHALTER UMLEGST (freistaedte.auflage.teleporter oder
+  #   .ladenrecht in der config.yml), KUERZE DIESE ZEILE und freistadt.regeln.geloescht
+  #   entsprechend. Beide Saetze beschreiben die ausgelieferte Einstellung, in der
+  #   BEIDE Haelften gelten; abgeschaltet sagt es dem Betreiber der Startbericht, dem
+  #   Spieler aber niemand.
+  gegruendet: "<green>{name} ist gegruendet - Feld {feld}.</green>\n<gray>Hin kommst du mit /warp freistadt {name}.</gray>\n<gray>Bis die Stadt Regeln hat und ein Grundstueck vergeben ist, kommen keine Fremden - und es entstehen keine Laeden.</gray>"
 
   absage:
     # {kleinstens} {groesstens} - die Laenge. Ein eigener Satz neben name-falsch, damit
@@ -1527,6 +1580,120 @@ freistadt:
     # Ueberschrift und den Besitzer sieht, haelt es fuer einen Fehler - und ab Werk ist
     # das der Normalfall, denn eine frische Stadt hat keine Buerger.
     leer: "<gray>  noch keine - verkauf oder verschenk ein Grundstueck mit /freistadt grundstueck anbieten</gray>"
+  # DIE STADTKASSE [Teil E]. Das Geld gehoert der STADT und nicht ihrem Besitzer - er
+  #   kann es abheben, aber es liegt bis dahin auf einem eigenen Konto, mit eigenem
+  #   Buchungsverlauf. Lesen darf den jeder, der in der Stadt steht: Was eine Stadt
+  #   einnimmt, ist in einer Freistadt keine Privatsache.
+  kasse:
+    # {stadt} {stand} - die Ueberschrift mit dem Guthaben.
+    kopf: "<gold>Die Kasse von {stadt}</gold><gray> - <white>{stand}</white></gray>"
+    # Die VERLAUFSZEILEN darunter kommen aus mark.verlauf.zeile - dieselbe Zeile wie
+    #   bei /mark verlauf. Wer sie aendert, aendert beide: Eine Buchung soll ueberall
+    #   gleich aussehen.
+    # Noch nie etwas eingenommen. Diese Zeile MUSS es geben: Ab Werk steht
+    #   freistaedte.verkaufsgebuehr-prozent auf 0, eine Stadt nimmt also nichts ein -
+    #   das ist der Normalfall und kein Fehler.
+    leer: "<gray>  noch nichts eingenommen - die Marktgebuehr steht ab Werk auf 0 Prozent</gray>"
+    # {betrag} {rest} - abgehoben. Was bleibt, steht dabei: Der Besitzer soll nicht
+    #   nachfragen muessen, ob er die Kasse geleert hat.
+    abgehoben: "<green>{betrag} aus der Stadtkasse genommen.</green><gray> Es bleiben <white>{rest}</white>.</gray>"
+    # {stand} - zu wenig darin. Die Zahl kommt MIT, damit man ausrechnen kann, was fehlt.
+    zu-wenig: "<red>So viel liegt nicht in der Kasse - darin sind <white>{stand}</white></red>"
+    # {stadt} {besitzer} - eine fremde Kasse. Lesen darf jeder, nehmen nur der Besitzer.
+    nicht-deine: "<red>Die Kasse von {stadt} gehoert <white>{besitzer}</white></red>"
+  # DIE REGELN EINER STADT [Teil E]. Was Besucher dort beachten sollen, vom Besitzer
+  #   gesetzt. Zusammen mit einem vergebenen Grundstueck ist das die Auflage fuer den
+  #   Teleporter und das Ladenrecht - eine Stadt ohne Regeln und ohne Buerger ist eine
+  #   Flaeche, die niemandem nuetzt.
+  regeln:
+    # {stadt} - die Ueberschrift.
+    kopf: "<gold>Die Regeln von {stadt}</gold>"
+    # {text} - der Text selbst, SPIELEREINGABE. Er steht in seiner eigenen Zeile und
+    #   wird eingesetzt, nicht eingespleisst: Darum kommt ein <red> darin zeichengleich
+    #   beim Leser an und wird nicht wirklich rot. Wer das aendert, baut einem
+    #   Stadtbesitzer eine Serverdurchsage.
+    zeile: "<gray>  {text}</gray>"
+    # {stadt} - noch keine Regeln. Diese Zeile MUSS es geben: Ab Werk hat jede Stadt
+    #   keine, und sie nennt den Befehl, weil genau hier danach gesucht wird.
+    leer: "<gray>  {stadt} hat noch keine Regeln - der Besitzer setzt sie mit /freistadt regeln \\<text></gray>"
+    # VERSPRICHT KEINE BESUCHER [berichtigt 17.11.2026]. Hier stand "Besucher lesen
+    #   sie mit /freistadt regeln" - zweifach zu viel versprochen: Der Befehl liest die
+    #   Stadt, in der einer STEHT, und hereinkommen duerfen Fremde erst mit erfuellter
+    #   Auflage. Ein Regeltext allein reicht dafuer nicht, es fehlt noch der Buerger.
+    gesetzt: "<green>Die Regeln stehen.</green><gray> Wer in deiner Stadt steht, liest sie mit /freistadt regeln.</gray>"
+    # Beide Haelften gelten nur mit beiden Schaltern - siehe den Hinweis bei
+    #   freistadt.gegruendet.
+    geloescht: "<green>Die Regeln sind weg.</green><gray> Ohne Regeln hat diese Stadt weder Teleporter noch Ladenrecht.</gray>"
+    schon-so: "<gray>Genau das stand schon da.</gray>"
+    war-leer: "<gray>Diese Stadt hatte gar keine Regeln.</gray>"
+    # {groesstens} {hat} - zu lang. BEIDE Zahlen, damit man weiss, wie viel zu kuerzen ist.
+    zu-lang: "<red>Die Regeln duerfen hoechstens {groesstens} Zeichen haben - dein Text hat <white>{hat}</white></red>"
+    # {stadt} {besitzer} - eine fremde Stadt. Lesen darf jeder, setzen nur der Besitzer.
+    nicht-deine: "<red>Die Regeln von {stadt} setzt <white>{besitzer}</white></red>"
+
+  # DAS ENDE EINER STADT [Plan 16, Teil E6]. Zwei Wege: Der Besitzer gibt sie auf
+  #   (/freistadt aufgeben), oder das Team raeumt sie (/freistadt raeumen <name>). In
+  #   beiden Faellen bekommt der BESITZER seinen Anteil am eingesetzten Preis plus das
+  #   Guthaben der Stadtkasse - auch wenn er gerade nicht da ist.
+  # BEIDE RUECKFRAGEN NENNEN ALLE DREI ZAHLEN und nicht nur die Summe: Ein Besitzer soll
+  #   nachrechnen koennen, woher sie kommt. Mit einer einzigen Zahl haelt er die
+  #   Stadtkasse fuer vergessen.
+  # {danach} IST DER BEFEHL zum Bestaetigen - eine Rueckfrage ohne ihn ist eine
+  #   Sackgasse. Lass ihn in der Zeile stehen.
+  aufgabe:
+    frage: "<gold>{stadt} aufgeben?</gold>\n<gray>Zurueck: {erstattung} vom Gruendungspreis und {kasse} aus der Stadtkasse, zusammen <white>{zusammen}</white>.</gray>\n<gray>Dann: {danach}</gray>"
+    raeumung-frage: "<gold>{stadt} raeumen?</gold>\n<gray>Ihr Besitzer bekommt {erstattung} vom Gruendungspreis und {kasse} aus der Stadtkasse, zusammen <white>{zusammen}</white>.</gray>\n<gray>Dann: {danach}</gray>"
+    # {name} - den getippten Namen gibt es nicht. Ein eigener Satz und nicht
+    #   grundstueck.keine-stadt: Jener gilt fuer einen STANDORT, das Team tippt
+    #   einen Namen.
+    name-unbekannt: "<red>Eine Freistadt {name} gibt es nicht.</red><gray> Die Namen zeigt /freistadt.</gray>"
+    beendet: "<green>{stadt} ist aufgeloest.</green><gray> Ausgezahlt: {zusammen}. Das Feld ist wieder frei.</gray>"
+    # DER SATZ, OHNE DEN DIESER BEFEHL EIN DIEBSTAHL WAERE: Ein Stadtbuerger hat sein
+    #   Grundstueck BEZAHLT. Nennt darum den Ausweg - zurueckkaufen kann der Besitzer.
+    noch-buerger: "<red>In {stadt} gehoert noch jemand anderem ein Grundstueck.</red>\n<gray>Kauf es zurueck, dann laesst sich die Stadt aufloesen - sie verfaellt ohnehin nicht, solange dort jemand wohnt.</gray>"
+    # Die Stadt ist weg, das Geld haengt. SAGT AUSDRUECKLICH, WAS ZU TUN IST: Hier ist
+    #   etwas Unumkehrbares geschehen, und der Betrag steht im Serverprotokoll.
+    geld-haengt: "<red>{stadt} ist aufgeloest, aber die Auszahlung von {zusammen} ging nicht durch.</red>\n<gray>Sag es dem Betreiber - der Betrag steht im Serverprotokoll.</gray>"
+
+  # DER VERFALL [Plan 16, Teil E5]. Eine Stadt, die zwoelf Monate unbesucht ist UND
+  #   keinen Stadtbuerger hat, geht in den Zustand verfallen: Dort baut niemand mehr,
+  #   auch ihr Besitzer nicht. Feld, Name und Guthaben behaelt sie - und ihr Besitzer
+  #   weckt sie, indem er sie BETRITT.
+  # ZWEI WARNUNGEN SIND ZWEI STUFEN und nicht zwei verschickte Nachrichten: Welche ein
+  #   Besitzer beim Anmelden liest, entscheidet allein der Abstand zum Verfall. Wer
+  #   nichts tut, liest sie beim naechsten Mal wieder - ein Zaehler "schon gewarnt"
+  #   stuende falsch, sobald eine Nachricht verloren geht.
+  # {tage} UND KEIN DATUM: Ein Datum muesste in der Zone des Servers gelesen werden,
+  #   und der Spieler sitzt vielleicht in einer anderen. "Noch 42 Tage" ist ueberall
+  #   dasselbe. Beide Warnungen sind GEZAEHLTE Saetze - die Einzahlform steht fuer den
+  #   letzten Tag.
+  verfall:
+    warnung-frueh:
+      eins: "<gray>Deine Freistadt {stadt} verfaellt morgen, wenn niemand sie betritt.</gray>"
+      viele: "<gray>Deine Freistadt {stadt} verfaellt in {tage} Tagen, wenn niemand sie betritt.</gray>"
+    # DRINGENDER IM TON, und das ist der ganze Sinn von zwei Stufen: Wer zwei Wochen
+    #   vorher denselben Satz liest wie zwei Monate vorher, liest ihn nicht mehr.
+    #   Nennt darum auch, was zu tun ist.
+    warnung-spaet:
+      eins: "<red>Deine Freistadt {stadt} verfaellt MORGEN!</red>\n<gray>Geh hin, oder vergib ein Grundstueck - ein Stadtbuerger haelt sie dauerhaft.</gray>"
+      viele: "<red>Deine Freistadt {stadt} verfaellt in {tage} Tagen!</red>\n<gray>Geh hin, oder vergib ein Grundstueck - ein Stadtbuerger haelt sie dauerhaft.</gray>"
+    # SAGT AUSDRUECKLICH, DASS NICHTS VERLOREN IST: Ohne diese Haelfte hielte ein
+    #   Besitzer seine 400.000 Mark fuer verbrannt und suchte den Betreiber.
+    verfallen: "<red>Deine Freistadt {stadt} ist verfallen.</red>\n<gray>Feld, Name und Guthaben hat sie noch - betritt sie, dann wacht sie wieder auf.</gray>"
+    aufgewacht: "<green>{stadt} ist wieder aktiv.</green><gray> Hier baut wieder, wer darf.</gray>"
+
+  # DIE DREI WORTE FUER {was} - was einer Stadt zur AUFLAGE fehlt [Plan 16].
+  #   Sie gehen als Wert in ZWEI fremde Saetze: warp.stadt-ohne-auflage, wenn ein
+  #   Fremder nicht in die Stadt reisen kann, und shop.absage.kein-ladenrecht, wenn in
+  #   ihr kein neuer Kistenshop entstehen darf. Darum stehen sie hier bei der Auflage
+  #   und nicht bei einem der beiden Befehle.
+  # KEIN FARBTAG: Sie sind Werte und werden als Blatt in den fertigen Satz gesetzt -
+  #   ihre Farbe ist die der Zeile, in der sie landen.
+  # Wenn du sie aenderst, lies beide Saetze: Sie beginnen mit "Es fehlt: ".
+  auflage:
+    ohne-regeln: "ein Regeltext"
+    ohne-buerger: "ein vergebenes Grundstueck"
+    ohne-beides: "ein Regeltext und ein vergebenes Grundstueck"
 
 laden:
   # Die Ueberschrift ueber der Liste - die EINZIGE goldene Zeile dieses Befehls.
@@ -1757,6 +1924,13 @@ shop:
   #   IN DER KISTE BLEIBT: Ein abgebauter Shop ist kein Verlust, aber das weiss nur, wer
   #   es gesagt bekommt. Wer es nicht liest, baut sein Schild nie wieder ab.
   abgebaut: "<yellow>Shop abgebaut: {ware}</yellow><gray> - die Ware bleibt in der Kiste.</gray>"
+  # Sein Laden ist weg, weil die TAGESGEBUEHR nicht zu zahlen war [Teil E6].
+  #   {stadt} {gebuehr}. Kein absage-Satz, obwohl es eine ist: Eine Absage liest er,
+  #   waehrend er ein Schild beschreibt - diese Zeile kommt aus dem taeglichen Lauf,
+  #   ohne dass er etwas getan hat.
+  # SAGT AUSDRUECKLICH, DASS DIE WARE NOCH DA IST. Ohne das sucht er sein Lager -
+  #   und findet es, denn beim Abbau bleibt die Ware immer in der Kiste.
+  ladengebuehr-weg: "<red>Dein Laden in {stadt} ist abgebaut.</red>\n<gray>Die Tagesgebuehr von {gebuehr} war nicht zu zahlen. Deine Ware liegt noch in der Kiste - setz ein neues Schild, wenn du wieder zahlen kannst.</gray>"
   # DIE ABSAGEN. Jede zweite Haelfte ist die Hilfe - lass sie stehen, auch wenn du die
   #   erste umschreibst.
   absage:
@@ -1819,6 +1993,23 @@ shop:
     ware-unbekannt: "<red>Den Gegenstand <white>{getippt}</white> gibt es nicht.</red><gray>\nLeg die Ware in die Kiste und schreib ein <white>?</white> - das geht immer, auch bei verzauberten Sachen.</gray>"
     # Ein Bundshop, aber das Recht dafuer fehlt.
     kein-bundrecht: "<red>Bundshops darfst du nicht anlegen.</red><gray>\nLass die erste Zeile leer, dann wird es dein eigener Shop.</gray>"
+    # {stadt} {was} - die Freistadt hat noch kein LADENRECHT [Plan 16, Teil E3].
+    #   EIN EIGENER SATZ und nicht fremde-kiste: Jener sagt "sie steht auf fremdem
+    #   Grund", und der Spieler suchte einen Eigentuemer, den es nicht gibt - er
+    #   kaufte ein Grundstueck, das nichts aendert. Hier darf NIEMAND einen Laden
+    #   anlegen, auch der Stadtbesitzer nicht.
+    # {stadt} nennt sie beim Namen: Wer in einer fremden Stadt baut, kennt ihn nicht
+    #   immer. {was} nennt, WAS fehlt - die drei Worte dazu stehen bei
+    #   freistadt.auflage. Ohne die Angabe weiss selbst der Besitzer nur, DASS etwas
+    #   fehlt, und nicht, was er tun soll.
+    kein-ladenrecht: "<red>{stadt} hat noch kein Ladenrecht</red>\n<gray>Es fehlt: {was}. Bestehende Laeden handeln weiter.</gray>"
+    # {gebuehr} - die Stadt nimmt eine Ladengebuehr, und sein Geld reicht nicht
+    #   [Teil E6]. EIN ANDERER SATZ als kein-ladenrecht: Dort darf NIEMAND einen Laden
+    #   anlegen, hier darf er nur gerade nicht. Wer "kein Ladenrecht" laese, wartete
+    #   auf den Stadtbesitzer statt Mark zu verdienen.
+    # NENNT DEN BETRAG: Eine Absage, die nicht sagt, wie viel fehlt, laesst ihn raten -
+    #   und raten heisst hier, Mark zu sammeln, ohne zu wissen, wie viele.
+    ladengebuehr-zu-teuer: "<red>Ein Laden in dieser Stadt kostet {gebuehr} - das hast du nicht.</red><gray>\nDie Gebuehr geht in die Stadtkasse; sie stellt der Betreiber ein.</gray>"
     # Die Datenbank hat geschwiegen. SAGT AUSDRUECKLICH "NOCH EINMAL VERSUCHEN": Eine
     #   Absage ohne Ausweg liest ein Spieler als Verbot, baut sein Schild ab und kommt
     #   nicht wieder.

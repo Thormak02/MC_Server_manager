@@ -1192,6 +1192,136 @@ freistaedte:
   # Ein Wort, das keines der drei ist, bricht den Start mit Namen ab - lieber das als ein
   # Recht, das der Betreiber gegeben hat und das lautlos nicht gilt.
   buergerrechte: []
+  # DIE AUFLAGE [Plan 16]. Eine Freistadt bekommt ihren Teleporter und das Recht, neue
+  #   Kistenshops in ihrem Gebiet entstehen zu lassen, erst wenn sie BEIDES hat:
+  #     - einen Regeltext (/freistadt regeln <text>) und
+  #     - mindestens ein vergebenes Grundstueck, also mindestens einen Stadtbuerger.
+  #   Der Zweck steht im Plan: Das verhindert Geisterstaedte, die Flaeche blockieren.
+  #
+  # LAUFEND geprueft und nicht nur beim Gruenden. Eine Stadt, die ihre Regeln loescht
+  #   oder deren letztes vergebenes Grundstueck zurueckgekauft wird, verliert BEIDES
+  #   wieder - den Teleporter UND das Ladenrecht. In einer eingelebten Stadt setzt dann
+  #   niemand mehr ein neues Shopschild, bis sie die Auflage wieder erfuellt; die
+  #   bestehenden Laeden handeln weiter. Eine Auflage, die nur einmal geprueft wird,
+  #   ist nach dem ersten Verkauf stumm.
+  #
+  # IMMER HINEIN duerfen der Stadtbesitzer, seine Mitbauer und die Stadtbuerger - auch
+  #   wenn die Auflage offen ist. Ohne diese Ausnahme waere die Gruendung eine Falle
+  #   ueber 400.000 Mark: Eine frische Stadt hat nie ein vergebenes Grundstueck, ihr
+  #   Besitzer kaeme also nicht hinein, um eines zuzuschneiden.
+  #
+  # ZWEI Schalter fuer EINE Auflage, damit sich die beiden Wirkungen trennen lassen.
+  #   Auf false wirkt die Auflage an dieser Stelle nicht; der Startbericht sagt es dann
+  #   ausdruecklich, denn eine abgeschaltete Regel sieht im Spiel aus wie eine kaputte.
+  #
+  # teleporter: Wer nicht hinein darf, liest WARUM und bleibt stehen - der
+  #   Stadtbesitzer, seine Mitbauer und die Stadtbuerger duerfen immer.
+  #
+  # ladenrecht: In einer Stadt ohne erfuellte Auflage entsteht KEIN NEUER Kistenshop.
+  #   DREI Dinge dazu, und alle drei ueberraschen sonst:
+  #     - BESTEHENDE Shops handeln weiter, auch in einer Stadt, die ihre Auflage
+  #       verliert. Ein Riegel, der sie mitnaehme, loeschte Laeden wegen einer
+  #       Einstellung - und die Ware darin gehoert Spielern.
+  #     - Der STADTBESITZER ist NICHT ausgenommen, anders als beim Teleporter. Dort
+  #       muss er hinein, sonst kaeme er nicht in seine eigene Stadt; hier sperrt ihn
+  #       nichts ein - Regeln setzt er mit einem Befehl, ein Grundstueck schneidet er
+  #       zu, und beides geht ohne einen einzigen Laden. Mit einer Ausnahme fuer ihn
+  #       baute er seine ganze Markthalle und erfuellte die Auflage nie.
+  #     - BUNDSHOPS gehen durch: Sie gehoeren niemandem, die Stadt lizenziert sie
+  #       nicht, und aufstellen kann sie nur, wer freimarken.shop.bund hat.
+  auflage:
+    teleporter: true
+    ladenrecht: true
+
+  # DER VERFALL [Plan 16]. Eine Freistadt, die lange unbesucht ist UND keinen
+  #   Stadtbuerger hat, ist eine Geisterstadt: Sie blockiert ein Feld, einen Namen und
+  #   einen Platz in der Hoechstzahl ihres Besitzers, und niemand hat etwas davon.
+  #
+  # WAS GESCHIEHT: Sie geht in den Zustand "verfallen". Dort baut NIEMAND mehr, auch ihr
+  #   Besitzer nicht - so sieht man, dass sie aufgehoert hat. Feld, Name und das
+  #   Guthaben ihrer Stadtkasse behaelt sie; verloren geht nichts.
+  #
+  # WIE SIE WIEDER AUFWACHT: Ihr BESITZER betritt sie. Das genuegt - im naechsten
+  #   Minutentakt ist sie wieder aktiv, und er liest es. Ein Fremder weckt sie NICHT,
+  #   sonst hielte ein Durchgangsverkehr jede Geisterstadt am Leben.
+  #
+  # ENTFERNT WIRD SIE NICHT VON SELBST. Das Feld bleibt belegt, bis das Team sie raeumt
+  #   oder ihr Besitzer sie aufgibt. Eine Stadt mit 400.000 Mark Einsatz loescht kein
+  #   Zeitgeber von allein.
+  #
+  # ZWEI WARNUNGEN SIND ZWEI STUFEN und nicht zwei verschickte Nachrichten: Der
+  #   Stadtbesitzer liest beim ANMELDEN, in welcher Stufe seine Stadt steht - und so
+  #   lange wieder, bis er etwas tut. Ein Zaehler "schon gewarnt" stuende falsch, sobald
+  #   eine Nachricht verloren geht, und ein Besuch waere keine Entwarnung.
+  #
+  # EIN STADTBUERGER HAELT SIE DAUERHAFT. Wer ein Grundstueck vergeben hat, dessen Stadt
+  #   verfaellt nie - auch unbesucht nicht. Das ist die zweite Haelfte der Regel aus
+  #   Plan 16, und sie ist der billigste Weg heraus.
+  verfall:
+    # Auf false verfaellt keine Stadt und es wird nicht gewarnt. Der Startbericht sagt
+    # es dann ausdruecklich - eine abgeschaltete Regel sieht im Spiel aus wie eine
+    # kaputte.
+    an: true
+
+    # Nach wie vielen Tagen OHNE BESUCH eine Stadt faellig ist. 365 sind die zwoelf
+    # Monate aus Plan 16. Gezaehlt wird ab dem letzten Besuch, und hatte sie noch
+    # keinen, ab ihrer GRUENDUNG - nicht ab 1970.
+    #
+    # In TAGEN und nicht in Monaten, wie jede Frist dieses Plugins: Mit Monaten haengt
+    # die Frist am Gruendungsdatum, und eine Stadt vom 31. Januar verfiele dreissig Tage
+    # eher als eine vom 1. Februar.
+    #
+    # Eine 0 ist NICHT erlaubt - sie liesse jede Stadt am Tag ihrer Gruendung verfallen.
+    # Wer den Verfall nicht will, setzt an auf false.
+    unbesucht-tage: 365
+
+    # Wie viele Tage VOR dem Verfall die erste Warnung gilt. Eine 0 heisst: keine erste
+    # Warnung.
+    warnung-frueh-tage: 60
+
+    # Und die zweite, dringendere. Sie MUSS naeher am Verfall liegen als die erste -
+    # sonst liest ein Stadtbesitzer nie die erste. Vertauscht gilt die ganze Vorgabe,
+    # mit einer Klage im Startbericht.
+    warnung-spaet-tage: 14
+
+  # WAS DER BESITZER BEIM ENDE SEINER STADT ZURUECKBEKOMMT, in Prozent des Preises, den
+  #   er WIRKLICH gezahlt hat - nicht des heutigen aus der Zeile darueber. Wer fuer
+  #   400.000 gegruendet hat, soll nicht darunter leiden, dass der Preis seitdem
+  #   gesunken ist; die Stadtzeile traegt ihren Preis selbst.
+  #
+  # Gezahlt wird bei /freistadt aufgeben UND wenn das Team eine Stadt raeumt. In beiden
+  #   Faellen kommt das GUTHABEN DER STADTKASSE dazu - sonst waere es verloren.
+  #
+  # 0 bis 100. Ueber 100 waere das Gruenden eine Geldquelle: Wer gruendet und aufgibt,
+  #   machte Gewinn. Eine 0 ist erlaubt, macht das Aufgeben aber unattraktiv - dann
+  #   laesst ein Besitzer seine Stadt lieber verfallen, und genau die soll verschwinden.
+  erstattung-prozent: 50
+
+  # DIE LADENGEBUEHR - was ein Kistenshop der Stadt zahlt, in deren Feld er steht. Das
+  #   Geld geht in die STADTKASSE und ist damit neben der Marktgebuehr die zweite
+  #   Einnahme einer Stadt.
+  #
+  # BEIDE GETRENNT EINSTELLBAR, und jede 0 ist ein Ausschalter:
+  ladengebuehr:
+    # EINMALIG beim Anlegen eines neuen Kistenshops in der Stadt. Wer nicht zahlen kann,
+    #   bekommt keinen Shop - und liest, was fehlt.
+    #
+    # NICHT 0 ab Werk, obwohl das die bequemere Vorgabe waere: Die zweite Einnahme einer
+    #   Stadt (handel.<lage> fuer die Marktgebuehr) liegt ebenfalls bei 0, und mit zwei
+    #   Nullen waere die Stadtkasse eine Kasse, in die nie etwas fliesst. Ein Betreiber,
+    #   der sie im Spiel ansieht, hielte sie fuer kaputt.
+    anlage: 250
+
+    # TAEGLICH je Kistenshop in der Stadt, abgebucht im selben Lauf wie die Ladenmiete.
+    #
+    # 0 AB WERK, und das ist Absicht: Eine Tagesgebuehr hat eine Folge, die eine
+    #   einmalige nicht hat - WER SIE NICHT ZAHLEN KANN, VERLIERT SEINEN SHOP. Das
+    #   Schild wird abgebaut; die WARE BLEIBT IN DER KISTE, wie bei jedem Abbau. Ob ein
+    #   Server das will, entscheidet sein Betreiber und nicht diese Vorgabe.
+    #
+    # Wer sie einschaltet, waehlt klein: Bei 10 Mark und zwanzig Shops zahlt ein
+    #   Haendler 200 Mark am Tag, und das ist schon eine Entscheidung.
+    tag: 0
 
 laeden:
   # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.

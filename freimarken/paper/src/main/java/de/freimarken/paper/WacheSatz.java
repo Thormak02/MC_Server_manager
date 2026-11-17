@@ -191,6 +191,23 @@ enum WacheSatz implements Satz {
     SCHUTZ_STADT_FREI("wache.schutz.stadt-frei", Art.HANDBALKEN),
 
     /**
+     * Die Stadt ist VERFALLEN - hier baut niemand mehr [Plan 16, Teil E5].
+     *
+     * <p>Ein eigener Satz und nicht {@link #SCHUTZ_STADT_FREI}: Jener sagt "hier ist
+     * noch nichts, gruende", und das waere eine Luege ueber ein Feld, das vergeben ist
+     * - der Spieler tippte {@code /freistadt gruenden} und bekaeme "Name vergeben".
+     *
+     * <p><b>Er sagt dem BESITZER, was zu tun ist</b>, und trifft damit den einen Fall,
+     * der heilbar ist: Wer hier abgewiesen wird und die Stadt besitzt, muss nur bleiben
+     * - der Besuchsstempel weckt sie im naechsten Minutentakt. Ohne diesen Hinweis
+     * stuende er vor seiner eigenen Stadt und haelte sie fuer verloren.
+     *
+     * <p>KEIN Platzhalter: Ein Handbalken traegt eine Zeile, und der Name der Stadt
+     * steht hier nicht - wer in ihr steht, hat sie gerade betreten und kennt sie.
+     */
+    SCHUTZ_STADT_VERFALLEN("wache.schutz.stadt-verfallen", Art.HANDBALKEN),
+
+    /**
      * Die Freistadt eines anderen - mit NAMEN und Eigentuemer.
      *
      * <p>Beide Werte, und das ist der Unterschied zu

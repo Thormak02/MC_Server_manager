@@ -296,6 +296,27 @@ enum ReiseSatz implements Satz {
     /** Die Welt der Freistaedte fehlt - dann fuehrt dieser Zweig nirgendwohin. */
     WARP_STADT_KEINE_WELT("warp.stadt-keine-welt", Art.SATZ),
 
+    /**
+     * Diese Stadt hat noch keinen Teleporter - {@code name}, {@code was} [Teil E3].
+     *
+     * <p><b>Der fehlende Satz, den die Erkundung zu Teil E gefunden hat:</b> Ohne ihn
+     * erschiene eine Stadt ohne Auflage als {@code warp.stadt-unbekannt} - also als
+     * Tippfehler. Das ist eine Luege ueber einen Namen, den es gibt, und ein Spieler
+     * suchte den Fehler an seiner Tastatur.
+     *
+     * <p>{@code was} nennt, WAS fehlt - Regeln, Buerger oder beides. Ohne diese Angabe
+     * ist der Satz fuer den Stadtbesitzer wertlos: Er weiss dann, dass etwas fehlt, und
+     * nicht, was er tun soll.
+     */
+    WARP_STADT_OHNE_AUFLAGE("warp.stadt-ohne-auflage", Art.SATZ, "name", "was"),
+
+    // DIE DREI WORTE FUER {was} STANDEN HIER und sind am 17.11.2026 nach FreistadtSatz
+    // gezogen (freistadt.auflage.*). Der Grund ist E3b: Seitdem liest sie ein ZWEITER
+    // Satz, die Ladenabsage an einem Shopschild. Worte, die zwei Saetze teilen, duerfen
+    // nicht unter dem Namen des einen stehen - wer sie beim Laden sucht, faende sie
+    // beim Reisen. Gewaehlt werden sie seitdem an EINER Stelle:
+    // Sprachschluessel.auflagenwort.
+
 
     /**
      * Was zwischen zwei Weltnamen in {@link #WARP_ZIELE} steht - heute zwei Leerzeichen.

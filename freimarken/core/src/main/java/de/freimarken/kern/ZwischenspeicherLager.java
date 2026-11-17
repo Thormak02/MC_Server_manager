@@ -133,6 +133,34 @@ public final class ZwischenspeicherLager implements BesitzLager {
     }
 
     @Override
+    public void regelnSetzen(long id, String regeln) {
+        wahrheit.regelnSetzen(id, regeln);
+        // LEEREN wie bei den Buergerrechten, und aus demselben Grund: Diese Methode
+        // kennt nur die Nummer, die Karte liegt unter dem ORT.
+        leeren();
+    }
+
+    @Override
+    public void zustandSetzen(long id, Zustand zustand) {
+        wahrheit.zustandSetzen(id, zustand);
+        // LEEREN wie jeder Setzer hier. Der Preis ist niedrig: Ein Verfall faellt je
+        // Stadt EINMAL, und eine Wiederbelebung auch.
+        leeren();
+    }
+
+    @Override
+    public void besuchSetzen(long id, java.time.LocalDate tag) {
+        wahrheit.besuchSetzen(id, tag);
+        // LEEREN wie jeder Setzer hier, und der Preis ist bekannt: Der Stempel faellt
+        // je Stadt EINMAL am Tag, also gibt es an einem Tag so viele Vollleerungen wie
+        // besuchte Staedte - danach kommt jeder Treffer wieder aus der Datenbank. Das
+        // ist bei einer Handvoll bewohnter Staedte verkraftbar, und die Alternative
+        // waere ein zweiter Pflegeweg fuer eine Karte, die unter dem ORT liegt,
+        // waehrend diese Methode nur die Nummer kennt.
+        leeren();
+    }
+
+    @Override
     public void entfernen(long id) {
         wahrheit.entfernen(id);
         leeren();

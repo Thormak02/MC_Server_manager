@@ -119,6 +119,7 @@ final class Schutztext {
             case AUSSERHALB -> WacheSatz.SCHUTZ_STADT_AUSSERHALB;
             case ANKUNFTSFELD -> WacheSatz.SCHUTZ_ANKUNFTSFELD;
             case FREIES_FELD -> WacheSatz.SCHUTZ_STADT_FREI;
+            case VERFALLENE_STADT -> WacheSatz.SCHUTZ_STADT_VERFALLEN;
             case ERLAUBT, ERLAUBT_GRUNDSTUECK, ERLAUBT_STADTBUERGER, FREMDE_STADT,
                     FREMDES_GRUNDSTUECK ->
                     throw new IllegalArgumentException("Fuer " + urteil + " gibt es hier"

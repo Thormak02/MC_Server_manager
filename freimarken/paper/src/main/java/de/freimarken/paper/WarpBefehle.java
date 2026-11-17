@@ -172,6 +172,22 @@ final class WarpBefehle {
             keineStadtZeilen(sprache, eingabe).forEach(spieler::sendMessage);
             return;
         }
+        // DIE AUFLAGE [Plan 16, Teil E3], und sie steht genau HIER: zwischen dem
+        // gefundenen Namen und der Reise. Davor waere sie eine Absage an einen Namen,
+        // den es gar nicht gibt; danach waere der Spieler schon in der Stadt.
+        //
+        // Die ENTSCHEIDUNG trifft das Buch und nicht dieser Zweig: Wer immer hinein
+        // darf - Besitzer, Mitbauer, Stadtbuerger -, was die Auflage ueberhaupt ist und
+        // ob sie in diesem Lauf geprueft werden kann, steht alles an EINER Stelle. Das
+        // Ladenrecht fragt dieselbe, und zwei Rechnungen darueber waeren zwei
+        // Antworten.
+        Freistadtbuch.Auflage auflage = freistadtbuch.darfReisen(stadt,
+                spieler.getUniqueId());
+        if (!auflage.erfuellt()) {
+            ohneAuflageZeilen(sprache, stadt.name(), auflage)
+                    .forEach(spieler::sendMessage);
+            return;
+        }
         // Mittig auf dem Block und auf Fusshoehe ueber dem Gras, wie der
         // Erscheinungspunkt der Welt. Die Mitte kommt aus dem Stadtfeldplan des Buchs -
         // nicht aus einer zweiten Rechnung hier.
@@ -305,5 +321,24 @@ final class WarpBefehle {
     static List<Component> keineStadtZeilen(Sprache sprache, String eingabe) {
         return sprache.bau(ReiseSatz.WARP_STADT_UNBEKANNT, 1L,
                 Einsatz.von("name", eingabe));
+    }
+
+    /**
+     * Diese Stadt hat noch keinen Teleporter - und was ihr fehlt [Teil E3].
+     *
+     * <p>Ein EIGENER Satz und nicht {@link #keineStadtZeilen}: Jener sagt "diesen Namen
+     * gibt es nicht", und das waere hier eine Luege ueber einen Namen, den es gibt. Ein
+     * Spieler suchte den Fehler an seiner Tastatur.
+     */
+    static List<Component> ohneAuflageZeilen(Sprache sprache, String name,
+                                             Freistadtbuch.Auflage auflage) {
+        // DAS WORT AUS Sprachschluessel.auflagenwort und nicht aus einem eigenen
+        // switch hier [17.11.2026]: Seit E3b weist auch das Ladenrecht mit demselben
+        // Wort ab. Zwei Zuordnungen fuer dieselbe Frage liefen auseinander, und ein
+        // Spieler lese je nach Riegel etwas anderes ueber denselben Mangel.
+        return sprache.bau(ReiseSatz.WARP_STADT_OHNE_AUFLAGE, 1L,
+                Einsatz.von("name", name)
+                        .mit("was", sprache.wort(Sprachschluessel.auflagenwort(auflage),
+                                Einsatz.keine())));
     }
 }

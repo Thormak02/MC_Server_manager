@@ -6,14 +6,19 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.kern.Absteckbuch;
+import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Grundstuecksbuch;
 import de.freimarken.kern.Kasse;
+import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Tat;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.bukkit.entity.Player;
 
@@ -126,6 +131,63 @@ final class FreistadtBefehle {
      */
     static final String RECHT_RECHTE = "freimarken.freistadt.rechte";
 
+    /**
+     * Das Recht, Geld aus der Stadtkasse zu nehmen.
+     *
+     * <p>Ein FUENFTES Recht und nicht {@link #RECHT_RECHTE}: Wer Buergerrechte setzt,
+     * aendert, was Fremde duerfen; wer abhebt, bewegt Geld. Ein Betreiber, der das eine
+     * erlaubt und das andere nicht, soll das koennen - und mit einem gemeinsamen Recht
+     * waere jede Einschraenkung eine doppelte.
+     *
+     * <p>Das ANSEHEN der Kasse haengt an keinem eigenen Recht: Wer in einer Stadt
+     * steht, darf lesen, was sie einnimmt - dieselbe Entscheidung wie bei
+     * {@code stadtbuerger} und {@code rechte}. Was eine Freistadt einnimmt, ist in
+     * einer Freistadt keine Privatsache.
+     */
+    static final String RECHT_KASSE = "freimarken.freistadt.kasse";
+
+    /**
+     * Wer seine eigene Stadt AUFGEBEN darf [Teil E6].
+     *
+     * <p>Ein eigenes Recht und nicht {@link #RECHT_GRUENDEN}: Ein Betreiber kann das
+     * Gruenden offen lassen und das Aufgeben schliessen - etwa auf einem Server, der
+     * Staedte nur vom Team beenden lassen will. Dass es dafuer ohnehin
+     * {@link #RECHT_RAEUMEN} gibt, macht die Trennung nicht ueberfluessig, sondern
+     * sinnvoll.
+     */
+    static final String RECHT_AUFGEBEN = "freimarken.freistadt.aufgeben";
+
+    /**
+     * Wer FREMDE Staedte raeumen darf - das Team [Teil E6].
+     *
+     * <p>Das einzige Recht dieses Befehls, das ueber eigenen Besitz hinausgeht, und
+     * darum ab Werk NUR fuer Operatoren. Wer es hat, loescht eine Stadt, fuer die ein
+     * anderer 400.000 Mark gezahlt hat - die Erstattung geht darum an DESSEN Konto und
+     * nicht an das eigene.
+     */
+    static final String RECHT_RAEUMEN = "freimarken.freistadt.raeumen";
+
+    /** Wie viele Buchungen die Kasse hoechstens zeigt. */
+    private static final int KASSE_ZEILEN = 10;
+
+    /** Das Argument des Abhebebetrages. */
+    private static final String ARGUMENT_BETRAG = "betrag";
+
+    /** Das Argument des Regeltextes - der ganze Rest der Zeile. */
+    private static final String ARGUMENT_TEXT = "text";
+
+    /**
+     * Das Recht, die Regeln der eigenen Stadt zu setzen.
+     *
+     * <p>Zu {@link #RECHT_RECHTE} und nicht zu {@link #RECHT_KASSE}: Beides sind
+     * Regeln eines Gebiets, keine Geldbewegung. Ein siebtes Recht fuer denselben
+     * Gedanken waere eine Einstellung, die niemand einzeln braucht.
+     *
+     * <p>Das ANSEHEN haengt an keinem Recht: Die Regeln einer Stadt liest jeder, der
+     * dort steht - das ist ihr ganzer Zweck.
+     */
+    static final String RECHT_REGELN = RECHT_RECHTE;
+
     /** Das Argument des Rechtezweigs - der Name eines Buergerrechts. */
     private static final String ARGUMENT_RECHT = "recht";
 
@@ -159,6 +221,16 @@ final class FreistadtBefehle {
     private final java.util.logging.Logger protokoll;
 
     /**
+     * Die Zone, in der ein Spieler Zeitpunkte liest - fuer den Kassenverlauf.
+     *
+     * <p>Als LIEFERANT und nicht als Wert, wie die Hoechstzahl: Sie steht in
+     * {@code zeit.zone} und ist neuladbar, also darf sie nicht beim Bauen eingefroren
+     * werden. Und sie kommt von aussen und nicht aus der Systemzone - auf einem
+     * Rechner, dessen Zone nicht die des Servers ist, waere das eine zweite Quelle.
+     */
+    private final Supplier<ZoneId> zone;
+
+    /**
      * @param weltschluessel die Welt der Freistaedte, aus {@code freistaedte.welt}, schon
      *                       umgewandelt. Leer heisst: Die Welt fehlt, und dann sagt jeder
      *                       Zweig das - statt in einer namenlosen Welt zu gruenden
@@ -166,10 +238,14 @@ final class FreistadtBefehle {
      *                       nicht kopiert, damit ein Neuladen die Zahl erreicht. Sie
      *                       steht in der Absage, und eine veraltete Zahl darin waere eine
      *                       Absage, die sich nicht nachrechnen laesst
+     * @param zone           in welcher Zone der Spieler die Zeitpunkte des
+     *                       Kassenverlaufs liest - aus {@code zeit.zone}
      */
+
     FreistadtBefehle(Freistadtbuch buch, Kasse kasse, Sprache sprache,
                      String weltschluessel, IntSupplier hoechstzahl,
                      Grundstuecksbuch grundstuecksbuch, Absteckbuch absteckbuch,
+                     Supplier<ZoneId> zone,
                      java.util.logging.Logger protokoll) {
         this.buch = buch;
         this.kasse = kasse;
@@ -178,6 +254,7 @@ final class FreistadtBefehle {
         this.hoechstzahl = hoechstzahl;
         this.grundstuecksbuch = grundstuecksbuch;
         this.absteckbuch = absteckbuch;
+        this.zone = zone;
         this.protokoll = protokoll;
     }
 
@@ -248,6 +325,63 @@ final class FreistadtBefehle {
                 // Fragen, und beide duerfen alle lesen, die in der Stadt stehen.
                 .then(Commands.literal("stadtbuerger")
                         .executes(this::zeigeStadtbuerger))
+                // DIE STADTKASSE [Teil E1]. Der nackte Zweig ZEIGT, und das darf jeder,
+                // der in der Stadt steht; abheben darf nur der Besitzer, und das prueft
+                // die Regel im Buch - nicht dieser Zweig, denn der Satz an einen
+                // Fremden soll den Namen der Stadt nennen, und den kennt nur das Buch.
+                // DIE REGELN [Teil E2]. Der nackte Zweig ZEIGT sie - das ist ihr
+                // Zweck, und es darf jeder, der in der Stadt steht. Setzen darf nur
+                // der Besitzer, und das prueft die Regel im Buch.
+                .then(Commands.literal("regeln")
+                        .executes(this::zeigeRegeln)
+                        .then(Commands.literal("loeschen")
+                                .requires(quelle -> quelle.getSender()
+                                        .hasPermission(RECHT_REGELN))
+                                .executes(zusammenhang -> setzeRegeln(zusammenhang,
+                                        null)))
+                        .then(Commands.argument(ARGUMENT_TEXT,
+                                        StringArgumentType.greedyString())
+                                .requires(quelle -> quelle.getSender()
+                                        .hasPermission(RECHT_REGELN))
+                                .executes(zusammenhang -> setzeRegeln(zusammenhang,
+                                        StringArgumentType.getString(zusammenhang,
+                                                ARGUMENT_TEXT)))))
+                .then(Commands.literal("kasse")
+                        .executes(this::zeigeKasse)
+                        .then(Commands.literal("abheben")
+                                .requires(quelle -> quelle.getSender()
+                                        .hasPermission(RECHT_KASSE))
+                                // EIN EIGENES .executes am Literal, und es zeigt die
+                                // Kasse: Ohne es faellt "abheben" ohne Zahl in
+                                // Brigadiers englische Fehlermeldung [Lehre von Teil
+                                // C3]. Und es zeigt die KASSE und nicht einen Hinweis -
+                                // wer abheben will, braucht als erstes die Zahl, die
+                                // darin liegt.
+                                .executes(this::zeigeKasse)
+                                .then(Commands.argument(ARGUMENT_BETRAG,
+                                                LongArgumentType.longArg(1))
+                                        .executes(this::hebeAb))))
+                // DAS ENDE EINER STADT [Plan 16, Teil E6]. Beide Zweige tragen ein
+                // eigenes .executes am Literal - ohne es endet "/freistadt aufgeben"
+                // in Brigadiers englischem "Unknown or incomplete command", und das
+                // ist die Lehre von Teil C3. Hier zeigt es die RUECKFRAGE: Wer eine
+                // Stadt beendet, soll zuerst lesen, was er dafuer bekommt.
+                .then(Commands.literal("aufgeben")
+                        .requires(quelle -> quelle.getSender()
+                                .hasPermission(RECHT_AUFGEBEN))
+                        .executes(this::frageNachAufgabe)
+                        .then(Commands.literal("bestaetigen")
+                                .executes(this::gibAuf)))
+                .then(Commands.literal("raeumen")
+                        .requires(quelle -> quelle.getSender()
+                                .hasPermission(RECHT_RAEUMEN))
+                        // OHNE Namen zeigt es die Liste: Wer raeumen will, braucht
+                        // zuerst die Namen - und die stehen schon in /freistadt.
+                        .executes(this::zeigeListe)
+                        .then(Commands.argument(ARGUMENT_NAME, StringArgumentType.word())
+                                .executes(this::frageNachRaeumung)
+                                .then(Commands.literal("bestaetigen")
+                                        .executes(this::raeume))))
                 .then(Commands.literal("rechte")
                         .executes(this::zeigeRechte)
                         .then(Commands.literal("an")
@@ -331,6 +465,115 @@ final class FreistadtBefehle {
                 buch.gruende(weltschluessel, spieler.getUniqueId(), getippt, erlaubt);
         sende(spieler, Freistadttext.antwortZeilen(sprache, entscheid, getippt,
                 erlaubt, guthaben));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    // ------------------------------------ Das Ende einer Stadt [Teil E6]
+
+    /**
+     * Die Rueckfrage: Was bekommst du, wenn du deine Stadt aufgibst?
+     *
+     * <p>Dieselbe Bauart wie beim Gruenden, und aus dem umgekehrten Grund: Dort kostet
+     * ein Vertipper 400.000 Mark, hier kostet er eine Stadt. Was er zurueckbekommt,
+     * steht in der Frage - sonst bestaetigt er eine Zahl, die er nicht kennt.
+     */
+    private int frageNachAufgabe(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        Optional<Parzelle> stadt;
+        try {
+            stadt = buch.stadtAn(weltschluessel, spieler.getLocation().getBlockX(),
+                    spieler.getLocation().getBlockZ());
+        } catch (RuntimeException fehler) {
+            sende(spieler, Freistadttext.endeZeilen(sprache, new
+                    Freistadtbuch.Endeentscheid(Freistadtbuch.Endebescheid.GESTOERT,
+                            Optional.empty(), 0L, 0L), ""));
+            return Command.SINGLE_SUCCESS;
+        }
+        if (stadt.isEmpty() || !stadt.get().gehoert(spieler.getUniqueId())) {
+            // DIE ZWEI ABSAGEN GEHEN DURCH DENSELBEN WEG wie die Tat selbst: Sonst
+            // laese ein Spieler bei der Rueckfrage etwas anderes als beim Bestaetigen.
+            sende(spieler, Freistadttext.endeZeilen(sprache, new
+                    Freistadtbuch.Endeentscheid(stadt.isEmpty()
+                            ? Freistadtbuch.Endebescheid.KEINE_STADT
+                            : Freistadtbuch.Endebescheid.FREMDE_STADT, stadt, 0L, 0L),
+                    ""));
+            return Command.SINGLE_SUCCESS;
+        }
+        sende(spieler, Freistadttext.aufgabeFrageZeilen(sprache, stadt.get(),
+                buch.erstattungFuer(stadt.get()), buch.kassenstand(stadt.get())));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Und die Tat selbst. */
+    private int gibAuf(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        Freistadtbuch.Endeentscheid entscheid = buch.gibAuf(weltschluessel,
+                spieler.getUniqueId(), spieler.getLocation().getBlockX(),
+                spieler.getLocation().getBlockZ());
+        sende(spieler, Freistadttext.endeZeilen(sprache, entscheid, ""));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Die Rueckfrage des Teams - mit dem Namen, nicht am Standort. */
+    private int frageNachRaeumung(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        String getippt = StringArgumentType.getString(zusammenhang, ARGUMENT_NAME);
+        Optional<Parzelle> stadt;
+        try {
+            stadt = buch.staedte(weltschluessel).stream()
+                    .filter(eine -> eine.name().equalsIgnoreCase(getippt))
+                    .findFirst();
+        } catch (RuntimeException fehler) {
+            sende(spieler, Freistadttext.endeZeilen(sprache, new
+                    Freistadtbuch.Endeentscheid(Freistadtbuch.Endebescheid.GESTOERT,
+                            Optional.empty(), 0L, 0L), getippt));
+            return Command.SINGLE_SUCCESS;
+        }
+        if (stadt.isEmpty()) {
+            sende(spieler, Freistadttext.endeZeilen(sprache, new
+                    Freistadtbuch.Endeentscheid(Freistadtbuch.Endebescheid.KEINE_STADT,
+                            Optional.empty(), 0L, 0L), getippt));
+            return Command.SINGLE_SUCCESS;
+        }
+        sende(spieler, Freistadttext.raeumungFrageZeilen(sprache, stadt.get(),
+                buch.erstattungFuer(stadt.get()), buch.kassenstand(stadt.get())));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Und die Raeumung selbst. */
+    private int raeume(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        String getippt = StringArgumentType.getString(zusammenhang, ARGUMENT_NAME);
+        sende(spieler, Freistadttext.endeZeilen(sprache,
+                buch.raeume(weltschluessel, getippt), getippt));
         return Command.SINGLE_SUCCESS;
     }
 
@@ -706,4 +949,126 @@ final class FreistadtBefehle {
             wer.sendMessage(zeile);
         }
     }
+
+    // --- Teil E1: die Stadtkasse ----------------------------------------------
+
+    /**
+     * Zeigt, was in der Kasse liegt - und woher es kam.
+     *
+     * <p>Ohne Rechtepruefung und ohne Besitzfrage: Wer in einer Stadt steht, darf lesen,
+     * was sie einnimmt. Dieselbe Entscheidung wie bei {@link #zeigeRechte} und
+     * {@link #zeigeStadtbuerger}.
+     */
+    private int zeigeKasse(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        Optional<Parzelle> stadt;
+        long stand;
+        List<Buchung> verlauf;
+        try {
+            stadt = buch.stadtAn(weltschluessel, spieler.getLocation().getBlockX(),
+                    spieler.getLocation().getBlockZ());
+            if (stadt.isEmpty()) {
+                sende(spieler, sprache.bau(FreistadtSatz.KEINE_STADT, 1L,
+                        Einsatz.keine()));
+                return Command.SINGLE_SUCCESS;
+            }
+            stand = buch.kassenstand(stadt.get());
+            verlauf = buch.kassenverlauf(stadt.get(), KASSE_ZEILEN);
+        } catch (RuntimeException fehler) {
+            // Die Ablage oder die Kasse war stumm. Dieselbe Antwort wie im Buch, und
+            // gefangen wird hier - der Befehl ist die Stelle, die mit einem Spieler
+            // redet.
+            sende(spieler, sprache.bau(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L,
+                    Einsatz.keine()));
+            return Command.SINGLE_SUCCESS;
+        }
+        sende(spieler, Freistadttext.kassenZeilen(sprache, stadt.get().name(), stand,
+                verlauf, zone.get()));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /** Geld aus der Kasse nehmen - nur der Stadtbesitzer. */
+    private int hebeAb(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        long betrag = LongArgumentType.getLong(zusammenhang, ARGUMENT_BETRAG);
+        Freistadtbuch.Kassenentscheid entscheid = buch.hebeAb(weltschluessel,
+                spieler.getUniqueId(), spieler.getLocation().getBlockX(),
+                spieler.getLocation().getBlockZ(), betrag);
+        sende(spieler, Freistadttext.abhebenZeilen(sprache, entscheid,
+                Spielername::von));
+        return Command.SINGLE_SUCCESS;
+    }
+
+
+    // --- Teil E2: der Regeltext -----------------------------------------------
+
+    /**
+     * Zeigt die Regeln dieser Stadt.
+     *
+     * <p>Ohne Rechtepruefung und ohne Besitzfrage: Dass Besucher die Regeln LESEN, ist
+     * der ganze Zweck der Sache.
+     */
+    private int zeigeRegeln(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        Optional<Parzelle> stadt;
+        try {
+            stadt = buch.stadtAn(weltschluessel, spieler.getLocation().getBlockX(),
+                    spieler.getLocation().getBlockZ());
+        } catch (RuntimeException fehler) {
+            sende(spieler, sprache.bau(FreistadtSatz.GRUNDSTUECK_GESTOERT, 1L,
+                    Einsatz.keine()));
+            return Command.SINGLE_SUCCESS;
+        }
+        if (stadt.isEmpty()) {
+            sende(spieler, sprache.bau(FreistadtSatz.KEINE_STADT, 1L, Einsatz.keine()));
+            return Command.SINGLE_SUCCESS;
+        }
+        sende(spieler, Freistadttext.regelnZeilen(sprache, stadt.get()));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Setzt die Regeln - oder loescht sie.
+     *
+     * @param text {@code null} loescht; so ruft es der Zweig {@code loeschen}
+     */
+    private int setzeRegeln(CommandContext<CommandSourceStack> zusammenhang,
+                            String text) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (weltschluessel.isEmpty()) {
+            sende(spieler, Freistadttext.keineWeltZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        Freistadtbuch.Regelentscheid entscheid = buch.setzeRegeln(weltschluessel,
+                spieler.getUniqueId(), spieler.getLocation().getBlockX(),
+                spieler.getLocation().getBlockZ(), text);
+        sende(spieler, Freistadttext.regelAntwortZeilen(sprache, entscheid,
+                text == null ? 0 : text.length(), Spielername::von));
+        return Command.SINGLE_SUCCESS;
+    }
+
 }

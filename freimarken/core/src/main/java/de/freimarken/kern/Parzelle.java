@@ -1,6 +1,7 @@
 package de.freimarken.kern;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
 
@@ -34,6 +35,15 @@ import java.util.UUID;
  * @param name        der Name einer Freistadt, sonst {@link #KEIN_NAME}
  * @param buergerrechte was die Stadtbuerger einer Freistadt im Gemeinschaftsgebiet
  *                      duerfen - bei allem anderen leer, nie {@code null}
+ * @param kasse       die Kontonummer der Stadtkasse einer Freistadt, sonst
+ *                    {@link #KEINE_KASSE}
+ * @param regeln      der Regeltext einer Freistadt - was Besucher dort beachten
+ *                    sollen -, sonst {@link #KEINE_REGELN}
+ * @param besucht     der TAG des letzten Besuchs einer Freistadt, sonst
+ *                    {@link #NIE_BESUCHT}. Ein {@link LocalDate} und kein
+ *                    {@code Instant}: Gefragt ist der Tag, und ein Zeitpunkt haette
+ *                    eine zweite Zone - dieselbe Entscheidung wie bei
+ *                    {@code Bonusstand.letzterTag} und {@code Mietvertrag.beginn}
  */
 public record Parzelle(
         long id,
@@ -48,7 +58,10 @@ public record Parzelle(
         long elternId,
         Zustand zustand,
         String name,
-        Set<Tat> buergerrechte) {
+        Set<Tat> buergerrechte,
+        UUID kasse,
+        String regeln,
+        LocalDate besucht) {
 
     /**
      * Keine Elternnummer.
@@ -78,6 +91,37 @@ public record Parzelle(
      * antworten koennen.
      */
     public static final Set<Tat> KEINE_RECHTE = Set.of();
+
+    /**
+     * Keine Stadtkasse - alles ausser einer Freistadt.
+     *
+     * <p>Benannt und nicht als nacktes {@code null} in vierzehn Aufrufen: Wer
+     * {@code KEINE_KASSE} liest, weiss, dass hier eine Entscheidung steht und nicht ein
+     * vergessenes Argument.
+     */
+    public static final UUID KEINE_KASSE = null;
+
+    /**
+     * Kein Regeltext - jede Parzelle, und jede Stadt, die noch keinen hat.
+     *
+     * <p>Anders als bei der Kontonummer ist das Fehlen hier KEIN Fehler, sondern der
+     * Anfangszustand: Eine frisch gegruendete Stadt hat noch keine Regeln, und genau
+     * das ist der Grund, aus dem Teil E die Auflage daran haengt.
+     */
+    public static final String KEINE_REGELN = null;
+
+    /**
+     * Noch nie besucht - und alles, was keine Freistadt ist.
+     *
+     * <p><b>{@code null} und nicht ein fruehes Datum</b>: "Noch nie" und "am 1.1.1970"
+     * sind verschiedene Aussagen, und die Verfallsregel aus Plan 16 muss sie
+     * unterscheiden koennen. Eine frisch gegruendete Stadt steht hier, bis ihr erster
+     * Besucher kommt - und ihre Frist laeuft ab der GRUENDUNG, nicht ab 1970.
+     */
+    public static final LocalDate NIE_BESUCHT = null;
+
+    /** Die laengste erlaubte Laenge - dieselbe wie die Spaltenbreite. */
+    public static final int REGELN_GROESSTENS = 256;
 
     public Parzelle {
         if (welt == null || welt.isBlank()) {
@@ -130,6 +174,56 @@ public record Parzelle(
                     + " damit Buergerrechte, nicht " + art.schluessel() + ": "
                     + buergerrechte);
         }
+        // DIE KONTONUMMER IST PFLICHT, und zwar in beiden Richtungen - genau wie der
+        // Name und anders als die Buergerrechte [Teil E1].
+        //
+        // Warum eine GESPEICHERTE Nummer und keine aus der id gerechnete: Die id kommt
+        // aus AUTO_INCREMENT, und die wird nach einem Neustart WIEDER VERGEBEN. Eine
+        // abgeleitete Nummer haette damit das Konto einer entfernten Stadt an die
+        // naechste gegeben, die zufaellig dieselbe id bekommt - mitsamt ihrem
+        // Buchungsverlauf. Das waere eine Luege ueber Geld, und sie faellt erst Monate
+        // spaeter auf.
+        //
+        // Warum PFLICHT und nicht NULL-faehig mit spaeterem Anlegen: Eine Stadt ohne
+        // Konto muesste eines bekommen, sobald das erste Geld fliesst - also mitten im
+        // Geldfluss, an der Stelle, an der am wenigsten Platz fuer einen zweiten
+        // Schreibweg ist. Mit der Pflicht entsteht die Nummer dort, wo die Stadt
+        // entsteht, und nirgends sonst.
+        if (art == Art.FREISTADT && kasse == null) {
+            throw new IllegalArgumentException("Eine Freistadt braucht die Kontonummer"
+                    + " ihrer Stadtkasse: " + id);
+        }
+        if (art != Art.FREISTADT && kasse != null) {
+            throw new IllegalArgumentException("Nur eine Freistadt hat eine Stadtkasse,"
+                    + " nicht " + art.schluessel() + ": " + kasse);
+        }
+        // DER REGELTEXT: nur EINE Richtung, und das unterscheidet ihn von Name und
+        // Kontonummer [Teil E2]. Eine Freistadt OHNE Regeln ist der Anfangszustand -
+        // jede frisch gegruendete hat keine, und genau daran haengt die Auflage aus
+        // Plan 16. Eine Parzelle MIT Regeln dagegen waere ein Text, den niemand je
+        // liest: Angezeigt wird er beim Betreten einer Stadt, und auf einer
+        // Marktstadtparzelle betritt man keine.
+        if (art != Art.FREISTADT && regeln != null) {
+            throw new IllegalArgumentException("Nur eine Freistadt hat Regeln, nicht "
+                    + art.schluessel() + ": " + regeln);
+        }
+        // Die LAENGE hier und nicht nur in der Datenbank: Dort waere ein zu langer Text
+        // je nach Betriebsart eine Treiberausnahme ohne Satz oder - schlimmer - eine
+        // stille Kuerzung auf 256 Zeichen. Ein Stadtbesitzer, dessen Regeln mitten im
+        // Wort aufhoeren, sucht den Fehler bei sich.
+        if (regeln != null && regeln.length() > REGELN_GROESSTENS) {
+            throw new IllegalArgumentException("Der Regeltext hat " + regeln.length()
+                    + " Zeichen und damit mehr als die erlaubten "
+                    + REGELN_GROESSTENS + ": " + id);
+        }
+        // DER BESUCHSTAG: nur EINE Richtung, wie beim Regeltext [Teil E4]. Eine
+        // Freistadt OHNE Stempel ist der Anfangszustand - frisch gegruendet war noch
+        // niemand da. Eine Parzelle MIT Stempel waere ein Tag, den niemand je liest:
+        // Gelesen wird er allein von der Verfallsregel, und die gilt nur fuer Staedte.
+        if (art != Art.FREISTADT && besucht != null) {
+            throw new IllegalArgumentException("Nur eine Freistadt wird besucht, nicht "
+                    + art.schluessel() + ": " + besucht);
+        }
         // Unveraenderlich kopieren: Sonst kann der Aufrufer die Mitbauer nachtraeglich
         // aendern, ohne dass das Lager etwas davon erfaehrt - und die Datenbank weiss
         // dann etwas anderes als der Speicher. Dasselbe gilt fuer die Rechte, und dort
@@ -151,7 +245,8 @@ public record Parzelle(
                     Set<UUID> mitbauer, long preis, Instant erworbenAm, Art art,
                     long elternId, Zustand zustand) {
         this(id, welt, x, z, eigentuemer, mitbauer, preis, erworbenAm, art, elternId,
-                zustand, KEIN_NAME, KEINE_RECHTE);
+                zustand, KEIN_NAME, KEINE_RECHTE, KEINE_KASSE, KEINE_REGELN,
+                NIE_BESUCHT);
     }
 
     // KEIN Kurzweg mit Namen und ohne Rechte, und das ist eine Lehre aus dem 11.11.2026:
@@ -213,7 +308,7 @@ public record Parzelle(
      */
     public Parzelle mitMitbauern(Set<UUID> andere) {
         return new Parzelle(id, welt, x, z, eigentuemer, andere, preis, erworbenAm,
-                art, elternId, zustand, name, buergerrechte);
+                art, elternId, zustand, name, buergerrechte, kasse, regeln, besucht);
     }
 
     /**
@@ -225,7 +320,49 @@ public record Parzelle(
      */
     public Parzelle mitBuergerrechten(Set<Tat> andere) {
         return new Parzelle(id, welt, x, z, eigentuemer, mitbauer, preis, erworbenAm,
-                art, elternId, zustand, name, andere);
+                art, elternId, zustand, name, andere, kasse, regeln, besucht);
+    }
+
+    /**
+     * Dieselbe Zeile mit anderem Zustand - fuer den Verfall und die Wiederbelebung.
+     *
+     * <p>Es gibt BEWUSST keinen Wandler fuer die Kontonummer. Eine Kontonummer, die
+     * sich aendern laesst, ist keine: Das Guthaben liegt unter der alten, und wer sie
+     * umschreibt, macht es unerreichbar, ohne dass eine Zeile im Buch davon erzaehlt.
+     * Sie entsteht mit der Stadt und vergeht mit ihr.
+     */
+    public Parzelle mitZustand(Zustand anderer) {
+        return new Parzelle(id, welt, x, z, eigentuemer, mitbauer, preis, erworbenAm,
+                art, elternId, anderer, name, buergerrechte, kasse, regeln, besucht);
+    }
+
+    /**
+     * Dieselbe Zeile mit einem neuen Besuchstag - fuer den Stempel aus Teil E4.
+     *
+     * <p>Der Tag kommt HEREIN und wird hier nicht gerechnet: Dieser Satz kennt keine
+     * Uhr und keine Zone, und genau das soll so bleiben. Wer stempelt, hat "heute"
+     * schon ueber {@code Tagesgrenze.tagVon} bestimmt.
+     */
+    public Parzelle mitBesuch(LocalDate tag) {
+        return new Parzelle(id, welt, x, z, eigentuemer, mitbauer, preis, erworbenAm,
+                art, elternId, zustand, name, buergerrechte, kasse, regeln, tag);
+    }
+
+    /** Dieselbe Zeile mit anderem Regeltext. */
+    public Parzelle mitRegeln(String andere) {
+        return new Parzelle(id, welt, x, z, eigentuemer, mitbauer, preis, erworbenAm,
+                art, elternId, zustand, name, buergerrechte, kasse, andere, besucht);
+    }
+
+    /**
+     * Ob diese Stadt einen Regeltext hat.
+     *
+     * <p>Die eine Stelle, die das entscheidet - und sie fragt nicht nur auf
+     * {@code null}, sondern auch auf Leerraum: Ein Text aus drei Leerzeichen ist keine
+     * Regel, und ohne diese Frage waere er eine erfuellte Auflage.
+     */
+    public boolean hatRegeln() {
+        return regeln != null && !regeln.isBlank();
     }
 
     /**

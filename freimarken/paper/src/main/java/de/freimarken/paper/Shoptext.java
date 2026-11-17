@@ -56,7 +56,19 @@ final class Shoptext {
         // gezaehlt - Sprache.bau verlangt sie trotzdem, weil es die EINE Baustelle fuer
         // alle Arten ist. Dieselbe 1L steht in Miettext.absageZeilen.
         return sprache.bau(Sprachschluessel.shopAnlage(anlage.bescheid(),
-                anlage.fehler()), 1L, absagewerte(anlage, getippteWare));
+                anlage.fehler()), 1L, absagewerte(sprache, anlage, getippteWare));
+    }
+
+    /**
+     * Sein Laden ist wegen der Tagesgebuehr abgebaut [Teil E6].
+     *
+     * <p>Sagt ausdruecklich, dass die WARE noch da ist: Diese Zeile kommt ohne sein
+     * Zutun, und ohne den Hinweis sucht er sein Lager.
+     */
+    static List<Component> ladenGebuehrWegZeilen(Sprache sprache, String stadt,
+            long gebuehr) {
+        return sprache.bau(ShopSatz.SHOP_LADENGEBUEHR_WEG, 1L,
+                Einsatz.von("stadt", stadt).mit("gebuehr", sprache.betrag(gebuehr)));
     }
 
     /**
@@ -104,20 +116,33 @@ final class Shoptext {
      * <p><b>Ueberzaehlige Werte sind unschaedlich, fehlende sind eine sichtbare
      * Klammer:</b> {@code Sprache.ersetze} klagt nur ueber einen Platzhalter, fuer den
      * kein Wert da ist; einen Wert, den kein Platzhalter abholt, sieht es nie. Die
-     * Alternative waere eine zweite Verzweigung ueber dieselben neunzehn Faelle, nur um
+     * Alternative waere eine zweite Verzweigung ueber dieselben siebzehn Faelle, nur um
      * je zwei Werte zu sparen - und zwei Verzweigungen ueber dieselbe Frage laufen
      * irgendwann auseinander. Welche Werte ein Satz WIRKLICH einsetzen darf, steht in
      * {@code ShopSatz.platzhalter()} und wird beim Laden gegen die Vorlage geprueft.
+     *
+     * <p>SIEBZEHN, nachgezaehlt am 17.11.2026 unter {@code shop.absage} in der
+     * Vorlage: acht Schildfehler und neun Weltbescheide. Hier stand neunzehn - die
+     * Zahl war vom 10.11. stehengeblieben, als die drei Bund-Bescheide fielen.
      *
      * <p>Die beiden Grenzen kommen aus {@link Kistenshop} und nicht aus dem Wortlaut: Ein
      * Betreiber, der sie aendert, aendert eine Zahl im Programm und nicht zwei Worte in
      * einer Datei.
      */
-    private static Einsatz absagewerte(Shopbuch.Anlage anlage, String getippteWare) {
+    private static Einsatz absagewerte(Sprache sprache, Shopbuch.Anlage anlage,
+            String getippteWare) {
         return Einsatz.von("zeile", anlage.zeile())
                 .mit("hoechstmenge", Kistenshop.GROESSTE_MENGE)
                 .mit("hoechstpreis", Kistenshop.HOECHSTER_PREIS)
-                .mit("getippt", getippteWare == null ? "" : getippteWare);
+                .mit("getippt", getippteWare == null ? "" : getippteWare)
+                // DIE ZWEI AUS TEIL E3b. Leer statt null, wenn kein Ladenrecht im
+                // Spiel ist: Sprache.ersetze klagt ueber einen Platzhalter OHNE Wert,
+                // und die Klage stuende sonst unter jeder der siebzehn Absagen.
+                .mit("stadt", anlage.stadt() == null ? "" : anlage.stadt())
+                .mit("gebuehr", sprache.betrag(anlage.gebuehr()))
+                .mit("was", anlage.auflage() == null ? ""
+                        : sprache.wort(Sprachschluessel.auflagenwort(anlage.auflage()),
+                                Einsatz.keine()));
     }
 
     /**

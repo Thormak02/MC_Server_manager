@@ -123,6 +123,58 @@ public interface BesitzLager {
      */
     void buergerrechteSetzen(long id, Set<Tat> rechte);
 
+    /**
+     * Den Regeltext einer Freistadt setzen - oder loeschen.
+     *
+     * <p>ERSETZEND und nicht ergaenzend, wie die Buergerrechte: Der neue Text ist der
+     * ganze Text. Ein {@code null} oder ein leerer Text loescht ihn, und das ist der
+     * Weg zurueck in den Anfangszustand - ohne ihn koennte ein Stadtbesitzer eine Regel
+     * aufstellen und nie wieder zurueckziehen.
+     *
+     * <p>Der Text wird NICHT geprueft: Seine Laenge prueft {@link Parzelle}, seine Form
+     * der Befehl. Eine dritte Pruefung hier waere eine dritte Meinung darueber, was ein
+     * Regeltext ist.
+     *
+     * @throws IllegalArgumentException wenn das keine Freistadt ist - nur eine Stadt
+     *                                  hat Regeln, und der Riegel dafuer steht in
+     *                                  {@link Parzelle}
+     * @throws IllegalStateException    wenn es die Nummer nicht gibt
+     */
+    void regelnSetzen(long id, String regeln);
+
+    /**
+     * Setzt den TAG des letzten Besuchs einer Freistadt [Teil E4].
+     *
+     * <p><b>Der Tag kommt herein und wird nicht hier gerechnet.</b> Ein Lager hat keine
+     * Uhr und keine Zone; "heute" bestimmt der Aufrufer ueber
+     * {@code Tagesgrenze.tagVon}. Eine Umsetzung, die {@code CURDATE()} schriebe, legte
+     * die Tagesgrenze in die Datenbanksitzung - und die steht auf UTC, also naennte sie
+     * zwischen Mitternacht und ein Uhr Ortszeit noch den Vortag.
+     *
+     * <p><b>Nur fuer eine Freistadt</b>, wie {@code regelnSetzen}: Eine Marktstadtzeile
+     * wird nicht besucht, und ein Stempel darauf waere ein Tag, den niemand liest.
+     * Jede Umsetzung wirft fuer eine andere Art.
+     *
+     * @param tag der Besuchstag, oder {@code null} fuer "noch nie" - letzteres braucht
+     *            die Wiederbelebung aus Teil E5 nicht, aber eine Umsetzung, die nur
+     *            setzen und nie loeschen kann, ist die Haelfte eines Setzers
+     */
+    void besuchSetzen(long id, java.time.LocalDate tag);
+
+    /**
+     * Setzt den ZUSTAND einer Freistadt [Teil E5].
+     *
+     * <p>Gebraucht vom Verfallslauf, der eine unbesuchte Stadt auf
+     * {@link Zustand#VERFALLEN} setzt, und vom Besuchsstempel, der sie wieder belebt.
+     *
+     * <p><b>Nur fuer eine Freistadt</b>, wie die zwei Setzer darueber - und das ist
+     * hier eine Einschraenkung mit Grund: Marktstadtparzellen haben einen Zustand, aber
+     * ihren setzt der MIETLAUF ueber eine ganz andere Tabelle. Zwei Schreibwege auf
+     * dieselbe Spalte liefen auseinander, und der eine wuerde dem anderen seine
+     * gekuendigten Laeden wieder aufwecken.
+     */
+    void zustandSetzen(long id, Zustand zustand);
+
     /** Eine Parzelle freigeben. */
     void entfernen(long id);
 

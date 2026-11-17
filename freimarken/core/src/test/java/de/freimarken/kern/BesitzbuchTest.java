@@ -675,6 +675,20 @@ class BesitzbuchTest {
         }
 
         @Override
+        public void regelnSetzen(long id, String regeln) {
+            echt.regelnSetzen(id, regeln);
+        }
+
+        @Override
+        public void besuchSetzen(long id, java.time.LocalDate tag) {
+            echt.besuchSetzen(id, tag);
+        }
+        @Override
+        public void zustandSetzen(long id, de.freimarken.kern.Zustand zustand) {
+            echt.zustandSetzen(id, zustand);
+        }
+
+        @Override
         public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
             // Geschrieben werden darf - aber nur auf die GRUPPE, nie auf das Kind.
             if (id != GRUPPE) {
@@ -773,6 +787,20 @@ class BesitzbuchTest {
         }
 
         @Override
+        public void regelnSetzen(long id, String regeln) {
+            echt.regelnSetzen(id, regeln);
+        }
+
+        @Override
+        public void besuchSetzen(long id, java.time.LocalDate tag) {
+            echt.besuchSetzen(id, tag);
+        }
+        @Override
+        public void zustandSetzen(long id, de.freimarken.kern.Zustand zustand) {
+            echt.zustandSetzen(id, zustand);
+        }
+
+        @Override
         public void entfernen(long id) {
             echt.entfernen(id);
         }
@@ -866,6 +894,20 @@ class BesitzbuchTest {
         @Override
         public void buergerrechteSetzen(long id, Set<Tat> rechte) {
             echt.buergerrechteSetzen(id, rechte);
+        }
+
+        @Override
+        public void regelnSetzen(long id, String regeln) {
+            echt.regelnSetzen(id, regeln);
+        }
+
+        @Override
+        public void besuchSetzen(long id, java.time.LocalDate tag) {
+            echt.besuchSetzen(id, tag);
+        }
+        @Override
+        public void zustandSetzen(long id, de.freimarken.kern.Zustand zustand) {
+            echt.zustandSetzen(id, zustand);
         }
 
         @Override

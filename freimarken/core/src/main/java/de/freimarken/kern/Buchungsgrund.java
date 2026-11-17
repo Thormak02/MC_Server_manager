@@ -286,7 +286,84 @@ public enum Buchungsgrund {
      * keinem Laden. Stuende sie hier mit drin, zaehlte sie danach als bezahlt, ohne dass
      * Geld geblieben waere - und der naechste Laden desselben Spielers waere umsonst.
      */
-    LADEN_ERSTATTET("laden_erstattet", Richtung.EINNAHME);
+    LADEN_ERSTATTET("laden_erstattet", Richtung.EINNAHME),
+
+    /**
+     * Die Marktgebuehr, wie sie in der STADTKASSE ankommt [Teil E1].
+     *
+     * <p>Das Gegenstueck zu {@link #GRUNDSTUECK_GEBUEHR}, und bis heute gab es keines:
+     * Die Gebuehr wurde dem Verkaeufer abgebucht und NIEMANDEM gutgeschrieben - eine
+     * reine Senke, wie die Senkentabelle aus Plan 12b sie vorsieht. Ab jetzt faellt sie
+     * der Stadt zu, in deren Feld das Grundstueck liegt.
+     *
+     * <p><b>Damit ist sie keine Senke mehr</b>, und das soll hier stehen, damit der
+     * Wirtschaftsbericht aus Plan 12b sie nicht doppelt zaehlt: Dieselben Mark
+     * erscheinen jetzt zweimal im Buch - einmal als Ausgabe beim Verkaeufer, einmal als
+     * Einnahme bei der Stadt. Wer beide Gruende addiert, bekommt null; wer nur den
+     * ersten nimmt, haelt eine Umverteilung fuer eine Senke.
+     */
+    STADTKASSE_GEBUEHR("stadtkasse_gebuehr", Richtung.EINNAHME),
+
+    /**
+     * Was der Stadtbesitzer aus der Kasse nimmt - auf dem Konto der STADT.
+     *
+     * <p>Zwei Gruende fuer eine Bewegung, und das ist keine Doppelung: Ein Konto traegt
+     * nur seine eigenen Zeilen, und in der Stadtkasse ist das Abheben eine Ausgabe,
+     * beim Spieler eine Einnahme. Mit einem einzigen Grund waere die eine der beiden
+     * Zeilen falsch gerichtet, und die Summenprobe des Buches faende es nicht - sie
+     * rechnet je Konto.
+     */
+    STADTKASSE_ABGEHOBEN("stadtkasse_abgehoben", Richtung.AUSGABE),
+
+    /** Dieselbe Bewegung beim SPIELER - siehe {@link #STADTKASSE_ABGEHOBEN}. */
+    STADTKASSE_AUSGEZAHLT("stadtkasse_ausgezahlt", Richtung.EINNAHME),
+
+    /**
+     * Was in die Kasse zurueckgelegt wurde, weil die Auszahlung scheiterte.
+     *
+     * <p>Ein EIGENER Grund und nicht die Gebuehr: In der Kasse ist beides eine
+     * Einnahme, aber die Gebuehr erzaehlt von einem Verkauf, und diese Zeile erzaehlt
+     * von einem Fehler. Wer den Verlauf liest, soll den Unterschied sehen - sonst
+     * stuende dort eine Marktgebuehr, zu der es keinen Verkauf gibt.
+     *
+     * <p>Gebucht wird er selten, naemlich nur dann, wenn das Abbuchen bei der Stadt
+     * gelang und die Gutschrift beim Spieler nicht. Selten ist nicht nie: Genau das ist
+     * der Augenblick, in dem Geld verschwinden koennte.
+     */
+    STADTKASSE_ZURUECK("stadtkasse_zurueck", Richtung.EINNAHME),
+
+    /**
+     * Der Anteil, den ein Stadtbesitzer beim AUFGEBEN zurueckbekommt [Teil E6].
+     *
+     * <p>Ein eigener Grund und nicht {@link #FREISTADT_ERSTATTET}: Jener erzaehlt von
+     * einer Gruendung, die SCHIEFGING - das Geld war abgebucht und die Stadt entstand
+     * nicht. Dieser erzaehlt von einer Stadt, die es gab und die ihr Besitzer beendet
+     * hat. Wer seinen Verlauf liest, soll den Unterschied sehen; mit einem gemeinsamen
+     * Grund stuende dort "Gruendung erstattet" zu einer Stadt, in der er ein Jahr
+     * gebaut hat.
+     *
+     * <p>Gerechnet vom EINGESETZTEN Preis der Zeile und nicht vom heutigen aus der
+     * Datei - die Begruendung steht bei {@code Freistadtwerte.VORGABE_ERSTATTUNG}.
+     */
+    FREISTADT_AUFGEGEBEN("freistadt_aufgegeben", Richtung.EINNAHME),
+
+    /**
+     * Die LADENGEBUEHR, wie sie der Shopbesitzer zahlt [Teil E6].
+     *
+     * <p>Ein eigener Grund und nicht {@link #LADEN_LIZENZ}: Jene ist die einmalige
+     * Gebuehr fuer einen Laden in der MARKTHALLE und geht an niemanden - eine Senke.
+     * Diese geht an die STADT, in deren Feld der Kistenshop steht, und sie faellt
+     * zweimal: einmal beim Anlegen und, wenn der Betreiber es einstellt, taeglich.
+     *
+     * <p><b>Ein Grund fuer beide Faelle</b>, anders als bei der Stadtkasse, wo Abheben
+     * und Auszahlen getrennt sind: Dort geht es um ZWEI Konten, hier um dieselbe
+     * Bewegung auf demselben. Was der Spieler im Verlauf lesen will, ist "Ladengebuehr"
+     * - ob sie einmalig oder taeglich war, sagt ihm das Datum.
+     */
+    FREISTADT_LADENGEBUEHR("freistadt_ladengebuehr", Richtung.AUSGABE),
+
+    /** Dieselbe Bewegung in der STADTKASSE - siehe {@link #FREISTADT_LADENGEBUEHR}. */
+    STADTKASSE_LADENGEBUEHR("stadtkasse_ladengebuehr", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {

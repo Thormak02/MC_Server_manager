@@ -51,7 +51,12 @@ class FreistadtwerteTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(-1L, 1, Freistadtwerte.VORGABE_HOECHSTZELLEN,
                         Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
-                        Freistadtwerte.VORGABE_BUERGERRECHTE));
+                        Freistadtwerte.VORGABE_BUERGERRECHTE,
+                        Freistadtwerte.VORGABE_AUFLAGE,
+                        Freistadtwerte.VORGABE_AUFLAGE, Verfallswerte.VORGABE,
+                        Freistadtwerte.VORGABE_ERSTATTUNG,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_ANLAGE,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG));
     }
 
     @Test
@@ -67,12 +72,22 @@ class FreistadtwerteTest {
                 new Freistadtwerte(Freistadtwerte.HOECHSTER_BETRAG, 1,
                         Freistadtwerte.VORGABE_HOECHSTZELLEN,
                         Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
-                        Freistadtwerte.VORGABE_BUERGERRECHTE).gruendungspreis());
+                        Freistadtwerte.VORGABE_BUERGERRECHTE,
+                        Freistadtwerte.VORGABE_AUFLAGE,
+                        Freistadtwerte.VORGABE_AUFLAGE, Verfallswerte.VORGABE,
+                        Freistadtwerte.VORGABE_ERSTATTUNG,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_ANLAGE,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG).gruendungspreis());
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(Freistadtwerte.HOECHSTER_BETRAG + 1L, 1,
                         Freistadtwerte.VORGABE_HOECHSTZELLEN,
                         Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
-                        Freistadtwerte.VORGABE_BUERGERRECHTE));
+                        Freistadtwerte.VORGABE_BUERGERRECHTE,
+                        Freistadtwerte.VORGABE_AUFLAGE,
+                        Freistadtwerte.VORGABE_AUFLAGE, Verfallswerte.VORGABE,
+                        Freistadtwerte.VORGABE_ERSTATTUNG,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_ANLAGE,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG));
     }
 
     @Test
@@ -88,17 +103,32 @@ class FreistadtwerteTest {
         assertEquals(399, new Freistadtwerte(1L, 399,
                 Freistadtwerte.VORGABE_HOECHSTZELLEN,
                         Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
-                        Freistadtwerte.VORGABE_BUERGERRECHTE).hoechstzahl());
+                        Freistadtwerte.VORGABE_BUERGERRECHTE,
+                        Freistadtwerte.VORGABE_AUFLAGE,
+                        Freistadtwerte.VORGABE_AUFLAGE, Verfallswerte.VORGABE,
+                        Freistadtwerte.VORGABE_ERSTATTUNG,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_ANLAGE,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG).hoechstzahl());
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(1L, 400,
                         Freistadtwerte.VORGABE_HOECHSTZELLEN,
                         Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
-                        Freistadtwerte.VORGABE_BUERGERRECHTE));
+                        Freistadtwerte.VORGABE_BUERGERRECHTE,
+                        Freistadtwerte.VORGABE_AUFLAGE,
+                        Freistadtwerte.VORGABE_AUFLAGE, Verfallswerte.VORGABE,
+                        Freistadtwerte.VORGABE_ERSTATTUNG,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_ANLAGE,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG));
         assertThrows(IllegalArgumentException.class,
                 () -> new Freistadtwerte(1L, -1,
                         Freistadtwerte.VORGABE_HOECHSTZELLEN,
                         Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
-                        Freistadtwerte.VORGABE_BUERGERRECHTE));
+                        Freistadtwerte.VORGABE_BUERGERRECHTE,
+                        Freistadtwerte.VORGABE_AUFLAGE,
+                        Freistadtwerte.VORGABE_AUFLAGE, Verfallswerte.VORGABE,
+                        Freistadtwerte.VORGABE_ERSTATTUNG,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_ANLAGE,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG));
     }
 
     @Test
@@ -107,7 +137,12 @@ class FreistadtwerteTest {
         Freistadtwerte eigen = new Freistadtwerte(12_345L, 7,
                 Freistadtwerte.VORGABE_HOECHSTZELLEN,
                         Freistadtwerte.VORGABE_VERKAUFSGEBUEHR,
-                        Freistadtwerte.VORGABE_BUERGERRECHTE);
+                        Freistadtwerte.VORGABE_BUERGERRECHTE,
+                        Freistadtwerte.VORGABE_AUFLAGE,
+                        Freistadtwerte.VORGABE_AUFLAGE, Verfallswerte.VORGABE,
+                        Freistadtwerte.VORGABE_ERSTATTUNG,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_ANLAGE,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG);
 
         assertEquals(7, eigen.mitGruendungspreis(1L).hoechstzahl());
         assertEquals(12_345L, eigen.mitHoechstzahl(3).gruendungspreis());

@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.sql.Statement;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -43,7 +44,7 @@ public final class MariaLager implements BesitzLager {
      */
     private static final String SPALTEN =
             "id, welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand,"
-                    + " name";
+                    + " name, kasse, regeln, besucht";
 
     /**
      * Was auf dem Raster liegt - und damit alles, was als Parzelle zaehlt.
@@ -183,10 +184,18 @@ public final class MariaLager implements BesitzLager {
         // KEIN "ON DUPLICATE KEY UPDATE": Das feuerte bei JEDEM eindeutigen Schluessel,
         // also auch beim Namen, und aenderte dann stillschweigend die fremde Zeile,
         // statt zu scheitern. Scheitern ist hier die richtige Antwort.
+        // Die Kontonummer entsteht HIER und nicht in der Datenbank, obwohl MariaDB
+        // ein UUID() hat: Der Rueckgabewert dieser Methode traegt die Stadt, wie sie
+        // JETZT ist, und mit UUID() im INSERT muesste die Zeile dafuer erst wieder
+        // gelesen werden. Derselbe Grund, aus dem erworben_am oben in Java entsteht.
+        //
+        // Schemaschritt 25 benutzt trotzdem UUID() - dort gibt es kein Java, das
+        // mitlaeuft, und niemand liest das Ergebnis zurueck.
+        UUID konto = UUID.randomUUID();
         String sql = "INSERT INTO parzellen "
                 + "(welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand,"
-                + " name) "
-                + "VALUES (?, ?, ?, ?, ?, ?, 'freistadt', NULL, 'aktiv', ?)";
+                + " name, kasse) "
+                + "VALUES (?, ?, ?, ?, ?, ?, 'freistadt', NULL, 'aktiv', ?, ?)";
         try (PreparedStatement anfrage = datenbank.verbindung()
                 .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             anfrage.setString(1, welt);
@@ -196,13 +205,22 @@ public final class MariaLager implements BesitzLager {
             anfrage.setLong(5, preis);
             anfrage.setObject(6, LocalDateTime.ofInstant(jetzt, ZoneOffset.UTC));
             anfrage.setString(7, name);
+            anfrage.setString(8, konto.toString());
             anfrage.executeUpdate();
             try (ResultSet schluessel = anfrage.getGeneratedKeys()) {
                 schluessel.next();
                 return new Parzelle(schluessel.getLong(1), welt, feldX, feldZ,
                         eigentuemer, Set.of(), preis, jetzt,
                                 Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV,
-                        name, Parzelle.KEINE_RECHTE);
+                        name, Parzelle.KEINE_RECHTE, konto,
+                        // KEINE Regeln beim Gruenden, und die Spalte steht darum nicht
+                        // im INSERT: Ihre Vorgabe ist NULL, und NULL IST hier der
+                        // richtige Anfangszustand - daran haengt die Auflage.
+                        Parzelle.KEINE_REGELN,
+                        // UND NOCH NIE BESUCHT, aus genau demselben Grund [Teil E4].
+                        // Die Frist der Verfallsregel laeuft ab erworben_am, das in
+                        // derselben Zeile steht.
+                        Parzelle.NIE_BESUCHT);
             }
         } catch (SQLIntegrityConstraintViolationException schonDa) {
             // ZWEI Schluessel koennen hier zuschlagen - das Feld und der Name -, und der
@@ -358,6 +376,116 @@ public final class MariaLager implements BesitzLager {
     }
 
     /** Die Art dieser Zeile als Schluessel - oder {@code null}, wenn es sie nicht gibt. */
+    @Override
+    public void regelnSetzen(long id, String regeln) {
+        // Leerraum wird zu NULL, und zwar HIER wie im Speicherlager: Sonst traegt die
+        // eine Fassung einen leeren Text und die andere NULL, und Parzelle.hatRegeln
+        // bekaeme auf dieselbe Frage zwei Antworten. Der gemeinsame Vertrag prueft es.
+        String text = regeln == null || regeln.isBlank() ? null : regeln;
+        // KEINE Transaktion, anders als bei den Buergerrechten: Das ist EIN UPDATE auf
+        // EINE Spalte EINER Zeile. Es gibt keinen Zwischenzustand, der sich
+        // zuruecknehmen liesse - und eine Transaktion um eine einzelne Anweisung waere
+        // eine Zusage, die nichts zusagt.
+        //
+        // Die ART steht im WHERE und wird nicht vorher gefragt: Ein zweiter Gang in die
+        // Datenbank waere ein Fenster, in dem die Zeile sich aendern kann. Was 0
+        // betroffene Zeilen bedeuten, entscheidet der Blick DANACH - und nur dann.
+        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(
+                "UPDATE parzellen SET regeln = ? WHERE id = ? AND art = 'freistadt'")) {
+            anfrage.setString(1, text);
+            anfrage.setLong(2, id);
+            if (anfrage.executeUpdate() == 0) {
+                // 0 Zeilen heisst ZWEIERLEI, und ein Aufrufer soll wissen, welches:
+                // Die Nummer gibt es nicht, oder sie gehoert keiner Stadt. Ohne diese
+                // Unterscheidung stuende in der Klage "keine Freistadt" auch dann, wenn
+                // es die Zeile gar nicht gibt - und die Suche ginge an der falschen
+                // Stelle los.
+                //
+                // Dass ein UPDATE mit demselben Wert ebenfalls 0 Zeilen meldet, ist
+                // ausgeschlossen: MariaDB zaehlt bei executeUpdate die GETROFFENEN
+                // Zeilen, nicht die geaenderten - gemessen gegen den Vertrag, der
+                // zweimal denselben Text setzt.
+                String art = artVon(datenbank.verbindung(), id);
+                if (art == null) {
+                    throw new IllegalStateException("Keine Parzelle mit der Nummer "
+                            + id);
+                }
+                throw new IllegalStateException("Nummer " + id + " ist keine Freistadt,"
+                        + " sondern " + art + " - Regeln gelten nur fuer eine Stadt");
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Setzen der Regeln", fehler);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Wortgleich zu {@link #besuchSetzen} gebaut: EIN UPDATE, die Art im WHERE, und
+     * was 0 betroffene Zeilen bedeuten, entscheidet der Blick DANACH.
+     *
+     * <p><b>Geschrieben wird der SCHLUESSEL und nicht {@code name()}</b>: In der Spalte
+     * steht {@code gekuendigt} ohne Umlaut, und {@code Zustand.schluessel()} ist die
+     * EINE Stelle, die das weiss. Ein {@code name().toLowerCase()} hier waere die
+     * zweite - und sie bliebe stehen, wenn ein Zustand einmal anders heisst als seine
+     * Spalte.
+     */
+    @Override
+    public void zustandSetzen(long id, Zustand zustand) {
+        if (zustand == null) {
+            throw new IllegalArgumentException("Ohne Zustand gibt es nichts zu setzen");
+        }
+        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(
+                "UPDATE parzellen SET zustand = ? WHERE id = ? AND art = 'freistadt'")) {
+            anfrage.setString(1, zustand.schluessel());
+            anfrage.setLong(2, id);
+            if (anfrage.executeUpdate() == 0) {
+                String art = artVon(datenbank.verbindung(), id);
+                if (art == null) {
+                    throw new IllegalStateException("Keine Parzelle mit der Nummer "
+                            + id);
+                }
+                throw new IllegalStateException("Nummer " + id + " ist keine Freistadt,"
+                        + " sondern " + art + " - deren Zustand setzt der Mietlauf");
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Setzen des Zustands", fehler);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Wortgleich zu {@link #regelnSetzen} gebaut, und das ist Absicht: EIN UPDATE auf
+     * EINE Spalte, die Art im WHERE statt in einem zweiten Gang, und was 0 betroffene
+     * Zeilen bedeuten, entscheidet der Blick DANACH.
+     *
+     * <p><b>{@code setObject} mit dem {@link LocalDate} selbst</b> und nicht
+     * {@code setDate(java.sql.Date.valueOf(...))}: Jenes rechnet in die Zone der JVM
+     * und beim Lesen wieder zurueck. Hin und zurueck heben sich die zwei Umrechnungen
+     * auf - also wird keine Probe rot, und der Tag liegt in der Datenbank doch um eins
+     * daneben. Genau dieselbe Zeile steht in {@code MariaBonus} und {@code MariaTruhe}.
+     */
+    @Override
+    public void besuchSetzen(long id, LocalDate tag) {
+        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(
+                "UPDATE parzellen SET besucht = ? WHERE id = ? AND art = 'freistadt'")) {
+            anfrage.setObject(1, tag);
+            anfrage.setLong(2, id);
+            if (anfrage.executeUpdate() == 0) {
+                String art = artVon(datenbank.verbindung(), id);
+                if (art == null) {
+                    throw new IllegalStateException("Keine Parzelle mit der Nummer "
+                            + id);
+                }
+                throw new IllegalStateException("Nummer " + id + " ist keine Freistadt,"
+                        + " sondern " + art + " - besucht wird eine Stadt");
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Setzen des Besuchstags", fehler);
+        }
+    }
+
     private String artVon(Connection c, long id) throws SQLException {
         try (PreparedStatement anfrage =
                      c.prepareStatement("SELECT art FROM parzellen WHERE id = ?")) {
@@ -694,7 +822,40 @@ public final class MariaLager implements BesitzLager {
                 // haette nichts, und jede Stadt haette nach einem Neustart keine
                 // Buergerrechte mehr - eingetragen in der Datenbank, wirkungslos im
                 // Spiel.
-                rechteVon(id));
+                rechteVon(id),
+                // Die Kontonummer, und wie beim Namen OHNE Umwandlung: getString gibt
+                // fuer SQL NULL ein echtes null, und das ist Parzelle.KEINE_KASSE.
+                //
+                // UUID.fromString WIRFT bei Unsinn, und das ist hier richtig. Eine
+                // Stadt, deren Kontonummer unlesbar ist, hat ein unerreichbares
+                // Guthaben; sie still mit einer neuen Nummer weiterlaufen zu lassen
+                // waere der schlimmere Fehler - dann liegt das Geld unter der alten
+                // und niemand sucht es.
+                //
+                // DER BESUCHSTAG kommt weiter unten, und er kommt ueber
+                // getObject(LocalDate.class) - nie ueber getDate. Jenes gibt ein
+                // java.sql.Date, das ueber die Zone der JVM reist; hin und zurueck
+                // heben sich die Umrechnungen auf, sodass keine Probe rot wird und
+                // der Tag doch um eins daneben liegen kann.
+                kasseVon(ergebnis.getString("kasse")),
+                // Der Regeltext, und wie beim Namen OHNE Umwandlung: getString gibt
+                // fuer SQL NULL ein echtes null, und das ist Parzelle.KEINE_REGELN.
+                ergebnis.getString("regeln"),
+                // Und der Besuchstag [Teil E4]. getObject mit der Klasse und nicht
+                // getDate - siehe die Begruendung oben. Fuer SQL NULL kommt ein echtes
+                // null, und das ist Parzelle.NIE_BESUCHT.
+                ergebnis.getObject("besucht", LocalDate.class));
+    }
+
+    /**
+     * Die Kontonummer aus der Spalte - oder keine.
+     *
+     * <p>Eine eigene Methode fuer drei Zeilen, weil {@code UUID.fromString(null)} mit
+     * einer NullPointerException wirft und nicht mit {@code null} antwortet. Inline
+     * waere das ein Bedingungsausdruck mitten in einem vierzehnstelligen Aufruf.
+     */
+    private static UUID kasseVon(String gelesen) {
+        return gelesen == null ? Parzelle.KEINE_KASSE : UUID.fromString(gelesen);
     }
 
     /**

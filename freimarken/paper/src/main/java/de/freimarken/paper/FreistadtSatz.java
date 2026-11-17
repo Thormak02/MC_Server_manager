@@ -291,7 +291,205 @@ enum FreistadtSatz implements Satz {
     STADTBUERGER_ZEILE("freistadt.stadtbuerger.zeile", Art.GEZAEHLT, "name", "anzahl"),
 
     /** Die Stadt hat noch keine Buerger. */
-    STADTBUERGER_LEER("freistadt.stadtbuerger.leer", Art.SATZ);
+    STADTBUERGER_LEER("freistadt.stadtbuerger.leer", Art.SATZ),
+
+    // --- Teil E1: die Stadtkasse ----------------------------------------------
+
+    /** Die Ueberschrift der Kasse - {@code stadt}, {@code stand}. */
+    KASSE_KOPF("freistadt.kasse.kopf", Art.SATZ, "stadt", "stand"),
+
+    // KEIN eigener Satz fuer eine VERLAUFSZEILE: Die baut Verlaufszeile, und zwar
+    // dieselbe wie fuer /mark verlauf. Eine Buchung soll ueberall gleich aussehen -
+    // mit einem zweiten Satz dafuer gaebe es zwei Formen derselben Zeile, und die
+    // zweite bekaeme die naechste Verbesserung nicht mit.
+
+    /**
+     * In der Kasse war noch nie etwas.
+     *
+     * <p>Diese Zeile MUSS es geben, und zwar aus demselben Grund wie bei den
+     * Stadtbuergern: Ab Werk steht {@code verkaufsgebuehr-prozent} auf 0, eine Stadt
+     * nimmt also gar nichts ein. Wer nur die Ueberschrift sieht, haelt es fuer einen
+     * Fehler - und das ist der Normalfall.
+     */
+    KASSE_LEER("freistadt.kasse.leer", Art.SATZ),
+
+    /** Abgehoben - {@code betrag}, {@code rest}. */
+    KASSE_ABGEHOBEN("freistadt.kasse.abgehoben", Art.SATZ, "betrag", "rest"),
+
+    /**
+     * So viel liegt nicht darin - {@code stand}.
+     *
+     * <p>Die Zahl kommt MIT, damit ein Spieler ausrechnen kann, was fehlt - dieselbe
+     * Entscheidung wie bei der Absage eines Grundstueckskaufs.
+     */
+    KASSE_ZU_WENIG("freistadt.kasse.zu-wenig", Art.SATZ, "stand"),
+
+    /** Die Kasse einer fremden Stadt - {@code stadt}, {@code besitzer}. */
+    KASSE_NICHT_DEINE("freistadt.kasse.nicht-deine", Art.SATZ, "stadt", "besitzer"),
+
+    // --- Teil E2: der Regeltext -----------------------------------------------
+
+    /** Die Ueberschrift der Regeln - {@code stadt}. */
+    REGELN_KOPF("freistadt.regeln.kopf", Art.SATZ, "stadt"),
+
+    /**
+     * Der Regeltext selbst - {@code text}.
+     *
+     * <p>Eine EIGENE Zeile und nicht in den Kopf hineingesetzt, und das ist hier
+     * wichtiger als sonst: Der Text ist SPIELEREINGABE. Weil die Sprache erst parst
+     * und dann ersetzt, kommt ein {@code <red>} darin zeichengleich beim Leser an -
+     * waere der Text in den Wortlaut gespleisst, waere er wirklich rot, und ein
+     * Stadtbesitzer koennte sich eine Serverdurchsage bauen.
+     */
+    REGELN_ZEILE("freistadt.regeln.zeile", Art.SATZ, "text"),
+
+    /**
+     * Diese Stadt hat noch keine Regeln - {@code stadt}.
+     *
+     * <p>Diese Zeile MUSS es geben: Ab Werk hat jede Stadt keine, und wer nur die
+     * Ueberschrift sieht, haelt es fuer einen Fehler. Sie nennt ausserdem den Befehl,
+     * denn genau hier sucht ihn ein Stadtbesitzer.
+     */
+    REGELN_LEER("freistadt.regeln.leer", Art.SATZ, "stadt"),
+
+    /** Die Regeln stehen jetzt. */
+    REGELN_GESETZT("freistadt.regeln.gesetzt", Art.SATZ),
+
+    /** Die Regeln sind weg. */
+    REGELN_GELOESCHT("freistadt.regeln.geloescht", Art.SATZ),
+
+    /** Genau dieser Text stand schon da. */
+    REGELN_SCHON_SO("freistadt.regeln.schon-so", Art.SATZ),
+
+    /** Es gab gar keine Regeln zu loeschen. */
+    REGELN_WAR_LEER("freistadt.regeln.war-leer", Art.SATZ),
+
+    /** Der Text ist zu lang - {@code groesstens}, {@code hat}. */
+    REGELN_ZU_LANG("freistadt.regeln.zu-lang", Art.SATZ, "groesstens", "hat"),
+
+    /** Die Regeln einer fremden Stadt - {@code stadt}, {@code besitzer}. */
+    REGELN_NICHT_DEINE("freistadt.regeln.nicht-deine", Art.SATZ, "stadt",
+            "besitzer"),
+
+    // --- Das Ende einer Stadt [Teil E6] ---------------------------------------
+
+    /**
+     * Die Rueckfrage beim Aufgeben - {@code stadt}, {@code erstattung}, {@code kasse},
+     * {@code zusammen}, {@code danach}.
+     *
+     * <p><b>Alle drei Zahlen</b>, und nicht nur die Summe: Ein Besitzer soll
+     * nachrechnen koennen, woher sie kommt. Mit einer einzigen Zahl haelt er die
+     * Stadtkasse fuer vergessen oder die Erstattung fuer hoeher als sie ist.
+     *
+     * <p>{@code danach} ist der Befehl zum Bestaetigen, wie bei {@code freistadt.frage}:
+     * Eine Rueckfrage ohne den Befehl, der sie beantwortet, ist eine Sackgasse.
+     */
+    AUFGABE_FRAGE("freistadt.aufgabe.frage", Art.SATZ, "stadt", "erstattung", "kasse",
+            "zusammen", "danach"),
+
+    /** Dieselbe Rueckfrage fuer das Team - mit {@code besitzer} statt der Anrede. */
+    RAEUMUNG_FRAGE("freistadt.aufgabe.raeumung-frage", Art.SATZ, "stadt", "erstattung",
+            "kasse", "zusammen", "danach"),
+
+    /**
+     * Den getippten Stadtnamen gibt es nicht - {@code name} [Teil E6].
+     *
+     * <p>Ein eigener Satz und nicht freistadt.grundstueck.keine-stadt: Jener sagt "hier
+     * steht keine Stadt" und gilt fuer einen STANDORT. Das Team tippt einen NAMEN, und
+     * "hier steht keine" waere darauf keine Antwort - es steht vielleicht meilenweit
+     * entfernt.
+     */
+    AUFGABE_NAME_UNBEKANNT("freistadt.aufgabe.name-unbekannt", Art.SATZ, "name"),
+
+    /** Die Stadt ist weg - {@code stadt}, {@code zusammen}. */
+    AUFGABE_BEENDET("freistadt.aufgabe.beendet", Art.SATZ, "stadt", "zusammen"),
+
+    /**
+     * In der Stadt gehoert noch jemand anderem ein Grundstueck - {@code stadt}.
+     *
+     * <p>Der Satz, ohne den dieser Befehl ein Diebstahl waere: Ein Stadtbuerger hat
+     * sein Grundstueck BEZAHLT. Er nennt darum auch den Ausweg - zurueckkaufen kann der
+     * Stadtbesitzer.
+     */
+    AUFGABE_NOCH_BUERGER("freistadt.aufgabe.noch-buerger", Art.SATZ, "stadt"),
+
+    /**
+     * Die Stadt ist weg, das Geld haengt - {@code stadt}, {@code zusammen}.
+     *
+     * <p>Ein eigener Satz und nicht die Stoerung: Hier ist etwas Unumkehrbares schon
+     * geschehen. Er sagt dem Spieler ausdruecklich, dass er sich an den Betreiber
+     * wenden soll - der Betrag und sein Name stehen im Protokoll.
+     */
+    AUFGABE_GELD_HAENGT("freistadt.aufgabe.geld-haengt", Art.SATZ, "stadt",
+            "zusammen"),
+
+    // --- Der Verfall [Teil E5] ------------------------------------------------
+
+    /**
+     * Die erste Warnung - {@code stadt}, {@code tage} [Plan 16].
+     *
+     * <p><b>Zwei Stufen und nicht zwei verschickte Nachrichten</b>: Welche ein Besitzer
+     * liest, entscheidet allein der Abstand zum Verfall. Die Begruendung steht bei
+     * {@code Verfallsregel} - kurz: Ein Zaehler "schon gewarnt" an der Stadtzeile waere
+     * eine zweite Wahrheit, er stuende falsch, sobald eine Nachricht verloren geht, und
+     * er machte aus einem Besuch keine Entwarnung.
+     *
+     * <p>{@code tage} statt eines Datums: Ein Datum muesste in der Zone des Servers
+     * gelesen werden, und der Spieler sitzt vielleicht in einer anderen. "Noch 42 Tage"
+     * ist in jeder Zone dasselbe.
+     */
+    VERFALL_WARNUNG_FRUEH("freistadt.verfall.warnung-frueh", Art.GEZAEHLT, "stadt",
+            "tage"),
+
+    /**
+     * Die zweite, dringendere Warnung - dieselben Werte.
+     *
+     * <p>Ein EIGENER Satz und nicht derselbe mit anderer Zahl: Wer zwei Wochen vor dem
+     * Verfall denselben Ton liest wie zwei Monate davor, liest ihn nicht mehr. Dass es
+     * zwei sind, ist der ganze Sinn von zwei Stufen.
+     */
+    VERFALL_WARNUNG_SPAET("freistadt.verfall.warnung-spaet", Art.GEZAEHLT, "stadt",
+            "tage"),
+
+    /**
+     * Die Stadt IST verfallen - {@code stadt}.
+     *
+     * <p>Gelesen beim Beitritt, und zwar so lange, bis der Besitzer sie betritt. Kein
+     * Platzhalter fuer Tage: Es gibt keine mehr.
+     *
+     * <p><b>Sagt ausdruecklich, dass nichts verloren ist</b>: Feld, Name und Guthaben
+     * bleiben, und Betreten weckt die Stadt. Ohne diesen Satz hielte ein Besitzer seine
+     * 400.000 Mark fuer verbrannt und suchte den Betreiber.
+     */
+    VERFALL_VERFALLEN("freistadt.verfall.verfallen", Art.SATZ, "stadt"),
+
+    /**
+     * Sie ist wieder aufgewacht - {@code stadt}.
+     *
+     * <p>Gesendet in dem Augenblick, in dem der Besuchsstempel den Besitzer in seiner
+     * verfallenen Stadt sieht. Ohne diese Zeile waere die Wiederbelebung unsichtbar: Er
+     * steht dort, darf ploetzlich bauen und weiss nicht, warum.
+     */
+    VERFALL_AUFGEWACHT("freistadt.verfall.aufgewacht", Art.SATZ, "stadt"),
+
+    // --- Die Auflage [Teil E3] ------------------------------------------------
+
+    /**
+     * Was einer Stadt zur Auflage fehlt - die drei Worte dazu.
+     *
+     * <p><b>Hier und nicht bei {@code ReiseSatz}</b>, wo sie bis zum 17.11.2026
+     * standen: Sie gehoeren der AUFLAGE und nicht einem ihrer beiden Riegel. Seit E3b
+     * setzt sie auch die Ladenabsage an einem Shopschild als {@code was} ein - unter
+     * {@code warp.} haette der naechste Leser sie beim falschen Befehl gesucht, und
+     * eine zweite Kopie daneben waere die zweite Wahrheit.
+     *
+     * <p>Gewaehlt werden sie an EINER Stelle, {@code Sprachschluessel.auflagenwort} -
+     * ein {@code switch} ohne {@code default}, also bricht ein vierter Grund die
+     * Uebersetzung und nicht das Spiel.
+     */
+    AUFLAGE_OHNE_REGELN("freistadt.auflage.ohne-regeln", Art.WORT),
+    AUFLAGE_OHNE_BUERGER("freistadt.auflage.ohne-buerger", Art.WORT),
+    AUFLAGE_OHNE_BEIDES("freistadt.auflage.ohne-beides", Art.WORT);
 
     /**
      * Das Wort zu einem Buergerrecht.

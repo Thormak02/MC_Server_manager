@@ -53,6 +53,7 @@ import de.freimarken.kern.SpeicherSpielzeit;
 import de.freimarken.kern.SpeicherTruhe;
 import de.freimarken.kern.Spielzeitablage;
 import de.freimarken.kern.Stadtfeldplan;
+import de.freimarken.kern.Stadtkasse;
 import de.freimarken.kern.Stadtgrenze;
 import de.freimarken.kern.Tagesgrenze;
 import de.freimarken.kern.Truhenablage;
@@ -161,6 +162,25 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Datenbank datenbank;
     private BesitzLager lager;
     private Kasse kasse;
+
+    /**
+     * Die Kasse der STAEDTE - eine zweite Kasse OHNE Startguthaben [Teil E1].
+     *
+     * <p>Zwei Kassen und nicht eine, und das ist der Kern der Sache: {@code guthaben}
+     * gibt fuer ein unbekanntes Konto das Startguthaben zurueck, und jede Buchung legt
+     * ein fehlendes Konto mit diesem Betrag an. Mit der Spielerkasse (ab Werk 50.000
+     * Mark) haette die erste Gutschrift an eine Stadt ihr 50.000 Mark geschenkt - und
+     * jede einzelne Buchung haette dabei richtig ausgesehen.
+     *
+     * <p>Mit Datenbank liegen beide Kassen auf DERSELBEN Tabelle; sie unterscheiden
+     * sich nur darin, mit welchem Betrag sie ein neues Konto anlegen. Ohne Datenbank
+     * sind es zwei getrennte Karten, und das ist kein Unterschied in der Sache: Eine
+     * Stadtkennung und eine Spielerkennung sind nie dieselbe.
+     *
+     * <p>Dass hier wirklich eine Kasse ohne Startguthaben steht, prueft
+     * {@link Stadtkasse} selbst - im Konstruktor, mit einer Frage, beim Start.
+     */
+    private Stadtkasse stadtkasse;
     private Spielzeitablage spielzeit;
 
     /**
@@ -302,6 +322,26 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * Befehl dann selbst. Dasselbe Vorgehen wie bei der Ladenwelt.
      */
     private Freistadtbuch freistadtbuch;
+
+    /**
+     * Der Besuchsstempel der Freistaedte - {@code null}, solange es kein Buch gibt.
+     *
+     * <p>Ein Feld und keine lokale Grosse, aus demselben Grund wie bei stadtwache:
+     * Gebaut wird er in richteFreistaedteEin, gebraucht erst in richteSpielzeitEin.
+     */
+    private Besuchslauf besuchslauf;
+
+    /**
+     * Die taegliche Ladengebuehr - {@code null} ohne Freistadtbuch ODER ohne Shops.
+     *
+     * <p>Gebaut in richteShopsEin, denn dort entsteht das Shopbuch - und gebraucht
+     * eine Zeile spaeter im Spielzeittakt. Zwei Bedingungen fuer EIN Feld, und darum
+     * steht die Pruefung dort und nicht hier.
+     */
+    private Ladengebuehrlauf ladengebuehrlauf;
+
+    /** Der taegliche Verfall - {@code null}, solange es kein Freistadtbuch gibt. */
+    private Verfallslauf verfallslauf;
 
     /**
      * Der Bauschutz der Freistaedte - {@code null}, solange es kein Freistadtbuch gibt.
@@ -1060,7 +1100,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // nichts zu raeumen. richteBlockbuchEin() laeuft VOR dieser Methode und hat es
         // dann gesetzt; die Reihenfolge sichert 31ai.
         spielzeitwache = new Spielzeitwache(this, buch, bonuswache, mietwache,
-                blockraeumung, truhenlauf, wirtschaft, getLogger());
+                blockraeumung, truhenlauf, besuchslauf, verfallslauf,
+                ladengebuehrlauf, wirtschaft, getLogger());
         getServer().getPluginManager().registerEvents(spielzeitwache, this);
         spielzeitwache.starte();
         // Jeder Wert, den dieser Satz verspricht, steht auch darin. Eine halbe Zusage -
@@ -1115,7 +1156,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 // wirtschaft.werte().handel().bundWort(), also das Wort beim Start - und
                 // ein Neuladen wirkte nie. Seit dem Bundesmarkt am Schild braucht das
                 // Buch den Stand ohnehin, denn die Ankauftafel gehoert dazu.
-                wirtschaft, getLogger());
+                wirtschaft,
+                // DAS LADENRECHT DER FREISTAEDTE [Plan 16, Teil E3b]. Das Feld steht
+                // hier fest: richteFreistaedteEin laeuft frueher im Start als dieser
+                // Zweig. Es DARF null sein - dann gibt es in diesem Lauf keine
+                // Freistaedte, und der Riegel laesst jeden Shop durch; gesagt hat das
+                // der Start schon mit zwei eigenen Zeilen.
+                freistadtbuch, getLogger());
         Shopwache shopwache = new Shopwache(shopbuch, shopware, sprache,
                 tat -> getServer().getScheduler().runTask(this, tat), getLogger());
         getServer().getPluginManager().registerEvents(shopwache, this);
@@ -1128,6 +1175,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 // Uhr kommt dazu, weil der Tagesdeckel des Bundesmarktes den heutigen
                 // Tag braucht.
                 wirtschaft, uhr, getLogger());
+        // DIE TAEGLICHE LADENGEBUEHR [Teil E6]. Hier und nicht in
+        // richteFreistaedteEin: Sie braucht das Shopbuch, und das entsteht erst in
+        // dieser Methode. Ohne Freistadtbuch entsteht sie gar nicht - dann gibt es
+        // keine Stadt, an die ein Laden zahlen koennte.
+        if (freistadtbuch != null) {
+            ladengebuehrlauf = new Ladengebuehrlauf(shopbuch, shopablage, freistadtbuch,
+                    weltschluessel(freistadtwelt), uhr, wirtschaft, getServer(),
+                    sprache, getLogger());
+        }
         shopklick = new Shopklick(shophandel, sprache);
         getServer().getPluginManager().registerEvents(shopklick, this);
         getLogger().info("Kistenshops aktiv: " + gefunden + " im Speicher, "
@@ -1213,6 +1269,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             fluechtig = true;
             lager = new SpeicherLager();
             kasse = new SpeicherKasse(startguthaben);
+            // Die Staedtekasse mit 0 - siehe das Feld stadtkasse.
+            stadtkasse = new Stadtkasse(new SpeicherKasse(0L));
             // Braucht keine Uhr: Der Tag kommt mit dem Zuschlag herein und bei lies() von
             // aussen. Eine Uhr hier waere eine zweite Quelle fuer die Tagesgrenze.
             spielzeit = new SpeicherSpielzeit();
@@ -1260,6 +1318,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // und abgebauten Block, und das darf keine Abfrage ueber das Netz werden.
             lager = new ZwischenspeicherLager(new MariaLager(datenbank));
             kasse = new MariaKasse(datenbank, startguthaben);
+            // DIESELBE Tabelle, nur ohne Startguthaben - siehe das Feld stadtkasse.
+            stadtkasse = new Stadtkasse(new MariaKasse(datenbank, 0L));
             // KEIN Zwischenspeicher darum: Fortschreiben ist additiv, und ein
             // zwischengespeicherter additiver Schreibzug ist entweder verloren oder
             // doppelt. Gelesen wird nur auf Befehl, also auch nichts zu sparen.
@@ -1504,7 +1564,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     new FreistadtBefehle(freistadtbuch, kasse, sprache,
                             freistadtbuch == null ? "" : weltschluessel(freistadtwelt),
                             () -> wirtschaft.werte().freistaedte().hoechstzahl(),
-                            grundstuecksbuch, absteckbuch, getLogger())
+                            // Die Zone als Abfrage, aus demselben Grund wie die
+                            // Hoechstzahl: Sie steht in zeit.zone und ist neuladbar.
+                            grundstuecksbuch, absteckbuch,
+                            () -> wirtschaft.werte().zeit().zone(), getLogger())
                             .freistadt(),
                     sprache.wort(BundSatz.BEFEHL_FREISTADT, Einsatz.keine()),
                     List.of()));
@@ -1982,8 +2045,22 @@ public final class FreimarkenPlugin extends JavaPlugin {
         Feldgrenze grenze = Feldgrenze.ausKante(stadtfelder.plan(),
                 Feldgrenze.wirksameKante(stadtfelder.plan(), angabe.kante(),
                         welt.getWorldBorder().getSize(), false));
-        freistadtbuch = new Freistadtbuch(grenze, lager, kasse, warpverzeichnis,
-                wirtschaft);
+        freistadtbuch = new Freistadtbuch(grenze, lager, kasse, stadtkasse,
+                warpverzeichnis, wirtschaft);
+        // DER BESUCHSSTEMPEL [Plan 16, Teil E4], und er entsteht HIER und nicht in
+        // richteSpielzeitEin: Dort gibt es das Freistadtbuch nicht, und ein zweites
+        // waere eine zweite Rechnung darueber, wo ein Feld liegt. Der Minutentakt
+        // entsteht spaeter (richteSpielzeitEin laeuft nach richteFreistaedteEin) und
+        // bekommt ihn als Mitfahrer.
+        besuchslauf = new Besuchslauf(freistadtbuch, uhr, wirtschaft, sprache,
+                getLogger());
+        // DER VERFALL [Plan 16, Teil E5]. Er ist Mitfahrer UND Zuhoerer: Der Lauf
+        // haengt am Minutentakt (richteSpielzeitEin, spaeter), die WARNUNG am Beitritt -
+        // und die muss dort haengen, weil ein abwesender Stadtbesitzer sonst nie
+        // erfaehrt, dass seine Stadt ablaeuft.
+        verfallslauf = new Verfallslauf(freistadtbuch, weltschluessel(freistadtwelt),
+                uhr, wirtschaft, sprache, getLogger());
+        getServer().getPluginManager().registerEvents(verfallslauf, this);
         // Das Verzeichnis der Stadtnamen fuellen, und die Zahl daraus in die
         // Startzeile: Der Vorschlagsgeber von /warp freistadt <name> liest es bei
         // jedem Tastendruck, und ein leeres Verzeichnis schluege nie etwas vor.
@@ -2019,7 +2096,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         try {
             int zellen = grundstuecksablage.fuellen(welt.key().asString());
             grundstuecksbuch = new Grundstuecksbuch(grenze, lager, grundstuecksablage,
-                    kasse, wirtschaft);
+                    kasse, stadtkasse, wirtschaft);
             freistadtbuch.gibGrundstuecke(grundstuecksablage);
             getLogger().info("Grundstuecke: " + zellen + " in "
                     + grundstuecksablage.belegteZellen() + " Zellen, hoechstens "
@@ -2032,6 +2109,19 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     + " in jeder Stadt baut wieder nur ihr Besitzer (auch dort, wo er"
                     + " Grundstuecke vergeben hat). Die Staedte selbst bleiben"
                     + " geschuetzt.", fehler);
+            // UND DIE AUFLAGE FAELLT MIT, in BEIDE Riegel [Plan 16]. Diese Zeile sagt
+            // das Freistadtbuch an zwei Stellen zu, und geschrieben war sie bis zum
+            // 17.11.2026 nicht - eine Regel, die halb wirkt und davon schweigt, sieht
+            // im Spiel aus wie eine kaputte. Eigenes severe und kein Anhaengsel an die
+            // Zeile darueber: Wer "Grundstuecke" liest, denkt an Zuschnitte und nicht
+            // an Teleporter.
+            getLogger().severe("Und damit faellt die AUFLAGE aus - in beide Richtungen"
+                    + " durchlassend: Buergerschaft ist aus den Grundstuecken"
+                    + " abgeleitet, also kann sie in diesem Lauf keine Stadt erfuellen."
+                    + " Jeder kommt per /warp freistadt in jede Stadt, und in jeder"
+                    + " Stadt entstehen neue Kistenshops. Eine Wirtschaftsregel, die"
+                    + " ausfaellt, darf nicht den Zugang kosten - aber sie soll es"
+                    + " sagen.");
             grundstuecksbuch = null;
         }
 

@@ -4,12 +4,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Shopregel;
 import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Warenprobe;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.Set;
 import net.kyori.adventure.text.Component;
@@ -164,20 +168,83 @@ class ShoptextTest {
     }
 
     @Test
-    @DisplayName("Jeder Weltbescheid bekommt seinen eigenen Satz")
+    @DisplayName("Jeder Weltbescheid bekommt seinen eigenen Satz - und KEINER fehlt")
     void jederWeltbescheidSeinenSatz() {
-        assertEquals("&cNeben dem Schild steht keine Kiste.",
-                ersteZeileVon(Shopbuch.Bescheid.KEINE_KISTE));
-        assertEquals("&cAn dieser Kiste darfst du nicht.",
-                ersteZeileVon(Shopbuch.Bescheid.FREMDE_KISTE));
-        assertEquals("&cHier haengt schon ein Shop.",
-                ersteZeileVon(Shopbuch.Bescheid.SCHON_EIN_SHOP));
-        assertEquals("&cDie Kiste sagt nicht, was du handeln willst.",
-                ersteZeileVon(Shopbuch.Bescheid.WARE_UNKLAR));
-        assertEquals("&cBundshops darfst du nicht anlegen.",
-                ersteZeileVon(Shopbuch.Bescheid.KEIN_BUNDRECHT));
-        assertEquals("&cDer Shop liess sich nicht anlegen.",
-                ersteZeileVon(Shopbuch.Bescheid.GESTOERT));
+        // SEIT DEM 17.11.2026 KEINE REINE HANDLISTE MEHR. Sie war eine: sechs
+        // Bescheide aufgezaehlt, ohne Zusage, dass es alle sind - ein neuer lief
+        // hier stumm vorbei. Der Vergleich am Ende schliesst die Luecke, und die
+        // vier Ausnahmen muessen sich einzeln rechtfertigen.
+        Map<Shopbuch.Bescheid, String> erwartet =
+                new EnumMap<>(Shopbuch.Bescheid.class);
+        erwartet.put(Shopbuch.Bescheid.KEINE_KISTE,
+                "&cNeben dem Schild steht keine Kiste.");
+        erwartet.put(Shopbuch.Bescheid.FREMDE_KISTE,
+                "&cAn dieser Kiste darfst du nicht.");
+        erwartet.put(Shopbuch.Bescheid.FREMDER_SHOP,
+                "&cAn dieser Kiste haengt schon ein fremder Shop.");
+        erwartet.put(Shopbuch.Bescheid.SCHON_EIN_SHOP,
+                "&cHier haengt schon ein Shop.");
+        erwartet.put(Shopbuch.Bescheid.WARE_UNKLAR,
+                "&cDie Kiste sagt nicht, was du handeln willst.");
+        erwartet.put(Shopbuch.Bescheid.WARE_UNBEKANNT,
+                "&cDen Gegenstand &fSTEIN&c gibt es nicht.");
+        erwartet.put(Shopbuch.Bescheid.KEIN_BUNDRECHT,
+                "&cBundshops darfst du nicht anlegen.");
+        erwartet.put(Shopbuch.Bescheid.KEIN_LADENRECHT,
+                "&cAnnastadt hat noch kein Ladenrecht");
+        erwartet.put(Shopbuch.Bescheid.LADENGEBUEHR_ZU_TEUER,
+                "&cEin Laden in dieser Stadt kostet 0 Mark - das hast du nicht.");
+        erwartet.put(Shopbuch.Bescheid.GESTOERT,
+                "&cDer Shop liess sich nicht anlegen.");
+
+        erwartet.forEach((bescheid, bild) ->
+                assertEquals(bild, ersteZeileVon(bescheid), bescheid.name()));
+
+        // DIE VIER, DIE HIER NICHT HINGEHOEREN, und jede mit ihrem Grund: ANGELEGT
+        // ist keine Absage und baut seine zwei bis vier Zeilen selbst;
+        // SCHILD_FEHLERHAFT waehlt seinen Satz ueber den FEHLER, nicht ueber den
+        // Bescheid (die Proben darueber); ABGEBAUT und KEIN_SHOP kommen vom Abbauen
+        // und werfen in shopAnlage.
+        EnumSet<Shopbuch.Bescheid> anderswo = EnumSet.of(
+                Shopbuch.Bescheid.ANGELEGT, Shopbuch.Bescheid.SCHILD_FEHLERHAFT,
+                Shopbuch.Bescheid.ABGEBAUT, Shopbuch.Bescheid.KEIN_SHOP);
+        EnumSet<Shopbuch.Bescheid> alle =
+                EnumSet.allOf(Shopbuch.Bescheid.class);
+        alle.removeAll(anderswo);
+        assertEquals(alle, EnumSet.copyOf(erwartet.keySet()),
+                "ein Weltbescheid, der hier fehlt, ist ein Satz, den niemand gelesen"
+                        + " hat - und eine Handliste merkt das nicht von selbst");
+    }
+
+    @Test
+    @DisplayName("Die Absage ohne Ladenrecht nennt die Stadt UND was ihr fehlt")
+    void ladenrechtsabsageNenntBeides() {
+        // DIE NAHTPROBE ZU DEN ZWEI NEUEN WERTEN [Teil E3b]. Shoptext.absagewerte
+        // setzt sie fuer ALLE Absagen in einem Zug - fehlt einer, wird er nicht
+        // geworfen, sondern mit sichtbaren Klammern gesendet. Die Bildtafel sieht das
+        // nie, weil sie ihren Einsatz selbst hereingibt; nur dieser Weg durch die
+        // echte anlageZeilen faengt es.
+        List<Component> zeilen = Shoptext.anlageZeilen(sprache,
+                ladenrechtsabsage(Freistadtbuch.Auflage.OHNE_BUERGER), "STEIN");
+
+        assertEquals(2, zeilen.size(), "Absage und Hilfe - wie bei jeder Shopabsage");
+        assertEquals("&cAnnastadt hat noch kein Ladenrecht", bild(zeilen.get(0)));
+        assertEquals("&7Es fehlt: ein vergebenes Grundstueck. Bestehende Laeden"
+                + " handeln weiter.", bild(zeilen.get(1)));
+    }
+
+    @Test
+    @DisplayName("Jeder Grund nennt ein ANDERES Wort - sonst traegt {was} nichts bei")
+    void jederGrundSeinWort() {
+        // Drei Gruende, drei Worte. Waeren zwei davon gleich, koennte der Satz die
+        // Angabe ebenso gut weglassen - und ein Stadtbesitzer liesse sich von ihr in
+        // die falsche Richtung schicken.
+        assertNotEqualsBild(zweiteZeileVon(Freistadtbuch.Auflage.OHNE_REGELN),
+                zweiteZeileVon(Freistadtbuch.Auflage.OHNE_BUERGER));
+        assertNotEqualsBild(zweiteZeileVon(Freistadtbuch.Auflage.OHNE_BUERGER),
+                zweiteZeileVon(Freistadtbuch.Auflage.OHNE_BEIDES));
+        assertNotEqualsBild(zweiteZeileVon(Freistadtbuch.Auflage.OHNE_REGELN),
+                zweiteZeileVon(Freistadtbuch.Auflage.OHNE_BEIDES));
     }
 
     @Test
@@ -277,7 +344,8 @@ class ShoptextTest {
 
     private List<Component> anlageZeilen(Kistenshop shop) {
         return Shoptext.anlageZeilen(sprache,
-                new Shopbuch.Anlage(Shopbuch.Bescheid.ANGELEGT, shop, null, 0),
+                new Shopbuch.Anlage(Shopbuch.Bescheid.ANGELEGT, shop, null, 0,
+                        null, null, 0L),
                 "");
     }
 
@@ -292,11 +360,27 @@ class ShoptextTest {
 
     private static Shopbuch.Anlage absage(Shopschild.Fehler fehler, int zeile) {
         return new Shopbuch.Anlage(Shopbuch.Bescheid.SCHILD_FEHLERHAFT, null, fehler,
-                zeile);
+                zeile, null, null, 0L);
     }
 
     private static Shopbuch.Anlage bescheid(Shopbuch.Bescheid bescheid) {
-        return new Shopbuch.Anlage(bescheid, null, null, 0);
+        // DIE ZWEI WERTE NUR FUER DEN EINEN BESCHEID, DER SIE HAT. Gaebe man sie
+        // jedem mit, saehe diese Probe nicht mehr, ob der richtige Satz sie abholt -
+        // ueberzaehlige Werte sind still.
+        return bescheid == Shopbuch.Bescheid.KEIN_LADENRECHT
+                ? ladenrechtsabsage(Freistadtbuch.Auflage.OHNE_REGELN)
+                : new Shopbuch.Anlage(bescheid, null, null, 0, null, null, 0L);
+    }
+
+    private static Shopbuch.Anlage ladenrechtsabsage(Freistadtbuch.Auflage auflage) {
+        return new Shopbuch.Anlage(Shopbuch.Bescheid.KEIN_LADENRECHT, null, null, 0,
+                "Annastadt", auflage, 0L);
+    }
+
+    /** Die graue Hilfszeile der Ladenabsage - dort steht das Wort zum Grund. */
+    private String zweiteZeileVon(Freistadtbuch.Auflage auflage) {
+        return bild(Shoptext.anlageZeilen(sprache, ladenrechtsabsage(auflage), "STEIN")
+                .get(1));
     }
 
     private static Kistenshop shop(UUID besitzer, int menge, long kauf, long verkauf) {

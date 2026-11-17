@@ -79,6 +79,21 @@ public class Lagerattrappe implements BesitzLager {
     }
 
     @Override
+    public void regelnSetzen(long id, String regeln) {
+        echtes.regelnSetzen(id, regeln);
+    }
+
+    @Override
+    public void besuchSetzen(long id, java.time.LocalDate tag) {
+        echtes.besuchSetzen(id, tag);
+    }
+
+    @Override
+    public void zustandSetzen(long id, Zustand zustand) {
+        echtes.zustandSetzen(id, zustand);
+    }
+
+    @Override
     public void entfernen(long id) {
         echtes.entfernen(id);
     }

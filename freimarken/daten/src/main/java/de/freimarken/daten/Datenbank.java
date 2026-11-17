@@ -905,6 +905,115 @@ public final class Datenbank implements AutoCloseable {
               CONSTRAINT fk_freistadt_recht FOREIGN KEY (stadt_id)
                 REFERENCES parzellen (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 24: die KONTONUMMER der Stadtkasse - Teil E, 16.11.2026.
+            //
+            // EINE GESPEICHERTE NUMMER UND KEINE AUS DER id GERECHNETE, und das ist der
+            // Kern der Sache: id kommt aus AUTO_INCREMENT, und AUTO_INCREMENT vergibt
+            // nach einem Neustart wieder, was ganz hinten frei geworden ist. Eine
+            // Kontonummer, die man aus der id rechnet, haette damit das Konto einer
+            // entfernten Stadt an die naechste mit derselben id weitergegeben -
+            // Guthaben und Buchungsverlauf eingeschlossen. Das ist eine Luege ueber
+            // Geld, und sie faellt erst auf, wenn jemand den Verlauf liest.
+            //
+            // CHAR(36) und nicht BINARY(16), wie ueberall in diesem Schema: Ein
+            // Betreiber, der in die Tabelle sieht, soll die Nummer lesen koennen.
+            //
+            // NULL-FAEHIG, weil 99 von 100 Zeilen keine Stadt sind - dieselbe
+            // Entscheidung wie bei name in Schritt 19, und mit derselben Folge: Was
+            // beide Richtungen angeht, prueft Parzelle im Konstruktor, nicht ein CHECK
+            // ueber zwei Spalten.
+            //
+            // KEIN eindeutiger Schluessel darauf, und das ist eine bewusste Auslassung:
+            // Die Nummer ist ein Zufallswert aus 122 Bit, zwei gleiche sind nicht zu
+            // erwarten - ein UNIQUE auf einer NULL-faehigen Spalte, in der fast nur
+            // NULL steht, kostet dagegen einen Index ueber die ganze Tabelle. Dass
+            // keine zweimal vorkommt, prueft der Vertrag der Ablage.
+            """
+            ALTER TABLE parzellen
+              ADD COLUMN IF NOT EXISTS kasse CHAR(36) NULL
+            """,
+
+            // Schritt 25: die Nummern fuer die Staedte, die es SCHON GIBT.
+            //
+            // Die zweite Ausnahme von "jeder Schritt ist DDL", nach Schritt 8, und sie
+            // ist aus demselben Grund noetig: Ohne sie traegt jede heute bestehende
+            // Freistadt NULL, und Parzelle wirft beim Lesen - der Server startete nicht
+            // mehr. Ein nachtraegliches Anlegen beim ersten Geldfluss waere die
+            // Alternative, und sie waere schlechter: ein zweiter Schreibweg mitten im
+            // Geld.
+            //
+            // UUID() ist MariaDBs eigene und damit dieselbe Form wie die aus Java -
+            // 36 Zeichen mit Bindestrichen. Welche Fassung die Nummer traegt, liest
+            // niemand aus.
+            //
+            // Das WHERE traegt den zweiten Lauf: Ein Schritt, der zweimal laeuft, darf
+            // nicht zweimal wirken, und migriere() legt um Anweisung und
+            // Standfortschreibung keine Transaktion. Mit kasse IS NULL bekommt jede
+            // Stadt genau einmal eine Nummer - auch wenn der Server zwischen der
+            // Anweisung und dem Stand ausfaellt.
+            """
+            UPDATE parzellen SET kasse = UUID()
+              WHERE art = 'freistadt' AND kasse IS NULL
+            """,
+
+            // Schritt 26: der REGELTEXT einer Freistadt - Teil E, 16.11.2026.
+            //
+            // Was Besucher in dieser Stadt beachten sollen, vom Besitzer gesetzt. Die
+            // Auflage aus Plan 16 haengt daran, und zwar MIT BEIDEN WIRKUNGEN: Erst
+            // mit Regeln UND einem vergebenen Grundstueck bekommt eine Stadt ihren
+            // Teleporter - und das Recht, dass in ihr ein neuer Kistenshop entsteht.
+            // Wer diese Spalte kuerzt, nullbar macht oder beim Aufraeumen leert, nimmt
+            // jeder betroffenen Stadt beides auf einmal.
+            //
+            // EINE SPALTE UND KEINE TABELLE, obwohl "Regelwand" nach mehreren Zeilen
+            // klingt: Gesetzt wird der Text mit einem Befehl, und ein Befehl tippt eine
+            // Zeile. Mehrere Zeilen waeren eine Tabelle, eine Reihenfolge, ein
+            // Loeschweg je Zeile und eine zweite Frage, was "hat Regeln" heisst - fuer
+            // etwas, das heute niemand eingeben kann.
+            //
+            // VARCHAR(256) und NICHT TEXT: Die Laenge steht damit in der Spalte und
+            // nicht nur im Java-Riegel, und 256 Zeichen sind im Chat schon vier Zeilen.
+            // Ein TEXT haette keine Grenze, und die erste Regelwand mit zehntausend
+            // Zeichen waere eine Chatflut, die jeder Besucher beim Betreten liest.
+            //
+            // NULL-faehig, und hier heisst NULL etwas anderes als bei der Kontonummer:
+            // NICHT "Fehler", sondern "noch keine Regeln". Das ist der Zustand jeder
+            // frisch gegruendeten Stadt - darum hat Parzelle fuer die Regeln nur EINEN
+            // Riegel und nicht zwei.
+            """
+            ALTER TABLE parzellen
+              ADD COLUMN IF NOT EXISTS regeln VARCHAR(256) NULL
+            """,
+
+            // Schritt 27: der BESUCHSTAG einer Freistadt - Teil E, 17.11.2026.
+            //
+            // Der Tag, an dem zuletzt ein Spieler in dieser Stadt stand. Daran haengt
+            // die Verfallsregel aus Plan 16: Eine Stadt, die zwoelf Monate unbesucht
+            // ist UND keinen Stadtbuerger hat, ist eine Geisterstadt und blockiert ein
+            // Feld, das jemand anderes bebauen wuerde.
+            //
+            // EIN DATE UND KEIN DATETIME, und das ist dieselbe Ausnahme von "alles
+            // UTC", die der Kopf dieser Klasse fuer spielzeit.tag und
+            // tagesbonus.letzter_tag begruendet: Gefragt ist der TAG unter zeit.zone.
+            // Ein Zeitpunkt haette eine zweite Zone, und die Frist waere je nach
+            // Leseort einen Tag laenger oder kuerzer. Geschrieben und gelesen wird mit
+            // setObject/getObject(LocalDate.class), nie mit java.sql.Date - jenes
+            // reist ueber die Zone der JVM, und valueOf und toLocalDate heben sich
+            // dabei gegenseitig auf, sodass keine Probe rot wird.
+            //
+            // NULL-faehig, und NULL heisst "noch nie besucht" - nicht "1970". Eine
+            // frisch gegruendete Stadt steht so da, und ihre Frist laeuft ab der
+            // GRUENDUNG: erworben_am steht in derselben Zeile.
+            //
+            // KEIN INDEX, anders als bei freie_truhe.tag: Gelesen wird diese Spalte
+            // vom Verfallslauf, der ohnehin alle Staedte einer Welt durchgeht
+            // (staedteIn), und vom Stempel, der die Zeile schon in der Hand hat. Ein
+            // Index waere Pflege fuer eine Suche, die es nicht gibt.
+            """
+            ALTER TABLE parzellen
+              ADD COLUMN IF NOT EXISTS besucht DATE NULL
             """);
 
     /**

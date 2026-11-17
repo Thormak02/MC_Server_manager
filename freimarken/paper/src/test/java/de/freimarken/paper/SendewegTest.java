@@ -233,6 +233,17 @@ class SendewegTest {
         for (Tat recht : Tat.values()) {
             alle.add(FreistadtSatz.rechtewort(recht).pfad());
         }
+        // ACHTE Familie seit Teil E3b: die drei Worte der Auflage, ueber
+        // Sprachschluessel.auflagenwort gewaehlt. Sie wurden eine, als der ZWEITE
+        // Riegel dazukam - bis dahin tippte WarpBefehle sie namentlich. Gedeckt sind
+        // sie in ShoptextTest, wo jeder Grund durch die echte Zeile der
+        // ausgelieferten Vorlage geht. Hier stehen sie, weil DIESE Probe die Liste
+        // der Ausnahmen fuehrt.
+        for (Freistadtbuch.Auflage auflage : Freistadtbuch.Auflage.values()) {
+            if (auflage != Freistadtbuch.Auflage.ERFUELLT) {
+                alle.add(Sprachschluessel.auflagenwort(auflage).pfad());
+            }
+        }
         // VIERTE Familie seit Plan 7.4: die Saetze der Kistenshops. Sie werden ueber
         // Sprachschluessel.shopAnlage und .schildfehler gewaehlt, nicht namentlich
         // getippt. ABGEBAUT und KEIN_SHOP fehlen, weil shopAnlage fuer sie wirft - sie

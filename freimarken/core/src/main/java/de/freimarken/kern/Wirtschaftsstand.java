@@ -249,6 +249,18 @@ public final class Wirtschaftsstand {
         nenneZahl(geaendert, Freistadtwerte.PFAD_VERKAUFSGEBUEHR,
                 alt.freistaedte().verkaufsgebuehrProzent(),
                 neu.freistaedte().verkaufsgebuehrProzent());
+        // DIE ZWEI AUFLAGENSCHALTER, nachgetragen am 17.11.2026 - aus genau dem Grund,
+        // der zwei Zeilen hoeher steht. Sie fehlten hier, und damit war ihr Neuladen
+        // voellig stumm: Wer das Ladenrecht nach einem Event wieder einschaltet und
+        // "nichts geaendert" liest, glaubt das Neuladen wirke nicht - oder die Regel
+        // sei kaputt. Ein abgeschalteter Riegel sieht im Spiel ohnehin aus wie ein
+        // kaputter; dann darf wenigstens sein Umlegen nicht verschwiegen werden.
+        nenneJaNein(geaendert, Freistadtwerte.PFAD_AUFLAGE_TELEPORTER,
+                alt.freistaedte().auflageTeleporter(),
+                neu.freistaedte().auflageTeleporter());
+        nenneJaNein(geaendert, Freistadtwerte.PFAD_AUFLAGE_LADENRECHT,
+                alt.freistaedte().auflageLadenrecht(),
+                neu.freistaedte().auflageLadenrecht());
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");
@@ -380,6 +392,20 @@ public final class Wirtschaftsstand {
     }
 
     private static void nenneZahl(List<String> hinein, String pfad, long alt, long neu) {
+        if (alt != neu) {
+            hinein.add(pfad + ": " + alt + " -> " + neu);
+        }
+    }
+
+    /**
+     * Dasselbe fuer ein Ja oder Nein - den gab es bis zum 17.11.2026 nicht.
+     *
+     * <p>Eigene Methode und kein {@code nenneZahl} mit 0 und 1: Der Betreiber hat
+     * {@code true} in die Datei geschrieben und soll {@code true} im Bericht lesen.
+     * Eine 1 waere eine Uebersetzung, die er zurueckrechnen muesste.
+     */
+    private static void nenneJaNein(List<String> hinein, String pfad, boolean alt,
+            boolean neu) {
         if (alt != neu) {
             hinein.add(pfad + ": " + alt + " -> " + neu);
         }

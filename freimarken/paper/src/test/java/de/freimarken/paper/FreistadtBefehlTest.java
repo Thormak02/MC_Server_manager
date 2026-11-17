@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -16,6 +17,7 @@ import de.freimarken.kern.SpeicherGrundstuecke;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.Stadtfeldplan;
+import de.freimarken.kern.Stadtkasse;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
@@ -55,6 +57,11 @@ class FreistadtBefehlTest {
     private Absteckbuch absteckbuch;
     private Spielerprobe anna;
 
+    /** Die Kasse der STAEDTE - ohne Startguthaben, siehe {@code vorher()}. */
+    private SpeicherKasse staedtekasse;
+
+    private Stadtkasse stadtkasse;
+
     @BeforeAll
     static void serverStellen() {
         Serverprobe.einmalSetzen();
@@ -68,6 +75,14 @@ class FreistadtBefehlTest {
         // stehen, haenge eine Probe am Erfolg der Probe vor ihr.
         Serverprobe.niemandMehrDa();
         kasse = new SpeicherKasse(1_000_000L, UHR);
+        // DIE STAEDTEKASSE EINMAL JE PROBE und nicht je probe()-Aufruf [Teil E1]:
+        // Jeder Aufruf baut Buch und Befehle neu, aber das GELD muss dazwischen
+        // liegen bleiben. Mit einer Kasse im Aufruf waere jede Kassenprobe gruen,
+        // solange sie "leer" erwartet - und blind gegen alles andere.
+        //
+        // Ohne Startguthaben, sonst wirft Stadtkasse schon im Konstruktor.
+        staedtekasse = new SpeicherKasse(0L, UHR);
+        stadtkasse = new Stadtkasse(staedtekasse);
         lager = new SpeicherLager();
         grundstuecke = new SpeicherGrundstuecke();
         absteckbuch = new Absteckbuch();
@@ -75,7 +90,8 @@ class FreistadtBefehlTest {
                 FreistadtBefehle.RECHT, FreistadtBefehle.RECHT_GRUENDEN,
                 FreistadtBefehle.RECHT_GRUNDSTUECK,
                 FreistadtBefehle.RECHT_KAUFEN,
-                FreistadtBefehle.RECHT_RECHTE)
+                FreistadtBefehle.RECHT_RECHTE,
+                FreistadtBefehle.RECHT_KASSE)
                 .inWelt(Serverprobe.welt(WELT));
     }
 
@@ -85,6 +101,7 @@ class FreistadtBefehlTest {
 
     private Befehlsprobe probe(Wirtschaftsstand stand, String weltschluessel) {
         Freistadtbuch buch = new Freistadtbuch(Feldgrenze.freistaedte(), lager, kasse,
+                stadtkasse,
                 Warpverzeichnis.ausWelten(List.of("kornmark", "freistaedte")), stand);
         // Das Grundstuecksbuch und die Absteckung kommen mit [Teil C2]. Beide hier
         // aus derselben Geometrie wie das Freistadtbuch - zwei waeren zwei Rechnungen
@@ -92,8 +109,9 @@ class FreistadtBefehlTest {
         var befehle = new FreistadtBefehle(buch, kasse, Sprachprobe.spracheAusDemJar(),
                 weltschluessel, () -> stand.werte().freistaedte().hoechstzahl(),
                 new Grundstuecksbuch(Feldgrenze.freistaedte(), lager, grundstuecke,
-                        kasse, stand),
-                absteckbuch, Logger.getLogger("FreistadtBefehlTest"));
+                        kasse, stadtkasse, stand),
+                absteckbuch, () -> java.time.ZoneId.of("Europe/Berlin"),
+                Logger.getLogger("FreistadtBefehlTest"));
         return new Befehlsprobe(List.of(befehle.freistadt()));
     }
 
@@ -179,11 +197,22 @@ class FreistadtBefehlTest {
     void mitBestaetigenEntstehtDieStadt() throws CommandSyntaxException {
         probe().tippe("freistadt gruenden neustadt bestaetigen", anna);
 
-        // ZWEI Zeilen: die Meldung und der Warp. Ohne die zweite stuende der
-        // frischgebackene Besitzer vor seiner Stadt und wuesste nicht, wie er hineinkommt.
-        assertEquals(2, gelesen().size(), gelesen().toString());
+        // DREI Zeilen seit Teil E3: die Meldung, der Warp und der Hinweis auf die
+        // Auflage. Ohne die zweite stuende der frischgebackene Besitzer vor seiner
+        // Stadt und wuesste nicht, wie er hineinkommt; ohne die dritte wartet er auf
+        // Besucher, die abgewiesen werden, und sucht den Fehler im Programm.
+        assertEquals(3, gelesen().size(), gelesen().toString());
         assertTrue(gelesen().get(0).contains("neustadt"), gelesen().get(0));
         assertTrue(gelesen().get(1).contains("/warp freistadt neustadt"), gelesen().get(1));
+        // BEIDE WIRKUNGEN, seit Teil E3b: Die dritte Zeile nennt den Teleporter UND
+        // das Ladenrecht. Stuende dort nur eine, baute die Gruenderin ihren ersten
+        // Shop und suchte den Fehler im Programm.
+        assertTrue(gelesen().get(2).contains("kommen keine Fremden"),
+                gelesen().get(2));
+        assertTrue(gelesen().get(2).contains("keine Laeden"),
+                "und die ZUSAGE bleibt dabei wahr: Der Besitzer darf immer hinein -"
+                        + " nur Fremde brauchen die erfuellte Auflage: "
+                        + gelesen().get(2));
 
         assertEquals(1, lager.staedteIn(WELT).size());
         assertEquals(1_000_000L - PREIS, kasse.guthaben(anna.kennung()));
@@ -513,9 +542,15 @@ class FreistadtBefehlTest {
      * die Probe prueefte den Platzhalter statt der Zusage.
      */
     private Spielerprobe bert() {
+        // RECHT_KASSE AUCH FUER BERT, und das ist die Lehre aus Teil D: Das Recht
+        // steht in der plugin.yml auf default: true, im Spiel hat es also jeder. Ohne
+        // es hier pruefte die Probe "aus fremder Kasse nehmen" das RECHTEGATTER statt
+        // der Besitzfrage - und sie waere gruen, auch wenn jeder aus jeder Kasse
+        // nehmen duerfte.
         Spielerprobe bert = new Spielerprobe("Bert", Spielerprobe.kennungAus(2),
                 FreistadtBefehle.RECHT, FreistadtBefehle.RECHT_GRUNDSTUECK,
-                FreistadtBefehle.RECHT_KAUFEN, FreistadtBefehle.RECHT_RECHTE)
+                FreistadtBefehle.RECHT_KAUFEN, FreistadtBefehle.RECHT_RECHTE,
+                FreistadtBefehle.RECHT_KASSE)
                 .inWelt(Serverprobe.welt(WELT));
         Serverprobe.anmelden(bert, "Bert");
         Serverprobe.anmelden(anna, "Anna");
@@ -1081,6 +1116,270 @@ class FreistadtBefehlTest {
         assertTrue(zeilen.get(2).contains("2 Grundstuecke"),
                 "die MEHRZAHLform - sie steht als zweite Zeile in der Vorlage, und"
                         + " ohne diese Probe waere sie ungelesen: " + zeilen.get(2));
+    }
+
+
+    // ================================================== Teil E1: die Stadtkasse
+
+    @Test
+    @DisplayName("Eine frische Kasse ist LEER - und sagt es")
+    void frischeKasseIstLeer() throws CommandSyntaxException {
+        // DER NORMALFALL und nicht die Ausnahme: Ab Werk steht
+        // freistaedte.verkaufsgebuehr-prozent auf 0, eine Stadt nimmt also nie etwas
+        // ein. Wer nur die Ueberschrift saehe, haelt das fuer einen Fehler.
+        annastadtMitEinemGrundstueck();
+        anna.vergessen();
+
+        probe().tippe("freistadt kasse", anna);
+
+        List<String> zeilen = gelesen();
+        assertEquals(2, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(0).contains("Die Kasse von annastadt"), zeilen.get(0));
+        assertTrue(zeilen.get(1).contains("noch nichts eingenommen"),
+                "der leere Fall MUSS einen Satz haben: " + zeilen.get(1));
+    }
+
+    @Test
+    @DisplayName("Die Marktgebuehr landet in der Kasse - und steht in ihrem Verlauf")
+    void gebuehrLandetInDerKasse() throws CommandSyntaxException {
+        // DIE GANZE STRECKE VON TEIL E1 IN EINER PROBE, durch die echten Befehle: Anna
+        // schneidet zu und bietet an, Bert kauft, und die Gebuehr erscheint im Verlauf
+        // der STADT. Was dazwischen liegt - Konto, Kontonummer, Buchungsgrund, die
+        // Umleitung im Grundstuecksbuch -, ist von hier aus nicht zu sehen, und genau
+        // darum ist diese Probe die, die den Nutzen prueft.
+        Wirtschaftsstand mitFuenf = mitGebuehr(5);
+        Parzelle stadt = annastadtMitEinemGrundstueck();
+        Spielerprobe bert = bert();
+        stellDich(bert, stadt, 0, 0);
+        probe(mitFuenf, WELT).tippe("freistadt grundstueck anbieten " + ANGEBOTSPREIS,
+                anna);
+        probe(mitFuenf, WELT).tippe("freistadt grundstueck kaufen", bert);
+        stellDich(anna, stadt, 0, 0);
+        anna.vergessen();
+
+        probe(mitFuenf, WELT).tippe("freistadt kasse", anna);
+
+        List<String> zeilen = gelesen();
+        assertTrue(zeilen.size() >= 2, "Kopf und mindestens eine Buchung: " + zeilen);
+        assertFalse(zeilen.get(0).contains("- 0 Mark"),
+                "die Kasse ist NICHT leer: " + zeilen.get(0));
+        assertTrue(zeilen.stream().anyMatch(z -> z.contains("Marktgebuehr einer Stadt")),
+                "und die Gebuehr steht mit ihrem EIGENEN Wort im Verlauf der Stadt -"
+                        + " nicht mit dem des Verkaeufers, denn hier ist sie eine"
+                        + " Einnahme: " + zeilen);
+    }
+
+    @Test
+    @DisplayName("Abheben: das Geld wechselt vom Stadtkonto auf das eigene")
+    void abhebenBewegtGeld() throws CommandSyntaxException {
+        Wirtschaftsstand mitFuenf = mitGebuehr(5);
+        Parzelle stadt = annastadtMitEinemGrundstueck();
+        Spielerprobe bert = bert();
+        stellDich(bert, stadt, 0, 0);
+        probe(mitFuenf, WELT).tippe("freistadt grundstueck anbieten " + ANGEBOTSPREIS,
+                anna);
+        probe(mitFuenf, WELT).tippe("freistadt grundstueck kaufen", bert);
+        stellDich(anna, stadt, 0, 0);
+        long annaVorher = kasse.guthaben(anna.kennung());
+        anna.vergessen();
+
+        // DIE GEBUEHR GERECHNET und nicht geraten: 5 Prozent von ANGEBOTSPREIS, mit
+        // derselben Rechnung wie das Programm. Eine feste Zahl hier waere bei jeder
+        // Preisaenderung rot, ohne dass an der Kasse etwas falsch waere.
+        long inDerKasse = de.freimarken.kern.Shopregel.gebuehrAuf(ANGEBOTSPREIS, 5);
+
+        probe(mitFuenf, WELT).tippe("freistadt kasse abheben " + inDerKasse, anna);
+
+        List<String> zeilen = gelesen();
+        assertEquals(1, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(0).contains("aus der Stadtkasse genommen"), zeilen.get(0));
+        assertEquals(annaVorher + inDerKasse, kasse.guthaben(anna.kennung()),
+                "und das Geld ist WIRKLICH bei ihr - der Satz allein waere eine Zusage"
+                        + " ohne Buchung");
+        assertEquals(0L, staedtekasse.guthaben(stadt.kasse()),
+                "und die Kasse ist LEER - geprueft an der Kontonummer aus der"
+                        + " Stadtzeile, also an der Stelle, an der das Geld wirklich"
+                        + " liegt");
+    }
+
+    @Test
+    @DisplayName("Mehr abheben als drin liegt: Absage mit der ZAHL")
+    void abhebenZuViel() throws CommandSyntaxException {
+        annastadtMitEinemGrundstueck();
+        anna.vergessen();
+
+        probe().tippe("freistadt kasse abheben 1000", anna);
+
+        List<String> zeilen = gelesen();
+        assertEquals(1, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(0).contains("So viel liegt nicht in der Kasse"),
+                zeilen.get(0));
+        assertTrue(zeilen.get(0).contains("0 Mark"),
+                "die ZAHL kommt mit, damit man ausrechnen kann, was fehlt: "
+                        + zeilen.get(0));
+    }
+
+    @Test
+    @DisplayName("Aus einer FREMDEN Kasse nimmt niemand - lesen darf er aber")
+    void fremdeKasseNurLesen() throws CommandSyntaxException {
+        // DIE ZWEI SEITEN DERSELBEN STADT, und sie sind der Grund, warum das Ansehen an
+        // keinem Recht haengt: Was eine Freistadt einnimmt, ist dort keine Privatsache -
+        // ein Buerger, der eine Marktgebuehr gezahlt hat, soll sehen, wo sie geblieben
+        // ist. Nehmen darf er nichts.
+        Parzelle stadt = annastadtMitEinemGrundstueck();
+        Spielerprobe bert = bert();
+        stellDich(bert, stadt, 0, 0);
+        bert.vergessen();
+
+        probe().tippe("freistadt kasse", bert);
+        assertTrue(bert.chatBild().get(0).contains("Die Kasse von annastadt"),
+                "LESEN darf er: " + bert.chatBild());
+
+        bert.vergessen();
+        probe().tippe("freistadt kasse abheben 1", bert);
+
+        List<String> zeilen = bert.chatBild();
+        assertEquals(1, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(0).contains("gehoert"),
+                "und der Satz nennt, WEM sie gehoert - ein Spieler soll nicht raten"
+                        + " muessen, wen er fragen kann: " + zeilen.get(0));
+    }
+
+    @Test
+    @DisplayName("Ausserhalb jeder Stadt gibt es keine Kasse")
+    void ohneStadtKeineKasse() throws CommandSyntaxException {
+        // AUF DEM ANKUNFTSFELD 0/0, und der Ort muss gesetzt sein: Eine
+        // Spielerprobe ohne anOrt() hat keinen, und getLocation wirft dann - die
+        // Probe sah GESTOERT und pruefte damit den Fangzweig statt dieser Lage.
+        anna.anOrt(new org.bukkit.Location(Serverprobe.welt(WELT), 3, 64, 3));
+        anna.vergessen();
+
+        probe().tippe("freistadt kasse", anna);
+
+        List<String> zeilen = gelesen();
+        assertEquals(2, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(0).contains("steht keine Stadt"),
+                "der vorhandene Satz des Grundstueckszweigs und kein zweiter fuer"
+                        + " dieselbe Lage: " + zeilen.get(0));
+    }
+
+    @Test
+    @DisplayName("abheben OHNE Zahl zeigt die Kasse - und keine englische Meldung")
+    void abhebenOhneZahlZeigtDieKasse() throws CommandSyntaxException {
+        // DIE LEHRE AUS TEIL C3: Ein Literal ohne eigenes .executes faellt in Brigadiers
+        // englische Fehlermeldung. Und es zeigt die KASSE und nicht einen Hinweis - wer
+        // abheben will, braucht als erstes die Zahl, die darin liegt.
+        annastadtMitEinemGrundstueck();
+        anna.vergessen();
+
+        probe().tippe("freistadt kasse abheben", anna);
+
+        List<String> zeilen = gelesen();
+        assertTrue(zeilen.get(0).contains("Die Kasse von annastadt"),
+                "deutscher Satz und nicht Brigadiers Meldung: " + zeilen);
+    }
+
+
+    // ================================================== Teil E2: der Regeltext
+
+    @Test
+    @DisplayName("Eine frische Stadt hat KEINE Regeln - und sagt, wie man sie setzt")
+    void frischeStadtOhneRegeln() throws CommandSyntaxException {
+        annastadtMitAnnaDarin();
+        anna.vergessen();
+
+        probe().tippe("freistadt regeln", anna);
+
+        List<String> zeilen = gelesen();
+        assertEquals(2, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(0).contains("Die Regeln von annastadt"), zeilen.get(0));
+        assertTrue(zeilen.get(1).contains("noch keine Regeln"), zeilen.get(1));
+        assertTrue(zeilen.get(1).contains("/freistadt regeln"),
+                "und der Satz nennt den Befehl - genau hier sucht ihn ein"
+                        + " Stadtbesitzer: " + zeilen.get(1));
+    }
+
+    @Test
+    @DisplayName("Regeln setzen, lesen, loeschen - durch die echten Befehle")
+    void regelnSetzenUndLesen() throws CommandSyntaxException {
+        annastadtMitAnnaDarin();
+
+        probe().tippe("freistadt regeln Kein PvP und keine Fallen", anna);
+        anna.vergessen();
+        probe().tippe("freistadt regeln", anna);
+
+        List<String> zeilen = gelesen();
+        assertEquals(2, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(1).contains("Kein PvP und keine Fallen"),
+                "der GANZE Rest der Zeile ist der Text - ein Argument, das beim ersten"
+                        + " Leerzeichen endet, haette hier nur 'Kein' gespeichert: "
+                        + zeilen.get(1));
+
+        anna.vergessen();
+        probe().tippe("freistadt regeln loeschen", anna);
+        assertTrue(gelesen().get(0).contains("sind weg"), gelesen().toString());
+    }
+
+    @Test
+    @DisplayName("Ein Tag im Regeltext bleibt TEXT - keine Serverdurchsage")
+    void tagImRegeltextBleibtText() throws CommandSyntaxException {
+        // DIE SICHERHEITSZUSAGE DIESES ZWEIGES, und sie ist die einzige Stelle, an der
+        // Spielereingabe in einen Satz kommt: Die Sprache parst erst und ersetzt dann,
+        // also wird der eingesetzte Wert von keinem MiniMessage-Lauf mehr angesehen.
+        //
+        // Wuerde der Text in den Wortlaut gespleisst, waere er wirklich rot - und mit
+        // einem click-Tag koennte ein Stadtbesitzer Besuchern einen Befehl unterschieben.
+        // Dass click im Tagvorrat ohnehin fehlt, ist der zweite Riegel; dieser hier
+        // prueft den ersten.
+        annastadtMitAnnaDarin();
+
+        probe().tippe("freistadt regeln <red>ACHTUNG</red> lies das", anna);
+        anna.vergessen();
+        probe().tippe("freistadt regeln", anna);
+
+        List<String> zeilen = gelesen();
+        assertTrue(zeilen.get(1).contains("<red>ACHTUNG</red>"),
+                "das Tag steht ZEICHENGLEICH da und ist keine Farbe geworden: "
+                        + zeilen.get(1));
+    }
+
+    @Test
+    @DisplayName("Aus einer FREMDEN Stadt setzt niemand Regeln - lesen darf er")
+    void fremdeRegelnNurLesen() throws CommandSyntaxException {
+        Parzelle stadt = annastadtMitAnnaDarin();
+        probe().tippe("freistadt regeln Kein PvP", anna);
+        Spielerprobe bert = bert();
+        stellDich(bert, stadt, 0, 0);
+        bert.vergessen();
+
+        probe().tippe("freistadt regeln", bert);
+        assertTrue(bert.chatBild().get(1).contains("Kein PvP"),
+                "LESEN darf er - das ist der ganze Zweck der Regeln: "
+                        + bert.chatBild());
+
+        bert.vergessen();
+        probe().tippe("freistadt regeln Meine Regel", bert);
+
+        List<String> zeilen = bert.chatBild();
+        assertEquals(1, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(0).contains("setzt"), zeilen.get(0));
+    }
+
+    @Test
+    @DisplayName("Ein zu langer Regeltext: Absage mit BEIDEN Zahlen")
+    void zuLangerRegeltext() throws CommandSyntaxException {
+        annastadtMitAnnaDarin();
+        anna.vergessen();
+
+        probe().tippe("freistadt regeln "
+                + "x".repeat(Parzelle.REGELN_GROESSTENS + 1), anna);
+
+        List<String> zeilen = gelesen();
+        assertEquals(1, zeilen.size(), zeilen.toString());
+        assertTrue(zeilen.get(0).contains("256"), zeilen.get(0));
+        assertTrue(zeilen.get(0).contains("257"),
+                "BEIDE Zahlen - sonst weiss niemand, wie viel zu kuerzen ist: "
+                        + zeilen.get(0));
     }
 
 }

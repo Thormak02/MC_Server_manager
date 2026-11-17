@@ -98,6 +98,33 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_LADEN_ERSTATTET("mark.verlauf.grund.laden-erstattet", Art.WORT),
 
     /**
+     * DIE DREI WOERTER DER STADTKASSE [Teil E1].
+     *
+     * <p>Drei und nicht eines, weil drei verschiedene Bewegungen laufen - und zwei von
+     * ihnen sind DIESELBE Bewegung auf zwei Konten: Was der Stadtbesitzer abhebt, ist
+     * auf dem Stadtkonto eine Ausgabe und auf seinem eine Einnahme. Mit einem Wort
+     * fuer beide stuende in einem der zwei Verlaeufe das Falsche.
+     *
+     * <p>Dieselbe Bauart wie beim Handel an Kistenshops, wo drei Zeilen fuer einen
+     * Handel stehen - und mit derselben Begruendung.
+     */
+    VERLAUF_GRUND_STADTKASSE_GEBUEHR("mark.verlauf.grund.stadtkasse-gebuehr",
+            Art.WORT),
+    VERLAUF_GRUND_FREISTADT_AUFGEGEBEN("mark.verlauf.grund.freistadt-aufgegeben",
+            Art.WORT),
+    VERLAUF_GRUND_FREISTADT_LADENGEBUEHR("mark.verlauf.grund.freistadt-ladengebuehr",
+            Art.WORT),
+    VERLAUF_GRUND_STADTKASSE_LADENGEBUEHR("mark.verlauf.grund.stadtkasse-ladengebuehr",
+            Art.WORT),
+    VERLAUF_GRUND_STADTKASSE_ABGEHOBEN("mark.verlauf.grund.stadtkasse-abgehoben",
+            Art.WORT),
+    VERLAUF_GRUND_STADTKASSE_AUSGEZAHLT("mark.verlauf.grund.stadtkasse-ausgezahlt",
+            Art.WORT),
+
+    VERLAUF_GRUND_STADTKASSE_ZURUECK("mark.verlauf.grund.stadtkasse-zurueck",
+            Art.WORT),
+
+    /**
      * Das Wort fuer {@code Buchungsgrund.LADEN_MIETE} [Teil C].
      *
      * <p>Der einzige WIEDERKEHRENDE Grund dieses Bereichs: Er steht einmal je Tag und

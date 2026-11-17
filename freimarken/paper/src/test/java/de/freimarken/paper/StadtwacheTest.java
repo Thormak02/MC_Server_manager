@@ -12,6 +12,7 @@ import de.freimarken.kern.SpeicherGrundstuecke;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.Stadtfeldplan;
+import de.freimarken.kern.Stadtkasse;
 import de.freimarken.kern.Tat;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
@@ -88,7 +89,7 @@ class StadtwacheTest {
         Serverprobe.keineWeltenMehr();
         lager = new SpeicherLager();
         buch = new Freistadtbuch(Feldgrenze.freistaedte(), lager,
-                new SpeicherKasse(10_000_000L),
+                new SpeicherKasse(10_000_000L), new Stadtkasse(new SpeicherKasse(0L)),
                 Warpverzeichnis.ausWelten(List.of("freistaedte")),
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
         protokollzeilen.clear();
@@ -234,7 +235,7 @@ class StadtwacheTest {
     void stummeAblageHeisstNein() {
         Stadtwache wache = new Stadtwache(
                 new Freistadtbuch(Feldgrenze.freistaedte(), new Lagerattrappe.Stumm(),
-                        new SpeicherKasse(0L),
+                        new SpeicherKasse(0L), new Stadtkasse(new SpeicherKasse(0L)),
                         Warpverzeichnis.ausWelten(List.of("freistaedte")),
                         new Wirtschaftsstand(Wirtschaftswerte.VORGABE)),
                 FREISTAEDTE, Sprachprobe.spracheAusDemJar(), protokoll);

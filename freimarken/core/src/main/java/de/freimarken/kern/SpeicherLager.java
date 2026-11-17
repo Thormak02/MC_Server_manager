@@ -102,10 +102,25 @@ public final class SpeicherLager implements BesitzLager {
         // ab Werk bekommt, entscheidet freistaedte.buergerrechte in der config.yml - und
         // zwar im Freistadtbuch, das die Einstellung lesen kann. Ein Vorgabewert HIER
         // waere eine zweite Quelle fuer dieselbe Frage.
+        //
+        // DIE KONTONUMMER DAGEGEN VERGIBT DAS LAGER [Teil E1], und zwar aus demselben
+        // Grund, aus dem es die id vergibt: Sie ist eine Kennung und keine Regel. Wer
+        // sie im Buch vergeben liesse, haette sie in jeder Umsetzung neu zu vergeben -
+        // und die dritte waere die, die es vergisst.
+        //
+        // Zufaellig und nicht aus der id gerechnet: Die id kommt aus AUTO_INCREMENT und
+        // wird wieder vergeben; eine abgeleitete Nummer gaebe das Konto samt Verlauf an
+        // die naechste Stadt mit derselben Nummer weiter.
         Parzelle neu = new Parzelle(naechsteId.getAndIncrement(), welt, feldX, feldZ,
                 eigentuemer, Set.of(), preis, uhr.instant(),
                 Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV, name,
-                Parzelle.KEINE_RECHTE);
+                Parzelle.KEINE_RECHTE, UUID.randomUUID(),
+                // KEINE Regeln beim Gruenden - das ist der Anfangszustand, an dem die
+                // Auflage aus Plan 16 haengt [Teil E2].
+                Parzelle.KEINE_REGELN,
+                // UND NOCH NIE BESUCHT [Teil E4]. Die Frist der Verfallsregel laeuft
+                // damit ab der GRUENDUNG und nicht ab 1970 - siehe Parzelle.NIE_BESUCHT.
+                Parzelle.NIE_BESUCHT);
         nachOrt.put(schluessel, neu);
         orteNachId.put(neu.id(), schluessel);
         return neu;
@@ -172,6 +187,58 @@ public final class SpeicherLager implements BesitzLager {
         }
         // Der Wandler und kein Nachbau - die Begruendung steht an mitMitbauern.
         nachOrt.put(schluessel, alt.mitBuergerrechten(rechte));
+    }
+
+    @Override
+    public synchronized void regelnSetzen(long id, String regeln) {
+        String schluessel = orteNachId.get(id);
+        if (schluessel == null) {
+            throw new IllegalStateException("Keine Parzelle mit der Nummer " + id);
+        }
+        Parzelle alt = nachOrt.get(schluessel);
+        if (!alt.istFreistadt()) {
+            throw new IllegalStateException("Nummer " + id + " ist keine Freistadt,"
+                    + " sondern " + alt.art().schluessel() + " - Regeln gelten nur"
+                    + " fuer eine Stadt");
+        }
+        // Leerraum wird zu KEINE_REGELN, und das an EINER Stelle: Sonst traegt die
+        // Speicherfassung einen leeren Text, die Datenbank ein NULL, und
+        // Parzelle.hatRegeln bekaeme zwei verschiedene Antworten auf dieselbe Frage.
+        nachOrt.put(schluessel, alt.mitRegeln(
+                regeln == null || regeln.isBlank() ? Parzelle.KEINE_REGELN : regeln));
+    }
+
+    @Override
+    public synchronized void besuchSetzen(long id, java.time.LocalDate tag) {
+        String schluessel = orteNachId.get(id);
+        if (schluessel == null) {
+            throw new IllegalStateException("Keine Parzelle mit der Nummer " + id);
+        }
+        Parzelle alt = nachOrt.get(schluessel);
+        if (!alt.istFreistadt()) {
+            throw new IllegalStateException("Nummer " + id + " ist keine Freistadt,"
+                    + " sondern " + alt.art().schluessel() + " - besucht wird eine"
+                    + " Stadt");
+        }
+        nachOrt.put(schluessel, alt.mitBesuch(tag));
+    }
+
+    @Override
+    public synchronized void zustandSetzen(long id, Zustand zustand) {
+        if (zustand == null) {
+            throw new IllegalArgumentException("Ohne Zustand gibt es nichts zu setzen");
+        }
+        String schluessel = orteNachId.get(id);
+        if (schluessel == null) {
+            throw new IllegalStateException("Keine Parzelle mit der Nummer " + id);
+        }
+        Parzelle alt = nachOrt.get(schluessel);
+        if (!alt.istFreistadt()) {
+            throw new IllegalStateException("Nummer " + id + " ist keine Freistadt,"
+                    + " sondern " + alt.art().schluessel() + " - deren Zustand setzt"
+                    + " der Mietlauf");
+        }
+        nachOrt.put(schluessel, alt.mitZustand(zustand));
     }
 
     @Override

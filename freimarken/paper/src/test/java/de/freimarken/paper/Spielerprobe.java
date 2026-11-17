@@ -279,6 +279,24 @@ final class Spielerprobe {
                 new Class<?>[] {Player.class},
                 (eigen, methode, werte) -> switch (methode.getName()) {
                     case "getUniqueId" -> kennung;
+                    // DREI ANTWORTEN FUER EINE REISE [Teil E3]: Reise.pruefe und
+                    // Reise.springe fragen danach, und bis Teil E hat keine Probe
+                    // diesen Weg je durchlaufen - alle pruefen eine ABSAGE.
+                    //
+                    // Ein Probenspieler sitzt auf nichts und hat niemanden an der
+                    // Leine; beides als festes null bzw. leere Liste und nicht
+                    // einstellbar, denn keine Probe braucht heute das Gegenteil. Wer
+                    // es braucht, gibt es dann mit - so wie der Ort.
+                    case "getVehicle" -> null;
+                    case "getNearbyEntities" -> java.util.List.of();
+                    // Der Teleport GILT und wird mitgeschrieben: Der Ort wandert
+                    // wirklich, damit eine Probe nachsehen kann, WO der Spieler danach
+                    // steht. Ein stilles true waere eine Reise, die nichts bewegt.
+                    case "teleportAsync" -> {
+                        anOrt((org.bukkit.Location) werte[0]);
+                        yield java.util.concurrent.CompletableFuture
+                                .completedFuture(Boolean.TRUE);
+                    }
                     case "getWorld" -> welt();
                     case "getLocation" -> ortOderKlage();
                     case "getGameMode" -> modus;

@@ -16,8 +16,11 @@ import org.junit.jupiter.api.Test;
 /**
  * Der Leser der VORGABE-BUERGERRECHTE aus dem Abschnitt {@code freistaedte:}.
  *
- * <p><b>Diese Datei beginnt bei Teil D</b> [12.11.2026], und sie prueft genau EINE Zeile
- * der Konfiguration: {@code freistaedte.buergerrechte}. Die vier Zahlen daneben -
+ * <p><b>Diese Datei beginnt bei Teil D</b> [12.11.2026] und prueft seit Teil E3 DREI
+ * Zeilen der Konfiguration: {@code freistaedte.buergerrechte} und die zwei
+ * Auflagenschalter. Die zwei kamen dazu, weil sie als benachbarte {@code boolean} in
+ * den Satz {@code Freistadtwerte} gehen und ab Werk GLEICH sind - ein Tausch waere ohne
+ * eine Probe mit zwei verschiedenen Werten unsichtbar. Die vier Zahlen daneben -
  * Gruendungspreis, Hoechstzahl, Hoechstzellen, Verkaufsgebuehr - sind von keiner Probe
  * dieses Projekts gedeckt; sie gehen durch {@code Wirtschaftsliste.ganzeZahl}, das seine
  * eigene hat. Dass dieser Leser hier eine bekommt, hat einen Grund: Er ist der erste des
@@ -28,7 +31,7 @@ import org.junit.jupiter.api.Test;
  * <p>Ohne Server, wie jeder Listenleser dieses Projekts: {@code YamlConfiguration} aus
  * einer Zeichenkette, und der Leser bekommt sie wie beim Start.
  */
-@DisplayName("Buergerrechte aus der config.yml")
+@DisplayName("Der Abschnitt freistaedte: aus der config.yml")
 class FreistadtlisteTest {
 
     private static Freistadtliste.Ergebnis lies(String yaml) {
@@ -159,4 +162,87 @@ class FreistadtlisteTest {
                         + " entscheidet");
         assertEquals(Set.of(), Freistadtwerte.VORGABE.buergerrechte());
     }
+
+    // --- Die zwei Auflagenschalter [Teil E3] ----------------------------------
+
+    @Test
+    @DisplayName("Die zwei Auflagenschalter werden nicht vertauscht")
+    void dieZweiSchalterKommenNichtVertauschtAn() {
+        // DER UNTERSCHIED IST DAS GEPRUEFTE: Die beiden Schalter stehen als
+        // benachbarte booleans im Satz Freistadtwerte, und ab Werk sind beide true.
+        // Eine Probe mit zwei gleichen Werten waere gruen, egal in welcher Reihenfolge
+        // dieser Leser sie hereingibt - also setzt diese Probe sie VERSCHIEDEN.
+        var ergebnis = lies("""
+                freistaedte:
+                  auflage:
+                    teleporter: false
+                    ladenrecht: true
+                """);
+
+        assertFalse(ergebnis.werte().auflageTeleporter(),
+                "teleporter stand auf false");
+        assertTrue(ergebnis.werte().auflageLadenrecht(),
+                "ladenrecht stand auf true - vertauscht waere beides umgekehrt");
+        assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
+    }
+
+    @Test
+    @DisplayName("Und in der anderen Richtung - sonst prueft die Probe nur eine Lesart")
+    void undInDerAnderenRichtung() {
+        var ergebnis = lies("""
+                freistaedte:
+                  auflage:
+                    teleporter: true
+                    ladenrecht: false
+                """);
+
+        assertTrue(ergebnis.werte().auflageTeleporter());
+        assertFalse(ergebnis.werte().auflageLadenrecht());
+    }
+
+    @Test
+    @DisplayName("Eine abgeschaltete Auflage steht im Startbericht - mit ihrem Pfad")
+    void abgeschalteteAuflageStehtImBericht() {
+        // Eine abgeschaltete Regel sieht im Spiel aus wie eine kaputte. Wer den
+        // Startbericht liest, soll sie finden - und zwar mit dem PFAD, damit er weiss,
+        // welche Zeile er anfassen muss.
+        var ergebnis = lies("""
+                freistaedte:
+                  auflage:
+                    ladenrecht: false
+                """);
+
+        assertTrue(berichtetUeber(ergebnis, Freistadtwerte.PFAD_AUFLAGE_LADENRECHT),
+                ergebnis.bericht().toString());
+        assertTrue(berichtetUeber(ergebnis, "wirkt hier NICHT"),
+                ergebnis.bericht().toString());
+        // UND GENAU EINE solche Zeile: Der unveraenderte Schalter bekommt keine.
+        // Sonst stuenden im Startbericht dreissig Zeilen, die nichts sagen.
+        //
+        // Gezaehlt wird die Zeile mit "wirkt hier NICHT" und nicht das Wort
+        // teleporter: Jenes steht ohnehin in der Liste der FEHLENDEN Zeilen, denn
+        // diese Probe gibt nur den einen Schluessel herein. Ein assertFalse darauf
+        // waere rot aus einem Grund, der mit der Auflage nichts zu tun hat.
+        assertEquals(1, ergebnis.bericht().stream()
+                        .filter(zeile -> zeile.contains("wirkt hier NICHT")).count(),
+                ergebnis.bericht().toString());
+    }
+
+    @Test
+    @DisplayName("Ein Wert, der kein Ja oder Nein ist, wird BEKLAGT - die Auflage bleibt")
+    void vielleichtWirdBeklagt() {
+        // Bukkits getBoolean gibt fuer "vielleicht" ein false zurueck, und das waere
+        // eine ausgeschaltete Auflage, die der Betreiber eingeschaltet glaubt.
+        var ergebnis = lies("""
+                freistaedte:
+                  auflage:
+                    ladenrecht: vielleicht
+                """);
+
+        assertTrue(klagtUeber(ergebnis, Freistadtwerte.PFAD_AUFLAGE_LADENRECHT),
+                ergebnis.klagen().toString());
+        assertTrue(ergebnis.werte().auflageLadenrecht(),
+                "und die Vorgabe gilt weiter - NICHT false");
+    }
+
 }

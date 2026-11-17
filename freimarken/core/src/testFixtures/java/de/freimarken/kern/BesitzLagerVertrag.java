@@ -3,9 +3,11 @@ package de.freimarken.kern;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -97,6 +99,217 @@ public abstract class BesitzLagerVertrag {
         assertEquals(400_000L, stadt.preis());
         assertEquals(Zustand.AKTIV, stadt.zustand());
         assertTrue(stadt.istFreistadt());
+    }
+
+    @Test
+    @DisplayName("Jede Freistadt bekommt eine Kontonummer - und sie UEBERLEBT das Lesen")
+    void kontonummerEntstehtUndUeberlebt() {
+        // JEDE UMSETZUNG VERGIBT DIESE NUMMER SELBST [Teil E1], und darum steht die
+        // Zusage hier und nicht in einer einzelnen Probe: Das Speicherlager zieht sie
+        // mit UUID.randomUUID, das MariaLager schreibt sie in die Spalte und liest sie
+        // zurueck, und Schemaschritt 25 traegt sie fuer bestehende Staedte nach. Eine
+        // Umsetzung, die das vergisst, wirft nicht - Parzelle wirft, und zwar erst beim
+        // LESEN, also nach einem Neustart und nicht beim Gruenden.
+        BesitzLager lager = lager();
+        Parzelle stadt = lager.freistadtAnlegen(STADTWELT, 3, -7, anna, 400_000L,
+                "kassenstadt");
+
+        assertNotNull(stadt.kasse(), "schon der Rueckgabewert traegt sie");
+
+        // Ueber finde() GELESEN: der Weg, den das Spiel nach einem Neustart nimmt. Hier
+        // faellt eine Umsetzung auf, die die Nummer schreibt und beim Lesen vergisst -
+        // dann liegt das Guthaben unter einer Nummer, die niemand mehr kennt.
+        Parzelle gelesen = lager.finde(STADTWELT, 3, -7).orElseThrow();
+        assertEquals(stadt.kasse(), gelesen.kasse(),
+                "und nach dem Weg durch die Ablage ist es DIESELBE. Eine Nummer, die"
+                        + " sich beim Lesen aendert, macht das Geld unerreichbar - und"
+                        + " keine Zeile im Buch erzaehlt davon.");
+    }
+
+    @Test
+    @DisplayName("Zwei Staedte bekommen VERSCHIEDENE Kontonummern")
+    void zweiStaedteZweiKontonummern() {
+        // Die Zusage, auf der die Trennung des Geldes ruht. Eine Umsetzung, die eine
+        // feste Nummer vergibt - oder sie aus der id rechnet und dabei etwas vertauscht
+        // -, haette ein Sammelkonto fuer alle Staedte, und jede saehe das Geld der
+        // anderen.
+        BesitzLager lager = lager();
+        Parzelle eine = lager.freistadtAnlegen(STADTWELT, 1, 2, anna, 400_000L,
+                "erststadt");
+        Parzelle andere = lager.freistadtAnlegen(STADTWELT, 4, 5, anna, 400_000L,
+                "zweitstadt");
+
+        assertNotEquals(eine.kasse(), andere.kasse());
+    }
+
+    @Test
+    @DisplayName("Eine gewoehnliche Parzelle bekommt KEINE Kontonummer")
+    void parzelleOhneKontonummer() {
+        // Die andere Richtung, und sie ist nicht nur Ordnungsliebe: Eine Parzelle mit
+        // Konto waere ein Konto, auf das nie etwas fliesst - und ein Betreiber, der es
+        // in der Spalte findet, sucht nach einer Kasse, die es nicht gibt. Parzelle
+        // weist diese Zeile ab, also faellt eine Umsetzung, die hier etwas einsetzt,
+        // sofort auf.
+        BesitzLager lager = lager();
+        Parzelle eine = lager.anlegen(WELT, 0, 0, anna, 0L);
+
+        assertEquals(Parzelle.KEINE_KASSE, eine.kasse());
+        assertEquals(Parzelle.KEINE_KASSE,
+                lager.finde(WELT, 0, 0).orElseThrow().kasse(),
+                "auch nach dem Weg durch die Ablage - eine Umsetzung, die die Spalte"
+                        + " beim Lesen mit einem Ersatzwert fuellt, faellt hier auf");
+    }
+
+    @Test
+    @DisplayName("Regeln werden gesetzt, ersetzt, geloescht - und sie UEBERLEBEN")
+    void regelnSetzenUndLesen() {
+        // Dieselbe Zusage wie bei den Buergerrechten, und derselbe lautlose Fehler
+        // droht: Eine Umsetzung, die den Text schreibt und beim Lesen vergisst, wirft
+        // nicht - sie liefert eine Stadt ohne Regeln. Im Spiel heisst das: Der Besitzer
+        // setzt seine Regeln, sie stehen in der Datenbank, und nach dem naechsten
+        // Neustart hat seine Stadt keinen Teleporter mehr.
+        BesitzLager lager = lager();
+        Parzelle stadt = lager.freistadtAnlegen(STADTWELT, 3, -7, anna, 400_000L,
+                "regelstadt");
+        assertEquals(Parzelle.KEINE_REGELN, stadt.regeln(),
+                "ab Werk hat eine Stadt keine Regeln - der Anfangszustand, an dem die"
+                        + " Auflage haengt");
+        assertFalse(stadt.hatRegeln());
+
+        lager.regelnSetzen(stadt.id(), "Kein PvP. Baue nicht an fremde Haeuser.");
+
+        // Ueber finde() GELESEN - der Weg nach einem Neustart.
+        Parzelle danach = lager.finde(STADTWELT, 3, -7).orElseThrow();
+        assertEquals("Kein PvP. Baue nicht an fremde Haeuser.", danach.regeln());
+        assertTrue(danach.hatRegeln());
+
+        // ERSETZEND und nicht ergaenzend: Der neue Text ist der ganze Text.
+        lager.regelnSetzen(stadt.id(), "Nur noch eine Regel.");
+        assertEquals("Nur noch eine Regel.",
+                lager.finde(STADTWELT, 3, -7).orElseThrow().regeln(),
+                "der alte Text ist WEG - ein Anhaengen waere eine Regel, die der"
+                        + " Besitzer zurueckgezogen hat und die bleibt");
+
+        // Und der Weg zurueck in den Anfangszustand. Ohne ihn koennte ein
+        // Stadtbesitzer eine Regel aufstellen und nie wieder loswerden.
+        lager.regelnSetzen(stadt.id(), null);
+        Parzelle leer = lager.finde(STADTWELT, 3, -7).orElseThrow();
+        assertEquals(Parzelle.KEINE_REGELN, leer.regeln());
+        assertFalse(leer.hatRegeln(), "und damit ist die Auflage wieder offen");
+    }
+
+    @Test
+    @DisplayName("Der Besuchstag wird gesetzt, ersetzt, geloescht - und er UEBERLEBT")
+    void besuchSetzenUndLesen() {
+        // DERSELBE LAUTLOSE FEHLER droht wie bei den Regeln: Eine Umsetzung, die den Tag
+        // schreibt und beim Lesen vergisst, wirft nicht - sie liefert eine Stadt, die
+        // nie besucht wurde. Im Spiel heisst das: Der Verfallslauf raeumt nach einem
+        // Jahr eine Stadt ab, in der jeden Tag jemand stand.
+        BesitzLager lager = lager();
+        Parzelle stadt = lager.freistadtAnlegen(STADTWELT, 3, -7, anna, 400_000L,
+                "besuchsstadt");
+        assertEquals(Parzelle.NIE_BESUCHT, stadt.besucht(),
+                "ab Werk war noch niemand da - und das ist NICHT 1970: Die Frist laeuft"
+                        + " ab der Gruendung, und die steht in erworbenAm");
+
+        lager.besuchSetzen(stadt.id(), LocalDate.of(2026, 11, 17));
+
+        // Ueber finde() GELESEN - der Weg nach einem Neustart.
+        Parzelle danach = lager.finde(STADTWELT, 3, -7).orElseThrow();
+        assertEquals(LocalDate.of(2026, 11, 17), danach.besucht());
+
+        // ERSETZEND: Der neue Tag ist der ganze Tag. Ein Lager, das den aelteren
+        // behielte, liesse eine besuchte Stadt verfallen.
+        lager.besuchSetzen(stadt.id(), LocalDate.of(2026, 11, 18));
+        assertEquals(LocalDate.of(2026, 11, 18),
+                lager.finde(STADTWELT, 3, -7).orElseThrow().besucht());
+
+        // Und der Weg zurueck auf "noch nie" - ein Setzer, der nur setzen und nie
+        // loeschen kann, ist die Haelfte eines Setzers.
+        lager.besuchSetzen(stadt.id(), null);
+        assertEquals(Parzelle.NIE_BESUCHT,
+                lager.finde(STADTWELT, 3, -7).orElseThrow().besucht());
+    }
+
+    @Test
+    @DisplayName("Ein Besuchstag an einer gewoehnlichen Parzelle wird ABGEWIESEN")
+    void besuchNurFuerStaedte() {
+        // Dieselbe Zusage wie bei den Regeln, und sie haelt die Spalte sauber: Ein Tag
+        // an einer Marktstadtzeile waere ein Wert, den niemand je liest - gelesen wird
+        // er allein von der Verfallsregel, und die gilt nur fuer Staedte.
+        BesitzLager lager = lager();
+        Parzelle parzelle = lager.anlegen(WELT, 2, 3, anna, 1_000L);
+
+        assertThrows(IllegalStateException.class,
+                () -> lager.besuchSetzen(parzelle.id(), LocalDate.of(2026, 11, 17)));
+    }
+
+    @Test
+    @DisplayName("Ein Besuchstag fuer eine Nummer, die es nicht gibt, wird ABGEWIESEN")
+    void besuchOhneParzelle() {
+        BesitzLager lager = lager();
+
+        assertThrows(IllegalStateException.class,
+                () -> lager.besuchSetzen(4711L, LocalDate.of(2026, 11, 17)));
+    }
+
+    @Test
+    @DisplayName("LEERRAUM wird zu KEINE_REGELN - in jeder Umsetzung gleich")
+    void leerraumWirdKeineRegeln() {
+        // DIE NAHT ZWISCHEN DEN FASSUNGEN: Ohne diese Zusage traegt die eine Fassung
+        // einen Text aus drei Leerzeichen und die andere ein NULL - und
+        // Parzelle.hatRegeln bekaeme auf dieselbe Frage zwei Antworten. Im Spiel waere
+        // das eine Stadt, die auf dem Probeserver ihren Teleporter hat und auf dem
+        // echten nicht.
+        BesitzLager lager = lager();
+        Parzelle stadt = lager.freistadtAnlegen(STADTWELT, 3, -7, anna, 400_000L,
+                "leerstadt");
+        lager.regelnSetzen(stadt.id(), "etwas");
+
+        lager.regelnSetzen(stadt.id(), "   ");
+
+        Parzelle danach = lager.finde(STADTWELT, 3, -7).orElseThrow();
+        assertEquals(Parzelle.KEINE_REGELN, danach.regeln());
+        assertFalse(danach.hatRegeln(),
+                "drei Leerzeichen sind keine Regel - ohne diese Zeile waere sie eine"
+                        + " erfuellte Auflage");
+    }
+
+    @Test
+    @DisplayName("Zweimal DERSELBE Text ist kein Fehler")
+    void zweimalDerselbeText() {
+        // Gegen eine Umsetzung, die betroffene Zeilen zaehlt und bei 0 klagt: MariaDB
+        // meldet bei executeUpdate die GETROFFENEN Zeilen, nicht die geaenderten - aber
+        // das ist eine Annahme ueber den Treiber, und sie gehoert gemessen.
+        BesitzLager lager = lager();
+        Parzelle stadt = lager.freistadtAnlegen(STADTWELT, 3, -7, anna, 400_000L,
+                "gleichstadt");
+        lager.regelnSetzen(stadt.id(), "Kein PvP.");
+
+        lager.regelnSetzen(stadt.id(), "Kein PvP.");
+
+        assertEquals("Kein PvP.",
+                lager.finde(STADTWELT, 3, -7).orElseThrow().regeln());
+    }
+
+    @Test
+    @DisplayName("Regeln gibt es nur fuer eine FREISTADT - und nur fuer bekannte Nummern")
+    void regelnNurFuerStaedte() {
+        BesitzLager lager = lager();
+        Parzelle eine = lager.anlegen(WELT, 0, 0, anna, 0L);
+
+        var keineStadt = assertThrows(IllegalStateException.class,
+                () -> lager.regelnSetzen(eine.id(), "Kein PvP."));
+        assertTrue(keineStadt.getMessage().contains("keine Freistadt"),
+                keineStadt.getMessage());
+
+        // Und eine Nummer, die es nicht gibt. Die ZWEI Klagen muessen sich
+        // unterscheiden: Sonst sucht ein Betreiber bei einer fehlenden Zeile nach einer
+        // falschen Art.
+        var unbekannt = assertThrows(IllegalStateException.class,
+                () -> lager.regelnSetzen(999_999L, "Kein PvP."));
+        assertTrue(unbekannt.getMessage().contains("Keine Parzelle"),
+                unbekannt.getMessage());
     }
 
     @Test

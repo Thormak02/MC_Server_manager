@@ -217,6 +217,46 @@ enum ShopSatz implements Satz {
     SHOP_KEIN_BUNDRECHT("shop.absage.kein-bundrecht", Art.SATZ),
 
     /**
+     * Die Stadt, in der die Kiste steht, hat noch kein LADENRECHT [Plan 16, Teil E3].
+     *
+     * <p><b>Ein anderer Satz als {@link #SHOP_FREMDE_KISTE}</b>, obwohl beide an
+     * derselben Kiste abweisen: Dort darf DIESER Spieler nicht, hier darf NIEMAND -
+     * auch die Stadtbesitzerin nicht. Wer "fremder Grund" laese, suchte einen
+     * Eigentuemer, den es nicht gibt, und die Antwort waere ein Grundstueckskauf, der
+     * nichts aendert.
+     *
+     * <p>{@code stadt} nennt sie beim Namen und {@code was}, WAS ihr fehlt. Beides ist
+     * noetig: Wer in einer fremden Stadt baut, kennt ihren Namen nicht immer, und ohne
+     * {@code was} weiss selbst die Besitzerin nur, dass etwas fehlt - nicht, was sie
+     * tun soll. Die drei Worte dafuer stehen bei {@code FreistadtSatz.AUFLAGE_*}.
+     */
+    SHOP_KEIN_LADENRECHT("shop.absage.kein-ladenrecht", Art.SATZ, "stadt", "was"),
+
+    /**
+     * Die Stadt nimmt eine Ladengebuehr, und sein Geld reicht nicht [Teil E6].
+     *
+     * <p>Ein anderer Satz als {@link #SHOP_KEIN_LADENRECHT}: Dort darf NIEMAND einen
+     * Laden anlegen, hier darf er nur gerade nicht. Wer "die Stadt hat kein
+     * Ladenrecht" laese, wartete auf den Stadtbesitzer statt Mark zu verdienen.
+     *
+     * <p>{@code gebuehr} nennt den Betrag: Eine Absage, die nicht sagt, wie viel
+     * fehlt, laesst den Spieler raten - und raten heisst hier, Mark zu sammeln, ohne
+     * zu wissen, wie viele.
+     */
+    SHOP_LADENGEBUEHR_ZU_TEUER("shop.absage.ladengebuehr-zu-teuer", Art.SATZ,
+            "gebuehr"),
+
+    /**
+     * Sein Laden ist weg, weil die TAGESGEBUEHR nicht zu zahlen war [Teil E6].
+     *
+     * <p>Kein {@code shop.absage}, obwohl es eine ist: Eine Absage liest er, waehrend
+     * er ein Schild beschreibt. Diese Zeile kommt aus dem taeglichen Lauf, ohne dass
+     * er etwas getan hat - und darum sagt sie ausdruecklich, dass seine WARE NOCH DA
+     * IST. Ohne das sucht er sein Lager.
+     */
+    SHOP_LADENGEBUEHR_WEG("shop.ladengebuehr-weg", Art.SATZ, "stadt", "gebuehr"),
+
+    /**
      * Die Datenbank hat geschwiegen.
      *
      * <p>Sagt ausdruecklich "noch einmal versuchen", wie

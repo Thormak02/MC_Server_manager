@@ -653,6 +653,13 @@ class BildGleichTest {
                 new Zeile(WacheSatz.SCHUTZ_ANKUNFTSFELD, 1L, Einsatz.keine(),
                         "&eDas Ankunftsfeld gehoert allen - deine eigene Stadt gruendest"
                                 + " du mit /freistadt gruenden"),
+                // Die verfallene Stadt [Teil E5]. EIN EIGENER Balken und nicht
+                // stadt-frei: Jener sagt "hier ist noch nichts, gruende" - eine Luege
+                // ueber ein Feld, das vergeben ist.
+                new Zeile(WacheSatz.SCHUTZ_STADT_VERFALLEN, 1L, Einsatz.keine(),
+                        "&cDiese Stadt ist verfallen - hier baut niemand.&7 Gehoert"
+                                + " sie dir, bleib einen Augenblick: Sie wacht von"
+                                + " selbst wieder auf."),
                 new Zeile(WacheSatz.SCHUTZ_STADT_FREI, 1L, Einsatz.keine(),
                         "&eDieses Stadtfeld ist frei - /freistadt gruenden"),
                 // ZWEI Werte und zwei Farbwechsel - derselbe Aufbau wie
@@ -1241,6 +1248,32 @@ class BildGleichTest {
                 new Zeile(ShopSatz.SHOP_KEIN_BUNDRECHT, 1L, Einsatz.keine(),
                         "&cBundshops darfst du nicht anlegen.\n&7Lass die erste"
                                 + " Zeile leer, dann wird es dein eigener Shop."),
+                // DAS LADENRECHT [Plan 16, Teil E3]. {was} steht hier von Hand, denn
+                // diese Tafel haelt das BILD des Satzes fest - im Spiel kommt es als
+                // Wort aus freistadt.auflage. Dass der RICHTIGE Wert ankommt, prueft
+                // ShoptextTest durch die echte Naht; eine Bildtafel kann das nie.
+                // Sein Laden ist weg, weil die TAGESGEBUEHR nicht zu zahlen war
+                // [Teil E6]. SAGT AUSDRUECKLICH, DASS DIE WARE NOCH DA IST - ohne das
+                // sucht er sein Lager.
+                new Zeile(ShopSatz.SHOP_LADENGEBUEHR_WEG, 1L,
+                        Einsatz.von("stadt", "annastadt").mit("gebuehr", "10 Mark"),
+                        "&cDein Laden in annastadt ist abgebaut.\n&7Die"
+                                + " Tagesgebuehr von 10 Mark war nicht zu zahlen."
+                                + " Deine Ware liegt noch in der Kiste - setz ein neues"
+                                + " Schild, wenn du wieder zahlen kannst."),
+                // Die Ladengebuehr, die er nicht zahlen kann [Teil E6]. EIN
+                // ANDERER Satz als kein-ladenrecht: Dort darf NIEMAND einen Laden
+                // anlegen, hier darf er nur gerade nicht.
+                new Zeile(ShopSatz.SHOP_LADENGEBUEHR_ZU_TEUER, 1L,
+                        Einsatz.von("gebuehr", "250 Mark"),
+                        "&cEin Laden in dieser Stadt kostet 250 Mark - das hast du"
+                                + " nicht.\n&7Die Gebuehr geht in die Stadtkasse; sie"
+                                + " stellt der Betreiber ein."),
+                new Zeile(ShopSatz.SHOP_KEIN_LADENRECHT, 1L,
+                        Einsatz.von("stadt", "Annastadt")
+                                .mit("was", "ein Regeltext"),
+                        "&cAnnastadt hat noch kein Ladenrecht\n&7Es fehlt: ein"
+                                + " Regeltext. Bestehende Laeden handeln weiter."),
                 // SAGT AUSDRUECKLICH "NOCH EINMAL VERSUCHEN": Eine Absage ohne Ausweg
                 // liest ein Spieler als Verbot, baut sein Schild ab und kommt nicht
                 // wieder. Dieselbe Linie wie wache.schutz.laden-gestoert.
@@ -1559,6 +1592,13 @@ class BildGleichTest {
                 new Zeile(FreistadtSatz.ZEILE, 1L,
                         Einsatz.von("name", "neustadt").mit("besitzer", "Anna")
                                 .mit("feld", "3/-7"), "&7  neustadt&8 - von Anna, Feld 3/-7"),
+                // --- Teil E3: die Auflage am Teleporter --------------------------
+                new Zeile(ReiseSatz.WARP_STADT_OHNE_AUFLAGE, 1L,
+                        Einsatz.von("name", "annastadt").mit("was",
+                                "ein Regeltext und ein vergebenes Grundstueck"),
+                        "&cannastadt hat noch keinen Teleporter\n"
+                                + "&7Es fehlt: ein Regeltext und ein vergebenes Grundstueck."
+                                + " Das stellt der Stadtbesitzer ein."),
                 new Zeile(FreistadtSatz.LEER, 1L, Einsatz.keine(), "&7  Es gibt noch keine Freistadt - macht die erste: /freistadt gruenden deinname"),
                 // Der Betrag kommt als WORT herein und nicht als Zahl [Teil C3]:
                 // Seit die Einheit aus waehrung.betrag stammt, setzt die Naht
@@ -1574,7 +1614,10 @@ class BildGleichTest {
                                 + " bestaetigen"),
                 new Zeile(FreistadtSatz.GEGRUENDET, 1L,
                         Einsatz.von("name", "neustadt").mit("feld", "3/-7"), "&aneustadt ist gegruendet - Feld 3/-7.\n"
-                        + "&7Hin kommst du mit /warp freistadt neustadt."),
+                        + "&7Hin kommst du mit /warp freistadt neustadt.\n"
+                        + "&7Bis die Stadt Regeln hat und ein Grundstueck"
+                        + " vergeben ist, kommen keine Fremden - und es entstehen"
+                        + " keine Laeden."),
                 new Zeile(FreistadtSatz.NAME_ZU_LANG, 1L,
                         Einsatz.von("kleinstens", 3L).mit("groesstens", 32L), "&cEin Stadtname hat 3 bis 32 Zeichen."),
                 new Zeile(FreistadtSatz.NAME_FALSCH, 1L, Einsatz.keine(), "&cEin Stadtname traegt nur kleine Buchstaben, Ziffern und"
@@ -1613,6 +1656,100 @@ class BildGleichTest {
                         "&eNeue Absteckung&7 - Ecke 1 steht bei 600/312, Zelle 37/19."
                                 + " Die vorige ist weg."),
                 // GEZAEHLT: Bei einer Zelle steht die Eins im Satz, nicht als Wert.
+                // DAS ENDE EINER STADT [Plan 16, Teil E6]. Beide Rueckfragen zeigen
+                // ALLE DREI Zahlen - ein Besitzer soll nachrechnen koennen, woher die
+                // Summe kommt.
+                new Zeile(FreistadtSatz.AUFGABE_FRAGE, 1L,
+                        Einsatz.von("stadt", "annastadt")
+                                .mit("erstattung", "200.000 Mark")
+                                .mit("kasse", "1.250 Mark")
+                                .mit("zusammen", "201.250 Mark")
+                                .mit("danach", "/freistadt aufgeben bestaetigen"),
+                        "&6annastadt aufgeben?\n&7Zurueck: 200.000 Mark vom"
+                                + " Gruendungspreis und 1.250 Mark aus der Stadtkasse,"
+                                + " zusammen &f201.250 Mark&7.\n&7Dann:"
+                                + " /freistadt aufgeben bestaetigen"),
+                new Zeile(FreistadtSatz.RAEUMUNG_FRAGE, 1L,
+                        Einsatz.von("stadt", "annastadt")
+                                .mit("erstattung", "200.000 Mark")
+                                .mit("kasse", "1.250 Mark")
+                                .mit("zusammen", "201.250 Mark")
+                                .mit("danach",
+                                        "/freistadt raeumen annastadt bestaetigen"),
+                        "&6annastadt raeumen?\n&7Ihr Besitzer bekommt 200.000"
+                                + " Mark vom Gruendungspreis und 1.250 Mark aus der"
+                                + " Stadtkasse, zusammen &f201.250 Mark&7.\n&7Dann:"
+                                + " /freistadt raeumen annastadt bestaetigen"),
+                new Zeile(FreistadtSatz.AUFGABE_NAME_UNBEKANNT, 1L,
+                        Einsatz.von("name", "geisterstadt"),
+                        "&cEine Freistadt geisterstadt gibt es nicht.&7 Die Namen"
+                                + " zeigt /freistadt."),
+                new Zeile(FreistadtSatz.AUFGABE_BEENDET, 1L,
+                        Einsatz.von("stadt", "annastadt")
+                                .mit("zusammen", "201.250 Mark"),
+                        "&aannastadt ist aufgeloest.&7 Ausgezahlt: 201.250 Mark. Das"
+                                + " Feld ist wieder frei."),
+                // DER SATZ, OHNE DEN DIESER BEFEHL EIN DIEBSTAHL WAERE: Ein
+                // Stadtbuerger hat sein Grundstueck bezahlt.
+                new Zeile(FreistadtSatz.AUFGABE_NOCH_BUERGER, 1L,
+                        Einsatz.von("stadt", "annastadt"),
+                        "&cIn annastadt gehoert noch jemand anderem ein"
+                                + " Grundstueck.\n&7Kauf es zurueck, dann laesst sich"
+                                + " die Stadt aufloesen - sie verfaellt ohnehin nicht,"
+                                + " solange dort jemand wohnt."),
+                new Zeile(FreistadtSatz.AUFGABE_GELD_HAENGT, 1L,
+                        Einsatz.von("stadt", "annastadt")
+                                .mit("zusammen", "201.250 Mark"),
+                        "&cannastadt ist aufgeloest, aber die Auszahlung von 201.250"
+                                + " Mark ging nicht durch.\n&7Sag es dem Betreiber -"
+                                + " der Betrag steht im Serverprotokoll."),
+
+                // DER VERFALL [Plan 16, Teil E5]. Die zwei Warnungen sind GEZAEHLT,
+                // also braucht jede zwei Zeilen: die Einzahl fuer den letzten Tag und
+                // die Mehrzahl. Dass es zwei verschiedene Saetze sind, ist der ganze
+                // Sinn von zwei Stufen - wer zwei Wochen vorher denselben Ton liest
+                // wie zwei Monate davor, liest ihn nicht mehr.
+                new Zeile(FreistadtSatz.VERFALL_WARNUNG_FRUEH, 2L,
+                        Einsatz.von("stadt", "annastadt").mit("tage", 2L),
+                        "&7Deine Freistadt annastadt verfaellt in 2 Tagen, wenn"
+                                + " niemand sie betritt."),
+                new Zeile(FreistadtSatz.VERFALL_WARNUNG_FRUEH, 1L,
+                        Einsatz.von("stadt", "annastadt").mit("tage", 1L),
+                        "&7Deine Freistadt annastadt verfaellt morgen, wenn niemand"
+                                + " sie betritt."),
+                // DIE NULL GEHOERT DAZU, auch wo sie im Spiel nicht vorkommt: Bei 0
+                // Resttagen ist die Stadt FAELLIG, und der taegliche Lauf macht daraus
+                // VERFALLEN. Ohne diese Zeile bliebe die Mehrzahlform fuer 0
+                // ungeprueft - dieselbe Begruendung wie bei ECKEN_FERTIG weiter unten.
+                new Zeile(FreistadtSatz.VERFALL_WARNUNG_FRUEH, 0L,
+                        Einsatz.von("stadt", "annastadt").mit("tage", 0L),
+                        "&7Deine Freistadt annastadt verfaellt in 0 Tagen, wenn"
+                                + " niemand sie betritt."),
+                new Zeile(FreistadtSatz.VERFALL_WARNUNG_SPAET, 2L,
+                        Einsatz.von("stadt", "annastadt").mit("tage", 2L),
+                        "&cDeine Freistadt annastadt verfaellt in 2 Tagen!\n&7Geh"
+                                + " hin, oder vergib ein Grundstueck - ein"
+                                + " Stadtbuerger haelt sie dauerhaft."),
+                new Zeile(FreistadtSatz.VERFALL_WARNUNG_SPAET, 1L,
+                        Einsatz.von("stadt", "annastadt").mit("tage", 1L),
+                        "&cDeine Freistadt annastadt verfaellt MORGEN!\n&7Geh hin,"
+                                + " oder vergib ein Grundstueck - ein Stadtbuerger"
+                                + " haelt sie dauerhaft."),
+                new Zeile(FreistadtSatz.VERFALL_WARNUNG_SPAET, 0L,
+                        Einsatz.von("stadt", "annastadt").mit("tage", 0L),
+                        "&cDeine Freistadt annastadt verfaellt in 0 Tagen!\n&7Geh"
+                                + " hin, oder vergib ein Grundstueck - ein"
+                                + " Stadtbuerger haelt sie dauerhaft."),
+                // SAGT AUSDRUECKLICH, DASS NICHTS VERLOREN IST: Ohne diese Haelfte
+                // hielte ein Besitzer seine 400.000 Mark fuer verbrannt.
+                new Zeile(FreistadtSatz.VERFALL_VERFALLEN, 1L,
+                        Einsatz.von("stadt", "annastadt"),
+                        "&cDeine Freistadt annastadt ist verfallen.\n&7Feld, Name"
+                                + " und Guthaben hat sie noch - betritt sie, dann"
+                                + " wacht sie wieder auf."),
+                new Zeile(FreistadtSatz.VERFALL_AUFGEWACHT, 1L,
+                        Einsatz.von("stadt", "annastadt"),
+                        "&aannastadt ist wieder aktiv.&7 Hier baut wieder, wer darf."),
                 new Zeile(FreistadtSatz.ECKEN_FERTIG, 1L, Einsatz.von("zellen", "1"),
                         "&7  Das waere 1 Zelle. Anlegen mit /freistadt grundstueck"
                                 + " anlegen"),
@@ -1835,6 +1972,63 @@ class BildGleichTest {
                 new Zeile(FreistadtSatz.STADTBUERGER_LEER, 1L, Einsatz.keine(),
                         "&7  noch keine - verkauf oder verschenk ein Grundstueck"
                                 + " mit /freistadt grundstueck anbieten"),
+                // --- Teil E1: die Stadtkasse -------------------------------------
+                // Die Bilder sind ZEICHENGLEICH aus dem roten Lauf abgeschrieben -
+                // erfundene Bilder pruefen die Vorlage nicht, sondern nur die eigene
+                // Erinnerung daran.
+                new Zeile(FreistadtSatz.KASSE_KOPF, 1L,
+                        Einsatz.von("stadt", "annastadt")
+                                .mit("stand", "2.500 Mark"),
+                        "&6Die Kasse von annastadt&7 - &f2.500 Mark"),
+                new Zeile(FreistadtSatz.KASSE_LEER, 1L, Einsatz.keine(),
+                        "&7  noch nichts eingenommen - die Marktgebuehr steht ab Werk"
+                                + " auf 0 Prozent"),
+                new Zeile(FreistadtSatz.KASSE_ABGEHOBEN, 1L,
+                        Einsatz.von("betrag", "1.000 Mark")
+                                .mit("rest", "1.500 Mark"),
+                        "&a1.000 Mark aus der Stadtkasse genommen.&7 Es bleiben"
+                                + " &f1.500 Mark&7."),
+                new Zeile(FreistadtSatz.KASSE_ZU_WENIG, 1L,
+                        Einsatz.von("stand", "500 Mark"),
+                        "&cSo viel liegt nicht in der Kasse - darin sind &f500 Mark"),
+                new Zeile(FreistadtSatz.KASSE_NICHT_DEINE, 1L,
+                        Einsatz.von("stadt", "Annastadt").mit("besitzer", "Anna"),
+                        "&cDie Kasse von Annastadt gehoert &fAnna"),
+                // --- Teil E2: der Regeltext --------------------------------------
+                // Bilder ZEICHENGLEICH aus dem roten Lauf
+                // abgeschrieben.
+                new Zeile(FreistadtSatz.REGELN_KOPF, 1L,
+                        Einsatz.von("stadt", "annastadt"),
+                        "&6Die Regeln von annastadt"),
+                // DER SPIELERTEXT MIT EINEM TAG DARIN, und das ist die wichtigste
+                // Zeile dieser Gruppe: Sie haelt zeichengleich fest, dass <red> aus
+                // einer Spielereingabe TEXT bleibt. Wuerde der Wert in den Wortlaut
+                // gespleisst statt eingesetzt, waere er wirklich rot - und ein
+                // Stadtbesitzer koennte sich eine Servermeldung bauen.
+                new Zeile(FreistadtSatz.REGELN_ZEILE, 1L,
+                        Einsatz.von("text", "<red>Kein PvP"),
+                        "&7  <red>Kein PvP"),
+                new Zeile(FreistadtSatz.REGELN_LEER, 1L,
+                        Einsatz.von("stadt", "annastadt"),
+                        "&7  annastadt hat noch keine Regeln - der Besitzer setzt sie"
+                                + " mit /freistadt regeln <text>"),
+                new Zeile(FreistadtSatz.REGELN_GESETZT, 1L, Einsatz.keine(),
+                        "&aDie Regeln stehen.&7 Wer in deiner Stadt steht, liest"
+                                + " sie mit /freistadt regeln."),
+                new Zeile(FreistadtSatz.REGELN_GELOESCHT, 1L, Einsatz.keine(),
+                        "&aDie Regeln sind weg.&7 Ohne Regeln hat diese Stadt weder"
+                                + " Teleporter noch Ladenrecht."),
+                new Zeile(FreistadtSatz.REGELN_SCHON_SO, 1L, Einsatz.keine(),
+                        "&7Genau das stand schon da."),
+                new Zeile(FreistadtSatz.REGELN_WAR_LEER, 1L, Einsatz.keine(),
+                        "&7Diese Stadt hatte gar keine Regeln."),
+                new Zeile(FreistadtSatz.REGELN_ZU_LANG, 1L,
+                        Einsatz.von("groesstens", "256").mit("hat", "300"),
+                        "&cDie Regeln duerfen hoechstens 256 Zeichen haben - dein Text"
+                                + " hat &f300"),
+                new Zeile(FreistadtSatz.REGELN_NICHT_DEINE, 1L,
+                        Einsatz.von("stadt", "Annastadt").mit("besitzer", "Anna"),
+                        "&cDie Regeln von Annastadt setzt &fAnna"),
                 new Zeile(FreistadtSatz.RECHT_UNBEKANNT, 1L,
                         Einsatz.von("wort", "fliegen"),
                         "&cfliegen ist kein Buergerrecht.\n&7Die Vorschlagsliste nennt,"

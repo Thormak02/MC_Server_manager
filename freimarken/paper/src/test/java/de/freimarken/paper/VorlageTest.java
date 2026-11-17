@@ -747,6 +747,13 @@ class VorlageTest {
             // PFENNIGE sind am 10.11.2026 mit dem Sortiment gegangen.
             "Freistadtliste.java -> \"Mark einmalig\"",
             "Freistadtliste.java -> \" Mark je Gruendung, \"",
+            // Die Klage ueber eine unbrauchbare Ladengebuehr - sie geht in den
+            // Startbericht, also an den Betreiber [Teil E6].
+            "Freistadtliste.java -> \" Mark - verworfen. Eine 0 ist\"",
+            // Zwei Protokollzeilen des Tageslaufs der Ladengebuehr [Teil E6]:
+            // Konsole, kein Spieler liest sie.
+            "Ladengebuehrlauf.java -> \" Mark nicht zahlen, liess sich\"",
+            "Ladengebuehrlauf.java -> \" Mark war nicht zu zahlen. Die Ware bleibt in\"",
             "Marktliste.java -> \"Mark\"",
             // Teil B: Zwei Protokollzeilen des Mietbuchs - die Kaution, die nach dem
             // Loeschen des Vertrags nicht zurueckgezahlt werden konnte, und eine
@@ -802,6 +809,10 @@ class VorlageTest {
             // Menge und ueber ein Schild, dessen Zahl von der Ankauftafel abwich. Sie
             // sind mit der Tafel gegangen: Der Preis steht auf dem Schild, und eine
             // Abweichung gibt es nicht mehr.
+            // Zwei Zeilen ins Protokoll, wenn eine Ladengebuehr nicht gebucht
+            // werden konnte [Teil E6]: Konsole, kein Spieler liest sie.
+            "Shopbuch.java -> \" Mark fuer den Shop\"",
+            "Shopbuch.java -> \" Mark fuer\"",
             "Shophandel.java -> \" Mark bei \"",
             "Shophandel.java -> \" Mark NICHT\"",
             "Shophandel.java -> \" Mark liess sich bei \"",
@@ -832,6 +843,7 @@ class VorlageTest {
             "Wirtschaftsliste.java -> \"Mark\"",
             "Wirtschaftsliste.java -> \"Mark je Feld\"",
             "Wirtschaftsliste.java -> \"Mark\"");
+
 
     /**
      * Das Geldwort in einem Zeichenkettenliteral - und nur dort.

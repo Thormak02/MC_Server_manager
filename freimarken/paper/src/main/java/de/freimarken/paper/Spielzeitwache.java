@@ -112,6 +112,59 @@ final class Spielzeitwache implements Listener {
      */
     private final Truhenlauf truhenlauf;
 
+    /**
+     * Der fuenfte Mitfahrer: der Besuchsstempel der Freistaedte [Teil E4].
+     *
+     * <p>JE ANWESENDEM SPIELER, wie der Bonus und anders als die drei dazwischen: Er
+     * fragt, WO einer steht. Einmal je Schlag waere die Frage nicht zu stellen.
+     *
+     * <p><b>Darf {@code null} sein</b>, wie die Raeumungen: Fehlt die Freistaedtewelt in
+     * der {@code config.yml}, entsteht gar kein Freistadtbuch - dann gibt es keine
+     * Stadt, die man besuchen koennte, und der Start sagt das mit eigenen Zeilen.
+     *
+     * <p>VOR dem Bonus und nicht danach, obwohl beide je Spieler laufen: Der Stempel
+     * schreibt hoechstens einmal je Stadt und Tag, der Bonus bucht Geld. Was selten
+     * schreibt, soll nicht hinter dem warten, was haeufig bucht - und wenn der Bonus
+     * wirft, ist der Stempel dieses Spielers schon gesetzt.
+     */
+    private final Besuchslauf besuchslauf;
+
+    /**
+     * Der sechste Mitfahrer: der taegliche Verfall der Geisterstaedte [Teil E5].
+     *
+     * <p>EINMAL je Taktschlag und nicht je Spieler, wie die Ladenmiete und aus demselben
+     * Grund: Der Lauf geht ueber alle STAEDTE einer Welt, nicht ueber die Anwesenden -
+     * und genau das ist sein Zweck. Eine Geisterstadt wird gerade dadurch zu einer, dass
+     * niemand kommt.
+     *
+     * <p><b>Darf {@code null} sein</b>, wie der Besuchsstempel und die zwei Raeumungen:
+     * Ohne Freistaedtewelt gibt es keine Stadt, die verfallen koennte.
+     *
+     * <p>NACH dem Besuchsstempel, und das ist wesentlich: Jener laeuft je Spieler und
+     * setzt heute besuchte Staedte auf heute. Liefe der Verfall davor, verfiele eine
+     * Stadt, in der in derselben Minute jemand steht - und wachte eine Zeile spaeter
+     * wieder auf.
+     */
+    private final Verfallslauf verfallslauf;
+
+    /**
+     * Der siebte Mitfahrer: die taegliche Ladengebuehr [Teil E6].
+     *
+     * <p>EINMAL je Taktschlag, wie die Ladenmiete und der Verfall: Der Lauf geht ueber
+     * alle SHOPS, nicht ueber die Anwesenden - und genau das ist sein Zweck. Ein Laden
+     * zahlt, ob sein Besitzer da ist oder nicht; waere er an Anwesenheit gebunden, waere
+     * Wegbleiben der Weg, ihn kostenlos zu halten.
+     *
+     * <p><b>Darf {@code null} sein</b>, und hier gleich aus zwei Gruenden: ohne
+     * Freistaedtewelt gibt es keine Stadt, und ohne lesbare Shopablage keinen Laden.
+     *
+     * <p>NACH dem Verfall, und das ist wesentlich: Jener kann eine Stadt auf verfallen
+     * setzen. Liefe die Gebuehr davor, zahlten Laeden einen Tag lang an eine Stadt, die
+     * im selben Takt aufhoert - und das ist die unangenehmere Reihenfolge, weil Geld
+     * fliesst.
+     */
+    private final Ladengebuehrlauf ladengebuehrlauf;
+
     private final Wirtschaftsstand wirtschaft;
     private final Logger protokoll;
 
@@ -120,13 +173,18 @@ final class Spielzeitwache implements Listener {
 
     Spielzeitwache(JavaPlugin plugin, Spielzeitbuch buch, Bonuswache bonuswache,
                    Mietwache mietwache, Blockraeumung blockraeumung,
-                   Truhenlauf truhenlauf, Wirtschaftsstand wirtschaft, Logger protokoll) {
+                   Truhenlauf truhenlauf, Besuchslauf besuchslauf,
+                   Verfallslauf verfallslauf, Ladengebuehrlauf ladengebuehrlauf,
+                   Wirtschaftsstand wirtschaft, Logger protokoll) {
         this.plugin = plugin;
         this.buch = buch;
         this.bonuswache = bonuswache;
         this.mietwache = mietwache;
         this.blockraeumung = blockraeumung;
         this.truhenlauf = truhenlauf;
+        this.besuchslauf = besuchslauf;
+        this.verfallslauf = verfallslauf;
+        this.ladengebuehrlauf = ladengebuehrlauf;
         this.wirtschaft = wirtschaft;
         this.protokoll = protokoll;
     }
@@ -265,6 +323,15 @@ final class Spielzeitwache implements Listener {
             // aller Spieler bis zum naechsten Neustart. Tagesbonus.pruefe faengt seine
             // Fehler selbst; dies ist die zweite Schranke.
             for (Player spieler : plugin.getServer().getOnlinePlayers()) {
+                // DER BESUCHSSTEMPEL ZUERST [Teil E4]: Er schreibt hoechstens einmal
+                // je Stadt und Tag, der Bonus bucht Geld. Wirft der Bonus trotz seines
+                // eigenen Fangs, ist der Stempel dieses Spielers schon gesetzt.
+                //
+                // Der null-Fall ist der Betrieb OHNE Freistaedtewelt, nicht ein
+                // Versehen - dann gibt es keine Stadt zu besuchen.
+                if (besuchslauf != null) {
+                    besuchslauf.imTakt(spieler);
+                }
                 bonuswache.imTakt(spieler);
             }
             // EINMAL und nicht je Spieler [Teil C]: Der Lauf geht ueber alle Vertraege,
@@ -298,6 +365,23 @@ final class Spielzeitwache implements Listener {
             // selbst, dies ist die zweite Schranke.
             if (truhenlauf != null) {
                 truhenlauf.imTakt();
+            }
+            // UND DER VERFALL, ganz am Ende [Teil E5]. Zuletzt aus demselben Grund wie
+            // die Raeumungen davor: Sein Ausfall kostet nichts - der naechste Takt holt
+            // ihn nach, und eine Geisterstadt, die einen Tag laenger steht, schadet
+            // niemandem. Alles davor schreibt Zeit oder bucht Geld.
+            //
+            // NACH dem Besuchsstempel, der weiter oben je Spieler laeuft: Liefe er
+            // davor, verfiele eine Stadt, in der in derselben Minute jemand steht.
+            if (verfallslauf != null) {
+                verfallslauf.imTakt();
+            }
+            // UND DIE TAGESGEBUEHR, nach dem Verfall [Teil E6]: Jener kann eine Stadt
+            // auf verfallen setzen, und dann sollen ihre Laeden an diesem Tag nicht
+            // mehr an sie zahlen. Ab Werk tut dieser Zweig nichts - die Tagesgebuehr
+            // ist 0, und das steht in der config.yml mit Begruendung.
+            if (ladengebuehrlauf != null) {
+                ladengebuehrlauf.imTakt();
             }
         } catch (Throwable fehler) {
             protokoll.log(Level.SEVERE, "Der Spielzeittakt ist in einen Fehler gelaufen."

@@ -18,10 +18,17 @@ import java.util.Set;
  * @param buergerrechte   was die Stadtbuerger einer NEU GEGRUENDETEN Stadt im
  *                        Gemeinschaftsgebiet duerfen - nur die Vorgabe, danach stellt
  *                        jeder Stadtbesitzer seine Stadt selbst ein
+ * @param auflageTeleporter ob eine Stadt die Auflage erfuellen muss, damit Fremde mit
+ *                          {@code /warp freistadt} hineinkommen
+ * @param auflageLadenrecht ob eine Stadt die Auflage erfuellen muss, damit in ihr neue
+ *                          Kistenshops entstehen duerfen
  */
 public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
                              int hoechstzellen, int verkaufsgebuehrProzent,
-                             Set<Tat> buergerrechte) {
+                             Set<Tat> buergerrechte, boolean auflageTeleporter,
+                             boolean auflageLadenrecht, Verfallswerte verfall,
+                             int erstattungProzent, long ladengebuehrAnlage,
+                             long ladengebuehrTag) {
 
     public static final String PFAD_GRUENDUNGSPREIS = "freistaedte.gruendungspreis";
 
@@ -53,6 +60,98 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
      * {@code welten:} und {@code berufe:}, die ebenfalls Aufzaehlungen sind.
      */
     public static final String PFAD_BUERGERRECHTE = "freistaedte.buergerrechte";
+
+    /**
+     * Ob die Auflage den Teleporter gattert.
+     *
+     * <p>ZWEI Schalter und nicht einer, obwohl es EINE Auflage ist: Ein Betreiber kann
+     * den Teleporter freigeben und das Ladenrecht gattern - oder umgekehrt. Mit einem
+     * Schalter waere jede Entscheidung eine doppelte, und wer nur eine der beiden
+     * Wirkungen will, bekaeme die andere dazu.
+     *
+     * <p>Die Auflage selbst ist trotzdem EINE Regel, an EINER Stelle
+     * ({@code Freistadtbuch.auflage}) - diese Schalter sagen nur, WO sie wirkt.
+     */
+    public static final String PFAD_AUFLAGE_TELEPORTER =
+            "freistaedte.auflage.teleporter";
+
+    /** Was der Besitzer beim Ende seiner Stadt zurueckbekommt, in Prozent. */
+    public static final String PFAD_ERSTATTUNG = "freistaedte.erstattung-prozent";
+
+    /** Was ein neuer Kistenshop EINMALIG an die Stadtkasse zahlt. */
+    public static final String PFAD_LADENGEBUEHR_ANLAGE =
+            "freistaedte.ladengebuehr.anlage";
+
+    /** Was ein Kistenshop TAEGLICH an die Stadtkasse zahlt. */
+    public static final String PFAD_LADENGEBUEHR_TAG = "freistaedte.ladengebuehr.tag";
+
+    /**
+     * Die Haelfte zurueck.
+     *
+     * <p><b>Nicht alles und nicht nichts</b>, und beides mit Grund: Die ganze Summe
+     * machte das Gruenden kostenlos - wer ein Feld ein Jahr blockiert und dann aufgibt,
+     * haette nichts bezahlt, und 400.000 Mark waeren keine Entscheidung mehr, sondern
+     * ein Pfand. Nichts dagegen machte das Aufgeben unmoeglich: Wer eine Stadt nicht
+     * mehr will, liesse sie lieber verfallen, und genau die Geisterstadt soll
+     * verschwinden.
+     *
+     * <p>Gerechnet wird vom EINGESETZTEN Preis der Zeile und nicht vom heutigen aus der
+     * Datei: Wer fuer 400.000 gegruendet hat, soll nicht darunter leiden, dass der
+     * Betreiber den Preis seitdem gesenkt hat.
+     */
+    public static final int VORGABE_ERSTATTUNG = 50;
+
+    /**
+     * 250 Mark fuer einen neuen Laden in einer Stadt.
+     *
+     * <p><b>Nicht 0</b>, obwohl eine 0 die bequemere Vorgabe waere: Die Stadtkasse ist
+     * seit Teil E1 gebaut, und ihre zweite Einnahme - die Marktgebuehr - liegt ab Werk
+     * bei 0 Prozent. Mit zwei Nullen waere sie eine Kasse, in die nie etwas fliesst,
+     * und ein Betreiber, der sie im Spiel ansieht, hielte sie fuer kaputt. 250 Mark
+     * sind wenig gegen die Einnahmen eines Shops und machen den Weg sichtbar.
+     *
+     * <p>Wer sie nicht will, schreibt 0 - dann faellt sie nicht, und der Startbericht
+     * nennt es.
+     */
+    public static final long VORGABE_LADENGEBUEHR_ANLAGE = 250L;
+
+    /**
+     * Taeglich NICHTS, und das ist die Vorgabe mit Bedacht.
+     *
+     * <p>Eine Tagesgebuehr ist die STAERKERE Senke, und sie hat eine Folge, die eine
+     * einmalige nicht hat: Wer sie nicht zahlen kann, verliert seinen Laden. Ob ein
+     * Server das will, entscheidet sein Betreiber und nicht diese Vorgabe - und eine
+     * Zahl ueber 0 hier naehme Spielern Laeden, von denen der Betreiber nie gelesen
+     * hat.
+     */
+    public static final long VORGABE_LADENGEBUEHR_TAG = 0L;
+
+    /** Ob die Auflage das Anlegen neuer Kistenshops gattert. */
+    public static final String PFAD_AUFLAGE_LADENRECHT =
+            "freistaedte.auflage.ladenrecht";
+
+    /**
+     * DIE AUFLAGE GILT ab Werk - beide Male.
+     *
+     * <p>So steht es in Plan 16, und der Zweck ist dort genannt: Geisterstaedte, die
+     * Flaeche blockieren. Eine Vorgabe von {@code false} haette die ganze Regel gebaut
+     * und ausgeschaltet geliefert - gruen geprueft und im Spiel wirkungslos.
+     *
+     * <p><b>Die Folge ist rueckwirkend und soll das sein:</b> Die Auflage ist eine
+     * LAUFENDE Bedingung und keine Vorgabe beim Gruenden. Eine Stadt, die ihr letztes
+     * vergebenes Grundstueck zurueckkauft oder ihre Regeln loescht, verliert den
+     * Teleporter wieder - und eine Stadt, die es heute schon gibt, hat ihn erst, wenn
+     * sie Regeln setzt. Eine Auflage, die nur beim Gruenden geprueft wird, waere nach
+     * dem ersten Verkauf stumm.
+     *
+     * <p><b>Seit Teil E3b ist diese Folge doppelt so gross</b>, und wer hier ueber die
+     * Vorgabe entscheidet, muss es wissen: Dieselbe Bedingung gattert auch das
+     * LADENRECHT. Jede heute bestehende Stadt ohne Regeltext verliert damit nicht nur
+     * ihren Teleporter, sondern auch die Moeglichkeit, dass in ihr ein NEUER
+     * Kistenshop entsteht. Die bestehenden handeln weiter - eine Einstellung darf
+     * keine Laeden loeschen, deren Ware Spielern gehoert.
+     */
+    public static final boolean VORGABE_AUFLAGE = true;
 
     /**
      * KEINE Rechte ab Werk - die sichere Richtung.
@@ -140,7 +239,9 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
 
     public static final Freistadtwerte VORGABE = new Freistadtwerte(
             VORGABE_GRUENDUNGSPREIS, VORGABE_HOECHSTZAHL, VORGABE_HOECHSTZELLEN,
-            VORGABE_VERKAUFSGEBUEHR, VORGABE_BUERGERRECHTE);
+            VORGABE_VERKAUFSGEBUEHR, VORGABE_BUERGERRECHTE, VORGABE_AUFLAGE,
+            VORGABE_AUFLAGE, Verfallswerte.VORGABE, VORGABE_ERSTATTUNG,
+            VORGABE_LADENGEBUEHR_ANLAGE, VORGABE_LADENGEBUEHR_TAG);
 
     public Freistadtwerte {
         if (gruendungspreis < 0L || gruendungspreis > HOECHSTER_BETRAG) {
@@ -178,35 +279,107 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
         // Aufrufer die Vorgabe des Betreibers nachtraeglich, und die naechste gegruendete
         // Stadt bekommt andere Rechte als die vorige.
         buergerrechte = buergerrechte == null ? Set.of() : Set.copyOf(buergerrechte);
+        // PFLICHT und nicht NULL-faehig: Ein fehlendes Satzstueck waere eine
+        // Verfallsrechnung, die beim ersten Takt mit einer NullPointerException stirbt -
+        // und zwar im Minutentakt, also fuer alle Spieler zugleich. Wer den Verfall
+        // nicht will, nimmt Verfallswerte.VORGABE.mitAn(false).
+        if (verfall == null) {
+            throw new IllegalArgumentException("Ohne Verfallswerte gibt es keine Frist -"
+                    + " wer den Verfall abschalten will, nimmt mitAn(false)");
+        }
+        // DIE ERSTATTUNG bis 100 Prozent, und beide Enden sind erlaubt: 0 heisst "nichts
+        // zurueck", 100 "alles zurueck". Darueber waere es ein Geschaeft - wer gruendet
+        // und aufgibt, machte Gewinn, und 400.000 Mark waeren eine Geldquelle.
+        if (erstattungProzent < 0 || erstattungProzent > 100) {
+            throw new IllegalArgumentException("Die Erstattung ist " + erstattungProzent
+                    + " Prozent und liegt nicht zwischen 0 und 100. Ueber 100 waere das"
+                    + " Gruenden eine Geldquelle: Wer gruendet und aufgibt, machte"
+                    + " Gewinn.");
+        }
+        for (long gebuehr : new long[] {ladengebuehrAnlage, ladengebuehrTag}) {
+            if (gebuehr < 0L || gebuehr > HOECHSTER_BETRAG) {
+                throw new IllegalArgumentException("Eine Ladengebuehr ist " + gebuehr
+                        + " und liegt nicht zwischen 0 und " + HOECHSTER_BETRAG
+                        + ". Eine 0 ist erlaubt und heisst: Sie faellt nicht.");
+            }
+        }
     }
 
     /** Dieselben Werte mit anderem Gruendungspreis. */
     public Freistadtwerte mitGruendungspreis(long anderer) {
         return new Freistadtwerte(anderer, hoechstzahl, hoechstzellen,
-                verkaufsgebuehrProzent, buergerrechte);
+                verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
+                auflageLadenrecht, verfall, erstattungProzent,
+                ladengebuehrAnlage, ladengebuehrTag);
     }
 
     /** Dieselben Werte mit anderer Hoechstzahl. */
     public Freistadtwerte mitHoechstzahl(int andere) {
         return new Freistadtwerte(gruendungspreis, andere, hoechstzellen,
-                verkaufsgebuehrProzent, buergerrechte);
+                verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
+                auflageLadenrecht, verfall, erstattungProzent,
+                ladengebuehrAnlage, ladengebuehrTag);
     }
 
     /** Dieselben Werte mit anderer Zellengrenze. */
     public Freistadtwerte mitHoechstzellen(int andere) {
         return new Freistadtwerte(gruendungspreis, hoechstzahl, andere,
-                verkaufsgebuehrProzent, buergerrechte);
+                verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
+                auflageLadenrecht, verfall, erstattungProzent,
+                ladengebuehrAnlage, ladengebuehrTag);
     }
 
     /** Dieselben Werte mit anderer Verkaufsgebuehr. */
     public Freistadtwerte mitVerkaufsgebuehr(int andere) {
         return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen, andere,
-                buergerrechte);
+                buergerrechte, auflageTeleporter, auflageLadenrecht, verfall, erstattungProzent,
+                ladengebuehrAnlage, ladengebuehrTag);
     }
 
     /** Dieselben Werte mit anderen Vorgabe-Buergerrechten. */
     public Freistadtwerte mitBuergerrechten(Set<Tat> andere) {
         return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
-                verkaufsgebuehrProzent, andere);
+                verkaufsgebuehrProzent, andere, auflageTeleporter, auflageLadenrecht,
+                verfall, erstattungProzent,
+                ladengebuehrAnlage, ladengebuehrTag);
+    }
+
+    /** Dieselben Werte mit anderem Teleporter-Gatter. */
+    public Freistadtwerte mitAuflageTeleporter(boolean andere) {
+        return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
+                verkaufsgebuehrProzent, buergerrechte, andere, auflageLadenrecht,
+                verfall, erstattungProzent,
+                ladengebuehrAnlage, ladengebuehrTag);
+    }
+
+    /** Dieselben Werte mit anderem Erstattungsanteil. */
+    public Freistadtwerte mitErstattung(int andere) {
+        return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
+                verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
+                auflageLadenrecht, verfall, andere, ladengebuehrAnlage,
+                ladengebuehrTag);
+    }
+
+    /** Dieselben Werte mit anderen Ladengebuehren - beide zusammen, weil sie es sind. */
+    public Freistadtwerte mitLadengebuehren(long anlage, long tag) {
+        return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
+                verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
+                auflageLadenrecht, verfall, erstattungProzent, anlage, tag);
+    }
+
+    /** Dieselben Werte mit anderen Verfallsfristen. */
+    public Freistadtwerte mitVerfall(Verfallswerte andere) {
+        return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
+                verkaufsgebuehrProzent, buergerrechte, auflageTeleporter,
+                auflageLadenrecht, andere, erstattungProzent,
+                ladengebuehrAnlage, ladengebuehrTag);
+    }
+
+    /** Dieselben Werte mit anderem Ladenrecht-Gatter. */
+    public Freistadtwerte mitAuflageLadenrecht(boolean andere) {
+        return new Freistadtwerte(gruendungspreis, hoechstzahl, hoechstzellen,
+                verkaufsgebuehrProzent, buergerrechte, auflageTeleporter, andere,
+                verfall, erstattungProzent,
+                ladengebuehrAnlage, ladengebuehrTag);
     }
 }

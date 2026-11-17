@@ -2,6 +2,7 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Blocktat;
+import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Handelsart;
@@ -237,6 +238,33 @@ final class Sprachschluessel {
     }
 
     /**
+     * Das Wort zu dem, was einer Stadt zur Auflage fehlt - fuer BEIDE Riegel.
+     *
+     * <p><b>Hier und nicht bei einem der beiden Aufrufer</b>, seit dem 17.11.2026:
+     * Der Teleporter weist mit {@code warp.stadt-ohne-auflage} ab, das Ladenrecht mit
+     * {@code shop.absage.kein-ladenrecht}, und beide setzen dasselbe Wort als
+     * {@code was} ein. Stuende die Wahl zweimal, bekaeme die zweite den naechsten
+     * Grund nicht mit - und ein Spieler lese je nach Riegel etwas anderes ueber
+     * denselben Mangel.
+     *
+     * <p>Ein {@code switch} ohne {@code default}: Ein vierter Grund bricht hier die
+     * Uebersetzung und nicht das Spiel.
+     */
+    static Satz auflagenwort(Freistadtbuch.Auflage auflage) {
+        return switch (auflage) {
+            case OHNE_REGELN -> FreistadtSatz.AUFLAGE_OHNE_REGELN;
+            case OHNE_BUERGER -> FreistadtSatz.AUFLAGE_OHNE_BUERGER;
+            case OHNE_BEIDES -> FreistadtSatz.AUFLAGE_OHNE_BEIDES;
+            // ERFUELLT kommt hier nicht an - jeder Aufrufer prueft erfuellt() vorher.
+            // Dass es trotzdem dasteht, ist Absicht: Eine stille Ausnahme waere eine
+            // Absage ohne Grund, ein Wurf ist ein Eintrag im Logbuch mit Zeile.
+            case ERFUELLT -> throw new IllegalArgumentException("Eine erfuellte Auflage"
+                    + " hat kein Wort - dieser Zweig wird nur fuer eine ABSAGE"
+                    + " gerufen, und der Aufrufer prueft erfuellt() vorher");
+        };
+    }
+
+    /**
      * Statt eines {@code switch} in {@link Shoptext} - der Satz zu einem Anlagebescheid.
      *
      * <p>Dieselbe Bauart wie {@link #bescheid} und aus demselben Grund: Die Zuordnung
@@ -270,6 +298,8 @@ final class Sprachschluessel {
             case WARE_UNKLAR -> ShopSatz.SHOP_WARE_UNKLAR;
             case WARE_UNBEKANNT -> ShopSatz.SHOP_WARE_UNBEKANNT;
             case KEIN_BUNDRECHT -> ShopSatz.SHOP_KEIN_BUNDRECHT;
+            case KEIN_LADENRECHT -> ShopSatz.SHOP_KEIN_LADENRECHT;
+            case LADENGEBUEHR_ZU_TEUER -> ShopSatz.SHOP_LADENGEBUEHR_ZU_TEUER;
             case GESTOERT -> ShopSatz.SHOP_GESTOERT;
             case ABGEBAUT, KEIN_SHOP -> throw new IllegalArgumentException(bescheid
                     + " kommt vom Abbauen und nicht vom Anlegen - dort waehlt niemand"
@@ -457,6 +487,20 @@ final class Sprachschluessel {
         // geht JEDES Recht durch die echte Zeile aus der ausgelieferten Vorlage.
         for (Tat recht : Tat.values()) {
             pfade.add(FreistadtSatz.rechtewort(recht).pfad());
+        }
+        // Die drei Worte der AUFLAGE, ueber auflagenwort gewaehlt - und seit dem
+        // 17.11.2026 nirgends mehr namentlich getippt, weil BEIDE Riegel sie
+        // brauchen. Gedeckt sind sie in ShoptextTest: Dort geht JEDER Grund durch die
+        // echte Zeile aus der ausgelieferten Vorlage, und die drei Worte muessen sich
+        // ausserdem unterscheiden - waeren zwei gleich, koennte der Satz die Angabe
+        // ebenso gut weglassen.
+        //
+        // ERFUELLT faellt weg, wie ABGEBAUT bei den Shopbescheiden: auflagenwort
+        // wirft dafuer, denn eine erfuellte Auflage hat keinen Mangel zu nennen.
+        for (Freistadtbuch.Auflage auflage : Freistadtbuch.Auflage.values()) {
+            if (auflage != Freistadtbuch.Auflage.ERFUELLT) {
+                pfade.add(auflagenwort(auflage).pfad());
+            }
         }
         // Die Saetze der Kistenshops, ueber shopAnlage und schildfehler gewaehlt.
         // ABGEBAUT und KEIN_SHOP fehlen mit Absicht: Sie werfen dort, siehe die

@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import de.freimarken.kern.Freistadtwerte;
+import de.freimarken.kern.Verfallswerte;
 import de.freimarken.kern.Tat;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -34,7 +35,13 @@ final class Freistadtliste {
     private static final List<String> SCHLUESSEL = List.of(
             PFAD_WELT, Freistadtwerte.PFAD_GRUENDUNGSPREIS,
             Freistadtwerte.PFAD_HOECHSTZAHL, Freistadtwerte.PFAD_HOECHSTZELLEN,
-            Freistadtwerte.PFAD_VERKAUFSGEBUEHR, Freistadtwerte.PFAD_BUERGERRECHTE);
+            Freistadtwerte.PFAD_VERKAUFSGEBUEHR, Freistadtwerte.PFAD_BUERGERRECHTE,
+            Freistadtwerte.PFAD_AUFLAGE_TELEPORTER,
+            Freistadtwerte.PFAD_AUFLAGE_LADENRECHT, Verfallswerte.PFAD_AN,
+            Verfallswerte.PFAD_UNBESUCHT_TAGE, Verfallswerte.PFAD_WARNUNG_FRUEH,
+            Verfallswerte.PFAD_WARNUNG_SPAET, Freistadtwerte.PFAD_ERSTATTUNG,
+            Freistadtwerte.PFAD_LADENGEBUEHR_ANLAGE,
+            Freistadtwerte.PFAD_LADENGEBUEHR_TAG);
 
     /**
      * @param welt der Weltname OHNE Namensraum, wie er in der Datei steht. Der Schluessel
@@ -72,9 +79,21 @@ final class Freistadtliste {
         int hoechstzellen = hoechstzellen(wurzel, klagen, bericht);
         int gebuehr = verkaufsgebuehr(wurzel, klagen, bericht);
         Set<Tat> rechte = buergerrechte(wurzel, klagen, bericht);
+        boolean teleporter = jaNein(wurzel,
+                Freistadtwerte.PFAD_AUFLAGE_TELEPORTER,
+                Freistadtwerte.VORGABE_AUFLAGE, klagen, bericht);
+        boolean ladenrecht = jaNein(wurzel,
+                Freistadtwerte.PFAD_AUFLAGE_LADENRECHT,
+                Freistadtwerte.VORGABE_AUFLAGE, klagen, bericht);
 
         Freistadtwerte werte = new Freistadtwerte(preis, hoechstzahl,
-                hoechstzellen, gebuehr, rechte);
+                hoechstzellen, gebuehr, rechte, teleporter, ladenrecht,
+                verfall(wurzel, klagen, bericht),
+                erstattung(wurzel, klagen, bericht),
+                betrag(wurzel, Freistadtwerte.PFAD_LADENGEBUEHR_ANLAGE,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_ANLAGE, klagen, bericht),
+                betrag(wurzel, Freistadtwerte.PFAD_LADENGEBUEHR_TAG,
+                        Freistadtwerte.VORGABE_LADENGEBUEHR_TAG, klagen, bericht));
         bericht.add(rechenprobe(werte) + " Welt: " + welt + ".");
         return new Ergebnis(welt, werte, klagen, bericht);
     }
@@ -225,6 +244,150 @@ final class Freistadtliste {
             bericht.add(Freistadtwerte.PFAD_HOECHSTZAHL + " = " + wert + " gilt.");
         }
         return (int) wert;
+    }
+
+    // --- Teil E3 ---------------------------------------------------------------
+
+    /**
+     * Ein Auflagenschalter - EINE Methode fuer BEIDE.
+     *
+     * <p>Zwei gleich gebaute Leser nebeneinander waeren genau die Stelle, an der der
+     * zweite die naechste Verschaerfung nicht mitbekommt - dieselbe Begruendung, die
+     * {@link #hoechstzellen} fuer seine Bauart gibt, nur hier zu Ende gedacht: Es IST
+     * dieselbe Frage, also ist es eine Methode mit einem Pfad als Argument.
+     *
+     * <p>Ein Wert, der kein Ja oder Nein ist, wird BEKLAGT und die Vorgabe gilt - nicht
+     * still als {@code false} gelesen. Bukkits {@code getBoolean} gibt fuer "vielleicht"
+     * ein {@code false} zurueck, und das waere eine ausgeschaltete Auflage, die der
+     * Betreiber eingeschaltet glaubt.
+     */
+    private static boolean jaNein(ConfigurationSection wurzel, String pfad,
+                                  boolean vorgabe, List<String> klagen,
+                                  List<String> bericht) {
+        if (!wurzel.contains(pfad, true)) {
+            return vorgabe;
+        }
+        Object roh = wurzel.get(pfad);
+        if (!(roh instanceof Boolean gelesen)) {
+            klagen.add(pfad + " ist kein Ja oder Nein ("
+                    + Wirtschaftsliste.wieGetippt(roh) + ") - verworfen. "
+                    + Wirtschaftsliste.esBleibt(String.valueOf(vorgabe)));
+            return vorgabe;
+        }
+        if (gelesen != vorgabe) {
+            // GEMELDET, und zwar laut: Eine abgeschaltete Auflage ist eine Regel, die
+            // gebaut ist und nicht wirkt. Wer den Startbericht liest, soll das sehen -
+            // sonst sucht er die Wirkung im Programm.
+            bericht.add(pfad + " = " + gelesen + " gilt - die Regel wirkt hier NICHT.");
+        }
+        return gelesen;
+    }
+
+    /**
+     * Die vier Verfallszeilen - und bei jedem Unsinn die ganze VORGABE.
+     *
+     * <p><b>Alles oder nichts, anders als bei den Zahlen daneben</b>: Die drei Fristen
+     * haengen voneinander ab ({@code Verfallswerte} verlangt, dass die zweite Warnung
+     * naeher am Verfall liegt als die erste). Ein einzeln zurechtgebogener Wert ergaebe
+     * eine Mischung aus Datei und Vorgabe, die der Betreiber nirgends nachlesen kann -
+     * und die Pruefung im Satz wuerfe mitten im Start.
+     *
+     * <p>Darum: Jede Zeile wird einzeln gelesen und beklagt, und wenn der fertige Satz
+     * sich nicht bauen laesst, gilt {@code Verfallswerte.VORGABE} - mit einer Klage, die
+     * den Grund woertlich nennt.
+     */
+    private static Verfallswerte verfall(ConfigurationSection wurzel,
+                                         List<String> klagen, List<String> bericht) {
+        boolean an = jaNein(wurzel, Verfallswerte.PFAD_AN, Verfallswerte.VORGABE_AN,
+                klagen, bericht);
+        int unbesucht = frist(wurzel, Verfallswerte.PFAD_UNBESUCHT_TAGE,
+                Verfallswerte.VORGABE_UNBESUCHT_TAGE, klagen, bericht);
+        int frueh = frist(wurzel, Verfallswerte.PFAD_WARNUNG_FRUEH,
+                Verfallswerte.VORGABE_WARNUNG_FRUEH, klagen, bericht);
+        int spaet = frist(wurzel, Verfallswerte.PFAD_WARNUNG_SPAET,
+                Verfallswerte.VORGABE_WARNUNG_SPAET, klagen, bericht);
+        try {
+            return new Verfallswerte(an, unbesucht, frueh, spaet);
+        } catch (IllegalArgumentException unbrauchbar) {
+            klagen.add("Die Verfallsfristen passen nicht zusammen: "
+                    + unbrauchbar.getMessage() + " "
+                    + Wirtschaftsliste.esBleibt("die Vorgabe ("
+                            + Verfallswerte.VORGABE_UNBESUCHT_TAGE + " Tage, Warnungen "
+                            + Verfallswerte.VORGABE_WARNUNG_FRUEH + " und "
+                            + Verfallswerte.VORGABE_WARNUNG_SPAET + " Tage vorher)"));
+            return Verfallswerte.VORGABE;
+        }
+    }
+
+    /**
+     * Eine Tagesfrist - ganze Zahl, nicht negativ, nicht laenger als zehn Jahre.
+     *
+     * <p>EINE Methode fuer drei Zeilen mit dem Pfad als Argument, aus demselben Grund,
+     * den {@link #auflage} nebenan nennt: Drei gleich gebaute Leser waeren drei Stellen,
+     * an denen der zweite die naechste Verschaerfung nicht mitbekommt.
+     */
+    private static int frist(ConfigurationSection wurzel, String pfad, int vorgabe,
+                             List<String> klagen, List<String> bericht) {
+        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel, pfad, vorgabe, klagen,
+                bericht);
+        if (gelesen == null) {
+            return vorgabe;
+        }
+        long wert = gelesen;
+        if (wert < 0L || wert > Verfallswerte.LAENGSTE_FRIST_TAGE) {
+            klagen.add(pfad + " ist " + wert + " und liegt nicht zwischen 0 und "
+                    + Verfallswerte.LAENGSTE_FRIST_TAGE + " Tagen - verworfen. "
+                    + Wirtschaftsliste.esBleibt(String.valueOf(vorgabe)));
+            return vorgabe;
+        }
+        return (int) wert;
+    }
+
+    /** Der Erstattungsanteil in Prozent - 0 bis 100. */
+    private static int erstattung(ConfigurationSection wurzel, List<String> klagen,
+                                  List<String> bericht) {
+        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel,
+                Freistadtwerte.PFAD_ERSTATTUNG, Freistadtwerte.VORGABE_ERSTATTUNG,
+                klagen, bericht);
+        if (gelesen == null) {
+            return Freistadtwerte.VORGABE_ERSTATTUNG;
+        }
+        long wert = gelesen;
+        if (wert < 0L || wert > 100L) {
+            klagen.add(Freistadtwerte.PFAD_ERSTATTUNG + " ist " + wert + " und liegt"
+                    + " nicht zwischen 0 und 100 Prozent - verworfen. Ueber 100 waere"
+                    + " das Gruenden eine Geldquelle. "
+                    + Wirtschaftsliste.esBleibt(
+                            String.valueOf(Freistadtwerte.VORGABE_ERSTATTUNG)));
+            return Freistadtwerte.VORGABE_ERSTATTUNG;
+        }
+        return (int) wert;
+    }
+
+    /**
+     * Ein Mark-Betrag - nicht negativ, nicht ueber der Obergrenze.
+     *
+     * <p>EINE Methode fuer die zwei Ladengebuehren mit dem Pfad als Argument, aus
+     * demselben Grund, den {@link #jaNein} und {@link #frist} nennen: Zwei gleich
+     * gebaute Leser waeren zwei Stellen, an denen der zweite die naechste Verschaerfung
+     * nicht mitbekommt.
+     */
+    private static long betrag(ConfigurationSection wurzel, String pfad, long vorgabe,
+                               List<String> klagen, List<String> bericht) {
+        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel, pfad, vorgabe, klagen,
+                bericht);
+        if (gelesen == null) {
+            return vorgabe;
+        }
+        long wert = gelesen;
+        if (wert < 0L || wert > Freistadtwerte.HOECHSTER_BETRAG) {
+            klagen.add(pfad + " ist " + wert + " und liegt nicht zwischen 0 und "
+                    + Freistadtwerte.HOECHSTER_BETRAG + " Mark - verworfen. Eine 0 ist"
+                    + " erlaubt und heisst: Die Gebuehr faellt nicht. "
+                    + Wirtschaftsliste.esBleibt(String.valueOf(vorgabe)));
+            return vorgabe;
+        }
+        return wert;
     }
 
     private static void nenneFehlende(ConfigurationSection wurzel, List<String> bericht) {

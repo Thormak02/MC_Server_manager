@@ -283,6 +283,19 @@ class GrenzeTest {
     private static final Set<String> SENDEN_ERLAUBT = new TreeSet<>(List.of(
             "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
             "BerufeBefehle.java",
+            // Der Verfallslauf [Teil E5]: Er warnt den Stadtbesitzer beim Beitritt und
+            // meldet ihm die Wiederbelebung. Eine Durchsage, die am Beitritt haengt,
+            // weil ein abwesender Besitzer sonst nie erfaehrt, dass seine Stadt
+            // ablaeuft.
+            "Verfallslauf.java",
+            // Die taegliche Ladengebuehr [Teil E6]: EINE Sendestelle - die Zeile an
+            // den Haendler, dessen Laden sie gekostet hat. Dass die Ware noch in der
+            // Kiste liegt, erfaehrt er nur hier.
+            "Ladengebuehrlauf.java",
+            // Und der Besuchsstempel [Teil E5]: EINE Sendestelle, die EINE Zeile
+            // sendet - dass eine verfallene Stadt wieder aufgewacht ist. Das Stempeln
+            // selbst sendet nie; es faellt 1.440 Mal am Tag.
+            "Besuchslauf.java",
             // Das Blockbuch: EINE Sendestelle fuer beide Zweige und jede Absage. Sie
             // antwortet dem SENDER und nicht dem Executor - bei
             // /execute as <spieler> run freimarken blockbuch schaut der Spieler den
@@ -453,6 +466,17 @@ class GrenzeTest {
             // alle durch dasselbe private sende(). Haette jeder Zweig sein eigenes,
             // stuende hier eine 3, und eine verlorene Sendung waere nicht zu sehen.
             Map.entry("Mietwache.java", 1),
+            // ZWEI im Verfallslauf [Teil E5]: die Warnung beim Beitritt und - ueber
+            // denselben forEach - die Meldung, dass die Stadt verfallen IST. Beide
+            // gehen durch Freistadttext.verfallszeilen, aber die Stelle zaehlt, nicht
+            // der Satz.
+            Map.entry("Verfallslauf.java", 1),
+            // EINS im Besuchsstempel: die Wiederbelebung. Das Stempeln sendet nie.
+            Map.entry("Besuchslauf.java", 1),
+            // EINS im Tageslauf der Ladengebuehr: die Zeile an den Haendler. Das
+            // ZAHLEN sendet nie - es faellt taeglich und waere eine Durchsage ohne
+            // Anlass.
+            Map.entry("Ladengebuehrlauf.java", 1),
             Map.entry("ParzellenBefehle.java", 44),
             Map.entry("Portalwache.java", 1),
             Map.entry("Reise.java", 7),
@@ -480,7 +504,10 @@ class GrenzeTest {
             Map.entry("Einrichtungswache.java", 1),
             Map.entry("SpielzeitBefehle.java", 4),
             Map.entry("Sprache.java", 3),
-            Map.entry("WarpBefehle.java", 6));
+            // 7 seit Teil E3: der Satz, der eine Stadt ohne erfuellte Auflage
+            // abweist. Ohne ihn erschien sie als warp.stadt-unbekannt, also als
+            // Tippfehler.
+            Map.entry("WarpBefehle.java", 7));
 
     /**
      * Wie oft jede reine Zeilen-Methode von {@code ParzellenBefehle} AUFGERUFEN wird.
@@ -725,7 +752,11 @@ class GrenzeTest {
             // Zweige dieselbe Lage haben: /warp freistadt ohne Namen und mit Namen.
             Map.entry("keineStadtweltZeilen", 2),
             Map.entry("welcheStadtZeilen", 1),
-            Map.entry("keineStadtZeilen", 1));
+            Map.entry("keineStadtZeilen", 1),
+            // Teil E3: die Absage an eine Stadt, deren Auflage offen ist. EIN Aufruf -
+            // der Riegel sitzt an genau einer Stelle, zwischen dem gefundenen Namen
+            // und der Reise.
+            Map.entry("ohneAuflageZeilen", 1));
 
     /**
      * Dasselbe fuer {@code RueckwegBefehle} - EIN Satz und EIN Wortstueck.
@@ -995,6 +1026,7 @@ class GrenzeTest {
             "SCHUTZ_STADT_AUSSERHALB -> HANDBALKEN",
             "SCHUTZ_ANKUNFTSFELD -> HANDBALKEN",
             "SCHUTZ_STADT_FREI -> HANDBALKEN",
+            "SCHUTZ_STADT_VERFALLEN -> HANDBALKEN",
             "SCHUTZ_FREMDE_STADT -> HANDBALKEN",
             // Auch dieser ist ein Handbalken, und hier ist es besonders wichtig:
             // Er erscheint, waehrend jemand BAUT - eine zweite Zeile wuerde dort
@@ -2984,6 +3016,23 @@ class GrenzeTest {
                 // richte-Methode setzt, hat keine Reihenfolge.
                 continue;
             }
+            // ODER DER FUELLER LAEUFT IN richteSpielzeitEin SELBST [Teil E6]:
+            // richteShopsEin wird von dort gerufen und nicht aus onEnable, denn das
+            // Shopbuch gehoert zum Takt. Dann ist die Frage nicht "vor
+            // richteSpielzeitEin", sondern "vor new Spielzeitwache" - und sie bleibt
+            // eine Frage: Wer den Aufruf dahinter schiebt, gibt ein null hinein, und
+            // weil null erlaubt ist, faellt es nirgends auf.
+            int ruftFueller = taktmethode.indexOf(fueller + "();");
+            if (ruftFueller >= 0) {
+                assertTrue(ruftFueller < taktmethode.indexOf(TAKTBAU),
+                        fueller + "() fuellt das Feld " + feld + ", und es wird in"
+                                + " richteSpielzeitEin selbst gerufen - aber ERST NACH"
+                                + " new Spielzeitwache(). Dann bekommt der Takt ein"
+                                + " null, und weil null dort ein ERLAUBTER Wert ist,"
+                                + " faellt nichts auf: Der Mitfahrer laeuft nie.");
+                geprueft.add(feld);
+                continue;
+            }
             int baut = start.indexOf(fueller + "(");
             assertTrue(baut >= 0 && baut < braucht,
                     fueller + "() fuellt das Feld " + feld + ", das new Spielzeitwache()"
@@ -2993,7 +3042,8 @@ class GrenzeTest {
                             + " laeuft nie, und keine Meldung sagt es.");
             geprueft.add(feld);
         }
-        assertEquals(List.of("blockraeumung", "truhenlauf"), geprueft,
+        assertEquals(List.of("blockraeumung", "truhenlauf", "besuchslauf",
+                        "verfallslauf", "ladengebuehrlauf"), geprueft,
                 "GEPRUEFT werden muessen alle Mitfahrer, die aus einer eigenen"
                         + " richte-Methode kommen. Diese Liste steht hier, damit ein Lauf"
                         + " ohne Messung nicht gruen meldet: Fiele die Erkennung aus,"
@@ -3431,4 +3481,90 @@ class GrenzeTest {
                         + " dangling-doc-comments, aber nur im Lauf, in dem wirklich"
                         + " uebersetzt wird: " + abgerissen);
     }
+
+    @Test
+    @DisplayName("31at - der Auflagenriegel sitzt VOR der Reise, in reiseInStadt")
+    void auflagenriegelVorDerReise() {
+        // EINE QUELLTEXTTAFEL UND KEINE VERHALTENSPROBE, und der Grund ist gemessen:
+        // Der Erfolgsfall eines Stadtwarps laeuft ohne Server nicht durch - Reise.pruefe
+        // fragt ueber Ankunftspunkt.taugt den Boden, und Material.isSolid geht in die
+        // Bukkit-Registry, die ohne Server wirft.
+        //
+        // Was diese Tafel festhaelt, ist die VERDRAHTUNG: Die Auflage wird gefragt, und
+        // zwar VOR reise.fuehre. Beides einzeln ist wertlos - eine Regel, die gebaut und
+        // gruen geprueft ist und nicht gerufen wird, ist im Spiel unsichtbar
+        // wirkungslos; und eine, die NACH der Reise fragt, kommt zu spaet.
+        String quelle = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("WarpBefehle.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("WarpBefehle.java fehlt")));
+        int riegel = quelle.indexOf("freistadtbuch.darfReisen(");
+        int reise = quelle.indexOf("reise.fuehre(spieler, new org.bukkit.Location(");
+
+        assertTrue(riegel > 0, "reiseInStadt fragt die Auflage GAR NICHT - die Regel"
+                + " ist dann gebaut, gruen geprueft und im Spiel wirkungslos");
+        assertTrue(reise > 0, "die Reise selbst steht nicht mehr da - dann prueft diese"
+                + " Tafel die falsche Datei");
+        assertTrue(riegel < reise,
+                "und der Riegel steht VOR der Reise. Danach waere der Spieler schon in"
+                        + " der Stadt, und die Absage kaeme ihm hinterher.");
+
+        // Und die andere Richtung: Zwischen dem Riegel und der Reise steht ein
+        // Ausgang. Ohne ihn liest der Abgewiesene seine Absage UND reist trotzdem.
+        String dazwischen = quelle.substring(riegel, reise);
+        assertTrue(dazwischen.contains("return;"),
+                "zwischen Riegel und Reise fehlt das return - dann sendet der Zweig die"
+                        + " Absage und reist danach doch: " + dazwischen);
+    }
+
+
+    @Test
+    @DisplayName("31au - das Shopbuch bekommt das ECHTE Freistadtbuch, nicht null")
+    void shopbuchBekommtDasFreistadtbuch() {
+        // DIE EINE ZEILE, DIE KEINE PROBE SIEHT. Jede Shopprobe baut ihr Shopbuch
+        // selbst und gibt hinein, was sie messen will; dass der laufende Server dort
+        // das echte Buch uebergibt, steht nur in FreimarkenPlugin. Ein null an dieser
+        // Stelle liesse den ganzen Riegel lautlos durch - gebaut, gruen geprueft und
+        // im Spiel ohne Wirkung. Dasselbe Anliegen wie bei 31at, nur fuer den zweiten
+        // Riegel derselben Auflage.
+        String quelle = Quellen.text(Quellen.alle().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("FreimarkenPlugin.java"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("FreimarkenPlugin.java fehlt")));
+        int bau = quelle.indexOf("new Shopbuch(");
+        assertTrue(bau > 0, "der Server baut gar kein Shopbuch mehr - dann prueft diese"
+                + " Tafel die falsche Datei");
+        int ende = quelle.indexOf("getLogger());", bau);
+        assertTrue(ende > bau, "der Bau des Shopbuchs endet nicht mehr am Protokoll -"
+                + " diese Tafel liest dann einen Abschnitt, der ihr nicht gehoert");
+
+        String werte = quelle.substring(bau, ende);
+        assertTrue(werte.contains("freistadtbuch,"),
+                "das Shopbuch bekommt das Freistadtbuch NICHT - der Riegel aus E3b ist"
+                        + " dann gebaut, gruen geprueft und im Spiel wirkungslos: "
+                        + werte);
+
+        // Und die andere Richtung, denn ein null uebersetzt sich genauso gut: Es darf
+        // nicht an die Stelle des Buches geraten.
+        assertFalse(werte.contains("null"),
+                "an dieser Stelle steht ein null - und null heisst hier 'es gibt keine"
+                        + " Freistaedte', also laesst der Riegel jeden Shop durch: "
+                        + werte);
+
+        // Die REIHENFOLGE im Start: Das Feld muss gefuellt sein, wenn das Shopbuch
+        // entsteht. Beide Zweige stehen in onEnable, und ihre Reihenfolge ist die
+        // ganze Zusage - richteShopsEin zuerst gaebe ein stilles null hinein.
+        int staedte = quelle.indexOf("richteFreistaedteEin();");
+        int spielzeit = quelle.indexOf("richteSpielzeitEin();");
+        assertTrue(staedte > 0 && spielzeit > 0,
+                "einer der beiden Einrichtungszweige heisst nicht mehr so");
+        assertTrue(staedte < spielzeit,
+                "richteFreistaedteEin laeuft NACH dem Zweig, aus dem richteShopsEin"
+                        + " gerufen wird - dann ist freistadtbuch beim Bau des"
+                        + " Shopbuchs noch null, und der Riegel wirkt in diesem Lauf"
+                        + " nie");
+    }
+
 }

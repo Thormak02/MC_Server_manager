@@ -1,5 +1,7 @@
 package de.freimarken.kern;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -150,7 +152,26 @@ public final class Freistadtbuch {
          * aufgehoben, und der Kaeufer haette fuer eine Flaeche gezahlt, auf der seine
          * Nachbarn weiterbauen.
          */
-        ERLAUBT_STADTBUERGER(true);
+        ERLAUBT_STADTBUERGER(true),
+        /**
+         * Die Stadt ist VERFALLEN - hier baut niemand mehr [Plan 16, Teil E5].
+         *
+         * <p><b>Es sticht ALLE DREI Ja-Urteile</b>, auch das des Besitzers und das des
+         * Grundstuecksbesitzers. Das ist der Zweck: Eine verfallene Stadt soll
+         * aussehen, als haette sie aufgehoert - sonst merkt niemand, dass sie es tat,
+         * und die Regel aus Plan 16 waere eine Zeile in der Datenbank.
+         *
+         * <p><b>Der Besitzer belebt sie durch BETRETEN wieder</b>, nicht durch Bauen.
+         * Darum trifft dieses Urteil auch ihn, und zwar hoechstens einen Taktschlag
+         * lang: Der Besuchsstempel aus Teil E4 sieht ihn in der Stadt stehen und setzt
+         * sie im naechsten Minutentakt auf aktiv. Der Satz dazu sagt es ihm.
+         *
+         * <p><b>Gefragt wird EINMAL und nicht in den drei Ja-Zweigen</b>: Drei Riegel
+         * waeren drei Stellen, an denen der vierte vergessen wird. Die Antwort kommt
+         * aus {@link Zustand#erlaubtBauen()} - der einen Stelle, die weiss, welcher
+         * Zustand Bauen erlaubt.
+         */
+        VERFALLENE_STADT(false);
 
         private final boolean erlaubt;
 
@@ -211,13 +232,37 @@ public final class Freistadtbuch {
     private Grundstuecksablage grundstuecke;
 
     public Freistadtbuch(Feldgrenze grenze, BesitzLager lager, Kasse kasse,
-                         Warpverzeichnis warps, Wirtschaftsstand wirtschaft) {
+                         Stadtkasse stadtkasse, Warpverzeichnis warps,
+                         Wirtschaftsstand wirtschaft) {
         this.grenze = grenze;
         this.plan = grenze.plan();
         this.lager = lager;
         this.kasse = kasse;
+        // IM KONSTRUKTOR und nicht nachgereicht wie die Grundstuecksablage: Die
+        // Stadtkasse entsteht zusammen mit der Spielerkasse, lange vor dem ersten
+        // Befehl. Ein Buch, das sie nachgereicht bekommt, haette einen Zustand, in dem
+        // es halb arbeitet - und der Abhebezweig fiele darin lautlos aus.
+        this.stadtkasse = stadtkasse;
         this.warps = warps;
         this.wirtschaft = wirtschaft;
+    }
+
+    /** Die Kasse der STAEDTE - siehe {@link Stadtkasse}. */
+    private final Stadtkasse stadtkasse;
+
+    /**
+     * Was in der Kasse dieser Stadt liegt - fuer die Auskunft.
+     *
+     * <p>Wirft bei einer Stoerung, wie {@link #darfBauen}: Der Aufrufer faengt das und
+     * sagt GESTOERT.
+     */
+    public long kassenstand(Parzelle stadt) {
+        return stadtkasse.stand(stadt);
+    }
+
+    /** Die letzten Buchungen dieser Stadt - fuer die Auskunft. */
+    public List<Buchung> kassenverlauf(Parzelle stadt, int hoechstens) {
+        return stadtkasse.verlauf(stadt, hoechstens);
     }
 
     /** Wie weit die Welt reicht - fuer die Zuteilung und fuer die Auskunft. */
@@ -342,6 +387,17 @@ public final class Freistadtbuch {
         if (stadt.isEmpty()) {
             return Bauurteil.FREIES_FELD;
         }
+        // DER ZUSTAND, und zwar VOR allen drei Ja-Zweigen [Teil E5]. Hier und nicht
+        // dreimal weiter unten: Drei Riegel waeren drei Stellen, an denen der vierte
+        // vergessen wird - und die Stadtzeile liegt nach lager.finde schon in der Hand,
+        // also kostet die Frage nichts.
+        //
+        // Gefragt wird Zustand.erlaubtBauen() und nicht auf VERFALLEN verglichen: Jene
+        // Methode ist die EINE Stelle, die weiss, welcher Zustand Bauen erlaubt, und
+        // ihr Kopf sagt seit Schritt 8, warum es genau eine sein muss.
+        if (!stadt.get().zustand().erlaubtBauen()) {
+            return Bauurteil.VERFALLENE_STADT;
+        }
         // DAS GRUNDSTUECK STICHT DIE STADT, und erst das macht Teil C2 wirksam: Wer ein
         // Grundstueck vergeben hat, darf dort selbst nicht mehr bauen. Gefragt wird es
         // NACH der Stadt, weil die Stadtfrage billiger ist (eine Punktabfrage auf den
@@ -428,12 +484,66 @@ public final class Freistadtbuch {
      * hoechstens alle paar Sekunden gebaut, die Bauregel bei jedem gesetzten Block. Wer
      * beides in einem Zug beantwortete, zahlte die Suche nach dem Besitzernamen auf dem
      * heissen Pfad mit.
+     *
+     * <p><b>Und WIRKLICH eine Stadt</b> [Fund vom 17.11.2026]: Das Lager filtert
+     * absichtlich nicht nach Art - {@code finde} muss jeden Belegten einer Rasterzelle
+     * melden, sonst hielte eine Suche die Flaeche fuer frei, das Besitzbuch buchte den
+     * Preis ab und liefe in den eindeutigen Schluessel. Marktstadt und Freistaedte
+     * teilen aber dasselbe Lager, und die Feldnummern der zwei Geometrien
+     * ueberschneiden sich: Block 150/150 der Marktstadt liegt in Stadtfeld 0/0. Ohne
+     * diesen Filter gab die Methode dort eine gewoehnliche Parzelle zurueck, und jeder
+     * Aufrufer lief anschliessend in {@link #auflage}, die fuer eine Nicht-Freistadt
+     * wirft.
+     *
+     * <p>HIER und nicht beim Aufrufer, obwohl der Riegel in Teil E3b erst in
+     * {@code Shopbuch} stand: Mit dem Besuchsstempel aus Teil E4 gibt es einen ZWEITEN
+     * Aufrufer, der eine beliebige Welt hereingibt. Zwei Riegel fuer dieselbe Frage
+     * laufen auseinander - und diese Methode heisst "stadtAn" und verspricht eine
+     * STADT.
      */
     public Optional<Parzelle> stadtAn(String welt, int blockX, int blockZ) {
         if (plan.feldBei(blockX, blockZ) != Stadtfeldplan.Feld.STADTFELD) {
             return Optional.empty();
         }
-        return lager.finde(welt, plan.feldNummer(blockX), plan.feldNummer(blockZ));
+        return lager.finde(welt, plan.feldNummer(blockX), plan.feldNummer(blockZ))
+                .filter(Parzelle::istFreistadt);
+    }
+
+    /**
+     * Stempelt den heutigen Tag als letzten Besuch dieser Stadt [Teil E4].
+     *
+     * <p><b>Der Tag kommt HEREIN.</b> Dieses Buch hat keine Uhr und keine Zone, und das
+     * soll so bleiben: "heute" ist eine Rechnung aus Zeitpunkt UND Zone
+     * ({@code Tagesgrenze.tagVon}), und wer sie hier anstellte, braeuchte beide als
+     * Feld - zwei weitere Dinge, die bei jedem Neuladen aktuell sein muessen.
+     *
+     * <p><b>Geschrieben wird nur, wenn der Tag sich AENDERT.</b> Das ist die Wahrheit
+     * hinter dem billigen Vortest des Laufs: Jener merkt sich im Arbeitsspeicher,
+     * welche Stadt heute schon gestempelt ist, und ueberlebt keinen Neustart. Diese
+     * Zeile ueberlebt ihn - nach einem Neustart mitten am Tag wird nicht ein zweites
+     * Mal geschrieben.
+     *
+     * <p><b>Ein Tag in der ZUKUNFT wird ueberschrieben</b>, anders als bei der
+     * Tagesserie: Dort haelt ein kuenftiger Tag die Zahlung an, weil sonst eine
+     * verstellte Uhr Geld verschenkte. Hier gibt es nichts zu verschenken, und der
+     * Besuch findet JETZT statt - ein Stempel von morgen ist ein kaputter Wert, und
+     * dieser Zweig heilt ihn.
+     *
+     * @return {@code true}, wenn wirklich geschrieben wurde
+     */
+    public boolean stempleBesuch(Parzelle stadt, LocalDate heute) {
+        if (stadt == null || !stadt.istFreistadt()) {
+            throw new IllegalArgumentException("Besucht wird eine Freistadt");
+        }
+        if (heute == null) {
+            throw new IllegalArgumentException("Ohne Tag gibt es keinen Stempel - wer"
+                    + " stempelt, hat heute ueber Tagesgrenze.tagVon bestimmt");
+        }
+        if (heute.equals(stadt.besucht())) {
+            return false;
+        }
+        lager.besuchSetzen(stadt.id(), heute);
+        return true;
     }
 
     /**
@@ -615,6 +725,750 @@ public final class Freistadtbuch {
         }
         return new Rechteentscheid(Rechtebescheid.GEAENDERT,
                 Optional.of(hier.mitBuergerrechten(neue)), neue);
+    }
+
+    // --- Teil E3: die Auflage -------------------------------------------------
+
+    /** Warum eine Stadt die Auflage nicht erfuellt - oder dass sie es tut. */
+    public enum Auflage {
+
+        /** Beides da: Regeln und mindestens ein Stadtbuerger. */
+        ERFUELLT,
+
+        /** Es fehlt der Regeltext. */
+        OHNE_REGELN,
+
+        /** Es fehlt ein vergebenes Grundstueck - also ein Stadtbuerger. */
+        OHNE_BUERGER,
+
+        /** Beides fehlt - der Zustand jeder frisch gegruendeten Stadt. */
+        OHNE_BEIDES;
+
+        /** Ob die Auflage erfuellt ist. */
+        public boolean erfuellt() {
+            return this == ERFUELLT;
+        }
+    }
+
+    /**
+     * Ob diese Stadt die Auflage aus Plan 16 erfuellt - die EINE Stelle.
+     *
+     * <p>Zwei Bedingungen, beide noetig: ein REGELTEXT und mindestens ein vergebenes
+     * Grundstueck. Das zweite ist nach Teil D dasselbe wie "mindestens ein
+     * Stadtbuerger" - ein Grundstueck, das nicht dem Stadtbesitzer gehoert, macht
+     * genau einen Buerger. Darum fragt diese Methode nicht zwei verschiedene Dinge,
+     * sondern dieselbe Frage einmal.
+     *
+     * <p><b>Warum sie den GRUND zurueckgibt und nicht nur ja oder nein:</b> Der Satz an
+     * den Stadtbesitzer soll sagen, was ihm fehlt. Mit einem {@code boolean} muesste
+     * der Aufrufer beide Bedingungen erneut fragen, um das herauszufinden - zwei Wege
+     * zur selben Frage, und der zweite bekommt die naechste Verschaerfung nicht mit.
+     *
+     * <p><b>Ohne Grundstuecksablage ist die Auflage NICHT erfuellbar</b>, und das ist
+     * die unangenehme, aber richtige Antwort: Ohne sie weiss niemand, ob ein Grundstueck
+     * vergeben ist. Dass daraus keine Sperre wird, entscheidet der AUFRUFER - und das
+     * gilt fuer JEDEN: {@link #darfReisen} laesst dann jeden hinein, {@link #darfLaden}
+     * laesst dann jeden Laden entstehen, und der Startbericht sagt es. Eine
+     * Wirtschaftsregel, die ausfaellt, darf nicht den Zugang kosten.
+     *
+     * <p><b>Wer einen dritten Riegel an diese Methode haengt, braucht denselben
+     * Zweig</b> und darf {@code auflage} nicht unmittelbar fragen: Sie gibt bei
+     * stummer Grundstuecksablage in JEDER Freistadt {@code OHNE_BEIDES} - also die
+     * Vollsperre, die die zwei vorhandenen Riegel ausdruecklich abfangen.
+     */
+    public Auflage auflage(Parzelle stadt) {
+        if (stadt == null || !stadt.istFreistadt()) {
+            throw new IllegalArgumentException("Eine Auflage haben nur Freistaedte");
+        }
+        boolean regeln = stadt.hatRegeln();
+        boolean buerger = hatStadtbuerger(stadt);
+        if (regeln && buerger) {
+            return Auflage.ERFUELLT;
+        }
+        if (!regeln && !buerger) {
+            return Auflage.OHNE_BEIDES;
+        }
+        return regeln ? Auflage.OHNE_BUERGER : Auflage.OHNE_REGELN;
+    }
+
+    /**
+     * Ob diese Stadt mindestens einen Stadtbuerger hat.
+     *
+     * <p>Gefragt wird die ABLAGE und nicht eine Zahl an der Stadtzeile: Buergerschaft
+     * ist nach Teil D abgeleitet und nie gespeichert, damit die Liste nicht veralten
+     * kann. Hier zahlt sich das aus - es gibt keinen Zaehler, der falsch stehen koennte.
+     *
+     * <p>Ohne Ablage ist niemand Buerger, wie in {@link #istStadtbuerger} und mit
+     * derselben Begruendung: Dann gibt es keine Grundstuecke, also auch keinen, dem
+     * eines gehoert.
+     */
+    private boolean hatStadtbuerger(Parzelle stadt) {
+        if (grundstuecke == null) {
+            return false;
+        }
+        for (Grundstueck eines : grundstuecke.inStadt(stadt.id())) {
+            if (Stadtbuergerschaft.istBuerger(stadt, eines.eigentuemer(), true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Ob dieser Spieler in diese Stadt reisen darf.
+     *
+     * <p><b>Vier Wege hinein, und drei davon gelten immer:</b> Der EIGENTUEMER muss
+     * immer hinein - sonst ist die Gruendung eine 400.000-Mark-Falle, denn eine frische
+     * Stadt hat nie ein vergebenes Grundstueck, und er kaeme nicht hinein, um eines
+     * zuzuschneiden. Ein MITBAUER wurde genau zum Bauen eingetragen. Und ein
+     * STADTBUERGER hat sein Grundstueck bezahlt; ein bezahltes Grundstueck, das niemand
+     * mehr betreten kann, weil ein Dritter das seine zurueckgekauft hat, waere der
+     * schwerere Fehler. Fuer alle anderen gilt die Auflage.
+     *
+     * <p><b>Ohne Grundstuecksablage darf JEDER</b>, und der Startbericht sagt es. Die
+     * sichere Richtung heisst hier nicht "weniger Schaden": Sie hiesse, dass in diesem
+     * Lauf niemand in irgendeine Freistadt kommt - und der Riegel schuetzt dabei
+     * nichts, denn der Bauschutz haengt nicht an ihm. Eine Auflage ist eine
+     * Wirtschaftsregel und keine Schutzwache.
+     *
+     * @return {@link Auflage#ERFUELLT}, wenn er hinein darf; sonst der GRUND, der ihn
+     *         draussen haelt - der Satz an den Spieler nennt ihn
+     */
+    public Auflage darfReisen(Parzelle stadt, UUID spieler) {
+        if (!wirtschaft.werte().freistaedte().auflageTeleporter()) {
+            return Auflage.ERFUELLT;
+        }
+        if (grundstuecke == null) {
+            // Die Auflage ist in diesem Lauf nicht pruefbar - siehe das Javadoc. Der
+            // Startbericht nennt das ausdruecklich; ohne diese Zeile waere es eine
+            // Regel, die halb wirkt und nichts davon sagt.
+            return Auflage.ERFUELLT;
+        }
+        if (spieler != null && (stadt.gehoert(spieler)
+                || stadt.mitbauer().contains(spieler)
+                || istStadtbuerger(stadt.welt(), stadt, spieler))) {
+            return Auflage.ERFUELLT;
+        }
+        return auflage(stadt);
+    }
+
+    /**
+     * Ob in dieser Stadt ein NEUER Kistenshop entstehen darf - der zweite Riegel.
+     *
+     * <p><b>Der Unterschied zu {@link #darfReisen} ist der wichtigste Satz hier: Es
+     * gibt KEINE Ausnahme, auch nicht fuer den Stadtbesitzer.</b> Beim Teleporter muss
+     * er hinein, sonst ist die Gruendung eine 400.000-Mark-Falle - er kaeme nicht in
+     * seine eigene Stadt, um das erste Grundstueck zuzuschneiden. Hier sperrt ihn
+     * nichts ein: Einen Regeltext setzt er mit einem Befehl, ein Grundstueck schneidet
+     * er zu und bietet es an, und beides geht ohne einen einzigen Laden. Liesse man
+     * ihn aus, duerfte er seine ganze Markthalle bauen und die Auflage nie erfuellen -
+     * dann waere der Riegel ein Riegel gegen seine Buerger und nicht gegen die
+     * Geisterstadt.
+     *
+     * <p><b>Ohne Grundstuecksablage faellt die Regel AUS und sperrt nicht</b>, genau wie
+     * bei {@link #darfReisen} und aus einem schaerferen Grund: Ohne sie ist
+     * {@link #auflage} nie {@code ERFUELLT}, denn Buergerschaft ist aus den
+     * Grundstuecken abgeleitet. Ein Riegel, der das nicht abfaengt, verweigert bei
+     * stummer Datenbank in JEDER Freistadt jeden neuen Kistenshop - eine
+     * Wirtschaftsregel, die beim Ausfall zur Vollsperre wird.
+     *
+     * @param stadt die Stadt, in der die KISTE steht - nie {@code null}
+     * @return {@link Auflage#ERFUELLT}, wenn der Shop entstehen darf; sonst der GRUND,
+     *         den der Satz an den Spieler nennt
+     */
+    public Auflage darfLaden(Parzelle stadt) {
+        if (!wirtschaft.werte().freistaedte().auflageLadenrecht()) {
+            return Auflage.ERFUELLT;
+        }
+        if (grundstuecke == null) {
+            // Siehe das Javadoc: Hier faellt die Regel aus, und der Startbericht sagt
+            // es. Ohne diesen Zweig waere es die Vollsperre.
+            return Auflage.ERFUELLT;
+        }
+        return auflage(stadt);
+    }
+
+    // --- Teil E5: der Verfall -------------------------------------------------
+
+    /**
+     * Wie weit diese Stadt auf dem Weg zum Verfall ist.
+     *
+     * <p>Die EINE Frage fuer alle drei Leser - den taeglichen Lauf, den Beitritt und die
+     * Liste. Dieses Buch fuegt der Rechnung in {@link Verfallsregel} genau eine Angabe
+     * hinzu, die jene nicht holen kann: ob die Stadt einen Stadtbuerger hat. Dafuer
+     * braucht es die Grundstuecke.
+     *
+     * <p><b>Ohne Grundstuecksablage gilt die Stadt als BEWOHNT</b> - und damit als
+     * aktiv. Das ist die umgekehrte Richtung als bei {@link #auflage}, und es ist
+     * dieselbe Lesart: Eine Wirtschaftsregel, die ausfaellt, darf nicht schaden. Dort
+     * hiesse "niemand ist Buerger" eine Vollsperre, hier hiesse es, dass der taegliche
+     * Lauf JEDE unbesuchte Stadt abraeumt, obwohl in der Haelfte Leute wohnen. Der
+     * Startbericht sagt es.
+     */
+    public Verfallsregel.Stand verfallsstand(Parzelle stadt, LocalDate heute,
+            ZoneId zone) {
+        boolean bewohnt = grundstuecke == null || hatStadtbuerger(stadt);
+        return Verfallsregel.stand(stadt, bewohnt,
+                wirtschaft.werte().freistaedte().verfall(), heute, zone);
+    }
+
+    /** Wie viele Tage es noch bis zum Verfall sind - fuer den Satz an den Besitzer. */
+    public long resttage(Parzelle stadt, LocalDate heute, ZoneId zone) {
+        return Verfallsregel.resttage(stadt,
+                wirtschaft.werte().freistaedte().verfall(), heute, zone);
+    }
+
+    /**
+     * Setzt diese Stadt auf VERFALLEN - gerufen vom taeglichen Lauf.
+     *
+     * <p>Schreibt nur, wenn sie es noch nicht ist. Jeder Schreibvorgang leert den
+     * Zwischenspeicher aller Parzellen, und ein Lauf, der taeglich denselben Zustand
+     * neu setzt, leerte ihn fuer nichts.
+     *
+     * @return {@code true}, wenn wirklich geschrieben wurde
+     */
+    public boolean lasseVerfallen(Parzelle stadt) {
+        if (stadt == null || !stadt.istFreistadt()) {
+            throw new IllegalArgumentException("Verfallen koennen nur Freistaedte");
+        }
+        if (stadt.zustand() == Zustand.VERFALLEN) {
+            return false;
+        }
+        lager.zustandSetzen(stadt.id(), Zustand.VERFALLEN);
+        return true;
+    }
+
+    /**
+     * Belebt eine verfallene Stadt wieder - gerufen, wenn ihr BESITZER darin steht.
+     *
+     * <p><b>Nur der Besitzer</b>, und das ist die Entscheidung: Ein Fremder, der durch
+     * eine verfallene Stadt laeuft, belebte sie sonst fuer ihren abwesenden Besitzer
+     * mit - und die Geisterstadt bliebe stehen, solange irgendjemand sie als Abkuerzung
+     * benutzt. Ein Mitbauer ebenfalls nicht: Er wurde zum Bauen eingetragen, nicht zum
+     * Erhalten.
+     *
+     * <p><b>Der Besuchsstempel faellt trotzdem fuer jeden</b> - das ist Teil E4 und
+     * eine andere Frage. Eine verfallene Stadt, die jemand betritt, bekommt also ihren
+     * Tag; aufwachen tut sie erst, wenn ihr Besitzer kommt. Ohne die Trennung waere der
+     * Stempel eine Wiederbelebung durch Dritte auf Umwegen.
+     *
+     * @return {@code true}, wenn sie wirklich aufgewacht ist
+     */
+    public boolean beleb(Parzelle stadt, UUID spieler) {
+        if (stadt == null || !stadt.istFreistadt()) {
+            throw new IllegalArgumentException("Beleben kann man nur eine Freistadt");
+        }
+        if (stadt.zustand() != Zustand.VERFALLEN || spieler == null
+                || !stadt.gehoert(spieler)) {
+            return false;
+        }
+        lager.zustandSetzen(stadt.id(), Zustand.AKTIV);
+        return true;
+    }
+
+    // --- Teil E6: die Ladengebuehr --------------------------------------------
+
+    /**
+     * Was ein Laden dieser Stadt zahlt - und ob derjenige es kann.
+     *
+     * @param betrag     0, wenn die Gebuehr abgeschaltet ist
+     * @param bezahlbar  ob sein Guthaben reicht. Bei Betrag 0 immer {@code true}
+     */
+    public record Ladengebuehr(long betrag, boolean bezahlbar) {
+
+        /** Ob ueberhaupt etwas zu erheben ist. */
+        public boolean faellt() {
+            return betrag > 0L;
+        }
+    }
+
+    /**
+     * Prueft die EINMALIGE Ladengebuehr, ohne etwas zu buchen [Teil E6].
+     *
+     * <p><b>Getrennt vom Erheben</b>, und das ist die ganze Reihenfolge: Wer nicht
+     * zahlen kann, soll keinen Shop bekommen UND kein Geld verlieren - also muss das
+     * Nachsehen vor dem Schreiben kommen und das Abbuchen danach. Eine Methode, die
+     * beides tut, liesse dem Aufrufer nur die Wahl zwischen "zahlt fuer einen Shop, der
+     * nicht entsteht" und "bekommt einen Shop, ohne zu zahlen".
+     */
+    public Ladengebuehr pruefeLadengebuehr(Parzelle stadt, UUID wer) {
+        long betrag = wirtschaft.werte().freistaedte().ladengebuehrAnlage();
+        if (betrag <= 0L || wer == null) {
+            return new Ladengebuehr(0L, true);
+        }
+        return new Ladengebuehr(betrag, kasse.guthaben(wer) >= betrag);
+    }
+
+    /**
+     * Erhebt sie wirklich - vom Spieler in die Stadtkasse.
+     *
+     * <p>ZWEI Buchungen fuer eine Bewegung, wie ueberall in diesem Projekt: Ein Konto
+     * traegt nur seine eigenen Zeilen. Beim Spieler eine Ausgabe, in der Stadt eine
+     * Einnahme.
+     *
+     * <p><b>Abbuchen zuerst.</b> Scheitert es, ist nichts geschehen; scheiterte
+     * umgekehrt die Gutschrift, haette die Stadt Geld, das niemand bezahlt hat.
+     *
+     * @return {@code false}, wenn das Abbuchen nicht ging - dann ist NICHTS gebucht
+     */
+    public boolean erhebeLadengebuehr(Parzelle stadt, UUID wer, long betrag) {
+        if (betrag <= 0L) {
+            return true;
+        }
+        if (!kasse.abbuchen(wer, betrag, Buchungsgrund.FREISTADT_LADENGEBUEHR)) {
+            return false;
+        }
+        stadtkasse.einzahlen(stadt, betrag, Buchungsgrund.STADTKASSE_LADENGEBUEHR);
+        return true;
+    }
+
+    // --- Teil E6: das Ende einer Stadt ----------------------------------------
+
+    /** Wie ein Ende ausgegangen ist. */
+    public enum Endebescheid {
+
+        /** Die Stadt ist weg, das Geld ist ausgezahlt. */
+        BEENDET,
+
+        /** Hier steht keine Stadt (beim Aufgeben) oder den Namen gibt es nicht. */
+        KEINE_STADT,
+
+        /** Die Stadt eines anderen - nur ihr Besitzer gibt sie auf. */
+        FREMDE_STADT,
+
+        /**
+         * In der Stadt gehoert noch jemand anderem ein Grundstueck.
+         *
+         * <p><b>Der Riegel, ohne den dieser Befehl ein Diebstahl waere</b>: Ein
+         * Stadtbuerger hat sein Grundstueck BEZAHLT. Wer die Stadt darueber hinweg
+         * aufloeste, naehme ihm Grund und Bauten und gaebe ihm nichts - und zwar fuer
+         * eine Entscheidung, die ein anderer getroffen hat.
+         *
+         * <p>Es ist auch kein Verlust fuer den Besitzer: Eine Stadt mit Buergern
+         * verfaellt nie, blockiert also kein Feld unnoetig, und wer sie wirklich
+         * beenden will, kauft die Grundstuecke zuvor zurueck - das kann er.
+         */
+        NOCH_BUERGER,
+
+        /**
+         * Die Stadt ist weg, aber das Geld ist NICHT angekommen.
+         *
+         * <p>Ein eigener Bescheid und nicht {@link #GESTOERT}: Hier ist etwas
+         * Unumkehrbares schon geschehen, und der Spieler soll das lesen - samt der
+         * Aufforderung, sich an den Betreiber zu wenden. Der Betrag und sein Name
+         * stehen im Protokoll.
+         */
+        GELD_HAENGT,
+
+        /** Die Datenbank hat geschwiegen - es ist NICHTS geschehen. */
+        GESTOERT
+    }
+
+    /**
+     * Das Ergebnis eines Endes.
+     *
+     * @param erstattung was aus dem Gruendungspreis zurueckkam
+     * @param kasse      was in der Stadtkasse lag und mit ausgezahlt wurde. Getrennt
+     *                   genannt, damit der Satz beide Zahlen zeigen kann: Sonst liest
+     *                   ein Besitzer eine Summe, die er nicht nachrechnen kann
+     */
+    public record Endeentscheid(Endebescheid bescheid, Optional<Parzelle> stadt,
+                                long erstattung, long kasse) {
+
+        /** Was zusammen ausgezahlt wurde. */
+        public long zusammen() {
+            return erstattung + kasse;
+        }
+    }
+
+    /**
+     * Was diese Stadt bei ihrem Ende erstatten wuerde - fuer die Rueckfrage.
+     *
+     * <p>DIESELBE Rechnung, die {@code beende} anstellt, und darum eine Methode: Zeigte
+     * die Rueckfrage eine andere Zahl als die Tat, waere das Bestaetigen eine
+     * Unterschrift unter einen Betrag, der nicht gilt.
+     *
+     * <p>Vom EINGESETZTEN Preis der Zeile und nicht vom heutigen aus der Datei - die
+     * Begruendung steht bei {@code Freistadtwerte.VORGABE_ERSTATTUNG}.
+     */
+    public long erstattungFuer(Parzelle stadt) {
+        if (stadt == null || !stadt.istFreistadt()) {
+            throw new IllegalArgumentException("Erstattet wird fuer eine Freistadt");
+        }
+        return Shopregel.gebuehrAuf(stadt.preis(),
+                wirtschaft.werte().freistaedte().erstattungProzent());
+    }
+
+    /**
+     * Der Besitzer gibt seine Stadt auf - am STANDORT, wie jeder Stadtbefehl.
+     *
+     * <p>Am Standort und nicht nach Namen: Was ein Gebiet betrifft, entscheidet man im
+     * Gebiet. Und es ist der schaerfere Weg - wer vor seiner Stadt steht, verwechselt
+     * sie nicht mit einer anderen gleichen Namens.
+     */
+    public Endeentscheid gibAuf(String welt, UUID spieler, int blockX, int blockZ) {
+        Optional<Parzelle> stadt;
+        try {
+            stadt = stadtAn(welt, blockX, blockZ);
+        } catch (RuntimeException fehler) {
+            return nichts(Endebescheid.GESTOERT);
+        }
+        if (stadt.isEmpty()) {
+            return nichts(Endebescheid.KEINE_STADT);
+        }
+        if (spieler == null || !stadt.get().gehoert(spieler)) {
+            return new Endeentscheid(Endebescheid.FREMDE_STADT, stadt, 0L, 0L);
+        }
+        return beende(stadt.get());
+    }
+
+    /**
+     * Das Team raeumt eine Stadt - nach NAMEN, von irgendwo.
+     *
+     * <p>Nach Namen und nicht am Standort, anders als {@link #gibAuf}: Eine verfallene
+     * Stadt zu betreten, um sie zu raeumen, waere der eine Weg, der sie vorher
+     * aufwecken wuerde - der Besuchsstempel sieht jeden, der darin steht. Und ein
+     * Teammitglied raeumt nicht dort, wo es gerade baut.
+     *
+     * <p><b>Die ERSTATTUNG geht an den BESITZER</b>, nicht an das Teammitglied. Das ist
+     * der ganze Unterschied zum Aufgeben: Geraeumt wird fremdes Eigentum, und wer es
+     * verliert, bekommt dafuer, was ihm zusteht - auch wenn er gerade nicht da ist.
+     */
+    public Endeentscheid raeume(String welt, String name) {
+        Optional<Parzelle> stadt;
+        try {
+            stadt = staedte(welt).stream()
+                    .filter(eine -> eine.name().equalsIgnoreCase(name))
+                    .findFirst();
+        } catch (RuntimeException fehler) {
+            return nichts(Endebescheid.GESTOERT);
+        }
+        if (stadt.isEmpty()) {
+            return nichts(Endebescheid.KEINE_STADT);
+        }
+        return beende(stadt.get());
+    }
+
+    /**
+     * Die eine Tat hinter beiden Wegen.
+     *
+     * <p><b>ERST ENTFERNEN, DANN ZAHLEN</b>, und das ist die gefaehrlichste Entscheidung
+     * dieser Klasse. Umgekehrt - zahlen, dann entfernen - machte aus einem
+     * gescheiterten Entfernen eine GELDQUELLE: Die Stadt stuende noch, der Spieler
+     * tippt den Befehl erneut und wird ein zweites Mal bezahlt. So dagegen ist der
+     * schlimmste Fall eine Schuld, die mit Namen und Betrag im Protokoll steht und die
+     * ein Betreiber von Hand begleichen kann.
+     *
+     * <p><b>Das Guthaben der Stadtkasse geht MIT.</b> Ohne diese Zeile waere es
+     * verloren: Das Konto bleibt bestehen - seine Nummer ist eine UUID und wird nie
+     * wieder vergeben -, aber niemand kaeme mehr daran, denn der Weg dorthin fuehrt
+     * ueber die Stadtzeile. Das Geld lag also fuer immer unerreichbar auf einem Konto,
+     * das zu keiner Stadt mehr gehoert.
+     *
+     * <p><b>Die Grundstuecke des BESITZERS verschwinden mit</b>, und nur seine - fremde
+     * halten den Befehl vorher an ({@link Endebescheid#NOCH_BUERGER}). Sie zu lassen
+     * waere schlimmer als sie zu loeschen: Zeilen, die auf eine Stadt zeigen, die es
+     * nicht mehr gibt, und in deren Feld irgendwann eine neue entsteht.
+     */
+    private Endeentscheid beende(Parzelle stadt) {
+        long erstattung;
+        long kassenstand;
+        try {
+            if (fremdesGrundstueckIn(stadt)) {
+                return new Endeentscheid(Endebescheid.NOCH_BUERGER,
+                        Optional.of(stadt), 0L, 0L);
+            }
+            // Beide Zahlen VOR dem Entfernen holen: Danach gibt es die Zeile nicht
+            // mehr, und der Preis stand in ihr.
+            erstattung = erstattungFuer(stadt);
+            kassenstand = stadtkasse.stand(stadt);
+            if (kassenstand > 0L && !stadtkasse.abbuchen(stadt, kassenstand,
+                    Buchungsgrund.STADTKASSE_ABGEHOBEN)) {
+                // Darf nicht vorkommen - wir haben den Stand gerade gelesen. Wenn
+                // doch, ist NICHTS geschehen, und das ist die richtige Antwort.
+                return nichts(Endebescheid.GESTOERT);
+            }
+            if (grundstuecke != null) {
+                for (Grundstueck eigenes : grundstuecke.inStadt(stadt.id())) {
+                    grundstuecke.entfernen(eigenes.id());
+                }
+            }
+            lager.entfernen(stadt.id());
+        } catch (RuntimeException fehler) {
+            return nichts(Endebescheid.GESTOERT);
+        }
+        // AB HIER IST DIE STADT WEG. Was jetzt noch schiefgeht, kostet kein Feld mehr -
+        // nur Geld, und das steht mit Namen und Betrag im Protokoll.
+        try {
+            long zusammen = erstattung + kassenstand;
+            if (erstattung > 0L) {
+                kasse.gutschreiben(stadt.eigentuemer(), erstattung,
+                        Buchungsgrund.FREISTADT_AUFGEGEBEN);
+            }
+            if (kassenstand > 0L) {
+                kasse.gutschreiben(stadt.eigentuemer(), kassenstand,
+                        Buchungsgrund.STADTKASSE_AUSGEZAHLT);
+            }
+            if (zusammen == 0L) {
+                // Nichts zu zahlen ist kein Fehler: Bei erstattung-prozent 0 und leerer
+                // Kasse ist das der Normalfall.
+                return new Endeentscheid(Endebescheid.BEENDET, Optional.of(stadt),
+                        0L, 0L);
+            }
+        } catch (RuntimeException fehler) {
+            return new Endeentscheid(Endebescheid.GELD_HAENGT, Optional.of(stadt),
+                    erstattung, kassenstand);
+        }
+        return new Endeentscheid(Endebescheid.BEENDET, Optional.of(stadt), erstattung,
+                kassenstand);
+    }
+
+    /**
+     * Ob in dieser Stadt ein Grundstueck jemand ANDEREM als dem Besitzer gehoert.
+     *
+     * <p>Ohne Ablage gilt: NEIN - und das ist hier die sichere Richtung nach unten.
+     * Wer nicht wissen kann, ob jemand ein Grundstueck hat, soll keine Stadt
+     * aufloesen... aber ohne Ablage gibt es auch keine Grundstuecke, die verloren gehen
+     * koennten: Jede Zeile darueber ist unlesbar, also kann der Befehl keine zerstoeren.
+     * Die Stadt selbst gehoert dem, der sie aufgibt.
+     */
+    private boolean fremdesGrundstueckIn(Parzelle stadt) {
+        if (grundstuecke == null) {
+            return false;
+        }
+        for (Grundstueck eines : grundstuecke.inStadt(stadt.id())) {
+            if (!stadt.gehoert(eines.eigentuemer())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Endeentscheid nichts(Endebescheid bescheid) {
+        return new Endeentscheid(bescheid, Optional.empty(), 0L, 0L);
+    }
+
+    // --- Teil E2: der Regeltext -----------------------------------------------
+
+    /** Wie ein Regelzug ausgegangen ist. */
+    public enum Regelbescheid {
+
+        /** Die Regeln stehen jetzt. */
+        GESETZT,
+
+        /** Die Regeln sind weg - der Weg zurueck in den Anfangszustand. */
+        GELOESCHT,
+
+        /** Genau dieser Text stand schon da. */
+        SCHON_SO,
+
+        /** Es gab gar keine Regeln, und geloescht werden sollte. */
+        WAR_SCHON_LEER,
+
+        /** Der Text ist laenger als erlaubt. */
+        ZU_LANG,
+
+        /** Hier steht keine Stadt. */
+        KEINE_STADT,
+
+        /** Die Stadt gehoert einem anderen. */
+        FREMDE_STADT,
+
+        /** Die Ablage war stumm. */
+        GESTOERT
+    }
+
+    /**
+     * Das Ergebnis eines Regelzuges.
+     *
+     * @param stadt die Stadt, um die es ging - bei KEINE_STADT leer. Sie traegt den
+     *              Text, wie er NACHHER ist; ein vom Aufrufer nachgebauter Stand war in
+     *              Teil C3 schon einmal der Fund
+     */
+    public record Regelentscheid(Regelbescheid bescheid, Optional<Parzelle> stadt) {
+    }
+
+    /**
+     * Den Regeltext einer Stadt setzen oder loeschen - am STANDORT des Spielers.
+     *
+     * <p>Am Standort und nur fuer den Eigentuemer, wie {@link #setzeRecht}: Was in einem
+     * Gebiet gilt, stellt man im Gebiet ein, und was Besucher dort lesen, entscheidet,
+     * wem es gehoert. Nicht einmal ein Mitbauer - er wurde zum Bauen eingetragen.
+     *
+     * <p><b>Die Laenge wird HIER geprueft und nicht erst in {@link Parzelle}</b>, obwohl
+     * der Riegel dort auch steht: Dieser Weg fuehrt zu einem Spieler, und ein Spieler
+     * soll einen Satz lesen und keine Ausnahme ausloesen. Der Riegel in Parzelle bleibt
+     * trotzdem - er faengt jeden anderen Weg, auch den, den heute noch niemand gebaut
+     * hat.
+     *
+     * @param text der neue Text; {@code null} oder leer LOESCHT die Regeln. Das ist der
+     *             Weg zurueck in den Anfangszustand - ohne ihn koennte ein
+     *             Stadtbesitzer eine Regel aufstellen und nie zurueckziehen
+     */
+    public Regelentscheid setzeRegeln(String welt, UUID spieler, int blockX, int blockZ,
+                                      String text) {
+        boolean loeschen = text == null || text.isBlank();
+        if (!loeschen && text.length() > Parzelle.REGELN_GROESSTENS) {
+            // VOR dem Blick in die Ablage: Wer sich verschreibt, soll das nicht erst
+            // erfahren, nachdem die Datenbank gefragt wurde - dieselbe Sortierung nach
+            // Kosten wie bei gruende().
+            return new Regelentscheid(Regelbescheid.ZU_LANG, Optional.empty());
+        }
+        Optional<Parzelle> stadt;
+        try {
+            stadt = stadtAn(welt, blockX, blockZ);
+        } catch (RuntimeException fehler) {
+            return new Regelentscheid(Regelbescheid.GESTOERT, Optional.empty());
+        }
+        if (stadt.isEmpty()) {
+            return new Regelentscheid(Regelbescheid.KEINE_STADT, Optional.empty());
+        }
+        Parzelle hier = stadt.get();
+        if (spieler == null || !hier.gehoert(spieler)) {
+            return new Regelentscheid(Regelbescheid.FREMDE_STADT, stadt);
+        }
+        if (loeschen && !hier.hatRegeln()) {
+            return new Regelentscheid(Regelbescheid.WAR_SCHON_LEER, stadt);
+        }
+        if (!loeschen && text.equals(hier.regeln())) {
+            // Kein Schreibzug fuer nichts - dieselbe Entscheidung wie SCHON_SO bei den
+            // Buergerrechten. Und ein Satz darueber, damit der Besitzer nicht glaubt,
+            // sein Text sei angekommen und etwas anderes stehe da.
+            return new Regelentscheid(Regelbescheid.SCHON_SO, stadt);
+        }
+        String neu = loeschen ? Parzelle.KEINE_REGELN : text;
+        try {
+            lager.regelnSetzen(hier.id(), neu);
+        } catch (RuntimeException fehler) {
+            return new Regelentscheid(Regelbescheid.GESTOERT, stadt);
+        }
+        return new Regelentscheid(
+                loeschen ? Regelbescheid.GELOESCHT : Regelbescheid.GESETZT,
+                Optional.of(hier.mitRegeln(neu)));
+    }
+
+    // --- Teil E1: die Stadtkasse ----------------------------------------------
+
+    /** Wie ein Abhebezug ausgegangen ist. */
+    public enum Kassenbescheid {
+
+        /** Abgehoben - das Geld ist beim Spieler. */
+        ABGEHOBEN,
+
+        /** Hier steht keine Stadt. */
+        KEINE_STADT,
+
+        /** Die Stadt gehoert einem anderen. */
+        FREMDE_STADT,
+
+        /** So viel liegt nicht in der Kasse. */
+        ZU_WENIG,
+
+        /** Die Ablage oder die Kasse war stumm. */
+        GESTOERT
+    }
+
+    /**
+     * Das Ergebnis eines Abhebezuges.
+     *
+     * @param stadt   die Stadt, um die es ging - bei KEINE_STADT leer
+     * @param betrag  was BEWEGT wurde; bei jedem Bescheid ausser ABGEHOBEN eine 0
+     * @param stand   was NACHHER in der Kasse liegt. Zurueckgegeben und nicht vom
+     *                Aufrufer nachgefragt: Ein zweiter Blick in die Kasse koennte
+     *                etwas anderes sehen, und der Satz an den Spieler wuerde dann eine
+     *                Zahl nennen, die zu seiner Buchung nicht passt
+     */
+    public record Kassenentscheid(Kassenbescheid bescheid, Optional<Parzelle> stadt,
+                                  long betrag, long stand) {
+    }
+
+    /**
+     * Geld aus der Stadtkasse nehmen - am STANDORT des Spielers.
+     *
+     * <p>Am Standort und nur fuer den Eigentuemer, wie {@link #setzeRecht}: Die Kasse
+     * gehoert der Stadt, und ueber ihr Geld entscheidet, wem die Stadt gehoert. Nicht
+     * einmal ein Mitbauer darf das - er wurde zum Bauen eingetragen, nicht zum
+     * Wirtschaften.
+     *
+     * <p><b>Die Reihenfolge ist ABBUCHEN, dann GUTSCHREIBEN</b>, und der Rueckweg ist
+     * hier anders als beim Grundstueckskauf WIRKLICH sicher: Scheitert die Gutschrift,
+     * hat der Spieler nichts bekommen - ein Zurueckschreiben an die Stadt kann also
+     * nicht dazu fuehren, dass beide Geld haben. Beim Kauf war genau das der Grund, auf
+     * den Rueckweg zu verzichten; hier ist er strikt besser als nichts, denn
+     * schlimmstenfalls scheitert er und das Geld ist weg - derselbe Zustand wie ohne
+     * ihn.
+     *
+     * @param betrag was abgehoben werden soll, ohne Vorzeichen
+     */
+    public Kassenentscheid hebeAb(String welt, UUID spieler, int blockX, int blockZ,
+                                  long betrag) {
+        Kasse.pruefeBetrag(betrag);
+        Optional<Parzelle> stadt;
+        try {
+            stadt = stadtAn(welt, blockX, blockZ);
+        } catch (RuntimeException fehler) {
+            return new Kassenentscheid(Kassenbescheid.GESTOERT, Optional.empty(), 0L,
+                    0L);
+        }
+        if (stadt.isEmpty()) {
+            return new Kassenentscheid(Kassenbescheid.KEINE_STADT, Optional.empty(), 0L,
+                    0L);
+        }
+        Parzelle hier = stadt.get();
+        long stand;
+        try {
+            stand = stadtkasse.stand(hier);
+        } catch (RuntimeException fehler) {
+            return new Kassenentscheid(Kassenbescheid.GESTOERT, stadt, 0L, 0L);
+        }
+        // DIE BESITZFRAGE NACH dem Stand, und das ist Absicht: Der Satz an einen
+        // Fremden nennt den Namen der Stadt und ihren Besitzer, nicht ihr Guthaben -
+        // aber der Stand wird fuer den Zweig darunter ohnehin gebraucht, und zwei
+        // Abfragen waeren zwei Antworten auf dieselbe Frage.
+        if (spieler == null || !hier.gehoert(spieler)) {
+            return new Kassenentscheid(Kassenbescheid.FREMDE_STADT, stadt, 0L, 0L);
+        }
+        if (betrag > stand) {
+            // Die Zahl kommt MIT: Ein Spieler soll ausrechnen koennen, was fehlt -
+            // dieselbe Entscheidung wie bei ZU_WENIG_MARK im Grundstueckskauf.
+            return new Kassenentscheid(Kassenbescheid.ZU_WENIG, stadt, 0L, stand);
+        }
+        try {
+            if (!stadtkasse.abbuchen(hier, betrag,
+                    Buchungsgrund.STADTKASSE_ABGEHOBEN)) {
+                // Zwischen dem Lesen und dem Abbuchen hat sich der Stand geaendert.
+                // Nicht unmoeglich: Ein Grundstueckskauf in dieser Stadt zahlt ein, ein
+                // zweiter Befehl hebt ab. Die Antwort ist dieselbe wie oben.
+                return new Kassenentscheid(Kassenbescheid.ZU_WENIG, stadt, 0L,
+                        stadtkasse.stand(hier));
+            }
+        } catch (RuntimeException fehler) {
+            return new Kassenentscheid(Kassenbescheid.GESTOERT, stadt, 0L, stand);
+        }
+        try {
+            kasse.gutschreiben(spieler, betrag, Buchungsgrund.STADTKASSE_AUSGEZAHLT);
+        } catch (RuntimeException fehler) {
+            legeZurueck(hier, betrag, fehler);
+            return new Kassenentscheid(Kassenbescheid.GESTOERT, stadt, 0L, stand);
+        }
+        return new Kassenentscheid(Kassenbescheid.ABGEHOBEN, stadt, betrag,
+                stand - betrag);
+    }
+
+    /**
+     * Das Geld zurueck in die Stadtkasse, wenn die Gutschrift scheiterte.
+     *
+     * <p>Die Ausnahme wird an die urspruengliche GEHAENGT und nicht an ihre Stelle
+     * gesetzt - derselbe Grund wie bei {@link #erstatte}: Sonst stuende im Logbuch der
+     * zweite Fehler, und der erste waere weg.
+     */
+    private void legeZurueck(Parzelle stadt, long betrag, RuntimeException ursache) {
+        try {
+            stadtkasse.einzahlen(stadt, betrag, Buchungsgrund.STADTKASSE_ZURUECK);
+        } catch (RuntimeException auchDas) {
+            ursache.addSuppressed(auchDas);
+            throw ursache;
+        }
     }
 
     /**

@@ -383,7 +383,7 @@ class ShopwacheTest {
         // Stellvertreter - dasselbe Muster wie in MesswacheTest.
         return new Shopwache(
                 new Shopbuch(welche, null, null,
-                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE),
+                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE), null,
                         Logger.getAnonymousLogger()), null,
                 Sprachprobe.spracheAusDemJar(), tat -> tat.run(),
                 Logger.getAnonymousLogger());

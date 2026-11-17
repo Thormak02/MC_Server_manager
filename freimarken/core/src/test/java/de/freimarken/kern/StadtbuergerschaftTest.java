@@ -29,11 +29,22 @@ class StadtbuergerschaftTest {
     private static final UUID BERT = UUID.randomUUID();
     private static final UUID CARA = UUID.randomUUID();
 
+    /**
+     * Die Kontonummer der Stadtkasse [Teil E1].
+     *
+     * <p>Eine Konstante und nicht ein Aufruf in der Fabrik darunter: Zwei Aufrufe von
+     * {@code annastadt()} sollen DIESELBE Stadt ergeben. Mit einer frisch gezogenen
+     * Nummer waeren es zwei verschiedene Konten, und eine Probe, die beide vergleicht,
+     * waere rot aus einem Grund, der nichts mit ihr zu tun hat.
+     */
+    private static final UUID KONTO = UUID.randomUUID();
+
     /** Die Stadt, deren Besitzerin Anna ist - und Bert ihr Mitbauer. */
     private static Parzelle annastadt() {
         return new Parzelle(STADT, WELT, 3, 7, ANNA, Set.of(BERT), 400_000L,
-                Instant.parse("2026-01-01T00:00:00Z"), Art.FREISTADT, Parzelle.KEIN_ELTERNTEIL,
-                Zustand.AKTIV, "Annastadt", Parzelle.KEINE_RECHTE);
+                Instant.parse("2026-01-01T00:00:00Z"), Art.FREISTADT,
+                Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV, "Annastadt",
+                Parzelle.KEINE_RECHTE, KONTO, Parzelle.KEINE_REGELN, Parzelle.NIE_BESUCHT);
     }
 
     /** Ein Grundstueck in der Stadt, Nummer und Erwerbszeitpunkt frei waehlbar. */

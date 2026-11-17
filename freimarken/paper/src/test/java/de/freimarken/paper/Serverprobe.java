@@ -29,6 +29,7 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.World;
+import org.bukkit.WorldBorder;
 
 /**
  * Ein Server-Stellvertreter unter {@code Bukkit.setServer} - damit eine Probe einen Zweig
@@ -414,6 +415,18 @@ final class Serverprobe {
                     case "getHighestBlockYAt" ->
                             griffOderKlage(griff).oben((Integer) werte[0],
                                     (Integer) werte[1]);
+                    // getUID fragt Reise.pruefe, um Start- und Zielwelt zu
+                    // vergleichen [Teil E3]. AUS DEM SCHLUESSEL abgeleitet und nicht
+                    // zufaellig: Zwei Aufrufe fuer dieselbe Welt muessen dieselbe
+                    // Kennung ergeben, sonst reist ein Spieler laut Reise.pruefe
+                    // immer in eine andere Welt - auch wenn er stehen bleibt.
+                    // Die Weltgrenze, die ALLES enthaelt [Teil E3]: Reise.pruefe
+                    // fragt sie, und eine Probe, die eine ECHTE Grenze setzen will,
+                    // gibt sie dann mit - so wie den Weltgriff.
+                    case "getWorldBorder" -> weltgrenze();
+                    case "getMaxHeight" -> 320;
+                    case "getUID" -> java.util.UUID.nameUUIDFromBytes(
+                            schluessel.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                     case "toString" -> "Weltprobe " + schluessel;
                     case "hashCode" -> schluessel.hashCode();
                     case "equals" -> eigen == (werte == null ? null : werte[0]);
@@ -626,6 +639,46 @@ final class Serverprobe {
                 new Class<?>[] {Server.class}, new Serverhand());
     }
 
+    /**
+     * Eine Weltgrenze, die jeden Ort enthaelt.
+     *
+     * <p>Gebraucht von {@code Reise.pruefe}, das jeden Teleport gegen sie prueft. Eine
+     * Grenze, die alles enthaelt, ist hier die richtige Antwort: Was die Grenze
+     * abweist, prueft {@code ReiseTest} mit seinen eigenen Mitteln - diese Attrappe
+     * soll den Weg nicht an einer Stelle verschliessen, die mit ihr nichts zu tun hat.
+     */
+    private static WorldBorder weltgrenze() {
+        return (WorldBorder) Proxy.newProxyInstance(
+                Serverprobe.class.getClassLoader(),
+                new Class<?>[] {WorldBorder.class},
+                (eigen, methode, werte) -> switch (methode.getName()) {
+                    case "isInside" -> true;
+                    case "toString" -> "Grenzprobe (alles innerhalb)";
+                    case "hashCode" -> System.identityHashCode(eigen);
+                    case "equals" -> eigen == (werte == null ? null : werte[0]);
+                    default -> throw new UnsupportedOperationException(
+                            "Serverprobe beantwortet WorldBorder."
+                                    + methode.getName() + " nicht");
+                });
+    }
+
+    /**
+     * Die Welt zu einer Kennung - der Rueckweg zu {@code World.getUID}.
+     *
+     * <p>Gesucht und nicht gespeichert: Die Kennung entsteht dort aus dem SCHLUESSEL
+     * ({@code nameUUIDFromBytes}), also ist sie hier wieder zu finden. Eine zweite
+     * Karte waere ein zweiter Ort fuer dieselbe Zuordnung - und der eine von beiden,
+     * der beim Anlegen einer Welt vergessen wird.
+     */
+    private static World weltMitKennung(UUID kennung) {
+        for (var eintrag : WELTEN.entrySet()) {
+            if (eintrag.getValue().getUID().equals(kennung)) {
+                return eintrag.getValue();
+            }
+        }
+        return null;
+    }
+
     /** Beantwortet, was gemessen gebraucht wird - und nur das. */
     private static final class Serverhand implements InvocationHandler {
 
@@ -650,7 +703,14 @@ final class Serverprobe {
                 case "getOnlinePlayers" -> List.copyOf(ANWESEND.values());
                 // Ueber den Schluessel, nicht ueber den Namen: Chunkmarken sucht so,
                 // und Bukkit.getWorld(NamespacedKey) landet hier.
-                case "getWorld" -> WELTEN.get(String.valueOf(werte[0]));
+                // ZWEI Wege zu einer Welt, und der zweite kam mit Teil E3: Bukkits
+                // Location.isWorldLoaded fragt getWorld(UUID), nicht getWorld(String).
+                // Vorher gab dieser Zweig dafuer null zurueck - jede Reise in eine
+                // Probenwelt galt als "Welt nicht geladen", und das fiel nicht auf,
+                // weil keine Probe je gereist ist.
+                case "getWorld" -> werte[0] instanceof UUID kennung
+                        ? weltMitKennung(kennung)
+                        : WELTEN.get(String.valueOf(werte[0]));
                 case "getWorlds" -> List.copyOf(WELTEN.values());
                 case "getLogger" -> protokoll;
                 case "isPrimaryThread" -> true;

@@ -450,6 +450,36 @@ class WirtschaftsstandTest {
     }
 
     @Test
+    @DisplayName("Die zwei Auflagenschalter werden getauscht - und EINZELN genannt")
+    void auflagenschalterGetauscht() {
+        // FUND VOM 17.11.2026: Diese zwei fehlten in der Meldung, und damit war ihr
+        // Neuladen voellig stumm. Wer das Ladenrecht nach einem Event wieder
+        // einschaltet und "nichts geaendert" liest, glaubt das Neuladen wirke nicht -
+        // oder die Regel sei kaputt.
+        //
+        // ANGEFANGEN WIRD MIT BEIDEN AUS, und umgelegt wird nur EINER: Waeren beide
+        // gleich, saehe diese Probe nicht, ob der richtige Pfad gemeldet wird - und die
+        // zwei stehen als benachbarte boolean im Satz Freistadtwerte.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE.mitFreistaedten(
+                Freistadtwerte.VORGABE.mitAuflageTeleporter(false)
+                        .mitAuflageLadenrecht(false)));
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitFreistaedten(
+                Freistadtwerte.VORGABE.mitAuflageTeleporter(false)
+                        .mitAuflageLadenrecht(true)));
+
+        assertTrue(stand.werte().freistaedte().auflageLadenrecht());
+        assertFalse(stand.werte().freistaedte().auflageTeleporter(),
+                "der andere Schalter bleibt, wo er war");
+        assertEquals(1, uebernahme.geaendert().size(),
+                uebernahme.geaendert().toString());
+        assertEquals(Freistadtwerte.PFAD_AUFLAGE_LADENRECHT + ": false -> true",
+                uebernahme.geaendert().getFirst(),
+                "der WORTLAUT, nicht die Zahl der Zeilen: Der Betreiber hat true in die"
+                        + " Datei geschrieben und soll true lesen, keine 1");
+    }
+
+    @Test
     @DisplayName("Zweimal neuladen vergleicht gegen den LAUFENDEN Stand, nicht die Vorgabe")
     void zweimal() {
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);

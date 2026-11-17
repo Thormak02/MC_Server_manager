@@ -1,12 +1,15 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Shopweg;
 import de.freimarken.kern.Shopablage;
 import de.freimarken.kern.Shopschild;
 import de.freimarken.kern.Warenprobe;
 import de.freimarken.kern.Wirtschaftsstand;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -63,6 +66,29 @@ final class Shopbuch {
         WARE_UNBEKANNT,
         /** Ein Bundshop, aber der Spieler hat das Recht dafuer nicht. */
         KEIN_BUNDRECHT,
+        /**
+         * Die Freistadt, in der die Kiste steht, hat noch kein LADENRECHT.
+         *
+         * <p>Ein anderer Fall als {@link #FREMDE_KISTE}: Dort darf DIESER Spieler
+         * nicht, hier darf NIEMAND - auch die Stadtbesitzerin nicht. Das ist der
+         * ganze Zweck der Auflage aus Plan 16; eine Ausnahme fuer sie machte den
+         * Riegel zu einem Riegel gegen ihre Buerger.
+         *
+         * <p>{@link Anlage#stadt} und {@link Anlage#auflage} tragen den Namen der
+         * Stadt und den Grund - der Satz an den Spieler nennt beides.
+         */
+        KEIN_LADENRECHT,
+        /**
+         * Die Stadt nimmt eine Ladengebuehr, und er kann sie nicht zahlen [Teil E6].
+         *
+         * <p>Ein eigener Bescheid und nicht {@link #KEIN_LADENRECHT}: Dort darf
+         * NIEMAND einen Laden anlegen, hier darf er nur gerade nicht - mit mehr Geld
+         * schon. Wer "die Stadt hat kein Ladenrecht" laese, wartete auf den
+         * Stadtbesitzer statt Mark zu verdienen.
+         *
+         * <p>{@link Anlage#gebuehr} traegt den Betrag, damit der Satz ihn nennen kann.
+         */
+        LADENGEBUEHR_ZU_TEUER,
         // DREI BESCHEIDE STANDEN HIER EINEN HALBEN TAG LANG und sind am 10.11.2026
         // wieder gegangen: BUND_ZWEI_RICHTUNGEN, BUND_KAUFT_NICHT und
         // BUND_MENGE_UNEBEN. Sie gehoerten zur Tafel bundesmarkt.ankauf, und die ist
@@ -87,9 +113,21 @@ final class Shopbuch {
      * @param fehler bei {@link Bescheid#SCHILD_FEHLERHAFT} der Grund, sonst {@code null}
      * @param zeile  bei {@link Bescheid#SCHILD_FEHLERHAFT} die Zeilennummer 1 bis 4,
      *               sonst 0. Ein Spieler soll lesen, WO er nachsehen muss
+     * @param stadt  bei {@link Bescheid#KEIN_LADENRECHT} der Name der Freistadt, sonst
+     *               {@code null}. Der NAME und nicht die Parzelle: Was der Satz
+     *               einsetzt, ist ein Wort - gaebe es hier den ganzen Stadtsatz,
+     *               muesste der Sendeort ihn auspacken, und das waere eine zweite
+     *               Stelle, die weiss, wie eine Stadt heisst
+     * @param auflage bei {@link Bescheid#KEIN_LADENRECHT} der GRUND, sonst
+     *               {@code null}. Nie {@code ERFUELLT}: Mit dem gaebe es diesen
+     *               Bescheid nicht, und das Wort dazu wirft
+     * @param gebuehr bei {@link Bescheid#LADENGEBUEHR_ZU_TEUER} der Betrag, den die
+     *               Stadt nimmt, sonst 0. Der Satz nennt ihn - eine Absage, die nicht
+     *               sagt, wie viel fehlt, laesst den Spieler raten
      */
     record Anlage(Bescheid bescheid, Kistenshop shop, Shopschild.Fehler fehler,
-                  int zeile) {
+                  int zeile, String stadt, Freistadtbuch.Auflage auflage,
+                  long gebuehr) {
     }
 
     /**
@@ -148,6 +186,24 @@ final class Shopbuch {
     private final Warenleser waren;
     private final Zugriff zugriff;
     private final Wirtschaftsstand wirtschaft;
+
+    /**
+     * Das Buch der Freistaedte - oder {@code null}, wenn es in diesem Lauf keine gibt.
+     *
+     * <p><b>Das Objekt selbst und keine dritte Naht</b>, obwohl diese Klasse sonst
+     * alles ueber schmale Schnittstellen hereinnimmt: Jene zwei gibt es, weil dahinter
+     * BUKKIT liegt und eine Probe sonst einen Server braeuchte. {@link Freistadtbuch}
+     * liegt im Kern und kennt kein Bukkit - eine Attrappe davor waere eine Nachbildung
+     * der Entscheidung, die der Kern schon trifft, und die Proben liefen gegen die
+     * Nachbildung statt gegen die Regel.
+     *
+     * <p><b>Darf {@code null} sein, anders als {@link #wirtschaft}</b>: Fehlt die
+     * Freistaedtewelt in der config.yml, entsteht gar kein Buch, und der Start sagt das
+     * mit zwei eigenen Zeilen. Ein Wurf hier machte aus einer fehlenden Welt einen
+     * Server ohne Kistenshops.
+     */
+    private final Freistadtbuch freistaedte;
+
     private final Logger protokoll;
 
     /**
@@ -158,9 +214,16 @@ final class Shopbuch {
      *                   {@code handel.bundshop-wort} nie - waehrend der Befehl
      *                   "uebernommen" meldete. Dieselbe Falle wie bei den Gebuehren in
      *                   {@code Shophandel}, gefunden beim Bau des Bundesmarktes
+     * @param freistaedte das Buch der Freistaedte, oder {@code null} - siehe das Feld.
+     *                   Ein Wert und kein spaeterer Nachtrag: Eine Regel, die gebaut
+     *                   und gruen geprueft ist und nicht verdrahtet wird, ist im Spiel
+     *                   unsichtbar wirkungslos, und ein vergessener Setzer faellt
+     *                   niemandem auf. So fragt der Uebersetzer jede einzelne
+     *                   Erzeugungsstelle
      */
     Shopbuch(Shopablage ablage, Warenleser waren, Zugriff zugriff,
-            Wirtschaftsstand wirtschaft, Logger protokoll) {
+            Wirtschaftsstand wirtschaft, Freistadtbuch freistaedte,
+            Logger protokoll) {
         if (wirtschaft == null) {
             throw new IllegalArgumentException("Ohne Wirtschaftsstand gibt es kein"
                     + " Bundwort - und das wird im AUGENBLICK des Schildschreibens"
@@ -170,6 +233,7 @@ final class Shopbuch {
         this.waren = waren;
         this.zugriff = zugriff;
         this.wirtschaft = wirtschaft;
+        this.freistaedte = freistaedte;
         this.protokoll = protokoll;
     }
 
@@ -177,9 +241,15 @@ final class Shopbuch {
      * Legt einen Shop an - aus einem beschriebenen Schild und der Kiste daneben.
      *
      * <p><b>Die Reihenfolge der Absagen ist die der Kosten</b>, wie beim Mieten: erst das
-     * Schild selbst (keine Abfrage), dann die Kiste in der Welt, dann das Recht, dann die
-     * Ablage. Ein Spieler, der sich vertippt hat, bekommt seine Absage, ohne dass die
-     * Datenbank gefragt wurde.
+     * Schild selbst (keine Abfrage), dann die Kiste in der Welt, dann das LADENRECHT der
+     * Stadt, dann das Recht an der Kiste, dann die Ablage. Ein Spieler, der sich vertippt
+     * hat, bekommt seine Absage, ohne dass die Datenbank gefragt wurde.
+     *
+     * <p>Das Ladenrecht steht dabei VOR dem Recht an der Kiste, und das ist nicht die
+     * Kostenreihenfolge, sondern die der LAGE: Wo ueberhaupt kein Laden entstehen darf,
+     * hilft es niemandem zu erfahren, wem die Kiste gehoert. Es fragt dabei selbst eine
+     * Ablage (das Besitzlager, und ueber die Auflage die Grundstuecke) - die Zeile
+     * darueber meint mit "die Ablage" die zwei SHOPfragen, und die bleiben zuletzt.
      *
      * <p><b>Eine Ausnahme davon ist die WARE, und sie steht zuletzt</b> [08.11.2026]:
      * Die zwei Ablagefragen sind eine Map im Arbeitsspeicher, das Lesen der Kiste ist ein
@@ -207,7 +277,7 @@ final class Shopbuch {
                 wirtschaft.werte().handel().bundWort());
         if (!gelesen.gelungen()) {
             return new Anlage(Bescheid.SCHILD_FEHLERHAFT, null, gelesen.fehler(),
-                    gelesen.zeile());
+                    gelesen.zeile(), null, null, 0L);
         }
         Shopschild.Gelesen schild = gelesen.schild();
         if (schild.bundshop() && !darfBund) {
@@ -217,6 +287,17 @@ final class Shopbuch {
         // daneben ist der haeufigste Fehlversuch, und er kostet keine Abfrage.
         if (!waren.taugtAlsShopkiste(welt, kisteX, kisteY, kisteZ)) {
             return absage(Bescheid.KEINE_KISTE);
+        }
+        // DAS LADENRECHT DER STADT [Plan 16, Teil E3b], und es steht VOR der
+        // BESITZFRAGE an der Kiste (nicht vor der Frage, ob dort ueberhaupt eine
+        // steht - die bleibt die erste): Wo gar kein Laden entstehen darf, hilft es
+        // dem Spieler nicht zu erfahren, wem die Kiste gehoert - er kaufte ein
+        // Grundstueck, das nichts aendert. Eine Absage, die auf einen Ausweg zeigt,
+        // den es nicht gibt, ist schlechter als gar keine.
+        Anlage ohneLadenrecht = ladenrechtsabsage(welt, kisteX, kisteZ,
+                schild.bundshop());
+        if (ohneLadenrecht != null) {
+            return ohneLadenrecht;
         }
         // Die KISTENSTELLE und nicht die Schildstelle - siehe den Klassenkopf. Dass er am
         // Schild bauen durfte, hat die Schutzwache schon entschieden, als er es setzte;
@@ -287,12 +368,28 @@ final class Shopbuch {
             Kistenshop shop = new Kistenshop(welt, schildX, schildY, schildZ, kisteX,
                     kisteY, kisteZ, schild.bundshop() ? null : wer, schild.menge(),
                     schild.kaufpreis(), schild.verkaufpreis(), ware, Set.of());
+            // DIE LADENGEBUEHR [Teil E6], und sie steht GANZ HINTEN: Der Shop ist
+            // beschlossen, alles andere ist geprueft. Weiter vorn zahlte ein Spieler
+            // und laese danach "die Kiste sagt nicht, was du handeln willst".
+            //
+            // GEPRUEFT wird hier, GEBUCHT nach dem Schreiben - die Begruendung steht
+            // bei pruefeLadengebuehr: Wer nicht zahlen kann, soll keinen Shop bekommen
+            // UND kein Geld verlieren.
+            Freistadtbuch.Ladengebuehr gebuehr = ladengebuehr(welt, kisteX, kisteZ,
+                    wer, schild.bundshop());
+            if (gebuehr.faellt() && !gebuehr.bezahlbar()) {
+                return new Anlage(Bescheid.LADENGEBUEHR_ZU_TEUER, null, null, 0, null,
+                        null, gebuehr.betrag());
+            }
             ablage.schreibe(shop);
+            if (gebuehr.faellt()) {
+                erhebe(welt, kisteX, kisteZ, wer, gebuehr.betrag());
+            }
             protokoll.info("Kistenshop angelegt: " + shop.schluessel() + " - "
                     + shop.menge() + "x " + ware.name() + ", "
                     + Shopschild.preistext(shop.kaufpreis(), shop.verkaufpreis())
                     + (shop.demBund() ? " (Bund)" : " von " + wer));
-            return new Anlage(Bescheid.ANGELEGT, shop, null, 0);
+            return new Anlage(Bescheid.ANGELEGT, shop, null, 0, null, null, 0L);
         } catch (RuntimeException fehler) {
             // Auch ein IllegalArgumentException aus dem Satz Kistenshop landet hier, und
             // das ist gewollt: Shopschild prueft dasselbe schon und laesst nichts durch,
@@ -402,7 +499,123 @@ final class Shopbuch {
         return wirtschaft.werte().handel().bundWort();
     }
 
+    /**
+     * Die Absage des LADENRECHTS - oder {@code null}, wenn der Shop entstehen darf.
+     *
+     * <p><b>Nach der KISTENSTELLE</b>, wie jede Ortsfrage dieser Klasse. Dass das
+     * Schild in einer anderen Stadt haengen koennte, ist in der Stadtfelderwelt
+     * ausgeschlossen: Zwischen zwei Feldern liegt die Leere, in der niemand bauen
+     * darf - Schild und Kiste sind Nachbarbloecke und damit immer im selben Feld.
+     *
+     * <p><b>Ein BUNDSHOP geht durch</b>, dieselbe Ausnahme wie bei der Zugriffsfrage
+     * eine Zeile tiefer: Er gehoert niemandem, die Stadt lizenziert ihn nicht, und
+     * aufstellen kann ihn ohnehin nur, wer {@code freimarken.shop.bund} hat. Die
+     * Auflage ist eine Auflage an die STADT und keine an das Team.
+     *
+     * <p><b>Das Teamrecht {@code bauen.ueberall} geht NICHT durch</b>, und das ist
+     * Absicht: Es oeffnet Tueren, wo jemand etwas reparieren muss. Hier gibt es nichts
+     * zu reparieren - die Stadt setzt Regeln und vergibt ein Grundstueck, und beides
+     * geht ohne einen einzigen Laden.
+     *
+     * <p><b>Bei einer Stoerung entsteht der Shop</b>, und das ist die UMGEKEHRTE
+     * Richtung als bei den zwei Ablagefragen weiter unten. Der Unterschied ist, was auf
+     * dem Spiel steht: Dort geht es um eine fremde Kiste, also um Eigentum, und eine
+     * leergezogene Kiste bekommt niemand zurueck. Hier geht es um eine
+     * Wirtschaftsregel - und diese Frage steht im Weg JEDES neuen Shops in JEDER Welt.
+     * Ein Nein bei stummem Lager hielte auch den Shop in der Wildnis auf, mit dem die
+     * Freistaedte nichts zu tun haben. Die Klage steht im Protokoll.
+     */
+    private Anlage ladenrechtsabsage(String welt, int kisteX, int kisteZ,
+            boolean bundshop) {
+        if (freistaedte == null || bundshop) {
+            return null;
+        }
+        try {
+            // DIE WELT KOMMT HIER BELIEBIG HEREIN - ein Shopschild kann in jeder
+            // Welt haengen. Dass dabei keine gewoehnliche Rasterparzelle als Stadt
+            // durchgeht, haelt stadtAn selbst: Der Riegel stand bis zum 17.11.2026 an
+            // dieser Stelle und ist in den Kern gewandert, als der Besuchsstempel
+            // einen zweiten Aufrufer mit beliebiger Welt dazugab. Die Begruendung
+            // steht dort - samt dem Fall, der ihn noetig machte.
+            Optional<Parzelle> stadt = freistaedte.stadtAn(welt, kisteX, kisteZ);
+            if (stadt.isEmpty()) {
+                return null;
+            }
+            Freistadtbuch.Auflage auflage = freistaedte.darfLaden(stadt.get());
+            if (auflage.erfuellt()) {
+                return null;
+            }
+            return new Anlage(Bescheid.KEIN_LADENRECHT, null, null, 0,
+                    stadt.get().name(), auflage, 0L);
+        } catch (RuntimeException fehler) {
+            protokoll.log(Level.WARNING, "Die Freistadt an " + welt + " " + kisteX
+                    + "/" + kisteZ + " ist nicht zu lesen - das Ladenrecht faellt fuer"
+                    + " diesen Shop aus, er entsteht. Eine Wirtschaftsregel darf bei"
+                    + " ihrem Ausfall nicht jeden Shop des Servers aufhalten.", fehler);
+            return null;
+        }
+    }
+
+    /**
+     * Was dieser Shop seiner Stadt zahlt - oder dass es keine gibt [Teil E6].
+     *
+     * <p>Dieselben drei Ausnahmen wie beim Ladenrecht, und aus denselben Gruenden:
+     * ohne Freistadtbuch keine Stadt, ein BUNDSHOP zahlt nicht (er gehoert niemandem,
+     * also gibt es niemanden, der zahlen koennte), und wo keine Stadt steht, gibt es
+     * keine Kasse.
+     *
+     * <p>Bei einer Stoerung faellt die Gebuehr AUS - loud, nicht still. Dieselbe
+     * Richtung wie beim Ladenrecht und aus demselben Grund: Diese Frage steht im Weg
+     * JEDES neuen Shops in JEDER Welt, und ein Nein bei stummem Lager hielte auch den
+     * Shop in der Wildnis auf.
+     */
+    private Freistadtbuch.Ladengebuehr ladengebuehr(String welt, int kisteX, int kisteZ,
+            UUID wer, boolean bundshop) {
+        if (freistaedte == null || bundshop) {
+            return new Freistadtbuch.Ladengebuehr(0L, true);
+        }
+        try {
+            Optional<Parzelle> stadt = freistaedte.stadtAn(welt, kisteX, kisteZ);
+            if (stadt.isEmpty()) {
+                return new Freistadtbuch.Ladengebuehr(0L, true);
+            }
+            return freistaedte.pruefeLadengebuehr(stadt.get(), wer);
+        } catch (RuntimeException fehler) {
+            protokoll.log(Level.WARNING, "Die Ladengebuehr an " + welt + " " + kisteX
+                    + "/" + kisteZ + " liess sich nicht ermitteln - sie faellt fuer"
+                    + " diesen Shop aus, er entsteht trotzdem.", fehler);
+            return new Freistadtbuch.Ladengebuehr(0L, true);
+        }
+    }
+
+    /**
+     * Bucht sie - NACH dem Schreiben, und klagt nur.
+     *
+     * <p>Hier ist der Shop schon in der Ablage. Scheitert jetzt das Abbuchen, hat die
+     * Stadt ihre Gebuehr nicht bekommen - und das ist der RICHTIGE Verlust von zweien:
+     * Die Alternative waere ein Spieler, der fuer einen Shop zahlt, den es nicht gibt.
+     * Dass ihm zwischen Pruefung und Abbuchung das Geld ausgeht, ist auf dem Haupttakt
+     * ausgeschlossen - dazwischen laeuft kein anderer Zweig.
+     */
+    private void erhebe(String welt, int kisteX, int kisteZ, UUID wer, long betrag) {
+        try {
+            Optional<Parzelle> stadt = freistaedte.stadtAn(welt, kisteX, kisteZ);
+            if (stadt.isPresent()
+                    && freistaedte.erhebeLadengebuehr(stadt.get(), wer, betrag)) {
+                return;
+            }
+            protokoll.warning("Die Ladengebuehr von " + betrag + " Mark fuer den Shop"
+                    + " an " + welt + " " + kisteX + "/" + kisteZ + " liess sich nicht"
+                    + " abbuchen. Der Shop steht; die Stadt hat sie nicht bekommen.");
+        } catch (RuntimeException fehler) {
+            protokoll.log(Level.WARNING, "Die Ladengebuehr von " + betrag + " Mark fuer"
+                    + " den Shop an " + welt + " " + kisteX + "/" + kisteZ + " liess"
+                    + " sich nicht buchen. Der Shop steht; die Stadt hat sie nicht"
+                    + " bekommen.", fehler);
+        }
+    }
+
     private static Anlage absage(Bescheid bescheid) {
-        return new Anlage(bescheid, null, null, 0);
+        return new Anlage(bescheid, null, null, 0, null, null, 0L);
     }
 }

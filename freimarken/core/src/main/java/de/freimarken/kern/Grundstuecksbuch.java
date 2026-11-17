@@ -132,6 +132,15 @@ public final class Grundstuecksbuch {
     private final Kasse kasse;
 
     /**
+     * Die Kasse der STAEDTE - erst mit Teil E gebraucht.
+     *
+     * <p>Eine zweite Kasse und nicht dieselbe: Konten von Staedten duerfen kein
+     * Startguthaben bekommen. Warum das so scharf getrennt gehoert, steht in
+     * {@link Stadtkasse} - zusammen mit dem Riegel, der es prueft.
+     */
+    private final Stadtkasse stadtkasse;
+
+    /**
      * Woher die Hoechstzahl der Zellen kommt.
      *
      * <p>Wie beim {@link Freistadtbuch} darf das Feld {@code final} bleiben, weil nicht
@@ -150,7 +159,7 @@ public final class Grundstuecksbuch {
      */
     public Grundstuecksbuch(Feldgrenze grenze, BesitzLager lager,
                             Grundstuecksablage ablage, Kasse kasse,
-                            Wirtschaftsstand wirtschaft) {
+                            Stadtkasse stadtkasse, Wirtschaftsstand wirtschaft) {
         this.grenze = grenze;
         this.plan = grenze.plan();
         // DER RIEGEL AM ENGSTEN VERBRAUCHER: Dieses Buch ist die einzige Stelle, die in
@@ -167,6 +176,7 @@ public final class Grundstuecksbuch {
         this.lager = lager;
         this.ablage = ablage;
         this.kasse = kasse;
+        this.stadtkasse = stadtkasse;
         this.wirtschaft = wirtschaft;
     }
 
@@ -461,14 +471,77 @@ public final class Grundstuecksbuch {
         // und eine Zeile ueber 0 Mark waere eine Zeile ohne Geldbewegung.
         long gebuehr = Shopregel.gebuehrAuf(preis,
                 wirtschaft.werte().freistaedte().verkaufsgebuehrProzent());
-        if (gebuehr > 0L) {
-            try {
-                kasse.abbuchen(verkaeufer, gebuehr, Buchungsgrund.GRUNDSTUECK_GEBUEHR);
-            } catch (RuntimeException fehler) {
-                meldeVerlorenenErloes.melde(verkaeufer, gebuehr, fehler);
-            }
+        return gekauft(neu, zellen, preis,
+                erhebeGebuehr(welt, blockX, blockZ, verkaeufer, gebuehr,
+                        meldeVerlorenenErloes));
+    }
+
+    /**
+     * Die Marktgebuehr erheben - und sie der STADT gutschreiben [Teil E1].
+     *
+     * <p><b>Bis Teil E verschwand sie.</b> Sie wurde dem Verkaeufer abgebucht und
+     * niemandem gutgeschrieben: eine reine Senke, wie Plan 12b sie fuehrt. Jetzt faellt
+     * sie der Stadt zu, in deren Feld das Grundstueck liegt - aus einer Steuer wird
+     * damit eine Abgabe, und das ist eine Entscheidung und kein Nebeneffekt. Was sie
+     * fuer die Senkenrechnung bedeutet, steht bei
+     * {@link Buchungsgrund#STADTKASSE_GEBUEHR}.
+     *
+     * <p><b>Die Stadt wird VOR dem Abbuchen gesucht</b>, und das ist die eigentliche
+     * Entscheidung dieser Methode: Findet sie sich nicht, faellt die Gebuehr AUS statt
+     * ins Nichts. Ein Grundstueck liegt immer in einer Stadt - {@code stadt_id} ist
+     * Pflicht -, also heisst "keine Stadt" hier: Der Datenstand ist kaputt. Bei einem
+     * kaputten Stand lieber keine Gebuehr als vernichtetes Geld; das Abbuchen ohne
+     * Empfaenger waere genau der alte Zustand, nur ohne seine Begruendung.
+     *
+     * <p>Die Reihenfolge danach ist ABBUCHEN, dann GUTSCHREIBEN, und zwar nach dem
+     * schlimmsten Fall - derselben Abwaegung wie in {@link #kaufe}: Scheitert das
+     * Gutschreiben, ist Geld verschwunden, und das kann ein Betreiber heilen.
+     * Scheiterte umgekehrt das Abbuchen, haette die Stadt Geld, das niemand bezahlt
+     * hat, und das ist nachher niemandem mehr zuzuordnen.
+     *
+     * @return was WIRKLICH erhoben wurde - 0, wenn die Gebuehr ausfiel. Der Entscheid
+     *         traegt diese Zahl zum Spieler, und eine Gebuehr, die im Satz steht und
+     *         nicht im Buch, waere eine Luege im Augenblick des Sendens
+     */
+    private long erhebeGebuehr(String welt, int blockX, int blockZ, UUID verkaeufer,
+                               long gebuehr, VerlorenerErloes meldeVerlorenenErloes) {
+        if (gebuehr <= 0L) {
+            return 0L;
         }
-        return gekauft(neu, zellen, preis, gebuehr);
+        Optional<Parzelle> stadt;
+        try {
+            stadt = lager.finde(welt, plan.feldNummer(blockX), plan.feldNummer(blockZ));
+        } catch (RuntimeException fehler) {
+            meldeVerlorenenErloes.melde(verkaeufer, gebuehr, fehler);
+            return 0L;
+        }
+        if (stadt.isEmpty()) {
+            meldeVerlorenenErloes.melde(verkaeufer, gebuehr,
+                    new IllegalStateException("Zu dem gekauften Grundstueck in " + welt
+                            + " gibt es keine Stadt - die Marktgebuehr von " + gebuehr
+                            + " Mark faellt darum aus, statt ins Nichts zu gehen."));
+            return 0L;
+        }
+        try {
+            if (!kasse.abbuchen(verkaeufer, gebuehr,
+                    Buchungsgrund.GRUNDSTUECK_GEBUEHR)) {
+                // Nicht gedeckt. Das kann vorkommen: Der Verkaeufer hat den Erloes in
+                // den Millisekunden dazwischen schon ausgegeben. Dann faellt die
+                // Gebuehr aus - eine Gebuehr auf Kredit gibt es nicht.
+                return 0L;
+            }
+        } catch (RuntimeException fehler) {
+            meldeVerlorenenErloes.melde(verkaeufer, gebuehr, fehler);
+            return 0L;
+        }
+        try {
+            stadtkasse.einzahlen(stadt.get(), gebuehr,
+                    Buchungsgrund.STADTKASSE_GEBUEHR);
+        } catch (RuntimeException fehler) {
+            // Abgebucht und nicht angekommen - der alte Zustand, aber diesmal LAUT.
+            meldeVerlorenenErloes.melde(verkaeufer, gebuehr, fehler);
+        }
+        return gebuehr;
     }
 
     /**
