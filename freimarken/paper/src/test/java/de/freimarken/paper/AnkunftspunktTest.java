@@ -1,8 +1,11 @@
 package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import de.freimarken.kern.Quader;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
@@ -272,5 +275,173 @@ class AnkunftspunktTest {
                 "20 Bloecke weit wird nicht gesucht");
         assertTrue(Ankunftspunkt.suche(welt, 13, 0).isPresent(),
                 "sieben Bloecke weit schon");
+    }
+
+    // ================================================ Die Torprobe
+
+    /**
+     * Eine gebaute Wand mit einer Oeffnung - der Fall vom 02.11.2026.
+     *
+     * <p>Boden auf {@code boden}, Wand von {@code boden+1} bis {@code boden+3}, und in
+     * der Mitte drei Bloecke Loch. Darueber ein Sturz. Genau so sieht die Reihe am
+     * Bundesmarkt aus, und genau an ihr hat die ringweise Suche damals alle sieben Tore
+     * fuer unbegehbar erklaert: Sie fragt {@code bodenHoehe} und findet den Sturz.
+     */
+    private static Probewelt wandMitLoch(int boden, int z) {
+        var welt = new Probewelt();
+        for (int x = 9; x <= 13; x++) {
+            welt.boden(x, z, boden, Material.STONE);
+            welt.setze(x, boden + 4, z, Material.STONE);
+        }
+        for (int hoehe = 1; hoehe <= 3; hoehe++) {
+            welt.setze(9, boden + hoehe, z, Material.STONE);
+            welt.setze(13, boden + hoehe, z, Material.STONE);
+        }
+        return welt;
+    }
+
+    @Test
+    @DisplayName("Ein Tor in einer gebauten Wand ist begehbar - der Fall vom 02.11.2026")
+    void torInEinerWand() {
+        // Die Probe, die es am 02.11.2026 nicht gab: Damals lief die ringweise Suche auf
+        // die Torquader, fand den STURZ ueber der Oeffnung und erklaerte eine gerade
+        // gebaute Wand fuer unbegehbar - sieben Klagen fuer sieben richtige Tore.
+        var welt = wandMitLoch(70, 0);
+
+        assertNull(Ankunftspunkt.torklage(welt, new Quader(10, 71, 0, 12, 73, 0)),
+                "drei Bloecke Loch ueber festem Boden sind ein Tor");
+        // Und die Gegenrichtung in derselben Welt: Die ringweise Suche, die hier NICHT
+        // benutzt wird, findet oben auf dem Sturz einen Platz - haette torklage sie
+        // genommen, waere die Hoehe um vier zu hoch.
+        assertEquals(welt.bodenHoehe(11, 0) + 1,
+                Ankunftspunkt.suche(welt, 11, 0).orElseThrow().y(),
+                "die Suche landet auf dem Sturz - darum fragt die Torprobe sie nicht");
+        assertEquals(74, welt.bodenHoehe(11, 0),
+                "der hoechste feste Block ueber dem Tor IST der Sturz");
+    }
+
+    @Test
+    @DisplayName("Ein Tor in der Luft nennt die Hoehe, auf der es stehen muesste")
+    void torInDerLuft() {
+        // KEINE Wand mit Sturz, sondern flacher Boden: Auf dem Sturz einer Wand kann man
+        // stehen, und ein Vorschlag, der ihn nennt, waere richtig. Hier soll der BODEN
+        // gefunden werden, und darum gibt es hier nur Boden.
+        var welt = new Probewelt();
+        for (int x = 10; x <= 12; x++) {
+            welt.boden(x, 0, 70, Material.STONE);
+        }
+
+        String klage = Ankunftspunkt.torklage(welt, new Quader(10, 75, 0, 12, 77, 0));
+
+        assertTrue(klage != null && klage.contains("ist kein Boden"), "" + klage);
+        assertTrue(klage.contains("Passend waere: von [10, 71, 0] bis [12, 73, 0]"),
+                "der Vorschlag muss die Zahlen zum Abtippen nennen: " + klage);
+    }
+
+    @Test
+    @DisplayName("Ueber einem Meeresboden gibt es KEINE Hoehe - und das sagt der Satz")
+    void torUeberWasser() {
+        // DER FUND VOM 18.11.2026, gemessen am heutigen Altfurt: Die ganze Torreihe am
+        // Bundesmarkt liegt im Meer. Der alte Vorschlag suchte nur den ersten festen
+        // Block unter der Fusshoehe - und riet "Passend waere: von [86, 51, 0] ...",
+        // also mitten ins Wasser. Wer das abtippte, bekam beim naechsten Start die
+        // naechste Klage ("steht WATER im Tor"). Ein Vorschlag, der in die naechste
+        // Klage fuehrt, ist schlimmer als keiner: Er sieht aus wie eine Antwort.
+        var welt = new Probewelt();
+        for (int x = 86; x <= 88; x++) {
+            welt.boden(x, 0, 51, Material.STONE);
+            for (int y = 52; y <= 62; y++) {
+                welt.setze(x, y, 0, Material.WATER);
+            }
+        }
+
+        String klage = Ankunftspunkt.torklage(welt, new Quader(86, 71, 0, 88, 73, 0));
+
+        assertTrue(klage != null && klage.contains("ist kein Boden"), "" + klage);
+        assertFalse(klage.contains("Passend waere"),
+                "auf einem Meeresboden ist keine Hoehe passend: " + klage);
+        assertTrue(klage.contains("hier muss gebaut werden"), klage);
+    }
+
+    @Test
+    @DisplayName("Eine Hoehe taugt nur, wenn JEDE Saeule der Oeffnung sie traegt")
+    void vorschlagFragtDieGanzeOeffnung() {
+        // Der Unterschied zwischen "die eine aufgefallene Saeule" und "die Oeffnung":
+        // Links und rechts steht der Boden auf 70, in der Mitte liegt eine Pfuetze -
+        // Boden 67, Wasser bis 70. Auf Hoehe 71 traegt also nur zwei Drittel der
+        // Oeffnung. Wer nur die erste Saeule fragt, nennt 71 und irrt.
+        var welt = new Probewelt();
+        welt.boden(10, 0, 70, Material.STONE);
+        welt.boden(12, 0, 70, Material.STONE);
+        welt.boden(11, 0, 67, Material.STONE);
+        for (int y = 68; y <= 70; y++) {
+            welt.setze(11, y, 0, Material.WATER);
+        }
+
+        String klage = Ankunftspunkt.torklage(welt, new Quader(10, 80, 0, 12, 82, 0));
+
+        assertTrue(klage != null && klage.contains("ist kein Boden"), "" + klage);
+        assertFalse(klage.contains("Passend waere"),
+                "keine Hoehe traegt alle drei Saeulen: " + klage);
+    }
+
+    @Test
+    @DisplayName("Ein zugemauertes Tor nennt den Block und KEINE Zahlen")
+    void torZugemauert() {
+        var welt = wandMitLoch(70, 0);
+        welt.setze(11, 72, 0, Material.STONE);
+
+        String klage = Ankunftspunkt.torklage(welt, new Quader(10, 71, 0, 12, 73, 0));
+
+        assertTrue(klage != null && klage.contains("steht STONE im Tor"), "" + klage);
+        assertFalse(klage.contains("Passend waere"),
+                "der Boden traegt ja - ein Vorschlag nennte dieselbe Hoehe wieder: "
+                        + klage);
+    }
+
+    @Test
+    @DisplayName("Ein Tor auf einem Magmablock ist eine Klage, nicht ein Durchgang")
+    void torAufMagma() {
+        // Der Boden traegt, und darum war dieser Fall vor dem 18.11.2026 klaglos: Die
+        // alte Pruefung fragte nur, ob unter dem Tor etwas FEST ist. Die Standprobe
+        // fragt beides, und seitdem tun es beide.
+        var welt = wandMitLoch(70, 0);
+        welt.setze(11, 70, 0, Material.MAGMA_BLOCK);
+
+        String klage = Ankunftspunkt.torklage(welt, new Quader(10, 71, 0, 12, 73, 0));
+
+        assertTrue(klage != null && klage.contains("MAGMA_BLOCK"), "" + klage);
+        assertTrue(klage.contains("nimmt Schaden"), klage);
+    }
+
+    @Test
+    @DisplayName("Die Torprobe fragt JEDE Saeule und JEDE Hoehe der Oeffnung")
+    void torprobeFragtAlles() {
+        // GEGEN DIE STILL GRUENE SCHLEIFE: Eine Pruefung, die nur die erste Saeule oder
+        // nur die Fusshoehe ansieht, ist bei einem 3x3-Tor zu acht Neunteln blind. Hier
+        // wird jede Stelle der Oeffnung EINZELN kaputtgemacht, und jede muss auffallen.
+        int gepruefteStellen = 0;
+        for (int x = 10; x <= 12; x++) {
+            for (int hoehe = 0; hoehe <= 1; hoehe++) {
+                var welt = wandMitLoch(70, 0);
+                welt.setze(x, 71 + hoehe, 0, Material.STONE);
+                gepruefteStellen++;
+                assertTrue(Ankunftspunkt.torklage(welt,
+                                new Quader(10, 71, 0, 12, 73, 0)) != null,
+                        "ein Block bei " + x + "/" + (71 + hoehe) + "/0 bleibt"
+                                + " unbemerkt - die Pruefung sieht nicht die ganze"
+                                + " Oeffnung an");
+            }
+            var ohneBoden = wandMitLoch(70, 0);
+            ohneBoden.setze(x, 70, 0, Material.AIR);
+            gepruefteStellen++;
+            assertTrue(Ankunftspunkt.torklage(ohneBoden,
+                            new Quader(10, 71, 0, 12, 73, 0)) != null,
+                    "ein Loch im Boden bei " + x + "/70/0 bleibt unbemerkt");
+        }
+        // Der Sturz (die dritte Hoehe) wird ABSICHTLICH nicht verlangt: Ein Spieler ist
+        // zwei Bloecke hoch, und ein Tor mit einem Block im Sturz ist begehbar. Darum
+        // sind es neun Stellen und nicht zwoelf.
+        assertEquals(9, gepruefteStellen, "drei Saeulen zu je Boden, Fuss und Kopf");
     }
 }

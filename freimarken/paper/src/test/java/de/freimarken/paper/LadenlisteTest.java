@@ -437,9 +437,10 @@ class LadenlisteTest {
         // eingemessen und nicht erfunden -, und damit haelt die Probe MEHR als
         // vorher: Sie laeuft den Leser mit wirklichen Zahlen durch.
         //
-        // Was keine Probe sehen kann, ist die Lage im Gelaende. Die config.yml
-        // schreibt daneben, woher die Zahlen kommen und wann sie wertlos werden
-        // (Altfurt hat keinen festen Startwert). Hier wird geprueft, was der LESER
+        // Was keine Probe sehen kann, ist die Lage im Gelaende - aber seit dem
+        // 18.11.2026 ist Altfurt art: flach, und damit liegt der Boden UEBERALL auf
+        // y -61. Die Zahlen sind also gegeben und nicht gemessen; die config.yml
+        // schreibt daneben, woher sie kommen. Hier wird geprueft, was der LESER
         // zusagt - und das Tragende ist die Zahl DREI neben der leeren Klagenliste:
         // Eine Ueberschneidung oder eine Truhe ausserhalb kostet ihre Einheit, und
         // zwar OHNE dass die Datei dafuer unlesbar wird. Mit zwei Staenden und einer

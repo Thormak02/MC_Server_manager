@@ -487,6 +487,141 @@ class WeltenlisteTest {
     }
 
     @Test
+    @DisplayName("Die Tore der ausgelieferten Datei stehen in EINER Reihe mit Schritt 4")
+    void dieTorreiheDerAusgelieferterDatei() throws Exception {
+        // WARUM ES DIESE TAFEL GIBT [18.11.2026]. Mit Wolkenwerder kam ein achtes Tor in
+        // die ausgelieferte Datei, und es fiel aus der Reihe: Die am 02.11.2026
+        // eingemessene Wand am Bundesmarkt war 32 Bloecke breit (x 56..87), acht
+        // Durchgaenge brauchen aber 1 + 8*4 = 33. Keine Probe hat das gesehen - die Probe
+        // darueber prueft, dass die Datei klaglos liest, dass es neun Welten gibt und dass
+        // genau acht davon ein Tor haben. Das ist alles wahr und sagt ueber die FORM der
+        // Reihe nichts: Eine neunte Welt koennte sie genauso still sprengen, und bemerkt
+        // wuerde es erst an der Wand im Spiel.
+        //
+        // GEPRUEFT WIRD DIE FORM UND NICHT DIE ZAHL. Jeder Torquader ist von Hand an
+        // genau einem Altfurt eingemessen; mit dem naechsten Startwert liegen alle acht
+        // woanders (Plan Abschnitt 4.3 und Weltangabe.wiederholbar). Eine Tafel, die
+        // 58..60 und 86..88 festnagelt, waere bei jeder Neumessung des Gelaendes rot -
+        // und eine Tafel, die bei richtiger Arbeit rot wird, schaltet jemand ab. Die
+        // Reihe selbst ist dagegen eine Entscheidung und keine Messung: eine Wand, eine
+        // Hoehe, Tuergroesse 3x3, dazwischen je eine Saeule. Das bleibt wahr, ganz gleich
+        // wo die Wand steht.
+        var ergebnis = ausgelieferteListe();
+        assertTrue(ergebnis.klagen().isEmpty(),
+                "die ausgelieferte Datei klagt: " + ergebnis.klagen());
+        var tore = ergebnis.welten().stream()
+                .filter(Weltangabe::hatTor)
+                .sorted(java.util.Comparator.comparingInt(
+                        (Weltangabe w) -> w.tor().vonX()))
+                .toList();
+        // GEGEN DIE ZAHL UND NICHT GEGEN "NICHT LEER": Ein Filter, der aus Versehen alles
+        // wegwirft, liesse jede Schleife unten ins Leere laufen - die Tafel waere gruen,
+        // ohne einen einzigen Quader angesehen zu haben. Die Zahl kommt aus der Liste
+        // selbst und steht nicht hier: Altfurt ist die Welt, IN der die Tore stehen, jede
+        // andere ist ein Ziel. Mit einer zehnten Welt waechst die Erwartung mit.
+        assertEquals(ergebnis.welten().size() - 1, tore.size(),
+                "jede Welt ausser Altfurt hat ein Tor, und jedes gehoert in diese"
+                        + " Messung: " + tore.stream().map(Weltangabe::name).toList());
+
+        // 1. EINE REIHE. Alle Tore stehen auf demselben z, und jedes ist in z genau einen
+        //    Block tief - es ist eine Tuer in einer Wand und kein Gang. Ein Tor einen
+        //    Block weiter hinten waere im Spiel unsichtbar verschoben: Man liefe an der
+        //    Wand entlang und reiste ploetzlich nicht. Und alle stehen auf DERSELBEN
+        //    Hoehe: Zwei Hoehen sind zwei Waende, und der Sturz der einen waere die
+        //    Schwelle der anderen.
+        // 2. TUERGROESSE 3x3 (x und y), wie Plan 4.3 und der Kommentar an welten.<name>.tor
+        //    sie nennen. Zwei Bloecke hoch heisst: Der Kopf steckt im Sturz, und die
+        //    Standprobe laesst niemanden durch.
+        int gemesseneQuader = 0;
+        for (var welt : tore) {
+            var quader = welt.tor();
+            gemesseneQuader++;
+            assertEquals(tore.get(0).tor().vonZ(), quader.vonZ(),
+                    "alle Tore stehen in EINER Wand, also auf demselben z - das Tor nach "
+                            + welt.name() + " steht auf z " + quader.vonZ()
+                            + ", das erste auf z " + tore.get(0).tor().vonZ());
+            assertEquals(quader.vonZ(), quader.bisZ(),
+                    "ein Tor ist eine Tuer und kein Gang: in z genau ein Block, das Tor"
+                            + " nach " + welt.name() + " reicht von z " + quader.vonZ()
+                            + " bis z " + quader.bisZ());
+            assertEquals(tore.get(0).tor().vonY(), quader.vonY(),
+                    "eine Wand hat EINE Hoehe - das Tor nach " + welt.name()
+                            + " steht auf y " + quader.vonY() + ", das erste auf y "
+                            + tore.get(0).tor().vonY());
+            assertEquals(3, quader.bisX() - quader.vonX() + 1,
+                    "Tuerbreite 3 aus Plan 4.3 - das Tor nach " + welt.name()
+                            + " ist x " + quader.vonX() + ".." + quader.bisX());
+            assertEquals(3, quader.bisY() - quader.vonY() + 1,
+                    "Tuerhoehe 3 aus Plan 4.3 - das Tor nach " + welt.name()
+                            + " ist y " + quader.vonY() + ".." + quader.bisY());
+        }
+        assertEquals(tore.size(), gemesseneQuader, "jeder Quader ist angesehen");
+
+        // 3. SCHRITT 4. Nach x sortiert hat jedes Tor genau einen Block Abstand zum
+        //    vorigen - die tragende Saeule zwischen zwei Durchgaengen. Zwei Bloecke und
+        //    mehr sind ein Loch in der Reihe (und bei acht Toren genau der Fall vom
+        //    18.11.2026: Das achte stand zu weit draussen); null Bloecke waere eine
+        //    doppelt breite Tuer ohne Stuetze darueber.
+        int gemesseneZwischenraeume = 0;
+        for (int i = 1; i < tore.size(); i++) {
+            var links = tore.get(i - 1);
+            var rechts = tore.get(i);
+            int saeule = rechts.tor().vonX() - links.tor().bisX() - 1;
+            gemesseneZwischenraeume++;
+            assertEquals(1, saeule,
+                    "zwischen dem Tor nach " + links.name() + " (x "
+                            + links.tor().vonX() + ".." + links.tor().bisX()
+                            + ") und dem Tor nach " + rechts.name() + " (x "
+                            + rechts.tor().vonX() + ".." + rechts.tor().bisX()
+                            + ") liegen " + saeule + " Bloecke Wand - die Reihe am"
+                            + " Bundesmarkt geht in Schritten von 4, also genau eine"
+                            + " Saeule je Zwischenraum");
+        }
+        assertEquals(tore.size() - 1, gemesseneZwischenraeume,
+                "jeder Zwischenraum der Reihe ist gemessen");
+
+        // 4. KEIN GETEILTER BLOCK, und zwar GEMESSEN. Weltenliste klagt darueber selbst,
+        //    und die Probe weiter unten prueft die Klage an einem erfundenen Haeppchen.
+        //    Hier wird nichts geglaubt: Die ausgelieferten Zahlen werden Paar fuer Paar
+        //    gegeneinander gehalten. Ein geteilter Block heisst, dass die Reihenfolge der
+        //    Eintraege entscheidet, wohin ein Spieler reist - das ist kein Ziel, sondern
+        //    ein Zufall.
+        int gemessenePaare = 0;
+        for (int i = 0; i < tore.size(); i++) {
+            for (int j = i + 1; j < tore.size(); j++) {
+                gemessenePaare++;
+                assertFalse(tore.get(i).tor().schneidet(tore.get(j).tor()),
+                        "die Tore nach " + tore.get(i).name() + " ("
+                                + tore.get(i).tor().alsText() + ") und "
+                                + tore.get(j).name() + " ("
+                                + tore.get(j).tor().alsText()
+                                + ") haben Bloecke gemeinsam");
+            }
+        }
+        assertEquals(tore.size() * (tore.size() - 1) / 2, gemessenePaare,
+                "jedes Paar ist gegeneinander gehalten");
+    }
+
+    /**
+     * Die Weltenliste aus der AUSGELIEFERTEN {@code config.yml} im Klassenpfad.
+     *
+     * <p>Aus der Datei und nicht aus einem getippten YAML-Haeppchen: Geprueft werden soll
+     * genau das, was der Betreiber ausgepackt bekommt. Ein nachgebauter Ausschnitt waere
+     * immer der Ausschnitt, den der Schreiber der Probe im Kopf hatte - und der achte
+     * Torquader vom 18.11.2026 waere darin gar nicht vorgekommen.
+     */
+    private static Weltenliste.Ergebnis ausgelieferteListe() throws Exception {
+        try (var strom = WeltenlisteTest.class.getResourceAsStream("/config.yml")) {
+            assertTrue(strom != null, "config.yml liegt nicht im Klassenpfad");
+            var datei = YamlConfiguration.loadConfiguration(new java.io.InputStreamReader(
+                    strom, java.nio.charset.StandardCharsets.UTF_8));
+            return Weltenliste.ausKonfiguration(
+                    datei.getConfigurationSection("welten"), "marktstadt", "altfurt",
+                    "freistaedte", "hafenwerder", "wolkenwerder");
+        }
+    }
+
+    @Test
     @DisplayName("Die Marktstadt ohne art: raster kostet die Marktstadt, nicht das Raster")
     void marktstadtMussRasterSein() {
         // Der unumkehrbare Fall: Wer den Block kopiert oder eine config.yml von einem

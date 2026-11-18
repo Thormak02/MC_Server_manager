@@ -36,9 +36,19 @@ class TruhenlisteTest {
 
     private static final String WELT = "freimarken:altfurt";
 
-    /** Die Halle aus der ausgelieferten Datei - stand-1 liegt bei 60..64 / 71..75 / 6..10. */
+    /**
+     * Die Halle aus der ausgelieferten Datei - stand-1 liegt bei
+     * 60..64 / -61..-57 / 6..10, die Truhe auf -60.
+     *
+     * <p>Die Hoehen sind negativ, weil Altfurt seit dem 18.11.2026
+     * {@code art: flach} ist: Vanillas Superflach legt das Gras auf y -61,
+     * der erste freie Block ist y -60. Eine Abschrift der Datei und darum
+     * hier dieselben Zahlen - stuenden hier andere, pruefte die Probe
+     * eine Halle, die es nicht gibt.
+     */
     private static final Ladenverzeichnis HALLE = Ladenverzeichnis.ausEinheiten(List.of(
-            new Ladeneinheit("stand-1", new Quader(60, 71, 6, 64, 75, 10), 62, 72, 8)));
+            new Ladeneinheit("stand-1", new Quader(60, -61, 6, 64, -57, 10),
+                    62, -60, 8)));
 
     // ====================================================== die Zahlen
 
@@ -312,7 +322,7 @@ class TruhenlisteTest {
         var stellen = stellen("""
                 freie-truhe:
                   truhen:
-                    - [62, 72, 8]
+                    - [62, -60, 8]
                 """);
 
         assertFalse(stellen.verzeichnis().gibtTruhen());

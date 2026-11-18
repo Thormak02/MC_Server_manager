@@ -1970,46 +1970,39 @@ laeden:
   # Die Reihenfolge dieser Eintraege ist die Reihenfolge in /laden liste - hier ordnest du.
   #
   # WOHER DIE ZAHLEN KOMMEN, und das gehoert hierher und nicht in ein Protokoll:
-  # Gemessen wurden sie am 02.11.2026 an den Regionsdateien von Altfurt, nicht heute -
-  # der Probeserver von damals ist aufgeraeumt, seine Weltdaten gibt es nicht mehr.
-  # Belegt ist damit: Das Feld x 56..87 / z -4..27 ist das flachste trockene Feld in
-  # der Naehe des Nullpunkts, sein Boden liegt durchgehend zwischen y 70 und y 72, und
-  # alle 1.024 Deckbloecke sind red_sand - kein Baum, kein Fels, kein Bauwerk. Auf der
-  # Linie z=12 ist der Boden an x 56/60/64/68/72/76/80/84 ueberall genau y=71.
+  # Sie sind GEGEBEN und nicht gemessen [18.11.2026]. Altfurt ist art: flach, und
+  # Vanillas Superflach legt Grundgestein auf y -64, zwei Schichten Dreck und Gras auf
+  # y -61. Der hoechste feste Block ist damit UEBERALL y -61 und der erste freie y -60 -
+  # keine Spanne, kein Wasser, kein Baum, und keine Zahl, die bei der naechsten Welt
+  # daneben liegt.
   #
-  # WAS DAS HEISST: Die Hoehe JEDES EINZELNEN Blockes unter den Staenden ist nicht
-  # gemessen, nur die Spanne des ganzen Feldes auf einem Raster von vier Bloecken. Wo
-  # der Boden y=70 ist, ist die unterste Quaderschicht Luft; wo er y=72 ist, steht ein
-  # Block darin. Beides ist kein Fehler - beim Bauen der Halle planiert man das. Pruefen
-  # kostet einen Befehl: /tp 62 73 8 und hinsehen.
+  # Bis zum 18.11.2026 stand hier eine Messung vom 02.11. an einer gewachsenen Welt,
+  # die es nicht mehr gibt - mit der Warnung, dass diese Quader wertlos sind, sobald
+  # ein Server Altfurt neu anlegt. Genau das war eingetreten: Im Altfurt des damals
+  # festgeschriebenen Startwerts liegen alle drei Staende in der Luft ueber dem Meer.
   #
-  # UND DIE WARNUNG DAZU: Altfurt hat KEINEN festen Startwert (welten.altfurt.art ist
-  # gewoehnlich, ein Startwert steht nirgends). Legt ein Server Altfurt NEU an, ist das
-  # Gelaende anders - dann sind diese Quader wertlos, und zwar genauso die sieben
-  # Torquader unter reisen.tore. Fuer die vorhandene Welt stimmen sie.
-  #
-  # Der Quader beginnt bei y=71, schliesst also den FUSSBODEN selbst ein. Das ist
+  # Der Quader beginnt bei y=-61, schliesst also den FUSSBODEN selbst ein. Das ist
   # Absicht: So deckt der Ladenschutz auch den Boden, und niemand hackt dem Mieter den
-  # Block unter seiner Truhe weg. Die Truhe steht darum eine Ebene hoeher, auf y=72.
+  # Block unter seiner Truhe weg. Die Truhe steht darum eine Ebene hoeher, auf y=-60.
   einheiten:
     # Westreihe, sechs Bloecke hinter der Torreihe bei z=0.
     stand-1:
-      von: [60, 71, 6]
-      bis: [64, 75, 10]
-      truhe: [62, 72, 8]
+      von: [60, -61, 6]
+      bis: [64, -57, 10]
+      truhe: [62, -60, 8]
     # Dieselbe Reihe, mit einer LUECKE von fuenf Bloecken zu stand-1 (z 11..15).
     # Die Luecke ist die eigentliche Probe fuer den Ladenschutz: Dort darf jeder
     # bauen, in den beiden Quadern nur der Mieter.
     stand-2:
-      von: [60, 71, 16]
-      bis: [64, 75, 20]
-      truhe: [62, 72, 18]
+      von: [60, -61, 16]
+      bis: [64, -57, 20]
+      truhe: [62, -60, 18]
     # Ostseite, gegenueber von stand-2. Die Mittelachse x 65..79 zwischen Torreihe
     # und Spawn (72/72/12) bleibt damit frei - dort laeuft jeder Ankommende durch.
     stand-3:
-      von: [80, 71, 16]
-      bis: [84, 75, 20]
-      truhe: [82, 72, 18]
+      von: [80, -61, 16]
+      bis: [84, -57, 20]
+      truhe: [82, -60, 18]
 # Der Handel an Kistenshops (Plan 7.4). Ein Kistenshop ist eine Kiste mit einem Schild
 # daran: erste Zeile der Besitzer, zweite die Menge je Handel, dritte die Preise in der
 # Form "B 100 : S 80", vierte die Ware oder ein Fragezeichen. Rechtsklick kauft,
@@ -2437,8 +2430,8 @@ welten:
   # tor:      Der Quader am Bundesmarkt, der HIERHER fuehrt - zwei Ecken, je drei ganze
   #           Zahlen, beide eingeschlossen:
   #               tor:
-  #                 von: [58, 71, 0]
-  #                 bis: [60, 73, 0]
+  #                 von: [58, -60, 0]
+  #                 bis: [60, -58, 0]
   #           Das Tor steht am Eintrag der ZIELwelt und nicht in einer eigenen Liste:
   #           So bleibt eine neue Welt ein Eintrag und ist nicht ein Eintrag plus ein
   #           vergessenes Tor. Geprueft wird beim Start, dass kein Tor in der
@@ -2452,18 +2445,27 @@ welten:
   marktstadt:
     art: raster
 
-    # Das Tor steht am Bundesmarkt in Altfurt und fuehrt HIERHER. Die Reihe ist am
-    # 02.11.2026 eingemessen: flachstes trockenes 32x32 um den Ursprung ist 56/-4 bis
-    # 87/27, Boden y 70..72, durchgehend red_sand. Die Tore stehen auf z=0, je drei
-    # Bloecke breit mit einem Block Abstand; y 71..73 deckt jeden Stand in der Reihe,
-    # denn der Boden wechselt dort zwischen 70 und 71.
+    # Das Tor steht am Bundesmarkt in Altfurt und fuehrt HIERHER.
+    #
+    # DIE REIHE IST NICHT MEHR EINGEMESSEN, sondern GEGEBEN [18.11.2026]:
+    # Altfurt ist art: flach, der Boden also ueberall y -61 und der erste
+    # freie Block y -60. Darum steht JEDES der acht Tore auf z=0 mit
+    # y -60..-58, drei Bloecke breit und drei hoch, in Schritten von vier
+    # (x 58, 62, 66, 70, 74, 78, 82, 86) - dazwischen je eine tragende
+    # Saeule. Die Wand reicht damit von x 57 bis x 89.
+    #
+    # Bis zum 18.11.2026 waren die Zahlen an einer gewachsenen Welt vom
+    # 02.11. gemessen, die es nicht mehr gibt. Acht Tore brauchen
+    # 1 + 8*4 = 33 Bloecke; das damals gemessene flache Feld war 32 breit -
+    # das achte Tor hatte gar keinen Platz. Auf einer Ebene gibt es diese
+    # Grenze nicht.
     #
     # Das Mauerwerk ist von Hand zu bauen (Plan 2.1 nennt die Gebaeude). Bis dahin ist
     # das Tor eine unsichtbare Tuer - das Protokoll sagt beim Start, welche Tore noch
     # ohne Bauwerk sind.
     tor:
-      von: [58, 71, 0]
-      bis: [60, 73, 0]
+      von: [58, -60, 0]
+      bis: [60, -58, 0]
     # Wunschkante der Weltgrenze in Bloecken; Plan Abschnitt 4 nennt 3.000.
     #
     # Gerechnet wird daraus ABGERUNDET auf ganze Rasterzellen (64 Parzelle + 7 Weg = 71)
@@ -2485,15 +2487,23 @@ welten:
     sprung-bestaetigt: ""
 
   # Gebaut, nicht gewachsen: Hier stehen Bundesmarkt und die Gebaeude aus Plan 2.1.
-  # Spielmodus Abenteuer setzt Schritt 3, Teil C - heute ist es eine gewoehnliche Welt.
-  # DER STARTWERT DES GELAENDES - und das ist die Zeile, die ein Einmessen
-  #   dauerhaft macht [eingefuehrt 09.11.2026]. Jeder von Hand eingemessene Quader
-  #   (die sieben Tore unten, die Ladeneinheiten weiter oben) ist eine Zahl in
-  #   dieser Datei, und das Gelaende ist es nicht. OHNE Startwert gehoeren diese
-  #   Zahlen zu genau EINER zufaellig erzeugten Welt: Wird sie geloescht, sind sie
-  #   wertlos, und niemand kann sie nachmessen. Am 09.11.2026 war genau das der
-  #   Fall - die am 02.11. eingemessene Welt war weg, und mit ihr die Grundlage der
-  #   Torquader.
+  # Spielmodus Abenteuer setzt Schritt 3, Teil C.
+  #
+  # EINE EBENE UND KEINE LANDSCHAFT [entschieden 18.11.2026]: Altfurt ist
+  #   art: flach. Jeder von Hand eingemessene Quader hier - die acht Tore unten,
+  #   die Ladeneinheiten weiter oben - ist eine Zahl in dieser Datei, und auf
+  #   gewachsenem Gelaende ist jede davon ein Glueckstreffer. Zweimal ist das
+  #   schiefgegangen: Am 09.11.2026 war die am 02.11. eingemessene Welt weg und
+  #   mit ihr die Grundlage der Torquader; am 18.11.2026 lag im Altfurt des
+  #   danach festgeschriebenen Startwerts die GANZE Torreihe unter Wasser. Auf
+  #   einer Ebene gibt es die Frage nicht - der Boden ist ueberall y -61.
+  #
+  # DER STARTWERT DES GELAENDES gilt darum fuer die GEWACHSENEN Welten -
+  #   hochwald, kornmark, nether, end [eingefuehrt 09.11.2026]. Er ist die Zeile,
+  #   die ein Einmessen dauerhaft macht: OHNE ihn gehoeren eingemessene Zahlen zu
+  #   genau EINER zufaellig erzeugten Welt, und wird sie geloescht, kann niemand
+  #   sie nachmessen. Fuer Altfurt steht hier keiner mehr - auf einer Ebene waere
+  #   er eine Zahl, die nie wirkt.
   # WIRKT NUR BEIM ANLEGEN. Eine Welt, die schon da ist, behaelt ihren Startwert -
   #   genau wie ihre Umgebung. Der Startbericht klagt laut, wenn beides
   #   auseinandergeht; wer das Gelaende dieser Zeile wirklich will, muss die Welt
@@ -2510,8 +2520,22 @@ welten:
   # Die Marktstadt hat KEINEN: Ihr Gelaende kommt aus dem Parzellengenerator, ein
   #   Startwert waere dort eine Zahl, die nie wirkt.
   altfurt:
-    art: gewoehnlich
-    startwert: 110926001
+    # FLACH und nicht gewoehnlich [entschieden 18.11.2026]. Altfurt ist
+    # eine GEBAUTE Stadt und keine gewachsene Landschaft: Jeder Quader
+    # hier - acht Tore, drei Ladeneinheiten - ist eine Zahl in dieser
+    # Datei, und auf gewachsenem Gelaende ist jede davon ein
+    # Glueckstreffer. Gemessen am 18.11.2026 im Altfurt des Startwerts
+    # 110926001: 73 Prozent der Umgebung des Nullpunkts ist Meer, die
+    # ganze Torreihe liegt unter Wasser (Boden y 47..53, Wasser bis
+    # y 62), und der Start klagt ueber alle acht Tore. Auf einer Ebene
+    # ist die Frage gar nicht da - der Boden ist ueberall y -61.
+    #
+    # KEIN Startwert, denn er wirkt hier nicht (Weltangabe.startwertWirkt:
+    # eine Ebene ist eine Ebene, gleich welche Zahl darueber steht). Eine
+    # Zahl hier waere eine, die nie wirkt - dieselbe Antwort wie bei den
+    # Freistaedten. Wer Altfurt doch gewachsen will, setzt art:
+    # gewoehnlich UND einen Startwert und misst danach jeden Quader neu.
+    art: flach
     kante: 800
     # Abenteuer in ganz Altfurt [entschieden 02.11.2026]. Altfurt wird nie
     # zurueckgesetzt - solange hier Ueberleben gilt, kann jeder Besucher im Rohbau
@@ -2538,8 +2562,8 @@ welten:
     art: stadtfelder
     kante: 6000
     tor:
-      von: [62, 71, 0]
-      bis: [64, 73, 0]
+      von: [62, -60, 0]
+      bis: [64, -58, 0]
 
   # Archipel mit eigenem Angelgut (Plan 4.1), eine Insel je Feld.
   hafenwerder:
@@ -2570,8 +2594,8 @@ welten:
     kante: 5000
     # Plan 2.1: "Hafen von Altfurt - Tor nach Hafenwerder".
     tor:
-      von: [66, 71, 0]
-      bis: [68, 73, 0]
+      von: [66, -60, 0]
+      bis: [68, -58, 0]
 
   wolkenwerder:
     # WOLKEN [18.11.2026, Plan 4.1 und 6.2]: die Skyblockwelt. Leere mit einem Raster
@@ -2596,13 +2620,12 @@ welten:
     kante: 20000
     # Plan 2.1: "Wolkenturm - Tor nach Wolkenwerder".
     #
-    # ACHTUNG, NOCH NICHT EINGEMESSEN: Die Torreihe am Bundesmarkt ist mit sieben
-    # Oeffnungen gebaut und endet bei x=85. Diese Zahlen setzen die Reihe um eine
-    # achte Oeffnung fort; im Boden liegt dort heute nichts. Der Start sagt beim
-    # Prueffen, was wirklich dasteht, und nennt einen Vorschlag.
+    # Das achte Tor der Reihe [18.11.2026]. Es setzt sie um eine Oeffnung fort und
+    # endet bei x=89. Auf der Ebene braucht es dafuer keine Messung mehr -
+    # gebaut werden muss die Oeffnung aber, wie die sieben anderen auch.
     tor:
-      von: [86, 71, 0]
-      bis: [88, 73, 0]
+      von: [86, -60, 0]
+      bis: [88, -58, 0]
 
   # Freibau; eine Sicherung kostet 5.000 Mark.
   hochwald:
@@ -2611,8 +2634,8 @@ welten:
     kante: 5000
     # Plan 2.1: "Forsttor - Tor zum Hochwald".
     tor:
-      von: [70, 71, 0]
-      bis: [72, 73, 0]
+      von: [70, -60, 0]
+      bis: [72, -58, 0]
 
   # Farmwelt. Wird bei jeder neuen Minecraft-Version zurueckgesetzt und neu
   # vorgeneriert - deshalb haengt an ihr kein Besitz (Plan 4.2).
@@ -2622,8 +2645,8 @@ welten:
     kante: 2000
     # Plan 2.1: "Kornpforte - Tor nach Kornmark".
     tor:
-      von: [74, 71, 0]
-      bis: [76, 73, 0]
+      von: [74, -60, 0]
+      bis: [76, -58, 0]
 
   nether:
     art: gewoehnlich
@@ -2631,8 +2654,8 @@ welten:
     umgebung: nether
     kante: 2000
     tor:
-      von: [78, 71, 0]
-      bis: [80, 73, 0]
+      von: [78, -60, 0]
+      bis: [80, -58, 0]
 
   # "end" und nicht "ende": Der Schluessel ist der Weltname, und den fuehrt Plan
   # Abschnitt 4 so. Weltnamen sind nach Plan 12a.6 nur lesbar - an ihnen haengen
@@ -2643,5 +2666,5 @@ welten:
     umgebung: ende
     kante: 2000
     tor:
-      von: [82, 71, 0]
-      bis: [84, 73, 0]
+      von: [82, -60, 0]
+      bis: [84, -58, 0]

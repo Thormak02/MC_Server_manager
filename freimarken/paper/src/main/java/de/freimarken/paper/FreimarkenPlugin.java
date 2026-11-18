@@ -2699,20 +2699,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * Prueft, ob durch jedes Tor ueberhaupt jemand gehen kann.
      *
      * <p>Noetig, weil die Torquader Zahlen in einer Datei sind und das Gelaende nicht.
-     * Die mitgelieferten Werte sind am 02.11.2026 an EINEM Altfurt eingemessen; ein
-     * anderer Startwert, ein anderes Gelaende, und die Tore liegen im Berg oder in der
-     * Luft. Beides merkt man ohne diese Pruefung erst, wenn jemand durchgehen will und
-     * nichts passiert.
+     * Die ausgelieferten Werte passen zu {@code art: flach} - dort liegt der Boden
+     * ueberall auf y -61, und die Reihe steht auf y -60. Wer Altfurt gewachsen macht
+     * oder die Quader verschiebt, hat eine Datei, die etwas anderes sagt als die Welt:
+     * Die Tore liegen dann im Berg, in der Luft oder im Wasser. Am 18.11.2026 lagen
+     * alle acht im Meer. Ohne diese Pruefung merkt man es erst, wenn jemand
+     * durchgehen will und nichts passiert.
      *
-     * <p>Ein Tor ist ein <b>Loch in einer Wand</b>, und das ist der Grund, warum hier
-     * nicht die Standprobe aus {@link Ankunftspunkt} laeuft: Die sucht den hoechsten
-     * festen Block einer Saeule und findet damit den STURZ ueber der Oeffnung, nicht den
-     * Boden darin. Am 02.11.2026 hat sie deshalb alle sieben Tore einer gerade gebauten
-     * Wand fuer unbegehbar erklaert.
-     *
-     * <p>Gefragt ist also zweierlei, und zwar fuer jede Saeule der Oeffnung: traegt der
-     * Block unter dem Tor, und ist das Tor selbst in Fuss- und Kopfhoehe frei? Liegt es
-     * daneben, sucht die Meldung den Boden und nennt die passenden Zahlen zum Abtippen.
+     * <p>Was ein Tor begehbar macht, steht in {@link Ankunftspunkt#torklage} - dort und
+     * nicht hier, damit es eine Probe dafuer geben KANN: FreimarkenPlugin ist ohne
+     * laufenden Server nicht zu starten, der {@link Ankunftspunkt.Weltgriff} dagegen ist
+     * eine Attrappe von drei Fragen. Hier bleibt, was nur das Plugin weiss - welche
+     * Welten es gibt und wohin die Klage geht.
      */
     private void pruefeTore(World ankunftswelt) {
         var griff = Ankunftspunkt.griffAuf(ankunftswelt);
@@ -2720,62 +2718,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
             if (!angabe.hatTor()) {
                 continue;
             }
-            String klage = torklage(griff, angabe.tor());
+            String klage = Ankunftspunkt.torklage(griff, angabe.tor());
             if (klage != null) {
                 getLogger().severe("Tor nach " + angabe.name() + " ("
                         + angabe.tor().alsText() + "): " + klage);
             }
         }
-    }
-
-    /** Was an diesem Tor nicht stimmt - oder {@code null}, wenn es begehbar ist. */
-    private String torklage(Ankunftspunkt.Weltgriff griff, Quader tor) {
-        for (int x = tor.vonX(); x <= tor.bisX(); x++) {
-            for (int z = tor.vonZ(); z <= tor.bisZ(); z++) {
-                if (!griff.fest(x, tor.vonY() - 1, z)) {
-                    return "unter " + x + "/" + tor.vonY() + "/" + z + " ist kein Boden -"
-                            + " wer hier durchgeht, faellt. " + vorschlag(griff, tor, x, z);
-                }
-                for (int hoehe = 0; hoehe <= 1 && tor.vonY() + hoehe <= tor.bisY(); hoehe++) {
-                    int y = tor.vonY() + hoehe;
-                    if (griff.fest(x, y, z)) {
-                        // Hier KEIN Vorschlag mit Koordinaten: Der Boden darunter traegt
-                        // ja, also nennt die Suche dieselbe Hoehe wieder - ein Rat, der
-                        // ins Leere fuehrt. Zu tun ist etwas anderes.
-                        return "bei " + x + "/" + y + "/" + z + " steht "
-                                + griff.bei(x, y, z) + " im Tor. Die Oeffnung muss frei"
-                                + " sein - entweder die Bloecke entfernen oder den Quader"
-                                + " dorthin legen, wo der Durchgang ist.";
-                    }
-                    if (Ankunftspunkt.schaedlich(griff.bei(x, y, z))) {
-                        return "bei " + x + "/" + y + "/" + z + " steht "
-                                + griff.bei(x, y, z) + " im Tor.";
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Welche Hoehe das Tor haette haben sollen - gesucht von oben nach unten.
-     *
-     * <p>Von oben, damit eine Wand ueber dem Tor nicht als Boden durchgeht: Gesucht ist
-     * der erste feste Block UNTER der eingetragenen Fusshoehe.
-     */
-    private String vorschlag(Ankunftspunkt.Weltgriff griff, Quader tor, int x, int z) {
-        for (int y = tor.vonY(); y > ankunftsTiefe(); y--) {
-            if (griff.fest(x, y - 1, z)) {
-                return "Passend waere: von [" + tor.vonX() + ", " + y + ", " + tor.vonZ()
-                        + "] bis [" + tor.bisX() + ", " + (y + 2) + ", " + tor.bisZ() + "]";
-            }
-        }
-        return "Unter dem Tor ist bis zum Weltboden nichts.";
-    }
-
-    /** Wie weit die Suche nach unten geht - tiefer gibt es keine Welt. */
-    private static int ankunftsTiefe() {
-        return -64;
     }
 
     /**

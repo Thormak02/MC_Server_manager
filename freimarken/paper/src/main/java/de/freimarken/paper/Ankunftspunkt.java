@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Quader;
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
@@ -158,6 +159,102 @@ final class Ankunftspunkt {
         return taugt(griff, x, fuesse, z)
                 ? Optional.of(new Stand(x, fuesse, z))
                 : Optional.empty();
+    }
+
+    /**
+     * Wie tief die Suche nach einer Torhoehe geht - tiefer gibt es keine Welt.
+     */
+    static final int WELTBODEN = -64;
+
+    /**
+     * Was an diesem Tor nicht stimmt - oder {@code null}, wenn es begehbar ist.
+     *
+     * <p><b>Ein Tor ist ein Loch in einer Wand</b>, und darum laeuft hier nicht
+     * {@link #suche}: Die springt auf {@link Weltgriff#bodenHoehe} und findet damit den
+     * STURZ ueber der Oeffnung, nicht den Boden darin. Am 02.11.2026 hat sie deshalb
+     * alle sieben Tore einer gerade gebauten Wand fuer unbegehbar erklaert. Geprueft
+     * wird darum Saeule fuer Saeule GENAU an der eingetragenen Hoehe - das ist
+     * {@link #taugt}, dieselbe Regel wie bei {@code /zurueck} und {@code /tpa}.
+     *
+     * <p>Warum hier und nicht im Plugin: Dort war sie privat in {@code FreimarkenPlugin}
+     * und ohne laufenden Server zu keiner Probe zu bringen - der Fund vom 18.11.2026
+     * (siehe {@link #vorschlag}) ist genau in dieser blinden Ecke entstanden.
+     */
+    static String torklage(Weltgriff griff, Quader tor) {
+        for (int x = tor.vonX(); x <= tor.bisX(); x++) {
+            for (int z = tor.vonZ(); z <= tor.bisZ(); z++) {
+                if (!griff.fest(x, tor.vonY() - 1, z)) {
+                    return "unter " + x + "/" + tor.vonY() + "/" + z + " ist kein Boden -"
+                            + " wer hier durchgeht, faellt. " + vorschlag(griff, tor);
+                }
+                // Der Boden selbst darf nicht schaden. Ohne diese Frage waere ein Tor
+                // auf einem Magmablock klaglos, und der Vorschlag darunter wuerde eine
+                // Hoehe nennen, die diese Pruefung gerade noch durchgelassen hat -
+                // zwei Regeln fuer dieselbe Sache, die sich widersprechen.
+                if (schaedlich(griff.bei(x, tor.vonY() - 1, z))) {
+                    return "unter " + x + "/" + tor.vonY() + "/" + z + " liegt "
+                            + griff.bei(x, tor.vonY() - 1, z) + " - wer hier durchgeht,"
+                            + " nimmt Schaden. " + vorschlag(griff, tor);
+                }
+                for (int hoehe = 0; hoehe <= 1 && tor.vonY() + hoehe <= tor.bisY(); hoehe++) {
+                    int y = tor.vonY() + hoehe;
+                    if (griff.fest(x, y, z)) {
+                        // Hier KEIN Vorschlag mit Koordinaten: Der Boden darunter traegt
+                        // ja, also nennt die Suche dieselbe Hoehe wieder - ein Rat, der
+                        // ins Leere fuehrt. Zu tun ist etwas anderes.
+                        return "bei " + x + "/" + y + "/" + z + " steht "
+                                + griff.bei(x, y, z) + " im Tor. Die Oeffnung muss frei"
+                                + " sein - entweder die Bloecke entfernen oder den Quader"
+                                + " dorthin legen, wo der Durchgang ist.";
+                    }
+                    if (schaedlich(griff.bei(x, y, z))) {
+                        return "bei " + x + "/" + y + "/" + z + " steht "
+                                + griff.bei(x, y, z) + " im Tor.";
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Welche Hoehe das Tor haette haben sollen - oder dass es keine gibt.
+     *
+     * <p><b>GEMESSEN AM 18.11.2026, und das war ein Fehler mit Ansage:</b> Vorher suchte
+     * diese Methode nur den ersten festen Block UNTER der eingetragenen Fusshoehe, und
+     * zwar in der einen Saeule, die gerade aufgefallen war. Im heutigen Altfurt liegt
+     * die ganze Torreihe im Meer - Boden auf y 51, Wasser darueber. Der Rat lautete
+     * "Passend waere: von [86, 51, 0] bis [88, 53, 0]", und wer ihn befolgte, bekam beim
+     * naechsten Start die naechste Klage: "bei 86/51/0 steht WATER im Tor." Ein
+     * Vorschlag, der in die naechste Klage fuehrt, ist schlimmer als keiner, weil er wie
+     * eine Antwort aussieht.
+     *
+     * <p>Darum wird jetzt die GANZE Oeffnung gefragt, mit derselben Regel, an der sie
+     * nachher gemessen wird ({@link #taugt} fuer jede Saeule): Boden darunter, Fuss und
+     * Kopf frei und nichts Schaedliches. Wo keine solche Hoehe liegt, sagt der Satz das -
+     * eine Zahl zu nennen waere geraten.
+     */
+    private static String vorschlag(Weltgriff griff, Quader tor) {
+        for (int y = tor.vonY(); y > WELTBODEN; y--) {
+            if (oeffnungTaugt(griff, tor, y)) {
+                return "Passend waere: von [" + tor.vonX() + ", " + y + ", " + tor.vonZ()
+                        + "] bis [" + tor.bisX() + ", " + (y + 2) + ", " + tor.bisZ() + "]";
+            }
+        }
+        return "Unter dem Tor liegt bis zum Weltboden keine Hoehe, auf der die ganze"
+                + " Oeffnung frei und trocken waere - hier muss gebaut werden.";
+    }
+
+    /** Ob die ganze Oeffnung auf dieser Fusshoehe begehbar ist - jede Saeule. */
+    private static boolean oeffnungTaugt(Weltgriff griff, Quader tor, int fussHoehe) {
+        for (int x = tor.vonX(); x <= tor.bisX(); x++) {
+            for (int z = tor.vonZ(); z <= tor.bisZ(); z++) {
+                if (!taugt(griff, x, fussHoehe, z)) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /**
