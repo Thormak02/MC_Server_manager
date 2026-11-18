@@ -2091,7 +2091,55 @@ class BildGleichTest {
                                 + " Startprotokoll."),
                 new Zeile(WerderSatz.ABSAGE_FALSCHE_WELT, 1L,
                         Einsatz.von("welt", "hafenwerder"), "&7Meerinseln gibt es nur in hafenwerder&8 - hin kommst du durch den"
-                                + " Hafen in Altfurt oder mit /warp hafenwerder."));
+                                + " Hafen in Altfurt oder mit /warp hafenwerder."),
+                // --- Wolkenwerder [Schritt 11] ---------------------------------
+                // Die drei Handbalken der Wolkenwache. Die fremde Insel und das
+                // Gestoert-Wort stehen oben bei Hafenwerder - sie gelten fuer BEIDE
+                // Inselwelten.
+                new Zeile(WacheSatz.SCHUTZ_WOLKE_LEERE, 1L, Einsatz.keine(), "&eHier ist nichts - zwischen den Inseln baut niemand"),
+                new Zeile(WacheSatz.SCHUTZ_WOLKE_ANKUNFT, 1L, Einsatz.keine(), "&eDie Ankunftsplattform gehoert allen - deine eigene Insel nimmst du mit /wolke nehmen"),
+                new Zeile(WacheSatz.SCHUTZ_WOLKE_FREI, 1L, Einsatz.keine(), "&eDieses Feld ist frei - mit /wolke nehmen bekommst du eine Insel"),
+                // Die Liste der eigenen Inseln. DIE NULL GEHOERT DAZU, obwohl sie im
+                // Spiel nie erscheint - wer keine Insel hat, liest wolke.leer.
+                new Zeile(WolkeSatz.KOPF, 0L, Einsatz.von("anzahl", "0"), "&6Deine Wolkeninseln: 0"),
+                new Zeile(WolkeSatz.KOPF, 1L, Einsatz.von("anzahl", "1"), "&6Deine Wolkeninsel"),
+                new Zeile(WolkeSatz.KOPF, 2L, Einsatz.von("anzahl", "3"), "&6Deine Wolkeninseln: 3"),
+                new Zeile(WolkeSatz.ZEILE, 1L, Einsatz.von("feld", "2/-3"), "&7  Insel 2/-3"),
+                new Zeile(WolkeSatz.ZEILE_MITBAUER, 1L,
+                        Einsatz.von("feld", "2/-3").mit("mitbauer", "Anna, Bert"), "&7  Insel 2/-3 · Mitbauer: &fAnna, Bert"),
+                new Zeile(WolkeSatz.LEER, 1L, Einsatz.keine(), "&7  Du hast keine Wolkeninsel - hol dir eine mit /wolke nehmen. Sie kostet nichts."),
+                new Zeile(WolkeSatz.NOCH_FREI, 0L, Einsatz.von("hoechstzahl", "0"), "&7  Du darfst 0 Inseln halten - /wolke nehmen"),
+                new Zeile(WolkeSatz.NOCH_FREI, 1L, Einsatz.von("hoechstzahl", "1"), "&7  Du darfst eine Insel halten - /wolke nehmen"),
+                new Zeile(WolkeSatz.NOCH_FREI, 2L, Einsatz.von("hoechstzahl", "3"), "&7  Du darfst 3 Inseln halten - /wolke nehmen"),
+                new Zeile(WolkeSatz.VOLL, 0L, Einsatz.von("hoechstzahl", "0"), "&7  Mehr als 0 Inseln erlaubt dein Rang nicht."),
+                new Zeile(WolkeSatz.VOLL, 1L, Einsatz.von("hoechstzahl", "1"), "&7  Mehr als eine Insel erlaubt dein Rang nicht."),
+                new Zeile(WolkeSatz.VOLL, 2L, Einsatz.von("hoechstzahl", "3"), "&7  Mehr als 3 Inseln erlaubt dein Rang nicht."),
+                // Genommen - mit Preis und ohne. Der zweite ist der Normalfall.
+                new Zeile(WolkeSatz.GENOMMEN, 1L,
+                        Einsatz.von("feld", "2/-3").mit("preis", "5.000 Mark")
+                                .mit("danach", "25.000 Mark"), "&aInsel 2/-3 gehoert jetzt dir - 5.000 Mark abgebucht.\n&7Es bleiben 25.000 Mark."),
+                new Zeile(WolkeSatz.GENOMMEN_GRATIS, 1L, Einsatz.von("feld", "2/-3"), "&aInsel 2/-3 gehoert jetzt dir.\n&7In der Truhe liegt, was du zum Anfangen brauchst - Lava und Eis machen den Steingenerator."),
+                // Die Insel gehoert ihm, die Bloecke stehen nicht - diesen Satz gibt es
+                // in keinem anderen Bereich.
+                new Zeile(WolkeSatz.AUFBAU_GESTOERT, 1L, Einsatz.von("feld", "2/-3"), "&cInsel 2/-3 gehoert dir, aber sie liess sich nicht aufsetzen.\n&7Sag es dem Betreiber - mit /wolke zuruecksetzen ist es zu beheben."),
+                // Die Absagen.
+                new Zeile(WolkeSatz.ABSAGE_GRENZE, 0L, Einsatz.von("hoechstzahl", "0"), "&cDu hast schon 0 Wolkeninseln - mehr erlaubt dein Rang nicht."),
+                new Zeile(WolkeSatz.ABSAGE_GRENZE, 1L, Einsatz.von("hoechstzahl", "1"), "&cDu hast schon eine Wolkeninsel - mehr erlaubt dein Rang nicht."),
+                new Zeile(WolkeSatz.ABSAGE_GRENZE, 2L, Einsatz.von("hoechstzahl", "3"), "&cDu hast schon 3 Wolkeninseln - mehr erlaubt dein Rang nicht."),
+                new Zeile(WolkeSatz.ABSAGE_WELT_VOLL, 1L, Einsatz.keine(), "&cIn Wolkenwerder ist kein Feld mehr frei.\n&7Sag es dem Betreiber - die Welt laesst sich vergroessern."),
+                new Zeile(WolkeSatz.ABSAGE_ZU_WENIG, 1L,
+                        Einsatz.von("preis", "5.000 Mark").mit("fehlt", "500 Mark"), "&cEine Wolkeninsel kostet 5.000 Mark - dir fehlen 500 Mark."),
+                new Zeile(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine(), "&cDie Wolkeninseln sind gerade nicht nachsehbar - versuch es noch einmal."),
+                new Zeile(WolkeSatz.ABSAGE_KEINE_WELT, 1L, Einsatz.keine(), "&cEs gibt keine Wolkenwelt&7 - der Betreiber findet den Grund im Startprotokoll."),
+                new Zeile(WolkeSatz.KEINE_INSEL, 1L, Einsatz.keine(), "&7Du hast keine Wolkeninsel&8 - hol dir eine mit /wolke nehmen."),
+                // Die Mitbauer.
+                new Zeile(WolkeSatz.MITBAUER_DAZU, 1L, Einsatz.von("spieler", "Anna"), "&aAnna darf jetzt auf deiner Insel bauen."),
+                new Zeile(WolkeSatz.MITBAUER_WEG, 1L, Einsatz.von("spieler", "Anna"), "&eAnna darf nicht mehr auf deiner Insel bauen."),
+                new Zeile(WolkeSatz.MITBAUER_SCHON, 1L, Einsatz.von("spieler", "Anna"), "&7Anna darf dort schon bauen."),
+                new Zeile(WolkeSatz.MITBAUER_NICHT_DABEI, 1L, Einsatz.von("spieler", "Anna"), "&7Anna ist auf dieser Insel kein Mitbauer."),
+                new Zeile(WolkeSatz.MITBAUER_UNBEKANNT, 1L, Einsatz.von("spieler", "Anna"), "&cDen Spieler Anna kennt dieser Server nicht."),
+                new Zeile(WolkeSatz.MITBAUER_SELBST, 1L, Einsatz.keine(), "&7Dich selbst musst du nicht eintragen - dir gehoert die Insel."),
+                new Zeile(WolkeSatz.MITBAUER_FREMD, 1L, Einsatz.von("eigentuemer", "Anna"), "&cDiese Insel gehoert &fAnna&c - Mitbauer setzt nur der Eigentuemer."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

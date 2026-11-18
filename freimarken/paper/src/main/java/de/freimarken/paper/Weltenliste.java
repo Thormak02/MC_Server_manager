@@ -39,10 +39,11 @@ final class Weltenliste {
      * @param ankunftswelt  die Welt, in der die Tore stehen - dort landet auch, wer neu ist
      * @param freistadtwelt die eine Welt, die Stadtfelder tragen darf
      * @param inselwelt     die eine Welt, die Inselfelder tragen darf
+     * @param wolkenwelt    die eine Welt, die Wolkenfelder tragen darf
      */
     static Ergebnis ausKonfiguration(ConfigurationSection abschnitt, String rasterwelt,
                                      String ankunftswelt, String freistadtwelt,
-                                     String inselwelt) {
+                                     String inselwelt, String wolkenwelt) {
         List<Weltangabe> welten = new ArrayList<>();
         List<String> klagen = new ArrayList<>();
         if (abschnitt == null) {
@@ -69,7 +70,8 @@ final class Weltenliste {
                 // machen, mitten in den Parzellen. Lieber laut aussteigen.
                 klagen.add("welten." + name + ".art fehlt oder ist unbekannt ("
                         + eintrag.getString("art") + "). Erlaubt sind raster, gewoehnlich,"
-                        + " leer, flach, stadtfelder, inseln - uebersprungen.");
+                        + " leer, flach, stadtfelder, inseln, wolken"
+                        + " - uebersprungen.");
                 continue;
             }
             if (art == Weltangabe.Art.RASTER != name.equals(rasterwelt)) {
@@ -124,6 +126,22 @@ final class Weltenliste {
                                 + " allein welten." + inselwelt + " - uebersprungen. Eine"
                                 + " zweite Inselwelt haette Inseln, aber kein Inselbuch"
                                 + " und keinen Schutz.");
+                continue;
+            }
+            if (art == Weltangabe.Art.WOLKEN != name.equals(wolkenwelt)) {
+                // Dieselbe Bindung wie bei den Inseln und mit derselben milderen Folge.
+                // Eine zweite Wolkenwelt bekaeme ein Ankunftsfeld und eine Weltgrenze,
+                // aber KEIN Wolkenbuch - Felder, die niemand nehmen und niemand
+                // schuetzen kann, und eine Leere, in der jeder baut.
+                klagen.add(name.equals(wolkenwelt)
+                        ? "welten." + name + ".art muss wolken sein (steht: "
+                                + eintrag.getString("art") + ") - uebersprungen."
+                                + " wolken.welt zeigt auf diese Welt, und ohne"
+                                + " Wolkenfelder gaebe es dort keine Insel zu nehmen."
+                        : "welten." + name + ".art ist wolken, aber die Wolkenfelder"
+                                + " traegt allein welten." + wolkenwelt
+                                + " - uebersprungen. Eine zweite Wolkenwelt haette"
+                                + " Felder, aber kein Buch und keinen Schutz.");
                 continue;
             }
             World.Environment umgebung = umgebung(eintrag.getString("umgebung", "normal"));
@@ -510,6 +528,7 @@ final class Weltenliste {
             case "flach" -> Weltangabe.Art.FLACH;
             case "stadtfelder" -> Weltangabe.Art.STADTFELDER;
             case "inseln" -> Weltangabe.Art.INSELN;
+            case "wolken" -> Weltangabe.Art.WOLKEN;
             default -> null;
         };
     }

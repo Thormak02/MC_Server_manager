@@ -95,21 +95,60 @@ public interface BesitzLager {
                            long preis);
 
     /**
-     * Alle Freistaedte dieser Welt, nach Namen sortiert.
+     * Eine Skyblockinsel nehmen - ein ganzes Wolkenfeld auf einmal [Schritt 11].
+     *
+     * <p>Der VIERTE Weg, und Wort fuer Wort wie {@link #werderAnlegen}: Die Art steht als
+     * LITERAL, x und z sind FELDnummern, und die vier Spalten einer Freistadt - Name,
+     * Kasse, Regeln, Besuchstag - bleiben leer.
+     *
+     * <p><b>Warum er trotzdem nicht derselbe Weg ist</b>: Die Art in der Spalte ist eine
+     * andere, und nur darum laesst sich nach Wolkeninseln FRAGEN
+     * ({@link #besitzIn}). Die Zuteilung in einer leeren Welt braucht genau das - dort
+     * kann niemand auf dem Feld stehen, das er haben will.
+     *
+     * <p><b>Der Preis ist ab Werk 0</b>, und das ist kein Sonderfall: {@code abbuchen(0)}
+     * geht immer durch und schreibt trotzdem eine Buchung. Die Zeile im Kontobuch ist die
+     * Spur, wann die Insel genommen wurde.
+     *
+     * @throws IllegalStateException wenn das Feld schon vergeben ist - ein Riegel der
+     *                               Ablage und keine Pruefung des Aufrufers. Eine
+     *                               Pruefung davor haette zwischen Fragen und Schreiben
+     *                               eine Luecke, und zwei Spieler, die gleichzeitig
+     *                               tippen, bekaemen dasselbe Feld
+     */
+    Parzelle wolkeAnlegen(String welt, int feldX, int feldZ, UUID eigentuemer,
+                          long preis);
+
+    /**
+     * Aller Besitz EINER Art in dieser Welt, in zugesagter Reihenfolge.
      *
      * <p>Die EINE Frage, aus der alles Weitere faellt: welches Feld noch frei ist, wo ein
-     * Name hinfuehrt, was die Liste zeigt. Ein eigener Weg je Frage waere dreimal
-     * dieselbe Abfrage mit drei Gelegenheiten, auseinanderzulaufen.
+     * Name hinfuehrt, was die Liste zeigt. Ein eigener Weg je Frage waere dieselbe
+     * Abfrage mehrfach, mit ebenso vielen Gelegenheiten, auseinanderzulaufen.
      *
-     * <p>Die Sortierung ist zugesagt, damit zwei Aufrufe dieselbe Reihenfolge geben -
-     * eine Liste, die mal so und mal anders kommt, ist im Spiel nicht zu lesen.
+     * <p><b>Mit der Art als Argument und nicht als Methodenname</b> [18.11.2026]: Bis zu
+     * diesem Tag hiess sie {@code staedteIn} und fragte {@code art = 'freistadt'}. Mit
+     * Wolkenwerder kam die zweite Art dazu, die so gefragt werden muss - die Zuteilung in
+     * einer leeren Welt sucht das naechste freie Feld aus der Liste der vergebenen. Zwei
+     * Methoden mit demselben SQL und zwei Sortierungen waeren der naechste Ort, an dem
+     * eine davon stehen bleibt.
+     *
+     * <p><b>Gefragt wird nach der ART und nicht nach der Lage</b>: Eine Freistadt liegt
+     * sehr wohl auf einem Raster, nur auf einem anderen - ein Lagefilter traefe auch jede
+     * Parzelle, falls je beide in derselben Welt staenden.
+     *
+     * <p>Die Reihenfolge ist zugesagt: erst der NAME, dann die Nummer. Fuer Freistaedte
+     * heisst das alphabetisch (ihre Namen sind eindeutig), fuer namenlose Arten wie
+     * {@link Art#WOLKE} nach dem Alter. Eine Liste, die mal so und mal anders kommt, ist
+     * im Spiel nicht zu lesen - und eine Zuteilung, die ihr folgt, gaebe zweimal
+     * hintereinander ein anderes Feld.
      *
      * <p><b>Ohne Filter auf den Zustand</b>, aus demselben Grund wie {@link #finde}: Eine
      * verfallene Stadt belegt ihr Feld weiter. Wer bei der Zuteilung nur die aktiven
      * zaehlt, vergibt ein belegtes Feld, und der Spieler zahlt in den eindeutigen
      * Schluessel hinein.
      */
-    List<Parzelle> staedteIn(String welt);
+    List<Parzelle> besitzIn(String welt, Art art);
 
     /**
      * Die Mitbauer setzen.

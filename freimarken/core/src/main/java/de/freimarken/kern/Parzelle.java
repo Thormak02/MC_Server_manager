@@ -279,6 +279,20 @@ public record Parzelle(
         return art == Art.WERDER;
     }
 
+    /**
+     * Ob das eine Skyblockinsel ist [Schritt 11].
+     *
+     * <p>Neben {@link #istWerder} die zweite Insel - und der Unterschied zwischen beiden
+     * ist nicht die Zeile, sondern die WELT: Eine Wolkeninsel liegt in Wolkenwerder und
+     * eine Meerinsel in Hafenwerder, und keine der beiden traegt Namen, Kasse, Regeln
+     * oder Besuchstag. Die eigene Art gibt es, damit sich nach ihr FRAGEN laesst: Die
+     * Zuteilung in einer leeren Welt sucht das naechste freie Feld aus der Liste der
+     * vergebenen, und die darf nicht die Meerinseln mitzaehlen.
+     */
+    public boolean istWolke() {
+        return art == Art.WOLKE;
+    }
+
     /** Ob das eine Freistadt ist - dann und nur dann traegt die Zeile einen Namen. */
     public boolean istFreistadt() {
         return art == Art.FREISTADT;

@@ -81,6 +81,18 @@ permissions:
     # es weg und gibt es einer Gruppe.
     description: Darf eine Meerinsel auf Hafenwerder nehmen
     default: true
+  freimarken.wolke:
+    # Die Auskunft: die eigenen Wolkeninseln sehen, heimreisen, Mitbauer setzen.
+    description: Darf die eigenen Wolkeninseln sehen
+    default: true
+  freimarken.wolke.nehmen:
+    # Ein zweites Recht, OBWOHL die Insel gratis ist - und gerade deshalb: Gratis heisst
+    # nicht folgenlos. Jedes Nehmen belegt ein Rasterfeld auf Dauer und setzt 810
+    # Bloecke in die Welt. Ein Betreiber, der Wolkenwerder erst oeffnen will, wenn sie
+    # eingerichtet ist, braucht genau diesen Schalter; die andere Haelfte davon ist
+    # wolken.hoechstzahl: 0.
+    description: Darf eine Skyblockinsel auf Wolkenwerder nehmen
+    default: true
   freimarken.freistadt:
     description: Darf die Liste der Freistaedte sehen
     default: true
@@ -189,9 +201,11 @@ permissions:
     # und das ist die Vorarbeit fuer einen Einbruch, nicht seine Aufklaerung.
     description: Darf das Blockbuch lesen - wer wann wo was getan hat
     default: op
-  # DREI Obergrenzen kommen ueber ein Recht mit Zahl: freimarken.parzellen.8 erlaubt acht
+  # VIER Obergrenzen kommen ueber ein Recht mit Zahl: freimarken.parzellen.8 erlaubt acht
   # Parzellen, freimarken.gruppe.4 vier Felder je zusammengelegter Gruppe,
-  # freimarken.inseln.2 zwei Meerinseln. Die hoechste
+  # freimarken.inseln.2 zwei Meerinseln, freimarken.wolken.2 zwei Wolkeninseln. Die
+  # Vorsilben heissen nach der SACHE und nicht nach dem Befehl - darum inseln neben
+  # /werder und wolken neben /wolke. Die hoechste
   # Zahl gewinnt, der Wert aus der config.yml ist die Untergrenze. Hier steht kein Eintrag
   # dafuer, weil die Zahl frei waehlbar ist - eingetragen wird sie in der
   # Rechteverwaltung, nicht hier.

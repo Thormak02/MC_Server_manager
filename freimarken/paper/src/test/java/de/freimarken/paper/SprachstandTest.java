@@ -61,7 +61,9 @@ class SprachstandTest {
                 "befehl.beschreibung.shop",
                 // Schritt 10: /werder. Auch diese Beschreibung steht seit der Anmeldung
                 // im Befehlsbaum - /help zeigt eine geaenderte erst nach einem Neustart.
-                "befehl.beschreibung.werder"));
+                "befehl.beschreibung.werder",
+                // Schritt 11: /wolke. Derselbe Grund.
+                "befehl.beschreibung.wolke"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachstand.NUR_BEIM_START.forEach(satz -> gefuehrt.add(satz.pfad()));
         // assertEquals auf Groesse UND Inhalt: contains haette auch eine Liste mit einem
@@ -106,9 +108,9 @@ class SprachstandTest {
                 + " schiefging, nicht, dass die Beschreibungen ohnehin nicht neuladbar"
                 + " sind - und sucht den Fehler an der falschen Zeile");
         assertTrue(ohne.get(0).contains("befehl.beschreibung.*"), ohne.get(0));
-        // FUENFZEHN seit /werder: Die Zahl waechst mit jedem Befehl, und sie gehoert in
+        // SECHZEHN seit /wolke: Die Zahl waechst mit jedem Befehl, und sie gehoert in
         // die Zeile - der Betreiber sieht daran, ob seine Aenderung dabei ist.
-        assertTrue(ohne.get(0).contains("15 Saetze"), ohne.get(0));
+        assertTrue(ohne.get(0).contains("16 Saetze"), ohne.get(0));
     }
 
     @Test

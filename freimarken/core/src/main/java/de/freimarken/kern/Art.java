@@ -19,9 +19,15 @@ import java.util.stream.Stream;
  * {@link #schluessel()}. Ein neuer Wert darf deshalb an jeder Stelle dazu - er kostet
  * dann allerdings einen Schemaschritt, weil die Spalte ein ENUM ist.
  *
- * <p>Heute entsteht ausschliesslich {@link #PARZELLE}: Es gibt genau einen Schreibweg,
- * und der legt eine eigenstaendige Rasterparzelle an. Die uebrigen Werte stehen hier,
- * damit das Schema sie spaeter nicht erst lernen muss.
+ * <p>Vier der sechs Arten entstehen wirklich, und jede auf ihrem EIGENEN Schreibweg:
+ * {@link #PARZELLE} (anlegen), {@link #FREISTADT} (freistadtAnlegen), {@link #WERDER}
+ * (werderAnlegen) und {@link #WOLKE} (wolkeAnlegen). Jeder dieser Wege traegt seine
+ * Art als LITERAL - ein durchgereichter Parameter liesse jeden Aufrufer jede Art
+ * erzeugen, auch eine {@link #GRUPPE} ohne Kinder. Die {@link #GRUPPE} entsteht beim
+ * Zusammenlegen; die {@link #LADENEINHEIT} ist fuer die Markthalle vorgesehen.
+ *
+ * <p>Der Satz an dieser Stelle sagte bis zum 18.11.2026 "heute entsteht ausschliesslich
+ * PARZELLE" und stand damit seit Schritt 5 falsch da.
  */
 public enum Art {
 
@@ -38,7 +44,20 @@ public enum Art {
     FREISTADT("freistadt"),
 
     /** Ein gemieteter Laden in der Markthalle. Plan 7. */
-    LADENEINHEIT("ladeneinheit");
+    LADENEINHEIT("ladeneinheit"),
+
+    /**
+     * Eine Skyblockinsel in Wolkenwerder. Plan 4.1, Schritt 11.
+     *
+     * <p>Eine eigene Art und nicht {@link #WERDER} noch einmal, obwohl beide ein
+     * Rasterfeld in einer Werderwelt sind und keine der beiden einen Namen traegt. Der
+     * Grund steht in der Spalte: Nur mit einer eigenen Art laesst sich eine Zeile
+     * NACH IHR fragen - und genau das braucht die Zuteilung einer Wolkeninsel. In einer
+     * Welt aus Leere kann niemand auf dem Feld STEHEN, das er haben will; das Buch
+     * sucht es stattdessen aus der Liste der schon vergebenen, wie das Freistadtbuch.
+     * Mit art='werder' fuer beide Welten liefe diese Abfrage ueber Hafenwerder mit.
+     */
+    WOLKE("wolke");
 
     private static final Map<String, Art> NACH_SCHLUESSEL = Stream.of(values())
             .collect(Collectors.toUnmodifiableMap(Art::schluessel, Function.identity()));

@@ -69,6 +69,11 @@ mark:
       # fuer den Kauf, eines fuer den Fall, in dem NICHTS geschehen ist.
       werder-gekauft: "Meerinsel genommen"
       werder-erstattet: "Meerinsel nicht eingetragen - erstattet"
+      # Schritt 11: die Wolkeninsel. Dieselben zwei Worte, und sie stehen auch
+      # dann hier, wenn die Insel gratis ist - eine Buchung ueber 0 Mark wird
+      # geschrieben und ist die Spur, wann sie genommen wurde.
+      wolke-genommen: "Wolkeninsel genommen"
+      wolke-erstattet: "Wolkeninsel nicht eingetragen - erstattet"
       # Teil C3: der Grundstueckshandel. VIER Worte, weil derselbe Betrag beim
       # Kaeufer eine Ausgabe und beim Verkaeufer eine Einnahme ist - wer seinen
       # Verlauf liest, muss beides auseinanderhalten koennen.
@@ -191,6 +196,7 @@ befehl:
     freistadt: "Die Freistaedte - Liste, gruenden, Grundstuecke, Stadtbuerger, Regeln, Kasse"
     # Schritt 10: die Meerinseln.
     werder: "Meerinseln auf Hafenwerder ansehen und eine nehmen"
+    wolke: "die eigenen Wolkeninseln, eine nehmen, heimreisen"
     shop: "Deine Kistenshops auflisten und fuer andere freigeben"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
@@ -1206,6 +1212,21 @@ wache:
     fremde-insel: "<red>Diese Insel gehoert <white>{eigentuemer}</white></red>"
     # Wie stadt-gestoert: Dann wird abgelehnt, und das ist die sichere Richtung.
     insel-gestoert: "<red>Die Inseln sind gerade nicht nachsehbar - versuch es noch einmal.</red>"
+    # Schritt 11, Wolkenwerder. Drei Lagen, und zwei Saetze fehlen hier mit Absicht:
+    # fremde-insel und insel-gestoert gelten fuer BEIDE Inselwelten - sie sagen dort
+    # Wort fuer Wort dasselbe, und ein Wort fuer eine Sache ist die Regel dieser
+    # Datei.
+    #
+    # Die Leere ist fuer JEDEN verboten, auch fuer den Nachbarn: Ein Block darin ist
+    # der erste Block einer Bruecke. Gelb und nicht rot - kein Vergehen, nur der
+    # falsche Ort.
+    wolke-leere: "<yellow>Hier ist nichts - zwischen den Inseln baut niemand</yellow>"
+    # Das Ankunftsfeld. MIT Ausweg, denn genau hier steht ein Spieler, wenn er
+    # zum ersten Mal ankommt.
+    wolke-ankunft: "<yellow>Die Ankunftsplattform gehoert allen - deine eigene Insel nimmst du mit /wolke nehmen</yellow>"
+    # Ein freies Feld. Der Ausweg nennt KEINE Stelle, denn genommen wird nicht
+    # dieses Feld, sondern das naechste freie - und das kann ein anderes sein.
+    wolke-frei: "<yellow>Dieses Feld ist frei - mit /wolke nehmen bekommst du eine Insel</yellow>"
   # DIE ANKUNFT. Zwei Saetze an zwei verschiedenen Anlaessen: Der eine kommt, weil jemand
   # einen Spawnpunkt setzen wollte, der andere, weil jemand eine Abenteuerwelt betritt.
   # Sie gehen nie zusammen hinaus, darum sind es zwei Zeilen und nicht eine mit beidem
@@ -2370,3 +2391,95 @@ werder:
     # {welt} - er steht nicht in Hafenwerder. MIT dem Weg dorthin, denn das ist die
     #   Frage, die er jetzt hat.
     falsche-welt: "<gray>Meerinseln gibt es nur in {welt}</gray><dark_gray> - hin kommst du durch den Hafen in Altfurt oder mit /warp {welt}.</dark_gray>"
+# DIE SKYBLOCKINSELN VON WOLKENWERDER (Plan 4.1 und 6.2, Schritt 11).
+#
+# Der achtzehnte Bereich. Er klingt anders als der der Meerinseln, und das hat einen
+# Grund: Dort KAUFT man eine Insel, auf der man steht und die schon daliegt. Hier
+# bekommt man eine ZUGETEILT - sie entsteht in dem Augenblick, in dem man sie nimmt,
+# und sie kostet nichts.
+#
+# DARUM NENNT KEIN SATZ EINE STELLE, DIE MAN SICH AUSSUCHT: Genommen wird das naechste
+# freie Feld, von der Mitte der Welt aus nach aussen. Wer in der Leere steht und
+# "/wolke nehmen" tippt, bekommt NICHT das Feld unter sich - es gibt keines.
+#
+# {feld} ist ueberall die Adresse als x/z, genau wie bei der Meerinsel und wie eine
+# Parzellennummer. Ein Spieler soll nicht lernen muessen, dass dieselbe Zahl in drei
+# Welten dreimal anders geschrieben wird.
+wolke:
+  # {anzahl} - die Ueberschrift ueber den eigenen Inseln. Die Einzahl nennt die Zahl
+  #   NICHT: "Deine Wolkeninsel: 1" waere eine Zahl, die niemand braucht.
+  kopf:
+    eins: "<gold>Deine Wolkeninsel</gold>"
+    viele: "<gold>Deine Wolkeninseln: {anzahl}</gold>"
+  # {feld} - eine Zeile je Insel. Hin kommt man mit /wolke heim.
+  zeile: "<gray>  Insel {feld}</gray>"
+  # {feld} {mitbauer} - dieselbe Zeile, wenn Mitbauer eingetragen sind. Ein eigener
+  #   Satz und kein Platzhalter, der manchmal leer ist: Ein "Mitbauer: " ohne Namen
+  #   dahinter sieht aus wie ein Fehler.
+  zeile-mitbauer: "<gray>  Insel {feld} · Mitbauer: </gray><white>{mitbauer}</white>"
+  # Du hast keine. Diese Zeile MUSS es geben: Wer nur die Ueberschrift sieht, haelt es
+  #   fuer einen Fehler, und am ersten Tag ist das der Normalfall. Sie nennt KEINEN
+  #   Preis - eine Wolkeninsel ist ab Werk gratis, und "kostet 0 Mark" ist keine
+  #   Auskunft.
+  leer: "<gray>  Du hast keine Wolkeninsel - hol dir eine mit /wolke nehmen. Sie kostet nichts.</gray>"
+  # {hoechstzahl} - du darfst noch eine nehmen. Die Zahl kommt aus einem RECHT
+  #   (freimarken.wolken.<zahl>) und ist darum fuer jeden eine andere.
+  noch-frei:
+    eins: "<gray>  Du darfst eine Insel halten - /wolke nehmen</gray>"
+    viele: "<gray>  Du darfst {hoechstzahl} Inseln halten - /wolke nehmen</gray>"
+  # {hoechstzahl} - du hast so viele, wie dein Rang erlaubt. Ein eigener Satz, denn das
+  #   ist die Antwort auf die Frage, die sonst offen bliebe: Warum keine weitere?
+  voll:
+    eins: "<gray>  Mehr als eine Insel erlaubt dein Rang nicht.</gray>"
+    viele: "<gray>  Mehr als {hoechstzahl} Inseln erlaubt dein Rang nicht.</gray>"
+  # {feld} {preis} {danach} - genommen und bezahlt. Nur, wenn der Betreiber einen Preis
+  #   gesetzt hat; ab Werk gilt der Satz darunter.
+  genommen: "<green>Insel {feld} gehoert jetzt dir - {preis} abgebucht.</green>\n<gray>Es bleiben {danach}.</gray>"
+  # {feld} - genommen, und es hat nichts gekostet (der Normalfall). Zwei Zeilen: Die
+  #   zweite sagt, was in der Truhe liegt, denn das ist der erste Handgriff.
+  genommen-gratis: "<green>Insel {feld} gehoert jetzt dir.</green>\n<gray>In der Truhe liegt, was du zum Anfangen brauchst - Lava und Eis machen den Steingenerator.</gray>"
+  # {feld} - die Insel ist eingetragen, aber die Bloecke stehen NICHT. Diesen Satz gibt
+  #   es in keinem anderen Bereich: In jeder anderen Welt macht der Weltgenerator das
+  #   Gelaende, hier das Plugin. Ohne diese Zeile reist der Spieler hin und faellt.
+  aufbau-gestoert: "<red>Insel {feld} gehoert dir, aber sie liess sich nicht aufsetzen.</red>\n<gray>Sag es dem Betreiber - mit /wolke zuruecksetzen ist es zu beheben.</gray>"
+  absage:
+    # {hoechstzahl} - so viele Inseln darf dieser Spieler halten.
+    grenze:
+      eins: "<red>Du hast schon eine Wolkeninsel - mehr erlaubt dein Rang nicht.</red>"
+      viele: "<red>Du hast schon {hoechstzahl} Wolkeninseln - mehr erlaubt dein Rang nicht.</red>"
+    # Jedes Feld der Welt ist vergeben. Der Satz nennt keinen Ausweg, denn der Spieler
+    #   hat keinen - er gehoert dem Betreiber (eine groessere welten.wolkenwerder.kante).
+    welt-voll: "<red>In Wolkenwerder ist kein Feld mehr frei.</red>\n<gray>Sag es dem Betreiber - die Welt laesst sich vergroessern.</gray>"
+    # {preis} {fehlt} - das Guthaben reicht nicht. Erscheint nur, wenn der Betreiber
+    #   einen Preis gesetzt hat.
+    zu-wenig: "<red>Eine Wolkeninsel kostet {preis} - dir fehlen {fehlt}.</red>"
+    # Die Ablage hat geschwiegen. Ein eigener Satz und kein stilles Nein: Wer nichts
+    #   liest, tippt den Befehl wieder.
+    gestoert: "<red>Die Wolkeninseln sind gerade nicht nachsehbar - versuch es noch einmal.</red>"
+    # Es gibt gar keine Wolkenwelt - wolken.welt zeigt auf eine Welt ohne Wolkenraster,
+    #   oder der Eintrag welten.wolkenwerder fehlt in der config.yml. Der Befehl wird
+    #   trotzdem angemeldet: Einen Befehl, den es je nach Datei gibt oder nicht,
+    #   versteht kein Spieler.
+    keine-welt: "<red>Es gibt keine Wolkenwelt</red><gray> - der Betreiber findet den Grund im Startprotokoll.</gray>"
+  # Du hast keine Insel - fuer /wolke heim und fuer die Mitbauer. MIT Ausweg.
+  keine-insel: "<gray>Du hast keine Wolkeninsel</gray><dark_gray> - hol dir eine mit /wolke nehmen.</dark_gray>"
+  mitbauer:
+    # {spieler} - eingetragen. Er darf ab jetzt alles, was der Eigentuemer darf; das
+    #   steht im Satz, denn es ist mehr, als die meisten erwarten.
+    dazu: "<green>{spieler} darf jetzt auf deiner Insel bauen.</green>"
+    # {spieler} - ausgetragen.
+    weg: "<yellow>{spieler} darf nicht mehr auf deiner Insel bauen.</yellow>"
+    # {spieler} - der stand schon drin. Ein eigener Satz und nicht dieselbe
+    #   Bestaetigung: Wer "darf jetzt" liest, obwohl nichts geschehen ist, haelt seine
+    #   Liste fuer laenger, als sie ist.
+    schon: "<gray>{spieler} darf dort schon bauen.</gray>"
+    # {spieler} - der stand nicht drin.
+    nicht-dabei: "<gray>{spieler} ist auf dieser Insel kein Mitbauer.</gray>"
+    # {spieler} - den Namen kennt der Server nicht. Ein stilles Nichtstun waere die
+    #   schlimmere Antwort: Der Besitzer glaubte, sein Freund duerfe bauen.
+    unbekannt: "<red>Den Spieler {spieler} kennt dieser Server nicht.</red>"
+    # Sich selbst eintragen geht nicht - der Eigentuemer darf ohnehin alles.
+    selbst: "<gray>Dich selbst musst du nicht eintragen - dir gehoert die Insel.</gray>"
+    # {eigentuemer} - die Insel, auf der du stehst, gehoert einem anderen. MIT seinem
+    #   Namen: In einer Welt ohne Wege kommt man nur hierher, wenn man geflogen ist.
+    fremd: "<red>Diese Insel gehoert <white>{eigentuemer}</white> - Mitbauer setzt nur der Eigentuemer.</red>"

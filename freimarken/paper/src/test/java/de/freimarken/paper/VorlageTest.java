@@ -254,7 +254,7 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle siebzehn Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - alle achtzehn Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
         // MietSatz ist der zwoelfte - und der ZWEITE Bereich desselben Befehls: Er und
         // LadenSatz schreiben beide Pfade unter laden., damit der Betreiber unter dem
@@ -286,7 +286,12 @@ class VorlageTest {
                 // Besitz nicht in einer gebauten Stadt liegt. Fuenf seiner Saetze
                 // dienen ZWEI Zweigen: Was an einer Stelle liegt, ist dieselbe
                 // Auskunft, ob man danach fragt oder ob sie eine Absage begruendet.
-                "WerderSatz"));
+                "WerderSatz",
+                // Der achtzehnte: Wolkenwerder. Ein eigener Bereich und keine Zeilen bei
+                // WerderSatz, obwohl beide Welten Inseln vergeben - dort KAUFT man die,
+                // auf der man steht, hier bekommt man eine zugeteilt, und sie kostet
+                // nichts.
+                "WolkeSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -865,7 +870,12 @@ class VorlageTest {
             "Verdienstwache.java -> \" Mark Verdienst\"",
             "Wirtschaftsliste.java -> \"Mark\"",
             "Wirtschaftsliste.java -> \"Mark je Feld\"",
-            "Wirtschaftsliste.java -> \"Mark\"");
+            "Wirtschaftsliste.java -> \"Mark\"",
+            // Die Einheit des Sprungschutzes und die Rechenprobe der Wolkeninseln -
+            // beide gehen an den Betreiber. Der Spieler liest den Preis einer Insel
+            // ueber sprache.betrag, und ab Werk ist er gratis.
+            "Wolkenliste.java -> \"Mark einmalig\"",
+            "Wolkenliste.java -> \" Mark je Insel\"");
 
 
     /**

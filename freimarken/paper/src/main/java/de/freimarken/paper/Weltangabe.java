@@ -88,12 +88,57 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
          *
          * <p>Der Startwert ist hier ohne Wirkung - das Gelaende kommt aus der Rechnung.
          */
-        INSELN
+        INSELN,
+
+        /**
+         * Leere mit einem Raster und einem einzigen Boden - Wolkenwerder [18.11.2026].
+         *
+         * <p>Ein festes Raster aus Feldern zu 128x128, durch 384 Bloecke Leere
+         * getrennt: {@code WolkenGenerator} und {@code Wolkenplan}. Der Generator
+         * erzeugt davon GENAU EIN Feld - das Ankunftsfeld mit seiner Steinplattform -,
+         * und jede Startinsel setzt danach das Plugin.
+         *
+         * <p><b>Warum das nicht {@link #LEER} ist</b>, obwohl die Welt fast ganz daraus
+         * besteht: Drei Dinge haengen an der Art und nicht am Inhalt. Erstens rundet
+         * {@code Weltenbau.rastermass} die Weltgrenze auf ganze Felder - ohne das liefe
+         * sie mitten durch Inselfelder. Zweitens braucht ein Ankommender einen festen
+         * Block unter den Fuessen, sonst fuehrt dorthin keine Reise. Drittens traegt der
+         * Biomgeber die Farbtafel, aus der die Biomwahl spaeter waehlt - und die wird
+         * genau einmal beim Anlegen gesetzt.
+         *
+         * <p>Der Startwert ist hier ohne Wirkung - es gibt kein Gelaende.
+         */
+        WOLKEN
     }
 
     /** Ob fuer diese Welt ueberhaupt eine Grenze gesetzt werden soll. */
     boolean hatGrenze() {
         return kante > 0;
+    }
+
+    /**
+     * Ob es in dieser Welt ueberhaupt etwas vorzugenerieren GIBT.
+     *
+     * <p>Vorgeneriert wird mit Chunky, und der Startbericht nennt jede Welt, die noch
+     * nicht fertig ist. Das ist richtig fuer jede Welt mit Gelaende - und falsch fuer
+     * eine aus Leere: Dort gibt es nichts zu erzeugen ausser Luft, und doch waeren die
+     * neun Stichprobenchunks erst nach einem Chunky-Lauf "fertig". Die Folge waere eine
+     * Warnung bei JEDEM Start, die nie verschwindet - und nach drei Wochen liest niemand
+     * mehr die naechste, die wirklich neu ist.
+     *
+     * <p>Fuer {@link Art#WOLKEN} gilt dasselbe: Der Generator legt ein einziges Feld an,
+     * und jede Insel darin entsteht in dem Augenblick, in dem jemand sie nimmt. 390.000
+     * leere Chunks vorzuerzeugen hiesse, Platz auf der Platte fuer Luft zu belegen.
+     *
+     * <p>Ein Verzweig ueber ALLE Arten und ohne {@code default}, aus demselben Grund wie
+     * bei {@link #startwertWirkt}: Eine neue Art soll sich nicht stillschweigend in die
+     * eine oder die andere Richtung einsortieren.
+     */
+    boolean vorzugenerieren() {
+        return switch (art) {
+            case RASTER, GEWOEHNLICH, FLACH, STADTFELDER, INSELN -> true;
+            case LEER, WOLKEN -> false;
+        };
     }
 
     /**
@@ -140,7 +185,7 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
     boolean startwertWirkt() {
         return switch (art) {
             case GEWOEHNLICH -> true;
-            case RASTER, LEER, FLACH, STADTFELDER, INSELN -> false;
+            case RASTER, LEER, FLACH, STADTFELDER, INSELN, WOLKEN -> false;
         };
     }
 

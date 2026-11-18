@@ -329,7 +329,9 @@ class GrenzeTest {
             "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java",
             // Schritt 10: der Befehl der Meerinseln. EINE Sendestelle, wie bei
             // /freistadt - jeder Zweig geht durch sende().
-            "WerderBefehle.java"));
+            "WerderBefehle.java",
+            // Schritt 11: /wolke - eine Sendestelle, dieselbe Bauart wie /werder.
+            "WolkeBefehle.java"));
 
     /**
      * Wo ein Satz aus Text werden darf - zwei Dateien, und das ist der ganze Weg
@@ -453,7 +455,7 @@ class GrenzeTest {
             // Teil H: EINE Sendestelle - die Nachricht ueber den gezahlten Bonus.
             Map.entry("Bonuswache.java", 1),
             Map.entry("BundBefehle.java", 2),
-            Map.entry("FreimarkenPlugin.java", 40),
+            Map.entry("FreimarkenPlugin.java", 41),
             // EINE Sendestelle, und das BLEIBT so, obwohl Teil B drei Taten dazugebracht
             // hat: Alle vier Zweige von /laden laufen durch dasselbe sende(). Eine Zwei
             // hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat - und der waere
@@ -511,7 +513,8 @@ class GrenzeTest {
             // abweist. Ohne ihn erschien sie als warp.stadt-unbekannt, also als
             // Tippfehler.
             Map.entry("WarpBefehle.java", 7),
-            Map.entry("WerderBefehle.java", 1));
+            Map.entry("WerderBefehle.java", 1),
+            Map.entry("WolkeBefehle.java", 1));
 
     /**
      * Wie oft jede reine Zeilen-Methode von {@code ParzellenBefehle} AUFGERUFEN wird.
@@ -1045,6 +1048,12 @@ class GrenzeTest {
             "SCHUTZ_INSEL_FREI -> HANDBALKEN",
             "SCHUTZ_FREMDE_INSEL -> HANDBALKEN",
             "SCHUTZ_INSEL_GESTOERT -> HANDBALKEN",
+            // Schritt 11: drei Lagen in Wolkenwerder. Die fremde Insel und das
+            // Gestoert-Wort fehlen hier mit Absicht - die gelten fuer BEIDE
+            // Inselwelten und sagen dort Wort fuer Wort dasselbe.
+            "SCHUTZ_WOLKE_LEERE -> HANDBALKEN",
+            "SCHUTZ_WOLKE_ANKUNFT -> HANDBALKEN",
+            "SCHUTZ_WOLKE_FREI -> HANDBALKEN",
             "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
             "ANKUNFT_ABENTEUER -> SATZ",
             "PORTAL_KEIN_AUSGANG -> SATZ");
@@ -1086,6 +1095,7 @@ class GrenzeTest {
             "BEFEHL_FREISTADT -> WORT",
             "BEFEHL_SHOP -> WORT",
             "BEFEHL_WERDER -> WORT",
+            "BEFEHL_WOLKE -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",
@@ -3309,7 +3319,13 @@ class GrenzeTest {
     private static final List<String> RECHTE_VORSILBEN = List.of(
             "freimarken.gruppe.", "freimarken.parzellen.",
             "freimarken.extra.gruppe.", "freimarken.extra.parzellen.",
-            "freimarken.inseln.", "freimarken.extra.inseln.");
+            "freimarken.inseln.", "freimarken.extra.inseln.",
+            // Schritt 11: die Obergrenze der Wolkeninseln. Die Vorsilbe heisst nach
+            // der SACHE (wolken) und nicht nach dem Befehl (wolke) - wie inseln
+            // neben /werder. Sie darf NICHT in die plugin.yml: Die Zahl dahinter ist
+            // frei waehlbar, und ein Eintrag machte die Gegenrichtung dieser Tafel
+            // rot (meldet an, keiner fragt).
+            "freimarken.wolken.", "freimarken.extra.wolken.");
 
     @Test
     @DisplayName("31am - jeder Sprungschluessel steht in der ausgelieferten config.yml")
@@ -3726,6 +3742,94 @@ class GrenzeTest {
         int bau = plugin.indexOf("Angelwache.ueberBukkit(");
         assertTrue(bau > 0, "der Server baut die Wache nicht mehr ueber ueberBukkit -"
                 + " und nur dort steht, dass ein Fang EIN Stueck ist");
+    }
+
+    @Test
+    @DisplayName("31ay - jedes Biom der Tafel hat seinen Zweig, und jeder Zweig ein Biom")
+    void jedesBiomHatSeinenZweig() {
+        // Die Naht zwischen Kern und Minecraft, und keine Verhaltensprobe kann sie
+        // sehen: Die NAMEN stehen im Kern (Wolkenbiome), weil sie ohne Server lesbar sein
+        // muessen - der Leser der config.yml prueft damit jede Zeile. Was daraus ein Biom
+        // macht, steht in Biomtafel und braucht einen laufenden Server; eine Probe, die
+        // das aufruft, waere ohne Server nicht moeglich.
+        //
+        // Beide Richtungen zaehlen. Ein Name ohne Zweig waere ein Biom, das der Befehl
+        // ANBIETET und das Plugin nicht setzen kann - eine Absage mitten im Spiel, ohne
+        // Grund. Ein Zweig ohne Name waere eine Zeile, die nie greift, und ein Biom in
+        // der Farbtafel der Welt, das niemand waehlen darf.
+        String quelle = Quellen.text(datei("Biomtafel.java"));
+        var zweige = new java.util.TreeSet<String>();
+        var muster = Pattern.compile("case \"([a-z_]+)\" ->");
+        var treffer = muster.matcher(quelle);
+        while (treffer.find()) {
+            zweige.add(treffer.group(1));
+        }
+
+        assertEquals(new java.util.TreeSet<>(de.freimarken.kern.Wolkenbiome.NAMEN),
+                zweige,
+                "die Namen im Kern und die Zweige im Plugin muessen dieselbe Menge"
+                        + " sein - sonst gibt es ein Biom, das sich anbieten aber nicht"
+                        + " setzen laesst, oder umgekehrt");
+
+        // Und die GANZE Tafel geht in die Farbtafel der Welt, nicht die eingestellte
+        // Auswahl: Jene wird genau einmal beim Anlegen gefragt, und was dort fehlt,
+        // laesst sich in dieser Welt nie setzen. Ein spaeter angebotenes Biom wirkte dann
+        // erst, nachdem der Weltordner geloescht wurde.
+        assertTrue(quelle.contains("for (String name : Wolkenbiome.NAMEN)"),
+                "alle() laeuft nicht mehr ueber die ganze Tafel - dann haengt die"
+                        + " Farbtafel der Welt an einer Einstellung");
+    }
+
+    @Test
+    @DisplayName("31az - der Wolkengenerator leert, schaltet Vanilla ab und setzt den Spawn")
+    void derWolkengenerator() {
+        // Dieselbe Tafel wie 31av fuer die Inseln, und aus demselben Grund: Keine Probe
+        // kann einen Generator laufen lassen - dazu braucht er ein ChunkData vom Server.
+        // Vier Zusagen stehen darum als TEXT, und jede einzelne waere im Spiel teuer.
+        String quelle = Quellen.text(datei("WolkenGenerator.java"));
+
+        // (1) ERST LEEREN. Was danach steht, ist gesetzt worden; ohne das Leeren haengt
+        // es davon ab, was Vanilla vorher hineingelegt hat.
+        assertTrue(quelle.contains("setRegion(0, unten, 0, 16, oben, 16, Material.AIR)"),
+                "der Chunk wird nicht mehr geleert");
+
+        // (2) VANILLA GANZ AUS. Jeder der fuenf Schalter auf true legte eine Landschaft
+        // in eine Welt, die aus Leere besteht - und zwar nur in neuen Chunks, also in
+        // einer Welt aus zwei Haelften.
+        var schalter = new java.util.TreeMap<String, String>();
+        var muster = Pattern.compile(
+                "public boolean (shouldGenerate\\w+)[(][^)]*[)] [{][^}]*?return (\\w+);",
+                Pattern.DOTALL);
+        var treffer = muster.matcher(quelle);
+        while (treffer.find()) {
+            schalter.put(treffer.group(1), treffer.group(2));
+        }
+
+        assertEquals(java.util.Map.of(
+                        "shouldGenerateNoise", "false",
+                        "shouldGenerateSurface", "false",
+                        "shouldGenerateCaves", "false",
+                        "shouldGenerateDecorations", "false",
+                        "shouldGenerateMobs", "false",
+                        "shouldGenerateStructures", "false"),
+                schalter,
+                "alle sechs aus. Bei den Inseln stehen Bewuchs und Tiere auf true, hier"
+                        + " waere beides wirkungslos: Wenn ein Chunk entsteht, liegt"
+                        + " darin kein Block - die Insel kommt erst danach aus der Hand"
+                        + " des Plugins");
+
+        // (3) DER ERSCHEINUNGSPUNKT auf der Ankunftsplattform, einen Block darueber.
+        // Liegt er woanders, faellt jeder Ankommende - und Ankunftspunkt findet in acht
+        // Ringen keinen festen Block, also fuehrt dorthin GAR KEINE Reise.
+        assertTrue(quelle.contains("plan.ankunftsMitte() + 0.5, Wolkenboden.BODEN + 1"),
+                "der Erscheinungspunkt sitzt nicht mehr auf der Ankunftsplattform");
+
+        // (4) DER VORTEST vor der Schleife. Die Plattform liegt in vier Chunks, die Welt
+        // hat 390.000; ohne ihn fragte jeder einzelne 2.560-mal nach einem Stueck, das es
+        // dort nicht gibt.
+        assertTrue(quelle.contains("if (!beruehrtAnkunftsfeld(chunkX, chunkZ))"),
+                "der billige Vortest ist weg - dann kostet jeder leere Chunk dieser Welt"
+                        + " eine Schleife ueber 256 Spalten");
     }
 
 }

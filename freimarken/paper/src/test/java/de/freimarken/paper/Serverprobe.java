@@ -692,6 +692,14 @@ final class Serverprobe {
                 // Fuer Schutzwache.namen: der Eigentuemer einer fremden Parzelle.
                 case "getOfflinePlayer" -> offlineSpieler(werte[0]);
                 case "getPlayerExact" -> ANWESEND.get(String.valueOf(werte[0]));
+                // Fuer Spielername.kennung: die Suche nach einem NAMEN [Schritt 11].
+                // Sie geht absichtlich nur in den Zwischenspeicher und nie ins Netz -
+                // und hier ist der Zwischenspeicher die Tafel, die nenne() fuellt. Ein
+                // Name, den keine Probe genannt hat, ist NICHT bekannt, und genau das
+                // ist der Zweig "den Spieler kennt dieser Server nicht".
+                case "getOfflinePlayerIfCached" -> kennungZu(String.valueOf(werte[0]))
+                        .map(Serverhand::offlineSpieler)
+                        .orElse(null);
                 // getPlayer nimmt in Bukkit einen Namen ODER eine UUID, und
                 // Mietwache.imTakt sucht nach der UUID des Mieters. Unterschieden
                 // wird am TYP und nicht an der Laenge: Ein Spielername darf keine
@@ -729,6 +737,20 @@ final class Serverprobe {
                                 + " null waere schlimmer: Dann liefe die Probe durch einen"
                                 + " anderen Zweig und waere gruen.");
             };
+        }
+
+        /**
+         * Die Kennung zu einem genannten Namen - oder leer.
+         *
+         * <p>Ueber die Tafel von {@link Serverprobe#nenne} und nicht ueber die
+         * Anwesenden: {@code getOfflinePlayerIfCached} findet auch, wer gerade nicht da
+         * ist - das ist der ganze Zweck dieser Bukkit-Methode.
+         */
+        private static java.util.Optional<UUID> kennungZu(String name) {
+            return NAMEN.entrySet().stream()
+                    .filter(eintrag -> eintrag.getValue().equals(name))
+                    .map(Map.Entry::getKey)
+                    .findFirst();
         }
 
         private static OfflinePlayer offlineSpieler(Object kennung) {

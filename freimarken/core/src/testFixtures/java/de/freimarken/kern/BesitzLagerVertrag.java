@@ -47,6 +47,17 @@ public abstract class BesitzLagerVertrag {
      */
     protected static final String INSELWELT = "freimarken:hafenwerder";
 
+    /**
+     * Die Welt der Wolkeninseln - eine VIERTE, aus genau dem Grund von {@link #STADTWELT}.
+     *
+     * <p>{@code anzahlVon} zaehlt alles, was auf dem Raster liegt, ohne nach der Art zu
+     * fragen. Der Riegel ist der WELTSCHLUESSEL, nicht die Art - und hier traegt er
+     * noch etwas: Wer eine Meerinsel haben darf, soll seine Zahl nicht in Wolkenwerder
+     * verbrauchen. Zwei Werderwelten mit demselben Schluessel waeren EINE Obergrenze
+     * fuer beide.
+     */
+    protected static final String WOLKENWELT = "freimarken:wolkenwerder";
+
     /** Ein leeres Lager der zu pruefenden Art. */
     protected abstract BesitzLager lager();
 
@@ -93,7 +104,7 @@ public abstract class BesitzLagerVertrag {
     @DisplayName("Eine gegruendete Freistadt traegt ihre Art, ihren Namen und ihr Feld")
     void freistadtGruenden() {
         BesitzLager lager = lager();
-        assertTrue(lager.staedteIn(STADTWELT).isEmpty());
+        assertTrue(lager.besitzIn(STADTWELT, Art.FREISTADT).isEmpty());
 
         // Lauter VERSCHIEDENE Werte, besonders feldX != feldZ: Waeren sie gleich, bliebe
         // ein vertauschtes Paar in der Ablage unsichtbar.
@@ -236,7 +247,7 @@ public abstract class BesitzLagerVertrag {
     void werderZaehltAberIstKeineStadt() {
         // Zwei Zusagen in einer Probe, weil sie dieselbe Sache von zwei Seiten sind:
         // Eine Insel liegt auf einem Raster, also zaehlt sie bei anzahlVon mit - daran
-        // haengt die Hoechstzahl je Rang. Sie ist aber keine Stadt, also darf staedteIn
+        // haengt die Hoechstzahl je Rang. Sie ist aber keine Stadt, also darf besitzIn
         // sie nicht nennen - sonst erschiene sie in /warp freistadt und in jeder Liste.
         BesitzLager lager = lager();
         lager.werderAnlegen(INSELWELT, 1, 1, anna, 75_000L);
@@ -245,8 +256,8 @@ public abstract class BesitzLagerVertrag {
         assertEquals(2, lager.anzahlVon(INSELWELT, anna));
         assertEquals(2, lager.vonSpieler(INSELWELT, anna).size());
         assertEquals(0, lager.anzahlVon(INSELWELT, bert));
-        assertTrue(lager.staedteIn(INSELWELT).isEmpty(),
-                "eine Insel ist keine Freistadt - staedteIn fragt die ART und nicht die"
+        assertTrue(lager.besitzIn(INSELWELT, Art.FREISTADT).isEmpty(),
+                "eine Insel ist keine Freistadt - besitzIn fragt die ART und nicht die"
                         + " Lage");
         assertEquals(0, lager.anzahlVon(WELT, anna),
                 "und in der Marktstadt zaehlt sie gar nicht mit - sonst koestete die"
@@ -302,6 +313,169 @@ public abstract class BesitzLagerVertrag {
 
         assertTrue(lager.finde(INSELWELT, 3, 3).isEmpty());
         assertEquals(0, lager.anzahlVon(INSELWELT, anna));
+    }
+
+    // --- Die Wolkeninseln [Schritt 11] -----------------------------------------
+
+    @Test
+    @DisplayName("Eine Wolkeninsel wird genommen und gefunden - als art WOLKE")
+    void wolkeAnlegenUndFinden() {
+        BesitzLager lager = lager();
+        assertTrue(lager.finde(WOLKENWELT, 2, -3).isEmpty());
+
+        Parzelle insel = lager.wolkeAnlegen(WOLKENWELT, 2, -3, anna, 0L);
+
+        assertEquals(2, insel.x());
+        assertEquals(-3, insel.z());
+        assertEquals(anna, insel.eigentuemer());
+        assertEquals(0L, insel.preis(), "gratis - Plan 6.2, und 0 ist kein Sonderfall");
+        assertTrue(insel.istWolke(), "die Art steht in der Zeile und nicht nur im Buch");
+        assertFalse(insel.istWerder(), "und sie ist KEINE Meerinsel");
+        assertEquals(Zustand.AKTIV, insel.zustand());
+
+        Parzelle gefunden = lager.finde(WOLKENWELT, 2, -3).orElseThrow();
+        assertEquals(insel.id(), gefunden.id());
+        assertTrue(gefunden.istWolke(),
+                "auch nach dem Weg durch die Ablage - eine Umsetzung, die die Art beim"
+                        + " Lesen auf parzelle zurueckfallen laesst, faellt hier auf");
+    }
+
+    @Test
+    @DisplayName("besitzIn trennt die Arten - und gibt sie in zugesagter Reihenfolge")
+    void besitzInTrenntDieArten() {
+        // DIE PROBE, DIE ES BEI DEN MEERINSELN NICHT GAB, und sie ist der Grund fuer die
+        // eigene Art: In einer leeren Welt kann niemand auf dem Feld STEHEN, das er haben
+        // will - das Buch sucht das naechste freie aus der Liste der vergebenen. Diese
+        // Liste darf weder Meerinseln noch Freistaedte enthalten, sonst gilt ein Feld als
+        // belegt, das frei ist.
+        BesitzLager lager = lager();
+        lager.wolkeAnlegen(WOLKENWELT, 0, 0, anna, 0L);
+        lager.wolkeAnlegen(WOLKENWELT, 1, 0, bert, 0L);
+        lager.werderAnlegen(INSELWELT, 0, 0, anna, 75_000L);
+        lager.freistadtAnlegen(STADTWELT, 0, 0, anna, 400_000L, "steinburg");
+
+        assertEquals(2, lager.besitzIn(WOLKENWELT, Art.WOLKE).size());
+        assertEquals(1, lager.besitzIn(INSELWELT, Art.WERDER).size());
+        assertEquals(1, lager.besitzIn(STADTWELT, Art.FREISTADT).size());
+        assertTrue(lager.besitzIn(WOLKENWELT, Art.WERDER).isEmpty(),
+                "die Art UND die Welt zaehlen - eine Wolkeninsel ist keine Meerinsel");
+        assertTrue(lager.besitzIn(WOLKENWELT, Art.FREISTADT).isEmpty());
+        assertTrue(lager.besitzIn(INSELWELT, Art.WOLKE).isEmpty(),
+                "und in Hafenwerder liegt keine Wolkeninsel");
+
+        // DIE REIHENFOLGE IST ZUGESAGT, und bei einer namenlosen Art heisst das: nach
+        // dem Alter. Ohne die zweite Sortierspalte gibt MariaDB die Zeilen in beliebiger
+        // Folge - und eine Zuteilung, die ihr folgt, naehme zweimal hintereinander ein
+        // anderes Feld.
+        var felder = lager.besitzIn(WOLKENWELT, Art.WOLKE);
+        assertEquals(0, felder.get(0).x(), "die zuerst genommene zuerst");
+        assertEquals(1, felder.get(1).x());
+        assertTrue(felder.get(0).id() < felder.get(1).id());
+    }
+
+    @Test
+    @DisplayName("Eine Wolkeninsel hat KEINEN Namen, KEINE Kasse, KEINE Regeln")
+    void wolkeHatKeineStadtspalten() {
+        // Die vier Spalten, die nur eine Freistadt fuellt - dieselbe Zusage wie fuer eine
+        // Meerinsel, und sie muss hier NEU geprueft werden: Es ist eine andere Art, und
+        // die Umsetzungen fuehren sie als LITERAL im INSERT.
+        BesitzLager lager = lager();
+        Parzelle insel = lager.wolkeAnlegen(WOLKENWELT, 0, 0, anna, 0L);
+
+        assertFalse(insel.istFreistadt());
+        assertEquals(Parzelle.KEIN_NAME, insel.name());
+        assertEquals(Parzelle.KEINE_KASSE, insel.kasse());
+        assertEquals(Parzelle.KEINE_REGELN, insel.regeln());
+        assertEquals(Parzelle.NIE_BESUCHT, insel.besucht());
+
+        Parzelle gelesen = lager.finde(WOLKENWELT, 0, 0).orElseThrow();
+        assertEquals(Parzelle.KEIN_NAME, gelesen.name());
+        assertEquals(Parzelle.KEINE_KASSE, gelesen.kasse());
+        assertEquals(Parzelle.KEINE_REGELN, gelesen.regeln());
+        assertEquals(Parzelle.NIE_BESUCHT, gelesen.besucht());
+    }
+
+    @Test
+    @DisplayName("Ein belegtes Wolkenfeld laesst sich nicht zweimal nehmen")
+    void wolkeNurEinmal() {
+        // Der Riegel gehoert der ABLAGE und nicht dem Aufrufer, und hier traegt er mehr
+        // als bei den Meerinseln: Zwei Spieler, die gleichzeitig /wolke nehmen tippen,
+        // bekaemen dasselbe Feld - und auf eines von beiden wuerde zweimal eine
+        // Startinsel AUFGESETZT, die zweite ueber die Bauten der ersten.
+        BesitzLager lager = lager();
+        lager.wolkeAnlegen(WOLKENWELT, 5, 5, anna, 0L);
+
+        assertThrows(IllegalStateException.class,
+                () -> lager.wolkeAnlegen(WOLKENWELT, 5, 5, bert, 0L));
+        assertEquals(anna, lager.finde(WOLKENWELT, 5, 5).orElseThrow().eigentuemer(),
+                "und die erste Insel steht unveraendert");
+    }
+
+    @Test
+    @DisplayName("Eine Wolkeninsel ZAEHLT fuer ihren Besitzer - in IHRER Welt")
+    void wolkeZaehltInIhrerWelt() {
+        BesitzLager lager = lager();
+        lager.wolkeAnlegen(WOLKENWELT, 1, 1, anna, 0L);
+        lager.wolkeAnlegen(WOLKENWELT, 2, 1, anna, 0L);
+
+        assertEquals(2, lager.anzahlVon(WOLKENWELT, anna));
+        assertEquals(2, lager.vonSpieler(WOLKENWELT, anna).size());
+        assertEquals(0, lager.anzahlVon(WOLKENWELT, bert));
+        assertEquals(0, lager.anzahlVon(WELT, anna),
+                "und in der Marktstadt zaehlt sie gar nicht mit - sonst koestete die"
+                        + " naechste Parzelle das Doppelte");
+        assertEquals(0, lager.anzahlVon(INSELWELT, anna),
+                "und auch nicht in Hafenwerder - wer eine Meerinsel darf, verbraucht"
+                        + " seine Zahl nicht in Wolkenwerder");
+    }
+
+    @Test
+    @DisplayName("Die vier Stadtsetzer weisen eine Wolkeninsel AB")
+    void stadtsetzerWeisenEineWolkeAb() {
+        // Dieselbe Zusage wie fuer eine Meerinsel, und sie ist NEU zu pruefen: Die
+        // Riegel fragen "ist Freistadt", und ein Riegel, den nie etwas ausloest, ist
+        // gruen mit UND ohne. Ein stilles Hinnehmen waere eine Einstellung, die der
+        // Betreiber setzt und die lautlos nichts tut.
+        BesitzLager lager = lager();
+        Parzelle insel = lager.wolkeAnlegen(WOLKENWELT, 7, 7, anna, 0L);
+
+        assertThrows(RuntimeException.class,
+                () -> lager.regelnSetzen(insel.id(), "kein Feuer"));
+        assertThrows(RuntimeException.class,
+                () -> lager.besuchSetzen(insel.id(), LocalDate.of(2026, 11, 18)));
+        assertThrows(RuntimeException.class,
+                () -> lager.buergerrechteSetzen(insel.id(), Set.of(Tat.BAUEN)));
+        assertThrows(RuntimeException.class,
+                () -> lager.zustandSetzen(insel.id(), Zustand.VERFALLEN));
+    }
+
+    @Test
+    @DisplayName("Mitbauer gelten auch auf einer Wolkeninsel - und sie UEBERLEBEN")
+    void mitbauerAufDerWolke() {
+        BesitzLager lager = lager();
+        Parzelle insel = lager.wolkeAnlegen(WOLKENWELT, -4, 8, anna, 0L);
+
+        lager.mitbauerSetzen(insel.id(), Set.of(bert));
+
+        assertEquals(Set.of(bert),
+                lager.finde(WOLKENWELT, -4, 8).orElseThrow().mitbauer());
+        assertTrue(lager.finde(WOLKENWELT, -4, 8).orElseThrow().istWolke(),
+                "und die Art bleibt, was sie war - eine Umsetzung, die die Zeile beim"
+                        + " Mitbauer-Setzen neu zusammenbaut, verliert sie hier");
+    }
+
+    @Test
+    @DisplayName("Eine Wolkeninsel laesst sich freigeben")
+    void wolkeEntfernen() {
+        BesitzLager lager = lager();
+        Parzelle insel = lager.wolkeAnlegen(WOLKENWELT, 3, 3, anna, 0L);
+
+        lager.entfernen(insel.id());
+
+        assertTrue(lager.finde(WOLKENWELT, 3, 3).isEmpty());
+        assertEquals(0, lager.anzahlVon(WOLKENWELT, anna));
+        assertTrue(lager.besitzIn(WOLKENWELT, Art.WOLKE).isEmpty(),
+                "und das Feld ist wieder zu vergeben");
     }
 
     @Test
@@ -605,7 +779,7 @@ public abstract class BesitzLagerVertrag {
         assertThrows(IllegalStateException.class, () -> lager.freistadtAnlegen(
                 STADTWELT, 1, 2, bert, 400_000L, "zweite"));
         assertEquals(anna, lager.finde(STADTWELT, 1, 2).orElseThrow().eigentuemer());
-        assertEquals(1, lager.staedteIn(STADTWELT).size());
+        assertEquals(1, lager.besitzIn(STADTWELT, Art.FREISTADT).size());
     }
 
     @Test
@@ -622,7 +796,7 @@ public abstract class BesitzLagerVertrag {
         assertTrue(lager.finde(STADTWELT, 4, 5).isEmpty(),
                 "und das Feld bleibt frei - ein halb angelegter Besitz waere schlimmer"
                         + " als gar keiner");
-        assertEquals(1, lager.staedteIn(STADTWELT).size());
+        assertEquals(1, lager.besitzIn(STADTWELT, Art.FREISTADT).size());
     }
 
     @Test
@@ -650,8 +824,8 @@ public abstract class BesitzLagerVertrag {
         lager.freistadtAnlegen(STADTWELT, 5, -3, anna, 400_000L, "moor");
 
         assertEquals(List.of("aue", "moor", "zwiesel"),
-                lager.staedteIn(STADTWELT).stream().map(Parzelle::name).toList());
-        assertEquals(lager.staedteIn(STADTWELT), lager.staedteIn(STADTWELT),
+                lager.besitzIn(STADTWELT, Art.FREISTADT).stream().map(Parzelle::name).toList());
+        assertEquals(lager.besitzIn(STADTWELT, Art.FREISTADT), lager.besitzIn(STADTWELT, Art.FREISTADT),
                 "zweimal gefragt, zweimal dasselbe");
     }
 
@@ -664,8 +838,8 @@ public abstract class BesitzLagerVertrag {
         lager.freistadtAnlegen("freimarken:andere", 1, 1, bert, 400_000L, "dort");
 
         assertEquals(List.of("hier"),
-                lager.staedteIn(STADTWELT).stream().map(Parzelle::name).toList());
-        assertTrue(lager.staedteIn(WELT).isEmpty(),
+                lager.besitzIn(STADTWELT, Art.FREISTADT).stream().map(Parzelle::name).toList());
+        assertTrue(lager.besitzIn(WELT, Art.FREISTADT).isEmpty(),
                 "in der Marktstadt steht eine Parzelle, aber keine Stadt");
     }
 

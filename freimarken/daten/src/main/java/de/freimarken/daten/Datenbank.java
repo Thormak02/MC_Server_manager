@@ -1009,11 +1009,40 @@ public final class Datenbank implements AutoCloseable {
             //
             // KEIN INDEX, anders als bei freie_truhe.tag: Gelesen wird diese Spalte
             // vom Verfallslauf, der ohnehin alle Staedte einer Welt durchgeht
-            // (staedteIn), und vom Stempel, der die Zeile schon in der Hand hat. Ein
+            // (besitzIn), und vom Stempel, der die Zeile schon in der Hand hat. Ein
             // Index waere Pflege fuer eine Suche, die es nicht gibt.
             """
             ALTER TABLE parzellen
               ADD COLUMN IF NOT EXISTS besucht DATE NULL
+            """,
+
+            // Schritt 28: die Art WOLKE - Schritt 11, 18.11.2026.
+            //
+            // Eine Skyblockinsel in Wolkenwerder. Sie traegt dieselben Spalten wie eine
+            // Meerinsel - Feldnummern in x und z, keinen Namen, keine Kasse -, und
+            // trotzdem braucht sie ihre eigene Art: Nur so laesst sich nach ihr FRAGEN.
+            // Die Zuteilung in einer leeren Welt sucht das naechste freie Feld aus der
+            // Liste der vergebenen (besitzIn), und mit art='werder' fuer beide Welten
+            // liefe diese Abfrage ueber Hafenwerder mit.
+            //
+            // EIN EIGENER SCHRITT UND NICHT SCHRITT 4, obwohl das ENUM dort steht: Ein
+            // geaenderter Schritt wirkt auf keiner laufenden Datenbank - migriere()
+            // fuehrt nur Schritte ab dem gespeicherten Stand aus. Auf einem Server, der
+            // schon lief, waere die neue Art damit stumm nicht vorhanden, und das erste
+            // Nehmen scheiterte an der Spalte. SchemaTest haelt jeden Schritt mit einer
+            // Pruefsumme fest, genau dagegen.
+            //
+            // MODIFY COLUMN IF EXISTS und das ENUM vollstaendig aufgezaehlt: MariaDB
+            // kennt kein "ADD VALUE". Die Reihenfolge der Werte bedeutet nichts
+            // (gespeichert wird der Text, nicht die Ordnungszahl), aber die Liste muss
+            // JEDEN alten Wert nennen - ein fehlender machte die Spalte jeder alten
+            // Zeile ungueltig. Kein UPDATE auf Altbestand: Diese Art hat heute niemand.
+            """
+            ALTER TABLE parzellen
+              MODIFY COLUMN IF EXISTS art
+                  ENUM('parzelle','gruppe','werder','freistadt','ladeneinheit',
+                       'wolke')
+                  NOT NULL DEFAULT 'parzelle'
             """);
 
     /**

@@ -288,6 +288,41 @@ enum WacheSatz implements Satz {
      */
     SCHUTZ_INSEL_GESTOERT("wache.schutz.insel-gestoert", Art.HANDBALKEN),
 
+    // --- Die Wolkenwache: drei Lagen in Wolkenwerder [Schritt 11] --------------
+
+    /**
+     * Die LEERE zwischen den Feldern - fuer jeden verboten.
+     *
+     * <p>Das Gegenstueck zu {@link #SCHUTZ_INSEL_MEER}, und hier traegt es mehr: In
+     * Hafenwerder trennt Wasser, und Wasser traegt von selbst. Hier trennt Nichts - ein
+     * Block darin ist der erste Block einer Bruecke zum Nachbarn, und der zweite stuende
+     * schon auf dessen Blick. Darum darf dort auch der Besitzer des Feldes daneben
+     * nichts setzen.
+     *
+     * <p>Gelb und nicht rot, wie {@link #SCHUTZ_INSEL_MEER}: Es ist kein Vergehen, nur
+     * der falsche Ort.
+     */
+    SCHUTZ_WOLKE_LEERE("wache.schutz.wolke-leere", Art.HANDBALKEN),
+
+    /**
+     * Das ANKUNFTSFELD - der Platz, auf dem jeder landet.
+     *
+     * <p>Wie {@link #SCHUTZ_INSEL_ANKUNFT}: Der Satz nennt den Ausweg, denn genau hier
+     * steht der Spieler, wenn er zum ersten Mal in Wolkenwerder ankommt. Ein Satz ohne
+     * den Befehl waere eine Absage an einen, der gerade erst da ist.
+     */
+    SCHUTZ_WOLKE_ANKUNFT("wache.schutz.wolke-ankunft", Art.HANDBALKEN),
+
+    /**
+     * Ein Feld, das es gibt und das niemandem gehoert.
+     *
+     * <p>Darauf steht man in dieser Welt nicht zufaellig - dort ist nichts, worauf man
+     * stehen koennte. Wer dorthin FLIEGT, bekommt diesen Satz mit dem Ausweg: Genommen
+     * wird nicht das Feld, auf dem man ist, sondern das naechste freie - und das kann
+     * ein anderes sein.
+     */
+    SCHUTZ_WOLKE_FREI("wache.schutz.wolke-frei", Art.HANDBALKEN),
+
     // --- Die Ankunftswache: zwei Anlaesse, zwei Chatzeilen ---------------------
 
     /**

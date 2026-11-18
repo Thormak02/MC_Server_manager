@@ -190,7 +190,7 @@ class LadenlisteTest {
         // die es nicht gibt - dort waere auch der Truhenschutz nirgends.
         var ergebnis = lies("""
                 laeden:
-                  welt: wolkenwerder
+                  welt: nebelland
                   einheiten:
                     halle-1:
                       von: [60, 71, 4]

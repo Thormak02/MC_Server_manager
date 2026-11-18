@@ -47,6 +47,11 @@ package de.freimarken.kern;
  *                      demselben Grund im selben Satz wie die Freistaedte
  * @param angeln        die Angeltabelle von Hafenwerder. Hier aus dem schaerfsten der
  *                      Gruende: Sie wird bei JEDEM Fang gelesen, und zwar im Hauptfaden
+ * @param wolken        Preis, Obergrenze und Biome von Wolkenwerder - und ab Teil C auch
+ *                      die Erzausbeute des Kobbelsteingenerators. EIN Bestandteil fuer
+ *                      diese ganze Welt und nicht vier: Jeder weitere hier kostet
+ *                      achtzehn Abwandlerzeilen, jeder weitere IN {@link Wolkenwerte} nur
+ *                      die eigenen
  */
 public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoechstzahl,
                                int gruppenFelder, String rangWerbung, Zeitwerte zeit,
@@ -55,7 +60,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                                Bonuswerte bonus, Mietwerte laeden,
                                Shopwerte handel, Truhenwerte truhe,
                                Freistadtwerte freistaedte, Inselwerte inseln,
-                               Angelwerte angeln) {
+                               Angelwerte angeln, Wolkenwerte wolken) {
 
     /**
      * Die Schluessel in der Einstellungsdatei - hier und nicht an jeder Stelle, die klagt.
@@ -107,7 +112,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
             Verdienstwerte.VORGABE, Marktwerte.VORGABE, Messwerte.VORGABE,
             Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE,
             Truhenwerte.VORGABE, Freistadtwerte.VORGABE, Inselwerte.VORGABE,
-            Angelwerte.VORGABE);
+            Angelwerte.VORGABE, Wolkenwerte.VORGABE);
 
     public Wirtschaftswerte {
         if (preise == null) {
@@ -179,15 +184,20 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                     + " Angeltabelle - wer sie abschalten will, nimmt"
                     + " Angelwerte.VORGABE.mitAn(false)");
         }
+        if (wolken == null) {
+            throw new IllegalArgumentException("Ohne Wolkenwerte gibt es keine"
+                    + " Skyblockinsel - wer keine vergeben will, nimmt"
+                    + " Wolkenwerte.VORGABE.mitHoechstzahl(0)");
+        }
     }
 
     /**
      * Dieselben Werte mit einer anderen Preisstaffel.
      *
-     * <p><b>Warum es diese siebzehn Abwandler gibt:</b> Dieser Satz ist mit jedem
+     * <p><b>Warum es diese achtzehn Abwandler gibt:</b> Dieser Satz ist mit jedem
      * Bauschritt um einen Teil gewachsen - erst die Zeitwerte, dann die Berufe, dann der
      * Verdienst, der Markt, die Messung, der Bonus, die Laeden, der Handel, die Freie
-     * Truhe, die Freistaedte, die Inseln, jetzt das Angelgut. Jede Probe, die ihn
+     * Truhe, die Freistaedte, die Inseln, das Angelgut, jetzt Wolkenwerder. Jede Probe, die ihn
      * mit ALLEN Teilen baut, bricht bei jedem
      * weiteren, und zwar nicht, weil ihre Frage falsch waere, sondern weil ein Teil
      * dazugekommen ist, der sie nichts angeht. Beim Verdienst waren das elf Stellen in
@@ -197,119 +207,126 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
     public Wirtschaftswerte mitPreisen(Preisstaffel andere) {
         return new Wirtschaftswerte(andere, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderem Startguthaben. */
     public Wirtschaftswerte mitStartguthaben(long anderes) {
         return new Wirtschaftswerte(preise, anderes, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderer Parzellenhoechstzahl. */
     public Wirtschaftswerte mitHoechstzahl(int andere) {
         return new Wirtschaftswerte(preise, startguthaben, andere, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderer Gruppengroesse. */
     public Wirtschaftswerte mitGruppenFeldern(int andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, andere,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderer Rangwerbung. */
     public Wirtschaftswerte mitWerbung(String andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 andere, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Zeitwerten. */
     public Wirtschaftswerte mitZeit(Zeitwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, andere, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Berufswerten. */
     public Wirtschaftswerte mitBerufen(Berufswerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, andere, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Verdienstwerten. */
     public Wirtschaftswerte mitVerdienst(Verdienstwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, andere, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Marktwerten. */
     public Wirtschaftswerte mitMarkt(Marktwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, andere, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Messwerten. */
     public Wirtschaftswerte mitMessung(Messwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, andere, bonus, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Bonuswerten. */
     public Wirtschaftswerte mitBonus(Bonuswerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, andere, laeden,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Mietwerten. */
     public Wirtschaftswerte mitLaeden(Mietwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, andere,
-                handel, truhe, freistaedte, inseln, angeln);
+                handel, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Handelsgebuehren. */
     public Wirtschaftswerte mitHandel(Shopwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                andere, truhe, freistaedte, inseln, angeln);
+                andere, truhe, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Zahlen der Freien Truhe. */
     public Wirtschaftswerte mitTruhe(Truhenwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, andere, freistaedte, inseln, angeln);
+                handel, andere, freistaedte, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Zahlen der Freistaedte. */
     public Wirtschaftswerte mitFreistaedten(Freistadtwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, andere, inseln, angeln);
+                handel, truhe, andere, inseln, angeln, wolken);
     }
 
     /** Dieselben Werte mit anderen Zahlen der Meerinseln. */
     public Wirtschaftswerte mitInseln(Inselwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, andere, angeln);
+                handel, truhe, freistaedte, andere, angeln, wolken);
     }
 
     /** Dieselben Werte mit einer anderen Angeltabelle. */
     public Wirtschaftswerte mitAngeln(Angelwerte andere) {
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
-                handel, truhe, freistaedte, inseln, andere);
+                handel, truhe, freistaedte, inseln, andere, wolken);
+    }
+
+    /** Dieselben Werte mit anderen Wolkenwerten. */
+    public Wirtschaftswerte mitWolken(Wolkenwerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
+                handel, truhe, freistaedte, inseln, angeln, andere);
     }
 
     /** Ob aus dieser Zahl ein Startguthaben werden kann; 0 heisst: mit nichts anfangen. */

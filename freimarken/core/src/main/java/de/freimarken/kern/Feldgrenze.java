@@ -8,6 +8,13 @@ package de.freimarken.kern;
  * Raster abgeleitet</b>. Aus dem Wunsch 6.000 werden 20 Felder je Achse (Nummern -10 bis
  * 9, zusammen 400 Stadtfelder) und daraus die tatsaechliche Kante 5.792.
  *
+ * <p><b>Gerechnet wird hier nicht mehr</b> [18.11.2026]: Feldzahl, Rand und Mitte
+ * stehen in {@link Feldfenster}, das Raster darunter in {@link Feldrechnung}. Diese
+ * Klasse ist der NAME dieser Welt - sie kennt ihren Plan, ihre ausgelieferte Kante
+ * und das Wort fuer das, was sie zaehlt. Bis zu diesem Tag stand der Rumpf zweimal
+ * da, Zeile fuer Zeile gleich; mit Wolkenwerder waere es die dritte Abschrift
+ * geworden.
+ *
  * <p><b>Warum das noetig ist</b> [gefunden 11.11.2026, Lesesuche ueber Teil A]: 6.000 ist
  * kein Vielfaches von 288. Eine Grenze von 6.000 um 0/0 schnitt 84 Felder an - und
  * schlimmer: Sie lief mitten durch Feld 10, dessen Mitte bei 3.007 liegt. Ein
@@ -43,11 +50,11 @@ public final class Feldgrenze {
     public static final int FREISTAEDTE_KANTE = 6000;
 
     private final Stadtfeldplan plan;
-    private final int felderJeAchse;
+    private final Feldfenster fenster;
 
-    private Feldgrenze(Stadtfeldplan plan, int felderJeAchse) {
+    private Feldgrenze(Stadtfeldplan plan, Feldfenster fenster) {
         this.plan = plan;
-        this.felderJeAchse = felderJeAchse;
+        this.fenster = fenster;
     }
 
     /**
@@ -63,17 +70,8 @@ public final class Feldgrenze {
      *                                  oberhalb dessen liegt, was eine Weltgrenze annimmt
      */
     public static Feldgrenze ausKante(Stadtfeldplan plan, int gewuenschteKante) {
-        int mindestens = mindestKante(plan);
-        if (gewuenschteKante < mindestens) {
-            throw new IllegalArgumentException("Die Kante muss mindestens " + mindestens
-                    + " sein, damit zwei Stadtfelder hineinpassen, nicht "
-                    + gewuenschteKante);
-        }
-        if (gewuenschteKante > WELTGRENZE_HOECHSTMASS) {
-            throw new IllegalArgumentException("Eine Weltgrenze nimmt hoechstens "
-                    + (long) WELTGRENZE_HOECHSTMASS + " an, nicht " + gewuenschteKante);
-        }
-        return new Feldgrenze(plan, plan.rechnung().felderFuer(gewuenschteKante));
+        return new Feldgrenze(plan, Feldfenster.ausKante(plan.rechnung(),
+                gewuenschteKante, "Stadtfelder"));
     }
 
     /** Die Grenze der Freistaedte nach Plan 6.4. */
@@ -104,7 +102,7 @@ public final class Feldgrenze {
      */
     public static int wirksameKante(Stadtfeldplan plan, int ausEinstellung, double inDerWelt,
                                     boolean sprungBestaetigt) {
-        return (int) Grenzregel.wirksam(ausEinstellung, inDerWelt, mindestKante(plan),
+        return Feldfenster.wirksameKante(plan.rechnung(), ausEinstellung, inDerWelt,
                 FREISTAEDTE_KANTE, sprungBestaetigt);
     }
 
@@ -113,28 +111,39 @@ public final class Feldgrenze {
         return Grenzregel.sprungText(ausEinstellung, inDerWelt);
     }
 
+    /**
+     * Das Fenster darunter - die geteilte Rechnung aus Feldzahl und Rand.
+     *
+     * <p>Herausgegeben und nicht verborgen, damit Fragen, die ALLE Feldrasterwelten
+     * gleich beantworten, auch nur einmal dastehen - etwa die Ringsuche nach einem
+     * freien Feld ({@link Feldfenster#freiesFeld}).
+     */
+    public Feldfenster fenster() {
+        return fenster;
+    }
+
     public Stadtfeldplan plan() {
         return plan;
     }
 
     /** Wie viele Stadtfelder auf einer Achse liegen - immer gerade. */
     public int felderJeAchse() {
-        return felderJeAchse;
+        return fenster.felderJeAchse();
     }
 
     /** Kleinste Feldnummer auf beiden Achsen. */
     public int von() {
-        return -felderJeAchse / 2;
+        return fenster.von();
     }
 
     /** Groesste Feldnummer auf beiden Achsen. */
     public int bis() {
-        return felderJeAchse / 2 - 1;
+        return fenster.bis();
     }
 
     /** Wie viele Stadtfelder die Welt insgesamt hat - das Ankunftsfeld eingerechnet. */
     public long felderZahl() {
-        return (long) felderJeAchse * felderJeAchse;
+        return fenster.felderZahl();
     }
 
     /**
@@ -145,14 +154,12 @@ public final class Feldgrenze {
      * sehr kleine Welt eine Stadt ab, die sie gar nicht hat.
      */
     public long staedteZahl() {
-        return felderZahl()
-                - (enthaeltFeld(Stadtfeldplan.ANKUNFTSFELD, Stadtfeldplan.ANKUNFTSFELD)
-                        ? 1 : 0);
+        return fenster.felderOhneAnkunft(Stadtfeldplan.ANKUNFTSFELD);
     }
 
     /** Liegt dieses Feld in der Welt? */
     public boolean enthaeltFeld(int feldX, int feldZ) {
-        return feldX >= von() && feldX <= bis() && feldZ >= von() && feldZ <= bis();
+        return fenster.enthaeltFeld(feldX, feldZ);
     }
 
     /**
@@ -165,26 +172,26 @@ public final class Feldgrenze {
      * {@link Stadtfeldplan#feldBei} und erst danach hier.
      */
     public boolean enthaelt(int weltX, int weltZ) {
-        return enthaeltFeld(plan.feldNummer(weltX), plan.feldNummer(weltZ));
+        return fenster.enthaelt(weltX, weltZ);
     }
 
     /** Die Kantenlaenge der Weltgrenze - ein Durchmesser, kein Radius. */
     public double kante() {
-        return plan.rechnung().weltkante(felderJeAchse);
+        return fenster.kante();
     }
 
     /** Die Mitte der Weltgrenze auf beiden Achsen. Immer -leereBreite/2. */
     public double mitte() {
-        return plan.rechnung().weltmitte();
+        return fenster.mitte();
     }
 
     /** Kleinste Weltkoordinate innerhalb der Grenze - der aeussere Rand der Leere. */
     public int kleinsterBlock() {
-        return plan.rechnung().kleinsterBlock(von());
+        return fenster.kleinsterBlock();
     }
 
     /** Groesste Weltkoordinate innerhalb der Grenze - der aeussere Rand der Leere. */
     public int groessterBlock() {
-        return plan.rechnung().groessterBlock(bis());
+        return fenster.groessterBlock();
     }
 }

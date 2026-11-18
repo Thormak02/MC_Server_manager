@@ -11,12 +11,13 @@ import java.util.UUID;
  * <p><b>Warum es diese Klasse gibt:</b> {@link SpeicherLager} ist {@code final}, und das
  * ist richtig so - es ist eine Umsetzung des Vertrags und keine Grundlage zum
  * Weiterbauen. Wer trotzdem EINE Methode anders beantworten will, braucht eine eigene
- * Umsetzung mit allen zwoelf Methoden. Die steht hier EINMAL, statt in jeder Probe neu.
+ * Umsetzung mit ALLEN Methoden des Vertrags. Die steht hier EINMAL, statt in jeder
+ * Probe neu.
  *
  * <p>Sie liegt in {@code testFixtures} und nicht in einer Probe, weil sie aus zwei
  * Modulen gebraucht wird: {@code FreistadtbuchTest} im Kern zaehlt mit ihr die Gaenge
  * zur Ablage auf dem heissen Pfad, {@code StadtwacheTest} im Paper-Modul laesst sie
- * werfen. Zwei Abschriften derselben zwoelf Methoden liefen beim naechsten Zuwachs des
+ * werfen. Zwei Abschriften desselben Vertrags liefen beim naechsten Zuwachs des
  * Vertrags auseinander - und dann prueft eine der beiden Proben etwas anderes als die
  * andere.
  *
@@ -70,8 +71,14 @@ public class Lagerattrappe implements BesitzLager {
     }
 
     @Override
-    public List<Parzelle> staedteIn(String welt) {
-        return echtes.staedteIn(welt);
+    public List<Parzelle> besitzIn(String welt, Art art) {
+        return echtes.besitzIn(welt, art);
+    }
+
+    @Override
+    public Parzelle wolkeAnlegen(String welt, int feldX, int feldZ,
+                                 UUID eigentuemer, long preis) {
+        return echtes.wolkeAnlegen(welt, feldX, feldZ, eigentuemer, preis);
     }
 
     @Override

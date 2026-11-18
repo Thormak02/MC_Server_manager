@@ -375,7 +375,29 @@ public enum Buchungsgrund {
      * Insel und tippen beide, laesst der eindeutige Schluessel auf (welt, x, z) den
      * zweiten auflaufen. Ohne diese Gegenbuchung zahlte er 75.000 Mark fuer nichts.
      */
-    WERDER_ERSTATTET("werder_erstattet", Richtung.EINNAHME);
+    WERDER_ERSTATTET("werder_erstattet", Richtung.EINNAHME),
+
+    /**
+     * Eine Wolkeninsel genommen - Plan 6.2, GRATIS [Schritt 11].
+     *
+     * <p><b>Ein Grund, obwohl ab Werk nichts fliesst</b>, und das ist derselbe Fall wie
+     * bei der ersten Parzelle: {@code abbuchen(0)} geht immer durch und schreibt
+     * trotzdem eine Buchung. Die Zeile mit 0 Mark ist die SPUR - sie sagt, wann die
+     * Insel genommen wurde, und ohne sie fehlte dieser Vorgang im Kontobuch ganz.
+     *
+     * <p>Und sie ist nicht fuer immer 0: {@code wolken.preis} ist eine Einstellung.
+     */
+    WOLKE_GENOMMEN("wolke_genommen", Richtung.AUSGABE),
+
+    /**
+     * Die Wolkeninsel konnte nicht eingetragen werden - der Preis kommt zurueck.
+     *
+     * <p>Wie bei {@link #WERDER_ERSTATTET}, und hier noch wahrscheinlicher: Zwei
+     * Spieler, die im selben Augenblick {@code /wolke nehmen} tippen, bekommen aus
+     * der Ringsuche DASSELBE freie Feld - sie stehen dafuer nicht einmal am selben
+     * Ort. Den zweiten laesst der eindeutige Schluessel auflaufen.
+     */
+    WOLKE_ERSTATTET("wolke_erstattet", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {

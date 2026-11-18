@@ -145,6 +145,17 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_WERDER_ERSTATTET("mark.verlauf.grund.werder-erstattet", Art.WORT),
 
     /**
+     * Die Worte der Wolkeninsel [Schritt 11].
+     *
+     * <p>Zwei, wie bei der Meerinsel - und beide auch dann, wenn die Insel GRATIS ist:
+     * Eine Buchung ueber 0 Mark wird geschrieben, und sie ist die Spur, wann die Insel
+     * genommen wurde. Ein Grund ohne Wort waere eine Zeile im Verlauf, in der der
+     * Datenbankschluessel steht.
+     */
+    VERLAUF_GRUND_WOLKE_GENOMMEN("mark.verlauf.grund.wolke-genommen", Art.WORT),
+    VERLAUF_GRUND_WOLKE_ERSTATTET("mark.verlauf.grund.wolke-erstattet", Art.WORT),
+
+    /**
      * Die Worte des Handels an Kistenshops (Plan 7.4).
      *
      * <p><b>DREI Zeilen fuer EINEN Handel, und das ist die Entscheidung dahinter:</b> Was

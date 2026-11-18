@@ -92,7 +92,7 @@ public final class SpeicherLager implements BesitzLager {
         // getrennte Bloecke waeren genau das Fenster, das der eindeutige Schluessel in
         // der Datenbank nicht hat - und dann pruefte diese Fassung etwas anderes als
         // jene, obwohl beide denselben Vertrag erfuellen sollen.
-        for (Parzelle stadt : staedteIn(welt)) {
+        for (Parzelle stadt : besitzIn(welt, Art.FREISTADT)) {
             if (stadt.name().equals(name)) {
                 throw new IllegalStateException("Der Stadtname ist vergeben: " + name);
             }
@@ -147,14 +147,38 @@ public final class SpeicherLager implements BesitzLager {
     }
 
     @Override
-    public synchronized List<Parzelle> staedteIn(String welt) {
+    public synchronized Parzelle wolkeAnlegen(String welt, int feldX, int feldZ,
+                                              UUID eigentuemer, long preis) {
+        String schluessel = ort(welt, feldX, feldZ);
+        if (nachOrt.containsKey(schluessel)) {
+            throw new IllegalStateException("Das Wolkenfeld ist bereits vergeben: "
+                    + schluessel);
+        }
+        // Wort fuer Wort wie werderAnlegen, mit der Art als einzigem Unterschied - und
+        // der KURZE Konstruktor sorgt dafuer, dass die vier Stadtspalten gar nicht erst
+        // zu fuellen sind.
+        Parzelle neu = new Parzelle(naechsteId.getAndIncrement(), welt, feldX, feldZ,
+                eigentuemer, Set.of(), preis, uhr.instant(),
+                Art.WOLKE, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV);
+        nachOrt.put(schluessel, neu);
+        orteNachId.put(neu.id(), schluessel);
+        return neu;
+    }
+
+    @Override
+    public synchronized List<Parzelle> besitzIn(String welt, Art art) {
         List<Parzelle> treffer = new ArrayList<>();
         for (Parzelle vorhanden : nachOrt.values()) {
-            if (vorhanden.welt().equals(welt) && vorhanden.istFreistadt()) {
+            if (vorhanden.welt().equals(welt) && vorhanden.art() == art) {
                 treffer.add(vorhanden);
             }
         }
-        treffer.sort(Comparator.comparing(Parzelle::name));
+        // Erst der Name, dann die Nummer - und NULLS LAST, denn eine namenlose Art hat
+        // keinen: Ein blosses comparing(Parzelle::name) wirft bei der ersten Wolkeninsel
+        // eine NullPointerException, und zwar mitten in der Zuteilung.
+        treffer.sort(Comparator.comparing(Parzelle::name,
+                        Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparingLong(Parzelle::id));
         return List.copyOf(treffer);
     }
 

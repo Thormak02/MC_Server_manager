@@ -1,7 +1,10 @@
 package de.freimarken.paper;
 
+import java.util.Optional;
 import java.util.UUID;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
 
 /**
  * Der Name hinter einer Kennung - die EINE Stelle, die ihn holt.
@@ -39,14 +42,43 @@ final class Spielername {
     }
 
     /**
+     * Die Kennung zu einem NAMEN - die Gegenrichtung, und sie geht nie ins Netz.
+     *
+     * <p>Hergezogen am 18.11.2026 aus {@code ParzellenBefehle.findeSpieler}, weil
+     * {@code WolkeBefehle} dieselbe Frage stellt: Wer einen Mitbauer eintraegt, nennt
+     * einen Namen. Zwei Abschriften waeren zwei Ruecksicherungen - und die Begruendung
+     * darunter ist zu teuer erkauft, um sie zu verdoppeln:
+     *
+     * <p><b>Absichtlich NICHT {@code Bukkit.getOfflinePlayer(String)}</b>: Das fragt im
+     * Zweifel bei Mojang nach und haelt dabei den ganzen Server an.
+     *
+     * <p><b>Und absichtlich nicht {@code Bukkit.getOfflinePlayers()}</b>: Das baut die
+     * Liste aller je angemeldeten Spieler bei JEDEM Aufruf neu auf, mit einem
+     * {@code getName()} je Eintrag. Ein Spieler, der einen solchen Befehl mit
+     * Zufallsnamen wiederholt, haelt damit den ganzen Server an - ohne Recht und aus
+     * jeder Welt heraus.
+     *
+     * <p>{@code getOfflinePlayerIfCached} schaut nur in den Zwischenspeicher; der Preis
+     * ist, dass ein lange abwesender Spieler nicht gefunden wird, solange ihn niemand
+     * nachgeschlagen hat. Der Aufrufer macht daraus eine Absage MIT Namen - ein stilles
+     * Nichtstun waere die schlimmere Antwort.
+     */
+    static Optional<UUID> kennung(String name) {
+        if (name == null || name.isBlank()) {
+            return Optional.empty();
+        }
+        Player anwesend = Bukkit.getPlayerExact(name);
+        if (anwesend != null) {
+            return Optional.of(anwesend.getUniqueId());
+        }
+        OfflinePlayer bekannt = Bukkit.getOfflinePlayerIfCached(name);
+        return bekannt != null ? Optional.of(bekannt.getUniqueId()) : Optional.empty();
+    }
+
+    /**
      * Der Name zu dieser Kennung, oder acht Zeichen der Kennung selbst.
      *
-     * <p>Ein Spieler, den der Server noch nie gesehen hat, hat keinen Namen - und "null"
-     * auf einem Handbalken sagt einem Menschen nichts. Deshalb nie {@code null} und nie
-     * leer: Was hier herauskommt, geht unmittelbar in einen Satz.
-     *
-     * @param wer die Kennung, oder {@code null} - dann der Text fuer "niemand", damit ein
-     *            Bundshop oder ein freier Stand keinen Wurf ausloest
+     * <p>Siehe den Klassenkopf. Die Gegenrichtung steht in {@link #kennung}.
      */
     static String von(UUID wer) {
         if (wer == null) {

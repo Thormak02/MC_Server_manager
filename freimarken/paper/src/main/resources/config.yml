@@ -78,11 +78,13 @@ wirtschaft:
   #
   # Die Bestaetigung gilt nur fuer genau diesen Sprung: Wer sie eintraegt und spaeter eine
   # andere Zahl setzt, wird erneut gefragt. Ein Dauerfreibrief waere keine Rueckfrage.
-  # NEUN Zeilen, eine je Geldwert mit Sprungschutz. Vier davon standen bis zum
+  # FUENFZEHN Zeilen, eine je Geldwert mit Sprungschutz. Vier davon standen bis zum
   # 10.11.2026 nicht hier, und das war keine Abschaltung - die Klage nennt den
   # Schluessel samt fertiger Zeile, und wer sie liest, traegt ihn ein. Aber diese Datei
-  # IST die Dokumentation: Ein Abschnitt, der vier von neun verschweigt, laesst dich
-  # glauben, es gebe fuer deinen Wert keine Bestaetigung. GrenzeTest.31am haelt das jetzt.
+  # IST die Dokumentation: Ein Abschnitt, der vier von fuenfzehn verschweigt, laesst
+  # dich glauben, es gebe fuer deinen Wert keine Bestaetigung. GrenzeTest.31am haelt die
+  # Schluessel beider Seiten gegeneinander - die ZAHL in diesem Satz haelt keine Probe,
+  # sie stand bis zum 18.11.2026 auf neun, als es schon vierzehn waren.
   sprung-bestaetigt:
     grundpreis: ""
     zusammenlegung-je-feld: ""
@@ -105,6 +107,11 @@ wirtschaft:
     freistadt-gruendung: ""
     # Und was eine Meerinsel kostet (inseln.preis).
     insel-kauf: ""
+    # Was eine Wolkeninsel kostet (wolken.preis). Ab Werk 0, also GRATIS - und darum
+    # braucht hier JEDE andere Zahl die Bestaetigung: Von 0 aus ist jeder Preis ein
+    # Sprung ueber das Doppelte. Das ist nicht im Weg, sondern richtig: Aus gratis etwas
+    # Kostenpflichtiges zu machen ist die Aenderung, die jeder Spieler sofort merkt.
+    wolken-kauf: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
@@ -1463,6 +1470,101 @@ angeln:
     sponge: 4
     heart_of_the_sea: 1
 
+# DIE SKYBLOCKINSELN VON WOLKENWERDER (Plan 4.1 und 6.2, Schritt 11).
+#
+# Hier steht, was eine Wolkeninsel kostet und wie viele einer halten darf. Die WELT
+# selbst - ihre Art, ihre Kante, ihr Tor - steht weiter unten unter welten.wolkenwerder;
+# das sind zwei verschiedene Fragen und darum zwei Abschnitte.
+wolken:
+  # In welcher Welt die Wolkenfelder liegen - ohne Namensraum.
+  #
+  # NUR BEIM START GELESEN. Die Welt muss im Abschnitt welten: weiter unten stehen UND
+  # dort art: wolken tragen, sonst entsteht sie nicht. Die Bindung gilt in BEIDE
+  # Richtungen: Genau eine Welt darf wolken tragen, und das muss die aus dieser Zeile
+  # sein. Eine zweite haette Felder, aber kein Buch und keinen Schutz - eine Leere, in
+  # der jeder baut.
+  welt: wolkenwerder
+
+  # Was eine Insel kostet, in Mark. GRATIS ab Werk, und das ist eine Entscheidung des
+  # Plans: 6.2 nennt die Skyblockinsel neben der ersten Parzelle als einen der ZWEI
+  # gratis Einstiege - "wer nur bauen will, zahlt nie etwas".
+  #
+  # ACHTUNG BEIM AENDERN: Von 0 aus ist JEDE Zahl ein Sprung ueber das Doppelte, und der
+  # braucht die Bestaetigung unter wirtschaft.sprung-bestaetigt.wolken-kauf. Die Klage
+  # beim Start nennt die fertige Zeile.
+  preis: 0
+
+  # Wie viele Inseln ein Spieler ohne besonderes Recht haelt.
+  #
+  # Eine, und zwar genau WEIL sie gratis ist: Wer zwei nehmen darf, nimmt die zweite mit
+  # und laesst sie leer liegen - und ein Rasterfeld gibt es nur einmal.
+  #
+  # Mehr gibt es ueber das RECHT, also je Rang:
+  #     freimarken.wolken.<n>         setzt die Zahl auf n
+  #     freimarken.extra.wolken.<n>   legt n auf die Zahl darauf
+  # Die Zahl hier ist nur die Untergrenze fuer jeden, der kein solches Recht hat.
+  #
+  # Eine 0 ist erlaubt und heisst: Es wird keine Insel vergeben. Das ist der Weg,
+  # Wolkenwerder zuzumachen, ohne das Recht anzufassen. Hoechstens 1443 - so viele Felder
+  # hat die Welt.
+  hoechstzahl: 1
+
+  # Welche Biome ein Spieler fuer seine Insel waehlen darf (/wolke biom).
+  #
+  # Ein Biom ist nicht nur eine Farbe: Es entscheidet, WAS erscheint und WAS waechst -
+  # und damit, was auf einer Insel in der Leere ueberhaupt zu bekommen ist. swamp gibt
+  # SCHLEIM (und damit Kolben), snowy_plains gibt Eis (und damit Wasser),
+  # mushroom_fields laesst KEIN Monster erscheinen, desert laesst es nie regnen.
+  #
+  # ERFINDEN KANN MAN KEINES: Erlaubt sind nur die zehn, die der Weltgenerator abgibt -
+  # plains, forest, desert, jungle, savanna, taiga, snowy_plains, swamp,
+  # mushroom_fields, cherry_grove. Ein anderer Name wird beklagt und uebersprungen, die
+  # uebrigen Zeilen gelten. Der Grund ist technisch und hart: Die Farbtafel einer Welt
+  # wird GENAU EINMAL beim Anlegen gesetzt, und was dort fehlt, laesst sich darin nie
+  # mehr setzen.
+  #
+  # Eine LEERE Liste ist erlaubt und heisst etwas anderes als eine fehlende: keine
+  # Biomwahl. Wer alle Zeilen herausnimmt, will sie nicht - und bekommt sie nicht aus
+  # der Vorgabe zurueck.
+  biome: [plains, forest, desert, jungle, savanna, taiga, snowy_plains, swamp,
+          mushroom_fields, cherry_grove]
+
+  # Was in der Truhe auf einer frischen Insel liegt - der Anfang des ganzen Spiels.
+  #
+  # DIES IST DER SCHWIERIGKEITSGRAD. In einer Welt aus Leere gibt es nichts, was
+  # nicht aus dieser Truhe oder dem Kobbelsteingenerator kommt - eine Zeile weniger
+  # ist eine Aufgabe mehr, und eine leere Truhe ist erlaubt.
+  #
+  # OHNE lava_bucket GIBT ES KEIN SPIEL: Aus der Lava und dem geschmolzenen Eis
+  # entsteht der Generator, aus ihm der Stein, aus dem Stein der Ofen und die
+  # Spitzhacke. Der Startbericht sagt es, wenn diese Zeile fehlt.
+  #
+  # Warum gerade diese zehn:
+  #   lava_bucket    das Herz des Generators
+  #   ice            Wasser; es schmilzt im Tageslicht. Zwei Stuecke, damit ein
+  #                  Fehlgriff nicht das Spiel beendet
+  #   bone_meal      damit Gras auf der Wiese waechst - daraus kommen die ersten
+  #                  Samen, und ohne Samen gibt es kein Brot
+  #   melon_slice, pumpkin_seeds, sugar_cane, brown_mushroom, red_mushroom,
+  #   cactus         Pflanzen, die nirgendwo sonst zu bekommen sind
+  #   sand           der Boden fuer den Kaktus; Sand entsteht hier sonst nicht
+  #
+  # Je Zeile ein Gegenstandsname und eine Anzahl von 1 bis 64. Ein Name, den
+  # Minecraft nicht kennt, kostet NUR SEINE ZEILE. Die Reihenfolge in der Truhe
+  # ist nicht die dieser Datei, sondern alphabetisch - so sieht jede Insel gleich
+  # aus, auch nach einem Neustart.
+  starttruhe:
+    lava_bucket: 1
+    ice: 2
+    bone_meal: 5
+    melon_slice: 1
+    pumpkin_seeds: 1
+    sugar_cane: 1
+    brown_mushroom: 1
+    red_mushroom: 1
+    cactus: 1
+    sand: 2
+
 laeden:
   # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.
   # Die Welt muss im Abschnitt welten: weiter unten stehen, sonst gilt keine Einheit.
@@ -2010,6 +2112,20 @@ welten:
   #                       Berg. Darum ist jede Insel dieselbe Insel, nur anderswo -
   #                       dieselbe Entscheidung wie am 11.11. bei den Freistaedten. Der
   #                       startwert wirkt auch hier nicht.
+  #           wolken      Leere mit einem Raster [18.11.2026] - die Welt
+  #                       Wolkenwerder. Felder zu 128x128, durch 384 Bloecke Leere
+  #                       getrennt; eine Rasterzelle ist damit 512 Bloecke und genau
+  #                       eine Regionsdatei. Der Generator erzeugt davon GENAU EIN
+  #                       Feld: 0/0, die Ankunftsplattform aus Steinziegeln mit
+  #                       Gelaender, auf Hoehe 64. Jede Startinsel - 9x9 Wiese, zwei
+  #                       Schichten Erde, eine Eiche, eine Truhe - setzt das Plugin,
+  #                       wenn jemand sie nimmt. Darum ist hier NICHTS vorzugenerieren,
+  #                       und der Start mahnt es auch nicht an.
+  #                       KEINE Barriere zwischen den Feldern, anders als bei den
+  #                       Stadtfeldern: In einer Skyblockwelt ist der Fall ins Nichts
+  #                       die Regel, mit der jeder rechnet. Gebaut wird in der Leere
+  #                       trotzdem nicht - das verbietet die Schutzwache.
+  #                       Der startwert wirkt auch hier nicht; es gibt kein Gelaende.
   #           Pflichtangabe. Eine fehlende Art wird NICHT geraten: "gewoehnlich" als
   #           Vorgabe wuerde aus der Marktstadt beim naechsten Start eine Welt mit
   #           Huegeln und Baeumen machen, mitten in den bezahlten Parzellen.
@@ -2042,9 +2158,6 @@ welten:
   #           Ankunftswelt selbst steht, keines ausserhalb ihrer Grenze liegt und keine
   #           zwei Tore sich Bloecke teilen - sonst entschiede die Reihenfolge der
   #           Eintraege, wohin ein Spieler reist.
-  #
-  # Nicht enthalten: wolkenwerder. Es waere eine Welt aus Leere, in der jeder Ankommende
-  # faellt - die Startinsel und die Skyblock-Mechaniken kommen mit Schritt 11.
   #
   # Neue Welten kommen beim Update NICHT von selbst in diese Datei - eine vorhandene
   # config.yml wird nie ueberschrieben. Was hier fehlt, nennt das Protokoll beim Start
@@ -2172,6 +2285,37 @@ welten:
     tor:
       von: [66, 71, 0]
       bis: [68, 73, 0]
+
+  wolkenwerder:
+    # WOLKEN [18.11.2026, Plan 4.1 und 6.2]: die Skyblockwelt. Leere mit einem Raster
+    # aus Feldern zu 128x128, durch 384 Bloecke Leere getrennt. Erzeugt wird davon nur
+    # Feld 0/0 - die Ankunftsplattform; jede Startinsel setzt das Plugin.
+    #
+    # NEU ANGELEGT: Diese Welt gab es bis zum 18.11.2026 nicht. Wer trotzdem einen
+    # Ordner wolkenwerder hat (etwa aus einem Versuch mit art: leer), loescht ihn
+    # einmal - was in einer schon erzeugten Welt im Boden liegt, bleibt liegen, und nur
+    # NEUE Chunks folgen dieser Zeile. Der Start sagt es als Klage.
+    #
+    # KEIN Startwert: Es gibt kein Gelaende, das er wuerfeln koennte.
+    #
+    # Die Kante ist ein WUNSCH und kein Mass: Aus 20000 werden 38 Felder je Achse
+    # (Nummern -19 bis 18) und die wirkliche Kante 19840 um -192/-192. Das sind 1444
+    # Felder, davon 1443 zu nehmen: Feld 0/0 ist das ANKUNFTSFELD, dort landet das Tor
+    # aus Altfurt. Viermal so viele wie Hafenwerder, und das hat einen Grund - die
+    # Insel hier ist GRATIS (Plan 6.2, der zweite der zwei gratis Einstiege), und von
+    # etwas Gratisem werden mehr Stuecke genommen. Kosten tut es nichts: Eine leere
+    # Welt hat keine Chunks, solange niemand eine Insel nimmt.
+    art: wolken
+    kante: 20000
+    # Plan 2.1: "Wolkenturm - Tor nach Wolkenwerder".
+    #
+    # ACHTUNG, NOCH NICHT EINGEMESSEN: Die Torreihe am Bundesmarkt ist mit sieben
+    # Oeffnungen gebaut und endet bei x=85. Diese Zahlen setzen die Reihe um eine
+    # achte Oeffnung fort; im Boden liegt dort heute nichts. Der Start sagt beim
+    # Prueffen, was wirklich dasteht, und nennt einen Vorschlag.
+    tor:
+      von: [86, 71, 0]
+      bis: [88, 73, 0]
 
   # Freibau; eine Sicherung kostet 5.000 Mark.
   hochwald:

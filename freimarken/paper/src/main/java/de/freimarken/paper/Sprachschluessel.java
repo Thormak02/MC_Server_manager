@@ -31,7 +31,7 @@ import java.util.Set;
 final class Sprachschluessel {
 
     /**
-     * Die siebzehn Bereiche, in der Reihenfolge der Bauschritte.
+     * Die achtzehn Bereiche, in der Reihenfolge der Bauschritte.
      *
      * <p>Als {@code Class} und nicht als {@code values()}: So braucht ein noch leerer
      * Bereich keinen Platzhalterschluessel, und die Probe kann trotzdem nachsehen, dass
@@ -49,9 +49,9 @@ final class Sprachschluessel {
             SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class,
             MarktSatz.class, BonusSatz.class, LadenSatz.class, MietSatz.class,
             ShopSatz.class, BlockSatz.class, TruheSatz.class, FreistadtSatz.class,
-            WerderSatz.class);
+            WerderSatz.class, WolkeSatz.class);
 
-    /** Alle Saetze, aus allen siebzehn Bereichen - einmal gebaut, unveraenderlich. */
+    /** Alle Saetze, aus allen achtzehn Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
 
     /** Jeder Pfad der Datei auf seinen Satz - auch {@code .eins} und {@code .viele}. */

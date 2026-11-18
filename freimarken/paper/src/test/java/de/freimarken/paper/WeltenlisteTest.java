@@ -25,7 +25,7 @@ class WeltenlisteTest {
         return Weltenliste.ausKonfiguration(
                 YamlConfiguration.loadConfiguration(new java.io.StringReader(yaml))
                         .getConfigurationSection("welten"), "marktstadt", "altfurt",
-                "freistaedte", "hafenwerder");
+                "freistaedte", "hafenwerder", "wolkenwerder");
     }
 
     @Test
@@ -156,11 +156,14 @@ class WeltenlisteTest {
     @Test
     @DisplayName("Ohne Kante gibt es keine Grenze - und das ist keine Klage")
     void ohneKanteKeineGrenze() {
-        // Wolkenwerder hat keine feste Kante (Plan 4). Das ist eine Angabe und kein
-        // Versehen, also auch keine Meldung.
+        // Eine Welt ohne Kante ist eine Angabe und kein Versehen, also auch keine
+        // Meldung. Der Name war bis zum 18.11.2026 wolkenwerder; seit es diese Welt
+        // wirklich gibt (art: wolken, Kante 20000), waere das hier eine Klage - die
+        // Art haengt am Namen, in beide Richtungen. nebelland gibt es nicht und
+        // wird es nicht geben.
         var ergebnis = lies("""
                 welten:
-                  wolkenwerder:
+                  nebelland:
                     art: leer
                 """);
 
@@ -419,7 +422,7 @@ class WeltenlisteTest {
                     strom, java.nio.charset.StandardCharsets.UTF_8));
             var ergebnis = Weltenliste.ausKonfiguration(
                     datei.getConfigurationSection("welten"), "marktstadt", "altfurt",
-                "freistaedte", "hafenwerder");
+                "freistaedte", "hafenwerder", "wolkenwerder");
 
             assertTrue(ergebnis.klagen().isEmpty(),
                     "die ausgelieferte Datei klagt: " + ergebnis.klagen());
@@ -461,18 +464,22 @@ class WeltenlisteTest {
             // hier ist beim ersten Start dauerhaft, und dieser Vergleich ist die einzige
             // Stelle, an der er vorher auffaellt.
             assertEquals(java.util.List.of("marktstadt", "altfurt", "freistaedte",
-                            "hafenwerder", "hochwald", "kornmark", "nether", "end"),
+                            "hafenwerder", "wolkenwerder", "hochwald", "kornmark",
+                            "nether", "end"),
                     ergebnis.welten().stream().map(Weltangabe::name).toList(),
                     "die Weltnamen aus Plan Abschnitt 4");
 
             // Teil C: Altfurt ist Abenteuer, und jede Welt ausser Altfurt hat ein Tor.
+            // ACHTUNG, der Quader des achten Tores ist noch nicht eingemessen: Er setzt
+            // die Reihe am Bundesmarkt fort, im Boden liegt dort noch nichts. Diese Probe
+            // prueft die DATEI und nicht das Gelaende - das sagt der Start.
             var altfurt = ergebnis.welten().stream()
                     .filter(w -> w.name().equals("altfurt")).findFirst().orElseThrow();
             assertEquals(GameMode.ADVENTURE, altfurt.spielmodus(),
                     "Plan Abschnitt 4 fuehrt Altfurt als Abenteuer");
             assertTrue(!altfurt.hatTor(), "in Altfurt stehen die Tore, keines fuehrt hinein");
-            assertEquals(7, ergebnis.welten().stream().filter(Weltangabe::hatTor).count(),
-                    "sieben Ziele, sieben Tore");
+            assertEquals(8, ergebnis.welten().stream().filter(Weltangabe::hatTor).count(),
+                    "acht Ziele, acht Tore - Wolkenwerder ist seit dem 18.11.2026 das achte");
             ergebnis.welten().stream().filter(w -> !w.name().equals("altfurt"))
                     .forEach(w -> assertTrue(w.hatTor(),
                             "ohne Tor kaeme man nur mit /warp hin: " + w.name()));
@@ -716,7 +723,7 @@ class WeltenlisteTest {
 
         var ergebnis = Weltenliste.ausKonfiguration(
                 eigene.getConfigurationSection("welten"), "marktstadt", "altfurt",
-                "freistaedte", "hafenwerder");
+                "freistaedte", "hafenwerder", "wolkenwerder");
 
         assertEquals(java.util.List.of("marktstadt"),
                 ergebnis.welten().stream().map(Weltangabe::name).toList());

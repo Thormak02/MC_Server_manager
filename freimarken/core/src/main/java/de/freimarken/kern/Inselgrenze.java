@@ -8,6 +8,13 @@ package de.freimarken.kern;
  * dem Wunsch 5.000 werden 18 Inselfelder je Achse (Nummern -9 bis 8, zusammen 324 Felder)
  * und daraus die tatsaechliche Kante 4.736 um -64/-64.
  *
+ * <p><b>Gerechnet wird hier nicht mehr</b> [18.11.2026]: Feldzahl, Rand und Mitte
+ * stehen in {@link Feldfenster}, das Raster darunter in {@link Feldrechnung}. Diese
+ * Klasse ist der NAME dieser Welt - sie kennt ihren Plan, ihre ausgelieferte Kante
+ * und das Wort fuer das, was sie zaehlt. Bis zu diesem Tag stand der Rumpf zweimal
+ * da, Zeile fuer Zeile gleich; mit Wolkenwerder waere es die dritte Abschrift
+ * geworden.
+ *
  * <p><b>Warum das noetig ist</b> [gefunden 11.11.2026 bei den Freistaedten, gilt hier
  * wortgleich]: 5.000 ist kein Vielfaches von 256. Eine Grenze von 5.000 um 0/0 schnitte
  * Inselfelder an - und schlimmer: Sie liefe mitten durch Feld 9, dessen Mitte bei 2.367
@@ -36,11 +43,11 @@ public final class Inselgrenze {
     public static final int HAFENWERDER_KANTE = 5000;
 
     private final Inselplan plan;
-    private final int felderJeAchse;
+    private final Feldfenster fenster;
 
-    private Inselgrenze(Inselplan plan, int felderJeAchse) {
+    private Inselgrenze(Inselplan plan, Feldfenster fenster) {
         this.plan = plan;
-        this.felderJeAchse = felderJeAchse;
+        this.fenster = fenster;
     }
 
     /**
@@ -51,17 +58,8 @@ public final class Inselgrenze {
      *                                  oberhalb dessen liegt, was eine Weltgrenze annimmt
      */
     public static Inselgrenze ausKante(Inselplan plan, int gewuenschteKante) {
-        int mindestens = mindestKante(plan);
-        if (gewuenschteKante < mindestens) {
-            throw new IllegalArgumentException("Die Kante muss mindestens " + mindestens
-                    + " sein, damit zwei Inselfelder hineinpassen, nicht "
-                    + gewuenschteKante);
-        }
-        if (gewuenschteKante > Grenzregel.HOECHSTMASS) {
-            throw new IllegalArgumentException("Eine Weltgrenze nimmt hoechstens "
-                    + (long) Grenzregel.HOECHSTMASS + " an, nicht " + gewuenschteKante);
-        }
-        return new Inselgrenze(plan, plan.rechnung().felderFuer(gewuenschteKante));
+        return new Inselgrenze(plan, Feldfenster.ausKante(plan.rechnung(),
+                gewuenschteKante, "Inselfelder"));
     }
 
     /** Die Grenze von Hafenwerder nach der ausgelieferten Einstellung. */
@@ -89,8 +87,19 @@ public final class Inselgrenze {
      */
     public static int wirksameKante(Inselplan plan, int ausEinstellung, double inDerWelt,
                                     boolean sprungBestaetigt) {
-        return (int) Grenzregel.wirksam(ausEinstellung, inDerWelt, mindestKante(plan),
+        return Feldfenster.wirksameKante(plan.rechnung(), ausEinstellung, inDerWelt,
                 HAFENWERDER_KANTE, sprungBestaetigt);
+    }
+
+    /**
+     * Das Fenster darunter - die geteilte Rechnung aus Feldzahl und Rand.
+     *
+     * <p>Herausgegeben und nicht verborgen, damit Fragen, die ALLE Feldrasterwelten
+     * gleich beantworten, auch nur einmal dastehen - etwa die Ringsuche nach einem
+     * freien Feld ({@link Feldfenster#freiesFeld}).
+     */
+    public Feldfenster fenster() {
+        return fenster;
     }
 
     public Inselplan plan() {
@@ -99,22 +108,22 @@ public final class Inselgrenze {
 
     /** Wie viele Inselfelder auf einer Achse liegen - immer gerade. */
     public int felderJeAchse() {
-        return felderJeAchse;
+        return fenster.felderJeAchse();
     }
 
     /** Kleinste Feldnummer auf beiden Achsen. */
     public int von() {
-        return -felderJeAchse / 2;
+        return fenster.von();
     }
 
     /** Groesste Feldnummer auf beiden Achsen. */
     public int bis() {
-        return felderJeAchse / 2 - 1;
+        return fenster.bis();
     }
 
     /** Wie viele Inselfelder die Welt insgesamt hat - die Ankunftsinsel eingerechnet. */
     public long felderZahl() {
-        return (long) felderJeAchse * felderJeAchse;
+        return fenster.felderZahl();
     }
 
     /**
@@ -125,13 +134,12 @@ public final class Inselgrenze {
      * sehr kleine Welt eine Insel ab, die sie gar nicht hat.
      */
     public long inselnZahl() {
-        return felderZahl()
-                - (enthaeltFeld(Inselplan.ANKUNFTSINSEL, Inselplan.ANKUNFTSINSEL) ? 1 : 0);
+        return fenster.felderOhneAnkunft(Inselplan.ANKUNFTSINSEL);
     }
 
     /** Liegt dieses Feld in der Welt? */
     public boolean enthaeltFeld(int feldX, int feldZ) {
-        return feldX >= von() && feldX <= bis() && feldZ >= von() && feldZ <= bis();
+        return fenster.enthaeltFeld(feldX, feldZ);
     }
 
     /**
@@ -144,26 +152,26 @@ public final class Inselgrenze {
      * hier.
      */
     public boolean enthaelt(int weltX, int weltZ) {
-        return enthaeltFeld(plan.feldNummer(weltX), plan.feldNummer(weltZ));
+        return fenster.enthaelt(weltX, weltZ);
     }
 
     /** Die Kantenlaenge der Weltgrenze - ein Durchmesser, kein Radius. */
     public double kante() {
-        return plan.rechnung().weltkante(felderJeAchse);
+        return fenster.kante();
     }
 
     /** Die Mitte der Weltgrenze auf beiden Achsen. Immer -meerBreite/2. */
     public double mitte() {
-        return plan.rechnung().weltmitte();
+        return fenster.mitte();
     }
 
     /** Kleinste Weltkoordinate innerhalb der Grenze - der aeussere Rand des Meerrings. */
     public int kleinsterBlock() {
-        return plan.rechnung().kleinsterBlock(von());
+        return fenster.kleinsterBlock();
     }
 
     /** Groesste Weltkoordinate innerhalb der Grenze - der aeussere Rand des Meerrings. */
     public int groessterBlock() {
-        return plan.rechnung().groessterBlock(bis());
+        return fenster.groessterBlock();
     }
 }

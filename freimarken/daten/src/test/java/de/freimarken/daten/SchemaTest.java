@@ -80,6 +80,7 @@ class SchemaTest {
         -956832920, // Schritt 25 - Kontonummern fuer die bestehenden Staedte
         411330449, // Schritt 26 - Spalte parzellen.regeln
         -316665461, // Schritt 27 - Spalte parzellen.besucht
+        -888342932, // Schritt 28 - die Art wolke im ENUM
     };
 
     private static String datenbanktext() {

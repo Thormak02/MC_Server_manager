@@ -282,7 +282,7 @@ public final class Freistadtbuch {
     /** Wie viele Staedte dieser Spieler in dieser Welt haelt. */
     public int staedteVon(String welt, UUID spieler) {
         int gezaehlt = 0;
-        for (Parzelle stadt : lager.staedteIn(welt)) {
+        for (Parzelle stadt : lager.besitzIn(welt, Art.FREISTADT)) {
             if (stadt.gehoert(spieler)) {
                 gezaehlt++;
             }
@@ -292,7 +292,7 @@ public final class Freistadtbuch {
 
     /** Alle Staedte dieser Welt, nach Namen - fuer die Liste und fuer den Warp. */
     public List<Parzelle> staedte(String welt) {
-        return lager.staedteIn(welt);
+        return lager.besitzIn(welt, Art.FREISTADT);
     }
 
     /** Die Namen fuer den Vorschlagsgeber - siehe {@link Stadtverzeichnis}. */
@@ -332,7 +332,7 @@ public final class Freistadtbuch {
      */
     public int erneuereVerzeichnis(String welt) {
         List<String> gefunden = new ArrayList<>();
-        for (Parzelle stadt : lager.staedteIn(welt)) {
+        for (Parzelle stadt : lager.besitzIn(welt, Art.FREISTADT)) {
             gefunden.add(stadt.name());
         }
         verzeichnis.erneuere(gefunden);
@@ -575,7 +575,7 @@ public final class Freistadtbuch {
             return Entscheid.nein(Bescheid.NAME_RESERVIERT);
         }
 
-        List<Parzelle> vorhandene = lager.staedteIn(welt);
+        List<Parzelle> vorhandene = lager.besitzIn(welt, Art.FREISTADT);
         int eigene = 0;
         for (Parzelle stadt : vorhandene) {
             if (stadt.name().equals(name)) {
@@ -1505,29 +1505,12 @@ public final class Freistadtbuch {
      * der Riegel - diese Suche ist die Abkuerzung, nicht die Sicherung.
      */
     private Optional<int[]> freiesFeld(List<Parzelle> vorhandene) {
-        boolean[][] belegt = new boolean[grenze.felderJeAchse()][grenze.felderJeAchse()];
-        for (Parzelle stadt : vorhandene) {
-            if (grenze.enthaeltFeld(stadt.x(), stadt.z())) {
-                belegt[stadt.x() - grenze.von()][stadt.z() - grenze.von()] = true;
-            }
-        }
-        int weiteste = Math.max(grenze.bis(), -grenze.von());
-        for (int ring = 0; ring <= weiteste; ring++) {
-            for (int x = -ring; x <= ring; x++) {
-                for (int z = -ring; z <= ring; z++) {
-                    // Nur der RAND des Rings - was weiter innen liegt, war schon dran.
-                    if (Math.max(Math.abs(x), Math.abs(z)) != ring) {
-                        continue;
-                    }
-                    if (!grenze.enthaeltFeld(x, z) || plan.istAnkunftsfeld(x, z)) {
-                        continue;
-                    }
-                    if (!belegt[x - grenze.von()][z - grenze.von()]) {
-                        return Optional.of(new int[] {x, z});
-                    }
-                }
-            }
-        }
-        return Optional.empty();
+        // Die Ringsuche selbst steht seit dem 18.11.2026 in Feldfenster - das Wolkenbuch
+        // braucht sie Zeile fuer Zeile genauso, und zwei Abschriften waeren zwei Orte,
+        // an denen die Reihenfolge der Ringe auseinanderlaeuft.
+        return grenze.fenster().freiesFeld(
+                vorhandene.stream().map(stadt -> new int[] {stadt.x(), stadt.z()})
+                        .toList(),
+                Stadtfeldplan.ANKUNFTSFELD);
     }
 }

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import de.freimarken.kern.Absteckbuch;
+import de.freimarken.kern.Art;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Feldgrenze;
 import de.freimarken.kern.Freistadtbuch;
@@ -189,7 +190,7 @@ class FreistadtBefehlTest {
         assertTrue(gelesen().get(1).contains("bestaetigen"), gelesen().get(1));
         assertEquals(1_000_000L, kasse.guthaben(anna.kennung()),
                 "die Rueckfrage kostet nichts");
-        assertTrue(lager.staedteIn(WELT).isEmpty(), "und gegruendet ist nichts");
+        assertTrue(lager.besitzIn(WELT, Art.FREISTADT).isEmpty(), "und gegruendet ist nichts");
     }
 
     @Test
@@ -214,7 +215,7 @@ class FreistadtBefehlTest {
                         + " nur Fremde brauchen die erfuellte Auflage: "
                         + gelesen().get(2));
 
-        assertEquals(1, lager.staedteIn(WELT).size());
+        assertEquals(1, lager.besitzIn(WELT, Art.FREISTADT).size());
         assertEquals(1_000_000L - PREIS, kasse.guthaben(anna.kennung()));
         // Negativ im Buch, weil es eine AUSGABE ist - darum auf die Summe gefragt und
         // nicht auf ein Vorzeichen.
@@ -248,7 +249,7 @@ class FreistadtBefehlTest {
         probe(stand, WELT).tippe("freistadt gruenden drei bestaetigen", anna);
 
         assertTrue(gelesen().get(0).contains("(2)"), gelesen().get(0));
-        assertEquals(2, lager.staedteIn(WELT).size());
+        assertEquals(2, lager.besitzIn(WELT, Art.FREISTADT).size());
     }
 
     @Test
@@ -259,7 +260,7 @@ class FreistadtBefehlTest {
 
         assertThrows(CommandSyntaxException.class,
                 () -> probe().tippe("freistadt gruenden neustadt bestaetigen", gast));
-        assertTrue(lager.staedteIn(WELT).isEmpty());
+        assertTrue(lager.besitzIn(WELT, Art.FREISTADT).isEmpty());
     }
 
     @Test
@@ -267,7 +268,7 @@ class FreistadtBefehlTest {
     void konsoleGruendetNicht() throws CommandSyntaxException {
         probe().tippeAufDerKonsole("freistadt gruenden neustadt bestaetigen");
 
-        assertTrue(lager.staedteIn(WELT).isEmpty());
+        assertTrue(lager.besitzIn(WELT, Art.FREISTADT).isEmpty());
         assertTrue(gelesen().isEmpty());
     }
 
@@ -290,7 +291,7 @@ class FreistadtBefehlTest {
         ohneWelt.tippe("freistadt gruenden neustadt bestaetigen", anna);
         assertTrue(gelesen().get(0).contains("Welt der Freistaedte fehlt"),
                 gelesen().get(0));
-        assertTrue(lager.staedteIn(WELT).isEmpty());
+        assertTrue(lager.besitzIn(WELT, Art.FREISTADT).isEmpty());
         assertEquals(1_000_000L, kasse.guthaben(anna.kennung()));
     }
 
@@ -306,7 +307,7 @@ class FreistadtBefehlTest {
     private Parzelle annastadtMitAnnaDarin() throws CommandSyntaxException {
         probe().tippe("freistadt gruenden annastadt bestaetigen", anna);
         anna.vergessen();
-        Parzelle stadt = lager.staedteIn(WELT).get(0);
+        Parzelle stadt = lager.besitzIn(WELT, Art.FREISTADT).get(0);
         stellDich(anna, stadt, 0, 0);
         return stadt;
     }

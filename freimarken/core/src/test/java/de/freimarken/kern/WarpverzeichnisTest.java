@@ -11,25 +11,26 @@ import org.junit.jupiter.api.Test;
 /** Das Warpverzeichnis - die Ableitung aus der Weltenliste. */
 class WarpverzeichnisTest {
 
-    private static final List<String> ACHT = List.of("marktstadt", "altfurt", "freistaedte",
-            "hafenwerder", "hochwald", "kornmark", "nether", "end");
+    private static final List<String> NEUN = List.of("marktstadt", "altfurt",
+            "freistaedte", "hafenwerder", "wolkenwerder", "hochwald", "kornmark",
+            "nether", "end");
 
     @Test
     @DisplayName("Die Reihenfolge der Datei bleibt die Reihenfolge der Vorschlaege")
     void reihenfolgeBleibt() {
         // Die Marktstadt steht oben. Wer /warp m tippt, meint fast immer sie.
-        var verzeichnis = Warpverzeichnis.ausWelten(ACHT);
+        var verzeichnis = Warpverzeichnis.ausWelten(NEUN);
 
-        assertEquals(ACHT, verzeichnis.welten());
+        assertEquals(NEUN, verzeichnis.welten());
         assertEquals(List.of("marktstadt"), verzeichnis.vorschlaege("m"));
         assertEquals(List.of("hafenwerder", "hochwald"), verzeichnis.vorschlaege("h"));
-        assertEquals(ACHT, verzeichnis.vorschlaege(""), "ein leerer Anfang schlaegt alles vor");
+        assertEquals(NEUN, verzeichnis.vorschlaege(""), "ein leerer Anfang schlaegt alles vor");
     }
 
     @Test
     @DisplayName("Gross und klein ist egal - der Name steht auf einem Schild")
     void grossKleinEgal() {
-        var verzeichnis = Warpverzeichnis.ausWelten(ACHT);
+        var verzeichnis = Warpverzeichnis.ausWelten(NEUN);
 
         assertEquals("kornmark", verzeichnis.aufgeloest("Kornmark").orElseThrow());
         assertEquals("kornmark", verzeichnis.aufgeloest("KORNMARK").orElseThrow());
@@ -40,10 +41,11 @@ class WarpverzeichnisTest {
     @Test
     @DisplayName("Was nicht in der Liste steht, ist kein Ziel")
     void unbekanntesZiel() {
-        var verzeichnis = Warpverzeichnis.ausWelten(ACHT);
+        var verzeichnis = Warpverzeichnis.ausWelten(NEUN);
 
-        assertTrue(verzeichnis.aufgeloest("wolkenwerder").isEmpty(),
-                "steht nicht in der ausgelieferten Liste - die Startinsel kommt mit Schritt 11");
+        assertTrue(verzeichnis.aufgeloest("nebelland").isEmpty(),
+                "steht in keiner Liste - bis zum 18.11.2026 stand hier wolkenwerder, und"
+                        + " seit es diese Welt gibt, prueft der Name nichts mehr");
         assertTrue(verzeichnis.aufgeloest("").isEmpty());
         assertTrue(verzeichnis.aufgeloest(null).isEmpty());
         assertTrue(verzeichnis.aufgeloest("kornmarkt").isEmpty(), "ein Buchstabe daneben");
@@ -55,7 +57,7 @@ class WarpverzeichnisTest {
         // Heute hat diese Frage noch keinen Gegenpart: Spielereigene Warps gehoeren zur
         // Rangleiter und sind nicht Teil C. Die Regel steht aber hier und nicht im
         // spaeteren Befehl, damit sie eine Stelle hat.
-        var verzeichnis = Warpverzeichnis.ausWelten(ACHT);
+        var verzeichnis = Warpverzeichnis.ausWelten(NEUN);
 
         assertTrue(verzeichnis.reserviert("kornmark"));
         assertTrue(verzeichnis.reserviert("Kornmark"));

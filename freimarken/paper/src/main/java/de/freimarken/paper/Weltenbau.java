@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import de.freimarken.kern.Feldgrenze;
 import de.freimarken.kern.Grenzregel;
 import de.freimarken.kern.Inselgrenze;
+import de.freimarken.kern.Wolkengrenze;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -48,15 +49,17 @@ final class Weltenbau {
     private final MarktstadtGenerator raster;
     private final StadtfelderGenerator stadtfelder;
     private final InselnGenerator inseln;
+    private final WolkenGenerator wolken;
     private final Logger protokoll;
 
     Weltenbau(JavaPlugin plugin, MarktstadtGenerator raster,
               StadtfelderGenerator stadtfelder, InselnGenerator inseln,
-              Logger protokoll) {
+              WolkenGenerator wolken, Logger protokoll) {
         this.plugin = plugin;
         this.raster = raster;
         this.stadtfelder = stadtfelder;
         this.inseln = inseln;
+        this.wolken = wolken;
         this.protokoll = protokoll;
     }
 
@@ -108,6 +111,19 @@ final class Weltenbau {
                         return new Rasterfenster(grenze.kante(), grenze.mitte(),
                                 "Hafenwerder " + welt + ": Inselfelder " + grenze.von()
                                         + ".." + grenze.bis() + " je Achse, "
+                                        + grenze.inselnZahl() + " Inseln moeglich,"
+                                        + " Bloecke " + grenze.kleinsterBlock() + ".."
+                                        + grenze.groessterBlock());
+                    });
+            case WOLKEN -> new Rastermass(
+                    Wolkengrenze.mindestKante(wolken.plan()),
+                    Wolkengrenze.WOLKENWERDER_KANTE,
+                    (wirksam, welt) -> {
+                        Wolkengrenze grenze = Wolkengrenze.ausKante(wolken.plan(),
+                                wirksam);
+                        return new Rasterfenster(grenze.kante(), grenze.mitte(),
+                                "Wolkenwerder " + welt + ": Felder " + grenze.von() + ".."
+                                        + grenze.bis() + " je Achse, "
                                         + grenze.inselnZahl() + " Inseln moeglich,"
                                         + " Bloecke " + grenze.kleinsterBlock() + ".."
                                         + grenze.groessterBlock());
@@ -263,6 +279,13 @@ final class Weltenbau {
             // Seegras, Korallen und tropische Fische.
             case INSELN -> bauplan.generator(inseln)
                     .biomeProvider(inseln.getDefaultBiomeProvider(null))
+                    .generateStructures(false);
+            // Wie bei den Inseln: eigener Generator UND eigener Biomgeber. Jener gibt
+            // dieser Welt ihren Grundton und - wichtiger - die ganze Farbtafel, aus der
+            // die Biomwahl spaeter nimmt: Was beim Anlegen fehlt, laesst sich darin nie
+            // mehr setzen.
+            case WOLKEN -> bauplan.generator(wolken)
+                    .biomeProvider(wolken.getDefaultBiomeProvider(null))
                     .generateStructures(false);
             // Gewoehnlich heisst: gar nichts angeben. Jeder eigene Generator schaltet das
             // Gelaende ab, das hier ausdruecklich gewollt ist - Erze, Baeume, Tiere.

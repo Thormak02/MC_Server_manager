@@ -1618,12 +1618,11 @@ final class ParzellenBefehle {
      * ihn niemand nachgeschlagen hat.
      */
     private static Optional<UUID> findeSpieler(String name) {
-        Player anwesend = Bukkit.getPlayerExact(name);
-        if (anwesend != null) {
-            return Optional.of(anwesend.getUniqueId());
-        }
-        OfflinePlayer bekannt = Bukkit.getOfflinePlayerIfCached(name);
-        return bekannt != null ? Optional.of(bekannt.getUniqueId()) : Optional.empty();
+        // Die Suche selbst steht seit dem 18.11.2026 in Spielername.kennung - samt
+        // ihrer teuer erkauften Begruendung, warum sie weder ins Netz geht noch die
+        // Liste aller je angemeldeten Spieler aufbaut. WolkeBefehle stellt dieselbe
+        // Frage, und zwei Abschriften waeren zwei Ruecksicherungen.
+        return Spielername.kennung(name);
     }
 
     /** Zum Eintragen: wer gerade da ist. */

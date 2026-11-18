@@ -183,6 +183,14 @@ final class Wirtschaftsliste {
         klagen.addAll(angeln.klagen());
         bericht.addAll(angeln.bericht());
 
+        // Wolkenwerder [Schritt 11]. Derselbe Schnitt wie bei den Meerinseln: Der
+        // WELTNAME daraus wird hier nicht gebraucht, den liest das Plugin vor den Welten
+        // noch einmal - beklagt wird nur hier, damit dieselbe Klage nicht zweimal im
+        // Protokoll steht.
+        Wolkenliste.Ergebnis wolken = Wolkenliste.ausKonfiguration(wurzel);
+        klagen.addAll(wolken.klagen());
+        bericht.addAll(wolken.bericht());
+
         // Und der Handel: ein eigener Abschnitt (handel:), eine eigene Schranke fuer
         // beide Gebuehren und ein Wort, das auf ein Schild passen muss. Ein eigener
         // Leser und nicht drei Zeilen hier, aus demselben Grund wie bei der Ladenmiete:
@@ -231,7 +239,7 @@ final class Wirtschaftsliste {
                 gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
                 markt.werte(), messung.werte(), bonus.werte(), laeden.werte(),
                 handel.werte(), truhe.werte(), freistaedte.werte(),
-                inseln.werte(), angeln.werte()), klagen, bericht);
+                inseln.werte(), angeln.werte(), wolken.werte()), klagen, bericht);
     }
 
     /**

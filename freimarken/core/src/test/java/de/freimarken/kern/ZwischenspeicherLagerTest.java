@@ -69,8 +69,14 @@ class ZwischenspeicherLagerTest {
         }
 
         @Override
-        public List<Parzelle> staedteIn(String welt) {
-            return echt.staedteIn(welt);
+        public List<Parzelle> besitzIn(String welt, Art art) {
+            return echt.besitzIn(welt, art);
+        }
+
+        @Override
+        public Parzelle wolkeAnlegen(String welt, int feldX, int feldZ,
+                                     UUID eigentuemer, long preis) {
+            return echt.wolkeAnlegen(welt, feldX, feldZ, eigentuemer, preis);
         }
 
         @Override

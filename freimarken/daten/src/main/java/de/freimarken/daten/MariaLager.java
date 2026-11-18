@@ -271,17 +271,57 @@ public final class MariaLager implements BesitzLager {
     }
 
     @Override
-    public List<Parzelle> staedteIn(String welt) {
+    public Parzelle wolkeAnlegen(String welt, int feldX, int feldZ, UUID eigentuemer,
+                                 long preis) {
+        // Wort fuer Wort wie werderAnlegen, mit der Art als einzigem Unterschied. Die
+        // vier Spalten einer Freistadt stehen nicht im INSERT und bleiben NULL.
+        Instant jetzt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        String sql = "INSERT INTO parzellen "
+                + "(welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand) "
+                + "VALUES (?, ?, ?, ?, ?, ?, 'wolke', NULL, 'aktiv')";
+        try (PreparedStatement anfrage = datenbank.verbindung()
+                .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            anfrage.setString(1, welt);
+            anfrage.setInt(2, feldX);
+            anfrage.setInt(3, feldZ);
+            anfrage.setString(4, eigentuemer.toString());
+            anfrage.setLong(5, preis);
+            anfrage.setObject(6, LocalDateTime.ofInstant(jetzt, ZoneOffset.UTC));
+            anfrage.executeUpdate();
+            try (ResultSet schluessel = anfrage.getGeneratedKeys()) {
+                schluessel.next();
+                return new Parzelle(schluessel.getLong(1), welt, feldX, feldZ,
+                        eigentuemer, Set.of(), preis, jetzt,
+                        Art.WOLKE, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV);
+            }
+        } catch (SQLIntegrityConstraintViolationException schonDa) {
+            // NUR EIN Schluessel kann hier zuschlagen - das Feld. Dieselbe Wortwahl wie
+            // in SpeicherLager: Der Vertrag prueft die KLASSE, die Meldung liest der
+            // Betreiber.
+            throw new IllegalStateException("Das Wolkenfeld ist bereits vergeben: "
+                    + welt + "/" + feldX + "/" + feldZ, schonDa);
+        } catch (SQLException fehler) {
+            throw weiterreichen("Nehmen einer Wolkeninsel", fehler);
+        }
+    }
+
+    @Override
+    public List<Parzelle> besitzIn(String welt, Art art) {
         // Nach art und nicht nach der Lage gefragt: Eine Freistadt liegt sehr wohl auf
         // einem Raster, nur auf einem anderen - AUF_DEM_RASTER traefe hier auch jede
         // Parzelle, falls je beide in derselben Welt staenden.
         //
-        // ORDER BY name, nicht nach der Nummer: Die Reihenfolge ist zugesagt, und eine
-        // Liste nach Gruendungsnummer waere fuer den Leser keine.
+        // ORDER BY name, id: Die Reihenfolge ist zugesagt, und eine Liste nach
+        // Gruendungsnummer waere fuer den Leser keine. Die id dahinter ist der Grund,
+        // warum dieselbe Abfrage auch fuer eine NAMENLOSE Art taugt - bei
+        // art = 'wolke' ist jeder name NULL, und dann entscheidet allein das Alter.
+        // Ohne das zweite Feld gaebe MariaDB die Zeilen in beliebiger Reihenfolge, und
+        // eine Zuteilung, die ihr folgt, naehme zweimal hintereinander ein anderes Feld.
         String sql = "SELECT " + SPALTEN + " FROM parzellen"
-                + " WHERE welt = ? AND art = 'freistadt' ORDER BY name";
+                + " WHERE welt = ? AND art = ? ORDER BY name, id";
         try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
             anfrage.setString(1, welt);
+            anfrage.setString(2, art.schluessel());
             try (ResultSet ergebnis = anfrage.executeQuery()) {
                 List<Parzelle> treffer = new ArrayList<>();
                 while (ergebnis.next()) {

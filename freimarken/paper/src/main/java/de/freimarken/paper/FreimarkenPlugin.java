@@ -40,6 +40,7 @@ import de.freimarken.kern.Ladeneinheit;
 import de.freimarken.kern.Ladenverzeichnis;
 import de.freimarken.kern.Messwerte;
 import de.freimarken.kern.Mietablage;
+import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
@@ -63,6 +64,9 @@ import de.freimarken.kern.Truhenablage;
 import de.freimarken.kern.Truhenverzeichnis;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftsstand;
+import de.freimarken.kern.Wolkenbuch;
+import de.freimarken.kern.Wolkengrenze;
+import de.freimarken.kern.Wolkenplan;
 import de.freimarken.kern.Zeitwerte;
 import de.freimarken.kern.ZwischenspeicherBerufe;
 import de.freimarken.kern.ZwischenspeicherGrundstuecke;
@@ -83,6 +87,7 @@ import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.WorldBorder;
@@ -151,6 +156,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     private final InselnGenerator inseln =
             new InselnGenerator(Inselplan.hafenwerder());
+
+    /**
+     * Der Generator von Wolkenwerder - Leere mit einem einzigen Boden [18.11.2026].
+     *
+     * <p>Ein Feld wie bei den drei Nachbarn darueber, aus demselben Grund. Er erzeugt nur
+     * das Ankunftsfeld; jede Startinsel setzt das Plugin, wenn jemand sie nimmt.
+     */
+    private final WolkenGenerator wolken =
+            new WolkenGenerator(Wolkenplan.wolkenwerder());
 
     /**
      * Die EINE Wanduhr des Plugins.
@@ -329,6 +343,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
     /** In welcher Welt die Inselfelder liegen - ohne Namensraum, wie in der config.yml. */
     private String inselwelt = Inselliste.VORGABE_WELT;
 
+    /** In welcher Welt die Wolkenfelder liegen - ohne Namensraum, wie in der config.yml. */
+    private String wolkenwelt = Wolkenliste.VORGABE_WELT;
+
     /**
      * Die Regel ueber die Meerinseln - {@code null}, solange die Welt fehlt.
      *
@@ -354,6 +371,21 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * erst in {@code richteInselnEin()}, und bis dahin ist die Regel nie zustaendig.
      */
     private Inselwache inselwache;
+
+    /** Die Regel ueber die Wolkeninseln - {@code null}, solange die Welt fehlt. */
+    private Wolkenbuch wolkenbuch;
+
+    /** Der Schutz von Wolkenwerder - {@code null}, solange es das Buch nicht gibt. */
+    private Wolkenwache wolkenwache;
+
+    /**
+     * Die Hand, die eine Startinsel setzt.
+     *
+     * <p>Ein Feld und kein Wert je Aufruf, weil sie die GEOMETRIE haelt - dieselbe, die
+     * der Generator benutzt. Die Welt bekommt sie erst beim Setzen gereicht: Sie kann
+     * beim Start gefehlt haben und spaeter da sein.
+     */
+    private final Wolkenaufbau wolkenaufbau = new Wolkenaufbau(wolken.plan());
 
     /**
      * Die Regel ueber das Gruenden - {@code null}, solange die Welt fehlt.
@@ -724,12 +756,14 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Wirtschaftsliste noch einmal und beklagt dort, was nicht stimmt. Zweimal
         // dieselbe Klage im Startprotokoll sieht nach zwei Fehlern aus.
         inselwelt = Inselliste.ausKonfiguration(getConfig()).welt();
+        // Und derselbe Griff fuer Wolkenwerder [Schritt 11].
+        wolkenwelt = Wolkenliste.ausKonfiguration(getConfig()).welt();
         var liste = Weltenliste.ausKonfiguration(
                 getConfig().getConfigurationSection("welten"), MARKTSTADT, ankunftswelt,
-                freistadtwelt, inselwelt);
+                freistadtwelt, inselwelt, wolkenwelt);
         liste.klagen().forEach(getLogger()::severe);
-        var gebaut = new Weltenbau(this, generator, stadtfelder, inseln, getLogger())
-                .baueAlle(liste.welten());
+        var gebaut = new Weltenbau(this, generator, stadtfelder, inseln, wolken,
+                getLogger()).baueAlle(liste.welten());
         welten.putAll(gebaut.welten());
         // Die Angaben mit, nicht nur die Welten: Spielmodus und Tor stehen dort, und ein
         // zweites Lesen der config.yml waere eine zweite Wahrheit.
@@ -837,7 +871,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
                                 weltschluessel(ladenwelt), sprache,
                                 getLogger()),
                         Schutzwache.Ortsregel.spaet(() -> stadtwache),
-                        Schutzwache.Ortsregel.spaet(() -> inselwache)),
+                        Schutzwache.Ortsregel.spaet(() -> inselwache),
+                        Schutzwache.Ortsregel.spaet(() -> wolkenwache)),
                 (spieler, block) -> shopklick != null
                         && shopklick.istHandel(spieler, block));
         getServer().getPluginManager().registerEvents(schutzwache, this);
@@ -920,6 +955,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Buecher wissen nichts voneinander. Sie steht trotzdem fest, damit das
         // Startprotokoll immer dieselbe Gestalt hat.
         richteInselnEin();
+        // NACH den Inseln, und wieder ohne Zwang: Die Buecher wissen nichts voneinander.
+        // Die Reihenfolge steht fest, damit das Startprotokoll immer dieselbe Gestalt
+        // hat - und sie steht VOR richteReisenEin, weil die Ankunftsplattform stehen
+        // muss, bevor der Warpbefehl die Ankunftspunkte aller Welten prueft.
+        richteWolkenEin();
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
         registriereBefehle();
@@ -1665,6 +1705,24 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     sprache.wort(BundSatz.BEFEHL_WERDER, Einsatz.keine()),
                     List.of()));
 
+            // /wolke - ein EIGENER Baum und kein Zweig am /werder [Schritt 11]. Der
+            // Grund ist die Tiefe: Diese Welt hat fuenf Zweige und bekommt weitere
+            // (Stufe, Herausforderungen, Biom, Zuruecksetzen). Als Unterbaum hiesse das
+            // "/werder wolke herausforderung" - drei Worte, bevor etwas geschieht.
+            //
+            // Die REISE geht mit hinein, und das ist der Unterschied zu jedem anderen
+            // Besitzbefehl: In einer Welt aus Leere steht man vor dem Nehmen nirgends
+            // und nach dem Nehmen weiter auf der Ankunftsplattform. Ohne Reise waere
+            // "deine Insel liegt auf Feld 3/-1" eine Auskunft ohne Weg.
+            angemeldet.addAll(verzeichnis.register(
+                    new WolkeBefehle(wolkenbuch, kasse, sprache, this::setzeInsel,
+                            (wer, ziel) -> reise.fuehre(wer, ziel,
+                                    WolkeBefehle.ARGUMENT),
+                            wolkenbuch == null ? "" : weltschluessel(wolkenwelt),
+                            () -> wirtschaft.werte().wolken().hoechstzahl()).wolke(),
+                    sprache.wort(BundSatz.BEFEHL_WOLKE, Einsatz.keine()),
+                    List.of()));
+
             // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
             // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein
             // Befehl, den es nicht gibt. Ohne diese Ausgabe laesst sich von aussen nicht
@@ -2272,6 +2330,121 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Wolkenwerder: Grenze, Buch, Wache und die Ankunftsplattform [Schritt 11].
+     *
+     * <p>Zeile fuer Zeile wie {@link #richteInselnEin}, mit einem Schritt mehr: Die
+     * Ankunftsplattform wird GEPRUEFT und notfalls gesetzt. In jeder anderen Welt macht
+     * das der Weltgenerator einmal und fuer immer; hier gibt es keinen Block, den
+     * jemand nicht gesetzt hat - und ohne festen Boden am Erscheinungspunkt fuehrt
+     * dorthin GAR KEINE Reise.
+     */
+    private void richteWolkenEin() {
+        World welt = welten.get(wolkenwelt);
+        if (welt == null) {
+            getLogger().severe("wolken.welt ist " + wolkenwelt + ", und diese Welt steht"
+                    + " nicht im Abschnitt welten: - /wolke bleibt ohne Wirkung. Trag"
+                    + " sie dort mit art: wolken ein.");
+            return;
+        }
+        Weltangabe angabe = angaben.get(wolkenwelt);
+        if (angabe == null || angabe.art() != Weltangabe.Art.WOLKEN) {
+            getLogger().severe("wolken.welt ist " + wolkenwelt + ", aber dort steht nicht"
+                    + " art: wolken - /wolke bleibt ohne Wirkung. In einer Welt ohne"
+                    + " Wolkenfelder gaebe es keine Insel zu nehmen.");
+            return;
+        }
+        // Die Grenze aus DERSELBEN Angabe, aus der die Welt entstand - und ueber
+        // Wolkengrenze und nicht ueber die Zahl aus der Datei: Jene ist ein WUNSCH, aus
+        // 20000 werden 38 Felder je Achse.
+        Wolkengrenze grenze = Wolkengrenze.ausKante(wolken.plan(),
+                Wolkengrenze.wirksameKante(wolken.plan(), angabe.kante(),
+                        welt.getWorldBorder().getSize(), false));
+        wolkenbuch = new Wolkenbuch(grenze, lager, kasse, wirtschaft);
+        // Die Wache unmittelbar nach dem Buch, und aus DERSELBEN Instanz - siehe
+        // richteInselnEin.
+        wolkenwache = new Wolkenwache(wolkenbuch, weltschluessel(wolkenwelt), sprache,
+                getLogger());
+        getLogger().info("Wolkeninseln: Welt " + welt.key().asString() + ", Felder "
+                + grenze.von() + ".." + grenze.bis() + " je Achse, bis zu "
+                + grenze.inselnZahl() + " Inseln. "
+                + Wolkenliste.rechenprobe(wirtschaft.werte().wolken()));
+        getLogger().info("Wolkenschutz aktiv in " + welt.key().asString()
+                + " - auf einer Insel baut nur, wem sie gehoert oder wer dort Mitbauer"
+                + " ist. In der LEERE baut niemand, auch der Nachbar nicht: Ein Block"
+                + " darin ist der erste Block einer Bruecke.");
+        setzeAnkunftsplattform(welt);
+    }
+
+    /**
+     * Setzt die Startinsel einer gerade genommenen Insel - die Hand hinter
+     * {@code WolkeBefehle.Aufsetzer}.
+     *
+     * <p>HIER und nicht im Befehl, weil hier die Welten liegen und weil die Bukkit-Griffe
+     * ohne laufenden Server werfen: {@code new ItemStack} greift in das
+     * Gegenstandsverzeichnis. Der Befehl kennt davon nur das Ergebnis - ja oder nein -,
+     * und genau deshalb ist sein Zweig von einer Probe durchlaufbar.
+     *
+     * <p>Die Welt wird JE AUFRUF gesucht: Sie kann beim Start gefehlt haben und spaeter
+     * da sein. Faellt das Setzen um, ist das Feld vergeben und leer - der Spieler liest
+     * es, und das Protokoll auch.
+     */
+    private boolean setzeInsel(Parzelle insel) {
+        World welt = welten.get(wolkenwelt);
+        if (welt == null) {
+            getLogger().severe("Insel " + insel.x() + "/" + insel.z() + " ist vergeben,"
+                    + " aber " + wolkenwelt + " ist nicht geladen - sie steht nicht."
+                    + " Mit /wolke zuruecksetzen ist es zu beheben.");
+            return false;
+        }
+        try {
+            int bloecke = wolkenaufbau.setze(insel.x(), insel.z(),
+                    Wolkenplan.Insel.START, wolkenbuch.starttruhe(),
+                    new Weltgriff.AufDerWelt(welt),
+                    new Wolkenaufbau.Truhengriff.AufDerWelt(welt));
+            getLogger().info("Wolkeninsel " + insel.x() + "/" + insel.z()
+                    + " aufgesetzt: " + bloecke + " Bloecke fuer "
+                    + Spielername.von(insel.eigentuemer()) + ".");
+            return true;
+        } catch (RuntimeException fehler) {
+            getLogger().log(java.util.logging.Level.SEVERE, "Insel " + insel.x() + "/"
+                    + insel.z() + " liess sich nicht aufsetzen - das Feld ist vergeben"
+                    + " und leer.", fehler);
+            return false;
+        }
+    }
+
+    /**
+     * Setzt die Ankunftsplattform, wenn sie fehlt.
+     *
+     * <p><b>Der Generator backt sie</b>, und darum ist das hier kein zweiter Weg zu
+     * derselben Tat, sondern eine Reparatur: Ein Chunk, der erzeugt wurde, bevor dieser
+     * Generator die Plattform kannte - oder einer, in dem jemand sie abgebaut hat, bevor
+     * die Wache stand -, laesst {@code Ankunftspunkt} in acht Ringen keinen festen Block
+     * finden. Dann sagt {@code /warp wolkenwerder} ab, das Tor im Wolkenturm tut nichts,
+     * und der Start klagt bei JEDEM Mal.
+     *
+     * <p>Gesetzt wird nur, wenn der Mittelblock FEHLT. Ohne diese Frage schriebe jeder
+     * Start 810 Bloecke in dieselbe Stelle - und ein Spieler, der gerade dort steht,
+     * saehe seine Welt bei jedem Neustart flackern.
+     */
+    private void setzeAnkunftsplattform(World welt) {
+        Wolkenplan plan = wolken.plan();
+        int mitte = plan.ankunftsMitte();
+        if (welt.getBlockAt(mitte, Wolkenboden.BODEN, mitte).getType() != Material.AIR) {
+            return;
+        }
+        int bloecke = wolkenaufbau.setze(Wolkenplan.ANKUNFTSFELD,
+                Wolkenplan.ANKUNFTSFELD, Wolkenplan.Insel.ANKUNFT, Map.of(),
+                new Weltgriff.AufDerWelt(welt),
+                new Wolkenaufbau.Truhengriff.AufDerWelt(welt));
+        getLogger().warning("Die Ankunftsplattform von " + welt.key().asString()
+                + " fehlte und wurde neu gesetzt (" + bloecke + " Bloecke auf Feld 0/0,"
+                + " Hoehe " + Wolkenboden.BODEN + "). Ohne festen Boden am"
+                + " Erscheinungspunkt fuehrt dorthin keine Reise - weder /warp noch das"
+                + " Tor im Wolkenturm.");
+    }
+
+    /**
      * Das eigene Angelgut von Hafenwerder [Plan 4.1, Schritt 10].
      *
      * <p>AUS {@code richteInselnEin} gerufen und nicht aus {@code onEnable}, und das ist
@@ -2489,8 +2662,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
             empfaenger.sendMessage(Component.text("Keine Welt gebaut.", NamedTextColor.RED));
             return;
         }
-        for (World welt : welten.values()) {
+        for (Map.Entry<String, World> eintrag : welten.entrySet()) {
+            World welt = eintrag.getValue();
             String schluessel = welt.key().asString();
+            if (!vorzugenerieren(eintrag.getKey())) {
+                empfaenger.sendMessage(Component.text(schluessel, NamedTextColor.YELLOW)
+                        .append(Component.text(" - Leere, hier entsteht Gelaende erst,"
+                                + " wenn jemand eine Insel nimmt. Nichts"
+                                + " vorzugenerieren.", NamedTextColor.GRAY)));
+                continue;
+            }
             if (!Vorgenerierung.hatGrenze(welt)) {
                 empfaenger.sendMessage(Component.text(schluessel, NamedTextColor.YELLOW)
                         .append(Component.text(" - keine Weltgrenze, also nichts"
@@ -2540,6 +2721,20 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Ob diese Welt ueberhaupt etwas zu erzeugen hat.
+     *
+     * <p>Die Frage steht in {@link Weltangabe#vorzugenerieren}, und hier wird sie zum
+     * Weltnamen gestellt - beide Stellen, die ueber das Vorgenerieren reden, muessen
+     * dieselbe Antwort bekommen. Eine Welt ohne Angabe gilt als vorzugenerierend: Das
+     * kann nicht vorkommen (die Welten entstehen aus den Angaben), und wenn doch, ist
+     * die Mahnung die mildere Folge gegenueber einer stillschweigend uebergangenen Welt.
+     */
+    private boolean vorzugenerieren(String name) {
+        Weltangabe angabe = angaben.get(name);
+        return angabe == null || angabe.vorzugenerieren();
+    }
+
+    /**
      * Nennt beim Start die Welten, die nicht vorgeneriert sind.
      *
      * <p>Angestossen wird die Vorgenerierung nur auf Befehl [entschieden 02.11.2026] - und
@@ -2556,7 +2751,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * erinnern.
      */
     private void nenneNichtVorgenerierte() {
-        List<World> zuPruefen = welten.values().stream()
+        List<World> zuPruefen = welten.entrySet().stream()
+                .filter(eintrag -> vorzugenerieren(eintrag.getKey()))
+                .map(Map.Entry::getValue)
                 .filter(Vorgenerierung::hatGrenze)
                 .toList();
         if (zuPruefen.isEmpty()) {

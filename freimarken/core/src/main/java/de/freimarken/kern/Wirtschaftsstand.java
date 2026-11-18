@@ -285,6 +285,16 @@ public final class Wirtschaftsstand {
                 alt.angeln().haeufigkeitProzent(), neu.angeln().haeufigkeitProzent());
         nenneMenge(geaendert, Angelwerte.PFAD_FAENGE,
                 alt.angeln().gewichte().keySet(), neu.angeln().gewichte().keySet());
+        // Wolkenwerder, aus demselben Grund wie die drei Bloecke darueber: Preis und
+        // Obergrenze werden beim Nehmen gefragt, die Biomliste beim Waehlen - gebaut und
+        // angemeldet wird nichts davon. Die Biome als MENGE und nicht als Liste: Welches
+        // dazukam und welches wegfiel, ist das, was der Betreiber lesen will.
+        nenneZahl(geaendert, Wolkenwerte.PFAD_PREIS,
+                alt.wolken().preis(), neu.wolken().preis());
+        nenneZahl(geaendert, Wolkenwerte.PFAD_HOECHSTZAHL,
+                alt.wolken().hoechstzahl(), neu.wolken().hoechstzahl());
+        nenneMenge(geaendert, Wolkenwerte.PFAD_BIOME,
+                Set.copyOf(alt.wolken().biome()), Set.copyOf(neu.wolken().biome()));
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");
