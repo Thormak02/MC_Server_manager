@@ -363,7 +363,19 @@ public enum Buchungsgrund {
     FREISTADT_LADENGEBUEHR("freistadt_ladengebuehr", Richtung.AUSGABE),
 
     /** Dieselbe Bewegung in der STADTKASSE - siehe {@link #FREISTADT_LADENGEBUEHR}. */
-    STADTKASSE_LADENGEBUEHR("stadtkasse_ladengebuehr", Richtung.EINNAHME);
+    STADTKASSE_LADENGEBUEHR("stadtkasse_ladengebuehr", Richtung.EINNAHME),
+
+    /** Eine Meerinsel genommen - Plan 6.2, 75.000 Mark [Schritt 10]. */
+    WERDER_GEKAUFT("werder_gekauft", Richtung.AUSGABE),
+
+    /**
+     * Die Insel konnte nicht eingetragen werden - der Preis kommt zurueck.
+     *
+     * <p>Nicht theoretisch: Stehen zwei Spieler im selben Augenblick auf derselben
+     * Insel und tippen beide, laesst der eindeutige Schluessel auf (welt, x, z) den
+     * zweiten auflaufen. Ohne diese Gegenbuchung zahlte er 75.000 Mark fuer nichts.
+     */
+    WERDER_ERSTATTET("werder_erstattet", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {

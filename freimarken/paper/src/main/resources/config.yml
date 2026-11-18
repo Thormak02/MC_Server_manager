@@ -103,6 +103,8 @@ wirtschaft:
     bonus-hoechstbetrag: ""
     # Was eine eigene Stadt kostet (freistaedte.gruendungspreis).
     freistadt-gruendung: ""
+    # Und was eine Meerinsel kostet (inseln.preis).
+    insel-kauf: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
@@ -478,6 +480,31 @@ verdienst:
     #
     # WAS HIER NICHT STEHT, bringt nichts. Die Liste nennt die Materialien, die zahlen,
     #   und nicht die tausend, die es nicht tun.
+  # DER INSELBONUS (Plan 9.1: "Fischer | Fang - Bonus auf Hafenwerder").
+  #
+  # Ein Zuschlag je Beruf, der NUR in der Inselwelt gilt - also in der Welt aus
+  # inseln.welt weiter unten. Die WELT steht nicht im Schluessel: Ein Bonus je Welt waere
+  # eine vierte Ebene im Lohnschluessel und eine Einstellung, die fuer sechs Welten
+  # dasteht, in denen niemand sie braucht.
+  #
+  # DER FISCHER UND SONST NIEMAND, so steht es im Plan. Der Reeder ist ausdruecklich
+  # nicht dabei - sein Seehandel ist nicht gebaut, und ein Zuschlag auf etwas, das es
+  # nicht gibt, waere eine Zeile, die nie wirkt.
+  #
+  # FUENFZIG PROZENT, und die Zahl hat einen Grund: Ein Fischer kommt nach der Rechnung
+  # weiter oben auf rund 2.850 Mark in der Stunde, mit dem Zuschlag auf 4.275. Das ist
+  # ein Grund, nach Hafenwerder zu fahren, und kein zweiter Beruf.
+  #
+  # DER ZUSCHLAG LIEGT VOR DER MINDERUNG: Er wird von ihr mitgedaempft, der hundertste
+  # Fisch bringt mit Zuschlag genauso viel mehr wie der erste. Danach gerechnet waere er
+  # am Ende einer Stunde der groessere Teil des Lohns - und die Bremse gegen den
+  # Klickautomaten waere in Hafenwerder die schwaechste.
+  #
+  # Erlaubt ist 0 bis 1000 Prozent je Zeile. Ein Beruf, den es in berufe.liste nicht
+  # gibt, kostet NUR SEINE ZEILE. Eine LEERE Liste heisst: kein Zuschlag.
+  inselbonus:
+    fischer: 50
+
   loehne:
     # Erze, Stein, Tiefe. Der Stein traegt die Spanne NICHT - er ist die Grundlast,
     # verdient wird an dem, was man dabei findet.
@@ -1323,6 +1350,119 @@ freistaedte:
     #   Haendler 200 Mark am Tag, und das ist schon eine Entscheidung.
     tag: 0
 
+# DIE MEERINSELN VON HAFENWERDER (Plan 6.2, Schritt 10).
+#
+# Nicht zu verwechseln mit welten.hafenwerder weiter unten: Jener Eintrag beschreibt die
+# WELT (ihre Art, ihre Kante, ihr Tor), dieser hier die Inseln darin. Anders als bei den
+# Freistaedten heissen die beiden nicht gleich, und das ist hier der Vorteil - bei
+# freistaedte: neben welten.freistaedte ist schon mehr als einmal der falsche Abschnitt
+# gemeint gewesen.
+#
+# welt uebernimmt /freimarken neuladen NICHT - eine Welt ist zur Laufzeit nicht zu
+# tauschen.
+inseln:
+  # In welcher Welt die Inselfelder liegen - ohne Namensraum, wie bei laeden.welt.
+  # Die Welt muss im Abschnitt welten: weiter unten stehen UND dort art: inseln tragen,
+  # sonst gilt keine Insel.
+  #
+  # NUR BEIM START GELESEN.
+  welt: hafenwerder
+
+  # Was eine Meerinsel kostet. Plan 6.2 nennt 75.000 Mark - rund drei Parzellen aus der
+  # Staffel (25.000, 50.000, 100.000) und ein Fuenftel einer Freistadt. Damit ist die
+  # Insel das, was Plan 4.1 von ihr sagt: ein "ruhiger Rueckzug mit Status" und kein
+  # Lebenswerk.
+  #
+  # Ein FESTPREIS und keine Staffel: Die Staffel der Marktstadt verdoppelt mit jeder
+  # Parzelle, weil dort das Flaechenhorten gebremst werden soll. Hier bremst die
+  # hoechstzahl, und 75.000 sind der Preis fuer DIE Insel - nicht fuer die erste von
+  # vielen.
+  #
+  # Ganze Zahl von 0 bis 8388607 Mark. 0 heisst: Wer das Recht hat, nimmt eine Insel
+  # umsonst - erlaubt, braucht aber die Bestaetigung oben unter sprung-bestaetigt.
+  preis: 75000
+
+  # Wie viele Inseln ein Spieler ohne besonderes Recht haelt.
+  #
+  # Eine, wie bei der Freistadt, und der Grund ist hier noch schaerfer: Inselflaeche gibt
+  # es in einem Archipel nur einmal, und eine Insel ist unteilbar - wer zwei haelt, haelt
+  # die zweite leer.
+  #
+  # MEHR GIBT ES UEBER DAS RECHT, nicht ueber diese Zahl: freimarken.werder.anzahl.<n>
+  # setzt die Grenze fuer einen Rang, freimarken.extra.werder.anzahl.<n> legt etwas
+  # darauf (Mitgliedschaft). Dieselbe Bauart wie bei den Parzellen - damit die
+  # Rangzahlen in der Rechteverwaltung bleiben und nicht im Programm.
+  #
+  # Ganze Zahl von 0 bis 323 (so viele Inseln hat die Welt). 0 heisst: Es wird keine
+  # vergeben - der Weg, die Inseln abzuschalten, ohne das Recht anzufassen.
+  hoechstzahl: 1
+
+# DAS EIGENE ANGELGUT VON HAFENWERDER (Plan 4.1, Schritt 10).
+#
+# DIE ERSTE BEUTETABELLE DIESES PROJEKTS. Bis zum 18.11.2026 gab es nirgends eine Stelle,
+# die bestimmt, WAS man faengt - das Angelereignis wurde nur gelesen, um den Fang zu
+# bezahlen. Was im Wasser hing, war vollstaendig Vanilla.
+#
+# SIE GILT NUR IN DER INSELWELT (inseln.welt weiter oben) und nur im OFFENEN WASSER -
+# dieselben Tore wie die Zahlung. Plan 4.1 sagt es so: "Das besondere Angelgut gibt es
+# nur im Meer."
+#
+# DER TAUSCH SITZT VOR DER ZAHLUNG: Die Lohntafel (verdienst.loehne) bezahlt den
+# GETAUSCHTEN Fang. Wer einem der Faenge unten eine Lohnzeile gibt, erreicht sie damit -
+# ab Werk hat nur nautilus_shell eine (reeder.fischen, 3000 Pfennige).
+#
+# Alle drei Zeilen uebernimmt /freimarken neuladen.
+angeln:
+  # Ob die Tabelle ueberhaupt greift. false heisst: In Hafenwerder faengt man, was
+  # Vanilla gibt - und zwar sofort, ohne die Tabelle anzufassen.
+  #
+  # true oder false, nicht ja oder nein: YAML kennt true/false (und yes/no/on/off), und
+  # ein "ja" ist dort ein WORT. Es wuerde beklagt und verworfen - dieselbe Schreibweise
+  # wie bei freistaedte.auflage.teleporter weiter oben.
+  an: true
+
+  # Wie oft die Tabelle den Fang ersetzt, in Prozent (0 bis 100).
+  #
+  # ZWANZIG, und die Zahl hat zwei Seiten: Weniger, und ein Angler merkt es nicht; mehr,
+  # und die Fische aus der Lohntafel werden selten - dann verdient der Fischer in
+  # Hafenwerder WENIGER als ueberall sonst, und das ist die Umkehrung von Plan 9.1.
+  #
+  # Alles, was nicht aus der Tabelle kommt, bleibt Vanilla: Fische, Schrott und die
+  # Schatzstuecke, auf die reeder.fischen rechnet.
+  haeufigkeit-prozent: 20
+
+  # DIE TABELLE: Gegenstand und Gewicht. Je hoeher das Gewicht, je oefter der Fang; die
+  # Summe aller Gewichte ist der Nenner. Erlaubt ist 1 bis 1000000 - eine 0 ist eine
+  # Zeile, die nie greift, und die gehoert heraus.
+  #
+  # WARUM GERADE DIESE NEUN: Hafenwerder hat keine Hoehlen und keine Bauwerke - kein
+  # Erz, kein Prismarin, keinen Schwamm, keine Korallen ausser denen, die der Bewuchs
+  # setzt. Was hier steht, ist darum kein Zusatzverdienst, sondern der einzige Weg zu
+  # diesen Dingen, und ein Grund, nach Hafenwerder zu fahren (Plan 4.1: "Faenge, die es
+  # sonst nirgends gibt").
+  #
+  # DAS MEERESHERZ mit Gewicht 1 ist der Reiz der ganzen Tabelle: Mit ihm und acht
+  # Schneckenhaeusern wird ein Aquisator gebaut. Das ist ein Inselziel fuer Wochen - und
+  # durch Angeln gibt es es in Vanilla nirgends. Bei 20 Prozent Haeufigkeit und Gewicht
+  # 1 von 83 kommt es auf etwa zwei von tausend Faengen; der Startbericht nennt die Zahl.
+  #
+  # Ein Name, den dieser Server nicht kennt, kostet NUR SEINE ZEILE: Der Start beklagt
+  # ihn, die uebrigen Faenge gelten. Erwartet wird der nackte Name wie cod oder
+  # heart_of_the_sea, ohne minecraft: davor.
+  #
+  # Eine LEERE Liste ist erlaubt und bedeutet etwas: wieder Vanilla, ohne den Schalter
+  # oben zu finden.
+  faenge:
+    tropical_fish: 30
+    nautilus_shell: 12
+    prismarine_shard: 10
+    sea_pickle: 8
+    prismarine_crystals: 6
+    brain_coral_block: 6
+    horn_coral_block: 6
+    sponge: 4
+    heart_of_the_sea: 1
+
 laeden:
   # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.
   # Die Welt muss im Abschnitt welten: weiter unten stehen, sonst gilt keine Einheit.
@@ -1858,6 +1998,18 @@ welten:
   #                       Stadt ist damit ein ORT und kein Nachbar: hinein kommt man
   #                       nur mit /warp freistadt <name>. Der startwert wirkt auch
   #                       hier nicht - das Gelaende kommt aus der Rechnung.
+  #           inseln      Gleiche Inseln in gleichem Abstand [18.11.2026] - die Welt
+  #                       Hafenwerder. Ein festes Raster aus Feldern zu 128x128, durch
+  #                       128 Bloecke offenes Meer getrennt. Das FELD ist das Eigentum,
+  #                       und darin liegt die Insel mit neun Bloecken eigenem Wasser
+  #                       rundherum - ihr Hafen. Keine Barriere wie bei den
+  #                       Stadtfeldern: Hinueberschwimmen soll man duerfen, nur bauen
+  #                       nicht. Plan 4.1 sagte "natuerlich gewachsen" und 6.2 einen
+  #                       FESTPREIS von 75.000 Mark; beides zusammen geht nicht, denn
+  #                       die eine Insel laege im Flachwasser und die naechste halb im
+  #                       Berg. Darum ist jede Insel dieselbe Insel, nur anderswo -
+  #                       dieselbe Entscheidung wie am 11.11. bei den Freistaedten. Der
+  #                       startwert wirkt auch hier nicht.
   #           Pflichtangabe. Eine fehlende Art wird NICHT geraten: "gewoehnlich" als
   #           Vorgabe wuerde aus der Marktstadt beim naechsten Start eine Welt mit
   #           Huegeln und Baeumen machen, mitten in den bezahlten Parzellen.
@@ -1989,10 +2141,32 @@ welten:
       von: [62, 71, 0]
       bis: [64, 73, 0]
 
-  # Archipel mit eigenem Angelgut (Plan 4.1).
+  # Archipel mit eigenem Angelgut (Plan 4.1), eine Insel je Feld.
   hafenwerder:
-    art: gewoehnlich
-    startwert: 110926003
+    # INSELN [entschieden 18.11.2026, Plan 4.1 und 6.2]: ein festes Raster aus Feldern
+    # zu 128x128, durch 128 Bloecke offenes Meer getrennt. Die Insel in jedem Feld ist
+    # dieselbe: ein gerundetes Quadrat, 110 Bloecke breit an der breitesten Stelle und
+    # 11.364 Bloecke Land, davon 1.600 Sandstrand. Darunter ein Hang, der am Rand des
+    # eigenen Feldes auf den Meeresgrund trifft; das Wasser ist sieben Bloecke tief, die
+    # Wasserlinie liegt auf 62 und die Wiese auf 63.
+    #
+    # ACHTUNG BEI EINER BESTEHENDEN WELT: Bis zum 18.11.2026 stand hier gewoehnlich.
+    # Was in einer schon erzeugten Welt im Boden liegt, bleibt liegen - nur NEUE Chunks
+    # folgen dieser Zeile, und das waere eine Welt aus zwei Haelften. Der Start sagt es
+    # als Klage ("wurde als GEWOEHNLICH angelegt, die Liste sagt INSELN"). Wer die Art
+    # wirklich wechselt, loescht den Weltordner einmal.
+    #
+    # KEIN Startwert: Das Gelaende kommt aus der Rechnung (Inselplan) und nicht aus
+    # einer Zahl. Die 110926003, die hier bis zum 18.11. stand, waere eine, die nie
+    # wirkt.
+    #
+    # Die Kante ist ein WUNSCH und kein Mass: Sie wird auf ganze Inselfelder
+    # abgerundet, sonst schnitte die Grenze mitten durch bezahltes Eigentum. Aus 5000
+    # werden 18 Felder je Achse (Nummern -9 bis 8) und die wirkliche Kante 4736 um
+    # -64/-64. Das sind 324 Felder, davon 323 zu nehmen: Feld 0/0 ist die
+    # ANKUNFTSINSEL, dort landet das Tor aus Altfurt. Was wirklich gilt, steht beim
+    # Start im Protokoll.
+    art: inseln
     kante: 5000
     # Plan 2.1: "Hafen von Altfurt - Tor nach Hafenwerder".
     tor:

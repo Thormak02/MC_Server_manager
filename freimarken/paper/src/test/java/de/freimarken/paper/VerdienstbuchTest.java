@@ -55,6 +55,17 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Der Sammler des Verdienstes")
 class VerdienstbuchTest {
 
+    /**
+     * Der Spieler steht NICHT in der Inselwelt - also legt kein Zuschlag auf.
+     *
+     * <p>Ein NAME und kein nacktes {@code false} an jeder Aufrufstelle: Der
+     * Inselbonus kam mit Schritt 10 dazu (Plan 9.1, "Fischer - Bonus auf
+     * Hafenwerder"), und jede Probe dieser Datei rechnet ohne ihn. Ein false an
+     * fuenfzig Stellen waere fuenfzigmal eine Zahl, die nichts sagt.
+     */
+    private static final boolean FESTLAND = false;
+
+
     private static final UUID ANNA = UUID.fromString("0000a11a-0000-0000-0000-000000000001");
     private static final UUID BERT = UUID.fromString("0000be27-0000-0000-0000-000000000002");
 
@@ -198,15 +209,15 @@ class VerdienstbuchTest {
         // Stein 0 zahlen, und zwei von drei Bloecken brachten gar nichts.
         var buch = buch();
 
-        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN));
-        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN));
+        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND));
+        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND));
         assertEquals(80L, buch.rest(ANNA));
         assertEquals(0L, buch.wartende(), "achtzig Pfennige sind keine Mark");
         assertEquals(0L, buch.rechneAb(10));
         assertEquals(80L, buch.rest(ANNA), "nicht gebucht heisst nicht verloren");
 
         // Der dritte Block ist der erste gemindert: 40 mal die Haelfte sind 20.
-        assertEquals(20L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN));
+        assertEquals(20L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND));
         assertEquals(1L, buch.wartende());
         assertEquals(1L, buch.rechneAb(10));
         assertEquals(1L, verdient(ANNA));
@@ -223,7 +234,7 @@ class VerdienstbuchTest {
         var buch = buch();
         List<Long> gesehen = new ArrayList<>();
         for (int mal = 0; mal < 12; mal++) {
-            gesehen.add(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ));
+            gesehen.add(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND));
         }
 
         assertEquals(List.of(1000L, 1000L, 500L, 500L, 250L, 250L, 120L, 120L,
@@ -237,10 +248,10 @@ class VerdienstbuchTest {
         // einen Tunnel graebt, verdiente am Erz darin nichts mehr.
         var buch = buch();
         for (int mal = 0; mal < 6; mal++) {
-            buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN);
+            buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND);
         }
 
-        assertEquals(1000L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ),
+        assertEquals(1000L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND),
                 "der erste Erzblock zahlt voll");
         assertEquals(2, buch.gezaehlteArten(ANNA).size());
     }
@@ -250,15 +261,15 @@ class VerdienstbuchTest {
     void fensterSpringtNachEinerStunde() {
         var buch = buch();
         for (int mal = 0; mal < 6; mal++) {
-            buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+            buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         }
 
         uhr.weiter(Verdienstbuch.FENSTER.minusSeconds(1L));
-        assertEquals(120L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ),
+        assertEquals(120L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND),
                 "eine Sekunde vor der Stunde gilt das alte Fenster noch");
 
         uhr.weiter(Duration.ofSeconds(2L));
-        assertEquals(1000L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ),
+        assertEquals(1000L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND),
                 "nach der Stunde beginnt die Minderung neu");
     }
 
@@ -270,12 +281,12 @@ class VerdienstbuchTest {
         // Stunde voller Saetze - geschenkt, ohne dass jemand es merkt.
         var buch = buch();
         for (int mal = 0; mal < 6; mal++) {
-            buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+            buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         }
 
         uhr.weiter(Duration.ofHours(-2L));
 
-        assertEquals(120L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ));
+        assertEquals(120L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND));
     }
 
     @Test
@@ -286,8 +297,9 @@ class VerdienstbuchTest {
         // Spielern waeren das Tausende Eintraege, die nie wieder angesehen werden.
         var buch = buch();
 
-        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, "dirt"));
-        assertEquals(0L, buch.verdiene(ANNA, Set.of("bauer"), Taetigkeit.ABBAUEN, STEIN),
+        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, "dirt", FESTLAND));
+        assertEquals(0L, buch.verdiene(ANNA, Set.of("bauer"), Taetigkeit.ABBAUEN,
+                STEIN, FESTLAND),
                 "der falsche Beruf zahlt an diesem Block nichts");
         assertEquals(List.of(), buch.gezaehlteArten(ANNA));
         assertEquals(0L, buch.rest(ANNA));
@@ -303,9 +315,9 @@ class VerdienstbuchTest {
         var buch = buch();
 
         assertEquals(1000L, buch.verdiene(ANNA, Set.of("bergmann", "steinmetz"),
-                Taetigkeit.ABBAUEN, ERZ));
+                Taetigkeit.ABBAUEN, ERZ, FESTLAND));
         assertEquals(300L, buch.verdiene(BERT, Set.of("steinmetz"),
-                Taetigkeit.ABBAUEN, ERZ), "allein zahlt der kleinere Satz");
+                Taetigkeit.ABBAUEN, ERZ, FESTLAND), "allein zahlt der kleinere Satz");
     }
 
     @Test
@@ -317,9 +329,9 @@ class VerdienstbuchTest {
         // besorgt die Marke; hier geht es nur um die zwei Saetze.
         var buch = buch();
 
-        assertEquals(10L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN));
-        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN));
-        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, ERZ),
+        assertEquals(10L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN, FESTLAND));
+        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND));
+        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, ERZ, FESTLAND),
                 "fuers Setzen von Erz steht kein Satz in der Liste");
     }
 
@@ -335,10 +347,10 @@ class VerdienstbuchTest {
         // Dass eine Schleife aus Setzen und Abbauen damit zwei Fenster hat, ist kein Loch:
         // Ein gesetzter Block traegt eine Marke und zahlt beim Abbauen gar nichts.
         var buch = buch();
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN, FESTLAND);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN, FESTLAND);
 
-        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN),
+        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND),
                 "das Abbauen hat sein eigenes Fenster - voller Satz");
         assertEquals(2, buch.gezaehlteArten(ANNA).size());
         assertTrue(buch.gezaehlteArten(ANNA).contains("setzen/" + STEIN),
@@ -359,17 +371,17 @@ class VerdienstbuchTest {
                 .mitStundenmenge(Taetigkeit.ABBAUEN, 3)), uhr, protokoll);
 
         // Drei zahlen - und zwar auf ZWEI verschiedene Namen verteilt.
-        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ) > 0L);
-        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN) > 0L);
-        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ) > 0L);
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND) > 0L);
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND) > 0L);
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND) > 0L);
 
-        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN),
+        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND),
                 "der vierte bringt nichts, obwohl es erst der zweite Stein ist");
         assertEquals(Taetigkeit.ABBAUEN, buch.anDerGrenze(ANNA),
                 "und der Spieler erfaehrt, WELCHE Arbeit zu ist");
 
         // Eine ANDERE Taetigkeit zahlt weiter - die Grenze gilt je Taetigkeit.
-        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN) > 0L);
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.SETZEN, STEIN, FESTLAND) > 0L);
         assertEquals(null, buch.anDerGrenze(ANNA),
                 "nach einer zahlenden Tat steht er nicht mehr an der Grenze");
     }
@@ -380,13 +392,13 @@ class VerdienstbuchTest {
         var buch = new Verdienstbuch(kasse, stand(werte(
                 Verdienstwerte.VORGABE_TAGESDECKEL)
                 .mitStundenmenge(Taetigkeit.ABBAUEN, 2)), uhr, protokoll);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
-        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ));
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
+        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND));
 
         uhr.weiter(Verdienstbuch.FENSTER);
 
-        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ) > 0L,
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND) > 0L,
                 "die neue Stunde zahlt wieder");
     }
 
@@ -405,15 +417,15 @@ class VerdienstbuchTest {
         var buch = new Verdienstbuch(kasse, stand(werte(
                 Verdienstwerte.VORGABE_TAGESDECKEL)
                 .mitStundenmenge(Taetigkeit.ABBAUEN, 1)), uhr, protokoll);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         for (int mal = 0; mal < 50; mal++) {
-            assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ));
+            assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND));
         }
 
         uhr.weiter(Verdienstbuch.FENSTER);
 
-        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ) > 0L);
-        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ),
+        assertTrue(buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND) > 0L);
+        assertEquals(0L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND),
                 "und dann ist wieder zu - genau nach einem");
     }
 
@@ -427,7 +439,7 @@ class VerdienstbuchTest {
         for (int wer = 0; wer < 5; wer++) {
             UUID einer = UUID.randomUUID();
             fuenf.add(einer);
-            buch.verdiene(einer, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+            buch.verdiene(einer, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         }
         assertEquals(5, buch.wartende());
 
@@ -458,7 +470,7 @@ class VerdienstbuchTest {
         // bremste nur die Auszahlung.
         var buch = buch(3L);
         for (int mal = 0; mal < 2; mal++) {
-            buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+            buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         }
         assertEquals(2000L, buch.rest(ANNA), "zwanzig Mark wollen gebucht werden");
 
@@ -468,7 +480,7 @@ class VerdienstbuchTest {
         assertEquals(0L, buch.rest(ANNA), "die siebzehn Mark darueber sind weg");
 
         // Und am naechsten Takt kommt nichts nach.
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         assertEquals(0L, buch.rechneAb(10));
         assertEquals(3L, verdient(ANNA));
     }
@@ -483,13 +495,13 @@ class VerdienstbuchTest {
         // was er nicht sein soll: eine Verzoegerung. Wer einen Tag durchfarmt, bekaeme
         // am naechsten Morgen alles.
         var buch = buch(10L);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         assertEquals(10L, buch.rechneAb(10), "der Deckel ist mit einem Erzblock voll");
         assertFalse(buch.amDeckel(ANNA), "genau aufgegangen ist nicht am Deckel");
 
         // Jetzt ist der Tag zu - und es wird weitergearbeitet.
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         assertEquals(1500L, buch.rest(ANNA), "fuenfzehn Mark wollen gebucht werden");
 
         assertEquals(0L, buch.rechneAb(10), "der Deckel laesst nichts mehr durch");
@@ -512,7 +524,7 @@ class VerdienstbuchTest {
         kasse.gutschreiben(ANNA, 20L, Buchungsgrund.BERUF_VERDIENST);
         var buch = buch(20L);
 
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         assertEquals(0L, buch.rechneAb(10),
                 "zwanzig Mark stehen schon im Buch - der Deckel ist erreicht");
         assertTrue(buch.amDeckel(ANNA));
@@ -527,7 +539,7 @@ class VerdienstbuchTest {
         kasse.gutschreiben(ANNA, 1_000L, Buchungsgrund.BESTAND);
         var buch = buch(20L);
 
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
 
         assertEquals(10L, buch.rechneAb(10));
         assertFalse(buch.amDeckel(ANNA));
@@ -537,8 +549,8 @@ class VerdienstbuchTest {
     @DisplayName("Der Deckel gilt je Spieler und nicht je Server")
     void derDeckelGiltJeSpieler() {
         var buch = buch(10L);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
-        buch.verdiene(BERT, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
+        buch.verdiene(BERT, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
 
         assertEquals(20L, buch.rechneAb(10));
         assertEquals(10L, verdient(ANNA));
@@ -549,13 +561,13 @@ class VerdienstbuchTest {
     @DisplayName("Ein neuer Tag hebt den Deckel wieder")
     void einNeuerTagHebtDenDeckel() {
         var buch = buch(10L);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         assertEquals(10L, buch.rechneAb(10));
 
         // Mitternacht UTC - die Zone des Standes dieser Probe.
         uhr.setze(Instant.parse("2026-11-07T00:00:00Z"));
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
 
         assertEquals(10L, buch.rechneAb(10), "der neue Tag zahlt wieder");
         assertEquals(20L, verdient(ANNA));
@@ -570,7 +582,7 @@ class VerdienstbuchTest {
         // niemand erarbeitet hat.
         var kaputte = new KaputteKasse();
         var buch = buch(kaputte);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
 
         assertEquals(0L, buch.rechneAb(10));
         assertEquals(1, kaputte.versuche, "einmal versucht");
@@ -592,11 +604,11 @@ class VerdienstbuchTest {
         // Betrag verschoben, in die falsche Richtung.
         var wackelige = new WackeligeKasse();
         var buch = buch(wackelige);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         assertEquals(0L, buch.rechneAb(10));
         assertEquals(1, wackelige.gelesen);
 
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         assertEquals(10L, buch.rechneAb(10), "der naechste Versuch gelingt");
 
         assertEquals(2, wackelige.gelesen, "die Tagessumme wird neu gelesen");
@@ -610,8 +622,8 @@ class VerdienstbuchTest {
         // wenn man es braucht.
         var kaputte = new KaputteKasse();
         var buch = buch(kaputte);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
-        buch.verdiene(BERT, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
+        buch.verdiene(BERT, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
 
         buch.rechneAb(10);
 
@@ -624,7 +636,7 @@ class VerdienstbuchTest {
     @DisplayName("Ein Abgang rechnet sofort ab und vergisst den Zaehler")
     void abgangRechnetSofortAb() {
         var buch = buch();
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
 
         buch.abgang(ANNA);
 
@@ -644,8 +656,8 @@ class VerdienstbuchTest {
         // behalten hiesse, den Stand eines abgemeldeten Spielers zu speichern, und dafuer
         // waere eine Spalte in der Datenbank fuer weniger als eine Mark da.
         var buch = buch();
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN);
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND);
 
         buch.abgang(ANNA);
 
@@ -659,8 +671,8 @@ class VerdienstbuchTest {
         // Ohne diesen Weg waere der letzte Verdienst jedes anwesenden Spielers verloren -
         // bei einem Neustart zur vollen Stunde jeden Tag.
         var buch = buch();
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
-        buch.verdiene(BERT, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
+        buch.verdiene(BERT, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
 
         assertEquals(20L, buch.rechneAllesAb());
 
@@ -677,12 +689,12 @@ class VerdienstbuchTest {
         // Gegenstandsgurt. Die -1 unterscheidet "noch nicht wieder" von "nichts
         // verdient": Beide senden nichts, aber eine Probe muss sie trennen koennen.
         var buch = buch();
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
 
         assertEquals(1000L, buch.fuerDenHandbalken(ANNA));
         assertEquals(0L, buch.fuerDenHandbalken(ANNA), "nichts Neues verdient");
 
-        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ);
+        buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, ERZ, FESTLAND);
         assertEquals(-1L, buch.fuerDenHandbalken(ANNA), "die Pause laeuft noch");
         assertEquals(-1L, buch.fuerDenHandbalken(ANNA));
 
@@ -719,13 +731,13 @@ class VerdienstbuchTest {
 
         var buch = buch();
         assertThrows(IllegalArgumentException.class,
-                () -> buch.verdiene(null, BERGMANN, Taetigkeit.ABBAUEN, STEIN));
+                () -> buch.verdiene(null, BERGMANN, Taetigkeit.ABBAUEN, STEIN, FESTLAND));
         assertThrows(IllegalArgumentException.class,
-                () -> buch.verdiene(ANNA, null, Taetigkeit.ABBAUEN, STEIN));
+                () -> buch.verdiene(ANNA, null, Taetigkeit.ABBAUEN, STEIN, FESTLAND));
         assertThrows(IllegalArgumentException.class,
-                () -> buch.verdiene(ANNA, BERGMANN, null, STEIN));
+                () -> buch.verdiene(ANNA, BERGMANN, null, STEIN, FESTLAND));
         assertThrows(IllegalArgumentException.class,
-                () -> buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, null));
+                () -> buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, null, FESTLAND));
     }
 
     /** Eine Kasse, die beim Gutschreiben immer wirft - und mitzaehlt, wie oft. */
@@ -785,4 +797,22 @@ class VerdienstbuchTest {
             return 0L;
         }
     }
+    @Test
+    @DisplayName("Der Inselbonus kommt durch das BUCH an - und nur in der Inselwelt")
+    void inselbonusKommtDurchDasBuch() {
+        // Die Naht zwischen Wache und Rechnung: Die Wache sagt, OB der Spieler in der
+        // Inselwelt steht, das Buch reicht es an die Regel weiter. Ohne diese Probe
+        // waere der Weg dazwischen ungeprueft - und ein vertauschter Wahrheitswert
+        // gaebe den Zuschlag ueberall ausser dort.
+        var buch = new Verdienstbuch(kasse, stand(werte(20_000L)
+                .mitInselbonus(java.util.Map.of("bergmann", 50))), uhr, protokoll);
+
+        assertEquals(40L, buch.verdiene(ANNA, BERGMANN, Taetigkeit.ABBAUEN, STEIN,
+                FESTLAND));
+        assertEquals(60L, buch.verdiene(BERT, BERGMANN, Taetigkeit.ABBAUEN, STEIN,
+                true),
+                "derselbe Block in der Inselwelt - und ein ANDERER Spieler, damit die"
+                        + " Minderung der ersten Zeile nicht mitrechnet");
+    }
+
 }

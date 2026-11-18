@@ -104,6 +104,18 @@ public final class ZwischenspeicherLager implements BesitzLager {
         return neu;
     }
 
+    @Override
+    public Parzelle werderAnlegen(String welt, int feldX, int feldZ, UUID eigentuemer,
+                                  long preis) {
+        Parzelle neu = wahrheit.werderAnlegen(welt, feldX, feldZ, eigentuemer, preis);
+        // DAS LEEREN IST DIE TRAGENDE ZEILE, und ihr Fehlen faellt in keiner Probe auf:
+        // Der Zwischenspeicher antwortete danach bis zu dreissig Sekunden lang "frei"
+        // auf eine gerade bezahlte Insel - und wer in dieser Zeit dort steht, baut auf
+        // fremdem Eigentum.
+        leeren();
+        return neu;
+    }
+
     /**
      * Ungepuffert durchgereicht.
      *

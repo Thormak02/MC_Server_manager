@@ -235,6 +235,42 @@ public final class MariaLager implements BesitzLager {
     }
 
     @Override
+    public Parzelle werderAnlegen(String welt, int feldX, int feldZ, UUID eigentuemer,
+                                  long preis) {
+        // Wort fuer Wort wie anlegen(), mit genau zwei Unterschieden: die Art als
+        // Literal 'werder' und Feldnummern statt Parzellennummern. Die vier Spalten
+        // einer Freistadt - name, kasse, regeln, besucht - stehen nicht im INSERT und
+        // bleiben NULL; eine Insel hat keinen Namen und keine Kasse.
+        Instant jetzt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        String sql = "INSERT INTO parzellen "
+                + "(welt, x, z, eigentuemer, preis, erworben_am, art, eltern_id, zustand) "
+                + "VALUES (?, ?, ?, ?, ?, ?, 'werder', NULL, 'aktiv')";
+        try (PreparedStatement anfrage = datenbank.verbindung()
+                .prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            anfrage.setString(1, welt);
+            anfrage.setInt(2, feldX);
+            anfrage.setInt(3, feldZ);
+            anfrage.setString(4, eigentuemer.toString());
+            anfrage.setLong(5, preis);
+            anfrage.setObject(6, LocalDateTime.ofInstant(jetzt, ZoneOffset.UTC));
+            anfrage.executeUpdate();
+            try (ResultSet schluessel = anfrage.getGeneratedKeys()) {
+                schluessel.next();
+                return new Parzelle(schluessel.getLong(1), welt, feldX, feldZ,
+                        eigentuemer, Set.of(), preis, jetzt,
+                        Art.WERDER, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV);
+            }
+        } catch (SQLIntegrityConstraintViolationException schonDa) {
+            // NUR EIN Schluessel kann hier zuschlagen - das Feld. Einen Namen gibt es
+            // nicht, also auch nicht die zweite Lage, die freistadtAnlegen nennen muss.
+            throw new IllegalStateException("Das Inselfeld ist bereits vergeben: "
+                    + welt + "/" + feldX + "/" + feldZ, schonDa);
+        } catch (SQLException fehler) {
+            throw weiterreichen("Nehmen einer Meerinsel", fehler);
+        }
+    }
+
+    @Override
     public List<Parzelle> staedteIn(String welt) {
         // Nach art und nicht nach der Lage gefragt: Eine Freistadt liegt sehr wohl auf
         // einem Raster, nur auf einem anderen - AUF_DEM_RASTER traefe hier auch jede

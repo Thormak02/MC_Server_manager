@@ -134,6 +134,17 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_LADEN_MIETE("mark.verlauf.grund.laden-miete", Art.WORT),
 
     /**
+     * Die zwei Worte der Meerinsel [Schritt 10].
+     *
+     * <p>Dieselbe Bauart wie bei der Parzelle und der Freistadt: ein Wort fuer den Kauf
+     * und ein zweites fuer den Fall, in dem NICHTS geschehen ist. Jenes zweite erzaehlt
+     * von einem Fehlschlag, und wer es in seinem Verlauf liest, soll nicht glauben, er
+     * habe eine Insel gekauft und wieder verkauft.
+     */
+    VERLAUF_GRUND_WERDER_GEKAUFT("mark.verlauf.grund.werder-gekauft", Art.WORT),
+    VERLAUF_GRUND_WERDER_ERSTATTET("mark.verlauf.grund.werder-erstattet", Art.WORT),
+
+    /**
      * Die Worte des Handels an Kistenshops (Plan 7.4).
      *
      * <p><b>DREI Zeilen fuer EINEN Handel, und das ist die Entscheidung dahinter:</b> Was

@@ -2,7 +2,7 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Feldgrenze;
 import de.freimarken.kern.Grenzregel;
-import de.freimarken.kern.Stadtfeldplan;
+import de.freimarken.kern.Inselgrenze;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -47,14 +47,73 @@ final class Weltenbau {
     private final JavaPlugin plugin;
     private final MarktstadtGenerator raster;
     private final StadtfelderGenerator stadtfelder;
+    private final InselnGenerator inseln;
     private final Logger protokoll;
 
     Weltenbau(JavaPlugin plugin, MarktstadtGenerator raster,
-              StadtfelderGenerator stadtfelder, Logger protokoll) {
+              StadtfelderGenerator stadtfelder, InselnGenerator inseln,
+              Logger protokoll) {
         this.plugin = plugin;
         this.raster = raster;
         this.stadtfelder = stadtfelder;
+        this.inseln = inseln;
         this.protokoll = protokoll;
+    }
+
+    /**
+     * Was eine Welt braucht, deren Weltgrenze aus einem FELDRASTER folgt - oder
+     * {@code null} fuer jede andere.
+     *
+     * <p>Die eine Stelle, an der entschieden wird, WELCHE Arten so rechnen [18.11.2026].
+     * Vorher stand die Frage dreimal in {@code setzeGrenze} - einmal fuer das Mindestmass,
+     * einmal fuer den Rueckfall, einmal fuer das Fenster -, und bei der zweiten Art waeren
+     * das drei Stellen gewesen, die sich einzeln vergessen lassen. Eine davon vergessen
+     * heisst: Die Grenze laeuft mitten durch bezahltes Eigentum.
+     *
+     * @param mindest   unterhalb dessen ergibt das Raster keine Welt mehr und WIRFT
+     * @param rueckfall was gilt, wenn die Zahl in der Datei unbrauchbar ist
+     * @param fenster   wie aus der wirksamen Kante Kante, Mitte und Bericht werden
+     */
+    private record Rastermass(long mindest, long rueckfall, Fensterbau fenster) {
+    }
+
+    /** Aus der wirksamen Kante und dem Weltschluessel wird das Fenster dieser Welt. */
+    private interface Fensterbau {
+        Rasterfenster baue(int wirksam, String welt);
+    }
+
+    /** Was wirklich an die Weltgrenze geht, und was darueber im Protokoll steht. */
+    private record Rasterfenster(double kante, double mitte, String bericht) {
+    }
+
+    private Rastermass rastermass(Weltangabe angabe) {
+        return switch (angabe.art()) {
+            case STADTFELDER -> new Rastermass(
+                    Feldgrenze.mindestKante(stadtfelder.plan()),
+                    Feldgrenze.FREISTAEDTE_KANTE,
+                    (wirksam, welt) -> {
+                        Feldgrenze grenze = Feldgrenze.ausKante(stadtfelder.plan(), wirksam);
+                        return new Rasterfenster(grenze.kante(), grenze.mitte(),
+                                "Freistaedte " + welt + ": Felder " + grenze.von() + ".."
+                                        + grenze.bis() + " je Achse, "
+                                        + grenze.staedteZahl() + " Staedte moeglich,"
+                                        + " Bloecke " + grenze.kleinsterBlock() + ".."
+                                        + grenze.groessterBlock());
+                    });
+            case INSELN -> new Rastermass(
+                    Inselgrenze.mindestKante(inseln.plan()),
+                    Inselgrenze.HAFENWERDER_KANTE,
+                    (wirksam, welt) -> {
+                        Inselgrenze grenze = Inselgrenze.ausKante(inseln.plan(), wirksam);
+                        return new Rasterfenster(grenze.kante(), grenze.mitte(),
+                                "Hafenwerder " + welt + ": Inselfelder " + grenze.von()
+                                        + ".." + grenze.bis() + " je Achse, "
+                                        + grenze.inselnZahl() + " Inseln moeglich,"
+                                        + " Bloecke " + grenze.kleinsterBlock() + ".."
+                                        + grenze.groessterBlock());
+                    });
+            case RASTER, GEWOEHNLICH, LEER, FLACH -> null;
+        };
     }
 
     /**
@@ -199,6 +258,12 @@ final class Weltenbau {
             case STADTFELDER -> bauplan.generator(stadtfelder)
                     .biomeProvider(stadtfelder.getDefaultBiomeProvider(null))
                     .generateStructures(false);
+            // Wie die Stadtfelder: eigener Generator UND eigener Biomgeber. Jener gibt der
+            // Insel eine Wiese, dem Strand Sand und dem Meer das WARME Biom - und mit ihm
+            // Seegras, Korallen und tropische Fische.
+            case INSELN -> bauplan.generator(inseln)
+                    .biomeProvider(inseln.getDefaultBiomeProvider(null))
+                    .generateStructures(false);
             // Gewoehnlich heisst: gar nichts angeben. Jeder eigene Generator schaltet das
             // Gelaende ab, das hier ausdruecklich gewollt ist - Erze, Baeume, Tiere.
             case GEWOEHNLICH -> bauplan.generateStructures(true);
@@ -225,17 +290,15 @@ final class Weltenbau {
                     + " es bleibt, was in der Welt steht (" + (long) rand.getSize() + ").");
             return;
         }
-        // Bei den Stadtfeldern ist die Zahl in der Datei ein WUNSCH und kein Mass
-        // [11.11.2026]: Sie wird auf ganze Felder abgerundet, genau wie die Marktstadt
-        // ihre Kante aus dem Parzellenraster ableitet. 6000 ist kein Vielfaches von 288 -
-        // eine Grenze von 6000 um 0/0 schnitt 84 Felder an und lief mitten durch Feld 10,
-        // dessen Mitte bei 3007 liegt. Ein Warp dorthin haette den Spieler VOR die eigene
-        // Weltgrenze gesetzt.
-        Stadtfeldplan feldplan = angabe.art() == Weltangabe.Art.STADTFELDER
-                ? stadtfelder.plan()
-                : null;
-        long mindest = feldplan != null
-                ? Feldgrenze.mindestKante(feldplan)
+        // Bei den Stadtfeldern und bei den Inseln ist die Zahl in der Datei ein WUNSCH
+        // und kein Mass [11.11.2026]: Sie wird auf ganze Felder abgerundet, genau wie die
+        // Marktstadt ihre Kante aus dem Parzellenraster ableitet. 6000 ist kein Vielfaches
+        // von 288 - eine Grenze von 6000 um 0/0 schnitt 84 Felder an und lief mitten durch
+        // Feld 10, dessen Mitte bei 3007 liegt. Ein Warp dorthin haette den Spieler VOR
+        // die eigene Weltgrenze gesetzt. Bei Hafenwerder ist es 5000 zu 256.
+        Rastermass mass = rastermass(angabe);
+        long mindest = mass != null
+                ? mass.mindest()
                 : Grenzregel.MINDESTKANTE;
         if (!Grenzregel.brauchbar(angabe.kante(), mindest)) {
             // Soll Weltenliste abgefangen haben. Ein Riegel, kein Rueckfall: Eine
@@ -248,8 +311,7 @@ final class Weltenbau {
         boolean bestaetigt = Grenzregel.sprungText(angabe.kante(), inDerWelt)
                 .equals(angabe.sprungBestaetigt());
         long wirksam = Grenzregel.wirksam(angabe.kante(), inDerWelt, mindest,
-                feldplan != null ? Feldgrenze.FREISTAEDTE_KANTE : angabe.kante(),
-                bestaetigt);
+                mass != null ? mass.rueckfall() : angabe.kante(), bestaetigt);
         String klage = Grenzregel.klage("welten." + angabe.name(), angabe.kante(),
                 inDerWelt, wirksam, mindest);
         if (klage != null) {
@@ -257,23 +319,21 @@ final class Weltenbau {
         }
         double kante = wirksam;
         double mitte = 0.0;
-        if (feldplan != null) {
-            Feldgrenze feldgrenze = Feldgrenze.ausKante(feldplan, (int) wirksam);
-            kante = feldgrenze.kante();
-            mitte = feldgrenze.mitte();
-            protokoll.info("Freistaedte " + welt.key().asString() + ": Felder "
-                    + feldgrenze.von() + ".." + feldgrenze.bis() + " je Achse, "
-                    + feldgrenze.staedteZahl() + " Staedte moeglich, Bloecke "
-                    + feldgrenze.kleinsterBlock() + ".." + feldgrenze.groessterBlock());
+        if (mass != null) {
+            Rasterfenster fenster = mass.fenster().baue((int) wirksam,
+                    welt.key().asString());
+            kante = fenster.kante();
+            mitte = fenster.mitte();
+            protokoll.info(fenster.bericht());
         }
-        if (frisch || feldplan != null) {
+        if (frisch || mass != null) {
             // Sonst nur bei einer frischen Welt. Die Kante wird nie kleiner - aber ein
             // verschobener Mittelpunkt schiebt die Grenze genauso nach innen, und wer ihn
             // mit /worldborder center gesetzt hat, hat das so gewollt.
             //
-            // Bei den Stadtfeldern gilt das NICHT: Dort haengt die ganze Geometrie an der
+            // Bei einem Feldraster gilt das NICHT: Dort haengt die ganze Geometrie an der
             // Mitte. Ein verschobener Mittelpunkt liesse die Grenze quer durch Stadtfelder
-            // laufen, und das ist kein Wunsch, sondern ein Unfall.
+            // oder Inselfelder laufen, und das ist kein Wunsch, sondern ein Unfall.
             rand.setCenter(mitte, mitte);
         }
         rand.setSize(kante);

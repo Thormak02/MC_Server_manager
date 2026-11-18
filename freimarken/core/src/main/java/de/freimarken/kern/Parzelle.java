@@ -265,6 +265,20 @@ public record Parzelle(
         return eigentuemer.equals(spieler);
     }
 
+    /**
+     * Ob das eine Meerinsel ist [Schritt 10].
+     *
+     * <p>Die Gegenfrage zu {@link #istFreistadt}, und beide zusammen machen die Zeile
+     * dreiwertig: Bis zum 18.11.2026 war alles, was keine Freistadt war, eine
+     * Marktstadtparzelle - sieben Riegel in dieser Klasse fragen so. Eine Insel traegt
+     * genauso wenig Namen, Kasse, Regeln und Besuchstag wie eine Parzelle, also mussten
+     * jene Riegel NICHT angefasst werden; wer hier aber etwas baut, das nur fuer die
+     * Marktstadt gilt, fragt ab jetzt diese Methode und nicht mehr {@code !istFreistadt}.
+     */
+    public boolean istWerder() {
+        return art == Art.WERDER;
+    }
+
     /** Ob das eine Freistadt ist - dann und nur dann traegt die Zeile einen Namen. */
     public boolean istFreistadt() {
         return art == Art.FREISTADT;
@@ -370,8 +384,18 @@ public record Parzelle(
      *
      * <p>Der Zustand steht vorn, weil er fuer alle gilt: Auf verfallenem Besitz baut auch
      * der Eigentuemer nicht mehr.
+     *
+     * <p><b>OHNE Spieler ist die Antwort NEIN und kein Wurf</b> [18.11.2026, gefunden
+     * von InselbuchTest]: {@code null} heisst hier "frage nur, ob ueberhaupt jemand
+     * darf" - genau so fragt eine Wache, wenn sie einen Handbalken begruendet, und
+     * genau so kommen die Ereignisse ohne Spieler herein. Vorher warf diese Zeile:
+     * {@code Set.of(...).contains(null)} ist eine NullPointerException, und zwar auch
+     * bei einer LEEREN Mitbauerliste. Im Spiel haette die Inselwache daraus eine Klage
+     * ueber eine stumme Datenbank gemacht und jedes Bauen abgelehnt - mit einem Grund,
+     * der nicht stimmt.
      */
     public boolean darfBauen(UUID spieler) {
-        return zustand.erlaubtBauen() && (gehoert(spieler) || mitbauer.contains(spieler));
+        return spieler != null && zustand.erlaubtBauen()
+                && (gehoert(spieler) || mitbauer.contains(spieler));
     }
 }

@@ -326,7 +326,10 @@ class GrenzeTest {
             // Die Einrichtung der Stadt [11.11.2026]: EIN Handbalken, wenn eine Kiste
             // zubleibt, die niemandem gehoert.
             "Einrichtungswache.java",
-            "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java"));
+            "SpielzeitBefehle.java", "Sprache.java", "WarpBefehle.java",
+            // Schritt 10: der Befehl der Meerinseln. EINE Sendestelle, wie bei
+            // /freistadt - jeder Zweig geht durch sende().
+            "WerderBefehle.java"));
 
     /**
      * Wo ein Satz aus Text werden darf - zwei Dateien, und das ist der ganze Weg
@@ -507,7 +510,8 @@ class GrenzeTest {
             // 7 seit Teil E3: der Satz, der eine Stadt ohne erfuellte Auflage
             // abweist. Ohne ihn erschien sie als warp.stadt-unbekannt, also als
             // Tippfehler.
-            Map.entry("WarpBefehle.java", 7));
+            Map.entry("WarpBefehle.java", 7),
+            Map.entry("WerderBefehle.java", 1));
 
     /**
      * Wie oft jede reine Zeilen-Methode von {@code ParzellenBefehle} AUFGERUFEN wird.
@@ -1035,6 +1039,12 @@ class GrenzeTest {
             "SCHUTZ_FREMDES_GRUNDSTUECK -> HANDBALKEN",
             "SCHUTZ_BUERGER_DARF_NICHT -> HANDBALKEN",
             "SCHUTZ_STADT_GESTOERT -> HANDBALKEN",
+            // Die fuenf Lagen von Hafenwerder [Schritt 10].
+            "SCHUTZ_INSEL_MEER -> HANDBALKEN",
+            "SCHUTZ_INSEL_ANKUNFT -> HANDBALKEN",
+            "SCHUTZ_INSEL_FREI -> HANDBALKEN",
+            "SCHUTZ_FREMDE_INSEL -> HANDBALKEN",
+            "SCHUTZ_INSEL_GESTOERT -> HANDBALKEN",
             "ANKUNFT_KEIN_SPAWNPUNKT -> SATZ",
             "ANKUNFT_ABENTEUER -> SATZ",
             "PORTAL_KEIN_AUSGANG -> SATZ");
@@ -1075,6 +1085,7 @@ class GrenzeTest {
             "BEFEHL_LADEN -> WORT",
             "BEFEHL_FREISTADT -> WORT",
             "BEFEHL_SHOP -> WORT",
+            "BEFEHL_WERDER -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",
@@ -2533,9 +2544,17 @@ class GrenzeTest {
         // ist richtig, denn jene Karte ist nach NAMEN geschluesselt, und
         // "... in " + ladenwelt + ..." ist eine Meldung. Der Name selbst ist nicht
         // falsch - falsch ist, ihn dort zu uebergeben, wo ein Schluessel erwartet wird.
+        // JEDE Gestalt des Namens und nicht nur die eine [geschaerft 18.11.2026]:
+        // Gesucht wurde "private final String weltschluessel", und damit war ein Feld,
+        // das anders heisst, fuer diese Tafel nicht vorhanden - die Verdienstwache haelt
+        // seit Schritt 10 einen inselschluessel. Das Muster trifft jetzt jedes Feld,
+        // dessen Name auf "schluessel" endet; ein Waechter, der nur eine Schreibweise
+        // kennt, ist dort blind, wo gerade gebaut wird.
+        var feldmuster = Pattern.compile(
+                "private final String \\w*[Ss]chluessel\\b");
         var verbraucher = new java.util.TreeSet<String>();
         for (java.nio.file.Path datei : Quellen.alle()) {
-            if (Quellen.text(datei).contains("private final String weltschluessel")) {
+            if (feldmuster.matcher(Quellen.text(datei)).find()) {
                 String name = datei.getFileName().toString();
                 verbraucher.add(name.substring(0, name.length() - ".java".length()));
             }
@@ -2553,6 +2572,15 @@ class GrenzeTest {
         var ohneUmwandlung = new java.util.TreeSet<String>();
         for (String klasse : verbraucher) {
             int stelle = plugin.indexOf("new " + klasse + "(");
+            if (stelle < 0) {
+                // AUCH DIE FABRIKFORM [18.11.2026]: Mehrere Klassen dieses Projekts
+                // entstehen ueber ueberBukkit(...), weil ein Stueck Bukkit darin als
+                // Naht steckt - die Angelwache etwa baut dort ihren Stapel. Gesucht
+                // wurde nur "new Klasse(", und damit galt sie als "wird gar nicht
+                // gebaut": eine Luecke dieser Tafel, keine des Programms. Die PRUEFUNG
+                // darunter bleibt dieselbe.
+                stelle = plugin.indexOf(klasse + ".ueberBukkit(");
+            }
             if (stelle < 0) {
                 ohneUmwandlung.add(klasse + " (wird gar nicht gebaut)");
                 continue;
@@ -3274,13 +3302,14 @@ class GrenzeTest {
      * <p>Ein Rang vergibt {@code freimarken.parzellen.5}, und die Zahl dahinter kennt nur
      * der Betreiber. Solche Knoten sind keine angemeldeten Rechte, sondern WERTE: Das
      * Programm liest sie aus den Rechten des Spielers heraus
-     * ({@code ParzellenBefehle.hoechsteAus}), statt zu fragen, ob er eines hat. Sie
+     * ({@code Rangzahl.hoechsteAus}), statt zu fragen, ob er eines hat. Sie
      * gehoeren darum nicht in {@code plugin.yml} - und was man nicht anmelden kann, darf
      * eine Probe nicht verlangen.
      */
     private static final List<String> RECHTE_VORSILBEN = List.of(
             "freimarken.gruppe.", "freimarken.parzellen.",
-            "freimarken.extra.gruppe.", "freimarken.extra.parzellen.");
+            "freimarken.extra.gruppe.", "freimarken.extra.parzellen.",
+            "freimarken.inseln.", "freimarken.extra.inseln.");
 
     @Test
     @DisplayName("31am - jeder Sprungschluessel steht in der ausgelieferten config.yml")
@@ -3565,6 +3594,138 @@ class GrenzeTest {
                         + " gerufen wird - dann ist freistadtbuch beim Bau des"
                         + " Shopbuchs noch null, und der Riegel wirkt in diesem Lauf"
                         + " nie");
+    }
+
+    @Test
+    @DisplayName("31av - die Spannen im Inselgenerator, Zeile fuer Zeile")
+    void dieSpannenImInselgenerator() {
+        // Dieselbe Tafel wie 31v fuer die Stadtfelder, und aus demselben Grund: Keine
+        // Probe kann den Generator laufen lassen - dazu braucht er ein ChunkData vom
+        // Server. Also wird der Quelltext gelesen, und zwar die UNTERE und die OBERE
+        // Grenze jeder Spanne als TEXT.
+        //
+        // Hier haengt mehr daran als dort, denn alle vier Spannen rechnen mit demselben
+        // GIPFEL: Verrutscht eine, hat die Spalte ein Loch oder einen Block zu viel - und
+        // zwar nur in der Tiefe, in der dieser Gipfel liegt. Auf dem Inselinneren waere
+        // das nie zu sehen, am Hang unter Wasser schon gar nicht.
+        String quelle = Quellen.text(datei("InselnGenerator.java"));
+        List<String> gefunden = new ArrayList<>();
+        var spanne = Pattern.compile(
+                "setRegion[(]lx, ([^,]+), lz, lx [+] 1, ([^,]+), lz [+] 1,").matcher(quelle);
+        while (spanne.find()) {
+            gefunden.add(spanne.group(1) + " .. " + spanne.group(2));
+        }
+
+        assertEquals(List.of(
+                        "unten .. unten + 1",
+                        "unten + 1 .. gipfel - Inselboden.ERDE_TIEF",
+                        "gipfel - Inselboden.ERDE_TIEF .. gipfel",
+                        "gipfel + 1 .. Inselboden.MEERESSPIEGEL + 1"),
+                gefunden,
+                "Grundgestein, Stein, Erde und das Wasser darueber - alle vier vom Gipfel"
+                        + " dieser Spalte aus gerechnet. Steht in einer wieder eine feste"
+                        + " Hoehe, liegt die Erde am Meeresgrund mitten im Stein und der"
+                        + " Grund selbst ist nackter Fels");
+
+        // Und der Riegel vor der Wasserspanne: Auf dem Inselinneren liegt der Gipfel
+        // UEBER der Wasserlinie, und eine Spanne von 64 bis 63 waere eine, die oben unter
+        // unten liegt. Was setRegion damit tut, ist nirgends zugesagt.
+        assertTrue(quelle.contains("if (gipfel < Inselboden.MEERESSPIEGEL) {"),
+                "der Riegel vor der Wasserspanne fehlt - dann bekommt setRegion auf jeder"
+                        + " Insel eine Spanne, deren Oberkante unter ihrer Unterkante"
+                        + " liegt");
+    }
+
+    @Test
+    @DisplayName("31aw - jede Weltart hat ihr Wort in der Datei und in der Klage")
+    void jedeWeltartHatIhrWort() {
+        // ZWEI STELLEN JE ART, und keine davon traegt ein Typ: Der Verzweig in
+        // Weltenliste.art uebersetzt das Wort aus der Datei, und die Klage zaehlt die
+        // erlaubten Worte auf. Eine neue Art ohne Wort ist eine, die niemand eintragen
+        // KANN - und das faellt nirgends auf, weil alles uebersetzt und jede Probe gruen
+        // bleibt. Eine Art, die in der Klage fehlt, kann der Betreiber nicht erraten.
+        //
+        // Die Liste kommt aus der AUFZAEHLUNG und nicht aus einer Abschrift: Eine
+        // handgeschriebene Liste hier waere die dritte Stelle, an der jemand eine Art
+        // vergisst.
+        String quelle = Quellen.text(datei("Weltenliste.java"));
+        // Die Klage steht ueber mehrere Zeilen und mehrere Stuecke. Zusammengelegt und
+        // von Anfuehrung und Plus befreit, steht sie als ein Satz da.
+        String satz = quelle.lines()
+                .map(String::strip)
+                .reduce("", (eines, naechstes) -> eines + " " + naechstes)
+                .replace("\"", "")
+                .replace("+", "");
+        int anfang = satz.indexOf("Erlaubt sind ");
+        int ende = satz.indexOf(" - uebersprungen.", anfang);
+        assertTrue(anfang > 0 && ende > anfang,
+                "die Klage ueber eine unbekannte Art zaehlt die erlaubten Worte nicht"
+                        + " mehr auf - dann weiss der Betreiber nicht, was er tippen"
+                        + " darf");
+        Set<String> inDerKlage = new TreeSet<>(List.of(satz
+                .substring(anfang + "Erlaubt sind ".length(), ende)
+                .replace(",", " ")
+                .trim()
+                .split("\\s+")));
+
+        Set<String> erwartet = new TreeSet<>();
+        for (Weltangabe.Art art : Weltangabe.Art.values()) {
+            String wort = art.name().toLowerCase(java.util.Locale.ROOT);
+            erwartet.add(wort);
+            assertTrue(quelle.contains("case \"" + wort + "\""),
+                    "die Art " + art + " hat kein Wort in Weltenliste.art - sie laesst"
+                            + " sich in der config.yml gar nicht eintragen");
+        }
+
+        assertEquals(erwartet, inDerKlage,
+                "die Klage nennt andere Worte als es Arten gibt - entweder fehlt eine"
+                        + " neue Art oder es steht eine darin, die es nicht mehr gibt");
+    }
+
+    @Test
+    @DisplayName("31ax - der Fangtausch sitzt VOR der Zahlung, und die Wache ist"
+            + " angemeldet")
+    void derFangtauschSitztVorDerZahlung() {
+        // ZWEI ZUSAGEN, DIE KEINE PROBE SEHEN KANN, und beide haengen an derselben
+        // Sache: Die Angelwache tauscht den Fang, die Verdienstwache bezahlt ihn - und
+        // zwar das Material des Stapels, der dann im Netz liegt. Steht der Tausch
+        // DANACH, ist die ganze Tabelle fuer den Verdienst unsichtbar: Die Lohnzeilen zu
+        // den neuen Faengen waeren Zeilen, die nie greifen, und niemand saehe es. Keine
+        // Probe kann das messen - dazu braeuchte sie den Ereignisbus des Servers.
+        //
+        // Gelesen wird die STUFE als Wort und nicht ihre Zahl: Die Zahl stuende als
+        // Erwartung in dieser Tafel, und Bukkit darf sie aendern.
+        Map<String, String> stufen = new TreeMap<>();
+        for (String datei : List.of("Angelwache.java", "Verdienstwache.java")) {
+            String quelle = Quellen.text(datei(datei));
+            int zweig = quelle.indexOf("public void beimFischen(PlayerFishEvent");
+            assertTrue(zweig > 0, datei + " hat keinen Zweig beimFischen mehr - dann"
+                    + " prueft diese Tafel die falsche Datei");
+            int stufe = quelle.lastIndexOf("EventPriority.", zweig);
+            assertTrue(stufe > 0, datei + ": vor beimFischen steht keine EventPriority");
+            String wort = quelle.substring(stufe + "EventPriority.".length(), zweig)
+                    .split("[^A-Z_]")[0];
+            stufen.put(datei, wort);
+        }
+
+        assertEquals(Map.of("Angelwache.java", "HIGH",
+                        "Verdienstwache.java", "MONITOR"),
+                stufen,
+                "HIGH laeuft VOR MONITOR - der Tausch zuerst, die Zahlung danach. Steht"
+                        + " hier etwas anderes, bezahlt die Lohntafel den Fang, den"
+                        + " Vanilla gewuerfelt hat, und die Angeltabelle ist fuer den"
+                        + " Verdienst nicht vorhanden");
+
+        // UND DIE ANMELDUNG. Eine Wache, die niemand am Server anmeldet, ist gebaut,
+        // gruen geprueft und im Spiel ohne Wirkung - dieselbe Lage wie bei der
+        // Truhenwache (31an) und beim Shopbuch (31au).
+        String plugin = Quellen.text(datei("FreimarkenPlugin.java"));
+        assertTrue(plugin.contains("registerEvents(angelwache, this)"),
+                "die Angelwache wird nicht angemeldet - dann tauscht sie nie einen Fang,"
+                        + " und kein Protokoll sagt es");
+        int bau = plugin.indexOf("Angelwache.ueberBukkit(");
+        assertTrue(bau > 0, "der Server baut die Wache nicht mehr ueber ueberBukkit -"
+                + " und nur dort steht, dass ein Fang EIN Stueck ist");
     }
 
 }

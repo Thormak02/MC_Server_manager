@@ -48,7 +48,7 @@ class SprachstandTest {
     }
 
     @Test
-    @DisplayName("23 - NUR_BEIM_START ist GENAU diese vierzehn")
+    @DisplayName("23 - NUR_BEIM_START ist GENAU diese fuenfzehn")
     void nurBeimStartIstGenauDieseZehn() {
         Set<String> erwartet = new LinkedHashSet<>(List.of(
                 "befehl.beschreibung.freimarken", "befehl.beschreibung.parzelle",
@@ -58,7 +58,10 @@ class SprachstandTest {
                 "befehl.beschreibung.tpdeny", "befehl.beschreibung.beruf",
                 "befehl.beschreibung.markt", "befehl.beschreibung.laden",
                 "befehl.beschreibung.freistadt",
-                "befehl.beschreibung.shop"));
+                "befehl.beschreibung.shop",
+                // Schritt 10: /werder. Auch diese Beschreibung steht seit der Anmeldung
+                // im Befehlsbaum - /help zeigt eine geaenderte erst nach einem Neustart.
+                "befehl.beschreibung.werder"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachstand.NUR_BEIM_START.forEach(satz -> gefuehrt.add(satz.pfad()));
         // assertEquals auf Groesse UND Inhalt: contains haette auch eine Liste mit einem
@@ -103,9 +106,9 @@ class SprachstandTest {
                 + " schiefging, nicht, dass die Beschreibungen ohnehin nicht neuladbar"
                 + " sind - und sucht den Fehler an der falschen Zeile");
         assertTrue(ohne.get(0).contains("befehl.beschreibung.*"), ohne.get(0));
-        // ZWOELF seit /laden: Die Zahl waechst mit jedem Befehl, und sie gehoert in
+        // FUENFZEHN seit /werder: Die Zahl waechst mit jedem Befehl, und sie gehoert in
         // die Zeile - der Betreiber sieht daran, ob seine Aenderung dabei ist.
-        assertTrue(ohne.get(0).contains("14 Saetze"), ohne.get(0));
+        assertTrue(ohne.get(0).contains("15 Saetze"), ohne.get(0));
     }
 
     @Test

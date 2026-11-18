@@ -68,6 +68,33 @@ public interface BesitzLager {
                               long preis, String name);
 
     /**
+     * Eine Meerinsel nehmen - ein ganzes Inselfeld auf einmal [Schritt 10].
+     *
+     * <p>Der DRITTE Weg neben {@link #anlegen} und {@link #freistadtAnlegen}, und aus
+     * demselben Grund wie jener: Jede Umsetzung fuehrt ihre Art als LITERAL. Ein
+     * durchgereichter {@code art}-Parameter liesse jeden Aufrufer jede Art erzeugen, auch
+     * eine GRUPPE ohne Kinder.
+     *
+     * <p><b>x und z sind FELDnummern</b>, keine Blockkoordinaten - wie bei
+     * {@link #freistadtAnlegen}. Die Umrechnung macht der {@link Inselplan}. Dadurch
+     * bleibt {@link #finde} auch fuer eine Insel eine Punktabfrage, und die Schutzwache
+     * braucht keinen zweiten Weg.
+     *
+     * <p><b>Eine Insel hat KEINEN Namen und KEINE Kasse</b>, und darum hat dieser Weg
+     * auch kein Namensargument: Sie ist Eigentum und keine Siedlung. Die vier Spalten,
+     * die nur eine Freistadt fuellt - Name, Kasse, Regeln, Besuchstag -, bleiben leer;
+     * {@link Parzelle} weist eine Zeile ab, die sie trotzdem traegt.
+     *
+     * @throws IllegalStateException wenn das Feld schon vergeben ist - ein Riegel der
+     *                               Ablage und keine Pruefung des Aufrufers. Eine
+     *                               Pruefung davor haette zwischen Fragen und Schreiben
+     *                               eine Luecke, und zwei Spieler, die gleichzeitig
+     *                               tippen, bekaemen dasselbe Feld
+     */
+    Parzelle werderAnlegen(String welt, int feldX, int feldZ, UUID eigentuemer,
+                           long preis);
+
+    /**
      * Alle Freistaedte dieser Welt, nach Namen sortiert.
      *
      * <p>Die EINE Frage, aus der alles Weitere faellt: welches Feld noch frei ist, wo ein

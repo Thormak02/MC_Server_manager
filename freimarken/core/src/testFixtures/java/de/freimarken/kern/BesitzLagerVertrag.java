@@ -37,6 +37,16 @@ public abstract class BesitzLagerVertrag {
      */
     protected static final String STADTWELT = "freimarken:freistaedte";
 
+    /**
+     * Die Welt der Meerinseln - eine DRITTE, aus genau dem Grund von {@link #STADTWELT}.
+     *
+     * <p>{@code anzahlVon} zaehlt alles, was auf dem Raster liegt, ohne nach der Art zu
+     * fragen. Laegen Inseln und Parzellen in derselben Welt, zaehlte eine Insel als
+     * Parzelle mit - die naechste Parzelle koestete das Doppelte und die Rangobergrenze
+     * waere frueher erreicht. Der Riegel ist der WELTSCHLUESSEL, nicht die Art.
+     */
+    protected static final String INSELWELT = "freimarken:hafenwerder";
+
     /** Ein leeres Lager der zu pruefenden Art. */
     protected abstract BesitzLager lager();
 
@@ -158,6 +168,140 @@ public abstract class BesitzLagerVertrag {
                 lager.finde(WELT, 0, 0).orElseThrow().kasse(),
                 "auch nach dem Weg durch die Ablage - eine Umsetzung, die die Spalte"
                         + " beim Lesen mit einem Ersatzwert fuellt, faellt hier auf");
+    }
+
+    // --- Die Meerinseln [Schritt 10] -------------------------------------------
+
+    @Test
+    @DisplayName("Eine Insel wird genommen und gefunden - als art WERDER")
+    void werderAnlegenUndFinden() {
+        BesitzLager lager = lager();
+        assertTrue(lager.finde(INSELWELT, 2, -3).isEmpty());
+
+        Parzelle insel = lager.werderAnlegen(INSELWELT, 2, -3, anna, 75_000L);
+
+        assertEquals(2, insel.x());
+        assertEquals(-3, insel.z());
+        assertEquals(anna, insel.eigentuemer());
+        assertEquals(75_000L, insel.preis());
+        assertTrue(insel.istWerder(), "die Art steht in der Zeile und nicht nur im Buch");
+        assertEquals(Zustand.AKTIV, insel.zustand());
+
+        Parzelle gefunden = lager.finde(INSELWELT, 2, -3).orElseThrow();
+        assertEquals(insel.id(), gefunden.id());
+        assertTrue(gefunden.istWerder(),
+                "auch nach dem Weg durch die Ablage - eine Umsetzung, die die Art beim"
+                        + " Lesen auf parzelle zurueckfallen laesst, faellt hier auf");
+    }
+
+    @Test
+    @DisplayName("Eine Insel hat KEINEN Namen, KEINE Kasse, KEINE Regeln, KEINEN Besuch")
+    void werderHatKeineStadtspalten() {
+        // Die vier Spalten, die nur eine Freistadt fuellt. Eine Insel ist Eigentum und
+        // keine Siedlung; eine Kontonummer an ihr waere ein Konto, auf das nie etwas
+        // fliesst, und ein Besuchstag ein Tag, den niemand liest.
+        BesitzLager lager = lager();
+        Parzelle insel = lager.werderAnlegen(INSELWELT, 0, 0, anna, 75_000L);
+
+        assertFalse(insel.istFreistadt());
+        assertEquals(Parzelle.KEIN_NAME, insel.name());
+        assertEquals(Parzelle.KEINE_KASSE, insel.kasse());
+        assertEquals(Parzelle.KEINE_REGELN, insel.regeln());
+        assertEquals(Parzelle.NIE_BESUCHT, insel.besucht());
+
+        Parzelle gelesen = lager.finde(INSELWELT, 0, 0).orElseThrow();
+        assertEquals(Parzelle.KEIN_NAME, gelesen.name());
+        assertEquals(Parzelle.KEINE_KASSE, gelesen.kasse());
+        assertEquals(Parzelle.KEINE_REGELN, gelesen.regeln());
+        assertEquals(Parzelle.NIE_BESUCHT, gelesen.besucht());
+    }
+
+    @Test
+    @DisplayName("Ein belegtes Inselfeld laesst sich nicht zweimal nehmen")
+    void werderNurEinmal() {
+        // Der Riegel gehoert der ABLAGE und nicht dem Aufrufer: Eine Pruefung davor
+        // haette zwischen Fragen und Schreiben eine Luecke, und zwei Spieler, die
+        // gleichzeitig tippen, bekaemen dasselbe Feld - beide haetten gezahlt.
+        BesitzLager lager = lager();
+        lager.werderAnlegen(INSELWELT, 5, 5, anna, 75_000L);
+
+        assertThrows(IllegalStateException.class,
+                () -> lager.werderAnlegen(INSELWELT, 5, 5, bert, 75_000L));
+        assertEquals(anna, lager.finde(INSELWELT, 5, 5).orElseThrow().eigentuemer(),
+                "und die erste Insel steht unveraendert");
+    }
+
+    @Test
+    @DisplayName("Eine Insel ZAEHLT fuer ihren Besitzer - das Stadtverzeichnis kennt sie nicht")
+    void werderZaehltAberIstKeineStadt() {
+        // Zwei Zusagen in einer Probe, weil sie dieselbe Sache von zwei Seiten sind:
+        // Eine Insel liegt auf einem Raster, also zaehlt sie bei anzahlVon mit - daran
+        // haengt die Hoechstzahl je Rang. Sie ist aber keine Stadt, also darf staedteIn
+        // sie nicht nennen - sonst erschiene sie in /warp freistadt und in jeder Liste.
+        BesitzLager lager = lager();
+        lager.werderAnlegen(INSELWELT, 1, 1, anna, 75_000L);
+        lager.werderAnlegen(INSELWELT, 2, 1, anna, 75_000L);
+
+        assertEquals(2, lager.anzahlVon(INSELWELT, anna));
+        assertEquals(2, lager.vonSpieler(INSELWELT, anna).size());
+        assertEquals(0, lager.anzahlVon(INSELWELT, bert));
+        assertTrue(lager.staedteIn(INSELWELT).isEmpty(),
+                "eine Insel ist keine Freistadt - staedteIn fragt die ART und nicht die"
+                        + " Lage");
+        assertEquals(0, lager.anzahlVon(WELT, anna),
+                "und in der Marktstadt zaehlt sie gar nicht mit - sonst koestete die"
+                        + " naechste Parzelle das Doppelte");
+    }
+
+    @Test
+    @DisplayName("Die vier Stadtsetzer weisen eine Insel AB")
+    void stadtsetzerWeisenEineInselAb() {
+        // Dieselbe Zusage wie fuer eine Marktstadtparzelle, und sie ist hier NEU zu
+        // pruefen: Die Riegel fragen "ist Freistadt", und eine Insel ist die erste Art,
+        // die weder das eine noch das andere ist. Ein stilles Hinnehmen waere eine
+        // Einstellung, die der Betreiber setzt und die lautlos nichts tut.
+        BesitzLager lager = lager();
+        Parzelle insel = lager.werderAnlegen(INSELWELT, 7, 7, anna, 75_000L);
+
+        assertThrows(RuntimeException.class,
+                () -> lager.regelnSetzen(insel.id(), "kein Feuer"));
+        assertThrows(RuntimeException.class,
+                () -> lager.besuchSetzen(insel.id(), LocalDate.of(2026, 11, 18)));
+        assertThrows(RuntimeException.class,
+                () -> lager.buergerrechteSetzen(insel.id(), Set.of(Tat.BAUEN)));
+        assertThrows(RuntimeException.class,
+                () -> lager.zustandSetzen(insel.id(), Zustand.VERFALLEN));
+    }
+
+    @Test
+    @DisplayName("Mitbauer gelten auch auf einer Insel - und sie UEBERLEBEN")
+    void mitbauerAufDerInsel() {
+        // Die Gegenrichtung zur Probe darueber: Mitbauer haengen am Datensatz Besitz und
+        // gelten fuer JEDE Art. Ohne diese Zusage waere eine Insel ein Grundstueck, auf
+        // dem niemand mitbauen kann - und das waere der einzige Besitz im Spiel ohne
+        // diese Moeglichkeit.
+        BesitzLager lager = lager();
+        Parzelle insel = lager.werderAnlegen(INSELWELT, -4, 8, anna, 75_000L);
+
+        lager.mitbauerSetzen(insel.id(), Set.of(bert));
+
+        assertEquals(Set.of(bert),
+                lager.finde(INSELWELT, -4, 8).orElseThrow().mitbauer());
+        assertTrue(lager.finde(INSELWELT, -4, 8).orElseThrow().istWerder(),
+                "und die Art bleibt, was sie war - eine Umsetzung, die die Zeile beim"
+                        + " Mitbauer-Setzen neu zusammenbaut, verliert sie hier");
+    }
+
+    @Test
+    @DisplayName("Eine Insel laesst sich freigeben")
+    void werderEntfernen() {
+        BesitzLager lager = lager();
+        Parzelle insel = lager.werderAnlegen(INSELWELT, 3, 3, anna, 75_000L);
+
+        lager.entfernen(insel.id());
+
+        assertTrue(lager.finde(INSELWELT, 3, 3).isEmpty());
+        assertEquals(0, lager.anzahlVon(INSELWELT, anna));
     }
 
     @Test

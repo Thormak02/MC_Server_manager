@@ -413,7 +413,7 @@ class VerdienstlisteTest {
 
         assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
         assertTrue(ergebnis.bericht().stream().anyMatch(zeile ->
-                        zeile.startsWith("9 von 9 Verdienstzeilen")),
+                        zeile.startsWith("10 von 10 Verdienstzeilen")),
                 ergebnis.bericht().toString());
         // Jeder Schluessel muss NAMENTLICH dastehen - eine Zahl allein sagt dem
         // Betreiber nicht, welche Zeile er nachtragen soll.
@@ -425,7 +425,8 @@ class VerdienstlisteTest {
                                          Verdienstwerte.PFAD_STUNDENMENGE,
                                          Verdienstwerte.PFAD_SPAWNGRUENDE,
                                          Verdienstwerte.PFAD_SAATGUT,
-                                         Verdienstwerte.PFAD_LOEHNE}) {
+                                         Verdienstwerte.PFAD_LOEHNE,
+                                         Verdienstwerte.PFAD_INSELBONUS}) {
             assertTrue(ergebnis.bericht().toString().contains(pfad), pfad);
         }
     }
@@ -886,4 +887,79 @@ class VerdienstlisteTest {
                 "die Vorgabe traegt mit Absicht keine Loehne");
         assertTrue(Wirtschaftswerte.VORGABE.verdienst().loehne().leer());
     }
+    // --- Der Inselbonus [Schritt 10, Plan 9.1] --------------------------------
+
+    @Test
+    @DisplayName("Der Inselbonus kommt Zeile fuer Zeile an")
+    void inselbonusKommtAn() {
+        var ergebnis = lies("""
+                verdienst:
+                  inselbonus:
+                    fischer: 80
+                    bergmann: 0
+                """);
+
+        assertEquals(List.of(), ergebnis.klagen(), ergebnis.klagen().toString());
+        assertEquals(80, ergebnis.werte().inselbonusFuer("fischer"));
+        assertEquals(0, ergebnis.werte().inselbonusFuer("bergmann"),
+                "eine 0 ist erlaubt: Sie steht fuer einen Beruf, der ausdruecklich"
+                        + " KEINEN Zuschlag bekommt - und das liest der Betreiber im"
+                        + " Bericht");
+    }
+
+    @Test
+    @DisplayName("Ein Beruf, den es nicht gibt, kostet NUR SEINE ZEILE")
+    void unbekannterBerufKostetNurSeineZeile() {
+        var ergebnis = lies("""
+                verdienst:
+                  inselbonus:
+                    seeraeuber: 50
+                    fischer: 20
+                """);
+
+        assertTrue(klagtUeber(ergebnis, Verdienstwerte.PFAD_INSELBONUS + ".seeraeuber"),
+                ergebnis.klagen().toString());
+        assertEquals(20, ergebnis.werte().inselbonusFuer("fischer"),
+                "die uebrigen gelten - ein Tippfehler darf nicht den ganzen Bonus"
+                        + " kosten");
+        assertEquals(0, ergebnis.werte().inselbonusFuer("seeraeuber"));
+    }
+
+    @Test
+    @DisplayName("Ein Zuschlag, der keine Zahl oder zu gross ist, wird verworfen")
+    void kaputterZuschlag() {
+        var ergebnis = lies("""
+                verdienst:
+                  inselbonus:
+                    fischer: viel
+                    bergmann: 5000
+                    bauer: 10
+                """);
+
+        assertEquals(2, ergebnis.klagen().size(), ergebnis.klagen().toString());
+        assertEquals(10, ergebnis.werte().inselbonusFuer("bauer"));
+        assertEquals(0, ergebnis.werte().inselbonusFuer("fischer"));
+    }
+
+    @Test
+    @DisplayName("Eine LEERE Liste heisst KEIN Zuschlag - nicht die Vorgabe")
+    void leereListeHeisstKeinZuschlag() {
+        // Der Unterschied, der zaehlt: Wer alle Zeilen herausnimmt, will keinen Bonus -
+        // und soll ihn nicht aus der Vorgabe zurueckbekommen. Fehlt der Abschnitt
+        // dagegen ganz, gilt das Programm.
+        var ohneZeilen = lies("""
+                verdienst:
+                  inselbonus: {}
+                """);
+        var ohneAbschnitt = lies("""
+                verdienst:
+                  tagesdeckel: 20000
+                """);
+
+        assertEquals(0, ohneZeilen.werte().inselbonusFuer("fischer"));
+        assertEquals(List.of(), ohneZeilen.klagen(), ohneZeilen.klagen().toString());
+        assertEquals(50, ohneAbschnitt.werte().inselbonusFuer("fischer"),
+                "fehlt der ganze Abschnitt, gilt der Fischer des Programms");
+    }
+
 }

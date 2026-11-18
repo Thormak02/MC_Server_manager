@@ -123,4 +123,49 @@ class VerdienstwerteTest {
         // getippt hat - sie darf nicht stillschweigend abgeschnitten werden.
         assertFalse(Verdienstwerte.brauchbareAnzahl(Integer.MAX_VALUE + 1L));
     }
+    @Test
+    @DisplayName("Der Inselbonus: kleingeschrieben gefragt, unbekannt ist 0")
+    void inselbonus() {
+        assertEquals(50, Verdienstwerte.VORGABE.inselbonusFuer("fischer"),
+                "Plan 9.1 nennt genau diesen einen Beruf");
+        assertEquals(50, Verdienstwerte.VORGABE.inselbonusFuer("  Fischer  "),
+                "kleingeschrieben und beschnitten gefragt, wie jeder Berufsname in"
+                        + " diesem Projekt - sonst waere der Vergleich immer ungleich");
+        assertEquals(0, Verdienstwerte.VORGABE.inselbonusFuer("reeder"),
+                "der Reeder steht ausdruecklich NICHT dabei: Sein Seehandel ist nicht"
+                        + " gebaut, und ein Zuschlag darauf waere eine Zeile ohne"
+                        + " Wirkung");
+        assertEquals(0, Verdienstwerte.VORGABE.inselbonusFuer(null));
+    }
+
+    @Test
+    @DisplayName("Ein Zuschlag ausserhalb 0 bis 1000 Prozent wird abgewiesen")
+    void inselbonusRiegel() {
+        assertThrows(IllegalArgumentException.class,
+                () -> Verdienstwerte.VORGABE.mitInselbonus(
+                        java.util.Map.of("fischer", -1)));
+        assertThrows(IllegalArgumentException.class,
+                () -> Verdienstwerte.VORGABE.mitInselbonus(java.util.Map.of("fischer",
+                        Verdienstwerte.HOECHSTER_INSELBONUS + 1)));
+        assertThrows(IllegalArgumentException.class,
+                () -> Verdienstwerte.VORGABE.mitInselbonus(null));
+        assertEquals(0, Verdienstwerte.VORGABE.mitInselbonus(java.util.Map.of())
+                        .inselbonusFuer("fischer"),
+                "eine LEERE Abbildung ist erlaubt und heisst: kein Zuschlag");
+    }
+
+    @Test
+    @DisplayName("Der Inselbonus wird KOPIERT - von aussen nicht zu aendern")
+    void inselbonusWirdKopiert() {
+        java.util.Map<String, Integer> meiner = new java.util.HashMap<>();
+        meiner.put("fischer", 10);
+        Verdienstwerte werte = Verdienstwerte.VORGABE.mitInselbonus(meiner);
+
+        meiner.put("bergmann", 900);
+
+        assertEquals(0, werte.inselbonusFuer("bergmann"),
+                "sonst waere der Satz, der bei JEDEM bezahlten Block gelesen wird, von"
+                        + " aussen veraenderlich - und zwar aus einem anderen Faden");
+    }
+
 }

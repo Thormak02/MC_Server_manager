@@ -64,6 +64,12 @@ public class Lagerattrappe implements BesitzLager {
     }
 
     @Override
+    public Parzelle werderAnlegen(String welt, int feldX, int feldZ, UUID eigentuemer,
+                                  long preis) {
+        return echtes.werderAnlegen(welt, feldX, feldZ, eigentuemer, preis);
+    }
+
+    @Override
     public List<Parzelle> staedteIn(String welt) {
         return echtes.staedteIn(welt);
     }

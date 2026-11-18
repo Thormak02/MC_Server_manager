@@ -261,6 +261,30 @@ public final class Wirtschaftsstand {
         nenneJaNein(geaendert, Freistadtwerte.PFAD_AUFLAGE_LADENRECHT,
                 alt.freistaedte().auflageLadenrecht(),
                 neu.freistaedte().auflageLadenrecht());
+        // Die Inselzahlen, aus genau demselben Grund wie die Freistadtzahlen darueber:
+        // Sie werden beim Gebrauch gefragt, es wird nichts gebaut und nichts angemeldet.
+        // Ohne diese zwei Zeilen aenderte sich der Preis einer Insel beim Neuladen stumm.
+        nenneZahl(geaendert, Inselwerte.PFAD_PREIS,
+                alt.inseln().preis(), neu.inseln().preis());
+        nenneZahl(geaendert, Inselwerte.PFAD_HOECHSTZAHL,
+                alt.inseln().hoechstzahl(), neu.inseln().hoechstzahl());
+        // Der Inselbonus als MENGE der Berufe: Welcher Beruf dazukam und welcher ging,
+        // ist das, was der Betreiber lesen will. Die ZAHL je Beruf nennt der
+        // Startbericht des Lesers - hier stuende sonst eine Zeile je Beruf, und bei
+        // einem Satz, der sich sonst nicht geaendert hat, waere das die laengste.
+        nenneMenge(geaendert, Verdienstwerte.PFAD_INSELBONUS,
+                alt.verdienst().inselbonus().keySet(),
+                neu.verdienst().inselbonus().keySet());
+        // Die Angeltabelle, aus demselben Grund wie die zwei Bloecke darueber. Der
+        // SCHALTER und die HAEUFIGKEIT als Zahl, die Tabelle als Menge: Welche Zeilen
+        // dazukamen und welche gingen, ist das, was der Betreiber lesen will - "dazu:
+        // sponge, weg: trident" sagt mehr als "die Tabelle hat sich geaendert".
+        nenneJaNein(geaendert, Angelwerte.PFAD_AN,
+                alt.angeln().an(), neu.angeln().an());
+        nenneZahl(geaendert, Angelwerte.PFAD_HAEUFIGKEIT,
+                alt.angeln().haeufigkeitProzent(), neu.angeln().haeufigkeitProzent());
+        nenneMenge(geaendert, Angelwerte.PFAD_FAENGE,
+                alt.angeln().gewichte().keySet(), neu.angeln().gewichte().keySet());
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");

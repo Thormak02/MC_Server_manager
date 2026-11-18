@@ -35,11 +35,14 @@ final class Weltenliste {
 
     /**
      * @param abschnitt    der Abschnitt {@code welten:}, darf {@code null} sein
-     * @param rasterwelt   der Name der einen Welt, die das Parzellenraster tragen darf
-     * @param ankunftswelt die Welt, in der die Tore stehen - dort landet auch, wer neu ist
+     * @param rasterwelt    der Name der einen Welt, die das Parzellenraster tragen darf
+     * @param ankunftswelt  die Welt, in der die Tore stehen - dort landet auch, wer neu ist
+     * @param freistadtwelt die eine Welt, die Stadtfelder tragen darf
+     * @param inselwelt     die eine Welt, die Inselfelder tragen darf
      */
     static Ergebnis ausKonfiguration(ConfigurationSection abschnitt, String rasterwelt,
-                                     String ankunftswelt, String freistadtwelt) {
+                                     String ankunftswelt, String freistadtwelt,
+                                     String inselwelt) {
         List<Weltangabe> welten = new ArrayList<>();
         List<String> klagen = new ArrayList<>();
         if (abschnitt == null) {
@@ -66,7 +69,7 @@ final class Weltenliste {
                 // machen, mitten in den Parzellen. Lieber laut aussteigen.
                 klagen.add("welten." + name + ".art fehlt oder ist unbekannt ("
                         + eintrag.getString("art") + "). Erlaubt sind raster, gewoehnlich,"
-                        + " leer, flach, stadtfelder - uebersprungen.");
+                        + " leer, flach, stadtfelder, inseln - uebersprungen.");
                 continue;
             }
             if (art == Weltangabe.Art.RASTER != name.equals(rasterwelt)) {
@@ -105,6 +108,22 @@ final class Weltenliste {
                                 + " traegt allein welten." + freistadtwelt
                                 + " - uebersprungen. Eine zweite Stadtfelderwelt haette"
                                 + " Felder, aber kein Gruendungsbuch und keinen Schutz.");
+                continue;
+            }
+            if (art == Weltangabe.Art.INSELN != name.equals(inselwelt)) {
+                // Dieselbe Bindung wie bei den Stadtfeldern und mit derselben milderen
+                // Folge: Die Welt wird uebersprungen, der Server laeuft weiter. Eine
+                // zweite Inselwelt bekaeme Inseln und eine Weltgrenze, aber KEIN
+                // Inselbuch - Felder, die niemand nehmen und niemand schuetzen kann.
+                klagen.add(name.equals(inselwelt)
+                        ? "welten." + name + ".art muss inseln sein (steht: "
+                                + eintrag.getString("art") + ") - uebersprungen."
+                                + " inseln.welt zeigt auf diese Welt, und ohne Inselfelder"
+                                + " gaebe es dort keine Insel zu nehmen."
+                        : "welten." + name + ".art ist inseln, aber die Inselfelder traegt"
+                                + " allein welten." + inselwelt + " - uebersprungen. Eine"
+                                + " zweite Inselwelt haette Inseln, aber kein Inselbuch"
+                                + " und keinen Schutz.");
                 continue;
             }
             World.Environment umgebung = umgebung(eintrag.getString("umgebung", "normal"));
@@ -490,6 +509,7 @@ final class Weltenliste {
             case "leer" -> Weltangabe.Art.LEER;
             case "flach" -> Weltangabe.Art.FLACH;
             case "stadtfelder" -> Weltangabe.Art.STADTFELDER;
+            case "inseln" -> Weltangabe.Art.INSELN;
             default -> null;
         };
     }

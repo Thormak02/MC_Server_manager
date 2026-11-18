@@ -25,7 +25,7 @@ class WeltenlisteTest {
         return Weltenliste.ausKonfiguration(
                 YamlConfiguration.loadConfiguration(new java.io.StringReader(yaml))
                         .getConfigurationSection("welten"), "marktstadt", "altfurt",
-                "freistaedte");
+                "freistaedte", "hafenwerder");
     }
 
     @Test
@@ -419,7 +419,7 @@ class WeltenlisteTest {
                     strom, java.nio.charset.StandardCharsets.UTF_8));
             var ergebnis = Weltenliste.ausKonfiguration(
                     datei.getConfigurationSection("welten"), "marktstadt", "altfurt",
-                "freistaedte");
+                "freistaedte", "hafenwerder");
 
             assertTrue(ergebnis.klagen().isEmpty(),
                     "die ausgelieferte Datei klagt: " + ergebnis.klagen());
@@ -539,6 +539,49 @@ class WeltenlisteTest {
         assertTrue(ergebnis.welten().isEmpty(), ergebnis.welten().toString());
         assertEquals(1, ergebnis.klagen().size());
         assertTrue(ergebnis.klagen().get(0).contains("muss stadtfelder sein"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Eine zweite Inselwelt gibt es nicht")
+    void nurEineInselwelt() {
+        // Dieselbe Bindung wie bei den Stadtfeldern: Die zweite bekaeme Inseln und eine
+        // Weltgrenze vom selben Generator, aber KEIN Inselbuch - Felder, die niemand
+        // nehmen und niemand schuetzen kann.
+        var ergebnis = lies("""
+                welten:
+                  hafenwerder:
+                    art: inseln
+                    kante: 5000
+                  hafenwerder2:
+                    art: inseln
+                    kante: 5000
+                """);
+
+        assertEquals(java.util.List.of("hafenwerder"),
+                ergebnis.welten().stream().map(Weltangabe::name).toList());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("allein welten.hafenwerder"),
+                ergebnis.klagen().get(0));
+    }
+
+    @Test
+    @DisplayName("Die Inselwelt MUSS inseln tragen - die andere Richtung")
+    void inselweltMussInselnSein() {
+        // Die Bindung gilt in BEIDE Richtungen. Ohne diese Haelfte entstuende die Welt,
+        // auf die inseln.welt zeigt, als gewoehnliche Welt mit Huegeln und Baeumen - und
+        // das Inselbuch vergaebe darin Felder, auf denen gar keine Insel liegt.
+        var ergebnis = lies("""
+                welten:
+                  hafenwerder:
+                    art: gewoehnlich
+                    startwert: 7
+                    kante: 5000
+                """);
+
+        assertTrue(ergebnis.welten().isEmpty(), ergebnis.welten().toString());
+        assertEquals(1, ergebnis.klagen().size());
+        assertTrue(ergebnis.klagen().get(0).contains("muss inseln sein"),
                 ergebnis.klagen().get(0));
     }
 
@@ -673,7 +716,7 @@ class WeltenlisteTest {
 
         var ergebnis = Weltenliste.ausKonfiguration(
                 eigene.getConfigurationSection("welten"), "marktstadt", "altfurt",
-                "freistaedte");
+                "freistaedte", "hafenwerder");
 
         assertEquals(java.util.List.of("marktstadt"),
                 ergebnis.welten().stream().map(Weltangabe::name).toList());

@@ -72,10 +72,28 @@ public final class Verdienstregel {
      * <p><b>Ein kleiner Lohn kann durch die Minderung auf 0 fallen</b>, und das ist
      * richtig gerechnet: Vier Pfennige mal ein Zehntel sind null. Wer das nicht will,
      * setzt den Lohn hoeher oder den Boden; die Rechnung erfindet keinen Pfennig.
+     *
+     * <p><b>Der INSELBONUS liegt VOR der Minderung</b> [Schritt 10, Plan 9.1], und das
+     * ist eine Entscheidung mit Folgen: Ein Zuschlag auf den vollen Satz wird von der
+     * Minderung mitgedaempft - der hundertste Fisch bringt mit Zuschlag genauso viel
+     * mehr wie der erste, naemlich die Haelfte. Danach gerechnet waere der Zuschlag am
+     * Ende einer Stunde der GROESSERE Teil des Lohns, und die Bremse gegen den
+     * Klickautomaten waere in Hafenwerder die schwaechste.
+     *
+     * <p><b>Der Zuschlag haengt am BERUF, und gezahlt wird der hoechste Satz</b>: Also
+     * wird jeder gehaltene Beruf einmal mit SEINEM Zuschlag gerechnet, und der beste
+     * gewinnt. {@code hoechsterLohn} allein genuegt dafuer nicht - es sagt nicht, WELCHER
+     * Beruf den besten Satz traegt, und mit dem Zuschlag kann ein schlechter Satz der
+     * beste werden.
+     *
+     * @param inDerInselwelt ob der Spieler in der Welt aus {@code inseln.welt} steht.
+     *                       Ein Wahrheitswert und kein Weltname: Welche Welt gemeint
+     *                       ist, entscheidet das Plugin an EINER Stelle, und der Kern
+     *                       kennt keine Weltschluessel
      */
     public static long pfennige(Verdienstwerte werte, Set<String> berufe,
                                 Taetigkeit taetigkeit, String material,
-                                int schonGezaehlt) {
+                                int schonGezaehlt, boolean inDerInselwelt) {
         if (werte == null) {
             throw new IllegalArgumentException("Ohne Werte gibt es keinen Lohn");
         }
@@ -86,7 +104,31 @@ public final class Verdienstregel {
         if (voll <= 0L) {
             return 0L;
         }
+        if (inDerInselwelt) {
+            voll = Math.max(voll, mitZuschlag(werte, berufe, taetigkeit, material));
+        }
         return voll * anteilProzent(werte, schonGezaehlt) / 100L;
+    }
+
+    /**
+     * Der hoechste Satz, wenn jeder Beruf seinen eigenen Zuschlag mitbringt.
+     *
+     * <p>Laeuft nur in der Inselwelt und nur, wenn ueberhaupt etwas zu verdienen ist -
+     * zwei Riegel beim Aufrufer. Die Schleife geht ueber die GEHALTENEN Berufe, also
+     * ueber hoechstens drei Namen.
+     */
+    private static long mitZuschlag(Verdienstwerte werte, Set<String> berufe,
+                                    Taetigkeit taetigkeit, String material) {
+        long bester = 0L;
+        for (String beruf : berufe) {
+            long satz = werte.loehne().pfennige(beruf, taetigkeit, material);
+            if (satz <= 0L) {
+                continue;
+            }
+            bester = Math.max(bester,
+                    satz + satz * werte.inselbonusFuer(beruf) / 100L);
+        }
+        return bester;
     }
 
     /**

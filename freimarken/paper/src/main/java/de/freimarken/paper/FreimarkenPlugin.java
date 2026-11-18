@@ -30,6 +30,9 @@ import de.freimarken.kern.Feldgrenze;
 import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Grenzregel;
 import de.freimarken.kern.Grundstuecksbuch;
+import de.freimarken.kern.Inselbuch;
+import de.freimarken.kern.Inselgrenze;
+import de.freimarken.kern.Inselplan;
 import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Kistenshop;
@@ -138,6 +141,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     private final StadtfelderGenerator stadtfelder =
             new StadtfelderGenerator(Stadtfeldplan.freistaedte());
+
+    /**
+     * Der Generator von Hafenwerder - gleiche Inseln in gleichem Abstand [18.11.2026].
+     *
+     * <p>Ein Feld wie beim Nachbarn darueber, und aus demselben Grund: Bukkit fragt den
+     * Generator aus mehreren Faeden, und er hat keinen veraenderlichen Zustand. Zwei
+     * Exemplare waeren zwei Rechnungen fuer dieselbe Welt.
+     */
+    private final InselnGenerator inseln =
+            new InselnGenerator(Inselplan.hafenwerder());
 
     /**
      * Die EINE Wanduhr des Plugins.
@@ -312,6 +325,35 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
     /** In welcher Welt die Stadtfelder liegen - ohne Namensraum, wie in der config.yml. */
     private String freistadtwelt = Freistadtliste.VORGABE_WELT;
+
+    /** In welcher Welt die Inselfelder liegen - ohne Namensraum, wie in der config.yml. */
+    private String inselwelt = Inselliste.VORGABE_WELT;
+
+    /**
+     * Die Regel ueber die Meerinseln - {@code null}, solange die Welt fehlt.
+     *
+     * <p>Dieselbe Form wie beim Freistadtbuch: Ein fehlendes Buch kostet den Start
+     * NICHT, {@code /werder} sagt es dann. Aus der Marktstadt kommen die
+     * Parzellennummern, aus Hafenwerder kommt nichts, was der Rest des Spiels braucht.
+     */
+    private Inselbuch inselbuch;
+
+    /**
+     * Die Hand, die in Hafenwerder den Fang tauscht - {@code null} ohne Inselwelt.
+     *
+     * <p>Ein Feld und keine oertliche Groesse, aus demselben Grund wie bei den anderen
+     * Wachen: Sie wird am Server angemeldet, und wer sie nur in einer Methode haelt,
+     * kann sie beim Abschalten nicht mehr finden.
+     */
+    private Angelwache angelwache;
+
+    /**
+     * Der Schutz von Hafenwerder - {@code null}, solange es das Buch nicht gibt.
+     *
+     * <p>Wird von der Schutzwache SPAET gelesen, wie die Stadtwache: Sein Buch entsteht
+     * erst in {@code richteInselnEin()}, und bis dahin ist die Regel nie zustaendig.
+     */
+    private Inselwache inselwache;
 
     /**
      * Die Regel ueber das Gruenden - {@code null}, solange die Welt fehlt.
@@ -676,11 +718,17 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Der Name der Freistaedtewelt VOR dem Lesen der Welten: Weltenliste bindet
         // die Art an ihn, genau wie beim Raster an den Marktstadtnamen.
         freistadtwelt = Freistadtliste.ausKonfiguration(getConfig()).welt();
+        // Derselbe Griff fuer die Inselwelt, und aus demselben Grund: Weltenliste bindet
+        // art: inseln an diesen Namen.
+        // NUR der Weltname, und Klagen bleiben hier stumm: Dieselbe Datei liest
+        // Wirtschaftsliste noch einmal und beklagt dort, was nicht stimmt. Zweimal
+        // dieselbe Klage im Startprotokoll sieht nach zwei Fehlern aus.
+        inselwelt = Inselliste.ausKonfiguration(getConfig()).welt();
         var liste = Weltenliste.ausKonfiguration(
                 getConfig().getConfigurationSection("welten"), MARKTSTADT, ankunftswelt,
-                freistadtwelt);
+                freistadtwelt, inselwelt);
         liste.klagen().forEach(getLogger()::severe);
-        var gebaut = new Weltenbau(this, generator, stadtfelder, getLogger())
+        var gebaut = new Weltenbau(this, generator, stadtfelder, inseln, getLogger())
                 .baueAlle(liste.welten());
         welten.putAll(gebaut.welten());
         // Die Angaben mit, nicht nur die Welten: Spielmodus und Tor stehen dort, und ein
@@ -772,16 +820,24 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // entscheidet Shopklick.istHandelsschild an einer Stelle. Eine zweite Pruefung
         // hier waere die zweite Wahrheit, vor der Shopzugriff ausdruecklich warnt.
         //
-        // ZWEI Ortsregeln seit dem 11.11.2026, und die zweite schliesst ein Loch: In der
-        // Welt der Stadtfelder griff bis dahin GAR KEINE Wache - jeder konnte in jedem
-        // Feld jeder fremden Stadt bauen. Die Stadtwache wird SPAET gelesen, weil ihr
-        // Buch erst in richteFreistaedteEin entsteht; bis dahin ist sie nie zustaendig.
+        // DREI Ortsregeln seit dem 18.11.2026, und zwei davon schliessen dasselbe Loch:
+        // In der Welt der Stadtfelder griff bis zum 11.11. GAR KEINE Wache, in
+        // Hafenwerder bis heute auch nicht - jeder konnte in jedem Feld jeder fremden
+        // Stadt und auf jeder fremden Insel bauen. Beide werden SPAET gelesen, weil
+        // ihre Buecher erst in richteFreistaedteEin und richteInselnEin entstehen; bis
+        // dahin ist keine von ihnen zustaendig.
+        //
+        // Die Reihenfolge ist ohne Bedeutung, weil alle drei in verschiedenen WELTEN
+        // liegen - sie ist trotzdem festgelegt und nicht dem Zufall einer Menge
+        // ueberlassen, damit eine vierte Regel an einer entschiedenen Stelle einzufuegen
+        // ist.
         schutzwache = new Schutzwache(buch, welt, sprache,
                 Schutzwache.Ortsregel.nacheinander(
                         new Ladenschutz(ladenverzeichnis, mietablage,
                                 weltschluessel(ladenwelt), sprache,
                                 getLogger()),
-                        Schutzwache.Ortsregel.spaet(() -> stadtwache)),
+                        Schutzwache.Ortsregel.spaet(() -> stadtwache),
+                        Schutzwache.Ortsregel.spaet(() -> inselwache)),
                 (spieler, block) -> shopklick != null
                         && shopklick.istHandel(spieler, block));
         getServer().getPluginManager().registerEvents(schutzwache, this);
@@ -815,7 +871,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             BukkitTask aufgabe = getServer().getScheduler()
                     .runTaskTimer(this, schlag, abstand, abstand);
             return aufgabe::cancel;
-        }, verdienstbuch, marken, berufsablage, wirtschaft, markierteWelten, sprache,
+        }, verdienstbuch, marken, berufsablage, wirtschaft, markierteWelten,
+                weltschluessel(inselwelt), sprache,
                 getLogger());
         getServer().getPluginManager().registerEvents(verdienstwache, this);
         verdienstwache.starte();
@@ -859,6 +916,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Dann das Buch, und ERST DANN die Reise: Der Warpbefehl traegt einen Zweig
         // /warp freistadt <name>, und der braucht das Buch.
         richteFreistaedteEin();
+        // NACH den Freistaedten, und die Reihenfolge ist hier ohne Zwang: Die beiden
+        // Buecher wissen nichts voneinander. Sie steht trotzdem fest, damit das
+        // Startprotokoll immer dieselbe Gestalt hat.
+        richteInselnEin();
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
         registriereBefehle();
@@ -1584,6 +1645,25 @@ public final class FreimarkenPlugin extends JavaPlugin {
                             getLogger()).shop(),
                     sprache.wort(BundSatz.BEFEHL_SHOP, Einsatz.keine()),
                     List.of()));
+            // /werder - die eigenen Meerinseln und das Nehmen einer neuen [Schritt 10].
+            // Das Buch kann null sein (die Welt fehlt); der Befehl wird trotzdem
+            // angemeldet und sagt es dann - dieselbe Entscheidung wie bei /freistadt.
+            //
+            // Kein Zweitname: "insel" waere der zweite Ort fuer dieselbe Liste, und
+            // Plan 2423 fuehrt genau einen Namen. Der Weltname geht MIT hinein, denn
+            // die Absage "nur in Hafenwerder" nennt ihn - und zwar ohne Namensraum,
+            // wie ein Spieler ihn tippt.
+            //
+            // Die Hoechstzahl kommt als Abfrage und nicht als Zahl: Sie steht in der
+            // Absage "du hast genug", und ein Neuladen muss sie erreichen. Was ein RANG
+            // daraufsetzt, holt der Befehl selbst aus den Rechten.
+            angemeldet.addAll(verzeichnis.register(
+                    new WerderBefehle(inselbuch, kasse, sprache,
+                            inselbuch == null ? "" : weltschluessel(inselwelt),
+                            inselwelt,
+                            () -> wirtschaft.werte().inseln().hoechstzahl()).werder(),
+                    sprache.wort(BundSatz.BEFEHL_WERDER, Einsatz.keine()),
+                    List.of()));
 
             // Diese Zeile ist nicht Zierde. /parzelle und /mark sind spielerpflichtig, und
             // auf der Konsole antwortet ein spielerpflichtiger Befehl wortgleich wie ein
@@ -2139,6 +2219,79 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + grenze.staedteZahl() + " Staedte, davon "
                 + (gegruendet < 0 ? "UNBEKANNT VIELE (die Ablage antwortete nicht)"
                         : gegruendet + " gegruendet") + ".");
+    }
+
+    /**
+     * Die Welt der Meerinseln und das Buch darueber [Schritt 10].
+     *
+     * <p>Dieselbe Form wie {@link #richteFreistaedteEin()}: Fehlt die Welt, bleibt das
+     * Buch {@code null} und {@code /werder} sagt es - der Server laeuft weiter. Die
+     * Marktstadt kostet den Start, weil aus ihr die Parzellennummern kommen; aus
+     * Hafenwerder kommt nichts, was der Rest des Spiels braucht.
+     *
+     * <p>Zwei Klagen und nicht eine: Eine fehlende Welt ist ein anderer Fehler als eine
+     * Welt mit falscher Art, und der Betreiber muss Verschiedenes tun.
+     */
+    private void richteInselnEin() {
+        World welt = welten.get(inselwelt);
+        if (welt == null) {
+            getLogger().severe("inseln.welt ist " + inselwelt + ", und diese Welt steht"
+                    + " nicht im Abschnitt welten: - /werder bleibt ohne Wirkung. Trag"
+                    + " sie dort mit art: inseln ein.");
+            return;
+        }
+        Weltangabe angabe = angaben.get(inselwelt);
+        if (angabe == null || angabe.art() != Weltangabe.Art.INSELN) {
+            getLogger().severe("inseln.welt ist " + inselwelt + ", aber dort steht nicht"
+                    + " art: inseln - /werder bleibt ohne Wirkung. In einer Welt ohne"
+                    + " Inselfelder gaebe es keine Insel zu nehmen.");
+            return;
+        }
+        // Die Grenze aus DERSELBEN Angabe, aus der die Welt entstand - und ueber
+        // Inselgrenze und nicht ueber die Zahl aus der Datei: Jene ist ein WUNSCH, aus
+        // 5000 werden 18 Felder je Achse. Wer das ueberspringt, vergibt eine Insel,
+        // deren Mitte vor der eigenen Weltgrenze liegt.
+        Inselgrenze grenze = Inselgrenze.ausKante(inseln.plan(),
+                Inselgrenze.wirksameKante(inseln.plan(), angabe.kante(),
+                        welt.getWorldBorder().getSize(), false));
+        inselbuch = new Inselbuch(grenze, lager, kasse, wirtschaft);
+        // Die Wache unmittelbar nach dem Buch, und aus DERSELBEN Instanz: Zwei Buecher
+        // waeren zwei Rechnungen darueber, wo ein Feld liegt - und die eine entschiede,
+        // wem es gehoert, die andere, wer darauf bauen darf.
+        inselwache = new Inselwache(inselbuch, weltschluessel(inselwelt), sprache,
+                getLogger());
+        getLogger().info("Meerinseln: Welt " + welt.key().asString() + ", Felder "
+                + grenze.von() + ".." + grenze.bis() + " je Achse, bis zu "
+                + grenze.inselnZahl() + " Inseln zu " + wirtschaft.werte().inseln()
+                .preis() + " Mark. Feld 0/0 ist die Ankunftsinsel und bleibt frei.");
+        getLogger().info("Inselschutz aktiv in " + welt.key().asString()
+                + " - auf einer Insel baut nur, wem sie gehoert oder wer dort Mitbauer"
+                + " ist. Im offenen Meer baut NIEMAND, auch der Nachbar nicht: Es ist"
+                + " das oeffentliche Wasser des Archipels.");
+        richteAngelnEin(welt);
+    }
+
+    /**
+     * Das eigene Angelgut von Hafenwerder [Plan 4.1, Schritt 10].
+     *
+     * <p>AUS {@code richteInselnEin} gerufen und nicht aus {@code onEnable}, und das ist
+     * kein Zufall: Die Tabelle gilt in der Inselwelt, und ob es die gibt, ist genau dort
+     * entschieden. Ein eigener Zweig im Start braeuchte dieselbe Pruefung ein zweites
+     * Mal - und die zweite waere die, die eines Tages anders urteilt.
+     *
+     * <p>Angemeldet wird die Wache auch bei einer LEEREN Tabelle: Was sie tut, haengt am
+     * Wirtschaftsstand, und der ist neuladbar. Eine Wache, die nur bei gefuellter Tabelle
+     * entsteht, waere nach einem {@code /freimarken neuladen} mit neuen Zeilen immer noch
+     * nicht da.
+     */
+    private void richteAngelnEin(World welt) {
+        angelwache = Angelwache.ueberBukkit(weltschluessel(inselwelt), wirtschaft,
+                new java.util.Random(), getLogger());
+        getServer().getPluginManager().registerEvents(angelwache, this);
+        getLogger().info("Angelgut aktiv in " + welt.key().asString() + " - "
+                + Angelliste.rechenprobe(wirtschaft.werte().angeln())
+                + " Der Tausch sitzt VOR der Zahlung, also bezahlt die Lohntafel den"
+                + " getauschten Fang.");
     }
 
     /**

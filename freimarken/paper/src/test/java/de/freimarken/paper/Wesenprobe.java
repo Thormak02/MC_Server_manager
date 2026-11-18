@@ -113,13 +113,25 @@ final class Wesenprobe {
         }
     }
 
-    /** Ein Gegenstand am Boden - das, was beim Angeln aus dem Wasser kommt. */
+    /**
+     * Ein Gegenstand am Boden - das, was beim Angeln aus dem Wasser kommt.
+     *
+     * <p><b>Der Stapel ist seit dem 18.11.2026 TAUSCHBAR</b>, und das ist die ganze
+     * Sache der {@link Angelwache}: Sie ersetzt den Fang mit {@code setItemStack}. Ohne
+     * diese Antwort warf der Stellvertreter mit seiner eigenen Meldung - richtig, aber
+     * dann liesse sich der Zweig nicht durchlaufen. Was gesetzt wurde, gibt
+     * {@code getItemStack} danach zurueck; so sieht eine Probe, WAS im Netz liegt.
+     */
     static Item gegenstand(Material art) {
-        ItemStack stapel = new Probestapel(art);
+        ItemStack[] stapel = {new Probestapel(art)};
         return (Item) Proxy.newProxyInstance(Wesenprobe.class.getClassLoader(),
                 new Class<?>[] {Item.class},
                 (eigen, methode, werte) -> switch (methode.getName()) {
-                    case "getItemStack" -> stapel;
+                    case "getItemStack" -> stapel[0];
+                    case "setItemStack" -> {
+                        stapel[0] = (ItemStack) werte[0];
+                        yield null;
+                    }
                     case "getType" -> EntityType.ITEM;
                     case "toString" -> "Gegenstandsprobe " + art;
                     case "hashCode" -> art.hashCode();

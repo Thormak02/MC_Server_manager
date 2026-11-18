@@ -127,6 +127,26 @@ public final class SpeicherLager implements BesitzLager {
     }
 
     @Override
+    public synchronized Parzelle werderAnlegen(String welt, int feldX, int feldZ,
+                                               UUID eigentuemer, long preis) {
+        String schluessel = ort(welt, feldX, feldZ);
+        if (nachOrt.containsKey(schluessel)) {
+            throw new IllegalStateException("Das Inselfeld ist bereits vergeben: "
+                    + schluessel);
+        }
+        // KEINE Namenspruefung, anders als beim Gruenden einer Stadt: Eine Insel hat
+        // keinen Namen. Damit bleibt vom ganzen Weg genau das uebrig, was anlegen()
+        // auch tut - mit der Art als einzigem Unterschied, und der KURZE Konstruktor
+        // sorgt dafuer, dass die vier Stadtspalten gar nicht erst zu fuellen sind.
+        Parzelle neu = new Parzelle(naechsteId.getAndIncrement(), welt, feldX, feldZ,
+                eigentuemer, Set.of(), preis, uhr.instant(),
+                Art.WERDER, Parzelle.KEIN_ELTERNTEIL, Zustand.AKTIV);
+        nachOrt.put(schluessel, neu);
+        orteNachId.put(neu.id(), schluessel);
+        return neu;
+    }
+
+    @Override
     public synchronized List<Parzelle> staedteIn(String welt) {
         List<Parzelle> treffer = new ArrayList<>();
         for (Parzelle vorhanden : nachOrt.values()) {

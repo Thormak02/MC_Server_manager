@@ -64,6 +64,7 @@ final class Verdienstliste {
             Verdienstwerte.PFAD_STUNDENMENGE,
             Verdienstwerte.PFAD_SPAWNGRUENDE,
             Verdienstwerte.PFAD_SAATGUT,
+            Verdienstwerte.PFAD_INSELBONUS,
             Verdienstwerte.PFAD_LOEHNE);
 
     /** Was in der Datei stand - und woran es gehapert hat. */
@@ -108,9 +109,68 @@ final class Verdienstliste {
                 klagen, bericht);
         Lohntafel tafel = tafel(wurzel.getConfigurationSection(
                 Verdienstwerte.PFAD_LOEHNE), gilt, saat, klagen, bericht);
+        Map<String, Integer> inselbonus = inselbonus(wurzel, gilt, klagen, bericht);
 
         return new Ergebnis(new Verdienstwerte(deckel, vollBis, stufe, faktor, boden,
-                mengen, gruende, saat, tafel), klagen, bericht);
+                mengen, gruende, saat, tafel, inselbonus), klagen, bericht);
+    }
+
+    /**
+     * Der Zuschlag je Beruf, der NUR in der Inselwelt gilt [Schritt 10, Plan 9.1].
+     *
+     * <p>Dieselbe Bauart wie die Lohntafel darueber: Der Beruf wird gegen das LAUFENDE
+     * Berufsverzeichnis geprueft, und eine kaputte Zeile faellt weg, waehrend die
+     * uebrigen gelten. Ein Zuschlag fuer einen Beruf, den es nicht gibt, ist eine Zeile,
+     * die nie wirkt - und die Klage nennt sie mit Namen und Pfad.
+     *
+     * <p>Fehlt der Abschnitt, gilt der Zuschlag des Programms (der Fischer mit 50
+     * Prozent). Ist er LEER, gilt KEIN Zuschlag - und das ist etwas anderes: Wer alle
+     * Zeilen herausnimmt, will keinen, und soll ihn nicht aus der Vorgabe
+     * zurueckbekommen.
+     */
+    private static Map<String, Integer> inselbonus(ConfigurationSection wurzel,
+                                                   Berufsverzeichnis gilt,
+                                                   List<String> klagen,
+                                                   List<String> bericht) {
+        if (!wurzel.contains(Verdienstwerte.PFAD_INSELBONUS, true)) {
+            bericht.add(Wirtschaftsliste.fehltText(Verdienstwerte.PFAD_INSELBONUS,
+                    Verdienstwerte.VORGABE_INSELBONUS.toString()));
+            return Verdienstwerte.VORGABE_INSELBONUS;
+        }
+        ConfigurationSection abschnitt =
+                wurzel.getConfigurationSection(Verdienstwerte.PFAD_INSELBONUS);
+        if (abschnitt == null) {
+            klagen.add(Verdienstwerte.PFAD_INSELBONUS + " ist kein Abschnitt ("
+                    + Wirtschaftsliste.wieGetippt(
+                            wurzel.get(Verdienstwerte.PFAD_INSELBONUS))
+                    + ") - verworfen. Darunter steht ein Beruf je Zeile mit seinem"
+                    + " Zuschlag in Prozent. Es gilt "
+                    + Verdienstwerte.VORGABE_INSELBONUS + ".");
+            return Verdienstwerte.VORGABE_INSELBONUS;
+        }
+        Map<String, Integer> tabelle = new LinkedHashMap<>();
+        for (String beruf : abschnitt.getKeys(false)) {
+            String pfad = Verdienstwerte.PFAD_INSELBONUS + "." + beruf;
+            String sauber = beruf.trim().toLowerCase(Locale.ROOT);
+            if (gilt.aufgeloest(sauber).isEmpty()) {
+                klagen.add(pfad + ": Den Beruf \"" + beruf + "\" gibt es nicht in "
+                        + Berufswerte.PFAD_LISTE + " - diese Zeile faellt weg. Ein"
+                        + " Zuschlag fuer einen Beruf, den es nicht gibt, ist eine"
+                        + " Zeile, die nie wirkt.");
+                continue;
+            }
+            Object roh = abschnitt.get(beruf);
+            if (!(roh instanceof Number zahl) || zahl.longValue() < 0L
+                    || zahl.longValue() > Verdienstwerte.HOECHSTER_INSELBONUS) {
+                klagen.add(pfad + " ist " + Wirtschaftsliste.wieGetippt(roh)
+                        + " - erwartet wird ein Zuschlag von 0 bis "
+                        + Verdienstwerte.HOECHSTER_INSELBONUS + " Prozent. Diese Zeile"
+                        + " faellt weg, die uebrigen gelten.");
+                continue;
+            }
+            tabelle.put(sauber, (int) zahl.longValue());
+        }
+        return tabelle;
     }
 
     /**
@@ -390,8 +450,13 @@ final class Verdienstliste {
      *
      * <p>Ein SATZTEIL und kein Wahrheitswert: Die Klage soll sagen, WAS falsch ist, und
      * eine Pruefung, die nur "nein" sagt, laesst den Betreiber raten.
+     *
+     * <p>Paketprivat seit dem 18.11.2026: {@link Angelliste} prueft ihre Fangnamen
+     * damit. Zwei Pruefungen auf dasselbe waeren zwei Meinungen darueber, was ein
+     * Gegenstandsname ist - und die eine nennte "minecraft:cod" gueltig und die andere
+     * nicht.
      */
-    private static String warumKeinMaterial(String name) {
+    static String warumKeinMaterial(String name) {
         if (Material.getMaterial(name.trim().toUpperCase(Locale.ROOT)) == null) {
             return "ist kein Material, das dieser Server kennt. Erwartet wird der nackte"
                     + " Name wie stone oder coal_ore, ohne minecraft: davor";

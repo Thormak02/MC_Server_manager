@@ -168,6 +168,21 @@ final class Wirtschaftsliste {
         klagen.addAll(freistaedte.klagen());
         bericht.addAll(freistaedte.bericht());
 
+        // Die Meerinseln, und der WELTNAME daraus wird hier NICHT gebraucht: Den liest
+        // das Plugin vor den Welten noch einmal, genau wie bei den Freistaedten. Zwei
+        // Aufrufe desselben Lesers sind kein Widerspruch - er hat keinen Zustand -, und
+        // beklagt wird nur hier, damit dieselbe Klage nicht zweimal im Protokoll steht.
+        Inselliste.Ergebnis inseln = Inselliste.ausKonfiguration(wurzel);
+        klagen.addAll(inseln.klagen());
+        bericht.addAll(inseln.bericht());
+
+        // Die Angeltabelle von Hafenwerder [Schritt 10]. Hier und nicht bei der
+        // Inselliste: Jene beschreibt, was eine Insel KOSTET, diese, was im Wasser
+        // haengt - zwei Fragen, zwei Abschnitte, zwei Haende.
+        Angelliste.Ergebnis angeln = Angelliste.ausKonfiguration(wurzel);
+        klagen.addAll(angeln.klagen());
+        bericht.addAll(angeln.bericht());
+
         // Und der Handel: ein eigener Abschnitt (handel:), eine eigene Schranke fuer
         // beide Gebuehren und ein Wort, das auf ein Schild passen muss. Ein eigener
         // Leser und nicht drei Zeilen hier, aus demselben Grund wie bei der Ladenmiete:
@@ -215,7 +230,8 @@ final class Wirtschaftsliste {
         return new Ergebnis(new Wirtschaftswerte(preise, startguthaben, hoechstzahl,
                 gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
                 markt.werte(), messung.werte(), bonus.werte(), laeden.werte(),
-                handel.werte(), truhe.werte(), freistaedte.werte()), klagen, bericht);
+                handel.werte(), truhe.werte(), freistaedte.werte(),
+                inseln.werte(), angeln.werte()), klagen, bericht);
     }
 
     /**

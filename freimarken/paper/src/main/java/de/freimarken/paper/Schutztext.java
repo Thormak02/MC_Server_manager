@@ -178,4 +178,46 @@ final class Schutztext {
     static Component stadtGestoertBalken(Sprache sprache) {
         return sprache.eineZeile(WacheSatz.SCHUTZ_STADT_GESTOERT, Einsatz.keine());
     }
+
+    /**
+     * Der Handbalken zu einer Lage in Hafenwerder [Schritt 10].
+     *
+     * <p><b>Der SATZ kommt herein und nicht ein Urteil</b>, anders als bei
+     * {@link #stadtBalken}: Das Inselbuch gibt einen {@code boolean} und keine
+     * Aufzaehlung von Lagen - es gibt nur Eigentuemer, Mitbauer und sonst niemanden. Die
+     * vier Lagen des Balkens entstehen darum in {@link Inselwache#grund} aus dem Plan,
+     * und diese Methode setzt nur noch den Satz zusammen.
+     *
+     * <p>Ein eigener Weg trotzdem, und nicht {@code sprache.eineZeile} beim Aufrufer:
+     * Jede Zeile dieses Bereichs geht durch Schutztext, und das ist die Zusage, an der
+     * {@code BildGleichTest} haengt.
+     *
+     * @param satz einer der vier Lagensaetze; die fremde Insel traegt einen Namen und
+     *             geht ueber {@link #fremdeInselBalken}
+     */
+    static Component inselBalken(Sprache sprache, WacheSatz satz) {
+        if (satz == WacheSatz.SCHUTZ_FREMDE_INSEL) {
+            throw new IllegalArgumentException("Die fremde Insel traegt ihren Besitzer"
+                    + " und geht ueber fremdeInselBalken - hier fehlte der Wert, und der"
+                    + " Satz stuende mit einem leeren Namen im Handbalken.");
+        }
+        return sprache.eineZeile(satz, Einsatz.keine());
+    }
+
+    /**
+     * Die Insel eines anderen - mit ihrem Besitzer.
+     *
+     * <p>OHNE Namen der Insel, anders als bei {@link #fremdeStadtBalken}: Eine Insel hat
+     * keinen. Was dem Fragenden fehlt, ist der Mensch, den er fragen muss - und der Name
+     * ist ein BLATT, aus demselben Grund wie dort.
+     */
+    static Component fremdeInselBalken(Sprache sprache, String eigentuemer) {
+        return sprache.eineZeile(WacheSatz.SCHUTZ_FREMDE_INSEL,
+                Einsatz.von("eigentuemer", eigentuemer));
+    }
+
+    /** Die Meerinseln sind nicht nachsehbar - wie {@link #stadtGestoertBalken}. */
+    static Component inselGestoertBalken(Sprache sprache) {
+        return sprache.eineZeile(WacheSatz.SCHUTZ_INSEL_GESTOERT, Einsatz.keine());
+    }
 }

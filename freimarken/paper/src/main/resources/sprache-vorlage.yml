@@ -65,6 +65,10 @@ mark:
       parzelle-erstattet: "Parzelle nicht eingetragen - erstattet"
       freistadt-gegruendet: "Freistadt gegruendet"
       freistadt-erstattet: "Freistadt nicht eingetragen - erstattet"
+      # Schritt 10: die Meerinsel. Zwei Worte wie bei Parzelle und Freistadt - eines
+      # fuer den Kauf, eines fuer den Fall, in dem NICHTS geschehen ist.
+      werder-gekauft: "Meerinsel genommen"
+      werder-erstattet: "Meerinsel nicht eingetragen - erstattet"
       # Teil C3: der Grundstueckshandel. VIER Worte, weil derselbe Betrag beim
       # Kaeufer eine Ausgabe und beim Verkaeufer eine Einnahme ist - wer seinen
       # Verlauf liest, muss beides auseinanderhalten koennen.
@@ -185,6 +189,8 @@ befehl:
     markt: "Was der Bundesmarkt ankauft - verkauft wird an seinen Schildern"
     laden: "Die Markthalle und ihre Ladeneinheiten"
     freistadt: "Die Freistaedte - Liste, gruenden, Grundstuecke, Stadtbuerger, Regeln, Kasse"
+    # Schritt 10: die Meerinseln.
+    werder: "Meerinseln auf Hafenwerder ansehen und eine nehmen"
     shop: "Deine Kistenshops auflisten und fuer andere freigeben"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
@@ -1181,6 +1187,25 @@ wache:
     # abgelehnt, und das ist die sichere Richtung: Ein stilles Ja liesse jeden in
     # jeder fremden Stadt bauen.
     stadt-gestoert: "<red>Die Freistaedte sind gerade nicht nachsehbar - versuch es noch einmal.</red>"
+    # --- Die Meerinseln von Hafenwerder [18.11.2026] ----------------------------
+    # Fuenf Lagen, und sie stehen hier bei den anderen Wachsaetzen und nicht unter
+    # werder: - aus demselben Grund wie die der Freistaedte darueber.
+    #
+    # Offenes Meer. KEIN Ausweg im Satz: Hier wird nie jemand bauen duerfen, auch
+    # nicht gegen Geld - es ist das oeffentliche Wasser des Archipels. Gelb und nicht
+    # rot, wie stadt-leere: Es ist kein Vergehen, nur der falsche Ort.
+    insel-meer: "<yellow>Offenes Meer - hier gehoert nichts niemandem, und gebaut wird hier nicht</yellow>"
+    # Feld 0/0 - das Ziel des Tores aus Altfurt. Es wird NIE vergeben, darum sagt der
+    # Satz, wem es gehoert, statt einen Ausweg zu nennen.
+    insel-ankunft: "<yellow>Die Ankunftsinsel gehoert allen - deine eigene nimmst du mit /werder hafen nehmen</yellow>"
+    # Eine freie Insel. MIT Ausweg, wie stadt-frei.
+    insel-frei: "<yellow>Diese Insel ist frei - /werder hafen nehmen</yellow>"
+    # {eigentuemer} - die Insel eines anderen. OHNE Namen, anders als fremde-stadt:
+    # Eine Insel hat keinen. Was dem Fragenden fehlt, ist der Mensch, den er fragen
+    # muss.
+    fremde-insel: "<red>Diese Insel gehoert <white>{eigentuemer}</white></red>"
+    # Wie stadt-gestoert: Dann wird abgelehnt, und das ist die sichere Richtung.
+    insel-gestoert: "<red>Die Inseln sind gerade nicht nachsehbar - versuch es noch einmal.</red>"
   # DIE ANKUNFT. Zwei Saetze an zwei verschiedenen Anlaessen: Der eine kommt, weil jemand
   # einen Spawnpunkt setzen wollte, der andere, weil jemand eine Abenteuerwelt betritt.
   # Sie gehen nie zusammen hinaus, darum sind es zwei Zeilen und nicht eine mit beidem
@@ -2280,3 +2305,68 @@ blockbuch:
     setzen: "setzte"
     abbauen: "baute ab"
     benutzen: "benutzte"
+
+# DIE MEERINSELN VON HAFENWERDER (Plan 6.2, Schritt 10).
+#
+# Der siebzehnte Bereich - und der erste, dessen Besitz nicht in einer gebauten Stadt
+# liegt, sondern im Meer. Darum klingt hier nichts nach Stadtverwaltung: Eine Insel hat
+# keinen Namen, keine Kasse, keine Buerger und keine Auflage. Sie hat eine ADRESSE
+# (die Feldnummer als x/z, wie eine Parzellennummer) und einen Festpreis.
+#
+# FUENF SAETZE DIENEN ZWEI ZWEIGEN: hier.* beantwortet "/werder hafen" ("was ist hier")
+# UND die Absage von "/werder hafen nehmen" bei denselben drei Lagen - offenes Meer,
+# Ankunftsinsel, fremde Insel. Zwei Satzpaare dafuer waeren zwei Beschreibungen
+# derselben Stelle, und eine von ihnen wuerde eines Tages anders.
+werder:
+  # {anzahl} - die Ueberschrift ueber den eigenen Inseln. Die Einzahl nennt die Zahl
+  #   NICHT: "Deine Meerinsel: 1" waere eine Zahl, die niemand braucht.
+  kopf:
+    eins: "<gold>Deine Meerinsel</gold>"
+    viele: "<gold>Deine Meerinseln: {anzahl}</gold>"
+  # {feld} - eine Zeile je Insel. Die Feldnummer IST die Adresse: Hin kommt man mit dem
+  #   Boot, und wer die Zahlen kennt, findet sie auf der Karte.
+  zeile: "<gray>  Insel {feld}</gray>"
+  # {preis} - du hast keine. Diese Zeile MUSS es geben: Wer nur die Ueberschrift sieht,
+  #   haelt es fuer einen Fehler, und am ersten Tag ist das der Normalfall. Sie nennt
+  #   den Preis, denn das ist die naechste Frage.
+  leer: "<gray>  Du hast keine Meerinsel - eine kostet {preis}. Fahr nach Hafenwerder und nimm eine mit /werder hafen nehmen.</gray>"
+  hier:
+    # Offenes Meer - dasselbe, was der Handbalken wache.schutz.insel-meer sagt, nur als
+    #   Chatzeile und als ganzer Satz.
+    meer: "<gray>Hier ist offenes Meer</gray><dark_gray> - es gehoert niemandem, und gebaut wird hier nicht.</dark_gray>"
+    # Feld 0/0. Sie wird nie vergeben, darum nennt der Satz keinen Weg, sie zu nehmen.
+    ankunft: "<gray>Das ist die Ankunftsinsel</gray><dark_gray> - sie gehoert allen und bleibt frei. Deine eigene nimmst du auf einer anderen.</dark_gray>"
+    # {feld} {preis} - eine freie Insel, mit Ausweg und Preis.
+    frei: "<yellow>Insel {feld} ist frei.</yellow>\n<gray>Nimm sie mit /werder hafen nehmen - sie kostet {preis}.</gray>"
+    # {feld} - die eigene.
+    eigene: "<green>Insel {feld} gehoert dir.</green>"
+    # {feld} {besitzer} - die eines anderen. Der Name ist ein BLATT: Er kommt von
+    #   Bukkit und nicht aus einer Datei.
+    fremd: "<gray>Insel {feld} gehoert </gray><white>{besitzer}</white><gray>.</gray>"
+  # {feld} {preis} {danach} - genommen. {danach} ist das Guthaben, das bleibt: 75.000
+  #   liest man, ohne es zu fuehlen - was danach bleibt, fuehlt man.
+  genommen: "<green>Insel {feld} gehoert jetzt dir - {preis} abgebucht.</green>\n<gray>Es bleiben {danach}.</gray>"
+  # {feld} - genommen, und es hat nichts gekostet (inseln.preis: 0). Ein eigener Satz
+  #   und keine 0 im Satz darueber: "0 abgebucht, es bleiben 1.200" schreibt niemand.
+  genommen-gratis: "<green>Insel {feld} gehoert jetzt dir.</green>"
+  absage:
+    # Jenseits der Weltgrenze. Die Grenze haelt ihn dort ohnehin auf; der Satz steht
+    #   fuer den Fall, dass ihn jemand hinbringt.
+    ausserhalb: "<red>Hier enden die Inseln von Hafenwerder.</red>"
+    # {hoechstzahl} - so viele Inseln darf dieser Spieler halten. Die Zahl kommt aus
+    #   einem RECHT (freimarken.inseln.<zahl>) und ist darum fuer jeden eine andere.
+    genug:
+      eins: "<red>Du hast schon eine Meerinsel - mehr erlaubt dein Rang nicht.</red>"
+      viele: "<red>Du hast schon {hoechstzahl} Meerinseln - mehr erlaubt dein Rang nicht.</red>"
+    # {preis} {fehlt} - das Guthaben reicht nicht.
+    zu-wenig: "<red>Eine Insel kostet {preis} - dir fehlen {fehlt}.</red>"
+    # Die Ablage hat geschwiegen. Ein eigener Satz und kein stilles Nein: Wer 75.000
+    #   Mark ausgeben will und irgendeine Absage liest, versucht es wieder.
+    gestoert: "<red>Die Inseln sind gerade nicht nachsehbar - versuch es noch einmal.</red>"
+    # Es gibt gar keine Inselwelt - inseln.welt zeigt auf eine Welt ohne Inselraster,
+    #   oder die Welt fehlt. Der Befehl wird trotzdem angemeldet: Einen Befehl, den es
+    #   je nach Einstellungsdatei gibt oder nicht, versteht kein Spieler.
+    keine-welt: "<red>Es gibt keine Inselwelt</red><gray> - der Betreiber findet den Grund im Startprotokoll.</gray>"
+    # {welt} - er steht nicht in Hafenwerder. MIT dem Weg dorthin, denn das ist die
+    #   Frage, die er jetzt hat.
+    falsche-welt: "<gray>Meerinseln gibt es nur in {welt}</gray><dark_gray> - hin kommst du durch den Hafen in Altfurt oder mit /warp {welt}.</dark_gray>"

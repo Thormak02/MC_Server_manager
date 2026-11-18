@@ -2032,7 +2032,66 @@ class BildGleichTest {
                 new Zeile(FreistadtSatz.RECHT_UNBEKANNT, 1L,
                         Einsatz.von("wort", "fliegen"),
                         "&cfliegen ist kein Buergerrecht.\n&7Die Vorschlagsliste nennt,"
-                                + " was moeglich ist."));
+                                + " was moeglich ist."),
+
+                // --- Die Meerinseln von Hafenwerder [Schritt 10] -----------------
+                // Die fuenf Handbalken der Inselwache: Was ein Spieler liest, waehrend
+                // er irgendwo in Hafenwerder baut.
+                new Zeile(WacheSatz.SCHUTZ_INSEL_MEER, 1L, Einsatz.keine(), "&eOffenes Meer - hier gehoert nichts niemandem, und gebaut wird hier"
+                                + " nicht"),
+                new Zeile(WacheSatz.SCHUTZ_INSEL_ANKUNFT, 1L, Einsatz.keine(), "&eDie Ankunftsinsel gehoert allen - deine eigene nimmst du mit"
+                                + " /werder hafen nehmen"),
+                new Zeile(WacheSatz.SCHUTZ_INSEL_FREI, 1L, Einsatz.keine(), "&eDiese Insel ist frei - /werder hafen nehmen"),
+                new Zeile(WacheSatz.SCHUTZ_FREMDE_INSEL, 1L,
+                        Einsatz.von("eigentuemer", "Anna"), "&cDiese Insel gehoert &fAnna"),
+                new Zeile(WacheSatz.SCHUTZ_INSEL_GESTOERT, 1L, Einsatz.keine(), "&cDie Inseln sind gerade nicht nachsehbar - versuch es noch einmal."),
+                // Die Liste der eigenen Inseln. DIE NULL GEHOERT DAZU, obwohl sie im
+                // Spiel nie erscheint - wer keine Insel hat, liest werder.leer. Die
+                // Tafel haelt fest, welche Form dann herauskaeme.
+                new Zeile(WerderSatz.KOPF, 0L, Einsatz.von("anzahl", "0"), "&6Deine Meerinseln: 0"),
+                new Zeile(WerderSatz.KOPF, 1L, Einsatz.von("anzahl", "1"), "&6Deine Meerinsel"),
+                new Zeile(WerderSatz.KOPF, 2L, Einsatz.von("anzahl", "3"), "&6Deine Meerinseln: 3"),
+                new Zeile(WerderSatz.ZEILE, 1L, Einsatz.von("feld", "2/-3"), "&7  Insel 2/-3"),
+                new Zeile(WerderSatz.LEER, 1L, Einsatz.von("preis", "75.000 Mark"),
+                        "&7  Du hast keine Meerinsel - eine kostet 75.000 Mark. Fahr nach"
+                                + " Hafenwerder und nimm eine mit /werder hafen nehmen."),
+                // Die fuenf Lagen als Chatzeile - dieselben drei, die auch eine Absage
+                // begruenden.
+                new Zeile(WerderSatz.HIER_MEER, 1L, Einsatz.keine(), "&7Hier ist offenes Meer&8 - es gehoert niemandem, und gebaut wird"
+                                + " hier nicht."),
+                new Zeile(WerderSatz.HIER_ANKUNFT, 1L, Einsatz.keine(), "&7Das ist die Ankunftsinsel&8 - sie gehoert allen und bleibt frei."
+                                + " Deine eigene nimmst du auf einer anderen."),
+                new Zeile(WerderSatz.HIER_FREI, 1L,
+                        Einsatz.von("feld", "2/-3").mit("preis", "75.000 Mark"), "&eInsel 2/-3 ist frei.\n&7Nimm sie mit /werder hafen nehmen - sie"
+                                + " kostet 75.000 Mark."),
+                new Zeile(WerderSatz.HIER_EIGENE, 1L, Einsatz.von("feld", "2/-3"),
+                        "&aInsel 2/-3 gehoert dir."),
+                new Zeile(WerderSatz.HIER_FREMD, 1L,
+                        Einsatz.von("feld", "2/-3").mit("besitzer", "Anna"), "&7Insel 2/-3 gehoert &fAnna&7."),
+                // Genommen - mit Preis und ohne.
+                new Zeile(WerderSatz.GENOMMEN, 1L,
+                        Einsatz.von("feld", "2/-3").mit("preis", "75.000 Mark")
+                                .mit("danach", "25.000 Mark"), "&aInsel 2/-3 gehoert jetzt dir - 75.000 Mark abgebucht."
+                                + "\n&7Es bleiben 25.000 Mark."),
+                new Zeile(WerderSatz.GENOMMEN_GRATIS, 1L, Einsatz.von("feld", "2/-3"),
+                        "&aInsel 2/-3 gehoert jetzt dir."),
+                // Die Absagen.
+                new Zeile(WerderSatz.ABSAGE_AUSSERHALB, 1L, Einsatz.keine(), "&cHier enden die Inseln von Hafenwerder."),
+                new Zeile(WerderSatz.ABSAGE_GENUG, 0L,
+                        Einsatz.von("hoechstzahl", "0"), "&cDu hast schon 0 Meerinseln - mehr erlaubt dein Rang nicht."),
+                new Zeile(WerderSatz.ABSAGE_GENUG, 1L,
+                        Einsatz.von("hoechstzahl", "1"), "&cDu hast schon eine Meerinsel - mehr erlaubt dein Rang nicht."),
+                new Zeile(WerderSatz.ABSAGE_GENUG, 2L,
+                        Einsatz.von("hoechstzahl", "3"), "&cDu hast schon 3 Meerinseln - mehr erlaubt dein Rang nicht."),
+                new Zeile(WerderSatz.ABSAGE_ZU_WENIG, 1L,
+                        Einsatz.von("preis", "75.000 Mark").mit("fehlt", "5.000 Mark"),
+                        "&cEine Insel kostet 75.000 Mark - dir fehlen 5.000 Mark."),
+                new Zeile(WerderSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine(), "&cDie Inseln sind gerade nicht nachsehbar - versuch es noch einmal."),
+                new Zeile(WerderSatz.ABSAGE_KEINE_WELT, 1L, Einsatz.keine(), "&cEs gibt keine Inselwelt&7 - der Betreiber findet den Grund im"
+                                + " Startprotokoll."),
+                new Zeile(WerderSatz.ABSAGE_FALSCHE_WELT, 1L,
+                        Einsatz.von("welt", "hafenwerder"), "&7Meerinseln gibt es nur in hafenwerder&8 - hin kommst du durch den"
+                                + " Hafen in Altfurt oder mit /warp hafenwerder."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

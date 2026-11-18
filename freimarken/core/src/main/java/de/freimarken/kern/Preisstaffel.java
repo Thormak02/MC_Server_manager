@@ -63,7 +63,7 @@ public record Preisstaffel(long grundpreis, long zusammenlegungJeFeld) {
      * Die hoechste Gebuehr je Feld, mit der die Rechnung nicht ueberlaeuft.
      *
      * <p>Die Gebuehr wird mit der Felderzahl multipliziert, und die kappt
-     * {@code ParzellenBefehle.mitZuschlag} bei {@link Integer#MAX_VALUE}. Mehr als dieser
+     * {@code Rangzahl.mitZuschlag} bei {@link Integer#MAX_VALUE}. Mehr als dieser
      * Betrag je Feld koennte das Produkt also ueber den {@code long} treiben.
      */
     public static final long HOECHSTE_GEBUEHR = Long.MAX_VALUE / Integer.MAX_VALUE;

@@ -247,6 +247,47 @@ enum WacheSatz implements Satz {
     /** Die Freistaedte sind nicht nachsehbar - wie {@link #SCHUTZ_LADEN_GESTOERT}. */
     SCHUTZ_STADT_GESTOERT("wache.schutz.stadt-gestoert", Art.HANDBALKEN),
 
+    /**
+     * DIE FUENF LAGEN VON HAFENWERDER [Schritt 10].
+     *
+     * <p>Sie stehen hier bei den anderen Wachsaetzen und nicht unter {@code werder:}, aus
+     * demselben Grund wie die der Freistaedte: Was ein Spieler im Handbalken liest,
+     * waehrend er irgendwo baut, gehoert zusammen.
+     *
+     * <p>Offenes Meer. KEIN Ausweg im Satz, wie bei {@link #SCHUTZ_STADT_LEERE}: Hier
+     * wird nie jemand bauen duerfen, auch nicht gegen Geld. Es ist das oeffentliche
+     * Wasser des Archipels - gelb und nicht rot, denn es ist kein Vergehen, nur der
+     * falsche Ort.
+     */
+    SCHUTZ_INSEL_MEER("wache.schutz.insel-meer", Art.HANDBALKEN),
+
+    /**
+     * Die Ankunftsinsel - Feld 0/0, das Ziel des Tores aus Altfurt.
+     *
+     * <p>Sie wird NIE vergeben, darum sagt der Satz, wem sie gehoert, statt einen Ausweg
+     * zu nennen. Dieselbe Entscheidung wie beim Ankunftsfeld der Freistaedte.
+     */
+    SCHUTZ_INSEL_ANKUNFT("wache.schutz.insel-ankunft", Art.HANDBALKEN),
+
+    /** Eine freie Insel. MIT Ausweg, wie {@link #SCHUTZ_STADT_FREI}. */
+    SCHUTZ_INSEL_FREI("wache.schutz.insel-frei", Art.HANDBALKEN),
+
+    /**
+     * Die Insel eines anderen - mit ihrem Besitzer.
+     *
+     * <p>OHNE Namen, anders als {@link #SCHUTZ_FREMDE_STADT}: Eine Insel hat keinen. Was
+     * dem Fragenden fehlt, ist der Mensch, den er fragen muss.
+     */
+    SCHUTZ_FREMDE_INSEL("wache.schutz.fremde-insel", Art.HANDBALKEN, "eigentuemer"),
+
+    /**
+     * Die Inseln sind gerade nicht nachsehbar - wie {@link #SCHUTZ_STADT_GESTOERT}.
+     *
+     * <p>Dann wird abgelehnt, und das ist die sichere Richtung: Ein stilles Ja liesse
+     * jeden auf jeder fremden Insel bauen.
+     */
+    SCHUTZ_INSEL_GESTOERT("wache.schutz.insel-gestoert", Art.HANDBALKEN),
+
     // --- Die Ankunftswache: zwei Anlaesse, zwei Chatzeilen ---------------------
 
     /**

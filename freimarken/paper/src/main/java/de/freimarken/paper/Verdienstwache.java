@@ -148,12 +148,27 @@ final class Verdienstwache implements Listener {
      */
     private final Set<String> welten;
 
+    /**
+     * Die Inselwelt - EIN Schluessel, und LEER heisst: keine [Schritt 10, Plan 9.1].
+     *
+     * <p>Hier liegt der Vergleich und nicht in den Verdienstwerten, und das hat einen
+     * Grund: Der Kern kennt keine Weltschluessel. Die Umwandlung von {@code hafenwerder}
+     * zu {@code freimarken:hafenwerder} steht an EINER Stelle im Plugin - genau wie bei
+     * der Stadtwache und der Angelwache -, und was hier ankommt, ist schon umgewandelt.
+     *
+     * <p>Der Name endet auf {@code schluessel}, damit Tafel 31ae ihn FINDET: Jene sucht
+     * die Klassen, die einen Schluessel erwarten, und verlangt dann, dass das Plugin ihn
+     * aus {@code weltschluessel(name)} holt. Ein Feld namens {@code inselwelt} waere die
+     * Stelle, die sie nicht ansieht.
+     */
+    private final String inselschluessel;
+
     /** Was den laufenden Zeitgeber abmeldet - und zugleich, DASS einer laeuft. */
     private Runnable abmelden;
 
     Verdienstwache(Taktquelle taktquelle, Verdienstbuch buch, Blockmarken marken,
                    Berufsablage berufe, Wirtschaftsstand wirtschaft, Set<String> welten,
-                   Sprache sprache, Logger protokoll) {
+                   String inselschluessel, Sprache sprache, Logger protokoll) {
         if (taktquelle == null || buch == null || marken == null || berufe == null
                 || wirtschaft == null || sprache == null || protokoll == null) {
             throw new IllegalArgumentException("Taktquelle, Sammler, Marken,"
@@ -170,6 +185,10 @@ final class Verdienstwache implements Listener {
         this.berufe = berufe;
         this.wirtschaft = wirtschaft;
         this.welten = Set.copyOf(welten);
+        // LEER ist erlaubt und heisst "es gibt keine Inselwelt": Dann ist der Vergleich
+        // nie wahr, und der Zuschlag liegt nirgends auf. Ein Wurf waere hier falsch -
+        // die Inselwelt fehlt auf jedem Server, der sie nicht eingetragen hat.
+        this.inselschluessel = inselschluessel == null ? "" : inselschluessel;
         this.sprache = sprache;
         this.protokoll = protokoll;
     }
@@ -395,7 +414,12 @@ final class Verdienstwache implements Listener {
             return;
         }
         for (int mal = 0; mal < wiederholt; mal++) {
-            buch.verdiene(kennung, gehalten, taetigkeit, name);
+            // DER INSELBONUS, und er haengt an DIESEM Vergleich [Schritt 10]: Die Welt
+            // steht schon oben als Schluessel da, weil die Weissliste sie braucht. Ein
+            // zweites Lesen waere ein zweiter Ort, an dem die Umwandlung schiefgehen
+            // kann - genau der Fehler vom 09.11.2026.
+            buch.verdiene(kennung, gehalten, taetigkeit, name,
+                    inselschluessel.equals(welt));
         }
         zeige(wer, kennung);
     }

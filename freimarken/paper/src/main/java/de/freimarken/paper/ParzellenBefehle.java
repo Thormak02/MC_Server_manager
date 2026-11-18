@@ -33,7 +33,6 @@ import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
-import org.bukkit.permissions.PermissionAttachmentInfo;
 
 /**
  * Die Befehle rund um Parzellen: nehmen, ansehen, Mitbauer, aufgeben.
@@ -1568,34 +1567,8 @@ final class ParzellenBefehle {
      * die Obergrenze ist eine Spielregel und keine Verwaltungsbefugnis.
      */
     private int hoechstzahl(Player spieler) {
-        return ausRecht(spieler, RECHT_ANZAHL, RECHT_EXTRA_ANZAHL,
+        return Rangzahl.ausRecht(spieler, RECHT_ANZAHL, RECHT_EXTRA_ANZAHL,
                 wirtschaft.werte().hoechstzahl());
-    }
-
-    /**
-     * Eine Grenze aus den Rechten: die hoechste erlaubte Zahl plus den Zuschlag.
-     *
-     * <p>Eine Methode fuer beide Grenzen, damit der Zuschlag nicht an einer von zwei
-     * Stellen vergessen werden kann. Genau das ist die Art Fehler, die niemand meldet:
-     * Der Spieler sieht nur, dass seine Mitgliedschaft beim Zusammenlegen nichts bringt,
-     * und haelt es fuer die Regel.
-     */
-    private static int ausRecht(Player spieler, String recht, String zuschlagsrecht,
-                                int vorgabe) {
-        return mitZuschlag(hoechsteAus(spieler, recht, vorgabe),
-                hoechsteAus(spieler, zuschlagsrecht, 0));
-    }
-
-    /**
-     * Grundlage plus Zuschlag, ohne ueberzulaufen.
-     *
-     * <p>Beide Zahlen koennen bis {@link Integer#MAX_VALUE} gehen - die Auswertung der
-     * Rechte kappt jede einzelne dort. Zusammengezaehlt liefe ein {@code int} ueber und
-     * waere danach NEGATIV, und eine negative Obergrenze heisst: gar keine Parzelle mehr,
-     * ausgerechnet fuer den, der am meisten hat.
-     */
-    static int mitZuschlag(int grundlage, int zuschlag) {
-        return (int) Math.min((long) grundlage + Math.max(zuschlag, 0), Integer.MAX_VALUE);
     }
 
     /**
@@ -1606,36 +1579,8 @@ final class ParzellenBefehle {
      * Grundstueck verbinden darf, entscheidet, wie gross ein einzelnes Bauwerk werden kann.
      */
     private int gruppenFelder(Player spieler) {
-        return ausRecht(spieler, RECHT_GRUPPE, RECHT_EXTRA_GRUPPE,
+        return Rangzahl.ausRecht(spieler, RECHT_GRUPPE, RECHT_EXTRA_GRUPPE,
                 wirtschaft.werte().gruppenFelder());
-    }
-
-    /**
-     * Die hoechste Zahl, die ein gesetztes Recht mit diesem Anfang nennt - mindestens die
-     * Vorgabe.
-     *
-     * <p>Eine Auswertung fuer beide Grenzen. Zwei Abschriften derselben Schleife waeren
-     * zwei Orte fuer dieselbe Falle, und die zweite bekaeme den Hinweis unten nicht mit.
-     */
-    private static int hoechsteAus(Player spieler, String recht, int vorgabe) {
-        int hoechste = vorgabe;
-        for (PermissionAttachmentInfo eintrag : spieler.getEffectivePermissions()) {
-            if (!eintrag.getValue() || !eintrag.getPermission().startsWith(recht)) {
-                continue;
-            }
-            try {
-                // long und dann gekappt: Integer.parseInt haette auch bei einer gueltigen,
-                // nur sehr grossen Zahl geworfen - und die waere dann wie ein Tippfehler
-                // behandelt worden, also stillschweigend als "keine Erhoehung".
-                long gewuenscht = Long.parseLong(
-                        eintrag.getPermission().substring(recht.length()));
-                hoechste = (int) Math.max(hoechste, Math.min(gewuenscht, Integer.MAX_VALUE));
-            } catch (NumberFormatException keineZahl) {
-                // "freimarken.parzellen.alle" oder ein Tippfehler - kein Grund fuer einen
-                // Abbruch, nur kein Anlass, die Obergrenze zu heben.
-            }
-        }
-        return hoechste;
     }
 
     private static String namen(UUID spieler) {

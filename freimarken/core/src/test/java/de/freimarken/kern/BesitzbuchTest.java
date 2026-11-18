@@ -634,6 +634,12 @@ class BesitzbuchTest {
         }
 
         @Override
+        public Parzelle werderAnlegen(String welt, int feldX, int feldZ,
+                                      UUID eigentuemer, long preis) {
+            return echt.werderAnlegen(welt, feldX, feldZ, eigentuemer, preis);
+        }
+
+        @Override
         public List<Parzelle> staedteIn(String welt) {
             return echt.staedteIn(welt);
         }
@@ -747,6 +753,12 @@ class BesitzbuchTest {
         }
 
         @Override
+        public Parzelle werderAnlegen(String welt, int feldX, int feldZ,
+                                      UUID eigentuemer, long preis) {
+            return echt.werderAnlegen(welt, feldX, feldZ, eigentuemer, preis);
+        }
+
+        @Override
         public List<Parzelle> staedteIn(String welt) {
             return echt.staedteIn(welt);
         }
@@ -853,6 +865,12 @@ class BesitzbuchTest {
         public Parzelle freistadtAnlegen(String welt, int feldX, int feldZ,
                                          UUID eigentuemer, long preis, String name) {
             return echt.freistadtAnlegen(welt, feldX, feldZ, eigentuemer, preis, name);
+        }
+
+        @Override
+        public Parzelle werderAnlegen(String welt, int feldX, int feldZ,
+                                      UUID eigentuemer, long preis) {
+            return echt.werderAnlegen(welt, feldX, feldZ, eigentuemer, preis);
         }
 
         @Override

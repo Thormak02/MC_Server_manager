@@ -70,6 +70,17 @@ permissions:
     # es weg und gibt es einer Gruppe.
     description: Darf einen Laden mieten, verlaengern und kuendigen
     default: true
+  freimarken.werder:
+    # Die Auskunft: die eigenen Inseln sehen und nachsehen, was an einer Stelle liegt.
+    description: Darf die eigenen Meerinseln sehen
+    default: true
+  freimarken.werder.nehmen:
+    # Ein zweites Recht und nicht freimarken.werder: Das Ansehen ist eine Auskunft, das
+    # Nehmen bewegt 75.000 Mark. Plan 9 haengt es spaeter an einen Rang - bis Schritt 12
+    # den Aufstieg bringt, steht es hier auf true. Wer schon heute staffeln will, nimmt
+    # es weg und gibt es einer Gruppe.
+    description: Darf eine Meerinsel auf Hafenwerder nehmen
+    default: true
   freimarken.freistadt:
     description: Darf die Liste der Freistaedte sehen
     default: true
@@ -178,8 +189,9 @@ permissions:
     # und das ist die Vorarbeit fuer einen Einbruch, nicht seine Aufklaerung.
     description: Darf das Blockbuch lesen - wer wann wo was getan hat
     default: op
-  # Zwei Obergrenzen kommen ueber ein Recht mit Zahl: freimarken.parzellen.8 erlaubt acht
-  # Parzellen, freimarken.gruppe.4 vier Felder je zusammengelegter Gruppe. Die hoechste
+  # DREI Obergrenzen kommen ueber ein Recht mit Zahl: freimarken.parzellen.8 erlaubt acht
+  # Parzellen, freimarken.gruppe.4 vier Felder je zusammengelegter Gruppe,
+  # freimarken.inseln.2 zwei Meerinseln. Die hoechste
   # Zahl gewinnt, der Wert aus der config.yml ist die Untergrenze. Hier steht kein Eintrag
   # dafuer, weil die Zahl frei waehlbar ist - eingetragen wird sie in der
   # Rechteverwaltung, nicht hier.

@@ -29,9 +29,9 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
     /**
      * Woher die Bloecke kommen.
      *
-     * <p>Drei und nicht beliebig viele: Jede Art ist ein Stueck Programm, das es geben
-     * muss. Ein vierter Eintrag in der Datei kann keinen Generator erfinden - deshalb
-     * nennt die Liste die Arten, nicht Klassennamen.
+     * <p>Eine feste Liste und nicht beliebig viele: Jede Art ist ein Stueck Programm, das
+     * es geben muss. Ein weiterer Eintrag in der Datei kann keinen Generator erfinden -
+     * deshalb nennt die Liste die Arten, nicht Klassennamen.
      */
     enum Art {
         /** Das Parzellenraster der Marktstadt. */
@@ -68,7 +68,27 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
          * {@link #LEER} und {@link #FLACH}: Das Gelaende kommt aus der Rechnung und
          * nicht aus einer Zahl.
          */
-        STADTFELDER
+        STADTFELDER,
+
+        /**
+         * Gleiche Inseln in gleichem Abstand, dazwischen Meer - Hafenwerder
+         * [18.11.2026].
+         *
+         * <p>Ein festes Raster aus Feldern zu 128x128, durch 128 Bloecke offenes Meer
+         * getrennt: {@code InselnGenerator} und {@code Inselplan}. Das FELD ist das
+         * Eigentum, und darin liegt die Insel mit einem Wasserring um sich herum - ihr
+         * Hafen. Keine Barriere wie bei den Stadtfeldern: Hinueberschwimmen soll man
+         * duerfen, nur bauen nicht.
+         *
+         * <p>Plan 4.1 sagte "Gelaende: natuerlich gewachsen", 6.2 einen Festpreis von
+         * 75.000 Mark. Beides zusammen geht nicht - die eine Insel laege im Flachwasser,
+         * die naechste halb im Berg, und EIN Preis kann nicht fuer beide derselbe sein.
+         * Darum ist jede Insel DIESELBE Insel, nur anderswo; dieselbe Entscheidung wie am
+         * 11.11.2026 bei den Freistaedten.
+         *
+         * <p>Der Startwert ist hier ohne Wirkung - das Gelaende kommt aus der Rechnung.
+         */
+        INSELN
     }
 
     /** Ob fuer diese Welt ueberhaupt eine Grenze gesetzt werden soll. */
@@ -99,19 +119,29 @@ record Weltangabe(String name, World.Environment umgebung, Weltangabe.Art art,
     /**
      * Ob bei dieser Art ein Startwert ueberhaupt etwas aendert.
      *
-     * <p>Beim {@link Art#RASTER} kommt das Gelaende aus dem Parzellengenerator, bei
-     * {@link Art#LEER} aus der Leere, und eine {@link Art#FLACH}e Ebene ist eine
-     * Ebene - gleich welche Zahl darueber steht.
+     * <p>Nur bei {@link Art#GEWOEHNLICH}. Beim {@link Art#RASTER} kommt das Gelaende aus
+     * dem Parzellengenerator, bei {@link Art#LEER} aus der Leere, bei
+     * {@link Art#STADTFELDER} und {@link Art#INSELN} aus der Rechnung, und eine
+     * {@link Art#FLACH}e Ebene ist eine Ebene - gleich welche Zahl darueber steht.
      *
      * <p><b>Diese Frage steht hier und nicht an ihren drei Aufrufstellen</b>, und das
      * ist am 09.11.2026 im Startlauf teuer geworden: Der Startwert wurde fuer eine
      * flache Welt richtig NICHT gesetzt, die Abweichungsklage kam aber trotzdem -
      * "die Welt hat 8765839788193927876, die Liste sagt 110926001". Eine Klage ueber
      * etwas, das Absicht ist, nimmt jeder Leser beim naechsten Mal nicht mehr ernst.
+     *
+     * <p><b>Ein Verzweig ueber ALLE Arten und keine Kette von Ungleichheiten</b>
+     * [18.11.2026]: Jene stand hier bis zur vierten Art und war eine Falle in die
+     * gefaehrliche Richtung - eine neu dazugekommene Art galt stillschweigend als
+     * startwertfaehig, und die Klage vom 09.11. waere wiedergekommen. Ein Verzweig ohne
+     * {@code default} laesst sich nicht erweitern, ohne die Frage zu beantworten: Er
+     * uebersetzt sich sonst nicht.
      */
     boolean startwertWirkt() {
-        return art != Art.RASTER && art != Art.LEER && art != Art.FLACH
-                && art != Art.STADTFELDER;
+        return switch (art) {
+            case GEWOEHNLICH -> true;
+            case RASTER, LEER, FLACH, STADTFELDER, INSELN -> false;
+        };
     }
 
     /**

@@ -232,7 +232,7 @@ final class SpielzeitBefehle {
 
     /**
      * Was unter der Ueberschrift steht - ohne Spielerobjekt und ohne Senden, damit es ohne
-     * Server pruefbar ist. Dasselbe Muster wie {@code ParzellenBefehle.mitZuschlag}.
+     * Server pruefbar ist. Dasselbe Muster wie {@code Rangzahl.mitZuschlag}.
      *
      * <p>Der TAG kommt vom Aufrufer und wird nicht in der Ablage gerechnet: {@code lies}
      * darf nicht wissen, was heute ist - sonst braeuchte es eine zweite Zone oder ein

@@ -63,6 +63,19 @@ class LadengebuehrlaufTest {
     private Shopbuch shopbuch;
     private Ladengebuehrlauf lauf;
 
+    /**
+     * Was der Lauf ins Protokoll geschrieben hat - MITGESCHRIEBEN, nicht gezaehlt.
+     *
+     * <p>Der Waechter dieser Datei, und er musste erst gefunden werden: Jeder Absturz
+     * des Laufs hinterlaesst genau eine Klage. Eine Probe, die bloss sagt "nichts ist
+     * passiert", ist blind dagegen - und ein zweiter, zahlender Shop beweist nur, dass
+     * der Lauf BIS ZU IHM gekommen ist, nicht dass er durch ist.
+     */
+    private final java.util.List<java.util.logging.LogRecord> protokollzeilen =
+            new java.util.ArrayList<>();
+
+    private Logger protokoll;
+
     @BeforeAll
     static void serverStellen() {
         Serverprobe.einmalSetzen();
@@ -87,9 +100,11 @@ class LadengebuehrlaufTest {
         shops = new SpeicherShops();
         shopbuch = new Shopbuch(shops, null, null, wirtschaft, buch,
                 Logger.getAnonymousLogger());
+        protokollzeilen.clear();
+        protokoll = eigenesProtokoll();
         lauf = new Ladengebuehrlauf(shopbuch, shops, buch, STADTWELT, uhr, wirtschaft,
                 org.bukkit.Bukkit.getServer(), Sprachprobe.spracheAusDemJar(),
-                Logger.getAnonymousLogger());
+                protokoll);
     }
 
     @Test
@@ -184,11 +199,24 @@ class LadengebuehrlaufTest {
         shops.schreibe(new Kistenshop(STADTWELT, stelleX(stadt) - 1, 64, stelleZ(stadt),
                 stelleX(stadt), 64, stelleZ(stadt), null, 16, 100L, 0L, STEIN,
                 Set.of()));
+        // FUND DER EINSPRITZUNGSRUNDE (F37): EIN ZWEITER, GEWOEHNLICHER SHOP, und er
+        // ist der eigentliche Waechter. Ohne ihn sagte diese Probe nur "der Bundshop
+        // steht noch" - und das gilt auch, wenn der Lauf an ihm ABBRICHT: Ein
+        // Bundshop hat keinen Besitzer, das Abbuchen wirft, und der Fang beendet den
+        // ganzen Durchgang. Im Spiel hiesse das: EIN Bundshop in einer Stadt haelt die
+        // Tagesgebuehr fuer ALLE Laeden auf, jeden Tag.
+        Parzelle zweite = buch.gruende(STADTWELT, ANNA, "bertstadt", 99).stadt()
+                .orElseThrow();
+        shops.schreibe(shopIn(zweite, BERT));
+        long bertVorher = geld.guthaben(BERT);
 
         assertEquals(0, lauf.imTakt());
 
         assertNotNull(shops.anDemSchild(STADTWELT, stelleX(stadt) - 1, 64,
                 stelleZ(stadt)));
+        assertEquals(bertVorher - 10L, geld.guthaben(BERT),
+                "und der gewoehnliche Shop hat gezahlt - der Lauf ist bis zu ihm"
+                        + " gekommen");
     }
 
     @Test
@@ -196,30 +224,55 @@ class LadengebuehrlaufTest {
     void ausserhalbZahltNichts() {
         // Die Gebuehr ist eine Gebuehr AN EINE STADT. Wo keine steht, gibt es keine
         // Kasse - und in Altfurt steht nie eine.
-        gegruendet();
+        Parzelle stadt = gegruendet();
         schalteEin(10L);
         shops.schreibe(new Kistenshop(ALTFURT, 10, 64, 10, 11, 64, 10, BERT, 16, 100L,
                 0L, STEIN, Set.of()));
         long vorher = geld.guthaben(BERT);
+        // FUND DER EINSPRITZUNGSRUNDE (F40): EIN ZWEITER SHOP, DER ZAHLEN MUSS - der
+        // eigentliche Waechter. Ohne ihn sagte diese Probe nur "nichts ist passiert",
+        // und genau so sieht ein Lauf aus, der an dem Shop in Altfurt ABBRICHT. Im
+        // Spiel hiesse das: Ein einziger Shop in der Wildnis haelt die Tagesgebuehr
+        // fuer alle Staedte auf.
+        shops.schreibe(shopIn(stadt, ANNA));
+        long annaVorher = geld.guthaben(ANNA);
 
         assertEquals(0, lauf.imTakt());
 
         assertEquals(vorher, geld.guthaben(BERT));
         assertNotNull(shops.anDemSchild(ALTFURT, 10, 64, 10));
+        assertEquals(annaVorher - 10L, geld.guthaben(ANNA),
+                "und der Shop IN der Stadt hat gezahlt");
+        // DER WAECHTER, der nicht an der Reihenfolge haengt [F40, zweiter Versuch]:
+        // Jeder Absturz dieses Laufs hinterlaesst genau eine Klage. Die Zeile darueber
+        // beweist nur, dass er BIS ZU diesem Shop gekommen ist - alle() ist nach der
+        // Stelle sortiert, und welcher zuerst kommt, ist Zufall der Koordinaten.
+        assertEquals(java.util.List.of(), klagen(),
+                "und er ist OHNE Klage durchgelaufen");
     }
 
     @Test
     @DisplayName("Ein Shop auf einem FREIEN Feld der Stadtwelt zahlt auch nichts")
     void freiesFeldZahltNichts() {
+        Parzelle stadt = gegruendet();
         schalteEin(10L);
         int frei = buch.plan().feldMitte(40);
         shops.schreibe(new Kistenshop(STADTWELT, frei - 1, 64, frei, frei, 64, frei,
                 BERT, 16, 100L, 0L, STEIN, Set.of()));
         long vorher = geld.guthaben(BERT);
+        // Und wieder der zweite Shop als Waechter - siehe F40 bei der Probe darueber.
+        shops.schreibe(shopIn(stadt, ANNA));
+        long annaVorher = geld.guthaben(ANNA);
 
         assertEquals(0, lauf.imTakt());
 
         assertEquals(vorher, geld.guthaben(BERT));
+        assertEquals(annaVorher - 10L, geld.guthaben(ANNA),
+                "der Shop IN der Stadt hat gezahlt");
+        // Und wieder die Klage als Waechter - siehe die Probe darueber.
+        assertEquals(java.util.List.of(), klagen(),
+                "ohne Klage durchgelaufen: Ein Shop auf einem freien Feld ist kein"
+                        + " Fehler, sondern ein Shop ohne Stadt");
     }
 
     @Test
@@ -251,6 +304,34 @@ class LadengebuehrlaufTest {
     }
 
     // --- Werkzeug -------------------------------------------------------------
+
+    private java.util.List<String> klagen() {
+        return protokollzeilen.stream()
+                .filter(satz -> satz.getLevel().intValue()
+                        >= java.util.logging.Level.WARNING.intValue())
+                .map(java.util.logging.LogRecord::getMessage)
+                .toList();
+    }
+
+    private Logger eigenesProtokoll() {
+        Logger eigener = Logger.getLogger("LadengebuehrProbe-" + UUID.randomUUID());
+        eigener.setUseParentHandlers(false);
+        eigener.addHandler(new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord satz) {
+                protokollzeilen.add(satz);
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        });
+        return eigener;
+    }
 
     private void schalteEin(long betrag) {
         wirtschaft.uebernimm(wirtschaft.werte().mitFreistaedten(

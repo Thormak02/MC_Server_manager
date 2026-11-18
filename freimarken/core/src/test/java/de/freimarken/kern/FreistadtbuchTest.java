@@ -769,6 +769,34 @@ class FreistadtbuchTest {
     // ------------------------------------- Der Regeltext [Teil E2]
 
     /**
+     * Eine Kasse, die den Stand NENNT und beim Abbuchen WIRFT.
+     *
+     * <p>Nur damit ist zu sehen, ob die Vorpruefung vor dem Abbuchen steht: Mit ihr
+     * kommt ZU_WENIG, ohne sie GESTOERT. Eine Kasse, die bloss false gibt, zeigte den
+     * Unterschied nicht - beide Riegel antworten gleich.
+     */
+    private static final class WerfendeKasse extends Kassenattrappe {
+
+        private long stand;
+        private int versuche;
+
+        WerfendeKasse() {
+            super(0L);
+        }
+
+        @Override
+        public long guthaben(UUID spieler) {
+            return stand;
+        }
+
+        @Override
+        public boolean abbuchen(UUID spieler, long betrag, Buchungsgrund grund) {
+            versuche++;
+            throw new IllegalStateException("Die Datenbank antwortet nicht");
+        }
+    }
+
+    /**
      * Ein Lager, das jeden gesetzten Besuchstag MITSCHREIBT.
      *
      * <p>Der Tag und keine Zahl: Eine Zaehltafel sagte nur, DASS geschrieben wurde,
@@ -1478,6 +1506,62 @@ class FreistadtbuchTest {
 
         assertEquals(Verfallsregel.Stand.FAELLIG, buch.verfallsstand(alt,
                 LocalDate.of(2026, 11, 17), java.time.ZoneId.of("Europe/Berlin")));
+    }
+
+    @Test
+    @DisplayName("Abheben prueft den Stand VOR dem Abbuchen - und nicht erst danach")
+    void abhebenPrueftVorher() {
+        // FUND DER EINSPRITZUNGSRUNDE (F3): Nimmt man die Vorpruefung heraus, bleibt
+        // alles gruen - denn dahinter liegt ein ZWEITER Riegel, und abbuchen antwortet
+        // mit demselben Bescheid. Zwei Pruefungen fuer denselben Fall machen sich
+        // gegenseitig unpruefbar.
+        //
+        // BEOBACHTBAR WIRD DER UNTERSCHIED MIT EINER KASSE, DIE BEIM ABBUCHEN WIRFT:
+        // Mit der Vorpruefung kommt ZU_WENIG, weil abbuchen nie gerufen wird; ohne sie
+        // kommt GESTOERT. Damit ist die Reihenfolge das Gepruefte und nicht der
+        // Bescheid, den beide Riegel teilen.
+        //
+        // Der zweite Riegel bleibt trotzdem: Er ist der Fang gegen die Lage, in der
+        // sich der Stand ZWISCHEN Lesen und Abbuchen aendert - ein Grundstueckskauf
+        // zahlt ein, ein zweiter Befehl hebt ab.
+        WerfendeKasse werfend = new WerfendeKasse();
+        Freistadtbuch eigenes = new Freistadtbuch(Feldgrenze.freistaedte(), lager, kasse,
+                new Stadtkasse(werfend), WARPS, VORGABE);
+        eigenes.gruende(WELT, anna, "kassenstadt", VIELE);
+        Parzelle stadt = eigenes.staedte(WELT).get(0);
+        werfend.stand = 500L;
+
+        Freistadtbuch.Kassenentscheid zuViel = eigenes.hebeAb(WELT, anna,
+                mitteX(stadt), mitteZ(stadt), 600L);
+
+        assertEquals(Freistadtbuch.Kassenbescheid.ZU_WENIG, zuViel.bescheid(),
+                "die Vorpruefung antwortet, OHNE die Kasse anzufassen - ohne sie waere"
+                        + " hier GESTOERT");
+        assertEquals(0, werfend.versuche, "und abbuchen wurde nicht einmal versucht");
+    }
+
+    @Test
+    @DisplayName("Die Erstattung rechnet vom EINGESETZTEN Preis, nicht vom heutigen")
+    void erstattungVomEingesetztenPreis() {
+        // FUND DER EINSPRITZUNGSRUNDE (F33): Alle Proben gruendeten mit dem
+        // Vorgabepreis und rechneten gegen denselben - der Unterschied zwischen
+        // "Preis der Zeile" und "Preis aus der Datei" war nie zu sehen. Das ist die
+        // Lehre, dass sich A und B NUR in der geprueften Sache unterscheiden duerfen.
+        //
+        // IM SPIEL: Ein Betreiber senkt den Gruendungspreis von 400.000 auf 100.000.
+        // Wer vorher gezahlt hat, bekaeme dann 50.000 statt 200.000 - und ein Jahr
+        // Bauzeit waere die Haelfte des Einsatzes wert.
+        Parzelle stadt = gegruendet();
+        assertEquals(PREIS, stadt.preis(), "gegruendet zum alten Preis");
+
+        Freistadtbuch billiger = new Freistadtbuch(Feldgrenze.freistaedte(), lager,
+                kasse, stadtkasse, WARPS,
+                new Wirtschaftsstand(Wirtschaftswerte.VORGABE.mitFreistaedten(
+                        Freistadtwerte.VORGABE.mitGruendungspreis(100_000L))));
+
+        assertEquals(PREIS / 2, billiger.erstattungFuer(stadt),
+                "die Haelfte von 400.000 und nicht von 100.000 - die Zeile traegt"
+                        + " ihren Preis selbst");
     }
 
     // ------------------------------------- Der Besuchsstempel [Teil E4]

@@ -80,6 +80,21 @@ class ParzelleTest {
     }
 
     @Test
+    @DisplayName("OHNE Spieler ist die Antwort NEIN - und kein Wurf")
+    void ohneSpielerIstEsNein() {
+        // GEFUNDEN AM 18.11.2026 von InselbuchTest: Set.of(...).contains(null) ist eine
+        // NullPointerException, und zwar auch bei einer LEEREN Mitbauerliste. Genau so
+        // fragt aber eine Wache, die einen Handbalken begruendet ("wem gehoert das hier
+        // ueberhaupt"), und genau so kommen die Ereignisse ohne Spieler herein.
+        //
+        // Im Spiel haette die Inselwache daraus eine Klage ueber eine stumme Datenbank
+        // gemacht und jedes Bauen abgelehnt - mit einem Grund, der nicht stimmt. Beide
+        // Listen stehen hier, weil der Wurf an der LEEREN schon kam.
+        assertFalse(bauen(1L, 0L, Zustand.AKTIV, Set.of()).darfBauen(null));
+        assertFalse(bauen(1L, 0L, Zustand.AKTIV, Set.of(bert)).darfBauen(null));
+    }
+
+    @Test
     @DisplayName("Mitbauer werden weiterhin unveraenderlich kopiert")
     void mitbauerBleibenUnveraenderlich() {
         Set<UUID> veraenderlich = new HashSet<>(Set.of(bert));

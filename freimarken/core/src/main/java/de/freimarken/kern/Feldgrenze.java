@@ -73,9 +73,7 @@ public final class Feldgrenze {
             throw new IllegalArgumentException("Eine Weltgrenze nimmt hoechstens "
                     + (long) WELTGRENZE_HOECHSTMASS + " an, nicht " + gewuenschteKante);
         }
-        int felder = 2 * ((gewuenschteKante - plan.leereBreite())
-                / (2 * plan.rasterWeite()));
-        return new Feldgrenze(plan, felder);
+        return new Feldgrenze(plan, plan.rechnung().felderFuer(gewuenschteKante));
     }
 
     /** Die Grenze der Freistaedte nach Plan 6.4. */
@@ -85,7 +83,7 @@ public final class Feldgrenze {
 
     /** Die kleinste Kante, die noch eine Welt ergibt: zwei Felder und eine Leere. */
     public static int mindestKante(Stadtfeldplan plan) {
-        return 2 * plan.rasterWeite() + plan.leereBreite();
+        return plan.rechnung().mindestKante();
     }
 
     /**
@@ -172,21 +170,21 @@ public final class Feldgrenze {
 
     /** Die Kantenlaenge der Weltgrenze - ein Durchmesser, kein Radius. */
     public double kante() {
-        return (double) plan.rasterWeite() * felderJeAchse + plan.leereBreite();
+        return plan.rechnung().weltkante(felderJeAchse);
     }
 
     /** Die Mitte der Weltgrenze auf beiden Achsen. Immer -leereBreite/2. */
     public double mitte() {
-        return -plan.leereBreite() / 2.0;
+        return plan.rechnung().weltmitte();
     }
 
     /** Kleinste Weltkoordinate innerhalb der Grenze - der aeussere Rand der Leere. */
     public int kleinsterBlock() {
-        return plan.feldAnfang(von()) - plan.leereBreite();
+        return plan.rechnung().kleinsterBlock(von());
     }
 
     /** Groesste Weltkoordinate innerhalb der Grenze - der aeussere Rand der Leere. */
     public int groessterBlock() {
-        return plan.feldAnfang(bis()) + plan.rasterWeite() - 1;
+        return plan.rechnung().groessterBlock(bis());
     }
 }

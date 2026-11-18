@@ -339,17 +339,29 @@ final class Spielerprobe {
      *
      * <p>{@code hasPermission} genuegt nicht ueberall: Die Zuschlaege auf die
      * Hoechstzahl stehen als {@code freimarken.extra.parzellen.3} im Recht selbst,
-     * und {@code ParzellenBefehle.hoechsteAus} liest die ZAHL aus dem Namen. Dazu
+     * und {@code Rangzahl.hoechsteAus} liest die ZAHL aus dem Namen. Dazu
      * muss es die Rechte aufzaehlen koennen.
      *
      * <p>{@code PermissionAttachmentInfo} ist eine Klasse und keine Schnittstelle,
-     * also kein Stellvertreter: Sie wird gebaut. Der Anhang und der Traeger bleiben
-     * {@code null} - gelesen werden nur Name und Wert.
+     * also kein Stellvertreter: Sie wird gebaut. Der TRAEGER ist der Spieler selbst,
+     * und das ist seit dem 18.11.2026 nicht mehr nur richtig, sondern notwendig: Hier
+     * stand {@code null}, mit der Begruendung, gelesen wuerden nur Name und Wert.
+     * Bukkit prueft es inzwischen im Konstruktor und wirft "Permissible may not be
+     * null" - also WARF jeder Zweig, der die Rechte durchsucht.
+     *
+     * <p><b>Aufgefallen ist das erst mit {@code WerderBefehlTest}</b>, und daran sieht
+     * man, was hier wirklich fehlte: Die Hoechstzahl aus einem Recht
+     * ({@code freimarken.parzellen.8}) hatte in keinem getippten Befehl eine Probe.
+     * Gezaehlt wurde sie nur in {@code RangzahlTest}, und der rechnet mit zwei Zahlen,
+     * ohne je einen Spieler zu fragen.
+     *
+     * <p>Der ANHANG bleibt {@code null} - den liest niemand, und ein erfundener waere
+     * eine zweite Wahrheit ueber die Herkunft des Rechts.
      */
     private Set<PermissionAttachmentInfo> wirksameRechte() {
         Set<PermissionAttachmentInfo> eintraege = new LinkedHashSet<>();
         for (String recht : rechte) {
-            eintraege.add(new PermissionAttachmentInfo(null, recht, null, true));
+            eintraege.add(new PermissionAttachmentInfo(spieler(), recht, null, true));
         }
         return eintraege;
     }

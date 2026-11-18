@@ -73,11 +73,14 @@ import java.util.Set;
  *                      tauscht beides als EIN Stueck, und wer mitten in der Rechnung
  *                      einen neuen Lohn aus einer alten Minderung bekaeme, verdiente
  *                      einen Augenblick lang etwas, das niemand eingestellt hat
+ * @param inselbonus    ein Zuschlag je Beruf, der NUR in der Inselwelt gilt (Plan 9.1:
+ *                      "Fischer - Bonus auf Hafenwerder"). Hier und nicht daneben, aus
+ *                      demselben Grund wie die Tafel darueber
  */
 public record Verdienstwerte(long tagesdeckel, int vollBis, int stufe, int faktorProzent,
                              int bodenProzent, Map<Taetigkeit, Integer> stundenmengen,
                              Set<String> spawngruende, Set<String> saatgut,
-                             Lohntafel loehne) {
+                             Lohntafel loehne, Map<String, Integer> inselbonus) {
 
     public static final String PFAD_TAGESDECKEL = "verdienst.tagesdeckel";
 
@@ -100,6 +103,17 @@ public record Verdienstwerte(long tagesdeckel, int vollBis, int stufe, int fakto
 
     /** Der Abschnitt mit den Loehnen - je Beruf, Taetigkeit und Name. */
     public static final String PFAD_LOEHNE = "verdienst.loehne";
+
+    /**
+     * Der Abschnitt mit einem Zuschlag je Beruf - gilt NUR in der Inselwelt.
+     *
+     * <p>Plan 9.1: "Fischer | Fang - Bonus auf Hafenwerder". Die WELT steht nicht in
+     * diesem Schluessel, und das ist eine Entscheidung: Gemeint ist die Welt aus
+     * {@code inseln.welt}, also genau die, in der es die Meerinseln gibt. Ein Bonus je
+     * Welt waere eine vierte Ebene im Lohnschluessel - und eine Einstellung, die fuer
+     * sechs Welten dasteht, in denen niemand sie braucht.
+     */
+    public static final String PFAD_INSELBONUS = "verdienst.inselbonus";
 
     /**
      * 20.000 Mark am Tag.
@@ -211,6 +225,27 @@ public record Verdienstwerte(long tagesdeckel, int vollBis, int stufe, int fakto
             "nether_wart", "sweet_berry_bush", "torchflower_crop", "pitcher_crop");
 
     /**
+     * Der hoechste Zuschlag, den eine Zeile tragen darf - tausend Prozent.
+     *
+     * <p>Gegen den Vertipper und nicht gegen den Willen: Wer 50 meint und 5000 tippt,
+     * soll es beim Start lesen und nicht am Kontostand seiner Fischer.
+     */
+    public static final int HOECHSTER_INSELBONUS = 1_000;
+
+    /**
+     * Der ausgelieferte Zuschlag: fuenfzig Prozent fuer den FISCHER.
+     *
+     * <p>Plan 9.1 nennt genau diesen einen. Der Reeder steht ausdruecklich NICHT dabei -
+     * sein Seehandel ist nicht gebaut, und ein Zuschlag auf etwas, das es nicht gibt,
+     * waere eine Zeile, die nie wirkt.
+     *
+     * <p>Fuenfzig, und die Zahl hat einen Grund: Ein Fischer kommt nach der Rechnung in
+     * der config.yml auf rund 2.850 Mark in der Stunde, mit dem Zuschlag auf 4.275. Das
+     * ist ein Grund, nach Hafenwerder zu fahren, und kein zweiter Beruf.
+     */
+    public static final Map<String, Integer> VORGABE_INSELBONUS = Map.of("fischer", 50);
+
+    /**
      * Die Vorgabe traegt eine LEERE Lohntafel - und das ist Absicht.
      *
      * <p>Jede andere Vorgabe dieses Projekts steht im Programm, damit sie nicht fehlen
@@ -226,9 +261,30 @@ public record Verdienstwerte(long tagesdeckel, int vollBis, int stufe, int fakto
     public static final Verdienstwerte VORGABE = new Verdienstwerte(VORGABE_TAGESDECKEL,
             VORGABE_VOLL_BIS, VORGABE_STUFE, VORGABE_FAKTOR_PROZENT,
             VORGABE_BODEN_PROZENT, VORGABE_STUNDENMENGEN, VORGABE_SPAWNGRUENDE,
-            VORGABE_SAATGUT, Lohntafel.ausLoehnen(List.of()));
+            VORGABE_SAATGUT, Lohntafel.ausLoehnen(List.of()), VORGABE_INSELBONUS);
 
     public Verdienstwerte {
+        if (inselbonus == null) {
+            throw new IllegalArgumentException("Ohne Inselbonus gibt es keinen Zuschlag;"
+                    + " eine LEERE Abbildung ist erlaubt und heisst: keiner");
+        }
+        for (Map.Entry<String, Integer> zeile : inselbonus.entrySet()) {
+            if (zeile.getKey() == null || zeile.getKey().isBlank()) {
+                throw new IllegalArgumentException(PFAD_INSELBONUS + " hat eine Zeile"
+                        + " ohne Beruf - der Name IST der Beruf.");
+            }
+            if (zeile.getValue() == null || zeile.getValue() < 0
+                    || zeile.getValue() > HOECHSTER_INSELBONUS) {
+                throw new IllegalArgumentException(PFAD_INSELBONUS + "."
+                        + zeile.getKey() + " ist " + zeile.getValue() + " und liegt"
+                        + " nicht zwischen 0 und " + HOECHSTER_INSELBONUS
+                        + " Prozent.");
+            }
+        }
+        // Die eigene Abbildung und nicht die hereingegebene, und hier aus dem
+        // schaerfsten Grund: Sie wird bei JEDEM bezahlten Block gelesen, und zwar aus
+        // dem Hauptfaden.
+        inselbonus = Map.copyOf(inselbonus);
         if (loehne == null) {
             throw new IllegalArgumentException("Ohne Lohntafel gibt es keinen Verdienst;"
                     + " eine leere Tafel ist erlaubt und heisst: nichts bringt etwas ein");
@@ -352,13 +408,13 @@ public record Verdienstwerte(long tagesdeckel, int vollBis, int stufe, int fakto
     public Verdienstwerte mitMinderung(long deckel, int bisVoll, int breite,
                                        int faktor, int boden) {
         return new Verdienstwerte(deckel, bisVoll, breite, faktor, boden, stundenmengen,
-                spawngruende, saatgut, loehne);
+                spawngruende, saatgut, loehne, inselbonus);
     }
 
     /** Dieselben Werte mit einer anderen Lohntafel. */
     public Verdienstwerte mitLoehnen(Lohntafel andere) {
         return new Verdienstwerte(tagesdeckel, vollBis, stufe, faktorProzent,
-                bodenProzent, stundenmengen, spawngruende, saatgut, andere);
+                bodenProzent, stundenmengen, spawngruende, saatgut, andere, inselbonus);
     }
 
     /** Dieselben Werte mit einer anderen Stundenmenge fuer EINE Taetigkeit. */
@@ -366,19 +422,40 @@ public record Verdienstwerte(long tagesdeckel, int vollBis, int stufe, int fakto
         Map<Taetigkeit, Integer> geaendert = new LinkedHashMap<>(stundenmengen);
         geaendert.put(taetigkeit, menge);
         return new Verdienstwerte(tagesdeckel, vollBis, stufe, faktorProzent,
-                bodenProzent, geaendert, spawngruende, saatgut, loehne);
+                bodenProzent, geaendert, spawngruende, saatgut, loehne, inselbonus);
     }
 
     /** Dieselben Werte mit einer anderen Weissliste der Entstehungsgruende. */
     public Verdienstwerte mitSpawngruenden(Set<String> andere) {
         return new Verdienstwerte(tagesdeckel, vollBis, stufe, faktorProzent,
-                bodenProzent, stundenmengen, andere, saatgut, loehne);
+                bodenProzent, stundenmengen, andere, saatgut, loehne, inselbonus);
+    }
+
+    /**
+     * Der Zuschlag fuer diesen Beruf in der Inselwelt - 0, wenn keiner eingetragen ist.
+     *
+     * <p>Kleingeschrieben gefragt, wie jeder Berufsname in diesem Projekt: Die
+     * {@code config.yml} schreibt {@code fischer}, und der Vergleich mit {@code Fischer}
+     * waere immer ungleich.
+     */
+    public int inselbonusFuer(String beruf) {
+        if (beruf == null) {
+            return 0;
+        }
+        return inselbonus.getOrDefault(
+                beruf.trim().toLowerCase(java.util.Locale.ROOT), 0);
+    }
+
+    /** Dieselben Werte mit einem anderen Inselbonus. */
+    public Verdienstwerte mitInselbonus(Map<String, Integer> andere) {
+        return new Verdienstwerte(tagesdeckel, vollBis, stufe, faktorProzent,
+                bodenProzent, stundenmengen, spawngruende, saatgut, loehne, andere);
     }
 
     /** Dieselben Werte mit einer anderen Saatgutliste. */
     public Verdienstwerte mitSaatgut(Set<String> andere) {
         return new Verdienstwerte(tagesdeckel, vollBis, stufe, faktorProzent,
-                bodenProzent, stundenmengen, spawngruende, andere, loehne);
+                bodenProzent, stundenmengen, spawngruende, andere, loehne, inselbonus);
     }
 
     public static boolean brauchbarerDeckel(long mark) {

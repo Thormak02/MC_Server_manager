@@ -19,7 +19,7 @@ import java.util.Set;
 /**
  * Das eine Verzeichnis aller Saetze - die Entsprechung zu {@code Wirtschaftsliste.SCHLUESSEL}.
  *
- * <p>Acht Bereichsaufzaehlungen, EINE Liste. Die Liste der Bereiche steht einmal und
+ * <p>Siebzehn Bereichsaufzaehlungen, EINE Liste. Die Liste der Bereiche steht einmal und
  * wird zweimal gebraucht: fuer {@link #alle()} und fuer die Probe, die nachsieht, ob ein
  * Bauschritt seinen Bereich auch angemeldet hat. Gab es sie zweimal, koennte ein Bereich in
  * der einen stehen und in der anderen fehlen.
@@ -31,7 +31,7 @@ import java.util.Set;
 final class Sprachschluessel {
 
     /**
-     * Die fuenfzehn Bereiche, in der Reihenfolge der Bauschritte.
+     * Die siebzehn Bereiche, in der Reihenfolge der Bauschritte.
      *
      * <p>Als {@code Class} und nicht als {@code values()}: So braucht ein noch leerer
      * Bereich keinen Platzhalterschluessel, und die Probe kann trotzdem nachsehen, dass
@@ -48,9 +48,10 @@ final class Sprachschluessel {
             BundSatz.class, MarkSatz.class, ParzellenSatz.class, AnfragenSatz.class,
             SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class,
             MarktSatz.class, BonusSatz.class, LadenSatz.class, MietSatz.class,
-            ShopSatz.class, BlockSatz.class, TruheSatz.class, FreistadtSatz.class);
+            ShopSatz.class, BlockSatz.class, TruheSatz.class, FreistadtSatz.class,
+            WerderSatz.class);
 
-    /** Alle Saetze, aus allen sechzehn Bereichen - einmal gebaut, unveraenderlich. */
+    /** Alle Saetze, aus allen siebzehn Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
 
     /** Jeder Pfad der Datei auf seinen Satz - auch {@code .eins} und {@code .viele}. */

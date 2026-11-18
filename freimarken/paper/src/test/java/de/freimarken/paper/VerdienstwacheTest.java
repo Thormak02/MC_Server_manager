@@ -58,6 +58,15 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Verdienstwache")
 class VerdienstwacheTest {
 
+    /**
+     * Es gibt keine Inselwelt - also legt nirgends ein Zuschlag auf.
+     *
+     * <p>Ein NAME und kein nacktes {@code ""}: Der Inselbonus kam mit Schritt 10 dazu,
+     * und jede Probe dieser Datei rechnet ohne ihn. Was der Zuschlag TUT, prueft
+     * {@code VerdienstbuchTest} - dort wird gerechnet; hier geht es um die Ereignisse.
+     */
+    private static final String KEINE_INSELWELT = "";
+
     private static final String MARKTSTADT = "freimarken:marktstadt";
     private static final String HOCHWALD = "freimarken:hochwald";
     private static final String FREMD = "freimarken:anderswo";
@@ -190,7 +199,8 @@ class VerdienstwacheTest {
 
     private Verdienstwache wache(Verdienstbuch buch, Berufsablage ablage) {
         return new Verdienstwache(takt, buch, marken, ablage, stand(),
-                Set.of(MARKTSTADT, HOCHWALD), Sprachprobe.spracheAusDemJar(), protokoll);
+                Set.of(MARKTSTADT, HOCHWALD), KEINE_INSELWELT,
+                Sprachprobe.spracheAusDemJar(), protokoll);
     }
 
     /**
@@ -819,7 +829,7 @@ class VerdienstwacheTest {
         // und bucht nie. Der Spieler sieht seinen Handbalken und ein leeres Konto.
         var wache = new Verdienstwache((schlag, abstand) -> null,
                 buch(Verdienstwerte.VORGABE_TAGESDECKEL), marken, berufe, stand(),
-                Set.of(MARKTSTADT), Sprachprobe.spracheAusDemJar(), protokoll);
+                Set.of(MARKTSTADT), KEINE_INSELWELT, Sprachprobe.spracheAusDemJar(), protokoll);
 
         assertThrows(IllegalStateException.class, wache::starte);
     }
@@ -925,30 +935,30 @@ class VerdienstwacheTest {
         Set<String> welten = Set.of(MARKTSTADT);
 
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(null, buch,
-                marken, berufe, stand(), welten, sprache,
+                marken, berufe, stand(), welten, KEINE_INSELWELT, sprache,
                 protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, null,
-                marken, berufe, stand(), welten, sprache,
+                marken, berufe, stand(), welten, KEINE_INSELWELT, sprache,
                 protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                null, berufe, stand(), welten, sprache,
+                null, berufe, stand(), welten, KEINE_INSELWELT, sprache,
                 protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, null, stand(), welten, sprache,
+                marken, null, stand(), welten, KEINE_INSELWELT, sprache,
                 protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, berufe, stand(), welten, null,
+                marken, berufe, stand(), welten, KEINE_INSELWELT, null,
                 protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, berufe, stand(), welten, sprache,
+                marken, berufe, stand(), welten, KEINE_INSELWELT, sprache,
                 null));
         // Und die Welten: Eine leere Menge ist ein Zweig, der nie etwas tut - niemand
         // verdiente etwas, und niemand merkte es, bis jemand nach einer Stunde fragt.
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, berufe, stand(), null, sprache,
+                marken, berufe, stand(), null, KEINE_INSELWELT, sprache,
                 protokoll));
         assertThrows(IllegalArgumentException.class, () -> new Verdienstwache(takt, buch,
-                marken, berufe, stand(), Set.of(), sprache,
+                marken, berufe, stand(), Set.of(), KEINE_INSELWELT, sprache,
                 protokoll));
     }
 
@@ -961,7 +971,7 @@ class VerdienstwacheTest {
         Set<String> veraenderlich = new java.util.HashSet<>(Set.of(MARKTSTADT));
         var buch = buch(Verdienstwerte.VORGABE_TAGESDECKEL);
         var wache = new Verdienstwache(takt, buch, marken, berufe, stand(),
-                veraenderlich, Sprachprobe.spracheAusDemJar(), protokoll);
+                veraenderlich, KEINE_INSELWELT, Sprachprobe.spracheAusDemJar(), protokoll);
         World fremde = Serverprobe.welt(FREMD, griff);
         veraenderlich.add(FREMD);
 

@@ -106,10 +106,16 @@ final class Verdienstbuch {
      * <p>Das ist der Weg aus dem Blockereignis, und er kostet keine Netzrunde: zwei
      * Nachschlaege in einer Tabelle, eine Multiplikation, eine Addition.
      *
+     * @param inDerInselwelt ob der Spieler in der Welt aus {@code inseln.welt} steht -
+     *                       dort legt der Inselbonus auf den Satz seines Berufs
+     *                       [Schritt 10, Plan 9.1]. Ein Wahrheitswert und kein Weltname:
+     *                       Welche Welt gemeint ist, entscheidet das Plugin an EINER
+     *                       Stelle
      * @return wie viele PFENNIGE das eingebracht hat; 0 heisst, dass diese Taetigkeit an
      *         diesem Material diesem Spieler nichts bringt
      */
-    long verdiene(UUID wer, Set<String> berufe, Taetigkeit taetigkeit, String material) {
+    long verdiene(UUID wer, Set<String> berufe, Taetigkeit taetigkeit, String material,
+                  boolean inDerInselwelt) {
         if (wer == null || berufe == null || taetigkeit == null || material == null) {
             throw new IllegalArgumentException("Ohne Spieler, Berufe, Taetigkeit und"
                     + " Material gibt es nichts zu verdienen");
@@ -146,7 +152,7 @@ final class Verdienstbuch {
         Zaehler jeName = imFenster(stand.arten,
                 taetigkeit.schluessel() + "/" + material, jetzt);
         long pfennige = Verdienstregel.pfennige(werte, berufe, taetigkeit, material,
-                jeName.anzahl);
+                jeName.anzahl, inDerInselwelt);
         jeName.anzahl++;
         jeTaetigkeit.anzahl++;
         stand.anDerGrenze = null;

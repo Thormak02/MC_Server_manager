@@ -254,7 +254,7 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle sechzehn Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - alle siebzehn Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
         // MietSatz ist der zwoelfte - und der ZWEITE Bereich desselben Befehls: Er und
         // LadenSatz schreiben beide Pfade unter laden., damit der Betreiber unter dem
@@ -281,7 +281,12 @@ class VorlageTest {
                 // mit zwei Blickwinkeln: mit Deckel eine Zahl, ohne Deckel ein eigener
                 // Satz, und beim Schliessen eine Zeile fuer das, was mitkommt, und eine
                 // fuer das, was dableibt.
-                "TruheSatz", "FreistadtSatz"));
+                "TruheSatz", "FreistadtSatz",
+                // Die Meerinseln sind der SIEBZEHNTE - und der erste Bereich, dessen
+                // Besitz nicht in einer gebauten Stadt liegt. Fuenf seiner Saetze
+                // dienen ZWEI Zweigen: Was an einer Stelle liegt, ist dieselbe
+                // Auskunft, ob man danach fragt oder ob sie eine Absage begruendet.
+                "WerderSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -578,6 +583,13 @@ class VorlageTest {
             // switch hat ausserdem kein default: Kommt ein Bauurteil dazu, uebersetzt
             // die Datei nicht mehr, statt still den falschen Balken zu zeigen.
             "Schutztext.java -> satz",
+            // UND EIN ZWEITES MAL Schutztext [Schritt 10]: inselBalken bekommt seinen
+            // Satz herein, statt ihn aus einem Urteil zu waehlen - das Inselbuch gibt
+            // einen boolean und keine Aufzaehlung von Lagen. Auch hier laeuft eine
+            // VARIABLE durch eineZeile, und auch hier sind alle moeglichen Saetze
+            // Art.HANDBALKEN (Probe 31u haelt das fest), also klagt Sprachliste schon
+            // beim LADEN ueber eine Umbruchmarke darin.
+            "Schutztext.java -> satz",
             "Shoptext.java -> satz",
             "Shoptext.java -> Sprachschluessel.shopHandel(ausgang.bescheid(),"
                     + " ausgang.art(), mitGebuehr)",
@@ -738,6 +750,11 @@ class VorlageTest {
             // Ankunftswelt" (die Weltpruefung fiel), dann die Zahl der Materialien im
             // Sortiment (die Tafel fiel).
             "FreimarkenPlugin.java -> \" Mark je Spieler und Tag.\"",
+            // Die Startzeile der Meerinseln [Schritt 10] - Konsole, kein Spieler liest
+            // sie. Sie nennt den Preis, weil genau das die Zahl ist, die der Betreiber
+            // beim Start nachsehen will.
+            "FreimarkenPlugin.java -> \" Mark. Feld 0/0 ist die Ankunftsinsel und bleibt"
+                    + " frei.\"",
             // Teil C3: Die SEVERE-Zeile des verlorenen Erloeses. Sie geht in die
             // Konsole und an niemanden sonst - ihr Zweck ist, dass der Betreiber von
             // Hand gutschreiben kann, und dafuer muss die Einheit darin stehen.
@@ -750,6 +767,12 @@ class VorlageTest {
             // Die Klage ueber eine unbrauchbare Ladengebuehr - sie geht in den
             // Startbericht, also an den Betreiber [Teil E6].
             "Freistadtliste.java -> \" Mark - verworfen. Eine 0 ist\"",
+            // Der Leser der Meerinseln [Schritt 10]: die Einheit seiner Klage und die
+            // Rechenprobe im Startbericht. Beide gehen an den BETREIBER, der seine
+            // config.yml liest; was ein SPIELER liest, kommt aus Werdertext und damit
+            // aus waehrung.betrag.
+            "Inselliste.java -> \"Mark einmalig\"",
+            "Inselliste.java -> \" Mark je Insel, \"",
             // Zwei Protokollzeilen des Tageslaufs der Ladengebuehr [Teil E6]:
             // Konsole, kein Spieler liest sie.
             "Ladengebuehrlauf.java -> \" Mark nicht zahlen, liess sich\"",

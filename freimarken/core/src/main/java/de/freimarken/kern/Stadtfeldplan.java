@@ -80,8 +80,7 @@ public final class Stadtfeldplan {
      */
     public static final int ZELLE_KANTE = 16;
 
-    private final int feldKante;
-    private final int leereBreite;
+    private final Feldrechnung rechnung;
 
     /**
      * @param feldKante   Kantenlaenge eines Stadtfeldes, mindestens 1
@@ -97,8 +96,23 @@ public final class Stadtfeldplan {
                     "Die Leere braucht Platz fuer zwei Barrieren, also mindestens 2,"
                             + " nicht " + leereBreite);
         }
-        this.feldKante = feldKante;
-        this.leereBreite = leereBreite;
+        // Die eigenen Riegel ZUERST und danach die Rechnung: Jene laesst einen
+        // Zwischenraum von 1 zu, hier braucht die Leere Platz fuer zwei Barrieren. Wer
+        // die Reihenfolge tauscht, bekommt bei leereBreite 1 die allgemeine Klage und
+        // nicht die, die den Grund nennt.
+        this.rechnung = new Feldrechnung(feldKante, leereBreite);
+    }
+
+    /**
+     * Die Rasterrechnung dieses Plans - die eine Quelle fuer Feldnummer und Mitte.
+     *
+     * <p>Geteilt mit {@link Inselplan} [18.11.2026]: Hafenwerder rechnet mit Inselfeldern
+     * zu 128 und 128 Bloecken Meer genauso. {@code feldMitte} bei gerader Kante und die
+     * Rundung der Weltgrenze auf eine GERADE Feldzahl sind Zeilen, die nicht zweimal
+     * dastehen duerfen - an beiden haengt, wo ein Warp den Spieler absetzt.
+     */
+    public Feldrechnung rechnung() {
+        return rechnung;
     }
 
     /** Der Plan der Freistaedte: 256er Felder, 32 Bloecke Leere. */
@@ -107,16 +121,16 @@ public final class Stadtfeldplan {
     }
 
     public int feldKante() {
-        return feldKante;
+        return rechnung.feldKante();
     }
 
     public int leereBreite() {
-        return leereBreite;
+        return rechnung.zwischenraum();
     }
 
     /** Kantenlaenge einer Rasterzelle: Stadtfeld plus Leere. */
     public int rasterWeite() {
-        return feldKante + leereBreite;
+        return rechnung.rasterWeite();
     }
 
     /**
@@ -144,11 +158,11 @@ public final class Stadtfeldplan {
     }
 
     private Feld aufAchse(int wert) {
-        int imRaster = Math.floorMod(wert, rasterWeite());
-        if (imRaster < feldKante) {
+        int imRaster = rechnung.imRaster(wert);
+        if (imRaster < feldKante()) {
             return Feld.STADTFELD;
         }
-        if (imRaster == feldKante || imRaster == rasterWeite() - 1) {
+        if (imRaster == feldKante() || imRaster == rasterWeite() - 1) {
             return Feld.BARRIERE;
         }
         return Feld.LEERE;
@@ -164,12 +178,12 @@ public final class Stadtfeldplan {
      * Stadt.
      */
     public int feldNummer(int wert) {
-        return Math.floorDiv(wert, rasterWeite());
+        return rechnung.feldNummer(wert);
     }
 
     /** Die kleinste Weltkoordinate dieses Feldes auf einer Achse. */
     public int feldAnfang(int nummer) {
-        return nummer * rasterWeite();
+        return rechnung.feldAnfang(nummer);
     }
 
     /**
@@ -180,7 +194,7 @@ public final class Stadtfeldplan {
      * herauskommt: Ein Warp, der mal hierhin und mal dorthin setzt, ist keiner.
      */
     public int feldMitte(int nummer) {
-        return feldAnfang(nummer) + (feldKante - 1) / 2;
+        return rechnung.feldMitte(nummer);
     }
 
     /**
@@ -205,7 +219,7 @@ public final class Stadtfeldplan {
      * Punktabfrage nicht mehr entscheiden.
      */
     public boolean zellenGehenAuf() {
-        return feldKante % ZELLE_KANTE == 0 && rasterWeite() % ZELLE_KANTE == 0;
+        return feldKante() % ZELLE_KANTE == 0 && rasterWeite() % ZELLE_KANTE == 0;
     }
 
     /**
@@ -235,7 +249,7 @@ public final class Stadtfeldplan {
 
     /** Wie viele Zellen auf eine Feldkante gehen. */
     public int zellenJeKante() {
-        return feldKante / ZELLE_KANTE;
+        return feldKante() / ZELLE_KANTE;
     }
 
     /** Die kleinste Zellnummer dieses Feldes auf einer Achse. */

@@ -23,6 +23,20 @@ import org.junit.jupiter.api.Test;
  */
 class VerdienstregelTest {
 
+    /**
+     * Der Spieler steht NICHT in der Inselwelt - also legt kein Zuschlag auf.
+     *
+     * <p>Ein NAME und kein nacktes {@code false} an jeder Aufrufstelle: Der
+     * Inselbonus kam mit Schritt 10 dazu (Plan 9.1, "Fischer - Bonus auf
+     * Hafenwerder"), und jede Probe dieser Datei rechnet ohne ihn. Ein false an
+     * fuenfzig Stellen waere fuenfzigmal eine Zahl, die nichts sagt.
+     */
+    private static final boolean FESTLAND = false;
+
+    /** Der Spieler steht in der Inselwelt - dort legt der Zuschlag auf. */
+    private static final boolean INSELWELT = true;
+
+
     /** Die Vorgabe: 200 voll, dann je 200 auf die Haelfte, Boden ein Zehntel. */
     private static final Verdienstwerte WERTE = Verdienstwerte.VORGABE;
 
@@ -116,13 +130,84 @@ class VerdienstregelTest {
     @DisplayName("Der Lohn ist der Satz der Tafel, gemindert um den Anteil")
     void lohnMalAnteil() {
         assertEquals(40L, Verdienstregel.pfennige(MIT_LOEHNEN, BERGMANN,
-                Taetigkeit.ABBAUEN, "stone", 0));
+                Taetigkeit.ABBAUEN, "stone", 0, FESTLAND));
         assertEquals(20L, Verdienstregel.pfennige(MIT_LOEHNEN, BERGMANN,
-                Taetigkeit.ABBAUEN, "stone", 200));
+                Taetigkeit.ABBAUEN, "stone", 200, FESTLAND));
         assertEquals(10L, Verdienstregel.pfennige(MIT_LOEHNEN, BERGMANN,
-                Taetigkeit.ABBAUEN, "stone", 400));
+                Taetigkeit.ABBAUEN, "stone", 400, FESTLAND));
         assertEquals(4L, Verdienstregel.pfennige(MIT_LOEHNEN, BERGMANN,
-                Taetigkeit.ABBAUEN, "stone", 10_000), "am Boden: ein Zehntel von 40");
+                Taetigkeit.ABBAUEN, "stone", 10_000, FESTLAND), "am Boden: ein Zehntel von 40");
+    }
+
+    @Test
+    @DisplayName("Der Inselbonus legt auf - und NUR in der Inselwelt")
+    void inselbonusLegtAuf() {
+        // Plan 9.1: "Fischer - Bonus auf Hafenwerder". Fuenfzig Prozent auf 40 Pfennige
+        // sind 60 - und auf dem Festland bleiben es 40. Die Probe setzt ihren Zuschlag
+        // SELBST und haengt nicht an der Vorgabe: An ihr haengend pruefte sie die
+        // Vorgabe statt der Regel.
+        Verdienstwerte werte = MIT_LOEHNEN.mitInselbonus(java.util.Map.of(
+                "bergmann", 50));
+
+        assertEquals(60L, Verdienstregel.pfennige(werte, BERGMANN, Taetigkeit.ABBAUEN,
+                "stone", 0, INSELWELT));
+        assertEquals(40L, Verdienstregel.pfennige(werte, BERGMANN, Taetigkeit.ABBAUEN,
+                "stone", 0, FESTLAND),
+                "auf dem Festland legt nichts auf - sonst waere der Bonus kein Grund,"
+                        + " irgendwohin zu fahren");
+    }
+
+    @Test
+    @DisplayName("Der Zuschlag liegt VOR der Minderung - er wird mitgedaempft")
+    void zuschlagVorDerMinderung() {
+        // DIE ENTSCHEIDUNG DIESES TEILS: 60 Pfennige, gemindert auf die Haelfte, sind
+        // 30. Danach gerechnet waeren es 20 plus 20, also 40 - und dann waere der
+        // Zuschlag am Ende einer Stunde der GROESSERE Teil des Lohns. Die Bremse gegen
+        // den Klickautomaten waere in Hafenwerder die schwaechste von allen.
+        Verdienstwerte werte = MIT_LOEHNEN.mitInselbonus(java.util.Map.of(
+                "bergmann", 50));
+
+        assertEquals(30L, Verdienstregel.pfennige(werte, BERGMANN, Taetigkeit.ABBAUEN,
+                "stone", 200, INSELWELT));
+        assertEquals(6L, Verdienstregel.pfennige(werte, BERGMANN, Taetigkeit.ABBAUEN,
+                "stone", 10_000, INSELWELT),
+                "am Boden: ein Zehntel von 60 - und nicht ein Zehntel von 40 plus die"
+                        + " halben 20");
+    }
+
+    @Test
+    @DisplayName("Der Zuschlag haengt am BERUF - und der beste Satz gewinnt")
+    void zuschlagHaengtAmBeruf() {
+        // Der Grund, aus dem die Regel jeden Beruf einzeln rechnet: hoechsterLohn sagt
+        // nicht, WELCHER Beruf den besten Satz traegt - und mit dem Zuschlag kann ein
+        // schlechterer Satz der beste werden. Hier zahlt der Bauer 10 und der Bergmann
+        // 40; mit 500 Prozent auf den Bauern sind es 60 gegen 40.
+        Verdienstwerte zwei = Verdienstwerte.VORGABE
+                .mitLoehnen(Lohntafel.ausLoehnen(List.of(
+                        new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, "stone", 40L),
+                        new Lohntafel.Lohn("bauer", Taetigkeit.ABBAUEN, "stone", 10L))))
+                .mitInselbonus(java.util.Map.of("bauer", 500));
+        Set<String> beide = Set.of("bergmann", "bauer");
+
+        assertEquals(40L, Verdienstregel.pfennige(zwei, beide, Taetigkeit.ABBAUEN,
+                "stone", 0, FESTLAND), "auf dem Festland gewinnt der Bergmann");
+        assertEquals(60L, Verdienstregel.pfennige(zwei, beide, Taetigkeit.ABBAUEN,
+                "stone", 0, INSELWELT),
+                "in der Inselwelt der Bauer mit seinem Zuschlag - eine Rechnung, die"
+                        + " nur den hoechsten Satz kennt, kaeme hier auf 40");
+    }
+
+    @Test
+    @DisplayName("Ein Zuschlag auf einen Beruf ohne Satz erfindet keinen Pfennig")
+    void zuschlagOhneSatzErfindetNichts() {
+        // Der Riegel, der vor dem Zuschlag steht: Wer die Taetigkeit an diesem Material
+        // nicht bezahlt bekommt, bekommt auch keinen Zuschlag darauf. Sonst verdiente
+        // ein Fischer in Hafenwerder am Abbauen von Stein.
+        Verdienstwerte werte = MIT_LOEHNEN.mitInselbonus(java.util.Map.of(
+                "fischer", 500));
+
+        assertEquals(0L, Verdienstregel.pfennige(werte, Set.of("fischer"),
+                Taetigkeit.ABBAUEN, "stone", 0, INSELWELT));
     }
 
     @Test
@@ -131,16 +216,16 @@ class VerdienstregelTest {
         // Der Normalfall: Die Liste nennt die Materialien, die zahlen, und nicht die
         // tausend, die es nicht tun.
         assertEquals(0L, Verdienstregel.pfennige(MIT_LOEHNEN, BERGMANN,
-                Taetigkeit.ABBAUEN, "dirt", 0));
+                Taetigkeit.ABBAUEN, "dirt", 0, FESTLAND));
         // Dieselbe Art, aber die andere Taetigkeit: Der Bergmann verdient am ABBAUEN von
         // Stein, nicht am Setzen. Ohne die Taetigkeit in der Tafel bekaeme er beides.
         assertEquals(0L, Verdienstregel.pfennige(MIT_LOEHNEN, BERGMANN,
-                Taetigkeit.SETZEN, "stone", 0));
+                Taetigkeit.SETZEN, "stone", 0, FESTLAND));
         // Und ohne den passenden Beruf gar nichts.
         assertEquals(0L, Verdienstregel.pfennige(MIT_LOEHNEN, Set.of("fischer"),
-                Taetigkeit.ABBAUEN, "stone", 0));
+                Taetigkeit.ABBAUEN, "stone", 0, FESTLAND));
         assertEquals(0L, Verdienstregel.pfennige(MIT_LOEHNEN, Set.of(),
-                Taetigkeit.ABBAUEN, "stone", 0));
+                Taetigkeit.ABBAUEN, "stone", 0, FESTLAND));
     }
 
     @Test
@@ -153,9 +238,9 @@ class VerdienstregelTest {
                         new Lohntafel.Lohn("bergmann", Taetigkeit.ABBAUEN, "stone", 4L))));
 
         assertEquals(4L, Verdienstregel.pfennige(knapp, BERGMANN, Taetigkeit.ABBAUEN,
-                "stone", 0));
+                "stone", 0, FESTLAND));
         assertEquals(0L, Verdienstregel.pfennige(knapp, BERGMANN, Taetigkeit.ABBAUEN,
-                "stone", 100));
+                "stone", 100, FESTLAND));
     }
 
     @Test
@@ -171,7 +256,7 @@ class VerdienstregelTest {
                                 70L))));
 
         assertEquals(70L, Verdienstregel.pfennige(beide,
-                Set.of("bergmann", "steinmetz"), Taetigkeit.ABBAUEN, "stone", 0));
+                Set.of("bergmann", "steinmetz"), Taetigkeit.ABBAUEN, "stone", 0, FESTLAND));
     }
 
     // --- Der Tagesdeckel ------------------------------------------------------
@@ -237,7 +322,7 @@ class VerdienstregelTest {
         long pfennige = 0L;
         for (int block = 0; block < 2_000; block++) {
             pfennige += Verdienstregel.pfennige(MIT_LOEHNEN, BERGMANN,
-                    Taetigkeit.ABBAUEN, "stone", block);
+                    Taetigkeit.ABBAUEN, "stone", block, FESTLAND);
         }
 
         // 196 Mark fuer eine Stunde Steinabbau - ein Zehntel der Spanne. Das ist
