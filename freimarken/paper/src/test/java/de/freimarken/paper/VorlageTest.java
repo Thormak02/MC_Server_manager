@@ -727,6 +727,13 @@ class VorlageTest {
      * Tafel unsichtbar.
      */
     private static final List<String> GELDWORT_IM_PROGRAMM = List.of(
+            // Schritt 11, Teil D: Die Rechenprobe der Herausforderungen und die Klage
+            // ueber eine unbrauchbare Belohnung. Beide gehen an den BETREIBER und in die
+            // Konsole - was ein Spieler liest, kommt aus Wolkentext und damit aus
+            // waehrung.betrag.
+            "Aufgabenliste.java -> \" Mark zu verdienen - je Insel EINMAL.\"",
+            "Aufgabenliste.java -> \" Mark. Diese Herausforderung faellt weg, die"
+                    + " uebrigen\"",
             // Die Einheit in der Klage ueber eine unbrauchbare Wechselgebuehr. Sie geht
             // an den Betreiber und in die Konsole, nie an einen Spieler - wie die drei
             // Stellen in Wirtschaftsliste, deren Helfer sie benutzt.
@@ -760,6 +767,9 @@ class VorlageTest {
             // beim Start nachsehen will.
             "FreimarkenPlugin.java -> \" Mark. Feld 0/0 ist die Ankunftsinsel und bleibt"
                     + " frei.\"",
+            // Schritt 11, Teil F: Die Startzeile ueber den Biomwechsel - Konsole, wie
+            // die vier darueber. Sie nennt die Einheit, weil die Zahl daneben steht.
+            "FreimarkenPlugin.java -> \" Mark\"",
             // Teil C3: Die SEVERE-Zeile des verlorenen Erloeses. Sie geht in die
             // Konsole und an niemanden sonst - ihr Zweck ist, dass der Betreiber von
             // Hand gutschreiben kann, und dafuer muss die Einheit darin stehen.
@@ -875,7 +885,11 @@ class VorlageTest {
             // beide gehen an den Betreiber. Der Spieler liest den Preis einer Insel
             // ueber sprache.betrag, und ab Werk ist er gratis.
             "Wolkenliste.java -> \"Mark einmalig\"",
-            "Wolkenliste.java -> \" Mark je Insel\"");
+            // Und die zwei Stellen des Biompreises [Teil F]: die Einheit seines
+            // Sprungschutzes und die Klammer in der Rechenprobe.
+            "Wolkenliste.java -> \"Mark je Wechsel\"",
+            "Wolkenliste.java -> \" Mark je Insel\"",
+            "Wolkenliste.java -> \" Mark)\"");
 
 
     /**

@@ -81,6 +81,8 @@ class SchemaTest {
         411330449, // Schritt 26 - Spalte parzellen.regeln
         -316665461, // Schritt 27 - Spalte parzellen.besucht
         -888342932, // Schritt 28 - die Art wolke im ENUM
+        2021794635, // Schritt 29 - Tabelle wolkeninsel
+        464971643, // Schritt 30 - Tabelle wolke_herausforderung
     };
 
     private static String datenbanktext() {

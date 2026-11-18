@@ -1043,6 +1043,76 @@ public final class Datenbank implements AutoCloseable {
                   ENUM('parzelle','gruppe','werder','freistadt','ladeneinheit',
                        'wolke')
                   NOT NULL DEFAULT 'parzelle'
+            """,
+
+            // Schritt 29: der ZUSTAND einer Wolkeninsel - Schritt 11, 18.11.2026.
+            //
+            // Biom, Punktzahl und der Zeitpunkt des letzten Blockzaehlens. Eine Zeile je
+            // Insel, und sie entsteht erst beim ersten Schreiben: Ein Stand aus lauter
+            // Vorgabewerten sagt nichts, und 1.443 solche Zeilen waeren eine Tabelle,
+            // die nur Platz braucht.
+            //
+            // EINE EIGENE TABELLE UND KEINE SPALTEN AN parzellen, und das ist dieselbe
+            // Entscheidung wie bei den Grundstuecken: Jene Zeile liegt auf dem heissen
+            // Pfad - sie wird bei JEDEM gesetzten und JEDEM abgebauten Block gelesen, in
+            // jeder Welt. Drei Spalten, die nur eine von sechs Arten fuellt, kaemen bei
+            // jedem Klick mit. Dazu haette ein viertes Feld an Parzelle 43 Aufrufstellen
+            // angefasst, von denen drei die Zeile von Hand nachbauen - und dort gingen
+            // sie LAUTLOS verloren (der Fund vom 11.11.2026).
+            //
+            // biom NULL-FAEHIG, und NULL heisst "nie gewaehlt" und nicht "Fehler". Was
+            // dann gilt, sagt Wolkenbiome.VORGABE im Programm - die Spalte beschreibt,
+            // was der Spieler getan hat, und nicht, was gilt.
+            //
+            // gezaehlt_am als DATETIME(3) in UTC, wie jede Zeitspalte dieses Schemas
+            // ausser den drei TAGesspalten. Begruendung im Kopf dieser Klasse.
+            //
+            // KEIN Index auf punkte, obwohl die Rangliste danach sortiert: Die Tabelle
+            // hat hoechstens so viele Zeilen, wie die Welt Felder hat (1.443), und sie
+            // wird fuer die Rangliste ganz gelesen. Ein Index waere Pflege fuer eine
+            // Sortierung ueber eine Handvoll Kilobytes.
+            """
+            CREATE TABLE IF NOT EXISTS wolkeninsel (
+              parzelle_id BIGINT       NOT NULL,
+              biom        VARCHAR(32)  NULL,
+              punkte      BIGINT       NOT NULL DEFAULT 0,
+              gezaehlt_am DATETIME(3)  NULL,
+              PRIMARY KEY (parzelle_id),
+              CONSTRAINT fk_wolkeninsel_feld FOREIGN KEY (parzelle_id)
+                REFERENCES parzellen (id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 30: die ERFUELLTEN HERAUSFORDERUNGEN - Schritt 11, 18.11.2026.
+            //
+            // Eine Zeile je Insel und Herausforderung. Die Zahl dieser Zeilen IST die
+            // Insel-Stufe, an der die Erzausbeute des Kobbelsteingenerators haengt - eine
+            // eigene Spalte stufe daneben waere eine zweite Wahrheit, und die erste
+            // Zeile, die beim Erfuellen nicht mitgeschrieben wird, liesse die Ausbeute
+            // hinter den Herausforderungen zurueckbleiben.
+            //
+            // EINE EIGENE TABELLE, weil es eine MENGE ist - dieselbe Bauart wie
+            // parzellen_mitbauer, freistadt_rechte und kistenshop_freigabe. Eine Liste in
+            // einer Spalte waere die vierte Bauart fuer dieselbe Sache, und die erste, bei
+            // der jemand eine falsche Annahme mitbringt.
+            //
+            // DER HAUPTSCHLUESSEL IST DER RIEGEL gegen die doppelte Belohnung: Das
+            // Erfuellen schreibt mit INSERT IGNORE, und die Zahl der geschriebenen Zeilen
+            // ist die Antwort auf "war es neu". Eine Pruefung im Programm davor haette
+            // zwischen Fragen und Schreiben eine Luecke, und zwei Abgaben im selben
+            // Augenblick zahlten zweimal.
+            //
+            // FREMDSCHLUESSEL AUF parzellen MIT CASCADE, wie bei freistadt_rechte: Wer
+            // seine Insel freigibt, gibt ihren Fortschritt mit auf. Ohne das erbte der
+            // naechste Spieler auf diesem Feld die Erzausbeute eines Fremden.
+            """
+            CREATE TABLE IF NOT EXISTS wolke_herausforderung (
+              parzelle_id BIGINT      NOT NULL,
+              schluessel  VARCHAR(32) NOT NULL,
+              PRIMARY KEY (parzelle_id, schluessel),
+              CONSTRAINT fk_wolke_herausforderung FOREIGN KEY (parzelle_id)
+                REFERENCES parzellen (id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -1257,6 +1327,11 @@ public final class Datenbank implements AutoCloseable {
             // stehen trotzdem hier, damit die Reihenfolge lesbar bleibt.
             // VOR parzellen, wie jede Nebentabelle mit Fremdschluessel darauf: Ein
             // DELETE auf die Elternzeile scheitert sonst an fk_freistadt_recht.
+            // Die zwei Tabellen von Wolkenwerder - auch sie VOR parzellen, aus
+            // demselben Grund: Ihr Fremdschluessel steht auf CASCADE, aber das DELETE
+            // auf die Elternzeile scheitert ohne sie am Riegel von InnoDB.
+            anweisung.execute("DELETE FROM wolke_herausforderung");
+            anweisung.execute("DELETE FROM wolkeninsel");
             anweisung.execute("DELETE FROM freistadt_rechte");
             anweisung.execute("DELETE FROM grundstuecke_mitbauer");
             anweisung.execute("DELETE FROM grundstuecke");

@@ -37,12 +37,12 @@ final class Sprachschluessel {
      * Bereich keinen Platzhalterschluessel, und die Probe kann trotzdem nachsehen, dass
      * alle fuenfzehn gefuehrt werden.
      *
-     * <p><b>{@link Berufsname} steht hier NICHT</b>, und das ist der Unterschied zwischen
-     * einem Bereich und einer offenen Familie: Diese Liste verlangt, dass jeder Satz in
-     * der ausgelieferten Vorlage steht. Welche Berufe es gibt, entscheidet aber die
-     * {@code config.yml}, und einen Beruf, den der Betreiber morgen eintraegt, kann die
-     * Vorlage nicht kennen. Darum wird er ueber {@link #zuPfad} erkannt und nicht
-     * aufgezaehlt - siehe dort.
+     * <p><b>{@link Berufsname} und {@link Aufgabenname} stehen hier NICHT</b>, und das ist
+     * der Unterschied zwischen einem Bereich und einer offenen Familie: Diese Liste
+     * verlangt, dass jeder Satz in der ausgelieferten Vorlage steht. Welche Berufe und
+     * welche Herausforderungen es gibt, entscheidet aber die {@code config.yml}, und was
+     * der Betreiber morgen eintraegt, kann die Vorlage nicht kennen. Darum werden sie
+     * ueber {@link #zuPfad} erkannt und nicht aufgezaehlt - siehe dort.
      */
     private static final List<Class<? extends Satz>> BEREICHE = List.of(
             BundSatz.class, MarkSatz.class, ParzellenSatz.class, AnfragenSatz.class,
@@ -127,7 +127,29 @@ final class Sprachschluessel {
         if (satz != null) {
             return satz;
         }
-        return Berufsname.passt(pfad) ? Berufsname.ausPfad(pfad) : null;
+        if (Berufsname.passt(pfad)) {
+            return Berufsname.ausPfad(pfad);
+        }
+        // Die ZWEITE Familie, seit es Herausforderungen gibt [Schritt 11, Teil D]. Sie
+        // steht hier und nicht in einer zweiten Methode daneben: Beide Leser - der der
+        // Vorlage und der der Betreiberdatei - gehen durch diese eine Stelle, und das ist
+        // der ganze Grund, warum sie existiert.
+        return Aufgabenname.passt(pfad) ? Aufgabenname.ausPfad(pfad) : null;
+    }
+
+    /**
+     * Ob dieser Satz zu einer OFFENEN FAMILIE gehoert.
+     *
+     * <p>Die eine Stelle, an der die Familien aufgezaehlt sind - und sie ist der Grund,
+     * warum es diese Methode gibt: {@link Sprachliste} muss jeden Familiensatz der
+     * ausgelieferten Vorlage selbst ins Buch eintragen, weil die Schleife ueber
+     * {@link #alle()} ihn nicht kennt. Stand dort ein {@code instanceof} je Familie, war
+     * die zweite Familie beim ersten Gebrauch ein Wurf mitten im Spiel - gemessen am
+     * 18.11.2026, als {@link Aufgabenname} dazukam: Das Wort fehlte im Buch, und
+     * {@code /wolke aufgaben} lief in "steht nicht in diesem Buch".
+     */
+    static boolean gehoertZuFamilie(Satz satz) {
+        return satz instanceof Berufsname || satz instanceof Aufgabenname;
     }
 
     /** Alle Pfade, die in der Datei stehen duerfen - mit {@code .eins}/{@code .viele}. */

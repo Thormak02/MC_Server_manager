@@ -154,13 +154,18 @@ final class Sprachliste {
                         + " Datei ist das ein Tippfehler beim Abschreiben.");
                 continue;
             }
-            // Ein Berufsname steht NICHT in alle(): Es gibt einen Schluessel je Beruf der
-            // config.yml, und welche das sind, weiss diese Datei nicht. Die Schleife
-            // darueber hat ihn also nicht geprueft und nicht eingetragen - beides
-            // passiert hier. Ohne diese drei Zeilen waere ein Farbtag in einem
-            // Berufsnamen ungeprueft, und das Wort fehlte im Buch: Der erste /beruf
-            // liefe in einen Wurf, und zwar mitten im Spiel.
-            if (satz instanceof Berufsname && !saetze.containsKey(pfad)) {
+            // Ein Berufsname oder ein Aufgabenname steht NICHT in alle(): Es gibt einen
+            // Schluessel je Beruf und je Herausforderung der config.yml, und welche das
+            // sind, weiss diese Datei nicht. Die Schleife darueber hat ihn also nicht
+            // geprueft und nicht eingetragen - beides passiert hier. Ohne diese drei
+            // Zeilen waere ein Farbtag darin ungeprueft, und das Wort fehlte im Buch:
+            // Der erste /beruf oder /wolke aufgaben liefe in einen Wurf, und zwar mitten
+            // im Spiel (gemessen am 18.11.2026 fuer die Aufgaben).
+            //
+            // GEFRAGT WIRD UEBER Sprachschluessel.gehoertZuFamilie und nicht mit einem
+            // instanceof je Familie: Sonst ist die naechste Familie genau hier
+            // vergessen.
+            if (Sprachschluessel.gehoertZuFamilie(satz) && !saetze.containsKey(pfad)) {
                 maengel.addAll(maengelAmWert(satz, pfad, eintrag.getValue()));
                 saetze.put(pfad, eintrag.getValue().wert());
             }

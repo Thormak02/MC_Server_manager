@@ -1,9 +1,13 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Aufgabenbuch;
+import de.freimarken.kern.Biombuch;
 import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.Punktebuch;
 import de.freimarken.kern.Wolkenbuch;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import net.kyori.adventure.text.Component;
@@ -214,5 +218,264 @@ final class Wolkentext {
                     Einsatz.von("spieler", name));
             case GESTOERT -> sprache.bau(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine());
         };
+    }
+
+    // ================================================== Die Herausforderungen [Teil D]
+
+    /**
+     * Die Tafel der Herausforderungen - jede Aufgabe mit ihrem Stand.
+     *
+     * <p>Ein {@code switch} ueber alle vier Bescheide ohne {@code default}, aus demselben
+     * Grund wie bei {@link #nehmenZeilen}.
+     *
+     * @param namen wie ein Aufgabenschluessel zu seinem Wort kommt - herein gegeben, weil
+     *              der Name aus der SPRACHDATEI kommt und nicht aus der Liste: Was es
+     *              gibt, steht in der {@code config.yml}, wie es heisst, in
+     *              {@code sprache.yml}
+     */
+    static List<Component> aufgabenZeilen(Sprache sprache, Aufgabenbuch.Tafel tafel,
+                                          Function<String, String> namen) {
+        return switch (tafel.bescheid()) {
+            case ERTEILT -> tafelZeilen(sprache, tafel, namen);
+            case AUS -> sprache.bau(WolkeSatz.AUFGABEN_AUS, 1L, Einsatz.keine());
+            case KEINE_INSEL -> sprache.bau(WolkeSatz.KEINE_INSEL, 1L, Einsatz.keine());
+            case GESTOERT -> sprache.bau(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine());
+            // Die fuenf Bescheide, die nur beim Abgeben vorkommen. Sie stehen hier
+            // namentlich und nicht als default: Kaeme einer von ihnen doch aus der Tafel,
+            // waere das ein Programmfehler - und eine Absage, die eine andere Lage
+            // beschreibt, waere die unauffaelligste Art, ihn zu verbergen.
+            case GIBT_ES_NICHT, NICHT_BERECHTIGT, SCHON_ERFUELLT, FEHLT, NICHT_GENOMMEN ->
+                    throw new IllegalStateException("Die Tafel kann nicht "
+                            + tafel.bescheid() + " sein - diesen Bescheid gibt es nur"
+                            + " beim Abgeben");
+        };
+    }
+
+    /** Kopf, eine Zeile je Aufgabe, in der Reihenfolge der Datei. */
+    private static List<Component> tafelZeilen(Sprache sprache, Aufgabenbuch.Tafel tafel,
+                                               Function<String, String> namen) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(WolkeSatz.AUFGABEN_KOPF, 1L,
+                Einsatz.von("erfuellt", tafel.stufe())
+                        .mit("gesamt", tafel.zeilen().size())));
+        for (Aufgabenbuch.Zeile zeile : tafel.zeilen()) {
+            String name = namen.apply(zeile.aufgabe().schluessel());
+            if (zeile.erfuellt()) {
+                zeilen.addAll(sprache.bau(WolkeSatz.AUFGABEN_FERTIG, 1L,
+                        Einsatz.von("name", name)));
+                continue;
+            }
+            zeilen.addAll(zeile.aufgabe().belohnung() == 0L
+                    ? sprache.bau(WolkeSatz.AUFGABEN_OFFEN_OHNE_LOHN, 1L,
+                            Einsatz.von("name", name)
+                                    .mit("verlangt", mengen(zeile.aufgabe().verlangt())))
+                    : sprache.bau(WolkeSatz.AUFGABEN_OFFEN, 1L,
+                            Einsatz.von("name", name)
+                                    .mit("verlangt", mengen(zeile.aufgabe().verlangt()))
+                                    .mit("belohnung",
+                                            sprache.betrag(zeile.aufgabe().belohnung()))));
+        }
+        return zeilen;
+    }
+
+    /**
+     * Die Antwort auf {@code /wolke abgeben} - jeder Bescheid des Aufgabenbuchs.
+     *
+     * <p>Wieder ohne {@code default}. Vier Bescheide teilen ihren Satz mit anderen
+     * Zweigen: {@code AUS} und {@code KEINE_INSEL} wie in der Tafel, {@code GESTOERT} wie
+     * beim Nehmen - die Ablage schweigt, und das ist dieselbe Nachricht.
+     *
+     * @param getippt was der Spieler geschrieben hat - fuer die Absage "gibt es nicht".
+     *                Aus dem Entscheid kaeme sie nicht: Dort steht keine Aufgabe, denn es
+     *                gibt sie ja nicht
+     */
+    static List<Component> abgebenZeilen(Sprache sprache, Aufgabenbuch.Entscheid entscheid,
+                                         String getippt, Function<String, String> namen,
+                                         Function<UUID, String> spielernamen,
+                                         Parzelle insel) {
+        return switch (entscheid.bescheid()) {
+            case ERTEILT -> erteiltZeilen(sprache, entscheid, namen);
+            case AUS -> sprache.bau(WolkeSatz.AUFGABEN_AUS, 1L, Einsatz.keine());
+            case GIBT_ES_NICHT -> sprache.bau(WolkeSatz.ABGABE_UNBEKANNT, 1L,
+                    Einsatz.von("name", getippt));
+            case KEINE_INSEL -> sprache.bau(WolkeSatz.KEINE_INSEL, 1L, Einsatz.keine());
+            case NICHT_BERECHTIGT -> sprache.bau(WolkeSatz.ABGABE_FREMD, 1L,
+                    Einsatz.von("eigentuemer",
+                            spielernamen.apply(insel.eigentuemer())));
+            case SCHON_ERFUELLT -> sprache.bau(WolkeSatz.ABGABE_SCHON, 1L,
+                    Einsatz.von("name", namen.apply(schluessel(entscheid))));
+            case FEHLT -> sprache.bau(WolkeSatz.ABGABE_FEHLT, 1L,
+                    Einsatz.von("name", namen.apply(schluessel(entscheid)))
+                            .mit("fehlt", mengen(entscheid.fehlt())));
+            case NICHT_GENOMMEN -> sprache.bau(WolkeSatz.ABGABE_WEGGEKOMMEN, 1L,
+                    Einsatz.von("name", namen.apply(schluessel(entscheid))));
+            case GESTOERT -> sprache.bau(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine());
+        };
+    }
+
+    /** Die Zusage - mit oder ohne Lohn, wie beim Nehmen. */
+    private static List<Component> erteiltZeilen(Sprache sprache,
+                                                 Aufgabenbuch.Entscheid entscheid,
+                                                 Function<String, String> namen) {
+        String name = namen.apply(schluessel(entscheid));
+        if (entscheid.belohnung() == 0L) {
+            return sprache.bau(WolkeSatz.ABGABE_ERTEILT_OHNE_LOHN, 1L,
+                    Einsatz.von("name", name).mit("stufe", entscheid.stufe()));
+        }
+        return sprache.bau(WolkeSatz.ABGABE_ERTEILT, 1L,
+                Einsatz.von("name", name)
+                        .mit("belohnung", sprache.betrag(entscheid.belohnung()))
+                        .mit("stufe", entscheid.stufe()));
+    }
+
+    private static String schluessel(Aufgabenbuch.Entscheid entscheid) {
+        return entscheid.aufgabe().orElseThrow().schluessel();
+    }
+
+    /**
+     * Gegenstaende und Mengen in EINER Zeichenkette - "64x cobblestone, 1x furnace".
+     *
+     * <p>Die technischen Namen und keine Uebersetzung, und zwar bewusst: Genau diese Namen
+     * stehen in der {@code config.yml}, in der Angeltabelle, in der Erztabelle und auf den
+     * Shopschildern. Ein uebersetzter Name hier waere der erste Ort im Spiel, an dem ein
+     * Gegenstand anders heisst als in jeder Einstellung - und ein Spieler, der danach
+     * fragt, bekaeme von seinem Betreiber die falsche Antwort.
+     *
+     * <p>Die Reihenfolge ist die der Aufgabe, also die der Datei: Was der Betreiber zuerst
+     * getippt hat, steht zuerst - und die fehlenden Mengen stehen in derselben Folge wie
+     * die verlangten.
+     */
+    private static String mengen(Map<String, Integer> gegenstaende) {
+        List<String> stuecke = new ArrayList<>();
+        for (var zeile : gegenstaende.entrySet()) {
+            stuecke.add(zeile.getValue() + "x " + zeile.getKey());
+        }
+        return String.join(", ", stuecke);
+    }
+
+    // ================================================== Punkte und Rangliste [Teil E]
+
+    /**
+     * Die Antwort auf {@code /wolke punkte} - jeder Bescheid des Punktebuchs.
+     *
+     * <p>Ein {@code switch} ueber alle sechs ohne {@code default}, wie ueberall in dieser
+     * Klasse. Die FERTIG-Zeile steht nicht darin: Sie kommt Sekunden spaeter, wenn die
+     * Zaehlung durch ist - siehe {@link #punkteFertigZeilen}.
+     */
+    static List<Component> punkteZeilen(Sprache sprache, Punktebuch.Entscheid entscheid,
+                                        Function<UUID, String> namen) {
+        return switch (entscheid.bescheid()) {
+            case ANGEFANGEN -> sprache.bau(WolkeSatz.PUNKTE_LAEUFT, 1L,
+                    Einsatz.von("chunks",
+                            entscheid.auftrag().orElseThrow().chunkzahl()));
+            case AUS -> sprache.bau(WolkeSatz.PUNKTE_AUS, 1L, Einsatz.keine());
+            case KEINE_INSEL -> sprache.bau(WolkeSatz.KEINE_INSEL, 1L, Einsatz.keine());
+            case ZU_FRUEH -> sprache.bau(WolkeSatz.PUNKTE_ZU_FRUEH, 1L,
+                    Einsatz.von("sekunden", entscheid.wartesekunden()));
+            case LAEUFT_SCHON -> sprache.bau(WolkeSatz.PUNKTE_LAEUFT_SCHON, 1L,
+                    Einsatz.keine());
+            case GESTOERT -> sprache.bau(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine());
+        };
+    }
+
+    /** Die Zeile, wenn die Zaehlung durch ist. */
+    static List<Component> punkteFertigZeilen(Sprache sprache, long punkte) {
+        return sprache.bau(WolkeSatz.PUNKTE_FERTIG, 1L, Einsatz.von("punkte", punkte));
+    }
+
+    /**
+     * Die Rangliste - Kopf und je Platz eine Zeile.
+     *
+     * <p>Leer heisst: Es gibt noch keine Insel. Das ist am ersten Tag der Normalfall, und
+     * eine Ueberschrift ueber einer leeren Liste sieht aus wie ein Fehler - dieselbe
+     * Antwort wie bei {@link #listenZeilen}.
+     */
+    static List<Component> ranglistenZeilen(Sprache sprache,
+                                            List<Punktebuch.Platz> plaetze,
+                                            Function<UUID, String> namen) {
+        if (plaetze.isEmpty()) {
+            return sprache.bau(WolkeSatz.RANGLISTE_LEER, 1L, Einsatz.keine());
+        }
+        List<Component> zeilen = new ArrayList<>(
+                sprache.bau(WolkeSatz.RANGLISTE_KOPF, 1L, Einsatz.keine()));
+        for (Punktebuch.Platz platz : plaetze) {
+            zeilen.addAll(sprache.bau(WolkeSatz.RANGLISTE_ZEILE, 1L,
+                    Einsatz.von("rang", platz.rang())
+                            .mit("spieler", namen.apply(platz.insel().eigentuemer()))
+                            .mit("feld", Werdertext.feld(platz.insel()))
+                            .mit("punkte", platz.punkte())
+                            .mit("stufe", platz.stufe())));
+        }
+        return zeilen;
+    }
+
+    // ================================================== Biom und Zuruecksetzen [Teil F]
+
+    /**
+     * Der Stand: welches Biom die Insel hat, was ein Wechsel kostet, was zur Wahl steht.
+     *
+     * <p>Die Antwort auf {@code /wolke biom} OHNE Namen. Zwei Zeilen und nicht eine: Die
+     * Liste der Biome ist lang, und ein Spieler, der nur wissen will, was er hat, soll es
+     * in der ersten Zeile lesen.
+     */
+    static List<Component> biomStandZeilen(Sprache sprache, String biom, long preis,
+                                           List<String> angebot) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(WolkeSatz.BIOM_STAND, 1L,
+                Einsatz.von("biom", biom).mit("preis", sprache.betrag(preis))));
+        if (angebot.isEmpty()) {
+            zeilen.addAll(sprache.bau(WolkeSatz.BIOM_KEINE_WAHL, 1L, Einsatz.keine()));
+            return zeilen;
+        }
+        zeilen.addAll(sprache.bau(WolkeSatz.BIOM_WAHL, 1L,
+                Einsatz.von("biome", String.join(", ", angebot))));
+        return zeilen;
+    }
+
+    /**
+     * Die Antwort auf {@code /wolke biom <name>} - jeder Bescheid des Biombuchs.
+     *
+     * <p>Wieder ohne {@code default}. Die Absage "nicht angeboten" nennt die ganze Liste:
+     * Ein Spieler, der sich vertippt hat, soll nicht erst einen zweiten Befehl brauchen.
+     *
+     * @param guthaben sein Stand VOR dem Versuch - die Erfolgszeile nennt, was bleibt
+     * @param angebot  die Biome zur Wahl; sie stehen in der Absage
+     */
+    static List<Component> biomZeilen(Sprache sprache, Biombuch.Entscheid entscheid,
+                                      long guthaben, List<String> angebot,
+                                      Function<UUID, String> namen) {
+        return switch (entscheid.bescheid()) {
+            case ERTEILT -> entscheid.kosten() == 0L
+                    ? sprache.bau(WolkeSatz.BIOM_GESETZT_GRATIS, 1L,
+                            Einsatz.von("biom", entscheid.biom()))
+                    : sprache.bau(WolkeSatz.BIOM_GESETZT, 1L,
+                            Einsatz.von("biom", entscheid.biom())
+                                    .mit("preis", sprache.betrag(entscheid.kosten()))
+                                    .mit("danach", sprache.betrag(
+                                            guthaben - entscheid.kosten())));
+            case KEINE_WAHL -> sprache.bau(WolkeSatz.BIOM_KEINE_WAHL, 1L,
+                    Einsatz.keine());
+            case NICHT_ANGEBOTEN -> sprache.bau(WolkeSatz.BIOM_NICHT_ANGEBOTEN, 1L,
+                    Einsatz.von("biom", entscheid.biom())
+                            .mit("biome", String.join(", ", angebot)));
+            case KEINE_INSEL -> sprache.bau(WolkeSatz.KEINE_INSEL, 1L, Einsatz.keine());
+            case NICHT_EIGENTUEMER -> sprache.bau(WolkeSatz.BIOM_NICHT_DEINE, 1L,
+                    Einsatz.von("eigentuemer", namen.apply(
+                            entscheid.insel().orElseThrow().eigentuemer())));
+            case ZU_WENIG_MARK -> sprache.bau(WolkeSatz.BIOM_ZU_WENIG, 1L,
+                    Einsatz.von("preis", sprache.betrag(entscheid.kosten()))
+                            .mit("fehlt", sprache.betrag(
+                                    entscheid.kosten() - guthaben)));
+            case GESTOERT -> sprache.bau(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine());
+        };
+    }
+
+    /** Die Warnung vor dem Zuruecksetzen - sie verlangt das zweite Wort. */
+    static List<Component> zuruecksetzenWarnungZeilen(Sprache sprache) {
+        return sprache.bau(WolkeSatz.ZURUECK_WARNUNG, 1L, Einsatz.keine());
+    }
+
+    /** Die Startinsel steht wieder. */
+    static List<Component> zuruecksetzenZeilen(Sprache sprache, Parzelle insel) {
+        return sprache.bau(WolkeSatz.ZURUECK_ERTEILT, 1L,
+                Einsatz.von("feld", Werdertext.feld(insel)));
     }
 }

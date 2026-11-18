@@ -1,5 +1,8 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Aufgabenwerte;
+import de.freimarken.kern.Erzwerte;
+import de.freimarken.kern.Punktwerte;
 import de.freimarken.kern.Wolkenbiome;
 import de.freimarken.kern.Wolkenwerte;
 import java.util.ArrayList;
@@ -41,7 +44,12 @@ final class Wolkenliste {
     /** Jede Zeile, die das Plugin mitbringt - fuer den Bericht ueber Fehlende. */
     private static final List<String> SCHLUESSEL = List.of(
             PFAD_WELT, Wolkenwerte.PFAD_PREIS, Wolkenwerte.PFAD_HOECHSTZAHL,
-            Wolkenwerte.PFAD_BIOME, Wolkenwerte.PFAD_STARTTRUHE);
+            Wolkenwerte.PFAD_BIOME, Wolkenwerte.PFAD_STARTTRUHE,
+            Erzwerte.PFAD_AN, Erzwerte.PFAD_GRUND, Erzwerte.PFAD_JE_STUFE,
+            Erzwerte.PFAD_HOECHST, Erzwerte.PFAD_MARKEN, Erzwerte.PFAD_TABELLE,
+            Aufgabenwerte.PFAD_AN, Aufgabenwerte.PFAD_LISTE,
+            Wolkenwerte.PFAD_BIOMPREIS, Punktwerte.PFAD_TABELLE,
+            Punktwerte.PFAD_CHUNKS_JE_TAKT, Punktwerte.PFAD_ABKLINGZEIT);
 
     /**
      * @param welt der Weltname OHNE Namensraum, wie er in der Datei steht. Der Schluessel
@@ -77,8 +85,30 @@ final class Wolkenliste {
         List<String> biome = biome(wurzel, klagen, bericht);
         Map<String, Integer> truhe = starttruhe(wurzel, klagen, bericht);
 
-        Wolkenwerte werte = new Wolkenwerte(preis, hoechstzahl, biome, truhe);
+        Erzwerte erze = erze(wurzel, klagen, bericht);
+        // Die Herausforderungen liest ihr EIGENER Leser, und seine Klagen kommen hier
+        // mit heraus: Der Startbericht hat eine Stelle, an der die Wolkeninseln stehen,
+        // und zwei Quellen dafuer waeren zwei Stellen, von denen eine uebersehen wird.
+        Aufgabenliste.Ergebnis aufgaben = Aufgabenliste.ausKonfiguration(wurzel);
+        klagen.addAll(aufgaben.klagen());
+        bericht.addAll(aufgaben.bericht());
+        Punkteliste.Ergebnis punkte = Punkteliste.ausKonfiguration(wurzel);
+        klagen.addAll(punkte.klagen());
+        bericht.addAll(punkte.bericht());
+        // Der Biompreis geht durch betrag() und damit durch den SPRUNGSCHUTZ: Eine
+        // Verdoppelung ohne Bestaetigung wird beklagt. Der Schluessel heisst wolken-biom
+        // und steht in der ausgelieferten config.yml unter sprung-bestaetigt (Tafel
+        // 31am).
+        long biompreis = Wirtschaftsliste.betrag(wurzel, Wolkenwerte.PFAD_BIOMPREIS,
+                "wolken-biom", Wolkenwerte.VORGABE_BIOMPREIS,
+                Wolkenwerte.HOECHSTER_BETRAG, "Mark je Wechsel", klagen, bericht);
+
+        Wolkenwerte werte = new Wolkenwerte(preis, hoechstzahl, biome, truhe, erze,
+                aufgaben.werte(), punkte.werte(), biompreis);
         bericht.add(rechenprobe(werte));
+        bericht.add(erzprobe(erze));
+        bericht.add(Aufgabenliste.rechenprobe(aufgaben.werte()));
+        bericht.add(Punkteliste.rechenprobe(punkte.werte()));
         return new Ergebnis(welt, werte, klagen, bericht);
     }
 
@@ -103,7 +133,16 @@ final class Wolkenliste {
                 ? "GRATIS"
                 : werte.preis() + " Mark je Insel");
         satz.append(", ").append(inseln(werte.hoechstzahl())).append(" je Spieler, ")
-                .append(biomwahl(werte)).append(", Starttruhe mit ")
+                .append(biomwahl(werte));
+        if (werte.biomwahl()) {
+            // Der Preis gehoert NEBEN die Zahl der Biome: Eine Wahl, die 2.000 Mark je
+            // Wechsel kostet, ist eine andere Wahl als eine kostenlose - und genau diese
+            // Zeile liest der Betreiber beim Start.
+            satz.append(werte.biompreis() == 0L
+                    ? " (Wechsel gratis)"
+                    : " (Wechsel " + werte.biompreis() + " Mark)");
+        }
+        satz.append(", Starttruhe mit ")
                 .append(werte.starttruhe().size()).append(" Gegenstaenden");
         if (!werte.starttruhe().containsKey(LAVA)) {
             satz.append(" (OHNE Lava)");
@@ -123,6 +162,248 @@ final class Wolkenliste {
         return werte.biome().size() == 1
                 ? "nur das Biom " + werte.biome().get(0)
                 : werte.biome().size() + " Biome zur Wahl";
+    }
+
+    /**
+     * Der Abschnitt {@code wolken.erze:} - der Kobbelsteingenerator.
+     *
+     * <p><b>Alles oder nichts bei den drei Prozentzahlen</b>, dieselbe Antwort wie bei den
+     * Verfallsfristen: Sie haengen voneinander ab ({@link Erzwerte} verlangt, dass der
+     * Deckel nicht unter dem Grundwert liegt), und ein einzeln zurechtgebogener Wert waere
+     * eine Mischung aus Datei und Vorgabe, die der Betreiber nirgends nachlesen kann. Also
+     * wird jede Zeile einzeln gelesen und beklagt, und laesst sich der Satz am Ende nicht
+     * bauen, gilt {@link Erzwerte#VORGABE} - mit einer Klage, die den Grund woertlich
+     * nennt.
+     *
+     * <p>Der SCHALTER bleibt dabei stehen: Wer den Generator abschaltet und sich in einer
+     * Prozentzahl vertippt, bekommt keine eingeschaltete Tabelle zurueck.
+     */
+    private static Erzwerte erze(ConfigurationSection wurzel, List<String> klagen,
+                                 List<String> bericht) {
+        boolean an = jaNein(wurzel, Erzwerte.PFAD_AN, Erzwerte.VORGABE.an(), klagen,
+                bericht);
+        boolean marken = jaNein(wurzel, Erzwerte.PFAD_MARKEN, Erzwerte.VORGABE.marken(),
+                klagen, bericht);
+        int grund = prozent(wurzel, Erzwerte.PFAD_GRUND, Erzwerte.VORGABE_GRUND, klagen,
+                bericht);
+        int jeStufe = prozent(wurzel, Erzwerte.PFAD_JE_STUFE, Erzwerte.VORGABE_JE_STUFE,
+                klagen, bericht);
+        int hoechst = prozent(wurzel, Erzwerte.PFAD_HOECHST, Erzwerte.VORGABE_HOECHST,
+                klagen, bericht);
+        Map<String, Erzwerte.Erzzeile> tabelle = erztabelle(wurzel, klagen, bericht);
+        try {
+            return new Erzwerte(an, grund, jeStufe, hoechst, marken, tabelle);
+        } catch (IllegalArgumentException unbrauchbar) {
+            klagen.add("Die Erzwerte passen nicht zusammen: "
+                    + unbrauchbar.getMessage() + " "
+                    + Wirtschaftsliste.esBleibt(Erzwerte.VORGABE_GRUND + " Prozent plus "
+                            + Erzwerte.VORGABE_JE_STUFE + " je Stufe, hoechstens "
+                            + Erzwerte.VORGABE_HOECHST + " Prozent"));
+            return Erzwerte.VORGABE.mitAn(an).mitMarken(marken);
+        }
+    }
+
+    /**
+     * Ein Ja oder Nein mit Bericht - der Schalter und die Marken.
+     *
+     * <p>Der Bericht steht HIER und nicht in {@link Wirtschaftsliste#jaNein}: Ein
+     * abgeschalteter Generator ist die Einstellung, die den ganzen Reiz dieser Welt
+     * ausmacht, und wer sie setzt, soll sie beim Start lesen. Eine stumme Zeile waere die
+     * unauffaelligste Art, Wolkenwerder langweilig zu machen.
+     */
+    private static boolean jaNein(ConfigurationSection wurzel, String pfad,
+                                  boolean vorgabe, List<String> klagen,
+                                  List<String> bericht) {
+        Boolean gelesen = Wirtschaftsliste.jaNein(wurzel, pfad, vorgabe, klagen, bericht);
+        if (gelesen == null) {
+            return vorgabe;
+        }
+        if (gelesen != vorgabe) {
+            bericht.add(pfad + " = " + gelesen + " gilt.");
+        }
+        return gelesen;
+    }
+
+    /**
+     * Eine Prozentzahl von 0 bis 100 - EINE Methode fuer drei Zeilen.
+     *
+     * <p>Mit dem Pfad als Argument, aus demselben Grund, den {@code Freistadtliste.frist}
+     * nennt: Drei gleich gebaute Leser waeren drei Stellen, an denen der zweite die
+     * naechste Verschaerfung nicht mitbekommt.
+     */
+    private static int prozent(ConfigurationSection wurzel, String pfad, int vorgabe,
+                               List<String> klagen, List<String> bericht) {
+        Long gelesen = Wirtschaftsliste.ganzeZahl(wurzel, pfad, vorgabe, klagen, bericht);
+        if (gelesen == null) {
+            return vorgabe;
+        }
+        long wert = gelesen;
+        if (wert < 0L || wert > 100L) {
+            klagen.add(pfad + " ist " + wert + " und liegt nicht zwischen 0 und 100"
+                    + " Prozent - verworfen. "
+                    + Wirtschaftsliste.esBleibt(String.valueOf(vorgabe)));
+            return vorgabe;
+        }
+        if (wert != vorgabe) {
+            bericht.add(pfad + " = " + wert + " Prozent gilt.");
+        }
+        return (int) wert;
+    }
+
+    /**
+     * Die Erztabelle - Zeile fuer Zeile geprueft, kaputte beklagt und uebersprungen.
+     *
+     * <p>Dieselbe Bauart wie {@code Angelliste.faenge}, mit einem Unterschied: Jede Zeile
+     * traegt ZWEI Zahlen, und darum ist sie selbst ein Abschnitt. Die Namen der beiden
+     * Unterschluessel stehen in {@link Erzwerte#SCHLUESSEL_GEWICHT} und
+     * {@link Erzwerte#SCHLUESSEL_AB_STUFE} - in der Datei geschriebene Namen und zur
+     * Laufzeit gelesene Schluessel sind eine Naht, und eine Probe, die die fertige Tabelle
+     * hereingibt, sieht sie nie.
+     *
+     * <p><b>Die Mindeststufe darf fehlen und heisst dann 0</b> - "von Anfang an". Das
+     * Gewicht darf es nicht: Eine Zeile ohne Gewicht ist keine Angabe, sondern ein halb
+     * getippter Eintrag, und eine stille 1 daraus waere ein Erz, das haeufiger kommt als
+     * alles, was danebensteht.
+     *
+     * <p>Fehlt der Abschnitt, gilt die Tabelle des Programms. Ist er LEER, gilt eine leere
+     * Tabelle - und das ist etwas anderes: Wer alle Zeilen herausnimmt, will reinen
+     * Kobbelstein und soll ihn bekommen, ohne den Schalter zu finden.
+     */
+    private static Map<String, Erzwerte.Erzzeile> erztabelle(ConfigurationSection wurzel,
+                                                             List<String> klagen,
+                                                             List<String> bericht) {
+        if (!wurzel.contains(Erzwerte.PFAD_TABELLE, true)) {
+            bericht.add(Wirtschaftsliste.fehltText(Erzwerte.PFAD_TABELLE,
+                    Erzwerte.VORGABE_TABELLE.size() + " Erze des Programms"));
+            return Erzwerte.VORGABE_TABELLE;
+        }
+        ConfigurationSection abschnitt =
+                wurzel.getConfigurationSection(Erzwerte.PFAD_TABELLE);
+        if (abschnitt == null) {
+            klagen.add(Erzwerte.PFAD_TABELLE + " ist keine Liste von Erzen mit Gewicht"
+                    + " und Mindeststufe - verworfen. Es gilt die Tabelle des Programms.");
+            return Erzwerte.VORGABE_TABELLE;
+        }
+        Map<String, Erzwerte.Erzzeile> tabelle = new LinkedHashMap<>();
+        for (String name : abschnitt.getKeys(false)) {
+            Erzwerte.Erzzeile zeile = erzzeile(abschnitt, name, klagen);
+            if (zeile != null) {
+                tabelle.put(name.trim().toLowerCase(Locale.ROOT), zeile);
+            }
+        }
+        if (tabelle.isEmpty() && !abschnitt.getKeys(false).isEmpty()) {
+            // JEDE Zeile war kaputt. Die Tabelle des Programms waere hier falsch: Der
+            // Betreiber hat eine eigene gewollt, und mit der Vorgabe kaemen Erze, die er
+            // gerade herausgenommen hat.
+            bericht.add(Erzwerte.PFAD_TABELLE + ": keine einzige Zeile war brauchbar -"
+                    + " der Generator gibt bis zur naechsten Berichtigung nur"
+                    + " Kobbelstein.");
+        }
+        return tabelle;
+    }
+
+    /** Eine Zeile der Erztabelle - oder {@code null}, wenn sie wegfaellt. */
+    private static Erzwerte.Erzzeile erzzeile(ConfigurationSection abschnitt, String name,
+                                              List<String> klagen) {
+        String pfad = Erzwerte.PFAD_TABELLE + "." + name;
+        String klein = name.trim().toLowerCase(Locale.ROOT);
+        String warum = Verdienstliste.warumKeinMaterial(klein);
+        if (warum != null) {
+            klagen.add(pfad + " " + warum
+                    + " - diese Zeile faellt weg, die uebrigen gelten.");
+            return null;
+        }
+        if (Erzwerte.istAusgang(klein)) {
+            // Kobbelstein IN der Tabelle waere ein Tausch von Kobbelstein gegen
+            // Kobbelstein: Der Prozentwurf greift, und heraus kommt dasselbe. Der
+            // Betreiber saehe eine Zeile mit Gewicht 50 und wunderte sich, warum sie
+            // nichts tut.
+            klagen.add(pfad + " ist der Block, AUS dem getauscht wird - eine Zeile"
+                    + " darueber tut nichts. Sie faellt weg, die uebrigen gelten.");
+            return null;
+        }
+        ConfigurationSection eintrag = abschnitt.getConfigurationSection(name);
+        if (eintrag == null) {
+            klagen.add(pfad + " ist " + Wirtschaftsliste.wieGetippt(abschnitt.get(name))
+                    + " - erwartet werden die zwei Zeilen "
+                    + Erzwerte.SCHLUESSEL_GEWICHT + " und "
+                    + Erzwerte.SCHLUESSEL_AB_STUFE + " darunter. Diese Zeile faellt weg,"
+                    + " die uebrigen gelten.");
+            return null;
+        }
+        Object rohGewicht = eintrag.get(Erzwerte.SCHLUESSEL_GEWICHT);
+        if (!(rohGewicht instanceof Number gewicht) || gewicht.longValue() < 1L
+                || gewicht.longValue() > Erzwerte.HOECHSTES_GEWICHT) {
+            klagen.add(pfad + "." + Erzwerte.SCHLUESSEL_GEWICHT + " ist "
+                    + Wirtschaftsliste.wieGetippt(rohGewicht) + " - erwartet wird ein"
+                    + " Gewicht von 1 bis " + Erzwerte.HOECHSTES_GEWICHT
+                    + ". Diese Zeile faellt weg, die uebrigen gelten.");
+            return null;
+        }
+        Object rohStufe = eintrag.get(Erzwerte.SCHLUESSEL_AB_STUFE);
+        long abStufe = 0L;
+        if (rohStufe != null) {
+            if (!(rohStufe instanceof Number stufe) || stufe.longValue() < 0L
+                    || stufe.longValue() > Erzwerte.HOECHSTE_STUFE) {
+                klagen.add(pfad + "." + Erzwerte.SCHLUESSEL_AB_STUFE + " ist "
+                        + Wirtschaftsliste.wieGetippt(rohStufe) + " - erwartet wird eine"
+                        + " Stufe von 0 bis " + Erzwerte.HOECHSTE_STUFE
+                        + ". Diese Zeile faellt weg, die uebrigen gelten.");
+                return null;
+            }
+            abStufe = stufe.longValue();
+        }
+        return new Erzwerte.Erzzeile((int) gewicht.longValue(), (int) abStufe);
+    }
+
+    /**
+     * Die Zahlen des Generators im Klartext - die zweite Rechenprobe.
+     *
+     * <p>Eine eigene Zeile und nicht an {@link #rechenprobe} angehaengt: Der Generator ist
+     * die Sache, um die es in dieser Welt geht, und seine Zahlen sind die, bei denen ein
+     * Vertipper am teuersten ist. Wer {@code je-stufe-prozent: 20} tippt, soll beim Start
+     * lesen, dass der Deckel schon bei Stufe 2 erreicht ist - und nicht erst merken, dass
+     * seine Herausforderungen ab der dritten nichts mehr bringen.
+     *
+     * <p>Paketprivat, damit eine Probe denselben Text nehmen kann.
+     */
+    static String erzprobe(Erzwerte werte) {
+        if (!werte.greift()) {
+            return "Kobbelsteingenerator: nur Kobbelstein - "
+                    + (werte.an() ? "die Erztabelle ist leer" : "wolken.erze.an ist aus")
+                    + ".";
+        }
+        StringBuilder satz = new StringBuilder("Kobbelsteingenerator: ");
+        satz.append(werte.grundProzent()).append(" Prozent Erz bei Stufe 0");
+        if (werte.jeStufeProzent() == 0) {
+            satz.append(", keine Steigerung je Stufe");
+        } else {
+            satz.append(", je Stufe ").append(werte.jeStufeProzent())
+                    .append(" mehr bis ").append(werte.hoechstProzent())
+                    .append(" Prozent ab Stufe ").append(deckelstufe(werte));
+        }
+        satz.append("; ").append(werte.tabelle().size()).append(" Erze, davon ")
+                .append(werte.tabelle().values().stream()
+                        .filter(zeile -> zeile.abStufe() == 0).count())
+                .append(" von Anfang an");
+        if (!werte.marken()) {
+            // Die Zeile, die Geld kostet: Ohne Marke zahlt der Abbau jedes getauschten
+            // Blocks den Lohn aus verdienst.loehne - und ein Automat laeuft Tag und Nacht.
+            satz.append("; OHNE Blockmarke, der Abbau zahlt Lohn");
+        }
+        return satz.append(".").toString();
+    }
+
+    /**
+     * Die erste Stufe, bei der der Deckel greift.
+     *
+     * <p>Aufgerundet, und das ist der Sinn der Zeile: Bei 15 Prozent plus 2 je Stufe und
+     * einem Deckel von 40 sind es 12,5 Stufen - gemeint ist die 13, denn bei 12 steht die
+     * Ausbeute noch bei 39.
+     */
+    private static int deckelstufe(Erzwerte werte) {
+        int fehlt = werte.hoechstProzent() - werte.grundProzent();
+        return (fehlt + werte.jeStufeProzent() - 1) / werte.jeStufeProzent();
     }
 
     /**

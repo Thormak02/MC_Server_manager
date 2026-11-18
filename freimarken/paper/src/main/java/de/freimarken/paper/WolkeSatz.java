@@ -172,7 +172,189 @@ enum WolkeSatz implements Satz {
      * will, ist entweder am falschen Ort oder meint die falsche Insel - und in einer Welt
      * ohne Wege kommt man nur auf eine fremde Insel, wenn man geflogen ist.
      */
-    MITBAUER_FREMD("wolke.mitbauer.fremd", Art.SATZ, "eigentuemer");
+    MITBAUER_FREMD("wolke.mitbauer.fremd", Art.SATZ, "eigentuemer"),
+
+    // ================================================== Die Herausforderungen [Teil D]
+
+    /**
+     * Die Ueberschrift der Tafel - wie viele von wie vielen erfuellt sind.
+     *
+     * <p>Ein SATZ und kein GEZAEHLTER, obwohl eine Zahl darin steht: Gezaehlt wird hier
+     * nicht EIN Ding in Ein- und Mehrzahl, sondern zwei Zahlen nebeneinander gestellt -
+     * "3 von 10". Eine Mehrzahlform davon waere eine Form je Kombination.
+     */
+    AUFGABEN_KOPF("wolke.aufgaben.kopf", Art.SATZ, "erfuellt", "gesamt"),
+
+    /** Eine offene Herausforderung - mit dem, was sie verlangt, und ihrem Lohn. */
+    AUFGABEN_OFFEN("wolke.aufgaben.offen", Art.SATZ, "name", "verlangt", "belohnung"),
+
+    /**
+     * Dieselbe Zeile, wenn es kein Geld dafuer gibt.
+     *
+     * <p>Zwei Saetze und kein Platzhalter, der manchmal leer ist - dieselbe Antwort wie
+     * bei {@link #ZEILE_MITBAUER}: Ein "fuer " ohne Betrag dahinter sieht aus wie ein
+     * Fehler. Und eine Aufgabe ohne Lohn ist erlaubt: Sie zahlt in Stufe statt in Mark.
+     */
+    AUFGABEN_OFFEN_OHNE_LOHN("wolke.aufgaben.offen-ohne-lohn", Art.SATZ, "name",
+            "verlangt"),
+
+    /**
+     * Eine erfuellte Herausforderung.
+     *
+     * <p>OHNE die verlangten Gegenstaende: Was weg ist, ist weg, und die Zeile soll
+     * zeigen, was noch zu tun ist. Eine vollstaendige Liste machte die Tafel doppelt so
+     * lang, und zwar genau fuer den Spieler, der sie nicht mehr braucht.
+     */
+    AUFGABEN_FERTIG("wolke.aufgaben.fertig", Art.SATZ, "name"),
+
+    /**
+     * In dieser Welt gibt es keine Herausforderungen.
+     *
+     * <p>Der Schalter {@code wolken.aufgaben.an} steht auf {@code false} oder die Liste
+     * ist leer. Ein stummer Befehl waere hier das Schlimmste: Der Spieler haelt die Tafel
+     * fuer kaputt und tippt sie wieder.
+     */
+    AUFGABEN_AUS("wolke.aufgaben.aus", Art.SATZ),
+
+    /** Erfuellt - mit dem Namen, dem Lohn und der neuen Stufe. */
+    ABGABE_ERTEILT("wolke.abgabe.erteilt", Art.SATZ, "name", "belohnung", "stufe"),
+
+    /** Dieselbe Zusage ohne Lohn - siehe {@link #AUFGABEN_OFFEN_OHNE_LOHN}. */
+    ABGABE_ERTEILT_OHNE_LOHN("wolke.abgabe.erteilt-ohne-lohn", Art.SATZ, "name",
+            "stufe"),
+
+    /**
+     * Es fehlt etwas - und zwar WAS.
+     *
+     * <p>Die Zahl ist das FEHLENDE und nicht das Verlangte: Wer 40 von 64 Kobbelsteinen
+     * hat, will wissen, dass 24 fehlen. Das Verlangte steht in der Tafel.
+     */
+    ABGABE_FEHLT("wolke.abgabe.fehlt", Art.SATZ, "name", "fehlt"),
+
+    /** Diese Herausforderung steht auf dieser Insel schon. */
+    ABGABE_SCHON("wolke.abgabe.schon", Art.SATZ, "name"),
+
+    /**
+     * Diese Herausforderung gibt es nicht.
+     *
+     * <p>Mit dem getippten Wort, denn das ist die Auskunft, die fehlt: In der Liste steht
+     * etwas anderes, und ein Spieler, der sich vertippt hat, soll seinen Tippfehler lesen.
+     */
+    ABGABE_UNBEKANNT("wolke.abgabe.unbekannt", Art.SATZ, "name"),
+
+    /**
+     * Die Insel, auf der du stehst, gehoert einem anderen - und du bist kein Mitbauer.
+     *
+     * <p>Ein eigener Satz und nicht {@link #MITBAUER_FREMD}: Dort geht es um das
+     * Eintragen, das NUR der Eigentuemer darf; hier um das Abgeben, das jeder Mitbauer
+     * darf. Zwei verschiedene Regeln mit einem Satz zu beschreiben hiesse, dass der eine
+     * Satz in einem der beiden Faelle falsch ist.
+     */
+    ABGABE_FREMD("wolke.abgabe.fremd", Art.SATZ, "eigentuemer"),
+
+    /**
+     * Gezaehlt war genug da, genommen wurde zu wenig.
+     *
+     * <p>Der Fall liegt zwischen zwei Augenblicken - was ein Spieler dazwischen wegwirft,
+     * ist weg. Alles Genommene ist zurueckgegeben, und nichts ist eingetragen. Ein stummes
+     * Nichts waere hier besonders schlecht: Der Spieler saehe seine Gegenstaende noch und
+     * die Aufgabe offen und hielte den Befehl fuer kaputt.
+     */
+    ABGABE_WEGGEKOMMEN("wolke.abgabe.weggekommen", Art.SATZ, "name"),
+
+    // ================================================== Punkte und Rangliste [Teil E]
+
+    /**
+     * Die Zaehlung laeuft - mit der Zahl der Chunks.
+     *
+     * <p>Die Zahl steht darin, weil sie die Wartezeit erklaert: Ein Feld hat 64 Chunks,
+     * und bei einem je Takt sind das gut drei Sekunden. Ohne diese Zeile haelt ein Spieler
+     * den Befehl fuer wirkungslos und tippt ihn wieder - und der zweite Versuch laeuft in
+     * "hier zaehlt schon jemand".
+     */
+    PUNKTE_LAEUFT("wolke.punkte.laeuft", Art.SATZ, "chunks"),
+
+    /** Die Zaehlung ist fertig - mit der Punktzahl. */
+    PUNKTE_FERTIG("wolke.punkte.fertig", Art.SATZ, "punkte"),
+
+    /**
+     * Zu frueh - mit der Wartezeit in Sekunden.
+     *
+     * <p>Die Abklingzeit haengt an der INSEL und nicht am Spieler: Gezaehlt wird ein Feld,
+     * und zehn Mitbauer koennten es sonst zehnmal hintereinander zaehlen lassen.
+     */
+    PUNKTE_ZU_FRUEH("wolke.punkte.zu-frueh", Art.SATZ, "sekunden"),
+
+    /** Auf dieser Insel zaehlt schon jemand. */
+    PUNKTE_LAEUFT_SCHON("wolke.punkte.laeuft-schon", Art.SATZ),
+
+    /** Es gibt keine Punktetabelle - dann waere jede Insel 0 wert. */
+    PUNKTE_AUS("wolke.punkte.aus", Art.SATZ),
+
+    /** Die Ueberschrift der Rangliste. */
+    RANGLISTE_KOPF("wolke.rangliste.kopf", Art.SATZ),
+
+    /**
+     * Eine Zeile der Rangliste.
+     *
+     * <p>Mit der STUFE neben den Punkten, und das ist der ganze Witz dieser Liste: Die
+     * Punkte sagen, was gebaut wurde, die Stufe, was geleistet wurde. Eine Liste nur nach
+     * Punkten waere eine Liste der Fleissigsten, und eine nur nach Stufe eine zweite
+     * Aufgabentafel.
+     */
+    RANGLISTE_ZEILE("wolke.rangliste.zeile", Art.SATZ, "rang", "spieler", "feld",
+            "punkte", "stufe"),
+
+    /** Es gibt noch keine Insel in der Liste. */
+    RANGLISTE_LEER("wolke.rangliste.leer", Art.SATZ),
+
+    // ================================================== Biom und Zuruecksetzen [Teil F]
+
+    /** Welches Biom deine Insel hat - und was ein Wechsel kostet. */
+    BIOM_STAND("wolke.biom.stand", Art.SATZ, "biom", "preis"),
+
+    /** Die Biome zur Wahl - eine Zeile unter dem Stand. */
+    BIOM_WAHL("wolke.biom.wahl", Art.SATZ, "biome"),
+
+    /** Gewechselt und bezahlt. */
+    BIOM_GESETZT("wolke.biom.gesetzt", Art.SATZ, "biom", "preis", "danach"),
+
+    /** Dieselbe Zusage, wenn der Wechsel gratis ist. */
+    BIOM_GESETZT_GRATIS("wolke.biom.gesetzt-gratis", Art.SATZ, "biom"),
+
+    /**
+     * Dieses Biom wird nicht angeboten - mit der Liste derer, die es gibt.
+     *
+     * <p>Die Liste gehoert in DIESE Absage: Ein Spieler, der sich vertippt hat, soll nicht
+     * erst einen zweiten Befehl brauchen, um die Namen zu lesen.
+     */
+    BIOM_NICHT_ANGEBOTEN("wolke.biom.nicht-angeboten", Art.SATZ, "biom", "biome"),
+
+    /** In dieser Welt gibt es keine Biomwahl - {@code wolken.biome} ist leer. */
+    BIOM_KEINE_WAHL("wolke.biom.keine-wahl", Art.SATZ),
+
+    /** Das Geld reicht nicht. */
+    BIOM_ZU_WENIG("wolke.biom.zu-wenig", Art.SATZ, "preis", "fehlt"),
+
+    /**
+     * Die Insel gehoert einem anderen.
+     *
+     * <p>Ein eigener Satz neben {@link #ABGABE_FREMD}: Abgeben darf jeder Mitbauer, das
+     * Biom wechseln NUR der Eigentuemer - es kostet Geld und stellt die ganze Insel um.
+     */
+    BIOM_NICHT_DEINE("wolke.biom.nicht-deine", Art.SATZ, "eigentuemer"),
+
+    /**
+     * Die Warnung vor dem Zuruecksetzen - sie verlangt das zweite Wort.
+     *
+     * <p>Dieselbe Bauart wie beim Aufgeben einer Parzelle: Zurueckgesetzt wird die
+     * STARTINSEL, und was an ihrer Stelle steht, ist danach weg. Ein Befehl, der das ohne
+     * Rueckfrage tut, ist einer, den man genau einmal versehentlich tippt.
+     */
+    ZURUECK_WARNUNG("wolke.zuruecksetzen.warnung", Art.SATZ),
+
+    /** Die Startinsel steht wieder. */
+    ZURUECK_ERTEILT("wolke.zuruecksetzen.erteilt", Art.SATZ, "feld");
 
     private final String pfad;
     private final Art art;

@@ -544,6 +544,18 @@ final class Serverprobe {
                     case "getX" -> x;
                     case "getY" -> y;
                     case "getZ" -> z;
+                    // Art LESEN und SETZEN, seit die Erzwache den gebildeten Block
+                    // tauscht [Schritt 11, Teil C]: Jener Zweig liest den neuen Zustand
+                    // und schreibt sein Erz in IHN - nicht in den Block. Beide Wege gehen
+                    // hier in denselben Weltgriff, und das ist der Unterschied zum
+                    // laufenden Server, auf dem der Block bis zum Ereignisende Lava
+                    // bleibt. Die Probe fragt danach den Griff, und genau das soll sie:
+                    // Was zaehlt, ist die Art, die der Zweig HINEINSCHREIBT.
+                    case "getType" -> griffOderKlage(griff).bei(x, y, z);
+                    case "setType" -> {
+                        griffOderKlage(griff).setze(x, y, z, (Material) werte[0]);
+                        yield null;
+                    }
                     case "toString" -> "Zustandsprobe " + x + "/" + y + "/" + z;
                     case "hashCode" -> (x * 31 + y) * 31 + z;
                     case "equals" -> eigen == (werte == null ? null : werte[0]);

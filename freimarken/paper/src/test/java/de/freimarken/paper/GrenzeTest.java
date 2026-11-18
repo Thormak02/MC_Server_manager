@@ -3832,4 +3832,168 @@ class GrenzeTest {
                         + " eine Schleife ueber 256 Spalten");
     }
 
+
+    @Test
+    @DisplayName("31ba - der Erztausch: angemeldet, auf HIGH, und die ART wird zuerst"
+            + " gefragt")
+    void derErztausch() {
+        // VIER ZUSAGEN, DIE KEINE VERHALTENSPROBE SEHEN KANN - und jede einzelne waere im
+        // Spiel teuer.
+        String quelle = Quellen.text(datei("Erzwache.java"));
+
+        // (1) DIE STUFE DER ANMELDUNG. HIGH wie bei der Angelwache: Hier wird GEAENDERT,
+        // und wer danach zusieht (MONITOR), soll das Ergebnis sehen. Gelesen wird das
+        // WORT und nicht die Zahl - die Zahl stuende als Erwartung in dieser Tafel, und
+        // Bukkit darf sie aendern.
+        int zweig = quelle.indexOf("public void beimBilden(BlockFormEvent");
+        assertTrue(zweig > 0, "Erzwache hat keinen Zweig beimBilden mehr - dann prueft"
+                + " diese Tafel die falsche Datei");
+        int stufe = quelle.lastIndexOf("EventPriority.", zweig);
+        assertTrue(stufe > 0, "vor beimBilden steht keine EventPriority");
+        assertEquals("HIGH", quelle.substring(stufe + "EventPriority.".length(), zweig)
+                        .split("[^A-Z_]")[0],
+                "HIGH laeuft VOR MONITOR - der Tausch zuerst, das Zusehen danach");
+        assertTrue(quelle.substring(stufe, zweig).contains("ignoreCancelled = true"),
+                "ohne ignoreCancelled legt die Wache ein Erz in einen Block, den ein"
+                        + " anderes Plugin gerade verhindert hat");
+
+        // (2) DIE REIHENFOLGE DER TORE. Dasselbe Ereignis bildet auch Schnee und Eis, und
+        // in einem Biom wie snowy_plains faellt es waehrend eines Schneesturms fuer JEDEN
+        // freien Block. Stuende die Inselabfrage davor, waere das die teuerste Zeile des
+        // Servers - und keine Verhaltensprobe koennte es messen, weil beide Reihenfolgen
+        // dasselbe Ergebnis geben.
+        int art = quelle.indexOf("Erzwerte.istAusgang(", zweig);
+        int insel = quelle.indexOf("buch.inselAn(", zweig);
+        int welt = quelle.indexOf("weltschluessel.equals(", zweig);
+        assertTrue(art > 0 && insel > 0 && welt > 0,
+                "einer der drei Tore ist weg: Art " + art + ", Welt " + welt
+                        + ", Insel " + insel);
+        assertTrue(art < welt && welt < insel,
+                "erst die ART, dann die WELT, dann die Insel - gefunden: Art " + art
+                        + ", Welt " + welt + ", Insel " + insel);
+
+        // (3) JEDER NAME DER AUSGELIEFERTEN TABELLE IST EIN GEGENSTAND. Material kennt
+        // ohne laufenden Server keine Bloecke, aber getMaterial geht - also kann diese
+        // Tafel den Tippfehler finden, den sonst erst ein Spieler findet: Ein Name, den
+        // es nicht gibt, kostet SEINE Zeile, und zwar still bis zur ersten Klage im
+        // Protokoll.
+        for (String name : de.freimarken.kern.Erzwerte.VORGABE_TABELLE.keySet()) {
+            assertNotNull(org.bukkit.Material.getMaterial(name.toUpperCase(java.util.Locale.ROOT)),
+                    "Erzwerte.VORGABE_TABELLE nennt " + name + " - diesen Gegenstand"
+                            + " kennt Minecraft nicht, und die Zeile faellt im Spiel"
+                            + " stumm weg");
+        }
+
+        // (4) UND DIE ANMELDUNG, aus dem Zweig, der die Welt schon geprueft hat. Eine
+        // Wache, die niemand am Server anmeldet, ist gebaut, gruen geprueft und im Spiel
+        // ohne Wirkung - dieselbe Lage wie bei der Truhenwache (31an) und beim Shopbuch
+        // (31au).
+        String plugin = Quellen.text(datei("FreimarkenPlugin.java"));
+        assertTrue(plugin.contains("registerEvents(new Erzwache("),
+                "die Erzwache wird nicht angemeldet - dann gibt der Generator fuer immer"
+                        + " nur Kobbelstein");
+        assertTrue(plugin.contains("richteErzeEin(welt)"),
+                "richteErzeEin wird nicht gerufen - die Wache entsteht dann nie");
+        int ruf = plugin.indexOf("richteErzeEin(welt)");
+        int wolken = plugin.indexOf("private void richteWolkenEin()");
+        int danach = plugin.indexOf("private void", wolken + 20);
+        assertTrue(ruf > wolken && ruf < danach,
+                "der Ruf steht nicht in richteWolkenEin - dort und nur dort ist"
+                        + " geprueft, dass es die Welt und das Buch gibt");
+    }
+
+
+    @Test
+    @DisplayName("31bb - jeder Gegenstand der Aufgaben und der Punktetabelle EXISTIERT")
+    void jederGegenstandExistiert() {
+        // Material kennt ohne laufenden Server keine Bloecke, aber getMaterial geht -
+        // also kann diese Tafel den Tippfehler finden, den sonst erst ein Spieler
+        // findet. Und er waere teuer: Ein verlangter Gegenstand, den es nicht gibt,
+        // laesst die GANZE Herausforderung wegfallen (Aufgabenliste klagt und
+        // ueberspringt sie), und eine Punktzeile faellt still weg. Beides merkt der
+        // Betreiber erst, wenn ein Spieler fragt, warum eine Aufgabe fehlt.
+        for (var aufgabe : de.freimarken.kern.Aufgabenwerte.VORGABE_LISTE) {
+            for (String gegenstand : aufgabe.verlangt().keySet()) {
+                assertNotNull(org.bukkit.Material.getMaterial(
+                                gegenstand.toUpperCase(java.util.Locale.ROOT)),
+                        "Die Herausforderung " + aufgabe.schluessel() + " verlangt "
+                                + gegenstand + " - diesen Gegenstand kennt Minecraft"
+                                + " nicht, und die ganze Aufgabe faellt im Spiel weg");
+            }
+        }
+        for (String block : de.freimarken.kern.Punktwerte.VORGABE_TABELLE.keySet()) {
+            assertNotNull(org.bukkit.Material.getMaterial(
+                            block.toUpperCase(java.util.Locale.ROOT)),
+                    "Die Punktetabelle nennt " + block + " - diesen Block kennt"
+                            + " Minecraft nicht, und die Zeile faellt still weg");
+        }
+
+        // UND die Namen der ausgelieferten Aufgaben haben ihr Wort in der Vorlage. Fehlt
+        // es, steht im Spiel ein Pfad - der Start meldet es, aber in der ausgelieferten
+        // Datei ist es ein Fehler beim Abschreiben.
+        String vorlage = ausgelieferte("sprache-vorlage.yml");
+        for (var aufgabe : de.freimarken.kern.Aufgabenwerte.VORGABE_LISTE) {
+            assertTrue(vorlage.contains("    " + aufgabe.schluessel() + ": \""),
+                    "zur Herausforderung " + aufgabe.schluessel() + " fehlt die Zeile "
+                            + Aufgabenname.VORSILBE + aufgabe.schluessel()
+                            + " in der sprache-vorlage.yml");
+        }
+    }
+
+    @Test
+    @DisplayName("31bc - Zaehlung und Biomwechsel sind VERDRAHTET und arbeiten in Happen")
+    void zaehlungUndBiomwechselSindVerdrahtet() {
+        // ZUSAGEN, DIE KEINE VERHALTENSPROBE SIEHT. Beide Haende entstehen in
+        // richteWolkenEin und werden ueber ein Buendel in den Befehl gegeben - eine
+        // gebaute, gruen gepruefte Hand, die niemand verdrahtet, ist im Spiel ohne
+        // Wirkung (dieselbe Lage wie bei der Truhenwache, 31an).
+        String plugin = Quellen.text(datei("FreimarkenPlugin.java"));
+        assertTrue(plugin.contains("richtePflegeEin(welt);"),
+                "richtePflegeEin wird nicht gerufen - dann gibt es keine Punkte und"
+                        + " keinen Biomwechsel");
+        int ruf = plugin.indexOf("richtePflegeEin(welt);");
+        int wolken = plugin.indexOf("private void richteWolkenEin()");
+        int danach = plugin.indexOf("private void", wolken + 20);
+        assertTrue(ruf > wolken && ruf < danach,
+                "der Ruf steht nicht in richteWolkenEin - dort und nur dort ist"
+                        + " geprueft, dass es die Welt, das Buch und die Staende gibt");
+        assertTrue(plugin.contains("wolkenpflege, kasse, sprache"),
+                "das Buendel geht nicht in den Befehl - dann sagt /wolke punkte fuer"
+                        + " immer, dass es keine Punkte gibt");
+
+        // DIE HAPPEN. Ein Feld hat 64 Chunks mit mehr als sechs Millionen Bloecken; in
+        // einem Zug gezaehlt stuende der Server. Beide Haende holen ihre Happen aus
+        // DERSELBEN Chunkfolge - zwei Abschriften der Rechnung waeren zwei Orte fuer
+        // denselben Fehler.
+        for (String datei : java.util.List.of("Inselzaehlung.java", "Biomhand.java")) {
+            String quelle = Quellen.text(datei(datei));
+            assertTrue(quelle.contains("naechsterHappen("),
+                    datei + " holt keinen Happen mehr - dann laeuft die Arbeit in EINEM"
+                            + " Takt, und der Server steht dabei");
+            assertTrue(quelle.contains("abmelden.run()"),
+                    datei + " meldet seinen Zeitgeber nicht ab - er schlaegt dann fuer"
+                            + " immer weiter");
+            assertTrue(quelle.contains("catch (RuntimeException fehler)"),
+                    datei + " fasst den Takt nicht in try - eine Ausnahme in einem"
+                            + " getakteten Auftrag meldet Bukkit NICHT ab, sie kaeme bei"
+                            + " jedem Tick wieder");
+        }
+
+        // DER SCHNAPPSCHUSS und die HOEHENGRENZE. Ohne beides liest ein Chunk 98.304
+        // Blockobjekte, von denen in dieser Welt fast alle Luft sind.
+        String zaehlung = Quellen.text(datei("Inselzaehlung.java"));
+        assertTrue(zaehlung.contains("getChunkSnapshot(false, false, false)"),
+                "die Zaehlung liest keinen Schnappschuss mehr");
+        assertTrue(zaehlung.contains("schnitt.getHighestBlockYAt(x, z)"),
+                "die Zaehlung laeuft bis zur Welthoehe statt bis zum hoechsten Block -"
+                        + " ueber einer Wolkeninsel ist alles Luft");
+
+        // UND DIE BIOMZELLE: In Schritten von 4, denn so legt Minecraft Biome ab. Ein
+        // setBiome je Block waere derselbe Vorgang 64-mal.
+        String biome = Quellen.text(datei("Biomhand.java"));
+        assertTrue(biome.contains("x += ZELLE") && biome.contains("y += ZELLE")
+                        && biome.contains("z += ZELLE"),
+                "die Biomhand setzt nicht mehr in Zellenschritten");
+    }
+
 }

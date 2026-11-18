@@ -12,6 +12,7 @@ import de.freimarken.daten.MariaMiete;
 import de.freimarken.daten.MariaShops;
 import de.freimarken.daten.MariaSpielzeit;
 import de.freimarken.daten.MariaTruhe;
+import de.freimarken.daten.MariaWolken;
 import de.freimarken.kern.Abholablage;
 import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Berufsablage;
@@ -21,6 +22,8 @@ import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Blockbuchablage;
 import de.freimarken.kern.Blockbuchwerte;
+import de.freimarken.kern.Aufgabenbuch;
+import de.freimarken.kern.Biombuch;
 import de.freimarken.kern.Blockmarken;
 import de.freimarken.kern.Blockort;
 import de.freimarken.kern.Bonusablage;
@@ -41,6 +44,7 @@ import de.freimarken.kern.Ladenverzeichnis;
 import de.freimarken.kern.Messwerte;
 import de.freimarken.kern.Mietablage;
 import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.Punktebuch;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
@@ -55,6 +59,7 @@ import de.freimarken.kern.SpeicherMiete;
 import de.freimarken.kern.SpeicherShops;
 import de.freimarken.kern.SpeicherSpielzeit;
 import de.freimarken.kern.SpeicherTruhe;
+import de.freimarken.kern.SpeicherWolken;
 import de.freimarken.kern.Spielzeitablage;
 import de.freimarken.kern.Stadtfeldplan;
 import de.freimarken.kern.Stadtkasse;
@@ -72,6 +77,7 @@ import de.freimarken.kern.ZwischenspeicherBerufe;
 import de.freimarken.kern.ZwischenspeicherGrundstuecke;
 import de.freimarken.kern.ZwischenspeicherLager;
 import de.freimarken.kern.ZwischenspeicherShops;
+import de.freimarken.kern.ZwischenspeicherWolken;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.sql.SQLException;
 import java.time.Clock;
@@ -377,6 +383,41 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
     /** Der Schutz von Wolkenwerder - {@code null}, solange es das Buch nicht gibt. */
     private Wolkenwache wolkenwache;
+
+    /**
+     * Punkte, Rangliste und Biomwechsel - {@code null} unter denselben Bedingungen wie
+     * {@link #aufgabenbuch}.
+     *
+     * <p>EIN Buendel und nicht vier Felder, weil die vier zusammen oder gar nicht
+     * entstehen - siehe {@link WolkeBefehle.Pflege}.
+     */
+    private WolkeBefehle.Pflege wolkenpflege;
+
+    /**
+     * Die Regel ueber die Herausforderungen - {@code null}, solange die Welt fehlt ODER
+     * die Inselstaende nicht zu lesen waren.
+     *
+     * <p><b>Die zweite Haelfte ist die wichtige</b>: Ein Aufgabenbuch auf einem
+     * ungefuellten Zwischenspeicher saehe jede Insel bei Stufe 0 - die Tafel nennte
+     * erfuellte Aufgaben als offen, und jeder Abgabeversuch liefe am Riegel der Ablage
+     * auf. Lieber keine Tafel, laut gemeldet, als eine, die falsch ist.
+     */
+    private Aufgabenbuch aufgabenbuch;
+
+    /**
+     * Der Zustand der Wolkeninseln - als {@link ZwischenspeicherWolken}, nicht als
+     * {@code Wolkenablage}.
+     *
+     * <p><b>Der Typ ist hier die Sache selbst</b>, wie bei {@link #shopablage}: Dieses
+     * Feld muss {@code fuellen()} koennen, und das steht nur am Zwischenspeicher. Haette
+     * es den Schnittstellentyp, braeuchte der Start einen Abwaertstest.
+     *
+     * <p>Und der Zwischenspeicher ist hier kein Sparen, sondern die Sache: Der
+     * Kobbelsteingenerator fragt bei JEDEM gebildeten Block nach der Insel-Stufe. Zwei
+     * Datenbankabfragen an dieser Stelle waeren derselbe Fehler, den
+     * {@link ZwischenspeicherBerufe} schon einmal geloest hat.
+     */
+    private ZwischenspeicherWolken wolkenstaende;
 
     /**
      * Die Hand, die eine Startinsel setzt.
@@ -1403,6 +1444,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     new ZwischenspeicherGrundstuecke(new SpeicherGrundstuecke());
             // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von aussen.
             berufsablage = new ZwischenspeicherBerufe(new SpeicherBerufe());
+            // Dieselbe Bauart wie bei den Shops: derselbe Zwischenspeicher, nur mit
+            // einer anderen Wahrheit darunter.
+            wolkenstaende = new ZwischenspeicherWolken(new SpeicherWolken());
             getLogger().warning("Keine Datenbank eingetragen: Parzellen, Guthaben und das"
                     + " Abholfach gelten nur bis zum naechsten Neustart.");
             getLogger().warning("Zum Festhalten datenbank.url in plugins/"
@@ -1468,6 +1512,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // besorgt dessen Leerung bei jedem Schreibzug - und weil /beruf durch
             // DIESELBE Ablage geht, kann das nicht auseinanderlaufen.
             berufsablage = new ZwischenspeicherBerufe(new MariaBerufe(datenbank));
+            // VOLLSTAENDIG und ohne Verfall, wie die Grundstuecke - und mit einer
+            // Obergrenze aus der Weltgeometrie: hoechstens 1443 Inseln. Die Rechnung
+            // steht an ZwischenspeicherWolken. Gefuellt wird in richteWolkenEin.
+            wolkenstaende = new ZwischenspeicherWolken(new MariaWolken(datenbank));
             getLogger().info("Datenbank bereit: " + ohneGeheimnis(url));
             return true;
         } catch (SQLException | RuntimeException fehler) {
@@ -1715,7 +1763,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // und nach dem Nehmen weiter auf der Ankunftsplattform. Ohne Reise waere
             // "deine Insel liegt auf Feld 3/-1" eine Auskunft ohne Weg.
             angemeldet.addAll(verzeichnis.register(
-                    new WolkeBefehle(wolkenbuch, kasse, sprache, this::setzeInsel,
+                    new WolkeBefehle(wolkenbuch, aufgabenbuch, Vorratshand::fuer,
+                            wolkenpflege, kasse, sprache, this::setzeInsel,
                             (wer, ziel) -> reise.fuehre(wer, ziel,
                                     WolkeBefehle.ARGUMENT),
                             wolkenbuch == null ? "" : weltschluessel(wolkenwelt),
@@ -2372,7 +2421,123 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + " - auf einer Insel baut nur, wem sie gehoert oder wer dort Mitbauer"
                 + " ist. In der LEERE baut niemand, auch der Nachbar nicht: Ein Block"
                 + " darin ist der erste Block einer Bruecke.");
+        if (richteErzeEin(welt)) {
+            // NUR wenn die Staende gelesen sind - siehe das Feld aufgabenbuch.
+            aufgabenbuch = new Aufgabenbuch(wolkenbuch, wolkenstaende, kasse, wirtschaft);
+            getLogger().info("Wolkenwerder: "
+                    + Aufgabenliste.rechenprobe(wirtschaft.werte().wolken().aufgaben()));
+            nenneAufgabenOhneWort();
+            richtePflegeEin(welt);
+        }
         setzeAnkunftsplattform(welt);
+    }
+
+    /**
+     * Meldet jede Herausforderung, zu der es kein Wort gibt.
+     *
+     * <p>BEIM START und nicht beim ersten {@code /wolke aufgaben}: Sonst faellt es mitten
+     * im Spiel auf, und zwar als Pfad in der Tafel eines Spielers.
+     *
+     * <p><b>Die Aufgabe bleibt trotzdem</b>, anders als bei einem Beruf ohne Wort (dort
+     * bleibt Freimarken aus). Der Grund steht in {@link Aufgabenname}: Die Stufe einer
+     * Insel ist die Zahl ihrer erfuellten Aufgaben, und eine weggefallene machte eine
+     * Stufe dauerhaft unerreichbar - und damit ein Erz, das niemand mehr bekommt.
+     */
+    private void nenneAufgabenOhneWort() {
+        List<String> ohneWort = new ArrayList<>();
+        for (String schluessel : wirtschaft.werte().wolken().aufgaben().schluessel()) {
+            if (!sprachstand.buch().saetze()
+                    .containsKey(new Aufgabenname(schluessel).pfad())) {
+                ohneWort.add(schluessel);
+            }
+        }
+        if (ohneWort.isEmpty()) {
+            return;
+        }
+        getLogger().severe("Zu " + ohneWort.size() + " Herausforderung(en) gibt es kein"
+                + " Wort: " + String.join(", ", ohneWort) + ". In der Sprachdatei fehlt"
+                + " je Zeile " + Aufgabenname.VORSILBE + "<name> -"
+                + " sprache-vorlage.yml zeigt, wie sie aussieht. Abgeben laesst sich die"
+                + " Aufgabe weiter; in der Tafel steht bis dahin ihr Pfad.");
+    }
+
+    /**
+     * Punkte, Rangliste und Biomwechsel - die Haende der Teile E und F.
+     *
+     * <p>NACH dem Fuellen der Inselstaende und nur dann, aus demselben Grund wie beim
+     * Aufgabenbuch: Eine Rangliste aus einem ungefuellten Zwischenspeicher zeigte jede
+     * Insel bei 0 Punkten, und eine Abklingzeit, die den letzten Zaehlzeitpunkt nicht
+     * kennt, liesse jede Insel sofort wieder zaehlen.
+     *
+     * <p>Die WELT geht in die zwei Haende hinein und wird dort gemerkt - anders als beim
+     * Aufsetzen, das sie je Aufruf sucht. Das ist tragbar, weil die Haende mit der Welt
+     * entstehen: Ist sie beim Start nicht da, gibt es sie nicht, und {@code /wolke punkte}
+     * sagt es. Ein Neuladen baut sie neu.
+     */
+    private void richtePflegeEin(World welt) {
+        Punktebuch punktebuch = new Punktebuch(wolkenbuch, wolkenstaende, wirtschaft,
+                uhr);
+        Inselzaehlung.Taktquelle takt = (schlag, abstand) -> {
+            BukkitTask aufgabe = getServer().getScheduler()
+                    .runTaskTimer(this, schlag, abstand, abstand);
+            return aufgabe::cancel;
+        };
+        Inselzaehlung zaehlung = new Inselzaehlung(punktebuch,
+                Inselzaehlung.ueberBukkit(welt), takt, getLogger());
+        Biomhand biomhand = new Biomhand(takt, Biomhand.ueberBukkit(welt), getLogger());
+        Biombuch biombuch = new Biombuch(wolkenbuch, wolkenstaende, kasse, wirtschaft);
+        wolkenpflege = new WolkeBefehle.Pflege(punktebuch, zaehlung::zaehle, biombuch,
+                (insel, biom, fertig) -> biomhand.setze(
+                        new de.freimarken.kern.Chunkfolge(wolkenbuch.plan(), insel.x(),
+                                insel.z()),
+                        biom, wirtschaft.werte().wolken().punkte().chunksJeTakt(),
+                        fertig));
+        getLogger().info("Wolkenwerder: "
+                + Punkteliste.rechenprobe(wirtschaft.werte().wolken().punkte())
+                + " Biomwechsel: "
+                + (wirtschaft.werte().wolken().biompreis() == 0L
+                        ? "gratis"
+                        : wirtschaft.werte().wolken().biompreis() + " Mark")
+                + " je Wechsel, und zwar JEDES Mal.");
+    }
+
+    /**
+     * Der Kobbelsteingenerator - Staende lesen und die Wache anmelden.
+     *
+     * <p>AUS {@code richteWolkenEin} gerufen und nicht aus {@code onEnable}, aus demselben
+     * Grund, den {@link #richteAngelnEin} nennt: Die Tabelle gilt in Wolkenwerder, und ob
+     * es die Welt gibt, ist genau dort entschieden.
+     *
+     * <p><b>Schlaegt das Fuellen fehl, wird KEINE Wache angemeldet</b>, und das ist die
+     * sichere Richtung: Ein ungefuellter Zwischenspeicher nennt jede Insel Stufe 0. Dann
+     * gaebe der Generator die Ausbeute des ersten Tages - auf Inseln, die ein Jahr alt
+     * sind. Lieber reiner Kobbelstein, laut gemeldet, als eine Ausbeute, die stillschweigend
+     * falsch ist.
+     *
+     * <p>Angemeldet wird die Wache auch bei einer LEEREN Tabelle: Was sie tut, haengt am
+     * Wirtschaftsstand, und der ist neuladbar.
+     *
+     * @return ob die Inselstaende gelesen sind. {@code false} heisst: kein Generator und
+     *         auch keine Herausforderungen - beide haengen an derselben Zahl
+     */
+    private boolean richteErzeEin(World welt) {
+        try {
+            wolkenstaende.fuellen();
+        } catch (RuntimeException fehler) {
+            getLogger().log(java.util.logging.Level.SEVERE, "Die Inselstaende sind nicht"
+                    + " zu lesen - in diesem Lauf gibt der Kobbelsteingenerator NUR"
+                    + " Kobbelstein, und keine erfuellte Herausforderung wirkt auf die"
+                    + " Ausbeute. Die Inseln selbst, ihr Schutz und /wolke bleiben"
+                    + " unberuehrt.", fehler);
+            return false;
+        }
+        getServer().getPluginManager().registerEvents(new Erzwache(
+                weltschluessel(wolkenwelt), wirtschaft, wolkenbuch, wolkenstaende,
+                marken, new java.util.Random(), getLogger()), this);
+        getLogger().info("Kobbelsteingenerator aktiv in " + welt.key().asString()
+                + " - " + wolkenstaende.groesse() + " Inseln mit Fortschritt gelesen. "
+                + Wolkenliste.erzprobe(wirtschaft.werte().wolken().erze()));
+        return true;
     }
 
     /**

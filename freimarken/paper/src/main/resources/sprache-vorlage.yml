@@ -74,6 +74,9 @@ mark:
       # geschrieben und ist die Spur, wann sie genommen wurde.
       wolke-genommen: "Wolkeninsel genommen"
       wolke-erstattet: "Wolkeninsel nicht eingetragen - erstattet"
+      wolke-aufgabe: "Herausforderung erfuellt"
+      wolke-biom: "Biom der Wolkeninsel gewechselt"
+      wolke-biom-erstattet: "Biomwechsel nicht zustande gekommen - erstattet"
       # Teil C3: der Grundstueckshandel. VIER Worte, weil derselbe Betrag beim
       # Kaeufer eine Ausgabe und beim Verkaeufer eine Einnahme ist - wer seinen
       # Verlauf liest, muss beides auseinanderhalten koennen.
@@ -2483,3 +2486,137 @@ wolke:
     # {eigentuemer} - die Insel, auf der du stehst, gehoert einem anderen. MIT seinem
     #   Namen: In einer Welt ohne Wege kommt man nur hierher, wenn man geflogen ist.
     fremd: "<red>Diese Insel gehoert <white>{eigentuemer}</white> - Mitbauer setzt nur der Eigentuemer.</red>"
+  # DIE HERAUSFORDERUNGEN - /wolke aufgaben zeigt die Tafel, /wolke abgeben gibt ab.
+  #
+  # Die Stufe einer Insel ist die Zahl ihrer erfuellten Herausforderungen, und an ihr
+  # haengt die Erzausbeute des Generators (wolken.erze in der config.yml). Darum nennt
+  # die Zusage die neue Stufe: Sie ist die eigentliche Belohnung, das Geld kommt dazu.
+  aufgaben:
+    # {erfuellt} {gesamt} - die Ueberschrift der Tafel. ZWEI Zahlen nebeneinander und
+    #   darum kein eins/viele: "1 von 10" braucht keine Mehrzahlform.
+    kopf: "<gold>Herausforderungen auf dieser Insel: {erfuellt} von {gesamt}</gold>"
+    # {name} {verlangt} {belohnung} - eine offene Aufgabe. {verlangt} ist eine Liste wie
+    #   "64x cobblestone, 1x furnace" - die Namen stehen so in der config.yml und auf
+    #   den Shopschildern, damit ein Gegenstand im ganzen Spiel gleich heisst.
+    offen: "<gray>  <white>{name}</white> · {verlangt} <dark_gray>· {belohnung}</dark_gray></gray>"
+    # {name} {verlangt} - dieselbe Zeile ohne Lohn. Ein eigener Satz und kein
+    #   Platzhalter, der manchmal leer ist: Ein "·" ohne Betrag dahinter sieht aus wie
+    #   ein Fehler. Eine Aufgabe ohne Lohn ist erlaubt - sie zahlt in Stufe.
+    offen-ohne-lohn: "<gray>  <white>{name}</white> · {verlangt}</gray>"
+    # {name} - erfuellt. OHNE die Gegenstaende: Was weg ist, ist weg, und die Tafel soll
+    #   zeigen, was noch zu tun ist.
+    fertig: "<dark_gray>  {name} · erfuellt</dark_gray>"
+    # In dieser Welt gibt es keine Herausforderungen (wolken.aufgaben.an ist aus oder
+    #   die Liste ist leer). Ein stummer Befehl waere hier das Schlimmste: Der Spieler
+    #   haelt die Tafel fuer kaputt und tippt sie wieder.
+    aus: "<gray>In Wolkenwerder gibt es keine Herausforderungen</gray><dark_gray> - der Betreiber schaltet sie in der config.yml ein.</dark_gray>"
+  abgabe:
+    # {name} {belohnung} {stufe} - erfuellt. Die STUFE steht darin, weil sie die
+    #   eigentliche Belohnung ist: An ihr haengt, was der Kobbelsteingenerator ausspuckt.
+    erteilt: "<green>{name} erfuellt - {belohnung} gutgeschrieben.</green>\n<gray>Deine Insel ist jetzt auf Stufe {stufe} - der Steingenerator gibt mehr und besseres Erz.</gray>"
+    # {name} {stufe} - dieselbe Zusage ohne Lohn.
+    erteilt-ohne-lohn: "<green>{name} erfuellt.</green>\n<gray>Deine Insel ist jetzt auf Stufe {stufe} - der Steingenerator gibt mehr und besseres Erz.</gray>"
+    # {name} {fehlt} - es fehlt etwas. Die Zahl ist das FEHLENDE und nicht das
+    #   Verlangte: Wer 40 von 64 Kobbelsteinen hat, will wissen, dass 24 fehlen.
+    fehlt: "<red>Fuer {name} fehlt dir noch: </red><white>{fehlt}</white>"
+    # {name} - steht auf dieser Insel schon. Je Insel EINMAL; wer seine Insel freigibt,
+    #   gibt ihren Fortschritt mit auf.
+    schon: "<gray>{name} ist auf dieser Insel schon erfuellt.</gray>"
+    # {name} - das getippte Wort steht nicht in der Liste. MIT dem Wort, damit ein
+    #   Spieler seinen Tippfehler liest.
+    unbekannt: "<red>Die Herausforderung {name} gibt es nicht</red><gray> - /wolke aufgaben zeigt alle.</gray>"
+    # {eigentuemer} - die Insel gehoert einem anderen, und du bist dort kein Mitbauer.
+    #   Ein eigener Satz neben mitbauer.fremd: Dort darf NUR der Eigentuemer, hier auch
+    #   jeder Mitbauer - zwei Regeln mit einem Satz zu beschreiben hiesse, dass der Satz
+    #   in einem der beiden Faelle falsch ist.
+    fremd: "<red>Diese Insel gehoert <white>{eigentuemer}</white> - abgeben darf nur, wer dort bauen darf.</red>"
+    # {name} - gezaehlt war genug da, genommen wurde zu wenig. Der Fall liegt zwischen
+    #   zwei Augenblicken: Was ein Spieler dazwischen wegwirft, ist weg. Alles Genommene
+    #   ist zurueck, und nichts ist eingetragen.
+    weggekommen: "<red>Bei {name} ist unterwegs etwas abhandengekommen - nichts ist abgegeben.</red>\n<gray>Sieh in deinem Rucksack nach und versuch es noch einmal.</gray>"
+  # DIE NAMEN DER HERAUSFORDERUNGEN - je Aufgabe der config.yml eine Zeile.
+  #
+  # Dieselbe Bauart wie beruf.name: Welche es gibt, steht in der config.yml
+  # (wolken.aufgaben.liste), wie sie heissen, hier. Wer dort eine hinzufuegt, traegt
+  # hier eine Zeile mit demselben Namen ein.
+  #
+  # Fehlt die Zeile, sagt es das Startprotokoll, und in der Tafel steht der Pfad. Die
+  # Aufgabe bleibt abgebbar - sie wegzulassen machte eine STUFE unerreichbar, und damit
+  # ein Erz, das niemand mehr bekommt.
+  #
+  # WORTE und keine Saetze: Sie werden in die Tafel, in die Zusage und in jede Absage
+  # eingesetzt. Ein Farbtag darin ueberschriebe die Farbe der Zeile, in der er landet.
+  # DIE PUNKTZAHL UND DIE RANGLISTE - /wolke punkte zaehlt, /wolke rangliste zeigt.
+  #
+  # Die Punktzahl entscheidet NICHTS: Sie steht in der Rangliste, und das ist alles. Die
+  # Erzausbeute haengt an der Stufe und damit an den Herausforderungen.
+  punkte:
+    # {chunks} - die Zaehlung laeuft. Die Zahl steht darin, weil sie die Wartezeit
+    #   erklaert: 64 Chunks sind bei einem je Takt gut drei Sekunden. Ohne diese Zeile
+    #   haelt ein Spieler den Befehl fuer wirkungslos und tippt ihn wieder.
+    laeuft: "<gray>Deine Insel wird gezaehlt - {chunks} Chunks. Das Ergebnis kommt gleich.</gray>"
+    # {punkte} - fertig.
+    fertig: "<gold>Deine Insel bringt {punkte} Punkte.</gold>\n<gray>Wie du stehst, zeigt /wolke rangliste.</gray>"
+    # {sekunden} - zu frueh. Die Abklingzeit haengt an der INSEL und nicht am Spieler:
+    #   Gezaehlt wird ein Feld, und jede Zaehlung liest Millionen Bloecke.
+    zu-frueh: "<yellow>Diese Insel wurde gerade gezaehlt - in {sekunden} Sekunden geht es wieder.</yellow>"
+    # Auf dieser Insel zaehlt schon jemand.
+    laeuft-schon: "<yellow>Auf dieser Insel zaehlt gerade schon jemand - warte, bis es durch ist.</yellow>"
+    # Es gibt keine Punktetabelle (wolken.punkte.tabelle ist leer). Dann waere jede
+    #   Insel 0 wert, und die Rangliste zeigte nur ihr Alter.
+    aus: "<gray>In Wolkenwerder werden keine Punkte gezaehlt</gray><dark_gray> - der Betreiber fuellt dafuer wolken.punkte.tabelle.</dark_gray>"
+  rangliste:
+    # Die Ueberschrift.
+    kopf: "<gold>Die besten Wolkeninseln</gold>"
+    # {rang} {spieler} {feld} {punkte} {stufe} - eine Zeile je Platz. Die STUFE steht
+    #   neben den Punkten, und das ist der Witz dieser Liste: Die Punkte sagen, was
+    #   gebaut wurde, die Stufe, was geleistet wurde.
+    zeile: "<gray>  {rang}. <white>{spieler}</white> · {punkte} Punkte · Stufe {stufe} <dark_gray>· Insel {feld}</dark_gray></gray>"
+    # Es gibt noch keine Insel. Am ersten Tag ist das der Normalfall - und eine
+    #   Ueberschrift ueber einer leeren Liste sieht aus wie ein Fehler.
+    leer: "<gray>In Wolkenwerder hat noch niemand eine Insel - die erste kannst du mit /wolke nehmen haben.</gray>"
+  # DAS BIOM - /wolke biom zeigt es, /wolke biom <name> wechselt es.
+  #
+  # Das Biom entscheidet, WAS erscheint und WAS waechst: swamp gibt Schleim und damit
+  # Kolben, snowy_plains gibt Eis und damit Wasser, mushroom_fields laesst kein Monster
+  # erscheinen, desert laesst es nie regnen.
+  biom:
+    # {biom} {preis} - welches Biom die Insel hat und was ein Wechsel kostet.
+    stand: "<gray>Diese Insel liegt im Biom <white>{biom}</white> · ein Wechsel kostet {preis}</gray>"
+    # {biome} - was zur Wahl steht.
+    wahl: "<dark_gray>  Zur Wahl: {biome} - /wolke biom \\<name></dark_gray>"
+    # {biom} {preis} {danach} - gewechselt und bezahlt. Die zweite Zeile ist keine
+    #   Hoeflichkeit: Biome stehen IM Chunk, und der Client hat ihn schon. Ohne diesen
+    #   Hinweis haelt ein Spieler den bezahlten Wechsel fuer wirkungslos.
+    gesetzt: "<green>Das Biom deiner Insel ist jetzt {biom} - {preis} abgebucht.</green>\n<gray>Es bleiben {danach}. Sichtbar wird es, wenn du die Gegend neu betrittst.</gray>"
+    # {biom} - dieselbe Zusage, wenn der Wechsel gratis ist.
+    gesetzt-gratis: "<green>Das Biom deiner Insel ist jetzt {biom}.</green>\n<gray>Sichtbar wird es, wenn du die Gegend neu betrittst.</gray>"
+    # {biom} {biome} - dieses Biom gibt es nicht. MIT der ganzen Liste: Wer sich
+    #   vertippt hat, soll nicht erst einen zweiten Befehl brauchen.
+    nicht-angeboten: "<red>Das Biom {biom} gibt es hier nicht.</red>\n<gray>Zur Wahl: {biome}</gray>"
+    # Es gibt gar keine Biomwahl - wolken.biome ist leer.
+    keine-wahl: "<gray>In Wolkenwerder gibt es keine Biomwahl</gray><dark_gray> - der Betreiber fuellt dafuer wolken.biome.</dark_gray>"
+    # {preis} {fehlt} - das Guthaben reicht nicht.
+    zu-wenig: "<red>Ein Biomwechsel kostet {preis} - dir fehlen {fehlt}.</red>"
+    # {eigentuemer} - die Insel gehoert einem anderen. Ein eigener Satz neben
+    #   mitbauer.fremd und abgabe.fremd: Abgeben darf jeder Mitbauer, das Biom wechseln
+    #   und zuruecksetzen nur der Eigentuemer.
+    nicht-deine: "<red>Diese Insel gehoert <white>{eigentuemer}</white> - das Biom aendert nur der Eigentuemer.</red>"
+  zuruecksetzen:
+    # Die Rueckfrage. Zurueckgesetzt wird nur der Quader der STARTINSEL - was daneben
+    #   steht, bleibt. Der Fortschritt bleibt auch: Die erfuellten Herausforderungen
+    #   gehoeren der Insel, und die Gegenstaende dafuer sind weg.
+    warnung: "<yellow>Das setzt die Startinsel wieder hin - Wiese, Baum und eine neue Truhe.</yellow>\n<gray>Was an ihrer Stelle steht, ist danach weg. Dein Fortschritt bleibt. Noch einmal mit /wolke zuruecksetzen bestaetigen</gray>"
+    # {feld} - die Startinsel steht wieder.
+    erteilt: "<green>Die Startinsel auf Feld {feld} steht wieder.</green>\n<gray>In der Truhe liegt, was du zum Anfangen brauchst.</gray>"
+  aufgabe:
+    erster-stein: "Erster Stein"
+    holzfaeller: "Holzfaeller"
+    kohlebrenner: "Kohlebrenner"
+    baecker: "Baecker"
+    steinmetz: "Steinmetz"
+    erstes-eisen: "Erstes Eisen"
+    kupferschmied: "Kupferschmied"
+    goldschmied: "Goldschmied"
+    rotsteinkundiger: "Rotsteinkundiger"
+    diamantschleifer: "Diamantschleifer"

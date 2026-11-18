@@ -463,6 +463,36 @@ final class Wirtschaftsliste {
     }
 
     /**
+     * Ein Ja oder Nein, roh gelesen und am TYP geprueft - oder {@code null}.
+     *
+     * <p>Dieselbe Form wie {@link #ganzeZahl} daneben, und aus demselben Grund: Bukkits
+     * {@code getBoolean} gibt fuer jedes andere Wort stillschweigend ein {@code false}
+     * zurueck. Das waere eine Regel, die der Betreiber eingeschaltet glaubt, weil er
+     * {@code an: ja} getippt hat - und YAML kennt dieses Wort nicht.
+     *
+     * <p><b>{@link Freistadtliste} und {@link Angelliste} haben eigene Fassungen</b>, und
+     * das ist Absicht, nicht Nachlaessigkeit: Jene melden eine ABWEICHUNG mit einem Satz,
+     * der nur fuer ihre Sache stimmt ("die Regel wirkt hier NICHT"). Hier bleibt der
+     * Bericht beim Aufrufer - diese Methode prueft nur, was dasteht.
+     */
+    static Boolean jaNein(ConfigurationSection wurzel, String pfad, boolean vorgabe,
+                          List<String> klagen, List<String> bericht) {
+        Object roh = wurzel.get(pfad);
+        if (roh == null) {
+            bericht.add(fehltText(pfad, String.valueOf(vorgabe)));
+            return null;
+        }
+        if (!(roh instanceof Boolean wert)) {
+            klagen.add(pfad + " ist kein Ja oder Nein (" + wieGetippt(roh)
+                    + ") - verworfen. " + esBleibt(String.valueOf(vorgabe))
+                    + " YAML kennt nur true und false; aus jedem anderen Wort liest"
+                    + " getBoolean stillschweigend ein false.");
+            return null;
+        }
+        return wert;
+    }
+
+    /**
      * Roh lesen und am TYP pruefen - oder {@code null}, wenn daraus keine Zahl wird.
      *
      * <p>Am Typ und nicht am Nachkommarest: YAML macht aus {@code 25.000} eine 25.0, und

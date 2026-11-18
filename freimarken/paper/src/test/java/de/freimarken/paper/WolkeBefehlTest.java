@@ -5,10 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import de.freimarken.kern.Aufgabenbuch;
+import de.freimarken.kern.Biombuch;
+import de.freimarken.kern.Aufgabenwerte;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
+import de.freimarken.kern.Punktebuch;
+import de.freimarken.kern.SpeicherWolken;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
 import de.freimarken.kern.Wolkenbuch;
@@ -49,7 +54,26 @@ class WolkeBefehlTest {
 
     private SpeicherKasse kasse;
     private SpeicherLager lager;
+    private Wirtschaftsstand wirtschaft;
     private Wolkenbuch buch;
+    private SpeicherWolken staende;
+    private Aufgabenbuch aufgabenbuch;
+
+    /** Der Rucksack des Spielers - die Naht zum Inventar, als Karte. */
+    private final java.util.Map<String, Integer> rucksack = new java.util.LinkedHashMap<>();
+
+    /**
+     * Was die Zaehlhand im Feld FINDET - gestellt statt gesucht.
+     *
+     * <p>Im Spiel liest {@code Inselzaehlung} dafuer sechs Millionen Bloecke aus Chunks.
+     * Hier kommt die Karte herein, und damit laeuft der Befehlszweig durch: Erste Zeile,
+     * Zaehlung, zweite Zeile.
+     */
+    private final java.util.Map<String, Long> gefundeneBloecke =
+            new java.util.LinkedHashMap<>();
+
+    /** Welches Biom die Hand umgesetzt hat - oder {@code null}. */
+    private String umgesetztesBiom;
     private Spielerprobe anna;
     private Spielerprobe bert;
 
@@ -80,8 +104,13 @@ class WolkeBefehlTest {
         Serverprobe.keineWeltenMehr();
         kasse = new SpeicherKasse(1_000_000L, UHR);
         lager = new SpeicherLager();
-        buch = new Wolkenbuch(Wolkengrenze.wolkenwerder(), lager, kasse,
-                new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+        wirtschaft = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        buch = new Wolkenbuch(Wolkengrenze.wolkenwerder(), lager, kasse, wirtschaft);
+        staende = new SpeicherWolken();
+        aufgabenbuch = new Aufgabenbuch(buch, staende, kasse, wirtschaft);
+        rucksack.clear();
+        gefundeneBloecke.clear();
+        umgesetztesBiom = null;
         aufgesetzt.clear();
         aufsetzenGelingt = true;
         gereist = null;
@@ -376,6 +405,277 @@ class WolkeBefehlTest {
                 bert.chatBild().get(0));
     }
 
+    // --------------------------------------------------------------------- Aufgaben
+
+    @Test
+    @DisplayName("/wolke aufgaben zeigt die Tafel der Insel, auf der man STEHT")
+    void aufgabenTafel() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        anna.vergessen();
+
+        probe.tippe("wolke aufgaben", anna);
+
+        assertEquals(Aufgabenwerte.VORGABE_LISTE.size() + 1, gelesen().size(),
+                "ein Kopf und je Aufgabe eine Zeile: " + gelesen());
+        assertTrue(gelesen().get(0).contains("0 von 10"), gelesen().get(0));
+        assertTrue(gelesen().get(1).contains("Erster Stein"), gelesen().get(1));
+        assertTrue(gelesen().get(1).contains("64x cobblestone"), gelesen().get(1));
+    }
+
+    @Test
+    @DisplayName("Ohne Insel unter den Fuessen sagt die Tafel es")
+    void aufgabenOhneInsel() throws CommandSyntaxException {
+        probe().tippe("wolke aufgaben", anna);
+
+        assertEquals(1, gelesen().size(), gelesen().toString());
+        assertTrue(gelesen().get(0).contains("keine Wolkeninsel"), gelesen().get(0));
+    }
+
+    @Test
+    @DisplayName("/wolke abgeben ALLEIN gibt die Tafel - nicht Brigadiers englischen Satz")
+    void abgebenAlleinIstLesbar() throws CommandSyntaxException {
+        // Dieselbe Falle wie bei "wolke mitbauer": Ein passendes Literal verdeckt in
+        // Brigadier jedes Geschwister. Ohne eigenes .executes endete dieser Befehl in
+        // "Unknown or incomplete command" - und nur ein getippter Befehl faengt das.
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        anna.vergessen();
+
+        probe.tippe("wolke abgeben", anna);
+
+        assertTrue(gelesen().get(0).contains("Herausforderungen auf dieser Insel"),
+                gelesen().get(0));
+    }
+
+    @Test
+    @DisplayName("Abgeben nimmt die Gegenstaende, zahlt und hebt die Tafel")
+    void abgebenGelingt() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        rucksack.put("cobblestone", 100);
+        long vorher = kasse.guthaben(anna.kennung());
+        anna.vergessen();
+
+        probe.tippe("wolke abgeben erster-stein", anna);
+
+        assertTrue(gelesen().get(0).contains("Erster Stein erfuellt"), gelesen().get(0));
+        assertTrue(gelesen().get(1).contains("Stufe 1"), gelesen().get(1));
+        assertEquals(36, rucksack.get("cobblestone"), "64 sind weg");
+        assertEquals(vorher + 50L, kasse.guthaben(anna.kennung()));
+
+        anna.vergessen();
+        probe.tippe("wolke aufgaben", anna);
+        assertTrue(gelesen().get(0).contains("1 von 10"), gelesen().get(0));
+        assertTrue(gelesen().get(1).contains("erfuellt"), gelesen().get(1));
+    }
+
+    @Test
+    @DisplayName("Fehlt etwas, sagt der Befehl WAS - und nimmt nichts")
+    void abgebenFehltEtwas() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        rucksack.put("cobblestone", 40);
+        anna.vergessen();
+
+        probe.tippe("wolke abgeben erster-stein", anna);
+
+        assertTrue(gelesen().get(0).contains("24x cobblestone"),
+                "das FEHLENDE, nicht das Verlangte: " + gelesen().get(0));
+        assertEquals(40, rucksack.get("cobblestone"), "nichts genommen");
+    }
+
+    @Test
+    @DisplayName("Eine Aufgabe, die es nicht gibt, nennt das getippte Wort")
+    void abgebenUnbekannt() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        anna.vergessen();
+
+        probe.tippe("wolke abgeben erster-stien", anna);
+
+        assertTrue(gelesen().get(0).contains("erster-stien"), gelesen().get(0));
+    }
+
+    @Test
+    @DisplayName("Auf einer FREMDEN Insel nennt die Absage den Eigentuemer")
+    void abgebenAufFremderInsel() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        Parzelle annas = buch.inselnVon(WELT, anna.kennung()).get(0);
+        bert.anOrt(new Location(Serverprobe.welt(WELT, wolkenboden()),
+                buch.plan().feldMitte(annas.x()), Wolkenboden.BODEN,
+                buch.plan().feldMitte(annas.z())));
+        rucksack.put("cobblestone", 64);
+        bert.vergessen();
+
+        probe.tippe("wolke abgeben erster-stein", bert);
+
+        assertTrue(bert.chatBild().get(0).contains("Anna"), bert.chatBild().get(0));
+        assertTrue(bert.chatBild().get(0).contains("wer dort bauen darf"),
+                bert.chatBild().get(0));
+        assertEquals(64, rucksack.get("cobblestone"));
+    }
+
+    // --------------------------------------------------------------------- Punkte
+
+    @Test
+    @DisplayName("/wolke punkte zaehlt und meldet sich ZWEIMAL")
+    void punkteZaehlen() throws CommandSyntaxException {
+        // Zwei Zeilen, und die erste ist die wichtige: Ohne sie haelt ein Spieler den
+        // Befehl fuer wirkungslos und tippt ihn wieder - und der zweite Versuch laeuft in
+        // "hier zaehlt schon jemand".
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        gefundeneBloecke.put("diamond_block", 2L);
+        anna.vergessen();
+
+        probe.tippe("wolke punkte", anna);
+
+        assertEquals(3, gelesen().size(), gelesen().toString());
+        assertTrue(gelesen().get(0).contains("64 Chunks"), gelesen().get(0));
+        assertTrue(gelesen().get(1).contains("1.800 Punkte"),
+                "zwei Diamantbloecke der Vorgabetabelle: " + gelesen().get(1));
+    }
+
+    @Test
+    @DisplayName("Ohne Insel unter den Fuessen wird nicht gezaehlt")
+    void punkteOhneInsel() throws CommandSyntaxException {
+        probe().tippe("wolke punkte", anna);
+
+        assertTrue(gelesen().get(0).contains("keine Wolkeninsel"), gelesen().get(0));
+    }
+
+    @Test
+    @DisplayName("Die Rangliste nennt Rang, Namen, Punkte und STUFE")
+    void rangliste() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        Parzelle insel = buch.inselnVon(WELT, anna.kennung()).get(0);
+        staende.punkteSetzen(insel.id(), 4_711L, java.time.Instant.parse(
+                "2026-11-18T12:00:00Z"));
+        staende.erfuellen(insel.id(), "erster-stein");
+        anna.vergessen();
+
+        probe.tippe("wolke rangliste", anna);
+
+        assertEquals(2, gelesen().size(), gelesen().toString());
+        assertTrue(gelesen().get(1).contains("Anna"), gelesen().get(1));
+        assertTrue(gelesen().get(1).contains("4.711"), gelesen().get(1));
+        assertTrue(gelesen().get(1).contains("Stufe 1"), gelesen().get(1));
+    }
+
+    @Test
+    @DisplayName("Ohne eine einzige Insel sagt die Rangliste es")
+    void ranglisteLeer() throws CommandSyntaxException {
+        probe().tippe("wolke rangliste", anna);
+
+        assertEquals(1, gelesen().size(), gelesen().toString());
+        assertTrue(gelesen().get(0).contains("noch niemand eine Insel"),
+                gelesen().get(0));
+    }
+
+    // --------------------------------------------------------------------- Biom
+
+    @Test
+    @DisplayName("/wolke biom ALLEIN gibt die Auskunft mit Preis und Wahl")
+    void biomAuskunft() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        anna.vergessen();
+
+        probe.tippe("wolke biom", anna);
+
+        assertEquals(2, gelesen().size(), gelesen().toString());
+        assertTrue(gelesen().get(0).contains("plains"),
+                "ohne Wahl gilt die Vorgabe: " + gelesen().get(0));
+        assertTrue(gelesen().get(0).contains("2.000"), gelesen().get(0));
+        assertTrue(gelesen().get(1).contains("swamp"), gelesen().get(1));
+    }
+
+    @Test
+    @DisplayName("Das Biom wechseln kostet - und die Bloecke werden umgesetzt")
+    void biomWechseln() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        long vorher = kasse.guthaben(anna.kennung());
+        anna.vergessen();
+
+        probe.tippe("wolke biom swamp", anna);
+
+        assertTrue(gelesen().get(0).contains("swamp"), gelesen().get(0));
+        assertTrue(gelesen().get(1).contains("neu betrittst"),
+                "der Hinweis gehoert dazu - Biome stehen IM Chunk: " + gelesen().get(1));
+        assertEquals(vorher - Wolkenwerte.VORGABE_BIOMPREIS,
+                kasse.guthaben(anna.kennung()));
+        assertEquals("swamp", umgesetztesBiom,
+                "und die Hand hat die Bloecke bekommen - ohne sie waere der Wechsel nur"
+                        + " eine Zeile in der Ablage");
+    }
+
+    @Test
+    @DisplayName("Ein Biom, das es nicht gibt, nennt die ganze Wahl")
+    void biomUnbekannt() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        anna.vergessen();
+
+        probe.tippe("wolke biom nether", anna);
+
+        assertTrue(gelesen().get(0).contains("nether"), gelesen().get(0));
+        assertTrue(gelesen().get(1).contains("cherry_grove"), gelesen().get(1));
+        assertEquals(null, umgesetztesBiom, "und nichts wurde umgesetzt");
+    }
+
+    // --------------------------------------------------------------------- Zuruecksetzen
+
+    @Test
+    @DisplayName("Zuruecksetzen fragt ZURUECK - und setzt erst beim zweiten Wort")
+    void zuruecksetzenFragtZurueck() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        stelleAufDieEigeneInsel(anna);
+        aufgesetzt.clear();
+        anna.vergessen();
+
+        probe.tippe("wolke zuruecksetzen", anna);
+        assertTrue(gelesen().get(0).contains("Startinsel"), gelesen().get(0));
+        assertEquals(List.of(), aufgesetzt, "noch nichts gesetzt");
+
+        anna.vergessen();
+        probe.tippe("wolke zuruecksetzen bestaetigen", anna);
+
+        assertTrue(gelesen().get(0).contains("steht wieder"), gelesen().get(0));
+        assertEquals(1, aufgesetzt.size(), "jetzt steht sie: " + aufgesetzt);
+    }
+
+    @Test
+    @DisplayName("Auf einer fremden Insel setzt niemand zurueck")
+    void zuruecksetzenAufFremderInsel() throws CommandSyntaxException {
+        Befehlsprobe probe = probe();
+        probe.tippe("wolke nehmen", anna);
+        Parzelle annas = buch.inselnVon(WELT, anna.kennung()).get(0);
+        bert.anOrt(new Location(Serverprobe.welt(WELT, wolkenboden()),
+                buch.plan().feldMitte(annas.x()), Wolkenboden.BODEN,
+                buch.plan().feldMitte(annas.z())));
+        aufgesetzt.clear();
+        bert.vergessen();
+
+        probe.tippe("wolke zuruecksetzen bestaetigen", bert);
+
+        assertTrue(bert.chatBild().get(0).contains("Anna"), bert.chatBild().get(0));
+        assertEquals(List.of(), aufgesetzt);
+    }
+
     // --------------------------------------------------------------------- Ohne Welt
 
     @Test
@@ -426,10 +726,68 @@ class WolkeBefehlTest {
     }
 
     private Befehlsprobe probe(Wolkenbuch welches, String weltschluessel) {
-        return new Befehlsprobe(List.of(new WolkeBefehle(welches, kasse,
+        return new Befehlsprobe(List.of(new WolkeBefehle(welches,
+                welches == null ? null : aufgabenbuch, wer -> kartenvorrat(),
+                welches == null ? null : pflege(), kasse,
                 Sprachprobe.spracheAusDemJar(), this::setzeAuf, this::merkeReise,
                 weltschluessel,
                 () -> Wirtschaftswerte.VORGABE.wolken().hoechstzahl()).wolke()));
+    }
+
+    /**
+     * Punkte und Biome - mit ECHTEN Buechern und zwei gestellten Haenden.
+     *
+     * <p>Die Buecher sind echt, weil ihre Entscheidungen hier geprueft werden sollen; die
+     * Haende sind gestellt, weil hinter ihnen Chunks und Taktgeber liegen. Die Zaehlhand
+     * zaehlt SOFORT fertig - was ein Taktgeber daraus macht, prueft
+     * {@code InselzaehlungTest}.
+     */
+    private WolkeBefehle.Pflege pflege() {
+        Punktebuch punktebuch = new Punktebuch(buch, staende, wirtschaft, UHR);
+        return new WolkeBefehle.Pflege(punktebuch,
+                (auftrag, fertig) -> {
+                    auftrag.nimm(gefundeneBloecke);
+                    while (!auftrag.fertig()) {
+                        auftrag.naechsterHappen(64);
+                    }
+                    fertig.accept(punktebuch.fertig(auftrag));
+                },
+                new Biombuch(buch, staende, kasse, wirtschaft),
+                (insel, biom, fertig) -> {
+                    umgesetztesBiom = biom;
+                    if (fertig != null) {
+                        fertig.run();
+                    }
+                });
+    }
+
+    /**
+     * Der Rucksack als {@link Aufgabenbuch.Vorrat} - die Naht zum Inventar.
+     *
+     * <p>Dahinter liegt im Spiel {@link Vorratshand}, und darin {@code new ItemStack}:
+     * jenes wirft ohne laufenden Server. Dieselbe Lage wie beim Aufsetzen und bei der
+     * Reise - und darum ist auch dieser Zweig nur mit Naht durchlaufbar.
+     */
+    private Aufgabenbuch.Vorrat kartenvorrat() {
+        return new Aufgabenbuch.Vorrat() {
+            @Override
+            public int zaehle(String gegenstand) {
+                return rucksack.getOrDefault(gegenstand, 0);
+            }
+
+            @Override
+            public int nimm(String gegenstand, int stueck) {
+                int weg = Math.min(zaehle(gegenstand), stueck);
+                rucksack.put(gegenstand, zaehle(gegenstand) - weg);
+                return weg;
+            }
+
+            @Override
+            public int lege(String gegenstand, int stueck) {
+                rucksack.merge(gegenstand, stueck, Integer::sum);
+                return stueck;
+            }
+        };
     }
 
     /** Die zweite Naht: Sie merkt sich, WOHIN gereist werden sollte. */

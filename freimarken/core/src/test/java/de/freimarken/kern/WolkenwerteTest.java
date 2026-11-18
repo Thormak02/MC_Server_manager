@@ -109,7 +109,8 @@ class WolkenwerteTest {
     @DisplayName("Jeder Abwandler laesst seine Nachbarn stehen")
     void abwandlerLassenNachbarnStehen() {
         Wolkenwerte eigene = new Wolkenwerte(5_000L, 7, List.of("swamp"),
-                java.util.Map.of("ice", 1));
+                java.util.Map.of("ice", 1), Erzwerte.VORGABE.mitAn(false),
+                Aufgabenwerte.VORGABE, Punktwerte.VORGABE, 500L);
 
         assertEquals(7, eigene.mitPreis(1L).hoechstzahl());
         assertEquals(List.of("swamp"), eigene.mitPreis(1L).biome());
@@ -121,6 +122,40 @@ class WolkenwerteTest {
                 "und die Truhe bleibt auch stehen");
         assertEquals(5_000L, eigene.mitStarttruhe(java.util.Map.of()).preis());
         assertEquals(List.of("swamp"), eigene.mitStarttruhe(java.util.Map.of()).biome());
+        assertEquals(eigene.erze(), eigene.mitPreis(1L).erze(),
+                "und die Erztabelle bleibt bei JEDEM Abwandler stehen - sie ist der"
+                        + " Reiz dieser Welt, und ein Preiswechsel darf sie nicht"
+                        + " zuruecksetzen");
+        assertEquals(Erzwerte.VORGABE, eigene.mitErzen(Erzwerte.VORGABE).erze());
+        assertEquals(5_000L, eigene.mitErzen(Erzwerte.VORGABE).preis());
+        assertEquals(500L, eigene.mitPunkten(Punktwerte.VORGABE).biompreis(),
+                "und der Biompreis bleibt bei JEDEM Abwandler stehen");
+        assertEquals(7, eigene.mitBiompreis(1L).hoechstzahl());
+    }
+
+    @Test
+    @DisplayName("Ohne Erzwerte ist es ein Programmfehler, nicht ein stiller Generator")
+    void ohneErzwerte() {
+        // Ein null hier waere ein Wurf bei JEDEM gebildeten Block - und zwar erst im
+        // Spiel. Wer den Generator abschalten will, nimmt mitAn(false).
+        assertThrows(IllegalArgumentException.class,
+                () -> new Wolkenwerte(0L, 1, List.of("plains"), java.util.Map.of(),
+                        null, Aufgabenwerte.VORGABE, Punktwerte.VORGABE, 0L));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Wolkenwerte(0L, 1, List.of("plains"), java.util.Map.of(),
+                        Erzwerte.VORGABE, null, Punktwerte.VORGABE, 0L),
+                "und ohne Aufgabenliste gibt es keine Stufe");
+        assertThrows(IllegalArgumentException.class,
+                () -> new Wolkenwerte(0L, 1, List.of("plains"), java.util.Map.of(),
+                        Erzwerte.VORGABE, Aufgabenwerte.VORGABE, null, 0L),
+                "und ohne Punktetabelle keine Rangliste");
+        assertThrows(IllegalArgumentException.class,
+                () -> new Wolkenwerte(0L, 1, List.of("plains"), java.util.Map.of(),
+                        Erzwerte.VORGABE, Aufgabenwerte.VORGABE, Punktwerte.VORGABE,
+                        -1L),
+                "und ein negativer Biompreis ist keiner");
+        assertEquals(Erzwerte.VORGABE, Wolkenwerte.VORGABE.erze(),
+                "ab Werk ist der Generator an - er ist der Grund fuer diese Welt");
     }
 
     @Test

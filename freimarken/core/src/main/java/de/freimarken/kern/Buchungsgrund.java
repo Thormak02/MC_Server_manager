@@ -397,7 +397,34 @@ public enum Buchungsgrund {
      * der Ringsuche DASSELBE freie Feld - sie stehen dafuer nicht einmal am selben
      * Ort. Den zweiten laesst der eindeutige Schluessel auflaufen.
      */
-    WOLKE_ERSTATTET("wolke_erstattet", Richtung.EINNAHME);
+    WOLKE_ERSTATTET("wolke_erstattet", Richtung.EINNAHME),
+
+    /**
+     * Eine Herausforderung auf der Wolkeninsel erfuellt - Plan 4.1 [Schritt 11].
+     *
+     * <p>Die Belohnung steht je Aufgabe in {@code wolken.aufgaben.liste} und darf 0 sein.
+     * Auch dann wird gebucht, und zwar aus demselben Grund wie bei
+     * {@link #WOLKE_GENOMMEN}: Die Zeile ist die SPUR. Sie sagt, WANN die Insel ihre
+     * Stufe bekommen hat - und ohne sie fehlte der Vorgang im Kontobuch ganz.
+     */
+    WOLKE_AUFGABE("wolke_aufgabe", Richtung.EINNAHME),
+
+    /**
+     * Das Biom einer Wolkeninsel gewechselt - Plan 4.1 [Schritt 11, Teil F].
+     *
+     * <p>JEDES MAL, auch beim gleichen Biom: Der Wechsel setzt die Biomzellen eines
+     * ganzen Feldes um, und das Biom entscheidet, was dort waechst und erscheint. Der
+     * Preis steht in {@code wolken.biomwechsel} und darf 0 sein.
+     */
+    WOLKE_BIOM("wolke_biom", Richtung.AUSGABE),
+
+    /**
+     * Der Biomwechsel ist nicht zustande gekommen - der Preis kommt zurueck.
+     *
+     * <p>Wie bei {@link #WOLKE_ERSTATTET}: Die Ablage schweigt NACH dem Abbuchen. Lieber
+     * zwei Zeilen im Kontobuch als ein Spieler, der fuer nichts bezahlt hat.
+     */
+    WOLKE_BIOM_ERSTATTET("wolke_biom_erstattet", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {

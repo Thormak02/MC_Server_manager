@@ -78,7 +78,7 @@ wirtschaft:
   #
   # Die Bestaetigung gilt nur fuer genau diesen Sprung: Wer sie eintraegt und spaeter eine
   # andere Zahl setzt, wird erneut gefragt. Ein Dauerfreibrief waere keine Rueckfrage.
-  # FUENFZEHN Zeilen, eine je Geldwert mit Sprungschutz. Vier davon standen bis zum
+  # SECHZEHN Zeilen, eine je Geldwert mit Sprungschutz. Vier davon standen bis zum
   # 10.11.2026 nicht hier, und das war keine Abschaltung - die Klage nennt den
   # Schluessel samt fertiger Zeile, und wer sie liest, traegt ihn ein. Aber diese Datei
   # IST die Dokumentation: Ein Abschnitt, der vier von fuenfzehn verschweigt, laesst
@@ -112,6 +112,7 @@ wirtschaft:
     # Sprung ueber das Doppelte. Das ist nicht im Weg, sondern richtig: Aus gratis etwas
     # Kostenpflichtiges zu machen ist die Aenderung, die jeder Spieler sofort merkt.
     wolken-kauf: ""
+    wolken-biom: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
@@ -1564,6 +1565,292 @@ wolken:
     red_mushroom: 1
     cactus: 1
     sand: 2
+
+  # DER KOBBELSTEINGENERATOR - das Herz von Wolkenwerder.
+  #
+  # In einer Welt aus Leere gibt es kein Erz: keine Hoehle, kein Gestein, keine Ader.
+  # Was ein Spieler an Metall bekommt, bekommt er aus Lava und Wasser. Diese Tabelle
+  # entscheidet also nicht ueber eine Bequemlichkeit, sondern ueber den ganzen
+  # Spielverlauf dieser Welt.
+  #
+  # ZWEI DINGE STEIGEN MIT DER INSEL-STUFE, und beide stehen hier getrennt:
+  #   WIE OFT   ueberhaupt ein Erz kommt - grund-prozent plus je-stufe-prozent,
+  #             gedeckelt durch hoechst-prozent
+  #   WELCHE    Erze in Frage kommen - jede Zeile der Tabelle traegt ihre ab-stufe
+  #
+  # Die Insel-Stufe ist die Zahl der erfuellten Herausforderungen (/wolke aufgaben).
+  # Sie zaehlt NUR die Herausforderungen; die Punktzahl der Rangliste aendert die
+  # Ausbeute nicht.
+  #
+  # GETAUSCHT WIRD NUR AUF EINER INSEL. Ein Generator in der Leere zwischen den
+  # Feldern gibt reinen Kobbelstein - dort gehoert niemandem etwas, und es gibt keine
+  # Stufe, nach der gerechnet werden koennte.
+  erze:
+    # Ob ueberhaupt getauscht wird. Ein false macht aus Wolkenwerder eine Welt, in
+    # der es nie Erz gibt - das ist spielbar, aber es ist ein anderes Spiel.
+    an: true
+
+    # Wie oft bei Stufe 0 ein Erz statt Kobbelstein kommt, in Prozent.
+    #
+    # 15 heisst: etwa jeder siebte Block. Das ist absichtlich spuerbar - die erste
+    # Spitzhacke soll aus dem Generator kommen und nicht aus der Truhe.
+    grund-prozent: 15
+
+    # Was jede Insel-Stufe darauflegt, in Prozentpunkten.
+    #
+    # Klein halten: Bei 2 und dem Deckel unten ist die hoechste Ausbeute ab Stufe 13
+    # erreicht, und bis dahin ist jede Herausforderung zu spueren. Eine 20 hier waere
+    # ein Fortschritt, der nach zwei Aufgaben vorbei ist - der Startbericht sagt, ab
+    # welcher Stufe der Deckel greift.
+    je-stufe-prozent: 2
+
+    # Wo es aufhoert - auch bei hoher Stufe.
+    #
+    # Mehr als jeder dritte Block waere kein Generator mehr, sondern eine Ader: Der
+    # Kobbelstein, aus dem Oefen, Treppen und ganze Inseln gebaut werden, kaeme zu
+    # selten. Der Deckel darf NICHT unter grund-prozent liegen - dann saenke die
+    # Ausbeute mit der ersten Stufe, und beim Start gilt die ganze Vorgabe.
+    hoechst-prozent: 40
+
+    # Ob ein getauschter Block eine BLOCKMARKE bekommt und sein Abbau damit keinen
+    # Lohn zahlt.
+    #
+    # true, und das ist eine Geldentscheidung: Ohne Marke zahlt verdienst.loehne fuer
+    # jedes Erz aus dem Generator - ein Automat laeuft Tag und Nacht und druckt Geld.
+    # Der Spieler behaelt das Erz, er bekommt nur kein Mark dafuer.
+    marken: true
+
+    # WAS der Generator ausspuckt. Je Zeile ein Gegenstandsname und darunter:
+    #
+    #   gewicht   wie schwer die Zeile im Vergleich zu den anderen wiegt (1 bis
+    #             1000000). Gezogen wird unter allen Zeilen, deren ab-stufe erreicht
+    #             ist - ein Gewicht von 50 gegen 1 kommt fuenfzigmal so oft.
+    #   ab-stufe  ab welcher Insel-Stufe die Zeile ueberhaupt mitspielt. Darf fehlen
+    #             und heisst dann 0, also von Anfang an.
+    #
+    # Ein Name, den Minecraft nicht kennt, kostet NUR SEINE ZEILE. cobblestone und
+    # stone gehoeren hier nicht hinein - das sind die Bloecke, AUS denen getauscht
+    # wird, eine Zeile darueber taete nichts.
+    #
+    # Eine LEERE Tabelle ist erlaubt und heisst: nur Kobbelstein, ohne den Schalter
+    # oben anzufassen.
+    #
+    # Warum gerade diese neun:
+    #   coal_ore, copper_ore   von Anfang an - ohne Kohle kein Ofen, ohne Ofen kein
+    #                          Eisen
+    #   iron_ore ab 1          damit die ERSTE Herausforderung wirklich etwas
+    #                          aufschliesst
+    #   gold_ore, redstone_ore ab 2
+    #   lapis_ore ab 3         er ist nur zum Verzaubern da
+    #   emerald_ore ab 4       in Vanilla das seltenste Erz, hier das Geld fuer den
+    #                          Bundesmarkt
+    #   diamond_ore ab 5
+    #   ancient_debris ab 8    Netherit in einer Welt ohne Nether - das eine Ziel, das
+    #                          weit genug weg ist, um eines zu sein
+    tabelle:
+      coal_ore:
+        gewicht: 50
+        ab-stufe: 0
+      copper_ore:
+        gewicht: 30
+        ab-stufe: 0
+      iron_ore:
+        gewicht: 25
+        ab-stufe: 1
+      gold_ore:
+        gewicht: 12
+        ab-stufe: 2
+      redstone_ore:
+        gewicht: 12
+        ab-stufe: 2
+      lapis_ore:
+        gewicht: 8
+        ab-stufe: 3
+      emerald_ore:
+        gewicht: 3
+        ab-stufe: 4
+      diamond_ore:
+        gewicht: 3
+        ab-stufe: 5
+      ancient_debris:
+        gewicht: 1
+        ab-stufe: 8
+
+  # DIE HERAUSFORDERUNGEN - und damit die INSEL-STUFE.
+  #
+  # Die Stufe einer Insel ist die Zahl ihrer erfuellten Herausforderungen, und an ihr
+  # haengt die Ausbeute des Generators oben: Eisen ab Stufe 1, Diamant ab 5, Netherit
+  # ab 8. Eine Welt ohne Herausforderungen hat damit keinen Fortschritt - jede Insel
+  # bliebe fuer immer bei Kohle und Kupfer.
+  #
+  # DIE ZAHL DER AUFGABEN IST DIE HOECHSTE STUFE. Wer vier eintraegt und oben den
+  # Diamanten ab Stufe fuenf stehen laesst, hat ein Erz, das in dieser Welt niemand je
+  # bekommt. Der Startbericht nennt beide Zahlen nebeneinander.
+  #
+  # ABGEGEBEN wird mit /wolke abgeben <name>, und zwar AUF DER INSEL: Es zaehlt das
+  # Feld, auf dem der Spieler steht - nicht, wem die Insel gehoert. Abgeben darf, wer
+  # dort bauen darf, also Eigentuemer UND Mitbauer. Die Belohnung bekommt, wer abgibt,
+  # die Stufe bekommt die Insel.
+  #
+  # JEDE AUFGABE EINMAL JE INSEL. Wer seine Insel freigibt, gibt ihren Fortschritt mit
+  # auf - der naechste Spieler auf diesem Feld faengt bei Stufe 0 an.
+  #
+  # DIE NAMEN DER AUFGABEN STEHEN IN DER SPRACHDATEI, nicht hier: je Aufgabe eine
+  # Zeile wolke.aufgabe.<name> in sprache.yml. Das ist dieselbe Teilung wie bei den
+  # Berufen - was es gibt, steht hier, wie es heisst, dort. Eine Aufgabe ohne Zeile
+  # wird beim Start gemeldet und faellt weg; sonst stuende ihr Schluessel im Spiel.
+  #
+  # KEINE VORAUSSETZUNG ZWISCHEN DEN AUFGABEN: Wer Diamanten hat, darf die
+  # Diamantaufgabe als erste abgeben. Das ist kein Loch, sondern folgt aus der Welt
+  # selbst - Diamant kommt nur aus dem Generator, und der gibt ihn erst ab Stufe 5.
+  # Die Erztabelle IST die Reihenfolge.
+  aufgaben:
+    # Ob es ueberhaupt Herausforderungen gibt. Ein false laesst jede Insel auf Stufe 0
+    # und macht die Mindeststufen oben zu Zeilen, die nie greifen.
+    an: true
+
+    # Die Aufgaben IN DIESER REIHENFOLGE - so stehen sie auch auf der Tafel im Spiel.
+    # Von leicht nach schwer ist eine Aussage ueber das Spiel, und sie wird gehalten.
+    #
+    # Je Eintrag:
+    #   verlangt    je Zeile ein Gegenstand und eine Anzahl von 1 bis 3456 (eine
+    #               Doppeltruhe voll). Die Gegenstaende werden GENOMMEN - ganz oder gar
+    #               nicht.
+    #   belohnung   was es dafuer gibt, in Mark. Darf fehlen und heisst dann 0: eine
+    #               Aufgabe nur fuer die Stufe.
+    #
+    # Ein Gegenstand, den Minecraft nicht kennt, laesst die GANZE Aufgabe wegfallen -
+    # anders als bei der Erztabelle oben. Der Grund: Eine Aufgabe, der ein verlangtes
+    # Stueck fehlt, ist eine andere Aufgabe, und zwar eine leichtere.
+    #
+    # Der Name links darf hoechstens 32 Zeichen lang sein - so lang ist die Spalte, in
+    # der der Fortschritt steht.
+    #
+    # Nichts hier verlangt etwas, das es nur ausserhalb von Wolkenwerder gibt: kein
+    # Dorf, keinen Nether, keinen Handel. Eine Insel in der Leere waere sonst eine
+    # Aufgabe, die nicht zu loesen ist.
+    liste:
+      erster-stein:
+        verlangt:
+          cobblestone: 64
+        belohnung: 50
+      holzfaeller:
+        verlangt:
+          oak_log: 64
+        belohnung: 100
+      kohlebrenner:
+        verlangt:
+          coal: 16
+          furnace: 1
+        belohnung: 150
+      baecker:
+        verlangt:
+          bread: 16
+        belohnung: 200
+      steinmetz:
+        verlangt:
+          stone_bricks: 64
+        belohnung: 250
+      erstes-eisen:
+        verlangt:
+          iron_ingot: 16
+        belohnung: 400
+      kupferschmied:
+        verlangt:
+          copper_ingot: 32
+        belohnung: 500
+      goldschmied:
+        verlangt:
+          gold_ingot: 16
+        belohnung: 800
+      rotsteinkundiger:
+        verlangt:
+          redstone: 32
+        belohnung: 1000
+      diamantschleifer:
+        verlangt:
+          diamond: 4
+        belohnung: 2000
+
+  # WAS EIN BIOMWECHSEL KOSTET, in Mark - und zwar JEDES MAL.
+  #
+  # Auch der Wechsel auf dasselbe Biom kostet. Das ist Absicht: Hinter dem Wechsel steht
+  # das Umsetzen der Biomzellen eines ganzen Feldes - 32 x 32 x 96 Zellen -, und das ist
+  # Arbeit, die der Server jedes Mal leistet. Ein Riegel "du hast dieses Biom schon"
+  # waere ausserdem eine Falle: Nach einem abgebrochenen Umsetzen kaeme man nie wieder
+  # an die Umsetzung heran.
+  #
+  # Das Biom entscheidet, WAS erscheint und WAS waechst - es ist nach der Insel selbst
+  # die zweite grosse Entscheidung eines Spielers. Ein kostenloser Wechsel waere ein
+  # Schalter, den man im Wechsel umlegt, bis das Erscheinen passt.
+  #
+  # ACHTUNG BEIM AENDERN: Eine Verdoppelung braucht die Bestaetigung unter
+  # wirtschaft.sprung-bestaetigt.wolken-biom. Eine 0 ist erlaubt und heisst: gratis.
+  # Wechseln darf nur der EIGENTUEMER, nicht ein Mitbauer.
+  biomwechsel: 2000
+
+  # DIE PUNKTZAHL - die Rangliste von Wolkenwerder (/wolke punkte, /wolke rangliste).
+  #
+  # DIE PUNKTZAHL ENTSCHEIDET NICHTS. Sie steht in der Rangliste, und das ist alles -
+  # die Erzausbeute haengt an der STUFE und damit an den Herausforderungen oben. Eine
+  # Rangliste, die die Ausbeute aendert, waere ein Grund, Bloecke zu stapeln, statt zu
+  # spielen.
+  #
+  # GEZAEHLT WIRD IN HAPPEN: Ein Wolkenfeld ist 128 Bloecke breit und reicht ueber die
+  # ganze Welthoehe - 64 Chunks mit mehr als sechs Millionen Bloecken. In einem Zug
+  # gezaehlt stuende der Server eine Sekunde oder laenger, und zwar fuer alle.
+  punkte:
+    # Wie viele Chunks ein Takt zaehlt (1 bis 64). Ein Takt ist ein Tick.
+    #
+    # Bei 1 braucht eine Zaehlung 64 Takte, also gut drei Sekunden - unmerklich. Bei 64
+    # ist sie in EINEM Takt fertig, und der Server steht, solange sie laeuft. Der
+    # Startbericht rechnet beides vor.
+    chunks-je-takt: 1
+
+    # Wie lange eine INSEL nach einer Zaehlung warten muss, in Sekunden.
+    #
+    # Die Abklingzeit haengt an der Insel und nicht am Spieler: Gezaehlt wird ein Feld,
+    # und zehn Mitbauer koennten es sonst zehnmal hintereinander zaehlen lassen. Eine 0
+    # ist erlaubt und heisst: ohne Pause.
+    abklingzeit-sekunden: 120
+
+    # WAS gezaehlt wird. Je Zeile ein Blockname und seine Punkte (1 bis 1000000).
+    #
+    # Was nicht darin steht, zaehlt NICHT - und das ist der Sinn der Tabelle: Eine Insel
+    # aus einer Million Kobbelsteinen ist keine Leistung, der Generator gibt sie
+    # umsonst. Darum stehen hier die Bloecke, die ARBEIT kosten.
+    #
+    # Die Zahlen sind eine Rangfolge und keine Rechnung: Ein Diamantblock ist neun
+    # Diamanten, also neunmal so viel wie ein Eisenblock neun Barren. Netherit steht
+    # darueber, weil es in einer Welt ohne Nether nur aus der letzten Erzstufe kommt.
+    #
+    # Ein Name, den Minecraft nicht kennt, kostet NUR SEINE ZEILE. Eine LEERE Tabelle
+    # ist erlaubt und heisst: keine Punkte - die Rangliste zeigt die Inseln dann in der
+    # Reihenfolge ihres Alters.
+    tabelle:
+      coal_block: 9
+      copper_block: 9
+      iron_block: 45
+      gold_block: 90
+      redstone_block: 45
+      lapis_block: 72
+      emerald_block: 450
+      diamond_block: 900
+      netherite_block: 3600
+      beacon: 2000
+      enchanting_table: 500
+      anvil: 150
+      hay_block: 9
+      bookshelf: 30
+      glass: 2
+      bricks: 4
+      oak_log: 2
+      melon: 5
+      pumpkin: 5
+      cactus: 5
+      sugar_cane: 3
+      brown_mushroom_block: 4
+      red_mushroom_block: 4
 
 laeden:
   # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.

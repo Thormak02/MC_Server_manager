@@ -2139,7 +2139,72 @@ class BildGleichTest {
                 new Zeile(WolkeSatz.MITBAUER_NICHT_DABEI, 1L, Einsatz.von("spieler", "Anna"), "&7Anna ist auf dieser Insel kein Mitbauer."),
                 new Zeile(WolkeSatz.MITBAUER_UNBEKANNT, 1L, Einsatz.von("spieler", "Anna"), "&cDen Spieler Anna kennt dieser Server nicht."),
                 new Zeile(WolkeSatz.MITBAUER_SELBST, 1L, Einsatz.keine(), "&7Dich selbst musst du nicht eintragen - dir gehoert die Insel."),
-                new Zeile(WolkeSatz.MITBAUER_FREMD, 1L, Einsatz.von("eigentuemer", "Anna"), "&cDiese Insel gehoert &fAnna&c - Mitbauer setzt nur der Eigentuemer."));
+                new Zeile(WolkeSatz.MITBAUER_FREMD, 1L, Einsatz.von("eigentuemer", "Anna"), "&cDiese Insel gehoert &fAnna&c - Mitbauer setzt nur der Eigentuemer."),
+                // Die Herausforderungen [Teil D]. Die Tafel, dann die Abgabe.
+                new Zeile(WolkeSatz.AUFGABEN_KOPF, 1L,
+                        Einsatz.von("erfuellt", "3").mit("gesamt", "10"), "&6Herausforderungen auf dieser Insel: 3 von 10"),
+                new Zeile(WolkeSatz.AUFGABEN_OFFEN, 1L,
+                        Einsatz.von("name", "Erster Stein")
+                                .mit("verlangt", "64x cobblestone")
+                                .mit("belohnung", "50 Mark"), "&7  &fErster Stein&7 · 64x cobblestone &8· 50 Mark"),
+                new Zeile(WolkeSatz.AUFGABEN_OFFEN_OHNE_LOHN, 1L,
+                        Einsatz.von("name", "Erster Stein")
+                                .mit("verlangt", "64x cobblestone"), "&7  &fErster Stein&7 · 64x cobblestone"),
+                new Zeile(WolkeSatz.AUFGABEN_FERTIG, 1L,
+                        Einsatz.von("name", "Erster Stein"), "&8  Erster Stein · erfuellt"),
+                new Zeile(WolkeSatz.AUFGABEN_AUS, 1L, Einsatz.keine(), "&7In Wolkenwerder gibt es keine Herausforderungen&8 - der Betreiber schaltet sie in der config.yml ein."),
+                new Zeile(WolkeSatz.ABGABE_ERTEILT, 1L,
+                        Einsatz.von("name", "Erster Stein").mit("belohnung", "50 Mark")
+                                .mit("stufe", "1"), "&aErster Stein erfuellt - 50 Mark gutgeschrieben.\n&7Deine Insel ist jetzt auf Stufe 1 - der Steingenerator gibt mehr und besseres Erz."),
+                new Zeile(WolkeSatz.ABGABE_ERTEILT_OHNE_LOHN, 1L,
+                        Einsatz.von("name", "Erster Stein").mit("stufe", "1"), "&aErster Stein erfuellt.\n&7Deine Insel ist jetzt auf Stufe 1 - der Steingenerator gibt mehr und besseres Erz."),
+                new Zeile(WolkeSatz.ABGABE_FEHLT, 1L,
+                        Einsatz.von("name", "Erster Stein")
+                                .mit("fehlt", "24x cobblestone"), "&cFuer Erster Stein fehlt dir noch: &f24x cobblestone"),
+                new Zeile(WolkeSatz.ABGABE_SCHON, 1L,
+                        Einsatz.von("name", "Erster Stein"), "&7Erster Stein ist auf dieser Insel schon erfuellt."),
+                new Zeile(WolkeSatz.ABGABE_UNBEKANNT, 1L,
+                        Einsatz.von("name", "erster-stien"), "&cDie Herausforderung erster-stien gibt es nicht&7 - /wolke aufgaben zeigt alle."),
+                new Zeile(WolkeSatz.ABGABE_FREMD, 1L,
+                        Einsatz.von("eigentuemer", "Anna"), "&cDiese Insel gehoert &fAnna&c - abgeben darf nur, wer dort bauen darf."),
+                new Zeile(WolkeSatz.ABGABE_WEGGEKOMMEN, 1L,
+                        Einsatz.von("name", "Erster Stein"), "&cBei Erster Stein ist unterwegs etwas abhandengekommen - nichts ist abgegeben.\n&7Sieh in deinem Rucksack nach und versuch es noch einmal."),
+                // Punkte und Rangliste [Teil E].
+                new Zeile(WolkeSatz.PUNKTE_LAEUFT, 1L, Einsatz.von("chunks", "64"), "&7Deine Insel wird gezaehlt - 64 Chunks. Das Ergebnis kommt gleich."),
+                new Zeile(WolkeSatz.PUNKTE_FERTIG, 1L,
+                        Einsatz.von("punkte", "4711"), "&6Deine Insel bringt 4711 Punkte.\n&7Wie du stehst, zeigt /wolke rangliste."),
+                new Zeile(WolkeSatz.PUNKTE_ZU_FRUEH, 1L,
+                        Einsatz.von("sekunden", "90"), "&eDiese Insel wurde gerade gezaehlt - in 90 Sekunden geht es wieder."),
+                new Zeile(WolkeSatz.PUNKTE_LAEUFT_SCHON, 1L, Einsatz.keine(), "&eAuf dieser Insel zaehlt gerade schon jemand - warte, bis es durch ist."),
+                new Zeile(WolkeSatz.PUNKTE_AUS, 1L, Einsatz.keine(), "&7In Wolkenwerder werden keine Punkte gezaehlt&8 - der Betreiber fuellt dafuer wolken.punkte.tabelle."),
+                new Zeile(WolkeSatz.RANGLISTE_KOPF, 1L, Einsatz.keine(), "&6Die besten Wolkeninseln"),
+                new Zeile(WolkeSatz.RANGLISTE_ZEILE, 1L,
+                        Einsatz.von("rang", "1").mit("spieler", "Anna")
+                                .mit("feld", "2/-3").mit("punkte", "4711")
+                                .mit("stufe", "3"), "&7  1. &fAnna&7 · 4711 Punkte · Stufe 3 &8· Insel 2/-3"),
+                new Zeile(WolkeSatz.RANGLISTE_LEER, 1L, Einsatz.keine(), "&7In Wolkenwerder hat noch niemand eine Insel - die erste kannst du mit /wolke nehmen haben."),
+                // Biom und Zuruecksetzen [Teil F].
+                new Zeile(WolkeSatz.BIOM_STAND, 1L,
+                        Einsatz.von("biom", "plains").mit("preis", "2.000 Mark"), "&7Diese Insel liegt im Biom &fplains&7 · ein Wechsel kostet 2.000 Mark"),
+                new Zeile(WolkeSatz.BIOM_WAHL, 1L,
+                        Einsatz.von("biome", "plains, swamp, taiga"), "&8  Zur Wahl: plains, swamp, taiga - /wolke biom <name>"),
+                new Zeile(WolkeSatz.BIOM_GESETZT, 1L,
+                        Einsatz.von("biom", "swamp").mit("preis", "2.000 Mark")
+                                .mit("danach", "8.000 Mark"), "&aDas Biom deiner Insel ist jetzt swamp - 2.000 Mark abgebucht.\n&7Es bleiben 8.000 Mark. Sichtbar wird es, wenn du die Gegend neu betrittst."),
+                new Zeile(WolkeSatz.BIOM_GESETZT_GRATIS, 1L,
+                        Einsatz.von("biom", "swamp"), "&aDas Biom deiner Insel ist jetzt swamp.\n&7Sichtbar wird es, wenn du die Gegend neu betrittst."),
+                new Zeile(WolkeSatz.BIOM_NICHT_ANGEBOTEN, 1L,
+                        Einsatz.von("biom", "nether")
+                                .mit("biome", "plains, swamp, taiga"), "&cDas Biom nether gibt es hier nicht.\n&7Zur Wahl: plains, swamp, taiga"),
+                new Zeile(WolkeSatz.BIOM_KEINE_WAHL, 1L, Einsatz.keine(), "&7In Wolkenwerder gibt es keine Biomwahl&8 - der Betreiber fuellt dafuer wolken.biome."),
+                new Zeile(WolkeSatz.BIOM_ZU_WENIG, 1L,
+                        Einsatz.von("preis", "2.000 Mark").mit("fehlt", "500 Mark"),
+                        "&cEin Biomwechsel kostet 2.000 Mark - dir fehlen 500 Mark."),
+                new Zeile(WolkeSatz.BIOM_NICHT_DEINE, 1L,
+                        Einsatz.von("eigentuemer", "Anna"), "&cDiese Insel gehoert &fAnna&c - das Biom aendert nur der Eigentuemer."),
+                new Zeile(WolkeSatz.ZURUECK_WARNUNG, 1L, Einsatz.keine(), "&eDas setzt die Startinsel wieder hin - Wiese, Baum und eine neue Truhe.\n&7Was an ihrer Stelle steht, ist danach weg. Dein Fortschritt bleibt. Noch einmal mit /wolke zuruecksetzen bestaetigen"),
+                new Zeile(WolkeSatz.ZURUECK_ERTEILT, 1L,
+                        Einsatz.von("feld", "2/-3"), "&aDie Startinsel auf Feld 2/-3 steht wieder.\n&7In der Truhe liegt, was du zum Anfangen brauchst."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

@@ -337,6 +337,20 @@ public final class Wolkenbuch {
         return lager.vonSpieler(welt, spieler);
     }
 
+    /**
+     * ALLE vergebenen Wolkeninseln dieser Welt - fuer die Rangliste.
+     *
+     * <p>Mit der ART und nicht nur mit der Welt: In Wolkenwerder kann es ausser Inseln
+     * nichts anderes geben, aber die Abfrage ist dieselbe wie bei den Freistaedten, und
+     * eine Welt ohne Art-Filter waere die erste Stelle, an der das stillschweigend gilt.
+     *
+     * <p>Hoechstens {@link Wolkengrenze#inselnZahl} Zeilen, und das ist der Grund, warum
+     * die Rangliste sie alle lesen darf: 1.443 Zeilen sind eine Handvoll Kilobytes.
+     */
+    public List<Parzelle> inselnIn(String welt) {
+        return lager.besitzIn(welt, Art.WOLKE);
+    }
+
     /** Wie viele Wolkeninseln dieser Spieler schon hat. */
     public int anzahlVon(String welt, UUID spieler) {
         return lager.anzahlVon(welt, spieler);

@@ -27,9 +27,15 @@ import java.util.Map;
  * @param biome       welche Biome {@code /wolke biom} anbietet; leer heisst: keine Wahl
  * @param starttruhe  was in der Truhe auf einer frischen Insel liegt, je Gegenstand eine
  *                    Anzahl; leer heisst: eine leere Truhe
+ * @param erze        was der Kobbelsteingenerator ausspuckt - siehe {@link Erzwerte}
+ * @param aufgaben    die Herausforderungen und damit die Stufe - siehe
+ *                    {@link Aufgabenwerte}
+ * @param punkte      was eine Insel wert ist - die Rangliste, siehe {@link Punktwerte}
+ * @param biompreis   was EIN Biomwechsel kostet, in Mark; 0 heisst gratis
  */
 public record Wolkenwerte(long preis, int hoechstzahl, List<String> biome,
-                          Map<String, Integer> starttruhe) {
+                          Map<String, Integer> starttruhe, Erzwerte erze,
+                          Aufgabenwerte aufgaben, Punktwerte punkte, long biompreis) {
 
     /** Der Schluessel des Preises in der Einstellungsdatei. */
     public static final String PFAD_PREIS = "wolken.preis";
@@ -42,6 +48,19 @@ public record Wolkenwerte(long preis, int hoechstzahl, List<String> biome,
 
     /** Der Schluessel der Starttruhe in der Einstellungsdatei. */
     public static final String PFAD_STARTTRUHE = "wolken.starttruhe";
+
+    /** Der Schluessel des Biompreises. */
+    public static final String PFAD_BIOMPREIS = "wolken.biomwechsel";
+
+    /**
+     * Was ein Biomwechsel ab Werk kostet.
+     *
+     * <p>2.000 Mark, und JEDES MAL: Das Biom entscheidet, was auf einer Insel waechst und
+     * erscheint - ein Wechsel ist ein Eingriff in das halbe Spiel dieser Insel, und er
+     * setzt ausserdem die Biomzellen eines ganzen Feldes um. Ein kostenloser Wechsel waere
+     * ein Schalter, den man im Wechsel umlegt, bis das Erscheinen passt.
+     */
+    public static final long VORGABE_BIOMPREIS = 2_000L;
 
     /**
      * Was eine Wolkeninsel ab Werk kostet - nichts.
@@ -141,7 +160,8 @@ public record Wolkenwerte(long preis, int hoechstzahl, List<String> biome,
 
     /** Die Werte, die das Programm mitbringt. */
     public static final Wolkenwerte VORGABE = new Wolkenwerte(VORGABE_PREIS,
-            VORGABE_HOECHSTZAHL, VORGABE_BIOME, VORGABE_STARTTRUHE);
+            VORGABE_HOECHSTZAHL, VORGABE_BIOME, VORGABE_STARTTRUHE, Erzwerte.VORGABE,
+            Aufgabenwerte.VORGABE, Punktwerte.VORGABE, VORGABE_BIOMPREIS);
 
     public Wolkenwerte {
         if (preis < 0L || preis > HOECHSTER_BETRAG) {
@@ -200,6 +220,25 @@ public record Wolkenwerte(long preis, int hoechstzahl, List<String> biome,
                     zeile.getValue());
         }
         starttruhe = Map.copyOf(abgelegt);
+        if (erze == null) {
+            throw new IllegalArgumentException("Ohne Erzwerte gibt es keinen Generator."
+                    + " Wer ihn abschalten will, nimmt Erzwerte.VORGABE.mitAn(false) -"
+                    + " ein null waere ein Wurf bei jedem gebildeten Block.");
+        }
+        if (aufgaben == null) {
+            throw new IllegalArgumentException("Ohne Aufgabenwerte gibt es keine Stufe."
+                    + " Wer die Herausforderungen abschalten will, nimmt"
+                    + " Aufgabenwerte.VORGABE.mitAn(false).");
+        }
+        if (punkte == null) {
+            throw new IllegalArgumentException("Ohne Punktwerte gibt es keine Rangliste."
+                    + " Wer sie abschalten will, nimmt eine LEERE Tabelle.");
+        }
+        if (biompreis < 0L || biompreis > HOECHSTER_BETRAG) {
+            throw new IllegalArgumentException("Der Preis eines Biomwechsels ist "
+                    + biompreis + " und liegt nicht zwischen 0 und " + HOECHSTER_BETRAG
+                    + ".");
+        }
     }
 
     /** Ob dieses Biom angeboten wird - gefragt wird kleingeschrieben. */
@@ -214,21 +253,49 @@ public record Wolkenwerte(long preis, int hoechstzahl, List<String> biome,
 
     /** Dieselben Werte mit einem anderen Preis. */
     public Wolkenwerte mitPreis(long anderer) {
-        return new Wolkenwerte(anderer, hoechstzahl, biome, starttruhe);
+        return new Wolkenwerte(anderer, hoechstzahl, biome, starttruhe, erze, aufgaben,
+                punkte, biompreis);
     }
 
     /** Dieselben Werte mit einer anderen Obergrenze. */
     public Wolkenwerte mitHoechstzahl(int andere) {
-        return new Wolkenwerte(preis, andere, biome, starttruhe);
+        return new Wolkenwerte(preis, andere, biome, starttruhe, erze, aufgaben, punkte,
+                biompreis);
     }
 
     /** Dieselben Werte mit anderen angebotenen Biomen. */
     public Wolkenwerte mitBiomen(List<String> andere) {
-        return new Wolkenwerte(preis, hoechstzahl, andere, starttruhe);
+        return new Wolkenwerte(preis, hoechstzahl, andere, starttruhe, erze, aufgaben,
+                punkte, biompreis);
     }
 
     /** Dieselben Werte mit einer anderen Starttruhe. */
     public Wolkenwerte mitStarttruhe(Map<String, Integer> andere) {
-        return new Wolkenwerte(preis, hoechstzahl, biome, andere);
+        return new Wolkenwerte(preis, hoechstzahl, biome, andere, erze, aufgaben, punkte,
+                biompreis);
+    }
+
+    /** Dieselben Werte mit einer anderen Erztabelle. */
+    public Wolkenwerte mitErzen(Erzwerte andere) {
+        return new Wolkenwerte(preis, hoechstzahl, biome, starttruhe, andere, aufgaben,
+                punkte, biompreis);
+    }
+
+    /** Dieselben Werte mit einer anderen Aufgabenliste. */
+    public Wolkenwerte mitAufgaben(Aufgabenwerte andere) {
+        return new Wolkenwerte(preis, hoechstzahl, biome, starttruhe, erze, andere,
+                punkte, biompreis);
+    }
+
+    /** Dieselben Werte mit einer anderen Punktetabelle. */
+    public Wolkenwerte mitPunkten(Punktwerte andere) {
+        return new Wolkenwerte(preis, hoechstzahl, biome, starttruhe, erze, aufgaben,
+                andere, biompreis);
+    }
+
+    /** Dieselben Werte mit einem anderen Biompreis. */
+    public Wolkenwerte mitBiompreis(long anderer) {
+        return new Wolkenwerte(preis, hoechstzahl, biome, starttruhe, erze, aufgaben,
+                punkte, anderer);
     }
 }

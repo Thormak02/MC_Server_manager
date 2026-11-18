@@ -5,15 +5,21 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import de.freimarken.kern.Aufgabenbuch;
+import de.freimarken.kern.Biombuch;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Parzelle;
+import de.freimarken.kern.Punktebuch;
 import de.freimarken.kern.Wolkenbuch;
+import de.freimarken.kern.Zaehlauftrag;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.IntSupplier;
+import java.util.function.LongConsumer;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -79,8 +85,61 @@ final class WolkeBefehle {
         void fuehre(Player spieler, Location ziel);
     }
 
+    /**
+     * Die Hand, die eine Insel ZAEHLT - als Naht.
+     *
+     * <p>Dahinter liegt {@link Inselzaehlung} und darin ein Taktgeber und Minecrafts
+     * Chunks. Der Befehl kennt davon nur zwei Dinge: Er gibt den Auftrag hinein und
+     * bekommt am Ende eine Zahl - und genau deshalb ist sein Zweig von einer Probe
+     * durchlaufbar.
+     */
+    interface Zaehlhand {
+
+        void zaehle(Zaehlauftrag auftrag, LongConsumer fertig);
+    }
+
+    /**
+     * Die Hand, die das BIOM eines Feldes umsetzt - als Naht.
+     *
+     * <p>Dahinter liegt {@link Biomhand} mit demselben Taktgeber. Dass der Befehl davon
+     * nichts weiss, ist dieselbe Entscheidung wie beim Aufsetzen.
+     */
+    interface Biomwechsel {
+
+        void setze(Parzelle insel, String biom, Runnable fertig);
+    }
+
+    /**
+     * Die Buecher und Haende der Teile E und F - EIN Buendel statt vier Parameter.
+     *
+     * <p>Ein Record und keine vier Felder, und das ist mehr als Bequemlichkeit: Die vier
+     * entstehen zusammen oder gar nicht (siehe {@code richteWolkenEin}), und ein Buendel
+     * macht genau das sichtbar. Ein {@code null} heisst: In diesem Lauf gibt es keine
+     * Punkte und keine Biomwahl - {@link #keinePflege} sagt es dann.
+     */
+    record Pflege(Punktebuch punkte, Zaehlhand zaehlhand, Biombuch biome,
+                  Biomwechsel wechsel) {
+
+        Pflege {
+            if (punkte == null || zaehlhand == null || biome == null
+                    || wechsel == null) {
+                throw new IllegalArgumentException("Eine halbe Pflege gibt es nicht:"
+                        + " Punktebuch, Zaehlhand, Biombuch und Biomwechsel gehoeren"
+                        + " zusammen");
+            }
+        }
+    }
+
     /** Der Name des Befehls. */
     static final String ARGUMENT = "wolke";
+
+    /**
+     * Wie viele Plaetze die Rangliste zeigt.
+     *
+     * <p>Zehn, und das ist eine Zahl fuer ein Chatfenster: Eine Welt hat bis zu 1.443
+     * Inseln, und eine Liste darueber waere kein Ansporn, sondern ein Wall.
+     */
+    private static final int RANGLISTE_PLAETZE = 10;
 
     /**
      * Die Auskunft - paketprivat, damit die Probe dasselbe Recht nimmt wie das Spiel.
@@ -120,6 +179,29 @@ final class WolkeBefehle {
     private static final String RECHT_EXTRA_ANZAHL = "freimarken.extra.wolken.";
 
     private final Wolkenbuch buch;
+
+    /**
+     * Die Regel ueber die Herausforderungen - {@code null}, solange es die Welt nicht
+     * gibt.
+     *
+     * <p>Darf null sein, und darum fragt {@link #keineAufgaben} danach: Das Buch entsteht
+     * in {@code richteWolkenEin}, der Befehl wird aber IMMER angemeldet - ein Befehl, den
+     * es je nach Einstellungsdatei gibt oder nicht, waere fuer einen Spieler ein Fehler
+     * ohne Erklaerung.
+     */
+    private final Aufgabenbuch aufgabenbuch;
+
+    /**
+     * Was ein Spieler traegt - die Naht zu {@link Vorratshand}.
+     *
+     * <p>Je Aufruf gefragt und nicht gemerkt: Der Vorrat ist der Zustand eines
+     * Inventars, und der aendert sich zwischen zwei Befehlen.
+     */
+    private final Function<Player, Aufgabenbuch.Vorrat> vorrat;
+
+    /** Punkte und Biome - {@code null}, wenn es sie in diesem Lauf nicht gibt. */
+    private final Pflege pflege;
+
     private final Kasse kasse;
     private final Sprache sprache;
     private final Aufsetzer aufsetzer;
@@ -143,9 +225,14 @@ final class WolkeBefehle {
      */
     private final IntSupplier hoechstzahl;
 
-    WolkeBefehle(Wolkenbuch buch, Kasse kasse, Sprache sprache, Aufsetzer aufsetzer,
-                 Heimweg heimweg, String wolkenschluessel, IntSupplier hoechstzahl) {
+    WolkeBefehle(Wolkenbuch buch, Aufgabenbuch aufgabenbuch,
+                 Function<Player, Aufgabenbuch.Vorrat> vorrat, Pflege pflege,
+                 Kasse kasse, Sprache sprache, Aufsetzer aufsetzer, Heimweg heimweg,
+                 String wolkenschluessel, IntSupplier hoechstzahl) {
         this.buch = buch;
+        this.aufgabenbuch = aufgabenbuch;
+        this.vorrat = vorrat;
+        this.pflege = pflege;
         this.kasse = kasse;
         this.sprache = sprache;
         this.aufsetzer = aufsetzer;
@@ -166,6 +253,34 @@ final class WolkeBefehle {
                         .executes(this::nehme))
                 .then(Commands.literal("heim")
                         .executes(this::heim))
+                .then(Commands.literal("aufgaben")
+                        .executes(this::zeigeAufgaben))
+                // Auch hier ein eigenes .executes am Literal: "/wolke abgeben" ohne Wort
+                // endete sonst in Brigadiers englischem "Unknown or incomplete command".
+                // Und die Tafel ist die richtige Antwort darauf - dort stehen die Namen,
+                // die als naechstes Wort gefragt sind.
+                .then(Commands.literal("abgeben")
+                        .executes(this::zeigeAufgaben)
+                        .then(aufgabenNamen()
+                                .executes(this::abgeben)))
+                .then(Commands.literal("punkte")
+                        .executes(this::zaehlePunkte))
+                .then(Commands.literal("rangliste")
+                        .executes(this::zeigeRangliste))
+                // Wieder ein eigenes .executes am Literal: "/wolke biom" ohne Namen gibt
+                // die AUSKUNFT - welches Biom die Insel hat, was ein Wechsel kostet und
+                // was zur Wahl steht. Ohne das waere es Brigadiers englischer Satz.
+                .then(Commands.literal("biom")
+                        .executes(this::zeigeBiom)
+                        .then(biomnamen()
+                                .executes(this::setzeBiom)))
+                // UND die Rueckfrage als zweites Wort: Zurueckgesetzt wird die
+                // Startinsel, und was an ihrer Stelle steht, ist danach weg. Dieselbe
+                // Bauart wie beim Aufgeben einer Parzelle.
+                .then(Commands.literal("zuruecksetzen")
+                        .executes(z -> setzeZurueck(z, false))
+                        .then(Commands.literal("bestaetigen")
+                                .executes(z -> setzeZurueck(z, true))))
                 // JEDES Literal mit Untersaetzen traegt ein eigenes .executes, und das
                 // ist keine Bequemlichkeit: Ein passendes Literal verdeckt in Brigadier
                 // jedes Geschwister vollstaendig (CommandNode.getRelevantNodes) - ohne
@@ -319,6 +434,336 @@ final class WolkeBefehle {
         sende(spieler, Wolkentext.mitbauerZeilen(sprache, entscheid, richtung, name,
                 Spielername::von));
         return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Die Tafel der Herausforderungen - und das Abgeben.
+     *
+     * <p>Zwei Zweige mit DEMSELBEN Recht wie die Liste: Wer die Welt betreten darf, soll
+     * sehen, was dort zu tun ist. Ein eigenes Recht waere ein Schalter, der eine Insel
+     * ohne Fortschritt hinterliesse - und die Insel hat ihn dann doch, nur sieht niemand
+     * mehr, wie er zustande kam.
+     */
+    private int zeigeAufgaben(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (keineWelt(spieler) || keineAufgaben(spieler)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Location ort = spieler.getLocation();
+        sende(spieler, Wolkentext.aufgabenZeilen(sprache,
+                aufgabenbuch.tafel(wolkenschluessel, ort.getBlockX(), ort.getBlockZ()),
+                this::aufgabenwort));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Eine Herausforderung abgeben - auf der Insel, auf der er STEHT.
+     *
+     * <p>Die INSEL wird vor dem Buch geholt, und nur fuer die Absage "gehoert einem
+     * anderen": Sie nennt den Eigentuemer, und dazu muss die Zeile gelesen sein. Die
+     * ENTSCHEIDUNG trifft das Buch - diese Abfrage daneben waere die zweite Meinung
+     * darueber, wo eine Insel liegt.
+     *
+     * <p>Der Vorrat kommt aus {@link #vorrat} und damit aus {@link Vorratshand}: Hinter
+     * jenem liegen {@code getStorageContents} und {@code new ItemStack}, und letzteres
+     * wirft ohne laufenden Server. Dieselbe Naht wie beim Aufsetzen.
+     */
+    private int abgeben(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (keineWelt(spieler) || keineAufgaben(spieler)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        String getippt = StringArgumentType.getString(zusammenhang, "aufgabe");
+        Location ort = spieler.getLocation();
+        Parzelle hier;
+        try {
+            hier = buch.inselAn(wolkenschluessel, ort.getBlockX(), ort.getBlockZ())
+                    .orElse(null);
+        } catch (RuntimeException fehler) {
+            sende(spieler, sprache.bau(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine()));
+            return Command.SINGLE_SUCCESS;
+        }
+
+        Aufgabenbuch.Entscheid entscheid = aufgabenbuch.abgeben(wolkenschluessel,
+                spieler.getUniqueId(), ort.getBlockX(), ort.getBlockZ(), getippt,
+                vorrat.apply(spieler));
+
+        sende(spieler, Wolkentext.abgebenZeilen(sprache, entscheid, getippt,
+                this::aufgabenwort, Spielername::von, hier));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Sagt es, wenn es in dieser Welt keine Herausforderungen gibt.
+     *
+     * <p>Der Riegel steht hier und nicht erst im Buch, weil das Buch selbst fehlen kann:
+     * Es entsteht in {@code richteWolkenEin}, und ohne Welt gibt es keines. Ein Griff ins
+     * Leere waere eine Ausnahme im Chat eines Spielers.
+     */
+    private boolean keineAufgaben(Player spieler) {
+        if (aufgabenbuch == null) {
+            sende(spieler, sprache.bau(WolkeSatz.AUFGABEN_AUS, 1L, Einsatz.keine()));
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Das Wort zu einem Aufgabenschluessel - aus der SPRACHDATEI.
+     *
+     * <p>Wie beim Berufsnamen: Was es gibt, steht in der {@code config.yml}, wie es
+     * heisst, in {@code sprache.yml}. Fehlt die Zeile, antwortet {@link Sprache} mit dem
+     * Pfad - und der Start hat es schon gemeldet.
+     */
+    private String aufgabenwort(String schluessel) {
+        return sprache.wort(new Aufgabenname(schluessel), Einsatz.keine());
+    }
+
+    /**
+     * Zum Abgeben: die OFFENEN Aufgaben dieser Insel.
+     *
+     * <p>Nur die offenen, und das ist der ganze Zweck: Eine Liste mit allen zehn liesse
+     * einen Spieler eine abgeben, die schon steht - und die Antwort darauf waere eine
+     * Absage. Steht er nicht auf einer Insel, kommen alle: Dann ist der Vorschlag die
+     * einzige Stelle, an der er die Namen ueberhaupt lesen kann.
+     *
+     * <p>Ohne Meldung und ohne Weltpruefung, wie {@link #mitbauerNamen}: Ein
+     * Vorschlagsgeber laeuft bei jedem Tastendruck.
+     */
+    private RequiredArgumentBuilder<CommandSourceStack, String> aufgabenNamen() {
+        return Commands.argument("aufgabe", StringArgumentType.word())
+                .suggests((zusammenhang, bauer) -> {
+                    if (aufgabenbuch != null && !wolkenschluessel.isEmpty()
+                            && zusammenhang.getSource().getExecutor()
+                                    instanceof Player spieler) {
+                        Location ort = spieler.getLocation();
+                        Aufgabenbuch.Tafel tafel = aufgabenbuch.tafel(wolkenschluessel,
+                                ort.getBlockX(), ort.getBlockZ());
+                        for (Aufgabenbuch.Zeile zeile : tafel.zeilen()) {
+                            if (!zeile.erfuellt()) {
+                                bauer.suggest(zeile.aufgabe().schluessel());
+                            }
+                        }
+                        if (tafel.zeilen().isEmpty()) {
+                            aufgabenbuch.werte().schluessel().forEach(bauer::suggest);
+                        }
+                    }
+                    return bauer.buildFuture();
+                });
+    }
+
+    /**
+     * Die Punktzahl zaehlen lassen - sie laeuft in Happen und meldet sich spaeter.
+     *
+     * <p>Die erste Zeile kommt sofort ("die Zaehlung laeuft"), die zweite, wenn sie durch
+     * ist. Ohne die erste haelt ein Spieler den Befehl fuer wirkungslos und tippt ihn
+     * wieder - und der zweite Versuch laeuft in "hier zaehlt schon jemand".
+     */
+    private int zaehlePunkte(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (keineWelt(spieler) || keinePflege(spieler, WolkeSatz.PUNKTE_AUS)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Location ort = spieler.getLocation();
+        Punktebuch.Entscheid entscheid = pflege.punkte().beginne(wolkenschluessel,
+                ort.getBlockX(), ort.getBlockZ());
+
+        sende(spieler, Wolkentext.punkteZeilen(sprache, entscheid, Spielername::von));
+        entscheid.auftrag().ifPresent(auftrag -> pflege.zaehlhand().zaehle(auftrag,
+                punkte -> sende(spieler,
+                        Wolkentext.punkteFertigZeilen(sprache, punkte))));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Die Rangliste - die Inseln mit den meisten Punkten.
+     *
+     * <p>Sie geht ueberall und nicht nur in Wolkenwerder: Wer wissen will, wie er steht,
+     * steht gerade irgendwo. Und sie nennt die STUFE neben den Punkten - das ist die
+     * andere Haelfte des Fortschritts.
+     */
+    private int zeigeRangliste(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (keineWelt(spieler) || keinePflege(spieler, WolkeSatz.PUNKTE_AUS)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        List<Punktebuch.Platz> plaetze;
+        try {
+            plaetze = pflege.punkte().rangliste(wolkenschluessel, RANGLISTE_PLAETZE);
+        } catch (RuntimeException fehler) {
+            sende(spieler, sprache.bau(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine()));
+            return Command.SINGLE_SUCCESS;
+        }
+        sende(spieler, Wolkentext.ranglistenZeilen(sprache, plaetze, Spielername::von));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Das Biom der Insel, auf der er steht - ohne Namen nur die Auskunft.
+     *
+     * <p>Zwei Zweige mit DEMSELBEN Literal, und das ist dieselbe Brigadier-Falle wie bei
+     * {@code mitbauer}: Ohne eigenes {@code .executes} endete "/wolke biom" in "Unknown or
+     * incomplete command".
+     */
+    private int zeigeBiom(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (keineWelt(spieler) || keinePflege(spieler, WolkeSatz.BIOM_KEINE_WAHL)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Location ort = spieler.getLocation();
+        try {
+            Optional<Parzelle> hier = buch.inselAn(wolkenschluessel, ort.getBlockX(),
+                    ort.getBlockZ());
+            if (hier.isEmpty()) {
+                sende(spieler, Wolkentext.keineInselZeilen(sprache));
+                return Command.SINGLE_SUCCESS;
+            }
+            sende(spieler, Wolkentext.biomStandZeilen(sprache,
+                    pflege.biome().biomVon(hier.get().id()), pflege.biome().preis(),
+                    pflege.biome().angebot()));
+        } catch (RuntimeException fehler) {
+            sende(spieler, sprache.bau(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine()));
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Das Biom wechseln - es KOSTET, und zwar jedes Mal.
+     *
+     * <p>Auch auf dasselbe Biom, und das ist kein Versehen: Hinter dem Wechsel steht das
+     * Umsetzen der Biomzellen eines ganzen Feldes, und das ist Arbeit, die der Server
+     * jedes Mal leistet. Die Begruendung steht ausgeschrieben in {@link Biombuch}.
+     *
+     * <p>Das Guthaben VOR dem Versuch, denn danach ist abgebucht - dieselbe Rechnung wie
+     * beim Nehmen.
+     */
+    private int setzeBiom(CommandContext<CommandSourceStack> zusammenhang) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (keineWelt(spieler) || keinePflege(spieler, WolkeSatz.BIOM_KEINE_WAHL)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        String gewuenscht = StringArgumentType.getString(zusammenhang, "biom");
+        Location ort = spieler.getLocation();
+        long guthaben = kasse.guthaben(spieler.getUniqueId());
+
+        Biombuch.Entscheid entscheid = pflege.biome().setze(wolkenschluessel,
+                spieler.getUniqueId(), ort.getBlockX(), ort.getBlockZ(), gewuenscht);
+
+        sende(spieler, Wolkentext.biomZeilen(sprache, entscheid, guthaben,
+                pflege.biome().angebot(), Spielername::von));
+        if (entscheid.erteilt()) {
+            // Die BLOECKE danach, und ohne weitere Zeile: Das Umsetzen laeuft in Happen
+            // und ist Sache des Servers. Was ein Spieler wissen muss - dass er die Chunks
+            // neu betreten muss -, steht im Erfolgssatz.
+            pflege.wechsel().setze(entscheid.insel().orElseThrow(), entscheid.biom(),
+                    null);
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Die Startinsel wiederherstellen - mit Rueckfrage.
+     *
+     * <p>Zurueckgesetzt wird nur der Quader der Startinsel, nicht das ganze Feld: Was ein
+     * Spieler daneben gebaut hat, bleibt stehen. Das ist genau der Griff, den
+     * {@code wolke.aufbau-gestoert} nennt - und der zweite Zweck ist der haeufigere: eine
+     * neue Starttruhe nach einem Fehlgriff mit der Lava.
+     *
+     * <p><b>Der Fortschritt bleibt.</b> Die erfuellten Herausforderungen und die Punkte
+     * gehoeren der Insel, und die Gegenstaende dafuer sind weg - sie zu loeschen waere
+     * eine Strafe fuer einen Griff, den das Spiel selbst anbietet.
+     */
+    private int setzeZurueck(CommandContext<CommandSourceStack> zusammenhang,
+                             boolean bestaetigt) {
+        Player spieler = spielerAus(zusammenhang);
+        if (spieler == null) {
+            return 0;
+        }
+        if (keineWelt(spieler)) {
+            return Command.SINGLE_SUCCESS;
+        }
+        Location ort = spieler.getLocation();
+        Optional<Parzelle> hier;
+        try {
+            hier = buch.inselAn(wolkenschluessel, ort.getBlockX(), ort.getBlockZ());
+        } catch (RuntimeException fehler) {
+            sende(spieler, sprache.bau(WolkeSatz.ABSAGE_GESTOERT, 1L, Einsatz.keine()));
+            return Command.SINGLE_SUCCESS;
+        }
+        if (hier.isEmpty()) {
+            sende(spieler, Wolkentext.keineInselZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        Parzelle insel = hier.get();
+        if (!insel.gehoert(spieler.getUniqueId())) {
+            // NUR der Eigentuemer, wie beim Biom: Ein Mitbauer wuerde sonst die
+            // Startinsel eines anderen ueberschreiben.
+            sende(spieler, sprache.bau(WolkeSatz.BIOM_NICHT_DEINE, 1L,
+                    Einsatz.von("eigentuemer",
+                            Spielername.von(insel.eigentuemer()))));
+            return Command.SINGLE_SUCCESS;
+        }
+        if (!bestaetigt) {
+            sende(spieler, Wolkentext.zuruecksetzenWarnungZeilen(sprache));
+            return Command.SINGLE_SUCCESS;
+        }
+        if (!aufsetzer.setze(insel)) {
+            sende(spieler, Wolkentext.aufbauGestoertZeilen(sprache, insel));
+            return Command.SINGLE_SUCCESS;
+        }
+        sende(spieler, Wolkentext.zuruecksetzenZeilen(sprache, insel));
+        return Command.SINGLE_SUCCESS;
+    }
+
+    /**
+     * Sagt es, wenn es die Pflege (Punkte, Biome) in diesem Lauf nicht gibt.
+     *
+     * <p>Sie fehlt genau dann, wenn die Welt beim Start fehlte oder die Inselstaende nicht
+     * zu lesen waren - und im zweiten Fall ist das die sichere Richtung: Eine Rangliste
+     * aus einem ungefuellten Zwischenspeicher zeigte jede Insel bei 0 Punkten.
+     *
+     * @param satz welcher Satz es sagt - fuer die Punkte und das Biom ein anderer
+     */
+    private boolean keinePflege(Player spieler, WolkeSatz satz) {
+        if (pflege == null) {
+            sende(spieler, sprache.bau(satz, 1L, Einsatz.keine()));
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Zum Wechseln: die Biome, die diese Welt anbietet.
+     *
+     * <p>Ohne Meldung und ohne Weltpruefung, wie {@link #mitbauerNamen}: Ein
+     * Vorschlagsgeber laeuft bei jedem Tastendruck.
+     */
+    private RequiredArgumentBuilder<CommandSourceStack, String> biomnamen() {
+        return Commands.argument("biom", StringArgumentType.word())
+                .suggests((zusammenhang, bauer) -> {
+                    if (pflege != null) {
+                        pflege.biome().angebot().forEach(bauer::suggest);
+                    }
+                    return bauer.buildFuture();
+                });
     }
 
     /**

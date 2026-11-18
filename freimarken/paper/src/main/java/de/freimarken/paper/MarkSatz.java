@@ -155,6 +155,14 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_WOLKE_GENOMMEN("mark.verlauf.grund.wolke-genommen", Art.WORT),
     VERLAUF_GRUND_WOLKE_ERSTATTET("mark.verlauf.grund.wolke-erstattet", Art.WORT),
 
+    /** Eine Herausforderung auf der Wolkeninsel erfuellt [Schritt 11, Teil D]. */
+    VERLAUF_GRUND_WOLKE_AUFGABE("mark.verlauf.grund.wolke-aufgabe", Art.WORT),
+
+    /** Das Biom einer Wolkeninsel gewechselt [Schritt 11, Teil F]. */
+    VERLAUF_GRUND_WOLKE_BIOM("mark.verlauf.grund.wolke-biom", Art.WORT),
+    VERLAUF_GRUND_WOLKE_BIOM_ERSTATTET("mark.verlauf.grund.wolke-biom-erstattet",
+            Art.WORT),
+
     /**
      * Die Worte des Handels an Kistenshops (Plan 7.4).
      *
