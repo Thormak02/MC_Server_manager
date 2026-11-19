@@ -3,6 +3,8 @@ package de.freimarken.paper;
 import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaAbholfach;
 import de.freimarken.daten.MariaBerufe;
+import de.freimarken.daten.Kassentabellen;
+import de.freimarken.daten.MariaRaenge;
 import de.freimarken.daten.MariaBlockbuch;
 import de.freimarken.daten.MariaBonus;
 import de.freimarken.daten.MariaGrundstuecke;
@@ -37,6 +39,7 @@ import de.freimarken.kern.Inselbuch;
 import de.freimarken.kern.Inselgrenze;
 import de.freimarken.kern.Inselplan;
 import de.freimarken.kern.Handelsart;
+import de.freimarken.kern.Goldkasse;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Ladeneinheit;
@@ -49,8 +52,10 @@ import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherAbholfach;
+import de.freimarken.kern.Rangablage;
 import de.freimarken.kern.SpeicherBerufe;
 import de.freimarken.kern.SpeicherBlockbuch;
+import de.freimarken.kern.SpeicherRaenge;
 import de.freimarken.kern.SpeicherBonus;
 import de.freimarken.kern.SpeicherGrundstuecke;
 import de.freimarken.kern.SpeicherKasse;
@@ -214,6 +219,31 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * {@link Stadtkasse} selbst - im Konstruktor, mit einer Frage, beim Start.
      */
     private Stadtkasse stadtkasse;
+
+    /**
+     * Die Kasse der GOLDMARK - die zweite Waehrung [Schritt 12 Teil E].
+     *
+     * <p>EIGENER TYP und nicht ein zweites Feld vom Typ {@link Kasse}: Zwei
+     * Kassenfelder sehen an jeder Aufrufstelle gleich aus, und eines Tages buchte
+     * jemand Mark in die Goldmark. Mit {@link Goldkasse} weist der Uebersetzer die
+     * Verwechslung ab, bevor sie Geld bewegt.
+     *
+     * <p>Mit Datenbank liegt sie auf EIGENEN Tabellen ({@code goldkassen},
+     * {@code goldbuchungen}) - anders als die Staedtekasse, die bewusst auf denen
+     * der Spieler liegt. Der Grund ist die Waehrung: Zwei Waehrungen in einer
+     * Tabelle addieren sich zu einem Stand, und die Summenprobe des Buchungsbuchs
+     * wuerde ihn bestaetigen, obwohl er zwei Dinge zusammenwirft.
+     *
+     * <p>Startguthaben 0, und das ist keine Einstellung: Plan 8.1 nennt genau zwei
+     * Quellen fuer Goldmark - Echtgeld und Tausch aus Mark. Dass hier wirklich eine
+     * Kasse ohne Startguthaben steht, prueft {@link Goldkasse} selbst, im
+     * Konstruktor, beim Start.
+     *
+     * <p><b>Noch ohne Verbraucher:</b> Gewechselt wird mit Teil F, gekauft im
+     * Muenzhaus mit Teil G. Bis dahin ist diese Kasse die Schicht darunter - und
+     * eine Startzeile, die sagt, dass sie steht.
+     */
+    private Goldkasse goldkasse;
     private Spielzeitablage spielzeit;
 
     /**
@@ -526,6 +556,32 @@ public final class FreimarkenPlugin extends JavaPlugin {
         return new NamespacedKey(this, name).asString();
     }
     private Berufsablage berufsablage;
+
+    /**
+     * Auf welcher Stufe der Leiter ein Spieler steht - Schritt 12 Teil C.
+     *
+     * <p>KEIN Zwischenspeicher, anders als bei den Berufen: Gelesen wird einmal je
+     * Beitritt und einmal je Taktschlag. Das sind bei zwanzig Spielern keine Zahlen,
+     * fuer die sich eine zweite Wahrheit ueber den Rang lohnte.
+     */
+    private Rangablage rangablage;
+
+    /**
+     * Die Wache, die aus dem abgelegten Rang Rechte macht.
+     *
+     * <p>EIN Feld und kein Wert je Aufruf, weil Teil D sie rufen muss: Ein Aufstieg
+     * zur Laufzeit wirkt erst, wenn jemand das Buendel neu vergibt. Ohne das waere
+     * der Aufstieg eine Nachricht, der nichts folgt.
+     */
+    private Rangwache rangwache;
+
+    /**
+     * Der Lauf, der messen und heben kann - Schritt 12 Teil D.
+     *
+     * <p>EIN Feld und kein Wert je Aufruf, weil ihn zwei Stellen brauchen: die Rangwache
+     * fuer den Takt und den Beitritt, und der Startbericht fuer die Nachstufung.
+     */
+    private Aufstiegslauf aufstiegslauf;
     /**
      * Welche Blockpositionen ein Spieler gesetzt hat - fuer Teil E.
      *
@@ -1003,6 +1059,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
         richteWolkenEin();
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
+        // NACH der Spielzeit, und das ist kein Geschmack: Die Bedingungen der Rangleiter
+        // werden an ihr gemessen. Steht die Leiter vor ihr im Protokoll, liest der
+        // Betreiber eine Huerde, deren Messstelle er noch nicht gesehen hat.
+        nenneRaenge();
+        nenneGoldmark();
         registriereBefehle();
 
         getLogger().info("Freimarken " + getPluginMeta().getVersion()
@@ -1238,14 +1299,39 @@ public final class FreimarkenPlugin extends JavaPlugin {
         richteShopsEin();
         Bonuswache bonuswache = new Bonuswache(tagesbonus, wirtschaft, sprache);
         getServer().getPluginManager().registerEvents(bonuswache, this);
+        // Der Aufstiegslauf [Schritt 12 Teil D] - der erste Verbraucher von Rangregel.
+        //
+        // DER WELTSCHLUESSEL KOMMT AUS DEMSELBEN FELD wie der von ParzellenBefehle
+        // (marktstadt.key().asString(), siehe dort): Die Zahl, an der ein Aufstieg
+        // haengt, MUSS dieselbe sein, die die Obergrenze begrenzt. Zwei Zaehlungen fuer
+        // "eigene Parzellen" waeren ein Rang, der an einer Zahl haengt, die der Spieler
+        // nirgends sieht - und ein neu gerechneter Schluessel ist genau die Naht, an der
+        // das auseinanderlaeuft.
+        //
+        // marktstadt ist hier nie null: Ohne sie bleibt Freimarken aus und onEnable ist
+        // vorher zurueckgekehrt (siehe die severe-Zeile in ladeWelten).
+        aufstiegslauf = new Aufstiegslauf(wirtschaft, rangablage, spielzeit, lager,
+                berufsablage, kasse, marktstadt.key().asString(), uhr, getLogger());
+        // Die Rangwache [Schritt 12 Teil C/D]. OHNE DIESE ZWEI ZEILEN ist die ganze
+        // Leiter unsichtbar wirkungslos: Teil A rechnet, Teil B liest, Teil C legt
+        // ab - und kein Spieler merkt davon etwas. Tafel 31cr haelt sie fest.
+        rangwache = new Rangwache(rangablage, wirtschaft,
+                new AnhangRechte(this), aufstiegslauf, sprache, getLogger());
+        getServer().getPluginManager().registerEvents(rangwache, this);
         // blockraeumung darf null sein - ohne Datenbank gibt es kein Blockbuch und
         // nichts zu raeumen. richteBlockbuchEin() laeuft VOR dieser Methode und hat es
         // dann gesetzt; die Reihenfolge sichert 31ai.
-        spielzeitwache = new Spielzeitwache(this, buch, bonuswache, mietwache,
+        spielzeitwache = new Spielzeitwache(this, buch, bonuswache, rangwache, mietwache,
                 blockraeumung, truhenlauf, besuchslauf, verfallslauf,
                 ladengebuehrlauf, wirtschaft, getLogger());
         getServer().getPluginManager().registerEvents(spielzeitwache, this);
         spielzeitwache.starte();
+        // DIE NACHSTUFUNG, und zwar NACH starte(): Jener Aufruf oeffnet die Zeitmarken
+        // der Anwesenden, dieser liest Summen. Die Reihenfolge entscheidet nichts
+        // Sachliches - die offenen Marken stehen erst beim naechsten Abrechnen in der
+        // Tabelle -, aber sie macht den Startbericht lesbar: Erst laeuft die Zeit, dann
+        // wird gestuft.
+        nenneNachstufung();
         // Jeder Wert, den dieser Satz verspricht, steht auch darin. Eine halbe Zusage -
         // "verlangt sind mehrere Arten" ohne die Zahl - liest sich wie eine Angabe und
         // traegt keine; genau das ist der Lesezeile des Bundesmarktes passiert.
@@ -1413,6 +1499,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
             kasse = new SpeicherKasse(startguthaben);
             // Die Staedtekasse mit 0 - siehe das Feld stadtkasse.
             stadtkasse = new Stadtkasse(new SpeicherKasse(0L));
+            // Die Goldmark ebenfalls mit 0, und hier ohne eigene Tabellen: Im
+            // Arbeitsspeicher ist jede Kasse ohnehin eine eigene Karte, und das ist
+            // kein Unterschied in der Sache - getrennt sind sie so und so.
+            goldkasse = new Goldkasse(new SpeicherKasse(0L));
             // Braucht keine Uhr: Der Tag kommt mit dem Zuschlag herein und bei lies() von
             // aussen. Eine Uhr hier waere eine zweite Quelle fuer die Tagesgrenze.
             spielzeit = new SpeicherSpielzeit();
@@ -1444,6 +1534,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     new ZwischenspeicherGrundstuecke(new SpeicherGrundstuecke());
             // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von aussen.
             berufsablage = new ZwischenspeicherBerufe(new SpeicherBerufe());
+            // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt im Antrag von
+            // aussen. Dass diese Fassung beim Neustart alles vergisst, ist beim
+            // Rang leicht zu verkraften: Verloren ist nichts, was jemand gekauft
+            // hat - er steigt wieder auf, sobald der Takt misst, denn die
+            // Bedingungen liegen in der Spielzeit und im Besitz und nicht hier.
+            rangablage = new SpeicherRaenge();
             // Dieselbe Bauart wie bei den Shops: derselbe Zwischenspeicher, nur mit
             // einer anderen Wahrheit darunter.
             wolkenstaende = new ZwischenspeicherWolken(new SpeicherWolken());
@@ -1465,6 +1561,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
             kasse = new MariaKasse(datenbank, startguthaben);
             // DIESELBE Tabelle, nur ohne Startguthaben - siehe das Feld stadtkasse.
             stadtkasse = new Stadtkasse(new MariaKasse(datenbank, 0L));
+            // UND EIGENE TABELLEN fuer die Goldmark, anders als bei der
+            // Staedtekasse: Es ist eine andere WAEHRUNG. Die Begruendung in ganzer
+            // Laenge steht an Kassentabellen und am Schemaschritt 32.
+            goldkasse = new Goldkasse(
+                    new MariaKasse(datenbank, 0L, Kassentabellen.GOLDMARK));
             // KEIN Zwischenspeicher darum: Fortschreiben ist additiv, und ein
             // zwischengespeicherter additiver Schreibzug ist entweder verloren oder
             // doppelt. Gelesen wird nur auf Befehl, also auch nichts zu sparen.
@@ -1512,6 +1613,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // besorgt dessen Leerung bei jedem Schreibzug - und weil /beruf durch
             // DIESELBE Ablage geht, kann das nicht auseinanderlaufen.
             berufsablage = new ZwischenspeicherBerufe(new MariaBerufe(datenbank));
+            // KEIN Zwischenspeicher: Gelesen wird einmal je Beitritt und einmal je
+            // Taktschlag - dafuer lohnt keine zweite Wahrheit ueber den Rang.
+            // Geschrieben wird gegen einen erwarteten Stand, und ein
+            // zwischengespeicherter Vergleichswert waere genau der veraltete Stand,
+            // den dieser Riegel abweisen soll.
+            rangablage = new MariaRaenge(datenbank);
             // VOLLSTAENDIG und ohne Verfall, wie die Grundstuecke - und mit einer
             // Obergrenze aus der Weltgeometrie: hoechstens 1443 Inseln. Die Rechnung
             // steht an ZwischenspeicherWolken. Gefuellt wird in richteWolkenEin.
@@ -2724,6 +2831,91 @@ public final class FreimarkenPlugin extends JavaPlugin {
                         + angabe.tor().alsText() + "): " + klage);
             }
         }
+    }
+
+    /**
+     * Nennt die Rangleiter - und was an ihr nicht wirkt.
+     *
+     * <p>Drei Saetze, und der zweite ist der wichtige: <b>Die Zahlen in der
+     * {@code config.yml} sind eine Untergrenze fuer JEDEN.</b> {@code Rangzahl} nimmt die
+     * hoechste Zahl aus Recht und Datei; solange dort die Buergerzahl steht, hebt die
+     * Leiter nichts, und im Spiel sieht das genau aus wie ein kaputter Rang. Keine Probe
+     * kann das fangen - es sind zwei Zeilen in zwei Abschnitten, und jede fuer sich ist
+     * richtig.
+     *
+     * <p>Der dritte Satz faengt den Vertipper im Rechtenamen: Ein Rang, der
+     * {@code laden.miete} vergibt, setzt es klaglos, und es fragt es nie jemand. Gefragt
+     * wird die Rechteverwaltung des Servers, weil nur sie weiss, was angemeldet ist.
+     */
+    private void nenneRaenge() {
+        var werte = wirtschaft.werte().raenge();
+        getLogger().info(Rangliste.rechenprobe(werte));
+        java.util.Map<String, Integer> untergrenzen = java.util.Map.of(
+                "parzellen", wirtschaft.werte().hoechstzahl(),
+                "gruppe", wirtschaft.werte().gruppenFelder(),
+                "inseln", wirtschaft.werte().inseln().hoechstzahl(),
+                "wolken", wirtschaft.werte().wolken().hoechstzahl());
+        Rangliste.wirkungslose(werte, untergrenzen).forEach(getLogger()::warning);
+        var angemeldet = new java.util.TreeSet<String>();
+        for (var recht : getServer().getPluginManager().getPermissions()) {
+            angemeldet.add(recht.getName());
+        }
+        Rangliste.unbekannteRechte(werte, angemeldet).forEach(getLogger()::severe);
+    }
+
+    /**
+     * Stuft beim Start jeden nach, dem mehr zusteht - und sagt, wie viele es waren.
+     *
+     * <p><b>Warum das bei JEDEM Start laeuft und nicht einmal</b> [19.11.2026]: Der Lauf
+     * ist folgenlos, wenn alles stimmt - {@code Rangregel.aufstieg} geht nur nach oben,
+     * und wer auf seiner Stufe steht, bekommt keinen Schreibzug. Ein Merker "schon
+     * erledigt" waere darum Aufwand ohne Gegenwert, und es gibt in diesem Projekt auch
+     * keinen fachlichen Merker, der einen Neustart ueberlebt. Dass er jedes Mal laeuft,
+     * ist sogar der Gewinn: Er faengt den Spieler, der waehrend seiner Abwesenheit
+     * aufstiegsreif wurde, und er zieht nach, wenn der Betreiber die Leiter aendert.
+     *
+     * <p>Die Zeile nennt die ZAHL der geprueften Spieler und nicht nur die der gehobenen.
+     * Eine Meldung "0 nachgestuft" allein waere nicht von "es wurde gar nicht gelaufen" zu
+     * unterscheiden - und genau das ist die Verwechslung, an der dieses Projekt schon
+     * zweimal eine stumme Luecke hatte.
+     */
+    private void nenneNachstufung() {
+        Aufstiegslauf.Ergebnis ergebnis = aufstiegslauf.nachstufung();
+        if (ergebnis.geprueft() == 0) {
+            getLogger().info("Nachstufung: niemand zu pruefen - es hat noch nie jemand"
+                    + " gespielt, oder raenge.an ist aus.");
+            return;
+        }
+        getLogger().info("Nachstufung: " + ergebnis.geprueft() + " Spieler geprueft, "
+                + ergebnis.aufstiege().size() + " nachgestuft.");
+        for (Aufstiegslauf.Aufstieg aufstieg : ergebnis.aufstiege()) {
+            // JEDER einzeln und nicht nur die Zahl: Ein Rang ist das, woran Grenzen
+            // haengen, und wer beim naechsten Start nachlesen will, WER gehoben wurde,
+            // findet es sonst nirgends - die Tabelle traegt nur den neuen Stand.
+            getLogger().info("  " + aufstieg.spieler() + ": " + aufstieg.vorher()
+                    + " -> " + aufstieg.nachher() + ".");
+        }
+    }
+
+    /**
+     * Sagt beim Start, dass die Goldmark steht - und was sie noch nicht kann.
+     *
+     * <p>Eine Waehrung ohne Verbraucher ist genau die Gestalt, die dieses Projekt
+     * mehrfach getroffen hat: gebaut, gruen geprueft, und niemand merkt etwas. Hier ist
+     * das Fehlen ABSICHT - gewechselt wird mit Teil F -, und darum sagt es der Start
+     * ausdruecklich. Ohne diese Zeile waere der Unterschied zwischen "noch kein
+     * Verbraucher" und "falsch verdrahtet" von aussen nicht zu sehen.
+     *
+     * <p>Genannt wird auch, WOHER ein Guthaben kommen kann. Das ist die Frage, die ein
+     * Betreiber als erste stellt, und die Antwort ist heute: noch von nirgends.
+     */
+    private void nenneGoldmark() {
+        getLogger().info("Goldmark: eigene Kasse, Startguthaben 0 - "
+                + (fluechtig ? "FLUECHTIG, vergisst beim Neustart"
+                        : "eigene Tabellen " + Kassentabellen.GOLDMARK.konten() + " und "
+                                + Kassentabellen.GOLDMARK.buch())
+                + ". Noch gibt es keinen Weg, Goldmark zu bekommen - Wechsel und"
+                + " Muenzhaus kommen mit Schritt 12 Teil F und G.");
     }
 
     /**

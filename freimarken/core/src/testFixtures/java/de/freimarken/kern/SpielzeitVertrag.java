@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -408,5 +409,109 @@ public abstract class SpielzeitVertrag {
         // sind 0, 6, 12, 18, also vier heute.
         assertEquals(420L, stand.taetigSekundenGesamt());
         assertEquals(240L, stand.taetigSekundenHeute());
+    }
+
+    @Test
+    @DisplayName("alleStaende liefert JEDEN, von dem die Ablage etwas weiss")
+    void alleStaendeLiefertJeden() {
+        Spielzeitablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
+        ablage.schreibeFort(List.of(
+                new Spielzeitablage.Zuschlag(anna, HEUTE, 600L, 300L),
+                new Spielzeitablage.Zuschlag(bert, GESTERN, 60L, 60L)));
+
+        List<Spielzeitstand> alle = ablage.alleStaende(HEUTE);
+
+        // OHNE DIESE METHODE GAEBE ES KEINE SPIELERLISTE. Jede andere Methode dieser
+        // Ablage nimmt eine UUID, und getOfflinePlayers ist im Plugin verboten - der
+        // Nachstufungslauf haette sonst nichts, worueber er laufen koennte.
+        assertEquals(2, alle.size(), alle.toString());
+        assertEquals(Set.of(anna, bert),
+                alle.stream().map(Spielzeitstand::spieler)
+                        .collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
+    @DisplayName("alleStaende traegt dieselben Zahlen wie lies - fuer jeden einzeln")
+    void alleStaendeStimmtMitLies() {
+        Spielzeitablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        UUID bert = UUID.randomUUID();
+        ablage.schreibeFort(List.of(
+                new Spielzeitablage.Zuschlag(anna, GESTERN, 600L, 120L),
+                new Spielzeitablage.Zuschlag(anna, HEUTE, 300L, 300L),
+                new Spielzeitablage.Zuschlag(bert, HEUTE, 60L, 0L)));
+
+        // DIE TRAGENDE PROBE: Zwei Rechenwege fuer dieselbe Summe laufen eines Tages
+        // auseinander, und dann sieht der Nachstufungslauf eine andere Zeit als
+        // /spielzeit. Gefunden wird das von niemandem - beide Zahlen sind fuer sich
+        // stimmig. Darum wird hier JEDER Stand gegen lies() gehalten.
+        for (Spielzeitstand stand : ablage.alleStaende(HEUTE)) {
+            assertEquals(ablage.lies(stand.spieler(), HEUTE), stand,
+                    "alleStaende und lies sind fuer " + stand.spieler()
+                            + " verschiedener Meinung");
+        }
+    }
+
+    @Test
+    @DisplayName("alleStaende ist nach der Kennung SORTIERT - das ist zugesagt")
+    void alleStaendeIstSortiert() {
+        Spielzeitablage ablage = ablage();
+        // Feste Kennungen und absichtlich in der falschen Reihenfolge geschrieben: Mit
+        // UUID.randomUUID waere eine zufaellig richtige Reihenfolge moeglich, und die
+        // Probe waere mal gruen, ohne dass sortiert wird.
+        UUID spaet = UUID.fromString("ffffffff-0000-0000-0000-000000000000");
+        UUID frueh = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID mitte = UUID.fromString("88888888-0000-0000-0000-000000000000");
+        ablage.schreibeFort(List.of(
+                new Spielzeitablage.Zuschlag(spaet, HEUTE, 60L, 0L),
+                new Spielzeitablage.Zuschlag(frueh, HEUTE, 60L, 0L),
+                new Spielzeitablage.Zuschlag(mitte, HEUTE, 60L, 0L)));
+
+        List<UUID> gelesen = ablage.alleStaende(HEUTE).stream()
+                .map(Spielzeitstand::spieler).toList();
+
+        // Ohne Zusage gaebe eine Gruppierung in MariaDB je Lauf eine andere Reihenfolge -
+        // der Startbericht stuende mal so und mal anders da, und jede Probe darauf waere
+        // mal gruen und mal rot.
+        assertEquals(List.of(frueh, mitte, spaet), gelesen,
+                "die Reihenfolge ist in der Schnittstelle zugesagt");
+    }
+
+    @Test
+    @DisplayName("alleStaende traegt den HEUTIGEN Tag, den man hereingibt")
+    void alleStaendeTraegtDenTag() {
+        Spielzeitablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        ablage.schreibeFort(List.of(
+                new Spielzeitablage.Zuschlag(anna, GESTERN, 600L, 600L),
+                new Spielzeitablage.Zuschlag(anna, HEUTE, 60L, 60L)));
+
+        Spielzeitstand heute = ablage.alleStaende(HEUTE).get(0);
+        Spielzeitstand gestern = ablage.alleStaende(GESTERN).get(0);
+
+        // Der Tag entscheidet, welche Zahl "heute" ist - und die Gesamtsumme bleibt
+        // davon unberuehrt. Eine Ablage, die den Tag uebergeht, faellt hier auf.
+        assertEquals(HEUTE, heute.tag());
+        assertEquals(60L, heute.sekundenHeute());
+        assertEquals(GESTERN, gestern.tag());
+        assertEquals(600L, gestern.sekundenHeute());
+        assertEquals(660L, heute.sekundenGesamt(), "die Summe ist dieselbe");
+        assertEquals(660L, gestern.sekundenGesamt());
+    }
+
+    @Test
+    @DisplayName("Ohne jede gemessene Zeit ist die Liste LEER und nicht null")
+    void alleStaendeLeer() {
+        // Das ist der erste Start eines neuen Servers. Ein null waere dort ein Absturz
+        // im Nachstufungslauf, und zwar bevor je ein Spieler da war.
+        assertEquals(List.of(), ablage().alleStaende(HEUTE));
+    }
+
+    @Test
+    @DisplayName("alleStaende ohne Tag wird abgewiesen")
+    void alleStaendeOhneTag() {
+        assertThrows(IllegalArgumentException.class, () -> ablage().alleStaende(null));
     }
 }

@@ -2204,7 +2204,16 @@ class BildGleichTest {
                         Einsatz.von("eigentuemer", "Anna"), "&cDiese Insel gehoert &fAnna&c - das Biom aendert nur der Eigentuemer."),
                 new Zeile(WolkeSatz.ZURUECK_WARNUNG, 1L, Einsatz.keine(), "&eDas setzt die Startinsel wieder hin - Wiese, Baum und eine neue Truhe.\n&7Was an ihrer Stelle steht, ist danach weg. Dein Fortschritt bleibt. Noch einmal mit /wolke zuruecksetzen bestaetigen"),
                 new Zeile(WolkeSatz.ZURUECK_ERTEILT, 1L,
-                        Einsatz.von("feld", "2/-3"), "&aDie Startinsel auf Feld 2/-3 steht wieder.\n&7In der Truhe liegt, was du zum Anfangen brauchst."));
+                        Einsatz.von("feld", "2/-3"), "&aDie Startinsel auf Feld 2/-3 steht wieder.\n&7In der Truhe liegt, was du zum Anfangen brauchst."),
+                // Die Rangleiter [Schritt 12 Teil D]. {rang} traegt den SCHLUESSEL aus
+                // der config.yml - hier die der ausgelieferten Leiter, damit die Tafel
+                // dasselbe Bild zeigt, das ein Spieler auf diesem Server liest.
+                new Zeile(RangSatz.AUFGESTIEGEN, 1L,
+                        Einsatz.von("rang", "siedler"), "&aDu bist jetzt siedler!"),
+                new Zeile(RangSatz.NAECHSTER, 1L,
+                        Einsatz.von("rang", "buerger"), "&7Als naechstes: buerger."),
+                new Zeile(RangSatz.HOECHSTE, 1L, Einsatz.keine(),
+                        "&6Damit stehst du auf der hoechsten Stufe."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

@@ -707,6 +707,198 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
   mitgeaendert: Das ist ein anderer Bereich mit eigenen Proben, und eine stille Reparatur daran gehoert
   nicht in einen Schritt ueber Tore.
 
+## Schritt 12: Raenge, Goldmark, Wechsel, Kosmetik
+
+- ENTSCHIEDEN 18.11.2026 (vier Fragen): Rang kommt in eine EIGENE Tabelle plus
+  PermissionAttachment (nicht LuckPerms - app/services/player_data_service.py fasst
+  .db/.sqlite beim UUID-Umbau bewusst nicht an, der Rang waere still weg); Goldmark als
+  ZWEITE Kasse-Instanz mit eigener Buchungstabelle (nicht als Waehrungsspalte - zwei
+  Waehrungen in einer Tabelle addieren sich zu einem Stand, den die tragende Zusage aus
+  Kasse.java:24 dann falsch bestaetigt).
+- ENTSCHIEDEN 18.11.2026 (Nutzer, zwei eigene Antworten): (1) "weiter nach dem grundsatz
+  immer frei einstellbar, zb. auch welcher rank wie viele gibt" - also auch der
+  Widerspruch im Plan um die Heimatpunkte (5 Goldmark vs. "allein den bezahlten Raengen")
+  wird nicht entschieden, sondern ein Schalter. (2) "man soll nicht fuer die reine
+  gespielte zeit belohnt werden, die gespielte zeit gilt als richtwert fuer kosten" - der
+  Aufstieg haengt an TAETIGER Zeit und an Taten, die Stundenzahlen aus Plan 9 sind damit
+  ein Richtwert fuer Preise und nicht der Ausloeser.
+- BAUPLAN in acht Teilen: A Rangleiter im Kern, B Leser und Bericht, C Ablage und
+  Vergabe, D Aufstieg zur Laufzeit, E Goldmark, F Wechsel mit Deckel, G Muenzhaus,
+  H Grenzen an den Rang.
+- ~~Teil A: die Rangleiter im Kern.~~ 19.11. GEBAUT. Bedingungsart (taetige-stunden,
+  anwesenheit-stunden, parzellen, beruf, guthaben - eine AUFZAEHLUNG, weil jede Art eine
+  Stelle braucht, die sie misst), Rangwerte (Leiter aus der Datei, je Stufe bedingungen/
+  zahlen/rechte), Rangregel (zustehend, aufstieg, fehlend, gebraucht).
+- EIN RANG IST EIN BUENDEL RECHTE: Was eine Stufe gibt, wird zu freimarken.<grenze>.<zahl>
+  und freimarken.<recht>, und Rangzahl bleibt die EINE Auswertestelle. Damit steht keine
+  Zahl aus Plan 9 im Quelltext.
+- Drei Regeln, die keine Probe erraten kann und die darum im Quelltext begruendet stehen:
+  kein UEBERSPRINGEN (es gilt der hoechste Rang, fuer den diese Stufe UND jede darunter
+  erfuellt ist), kein ABSTIEG (sonst verliert ein Buerger seinen Rang, weil er seine
+  Parzelle verkauft hat), und die unterste Stufe darf KEINE Bedingung haben (sonst stuende
+  ein neuer Spieler auf keiner Stufe).
+- Die Umrechnung Stunden -> Sekunden steht an EINER Stelle (Bedingungsart.inMesseinheit).
+  Am Rand haette sie jeder Messer selbst gemacht - einer schnitte die angefangene Stunde
+  ab, der naechste nicht, und zwei Spieler mit derselben Zeit haetten verschiedene Raenge.
+- ~~Teil B: Leser und Bericht.~~ 19.11. GEBAUT. Rangliste (eigener Leser wie
+  Aufgabenliste), Abschnitt raenge: in der config.yml, neunzehnter Bestandteil der
+  Wirtschaftswerte, Startzeile nenneRaenge().
+- EINE KAPUTTE STUFE FAELLT GANZ WEG, anders als bei jedem anderen Leser: Eine Stufe, der
+  eine Bedingung fehlt, ist eine LEICHTERE - dann bekaeme jemand Rechte, die er nicht
+  verdient hat. Eine weggefallene Stufe nimmt dagegen niemandem etwas, was er schon hat.
+- DIE SCHRANKE, DIE KEINE PROBE FANGEN KANN: parzellen.hoechstzahl ist eine UNTERGRENZE
+  fuer JEDEN (Rangzahl nimmt die hoechste Zahl aus Recht UND Datei). Solange dort 4 steht,
+  hebt die ganze Leiter nichts. Zwei Zeilen in zwei Abschnitten, jede fuer sich richtig -
+  darum sagt es der Startlauf in einer eigenen Warnung je Grenze
+  (Rangliste.wirkungslose). Das Senken kommt mit Teil H samt Einmallauf.
+- Tafel 31ab deckt jetzt pruefe* UND nenne*: nenneRaenge waere durch das alte Muster
+  gefallen, dabei ist es dieselbe Sache - eine Methode, die nur meldet, meldet gar nichts,
+  wenn niemand sie ruft.
+- Proben 4054 -> 4101 (core 1583, daten 313, paper 2205), 0 rot, 0 uebersprungen. Neu:
+  RangwerteTest (19), RangregelTest (15), RanglisteTest (13). Nachgezogen:
+  WirtschaftsstandTest (die eine Stelle, die den vollen Satz von Hand baut).
+- ~~Teil C: Ablage und Vergabe.~~ 19.11. GEBAUT. Rangstand und Rangablage im Kern,
+  SpeicherRaenge, RangVertrag, Schemaschritt 31 (Tabelle raenge), MariaRaenge, Rangwache
+  mit Rechtegriff/AnhangRechte, verdrahtet in richteSpielzeitEin.
+- EIN RANG GIBT KUMULATIV, was die Stufen darunter geben - die Entscheidung, die Teil C
+  erzwungen hat: buerger nennt laden.mieten nicht noch einmal, er nennt nur das NEUE.
+  Zaehlte allein die erreichte Stufe, naehme der Aufstieg zum Buerger dem Spieler seinen
+  Laden weg - der Abstieg durch die Hintertuer, und die Absage im Spiel ist dieselbe wie
+  bei einem, der das Recht nie hatte. Bei Zahlen gilt die hoechste.
+- DARUM BERICHTIGT: Rangwerte.ungereimtheiten sagte "ein Aufstieg nimmt hier etwas weg".
+  Seit buendel() kumuliert, nimmt er nichts weg, er hebt nur nichts - der Satz haette
+  einen Schaden behauptet, den es nicht gibt, und den echten (eine Stufe ohne Wirkung)
+  verdeckt. Zwei Proben nachgezogen.
+- KEINE ZEILE HEISST "UNTERSTE STUFE", nicht "kein Rang": Geschrieben wird erst beim
+  ersten Aufstieg. Eine Zeile je Besucher waere eine Tabelle, die nur Platz braucht - und
+  wer eine Stufe aus der config.yml nimmt, strandet sonst jeden, der auf ihr stand. Der
+  Rueckfall steht an EINER Stelle (Rangstand.stufeIn), und ein Rang, den die Leiter nicht
+  mehr kennt, faellt mit zurueck UND wird einmal gemeldet.
+- EINE ZEILE JE SPIELER, kein Verlauf: PRIMARY KEY (spieler). Auf "welchen Rang hat er"
+  muss es genau EINE Antwort geben; mit einer Zeile je erreichter Stufe waere es "die
+  juengste", und die ist nach einer umsortierten Leiter die falsche.
+- KEIN LUCKPERMS, sondern PermissionAttachment: app/services/player_data_service.py fasst
+  .db/.sqlite beim UUID-Umbau bewusst nicht an - der Rang waere nach einem Umbau still
+  weg. Das Anhaengsel wird ERSETZT und nicht ergaenzt, sonst wirkte eine Leiter, die je
+  eine Zahl senkt, nie.
+- Rangzahl haelt jetzt BEIDE Richtungen: knoten() schreibt freimarken.<name>.<zahl>,
+  ausRecht() liest es. Ein Schreiber und ein Leser derselben Gestalt an zwei Stellen
+  laufen auseinander, und rot wird dabei nichts - darum die Rundreiseprobe.
+- Drei neue Quelltexttafeln, jede gegen eine Luecke, die kein Verhaltenstest sieht:
+  31cq (jede Grenze aus BEKANNTE_ZAHLEN hat im Spielmodul einen LESER, und umgekehrt),
+  31cr (die Rangwache wird gebaut, angemeldet und NACH der Ablage), 31cs (jede Methode,
+  die wie ein Ereignisempfaenger aussieht, traegt @EventHandler - angemeldet wird eine
+  Wache auch ohne Marke, und dann ruft sie niemand).
+- GEMESSEN, vier Einspritzungen, alle gefangen mit dem richtigen TREFFERTEXT: Ruf von
+  registerEvents weg -> 31cr; Grenze ohne Leser -> 31cq; @EventHandler weg -> 31cs nennt
+  Rangwache.beimBeitritt; buendel nur die erreichte Stufe -> die Ladenprobe. Startlauf
+  ohne Datenbank: keine Ausnahme, keine Klage beim Anmelden.
+- MERKEN: --rerun-tasks ist auf der Freigabe ein clean ("Failed to clean up stale
+  outputs"). Je Aufgabe einzeln mit --rerun, wie bei clean.
+- Proben 4101 -> 4160 (core 1607, daten 328, paper 2225), 0 rot, 0 uebersprungen. Neu:
+  RangstandTest (9), SpeicherRaengeTest/RangVertrag (10), MariaRaengeTest (15 inkl.
+  Vertrag, gegen die ECHTE Datenbank gelaufen), RangwacheTest (11), RangzahlTest (+6),
+  RangwerteTest (+5), GrenzeTest (+3).
+- ~~Teil D: Aufstieg zur Laufzeit.~~ 19.11. GEBAUT. Aufstiegslauf (misst, urteilt,
+  traegt ein), RangSatz/Rangtext samt Abschnitt raenge in sprache-vorlage.yml, Rangwache
+  als Mitfahrer im Spielzeittakt UND beim Beitritt, nenneNachstufung im Startbericht.
+- ABNAHMEKRITIERUM VON SCHRITT 12 BEWIESEN, Ende zu Ende gegen das PROBENSCHEMA: Ein
+  Spieler mit 6 h taetiger Zeit und einer Parzelle, echter Server, echte MariaDB ->
+  "Nachstufung: 1 Spieler geprueft, 1 nachgestuft" und "reisender -> siedler", Zeile in
+  raenge mit UTC-Zeitpunkt, 0 Ausnahmen. Der erste Lauf OHNE Parzelle meldete "1
+  geprueft, 0 nachgestuft" - die Regel "kein Ueberspringen" also auch gemessen.
+- NEUER LESER IM KERN, weil es keinen gab: Spielzeitablage.alleStaende(heute). Es gibt in
+  diesem Projekt keinen Weg, alle Spieler aufzuzaehlen - getOfflinePlayers ist an zwei
+  Stellen ausdruecklich verboten, und jede Ablagenmethode nimmt eine UUID. Die Tabelle
+  spielzeit ist die richtige Quelle: Wer gemessene Zeit hat, hat gespielt. EINE Abfrage
+  mit GROUP BY, nicht eine je Spieler.
+- DER STARTLAUF IST KEIN EINMALLAUF, sondern ein Lauf bei JEDEM Start. Er ist folgenlos,
+  wenn alles stimmt (aufstieg geht nur nach oben), ein Merker waere Aufwand ohne
+  Gegenwert - und es gibt keinen fachlichen Merker, der einen Neustart ueberlebt. Dass er
+  jedes Mal laeuft, ist der Gewinn: Er faengt den, der waehrend seiner Abwesenheit
+  aufstiegsreif wurde, und zieht nach, wenn die Leiter sich aendert.
+- GEMESSEN WIRD NUR, WAS DIE LEITER VERLANGT (Rangregel.gebraucht), und fuer NIEMANDEN,
+  der schon oben steht. Jede Messung ausser dem Beruf ist eine Datenbankabfrage im
+  Hauptfaden, und der Takt schlaegt jede Minute je anwesendem Spieler. Steht die ganze
+  Mannschaft oben, kostet der Mitfahrer eine Abfrage je Spieler und Minute.
+- BEIM BEITRITT ERST HEBEN, DANN VERGEBEN. Andersherum bekaeme der Spieler die Rechte des
+  ALTEN Ranges und die Nachricht ueber den neuen - und in genau dieser Minute versucht er,
+  was die Nachricht ihm versprochen hat. Geprueft wird auch beim Beitritt und nicht nur im
+  Takt: Die eine Minute ist die, in der ein Rueckkehrer sofort /parzelle nehmen tippt.
+- ZWEI DER DREI SAETZE DUERFEN LEER BLEIBEN (naechster, hoechste) - die leere Zeile IST
+  der Schalter, an der Stelle, an der auch die Worte stehen. Der Aufstieg selbst darf es
+  nicht: Wer Rechte bekommt und nicht liest, warum, haelt sie fuer einen Zufall. Dafuer
+  neu: Sprache.leerGelassen und Sprachprobe.mitZeilen.
+- Der RANGNAME ist ein Platzhalter und kein Satz: Welche Stufen es gibt, entscheidet die
+  config.yml, eine Aufzaehlung in Java koennte sie nicht kennen.
+- GEMESSEN, fuenf Einspritzungen, alle mit ihrem TREFFERTEXT gefangen: Ruf imTakt weg ->
+  31aj nennt [Rangwache]; taetige Zeit -> Anwesenheit; stehtSchonOben immer false;
+  vergibNeu weg -> acht rote Proben; nenneNachstufung weg -> 31ab nennt die tote Methode.
+- EIGENER FUND, und er bleibt offen: ORDER BY spieler in MariaSpielzeit.ALLE_LESEN ist
+  NICHT pruefbar - entfernt man es, bleibt jede Probe gruen, weil MariaDB fuer die
+  Gruppierung ohnehin sortiert. Die Zusage haengt allein an SpeicherSpielzeit, wo
+  dieselbe Einspritzung rot wird. Steht als Warnung im Javadoc der Konstante.
+- EIGENER FUND zu Teil C: Die Behauptung "keine Uebersetzungswarnung" war falsch -
+  :paper:test --rerun fuehrt compileTestJava NICHT erneut aus, und RangwacheTest trug
+  eine Verfallswarnung (PlayerQuitEvent mit zwei Angaben). Behoben; der Abschlusslauf
+  uebersetzt die Proben jetzt ausdruecklich.
+- KEINE ZWEITE TAFEL: Fuer "Mitfahrer wird nie gerufen" gibt es 31aj schon, und sie
+  erkennt den neuen von selbst (Feld + imTakt im Quelltext). Die eigene Tafel 31ct wurde
+  wieder herausgenommen - zwei Pruefungen fuer denselben Fall machen sich unpruefbar.
+- Proben 4160 -> 4198 (core 1613, daten 334, paper 2251), 0 rot, 0 uebersprungen, 0
+  Warnungen. Neu: AufstiegslaufTest (18), RangtextTest (5), SpielzeitVertrag (+6, gegen
+  die ECHTE Datenbank), BildGleich (+3). Nachgezogen: 31b/31c (Rangwache sendet einmal),
+  VorlageTest 9 (neunzehnter Bereich), sechs Spielzeit-Attrappen.
+- ~~Teil E: Goldmark.~~ 19.11. GEBAUT. Kassentabellen (MARK/GOLDMARK), MariaKasse auf
+  eine zweite Tabellenmenge umstellbar, Schemaschritte 32/33 (goldkassen,
+  goldbuchungen), Goldkasse mit dem Riegel, verdrahtet in beiden Betriebsarten,
+  Startzeile nenneGoldmark.
+- EIGENE TABELLEN UND KEINE WAEHRUNGSSPALTE: Zwei Waehrungen in kassen addieren sich zu
+  einem Stand - und die tragende Zusage des Buchungsbuchs ("fuer ein eroeffnetes Konto
+  ist die Summe aller Buchungen sein Stand") wuerde ihn BESTAETIGEN. Die Summenprobe
+  waere gruen und das Geld falsch. Mit zwei Tabellenmengen gilt die Zusage je Waehrung,
+  und MariaGoldkasseTest haelt den vollen KasseVertrag ein zweites Mal - gegen die echte
+  Datenbank.
+- UNTERSCHIED ZUR STAEDTEKASSE, damit das nicht verwechselt wird: Jene liegt ABSICHTLICH
+  auf denselben Tabellen (dieselbe Waehrung, eine Stadtkennung ist nie eine
+  Spielerkennung). Hier ist es eine andere Waehrung. 31ct haelt beides fest.
+- EINE Klasse MariaKasse, keine Kopie: Die sieben SQL-Saetze haben Namen bekommen und
+  entstehen EINMAL im Konstruktor; die Tabellennamen kommen aus Kassentabellen und nie
+  aus einer Einstellung. Eine Kopie waere eine zweite Fassung der Transaktionsfuehrung.
+- Die Betragsspalte heisst goldmark und nicht mark. Derselbe Name waere der kuerzere Weg
+  und eine Luege, auf die jeder spaetere Leser hereinfaellt.
+- EIGENER TYP Goldkasse und nicht ein zweites Kasse-Feld: Zwei Kassenfelder sehen an
+  jeder Aufrufstelle gleich aus, und eines Tages buchte jemand Mark in die Goldmark.
+  GEMESSEN: Den Umschlag wegzunehmen ergibt "Inkompatible Typen: MariaKasse kann nicht in
+  Goldkasse konvertiert werden" - der UEBERSETZER ist hier der Riegel, staerker als jede
+  Tafel. Die Zusicherung in 31ct, die dasselbe halten sollte, ist daraufhin wieder
+  entfernt worden.
+- KEIN GOLDMARK-STARTGUTHABEN, und das ist keine Einstellung: Plan 8.1 nennt genau zwei
+  Quellen (Echtgeld, Tausch aus Mark). Der Riegel ist derselbe wie bei der Stadtkasse -
+  eine Frage beim Start, laut. Wer verschenken will, verschenkt Mark.
+- KEINE Einstellschluessel in dieser Runde. Kurs (1.000 Mark = 1 Goldmark), Rueckweg
+  (1 Goldmark = 800 Mark) und Wechseldeckel (10.000 Mark/Tag) stehen in Plan 8.1 und
+  kommen mit Teil F - Plan 8.7 sagt ausdruecklich, dass es diese Schluessel noch nicht
+  geben soll.
+- NOCH OHNE VERBRAUCHER, und der Start sagt das: "Noch gibt es keinen Weg, Goldmark zu
+  bekommen - Wechsel und Muenzhaus kommen mit Teil F und G." Ohne diese Zeile waere
+  "noch kein Verbraucher" von "falsch verdrahtet" nicht zu unterscheiden.
+- GEMESSEN, fuenf Einspritzungen mit TREFFERTEXT plus eine am Uebersetzer: Tabellen weg
+  -> 31ct nennt die MARKtabellen; fluechtiger Zweig weg -> 31ct; nenneGoldmark nicht
+  gerufen -> 31ab; DELETE FROM goldbuchungen weg -> SchemaTest; Betragsspalte "mark"
+  -> KassentabellenTest. Startlauf gegen das Probenschema: beide Tabellen entstehen,
+  fk_goldbuchung_kasse zeigt auf goldkassen, 0 Ausnahmen.
+- EIGENER FUND am Treiber: Ein Einspritzungslauf, der beim UEBERSETZEN abbricht, schreibt
+  keinen Bericht - und der stehengebliebene des vorigen Falles sieht aus wie ein Fang.
+  Der Treiber raeumt die Berichte jetzt vor jedem Lauf weg.
+- Proben 4198 -> 4237 (core 1619, daten 366, paper 2252), 0 rot, 0 uebersprungen, 0
+  Warnungen. Neu: MariaGoldkasseTest (28, voller Vertrag gegen die echte Datenbank),
+  GoldkasseTest (6), KassentabellenTest (5), GrenzeTest 31ct.
+- Offen in Teil A, mit Absicht: Der RUNDGANG (Plan 9, Siedler) und "eigene Parzelle
+  bebaut" (Plan 9, Buerger) sind keine Bedingungsart - den Rundgang gibt es erst mit
+  Schritt 13, und was "bebaut" misst, steht im Plan nirgends. Beide kommen als Zeile dazu,
+  ohne dass sich sonst etwas aendert.
+
 ## Schritt 11: Wolkenwerder
 
 - ENTSCHIEDEN 18.11.2026 (vier Fragen): Die Insel-Stufe kommt aus BEIDEM (Blockscan fuer die Punktzahl, Herausforderungen fuer die Stufe am Generator), der Befehl heisst /wolke als EIGENER Baum, und dazu gehoeren auch Zuruecksetzen, Biomwahl, Inselrangliste und Mitbauer. Der Kobbelsteingenerator ist ausdruecklich DER Reiz der Welt und gibt Erze mit gewichteter Wahrscheinlichkeit.

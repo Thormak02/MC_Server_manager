@@ -207,6 +207,15 @@ final class Wirtschaftsliste {
         klagen.addAll(truhe.klagen());
         bericht.addAll(truhe.bericht());
 
+        // Die Rangleiter [Schritt 12]. Sie steht hier bei den uebrigen Teillesern und
+        // nicht oben bei parzellen.hoechstzahl, obwohl sie dieselbe Grenze meint: Jene
+        // Zahl gilt fuer JEDEN und ist eine Untergrenze, die Leiter hebt sie je Spieler.
+        // Zwei Dinge, zwei Abschnitte - und der Startbericht sagt, wenn die Untergrenze
+        // so hoch steht, dass die Leiter nichts mehr heben kann.
+        Rangliste.Ergebnis raenge = Rangliste.ausKonfiguration(wurzel);
+        klagen.addAll(raenge.klagen());
+        bericht.addAll(raenge.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -239,7 +248,8 @@ final class Wirtschaftsliste {
                 gruppenFelder, werbung, zeit, beruf.werte(), verdienst.werte(),
                 markt.werte(), messung.werte(), bonus.werte(), laeden.werte(),
                 handel.werte(), truhe.werte(), freistaedte.werte(),
-                inseln.werte(), angeln.werte(), wolken.werte()), klagen, bericht);
+                inseln.werte(), angeln.werte(), wolken.werte(),
+                raenge.werte()), klagen, bericht);
     }
 
     /**

@@ -1113,6 +1113,113 @@ public final class Datenbank implements AutoCloseable {
               CONSTRAINT fk_wolke_herausforderung FOREIGN KEY (parzelle_id)
                 REFERENCES parzellen (id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 31: der RANG eines Spielers - Schritt 12 Teil C, 19.11.2026.
+            //
+            // EINE Zeile je Spieler, und sie entsteht erst beim ersten AUFSTIEG. Wer nie
+            // aufgestiegen ist, hat keine Zeile, und das heisst: unterste Stufe. Zwei
+            // Gruende, und beide stehen ausfuehrlich an Rangablage: Eine Zeile je
+            // Besucher waere eine Tabelle, die nur Platz braucht - und wer eine Stufe aus
+            // der config.yml nimmt, strandet sonst jeden, der auf ihr stand.
+            //
+            // KEIN VERLAUF, also PRIMARY KEY (spieler) und nicht (spieler, rang): Auf
+            // die Frage "welchen Rang hat er" muss es genau EINE Antwort geben. Mit
+            // einer Zeile je erreichter Stufe waere die Antwort "die juengste", und die
+            // waere nach einer umsortierten Leiter die falsche. Wer den Verlauf will,
+            // bekommt eine zweite Tabelle wie das Blockbuch und nicht eine zweite
+            // Bedeutung fuer diese.
+            //
+            // rang als VARCHAR(32) und nicht als ENUM: Die Stufen stehen in der
+            // config.yml und sind frei benennbar - ein ENUM waere die Leiter ein zweites
+            // Mal, und ein neuer Rang in der Datei braeuchte einen Schemaschritt. Die 32
+            // sind dieselben wie Rangwerte.HOECHSTE_SCHLUESSELLAENGE; wer eine davon
+            // aendert, muss die andere mitnehmen, sonst scheitert der erste Aufstieg mit
+            // einem langen Namen als Datenbankfehler mitten im Spiel.
+            //
+            // erreicht_am als DATETIME(3) in UTC, wie jede Zeitspalte dieses Schemas
+            // ausser den drei TAGesspalten. NOT NULL, weil ein Rang ohne Zeitpunkt ein
+            // halber Stand waere: Rangstand laesst ihn gar nicht erst bauen, und die
+            // Spalte haelt dieselbe Zusage noch einmal.
+            //
+            // KEIN FREMDSCHLUESSEL auf kassen, wie bei berufe: Ein RESTRICT brachte den
+            // Aufstieg zum Scheitern, sobald eine Kontoeroeffnung einmal fehlgeschlagen
+            // ist; ein CASCADE loeschte Raenge stumm mit dem Konto.
+            //
+            // KEIN INDEX auf rang, obwohl "wie viele stehen auf welcher Stufe" eine
+            // naheliegende Frage ist: Sie hat heute keinen Leser. Ein Index waere Pflege
+            // fuer eine Suche, die es nicht gibt - dieselbe Entscheidung wie bei
+            // wolkeninsel.punkte. Er kommt mit dem ersten Leser, als eigener Schritt.
+            """
+            CREATE TABLE IF NOT EXISTS raenge (
+              spieler     CHAR(36)    NOT NULL,
+              rang        VARCHAR(32) NOT NULL,
+              erreicht_am DATETIME(3) NOT NULL,
+              PRIMARY KEY (spieler)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 32: die GOLDMARK-Konten - Schritt 12 Teil E, 19.11.2026.
+            //
+            // EINE EIGENE TABELLE UND KEINE WAEHRUNGSSPALTE [entschieden 18.11.2026].
+            // Zwei Waehrungen in kassen addieren sich zu einem Stand, und die tragende
+            // Zusage des Buchungsbuchs - "fuer ein eroeffnetes Konto ist die Summe aller
+            // Buchungen sein Stand" - wuerde diesen Stand BESTAETIGEN, obwohl er zwei
+            // Dinge zusammenwirft. Die Summenprobe waere gruen und das Geld falsch. Mit
+            // zwei Tabellenmengen gilt die Zusage je Waehrung, und der geteilte
+            // KasseVertrag prueft sie zweimal.
+            //
+            // DER UNTERSCHIED ZUR STAEDTEKASSE: Jene liegt ausdruecklich auf DERSELBEN
+            // Tabelle wie die Spielerkonten (siehe den Klassenkopf von Stadtkasse) - eine
+            // Stadtkennung und eine Spielerkennung sind nie dieselbe, und es ist dieselbe
+            // Waehrung. Hier ist es eine ANDERE Waehrung.
+            //
+            // Die Spalte heisst goldmark und nicht mark. Derselbe Name waere der kuerzere
+            // Weg - die SQL-Saetze unterschieden sich dann nur im Tabellennamen - und eine
+            // Luege, auf die jeder spaetere Leser hereinfaellt.
+            //
+            // KEIN FREMDSCHLUESSEL auf kassen: Wer Goldmark hat, muss kein Markkonto
+            // haben. Ein RESTRICT brachte die erste Goldmarkbuchung zum Scheitern, wenn
+            // das Markkonto fehlt; ein CASCADE loeschte gekaufte Goldmark mit ihm.
+            //
+            // KEIN Altbestandsschritt wie Schritt 8 fuer die Mark: Es gibt heute keine
+            // Goldmark, also auch keine Geschichte, die nachzutragen waere.
+            """
+            CREATE TABLE IF NOT EXISTS goldkassen (
+              spieler  CHAR(36) NOT NULL,
+              goldmark BIGINT   NOT NULL,
+              PRIMARY KEY (spieler)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 33: das Buch der GOLDMARK - Schritt 12 Teil E, 19.11.2026.
+            //
+            // Spaltengleich mit buchungen (Schritt 7), und das ist Absicht: Dieselbe
+            // Klasse MariaKasse liest beide, und die Spaltennamen stehen in ihren
+            // SQL-Saetzen. Eine abweichende Spalte hier waere eine zweite Leseweise fuer
+            // dasselbe Buch.
+            //
+            // betrag VORZEICHENBEHAFTET und stand_nachher dabei - die Begruendung steht
+            // vollstaendig am Schritt 7 und gilt hier unveraendert.
+            //
+            // EIGENER FREMDSCHLUESSELNAME: fk_goldbuchung_kasse. Namen von
+            // Fremdschluesseln sind im Schema eindeutig; fk_buchung_kasse ein zweites Mal
+            // haette den Schritt mit einem Fehler abgebrochen, den niemand erwartet.
+            // Und er zeigt auf goldkassen, nicht auf kassen - ein Buch, das auf die
+            // falsche Kasse zeigt, haelt seine Zusage fuer die andere Waehrung.
+            """
+            CREATE TABLE IF NOT EXISTS goldbuchungen (
+              id            BIGINT      NOT NULL AUTO_INCREMENT,
+              spieler       CHAR(36)    NOT NULL,
+              zeitpunkt     DATETIME(3) NOT NULL,
+              grund         VARCHAR(32) NOT NULL,
+              betrag        BIGINT      NOT NULL,
+              stand_nachher BIGINT      NOT NULL,
+              PRIMARY KEY (id),
+              KEY nach_spieler (spieler, zeitpunkt, id),
+              CONSTRAINT fk_goldbuchung_kasse FOREIGN KEY (spieler)
+                  REFERENCES goldkassen (spieler) ON DELETE RESTRICT
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -1386,6 +1493,13 @@ public final class Datenbank implements AutoCloseable {
             // diese Zeile wandern gewaehlte Berufe von einem Test in den naechsten, und
             // der geteilte Vertrag wird sporadisch rot.
             anweisung.execute("DELETE FROM berufe");
+            // Die Raenge haengen an keinem Fremdschluessel, ihre Stelle in dieser Liste
+            // ist also frei - sie stehen hier, damit sie nicht uebersehen werden. Ohne
+            // diese Zeile wandern erreichte Raenge von einem Test in den naechsten, und
+            // weil "ein Rang je Spieler" der Hauptschluessel ist, waere die Folge nicht
+            // nur ein falscher Stand: Der geteilte Vertrag faende bei "ein unbekannter
+            // Spieler hat keinen Rang" einen vorgefundenen vor.
+            anweisung.execute("DELETE FROM raenge");
             // Das Blockbuch haengt an keinem Fremdschluessel - mit Absicht, siehe den
             // Schemaschritt -, seine Stelle in dieser Liste ist also frei. Es steht hier,
             // damit es nicht uebersehen wird. Ohne diese Zeile wandern Protokollzeilen
@@ -1400,6 +1514,14 @@ public final class Datenbank implements AutoCloseable {
             // in die naechste, und eine Probe ueber den ersten Griff eines Spielers
             // faende dort schon einen Deckel.
             anweisung.execute("DELETE FROM freie_truhe");
+            // DIE GOLDMARK, und zwar das Buch VOR den Konten: fk_goldbuchung_kasse steht
+            // auf RESTRICT, genau wie bei der Mark. Beide Zeilen sind Pflicht - ohne sie
+            // wandern Goldmarkstaende von einer Probe in die naechste, und weil "ein
+            // Konto je Spieler" der Hauptschluessel ist, faende der geteilte KasseVertrag
+            // bei "ein unbekannter Spieler hat das Startguthaben" einen vorgefundenen
+            // Stand vor.
+            anweisung.execute("DELETE FROM goldbuchungen");
+            anweisung.execute("DELETE FROM goldkassen");
             anweisung.execute("DELETE FROM kassen");
         }
     }

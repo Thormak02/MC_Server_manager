@@ -2620,3 +2620,25 @@ wolke:
     goldschmied: "Goldschmied"
     rotsteinkundiger: "Rotsteinkundiger"
     diamantschleifer: "Diamantschleifer"
+
+# Die Rangleiter (Plan 9, Schritt 12): Wer lange genug taetig gespielt hat und die
+# Taten vorweisen kann, steigt von selbst auf - ohne Antrag, ohne Team. Welche Stufen
+# es gibt, was sie verlangen und was sie geben, steht im Abschnitt raenge der
+# config.yml. HIER stehen nur die Worte.
+#
+# {rang} ist der SCHLUESSEL aus der config.yml - also reisender, siedler, buerger oder
+#   wie du deine Stufen genannt hast. Eine Liste der Rangnamen gibt es hier nicht und
+#   kann es nicht geben: Du legst sie selbst an.
+raenge:
+  # {rang} - die neue Stufe. Diese Zeile MUSS stehen: Wer neue Rechte bekommt und nicht
+  #   liest, warum, haelt sie fuer einen Zufall.
+  aufgestiegen: "<green>Du bist jetzt {rang}!</green>"
+  # {rang} - die Stufe darueber, gesendet unmittelbar nach dem Aufstieg. Dieselbe
+  #   Aufgabe wie {morgen} beim Tagesbonus: der Grund, weiterzuspielen.
+  # DARF LEER BLEIBEN. Eine leere Zeile heisst hier nicht "kaputt", sondern "ich will
+  #   den Ausblick nicht" - dann faellt sie weg, und der Aufstieg steht allein da.
+  naechster: "<gray>Als naechstes: {rang}.</gray>"
+  # Es gibt keine Stufe mehr darueber. Ein eigener Satz, damit der Spieler es LIEST und
+  #   es nicht aus einer fehlenden Zeile schliessen muss.
+  # DARF ebenfalls LEER BLEIBEN.
+  hoechste: "<gold>Damit stehst du auf der hoechsten Stufe.</gold>"

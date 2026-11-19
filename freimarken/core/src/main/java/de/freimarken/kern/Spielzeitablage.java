@@ -141,4 +141,37 @@ public interface Spielzeitablage {
      *         {@link Spielzeitstand#leer(UUID, LocalDate)}
      */
     Spielzeitstand lies(UUID spieler, LocalDate heute);
+
+    /**
+     * Was von JEDEM gemessen ist, von dem diese Ablage etwas weiss.
+     *
+     * <p><b>Wofuer es diese Methode gibt</b> [19.11.2026, Schritt 12 Teil D]: Der
+     * Nachstufungslauf muss die Spieler einstufen, die schon da waren, bevor es die
+     * Rangleiter gab - und dafuer braucht er ueberhaupt erst eine Liste. Es gab keine:
+     * Jede Methode dieser Ablage nimmt eine {@code UUID}, und
+     * {@code Bukkit.getOfflinePlayers()} ist im Plugin an zwei Stellen ausdruecklich
+     * verboten, weil es die Liste aller je angemeldeten Spieler bei JEDEM Aufruf neu
+     * aufbaut. Diese Tabelle ist die richtige Quelle: Wer gemessene Zeit hat, hat
+     * gespielt.
+     *
+     * <p><b>EINE Abfrage und nicht eine je Spieler.</b> Der Lauf steht im Start, und
+     * zwanzig Rundlaeufe ueber das Netz waeren dort zwanzig Fristen hintereinander.
+     * Dieselbe Entscheidung wie bei {@code MariaGrundstuecke}, das die Mitbauer aller
+     * Grundstuecke in EINER zweiten Abfrage holt statt je Zeile.
+     *
+     * <p><b>Die Reihenfolge ist ZUGESAGT</b>: nach der Zeichenfolge der Kennung,
+     * aufsteigend. Nicht aus Schoenheit - ohne Zusage gaebe eine Gruppierung in MariaDB
+     * je Lauf eine andere Reihenfolge, und der Startbericht und jede Probe darueber
+     * waeren mal so und mal anders. Derselbe Grund, aus dem
+     * {@link Rangwerte#buendel(String)} sortiert.
+     *
+     * <p>Ein Spieler OHNE Zeile kommt nicht vor; dafuer gibt es
+     * {@link Spielzeitstand#leer(UUID, LocalDate)}. Eine leere Liste heisst: Es hat noch
+     * nie jemand gespielt.
+     *
+     * @param heute derselbe Tag wie bei {@link #lies}, und aus demselben Grund von aussen
+     * @throws IllegalStateException wie bei {@link #lies}, wenn eine Summe ueberlaeuft -
+     *         EIN Verhalten fuer beide Lesewege und nicht zwei
+     */
+    List<Spielzeitstand> alleStaende(LocalDate heute);
 }

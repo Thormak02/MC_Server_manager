@@ -308,6 +308,7 @@ class GrenzeTest {
             // Laufs - alle durch dasselbe private sende().
             "Mietwache.java",
             "ParzellenBefehle.java", "Portalwache.java",
+            "Rangwache.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
             // Plan 7.4: die Zeilen des Anlegens und die Handbalken des Schutzes -
             // zwei Wege, weil Chat und Handbalken zwei verschiedene Aufrufe sind.
@@ -484,6 +485,7 @@ class GrenzeTest {
             Map.entry("Ladengebuehrlauf.java", 1),
             Map.entry("ParzellenBefehle.java", 44),
             Map.entry("Portalwache.java", 1),
+            Map.entry("Rangwache.java", 1),
             Map.entry("Reise.java", 7),
             Map.entry("RueckwegBefehle.java", 1),
             Map.entry("Schutzwache.java", 1),
@@ -2438,9 +2440,16 @@ class GrenzeTest {
         // Die Namen aus dem Quelltext holen und nicht hier auflisten: Eine Liste von
         // Hand bliebe beim naechsten Zuwachs stehen, und dann ist die neue Pruefung
         // genauso tot wie die alte - nur dass jetzt eine gruene Probe daneben steht.
+        //
+        // ZWEI FAMILIEN seit dem 19.11.2026: pruefe* UND nenne*. Die zweite kam mit
+        // nenneRaenge dazu und waere durch dieses Netz gefallen - dabei ist sie
+        // dieselbe Sache: eine Methode, die nur meldet, meldet eben gar nichts, wenn
+        // niemand sie ruft. Das Muster faengt beide, und eine dritte Familie muesste
+        // hier eingetragen werden - das ist der Preis dafuer, dass es ueberhaupt ein
+        // Muster gibt.
         var namen = new java.util.TreeSet<String>();
         var sucher = java.util.regex.Pattern
-                .compile("private (?:void|String) (pruefe[A-Z][A-Za-z]*)\\(")
+                .compile("private (?:void|String) ((?:pruefe|nenne)[A-Z][A-Za-z]*)\\(")
                 .matcher(plugin);
         while (sucher.find()) {
             namen.add(sucher.group(1));
@@ -3994,6 +4003,209 @@ class GrenzeTest {
         assertTrue(biome.contains("x += ZELLE") && biome.contains("y += ZELLE")
                         && biome.contains("z += ZELLE"),
                 "die Biomhand setzt nicht mehr in Zellenschritten");
+    }
+
+    @Test
+    @DisplayName("31cq - jede Grenze der Rangleiter hat im Spielmodul einen LESER")
+    void jedeRanggrenzeHatEinenLeser() {
+        // DIE ZUSAGE STEHT IM JAVADOC VON BEKANNTE_ZAHLEN und hatte bis heute keine
+        // Probe: "Ein Name ohne Leser waere ein Recht, das vergeben wird und nichts tut."
+        // Genau so sieht es im Spiel aus: Der Betreiber traegt heimatpunkte: 3 ein, das
+        // Plugin vergibt freimarken.heimatpunkte.3 - und niemand fragt je danach. Kein
+        // Fehler im Protokoll, keine rote Probe, nur eine Zeile ohne Wirkung.
+        //
+        // Gesucht wird die VORSILBE mit Punkt am Ende, denn genau so liest Rangzahl:
+        // Ein Leser, der freimarken.parzellen (ohne Punkt) schriebe, faende auch
+        // freimarken.parzellenzahl.
+        StringBuilder ohneLeser = new StringBuilder();
+        for (String name : new java.util.TreeSet<>(
+                de.freimarken.kern.Rangwerte.BEKANNTE_ZAHLEN)) {
+            String vorsilbe = "\"" + de.freimarken.kern.Rangwerte.VORSILBE + name
+                    + ".\"";
+            boolean gefunden = false;
+            for (Path datei : Quellen.alle()) {
+                if (Quellen.text(datei).contains(vorsilbe)) {
+                    gefunden = true;
+                    break;
+                }
+            }
+            if (!gefunden) {
+                ohneLeser.append(ohneLeser.isEmpty() ? "" : ", ").append(name);
+            }
+        }
+        assertEquals("", ohneLeser.toString(),
+                "diese Grenzen stehen in Rangwerte.BEKANNTE_ZAHLEN, aber kein Zweig des"
+                        + " Spielmoduls nennt ihre Vorsilbe - ein Rang, der sie hebt,"
+                        + " hebt nichts: " + ohneLeser);
+
+        // UND DIE GEGENRICHTUNG: Was Rangzahl liest, muss die Leiter auch vergeben
+        // koennen. Eine Vorsilbe ohne Namen in BEKANNTE_ZAHLEN waere eine Grenze, die
+        // nur die Rechteverwaltung heben kann und kein Rang - und die Datei wiese jeden
+        // Versuch mit "kennt das Programm nicht" ab.
+        java.util.regex.Matcher sucher = java.util.regex.Pattern
+                .compile("\"freimarken\\.([a-z]+)\\.\"")
+                .matcher(Quellen.text(datei("ParzellenBefehle.java"))
+                        + Quellen.text(datei("WerderBefehle.java"))
+                        + Quellen.text(datei("WolkeBefehle.java")));
+        java.util.Set<String> gelesen = new java.util.TreeSet<>();
+        while (sucher.find()) {
+            if (!"extra".equals(sucher.group(1))) {
+                gelesen.add(sucher.group(1));
+            }
+        }
+        assertFalse(gelesen.isEmpty(),
+                "keine einzige Vorsilbe gefunden - dann prueft diese Tafel nichts");
+        assertEquals(new java.util.TreeSet<>(
+                        de.freimarken.kern.Rangwerte.BEKANNTE_ZAHLEN), gelesen,
+                "die Grenzen, die Rangzahl LIEST, und die, die ein Rang VERGEBEN kann,"
+                        + " sind nicht dieselben. Dann gibt es entweder ein Recht ohne"
+                        + " Leser oder eine Grenze, die kein Rang heben kann.");
+    }
+
+    @Test
+    @DisplayName("31cr - die Rangwache wird gebaut UND angemeldet")
+    void rangwacheIstVerdrahtet() {
+        // OHNE DIESE ZEILEN IST DIE GANZE LEITER UNSICHTBAR WIRKUNGSLOS: Teil A rechnet
+        // aus, wer wohin gehoert, Teil B liest sie aus der Datei, Teil C legt den
+        // erreichten Rang ab - und kein Spieler merkt davon etwas. Dieselbe Lage wie bei
+        // der Truhenwache (31an), beim Shopbuch (31au) und bei der Erzwache: gebaut,
+        // gruen geprueft, nie angemeldet.
+        String plugin = plugintext();
+
+        assertTrue(plugin.contains("new Rangwache("),
+                "die Rangwache wird nirgends gebaut - der abgelegte Rang wird dann nie"
+                        + " zu einem Recht");
+        assertTrue(plugin.contains("registerEvents(rangwache, this)"),
+                "die Rangwache wird nicht angemeldet - dann bekommt beim Beitritt"
+                        + " niemand sein Buendel, und die Leiter ist gebaut, gruen"
+                        + " geprueft und ohne Wirkung");
+
+        // UND DIE ABLAGE IN BEIDEN BETRIEBSARTEN. Fehlte sie im fluechtigen Zweig, waere
+        // rangablage dort null und der erste Beitritt ein Absturz - auf genau dem
+        // Server, auf dem man eine neue Fassung ausprobiert.
+        assertTrue(plugin.contains("rangablage = new SpeicherRaenge()"),
+                "ohne Datenbank gibt es keine Rangablage - der erste Beitritt stuerzt ab");
+        assertTrue(plugin.contains("rangablage = new MariaRaenge(datenbank)"),
+                "mit Datenbank gibt es keine Rangablage");
+
+        // DIE WACHE MUSS NACH DER ABLAGE ENTSTEHEN. Beides steht in verschiedenen
+        // Schritten des Starts; stuende die Wache zuerst, bekaeme sie null und meldete
+        // es erst beim ersten Beitritt - und zwar als Absturz.
+        //
+        // Geprueft wird die STELLE der Aufrufe in onEnable und nicht die Reihenfolge der
+        // Methoden im Quelltext, denn die ist hier GENAU UMGEKEHRT: richteSpielzeitEin
+        // steht weiter oben in der Datei und laeuft doch spaeter. Eine Tafel ueber den
+        // Dateitext waere darum rot gewesen, obwohl alles stimmt - und das ist dieselbe
+        // Falle wie bei 31ai, nur andersherum. Gemessen am 19.11.2026.
+        int anfang = plugin.indexOf("public void onEnable()");
+        assertTrue(anfang >= 0, "onEnable fehlt in FreimarkenPlugin");
+        String start = plugin.substring(anfang);
+        int ablage = start.indexOf("richteAblageEin(");
+        int wache = start.indexOf("richteSpielzeitEin();");
+        assertTrue(ablage >= 0 && wache >= 0,
+                "einer der beiden Startschritte wird in onEnable nicht gerufen - dann"
+                        + " prueft diese Tafel nichts");
+        assertTrue(wache > ablage,
+                "richteSpielzeitEin() laeuft vor richteAblageEin() - die Rangwache"
+                        + " bekaeme dann eine Ablage, die es noch nicht gibt");
+    }
+
+    @Test
+    @DisplayName("31cs - was wie ein Ereignisempfaenger aussieht, IST einer")
+    void jederEmpfaengerTraegtDieMarke() {
+        // DIE LUECKE, DIE 31cr OFFEN LAESST: registerEvents kann durchgehen, und die
+        // Methode wird trotzdem nie gerufen - es fehlt nur das @EventHandler. Bukkit
+        // meldet nichts, denn eine Wache ohne Empfaenger ist erlaubt. Die Wache ist dann
+        // gebaut, gruen geprueft, ANGEMELDET und wirkungslos, und das ist die Gestalt,
+        // die dieses Projekt dreimal getroffen hat (31an, 31au, die Erzwache).
+        //
+        // Gesucht wird in JEDER Datei, die Listener umsetzt - keine Liste von Hand, die
+        // bei der naechsten Wache stehen bleibt.
+        var ohneMarke = new java.util.TreeSet<String>();
+        var gefundene = new java.util.TreeSet<String>();
+        java.util.regex.Pattern empfaenger = java.util.regex.Pattern.compile(
+                "(@EventHandler[^;{}]*?)?\\s*public void ([a-zA-Z]+)\\("
+                        + "\\s*([A-Za-z]+Event)\\s+[a-zA-Z]+\\s*\\)");
+        for (Path datei : Quellen.alle()) {
+            String text = Quellen.text(datei);
+            if (!text.contains("implements Listener")) {
+                continue;
+            }
+            java.util.regex.Matcher sucher = empfaenger.matcher(text);
+            while (sucher.find()) {
+                String name = datei.getFileName().toString() + "." + sucher.group(2)
+                        + "(" + sucher.group(3) + ")";
+                gefundene.add(name);
+                if (sucher.group(1) == null) {
+                    ohneMarke.add(name);
+                }
+            }
+        }
+
+        // ERST DIE ZAHL DER FUNDE: Ein Muster, das nichts mehr trifft, ist eine Tafel,
+        // die gruen ist, ohne etwas geprueft zu haben. Die Zahl ist absichtlich eine
+        // Untergrenze und keine Gleichheit - jede neue Wache soll sie erhoehen duerfen.
+        assertTrue(gefundene.size() >= 20,
+                "nur " + gefundene.size() + " Ereignisempfaenger gefunden (" + gefundene
+                        + ") - das Muster passt offenbar nicht mehr auf den Quelltext,"
+                        + " und eine Tafel, die nur einen Teil sieht, ist schlimmer als"
+                        + " keine");
+
+        assertEquals(java.util.Set.of(), ohneMarke,
+                "diese Methoden nehmen ein Bukkit-Ereignis und stehen in einer Klasse,"
+                        + " die Listener umsetzt - aber ohne @EventHandler ruft sie"
+                        + " niemand. Angemeldet wird die Wache trotzdem ohne Klage: "
+                        + ohneMarke);
+    }
+
+    @Test
+    @DisplayName("31ct - die Goldkasse steht auf den GOLDmarktabellen, in beiden Betriebsarten")
+    void goldkasseAufEigenenTabellen() {
+        // DER SCHLIMMSTE FEHLER DIESES BAUSCHRITTES, und er ist von aussen unsichtbar:
+        // Ein new MariaKasse(datenbank, 0L) OHNE Kassentabellen.GOLDMARK legte die
+        // Goldmark in die MARKtabellen. Dann addieren sich zwei Waehrungen zu einem
+        // Stand - und die tragende Zusage des Buchungsbuchs ("fuer ein eroeffnetes Konto
+        // ist die Summe aller Buchungen sein Stand") wuerde diesen Stand BESTAETIGEN.
+        // Der Server startet, der Startbericht sagt dasselbe wie sonst, jede Probe bleibt
+        // gruen: MariaGoldkasseTest prueft die Kasse unmittelbar und nicht die
+        // Verdrahtung. Nur diese Tafel sieht es.
+        String plugin = plugintext();
+
+        assertTrue(plugin.contains("goldkasse = new Goldkasse("),
+                "die Goldkasse wird nirgends gebaut - dann gibt es die zweite Waehrung"
+                        + " nicht");
+        assertTrue(plugin.contains("new MariaKasse(datenbank, 0L,"
+                        + " Kassentabellen.GOLDMARK)")
+                        || plugin.contains("new MariaKasse(datenbank, 0L, Kassentabellen"
+                                + ".GOLDMARK)"),
+                "die Goldkasse bekommt keine eigenen Tabellen - dann liegt die Goldmark"
+                        + " in den MARKtabellen, beide Waehrungen addieren sich zu einem"
+                        + " Stand, und die Summenprobe bestaetigt ihn");
+
+        // UND BEIDE BETRIEBSARTEN. Fehlte sie im fluechtigen Zweig, waere goldkasse dort
+        // null - und der erste Zugriff ein Absturz auf genau dem Server, auf dem man eine
+        // neue Fassung ausprobiert.
+        assertTrue(plugin.contains("goldkasse = new Goldkasse(new SpeicherKasse(0L))"),
+                "ohne Datenbank gibt es keine Goldkasse");
+
+        // DASS DER RIEGEL UEBERHAUPT UMGELEGT IST, prueft hier NICHTS - und das ist
+        // absichtlich [gemessen 19.11.2026]: Hier stand eine Zusicherung gegen
+        // "goldkasse = new MariaKasse(...)". Die Einspritzung dazu kommt gar nicht bis zu
+        // einer Probe, sie scheitert am UEBERSETZER: "Inkompatible Typen: MariaKasse kann
+        // nicht in Goldkasse konvertiert werden". Das Feld ist vom Typ Goldkasse, und
+        // damit IST der Typ der Riegel - staerker als jede Tafel.
+        //
+        // Die Zusicherung war also Quelltext, der nie fallen kann, und zwei Pruefungen
+        // fuer denselben Fall machen sich gegenseitig unpruefbar. Sie ist herausgenommen;
+        // dieser Absatz bleibt, damit niemand sie "vergessen" nachtraegt.
+
+        // UND DIE STAEDTEKASSE BLEIBT, WO SIE IST. Sie liegt ABSICHTLICH auf den
+        // Marktabellen (siehe ihren Klassenkopf): Es ist dieselbe Waehrung, und eine
+        // Stadtkennung ist nie eine Spielerkennung. Wer ihr aus Versehen die
+        // Goldmarktabellen gibt, verschiebt jedes Stadtguthaben in eine andere Waehrung.
+        assertTrue(plugin.contains("new Stadtkasse(new MariaKasse(datenbank, 0L))"),
+                "die Staedtekasse liegt nicht mehr auf den Marktabellen - sie SOLL dort"
+                        + " liegen, es ist dieselbe Waehrung");
     }
 
 }

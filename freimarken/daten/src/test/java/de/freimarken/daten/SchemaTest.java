@@ -83,6 +83,9 @@ class SchemaTest {
         -888342932, // Schritt 28 - die Art wolke im ENUM
         2021794635, // Schritt 29 - Tabelle wolkeninsel
         464971643, // Schritt 30 - Tabelle wolke_herausforderung
+        -1066266029, // Schritt 31 - Tabelle raenge
+        704178029, // Schritt 32 - Tabelle goldkassen
+        -816915537, // Schritt 33 - Tabelle goldbuchungen
     };
 
     private static String datenbanktext() {

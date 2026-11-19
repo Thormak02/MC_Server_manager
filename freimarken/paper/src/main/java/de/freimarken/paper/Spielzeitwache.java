@@ -70,6 +70,20 @@ final class Spielzeitwache implements Listener {
     private final Bonuswache bonuswache;
 
     /**
+     * Der Mitfahrer fuer den Rangaufstieg [Schritt 12 Teil D].
+     *
+     * <p>JE ANWESENDEM SPIELER, wie der Bonus und aus demselben Grund: Ein Rang gehoert
+     * einem Spieler. Und NACH dem Abrechnen, ebenfalls wie der Bonus - die taetigen
+     * Sekunden dieses Taktes entstehen genau dort, und auf die wartet der Aufstieg.
+     *
+     * <p>Darf NICHT {@code null} sein, anders als die fuenf Laeufe darunter: Es gibt
+     * keinen Betrieb ohne Raenge. Ist die Leiter leer oder {@code raenge.an} aus, sagt
+     * das die Wache selbst - sie tut dann nichts, und das ist eine Entscheidung der
+     * {@code config.yml} und keine der Verdrahtung.
+     */
+    private final Rangwache rangwache;
+
+    /**
      * Der zweite Mitfahrer: der taegliche Lauf der Ladenmiete [Teil C].
      *
      * <p>EINMAL je Taktschlag und nicht je Spieler, anders als der Bonus. Der Bonus
@@ -172,13 +186,29 @@ final class Spielzeitwache implements Listener {
     private BukkitTask zeitgeber;
 
     Spielzeitwache(JavaPlugin plugin, Spielzeitbuch buch, Bonuswache bonuswache,
-                   Mietwache mietwache, Blockraeumung blockraeumung,
+                   Rangwache rangwache, Mietwache mietwache,
+                   Blockraeumung blockraeumung,
                    Truhenlauf truhenlauf, Besuchslauf besuchslauf,
                    Verfallslauf verfallslauf, Ladengebuehrlauf ladengebuehrlauf,
                    Wirtschaftsstand wirtschaft, Logger protokoll) {
+        if (rangwache == null) {
+            // DIE EINE PRUEFUNG IN DIESEM KONSTRUKTOR, und sie steht hier, weil das
+            // Javadoc des Feldes sie zusagt: Die fuenf Laeufe darunter DUERFEN null sein,
+            // der Rang nicht. Ohne diese Zeile waere eine vergessene Angabe kein Fehler
+            // beim Bauen, sondern ein NullPointer in JEDEM Taktschlag - und damit der
+            // Verlust der Spielzeit aller Spieler, denn der Fang um den Schlag meldet nur
+            // und der Zeitgeber laeuft weiter.
+            //
+            // Eine Zusage im Javadoc ohne Pruefung im Quelltext ist keine Zusage.
+            throw new IllegalArgumentException("Ohne Rangwache gibt es keinen Takt. Sie"
+                    + " darf - anders als die fuenf Laeufe - nicht fehlen: Ist die"
+                    + " Leiter leer oder raenge.an aus, sagt die Wache das selbst und"
+                    + " tut nichts.");
+        }
         this.plugin = plugin;
         this.buch = buch;
         this.bonuswache = bonuswache;
+        this.rangwache = rangwache;
         this.mietwache = mietwache;
         this.blockraeumung = blockraeumung;
         this.truhenlauf = truhenlauf;
@@ -333,6 +363,14 @@ final class Spielzeitwache implements Listener {
                     besuchslauf.imTakt(spieler);
                 }
                 bonuswache.imTakt(spieler);
+                // DER RANG ZULETZT in diesem Durchgang [Teil D]: Er liest die taetige
+                // Zeit, die das Abrechnen oben gerade geschrieben hat, und er liest die
+                // Parzellenzahl und den Beruf. Nichts davon aendert er - er haengt
+                // Rechte an und sendet. Steht er VOR dem Bonus, kann eine Ausnahme von
+                // dort den Bonus dieses Taktes kosten; steht er danach, kostet eine
+                // Ausnahme von hier nur den Aufstieg, und den holt der naechste Takt
+                // nach.
+                rangwache.imTakt(spieler);
             }
             // EINMAL und nicht je Spieler [Teil C]: Der Lauf geht ueber alle Vertraege,
             // nicht ueber alle Anwesenden. Nach dem Bonus, weil er Geld ABBUCHT - wer

@@ -7,6 +7,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -93,6 +94,46 @@ public final class MariaSpielzeit implements Spielzeitablage {
                     + " AS taetig_heute,"
                     + " COALESCE(SUM(taetig_sekunden), 0) AS taetig_gesamt"
                     + " FROM spielzeit WHERE spieler = ?";
+
+    /**
+     * Dieselben vier Summen fuer JEDEN Spieler - in EINER Abfrage [Schritt 12 Teil D].
+     *
+     * <p>Buchstaeblich derselbe Satz wie {@link #LESEN}, nur mit {@code spieler} in der
+     * Auswahl, ohne {@code WHERE} und mit {@code GROUP BY}. Dass die beiden sich
+     * aehnlich sehen, ist Absicht und keine Nachlaessigkeit: Wer eine der Summen aendert,
+     * muss die andere mitnehmen, sonst sieht der Nachstufungslauf eine andere Zeit als
+     * {@code /spielzeit} - und niemand findet den Unterschied, weil beide Zahlen fuer
+     * sich stimmig sind.
+     *
+     * <p><b>{@code ORDER BY spieler} ist keine Schoenheit, sondern die ZUSAGE der
+     * Schnittstelle.</b> Eine Gruppierung ohne Ordnung sagt keine Reihenfolge zu; der
+     * Startbericht stuende dann je Lauf anders da, und jede Probe darauf waere mal gruen
+     * und mal rot.
+     *
+     * <p><b>UND DIESE ZEILE KANN KEINE PROBE VERTEIDIGEN</b> [gemessen 19.11.2026]: Eine
+     * Einspritzung, die {@code ORDER BY spieler} entfernt, liess jede Probe gruen -
+     * {@code MariaSpielzeit} eingeschlossen. MariaDB sortiert fuer die Gruppierung
+     * ohnehin und liefert damit zufaellig dieselbe Reihenfolge. Die Zusage haengt
+     * deshalb allein an {@code SpeicherSpielzeit}, wo sie in Java sortiert und von
+     * {@code SpielzeitVertrag.alleStaendeIstSortiert} gehalten wird (dieselbe
+     * Einspritzung dort wird rot). Wer hier etwas aendert, bekommt also KEINE Warnung -
+     * und ein anderer Datenbankhersteller oder eine andere Fassung von MariaDB darf
+     * jederzeit eine andere Reihenfolge liefern. Diese Zeile bleibt stehen, weil sie das
+     * Richtige tut, nicht weil sie geprueft waere.
+     *
+     * <p><b>Das ist ein vollstaendiger Durchgang durch die Tabelle</b>, und das ist hier
+     * richtig: Die Gruppierung braucht jede Zeile jedes Spielers. Der Primaerschluessel
+     * ist {@code (spieler, tag)}, die Gruppierung laeuft also auf seinem linken Glied
+     * und braucht keinen zweiten Index. Gerufen wird genau EINMAL je Serverstart.
+     */
+    private static final String ALLE_LESEN =
+            "SELECT spieler,"
+                    + " COALESCE(SUM(CASE WHEN tag = ? THEN sekunden END), 0) AS heute,"
+                    + " COALESCE(SUM(sekunden), 0) AS gesamt,"
+                    + " COALESCE(SUM(CASE WHEN tag = ? THEN taetig_sekunden END), 0)"
+                    + " AS taetig_heute,"
+                    + " COALESCE(SUM(taetig_sekunden), 0) AS taetig_gesamt"
+                    + " FROM spielzeit GROUP BY spieler ORDER BY spieler";
 
     private final Datenbank datenbank;
 
@@ -207,5 +248,36 @@ public final class MariaSpielzeit implements Spielzeitablage {
         } catch (SQLException fehler) {
             throw new IllegalStateException("Spielzeit nicht lesbar: " + spieler, fehler);
         }
+    }
+
+    @Override
+    public List<Spielzeitstand> alleStaende(LocalDate heute) {
+        if (heute == null) {
+            throw new IllegalArgumentException("Ohne Tag ist 'heute' nicht zu"
+                    + " beantworten");
+        }
+        List<Spielzeitstand> staende = new ArrayList<>();
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(ALLE_LESEN)) {
+            anfrage.setObject(1, heute);
+            // Der Tag zweimal, wie bei LESEN und aus demselben Grund.
+            anfrage.setObject(2, heute);
+            try (ResultSet ergebnis = anfrage.executeQuery()) {
+                while (ergebnis.next()) {
+                    staende.add(new Spielzeitstand(
+                            UUID.fromString(ergebnis.getString("spieler")), heute,
+                            ergebnis.getLong("gesamt"), ergebnis.getLong("heute"),
+                            ergebnis.getLong("taetig_gesamt"),
+                            ergebnis.getLong("taetig_heute")));
+                }
+            }
+        } catch (SQLException fehler) {
+            // DIESELBE Hausform wie bei lies, und das ist eine Zusage der Schnittstelle:
+            // EIN Verhalten fuer beide Lesewege. Faenge der Aufrufer hier eine andere
+            // Ausnahme, muesste er wissen, welchen der beiden Wege er gerade geht.
+            throw new IllegalStateException("Spielzeit nicht lesbar: alle Staende",
+                    fehler);
+        }
+        return List.copyOf(staende);
     }
 }

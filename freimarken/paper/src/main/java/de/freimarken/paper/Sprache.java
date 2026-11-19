@@ -153,6 +153,29 @@ final class Sprache {
         return zeilen.get(0);
     }
 
+    /**
+     * Ob der Betreiber diesen Satz LEER gelassen hat.
+     *
+     * <p>Fuer die Saetze mit {@link Satz#LEER_ERLAUBT}, deren leere Zeile eine
+     * ENTSCHEIDUNG ist und kein Mangel. Bisher waren das nur Trenner vom Typ
+     * {@code Art.WORT}, bei denen die Leere von selbst wirkt - zwei Namen stossen dann
+     * aneinander. Mit {@link RangSatz#NAECHSTER} gibt es den ersten {@code Art.SATZ}
+     * dieser Sorte, und dort muss der Zweig es FRAGEN: Gesendet waere eine leere Zeile im
+     * Chat, und die liest sich wie ein verschluckter Satz.
+     *
+     * <p><b>Gefragt wird der rohe Wortlaut und nicht der gebaute Component.</b> Ein
+     * leerer Wortlaut ergibt durch MiniMessage zwar einen leeren Component - aber diesen
+     * Umweg braucht niemand, um eine Zeichenkette auf leer zu pruefen, und ein
+     * {@code Component} aus nichts als Farbtags waere nicht leer und saehe doch leer aus.
+     *
+     * <p>Fuer einen Satz, der NICHT leer sein darf, ist die Antwort immer {@code false}:
+     * Die Ladepruefung hat den leeren Wert dann schon abgewiesen. Ein Wurf waere hier ein
+     * zweiter Riegel fuer denselben Fall.
+     */
+    boolean leerGelassen(Satz schluessel) {
+        return stand.buch().wortlaut(schluessel).isBlank();
+    }
+
     /** Ein {@code Art.WORT} als Wert fuer einen anderen Satz - ohne Farbe, ohne Component. */
     String wort(Satz schluessel, Einsatz werte) {
         if (schluessel.art() != Satz.Art.WORT) {

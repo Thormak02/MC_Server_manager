@@ -46,24 +46,84 @@ public final class MariaKasse implements Kasse {
     private final Datenbank datenbank;
     private final long startguthaben;
 
+    /**
+     * Welche Tabellen diese Kasse benutzt - also WELCHE WAEHRUNG sie fuehrt.
+     *
+     * <p>Gehalten, damit die Fehlermeldungen sie nennen koennen: "Guthaben nicht lesbar"
+     * ist auf zwei Waehrungen nicht mehr eindeutig.
+     */
+    private final Kassentabellen tabellen;
+
+    // DIE SIEBEN SAETZE, EINMAL GEBAUT. Vorher stand jeder mitten in seiner Methode, und
+    // dass acht Tabellennamen im Spiel sind, sah man nur beim Durchlesen. Hier stehen sie
+    // beieinander, und der EINE Ort, an dem ein Tabellenname ins SQL kommt, ist der
+    // Konstruktor - gefuettert allein aus den Konstanten von Kassentabellen, nie aus
+    // einer Einstellung.
+    private final String satzGuthaben;
+    private final String satzAnlegen;
+    private final String satzAbbuchen;
+    private final String satzGutschreiben;
+    private final String satzTagessumme;
+    private final String satzVerlauf;
+    private final String satzBuchen;
+
+    /** Die Kasse der Mark - dieselbe Bedeutung wie vor Schritt 12 Teil E. */
     public MariaKasse(Datenbank datenbank, long startguthaben) {
+        this(datenbank, startguthaben, Kassentabellen.MARK);
+    }
+
+    /**
+     * Eine Kasse auf DIESER Tabellenmenge - der Weg fuer die Goldmark.
+     *
+     * <p>Die Tabellennamen gehen ungeschuetzt in das SQL; sie kommen darum
+     * ausschliesslich aus den Konstanten von {@link Kassentabellen}, und jene prueft sie
+     * noch einmal selbst.
+     */
+    public MariaKasse(Datenbank datenbank, long startguthaben,
+                      Kassentabellen tabellen) {
         if (startguthaben < 0) {
             throw new IllegalArgumentException("Startguthaben darf nicht negativ sein");
         }
+        if (tabellen == null) {
+            throw new IllegalArgumentException("Ohne Tabellen gibt es keine Kasse -"
+                    + " welche Waehrung soll sie fuehren?");
+        }
         this.datenbank = datenbank;
         this.startguthaben = startguthaben;
+        this.tabellen = tabellen;
+        String konten = tabellen.konten();
+        String buch = tabellen.buch();
+        String betrag = tabellen.betragsspalte();
+        this.satzGuthaben = "SELECT " + betrag + " FROM " + konten
+                + " WHERE spieler = ?";
+        this.satzAnlegen = "INSERT IGNORE INTO " + konten + " (spieler, " + betrag
+                + ") VALUES (?, ?)";
+        this.satzAbbuchen = "UPDATE " + konten + " SET " + betrag + " = " + betrag
+                + " - ? WHERE spieler = ? AND " + betrag + " >= ?";
+        this.satzGutschreiben = "UPDATE " + konten + " SET " + betrag + " = " + betrag
+                + " + ? WHERE spieler = ?";
+        this.satzTagessumme = "SELECT COALESCE(SUM(betrag), 0) FROM " + buch
+                + " WHERE spieler = ? AND zeitpunkt >= ? AND grund = ?";
+        this.satzVerlauf = "SELECT id, zeitpunkt, grund, betrag, stand_nachher FROM "
+                + buch + " WHERE spieler = ? ORDER BY zeitpunkt DESC, id DESC LIMIT ?";
+        this.satzBuchen = "INSERT INTO " + buch + " (spieler, zeitpunkt, grund, betrag,"
+                + " stand_nachher) SELECT ?, UTC_TIMESTAMP(3), ?, ?, " + betrag
+                + " FROM " + konten + " WHERE spieler = ?";
     }
 
     @Override
     public long guthaben(UUID spieler) {
-        String sql = "SELECT mark FROM kassen WHERE spieler = ?";
-        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(satzGuthaben)) {
             anfrage.setString(1, spieler.toString());
             try (ResultSet ergebnis = anfrage.executeQuery()) {
-                return ergebnis.next() ? ergebnis.getLong("mark") : startguthaben;
+                return ergebnis.next()
+                        ? ergebnis.getLong(tabellen.betragsspalte())
+                        : startguthaben;
             }
         } catch (SQLException fehler) {
-            throw new IllegalStateException("Guthaben nicht lesbar: " + spieler, fehler);
+            throw new IllegalStateException("Guthaben nicht lesbar ("
+                    + tabellen.konten() + "): " + spieler, fehler);
         }
     }
 
@@ -90,8 +150,7 @@ public final class MariaKasse implements Kasse {
      * @return {@code true}, wenn die Zeile jetzt entstanden ist
      */
     private boolean stelleKontoSicher(Connection c, UUID spieler) throws SQLException {
-        String sql = "INSERT IGNORE INTO kassen (spieler, mark) VALUES (?, ?)";
-        try (PreparedStatement anfrage = c.prepareStatement(sql)) {
+        try (PreparedStatement anfrage = c.prepareStatement(satzAnlegen)) {
             anfrage.setString(1, spieler.toString());
             anfrage.setLong(2, startguthaben);
             if (anfrage.executeUpdate() == 0) {
@@ -111,9 +170,8 @@ public final class MariaKasse implements Kasse {
             return inTransaktion(c -> {
                 stelleKontoSicher(c, spieler);
                 if (betrag > 0L) {
-                    String sql = "UPDATE kassen SET mark = mark - ?"
-                            + " WHERE spieler = ? AND mark >= ?";
-                    try (PreparedStatement anfrage = c.prepareStatement(sql)) {
+                    try (PreparedStatement anfrage =
+                                 c.prepareStatement(satzAbbuchen)) {
                         anfrage.setLong(1, betrag);
                         anfrage.setString(2, spieler.toString());
                         anfrage.setLong(3, betrag);
@@ -143,8 +201,8 @@ public final class MariaKasse implements Kasse {
             inTransaktion(c -> {
                 stelleKontoSicher(c, spieler);
                 if (betrag > 0L) {
-                    String sql = "UPDATE kassen SET mark = mark + ? WHERE spieler = ?";
-                    try (PreparedStatement anfrage = c.prepareStatement(sql)) {
+                    try (PreparedStatement anfrage =
+                                 c.prepareStatement(satzGutschreiben)) {
                         anfrage.setLong(1, betrag);
                         anfrage.setString(2, spieler.toString());
                         anfrage.executeUpdate();
@@ -168,9 +226,8 @@ public final class MariaKasse implements Kasse {
         // laeuft damit ueber denselben Index, und der Grund wird erst danach gefiltert -
         // ein eigener Index fuer eine Abfrage, die einmal je Sitzung laeuft, waere derselbe
         // Fehler wie ein Einstellschluessel fuer einen Wert, den es nicht gibt.
-        String sql = "SELECT COALESCE(SUM(betrag), 0) FROM buchungen"
-                + " WHERE spieler = ? AND zeitpunkt >= ? AND grund = ?";
-        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(satzTagessumme)) {
             anfrage.setString(1, spieler.toString());
             // Mit Kalender in UTC: Die Spalte haelt UTC, und ohne Zone legte der Treiber
             // die der JVM darueber - dann begaenne der Tag um den Ortsversatz verschoben,
@@ -193,9 +250,8 @@ public final class MariaKasse implements Kasse {
         // Die Sortierung folgt dem Index (spieler, zeitpunkt, id). Die id als zweites
         // Merkmal ist noetig, weil zwei Buchungen im selben Millisekundenschritt sonst in
         // beliebiger Reihenfolge kaemen - und der Verlauf waere bei jedem Blick ein anderer.
-        String sql = "SELECT id, zeitpunkt, grund, betrag, stand_nachher FROM buchungen"
-                + " WHERE spieler = ? ORDER BY zeitpunkt DESC, id DESC LIMIT ?";
-        try (PreparedStatement anfrage = datenbank.verbindung().prepareStatement(sql)) {
+        try (PreparedStatement anfrage =
+                     datenbank.verbindung().prepareStatement(satzVerlauf)) {
             anfrage.setString(1, spieler.toString());
             anfrage.setInt(2, hoechstens);
             try (ResultSet ergebnis = anfrage.executeQuery()) {
@@ -230,10 +286,7 @@ public final class MariaKasse implements Kasse {
      */
     private void schreibeBuchung(Connection c, UUID spieler, long betrag,
                                  Buchungsgrund grund) throws SQLException {
-        String sql = "INSERT INTO buchungen (spieler, zeitpunkt, grund, betrag,"
-                + " stand_nachher) SELECT ?, UTC_TIMESTAMP(3), ?, ?, mark FROM kassen"
-                + " WHERE spieler = ?";
-        try (PreparedStatement anfrage = c.prepareStatement(sql)) {
+        try (PreparedStatement anfrage = c.prepareStatement(satzBuchen)) {
             anfrage.setString(1, spieler.toString());
             anfrage.setString(2, grund.schluessel());
             anfrage.setLong(3, betrag);

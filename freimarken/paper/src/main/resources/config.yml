@@ -135,6 +135,90 @@ parzellen:
   # Ganze Zahl ab 1, wie oben. /freimarken neuladen uebernimmt diesen Wert.
   gruppe-hoechstzahl: 4
 
+# Die Rangleiter (Plan 9, Schritt 12).
+#
+# EIN RANG IST EIN BUENDEL RECHTE und keine Zahl im Programm [entschieden 18.11.2026]:
+# Was eine Stufe gibt, steht hier unten in zahlen: und rechte:, und das Plugin macht
+# daraus die Rechte freimarken.<grenze>.<zahl> beziehungsweise freimarken.<recht>. Damit
+# laesst sich die ganze Leiter hier aendern, ohne eine Zeile Programm anzufassen - auch
+# welcher Rang wie viele Parzellen gibt.
+#
+# NICHT FUER REINES DASITZEN [entschieden 18.11.2026]: "man soll nicht fuer die reine
+# gespielte zeit belohnt werden, die gespielte zeit gilt als richtwert fuer kosten".
+# Darum steht in der ausgelieferten Leiter die TAETIGE Zeit (die Messstelle zaehlt sie
+# seit dem 03.11.2026 neben der Anwesenheit) und daneben eine Tat. Die Stundenzahlen aus
+# Plan 9 sind geblieben, meinen jetzt aber gemessene Taetigkeit - sie sind damit
+# strenger als dort und nicht schwaecher.
+#
+# GESTIEGEN WIRD SPROSSE FUER SPROSSE, in der Reihenfolge dieser Datei: Es gilt der
+# hoechste Rang, fuer den diese Stufe UND jede darunter erfuellt ist. Wer die Stunden der
+# obersten hat, aber die Bedingung der mittleren nie erfuellt hat, bleibt unten. Wer das
+# Ueberspringen will, schreibt die untere Bedingung in die obere Stufe.
+#
+# KEIN ABSTIEG: Was einmal erreicht ist, bleibt aufgeschrieben. Sonst verloere ein
+# Buerger seinen Rang, weil er seine Parzelle verkauft hat - und mit ihm die Obergrenze,
+# unter der sein uebriger Besitz steht.
+#
+# DIE ZAHLEN OBEN SIND EINE UNTERGRENZE FUER JEDEN. parzellen.hoechstzahl: 4 bekommt
+# jeder Reisende, denn es gilt immer die hoechste Zahl aus Recht UND Datei. Solange dort
+# die Buergerzahl steht, ist der Aufstieg auf dieser Grenze wirkungslos - der Startlauf
+# sagt es in einer eigenen Zeile. Das Senken kommt mit Teil H dieses Schrittes, zusammen
+# mit dem Einmallauf, der die vorhandenen Spieler nach ihrer gemessenen Zeit einstuft.
+raenge:
+  # Ob ueberhaupt Raenge vergeben werden. Aus heisst: Es gelten fuer jeden die Zahlen
+  # aus dieser Datei, und niemand steigt auf.
+  an: true
+
+  # Die Leiter von UNTEN nach OBEN. Der erste Eintrag ist der Rang, den jeder beim
+  # ersten Beitritt hat; er darf darum keine Bedingung haben.
+  #
+  # Je Stufe drei Tabellen, alle drei duerfen fehlen:
+  #   bedingungen: - was erfuellt sein muss. Es gibt taetige-stunden,
+  #     anwesenheit-stunden, parzellen, beruf und guthaben. Eine 0 ist keine Bedingung,
+  #     sondern eine Zeile, die nie wirkt - wer keine will, laesst die Zeile weg.
+  #   zahlen:      - welche Obergrenze der Rang hebt. Es gibt parzellen, gruppe, inseln
+  #     und wolken; jede wird zu freimarken.<name>.<zahl>. Heimatpunkte und eigene Warps
+  #     stehen in Plan 9, es gibt sie aber noch nicht - sie kommen mit ihrer Mechanik.
+  #   rechte:      - welche Rechte der Rang gibt, OHNE die Vorsilbe freimarken.
+  #
+  # Eine Stufe mit einer unbekannten Zeile faellt GANZ weg und nicht nur ihre Zeile:
+  # Eine Stufe, der eine Bedingung fehlt, waere eine LEICHTERE - dann bekaeme jemand
+  # Rechte, die er nicht verdient hat. Eine weggefallene Stufe nimmt dagegen niemandem
+  # etwas, was er schon hat; sie ist nur nicht mehr zu erreichen.
+  leiter:
+    reisender:
+      zahlen:
+        parzellen: 1
+        gruppe: 1
+        inseln: 1
+        wolken: 1
+
+    siedler:
+      bedingungen:
+        taetige-stunden: 5
+        parzellen: 1
+      zahlen:
+        parzellen: 2
+        gruppe: 2
+        inseln: 1
+        wolken: 1
+      rechte:
+        - laden.mieten
+
+    buerger:
+      bedingungen:
+        taetige-stunden: 40
+        parzellen: 1
+        beruf: 1
+      zahlen:
+        parzellen: 4
+        gruppe: 4
+        inseln: 1
+        wolken: 1
+      rechte:
+        - freistadt.gruenden
+        - beruf.spezialisierung
+
 hinweise:
   # Eine Zeile, die der Spieler zusaetzlich sieht, wenn sein RANG die Grenze setzt: beim
   # Kauf einer weiteren Parzelle, beim Zusammenlegen und auf einer freien Parzelle, die er

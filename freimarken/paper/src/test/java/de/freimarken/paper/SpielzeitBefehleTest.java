@@ -64,6 +64,18 @@ class SpielzeitBefehleTest {
         public Spielzeitstand lies(UUID spieler, LocalDate heute) {
             throw new IllegalStateException("Spielzeit nicht lesbar");
         }
+
+        /**
+         * Auch dieser Leseweg wirft - die Datenbank ist weggezogen, nicht halb da.
+         *
+         * <p>Eine Attrappe, die hier eine leere Liste gaebe, waere nicht unerreichbar,
+         * sondern leer - und das sind zwei verschiedene Lagen. Der Nachstufungslauf
+         * meldet die eine und uebergeht die andere.
+         */
+        @Override
+        public List<Spielzeitstand> alleStaende(LocalDate heute) {
+            throw new IllegalStateException("Spielzeit nicht lesbar");
+        }
     }
 
     /** Eine Ablage, die lesen kann, aber nichts annimmt - so entsteht die Sperre. */
@@ -78,6 +90,12 @@ class SpielzeitBefehleTest {
         @Override
         public Spielzeitstand lies(UUID spieler, LocalDate heute) {
             return Spielzeitstand.leer(spieler, heute);
+        }
+
+        /** Sie kann lesen und kennt niemanden - eine leere Liste ist die Wahrheit. */
+        @Override
+        public List<Spielzeitstand> alleStaende(LocalDate heute) {
+            return List.of();
         }
     }
 

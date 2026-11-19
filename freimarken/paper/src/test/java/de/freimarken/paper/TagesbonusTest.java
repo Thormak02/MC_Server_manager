@@ -293,6 +293,13 @@ class TagesbonusTest {
             public de.freimarken.kern.Spielzeitstand lies(UUID spieler, LocalDate heute) {
                 throw new IllegalStateException("darf nicht gefragt werden");
             }
+
+            /** Auch dieser Weg darf nicht gefragt werden - derselbe Wurf. */
+            @Override
+            public List<de.freimarken.kern.Spielzeitstand> alleStaende(
+                    LocalDate heute) {
+                throw new IllegalStateException("darf nicht gefragt werden");
+            }
         };
 
         Tagesbonus.Zahlung zahlung = new Tagesbonus(wirtschaft, ablage, kasse, werfende,

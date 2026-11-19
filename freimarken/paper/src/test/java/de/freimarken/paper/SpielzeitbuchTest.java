@@ -231,6 +231,15 @@ class SpielzeitbuchTest {
             public Spielzeitstand lies(UUID spieler, LocalDate heute) {
                 return Spielzeitstand.leer(spieler, heute);
             }
+
+            /** Gehoert nicht zur Aufgabe dieser Attrappe - siehe den Wurf. */
+            @Override
+            public List<Spielzeitstand> alleStaende(LocalDate heute) {
+                throw new UnsupportedOperationException("Diese Attrappe misst EINEN"
+                        + " Spieler. Wer hier landet, hat einen Lauf ueber ALLE"
+                        + " gerufen - dann gehoert eine Attrappe her, die eine Liste"
+                        + " hat, und keine stumme Leere.");
+            }
         };
     }
 
@@ -244,6 +253,18 @@ class SpielzeitbuchTest {
     private static final class ZaehlendeAblage implements Spielzeitablage {
 
         private final SpeicherSpielzeit echt = new SpeicherSpielzeit();
+
+        /**
+         * Durchgereicht an die echte Fassung - sie zaehlt nur SCHREIBzuege.
+         *
+         * <p>Nicht geworfen, anders als bei den anderen Attrappen: Diese hier hat eine
+         * echte Ablage darunter, also gibt es eine richtige Antwort. Ein Wurf waere eine
+         * erfundene Einschraenkung.
+         */
+        @Override
+        public List<Spielzeitstand> alleStaende(LocalDate heute) {
+            return echt.alleStaende(heute);
+        }
 
         private int aufrufe;
 
@@ -1007,6 +1028,15 @@ class SpielzeitbuchTest {
             @Override
             public Spielzeitstand lies(UUID spieler, LocalDate heute) {
                 return Spielzeitstand.leer(spieler, heute);
+            }
+
+            /** Gehoert nicht zur Aufgabe dieser Attrappe - siehe den Wurf. */
+            @Override
+            public List<Spielzeitstand> alleStaende(LocalDate heute) {
+                throw new UnsupportedOperationException("Diese Attrappe misst EINEN"
+                        + " Spieler. Wer hier landet, hat einen Lauf ueber ALLE"
+                        + " gerufen - dann gehoert eine Attrappe her, die eine Liste"
+                        + " hat, und keine stumme Leere.");
             }
         };
         Spielzeitbuch buch = buch(Zeitwerte.VORGABE, tot);

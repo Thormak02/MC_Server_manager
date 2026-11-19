@@ -43,6 +43,34 @@ final class Sprachprobe {
         return new Sprache(standAusDemJar());
     }
 
+    /**
+     * Das ausgelieferte Buch mit EINZELNEN Zeilen ueberschrieben - wie eine eigene
+     * {@code sprache.yml} es tut.
+     *
+     * <p>Gebraucht seit {@link RangSatz#NAECHSTER} [19.11.2026]: Das ist der erste
+     * {@code Art.SATZ}, den der Betreiber LEER lassen darf, und die Wirkung einer leeren
+     * Zeile laesst sich nur mit einer leeren Zeile pruefen. Die uebrigen Saetze bleiben
+     * die ausgelieferten - eine Probe gegen ein von Hand gebautes Buch prueefte eine
+     * Datei, die es nirgends gibt.
+     *
+     * @param anders je Pfad der neue Wortlaut; ein leerer Text ist erlaubt und ist der
+     *               eigentliche Zweck
+     */
+    static Sprache mitZeilen(Map<String, String> anders) {
+        Sprachbuch buch = ausDemJar();
+        Map<String, String> saetze = new LinkedHashMap<>(buch.saetze());
+        for (var zeile : anders.entrySet()) {
+            if (!saetze.containsKey(zeile.getKey())) {
+                throw new AssertionError("Den Pfad " + zeile.getKey() + " gibt es in der"
+                        + " ausgelieferten Vorlage nicht - eine Probe, die einen"
+                        + " erfundenen Pfad ueberschreibt, prueft nichts.");
+            }
+            saetze.put(zeile.getKey(), zeile.getValue());
+        }
+        return new Sprache(new Sprachstand(
+                new Sprachbuch(saetze, buch.ausDerDatei(), buch.muster())));
+    }
+
     /** Der rohe Text der ausgelieferten Vorlage. */
     static String vorlagentext() {
         return Sprachliste.ressource(Sprachliste.VORLAGE);

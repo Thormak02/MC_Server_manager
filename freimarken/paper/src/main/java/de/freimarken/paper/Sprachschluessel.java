@@ -49,9 +49,9 @@ final class Sprachschluessel {
             SpielzeitSatz.class, ReiseSatz.class, WacheSatz.class, BerufSatz.class,
             MarktSatz.class, BonusSatz.class, LadenSatz.class, MietSatz.class,
             ShopSatz.class, BlockSatz.class, TruheSatz.class, FreistadtSatz.class,
-            WerderSatz.class, WolkeSatz.class);
+            WerderSatz.class, WolkeSatz.class, RangSatz.class);
 
-    /** Alle Saetze, aus allen achtzehn Bereichen - einmal gebaut, unveraenderlich. */
+    /** Alle Saetze, aus allen neunzehn Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
 
     /** Jeder Pfad der Datei auf seinen Satz - auch {@code .eins} und {@code .viele}. */

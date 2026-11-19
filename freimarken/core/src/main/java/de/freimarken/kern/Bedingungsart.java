@@ -1,0 +1,142 @@
+package de.freimarken.kern;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+
+/**
+ * Woran ein Rangaufstieg haengen darf - die Liste der messbaren Dinge.
+ *
+ * <p><b>Nicht fuer reine Anwesenheit</b> [entschieden 18.11.2026, Nutzer]: "man soll nicht
+ * fuer die reine gespielte zeit belohnt werden, die gespielte zeit gilt als richtwert fuer
+ * kosten". Darum steht die TAETIGE Zeit an erster Stelle und die blosse Anwesenheit
+ * daneben als das, was sie ist - eine schwaechere Zahl, die ein Betreiber nehmen kann,
+ * aber nicht muss. Der Plan nennt in der Rangtafel (Abschnitt 9) Stunden; die sind nach
+ * dieser Entscheidung ein Richtwert fuer Preise und nicht der Ausloeser eines Aufstiegs.
+ *
+ * <p><b>Warum eine Aufzaehlung und keine freien Namen:</b> Jede Art braucht eine Stelle,
+ * die sie MISST - die taetige Zeit kommt aus der Spielzeitmessung, die Parzellenzahl aus
+ * dem Besitzbuch. Ein frei getippter Name haette keinen Messer und waere eine Bedingung,
+ * die nie erfuellt wird; der Spieler sucht dann einen Aufstieg, den es nicht geben kann.
+ * Ein unbekannter Name in der Datei wird deshalb BEKLAGT und nicht geraten.
+ *
+ * <p><b>Was hier noch fehlt und mit Absicht fehlt:</b> Der Rundgang (Plan 9, Siedler) wird
+ * erst mit Schritt 13 gebaut - eine Bedingung darauf waere heute eine, die niemand
+ * erfuellen kann. Dasselbe gilt fuer "eigene Parzelle bebaut" (Plan 9, Buerger): Was
+ * "bebaut" misst, steht im Plan nirgends, und eine geratene Zahl waere eine Huerde, die
+ * der Betreiber nicht nachrechnen kann. Beide kommen als Zeile dazu, wenn es sie gibt -
+ * {@link #ausSchluessel} nimmt sie dann ohne weitere Aenderung an.
+ */
+public enum Bedingungsart {
+
+    /**
+     * Stunden TAETIGER Zeit - gemessen, nicht abgesessen.
+     *
+     * <p>Die Messstelle aus Schritt 7 zaehlt neben der Anwesenheit die taetige Zeit
+     * ({@code Spielzeitstand.taetigSekundenGesamt}); sie ist seit dem 03.11.2026 in
+     * Betrieb und hatte bisher nur den Tagesbonus als Verbraucher.
+     */
+    TAETIGE_STUNDEN("taetige-stunden", "Stunden taetiger Zeit", 100_000L),
+
+    /**
+     * Stunden blosser Anwesenheit.
+     *
+     * <p>Steht zur Verfuegung, ist aber ausdruecklich die schwaechere Zahl: Sie ist mit
+     * einem Makro im Stehen zu erreichen, und der Plan sagt das selbst (Abschnitt 9,
+     * "gemessene Anwesenheit und keine gemessene Taetigkeit").
+     */
+    ANWESENHEIT_STUNDEN("anwesenheit-stunden", "Stunden Anwesenheit", 100_000L),
+
+    /** Wie viele Parzellen der Spieler haelt. */
+    PARZELLEN("parzellen", "eigene Parzellen", 10_000L),
+
+    /** Ob ein Beruf gewaehlt ist - 1 heisst ja, 0 heisst: keine Bedingung. */
+    BERUF("beruf", "gewaehlter Beruf", 1L),
+
+    /** Mark auf dem Konto. */
+    GUTHABEN("guthaben", "Mark auf dem Konto", Freistadtwerte.HOECHSTER_BETRAG);
+
+    private final String schluessel;
+
+    private final String beschreibung;
+
+    private final long hoechsterWert;
+
+    Bedingungsart(String schluessel, String beschreibung, long hoechsterWert) {
+        this.schluessel = schluessel;
+        this.beschreibung = beschreibung;
+        this.hoechsterWert = hoechsterWert;
+    }
+
+    /** Wie die Art in der Einstellungsdatei heisst. */
+    public String schluessel() {
+        return schluessel;
+    }
+
+    /** Was sie misst - fuer die Klage und den Startbericht, nicht fuer das Spiel. */
+    public String beschreibung() {
+        return beschreibung;
+    }
+
+    /**
+     * Die hoechste Zahl, die in der Datei stehen darf.
+     *
+     * <p>Je Art eine eigene Schranke und keine gemeinsame: 100.000 Stunden sind
+     * offensichtlich ein Vertipper, bei einem Geldbetrag waeren sie es nicht. Ohne diese
+     * Schranke faengt den Vertipper niemand - eine unerfuellbare Bedingung sieht im
+     * Betrieb genauso aus wie ein Rang, den eben noch niemand erreicht hat.
+     */
+    public long hoechsterWert() {
+        return hoechsterWert;
+    }
+
+    /** Ob diese Art ein Ja/Nein ist und keine Menge. */
+    public boolean jaNein() {
+        return hoechsterWert == 1L;
+    }
+
+    /** Ob diese Art in der Datei in STUNDEN steht und in Sekunden gemessen wird. */
+    public boolean inStunden() {
+        return this == TAETIGE_STUNDEN || this == ANWESENHEIT_STUNDEN;
+    }
+
+    /**
+     * Die Zahl aus der Datei in der Einheit, in der gemessen wird.
+     *
+     * <p><b>Die Datei spricht Stunden, die Messung spricht Sekunden</b> - und die
+     * Umrechnung steht hier, an EINER Stelle. Stuende sie am Rand, muesste jeder Messer
+     * sie selbst machen: einer rechnete in Stunden und schnitte dabei die angefangene ab,
+     * der naechste in Sekunden - und zwei Spieler mit derselben Zeit haetten verschiedene
+     * Raenge, je nachdem, welcher Weg sie gemessen hat.
+     */
+    public long inMesseinheit(long ausDerDatei) {
+        return inStunden() ? ausDerDatei * SEKUNDEN_JE_STUNDE : ausDerDatei;
+    }
+
+    /** Wie viele Sekunden eine Stunde hat - damit die Zahl nicht dreimal dasteht. */
+    public static final long SEKUNDEN_JE_STUNDE = 3_600L;
+
+    /** Die Art zu diesem Schluessel - leer, wenn es sie nicht gibt. */
+    public static Optional<Bedingungsart> ausSchluessel(String roh) {
+        if (roh == null) {
+            return Optional.empty();
+        }
+        String klein = roh.trim().toLowerCase(Locale.ROOT);
+        for (Bedingungsart art : values()) {
+            if (art.schluessel.equals(klein)) {
+                return Optional.of(art);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Alle Schluessel in der Reihenfolge der Aufzaehlung - fuer Klage und Ergaenzung. */
+    public static List<String> alleSchluessel() {
+        List<String> namen = new ArrayList<>();
+        for (Bedingungsart art : values()) {
+            namen.add(art.schluessel);
+        }
+        return List.copyOf(namen);
+    }
+}

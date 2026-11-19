@@ -1,6 +1,8 @@
 package de.freimarken.kern;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -135,5 +137,28 @@ public final class SpeicherSpielzeit implements Spielzeitablage {
         Zeile heutige = tage.getOrDefault(heute, Zeile.LEER);
         return new Spielzeitstand(spieler, heute, gesamt, heutige.sekunden(),
                 taetigGesamt, heutige.taetig());
+    }
+
+    @Override
+    public synchronized List<Spielzeitstand> alleStaende(LocalDate heute) {
+        if (heute == null) {
+            throw new IllegalArgumentException("Ohne Tag ist 'heute' nicht zu"
+                    + " beantworten");
+        }
+        // SORTIERT, und zwar genauso wie die Datenbankfassung mit ORDER BY spieler: Die
+        // Reihenfolge ist in der Schnittstelle ZUGESAGT. Ohne sie gaebe diese Karte je
+        // Lauf der Maschine eine andere, und eine Probe, die beide Fassungen gegen
+        // dieselbe Liste haelt, waere mal gruen und mal rot.
+        List<UUID> geordnet = new ArrayList<>(sekunden.keySet());
+        geordnet.sort(Comparator.comparing(UUID::toString));
+        List<Spielzeitstand> staende = new ArrayList<>();
+        for (UUID wer : geordnet) {
+            // Ueber lies() und nicht mit einer zweiten Summenrechnung: Zwei Rechenwege
+            // fuer dieselbe Summe laufen eines Tages auseinander - und dann saehe der
+            // Nachstufungslauf eine andere Zeit als /spielzeit. Der Ueberlauffang liegt
+            // damit auch nur an EINER Stelle.
+            staende.add(lies(wer, heute));
+        }
+        return List.copyOf(staende);
     }
 }

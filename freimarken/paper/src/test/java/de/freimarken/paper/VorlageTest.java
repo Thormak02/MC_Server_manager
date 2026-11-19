@@ -254,7 +254,7 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle achtzehn Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - alle neunzehn Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
         // MietSatz ist der zwoelfte - und der ZWEITE Bereich desselben Befehls: Er und
         // LadenSatz schreiben beide Pfade unter laden., damit der Betreiber unter dem
@@ -291,7 +291,7 @@ class VorlageTest {
                 // WerderSatz, obwohl beide Welten Inseln vergeben - dort KAUFT man die,
                 // auf der man steht, hier bekommt man eine zugeteilt, und sie kostet
                 // nichts.
-                "WolkeSatz"));
+                "WolkeSatz", "RangSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));

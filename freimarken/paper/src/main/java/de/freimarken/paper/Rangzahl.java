@@ -1,5 +1,9 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Rangwerte;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import org.bukkit.entity.Player;
 import org.bukkit.permissions.PermissionAttachmentInfo;
 
@@ -17,10 +21,53 @@ import org.bukkit.permissions.PermissionAttachmentInfo;
  * erlaubt -, und zwei Abschriften waeren zwei Orte, an denen der ZUSCHLAG vergessen wird.
  * Genau das ist die Art Fehler, die niemand meldet: Der Spieler sieht nur, dass seine
  * Mitgliedschaft nichts bringt, und haelt es fuer die Regel.
+ *
+ * <p><b>Und seit Schritt 12 Teil C steht hier auch der Weg HINEIN</b> [19.11.2026]:
+ * {@link #knoten} macht aus einem Rangbuendel die Rechtenamen, die {@link #ausRecht}
+ * gleich darauf wieder ausliest. Beide Richtungen in EINER Datei, und zwar aus dem
+ * Grund, der in diesem Projekt schon mehrfach zugeschlagen hat: Ein Schreiber und ein
+ * Leser derselben Gestalt an zwei Stellen laufen eines Tages auseinander - geschrieben
+ * wird {@code freimarken.parzelle.2}, gelesen {@code freimarken.parzellen.}, und der
+ * Rang wirkt einfach nicht. Rot wird dabei nichts.
  */
 final class Rangzahl {
 
     private Rangzahl() {
+    }
+
+    /**
+     * Aus einem Rangbuendel die Rechtenamen, die es vergibt.
+     *
+     * <p>Zwei Gestalten, und beide liest dieselbe Datei wieder:
+     * <ul>
+     *   <li>eine Grenze wird zu {@code freimarken.<name>.<zahl>} - das ist genau die
+     *       Vorsilbe, die {@link #ausRecht} an den vier Grenzen durchsucht;</li>
+     *   <li>ein Recht wird zu {@code freimarken.<recht>} - die Vorsilbe kommt vom
+     *       Programm, darum verbietet {@code Rangwerte.Stufe} sie in der Datei.</li>
+     * </ul>
+     *
+     * <p><b>Die ZUSCHLAEGE stehen hier nicht</b> und duerfen es nicht: Sie kommen aus der
+     * Rechteverwaltung und gehoeren einer Mitgliedschaft, nicht einem Rang. Wer sie hier
+     * mit vergaebe, haette sie zweimal - und {@link #mitZuschlag} zaehlte sie doppelt.
+     *
+     * <p>Ein leeres Buendel gibt eine leere Menge. Das ist der Fall "Raenge sind aus"
+     * und der Fall "dieser Server hat gar keine Leiter"; beide sind erlaubt.
+     */
+    static Set<String> knoten(Rangwerte.Buendel buendel) {
+        if (buendel == null) {
+            return Set.of();
+        }
+        // LinkedHashSet und nicht HashSet: Die Reihenfolge steht im Startbericht und in
+        // den Proben. Eine Menge ohne Ordnung stuende je Lauf der Maschine anders da.
+        var namen = new LinkedHashSet<String>();
+        for (var zeile : buendel.zahlen().entrySet()) {
+            namen.add(Rangwerte.VORSILBE + zeile.getKey() + "."
+                    + zeile.getValue());
+        }
+        for (String recht : buendel.rechte()) {
+            namen.add(Rangwerte.VORSILBE + recht);
+        }
+        return Collections.unmodifiableSet(namen);
     }
 
     /**
