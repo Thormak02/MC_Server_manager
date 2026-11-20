@@ -6,6 +6,7 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.kern.Aufgabenbuch;
+import de.freimarken.kern.Vorrat;
 import de.freimarken.kern.Biombuch;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Parzelle;
@@ -197,7 +198,7 @@ final class WolkeBefehle {
      * <p>Je Aufruf gefragt und nicht gemerkt: Der Vorrat ist der Zustand eines
      * Inventars, und der aendert sich zwischen zwei Befehlen.
      */
-    private final Function<Player, Aufgabenbuch.Vorrat> vorrat;
+    private final Function<Player, Vorrat> vorrat;
 
     /** Punkte und Biome - {@code null}, wenn es sie in diesem Lauf nicht gibt. */
     private final Pflege pflege;
@@ -226,7 +227,7 @@ final class WolkeBefehle {
     private final IntSupplier hoechstzahl;
 
     WolkeBefehle(Wolkenbuch buch, Aufgabenbuch aufgabenbuch,
-                 Function<Player, Aufgabenbuch.Vorrat> vorrat, Pflege pflege,
+                 Function<Player, Vorrat> vorrat, Pflege pflege,
                  Kasse kasse, Sprache sprache, Aufsetzer aufsetzer, Heimweg heimweg,
                  String wolkenschluessel, IntSupplier hoechstzahl) {
         this.buch = buch;

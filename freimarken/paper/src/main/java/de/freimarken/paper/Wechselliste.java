@@ -193,9 +193,9 @@ final class Wechselliste {
     /**
      * Nennt jede Wechselzeile, die das Plugin mitbringt, die aber in der Datei fehlt.
      *
-     * <p>Eigene Liste und eigener Zaehlsatz, nicht die von {@link Wirtschaftsliste} oder
-     * {@link Marktliste}: Vier Berichte, die dieselbe Zahl verschieden nennen, sind
-     * schlimmer als vier Zeilen.
+     * <p>Eigene Liste und eigener Zaehlsatz, nicht die von {@link Wirtschaftsliste},
+     * {@link Marktliste} oder {@link Muenzliste}: Fuenf Berichte, die dieselbe Zahl
+     * verschieden nennen, sind schlimmer als fuenf Zeilen.
      */
     private static void nenneFehlende(ConfigurationSection wurzel, List<String> bericht) {
         List<String> fehlen = new ArrayList<>();

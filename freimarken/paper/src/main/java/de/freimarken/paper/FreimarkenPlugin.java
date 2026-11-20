@@ -44,6 +44,8 @@ import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Kistenshop;
 import de.freimarken.kern.Ladeneinheit;
 import de.freimarken.kern.Ladenverzeichnis;
+import de.freimarken.kern.Muenzhaus;
+import de.freimarken.kern.Muenzwerte;
 import de.freimarken.kern.Messwerte;
 import de.freimarken.kern.Mietablage;
 import de.freimarken.kern.Parzelle;
@@ -240,9 +242,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * Kasse ohne Startguthaben steht, prueft {@link Goldkasse} selbst, im
      * Konstruktor, beim Start.
      *
-     * <p><b>Noch ohne Verbraucher:</b> Gewechselt wird mit Teil F, gekauft im
-     * Muenzhaus mit Teil G. Bis dahin ist diese Kasse die Schicht darunter - und
-     * eine Startzeile, die sagt, dass sie steht.
+     * <p><b>Zwei Verbraucher, eine Kasse:</b> die Wechselstube ({@code Wechselbuch},
+     * Teil F) und das Muenzhaus ({@code Muenzhaus}, Teil G). Beide bekommen DIESES
+     * Feld - zwei Goldkassen waeren zwei Konten in derselben Waehrung, und die Summe
+     * waere auf keiner von beiden der Stand.
      */
     private Goldkasse goldkasse;
     private Spielzeitablage spielzeit;
@@ -934,6 +937,20 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Tausch.
         Wechselbuch wechselbuch = new Wechselbuch(buch.kasse(), goldkasse, wirtschaft,
                 uhr);
+        // DAS MUENZHAUS [Teil G]: dieselbe Goldkasse wie die Wechselstube - zwei waeren
+        // zwei Konten in derselben Waehrung - und derselbe geteilte Wirtschaftsstand,
+        // damit /freimarken neuladen den Katalog erreicht.
+        //
+        // Die MESSUNG als Lambda auf das Feld und nicht als Abhaengigkeit: Der
+        // Aufstiegslauf entsteht erst in richteRaengeEin, und er ist die EINE Stelle, die
+        // eine Bedingung messen darf. Gemessen wird beim Aufruf, also lange nach dem
+        // Bauen. Ist das Feld null - der Start ist vorher abgebrochen -, gilt KEIN
+        // Messwert; dann ist jeder Posten mit Bedingung gesperrt, und das ist die sichere
+        // Richtung: Lieber kauft niemand, als dass jemand ohne Anspruch kauft.
+        Muenzhaus muenzhaus = new Muenzhaus(goldkasse, wirtschaft,
+                (wer, gebraucht) -> aufstiegslauf == null
+                        ? java.util.Map.of()
+                        : aufstiegslauf.messeFuer(wer, gebraucht));
         befehle = new ParzellenBefehle(buch, marktstadt, wirtschaft, getLogger(),
                 sprache,
                 // Das FELD wird beim Aufruf gelesen und nicht beim Bauen: Die Befehle
@@ -941,7 +958,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 // Pruefung auf null faengt den Fall, dass der Start davor abgebrochen
                 // ist - dann zeigt /mark seine uebrigen Zeilen.
                 wer -> tagesbonus == null ? null : tagesbonus.standZeile(wer, sprache),
-                wechselbuch);
+                wechselbuch, muenzhaus, Vorratshand::fuer);
         // Der Ladenschutz als ZWEITE Frage derselben Wache [Teil C] - nicht als zweite
         // Wache. Jene deckt fuenfzehn Ereignisarten ab, dreizehn davon ueber dasselbe
         // unterbinden(); eine zweite Liste liefe auseinander, und genau davor warnt ihre
@@ -1077,6 +1094,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Betreiber eine Huerde, deren Messstelle er noch nicht gesehen hat.
         nenneRaenge();
         nenneGoldmark();
+        nennePostenOhneWort();
+        nenneUnlieferbarePosten();
         registriereBefehle();
 
         getLogger().info("Freimarken " + getPluginMeta().getVersion()
@@ -2847,6 +2866,93 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Meldet jeden Katalogposten, der NICHT ANKOMMEN KANN [20.11.2026].
+     *
+     * <p>Zwei Faelle, und beide sind in der Pruefrunde zu Teil G gefunden worden:
+     *
+     * <p><b>Kein Gegenstand.</b> {@code potatoes} ist der Feldblock, {@code potato} der
+     * Gegenstand - dasselbe bei {@code carrots}, {@code beetroots} und {@code water}. Der
+     * Leser der {@code config.yml} kann das nicht fragen: {@code Material.isItem} greift
+     * in Minecrafts Verzeichnis und wirft ohne laufenden Server, und die Proben des
+     * Lesers laufen ohne. Die Lieferung sagt seit heute ab (KEIN PLATZ, vor der Zahlung,
+     * siehe {@code Vorratshand.art}) - aber eine Absage, die der Betreiber nie liest,
+     * laesst ihn den Fehler beim Spieler suchen.
+     *
+     * <p><b>Mehr Plaetze als ein Spieler hat.</b> Vierzig Musikscheiben sind vierzig
+     * Lagerplaetze; die Stueckgrenze von {@link Muenzwerte#HOECHSTE_STUECKZAHL} laesst
+     * sie durch, weil sie in Stueck rechnet. Ein solcher Posten stuende mit Preis in der
+     * Tafel und antwortete auch bei leerem Rucksack "dir fehlt Platz".
+     *
+     * <p>Der Posten bleibt in beiden Faellen stehen, wie der ohne Wort: Wegfallen liesse
+     * den Betreiber einen Katalog lesen, in dem seine Zeile einfach nicht ist.
+     */
+    private void nenneUnlieferbarePosten() {
+        List<String> klagen = new ArrayList<>();
+        for (Muenzwerte.Posten posten : wirtschaft.werte().muenzhaus().katalog()) {
+            List<String> keinGegenstand = new ArrayList<>();
+            int plaetze = 0;
+            for (var zeile : posten.gegenstaende().entrySet()) {
+                Material art = Material.matchMaterial(zeile.getKey());
+                if (art == null || !art.isItem()) {
+                    keinGegenstand.add(zeile.getKey());
+                    continue;
+                }
+                int stapel = Math.max(1, art.getMaxStackSize());
+                plaetze += (zeile.getValue() + stapel - 1) / stapel;
+            }
+            if (!keinGegenstand.isEmpty()) {
+                klagen.add(posten.schluessel() + ": " + String.join(", ", keinGegenstand)
+                        + " gibt es nur als Block und nicht als Gegenstand - der Posten"
+                        + " sagt beim Kauf ab");
+            }
+            if (plaetze > Muenzwerte.LAGERPLAETZE) {
+                klagen.add(posten.schluessel() + ": braucht " + plaetze
+                        + " Lagerplaetze, ein Spieler hat " + Muenzwerte.LAGERPLAETZE
+                        + " - der Posten ist auf Dauer unkaufbar");
+            }
+        }
+        if (klagen.isEmpty()) {
+            return;
+        }
+        getLogger().severe(klagen.size() + " Katalogposten koennen nicht ankommen: "
+                + String.join(" | ", klagen) + ". Gepruefte Namen sind nicht genug -"
+                + " entscheidend ist, ob ein Spieler den Gegenstand in die Hand nehmen"
+                + " und tragen kann.");
+    }
+
+    /**
+     * Meldet jeden Katalogposten, zu dem es kein Wort gibt [Teil G].
+     *
+     * <p>BEIM START und nicht beim ersten {@code /mark muenzhaus}: Sonst faellt es mitten
+     * im Spiel auf, und zwar als Pfad in der Tafel eines Spielers.
+     *
+     * <p><b>Der Posten bleibt trotzdem kaufbar</b>, wie eine Herausforderung ohne Wort und
+     * anders als ein Beruf ohne Wort (dort bleibt Freimarken aus). Der Grund steht in
+     * {@link Muenzname}: Ein weggefallener Posten waere Kosmetik, die niemand mehr
+     * bekommt, und der Spieler suchte den Fehler bei sich.
+     *
+     * <p>Hier und nicht in {@link Muenzliste}: Der Leser kennt die {@code config.yml}, und
+     * ob es ein WORT gibt, weiss nur der Sprachstand.
+     */
+    private void nennePostenOhneWort() {
+        List<String> ohneWort = new ArrayList<>();
+        for (String schluessel : wirtschaft.werte().muenzhaus().schluessel()) {
+            if (!sprachstand.buch().saetze()
+                    .containsKey(new Muenzname(schluessel).pfad())) {
+                ohneWort.add(schluessel);
+            }
+        }
+        if (ohneWort.isEmpty()) {
+            return;
+        }
+        getLogger().severe("Zu " + ohneWort.size() + " Katalogposten gibt es kein Wort: "
+                + String.join(", ", ohneWort) + ". In der Sprachdatei fehlt je Zeile "
+                + Muenzname.VORSILBE + "<name> - sprache-vorlage.yml zeigt, wie sie"
+                + " aussieht. Kaufen laesst sich der Posten weiter; in der Tafel steht"
+                + " bis dahin sein Pfad.");
+    }
+
+    /**
      * Nennt die Rangleiter - und was an ihr nicht wirkt.
      *
      * <p>Drei Saetze, und der zweite ist der wichtige: <b>Die Zahlen in der
@@ -2937,8 +3043,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + (fluechtig ? "FLUECHTIG, vergisst beim Neustart"
                         : "eigene Tabellen " + Kassentabellen.GOLDMARK.konten() + " und "
                                 + Kassentabellen.GOLDMARK.buch())
-                + ". Zu bekommen ist sie allein durch Tausch aus Mark (/mark tauschen);"
-                + " das Muenzhaus, das sie ausgibt, kommt mit Schritt 12 Teil G.");
+                + ". Zu bekommen ist sie allein durch Tausch aus Mark"
+                + " (/mark tauschen), ausgegeben wird sie im Muenzhaus"
+                + " (/mark muenzhaus).");
     }
 
 

@@ -4,6 +4,7 @@ import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Blocktat;
 import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Shopschild;
+import de.freimarken.kern.Bedingungsart;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Taetigkeit;
@@ -134,7 +135,11 @@ final class Sprachschluessel {
         // steht hier und nicht in einer zweiten Methode daneben: Beide Leser - der der
         // Vorlage und der der Betreiberdatei - gehen durch diese eine Stelle, und das ist
         // der ganze Grund, warum sie existiert.
-        return Aufgabenname.passt(pfad) ? Aufgabenname.ausPfad(pfad) : null;
+        if (Aufgabenname.passt(pfad)) {
+            return Aufgabenname.ausPfad(pfad);
+        }
+        // Die DRITTE Familie, seit es das Muenzhaus gibt [Schritt 12, Teil G].
+        return Muenzname.passt(pfad) ? Muenzname.ausPfad(pfad) : null;
     }
 
     /**
@@ -149,7 +154,8 @@ final class Sprachschluessel {
      * {@code /wolke aufgaben} lief in "steht nicht in diesem Buch".
      */
     static boolean gehoertZuFamilie(Satz satz) {
-        return satz instanceof Berufsname || satz instanceof Aufgabenname;
+        return satz instanceof Berufsname || satz instanceof Aufgabenname
+                || satz instanceof Muenzname;
     }
 
     /** Alle Pfade, die in der Datei stehen duerfen - mit {@code .eins}/{@code .viele}. */
@@ -159,6 +165,18 @@ final class Sprachschluessel {
             pfade.addAll(satz.pfade());
         }
         return List.copyOf(pfade);
+    }
+
+    /**
+     * Der Satz, der eine Bedingung in Worte fasst - mechanisch gewaehlt wie der Grund.
+     *
+     * <p>Eine eigene Stelle und kein Zugriff auf {@code MarkSatz.bedingungssatz} von
+     * aussen: Dieselbe Trennung, die {@link #grund} schon macht - wer einen Satz zu einem
+     * Kernwert braucht, fragt hier und nicht die Satzaufzaehlung. So steht die Familie an
+     * EINER Stelle, und {@link #familienDeckung()} kann sie aufzaehlen.
+     */
+    static Satz bedingung(Bedingungsart art) {
+        return MarkSatz.bedingungssatz(art);
     }
 
     /**
@@ -528,6 +546,16 @@ final class Sprachschluessel {
         // Die Saetze der Kistenshops, ueber shopAnlage und schildfehler gewaehlt.
         // ABGEBAUT und KEIN_SHOP fehlen mit Absicht: Sie werfen dort, siehe die
         // Begruendung an der Funktion.
+        // Die fuenf Worte der BEDINGUNGEN, ueber MarkSatz.bedingungssatz gewaehlt und
+        // nirgends namentlich getippt - dieselbe Bauart wie die Buchungsgruende darueber.
+        // Gedeckt sind sie in MuenztextTest: Dort geht JEDE Bedingungsart durch die echte
+        // Zeile der ausgelieferten Vorlage, in beiden Zahlformen.
+        for (Bedingungsart art : Bedingungsart.values()) {
+            // Der BASISpfad und nicht pfade(): Diese Liste wird gegen die Schluessel
+            // gehalten, die Tafel 30 im Programm sucht, und die kennt einen gezaehlten
+            // Satz unter EINEM Namen - .eins und .viele sind zwei Zeilen DERSELBEN Sache.
+            pfade.add(MarkSatz.bedingungssatz(art).pfad());
+        }
         Set<String> nurFamilie = new LinkedHashSet<>();
         for (Shopbuch.Bescheid bescheid : Shopbuch.Bescheid.values()) {
             if (bescheid != Shopbuch.Bescheid.ABGEBAUT

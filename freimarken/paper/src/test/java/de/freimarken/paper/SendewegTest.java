@@ -10,6 +10,7 @@ import de.freimarken.kern.Art;
 import de.freimarken.kern.Berufsregel;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Blocktat;
+import de.freimarken.kern.Bedingungsart;
 import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Freistadtbuch;
@@ -124,7 +125,8 @@ class SendewegTest {
         Sprache sprache = Sprachprobe.spracheAusDemJar();
 
         var zeile = Verlaufszeile.zeile(sprache,
-                buchung(Buchungsgrund.PARZELLE_GEKAUFT, -25_000L, 25_000L), BERLIN);
+                buchung(Buchungsgrund.PARZELLE_GEKAUFT, -25_000L, 25_000L), BERLIN,
+                Buchungsgrund.Buch.MARK);
 
         // Die ganze Zeile und nicht vier einzelne contains: Vertauscht jemand zwei Werte,
         // waeren vier contains alle vier gruen.
@@ -141,8 +143,15 @@ class SendewegTest {
             // Buchung und wirft sonst (Buchung.java:39-43).
             long betrag = grund.istAusgabe() ? -1_000L : 1_000L;
             String wort = sprache.wort(Sprachschluessel.grund(grund), Einsatz.keine());
+            // JE GRUND SEIN BUCH, und das ist seit Teil G Pflicht: Die Zeile
+            // weist einen Grund ab, der nicht in das angezeigte Buch gehoert - sonst
+            // stuende an einer Goldmarkbuchung das Wort "Mark". EROEFFNUNG gehoert in
+            // JEDES Buch; die schreibt die Kasse selbst, in welchem sie auch fuehrt.
+            Buchungsgrund.Buch buch = grund.buch() == Buchungsgrund.Buch.JEDES
+                    ? Buchungsgrund.Buch.MARK
+                    : grund.buch();
             String zeile = Sprachprobe.nurText(Verlaufszeile.zeile(sprache,
-                    buchung(grund, betrag, 2_000L), BERLIN));
+                    buchung(grund, betrag, 2_000L), BERLIN, buch));
 
             assertTrue(wort != null && !wort.isBlank(), "ohne Wort: " + grund);
             assertTrue(zeile.contains("  " + wort + "  "), grund + " steht nicht in der"
@@ -243,6 +252,14 @@ class SendewegTest {
             if (auflage != Freistadtbuch.Auflage.ERFUELLT) {
                 alle.add(Sprachschluessel.auflagenwort(auflage).pfad());
             }
+        }
+        // NEUNTE Familie seit Teil G: die fuenf Worte der BEDINGUNGEN, ueber
+        // Sprachschluessel.bedingung gewaehlt. Gedeckt sind sie in MuenztextTest, wo
+        // JEDE Bedingungsart durch die echte Zeile der ausgelieferten Vorlage geht, und
+        // zwar in beiden Zahlformen. Hier stehen sie, weil DIESE Probe die Liste der
+        // Ausnahmen fuehrt.
+        for (Bedingungsart art : Bedingungsart.values()) {
+            alle.add(Sprachschluessel.bedingung(art).pfad());
         }
         // VIERTE Familie seit Plan 7.4: die Saetze der Kistenshops. Sie werden ueber
         // Sprachschluessel.shopAnlage und .schildfehler gewaehlt, nicht namentlich

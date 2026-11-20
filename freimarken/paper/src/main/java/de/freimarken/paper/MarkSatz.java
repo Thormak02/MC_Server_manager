@@ -1,5 +1,6 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Bedingungsart;
 import de.freimarken.kern.Buchungsgrund;
 import java.util.Set;
 
@@ -220,8 +221,8 @@ enum MarkSatz implements Satz {
      * daneben hat, sagt die Zeile, nicht das Wort. Stuende die Waehrung im Wort, hiesse
      * dieselbe Zeile im Goldbuch "5 Goldmark - Mark gekauft".
      *
-     * <p>Zu lesen sind die Goldbuchzeilen heute noch nirgends: {@code /mark verlauf} zeigt
-     * das Markbuch. Die Worte stehen trotzdem schon da, weil {@code Buchungsgrund} zu
+     * <p>Gelesen werden die Goldbuchzeilen seit Teil G von {@code /mark muenzhaus
+     * verlauf}; {@code /mark verlauf} zeigt weiter das Markbuch. Die Worte stehen trotzdem schon da, weil {@code Buchungsgrund} zu
      * JEDEM Grund ein Wort verlangt - und weil das Muenzhaus (Teil G) sie braucht.
      */
     VERLAUF_GRUND_WECHSEL_MARK_WEG("mark.verlauf.grund.wechsel-mark-weg", Art.WORT),
@@ -249,8 +250,9 @@ enum MarkSatz implements Satz {
      * Die Tafel der Wechselstube - der Kopf von {@code /mark tauschen}.
      *
      * <p>Plan 2.1 nennt fuer das Muenzhaus "Kontostand, Verlauf, Wechsel Mark - Goldmark,
-     * Wechseldeckel sichtbar". Das Haus kommt mit Teil G; die vier Zeilen dieser Tafel
-     * sind seine Auskunft, schon jetzt und im Chat.
+     * Wechseldeckel sichtbar". Seit Teil G gibt es das Haus, und es zeigt DIESE Zeilen
+     * mit: {@code Tauschtext.standUndKurse} liefert sie an beide Tafeln, damit es den
+     * Deckel nicht zweimal in Worten gibt.
      */
     TAUSCH_KOPF("mark.tausch.kopf", Art.SATZ),
 
@@ -337,6 +339,177 @@ enum MarkSatz implements Satz {
     WAEHRUNG_PFENNIGE("waehrung.pfennige", Art.WORT, "zahl"),
 
     /**
+     * Was ein Posten aus dem Muenzhaus gekostet hat - im GOLDbuch [Teil G].
+     *
+     * <p>Waehrungsfrei formuliert wie die sechs Wechselworte darueber: Welche Einheit die
+     * Zahl daneben hat, sagt die Zeile und nicht das Wort. Hier steht trotzdem
+     * "Muenzhaus" darin - der Posten ist die Auskunft, die der Spieler im Verlauf sucht.
+     */
+    VERLAUF_GRUND_MUENZHAUS_KAUF("mark.verlauf.grund.muenzhaus-kauf", Art.WORT),
+
+    /** Die Erstattung dazu - sie faellt nur, wenn die Lieferung nicht zustandekam. */
+    VERLAUF_GRUND_MUENZHAUS_ERSTATTET("mark.verlauf.grund.muenzhaus-erstattet", Art.WORT),
+
+    /**
+     * Die Tafel des Muenzhauses - der Kopf von {@code /mark muenzhaus} [Teil G].
+     *
+     * <p>Der ORT, den Plan 2.1 nennt: Kontostand, Verlauf, Wechseldeckel und der Katalog
+     * an einer Stelle. Die drei mittleren Zeilen holt sich diese Tafel von der
+     * Wechselstube - Stand, Kurse und der sichtbare Deckel stehen in
+     * {@link #TAUSCH_STAND}, {@link #TAUSCH_KURSE} und {@link #TAUSCH_FREI}, und eine
+     * zweite Fassung derselben Auskunft waere die, die der naechste Umbau vergisst.
+     */
+    MUENZHAUS_KOPF("mark.muenzhaus.kopf", Art.SATZ),
+
+    /** Der Betreiber hat das Muenzhaus abgeschaltet - und sagt es statt zu schweigen. */
+    MUENZHAUS_AUS("mark.muenzhaus.aus", Art.SATZ),
+
+    /**
+     * Das Muenzhaus ist an, der Katalog aber leer.
+     *
+     * <p>Ein eigener Satz und nicht {@link #MUENZHAUS_AUS}: Ein leerer Katalog ist eine
+     * andere Aussage als ein geschlossenes Haus - der Kontostand gilt weiter, und morgen
+     * kann etwas darin stehen.
+     */
+    MUENZHAUS_LEER("mark.muenzhaus.leer", Art.SATZ),
+
+    /**
+     * EINE Zeile des Katalogs - ein Posten, den dieser Spieler nehmen koennte.
+     *
+     * <p><b>Eine Zeile je Posten, und alles darin</b>: Name, Preis und Inhalt. Die
+     * Gegenprobe steht bei den Herausforderungen, wo {@code Wolkentext.mengen} dasselbe
+     * tut - packte man den Inhalt stattdessen in eigene Zeilen, waere die Tafel bei vier
+     * Posten zwischen sieben und siebenundzwanzig Zeilen lang, je nachdem, was der
+     * Betreiber eingetragen hat.
+     *
+     * <p>Der INHALT nennt die technischen Namen, wie die Aufgabentafel: Genau diese Namen
+     * stehen in der {@code config.yml}, und ein Spieler, der nach einem fragt, bekaeme von
+     * seinem Betreiber sonst die falsche Antwort.
+     */
+    MUENZHAUS_ZEILE("mark.muenzhaus.zeile", Art.SATZ, "name", "preis", "inhalt"),
+
+    /** Dieselbe Zeile fuer einen Posten, dessen Preis er heute nicht aufbringt. */
+    MUENZHAUS_ZEILE_ZU_TEUER("mark.muenzhaus.zeile-zu-teuer", Art.SATZ, "name", "preis",
+            "inhalt"),
+
+    /**
+     * Dieselbe Zeile fuer einen Posten, dessen BEDINGUNG er nicht erfuellt.
+     *
+     * <p>Ohne die Zahlen, und das ist Absicht: Was genau fehlt, sagt der Versuch
+     * ({@link #MUENZHAUS_BEDINGUNG_FEHLT} und je Bedingung eine eigene Zeile). In einer
+     * Liste von Posten waere es eine Wand.
+     *
+     * <p>Gezeigt wird er trotzdem - ein Posten, den der Spieler nicht sieht, ist ein
+     * Posten, von dem er nie erfaehrt.
+     */
+    MUENZHAUS_ZEILE_GESPERRT("mark.muenzhaus.zeile-gesperrt", Art.SATZ, "name", "preis",
+            "inhalt"),
+
+    /** Wie man kauft und wo der Verlauf steht - die letzte Zeile der Tafel. */
+    MUENZHAUS_HILFE("mark.muenzhaus.hilfe", Art.SATZ),
+
+    /**
+     * Die RUECKFRAGE vor einem Kauf - mit Preis, Inhalt und dem Stand danach.
+     *
+     * <p>Dieselbe Sicherung wie bei {@code /beruf verlassen} und {@code /freistadt
+     * gruenden}, und aus demselben Grund: Der Posten wird GETIPPT, er kostet Goldmark, und
+     * es gibt keinen Weg zurueck - verkauft wird im Muenzhaus nichts. Wer bei vier
+     * aehnlich klingenden Namen den falschen vervollstaendigt, soll nicht schon bezahlt
+     * haben.
+     */
+    MUENZHAUS_FRAGE("mark.muenzhaus.frage", Art.SATZ, "name", "posten", "preis", "inhalt",
+            "danach"),
+
+    /** Gekauft: was es war, was es kostete, was jetzt dasteht. */
+    MUENZHAUS_GEKAUFT("mark.muenzhaus.gekauft", Art.SATZ, "name", "inhalt", "preis",
+            "stand"),
+
+    /** Diesen Posten gibt es nicht - mit dem, was der Spieler getippt hat. */
+    MUENZHAUS_UNBEKANNT("mark.muenzhaus.unbekannt", Art.SATZ, "posten"),
+
+    /** Die Kopfzeile der Absage; darunter je fehlende Bedingung eine eigene Zeile. */
+    MUENZHAUS_BEDINGUNG_FEHLT("mark.muenzhaus.bedingung-fehlt", Art.SATZ, "name"),
+
+    /** So viel Goldmark hat er nicht - mit Preis, Stand und dem, was fehlt. */
+    MUENZHAUS_ZU_WENIG("mark.muenzhaus.zu-wenig", Art.SATZ, "preis", "stand", "fehlt"),
+
+    /**
+     * Im Rucksack ist kein Platz - gefragt wird VOR der Zahlung.
+     *
+     * <p>Die Zahl der Stuecke, die nicht hineinpassen, ist die ganze Nachricht: Das
+     * Muenzhaus kuerzt nicht, es sagt ab - also muss der Spieler lesen, wie viel Platz er
+     * machen muss.
+     */
+    MUENZHAUS_KEIN_PLATZ("mark.muenzhaus.kein-platz", Art.GEZAEHLT, "stueck"),
+
+    /**
+     * Kasse, Messung oder Rucksack haben geschwiegen - und es ist NICHTS passiert.
+     *
+     * <p>Dieser Satz gehoert dem BLICK und der Rueckfrage: der Tafel, dem Goldverlauf
+     * und einem Kauf, der vor der Zahlung gescheitert ist. Dass er und
+     * {@link #MUENZHAUS_ERSTATTET} zwei Saetze sein muessen, ist am 20.11.2026
+     * aufgefallen: Mit einem einzigen las ein Spieler "Dein Geld ist zurueck", wenn er
+     * nur die Tafel aufgeschlagen hatte - und suchte eine Buchung, die es nicht gibt.
+     */
+    MUENZHAUS_GESTOERT("mark.muenzhaus.gestoert", Art.SATZ),
+
+    /** Es war abgebucht, und das Geld ist zurueck - der einzige Fall, der das sagen darf. */
+    MUENZHAUS_ERSTATTET("mark.muenzhaus.erstattet", Art.SATZ),
+
+    /**
+     * Der Kopf des GOLDverlaufs - mit dem Stand in Goldmark.
+     *
+     * <p>Ein eigener Kopf und eine eigene Leerzeile, aber KEINE eigene Zeilenform: Die
+     * Buchungen selbst kommen aus {@link #VERLAUF_ZEILE}, wie die der Stadtkasse. Eine
+     * Buchung soll ueberall gleich aussehen; welche Waehrung die Zahlen haben, sagt das
+     * Buch, das {@code Verlaufszeile} hereinbekommt.
+     */
+    MUENZHAUS_VERLAUF_KOPF("mark.muenzhaus.verlauf-kopf", Art.SATZ, "betrag"),
+
+    /** Noch keine Goldmark bewegt - dann steht hier das statt einer leeren Liste. */
+    MUENZHAUS_VERLAUF_LEER("mark.muenzhaus.verlauf-leer", Art.SATZ),
+
+    /**
+     * Die fuenf Worte der Bedingungen - je Art eine GEZAEHLTE Zeile [Teil G].
+     *
+     * <p><b>Warum gezaehlt und nicht ein Wort mit Zahl davor:</b> "1 eigene Parzellen"
+     * ist falsches Deutsch, und genau diese Zahl steht in der ausgelieferten Datei. Mit
+     * {@link Art#GEZAEHLT} waehlt die Sprachdatei zwischen {@code .eins} und
+     * {@code .viele}, und der Betreiber kann beide Formen selbst setzen.
+     *
+     * <p><b>Warum eigene Saetze und nicht {@code Bedingungsart.beschreibung()}:</b> Jene
+     * Zeichenkette steht im Quelltext und sagt es selbst - "fuer die Klage und den
+     * Startbericht, nicht fuer das Spiel". Ein Spieler liest nur, was in der
+     * {@code sprache.yml} steht.
+     *
+     * <p>Die ZAHL ist die aus der {@code config.yml} und nicht die gemessene Differenz:
+     * {@code Rangregel.Fehlend} rechnet in Sekunden, und ungerechnet gezeigt stuende hier
+     * "noch 14.400 Stunden". Zurueckgerechnet wird mit
+     * {@code Bedingungsart.inDerDatei} - an derselben einen Stelle wie hin.
+     *
+     * <p>Gewaehlt werden sie ueber {@link #bedingungssatz}, also mechanisch wie die
+     * Buchungsgruende - darum stehen sie in {@code Sprachschluessel.familienDeckung()},
+     * und eine Probe schickt JEDE Art durch die ausgelieferte Vorlage.
+     */
+    MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN("mark.muenzhaus.bedingung.taetige-stunden",
+            Art.GEZAEHLT, "zahl"),
+
+    /** Siehe {@link #MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN}. */
+    MUENZHAUS_BEDINGUNG_ANWESENHEIT_STUNDEN(
+            "mark.muenzhaus.bedingung.anwesenheit-stunden", Art.GEZAEHLT, "zahl"),
+
+    /** Siehe {@link #MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN}. */
+    MUENZHAUS_BEDINGUNG_PARZELLEN("mark.muenzhaus.bedingung.parzellen", Art.GEZAEHLT,
+            "zahl"),
+
+    /** Siehe {@link #MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN}. */
+    MUENZHAUS_BEDINGUNG_BERUF("mark.muenzhaus.bedingung.beruf", Art.GEZAEHLT, "zahl"),
+
+    /** Siehe {@link #MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN}. */
+    MUENZHAUS_BEDINGUNG_GUTHABEN("mark.muenzhaus.bedingung.guthaben", Art.GEZAEHLT,
+            "zahl"),
+
+    /**
      * Das Wort fuer einen Betrag in GOLDMARK - zum Beispiel {@code "{zahl} Goldmark"}.
      *
      * <p>Ein eigener Schluessel und nicht derselbe wie {@link #WAEHRUNG_BETRAG}, und das
@@ -391,5 +564,26 @@ enum MarkSatz implements Satz {
     static String grundpfad(Buchungsgrund grund) {
         return "mark.verlauf.grund."
                 + grund.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+    }
+
+    /**
+     * Der Satz, der eine Bedingung in Worte fasst - je Art einer.
+     *
+     * <p><b>Ein Schalter ohne {@code default}</b>, wie der des Buchungsgrundes nach seinem
+     * Buch: Wer der {@link Bedingungsart} einen sechsten Wert hinzufuegt, wird vom
+     * Uebersetzer gefragt, was der Spieler dann liest. Eine Karte daneben waere eine
+     * stille Vorgabe, und die fehlende Zeile faende man erst im Chat.
+     *
+     * <p>Die Pfade folgen den Schluesseln der Aufzaehlung; dass sie es wirklich tun,
+     * sichert eine Probe zu - sonst stuende in der Vorlage ein Pfad, den niemand findet.
+     */
+    static MarkSatz bedingungssatz(Bedingungsart art) {
+        return switch (art) {
+            case TAETIGE_STUNDEN -> MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN;
+            case ANWESENHEIT_STUNDEN -> MUENZHAUS_BEDINGUNG_ANWESENHEIT_STUNDEN;
+            case PARZELLEN -> MUENZHAUS_BEDINGUNG_PARZELLEN;
+            case BERUF -> MUENZHAUS_BEDINGUNG_BERUF;
+            case GUTHABEN -> MUENZHAUS_BEDINGUNG_GUTHABEN;
+        };
     }
 }

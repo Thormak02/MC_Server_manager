@@ -164,6 +164,11 @@ mark:
       wechsel-mark-her: "Aus Goldmark gewechselt"
       wechsel-mark-zurueck: "Kauf gescheitert - erstattet"
       wechsel-goldmark-zurueck: "Rueckwechsel gescheitert - erstattet"
+      # Teil G: das Muenzhaus. Zwei Worte, und das zweite faellt nur, wenn die
+      # Lieferung nach der Zahlung nicht zustandekam - dann steht die Erstattung als
+      # eigene Zeile daneben, und der Spieler sieht, dass sein Geld zurueck ist.
+      muenzhaus-kauf: "Im Muenzhaus gekauft"
+      muenzhaus-erstattet: "Kauf gescheitert - erstattet"
 
   # /MARK TAUSCHEN - die Wechselstube. Plan 2.1 nennt fuer das Muenzhaus "Kontostand,
   # Verlauf, Wechsel Mark - Goldmark, Wechseldeckel sichtbar"; das Haus selbst kommt
@@ -206,6 +211,90 @@ mark:
     # Eine Kasse hat geschwiegen. Was abgebucht war, ist zurueck.
     gestoert: "<red>Die Kasse hat nicht geantwortet. Es ist nichts passiert.</red>"
 
+  # /MARK MUENZHAUS - das Haus selbst (Plan 2.1: Bank und Waehrung). Es zeigt den
+  # Kontostand, die Kurse, den sichtbaren Wechseldeckel und den Katalog, und es
+  # verkauft GEGENSTAENDE fuer Goldmark.
+  #
+  # DREI ZEILEN DER TAFEL STEHEN NICHT HIER, sondern oben unter tausch: stand, kurse
+  # und frei bzw. zu. Das ist Absicht - es ist dieselbe Auskunft, und zwei Wortlaute
+  # fuer eine Zahl laufen auseinander, sobald jemand nur einen davon aendert.
+  #
+  # DIE NAMEN DER POSTEN stehen ganz unten unter muenzhaus.posten - was es gibt, steht
+  # in der config.yml, wie es heisst, hier.
+  muenzhaus:
+    # Die erste Zeile der Tafel.
+    kopf: "<gold>Muenzhaus</gold>"
+    # Wenn muenzhaus.an auf false steht. Kontostand und Verlauf bleiben zu sehen.
+    aus: "<gray>Im Muenzhaus wird gerade nichts verkauft.</gray>"
+    # Wenn der Katalog leer ist - eine andere Aussage als "aus".
+    leer: "<gray>Der Katalog ist leer.</gray>"
+    # EINE Zeile je Posten. {name} der Name aus muenzhaus.posten, {preis} in GOLDMARK,
+    # {inhalt} die Gegenstaende mit ihren technischen Namen, so wie sie in der
+    # config.yml stehen - wer danach fragt, soll die Antwort dort wiederfinden.
+    zeile: "<gray>- <white>{name}</white> fuer <gold>{preis}</gold>: {inhalt}</gray>"
+    # Dieselbe Zeile, wenn dein Goldmarkstand nicht reicht.
+    zeile-zu-teuer: "<dark_gray>- {name} fuer {preis}: {inhalt}</dark_gray>"
+    # Dieselbe Zeile, wenn eine BEDINGUNG fehlt. Ohne die Zahlen - was genau fehlt,
+    # sagt der Versuch zu kaufen; in einer Liste von Posten waere es eine Wand.
+    zeile-gesperrt: "<dark_gray>- {name} fuer {preis}: {inhalt} (noch nicht frei)</dark_gray>"
+    # Die letzte Zeile der Tafel.
+    hilfe: "<dark_gray>/mark muenzhaus kaufen [posten] - Verlauf: /mark muenzhaus verlauf</dark_gray>"
+    # DIE RUECKFRAGE. {name} der Name, {posten} sein Schluessel fuer den Befehl,
+    # {preis} der Preis, {inhalt} was du bekommst, {danach} dein Stand danach.
+    # Zwei Stufen wie bei /beruf verlassen und /freistadt gruenden: Der Posten wird
+    # getippt, er kostet Goldmark, und verkauft wird hier nichts.
+    frage: "<yellow>{name} kostet {preis} und bringt {inhalt}. Danach haettest du {danach}.</yellow>\n<gray>Zum Kaufen: /mark muenzhaus kaufen {posten} bestaetigen</gray>"
+    # {name} was du gekauft hast, {inhalt} was in deinem Rucksack liegt, {preis} was
+    # es gekostet hat, {stand} dein Goldmarkstand danach.
+    gekauft: "<green>{name} gekauft fuer {preis}: {inhalt}. Du hast jetzt {stand}.</green>"
+    # {posten} was du getippt hast. Mit dem Wort darin, damit du deinen Tippfehler
+    # siehst - ohne es sucht man an der falschen Stelle.
+    unbekannt: "<red>Den Posten \"{posten}\" gibt es im Katalog nicht.</red>"
+    # {name} der Posten. Darunter kommt je fehlender Bedingung eine eigene Zeile.
+    bedingung-fehlt: "<red>{name} ist noch nicht frei fuer dich. Dafuer brauchst du:</red>"
+    # {preis} was es kostet, {stand} was du hast, {fehlt} der Unterschied.
+    zu-wenig: "<red>Das kostet {preis} - du hast {stand}, dir fehlen {fehlt}.</red>"
+    # {stueck} wie viele Stueck NICHT hineinpassen. Gefragt wird VOR der Zahlung: Hier
+    # ist nichts abgebucht und nichts geliefert.
+    kein-platz:
+      eins: "<red>In deinem Rucksack fehlt Platz fuer 1 Stueck - es ist nichts passiert.</red>"
+      viele: "<red>In deinem Rucksack fehlt Platz fuer {stueck} Stueck - es ist nichts passiert.</red>"
+    # Kasse, Messung oder Rucksack haben geschwiegen - und es ist NICHTS passiert.
+    # Diesen Satz liest, wer nur die Tafel oder den Verlauf aufgeschlagen hat, und wer
+    # beim Kaufen vor der Zahlung gescheitert ist. Vom Geld redet nur die Zeile darunter.
+    gestoert: "<red>Das Muenzhaus hat nicht geantwortet - es ist nichts passiert.</red>"
+    # Hier war abgebucht, und das Geld ist zurueck. Der einzige Satz, der das sagen
+    # darf: Ein Spieler, der eine Erstattung liest, sucht sie danach im Verlauf.
+    erstattet: "<red>Das Muenzhaus hat nicht geantwortet. Dein Geld ist zurueck.</red>"
+    # Der Kopf des GOLDverlaufs. {betrag} dein Goldmarkstand. Die Buchungszeilen
+    # darunter kommen aus mark.verlauf.zeile - dieselbe Form wie im Markbuch, nur mit
+    # der anderen Waehrung an den Zahlen.
+    verlauf-kopf: "<gold>Goldmark: {betrag}</gold>"
+    # Noch keine Goldmark bewegt.
+    verlauf-leer: "<gray>Noch keine Goldmark bewegt. Mit /mark tauschen kaufen 5 geht es los.</gray>"
+    # DIE BEDINGUNGEN, je eine Zeile unter bedingung-fehlt. {zahl} ist die Zahl aus
+    # deiner config.yml - zwei Formen, weil "1 eigene Parzellen" falsch waere.
+    bedingung:
+      taetige-stunden:
+        eins: "<gray>- 1 Stunde taetige Zeit</gray>"
+        viele: "<gray>- {zahl} Stunden taetige Zeit</gray>"
+      anwesenheit-stunden:
+        eins: "<gray>- 1 Stunde auf dem Server</gray>"
+        viele: "<gray>- {zahl} Stunden auf dem Server</gray>"
+      parzellen:
+        eins: "<gray>- 1 eigene Parzelle</gray>"
+        viele: "<gray>- {zahl} eigene Parzellen</gray>"
+      beruf:
+        eins: "<gray>- 1 gewaehlter Beruf</gray>"
+        viele: "<gray>- {zahl} gewaehlte Berufe</gray>"
+      # OHNE Waehrungswort: {zahl} ist hier ein GELDbetrag und kommt aus
+      # waehrung.betrag - mit Tausenderpunkt und mit deinem Wort fuer die Waehrung.
+      # Darum stehen beide Formen gleich da: "1 Mark" und "50.000 Mark" bildet jene
+      # Zeile selbst. Die Stundenzeilen darueber sind kein Geld und bleiben nackt.
+      guthaben:
+        eins: "<gray>- {zahl} auf dem Konto</gray>"
+        viele: "<gray>- {zahl} auf dem Konto</gray>"
+
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
   # deines; die Zahlform bleibt im Programm, damit ein Tippfehler keine Preise
@@ -230,7 +319,8 @@ waehrung:
   # derselbe wie oben, und das ist der sichtbarste Teil der Trennung: Beide Zahlen sind
   # im Programm dasselbe, und eine verwechselte Zeile zeigte "12 Mark", wo einer 12
   # Goldmark hat - beim Kurs des Plans das Tausendfache daneben.
-  # Gebraucht wird es von /mark tauschen und spaeter vom Muenzhaus.
+  # Gebraucht wird es von /mark tauschen und vom Muenzhaus - Stand, Preise und jede
+  # Zeile des Goldverlaufs.
   goldmark: "{zahl} Goldmark"
 
 zeit:
@@ -2703,3 +2793,23 @@ raenge:
   #   es nicht aus einer fehlenden Zeile schliessen muss.
   # DARF ebenfalls LEER BLEIBEN.
   hoechste: "<gold>Damit stehst du auf der hoechsten Stufe.</gold>"
+
+muenzhaus:
+  # DIE NAMEN DER KATALOGPOSTEN. Je Posten eine Zeile, und der Schluessel links ist
+  # genau der aus der config.yml unter muenzhaus.katalog.
+  #
+  # EIN POSTEN OHNE ZEILE FAELLT NICHT WEG - er bleibt kaufbar und zeigt dann seinen
+  # Pfad statt eines Namens. Das ist der kleinere Schaden: Ein weggefallener Posten
+  # waere Kosmetik, die niemand mehr bekommt, und der Spieler suchte den Fehler bei
+  # sich. Der Startlauf sagt dir, welcher Name fehlt.
+  #
+  # KEIN FARBTAG: Der Name wird in andere Saetze eingesetzt - in die Tafel, in die
+  # Rueckfrage, in jede Absage - und ein Tag darin ueberschriebe die Farbe der Zeile,
+  # in der er landet.
+  #
+  # Traegst du einen Posten in die config.yml ein, traegst du seinen Namen hier ein.
+  posten:
+    kuerbishut: "Kuerbishut"
+    blumenkiste: "Blumenkiste"
+    musikscheibe: "Musikscheibe"
+    rathausglocke: "Rathausglocke"

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import de.freimarken.kern.Aufgabenbuch;
+import de.freimarken.kern.Vorrat;
 import de.freimarken.kern.Biombuch;
 import de.freimarken.kern.Aufgabenwerte;
 import de.freimarken.kern.Buchungsgrund;
@@ -762,14 +763,14 @@ class WolkeBefehlTest {
     }
 
     /**
-     * Der Rucksack als {@link Aufgabenbuch.Vorrat} - die Naht zum Inventar.
+     * Der Rucksack als {@link Vorrat} - die Naht zum Inventar.
      *
      * <p>Dahinter liegt im Spiel {@link Vorratshand}, und darin {@code new ItemStack}:
      * jenes wirft ohne laufenden Server. Dieselbe Lage wie beim Aufsetzen und bei der
      * Reise - und darum ist auch dieser Zweig nur mit Naht durchlaufbar.
      */
-    private Aufgabenbuch.Vorrat kartenvorrat() {
-        return new Aufgabenbuch.Vorrat() {
+    private Vorrat kartenvorrat() {
+        return new Vorrat() {
             @Override
             public int zaehle(String gegenstand) {
                 return rucksack.getOrDefault(gegenstand, 0);
@@ -786,6 +787,12 @@ class WolkeBefehlTest {
             public int lege(String gegenstand, int stueck) {
                 rucksack.merge(gegenstand, stueck, Integer::sum);
                 return stueck;
+            }
+
+            /** Ein Rucksack als Karte ist nie voll; /wolke abgeben fragt nicht danach. */
+            @Override
+            public int fehlenderPlatz(java.util.Map<String, Integer> gegenstaende) {
+                return 0;
             }
         };
     }

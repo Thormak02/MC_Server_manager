@@ -776,7 +776,7 @@ class VorlageTest {
             // Zahl. Die zweite erscheint nur bei geschlossenem Rueckweg; sie nennt
             // Goldmark und Mark, weil genau die Richtung gemeint ist.
             "FreimarkenPlugin.java -> \". Zu bekommen ist sie allein durch Tausch aus"
-                    + " Mark (/mark tauschen);\"",
+                    + " Mark\"",
             // Teil C3: Die SEVERE-Zeile des verlorenen Erloeses. Sie geht in die
             // Konsole und an niemanden sonst - ihr Zweck ist, dass der Betreiber von
             // Hand gutschreiben kann, und dafuer muss die Einheit darin stehen.
@@ -839,6 +839,15 @@ class VorlageTest {
             // Kaution unter dem Verlust bis zur Raeumung benennt. Erlaubt ist
             // sie, aber der Betreiber soll die Folge kennen.
             "Mietliste.java -> \" Mark Miete, die bis zur Raeumung\"",
+            // Teil G: die Rechenprobe des Muenzhauses. Sie nennt jeden Preis in BEIDEN
+            // Waehrungen - Goldmark ist die grobe Einheit, und erst in Mark sieht ein
+            // Betreiber, ob ein Hut eine Spielstunde oder einen Monat kostet. Dazu die
+            // Klage ueber einen Preis: Sie muss sagen, dass die Zahl GOLDmark meint,
+            // sonst traegt der naechste 2000 ein. Kein Spieler liest eine davon.
+            "Muenzliste.java -> \" Mark je Goldmark.\"",
+            "Muenzliste.java -> \" Mark)\"",
+            "Muenzliste.java -> \" Achtung, nicht in Mark: Die Goldmark ist die grobe"
+                    + " Einheit, der\"",
             // Plan 7.4: die Rechenprobe des Handels. EINE Nennung, und sie steht in
             // einer Zeile, die nur der Betreiber liest - "von 1.000 Mark bleiben
             // 1.000" sagt ihm, was 0 Prozent bedeuten; die Zahl 0 allein sagt

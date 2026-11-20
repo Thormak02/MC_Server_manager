@@ -64,7 +64,31 @@ public final class Rangregel {
         if (stufe == null) {
             throw new IllegalArgumentException("Ohne Stufe gibt es nichts zu pruefen");
         }
-        for (var zeile : stufe.bedingungen().entrySet()) {
+        return erfuellt(stufe.bedingungen(), gemessen);
+    }
+
+    /**
+     * Ob diese BEDINGUNGEN mit diesen Messwerten erfuellt sind - ohne Rangstufe.
+     *
+     * <p><b>Warum es diese Tuer gibt</b> [20.11.2026, Teil G]: Ein Katalogposten im
+     * {@link Muenzhaus} haengt an denselben Bedingungen, ist aber keine Rangstufe - er hat
+     * keine Zahlen und keine Rechte, und sein Schluessel steht in keiner Rangablage. Ohne
+     * diese Tuer blieben drei Wege, und jeder war schlechter: eine gefaelschte Stufe je
+     * Posten, eine zweite Vergleichsschleife im Muenzhaus (die dann
+     * {@link Bedingungsart#inMesseinheit} selbst rufen muesste - und genau dagegen steht
+     * dessen Begruendung), oder zwei Urteile ueber dieselbe Frage.
+     *
+     * <p>Eine leere Bedingungskarte ist immer erfuellt - das ist der Posten ohne
+     * Bedingung und der unterste Rang, und beide sind erlaubt. Eine Art, zu der gar nichts
+     * gemessen wurde, zaehlt als 0 und nicht als "egal".
+     */
+    public static boolean erfuellt(Map<Bedingungsart, Long> verlangt,
+                                   Map<Bedingungsart, Long> gemessen) {
+        if (verlangt == null) {
+            throw new IllegalArgumentException("Ohne Bedingungen gibt es nichts zu"
+                    + " pruefen - eine LEERE Karte ist erlaubt, null nicht");
+        }
+        for (var zeile : verlangt.entrySet()) {
             if (wert(gemessen, zeile.getKey())
                     < zeile.getKey().inMesseinheit(zeile.getValue())) {
                 return false;
@@ -82,16 +106,33 @@ public final class Rangregel {
         if (stufe == null) {
             throw new IllegalArgumentException("Ohne Stufe gibt es nichts zu pruefen");
         }
+        return fehlend(stufe.bedingungen(), gemessen);
+    }
+
+    /**
+     * Was diesen BEDINGUNGEN noch fehlt - ohne Rangstufe, dieselbe Reihenfolge.
+     *
+     * <p>Die Tuer fuer den Katalogposten, aus demselben Grund wie bei
+     * {@link #erfuellt(Map, Map)}. Die Reihenfolge kommt weiter aus der Aufzaehlung und
+     * nicht aus der Karte, damit die Tafel des Muenzhauses und die Absage eines Kaufs
+     * dieselbe Reihenfolge zeigen wie die Rangleiter.
+     */
+    public static List<Fehlend> fehlend(Map<Bedingungsart, Long> verlangt,
+                                        Map<Bedingungsart, Long> gemessen) {
+        if (verlangt == null) {
+            throw new IllegalArgumentException("Ohne Bedingungen gibt es nichts zu"
+                    + " pruefen - eine LEERE Karte ist erlaubt, null nicht");
+        }
         List<Fehlend> offen = new ArrayList<>();
         for (Bedingungsart art : Bedingungsart.values()) {
-            Long ausDerDatei = stufe.bedingungen().get(art);
+            Long ausDerDatei = verlangt.get(art);
             if (ausDerDatei == null) {
                 continue;
             }
-            long verlangt = art.inMesseinheit(ausDerDatei);
+            long noetig = art.inMesseinheit(ausDerDatei);
             long hat = wert(gemessen, art);
-            if (hat < verlangt) {
-                offen.add(new Fehlend(art, verlangt, hat));
+            if (hat < noetig) {
+                offen.add(new Fehlend(art, noetig, hat));
             }
         }
         return List.copyOf(offen);

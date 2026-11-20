@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,7 @@ class WirtschaftsstandTest {
                 Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE,
                 Truhenwerte.VORGABE, Freistadtwerte.VORGABE, Inselwerte.VORGABE,
                 Angelwerte.VORGABE, Wolkenwerte.VORGABE, Rangwerte.VORGABE,
-                Wechselwerte.VORGABE);
+                Wechselwerte.VORGABE, Muenzwerte.VORGABE);
     }
 
     /**
@@ -511,6 +512,89 @@ class WirtschaftsstandTest {
     }
 
     @Test
+    @DisplayName("Der Muenzhauskatalog wird genannt: Schalter, Bestand UND Preis je Posten")
+    void muenzhausGenannt() {
+        // DREI GESTALTEN, drei Aufgaben: Der Schalter sagt, ob verkauft wird; die MENGE
+        // sagt, welcher Posten dazukam oder wegfiel; und der PREIS je Posten ist der
+        // Wert, an dem ein Betreiber am haeufigsten dreht.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var anders = Muenzwerte.VORGABE.mitKatalog(List.of(
+                new Muenzwerte.Posten("kuerbishut", Map.of("carved_pumpkin", 1), 7L,
+                        Map.of()),
+                new Muenzwerte.Posten("neu", Map.of("bell", 1), 3L, Map.of())));
+
+        var uebernahme = stand.uebernimm(
+                Wirtschaftswerte.VORGABE.mitMuenzhaus(anders.mitAn(false)));
+
+        assertTrue(uebernahme.geaendert().contains(Muenzwerte.PFAD_AN + ": true -> false"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().stream().anyMatch(zeile ->
+                        zeile.startsWith(Muenzwerte.PFAD_KATALOG + ": 4 -> 2 Namen")
+                                && zeile.contains("dazu: neu")
+                                && zeile.contains("weg: blumenkiste")),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(
+                        Muenzwerte.PFAD_KATALOG + ".kuerbishut.preis: 2 -> 7"),
+                "der Preis je Posten, mit dem Posten im Pfad: "
+                        + uebernahme.geaendert());
+    }
+
+    @Test
+    @DisplayName("Ein neuer Posten bekommt KEINE Preiszeile - es ist sein erster Wert")
+    void neuerPostenOhnePreiszeile() {
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var anders = Muenzwerte.VORGABE.mitKatalog(List.of(
+                new Muenzwerte.Posten("neu", Map.of("bell", 1), 3L, Map.of())));
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitMuenzhaus(anders));
+
+        assertFalse(uebernahme.geaendert().stream().anyMatch(zeile ->
+                        zeile.contains(".neu.preis")),
+                "ein neuer Posten hat keinen alten Preis - die Menge nennt ihn schon: "
+                        + uebernahme.geaendert());
+    }
+
+    @Test
+    @DisplayName("Ein unveraendertes Muenzhaus schweigt")
+    void unveraendertesMuenzhausSchweigt() {
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE);
+
+        assertFalse(uebernahme.geaendert().stream().anyMatch(zeile ->
+                        zeile.startsWith("muenzhaus")), uebernahme.geaendert().toString());
+    }
+
+    @Test
+    @DisplayName("Die am 20.11. gefundenen stummen Werte werden jetzt genannt")
+    void gefundeneStummeWerte() {
+        // DER FUND, und darum stehen hier Werte aus fuenf verschiedenen Bereichen: Alle
+        // waren neuladbar und wurden in uebernimm NIE genannt - das Neuladen war
+        // vollstaendig stumm. Drei davon sind GELD (Miete, Kaution, Lizenz), also genau
+        // die Art Wert, fuer die Teil F die Wechselkurse nachgetragen hat.
+        //
+        // Gehalten wird die Vollstaendigkeit ab jetzt von GrenzeTest 31cw; diese Probe
+        // zeigt, dass die Zeilen wirklich entstehen und ihren Pfad nennen.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE
+                .mitLaeden(new Mietwerte(99L, 990L, 97L, 96, 95))
+                .mitHandel(new Shopwerte(9, 8, 7, "Bundshop", 6))
+                .mitWolken(Wolkenwerte.VORGABE.mitBiompreis(12_345L)));
+
+        for (String pfad : List.of(Mietwerte.PFAD_MIETE, Mietwerte.PFAD_KAUTION,
+                Mietwerte.PFAD_LIZENZ, Mietwerte.PFAD_DAUER, Mietwerte.PFAD_AUSFAELLE,
+                Shopwerte.PFAD_SPIELER_KAUF, Shopwerte.PFAD_SPIELER_VERKAUF,
+                Shopwerte.PFAD_BUND_VERKAUF, Shopwerte.PFAD_ZEILEN,
+                Wolkenwerte.PFAD_BIOMPREIS)) {
+            assertTrue(uebernahme.geaendert().stream().anyMatch(zeile ->
+                            zeile.startsWith(pfad + ":")),
+                    pfad + " wird beim Neuladen nicht genannt: "
+                            + uebernahme.geaendert());
+        }
+    }
+
+    @Test
     @DisplayName("Eine unveraenderte Wechselstube steht NICHT in der Meldung")
     void unveraenderterWechselSchweigt() {
         // Die Gegenrichtung, und sie ist Pflicht: Drei Zeilen, die immer dastehen, waeren
@@ -730,5 +814,108 @@ class WirtschaftsstandTest {
         assertTrue(uebernahme.geaendert().stream().noneMatch(zeile
                         -> zeile.startsWith("messstelle.")),
                 uebernahme.geaendert().toString());
+    }
+
+    @Test
+    @DisplayName("Geliefertes UND Bedingungen eines Postens werden genannt")
+    void postenGegenstaendeUndBedingungen() {
+        // BEFUND DER PRUEFRUNDE (20.11.2026): Genannt wurde je Posten nur der PREIS. Wer
+        // muenzhaus.katalog.blumenkiste.bedingungen.parzellen von 1 auf 3 setzte, las
+        // "an den Wirtschaftswerten hat sich nichts geaendert" - und die neue Huerde galt
+        // ab dem naechsten /mark muenzhaus. Dasselbe beim Geliefertem: rose_bush 16 -> 1
+        // war ein Siebzehntel fuer denselben Preis, stumm.
+        var hut = Muenzwerte.VORGABE.posten("kuerbishut").orElseThrow();
+        var blumen = Muenzwerte.VORGABE.posten("blumenkiste").orElseThrow();
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var anders = Muenzwerte.VORGABE.mitKatalog(List.of(
+                new Muenzwerte.Posten(hut.schluessel(), Map.of("carved_pumpkin", 2),
+                        hut.preis(), hut.bedingungen()),
+                new Muenzwerte.Posten(blumen.schluessel(), blumen.gegenstaende(),
+                        blumen.preis(), Map.of(Bedingungsart.PARZELLEN, 3L))));
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitMuenzhaus(anders));
+
+        assertTrue(uebernahme.geaendert().stream().anyMatch(zeile -> zeile.startsWith(
+                        Muenzwerte.PFAD_KATALOG + ".kuerbishut."
+                                + Muenzwerte.SCHLUESSEL_GEGENSTAENDE + ":")),
+                "das GELIEFERTE wird genannt: " + uebernahme.geaendert());
+        assertTrue(uebernahme.geaendert().stream().anyMatch(zeile -> zeile.startsWith(
+                        Muenzwerte.PFAD_KATALOG + ".blumenkiste."
+                                + Muenzwerte.SCHLUESSEL_BEDINGUNGEN + ":")),
+                "die BEDINGUNG wird genannt: " + uebernahme.geaendert());
+        assertFalse(uebernahme.geaendert().stream().anyMatch(zeile ->
+                        zeile.contains("kuerbishut." + Muenzwerte.SCHLUESSEL_PREIS)),
+                "der unveraenderte Preis bleibt stumm - sonst sind es Zeilen, die immer"
+                        + " dastehen: " + uebernahme.geaendert());
+    }
+
+    @Test
+    @DisplayName("Die drei Teile einer Rangstufe werden genannt")
+    void rangstufeTeileGenannt() {
+        // Derselbe Befund eine Ebene tiefer: raenge.leiter nannte nur die MENGE der
+        // Stufennamen. Wer rang.leiter.buerger.zahlen von 4 auf 8 Parzellen setzte oder
+        // ein Recht herausnahm, las "nichts geaendert" - und der Wert galt.
+        //
+        // Aufgezaehlt wird der Inhalt NICHT (das waere bei vier Stufen eine Wand),
+        // sondern nur, DASS sich die Tabelle geaendert hat - dieselbe Antwort, die die
+        // Lohntafel seit Monaten gibt.
+        var buerger = Rangwerte.VORGABE.stufe("buerger").orElseThrow();
+        var stufen = new java.util.ArrayList<>(Rangwerte.VORGABE.leiter());
+        stufen.set(stufen.size() - 1, new Rangwerte.Stufe(buerger.schluessel(),
+                Map.of(Bedingungsart.TAETIGE_STUNDEN, 41L),
+                Map.of("parzellen", 8, "gruppe", 4, "inseln", 1, "wolken", 1),
+                List.of("freistadt.gruenden")));
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE
+                .mitRaengen(new Rangwerte(true, stufen)));
+
+        for (String teil : List.of(Rangwerte.SCHLUESSEL_BEDINGUNGEN,
+                Rangwerte.SCHLUESSEL_ZAHLEN, Rangwerte.SCHLUESSEL_RECHTE)) {
+            assertTrue(uebernahme.geaendert().stream().anyMatch(zeile ->
+                            zeile.startsWith(Rangwerte.PFAD_LEITER + ".buerger." + teil
+                                    + ":")),
+                    teil + " wird nicht genannt: " + uebernahme.geaendert());
+        }
+    }
+
+    @Test
+    @DisplayName("Eine unveraenderte Rangstufe und ein unveraenderter Posten schweigen")
+    void unveraenderteTeileSchweigen() {
+        // Die Gegenrichtung fuer beide Nachtraege zusammen: Sechs Zeilen je Stufe und
+        // zwei je Posten, die immer dastehen, waeren mit den Proben darueber genauso
+        // gruen - und der Betreiber laese bei jedem Neuladen, seine Raenge haetten sich
+        // geaendert.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE);
+
+        assertEquals(List.of(), uebernahme.geaendert());
+    }
+
+    @Test
+    @DisplayName("Das Verlangte und die Belohnung einer Herausforderung werden genannt")
+    void herausforderungTeileGenannt() {
+        // Die dritte Liste mit demselben Befund - und hier ist einer der zwei Werte
+        // GELD: Eine Belohnung, die sich beim Neuladen stumm aendert, ist genau der Fall,
+        // fuer den Teil F die Wechselkurse nachgetragen hat.
+        var erster = Aufgabenwerte.VORGABE.aufgabe("erster-stein").orElseThrow();
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        var anders = new Aufgabenwerte(true, List.of(
+                new Aufgabenwerte.Aufgabe(erster.schluessel(),
+                        Map.of("cobblestone", 128), 500L)));
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitWolken(
+                Wolkenwerte.VORGABE.mitAufgaben(anders)));
+
+        assertTrue(uebernahme.geaendert().stream().anyMatch(zeile -> zeile.startsWith(
+                        Aufgabenwerte.PFAD_LISTE + ".erster-stein."
+                                + Aufgabenwerte.SCHLUESSEL_VERLANGT + ":")),
+                "das VERLANGTE wird genannt: " + uebernahme.geaendert());
+        assertTrue(uebernahme.geaendert().contains(Aufgabenwerte.PFAD_LISTE
+                        + ".erster-stein." + Aufgabenwerte.SCHLUESSEL_BELOHNUNG
+                        + ": " + erster.belohnung() + " -> 500"),
+                "die BELOHNUNG wird mit beiden Zahlen genannt - sie ist Geld: "
+                        + uebernahme.geaendert());
     }
 }

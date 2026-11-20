@@ -37,6 +37,27 @@ record Sprachbuch(Map<String, String> saetze, Set<String> ausDerDatei,
             throw new IllegalArgumentException(schluessel.pfad() + " ist gezaehlt - ohne"
                     + " Anzahl ist nicht entschieden, ob .eins oder .viele gilt.");
         }
+        if (Sprachschluessel.gehoertZuFamilie(schluessel)
+                && !saetze.containsKey(schluessel.pfad())) {
+            // DER PFAD STATT EINES WURFS - aber NUR fuer eine offene Familie
+            // [20.11.2026].
+            //
+            // Was es gibt, steht in der config.yml; wie es heisst, in der sprache.yml.
+            // Der Betreiber darf dort morgen einen Posten eintragen und die Namenszeile
+            // vergessen, und genau diese Antwort haben drei Javadocs, eine
+            // Startmeldung und die ausgelieferte Vorlage ihm zugesagt: "Kaufen laesst
+            // sich der Posten weiter; in der Tafel steht bis dahin sein Pfad."
+            //
+            // ZUGESAGT, ABER NICHT GEBAUT - gemessen in der Pruefrunde zu Teil G: Ein
+            // vergessener Name liess JEDEN Muenzhausbefehl in "steht nicht in diesem
+            // Buch" laufen, also auch die vier richtigen Posten; und ein Kauf buchte ab,
+            // lieferte und antwortete dann mit einer roten englischen Serverzeile. Der
+            // Spieler haelt ihn fuer gescheitert und kauft ein zweites Mal.
+            //
+            // Fuer jeden anderen Pfad bleibt es ein WURF: Dort ist ein Fehlen ein
+            // Programmfehler, und ein Buch ist vollstaendig oder es entsteht nicht.
+            return schluessel.pfad();
+        }
         return hole(schluessel.pfad());
     }
 

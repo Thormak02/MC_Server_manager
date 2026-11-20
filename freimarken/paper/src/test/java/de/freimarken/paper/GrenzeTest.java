@@ -483,7 +483,9 @@ class GrenzeTest {
             // ZAHLEN sendet nie - es faellt taeglich und waere eine Durchsage ohne
             // Anlass.
             Map.entry("Ladengebuehrlauf.java", 1),
-            Map.entry("ParzellenBefehle.java", 47),
+            // 47 -> 51 mit dem Muenzhaus [Teil G]: die Tafel, der Goldverlauf, die
+            // Rueckfrage und der Kauf.
+            Map.entry("ParzellenBefehle.java", 51),
             Map.entry("Portalwache.java", 1),
             Map.entry("Rangwache.java", 1),
             Map.entry("Reise.java", 7),
@@ -562,6 +564,10 @@ class GrenzeTest {
                     Map.entry("mitbauerSchonDrinZeilen", 1),
                     Map.entry("mitbauerWegErteiltZeilen", 1),
                     Map.entry("mitbauerZeilen", 1),
+            // Teil G: die Tafel des Muenzhauses und der Goldverlauf. Beide tragen die
+            // Stoerungswache - darum sind sie Methoden und keine Zeile im Zweig.
+            Map.entry("muenzhaustafelZeilen", 1),
+            Map.entry("muenzverlaufZeilen", 1),
                     Map.entry("nehmenAusserhalbZeilen", 1),
                     Map.entry("nehmenErteiltZeilen", 1),
                     Map.entry("nehmenGrenzeZeilen", 1),
@@ -4237,9 +4243,14 @@ class GrenzeTest {
         // UND SIE WIRD UEBERGEBEN. Das Argument ist Pflicht, aber ein null dort
         // uebersetzt - und dann stuerzt der erste /mark tauschen ab, auf dem Server und
         // nicht in einer Probe.
-        assertTrue(plugin.contains("wechselbuch);"),
-                "die Wechselstube wird gebaut und nicht an die Befehle gegeben - dann"
-                        + " gibt es sie, und niemand kann sie benutzen");
+        // BEIDE Uebergaben in EINER Zusicherung [Teil G]: Mit dem Muenzhaus und der Rucksacknaht als achtem und neuntem
+        // Argument heisst die Zeile "wechselbuch, muenzhaus);". Wer hier nur noch
+        // "muenzhaus);" naegelte, striche damit die Zusage ueber die Wechselstube - und
+        // genau sie ist der Fall, der beim ersten /mark tauschen abstuerzt.
+        assertTrue(plugin.contains("wechselbuch, muenzhaus, Vorratshand::fuer);"),
+                "Wechselstube, Muenzhaus oder die Rucksacknaht werden gebaut und nicht an"
+                        + " die Befehle gegeben - dann gibt es sie, und niemand kann sie"
+                        + " benutzen");
 
         // UND DIE EINE UHR DES PLUGINS. Mit einer zweiten Uhr liefe die Tagesgrenze des
         // Wechseldeckels gegen eine andere Zeit als jede andere Tagesrechnung - und der
@@ -4252,4 +4263,181 @@ class GrenzeTest {
                         + " Plugin, und die Tagesgrenze haengt an ihr");
     }
 
+    @Test
+    @DisplayName("31cv - das Muenzhaus steht auf derselben Goldkasse und misst an EINER"
+            + " Stelle")
+    void muenzhausVerdrahtet() {
+        // DREI VERDRAHTUNGEN, und jede einzelne ist von aussen unsichtbar:
+        //
+        // 1. DIE GOLDKASSE. Eine zweite waere ein zweites Konto in derselben Waehrung -
+        //    ein Spieler tauschte Goldmark ein und faende sie im Muenzhaus nicht wieder.
+        //    Jede Probe bliebe gruen: Beide Kassen tun genau, was man ihnen sagt.
+        // 2. DER WIRTSCHAFTSSTAND. Ein eigener machte das Neuladen des Katalogs stumm -
+        //    derselbe Fund, den Teil F fuer die Wechselstube aufgeschrieben hat.
+        // 3. DIE MESSTUER. Baut sich das Muenzhaus seine eigene Messung, urteilt ein Kauf
+        //    eines Tages anders als eine Befoerderung: dieselbe Bedingung, dieselbe Zahl
+        //    in der Datei, zwei verschiedene Antworten.
+        String plugin = plugintext();
+
+        assertTrue(plugin.contains("new Muenzhaus(goldkasse, wirtschaft,"),
+                "das Muenzhaus steht nicht auf der Goldkasse und dem geteilten"
+                        + " Wirtschaftsstand des Plugins");
+        var eigeneKasse = java.util.regex.Pattern
+                .compile("new Muenzhaus\\([^)]*new Goldkasse")
+                .matcher(plugin);
+        assertFalse(eigeneKasse.find(),
+                "das Muenzhaus baut sich eine eigene Goldkasse - dann gibt es zwei"
+                        + " Konten in derselben Waehrung");
+        // UEBER DIE BAUZEILE und nicht als freistehende Zeile - nachgezogen am
+        // 20.11.2026: Vorher waren die drei Zusicherungen voneinander unabhaengig. Wer
+        // das Lambda auf "(wer, gebraucht) -> java.util.Map.of()" setzte und irgendwo
+        // sonst in der Datei ein aufstiegslauf.messeFuer(wer, gebraucht) stehen liess,
+        // blieb gruen - und im Spiel waere dann jeder Posten mit Bedingung dauerhaft
+        // gesperrt, auch fuer den, der sie erfuellt: Eine leere Messkarte heisst
+        // "gilt nicht". 31cu macht es an derselben Stelle schon richtig.
+        var messtuer = java.util.regex.Pattern
+                .compile("new Muenzhaus\\([^;]*messeFuer\\(wer, gebraucht\\)")
+                .matcher(plugin);
+        assertTrue(messtuer.find(),
+                "das Muenzhaus misst seine Bedingungen nicht ueber den Aufstiegslauf -"
+                        + " und das ist die EINE Stelle, die messen darf");
+
+        // UND DIE MESSTUER GIBT ES GENAU EINMAL. Ein zweiter Messer waere genau der
+        // Fall, den Punkt 3 oben beschreibt - und er stuende dann in einer anderen
+        // Datei, wo niemand ihn neben diesen legt.
+        int messer = 0;
+        for (var datei : Quellen.alleDateien()) {
+            String text = Quellen.text(datei);
+            // GESCHAERFT und nicht ausgenommen: Das blosse Vorkommen der Faelle
+            // traf auch MarkSatz.bedingungssatz, das je Art einen SATZ waehlt. Ein
+            // MESSER liest die Zahl - er fragt die Kasse nach dem Guthaben.
+            if (text.contains("case GUTHABEN -> kasse.guthaben(wer)")) {
+                messer++;
+            }
+        }
+        assertEquals(1, messer, "die Bedingungen werden an " + messer + " Stellen"
+                + " gemessen - erlaubt ist genau eine (Aufstiegslauf.messe)");
+    }
+
+    /**
+     * Die Pfade, die in {@code Wirtschaftsstand.uebernimm} mit ABSICHT nicht genannt
+     * werden - mit dem Grund je Gruppe.
+     *
+     * <p><b>Warum es diese Liste gibt</b> [20.11.2026, Teil G]: Dieselbe Luecke ist in
+     * diesem Projekt dreimal aufgefallen - die zwei Auflagenschalter (17.11.), die
+     * Rangleiter (19.11.) und beim Bau des Muenzhauses ein ganzer Satz weiterer Pfade.
+     * Das Fehlerbild ist jedes Mal dasselbe: Der Wert GILT nach dem Neuladen, und der
+     * Befehl sagt "nichts geaendert". Keine Verhaltensprobe kann das fangen.
+     *
+     * <p>Ab jetzt faengt es diese Tafel, und sie prueft in BEIDE Richtungen: Ein neuer
+     * Einstellwert ohne Zeile ist rot, und eine Zeile, die nachgetragen wurde, muss hier
+     * heraus.
+     */
+    private static final Set<String> OHNE_NEULADEZEILE = Set.of(
+            // Das BLOCKBUCH ist kein Bestandteil der Wirtschaftswerte - es hat seine
+            // eigenen Werte und wird beim Start in seine Wache gegeben.
+            "Blockbuchwerte.PFAD_BENUTZBAR",
+            "Blockbuchwerte.PFAD_FRIST", "Blockbuchwerte.PFAD_HAPPEN",
+            "Blockbuchwerte.PFAD_REICHWEITE", "Blockbuchwerte.PFAD_TATEN",
+            "Blockbuchwerte.PFAD_WELTEN", "Blockbuchwerte.PFAD_ZEILEN",
+            // Die STELLEN der Freien Truhen sind kein Wert, sondern eine Liste von
+            // Orten: Sie werden beim Start gelesen und in die Wache gegeben.
+            "Truhenverzeichnis.PFAD_TRUHEN",
+            // Die BERUFSLISTE steckt in der Befehlsvervollstaendigung und wird darum nur
+            // beim Start gelesen; der Leser gibt dafuer ausdruecklich keinen Bericht.
+            "Berufswerte.PFAD_LISTE",
+            // Die WURZEL der Sprungbestaetigung ist kein Wert, sondern der Ort, an dem
+            // Bestaetigungen stehen.
+            "Wirtschaftswerte.PFAD_BESTAETIGT",
+            // Die zwei Unterschluessel einer ERZZEILE stehen in der Tabelle, und die
+            // wird als Ganzes verglichen (Erzwerte.PFAD_TABELLE, nenneTabelle): Eine
+            // geaenderte Zeile faellt dort auf, weil Erzzeile ein record ist und equals
+            // beide Zahlen vergleicht. Eine eigene Zeile je Erz waere eine Wand.
+            "Erzwerte.SCHLUESSEL_GEWICHT", "Erzwerte.SCHLUESSEL_AB_STUFE");
+
+    @Test
+    @DisplayName("31cw - jeder Einstellwert des Kerns wird beim Neuladen GENANNT")
+    void jederEinstellwertWirdGenannt() {
+        // PFAD_ UND SCHLUESSEL_ - geweitet am 20.11.2026, Befund der Pruefrunde: Ein
+        // Listenwert hat seinen Pfad (muenzhaus.katalog) und darunter je Eintrag
+        // UNTERSCHLUESSEL (gegenstaende, preis, bedingungen). Die heissen SCHLUESSEL_*,
+        // standen darum ausserhalb dieser Tafel - und fuer drei von ihnen war das
+        // Fehlerbild, gegen das die Tafel gebaut ist, genau hier schon da: Wer
+        // rang.leiter.buerger.zahlen oder muenzhaus.katalog.blumenkiste.bedingungen
+        // aenderte, las "nichts geaendert", und der neue Wert galt.
+        var muster = java.util.regex.Pattern
+                .compile("public static final String ((?:PFAD|SCHLUESSEL)_[A-Z_]+)\\s*=");
+        String stand = null;
+        var alle = new TreeSet<String>();
+        for (var datei : Quellen.alleDateien()) {
+            String name = datei.getFileName().toString();
+            if (!name.endsWith(".java")) {
+                continue;
+            }
+            String klasse = name.substring(0, name.length() - ".java".length());
+            String text = Quellen.mitKommentaren(datei);
+            if (klasse.equals("Wirtschaftsstand")) {
+                // OHNE KOMMENTARE, und das ist ein eigener Befund vom 20.11.2026: Mit
+                // ihnen genuegte die Zeile "// Muenzwerte.PFAD_AN bleibt absichtlich
+                // ungenannt", um gruen zu sein - ohne eine einzige Berichtszeile. Genau
+                // dieser Fehler ist in diesem Projekt schon gemessen worden und der
+                // Grund, warum es Quellen.text ueberhaupt gibt (siehe dort:
+                // "jederSchluesselWirdGesendet nahm eine Nennung im Javadoc als
+                // Benutzung").
+                stand = Quellen.text(datei);
+            }
+            var suche = muster.matcher(text);
+            while (suche.find()) {
+                alle.add(klasse + "." + suche.group(1));
+            }
+        }
+        assertTrue(stand != null, "Wirtschaftsstand.java nicht gefunden");
+        assertTrue(alle.size() > 80, "nur " + alle.size() + " Einstellpfade gefunden -"
+                + " die Suche laeuft leer, und dann ist diese Tafel blind");
+
+        var ohneZeile = new TreeSet<String>();
+        for (String pfad : alle) {
+            if (!stand.contains(pfad)) {
+                ohneZeile.add(pfad);
+            }
+        }
+
+        assertEquals(new TreeSet<>(OHNE_NEULADEZEILE), ohneZeile,
+                "Ein Einstellwert ohne Zeile in uebernimm wechselt beim Neuladen STUMM:"
+                        + " Er gilt, und der Befehl sagt \"nichts geaendert\". Wer einen"
+                        + " neuen Wert anlegt, traegt seine Zeile nach - und wer eine"
+                        + " nachgetragen hat, nimmt ihn aus OHNE_NEULADEZEILE heraus.");
+    }
+
+    @Test
+    @DisplayName("31cx - die Platzrechnung fragt nach GESTALT und nach GEGENSTAND")
+    void platzrechnungFragtGestaltUndGegenstand() {
+        // ZWEI BEFUNDE DER PRUEFRUNDE ZU TEIL G (20.11.2026), und beide haben dieselbe
+        // Wurzel: Die Rechnung vor der Zahlung war OPTIMISTISCHER als Bukkits addItem.
+        // Was sie zu viel verspricht, kostet echte Goldmark - abgebucht, halb geliefert,
+        // der ganze Preis erstattet, und das Gelieferte bleibt beim Spieler.
+        //
+        // 1. DIE GESTALT. addItem fuellt angefangene Stapel nur bei AEHNLICHKEIT auf
+        //    (firstPartial fragt isSimilar); die Rechnung verglich nur die ART. Ein im
+        //    Amboss umbenannter Stapel war fuer sie ein Aufstockziel und fuer Bukkit
+        //    keines.
+        // 2. DER GEGENSTAND. "potatoes" ist der Feldblock, "potato" der Gegenstand. Der
+        //    Leser der config.yml kann das nicht fragen - isItem wirft ohne Server -,
+        //    also faellt die Frage an dieser Naht.
+        //
+        // Beides ist eine Quelltextzusage, weil Vorratshand einen laufenden Server
+        // braucht: Die RECHNUNG selbst prueft VorratshandTest, aber was aus Bukkit
+        // hereingeholt wird, sieht nur diese Tafel.
+        String hand = Quellen.text(Quellen.alleDateien().stream()
+                .filter(datei -> datei.getFileName().toString().equals("Vorratshand.java"))
+                .findFirst().orElseThrow());
+
+        assertTrue(hand.contains("aufstockbar[platz] = !plaetze[platz].hasItemMeta();"),
+                "die Platzrechnung merkt sich nicht, welcher Stapel eine eigene Gestalt"
+                        + " hat - dann rechnet sie einen umbenannten Stapel voll, in den"
+                        + " addItem nichts legt");
+        assertTrue(hand.contains("art == null || !art.isItem()"),
+                "die Naht laesst ein reines BLOCKmaterial durch - ein Posten darauf"
+                        + " bucht ab und liefert nichts");
+    }
 }

@@ -2,6 +2,7 @@ package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -170,5 +171,42 @@ class SpracheTest {
                 "Sprache hat genau EIN Feld, und das ist der Halter - was neuladbar ist,"
                         + " wird beim Gebrauch gefragt und nie beim Bauen"
                         + " festgeschrieben");
+    }
+
+    @Test
+    @DisplayName("29c - ein Satz einer OFFENEN FAMILIE ohne Zeile antwortet mit seinem Pfad")
+    void offeneFamilieOhneZeile() {
+        // BEFUND DER PRUEFRUNDE (20.11.2026), und es ist der schwerste von Teil G: Drei
+        // Javadocs, eine Startmeldung und die ausgelieferte Vorlage sagen zu, ein Posten
+        // ohne Namenszeile bleibe kaufbar und zeige seinen Pfad. Gebaut war es nicht.
+        //
+        // Was wirklich geschah: Der Betreiber traegt einen fuenften Posten in die
+        // config.yml ein und vergisst muenzhaus.posten.schmiedehut in der sprache.yml.
+        // Danach wirft JEDER Muenzhausbefehl - auch die vier richtigen Posten sind weg -,
+        // und ein Kauf bucht ab, liefert, schreibt die Goldbuchzeile und antwortet dann
+        // mit einer roten englischen Serverzeile. Der Spieler haelt den Kauf fuer
+        // gescheitert und tippt ihn ein zweites Mal: zweimal bezahlt.
+        //
+        // Dieselbe Luecke hatte der Zwilling aus Teil E (Aufgabenname) - eine Stelle
+        // loest beide ein.
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+
+        assertEquals("muenzhaus.posten.schmiedehut",
+                sprache.wort(new Muenzname("schmiedehut"), Einsatz.keine()));
+        assertEquals("wolke.aufgabe.gibtesnicht",
+                sprache.wort(new Aufgabenname("gibtesnicht"), Einsatz.keine()));
+    }
+
+    @Test
+    @DisplayName("29d - fuer JEDEN ANDEREN Pfad bleibt ein fehlender Satz ein WURF")
+    void fremderPfadBleibtEinWurf() {
+        // Die Gegenrichtung, und sie ist die wichtigere Haelfte: Ein Rueckfall fuer alles
+        // machte aus jedem vergessenen Satz eine Chatzeile mit einem technischen Pfad -
+        // genau die stumme Luecke, gegen die Sprachbuch.hole gebaut ist. Ein Buch ist
+        // vollstaendig oder es entsteht nicht.
+        Satz fremd = satzZu("probe.fehlt");
+        Sprachbuch luecke = Sprachprobe.buch(List.of(fremd), "probe.anderes", "da");
+
+        assertThrows(IllegalStateException.class, () -> luecke.wortlaut(fremd));
     }
 }

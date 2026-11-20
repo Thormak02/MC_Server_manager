@@ -972,6 +972,157 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
   noch keine Anzeige. Die sechs Worte stehen schon in der Vorlage, weil Buchungsgrund zu
   jedem Grund ein Wort verlangt; eine Verlaufszeile in Goldmark braucht ihren eigenen
   Satz, denn waehrung.betrag sagt "Mark".
+- ~~Teil G: Muenzhaus.~~ 20.11. GEBAUT. Muenzwerte (Katalog als freie Liste),
+  Muenzhaus (pruefe/kaufe/tafel/konto), Vorrat als eigene Naht, Muenzliste, Muenztext,
+  Muenzname, Abschnitt muenzhaus: in der config.yml, /mark muenzhaus mit Tafel, Kauf in
+  zwei Stufen und Goldverlauf, GrenzeTest 31cv und 31cw.
+- VERKAUFT WERDEN GEGENSTAENDE - die erste Entscheidung. Alles andere, was Plan 8.3 als
+  Katalogware nennt (Partikel, Haustier, Rangfarbe, Namensanzeige, Heimatpunkt), hat
+  heute KEINE Mechanik; ein Posten darauf waere echte Goldmark fuer ein Recht, das
+  niemand liest. heimatpunkte ist sogar in zwei Proben als Gegenbeispiel festgenagelt.
+  Ein Gegenstand wirkt am Tag des Kaufs, braucht keine Rechteverwaltung, kein
+  PermissionAttachment (das ueberlebt keinen Neustart) und KEINE neue Tabelle - er liegt
+  danach im Rucksack, und Minecraft speichert Inventare.
+- PLATZ VOR GELD, und das ist die Reihenfolge des Kistenshops: "Erst der Vorrat, dann
+  der Platz, dann das Geld." Mein erster Entwurf wollte zuerst zahlen - dann stuenden
+  beim haeufigsten Fehlschlag (voller Rucksack) ZWEI Zeilen im Goldbuch fuer einen Kauf,
+  der nie stattgefunden hat. Ausgerechnet in dem Verlauf, den dieser Teil baut.
+- DAS HAUS NIMMT NICHTS ZURUECK. Die Naht vergleicht nur die ART eines Gegenstandes -
+  Vorratshand sagt selbst, dass diese Milde fuer HANDEL nicht gilt. Ein Rueckweg per
+  nimm koennte dem Spieler sein verzaubertes Schwert nehmen und ihm das gelieferte
+  blanke lassen, und keine Probe saehe es. Darum wird vorher nach dem Platz gefragt; und
+  wenn danach doch etwas schiefgeht, verliert der SERVER ein paar Blumen.
+- ZWEI BUCHUNGSGRUENDE, beide im Goldbuch: der Kauf und eine Erstattung. Letztere ist
+  nur noch der Programmfehlerpfad (ein Wurf nach dem Abbuchen) - Buchung wirft bei
+  falscher Richtung, ein Grund allein geht also nicht.
+- DIE VERLAUFSZEILE BEKOMMT DAS BUCH, nicht einen Formatierer. Ein
+  LongFunction<String> haette genau den Riegel aufgehoben, den Sprache.goldmark dafuer
+  gebaut hat ("jede Aufrufstelle nennt sie beim Namen"): Beide Zahlen sind long, beide
+  Methoden passen auf dieselbe Signatur. Mit dem Buch ist es ein erschoepfender
+  Schalter, und die Zeile prueft zusaetzlich, dass der GRUND in dieses Buch gehoert -
+  eine Markzeile im Goldverlauf wirft jetzt, statt zu luegen. Die Zeile hatte DREI
+  Geldstellen, nicht eine: zwei davon in mitVorzeichen.
+- DIE BEDINGUNG IST DIE VORHANDENE BEDINGUNGSART, kein zweiter Typ - sonst gaebe es
+  ausSchluessel, alleSchluessel und inMesseinheit zweimal. Rangregel hat dafuer zwei
+  neue Tueren, die eine blosse Bedingungskarte nehmen; gemessen wird weiter an EINER
+  Stelle (Aufstiegslauf.messeFuer), damit ein Kauf nicht anders urteilt als eine
+  Befoerderung. Und Bedingungsart.inDerDatei ist der Rueckweg: Fehlend rechnet in
+  SEKUNDEN, ungerechnet gezeigt stuende da "noch 18.000 Stunden".
+- RUECKFRAGE VOR DEM KAUF (kaufen <posten>, dann bestaetigen), wie /beruf verlassen und
+  /freistadt gruenden: Der Posten wird GETIPPT, er kostet Goldmark, und verkauft wird
+  nichts. pruefe und kaufe gehen denselben Weg - wer eine Bedingung nicht erfuellt,
+  erfaehrt es VOR der Bestaetigung.
+- EINE ZEILE JE POSTEN, mit Name, Preis und Inhalt darin (technische Namen, wie bei den
+  Aufgaben). Mit dem Inhalt in eigenen Zeilen waere die Tafel bei vier Posten zwischen
+  sieben und siebenundzwanzig Zeilen lang - fehlend ist je Posten eine LISTE.
+- KEIN SPRUNGSCHUTZ fuer die Preise: betrag() braucht je Wert einen festen Schluessel
+  unter wirtschaft.sprung-bestaetigt, und den hat ein frei getippter Posten nicht;
+  Tafel 31am prueft Mengengleichheit in beide Richtungen. Die Schranke ist die
+  RECHENPROBE - sie nennt jeden Preis auch in Mark, und "ein Hut kostet 5.000.000 Mark"
+  sieht jeder. Gerechnet wird mit dem HINWEGkurs, und ein Preis von 0 wird nicht
+  gerechnet: kaufpreis(0) wirft und riss den Startlauf mit.
+- GEMESSEN, Fund in Teil F: Mein eigener tauschZweig hatte kein eigenes .executes am
+  Literal "kaufen" - "/mark tauschen kaufen" antwortete englisch (Brigadier verdeckt mit
+  einem passenden Literal jedes Geschwister). Beide Literale sind nachgetragen, und die
+  Probe, die den Wurf verlangte, verlangt jetzt die Tafel.
+- GEMESSEN, Fund an Bukkit: Material.getMaxStackSize() WIRFT ohne laufenden Server (No
+  RegistryAccess implementation found), derselbe Weg wie new ItemStack. Darum kommt der
+  Rucksack als NAHT in die Befehle (Function<Player, Vorrat>, wie bei /wolke abgeben) -
+  erst damit laeuft der ganze Kaufzweig durch den echten Befehlsbaum, auch der volle
+  Rucksack.
+- GEFUNDEN UND BEHOBEN, nicht von Teil G: SIEBENUNDZWANZIG Einstellpfade fehlten in
+  Wirtschaftsstand.uebernimm - laeden.* (fuenf, davon drei GELD), handel.* (fuenf),
+  freistaedte.buergerrechte/.erstattung/.ladengebuehr.*, freistaedte.verfall.* (vier),
+  wolken.erze.* (sechs), wolken.starttruhe, wolken.biomwechsel, wolken.aufgaben.*,
+  wolken.punkte.*. Ihr Neuladen war VOLLSTAENDIG stumm. Es ist derselbe Fund zum
+  dritten Mal (Auflagenschalter 17.11., Rangleiter 19.11.), und darum haelt ihn ab jetzt
+  Tafel 31cw: Jeder PFAD_* aus dem Kern muss genannt sein oder in einer BEGRUENDETEN
+  Ausnahmeliste stehen, in beide Richtungen.
+- DIE TAFEL FAND SOFORT IHREN ERSTEN FEHLER - in meiner Ausnahmeliste:
+  Blockbuchwerte.PFAD_AN gibt es gar nicht. Genau dafuer ist sie da.
+- GEMESSEN, elf Zeilen je Sendestelle: ParzellenBefehle sendet 47 -> 51 mal; zwei neue
+  Zeilenmethoden in Tafel 31d; 33 neue Zeilen in der Bildtafel, davon 18 fuer die
+  gezaehlten Saetze (1, 2 und 0 - die Null waehlt die viele-Zeile).
+- NEUNTE MECHANISCHE FAMILIE: die fuenf Bedingungsworte, ueber MarkSatz.bedingungssatz
+  gewaehlt. Art.GEZAEHLT und nicht ein Wort mit Zahl davor, denn "1 eigene Parzellen"
+  ist falsches Deutsch - und genau diese Zahl steht in der ausgelieferten Datei.
+- GEMESSEN, vierzehn Einspritzungen mit TREFFERTEXT: Posten ohne Gegenstaende erlaubt ->
+  MuenzwerteTest; Platz erst nach der Zahlung -> MuenzhausTest; Erstattung weg (zweimal,
+  Zweig und Faenger) -> MuenzhausTest; Bedingung nicht geprueft -> MuenzhausTest;
+  abbuchen ohne Riegel -> MuenzhausTest; Goldverlauf in Mark -> VerlaufszeileTest;
+  Buchpruefung weg -> VerlaufszeileTest; Bedingungszahl in Sekunden -> MuenztextTest;
+  Materialpruefung weg -> MuenzlisteTest; Rechenprobe mit dem Rueckwegkurs ->
+  MuenzlisteTest; kaufen ohne .executes -> MarkBefehlTest 39n; eigene Goldkasse ->
+  31cv; eine Neuladezeile weg -> 31cw.
+- Proben 4326 -> 4453, 0 rot, 0 uebersprungen, 0 Warnungen. Neu: MuenzhausTest (22),
+  MuenzwerteTest (17), MuenzlisteTest (19), MuenztextTest (17), MarkBefehlTest +6,
+  VerlaufszeileTest +3, WirtschaftsstandTest +4, RangregelTest +2, BildGleich +33,
+  GrenzeTest 31cv und 31cw.
+- PRUEFRUNDE ZU TEIL G, 20.11.: 27 Befunde gemeldet, 14 haben die Widerlegung
+  ueberlebt, alle behoben. Die vier schweren:
+- DIE PLATZRECHNUNG WAR ZU OPTIMISTISCH. Sie fuellte angefangene Stapel nach der ART
+  auf, Bukkits addItem aber nur bei AEHNLICHKEIT (firstPartial fragt isSimilar). Ein im
+  Amboss umbenannter Stapel war fuer die Rechnung ein Aufstockziel und fuer Bukkit
+  keines: abgebucht, nichts angekommen, zwei Zeilen im Goldbuch fuer einen Kauf, der nie
+  stattfand - und bei halber Lieferung GRATIS, denn was ankommt bleibt und erstattet wird
+  der ganze Preis. Jetzt ist ein Platz mit eigener Gestalt belegt, aber kein
+  Aufstockziel; die Richtung ist pessimistisch.
+- UND SIE WAR UNPRUEFBAR. Die Schleife stand in der anonymen Klasse, hinter einem Player
+  und hinter getMaxStackSize - keine der 4453 Proben konnte sie durchlaufen. Jetzt ist
+  sie eine statische Methode, die Stapelgroesse kommt als ZAHL herein, und
+  VorratshandTest (10 Proben) rechnet sie nach. Was aus Bukkit hereingeholt wird, haelt
+  die Quelltextzusage 31cx.
+- MATERIAL IST NICHT GEGENSTAND. "potatoes" ist der Feldblock, "potato" der Gegenstand -
+  dasselbe bei carrots, beetroots, water. Der Leser kann das nicht fragen (isItem wirft
+  ohne Server), also faellt die Frage an der NAHT: Vorratshand.art gibt null, der Posten
+  sagt ab, bevor gezahlt wird. Dazu nennt nenneUnlieferbarePosten beim Start jeden
+  solchen Posten - und jeden, der mehr als 36 Lagerplaetze braucht (40 Musikscheiben
+  sind 40 Plaetze; die Stueckgrenze rechnet in Stueck).
+- EIN ZUGESAGTER RUECKFALL WAR NICHT GEBAUT. Drei Javadocs, eine Startmeldung und die
+  Vorlage sagen zu: Ein Posten ohne Namenszeile bleibt kaufbar und zeigt seinen Pfad. In
+  Wahrheit warf JEDER Muenzhausbefehl - auch die vier richtigen Posten waren weg -, und
+  ein Kauf buchte ab, lieferte, schrieb die Zeile und antwortete mit einer roten
+  englischen Serverzeile; der Spieler haelt ihn fuer gescheitert und kauft zweimal.
+  Behoben in Sprachbuch.wortlaut, NUR fuer die offenen Familien - dieselbe Zeile loest
+  Muenzname und Aufgabenname (Teil E) zugleich ein.
+- VOM GELD REDET JETZT NUR, WO GELD BEWEGT WURDE. Ein Satz fuer zwei Lagen: Wer nur die
+  Tafel aufschlug und auf eine schweigende Datenbank traf, las "Dein Geld ist zurueck".
+  Zwei Bescheide (GESTOERT, ERSTATTET) und zwei Saetze.
+- GELD SIEHT UEBERALL GLEICH AUS. Die Bedingung guthaben stand nackt da, mit "Mark" fest
+  in der Sprachdatei - derselbe Betrag hiess zwei Zeilen hoeher "50.000 Mark". Jetzt
+  entscheidet Bedingungsart.istGeld (erschoepfender Schalter), und die Zahl kommt aus
+  waehrung.betrag.
+- DIE SUMME EINES POSTENS wird geprueft, nicht nur die Zeile: Zwei Zeilen von je 2.000
+  Stueck bestanden jede fuer sich. stueckzahl() rief vorher niemand im Hauptcode - eine
+  Zahl, die nirgends ankommt, ist keine Grenze.
+- DREI BEFUNDE AN DEN TAFELN SELBST: 31cv prueffte nur, DASS der Messaufruf irgendwo in
+  der Datei steht (jetzt ein Muster ueber die Bauzeile, wie 31cu); 31cw las
+  Wirtschaftsstand MIT Kommentaren, eine Nennung im Kommentar galt als Neuladezeile
+  (jetzt Quellen.text - derselbe Fehler wie damals bei jederSchluesselWirdGesendet); und
+  31cw sah nur PFAD_*, nicht die UNTERSCHLUESSEL der Listenwerte.
+- UND DAFUER WAR DAS FEHLERBILD SCHON DA, zum vierten Mal: gegenstaende und bedingungen
+  je Posten, zahlen, bedingungen und rechte je RANGSTUFE, verlangt und belohnung je
+  HERAUSFORDERUNG wechselten beim Neuladen vollstaendig stumm. Die Antwort ist je
+  Tabelle eine Zeile "N -> N Zeilen (geaendert)" - kurz wie bisher, aber nicht stumm.
+  31cw sieht jetzt PFAD_ und SCHLUESSEL_; die zwei Erzschluessel stehen mit Begruendung
+  in der Ausnahmeliste (sie stecken in der Tabelle, die als Ganzes verglichen wird).
+- DIE PREISGRENZE wurde nie GENAU getroffen: < und <= waren dasselbe.
+- GEMESSEN, zwoelf neue Einspritzungen gegen die Behebungen: alle gefangen (mit den
+  vierzehn von Teil G zusammen 26). Darunter die Probe der Probe - eine Neuladezeile, die
+  nur noch im Kommentar steht, macht 31cw rot.
+- GEMESSEN AM LAUFENDEN SERVER, was keine Probe sehen kann: Mit drei absichtlich kaputten
+  Posten meldet der Start "kartoffelkiste: potatoes gibt es nur als Block" und
+  "plattensammlung: braucht 40 Lagerplaetze, ein Spieler hat 36"; ein Neuladen nennt
+  raenge.leiter.buerger.zahlen, muenzhaus.katalog.kuerbishut.gegenstaende und
+  muenzhaus.katalog.blumenkiste.bedingungen - vorher lautete die Antwort "nichts
+  geaendert". 0 Ausnahmen.
+- Proben 4453 -> 4480, 0 rot, 0 uebersprungen, 0 Warnungen. Neu: VorratshandTest (10),
+  WirtschaftsstandTest +4, MuenztextTest +4, MuenzwerteTest +4, SpracheTest +2,
+  RangregelTest +1, GrenzeTest 31cx, BildGleich +1.
+- NOCH NICHT DA, mit Absicht: eine Grenze je Spieler ("hoechstens einmal kaufen")
+  braeuchte eine Ablage; ein Gegenstand ist ohnehin beliebig oft sinnvoll. Und eine
+  Anzeige auf einem BLOCK gibt es im ganzen Plugin nicht - "der Wechseldeckel am Ort"
+  ist die Chattafel des Hauses, und genau das sagt MarkSatz seit Teil F.
 - Offen in Teil A, mit Absicht: Der RUNDGANG (Plan 9, Siedler) und "eigene Parzelle
   bebaut" (Plan 9, Buerger) sind keine Bedingungsart - den Rundgang gibt es erst mit
   Schritt 13, und was "bebaut" misst, steht im Plan nirgends. Beide kommen als Zeile dazu,

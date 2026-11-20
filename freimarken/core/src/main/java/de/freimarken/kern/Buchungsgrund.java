@@ -489,7 +489,40 @@ public enum Buchungsgrund {
      * erzeugen kann -, und wenn danach die Gutschrift scheitert, hat der Spieler gezahlt
      * und nichts bekommen.
      */
-    WECHSEL_GOLDMARK_ZURUECK("wechsel_goldmark_zurueck", Richtung.EINNAHME);
+    WECHSEL_GOLDMARK_ZURUECK("wechsel_goldmark_zurueck", Richtung.EINNAHME),
+
+    /**
+     * Ein Posten aus dem Muenzhaus - im GOLDBUCH [Teil G].
+     *
+     * <p>Der Preis eines Katalogpostens, in Goldmark. Was dafuer kommt, sind
+     * GEGENSTAENDE und kein Recht und keine Zahl: Alles andere, was Plan 8.1 als
+     * Katalogware nennt - Partikel, Haustier, Rangfarbe, ein weiterer Heimatpunkt -, hat
+     * heute keine Mechanik, und ein Posten darauf waere Goldmark fuer etwas, das niemand
+     * liest.
+     *
+     * <p><b>Abgebucht wird erst, wenn der PLATZ sicher ist.</b> Das ist die Reihenfolge
+     * des Kistenshops ({@code Shophandel}: erst der Vorrat, dann der Platz, dann das
+     * Geld), und sie ist der Grund, warum es neben diesem Grund nur eine Erstattung fuer
+     * den Programmfehler gibt und keine fuer den Alltag: Ein voller Rucksack sagt ab,
+     * bevor sich etwas bewegt, und hinterlaesst keine zwei Zeilen im Verlauf.
+     */
+    MUENZHAUS_KAUF("muenzhaus_kauf", Richtung.AUSGABE),
+
+    /**
+     * Der Preis kommt zurueck, weil die Lieferung nicht zustandekam - im GOLDBUCH.
+     *
+     * <p>Dieselbe Antwort wie {@link #WECHSEL_GOLDMARK_ZURUECK}, und sie wird aus
+     * demselben Grund gebraucht: Wirft nach dem Abbuchen etwas - die Datenbank, das
+     * Inventar -, hat der Spieler gezahlt und nichts bekommen. Goldmark hat genau zwei
+     * Quellen (Plan 8.1), Echtgeld und den Tausch aus Mark; sie verschwindet hier also
+     * endgueltig, wenn niemand sie zurueckbucht.
+     *
+     * <p><b>Ein eigener Grund und nicht {@link #MUENZHAUS_KAUF} mit umgedrehtem
+     * Vorzeichen</b>: {@link Buchung} wirft, wenn Betrag und Richtung nicht
+     * zusammenpassen. Und im Verlauf stuende sonst "Im Muenzhaus gekauft +5 Goldmark" -
+     * ein Satz, der das Gegenteil von dem behauptet, was geschehen ist.
+     */
+    MUENZHAUS_ERSTATTET("muenzhaus_erstattet", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {
@@ -559,7 +592,8 @@ public enum Buchungsgrund {
      */
     public Buch buch() {
         return switch (this) {
-            case WECHSEL_GOLDMARK_HER, WECHSEL_GOLDMARK_WEG, WECHSEL_GOLDMARK_ZURUECK -> Buch.GOLDMARK;
+            case WECHSEL_GOLDMARK_HER, WECHSEL_GOLDMARK_WEG, WECHSEL_GOLDMARK_ZURUECK,
+                     MUENZHAUS_KAUF, MUENZHAUS_ERSTATTET -> Buch.GOLDMARK;
             case EROEFFNUNG -> Buch.JEDES;
             case BESTAND, PARZELLE_GEKAUFT, PARZELLE_ERSTATTET,
                      FREISTADT_GEGRUENDET, FREISTADT_ERSTATTET, GRUNDSTUECK_GEKAUFT,

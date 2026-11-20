@@ -32,8 +32,13 @@ class VerlaufszeileTest {
     }
 
     private static String bild(Buchung buchung, ZoneId zone) {
+        return bild(buchung, zone, Buchungsgrund.Buch.MARK);
+    }
+
+    /** Dasselbe fuer ein bestimmtes Buch - die Waehrung haengt daran. */
+    private static String bild(Buchung buchung, ZoneId zone, Buchungsgrund.Buch buch) {
         return Sprachprobe.bild(
-                Verlaufszeile.zeile(Sprachprobe.spracheAusDemJar(), buchung, zone));
+                Verlaufszeile.zeile(Sprachprobe.spracheAusDemJar(), buchung, zone, buch));
     }
 
     @Test
@@ -82,6 +87,41 @@ class VerlaufszeileTest {
         assertTrue(bild(zeile, ZoneId.of("UTC")).startsWith("&7  02.11. 13:37"));
         assertTrue(bild(zeile, ZoneId.of("Pacific/Auckland")).startsWith("&7  03.11."),
                 "jenseits der Datumsgrenze ist es schon der naechste Tag");
+    }
+
+    @Test
+    @DisplayName("Im GOLDbuch stehen beide Zahlen in Goldmark")
+    void goldbuchZeigtGoldmark() {
+        // DREI GELDSTELLEN hat diese Zeile: der Betrag (zweimal, in mitVorzeichen) und
+        // der Stand. Bleibt eine beim Markwort, widerspricht sich EINE Zeile in sich -
+        // und zwar um das Achthundertfache. Darum das GANZE Bild und nicht ein contains.
+        String bild = bild(buchung(Buchungsgrund.MUENZHAUS_KAUF, -2L, 8L),
+                ZoneId.of("Europe/Berlin"), Buchungsgrund.Buch.GOLDMARK);
+
+        assertEquals("&7  02.11. 14:37  -2 Goldmark  Im Muenzhaus gekauft"
+                + "  (Stand 8 Goldmark)", bild);
+    }
+
+    @Test
+    @DisplayName("Eine Markbuchung im Goldbuch wirft, statt die Waehrung zu verwechseln")
+    void markbuchungImGoldbuchWirft() {
+        // Die Zahl waere richtig und die Einheit falsch - und keine Probe wuerde davon
+        // rot. Ein Grund im falschen Buch ist kein Betriebsfall, sondern ein Fehler im
+        // Programm.
+        var fehler = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> bild(buchung(Buchungsgrund.PARZELLE_GEKAUFT, -25_000L, 0L),
+                        ZoneId.of("Europe/Berlin"), Buchungsgrund.Buch.GOLDMARK));
+
+        assertTrue(fehler.getMessage().contains("MARK-Buch"), fehler.getMessage());
+    }
+
+    @Test
+    @DisplayName("JEDES ist keine Waehrung und wird abgewiesen")
+    void jedesIstKeineWaehrung() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> bild(buchung(Buchungsgrund.EROEFFNUNG, 50_000L, 50_000L),
+                        ZoneId.of("Europe/Berlin"), Buchungsgrund.Buch.JEDES));
     }
 
     @Test

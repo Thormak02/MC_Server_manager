@@ -43,7 +43,25 @@ final class Tauschtext {
     static List<Component> tafelZeilen(Sprache sprache, Wechselbuch.Auskunft auskunft) {
         List<Component> zeilen = new ArrayList<>(sprache.bau(MarkSatz.TAUSCH_KOPF, 1L,
                 Einsatz.keine()));
-        zeilen.addAll(sprache.bau(MarkSatz.TAUSCH_STAND, 1L,
+        zeilen.addAll(standUndKurse(sprache, auskunft));
+        zeilen.addAll(sprache.bau(MarkSatz.TAUSCH_HILFE, 1L, Einsatz.keine()));
+        return List.copyOf(zeilen);
+    }
+
+    /**
+     * Stand, Kurse und der sichtbare Wechseldeckel - die drei Zeilen in der Mitte.
+     *
+     * <p><b>Warum sie eine eigene Methode sind</b> [20.11.2026, Teil G]: Das Muenzhaus
+     * zeigt genau diese drei Zeilen auch - Plan 2.1 verlangt "Wechseldeckel sichtbar" an
+     * DEM Ort, und das Muenzhaus ist der Ort. Abgeschrieben waere es eine zweite Fassung
+     * derselben Auskunft; mit eigenen Saetzen daneben waeren es zwei Wortlaute fuer eine
+     * Zahl, und der Betreiber aenderte eines Tages nur einen davon.
+     *
+     * <p>Die dritte Zeile hat zwei Gestalten, und die Wahl ist der Grund, warum diese
+     * Methode mehr tut als Zeilen aneinanderzuhaengen - siehe {@link #tafelZeilen}.
+     */
+    static List<Component> standUndKurse(Sprache sprache, Wechselbuch.Auskunft auskunft) {
+        List<Component> zeilen = new ArrayList<>(sprache.bau(MarkSatz.TAUSCH_STAND, 1L,
                 Einsatz.von("betrag", sprache.goldmark(auskunft.goldmark()))));
         zeilen.addAll(sprache.bau(MarkSatz.TAUSCH_KURSE, 1L,
                 Einsatz.von("kauf", sprache.betrag(auskunft.werte().markJeGoldmark()))
@@ -57,7 +75,6 @@ final class Tauschtext {
         } else {
             zeilen.addAll(sprache.bau(MarkSatz.TAUSCH_ZU, 1L, Einsatz.keine()));
         }
-        zeilen.addAll(sprache.bau(MarkSatz.TAUSCH_HILFE, 1L, Einsatz.keine()));
         return List.copyOf(zeilen);
     }
 

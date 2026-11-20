@@ -12,9 +12,10 @@ import java.util.UUID;
  *
  * <p><b>Ohne Bukkit, und das ist der ganze Zweck des {@link Vorrat}:</b> Was ein Spieler
  * traegt und was ihm weggenommen wird, kann nur der Server sagen. Diese Regel bekommt es
- * als drei Zahlen herein - zaehlen, nehmen, zurueckgeben -, und damit laesst sich jeder
- * Zweig ohne laufenden Server durchlaufen, auch der teuerste: das Zurueckgeben nach einem
- * halben Nehmen.
+ * als Zahlen herein - zaehlen, nehmen, zurueckgeben -, und damit laesst sich jeder Zweig
+ * ohne laufenden Server durchlaufen, auch der teuerste: das Zurueckgeben nach einem
+ * halben Nehmen. Die Naht stand bis zum 20.11.2026 hier geschachtelt; mit dem Muenzhaus
+ * bekam sie einen zweiten Verbraucher und damit ihre eigene Datei.
  *
  * <p><b>Die Reihenfolge der Schritte ist die Sache selbst</b>, und sie steht in
  * {@link #abgeben}: zaehlen, nehmen, EINTRAGEN, zahlen. Das Eintragen ist der Riegel gegen
@@ -27,26 +28,6 @@ import java.util.UUID;
  * die Gegenstaende. Scheitert das Eintragen, kommt alles Genommene zurueck.
  */
 public final class Aufgabenbuch {
-
-    /**
-     * Was ein Spieler traegt - die EINE Naht zum Server.
-     *
-     * <p>Drei Zahlen und kein {@code boolean}: Bukkits {@code removeItem} und
-     * {@code addItem} sind NICHT unteilbar (dieselbe Lehre steht in {@code Shopware}). Sie
-     * nehmen und legen, was sie finden, und melden den Rest - wer sie als
-     * ganz-oder-gar-nicht liest, verliert Gegenstaende.
-     */
-    public interface Vorrat {
-
-        /** Wie viele Stueck dieses Gegenstandes er hat. */
-        int zaehle(String gegenstand);
-
-        /** Nimmt Stueck weg und meldet, wie viele WIRKLICH wegkamen. */
-        int nimm(String gegenstand, int stueck);
-
-        /** Legt Stueck zurueck und meldet, wie viele WIRKLICH ankamen. */
-        int lege(String gegenstand, int stueck);
-    }
 
     /** Was aus einer Abgabe wird. */
     public enum Bescheid {

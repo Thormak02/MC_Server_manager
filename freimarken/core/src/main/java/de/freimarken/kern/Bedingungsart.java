@@ -6,7 +6,14 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Woran ein Rangaufstieg haengen darf - die Liste der messbaren Dinge.
+ * Woran ein Rangaufstieg oder ein Kauf haengen darf - die Liste der messbaren Dinge.
+ *
+ * <p><b>Der zweite Verbraucher kam am 20.11.2026</b> mit dem {@link Muenzhaus}: Dort
+ * haengt ein Katalogposten an denselben Bedingungen, und das ist der Grund, warum hier
+ * keine zweite Aufzaehlung daneben steht. Eine eigene Katalogbedingungsart haette
+ * {@link #ausSchluessel}, {@link #alleSchluessel} und {@link #inMesseinheit} verdoppelt -
+ * und damit die Umrechnung, die es genau einmal geben darf. Was ein Rang verlangen kann,
+ * kann auch ein Preis verlangen; gemessen wird beides an derselben Stelle.
  *
  * <p><b>Nicht fuer reine Anwesenheit</b> [entschieden 18.11.2026, Nutzer]: "man soll nicht
  * fuer die reine gespielte zeit belohnt werden, die gespielte zeit gilt als richtwert fuer
@@ -102,6 +109,28 @@ public enum Bedingungsart {
     }
 
     /**
+     * Ob der Wert dieser Art ein GELDbetrag ist [20.11.2026].
+     *
+     * <p><b>Warum das jemand fragen muss</b>: In diesem Projekt kommt jeder Betrag, den
+     * ein Spieler liest, aus {@code waehrung.betrag} - mit dem Tausenderpunkt und mit dem
+     * Wort des Betreibers. Die Bedingungszeile des Muenzhauses setzte ihre Zahl nackt ein
+     * und hatte "Mark" fest in der Sprachdatei: Derselbe Betrag hiess zwei Zeilen
+     * hoeher "50.000 Mark" und hier "50000 Mark". Gefunden in der Pruefrunde zu Teil G.
+     *
+     * <p><b>Ein erschoepfender Schalter</b> und nicht {@code this == GUTHABEN}, anders
+     * als bei {@link #inStunden} daneben: Die naechste Art ist entweder Geld oder nicht,
+     * und diese Frage soll der Uebersetzer stellen und nicht der Betrieb. (Jene Methode
+     * bleibt, wie sie ist - zwei von fuenf Arten aufzuzaehlen waere hier dieselbe
+     * Luecke mit umgekehrtem Vorzeichen.)
+     */
+    public boolean istGeld() {
+        return switch (this) {
+            case TAETIGE_STUNDEN, ANWESENHEIT_STUNDEN, PARZELLEN, BERUF -> false;
+            case GUTHABEN -> true;
+        };
+    }
+
+    /**
      * Die Zahl aus der Datei in der Einheit, in der gemessen wird.
      *
      * <p><b>Die Datei spricht Stunden, die Messung spricht Sekunden</b> - und die
@@ -112,6 +141,24 @@ public enum Bedingungsart {
      */
     public long inMesseinheit(long ausDerDatei) {
         return inStunden() ? ausDerDatei * SEKUNDEN_JE_STUNDE : ausDerDatei;
+    }
+
+    /**
+     * Die gemessene Zahl in der Einheit, in der sie in der DATEI steht - der Rueckweg.
+     *
+     * <p><b>Warum es ihn gibt</b> [20.11.2026, Teil G]: {@link Rangregel.Fehlend} rechnet
+     * in der Messeinheit, also in Sekunden. Ungerechnet in eine Chatzeile gesetzt, laese
+     * ein Spieler "noch 14.400 Stunden", wo in der {@code config.yml}
+     * {@code taetige-stunden: 5} steht - und der Betreiber faende seine Zahl in der Zeile
+     * nicht wieder.
+     *
+     * <p>Er steht neben {@link #inMesseinheit} und nicht beim Leser, aus genau demselben
+     * Grund: Zwei Wege zurueck wuerden eines Tages verschieden runden. Gerundet wird
+     * ABWAERTS, und das ist die ehrliche Richtung - wer noch 90 Minuten braucht, soll
+     * nicht "noch 2 Stunden" lesen und nach einer Stunde immer noch gesperrt sein.
+     */
+    public long inDerDatei(long gemessen) {
+        return inStunden() ? gemessen / SEKUNDEN_JE_STUNDE : gemessen;
     }
 
     /** Wie viele Sekunden eine Stunde hat - damit die Zahl nicht dreimal dasteht. */

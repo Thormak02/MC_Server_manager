@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Blockecke;
 import de.freimarken.kern.Buchung;
+import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Freistadtbuch;
 import de.freimarken.kern.Grundstueck;
 import de.freimarken.kern.Grundstuecksbuch;
@@ -588,7 +589,8 @@ final class Freistadttext {
             return List.copyOf(zeilen);
         }
         for (Buchung buchung : verlauf) {
-            zeilen.add(Verlaufszeile.zeile(sprache, buchung, zone));
+            zeilen.add(Verlaufszeile.zeile(sprache, buchung, zone,
+                    Buchungsgrund.Buch.MARK));
         }
         return List.copyOf(zeilen);
     }

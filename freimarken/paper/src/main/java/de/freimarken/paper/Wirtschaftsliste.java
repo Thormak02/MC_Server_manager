@@ -225,6 +225,15 @@ final class Wirtschaftsliste {
         klagen.addAll(wechsel.klagen());
         bericht.addAll(wechsel.bericht());
 
+        // Das Muenzhaus [Schritt 12 Teil G]: der Katalog in Goldmark. NACH der
+        // Wechselstube, und das ist keine Geschmacksfrage - seine Rechenprobe nennt jeden
+        // Preis auch in Mark, und dafuer braucht sie die GELESENEN Kurse. Mit der Vorgabe
+        // gerechnet stuende im Bericht ein Markbetrag, den dieser Server nicht verlangt.
+        Muenzliste.Ergebnis muenzhaus =
+                Muenzliste.ausKonfiguration(wurzel, wechsel.werte());
+        klagen.addAll(muenzhaus.klagen());
+        bericht.addAll(muenzhaus.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -258,7 +267,8 @@ final class Wirtschaftsliste {
                 markt.werte(), messung.werte(), bonus.werte(), laeden.werte(),
                 handel.werte(), truhe.werte(), freistaedte.werte(),
                 inseln.werte(), angeln.werte(), wolken.werte(),
-                raenge.werte(), wechsel.werte()), klagen, bericht);
+                raenge.werte(), wechsel.werte(), muenzhaus.werte()), klagen,
+                bericht);
     }
 
     /**

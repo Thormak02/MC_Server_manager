@@ -252,6 +252,31 @@ final class Aufstiegslauf {
     }
 
     /**
+     * Die Messwerte fuer einen Spieler - die Tuer fuer das Muenzhaus [Teil G].
+     *
+     * <p><b>Warum sie hier steht und nicht im Muenzhaus:</b> Gemessen wird an EINER
+     * Stelle. Haette der Katalog seinen eigenen Messer, urteilte ein Kauf eines Tages
+     * anders als eine Befoerderung - dieselbe Bedingung, dieselbe Zahl in der Datei, und
+     * zwei verschiedene Antworten. Gerufen wird sie ueber
+     * {@code Muenzhaus.Bedingungsmessung}, also als Naht und nicht als Abhaengigkeit.
+     *
+     * <p><b>Der Spielzeitstand wird nur geholt, wenn eine Zeitart gefragt ist</b>, und das
+     * ist dieselbe Regel wie bei {@link #messe}: Jede Messung ausser dem Beruf ist eine
+     * Datenbankabfrage im Hauptfaden. Ein Katalog ohne Zeitbedingung soll seine Tafel
+     * nicht mit einer Abfrage bezahlen, deren Ergebnis niemand liest - und die werfen
+     * kann.
+     */
+    Map<Bedingungsart, Long> messeFuer(UUID wer, List<Bedingungsart> gebraucht) {
+        if (wer == null || gebraucht == null) {
+            throw new IllegalArgumentException("Gemessen wird fuer einen Spieler, und nur"
+                    + " das, was jemand verlangt");
+        }
+        boolean zeitNoetig = gebraucht.contains(Bedingungsart.TAETIGE_STUNDEN)
+                || gebraucht.contains(Bedingungsart.ANWESENHEIT_STUNDEN);
+        return messe(wer, zeitNoetig ? spielzeit.lies(wer, heute()) : null, gebraucht);
+    }
+
+    /**
      * Die Messwerte - und zwar NUR die verlangten.
      *
      * <p>Eine Art, die in keiner Stufe steht, wird nicht gefragt. Das ist nicht nur

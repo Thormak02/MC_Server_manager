@@ -244,13 +244,37 @@ class RangregelTest {
     @Test
     @DisplayName("Ohne Stufe oder Werte gibt es nichts zu rechnen")
     void riegel() {
+        // DIE UMWANDLUNG IST PFLICHT, seit es die zweite Tuer gibt [Teil G]: erfuellt
+        // und fehlend nehmen eine Stufe ODER eine blosse Bedingungskarte, und eine
+        // nackte null passt auf beide. Benannt ist hier die Stufe - die KARTE darf leer
+        // sein, und ihre eigene Null hat ihre eigene Probe darunter.
         assertThrows(IllegalArgumentException.class,
-                () -> Rangregel.erfuellt(null, Map.of()));
+                () -> Rangregel.erfuellt((Rangwerte.Stufe) null, Map.of()));
         assertThrows(IllegalArgumentException.class,
-                () -> Rangregel.fehlend(null, Map.of()));
+                () -> Rangregel.fehlend((Rangwerte.Stufe) null, Map.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> Rangregel.erfuellt((Map<Bedingungsart, Long>) null, Map.of()));
+        assertThrows(IllegalArgumentException.class,
+                () -> Rangregel.fehlend((Map<Bedingungsart, Long>) null, Map.of()));
         assertThrows(IllegalArgumentException.class,
                 () -> Rangregel.zustehend(null, Map.of()));
         assertThrows(IllegalArgumentException.class,
                 () -> new Rangregel.Fehlend(null, 1L, 0L));
+    }
+
+    @Test
+    @DisplayName("Nur das Guthaben ist GELD - und der Schalter zwingt die naechste Art")
+    void nurGuthabenIstGeld() {
+        // Die Frage gibt es, weil jeder Betrag, den ein Spieler liest, aus
+        // waehrung.betrag kommt: mit Tausenderpunkt und mit dem Wort des Betreibers.
+        // Vorher stand die Zahl der Bedingungszeile nackt da, und "Mark" fest in der
+        // Sprachdatei - derselbe Betrag hiess zwei Zeilen hoeher "50.000 Mark".
+        assertTrue(Bedingungsart.GUTHABEN.istGeld());
+        for (Bedingungsart art : Bedingungsart.values()) {
+            if (art != Bedingungsart.GUTHABEN) {
+                assertFalse(art.istGeld(), art + " ist kein Geld und darf keinen"
+                        + " Tausenderpunkt tragen");
+            }
+        }
     }
 }

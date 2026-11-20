@@ -22,6 +22,10 @@ import java.util.logging.Logger;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import de.freimarken.kern.Bedingungsart;
+import de.freimarken.kern.Muenzhaus;
+import java.util.Map;
+import de.freimarken.kern.Vorrat;
 
 /**
  * {@code /mark} GETIPPT - durch den echten Befehlsbaum.
@@ -56,7 +60,8 @@ class MarkBefehlTest {
     }
 
     /** Befehlsbaum und Kasse zusammen - die Kasse braucht die Probe zum Fuellen. */
-    private record Stand(Befehlsprobe baum, SpeicherKasse kasse, Goldkasse gold) { }
+    private record Stand(Befehlsprobe baum, SpeicherKasse kasse, Goldkasse gold,
+                         Rucksack rucksack) { }
 
     /**
      * Die Uhr der Kasse steht FEST, und das ist die Sache selbst.
@@ -72,11 +77,23 @@ class MarkBefehlTest {
             Instant.parse("2026-11-06T13:37:00Z"), ZoneOffset.UTC);
 
     private static Stand stand() {
+        return stand(Map.of());
+    }
+
+    /**
+     * Derselbe Stand mit MESSWERTEN fuer die Bedingungen des Muenzhauses.
+     *
+     * <p>Hereingegeben und nicht gesetzt: Die Messung ist im Spiel eine
+     * Datenbankabfrage, und hier ist sie eine Karte. Ohne Werte misst jede Bedingung 0 -
+     * das ist der Spieler am ersten Tag.
+     */
+    private static Stand stand(Map<Bedingungsart, Long> gemessen) {
         SpeicherKasse kasse = new SpeicherKasse(Wirtschaftswerte.VORGABE_STARTGUTHABEN, UHR);
         Besitzbuch buch = new Besitzbuch(Stadtgrenze.marktstadt(), new SpeicherLager(),
                 kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
         Goldkasse gold = new Goldkasse(new SpeicherKasse(0L, UHR));
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+        Rucksack rucksack = new Rucksack();
         ParzellenBefehle befehle = new ParzellenBefehle(buch, Serverprobe.welt(WELT),
                 stand,
                 Logger.getLogger("MarkBefehlTest"), Sprachprobe.spracheAusDemJar(),
@@ -86,8 +103,15 @@ class MarkBefehlTest {
                 // DIESELBE UHR wie die Kasse: Der Wechseldeckel zaehlt die Buchungen
                 // seit dem Tagesbeginn, und mit zwei Uhren lagen die Buchungen und die
                 // Grenze an verschiedenen Tagen.
-                new Wechselbuch(kasse, gold, stand, UHR));
-        return new Stand(new Befehlsprobe(List.of(befehle.mark())), kasse, gold);
+                new Wechselbuch(kasse, gold, stand, UHR),
+                // Das Muenzhaus auf DERSELBEN Goldkasse wie die Wechselstube - zwei
+                // waeren zwei Konten in einer Waehrung, und keine Probe saehe es.
+                new Muenzhaus(gold, stand, (wer, gebraucht) -> gemessen),
+                // Der Rucksack als Karte - Vorratshand braucht einen laufenden Server
+                // (Material.getMaxStackSize greift in Minecrafts Verzeichnis).
+                spieler -> rucksack);
+        return new Stand(new Befehlsprobe(List.of(befehle.mark())), kasse, gold,
+                rucksack);
     }
 
     private static Spielerprobe spieler(int zahl, SpeicherKasse kasse) {
@@ -259,17 +283,184 @@ class MarkBefehlTest {
     }
 
     @Test
-    @DisplayName("39k - tauschen ohne Zahl tauscht nichts")
-    void tauschenOhneZahl() {
-        // kaufen ohne Anzahl waere eine Vermutung darueber, wie viele einer meint - und
-        // hier bewegt jeder Ruf Geld. Der Zweig hat darum KEIN eigenes executes.
+    @DisplayName("39k - tauschen ohne Zahl tauscht nichts und antwortet DEUTSCH")
+    void tauschenOhneZahl() throws CommandSyntaxException {
+        // GEAENDERT AM 20.11.2026, und zwar als FUND dieses Bauschrittes: Bis dahin
+        // verlangte diese Probe einen Wurf - und der war Brigadiers englisches "Unknown
+        // or incomplete command". Ein passendes Literal verdeckt in Brigadier jedes
+        // Geschwister vollstaendig; ohne eigenes .executes fuehrte "kaufen" also
+        // nirgendwohin. Jetzt zeigt es die TAFEL, auf der steht, was als naechstes Wort
+        // gefragt ist - wie "/wolke abgeben" ohne Namen.
+        //
+        // Dass dabei kein Geld fliesst, bleibt die tragende Haelfte dieser Probe.
         Stand stand = stand();
         Spielerprobe spieler = spieler(71, stand.kasse());
 
-        assertThrows(CommandSyntaxException.class,
-                () -> stand.baum().tippe("mark tauschen kaufen", spieler));
-        assertEquals(List.of(), spieler.chatBild());
+        stand.baum().tippe("mark tauschen kaufen", spieler);
+
+        assertTrue(spieler.chatBild().contains("&6Wechselstube"),
+                "statt einer englischen Fehlerzeile die Tafel: " + spieler.chatBild());
         assertEquals(50_000L, stand.kasse().guthaben(spieler.kennung()));
+        assertEquals(0L, stand.gold().guthaben(spieler.kennung()));
+    }
+
+    @Test
+    @DisplayName("39m - /mark muenzhaus zeigt Stand, Deckel UND den Katalog")
+    void muenzhausZeigtDieTafel() throws CommandSyntaxException {
+        // DER ORT, den Plan 2.1 nennt: Kontostand, Wechseldeckel sichtbar, Katalog. Die
+        // ganze Liste und nicht ein contains - eine verschobene Zeile faellt sonst nicht
+        // auf.
+        Stand stand = stand();
+        Spielerprobe spieler = spieler(73, stand.kasse());
+
+        assertEquals(1, stand.baum().tippe("mark muenzhaus", spieler));
+
+        assertEquals(List.of("&6Muenzhaus",
+                        "&7Du hast &60 Goldmark&7.",
+                        "&7Eine Goldmark kostet &61.000 Mark&7 und bringt &6800 Mark&7"
+                                + " zurueck.",
+                        "&7Heute kannst du noch &612 Goldmark&7 zurueckwechseln"
+                                + " (10.000 Mark).",
+                        "&8- Kuerbishut fuer 2 Goldmark: 1x carved_pumpkin",
+                        "&8- Blumenkiste fuer 2 Goldmark: 16x rose_bush, 16x peony,"
+                                + " 16x lilac (noch nicht frei)",
+                        "&8- Musikscheibe fuer 5 Goldmark: 1x music_disc_cat",
+                        "&8- Rathausglocke fuer 5 Goldmark: 1x bell (noch nicht frei)",
+                        "&8/mark muenzhaus kaufen [posten] - Verlauf:"
+                                + " /mark muenzhaus verlauf"),
+                spieler.chatBild());
+    }
+
+    @Test
+    @DisplayName("39n - /mark muenzhaus kaufen ohne Posten zeigt die Tafel")
+    void muenzhausKaufenOhnePosten() throws CommandSyntaxException {
+        // Das Literal traegt sein eigenes .executes - ohne es endete der Ruf in
+        // Brigadiers englischem "Unknown or incomplete command", und der Spieler laese
+        // nicht, welche Posten es gibt.
+        Stand stand = stand();
+        Spielerprobe spieler = spieler(74, stand.kasse());
+
+        stand.baum().tippe("mark muenzhaus kaufen", spieler);
+
+        assertTrue(spieler.chatBild().contains("&6Muenzhaus"),
+                spieler.chatBild().toString());
+    }
+
+    @Test
+    @DisplayName("39o - ein Tippfehler im Posten bekommt einen DEUTSCHEN Satz")
+    void muenzhausTippfehler() throws CommandSyntaxException {
+        // Das Argument ist ein freies Wort, damit der Tippfehler den Zweig erreicht. Ein
+        // Argumenttyp, der das Muster prueft, machte den Bescheid UNBEKANNT unerreichbar
+        // - und eine Probe, die kaufe() unmittelbar ruft, waere trotzdem gruen.
+        Stand stand = stand();
+        Spielerprobe spieler = spieler(75, stand.kasse());
+
+        stand.baum().tippe("mark muenzhaus kaufen kuerbishu", spieler);
+
+        assertEquals(List.of("&cDen Posten \"kuerbishu\" gibt es im Katalog nicht."),
+                spieler.chatBild());
+    }
+
+    @Test
+    @DisplayName("39p - kaufen fragt ZURUECK, bestaetigen bucht")
+    void muenzhausZweiStufen() throws CommandSyntaxException {
+        // Dieselbe Sicherung wie /beruf verlassen und /freistadt gruenden: Der Posten
+        // wird getippt, er kostet Goldmark, und verkauft wird hier nichts.
+        Stand stand = stand();
+        Spielerprobe spieler = spieler(76, stand.kasse());
+        stand.baum().tippe("mark tauschen kaufen 5", spieler);
+        spieler.vergessen();
+
+        stand.baum().tippe("mark muenzhaus kaufen kuerbishut", spieler);
+
+        assertEquals(5L, stand.gold().guthaben(spieler.kennung()),
+                "die Rueckfrage bucht nichts");
+        assertEquals(0, stand.rucksack().hat("carved_pumpkin"),
+                "und sie liefert nichts");
+        assertTrue(spieler.chatBild().stream().anyMatch(zeile -> zeile.contains(
+                        "/mark muenzhaus kaufen kuerbishut bestaetigen")),
+                spieler.chatBild().toString());
+
+        spieler.vergessen();
+        stand.baum().tippe("mark muenzhaus kaufen kuerbishut bestaetigen", spieler);
+
+        assertEquals(3L, stand.gold().guthaben(spieler.kennung()),
+                "jetzt sind zwei Goldmark weg");
+        assertEquals(1, stand.rucksack().hat("carved_pumpkin"), "und der Hut ist da");
+        assertEquals(List.of("&aKuerbishut gekauft fuer 2 Goldmark: 1x carved_pumpkin."
+                        + " Du hast jetzt 3 Goldmark."), spieler.chatBild());
+    }
+
+    @Test
+    @DisplayName("39t - ein voller Rucksack sagt ab, BEVOR etwas gebucht ist")
+    void muenzhausOhnePlatz() throws CommandSyntaxException {
+        // DIE REIHENFOLGE DIESES BAUSCHRITTES, durch den echten Befehlsbaum: erst der
+        // Platz, dann das Geld. Andersherum stuenden im Goldverlauf zwei Zeilen fuer
+        // einen Kauf, der nie stattgefunden hat.
+        Stand stand = stand();
+        Spielerprobe spieler = spieler(80, stand.kasse());
+        stand.baum().tippe("mark tauschen kaufen 5", spieler);
+        stand.rucksack().platzFuer(0);
+        spieler.vergessen();
+
+        stand.baum().tippe("mark muenzhaus kaufen kuerbishut bestaetigen", spieler);
+
+        assertEquals(5L, stand.gold().guthaben(spieler.kennung()), "nichts abgebucht");
+        assertEquals(List.of("&cIn deinem Rucksack fehlt Platz fuer 1 Stueck - es ist"
+                + " nichts passiert."), spieler.chatBild());
+    }
+
+    @Test
+    @DisplayName("39q - /mark muenzhaus verlauf zeigt das GOLDbuch")
+    void muenzhausVerlauf() throws CommandSyntaxException {
+        // Der Verlauf, den der Auftrag verlangt - und er zeigt Goldmark an beiden Zahlen.
+        // /mark verlauf zeigt weiter das Markbuch; dass beide dasselbe Buch zeigen, waere
+        // der Fehler, den niemand bemerkt.
+        Stand stand = stand();
+        Spielerprobe spieler = spieler(77, stand.kasse());
+        stand.baum().tippe("mark tauschen kaufen 3", spieler);
+        spieler.vergessen();
+
+        stand.baum().tippe("mark muenzhaus verlauf", spieler);
+
+        // DREI Zeilen, und die dritte ist die EROEFFNUNG des Goldkontos: Die schreibt
+        // die Kasse selbst, sobald die erste Goldmark ankommt - mit 0, denn die Goldmark
+        // hat kein Startguthaben (Plan 8.1 nennt genau zwei Quellen). Sie gehoert in
+        // JEDES Buch, und darum steht sie hier in Goldmark da.
+        assertEquals(List.of("&6Goldmark: 3 Goldmark",
+                        "&7  06.11. 14:37  +3 Goldmark  Aus Mark gewechselt"
+                                + "  (Stand 3 Goldmark)",
+                        "&7  06.11. 14:37  0 Goldmark  Startguthaben"
+                                + "  (Stand 0 Goldmark)"),
+                spieler.chatBild());
+    }
+
+    @Test
+    @DisplayName("39r - ein leeres Goldbuch sagt es, statt nichts zu zeigen")
+    void muenzhausVerlaufLeer() throws CommandSyntaxException {
+        Stand stand = stand();
+        Spielerprobe spieler = spieler(78, stand.kasse());
+
+        stand.baum().tippe("mark muenzhaus verlauf", spieler);
+
+        assertEquals(List.of("&6Goldmark: 0 Goldmark",
+                        "&7Noch keine Goldmark bewegt. Mit /mark tauschen kaufen 5 geht"
+                                + " es los."),
+                spieler.chatBild());
+    }
+
+    @Test
+    @DisplayName("39s - der Vorschlag nennt JEDEN Posten des Katalogs")
+    void muenzhausVorschlag() {
+        // Alle und nicht nur die erreichbaren: Brigadier fragt die Vorschlaege bei JEDEM
+        // Tastendruck, und eine Goldmark- oder Bedingungsmessung je Buchstabe waere ein
+        // Datenbankzugriff je Buchstabe.
+        Stand stand = stand();
+        Spielerprobe spieler = spieler(79, stand.kasse());
+
+        assertEquals(List.of("blumenkiste", "kuerbishut", "musikscheibe",
+                        "rathausglocke"),
+                stand.baum().vorschlaege("mark muenzhaus kaufen ", spieler));
     }
 
     @Test
@@ -308,4 +499,54 @@ class MarkBefehlTest {
                         + " verlaufx den Stand, weil Brigadier auf den Elternknoten"
                         + " zurueckfaellt");
     }
+    /**
+     * Ein Rucksack als Karte, mit Platzbudget und Mitschrift.
+     *
+     * <p>Die Naht, die im Spiel {@code Vorratshand} ausfuellt - und sie ist hier Pflicht,
+     * nicht Bequemlichkeit: {@code Material.getMaxStackSize} greift in Minecrafts
+     * Verzeichnis und wirft ohne laufenden Server ("No RegistryAccess implementation
+     * found", gemessen am 20.11.2026). Mit dieser Attrappe laeuft der ganze Kaufzweig
+     * durch den ECHTEN Befehlsbaum, auch der volle Rucksack.
+     */
+    static final class Rucksack implements Vorrat {
+
+        private final java.util.Map<String, Integer> inhalt = new java.util.LinkedHashMap<>();
+        private int platz = 1_000;
+
+        void platzFuer(int stueck) {
+            platz = stueck;
+        }
+
+        int hat(String gegenstand) {
+            return inhalt.getOrDefault(gegenstand, 0);
+        }
+
+        @Override
+        public int zaehle(String gegenstand) {
+            return hat(gegenstand);
+        }
+
+        @Override
+        public int nimm(String gegenstand, int stueck) {
+            int weg = Math.min(hat(gegenstand), stueck);
+            inhalt.put(gegenstand, hat(gegenstand) - weg);
+            return weg;
+        }
+
+        @Override
+        public int lege(String gegenstand, int stueck) {
+            inhalt.merge(gegenstand, stueck, Integer::sum);
+            return stueck;
+        }
+
+        @Override
+        public int fehlenderPlatz(java.util.Map<String, Integer> gegenstaende) {
+            int summe = 0;
+            for (int stueck : gegenstaende.values()) {
+                summe += stueck;
+            }
+            return Math.max(0, summe - platz);
+        }
+    }
+
 }

@@ -329,6 +329,100 @@ wechsel:
   # DER HEBEL FUER EINEN ENGEREN GELDWEG: Plan 8.1 nennt 5.000 als das naechstliegende.
   tagesdeckel: 10000
 
+# DAS MUENZHAUS - was es fuer Goldmark gibt (Plan 2.1: Bank und Waehrung).
+#
+# VERKAUFT WERDEN GEGENSTAENDE, und das ist die tragende Entscheidung dieses Katalogs.
+# Plan 8.3 nennt als Katalogware auch Partikel, Haustiere, Rangfarben, Heimatpunkte und
+# die Namensanzeige - und von all dem gibt es heute nichts. Ein Posten darauf waere echte
+# Goldmark fuer ein Recht, das niemand liest. Ein Gegenstand dagegen wirkt am Tag des
+# Kaufs: Er liegt danach im Rucksack, und Minecraft speichert Inventare.
+#
+# WAS GEKAUFT IST, GEHOERT DEM SPIELER - wie jeder andere Gegenstand. Es kann in Lava
+# fallen, beim Sterben liegenbleiben oder verschenkt werden, und es gibt keinen Ersatz.
+# Dafuer ist jeder Posten beliebig oft zu kaufen; zwei Huete sind nun einmal zwei Huete.
+#
+# NUR KOSMETIK, KEIN VORTEIL. Plan 8.4 verbietet fuer Bezahltes ausdruecklich: hoehere
+# Verdienstsaetze, guenstigere Preise, Vorrang beim Support, Vorteile in Wettbewerben,
+# Rechte auf fremdem Besitz. Ein Katalog, der eine Ruestung oder ein Werkzeug verkauft,
+# ist kein Kosmetikladen mehr - und die Zusage "alles ist auch erspielbar" haengt daran,
+# dass Goldmark nichts kauft, was im Spiel entscheidet.
+#
+# DIE REIHENFOLGE IST DEINE AUSSAGE: So stehen die Posten auch auf der Tafel im Spiel.
+#
+# DIE NAMEN STEHEN NICHT HIER, sondern in der sprache.yml unter muenzhaus.posten.<name>.
+# Worte gehoeren in die Sprachdatei; hier stehen die Schluessel. Ein Posten ohne Zeile
+# dort bleibt kaufbar und zeigt seinen Pfad - der Startlauf sagt dir, welcher fehlt.
+#
+# KEINE FAKTOR-2-RUECKFRAGE: Die Preise haben keinen festen Schluessel unter
+# wirtschaft.sprung-bestaetigt, weil du die Posten selbst benennst. Die Schranke gegen
+# den Vertipper ist die Rechenprobe im Startlauf - sie nennt jeden Preis auch in Mark.
+#
+# /freimarken neuladen nimmt den ganzen Abschnitt an, samt Vervollstaendigung im Befehl.
+muenzhaus:
+  # Ob ueberhaupt verkauft wird. Aus heisst: Kontostand und Verlauf der Goldmark bleiben
+  # zu sehen, gekauft wird nichts. Dasselbe gilt fuer einen leeren Katalog - aber die
+  # beiden Faelle sagen dem Spieler verschiedene Saetze.
+  an: true
+
+  # DER KATALOG. Je Posten ein Abschnitt, und darin:
+  #   gegenstaende:  je Zeile ein Gegenstand und eine Anzahl von 1 bis 2304 Stueck. Die
+  #                  2304 sind 36 Lagerplaetze mal 64 Stueck - mehr passt in keinen
+  #                  Rucksack und koennte nie ankommen. Geliefert wird ganz oder gar
+  #                  nicht: Reicht der Platz nicht, sagt der Kauf AB, bevor etwas
+  #                  abgebucht ist.
+  #   preis:         in GOLDMARK, von 0 bis 1000000. Achtung, nicht in Mark - die
+  #                  Goldmark ist die grobe Einheit, Plan 8.1 nennt fuer Kosmetik 2 bis
+  #                  5. Eine 0 heisst gratis.
+  #   bedingungen:   darf fehlen und heisst dann: fuer jeden. Es gibt dieselben Arten wie
+  #                  bei den Raengen - taetige-stunden, anwesenheit-stunden, parzellen,
+  #                  beruf und guthaben (in MARK). Eine 0 ist keine Bedingung, sondern
+  #                  eine Zeile, die nie wirkt; wer keine will, laesst sie weg.
+  #
+  # Ein Gegenstand, den Minecraft nicht kennt, laesst den GANZEN Posten wegfallen - wie
+  # bei den Herausforderungen in Wolkenwerder, und aus demselben Grund: Ein Posten, dem
+  # ein Stueck fehlt, ist ein anderer Posten. Dasselbe gilt fuer eine unbekannte
+  # Bedingung; sonst waere der Posten LEICHTER als eingestellt.
+  #
+  # Der Name links darf hoechstens 32 Zeichen lang sein, Kleinbuchstaben, Ziffern,
+  # Unterstrich und Bindestrich - er steht in der sprache.yml und im getippten Befehl.
+  #
+  # Hoechstens 64 Posten: Die Tafel ist eine Chatliste, und mehr findet dort niemand.
+  katalog:
+    # Ein Hut, der die Sicht verdeckt und sonst nichts kann - Kosmetik im Wortsinn.
+    # Plan 8.1 nennt fuer einen Hut 2 bis 5 Goldmark.
+    kuerbishut:
+      gegenstaende:
+        carved_pumpkin: 1
+      preis: 2
+
+    # Blumen fuer den eigenen Garten - und darum die Bedingung: Wer keine Parzelle hat,
+    # hat keinen Garten. Sie steht hier auch als Beispiel, wie eine Bedingung aussieht.
+    blumenkiste:
+      gegenstaende:
+        rose_bush: 16
+        peony: 16
+        lilac: 16
+      preis: 2
+      bedingungen:
+        parzellen: 1
+
+    # Eine Scheibe, die man im Spiel nur aus einem erschossenen Creeper bekommt - selten,
+    # und reiner Zierrat.
+    musikscheibe:
+      gegenstaende:
+        music_disc_cat: 1
+      preis: 5
+
+    # Eine Glocke laesst sich in Minecraft gar nicht herstellen; es gibt sie nur in
+    # Doerfern. Darum der hoehere Preis - und die Bedingung als zweites Beispiel, diesmal
+    # auf die taetige Zeit.
+    rathausglocke:
+      gegenstaende:
+        bell: 1
+      preis: 5
+      bedingungen:
+        taetige-stunden: 5
+
 # DIE BERUFE - was ein Spieler waehlen darf, was ein Wechsel kostet und was ihn bremst.
 #
 # Ein Spieler haelt zwei Grundberufe und eine Spezialisierung. Das WAEHLEN ist gratis,

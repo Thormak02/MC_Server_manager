@@ -2,6 +2,7 @@ package de.freimarken.kern;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeSet;
 import java.util.Set;
 
@@ -309,6 +310,29 @@ public final class Wirtschaftsstand {
         nenneMenge(geaendert, Rangwerte.PFAD_LEITER,
                 new TreeSet<>(alt.raenge().schluessel()),
                 new TreeSet<>(neu.raenge().schluessel()));
+        // UND JE STUFE IHRE DREI TEILE - nachgetragen am 20.11.2026, Befund der
+        // Pruefrunde zu Teil G. Der Absatz darueber hat sich gegen eine Zeile je
+        // geaenderter BEDINGUNG entschieden, und das bleibt richtig: Die Antwort waere
+        // eine Wand. Aber die Entscheidung war "kuerzer", nicht "stumm" - wer
+        // rang.leiter.buerger.zahlen von 400.000 auf 4.000 setzt, darf nicht "nichts
+        // geaendert" lesen. Darum dieselbe Antwort, die die Lohntafel schon gibt: DASS
+        // sich die Tabelle geaendert hat, mit ihrer Laenge. Was darin steht, nennt der
+        // Startbericht des Lesers.
+        for (Rangwerte.Stufe stufe : neu.raenge().leiter()) {
+            var vorher = alt.raenge().stufe(stufe.schluessel());
+            if (vorher.isEmpty()) {
+                // Fuer eine NEUE Stufe ist nichts davon eine Aenderung, sondern ihr
+                // erster Wert - und die Menge darueber nennt sie schon.
+                continue;
+            }
+            String wurzel = Rangwerte.PFAD_LEITER + "." + stufe.schluessel() + ".";
+            nenneTabelle(geaendert, wurzel + Rangwerte.SCHLUESSEL_BEDINGUNGEN,
+                    vorher.get().bedingungen(), stufe.bedingungen());
+            nenneTabelle(geaendert, wurzel + Rangwerte.SCHLUESSEL_ZAHLEN,
+                    vorher.get().zahlen(), stufe.zahlen());
+            nenneMenge(geaendert, wurzel + Rangwerte.SCHLUESSEL_RECHTE,
+                    new TreeSet<>(vorher.get().rechte()), new TreeSet<>(stufe.rechte()));
+        }
         // Die Wechselstube [Teil F]: zwei Kurse und der Wechseldeckel. Aus demselben
         // Grund wie die Bloecke darueber - sie werden beim Gebrauch gefragt, es wird
         // nichts gebaut und nichts angemeldet. Ohne diese drei Zeilen aenderte sich der
@@ -320,6 +344,159 @@ public final class Wirtschaftsstand {
                 alt.wechsel().markZurueck(), neu.wechsel().markZurueck());
         nenneZahl(geaendert, Wechselwerte.PFAD_DECKEL,
                 alt.wechsel().tagesdeckel(), neu.wechsel().tagesdeckel());
+        // DAS MUENZHAUS [Teil G]: der Schalter, der Bestand des Katalogs und je Posten
+        // sein Preis. Die drei Gestalten haben verschiedene Aufgaben: Der Schalter sagt,
+        // ob ueberhaupt verkauft wird; die MENGE sagt, welcher Posten dazukam oder
+        // wegfiel; und der Preis je Posten ist der Wert, an dem ein Betreiber am
+        // haeufigsten dreht - er darf nicht unter "nichts geaendert" verschwinden.
+        //
+        // Der dynamische Pfad hat sein Vorbild bei der Stundenmenge je Taetigkeit weiter
+        // oben. Genannt werden nur Posten, die in BEIDEN Katalogen stehen: Fuer einen
+        // neuen Posten ist der Preis keine Aenderung, sondern sein erster Wert, und die
+        // Menge nennt ihn schon.
+        nenneJaNein(geaendert, Muenzwerte.PFAD_AN,
+                alt.muenzhaus().an(), neu.muenzhaus().an());
+        nenneMenge(geaendert, Muenzwerte.PFAD_KATALOG,
+                new java.util.LinkedHashSet<>(alt.muenzhaus().schluessel()),
+                new java.util.LinkedHashSet<>(neu.muenzhaus().schluessel()));
+        for (Muenzwerte.Posten posten : neu.muenzhaus().katalog()) {
+            var vorher = alt.muenzhaus().posten(posten.schluessel());
+            if (vorher.isPresent()) {
+                String wurzel = Muenzwerte.PFAD_KATALOG + "." + posten.schluessel() + ".";
+                nenneZahl(geaendert, wurzel + Muenzwerte.SCHLUESSEL_PREIS,
+                        vorher.get().preis(), posten.preis());
+                // GELIEFERTES UND BEDINGUNGEN AUCH - nachgetragen am 20.11.2026: Mit nur
+                // dem Preis gilt eine Bedingung von 1 auf 50 gehobene Parzellenzahl
+                // sofort, und die Antwort des Befehls lautet "nichts geaendert". Dann
+                // ist der Posten ueber Nacht fuer niemanden mehr frei, und niemand hat
+                // es gelesen.
+                nenneTabelle(geaendert, wurzel + Muenzwerte.SCHLUESSEL_GEGENSTAENDE,
+                        vorher.get().gegenstaende(), posten.gegenstaende());
+                nenneTabelle(geaendert, wurzel + Muenzwerte.SCHLUESSEL_BEDINGUNGEN,
+                        vorher.get().bedingungen(), posten.bedingungen());
+            }
+        }
+
+        // ============================================================================
+        // GEFUNDEN AM 20.11.2026, beim Bau des Muenzhauses - und darum hier und nicht in
+        // einem eigenen Schritt: Alles ab hier gehoert zu Bestandteilen, die es seit
+        // Monaten gibt und die in dieser Methode NIE genannt wurden. Ihr Neuladen war
+        // vollstaendig stumm, so wie es die Rangleiter bis Teil F und die zwei
+        // Auflagenschalter bis zum 17.11.2026 waren. Es ist derselbe Fund zum dritten
+        // Mal, und darum haelt ihn ab jetzt eine Tafel: Jeder PFAD_* aus dem Kern muss
+        // hier genannt sein oder in GrenzeTest mit Begruendung ausgenommen.
+        //
+        // Gemessen wurde mit allen "Klasse.PFAD_X"-Vorkommen dieser Datei gegen alle
+        // "public static final String PFAD_*" des Kerns. Darunter ist GELD - Ladenmiete,
+        // Kaution, Lizenz, die drei Marktgebuehren -, also genau die Art Wert, fuer die
+        // Teil F die Wechselkurse nachgetragen hat.
+        // ============================================================================
+
+        // Die Laeden der Markthalle: fuenf Zahlen, drei davon Geld. Eine geaenderte
+        // Miete gilt ab dem naechsten Mietlauf, eine geaenderte Lizenz beim naechsten
+        // Mieten - gebaut und angemeldet wird nichts davon.
+        nenneZahl(geaendert, Mietwerte.PFAD_MIETE,
+                alt.laeden().miete(), neu.laeden().miete());
+        nenneZahl(geaendert, Mietwerte.PFAD_KAUTION,
+                alt.laeden().kaution(), neu.laeden().kaution());
+        nenneZahl(geaendert, Mietwerte.PFAD_LIZENZ,
+                alt.laeden().lizenz(), neu.laeden().lizenz());
+        nenneZahl(geaendert, Mietwerte.PFAD_DAUER,
+                alt.laeden().dauerTage(), neu.laeden().dauerTage());
+        nenneZahl(geaendert, Mietwerte.PFAD_AUSFAELLE,
+                alt.laeden().ausfaelleBisRaeumung(), neu.laeden().ausfaelleBisRaeumung());
+
+        // Der Kistenhandel: drei Gebuehrensaetze, die Seitenlaenge des Verzeichnisses und
+        // das Wort, mit dem ein Bundshop sich ausweist. Das WORT steht hier als Zeile mit
+        // Anfuehrungszeichen, wie die Rangwerbung - es ist Text und keine Zahl.
+        nenneZahl(geaendert, Shopwerte.PFAD_SPIELER_KAUF,
+                alt.handel().spielershopKauf(), neu.handel().spielershopKauf());
+        nenneZahl(geaendert, Shopwerte.PFAD_SPIELER_VERKAUF,
+                alt.handel().spielershopVerkauf(), neu.handel().spielershopVerkauf());
+        nenneZahl(geaendert, Shopwerte.PFAD_BUND_VERKAUF,
+                alt.handel().bundshopVerkauf(), neu.handel().bundshopVerkauf());
+        nenneZahl(geaendert, Shopwerte.PFAD_ZEILEN,
+                alt.handel().zeilenJeSeite(), neu.handel().zeilenJeSeite());
+        nenneWort(geaendert, Shopwerte.PFAD_WORT,
+                alt.handel().bundWort(), neu.handel().bundWort());
+
+        // Die Freistaedte, zweiter Teil: die Buergerrechte als Menge, die Erstattung beim
+        // Aufgeben und die zwei Ladengebuehren. Dazu der VERFALL - vier Zahlen, die
+        // darueber entscheiden, wann eine Stadt zurueckfaellt.
+        nenneMenge(geaendert, Freistadtwerte.PFAD_BUERGERRECHTE,
+                taten(alt.freistaedte().buergerrechte()),
+                taten(neu.freistaedte().buergerrechte()));
+        nenneZahl(geaendert, Freistadtwerte.PFAD_ERSTATTUNG,
+                alt.freistaedte().erstattungProzent(),
+                neu.freistaedte().erstattungProzent());
+        nenneZahl(geaendert, Freistadtwerte.PFAD_LADENGEBUEHR_ANLAGE,
+                alt.freistaedte().ladengebuehrAnlage(),
+                neu.freistaedte().ladengebuehrAnlage());
+        nenneZahl(geaendert, Freistadtwerte.PFAD_LADENGEBUEHR_TAG,
+                alt.freistaedte().ladengebuehrTag(),
+                neu.freistaedte().ladengebuehrTag());
+        nenneJaNein(geaendert, Verfallswerte.PFAD_AN,
+                alt.freistaedte().verfall().an(), neu.freistaedte().verfall().an());
+        nenneZahl(geaendert, Verfallswerte.PFAD_UNBESUCHT_TAGE,
+                alt.freistaedte().verfall().unbesuchtTage(),
+                neu.freistaedte().verfall().unbesuchtTage());
+        nenneZahl(geaendert, Verfallswerte.PFAD_WARNUNG_FRUEH,
+                alt.freistaedte().verfall().warnungFruehTage(),
+                neu.freistaedte().verfall().warnungFruehTage());
+        nenneZahl(geaendert, Verfallswerte.PFAD_WARNUNG_SPAET,
+                alt.freistaedte().verfall().warnungSpaetTage(),
+                neu.freistaedte().verfall().warnungSpaetTage());
+
+        // Wolkenwerder, zweiter Teil: Starttruhe, Biompreis, die Erzausbeute, die
+        // Herausforderungen und die Punktetabelle. Die drei TABELLEN werden gezaehlt und
+        // verglichen, nicht aufgezaehlt - was in einer Zeile steht, nennt der
+        // Startbericht des Lesers.
+        nenneTabelle(geaendert, Wolkenwerte.PFAD_STARTTRUHE,
+                alt.wolken().starttruhe(), neu.wolken().starttruhe());
+        nenneZahl(geaendert, Wolkenwerte.PFAD_BIOMPREIS,
+                alt.wolken().biompreis(), neu.wolken().biompreis());
+        nenneJaNein(geaendert, Erzwerte.PFAD_AN,
+                alt.wolken().erze().an(), neu.wolken().erze().an());
+        nenneZahl(geaendert, Erzwerte.PFAD_GRUND,
+                alt.wolken().erze().grundProzent(), neu.wolken().erze().grundProzent());
+        nenneZahl(geaendert, Erzwerte.PFAD_JE_STUFE,
+                alt.wolken().erze().jeStufeProzent(),
+                neu.wolken().erze().jeStufeProzent());
+        nenneZahl(geaendert, Erzwerte.PFAD_HOECHST,
+                alt.wolken().erze().hoechstProzent(),
+                neu.wolken().erze().hoechstProzent());
+        nenneJaNein(geaendert, Erzwerte.PFAD_MARKEN,
+                alt.wolken().erze().marken(), neu.wolken().erze().marken());
+        nenneTabelle(geaendert, Erzwerte.PFAD_TABELLE,
+                alt.wolken().erze().tabelle(), neu.wolken().erze().tabelle());
+        nenneJaNein(geaendert, Aufgabenwerte.PFAD_AN,
+                alt.wolken().aufgaben().an(), neu.wolken().aufgaben().an());
+        nenneMenge(geaendert, Aufgabenwerte.PFAD_LISTE,
+                new java.util.LinkedHashSet<>(alt.wolken().aufgaben().schluessel()),
+                new java.util.LinkedHashSet<>(neu.wolken().aufgaben().schluessel()));
+        // JE HERAUSFORDERUNG das Verlangte und die Belohnung - derselbe Nachtrag wie bei
+        // der Rangleiter und beim Katalog: Die BELOHNUNG ist Geld, und Geld, das sich
+        // beim Neuladen stumm aendert, ist genau der Fall, gegen den Teil F die
+        // Wechselkurse nachgetragen hat.
+        for (Aufgabenwerte.Aufgabe aufgabe : neu.wolken().aufgaben().liste()) {
+            var vorher = alt.wolken().aufgaben().aufgabe(aufgabe.schluessel());
+            if (vorher.isEmpty()) {
+                continue;
+            }
+            String wurzel = Aufgabenwerte.PFAD_LISTE + "." + aufgabe.schluessel() + ".";
+            nenneTabelle(geaendert, wurzel + Aufgabenwerte.SCHLUESSEL_VERLANGT,
+                    vorher.get().verlangt(), aufgabe.verlangt());
+            nenneZahl(geaendert, wurzel + Aufgabenwerte.SCHLUESSEL_BELOHNUNG,
+                    vorher.get().belohnung(), aufgabe.belohnung());
+        }
+        nenneTabelle(geaendert, Punktwerte.PFAD_TABELLE,
+                alt.wolken().punkte().tabelle(), neu.wolken().punkte().tabelle());
+        nenneZahl(geaendert, Punktwerte.PFAD_CHUNKS_JE_TAKT,
+                alt.wolken().punkte().chunksJeTakt(),
+                neu.wolken().punkte().chunksJeTakt());
+        nenneZahl(geaendert, Punktwerte.PFAD_ABKLINGZEIT,
+                alt.wolken().punkte().abklingSekunden(),
+                neu.wolken().punkte().abklingSekunden());
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");
@@ -454,6 +631,50 @@ public final class Wirtschaftsstand {
         if (alt != neu) {
             hinein.add(pfad + ": " + alt + " -> " + neu);
         }
+    }
+
+    /**
+     * Dasselbe fuer einen TEXT - mit Anfuehrungszeichen, damit ein Leerzeichen sichtbar
+     * ist.
+     *
+     * <p>Dieselbe Gestalt, die die Rangwerbung schon hatte, bevor sie eine Methode war.
+     */
+    private static void nenneWort(List<String> hinein, String pfad, String alt,
+            String neu) {
+        if (!alt.equals(neu)) {
+            hinein.add(pfad + ": \"" + alt + "\" -> \"" + neu + "\"");
+        }
+    }
+
+    /**
+     * Eine TABELLE: ihre Laenge und dass sie sich geaendert hat.
+     *
+     * <p>Dieselbe Antwort wie bei der Lohntafel, und aus demselben Grund: Eine Zeile mit
+     * einem anderen Wert laesst die Laenge gleich, und genau das ist die Aenderung, die
+     * der Betreiber gerade gemacht hat. Aufgezaehlt wird sie nicht - vierzig Zeilen
+     * "alt -> neu" waeren keine Antwort mehr, sondern eine Wand; was in einer Zeile
+     * steht, nennt der Startbericht des Lesers.
+     */
+    private static void nenneTabelle(List<String> hinein, String pfad, Map<?, ?> alt,
+            Map<?, ?> neu) {
+        if (!alt.equals(neu)) {
+            hinein.add(pfad + ": " + alt.size() + " -> " + neu.size()
+                    + " Zeilen (geaendert)");
+        }
+    }
+
+    /**
+     * Die Schluessel einer Tatenmenge - damit {@link #nenneMenge} sie vergleichen kann.
+     *
+     * <p>Wie bei den Lebenszeichen: die Schluessel und nicht {@code name()}, damit in der
+     * Antwort steht, was in der Datei des Betreibers steht.
+     */
+    private static Set<String> taten(Set<Tat> rechte) {
+        Set<String> namen = new java.util.LinkedHashSet<>();
+        for (Tat recht : rechte) {
+            namen.add(recht.schluessel());
+        }
+        return namen;
     }
 
     /**

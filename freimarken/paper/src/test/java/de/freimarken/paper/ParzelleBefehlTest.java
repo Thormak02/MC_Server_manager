@@ -24,6 +24,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import de.freimarken.kern.Muenzhaus;
+import java.util.Map;
+import de.freimarken.kern.Vorrat;
 
 /**
  * {@code /parzelle} GETIPPT - welcher Unterbefehl bei welchem Zweig landet.
@@ -71,17 +74,20 @@ class ParzelleBefehlTest {
         kasse = new SpeicherKasse(REICH);
         buch = new Besitzbuch(Stadtgrenze.marktstadt(), new SpeicherLager(),
                 kasse, new Wirtschaftsstand(Wirtschaftswerte.VORGABE));
+        Goldkasse gold = new Goldkasse(new SpeicherKasse(0L));
+        Wirtschaftsstand stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
         ParzellenBefehle befehle = new ParzellenBefehle(buch, welt,
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE),
                 Logger.getLogger("ParzelleBefehlTest"), Sprachprobe.spracheAusDemJar(),
                 // Keine Bonuszeile: Diese Proben halten /mark ohne Teil H.
                 // Dass die Zeile dazukommt, prueft BonusBefehlTest.
                 wer -> null,
-                // Eine Wechselstube, weil der Befehlsbaum eine braucht. Was sie TUT,
-                // prueft MarkBefehlTest.
-                new Wechselbuch(kasse, new Goldkasse(new SpeicherKasse(0L)),
-                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE),
-                        Clock.systemUTC()));
+                // Eine Wechselstube und ein Muenzhaus, weil der Befehlsbaum sie braucht.
+                // Was sie TUN, prueft MarkBefehlTest - und beide auf DERSELBEN Goldkasse.
+                new Wechselbuch(kasse, gold, stand, Clock.systemUTC()),
+                new Muenzhaus(gold, stand, (wer, gebraucht) -> Map.of()),
+                // Ein Rucksack als Karte: Vorratshand braucht einen laufenden Server.
+                spieler -> kartenvorrat());
         baum = new Befehlsprobe(List.of(befehle.parzelle()));
     }
 
@@ -191,4 +197,35 @@ class ParzelleBefehlTest {
                 "dieselbe Unschoenheit wie bei /mark, und derselbe Grund fuer die"
                         + " eigene Bereitmeldung beim Start");
     }
+    /**
+     * Ein Rucksack als Karte - die Naht, die {@code Vorratshand} im Spiel ausfuellt.
+     *
+     * <p>Jene braucht einen laufenden Server: {@code Material.getMaxStackSize} greift in
+     * Minecrafts Verzeichnis. Hier geht es nicht um den Kauf - was das Muenzhaus tut,
+     * prueft {@code MarkBefehlTest} - sondern nur darum, dass der Befehlsbaum steht.
+     */
+    private static Vorrat kartenvorrat() {
+        return new Vorrat() {
+            @Override
+            public int zaehle(String gegenstand) {
+                return 0;
+            }
+
+            @Override
+            public int nimm(String gegenstand, int stueck) {
+                return 0;
+            }
+
+            @Override
+            public int lege(String gegenstand, int stueck) {
+                return stueck;
+            }
+
+            @Override
+            public int fehlenderPlatz(java.util.Map<String, Integer> gegenstaende) {
+                return 0;
+            }
+        };
+    }
+
 }

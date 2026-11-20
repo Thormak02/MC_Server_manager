@@ -33,6 +33,8 @@ import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import de.freimarken.kern.Muenzhaus;
+import de.freimarken.kern.Vorrat;
 
 /**
  * Die AUFRUFSTELLE, mitgeschrieben - was ein Zweig waehlt und was er uebergibt.
@@ -162,6 +164,8 @@ class AufrufstelleTest {
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                         .mitStartguthaben(REICH).mitHoechstzahl(HOECHSTZAHL)
                         .mitGruppenFeldern(GRUPPENFELDER)));
+        Goldkasse gold = new Goldkasse(new SpeicherKasse(0L));
+        Wirtschaftsstand stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
         befehle = new ParzellenBefehle(buch, welt,
                 new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                         .mitStartguthaben(REICH).mitHoechstzahl(HOECHSTZAHL)
@@ -172,9 +176,14 @@ class AufrufstelleTest {
                 wer -> null,
                 // Eine Wechselstube, weil der Befehlsbaum eine braucht. Was sie TUT,
                 // prueft MarkBefehlTest - hier geht es um die Aufrufstellen.
-                new Wechselbuch(kasse, new Goldkasse(new SpeicherKasse(0L)),
-                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE),
-                        Clock.systemUTC()));
+                new Wechselbuch(kasse, gold, stand, Clock.systemUTC()),
+                // Ein Muenzhaus aus demselben Grund, und auf DERSELBEN Goldkasse: Zwei
+                // waeren zwei Konten in einer Waehrung. Gemessen wird nichts - ohne
+                // Messwerte ist jeder Posten mit Bedingung gesperrt, und das ist hier
+                // einerlei.
+                new Muenzhaus(gold, stand, (wer, gebraucht) -> Map.of()),
+                // Ein Rucksack als Karte: Vorratshand braucht einen laufenden Server.
+                spieler -> kartenvorrat());
         kasse.eroeffne(ANNA);
         kasse.eroeffne(BERT);
     }
@@ -870,4 +879,35 @@ class AufrufstelleTest {
 
         assertEquals("", mitschrift(), "ein Nicht-Spieler bekommt keine Zeile");
     }
+    /**
+     * Ein Rucksack als Karte - die Naht, die {@code Vorratshand} im Spiel ausfuellt.
+     *
+     * <p>Jene braucht einen laufenden Server: {@code Material.getMaxStackSize} greift in
+     * Minecrafts Verzeichnis. Hier geht es nicht um den Kauf - was das Muenzhaus tut,
+     * prueft {@code MarkBefehlTest} - sondern nur darum, dass der Befehlsbaum steht.
+     */
+    private static Vorrat kartenvorrat() {
+        return new Vorrat() {
+            @Override
+            public int zaehle(String gegenstand) {
+                return 0;
+            }
+
+            @Override
+            public int nimm(String gegenstand, int stueck) {
+                return 0;
+            }
+
+            @Override
+            public int lege(String gegenstand, int stueck) {
+                return stueck;
+            }
+
+            @Override
+            public int fehlenderPlatz(java.util.Map<String, Integer> gegenstaende) {
+                return 0;
+            }
+        };
+    }
+
 }

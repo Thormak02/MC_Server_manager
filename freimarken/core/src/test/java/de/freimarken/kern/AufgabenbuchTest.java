@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * <p>Geprueft wird, was ein Spieler merkt: Sind meine Gegenstaende weg? Ist das Geld da?
  * Steht die Aufgabe? Und vor allem - habe ich noch alles, wenn es NICHT geklappt hat?
  *
- * <p><b>Der {@link Aufgabenbuch.Vorrat} ist hier eine Karte</b>, und genau darum laeuft
+ * <p><b>Der {@link Vorrat} ist hier eine Karte</b>, und genau darum laeuft
  * jeder Zweig: Auf einem Server liegt dahinter ein Inventar, dessen
  * {@code removeItem} nicht unteilbar ist. Diese Probe kann den Fall stellen, in dem
  * gezaehlt genug da war und genommen zu wenig - und das ist der Zweig, in dem ein Spieler
@@ -409,7 +409,7 @@ class AufgabenbuchTest {
      * Spieler etwas wegwerfen kann. Ohne diese Attrappe waere der Zweig, der das
      * Genommene zurueckgibt, von keiner Probe durchlaufbar.
      */
-    private static final class Kartenvorrat implements Aufgabenbuch.Vorrat {
+    private static final class Kartenvorrat implements Vorrat {
 
         private final Map<String, Integer> inhalt = new LinkedHashMap<>();
         private String luegt;
@@ -443,6 +443,18 @@ class AufgabenbuchTest {
         public int lege(String gegenstand, int stueck) {
             hinein(gegenstand, stueck);
             return stueck;
+        }
+
+        /**
+         * Eine Karte hat unbegrenzt Platz - und das Aufgabenbuch fragt nicht danach.
+         *
+         * <p>Es legt ausschliesslich zurueck, was es im selben Augenblick genommen hat;
+         * der Platz dafuer ist durch das Nehmen selbst frei geworden. Gefragt wird diese
+         * Zahl vom {@code Muenzhaus}, und dort hat sie ihre eigenen Proben.
+         */
+        @Override
+        public int fehlenderPlatz(Map<String, Integer> gegenstaende) {
+            return 0;
         }
     }
 

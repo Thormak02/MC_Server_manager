@@ -9,10 +9,13 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Buchung;
+import de.freimarken.kern.Buchungsgrund;
+import de.freimarken.kern.Muenzhaus;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.Richtung;
+import de.freimarken.kern.Vorrat;
 import de.freimarken.kern.Wechselbuch;
 import de.freimarken.kern.Wechselwerte;
 import de.freimarken.kern.Wirtschaftsstand;
@@ -26,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -144,12 +148,36 @@ final class ParzellenBefehle {
      */
     private final Wechselbuch wechselbuch;
 
+    /**
+     * Das Muenzhaus hinter {@code /mark muenzhaus} [Teil G].
+     *
+     * <p>Es liegt hier und bekommt keinen eigenen Befehl, aus demselben Grund wie die
+     * Wechselstube: "Zwei Befehle, die denselben Stand zeigen, laufen eines Tages
+     * auseinander." Das Muenzhaus IST die Bank (Plan 2.1 - Kontostand, Verlauf, Wechsel,
+     * Wechseldeckel), und {@code /mark} ist dieses Konto.
+     */
+    private final Muenzhaus muenzhaus;
+
+    /**
+     * Was ein Spieler traegt - die Naht zum Inventar [Teil G].
+     *
+     * <p>Eine Naht und keine Abhaengigkeit auf {@code Vorratshand}, wie bei
+     * {@code WolkeBefehle}: Dahinter liegt {@code Material.getMaxStackSize}, und das
+     * greift in Minecrafts Verzeichnis - GEMESSEN am 20.11.2026 wirft es ohne laufenden
+     * Server ("No RegistryAccess implementation found"). Mit der Naht laeuft der ganze
+     * Kaufzweig durch eine Probe, auch der teuerste Fall: der volle Rucksack.
+     */
+    private final Function<Player, Vorrat> vorrat;
+
     ParzellenBefehle(Besitzbuch buch, World marktstadt, Wirtschaftsstand wirtschaft,
                      Logger protokoll, Sprache sprache, Bonusauskunft bonusauskunft,
-                     Wechselbuch wechselbuch) {
+                     Wechselbuch wechselbuch, Muenzhaus muenzhaus,
+                     Function<Player, Vorrat> vorrat) {
         this.sprache = sprache;
         this.bonusauskunft = bonusauskunft;
         this.wechselbuch = wechselbuch;
+        this.muenzhaus = muenzhaus;
+        this.vorrat = vorrat;
         this.buch = buch;
         this.marktstadt = marktstadt;
         // Aus der Welt gelesen und nicht daneben uebergeben: Zwei Angaben fuer dieselbe
@@ -237,6 +265,7 @@ final class ParzellenBefehle {
                 .then(Commands.literal("verlauf")
                         .executes(fuerSpieler(this::zeigeVerlauf)))
                 .then(tauschZweig())
+                .then(muenzhausZweig())
                 .build();
     }
 
@@ -259,12 +288,97 @@ final class ParzellenBefehle {
     private LiteralArgumentBuilder<CommandSourceStack> tauschZweig() {
         return Commands.literal("tauschen")
                 .executes(fuerSpieler(this::zeigeTauschtafel))
+                // JEDES Literal mit Untersaetzen traegt ein eigenes .executes - und diese
+                // zwei bekamen es am 20.11.2026 nachgetragen, als FUND des Muenzhauses:
+                // Ein passendes Literal verdeckt in Brigadier jedes Geschwister
+                // vollstaendig, also endete "/mark tauschen kaufen" ohne Zahl in
+                // Brigadiers englischem "Unknown or incomplete command" - statt in der
+                // Tafel, auf der steht, was als naechstes Wort gefragt ist.
                 .then(Commands.literal("kaufen")
+                        .executes(fuerSpieler(this::zeigeTauschtafel))
                         .then(anzahlGoldmark()
                                 .executes(z -> mitAnzahl(z, this::kaufeGoldmark))))
                 .then(Commands.literal("verkaufen")
+                        .executes(fuerSpieler(this::zeigeTauschtafel))
                         .then(anzahlGoldmark()
                                 .executes(z -> mitAnzahl(z, this::verkaufeGoldmark))));
+    }
+
+    /**
+     * Der Zweig {@code /mark muenzhaus} - die Tafel, der Verlauf und der Kauf.
+     *
+     * <p><b>Das Wort allein zeigt die TAFEL</b>: Kontostand, die Kurse, den sichtbaren
+     * Wechseldeckel und den Katalog. Das ist der ORT, den Plan 2.1 nennt - im Chat, denn
+     * eine Anzeige auf einem Block gibt es in diesem Plugin nirgends.
+     *
+     * <p><b>Der Kauf hat zwei Stufen</b>, wie {@code /beruf verlassen} und
+     * {@code /freistadt gruenden}: {@code kaufen <posten>} zeigt Preis, Inhalt und den
+     * Stand danach, und erst {@code kaufen <posten> bestaetigen} bucht. Der Posten wird
+     * getippt, er kostet Goldmark, und verkauft wird hier nichts.
+     *
+     * <p><b>Der Postenname ist ein freies Wort</b> ({@code StringArgumentType.word()}) und
+     * kein Argumenttyp, der das Muster prueft. Das ist Absicht: So erreicht ein Tippfehler
+     * den Zweig, und der Spieler liest einen deutschen Satz mit dem, was er geschrieben
+     * hat - statt einer roten englischen Zeile von Brigadier.
+     */
+    private LiteralArgumentBuilder<CommandSourceStack> muenzhausZweig() {
+        return Commands.literal("muenzhaus")
+                .executes(fuerSpieler(this::zeigeMuenztafel))
+                .then(Commands.literal("verlauf")
+                        .executes(fuerSpieler(this::zeigeMuenzverlauf)))
+                .then(Commands.literal("kaufen")
+                        .executes(fuerSpieler(this::zeigeMuenztafel))
+                        .then(postenName()
+                                .executes(z -> mitPosten(z, this::frageKauf))
+                                .then(Commands.literal("bestaetigen")
+                                        .executes(z -> mitPosten(z, this::kaufePosten)))));
+    }
+
+    /**
+     * Der Name eines Katalogpostens, mit Vorschlag aus den GELTENDEN Werten.
+     *
+     * <p>Vorgeschlagen werden ALLE Posten und nicht nur die erreichbaren - dieselbe
+     * bewusste Abweichung wie bei {@code BerufeBefehle}: Nur die erreichbaren zu nennen
+     * hiesse, den Stand des Spielers zu lesen, und Brigadier fragt die Vorschlaege bei
+     * JEDEM Tastendruck neu. Mit einer Goldmark- und einer Bedingungsmessung je Buchstabe
+     * waere das ein Datenbankzugriff je Buchstabe.
+     *
+     * <p>Gefragt wird {@code muenzhaus.werte()}, also der laufende Stand - damit wirkt
+     * {@code /freimarken neuladen} auch auf die Vervollstaendigung.
+     */
+    private RequiredArgumentBuilder<CommandSourceStack, String> postenName() {
+        return Commands.argument("posten", StringArgumentType.word())
+                .suggests((zusammenhang, bauer) -> {
+                    muenzhaus.werte().schluessel().forEach(bauer::suggest);
+                    return bauer.buildFuture();
+                });
+    }
+
+    /**
+     * Die Tafel des Muenzhauses - mit der Stoerungswache fuer BEIDE Auskuenfte.
+     *
+     * <p>Die Wache steht in der ZEILEN-Methode und nicht im Zweig, nach der Hausregel von
+     * {@link #tauschtafelZeilen}: Sie entscheidet WAS gesendet wird, nicht OB. Und sie
+     * fragt beide Auskuenfte - eine halbe Tafel mit dem Katalog, aber ohne den Deckel,
+     * waere eine Auskunft, die der naechste Tausch bricht.
+     */
+    static List<Component> muenzhaustafelZeilen(Sprache sprache,
+                                                Optional<Muenzhaus.Tafel> tafel,
+                                                Optional<Wechselbuch.Auskunft> auskunft) {
+        if (tafel.isEmpty() || auskunft.isEmpty()) {
+            return sprache.bau(MarkSatz.MUENZHAUS_GESTOERT, 1L, Einsatz.keine());
+        }
+        return Muenztext.tafelZeilen(sprache, tafel.get(), auskunft.get());
+    }
+
+    /** Der Goldverlauf - dieselbe Wache, derselbe Grund. */
+    static List<Component> muenzverlaufZeilen(Sprache sprache,
+                                              Optional<Muenzhaus.Konto> konto,
+                                              ZoneId zone) {
+        if (konto.isEmpty()) {
+            return sprache.bau(MarkSatz.MUENZHAUS_GESTOERT, 1L, Einsatz.keine());
+        }
+        return Muenztext.verlaufZeilen(sprache, konto.get(), zone);
     }
 
     /** Die Anzahl Goldmark - mit den Grenzen aus dem Kern, nicht mit eigenen. */
@@ -354,7 +468,8 @@ final class ParzellenBefehle {
         // nicht mehr hier: Verlaufszeile gibt ein fertiges Component zurueck. Hier stand
         // Component.text("  " + text, GRAY) - zwei Leerzeichen und eine Farbe, die der
         // Betreiber nicht erreichen konnte.
-        buchungen.forEach(buchung -> zeilen.add(Verlaufszeile.zeile(sprache, buchung, zone)));
+        buchungen.forEach(buchung -> zeilen.add(
+                Verlaufszeile.zeile(sprache, buchung, zone, Buchungsgrund.Buch.MARK)));
         return zeilen;
     }
 
@@ -1737,6 +1852,40 @@ final class ParzellenBefehle {
                 .forEach(spieler::sendMessage);
     }
 
+    /** {@code /mark muenzhaus} - Stand, Wechseldeckel und Katalog. */
+    void zeigeMuenztafel(Player spieler) {
+        muenzhaustafelZeilen(sprache, muenzhaus.tafel(spieler.getUniqueId()),
+                        wechselbuch.auskunft(spieler.getUniqueId()))
+                .forEach(spieler::sendMessage);
+    }
+
+    /** {@code /mark muenzhaus verlauf} - das GOLDbuch, nicht das Markbuch. */
+    void zeigeMuenzverlauf(Player spieler) {
+        muenzverlaufZeilen(sprache,
+                        muenzhaus.konto(spieler.getUniqueId(), VERLAUF_ZEILEN),
+                        wirtschaft.werte().zeit().zone())
+                .forEach(spieler::sendMessage);
+    }
+
+    /**
+     * {@code /mark muenzhaus kaufen <posten>} - die Rueckfrage, noch ohne Buchung.
+     *
+     * <p>Geprueft wird mit demselben Weg, der danach bucht: Wer hier eine Bedingung nicht
+     * erfuellt, erfaehrt es VOR der Bestaetigung und nicht danach.
+     */
+    private void frageKauf(Player spieler, String posten) {
+        Muenztext.entscheidZeilen(sprache, posten, muenzhaus.pruefe(spieler.getUniqueId(),
+                        posten, vorrat.apply(spieler)))
+                .forEach(spieler::sendMessage);
+    }
+
+    /** {@code /mark muenzhaus kaufen <posten> bestaetigen} - jetzt wird gebucht. */
+    private void kaufePosten(Player spieler, String posten) {
+        Muenztext.entscheidZeilen(sprache, posten, muenzhaus.kaufe(spieler.getUniqueId(),
+                        posten, vorrat.apply(spieler)))
+                .forEach(spieler::sendMessage);
+    }
+
     /** {@code /mark tauschen verkaufen <anzahl>} - Goldmark hinein, Mark heraus. */
     private void verkaufeGoldmark(Player spieler, int anzahl) {
         Wechselwerte werte = wechselbuch.werte();
@@ -1814,5 +1963,18 @@ final class ParzellenBefehle {
     @FunctionalInterface
     private interface MitAnzahl {
         void fuehreAus(Player spieler, int anzahl);
+    }
+
+    /** Wie {@link #mitAnzahl}, aber mit dem getippten Postennamen des Muenzhauses. */
+    private int mitPosten(CommandContext<CommandSourceStack> zusammenhang, MitPosten tat) {
+        if (zusammenhang.getSource().getExecutor() instanceof Player spieler) {
+            tat.fuehreAus(spieler, StringArgumentType.getString(zusammenhang, "posten"));
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    @FunctionalInterface
+    private interface MitPosten {
+        void fuehreAus(Player spieler, String posten);
     }
 }

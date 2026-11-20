@@ -2251,7 +2251,103 @@ class BildGleichTest {
                                 .mit("betrag", sprache.betrag(9_600L)), "&cHeute gehen nur noch 12 Goldmark (9.600 Mark) - der Wechseldeckel."),
                 new Zeile(MarkSatz.TAUSCH_DECKEL_VOLL, 1L,
                         Einsatz.von("betrag", sprache.betrag(10_000L)), "&cHeute ist der Wechseldeckel von 10.000 Mark erreicht. Morgen wieder."),
-                new Zeile(MarkSatz.TAUSCH_GESTOERT, 1L, Einsatz.keine(), "&cDie Kasse hat nicht geantwortet. Es ist nichts passiert."));
+                new Zeile(MarkSatz.TAUSCH_GESTOERT, 1L, Einsatz.keine(), "&cDie Kasse hat nicht geantwortet. Es ist nichts passiert."),
+
+                // DAS MUENZHAUS [Schritt 12 Teil G]. Dieselbe Strenge wie bei der
+                // Wechselstube darueber, und aus demselben Grund: Die Preise sind
+                // GOLDMARK, die Kurse sind MARK, und beides ist im Programm ein long.
+                // Steht in einem Bild unten die falsche Einheit, ist diese Probe rot.
+                //
+                // Die NAMEN der Posten kommen ueber Muenzname aus der Datei - sie sind
+                // der dritte Satz, der keinen Platz in einer Aufzaehlung hat, und damit
+                // haengt auch die offene Familie an einer Bildprobe.
+                //
+                // Die GEZAEHLTEN Saetze stehen dreimal: mit 1, mit 2 und mit 0. Die Null
+                // ist dabei kein Zierrat - sie waehlt die viele-Zeile, und ein Satz, der
+                // nur mit 1 geprueft waere, koennte in seiner zweiten Zeile alles sagen.,
+                new Zeile(MarkSatz.MUENZHAUS_KOPF, 1L, Einsatz.keine(),
+                        "&6Muenzhaus"),
+                new Zeile(MarkSatz.MUENZHAUS_AUS, 1L, Einsatz.keine(),
+                        "&7Im Muenzhaus wird gerade nichts verkauft."),
+                new Zeile(MarkSatz.MUENZHAUS_LEER, 1L, Einsatz.keine(),
+                        "&7Der Katalog ist leer."),
+                new Zeile(MarkSatz.MUENZHAUS_ZEILE, 1L,
+                        Einsatz.von("name", sprache.wort(new Muenzname("kuerbishut"), Einsatz.keine()))
+                                .mit("preis", sprache.goldmark(2L))
+                                .mit("inhalt", "1x carved_pumpkin"), "&7- &fKuerbishut&7 fuer &62 Goldmark&7: 1x carved_pumpkin"),
+                new Zeile(MarkSatz.MUENZHAUS_ZEILE_ZU_TEUER, 1L,
+                        Einsatz.von("name", sprache.wort(new Muenzname("kuerbishut"), Einsatz.keine()))
+                                .mit("preis", sprache.goldmark(2L))
+                                .mit("inhalt", "1x carved_pumpkin"), "&8- Kuerbishut fuer 2 Goldmark: 1x carved_pumpkin"),
+                new Zeile(MarkSatz.MUENZHAUS_ZEILE_GESPERRT, 1L,
+                        Einsatz.von("name", sprache.wort(new Muenzname("blumenkiste"), Einsatz.keine()))
+                                .mit("preis", sprache.goldmark(2L))
+                                .mit("inhalt", "16x rose_bush, 16x peony"), "&8- Blumenkiste fuer 2 Goldmark: 16x rose_bush, 16x peony (noch nicht frei)"),
+                new Zeile(MarkSatz.MUENZHAUS_HILFE, 1L, Einsatz.keine(),
+                        "&8/mark muenzhaus kaufen [posten] - Verlauf: /mark muenzhaus verlauf"),
+                new Zeile(MarkSatz.MUENZHAUS_FRAGE, 1L,
+                        Einsatz.von("name", sprache.wort(new Muenzname("kuerbishut"), Einsatz.keine()))
+                                .mit("posten", "kuerbishut")
+                                .mit("preis", sprache.goldmark(2L))
+                                .mit("inhalt", "1x carved_pumpkin")
+                                .mit("danach", sprache.goldmark(8L)), "&eKuerbishut kostet 2 Goldmark und bringt 1x carved_pumpkin. Danach haettest du 8 Goldmark.\n&7Zum Kaufen: /mark muenzhaus kaufen kuerbishut bestaetigen"),
+                new Zeile(MarkSatz.MUENZHAUS_GEKAUFT, 1L,
+                        Einsatz.von("name", sprache.wort(new Muenzname("kuerbishut"), Einsatz.keine()))
+                                .mit("inhalt", "1x carved_pumpkin")
+                                .mit("preis", sprache.goldmark(2L))
+                                .mit("stand", sprache.goldmark(8L)), "&aKuerbishut gekauft fuer 2 Goldmark: 1x carved_pumpkin. Du hast jetzt 8 Goldmark."),
+                new Zeile(MarkSatz.MUENZHAUS_UNBEKANNT, 1L, Einsatz.von("posten", "kuerbishu"),
+                        "&cDen Posten \"kuerbishu\" gibt es im Katalog nicht."),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_FEHLT, 1L, Einsatz.von("name", sprache.wort(new Muenzname("blumenkiste"), Einsatz.keine())),
+                        "&cBlumenkiste ist noch nicht frei fuer dich. Dafuer brauchst du:"),
+                new Zeile(MarkSatz.MUENZHAUS_ZU_WENIG, 1L,
+                        Einsatz.von("preis", sprache.goldmark(5L))
+                                .mit("stand", sprache.goldmark(2L))
+                                .mit("fehlt", sprache.goldmark(3L)), "&cDas kostet 5 Goldmark - du hast 2 Goldmark, dir fehlen 3 Goldmark."),
+                new Zeile(MarkSatz.MUENZHAUS_GESTOERT, 1L, Einsatz.keine(),
+                        "&cDas Muenzhaus hat nicht geantwortet - es ist nichts passiert."),
+                new Zeile(MarkSatz.MUENZHAUS_ERSTATTET, 1L, Einsatz.keine(),
+                        "&cDas Muenzhaus hat nicht geantwortet. Dein Geld ist zurueck."),
+                new Zeile(MarkSatz.MUENZHAUS_VERLAUF_KOPF, 1L, Einsatz.von("betrag", sprache.goldmark(12L)),
+                        "&6Goldmark: 12 Goldmark"),
+                new Zeile(MarkSatz.MUENZHAUS_VERLAUF_LEER, 1L, Einsatz.keine(),
+                        "&7Noch keine Goldmark bewegt. Mit /mark tauschen kaufen 5 geht es los."),
+                new Zeile(MarkSatz.MUENZHAUS_KEIN_PLATZ, 1L, Einsatz.von("stueck", "1"),
+                        "&cIn deinem Rucksack fehlt Platz fuer 1 Stueck - es ist nichts passiert."),
+                new Zeile(MarkSatz.MUENZHAUS_KEIN_PLATZ, 2L, Einsatz.von("stueck", "2"),
+                        "&cIn deinem Rucksack fehlt Platz fuer 2 Stueck - es ist nichts passiert."),
+                new Zeile(MarkSatz.MUENZHAUS_KEIN_PLATZ, 0L, Einsatz.von("stueck", "0"),
+                        "&cIn deinem Rucksack fehlt Platz fuer 0 Stueck - es ist nichts passiert."),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN, 1L, Einsatz.von("zahl", "1"),
+                        "&7- 1 Stunde taetige Zeit"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN, 2L, Einsatz.von("zahl", "2"),
+                        "&7- 2 Stunden taetige Zeit"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN, 0L, Einsatz.von("zahl", "0"),
+                        "&7- 0 Stunden taetige Zeit"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_ANWESENHEIT_STUNDEN, 1L, Einsatz.von("zahl", "1"),
+                        "&7- 1 Stunde auf dem Server"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_ANWESENHEIT_STUNDEN, 2L, Einsatz.von("zahl", "2"),
+                        "&7- 2 Stunden auf dem Server"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_ANWESENHEIT_STUNDEN, 0L, Einsatz.von("zahl", "0"),
+                        "&7- 0 Stunden auf dem Server"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_PARZELLEN, 1L, Einsatz.von("zahl", "1"),
+                        "&7- 1 eigene Parzelle"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_PARZELLEN, 2L, Einsatz.von("zahl", "2"),
+                        "&7- 2 eigene Parzellen"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_PARZELLEN, 0L, Einsatz.von("zahl", "0"),
+                        "&7- 0 eigene Parzellen"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_BERUF, 1L, Einsatz.von("zahl", "1"),
+                        "&7- 1 gewaehlter Beruf"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_BERUF, 2L, Einsatz.von("zahl", "2"),
+                        "&7- 2 gewaehlte Berufe"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_BERUF, 0L, Einsatz.von("zahl", "0"),
+                        "&7- 0 gewaehlte Berufe"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_GUTHABEN, 1L, Einsatz.von("zahl", sprache.betrag(1L)),
+                        "&7- 1 Mark auf dem Konto"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_GUTHABEN, 2L, Einsatz.von("zahl", sprache.betrag(2L)),
+                        "&7- 2 Mark auf dem Konto"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_GUTHABEN, 0L, Einsatz.von("zahl", sprache.betrag(0L)),
+                        "&7- 0 Mark auf dem Konto"));
     }
 
     @ParameterizedTest(name = "11 - {0}")
