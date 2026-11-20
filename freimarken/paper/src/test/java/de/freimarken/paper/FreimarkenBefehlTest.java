@@ -10,6 +10,7 @@ import de.freimarken.kern.Wirtschaftswerte;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.ArrayList;
 import java.util.List;
+import net.kyori.adventure.audience.Audience;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -79,6 +80,18 @@ class FreimarkenBefehlTest {
                 (empfaenger, wer) -> gerufen.add("neuladen:" + wer),
                 (empfaenger, wer) -> gerufen.add("messstelle"),
                 (empfaenger, x, z) -> gerufen.add("parzelle " + x + "/" + z),
+                new BundBefehle.Geldzweig() {
+                    @Override
+                    public void tue(Audience empfaenger, String wer, String spieler,
+                                    long betrag) {
+                        gerufen.add("geld:" + wer + ":" + spieler + ":" + betrag);
+                    }
+
+                    @Override
+                    public void hilfe(Audience empfaenger) {
+                        gerufen.add("geld-hilfe");
+                    }
+                },
                 VON, BIS);
     }
 
@@ -216,5 +229,54 @@ class FreimarkenBefehlTest {
         assertEquals(5, baum.konsoleBild().size(),
                 "die Konsole liest alle fuenf Zeilen: " + baum.konsoleBild());
         assertEquals("&6Der Freimarkenbund", baum.konsoleBild().get(0));
+    }
+
+    @Test
+    @DisplayName("44j - geld gibt Absender, Spieler und Betrag in DIESER Reihenfolge"
+            + " weiter")
+    void geldGibtDreiAngabenInDieserReihenfolge() throws CommandSyntaxException {
+        Spielerprobe mitRecht = spieler(119, BundBefehle.RECHT_GELD);
+
+        assertEquals(1, baum.tippe("freimarken geld Anna -250", mitRecht));
+
+        // Drei Angaben, zwei davon Namen: Ein Tausch von Absender und Spieler uebersetzt
+        // fehlerfrei - und dann bucht der Befehl auf das Konto des Betreibers und
+        // schreibt den Spieler ins Protokoll. Das Minus steht mit Absicht da: Es geht
+        // als Vorzeichen durch den Baum und nicht als eigener Zweig.
+        assertEquals(List.of("geld:Cara:Anna:-250"), gerufen);
+    }
+
+    @Test
+    @DisplayName("44k - jede unvollstaendige Form zeigt die Benutzung")
+    void unvollstaendigeFormZeigtBenutzung() throws CommandSyntaxException {
+        Spielerprobe mitRecht = spieler(120, BundBefehle.RECHT_GELD);
+
+        // Ohne eigenes .executes an BEIDEN Stellen endet das in Brigadiers englischem
+        // "Unknown or incomplete command" - und der Betreiber sucht den Fehler bei sich.
+        assertEquals(1, baum.tippe("freimarken geld", mitRecht));
+        assertEquals(1, baum.tippe("freimarken geld Anna", mitRecht));
+
+        assertEquals(List.of("geld-hilfe", "geld-hilfe"), gerufen);
+    }
+
+    @Test
+    @DisplayName("44l - freimarken.verwalten allein oeffnet den Geldzweig NICHT")
+    void verwaltenAlleinOeffnetGeldNicht() {
+        // DIE ZUSAGE DES EIGENEN RECHTS: Wer Welten nachsehen und Spieler versetzen
+        // darf, darf nicht zugleich Konten fuellen. Ohne diese Probe waere der
+        // Unterschied nur ein Kommentar.
+        Spielerprobe nurVerwalten = spieler(121, BundBefehle.RECHT_VERWALTEN);
+
+        assertThrows(CommandSyntaxException.class,
+                () -> baum.tippe("freimarken geld Anna 1", nurVerwalten));
+        assertEquals(List.of(), gerufen);
+
+        // Und die Gegenrichtung: Das Geldrecht allein oeffnet die Verwaltungszweige
+        // nicht. Sonst waere oben nicht das Recht geprueft, sondern irgendetwas.
+        Spielerprobe nurGeld = spieler(122, BundBefehle.RECHT_GELD);
+
+        assertThrows(CommandSyntaxException.class,
+                () -> baum.tippe("freimarken welt", nurGeld));
+        assertEquals(List.of(), gerufen);
     }
 }

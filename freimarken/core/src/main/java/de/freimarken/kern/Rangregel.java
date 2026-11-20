@@ -29,18 +29,29 @@ import java.util.Optional;
 public final class Rangregel {
 
     /**
-     * Eine Bedingung, die noch nicht erfuellt ist.
+     * Eine Bedingung einer Stufe mit dem Stand daneben - erfuellt oder nicht.
+     *
+     * <p><b>Hiess bis zum 20.11.2026 {@code Fehlend}</b> und wurde nur fuer die offenen
+     * Bedingungen gebaut. {@code /rang} braucht dieselben drei Werte auch fuer die
+     * erfuellten: Was ein Spieler schon hat, ist die Haelfte der Auskunft. Ein zweiter
+     * record mit derselben Gestalt waere eine Abschrift gewesen - und Abschriften laufen
+     * auseinander, sobald eine von beiden eine Rechnung dazubekommt.
      *
      * @param art      woran es haengt
      * @param verlangt wie viel noetig ist, in der Messeinheit
      * @param gemessen wie viel der Spieler hat, in der Messeinheit
      */
-    public record Fehlend(Bedingungsart art, long verlangt, long gemessen) {
+    public record Bedingungsstand(Bedingungsart art, long verlangt, long gemessen) {
 
-        public Fehlend {
+        public Bedingungsstand {
             if (art == null) {
-                throw new IllegalArgumentException("Eine fehlende Bedingung ohne Art");
+                throw new IllegalArgumentException("Eine Bedingung ohne Art");
             }
+        }
+
+        /** Ob diese Bedingung erfuellt ist - dieselbe Frage wie in {@link #erfuellt}. */
+        public boolean erfuellt() {
+            return gemessen >= verlangt;
         }
 
         /** Wie viel noch fehlt - nie negativ. */
@@ -101,8 +112,8 @@ public final class Rangregel {
      * Was dieser Stufe noch fehlt - in der Reihenfolge der Aufzaehlung, damit zwei
      * Anzeigen dieselbe Reihenfolge haben.
      */
-    public static List<Fehlend> fehlend(Rangwerte.Stufe stufe,
-                                        Map<Bedingungsart, Long> gemessen) {
+    public static List<Bedingungsstand> fehlend(Rangwerte.Stufe stufe,
+                                                Map<Bedingungsart, Long> gemessen) {
         if (stufe == null) {
             throw new IllegalArgumentException("Ohne Stufe gibt es nichts zu pruefen");
         }
@@ -117,25 +128,59 @@ public final class Rangregel {
      * nicht aus der Karte, damit die Tafel des Muenzhauses und die Absage eines Kaufs
      * dieselbe Reihenfolge zeigen wie die Rangleiter.
      */
-    public static List<Fehlend> fehlend(Map<Bedingungsart, Long> verlangt,
-                                        Map<Bedingungsart, Long> gemessen) {
+    public static List<Bedingungsstand> fehlend(Map<Bedingungsart, Long> verlangt,
+                                                Map<Bedingungsart, Long> gemessen) {
+        // GEFILTERT und nicht zweimal gerechnet: Ein zweiter Durchlauf ueber dieselben
+        // Karten waere eine zweite Stelle, an der die Messeinheit umgerechnet wird - und
+        // dann sagte eines Tages die Absage etwas anderes als die Auskunft.
+        List<Bedingungsstand> offen = new ArrayList<>();
+        for (Bedingungsstand eine : stand(verlangt, gemessen)) {
+            if (!eine.erfuellt()) {
+                offen.add(eine);
+            }
+        }
+        return List.copyOf(offen);
+    }
+
+    /**
+     * JEDE Bedingung dieser Stufe mit dem Stand daneben - die Tuer fuer {@code /rang}.
+     *
+     * <p>Dieselbe Zwillingstuer wie bei {@link #erfuellt} und {@link #fehlend}: einmal
+     * mit der Stufe, einmal mit ihrer Bedingungskarte.
+     */
+    public static List<Bedingungsstand> stand(Rangwerte.Stufe stufe,
+                                              Map<Bedingungsart, Long> gemessen) {
+        if (stufe == null) {
+            throw new IllegalArgumentException("Ohne Stufe gibt es nichts zu zeigen");
+        }
+        return stand(stufe.bedingungen(), gemessen);
+    }
+
+    /**
+     * Die Rechnung dahinter - EINE Stelle, die die Messeinheit umrechnet.
+     *
+     * <p>Genannt wird nur, was in der Datei steht: Eine Art ohne Zeile ist keine
+     * Bedingung dieser Stufe und gehoert auch nicht in die Auskunft. Die REIHENFOLGE
+     * kommt aus {@code Bedingungsart.values()} und nicht aus der Karte - eine HashMap
+     * gibt je Lauf eine andere, und dann stuenden die Zeilen von {@code /rang} jedes Mal
+     * anders.
+     */
+    public static List<Bedingungsstand> stand(Map<Bedingungsart, Long> verlangt,
+                                              Map<Bedingungsart, Long> gemessen) {
         if (verlangt == null) {
             throw new IllegalArgumentException("Ohne Bedingungen gibt es nichts zu"
                     + " pruefen - eine LEERE Karte ist erlaubt, null nicht");
         }
-        List<Fehlend> offen = new ArrayList<>();
+        List<Bedingungsstand> alle = new ArrayList<>();
         for (Bedingungsart art : Bedingungsart.values()) {
             Long ausDerDatei = verlangt.get(art);
             if (ausDerDatei == null) {
                 continue;
             }
-            long noetig = art.inMesseinheit(ausDerDatei);
-            long hat = wert(gemessen, art);
-            if (hat < noetig) {
-                offen.add(new Fehlend(art, noetig, hat));
-            }
+            alle.add(new Bedingungsstand(art, art.inMesseinheit(ausDerDatei),
+                    wert(gemessen, art)));
         }
-        return List.copyOf(offen);
+        return List.copyOf(alle);
     }
 
     /**

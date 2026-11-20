@@ -55,6 +55,7 @@ import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherAbholfach;
 import de.freimarken.kern.Rangablage;
+import de.freimarken.kern.Rangschau;
 import de.freimarken.kern.SpeicherBerufe;
 import de.freimarken.kern.SpeicherBlockbuch;
 import de.freimarken.kern.SpeicherRaenge;
@@ -97,6 +98,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.logging.Level;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -1734,6 +1736,25 @@ public final class FreimarkenPlugin extends JavaPlugin {
     }
 
     /**
+     * Baut den Befehlsbaum von {@code /rang} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Dieselbe Form und derselbe Grund wie bei {@link #berufeBefehle}. Die MESSUNG ist
+     * woertlich dieselbe Naht wie beim Muenzhaus: ein Lambda auf das Feld
+     * {@code aufstiegslauf}, denn der entsteht erst in {@code richteRaengeEin} und ist
+     * die EINE Stelle, die eine Bedingung messen darf. Ist das Feld null - der Start ist
+     * vorher abgebrochen -, gilt KEIN Messwert; dann zeigt die Auskunft jede Bedingung
+     * als offen, und das ist die sichere Richtung: Lieber zeigt sie zu wenig, als dass
+     * sie einen Aufstieg verspricht, den der Aufstiegslauf nicht gibt.
+     */
+    private RangBefehle rangBefehle() {
+        return new RangBefehle(new Rangschau(rangablage, wirtschaft,
+                (wer, gebraucht) -> aufstiegslauf == null
+                        ? java.util.Map.of()
+                        : aufstiegslauf.messeFuer(wer, gebraucht)),
+                sprache, getLogger());
+    }
+
+    /**
      * Baut den Befehlsbaum von {@code /markt} - im Ereignis, nicht im onEnable.
      *
      * <p>Dieselbe Form und derselbe Grund wie bei {@link #berufeBefehle}.
@@ -1824,6 +1845,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.addAll(verzeichnis.register(berufeBefehle().beruf(),
                     sprache.wort(BundSatz.BEFEHL_BERUF, Einsatz.keine()),
                     List.of("job")));
+            // /rank als zweiter Name, dieselbe Linie wie plot, balance und job: Wer von
+            // einem englischsprachigen Server kommt, tippt ihn zuerst. Ein Spieler, der
+            // "unbekannter Befehl" liest, sucht die Rangleiter nicht weiter.
+            angemeldet.addAll(verzeichnis.register(rangBefehle().rang(),
+                    sprache.wort(BundSatz.BEFEHL_RANG, Einsatz.keine()),
+                    List.of("rank")));
             // /bundesmarkt als zweiter Name: Der Ort heisst so, und wer ihn sucht, tippt
             // seinen Namen und nicht die Abkuerzung.
             angemeldet.addAll(verzeichnis.register(marktBefehle().markt(),
@@ -1965,7 +1992,91 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 this::neulade,
                 (empfaenger, wer) -> zeigeMessstelle(empfaenger),
                 this::bringeZurParzelle,
+                geldzweig(),
                 grenze.von(), grenze.bis());
+    }
+
+    /**
+     * Der Zweig von {@code /freimarken geld} - Regel in {@link Betreibergeld}, Text hier.
+     *
+     * <p>Dieselbe Trennung wie bei den vier Verwaltungszweigen: Die Entscheidung steht in
+     * einer Klasse ohne Bukkit und ohne Text, damit jede Lage in einer Probe ohne Server
+     * laeuft; hier steht nur, was der Betreiber liest, und das bleibt im Programm.
+     *
+     * <p>Die Antwort kommt aus einem Schalter-AUSDRUCK: Nur der muss vollstaendig sein.
+     * Eine Anweisung ohne {@code default} liesse einen neuen Ausgang stumm durchfallen -
+     * der Betreiber bekaeme dann gar keine Zeile und hielte die Buchung fuer erledigt.
+     *
+     * <p>Protokolliert wird JEDER Versuch, auch der abgewiesene: Bei Geld ist das keine
+     * Formalie. Wer, wann, was, und was daraus wurde - das ist der Unterschied zwischen
+     * "der Betreiber hat es korrigiert" und "mir fehlen 50.000 Mark".
+     */
+    private BundBefehle.Geldzweig geldzweig() {
+        return new BundBefehle.Geldzweig() {
+
+            @Override
+            public void tue(Audience empfaenger, String wer, String spieler,
+                            long betrag) {
+                Betreibergeld.Ergebnis ergebnis;
+                try {
+                    ergebnis = Betreibergeld.buche(kasse,
+                            Spielername::kennungAuchAbwesend, spieler, betrag);
+                } catch (RuntimeException stoerung) {
+                    getLogger().log(Level.SEVERE, "Geld von Hand GESCHEITERT: " + wer
+                            + " wollte " + mitMark(betrag) + " fuer " + spieler
+                            + " buchen - die Kasse antwortet nicht.", stoerung);
+                    empfaenger.sendMessage(Component.text("Die Kasse antwortet nicht -"
+                            + " es ist NICHTS gebucht. Der Grund steht im"
+                            + " Serverprotokoll.", NamedTextColor.RED));
+                    return;
+                }
+                getLogger().info("Geld von Hand: " + wer + " -> " + spieler + ", "
+                        + mitMark(betrag) + ", Ausgang " + ergebnis.ausgang()
+                        + ", Stand danach " + mitMark(ergebnis.stand()) + ".");
+                empfaenger.sendMessage(switch (ergebnis.ausgang()) {
+                    case GUTGESCHRIEBEN -> Component.text(ergebnis.spieler() + " hat "
+                            + mitMark(ergebnis.betrag()) + " bekommen - Stand jetzt "
+                            + mitMark(ergebnis.stand()) + ".", NamedTextColor.GOLD);
+                    case ABGEZOGEN -> Component.text(ergebnis.spieler() + ": "
+                            + mitMark(ergebnis.betrag()) + " abgezogen - Stand jetzt "
+                            + mitMark(ergebnis.stand()) + ".", NamedTextColor.GOLD);
+                    case UNBEKANNTER_SPIELER -> Component.text("Den Namen "
+                            + ergebnis.spieler() + " kennt dieser Server nicht - es ist"
+                            + " nichts gebucht. Gross- und Kleinschreibung zaehlt.",
+                            NamedTextColor.RED);
+                    case NICHTS_ZU_BUCHEN -> Component.text(mitMark(0L) + " ist keine"
+                            + " Korrektur - nichts gebucht. Ein Minus zieht ab.",
+                            NamedTextColor.GRAY);
+                    case NICHT_GEDECKT -> Component.text(ergebnis.spieler() + " hat"
+                            + " keine " + mitMark(ergebnis.betrag()) + " (Stand "
+                            + mitMark(ergebnis.stand())
+                            + ") - es ist nichts gebucht.", NamedTextColor.RED);
+                });
+            }
+
+            @Override
+            public void hilfe(Audience empfaenger) {
+                empfaenger.sendMessage(Component.text(
+                        "/freimarken geld <spieler> <betrag> - ein Minus zieht ab,"
+                                + " hoechstens " + mitMark(Betreibergeld.HOECHSTENS)
+                                + ". Die Buchung steht danach in /mark verlauf.",
+                        NamedTextColor.GRAY));
+            }
+        };
+    }
+
+    /**
+     * Ein Geldbetrag fuer den BETREIBER - das Wort an EINER Stelle.
+     *
+     * <p>Was ein SPIELER liest, holt sein Geldwort aus {@code waehrung.betrag} in der
+     * Sprachdatei; {@code VorlageTest} 10e haelt das fest und verlangt, dass jede Stelle
+     * im Programm, die "Mark" selbst schreibt, dort aufgeschrieben ist. Die Zeilen von
+     * {@code /freimarken geld} gehen an den Betreiber und bleiben darum im Programm -
+     * aber sie brauchen das Wort elfmal. Ueber diesen Helfer steht es einmal da, und die
+     * Tafel bleibt lesbar.
+     */
+    private static String mitMark(long betrag) {
+        return betrag + " Mark";
     }
 
     /**

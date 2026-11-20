@@ -124,14 +124,21 @@ class WirtschaftslisteTest {
      * benutzen darf.
      *
      * <p>Die Liste der Schluessel kommt aus {@link Wirtschaftsstand#NUR_BEIM_START} und
-     * nicht aus dieser Probe: Wer dort einen vierten eintraegt, ist hier sofort mitgeprueft.
+     * {@link Wirtschaftsliste#NUR_BEIM_START_WELTEN} und nicht aus dieser Probe: Wer dort
+     * einen eintraegt, ist hier sofort mitgeprueft. Genau so ist der Fund vom 20.11.2026
+     * gefallen - die vier Weltnamen standen in keiner der beiden Listen, und dieser Leser
+     * schrieb fuer eine fehlende Zeile "freistaedte.welt ... es gilt freistaedte". Ein
+     * Neuladen stellt diese Geltung nicht her: Die vier laufenden Weltnamen werden
+     * ausschliesslich beim Start zugewiesen.
      */
     private static void keineGeltungsbehauptung(Wirtschaftsliste.Ergebnis ergebnis) {
         List<String> alle = new ArrayList<>(ergebnis.bericht());
         alle.addAll(ergebnis.klagen());
+        List<String> nichtNeuladbar = new ArrayList<>(Wirtschaftsstand.NUR_BEIM_START);
+        nichtNeuladbar.addAll(Wirtschaftsliste.NUR_BEIM_START_WELTEN);
         for (String zeile : alle) {
             String klein = zeile.toLowerCase(Locale.ROOT);
-            for (String pfad : Wirtschaftsstand.NUR_BEIM_START) {
+            for (String pfad : nichtNeuladbar) {
                 if (!zeile.contains(pfad)) {
                     continue;
                 }
@@ -758,6 +765,61 @@ class WirtschaftslisteTest {
                     pfad + " fehlt in der Datei und muss genannt werden: "
                             + fehlend.bericht());
         }
+    }
+
+    @Test
+    @DisplayName("Ein fehlender Weltname nennt den Start und behauptet keine Geltung")
+    void fehlenderWeltnameNenntKeineGeltung() {
+        // VOLLSTAENDIG hat keinen Abschnitt freistaedte:, inseln: oder wolken: - die drei
+        // Leser laufen trotzdem mit, weil diese Klasse sie ruft und ihre Zeilen
+        // uebernimmt. Ihre Weltzeile ist damit Teil DIESER Antwort.
+        var ergebnis = lies(VOLLSTAENDIG);
+
+        for (String pfad : List.of(Freistadtliste.PFAD_WELT, Inselliste.PFAD_WELT,
+                Wolkenliste.PFAD_WELT)) {
+            String zeile = ergebnis.bericht().stream()
+                    .filter(eine -> eine.startsWith(pfad))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError(pfad + " fehlt in der Datei und"
+                            + " muss genannt werden: " + ergebnis.bericht()));
+            assertTrue(zeile.contains("nur beim Start gelesen"),
+                    pfad + " ist nicht neuladbar - die Zeile muss es sagen: " + zeile);
+            assertFalse(zeile.contains("es gilt"),
+                    pfad + " wird beim Neuladen NICHT uebernommen; diese Zeile behauptet"
+                            + " eine Geltung, die erst der naechste Start herstellt: "
+                            + zeile);
+        }
+        // laeden.welt steht hier mit Absicht nicht: Ladenliste ruft das Plugin selbst, und
+        // ihre Zeilen landen nicht in dieser Antwort. Dieselbe Probe dafuer steht in
+        // LadenlisteTest.
+    }
+
+    @Test
+    @DisplayName("Die Sammelzeile nimmt aus, was ein Neuladen nicht uebernimmt")
+    void sammelzeileNimmtNichtNeuladbareAus() {
+        String neuladbar = Wirtschaftsliste.fehlendeZeilen(
+                List.of(Wirtschaftswerte.PFAD_GRUNDPREIS), 9, "der Wirtschaft");
+        String nurStart = Wirtschaftsliste.fehlendeZeilen(
+                List.of(Inselliste.PFAD_WELT), 9, "der Meerinseln");
+        String gemischt = Wirtschaftsliste.fehlendeZeilen(
+                List.of(Inselliste.PFAD_WELT, Wirtschaftswerte.PFAD_GRUNDPREIS), 9,
+                "der Meerinseln");
+
+        assertTrue(neuladbar.endsWith(" Dafuer gelten die Vorgaben des Programms."),
+                "fehlt nur Neuladbares, ist die Behauptung auf beiden Wegen richtig: "
+                        + neuladbar);
+        assertFalse(nurStart.contains("gelten"),
+                "diese Zeile nennt nur " + Inselliste.PFAD_WELT + " - was gilt, weiss"
+                        + " dieser Leser nicht: " + nurStart);
+        assertTrue(nurStart.contains("nur beim Start gelesen"), nurStart);
+        assertFalse(gemischt.contains("gelten"),
+                "eine Behauptung, die ein Nebensatz gleich wieder einschraenkt, bleibt"
+                        + " beim Querlesen stehen: " + gemischt);
+        assertTrue(gemischt.contains("Vorgaben des Programms")
+                        && gemischt.contains("ausgenommen davon: "
+                                + Inselliste.PFAD_WELT),
+                "die neuladbaren Zeilen brauchen ihre Vorgabe, die Welt ihre Ausnahme: "
+                        + gemischt);
     }
 
     @Test

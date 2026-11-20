@@ -103,6 +103,22 @@ enum MarktSatz implements Satz {
     OHNE_DECKEL("markt.ohne-deckel", Art.SATZ),
 
     /**
+     * Der Tagesdeckel liess sich nicht lesen - die Liste steht trotzdem.
+     *
+     * <p>Ein EIGENER Satz und nicht {@link #GESTOERT}: Jener sagt "die Staende liessen
+     * sich nicht lesen", und das waere hier falsch - die Staende sind gelesen, mit Ort,
+     * Ware und beiden Preisen. Unlesbar ist allein die eine Zahl der letzten Zeile, und
+     * dafuer eine Liste wegzunehmen, die vollstaendig dasteht, ist der teurere Fehler:
+     * Der Spieler sucht dann einen Markt, den er gerade haette lesen koennen.
+     *
+     * <p>Auch kein stiller Rueckfall auf eine 0: "Heute kannst du noch 0 Mark bekommen"
+     * waere eine Zahl, die der Spieler fuer gemessen haelt - und er verkauft nicht,
+     * obwohl er darf. Dieselbe Gattung Fehler wie der offene Deckel in der anderen
+     * Richtung, nur zu seinen Lasten.
+     */
+    DECKEL_UNLESBAR("markt.deckel-unlesbar", Art.SATZ),
+
+    /**
      * Die Staende liessen sich nicht lesen.
      *
      * <p>Ein eigener Satz und nicht die leere Liste: Eine Stoerung, die wie "es steht

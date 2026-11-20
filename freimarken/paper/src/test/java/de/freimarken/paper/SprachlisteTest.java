@@ -403,6 +403,69 @@ class SprachlisteTest {
     }
 
     @Test
+    @DisplayName("21d - ein Satz, den niemand als EINE Zeile holt, darf mehrzeilig sein")
+    void nichtGeholterSatzDarfMehrzeiligSein() {
+        // DIE GRENZE DES NEUEN RIEGELS, und sie ist Absicht: Der Aufbau eines Satzes
+        // gehoert dem Betreiber. Verboten ist die Umbruchmarke nur dort, wo das Programm
+        // den Satz als eine Zeile HOLT - und dieser Probesatz steht in keiner Liste.
+        //
+        // Ein Probesatz, der ausdruecklich NICHT Art.HANDBALKEN ist: Sonst griffe die
+        // aeltere Sperre, und diese Probe waere gruen, ohne etwas ueber die neue zu
+        // sagen.
+        Satz zeile = Sprachprobe.Probesatz.von("probe.zeile", Satz.Art.SATZ);
+        List<Satz> schluessel = List.of(zeile);
+        Sprachbuch vorlage = Sprachprobe.buch(schluessel,
+                "probe.zeile", "<gray>Das geht nicht</gray>");
+
+        var gelesen = Sprachliste.ausQuelle(
+                "probe:\n  zeile: \"<gray>Erste\\nZweite</gray>\"\n", vorlage,
+                schluessel);
+
+        assertEquals(List.of(), gelesen.klagen(),
+                "ein Satz, den niemand als eine Zeile holt, darf mehrzeilig sein:"
+                        + " bekommen " + gelesen.klagen());
+        assertNotNull(gelesen.buch());
+    }
+
+    @Test
+    @DisplayName("21e - eine Umbruchmarke in einem einzeilig geholten Satz ist eine"
+            + " Klage")
+    void einzeiligGeholterSatzMitUmbruchIstKlage() {
+        // DER ZWEITE GRUND, einzeilig zu sein - und bis zum 20.11.2026 der ungeschuetzte:
+        // Sprache.eineZeile WIRFT bei der zweiten Zeile, und zwar mitten im Zweig, der
+        // schon sendet. Der Spieler liest dann gar nichts.
+        //
+        // markt.gestoert ist mit Bedacht gewaehlt: Dieser Satz steht in einem FANGZWEIG.
+        // Dort verlaesst der Wurf den Fang, und aus der Meldung "die Staende sind nicht
+        // lesbar" wird eine rote englische Serverzeile - der Spieler erfaehrt von der
+        // Stoerung nichts und vom Fehler nur, dass etwas kaputt ist.
+        //
+        // Geprueft wird durch die ECHTE Schluesselliste und das ausgelieferte Buch: Am
+        // Probesatz von 21d waere nicht zu sehen, dass die Liste wirklich gefragt wird.
+        String mitUmbruch = "markt:\n  " + kurz(MarktSatz.GESTOERT)
+                + ": \"<red>Erste\\nZweite</red>\"\n";
+
+        var gelesen = Sprachliste.ausQuelle(mitUmbruch, Sprachprobe.ausDemJar());
+
+        assertNull(gelesen.buch(), "eine Klage weist die ganze Datei ab - alles oder"
+                + " nichts, wie bei jedem anderen Mangel");
+        assertTrue(gelesen.klagen().stream().anyMatch(klage
+                        -> klage.contains(MarktSatz.GESTOERT.pfad())
+                        && klage.contains("Umbruchmarke")),
+                "bekommen: " + gelesen.klagen());
+
+        // In die andere Richtung, wie bei 21b und 21c: ohne Umbruch geht derselbe Satz
+        // durch. Ohne diese Haelfte waere auch eine Sperre gruen, die JEDEN Satz dieses
+        // Bereichs abweist.
+        String ohneUmbruch = "markt:\n  " + kurz(MarktSatz.GESTOERT)
+                + ": \"<red>Nicht lesbar</red>\"\n";
+
+        var heil = Sprachliste.ausQuelle(ohneUmbruch, Sprachprobe.ausDemJar());
+
+        assertEquals(List.of(), heil.klagen());
+    }
+
+    @Test
     @DisplayName("21c - dieselbe Sperre am ECHTEN Handbalken der Schutzwache")
     void handbalkenDerSchutzwacheMitUmbruchIstKlage() {
         // 21b prueft die Regel an einem Probesatz und kann das auch, wenn es den

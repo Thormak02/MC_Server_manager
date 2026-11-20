@@ -67,6 +67,26 @@ final class Wirtschaftsliste {
             Zeitwerte.PFAD_TAKT,
             Zeitwerte.PFAD_UNTAETIG);
 
+    /**
+     * Die vier Weltnamen, die ein Neuladen NICHT uebernimmt - der Teil der Liste, den der
+     * Kern nicht kennen kann.
+     *
+     * <p>{@link Wirtschaftsstand#NUR_BEIM_START} ist die Liste in der Klasse, die es
+     * entscheidet; sie nennt die Schluessel des Kerns. Ein Weltname ist aber kein
+     * Wirtschaftswert: Er steht in keinem Wertesatz, sondern wird aus dem Leser heraus
+     * gleich an die Welt gebunden, und die vier Pfadkonstanten sind darum paketprivat und
+     * liegen je bei ihrem Leser. Der Kern kann sie nicht aufzaehlen und auch nicht sagen,
+     * welche Welt gerade gilt - also steht der Riegel hier, beim engsten Verbraucher.
+     *
+     * <p>Gefunden am 20.11.2026: Die vier trugen in der Datei "NUR BEIM START GELESEN",
+     * standen aber in keiner Liste. Fehlte die Zeile, schrieb {@link #fehltText}
+     * "es gilt wolkenwerder" - eine Geltung, die ein Neuladen gar nicht herstellt, denn
+     * die vier laufenden Namen werden ausschliesslich beim Start zugewiesen.
+     */
+    static final List<String> NUR_BEIM_START_WELTEN = List.of(
+            Freistadtliste.PFAD_WELT, Inselliste.PFAD_WELT,
+            Ladenliste.PFAD_WELT, Wolkenliste.PFAD_WELT);
+
     /** Wie viele Preisstufen die Rechenprobe im Protokoll nennt. */
     private static final int STUFEN_IM_BERICHT = 4;
 
@@ -605,6 +625,13 @@ final class Wirtschaftsliste {
     static String fehltText(String pfad, String wert) {
         String nachsatz = " Eine vorhandene Datei wird beim Update nie ueberschrieben; die"
                 + " Zeile muss von Hand hinein, sonst ist der Wert nicht einstellbar.";
+        if (NUR_BEIM_START_WELTEN.contains(pfad)) {
+            return pfad + " steht nicht in deiner config.yml - ausgeliefert ist " + wert
+                    + ". Diese Zeile wird nur beim Start gelesen; ein /freimarken"
+                    + " neuladen verschiebt keine Welt. Bis zum naechsten Start"
+                    + " bleibt es bei der Welt, die beim Start gelesen wurde."
+                    + nachsatz;
+        }
         if (Wirtschaftsstand.NUR_BEIM_START.contains(pfad)) {
             return pfad + " steht nicht in deiner config.yml - ausgeliefert ist " + wert
                     + ". Diese Zeile wird ohnehin nur beim Start gelesen; was der Server"
@@ -613,6 +640,68 @@ final class Wirtschaftsliste {
         }
         return pfad + " steht nicht in deiner config.yml - es gilt " + wert + "."
                 + nachsatz;
+    }
+
+    /**
+     * Uebernimmt ein Neuladen diesen Schluessel nicht?
+     *
+     * <p>Die EINE Frage fuer beide Satzbauer: {@link #fehltText} fuer den einzelnen
+     * Schluessel und {@link #fehlendeZeilen} fuer die Sammelzeile eines Abschnitts.
+     * Zweimal gefragt wichen die zwei eines Tages ab, und dann behauptete die Sammelzeile
+     * eine Geltung, die die Zeile darunter bestritt - genau das ist am 20.11.2026 in drei
+     * Lesern gefunden worden.
+     */
+    static boolean nurBeimStart(String pfad) {
+        return Wirtschaftsstand.NUR_BEIM_START.contains(pfad)
+                || NUR_BEIM_START_WELTEN.contains(pfad);
+    }
+
+    /**
+     * Die Sammelzeile eines Abschnitts: wie viele seiner Zeilen in der Datei fehlen.
+     *
+     * <p>Diese Zeile nennt ALLE fehlenden Schluessel auf einmal - und darf darum nur
+     * behaupten, was fuer jeden einzelnen davon stimmt. Fuer einen neuladbaren Schluessel
+     * ist "dafuer gelten die Vorgaben" auf beiden Wegen richtig: Beim Start wirkt der
+     * Rueckfall, beim Neuladen wird er uebernommen. Fuer einen aus
+     * {@link #nurBeimStart} ist er beim Neuladen falsch, denn dort bleibt der Wert vom
+     * Start stehen - und welcher das ist, weiss dieser Leser nicht.
+     *
+     * <p>Gefunden am 20.11.2026 in Freistadtliste, Inselliste und Wolkenliste: Alle drei
+     * zaehlen ihren Weltschluessel mit und hingen die Behauptung an die Sammelzeile.
+     * Dieselbe Lehre stand seit dem 02.11. zwei Dateien weiter -
+     * {@link #nenneFehlende} hat den Satz "Sie gelten aus den Vorgaben des Plugins"
+     * deswegen schon einmal verloren. Fuenf weitere Leser benutzen den Helfer ohne
+     * Aenderung an ihrer Zeile: Sie zaehlen heute keinen solchen Schluessel, und wer dort
+     * morgen einen eintraegt, bekommt den richtigen Satz von selbst.
+     *
+     * <p>Kein Satz haengt an der ANZAHL der Ausnahmen: Eine Grammatik, die bei einem
+     * Schluessel anders lautet als bei zwei, ist eine zweite Zeile, die niemand prueft.
+     *
+     * <p>Und kein Zweig, der einen solchen Schluessel NENNT, benutzt das Wort "gilt" oder
+     * "gelten" - auch nicht in einem Nebensatz, der es gleich wieder einschraenkt. Das
+     * haelt {@code WirtschaftslisteTest.keineGeltungsbehauptung} ueber die Wortfamilie,
+     * und das ist genau richtig: Wer die Zeile querliest, nimmt die Behauptung mit und
+     * die Ausnahme nicht.
+     *
+     * @param bereich der Abschnitt im Genitiv, wie er in der Zeile steht - etwa
+     *                "der Freistaedte"
+     */
+    static String fehlendeZeilen(List<String> fehlen, int gesamt, String bereich) {
+        List<String> nurStart = fehlen.stream().filter(Wirtschaftsliste::nurBeimStart)
+                .toList();
+        String zeile = fehlen.size() + " von " + gesamt + " Zeilen " + bereich
+                + " fehlen in deiner config.yml: " + String.join(", ", fehlen) + ".";
+        String nurStartSatz = " Was dort fehlt, wird nur beim Start gelesen, und es"
+                + " bleibt bei dem Wert, der bisher galt.";
+        if (nurStart.isEmpty()) {
+            return zeile + " Dafuer gelten die Vorgaben des Programms.";
+        }
+        if (nurStart.size() == fehlen.size()) {
+            return zeile + nurStartSatz;
+        }
+        return zeile + " Die uebrigen fallen auf die Vorgaben des Programms"
+                + " zurueck - ausgenommen davon: " + String.join(", ", nurStart) + "."
+                + nurStartSatz;
     }
 
     /** Der Name der Einstellungsdatei - einmal, damit kein zweiter Name entsteht. */

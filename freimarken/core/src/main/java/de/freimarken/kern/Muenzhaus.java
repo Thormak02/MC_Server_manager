@@ -48,22 +48,10 @@ import java.util.UUID;
  */
 public final class Muenzhaus {
 
-    /**
-     * Woran eine Bedingung gemessen wird - die Naht zum Spielmodul.
-     *
-     * <p>Gemessen wird dort, wo die Zahlen liegen: taetige Zeit in der Spielzeitmessung,
-     * Parzellen im Besitzbuch, Berufe im Berufsverzeichnis. Diese Naht ist bewusst dieselbe
-     * Frage wie die des Rangaufstiegs - gestellt wird sie an EINE Stelle
-     * ({@code Aufstiegslauf.messeFuer}), damit ein Kauf nicht anders urteilt als eine
-     * Beforderung.
-     *
-     * <p>Gefragt wird nur nach den Arten, die der Katalog ueberhaupt verlangt
-     * ({@link Muenzwerte#gebraucht()}). Jede Messung ausser dem Beruf ist eine
-     * Datenbankabfrage im Hauptfaden.
-     */
-    public interface Bedingungsmessung {
-        Map<Bedingungsart, Long> fuer(UUID wer, List<Bedingungsart> gebraucht);
-    }
+    // Die Bedingungsmessung stand bis zum 20.11.2026 HIER, als verschachtelte
+    // Schnittstelle. Mit /rang bekam sie den zweiten Leser, und eine Naht, die zwei
+    // Klassen brauchen, gehoert keiner von beiden - sie steht jetzt fuer sich
+    // (Bedingungsmessung). Der Name im Konstruktor ist derselbe geblieben.
 
     /** Was aus einem Kauf wird. */
     public enum Bescheid {
@@ -139,7 +127,7 @@ public final class Muenzhaus {
      * @param fehlenderPlatz wie viele Stueck nicht hineinpassen; 0, wenn alles passt
      */
     public record Entscheid(Bescheid bescheid, Optional<Muenzwerte.Posten> posten,
-                            long preis, long stand, List<Rangregel.Fehlend> fehlend,
+                            long preis, long stand, List<Rangregel.Bedingungsstand> fehlend,
                             int fehlenderPlatz) {
 
         public Entscheid {
@@ -174,7 +162,8 @@ public final class Muenzhaus {
      * @param fehlend   welche Bedingungen ihm fehlen; leer heisst: offen fuer ihn
      * @param bezahlbar ob sein Goldmarkstand reicht
      */
-    public record Zeile(Muenzwerte.Posten posten, List<Rangregel.Fehlend> fehlend,
+    public record Zeile(Muenzwerte.Posten posten,
+                        List<Rangregel.Bedingungsstand> fehlend,
                         boolean bezahlbar) {
 
         public Zeile {
@@ -396,7 +385,7 @@ public final class Muenzhaus {
         Muenzwerte.Posten posten = gesucht.get();
         try {
             Map<Bedingungsart, Long> gemessen = messung.fuer(spieler, werte.gebraucht());
-            List<Rangregel.Fehlend> fehlend =
+            List<Rangregel.Bedingungsstand> fehlend =
                     Rangregel.fehlend(posten.bedingungen(), gemessen);
             long stand = gold.guthaben(spieler);
             if (!fehlend.isEmpty()) {

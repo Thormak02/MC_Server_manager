@@ -5,6 +5,7 @@ import de.freimarken.kern.Marktwerte;
 import de.freimarken.kern.Seitenregel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalLong;
 import net.kyori.adventure.text.Component;
 
 /**
@@ -44,7 +45,7 @@ final class Markttext {
      * @param heuteSchon was dieser Spieler heute schon aus Verkaeufen bekommen hat
      */
     static List<Component> listeZeilen(Sprache sprache, List<Kistenshop> staende,
-            int seite, int jeSeite, Marktwerte werte, long heuteSchon) {
+            int seite, int jeSeite, Marktwerte werte, OptionalLong heuteSchon) {
         List<Component> zeilen = new ArrayList<>();
         if (staende.isEmpty()) {
             zeilen.add(sprache.eineZeile(MarktSatz.LEER, Einsatz.keine()));
@@ -68,13 +69,24 @@ final class Markttext {
             zeilen.add(sprache.eineZeile(MarktSatz.WEITER,
                     Einsatz.von("naechste", seite + 1)));
         }
-        // Und was heute noch zu holen ist - oder dass es keine Grenze gibt. ZWEI Saetze
+        // Und was heute noch zu holen ist - oder dass es keine Grenze gibt. DREI Saetze
         // und nicht eine Zahl: "noch 0 Mark" waere bei einem abgeschalteten Deckel das
-        // Gegenteil der Wahrheit, und eine riesige Zahl liest niemand.
-        zeilen.add(werte.gedeckelt()
-                ? sprache.eineZeile(MarktSatz.FREI, Einsatz.von("betrag",
-                        sprache.betrag(Math.max(0L, werte.tagesdeckel() - heuteSchon))))
-                : sprache.eineZeile(MarktSatz.OHNE_DECKEL, Einsatz.keine()));
+        // Gegenteil der Wahrheit, eine riesige Zahl liest niemand, und eine 0 fuer eine
+        // ungelesene Kasse waere eine Zahl, die der Spieler fuer gemessen haelt.
+        //
+        // Die Reihenfolge der Fragen ist die Zusage: Ohne Deckel spielt die Kasse keine
+        // Rolle, darum wird sie dann gar nicht erst gefragt (und der Aufrufer fragt sie
+        // auch nicht). Erst der gedeckelte Markt braucht die Zahl - und nur dort ist
+        // eine fehlende Zahl eine eigene Zeile wert.
+        if (!werte.gedeckelt()) {
+            zeilen.add(sprache.eineZeile(MarktSatz.OHNE_DECKEL, Einsatz.keine()));
+        } else if (heuteSchon.isEmpty()) {
+            zeilen.add(sprache.eineZeile(MarktSatz.DECKEL_UNLESBAR, Einsatz.keine()));
+        } else {
+            zeilen.add(sprache.eineZeile(MarktSatz.FREI, Einsatz.von("betrag",
+                    sprache.betrag(Math.max(0L, werte.tagesdeckel()
+                            - heuteSchon.getAsLong())))));
+        }
         return zeilen;
     }
 

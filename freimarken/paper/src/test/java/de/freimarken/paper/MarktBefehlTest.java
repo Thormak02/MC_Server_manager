@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import de.freimarken.kern.Buchung;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Kistenshop;
@@ -100,12 +101,76 @@ class MarktBefehlTest {
     }
 
     private Befehlsprobe probe(long deckel, int jeSeite) {
+        return probe(deckel, jeSeite, kasse);
+    }
+
+    private Befehlsprobe probe(long deckel, int jeSeite, Kasse welcheKasse) {
         Wirtschaftsstand stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE
                 .mitMarkt(Marktwerte.VORGABE.mitDeckel(deckel))
                 .mitHandel(Shopwerte.VORGABE.mitZeilen(jeSeite)));
-        var befehle = new MarktBefehle(shops, stand, kasse, UHR,
+        var befehle = new MarktBefehle(shops, stand, welcheKasse, UHR,
                 Sprachprobe.spracheAusDemJar(), Logger.getAnonymousLogger());
         return new Befehlsprobe(List.of(befehle.markt()));
+    }
+
+    /**
+     * Eine Kasse, die jede Frage nach der Tagessumme MITZAEHLT - und sie verweigern kann.
+     *
+     * <p>Gezaehlt wird VOR dem Wurf: Eine Mitschrift hinter dem Aufruf sieht einen
+     * werfenden Aufruf nie, und dann waere die Probe "gar nicht gefragt" auch gruen,
+     * wenn gefragt worden waere.
+     *
+     * <p>Alles andere geht an die echte Kasse. Ein eigener Nachbau waere eine zweite
+     * Kasse mit eigenen Regeln, und die Probe prueefte am Ende die Attrappe.
+     */
+    private static final class Tagesfrage implements Kasse {
+
+        private final Kasse echte;
+        private final boolean stumm;
+        private int gefragt;
+
+        private Tagesfrage(Kasse echte, boolean stumm) {
+            this.echte = echte;
+            this.stumm = stumm;
+        }
+
+        private int gefragt() {
+            return gefragt;
+        }
+
+        @Override
+        public long summeSeit(UUID spieler, Instant ab, Buchungsgrund grund) {
+            gefragt++;
+            if (stumm) {
+                throw new IllegalStateException("die Kasse schweigt");
+            }
+            return echte.summeSeit(spieler, ab, grund);
+        }
+
+        @Override
+        public long guthaben(UUID spieler) {
+            return echte.guthaben(spieler);
+        }
+
+        @Override
+        public boolean eroeffne(UUID spieler) {
+            return echte.eroeffne(spieler);
+        }
+
+        @Override
+        public boolean abbuchen(UUID spieler, long betrag, Buchungsgrund grund) {
+            return echte.abbuchen(spieler, betrag, grund);
+        }
+
+        @Override
+        public void gutschreiben(UUID spieler, long betrag, Buchungsgrund grund) {
+            echte.gutschreiben(spieler, betrag, grund);
+        }
+
+        @Override
+        public List<Buchung> verlauf(UUID spieler, int hoechstens) {
+            return echte.verlauf(spieler, hoechstens);
+        }
     }
 
     private Befehlsprobe probe() {
@@ -285,6 +350,47 @@ class MarktBefehlTest {
         assertEquals(3, gelesen().size(), gelesen().toString());
         assertTrue(gelesen().get(2).contains("keinen Tagesdeckel"), gelesen().get(2));
         assertTrue(!gelesen().get(2).contains("0 Mark"), gelesen().get(2));
+    }
+
+    @Test
+    @DisplayName("Eine stumme Kasse nimmt nur die letzte ZEILE weg, nicht die Liste")
+    void stummeKasseNimmtNurDieZeile() throws CommandSyntaxException {
+        // BIS ZUM 20.11.2026 stand der Fang um BEIDE Lesungen: Fiel die Kasse aus, las
+        // der Spieler "Die Staende des Bundes liessen sich nicht lesen" - und die Staende
+        // lagen fertig daneben, mit Ort, Ware und beiden Preisen. Unlesbar ist allein die
+        // Zahl der letzten Zeile.
+        shops.schreibe(stand(100, 5, 0L, 1L, "STONE"));
+        var kasse = new Tagesfrage(this.kasse, true);
+
+        probe(5_000L, 10, kasse).tippe("markt", anna);
+
+        assertEquals(3, gelesen().size(), gelesen().toString());
+        assertTrue(gelesen().get(1).contains("STONE"),
+                "die Standzeile steht da - sie war gelesen: " + gelesen());
+        assertTrue(gelesen().get(2).contains("liess sich nicht lesen"),
+                "und statt der Restzeile ein eigener Satz: " + gelesen().get(2));
+        assertTrue(!gelesen().get(2).contains("0 Mark"),
+                "keine Zahl, die der Spieler fuer gemessen haelt: " + gelesen().get(2));
+        assertEquals(1, kasse.gefragt(),
+                "gefragt wird sie genau einmal - ein gedeckelter Markt braucht die Zahl");
+    }
+
+    @Test
+    @DisplayName("OHNE Deckel wird die Kasse gar nicht gefragt")
+    void ohneDeckelKeineFrageAnDieKasse() throws CommandSyntaxException {
+        // Am BILD nicht zu sehen: Ohne Deckel steht dieselbe Zeile da, ob die Kasse
+        // gefragt wurde oder nicht. Die Zusage ist aber eine eigene - eine Abfrage im
+        // Hauptfaden fuer eine Zahl, die niemand braucht, und auf einem Server ohne
+        // Deckel nahm ihr Ausfall bis zum 20.11.2026 die ganze Liste weg.
+        shops.schreibe(stand(100, 5, 0L, 1L, "STONE"));
+        var kasse = new Tagesfrage(this.kasse, false);
+
+        probe(Marktwerte.KEIN_DECKEL, 10, kasse).tippe("markt", anna);
+
+        assertEquals(0, kasse.gefragt(),
+                "ohne Deckel spielt die Tagessumme keine Rolle - dann gehoert die"
+                        + " Abfrage nicht in den Hauptfaden");
+        assertTrue(gelesen().get(2).contains("keinen Tagesdeckel"), gelesen().get(2));
     }
 
     @Test

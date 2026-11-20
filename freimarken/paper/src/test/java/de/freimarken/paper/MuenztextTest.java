@@ -56,7 +56,7 @@ class MuenztextTest {
 
     private static Muenzhaus.Entscheid entscheid(Muenzhaus.Bescheid bescheid,
                                                  Muenzwerte.Posten posten, long stand,
-                                                 List<Rangregel.Fehlend> fehlend,
+                                                 List<Rangregel.Bedingungsstand> fehlend,
                                                  int platz) {
         return new Muenzhaus.Entscheid(bescheid, Optional.ofNullable(posten),
                 posten == null ? 0L : posten.preis(), stand, fehlend, platz);
@@ -117,7 +117,7 @@ class MuenztextTest {
         var frei = new Muenzhaus.Zeile(hut(), List.of(), true);
         var zuTeuer = new Muenzhaus.Zeile(hut(), List.of(), false);
         var gesperrt = new Muenzhaus.Zeile(hut(),
-                List.of(new Rangregel.Fehlend(Bedingungsart.PARZELLEN, 1L, 0L)), true);
+                List.of(new Rangregel.Bedingungsstand(Bedingungsart.PARZELLEN, 1L, 0L)), true);
 
         Set<String> bilder = new LinkedHashSet<>();
         for (Muenzhaus.Zeile zeile : List.of(frei, zuTeuer, gesperrt)) {
@@ -134,7 +134,7 @@ class MuenztextTest {
         // Wer beides nicht hat, soll die groessere Huerde lesen - Geld kann er sich
         // holen, die Spielstunden nicht.
         var beides = new Muenzhaus.Zeile(hut(),
-                List.of(new Rangregel.Fehlend(Bedingungsart.PARZELLEN, 1L, 0L)), false);
+                List.of(new Rangregel.Bedingungsstand(Bedingungsart.PARZELLEN, 1L, 0L)), false);
 
         String bild = Sprachprobe.bild(Muenztext.tafelZeilen(SPRACHE,
                 tafel(Muenzwerte.VORGABE, 0L, List.of(beides)), auskunft()));
@@ -176,7 +176,7 @@ class MuenztextTest {
                         0);
                 case ERSTATTET -> entscheid(bescheid, hut(), 10L, List.of(), 1);
                 case BEDINGUNG_FEHLT -> entscheid(bescheid, blumen(), 10L,
-                        List.of(new Rangregel.Fehlend(Bedingungsart.PARZELLEN, 1L, 0L)),
+                        List.of(new Rangregel.Bedingungsstand(Bedingungsart.PARZELLEN, 1L, 0L)),
                         0);
                 case KEIN_PLATZ -> entscheid(bescheid, hut(), 10L, List.of(), 1);
                 case ZU_WENIG_GOLDMARK -> entscheid(bescheid, hut(), 1L, List.of(), 0);
@@ -228,7 +228,7 @@ class MuenztextTest {
         Set<String> bilder = new LinkedHashSet<>();
         for (Bedingungsart art : Bedingungsart.values()) {
             for (long zahl : new long[] {1L, 2L}) {
-                var fehlend = new Rangregel.Fehlend(art, art.inMesseinheit(zahl), 0L);
+                var fehlend = new Rangregel.Bedingungsstand(art, art.inMesseinheit(zahl), 0L);
                 String bild = Sprachprobe.bild(Muenztext.entscheidZeilen(SPRACHE, "x",
                         entscheid(Muenzhaus.Bescheid.BEDINGUNG_FEHLT, blumen(), 10L,
                                 List.of(fehlend), 0)));
@@ -248,7 +248,7 @@ class MuenztextTest {
         // GEMESSEN GEGEN DIE DATEI und nicht gegen den Fehlend-Wert: Rangregel rechnet in
         // Sekunden, und ungerechnet gezeigt stuende hier "noch 18.000 Stunden". Eine
         // Probe, die ihre Erwartung aus inMesseinheit holt, faengt genau das nicht.
-        var fehlend = new Rangregel.Fehlend(Bedingungsart.TAETIGE_STUNDEN,
+        var fehlend = new Rangregel.Bedingungsstand(Bedingungsart.TAETIGE_STUNDEN,
                 5L * Bedingungsart.SEKUNDEN_JE_STUNDE, 0L);
 
         String bild = Sprachprobe.bild(Muenztext.entscheidZeilen(SPRACHE, "x",
@@ -264,9 +264,9 @@ class MuenztextTest {
     @Test
     @DisplayName("Mehrere fehlende Bedingungen stehen in der Reihenfolge der Aufzaehlung")
     void mehrereBedingungenInReihenfolge() {
-        var zeit = new Rangregel.Fehlend(Bedingungsart.TAETIGE_STUNDEN,
+        var zeit = new Rangregel.Bedingungsstand(Bedingungsart.TAETIGE_STUNDEN,
                 5L * Bedingungsart.SEKUNDEN_JE_STUNDE, 0L);
-        var parzellen = new Rangregel.Fehlend(Bedingungsart.PARZELLEN, 1L, 0L);
+        var parzellen = new Rangregel.Bedingungsstand(Bedingungsart.PARZELLEN, 1L, 0L);
 
         List<Component> zeilen = Muenztext.entscheidZeilen(SPRACHE, "x",
                 entscheid(Muenzhaus.Bescheid.BEDINGUNG_FEHLT, blumen(), 10L,
@@ -405,7 +405,7 @@ class MuenztextTest {
         // umbenannte, erreichte diese Zeile nicht.
         String bild = Sprachprobe.bild(Muenztext.entscheidZeilen(SPRACHE, "kuerbishut",
                 entscheid(Muenzhaus.Bescheid.BEDINGUNG_FEHLT, hut(), 0L,
-                        List.of(new Rangregel.Fehlend(Bedingungsart.GUTHABEN, 50_000L,
+                        List.of(new Rangregel.Bedingungsstand(Bedingungsart.GUTHABEN, 50_000L,
                                 0L)), 0)));
 
         assertTrue(bild.contains("50.000 Mark"), "der Betrag kommt aus der Waehrung: "
@@ -420,7 +420,7 @@ class MuenztextTest {
         // taetiger Zeit" da. Die Probe darueber waere auch dann gruen.
         String bild = Sprachprobe.bild(Muenztext.entscheidZeilen(SPRACHE, "kuerbishut",
                 entscheid(Muenzhaus.Bescheid.BEDINGUNG_FEHLT, hut(), 0L,
-                        List.of(new Rangregel.Fehlend(Bedingungsart.TAETIGE_STUNDEN,
+                        List.of(new Rangregel.Bedingungsstand(Bedingungsart.TAETIGE_STUNDEN,
                                 18_000L, 0L)), 0)));
 
         assertTrue(bild.contains("5 Stunden"), bild);

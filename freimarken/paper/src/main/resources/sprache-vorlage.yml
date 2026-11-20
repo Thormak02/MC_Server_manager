@@ -169,6 +169,11 @@ mark:
       # eigene Zeile daneben, und der Spieler sieht, dass sein Geld zurueck ist.
       muenzhaus-kauf: "Im Muenzhaus gekauft"
       muenzhaus-erstattet: "Kauf gescheitert - erstattet"
+      # Die einzige Geldquelle, die nicht aus dem Spiel kommt: /freimarken geld. Der
+      #   Spieler soll sie in seinem Verlauf erkennen - sonst sucht er einen Verkauf,
+      #   den es nicht gab.
+      betreiber-gutschrift: "Vom Betreiber gutgeschrieben"
+      betreiber-abzug: "Vom Betreiber abgezogen"
 
   # /MARK TAUSCHEN - die Wechselstube. Plan 2.1 nennt fuer das Muenzhaus "Kontostand,
   # Verlauf, Wechsel Mark - Goldmark, Wechseldeckel sichtbar"; das Haus selbst kommt
@@ -351,6 +356,8 @@ befehl:
     # Schritt 10: die Meerinseln.
     werder: "Meerinseln auf Hafenwerder ansehen und eine nehmen"
     wolke: "die eigenen Wolkeninseln, eine nehmen, heimreisen"
+    # 20.11.2026: der eigene Rang und die Leiter.
+    rang: "Dein Rang, die naechste Stufe und die ganze Leiter"
     shop: "Deine Kistenshops auflisten und fuer andere freigeben"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
 
@@ -1550,6 +1557,10 @@ markt:
   # Ein EIGENER Satz und keine Zahl: bundesmarkt.tagesdeckel: 0 heisst kein Deckel, und
   #   "noch 0 Mark" waere das Gegenteil der Wahrheit.
   ohne-deckel: "<gray>Es gibt keinen Tagesdeckel - du kannst beliebig viel an den Bund verkaufen.</gray>"
+  # Nimmt den PLATZ der Zeile frei, wenn die Kasse die Tagessumme nicht hergibt. Die
+  #   Liste selbst steht vollstaendig darueber - unlesbar ist nur die eine Zahl.
+  deckel-unlesbar: "<gray>Wie viel du heute noch bekommen kannst, liess sich nicht lesen</gray><red> - verkaufe lieber erst, wenn es wieder dasteht.</red>"
+  # Die Staende selbst sind nicht lesbar. Dann kommt keine Liste.
   gestoert: "<red>Die Staende des Bundes liessen sich nicht lesen</red><gray> - sie sind deswegen NICHT weg. Der Grund steht im Serverprotokoll.</gray>"
 
 # Die Markthalle (Plan 7.1, Schritt 8 Teil A): /laden zeigt die Ladeneinheiten.
@@ -2811,6 +2822,39 @@ raenge:
   #   es nicht aus einer fehlenden Zeile schliessen muss.
   # DARF ebenfalls LEER BLEIBEN.
   hoechste: "<gold>Damit stehst du auf der hoechsten Stufe.</gold>"
+
+  # /RANG - die Auskunft ueber den eigenen Stand [20.11.2026]. Vorher sah ein Spieler
+  #   seinen Rang nur im Augenblick des Aufstiegs.
+  schau:
+    kopf: "<gold>Dein Rang</gold>"
+    # {rang} - der Schluessel aus deiner config.yml, also siedler oder buerger.
+    jetzt: "<gray>Du bist <white>{rang}</white>.</gray>"
+    # {rang} der EINGETRAGENE, {gilt} der geltende Schluessel. Diese Zeile kommt, wenn in
+    #   der Ablage eine Stufe steht, die in raenge.leiter nicht mehr vorkommt - etwa nach
+    #   dem Umbenennen einer Stufe. Sie gehoert gelesen und gemeldet.
+    unbekannt: "<red>Eingetragen ist {rang} - diese Stufe gibt es nicht mehr. Es gilt {gilt}; bitte melde das dem Team.</red>"
+    # {rang} - die naechste Stufe. Darunter stehen ihre Bedingungen, je zwei Zeilen: was
+    #   verlangt ist (aus mark.muenzhaus.bedingung.*) und was du hast.
+    naechste: "<gray>Als naechstes: <white>{rang}</white>. Dafuer zaehlt:</gray>"
+    # {stand} - was du hast. Zwei Saetze, weil die FARBE den Unterschied macht.
+    stand-erfuellt: "<green>    du hast {stand} - geschafft</green>"
+    stand-offen: "<gray>    du hast {stand}</gray>"
+    # DARF LEER BLEIBEN - dann faellt die Zeile weg.
+    fuss: "<dark_gray>/rang leiter zeigt alle Stufen.</dark_gray>"
+  # /RANG LEITER - die ganze Leiter, je Stufe eine Zeile in einem von drei Zustaenden.
+  leiter:
+    kopf: "<gold>Die Rangleiter</gold>"
+    # {rang} je Zeile. erreicht heisst "an oder unter deiner Stufe".
+    erreicht: "<gray>  {rang} - erreicht</gray>"
+    jetzt: "<white>  {rang} - hier stehst du</white>"
+    offen: "<dark_gray>  {rang} - offen</dark_gray>"
+  # raenge.an: false oder eine leere Leiter.
+  aus: "<gray>Auf diesem Server gibt es keine Raenge.</gray>"
+  # Die Ablage hat nicht geantwortet. KEIN Rueckfall auf die unterste Stufe: Der sieht
+  #   aus wie eine Auskunft und ist eine Vermutung.
+  gestoert: "<red>Dein Rang liess sich nicht lesen</red><gray> - versuche es noch einmal. Der Grund steht im Serverprotokoll.</gray>"
+  # /rang zeigt den Rang EINES Spielers - die Konsole ist keiner.
+  keine-konsole: "<gray>/rang zeigt den Rang eines Spielers - auf der Konsole gibt es keinen.</gray>"
 
 muenzhaus:
   # DIE NAMEN DER KATALOGPOSTEN. Je Posten eine Zeile, und der Schluessel links ist

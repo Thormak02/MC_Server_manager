@@ -211,10 +211,8 @@ final class Bonusliste {
             }
         }
         if (!fehlen.isEmpty()) {
-            bericht.add(fehlen.size() + " von " + SCHLUESSEL.size() + " Zeilen des"
-                    + " Tagesbonus fehlen in deiner config.yml: "
-                    + String.join(", ", fehlen)
-                    + ". Dafuer gelten die Vorgaben des Programms.");
+            bericht.add(Wirtschaftsliste.fehlendeZeilen(fehlen,
+                    SCHLUESSEL.size(), "des Tagesbonus"));
         }
     }
 }

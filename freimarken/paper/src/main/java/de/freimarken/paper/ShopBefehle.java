@@ -21,7 +21,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
@@ -518,25 +517,7 @@ final class ShopBefehle {
                                    Wirtschaftsstand wirtschaft, Logger protokoll) {
         return new ShopBefehle(ablage, sprache,
                 (wer, reichweite) -> wer.getTargetBlockExact(reichweite),
-                ShopBefehle::kennungUeberBukkit, Spielername::von, wirtschaft,
+                Spielername::kennungAuchAbwesend, Spielername::von, wirtschaft,
                 protokoll);
-    }
-
-    /**
-     * Die Kennung zu einem getippten Namen - oder {@code null}.
-     *
-     * <p>{@code hasPlayedBefore()} ist die Schranke: {@code getOfflinePlayer(String)}
-     * gibt NIEMALS null, sondern erfindet bei einem unbekannten Namen ein Exemplar mit
-     * frisch gewuerfelter Kennung. Ohne diese Frage traege ein Tippfehler eine Freigabe
-     * fuer einen Spieler ein, den es nicht gibt - und die stuende fuer immer in der
-     * Liste, ohne dass jemand sie je einloesen koennte.
-     */
-    private static UUID kennungUeberBukkit(String name) {
-        Player anwesend = Bukkit.getPlayerExact(name);
-        if (anwesend != null) {
-            return anwesend.getUniqueId();
-        }
-        OfflinePlayer bekannt = Bukkit.getOfflinePlayer(name);
-        return bekannt.hasPlayedBefore() ? bekannt.getUniqueId() : null;
     }
 }

@@ -266,15 +266,20 @@ hinweise:
   # freistadt.rang-werbung).
   #
   # Beispiele:
+  #   "Was dir fehlt, zeigt /rang."
   #   "Mehr Parzellen gibt es mit dem Rang Buerger - rund 40 Spielstunden und eine
-  #    bebaute Parzelle."
+  #    bebaute Parzelle. /rang zeigt deinen Stand."
   #   "Mehr Parzellen gibt es mit dem Rang Buerger - oder als Zuschlag obendrauf mit
   #    einer Mitgliedschaft."
   #
-  # Versprich hier nichts, was es nicht gibt - weder einen Befehl noch einen Weg. Der Satz
-  # erscheint genau in dem Augenblick, in dem der Spieler abgewiesen wurde; ein Hinweis
-  # auf einen Shop oder einen /rang-Befehl, den es nicht gibt, ist dann aergerlicher als
-  # gar keiner.
+  # SEIT DEM 20.11.2026 darf hier /rang stehen: Bis dahin verbot diese Stelle den
+  # Verweis, weil es den Befehl nicht gab. Er zeigt den eigenen Rang, die naechste Stufe
+  # mit jeder Bedingung samt Stand und (mit /rang leiter) die ganze Leiter - also genau
+  # das, was der Spieler in diesem Augenblick wissen will.
+  #
+  # Versprich darueber hinaus nichts, was es nicht gibt - weder einen Befehl noch einen
+  # Weg. Der Satz erscheint genau in dem Augenblick, in dem der Spieler abgewiesen wurde;
+  # ein Hinweis auf einen Shop, den es nicht gibt, ist dann aergerlicher als gar keiner.
   #
   # Und er darf den Raengen nicht widersprechen. Nach Plan 9 haengt die Parzellengrenze an
   # den drei erspielbaren Raengen (Reisender, Siedler, Buerger); die beiden kaufbaren
@@ -1378,29 +1383,7 @@ messstelle:
     - oeffnen
     - kaempfen
     - sprechen
-# Die Markthalle (Plan 7.1, Schritt 8 Teil A): Welche Ladeneinheiten es gibt.
-#
-# Eine Ladeneinheit ist ein ORT - ein kleiner Raum in der Markthalle und die Truhe darin.
-# Wer sie mietet und wie lange, kommt mit Teil B; hier stehen nur die Staende.
-#
-# WARUM HIER DREI PROBESTAENDE STEHEN UND KEINE HALLE: Die Markthalle ist eines der zehn
-# Gebaeude, die von Hand in Altfurt entstehen (Plan 2.1) - das Programm setzt dort keine
-# Bloecke. Entschieden am 08.11.2026: Drei kleine Staende genuegen, um Mieten, Verlaengern,
-# Kuendigen, den taeglichen Lauf und den Ladenschutz im Spiel zu pruefen; die Halle kann
-# spaeter drumherum wachsen, die Quader bleiben stehen.
-#
-# WARUM EIN QUADER UND KEIN RASTERFELD: Altfurt hat kein Raster, es ist gewachsenes
-# Gelaende. Plan 6.1 hat genau diesen Fall vorgesehen - fuer Besitz, der nicht am Raster
-# haengt, kommt der Quader als eigene Angabe.
-#
-# WARUM DIE TRUHE DAZUGEHOERT: In Altfurt stehen alle Spieler im Abenteuermodus, und der
-# verbietet das Setzen von Bloecken - ein Mieter kann sich keine Truhe hinstellen. Die
-# Einheit kommt darum mit ihrer Truhe aus dem Bauwerk, und der Mieter fuellt sie nur.
-# Die Truhe MUSS innerhalb ihrer Einheit stehen, sonst waere sie ungeschuetzt.
-#
-# NUR BEIM START GELESEN. /freimarken neuladen verschiebt keinen Laden: Ein Mieter haette
-# sonst von einem Augenblick auf den anderen einen anderen Raum, und seine Truhe stuende
-# beim Nachbarn. Die Antwort auf neuladen sagt das ausdruecklich.
+
 # Was eine eigene Stadt kostet - Plan 6.2 und 6.4, gebaut am 11.11.2026.
 #
 # NICHT zu verwechseln mit welten.freistaedte weiter unten: Jener Eintrag beschreibt die
@@ -2142,9 +2125,34 @@ wolken:
       brown_mushroom_block: 4
       red_mushroom_block: 4
 
+# Die Markthalle (Plan 7.1, Schritt 8 Teil A): Welche Ladeneinheiten es gibt.
+#
+# Eine Ladeneinheit ist ein ORT - ein kleiner Raum in der Markthalle und die Truhe darin.
+# Wer sie mietet und wie lange, kommt mit Teil B; hier stehen nur die Staende.
+#
+# WARUM HIER DREI PROBESTAENDE STEHEN UND KEINE HALLE: Die Markthalle ist eines der zehn
+# Gebaeude, die von Hand in Altfurt entstehen (Plan 2.1) - das Programm setzt dort keine
+# Bloecke. Entschieden am 08.11.2026: Drei kleine Staende genuegen, um Mieten, Verlaengern,
+# Kuendigen, den taeglichen Lauf und den Ladenschutz im Spiel zu pruefen; die Halle kann
+# spaeter drumherum wachsen, die Quader bleiben stehen.
+#
+# WARUM EIN QUADER UND KEIN RASTERFELD: Altfurt hat kein Raster, es ist gewachsenes
+# Gelaende. Plan 6.1 hat genau diesen Fall vorgesehen - fuer Besitz, der nicht am Raster
+# haengt, kommt der Quader als eigene Angabe.
+#
+# WARUM DIE TRUHE DAZUGEHOERT: In Altfurt stehen alle Spieler im Abenteuermodus, und der
+# verbietet das Setzen von Bloecken - ein Mieter kann sich keine Truhe hinstellen. Die
+# Einheit kommt darum mit ihrer Truhe aus dem Bauwerk, und der Mieter fuellt sie nur.
+# Die Truhe MUSS innerhalb ihrer Einheit stehen, sonst waere sie ungeschuetzt.
+#
+# NUR BEIM START GELESEN. /freimarken neuladen verschiebt keinen Laden: Ein Mieter haette
+# sonst von einem Augenblick auf den anderen einen anderen Raum, und seine Truhe stuende
+# beim Nachbarn. Die Antwort auf neuladen sagt das ausdruecklich.
 laeden:
   # In welcher Welt die Halle steht - ohne Namensraum, wie bei reisen.ankunftswelt.
   # Die Welt muss im Abschnitt welten: weiter unten stehen, sonst gilt keine Einheit.
+  #
+  # NUR BEIM START GELESEN.
   welt: altfurt
 
   # Die Miete je Tag. Plan 7.1 nennt sie die STAERKSTE Geldsenke des Servers: laufend,

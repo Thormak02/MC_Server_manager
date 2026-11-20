@@ -76,6 +76,45 @@ final class Spielername {
     }
 
     /**
+     * Die Kennung zu einem Namen - AUCH fuer einen lange abwesenden Spieler.
+     *
+     * <p><b>Der Unterschied zu {@link #kennung} ist der ganze Zweck:</b> Jene schaut nur
+     * in den Zwischenspeicher und findet einen lange Abwesenden nicht. Fuer einen
+     * Mitbauer ist das richtig - der Eintrag kostet nichts und laesst sich wiederholen.
+     * Fuer eine Verwaltungstat ist es falsch: Wer einem Spieler Geld gutschreiben oder
+     * ein Blockbuch nachsehen will, meint oft genau den, der gerade nicht da ist.
+     *
+     * <p>{@code hasPlayedBefore()} ist die Schranke, und sie ist Pflicht:
+     * {@code getOfflinePlayer(String)} gibt NIEMALS {@code null}, sondern erfindet bei
+     * einem unbekannten Namen ein Exemplar mit frisch gewuerfelter Kennung. Ohne die
+     * Frage wuerde ein Tippfehler zu einer Buchung auf ein Konto, das es nie gab - die
+     * Kasse legt es beim Gutschreiben samt Startguthaben an, und niemand findet es
+     * wieder.
+     *
+     * <p>Der anwesende Spieler wird ZUERST gefragt: Er hat sicher eine Kennung, und
+     * {@code hasPlayedBefore()} ist auf manchen Servern fuer den gerade Beigetretenen
+     * noch falsch.
+     *
+     * <p><b>Diese Methode stand bis zum 20.11.2026 zweimal im Projekt</b> - wortgleich
+     * privat in {@code BlockBefehle} und in {@code ShopBefehle}, mit derselben
+     * Begruendung in zwei Javadocs. Aufgefallen ist es, als der Betreiberbefehl fuer Geld
+     * sie zum dritten Mal brauchte. Zwei Abschriften derselben Schranke laufen
+     * auseinander, und die eine, die ihr {@code hasPlayedBefore} verliert, bucht dann auf
+     * Geisterkonten.
+     */
+    static UUID kennungAuchAbwesend(String name) {
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+        Player anwesend = Bukkit.getPlayerExact(name);
+        if (anwesend != null) {
+            return anwesend.getUniqueId();
+        }
+        OfflinePlayer bekannt = Bukkit.getOfflinePlayer(name);
+        return bekannt.hasPlayedBefore() ? bekannt.getUniqueId() : null;
+    }
+
+    /**
      * Der Name zu dieser Kennung, oder acht Zeichen der Kennung selbst.
      *
      * <p>Siehe den Klassenkopf. Die Gegenrichtung steht in {@link #kennung}.

@@ -351,6 +351,18 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_MUENZHAUS_ERSTATTET("mark.verlauf.grund.muenzhaus-erstattet", Art.WORT),
 
     /**
+     * Geld von Hand - die zwei Worte zu /freimarken geld [20.11.2026].
+     *
+     * <p>JE Richtung ein Wort, weil es je Richtung einen Buchungsgrund gibt: Im Verlauf
+     * soll der Spieler sehen, ob der Betreiber ihm etwas gegeben oder genommen hat. Es
+     * ist die einzige Geldquelle, die nicht aus dem Spiel kommt - wer sie nicht erkennt,
+     * sucht einen Verkauf, den es nie gab.
+     */
+    VERLAUF_GRUND_BETREIBER_GUTSCHRIFT("mark.verlauf.grund.betreiber-gutschrift",
+            Art.WORT),
+    VERLAUF_GRUND_BETREIBER_ABZUG("mark.verlauf.grund.betreiber-abzug", Art.WORT),
+
+    /**
      * Die Tafel des Muenzhauses - der Kopf von {@code /mark muenzhaus} [Teil G].
      *
      * <p>Der ORT, den Plan 2.1 nennt: Kontostand, Verlauf, Wechseldeckel und der Katalog

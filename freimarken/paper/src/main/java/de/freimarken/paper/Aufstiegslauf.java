@@ -258,7 +258,7 @@ final class Aufstiegslauf {
      * Stelle. Haette der Katalog seinen eigenen Messer, urteilte ein Kauf eines Tages
      * anders als eine Befoerderung - dieselbe Bedingung, dieselbe Zahl in der Datei, und
      * zwei verschiedene Antworten. Gerufen wird sie ueber
-     * {@code Muenzhaus.Bedingungsmessung}, also als Naht und nicht als Abhaengigkeit.
+     * {@code Bedingungsmessung}, also als Naht und nicht als Abhaengigkeit.
      *
      * <p><b>Der Spielzeitstand wird nur geholt, wenn eine Zeitart gefragt ist</b>, und das
      * ist dieselbe Regel wie bei {@link #messe}: Jede Messung ausser dem Beruf ist eine

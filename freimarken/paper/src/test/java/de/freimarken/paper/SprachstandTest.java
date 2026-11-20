@@ -48,8 +48,11 @@ class SprachstandTest {
     }
 
     @Test
-    @DisplayName("23 - NUR_BEIM_START ist GENAU diese fuenfzehn")
-    void nurBeimStartIstGenauDieseZehn() {
+    @DisplayName("23 - NUR_BEIM_START ist GENAU die Liste der Befehlsbeschreibungen")
+    void nurBeimStartIstGenauDieseListe() {
+        // KEINE ZAHL in der Ueberschrift: Dort stand "diese fuenfzehn", und es waren
+        // schon sechzehn - seit /wolke, ohne dass etwas rot wurde. Der Methodenname sagte
+        // sogar "DieseZehn". Was die Liste wirklich haelt, ist der Vergleich darunter.
         Set<String> erwartet = new LinkedHashSet<>(List.of(
                 "befehl.beschreibung.freimarken", "befehl.beschreibung.parzelle",
                 "befehl.beschreibung.mark", "befehl.beschreibung.warp",
@@ -63,7 +66,10 @@ class SprachstandTest {
                 // im Befehlsbaum - /help zeigt eine geaenderte erst nach einem Neustart.
                 "befehl.beschreibung.werder",
                 // Schritt 11: /wolke. Derselbe Grund.
-                "befehl.beschreibung.wolke"));
+                "befehl.beschreibung.wolke",
+                // 20.11.2026: /rang. Derselbe Grund - eine geaenderte Beschreibung
+                // wirkt erst nach einem Neustart.
+                "befehl.beschreibung.rang"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachstand.NUR_BEIM_START.forEach(satz -> gefuehrt.add(satz.pfad()));
         // assertEquals auf Groesse UND Inhalt: contains haette auch eine Liste mit einem
@@ -108,9 +114,11 @@ class SprachstandTest {
                 + " schiefging, nicht, dass die Beschreibungen ohnehin nicht neuladbar"
                 + " sind - und sucht den Fehler an der falschen Zeile");
         assertTrue(ohne.get(0).contains("befehl.beschreibung.*"), ohne.get(0));
-        // SECHZEHN seit /wolke: Die Zahl waechst mit jedem Befehl, und sie gehoert in
-        // die Zeile - der Betreiber sieht daran, ob seine Aenderung dabei ist.
-        assertTrue(ohne.get(0).contains("16 Saetze"), ohne.get(0));
+        // SIEBZEHN seit /rang: Die Zahl waechst mit jedem Befehl, und sie gehoert in
+        // die Zeile - der Betreiber sieht daran, ob seine Aenderung dabei ist. Hier ist
+        // die Zahl eine Zusicherung ueber die Zeile und keine Ueberschrift: Sie steht im
+        // Text, den er liest.
+        assertTrue(ohne.get(0).contains("17 Saetze"), ohne.get(0));
     }
 
     @Test

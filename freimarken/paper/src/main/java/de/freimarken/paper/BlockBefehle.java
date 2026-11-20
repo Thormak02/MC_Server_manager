@@ -17,7 +17,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 
@@ -282,29 +281,6 @@ final class BlockBefehle {
                                     Logger protokoll) {
         return new BlockBefehle(ablage, werte, wirtschaft, sprache,
                 (wer, reichweite) -> wer.getTargetBlockExact(reichweite),
-                BlockBefehle::kennungUeberBukkit, Spielername::von, protokoll);
-    }
-
-    /**
-     * Die Kennung zu einem getippten Namen - oder {@code null}.
-     *
-     * <p>{@code hasPlayedBefore()} ist die Schranke: {@code getOfflinePlayer(String)}
-     * gibt NIEMALS null zurueck, sondern erfindet bei einem unbekannten Namen ein
-     * Exemplar mit einer frisch gewuerfelten Kennung. Ohne diese Frage wuerde ein
-     * Tippfehler zu einer Abfrage auf eine Kennung, die es nie gab - und die Antwort
-     * waere "zu diesem Spieler steht nichts im Buch", also ein Freispruch fuer einen
-     * Namen, den niemand traegt.
-     *
-     * <p>Ein anwesender Spieler wird zuerst gefragt: Er hat sicher eine Kennung, und
-     * {@code hasPlayedBefore()} ist auf manchen Servern fuer den gerade beigetretenen
-     * Spieler noch falsch.
-     */
-    private static UUID kennungUeberBukkit(String name) {
-        Player anwesend = Bukkit.getPlayerExact(name);
-        if (anwesend != null) {
-            return anwesend.getUniqueId();
-        }
-        OfflinePlayer bekannt = Bukkit.getOfflinePlayer(name);
-        return bekannt.hasPlayedBefore() ? bekannt.getUniqueId() : null;
+                Spielername::kennungAuchAbwesend, Spielername::von, protokoll);
     }
 }

@@ -146,7 +146,7 @@ public enum Bedingungsart {
     /**
      * Die gemessene Zahl in der Einheit, in der sie in der DATEI steht - der Rueckweg.
      *
-     * <p><b>Warum es ihn gibt</b> [20.11.2026, Teil G]: {@link Rangregel.Fehlend} rechnet
+     * <p><b>Warum es ihn gibt</b> [20.11.2026, Teil G]: {@link Rangregel.Bedingungsstand} rechnet
      * in der Messeinheit, also in Sekunden. Ungerechnet in eine Chatzeile gesetzt, laese
      * ein Spieler "noch 14.400 Stunden", wo in der {@code config.yml}
      * {@code taetige-stunden: 5} steht - und der Betreiber faende seine Zahl in der Zeile

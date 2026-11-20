@@ -611,6 +611,46 @@ class WirtschaftsstandTest {
     }
 
     @Test
+    @DisplayName("Geaenderte Buergerrechte werden genannt - mit ihren Schluesseln")
+    void buergerrechteGenannt() {
+        // Die Zeile dafuer ist am 20.11.2026 gebaut worden, eine Probe hatte sie nie.
+        // Gehalten hat sie allein GrenzeTest 31cw, und die prueft eine NENNUNG: dass der
+        // Name PFAD_BUERGERRECHTE im Quelltext vorkommt. Mit
+        // nenneMenge(..., taten(alt...), taten(alt...)) waere jene Tafel gruen und diese
+        // Meldung wieder stumm - der Betreiber liest "nichts geaendert", und seine neuen
+        // Rechte gelten trotzdem.
+        //
+        // Getauscht wird in BEIDE Richtungen, weil die Vorgabe die leere Menge ist: erst
+        // ein Recht dazu, dann dasselbe wieder weg. Eine Probe, die nur hinzufuegt, waere
+        // auch mit einem Vergleich gruen, der die neue Menge zweimal nimmt.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var dazu = stand.uebernimm(Wirtschaftswerte.VORGABE.mitFreistaedten(
+                Freistadtwerte.VORGABE.mitBuergerrechten(Set.of(Tat.BEHAELTER))));
+        var weg = stand.uebernimm(Wirtschaftswerte.VORGABE);
+
+        assertEquals(Freistadtwerte.PFAD_BUERGERRECHTE + ": 0 -> 1 Namen,"
+                        + " dazu: behaelter",
+                zeileZu(dazu, Freistadtwerte.PFAD_BUERGERRECHTE),
+                "der WORTLAUT: In der Datei des Betreibers steht behaelter, nicht der"
+                        + " Name der Konstante - dafuer gibt es den Uebersetzer taten()");
+        assertEquals(Freistadtwerte.PFAD_BUERGERRECHTE + ": 1 -> 0 Namen,"
+                        + " weg: behaelter",
+                zeileZu(weg, Freistadtwerte.PFAD_BUERGERRECHTE),
+                "auch der Weg zurueck muss ankommen - ein Recht, das der Betreiber"
+                        + " herausnimmt, ist die Aenderung, die er am ehesten nachprueft");
+    }
+
+    /** Die eine Zeile der Uebernahme zu diesem Pfad - oder ein leerer Text. */
+    private static String zeileZu(Wirtschaftsstand.Uebernahme uebernahme, String pfad) {
+        return uebernahme.geaendert().stream()
+                .filter(zeile -> zeile.startsWith(pfad + ":"))
+                .findFirst()
+                .orElse("(keine Zeile zu " + pfad + " in "
+                        + uebernahme.geaendert() + ")");
+    }
+
+    @Test
     @DisplayName("Eine unveraenderte Wechselstube steht NICHT in der Meldung")
     void unveraenderterWechselSchweigt() {
         // Die Gegenrichtung, und sie ist Pflicht: Drei Zeilen, die immer dastehen, waeren

@@ -60,7 +60,100 @@ enum RangSatz implements Satz {
      *
      * <p>{@link Satz#LEER_ERLAUBT} - siehe den Klassenkopf.
      */
-    HOECHSTE("raenge.hoechste", Art.SATZ, Satz.LEER_ERLAUBT);
+    HOECHSTE("raenge.hoechste", Art.SATZ, Satz.LEER_ERLAUBT),
+
+    // --- /rang: die Auskunft ueber den eigenen Stand [20.11.2026] -----------
+
+    /**
+     * Der Kopf von {@code /rang}.
+     *
+     * <p><b>Warum es diesen Befehl gibt:</b> Bis zum 20.11.2026 sah ein Spieler seinen
+     * Rang nur im Augenblick des Aufstiegs und beim Beitritt. Nachsehen konnte er ihn
+     * nicht - und die gelbe Zeile unter jeder Absage ("Mehr erlaubt ein hoeherer Rang.")
+     * verwies damit auf etwas, das er nirgends finden konnte.
+     */
+    SCHAU_KOPF("raenge.schau.kopf", Art.SATZ),
+
+    /** Auf welcher Stufe er steht. {@code rang} ist der Schluessel aus der Datei. */
+    SCHAU_JETZT("raenge.schau.jetzt", Art.SATZ, "rang"),
+
+    /**
+     * In der Ablage steht eine Stufe, die die Leiter nicht mehr kennt.
+     *
+     * <p>Ein EIGENER Satz, und er ist der Grund, warum die Tafel den eingetragenen
+     * Schluessel ueberhaupt mitbringt: {@code Rangstand.stufeIn} faellt auf die unterste
+     * Stufe zurueck - richtig, aber als Auskunft eine stille Rueckstufung. Wer "du bist
+     * reisender" liest, meldet nichts, und die Zeile bleibt fuer immer so stehen.
+     * {@code rang} ist der eingetragene, {@code gilt} der geltende Schluessel.
+     */
+    SCHAU_UNBEKANNT("raenge.schau.unbekannt", Art.SATZ, "rang", "gilt"),
+
+    /** Die naechste Stufe - darunter stehen ihre Bedingungen. */
+    SCHAU_NAECHSTE("raenge.schau.naechste", Art.SATZ, "rang"),
+
+    /**
+     * Was er von dieser Bedingung schon hat - erfuellt.
+     *
+     * <p>ZWEI Saetze und nicht einer mit einem Platzhalter fuer das Haekchen: Der
+     * Unterschied ist die FARBE, und die gehoert in den Satz. Ein Betreiber, der beides
+     * gleich will, schreibt zweimal dasselbe hin - ein Betreiber, der es verschieden
+     * will, koennte es mit einem Satz nicht.
+     *
+     * <p>Die Zeile DARUEBER - was verlangt ist - kommt aus dem Muenzhaus
+     * ({@code mark.muenzhaus.bedingung.<art>}): dieselbe Frage, dieselbe Antwort. Eine
+     * zweite Wortfamilie dafuer waere eine Abschrift, und zwei Abschriften laufen
+     * auseinander.
+     */
+    SCHAU_STAND_ERFUELLT("raenge.schau.stand-erfuellt", Art.SATZ, "stand"),
+
+    /** Dasselbe, noch offen - siehe {@link #SCHAU_STAND_ERFUELLT}. */
+    SCHAU_STAND_OFFEN("raenge.schau.stand-offen", Art.SATZ, "stand"),
+
+    /**
+     * Der Hinweis auf {@code /rang leiter} unter der Auskunft.
+     *
+     * <p>{@link Satz#LEER_ERLAUBT}: Wer die Zeile nicht will, laesst sie weg - wie beim
+     * Ausblick nach dem Aufstieg.
+     */
+    SCHAU_FUSS("raenge.schau.fuss", Art.SATZ, Satz.LEER_ERLAUBT),
+
+    /** Der Kopf von {@code /rang leiter}. */
+    LEITER_KOPF("raenge.leiter.kopf", Art.SATZ),
+
+    /**
+     * Eine Stufe, die er hat - DREI Saetze fuer drei Zustaende.
+     *
+     * <p>Erreicht heisst "an oder unter seiner Stufe" und wird aus der NUMMER gerechnet,
+     * nicht aus den Bedingungen: Wer befoerdert wurde, behaelt seinen Rang auch dann,
+     * wenn der Betreiber die Bedingungen danach heraufsetzt.
+     */
+    LEITER_ERREICHT("raenge.leiter.erreicht", Art.SATZ, "rang"),
+
+    /** Die Stufe, auf der er steht. */
+    LEITER_JETZT("raenge.leiter.jetzt", Art.SATZ, "rang"),
+
+    /** Eine Stufe, die noch vor ihm liegt. */
+    LEITER_OFFEN("raenge.leiter.offen", Art.SATZ, "rang"),
+
+    /**
+     * Auf diesem Server gibt es keine Raenge.
+     *
+     * <p>{@code raenge.an: false} oder eine leere Leiter. Ein eigener Satz und keine
+     * leere Antwort: Ein Befehl, der nichts sagt, sieht kaputt aus.
+     */
+    AUS("raenge.aus", Art.SATZ),
+
+    /**
+     * Die Ablage hat nicht geantwortet.
+     *
+     * <p>Kein Rueckfall auf die unterste Stufe: Der saehe aus wie eine Auskunft und waere
+     * eine Vermutung - und ein Spieler, der sich fuer einen Reisenden haelt, fragt beim
+     * Team nach seinem verschwundenen Rang.
+     */
+    GESTOERT("raenge.gestoert", Art.SATZ),
+
+    /** Auf der Konsole gibt es keinen Rang - sie ist kein Spieler. */
+    KEINE_KONSOLE("raenge.keine-konsole", Art.SATZ);
 
     private final String pfad;
     private final Art art;

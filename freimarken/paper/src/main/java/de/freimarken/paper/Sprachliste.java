@@ -436,11 +436,23 @@ final class Sprachliste {
                 maengel.add(tag);
             }
         }
-        if (satz.art() == Satz.Art.HANDBALKEN && fund.wert().indexOf('\n') >= 0) {
-            maengel.add(ort(pfad, fund.zeile()) + " traegt eine Umbruchmarke. Der Handbalken"
-                    + " ueber dem Gegenstandsgurt nimmt genau EINE Zeile (sendActionBar"
-                    + " nimmt ein Component und keine Liste) - die zweite verschwindet"
-                    + " stumm. Kuerze den Satz.");
+        if (fund.wert().indexOf('\n') >= 0) {
+            // EINE Frage nach der Umbruchmarke, zwei Gruende - und darum zwei Saetze. Wer
+            // beides in eine Klage legte, muesste dem Betreiber erklaeren, was ein
+            // Handbalken mit einer Chatzeile zu tun hat; wer zwei Fragen stellte, haette
+            // zwei Riegel fuer denselben Fall, und einer davon waere unpruefbar.
+            if (satz.art() == Satz.Art.HANDBALKEN) {
+                maengel.add(ort(pfad, fund.zeile()) + " traegt eine Umbruchmarke. Der"
+                        + " Handbalken ueber dem Gegenstandsgurt nimmt genau EINE Zeile"
+                        + " (sendActionBar nimmt ein Component und keine Liste) - die"
+                        + " zweite verschwindet stumm. Kuerze den Satz.");
+            } else if (Einzeiler.nurEineZeile(satz)) {
+                maengel.add(ort(pfad, fund.zeile()) + " traegt eine Umbruchmarke. Diesen"
+                        + " Satz holt das Programm als GENAU EINE Zeile - mit einer"
+                        + " zweiten bricht der Befehl ab, und der Spieler liest dann gar"
+                        + " nichts statt eines langen Satzes. Kuerze den Satz, oder nimm"
+                        + " die Marke heraus.");
+            }
         }
         return maengel;
     }

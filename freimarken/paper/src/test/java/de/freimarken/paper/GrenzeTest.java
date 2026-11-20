@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import de.freimarken.kern.Tat;
+import de.freimarken.kern.Wirtschaftsstand;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -309,6 +310,8 @@ class GrenzeTest {
             "Mietwache.java",
             "ParzellenBefehle.java", "Portalwache.java",
             "Rangwache.java",
+            // /rang [20.11.2026]: EINE Sendestelle fuer beide Zweige und jede Absage.
+            "RangBefehle.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
             // Plan 7.4: die Zeilen des Anlegens und die Handbalken des Schutzes -
             // zwei Wege, weil Chat und Handbalken zwei verschiedene Aufrufe sind.
@@ -456,7 +459,7 @@ class GrenzeTest {
             // Teil H: EINE Sendestelle - die Nachricht ueber den gezahlten Bonus.
             Map.entry("Bonuswache.java", 1),
             Map.entry("BundBefehle.java", 2),
-            Map.entry("FreimarkenPlugin.java", 41),
+            Map.entry("FreimarkenPlugin.java", 44),
             // EINE Sendestelle, und das BLEIBT so, obwohl Teil B drei Taten dazugebracht
             // hat: Alle vier Zweige von /laden laufen durch dasselbe sende(). Eine Zwei
             // hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat - und der waere
@@ -488,6 +491,10 @@ class GrenzeTest {
             Map.entry("ParzellenBefehle.java", 51),
             Map.entry("Portalwache.java", 1),
             Map.entry("Rangwache.java", 1),
+            // /rang: beide Zweige, die Absage an die Konsole, die Stoerung und "keine
+            // Raenge" gehen durch dasselbe private sende(). Eine Zwei hier heisst, dass
+            // sich ein Zweig seinen eigenen Weg gebaut hat.
+            Map.entry("RangBefehle.java", 1),
             Map.entry("Reise.java", 7),
             Map.entry("RueckwegBefehle.java", 1),
             Map.entry("Schutzwache.java", 1),
@@ -1109,6 +1116,7 @@ class GrenzeTest {
             "BEFEHL_SHOP -> WORT",
             "BEFEHL_WERDER -> WORT",
             "BEFEHL_WOLKE -> WORT",
+            "BEFEHL_RANG -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",
@@ -4138,6 +4146,87 @@ class GrenzeTest {
     }
 
     @Test
+    @DisplayName("31db - der Baum von /rang wird gebaut, angemeldet und misst ueber den"
+            + " Aufstiegslauf")
+    void rangbefehlIstVerdrahtet() {
+        // ZWEI ZUSICHERUNGEN, und keine Verhaltensprobe sieht eine davon:
+        //
+        // 1. GEBAUT UND ANGEMELDET. Ein Baum, den niemand bei Paper anmeldet, ist der
+        //    Fall, den dieses Projekt dreimal hatte (Truhenwache 31an, Shopbuch 31au,
+        //    Erzwache): gebaut, gruen geprueft, ohne Wirkung. Hier waere er besonders
+        //    bitter - /rang ist der Grund, aus dem die Rangwerbung in der config.yml
+        //    seit dem 20.11.2026 ueberhaupt auf einen Befehl verweisen darf.
+        // 2. DIE MESSTUER, ueber die BAUZEILE. Wer das Lambda auf eine leere Karte
+        //    setzt, bekommt keine rote Probe: Die Auskunft zeigte dann jede Bedingung
+        //    als offen, und ein Buerger laese, ihm fehlten vierzig Stunden. Dieselbe
+        //    Schaerfung wie bei 31cv.
+        String plugin = plugintext();
+
+        assertTrue(plugin.contains("new RangBefehle(new Rangschau(rangablage,"),
+                "/rang steht nicht auf der Rangablage und dem geteilten"
+                        + " Wirtschaftsstand des Plugins");
+        // DIE GRENZE DIESER ZEILE, gemessen am 20.11.2026 (Einspritzungsfall F8): Wer
+        // die Anmeldung in ein "if (sprache == null)" huellt, laesst den TEXT stehen -
+        // und dieses contains bleibt gruen, waehrend der Befehl im Spiel fehlt. Eine
+        // Quelltexttafel sieht Text und keine Erreichbarkeit; javac sagt zu totem Code
+        // in einem solchen Zweig nichts. Gefangen wird dieser Fall im STARTLAUF: Ohne
+        // Anmeldung fehlt "freimarken:rang" in der Zeile "Befehle angemeldet: ...", und
+        // die Konsole bekommt auf /rang Brigadiers englische Zeile statt des eigenen
+        // Satzes. Beides ist am 20.11. mit und ohne Einspritzung gemessen worden.
+        assertTrue(plugin.contains("verzeichnis.register(rangBefehle().rang(),"),
+                "der Baum von /rang wird nicht angemeldet - dann gibt es den Befehl im"
+                        + " Spiel nicht, und die Rangwerbung verweist wieder auf etwas,"
+                        + " das niemand finden kann");
+        var messtuer = java.util.regex.Pattern
+                .compile("new Rangschau\\([^;]*messeFuer\\(wer, gebraucht\\)")
+                .matcher(plugin);
+        assertTrue(messtuer.find(),
+                "/rang misst seine Bedingungen nicht ueber den Aufstiegslauf - und das"
+                        + " ist die EINE Stelle, die messen darf");
+    }
+
+    @Test
+    @DisplayName("31dc - der Weg vom NAMEN zur Kennung fragt hasPlayedBefore, und zwar"
+            + " an einer Stelle")
+    void jederWegZurKennungFragtHasPlayedBefore() {
+        // GEFUNDEN AM 20.11.2026, beim Bau von /freimarken geld: Diese Methode stand
+        // ZWEIMAL wortgleich im Projekt, privat in BlockBefehle und in ShopBefehle, mit
+        // derselben Begruendung in zwei Javadocs. Der Geldzweig haette sie zum dritten
+        // Mal gebraucht.
+        //
+        // Keine Verhaltensprobe kann sie pruefen: Sie ruft Bukkit statisch und laeuft
+        // ohne Server nicht. Was sie zusichert, ist aber genau die Art Zusage, die teuer
+        // ist - getOfflinePlayer(String) gibt NIEMALS null, sondern erfindet fuer einen
+        // unbekannten Namen eine frische Kennung. Ohne hasPlayedBefore() buchte ein
+        // Tippfehler auf ein Geisterkonto, das die Kasse samt Startguthaben anlegt.
+        var mitSchranke = new TreeSet<String>();
+        for (var datei : Quellen.alleDateien()) {
+            if (!datei.getFileName().toString().endsWith(".java")) {
+                continue;
+            }
+            if (Quellen.text(datei).contains("hasPlayedBefore()")) {
+                mitSchranke.add(datei.getFileName().toString());
+            }
+        }
+
+        assertEquals(new TreeSet<>(Set.of("Spielername.java")), mitSchranke,
+                "Die Schranke gegen die erfundene Kennung gehoert an EINE Stelle. Steht"
+                        + " sie nirgends, bucht ein Tippfehler auf ein Konto, das es nie"
+                        + " gab; steht sie an zwei Stellen, verliert eine davon sie"
+                        + " eines Tages - und niemand legt die beiden nebeneinander.");
+
+        String spielername = Quellen.text(Quellen.alleDateien().stream()
+                .filter(datei -> datei.getFileName().toString()
+                        .equals("Spielername.java"))
+                .findFirst().orElseThrow());
+        int methode = spielername.indexOf("kennungAuchAbwesend");
+        assertTrue(methode >= 0, "kennungAuchAbwesend fehlt in Spielername");
+        assertTrue(spielername.indexOf("hasPlayedBefore()", methode) >= 0,
+                "die Schranke steht nicht IN kennungAuchAbwesend - und das ist die"
+                        + " Methode, die aus einem getippten Namen eine Kennung macht");
+    }
+
+    @Test
     @DisplayName("31cr - die Rangwache wird gebaut UND angemeldet")
     void rangwacheIstVerdrahtet() {
         // OHNE DIESE ZEILEN IST DIE GANZE LEITER UNSICHTBAR WIRKUNGSLOS: Teil A rechnet
@@ -4471,6 +4560,115 @@ class GrenzeTest {
                         + " Er gilt, und der Befehl sagt \"nichts geaendert\". Wer einen"
                         + " neuen Wert anlegt, traegt seine Zeile nach - und wer eine"
                         + " nachgetragen hat, nimmt ihn aus OHNE_NEULADEZEILE heraus.");
+    }
+
+    @Test
+    @DisplayName("31cz - jeder Weltname der Leser steht in der Liste der nicht"
+            + " neuladbaren")
+    void jederWeltnameStehtInDerListe() {
+        // FUND VOM 20.11.2026: Die vier Weltnamen sind nicht neuladbar - die laufenden
+        // Namen werden ausschliesslich beim Start zugewiesen -, standen aber in keiner
+        // Liste. Fuer eine fehlende Zeile schrieb der Leser darum "es gilt wolkenwerder",
+        // eine Geltung, die erst der naechste Start herstellt.
+        //
+        // Die Pfadkonstanten sind PAKETPRIVAT und liegen je bei ihrem Leser: Ein Weltname
+        // ist kein Wirtschaftswert, der Kern kennt ihn nicht. Diese Tafel ist damit die
+        // einzige Stelle, die beide Seiten gegeneinander haelt - 31cw sieht sie nicht,
+        // denn ihr Muster verlangt public.
+        var muster = Pattern.compile(
+                "static final String PFAD_WELT\\s*=\\s*\"([a-z][a-z.]*)\"");
+        var gefunden = new TreeSet<String>();
+        for (var datei : Quellen.alleDateien()) {
+            if (!datei.getFileName().toString().endsWith(".java")) {
+                continue;
+            }
+            var suche = muster.matcher(Quellen.text(datei));
+            while (suche.find()) {
+                gefunden.add(suche.group(1));
+            }
+        }
+        assertTrue(gefunden.size() > 2,
+                "nur " + gefunden.size() + " Weltschluessel gefunden - dann laeuft die"
+                        + " Suche leer und diese Tafel ist blind: " + gefunden);
+
+        assertEquals(gefunden, new TreeSet<>(Wirtschaftsliste.NUR_BEIM_START_WELTEN),
+                "Links die Weltnamen, die ein Leser aus der Datei holt, rechts die Liste,"
+                        + " die fehltText und die Sammelzeile fragen. Fehlt einer rechts,"
+                        + " behauptet der Bericht fuer ihn eine Geltung, die ein"
+                        + " Neuladen nicht herstellt; steht einer rechts zu viel,"
+                        + " verschweigt der Bericht eine Geltung, die stimmt.");
+    }
+
+    @Test
+    @DisplayName("31da - jeder nicht neuladbare Schluessel traegt den Vermerk DIREKT"
+            + " ueber sich")
+    void nichtNeuladbarerSchluesselTraegtDenVermerk() {
+        // FUND VOM 20.11.2026: laeden.welt war der einzige der vier Weltnamen ohne den
+        // Vermerk - nicht, weil er fehlte, sondern weil er VERWAIST war. Der Kopfblock der
+        // Markthalle stand ohne Leerzeile direkt ueber "freistaedte:", und damit gehoerte
+        // er in YAML den Freistaedten. Das ist die YAML-Fassung der Falle, die 31ak fuer
+        // Javadoc haelt: Dort reisst ein eingeschobenes Feld die Doku des Nachbarn ab,
+        // hier verschiebt ein umgezogener Abschnitt die Doku zum Nachbarn.
+        //
+        // Geprueft wird der Kommentarblock DIREKT ueber dem Schluessel. Ein Vermerk
+        // irgendwo in der Datei genuegt ausdruecklich nicht: Der Betreiber liest die
+        // Zeilen ueber seiner Zeile, und sonst keine.
+        String[] zeilen = ausgelieferte("config.yml").split("\n", -1);
+        var zuZeile = new java.util.LinkedHashMap<String, Integer>();
+        var namen = new java.util.ArrayList<String>();
+        var tiefen = new java.util.ArrayList<Integer>();
+        for (int i = 0; i < zeilen.length; i++) {
+            String ohne = zeilen[i].stripLeading();
+            if (ohne.isEmpty() || ohne.startsWith("#") || ohne.startsWith("- ")) {
+                continue;
+            }
+            int doppel = ohne.indexOf(':');
+            if (doppel <= 0) {
+                continue;
+            }
+            String name = ohne.substring(0, doppel);
+            if (name.contains(" ") || name.contains("\"")) {
+                continue;
+            }
+            int tiefe = zeilen[i].length() - ohne.length();
+            while (!tiefen.isEmpty() && tiefen.get(tiefen.size() - 1) >= tiefe) {
+                tiefen.remove(tiefen.size() - 1);
+                namen.remove(namen.size() - 1);
+            }
+            namen.add(name);
+            tiefen.add(tiefe);
+            zuZeile.put(String.join(".", namen), i);
+        }
+        assertTrue(zuZeile.size() > 200,
+                "nur " + zuZeile.size() + " Schluessel in der ausgelieferten config.yml"
+                        + " gefunden - dann liest diese Tafel die Datei nicht richtig");
+
+        var ohneVermerk = new TreeSet<String>();
+        var nichtNeuladbar = new java.util.ArrayList<String>(
+                Wirtschaftsstand.NUR_BEIM_START);
+        nichtNeuladbar.addAll(Wirtschaftsliste.NUR_BEIM_START_WELTEN);
+        for (String pfad : nichtNeuladbar) {
+            Integer zeile = zuZeile.get(pfad);
+            assertTrue(zeile != null, pfad + " steht nicht in der ausgelieferten"
+                    + " config.yml - dann ist er fuer den Betreiber unsichtbar");
+            var block = new StringBuilder();
+            for (int i = zeile - 1; i >= 0; i--) {
+                String ohne = zeilen[i].stripLeading();
+                if (!ohne.startsWith("#")) {
+                    break;
+                }
+                block.append(ohne).append('\n');
+            }
+            if (!block.toString().contains("NUR BEIM START GELESEN")) {
+                ohneVermerk.add(pfad);
+            }
+        }
+
+        assertEquals(new TreeSet<String>(), ohneVermerk,
+                "Diese Schluessel uebernimmt ein Neuladen nicht, und der Kommentarblock"
+                        + " direkt ueber ihnen sagt es nicht. Wer sie im Betrieb aendert,"
+                        + " liest \"uebernommen\" und bekommt den alten Wert: "
+                        + ohneVermerk);
     }
 
     @Test

@@ -669,7 +669,7 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - ~~Entschieden: Die Miete laeuft am vorhandenen Spielzeittakt~~ 7.11. Dreht sich der Tag, laeuft sie einmal ueber alle Vertraege - auch ohne Spieler. KEIN zweiter Zeitgeber (Plan 8.8).
 - Ein Server, der ueber Nacht aus war, holt die Abbuchung beim naechsten Start nach - genau einmal je versaeumtem Tag, nicht alles auf einmal und nicht gar nicht.
 - BEFUND: Altfurt ist vom Besitzschutz NICHT gedeckt - die Schutzwache haengt an EINER Welt (Marktstadt). Was dort heute das Bauen verhindert, ist nur der Abenteuermodus.
-- Der Abenteuermodus erlaubt aber das OEFFNEN von Truhen. Schritt 8 braucht darum einen Truhenschutz fuer Altfurt auf Quader-Grundlage - Plan 6.1 hat ihn vorhergesehen.
+- ~~Der Abenteuermodus erlaubt aber das OEFFNEN von Truhen. Schritt 8 braucht darum einen Truhenschutz fuer Altfurt auf Quader-Grundlage.~~ 11.11. GEBAUT - und ausdruecklich NICHT auf Quader-Grundlage: Die Einrichtungswache sperrt JEDEN Behaelter der Ladenwelt (eine Quaderliste waere eine Liste von Loechern).
 - Daraus folgt: Ladeneinheiten werden von HAND vorgebaut (samt Truhe und Schild), der Mieter fuellt und preist nur. Minecraft kennt keinen Spielmodus je Region.
 - ~~Die Ladeneinheit ist eine Zeile in parzellen~~ 7.11. ANDERS entschieden: Die EINHEIT steht in der config.yml (von Hand gebaute Einrichtung, kein gekaufter Besitz), der VERTRAG in der eigenen Tabelle ladenmiete. Eine Parzellenzeile daneben waere ein zweiter Ort fuer dieselbe Geometrie.
 - ~~Zahlen aus dem Plan in die config.yml~~ 8.11.: laeden.miete-je-tag 500, kaution 5000, lizenz 50000, mietdauer-tage 30. Offen bleiben Marktgebuehr 5 % (Teil F) und Freie Truhe ~16 Gegenstaende je Spieler/Tag (Teil D).
@@ -1171,6 +1171,70 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
   (saveDefaultConfig schreibt eine vorhandene Datei nie um). parzellen.hoechstzahl: 1,
   parzellen.gruppe-hoechstzahl: 1, dann /freimarken neuladen.
 
+### Nachlese zu Schritt 12 - 20.11.2026
+
+- /RANG GEBAUT: /rang (auch /rank) zeigt die eigene Stufe,
+  die naechste mit JEDER Bedingung samt Stand, /rang leiter die ganze Leiter in drei
+  Zustaenden. Rangschau im Kern stellt zusammen, Rangtext baut die Zeilen, RangBefehle
+  ist der Baum. Das Recht freimarken.rang ist default true.
+- Die Bedingungsworte kommen aus dem MUENZHAUS (mark.muenzhaus.bedingung.<art>) - dieselbe
+  Frage, dieselbe Antwort. Neu ist nur "du hast {stand}", einmal gruen und einmal grau.
+- GEMESSEN WIRD NUR, was die naechste Stufe verlangt: Auf der hoechsten loest /rang keine
+  einzige Datenbankabfrage aus. Die Messnaht ist woertlich die des Muenzhauses
+  (Bedingungsmessung, jetzt eine eigene Datei statt verschachtelt im Muenzhaus).
+- Rangregel.Fehlend heisst jetzt Bedingungsstand und kann erfuellt(); stand() nennt JEDE
+  Bedingung, fehlend() filtert sie. EIN Satz statt zweier gleich gebauter.
+- ERREICHT kommt aus der NUMMER und nicht aus den Bedingungen: Wer befoerdert wurde,
+  behaelt seinen Rang, auch wenn der Betreiber die Bedingungen danach heraufsetzt.
+- Ein Eintrag, den die Leiter nicht mehr kennt, wird GENANNT (raenge.schau.unbekannt mit
+  dem eingetragenen Schluessel). stufeIn faellt auf die unterste Stufe zurueck - richtig,
+  aber als Auskunft eine stille Rueckstufung, die niemand melden kann.
+- GELD VON HAND: /freimarken geld <spieler> <betrag>,
+  ein Minus zieht ab, EIGENES Recht freimarken.geld (default op). Zwei neue
+  Buchungsgruende, je Richtung einer; jeder Versuch steht im Serverprotokoll, die Buchung
+  im Verlauf des Spielers ("Vom Betreiber gutgeschrieben").
+- ABSICHTLICH OHNE Meldung an den Spieler: Was er bekam, steht in /mark verlauf. Eine
+  Zeile dazu waere ein neuer Spielersatz; wenn sie gewollt ist, ist sie drei Zeilen.
+- Die Schranke 1.000.000.000 Mark im Baum ist TECHNISCH und keine Spielzahl: Sie faengt
+  den Tippfehler mit drei Nullen zu viel.
+- DIE VIER WELTNAMEN sind nicht neuladbar und sagen es: fehltText und die
+  Sammelzeile fragen jetzt EINE Frage (Wirtschaftsliste.nurBeimStart). Fuer eine fehlende
+  Weltzeile steht nicht mehr "es gilt wolkenwerder" - eine Geltung, die erst der naechste
+  Start herstellt.
+- GEFUNDEN DABEI: Derselbe falsche Satz stand noch einmal daneben - "Dafuer gelten die
+  Vorgaben des Programms." in acht Lesern, drei davon zaehlen einen Weltschluessel mit.
+  Die Zeile entsteht jetzt an EINER Stelle und nimmt die nicht neuladbaren aus.
+- GEFUNDEN DABEI: Der Kopfblock der Markthalle stand ohne Leerzeile ueber freistaedte: -
+  in YAML dokumentierte er damit die Freistaedte, und laeden.welt war der einzige der
+  vier ohne den Vermerk "NUR BEIM START GELESEN". Haelt jetzt Tafel 31da.
+- DIE BUERGERRECHTS-NEULADEZEILE war am 20.11.
+  schon gebaut (taten()); gefehlt hat die PROBE. 31cw prueft nur, dass der Name im
+  Quelltext vorkommt - mit taten(alt...) zweimal waere sie gruen und das Neuladen stumm.
+- /MARKT LISTE: Der Fang stand seit 10.11. Echt
+  offen waren drei andere Dinge: EIN Satz fuer ZWEI Quellen (bei stummer Kasse las der
+  Spieler, die Staende seien nicht lesbar), die geholte Liste wurde weggeworfen, und die
+  Kassenrichtung hatte keine Probe. Jetzt zwei Faenge, ein eigener Satz
+  (markt.deckel-unlesbar) - und ohne Tagesdeckel wird die Kasse gar nicht gefragt.
+- DIE UMBRUCHMARKE in einem einzeilig geholten Satz klagt jetzt beim LADEN: Die
+  Liste Einzeiler (103 Saetze, GERECHNET aus den eineZeile-Stellen) und die Klage beim
+  LADEN. Tafel 10j haelt die Liste in beide Richtungen gegen den Quelltext.
+- GEFUNDEN DABEI: kennungUeberBukkit stand ZWEIMAL wortgleich im Projekt (BlockBefehle,
+  ShopBefehle), beide privat. Jetzt einmal in Spielername; Tafel 31dc haelt, dass
+  hasPlayedBefore() in genau einer Datei steht - ohne die Schranke bucht ein Tippfehler
+  auf ein Konto, das die Kasse selbst anlegt.
+- Proben 4491 -> 4554, 0 rot, 0 uebersprungen, 0 Warnungen. Neu: RangschauTest,
+  RangBefehlTest, BetreibergeldTest, RangregelTest +3, Grenze 31cz/31da/31db/31dc,
+  Vorlage 10j, Sprachliste 21d/21e, BildGleich +15.
+- GEMESSEN AM LAUFENDEN SERVER: freimarken:rang und freimarken:rank sind angemeldet,
+  0 Grenzwarnungen, 0 Ausnahmen. Auf der Konsole antworten /rang und /freimarken geld mit
+  ihren eigenen Saetzen - nicht mit Brigadiers englischer Zeile.
+- GEMESSEN, einundzwanzig Einspritzungen: zwanzig von einer Probe gefangen, der
+  einundzwanzigste vom STARTLAUF. Er ist ein Befund ueber die Tafel: Die Anmeldezeile von
+  /rang in ein "if (sprache == null)" gehuellt laesst den Text stehen, und jedes contains
+  bleibt gruen. Mit Einspritzung fehlt freimarken:rang in "Befehle angemeldet" und die
+  Konsole bekommt Brigadiers englische Zeile; ohne sie ist beides richtig. Die Grenze
+  steht jetzt in Tafel 31db selbst.
+
 ## Schritt 11: Wolkenwerder
 
 - ENTSCHIEDEN 18.11.2026 (vier Fragen): Die Insel-Stufe kommt aus BEIDEM (Blockscan fuer die Punktzahl, Herausforderungen fuer die Stufe am Generator), der Befehl heisst /wolke als EIGENER Baum, und dazu gehoeren auch Zuruecksetzen, Biomwahl, Inselrangliste und Mitbauer. Der Kobbelsteingenerator ist ausdruecklich DER Reiz der Welt und gibt Erze mit gewichteter Wahrscheinlichkeit.
@@ -1238,7 +1302,7 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - GEMESSEN im heutigen Altfurt (1.024 Chunks um den Ursprung erzeugt, x/z -200..200): 297 von 401 Linien tragen ueberhaupt ein 33er Fenster. BESTE STELLE z=161, x 7..39, Boden y 79, Spanne 0, nur Grasbueschel - eine Wand ohne Planierung. Auf der alten Linie z=0 liegt das naechste trockene Fenster bei x 140..172, Spanne 5.
 - Der Ankunftsort haengt NICHT an der config.yml: Ankunftswache nimmt ankunftswelt.getSpawnLocation(). Die Reihe darf also ueberall stehen, der Weltspawn wandert mit (setworldspawn).
 - Proben 4046 -> 4054 (core 1549, daten 313, paper 2192), 0 rot, 0 uebersprungen. Neu: acht Torproben in AnkunftspunktTest (gebaute Wand vom 02.11., Tor in der Luft, Meeresboden, Pfuetze unter einer von drei Saeulen, zugemauert, Magma, und eine, die jede der neun Stellen einer Oeffnung einzeln kaputtmacht). Nachgezogen: WeltenlisteTest um die Reihentafel (eine Wand, ein z, EINE Hoehe, Tuer 3x3, Schritt 4, kein geteilter Block) - die Hoehe stand vorher nur im Kommentar.
-- Offen, NICHT neu und nicht Teil dieses Schrittes: Vier Weltnamen-Schluessel (freistaedte.welt, inseln.welt, laeden.welt, wolken.welt) tragen in der config.yml "NUR BEIM START GELESEN", stehen aber nicht in Wirtschaftsstand.NUR_BEIM_START. Fehlt so eine Zeile, schreibt fehltText dazu "es gilt wolkenwerder" - eine Geltung, die ein Neuladen nicht herstellt. Die Pfadkonstanten liegen in den Lesern (paper) und nicht im Kern; der Riegel braucht alle vier zusammen.
+- ~~Offen, NICHT neu und nicht Teil dieses Schrittes: Vier Weltnamen-Schluessel ohne Neulade-Riegel.~~ 20.11. GEBAUT, siehe Nachlese zu Schritt 12. Die vier Pfadkonstanten liegen in den LESERN und nicht im Kern; darum fragen fehltText und die Sammelzeile jetzt eine gemeinsame Frage in Wirtschaftsliste. Vorher: Fehlt so eine Zeile, schreibt fehltText dazu "es gilt wolkenwerder" - eine Geltung, die ein Neuladen nicht herstellt. Die Pfadkonstanten liegen in den Lesern (paper) und nicht im Kern; der Riegel braucht alle vier zusammen.
 
 ## Schritt 10: Hafenwerder
 
@@ -1383,7 +1447,7 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Und zweimal mein eigener Einschub zwischen Doku und Deklaration: einmal in Sprachschluessel (31ak hat es gefangen), einmal in der Vorlage, wo mein Satzblock den Kommentar von shop.absage.kein-bundrecht abgerissen hat - dort faengt es keine Tafel, nur ein Leser.
 - Einspritzung 5 Faelle, 5/5 gefangen, jeder von genau den Proben, die es sollten: Riegel weg (2 rot), Kern-Entscheid weg (4), Bundshop nicht ausgenommen (1), erfuellte Auflage weist trotzdem ab (2), Ausfallzweig weg (1). Die Ruecknahme von Fall E scheiterte am Anker - LEHRE: Ein Einspritzanker muss in BEIDE Richtungen einmalig sein.
 - Offen, braucht eine Entscheidung: Verliert eine Stadt ihr letztes vergebenes Grundstueck (der Besitzer kauft es zurueck), fallen Teleporter UND Ladenrecht ohne ein Wort. Wer soll es lesen - der Besitzer beim Kauf, der Verkaeufer, beide? Gehoert zu E5/E6, wo die Stadt ohnehin Zustandssaetze bekommt.
-- Offen, klein: Die VORGABE-Buergerrechte (Teil D) werden beim Neuladen ebenso stumm getauscht wie es die zwei Schalter waren - nenneMenge nimmt Set<String>, buergerrechte sind Set<Tat>.
+- ~~Offen, klein: Die VORGABE-Buergerrechte werden beim Neuladen stumm getauscht.~~ War am 20.11. mit dem Muenzhaus schon gebaut (Uebersetzer taten()); gefehlt hat die PROBE - 31cw prueft nur die Nennung im Quelltext. Jetzt haelt WirtschaftsstandTest beide Richtungen.
 - ~~Teil E4: der Besuchsstempel.~~ 17.11. GEBAUT: Jede Freistadt merkt sich den TAG ihres letzten Besuchs (Spalte parzellen.besucht, Schemaschritt 27). Ein eigener Mitfahrer Besuchslauf im vorhandenen Minutentakt, je anwesendem Spieler; der Kern bleibt zeitfrei, der Tag kommt fertig herein.
 - ZWEI WAECHTER gegen dasselbe Schreiben, wie bei Mietlauf und Truhenlauf: eine Menge der heute gestempelten Staedte im Arbeitsspeicher (spart die Abfrage) UND der Vergleich mit der Zeile (ueberlebt den Neustart). Kein doppelter Riegel - jeder kann, was der andere nicht kann.
 - FALLE, die die Erkundung gefunden hat: Die vorhandene Messstelle.Ortsquelle liefert den WELTNAMEN (freistaedte), das Freistadtbuch rechnet mit dem SCHLUESSEL (freimarken:freistaedte). Haette der Stempel sie benutzt, waere er stumm leer geblieben - kein Wurf, keine Klage, und nach einem Jahr raeumt der Verfall jede Stadt ab.
@@ -1480,7 +1544,7 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Der Sprungschutz hat sauber gearbeitet und mich belehrt: laeden.lizenz von 50.000 auf 1.000 ist mehr als Faktor 2 und braucht wirtschaft.sprung-bestaetigt. Der Startbericht sagte es wortwoertlich samt Loesungszeile - ich hatte ihn nur nach "Ladenmiete" gefiltert statt Satz fuer Satz gelesen.
 - Im Spiel BESTAETIGT: /warp, /laden (Liste), /laden mieten (Abschluss 6.000 = 1.000 Lizenz + 5.000 Kaution), die Sperre gegen einen zweiten Laden, /laden verlaengern (15.11. -> 22.11.), /mark verlauf mit allen Buchungen in richtiger Reihenfolge, Tagesbonus 500, Verdienst aus Arbeit, Verkauf an den Bundesmarkt.
 - Offen in der Spielprobe: Kuendigen samt Kautionsrueckgabe, der Ladenschutz in der Luecke zwischen stand-1 und stand-2, die Kistenshops samt Handel und Kistenschutz, der taegliche Lauf (braucht einen Tageswechsel).
-- Offen und benannt: Es gibt KEINEN Betreiberbefehl fuer Geld. Fuer Proben und fuer den Ernstfall (ein Spieler verliert Mark durch einen Fehler) geht es heute nur ueber die Datenbank oder ueber eine Einstellung. Ein /freimarken geld <spieler> <betrag> mit eigenem Buchungsgrund waere der Weg.
+- ~~Offen und benannt: Es gibt KEINEN Betreiberbefehl fuer Geld.~~ 20.11. GEBAUT als /freimarken geld mit eigenem Recht und zwei Buchungsgruenden, siehe Nachlese zu Schritt 12. Vorher: Fuer Proben und fuer den Ernstfall (ein Spieler verliert Mark durch einen Fehler) geht es heute nur ueber die Datenbank oder ueber eine Einstellung. Ein /freimarken geld <spieler> <betrag> mit eigenem Buchungsgrund waere der Weg.
 - 0 ist ein GUELTIGER Startwert, darum ist das Feld ein Long und kein long: Bei der Kante heisst 0 "keine Grenze", hier waere dasselbe ein Gelaende, das niemand mehr einstellen kann.
 - Ein WORT als Startwert wird beklagt und nicht umgerechnet. Minecraft nimmt im Menue Woerter und rechnet sie selbst in eine Zahl um; das nachzubauen waere eine Abschrift des Spiels - weicht sie eines Tages ab, entsteht aus demselben Wort ein anderes Gelaende, und jeder eingemessene Quader liegt daneben.
 - Zwei Welten mit gleichem Startwert UND gleicher Umgebung werden beklagt (dasselbe Gelaende, Block fuer Block - zwei Namen fuer eine Landschaft). Gleicher Wert in ANDERER Umgebung ist keine Klage: Oberwelt und Nether aus derselben Zahl sind in Vanilla der Normalfall.
@@ -1634,7 +1698,7 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Das MATERIAL kommt aus einer neuen Naht und NICHT aus ware().name(): Jener Name ist gekuerzt (NETHERITE_PICKAXE wird PICKAXE), zwei Materialien koennen denselben Kurznamen haben, und ShopwareTafel haelt die Zusage, dass er nirgends verglichen wird. Die Tafel bundesmarkt.ankauf steht je Material.
 - Markttag ist eine eigene Klasse fuer EINE Abfrage: Was ein Spieler heute schon aus Verkaeufen bekommen hat, brauchen jetzt ZWEI Stellen - /markt liste verspricht die Zahl, der Stand entscheidet damit. Zwei Abschriften liefen auseinander, und dann verspricht die Liste etwas, das der Stand nicht hergibt.
 - Zehn Proben von /markt verkaufen sind mit dem Befehl gegangen; ihre Zusagen stehen namentlich am Stand (ShophandelTest.deckelBeschneidetDenStapel, deckelZaehltNurVerkaeufe, ausDemSortimentGenommen, ShopbuchTest.unebeneMengeWirdAbgewiesen). Der Kopf von MarktBefehlTest sagt, welche wohin gewandert ist.
-- Offen, unveraendert: /markt liste wirft bei stummer Datenbank (die Zeile ueber das heutige Freie fragt die Kasse). War vorher auch so; ein eigener Satz dafuer fehlt.
+- ~~Offen, unveraendert: /markt liste wirft bei stummer Datenbank.~~ Der Fang stand seit dem 10.11.; echt offen waren der falsche SATZ (eine stumme Kasse meldete unlesbare Staende), die weggeworfene Liste und die fehlende Probe. 20.11. behoben, siehe Nachlese zu Schritt 12.
 - Offen: Ein Bund-Ankaufstand auf einem BESONDEREN Gegenstand (verzaubert) zahlt den Preis des gewoehnlichen - die Tafel steht je Material. Kein Spielerloch (nur der Betreiber stellt Staende), aber eine Falle fuer ihn. Nicht gebaut, weil der Vergleich "gewoehnlich?" nur mit laufendem Server pruefbar waere.
 - UMKEHR 10.11. nachmittags, auf Zuruf des Betreibers: "einfach alles freigeben, admins stellen die schilder auf, es kann ja nur ge und verkauft werden, wofuer es ein schild gibt". Die Tafel bundesmarkt.ankauf ist damit GEFALLEN - mit ihr die Pfennige als Einheit, die Pruefung auf ganze Mark, die Absage "das kauft der Bund nicht" und die Regel "ein Bundschild traegt eine Richtung".
 - Der PREIS steht jetzt auf dem Schild, wie bei jedem Kistenshop. Ein Schildpreis IST eine ganze Mark, und beide Preise auf einem Schild haelt der Satz Kistenshop selbst (Verkauf nie ueber Kauf) - der Rundlauf, gegen den die Einrichtungsregel stand, ist dadurch unmoeglich.
@@ -1664,12 +1728,12 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Offen, Berufe: der Kolben, der einen markierten Block weiterschiebt, und der Pflastersteingenerator - Weltregeln, eigener Schritt.
 - Entscheidung, Sprachdatei: sendeHandbalken hat seit Teil E zwei Aufrufer; Sprache.sende und sendeGezaehlt haben weiter keinen. Entfernen oder beim naechsten Sendeort nutzen?
 - Entscheidung, Sprachdatei: Die Chatzeilen der vier Verwaltungszweige von /freimarken bleiben im Programm - sie gehen an einen Betreiber mit dem Recht, nicht an einen Spieler.
-- Offen, Sprachdatei: Eine Umbruchmarke in einem Satz, der ueber Sprache.eineZeile geht, laesst den Aufbau werfen - der Spieler liest dann GAR NICHTS. Braucht ein eigenes Merkmal am Satz.
+- ~~Offen, Sprachdatei: Eine Umbruchmarke in einem Satz, der ueber Sprache.eineZeile geht, laesst den Aufbau werfen.~~ 20.11. GEBAUT: Das Merkmal ist eine LISTE (Einzeiler), gerechnet aus den Holstellen, und die Klage kommt beim LADEN. Tafel 10j haelt beide Richtungen.
 - Pruefen, Sprachdatei: Nach dem ersten Start liegen beide Dateien im Plugin-Ordner, /mark verlauf sieht aus wie vorher. Dann eine Zeile samt aller Ebenen darueber nach sprache.yml kopieren, Farbe aendern, /freimarken neuladen: die Antwort nennt, wie viele Saetze von dir sind.
 - Pruefen, Sprachdatei: Eine kaputte Zeile in sprache.yml, etwa ein offenes <gold> - GAR NICHTS wird uebernommen, die Klage nennt Zeile und Spalte, die bisherigen Saetze gelten weiter.
 - Pruefen, Sprachdatei: Die neun Befehlsbeschreibungen in /help kommen aus der Datei, aendern sich aber erst nach einem Neustart.
 - Offen, Sprachdatei (nicht im Spiel geprueft): dass die Vorlage bei jedem Start ueberschrieben wird, sprache.yml nie angetastet, und dass SnakeYAML unter Paper zur Laufzeit erreichbar ist.
-- Offen: /rang gibt es noch nicht. Sobald er da ist, gehoert er ins Beispiel von hinweise.rang-werbung in der config.yml.
+- ~~Offen: /rang gibt es noch nicht.~~ 20.11. GEBAUT, und das Beispiel in hinweise.rang-werbung nennt ihn jetzt - der Kommentar dort verbot den Verweis vorher ausdruecklich.
 - Aufraeumen, wenn Schritt 6 abgeschlossen ist: Probeserver-Ordner im Temp loeschen (Zugangsdaten im Klartext) und die Testdaten in der echten DB zuruecksetzen - die Parzellen 0/-1 (id 108) und -1/-1 (id 111) waren nur fuer den Test, Thormak2002 steht auf 200.000 Mark.
 - Offen, niedrig: Die Spaltenschleife kann im aeussersten Fall ~707.000 Blockzugriffe in einem Befehl machen, und die Warnung ist ohne Bestaetigung beliebig oft ausloesbar. Ein Hohlraum unter einer stehengelassenen Decke wird bewusst nicht gefunden.
 - Offen (eigene Entscheidung): Ein abgebrochener Zurueckbau laesst sich nicht nachholen - die Gruppe ist in der Ablage weg, Gras bleibt auf oeffentlichem Weg liegen. Braeuchte einen Befehl, der die Welt der Ablage nachzieht.
@@ -1709,7 +1773,7 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Neue Proben: die Gabe zwischen zwei Takten bleibt liegen, am naechsten Tag wird wieder geleert (mit STELLBARER Uhr - mit der festen ist der Tageswechsel gar nicht zu erreichen), die Zeile kommt einmal. Einspritzungsrunde 5/5 gefangen. Proben 2806 -> 2809.
 - Offen beim Spieltest: zu zweit GEMEINSAM hineinsehen (muss jetzt gehen, keine Meldung), und der taegliche Lauf mit zeit.zone.
 - Offen, nicht gebaut: Niemand prueft, ob an einer Freien Truhe ein SHOPSCHILD haengt. Ein Bundschild an ihr waere ein Stand, der die Gemeinschaftsware verkauft - ein Fehler des Betreibers, kein Spielerloch. Die Pruefung braeuchte den Shop-Zwischenspeicher, und der ist bei richteTruheEin noch leer; sie gehoert in den Startbericht von Teil E/F.
-- Offen, bekannt und nicht neu: Jede ANDERE Kiste in Altfurt steht ebenfalls jedem offen (der Abenteuermodus erlaubt das Oeffnen). Die Freie Truhe lebt davon; fuer den Rest der Halle fehlt der Truhenschutz auf Quader-Grundlage.
+- ~~Offen, bekannt und nicht neu: Jede ANDERE Kiste in Altfurt steht ebenfalls jedem offen.~~ Diese Zeile war beim Nachsehen am 20.11. veraltet: Die Einrichtungswache vom 11.11. sperrt jeden Behaelter der Ladenwelt.
 - Einspritzungsrunde 18 (10.11.): 35 Fälle, 33 gefangen, zwei Funde — 31 für die Freie Truhe und vier als Nachrunde zu Runde 17 (T11-T13 waren an einem Übersetzungsfehler gestorben, T14 ist mit der neuen Probe "Am Deckel KAUFT der Kunde weiter" geschlossen). Grundlinie 2761 Proben.
 - FUND D18: Die Probe "Gezählt wird JE MATERIAL" legte die Erde erst NACH dem Öffnen hinein. Gerechnet wird aber über die Materialien des Schnappschusses, und was vorher nicht darin lag, macht die Differenz nie negativ - der Riegel (nur aufnehmen, was > 0 ist) wurde von keiner Probe gefragt, obwohl eine mit genau diesem Namen dastand. Probe geschärft: Die Erde liegt jetzt schon beim Öffnen in der Truhe.
 - FUND D29: doppelter Riegel. Kleingeschrieben wurde in Truhenwerte UND beim Lesen in Truhenliste; das zweite Kleinschreiben wegzunehmen änderte nichts und machte nichts rot. Jetzt liegt die Regel an einer Stelle (Truhenwerte.wieAbgelegt), der Leser fragt dort und zählt für seinen Bericht das Ergebnis: "STONE" und "stone" sind EIN Gegenstand, und der Bericht nennt die Zahl, die wirklich gilt.

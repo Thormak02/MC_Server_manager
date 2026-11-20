@@ -522,7 +522,30 @@ public enum Buchungsgrund {
      * zusammenpassen. Und im Verlauf stuende sonst "Im Muenzhaus gekauft +5 Goldmark" -
      * ein Satz, der das Gegenteil von dem behauptet, was geschehen ist.
      */
-    MUENZHAUS_ERSTATTET("muenzhaus_erstattet", Richtung.EINNAHME);
+    MUENZHAUS_ERSTATTET("muenzhaus_erstattet", Richtung.EINNAHME),
+
+    /**
+     * Der Betreiber hat Geld gutgeschrieben - {@code /freimarken geld} mit einer
+     * positiven Zahl.
+     *
+     * <p>Ein EIGENER Grund und nicht einer der vorhandenen geborgt: Mehrere Gruende
+     * werden als Marke gelesen ("ist heute schon ein Bonus gezahlt?", "wie viel ist heute
+     * an den Bund verkauft?"). Betreibergeld unter {@code tagesbonus} liesse den Bonus
+     * ausfallen, unter {@code bundesmarkt_verkauf} fuellte es den Tagesdeckel eines
+     * Spielers, der nichts verkauft hat. Und im Wirtschaftsbericht gehoert es ohnehin
+     * getrennt: Es ist die eine Geldquelle, die nicht aus dem Spiel kommt.
+     */
+    BETREIBER_GUTSCHRIFT("betreiber_gutschrift", Richtung.EINNAHME),
+
+    /**
+     * Der Betreiber hat Geld abgezogen - {@code /freimarken geld} mit einem Minus.
+     *
+     * <p>ZWEI Gruende und nicht einer mit Vorzeichen, wie ueberall hier: Die Richtung
+     * gehoert an den Grund. Mit einem Grund waeren eine Gutschrift und ein Abzug ueber 0
+     * im Buch nicht zu unterscheiden, und {@code /mark verlauf} koennte die Zeile nicht
+     * benennen.
+     */
+    BETREIBER_ABZUG("betreiber_abzug", Richtung.AUSGABE);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {
@@ -607,7 +630,8 @@ public enum Buchungsgrund {
                      FREISTADT_LADENGEBUEHR, STADTKASSE_LADENGEBUEHR, WERDER_GEKAUFT,
                      WERDER_ERSTATTET, WOLKE_GENOMMEN, WOLKE_ERSTATTET, WOLKE_AUFGABE,
                      WOLKE_BIOM, WOLKE_BIOM_ERSTATTET, WECHSEL_MARK_WEG, WECHSEL_MARK_HER,
-                     WECHSEL_MARK_ZURUECK -> Buch.MARK;
+                     WECHSEL_MARK_ZURUECK, BETREIBER_GUTSCHRIFT,
+                     BETREIBER_ABZUG -> Buch.MARK;
         };
     }
 

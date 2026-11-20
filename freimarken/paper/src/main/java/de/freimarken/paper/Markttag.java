@@ -39,6 +39,14 @@ final class Markttag {
      * und die kostet eine Abfrage. Wirft, wenn die Kasse schweigt - beide Aufrufer fangen
      * das, und zwar verschieden: Der Befehl sagt es, der Handel sagt ab. Ein stiller
      * Rueckfall auf 0 waere der offene Deckel.
+     *
+     * <p><b>Die zwei Aufrufer fragen auch verschieden OFT, und das ist kein vergessener
+     * Riegel</b>: {@code /markt liste} fragt nur, wenn es einen Deckel gibt - ohne ihn
+     * braucht die letzte Zeile keine Zahl, und eine Abfrage im Hauptfaden fuer eine
+     * ungenutzte Zahl nahm bis zum 20.11.2026 bei einem Ausfall die ganze Liste weg. Der
+     * Handel fragt immer, wenn der Bund ankauft: Dort entscheidet die Zahl ueber GELD,
+     * und wer sie nicht lesen kann, sagt ab statt zu raten. Die Entscheidung "fragen
+     * oder nicht" gehoert damit zum Aufrufer und nicht hierher.
      */
     static long heuteSchon(Kasse kasse, Wirtschaftsstand wirtschaft, Clock uhr,
             UUID wer) {

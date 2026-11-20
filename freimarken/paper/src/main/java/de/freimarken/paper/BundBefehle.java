@@ -2,6 +2,8 @@ package de.freimarken.paper;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.LongArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.kern.Preisstaffel;
@@ -43,6 +45,17 @@ final class BundBefehle {
     static final String RECHT_VERWALTEN = "freimarken.verwalten";
 
     /**
+     * Wer Geld von Hand buchen darf - ein EIGENES Recht.
+     *
+     * <p>Nicht {@link #RECHT_VERWALTEN}, und der Grund steht im Kommentar an
+     * {@code neuladen}: Jene Zweige zeigen etwas oder tauschen Einstellwerte aus - "der
+     * Befehl kann Werte austauschen, keine Buchung aendern". Dieser aendert eine Buchung,
+     * und das ist der Unterschied, auf den sich jene Begruendung stuetzt. Wer Welten
+     * anlegen soll, soll nicht zugleich Konten fuellen koennen.
+     */
+    static final String RECHT_GELD = "freimarken.geld";
+
+    /**
      * Was die Standzeile nennt - vier einfache Werte, ohne Server und ohne Plugin.
      *
      * @param version     der Stand des Plugins
@@ -69,6 +82,26 @@ final class BundBefehle {
         void tue(Audience empfaenger, int parzelleX, int parzelleZ);
     }
 
+    /**
+     * Der Zweig, der Geld bucht: {@code /freimarken geld <spieler> <betrag>}.
+     *
+     * <p>ZWEI Methoden und kein Sonderwert fuer "Angaben fehlen": Ein {@code null} als
+     * Name waere ein Zeichen, das der Aufgerufene erraten muss, und beim naechsten Zweig
+     * erraet es jemand falsch.
+     *
+     * <p>{@code wer} ist der Name des Absenders. Er gehoert in das Protokoll und nicht in
+     * die Antwort: Wer, wann, was - bei Geld ist das keine Formalie, sondern der
+     * Unterschied zwischen "der Betreiber hat es korrigiert" und "mir fehlen 50.000
+     * Mark".
+     */
+    interface Geldzweig {
+
+        void tue(Audience empfaenger, String wer, String spieler, long betrag);
+
+        /** Die Benutzung - fuer jede unvollstaendige Form des Zweigs. */
+        void hilfe(Audience empfaenger);
+    }
+
     private final Sprache sprache;
     private final Stand stand;
     private final Wirtschaftsstand wirtschaft;
@@ -93,6 +126,7 @@ final class BundBefehle {
     private final Betreiberzweig neuladen;
     private final Betreiberzweig messstelle;
     private final Versetzung versetzung;
+    private final Geldzweig geld;
     private final int von;
     private final int bis;
 
@@ -110,7 +144,8 @@ final class BundBefehle {
                 LiteralArgumentBuilder<CommandSourceStack> blockbuch,
                 Betreiberzweig welt,
                 Betreiberzweig vorgenerieren, Betreiberzweig neuladen,
-                Betreiberzweig messstelle, Versetzung versetzung, int von, int bis) {
+                Betreiberzweig messstelle, Versetzung versetzung, Geldzweig geld,
+                int von, int bis) {
         this.blockbuch = blockbuch;
         this.sprache = sprache;
         this.stand = stand;
@@ -121,6 +156,7 @@ final class BundBefehle {
         this.neuladen = neuladen;
         this.messstelle = messstelle;
         this.versetzung = versetzung;
+        this.geld = geld;
         this.von = von;
         this.bis = bis;
     }
@@ -171,6 +207,36 @@ final class BundBefehle {
                 .then(Commands.literal("messstelle")
                         .requires(darfVerwalten())
                         .executes(z -> rufe(z, messstelle)))
+                // GELD VON HAND, und mit einem EIGENEN Recht: Die vier Zweige darueber
+                // zeigen etwas oder tauschen Einstellwerte aus; dieser aendert eine
+                // Buchung. Drei .executes, eines je unvollstaendiger Form - sonst endet
+                // "/freimarken geld" in Brigadiers englischem "Unknown or incomplete
+                // command", und der Betreiber sucht den Fehler bei sich.
+                .then(Commands.literal("geld")
+                        .requires(quelle -> quelle.getSender()
+                                .hasPermission(RECHT_GELD))
+                        .executes(z -> {
+                            geld.hilfe(z.getSource().getSender());
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.argument("spieler", StringArgumentType.word())
+                                .executes(z -> {
+                                    geld.hilfe(z.getSource().getSender());
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                                .then(Commands.argument("betrag",
+                                                LongArgumentType.longArg(
+                                                        -Betreibergeld.HOECHSTENS,
+                                                        Betreibergeld.HOECHSTENS))
+                                        .executes(z -> {
+                                            geld.tue(z.getSource().getSender(),
+                                                    z.getSource().getSender().getName(),
+                                                    StringArgumentType.getString(z,
+                                                            "spieler"),
+                                                    LongArgumentType.getLong(z,
+                                                            "betrag"));
+                                            return Command.SINGLE_SUCCESS;
+                                        }))))
                 .then(Commands.literal("parzelle")
                         .requires(darfVerwalten())
                         // Die Grenzen kommen aus der Stadt, nicht aus einer geratenen

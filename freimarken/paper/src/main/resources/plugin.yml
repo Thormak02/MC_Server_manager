@@ -14,6 +14,20 @@ permissions:
   freimarken.bauen.ueberall:
     description: Baut und oeffnet auf jeder Parzelle, auch auf fremder
     default: op
+  # Geld von Hand buchen: /freimarken geld <spieler> <betrag>, ein Minus zieht ab.
+  # EIGENES Recht und nicht freimarken.verwalten: Jene Zweige zeigen etwas oder tauschen
+  # Einstellwerte aus, dieser aendert eine BUCHUNG. Jeder Versuch steht im
+  # Serverprotokoll, und die Buchung steht im Verlauf des Spielers.
+  freimarken.geld:
+    description: Einem Spieler Mark gutschreiben oder abziehen
+    default: op
+  # Den eigenen Rang nachsehen: /rang und /rang leiter [20.11.2026]. Fuer JEDEN -
+  # darum default true. Ohne diese Anmeldung antwortet Bukkit mit der Vorgabe OP, und
+  # der Befehl waere fuer einen gewoehnlichen Spieler verborgen UND verwehrt, waehrend
+  # im Programm "jeder" steht.
+  freimarken.rang:
+    description: Den eigenen Rang, die naechste Stufe und die Leiter ansehen
+    default: true
   freimarken.verwalten:
     description: Darf die Welt nachsehen, sich zu einer Parzelle versetzen und die Einstellungen neu laden
     default: op

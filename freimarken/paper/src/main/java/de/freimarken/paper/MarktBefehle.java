@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Kistenshop;
+import de.freimarken.kern.Marktwerte;
 import de.freimarken.kern.Shopablage;
 import de.freimarken.kern.Wirtschaftsstand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
@@ -13,6 +14,7 @@ import io.papermc.paper.command.brigadier.Commands;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import net.kyori.adventure.text.Component;
@@ -131,10 +133,8 @@ final class MarktBefehle {
             return Command.SINGLE_SUCCESS;
         }
         List<Kistenshop> staende;
-        long heuteSchon;
         try {
             staende = staende();
-            heuteSchon = Markttag.heuteSchon(kasse, wirtschaft, uhr, wer.getUniqueId());
         } catch (RuntimeException stoerung) {
             // Ein eigener Satz und nicht die leere Liste: Eine Stoerung, die wie "es
             // steht kein Schild" aussieht, laesst einen Spieler auf einen Markt warten,
@@ -144,9 +144,29 @@ final class MarktBefehle {
             sende(wer, List.of(sprache.eineZeile(MarktSatz.GESTOERT, Einsatz.keine())));
             return 0;
         }
+        // ZWEI Faenge und nicht einer, und dazwischen die Frage nach dem Deckel. Bis zum
+        // 20.11.2026 stand beides in einem try: Fiel die KASSE aus, las der Spieler "die
+        // Staende liessen sich nicht lesen" - und die Staende lagen fertig daneben. Ohne
+        // Deckel wurde die Kasse ausserdem umsonst gefragt, und ihr Ausfall nahm eine
+        // Liste weg, fuer die es gar keine Zahl braucht.
+        // EINMAL gelesen und an beide Stellen gegeben: Der Riegel hier entscheidet, ob
+        // die Kasse ueberhaupt gefragt wird, und der Zweig in Markttext, welche letzte
+        // Zeile entsteht. Zwei Lesungen koennten sich unterscheiden, und dann waere
+        // gefragt, was niemand braucht - oder eine Zahl fehlte, die gebraucht wird.
+        Marktwerte markt = wirtschaft.werte().markt();
+        OptionalLong heuteSchon = OptionalLong.empty();
+        if (markt.gedeckelt()) {
+            try {
+                heuteSchon = OptionalLong.of(Markttag.heuteSchon(kasse, wirtschaft, uhr,
+                        wer.getUniqueId()));
+            } catch (RuntimeException stoerung) {
+                protokoll.log(Level.WARNING, "Der Tagesdeckel ist nicht lesbar - "
+                        + wer.getName() + " bekommt die Liste ohne die Restzeile.",
+                        stoerung);
+            }
+        }
         sende(wer, Markttext.listeZeilen(sprache, staende, seite,
-                wirtschaft.werte().handel().zeilenJeSeite(),
-                wirtschaft.werte().markt(), heuteSchon));
+                wirtschaft.werte().handel().zeilenJeSeite(), markt, heuteSchon));
         return Command.SINGLE_SUCCESS;
     }
 

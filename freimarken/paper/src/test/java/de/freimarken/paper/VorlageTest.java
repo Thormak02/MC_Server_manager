@@ -517,6 +517,42 @@ class VorlageTest {
                 + " Sackgasse.");
     }
 
+    @Test
+    @DisplayName("10j - die Liste der Einzeiler nennt genau die geholten Chatsaetze")
+    void einzeilerNennenGenauDieHolstellen() {
+        // DIE LISTE IST GERECHNET UND NICHT GESAMMELT, und diese Tafel ist der Grund,
+        // dass sie es bleibt. Sie prueft BEIDE Richtungen, und jede faengt einen anderen
+        // Fehler:
+        //   - ein geholter Satz OHNE Eintrag: Der Riegel in Sprachliste laesst die
+        //     Umbruchmarke durch, und der Befehl bricht beim Spieler ab - genau der
+        //     Zustand bis zum 20.11.2026.
+        //   - ein Eintrag OHNE Holstelle: Der Riegel verbietet einem Satz den Aufbau,
+        //     obwohl ihn niemand als eine Zeile holt - und der Aufbau gehoert dem
+        //     Betreiber.
+        //
+        // Der Handbalken bleibt aussen vor: Fuer ihn klagt Sprachliste mit einem eigenen
+        // Grund, und zwei Riegel fuer denselben Fall machen einander unpruefbar.
+        var geholt = new TreeSet<String>();
+        for (Holstelle stelle : holstellen()) {
+            if (stelle.satz().art() != Satz.Art.HANDBALKEN) {
+                geholt.add(stelle.satz().pfad());
+            }
+        }
+        var eingetragen = new TreeSet<String>();
+        for (Satz satz : Einzeiler.chatzeilen()) {
+            eingetragen.add(satz.pfad());
+        }
+        assertFalse(geholt.isEmpty(), "keine einzige Holstelle gefunden - dann rechnet"
+                + " diese Tafel ins Leere");
+
+        assertEquals(geholt, eingetragen,
+                "Links die Saetze, die der Quelltext als EINE Zeile holt, rechts die"
+                        + " Liste in Einzeiler. Wer einen Zweig von eineZeile auf bau"
+                        + " umstellt oder einen neuen Zweig baut, zieht die Liste nach -"
+                        + " sie ist der einzige Grund, warum die Datei des Betreibers"
+                        + " gegen diesen Fehler geschuetzt ist.");
+    }
+
     /**
      * 10i - jede {@code eineZeile}-Stelle gibt ihren Satz im Quelltext preis.
      *
@@ -762,6 +798,12 @@ class VorlageTest {
             // Ankunftswelt" (die Weltpruefung fiel), dann die Zahl der Materialien im
             // Sortiment (die Tafel fiel).
             "FreimarkenPlugin.java -> \" Mark je Spieler und Tag.\"",
+            // /freimarken geld [20.11.2026]: Elf Zeilen dieses Zweigs nennen einen
+            // Betrag, und alle gehen an den BETREIBER oder ins Protokoll. Sie holen das
+            // Wort aus dem Helfer mitMark - darum steht hier EINE Zeile und nicht elf.
+            // Was ein Spieler von dieser Buchung liest, ist das Wort im Verlauf
+            // (mark.verlauf.grund.betreiber-gutschrift), und das steht in der Datei.
+            "FreimarkenPlugin.java -> \" Mark\"",
             // Die Startzeile der Meerinseln [Schritt 10] - Konsole, kein Spieler liest
             // sie. Sie nennt den Preis, weil genau das die Zahl ist, die der Betreiber
             // beim Start nachsehen will.

@@ -912,6 +912,10 @@ class BildGleichTest {
                 new Zeile(MarktSatz.OHNE_DECKEL, 1L, Einsatz.keine(),
                         "&7Es gibt keinen Tagesdeckel - du kannst beliebig viel an den"
                                 + " Bund verkaufen."),
+                new Zeile(MarktSatz.DECKEL_UNLESBAR, 1L, Einsatz.keine(),
+                        "&7Wie viel du heute noch bekommen kannst, liess sich nicht"
+                                + " lesen&c - verkaufe lieber erst, wenn es wieder"
+                                + " dasteht."),
                 new Zeile(MarktSatz.LEER, 1L, Einsatz.keine(),
                         "&eDer Bund hat noch keinen Stand. Gehandelt wird nur, wofuer"
                                 + " ein Schild steht."),
@@ -2228,6 +2232,38 @@ class BildGleichTest {
                         Einsatz.von("rang", "buerger"), "&7Als naechstes: buerger."),
                 new Zeile(RangSatz.HOECHSTE, 1L, Einsatz.keine(),
                         "&6Damit stehst du auf der hoechsten Stufe."),
+                new Zeile(RangSatz.SCHAU_KOPF, 1L, Einsatz.keine(), "&6Dein Rang"),
+                new Zeile(RangSatz.SCHAU_JETZT, 1L, Einsatz.von("rang", "siedler"),
+                        "&7Du bist &fsiedler&7."),
+                new Zeile(RangSatz.SCHAU_UNBEKANNT, 1L,
+                        Einsatz.von("rang", "stifter").mit("gilt", "reisender"),
+                        "&cEingetragen ist stifter - diese Stufe gibt es nicht mehr."
+                                + " Es gilt reisender; bitte melde das dem Team."),
+                new Zeile(RangSatz.SCHAU_NAECHSTE, 1L, Einsatz.von("rang", "buerger"),
+                        "&7Als naechstes: &fbuerger&7. Dafuer zaehlt:"),
+                new Zeile(RangSatz.SCHAU_STAND_ERFUELLT, 1L, Einsatz.von("stand", "12"),
+                        "&a    du hast 12 - geschafft"),
+                new Zeile(RangSatz.SCHAU_STAND_OFFEN, 1L, Einsatz.von("stand", "1"),
+                        "&7    du hast 1"),
+                new Zeile(RangSatz.SCHAU_FUSS, 1L, Einsatz.keine(),
+                        "&8/rang leiter zeigt alle Stufen."),
+                new Zeile(RangSatz.LEITER_KOPF, 1L, Einsatz.keine(),
+                        "&6Die Rangleiter"),
+                new Zeile(RangSatz.LEITER_ERREICHT, 1L,
+                        Einsatz.von("rang", "reisender"),
+                        "&7  reisender - erreicht"),
+                new Zeile(RangSatz.LEITER_JETZT, 1L, Einsatz.von("rang", "siedler"),
+                        "&f  siedler - hier stehst du"),
+                new Zeile(RangSatz.LEITER_OFFEN, 1L, Einsatz.von("rang", "buerger"),
+                        "&8  buerger - offen"),
+                new Zeile(RangSatz.AUS, 1L, Einsatz.keine(),
+                        "&7Auf diesem Server gibt es keine Raenge."),
+                new Zeile(RangSatz.GESTOERT, 1L, Einsatz.keine(),
+                        "&cDein Rang liess sich nicht lesen&7 - versuche es noch"
+                                + " einmal. Der Grund steht im Serverprotokoll."),
+                new Zeile(RangSatz.KEINE_KONSOLE, 1L, Einsatz.keine(),
+                        "&7/rang zeigt den Rang eines Spielers - auf der Konsole gibt"
+                                + " es keinen."),
 
                 // DIE WECHSELSTUBE [Schritt 12 Teil F]. Die Betraege kommen ueber
                 // sprache.betrag und sprache.goldmark aus der Datei - und das ist hier

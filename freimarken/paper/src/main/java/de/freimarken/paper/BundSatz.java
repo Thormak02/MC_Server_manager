@@ -55,6 +55,9 @@ enum BundSatz implements Satz {
     /** Die Beschreibung von {@code /wolke} in der Befehlsliste [Schritt 11]. */
     BEFEHL_WOLKE("befehl.beschreibung.wolke", Art.WORT),
 
+    /** Die Beschreibung von {@code /rang} in der Befehlsliste [20.11.2026]. */
+    BEFEHL_RANG("befehl.beschreibung.rang", Art.WORT),
+
     // --- Das nackte /freimarken: vier oder fuenf Chatzeilen -----------------
     STAND_KOPF("stand.kopf", Art.SATZ),
     STAND_VERSION("stand.version", Art.SATZ, "version", "java", "minecraft"),

@@ -78,6 +78,30 @@ class LadenlisteTest {
     }
 
     @Test
+    @DisplayName("Ein fehlender Weltname nennt den Start und behauptet keine Geltung")
+    void fehlenderWeltnameNenntKeineGeltung() {
+        // Der vierte der nicht neuladbaren Weltnamen, und der einzige, dessen Leser das
+        // Plugin selbst ruft - seine Zeile landet nicht im Bericht der Wirtschaftsliste,
+        // wo die anderen drei geprueft werden.
+        var ergebnis = lies("""
+                laeden:
+                  miete-je-tag: 500
+                """);
+
+        String zeile = ergebnis.bericht().stream()
+                .filter(eine -> eine.startsWith(Ladenliste.PFAD_WELT))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(Ladenliste.PFAD_WELT + " fehlt in"
+                        + " der Datei und muss genannt werden: " + ergebnis.bericht()));
+        assertTrue(zeile.contains("nur beim Start gelesen"),
+                "eine Welt ist zur Laufzeit nicht zu tauschen - die Zeile muss es sagen: "
+                        + zeile);
+        assertFalse(zeile.contains("es gilt"),
+                "ein /freimarken neuladen verschiebt keinen Laden; diese Zeile behauptet"
+                        + " eine Geltung, die erst der naechste Start herstellt: " + zeile);
+    }
+
+    @Test
     @DisplayName("Ein fehlender Abschnitt ist ein BERICHT und keine Klage")
     void fehlenderAbschnitt() {
         // Die Markthalle ist von Hand zu bauen. Bis dahin ist eine leere Liste der

@@ -26,6 +26,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -117,6 +119,72 @@ class SendewegTest {
         String ganz() {
             return text.toString();
         }
+    }
+
+    @Test
+    @DisplayName("33ab - die Tafeln von /rang, je Lage als EIN Bild")
+    void tafelnVonRang() {
+        Sprache sprache = Sprachprobe.spracheAusDemJar();
+        var leiter = new de.freimarken.kern.Rangwerte(true, List.of(
+                new de.freimarken.kern.Rangwerte.Stufe("reisender", Map.of(), Map.of(),
+                        List.of()),
+                new de.freimarken.kern.Rangwerte.Stufe("siedler",
+                        Map.of(de.freimarken.kern.Bedingungsart.GUTHABEN, 50_000L),
+                        Map.of(), List.of())));
+
+        Tafel tafel = new Tafel()
+                .fall("auskunft-mit-geldbedingung", Rangtext.schauZeilen(sprache,
+                        new de.freimarken.kern.Rangschau.Tafel(
+                                leiter.leiter().get(0), Optional.empty(),
+                                Optional.of(leiter.leiter().get(1)),
+                                List.of(new de.freimarken.kern.Rangregel.Bedingungsstand(
+                                        de.freimarken.kern.Bedingungsart.GUTHABEN,
+                                        50_000L, 1_000L)),
+                                List.of())))
+                .fall("auskunft-unbekannter-eintrag", Rangtext.schauZeilen(sprache,
+                        new de.freimarken.kern.Rangschau.Tafel(
+                                leiter.leiter().get(0), Optional.of("stifter"),
+                                Optional.empty(), List.of(), List.of())))
+                .fall("leiter", Rangtext.leiterZeilen(sprache,
+                        new de.freimarken.kern.Rangschau.Tafel(
+                                leiter.leiter().get(1), Optional.empty(),
+                                Optional.empty(), List.of(), List.of(
+                                new de.freimarken.kern.Rangschau.Sprosse(
+                                        leiter.leiter().get(0), true, false),
+                                new de.freimarken.kern.Rangschau.Sprosse(
+                                        leiter.leiter().get(1), true, true)))))
+                .fall("aus", Rangtext.ausZeilen(sprache))
+                .fall("gestoert", Rangtext.gestoertZeilen(sprache))
+                .fall("keine-konsole", Rangtext.keineKonsoleZeilen(sprache));
+
+        // EIN Vergleich und nicht sechs: Eine fehlende Zeile, zwei vertauschte und ein
+        // nicht uebergebener Wert sind damit derselbe rote Vergleich. Besonders die
+        // GELDbedingung steht hier - sie ist die eine, bei der zwei Zahlen durch die
+        // Waehrung gehen muessen, und ein nackter Betrag faellt im Bild sofort auf.
+        assertEquals("""
+                == auskunft-mit-geldbedingung
+                &6Dein Rang
+                &7Du bist &freisender&7.
+                &7Als naechstes: &fsiedler&7. Dafuer zaehlt:
+                &7- 50.000 Mark auf dem Konto
+                &7    du hast 1.000 Mark
+                &8/rang leiter zeigt alle Stufen.
+                == auskunft-unbekannter-eintrag
+                &6Dein Rang
+                &cEingetragen ist stifter - diese Stufe gibt es nicht mehr. Es gilt reisender; bitte melde das dem Team.
+                &6Damit stehst du auf der hoechsten Stufe.
+                &8/rang leiter zeigt alle Stufen.
+                == leiter
+                &6Die Rangleiter
+                &7  reisender - erreicht
+                &f  siedler - hier stehst du
+                == aus
+                &7Auf diesem Server gibt es keine Raenge.
+                == gestoert
+                &cDein Rang liess sich nicht lesen&7 - versuche es noch einmal. Der Grund steht im Serverprotokoll.
+                == keine-konsole
+                &7/rang zeigt den Rang eines Spielers - auf der Konsole gibt es keinen.
+                """, tafel.ganz());
     }
 
     @Test

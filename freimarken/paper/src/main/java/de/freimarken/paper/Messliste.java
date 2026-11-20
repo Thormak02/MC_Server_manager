@@ -224,10 +224,8 @@ final class Messliste {
             }
         }
         if (!fehlen.isEmpty()) {
-            bericht.add(fehlen.size() + " von " + SCHLUESSEL.size() + " Zeilen der"
-                    + " Messstelle fehlen in deiner config.yml: "
-                    + String.join(", ", fehlen)
-                    + ". Dafuer gelten die Vorgaben des Programms.");
+            bericht.add(Wirtschaftsliste.fehlendeZeilen(fehlen,
+                    SCHLUESSEL.size(), "der Messstelle"));
         }
     }
 

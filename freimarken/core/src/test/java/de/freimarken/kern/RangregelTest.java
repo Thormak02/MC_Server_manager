@@ -194,6 +194,68 @@ class RangregelTest {
     }
 
     @Test
+    @DisplayName("stand nennt JEDE Bedingung - auch die erfuellte")
+    void standNenntAuchErfuellte() {
+        // DER UNTERSCHIED ZU fehlend(), und der einzige: Ohne die erfuellte Zeile waere
+        // diese Probe auch gruen, wenn stand() nur fehlend() weiterreichte.
+        var buerger = new Rangwerte.Stufe("buerger",
+                Map.of(Bedingungsart.TAETIGE_STUNDEN, 10L,
+                        Bedingungsart.PARZELLEN, 2L),
+                Map.of(), List.of());
+
+        var stand = Rangregel.stand(buerger,
+                gemessen(Bedingungsart.TAETIGE_STUNDEN, 12 * STUNDE,
+                        Bedingungsart.PARZELLEN, 1L));
+
+        assertEquals(2, stand.size(), "beide Bedingungen, nicht nur die offene: "
+                + stand);
+        assertEquals(Bedingungsart.TAETIGE_STUNDEN, stand.get(0).art(),
+                "die Reihenfolge kommt aus der Aufzaehlung");
+        assertTrue(stand.get(0).erfuellt());
+        assertEquals(10 * STUNDE, stand.get(0).verlangt(),
+                "verlangt steht in der MESSEINHEIT - die Datei sprach von 10 Stunden");
+        assertEquals(12 * STUNDE, stand.get(0).gemessen());
+        assertEquals(0L, stand.get(0).rest());
+        assertFalse(stand.get(1).erfuellt());
+        assertEquals(1L, stand.get(1).rest(), "eine Parzelle fehlt noch");
+    }
+
+    @Test
+    @DisplayName("stand nennt NUR, was in der Datei steht")
+    void standNenntNurEingetragene() {
+        // Eine Art ohne Zeile ist keine Bedingung dieser Stufe. Stuende sie mit 0 in der
+        // Liste, las der Spieler eine Huerde, die es nicht gibt - und auf der hoechsten
+        // Stufe fuenf davon.
+        var siedler = new Rangwerte.Stufe("siedler",
+                Map.of(Bedingungsart.BERUF, 1L), Map.of(), List.of());
+
+        var stand = Rangregel.stand(siedler, gemessen(Bedingungsart.GUTHABEN, 500L));
+
+        assertEquals(1, stand.size(), stand.toString());
+        assertEquals(Bedingungsart.BERUF, stand.get(0).art());
+        assertEquals(0L, stand.get(0).gemessen(),
+                "ein fehlender Messwert zaehlt als 0 - wie bei fehlend()");
+    }
+
+    @Test
+    @DisplayName("fehlend ist stand ohne die erfuellten - und rechnet nicht zweimal")
+    void fehlendIstStandGefiltert() {
+        var buerger = new Rangwerte.Stufe("buerger",
+                Map.of(Bedingungsart.TAETIGE_STUNDEN, 10L,
+                        Bedingungsart.PARZELLEN, 2L),
+                Map.of(), List.of());
+        var messwerte = gemessen(Bedingungsart.TAETIGE_STUNDEN, 12 * STUNDE,
+                Bedingungsart.PARZELLEN, 1L);
+
+        var offen = Rangregel.fehlend(buerger, messwerte);
+        var alle = Rangregel.stand(buerger, messwerte);
+
+        assertEquals(1, offen.size(), "nur die offene: " + offen);
+        assertEquals(alle.get(1), offen.get(0),
+                "dieselbe Zeile, dieselben Zahlen - gefiltert und nicht neu gerechnet");
+    }
+
+    @Test
     @DisplayName("Die Reihenfolge von fehlend ist FEST, nicht die einer Karte")
     void fehlendSortiert() {
         // Map.copyOf sagt keine Reihenfolge zu, und sie ist je Lauf der Maschine eine
@@ -210,7 +272,7 @@ class RangregelTest {
         var offen = Rangregel.fehlend(stufe, Map.of());
 
         assertEquals(List.of(Bedingungsart.values()),
-                offen.stream().map(Rangregel.Fehlend::art).toList(),
+                offen.stream().map(Rangregel.Bedingungsstand::art).toList(),
                 "genau die Reihenfolge der Aufzaehlung");
     }
 
@@ -259,7 +321,7 @@ class RangregelTest {
         assertThrows(IllegalArgumentException.class,
                 () -> Rangregel.zustehend(null, Map.of()));
         assertThrows(IllegalArgumentException.class,
-                () -> new Rangregel.Fehlend(null, 1L, 0L));
+                () -> new Rangregel.Bedingungsstand(null, 1L, 0L));
     }
 
     @Test

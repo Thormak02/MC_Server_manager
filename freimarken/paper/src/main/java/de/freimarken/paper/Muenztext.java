@@ -177,7 +177,7 @@ final class Muenztext {
         List<Component> zeilen = new ArrayList<>(sprache.bau(
                 MarkSatz.MUENZHAUS_BEDINGUNG_FEHLT, 1L,
                 Einsatz.von("name", name(sprache, posten(entscheid)))));
-        for (Rangregel.Fehlend fehlend : entscheid.fehlend()) {
+        for (Rangregel.Bedingungsstand fehlend : entscheid.fehlend()) {
             long ausDerDatei = fehlend.art().inDerDatei(fehlend.verlangt());
             // EIN GELDBETRAG KOMMT AUS DER WAEHRUNG, jede andere Zahl nackt. Vorher
             // stand hier jede Zahl nackt, und das Wort "Mark" fest in der Sprachdatei:
