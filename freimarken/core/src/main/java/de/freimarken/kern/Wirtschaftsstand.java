@@ -295,6 +295,31 @@ public final class Wirtschaftsstand {
                 alt.wolken().hoechstzahl(), neu.wolken().hoechstzahl());
         nenneMenge(geaendert, Wolkenwerte.PFAD_BIOME,
                 Set.copyOf(alt.wolken().biome()), Set.copyOf(neu.wolken().biome()));
+        // DIE RANGLEITER, nachgetragen am 19.11.2026 mit Teil F - und zwar als Fund und
+        // nicht als Erweiterung: Sie fehlte hier seit Teil A, und damit war ihr Neuladen
+        // voellig stumm. Wer eine Stufe hinzufuegt und "nichts geaendert" liest, glaubt
+        // das Neuladen wirke nicht. Es ist dasselbe Fehlerbild wie bei den zwei
+        // Auflagenschaltern eine Seite hoeher, und es hat dieselbe Antwort.
+        //
+        // Der SCHALTER als Ja/Nein, die Leiter als MENGE ihrer Stufennamen: Welche Stufe
+        // dazukam und welche wegfiel, ist das, was der Betreiber lesen will. Eine Zeile
+        // je geaenderter Bedingung waere bei vier Stufen die laengste Antwort des
+        // Befehls - und was in einer Stufe steht, nennt der Startbericht des Lesers.
+        nenneJaNein(geaendert, Rangwerte.PFAD_AN, alt.raenge().an(), neu.raenge().an());
+        nenneMenge(geaendert, Rangwerte.PFAD_LEITER,
+                new TreeSet<>(alt.raenge().schluessel()),
+                new TreeSet<>(neu.raenge().schluessel()));
+        // Die Wechselstube [Teil F]: zwei Kurse und der Wechseldeckel. Aus demselben
+        // Grund wie die Bloecke darueber - sie werden beim Gebrauch gefragt, es wird
+        // nichts gebaut und nichts angemeldet. Ohne diese drei Zeilen aenderte sich der
+        // KURS beim Neuladen stumm, und das ist der Wert, an dem ein Betreiber am
+        // ehesten dreht.
+        nenneZahl(geaendert, Wechselwerte.PFAD_HIN,
+                alt.wechsel().markJeGoldmark(), neu.wechsel().markJeGoldmark());
+        nenneZahl(geaendert, Wechselwerte.PFAD_ZURUECK,
+                alt.wechsel().markZurueck(), neu.wechsel().markZurueck());
+        nenneZahl(geaendert, Wechselwerte.PFAD_DECKEL,
+                alt.wechsel().tagesdeckel(), neu.wechsel().tagesdeckel());
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");

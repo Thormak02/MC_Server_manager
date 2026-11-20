@@ -216,6 +216,15 @@ final class Wirtschaftsliste {
         klagen.addAll(raenge.klagen());
         bericht.addAll(raenge.bericht());
 
+        // Die Wechselstube [Schritt 12 Teil F]: zwei Kurse und der Wechseldeckel. Ein
+        // eigener Leser und nicht drei Zeilen hier, und zwar aus einem Grund, den keiner
+        // der anderen hat: Seine beiden Kurse muessen GEGENEINANDER geprueft werden.
+        // Jeder fuer sich kann im erlaubten Bereich liegen, und zusammen erzeugen sie
+        // Geld - diese Pruefung gehoert zu ihnen und nicht in die Mitte dieser Methode.
+        Wechselliste.Ergebnis wechsel = Wechselliste.ausKonfiguration(wurzel);
+        klagen.addAll(wechsel.klagen());
+        bericht.addAll(wechsel.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -249,7 +258,7 @@ final class Wirtschaftsliste {
                 markt.werte(), messung.werte(), bonus.werte(), laeden.werte(),
                 handel.werte(), truhe.werte(), freistaedte.werte(),
                 inseln.werte(), angeln.werte(), wolken.werte(),
-                raenge.werte()), klagen, bericht);
+                raenge.werte(), wechsel.werte()), klagen, bericht);
     }
 
     /**

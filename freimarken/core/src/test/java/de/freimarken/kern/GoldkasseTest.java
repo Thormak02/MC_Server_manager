@@ -87,10 +87,11 @@ class GoldkasseTest {
 
         kasse.guthaben(anna);
         kasse.eroeffne(anna);
-        kasse.abbuchen(anna, 4L, Buchungsgrund.WOLKE_BIOM);
-        kasse.gutschreiben(anna, 10L, Buchungsgrund.BESTAND);
+        kasse.abbuchen(anna, 4L, Buchungsgrund.WECHSEL_GOLDMARK_WEG);
+        kasse.gutschreiben(anna, 10L, Buchungsgrund.WECHSEL_GOLDMARK_HER);
         kasse.verlauf(anna, 7);
-        kasse.summeSeit(anna, Instant.EPOCH, Buchungsgrund.BESTAND);
+        kasse.summeSeit(anna, Instant.EPOCH,
+                Buchungsgrund.WECHSEL_GOLDMARK_HER);
 
         // DIE PROBE, DIE EIN VERTAUSCHEN FAENGT. Dass alle sechs Methoden DA sind, sichert
         // der Uebersetzer - Kasse hat keine Vorgabeumsetzungen. Was er NICHT sichert: dass
@@ -102,10 +103,11 @@ class GoldkasseTest {
         assertEquals(List.of(
                         "guthaben " + anna,
                         "eroeffne " + anna,
-                        "abbuchen " + anna + " 4 wolke_biom",
-                        "gutschreiben " + anna + " 10 bestand",
+                        "abbuchen " + anna + " 4 wechsel_goldmark_weg",
+                        "gutschreiben " + anna + " 10 wechsel_goldmark_her",
                         "verlauf " + anna + " 7",
-                        "summeSeit " + anna + " " + Instant.EPOCH + " bestand"),
+                        "summeSeit " + anna + " " + Instant.EPOCH
+                                + " wechsel_goldmark_her"),
                 darunter.rufe);
     }
 
@@ -120,9 +122,62 @@ class GoldkasseTest {
         // Geld. Geprueft mit einem Wert, den die Kasse darunter nie von sich aus gaebe.
         assertEquals(42L, kasse.guthaben(UUID.randomUUID()));
         assertEquals(42L, kasse.summeSeit(UUID.randomUUID(), Instant.EPOCH,
-                Buchungsgrund.BESTAND));
-        assertFalse(kasse.abbuchen(UUID.randomUUID(), 1L, Buchungsgrund.WOLKE_BIOM),
+                Buchungsgrund.WECHSEL_GOLDMARK_HER));
+        assertFalse(kasse.abbuchen(UUID.randomUUID(), 1L,
+                        Buchungsgrund.WECHSEL_GOLDMARK_WEG),
                 "ein false von darunter bleibt ein false");
+    }
+
+    @Test
+    @DisplayName("Ein MARKGRUND wird abgewiesen - auf allen drei Wegen in das Buch")
+    void markgrundAbgewiesen() {
+        Mitschrift darunter = new Mitschrift();
+        Goldkasse kasse = new Goldkasse(darunter);
+        darunter.rufe.clear();
+        UUID anna = UUID.randomUUID();
+
+        // ALLE DREI WEGE, und das ist der Zweck dieser Probe: Ein Riegel, der nur an
+        // abbuchen haengt, laesst die Gutschrift durch - und eine Gutschrift mit einem
+        // Markgrund im Goldbuch ist genau die Zeile, die richtig aussieht und von der
+        // falschen Waehrung erzaehlt.
+        var beimAbbuchen = assertThrows(IllegalArgumentException.class,
+                () -> kasse.abbuchen(anna, 1L, Buchungsgrund.TAGESBONUS));
+        assertThrows(IllegalArgumentException.class,
+                () -> kasse.gutschreiben(anna, 1L, Buchungsgrund.TAGESBONUS));
+        assertThrows(IllegalArgumentException.class,
+                () -> kasse.summeSeit(anna, Instant.EPOCH, Buchungsgrund.TAGESBONUS));
+
+        assertTrue(beimAbbuchen.getMessage().contains("TAGESBONUS"),
+                "die Meldung muss den GRUND nennen, sonst sucht niemand die Stelle: "
+                        + beimAbbuchen.getMessage());
+        // UND NICHTS IST ANGEKOMMEN. Ein Riegel, der wirft, nachdem er weitergereicht
+        // hat, waere mit der Pruefung auf die Ausnahme allein gruen.
+        assertEquals(List.of(), darunter.rufe,
+                "der abgewiesene Grund darf die Kasse darunter nie erreichen");
+    }
+
+    @Test
+    @DisplayName("Der Riegel laesst GOLDMARKGRUENDE durch - alle drei")
+    void goldmarkgruendeDurch() {
+        // Die Gegenrichtung, und sie ist Pflicht: Ein Riegel, der ALLES abweist, waere
+        // mit der Probe darueber genauso gruen.
+        Goldkasse kasse = new Goldkasse(new SpeicherKasse(0L));
+        UUID anna = UUID.randomUUID();
+
+        kasse.gutschreiben(anna, 5L, Buchungsgrund.WECHSEL_GOLDMARK_HER);
+        kasse.gutschreiben(anna, 1L, Buchungsgrund.WECHSEL_GOLDMARK_ZURUECK);
+        assertTrue(kasse.abbuchen(anna, 2L, Buchungsgrund.WECHSEL_GOLDMARK_WEG));
+
+        assertEquals(4L, kasse.guthaben(anna));
+    }
+
+    @Test
+    @DisplayName("Ohne Grund gibt es keine Buchung - auch nicht im Goldbuch")
+    void ohneGrund() {
+        Goldkasse kasse = new Goldkasse(new SpeicherKasse(0L));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> kasse.gutschreiben(UUID.randomUUID(), 1L, null));
     }
 
     /**

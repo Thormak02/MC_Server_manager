@@ -7,12 +7,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import de.freimarken.kern.Besitzbuch;
+import de.freimarken.kern.Goldkasse;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.Stadtgrenze;
+import de.freimarken.kern.Wechselbuch;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wirtschaftswerte;
+import java.time.Clock;
 import java.util.List;
 import java.util.logging.Logger;
 import org.bukkit.Location;
@@ -73,7 +76,12 @@ class ParzelleBefehlTest {
                 Logger.getLogger("ParzelleBefehlTest"), Sprachprobe.spracheAusDemJar(),
                 // Keine Bonuszeile: Diese Proben halten /mark ohne Teil H.
                 // Dass die Zeile dazukommt, prueft BonusBefehlTest.
-                wer -> null);
+                wer -> null,
+                // Eine Wechselstube, weil der Befehlsbaum eine braucht. Was sie TUT,
+                // prueft MarkBefehlTest.
+                new Wechselbuch(kasse, new Goldkasse(new SpeicherKasse(0L)),
+                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE),
+                        Clock.systemUTC()));
         baum = new Befehlsprobe(List.of(befehle.parzelle()));
     }
 

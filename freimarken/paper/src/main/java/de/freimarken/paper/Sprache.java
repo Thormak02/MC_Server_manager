@@ -210,6 +210,22 @@ final class Sprache {
     }
 
     /**
+     * Zum Beispiel {@code "12 Goldmark"} - ein Betrag in der zweiten Waehrung.
+     *
+     * <p>Eine eigene Methode und nicht {@link #betrag} mit anderem Wort, und das ist der
+     * Riegel an der Stelle, an der er am meisten noetig ist: Beide Zahlen sind
+     * {@code long}, und eine verwechselte Zeile zeigte dem Spieler "12 Mark", wo er 12
+     * Goldmark hat - also das Tausendfache daneben. Die Methode heisst darum nach der
+     * Waehrung, und jede Aufrufstelle nennt sie beim Namen.
+     *
+     * <p>Dieselbe Zahlform wie bei den Mark: der Tausenderpunkt aus dem Programm. Nur das
+     * Wort ist des Betreibers.
+     */
+    String goldmark(long betrag) {
+        return wort(MarkSatz.WAEHRUNG_GOLDMARK, Einsatz.von("zahl", betrag));
+    }
+
+    /**
      * Zum Beispiel {@code "0,40 Mark"} - ein Betrag unter einer Mark.
      *
      * <p>Das Komma und die zwei Stellen kommen aus dem Programm, wie der Tausenderpunkt

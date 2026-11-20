@@ -211,6 +211,99 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_SHOP_ERSTATTET("mark.verlauf.grund.shop-erstattet", Art.WORT),
 
     /**
+     * Die sechs Worte der Wechselstube (Plan 8.1) [Schritt 12 Teil F].
+     *
+     * <p><b>Die Worte sagen, WOHER das Geld kam oder WOHIN es ging - nie, welche Waehrung
+     * es war.</b> Das ist die Entscheidung dieser Gruppe, und sie hat einen Grund: Dieselben
+     * Schluessel tragen die Zeilen in ZWEI Buechern. Im Markbuch steht "in Goldmark
+     * gewechselt", im Goldbuch "aus Mark gewechselt" - und welche Einheit der BETRAG
+     * daneben hat, sagt die Zeile, nicht das Wort. Stuende die Waehrung im Wort, hiesse
+     * dieselbe Zeile im Goldbuch "5 Goldmark - Mark gekauft".
+     *
+     * <p>Zu lesen sind die Goldbuchzeilen heute noch nirgends: {@code /mark verlauf} zeigt
+     * das Markbuch. Die Worte stehen trotzdem schon da, weil {@code Buchungsgrund} zu
+     * JEDEM Grund ein Wort verlangt - und weil das Muenzhaus (Teil G) sie braucht.
+     */
+    VERLAUF_GRUND_WECHSEL_MARK_WEG("mark.verlauf.grund.wechsel-mark-weg", Art.WORT),
+
+    /** Das Wort fuer {@code Buchungsgrund.WECHSEL_GOLDMARK_HER} - siehe oben. */
+    VERLAUF_GRUND_WECHSEL_GOLDMARK_HER("mark.verlauf.grund.wechsel-goldmark-her",
+            Art.WORT),
+
+    /** Das Wort fuer {@code Buchungsgrund.WECHSEL_GOLDMARK_WEG} - siehe oben. */
+    VERLAUF_GRUND_WECHSEL_GOLDMARK_WEG("mark.verlauf.grund.wechsel-goldmark-weg",
+            Art.WORT),
+
+    /** Das Wort fuer {@code Buchungsgrund.WECHSEL_MARK_HER} - der Zeuge des Deckels. */
+    VERLAUF_GRUND_WECHSEL_MARK_HER("mark.verlauf.grund.wechsel-mark-her", Art.WORT),
+
+    /** Das Wort fuer {@code Buchungsgrund.WECHSEL_MARK_ZURUECK} - eine Erstattung. */
+    VERLAUF_GRUND_WECHSEL_MARK_ZURUECK("mark.verlauf.grund.wechsel-mark-zurueck",
+            Art.WORT),
+
+    /** Das Wort fuer {@code Buchungsgrund.WECHSEL_GOLDMARK_ZURUECK} - eine Erstattung. */
+    VERLAUF_GRUND_WECHSEL_GOLDMARK_ZURUECK("mark.verlauf.grund.wechsel-goldmark-zurueck",
+            Art.WORT),
+
+    /**
+     * Die Tafel der Wechselstube - der Kopf von {@code /mark tauschen}.
+     *
+     * <p>Plan 2.1 nennt fuer das Muenzhaus "Kontostand, Verlauf, Wechsel Mark - Goldmark,
+     * Wechseldeckel sichtbar". Das Haus kommt mit Teil G; die vier Zeilen dieser Tafel
+     * sind seine Auskunft, schon jetzt und im Chat.
+     */
+    TAUSCH_KOPF("mark.tausch.kopf", Art.SATZ),
+
+    /** Der Goldmarkstand - {@code /mark} zeigt die Mark, diese Zeile die Goldmark. */
+    TAUSCH_STAND("mark.tausch.stand", Art.SATZ, "betrag"),
+
+    /** Die zwei Kurse in einer Zeile: was eine Goldmark kostet und was sie bringt. */
+    TAUSCH_KURSE("mark.tausch.kurse", Art.SATZ, "kauf", "verkauf"),
+
+    /**
+     * Was heute noch zurueckgewechselt werden darf - der SICHTBARE Wechseldeckel.
+     *
+     * <p>Beide Zahlen in einer Zeile, die Goldmark und die Mark: Der Deckel ist in Mark
+     * bemessen, gewechselt wird in Goldmark - wer nur eine der zwei Zahlen liest, rechnet
+     * die andere falsch.
+     */
+    TAUSCH_FREI("mark.tausch.frei", Art.SATZ, "anzahl", "betrag"),
+
+    /** Statt der Zeile darueber, wenn der Betreiber den Rueckweg geschlossen hat. */
+    TAUSCH_ZU("mark.tausch.zu", Art.SATZ),
+
+    /** Wie man tauscht - die letzte Zeile der Tafel. */
+    TAUSCH_HILFE("mark.tausch.hilfe", Art.SATZ),
+
+    /** Gekauft: so viele Goldmark fuer so viele Mark, und was jetzt dasteht. */
+    TAUSCH_GEKAUFT("mark.tausch.gekauft", Art.SATZ, "goldmark", "mark", "stand"),
+
+    /** Zurueckgewechselt - die Gegenseite von {@link #TAUSCH_GEKAUFT}. */
+    TAUSCH_VERKAUFT("mark.tausch.verkauft", Art.SATZ, "goldmark", "mark", "stand"),
+
+    /** Das Markguthaben reicht nicht - mit dem Preis und dem, was fehlt. */
+    TAUSCH_ZU_WENIG_MARK("mark.tausch.zu-wenig-mark", Art.SATZ, "preis", "fehlt"),
+
+    /** So viele Goldmark hat der Spieler nicht. */
+    TAUSCH_ZU_WENIG_GOLDMARK("mark.tausch.zu-wenig-goldmark", Art.SATZ, "anzahl",
+            "stand"),
+
+    /**
+     * Der Deckel laesst heute weniger zu - mit der Zahl, die noch geht.
+     *
+     * <p><b>Die Zahl ist die ganze Nachricht.</b> Der Wechsel kuerzt nicht, er sagt ab -
+     * also muss der Spieler lesen, was stattdessen moeglich ist, sonst probiert er
+     * zwanzigmal.
+     */
+    TAUSCH_DECKEL_ERREICHT("mark.tausch.deckel-erreicht", Art.SATZ, "anzahl", "betrag"),
+
+    /** Heute geht gar nichts mehr - der Deckel ist voll. */
+    TAUSCH_DECKEL_VOLL("mark.tausch.deckel-voll", Art.SATZ, "betrag"),
+
+    /** Eine Kasse hat geschwiegen; was abgebucht war, ist zurueck. */
+    TAUSCH_GESTOERT("mark.tausch.gestoert", Art.SATZ),
+
+    /**
      * Die Zeitform des Verlaufs - beim LADEN uebersetzt.
      *
      * <p>Beim Laden und nicht beim ersten {@code /mark verlauf}: Ein unbrauchbares Muster
@@ -241,7 +334,21 @@ enum MarkSatz implements Satz {
      * Stellen dahinter. Nur das WORT ist des Betreibers - wer seine Waehrung umbenennt,
      * muss es an ZWEI Stellen tun, und diese Zeile sagt es ihm.
      */
-    WAEHRUNG_PFENNIGE("waehrung.pfennige", Art.WORT, "zahl");
+    WAEHRUNG_PFENNIGE("waehrung.pfennige", Art.WORT, "zahl"),
+
+    /**
+     * Das Wort fuer einen Betrag in GOLDMARK - zum Beispiel {@code "{zahl} Goldmark"}.
+     *
+     * <p>Ein eigener Schluessel und nicht derselbe wie {@link #WAEHRUNG_BETRAG}, und das
+     * ist der sichtbarste Teil der Entscheidung aus Teil E: Es sind zwei Waehrungen, und
+     * sie duerfen nirgends dieselbe Form haben. Wer eine Zahl ohne Einheit liest, kann
+     * nicht wissen, ob sie fuenf Mark oder fuenf Goldmark meint - und das sind beim Kurs
+     * des Plans Faktor 1.000.
+     *
+     * <p>Die Zahlform bleibt im Programm, wie bei jedem Betrag. Nur das WORT ist des
+     * Betreibers; wer seine Premiumwaehrung umbenennt, aendert diese eine Zeile.
+     */
+    WAEHRUNG_GOLDMARK("waehrung.goldmark", Art.WORT, "zahl");
 
     private final String pfad;
     private final Art art;

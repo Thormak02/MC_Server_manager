@@ -34,9 +34,22 @@ import java.util.UUID;
  * Tabellen es sind, entscheidet die Datenschicht ({@code Kassentabellen}); dieser Kern
  * weiss davon nichts.
  *
- * <p><b>Was hier NICHT steht:</b> Kurs, Wechsel und Wechseldeckel. Die kommen mit Teil F.
- * Dieselbe Abgrenzung, die {@link Kasse} im Klassenkopf fuer sich zieht - sie waeren hier
- * eine halbe Umsetzung, die spaeter wieder auseinandergenommen werden muesste.
+ * <p><b>Der zweite Riegel kam mit Teil F: Der GRUND muss ein Goldmarkgrund sein.</b> Seit
+ * es zwei Buecher gibt, ist der schlimmste denkbare Fehler eine Zeile im falschen - sie
+ * steht da, sie ist richtig gerichtet, die Summe des Kontos stimmt, und sie erzaehlt von
+ * einer Waehrung, die dieses Konto nicht fuehrt. Niemand sieht es, bis jemand nachrechnet.
+ * Diese Klasse ist die EINZIGE Tuer zum Goldbuch, in beiden Betriebsarten - also steht der
+ * Riegel hier und nicht in den zwei Kassenumsetzungen.
+ *
+ * <p>Fuer das MARKBUCH gibt es ihn ausdruecklich nicht, und das ist keine
+ * Nachlaessigkeit: Dort buchen dreissig Stellen, und alle hatten bis heute nur
+ * Markgruende. Die einzige Stelle, die BEIDE Buecher anfasst, ist {@link Wechselbuch} -
+ * und die prueft ihre Markbuchungen selbst, mit demselben Satz. Zwei Riegel fuer dieselbe
+ * Lage machten sich gegenseitig unpruefbar.
+ *
+ * <p><b>Was hier NICHT steht:</b> Kurs, Wechsel und Wechseldeckel. Die stehen seit Teil F
+ * in {@link Wechselwerte} und {@link Wechselbuch}. Dieselbe Abgrenzung, die {@link Kasse}
+ * im Klassenkopf fuer sich zieht - sie waeren hier eine halbe Umsetzung.
  */
 public final class Goldkasse implements Kasse {
 
@@ -82,11 +95,13 @@ public final class Goldkasse implements Kasse {
 
     @Override
     public boolean abbuchen(UUID spieler, long betrag, Buchungsgrund grund) {
+        pruefeWaehrung(grund);
         return kasse.abbuchen(spieler, betrag, grund);
     }
 
     @Override
     public void gutschreiben(UUID spieler, long betrag, Buchungsgrund grund) {
+        pruefeWaehrung(grund);
         kasse.gutschreiben(spieler, betrag, grund);
     }
 
@@ -97,6 +112,29 @@ public final class Goldkasse implements Kasse {
 
     @Override
     public long summeSeit(UUID spieler, Instant ab, Buchungsgrund grund) {
+        // Auch beim LESEN: Ein Markgrund im Goldbuch ergibt 0, und eine 0 ist hier die
+        // gefaehrlichste Antwort, die es gibt - nach ihr sieht ein verbrauchter
+        // Tagesdeckel aus wie ein unberuehrter.
+        pruefeWaehrung(grund);
         return kasse.summeSeit(spieler, ab, grund);
+    }
+
+    /**
+     * Der Riegel gegen eine Zeile im falschen Buch - siehe die Klassenbeschreibung.
+     *
+     * <p>Ein Wurf und keine stille Ablehnung: Ein Grund aus der falschen Waehrung ist kein
+     * Zustand, auf den ein Spieler eine Antwort bekommen soll, sondern ein Fehler im
+     * Programm. Er faellt beim ersten Aufruf auf, mit dem Namen des Grundes darin.
+     */
+    private static void pruefeWaehrung(Buchungsgrund grund) {
+        if (grund == null) {
+            throw new IllegalArgumentException("Ohne Grund gibt es keine Buchung");
+        }
+        if (!grund.gehoertIn(Buchungsgrund.Buch.GOLDMARK)) {
+            throw new IllegalArgumentException("Der Grund " + grund + " gehoert in das "
+                    + grund.buch() + "-Buch und nicht in das Goldbuch. Eine Zeile im"
+                    + " falschen Buch sieht richtig aus und erzaehlt von einer Waehrung,"
+                    + " die dieses Konto nicht fuehrt.");
+        }
     }
 }

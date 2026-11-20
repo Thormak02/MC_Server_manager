@@ -13,6 +13,8 @@ import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.Richtung;
+import de.freimarken.kern.Wechselbuch;
+import de.freimarken.kern.Wechselwerte;
 import de.freimarken.kern.Wirtschaftsstand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -132,10 +134,22 @@ final class ParzellenBefehle {
 
     private final Bonusauskunft bonusauskunft;
 
+    /**
+     * Die Wechselstube hinter {@code /mark tauschen} [Teil F].
+     *
+     * <p>Sie liegt hier und bekommt keinen eigenen Befehl, und das stand schon vor ihr in
+     * dieser Datei: "Zwei Befehle, die denselben Stand zeigen, laufen eines Tages
+     * auseinander." Plan 11.1 nennt den Zweig ausdruecklich - {@code /konto tauschen} -,
+     * und {@code /mark} ist dieses Konto.
+     */
+    private final Wechselbuch wechselbuch;
+
     ParzellenBefehle(Besitzbuch buch, World marktstadt, Wirtschaftsstand wirtschaft,
-                     Logger protokoll, Sprache sprache, Bonusauskunft bonusauskunft) {
+                     Logger protokoll, Sprache sprache, Bonusauskunft bonusauskunft,
+                     Wechselbuch wechselbuch) {
         this.sprache = sprache;
         this.bonusauskunft = bonusauskunft;
+        this.wechselbuch = wechselbuch;
         this.buch = buch;
         this.marktstadt = marktstadt;
         // Aus der Welt gelesen und nicht daneben uebergeben: Zwei Angaben fuer dieselbe
@@ -222,7 +236,41 @@ final class ParzellenBefehle {
                 // Zweitname, und beide holen Stand und Verlauf aus derselben Methode.
                 .then(Commands.literal("verlauf")
                         .executes(fuerSpieler(this::zeigeVerlauf)))
+                .then(tauschZweig())
                 .build();
+    }
+
+    /**
+     * Der Zweig {@code /mark tauschen} - die Tafel und die zwei Richtungen.
+     *
+     * <p><b>Das Wort allein zeigt die TAFEL und tauscht nichts.</b> Ein Tausch ohne Zahl
+     * waere eine Vermutung darueber, wie viele einer meint - und hier bewegt jeder Ruf
+     * Geld.
+     *
+     * <p><b>Die Anzahl ist in GOLDMARK, in beiden Richtungen</b>, und die Grenzen stehen
+     * im Befehlsbaum: Der Client markiert eine 0 oder eine zu grosse Zahl rot, bevor sie
+     * den Server erreicht. Darum darf {@code Wechselbuch} bei einer unmoeglichen Anzahl
+     * werfen - sie kann aus diesem Zweig nicht kommen.
+     *
+     * <p>{@code kaufen} und {@code verkaufen} und nicht ein Wort fuer die Richtung: Was
+     * ein Spieler tippt, soll sagen, was mit seiner Goldmark passiert. "tauschen mark 5"
+     * hiesse fuenf Goldmark gegen Mark - und laese sich genauso gut umgekehrt.
+     */
+    private LiteralArgumentBuilder<CommandSourceStack> tauschZweig() {
+        return Commands.literal("tauschen")
+                .executes(fuerSpieler(this::zeigeTauschtafel))
+                .then(Commands.literal("kaufen")
+                        .then(anzahlGoldmark()
+                                .executes(z -> mitAnzahl(z, this::kaufeGoldmark))))
+                .then(Commands.literal("verkaufen")
+                        .then(anzahlGoldmark()
+                                .executes(z -> mitAnzahl(z, this::verkaufeGoldmark))));
+    }
+
+    /** Die Anzahl Goldmark - mit den Grenzen aus dem Kern, nicht mit eigenen. */
+    private static RequiredArgumentBuilder<CommandSourceStack, Integer> anzahlGoldmark() {
+        return Commands.argument("anzahl",
+                IntegerArgumentType.integer(1, (int) Wechselwerte.HOECHSTE_ANZAHL));
     }
 
     // --- Die Naht: reine Methoden, die nur Zeilen bauen ------------------------
@@ -272,6 +320,20 @@ final class ParzellenBefehle {
         }
         zeilen.addAll(sprache.bau(MarkSatz.VERLAUF_HINWEIS, 1L, Einsatz.keine()));
         return List.copyOf(zeilen);
+    }
+
+    /**
+     * Die Tafel der Wechselstube - oder die Stoerungszeile.
+     *
+     * <p>Die Wache auf die leere Auskunft steht hier und nicht im Zweig, weil in BEIDEN
+     * Faellen gesendet wird: Sie entscheidet, WAS der Spieler liest, und nicht, OB.
+     */
+    static List<Component> tauschtafelZeilen(Sprache sprache,
+                                             Optional<Wechselbuch.Auskunft> auskunft) {
+        if (auskunft.isEmpty()) {
+            return sprache.bau(MarkSatz.TAUSCH_GESTOERT, 1L, Einsatz.keine());
+        }
+        return Tauschtext.tafelZeilen(sprache, auskunft.get());
     }
 
     /**
@@ -1657,6 +1719,32 @@ final class ParzellenBefehle {
                 });
     }
 
+    /** {@code /mark tauschen} - was Plan 2.1 "Wechseldeckel sichtbar" nennt. */
+    private void zeigeTauschtafel(Player spieler) {
+        tauschtafelZeilen(sprache, wechselbuch.auskunft(spieler.getUniqueId()))
+                .forEach(spieler::sendMessage);
+    }
+
+    /** {@code /mark tauschen kaufen <anzahl>} - Mark hinein, Goldmark heraus. */
+    private void kaufeGoldmark(Player spieler, int anzahl) {
+        // Die Kurse VOR dem Tausch geholt und mit hineingegeben: Dieselbe Tafel, mit der
+        // gerechnet wurde, schreibt auch die Antwort. Zwei Blicke in den
+        // Wirtschaftsstand koennten ein Neuladen dazwischen haben - und dann nennte die
+        // Absage einen anderen Kurs als die Rechnung.
+        Wechselwerte werte = wechselbuch.werte();
+        Tauschtext.entscheidZeilen(sprache, werte,
+                        wechselbuch.kaufe(spieler.getUniqueId(), anzahl))
+                .forEach(spieler::sendMessage);
+    }
+
+    /** {@code /mark tauschen verkaufen <anzahl>} - Goldmark hinein, Mark heraus. */
+    private void verkaufeGoldmark(Player spieler, int anzahl) {
+        Wechselwerte werte = wechselbuch.werte();
+        Tauschtext.entscheidZeilen(sprache, werte,
+                        wechselbuch.verkaufe(spieler.getUniqueId(), anzahl))
+                .forEach(spieler::sendMessage);
+    }
+
     /** Hebt den Spieler aus der Befehlsquelle - alle Zweige hier sind spielerpflichtig. */
     private Command<CommandSourceStack> fuerSpieler(Consumer<Player> tat) {
         return zusammenhang -> {
@@ -1713,5 +1801,18 @@ final class ParzellenBefehle {
     @FunctionalInterface
     private interface MitNummer {
         void fuehreAus(Player spieler, int gemeintX, int gemeintZ);
+    }
+
+    /** Wie {@link #mitNummer}, aber mit der EINEN Zahl des Tauschzweigs. */
+    private int mitAnzahl(CommandContext<CommandSourceStack> zusammenhang, MitAnzahl tat) {
+        if (zusammenhang.getSource().getExecutor() instanceof Player spieler) {
+            tat.fuehreAus(spieler, IntegerArgumentType.getInteger(zusammenhang, "anzahl"));
+        }
+        return Command.SINGLE_SUCCESS;
+    }
+
+    @FunctionalInterface
+    private interface MitAnzahl {
+        void fuehreAus(Player spieler, int anzahl);
     }
 }

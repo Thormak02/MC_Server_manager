@@ -894,6 +894,84 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Proben 4198 -> 4237 (core 1619, daten 366, paper 2252), 0 rot, 0 uebersprungen, 0
   Warnungen. Neu: MariaGoldkasseTest (28, voller Vertrag gegen die echte Datenbank),
   GoldkasseTest (6), KassentabellenTest (5), GrenzeTest 31ct.
+- ~~Teil F: Wechsel mit Deckel.~~ 20.11. GEBAUT. Wechselwerte (zwei Kurse, Deckel),
+  Wechselbuch mit beiden Richtungen, sechs Buchungsgruende, Buchungsgrund.buch(),
+  Wechselliste, Abschnitt wechsel: in der config.yml, /mark tauschen mit Tafel,
+  Tauschtext, GrenzeTest 31cu.
+- GEWECHSELT WIRD IN GOLDMARK, in BEIDEN Richtungen - die erste Entscheidung: Wer nach
+  dem Hinweg in MARK fragte, muesste mit 2.500 Mark zwei Goldmark geben und 500 Mark
+  behalten. Dieser Rest wird irgendwann irgendwo verschluckt. Mit der Goldmark als
+  Einheit gibt es keinen, und sie ist ohnehin die grobe Einheit des Plans.
+- DER RUNDLAUFRIEGEL ist die tragende Zeile: Braechte der Rueckweg mehr, als der Hinweg
+  kostet, waere jeder Rundlauf ein Gewinn - beliebig oft, ohne eine Minute Arbeit, und
+  JEDE Buchung dabei richtig. Die Summenprobe des Buchungsbuchs bestaetigt dabei jeden
+  Stand. Der Tagesdeckel hilft NICHT: Er begrenzt die Menge, nicht das Verhaeltnis.
+  Darum weist Wechselwerte das Paar ab und der Leser verwirft BEIDE Kurse.
+- DER DECKEL IST IN MARK BEMESSEN (Plan 8.1) und wird in Goldmark ABGERUNDET: 10.000
+  Mark bei 800 je Goldmark sind zwoelf am Tag (9.600 Mark), nicht zwoelf Komma fuenf.
+- ER KUERZT NICHT, ER SAGT AB - anders als Verdienst- und Marktdeckel. Dort wird
+  gekuerzt, weil ein abgebauter Block sich nicht zuruecknehmen laesst; hier hat der
+  Spieler nur eine Zahl genannt. Wer zwanzig will und zwoelf darf, soll es LESEN.
+- EINE 0 HEISST HIER DAS GEGENTEIL von bundesmarkt.tagesdeckel: dort KEIN Deckel, hier
+  RUECKWEG ZU. Begruendung: Bei der Arbeit waere "niemand darf verdienen" von einem
+  Tippfehler nicht zu unterscheiden; ein geschlossener Rueckweg ist eine sinnvolle
+  Einstellung, ein Rueckweg ohne Deckel bricht die Zusage des Plans. Der Leser nennt den
+  Unterschied in seiner Berichtszeile, damit niemand den falschen Deckel auf 0 stellt.
+- SECHS GRUENDE und nicht vier: Ein Wechsel bewegt Geld in ZWEI Buechern, und ein Konto
+  traegt nur seine eigenen Zeilen. Dazu je Richtung eine ERSTATTUNG - und die ist der
+  Grund, warum es sechs sind: Eine Erstattung mit WECHSEL_MARK_HER fuellte den
+  Tagesdeckel eines Spielers, dem der Tausch misslungen ist.
+- BUCHUNGSGRUND.BUCH() als Schalter OHNE default: Der Uebersetzer fragt jeden kuenftigen
+  Grund, in welches Buch er gehoert. Eine Liste der Goldmarkgruende daneben waere die
+  stille Vorgabe gewesen, die man zu ergaenzen vergisst.
+- GEMESSEN, der Fund dabei: Die erste Fassung hiess Waehrung mit zwei Werten, und die
+  Probe auf den Inhalt des Goldbuchs war ROT - dort stand eine EROEFFNUNG, und die
+  schreibt die Kasse SELBST, in welchem Buch sie auch fuehrt. Daher der dritte Wert
+  JEDES und gehoertIn() an EINER Stelle; zwei Vergleiche mit != haetten ihn zweimal
+  uebersehen.
+- ZWEI RIEGEL, keine Ueberdeckung: Die Goldkasse weist jeden Grund ab, der nicht in das
+  Goldbuch gehoert (sie ist die einzige Tuer dorthin, in beiden Betriebsarten); das
+  Wechselbuch prueft seine MARKbuchungen selbst (es ist die einzige Stelle, die beide
+  Buecher anfasst). Fuer das Markbuch im Uebrigen gibt es keinen - dort buchen dreissig
+  Stellen, und alle hatten bis heute nur Markgruende.
+- GEMESSEN, Fund an Tafel 31am: Der Schluessel der Sprungbestaetigung war durch einen
+  PARAMETER gereicht - und damit fuer die Tafel unsichtbar, die die Gestalt
+  betrag(wurzel, ... "schluessel") liest. Die Probe meldete eine Zeile zu viel in der
+  config.yml. Die Schluessel stehen jetzt am Aufruf; der Waechter sieht nur diese
+  Gestalt.
+- GEMESSEN, Fund im Startlauf: Die Rechenprobe stand ZWEIMAL im Protokoll - einmal aus
+  dem Bericht des Lesers, einmal aus nenneWechsel. nenneWechsel ist weg. Geblieben ist
+  der BERICHT, obwohl nenneRaenge es umgekehrt macht: Der Bericht erscheint auch bei
+  /freimarken neuladen, und eine Zahl ist am ehesten falsch, kurz nachdem jemand sie
+  geaendert hat.
+- GEFUNDEN UND BEHOBEN, nicht von Teil F: raenge.an und raenge.leiter fehlten seit Teil A
+  in Wirtschaftsstand.uebernimm - ihr Neuladen war voellig stumm. Jetzt werden sie
+  genannt, mit eigener Probe.
+- GEMESSEN, elf Einspritzungen mit TREFFERTEXT: Rundlaufriegel aus -> WechselwerteTest;
+  Deckel zaehlt den falschen Grund -> WechselbuchTest; Erstattung mit dem Deckelgrund ->
+  WechselbuchTest; EROEFFNUNG als Markgrund -> die Buchprobe; Abbuchen blockiert nicht
+  -> ZU_WENIG_MARK; Waehrungsriegel der Goldkasse aus -> GoldkasseTest; falsche
+  Markkasse in der Stube -> 31cu; die zwei Deckelsaetze vertauscht -> TauschtextTest;
+  Tauschzweig nicht angemeldet -> MarkBefehlTest 39f; Rechenprobe aus dem Bericht ->
+  WechsellisteTest.
+- UND EINE IST ZUERST DURCHGEGANGEN: > zu >= an der Deckelgrenze blieb GRUEN. Grund ist
+  Arithmetik - bei 800 Mark je Goldmark trifft kein Tausch den Deckel von 10.000 genau
+  (zwoelf sind 9.600, dreizehn 10.400), also entscheidet das Zeichen dort nichts. Neue
+  Probe mit Kurs 1.000: zehn Goldmark sind genau 10.000 Mark. Danach rot.
+- GEMESSEN auf einem laufenden Paper 26.3 (Probenschema): Startzeile EINMAL,
+  /freimarken neuladen nennt "wechsel.mark-je-goldmark: 1000 -> 2000", die
+  Sprungbestaetigung fuer 10000 -> 0 wird erkannt, und der geschlossene Rueckweg wird
+  gemeldet - samt dem Hinweis auf die andere Bedeutung der 0. 0 Ausnahmen.
+- DER TAUSCH SELBST ist von der Konsole aus nicht pruefbar: /mark tauschen ist
+  spielerpflichtig. Dafuer stehen MarkBefehlTest (durch den echten Befehlsbaum, mit
+  Kontostaenden) und WechselbuchTest.
+- Proben 4237 -> 4326, 0 rot, 0 uebersprungen, 0 Warnungen. Neu: WechselbuchTest (24),
+  WechselwerteTest (14), WechsellisteTest (13), TauschtextTest (10), MarkBefehlTest +7,
+  WirtschaftsstandTest +3, GoldkasseTest +3, GrenzeTest 31cu, BildGleich 13 Zeilen.
+- NOCH NICHT DA, mit Absicht: Das Muenzhaus (Teil G) - der Verlauf des GOLDbuchs hat
+  noch keine Anzeige. Die sechs Worte stehen schon in der Vorlage, weil Buchungsgrund zu
+  jedem Grund ein Wort verlangt; eine Verlaufszeile in Goldmark braucht ihren eigenen
+  Satz, denn waehrung.betrag sagt "Mark".
 - Offen in Teil A, mit Absicht: Der RUNDGANG (Plan 9, Siedler) und "eigene Parzelle
   bebaut" (Plan 9, Buerger) sind keine Bedingungsart - den Rundgang gibt es erst mit
   Schritt 13, und was "bebaut" misst, steht im Plan nirgends. Beide kommen als Zeile dazu,

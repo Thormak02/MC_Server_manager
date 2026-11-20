@@ -770,6 +770,13 @@ class VorlageTest {
             // Schritt 11, Teil F: Die Startzeile ueber den Biomwechsel - Konsole, wie
             // die vier darueber. Sie nennt die Einheit, weil die Zahl daneben steht.
             "FreimarkenPlugin.java -> \" Mark\"",
+            // Schritt 12, Teil F: Die zwei Startzeilen der Wechselstube. Beide gehen in
+            // die KONSOLE. Die erste sagt, woher Goldmark ueberhaupt kommt - und das Wort
+            // Mark steht darin als Name der anderen Waehrung, nicht als Einheit einer
+            // Zahl. Die zweite erscheint nur bei geschlossenem Rueckweg; sie nennt
+            // Goldmark und Mark, weil genau die Richtung gemeint ist.
+            "FreimarkenPlugin.java -> \". Zu bekommen ist sie allein durch Tausch aus"
+                    + " Mark (/mark tauschen);\"",
             // Teil C3: Die SEVERE-Zeile des verlorenen Erloeses. Sie geht in die
             // Konsole und an niemanden sonst - ihr Zweck ist, dass der Betreiber von
             // Hand gutschreiben kann, und dafuer muss die Einheit darin stehen.
@@ -878,6 +885,24 @@ class VorlageTest {
                     + " Tausender, sondern die\"",
             // Die Zeile beim Abschalten - Konsole.
             "Verdienstwache.java -> \" Mark Verdienst\"",
+            // Schritt 12, Teil F: der Leser der Wechselstube. NEUN Stellen, und jede
+            // einzelne geht an den BETREIBER - zwei Einheiten fuer den Sprungschutz, die
+            // Rechenprobe mit beiden Kursen und dem Tagesdeckel, und die Klagen ueber
+            // einen unbrauchbaren Kurs und ueber den Rundlauf. Was ein SPIELER liest,
+            // kommt aus mark.tausch.* und damit ueber sprache.betrag und
+            // sprache.goldmark aus der Datei; die Bildproben halten das zeichengleich.
+            "Wechselliste.java -> \"Mark\"",
+            "Wechselliste.java -> \"Mark\"",
+            "Wechselliste.java -> \" Mark je Goldmark, beliebig oft wiederholbar. Der"
+                    + " Rueckweg darf\"",
+            "Wechselliste.java -> \" Mark und bringt \"",
+            "Wechselliste.java -> \" Mark zurueck\"",
+            "Wechselliste.java -> \" Mark). \"",
+            "Wechselliste.java -> \" Mark braucht auf diesem Weg \"",
+            "Wechselliste.java -> \" Mark je Goldmark; eine 0 waere ein\"",
+            "Wechselliste.java -> \"Mark\"",
+            "Wechselliste.java -> \" in Mark zurueckwechseln. Achtung, hier heisst die 0"
+                    + " etwas anderes\"",
             "Wirtschaftsliste.java -> \"Mark\"",
             "Wirtschaftsliste.java -> \"Mark je Feld\"",
             "Wirtschaftsliste.java -> \"Mark\"",

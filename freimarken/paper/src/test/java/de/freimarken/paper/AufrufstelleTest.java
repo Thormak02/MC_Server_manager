@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Berufswerte;
+import de.freimarken.kern.Goldkasse;
 import de.freimarken.kern.Verdienstwerte;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Buchungsgrund;
@@ -14,11 +15,13 @@ import de.freimarken.kern.Richtung;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
 import de.freimarken.kern.Stadtgrenze;
+import de.freimarken.kern.Wechselbuch;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Warpverzeichnis;
 import de.freimarken.kern.Wirtschaftswerte;
 import de.freimarken.kern.Zeitwerte;
 import java.util.ArrayList;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -166,7 +169,12 @@ class AufrufstelleTest {
                 Logger.getLogger("probe"), Sprachprobe.spracheAusDemJar(),
                 // Keine Bonuszeile: Diese Proben halten /mark ohne Teil H.
                 // Dass die Zeile dazukommt, prueft BonusBefehlTest.
-                wer -> null);
+                wer -> null,
+                // Eine Wechselstube, weil der Befehlsbaum eine braucht. Was sie TUT,
+                // prueft MarkBefehlTest - hier geht es um die Aufrufstellen.
+                new Wechselbuch(kasse, new Goldkasse(new SpeicherKasse(0L)),
+                        new Wirtschaftsstand(Wirtschaftswerte.VORGABE),
+                        Clock.systemUTC()));
         kasse.eroeffne(ANNA);
         kasse.eroeffne(BERT);
     }

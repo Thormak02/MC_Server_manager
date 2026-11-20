@@ -54,7 +54,8 @@ class WirtschaftsstandTest {
                 Marktwerte.VORGABE, Messwerte.VORGABE,
                 Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE,
                 Truhenwerte.VORGABE, Freistadtwerte.VORGABE, Inselwerte.VORGABE,
-                Angelwerte.VORGABE, Wolkenwerte.VORGABE, Rangwerte.VORGABE);
+                Angelwerte.VORGABE, Wolkenwerte.VORGABE, Rangwerte.VORGABE,
+                Wechselwerte.VORGABE);
     }
 
     /**
@@ -478,6 +479,74 @@ class WirtschaftsstandTest {
                 uebernahme.geaendert().getFirst(),
                 "der WORTLAUT, nicht die Zahl der Zeilen: Der Betreiber hat true in die"
                         + " Datei geschrieben und soll true lesen, keine 1");
+    }
+
+    @Test
+    @DisplayName("Beide Kurse und der Wechseldeckel werden getauscht - und EINZELN genannt")
+    void wechselzahlenGetauscht() {
+        // Alle drei sind neuladbar: Sie werden beim Gebrauch gefragt, es wird nichts
+        // gebaut und nichts angemeldet. Und alle drei MUESSEN im Bericht stehen - der
+        // Kurs ist der Wert, an dem ein Betreiber am ehesten dreht, und ein stumm
+        // geaenderter Kurs ist im Spiel von einem kaputten Tausch nicht zu unterscheiden.
+        //
+        // ALLE DREI auf einmal verstellt, und zwar auf verschiedene Zahlen: Waeren zwei
+        // gleich, saehe diese Probe nicht, ob jede Zeile ihren eigenen Pfad nennt.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitWechsel(
+                new Wechselwerte(2_000L, 1_500L, 7_000L)));
+
+        assertEquals(2_000L, stand.werte().wechsel().markJeGoldmark());
+        assertEquals(1_500L, stand.werte().wechsel().markZurueck());
+        assertEquals(7_000L, stand.werte().wechsel().tagesdeckel());
+        assertTrue(uebernahme.geaendert().contains(
+                        Wechselwerte.PFAD_HIN + ": 1000 -> 2000"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(
+                        Wechselwerte.PFAD_ZURUECK + ": 800 -> 1500"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().contains(
+                        Wechselwerte.PFAD_DECKEL + ": 10000 -> 7000"),
+                uebernahme.geaendert().toString());
+    }
+
+    @Test
+    @DisplayName("Eine unveraenderte Wechselstube steht NICHT in der Meldung")
+    void unveraenderterWechselSchweigt() {
+        // Die Gegenrichtung, und sie ist Pflicht: Drei Zeilen, die immer dastehen, waeren
+        // mit der Probe darueber genauso gruen - und der Betreiber laese bei jedem
+        // Neuladen, der Kurs habe sich geaendert.
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE);
+
+        assertEquals(List.of(), uebernahme.geaendert());
+    }
+
+    @Test
+    @DisplayName("Der Schalter und die Stufen der Rangleiter werden getauscht")
+    void rangleiterGetauscht() {
+        // FUND VOM 20.11.2026, beim Bauen von Teil F: Die Rangleiter fehlte in dieser
+        // Meldung seit Teil A. Wer eine Stufe eintraegt und "nichts geaendert" liest,
+        // glaubt das Neuladen wirke nicht - dasselbe Fehlerbild wie bei den zwei
+        // Auflagenschaltern, und dieselbe Antwort.
+        //
+        // Der Schalter als Ja/Nein, die Leiter als MENGE ihrer Stufennamen: Welche Stufe
+        // dazukam und welche wegfiel, ist das, was der Betreiber lesen will.
+        var kurz = new Rangwerte(true, Rangwerte.VORGABE.leiter().subList(0, 2));
+        var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE.mitRaengen(kurz));
+
+        var uebernahme = stand.uebernimm(Wirtschaftswerte.VORGABE.mitRaengen(
+                new Rangwerte(false, Rangwerte.VORGABE.leiter())));
+
+        assertFalse(stand.werte().raenge().an());
+        assertEquals(Rangwerte.VORGABE.leiter().size(),
+                stand.werte().raenge().leiter().size());
+        assertTrue(uebernahme.geaendert().contains(Rangwerte.PFAD_AN + ": true -> false"),
+                uebernahme.geaendert().toString());
+        assertTrue(uebernahme.geaendert().stream()
+                        .anyMatch(zeile -> zeile.startsWith(Rangwerte.PFAD_LEITER)),
+                uebernahme.geaendert().toString());
     }
 
     @Test

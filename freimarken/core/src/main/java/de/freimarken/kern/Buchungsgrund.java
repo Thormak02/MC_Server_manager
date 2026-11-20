@@ -424,12 +424,114 @@ public enum Buchungsgrund {
      * <p>Wie bei {@link #WOLKE_ERSTATTET}: Die Ablage schweigt NACH dem Abbuchen. Lieber
      * zwei Zeilen im Kontobuch als ein Spieler, der fuer nichts bezahlt hat.
      */
-    WOLKE_BIOM_ERSTATTET("wolke_biom_erstattet", Richtung.EINNAHME);
+    WOLKE_BIOM_ERSTATTET("wolke_biom_erstattet", Richtung.EINNAHME),
+
+    /**
+     * Was ein Spieler fuer Goldmark BEZAHLT hat - im Markbuch [Schritt 12 Teil F].
+     *
+     * <p>Plan 8.1: 1.000 Mark = 1 Goldmark, unbegrenzt. Das ist die eine Richtung, die
+     * keinen Deckel hat, und sie braucht auch keinen: Sie VERNICHTET Mark.
+     *
+     * <p><b>Vier Gruende fuer zwei Tauschgaenge, und das ist keine Doppelung.</b> Ein
+     * Wechsel bewegt Geld in ZWEI Buechern - Mark hier, Goldmark dort -, und ein Konto
+     * traegt nur seine eigenen Zeilen. Dieselbe Bewegung ist im Markbuch eine Ausgabe
+     * und im Goldbuch eine Einnahme; mit einem gemeinsamen Grund waere eine der beiden
+     * Zeilen falsch gerichtet, und die Summenprobe faende es nicht - sie rechnet je
+     * Konto und je Buch.
+     */
+    WECHSEL_MARK_WEG("wechsel_mark_weg", Richtung.AUSGABE),
+
+    /** Die Goldmark, die aus diesem Tausch kam - im GOLDBUCH. Siehe {@link #WECHSEL_MARK_WEG}. */
+    WECHSEL_GOLDMARK_HER("wechsel_goldmark_her", Richtung.EINNAHME),
+
+    /**
+     * Die Goldmark, die ein Spieler zurueckgetauscht hat - im GOLDBUCH.
+     *
+     * <p>Der Rueckweg, und er ist der gedeckelte: Plan 8.1 gibt 1 Goldmark = 800 Mark und
+     * hoechstens 10.000 Mark am Tag. Gezaehlt wird der Deckel aber NICHT an diesem Grund,
+     * sondern an {@link #WECHSEL_MARK_HER} - der Deckel ist in MARK bemessen.
+     */
+    WECHSEL_GOLDMARK_WEG("wechsel_goldmark_weg", Richtung.AUSGABE),
+
+    /**
+     * Die Mark, die aus dem Rueckweg kam - und <b>der Zeuge des Wechseldeckels</b>.
+     *
+     * <p>Wie beim Tagesbonus und bei der Ladenmiete ist das BUCHUNGSBUCH die Wahrheit
+     * ueber "heute schon": Gefragt wird {@link Kasse#summeSeit} mit DIESEM Grund seit dem
+     * Tagesbeginn, und was dort steht, ist der verbrauchte Teil des Deckels. Eine zweite
+     * Tabelle daneben waere eine zweite Wahrheit, die nach dem ersten Absturz von der
+     * ersten abweicht.
+     *
+     * <p><b>Darum gibt es {@link #WECHSEL_MARK_ZURUECK} daneben.</b> Eine Erstattung ist
+     * auch Mark, die ins Konto kommt - aber sie ist KEIN Wechsel, und mit demselben Grund
+     * fuellte sie den Tagesdeckel eines Spielers, dem der Tausch misslungen ist. Wer den
+     * Schluessel dieses Grundes aendert, macht jeden heute schon getauschten Betrag
+     * unsichtbar: Der Deckel steht dann wieder auf voll, und die Grenze des Plans - 400.000
+     * Mark brauchen mindestens 40 Tage - gilt an diesem Tag nicht.
+     */
+    WECHSEL_MARK_HER("wechsel_mark_her", Richtung.EINNAHME),
+
+    /**
+     * Der Kaufpreis kommt zurueck, weil die Goldmark nicht ankam.
+     *
+     * <p>Dieselbe Antwort wie {@link #PARZELLE_ERSTATTET} und {@link #WOLKE_ERSTATTET},
+     * und hier mit einem zweiten Zweck: Dieser Grund ist ausdruecklich NICHT der Zeuge des
+     * Wechseldeckels. Stuende hier {@link #WECHSEL_MARK_HER}, verbrauchte eine misslungene
+     * Hinrichtung - die gar nicht gedeckelt ist - den Tagesdeckel des Rueckwegs.
+     */
+    WECHSEL_MARK_ZURUECK("wechsel_mark_zurueck", Richtung.EINNAHME),
+
+    /**
+     * Die Goldmark kommt zurueck, weil die Mark nicht ankam - im GOLDBUCH.
+     *
+     * <p>Die Gegenseite von {@link #WECHSEL_MARK_ZURUECK}, und sie wird aus demselben
+     * Grund gebraucht: Abgebucht wird ZUERST - das ist die Reihenfolge, die kein Geld
+     * erzeugen kann -, und wenn danach die Gutschrift scheitert, hat der Spieler gezahlt
+     * und nichts bekommen.
+     */
+    WECHSEL_GOLDMARK_ZURUECK("wechsel_goldmark_zurueck", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {
         EINNAHME,
         AUSGABE
+    }
+
+    /**
+     * In WELCHEM Buch dieser Grund steht - die Frage, die Teil F aufgeworfen hat.
+     *
+     * <p>Bis zum 19.11.2026 gab es nur ein Buch, und die Frage stellte sich nicht. Seit
+     * der Goldmark gibt es zwei ({@code buchungen} und {@code goldbuchungen}), und ein
+     * Grund, der im falschen landet, ist der schlimmste Fehler dieser Bauphase: Die Zeile
+     * steht da, sie ist richtig gerichtet, die Summe des Kontos stimmt - und sie erzaehlt
+     * von einer Waehrung, die dieses Konto nicht fuehrt. Niemand sieht es, bis jemand eine
+     * Summe nachrechnet.
+     *
+     * <p><b>{@link #JEDES} ist der gemessene Fund dieses Teils</b> [19.11.2026]: Die
+     * Aufzaehlung hiess zuerst {@code Waehrung} mit zwei Werten, und die erste Probe
+     * gegen den Inhalt des Goldbuchs war rot - dort stand eine {@link #EROEFFNUNG}, und
+     * die war als Markgrund eingetragen. Sie kommt nicht von einem Aufrufer, sondern von
+     * der Kasse SELBST: Jede Umsetzung legt ein Konto mit einer Eroeffnungsbuchung an, in
+     * welchem Buch sie auch fuehrt. Ein solcher Grund ist keine Waehrungsentscheidung,
+     * und ihn einer Waehrung zuzuschlagen machte die Zusage "jede Zeile dieses Buches
+     * traegt einen Grund dieses Buches" unhaltbar - also gibt es den dritten Wert.
+     */
+    public enum Buch {
+
+        /** Nur im Markbuch - die Waehrung des Alltags. */
+        MARK,
+
+        /** Nur im Goldbuch (Plan 8.1). */
+        GOLDMARK,
+
+        /**
+         * In jedem Buch - was eine Kasse von sich aus schreibt.
+         *
+         * <p>Sparsam zu vergeben: Jeder Grund hier ist einer, den der Riegel nicht mehr
+         * prueft. Er ist richtig fuer das, was die Kasse selbst tut, und falsch fuer
+         * alles, was ein Aufrufer bucht.
+         */
+        JEDES
     }
 
     private final String schluessel;
@@ -443,6 +545,52 @@ public enum Buchungsgrund {
     /** Wie der Grund in der Datenbank steht. */
     public String schluessel() {
         return schluessel;
+    }
+
+    /**
+     * In welchem Buch dieser Grund steht.
+     *
+     * <p><b>Ein Schalter ohne {@code default} und mit allen Gruenden einzeln</b>, und das
+     * ist der ganze Zweck: Ein Schalterausdruck ueber eine Aufzaehlung muss vollstaendig
+     * sein, sonst uebersetzt er nicht. Wer einen neuen Grund eintraegt, wird vom
+     * Uebersetzer gefragt, in welches Buch er gehoert - und bekommt keine stille Vorgabe,
+     * die ihn in das Markbuch legt. Eine Liste der Goldmarkgruende daneben waere genau
+     * diese stille Vorgabe gewesen: Wer sie zu ergaenzen vergisst, merkt es nie.
+     */
+    public Buch buch() {
+        return switch (this) {
+            case WECHSEL_GOLDMARK_HER, WECHSEL_GOLDMARK_WEG, WECHSEL_GOLDMARK_ZURUECK -> Buch.GOLDMARK;
+            case EROEFFNUNG -> Buch.JEDES;
+            case BESTAND, PARZELLE_GEKAUFT, PARZELLE_ERSTATTET,
+                     FREISTADT_GEGRUENDET, FREISTADT_ERSTATTET, GRUNDSTUECK_GEKAUFT,
+                     GRUNDSTUECK_VERKAUFT, GRUNDSTUECK_GEBUEHR, GRUNDSTUECK_ERSTATTET,
+                     ZUSAMMENLEGUNG, ZUSAMMENLEGUNG_ERSTATTET, BERUF_VERLASSEN,
+                     BERUF_ERSTATTET, BERUF_VERDIENST, BUNDESMARKT_VERKAUF, TAGESBONUS,
+                     LADEN_LIZENZ, LADEN_KAUTION, LADEN_KAUTION_ZURUECK, LADEN_MIETE,
+                     SHOP_GEKAUFT, SHOP_VERKAUFT, SHOP_GEBUEHR, SHOP_ERSTATTET,
+                     LADEN_ERSTATTET, STADTKASSE_GEBUEHR, STADTKASSE_ABGEHOBEN,
+                     STADTKASSE_AUSGEZAHLT, STADTKASSE_ZURUECK, FREISTADT_AUFGEGEBEN,
+                     FREISTADT_LADENGEBUEHR, STADTKASSE_LADENGEBUEHR, WERDER_GEKAUFT,
+                     WERDER_ERSTATTET, WOLKE_GENOMMEN, WOLKE_ERSTATTET, WOLKE_AUFGABE,
+                     WOLKE_BIOM, WOLKE_BIOM_ERSTATTET, WECHSEL_MARK_WEG, WECHSEL_MARK_HER,
+                     WECHSEL_MARK_ZURUECK -> Buch.MARK;
+        };
+    }
+
+    /**
+     * Ob dieser Grund in dieses Buch gehoert.
+     *
+     * <p>Die Frage, die die zwei Riegel stellen - und sie steht HIER und nicht zweimal
+     * dort: {@link Buch#JEDES} passt in beide, und ein Vergleich mit {@code !=} an zwei
+     * Stellen haette diesen dritten Wert zweimal uebersehen. Genau das war der Fehler, mit
+     * dem dieser Teil anfing.
+     */
+    public boolean gehoertIn(Buch welches) {
+        if (welches == null || welches == Buch.JEDES) {
+            throw new IllegalArgumentException("Gefragt wird nach einem bestimmten Buch,"
+                    + " nicht nach " + welches);
+        }
+        return buch() == welches || buch() == Buch.JEDES;
     }
 
     public Richtung richtung() {

@@ -150,6 +150,61 @@ mark:
       #   Nach einer genauen Platzrechnung ist der Fall nicht erreichbar - das Wort
       #   steht da, weil "nicht erreichbar" kein Zustand ist, auf den man Geld setzt.
       shop-erstattet: "Handel erstattet"
+      # Die Wechselstube (Plan 8.1). DIE WORTE SAGEN, WOHER DAS GELD KAM ODER WOHIN
+      #   ES GING - nie, welche Waehrung es war: Dieselben sechs Schluessel tragen die
+      #   Zeilen in BEIDEN Buechern, im Markbuch und im Goldbuch, und welche Einheit
+      #   gemeint ist, sagt der Betrag daneben. Stuende die Waehrung im Wort, laese ein
+      #   Spieler im Goldbuch "5 Goldmark - Mark gekauft".
+      # Die zwei ERSTATTUNGEN unterscheiden sich darin, welche RICHTUNG gescheitert
+      #   ist, und nicht in der Waehrung. Sie fallen selten: nur, wenn zwischen den
+      #   zwei Buchungen eines Tausches die Verbindung abbricht.
+      wechsel-mark-weg: "In Goldmark gewechselt"
+      wechsel-goldmark-her: "Aus Mark gewechselt"
+      wechsel-goldmark-weg: "In Mark gewechselt"
+      wechsel-mark-her: "Aus Goldmark gewechselt"
+      wechsel-mark-zurueck: "Kauf gescheitert - erstattet"
+      wechsel-goldmark-zurueck: "Rueckwechsel gescheitert - erstattet"
+
+  # /MARK TAUSCHEN - die Wechselstube. Plan 2.1 nennt fuer das Muenzhaus "Kontostand,
+  # Verlauf, Wechsel Mark - Goldmark, Wechseldeckel sichtbar"; das Haus selbst kommt
+  # spaeter, diese Zeilen sind seine Auskunft im Chat.
+  #
+  # GEWECHSELT WIRD IN GOLDMARK, in beiden Richtungen - darum heissen beide Zahlen in
+  # den Saetzen unten {goldmark} und {anzahl} und nie "Betrag": Wer drei kauft, zahlt
+  # dreimal den Kurs, und ein Rest bleibt nie liegen.
+  tausch:
+    # Die erste von vier Zeilen der Tafel.
+    kopf: "<gold>Wechselstube</gold>"
+    # {betrag} - dein Stand in GOLDMARK. Die Mark zeigt /mark ohne weiteres Wort.
+    stand: "<gray>Du hast <gold>{betrag}</gold>.</gray>"
+    # {kauf} was eine Goldmark kostet, {verkauf} was sie zurueckbringt. Beide in EINER
+    # Zeile: Der Unterschied zwischen den zwei Zahlen IST der Preis des Rundlaufs.
+    kurse: "<gray>Eine Goldmark kostet <gold>{kauf}</gold> und bringt <gold>{verkauf}</gold> zurueck.</gray>"
+    # {anzahl} Goldmark, {betrag} Mark - der sichtbare Wechseldeckel. Beide Zahlen,
+    # weil der Deckel in MARK bemessen ist und gewechselt wird in GOLDMARK.
+    frei: "<gray>Heute kannst du noch <gold>{anzahl}</gold> zurueckwechseln ({betrag}).</gray>"
+    # Statt der Zeile darueber, wenn wechsel.tagesdeckel auf 0 steht.
+    zu: "<gray>Der Rueckweg in Mark ist geschlossen.</gray>"
+    # Die letzte Zeile der Tafel: wie man tauscht.
+    hilfe: "<dark_gray>/mark tauschen kaufen 5 oder /mark tauschen verkaufen 5</dark_gray>"
+    # {goldmark} was du bekommen hast, {mark} was es gekostet hat, {stand} dein
+    # Goldmarkstand danach.
+    gekauft: "<green>{goldmark} fuer {mark} gekauft. Du hast jetzt {stand}.</green>"
+    # Die Gegenseite: {mark} ist hier, was du bekommen hast.
+    verkauft: "<green>{goldmark} fuer {mark} zurueckgewechselt. Du hast jetzt {stand}.</green>"
+    # {preis} was es kostet, {fehlt} was dir an Mark fehlt.
+    zu-wenig-mark: "<red>Das kostet {preis} - dir fehlen {fehlt}.</red>"
+    # {anzahl} was du tauschen wolltest, {stand} was du hast.
+    zu-wenig-goldmark: "<red>{anzahl} hast du nicht - du hast {stand}.</red>"
+    # {anzahl} wie viele Goldmark heute noch gehen, {betrag} wie viele Mark das sind.
+    # DIE ZAHL IST DIE GANZE NACHRICHT: Der Wechsel kuerzt nicht, er sagt ab - ohne
+    # diese Zahl probiert ein Spieler zwanzigmal.
+    deckel-erreicht: "<red>Heute gehen nur noch {anzahl} ({betrag}) - der Wechseldeckel.</red>"
+    # {betrag} der Deckel in Mark. Diese Zeile statt der darueber, wenn heute gar
+    # nichts mehr geht.
+    deckel-voll: "<red>Heute ist der Wechseldeckel von {betrag} erreicht. Morgen wieder.</red>"
+    # Eine Kasse hat geschwiegen. Was abgebucht war, ist zurueck.
+    gestoert: "<red>Die Kasse hat nicht geantwortet. Es ist nichts passiert.</red>"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -171,6 +226,12 @@ waehrung:
   # Pfennige, und "0 Mark" waere die falsche Antwort an einen, der gerade arbeitet.
   # AENDERST DU DEIN WAEHRUNGSWORT, aendere es an BEIDEN Stellen.
   pfennige: "{zahl} Mark"
+  # Die ZWEITE Waehrung (Plan 8.1): die Goldmark. Ein eigener Schluessel und nicht
+  # derselbe wie oben, und das ist der sichtbarste Teil der Trennung: Beide Zahlen sind
+  # im Programm dasselbe, und eine verwechselte Zeile zeigte "12 Mark", wo einer 12
+  # Goldmark hat - beim Kurs des Plans das Tausendfache daneben.
+  # Gebraucht wird es von /mark tauschen und spaeter vom Muenzhaus.
+  goldmark: "{zahl} Goldmark"
 
 zeit:
   # Muster fuer DateTimeFormatter, kein Satz. Wird beim LADEN uebersetzt - ein

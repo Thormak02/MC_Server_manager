@@ -2213,7 +2213,45 @@ class BildGleichTest {
                 new Zeile(RangSatz.NAECHSTER, 1L,
                         Einsatz.von("rang", "buerger"), "&7Als naechstes: buerger."),
                 new Zeile(RangSatz.HOECHSTE, 1L, Einsatz.keine(),
-                        "&6Damit stehst du auf der hoechsten Stufe."));
+                        "&6Damit stehst du auf der hoechsten Stufe."),
+
+                // DIE WECHSELSTUBE [Schritt 12 Teil F]. Die Betraege kommen ueber
+                // sprache.betrag und sprache.goldmark aus der Datei - und das ist hier
+                // mehr als Bequemlichkeit: Die zwei Waehrungen sind im Programm beide
+                // ein long, und eine verwechselte Zeile zeigte "12 Mark", wo einer 12
+                // Goldmark hat. Steht in einem Bild unten die falsche Einheit, ist diese
+                // Probe rot.
+                new Zeile(MarkSatz.TAUSCH_KOPF, 1L, Einsatz.keine(), "&6Wechselstube"),
+                new Zeile(MarkSatz.TAUSCH_STAND, 1L,
+                        Einsatz.von("betrag", sprache.goldmark(12L)), "&7Du hast &612 Goldmark&7."),
+                new Zeile(MarkSatz.TAUSCH_KURSE, 1L,
+                        Einsatz.von("kauf", sprache.betrag(1_000L))
+                                .mit("verkauf", sprache.betrag(800L)), "&7Eine Goldmark kostet &61.000 Mark&7 und bringt &6800 Mark&7 zurueck."),
+                new Zeile(MarkSatz.TAUSCH_FREI, 1L,
+                        Einsatz.von("anzahl", sprache.goldmark(12L))
+                                .mit("betrag", sprache.betrag(10_000L)), "&7Heute kannst du noch &612 Goldmark&7 zurueckwechseln (10.000 Mark)."),
+                new Zeile(MarkSatz.TAUSCH_ZU, 1L, Einsatz.keine(), "&7Der Rueckweg in Mark ist geschlossen."),
+                new Zeile(MarkSatz.TAUSCH_HILFE, 1L, Einsatz.keine(), "&8/mark tauschen kaufen 5 oder /mark tauschen verkaufen 5"),
+                new Zeile(MarkSatz.TAUSCH_GEKAUFT, 1L,
+                        Einsatz.von("goldmark", sprache.goldmark(3L))
+                                .mit("mark", sprache.betrag(3_000L))
+                                .mit("stand", sprache.goldmark(3L)), "&a3 Goldmark fuer 3.000 Mark gekauft. Du hast jetzt 3 Goldmark."),
+                new Zeile(MarkSatz.TAUSCH_VERKAUFT, 1L,
+                        Einsatz.von("goldmark", sprache.goldmark(5L))
+                                .mit("mark", sprache.betrag(4_000L))
+                                .mit("stand", sprache.goldmark(0L)), "&a5 Goldmark fuer 4.000 Mark zurueckgewechselt. Du hast jetzt 0 Goldmark."),
+                new Zeile(MarkSatz.TAUSCH_ZU_WENIG_MARK, 1L,
+                        Einsatz.von("preis", sprache.betrag(3_000L))
+                                .mit("fehlt", sprache.betrag(1L)), "&cDas kostet 3.000 Mark - dir fehlen 1 Mark."),
+                new Zeile(MarkSatz.TAUSCH_ZU_WENIG_GOLDMARK, 1L,
+                        Einsatz.von("anzahl", sprache.goldmark(3L))
+                                .mit("stand", sprache.goldmark(2L)), "&c3 Goldmark hast du nicht - du hast 2 Goldmark."),
+                new Zeile(MarkSatz.TAUSCH_DECKEL_ERREICHT, 1L,
+                        Einsatz.von("anzahl", sprache.goldmark(12L))
+                                .mit("betrag", sprache.betrag(9_600L)), "&cHeute gehen nur noch 12 Goldmark (9.600 Mark) - der Wechseldeckel."),
+                new Zeile(MarkSatz.TAUSCH_DECKEL_VOLL, 1L,
+                        Einsatz.von("betrag", sprache.betrag(10_000L)), "&cHeute ist der Wechseldeckel von 10.000 Mark erreicht. Morgen wieder."),
+                new Zeile(MarkSatz.TAUSCH_GESTOERT, 1L, Einsatz.keine(), "&cDie Kasse hat nicht geantwortet. Es ist nichts passiert."));
     }
 
     @ParameterizedTest(name = "11 - {0}")

@@ -483,7 +483,7 @@ class GrenzeTest {
             // ZAHLEN sendet nie - es faellt taeglich und waere eine Durchsage ohne
             // Anlass.
             Map.entry("Ladengebuehrlauf.java", 1),
-            Map.entry("ParzellenBefehle.java", 44),
+            Map.entry("ParzellenBefehle.java", 47),
             Map.entry("Portalwache.java", 1),
             Map.entry("Rangwache.java", 1),
             Map.entry("Reise.java", 7),
@@ -574,6 +574,11 @@ class GrenzeTest {
                     Map.entry("niemandMitDemNamenZeilen", 1),
                     Map.entry("ohneParzelleZeilen", 1),
                     Map.entry("stehtNichtAufZeilen", 1),
+                    // Teil F: /mark tauschen zeigt die Tafel der Wechselstube. Die
+                    // zwei Richtungen stehen hier NICHT - sie rufen Tauschtext
+                    // unmittelbar, und dessen Methoden zaehlt diese Tafel nicht.
+                    // Gedeckt sind sie durch TauschtextTest und MarkBefehlTest.
+                    Map.entry("tauschtafelZeilen", 1),
                     Map.entry("unbekannterSpielerZeilen", 1),
                     Map.entry("vergebenZeilen", 1),
                     Map.entry("verlaufZeilen", 1),
@@ -4206,6 +4211,45 @@ class GrenzeTest {
         assertTrue(plugin.contains("new Stadtkasse(new MariaKasse(datenbank, 0L))"),
                 "die Staedtekasse liegt nicht mehr auf den Marktabellen - sie SOLL dort"
                         + " liegen, es ist dieselbe Waehrung");
+    }
+
+    @Test
+    @DisplayName("31cu - die Wechselstube haengt an derselben Markkasse, die /mark zeigt")
+    void wechselstubeAnDerRichtigenKasse() {
+        // DER SCHLIMMSTE FEHLER DIESES BAUSCHRITTES, und er ist von aussen unsichtbar:
+        // Die Wechselstube nimmt eine Kasse und eine Goldkasse. Die Goldkasse kann der
+        // Uebersetzer nicht verwechseln - sie hat ihren eigenen Typ, das war die
+        // Entscheidung aus Teil E. Die MARKKASSE aber ist einfach eine Kasse, und es
+        // gibt mehrere im Plugin: die der Spieler (buch.kasse()) und die der Staedte.
+        // Eine falsche hier hiesse, dass /mark tauschen von einem anderen Konto abbucht
+        // als /mark anzeigt - der Spieler sieht sein Guthaben unveraendert und hat
+        // trotzdem gezahlt. Jede Probe bleibt dabei gruen: Das Wechselbuch tut genau,
+        // was man ihm sagt.
+        String plugin = plugintext();
+
+        assertTrue(plugin.contains("new Wechselbuch(buch.kasse(), goldkasse, wirtschaft,"),
+                "die Wechselstube wird nicht mit der Spielerkasse, der Goldkasse und dem"
+                        + " GETEILTEN Wirtschaftsstand gebaut - und jede dieser drei"
+                        + " Verwechslungen ist lautlos: eine andere Kasse bucht vom"
+                        + " falschen Konto, ein eigener Wirtschaftsstand macht das"
+                        + " Neuladen der Kurse stumm");
+
+        // UND SIE WIRD UEBERGEBEN. Das Argument ist Pflicht, aber ein null dort
+        // uebersetzt - und dann stuerzt der erste /mark tauschen ab, auf dem Server und
+        // nicht in einer Probe.
+        assertTrue(plugin.contains("wechselbuch);"),
+                "die Wechselstube wird gebaut und nicht an die Befehle gegeben - dann"
+                        + " gibt es sie, und niemand kann sie benutzen");
+
+        // UND DIE EINE UHR DES PLUGINS. Mit einer zweiten Uhr liefe die Tagesgrenze des
+        // Wechseldeckels gegen eine andere Zeit als jede andere Tagesrechnung - und der
+        // Unterschied ist in der Nacht am groessten, wenn niemand hinsieht.
+        var zweiteUhr = java.util.regex.Pattern
+                .compile("new Wechselbuch\\([^)]*Clock\\.")
+                .matcher(plugin);
+        assertFalse(zweiteUhr.find(),
+                "die Wechselstube baut sich eine eigene Uhr - es gibt genau eine im"
+                        + " Plugin, und die Tagesgrenze haengt an ihr");
     }
 
 }

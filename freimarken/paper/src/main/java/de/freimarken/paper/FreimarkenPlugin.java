@@ -73,6 +73,7 @@ import de.freimarken.kern.Tagesgrenze;
 import de.freimarken.kern.Truhenablage;
 import de.freimarken.kern.Truhenverzeichnis;
 import de.freimarken.kern.Warpverzeichnis;
+import de.freimarken.kern.Wechselbuch;
 import de.freimarken.kern.Wirtschaftsstand;
 import de.freimarken.kern.Wolkenbuch;
 import de.freimarken.kern.Wolkengrenze;
@@ -922,13 +923,25 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // jeder Umzugsschritt diese Datei und teils dieselbe Methode anfassen -
         // benachbarte Zeilen, zwei Haende, ein verlorener Schreibzug. So fasst nach diesem
         // Schritt kein Umzug FreimarkenPlugin mehr an.
+        // DIE WECHSELSTUBE [Teil F]: dieselbe Markkasse, die /mark zeigt, und die
+        // Goldkasse aus richteAblageEin. Hier gebaut und nicht in einer eigenen
+        // richte-Methode, weil sie nichts einrichtet - kein Zeitgeber, kein Zuhoerer,
+        // keine Tabelle. Sie ist eine Regel mit zwei Kassen.
+        //
+        // Die Goldkasse steht an dieser Stelle schon: richteAblageEin lief weiter oben,
+        // in BEIDEN Betriebsarten. Waere sie null, waere es kein stiller Fehler, sondern
+        // ein Wurf im Konstruktor von Wechselbuch - beim Start und nicht beim ersten
+        // Tausch.
+        Wechselbuch wechselbuch = new Wechselbuch(buch.kasse(), goldkasse, wirtschaft,
+                uhr);
         befehle = new ParzellenBefehle(buch, marktstadt, wirtschaft, getLogger(),
                 sprache,
                 // Das FELD wird beim Aufruf gelesen und nicht beim Bauen: Die Befehle
                 // entstehen vor dem Spielzeittakt, mit dem der Bonus entsteht. Die
                 // Pruefung auf null faengt den Fall, dass der Start davor abgebrochen
                 // ist - dann zeigt /mark seine uebrigen Zeilen.
-                wer -> tagesbonus == null ? null : tagesbonus.standZeile(wer, sprache));
+                wer -> tagesbonus == null ? null : tagesbonus.standZeile(wer, sprache),
+                wechselbuch);
         // Der Ladenschutz als ZWEITE Frage derselben Wache [Teil C] - nicht als zweite
         // Wache. Jene deckt fuenfzehn Ereignisarten ab, dreizehn davon ueber dasselbe
         // unterbinden(); eine zweite Liste liefe auseinander, und genau davor warnt ihre
@@ -2901,22 +2914,33 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * Sagt beim Start, dass die Goldmark steht - und was sie noch nicht kann.
      *
      * <p>Eine Waehrung ohne Verbraucher ist genau die Gestalt, die dieses Projekt
-     * mehrfach getroffen hat: gebaut, gruen geprueft, und niemand merkt etwas. Hier ist
-     * das Fehlen ABSICHT - gewechselt wird mit Teil F -, und darum sagt es der Start
-     * ausdruecklich. Ohne diese Zeile waere der Unterschied zwischen "noch kein
-     * Verbraucher" und "falsch verdrahtet" von aussen nicht zu sehen.
+     * mehrfach getroffen hat: gebaut, gruen geprueft, und niemand merkt etwas. Mit Teil E
+     * sagte diese Zeile, dass es ueberhaupt keinen Weg zu Goldmark gibt; seit Teil F
+     * nennt sie den EINEN, der es gibt - den Tausch. Was weiter fehlt, ist das Haus, das
+     * sie ausgibt, und auch das steht hier: Ohne diese Zeile waere der Unterschied
+     * zwischen "noch kein Verbraucher" und "falsch verdrahtet" von aussen nicht zu
+     * sehen.
      *
      * <p>Genannt wird auch, WOHER ein Guthaben kommen kann. Das ist die Frage, die ein
-     * Betreiber als erste stellt, und die Antwort ist heute: noch von nirgends.
+     * Betreiber als erste stellt - seit Teil F lautet die Antwort: aus dem Tausch, und
+     * sonst nirgends.
+     *
+     * <p><b>Die ZAHLEN des Tausches stehen hier nicht</b>, und das ist gemessen
+     * [20.11.2026]: Sie stehen in der Rechenprobe des Lesers ({@code Wechselliste}),
+     * und eine zweite Zeile daneben war im Startprotokoll wortgleich dieselbe. Der
+     * Bericht des Lesers ist der richtige Ort, weil er auch bei {@code /freimarken
+     * neuladen} erscheint - und eine Zahl ist am ehesten falsch, kurz nachdem
+     * jemand sie geaendert hat.
      */
     private void nenneGoldmark() {
         getLogger().info("Goldmark: eigene Kasse, Startguthaben 0 - "
                 + (fluechtig ? "FLUECHTIG, vergisst beim Neustart"
                         : "eigene Tabellen " + Kassentabellen.GOLDMARK.konten() + " und "
                                 + Kassentabellen.GOLDMARK.buch())
-                + ". Noch gibt es keinen Weg, Goldmark zu bekommen - Wechsel und"
-                + " Muenzhaus kommen mit Schritt 12 Teil F und G.");
+                + ". Zu bekommen ist sie allein durch Tausch aus Mark (/mark tauschen);"
+                + " das Muenzhaus, das sie ausgibt, kommt mit Schritt 12 Teil G.");
     }
+
 
     /**
      * Nennt die Welten, in deren Erscheinungspunkt niemand stehen kann.

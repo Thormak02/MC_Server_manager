@@ -78,7 +78,7 @@ wirtschaft:
   #
   # Die Bestaetigung gilt nur fuer genau diesen Sprung: Wer sie eintraegt und spaeter eine
   # andere Zahl setzt, wird erneut gefragt. Ein Dauerfreibrief waere keine Rueckfrage.
-  # SECHZEHN Zeilen, eine je Geldwert mit Sprungschutz. Vier davon standen bis zum
+  # NEUNZEHN Zeilen, eine je Geldwert mit Sprungschutz. Vier davon standen bis zum
   # 10.11.2026 nicht hier, und das war keine Abschaltung - die Klage nennt den
   # Schluessel samt fertiger Zeile, und wer sie liest, traegt ihn ein. Aber diese Datei
   # IST die Dokumentation: Ein Abschnitt, der vier von fuenfzehn verschweigt, laesst
@@ -113,6 +113,12 @@ wirtschaft:
     # Kostenpflichtiges zu machen ist die Aenderung, die jeder Spieler sofort merkt.
     wolken-kauf: ""
     wolken-biom: ""
+    # Die drei Zahlen der Wechselstube (wechsel.*). Der Deckel braucht die Bestaetigung
+    # auch dann, wenn du ihn auf 0 setzt - von 10.000 auf 0 ist mehr als Faktor 2, und
+    # eine 0 schliesst den Rueckweg ganz.
+    wechsel-hin: ""
+    wechsel-zurueck: ""
+    wechsel-tagesdeckel: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
@@ -266,6 +272,62 @@ kasse:
   # Eroeffnungsbuchung am 02.11.2026 behoben hat. Der Betrag friert im Augenblick der
   # Eroeffnung ein (Beitritt oder erste Buchung, je was zuerst kommt).
   startguthaben: 50000
+
+# DIE WECHSELSTUBE - Mark in Goldmark und zurueck.
+#
+# Die Goldmark ist die zweite Waehrung (Plan 8.1). Sie hat genau zwei Quellen: Echtgeld
+# und den Tausch aus Mark. Gekauft wird fuer Kosmetik, Bequemlichkeit, Rangfarben und
+# Haustiere - nie fuer Parzellen, Staedte oder Inseln.
+#
+# GEWECHSELT WIRD IN GOLDMARK, in beiden Richtungen. Darum gibt es keinen Rest: Wer drei
+# Goldmark kauft, zahlt dreimal den Hinwegkurs; wer drei zurueckwechselt, bekommt dreimal
+# den Rueckwegkurs. Eine halbe Goldmark gibt es nicht.
+#
+# DER HINWEG IST FREI, DER RUECKWEG GEDECKELT, und das ist die tragende Entscheidung des
+# Plans: Der Hinweg VERNICHTET Mark und braucht keine Grenze. Der Rueckweg bringt Mark in
+# Umlauf, die niemand erarbeitet hat - er ist der Weg, auf dem Echtgeld zu Parzellen
+# wuerde. Mit 10.000 Mark am Tag braucht eine Freistadt zu 400.000 Mark mindestens 40
+# Tage, auch bei hundert Euro. "Pay to fast", nicht "pay to win".
+#
+# Alle drei Zahlen nimmt /freimarken neuladen im Betrieb an.
+wechsel:
+  # Was eine Goldmark KOSTET.
+  #
+  # Ganze Zahl von 1 bis 1000000000 Mark. Mehr als Faktor 2 gegenueber 1.000 braucht die
+  # Bestaetigung unter wirtschaft.sprung-bestaetigt.wechsel-hin.
+  #
+  # Mit 1.000 ist Kosmetik bewusst billig: Ein Hut zu zwei Goldmark sind 2.000 Mark, also
+  # ungefaehr eine Spielstunde. Eine kleine Freude, ueber die niemand lange nachdenkt.
+  mark-je-goldmark: 1000
+
+  # Was eine Goldmark BRINGT, wenn sie zurueckgewechselt wird.
+  #
+  # Ganze Zahl von 1 bis 1000000000 Mark, und NIE mehr als mark-je-goldmark: Braechte der
+  # Rueckweg mehr, als der Hinweg kostet, waere jeder Rundlauf ein Gewinn - beliebig oft,
+  # ohne eine Minute Arbeit. Der Start weist ein solches Paar ab und nimmt BEIDE Vorgaben.
+  #
+  # Mit 800 verliert ein Rundlauf 20 Prozent. Das macht den Wechsel zu einer Entscheidung
+  # und die Goldmark nicht zu einem Verwahrort fuer Mark.
+  mark-zurueck: 800
+
+  # Wie viele MARK ein Spieler an einem Tag hoechstens aus Goldmark zurueckholen darf.
+  #
+  # Ganze Zahl von 0 bis 2305843009213693951 Mark. In MARK bemessen und nicht in
+  # Goldmark: Mit 10.000 Mark und einem Rueckwegkurs von 800 sind das zwoelf Goldmark am
+  # Tag (9.600 Mark) - die dreizehnte waere darueber und wird abgesagt, nicht gekuerzt.
+  #
+  # EINE 0 HEISST HIER: DER RUECKWEG IST ZU. Goldmark laesst sich dann kaufen und nicht
+  # mehr in Mark zurueckwechseln. Achtung, bei bundesmarkt.tagesdeckel bedeutet dieselbe
+  # 0 das Gegenteil, naemlich KEIN Deckel - dort waere "niemand darf verkaufen" von einem
+  # Tippfehler nicht zu unterscheiden, hier ist ein geschlossener Rueckweg eine sinnvolle
+  # Einstellung. Wer hier keinen Deckel will, traegt eine grosse Zahl ein.
+  #
+  # DIE TAGESGRENZE ist dieselbe wie bei Tagesbonus, Verdienstdeckel und Ladenmiete:
+  # Mitternacht in der Zone unter zeit.zone. Gezaehlt wird aus dem Buchungsbuch und nicht
+  # aus einer eigenen Tabelle - was heute schon zurueckkam, steht dort als Buchung.
+  #
+  # DER HEBEL FUER EINEN ENGEREN GELDWEG: Plan 8.1 nennt 5.000 als das naechstliegende.
+  tagesdeckel: 10000
 
 # DIE BERUFE - was ein Spieler waehlen darf, was ein Wechsel kostet und was ihn bremst.
 #
