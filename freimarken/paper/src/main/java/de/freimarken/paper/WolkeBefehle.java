@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.IntSupplier;
 import java.util.function.LongConsumer;
+import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -179,6 +180,14 @@ final class WolkeBefehle {
     /** Der Zuschlag - eine Mitgliedschaft legt etwas auf den Rang. */
     private static final String RECHT_EXTRA_ANZAHL = "freimarken.extra.wolken.";
 
+    /**
+     * Die Werbezeile aus {@code hinweise.rang-werbung} - als ABFRAGE.
+     *
+     * <p>Aus demselben Grund wie die Hoechstzahl: Sie ist neuladbar, und beim Bauen
+     * kopiert waere sie nach {@code /freimarken neuladen} die alte.
+     */
+    private final Supplier<String> rangWerbung;
+
     private final Wolkenbuch buch;
 
     /**
@@ -229,7 +238,8 @@ final class WolkeBefehle {
     WolkeBefehle(Wolkenbuch buch, Aufgabenbuch aufgabenbuch,
                  Function<Player, Vorrat> vorrat, Pflege pflege,
                  Kasse kasse, Sprache sprache, Aufsetzer aufsetzer, Heimweg heimweg,
-                 String wolkenschluessel, IntSupplier hoechstzahl) {
+                 String wolkenschluessel, IntSupplier hoechstzahl,
+                 Supplier<String> rangWerbung) {
         this.buch = buch;
         this.aufgabenbuch = aufgabenbuch;
         this.vorrat = vorrat;
@@ -240,6 +250,7 @@ final class WolkeBefehle {
         this.heimweg = heimweg;
         this.wolkenschluessel = wolkenschluessel;
         this.hoechstzahl = hoechstzahl;
+        this.rangWerbung = rangWerbung;
     }
 
     LiteralCommandNode<CommandSourceStack> wolke() {
@@ -357,7 +368,8 @@ final class WolkeBefehle {
         Wolkenbuch.Entscheid entscheid =
                 buch.nehmen(wolkenschluessel, spieler.getUniqueId(), erlaubt);
 
-        sende(spieler, Wolkentext.nehmenZeilen(sprache, entscheid, erlaubt, guthaben));
+        sende(spieler, Wolkentext.nehmenZeilen(sprache, entscheid, erlaubt, guthaben,
+                rangWerbung.get()));
         if (!entscheid.erteilt()) {
             return Command.SINGLE_SUCCESS;
         }

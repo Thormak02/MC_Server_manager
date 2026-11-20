@@ -73,7 +73,8 @@ class RangwacheTest {
         // Ein Neuling hat keine Zeile in der Ablage. Bekaeme er darum NICHTS, stuende er
         // ohne jedes Rangrecht da - und im Spiel sieht das aus wie die Regel.
         assertEquals(Set.of("freimarken.parzellen.1", "freimarken.gruppe.1",
-                        "freimarken.inseln.1", "freimarken.wolken.1"),
+                        "freimarken.inseln.1", "freimarken.wolken.1",
+                        "freimarken.freistaedte.1"),
                 griff.gesetzt(anna));
     }
 
@@ -188,7 +189,8 @@ class RangwacheTest {
         // waere der Spieler nie aufgestiegen. Darum die Zeile - und sie muss den Rang
         // NENNEN, sonst weiss der Betreiber nicht, welchen er wieder eintragen soll.
         assertEquals(Set.of("freimarken.parzellen.1", "freimarken.gruppe.1",
-                        "freimarken.inseln.1", "freimarken.wolken.1"),
+                        "freimarken.inseln.1", "freimarken.wolken.1",
+                        "freimarken.freistaedte.1"),
                 griff.gesetzt(anna));
         assertEquals(1, gemeldet.size(), gemeldet.toString());
         assertTrue(gemeldet.get(0).contains("fuerst"), gemeldet.get(0));

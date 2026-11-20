@@ -10,6 +10,7 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.List;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
@@ -64,6 +65,15 @@ final class WerderBefehle {
     /** Der Zuschlag - eine Mitgliedschaft legt etwas auf den Rang. */
     private static final String RECHT_EXTRA_ANZAHL = "freimarken.extra.inseln.";
 
+    /**
+     * Die Werbezeile aus {@code hinweise.rang-werbung} - als ABFRAGE.
+     *
+     * <p>Aus demselben Grund wie die Hoechstzahl: Sie ist neuladbar. Beim Bauen kopiert
+     * waere sie nach {@code /freimarken neuladen} die alte, und ein Hinweis, der eine
+     * Stufe bewirbt, die es nicht mehr gibt, ist schlimmer als keiner.
+     */
+    private final Supplier<String> rangWerbung;
+
     private final Inselbuch buch;
     private final Kasse kasse;
     private final Sprache sprache;
@@ -90,13 +100,15 @@ final class WerderBefehle {
     private final IntSupplier hoechstzahl;
 
     WerderBefehle(Inselbuch buch, Kasse kasse, Sprache sprache, String weltschluessel,
-                  String weltname, IntSupplier hoechstzahl) {
+                  String weltname, IntSupplier hoechstzahl,
+                  Supplier<String> rangWerbung) {
         this.buch = buch;
         this.kasse = kasse;
         this.sprache = sprache;
         this.weltschluessel = weltschluessel;
         this.weltname = weltname;
         this.hoechstzahl = hoechstzahl;
+        this.rangWerbung = rangWerbung;
     }
 
     LiteralCommandNode<CommandSourceStack> werder() {
@@ -205,7 +217,7 @@ final class WerderBefehle {
                 spieler.getUniqueId(), ort.getBlockX(), ort.getBlockZ(), erlaubt);
 
         sende(spieler, Werdertext.nehmenZeilen(sprache, entscheid, erlaubt, guthaben,
-                Spielername::von));
+                rangWerbung.get(), Spielername::von));
         return Command.SINGLE_SUCCESS;
     }
 

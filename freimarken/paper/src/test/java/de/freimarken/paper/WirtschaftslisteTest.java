@@ -48,8 +48,8 @@ class WirtschaftslisteTest {
                 grundpreis: 25000
                 zusammenlegung-je-feld: 10000
             parzellen:
-              hoechstzahl: 4
-              gruppe-hoechstzahl: 4
+              hoechstzahl: 1
+              gruppe-hoechstzahl: 1
             hinweise:
               rang-werbung: "Mehr erlaubt ein hoeherer Rang."
             kasse:
@@ -239,8 +239,8 @@ class WirtschaftslisteTest {
                   sprung-bestaetigt:
                     grundpreis: "25000 -> 100000"
                 parzellen:
-                  hoechstzahl: 4
-                  gruppe-hoechstzahl: 4
+                  hoechstzahl: 1
+                  gruppe-hoechstzahl: 1
                 hinweise:
                   rang-werbung: ""
                 kasse:
@@ -297,11 +297,13 @@ class WirtschaftslisteTest {
     @Test
     @DisplayName("Eine Obergrenze von 0 hiesse: niemand darf eine Parzelle")
     void nullParzellen() {
-        var ergebnis = lies(VOLLSTAENDIG.replace("hoechstzahl: 4", "hoechstzahl: 0"));
+        var ergebnis = lies(VOLLSTAENDIG.replace("hoechstzahl: 1", "hoechstzahl: 0"));
 
         assertTrue(klagtUeber(ergebnis, Wirtschaftswerte.PFAD_HOECHSTZAHL),
                 ergebnis.klagen().toString());
-        assertEquals(4, ergebnis.werte().hoechstzahl());
+        assertEquals(Wirtschaftswerte.VORGABE_HOECHSTZAHL,
+                ergebnis.werte().hoechstzahl(),
+                "beklagt wird sie, und es gilt der Rueckfall");
     }
 
     @Test
@@ -309,7 +311,7 @@ class WirtschaftslisteTest {
     void anzahlOhneRueckfrage() {
         // Die Faktor-2-Rueckfrage gilt nur fuer Geldwerte. Eine Obergrenze macht kein
         // Geld, und der Wert ist ohnehin nur die Untergrenze der Rechteauswertung.
-        var ergebnis = lies(VOLLSTAENDIG.replace("hoechstzahl: 4", "hoechstzahl: 20"));
+        var ergebnis = lies(VOLLSTAENDIG.replace("hoechstzahl: 1", "hoechstzahl: 20"));
 
         assertTrue(ergebnis.klagen().isEmpty(), ergebnis.klagen().toString());
         assertEquals(20, ergebnis.werte().hoechstzahl());
@@ -558,7 +560,7 @@ class WirtschaftslisteTest {
         // damit ist die Bremse gegen Flaechenhorten lautlos aus.
         for (String getippt : new String[] {"-2147483649", "-4294967292", "-2147483650",
                                             "-1", "0"}) {
-            var ergebnis = lies(VOLLSTAENDIG.replace("hoechstzahl: 4",
+            var ergebnis = lies(VOLLSTAENDIG.replace("hoechstzahl: 1",
                     "hoechstzahl: " + getippt));
 
             assertTrue(klagtUeber(ergebnis, Wirtschaftswerte.PFAD_HOECHSTZAHL),
@@ -571,7 +573,7 @@ class WirtschaftslisteTest {
     @Test
     @DisplayName("Dieselbe Luecke bei der Gruppengroesse")
     void negativeGruppengroesseKipptNicht() {
-        var ergebnis = lies(VOLLSTAENDIG.replace("gruppe-hoechstzahl: 4",
+        var ergebnis = lies(VOLLSTAENDIG.replace("gruppe-hoechstzahl: 1",
                 "gruppe-hoechstzahl: -4294967292"));
 
         assertTrue(klagtUeber(ergebnis, Wirtschaftswerte.PFAD_GRUPPEN_FELDER),
@@ -594,8 +596,8 @@ class WirtschaftslisteTest {
                   sprung-bestaetigt:
                     startguthaben: "50000 -> 120000"
                 parzellen:
-                  hoechstzahl: 4
-                  gruppe-hoechstzahl: 4
+                  hoechstzahl: 1
+                  gruppe-hoechstzahl: 1
                 hinweise:
                   rang-werbung: ""
                 kasse:
@@ -762,17 +764,17 @@ class WirtschaftslisteTest {
     @DisplayName("Eine fehlende neuladbare Zeile nennt weiter, was GILT")
     void fehlendeNeuladbareZeileNenntWasGilt() {
         // Die andere Haelfte derselben Entscheidung: Fuer die sechs neuladbaren Schluessel
-        // wird der Rueckfall wirklich uebernommen, also stimmt "es gilt 4" auf beiden
+        // wird der Rueckfall wirklich uebernommen, also stimmt "es gilt 1" auf beiden
         // Wegen. Eine Zeit lang stand fuer alle neun nur "ausgeliefert ist 4" - damit
         // erfuhr der Betreiber in der ganzen Antwort nicht mehr, welche Hoechstzahl gilt,
         // denn uebernimm() nennt nur GEAENDERTE Zeilen und der Block darunter fuehrt sie
         // nicht.
-        var ergebnis = lies(VOLLSTAENDIG.replace("  hoechstzahl: 4\n", ""));
+        var ergebnis = lies(VOLLSTAENDIG.replace("  hoechstzahl: 1\n", ""));
 
         assertEquals(Wirtschaftswerte.VORGABE_HOECHSTZAHL, ergebnis.werte().hoechstzahl());
         assertTrue(ergebnis.bericht().stream().anyMatch(zeile ->
                 zeile.contains(Wirtschaftswerte.PFAD_HOECHSTZAHL)
-                        && zeile.contains("es gilt 4")),
+                        && zeile.contains("es gilt 1")),
                 "die Zeile muss nennen, welche Hoechstzahl gilt: " + ergebnis.bericht());
     }
 

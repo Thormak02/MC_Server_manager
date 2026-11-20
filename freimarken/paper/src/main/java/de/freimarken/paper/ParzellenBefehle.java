@@ -1684,18 +1684,15 @@ final class ParzellenBefehle {
      * <p>In Gelb und nicht in Rot: Die Absage darueber ist die Nachricht, das hier ist
      * das Angebot. Zwei rote Zeilen hintereinander liest niemand als zwei Dinge.
      *
-     * <p>Die EINE Stelle, an der diese Zeile entsteht - vier Zweige haengen sie an, und
-     * jeder von ihnen tut es ueber diese Methode. Ein Hinweis, den drei von vier Wegen
-     * kennen, wirkt auf den vierten wie ein Zufall.
+     * <p><b>Die Regel steht seit Teil H in {@link Rangwerbung}</b> und nicht mehr hier:
+     * Mit den Inseln, den Wolkeninseln und den Freistaedten haengen seither alle fuenf
+     * Grenzen am Rang, und damit gibt es drei weitere Absagen, an denen dieselbe Zeile
+     * haengen muss. Diese Methode bleibt als der Name, den die vier Parzellenzweige
+     * kennen - ein Hinweis, den drei von vier Wegen kennen, wirkt auf den vierten wie ein
+     * Zufall.
      */
     static List<Component> werbungZeilen(Sprache sprache, String rangWerbung) {
-        if (rangWerbung.isEmpty()) {
-            return List.of();
-        }
-        // Nur die FARBE kommt aus der Sprachdatei; der Satz selbst steht in der
-        // config.yml unter hinweise.rang-werbung und ist eine Einstellung dieses Servers.
-        return sprache.bau(ParzellenSatz.RANG_WERBUNG, 1L,
-                Einsatz.von("werbung", rangWerbung));
+        return Rangwerbung.zeilen(sprache, ParzellenSatz.RANG_WERBUNG, rangWerbung);
     }
 
     /** Die Preise, die JETZT gelten - beim Gebrauch geholt, nie in ein Feld kopiert. */

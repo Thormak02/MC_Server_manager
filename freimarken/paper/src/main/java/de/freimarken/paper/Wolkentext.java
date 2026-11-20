@@ -111,15 +111,21 @@ final class Wolkentext {
      * kein Satz dazu steht. Ein {@code default} machte ihn stumm - der Spieler bekaeme
      * eine Absage, die eine andere Lage beschreibt.
      *
-     * @param hoechstzahl was sein Rang erlaubt - steht in der Absage "du hast genug"
-     * @param guthaben    sein Stand VOR dem Versuch; danach ist abgebucht
+     * @param hoechstzahl  was sein Rang erlaubt - steht in der Absage "du hast genug"
+     * @param guthaben     sein Stand VOR dem Versuch; danach ist abgebucht
+     * @param rangWerbung  die Zeile aus {@code hinweise.rang-werbung}, moeglicherweise
+     *                     leer. Sie haengt NUR unter der Absage an der Grenze - bei
+     *                     "die Welt ist voll" hilft kein Rang
      */
     static List<Component> nehmenZeilen(Sprache sprache, Wolkenbuch.Entscheid entscheid,
-                                        int hoechstzahl, long guthaben) {
+                                        int hoechstzahl, long guthaben,
+                                        String rangWerbung) {
         return switch (entscheid.bescheid()) {
             case ERTEILT -> genommenZeilen(sprache, entscheid, guthaben);
-            case GRENZE_ERREICHT -> sprache.bau(WolkeSatz.ABSAGE_GRENZE, hoechstzahl,
-                    Einsatz.von("hoechstzahl", hoechstzahl));
+            case GRENZE_ERREICHT -> Rangwerbung.darunter(sprache,
+                    WolkeSatz.RANG_WERBUNG, rangWerbung,
+                    sprache.bau(WolkeSatz.ABSAGE_GRENZE, hoechstzahl,
+                            Einsatz.von("hoechstzahl", hoechstzahl)));
             case WELT_VOLL -> sprache.bau(WolkeSatz.ABSAGE_WELT_VOLL, 1L,
                     Einsatz.keine());
             case ZU_WENIG_MARK -> sprache.bau(WolkeSatz.ABSAGE_ZU_WENIG, 1L,

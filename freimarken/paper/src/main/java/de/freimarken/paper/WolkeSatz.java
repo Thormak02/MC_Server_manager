@@ -101,6 +101,14 @@ enum WolkeSatz implements Satz {
     ABSAGE_GRENZE("wolke.absage.grenze", Art.GEZAEHLT, "hoechstzahl"),
 
     /**
+     * Die Zeile aus der {@code config.yml} unter der Absage an der Grenze.
+     *
+     * <p>Nur die FARBE ist hier des Betreibers, der Wortlaut steht in
+     * {@code hinweise.rang-werbung}. Gebaut wird sie in {@link Rangwerbung}.
+     */
+    RANG_WERBUNG("wolke.rang-werbung", Art.SATZ, "werbung"),
+
+    /**
      * Die Welt ist voll - jedes Feld ist vergeben.
      *
      * <p>Bei 1.443 Feldern weit weg, und doch der Zustand, in dem ein Spieler sonst eine

@@ -223,13 +223,15 @@ public record Rangwerte(boolean an, List<Rangwerte.Stufe> leiter) {
      * Gruppenfelder, Meerinseln, Wolkeninseln). Ein Name ohne Leser waere ein Recht, das
      * vergeben wird und nichts tut.
      *
-     * <p><b>Was hier noch fehlt:</b> {@code freistaedte} - der Riegel dort nimmt bis
-     * Schritt 12 Teil H nur die Zahl aus der {@code config.yml}, obwohl der Satz dem
-     * Spieler schon heute sagt "so viele, wie dein Rang erlaubt". Heimatpunkte und
-     * eigene Warps (Plan 9) gibt es noch gar nicht; sie kommen mit ihrer Mechanik.
+     * <p><b>{@code freistaedte} kam mit Teil H</b> [20.11.2026]: Der Riegel dort nahm
+     * bis dahin nur die Zahl aus der {@code config.yml}, obwohl der Satz dem Spieler
+     * schon sagte "so viele, wie dein Rang erlaubt" - eine Zusage ohne Bau. Heimatpunkte
+     * und eigene Warps (Plan 9) gibt es noch gar nicht; sie kommen mit ihrer Mechanik und
+     * nicht vorher, denn ein Recht ohne Leser ist genau das, was dieser Absatz verhindern
+     * soll.
      */
     public static final Set<String> BEKANNTE_ZAHLEN =
-            Set.of("parzellen", "gruppe", "inseln", "wolken");
+            Set.of("parzellen", "gruppe", "inseln", "wolken", "freistaedte");
 
     /**
      * Die ausgelieferte Leiter - drei Stufen nach Plan 9.
@@ -240,24 +242,32 @@ public record Rangwerte(boolean an, List<Rangwerte.Stufe> leiter) {
      * als dort und nicht schwaecher.
      *
      * <p>Die Zahlen sind die der Rangtafel in Plan 9: Parzellen 1/2/4, Zusammenlegen
-     * -/2/4. Meer- und Wolkeninseln bleiben auf allen Stufen bei 1, weil der Plan dort
-     * keine Staffel nennt - der Betreiber kann sie in der Datei aufziehen, ohne dass eine
-     * Zeile Programm zu aendern waere.
+     * 1/2/4. Meerinseln, Wolkeninseln und Freistaedte bleiben auf allen Stufen bei 1,
+     * weil der Plan dort keine Staffel nennt - der Betreiber kann sie in der Datei
+     * aufziehen, ohne dass eine Zeile Programm zu aendern waere.
+     *
+     * <p><b>Jede Stufe nennt JEDE Grenze</b>, auch wo sie nichts hebt [Teil H]: Eine
+     * Stufe, die eine Grenze nicht nennt, gibt dort 0, und dann entscheidet allein die
+     * Datei. Das ist erlaubt und manchmal gewollt - aber es sieht einer vergessenen Zeile
+     * zum Verwechseln aehnlich. Ausgeliefert steht darum ueberall eine Zahl.
      */
     public static final List<Stufe> VORGABE_LEITER = List.of(
             new Stufe("reisender", Map.of(),
-                    Map.of("parzellen", 1, "gruppe", 1, "inseln", 1, "wolken", 1),
+                    Map.of("parzellen", 1, "gruppe", 1, "inseln", 1, "wolken", 1,
+                            "freistaedte", 1),
                     List.of()),
             new Stufe("siedler",
                     Map.of(Bedingungsart.TAETIGE_STUNDEN, 5L,
                             Bedingungsart.PARZELLEN, 1L),
-                    Map.of("parzellen", 2, "gruppe", 2, "inseln", 1, "wolken", 1),
+                    Map.of("parzellen", 2, "gruppe", 2, "inseln", 1, "wolken", 1,
+                            "freistaedte", 1),
                     List.of("laden.mieten")),
             new Stufe("buerger",
                     Map.of(Bedingungsart.TAETIGE_STUNDEN, 40L,
                             Bedingungsart.PARZELLEN, 1L,
                             Bedingungsart.BERUF, 1L),
-                    Map.of("parzellen", 4, "gruppe", 4, "inseln", 1, "wolken", 1),
+                    Map.of("parzellen", 4, "gruppe", 4, "inseln", 1, "wolken", 1,
+                            "freistaedte", 1),
                     List.of("freistadt.gruenden", "beruf.spezialisierung")));
 
     /** Die Werte, die das Programm mitbringt. */

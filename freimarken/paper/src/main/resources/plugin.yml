@@ -201,11 +201,16 @@ permissions:
     # und das ist die Vorarbeit fuer einen Einbruch, nicht seine Aufklaerung.
     description: Darf das Blockbuch lesen - wer wann wo was getan hat
     default: op
-  # VIER Obergrenzen kommen ueber ein Recht mit Zahl: freimarken.parzellen.8 erlaubt acht
-  # Parzellen, freimarken.gruppe.4 vier Felder je zusammengelegter Gruppe,
-  # freimarken.inseln.2 zwei Meerinseln, freimarken.wolken.2 zwei Wolkeninseln. Die
-  # Vorsilben heissen nach der SACHE und nicht nach dem Befehl - darum inseln neben
-  # /werder und wolken neben /wolke. Die hoechste
-  # Zahl gewinnt, der Wert aus der config.yml ist die Untergrenze. Hier steht kein Eintrag
-  # dafuer, weil die Zahl frei waehlbar ist - eingetragen wird sie in der
+  # FUENF Obergrenzen kommen ueber ein Recht mit Zahl: freimarken.parzellen.8 erlaubt
+  # acht Parzellen, freimarken.gruppe.4 vier Felder je zusammengelegter Gruppe,
+  # freimarken.inseln.2 zwei Meerinseln, freimarken.wolken.2 zwei Wolkeninseln,
+  # freimarken.freistaedte.2 zwei Freistaedte. Die Vorsilben heissen nach der SACHE und
+  # nicht nach dem Befehl - darum inseln neben /werder und wolken neben /wolke. Die
+  # hoechste Zahl gewinnt, der Wert aus der config.yml ist die Untergrenze. Hier steht
+  # kein Eintrag dafuer, weil die Zahl frei waehlbar ist - eingetragen wird sie in der
   # Rechteverwaltung, nicht hier.
+  #
+  # Je Grenze gibt es dazu einen ZUSCHLAG fuer eine Mitgliedschaft:
+  # freimarken.extra.parzellen.<n>, .extra.gruppe.<n>, .extra.inseln.<n>,
+  # .extra.wolken.<n>, .extra.freistaedte.<n>. Er kommt auf den Rang und ersetzt ihn
+  # nicht.

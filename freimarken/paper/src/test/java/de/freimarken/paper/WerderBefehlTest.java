@@ -90,7 +90,8 @@ class WerderBefehlTest {
     private Befehlsprobe probe(Inselbuch welches, String weltschluessel) {
         return new Befehlsprobe(List.of(new WerderBefehle(welches, kasse,
                 Sprachprobe.spracheAusDemJar(), weltschluessel, "hafenwerder",
-                () -> Wirtschaftswerte.VORGABE.inseln().hoechstzahl()).werder()));
+                () -> Wirtschaftswerte.VORGABE.inseln().hoechstzahl(),
+                () -> Wirtschaftswerte.VORGABE.rangWerbung()).werder()));
     }
 
     private List<String> gelesen() {
@@ -253,8 +254,14 @@ class WerderBefehlTest {
         assertEquals(1, buch.anzahlVon(WELT, anna.kennung()),
                 "ohne Recht bleibt es bei der einen - sonst prueft die Zeile danach"
                         + " nichts: " + gelesen());
-        assertTrue(gelesen().get(gelesen().size() - 1).contains("mehr erlaubt dein Rang"),
+        // ZWEI Zeilen seit Teil H: die Absage und darunter die Werbezeile aus
+        // hinweise.rang-werbung. Geprueft werden beide und ihre REIHENFOLGE - das
+        // Angebot unter der Nachricht, nicht davor.
+        assertTrue(gelesen().get(gelesen().size() - 2).contains("mehr erlaubt dein Rang"),
                 gelesen().toString());
+        assertEquals("&e" + Wirtschaftswerte.VORGABE_RANG_WERBUNG,
+                gelesen().get(gelesen().size() - 1),
+                "unter der Absage gehoert hinweise.rang-werbung: " + gelesen());
 
         Spielerprobe reich = spieler("Reich", 3, WerderBefehle.RECHT,
                 WerderBefehle.RECHT_NEHMEN, "freimarken.inseln.3");

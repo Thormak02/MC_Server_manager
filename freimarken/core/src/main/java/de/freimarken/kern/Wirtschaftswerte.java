@@ -100,11 +100,29 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
     /** Das ausgelieferte Startguthaben. */
     public static final long VORGABE_STARTGUTHABEN = 50_000L;
 
-    /** Die ausgelieferte Parzellenzahl ohne besonderes Recht. */
-    public static final int VORGABE_HOECHSTZAHL = 4;
+    /**
+     * Die ausgelieferte Parzellenzahl ohne besonderes Recht - die Zahl des REISENDEN.
+     *
+     * <p><b>Eine Eins und nicht die Vier aus Plan 9</b> [20.11.2026, Schritt 12 Teil H]:
+     * Dieser Wert ist eine UNTERGRENZE FUER JEDEN. {@code Rangzahl} nimmt die hoechste
+     * Zahl aus Recht UND Datei; stand hier die Buergerzahl, bekam sie jeder Reisende, und
+     * der ganze Aufstieg auf dieser Grenze war wirkungslos - ohne dass irgendwo etwas rot
+     * wurde. Die Vier steht jetzt dort, wo sie hingehoert: in der obersten Stufe der
+     * Leiter ({@link Rangwerte#VORGABE_LEITER}).
+     *
+     * <p>Wer keine Raenge will, schaltet {@code raenge.an} aus und traegt hier die Zahl
+     * ein, die fuer jeden gelten soll. Dann ist diese Zahl die ganze Regel.
+     */
+    public static final int VORGABE_HOECHSTZAHL = 1;
 
-    /** Die ausgelieferte Felderzahl je Gruppe ohne besonderes Recht. */
-    public static final int VORGABE_GRUPPEN_FELDER = 4;
+    /**
+     * Die ausgelieferte Felderzahl je Gruppe ohne besonderes Recht - Reisendenzahl.
+     *
+     * <p>Aus demselben Grund eine Eins wie {@link #VORGABE_HOECHSTZAHL}, und hier ist die
+     * Folge sogar sichtbarer: Eine Gruppe aus EINEM Feld ist keine Gruppe - der Reisende
+     * kann also gar nicht zusammenlegen, und genau das ist der Rangvorteil des Siedlers.
+     */
+    public static final int VORGABE_GRUPPEN_FELDER = 1;
 
     /** Die ausgelieferte Rangwerbung. */
     public static final String VORGABE_RANG_WERBUNG = "Mehr erlaubt ein hoeherer Rang.";

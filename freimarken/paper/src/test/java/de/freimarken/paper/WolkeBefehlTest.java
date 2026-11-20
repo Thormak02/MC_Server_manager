@@ -246,6 +246,16 @@ class WolkeBefehlTest {
         probe.tippe("wolke nehmen", reich);
         assertTrue(reich.chatBild().get(0).contains("schon 3 Wolkeninseln"),
                 reich.chatBild().get(0));
+        // UND DARUNTER DIE WERBEZEILE aus hinweise.rang-werbung [Teil H]: Die Absage
+        // sagt "mehr erlaubt dein Rang nicht" - erst diese Zeile sagt, wie es
+        // weitergeht. Sie hing bis dahin nur an den Parzellen.
+        assertEquals(2, reich.chatBild().size(),
+                "Absage und Werbezeile, keine mehr und keine weniger: "
+                        + reich.chatBild());
+        assertEquals("&e" + Wirtschaftswerte.VORGABE_RANG_WERBUNG,
+                reich.chatBild().get(1),
+                "unter der Absage gehoert hinweise.rang-werbung: "
+                        + reich.chatBild());
     }
 
     @Test
@@ -732,7 +742,8 @@ class WolkeBefehlTest {
                 welches == null ? null : pflege(), kasse,
                 Sprachprobe.spracheAusDemJar(), this::setzeAuf, this::merkeReise,
                 weltschluessel,
-                () -> Wirtschaftswerte.VORGABE.wolken().hoechstzahl()).wolke()));
+                () -> Wirtschaftswerte.VORGABE.wolken().hoechstzahl(),
+                () -> Wirtschaftswerte.VORGABE.rangWerbung()).wolke()));
     }
 
     /**

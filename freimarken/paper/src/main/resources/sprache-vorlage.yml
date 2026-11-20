@@ -372,6 +372,11 @@ parzelle:
   # bescheid.grenze-erreicht, bescheid.gruppe-zu-gross und
   # bescheid.noch-frei-am-limit. In Gelb und nicht in Rot - die Absage darueber ist
   # die Nachricht, das hier ist das Angebot.
+  #
+  # DIE ANDEREN VIER GRENZEN haben ihren eigenen Schluessel mit demselben Wortlaut:
+  # werder.rang-werbung, wolke.rang-werbung und freistadt.rang-werbung. Der SATZ ist
+  # ueberall derselbe (er steht einmal in der config.yml), die FARBE kannst du je Ort
+  # anders setzen.
   rang-werbung: "<yellow>{werbung}</yellow>"
   # Die eine Weltpruefung: Jeder Zweig von /parzelle beginnt damit.
   nicht-in-der-marktstadt: "<red>Parzellen gibt es nur in der Marktstadt.</red>"
@@ -1582,6 +1587,10 @@ freistadt:
   #   Spieler aber niemand.
   gegruendet: "<green>{name} ist gegruendet - Feld {feld}.</green>\n<gray>Hin kommst du mit /warp freistadt {name}.</gray>\n<gray>Bis die Stadt Regeln hat und ein Grundstueck vergeben ist, kommen keine Fremden - und es entstehen keine Laeden.</gray>"
 
+  # {werbung} - NUR DIE FARBE ist hier deine; der Satz steht in der config.yml unter
+  # hinweise.rang-werbung. Angehaengt wird er allein unter absage.grenze-erreicht: Bei
+  # "kein Feld mehr frei" hilft kein Rang.
+  rang-werbung: "<yellow>{werbung}</yellow>"
   absage:
     # {kleinstens} {groesstens} - die Laenge. Ein eigener Satz neben name-falsch, damit
     #   die Absage sagt, WAS nicht stimmt.
@@ -2524,6 +2533,11 @@ werder:
   # {feld} - genommen, und es hat nichts gekostet (inseln.preis: 0). Ein eigener Satz
   #   und keine 0 im Satz darueber: "0 abgebucht, es bleiben 1.200" schreibt niemand.
   genommen-gratis: "<green>Insel {feld} gehoert jetzt dir.</green>"
+  # {werbung} - NUR DIE FARBE ist hier deine; der Satz steht in der config.yml unter
+  # hinweise.rang-werbung. Angehaengt wird er allein unter absage.genug: Dort ist der
+  # Rang der Grund. Unter "hier ist Meer" waere er eine Antwort auf eine Frage, die
+  # niemand gestellt hat.
+  rang-werbung: "<yellow>{werbung}</yellow>"
   absage:
     # Jenseits der Weltgrenze. Die Grenze haelt ihn dort ohnehin auf; der Satz steht
     #   fuer den Fall, dass ihn jemand hinbringt.
@@ -2596,6 +2610,10 @@ wolke:
   #   es in keinem anderen Bereich: In jeder anderen Welt macht der Weltgenerator das
   #   Gelaende, hier das Plugin. Ohne diese Zeile reist der Spieler hin und faellt.
   aufbau-gestoert: "<red>Insel {feld} gehoert dir, aber sie liess sich nicht aufsetzen.</red>\n<gray>Sag es dem Betreiber - mit /wolke zuruecksetzen ist es zu beheben.</gray>"
+  # {werbung} - NUR DIE FARBE ist hier deine; der Satz steht in der config.yml unter
+  # hinweise.rang-werbung. Angehaengt wird er allein unter absage.grenze: Bei "die Welt
+  # ist voll" hilft kein Rang, und ein Hinweis darauf waere dann falsch.
+  rang-werbung: "<yellow>{werbung}</yellow>"
   absage:
     # {hoechstzahl} - so viele Inseln darf dieser Spieler halten.
     grenze:

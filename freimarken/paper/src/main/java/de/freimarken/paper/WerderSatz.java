@@ -96,6 +96,15 @@ enum WerderSatz implements Satz {
      */
     ABSAGE_GENUG("werder.absage.genug", Art.GEZAEHLT, "hoechstzahl"),
 
+    /**
+     * Die Zeile aus der {@code config.yml} unter der Absage "du hast genug".
+     *
+     * <p>Nur die FARBE ist hier des Betreibers, der Wortlaut steht in
+     * {@code hinweise.rang-werbung}. Gebaut wird sie in {@link Rangwerbung} - der einen
+     * Stelle, die alle fuenf Grenzen bedient.
+     */
+    RANG_WERBUNG("werder.rang-werbung", Art.SATZ, "werbung"),
+
     /** Das Guthaben reicht nicht - mit Preis und Fehlbetrag. */
     ABSAGE_ZU_WENIG("werder.absage.zu-wenig", Art.SATZ, "preis", "fehlt"),
 

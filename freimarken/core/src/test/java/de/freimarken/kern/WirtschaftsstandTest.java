@@ -23,6 +23,21 @@ import org.junit.jupiter.api.Test;
  */
 class WirtschaftsstandTest {
 
+    /**
+     * Die AUSGELIEFERTEN Zahlen der zwei Parzellengrenzen.
+     *
+     * <p>Als Verweis und nicht als Zahl: Der Vergleichsstand dieser Proben ist
+     * {@code Wirtschaftswerte.VORGABE}, und eine Probe, die daneben eine eigene Zahl
+     * hinschreibt, meldet jede Aenderung der Vorgabe als Fehler. Genau das ist am
+     * 20.11.2026 passiert - Teil H senkte die beiden auf die Reisendenzahl, und sechs
+     * Proben wurden rot, die mit den Grenzen nichts zu tun haben.
+     *
+     * <p>Wo eine Probe eine ANDERE Zahl braucht, steht sie weiter am Aufruf.
+     */
+    private static final int VORGABE_ZAHL = Wirtschaftswerte.VORGABE_HOECHSTZAHL;
+
+    private static final int VORGABE_FELDER = Wirtschaftswerte.VORGABE_GRUPPEN_FELDER;
+
     private static Wirtschaftswerte satz(long grundpreis, long jeFeld, long startguthaben,
                                          int hoechstzahl, int gruppenFelder,
                                          String werbung) {
@@ -112,7 +127,8 @@ class WirtschaftsstandTest {
                 Wirtschaftswerte.PFAD_GRUNDPREIS + ": 25000 -> 40000"),
                 uebernahme.geaendert().toString());
         assertTrue(uebernahme.geaendert().contains(
-                Wirtschaftswerte.PFAD_HOECHSTZAHL + ": 4 -> 6"),
+                Wirtschaftswerte.PFAD_HOECHSTZAHL + ": "
+                        + Wirtschaftswerte.VORGABE_HOECHSTZAHL + " -> 6"),
                 uebernahme.geaendert().toString());
     }
 
@@ -120,7 +136,7 @@ class WirtschaftsstandTest {
     @DisplayName("Das Startguthaben bleibt stehen und wird genannt")
     void startguthabenBleibt() {
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
-        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 999_000L, 4, 4,
+        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 999_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG));
 
         assertEquals(50_000L, stand.werte().startguthaben(),
@@ -143,7 +159,7 @@ class WirtschaftsstandTest {
         // aenderte der Betreiber die Gebuehr, /freimarken neuladen meldete gruen "nichts
         // geaendert", und im Spiel gaelte die alte Zahl weiter.
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
-        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, 4, 4,
+        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
                 andereberufe()));
 
@@ -176,7 +192,7 @@ class WirtschaftsstandTest {
         // aenderte er einen Lohn, /freimarken neuladen meldete gruen "nichts geaendert",
         // und im Spiel gaelte der alte Satz weiter.
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
-        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, 4, 4,
+        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
                 Berufswerte.VORGABE, andereverdienste()));
 
@@ -261,7 +277,7 @@ class WirtschaftsstandTest {
         // sie darin, lernte der Betreiber, dass eine Aenderung erst mit dem Neustart
         // gilt - und wartete auf etwas, das schon passiert ist.
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
-        var zeilen = stand.nichtAngefasst(satz(25_000L, 10_000L, 50_000L, 4, 4,
+        var zeilen = stand.nichtAngefasst(satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG, Zeitwerte.VORGABE,
                 andereberufe()));
 
@@ -277,7 +293,7 @@ class WirtschaftsstandTest {
         // Zeitgeber - ein zweiter Zeitgeber schriebe dieselbe Spielzeit doppelt. Die Grenze
         // dagegen wird beim Gebrauch gefragt und kostet nichts.
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
-        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, 4, 4,
+        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG, anderezeit()));
 
         assertEquals(ZoneId.of("Europe/Berlin"), stand.werte().zeit().zone(),
@@ -296,7 +312,7 @@ class WirtschaftsstandTest {
     @DisplayName("Zone und Takt werden mit dem gelesenen Wert genannt, wenn er abweicht")
     void zoneUndTaktWerdenGenannt() {
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
-        var zeilen = stand.nichtAngefasst(satz(25_000L, 10_000L, 50_000L, 4, 4,
+        var zeilen = stand.nichtAngefasst(satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG, anderezeit()));
 
         String zone = zeilen.get(1);
@@ -331,9 +347,9 @@ class WirtschaftsstandTest {
         // falsch: Ein Neuladen bricht nicht ab.
         var langerTakt = new Zeitwerte(ZoneId.of("Europe/Berlin"), Duration.ofSeconds(600),
                 Duration.ofMinutes(10));
-        var stand = new Wirtschaftsstand(satz(25_000L, 10_000L, 50_000L, 4, 4,
+        var stand = new Wirtschaftsstand(satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG, langerTakt));
-        var ausDerDatei = satz(25_000L, 10_000L, 50_000L, 4, 4,
+        var ausDerDatei = satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG,
                 new Zeitwerte(ZoneId.of("Europe/Berlin"), Duration.ofSeconds(60),
                         Duration.ofMinutes(1)));
@@ -416,7 +432,7 @@ class WirtschaftsstandTest {
     @DisplayName("Nur die Zeilen, die sich wirklich geaendert haben, werden genannt")
     void nurEchteAenderungen() {
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
-        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, 4, 4, "anders"));
+        var uebernahme = stand.uebernimm(satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER, "anders"));
 
         assertEquals(1, uebernahme.geaendert().size(), uebernahme.geaendert().toString());
         assertTrue(uebernahme.geaendert().getFirst()
@@ -637,9 +653,9 @@ class WirtschaftsstandTest {
     @DisplayName("Zweimal neuladen vergleicht gegen den LAUFENDEN Stand, nicht die Vorgabe")
     void zweimal() {
         var stand = new Wirtschaftsstand(Wirtschaftswerte.VORGABE);
-        stand.uebernimm(satz(40_000L, 10_000L, 50_000L, 4, 4,
+        stand.uebernimm(satz(40_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG));
-        var zweite = stand.uebernimm(satz(80_000L, 10_000L, 50_000L, 4, 4,
+        var zweite = stand.uebernimm(satz(80_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER,
                 Wirtschaftswerte.VORGABE_RANG_WERBUNG));
 
         assertEquals(Wirtschaftswerte.PFAD_GRUNDPREIS + ": 40000 -> 80000",
@@ -653,16 +669,16 @@ class WirtschaftsstandTest {
         // Sonst geschieht es an jeder Stelle, die den Text anzeigt - und eine davon
         // wird es vergessen.
         assertEquals("Mehr erlaubt ein Rang.",
-                satz(25_000L, 10_000L, 50_000L, 4, 4, "  Mehr erlaubt ein Rang.  ")
+                satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER, "  Mehr erlaubt ein Rang.  ")
                         .rangWerbung());
-        assertEquals("", satz(25_000L, 10_000L, 50_000L, 4, 4, null).rangWerbung());
+        assertEquals("", satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER, null).rangWerbung());
     }
 
     @Test
     @DisplayName("Unbrauchbare Werte kommen nie in einen Stand")
     void schrankenGelten() {
         assertThrows(IllegalArgumentException.class,
-                () -> satz(25_000L, 10_000L, -1L, 4, 4, ""));
+                () -> satz(25_000L, 10_000L, -1L, VORGABE_ZAHL, VORGABE_FELDER, ""));
         assertThrows(IllegalArgumentException.class,
                 () -> satz(25_000L, 10_000L, 50_000L, 0, 4, ""));
         assertThrows(IllegalArgumentException.class,
@@ -681,8 +697,13 @@ class WirtschaftsstandTest {
         assertEquals(25_000L, Wirtschaftswerte.VORGABE.preise().grundpreis());
         assertEquals(10_000L, Wirtschaftswerte.VORGABE.preise().zusammenlegungJeFeld());
         assertEquals(50_000L, Wirtschaftswerte.VORGABE.startguthaben());
-        assertEquals(4, Wirtschaftswerte.VORGABE.hoechstzahl());
-        assertEquals(4, Wirtschaftswerte.VORGABE.gruppenFelder());
+        // EINS und nicht vier [20.11.2026, Teil H]: Diese Zahl ist die Untergrenze fuer
+        // JEDEN, und die Staffel 1/2/4 steht in der Rangleiter. Hier stehen die Zahlen
+        // als LITERAL und nicht als Verweis auf dieselbe Konstante - diese Probe ist der
+        // Zwilling der ausgelieferten config.yml, und ein Verweis pruefte nur, dass eine
+        // Konstante sich selbst gleicht.
+        assertEquals(1, Wirtschaftswerte.VORGABE.hoechstzahl());
+        assertEquals(1, Wirtschaftswerte.VORGABE.gruppenFelder());
         assertEquals("Mehr erlaubt ein hoeherer Rang.",
                 Wirtschaftswerte.VORGABE.rangWerbung());
         assertEquals(ZoneId.of("Europe/Berlin"), Wirtschaftswerte.VORGABE.zeit().zone());
@@ -694,7 +715,7 @@ class WirtschaftsstandTest {
     @DisplayName("Ein Stand ohne Zeitwerte kommt nicht zustande")
     void zeitIstPflicht() {
         assertThrows(IllegalArgumentException.class,
-                () -> satz(25_000L, 10_000L, 50_000L, 4, 4, "", null));
+                () -> satz(25_000L, 10_000L, 50_000L, VORGABE_ZAHL, VORGABE_FELDER, "", null));
     }
 
     @Test

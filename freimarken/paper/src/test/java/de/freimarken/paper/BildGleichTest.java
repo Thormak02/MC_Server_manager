@@ -1629,6 +1629,12 @@ class BildGleichTest {
                 new Zeile(FreistadtSatz.GRENZE_ERREICHT, 1L,
                         Einsatz.von("hoechstzahl", 1L), "&cDu hast schon so viele Freistaedte, wie dein Rang erlaubt (1)."),
                 new Zeile(FreistadtSatz.KEIN_FREIES_FELD, 1L, Einsatz.keine(), "&cIn dieser Welt ist kein Stadtfeld mehr frei."),
+                // Die Werbezeile unter der Absage [Teil H]. Derselbe Wortlaut wie bei
+                // der Parzelle - er steht EINMAL in der config.yml -, nur die Farbe
+                // ist je Bereich eigen.
+                new Zeile(FreistadtSatz.RANG_WERBUNG, 1L,
+                        Einsatz.von("werbung", Wirtschaftswerte.VORGABE_RANG_WERBUNG),
+                        "&eMehr erlaubt ein hoeherer Rang."),
                 // Der FEHLBETRAG traegt die Einheit jetzt mit [Teil C3]. Vorher
                 // stand sie nur am Preis, weil sie im Satz stand - "dir fehlen" 
                 // 276.544 liess offen, in was.
@@ -2083,6 +2089,10 @@ class BildGleichTest {
                         Einsatz.von("hoechstzahl", "1"), "&cDu hast schon eine Meerinsel - mehr erlaubt dein Rang nicht."),
                 new Zeile(WerderSatz.ABSAGE_GENUG, 2L,
                         Einsatz.von("hoechstzahl", "3"), "&cDu hast schon 3 Meerinseln - mehr erlaubt dein Rang nicht."),
+                // Die Werbezeile unter der Absage an der Grenze [Teil H].
+                new Zeile(WerderSatz.RANG_WERBUNG, 1L,
+                        Einsatz.von("werbung", Wirtschaftswerte.VORGABE_RANG_WERBUNG),
+                        "&eMehr erlaubt ein hoeherer Rang."),
                 new Zeile(WerderSatz.ABSAGE_ZU_WENIG, 1L,
                         Einsatz.von("preis", "75.000 Mark").mit("fehlt", "5.000 Mark"),
                         "&cEine Insel kostet 75.000 Mark - dir fehlen 5.000 Mark."),
@@ -2126,6 +2136,10 @@ class BildGleichTest {
                 new Zeile(WolkeSatz.ABSAGE_GRENZE, 0L, Einsatz.von("hoechstzahl", "0"), "&cDu hast schon 0 Wolkeninseln - mehr erlaubt dein Rang nicht."),
                 new Zeile(WolkeSatz.ABSAGE_GRENZE, 1L, Einsatz.von("hoechstzahl", "1"), "&cDu hast schon eine Wolkeninsel - mehr erlaubt dein Rang nicht."),
                 new Zeile(WolkeSatz.ABSAGE_GRENZE, 2L, Einsatz.von("hoechstzahl", "3"), "&cDu hast schon 3 Wolkeninseln - mehr erlaubt dein Rang nicht."),
+                // Die Werbezeile unter der Absage an der Grenze [Teil H].
+                new Zeile(WolkeSatz.RANG_WERBUNG, 1L,
+                        Einsatz.von("werbung", Wirtschaftswerte.VORGABE_RANG_WERBUNG),
+                        "&eMehr erlaubt ein hoeherer Rang."),
                 new Zeile(WolkeSatz.ABSAGE_WELT_VOLL, 1L, Einsatz.keine(), "&cIn Wolkenwerder ist kein Feld mehr frei.\n&7Sag es dem Betreiber - die Welt laesst sich vergroessern."),
                 new Zeile(WolkeSatz.ABSAGE_ZU_WENIG, 1L,
                         Einsatz.von("preis", "5.000 Mark").mit("fehlt", "500 Mark"), "&cEine Wolkeninsel kostet 5.000 Mark - dir fehlen 500 Mark."),

@@ -191,11 +191,32 @@ final class FreistadtBefehle {
     /** Das Argument des Rechtezweigs - der Name eines Buergerrechts. */
     private static final String ARGUMENT_RECHT = "recht";
 
+    /**
+     * Die Vorsilbe der Obergrenze: {@code freimarken.freistaedte.2} erlaubt zwei Staedte.
+     *
+     * <p><b>Seit Schritt 12 Teil H</b> [20.11.2026]: Bis dahin nahm der Riegel allein die
+     * Zahl aus der {@code config.yml} - waehrend die Absage dem Spieler schon sagte "so
+     * viele, wie dein Rang erlaubt". Eine Zusage ohne Bau, und zwar eine, die niemandem
+     * auffaellt: Solange jeder dieselbe Zahl hat, sieht die Absage richtig aus.
+     */
+    private static final String RECHT_ANZAHL = "freimarken.freistaedte.";
+
+    /** Der Zuschlag - eine Mitgliedschaft legt etwas auf den Rang. */
+    private static final String RECHT_EXTRA_ANZAHL = "freimarken.extra.freistaedte.";
+
     private final Freistadtbuch buch;
     private final Kasse kasse;
     private final Sprache sprache;
     private final String weltschluessel;
     private final IntSupplier hoechstzahl;
+
+    /**
+     * Die Werbezeile aus {@code hinweise.rang-werbung} - als ABFRAGE.
+     *
+     * <p>Aus demselben Grund wie die Hoechstzahl: Sie ist neuladbar, und beim Bauen
+     * kopiert waere sie nach {@code /freimarken neuladen} die alte.
+     */
+    private final Supplier<String> rangWerbung;
 
     /**
      * Das Buch der Grundstuecke - {@code null}, solange es keine gibt.
@@ -244,6 +265,7 @@ final class FreistadtBefehle {
 
     FreistadtBefehle(Freistadtbuch buch, Kasse kasse, Sprache sprache,
                      String weltschluessel, IntSupplier hoechstzahl,
+                     Supplier<String> rangWerbung,
                      Grundstuecksbuch grundstuecksbuch, Absteckbuch absteckbuch,
                      Supplier<ZoneId> zone,
                      java.util.logging.Logger protokoll) {
@@ -252,6 +274,7 @@ final class FreistadtBefehle {
         this.sprache = sprache;
         this.weltschluessel = weltschluessel == null ? "" : weltschluessel;
         this.hoechstzahl = hoechstzahl;
+        this.rangWerbung = rangWerbung;
         this.grundstuecksbuch = grundstuecksbuch;
         this.absteckbuch = absteckbuch;
         this.zone = zone;
@@ -456,7 +479,12 @@ final class FreistadtBefehle {
             return Command.SINGLE_SUCCESS;
         }
         String getippt = StringArgumentType.getString(zusammenhang, ARGUMENT_NAME);
-        int erlaubt = hoechstzahl.getAsInt();
+        // DIE ZAHL DIESES SPIELERS und nicht die der Datei: Rangzahl nimmt die hoechste
+        // aus Recht und Datei und legt den Zuschlag darauf. Die EINE Auswertestelle, aus
+        // demselben Grund wie bei den Parzellen und den Inseln - zwei Abschriften waeren
+        // zwei Orte, an denen der Zuschlag vergessen wird.
+        int erlaubt = Rangzahl.ausRecht(spieler, RECHT_ANZAHL, RECHT_EXTRA_ANZAHL,
+                hoechstzahl.getAsInt());
         // Das Guthaben VOR dem Versuch, denn danach ist es abgebucht: Die Absage
         // "zu wenig Mark" nennt, was fehlt, und das rechnet sich nur gegen den Stand
         // von vorher.
@@ -464,7 +492,7 @@ final class FreistadtBefehle {
         Freistadtbuch.Entscheid entscheid =
                 buch.gruende(weltschluessel, spieler.getUniqueId(), getippt, erlaubt);
         sende(spieler, Freistadttext.antwortZeilen(sprache, entscheid, getippt,
-                erlaubt, guthaben));
+                erlaubt, guthaben, rangWerbung.get()));
         return Command.SINGLE_SUCCESS;
     }
 

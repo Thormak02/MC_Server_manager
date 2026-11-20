@@ -205,11 +205,16 @@ final class Freistadttext {
      * dazu, meldet der Uebersetzer die fehlende Zeile. Ein {@code default} machte daraus
      * eine Zeile, die im Spiel das Falsche sagt.
      *
-     * @param guthaben was der Spieler hat - nur fuer ZU_WENIG_MARK gebraucht
+     * @param guthaben    was der Spieler hat - nur fuer ZU_WENIG_MARK gebraucht
+     * @param rangWerbung die Zeile aus {@code hinweise.rang-werbung}, moeglicherweise
+     *                    leer. Sie haengt NUR unter GRENZE_ERREICHT: Bei
+     *                    KEIN_FREIES_FELD hilft kein Rang, und bei einem falschen Namen
+     *                    waere sie eine Antwort auf eine Frage, die niemand gestellt hat
      */
     static List<Component> antwortZeilen(Sprache sprache,
                                          Freistadtbuch.Entscheid entscheid, String name,
-                                         int hoechstzahl, long guthaben) {
+                                         int hoechstzahl, long guthaben,
+                                         String rangWerbung) {
         return switch (entscheid.bescheid()) {
             case GEGRUENDET -> sprache.bau(FreistadtSatz.GEGRUENDET, 1L, Einsatz
                     .von("name", entscheid.stadt().orElseThrow().name())
@@ -223,8 +228,10 @@ final class Freistadttext {
                     Einsatz.von("name", name));
             case NAME_VERGEBEN -> sprache.bau(FreistadtSatz.NAME_VERGEBEN, 1L,
                     Einsatz.von("name", name));
-            case GRENZE_ERREICHT -> sprache.bau(FreistadtSatz.GRENZE_ERREICHT, 1L,
-                    Einsatz.von("hoechstzahl", hoechstzahl));
+            case GRENZE_ERREICHT -> Rangwerbung.darunter(sprache,
+                    FreistadtSatz.RANG_WERBUNG, rangWerbung,
+                    sprache.bau(FreistadtSatz.GRENZE_ERREICHT, 1L,
+                            Einsatz.von("hoechstzahl", hoechstzahl)));
             case KEIN_FREIES_FELD -> sprache.bau(FreistadtSatz.KEIN_FREIES_FELD, 1L,
                     Einsatz.keine());
             case ZU_WENIG_MARK -> sprache.bau(FreistadtSatz.ZU_WENIG_MARK, 1L, Einsatz

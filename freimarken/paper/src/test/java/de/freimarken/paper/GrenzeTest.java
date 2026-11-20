@@ -3345,7 +3345,11 @@ class GrenzeTest {
             // neben /werder. Sie darf NICHT in die plugin.yml: Die Zahl dahinter ist
             // frei waehlbar, und ein Eintrag machte die Gegenrichtung dieser Tafel
             // rot (meldet an, keiner fragt).
-            "freimarken.wolken.", "freimarken.extra.wolken.");
+            "freimarken.wolken.", "freimarken.extra.wolken.",
+            // Teil H: die Freistaedte. Dieselbe Bauart, derselbe Grund - und hier war
+            // die Vorsilbe bis zum 20.11.2026 die EINZIGE, die niemand las: Der Riegel
+            // nahm allein die Zahl aus der config.yml.
+            "freimarken.freistaedte.", "freimarken.extra.freistaedte.");
 
     @Test
     @DisplayName("31am - jeder Sprungschluessel steht in der ausgelieferten config.yml")
@@ -4057,7 +4061,8 @@ class GrenzeTest {
                 .compile("\"freimarken\\.([a-z]+)\\.\"")
                 .matcher(Quellen.text(datei("ParzellenBefehle.java"))
                         + Quellen.text(datei("WerderBefehle.java"))
-                        + Quellen.text(datei("WolkeBefehle.java")));
+                        + Quellen.text(datei("WolkeBefehle.java"))
+                        + Quellen.text(datei("FreistadtBefehle.java")));
         java.util.Set<String> gelesen = new java.util.TreeSet<>();
         while (sucher.find()) {
             if (!"extra".equals(sucher.group(1))) {
@@ -4071,6 +4076,65 @@ class GrenzeTest {
                 "die Grenzen, die Rangzahl LIEST, und die, die ein Rang VERGEBEN kann,"
                         + " sind nicht dieselben. Dann gibt es entweder ein Recht ohne"
                         + " Leser oder eine Grenze, die kein Rang heben kann.");
+    }
+
+    @Test
+    @DisplayName("31cy - jedes Recht, das eine ausgelieferte Datei NENNT, gibt es auch")
+    void jedesGenannteRechtGibtEs() {
+        // FUND VOM 20.11.2026, Teil H: Der Kommentar an inseln.hoechstzahl nannte
+        // "freimarken.werder.anzahl.<n> setzt die Grenze fuer einen Rang". Gelesen wird
+        // freimarken.inseln.<n>. Wer dem Kommentar folgte, vergab ein Recht, nach dem
+        // niemand fragt - und sah einen Rang, der nicht wirkt. Rot wurde dabei nichts:
+        // Ein Kommentar ist fuer den Uebersetzer Luft.
+        //
+        // Das ist die Gegenrichtung zu 31al: Jene prueft, dass jedes GEFRAGTE Recht
+        // angemeldet ist. Diese prueft, dass jedes GENANNTE Recht gefragt wird.
+        var genannt = new java.util.TreeSet<String>();
+        // Die NEGATIVE Umschau ist noetig: Ohne sie faende das Muster auch
+        // "de.freimarken.paper.FreimarkenPlugin" in der main-Zeile der plugin.yml - ein
+        // Klassenname und kein Recht.
+        var muster = Pattern.compile(
+                "(?<![a-zA-Z.])freimarken\\.[a-z][a-z0-9.]*(?:<[a-z]+>)?");
+        for (String name : List.of("config.yml", "plugin.yml", "sprache-vorlage.yml")) {
+            var suche = muster.matcher(ausgelieferte(name));
+            while (suche.find()) {
+                String rein = suche.group();
+                int klammer = rein.indexOf('<');
+                if (klammer >= 0) {
+                    rein = rein.substring(0, klammer);
+                }
+                while (rein.endsWith(".")) {
+                    rein = rein.substring(0, rein.length() - 1);
+                }
+                // Eine Zahl am Ende ist ein WERT und kein Rechtename:
+                // freimarken.parzellen.8 ist die Vorsilbe freimarken.parzellen. mit 8.
+                genannt.add(rein.replaceAll("\\.[0-9]+$", ""));
+            }
+        }
+        assertTrue(genannt.size() > 10,
+                "nur " + genannt.size() + " Rechte in den Dateien gefunden - dann"
+                        + " prueft diese Tafel fast nichts: " + genannt);
+
+        var angemeldet = new java.util.TreeSet<String>();
+        for (String zeile : ausgelieferte("plugin.yml").split("\n", -1)) {
+            if (zeile.startsWith("  freimarken.") && zeile.endsWith(":")) {
+                angemeldet.add(zeile.strip().substring(0, zeile.strip().length() - 1));
+            }
+        }
+
+        var ohneLeser = new java.util.TreeSet<String>();
+        for (String recht : genannt) {
+            if (angemeldet.contains(recht)
+                    || RECHTE_VORSILBEN.contains(recht + ".")) {
+                continue;
+            }
+            ohneLeser.add(recht);
+        }
+        assertEquals(java.util.Set.of(), ohneLeser,
+                "diese Rechte nennen die ausgelieferten Dateien, und es gibt sie nicht -"
+                        + " weder als angemeldetes Recht (plugin.yml) noch als Vorsilbe"
+                        + " einer Rangzahl. Wer dem Kommentar folgt, vergibt sie und"
+                        + " nichts geschieht: " + ohneLeser);
     }
 
     @Test

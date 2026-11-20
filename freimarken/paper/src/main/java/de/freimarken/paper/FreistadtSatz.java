@@ -72,6 +72,16 @@ enum FreistadtSatz implements Satz {
     GRENZE_ERREICHT("freistadt.absage.grenze-erreicht", Art.SATZ, "hoechstzahl"),
 
     /**
+     * Die Zeile aus der {@code config.yml} unter {@link #GRENZE_ERREICHT}.
+     *
+     * <p>Nur die FARBE ist hier des Betreibers, der Wortlaut steht in
+     * {@code hinweise.rang-werbung}. Gebaut wird sie in {@link Rangwerbung}. Unter
+     * {@link #KEIN_FREIES_FELD} steht sie NICHT: Dort ist kein Rang der Grund, und ein
+     * "mehr erlaubt ein hoeherer Rang" waere dann eine falsche Auskunft.
+     */
+    RANG_WERBUNG("freistadt.rang-werbung", Art.SATZ, "werbung"),
+
+    /**
      * Alle Felder der Welt sind vergeben.
      *
      * <p>Ein eigener Satz neben {@link #GRENZE_ERREICHT}: Jener sagt "du hast genug",

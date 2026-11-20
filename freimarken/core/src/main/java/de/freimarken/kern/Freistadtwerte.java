@@ -187,9 +187,15 @@ public record Freistadtwerte(long gruendungspreis, int hoechstzahl,
      * als eine volle.
      *
      * <p><b>Als Zahl und nicht als Eins im Programm</b>, genau wie
-     * {@code parzellen.hoechstzahl}: Schritt 12 haengt die Raenge daran, und dann gibt
-     * ein Recht {@code freimarken.freistaedte.<n>} einem hoeheren Rang mehr. Eine fest
-     * eingebaute Eins muesste dafuer erst wieder herausgeholt werden.
+     * {@code parzellen.hoechstzahl} - und seit Schritt 12 Teil H haengt der Rang daran:
+     * {@code freimarken.freistaedte.<n>} hebt diese Zahl, {@code Rangzahl} nimmt die
+     * hoechste aus Recht und Datei. Diese Zahl ist damit die UNTERGRENZE fuer jeden.
+     *
+     * <p><b>Eine 0 schliesst das Gruenden nur zusammen mit der Leiter</b>: Vergibt eine
+     * Rangstufe {@code freistaedte: 1}, gilt die Eins aus dem Recht, und die 0 hier wirkt
+     * nicht. Der Startlauf sagt genau das in einer eigenen Zeile
+     * ({@code Rangliste.wirkungslose}) - sonst waere es die Art Falle, bei der zwei
+     * Zeilen in zwei Abschnitten jede fuer sich richtig sind.
      */
     public static final int VORGABE_HOECHSTZAHL = 1;
 

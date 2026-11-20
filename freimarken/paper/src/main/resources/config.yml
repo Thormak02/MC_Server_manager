@@ -123,12 +123,21 @@ wirtschaft:
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
   # Mehr erlaubt das Recht freimarken.parzellen.<zahl>, etwa freimarken.parzellen.8.
-  # Die hoechste Zahl gewinnt, dieser Wert ist die Untergrenze.
+  # Die hoechste Zahl gewinnt, dieser Wert ist die UNTERGRENZE FUER JEDEN.
+  #
+  # AB WERK DIE ZAHL DES REISENDEN, nicht die des Buergers [20.11.2026, Teil H]: Weil
+  # immer die hoechste Zahl aus Recht UND Datei gilt, bekommt jeder Reisende, was hier
+  # steht. Stand hier die 4 der obersten Stufe, war der ganze Aufstieg auf dieser Grenze
+  # wirkungslos - und im Spiel sah das aus wie ein kaputter Rang. Die Staffel steht in
+  # raenge.leiter weiter unten: 1 / 2 / 4.
+  #
+  # Wer KEINE Raenge will, schaltet raenge.an aus und traegt hier die Zahl ein, die fuer
+  # jeden gelten soll. Dann ist diese Zahl die ganze Regel.
   #
   # Ganze Zahl ab 1. Eine 0 hiesse, niemand darf eine Parzelle - und das sieht in einer
   # Einstellungsdatei aus wie ein Tippfehler, weil es einer ist. Wer das Parzellensystem
   # abschalten will, nimmt das Recht weg. /freimarken neuladen uebernimmt diesen Wert.
-  hoechstzahl: 4
+  hoechstzahl: 1
 
   # Wie viele Felder eine zusammengelegte Gruppe haben darf. Mehr erlaubt das Recht
   # freimarken.gruppe.<zahl>, nach derselben Regel wie oben.
@@ -138,8 +147,12 @@ parzellen:
   # verbinden darf, entscheidet, wie gross ein einzelnes Bauwerk werden kann. Vier Felder
   # im Quadrat sind 135 x 135 Bloecke.
   #
+  # AUCH HIER DIE REISENDENZAHL: Eine Gruppe aus EINEM Feld ist keine Gruppe - der
+  # Reisende kann also gar nicht zusammenlegen, und genau das ist der erste Rangvorteil
+  # des Siedlers. Die Staffel steht in raenge.leiter: 1 / 2 / 4.
+  #
   # Ganze Zahl ab 1, wie oben. /freimarken neuladen uebernimmt diesen Wert.
-  gruppe-hoechstzahl: 4
+  gruppe-hoechstzahl: 1
 
 # Die Rangleiter (Plan 9, Schritt 12).
 #
@@ -165,11 +178,20 @@ parzellen:
 # Buerger seinen Rang, weil er seine Parzelle verkauft hat - und mit ihm die Obergrenze,
 # unter der sein uebriger Besitz steht.
 #
-# DIE ZAHLEN OBEN SIND EINE UNTERGRENZE FUER JEDEN. parzellen.hoechstzahl: 4 bekommt
-# jeder Reisende, denn es gilt immer die hoechste Zahl aus Recht UND Datei. Solange dort
-# die Buergerzahl steht, ist der Aufstieg auf dieser Grenze wirkungslos - der Startlauf
-# sagt es in einer eigenen Zeile. Das Senken kommt mit Teil H dieses Schrittes, zusammen
-# mit dem Einmallauf, der die vorhandenen Spieler nach ihrer gemessenen Zeit einstuft.
+# DIE ZAHLEN OBEN SIND EINE UNTERGRENZE FUER JEDEN: Was in parzellen.hoechstzahl steht,
+# bekommt jeder Reisende, denn es gilt immer die hoechste Zahl aus Recht UND Datei.
+# Seit dem 20.11.2026 (Teil H) stehen dort darum die Zahlen der UNTERSTEN Stufe; die
+# Staffel steht hier in der Leiter.
+#
+# Wer eine Zahl oben erhoeht, nimmt der Leiter genau so viele Sprossen weg - und der
+# Startlauf sagt das in einer eigenen Zeile je Grenze, mit den Stufen, die dadurch nichts
+# mehr heben. Dasselbe gilt fuer eine 0: Sie schaltet eine Grenze nur dann ab, wenn auch
+# keine Stufe sie vergibt.
+#
+# WER SCHON GESPIELT HAT, verliert nichts: Beim Start stuft Freimarken jeden nach, dem
+# nach seiner gemessenen Zeit mehr zusteht ("Nachstufung: N Spieler geprueft"), und ein
+# Abstieg gibt es nicht. Was einmal gebaut ist, bleibt ausserdem stehen - eine gesenkte
+# Grenze nimmt keine Parzelle weg, sie verhindert nur die naechste.
 raenge:
   # Ob ueberhaupt Raenge vergeben werden. Aus heisst: Es gelten fuer jeden die Zahlen
   # aus dieser Datei, und niemand steigt auf.
@@ -182,9 +204,12 @@ raenge:
   #   bedingungen: - was erfuellt sein muss. Es gibt taetige-stunden,
   #     anwesenheit-stunden, parzellen, beruf und guthaben. Eine 0 ist keine Bedingung,
   #     sondern eine Zeile, die nie wirkt - wer keine will, laesst die Zeile weg.
-  #   zahlen:      - welche Obergrenze der Rang hebt. Es gibt parzellen, gruppe, inseln
-  #     und wolken; jede wird zu freimarken.<name>.<zahl>. Heimatpunkte und eigene Warps
-  #     stehen in Plan 9, es gibt sie aber noch nicht - sie kommen mit ihrer Mechanik.
+  #   zahlen:      - welche Obergrenze der Rang hebt. Es gibt parzellen, gruppe, inseln,
+  #     wolken und freistaedte; jede wird zu freimarken.<name>.<zahl>. Heimatpunkte und
+  #     eigene Warps stehen in Plan 9, es gibt sie aber noch nicht - sie kommen mit ihrer
+  #     Mechanik, denn ein Recht, das niemand liest, hebt nichts.
+  #     Eine Grenze, die eine Stufe nicht nennt, hebt diese Stufe nicht; dann entscheidet
+  #     allein die Zahl oben in der Datei.
   #   rechte:      - welche Rechte der Rang gibt, OHNE die Vorsilbe freimarken.
   #
   # Eine Stufe mit einer unbekannten Zeile faellt GANZ weg und nicht nur ihre Zeile:
@@ -198,6 +223,7 @@ raenge:
         gruppe: 1
         inseln: 1
         wolken: 1
+        freistaedte: 1
 
     siedler:
       bedingungen:
@@ -208,6 +234,7 @@ raenge:
         gruppe: 2
         inseln: 1
         wolken: 1
+        freistaedte: 1
       rechte:
         - laden.mieten
 
@@ -221,15 +248,22 @@ raenge:
         gruppe: 4
         inseln: 1
         wolken: 1
+        freistaedte: 1
       rechte:
         - freistadt.gruenden
         - beruf.spezialisierung
 
 hinweise:
   # Eine Zeile, die der Spieler zusaetzlich sieht, wenn sein RANG die Grenze setzt: beim
-  # Kauf einer weiteren Parzelle, beim Zusammenlegen und auf einer freien Parzelle, die er
-  # nicht mehr nehmen darf. Was der Rang erlaubt, steht schon in der Zeile davor - hier
-  # gehoert hin, wie es auf DIESEM Server weitergeht.
+  # Kauf einer weiteren Parzelle, beim Zusammenlegen, auf einer freien Parzelle, die er
+  # nicht mehr nehmen darf - und seit Teil H auch an der Meerinsel, der Wolkeninsel und
+  # der Freistadt. Was der Rang erlaubt, steht schon in der Zeile davor - hier gehoert
+  # hin, wie es auf DIESEM Server weitergeht.
+  #
+  # EINE Zeile fuer alle fuenf Grenzen, und das ist Absicht: Fuenf Werbesaetze waeren
+  # fuenf Orte, an denen einer veraltet. Die FARBE ist je Bereich einstellbar (in der
+  # sprache.yml unter parzelle.rang-werbung, werder.rang-werbung, wolke.rang-werbung und
+  # freistadt.rang-werbung).
   #
   # Beispiele:
   #   "Mehr Parzellen gibt es mit dem Rang Buerger - rund 40 Spielstunden und eine
@@ -1393,10 +1427,16 @@ freistaedte:
   gruendungspreis: 400000
 
   # Wie viele Staedte ein Spieler ohne besonderes Recht haelt.
-  # Mehr erlaubt spaeter das Recht freimarken.freistaedte.<zahl> (Schritt 12).
+  #
+  # Mehr erlaubt das Recht freimarken.freistaedte.<zahl> (je Rang, in raenge.leiter unter
+  # zahlen: freistaedte) und obendrauf freimarken.extra.freistaedte.<zahl> (eine
+  # Mitgliedschaft). Es gilt die hoechste Zahl aus Recht UND Datei, der Zuschlag kommt
+  # darauf - wie bei den Parzellen und den Inseln.
   #
   # Ganze Zahl von 0 bis 399 - mehr Felder hat die Welt nicht. Eine 0 heisst: Es wird gar
-  # nicht gegruendet; brauchbar, solange die Welt noch vorbereitet wird.
+  # nicht gegruendet; brauchbar, solange die Welt noch vorbereitet wird. ABER NUR, WENN
+  # AUCH KEINE RANGSTUFE freistaedte VERGIBT - sonst gilt die Zahl aus dem Recht, und die
+  # 0 hier wirkt nicht. Der Startlauf sagt genau das in einer eigenen Zeile.
   #
   # Eine Eins, weil es nur 399 Felder gibt und eine Stadt 256x256 Bloecke ist. Wer zwei
   # haelt, nimmt sie einem anderen weg - und zwei halbleere Staedte sind schlechter als
@@ -1636,13 +1676,21 @@ inseln:
   # es in einem Archipel nur einmal, und eine Insel ist unteilbar - wer zwei haelt, haelt
   # die zweite leer.
   #
-  # MEHR GIBT ES UEBER DAS RECHT, nicht ueber diese Zahl: freimarken.werder.anzahl.<n>
-  # setzt die Grenze fuer einen Rang, freimarken.extra.werder.anzahl.<n> legt etwas
-  # darauf (Mitgliedschaft). Dieselbe Bauart wie bei den Parzellen - damit die
-  # Rangzahlen in der Rechteverwaltung bleiben und nicht im Programm.
+  # MEHR GIBT ES UEBER DAS RECHT, nicht ueber diese Zahl: freimarken.inseln.<n> setzt
+  # die Grenze fuer einen Rang (in raenge.leiter unter zahlen: inseln),
+  # freimarken.extra.inseln.<n> legt etwas darauf (Mitgliedschaft). Dieselbe Bauart wie
+  # bei den Parzellen - damit die Rangzahlen in der Rechteverwaltung bleiben und nicht im
+  # Programm.
+  #
+  # DIE VORSILBE HEISST NACH DER SACHE UND NICHT NACH DEM BEFEHL: inseln neben /werder,
+  # wolken neben /wolke. Hier stand bis zum 20.11.2026 die Vorsilbe des BEFEHLS
+  # (werder.anzahl) - ein Recht, das es nicht gibt. Wer dem Kommentar folgte, vergab es
+  # klaglos, und niemand fragte je danach.
   #
   # Ganze Zahl von 0 bis 323 (so viele Inseln hat die Welt). 0 heisst: Es wird keine
-  # vergeben - der Weg, die Inseln abzuschalten, ohne das Recht anzufassen.
+  # vergeben - der Weg, die Inseln abzuschalten, ohne das Recht anzufassen. Das gilt nur,
+  # solange keine Rangstufe inseln vergibt: Sonst zaehlt die Zahl aus dem Recht. Der
+  # Startlauf sagt es.
   hoechstzahl: 1
 
 # DAS EIGENE ANGELGUT VON HAFENWERDER (Plan 4.1, Schritt 10).
@@ -1746,8 +1794,10 @@ wolken:
   # Die Zahl hier ist nur die Untergrenze fuer jeden, der kein solches Recht hat.
   #
   # Eine 0 ist erlaubt und heisst: Es wird keine Insel vergeben. Das ist der Weg,
-  # Wolkenwerder zuzumachen, ohne das Recht anzufassen. Hoechstens 1443 - so viele Felder
-  # hat die Welt.
+  # Wolkenwerder zuzumachen, ohne das Recht anzufassen - aber nur, solange auch keine
+  # Rangstufe wolken vergibt (raenge.leiter), denn sonst gilt die Zahl aus dem Recht. Der
+  # Startlauf sagt es in einer eigenen Zeile. Hoechstens 1443 - so viele Felder hat die
+  # Welt.
   hoechstzahl: 1
 
   # Welche Biome ein Spieler fuer seine Insel waehlen darf (/wolke biom).
@@ -2238,7 +2288,7 @@ laeden:
       bis: [64, -57, 20]
       truhe: [62, -60, 18]
     # Ostseite, gegenueber von stand-2. Die Mittelachse x 65..79 zwischen Torreihe
-    # und Spawn (72/72/12) bleibt damit frei - dort laeuft jeder Ankommende durch.
+    # und Spawn (72/-60/12) bleibt damit frei - dort laeuft jeder Ankommende durch.
     stand-3:
       von: [80, -61, 16]
       bis: [84, -57, 20]
@@ -2392,8 +2442,10 @@ freie-truhe:
   # und die Wache wird gar nicht angemeldet.
   #
   # DIESE STELLEN GELTEN NUR FUER DIE VORHANDENE WELT - genauso wie die Quader der
-  # Ladeneinheiten weiter oben und die sieben Torquader unter reisen.tore. Wer Altfurt
-  # neu anlegt, hat anderes Gelaende; dann steht die Truhe im Boden.
+  # Ladeneinheiten weiter oben und die acht Torquader unter reisen.tore. Altfurt ist
+  # art: flach, der Boden liegt also ueberall auf y -61 und der erste freie Block auf
+  # y -60; eine Truhe steht auf -60. Wer die Welt neu anlegt, behaelt diese Hoehen -
+  # eine Ebene hat keine zweite Gestalt.
   #
   # EINE DOPPELKISTE braucht BEIDE Haelften, je eine Zeile: Welche Haelfte angeklickt
   # wird, entscheidet der Spieler. Eine Stelle in einer LADENEINHEIT wird abgewiesen -
@@ -2403,8 +2455,8 @@ freie-truhe:
   # etwa so aus - beide Haelften, je eine Zeile (die Stellen sind ein Beispiel und keine
   # Empfehlung):
   #   truhen:
-  #     - [72, 72, 20]
-  #     - [73, 72, 20]
+  #     - [72, -60, 20]
+  #     - [73, -60, 20]
   #
   # NUR BEIM START GELESEN - /freimarken neuladen verschiebt keine Truhe. Die beiden
   # Nachbarschluessel dieses Abschnitts sind neuladbar, dieser nicht: Eine Stelle,

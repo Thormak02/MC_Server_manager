@@ -1852,8 +1852,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     new FreistadtBefehle(freistadtbuch, kasse, sprache,
                             freistadtbuch == null ? "" : weltschluessel(freistadtwelt),
                             () -> wirtschaft.werte().freistaedte().hoechstzahl(),
+                            () -> wirtschaft.werte().rangWerbung(),
                             // Die Zone als Abfrage, aus demselben Grund wie die
-                            // Hoechstzahl: Sie steht in zeit.zone und ist neuladbar.
+                            // Hoechstzahl und die Werbezeile: Sie steht in zeit.zone und
+                            // ist neuladbar.
                             grundstuecksbuch, absteckbuch,
                             () -> wirtschaft.werte().zeit().zone(), getLogger())
                             .freistadt(),
@@ -1888,7 +1890,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     new WerderBefehle(inselbuch, kasse, sprache,
                             inselbuch == null ? "" : weltschluessel(inselwelt),
                             inselwelt,
-                            () -> wirtschaft.werte().inseln().hoechstzahl()).werder(),
+                            () -> wirtschaft.werte().inseln().hoechstzahl(),
+                            () -> wirtschaft.werte().rangWerbung()).werder(),
                     sprache.wort(BundSatz.BEFEHL_WERDER, Einsatz.keine()),
                     List.of()));
 
@@ -1907,7 +1910,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
                             (wer, ziel) -> reise.fuehre(wer, ziel,
                                     WolkeBefehle.ARGUMENT),
                             wolkenbuch == null ? "" : weltschluessel(wolkenwelt),
-                            () -> wirtschaft.werte().wolken().hoechstzahl()).wolke(),
+                            () -> wirtschaft.werte().wolken().hoechstzahl(),
+                            () -> wirtschaft.werte().rangWerbung()).wolke(),
                     sprache.wort(BundSatz.BEFEHL_WOLKE, Einsatz.keine()),
                     List.of()));
 
@@ -2973,7 +2977,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 "parzellen", wirtschaft.werte().hoechstzahl(),
                 "gruppe", wirtschaft.werte().gruppenFelder(),
                 "inseln", wirtschaft.werte().inseln().hoechstzahl(),
-                "wolken", wirtschaft.werte().wolken().hoechstzahl());
+                "wolken", wirtschaft.werte().wolken().hoechstzahl(),
+                "freistaedte", wirtschaft.werte().freistaedte().hoechstzahl());
         Rangliste.wirkungslose(werte, untergrenzen).forEach(getLogger()::warning);
         var angemeldet = new java.util.TreeSet<String>();
         for (var recht : getServer().getPluginManager().getPermissions()) {

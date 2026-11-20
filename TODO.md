@@ -1127,6 +1127,49 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
   bebaut" (Plan 9, Buerger) sind keine Bedingungsart - den Rundgang gibt es erst mit
   Schritt 13, und was "bebaut" misst, steht im Plan nirgends. Beide kommen als Zeile dazu,
   ohne dass sich sonst etwas aendert.
+- ~~Teil H: Grenzen an den Rang.~~ 20.11. GEBAUT. Damit ist Schritt 12 durch.
+- DIE VIER WARNUNGEN SIND WEG, und zwar an der Ursache: parzellen.hoechstzahl und
+  gruppe-hoechstzahl stehen auf 1 - der Zahl des REISENDEN. Die Staffel 1/2/4 steht in
+  raenge.leiter, wo sie hingehoert. Vorher bekam jeder Reisende die Buergerzahl, denn es
+  gilt immer die hoechste Zahl aus Recht UND Datei.
+- FUENFTE GRENZE: freistaedte. /freistadt gruenden fragt jetzt Rangzahl
+  (freimarken.freistaedte.<n> plus Zuschlag freimarken.extra.freistaedte.<n>) - bis dahin
+  nahm der Riegel allein die Zahl aus der Datei, waehrend die Absage dem Spieler sagte
+  "so viele, wie dein RANG erlaubt".
+- hinweise.rang-werbung haengt jetzt an ALLEN Absagen: Meerinsel, Wolkeninsel und
+  Freistadt haben ihren eigenen Farbschluessel (werder/wolke/freistadt.rang-werbung), die
+  REGEL steht einmal in Rangwerbung.
+- DIE WARNUNG UNTERSCHEIDET VIER LAGEN, vorher eine: ganze Leiter tot (alt), nur die
+  unteren Stufen tot (Leiter 1/2/4 und Datei 2 - das verschwieg der alte Vergleich),
+  die 0, die NICHT abschaltet, und richtig eingestellt = STILL. Ohne das Stille waere
+  nach Teil H die Haelfte aller Zeilen eine Warnung, die niemand beheben kann.
+- GEFUNDEN UND BEHOBEN, nicht von Teil H: Die ausgelieferte config.yml versprach bei den
+  Inseln "eine 0 schaltet es ab, ohne das Recht anzufassen" - und ihre eigene Leiter
+  vergab freimarken.wolken.1. Zwei Zeilen in zwei Abschnitten, jede fuer sich richtig.
+  Jetzt sagt es der Startlauf.
+- GEFUNDEN UND BEHOBEN, nicht von Teil H: Der Kommentar an inseln.hoechstzahl nannte
+  freimarken.werder.anzahl.<n> - ein Recht, das es nicht gibt (gelesen wird inseln).
+  Haelt jetzt Tafel 31cy: Jedes Recht, das eine ausgelieferte Datei NENNT, muss es geben.
+- UND EINE LUECKE IN DEN PROBEN: Keine einzige las die Zahlen der ECHTEN config.yml. Die
+  neue Probe faehrt die ausgelieferte Datei durch denselben Leser und dieselbe Warnung wie
+  der Startlauf - sonst koennten Datei und Programmvorgabe stumm auseinanderlaufen.
+- GEMESSEN, dreizehn Einspritzungen: alle gefangen. Darunter die Tafel selbst (31cq ohne
+  FreistadtBefehle) und der leere Werbesatz, der doch eine Zeile sendet.
+- GEMESSEN AM LAUFENDEN SERVER: Mit der ausgelieferten Datei kommt KEINE Grenzwarnung
+  mehr (vorher vier). Mit drei absichtlichen Fehlern kommen genau drei - je Lage eine -,
+  und freistaedte bleibt dabei still. 0 Ausnahmen.
+- Proben 4480 -> 4491, 0 rot, 0 uebersprungen, 0 Warnungen. Neu: RanglisteTest +6,
+  GrenzeTest 31cy, FreistadtBefehlTest +1, BildGleich +3.
+- WER SCHON SPIELT, verliert nichts: Der Nachstufungslauf beim Start hebt jeden auf den
+  Rang, der ihm nach seiner gemessenen Zeit zusteht, und Gebautes bleibt stehen - eine
+  gesenkte Grenze verhindert nur die naechste Parzelle.
+- GEFUNDEN UND BEHOBEN, nicht von Teil H: Zwei Kommentare der ausgelieferten config.yml
+  nannten noch Hoehen aus dem Altfurt VOR der Ebene (Spawn 72/72/12, Beispieltruhe
+  [72, 72, 20]). Wer das Beispiel abschrieb, setzte eine Truhe 133 Bloecke ueber den
+  Boden. Jetzt -60, und daneben steht, warum eine Ebene keine zweite Gestalt hat.
+- VON HAND auf dem Server: Die laufende plugins/Freimarken/config.yml behaelt ihre 4
+  (saveDefaultConfig schreibt eine vorhandene Datei nie um). parzellen.hoechstzahl: 1,
+  parzellen.gruppe-hoechstzahl: 1, dann /freimarken neuladen.
 
 ## Schritt 11: Wolkenwerder
 

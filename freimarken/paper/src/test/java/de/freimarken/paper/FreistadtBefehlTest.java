@@ -109,6 +109,7 @@ class FreistadtBefehlTest {
         // darueber, wo ein Feld liegt.
         var befehle = new FreistadtBefehle(buch, kasse, Sprachprobe.spracheAusDemJar(),
                 weltschluessel, () -> stand.werte().freistaedte().hoechstzahl(),
+                () -> stand.werte().rangWerbung(),
                 new Grundstuecksbuch(Feldgrenze.freistaedte(), lager, grundstuecke,
                         kasse, stadtkasse, stand),
                 absteckbuch, () -> java.time.ZoneId.of("Europe/Berlin"),
@@ -177,6 +178,42 @@ class FreistadtBefehlTest {
     }
 
     // ------------------------------------------------------------------ Gruenden
+
+    @Test
+    @DisplayName("DIE HOECHSTZAHL KOMMT AUS DEM RECHT - nicht aus der config.yml allein")
+    void hoechstzahlKommtAusDemRecht() throws CommandSyntaxException {
+        // DER RIEGEL VON TEIL H [20.11.2026]. Die config.yml erlaubt eine Stadt, und die
+        // Absage sagte schon immer "so viele, wie dein RANG erlaubt" - gelesen wurde
+        // aber allein die Zahl aus der Datei. Eine Zusage ohne Bau, und zwar eine, die
+        // niemandem auffaellt: Solange jeder dieselbe Zahl hat, sieht sie richtig aus.
+        //
+        // Im Buch ist davon nichts zu sehen: Dort kommt die Zahl von aussen herein. Nur
+        // ein getippter Befehl zeigt, ob der Zweig sie aus den Rechten holt.
+        probe().tippe("freistadt gruenden eins bestaetigen", anna);
+        anna.vergessen();
+        probe().tippe("freistadt gruenden zwei bestaetigen", anna);
+
+        assertEquals(1, lager.besitzIn(WELT, Art.FREISTADT).size(),
+                "ohne Recht bleibt es bei der einen: " + gelesen());
+        assertTrue(gelesen().get(0).contains("wie dein Rang erlaubt"), gelesen().get(0));
+        // UND DARUNTER DIE WERBEZEILE aus hinweise.rang-werbung [Teil H]: Die Absage ist
+        // die Nachricht, diese Zeile ist das Angebot. Geprueft wird die REIHENFOLGE -
+        // ein Angebot vor der Absage liest sich wie eine Zusage.
+        assertEquals(2, gelesen().size(),
+                "Absage und Werbezeile, keine mehr und keine weniger: " + gelesen());
+        assertEquals("&e" + Wirtschaftswerte.VORGABE_RANG_WERBUNG, gelesen().get(1),
+                "unter der Absage gehoert hinweise.rang-werbung: " + gelesen());
+
+        Spielerprobe reich = new Spielerprobe("Reich", Spielerprobe.kennungAus(7),
+                FreistadtBefehle.RECHT, FreistadtBefehle.RECHT_GRUENDEN,
+                "freimarken.freistaedte.2").inWelt(Serverprobe.welt(WELT));
+        probe().tippe("freistadt gruenden drei bestaetigen", reich);
+        probe().tippe("freistadt gruenden vier bestaetigen", reich);
+
+        assertEquals(3, lager.besitzIn(WELT, Art.FREISTADT).size(),
+                "mit freimarken.freistaedte.2 geht die zweite durch: "
+                        + reich.chatBild());
+    }
 
     @Test
     @DisplayName("Ohne bestaetigen wird NICHT gegruendet - nur gefragt")

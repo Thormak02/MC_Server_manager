@@ -135,14 +135,38 @@ final class Rangliste {
     }
 
     /**
-     * Welche Grenzen die Leiter gar nicht heben kann, weil die Datei sie schon vergibt.
+     * Welche Grenzen die Leiter nicht heben kann, weil die Datei sie schon vergibt.
      *
      * <p><b>Die gefaehrlichste Schranke dieser Leiter</b>, und sie steht in einer anderen
      * Zeile der Datei: Die Zahl in der {@code config.yml} ist eine UNTERGRENZE fuer
      * JEDEN. {@code Rangzahl} nimmt die hoechste Zahl aus Recht und Datei; steht in
      * {@code parzellen.hoechstzahl} eine 4, bekommt sie jeder Reisende - und der ganze
      * Aufstieg auf dieser Grenze ist wirkungslos, ohne dass irgendwo etwas rot wuerde.
-     * Genau so steht die ausgelieferte Datei bis Teil H dieses Schrittes da.
+     * Genau so stand die ausgelieferte Datei bis Teil H dieses Schrittes da.
+     *
+     * <p><b>VIER Lagen und nicht eine</b> [20.11.2026, Teil H]: Die alte Bedingung
+     * ({@code unten >= hoechste}) war in beide Richtungen zu grob.
+     * <ul>
+     *   <li><b>Die Null, die nicht schliesst:</b> Die ausgelieferte Datei verspricht bei
+     *       den Inseln und den Freistaedten, eine 0 sei "der Weg, das abzuschalten, ohne
+     *       das Recht anzufassen". Vergibt eine Stufe dort eine 1, ist das Versprechen
+     *       gebrochen - und zwar stumm.</li>
+     *   <li><b>Die ganze Leiter tot:</b> der alte Fall - die Datei gibt jedem, was erst
+     *       die oberste Stufe geben wollte.</li>
+     *   <li><b>Die unteren Stufen tot:</b> Leiter 1/2/4 und Datei 2 - der Aufstieg zum
+     *       Siedler bringt auf dieser Grenze nichts. Die alte Bedingung schwieg dazu,
+     *       denn 2 ist nicht groesser als 4.</li>
+     *   <li><b>Richtig eingestellt und darum STILL:</b> Die Datei nennt hoechstens die
+     *       Zahl der untersten Stufe. Das gilt auch fuer eine Grenze, die die Leiter
+     *       ueberhaupt nicht staffelt (Inseln und Freistaedte stehen auf allen Stufen bei
+     *       1) - eine Warnung dort waere nach Teil H die Haelfte aller Zeilen, und ein
+     *       Startbericht, dessen Warnungen man ueberliest, warnt nicht mehr.</li>
+     * </ul>
+     *
+     * <p>Fehlt zu einer bekannten Grenze der Eintrag in {@code untergrenzen}, sagt diese
+     * Methode DAS - sie ist dann unbeobachtet. Der Riegel steht hier und nicht als Tafel
+     * ueber dem Quelltext der Karte: Eine Probe kann ihn stellen, und auf dem Server, dem
+     * eine Zeile fehlt, erscheint er auch.
      *
      * <p>Paketprivat und einzeln, damit eine Probe genau diesen Satz nehmen kann.
      *
@@ -158,22 +182,68 @@ final class Rangliste {
         for (String name : new TreeSet<>(Rangwerte.BEKANNTE_ZAHLEN)) {
             Integer unten = untergrenzen.get(name);
             if (unten == null) {
+                saetze.add("Zur Grenze " + name + " nennt der Startbericht keine Zahl aus"
+                        + " der config.yml - sie steht in Rangwerte.BEKANNTE_ZAHLEN, und"
+                        + " ob die Leiter sie ueberhaupt hebt, prueft darum niemand.");
                 continue;
             }
-            int hoechsteDerLeiter = 0;
+            int hoechste = 0;
             String hoechsterRang = null;
+            int niedrigste = 0;
+            String niedrigsterRang = null;
+            // Die TOTEN Stufen: die, deren Zahl die Datei schon jedem gibt. Gezaehlt wird
+            // in der Reihenfolge der Leiter, denn so liest der Betreiber seine Datei.
+            List<String> tote = new ArrayList<>();
             for (Rangwerte.Stufe stufe : werte.leiter()) {
                 int wert = stufe.zahl(name).orElse(0);
-                if (wert > hoechsteDerLeiter) {
-                    hoechsteDerLeiter = wert;
+                if (wert <= 0) {
+                    // Eine Stufe, die diese Grenze nicht nennt, hebt sie nicht und ist
+                    // darum auch nicht "tot" - dort entscheidet allein die Datei.
+                    continue;
+                }
+                if (wert > hoechste) {
+                    hoechste = wert;
                     hoechsterRang = stufe.schluessel();
                 }
+                if (niedrigsterRang == null || wert < niedrigste) {
+                    niedrigste = wert;
+                    niedrigsterRang = stufe.schluessel();
+                }
+                if (wert <= unten) {
+                    tote.add(stufe.schluessel());
+                }
             }
-            if (hoechsterRang != null && unten >= hoechsteDerLeiter) {
+            if (hoechsterRang == null) {
+                // Die Leiter hebt diese Grenze nirgends. Dann ist die Zahl in der Datei
+                // die ganze Regel, und daran ist nichts zu beklagen.
+                continue;
+            }
+            if (unten == 0) {
+                saetze.add("Die config.yml gibt " + name + ": 0 - das schaltet diese"
+                        + " Grenze NICHT ab. Die Stufe " + niedrigsterRang + " vergibt"
+                        + " " + Rangwerte.VORSILBE + name + "." + niedrigste + ", und es"
+                        + " gilt die hoechste Zahl aus Recht UND Datei. Zum Abschalten"
+                        + " muss die Zeile auch aus raenge.leiter heraus.");
+            } else if (unten <= niedrigste) {
+                // RICHTIG EINGESTELLT: Die Datei nennt den Boden, die Leiter hebt
+                // darueber. Hier gehoert keine Zeile in den Startbericht.
+                continue;
+            } else if (unten >= hoechste) {
                 saetze.add("Die config.yml gibt " + name + ": " + unten
                         + " an JEDEN, die Leiter hebt es hoechstens auf "
-                        + hoechsteDerLeiter + " (" + hoechsterRang + ") - der Aufstieg"
+                        + hoechste + " (" + hoechsterRang + ") - der Aufstieg"
                         + " wirkt auf diese Grenze nicht.");
+            } else {
+                // DREI KURZE SAETZE UND EINE LISTE, kein Satz mit der Liste als
+                // Subjekt: "damit hebt reisender, siedler diese Grenze nicht" war bei
+                // EINER toten Stufe richtig und bei zwei falsch. Eine Meldung, deren
+                // Grammatik von einer Anzahl abhaengt, ist entweder halb falsch oder
+                // sie braucht zwei Fassungen.
+                saetze.add("Die config.yml gibt " + name + ": " + unten
+                        + " an JEDEN. Ohne Wirkung auf diese Grenze: "
+                        + String.join(", ", tote) + ". In die Datei gehoert hoechstens"
+                        + " die Zahl der untersten Stufe (" + niedrigsterRang + ": "
+                        + niedrigste + ").");
             }
         }
         return List.copyOf(saetze);

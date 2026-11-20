@@ -127,12 +127,17 @@ final class Werdertext {
      * kein Satz dazu steht. Ein {@code default} machte ihn stumm - der Spieler bekaeme
      * eine Absage, die eine andere Lage beschreibt.
      *
-     * @param hoechstzahl was sein Rang erlaubt - steht in der Absage "du hast genug"
-     * @param guthaben    sein Stand VOR dem Versuch; danach ist abgebucht
-     * @param namen       wie aus einer Kennung ein Name wird
+     * @param hoechstzahl  was sein Rang erlaubt - steht in der Absage "du hast genug"
+     * @param guthaben     sein Stand VOR dem Versuch; danach ist abgebucht
+     * @param rangWerbung  die Zeile aus {@code hinweise.rang-werbung}, moeglicherweise
+     *                     leer. Sie haengt NUR unter der Absage an der Grenze: Dort ist
+     *                     der Rang der Grund, bei "hier ist Meer" waere sie eine falsche
+     *                     Auskunft
+     * @param namen        wie aus einer Kennung ein Name wird
      */
     static List<Component> nehmenZeilen(Sprache sprache, Inselbuch.Entscheid entscheid,
                                         int hoechstzahl, long guthaben,
+                                        String rangWerbung,
                                         Function<UUID, String> namen) {
         return switch (entscheid.bescheid()) {
             case ERTEILT -> genommenZeilen(sprache, entscheid, guthaben);
@@ -146,8 +151,10 @@ final class Werdertext {
                                     entscheid.insel().orElseThrow().eigentuemer())));
             case AUSSERHALB -> sprache.bau(WerderSatz.ABSAGE_AUSSERHALB, 1L,
                     Einsatz.keine());
-            case GRENZE_ERREICHT -> sprache.bau(WerderSatz.ABSAGE_GENUG, hoechstzahl,
-                    Einsatz.von("hoechstzahl", hoechstzahl));
+            case GRENZE_ERREICHT -> Rangwerbung.darunter(sprache,
+                    WerderSatz.RANG_WERBUNG, rangWerbung,
+                    sprache.bau(WerderSatz.ABSAGE_GENUG, hoechstzahl,
+                            Einsatz.von("hoechstzahl", hoechstzahl)));
             case ZU_WENIG_MARK -> sprache.bau(WerderSatz.ABSAGE_ZU_WENIG, 1L,
                     Einsatz.von("preis", sprache.betrag(entscheid.kosten()))
                             .mit("fehlt", sprache.betrag(
