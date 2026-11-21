@@ -146,7 +146,7 @@ class TruhenwacheEreignisTest {
 
         assertFalse(ereignis.isCancelled(), "er ist der einzige Zuschauer");
         // Satz und Zahl getrennt gefragt: Im Bild steht die Farbmarke MITTEN in der Zahl
-        // ("noch &616&7 Gegenstaende"), und das Bild als Ganzes haelt BildGleichTest.
+        // ("noch &#c6a15b16&#a5b4bf Gegenstaende"), und das Bild als Ganzes haelt BildGleichTest.
         // Hier geht es um etwas anderes - dass dieser Satz mit DIESER Zahl ankommt.
         assertTrue(anna.chatBild().toString().contains("Freie Truhe - heute kannst du noch"),
                 anna.chatBild().toString());

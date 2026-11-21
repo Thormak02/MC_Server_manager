@@ -129,8 +129,8 @@ class MarkBefehlTest {
         assertEquals(1, stand.baum().tippe("mark", spieler),
                 "ein ausgefuehrter Zweig gibt SINGLE_SUCCESS");
 
-        assertEquals(List.of("&7Du hast &650.000 Mark&7.",
-                "&8/mark verlauf zeigt die letzten Buchungen."),
+        assertEquals(List.of("&#a5b4bfDu hast &#c6a15b50.000 Mark&#a5b4bf.",
+                "&#6e7a82/mark verlauf zeigt die letzten Buchungen."),
                 spieler.chatBild(), "der Stand und der Hinweis darunter -"
                         + " nicht der Verlauf");
     }
@@ -145,8 +145,8 @@ class MarkBefehlTest {
 
         // DIE WEICHE: Haengt zeigeVerlauf am falschen Unterbefehl, kommt hier der Stand -
         // und die Zahl in AUFRUFE_IN_PARZELLENBEFEHLE bleibt dabei eine Eins.
-        assertEquals(List.of("&6Deine letzten Buchungen",
-                "&7  06.11. 14:37  +50.000 Mark  Startguthaben  (Stand 50.000 Mark)"),
+        assertEquals(List.of("&#c6a15bDeine letzten Buchungen",
+                "&#a5b4bf  06.11. 14:37  +50.000 Mark  Startguthaben  (Stand 50.000 Mark)"),
                 spieler.chatBild(), "der Kopf und die EINE Buchung, die das Eroeffnen"
                         + " des Kontos erzeugt hat - 14:37 Ortszeit aus 13:37 UTC,"
                         + " also die eingestellte Zone und nicht die des Rechners");
@@ -164,9 +164,9 @@ class MarkBefehlTest {
 
         // Die NEUESTE Buchung zuerst - ein Verlauf, der von hinten liest, zeigt
         // dem Spieler sein Startguthaben ueber dem Kauf von gestern.
-        assertEquals(List.of("&6Deine letzten Buchungen",
-                "&7  06.11. 14:37  -25.000 Mark  Parzelle genommen  (Stand 25.000 Mark)",
-                "&7  06.11. 14:37  +50.000 Mark  Startguthaben  (Stand 50.000 Mark)"),
+        assertEquals(List.of("&#c6a15bDeine letzten Buchungen",
+                "&#a5b4bf  06.11. 14:37  -25.000 Mark  Parzelle genommen  (Stand 25.000 Mark)",
+                "&#a5b4bf  06.11. 14:37  +50.000 Mark  Startguthaben  (Stand 50.000 Mark)"),
                 spieler.chatBild(), "der Kauf steht UEBER dem Startguthaben: Ein"
                         + " Verlauf, der von hinten liest, zeigt dem Spieler die"
                         + " aelteste Buchung zuerst");
@@ -205,13 +205,13 @@ class MarkBefehlTest {
         // nennt. Sie nennt die ZAHL DES DECKELS und nicht den Goldmarkstand des
         // Spielers: Was heute noch geht, haengt am Deckel und nicht daran, wie viel
         // einer hat.
-        assertEquals(List.of("&6Wechselstube",
-                        "&7Du hast &60 Goldmark&7.",
-                        "&7Eine Goldmark kostet &61.000 Mark&7 und bringt &6800 Mark&7"
+        assertEquals(List.of("&#c6a15bWechselstube",
+                        "&#a5b4bfDu hast &#c6a15b0 Goldmark&#a5b4bf.",
+                        "&#a5b4bfEine Goldmark kostet &#c6a15b1.000 Mark&#a5b4bf und bringt &#c6a15b800 Mark&#a5b4bf"
                                 + " zurueck.",
-                        "&7Heute kannst du noch &612 Goldmark&7 zurueckwechseln"
+                        "&#a5b4bfHeute kannst du noch &#c6a15b12 Goldmark&#a5b4bf zurueckwechseln"
                                 + " (10.000 Mark).",
-                        "&8/mark tauschen kaufen 5 oder /mark tauschen verkaufen 5"),
+                        "&#6e7a82/mark tauschen kaufen 5 oder /mark tauschen verkaufen 5"),
                 spieler.chatBild());
     }
 
@@ -223,7 +223,7 @@ class MarkBefehlTest {
 
         assertEquals(1, stand.baum().tippe("mark tauschen kaufen 3", spieler));
 
-        assertEquals(List.of("&a3 Goldmark fuer 3.000 Mark gekauft. Du hast jetzt"
+        assertEquals(List.of("&#73bf963 Goldmark fuer 3.000 Mark gekauft. Du hast jetzt"
                 + " 3 Goldmark."), spieler.chatBild());
         // UND DAS GELD IST WIRKLICH GEFLOSSEN. Ohne diese zwei Zeilen prueefte die Probe
         // nur den Satz - und ein Zweig, der die Antwort baut und nichts bucht, waere
@@ -258,7 +258,7 @@ class MarkBefehlTest {
 
         assertEquals(1, stand.baum().tippe("mark tauschen verkaufen 20", spieler));
 
-        assertEquals(List.of("&cHeute gehen nur noch 12 Goldmark (9.600 Mark) -"
+        assertEquals(List.of("&#d9564dHeute gehen nur noch 12 Goldmark (9.600 Mark) -"
                 + " der Wechseldeckel."), spieler.chatBild());
         // NICHTS GEKUERZT: Die zwanzig Goldmark liegen noch beim Spieler. Wer hier
         // kuerzt, nimmt ihm zwoelf, ohne dass er es gesagt hat.
@@ -298,7 +298,7 @@ class MarkBefehlTest {
 
         stand.baum().tippe("mark tauschen kaufen", spieler);
 
-        assertTrue(spieler.chatBild().contains("&6Wechselstube"),
+        assertTrue(spieler.chatBild().contains("&#c6a15bWechselstube"),
                 "statt einer englischen Fehlerzeile die Tafel: " + spieler.chatBild());
         assertEquals(50_000L, stand.kasse().guthaben(spieler.kennung()));
         assertEquals(0L, stand.gold().guthaben(spieler.kennung()));
@@ -315,18 +315,18 @@ class MarkBefehlTest {
 
         assertEquals(1, stand.baum().tippe("mark muenzhaus", spieler));
 
-        assertEquals(List.of("&6Muenzhaus",
-                        "&7Du hast &60 Goldmark&7.",
-                        "&7Eine Goldmark kostet &61.000 Mark&7 und bringt &6800 Mark&7"
+        assertEquals(List.of("&#c6a15bMuenzhaus",
+                        "&#a5b4bfDu hast &#c6a15b0 Goldmark&#a5b4bf.",
+                        "&#a5b4bfEine Goldmark kostet &#c6a15b1.000 Mark&#a5b4bf und bringt &#c6a15b800 Mark&#a5b4bf"
                                 + " zurueck.",
-                        "&7Heute kannst du noch &612 Goldmark&7 zurueckwechseln"
+                        "&#a5b4bfHeute kannst du noch &#c6a15b12 Goldmark&#a5b4bf zurueckwechseln"
                                 + " (10.000 Mark).",
-                        "&8- Kuerbishut fuer 2 Goldmark: 1x carved_pumpkin",
-                        "&8- Blumenkiste fuer 2 Goldmark: 16x rose_bush, 16x peony,"
+                        "&#6e7a82- Kuerbishut fuer 2 Goldmark: 1x carved_pumpkin",
+                        "&#6e7a82- Blumenkiste fuer 2 Goldmark: 16x rose_bush, 16x peony,"
                                 + " 16x lilac (noch nicht frei)",
-                        "&8- Musikscheibe fuer 5 Goldmark: 1x music_disc_cat",
-                        "&8- Rathausglocke fuer 5 Goldmark: 1x bell (noch nicht frei)",
-                        "&8/mark muenzhaus kaufen [posten] - Verlauf:"
+                        "&#6e7a82- Musikscheibe fuer 5 Goldmark: 1x music_disc_cat",
+                        "&#6e7a82- Rathausglocke fuer 5 Goldmark: 1x bell (noch nicht frei)",
+                        "&#6e7a82/mark muenzhaus kaufen [posten] - Verlauf:"
                                 + " /mark muenzhaus verlauf"),
                 spieler.chatBild());
     }
@@ -342,7 +342,7 @@ class MarkBefehlTest {
 
         stand.baum().tippe("mark muenzhaus kaufen", spieler);
 
-        assertTrue(spieler.chatBild().contains("&6Muenzhaus"),
+        assertTrue(spieler.chatBild().contains("&#c6a15bMuenzhaus"),
                 spieler.chatBild().toString());
     }
 
@@ -357,7 +357,7 @@ class MarkBefehlTest {
 
         stand.baum().tippe("mark muenzhaus kaufen kuerbishu", spieler);
 
-        assertEquals(List.of("&cDen Posten \"kuerbishu\" gibt es im Katalog nicht."),
+        assertEquals(List.of("&#d9564dDen Posten \"kuerbishu\" gibt es im Katalog nicht."),
                 spieler.chatBild());
     }
 
@@ -387,7 +387,7 @@ class MarkBefehlTest {
         assertEquals(3L, stand.gold().guthaben(spieler.kennung()),
                 "jetzt sind zwei Goldmark weg");
         assertEquals(1, stand.rucksack().hat("carved_pumpkin"), "und der Hut ist da");
-        assertEquals(List.of("&aKuerbishut gekauft fuer 2 Goldmark: 1x carved_pumpkin."
+        assertEquals(List.of("&#73bf96Kuerbishut gekauft fuer 2 Goldmark: 1x carved_pumpkin."
                         + " Du hast jetzt 3 Goldmark."), spieler.chatBild());
     }
 
@@ -406,7 +406,7 @@ class MarkBefehlTest {
         stand.baum().tippe("mark muenzhaus kaufen kuerbishut bestaetigen", spieler);
 
         assertEquals(5L, stand.gold().guthaben(spieler.kennung()), "nichts abgebucht");
-        assertEquals(List.of("&cIn deinem Rucksack fehlt Platz fuer 1 Stueck - es ist"
+        assertEquals(List.of("&#d9564dIn deinem Rucksack fehlt Platz fuer 1 Stueck - es ist"
                 + " nichts passiert."), spieler.chatBild());
     }
 
@@ -427,10 +427,10 @@ class MarkBefehlTest {
         // die Kasse selbst, sobald die erste Goldmark ankommt - mit 0, denn die Goldmark
         // hat kein Startguthaben (Plan 8.1 nennt genau zwei Quellen). Sie gehoert in
         // JEDES Buch, und darum steht sie hier in Goldmark da.
-        assertEquals(List.of("&6Goldmark: 3 Goldmark",
-                        "&7  06.11. 14:37  +3 Goldmark  Aus Mark gewechselt"
+        assertEquals(List.of("&#c6a15bGoldmark: 3 Goldmark",
+                        "&#a5b4bf  06.11. 14:37  +3 Goldmark  Aus Mark gewechselt"
                                 + "  (Stand 3 Goldmark)",
-                        "&7  06.11. 14:37  0 Goldmark  Startguthaben"
+                        "&#a5b4bf  06.11. 14:37  0 Goldmark  Startguthaben"
                                 + "  (Stand 0 Goldmark)"),
                 spieler.chatBild());
     }
@@ -443,8 +443,8 @@ class MarkBefehlTest {
 
         stand.baum().tippe("mark muenzhaus verlauf", spieler);
 
-        assertEquals(List.of("&6Goldmark: 0 Goldmark",
-                        "&7Noch keine Goldmark bewegt. Mit /mark tauschen kaufen 5 geht"
+        assertEquals(List.of("&#c6a15bGoldmark: 0 Goldmark",
+                        "&#a5b4bfNoch keine Goldmark bewegt. Mit /mark tauschen kaufen 5 geht"
                                 + " es los."),
                 spieler.chatBild());
     }
@@ -480,7 +480,7 @@ class MarkBefehlTest {
         // Die GANZE Zeile und nicht ihre Teile: Ein Index in die Chatliste waere die
         // naechste Probe, die nach einer zusaetzlichen Zeile das Falsche prueft.
         assertTrue(spieler.chatBild().contains(
-                        "&7Heute kannst du noch &62 Goldmark&7 zurueckwechseln"
+                        "&#a5b4bfHeute kannst du noch &#c6a15b2 Goldmark&#a5b4bf zurueckwechseln"
                                 + " (2.000 Mark)."),
                 "8.000 Mark sind durch, 2.000 frei - das sind zwei Goldmark: "
                         + spieler.chatBild());

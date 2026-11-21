@@ -56,6 +56,23 @@ enum AnfragenSatz implements Satz {
     /** Er hat sich selbst gefragt. Ohne Namen: Er kennt seinen eigenen. */
     FRAGE_BEI_DIR("anfrage.frage.bei-dir", Art.SATZ),
 
+    /**
+     * Wie man fragt - die Antwort auf {@code /tpa} ohne Namen [21.11.2026].
+     *
+     * <p>Ohne diesen Satz endete {@code /tpa} in Brigadiers englischem "Unknown or
+     * incomplete command", waehrend die Fusszeile von {@code /hilfe} jedem zusagt, dass
+     * ein Befehl ohne Zusatz zeigt, was er kann.
+     *
+     * <p>ZWEI Saetze fuer die zwei Richtungen und nicht einer mit {@code {befehl}}: Wer
+     * {@code /tpa} tippt, will selbst gehen, wer {@code /tpahere} tippt, will jemanden
+     * holen. Derselbe Schnitt wie bei {@link #FRAGE_EINGELADEN} und
+     * {@link #FRAGE_MOECHTE_KOMMEN}.
+     */
+    FRAGE_GEBRAUCH_ZU_DIR("anfrage.frage.gebrauch-zu-dir", Art.SATZ),
+
+    /** Wie man einlaedt - die Antwort auf {@code /tpahere} ohne Namen [21.11.2026]. */
+    FRAGE_GEBRAUCH_HIERHER("anfrage.frage.gebrauch-hierher", Art.SATZ),
+
     /** Dieselbe Anfrage steht schon offen - es ist nichts hinzugekommen. */
     FRAGE_STEHT_NOCH("anfrage.frage.steht-noch", Art.SATZ, "name"),
 

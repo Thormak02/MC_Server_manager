@@ -50,18 +50,29 @@ final class Sprache {
      * <p>Derselbe Vorrat beantwortet beide Tore: {@code tagklage} fragt ihn mit
      * {@code has(name)}, und hier wird mit ihm geparst. Zwei Tore mit zwei Wortschaetzen
      * waeren ein Fehler fuer sich.
+     *
+     * <p><b>Seit der Farbwelt kennt er acht Rollen mehr</b> ({@link Farbtafel#ROLLEN}),
+     * und hier stehen sie mit den AUSGELIEFERTEN Werten. Das ist kein Widerspruch zur
+     * Einstellbarkeit, sondern die Arbeitsteilung: Dieser Vorrat beantwortet nur die
+     * Frage "kennt das Plugin dieses Tag?" - und die NAMEN sind fest, nur die Werte sind
+     * es nicht. Was ein Spieler wirklich SIEHT, kommt aus dem Leser der geltenden
+     * Palette ({@link Farbtafel#leser}), und den holt {@link #bau} beim Gebrauch am
+     * Halter.
      */
-    static final TagResolver VORRAT = TagResolver.builder()
-            .resolver(StandardTags.color())
-            .resolver(StandardTags.decorations())
-            .build();
+    static final TagResolver VORRAT = Farbtafel.vorrat(Farbtafel.VORGABE.rollen());
 
     /**
-     * Unveraenderlich und faden-sicher, also {@code static final} und einmal gebaut.
+     * Der Leser der LADEPRUEFUNG - unveraenderlich, faden-sicher, einmal gebaut.
      *
      * <p>{@code strict(true)}: Ein nicht geschlossenes Tag ist damit beim LADEN eine Klage
      * mit Zeile und Spalte. Dass ein falsch GESCHRIEBENES Tag trotzdem durchgeht, ist
      * gemessen - dagegen steht {@link Sprachliste#tagklage}.
+     *
+     * <p><b>NICHT der Leser des Chats.</b> Er traegt die ausgelieferten Farbwerte und
+     * taugt fuer alles, was nur WISSEN muss, ob ein Wortlaut sich lesen laesst - die
+     * Ladepruefung und die Bildproben der Vorlage. Was ein Spieler sieht, baut
+     * {@link #bau} mit dem Leser der geltenden Palette; sonst wirkte eine geaenderte
+     * Farbe erst nach einem Neustart und niemand wuesste, warum.
      */
     static final MiniMessage MINIMESSAGE = MiniMessage.builder()
             .strict(true)
@@ -121,7 +132,7 @@ final class Sprache {
     List<Component> bau(Satz schluessel, long anzahl, Einsatz werte) {
         String wortlaut = stand.buch().wortlaut(schluessel, anzahl);
         try {
-            return teile(ersetze(schluessel, wortlaut, werte));
+            return teile(ersetze(leser(), schluessel, wortlaut, werte));
         } catch (IllegalStateException fehlt) {
             // Nicht abbrechen: Der Spieler sieht {z} und weiss, dass etwas kaputt ist; bei
             // einem abgebrochenen Befehl wuesste er nur, dass nichts geschieht. Dieselbe
@@ -131,7 +142,7 @@ final class Sprache {
             PROTOKOLL.severe(fehlt.getMessage() + " - gesendet wird der Satz mit"
                     + " sichtbaren Klammern. Ein abgebrochener Befehl liesse den Spieler"
                     + " ratlos; eine sichtbare Klammer sagt ihm, dass etwas kaputt ist.");
-            return teile(MINIMESSAGE.deserialize(wortlaut));
+            return teile(leser().deserialize(wortlaut));
         }
     }
 
@@ -139,9 +150,16 @@ final class Sprache {
      * Genau ein Component - fuer jeden Ort, der keine Liste senden kann.
      *
      * <p>Wirft, wenn der Satz mehr als eine Zeile ergibt. Fuer {@code Art.HANDBALKEN} ist
-     * das beim Laden ausgeschlossen; fuer einen {@code Art.SATZ}, der in einer Zeile
-     * gebraucht wird, ist es die eine Stelle, an der ein Betreiber mit einer Umbruchmarke
-     * etwas kaputt machen koennte - und dann sagt der Wurf, welcher Satz es war.
+     * das beim Laden ausgeschlossen.
+     *
+     * <p><b>Fuer einen {@code Art.SATZ} liegt der Riegel inzwischen auch beim LADEN</b>
+     * [21.11.2026]: Jeder Satz, den eine Stelle hier holt, steht in
+     * {@link Einzeiler#CHATZEILEN} oder {@link Einzeiler#UEBER_VARIABLE}, und
+     * {@code Sprachliste} klagt dort ueber eine Umbruchmarke, bevor der Wert gilt - die
+     * Tafeln 10h bis 10j halten beide Richtungen. Dieser Wurf ist damit die letzte
+     * Sicherung und nicht mehr das einzige Tor; er greift noch fuer die ausgelieferte
+     * Vorlage und fuer eine Stelle, die jemand ohne Eintrag in jenen Listen baut. Dann
+     * sagt er, welcher Satz es war.
      */
     Component eineZeile(Satz schluessel, Einsatz werte) {
         List<Component> zeilen = bau(schluessel, 1L, werte);
@@ -285,8 +303,21 @@ final class Sprache {
 
     // --- Der Weg vom Wortlaut zum Component ------------------------------------
 
-    private static Component ersetze(Satz schluessel, String wortlaut, Einsatz werte) {
-        Component roh = MINIMESSAGE.deserialize(wortlaut);
+    /**
+     * Der Leser der GELTENDEN Palette - beim Gebrauch am Halter geholt.
+     *
+     * <p>Kein Feld: Dieselbe Regel wie fuer jeden Wortlaut. Eine im Konstruktor
+     * festgeschriebene Palette liesse eine geaenderte Farbe erst nach einem Neustart
+     * wirken, und die Antwort auf {@code /freimarken neuladen} haette sie trotzdem
+     * gemeldet - eine Zusage, die nur halb gilt.
+     */
+    private MiniMessage leser() {
+        return stand.buch().farben().leser();
+    }
+
+    private static Component ersetze(MiniMessage leser, Satz schluessel, String wortlaut,
+                                     Einsatz werte) {
+        Component roh = leser.deserialize(wortlaut);
         return roh.replaceText(TextReplacementConfig.builder()
                 .match(Sprachliste.MARKE.pattern())
                 .replacement((treffer, bauer) -> {

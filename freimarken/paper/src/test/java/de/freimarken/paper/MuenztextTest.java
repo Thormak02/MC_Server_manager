@@ -81,7 +81,7 @@ class MuenztextTest {
                 tafel(Muenzwerte.VORGABE, 12L, List.of()), auskunft());
 
         String bild = Sprachprobe.bild(zeilen);
-        assertTrue(bild.contains("&6Muenzhaus"), bild);
+        assertTrue(bild.contains("&#c6a15bMuenzhaus"), bild);
         assertTrue(bild.contains("12 Goldmark"), "der Goldmarkstand: " + bild);
         assertTrue(bild.contains("1.000 Mark"), "der Hinwegkurs: " + bild);
         assertTrue(bild.contains("800 Mark"), "der Rueckwegkurs: " + bild);

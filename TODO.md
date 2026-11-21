@@ -707,6 +707,64 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
   mitgeaendert: Das ist ein anderer Bereich mit eigenen Proben, und eine stille Reparatur daran gehoert
   nicht in einen Schritt ueber Tore.
 
+## Schritt 13: Sprache, Farbwelt, Menues
+
+### Teil A: die Farbwelt - 21.11.2026
+
+- ENTSCHIEDEN: flaechig im ganzen Chat, frei anpassbar, thematisch gruppiert - ACHT Rollen statt eines Feldes je Tag.
+- Die Rollen heissen nach ihrer AUFGABE (fliesstext, betont, kopf, geld, warnung, bestaetigung, hinweis, gedaempft) und nicht nach ihrer Farbe: Wer umfaerbt, muss keinen Satz anfassen.
+- Die Palette steht im Block farben: der SPRACHDATEI, nicht in der config.yml - eine Datei, ein Leser, ein Stand, ein gepruefter alles-oder-nichts-Neuladeweg.
+- betont heisst nicht name: <name> ist in dieser Datei der Angabeplatz der Befehlshinweise ("/laden mieten <name>"). Tafel 31t haette es abgewiesen.
+- 791 Tags umgestellt, die 1272 vorhandenen Bildzeilen blieben unveraendert gruen - der hexColors-Schritt im Bildner war vorher getrennt belegt.
+- Die Markenwerte sind fuer den Chat AUFGEHELLT (Schiefer, Markgold, Bundesrot, Forstgruen); die reinen Werte bleiben fuer Flaechen.
+- Eine unbekannte Rolle ist ein BERICHT (sie wirkt nicht, und das steht da), ein kaputter Farbwert eine KLAGE mit dem Hinweis auf die YAML-Falle (eine Raute ohne Anfuehrungszeichen beginnt einen Kommentar).
+- Offen, nicht gebaut: ein Betreiberbefehl, der die Palette zeigt. Heute sieht man sie nur in der Datei.
+
+### Teil B: Menue, Regeln, Hilfe - 21.11.2026
+
+- /MENU GEBAUT (auch /menue): Truhenmenue mit elf Eintraegen. Ein Klick fuehrt einen BEFEHL aus, das Menue gewaehrt nie selbst etwas - Recht, Geld und Ort prueft derselbe Zweig, den der Spieler tippt.
+- Erkannt wird das eigene Menue am HALTER und nie am Titel (der kommt aus der Sprachdatei und laesst sich nachmachen). MenuType kann das nicht: ihr InventoryViewBuilder nimmt keinen Halter (im API-Jar nachgesehen).
+- Jeder Klick wird abgesagt, auch der auf ein leeres Fach, und das ZIEHEN ist ein eigenes Ereignis - sonst holt sich jemand den Hilfetext als Diamanten.
+- Ein offenes Pluginmenue zaehlt NICHT als taetige Zeit (die Messwache fragt den Halter) - sonst waere bezahlte Anwesenheit mit einem Klick zu haben.
+- /REGELN GEBAUT (auch /rules): ein Spieler bekommt ein FENSTER (Paper-Dialog), die Konsole und /regeln chat den Chat. Geht das Fenster nicht auf - ein alter Client ueber ViaProxy -, kommen dieselben Zeilen in den Chat; der Grund steht einmal im Serverprotokoll.
+- Der Regeltext ist EIN Satz mit Umbruchmarken (regeln.text) - der erste mehrzeilige Satz des Projekts. Eine Liste haette eine Zahl von Schluesseln, die der Betreiber bestimmt, und jeder Schluessel muss zu einem Satz gehoeren.
+- Die Dialoghaelfte ist die EINZIGE Klasse ohne Zeugen: Die ganze API geht durch einen ServiceLoader, der auf dem Probenklassenpfad nichts findet (Bukkit.setServer hilft nicht). Darum nimmt sie FERTIGE Components und keine Satzschluessel - sonst laege das Holen genau dort, wo keine Probe hinkommt.
+- /HILFE GEBAUT: zwanzig Befehle in sechs Gruppen, gefiltert mit dem Recht, das der Befehl SELBST fragt. Eine Gruppe, von der nichts uebrig bleibt, verschwindet mit ihrer Ueberschrift.
+- Die Beschreibung steht genau EINMAL (befehl.beschreibung.*) - dieselbe Zeile zeigt Papers eigene Befehlsliste. HilfeplanTest haelt vier Richtungen: Beschreibung gegen Plan, die PAARUNG je Eintrag, Menuetafel gegen Plan, und den Plan gegen die echte Anmeldung im Quelltext.
+- Kein Zweitname "help" fuer /hilfe: Den hat der Server selbst, ein zweiter Anbieter landet im Namensraum des Plugins - eine Verwechslung, die man nicht sieht, weil beides etwas anzeigt.
+- Jede Zeile von /hilfe kommt ueber bau und nie ueber eineZeile: Eine Umbruchmarke in einer Beschreibung wird so eine zweite Zeile und kein Wurf mitten in der Liste.
+- FUND beim Nachbauen der fehlenden Menueproben: Die Wache hatte ZWEI Riegel fuer denselben Fall (geklicktes Inventar UND rohes Fach). Der zweite ist heraus - mit ihm davor war getRawSlot gegen getSlot nicht unterscheidbar, ein Tausch blieb gruen. Jetzt haelt MenuewacheTest 3 den Fall wirklich (Fach 37 im Rucksack ist umgerechnet Fach 10 im Menue).
+- Das Menue hatte bis heute KEINE eigene Probe, nur Tafeln. Neu: MenuetafelTest (9), MenueBefehlTest (4), MenuewacheTest (7). Dazu HilfeplanTest (9), HilfeBefehlTest (8), RegelnBefehlTest (7) und 13 Bildzeilen. Proben 2493 -> 2550.
+- Spielerprobe schreibt jetzt EINE Liste mit, in der Schliessen und Tippen zusammen stehen: Die Zusage "erst schliessen, dann tippen" ist eine REIHENFOLGE, und zwei getrennte Mitschriften koennten sie nicht halten.
+- Einspritzungsrunde (19 Faelle): 19/19 gefangen, jeder von der Probe, deren Name den Fall nennt. ZWEI Fehler steckten im Treiber, keiner im Code - der Rueckweg war eine Textersetzung (ein Fall, der etwas durch den Leerstring ersetzt, ist so nicht zurueckzunehmen), und die Einordnung suchte "error:" ohne Gross-Klein-Ruecksicht und traf damit "AssertionFailedError:". Jetzt: Sicherungskopie je Runde, Einordnung am javac-Muster.
+- Startlauf gegen einen Wegwerfserver: Sprachdatei laedt OHNE Klage (der erste mehrzeilige Wert geht durch die Zeichenwache), /hilfe antwortet auf der Konsole mit genau 28 Zeilen, /regeln mit 7, /menu mit seiner eigenen Absage. Die Anmeldezeile nennt hilfe, regeln, rules, menu und menue. Fehlerzeilen und Warnungen sind zeichengleich die des vorigen Laufes (fehlende Truhen in der frischen Markthalle, Papers Datenpaketzeile, keine Datenbank).
+- Offen, gehoert zum Buergeramt: die ANNAHME der Regeln als Formular mit zwei Knoepfen. Das Geruest dafuer steht - eine confirmation statt einer notice, und der zweite Knopf fuehrt einen BEFEHL aus, so wie das Menue es tut.
+- Offen beim Spieltest: /menu mit einem Klick je Eintrag, /regeln als Fenster, /regeln auf einem alten Client ueber ViaProxy (dort muss der Chatweg kommen), und die Farben im Spiel statt auf der Konsole.
+
+### Nachlese zu Teil A und B: 18 Funde einer Lesesuche - 21.11.2026
+
+- Sechs Linsen ueber Teil A und B, jeder Fund von zwei Skeptikern geprueft: 18 bestaetigt, 3 strittig. Alle 21 selbst an der Quelle nachgelesen - alle echt, keiner verworfen.
+- SCHWERSTER FUND: Ein Vorzeichen im Farbwert WARF, statt zu klagen. Integer.parseInt nimmt "#-00001" als -1; die Zahl lief an der Klage vorbei in den Riegel der Farbtafel - und der wirft. Beim Start steht das Lesen ausserhalb des try, also schaltete EIN Tippfehler in der sprache.yml das ganze Plugin ab. Jetzt prueft farbwert die sechs Stellen selbst; der Riegel in Farbtafel ist wieder die zweite Zusicherung.
+- ZWEITSCHWERSTER: Das Hauptmenue bot elf Befehle UNGEFILTERT an. /hilfe filtert mit dem Recht des Befehls, das Menue nicht - wer freimarken.werder wegnimmt, sah den Prismarinblock weiter und bekam auf den Klick Brigadiers englische Zeile (requires VERBIRGT einen Knoten, es sagt nicht ab). Der Filter sitzt jetzt in der TAFEL und nicht in der Hand: Die Hand legt die gefilterte Tafel in den Halter, also geht auch der KLICK durch denselben Riegel - ein weggefallenes Fach ist unbekannt und nicht bloss leer.
+- Das Recht hat EINEN Ort: Die Tafel schreibt es nicht ab, sie fragt beim Hilfeplan nach. Ein Eintrag mit einem Befehl, den der Plan nicht kennt, wird beim Bauen abgewiesen - ohne Plan gibt es kein Recht, nach dem zu fragen waere.
+- ZUSAGE OHNE BAU, dreimal dieselbe: Der Rueckfall fuer alte Clients. showDialog SENDET und fragt nicht; ein Paket, das ViaProxy nach unten verwirft, merkt der Server nie - der Spieler las GAR NICHTS, und auch keine Protokollzeile. Eine Erkennung der Dialogfaehigkeit ist nicht gemessen, also wird sie nicht zugesagt: Die drei Texte sagen jetzt, was der Fang deckt (einen Fehler auf dem SERVER), und der Ausweg /regeln chat steht in der Beschreibung des Befehls - der einen Zeile, die jeder Client in seiner Befehlsliste liest.
+- /shop, /tpa und /tpahere hatten an der Wurzel kein executes, waehrend hilfe.fuss jedem zusagt: "Jeder Befehl ohne Zusatz zeigt, was er kann." /shop zeigt jetzt die Liste, /tpa und /tpahere je einen Gebrauchssatz - zwei Saetze und nicht einer, weil die RICHTUNG verschieden ist.
+- 34 Kommentarzeilen der Sprachdatei nannten noch feste Farben ("die Ueberschrift gold, die Liste aqua, der Hinweis grau"), und zwar mit Woertern, die jetzt ROLLENNAMEN sind: "der Hinweis grau" stand fuer fliesstext. Wer das liest, aendert folgerichtig die falsche Rolle. Jede Rolle ist am Satz darunter abgelesen; "aqua" gab es in der ganzen Datei nur in diesem einen Kommentar.
+- Vier veraltete Zusagen im Quelltext: regeln.kopf durfte laut Javadoc mehrzeilig werden (der Riegel kostet die GANZE Datei, und zwar beim Laden), @param name nannte Art.WORT statt SATZ, der Kopf von VERDECKTE_HOLSTELLEN teilte fuenf Stellen in zwei Gruppen (es sind zehn in drei), und in plugin.yml hing der Erklaerungsblock von freimarken.rang ueber freimarken.menu - die neuen Rechte waren zwischen Block und Schluessel geraten.
+- Das Neuladen nannte nur /help; seit es /hilfe gibt, liest ein ZWEITER Befehl dieselben eingefrorenen Beschreibungen aus demselben Buch.
+- artname war gebaut und wurde nirgends gerufen. Jetzt normalisiert der Eintrag-Konstruktor damit - und die Methode steht auf der REINEN Seite der Naht, sonst laedt jede Tafelprobe die Bukkit-Haelfte.
+- /regeln zeigte das Fenster dem Executor und schrieb den Rueckfall an den Sender: Bei /execute as las je nach Lage ein anderer. Jetzt EIN Leser - der, der getippt hat.
+- FEHLENDE PROBEN (fuenf Funde waren keine Fehler, sondern ungehaltene Zusagen): Der Neuladeweg der PALETTE hatte keine (der Helfer kopierte immer dieselben Farben, der Farbzweig lief nie); die Anmeldung der Menuewache keine Tafel; das Recht im Hilfeplan war an nichts gebunden (die Probe holte ihre Erwartung AUS dem Plan); die Paarung Satz-zu-Befehl im Hauptmenue pruefte nur Spalten, nie Zeilen; und MenuetafelTest 8 war beim Fall "keine Zeile" mit UND ohne Riegel gruen, weil das Gegenbeispiel vorher im Fach-Riegel hing.
+- Die Befehlsprobe kann jetzt ZWEI verschiedene Leser besetzen (tippeAls). Ihr eigenes Javadoc sagte seit Monaten, dass diese Probe fehlt - ohne sie war jedes Vertauschen von Sender und Executor gruen, in jedem Befehl.
+- Neue Tafeln: 31de (Menuewache angemeldet) und 31df (kein Farbwort in einem Kommentar der Vorlage, erst hinter dem Block farben:, mit dem TREFFERTEXT). Fuer "weiss" trifft das Muster nur eine Farbwendung - "weiss der Spieler nicht" ist das Verb, und eine ausgenommene Zeile ist fuer immer blind.
+- EINSPRITZUNGSRUNDE (20 Faelle) gegen die neuen Riegel und Proben: 18 auf Anhieb gefangen. Die zwei anderen waren die lehrreichen.
+- FUND AN DER EIGENEN REPARATUR: Der Rechtefilter war dreifach gruen geprueft - dass die HAND ihn benutzt, hielt nichts. Ersetzt man dort fuerRechte durch die Tafel selbst, bleiben alle 2565 Proben gruen und das Menue bietet wieder jedem alles an. Der Variablenname bleibt ja gleich, also sieht auch keine Namenstafel es, und die Hand liegt hinter createInventory. Tafel 31dg haelt jetzt BEIDE Zeilen - den Filteraufruf und den Halter, denn die zweite entscheidet, ob auch der KLICK durch den Riegel geht.
+- FUND AN DER EIGENEN PROBE: Eine neue Probe meldete eine zweite "Anna" in der STATISCHEN Anwesenheitstabelle an - und machte damit WolkeBefehlTest rot, eine Datei, die ich nicht angefasst hatte. /regeln loest keinen Namen auf, die Anmeldung war ueberfluessig. Tafel 31dh: Wer anmelden ruft, ruft niemandMehrDa. Dafuer liest Quellen jetzt auch den PROBENBAUM - fuer keine Tafel war er bisher lesbar.
+- GEMESSEN, was keine Probe messen kann: Ein Wegwerfserver bekam eine sprache.yml mit farben: warnung: "#-00001". Jetzt kommt die KLAGE mit Zeilennummer, das Plugin laeuft weiter und /hilfe antwortet; der gute Wert in derselben Datei wirkt nicht (alles oder nichts). Vorher hatte Paper hier das ganze Plugin abgeschaltet. Zweiter Lauf mit nur dem guten Wert: "deine Farben: kopf: #c6a15b -> #00ff00" - Rolle und beide Werte in der Richtung alt -> neu.
+- Startlauf: Sprachdatei laedt ohne Klage, /hilfe 28 Zeilen (die Zeile zu /regeln nennt jetzt den Chatweg), /regeln und /regeln chat je 7, /menu seine Absage. Fehlerzeilen zeichengleich die des vorigen Laufes.
+- NICHT belegt durch den Startlauf: Die neuen Wurzeln von /shop, /tpa und /tpahere sind spielerpflichtig, also fuer die Konsole VERBORGEN - dort kommt Brigadiers englische Zeile, und das ist richtig. Nur die Proben halten sie; gesehen hat sie noch niemand.
+- Proben 2550 -> 2567. Einspritzungen insgesamt 24, alle gefangen.
+
 ## Schritt 12: Raenge, Goldmark, Wechsel, Kosmetik
 
 - ENTSCHIEDEN 18.11.2026 (vier Fragen): Rang kommt in eine EIGENE Tabelle plus

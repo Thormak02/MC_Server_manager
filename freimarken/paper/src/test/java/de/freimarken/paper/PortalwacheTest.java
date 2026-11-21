@@ -43,8 +43,8 @@ class PortalwacheTest {
      * gehen immer zusammen hinaus, und genau das haelt diese Form fest.
      */
     private static final List<String> ABSAGE = List.of(
-            "&cHier fuehrt kein Portal hinaus.",
-            "&7Nether und Ende erreichst du mit /warp nether und /warp end -"
+            "&#d9564dHier fuehrt kein Portal hinaus.",
+            "&#a5b4bfNether und Ende erreichst du mit /warp nether und /warp end -"
                     + " oder durch ein Tor am Bundesmarkt.");
 
     @BeforeAll

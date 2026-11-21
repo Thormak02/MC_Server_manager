@@ -166,10 +166,10 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf liste", cara));
 
-        assertEquals(List.of("&6Berufe im Freimarkenbund",
-                        "&7  &fBergmann&7 · dazu: Steinmetz",
-                        "&7  &fBauer",
-                        "&7  /beruf waehlen <beruf> · /beruf stand"),
+        assertEquals(List.of("&#c6a15bBerufe im Freimarkenbund",
+                        "&#a5b4bf  &#edf1f3Bergmann&#a5b4bf · dazu: Steinmetz",
+                        "&#a5b4bf  &#edf1f3Bauer",
+                        "&#a5b4bf  /beruf waehlen <beruf> · /beruf stand"),
                 cara.chatBild());
     }
 
@@ -181,10 +181,10 @@ class BerufBefehlTest {
         // bleiben: Der Betreiber will sie lesen koennen, ohne sich einzuloggen.
         assertEquals(1, baum.tippeAufDerKonsole("beruf liste"));
 
-        assertEquals(List.of("&6Berufe im Freimarkenbund",
-                        "&7  &fBergmann&7 · dazu: Steinmetz",
-                        "&7  &fBauer",
-                        "&7  /beruf waehlen <beruf> · /beruf stand"),
+        assertEquals(List.of("&#c6a15bBerufe im Freimarkenbund",
+                        "&#a5b4bf  &#edf1f3Bergmann&#a5b4bf · dazu: Steinmetz",
+                        "&#a5b4bf  &#edf1f3Bauer",
+                        "&#a5b4bf  /beruf waehlen <beruf> · /beruf stand"),
                 baum.konsoleBild());
     }
 
@@ -199,10 +199,10 @@ class BerufBefehlTest {
         // Viermal derselbe Satz und keine Ausnahme: Ein spielerpflichtiger Befehl
         // antwortet auf der Konsole sonst wortgleich wie ein Befehl, den es nicht gibt.
         assertEquals(List.of(
-                        "&7Ein Beruf gehoert zu einem Spieler - die Konsole hat keinen.",
-                        "&7Ein Beruf gehoert zu einem Spieler - die Konsole hat keinen.",
-                        "&7Ein Beruf gehoert zu einem Spieler - die Konsole hat keinen.",
-                        "&7Ein Beruf gehoert zu einem Spieler - die Konsole hat keinen."),
+                        "&#a5b4bfEin Beruf gehoert zu einem Spieler - die Konsole hat keinen.",
+                        "&#a5b4bfEin Beruf gehoert zu einem Spieler - die Konsole hat keinen.",
+                        "&#a5b4bfEin Beruf gehoert zu einem Spieler - die Konsole hat keinen.",
+                        "&#a5b4bfEin Beruf gehoert zu einem Spieler - die Konsole hat keinen."),
                 baum.konsoleBild());
         assertEquals(List.of(), ablage.lies(UUID.randomUUID()).berufe(),
                 "und geschrieben wurde nichts");
@@ -217,11 +217,11 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf", cara));
 
-        assertEquals(List.of("&6Dein Beruf",
-                        "&7Du hast noch keinen Beruf gewaehlt.",
-                        "&7  Grundberufe:       0 von 2",
-                        "&7  Spezialisierungen: 0 von 1",
-                        "&7  Ein Beruf aufgeben kostet 5.000 Mark."),
+        assertEquals(List.of("&#c6a15bDein Beruf",
+                        "&#a5b4bfDu hast noch keinen Beruf gewaehlt.",
+                        "&#a5b4bf  Grundberufe:       0 von 2",
+                        "&#a5b4bf  Spezialisierungen: 0 von 1",
+                        "&#a5b4bf  Ein Beruf aufgeben kostet 5.000 Mark."),
                 cara.chatBild(),
                 "wer /beruf ohne Zusatz tippt, will wissen, was er selbst ist");
     }
@@ -235,12 +235,12 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf stand", cara));
 
-        assertEquals(List.of("&6Dein Beruf",
-                        "&7  &fBergmann",
-                        "&7  &fSteinmetz&7 · baut auf Bergmann auf",
-                        "&7  Grundberufe:       1 von 2",
-                        "&7  Spezialisierungen: 1 von 1",
-                        "&7  Ein Beruf aufgeben kostet 5.000 Mark."),
+        assertEquals(List.of("&#c6a15bDein Beruf",
+                        "&#a5b4bf  &#edf1f3Bergmann",
+                        "&#a5b4bf  &#edf1f3Steinmetz&#a5b4bf · baut auf Bergmann auf",
+                        "&#a5b4bf  Grundberufe:       1 von 2",
+                        "&#a5b4bf  Spezialisierungen: 1 von 1",
+                        "&#a5b4bf  Ein Beruf aufgeben kostet 5.000 Mark."),
                 cara.chatBild());
     }
 
@@ -256,11 +256,11 @@ class BerufBefehlTest {
         assertEquals(1, baum.tippe("beruf stand", cara));
 
         assertTrue(cara.chatBild().contains(
-                        "&e  Du kannst in 14 h 00 min wieder wechseln."),
+                        "&#e3c57e  Du kannst in 14 h 00 min wieder wechseln."),
                 cara.chatBild().toString());
         // Und die Zeile "noch keinen gewaehlt" steht NICHT da: Wer alles abgelegt hat,
         // ist kein Neuling.
-        assertFalse(cara.chatBild().contains("&7Du hast noch keinen Beruf gewaehlt."),
+        assertFalse(cara.chatBild().contains("&#a5b4bfDu hast noch keinen Beruf gewaehlt."),
                 cara.chatBild().toString());
     }
 
@@ -273,7 +273,7 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf waehlen bergmann", cara));
 
-        assertEquals(List.of("&aDu bist jetzt Bergmann."), cara.chatBild());
+        assertEquals(List.of("&#73bf96Du bist jetzt Bergmann."), cara.chatBild());
         assertEquals(List.of("bergmann"), ablage.lies(cara.kennung()).berufe());
         assertEquals(REICH, kasse.guthaben(cara.kennung()),
                 "Waehlen kostet nichts - bezahlt wird das Aufgeben");
@@ -288,7 +288,7 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf waehlen BERGMANN", cara));
 
-        assertEquals(List.of("&aDu bist jetzt Bergmann."), cara.chatBild());
+        assertEquals(List.of("&#73bf96Du bist jetzt Bergmann."), cara.chatBild());
         assertEquals(List.of("bergmann"), ablage.lies(cara.kennung()).berufe());
     }
 
@@ -299,7 +299,7 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf waehlen Holzfaeler", cara));
 
-        assertEquals(List.of("&cDen Beruf \"Holzfaeler\" gibt es nicht."
+        assertEquals(List.of("&#d9564dDen Beruf \"Holzfaeler\" gibt es nicht."
                         + " /beruf liste zeigt alle."), cara.chatBild());
         assertEquals(List.of(), ablage.lies(cara.kennung()).berufe());
     }
@@ -315,7 +315,7 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf waehlen steinmetz", cara));
 
-        assertEquals(List.of("&cSpezialisierungen sind noch nicht fuer dich"
+        assertEquals(List.of("&#d9564dSpezialisierungen sind noch nicht fuer dich"
                         + " freigegeben."), cara.chatBild());
         assertEquals(List.of("bergmann"), ablage.lies(cara.kennung()).berufe());
     }
@@ -328,7 +328,7 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf waehlen steinmetz", cara));
 
-        assertEquals(List.of("&aDu bist jetzt Steinmetz."), cara.chatBild());
+        assertEquals(List.of("&#73bf96Du bist jetzt Steinmetz."), cara.chatBild());
         assertEquals(List.of("bergmann", "steinmetz"),
                 ablage.lies(cara.kennung()).berufe());
     }
@@ -340,7 +340,7 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf waehlen steinmetz", cara));
 
-        assertEquals(List.of("&cDafuer musst du zuerst Bergmann sein."), cara.chatBild());
+        assertEquals(List.of("&#d9564dDafuer musst du zuerst Bergmann sein."), cara.chatBild());
     }
 
     @Test
@@ -352,7 +352,7 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf waehlen bergmann", cara),
                 "derselbe Beruf: das ist schon-gehalten und nicht voll");
-        assertEquals(List.of("&7Du bist schon Bergmann."), cara.chatBild());
+        assertEquals(List.of("&#a5b4bfDu bist schon Bergmann."), cara.chatBild());
     }
 
     // --- Verlassen -------------------------------------------------------------
@@ -365,10 +365,10 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf verlassen bergmann", cara));
 
-        assertEquals(List.of("&eBergmann aufgeben?",
-                        "&7  Es kostet &65.000 Mark&7, und danach kannst du 24 h 00 min"
+        assertEquals(List.of("&#e3c57eBergmann aufgeben?",
+                        "&#a5b4bf  Es kostet &#c6a15b5.000 Mark&#a5b4bf, und danach kannst du 24 h 00 min"
                                 + " lang nicht wechseln.",
-                        "&c  /beruf verlassen bergmann bestaetigen"),
+                        "&#d9564d  /beruf verlassen bergmann bestaetigen"),
                 cara.chatBild());
         // Das Wichtigste an dieser Probe: NICHTS ist passiert.
         assertEquals(List.of("bergmann"), ablage.lies(cara.kennung()).berufe());
@@ -383,8 +383,8 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf verlassen bergmann bestaetigen", cara));
 
-        assertEquals(List.of("&7Du hast Bergmann aufgegeben."
-                        + " Gebucht: &65.000 Mark&7."), cara.chatBild());
+        assertEquals(List.of("&#a5b4bfDu hast Bergmann aufgegeben."
+                        + " Gebucht: &#c6a15b5.000 Mark&#a5b4bf."), cara.chatBild());
         assertEquals(List.of(), ablage.lies(cara.kennung()).berufe());
         assertEquals(REICH - 5_000L, kasse.guthaben(cara.kennung()));
         assertEquals(MITTAGS, ablage.lies(cara.kennung()).letztesAblegen(),
@@ -407,8 +407,8 @@ class BerufBefehlTest {
 
         assertEquals(1, gratis.tippe("beruf verlassen bergmann", cara));
 
-        assertEquals(List.of("&7Du hast Bergmann aufgegeben."
-                        + " Gebucht: &60 Mark&7."), cara.chatBild());
+        assertEquals(List.of("&#a5b4bfDu hast Bergmann aufgegeben."
+                        + " Gebucht: &#c6a15b0 Mark&#a5b4bf."), cara.chatBild());
         assertEquals(List.of(), eigene.lies(cara.kennung()).berufe());
         assertEquals(REICH, eigeneKasse.guthaben(cara.kennung()),
                 "und gebucht wurde nichts - 0 Mark bucht der Befehl nicht");
@@ -427,7 +427,7 @@ class BerufBefehlTest {
 
         assertEquals(1, mitArmerKasse.tippe("beruf verlassen bergmann bestaetigen", cara));
 
-        assertEquals(List.of("&cAufgeben kostet 5.000 Mark, du hast 100 Mark."),
+        assertEquals(List.of("&#d9564dAufgeben kostet 5.000 Mark, du hast 100 Mark."),
                 cara.chatBild());
         assertEquals(List.of("bergmann"), eigene.lies(cara.kennung()).berufe(),
                 "der Beruf bleibt");
@@ -453,7 +453,7 @@ class BerufBefehlTest {
 
         // Beides fehlt - Geld UND Zeit. Gemeldet wird die Zeit: Geld laesst sich
         // verdienen, Zeit nicht.
-        assertEquals(List.of("&cDu kannst erst in 18 h 00 min wieder wechseln."),
+        assertEquals(List.of("&#d9564dDu kannst erst in 18 h 00 min wieder wechseln."),
                 cara.chatBild());
         assertEquals(List.of("bergmann"), eigene.lies(cara.kennung()).berufe());
     }
@@ -467,7 +467,7 @@ class BerufBefehlTest {
 
         assertEquals(1, baum.tippe("beruf verlassen bergmann bestaetigen", cara));
 
-        assertEquals(List.of("&cDafuer musst du zuerst Steinmetz aufgeben."),
+        assertEquals(List.of("&#d9564dDafuer musst du zuerst Steinmetz aufgeben."),
                 cara.chatBild());
         assertEquals(List.of("bergmann", "steinmetz"),
                 ablage.lies(cara.kennung()).berufe());
@@ -491,7 +491,7 @@ class BerufBefehlTest {
         assertEquals(1,
                 mitSturerAblage.tippe("beruf verlassen bergmann bestaetigen", cara));
 
-        assertEquals(List.of("&eDein Berufsstand hat sich eben geaendert - versuch es"
+        assertEquals(List.of("&#e3c57eDein Berufsstand hat sich eben geaendert - versuch es"
                         + " noch einmal."), cara.chatBild());
         assertEquals(REICH, eigeneKasse.guthaben(cara.kennung()),
                 "die Gebuehr muss zurueck sein");
@@ -515,9 +515,9 @@ class BerufBefehlTest {
         assertEquals(1, mitKaputterAblage.tippe("beruf waehlen bergmann", cara));
 
         assertEquals(List.of(
-                        "&7Deine Berufe sind gerade nicht lesbar - im Serverprotokoll"
+                        "&#a5b4bfDeine Berufe sind gerade nicht lesbar - im Serverprotokoll"
                                 + " steht, warum.",
-                        "&7Deine Berufe sind gerade nicht lesbar - im Serverprotokoll"
+                        "&#a5b4bfDeine Berufe sind gerade nicht lesbar - im Serverprotokoll"
                                 + " steht, warum."),
                 cara.chatBild(),
                 "kein Wurf im Chat, sondern ein Satz - und zwar auf BEIDEN Wegen");

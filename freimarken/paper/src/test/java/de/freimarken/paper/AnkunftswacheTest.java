@@ -48,7 +48,7 @@ class AnkunftswacheTest {
      * ist: Bett und Seelenanker sind zwei Anlaesse und bekommen DENSELBEN Satz.
      * Zweimal derselbe Text im Quelltext liesse offen, ob das Absicht war.
      */
-    private static final String KEIN_SPAWNPUNKT = "&7Hier wird kein Spawnpunkt"
+    private static final String KEIN_SPAWNPUNKT = "&#a5b4bfHier wird kein Spawnpunkt"
             + " gesetzt - gestorben wird immer nach Altfurt. Schlafen geht"
             + " weiter.";
 
@@ -171,7 +171,7 @@ class AnkunftswacheTest {
 
         assertEquals(List.of(GameMode.ADVENTURE), reisender.moduswechsel(),
                 "in der Wildnis wird auf Abenteuer gestellt");
-        assertEquals(List.of("&7Hier ist Abenteuer: ansehen und benutzen, aber"
+        assertEquals(List.of("&#a5b4bfHier ist Abenteuer: ansehen und benutzen, aber"
                 + " nicht abbauen. Gebaut wird in der Marktstadt."),
                 reisender.chatBild(), "wer ins Abenteuer kommt, erfaehrt warum");
 

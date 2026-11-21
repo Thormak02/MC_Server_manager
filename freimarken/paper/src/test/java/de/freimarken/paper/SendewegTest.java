@@ -163,27 +163,27 @@ class SendewegTest {
         // Waehrung gehen muessen, und ein nackter Betrag faellt im Bild sofort auf.
         assertEquals("""
                 == auskunft-mit-geldbedingung
-                &6Dein Rang
-                &7Du bist &freisender&7.
-                &7Als naechstes: &fsiedler&7. Dafuer zaehlt:
-                &7- 50.000 Mark auf dem Konto
-                &7    du hast 1.000 Mark
-                &8/rang leiter zeigt alle Stufen.
+                &#c6a15bDein Rang
+                &#a5b4bfDu bist &#edf1f3reisender&#a5b4bf.
+                &#a5b4bfAls naechstes: &#edf1f3siedler&#a5b4bf. Dafuer zaehlt:
+                &#a5b4bf- 50.000 Mark auf dem Konto
+                &#a5b4bf    du hast 1.000 Mark
+                &#6e7a82/rang leiter zeigt alle Stufen.
                 == auskunft-unbekannter-eintrag
-                &6Dein Rang
-                &cEingetragen ist stifter - diese Stufe gibt es nicht mehr. Es gilt reisender; bitte melde das dem Team.
-                &6Damit stehst du auf der hoechsten Stufe.
-                &8/rang leiter zeigt alle Stufen.
+                &#c6a15bDein Rang
+                &#d9564dEingetragen ist stifter - diese Stufe gibt es nicht mehr. Es gilt reisender; bitte melde das dem Team.
+                &#c6a15bDamit stehst du auf der hoechsten Stufe.
+                &#6e7a82/rang leiter zeigt alle Stufen.
                 == leiter
-                &6Die Rangleiter
-                &7  reisender - erreicht
-                &f  siedler - hier stehst du
+                &#c6a15bDie Rangleiter
+                &#a5b4bf  reisender - erreicht
+                &#edf1f3  siedler - hier stehst du
                 == aus
-                &7Auf diesem Server gibt es keine Raenge.
+                &#a5b4bfAuf diesem Server gibt es keine Raenge.
                 == gestoert
-                &cDein Rang liess sich nicht lesen&7 - versuche es noch einmal. Der Grund steht im Serverprotokoll.
+                &#d9564dDein Rang liess sich nicht lesen&#a5b4bf - versuche es noch einmal. Der Grund steht im Serverprotokoll.
                 == keine-konsole
-                &7/rang zeigt den Rang eines Spielers - auf der Konsole gibt es keinen.
+                &#a5b4bf/rang zeigt den Rang eines Spielers - auf der Konsole gibt es keinen.
                 """, tafel.ganz());
     }
 
@@ -198,7 +198,7 @@ class SendewegTest {
 
         // Die ganze Zeile und nicht vier einzelne contains: Vertauscht jemand zwei Werte,
         // waeren vier contains alle vier gruen.
-        assertEquals("&7  02.11. 14:37  -25.000 Mark  Parzelle genommen"
+        assertEquals("&#a5b4bf  02.11. 14:37  -25.000 Mark  Parzelle genommen"
                 + "  (Stand 25.000 Mark)", Sprachprobe.bild(zeile));
     }
 
@@ -417,11 +417,11 @@ class SendewegTest {
 
         assertEquals("""
                 == stand-25000
-                &7Du hast &625.000 Mark&7.
-                &8/mark verlauf zeigt die letzten Buchungen.
+                &#a5b4bfDu hast &#c6a15b25.000 Mark&#a5b4bf.
+                &#6e7a82/mark verlauf zeigt die letzten Buchungen.
                 == stand-0
-                &7Du hast &60 Mark&7.
-                &8/mark verlauf zeigt die letzten Buchungen.
+                &#a5b4bfDu hast &#c6a15b0 Mark&#a5b4bf.
+                &#6e7a82/mark verlauf zeigt die letzten Buchungen.
                 """, tafel.ganz());
     }
 
@@ -436,11 +436,11 @@ class SendewegTest {
 
         assertEquals("""
                 == leer
-                &7Noch keine Buchungen.
+                &#a5b4bfNoch keine Buchungen.
                 == zwei-buchungen
-                &6Deine letzten Buchungen
-                &7  02.11. 14:37  -25.000 Mark  Parzelle genommen  (Stand 25.000 Mark)
-                &7  02.11. 14:37  +1.000 Mark  Startguthaben  (Stand 26.000 Mark)
+                &#c6a15bDeine letzten Buchungen
+                &#a5b4bf  02.11. 14:37  -25.000 Mark  Parzelle genommen  (Stand 25.000 Mark)
+                &#a5b4bf  02.11. 14:37  +1.000 Mark  Startguthaben  (Stand 26.000 Mark)
                 """, tafel.ganz());
     }
 
@@ -478,54 +478,54 @@ class SendewegTest {
 
         assertEquals("""
                 == gruppenboden
-                &6Gruppenboden - war einmal Weg
-                &7  Eigentuemer: &fAnna
+                &#c6a15bGruppenboden - war einmal Weg
+                &#a5b4bf  Eigentuemer: &#edf1f3Anna
                 == ohne-parzelle-weg
-                &7Du stehst auf einem Weg - der gehoert allen.
+                &#a5b4bfDu stehst auf einem Weg - der gehoert allen.
                 == ohne-parzelle-mauer
-                &7Du stehst auf einer Mauer - die gehoert zur Strasse.
+                &#a5b4bfDu stehst auf einer Mauer - die gehoert zur Strasse.
                 == kopf
-                &6Parzelle 3/-4
+                &#c6a15bParzelle 3/-4
                 == ausserhalb
-                &7  ausserhalb der Marktstadt - wird nicht vergeben
+                &#a5b4bf  ausserhalb der Marktstadt - wird nicht vergeben
                 == frei-gratis
-                &7  frei · &agratis&8 · /parzelle nehmen
+                &#a5b4bf  frei · &#73bf96gratis&#6e7a82 · /parzelle nehmen
                 == frei-mit-preis
-                &7  frei · &a25.000 Mark&8 · /parzelle nehmen
+                &#a5b4bf  frei · &#73bf9625.000 Mark&#6e7a82 · /parzelle nehmen
                 == frei-am-limit-viele
-                &7  frei · 25.000 Mark
-                &c  Dein Rang erlaubt 4 Parzellen, und so viele hast du schon.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#a5b4bf  frei · 25.000 Mark
+                &#d9564d  Dein Rang erlaubt 4 Parzellen, und so viele hast du schon.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == frei-am-limit-eins
-                &7  frei · 25.000 Mark
-                &c  Dein Rang erlaubt 1 Parzelle, und so viele hast du schon.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#a5b4bf  frei · 25.000 Mark
+                &#d9564d  Dein Rang erlaubt 1 Parzelle, und so viele hast du schon.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == frei-am-limit-ohne-werbung
-                &7  frei · 25.000 Mark
-                &c  Dein Rang erlaubt 4 Parzellen, und so viele hast du schon.
+                &#a5b4bf  frei · 25.000 Mark
+                &#d9564d  Dein Rang erlaubt 4 Parzellen, und so viele hast du schon.
                 == vergeben-fremd
-                &7  Eigentuemer: &fAnna
-                &7  Gekauft fuer: &f25.000 Mark
+                &#a5b4bf  Eigentuemer: &#edf1f3Anna
+                &#a5b4bf  Gekauft fuer: &#edf1f325.000 Mark
                 == vergeben-gratis
-                &7  Eigentuemer: &fAnna
-                &7  Gekauft fuer: &fgratis (die erste)
+                &#a5b4bf  Eigentuemer: &#edf1f3Anna
+                &#a5b4bf  Gekauft fuer: &#edf1f3gratis (die erste)
                 == vergeben-mit-mitbauern
-                &7  Eigentuemer: &fAnna
-                &7  Gekauft fuer: &f25.000 Mark
-                &7  Mitbauer: &fBert, Cara
+                &#a5b4bf  Eigentuemer: &#edf1f3Anna
+                &#a5b4bf  Gekauft fuer: &#edf1f325.000 Mark
+                &#a5b4bf  Mitbauer: &#edf1f3Bert, Cara
                 == vergeben-meine
-                &7  Eigentuemer: &fAnna
-                &7  Gekauft fuer: &f25.000 Mark
-                &8  /parzelle zusammenlegen <nord|ost|sued|west>
+                &#a5b4bf  Eigentuemer: &#edf1f3Anna
+                &#a5b4bf  Gekauft fuer: &#edf1f325.000 Mark
+                &#6e7a82  /parzelle zusammenlegen <nord|ost|sued|west>
                 == vergeben-gruppe-fremd
-                &7  Eigentuemer: &fAnna
-                &7  Gekauft fuer: &f25.000 Mark
-                &f  Teil einer Gruppe aus 3 Feldern
+                &#a5b4bf  Eigentuemer: &#edf1f3Anna
+                &#a5b4bf  Gekauft fuer: &#edf1f325.000 Mark
+                &#edf1f3  Teil einer Gruppe aus 3 Feldern
                 == vergeben-gruppe-meine
-                &7  Eigentuemer: &fAnna
-                &7  Gekauft fuer: &f25.000 Mark
-                &f  Teil einer Gruppe aus 3 Feldern
-                &8  /parzelle auftrennen        dieses Feld herausloesen
+                &#a5b4bf  Eigentuemer: &#edf1f3Anna
+                &#a5b4bf  Gekauft fuer: &#edf1f325.000 Mark
+                &#edf1f3  Teil einer Gruppe aus 3 Feldern
+                &#6e7a82  /parzelle auftrennen        dieses Feld herausloesen
                 """, tafel.ganz());
     }
 
@@ -556,32 +556,32 @@ class SendewegTest {
 
         assertEquals("""
                 == erteilt-erste-gratis
-                &aParzelle 3/-4 gehoert jetzt dir
-                &7  Die erste ist gratis.
+                &#73bf96Parzelle 3/-4 gehoert jetzt dir
+                &#a5b4bf  Die erste ist gratis.
                 == erteilt-gratis-trotz-guthaben
-                &aParzelle 3/-4 gehoert jetzt dir
-                &7  Die erste ist gratis.
+                &#73bf96Parzelle 3/-4 gehoert jetzt dir
+                &#a5b4bf  Die erste ist gratis.
                 == erteilt-bezahlt
-                &aParzelle 3/-4 gehoert jetzt dir
-                &7  Bezahlt: 25.000 Mark · Rest: 75.000 Mark
+                &#73bf96Parzelle 3/-4 gehoert jetzt dir
+                &#a5b4bf  Bezahlt: 25.000 Mark · Rest: 75.000 Mark
                 == kein-bauland
-                &cHier ist kein Bauland - stell dich auf eine Parzelle.
+                &#d9564dHier ist kein Bauland - stell dich auf eine Parzelle.
                 == schon-vergeben
-                &cDie gehoert schon &fAnna
+                &#d9564dDie gehoert schon &#edf1f3Anna
                 == grenze-viele
-                &cDu hast schon 4 Parzellen - mehr erlaubt dein Rang nicht.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDu hast schon 4 Parzellen - mehr erlaubt dein Rang nicht.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == grenze-eins
-                &cDu hast schon 1 Parzelle - mehr erlaubt dein Rang nicht.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDu hast schon 1 Parzelle - mehr erlaubt dein Rang nicht.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == grenze-ohne-werbung
-                &cDu hast schon 4 Parzellen - mehr erlaubt dein Rang nicht.
+                &#d9564dDu hast schon 4 Parzellen - mehr erlaubt dein Rang nicht.
                 == zu-wenig
-                &cDie kostet &625.000 Mark&c, du hast 1.000 Mark.
+                &#d9564dDie kostet &#c6a15b25.000 Mark&#d9564d, du hast 1.000 Mark.
                 == ausserhalb
-                &cHier endet die Marktstadt. Parzellen gibt es von -8/-8 bis 8/8.
+                &#d9564dHier endet die Marktstadt. Parzellen gibt es von -8/-8 bis 8/8.
                 == sonst
-                &cDas ging nicht: SCHON_IN_GRUPPE
+                &#d9564dDas ging nicht: SCHON_IN_GRUPPE
                 """, tafel.ganz());
     }
 
@@ -601,16 +601,16 @@ class SendewegTest {
 
         assertEquals("""
                 == leer
-                &eDu hast noch keine Parzelle. Die erste ist gratis - /parzelle nehmen
+                &#e3c57eDu hast noch keine Parzelle. Die erste ist gratis - /parzelle nehmen
                 == eine-unter-der-grenze
-                &6Deine Parzellen (1 von 4)
-                &7  0/0 · gratis
-                &8Die naechste kostet 25.000 Mark
+                &#c6a15bDeine Parzellen (1 von 4)
+                &#a5b4bf  0/0 · gratis
+                &#6e7a82Die naechste kostet 25.000 Mark
                 == drei-am-limit
-                &6Deine Parzellen (3 von 3)
-                &7  0/0 · gratis
-                &7  1/0 · 25.000 Mark · 1 Mitbauer
-                &7  2/0 · 50.000 Mark · Gruppe
+                &#c6a15bDeine Parzellen (3 von 3)
+                &#a5b4bf  0/0 · gratis
+                &#a5b4bf  1/0 · 25.000 Mark · 1 Mitbauer
+                &#a5b4bf  2/0 · 50.000 Mark · Gruppe
                 """, tafel.ganz());
     }
 
@@ -625,12 +625,12 @@ class SendewegTest {
 
         assertEquals("""
                 == keine-parzelle
-                &cHier ist keine vergebene Parzelle.
+                &#d9564dHier ist keine vergebene Parzelle.
                 == niemand-fremd
-                &6Mitbauer auf 3/-4: &fniemand
+                &#c6a15bMitbauer auf 3/-4: &#edf1f3niemand
                 == namen-meine
-                &6Mitbauer auf 3/-4: &fBert, Cara
-                &8/parzelle mitbauer hinzu <name> · weg <name>
+                &#c6a15bMitbauer auf 3/-4: &#edf1f3Bert, Cara
+                &#6e7a82/parzelle mitbauer hinzu <name> · weg <name>
                 """, tafel.ganz());
     }
 
@@ -644,11 +644,11 @@ class SendewegTest {
 
         assertEquals("""
                 == unbekannt
-                &cDen kenne ich nicht. Er muss einmal auf dem Server gewesen sein.
+                &#d9564dDen kenne ich nicht. Er muss einmal auf dem Server gewesen sein.
                 == erteilt
-                &aBert darf hier jetzt bauen.
+                &#73bf96Bert darf hier jetzt bauen.
                 == schon-drin
-                &eBert darf hier ohnehin bauen.
+                &#e3c57eBert darf hier ohnehin bauen.
                 """, tafel.ganz());
     }
 
@@ -662,11 +662,11 @@ class SendewegTest {
 
         assertEquals("""
                 == niemand
-                &cSteht hier niemand mit dem Namen - /parzelle mitbauer zeigt die Liste.
+                &#d9564dSteht hier niemand mit dem Namen - /parzelle mitbauer zeigt die Liste.
                 == erteilt
-                &aBert darf hier nicht mehr bauen.
+                &#73bf96Bert darf hier nicht mehr bauen.
                 == nicht-drin
-                &eBert stand gar nicht auf der Liste.
+                &#e3c57eBert stand gar nicht auf der Liste.
                 """, tafel.ganz());
     }
 
@@ -681,15 +681,15 @@ class SendewegTest {
 
         assertEquals("""
                 == nicht-deine
-                &cDas ist nicht deine Parzelle.
+                &#d9564dDas ist nicht deine Parzelle.
                 == gruppe
-                &cDie Parzelle gehoert zu einer Gruppe - erst /parzelle auftrennen.
+                &#d9564dDie Parzelle gehoert zu einer Gruppe - erst /parzelle auftrennen.
                 == warnung
-                &eParzelle 3/-4 aufgeben?
-                &7  Es gibt kein Geld zurueck, und gebaut bleibt stehen.
-                &c  /parzelle aufgeben bestaetigen 3 -4
+                &#e3c57eParzelle 3/-4 aufgeben?
+                &#a5b4bf  Es gibt kein Geld zurueck, und gebaut bleibt stehen.
+                &#d9564d  /parzelle aufgeben bestaetigen 3 -4
                 == erteilt
-                &aParzelle 3/-4 ist wieder frei.
+                &#73bf96Parzelle 3/-4 ist wieder frei.
                 """, tafel.ganz());
     }
 
@@ -715,51 +715,51 @@ class SendewegTest {
 
         assertEquals("""
                 == gruppe-zu-gross-viele
-                &cDein Rang erlaubt hoechstens 4 Felder je Gruppe.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt hoechstens 4 Felder je Gruppe.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == gruppe-zu-gross-eins
-                &cDein Rang erlaubt hoechstens 1 Feld je Gruppe.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt hoechstens 1 Feld je Gruppe.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == gruppe-zu-gross-ohne-werbung
-                &cDein Rang erlaubt hoechstens 4 Felder je Gruppe.
+                &#d9564dDein Rang erlaubt hoechstens 4 Felder je Gruppe.
                 == warnung-nord
-                &eParzelle 3/-4 mit 3/-5 zusammenlegen?
-                &7  Gebuehr: &610.000 Mark&7 · du hast 25.000 Mark
-                &7  Der Weg dazwischen wird dein Bauland.
-                &7  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
-                &7  darauf steht.
-                &e  /parzelle zusammenlegen nord bestaetigen 3 -4
+                &#e3c57eParzelle 3/-4 mit 3/-5 zusammenlegen?
+                &#a5b4bf  Gebuehr: &#c6a15b10.000 Mark&#a5b4bf · du hast 25.000 Mark
+                &#a5b4bf  Der Weg dazwischen wird dein Bauland.
+                &#a5b4bf  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
+                &#a5b4bf  darauf steht.
+                &#e3c57e  /parzelle zusammenlegen nord bestaetigen 3 -4
                 == warnung-ost
-                &eParzelle 3/-4 mit 4/-4 zusammenlegen?
-                &7  Gebuehr: &610.000 Mark&7 · du hast 25.000 Mark
-                &7  Der Weg dazwischen wird dein Bauland.
-                &7  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
-                &7  darauf steht.
-                &e  /parzelle zusammenlegen ost bestaetigen 3 -4
+                &#e3c57eParzelle 3/-4 mit 4/-4 zusammenlegen?
+                &#a5b4bf  Gebuehr: &#c6a15b10.000 Mark&#a5b4bf · du hast 25.000 Mark
+                &#a5b4bf  Der Weg dazwischen wird dein Bauland.
+                &#a5b4bf  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
+                &#a5b4bf  darauf steht.
+                &#e3c57e  /parzelle zusammenlegen ost bestaetigen 3 -4
                 == warnung-sued
-                &eParzelle 3/-4 mit 3/-3 zusammenlegen?
-                &7  Gebuehr: &610.000 Mark&7 · du hast 25.000 Mark
-                &7  Der Weg dazwischen wird dein Bauland.
-                &7  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
-                &7  darauf steht.
-                &e  /parzelle zusammenlegen sued bestaetigen 3 -4
+                &#e3c57eParzelle 3/-4 mit 3/-3 zusammenlegen?
+                &#a5b4bf  Gebuehr: &#c6a15b10.000 Mark&#a5b4bf · du hast 25.000 Mark
+                &#a5b4bf  Der Weg dazwischen wird dein Bauland.
+                &#a5b4bf  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
+                &#a5b4bf  darauf steht.
+                &#e3c57e  /parzelle zusammenlegen sued bestaetigen 3 -4
                 == warnung-west
-                &eParzelle 3/-4 mit 2/-4 zusammenlegen?
-                &7  Gebuehr: &610.000 Mark&7 · du hast 25.000 Mark
-                &7  Der Weg dazwischen wird dein Bauland.
-                &7  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
-                &7  darauf steht.
-                &e  /parzelle zusammenlegen west bestaetigen 3 -4
+                &#e3c57eParzelle 3/-4 mit 2/-4 zusammenlegen?
+                &#a5b4bf  Gebuehr: &#c6a15b10.000 Mark&#a5b4bf · du hast 25.000 Mark
+                &#a5b4bf  Der Weg dazwischen wird dein Bauland.
+                &#a5b4bf  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
+                &#a5b4bf  darauf steht.
+                &#e3c57e  /parzelle zusammenlegen west bestaetigen 3 -4
                 == warnung-zu-wenig
-                &eParzelle 3/-4 mit 3/-5 zusammenlegen?
-                &7  Gebuehr: &610.000 Mark&7 · du hast 1.000 Mark
-                &7  Der Weg dazwischen wird dein Bauland.
-                &7  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
-                &7  darauf steht.
-                &c  Dein Guthaben reicht nicht.
+                &#e3c57eParzelle 3/-4 mit 3/-5 zusammenlegen?
+                &#a5b4bf  Gebuehr: &#c6a15b10.000 Mark&#a5b4bf · du hast 1.000 Mark
+                &#a5b4bf  Der Weg dazwischen wird dein Bauland.
+                &#a5b4bf  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
+                &#a5b4bf  darauf steht.
+                &#d9564d  Dein Guthaben reicht nicht.
                 == erteilt
-                &aEin Grundstueck aus 2 Feldern.
-                &7  Bezahlt: 10.000 Mark · Rest: 15.000 Mark
+                &#73bf96Ein Grundstueck aus 2 Feldern.
+                &#a5b4bf  Bezahlt: 10.000 Mark · Rest: 15.000 Mark
                 """, tafel.ganz());
     }
 
@@ -773,13 +773,13 @@ class SendewegTest {
 
         assertEquals("""
                 == warnung
-                &eGrundstueck aus 3 Feldern ganz auftrennen?
-                &7  ALLE Wege zwischen den Feldern kommen zurueck. Geld gibt es keines zurueck.
-                &7  Fuer ein einzelnes Feld: stell dich darauf und nimm /parzelle auftrennen ohne "alles".
+                &#e3c57eGrundstueck aus 3 Feldern ganz auftrennen?
+                &#a5b4bf  ALLE Wege zwischen den Feldern kommen zurueck. Geld gibt es keines zurueck.
+                &#a5b4bf  Fuer ein einzelnes Feld: stell dich darauf und nimm /parzelle auftrennen ohne "alles".
                 == bestaetigen
-                &c  /parzelle auftrennen alles bestaetigen 3 -4
+                &#d9564d  /parzelle auftrennen alles bestaetigen 3 -4
                 == erteilt
-                &aAufgetrennt - 3 eigenstaendige Parzellen.
+                &#73bf96Aufgetrennt - 3 eigenstaendige Parzellen.
                 """, tafel.ganz());
     }
 
@@ -801,20 +801,20 @@ class SendewegTest {
 
         assertEquals("""
                 == warnung-zwei-felder
-                &eGrundstueck aus 2 Feldern auftrennen?
-                &7  Es hat nur zwei Felder - eines allein geht nicht heraus, also wird
-                &7  es ganz aufgetrennt.
-                &7  Der Weg dorthin kommt zurueck. Geld gibt es keines zurueck.
+                &#e3c57eGrundstueck aus 2 Feldern auftrennen?
+                &#a5b4bf  Es hat nur zwei Felder - eines allein geht nicht heraus, also wird
+                &#a5b4bf  es ganz aufgetrennt.
+                &#a5b4bf  Der Weg dorthin kommt zurueck. Geld gibt es keines zurueck.
                 == warnung-feld
-                &eDas Feld 3/-4 aus dem Grundstueck herausloesen?
-                &7  Die anderen 3 Felder bleiben ein Grundstueck.
-                &7  Der Weg dorthin kommt zurueck. Geld gibt es keines zurueck.
+                &#e3c57eDas Feld 3/-4 aus dem Grundstueck herausloesen?
+                &#a5b4bf  Die anderen 3 Felder bleiben ein Grundstueck.
+                &#a5b4bf  Der Weg dorthin kommt zurueck. Geld gibt es keines zurueck.
                 == bestaetigen
-                &c  /parzelle auftrennen bestaetigen 3 -4
+                &#d9564d  /parzelle auftrennen bestaetigen 3 -4
                 == erteilt-feld
-                &aFeld 3/-4 herausgeloest - das Grundstueck hat noch 3 Felder.
+                &#73bf96Feld 3/-4 herausgeloest - das Grundstueck hat noch 3 Felder.
                 == erteilt-ganz
-                &aAufgetrennt - 2 eigenstaendige Parzellen.
+                &#73bf96Aufgetrennt - 2 eigenstaendige Parzellen.
                 """, tafel.ganz());
     }
 
@@ -841,17 +841,17 @@ class SendewegTest {
 
         assertEquals("""
                 == null-und-null
-                &7  Auf der Wegflaeche steht nichts - es geht nichts verloren.
+                &#a5b4bf  Auf der Wegflaeche steht nichts - es geht nichts verloren.
                 == eins-und-eins
-                &c  Dabei verschwindet 1 Block von der Flaeche.
-                &7  1 Fehlstelle wird wieder gefuellt.
+                &#d9564d  Dabei verschwindet 1 Block von der Flaeche.
+                &#a5b4bf  1 Fehlstelle wird wieder gefuellt.
                 == viele-und-viele
-                &c  Dabei verschwinden 4928 Bloecke von der Flaeche.
-                &7  12 Fehlstellen werden wieder gefuellt.
+                &#d9564d  Dabei verschwinden 4928 Bloecke von der Flaeche.
+                &#a5b4bf  12 Fehlstellen werden wieder gefuellt.
                 == nur-verschwindet
-                &c  Dabei verschwinden 3 Bloecke von der Flaeche.
+                &#d9564d  Dabei verschwinden 3 Bloecke von der Flaeche.
                 == nur-verfuellt
-                &7  3 Fehlstellen werden wieder gefuellt.
+                &#a5b4bf  3 Fehlstellen werden wieder gefuellt.
                 """, tafel.ganz());
     }
 
@@ -873,11 +873,11 @@ class SendewegTest {
 
         assertEquals("""
                 == weg-ist-bauland
-                &7  Der Weg dazwischen ist Bauland (623 Bloecke geaendert).
+                &#a5b4bf  Der Weg dazwischen ist Bauland (623 Bloecke geaendert).
                 == weg-ist-zurueck
-                &7  Der Weg ist zurueck (448 Bloecke geaendert).
+                &#a5b4bf  Der Weg ist zurueck (448 Bloecke geaendert).
                 == fehler
-                &c  Der Boden liess sich nicht aendern. Die Parzellen stimmen - sag einem Operator Bescheid.
+                &#d9564d  Der Boden liess sich nicht aendern. Die Parzellen stimmen - sag einem Operator Bescheid.
                 """, tafel.ganz());
     }
 
@@ -896,9 +896,9 @@ class SendewegTest {
         assertEquals("""
                 == null-sekunden
                 == eine-sekunde
-                &7Einen Augenblick - die Abschaetzung liest jeden Block ueber dem Weg. Noch 1 Sekunde.
+                &#a5b4bfEinen Augenblick - die Abschaetzung liest jeden Block ueber dem Weg. Noch 1 Sekunde.
                 == drei-sekunden
-                &7Einen Augenblick - die Abschaetzung liest jeden Block ueber dem Weg. Noch 3 Sekunden.
+                &#a5b4bfEinen Augenblick - die Abschaetzung liest jeden Block ueber dem Weg. Noch 3 Sekunden.
                 """, tafel.ganz());
     }
 
@@ -922,13 +922,13 @@ class SendewegTest {
 
         assertEquals("""
                 == nichts-aufgegeben
-                &cDu stehst nicht auf Parzelle 3/-4. Nichts aufgegeben.
+                &#d9564dDu stehst nicht auf Parzelle 3/-4. Nichts aufgegeben.
                 == nichts-zusammengelegt
-                &cDu stehst nicht auf Parzelle 3/-4. Nichts zusammengelegt.
+                &#d9564dDu stehst nicht auf Parzelle 3/-4. Nichts zusammengelegt.
                 == nichts-herausgeloest
-                &cDu stehst nicht auf Parzelle 3/-4. Nichts herausgeloest.
+                &#d9564dDu stehst nicht auf Parzelle 3/-4. Nichts herausgeloest.
                 == nichts-aufgetrennt
-                &cDu stehst nicht auf Parzelle 3/-4. Nichts aufgetrennt.
+                &#d9564dDu stehst nicht auf Parzelle 3/-4. Nichts aufgetrennt.
                 """, tafel.ganz());
     }
 
@@ -951,45 +951,45 @@ class SendewegTest {
 
         assertEquals("""
                 == ERTEILT
-                &cErledigt.
+                &#d9564dErledigt.
                 == KEINE_PARZELLE
-                &cHier ist keine Parzelle.
+                &#d9564dHier ist keine Parzelle.
                 == NOCH_FREI
-                &cDiese Parzelle gehoert noch niemandem - nimm sie mit /parzelle nehmen.
+                &#d9564dDiese Parzelle gehoert noch niemandem - nimm sie mit /parzelle nehmen.
                 == SCHON_VERGEBEN
-                &cDie gehoert schon jemandem.
+                &#d9564dDie gehoert schon jemandem.
                 == AUSSERHALB
-                &cDas liegt ausserhalb der Marktstadt.
+                &#d9564dDas liegt ausserhalb der Marktstadt.
                 == GRENZE_ERREICHT
-                &cDein Rang erlaubt 7 Parzellen, und so viele hast du schon.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt 7 Parzellen, und so viele hast du schon.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == ZU_WENIG_MARK
-                &cDein Guthaben reicht nicht.
+                &#d9564dDein Guthaben reicht nicht.
                 == NICHT_EIGENTUEMER
-                &cDas darf nur der Eigentuemer.
+                &#d9564dDas darf nur der Eigentuemer.
                 == SCHON_EINGETRAGEN
-                &cSteht schon auf der Liste.
+                &#d9564dSteht schon auf der Liste.
                 == NICHT_EINGETRAGEN
-                &cStand gar nicht auf der Liste.
+                &#d9564dStand gar nicht auf der Liste.
                 == TEIL_EINER_GRUPPE
-                &cDie Parzelle gehoert zu einer Gruppe - das geht nur ueber die ganze Gruppe.
+                &#d9564dDie Parzelle gehoert zu einer Gruppe - das geht nur ueber die ganze Gruppe.
                 == NACHBAR_FREI
-                &cDort drueben ist keine Parzelle vergeben.
+                &#d9564dDort drueben ist keine Parzelle vergeben.
                 == NACHBAR_FREMD
-                &cDie Nachbarparzelle gehoert jemand anderem.
+                &#d9564dDie Nachbarparzelle gehoert jemand anderem.
                 == SCHON_IN_GRUPPE
-                &cDie beiden gehoeren zu zwei verschiedenen Grundstuecken. Trenne eines auf und haenge die Felder einzeln an.
+                &#d9564dDie beiden gehoeren zu zwei verschiedenen Grundstuecken. Trenne eines auf und haenge die Felder einzeln an.
                 == SCHON_ZUSAMMEN
-                &cDie beiden sind schon dasselbe Grundstueck.
+                &#d9564dDie beiden sind schon dasselbe Grundstueck.
                 == GRUPPE_ZU_GROSS
-                &cDein Rang erlaubt hoechstens 3 Felder je Gruppe.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt hoechstens 3 Felder je Gruppe.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == KEINE_GRUPPE
-                &cHier ist keine Gruppe.
+                &#d9564dHier ist keine Gruppe.
                 == AUF_DEM_WEG
-                &cStell dich auf das Feld, das du meinst - nicht auf den Weg.
+                &#d9564dStell dich auf das Feld, das du meinst - nicht auf den Weg.
                 == HAELT_ZUSAMMEN
-                &cDieses Feld haelt dein Grundstueck zusammen. Loese erst eines am Rand heraus.
+                &#d9564dDieses Feld haelt dein Grundstueck zusammen. Loese erst eines am Rand heraus.
                 """, tafel.ganz());
     }
 
@@ -1006,46 +1006,46 @@ class SendewegTest {
 
         assertEquals("""
                 == ERTEILT
-                &cErledigt.
+                &#d9564dErledigt.
                 == KEINE_PARZELLE
-                &cHier ist keine Parzelle.
+                &#d9564dHier ist keine Parzelle.
                 == NOCH_FREI
-                &cDiese Parzelle gehoert noch niemandem - aber dein Rang erlaubt 7 Parzellen, und so viele hast du schon.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDiese Parzelle gehoert noch niemandem - aber dein Rang erlaubt 7 Parzellen, und so viele hast du schon.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == SCHON_VERGEBEN
-                &cDie gehoert schon jemandem.
+                &#d9564dDie gehoert schon jemandem.
                 == AUSSERHALB
-                &cDas liegt ausserhalb der Marktstadt.
+                &#d9564dDas liegt ausserhalb der Marktstadt.
                 == GRENZE_ERREICHT
-                &cDein Rang erlaubt 7 Parzellen, und so viele hast du schon.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt 7 Parzellen, und so viele hast du schon.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == ZU_WENIG_MARK
-                &cDein Guthaben reicht nicht.
+                &#d9564dDein Guthaben reicht nicht.
                 == NICHT_EIGENTUEMER
-                &cDas darf nur der Eigentuemer.
+                &#d9564dDas darf nur der Eigentuemer.
                 == SCHON_EINGETRAGEN
-                &cSteht schon auf der Liste.
+                &#d9564dSteht schon auf der Liste.
                 == NICHT_EINGETRAGEN
-                &cStand gar nicht auf der Liste.
+                &#d9564dStand gar nicht auf der Liste.
                 == TEIL_EINER_GRUPPE
-                &cDie Parzelle gehoert zu einer Gruppe - das geht nur ueber die ganze Gruppe.
+                &#d9564dDie Parzelle gehoert zu einer Gruppe - das geht nur ueber die ganze Gruppe.
                 == NACHBAR_FREI
-                &cDort drueben ist keine Parzelle vergeben.
+                &#d9564dDort drueben ist keine Parzelle vergeben.
                 == NACHBAR_FREMD
-                &cDie Nachbarparzelle gehoert jemand anderem.
+                &#d9564dDie Nachbarparzelle gehoert jemand anderem.
                 == SCHON_IN_GRUPPE
-                &cDie beiden gehoeren zu zwei verschiedenen Grundstuecken. Trenne eines auf und haenge die Felder einzeln an.
+                &#d9564dDie beiden gehoeren zu zwei verschiedenen Grundstuecken. Trenne eines auf und haenge die Felder einzeln an.
                 == SCHON_ZUSAMMEN
-                &cDie beiden sind schon dasselbe Grundstueck.
+                &#d9564dDie beiden sind schon dasselbe Grundstueck.
                 == GRUPPE_ZU_GROSS
-                &cDein Rang erlaubt hoechstens 3 Felder je Gruppe.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt hoechstens 3 Felder je Gruppe.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == KEINE_GRUPPE
-                &cHier ist keine Gruppe.
+                &#d9564dHier ist keine Gruppe.
                 == AUF_DEM_WEG
-                &cStell dich auf das Feld, das du meinst - nicht auf den Weg.
+                &#d9564dStell dich auf das Feld, das du meinst - nicht auf den Weg.
                 == HAELT_ZUSAMMEN
-                &cDieses Feld haelt dein Grundstueck zusammen. Loese erst eines am Rand heraus.
+                &#d9564dDieses Feld haelt dein Grundstueck zusammen. Loese erst eines am Rand heraus.
                 """, tafel.ganz());
     }
 
@@ -1071,20 +1071,20 @@ class SendewegTest {
 
         assertEquals("""
                 == noch-frei-am-limit-eins
-                &cDiese Parzelle gehoert noch niemandem - aber dein Rang erlaubt 1 Parzelle, und so viele hast du schon.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDiese Parzelle gehoert noch niemandem - aber dein Rang erlaubt 1 Parzelle, und so viele hast du schon.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == grenze-erreicht-eins
-                &cDein Rang erlaubt 1 Parzelle, und so viele hast du schon.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt 1 Parzelle, und so viele hast du schon.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == gruppe-zu-gross-eins
-                &cDein Rang erlaubt hoechstens 1 Feld je Gruppe.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt hoechstens 1 Feld je Gruppe.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == noch-frei-am-limit-stumm
-                &cDiese Parzelle gehoert noch niemandem - aber dein Rang erlaubt 7 Parzellen, und so viele hast du schon.
+                &#d9564dDiese Parzelle gehoert noch niemandem - aber dein Rang erlaubt 7 Parzellen, und so viele hast du schon.
                 == grenze-erreicht-stumm
-                &cDein Rang erlaubt 7 Parzellen, und so viele hast du schon.
+                &#d9564dDein Rang erlaubt 7 Parzellen, und so viele hast du schon.
                 == gruppe-zu-gross-stumm
-                &cDein Rang erlaubt hoechstens 3 Felder je Gruppe.
+                &#d9564dDein Rang erlaubt hoechstens 3 Felder je Gruppe.
                 """, tafel.ganz());
     }
 
@@ -1098,10 +1098,10 @@ class SendewegTest {
 
         assertEquals("""
                 == werbung-gesetzt
-                &eMehr erlaubt ein hoeherer Rang.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 == werbung-leer
                 == nicht-in-der-marktstadt
-                &cParzellen gibt es nur in der Marktstadt.
+                &#d9564dParzellen gibt es nur in der Marktstadt.
                 """, tafel.ganz());
     }
 
@@ -1143,21 +1143,21 @@ class SendewegTest {
 
         assertEquals("""
                 == nicht-da
-                &cBert ist nicht da.
+                &#d9564dBert ist nicht da.
                 == bei-dir
-                &7Du bist schon bei dir.
+                &#a5b4bfDu bist schon bei dir.
                 == steht-noch
-                &7Diese Anfrage an Bert steht noch.
+                &#a5b4bfDiese Anfrage an Bert steht noch.
                 == zu-dir/an-frager
-                &7Angefragt bei Bert - er oder sie muss zustimmen.
+                &#a5b4bfAngefragt bei Bert - er oder sie muss zustimmen.
                 == zu-dir/an-angefragten
-                &6Anna moechte zu dir kommen.
-                &7/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
+                &#c6a15bAnna moechte zu dir kommen.
+                &#a5b4bf/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
                 == hierher/an-frager
-                &7Angefragt bei Bert - er oder sie muss zustimmen.
+                &#a5b4bfAngefragt bei Bert - er oder sie muss zustimmen.
                 == hierher/an-angefragten
-                &6Anna laedt dich ein zu kommen.
-                &7/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
+                &#c6a15bAnna laedt dich ein zu kommen.
+                &#a5b4bf/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
                 """, tafel.ganz());
     }
 
@@ -1187,23 +1187,23 @@ class SendewegTest {
 
         assertEquals("""
                 == niemand
-                &7Es fragt niemand.
+                &#a5b4bfEs fragt niemand.
                 == fragender-weg
-                &cWer gefragt hatte, ist nicht mehr da.
+                &#d9564dWer gefragt hatte, ist nicht mehr da.
                 == zu-dir/an-annehmer
-                &aAnna kommt zu dir.
+                &#73bf96Anna kommt zu dir.
                 == zu-dir/an-frager
-                &aBert hat angenommen - du kommst.
+                &#73bf96Bert hat angenommen - du kommst.
                 == hierher/an-annehmer
-                &aDu kommst zu Anna.
+                &#73bf96Du kommst zu Anna.
                 == hierher/an-frager
-                &aBert hat angenommen und kommt zu dir.
+                &#73bf96Bert hat angenommen und kommt zu dir.
                 == weitere-eins
-                &7Es warten noch 1 Anfrage.
+                &#a5b4bfEs warten noch 1 Anfrage.
                 == weitere-drei
-                &7Es warten noch 3 Anfragen.
+                &#a5b4bfEs warten noch 3 Anfragen.
                 == weitere-tausend
-                &7Es warten noch 1000 Anfragen.
+                &#a5b4bfEs warten noch 1000 Anfragen.
                 """, tafel.ganz());
     }
 
@@ -1220,13 +1220,13 @@ class SendewegTest {
 
         assertEquals("""
                 == nichts-da
-                &7Es fragt niemand.
+                &#a5b4bfEs fragt niemand.
                 == eins
-                &71 Anfrage abgelehnt.
+                &#a5b4bf1 Anfrage abgelehnt.
                 == vier
-                &74 Anfragen abgelehnt.
+                &#a5b4bf4 Anfragen abgelehnt.
                 == tausend
-                &71000 Anfragen abgelehnt.
+                &#a5b4bf1000 Anfragen abgelehnt.
                 """, tafel.ganz());
     }
 
@@ -1300,15 +1300,15 @@ class SendewegTest {
 
         assertEquals("""
                 == WELT_NICHT_GELADEN
-                &cDorthin geht es nicht mehr - die Welt ist nicht geladen.
+                &#d9564dDorthin geht es nicht mehr - die Welt ist nicht geladen.
                 == ZU_PFERD
-                &cNicht zu Pferd - absteigen, dann reisen. Das Reittier bleibt zurueck.
+                &#d9564dNicht zu Pferd - absteigen, dann reisen. Das Reittier bleibt zurueck.
                 == AUSSERHALB_DER_WELTHOEHE
-                &cDorthin geht es nicht - der Ort liegt ausserhalb der Welthoehe.
+                &#d9564dDorthin geht es nicht - der Ort liegt ausserhalb der Welthoehe.
                 == AUSSERHALB_DER_WELTGRENZE
-                &cDorthin geht es nicht - der Ort liegt ausserhalb der Weltgrenze.
+                &#d9564dDorthin geht es nicht - der Ort liegt ausserhalb der Weltgrenze.
                 == KEIN_PLATZ_MEHR
-                &cDort ist kein Platz zum Stehen mehr.
+                &#d9564dDort ist kein Platz zum Stehen mehr.
                 """, tafel.ganz());
     }
 
@@ -1335,21 +1335,21 @@ class SendewegTest {
 
         assertEquals("""
                 == schon-da/welt
-                &7Du bist schon in kornmark.
+                &#a5b4bfDu bist schon in kornmark.
                 == schon-da/wendung
-                &7Du bist schon in deinen letzten Ort.
+                &#a5b4bfDu bist schon in deinen letzten Ort.
                 == kein-platz-am-erscheinungspunkt
-                &cIn kornmark ist am Erscheinungspunkt kein Platz zum Stehen. Das ist nichts, was du beheben kannst - melde es.
+                &#d9564dIn kornmark ist am Erscheinungspunkt kein Platz zum Stehen. Das ist nichts, was du beheben kannst - melde es.
                 == leine-reisst
-                &eAngeleinte Tiere bleiben zurueck - eine Leine reisst beim Weltwechsel.
+                &#e3c57eAngeleinte Tiere bleiben zurueck - eine Leine reisst beim Weltwechsel.
                 == nicht-geklappt/welt
-                &cDie Reise nach kornmark hat nicht geklappt.
+                &#d9564dDie Reise nach kornmark hat nicht geklappt.
                 == nicht-geklappt/wendung
-                &cDie Reise nach deinen letzten Ort hat nicht geklappt.
+                &#d9564dDie Reise nach deinen letzten Ort hat nicht geklappt.
                 == abklingzeit/eine
-                &7Einen Augenblick - noch 1 Sekunde.
+                &#a5b4bfEinen Augenblick - noch 1 Sekunde.
                 == abklingzeit/drei
-                &7Einen Augenblick - noch 3 Sekunden.
+                &#a5b4bfEinen Augenblick - noch 3 Sekunden.
                 """, tafel.ganz());
     }
 
@@ -1376,15 +1376,15 @@ class SendewegTest {
 
         assertEquals("""
                 == wartezeit/drei-welt
-                &7Nach 3 Sekunden geht es nach kornmark - bis dahin stehen bleiben.
+                &#a5b4bfNach 3 Sekunden geht es nach kornmark - bis dahin stehen bleiben.
                 == wartezeit/drei-wendung
-                &7Nach 3 Sekunden geht es nach deinen letzten Ort - bis dahin stehen bleiben.
+                &#a5b4bfNach 3 Sekunden geht es nach deinen letzten Ort - bis dahin stehen bleiben.
                 == wartezeit/zehn-welt
-                &7Nach 10 Sekunden geht es nach kornmark - bis dahin stehen bleiben.
+                &#a5b4bfNach 10 Sekunden geht es nach kornmark - bis dahin stehen bleiben.
                 == abbruch/BEWEGT
-                &cBewegt - die Reise nach kornmark ist abgebrochen.
+                &#d9564dBewegt - die Reise nach kornmark ist abgebrochen.
                 == abbruch/SCHADEN
-                &cSchaden genommen - die Reise nach kornmark ist abgebrochen.
+                &#d9564dSchaden genommen - die Reise nach kornmark ist abgebrochen.
                 """, tafel.ganz());
     }
 
@@ -1414,14 +1414,14 @@ class SendewegTest {
 
         assertEquals("""
                 == ziele
-                &6Reiseziele
-                &bmarktstadt  kornmark  nether
-                &7/warp <ziel> - oder durch ein Tor am Bundesmarkt.
+                &#c6a15bReiseziele
+                &#edf1f3marktstadt  kornmark  nether
+                &#a5b4bf/warp <ziel> - oder durch ein Tor am Bundesmarkt.
                 == kein-ziel
-                &cDorthin geht keine Reise: mordor
-                &7Moeglich sind: marktstadt, kornmark, nether
+                &#d9564dDorthin geht keine Reise: mordor
+                &#a5b4bfMoeglich sind: marktstadt, kornmark, nether
                 == welt-fehlt
-                &cDie Welt kornmark gibt es gerade nicht.
+                &#d9564dDie Welt kornmark gibt es gerade nicht.
                 """, tafel.ganz());
     }
 
@@ -1436,7 +1436,7 @@ class SendewegTest {
         // beide Haelften auf einmal zeigen.
         assertEquals("""
                 == kein-ort-gemerkt
-                &7Es ist kein Ort gemerkt - du bist noch nirgends gewesen, wohin es \
+                &#a5b4bfEs ist kein Ort gemerkt - du bist noch nirgends gewesen, wohin es \
                 zurueckgeht.
                 == letzter-ort
                 deinen letzten Ort
@@ -1467,11 +1467,11 @@ class SendewegTest {
 
         assertEquals("""
                 == farbtag
-                &cDorthin geht keine Reise: <red>boese</red>
-                &7Moeglich sind: marktstadt, kornmark, nether
+                &#d9564dDorthin geht keine Reise: <red>boese</red>
+                &#a5b4bfMoeglich sind: marktstadt, kornmark, nether
                 == wertmarke
-                &cDorthin geht keine Reise: {liste}
-                &7Moeglich sind: marktstadt, kornmark, nether
+                &#d9564dDorthin geht keine Reise: {liste}
+                &#a5b4bfMoeglich sind: marktstadt, kornmark, nether
                 """, tafel.ganz());
 
         // Die zweite Haelfte, und sie ist ein eigener Riegel: Brigadier laesst die zwei
@@ -1520,12 +1520,12 @@ class SendewegTest {
         // steht hier hinter "Moeglich sind: ". Mit einem Textblock waere die Zusicherung
         // stumm um ein Zeichen schwaecher.
         assertEquals("== ziele/leer\n"
-                + "&6Reiseziele\n"
+                + "&#c6a15bReiseziele\n"
                 + "\n"
-                + "&7/warp <ziel> - oder durch ein Tor am Bundesmarkt.\n"
+                + "&#a5b4bf/warp <ziel> - oder durch ein Tor am Bundesmarkt.\n"
                 + "== kein-ziel/leer\n"
-                + "&cDorthin geht keine Reise: mordor\n"
-                + "&7Moeglich sind: \n", tafel.ganz());
+                + "&#d9564dDorthin geht keine Reise: mordor\n"
+                + "&#a5b4bfMoeglich sind: \n", tafel.ganz());
     }
 
     /** Der Name eines Eigentuemers, wie der Benutzerzwischenspeicher ihn liefert. */
@@ -1562,17 +1562,17 @@ class SendewegTest {
 
         assertEquals("""
                 == leere
-                &eZwischen den Staedten gehoert nichts niemandem - und gebaut wird hier nicht
+                &#e3c57eZwischen den Staedten gehoert nichts niemandem - und gebaut wird hier nicht
                 == ausserhalb
-                &eHier enden die Freistaedte
+                &#e3c57eHier enden die Freistaedte
                 == ankunftsfeld
-                &eDas Ankunftsfeld gehoert allen - deine eigene Stadt gruendest du mit /freistadt gruenden
+                &#e3c57eDas Ankunftsfeld gehoert allen - deine eigene Stadt gruendest du mit /freistadt gruenden
                 == frei
-                &eDieses Stadtfeld ist frei - /freistadt gruenden
+                &#e3c57eDieses Stadtfeld ist frei - /freistadt gruenden
                 == fremde-stadt
-                &cFreistadt &fneustadt&c gehoert &fBert
+                &#d9564dFreistadt &#edf1f3neustadt&#d9564d gehoert &#edf1f3Bert
                 == gestoert
-                &cDie Freistaedte sind gerade nicht nachsehbar - versuch es noch einmal.
+                &#d9564dDie Freistaedte sind gerade nicht nachsehbar - versuch es noch einmal.
                 """, tafel.ganz());
 
         // Die zwei Zweige OHNE Balken, und beide mit Grund:
@@ -1606,15 +1606,15 @@ class SendewegTest {
         // Leerzeichen, anders als in 33ai.
         assertEquals("""
                 == weg-und-mauer
-                &eWeg und Mauer gehoeren allen
+                &#e3c57eWeg und Mauer gehoeren allen
                 == parzelle-frei
-                &eDiese Parzelle ist frei - /parzelle nehmen
+                &#e3c57eDiese Parzelle ist frei - /parzelle nehmen
                 == ausserhalb
-                &eHier endet die Marktstadt
+                &#e3c57eHier endet die Marktstadt
                 == fremde-parzelle/name
-                &cDiese Parzelle gehoert &fBert
+                &#d9564dDiese Parzelle gehoert &#edf1f3Bert
                 == fremde-parzelle/unbekannt
-                &cDiese Parzelle gehoert &f0f1e2d3c
+                &#d9564dDiese Parzelle gehoert &#edf1f30f1e2d3c
                 """, tafel.ganz());
     }
 
@@ -1631,9 +1631,9 @@ class SendewegTest {
 
         assertEquals("""
                 == kein-spawnpunkt
-                &7Hier wird kein Spawnpunkt gesetzt - gestorben wird immer nach Altfurt. Schlafen geht weiter.
+                &#a5b4bfHier wird kein Spawnpunkt gesetzt - gestorben wird immer nach Altfurt. Schlafen geht weiter.
                 == abenteuer
-                &7Hier ist Abenteuer: ansehen und benutzen, aber nicht abbauen. Gebaut wird in der Marktstadt.
+                &#a5b4bfHier ist Abenteuer: ansehen und benutzen, aber nicht abbauen. Gebaut wird in der Marktstadt.
                 """, tafel.ganz());
     }
 
@@ -1653,8 +1653,8 @@ class SendewegTest {
 
         assertEquals("""
                 == kein-ausgang
-                &cHier fuehrt kein Portal hinaus.
-                &7Nether und Ende erreichst du mit /warp nether und /warp end - oder durch ein Tor am Bundesmarkt.
+                &#d9564dHier fuehrt kein Portal hinaus.
+                &#a5b4bfNether und Ende erreichst du mit /warp nether und /warp end - oder durch ein Tor am Bundesmarkt.
                 """, tafel.ganz());
     }
 
@@ -1751,33 +1751,33 @@ class SendewegTest {
 
         assertEquals("""
                 == stand/fluechtig-ohne-recht
-                &6Der Freimarkenbund
-                &7Stand 0.1.0 · Java 25 · 1.21.4
-                &cAblage fluechtig - nichts ueberlebt den Neustart
-                &7/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
+                &#c6a15bDer Freimarkenbund
+                &#a5b4bfStand 0.1.0 · Java 25 · 1.21.4
+                &#d9564dAblage fluechtig - nichts ueberlebt den Neustart
+                &#a5b4bf/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
                 == stand/fluechtig-mit-recht
-                &6Der Freimarkenbund
-                &7Stand 0.1.0 · Java 25 · 1.21.4
-                &cAblage fluechtig - nichts ueberlebt den Neustart
-                &7/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
-                &8/freimarken welt · parzelle <x> <z> · neuladen
+                &#c6a15bDer Freimarkenbund
+                &#a5b4bfStand 0.1.0 · Java 25 · 1.21.4
+                &#d9564dAblage fluechtig - nichts ueberlebt den Neustart
+                &#a5b4bf/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
+                &#6e7a82/freimarken welt · parzelle <x> <z> · neuladen
                 == stand/mariadb-ohne-recht
-                &6Der Freimarkenbund
-                &7Stand 0.1.0 · Java 25 · 1.21.4
-                &8Ablage MariaDB
-                &7/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
+                &#c6a15bDer Freimarkenbund
+                &#a5b4bfStand 0.1.0 · Java 25 · 1.21.4
+                &#6e7a82Ablage MariaDB
+                &#a5b4bf/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
                 == stand/mariadb-mit-recht
-                &6Der Freimarkenbund
-                &7Stand 0.1.0 · Java 25 · 1.21.4
-                &8Ablage MariaDB
-                &7/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
-                &8/freimarken welt · parzelle <x> <z> · neuladen
+                &#c6a15bDer Freimarkenbund
+                &#a5b4bfStand 0.1.0 · Java 25 · 1.21.4
+                &#6e7a82Ablage MariaDB
+                &#a5b4bf/parzelle · /mark · /freimarken preis <anzahl> · /freimarken spielzeit
+                &#6e7a82/freimarken welt · parzelle <x> <z> · neuladen
                 == preis/gratis
-                &aDie erste Parzelle ist gratis.
-                &8Bisher ausgegeben: 0 Mark
+                &#73bf96Die erste Parzelle ist gratis.
+                &#6e7a82Bisher ausgegeben: 0 Mark
                 == preis/kostet
-                &7Parzelle Nr. 2 kostet &650.000 Mark&7.
-                &8Bisher ausgegeben: 25.000 Mark
+                &#a5b4bfParzelle Nr. 2 kostet &#c6a15b50.000 Mark&#a5b4bf.
+                &#6e7a82Bisher ausgegeben: 25.000 Mark
                 """, tafel.ganz());
     }
 }

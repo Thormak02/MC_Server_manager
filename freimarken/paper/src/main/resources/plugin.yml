@@ -21,6 +21,22 @@ permissions:
   freimarken.geld:
     description: Einem Spieler Mark gutschreiben oder abziehen
     default: op
+  # Das Hauptmenue oeffnen: /menu [21.11.2026]. Fuer JEDEN - es zeigt nur die
+  # Eintraege, deren Recht der Oeffner hat (Menuetafel.fuerRechte), und ein Klick fuehrt
+  # einen Befehl aus, der seine Rechte noch einmal selbst prueft.
+  freimarken.menu:
+    description: Das Hauptmenue oeffnen
+    default: true
+  # Die Regeln lesen: /regeln [21.11.2026]. Fuer JEDEN, und zwar notwendig: Wer die
+  # Regeln nicht lesen darf, kann sich nicht an sie halten.
+  freimarken.regeln:
+    description: Die Regeln des Servers lesen
+    default: true
+  # Die Befehlsliste lesen: /hilfe [21.11.2026]. Fuer JEDEN - sie zeigt ohnehin nur,
+  # was der Leser selbst tippen darf.
+  freimarken.hilfe:
+    description: Alle Befehle nach Bereichen lesen
+    default: true
   # Den eigenen Rang nachsehen: /rang und /rang leiter [20.11.2026]. Fuer JEDEN -
   # darum default true. Ohne diese Anmeldung antwortet Bukkit mit der Vorgabe OP, und
   # der Befehl waere fuer einen gewoehnlichen Spieler verborgen UND verwehrt, waehrend

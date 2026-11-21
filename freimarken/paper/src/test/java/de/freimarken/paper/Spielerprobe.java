@@ -264,6 +264,22 @@ final class Spielerprobe {
         return -1;
     }
 
+
+    /**
+     * Was mit diesem Spieler GESCHEHEN ist, in der Reihenfolge [21.11.2026].
+     *
+     * <p>EINE Liste fuer zwei Dinge - das Schliessen seines Inventars und jeden Befehl,
+     * den etwas FUER ihn getippt hat -, und das ist der ganze Zweck: Die
+     * {@code Menuewache} verspricht "erst schliessen, dann tippen" (ein Befehl, der
+     * selbst ein Menue oeffnet, liefe sonst gegen ein offenes, und Bukkit schickt dafuer
+     * ein Schliessereignis mitten in die Ausfuehrung). Zwei getrennte Mitschriften
+     * koennten diese REIHENFOLGE nicht halten.
+     */
+    private final List<String> gefuehrt = new ArrayList<>();
+
+    /** Der Eintrag, den das Schliessen des Inventars hinterlaesst. */
+    static final String INVENTAR_ZU = "inventar zu";
+
     /**
      * Der Spieler, wie die Wache ihn sieht.
      *
@@ -311,6 +327,18 @@ final class Spielerprobe {
                     case "sendActionBar" -> merke(handbalken, werte[0]);
                     case "sendMessage" -> merke(chat, werte[0]);
                     case "getInventory" -> inventar();
+                    // ZWEI ANTWORTEN FUER DAS MENUE [21.11.2026]: Die Menuewache
+                    // schliesst das Fenster und tippt dann einen Befehl fuer den
+                    // Spieler. Beides wird mitgeschrieben, und zwar in EINER Liste -
+                    // die Reihenfolge ist die Zusage.
+                    case "closeInventory" -> {
+                        gefuehrt.add(INVENTAR_ZU);
+                        yield null;
+                    }
+                    case "performCommand" -> {
+                        gefuehrt.add("/" + werte[0]);
+                        yield Boolean.TRUE;
+                    }
                     case "toString" -> "Spielerprobe " + name;
                     case "hashCode" -> kennung.hashCode();
                     case "equals" -> eigen == (werte == null ? null : werte[0]);
@@ -321,6 +349,11 @@ final class Spielerprobe {
                                     + " Antwort, die die Probe mitgibt.");
                 });
         return stellvertreter;
+    }
+
+    /** Was mit diesem Spieler geschehen ist - in der Reihenfolge. */
+    List<String> gefuehrt() {
+        return List.copyOf(gefuehrt);
     }
 
     private World welt() {
@@ -413,9 +446,17 @@ final class Spielerprobe {
         return chat.stream().map(Sprachprobe::bild).toList();
     }
 
-    /** Vergisst alles Angekommene - fuer den naechsten Fall derselben Probe. */
+    /**
+     * Vergisst alles Angekommene - fuer den naechsten Fall derselben Probe.
+     *
+     * <p>ALLE drei Mitschriften, auch {@link #gefuehrt()} [21.11.2026]. Blieb jene
+     * stehen, bekaeme die erste Probe, die einen Spieler ueber zwei Faelle
+     * wiederverwendet, die Eintraege des ersten mitgeliefert - und waere gruen, auch wenn
+     * der zweite Klick gar nichts mehr tut.
+     */
     void vergessen() {
         handbalken.clear();
         chat.clear();
+        gefuehrt.clear();
     }
 }

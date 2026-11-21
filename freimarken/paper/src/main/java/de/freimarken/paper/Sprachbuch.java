@@ -21,14 +21,21 @@ import java.util.Set;
  * @param muster      die schon uebersetzten Zeitmuster. Beim LADEN uebersetzt und nicht
  *                    beim ersten {@code /mark verlauf}: Ein unbrauchbares Muster ist dann
  *                    eine Klage mit Zeilennummer und kein Wurf mitten in einem Befehl
+ * @param farben      die geltende Farbwelt. Sie reist MIT dem Buch, weil sie in derselben
+ *                    Datei steht und derselbe Tausch sie austauscht: Ein Buch mit neuen
+ *                    Worten und alten Farben hat es damit nie gegeben
  */
 record Sprachbuch(Map<String, String> saetze, Set<String> ausDerDatei,
-                  Map<String, DateTimeFormatter> muster) {
+                  Map<String, DateTimeFormatter> muster, Farbtafel farben) {
 
     Sprachbuch {
         saetze = Map.copyOf(saetze);
         ausDerDatei = Set.copyOf(ausDerDatei);
         muster = Map.copyOf(muster);
+        if (farben == null) {
+            throw new IllegalArgumentException("Ein Buch ohne Farbwelt gibt es nicht -"
+                    + " der Leser traegt Fehlendes aus der Vorgabe nach");
+        }
     }
 
     /** Der Wortlaut eines einfachen Satzes. Wirft bei einem gezaehlten - dort fehlt die Zahl. */

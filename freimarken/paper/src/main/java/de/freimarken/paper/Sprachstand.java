@@ -37,15 +37,21 @@ final class Sprachstand {
      * Die Schluessel, die ein Neuladen NICHT uebernimmt - die EINE Liste davon.
      *
      * <p>Sie steht in der Klasse, die es entscheidet: {@link #uebernimm} laesst genau diese
-     * neun stehen, und {@link #nichtAngefasst} nennt genau diese neun. Gab es die Liste
+     * stehen, und {@link #nichtAngefasst} nennt genau diese. Gab es die Liste
      * zweimal, sagten Leser und Halter in derselben Antwort Verschiedenes - genau das ist
-     * bei den Wirtschaftswerten einmal passiert.
+     * bei den Wirtschaftswerten einmal passiert. KEINE Zahl hier: Sie waechst mit jedem
+     * Befehl, und eine gezaehlte Zusage im Javadoc ueberlebt den naechsten Bauschritt
+     * nicht (es standen "neun" da, als es schon zwanzig waren).
      *
-     * <p>Der Grund ist derselbe wie dort beim Zeitgeber: Die neun Befehlsbeschreibungen
-     * gehen in {@code FreimarkenPlugin:529-564} bei der ANMELDUNG an
-     * {@code verzeichnis.register()}. Ein Neuladen meldet keinen Befehl neu an - das ist
-     * der ganze Trick dieser Form -, also wirkt eine geaenderte Beschreibung erst nach
-     * einem Neustart. {@code /help} zeigt bis dahin die alte.
+     * <p>Der Grund ist derselbe wie dort beim Zeitgeber: Die Befehlsbeschreibungen gehen
+     * bei der ANMELDUNG an {@code verzeichnis.register()}. Ein Neuladen meldet keinen
+     * Befehl neu an - das ist der ganze Trick dieser Form -, also wirkt eine geaenderte
+     * Beschreibung erst nach einem Neustart.
+     *
+     * <p>ZWEI Leser zeigen bis dahin die alte [21.11.2026]: Papers eigenes {@code /help}
+     * aus dem Befehlsbaum und das eigene {@code /hilfe}, das {@link HilfeBefehle} bei
+     * jedem Aufruf aus DEMSELBEN Buch holt. Nur einen davon zu nennen schickt den
+     * Betreiber zur falschen Zeile.
      */
     static final List<Satz> NUR_BEIM_START = BundSatz.beschreibungen();
 
@@ -97,9 +103,17 @@ final class Sprachstand {
                 muster.put(satz.pfad(), alt.muster().get(satz.pfad()));
             }
         }
-        Sprachbuch neu = new Sprachbuch(saetze, ausDerDateiJetzt, muster);
+        // DIE PALETTE REIST MIT und steht nicht in NUR_BEIM_START: Eine Farbe wirkt
+        // beim naechsten Satz, den jemand liest - es gibt nichts, was sie beim Start
+        // festschreibt (anders als eine Befehlsbeschreibung, die bei der Anmeldung in
+        // den Befehlsbaum geht).
+        Sprachbuch neu = new Sprachbuch(saetze, ausDerDateiJetzt, muster,
+                ausDerDatei.farben());
 
         List<String> geaendert = new ArrayList<>();
+        for (String rolle : neu.farben().unterschiede(alt.farben())) {
+            geaendert.add(Farbtafel.PFAD + "." + rolle);
+        }
         for (String pfad : saetze.keySet()) {
             if (!saetze.get(pfad).equals(alt.saetze().get(pfad))) {
                 geaendert.add(pfad);
@@ -128,8 +142,8 @@ final class Sprachstand {
         Sprachbuch jetzt = stand;
         List<String> zeilen = new ArrayList<>();
         zeilen.add("befehl.beschreibung.* (" + NUR_BEIM_START.size() + " Saetze) - sie"
-                + " stehen seit der Anmeldung im Befehlsbaum; /help zeigt eine neue erst"
-                + " nach einem Neustart.");
+                + " stehen seit der Anmeldung im Befehlsbaum; /help UND /hilfe zeigen"
+                + " eine neue erst nach einem Neustart.");
         if (ausDerDatei == null) {
             return List.copyOf(zeilen);
         }

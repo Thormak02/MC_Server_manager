@@ -102,7 +102,7 @@ class TauschtextTest {
         String bild = Sprachprobe.bild(
                 Tauschtext.entscheidZeilen(SPRACHE, Wechselwerte.VORGABE, antwort));
 
-        assertEquals("&a3 Goldmark fuer 3.000 Mark gekauft. Du hast jetzt 3 Goldmark.",
+        assertEquals("&#73bf963 Goldmark fuer 3.000 Mark gekauft. Du hast jetzt 3 Goldmark.",
                 bild);
     }
 
@@ -112,7 +112,7 @@ class TauschtextTest {
         var antwort = entscheid(Wechselbuch.Bescheid.VERKAUFT, 5L, 4_000L, 7L, 0L,
                 4_000L);
 
-        assertEquals("&a5 Goldmark fuer 4.000 Mark zurueckgewechselt. Du hast jetzt"
+        assertEquals("&#73bf965 Goldmark fuer 4.000 Mark zurueckgewechselt. Du hast jetzt"
                         + " 0 Goldmark.",
                 Sprachprobe.bild(Tauschtext.entscheidZeilen(SPRACHE,
                         Wechselwerte.VORGABE, antwort)));
@@ -127,7 +127,7 @@ class TauschtextTest {
         var antwort = entscheid(Wechselbuch.Bescheid.ZU_WENIG_MARK, 3L, 3_000L, 0L, 0L,
                 2_999L);
 
-        assertEquals("&cDas kostet 3.000 Mark - dir fehlen 1 Mark.",
+        assertEquals("&#d9564dDas kostet 3.000 Mark - dir fehlen 1 Mark.",
                 Sprachprobe.bild(Tauschtext.entscheidZeilen(SPRACHE,
                         Wechselwerte.VORGABE, antwort)));
     }
@@ -138,7 +138,7 @@ class TauschtextTest {
         var antwort = entscheid(Wechselbuch.Bescheid.ZU_WENIG_GOLDMARK, 3L, 2_400L, 12L,
                 2L, 0L);
 
-        assertEquals("&c3 Goldmark hast du nicht - du hast 2 Goldmark.",
+        assertEquals("&#d9564d3 Goldmark hast du nicht - du hast 2 Goldmark.",
                 Sprachprobe.bild(Tauschtext.entscheidZeilen(SPRACHE,
                         Wechselwerte.VORGABE, antwort)));
     }
@@ -155,7 +155,7 @@ class TauschtextTest {
         String bild = Sprachprobe.bild(
                 Tauschtext.entscheidZeilen(SPRACHE, Wechselwerte.VORGABE, antwort));
 
-        assertEquals("&cHeute gehen nur noch 12 Goldmark (9.600 Mark) -"
+        assertEquals("&#d9564dHeute gehen nur noch 12 Goldmark (9.600 Mark) -"
                 + " der Wechseldeckel.", bild);
         assertFalse(bild.contains("16.000"),
                 "die abgelehnte Summe darf nicht in der Zeile stehen: " + bild);
@@ -169,7 +169,7 @@ class TauschtextTest {
         var antwort = entscheid(Wechselbuch.Bescheid.DECKEL_ERREICHT, 1L, 800L, 0L, 5L,
                 0L);
 
-        assertEquals("&cHeute ist der Wechseldeckel von 10.000 Mark erreicht."
+        assertEquals("&#d9564dHeute ist der Wechseldeckel von 10.000 Mark erreicht."
                         + " Morgen wieder.",
                 Sprachprobe.bild(Tauschtext.entscheidZeilen(SPRACHE,
                         Wechselwerte.VORGABE, antwort)));

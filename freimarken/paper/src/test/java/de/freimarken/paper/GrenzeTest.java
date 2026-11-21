@@ -225,7 +225,14 @@ class GrenzeTest {
      * senden; was ein SPIELER liest, liegt nicht mehr dort.
      */
     private static final Set<String> FARBE_ERLAUBT = new TreeSet<>(List.of(
-            "FreimarkenPlugin.java", "Sprachstand.java"));
+            "FreimarkenPlugin.java", "Sprachstand.java",
+            // Die Farbwelt [21.11.2026]: Hier wird aus einer ZAHL der Datei eine Farbe,
+            // und das ist genau EINE Stelle. Der Unterschied zu einem Farbcode im
+            // Quelltext ist der ganze Punkt dieser Tafel: Dort stuende die Farbe eines
+            // SATZES im Programm; hier steht der ausgelieferte Wert einer ROLLE, die der
+            // Betreiber in der Sprachdatei ueberschreibt. Ohne eine solche Stelle gaebe
+            // es keinen Weg von "#a5b4bf" zu einer Farbe.
+            "Farbtafel.java"));
 
     /**
      * Wo ein Farbtag als ZEICHEN stehen darf - eine Datei, und dort ist er eine
@@ -309,6 +316,17 @@ class GrenzeTest {
             // Laufs - alle durch dasselbe private sende().
             "Mietwache.java",
             "ParzellenBefehle.java", "Portalwache.java",
+            // /hilfe [21.11.2026]: EINE Sendestelle fuer die ganze Liste - sie geht
+            // als Liste von Zeilen heraus, nicht Zeile fuer Zeile.
+            "HilfeBefehle.java",
+            // /regeln [21.11.2026]: EINE Sendestelle, und sie bedient BEIDE Wege - den
+            // Chatzweig und den Rueckfall, wenn das Fenster nicht aufgeht. Das FENSTER
+            // selbst sendet nichts: Was darin steht, ist kein Chat.
+            "RegelnBefehle.java",
+            // /menu [21.11.2026]: EINE Sendestelle fuer die zwei Absagen. Das MENUE
+            // selbst sendet nichts - es oeffnet ein Inventar, und was darin steht, ist
+            // kein Chat.
+            "MenueBefehle.java",
             "Rangwache.java",
             // /rang [20.11.2026]: EINE Sendestelle fuer beide Zweige und jede Absage.
             "RangBefehle.java",
@@ -346,6 +364,12 @@ class GrenzeTest {
      * schreibt einen Satz selbst - siehe das Javadoc von {@link #MINIMESSAGE_LESEN}.
      */
     private static final Set<String> MINIMESSAGE_ERLAUBT = new TreeSet<>(List.of(
+            // Die Farbwelt [21.11.2026]: Die Farbtafel BAUT den Leser - sie liest keinen
+            // Satz. Dass sie trotzdem hier steht, liegt am Muster: "MiniMessage" trifft
+            // auch den Bauer. Die Datei auszunehmen waere der falsche Weg (eine
+            // ausgenommene Datei ist fuer immer blind), und ein engeres Muster waere eine
+            // zweite Abschrift der Frage.
+            "Farbtafel.java",
             "Sprache.java",
             "Sprachliste.java"));
 
@@ -431,7 +455,7 @@ class GrenzeTest {
      * Satz waehlt, ist der Grund fuer {@link #SENDEPAARE_IN_ANKUNFTSWACHE}.
      */
     private static final Map<String, Integer> SENDESTELLEN = Map.ofEntries(
-            Map.entry("AnfragenBefehle.java", 11),
+            Map.entry("AnfragenBefehle.java", 12),
             Map.entry("Ankunftswache.java", 2),
             Map.entry("Aufwaermzeit.java", 2),
             // EINS, und das ist eine Entscheidung: Alle fuenf Zweige von /beruf laufen
@@ -490,6 +514,9 @@ class GrenzeTest {
             // Rueckfrage und der Kauf.
             Map.entry("ParzellenBefehle.java", 51),
             Map.entry("Portalwache.java", 1),
+            Map.entry("HilfeBefehle.java", 1),
+            Map.entry("MenueBefehle.java", 1),
+            Map.entry("RegelnBefehle.java", 1),
             Map.entry("Rangwache.java", 1),
             // /rang: beide Zweige, die Absage an die Konsole, die Stoerung und "keine
             // Raenge" gehen durch dasselbe private sende(). Eine Zwei hier heisst, dass
@@ -1117,6 +1144,9 @@ class GrenzeTest {
             "BEFEHL_WERDER -> WORT",
             "BEFEHL_WOLKE -> WORT",
             "BEFEHL_RANG -> WORT",
+            "BEFEHL_MENU -> WORT",
+            "BEFEHL_REGELN -> WORT",
+            "BEFEHL_HILFE -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",
@@ -1298,7 +1328,16 @@ class GrenzeTest {
     private static final Pattern FARBTAG_IM_SATZ = Pattern.compile(
             "<(?:black|dark_blue|dark_green|dark_aqua|dark_red|dark_purple|gold|gray"
                     + "|dark_gray|blue|green|aqua|red|light_purple|yellow|white|bold"
-                    + "|italic|underlined|strikethrough|obfuscated)>"
+                    + "|italic|underlined|strikethrough|obfuscated"
+                    // Die acht Rollen der Farbwelt [21.11.2026]. Ohne sie waere genau
+                    // der Fehler, gegen den diese Tafel gebaut ist, ab heute wieder
+                    // unsichtbar: Ein "<warnung>" + name im Programm nennt keine
+                    // Adventure-Klasse und liest keinen Satz - nur dieses Muster sieht
+                    // es. Die Namen kommen aus Farbtafel.ROLLEN und sind hier
+                    // ausgeschrieben, weil ein Muster kein Java ausfuehrt; die Tafel
+                    // 31dd haelt beide Listen gegeneinander.
+                    + "|fliesstext|betont|kopf|geld|warnung|bestaetigung|hinweis"
+                    + "|gedaempft)>"
                     + "|<#[0-9a-fA-F]{6}>"
                     + "|<(?:click|hover|gradient|rainbow)[:>]");
 
@@ -4186,6 +4225,39 @@ class GrenzeTest {
     }
 
     @Test
+    @DisplayName("31dd - die acht Rollen der Farbwelt und die Saetze kennen sich")
+    void rollenUndSaetzeKennenSich() {
+        // DREI LISTEN FUER EINE SACHE, und sie koennen auseinanderlaufen: Farbtafel.ROLLEN
+        // (das Programm), der Block farben: der ausgelieferten Datei (Probe 2b haelt ihn
+        // dagegen) und das Muster FARBTAG_IM_SATZ dieser Datei. Das Muster ist von Hand
+        // ausgeschrieben, weil ein Muster kein Java ausfuehrt - also haelt diese Tafel es
+        // gegen die Liste.
+        //
+        // Und die andere Richtung: Jede Rolle muss in den ausgelieferten SAETZEN wirklich
+        // vorkommen. Eine Rolle, die niemand benutzt, ist eine Einstellung ohne Wirkung -
+        // der Betreiber aendert sie und nichts geschieht.
+        for (String rolle : Farbtafel.ROLLEN) {
+            assertTrue(FARBTAG_IM_SATZ.matcher("<" + rolle + ">").find(),
+                    "<" + rolle + "> fehlt im Muster FARBTAG_IM_SATZ - ein Satz mit"
+                            + " dieser Rolle im Programm waere damit unsichtbar");
+        }
+
+        String vorlage = ausgelieferte("sprache-vorlage.yml");
+        var ohneSatz = new TreeSet<String>();
+        for (String rolle : Farbtafel.ROLLEN) {
+            // Gezaehlt wird das SCHLIESSENDE Tag: Das oeffnende steht auch im Block
+            // farben: als Kommentar und im Kopf der Datei, das schliessende nur in einem
+            // Satz.
+            if (!vorlage.contains("</" + rolle + ">")) {
+                ohneSatz.add(rolle);
+            }
+        }
+        assertEquals(new TreeSet<String>(), ohneSatz,
+                "diese Rollen benutzt kein ausgelieferter Satz - eine Farbe, die der"
+                        + " Betreiber aendern kann, ohne dass sich etwas aendert");
+    }
+
+    @Test
     @DisplayName("31dc - der Weg vom NAMEN zur Kennung fragt hasPlayedBefore, und zwar"
             + " an einer Stelle")
     void jederWegZurKennungFragtHasPlayedBefore() {
@@ -4224,6 +4296,146 @@ class GrenzeTest {
         assertTrue(spielername.indexOf("hasPlayedBefore()", methode) >= 0,
                 "die Schranke steht nicht IN kennungAuchAbwesend - und das ist die"
                         + " Methode, die aus einem getippten Namen eine Kennung macht");
+    }
+
+    @Test
+    @DisplayName("31dg - die Hand baut das Menue FUER DIESEN Spieler")
+    void handNimmtDieGefilterteTafel() {
+        // DER FILTER IST GEBAUT UND GRUEN GEPRUEFT - hier haengt er an [21.11.2026].
+        // MenuetafelTest 11 bis 13 halten, dass fuerRechte richtig auswaehlt; dass die
+        // HAND das Ergebnis nimmt, hielt nichts. Nimmt jemand den Aufruf heraus
+        // (Menuetafel sichtbar = tafel), bleibt der ganze Lauf gruen, und das Menue
+        // bietet wieder jedem alles an - ein Klick auf einen Befehl, den requires
+        // VERBIRGT, endet in Brigadiers englischer Zeile.
+        //
+        // Gemessen in der Einspritzungsrunde vom 21.11.2026: Dieser Fall war der EINZIGE
+        // von zwanzig, den keine Probe fing. Die Hand liegt hinter
+        // Bukkit.createInventory, also kommt dort keine hin - darum eine Tafel, wie bei
+        // der Truhenwache (31an) und der Rangwache (31cr).
+        String hand = Quellen.text(datei("Menuehand.java"));
+
+        assertTrue(hand.contains("tafel.fuerRechte(wer::hasPermission)"),
+                "die Hand baut das Menue nicht fuer DIESEN Spieler - dann sieht jeder"
+                        + " jeden Eintrag, auch den, den er nicht tippen darf");
+        // UND die gefilterte Tafel muss in den HALTER gehen, nicht nur ins Inventar: Die
+        // Wache liest sie von dort wieder heraus, und nur deshalb ist ein weggefallenes
+        // Fach auch per Klick unbekannt.
+        assertTrue(hand.contains("new Menuehalter(sichtbar)"),
+                "der Halter bekommt die ungefilterte Tafel - dann findet die Wache den"
+                        + " Eintrag doch und fuehrt den Befehl aus");
+    }
+
+    @Test
+    @DisplayName("31dh - wer Anwesende anmeldet, raeumt sie auch weg")
+    void werAnmeldetRaeumtAuchWeg() {
+        // DIE TABELLE DER ANWESENDEN IST STATISCH, also lebt ein Eintrag ueber die
+        // Klassengrenze hinaus [21.11.2026]. Eine Probe, die "Anna" anmeldet und nicht
+        // aufraeumt, laesst eine FREMDE Probendatei mit ihrer eigenen Anna auf den
+        // falschen Spieler stossen - und die rote Meldung nennt die Datei, die es
+        // ABBEKOMMEN hat, nicht die, die es verursacht. Genau so geschehen: Eine neue
+        // Probe in RegelnBefehlTest machte WolkeBefehlTest rot.
+        //
+        // Die drei Dateien, die anmelden schon vorher riefen, halten die Regel von
+        // selbst - sie war gelebte Praxis und nur unverbuergt.
+        List<Path> proben = Quellen.alleProben();
+        assertFalse(proben.isEmpty(), "der Probenbaum wurde nicht gefunden - dann laeuft"
+                + " diese Tafel leer und gruen");
+
+        List<String> ohneAufraeumen = new ArrayList<>();
+        for (Path probe : proben) {
+            String text = Quellen.text(probe);
+            if (text.contains("Serverprobe.anmelden(")
+                    && !text.contains("niemandMehrDa()")) {
+                ohneAufraeumen.add(probe.getFileName().toString());
+            }
+        }
+        assertEquals(List.of(), ohneAufraeumen, "Diese Probe meldet Anwesende an und"
+                + " raeumt sie nicht weg. Serverprobe.niemandMehrDa() gehoert in ihr"
+                + " Vorher - sonst findet eine andere Probendatei spaeter den falschen"
+                + " Spieler unter einem Namen, den sie selbst vergeben hat.");
+    }
+
+    @Test
+    @DisplayName("31de - die Menuewache wird angemeldet")
+    void menuewacheIstVerdrahtet() {
+        // DIE EINE ZEILE, AN DER DAS GANZE MENUEGERUEST HAENGT [21.11.2026]. Faellt sie
+        // bei einem Umbau weg, bleiben MenuewacheTest, MenuetafelTest und
+        // MenueBefehlTest alle gruen - und im Spiel ist /menu eine gewoehnliche Truhe:
+        // Der Spieler nimmt Grasblock, Goldbarren, Smaragd und Spitzhacke heraus und
+        // behaelt sie, und kein Klick fuehrt mehr einen Befehl aus. Dieselbe Lage wie
+        // bei der Truhenwache (31an), beim Shopbuch (31au) und bei der Rangwache
+        // (31cr): gebaut, gruen geprueft, nie angemeldet.
+        assertTrue(plugintext().contains("registerEvents(new Menuewache("),
+                "die Menuewache wird nicht angemeldet - dann ist jeder Gegenstand im"
+                        + " Menue eine Ware, und ein Hilfetext laesst sich als Diamant"
+                        + " herausnehmen");
+    }
+
+    /**
+     * Die Farbwoerter, die in einem Kommentar der Sprachdatei nichts mehr zu suchen
+     * haben - jedes als ganzes Wort.
+     *
+     * <p>Die eindeutigen stehen ganz da ({@code aqua}, {@code gelb}, {@code grau},
+     * {@code gold}). {@code rot} und {@code weiss} sind zweideutig und stehen nur in
+     * einer FARBWENDUNG: bei {@code rot} auch "rot der Kopf", bei {@code weiss} NICHT -
+     * "weiss der Spieler nicht, wie weit er ist" ist das Verb, und davon gibt es vier
+     * Stellen. Auch "keine Probe wuerde rot" meint keine Farbe. Ein Muster, das beide
+     * Woerter blind trifft, waere an harmlosen Stellen rot - und das erste, was jemand
+     * dann tut, ist, Zeilen auszunehmen; eine ausgenommene Zeile ist fuer immer blind.
+     */
+    private static final java.util.regex.Pattern FARBWORT_IM_KOMMENTAR =
+            java.util.regex.Pattern.compile(
+                    "\\b(aqua|cyan|gelb|gelbe[nmrs]?|grau|graue[nmrs]?|gold|golden"
+                            + "|goldene[nmrs]?|gruen|gruene[nmrs]?|blau|blaue[nmrs]?"
+                            + "|rote[nmrs]?)\\b"
+                            + "|\\b(in|nicht)\\s+(rot|weiss)\\b"
+                            + "|\\brot\\s+(der|die|das)\\b"
+                            + "|\\b(fast|in|nicht)\\s+weiss\\b",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    @Test
+    @DisplayName("31df - kein Kommentar der Sprachdatei nennt mehr eine feste Farbe")
+    void keinKommentarNenntEineFesteFarbe() {
+        // DIE AUSGELIEFERTE DATEI IST DAS EINZIGE HANDBUCH, das der Betreiber hat - sie
+        // wird bei jedem Start neu geschrieben. Ihr Kopf sagt zu: "Ein Satz nennt die
+        // Rolle und nie einen Farbwert." Die SAETZE hielten das vom ersten Tag an; die
+        // KOMMENTARE daneben nicht, und sie benutzten genau die Woerter, die jetzt
+        // ROLLENNAMEN sind: "der Hinweis grau" stand fuer <fliesstext>, "der Kopf rot"
+        // fuer <warnung>. Wer das liest, aendert folgerichtig die falsche Rolle - und an
+        // seiner Zeile aendert sich nichts.
+        //
+        // ERST HINTER DEM BLOCK farben: Dort sind die Farbnamen Gegenstand der
+        // Erklaerung ("Markgold, aufgehellt" sagt, WOHER der Wert kommt), und genauso im
+        // Kopfabsatz, der die Vanillanamen gegen die Rollen stellt.
+        List<String> zeilen = List.of(ausgelieferte("sprache-vorlage.yml").split("\n", -1));
+        int abZeile = 0;
+        for (int stelle = 0; stelle < zeilen.size(); stelle++) {
+            if (zeilen.get(stelle).startsWith("  gedaempft:")) {
+                abZeile = stelle + 1;
+                break;
+            }
+        }
+        assertTrue(abZeile > 0, "der Block farben: endet nicht mehr mit gedaempft -"
+                + " dann weiss diese Tafel nicht, wo die Ausnahme aufhoert");
+
+        // DER TREFFERTEXT und keine Zahl: Eine Zahl liesse sich hochdrehen, und wer den
+        // Fund behebt, braucht die ZEILE.
+        List<String> gefunden = new ArrayList<>();
+        for (int stelle = abZeile; stelle < zeilen.size(); stelle++) {
+            String zeile = zeilen.get(stelle);
+            if (!zeile.strip().startsWith("#")) {
+                continue;
+            }
+            var sucher = FARBWORT_IM_KOMMENTAR.matcher(zeile);
+            if (sucher.find()) {
+                gefunden.add((stelle + 1) + ": <" + sucher.group() + "> " + zeile.strip());
+            }
+        }
+        assertEquals(List.of(), gefunden, "Ein Kommentar der ausgelieferten Sprachdatei"
+                + " nennt eine feste Farbe. Nenne die ROLLE, die der Satz darunter"
+                + " traegt (fliesstext, betont, kopf, geld, warnung, bestaetigung,"
+                + " hinweis, gedaempft) - sonst aendert der Betreiber die falsche Zeile"
+                + " und wundert sich, dass nichts geschieht.");
     }
 
     @Test

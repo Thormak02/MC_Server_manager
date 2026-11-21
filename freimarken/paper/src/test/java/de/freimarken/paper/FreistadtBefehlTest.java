@@ -201,7 +201,7 @@ class FreistadtBefehlTest {
         // ein Angebot vor der Absage liest sich wie eine Zusage.
         assertEquals(2, gelesen().size(),
                 "Absage und Werbezeile, keine mehr und keine weniger: " + gelesen());
-        assertEquals("&e" + Wirtschaftswerte.VORGABE_RANG_WERBUNG, gelesen().get(1),
+        assertEquals("&#e3c57e" + Wirtschaftswerte.VORGABE_RANG_WERBUNG, gelesen().get(1),
                 "unter der Absage gehoert hinweise.rang-werbung: " + gelesen());
 
         Spielerprobe reich = new Spielerprobe("Reich", Spielerprobe.kennungAus(7),

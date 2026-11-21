@@ -21,6 +21,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryView;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -174,6 +175,22 @@ class MesswacheTest {
     }
 
     @Test
+    @DisplayName("Ein MENUE des Plugins ist KEIN Lebenszeichen")
+    void menueZaehltNicht() {
+        // DER FUND VOM 21.11.2026, und er faellt sonst nirgends auf: Gemessen wird TAETIGE
+        // Zeit, und daran haengen Verdienst, Tagesbonus und das Makro-Urteil. Ein offenes
+        // Hauptmenue, das ab und zu angeklickt wird, waere bezahlte Anwesenheit - und
+        // diese Wache steht auf MONITOR, bricht nichts ab und sagt kein Wort.
+        var menue = inventarMit(new Menuehalter(Menuetafel.HAUPT));
+
+        wache.beimOeffnen(new InventoryOpenEvent(sichtAuf(anna.spieler(), menue)));
+
+        assertEquals(List.of(), gesammelt(),
+                "ein Menue, das das Plugin selbst oeffnet, ist keine Taetigkeit des"
+                        + " Spielers");
+    }
+
+    @Test
     @DisplayName("Der ANGREIFER zaehlt, wenn er ein Spieler ist")
     void angreiferIstEinSpieler() {
         // Ueber den Griff und nicht ueber das Ereignis: EntityDamageByEntityEvent bricht
@@ -247,14 +264,23 @@ class MesswacheTest {
     }
 
     /**
-     * Eine Sicht, die nur ihren Spieler kennt - mehr fragt {@link InventoryOpenEvent}
-     * nicht.
+     * Eine Sicht auf diesen Spieler - und auf dieses Inventar.
      *
      * <p>Ein Stellvertreter und kein echtes Inventar: {@code InventoryView} ist eine
-     * Schnittstelle, und ohne Server gibt es keine Umsetzung davon. Was die Wache daraus
-     * liest, ist allein {@code getPlayer()}.
+     * Schnittstelle, und ohne Server gibt es keine Umsetzung davon.
+     *
+     * <p><b>Bis zum 21.11.2026 hat diese Attrappe bei {@code getTopInventory} GEWORFEN</b>,
+     * mit dem Satz "Die Wache darf nur den Spieler fragen". Das war eine Entwurfszusage,
+     * und sie ist mit dem Menuegeruest gefallen: Die Wache MUSS das Inventar ansehen, um
+     * ein Menue des Plugins NICHT als taetige Zeit zu zaehlen. Die Zusage, die geblieben
+     * ist, steht jetzt enger da - gefragt werden darf der Spieler und der HALTER des
+     * Inventars, nichts weiter.
      */
     private static InventoryView sichtAuf(HumanEntity spieler) {
+        return sichtAuf(spieler, inventarMit(null));
+    }
+
+    private static InventoryView sichtAuf(HumanEntity spieler, Inventory oben) {
         return (InventoryView) Proxy.newProxyInstance(
                 MesswacheTest.class.getClassLoader(),
                 new Class<?>[] {InventoryView.class},
@@ -262,12 +288,34 @@ class MesswacheTest {
                     if ("getPlayer".equals(methode.getName())) {
                         return spieler;
                     }
+                    if ("getTopInventory".equals(methode.getName())) {
+                        return oben;
+                    }
                     if ("toString".equals(methode.getName())) {
                         return "Sicht auf " + spieler.getName();
                     }
-                    throw new UnsupportedOperationException("Die Wache darf nur den"
-                            + " Spieler fragen, nicht " + methode.getName());
+                    throw new UnsupportedOperationException("Die Wache darf den Spieler"
+                            + " und den Halter des Inventars fragen, nicht "
+                            + methode.getName());
                 });
     }
+
+    /** Ein Inventar, das nur seinen Halter kennt - mehr fragt die Wache nicht. */
+    private static Inventory inventarMit(Object halter) {
+        return (Inventory) Proxy.newProxyInstance(
+                MesswacheTest.class.getClassLoader(),
+                new Class<?>[] {Inventory.class},
+                (stellvertreter, methode, argumente) -> {
+                    if ("getHolder".equals(methode.getName())) {
+                        return halter;
+                    }
+                    if ("toString".equals(methode.getName())) {
+                        return "Inventar von " + halter;
+                    }
+                    throw new UnsupportedOperationException("Die Wache fragt ein Inventar"
+                            + " nur nach seinem Halter, nicht nach " + methode.getName());
+                });
+    }
+
 
 }

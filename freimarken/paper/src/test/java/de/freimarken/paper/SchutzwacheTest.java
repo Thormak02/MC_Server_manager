@@ -203,10 +203,10 @@ class SchutzwacheTest {
         // Bild - und wer einen der vier Zweige vertauscht, bricht diesen hier,
         // ohne den anderen anzufassen.
         assertEquals(List.of(
-                "&eDiese Parzelle ist frei - /parzelle nehmen",
-                "&eWeg und Mauer gehoeren allen",
-                "&eHier endet die Marktstadt",
-                "&cDiese Parzelle gehoert &fBert"), gefunden,
+                "&#e3c57eDiese Parzelle ist frei - /parzelle nehmen",
+                "&#e3c57eWeg und Mauer gehoeren allen",
+                "&#e3c57eHier endet die Marktstadt",
+                "&#d9564dDiese Parzelle gehoert &#edf1f3Bert"), gefunden,
                 "Die Reihenfolge ist die der vier Lagen: freie Parzelle, Weg,"
                         + " jenseits der Grenze, fremder Besitz. Ein Tausch"
                         + " zwischen zwei Lagen laesst jede Zahltafel"

@@ -305,7 +305,7 @@ class AufrufstelleTest {
         // Component.text(...) ohne Farbe laesst sich hier senden, ohne dass eines der
         // Tore in GrenzeTest rot wird - dieser Vergleich faengt es, weil er das Bild
         // nennt und nicht nur die Zahl.
-        assertEquals("&cParzellen gibt es nur in der Marktstadt.\n", mitschrift());
+        assertEquals("&#d9564dParzellen gibt es nur in der Marktstadt.\n", mitschrift());
     }
 
     @Test
@@ -318,8 +318,8 @@ class AufrufstelleTest {
                 .forEach(anna(auf(0, 0))::sendMessage);
 
         assertEquals("""
-                &7Du hast &610.025.000 Mark&7.
-                &8/mark verlauf zeigt die letzten Buchungen.
+                &#a5b4bfDu hast &#c6a15b10.025.000 Mark&#a5b4bf.
+                &#6e7a82/mark verlauf zeigt die letzten Buchungen.
                 """, mitschrift());
     }
 
@@ -333,8 +333,8 @@ class AufrufstelleTest {
         // Ordnung. Zwei verschiedene Zahlen, und eine davon negativ - mit 0/0 waere der
         // Tausch unsichtbar.
         assertEquals("""
-                &6Parzelle 3/-4
-                &7  frei · &agratis&8 · /parzelle nehmen
+                &#c6a15bParzelle 3/-4
+                &#a5b4bf  frei · &#73bf96gratis&#6e7a82 · /parzelle nehmen
                 """, mitschrift());
     }
 
@@ -342,7 +342,7 @@ class AufrufstelleTest {
     @DisplayName("34d - Zweig info auf dem Weg und auf einer fremden Parzelle")
     void infoAufWegUndFremd() {
         befehle.zeigeInfo(anna(aufDemWeg(0, 0)));
-        assertEquals("&7Du stehst auf einem Weg - der gehoert allen.\n", mitschrift());
+        assertEquals("&#a5b4bfDu stehst auf einem Weg - der gehoert allen.\n", mitschrift());
     }
 
     @Test
@@ -350,16 +350,16 @@ class AufrufstelleTest {
     void nehmenErstGratisDannBezahlt() {
         befehle.nehmen(anna(auf(1, 1)));
         assertEquals("""
-                &aParzelle 1/1 gehoert jetzt dir
-                &7  Die erste ist gratis.
+                &#73bf96Parzelle 1/1 gehoert jetzt dir
+                &#a5b4bf  Die erste ist gratis.
                 """, mitschrift());
 
         befehle.nehmen(anna(auf(2, 1)));
         // Der Rest kommt aus der Kasse und nicht aus einer Null am Sendeort: Wer die
         // Wache in nehmenErteiltZeilen fasst, liest hier eine 0.
         assertEquals("""
-                &aParzelle 2/1 gehoert jetzt dir
-                &7  Bezahlt: 25.000 Mark · Rest: 9.975.000 Mark
+                &#73bf96Parzelle 2/1 gehoert jetzt dir
+                &#a5b4bf  Bezahlt: 25.000 Mark · Rest: 9.975.000 Mark
                 """, mitschrift());
     }
 
@@ -375,8 +375,8 @@ class AufrufstelleTest {
         }
         befehle.nehmen(anna(auf(1, 4)));
         assertEquals("""
-                &cDu hast schon 7 Parzellen - mehr erlaubt dein Rang nicht.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDu hast schon 7 Parzellen - mehr erlaubt dein Rang nicht.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 """, mitschrift());
     }
 
@@ -395,14 +395,14 @@ class AufrufstelleTest {
         // gewaehlt, las der Eigentuemer "Das ist nicht deine Parzelle." und suchte den
         // Eigentuemer seiner eigenen Parzelle.
         befehle.warneVorAufgeben(anna(auf(1, 0)));
-        assertEquals("&cDie Parzelle gehoert zu einer Gruppe - erst /parzelle"
+        assertEquals("&#d9564dDie Parzelle gehoert zu einer Gruppe - erst /parzelle"
                 + " auftrennen.\n", mitschrift());
 
         // Und die fremde Parzelle bekommt den anderen Satz - sonst waere die Zeile
         // darueber auch mit dem falschen Schluessel gruen.
         nimm(BERT, 5, 5);
         befehle.warneVorAufgeben(anna(auf(5, 5)));
-        assertEquals("&cDas ist nicht deine Parzelle.\n", mitschrift());
+        assertEquals("&#d9564dDas ist nicht deine Parzelle.\n", mitschrift());
     }
 
     @Test
@@ -412,19 +412,19 @@ class AufrufstelleTest {
 
         befehle.warneVorAufgeben(anna(auf(3, -4)));
         assertEquals("""
-                &eParzelle 3/-4 aufgeben?
-                &7  Es gibt kein Geld zurueck, und gebaut bleibt stehen.
-                &c  /parzelle aufgeben bestaetigen 3 -4
+                &#e3c57eParzelle 3/-4 aufgeben?
+                &#a5b4bf  Es gibt kein Geld zurueck, und gebaut bleibt stehen.
+                &#d9564d  /parzelle aufgeben bestaetigen 3 -4
                 """, mitschrift());
 
         // Die Nummer im Befehl zeigt woandershin - dann geschieht nichts, und die Tat,
         // die ausblieb, ist die dieses Zweiges.
         befehle.aufgeben(anna(auf(3, -4)), 3, -5);
-        assertEquals("&cDu stehst nicht auf Parzelle 3/-5. Nichts aufgegeben.\n",
+        assertEquals("&#d9564dDu stehst nicht auf Parzelle 3/-5. Nichts aufgegeben.\n",
                 mitschrift());
 
         befehle.aufgeben(anna(auf(3, -4)), 3, -4);
-        assertEquals("&aParzelle 3/-4 ist wieder frei.\n", mitschrift());
+        assertEquals("&#73bf96Parzelle 3/-4 ist wieder frei.\n", mitschrift());
     }
 
     @Test
@@ -435,12 +435,12 @@ class AufrufstelleTest {
 
         befehle.warneVorZusammenlegen(anna(auf(0, 0)), Richtung.OST);
         assertEquals("""
-                &eParzelle 0/0 mit 1/0 zusammenlegen?
-                &7  Gebuehr: &620.000 Mark&7 · du hast 9.975.000 Mark
-                &7  Der Weg dazwischen wird dein Bauland.
-                &7  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
-                &7  darauf steht.
-                &e  /parzelle zusammenlegen ost bestaetigen 0 0
+                &#e3c57eParzelle 0/0 mit 1/0 zusammenlegen?
+                &#a5b4bf  Gebuehr: &#c6a15b20.000 Mark&#a5b4bf · du hast 9.975.000 Mark
+                &#a5b4bf  Der Weg dazwischen wird dein Bauland.
+                &#a5b4bf  Beim Auftrennen kommt er zurueck - und raeumt alles weg, was dann
+                &#a5b4bf  darauf steht.
+                &#e3c57e  /parzelle zusammenlegen ost bestaetigen 0 0
                 """, mitschrift());
 
         befehle.zusammenlegen(anna(auf(0, 0)), Richtung.OST, 0, 0);
@@ -450,9 +450,9 @@ class AufrufstelleTest {
         // auf eine reine Methode faellt darueber, weil beide Woerter dort als Wert
         // hereinkommen.
         assertEquals("""
-                &aEin Grundstueck aus 2 Feldern.
-                &7  Bezahlt: 20.000 Mark · Rest: 9.955.000 Mark
-                &7  Der Weg dazwischen ist Bauland (596 Bloecke geaendert).
+                &#73bf96Ein Grundstueck aus 2 Feldern.
+                &#a5b4bf  Bezahlt: 20.000 Mark · Rest: 9.955.000 Mark
+                &#a5b4bf  Der Weg dazwischen ist Bauland (596 Bloecke geaendert).
                 """, mitschrift());
     }
 
@@ -468,17 +468,17 @@ class AufrufstelleTest {
 
         befehle.warneVorAuftrennen(anna(auf(0, 0)));
         assertEquals("""
-                &eGrundstueck aus 2 Feldern ganz auftrennen?
-                &7  ALLE Wege zwischen den Feldern kommen zurueck. Geld gibt es keines zurueck.
-                &7  Fuer ein einzelnes Feld: stell dich darauf und nimm /parzelle auftrennen ohne "alles".
-                &7  Auf der Wegflaeche steht nichts - es geht nichts verloren.
-                &c  /parzelle auftrennen alles bestaetigen 0 0
+                &#e3c57eGrundstueck aus 2 Feldern ganz auftrennen?
+                &#a5b4bf  ALLE Wege zwischen den Feldern kommen zurueck. Geld gibt es keines zurueck.
+                &#a5b4bf  Fuer ein einzelnes Feld: stell dich darauf und nimm /parzelle auftrennen ohne "alles".
+                &#a5b4bf  Auf der Wegflaeche steht nichts - es geht nichts verloren.
+                &#d9564d  /parzelle auftrennen alles bestaetigen 0 0
                 """, mitschrift());
 
         befehle.auftrennen(anna(auf(0, 0)), 0, 0);
         assertEquals("""
-                &aAufgetrennt - 2 eigenstaendige Parzellen.
-                &7  Der Weg ist zurueck (596 Bloecke geaendert).
+                &#73bf96Aufgetrennt - 2 eigenstaendige Parzellen.
+                &#a5b4bf  Der Weg ist zurueck (596 Bloecke geaendert).
                 """, mitschrift());
     }
 
@@ -506,8 +506,8 @@ class AufrufstelleTest {
 
         befehle.warneVorZusammenlegen(anna(auf(GRUPPENFELDER - 1, 0)), Richtung.OST);
         assertEquals("""
-                &cDein Rang erlaubt hoechstens 3 Felder je Gruppe.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt hoechstens 3 Felder je Gruppe.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 """, mitschrift());
 
         // UND DERSELBE BESCHEID DURCH absage(). Der Zweig darueber faengt
@@ -519,8 +519,8 @@ class AufrufstelleTest {
         befehle.zusammenlegen(anna(auf(GRUPPENFELDER - 1, 0)), Richtung.OST,
                 GRUPPENFELDER - 1, 0);
         assertEquals("""
-                &cDein Rang erlaubt hoechstens 3 Felder je Gruppe.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDein Rang erlaubt hoechstens 3 Felder je Gruppe.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 """, mitschrift());
 
         // Und die andere Haelfte derselben Zahlenwahl: derselbe Weg mit einem Bescheid,
@@ -533,8 +533,8 @@ class AufrufstelleTest {
         gesendet.clear();
         befehle.aufgeben(anna(auf(0, 5)), 0, 5);
         assertEquals("""
-                &cDiese Parzelle gehoert noch niemandem - aber dein Rang erlaubt 7 Parzellen, und so viele hast du schon.
-                &eMehr erlaubt ein hoeherer Rang.
+                &#d9564dDiese Parzelle gehoert noch niemandem - aber dein Rang erlaubt 7 Parzellen, und so viele hast du schon.
+                &#e3c57eMehr erlaubt ein hoeherer Rang.
                 """, mitschrift());
     }
 
@@ -547,10 +547,10 @@ class AufrufstelleTest {
 
         befehle.zeigeListe(anna(auf(0, 0)));
         assertEquals("""
-                &6Deine Parzellen (2 von 7)
-                &7  0/0 · gratis
-                &7  1/2 · 25.000 Mark
-                &8Die naechste kostet 50.000 Mark
+                &#c6a15bDeine Parzellen (2 von 7)
+                &#a5b4bf  0/0 · gratis
+                &#a5b4bf  1/2 · 25.000 Mark
+                &#6e7a82Die naechste kostet 50.000 Mark
                 """, mitschrift());
     }
 
@@ -586,11 +586,11 @@ class AufrufstelleTest {
         // tauscht, laesst Anna "Angefragt bei Anna" lesen und Bert "Bert moechte zu dir
         // kommen" - die Empfaenger bleiben dabei richtig, und das ist alles, was
         // GrenzeTest 31e sieht.
-        assertEquals("&7Angefragt bei Bert - er oder sie muss zustimmen.\n",
+        assertEquals("&#a5b4bfAngefragt bei Bert - er oder sie muss zustimmen.\n",
                 mitschrift(annaLiest));
         assertEquals("""
-                &6Anna moechte zu dir kommen.
-                &7/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
+                &#c6a15bAnna moechte zu dir kommen.
+                &#a5b4bf/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
                 """, mitschrift(bertLiest));
 
         // /tpahere: EIN anderer Satz an den Angefragten, und der Fragende liest weiter
@@ -598,11 +598,11 @@ class AufrufstelleTest {
         // ist eine der zwei Zeilen hier rot.
         AnfragenBefehle.sendeStellen(sprache, anna, bert, Anfragen.Richtung.HIERHER);
 
-        assertEquals("&7Angefragt bei Bert - er oder sie muss zustimmen.\n",
+        assertEquals("&#a5b4bfAngefragt bei Bert - er oder sie muss zustimmen.\n",
                 mitschrift(annaLiest));
         assertEquals("""
-                &6Anna laedt dich ein zu kommen.
-                &7/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
+                &#c6a15bAnna laedt dich ein zu kommen.
+                &#a5b4bf/tpaccept zum Annehmen, /tpdeny zum Ablehnen. Die Anfrage laeuft nach einer Minute ab.
                 """, mitschrift(bertLiest));
     }
 
@@ -621,16 +621,16 @@ class AufrufstelleTest {
         assertEquals(1, bertLiest.size(), "bei Null wartenden Anfragen liest der Annehmer"
                 + " GENAU seine eine Zeile - eine zweite waere ein Hinweis auf nichts");
         assertEquals(1, annaLiest.size(), "der Fragende liest genau seine Quittung");
-        assertEquals("&aAnna kommt zu dir.\n", mitschrift(bertLiest));
-        assertEquals("&aBert hat angenommen - du kommst.\n", mitschrift(annaLiest));
+        assertEquals("&#73bf96Anna kommt zu dir.\n", mitschrift(bertLiest));
+        assertEquals("&#73bf96Bert hat angenommen - du kommst.\n", mitschrift(annaLiest));
 
         // /tpahere: dieselben zwei Spieler, dieselben zwei Empfaenger - aber der Annehmer
         // wandert selbst. Vier Faelle, vier Saetze; dass es wirklich vier verschiedene
         // sind, haelt SendewegTest 33ab.
         AnfragenBefehle.sendeAnnahme(sprache, bert, anna, true, 0L);
 
-        assertEquals("&aDu kommst zu Anna.\n", mitschrift(bertLiest));
-        assertEquals("&aBert hat angenommen und kommt zu dir.\n", mitschrift(annaLiest));
+        assertEquals("&#73bf96Du kommst zu Anna.\n", mitschrift(bertLiest));
+        assertEquals("&#73bf96Bert hat angenommen und kommt zu dir.\n", mitschrift(annaLiest));
 
         // GENAU EINE weitere Anfrage - der Fall, den die Wache festhalten muss. Auf
         // "weitere > 1" geaendert erfaehrt Bert nichts von ihr und laesst sie ablaufen,
@@ -643,10 +643,10 @@ class AufrufstelleTest {
         assertEquals(1, annaLiest.size(), "der Fragende liest nur seine Quittung - wie"
                 + " viele Anfragen an BERT noch offen sind, geht ihn nichts an");
         assertEquals("""
-                &aAnna kommt zu dir.
-                &7Es warten noch 1 Anfrage.
+                &#73bf96Anna kommt zu dir.
+                &#a5b4bfEs warten noch 1 Anfrage.
                 """, mitschrift(bertLiest));
-        assertEquals("&aBert hat angenommen - du kommst.\n", mitschrift(annaLiest));
+        assertEquals("&#73bf96Bert hat angenommen - du kommst.\n", mitschrift(annaLiest));
     }
 
     @Test
@@ -661,14 +661,14 @@ class AufrufstelleTest {
         // Zeile an den Fragenden waere ein neuer Satz und kein Umzug.
         AnfragenBefehle.sendeAblehnung(sprache, bert, 2L);
 
-        assertEquals("&72 Anfragen abgelehnt.\n", mitschrift(bertLiest));
+        assertEquals("&#a5b4bf2 Anfragen abgelehnt.\n", mitschrift(bertLiest));
         assertEquals("", mitschrift(annaLiest));
 
         // Die Null ist KEIN stummer Fall: Gesendet wird in beiden Faellen, nur ein
         // anderer Satz - die Wache dafuer steht in lehneAbZeilen und nicht hier.
         AnfragenBefehle.sendeAblehnung(sprache, bert, 0L);
 
-        assertEquals("&7Es fragt niemand.\n", mitschrift(bertLiest));
+        assertEquals("&#a5b4bfEs fragt niemand.\n", mitschrift(bertLiest));
         assertEquals("", mitschrift(annaLiest));
 
         // Und derselbe Weg mit dem ANDEREN Spieler als Ablehnendem. Das prueft das
@@ -677,7 +677,7 @@ class AufrufstelleTest {
         // nun Anna und Bert nichts, also sind sie wirklich getrennt.
         AnfragenBefehle.sendeAblehnung(sprache, anna, 1L);
 
-        assertEquals("&71 Anfrage abgelehnt.\n", mitschrift(annaLiest));
+        assertEquals("&#a5b4bf1 Anfrage abgelehnt.\n", mitschrift(annaLiest));
         assertEquals("", mitschrift(bertLiest));
     }
 
@@ -718,7 +718,7 @@ class AufrufstelleTest {
         // nicht der Spielfall.
         Reise.sendeSchonDa(sprache, anna, NAME_BERT);
 
-        assertEquals("&7Du bist schon in Bert.\n", mitschrift(annaLiest));
+        assertEquals("&#a5b4bfDu bist schon in Bert.\n", mitschrift(annaLiest));
         assertEquals("", mitschrift(bertLiest), "aus diesen zwei Dateien liest der"
                 + " Bleibende NICHTS - eine Zeile an ihn waere ein neuer Satz");
 
@@ -727,7 +727,7 @@ class AufrufstelleTest {
         // Grund, warum der Platzhalter nicht {welt} heisst.
         Reise.sendeKeinPlatzAmErscheinungspunkt(sprache, anna, "kornmark");
 
-        assertEquals("&cIn kornmark ist am Erscheinungspunkt kein Platz zum Stehen. Das"
+        assertEquals("&#d9564dIn kornmark ist am Erscheinungspunkt kein Platz zum Stehen. Das"
                 + " ist nichts, was du beheben kannst - melde es.\n",
                 mitschrift(annaLiest));
         assertEquals("", mitschrift(bertLiest));
@@ -736,7 +736,7 @@ class AufrufstelleTest {
         // darum mit der Wendung von /zurueck geprueft.
         Reise.sendeNichtGeklappt(sprache, anna, "deinen letzten Ort");
 
-        assertEquals("&cDie Reise nach deinen letzten Ort hat nicht geklappt.\n",
+        assertEquals("&#d9564dDie Reise nach deinen letzten Ort hat nicht geklappt.\n",
                 mitschrift(annaLiest));
         assertEquals("", mitschrift(bertLiest));
 
@@ -745,7 +745,7 @@ class AufrufstelleTest {
         // Mitschriften darueber kein Befund.
         Reise.sendeSchonDa(sprache, bert, NAME_ANNA);
 
-        assertEquals("&7Du bist schon in Anna.\n", mitschrift(bertLiest));
+        assertEquals("&#a5b4bfDu bist schon in Anna.\n", mitschrift(bertLiest));
         assertEquals("", mitschrift(annaLiest));
     }
 
@@ -762,13 +762,13 @@ class AufrufstelleTest {
         Aufwaermzeit.sendeWartezeit(sprache, anna, Aufwaermzeit.DAUER.toSeconds(),
                 NAME_BERT);
 
-        assertEquals("&7Nach 3 Sekunden geht es nach Bert - bis dahin stehen bleiben.\n",
+        assertEquals("&#a5b4bfNach 3 Sekunden geht es nach Bert - bis dahin stehen bleiben.\n",
                 mitschrift(annaLiest));
         assertEquals("", mitschrift(bertLiest));
 
         Aufwaermzeit.sendeWartezeit(sprache, anna, 10L, NAME_BERT);
 
-        assertEquals("&7Nach 10 Sekunden geht es nach Bert - bis dahin stehen bleiben.\n",
+        assertEquals("&#a5b4bfNach 10 Sekunden geht es nach Bert - bis dahin stehen bleiben.\n",
                 mitschrift(annaLiest));
 
         // Beide Abbruchgruende, und beide an den Reisenden. Der Bleibende erfaehrt nichts
@@ -776,14 +776,14 @@ class AufrufstelleTest {
         Aufwaermzeit.sendeAbbruch(sprache, anna, Aufwaermzeit.Abbruchgrund.BEWEGT,
                 NAME_BERT);
 
-        assertEquals("&cBewegt - die Reise nach Bert ist abgebrochen.\n",
+        assertEquals("&#d9564dBewegt - die Reise nach Bert ist abgebrochen.\n",
                 mitschrift(annaLiest));
         assertEquals("", mitschrift(bertLiest));
 
         Aufwaermzeit.sendeAbbruch(sprache, anna, Aufwaermzeit.Abbruchgrund.SCHADEN,
                 NAME_BERT);
 
-        assertEquals("&cSchaden genommen - die Reise nach Bert ist abgebrochen.\n",
+        assertEquals("&#d9564dSchaden genommen - die Reise nach Bert ist abgebrochen.\n",
                 mitschrift(annaLiest));
         assertEquals("", mitschrift(bertLiest));
 
@@ -791,7 +791,7 @@ class AufrufstelleTest {
         Aufwaermzeit.sendeAbbruch(sprache, bert, Aufwaermzeit.Abbruchgrund.SCHADEN,
                 NAME_ANNA);
 
-        assertEquals("&cSchaden genommen - die Reise nach Anna ist abgebrochen.\n",
+        assertEquals("&#d9564dSchaden genommen - die Reise nach Anna ist abgebrochen.\n",
                 mitschrift(bertLiest));
         assertEquals("", mitschrift(annaLiest));
     }
@@ -825,15 +825,15 @@ class AufrufstelleTest {
 
         befehle.zeigeZiele(anna);
 
-        assertEquals("&6Reiseziele\n"
-                + "&bmarktstadt  kornmark  nether\n"
-                + "&7/warp <ziel> - oder durch ein Tor am Bundesmarkt.\n",
+        assertEquals("&#c6a15bReiseziele\n"
+                + "&#edf1f3marktstadt  kornmark  nether\n"
+                + "&#a5b4bf/warp <ziel> - oder durch ein Tor am Bundesmarkt.\n",
                 mitschrift());
 
         befehle.reiseAn(anna, "mordor");
 
-        assertEquals("&cDorthin geht keine Reise: mordor\n"
-                + "&7Moeglich sind: marktstadt, kornmark, nether\n", mitschrift());
+        assertEquals("&#d9564dDorthin geht keine Reise: mordor\n"
+                + "&#a5b4bfMoeglich sind: marktstadt, kornmark, nether\n", mitschrift());
 
         // GROSS getippt, und das ist der Zweck dieser Zeile: aufgeloest() nimmt jede
         // Schreibweise an und gibt den KLEINEN Namen aus der config.yml zurueck. Im
@@ -844,7 +844,7 @@ class AufrufstelleTest {
         // darum steht hier KORNMARK und nicht kornmark.
         befehle.reiseAn(anna, "KORNMARK");
 
-        assertEquals("&cDie Welt kornmark gibt es gerade nicht.\n", mitschrift(),
+        assertEquals("&#d9564dDie Welt kornmark gibt es gerade nicht.\n", mitschrift(),
                 "KLEIN geschrieben, obwohl GROSS getippt wurde - genannt wird der Name"
                         + " aus der config.yml und nicht die Eingabe. Steht hier"
                         + " dagegen GAR NICHTS, dann sendet der Zweig den Satz"
@@ -872,7 +872,7 @@ class AufrufstelleTest {
 
         befehle.fuehreZurueck(anna);
 
-        assertEquals("&7Es ist kein Ort gemerkt - du bist noch nirgends gewesen, wohin"
+        assertEquals("&#a5b4bfEs ist kein Ort gemerkt - du bist noch nirgends gewesen, wohin"
                 + " es zurueckgeht.\n", mitschrift());
 
         befehle.fuehreZurueck("die Konsole");

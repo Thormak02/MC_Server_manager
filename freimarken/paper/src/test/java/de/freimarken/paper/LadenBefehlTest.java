@@ -355,7 +355,7 @@ class LadenBefehlTest {
     void abholfachLeer() throws Exception {
         probe().tippe("laden abholfach", anna);
 
-        assertEquals(List.of("&7Dein Abholfach ist leer."), gelesen());
+        assertEquals(List.of("&#a5b4bfDein Abholfach ist leer."), gelesen());
     }
 
     @Test
@@ -369,7 +369,7 @@ class LadenBefehlTest {
 
         probe().tippe("laden abholfach", ohneMietrecht);
 
-        assertEquals(List.of("&7Dein Abholfach ist leer."), ohneMietrecht.chatBild());
+        assertEquals(List.of("&#a5b4bfDein Abholfach ist leer."), ohneMietrecht.chatBild());
     }
 
     @Test
@@ -381,7 +381,7 @@ class LadenBefehlTest {
 
         probe().tippe("laden abholfach", anna);
 
-        assertEquals(List.of("&7Dein Abholfach ist leer."), gelesen());
+        assertEquals(List.of("&#a5b4bfDein Abholfach ist leer."), gelesen());
     }
 
     @Test
@@ -398,7 +398,7 @@ class LadenBefehlTest {
 
         probe().tippe("laden abholfach", anna);
 
-        assertEquals(List.of("&cNicht herausgegeben: 1 Stapel. Das bleibt liegen -"
+        assertEquals(List.of("&#d9564dNicht herausgegeben: 1 Stapel. Das bleibt liegen -"
                 + " bitte sag es dem Team."), gelesen());
         assertEquals(1, fach.anzahlFuer(anna.kennung()), "der Stapel liegt noch da");
     }
@@ -415,7 +415,7 @@ class LadenBefehlTest {
         probe().tippe("laden", anna);
 
         List<String> bild = gelesen();
-        assertEquals("&7Abholfach: 2 Stapel. /laden abholfach holt sie.",
+        assertEquals("&#a5b4bfAbholfach: 2 Stapel. /laden abholfach holt sie.",
                 bild.get(bild.size() - 1), bild.toString());
         // Und die Standzeile steht DAVOR - zwei Dinge in einer festen Reihenfolge.
         assertTrue(bild.get(bild.size() - 2).contains("noch keinen Laden"),

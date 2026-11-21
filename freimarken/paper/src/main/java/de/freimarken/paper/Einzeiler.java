@@ -58,6 +58,7 @@ final class Einzeiler {
             MarktSatz.DECKEL_UNLESBAR, MarktSatz.FREI, MarktSatz.GESTOERT,
             MarktSatz.KEINE_SEITE, MarktSatz.KOPF, MarktSatz.LEER, MarktSatz.OHNE_DECKEL,
             MarktSatz.WEITER, MarktSatz.ZEILE,
+            MenueSatz.GESTOERT, MenueSatz.KEINE_KONSOLE, MenueSatz.KLICK,
             MietSatz.ABHOLFACH_BLEIBT, MietSatz.ABHOLFACH_GEHOLT,
             MietSatz.ABHOLFACH_KEIN_PLATZ, MietSatz.ABHOLFACH_LEER, MietSatz.ABHOLFACH_STAND,
             MietSatz.ABHOLFACH_UNLESBAR, MietSatz.GEKUENDIGT, MietSatz.GEKUENDIGT_KAUTION,
@@ -71,6 +72,10 @@ final class Einzeiler {
             RangSatz.SCHAU_FUSS, RangSatz.SCHAU_JETZT, RangSatz.SCHAU_KOPF,
             RangSatz.SCHAU_NAECHSTE, RangSatz.SCHAU_STAND_ERFUELLT, RangSatz.SCHAU_STAND_OFFEN,
             RangSatz.SCHAU_UNBEKANNT,
+            // Die Regeln [21.11.2026]: Kopf und Knopf gehen in den Titel und auf den
+            // Knopf des Fensters, und beides nimmt EIN Component. Der TEXT steht
+            // ausdruecklich nicht hier - er darf und soll mehrzeilig sein.
+            RegelnSatz.KNOPF, RegelnSatz.KOPF,
             ShopSatz.SHOP_ABGEBAUT, ShopSatz.SHOP_ANGELEGT, ShopSatz.SHOP_ANGELEGT_BUND,
             ShopSatz.SHOP_FREIGABEN_KOPF, ShopSatz.SHOP_FREIGABEN_LEER,
             ShopSatz.SHOP_FREIGABEN_ZEILE, ShopSatz.SHOP_LISTE_KOPF,
@@ -82,6 +87,41 @@ final class Einzeiler {
             TruheSatz.BEHALTEN, TruheSatz.BESETZT, TruheSatz.DECKEL, TruheSatz.GESTOERT,
             TruheSatz.OFFEN, TruheSatz.OFFEN_FREI, TruheSatz.VERBOTEN, TruheSatz.ZURUECK,
             WerderSatz.LEER, WerderSatz.ZEILE);
+
+
+    /**
+     * Die Saetze, die das Programm nur ueber eine VARIABLE holt - und auch sie muessen
+     * genau eine Zeile sein.
+     *
+     * <p><b>Warum sie nicht in {@link #CHATZEILEN} stehen koennen:</b> Jene Liste wird
+     * gegen die Holstellen des Quelltextes gehalten ({@code VorlageTest} 10j), und eine
+     * Holstelle wie {@code sprache.eineZeile(eintrag.name(), ...)} nennt keinen Satz -
+     * sie nennt ein Feld. Ein Eintrag dort waere fuer jene Tafel ein Eintrag ohne
+     * Holstelle.
+     *
+     * <p><b>Warum die Menge trotzdem genau bekannt ist:</b> Durch jene Variablen laufen
+     * ausschliesslich die Saetze einer {@link Menuetafel}, und eine Tafel traegt nur
+     * {@link MenueSatz}-Konstanten. Was hier stehen MUSS, ist damit abzaehlbar: Titel,
+     * Name und Erklaerung jedes Eintrags. Tafel 10j prueft beide Richtungen - kein
+     * MenueSatz dieser Art ohne Eintrag, kein Eintrag, der kein MenueSatz ist.
+     *
+     * <p>Der Riegel selbst ist derselbe: Eine Umbruchmarke in einem dieser Saetze ist
+     * beim LADEN eine Klage. Im Menue waere sie besonders teuer - ein Wurf beim Bauen des
+     * Gegenstands liesse das Fenster zu, und der Spieler las nur eine rote Zeile.
+     */
+    private static final Set<Satz> UEBER_VARIABLE = Set.of(
+            MenueSatz.TITEL,
+            MenueSatz.PARZELLE_NAME, MenueSatz.PARZELLE_ERKLAERUNG,
+            MenueSatz.MARK_NAME, MenueSatz.MARK_ERKLAERUNG,
+            MenueSatz.RANG_NAME, MenueSatz.RANG_ERKLAERUNG,
+            MenueSatz.BERUF_NAME, MenueSatz.BERUF_ERKLAERUNG,
+            MenueSatz.MARKT_NAME, MenueSatz.MARKT_ERKLAERUNG,
+            MenueSatz.LADEN_NAME, MenueSatz.LADEN_ERKLAERUNG,
+            MenueSatz.FREISTADT_NAME, MenueSatz.FREISTADT_ERKLAERUNG,
+            MenueSatz.WERDER_NAME, MenueSatz.WERDER_ERKLAERUNG,
+            MenueSatz.WOLKE_NAME, MenueSatz.WOLKE_ERKLAERUNG,
+            MenueSatz.HILFE_NAME, MenueSatz.HILFE_ERKLAERUNG,
+            MenueSatz.REGELN_NAME, MenueSatz.REGELN_ERKLAERUNG);
 
     private Einzeiler() {
     }
@@ -95,11 +135,16 @@ final class Einzeiler {
      * Befehl, der in der Hand des Spielers verschwindet.
      */
     static boolean nurEineZeile(Satz schluessel) {
-        return CHATZEILEN.contains(schluessel);
+        return CHATZEILEN.contains(schluessel) || UEBER_VARIABLE.contains(schluessel);
     }
 
     /** Die Liste selbst - fuer die Tafel, die sie gegen den Quelltext haelt. */
     static Set<Satz> chatzeilen() {
         return CHATZEILEN;
+    }
+
+    /** Die Saetze, die nur ueber eine Variable geholt werden - fuer dieselbe Tafel. */
+    static Set<Satz> ueberVariable() {
+        return UEBER_VARIABLE;
     }
 }

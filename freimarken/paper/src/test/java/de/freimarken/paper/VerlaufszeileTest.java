@@ -49,7 +49,7 @@ class VerlaufszeileTest {
 
         // Der Einzug von zwei Leerzeichen und das Grau stehen jetzt im Satz und nicht am
         // Sendeort - darum sind sie Teil dieser Zusicherung.
-        assertEquals("&7  02.11. 14:37  -25.000 Mark  Parzelle genommen"
+        assertEquals("&#a5b4bf  02.11. 14:37  -25.000 Mark  Parzelle genommen"
                 + "  (Stand 25.000 Mark)", bild);
     }
 
@@ -82,10 +82,10 @@ class VerlaufszeileTest {
         // frueh, im Sommer zwei.
         var zeile = buchung(Buchungsgrund.EROEFFNUNG, 50_000L, 50_000L);
 
-        assertTrue(bild(zeile, BERLIN).startsWith("&7  02.11. 14:37"),
+        assertTrue(bild(zeile, BERLIN).startsWith("&#a5b4bf  02.11. 14:37"),
                 bild(zeile, BERLIN));
-        assertTrue(bild(zeile, ZoneId.of("UTC")).startsWith("&7  02.11. 13:37"));
-        assertTrue(bild(zeile, ZoneId.of("Pacific/Auckland")).startsWith("&7  03.11."),
+        assertTrue(bild(zeile, ZoneId.of("UTC")).startsWith("&#a5b4bf  02.11. 13:37"));
+        assertTrue(bild(zeile, ZoneId.of("Pacific/Auckland")).startsWith("&#a5b4bf  03.11."),
                 "jenseits der Datumsgrenze ist es schon der naechste Tag");
     }
 
@@ -98,7 +98,7 @@ class VerlaufszeileTest {
         String bild = bild(buchung(Buchungsgrund.MUENZHAUS_KAUF, -2L, 8L),
                 ZoneId.of("Europe/Berlin"), Buchungsgrund.Buch.GOLDMARK);
 
-        assertEquals("&7  02.11. 14:37  -2 Goldmark  Im Muenzhaus gekauft"
+        assertEquals("&#a5b4bf  02.11. 14:37  -2 Goldmark  Im Muenzhaus gekauft"
                 + "  (Stand 8 Goldmark)", bild);
     }
 

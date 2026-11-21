@@ -259,7 +259,7 @@ class WerderBefehlTest {
         // Angebot unter der Nachricht, nicht davor.
         assertTrue(gelesen().get(gelesen().size() - 2).contains("mehr erlaubt dein Rang"),
                 gelesen().toString());
-        assertEquals("&e" + Wirtschaftswerte.VORGABE_RANG_WERBUNG,
+        assertEquals("&#e3c57e" + Wirtschaftswerte.VORGABE_RANG_WERBUNG,
                 gelesen().get(gelesen().size() - 1),
                 "unter der Absage gehoert hinweise.rang-werbung: " + gelesen());
 

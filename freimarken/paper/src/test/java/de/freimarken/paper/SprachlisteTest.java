@@ -244,12 +244,123 @@ class SprachlisteTest {
     }
 
     @Test
+    @DisplayName("17e - eine eigene Farbe wirkt, und zwar im BILD")
+    void eigeneFarbeWirktImBild() {
+        // Die ganze Kette in einer Probe: Zeile in der Datei -> Leser -> Buch -> Halter
+        // -> Sprache -> Bild. Faellt irgendwo dazwischen die Palette heraus, ist diese
+        // Probe rot - und nur sie: Eine Zeile, die nur den LESER prueft, waere gruen,
+        // auch wenn Sprache weiter mit dem ausgelieferten Leser baut.
+        var gelesen = Sprachliste.ausQuelle(quelle(
+                "farben:",
+                "  warnung: \"#ff0000\""), vorlage());
+
+        assertNotNull(gelesen.buch(), "bekommen: " + gelesen.klagen());
+        assertEquals(0xff0000, gelesen.buch().farben().wert(Farbtafel.WARNUNG));
+        var sprache = new Sprache(new Sprachstand(gelesen.buch()));
+        assertTrue(Sprachprobe.bild(sprache.eineZeile(MarktSatz.GESTOERT,
+                                Einsatz.keine())).startsWith("&#ff0000"),
+                "die eigene Farbe muss im Bild stehen, nicht die ausgelieferte: "
+                        + Sprachprobe.bild(sprache.eineZeile(MarktSatz.GESTOERT,
+                                Einsatz.keine())));
+
+        // Und die anderen sieben bleiben, wie sie waren - wer eine Farbe setzt, soll
+        // nicht sieben andere mitschreiben muessen.
+        assertEquals(Farbtafel.VORGABE.wert(Farbtafel.FLIESSTEXT),
+                gelesen.buch().farben().wert(Farbtafel.FLIESSTEXT));
+    }
+
+    @Test
+    @DisplayName("17f - eine Raute OHNE Anfuehrungszeichen ist eine Klage")
+    void rauteOhneAnfuehrungszeichenIstKlage() {
+        // DIE FALLE, die jeder Betreiber einmal baut: In YAML beginnt eine Raute einen
+        // KOMMENTAR. fliesstext: #a5b4bf hat damit gar keinen Wert - und ohne eigene
+        // Klage faellt die Zeile still auf die Vorgabe zurueck, waehrend der Betreiber
+        // glaubt, er habe die Farbe geaendert.
+        var gelesen = Sprachliste.ausQuelle(quelle(
+                "farben:",
+                "  fliesstext: #a5b4bf"), vorlage());
+
+        assertNull(gelesen.buch(), "eine Klage weist die ganze Datei ab");
+        assertTrue(gelesen.klagen().stream().anyMatch(klage
+                        -> klage.contains("fliesstext")
+                        && klage.contains("Anfuehrungszeichen")),
+                "die Klage muss die Anfuehrungszeichen nennen - das ist die Behebung:"
+                        + " bekommen " + gelesen.klagen());
+    }
+
+    @Test
+    @DisplayName("17g - ein unbrauchbarer Farbwert ist eine Klage, keine stille Vorgabe")
+    void unbrauchbarerFarbwertIstKlage() {
+        // "#-00001" und "#+12345" sind die zwei, die bis zum 21.11.2026 durchkamen:
+        // parseInt nimmt ein Vorzeichen an, und die Zahl lief an der Klage vorbei in
+        // den Riegel der Farbtafel - als Wurf, der das Plugin beim Start abschaltet.
+        for (String wert : java.util.List.of("rot", "#a5b4b", "#a5b4bff", "a5b4bf",
+                "#gggggg", "#-00001", "#+12345")) {
+            var gelesen = Sprachliste.ausQuelle(quelle(
+                    "farben:",
+                    "  kopf: \"" + wert + "\""), vorlage());
+
+            assertNull(gelesen.buch(), wert + " muesste abgewiesen werden");
+            assertTrue(gelesen.klagen().stream().anyMatch(klage -> klage.contains("kopf")),
+                    wert + ": " + gelesen.klagen());
+        }
+
+        // Und die Gegenrichtung: Die richtige Form geht durch. Ohne diese Haelfte waere
+        // auch ein Leser gruen, der JEDEN Wert abweist.
+        var heil = Sprachliste.ausQuelle(quelle(
+                "farben:",
+                "  kopf: \"#010203\""), vorlage());
+        assertEquals(java.util.List.of(), heil.klagen());
+        assertEquals(0x010203, heil.buch().farben().wert(Farbtafel.KOPF));
+    }
+
+    @Test
+    @DisplayName("17h - eine unbekannte Rolle wirkt nicht und sagt es")
+    void unbekannteRolleWirktNicht() {
+        // KEINE Klage, sondern ein Bericht: Eine unbekannte Rolle ist ein Rest aus einer
+        // vorigen Fassung oder ein Tippfehler. Sie darf die ganze Datei nicht aufhalten -
+        // sonst verliert der Betreiber alle seine Saetze wegen einer Farbzeile.
+        var gelesen = Sprachliste.ausQuelle(quelle(
+                "farben:",
+                "  markgold: \"#c6a15b\""), vorlage());
+
+        assertNotNull(gelesen.buch(), "bekommen: " + gelesen.klagen());
+        assertEquals(Farbtafel.VORGABE, gelesen.buch().farben(),
+                "nichts darf sich geaendert haben");
+        assertTrue(gelesen.bericht().stream().anyMatch(zeile
+                        -> zeile.contains("markgold") && zeile.contains("wirkt nicht")),
+                "bekommen: " + gelesen.bericht());
+    }
+
+    @Test
+    @DisplayName("17i - eine Farbzeile ist kein Satz ohne Schluessel")
+    void farbzeileIstKeinSatzOhneSchluessel() {
+        // Vor dem Farbleser waere jede Farbzeile eine Zeile, "die zu keinem Satz dieses
+        // Plugins gehoert" - eine Berichtszeile, die dem Betreiber sagt, seine Farbe
+        // wirke nicht, waehrend sie wirkt. Der Leser nimmt den Block darum VOR den
+        // Saetzen heraus.
+        var gelesen = Sprachliste.ausQuelle(quelle(
+                "farben:",
+                "  geld: \"#010203\""), vorlage());
+
+        assertTrue(gelesen.bericht().stream().noneMatch(zeile
+                        -> zeile.contains("gehoert zu keinem Satz")),
+                "bekommen: " + gelesen.bericht());
+        assertEquals(0x010203, gelesen.buch().farben().wert(Farbtafel.GELD));
+    }
+
+    @Test
     @DisplayName("17b - jedes Tag, das der Leser VERSTEHT, wird auch angenommen")
     void jederTagDenDerLeserVerstehtWirdAngenommen() {
         // Zwei Tore mit zwei Wortschaetzen sind ein Fehler fuer sich: Eine Handliste mit
         // zehn Farben haette <dark_blue> abgewiesen - eine Farbe, die das Plugin kennt -,
         // und der Betreiber haette dabei alle seine anderen Aenderungen verloren.
-        for (String tag : List.of("dark_blue", "light_purple", "#ffaa00", "b", "st")) {
+        // Die acht Rollen stehen MIT in der Liste [21.11.2026]: Sie sind der
+        // Hauptfall, seit jeder Satz der ausgelieferten Datei sie benutzt - und ein
+        // Vorrat, der eine Rolle nicht kennt, wiese die ganze Datei des Betreibers ab.
+        List<String> tags = new java.util.ArrayList<>(Farbtafel.ROLLEN);
+        tags.addAll(List.of("dark_blue", "light_purple", "#ffaa00", "b", "st"));
+        for (String tag : tags) {
             assertTrue(Sprache.VORRAT.has(tag), "der Vorrat kennt <" + tag + "> nicht");
             var gelesen = Sprachliste.ausQuelle(quelle(
                     "mark:",

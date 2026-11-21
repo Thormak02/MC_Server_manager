@@ -489,6 +489,30 @@ class ShopBefehlTest {
     // --- /shop liste [seite] [10.11.2026] -------------------------------------
 
     @Test
+    @DisplayName("/shop allein zeigt dieselbe Liste wie /shop liste")
+    void wurzelZeigtDieListe() throws CommandSyntaxException {
+        // DIE FUSSZEILE VON /hilfe SAGT ES JEDEM ZU: "Jeder Befehl ohne Zusatz zeigt,
+        // was er kann." Bis zum 21.11.2026 stand an der Wurzel von /shop kein executes,
+        // und wer /shop tippte, las Brigadiers englisches "Unknown or incomplete
+        // command" - dieselbe Falle, die /freimarken geld mit drei executes zugemacht
+        // hat.
+        //
+        // ZEILE FUER ZEILE gegen /shop liste und nicht bloss "es kommt etwas": Eine
+        // Wurzel, die eine ANDERE Liste zeigt, waere ein zweiter Weg zur selben Tat.
+        shops.schreibe(annasShopBei(60, "Stein"));
+        Spielerprobe ueberListe = anna();
+        probe().tippe("shop liste", ueberListe);
+        List<String> erwartet = ueberListe.chatBild();
+        assertFalse(erwartet.isEmpty(), "die Liste selbst sendet nichts - dann prueft"
+                + " diese Probe nichts");
+
+        Spielerprobe ueberWurzel = anna();
+        assertEquals(1, probe().tippe("shop", ueberWurzel));
+
+        assertEquals(erwartet, ueberWurzel.chatBild());
+    }
+
+    @Test
     @DisplayName("Ohne eigenen Laden sagt die Liste es - und nennt den Weg zum ersten")
     void leereShoplisteSagtEs() throws CommandSyntaxException {
         // Und zwar OHNE Kopf: Wer eine Ueberschrift ohne Zeilen liest, haelt es fuer

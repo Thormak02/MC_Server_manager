@@ -106,22 +106,50 @@ final class Befehlsprobe {
     }
 
     /**
+     * Tippt den Befehl, waehrend ein ANDERER Spieler ihn ausfuehrt - wie
+     * {@code /execute as <ausfuehrender> run <befehl>} [21.11.2026].
+     *
+     * <p><b>Die Probe, die hier lange fehlte.</b> Im Spiel sind {@code getExecutor} und
+     * {@code getSender} verschieden, sobald ein Befehl ueber {@code /execute as} laeuft.
+     * Ein Zweig, der das eine fragt und das andere beantwortet, laesst einen anderen
+     * lesen als den, der getippt hat - und mit nur einem Spieler in der Quelle war das
+     * nicht zu sehen. Gefunden wurde es in {@code /regeln}: Das Fenster ging an den
+     * Executor, der Rueckfall an den Sender.
+     *
+     * @param tipper        wer getippt hat ({@code getSender}) - er liest die Antwort
+     * @param ausfuehrender wen der Befehl bewegt ({@code getExecutor})
+     */
+    int tippeAls(String befehl, Spielerprobe tipper, Spielerprobe ausfuehrender)
+            throws CommandSyntaxException {
+        return baum.execute(befehl, alsZwei(ausfuehrender.spieler(), tipper.spieler()));
+    }
+
+    /**
      * Die Quelle mit einem Spieler dahinter.
      *
-     * <p>{@code getExecutor} UND {@code getSender} geben denselben Spieler, und das ist
-     * nicht Bequemlichkeit: Im Spiel sind sie verschieden, sobald ein Befehl ueber
-     * {@code /execute as} laeuft, und die Zweige dieses Projekts fragen darum
-     * ausdruecklich den EXECUTOR. Wer das verwechselt, laesst einen Befehl auf einen
-     * anderen Spieler wirken als den, der ihn tippt. Eine Probe, die beide verschieden
-     * besetzt, gehoert dazu - sie ist noch nicht gebaut, und darum steht das hier.
+     * <p>{@code getExecutor} UND {@code getSender} geben denselben Spieler - das ist der
+     * gewoehnliche Fall, in dem jemand selbst tippt. Wer beide verschieden braucht,
+     * nimmt {@link #tippeAls}.
      */
     private static CommandSourceStack alsSpieler(Player spieler) {
+        return alsZwei(spieler, spieler);
+    }
+
+    /**
+     * Die Quelle mit zwei verschiedenen Spielern - Executor und Sender getrennt.
+     *
+     * <p>EINE Stelle fuer beide Faelle: Gaebe es zwei Attrappen, antwortete eines Tages
+     * die eine auf eine Methode, die die andere noch wirft.
+     */
+    private static CommandSourceStack alsZwei(Player ausfuehrender, Player tipper) {
         return (CommandSourceStack) Proxy.newProxyInstance(
                 Befehlsprobe.class.getClassLoader(),
                 new Class<?>[] {CommandSourceStack.class},
                 (eigen, methode, werte) -> switch (methode.getName()) {
-                    case "getExecutor", "getSender" -> spieler;
-                    case "toString" -> "Befehlsquelle " + spieler;
+                    case "getExecutor" -> ausfuehrender;
+                    case "getSender" -> tipper;
+                    case "toString" -> "Befehlsquelle " + tipper + " als "
+                            + ausfuehrender;
                     case "hashCode" -> System.identityHashCode(eigen);
                     case "equals" -> eigen == (werte == null ? null : werte[0]);
                     default -> throw new UnsupportedOperationException(

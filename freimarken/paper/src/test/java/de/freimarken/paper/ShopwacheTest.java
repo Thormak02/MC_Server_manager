@@ -113,7 +113,7 @@ class ShopwacheTest {
         wache.beimOeffnen(ereignis);
 
         assertTrue(ereignis.isCancelled(), "der Deckel MUSS zubleiben");
-        assertEquals(List.of("&cDiese Kiste ist der Shop von &fAnna"),
+        assertEquals(List.of("&#d9564dDiese Kiste ist der Shop von &#edf1f3Anna"),
                 bert.handbalkenBild(),
                 "und er soll lesen, wessen sie ist - sonst haelt er den Server fuer"
                         + " kaputt");
@@ -211,7 +211,7 @@ class ShopwacheTest {
         wache.beimOeffnen(mit);
 
         assertTrue(ohne.isCancelled(), "ohne Bundrecht zu");
-        assertEquals(List.of("&cDas ist ein Shop des Bundes"), bert.handbalkenBild(),
+        assertEquals(List.of("&#d9564dDas ist ein Shop des Bundes"), bert.handbalkenBild(),
                 "und ein eigener Satz, denn ein Bundshop hat keinen Menschen zu nennen");
         assertFalse(mit.isCancelled(), "mit Bundrecht offen");
     }
@@ -271,7 +271,7 @@ class ShopwacheTest {
         wache.beimOeffnen(ereignis);
 
         assertTrue(ereignis.isCancelled(), "bei Zweifel bleibt die Kiste zu");
-        assertEquals(List.of("&cDiese Kiste ist geschuetzt - versuch es noch einmal"),
+        assertEquals(List.of("&#d9564dDiese Kiste ist geschuetzt - versuch es noch einmal"),
                 bert.handbalkenBild(),
                 "und ein eigener Satz: \"der Shop von -\" sieht aus wie ein"
                         + " Programmfehler");

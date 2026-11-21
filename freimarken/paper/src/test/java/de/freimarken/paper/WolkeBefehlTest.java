@@ -252,7 +252,7 @@ class WolkeBefehlTest {
         assertEquals(2, reich.chatBild().size(),
                 "Absage und Werbezeile, keine mehr und keine weniger: "
                         + reich.chatBild());
-        assertEquals("&e" + Wirtschaftswerte.VORGABE_RANG_WERBUNG,
+        assertEquals("&#e3c57e" + Wirtschaftswerte.VORGABE_RANG_WERBUNG,
                 reich.chatBild().get(1),
                 "unter der Absage gehoert hinweise.rang-werbung: "
                         + reich.chatBild());

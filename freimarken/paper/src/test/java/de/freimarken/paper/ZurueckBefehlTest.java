@@ -64,7 +64,7 @@ class ZurueckBefehlTest {
 
         // Aus dem ROTEN Lauf, und gegengelesen gegen die Tafel von BildGleichTest,
         // die denselben Satz ueber den Schluessel holt statt ueber den Befehl.
-        assertEquals(List.of("&7Es ist kein Ort gemerkt - du bist noch nirgends"
+        assertEquals(List.of("&#a5b4bfEs ist kein Ort gemerkt - du bist noch nirgends"
                 + " gewesen, wohin es zurueckgeht."), spieler.chatBild());
     }
 

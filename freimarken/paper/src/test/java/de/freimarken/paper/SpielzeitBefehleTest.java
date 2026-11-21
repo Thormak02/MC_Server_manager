@@ -391,12 +391,12 @@ class SpielzeitBefehleTest {
         SpielzeitBefehle befehle = zehnMinutenGeschrieben();
 
         assertEquals("""
-                &6Deine Spielzeit
-                &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
-                &7  gesamt  10 min
-                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
-                &7  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s.
-                &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
+                &#c6a15bDeine Spielzeit
+                &#a5b4bf  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
+                &#a5b4bf  gesamt  10 min
+                &#a5b4bf  taetig  0 min   (0 min heute, 0 % der Zeit)
+                &#a5b4bf  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s.
+                &#a5b4bf  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
                 gesendetesBild(Spielzeittext.kopfSelbst(sprache), zeilen(befehle)));
     }
 
@@ -406,12 +406,12 @@ class SpielzeitBefehleTest {
         SpielzeitBefehle befehle = zehnMinutenGeschrieben();
 
         assertEquals("""
-                &6Spielzeit von Anna
-                &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
-                &7  gesamt  10 min
-                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
-                &7  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s.
-                &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
+                &#c6a15bSpielzeit von Anna
+                &#a5b4bf  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
+                &#a5b4bf  gesamt  10 min
+                &#a5b4bf  taetig  0 min   (0 min heute, 0 % der Zeit)
+                &#a5b4bf  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s.
+                &#a5b4bf  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
                 gesendetesBild(Spielzeittext.kopfFuer(sprache, "Anna"), zeilen(befehle)));
     }
 
@@ -424,8 +424,8 @@ class SpielzeitBefehleTest {
         // GRAU und MIT Einzug, obwohl es eine Absage ist: Sie steht an der Stelle der vier
         // Zeilen. Nicht zu verwechseln mit 33h, der einzigen roten Zeile dieses Befehls.
         assertEquals("""
-                &6Deine Spielzeit
-                &7  Die Spielzeit ist gerade nicht lesbar - gezaehlt wird trotzdem. Sag einem Operator Bescheid.""",
+                &#c6a15bDeine Spielzeit
+                &#a5b4bf  Die Spielzeit ist gerade nicht lesbar - gezaehlt wird trotzdem. Sag einem Operator Bescheid.""",
                 gesendetesBild(Spielzeittext.kopfSelbst(sprache), zeilen(befehle)));
     }
 
@@ -436,12 +436,12 @@ class SpielzeitBefehleTest {
         SpielzeitBefehle befehle = untaetigSeit(untaetig);
 
         assertEquals("""
-                &6Deine Spielzeit
-                &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
-                &7  gesamt  10 min
-                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
-                &7  wird gerade NICHT gezaehlt - untaetig seit 12 min, gezaehlt wird bis 10 min. Ein Schritt oder ein Tastendruck zaehlt wieder.
-                &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""", gesendetesBild(Spielzeittext.kopfSelbst(sprache),
+                &#c6a15bDeine Spielzeit
+                &#a5b4bf  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
+                &#a5b4bf  gesamt  10 min
+                &#a5b4bf  taetig  0 min   (0 min heute, 0 % der Zeit)
+                &#a5b4bf  wird gerade NICHT gezaehlt - untaetig seit 12 min, gezaehlt wird bis 10 min. Ein Schritt oder ein Tastendruck zaehlt wieder.
+                &#a5b4bf  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""", gesendetesBild(Spielzeittext.kopfSelbst(sprache),
                 befehle.zeilen(ANNA, untaetig, HEUTE, Zeitwerte.VORGABE)));
     }
 
@@ -451,12 +451,12 @@ class SpielzeitBefehleTest {
         SpielzeitBefehle befehle = hinterDerSperre();
 
         assertEquals("""
-                &6Deine Spielzeit
-                &7  heute   2 min   (03.11.2026, Tagesgrenze Europe/Berlin)
-                &7  gesamt  2 min
-                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
-                &7  wird gezaehlt - die letzten 2 min sind noch nicht geschrieben, der naechste Schreibzug wartet auf die Datenbank - gezaehlt wird weiter, nachgeschrieben wird alles.
-                &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
+                &#c6a15bDeine Spielzeit
+                &#a5b4bf  heute   2 min   (03.11.2026, Tagesgrenze Europe/Berlin)
+                &#a5b4bf  gesamt  2 min
+                &#a5b4bf  taetig  0 min   (0 min heute, 0 % der Zeit)
+                &#a5b4bf  wird gezaehlt - die letzten 2 min sind noch nicht geschrieben, der naechste Schreibzug wartet auf die Datenbank - gezaehlt wird weiter, nachgeschrieben wird alles.
+                &#a5b4bf  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
                 gesendetesBild(Spielzeittext.kopfSelbst(sprache), zeilen(befehle)));
     }
 
@@ -470,12 +470,12 @@ class SpielzeitBefehleTest {
         SpielzeitBefehle befehle = zehnMinutenGeschrieben();
 
         assertEquals("""
-                &6Deine Spielzeit
-                &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
-                &7  gesamt  10 min
-                &7  taetig  0 min   (0 min heute, 0 % der Zeit)
-                &7  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s. Abwesenheit zaehlt auf diesem Server mit (zeit.untaetig-minuten: 0).
-                &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""", gesendetesBild(Spielzeittext.kopfSelbst(sprache),
+                &#c6a15bDeine Spielzeit
+                &#a5b4bf  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
+                &#a5b4bf  gesamt  10 min
+                &#a5b4bf  taetig  0 min   (0 min heute, 0 % der Zeit)
+                &#a5b4bf  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s. Abwesenheit zaehlt auf diesem Server mit (zeit.untaetig-minuten: 0).
+                &#a5b4bf  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""", gesendetesBild(Spielzeittext.kopfSelbst(sprache),
                 befehle.zeilen(ANNA, Duration.ZERO, HEUTE, aus)));
     }
 
@@ -484,7 +484,7 @@ class SpielzeitBefehleTest {
     void bildDerKonsolenabsage() {
         // Sie geht nicht durch sende() und stand nie unter einer Ueberschrift. Wer den
         // Einzug mechanisch in alle Saetze schreibt, gibt ihr einen, den sie nie hatte.
-        assertEquals("&7Die Konsole spielt nicht. /freimarken spielzeit <spieler> nennt die Zeit eines anwesenden Spielers.",
+        assertEquals("&#a5b4bfDie Konsole spielt nicht. /freimarken spielzeit <spieler> nennt die Zeit eines anwesenden Spielers.",
                 Sprachprobe.bild(SpielzeitBefehle.keineKonsoleZeilen(sprache)));
     }
 
@@ -495,7 +495,7 @@ class SpielzeitBefehleTest {
         // sei grau und nicht mehr rot - gemeint war 33c, die durch sende() laeuft, nicht
         // diese. Wer die zwei verwechselt, nimmt der Absage, die der Spieler als Fehler
         // lesen soll, ihre Farbe.
-        assertEquals("&cAnna ist nicht da. Gezeigt werden kann nur die Spielzeit eines anwesenden Spielers.",
+        assertEquals("&#d9564dAnna ist nicht da. Gezeigt werden kann nur die Spielzeit eines anwesenden Spielers.",
                 Sprachprobe.bild(SpielzeitBefehle.nichtDaZeilen(sprache, "Anna")));
     }
 
@@ -544,12 +544,12 @@ class SpielzeitBefehleTest {
         SpielzeitBefehle befehle = befehle(ablage, buch(ablage));
 
         assertEquals("""
-                &6Deine Spielzeit
-                &7  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
-                &7  gesamt  20 min
-                &7  taetig  10 min   (4 min heute, 50 % der Zeit)
-                &7  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s.
-                &7  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
+                &#c6a15bDeine Spielzeit
+                &#a5b4bf  heute   10 min   (03.11.2026, Tagesgrenze Europe/Berlin)
+                &#a5b4bf  gesamt  20 min
+                &#a5b4bf  taetig  10 min   (4 min heute, 50 % der Zeit)
+                &#a5b4bf  wird gezaehlt - die letzten 0 s sind noch nicht geschrieben, das geschieht alle 60 s.
+                &#a5b4bf  Gezaehlt wird erst seit dem Einbau dieser Messung - Spielstunden von davor stehen nirgends, jeder faengt bei 0 an.""",
                 gesendetesBild(Spielzeittext.kopfSelbst(sprache), zeilen(befehle)));
     }
 }

@@ -56,13 +56,13 @@ class ShoptextTest {
         List<Component> zeilen = anlageZeilen(shop(ANNA, 16, 100L, 80L));
 
         assertEquals(3, zeilen.size());
-        assertEquals("&aShop angelegt: 16x STONE", bild(zeilen.get(0)));
+        assertEquals("&#73bf96Shop angelegt: 16x STONE", bild(zeilen.get(0)));
         // DIE REIHENFOLGE ist die Zusage: Kauf vor Verkauf, weil das Schild sie so nennt
         // (B vor S). Vertauscht liest ein Spieler den falschen Preis als den, den er
         // bekommt - und die Bildtafel saehe das nicht, denn beide Saetze sind fuer sich
         // richtig.
-        assertEquals("&7Kunden kaufen fuer &f100 Mark&7.", bild(zeilen.get(1)));
-        assertEquals("&7Kunden verkaufen fuer &f80 Mark&7.", bild(zeilen.get(2)));
+        assertEquals("&#a5b4bfKunden kaufen fuer &#edf1f3100 Mark&#a5b4bf.", bild(zeilen.get(1)));
+        assertEquals("&#a5b4bfKunden verkaufen fuer &#edf1f380 Mark&#a5b4bf.", bild(zeilen.get(2)));
     }
 
     @Test
@@ -73,8 +73,8 @@ class ShoptextTest {
         List<Component> zeilen = anlageZeilen(shop(ANNA, 64, 0L, 5L));
 
         assertEquals(2, zeilen.size());
-        assertEquals("&7Kunden verkaufen fuer &f5 Mark&7.", bild(zeilen.get(1)));
-        assertTrue(zeilen.stream().noneMatch(z -> bild(z).contains("kaufen fuer &f0")),
+        assertEquals("&#a5b4bfKunden verkaufen fuer &#edf1f35 Mark&#a5b4bf.", bild(zeilen.get(1)));
+        assertTrue(zeilen.stream().noneMatch(z -> bild(z).contains("kaufen fuer &#edf1f30")),
                 "eine 0 als Preis steht in keiner Zeile");
     }
 
@@ -84,7 +84,7 @@ class ShoptextTest {
         List<Component> zeilen = anlageZeilen(shop(ANNA, 1, 5_000L, 0L));
 
         assertEquals(2, zeilen.size());
-        assertEquals("&7Kunden kaufen fuer &f5.000 Mark&7.", bild(zeilen.get(1)));
+        assertEquals("&#a5b4bfKunden kaufen fuer &#edf1f35.000 Mark&#a5b4bf.", bild(zeilen.get(1)));
     }
 
     @Test
@@ -96,8 +96,8 @@ class ShoptextTest {
         List<Component> zeilen = anlageZeilen(shop(null, 16, 100L, 80L));
 
         assertEquals(4, zeilen.size());
-        assertEquals("&aShop angelegt: 16x STONE", bild(zeilen.get(0)));
-        assertEquals("&6Bundshop: unbegrenzter Vorrat, unbegrenzter Platz,"
+        assertEquals("&#73bf96Shop angelegt: 16x STONE", bild(zeilen.get(0)));
+        assertEquals("&#c6a15bBundshop: unbegrenzter Vorrat, unbegrenzter Platz,"
                 + " unbegrenztes Geld.", bild(zeilen.get(3)));
     }
 
@@ -110,21 +110,21 @@ class ShoptextTest {
         // Eine vertauschte Zuordnung ist zweimal ein richtiger Satz an der falschen
         // Stelle - und ein Spieler, der bei einem Preisfehler "schreib eine Zahl von 1
         // bis 3456" liest, aendert die falsche Zeile.
-        assertEquals("&cZeile 2 ist keine Zahl.",
+        assertEquals("&#d9564dZeile 2 ist keine Zahl.",
                 ersteZeile(Shopschild.Fehler.MENGE_KEINE_ZAHL, 2));
-        assertEquals("&cZeile 2: die Menge geht von 1 bis 3.456.",
+        assertEquals("&#d9564dZeile 2: die Menge geht von 1 bis 3.456.",
                 ersteZeile(Shopschild.Fehler.MENGE_AUSSERHALB, 2));
-        assertEquals("&cZeile 3 ist keine Preiszeile.",
+        assertEquals("&#d9564dZeile 3 ist keine Preiszeile.",
                 ersteZeile(Shopschild.Fehler.PREIS_FORM, 3));
-        assertEquals("&cZeile 3: der Preis ist keine ganze Zahl.",
+        assertEquals("&#d9564dZeile 3: der Preis ist keine ganze Zahl.",
                 ersteZeile(Shopschild.Fehler.PREIS_KEINE_ZAHL, 3));
-        assertEquals("&cZeile 3: der Preis geht von 0 bis 10.000.000.",
+        assertEquals("&#d9564dZeile 3: der Preis geht von 0 bis 10.000.000.",
                 ersteZeile(Shopschild.Fehler.PREIS_AUSSERHALB, 3));
-        assertEquals("&cZeile 3: beide Preise sind 0.",
+        assertEquals("&#d9564dZeile 3: beide Preise sind 0.",
                 ersteZeile(Shopschild.Fehler.PREIS_BEIDE_NULL, 3));
-        assertEquals("&cZeile 3: du kaufst teurer an, als du verkaufst.",
+        assertEquals("&#d9564dZeile 3: du kaufst teurer an, als du verkaufst.",
                 ersteZeile(Shopschild.Fehler.PREIS_VERDREHT, 3));
-        assertEquals("&cZeile 4 ist leer.",
+        assertEquals("&#d9564dZeile 4 ist leer.",
                 ersteZeile(Shopschild.Fehler.WARE_FEHLT, 4));
     }
 
@@ -135,7 +135,7 @@ class ShoptextTest {
         // SignChangeEvent sind immer vier da. Er ist also kein Fall des Spielers, sondern
         // ein Fehler des Programms - und ein eigener Wortlaut dafuer waere ein Satz, den
         // nie jemand liest und den der Betreiber trotzdem uebersetzen muesste.
-        assertEquals("&cDer Shop liess sich nicht anlegen.",
+        assertEquals("&#d9564dDer Shop liess sich nicht anlegen.",
                 ersteZeile(Shopschild.Fehler.KEIN_SCHILD, 0));
     }
 
@@ -150,7 +150,7 @@ class ShoptextTest {
                     absage(fehler, 3), "STEIN");
             assertEquals(2, zeilen.size(), fehler + " muss zwei Zeilen haben:"
                     + " die Absage und die Hilfe");
-            assertTrue(bild(zeilen.get(1)).startsWith("&7"),
+            assertTrue(bild(zeilen.get(1)).startsWith("&#a5b4bf"),
                     fehler + ": die Hilfe ist grau, die Absage rot");
         }
     }
@@ -164,7 +164,7 @@ class ShoptextTest {
         List<Component> zeilen = Shoptext.anlageZeilen(sprache,
                 bescheid(Shopbuch.Bescheid.WARE_UNBEKANNT), "STEIN ");
 
-        assertEquals("&cDen Gegenstand &fSTEIN &c gibt es nicht.", bild(zeilen.get(0)));
+        assertEquals("&#d9564dDen Gegenstand &#edf1f3STEIN &#d9564d gibt es nicht.", bild(zeilen.get(0)));
     }
 
     @Test
@@ -177,25 +177,25 @@ class ShoptextTest {
         Map<Shopbuch.Bescheid, String> erwartet =
                 new EnumMap<>(Shopbuch.Bescheid.class);
         erwartet.put(Shopbuch.Bescheid.KEINE_KISTE,
-                "&cNeben dem Schild steht keine Kiste.");
+                "&#d9564dNeben dem Schild steht keine Kiste.");
         erwartet.put(Shopbuch.Bescheid.FREMDE_KISTE,
-                "&cAn dieser Kiste darfst du nicht.");
+                "&#d9564dAn dieser Kiste darfst du nicht.");
         erwartet.put(Shopbuch.Bescheid.FREMDER_SHOP,
-                "&cAn dieser Kiste haengt schon ein fremder Shop.");
+                "&#d9564dAn dieser Kiste haengt schon ein fremder Shop.");
         erwartet.put(Shopbuch.Bescheid.SCHON_EIN_SHOP,
-                "&cHier haengt schon ein Shop.");
+                "&#d9564dHier haengt schon ein Shop.");
         erwartet.put(Shopbuch.Bescheid.WARE_UNKLAR,
-                "&cDie Kiste sagt nicht, was du handeln willst.");
+                "&#d9564dDie Kiste sagt nicht, was du handeln willst.");
         erwartet.put(Shopbuch.Bescheid.WARE_UNBEKANNT,
-                "&cDen Gegenstand &fSTEIN&c gibt es nicht.");
+                "&#d9564dDen Gegenstand &#edf1f3STEIN&#d9564d gibt es nicht.");
         erwartet.put(Shopbuch.Bescheid.KEIN_BUNDRECHT,
-                "&cBundshops darfst du nicht anlegen.");
+                "&#d9564dBundshops darfst du nicht anlegen.");
         erwartet.put(Shopbuch.Bescheid.KEIN_LADENRECHT,
-                "&cAnnastadt hat noch kein Ladenrecht");
+                "&#d9564dAnnastadt hat noch kein Ladenrecht");
         erwartet.put(Shopbuch.Bescheid.LADENGEBUEHR_ZU_TEUER,
-                "&cEin Laden in dieser Stadt kostet 0 Mark - das hast du nicht.");
+                "&#d9564dEin Laden in dieser Stadt kostet 0 Mark - das hast du nicht.");
         erwartet.put(Shopbuch.Bescheid.GESTOERT,
-                "&cDer Shop liess sich nicht anlegen.");
+                "&#d9564dDer Shop liess sich nicht anlegen.");
 
         erwartet.forEach((bescheid, bild) ->
                 assertEquals(bild, ersteZeileVon(bescheid), bescheid.name()));
@@ -228,8 +228,8 @@ class ShoptextTest {
                 ladenrechtsabsage(Freistadtbuch.Auflage.OHNE_BUERGER), "STEIN");
 
         assertEquals(2, zeilen.size(), "Absage und Hilfe - wie bei jeder Shopabsage");
-        assertEquals("&cAnnastadt hat noch kein Ladenrecht", bild(zeilen.get(0)));
-        assertEquals("&7Es fehlt: ein vergebenes Grundstueck. Bestehende Laeden"
+        assertEquals("&#d9564dAnnastadt hat noch kein Ladenrecht", bild(zeilen.get(0)));
+        assertEquals("&#a5b4bfEs fehlt: ein vergebenes Grundstueck. Bestehende Laeden"
                 + " handeln weiter.", bild(zeilen.get(1)));
     }
 
@@ -266,7 +266,7 @@ class ShoptextTest {
                 Shopbuch.Bescheid.ABGEBAUT, shop(ANNA, 16, 100L, 80L));
 
         assertEquals(1, zeilen.size());
-        assertEquals("&eShop abgebaut: STONE&7 - die Ware bleibt in der Kiste.",
+        assertEquals("&#e3c57eShop abgebaut: STONE&#a5b4bf - die Ware bleibt in der Kiste.",
                 bild(zeilen.get(0)));
     }
 
@@ -319,14 +319,14 @@ class ShoptextTest {
         // vertauscht, nennt an einer Kiste "dieser Shop gehoert" oder an einem Bundshop
         // einen Menschen, den es nicht gibt.
         assertTrue(bild(Shoptext.schutzBalken(sprache, Shoptext.Teil.SCHILD, meiner, "Anna"))
-                .startsWith("&cDieser Shop gehoert &f"));
+                .startsWith("&#d9564dDieser Shop gehoert &#edf1f3"));
         assertTrue(bild(Shoptext.schutzBalken(sprache, Shoptext.Teil.KISTE, meiner, "Anna"))
-                .startsWith("&cDiese Kiste ist der Shop von &f"));
-        assertEquals("&cDas ist ein Shop des Bundes",
+                .startsWith("&#d9564dDiese Kiste ist der Shop von &#edf1f3"));
+        assertEquals("&#d9564dDas ist ein Shop des Bundes",
                 bild(Shoptext.schutzBalken(sprache, Shoptext.Teil.SCHILD, bundes, "Anna")));
-        assertEquals("&cDas ist ein Shop des Bundes",
+        assertEquals("&#d9564dDas ist ein Shop des Bundes",
                 bild(Shoptext.schutzBalken(sprache, Shoptext.Teil.KISTE, bundes, "Anna")));
-        assertEquals("&cDaran haengt ein fremdes Shopschild",
+        assertEquals("&#d9564dDaran haengt ein fremdes Shopschild",
                 bild(Shoptext.schutzBalken(sprache, Shoptext.Teil.TRAEGER, meiner, "Anna")));
     }
 
@@ -336,7 +336,7 @@ class ShoptextTest {
         // Gerufen wird er fuer jeden Block, der ein Shopschild haelt; welcher Shop daran
         // haengt, ist fuer diesen Satz ohne Bedeutung. Ein Wurf hier liesse eine Wache
         // beim Schuetzen sterben, und dann braeche der Block.
-        assertEquals("&cDaran haengt ein fremdes Shopschild",
+        assertEquals("&#d9564dDaran haengt ein fremdes Shopschild",
                 bild(Shoptext.schutzBalken(sprache, Shoptext.Teil.TRAEGER, null, "Anna")));
     }
 
@@ -391,11 +391,11 @@ class ShoptextTest {
     /**
      * Eine Preisform, wie sie WEISS in der Hilfe steht - samt der Farbe dahinter.
      *
-     * <p>Das ist die Einfassung, die aus einem Teilstueck eine Zusage macht: "&fB 100"
-     * allein steht auch in "&fB 100 : S 80", "&fB 100&7" nicht.
+     * <p>Das ist die Einfassung, die aus einem Teilstueck eine Zusage macht: "&#edf1f3B 100"
+     * allein steht auch in "&#edf1f3B 100 : S 80", "&#edf1f3B 100&#a5b4bf" nicht.
      */
     private static String eingefasst(String form) {
-        return "&f" + form + "&7";
+        return "&#edf1f3" + form + "&#a5b4bf";
     }
 
     private static String bild(Component zeile) {
@@ -443,8 +443,8 @@ class ShoptextTest {
         // "B 100" steht als Teilstueck auch in "B 100 : S 80". Eine Zusage, die ihre
         // eigene Verletzung nicht sieht, ist keine.
         //
-        // Mit dem &7 dahinter geht das nicht mehr: "&fB 100&7" steht in
-        // "&fB 100 : S 80&7" nicht.
+        // Mit dem &#a5b4bf dahinter geht das nicht mehr: "&#edf1f3B 100&#a5b4bf" steht in
+        // "&#edf1f3B 100 : S 80&#a5b4bf" nicht.
         assertTrue(hilfe.contains(eingefasst(beide)),
                 "die Hilfe muss \"" + beide + "\" nennen - das ist die Form, die"
                         + " preistext schreibt und lies annimmt: " + hilfe);
@@ -476,7 +476,7 @@ class ShoptextTest {
                 16, 100L, 0L));
 
         assertEquals(1, zeilen.size(), "ein Handbalken ist EINE Zeile");
-        assertEquals("&aGekauft: 16x STONE&7 fuer &f100 Mark", bild(zeilen.get(0)));
+        assertEquals("&#73bf96Gekauft: 16x STONE&#a5b4bf fuer &#edf1f3100 Mark", bild(zeilen.get(0)));
     }
 
     @Test
@@ -485,7 +485,7 @@ class ShoptextTest {
         var zeilen = Shoptext.handelBalken(sprache,
                 gehandelt(Handelsart.KUNDE_VERKAUFT, 16, 80L, 0L));
 
-        assertEquals("&aVerkauft: 16x STONE&7 fuer &f80 Mark", bild(zeilen.get(0)));
+        assertEquals("&#73bf96Verkauft: 16x STONE&#a5b4bf fuer &#edf1f380 Mark", bild(zeilen.get(0)));
     }
 
     @Test
@@ -500,7 +500,7 @@ class ShoptextTest {
         var zeilen = Shoptext.handelBalken(sprache,
                 gehandelt(Handelsart.KUNDE_VERKAUFT, 16, 100L, 7L));
 
-        assertEquals("&aVerkauft: 16x STONE&7 fuer &f93 Mark&7 von 100 Mark, 7 Mark"
+        assertEquals("&#73bf96Verkauft: 16x STONE&#a5b4bf fuer &#edf1f393 Mark&#a5b4bf von 100 Mark, 7 Mark"
                 + " Marktgebuehr", bild(zeilen.get(0)));
     }
 
@@ -526,7 +526,7 @@ class ShoptextTest {
         var links = Shoptext.handelBalken(sprache, absage(
                 Shophandel.Bescheid.EIGENER_SHOP, Handelsart.KUNDE_VERKAUFT));
 
-        assertEquals("&7Das ist dein eigener Shop - nimm die Ware aus der Kiste.",
+        assertEquals("&#a5b4bfDas ist dein eigener Shop - nimm die Ware aus der Kiste.",
                 bild(rechts.get(0)));
         assertEquals(List.of(), links, "beim Linksklick baut er ab - kein Wort dazu");
     }
@@ -537,17 +537,17 @@ class ShoptextTest {
         // Die Kiste ist "ausverkauft", der Spieler "hat die Ware nicht" - und wer beides
         // mit einem Satz beantwortet, schickt den Kunden zum Aufraeumen eines Rucksacks,
         // der nicht das Problem ist. Dasselbe bei Platz und Geld.
-        assertEquals("&cAusverkauft: STONE", bild(Shoptext.handelBalken(sprache,
+        assertEquals("&#d9564dAusverkauft: STONE", bild(Shoptext.handelBalken(sprache,
                 absage(Shophandel.Bescheid.AUSVERKAUFT,
                         Handelsart.KUNDE_KAUFT)).get(0)));
-        assertEquals("&cDu brauchst 16x STONE", bild(Shoptext.handelBalken(sprache,
+        assertEquals("&#d9564dDu brauchst 16x STONE", bild(Shoptext.handelBalken(sprache,
                 absage(Shophandel.Bescheid.KEINE_WARE,
                         Handelsart.KUNDE_VERKAUFT)).get(0)));
-        assertEquals("&cIn deinem Rucksack ist kein Platz",
+        assertEquals("&#d9564dIn deinem Rucksack ist kein Platz",
                 bild(Shoptext.handelBalken(sprache, absage(
                         Shophandel.Bescheid.KEIN_PLATZ,
                         Handelsart.KUNDE_KAUFT)).get(0)));
-        assertEquals("&cDie Kiste dieses Shops ist voll",
+        assertEquals("&#d9564dDie Kiste dieses Shops ist voll",
                 bild(Shoptext.handelBalken(sprache, absage(
                         Shophandel.Bescheid.KISTE_VOLL,
                         Handelsart.KUNDE_VERKAUFT)).get(0)));
@@ -560,13 +560,13 @@ class ShoptextTest {
         // den er nicht bekommt. Bei einer Absage gibt es keinen gerechneten Handel, also
         // kommt die Zahl aus dem Shop: 100 beim Kauf, 80 beim Verkauf. Zwei
         // verschiedene Zahlen, damit ein Tausch zu sehen ist.
-        assertEquals("&cDafuer brauchst du 100 Mark",
+        assertEquals("&#d9564dDafuer brauchst du 100 Mark",
                 bild(Shoptext.handelBalken(sprache, absage(
                         Shophandel.Bescheid.KEIN_GELD,
                         Handelsart.KUNDE_KAUFT)).get(0)));
         // Und in der anderen Richtung ist es der Verkaufpreis - die Zahl, die der Shop
         // nicht zahlen kann.
-        assertEquals("&cDieser Shop kann das nicht zahlen",
+        assertEquals("&#d9564dDieser Shop kann das nicht zahlen",
                 bild(Shoptext.handelBalken(sprache, absage(
                         Shophandel.Bescheid.SHOP_PLEITE,
                         Handelsart.KUNDE_VERKAUFT)).get(0)));
@@ -581,7 +581,7 @@ class ShoptextTest {
         String zeile = bild(Shoptext.handelBalken(sprache, absage(
                 Shophandel.Bescheid.GESTOERT, Handelsart.KUNDE_KAUFT)).get(0));
 
-        assertEquals("&cDer Handel ist nicht zustande gekommen&7 - dein Geld ist nicht"
+        assertEquals("&#d9564dDer Handel ist nicht zustande gekommen&#a5b4bf - dein Geld ist nicht"
                 + " weg.", zeile);
     }
 

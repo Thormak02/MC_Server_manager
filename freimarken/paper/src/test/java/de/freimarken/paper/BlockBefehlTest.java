@@ -306,11 +306,11 @@ class BlockBefehlTest {
         assertEquals(3, gelesen.size(), gelesen.toString());
         String abgewiesen = gelesen.get(1);
         String gelungen = gelesen.get(2);
-        assertTrue(abgewiesen.contains("&c"),
+        assertTrue(abgewiesen.contains("&#d9564d"),
                 "die abgewiesene Zeile traegt Rot: " + abgewiesen);
         assertTrue(abgewiesen.contains(" x "),
                 "und ein Zeichen, das beim Durchlesen auffaellt: " + abgewiesen);
-        assertTrue(gelungen.startsWith("&7") && !gelungen.contains("&c"),
+        assertTrue(gelungen.startsWith("&#a5b4bf") && !gelungen.contains("&#d9564d"),
                 "die gelungene Zeile traegt es nicht: " + gelungen);
     }
 

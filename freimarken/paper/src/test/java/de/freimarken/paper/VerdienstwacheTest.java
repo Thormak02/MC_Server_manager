@@ -272,7 +272,7 @@ class VerdienstwacheTest {
         wache.beimAbbauen(abbauen(7, 71, 13));
 
         assertEquals(40L, buch.rest(anna.kennung()), "vierzig Pfennige fuer einen Stein");
-        assertEquals(List.of("&a+0,40 Mark"), anna.handbalkenBild());
+        assertEquals(List.of("&#73bf96+0,40 Mark"), anna.handbalkenBild());
     }
 
     @Test
@@ -362,7 +362,7 @@ class VerdienstwacheTest {
         wache.zahleFuerSetzen(anna.spieler(), Material.STONE, 2);
 
         assertEquals(20L, buch.rest(anna.kennung()), "zwei mal zehn Pfennige");
-        assertEquals(List.of("&a+0,20 Mark"), anna.handbalkenBild(),
+        assertEquals(List.of("&#73bf96+0,20 Mark"), anna.handbalkenBild(),
                 "und EIN Handbalken fuer beide, nicht zwei");
     }
 
@@ -391,7 +391,7 @@ class VerdienstwacheTest {
         wache.beimAbbauen(abbauen(8, 71, 13));
         wache.beimAbbauen(abbauen(9, 71, 13));
 
-        assertEquals(List.of("&a+0,40 Mark"), anna.handbalkenBild(),
+        assertEquals(List.of("&#73bf96+0,40 Mark"), anna.handbalkenBild(),
                 "nur der erste kommt durch");
         // Hundert und nicht hundertzwanzig: Der dritte Stein ist der erste gemminderte
         // (voll-bis 2 in dieser Probe), also 40 + 40 + 20. Die Minderung laeuft WEITER,
@@ -401,7 +401,7 @@ class VerdienstwacheTest {
         uhr.weiter(Verdienstbuch.ANZEIGEPAUSE);
         wache.beimAbbauen(abbauen(10, 71, 13));
 
-        assertEquals(List.of("&a+0,40 Mark", "&a+0,80 Mark"), anna.handbalkenBild(),
+        assertEquals(List.of("&#73bf96+0,40 Mark", "&#73bf96+0,80 Mark"), anna.handbalkenBild(),
                 "und dann die Summe der drei, die in der Pause lagen: 40 + 20 + 20");
     }
 
@@ -415,14 +415,14 @@ class VerdienstwacheTest {
         var buch = buch(1L);
         var wache = wache(buch);
         wache.beimAbbauen(abbauen(7, 71, 13));
-        assertEquals(List.of("&a+10,00 Mark"), anna.handbalkenBild());
+        assertEquals(List.of("&#73bf96+10,00 Mark"), anna.handbalkenBild());
 
         assertEquals(1L, buch.rechneAb(10), "der Deckel laesst eine Mark zu");
         uhr.weiter(Verdienstbuch.ANZEIGEPAUSE);
         wache.beimAbbauen(abbauen(8, 71, 13));
 
-        assertEquals(List.of("&a+10,00 Mark",
-                        "&eHeute ist genug verdient - morgen zahlt die Arbeit wieder."),
+        assertEquals(List.of("&#73bf96+10,00 Mark",
+                        "&#e3c57eHeute ist genug verdient - morgen zahlt die Arbeit wieder."),
                 anna.handbalkenBild());
     }
 
@@ -540,7 +540,7 @@ class VerdienstwacheTest {
                 Wesenprobe.gegenstand(Material.COD)));
 
         assertEquals(800L, buch.rest(anna.kennung()));
-        assertEquals(List.of("&a+8,00 Mark"), anna.handbalkenBild());
+        assertEquals(List.of("&#73bf96+8,00 Mark"), anna.handbalkenBild());
     }
 
     @Test

@@ -70,6 +70,14 @@ final class AnfragenBefehle {
                                                                Anfragen.Richtung richtung) {
         return Commands.literal(befehlsname)
                 .requires(diesesIstEinSpieler())
+                // Die WURZEL sagt, wie man fragt [21.11.2026]. Ohne dieses executes las
+                // wer /tpa tippt Brigadiers englisches "Unknown or incomplete command" -
+                // und die Fusszeile von /hilfe sagt ihm das Gegenteil zu.
+                .executes(z -> {
+                    gebrauchZeilen(sprache, richtung)
+                            .forEach(z.getSource().getSender()::sendMessage);
+                    return Command.SINGLE_SUCCESS;
+                })
                 .then(Commands.argument("spieler", StringArgumentType.word())
                         .suggests((zusammenhang, bauer) -> {
                             // Kein ArgumentTypes.player(): Der vanillanahe Typ nimmt
@@ -325,6 +333,20 @@ final class AnfragenBefehle {
     /** Die Quittung an den FRAGENDEN - eine Zeile. */
     static List<Component> stellenFragerZeilen(Sprache sprache, String name) {
         return sprache.bau(AnfragenSatz.FRAGE_GESTELLT, 1L, Einsatz.von("name", name));
+    }
+
+    /**
+     * Wie man fragt - die Antwort auf {@code /tpa} und {@code /tpahere} ohne Namen.
+     *
+     * <p>Eine reine Methode wie die anderen hier: Die Verzweigung nach der Richtung laeuft
+     * in einer Probe ohne Server durch, und gesendet wird im Zweig.
+     *
+     * @param richtung welcher der zwei Befehle getippt wurde
+     */
+    static List<Component> gebrauchZeilen(Sprache sprache, Anfragen.Richtung richtung) {
+        return sprache.bau(richtung == Anfragen.Richtung.HIERHER
+                ? AnfragenSatz.FRAGE_GEBRAUCH_HIERHER
+                : AnfragenSatz.FRAGE_GEBRAUCH_ZU_DIR, 1L, Einsatz.keine());
     }
 
     /**

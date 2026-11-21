@@ -88,12 +88,53 @@ class VorlageTest {
     void keineZeileOhneSchluessel() {
         List<String> ueberzaehlig = new ArrayList<>();
         for (String pfad : zeilenDerVorlage().keySet()) {
+            // DIE FARBWELT IST KEIN SATZ [21.11.2026]: Der Block farben: traegt Werte,
+            // keine Worte - acht Zeilen, die der Leser VOR den Saetzen aus dem
+            // Knotenbaum nimmt. Geprueft wird er von Probe 2b, und zwar strenger als
+            // hier: dort muss er GENAU die acht Rollen tragen, hier wuerde eine
+            // neunte durchlaufen.
+            if (pfad.startsWith(Farbtafel.PFAD + ".")) {
+                continue;
+            }
             if (Sprachschluessel.zuPfad(pfad) == null) {
                 ueberzaehlig.add(pfad);
             }
         }
         assertEquals(List.of(), ueberzaehlig, "gehoert zu keinem Satz dieses Plugins -"
                 + " beim Abschreiben vertippt, oder der Schluessel fehlt in Java");
+    }
+
+    @Test
+    @DisplayName("2b - der Block farben: traegt GENAU die acht Rollen, mit Wert")
+    void farbblockTraegtGenauDieRollen() {
+        // DER PREIS DAFUER, dass Probe 2 den Block durchlaesst: Hier wird er genauer
+        // geprueft als jeder Satz. Eine fehlende Rolle waere ein Satz ohne Farbe im
+        // Chat, eine ueberzaehlige eine Zeile, die der Betreiber setzt und die nichts
+        // tut - und beides faellt sonst nirgends auf: Der Leser traegt Fehlendes still
+        // aus der Vorgabe nach, und genau dafuer ist er da.
+        var gefunden = new java.util.TreeMap<String, String>();
+        for (var eintrag : zeilenDerVorlage().entrySet()) {
+            if (eintrag.getKey().startsWith(Farbtafel.PFAD + ".")) {
+                gefunden.put(eintrag.getKey()
+                        .substring(Farbtafel.PFAD.length() + 1), eintrag.getValue());
+            }
+        }
+
+        assertEquals(new java.util.TreeSet<>(Farbtafel.ROLLEN), gefunden.keySet(),
+                "die ausgelieferte Datei muss JEDE Rolle der Farbwelt nennen - und keine"
+                        + " andere. Fehlt eine, faellt sie still auf die Vorgabe zurueck"
+                        + " und der Betreiber findet sie nicht; steht eine zu viel,"
+                        + " aendert er eine Zeile, die nichts tut.");
+
+        // UND DER WERT MUSS DER AUSGELIEFERTE SEIN. Ohne diese Haelfte stuende in der
+        // Datei eine Farbe und im Programm eine andere - und die Vorgabe des Programms
+        // gilt genau dann, wenn der Betreiber die Zeile WEGLAESST. Zwei verschiedene
+        // Vorgaben sind der Fall, den niemand nachrechnet.
+        for (String rolle : Farbtafel.ROLLEN) {
+            assertEquals(Farbtafel.wieInDerDatei(Farbtafel.VORGABE.wert(rolle)),
+                    gefunden.get(rolle),
+                    rolle + " steht in der Datei anders als in Farbtafel.VORGABE");
+        }
     }
 
     @Test
@@ -254,7 +295,7 @@ class VorlageTest {
     }
 
     @Test
-    @DisplayName("9 - alle neunzehn Bereiche stehen im Verzeichnis")
+    @DisplayName("9 - ALLE Bereiche stehen im Verzeichnis")
     void alleBereicheStehenImVerzeichnis() {
         // MietSatz ist der zwoelfte - und der ZWEITE Bereich desselben Befehls: Er und
         // LadenSatz schreiben beide Pfade unter laden., damit der Betreiber unter dem
@@ -291,7 +332,12 @@ class VorlageTest {
                 // WerderSatz, obwohl beide Welten Inseln vergeben - dort KAUFT man die,
                 // auf der man steht, hier bekommt man eine zugeteilt, und sie kostet
                 // nichts.
-                "WolkeSatz", "RangSatz"));
+                "WolkeSatz", "RangSatz",
+                // Schritt 13 Teil B: das Hauptmenue, die Regeln und die
+                // Befehlsliste. Die Regeln sind der erste Bereich, dessen Text in einem
+                // FENSTER steht und nicht im Chat - und der erste mit einem Satz, der
+                // ausdruecklich mehrzeilig sein darf.
+                "MenueSatz", "RegelnSatz", "HilfeSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -373,7 +419,7 @@ class VorlageTest {
         // Und die Zusage, um die es wirklich geht: JEDE Zeile behaelt die Farbe des
         // Satzes. Vor dem Umbruch steht sie im Tag, hinter ihm nirgends - wer am Wortlaut
         // teilte statt am Baum, schickte die zweite Zeile farblos los.
-        zeilen.forEach(zeile -> assertTrue(Sprachprobe.bild(zeile).startsWith("&7"),
+        zeilen.forEach(zeile -> assertTrue(Sprachprobe.bild(zeile).startsWith("&#a5b4bf"),
                 "die Farbe muss ueber den Umbruch hinweg gelten: "
                         + Sprachprobe.bild(zeile)));
     }
@@ -542,6 +588,28 @@ class VorlageTest {
         for (Satz satz : Einzeiler.chatzeilen()) {
             eingetragen.add(satz.pfad());
         }
+
+        // DIE ZWEITE LISTE, und sie wird anders geprueft [21.11.2026]: Was nur ueber eine
+        // Variable geholt wird, hat keine Holstelle mit Namen - also kann diese Tafel es
+        // nicht gegen den Quelltext halten. Nachweisbar ist dafuer die MENGE: Durch die
+        // drei Variablen des Menues laufen ausschliesslich MenueSatz-Konstanten, und von
+        // denen muessen genau die darin stehen, die ein GEGENSTAND traegt (Titel, Name,
+        // Erklaerung) - nicht die vier, die als Chatzeile gesendet werden.
+        var ausDerTafel = new TreeSet<String>();
+        for (Menuetafel.Eintrag eintrag : Menuetafel.HAUPT.eintraege()) {
+            ausDerTafel.add(eintrag.name().pfad());
+            ausDerTafel.add(eintrag.erklaerung().pfad());
+        }
+        ausDerTafel.add(Menuetafel.HAUPT.titel().pfad());
+        var ueberVariable = new TreeSet<String>();
+        for (Satz satz : Einzeiler.ueberVariable()) {
+            ueberVariable.add(satz.pfad());
+        }
+        assertEquals(ausDerTafel, ueberVariable,
+                "Links die Saetze, die das Menue aus seiner Tafel holt, rechts"
+                        + " Einzeiler.UEBER_VARIABLE. Fehlt einer rechts, darf der"
+                        + " Betreiber eine Umbruchmarke hineinschreiben - und das Fenster"
+                        + " bleibt zu, mit einem Wurf beim Bauen des Gegenstands.");
         assertFalse(geholt.isEmpty(), "keine einzige Holstelle gefunden - dann rechnet"
                 + " diese Tafel ins Leere");
 
@@ -592,16 +660,19 @@ class VorlageTest {
     /**
      * Die Stellen, an denen der Satz erst zur Laufzeit feststeht.
      *
-     * <p><b>Jede einzeln nachgesehen am 11.11.2026, und alle fuenf sind tragbar - aber
-     * aus zwei ganz verschiedenen Gruenden:</b>
+     * <p><b>Jede einzeln nachgesehen, und jede ist tragbar - aber aus DREI ganz
+     * verschiedenen Gruenden.</b> KEINE Zahl hier: Die Liste waechst, und eine gezaehlte
+     * Zusage im Kopf ueberlebt den naechsten Bauschritt nicht (es stand "alle fuenf" da,
+     * als es schon zehn waren). Wer eine Stelle eintraegt, ordnet sie einer dieser drei
+     * Gruppen zu - und wenn keine passt, ist sie NICHT gedeckt:
      *
      * <ul>
-     *   <li>{@code Bonustext -> satz} waehlt zwischen
+     *   <li><b>Nur durch Nachsehen gedeckt.</b> {@code Bonustext -> satz} waehlt zwischen
      *       {@code tagesbonus.gezahlt.bestmarke} und {@code .serie}. Beide sind
-     *       einzeilig, und beide sind {@link Satz.Art#SATZ} - hier schuetzt NICHTS
-     *       ausser dem Nachsehen. Das ist die eine Stelle, die bei einer Aenderung
-     *       wirklich geprueft werden muss.</li>
-     *   <li>Die vier anderen holen ausschliesslich {@link Satz.Art#HANDBALKEN}:
+     *       einzeilig, und beide sind {@link Satz.Art#SATZ}, stehen aber in keiner Liste -
+     *       hier schuetzt NICHTS ausser dem Nachsehen. Das ist die eine Stelle, die bei
+     *       einer Aenderung wirklich geprueft werden muss.</li>
+     *   <li><b>{@link Satz.Art#HANDBALKEN} - Klage schon beim Laden.</b>
      *       {@code Shoptext -> satz} waehlt zwischen {@code shop.schutz.fremdes-schild}
      *       und {@code .fremde-kiste}, {@code Shoptext -> Sprachschluessel.shopHandel}
      *       waehlt aus der Familie {@code shop.handel.*}, und die zwei Stellen in
@@ -610,6 +681,12 @@ class VorlageTest {
      *       {@code Sprachliste.maengelAmWert} schon beim LADEN ueber jede Umbruchmarke -
      *       der Satz kaeme also gar nicht erst durch. Der Riegel liegt dort frueher und
      *       enger als hier.</li>
+     *   <li><b>{@link Satz.Art#SATZ}, aber in {@link Einzeiler#UEBER_VARIABLE}</b>
+     *       [21.11.2026]: die drei Stellen von {@code Menuehand}. Durch jede laufen
+     *       ausschliesslich {@code MenueSatz}-Konstanten, und genau die stehen in jener
+     *       Liste - {@code Sprachliste} klagt damit ebenfalls beim Laden, und Tafel 10j
+     *       haelt beide Richtungen. Wer hier eintraegt, MUSS seinen Satz dort
+     *       aufnehmen.</li>
      * </ul>
      *
      * <p>Aufgeschrieben wird trotzdem jede, und zwar als TEXT: Eine Zahl liesse sich
@@ -618,6 +695,18 @@ class VorlageTest {
      */
     private static final List<String> VERDECKTE_HOLSTELLEN = List.of(
             "Bonustext.java -> satz",
+            // DAS MENUE [21.11.2026]: Es holt Titel, Name und Erklaerung aus seiner
+            // Tafel, also durch ein Feld. Tragbar, und zwar nachweisbar: Durch diese
+            // drei Variablen laufen ausschliesslich MenueSatz-Konstanten (eine
+            // Menuetafel traegt nur solche), und genau die stehen in
+            // Einzeiler.UEBER_VARIABLE - Tafel 10j haelt beide Richtungen. Eine
+            // Umbruchmarke darin ist damit beim LADEN eine Klage, obwohl 10h sie nicht
+            // sieht.
+            //
+            // Die Liste steht nach DATEINAME sortiert, wie die Probe sie findet.
+            "Menuehand.java -> sichtbar.titel()",
+            "Menuehand.java -> eintrag.name()",
+            "Menuehand.java -> eintrag.erklaerung()",
             // Der switch in Schutztext.stadtBalken [11.11.2026]. Vier Saetze koennen
             // hier durchlaufen, alle vier sind Art.HANDBALKEN - fuer die klagt
             // Sprachliste.maengelAmWert schon beim LADEN ueber jede Umbruchmarke. Der

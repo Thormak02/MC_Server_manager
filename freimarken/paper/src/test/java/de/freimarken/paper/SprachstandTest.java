@@ -30,7 +30,7 @@ class SprachstandTest {
         saetze.put(pfad, neu);
         Set<String> ausDerDatei = new LinkedHashSet<>(vorbild.ausDerDatei());
         ausDerDatei.add(pfad);
-        return new Sprachbuch(saetze, ausDerDatei, vorbild.muster());
+        return new Sprachbuch(saetze, ausDerDatei, vorbild.muster(), vorbild.farben());
     }
 
     private static String alsText(List<Component> zeilen) {
@@ -69,7 +69,12 @@ class SprachstandTest {
                 "befehl.beschreibung.wolke",
                 // 20.11.2026: /rang. Derselbe Grund - eine geaenderte Beschreibung
                 // wirkt erst nach einem Neustart.
-                "befehl.beschreibung.rang"));
+                "befehl.beschreibung.rang",
+                // 21.11.2026: /menu.
+                "befehl.beschreibung.menu",
+                // 21.11.2026: /regeln und /hilfe.
+                "befehl.beschreibung.regeln",
+                "befehl.beschreibung.hilfe"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachstand.NUR_BEIM_START.forEach(satz -> gefuehrt.add(satz.pfad()));
         // assertEquals auf Groesse UND Inhalt: contains haette auch eine Liste mit einem
@@ -118,7 +123,14 @@ class SprachstandTest {
         // die Zeile - der Betreiber sieht daran, ob seine Aenderung dabei ist. Hier ist
         // die Zahl eine Zusicherung ueber die Zeile und keine Ueberschrift: Sie steht im
         // Text, den er liest.
-        assertTrue(ohne.get(0).contains("17 Saetze"), ohne.get(0));
+        assertTrue(ohne.get(0).contains("20 Saetze"), ohne.get(0));
+        // BEIDE LESER [21.11.2026]: Seit es /hilfe gibt, liest ein zweiter Befehl
+        // dieselben Saetze aus demselben Buch. Nannte die Zeile nur /help, verbesserte
+        // der Betreiber eine Beschreibung, las die Einschraenkung - und tippte dann
+        // /hilfe, weil das eine gewoehnliche Chatliste ist wie jede andere. Dort stand
+        // sein Tippfehler weiter, und er suchte den Fehler an der falschen Zeile: genau
+        // das Bild, gegen das diese Zeile antritt.
+        assertTrue(ohne.get(0).contains("/help UND /hilfe"), ohne.get(0));
     }
 
     @Test
@@ -187,6 +199,44 @@ class SprachstandTest {
                 "der Wortlaut gehoert nicht in die Antwort: " + antwort);
         assertEquals("Altbestand bei der Einfuehrung",
                 stand.buch().wortlaut(MarkSatz.VERLAUF_GRUND_BESTAND));
+    }
+
+    @Test
+    @DisplayName("22g - eine geaenderte Palette REIST MIT und steht in der Meldung")
+    void geaendertePaletteReistMit() {
+        // DER EINZIGE WEG, auf dem eine geaenderte Farbe im laufenden Server ankommt
+        // [21.11.2026]. Bis heute reichte keine Probe dem Tausch ein Buch mit einer
+        // ANDEREN Palette herein: mitAenderung kopiert vorbild.farben(), also waren alt
+        // und neu immer gleich und der Farbzweig von uebernimm lief nie. Schriebe jemand
+        // dort alt.farben() statt ausDerDatei.farben(), blieben alle Proben gruen - und
+        // im Spiel aenderte der Betreiber farben: warnung, bekaeme "an den Saetzen hat
+        // sich nichts geaendert" zu lesen und die neue Farbe erst nach einem Neustart.
+        var gelesen = Sprachliste.ausQuelle("farben:\n  warnung: \"#ff0000\"\n",
+                Sprachprobe.ausDemJar());
+        assertEquals(List.of(), gelesen.klagen(), "die Quelle selbst muss sauber sein");
+
+        Sprachstand stand = Sprachprobe.standAusDemJar();
+        int vorher = stand.buch().farben().wert(Farbtafel.WARNUNG);
+        String antwort = alsText(stand.antwort(gelesen));
+
+        // (a) DER WERT ist im Buch angekommen.
+        assertEquals(0xff0000, stand.buch().farben().wert(Farbtafel.WARNUNG),
+                "die neue Farbe steht nicht im Buch - sie reist nicht mit");
+        // (b) UND SIE WIRKT: dasselbe geprueft am BILD eines Satzes, den dieselbe
+        // Sprache-Instanz danach baut. Ohne diese Haelfte waere auch ein Buch gruen,
+        // das die Zahl traegt und seinen Leser nicht erneuert hat.
+        assertEquals("&#ff0000Anna ist nicht da.",
+                Sprachprobe.bild(new Sprache(stand).bau(AnfragenSatz.FRAGE_NICHT_DA, 1L,
+                        Einsatz.von("name", "Anna")).get(0)),
+                "der Satz traegt die alte Farbe - der Leser wurde nicht neu gebaut");
+        // (c) DIE MELDEZEILE nennt die Rolle und BEIDE Werte in der Richtung alt -> neu.
+        // Ein Vertauschen der zwei in Farbtafel.unterschiede waere sonst nicht zu sehen.
+        assertTrue(antwort.contains("farben.warnung"),
+                "die Meldung nennt die geaenderte Rolle nicht: " + antwort);
+        assertTrue(antwort.contains(Farbtafel.wieInDerDatei(vorher)
+                        + " -> " + Farbtafel.wieInDerDatei(0xff0000)),
+                "die Meldung nennt nicht beide Werte in der Richtung alt -> neu: "
+                        + antwort);
     }
 
     @Test

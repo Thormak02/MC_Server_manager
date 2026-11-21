@@ -121,6 +121,9 @@ final class Sprachliste {
         List<String> maengel = new ArrayList<>(dublettenklagen(wurzel));
         Map<String, Fund> gefunden = new LinkedHashMap<>();
         blaetter("", wurzel, gefunden, maengel);
+        // BEIDE Listen sind hier dieselbe: In der ausgelieferten Datei ist auch eine
+        // unbekannte Rolle ein Bauunfall und kein Betriebsfall.
+        Farbtafel farben = farbenAus(gefunden, Farbtafel.VORGABE, maengel, maengel);
 
         Map<String, String> saetze = new LinkedHashMap<>();
         Map<String, DateTimeFormatter> muster = new LinkedHashMap<>();
@@ -183,7 +186,7 @@ final class Sprachliste {
                     + " Der Befund steht in VorlageTest 1 und 2; die uebrigen roten"
                     + " Zeilen sind Folgen und nennen denselben Grund.");
         }
-        return new Sprachbuch(saetze, Set.of(), muster);
+        return new Sprachbuch(saetze, Set.of(), muster, farben);
     }
 
     /** Der Text einer Ressource aus der Jar - UTF-8 mit Wurf, wie bei der Datei. */
@@ -288,6 +291,7 @@ final class Sprachliste {
         klagen.addAll(dublettenklagen(wurzel));
         Map<String, Fund> gefunden = new LinkedHashMap<>();
         blaetter("", wurzel, gefunden, klagen);
+        Farbtafel farben = farbenAus(gefunden, vorlage.farben(), klagen, bericht);
 
         Map<String, Satz> verzeichnis = Sprachschluessel.verzeichnisVon(schluessel);
         Map<String, String> eigene = new LinkedHashMap<>();
@@ -383,8 +387,105 @@ final class Sprachliste {
         if (!eigene.isEmpty()) {
             bericht.add(1, "  deine: " + String.join(", ", eigene.keySet()));
         }
-        return new Ergebnis(new Sprachbuch(saetze, eigene.keySet(), muster),
+        if (!farben.equals(vorlage.farben())) {
+            bericht.add(1, "  deine Farben: "
+                    + String.join(", ", farben.unterschiede(vorlage.farben())));
+        }
+        return new Ergebnis(new Sprachbuch(saetze, eigene.keySet(), muster, farben),
                 List.of(), List.copyOf(bericht));
+    }
+
+    /**
+     * Die Farbwelt aus dem Knotenbaum - und sie wird dabei AUS der Satzmenge genommen.
+     *
+     * <p><b>Warum das Entfernen dazugehoert:</b> Der Leser danach prueft jede gefundene
+     * Zeile gegen die Satzschluessel des Plugins. Bliebe {@code farben.warnung} darin
+     * stehen, waere jede Farbzeile "eine Zeile, die zu keinem Satz dieses Plugins
+     * gehoert" - in der ausgelieferten Datei ein Abbruch, in der des Betreibers eine
+     * Berichtszeile, die ihm sagt, seine Farbe wirke nicht.
+     *
+     * <p><b>Und warum ZUERST:</b> Die Saetze werden gegen die Tags geprueft, die diese
+     * Palette benennt. Eine Reihenfolge andersherum pruefte Saetze gegen Tags, die noch
+     * nicht gelesen sind.
+     *
+     * <p>Fehlendes faellt je ROLLE auf die Vorgabe zurueck, nie die ganze Tafel: Wer eine
+     * Farbe setzt, soll nicht sieben andere mitschreiben muessen.
+     *
+     * @param hinein   die Fundstellen; die Farbzeilen werden daraus ENTFERNT
+     * @param vorgabe  die Palette, die ohne eigene Zeile gilt
+     * @param klagen   wohin ein unbrauchbarer WERT geht - er haelt die ganze Datei auf
+     * @param bericht  wohin eine unbekannte ROLLE geht - sie wirkt nicht, haelt aber
+     *                 nichts auf. Fuer die ausgelieferte Datei gibt der Aufrufer hier
+     *                 dieselbe Liste herein: dort ist beides ein Bauunfall
+     */
+    private static Farbtafel farbenAus(Map<String, Fund> hinein, Farbtafel vorgabe,
+                                       List<String> klagen, List<String> bericht) {
+        Map<String, Integer> werte = new LinkedHashMap<>(vorgabe.rollen());
+        var wanderung = hinein.entrySet().iterator();
+        while (wanderung.hasNext()) {
+            Map.Entry<String, Fund> eintrag = wanderung.next();
+            String pfad = eintrag.getKey();
+            if (!pfad.startsWith(Farbtafel.PFAD + ".")) {
+                continue;
+            }
+            wanderung.remove();
+            Fund fund = eintrag.getValue();
+            String rolle = pfad.substring(Farbtafel.PFAD.length() + 1);
+            if (!Farbtafel.ROLLEN.contains(rolle)) {
+                bericht.add(ort(pfad, fund.zeile()) + " ist keine Rolle der Farbwelt -"
+                        + " diese Zeile wirkt nicht. Es gibt "
+                        + String.join(", ", Farbtafel.ROLLEN) + ".");
+                continue;
+            }
+            Integer wert = farbwert(fund.wert());
+            if (wert == null) {
+                klagen.add(ort(pfad, fund.zeile()) + ": \"" + fund.wert() + "\" ist keine"
+                        + " Farbe. Erwartet wird eine Raute mit sechs Stellen in"
+                        + " Anfuehrungszeichen, zum Beispiel \""
+                        + Farbtafel.wieInDerDatei(vorgabe.wert(rolle)) + "\"."
+                        + " OHNE Anfuehrungszeichen beginnt die Raute in YAML einen"
+                        + " Kommentar, und die Zeile hat gar keinen Wert mehr"
+                        + " (gelesen: " + fund.tag() + ").");
+                continue;
+            }
+            werte.put(rolle, wert);
+        }
+        return new Farbtafel(werte);
+    }
+
+    /**
+     * {@code #rrggbb} zu einer Zahl - oder {@code null}, wenn es keine Farbe ist.
+     *
+     * <p>Genau diese EINE Form, und zwar mit Raute: So steht sie in MiniMessage, so steht
+     * sie in jedem Entwurfswerkzeug, und so laesst sie sich aus der Datei in einen Satz
+     * kopieren. Drei Stellen (die Kurzform) sind ausdruecklich NICHT erlaubt - sie waere
+     * ein zweiter Weg zur selben Farbe, und der Betreiber koennte nicht sehen, welcher
+     * gilt.
+     *
+     * <p>Die sechs Stellen werden HIER geprueft und nicht {@code parseInt} ueberlassen
+     * [21.11.2026]: Jenes nimmt ein Vorzeichen an, also ergab {@code "#-00001"} die Zahl
+     * -1 und {@code "#+12345"} stillschweigend die Kurzform, die der Absatz darueber
+     * ausschliesst. Eine Zahl ist nicht {@code null}, lief also an der Klage vorbei und
+     * erst im Riegel der {@link Farbtafel} auf - als Wurf und nicht als Klage, und der
+     * {@code farben}-Block ist die einzige Stelle ohne zweites Tor dahinter. Ein
+     * Tippfehler in EINER Zeile schaltete so beim Start das ganze Plugin ab.
+     */
+    private static Integer farbwert(String wert) {
+        if (wert == null) {
+            return null;
+        }
+        String rein = wert.trim();
+        if (rein.length() != 7 || rein.charAt(0) != '#') {
+            return null;
+        }
+        for (int stelle = 1; stelle < rein.length(); stelle++) {
+            // Character.digit und nicht parseInt: Jede Stelle muss eine Hexstelle sein,
+            // und ein Vorzeichen ist keine.
+            if (Character.digit(rein.charAt(stelle), 16) < 0) {
+                return null;
+            }
+        }
+        return Integer.parseInt(rein.substring(1), 16);
     }
 
     /**
@@ -552,8 +653,11 @@ final class Sprachliste {
             }
             if (!Sprache.VORRAT.has(name.toLowerCase(Locale.ROOT))) {
                 return ort(pfad, zeile) + ", Spalte " + i + ": <" + marke + "> versteht das"
-                        + " Plugin nicht. Erlaubt ist jede Farbe und jede Schriftform, die"
-                        + " MiniMessage kennt - zum Beispiel <gray> <dark_gray> <white>"
+                        + " Plugin nicht. Erlaubt sind die acht Rollen der Farbwelt - <"
+                        + String.join("> <", Farbtafel.ROLLEN) + "> (ihre Werte stehen"
+                        + " im Block " + Farbtafel.PFAD + ": der " + VORLAGE + ") -,"
+                        + " dazu jede Farbe und jede Schriftform, die MiniMessage kennt:"
+                        + " zum Beispiel <gray> <dark_gray> <white>"
                         + " <yellow> <gold> <green> <red> <aqua> <bold> <italic>, dazu"
                         + " <dark_blue>, <light_purple> und <#ffaa00>. Nicht erlaubt sind"
                         + " <click> und <hover> - sie koennten einen Befehl im Namen des"
@@ -743,8 +847,12 @@ final class Sprachliste {
     }
 
     private static String vorschlag(String name) {
-        for (String bekannt : List.of("gold", "gray", "dark_gray", "white", "yellow",
-                "green", "red", "aqua", "bold", "italic", "dark_blue", "light_purple")) {
+        List<String> bekannte = new ArrayList<>(Farbtafel.ROLLEN);
+        bekannte.addAll(List.of("gold", "gray", "dark_gray", "white", "yellow",
+                "green", "red", "aqua", "bold", "italic", "dark_blue", "light_purple"));
+        // DIE ROLLEN ZUERST: Wer sich bei <warnun> vertippt, soll die Rolle vorgeschlagen
+        // bekommen und nicht ein Vanillatag, das zufaellig aehnlich anfaengt.
+        for (String bekannt : bekannte) {
             if (bekannt.startsWith(name) || name.startsWith(bekannt)) {
                 return " Meintest du <" + bekannt + ">?";
             }

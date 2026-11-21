@@ -49,6 +49,11 @@ class SpracheTest {
         assertEquals(1, zeilen.size());
         assertEquals("Lesefehler: " + fremd, Sprachprobe.nurText(zeilen.get(0)));
         // Und als Bild: die Farbe des SATZES gilt, die aus dem Wert nicht.
+        //
+        // DER SATZ DIESER PROBE TRAEGT EIN VANILLATAG, und das ist seit der Farbwelt
+        // [21.11.2026] eine zweite Zusage: Der Kopf der Sprachdatei sagt dem Betreiber,
+        // die Farben, die Minecraft kennt, wirkten weiter - hier steht, dass das stimmt.
+        // Die Saetze der ausgelieferten Datei nennen dagegen alle eine ROLLE.
         assertEquals("&7Lesefehler: " + fremd, Sprachprobe.bild(zeilen.get(0)));
     }
 

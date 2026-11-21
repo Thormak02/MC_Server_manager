@@ -106,10 +106,10 @@ class FreimarkenBefehlTest {
 
         assertEquals(1, baum.tippe("freimarken", ohneRecht));
 
-        assertEquals(List.of("&6Der Freimarkenbund",
-                        "&7Stand 0.1.0 · Java 25 · 1.21.4",
-                        "&8Ablage MariaDB",
-                        "&7/parzelle · /mark · /freimarken preis <anzahl>"
+        assertEquals(List.of("&#c6a15bDer Freimarkenbund",
+                        "&#a5b4bfStand 0.1.0 · Java 25 · 1.21.4",
+                        "&#6e7a82Ablage MariaDB",
+                        "&#a5b4bf/parzelle · /mark · /freimarken preis <anzahl>"
                                 + " · /freimarken spielzeit"),
                 ohneRecht.chatBild(),
                 "wer das Recht nicht hat, liest die Verwaltungszeile nie");
@@ -125,7 +125,7 @@ class FreimarkenBefehlTest {
 
         assertEquals(5, mitRecht.chatBild().size(), "vier Zeilen plus die Verwaltung: "
                 + mitRecht.chatBild());
-        assertEquals("&8/freimarken welt · parzelle <x> <z> · neuladen",
+        assertEquals("&#6e7a82/freimarken welt · parzelle <x> <z> · neuladen",
                 mitRecht.chatBild().get(4),
                 "und sie steht ZULETZT - ein Spieler liest sie sonst vor den Befehlen,"
                         + " die ihn angehen");
@@ -228,7 +228,7 @@ class FreimarkenBefehlTest {
 
         assertEquals(5, baum.konsoleBild().size(),
                 "die Konsole liest alle fuenf Zeilen: " + baum.konsoleBild());
-        assertEquals("&6Der Freimarkenbund", baum.konsoleBild().get(0));
+        assertEquals("&#c6a15bDer Freimarkenbund", baum.konsoleBild().get(0));
     }
 
     @Test

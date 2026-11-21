@@ -67,6 +67,17 @@ final class Messwache implements Listener {
      */
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void beimOeffnen(InventoryOpenEvent ereignis) {
+        // EIN MENUE DES PLUGINS ZAEHLT NICHT [21.11.2026]. Gemessen wird TAETIGE Zeit,
+        // und daran haengen Verdienst, Tagesbonus und das Makro-Urteil. Ein offenes
+        // Hauptmenue, das ab und zu angeklickt wird, waere sonst bezahlte Anwesenheit -
+        // und zwar still: Diese Wache steht auf MONITOR, bricht nichts ab, und keine
+        // Zeile des Spiels sagt, dass dieses Oeffnen gezaehlt wurde.
+        //
+        // Gefragt wird Menuehalter und nicht der Titel: Der Titel kommt aus der
+        // Sprachdatei und laesst sich nachmachen.
+        if (Menuehalter.istMenue(ereignis.getInventory())) {
+            return;
+        }
         if (ereignis.getPlayer() instanceof Player spieler) {
             messstelle.melde(spieler.getUniqueId(), Lebenszeichen.OEFFNEN);
         }

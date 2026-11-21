@@ -161,6 +161,11 @@ final class ShopBefehle {
         return Commands.literal("shop")
                 .requires(quelle -> quelle.getExecutor() instanceof Player
                         && quelle.getSender().hasPermission(RECHT))
+                // Die WURZEL zeigt die Liste, genau wie bei /laden, /markt, /werder und
+                // /wolke [21.11.2026]. Ohne dieses executes endete /shop in Brigadiers
+                // englischem "Unknown or incomplete command" - waehrend die Fusszeile von
+                // /hilfe jedem zusagt, dass ein Befehl ohne Zusatz zeigt, was er kann.
+                .executes(zusammenhang -> zeigeListe(zusammenhang, 1))
                 .then(Commands.literal("freigeben")
                         .then(Commands.argument("name", StringArgumentType.word())
                                 .suggests((zusammenhang, bauer) -> {

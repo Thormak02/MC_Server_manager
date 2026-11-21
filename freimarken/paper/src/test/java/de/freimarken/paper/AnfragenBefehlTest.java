@@ -157,12 +157,26 @@ class AnfragenBefehlTest {
     }
 
     @Test
-    @DisplayName("43e - /tpa ohne Namen fuehrt nirgendwohin")
-    void tpaOhneNamenFuehrtNirgendwohin() {
-        // An der Wurzel steht KEIN executes: /tpa allein ist unvollstaendig. Ohne diese
-        // Probe koennte jemand eines hinzufuegen, das still nichts tut.
-        assertThrows(CommandSyntaxException.class, () -> baum.tippe("tpa", frager));
-        assertEquals(List.of(), frager.chatBild());
+    @DisplayName("43e - /tpa und /tpahere ohne Namen sagen, wie man fragt")
+    void ohneNamenSagenSieWieManFragt() throws CommandSyntaxException {
+        // Bis zum 21.11.2026 stand an der Wurzel KEIN executes, und diese Probe nagelte
+        // das fest. Dann las, wer /tpa tippte, Brigadiers englisches "Unknown or
+        // incomplete command" - waehrend die Fusszeile von /hilfe jedem zusagt, dass ein
+        // Befehl ohne Zusatz zeigt, was er kann.
+        //
+        // BEIDE Richtungen in EINER Probe, und mit dem ganzen Wortlaut: Die zwei Saetze
+        // unterscheiden sich darin, WER geht. Ein Vertauschen waere mit nur einer
+        // Richtung oder einer Zeilenzahl nicht zu sehen.
+        baum.tippe("tpa", frager);
+        assertEquals(List.of("&#a5b4bfMit /tpa und dem Namen eines Spielers fragst du,"
+                        + " ob du zu ihm kommen darfst."),
+                frager.chatBild());
+
+        frager.vergessen();
+        baum.tippe("tpahere", frager);
+        assertEquals(List.of("&#a5b4bfMit /tpahere und dem Namen eines Spielers laedst"
+                        + " du ihn zu dir ein."),
+                frager.chatBild());
     }
 
     @Test

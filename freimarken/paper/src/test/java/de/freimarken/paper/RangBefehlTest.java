@@ -102,14 +102,14 @@ class RangBefehlTest {
         // DIE GANZE ANTWORT und nicht vier contains: Vertauscht jemand "verlangt" und
         // "Stand", waeren vier contains alle gruen - und der Spieler las, er habe schon
         // zwei Parzellen.
-        assertEquals(List.of("&6Dein Rang",
-                        "&7Du bist &fsiedler&7.",
-                        "&7Als naechstes: &fbuerger&7. Dafuer zaehlt:",
-                        "&7- 10 Stunden taetige Zeit",
-                        "&a    du hast 12 - geschafft",
-                        "&7- 2 eigene Parzellen",
-                        "&7    du hast 1",
-                        "&8/rang leiter zeigt alle Stufen."),
+        assertEquals(List.of("&#c6a15bDein Rang",
+                        "&#a5b4bfDu bist &#edf1f3siedler&#a5b4bf.",
+                        "&#a5b4bfAls naechstes: &#edf1f3buerger&#a5b4bf. Dafuer zaehlt:",
+                        "&#a5b4bf- 10 Stunden taetige Zeit",
+                        "&#73bf96    du hast 12 - geschafft",
+                        "&#a5b4bf- 2 eigene Parzellen",
+                        "&#a5b4bf    du hast 1",
+                        "&#6e7a82/rang leiter zeigt alle Stufen."),
                 cara.chatBild());
     }
 
@@ -120,10 +120,10 @@ class RangBefehlTest {
 
         assertEquals(1, baum().tippe("rang leiter", cara));
 
-        assertEquals(List.of("&6Die Rangleiter",
-                        "&7  reisender - erreicht",
-                        "&f  siedler - hier stehst du",
-                        "&8  buerger - offen"),
+        assertEquals(List.of("&#c6a15bDie Rangleiter",
+                        "&#a5b4bf  reisender - erreicht",
+                        "&#edf1f3  siedler - hier stehst du",
+                        "&#6e7a82  buerger - offen"),
                 cara.chatBild());
     }
 
@@ -157,7 +157,7 @@ class RangBefehlTest {
 
         assertEquals(0, baum.tippeAufDerKonsole("rang"));
 
-        assertEquals(List.of("&7/rang zeigt den Rang eines Spielers - auf der Konsole"
+        assertEquals(List.of("&#a5b4bf/rang zeigt den Rang eines Spielers - auf der Konsole"
                 + " gibt es keinen."), baum.konsoleBild());
     }
 
@@ -169,7 +169,7 @@ class RangBefehlTest {
         assertEquals(1, baum(new Rangwerte(false, LEITER.leiter()), ablage)
                 .tippe("rang", cara));
 
-        assertEquals(List.of("&7Auf diesem Server gibt es keine Raenge."),
+        assertEquals(List.of("&#a5b4bfAuf diesem Server gibt es keine Raenge."),
                 cara.chatBild());
     }
 
@@ -221,10 +221,10 @@ class RangBefehlTest {
 
         assertEquals(1, baum().tippe("rang", cara));
 
-        assertEquals(List.of("&6Dein Rang",
-                        "&7Du bist &fbuerger&7.",
-                        "&6Damit stehst du auf der hoechsten Stufe.",
-                        "&8/rang leiter zeigt alle Stufen."),
+        assertEquals(List.of("&#c6a15bDein Rang",
+                        "&#a5b4bfDu bist &#edf1f3buerger&#a5b4bf.",
+                        "&#c6a15bDamit stehst du auf der hoechsten Stufe.",
+                        "&#6e7a82/rang leiter zeigt alle Stufen."),
                 cara.chatBild());
     }
 

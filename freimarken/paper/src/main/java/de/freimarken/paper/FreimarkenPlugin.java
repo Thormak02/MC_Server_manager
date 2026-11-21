@@ -1349,6 +1349,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Die Rangwache [Schritt 12 Teil C/D]. OHNE DIESE ZWEI ZEILEN ist die ganze
         // Leiter unsichtbar wirkungslos: Teil A rechnet, Teil B liest, Teil C legt
         // ab - und kein Spieler merkt davon etwas. Tafel 31cr haelt sie fest.
+        // DIE MENUEWACHE [21.11.2026]: Sie sagt jeden Klick in einem Menue des
+        // Plugins ab und fuehrt den Befehl aus, der am geklickten Fach steht. Ohne
+        // Anmeldung waere jeder Gegenstand darin eine Ware - ein Hilfetext zum
+        // Herausnehmen.
+        getServer().getPluginManager().registerEvents(new Menuewache(getLogger()), this);
         rangwache = new Rangwache(rangablage, wirtschaft,
                 new AnhangRechte(this), aufstiegslauf, sprache, getLogger());
         getServer().getPluginManager().registerEvents(rangwache, this);
@@ -1735,6 +1740,35 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 getLogger(), sprache);
     }
 
+
+
+    /**
+     * Baut den Befehlsbaum von {@code /regeln} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Dieselbe Form und derselbe Grund wie bei {@link #menueBefehle}. Die HAND steht
+     * hier und nicht im Befehl: Die Dialog-API von Paper laeuft in keiner Probe, und was
+     * nicht laeuft, gehoert hinter eine Naht. Der LOGGER geht mit hinein, weil die Hand
+     * das einzige Stueck des Plugins ist, dessen Scheitern niemand sonst bemerkt - ein
+     * Spieler sieht dann nur Chatzeilen statt eines Fensters.
+     */
+    private RegelnBefehle regelnBefehle() {
+        Formularhand hand = new Formularhand(getLogger());
+        return new RegelnBefehle(hand::zeige, sprache);
+    }
+
+    /**
+     * Baut den Befehlsbaum von {@code /menu} - im Ereignis, nicht im onEnable.
+     *
+     * <p>Dieselbe Form und derselbe Grund wie bei {@link #berufeBefehle}. Die HAND steht
+     * hier und nicht im Befehl: {@code Bukkit.createInventory} und {@code new ItemStack}
+     * brauchen einen laufenden Server, und hinter der Naht laeuft jeder Zweig des Befehls
+     * durch eine Probe.
+     */
+    private MenueBefehle menueBefehle() {
+        Menuehand hand = new Menuehand(sprache, getLogger());
+        return new MenueBefehle(hand::oeffne, sprache);
+    }
+
     /**
      * Baut den Befehlsbaum von {@code /rang} - im Ereignis, nicht im onEnable.
      *
@@ -1845,6 +1879,29 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.addAll(verzeichnis.register(berufeBefehle().beruf(),
                     sprache.wort(BundSatz.BEFEHL_BERUF, Einsatz.keine()),
                     List.of("job")));
+            // /menue als zweiter Name: Der Plan schreibt /menu, und wer deutsch tippt,
+            // schreibt das e dahinter. Beide Namen kosten nichts und ersparen ein
+            // "unbekannter Befehl" im ersten Augenblick eines Neulings.
+            angemeldet.addAll(verzeichnis.register(menueBefehle().menu(),
+                    sprache.wort(BundSatz.BEFEHL_MENU, Einsatz.keine()),
+                    List.of("menue")));
+            // /regeln und /hilfe [21.11.2026] - die zwei Befehle, auf die das
+            // Hauptmenue schon zeigt. Beide stehen in Plan 11.1, und beide sind fuer
+            // jeden: Wer die Regeln nicht lesen darf, kann sich nicht an sie halten.
+            //
+            // /rules als zweiter Name, dieselbe Linie wie plot, balance, job und rank.
+            //
+            // KEIN zweiter Name "help" fuer /hilfe, und das ist gemessen und nicht
+            // vermutet: Den Namen hat der Server selbst. Ein zweiter Anbieter landet im
+            // Namensraum des Plugins (freimarken:help), und wer /help tippt, bekaeme
+            // weiter die alphabetische Wand von Paper - eine Verwechslung, die man nicht
+            // sieht, weil beides etwas anzeigt.
+            angemeldet.addAll(verzeichnis.register(regelnBefehle().regeln(),
+                    sprache.wort(BundSatz.BEFEHL_REGELN, Einsatz.keine()),
+                    List.of("rules")));
+            angemeldet.addAll(verzeichnis.register(new HilfeBefehle(sprache).hilfe(),
+                    sprache.wort(BundSatz.BEFEHL_HILFE, Einsatz.keine()),
+                    List.of()));
             // /rank als zweiter Name, dieselbe Linie wie plot, balance und job: Wer von
             // einem englischsprachigen Server kommt, tippt ihn zuerst. Ein Spieler, der
             // "unbekannter Befehl" liest, sucht die Rangleiter nicht weiter.

@@ -68,7 +68,8 @@ final class Sprachprobe {
             saetze.put(zeile.getKey(), zeile.getValue());
         }
         return new Sprache(new Sprachstand(
-                new Sprachbuch(saetze, buch.ausDerDatei(), buch.muster())));
+                new Sprachbuch(saetze, buch.ausDerDatei(), buch.muster(),
+                        buch.farben())));
     }
 
     /** Der rohe Text der ausgelieferten Vorlage. */
@@ -81,16 +82,36 @@ final class Sprachprobe {
         return Sprachliste.ressource(Sprachliste.DATEI);
     }
 
+    /** Der Serialisierer der Bilder - mit Hexfarben, und das ist der ganze Punkt. */
+    private static final LegacyComponentSerializer BILDNER =
+            LegacyComponentSerializer.builder()
+                    .character((char) 0xa7)
+                    .hexColors()
+                    .build();
+
     /**
      * Das BILD eines Components - mit {@code &} statt des Paragrafenzeichens.
      *
      * <p>Das Paragrafenzeichen waere in dieser Quelldatei ein Zeichen, das die Hausregel
      * nicht erlaubt, und in einer Fehlermeldung waere es unlesbar. Ersetzt wird es nach
      * der Serialisierung, also aendert es am Vergleich nichts.
+     *
+     * <p><b>{@code hexColors()} statt {@code legacySection()}, und das ist kein
+     * Feinschliff</b> [21.11.2026]: Ohne diesen Schalter setzt der Serialisierer eine
+     * Hexfarbe stumm auf die NAECHSTE der sechzehn Altfarben herab (gemessen in
+     * {@code LegacyComponentSerializerImpl.toLegacyCode}: ohne {@code hexColours} laeuft
+     * jede Farbe, die kein {@code NamedTextColor} ist, durch
+     * {@code TextColor.nearestColorTo}). Markgold waere dann zeichengleich mit
+     * {@code &e}, Bundesrot mit {@code &4} - jede Bildtafel ueber einer Markenfarbe
+     * waere blind, und zwei verschiedene Farben koennten dasselbe Bild haben.
+     *
+     * <p>Fuer die benannten Farben aendert der Schalter NICHTS: Der Hexpfad wird nur fuer
+     * {@code isHexTextColor()} genommen, und das ist "TextColor und kein
+     * NamedTextColor". Darum sind alle Bilder, die vor der Farbwelt aufgeschrieben
+     * wurden, nach diesem Schritt zeichengleich dieselben.
      */
     static String bild(Component gebaut) {
-        return LegacyComponentSerializer.legacySection().serialize(gebaut)
-                .replace((char) 0xa7, '&');
+        return BILDNER.serialize(gebaut).replace((char) 0xa7, '&');
     }
 
     /** Das Bild mehrerer Zeilen - eine Zeile je Sendung, mit Umbruch dazwischen. */
@@ -130,7 +151,7 @@ final class Sprachprobe {
                         saetze.get(satz.pfad()), Locale.GERMANY));
             }
         }
-        return new Sprachbuch(saetze, Set.of(), muster);
+        return new Sprachbuch(saetze, Set.of(), muster, Farbtafel.VORGABE);
     }
 
     /**

@@ -46,6 +46,39 @@ final class Quellen {
     }
 
     /**
+     * Jede Probendatei dieses Moduls, nach Namen geordnet.
+     *
+     * <p>Fuer die wenigen Zusagen, die ueber den PROBENBAUM gelten [21.11.2026]: Eine
+     * Probe, die statischen Zustand hinterlaesst (etwa die Tabelle der Anwesenden in
+     * {@link Serverprobe}), macht eine FREMDE Probendatei rot - und zwar je nach
+     * Reihenfolge der Klassen, also nicht zuverlaessig. So etwas ist im roten Lauf
+     * praktisch nicht zu finden: Die Meldung nennt die Datei, die es ABBEKOMMEN hat.
+     *
+     * <p>Gibt eine leere Liste, wenn der Ordner nicht steht - der Aufrufer prueft das,
+     * damit eine Tafel nicht leer und gruen laeuft.
+     */
+    static List<Path> alleProben() {
+        Path quellordner = ordner();
+        if (quellordner == null) {
+            return List.of();
+        }
+        Path proben = quellordner.getParent().getParent().getParent().getParent()
+                .getParent().resolve("test").resolve("java").resolve("de")
+                .resolve("freimarken").resolve("paper");
+        if (!Files.isDirectory(proben)) {
+            return List.of();
+        }
+        try (Stream<Path> lauf = Files.list(proben)) {
+            return List.copyOf(lauf
+                    .filter(pfad -> pfad.getFileName().toString().endsWith(".java"))
+                    .sorted(Comparator.comparing(pfad -> pfad.getFileName().toString()))
+                    .toList());
+        } catch (IOException nichtLesbar) {
+            throw new UncheckedIOException(nichtLesbar);
+        }
+    }
+
+    /**
      * Die Quellordner ALLER drei Module - fuer Proben, die das ganze Projekt lesen.
      *
      * <p>{@link #ordner()} findet nur diesen einen (das Paper-Modul), und das genuegt
