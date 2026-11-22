@@ -14,6 +14,9 @@ class ServerCreate(BaseModel):
     memory_min_mb: int | None = None
     memory_max_mb: int | None = None
     port: int | None = None
+    # Mit Vorgabe, denn create_server_from_import und die Proben bauen diese Fassung
+    # ohne das Feld.
+    freimarken_enabled: bool = False
 
 
 class ServerUpdate(BaseModel):

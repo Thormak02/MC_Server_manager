@@ -116,14 +116,25 @@ def _fuer_schreiben(request: Request, db: Session, server_id: int,
 
 
 def _sichtbare_server(db: Session, user: User) -> list[Server]:
-    """Die Server mit einer Freimarken-Konfiguration, die dieser Nutzer sehen darf.
+    """Die Freimarken-Server, die dieser Nutzer sehen darf.
 
     Die Sichtbarkeit beantwortet list_servers_for_user - in SQL und einmal fuer alle, statt
     hier Server fuer Server zu fragen. Die Reihenfolge ist die von dort (nach Namen), damit
     die Uebersicht nicht bei jedem Aufruf anders aussieht.
+
+    GEFRAGT WIRD DAS FELD, nicht die Datei [22.11.2026]. Hier stand
+    ``hat_freimarken(server)``, und das liest ``plugins/Freimarken/config.yml`` - eine
+    Datei, die das PLUGIN beim ersten Start anlegt. Ein frisch erstellter Server haette
+    sie nicht: Er waere aus dem Dashboard schon verschwunden und hier noch nicht
+    angekommen, also nirgends - und das ausgerechnet in der Lage, fuer die es den
+    Erstellen-Knopf gibt.
+
+    ``hat_freimarken`` bleibt und beantwortet weiter die ANDERE Frage: ob das Plugin
+    schon einmal gelaufen ist. Die Seiten brauchen sie, um einen leeren Zustand zu
+    erklaeren statt eine Ausnahme zu werfen.
     """
     return [server for server in list_servers_for_user(db, user)
-            if freimarken_service.hat_freimarken(server)]
+            if server.freimarken_enabled]
 
 
 @router.get("/freimarken", response_class=HTMLResponse)
@@ -133,18 +144,21 @@ def freimarken_uebersicht(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
 
     server_liste = _sichtbare_server(db, current_user)
-    # Ein einziger Server mit Freimarken ist der haeufige Fall - dann ist die Uebersicht
-    # eine Seite mit einem Link darauf, und das ist ein Klick zu viel.
-    if len(server_liste) == 1:
-        erste = freimarken_service.seiten()[0]["schluessel"]
-        return RedirectResponse(
-            url="/freimarken/" + str(server_liste[0].id) + "/" + erste,
-            status_code=303)
+    # HIER STAND EINE ABKUERZUNG: Bei genau einem Server ging es sofort auf dessen erste
+    # Seite, "denn das ist ein Klick zu viel". Das stimmte, solange die Uebersicht nichts
+    # bot - jetzt traegt sie den Status, die Reiter und den Knopf "Server erstellen". Mit
+    # der Abkuerzung waere genau dieser Knopf ab dem ersten Server unerreichbar und beim
+    # zweiten wieder da, was wie ein Fehler aussieht.
 
     return templates.TemplateResponse(
         "freimarken_uebersicht.html",
         build_context(request, current_user=current_user, server_liste=server_liste,
-                      seiten=freimarken_service.seiten()),
+                      seiten=freimarken_service.seiten(),
+                      # Die Zielroute laesst nur den Super-Admin herein
+                      # (provisioning.py); ein Knopf fuer Moderatoren fuehrte stumm auf
+                      # die Anmeldeseite.
+                      darf_erstellen=(current_user.role
+                                      == UserRole.SUPER_ADMIN.value)),
     )
 
 

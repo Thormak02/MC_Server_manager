@@ -138,7 +138,14 @@
         </tbody>
     </table>
     {% else %}
-    <p class="muted">Noch keine sichtbaren Server vorhanden.</p>
+    {# Die Liste ist um die Freimarken-Server gekuerzt. Gibt es NUR solche, behauptete der
+       alte Satz, es gebe gar keinen Server - mit dem Hinweis wird daraus eine wahre
+       Aussage. #}
+    <p class="muted">
+        Noch keine sichtbaren Server vorhanden.
+        Freimarken-Server stehen nicht hier, sondern im
+        <a href="/freimarken">Freimarken-Bereich</a>.
+    </p>
     {% endif %}
 </section>
 {% endblock %}

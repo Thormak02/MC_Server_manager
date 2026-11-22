@@ -2,28 +2,62 @@
 {% block content %}
 <h1>Freimarken</h1>
 
+{#
+  DIE STARTSEITE DES BEREICHS, und sie wird immer gezeigt [22.11.2026].
+
+  Hier leitete die Route bei genau einem Server sofort auf dessen erste Seite um. Mit dem
+  Knopf "Server erstellen" geht das nicht mehr: Er waere ab dem ersten Server unerreichbar
+  und beim zweiten wieder da, was wie ein Fehler aussieht.
+#}
+
+{% if darf_erstellen %}
+<section class="card">
+    <div class="inline-form">
+        <a class="button-like" href="/servers/create?freimarken=1">Server erstellen</a>
+    </div>
+    <p class="muted">
+        Legt einen Server an, der hier bedient wird und nicht im Dashboard erscheint.
+        Danach kommt das Plugin nach <code>plugins/</code> &ndash; das geht ueber den
+        Reiter <strong>Dateien</strong> &ndash;, und der erste Start erzeugt
+        <code>plugins/Freimarken/config.yml</code>. Erst dann haben die
+        Einstellungsseiten Inhalt.
+    </p>
+</section>
+{% endif %}
+
 {% if server_liste %}
 <section class="card">
     <p class="muted">
-        Server mit einer Freimarken-Konfiguration. Die Einstellungen gehoeren zum Server,
-        nicht zum Manager - darum erst die Wahl, dann die Seite.
+        Deine Freimarken-Server. Die Einstellungen gehoeren zum Server, nicht zum
+        Manager &ndash; darum erst die Wahl, dann die Seite.
     </p>
     <table>
         <thead>
             <tr>
                 <th>Server</th>
                 <th>Status</th>
-                <th>Einstellungen</th>
+                <th>Seiten</th>
             </tr>
         </thead>
         <tbody>
             {% for server in server_liste %}
+            {% set ansicht = server_status_view(server) %}
             <tr>
-                <td><a href="/servers/{{ server.id }}">{{ server.name }}</a></td>
                 <td>
-                    {% set ansicht = server_status_view(server) %}
-                    <span class="status-dot" style="background: {{ ansicht.color }}"></span>
-                    {{ ansicht.label }}
+                    <a href="/freimarken/{{ server.id }}/{{ seiten[0].schluessel }}">{{ server.name }}</a>
+                </td>
+                <td>
+                    {#
+                      DIE FARBE IST EINE KLASSE, kein Stilwert [Fund 22.11.2026]. Hier
+                      stand style="background: {{ ansicht.color }}" und darunter
+                      ansicht.label - beides griff nie: server_status_view liefert
+                      "status" und "color", und color ist ein Schluessel wie "online",
+                      kein Farbwert. Das Dashboard macht es mit der Klasse
+                      status-dot-{{ color }} richtig (dashboard.html).
+                    #}
+                    <span class="status-dot status-dot-{{ ansicht.color }}"
+                          aria-hidden="true"></span>
+                    {{ ansicht.status }}
                 </td>
                 <td>
                     {% for eintrag in seiten %}
@@ -38,12 +72,15 @@
 </section>
 {% else %}
 <section class="card">
-    <h2>Kein Server mit Freimarken</h2>
+    <h2>Noch kein Freimarken-Server</h2>
     <p>
-        Auf keinem der Server, die du sehen darfst, liegt die Datei
-        <code>plugins/Freimarken/config.yml</code>. Sie entsteht beim ersten Start des
-        Plugins - danach erscheint der Server hier von selbst.
+        Keiner der Server, die du sehen darfst, ist als Freimarken-Server angelegt. Die
+        Zugehoerigkeit entsteht beim Erstellen &ndash; sie haengt nicht daran, ob das
+        Plugin schon lief.
     </p>
+    {% if not darf_erstellen %}
+    <p class="muted">Einen Server anlegen darf nur der Super-Admin.</p>
+    {% endif %}
 </section>
 {% endif %}
 {% endblock %}

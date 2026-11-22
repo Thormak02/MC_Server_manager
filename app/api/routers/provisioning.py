@@ -39,11 +39,31 @@ def _to_optional_int(value: str | None) -> int | None:
     return int(stripped)
 
 
+def _ist_ja(wert: str | None) -> bool:
+    """Ob diese Angabe "ja" bedeutet - die EINE Stelle, die das entscheidet.
+
+    Gebraucht an zwei Stellen: beim Abfrageparameter der Formularseite und beim
+    Formularfeld beim Senden. Zwei Abschriften derselben Menge liefen eines Tages
+    auseinander - dann belegte die Adresse das Haekchen vor, und das Senden machte daraus
+    trotzdem einen normalen Server, ohne Fehler und ohne Meldung.
+
+    ``on`` steht mit dabei, weil ein Haekchen ohne ``value`` genau das schickt.
+    """
+    return str(wert or "").strip().lower() in {"1", "true", "on", "ja"}
+
+
 @router.get("/servers/create")
 def create_server_page(
     request: Request,
+    freimarken: str = "",
     db: Session = Depends(get_db),
 ):
+    """Das Erstellungsformular. ``?freimarken=1`` belegt die Bereichszugehoerigkeit vor.
+
+    Ein Abfrageparameter und keine zweite Route: Das Formular ist dasselbe, nur ein
+    Haekchen steht anders. Eine eigene Route waere eine zweite Fassung derselben
+    neunzehn Felder - und die naechste Aenderung traefe nur eine davon.
+    """
     current_user = _require_super_admin(request, db)
     if current_user is None:
         return RedirectResponse(url="/login", status_code=303)
@@ -68,6 +88,11 @@ def create_server_page(
             templates=templates_list,
             default_template_id=default_template.id if default_template else None,
             default_server_storage_root=default_server_storage_root,
+            # Aus der Adresse vorbelegt: Der Knopf im Freimarken-Bereich ruft
+            # /servers/create?freimarken=1. Gelesen wird derselbe Satz an Werten wie
+            # beim Senden des Formulars, damit beide Seiten dieselbe Vorstellung von
+            # "ja" haben.
+            freimarken_vorbelegt=_ist_ja(freimarken),
         ),
     )
 
@@ -115,6 +140,7 @@ def create_server_action(
     port: Annotated[str | None, Form()] = None,
     start_parameters: Annotated[str | None, Form()] = None,
     template_id: Annotated[str | None, Form()] = None,
+    freimarken_enabled: Annotated[str | None, Form()] = None,
     db: Session = Depends(get_db),
 ):
     current_user = _require_super_admin(request, db)
@@ -169,6 +195,11 @@ def create_server_action(
         port=parsed_port if parsed_port is not None else (template.port_min if template else None),
         start_parameters=(start_parameters or "").strip()
         or (template.start_parameters if template else None),
+        # Ein Haekchen schickt der Browser nur, WENN es gesetzt ist - fehlt das Feld,
+        # steht hier None, und das heisst "normaler Server". Der Wert wird nicht aus einer
+        # Vorlage ergaenzt: ServerTemplate hat kein solches Feld (server_template.py), und
+        # ein Plan, der sich darauf stuetzt, haengt in der Luft.
+        freimarken_enabled=_ist_ja(freimarken_enabled),
     )
 
     try:
@@ -187,4 +218,15 @@ def create_server_action(
     if notes:
         push_flash(request, " | ".join(notes), "info")
     push_flash(request, f"Server '{server.name}' wurde erstellt.", "success")
+    if server.freimarken_enabled:
+        # BEDINGT und nicht unbedingt: Fuer einen normalen Server ist die Serverseite
+        # weiter das richtige Ziel, und zwei Proben rechnen die Server-Id aus genau
+        # dieser Adresse (test_provisioning, test_runtime_defaults_and_start_commands).
+        # Ein Freimarken-Server soll dagegen nicht auf der Seite landen, aus der er
+        # heraussoll.
+        from app.services.freimarken_service import seiten as freimarken_seiten
+
+        erste = freimarken_seiten()[0]["schluessel"]
+        return RedirectResponse(url=f"/freimarken/{server.id}/{erste}",
+                                status_code=303)
     return RedirectResponse(url=f"/servers/{server.id}", status_code=303)

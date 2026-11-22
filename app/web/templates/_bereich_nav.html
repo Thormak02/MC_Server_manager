@@ -1,0 +1,59 @@
+{#
+  DIE EINE REITERLEISTE fuer beide Gruppen [22.11.2026].
+
+  Es gab zwei: server_nav.html (acht Manager-Seiten) und freimarken_nav.html (zwoelf
+  Katalogseiten). Ein Freimarken-Server soll vollstaendig im Freimarken-Bereich bedient
+  werden - Konsole, Backups und Dateien eingeschlossen. Das heisst NICHT, diese vier
+  Seiten abzuschreiben: Sie sind schon ein zusammenhaengendes Set. Es heisst, beide
+  Gruppen in EINER Leiste zu zeigen. Dieselben Seiten, zwei Wege hinein, keine zweite
+  Wahrheit - und jede kuenftige Aenderung an der Konsole wirkt hier mit.
+
+  ZWEI ZEILEN und nicht zwanzig Pillen in einer: Ungetrennt stuende "Konsole" (Manager)
+  neben "Konten" (Plugin), und niemand saehe, wo die eine Gruppe endet.
+
+  VIER WERTE braucht diese Leiste: request (fuer den Pfad), server (fuer die id),
+  current_user (fuer die Rolle) und die Katalogliste. Die ersten drei hat jede Route ueber
+  build_context; die Liste kommt als GLOBAL freimarken_seiten() aus pages.py, weil sie
+  sonst in acht Routen nachzureichen waere - und die neunte sie vergisst.
+
+  DIE ZWEITE GRUPPE HAENGT AN ZWEI BEDINGUNGEN: am Feld des Servers UND an der Rolle. Die
+  acht Serverseiten verlangen nur can_view_server, der Freimarken-Bereich mindestens
+  Moderator. Ohne die Rollenfrage bekaeme ein view_only-Nutzer zwoelf Reiter, die alle
+  403 liefern.
+#}
+{% set current_path = request.url.path %}
+{% set bereich_seiten = freimarken_seiten() %}
+{% set zeigt_freimarken = server.freimarken_enabled
+    and bereich_seiten
+    and current_user and current_user.role != "view_only" %}
+
+<section class="card">
+    <div class="inline-form server-nav">
+        {% for reiter in [
+            ("", "Server Details"),
+            ("/console", "Konsole"),
+            ("/logs", "Logs"),
+            ("/schedules", "Scheduling"),
+            ("/backups", "Backups"),
+            ("/content", "Mods & Inhalte"),
+            ("/access", "OP/Bans/Whitelist"),
+            ("/files", "Dateien"),
+        ] %}
+        {% set ziel = "/servers/" ~ server.id ~ reiter[0] %}
+        <a class="button-like {% if current_path == ziel %}active{% endif %}"
+           href="{{ ziel }}"
+           {% if current_path == ziel %}aria-current="page"{% endif %}>{{ reiter[1] }}</a>
+        {% endfor %}
+    </div>
+
+    {% if zeigt_freimarken %}
+    <div class="inline-form server-nav">
+        {% for eintrag in bereich_seiten %}
+        {% set ziel = "/freimarken/" ~ server.id ~ "/" ~ eintrag.schluessel %}
+        <a class="button-like {% if current_path == ziel %}active{% endif %}"
+           href="{{ ziel }}"
+           {% if current_path == ziel %}aria-current="page"{% endif %}>{{ eintrag.name }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>

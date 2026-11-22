@@ -139,7 +139,8 @@ def test_nur_select_kommt_durch(sql, tmp_path):
 
     server = Server(name="x", slug="x", server_type="paper", mc_version="26.3",
                     base_path=str(tmp_path), port=25600, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
     with pytest.raises(FreimarkenDbFehler) as fehler:
         frage(server, sql)
@@ -157,7 +158,8 @@ def test_select_erreicht_den_zugang(tmp_path):
 
     server = Server(name="x", slug="x2", server_type="paper", mc_version="26.3",
                     base_path=str(tmp_path), port=25601, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
     with pytest.raises(FreimarkenDbFehler) as fehler:
         frage(server, "SELECT 1")
@@ -178,7 +180,8 @@ def _server_mit_config(tmp_path, inhalt, *, slug="zugang", port=25610):
         inhalt, encoding="utf-8", newline="")
     return Server(name=slug, slug=slug, server_type="paper", mc_version="26.3",
                   base_path=str(basis), port=port, status="stopped",
-                  start_mode="command", start_command="java -jar server.jar")
+                  start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
 
 def test_zugang_kommt_aus_der_config(tmp_path):
@@ -315,7 +318,8 @@ def test_namen_kommen_aus_usercache_und_den_zugangslisten(tmp_path):
 
     server = Server(name="n", slug="n", server_type="paper", mc_version="26.3",
                     base_path=str(basis), port=25620, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
     gefunden = namen(server)
     assert gefunden["aaaaaaaa-1111-4111-8111-111111111111"] == "AnnaNeu"
@@ -334,7 +338,8 @@ def test_kaputte_dateien_sind_kein_fehlerfall(tmp_path):
 
     server = Server(name="k", slug="k", server_type="paper", mc_version="26.3",
                     base_path=str(basis), port=25621, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
     assert namen(server) == {}
 
@@ -376,7 +381,8 @@ def test_eine_stadtkasse_wird_als_solche_benannt(monkeypatch, tmp_path):
 
     server = Server(name="s", slug="s", server_type="paper", mc_version="26.3",
                     base_path=str(tmp_path), port=25630, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
     zeilen = {z["kennung"]: z for z in konten(server)}
     assert zeilen[stadt]["name"] == "Stadtkasse"
@@ -401,7 +407,8 @@ def test_kein_goldkonto_ist_nicht_null_goldmark(monkeypatch, tmp_path):
 
     server = Server(name="g", slug="g", server_type="paper", mc_version="26.3",
                     base_path=str(tmp_path), port=25631, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
     zeilen = {z["kennung"]: z for z in konten(server)}
     assert zeilen[ohne]["goldmark"] is None, "kein Goldkonto"
@@ -431,7 +438,8 @@ def test_eine_gruppe_hat_keine_stelle(monkeypatch, tmp_path):
 
     server = Server(name="b", slug="b", server_type="paper", mc_version="26.3",
                     base_path=str(tmp_path), port=25632, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
     zeilen = {z["id"]: z for z in besitz(server)}
     assert zeilen[1]["stelle"] == "3/4"
@@ -456,7 +464,8 @@ def test_eine_leere_kassentabelle_gibt_null_und_nicht_none(monkeypatch, tmp_path
 
     server = Server(name="z", slug="z", server_type="paper", mc_version="26.3",
                     base_path=str(tmp_path), port=25633, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
     assert zusammenfassung(server)["mark_gesamt"] == 0
 
@@ -480,7 +489,8 @@ def test_der_verlauf_sortiert_mit_der_nummer(monkeypatch, tmp_path):
 
     server = Server(name="v", slug="v", server_type="paper", mc_version="26.3",
                     base_path=str(tmp_path), port=25634, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
 
     sp.verlauf(server, "aaaaaaaa-1111-4111-8111-111111111111")
     assert "ORDER BY zeitpunkt DESC, id DESC" in gesehen[0]
@@ -512,7 +522,8 @@ def _server(db, tmp_path, *, slug, port):
     basis.mkdir(parents=True, exist_ok=True)
     server = Server(name=slug, slug=slug, server_type="paper", mc_version="26.3",
                     base_path=str(basis), port=port, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                  freimarken_enabled=True)
     db.add(server)
     db.commit()
     db.refresh(server)

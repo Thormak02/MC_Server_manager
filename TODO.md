@@ -791,6 +791,28 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Proben: `tests/test_freimarken_seiten.py` (29). Einspritzungen 12/12, darunter der Blocktausch und zwei "Zustand vorher"-Faelle.
 - Voller Manager-Lauf: 1969 -> 2104 Proben, 0 Fehler.
 
+#### Teil E: eigener Bereich, eigene Erstellung - 22.11.2026
+
+- ENTSCHIEDEN (Chat): Ein Freimarken-Server erscheint NICHT im Dashboard, wird vollstaendig im Freimarken-Bereich bedient und hat dort einen eigenen Erstellen-Knopf. In allen UEBRIGEN Listen (Backupplan, Zeitplan, Konsolenauswahl, Systemstatus) bleibt er.
+- FUND, der die Loesung bestimmt: `hat_freimarken` erkennt an `plugins/Freimarken/config.yml`, und die legt das PLUGIN beim ersten Start an. Ein frisch erstellter Server haette sie nicht - aus dem Dashboard schon verschwunden, im Bereich noch nicht angekommen, also nirgends. Darum ein Feld am Server: `freimarken_enabled`, gesetzt beim Erstellen.
+- `hat_freimarken` BLEIBT und beantwortet weiter die andere Frage: ob das Plugin schon einmal lief. Zwei Fragen, zwei Namen.
+- NICHT nachgebaut: Die acht Serverseiten (Details, Konsole, Logs, Zeitplan, Backups, Inhalte, Zugang, Dateien) sind schon ein Tab-Set. "Alles im Bereich" heisst darum EINE Leiste fuer beide Gruppen - neue Datei `_bereich_nav.html`, eingebunden von `server_nav.html` UND `freimarken_nav.html`. Dieselben Seiten, zwei Wege hinein, keine zweite Wahrheit; jede kuenftige Aenderung an der Konsole wirkt dort mit.
+- Die Dateinamen der beiden alten Leisten blieben: neun Vorlagen binden sie ein, und sie sehen unterschiedlich aus (`server_detail.html` erst nach einem 45-zeiligen Skript).
+- Die Seitenliste wurde ein GLOBAL (`freimarken_seiten()` in `pages.py`). Als Kontextwert haette sie in acht Routen nachgereicht werden muessen - und die neunte vergisst sie. Dann iteriert Jinja ueber Undefined, und das ist ein Fehler, keine leere Schleife.
+- Die zweite Reitergruppe haengt an ZWEI Bedingungen: am Feld und an der Rolle. Die Serverseiten verlangen nur `can_view`, der Freimarken-Bereich mindestens Moderator - ohne die Rollenfrage bekaeme ein `view_only`-Nutzer zwoelf Reiter, die alle 403 liefern.
+- Der Filter sitzt in einem HELFER `list_dashboard_servers`, nicht im Tor `list_servers_for_user`: Jenes versorgt auch Systemstatus, KI-Uebersicht und die Auswahl "Daten uebernehmen" - dort soll der Server bleiben.
+- FUND, der sonst erst im Browser aufgefallen waere: `app.js` setzt die Kacheln "Server gesamt" und "Server laufend" aus `/api/resources`, schon beim Laden. Ein Filter nur in `get_dashboard_summary` wirkt Bruchteile einer Sekunde - und KEINE Probe im Haus rief diese Route je auf. Der Helfer wird jetzt von beiden Verbrauchern gerufen, und eine Probe liest die Liste samt ihrer Laenge.
+- FUND, schon vorher kaputt: Die Statusspalte der Freimarken-Uebersicht zeigte `ansicht.label` (gibt es nicht) und `style="background: {{ ansicht.color }}"` (color ist ein Schluessel wie `online`, kein Farbwert). Jetzt als Klasse `status-dot-{{ color }}`, wie im Dashboard.
+- Die Ein-Server-Abkuerzung der Uebersicht faellt weg: Mit ihr waere der Erstellen-Knopf ab dem ersten Server unerreichbar und beim zweiten wieder da. Ihre Begruendung ("ein Klick zu viel") stimmte, solange die Uebersicht nichts bot.
+- Die Erstellungskette fuehrt durch VIER Schichten, die jedes Feld einzeln abschreiben (Formular -> ProvisionServerRequest -> ServerCreate -> Server). Eine vergessene verliert die Markierung ohne Fehler. Alle vier gesetzt, je eine Einspritzung dagegen.
+- Die Umleitung nach dem Erstellen ist BEDINGT: ein Freimarken-Server landet im Bereich, ein gewoehnlicher weiter auf `/servers/<id>`. Zwei Proben rechnen die Server-Id aus genau dieser Adresse.
+- Was als "ja" gilt, steht an EINER Stelle (`_ist_ja`): Zwei Abschriften liefen auseinander, und dann belegte die Adresse das Haekchen vor, waehrend das Senden einen normalen Server erzeugte.
+- Der Klon nimmt die Markierung MIT (anders als `gateway_*`): Das Duplizieren kopiert den ganzen Ordner samt `plugins/Freimarken`. Festgenagelt in der vorhandenen Klon-Tafel, nicht in einer zweiten.
+- `update_server_settings` wurde NICHT angefasst. Sie setzt jedes Feld bedingungslos; ein neues Feld mit Vorgabe False loeschte die Zugehoerigkeit bei jedem Speichern der Serverseite. Die Markierung entsteht beim Erstellen und ist dort nicht aenderbar.
+- NEU: eine Migrationsprobe fuer `servers` - die gab es gar nicht. In Proben legt immer `create_all` die Spalten an, der ALTER-Zweig laeuft nie; ein vergessener Eintrag waere erst beim Start der echten Datenbank aufgefallen, dann mit "no such column" bei JEDER Abfrage. Die Probe prueft die Spalte UND den Eintrag in der Liste.
+- Proben: `tests/test_freimarken_bereich.py` (25), dazu 15 Probenvorrichtungen markiert und die Klon-Tafel erweitert. Einspritzungen 15/15, darunter zwei "Zustand vorher"-Faelle. Voller Lauf 2104 -> 2129, 0 Fehler.
+- LEHRE wiederholt: Der Treiber meldete "15 von 15 gefangen (erwartet 14)" und brach ab - die Konstante war falsch gesetzt. Dass sie ueberhaupt da ist, hat den Zaehlfehler sichtbar gemacht.
+
 #### Nachlese: zwoelf Funde aus der Gegenlese - 22.11.2026
 
 - Fuenf Linsen plus ein Gegenleser je Fund. 17 Funde, 12 bestaetigt, 5 widerlegt. Die Rueckgabe des Laufs war ABGESCHNITTEN und zeigte 2 - die anderen 10 standen im Journal. Rohfunde immer selbst lesen.

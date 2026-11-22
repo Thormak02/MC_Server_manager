@@ -1,22 +1,8 @@
-{% set current_path = request.url.path %}
-{% set details_path = "/servers/" ~ server.id %}
-{% set console_path = "/servers/" ~ server.id ~ "/console" %}
-{% set logs_path = "/servers/" ~ server.id ~ "/logs" %}
-{% set schedules_path = "/servers/" ~ server.id ~ "/schedules" %}
-{% set backups_path = "/servers/" ~ server.id ~ "/backups" %}
-{% set content_path = "/servers/" ~ server.id ~ "/content" %}
-{% set files_path = "/servers/" ~ server.id ~ "/files" %}
-{% set access_path = "/servers/" ~ server.id ~ "/access" %}
+{#
+  BEIDE ALTEN LEISTEN BINDEN JETZT DIESELBE EIN [22.11.2026].
 
-<section class="card">
-    <div class="inline-form server-nav">
-        <a class="button-like {% if current_path == details_path %}active{% endif %}" href="{{ details_path }}" {% if current_path == details_path %}aria-current="page"{% endif %}>Server Details</a>
-        <a class="button-like {% if current_path == console_path %}active{% endif %}" href="{{ console_path }}" {% if current_path == console_path %}aria-current="page"{% endif %}>Konsole</a>
-        <a class="button-like {% if current_path == logs_path %}active{% endif %}" href="{{ logs_path }}" {% if current_path == logs_path %}aria-current="page"{% endif %}>Logs</a>
-        <a class="button-like {% if current_path == schedules_path %}active{% endif %}" href="{{ schedules_path }}" {% if current_path == schedules_path %}aria-current="page"{% endif %}>Scheduling</a>
-        <a class="button-like {% if current_path == backups_path %}active{% endif %}" href="{{ backups_path }}" {% if current_path == backups_path %}aria-current="page"{% endif %}>Backups</a>
-        <a class="button-like {% if current_path == content_path %}active{% endif %}" href="{{ content_path }}" {% if current_path == content_path %}aria-current="page"{% endif %}>Mods & Inhalte</a>
-        <a class="button-like {% if current_path == access_path %}active{% endif %}" href="{{ access_path }}" {% if current_path == access_path %}aria-current="page"{% endif %}>OP/Bans/Whitelist</a>
-        <a class="button-like {% if current_path == files_path %}active{% endif %}" href="{{ files_path }}" {% if current_path == files_path %}aria-current="page"{% endif %}>Dateien</a>
-    </div>
-</section>
+  Die Dateinamen bleiben, weil neun Vorlagen sie einbinden - ein Umbenennen waere neun
+  Aenderungen an Stellen, die unterschiedlich aussehen (server_detail.html bindet die
+  Leiste erst nach einem 45-zeiligen Skript ein, die anderen direkt unter der H1).
+#}
+{% include "_bereich_nav.html" %}

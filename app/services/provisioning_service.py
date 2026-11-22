@@ -104,6 +104,7 @@ class ProvisioningService:
                 memory_min_mb=data.memory_min_mb,
                 memory_max_mb=data.memory_max_mb,
                 port=data.port,
+                freimarken_enabled=data.freimarken_enabled,
             ),
         )
         sync_server_settings_to_files(server)

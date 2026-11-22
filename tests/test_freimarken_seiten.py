@@ -60,7 +60,8 @@ def _aufbau(client, tmp_path, *, name, port, rolle="super_admin", steuern=True):
         person = _nutzer(db, rolle, name)
         server = Server(name=name, slug=name, server_type="paper", mc_version="26.3",
                         base_path=str(basis), port=port, status="stopped",
-                        start_mode="command", start_command="java -jar server.jar")
+                        start_mode="command", start_command="java -jar server.jar",
+                        freimarken_enabled=True)
         db.add(server)
         db.commit()
         db.refresh(server)

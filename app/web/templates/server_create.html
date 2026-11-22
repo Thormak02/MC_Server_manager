@@ -132,6 +132,21 @@
             <label for="start_parameters">Startparameter (optional)</label>
             <input id="start_parameters" name="start_parameters" type="text" placeholder="-Dfile.encoding=UTF-8">
         </div>
+        <div>
+            <label for="freimarken_enabled">
+                <input id="freimarken_enabled" name="freimarken_enabled"
+                       type="checkbox" value="1"
+                       {% if freimarken_vorbelegt %}checked{% endif %}>
+                Freimarken-Server
+            </label>
+            <p class="muted">
+                Dieser Server wird im <strong>Freimarken-Bereich</strong> bedient und
+                erscheint nicht im Dashboard. In Backupplan, Zeitplan und Serverauswahl
+                steht er weiter wie jeder andere. Das Plugin selbst legt der Manager
+                nicht ab &ndash; es kommt in <code>plugins/</code>, und erst der erste
+                Start erzeugt <code>plugins/Freimarken/config.yml</code>.
+            </p>
+        </div>
         <div class="align-end">
             <button type="submit">Server erstellen</button>
         </div>

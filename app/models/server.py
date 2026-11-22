@@ -47,6 +47,19 @@ class Server(Base):
     gateway_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     gateway_hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     gateway_is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Dieser Server wird im Freimarken-Bereich bedient und NICHT im Dashboard gelistet.
+    #
+    # Ein eigenes Feld und nicht die Frage, ob plugins/Freimarken/config.yml da ist:
+    # Jene Datei legt das PLUGIN beim ersten Start an. Ein frisch erstellter Server haette
+    # sie nicht - er waere aus dem Dashboard schon verschwunden und im Freimarken-Bereich
+    # noch nicht angekommen, also nirgends. Die Zugehoerigkeit entsteht beim Erstellen.
+    #
+    # Sie ist auf der normalen Serverseite NICHT aenderbar: update_server_settings setzt
+    # jedes Feld bedingungslos, und ein Wert mit Vorgabe False loeschte sie bei jedem
+    # Speichern. Wer sie umstellen will, braucht einen eigenen Weg mit eigener Meldung.
+    freimarken_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

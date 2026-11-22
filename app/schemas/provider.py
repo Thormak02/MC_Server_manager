@@ -12,6 +12,7 @@ class ProvisionServerRequest(BaseModel):
     memory_max_mb: int = 4096
     port: int | None = None
     start_parameters: str | None = None
+    freimarken_enabled: bool = False
 
 
 class VersionInfo(BaseModel):

@@ -172,6 +172,28 @@ def list_servers_for_user(db: Session, user: User) -> list[Server]:
     return list(db.scalars(query).all())
 
 
+def list_dashboard_servers(db: Session, user: User) -> list[Server]:
+    """Die Server, die das DASHBOARD zeigt - ohne die des Freimarken-Bereichs.
+
+    Eine eigene Funktion und KEIN Filter in {@link list_servers_for_user}: Jenes Tor
+    versorgt auch /system-status (system_service), die KI-Uebersicht (ai_agent_service),
+    die Auswahl "Daten uebernehmen" (routers/servers) und den Freimarken-Bereich selbst.
+    Dort soll ein Freimarken-Server ausdruecklich erscheinen - er verschwindet nur aus dem
+    Dashboard.
+
+    UND SIE HAT GENAU ZWEI AUFRUFER, die beide noetig sind: ``get_dashboard_summary``
+    fuer die gerenderte Seite und ``get_server_resource_entries`` fuer /api/resources.
+    Der Grund steht in app/web/static/js/app.js: Zeile 273 setzt die Kachel
+    "Server gesamt" auf die Laenge der JSON-Liste und Zeile 333 "Server laufend" auf
+    einen selbst gezaehlten Wert, und refresh() laeuft schon beim Laden der Seite. Wer nur
+    hier filtert und /api/resources vergisst, sieht die Tabelle um eine Zeile kuerzer und
+    beide Zahlen unveraendert - und keine Probe faellt darueber, weil keine
+    /api/resources aufruft.
+    """
+    return [server for server in list_servers_for_user(db, user)
+            if not server.freimarken_enabled]
+
+
 def get_server_by_id(db: Session, server_id: int) -> Server | None:
     return db.get(Server, server_id)
 
@@ -256,6 +278,7 @@ def create_server(db: Session, data: ServerCreate) -> Server:
             status=DEFAULT_SERVER_STATUS,
             auto_restart=False,
             auto_start_with_manager=False,
+            freimarken_enabled=data.freimarken_enabled,
         )
         db.add(server)
         db.commit()
@@ -647,6 +670,12 @@ def duplicate_server(db: Session, source: Server, user_id: int | None, *,
             gateway_enabled=False,                   # Netzwerk/Alias sind eindeutig -> auf dem Klon aus
             gateway_hostname=None,
             gateway_is_default=False,
+            # MITGENOMMEN, anders als gateway_* darueber: Das Duplizieren kopiert den
+            # ganzen Ordner samt plugins/Freimarken, der Klon ist also inhaltlich ein
+            # Freimarken-Server. Ohne die Markierung stuende ein voller Freimarken-Ordner
+            # im normalen Dashboard. Ein Hostname-Alias MUSS eindeutig sein, eine
+            # Bereichszugehoerigkeit nicht.
+            freimarken_enabled=source.freimarken_enabled,
         )
         db.add(clone)
         db.commit()
@@ -1777,7 +1806,11 @@ def create_server_from_import(db: Session, data: ServerImportConfirm) -> Server:
 
 
 def get_dashboard_summary(db: Session, user: User) -> dict[str, object]:
-    visible_servers = list_servers_for_user(db, user)
+    # DER HELFER und nicht das Tor: Hier entstehen Liste, total_servers und
+    # running_servers aus derselben Quelle, also haelt ein Filter an dieser einen Stelle
+    # alle drei zugleich richtig. Weiter unten gefiltert - etwa nur bei "servers" -
+    # waere die Tabelle kuerzer und die Zahl daneben falsch.
+    visible_servers = list_dashboard_servers(db, user)
     running_servers = sum(1 for server in visible_servers if server.status == "running")
 
     user_count: int | None = None

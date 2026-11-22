@@ -1,13 +1,8 @@
-{# Die Reiter des Freimarken-Bereichs. Die Liste kommt aus dem Feldkatalog, damit eine
-   neue Seite dort und nicht an zwei Stellen eingetragen wird. #}
-{% set current_path = request.url.path %}
-<section class="card">
-    <div class="inline-form server-nav">
-        {% for eintrag in seiten %}
-        {% set ziel = "/freimarken/" ~ server.id ~ "/" ~ eintrag.schluessel %}
-        <a class="button-like {% if current_path == ziel %}active{% endif %}"
-           href="{{ ziel }}"
-           {% if current_path == ziel %}aria-current="page"{% endif %}>{{ eintrag.name }}</a>
-        {% endfor %}
-    </div>
-</section>
+{#
+  BEIDE ALTEN LEISTEN BINDEN JETZT DIESELBE EIN [22.11.2026].
+
+  Die Dateinamen bleiben, weil neun Vorlagen sie einbinden - ein Umbenennen waere neun
+  Aenderungen an Stellen, die unterschiedlich aussehen (server_detail.html bindet die
+  Leiste erst nach einem 45-zeiligen Skript ein, die anderen direkt unter der H1).
+#}
+{% include "_bereich_nav.html" %}

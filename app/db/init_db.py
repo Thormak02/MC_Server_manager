@@ -133,6 +133,14 @@ def _ensure_server_schema() -> None:
             "gateway_is_default",
             "ALTER TABLE servers ADD COLUMN gateway_is_default BOOLEAN NOT NULL DEFAULT 0",
         ),
+        # Der erste Name muss ZEICHENGLEICH zur Modellspalte sein. Passt er nicht, steht
+        # dieser Eintrag bei jedem Start erneut in pending, und das zweite ALTER wirft
+        # "duplicate column name" aus dem engine.begin()-Block darunter - der hat kein
+        # try, also startet die Anwendung dann nicht mehr.
+        (
+            "freimarken_enabled",
+            "ALTER TABLE servers ADD COLUMN freimarken_enabled BOOLEAN NOT NULL DEFAULT 0",
+        ),
     ]
 
     pending = [(name, sql) for name, sql in migrations if name not in columns]

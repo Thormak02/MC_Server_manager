@@ -8,7 +8,7 @@ from app.services.process_service import (
     get_player_counts,
     get_process_resource_usage,
 )
-from app.services.server_service import list_servers_for_user
+from app.services.server_service import list_dashboard_servers
 
 try:
     import psutil  # type: ignore[import-not-found]
@@ -37,7 +37,11 @@ def get_host_resources() -> dict[str, Any]:
 
 
 def get_server_resource_entries(db: Session, user: User) -> list[dict[str, Any]]:
-    servers = list_servers_for_user(db, user)
+    # DERSELBE Helfer wie im Dashboard, und das ist tragend: app/web/static/js/app.js:273
+    # setzt die Kachel "Server gesamt" auf die Laenge DIESER Liste und Zeile 333
+    # "Server laufend" auf einen daraus selbst gezaehlten Wert. Ohne diese Zeile zeigte
+    # das Dashboard eine kuerzere Tabelle und unveraenderte Zahlen.
+    servers = list_dashboard_servers(db, user)
     host = get_host_resources()
     total_mem = host.get("memory_total_mb") or 0.0
 

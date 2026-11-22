@@ -68,9 +68,14 @@ def _server(db, tmp_path, *, slug, port, mit_freimarken=True):
         eigen.mkdir(parents=True, exist_ok=True)
         with open(eigen / "config.yml", "w", encoding="utf-8", newline="") as offen:
             offen.write(CONFIG)
+    # mit_freimarken steuert jetzt BEIDES: die Datei und die Markierung am Server.
+    # Die Datei sagt "das Plugin lief schon einmal", die Markierung "dieser Server
+    # gehoert in den Bereich" - zwei verschiedene Fragen, und die Uebersicht stellt seit
+    # dem 22.11.2026 die zweite.
     server = Server(name=slug, slug=slug, server_type="paper", mc_version="26.3",
                     base_path=str(basis), port=port, status="stopped",
-                    start_mode="command", start_command="java -jar server.jar")
+                    start_mode="command", start_command="java -jar server.jar",
+                    freimarken_enabled=mit_freimarken)
     db.add(server)
     db.commit()
     db.refresh(server)
@@ -153,7 +158,7 @@ def test_server_ohne_freimarken_erscheint_nicht(client, tmp_path):
             mit_freimarken=False)
     antwort = client.get("/freimarken")
     assert antwort.status_code == 200
-    assert "Kein Server mit Freimarken" in antwort.text
+    assert "Noch kein Freimarken-Server" in antwort.text
 
 
 def test_ohne_sichtrecht_kein_zugriff_auf_den_server(client, tmp_path):

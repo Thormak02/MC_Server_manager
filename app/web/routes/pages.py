@@ -26,9 +26,32 @@ def _sleep_delay_parts(seconds: object) -> dict[str, object]:
     return split_sleep_delay_seconds(seconds)
 
 
+def _freimarken_seiten() -> list[dict]:
+    """Die Reiter des Freimarken-Bereichs, aus dem Feldkatalog.
+
+    Als GLOBAL und nicht als Kontextwert: Die gemeinsame Reiterleiste steht in
+    server_nav.html, und die binden alle acht Serverseiten ein. Die Liste in acht Routen
+    nachzureichen waere achtmal dieselbe Zeile - und die neunte Serverseite vergisst sie.
+    Dann iteriert Jinja ueber Undefined, und das ist ein Fehler, keine leere Schleife.
+
+    Der Import steht im Rumpf: app/api/routers/freimarken.py importiert selbst aus diesem
+    Modul, ein Modulimport in der Gegenrichtung waere ein Kreis.
+
+    Wirft nie: Ein unlesbarer Katalog darf keine Serverseite mitnehmen, auf der von
+    Freimarken gar nichts steht.
+    """
+    try:
+        from app.services.freimarken_service import seiten
+
+        return seiten()
+    except Exception:  # noqa: BLE001 - eine Reiterleiste ist keinen Absturz wert
+        return []
+
+
 # In Templates verfuegbar: {{ server_status_view(server).color }} etc.
 templates.env.globals["server_status_view"] = _server_status_view
 templates.env.globals["sleep_delay_parts"] = _sleep_delay_parts
+templates.env.globals["freimarken_seiten"] = _freimarken_seiten
 
 
 def _avatar_schluessel(wert: object, ersatz: object = None) -> str | None:

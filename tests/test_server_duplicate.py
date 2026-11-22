@@ -26,6 +26,7 @@ def _make_source(db, base: Path):
         start_mode="bat", start_bat_path=str(base / "start.bat"),
         sleep_enabled=False, gateway_enabled=True, gateway_hostname="david",
         gateway_is_default=True, auto_start_with_manager=True,
+        freimarken_enabled=True,
     )
     db.add(srv)
     db.commit()
@@ -79,6 +80,12 @@ def test_duplicate_copies_everything_and_changes_port(client, monkeypatch, tmp_p
         assert clone.gateway_is_default is False
         assert clone.auto_start_with_manager is False
         assert clone.server_type == "paper" and clone.mc_version == "1.21.11"
+        # Die Bereichszugehoerigkeit wandert MIT, anders als gateway_* darueber: Das
+        # Duplizieren kopiert den ganzen Ordner samt plugins/Freimarken, der Klon ist
+        # also inhaltlich ein Freimarken-Server. Ohne diese Zeile stuende ein voller
+        # Freimarken-Ordner im normalen Dashboard. Ein Hostname-Alias MUSS eindeutig
+        # sein, eine Bereichszugehoerigkeit nicht.
+        assert clone.freimarken_enabled is True
 
         # start_bat_path auf den Klon-Ordner umgebogen
         assert clone.start_bat_path.startswith(clone.base_path)
