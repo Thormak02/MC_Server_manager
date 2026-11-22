@@ -283,6 +283,12 @@ class RangwacheTest {
     private Aufstiegslauf lauf(Wirtschaftsstand wirtschaft) {
         return new Aufstiegslauf(wirtschaft, ablage, new SpeicherSpielzeit(),
                 new SpeicherLager(), new SpeicherBerufe(), new SpeicherKasse(0L),
+                // Ein Rundgang OHNE Stationen: Diese Proben messen den Rang und nicht
+                // den Weg. Dass er ohne Stationen nicht abgeschlossen ist, prueft
+                // AufstiegslaufTest ausdruecklich.
+                new de.freimarken.kern.Rundgang(new de.freimarken.kern.SpeicherRundgang(),
+                        de.freimarken.kern.Rundgangsverzeichnis.ohneStationen(),
+                        java.time.Clock.systemUTC()),
                 "freimarken:marktstadt", java.time.Clock.systemUTC(),
                 Logger.getLogger("AufstiegLeer"));
     }

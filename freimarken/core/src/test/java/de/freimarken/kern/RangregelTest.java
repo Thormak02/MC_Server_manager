@@ -266,7 +266,11 @@ class RangregelTest {
                         Bedingungsart.ANWESENHEIT_STUNDEN, 1L,
                         Bedingungsart.PARZELLEN, 1L,
                         Bedingungsart.BERUF, 1L,
-                        Bedingungsart.GUTHABEN, 1L),
+                        Bedingungsart.GUTHABEN, 1L,
+                        // Die sechste Art [21.11.2026]. Diese Probe laeuft ueber
+                        // values(), also zieht sie jede neue Art mit - und sie VERLANGT
+                        // damit, dass die Karte hier alle nennt.
+                        Bedingungsart.RUNDGANG, 1L),
                 Map.of(), List.of());
 
         var offen = Rangregel.fehlend(stufe, Map.of());

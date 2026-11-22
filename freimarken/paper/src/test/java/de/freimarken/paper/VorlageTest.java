@@ -337,7 +337,8 @@ class VorlageTest {
                 // Befehlsliste. Die Regeln sind der erste Bereich, dessen Text in einem
                 // FENSTER steht und nicht im Chat - und der erste mit einem Satz, der
                 // ausdruecklich mehrzeilig sein darf.
-                "MenueSatz", "RegelnSatz", "HilfeSatz"));
+                "MenueSatz", "RegelnSatz", "HilfeSatz", "AnmeldeSatz",
+                "RundgangSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));

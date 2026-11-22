@@ -3,6 +3,7 @@ package de.freimarken.paper;
 import io.papermc.paper.dialog.Dialog;
 import io.papermc.paper.registry.data.dialog.ActionButton;
 import io.papermc.paper.registry.data.dialog.DialogBase;
+import io.papermc.paper.registry.data.dialog.action.DialogAction;
 import io.papermc.paper.registry.data.dialog.body.DialogBody;
 import io.papermc.paper.registry.data.dialog.type.DialogType;
 import java.util.ArrayList;
@@ -32,12 +33,16 @@ import org.bukkit.entity.Player;
  * und keine Spielzahl, sondern das Mass des Fensters: 150 von 200 moeglichen Punkten ist
  * die Breite, die der Vanilla-Dialog fuer einen einzelnen Knopf benutzt.
  *
- * <p><b>Kein {@code DialogAction} am Knopf</b>, und das ist Absicht: Ein Knopf OHNE Tat
- * schliesst das Fenster und tut sonst nichts - genau das, was ein gelesener Text braucht.
- * Ein Knopf MIT Tat waere eine zweite Tuer in das Plugin, und die muesste ihre Rechte
- * selbst pruefen. Wenn ein spaeterer Schritt die ANNAHME der Regeln baut, ist das eine
- * {@code confirmation} mit zwei Knoepfen - und der eine davon fuehrt dann einen BEFEHL
- * aus, so wie es das Menue schon tut.
+ * <p><b>ZWEI Methoden, zwei Dialogarten.</b> {@link #zeige} ist eine {@code notice} mit
+ * einem Knopf OHNE Tat: Er schliesst das Fenster und tut sonst nichts - genau das, was ein
+ * gelesener Text braucht. {@link #frage} ist eine {@code confirmation} mit zwei Knoepfen,
+ * und der eine davon fuehrt einen BEFEHL aus [21.11.2026].
+ *
+ * <p><b>Ein Knopf mit Tat ist eine zweite Tuer in das Plugin</b>, und darum traegt er
+ * keine eigene Entscheidung: Er tippt einen Befehl, so wie das Menue es tut, und jener
+ * Befehl prueft seine Rechte selbst. Ein Knopf, der hier etwas gewaehrte, waere eine Tuer
+ * ohne Rechtefrage - und sie liesse sich von jedem oeffnen, dem ein Fenster geschickt
+ * wurde.
  */
 final class Formularhand {
 
@@ -92,14 +97,75 @@ final class Formularhand {
             // LinkageError mit gefangen: Fehlt die Dialog-API einer Serverfassung ganz,
             // ist es kein RuntimeException, sondern ein NoClassDefFoundError - und auch
             // der darf den Befehl nicht mitreissen.
-            if (!gemeldet) {
-                gemeldet = true;
-                protokoll.log(Level.WARNING, "Ein Formular liess sich nicht als Fenster"
-                        + " zeigen - die Zeilen gehen stattdessen in den Chat. Der Grund"
-                        + " steht unten; diese Meldung kommt nur beim ersten Mal.",
-                        nichtDa);
-            }
+            melde(nichtDa);
             return false;
+        }
+    }
+
+    /**
+     * Baut das Fenster mit ZWEI Knoepfen und zeigt es - oder sagt, dass es nicht ging.
+     *
+     * <p>Eine {@code confirmation}: Der erste Knopf fuehrt {@code befehl} aus, der zweite
+     * schliesst nur. Welcher welcher ist, entscheidet die Reihenfolge der Argumente von
+     * {@code DialogType.confirmation(ja, nein)} - und das ist der einzige Unterschied
+     * zwischen Annehmen und Abbrechen. Ein vertauschtes Paar waere ein Fenster, das auf
+     * "Spaeter" zustimmt; die Probe des Aufrufers haelt die Reihenfolge fest.
+     *
+     * <p><b>{@code DialogAction.commandTemplate} und kein eigener Rumpf</b>: Der Knopf
+     * tippt fuer den Spieler, genau wie das Menue, und der Befehl prueft danach seine
+     * Rechte selbst. Ein {@code customClick} mit eigenem Rumpf waere eine Entscheidung in
+     * der einen Klasse ohne Zeugen.
+     *
+     * <p><b>Der Befehl steht OHNE Schraegstrich da.</b> Dieselbe Form wie bei
+     * {@code performCommand} im Menue - und derselbe Riegel: Wer hier einen mit
+     * Schraegstrich hereingibt, bekommt ihn abgewiesen, bevor ein Fenster aufgeht.
+     *
+     * <p>Gefangen wird dasselbe wie in {@link #zeige} und mit derselben Einschraenkung:
+     * ein Fehler auf dem SERVER. Einen alten CLIENT faengt das nicht - der Aufrufer
+     * braucht also auch hier einen Weg ohne Fenster.
+     *
+     * @param befehl der Befehl, den der erste Knopf ausfuehrt - OHNE Schraegstrich
+     * @return ob das Fenster offen ist
+     */
+    boolean frage(Player wer, Component titel, List<Component> text, Component jaKnopf,
+            Component neinKnopf, String befehl) {
+        if (befehl == null || befehl.isBlank() || befehl.startsWith("/")) {
+            throw new IllegalArgumentException("Der Befehl eines Knopfes steht OHNE"
+                    + " Schraegstrich da und darf nicht leer sein - commandTemplate"
+                    + " nimmt ihn so: " + befehl);
+        }
+        try {
+            List<DialogBody> koerper = new ArrayList<>();
+            for (Component zeile : text) {
+                koerper.add(DialogBody.plainMessage(zeile));
+            }
+            ActionButton ja = ActionButton.create(jaKnopf, null, KNOPFBREITE,
+                    DialogAction.commandTemplate(befehl));
+            ActionButton nein = ActionButton.create(neinKnopf, null, KNOPFBREITE, null);
+            wer.showDialog(Dialog.create(bauer -> bauer.empty()
+                    .base(DialogBase.builder(titel).body(koerper).build())
+                    .type(DialogType.confirmation(ja, nein))));
+            return true;
+        } catch (RuntimeException | LinkageError nichtDa) {
+            melde(nichtDa);
+            return false;
+        }
+    }
+
+    /**
+     * Die eine Protokollzeile fuer beide Fenster - genau einmal.
+     *
+     * <p>Beim ersten Mal will der Betreiber wissen, warum seine Spieler kein Fenster
+     * sehen; beim hundertsten Mal waere es eine Protokollflut fuer einen Zustand, der
+     * sich nicht aendert. EINE Stelle fuer beide Methoden: Zwei Zaehler meldeten
+     * denselben Ausfall zweimal, und zwei Texte sagten dasselbe verschieden.
+     */
+    private void melde(Throwable nichtDa) {
+        if (!gemeldet) {
+            gemeldet = true;
+            protokoll.log(Level.WARNING, "Ein Formular liess sich nicht als Fenster"
+                    + " zeigen - die Zeilen gehen stattdessen in den Chat. Der Grund"
+                    + " steht unten; diese Meldung kommt nur beim ersten Mal.", nichtDa);
         }
     }
 }

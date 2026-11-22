@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.freimarken.kern.Buchung;
+import de.freimarken.kern.Anmeldung;
 import de.freimarken.kern.Buchungsgrund;
+import de.freimarken.kern.SpeicherAnmeldungen;
 import de.freimarken.kern.Handelsart;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Kistenshop;
@@ -167,7 +169,8 @@ class ShophandelTest {
         var werte = Shopwerte.VORGABE.mitSpielerKauf(7);
         Wirtschaftsstand eigenerStand = stand(werte);
         var handel = new Shophandel(buch(eigenerStand), hand,
-                new Mitschrift(leer, schritte), eigenerStand, UHR,
+                new Mitschrift(leer, schritte), eigenerStand,
+                angenommen(eigenerStand), UHR,
                 Logger.getAnonymousLogger());
         Kistenshop shop = spielershop();
         ablage.schreibe(shop);
@@ -205,6 +208,71 @@ class ShophandelTest {
         // Und im Buch des Verkaeufers steht genau eine Zeile.
         assertEquals(List.of(Buchungsgrund.SHOP_VERKAUFT),
                 gruende(echteKasse, BESITZER));
+    }
+
+    // ========================================== die Anmeldung [Teil C, 21.11.2026]
+
+    @Test
+    @DisplayName("Am BUNDstand sagt der Handel ab, solange die Regeln nicht angenommen"
+            + " sind")
+    void bundstandOhneAnnahmeSagtAb() {
+        // "ERST DANACH OEFFNET SICH DER BUNDESMARKT" - Plan 10.1. Der Zustand wird HIER
+        // hergestellt: eine Anmeldung, die AN ist und in der niemand angenommen hat.
+        // Ohne diesen Zustand waere der Riegel gruen mit und ohne.
+        Wirtschaftsstand eigenerStand = stand(Shopwerte.VORGABE);
+        var handel = new Shophandel(buch(eigenerStand), hand, kasse, eigenerStand,
+                offen(eigenerStand), UHR, protokollMit(protokollzeilen));
+        ablage.schreibe(bundstand());
+
+        var ausgang = handel.handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT,
+                false);
+
+        assertEquals(Shophandel.Bescheid.NICHT_ANGEMELDET, ausgang.bescheid());
+        assertEquals(List.of(), schritte, "abgesagt heisst: NICHTS ist geschehen");
+    }
+
+    @Test
+    @DisplayName("Am SPIELERshop sagt sie NICHT ab - der Handel zwischen Buergern bleibt"
+            + " offen")
+    void spielershopBleibtOffen() {
+        // DIE GEGENRICHTUNG, und sie ist die Entscheidung des Plans: Gesperrt ist, was
+        // der BUND anbietet. Einen Spielershop zu sperren waere eine Entscheidung ueber
+        // das Geschaeft eines Dritten - und er bekaeme sein Geld nicht, weil ein vierter
+        // seine Regeln nicht gelesen hat.
+        Wirtschaftsstand eigenerStand = stand(Shopwerte.VORGABE);
+        var handel = new Shophandel(buch(eigenerStand), hand, kasse, eigenerStand,
+                offen(eigenerStand), UHR, protokollMit(protokollzeilen));
+        ablage.schreibe(spielershop());
+
+        var ausgang = handel.handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_KAUFT,
+                false);
+
+        assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid(),
+                "am Spielershop darf die Anmeldung nichts verbieten: " + schritte);
+    }
+
+    @Test
+    @DisplayName("Nach der Annahme handelt derselbe Spieler am Bundstand")
+    void nachDerAnnahmeGehtEs() {
+        // Ohne diese Haelfte waere auch ein Riegel gruen, der IMMER absagt - und der
+        // Bundesmarkt waere fuer jeden zu, auch fuer den, der zugestimmt hat.
+        Wirtschaftsstand eigenerStand = stand(Shopwerte.VORGABE);
+        var anmeldung = offen(eigenerStand);
+        var handel = new Shophandel(buch(eigenerStand), hand, kasse, eigenerStand,
+                anmeldung, UHR, protokollMit(protokollzeilen));
+        ablage.schreibe(bundstand());
+
+        anmeldung.nimmAn(KUNDE);
+        var ausgang = handel.handle(KUNDE, WELT, 60, 71, 6, Handelsart.KUNDE_VERKAUFT,
+                false);
+
+        assertEquals(Shophandel.Bescheid.GEHANDELT, ausgang.bescheid(),
+                "nach der Zustimmung ist der Bundesmarkt offen: " + schritte);
+    }
+
+    /** Die Anmeldung ist AN, und niemand hat angenommen - die Lage eines Neulings. */
+    private static Anmeldung offen(Wirtschaftsstand wirtschaft) {
+        return new Anmeldung(new SpeicherAnmeldungen(), wirtschaft, UHR);
     }
 
     // ================================================== der Bundshop
@@ -890,8 +958,27 @@ class ShophandelTest {
     }
 
     private Shophandel handel(Wirtschaftsstand wirtschaft) {
-        return new Shophandel(buch(wirtschaft), hand, kasse, wirtschaft, UHR,
-                protokollMit(protokollzeilen));
+        return new Shophandel(buch(wirtschaft), hand, kasse, wirtschaft,
+                angenommen(wirtschaft), UHR, protokollMit(protokollzeilen));
+    }
+
+    /**
+     * Die Anmeldung in der Lage, die auf einem Server der Normalfall ist: AN, und der
+     * Kunde hat zugestimmt [21.11.2026].
+     *
+     * <p><b>Und nicht ausgeschaltet.</b> Eine Anmeldung mit {@code an: false} liesse jede
+     * Probe hier durchlaufen, pruefte aber eine Lage, die ab Werk nicht vorkommt - jede
+     * dieser Proben hiesse dann stillschweigend "so handelt ein Server ohne Anmeldung".
+     * Der Riegel selbst hat eigene Proben; sie stellen den Zustand her, in dem er greift.
+     *
+     * <p>Der Wirtschaftsstand kommt herein und wird nicht neu gebaut: Die geltende
+     * Fassung muss dieselbe sein, die der geprueefte Handel fragt.
+     */
+    private static Anmeldung angenommen(Wirtschaftsstand wirtschaft) {
+        var ablage = new SpeicherAnmeldungen();
+        var anmeldung = new Anmeldung(ablage, wirtschaft, UHR);
+        anmeldung.nimmAn(KUNDE);
+        return anmeldung;
     }
 
     /** Ein Protokoll, das in eine Liste schreibt - fuer die Zeilen des Betreibers. */
@@ -954,7 +1041,8 @@ class ShophandelTest {
                 new Shopbuch(eigeneAblage, new Leser(),
                         (wer, welt, x, y, z) -> true, eigenerStand, null,
                         Logger.getAnonymousLogger()),
-                eigeneHand, eigeneKasse, eigenerStand, UHR,
+                eigeneHand, eigeneKasse, eigenerStand,
+                angenommen(eigenerStand), UHR,
                 Logger.getAnonymousLogger());
 
         var ausgang = handel.handle(KUNDE, WELT, 60, 71, 6, art, false);

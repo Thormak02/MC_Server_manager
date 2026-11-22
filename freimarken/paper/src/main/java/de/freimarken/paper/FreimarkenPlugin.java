@@ -2,6 +2,8 @@ package de.freimarken.paper;
 
 import de.freimarken.daten.Datenbank;
 import de.freimarken.daten.MariaAbholfach;
+import de.freimarken.daten.MariaAnmeldungen;
+import de.freimarken.daten.MariaRundgang;
 import de.freimarken.daten.MariaBerufe;
 import de.freimarken.daten.Kassentabellen;
 import de.freimarken.daten.MariaRaenge;
@@ -16,6 +18,11 @@ import de.freimarken.daten.MariaSpielzeit;
 import de.freimarken.daten.MariaTruhe;
 import de.freimarken.daten.MariaWolken;
 import de.freimarken.kern.Abholablage;
+import de.freimarken.kern.Anmeldeablage;
+import de.freimarken.kern.Anmeldung;
+import de.freimarken.kern.Rundgang;
+import de.freimarken.kern.Rundgangsablage;
+import de.freimarken.kern.Rundgangsverzeichnis;
 import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
@@ -58,6 +65,8 @@ import de.freimarken.kern.Rangablage;
 import de.freimarken.kern.Rangschau;
 import de.freimarken.kern.SpeicherBerufe;
 import de.freimarken.kern.SpeicherBlockbuch;
+import de.freimarken.kern.SpeicherAnmeldungen;
+import de.freimarken.kern.SpeicherRundgang;
 import de.freimarken.kern.SpeicherRaenge;
 import de.freimarken.kern.SpeicherBonus;
 import de.freimarken.kern.SpeicherGrundstuecke;
@@ -573,6 +582,57 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Rangablage rangablage;
 
     /**
+     * Wo die Annahme der Regeln liegt - Plan 10.1 [Schritt 13 Teil C].
+     *
+     * <p>Kein Zwischenspeicher: Gelesen wird einmal je Beitritt und je Klick an einem
+     * Bundstand, und das ist eine Abfrage auf den Hauptschluessel. Ein
+     * zwischengespeicherter Wert waere eine zweite Wahrheit darueber, ob jemand
+     * zugestimmt hat - und gerade die darf es nicht geben.
+     */
+    private Anmeldeablage anmeldeablage;
+
+    /**
+     * Die EINE Stelle, die sagt, ob ein Spieler noch annehmen muss.
+     *
+     * <p>EIN Feld, weil drei Wege sie fragen: die Wache beim Beitritt, {@code /regeln}
+     * und der Handel am Bundesmarkt. Drei Fassungen derselben Frage wichen eines Tages
+     * ab - und dann boete ein Weg etwas an, was ein anderer verweigert.
+     */
+    private Anmeldung anmeldung;
+
+    /**
+     * Wo der Rundgangsfortschritt liegt - Plan 10.2 [Schritt 13 Teil D].
+     *
+     * <p>Kein Zwischenspeicher: Gelesen wird bei jedem Schritt in einen Stationsbereich,
+     * und das ist eine Abfrage auf den Hauptschluessel - aber nur, solange der Spieler
+     * wirklich in einem Bereich steht. Ein Zwischenspeicher waere eine zweite Wahrheit
+     * darueber, wo jemand war.
+     */
+    private Rundgangsablage rundgangsablage;
+
+    /**
+     * Der Rundgang - die EINE Stelle, die seinen Stand kennt.
+     *
+     * <p>EIN Feld, weil ihn zwei fragen: die Wache beim Schritt und der Aufstiegslauf als
+     * fuenfte Messquelle. Zwei Fassungen derselben Rechnung wichen eines Tages ab - und
+     * dann waere ein Spieler aufgestiegen, dem {@code /rang} noch eine fehlende Station
+     * anzeigt.
+     */
+    private Rundgang rundgang;
+
+    /**
+     * Das Verzeichnis der Stationen - NUR BEIM START gelesen.
+     *
+     * <p>Ab Werk leer: Die Gebaeude in Altfurt sind Handarbeit. Ein eigenes Feld, weil
+     * die Wache die Welt dazu braucht und der Rundgang das Verzeichnis.
+     */
+    private Rundgangsverzeichnis rundgangsstationen = Rundgangsverzeichnis
+            .ohneStationen();
+
+    /** Die Welt, in der die Stationen liegen - leer, solange es keine gibt. */
+    private String rundgangswelt = "";
+
+    /**
      * Die Wache, die aus dem abgelegten Rang Rechte macht.
      *
      * <p>EIN Feld und kein Wert je Aufruf, weil Teil D sie rufen muss: Ein Aufstieg
@@ -881,6 +941,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
         laeden.bericht().forEach(getLogger()::info);
         ladenwelt = laeden.welt();
         ladenverzeichnis = laeden.verzeichnis();
+        // DER RUNDGANG [Teil D]: hier und nicht an einer eigenen Stelle, weil er die
+        // DIESELBEN Kanten braucht wie die Ladeneinheiten - ein Bereich hinter der
+        // Weltgrenze ist einer, an den niemand kommt. Und er liegt in derselben Welt:
+        // Altfurt. Ein zweites Lesen von welten: waere eine zweite Wahrheit.
+        Rundgangsliste.Ergebnis stationen =
+                Rundgangsliste.ausKonfiguration(getConfig(), kanten);
+        stationen.klagen().forEach(getLogger()::severe);
+        stationen.bericht().forEach(getLogger()::info);
+        rundgangswelt = stationen.welt();
+        rundgangsstationen = stationen.verzeichnis();
         marktstadt = gebaut.welten().get(MARKTSTADT);
         // Dieselbe Angabe, aus der die Welt entstand, entscheidet auch ueber ihre Grenze.
         // Vorher las richteWeltgrenzeEin die Einstellung ein zweites Mal und ungefiltert
@@ -1330,6 +1400,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
         mietwache = new Mietwache(getServer(), mietlauf, mietbuch, abholbuch, wirtschaft,
                 sprache);
         getServer().getPluginManager().registerEvents(mietwache, this);
+        // DIE ANMELDUNG [Schritt 13 Teil C] - und sie steht VOR richteShopsEin, nicht
+        // danach. GEMESSEN IM STARTLAUF vom 21.11.2026: Dahinter gesetzt, bekam
+        // Shophandel ein null und Paper schaltete das ganze Plugin ab ("Error occurred
+        // while enabling"). Keine Probe kann das sehen - sie baut den Handel selbst und
+        // gibt ihm, was er braucht; die REIHENFOLGE im onEnable prueft nur ein Start.
+        // Tafel 31dn haelt sie jetzt fest.
+        //
+        // Hier ist beides da: die Ablage aus richteAblageEin (laeuft im onEnable davor)
+        // und der Halter aus Zeile 884. Die Fassung wird im AUGENBLICK gefragt und nicht
+        // gemerkt - ein Neuladen kann sie aendern, und genau dann muessen alle neu
+        // zustimmen.
+        anmeldung = new Anmeldung(anmeldeablage, wirtschaft, uhr);
         richteShopsEin();
         Bonuswache bonuswache = new Bonuswache(tagesbonus, wirtschaft, sprache);
         getServer().getPluginManager().registerEvents(bonuswache, this);
@@ -1344,8 +1426,25 @@ public final class FreimarkenPlugin extends JavaPlugin {
         //
         // marktstadt ist hier nie null: Ohne sie bleibt Freimarken aus und onEnable ist
         // vorher zurueckgekehrt (siehe die severe-Zeile in ladeWelten).
+        // DER RUNDGANG [Teil D] - gebaut VOR dem Aufstiegslauf, denn jener nimmt ihn als
+        // fuenfte Messquelle. Das Verzeichnis steht seit ladeWelten, die Ablage seit
+        // richteAblageEin.
+        rundgang = new Rundgang(rundgangsablage, rundgangsstationen, uhr);
         aufstiegslauf = new Aufstiegslauf(wirtschaft, rangablage, spielzeit, lager,
-                berufsablage, kasse, marktstadt.key().asString(), uhr, getLogger());
+                berufsablage, kasse, rundgang, marktstadt.key().asString(), uhr,
+                getLogger());
+        // DIE RUNDGANGSWACHE nur bei vorhandenen Stationen - dieselbe Entscheidung wie
+        // bei der Torwache (if hatTore()) und der Anmeldewache. Ab Werk gibt es keine
+        // Station; dann hoert hier niemand zu, und kein Schritt kostet etwas.
+        //
+        // OHNE DIESE ZEILEN ist der ganze Rundgang unsichtbar wirkungslos: Die Ablage
+        // bliebe leer, niemand saehe eine Station, und eine Rangstufe, die ihn verlangt,
+        // waere unerreichbar. Tafel 31dk haelt sie.
+        Rundgangswache rundgangswache = new Rundgangswache(rundgang,
+                getServer().getWorld(rundgangswelt), sprache);
+        if (rundgangswache.hatStationen()) {
+            getServer().getPluginManager().registerEvents(rundgangswache, this);
+        }
         // Die Rangwache [Schritt 12 Teil C/D]. OHNE DIESE ZWEI ZEILEN ist die ganze
         // Leiter unsichtbar wirkungslos: Teil A rechnet, Teil B liest, Teil C legt
         // ab - und kein Spieler merkt davon etwas. Tafel 31cr haelt sie fest.
@@ -1357,6 +1456,21 @@ public final class FreimarkenPlugin extends JavaPlugin {
         rangwache = new Rangwache(rangablage, wirtschaft,
                 new AnhangRechte(this), aufstiegslauf, sprache, getLogger());
         getServer().getPluginManager().registerEvents(rangwache, this);
+        // DIE WACHE nur bei eingeschalteter Anmeldung - dieselbe Entscheidung wie bei
+        // der Torwache, die ohne Tore nicht angemeldet wird. Aus heisst dann wirklich
+        // aus: kein Zuhoerer am Beitritt, kein Lesen der Ablage.
+        //
+        // OHNE DIESE ZEILE ist die ganze Anmeldung unsichtbar wirkungslos: Die Ablage
+        // bliebe leer, und weil der Bundesmarkt an genau dieser Ablage haengt, saehe
+        // der Spieler nur eine Absage, die er nicht aufheben kann. Tafel 31di haelt sie.
+        if (anmeldung.an()) {
+            getServer().getPluginManager().registerEvents(new Anmeldewache(anmeldung,
+                    new Anmeldeformular(new Formularhand(getLogger())::frage, sprache)),
+                    this);
+            getLogger().info("Anmeldung im Buergeramt: Fassung \"" + anmeldung.fassung()
+                    + "\" - wer sie noch nicht angenommen hat, bekommt beim Beitritt das"
+                    + " Formular und kann bis dahin am Bundesmarkt nicht handeln.");
+        }
         // blockraeumung darf null sein - ohne Datenbank gibt es kein Blockbuch und
         // nichts zu raeumen. richteBlockbuchEin() laeuft VOR dieser Methode und hat es
         // dann gesetzt; die Reihenfolge sichert 31ai.
@@ -1370,6 +1484,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Sachliches - die offenen Marken stehen erst beim naechsten Abrechnen in der
         // Tabelle -, aber sie macht den Startbericht lesbar: Erst laeuft die Zeit, dann
         // wird gestuft.
+        nenneStationenOhneWort();
         nenneNachstufung();
         // Jeder Wert, den dieser Satz verspricht, steht auch darin. Eine halbe Zusage -
         // "verlangt sind mehrere Arten" ohne die Zahl - liest sich wie eine Angabe und
@@ -1441,7 +1556,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 // Derselbe Fund: Hier stand der Schnappschuss der Gebuehren. Und die
                 // Uhr kommt dazu, weil der Tagesdeckel des Bundesmarktes den heutigen
                 // Tag braucht.
-                wirtschaft, uhr, getLogger());
+                wirtschaft,
+                // DIE ANMELDUNG [Teil C]: "Erst danach oeffnet sich der Bundesmarkt"
+                // (Plan 10.1). Als HALTER und nicht als Antwort - gefragt wird im
+                // Augenblick des Klicks, denn ein Neuladen kann die Fassung aendern.
+                anmeldung, uhr, getLogger());
         // DIE TAEGLICHE LADENGEBUEHR [Teil E6]. Hier und nicht in
         // richteFreistaedteEin: Sie braucht das Shopbuch, und das entsteht erst in
         // dieser Methode. Ohne Freistadtbuch entsteht sie gar nicht - dann gibt es
@@ -1579,6 +1698,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // hat - er steigt wieder auf, sobald der Takt misst, denn die
             // Bedingungen liegen in der Spielzeit und im Besitz und nicht hier.
             rangablage = new SpeicherRaenge();
+            // Die Annahme der Regeln - fluechtig. Das ist hier teurer als beim Rang:
+            // Nach jedem Neustart muss jeder erneut zustimmen, und ein NACHWEIS der
+            // Zustimmung ist weg. Die Warnung darunter sagt es; wer die Zustimmung als
+            // Nachweis braucht, braucht eine Datenbank.
+            anmeldeablage = new SpeicherAnmeldungen();
+            // Der Rundgangsfortschritt - fluechtig. Leichter zu verkraften als die
+            // Anmeldung: Verloren ist kein Nachweis, sondern ein Weg, den man noch
+            // einmal gehen kann. Wer den Rundgang als Rangbedingung gesetzt hat, sollte
+            // es trotzdem wissen - ohne Datenbank steigt dann niemand dauerhaft auf.
+            rundgangsablage = new SpeicherRundgang();
             // Dieselbe Bauart wie bei den Shops: derselbe Zwischenspeicher, nur mit
             // einer anderen Wahrheit darunter.
             wolkenstaende = new ZwischenspeicherWolken(new SpeicherWolken());
@@ -1658,6 +1787,13 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // zwischengespeicherter Vergleichswert waere genau der veraltete Stand,
             // den dieser Riegel abweisen soll.
             rangablage = new MariaRaenge(datenbank);
+            // KEIN Zwischenspeicher, aus demselben Grund wie beim Rang - und hier noch
+            // strenger: Ein gemerktes "hat zugestimmt" waere eine zweite Wahrheit ueber
+            // einen Nachweis.
+            anmeldeablage = new MariaAnmeldungen(datenbank);
+            // KEIN Zwischenspeicher: eine Abfrage auf den Hauptschluessel, und nur
+            // solange der Spieler in einem Stationsbereich steht.
+            rundgangsablage = new MariaRundgang(datenbank);
             // VOLLSTAENDIG und ohne Verfall, wie die Grundstuecke - und mit einer
             // Obergrenze aus der Weltgeometrie: hoechstens 1443 Inseln. Die Rechnung
             // steht an ZwischenspeicherWolken. Gefuellt wird in richteWolkenEin.
@@ -1753,7 +1889,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     private RegelnBefehle regelnBefehle() {
         Formularhand hand = new Formularhand(getLogger());
-        return new RegelnBefehle(hand::zeige, sprache);
+        // DIESELBE Hand fuer beide Fenster: Das Lesefenster hat einen Knopf, das
+        // Anmeldeformular zwei. Zwei Haende meldeten denselben Ausfall zweimal, denn
+        // jede haette ihren eigenen Zaehler.
+        return new RegelnBefehle(hand::zeige, sprache, anmeldung,
+                new Anmeldeformular(hand::frage, sprache));
     }
 
     /**
@@ -3122,6 +3262,43 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + Muenzname.VORSILBE + "<name> - sprache-vorlage.yml zeigt, wie sie"
                 + " aussieht. Kaufen laesst sich der Posten weiter; in der Tafel steht"
                 + " bis dahin sein Pfad.");
+    }
+
+    /**
+     * Meldet jede Rundgangsstation, zu der eine Sprachzeile fehlt [Teil D].
+     *
+     * <p>BEIM START und nicht beim ersten Schritt: Sonst faellt es mitten im Spiel auf,
+     * und zwar als Pfad in der Zeile eines Spielers, der gerade ein Gebaeude betreten
+     * hat.
+     *
+     * <p><b>Die Station bleibt trotzdem begehbar</b>, wie ein Katalogposten ohne Wort und
+     * anders als ein Beruf ohne Wort (dort bleibt Freimarken aus). Der Grund steht in
+     * {@link Stationssatz}: Eine weggefallene Station waere ein Rundgang, den niemand
+     * abschliessen kann, und der Spieler suchte den Fehler bei sich.
+     *
+     * <p>Hier und nicht in {@link Rundgangsliste}: Der Leser kennt die
+     * {@code config.yml}, und ob es einen SATZ gibt, weiss nur der Sprachstand. Drei
+     * Stellen sagen diese Pruefung zu - {@code Stationssatz}, der Kommentar der
+     * {@code config.yml} und die Rechenprobe des Lesers.
+     */
+    private void nenneStationenOhneWort() {
+        List<String> ohneWort = new ArrayList<>();
+        for (String station : rundgangsstationen.namen()) {
+            for (Stationssatz.Teil teil : Stationssatz.Teil.values()) {
+                String pfad = new Stationssatz(station, teil).pfad();
+                if (!sprachstand.buch().saetze().containsKey(pfad)) {
+                    ohneWort.add(pfad);
+                }
+            }
+        }
+        if (ohneWort.isEmpty()) {
+            return;
+        }
+        getLogger().severe("Zu " + rundgangsstationen.anzahl() + " Rundgangsstationen"
+                + " fehlen " + ohneWort.size() + " Sprachzeilen: "
+                + String.join(", ", ohneWort) + ". Begehbar bleiben sie; bis dahin liest"
+                + " ein Spieler dort den Pfad statt eines Satzes. sprache-vorlage.yml"
+                + " zeigt im Abschnitt rundgang:, wie die Zeilen aussehen.");
     }
 
     /**

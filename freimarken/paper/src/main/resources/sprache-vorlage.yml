@@ -348,6 +348,11 @@ mark:
       guthaben:
         eins: "<fliesstext>- {zahl} auf dem Konto</fliesstext>"
         viele: "<fliesstext>- {zahl} auf dem Konto</fliesstext>"
+      # Der Rundgang [21.11.2026] - eine Frage mit ja oder nein, darum ist die Zahl
+      # immer 1. Beide Formen muessen trotzdem dastehen; die Mehrzahl liest niemand.
+      rundgang:
+        eins: "<fliesstext>- 1 abgeschlossener Rundgang durch Altfurt</fliesstext>"
+        viele: "<fliesstext>- {zahl} abgeschlossene Rundgaenge</fliesstext>"
 
 waehrung:
   # {zahl} setzt das Programm mit deutschen Tausenderpunkten ein. Nur das Wort ist
@@ -2374,6 +2379,10 @@ shop:
     ware-unlesbar: "<warnung>Dieser Shop handelt nicht mehr</warnung><fliesstext> - sag es seinem Besitzer.</fliesstext>"
     # {ware} - die Shopkiste hat nicht genug. MIT DER WARE DARIN, damit der Kunde weiss,
     #   was er wiederholen soll.
+    # Er hat die Regeln noch nicht angenommen (Plan 10.1) - nur am BUNDstand.
+    # Der Handel zwischen zwei Spielern bleibt offen. Die Zeile nennt den WEG:
+    # Eine Absage, die nicht sagt, was zu tun ist, schickt den Spieler ins Forum.
+    nicht-angemeldet: "<warnung>Erst annehmen: /regeln</warnung>"
     ausverkauft: "<warnung>Ausverkauft: {ware}</warnung>"
     # {menge} {ware} - der Kunde hat nicht genug. MIT DER MENGE DES SHOPS: Ein Shop, der
     #   16 Stueck je Handel nimmt, lehnt auch 15 ab - ohne die Zahl sieht der Kunde
@@ -2956,6 +2965,80 @@ regeln:
   fuss: "<gedaempft>Wer dagegen handelt, verliert Rang, Grund oder den Zugang.</gedaempft>"
   # Der Knopf, der das Fenster schliesst. Auch er GENAU EINE Zeile.
   knopf: "<betont>Gelesen</betont>"
+
+# DIE ANMELDUNG IM BUERGERAMT - /regeln annehmen [21.11.2026, Schritt 13 Teil C].
+#
+# WER ZUM ERSTEN MAL ANKOMMT, bekommt beim Beitritt ein FENSTER mit zwei Knoepfen: den
+#   Regeltext von oben, darunter die Frage, und dann Annehmen oder Spaeter. Erst nach der
+#   Annahme handelt er am Bundesmarkt; alles andere kann er von Anfang an.
+# DER REGELTEXT STEHT NICHT HIER, sondern oben unter regeln.text - das Formular zeigt
+#   genau jenen. Ein zweiter Text hier waere derselbe an zwei Orten, und du aenderst
+#   eines Tages nur einen.
+# WELCHE FASSUNG GILT, steht in der config.yml unter anmeldung.fassung. Aenderst du die
+#   Regeln inhaltlich, erhoehe sie - sonst gilt die alte Zustimmung weiter.
+# WER KEIN FENSTER BEKOMMT - ein alter Client ueber ViaProxy -, liest dieselben Zeilen im
+#   Chat samt hinweis: Das ist die einzige Zeile, die ihm den Weg nennt, und darum darf
+#   sie nicht leer bleiben.
+anmeldung:
+  # Im Chat die erste Zeile, im Fenster der Titel. Darum GENAU EINE Zeile.
+  kopf: "<kopf>Aufnahme in den Freimarkenbund</kopf>"
+  # Die Frage unter dem Regeltext - der ganze Unterschied zwischen Lesen und Annehmen.
+  # Sie DARF mehrzeilig sein (Umbruchmarke), wenn du ausfuehrlicher fragen willst.
+  frage: "<hinweis>Nimmst du diese Regeln an? Mit der Annahme wirst du Buerger des Bundes.</hinweis>"
+  # Die zwei Knoepfe des Fensters. Beide GENAU EINE Zeile - ein Knopf traegt keine
+  # zweite. Der erste tippt /regeln annehmen, der zweite schliesst nur; beim naechsten
+  # Beitritt kommt das Fenster wieder.
+  annehmen: "<bestaetigung>Ich nehme an</bestaetigung>"
+  spaeter: "<gedaempft>Spaeter</gedaempft>"
+  # Nach der Annahme - die Aufnahme in den Bund. Plan 10.1: Fiktion und Technik fallen
+  # zusammen, also liest er hier keine Quittung, sondern eine Begruessung.
+  angenommen: "<bestaetigung>Angenommen - willkommen im Freimarkenbund!</bestaetigung>\n<fliesstext>Mit /parzelle nehmen bekommst du deine erste Parzelle, und sie ist gratis.</fliesstext>"
+  # Auf ein zweites /regeln annehmen. Ein eigener Satz und nicht derselbe wie oben: Eine
+  # zweite Begruessung sieht aus, als haette die erste nicht gewirkt.
+  schon-angenommen: "<fliesstext>Du hast die Regeln schon angenommen.</fliesstext>"
+  # DIE BRUECKE FUER EINEN ALTEN CLIENT. Wer kein Fenster sehen kann, liest die Regeln im
+  # Chat und diese Zeile - sie nennt den Befehl ausgeschrieben, weil er so zu tippen ist.
+  hinweis: "<hinweis>Tippe /regeln annehmen, um die Regeln anzunehmen.</hinweis>"
+  # Die Konsole kann nicht zustimmen - eine Zustimmung ist die Erklaerung eines Menschen.
+  nur-spieler: "<fliesstext>Annehmen kann nur ein Spieler - die Konsole stimmt fuer niemanden zu.</fliesstext>"
+  # Wenn anmeldung.an auf false steht und jemand den Befehl doch tippt.
+  nicht-verlangt: "<fliesstext>Auf diesem Server ist keine Anmeldung noetig.</fliesstext>"
+
+# DER RUNDGANG DURCH ALTFURT - Plan 10.2 [21.11.2026, Schritt 13 Teil D].
+#
+# WER EINE STATION BETRITT, liest zwei Zeilen: ihren Namen mit dem Fortschritt (die Zeile
+#   station-entdeckt hier) und ihren eigenen Text. Beim zweiten Betreten nichts - ein
+#   Stationstext bei jedem Schritt durch dieselbe Tuer waere eine Plage.
+#
+# DIE STATIONEN SELBST STEHEN NICHT HIER, denn welche es gibt, bestimmst du in der
+#   config.yml unter rundgang.stationen. Je Station gehoeren ZWEI Zeilen hierher, und ihr
+#   Schluessel folgt dem Namen aus der config.yml:
+#
+#     rundgang:
+#       station:
+#         buergeramt:
+#           name: "Das Buergeramt"
+#           text: "<fliesstext>Hier bekommst du deine erste Parzelle - gratis, mit /parzelle nehmen.</fliesstext>"
+#         zunfthaus:
+#           name: "Das Zunfthaus"
+#           text: "<fliesstext>Hier waehlst du einen Beruf mit /beruf. Er bestimmt, womit du am besten verdienst.</fliesstext>"
+#
+#   DER NAME IST EIN WORT und traegt KEINE Farbe: Er wird in die Zeile station-entdeckt
+#     eingesetzt, und ein Farbtag darin ueberschriebe die Farbe jener Zeile.
+#   DER TEXT DARF MEHRZEILIG sein (Umbruchmarke) - eine Station, die zwei Dinge erklaert,
+#     braucht zwei Zeilen.
+#   FEHLT EINE DER ZWEI ZEILEN, bleibt die Station begehbar und zeigt ihren Pfad. Das
+#     Startprotokoll nennt jede Station, der eine Zeile fehlt.
+rundgang:
+  # {station} {gesehen} {alle} - die Kopfzeile einer gerade entdeckten Station. BEIDE
+  # Zahlen: "Station 2" sagt nicht, wie weit es noch ist, und ein Einstieg soll zeigen,
+  # wann er fertig ist.
+  station-entdeckt: "<kopf>{station}</kopf><gedaempft> - Station {gesehen} von {alle}</gedaempft>"
+  # Der Abschluss - er kommt GENAU EINMAL. Hier gehoert hin, was ein Neuling als
+  # Naechstes tun soll (Plan 10: "ein sichtbares naechstes Ziel"); darum darf die Zeile
+  # mehrzeilig sein.
+  abgeschlossen: "<bestaetigung>Rundgang geschafft - du kennst Altfurt!</bestaetigung>\n<fliesstext>Jetzt fehlt nur noch deine erste Parzelle: /parzelle nehmen, und sie ist gratis.</fliesstext>"
+
 
 # ALLE BEFEHLE - /hilfe [21.11.2026, Schritt 13 Teil B].
 #

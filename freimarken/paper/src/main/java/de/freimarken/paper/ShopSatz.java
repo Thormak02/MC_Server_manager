@@ -615,7 +615,22 @@ enum ShopSatz implements Satz {
      * <p>Gelesen nur, wenn ueberhaupt gedeckelt wird: {@code bundesmarkt.tagesdeckel: 0}
      * heisst kein Deckel, und dann kommt dieser Satz nie.
      */
-    SHOP_BUND_DECKEL("shop.bund.deckel", Art.SATZ);
+    SHOP_BUND_DECKEL("shop.bund.deckel", Art.SATZ),
+
+    /**
+     * Er hat die Regeln noch nicht angenommen - Plan 10.1 [21.11.2026].
+     *
+     * <p>{@code Art.HANDBALKEN} wie die uebrigen Handelssaetze und nicht {@code Art.SATZ}
+     * wie der Deckel darueber: Dies ist eine Absage auf einen Klick, und die steht in der
+     * Aktionsleiste. Der Deckel ist die Ausnahme, weil er einen Betrag nennt, den man
+     * nachlesen will.
+     *
+     * <p>Er nennt den WEG ({@code /regeln}): Eine Absage, die nicht sagt, was zu tun ist,
+     * schickt den Spieler ins Forum.
+     *
+     * <p>Nur am BUNDstand gelesen - der Handel zwischen zwei Spielern bleibt offen.
+     */
+    SHOP_NICHT_ANGEMELDET("shop.handel.nicht-angemeldet", Art.HANDBALKEN);
 
     private final String pfad;
     private final Art art;

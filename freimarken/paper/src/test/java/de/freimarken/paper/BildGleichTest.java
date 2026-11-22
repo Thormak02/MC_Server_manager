@@ -2293,6 +2293,46 @@ class BildGleichTest {
                         "&#6e7a82Wer dagegen handelt, verliert Rang, Grund oder den Zugang."),
                 new Zeile(RegelnSatz.KNOPF, 1L, Einsatz.keine(),
                         "&#edf1f3Gelesen"),
+                // DIE ANMELDUNG [Schritt 13 Teil C, 21.11.2026]. Der Regeltext steht
+                // oben und nicht hier - das Formular zeigt jenen, und ein zweiter waere
+                // derselbe Text an zwei Orten.
+                new Zeile(AnmeldeSatz.KOPF, 1L, Einsatz.keine(),
+                        "&#c6a15bAufnahme in den Freimarkenbund"),
+                new Zeile(AnmeldeSatz.FRAGE, 1L, Einsatz.keine(),
+                        "&#e3c57eNimmst du diese Regeln an? Mit der Annahme wirst du "
+                        + "Buerger des Bundes."),
+                new Zeile(AnmeldeSatz.ANNEHMEN, 1L, Einsatz.keine(),
+                        "&#73bf96Ich nehme an"),
+                new Zeile(AnmeldeSatz.SPAETER, 1L, Einsatz.keine(),
+                        "&#6e7a82Spaeter"),
+                new Zeile(AnmeldeSatz.ANGENOMMEN, 1L, Einsatz.keine(),
+                        "&#73bf96Angenommen - willkommen im Freimarkenbund!"
+                        + "\n&#a5b4bfMit /parzelle nehmen bekommst du deine erste "
+                        + "Parzelle, und sie ist gratis."),
+                new Zeile(AnmeldeSatz.SCHON_ANGENOMMEN, 1L, Einsatz.keine(),
+                        "&#a5b4bfDu hast die Regeln schon angenommen."),
+                new Zeile(AnmeldeSatz.HINWEIS, 1L, Einsatz.keine(),
+                        "&#e3c57eTippe /regeln annehmen, um die Regeln anzunehmen."),
+                new Zeile(AnmeldeSatz.NUR_SPIELER, 1L, Einsatz.keine(),
+                        "&#a5b4bfAnnehmen kann nur ein Spieler - die Konsole stimmt fuer "
+                        + "niemanden zu."),
+                new Zeile(AnmeldeSatz.NICHT_VERLANGT, 1L, Einsatz.keine(),
+                        "&#a5b4bfAuf diesem Server ist keine Anmeldung noetig."),
+                // Die Absage am BUNDstand - sie steht bei den Handelssaetzen in der
+                // Datei und darum hier bei den uebrigen Bescheiden.
+                new Zeile(ShopSatz.SHOP_NICHT_ANGEMELDET, 1L, Einsatz.keine(),
+                        "&#d9564dErst annehmen: /regeln"),
+                // DER RUNDGANG [Schritt 13 Teil D]. Die Saetze der einzelnen Stationen
+                // stehen hier nicht - welche es gibt, bestimmt der Betreiber, und ab
+                // Werk gibt es keine.
+                new Zeile(RundgangSatz.STATION, 1L,
+                        Einsatz.von("station", "Das Zunfthaus").mit("gesehen", 2L)
+                                .mit("alle", 6L),
+                        "&#c6a15bDas Zunfthaus&#6e7a82 - Station 2 von 6"),
+                new Zeile(RundgangSatz.ABGESCHLOSSEN, 1L, Einsatz.keine(),
+                        "&#73bf96Rundgang geschafft - du kennst Altfurt!"
+                        + "\n&#a5b4bfJetzt fehlt nur noch deine erste Parzelle:"
+                        + " /parzelle nehmen, und sie ist gratis."),
                 new Zeile(HilfeSatz.KOPF, 1L, Einsatz.keine(),
                         "&#c6a15bAlle Befehle des Freimarkenbundes"),
                 new Zeile(HilfeSatz.GRUPPE_GRUND, 1L, Einsatz.keine(),
@@ -2506,7 +2546,16 @@ class BildGleichTest {
                 new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_GUTHABEN, 2L, Einsatz.von("zahl", sprache.betrag(2L)),
                         "&#a5b4bf- 2 Mark auf dem Konto"),
                 new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_GUTHABEN, 0L, Einsatz.von("zahl", sprache.betrag(0L)),
-                        "&#a5b4bf- 0 Mark auf dem Konto"));
+                        "&#a5b4bf- 0 Mark auf dem Konto"),
+                // Der Rundgang [21.11.2026] - eine Frage mit ja oder nein. Die
+                // Einzahlform nennt die 1 ausgeschrieben, wie beim Beruf; die Mehrzahl
+                // liest im Betrieb niemand, muss aber dastehen.
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_RUNDGANG, 1L, Einsatz.von("zahl", 1L),
+                        "&#a5b4bf- 1 abgeschlossener Rundgang durch Altfurt"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_RUNDGANG, 2L, Einsatz.von("zahl", 2L),
+                        "&#a5b4bf- 2 abgeschlossene Rundgaenge"),
+                new Zeile(MarkSatz.MUENZHAUS_BEDINGUNG_RUNDGANG, 0L, Einsatz.von("zahl", 0L),
+                        "&#a5b4bf- 0 abgeschlossene Rundgaenge"));
     }
 
     @ParameterizedTest(name = "11 - {0}")

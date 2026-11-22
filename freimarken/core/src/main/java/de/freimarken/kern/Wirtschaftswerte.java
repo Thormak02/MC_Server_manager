@@ -58,6 +58,8 @@ package de.freimarken.kern;
  *                      Satz als EIN Stueck, und wer mitten in einem Tausch den neuen Kurs
  *                      mit dem alten Deckel bekaeme, tauschte zu etwas, das niemand
  *                      eingestellt hat
+ * @param anmeldung     die Anmeldung im Buergeramt (Plan 10.1) - ob sie verlangt wird
+ *                      und welche Fassung der Regeln heute gilt
  * @param muenzhaus     der Katalog des Muenzhauses (Plan 2.1) - was es fuer Goldmark
  *                      gibt, zu welchem Preis und unter welcher Bedingung. Neben und
  *                      nicht IN {@link Wechselwerte}, obwohl das nur die eigenen Zeilen
@@ -73,7 +75,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                                Freistadtwerte freistaedte, Inselwerte inseln,
                                Angelwerte angeln, Wolkenwerte wolken,
                                Rangwerte raenge, Wechselwerte wechsel,
-                               Muenzwerte muenzhaus) {
+                               Muenzwerte muenzhaus, Anmeldewerte anmeldung) {
 
     /**
      * Die Schluessel in der Einstellungsdatei - hier und nicht an jeder Stelle, die klagt.
@@ -144,7 +146,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
             Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE,
             Truhenwerte.VORGABE, Freistadtwerte.VORGABE, Inselwerte.VORGABE,
             Angelwerte.VORGABE, Wolkenwerte.VORGABE, Rangwerte.VORGABE,
-            Wechselwerte.VORGABE, Muenzwerte.VORGABE);
+            Wechselwerte.VORGABE, Muenzwerte.VORGABE, Anmeldewerte.VORGABE);
 
     public Wirtschaftswerte {
         if (preise == null) {
@@ -230,6 +232,11 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
                     + " und keinen Wechseldeckel - wer den Rueckweg schliessen will,"
                     + " nimmt Wechselwerte.VORGABE.mitDeckel(Wechselwerte.RUECKWEG_ZU)");
         }
+        if (anmeldung == null) {
+            throw new IllegalArgumentException("Ohne Anmeldewerte gibt es keine Anmeldung"
+                    + " - wer sie nicht will, nimmt"
+                    + " new Anmeldewerte(false, Anmeldewerte.VORGABE_FASSUNG)");
+        }
         if (muenzhaus == null) {
             throw new IllegalArgumentException("Ohne Muenzwerte gibt es kein Muenzhaus -"
                     + " wer nichts verkaufen will, nimmt"
@@ -255,7 +262,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(andere, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderem Startguthaben. */
@@ -263,7 +270,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, anderes, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderer Parzellenhoechstzahl. */
@@ -271,7 +278,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, andere, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderer Gruppengroesse. */
@@ -279,7 +286,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, andere,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderer Rangwerbung. */
@@ -287,7 +294,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 andere, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Zeitwerten. */
@@ -295,7 +302,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, andere, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Berufswerten. */
@@ -303,7 +310,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, andere, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Verdienstwerten. */
@@ -311,7 +318,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, andere, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Marktwerten. */
@@ -319,7 +326,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, andere, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Messwerten. */
@@ -327,7 +334,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, andere, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Bonuswerten. */
@@ -335,7 +342,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, andere, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Mietwerten. */
@@ -343,7 +350,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, andere,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Handelsgebuehren. */
@@ -351,7 +358,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 andere, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Zahlen der Freien Truhe. */
@@ -359,7 +366,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, andere, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Zahlen der Freistaedte. */
@@ -367,7 +374,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, andere, inseln, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Zahlen der Meerinseln. */
@@ -375,7 +382,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, andere, angeln, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit einer anderen Angeltabelle. */
@@ -383,7 +390,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, andere, wolken, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Wolkenwerten. */
@@ -391,7 +398,15 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, andere, raenge,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
+    }
+
+    /** Dieselben Werte mit einer anderen Anmeldung. */
+    public Wirtschaftswerte mitAnmeldung(Anmeldewerte andere) {
+        return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
+                rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
+                handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
+                wechsel, muenzhaus, andere);
     }
 
     /** Dieselben Werte mit anderem Muenzhauskatalog. */
@@ -399,7 +414,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                wechsel, andere);
+                wechsel, andere, anmeldung);
     }
 
     /** Dieselben Werte mit anderen Kursen und anderem Wechseldeckel. */
@@ -407,7 +422,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, raenge,
-                andere, muenzhaus);
+                andere, muenzhaus, anmeldung);
     }
 
     /** Dieselben Werte mit einer anderen Rangleiter. */
@@ -415,7 +430,7 @@ public record Wirtschaftswerte(Preisstaffel preise, long startguthaben, int hoec
         return new Wirtschaftswerte(preise, startguthaben, hoechstzahl, gruppenFelder,
                 rangWerbung, zeit, berufe, verdienst, markt, messung, bonus, laeden,
                 handel, truhe, freistaedte, inseln, angeln, wolken, andere,
-                wechsel, muenzhaus);
+                wechsel, muenzhaus, anmeldung);
     }
 
     /** Ob aus dieser Zahl ein Startguthaben werden kann; 0 heisst: mit nichts anfangen. */

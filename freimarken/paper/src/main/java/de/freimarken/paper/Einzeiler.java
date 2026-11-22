@@ -43,6 +43,11 @@ final class Einzeiler {
      * -Stelle des Spielmoduls, und keiner steht hier ohne eine.
      */
     private static final Set<Satz> CHATZEILEN = Set.of(
+            // Das Anmeldeformular [21.11.2026]: KOPF ist der Fenstertitel, ANNEHMEN und
+            // SPAETER sind die zwei Knoepfe, und alle drei nehmen EIN Component. Die
+            // FRAGE steht ausdruecklich nicht hier - sie darf mehrzeilig sein, wie der
+            // Regeltext, den sie begleitet.
+            AnmeldeSatz.ANNEHMEN, AnmeldeSatz.KOPF, AnmeldeSatz.SPAETER,
             BlockSatz.KOPF_ORT, BlockSatz.KOPF_SPIELER, BlockSatz.LEER_ORT,
             BlockSatz.LEER_SPIELER, BlockSatz.ZEILE, BlockSatz.ZEILE_ABGEWIESEN,
             BlockSatz.ZEILE_MIT_ORT, BlockSatz.ZEILE_MIT_ORT_ABGEWIESEN,

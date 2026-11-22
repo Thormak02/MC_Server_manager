@@ -397,6 +397,107 @@ wechsel:
 # den Vertipper ist die Rechenprobe im Startlauf - sie nennt jeden Preis auch in Mark.
 #
 # /freimarken neuladen nimmt den ganzen Abschnitt an, samt Vervollstaendigung im Befehl.
+# DIE ANMELDUNG IM BUERGERAMT - Plan 10.1 [Schritt 13 Teil C, 21.11.2026].
+#
+# WER ZUM ERSTEN MAL ANKOMMT, nimmt die Regeln als FORMULAR an und nicht als Textwand,
+#   die man wegklickt. Erst danach handelt er am Bundesmarkt. Die Regeln selbst stehen in
+#   der sprache.yml unter regeln.text - was hier steht, ist nur, OB und WOZU.
+#
+# DIE FASSUNG IST DIE WICHTIGSTE ZEILE DIESES ABSCHNITTS. Sie sagt, zu WELCHEN Regeln
+#   zugestimmt wurde. Aenderst du regeln.text und laesst die Fassung stehen, gilt die alte
+#   Zustimmung weiter - niemand wird neu gefragt, und der Nachweis in der Datenbank zeigt
+#   auf einen Text, den es nicht mehr gibt. Erhoehe sie also, wenn du die Regeln
+#   inhaltlich aenderst; einen Tippfehler zu verbessern ist kein Grund.
+#   Das Programm zaehlt sie NICHT selbst hoch: Dafuer muesste es den Text vergleichen, und
+#   dann waere jedes verbesserte Komma eine neue Zustimmungspflicht fuer alle.
+#
+# WAS BEIM AENDERN GESCHIEHT: Jeder, der die neue Fassung noch nicht angenommen hat,
+#   bekommt beim naechsten Beitritt das Formular - auch wer seit Monaten dabei ist. Bis er
+#   annimmt, sagt der Bundesmarkt ab; alles andere kann er wie bisher.
+#
+# WO DIE ANNAHME LIEGT: in der Datenbank, eine Zeile je Spieler, mit Fassung und
+#   Zeitpunkt. OHNE Datenbank laeuft der Server fluechtig und vergisst sie beim Neustart -
+#   dann fragt er jeden nach jedem Neustart erneut. Wer die Zustimmung als NACHWEIS
+#   braucht, braucht eine Datenbank.
+#
+# /freimarken neuladen nimmt beide Zeilen an.
+anmeldung:
+  # Ob die Anmeldung verlangt wird. Aus heisst: kein Formular, kein Riegel am
+  # Bundesmarkt, und die schon abgelegten Annahmen bleiben unangetastet stehen. Fuer
+  # einen Server, dessen Regeln noch nicht geschrieben sind - niemand soll einem leeren
+  # Text zustimmen.
+  an: true
+
+  # Die Bezeichnung der heute geltenden Regeln. IN ANFUEHRUNGSZEICHEN, denn ein Datum
+  # ohne sie liest YAML als Datum und nicht als Text. Erlaubt sind Kleinbuchstaben,
+  # Ziffern, Punkt, Unterstrich und Bindestrich, hoechstens 32 Zeichen - ein Datum, eine
+  # Nummer oder beides. Was darin steht, ist deine Sache; das Programm vergleicht nur.
+  fassung: "2026-11-21"
+
+# DER RUNDGANG DURCH ALTFURT - Plan 10.2 [Schritt 13 Teil D, 21.11.2026].
+#
+# EIN WEG MIT STATIONEN: Plan 10.2 nennt sechs - Buergeramt, Zunfthaus, Markthalle mit
+#   der Freien Truhe, Muenzhaus, Bundesratshaus und das Stadttor in die Marktstadt. Wer
+#   eine Station BETRITT, liest zum ersten Mal, was man dort tut; beim zweiten Mal nichts.
+#   Plan 10.2 verlangt "ein Ort, kein Textfenster".
+#
+# AB WERK IST DIE LISTE LEER, und das ist kein Mangel: Die Gebaeude in Altfurt sind
+#   Handarbeit. Ein Bereich auf einem Platz, auf dem nichts steht, waere eine Station, die
+#   niemand findet. Ohne Stationen gibt es keinen Rundgang - die Wache wird nicht
+#   angemeldet, und niemand liest etwas.
+#
+# WENN DEINE GEBAEUDE STEHEN, traegst du je Station zwei Ecken ein:
+#
+#   rundgang:
+#     welt: altfurt
+#     stationen:
+#       buergeramt:
+#         von: [10, -60, 10]
+#         bis: [20, -55, 20]
+#       zunfthaus:
+#         von: [30, -60, 10]
+#         bis: [40, -55, 20]
+#
+#   DIE HOEHE GEHOERT DAZU. Altfurt ist flach (art: flach): Der Boden liegt auf y=-61, der
+#     erste freie Block auf y=-60. Ein Bereich, der nur in der Ebene liegt, zaehlte einen
+#     Spieler auch dann, wenn er zwanzig Bloecke darueber fliegt - nimm die Hoehe deines
+#     Raumes.
+#   BEIDE ECKEN SIND EINGESCHLOSSEN, wie bei den Ladeneinheiten.
+#   DIE REIHENFOLGE IST DER WEG. Sie entscheidet nicht, wohin ein Spieler zuerst darf -
+#     jede Station zaehlt, sobald er sie betritt -, aber sie steht so im Startprotokoll,
+#     und daran siehst du, ob dein Weg am Ausgang beginnt.
+#   HOECHSTENS ZWOELF Stationen, und hoechstens 64x64x64 Bloecke je Station: Eine Station
+#     ist ein Gebaeude, kein Stadtteil. Ein Bereich von der Groesse Altfurts waere mit dem
+#     ersten Schritt gesehen.
+#   ZWEI STATIONEN, DIE SICH BLOECKE TEILEN, werden BEIDE verworfen - sonst entschiede die
+#     Reihenfolge der Eintraege, welche ein Spieler gesehen hat.
+#
+# JEDE STATION BRAUCHT ZWEI ZEILEN IN DER sprache.yml:
+#     rundgang.station.buergeramt.name: "Das Buergeramt"
+#     rundgang.station.buergeramt.text: "<fliesstext>Hier ...</fliesstext>"
+#   Fehlt eine, bleibt die Station begehbar und zeigt ihren Pfad - haesslich, aber nicht
+#   kaputt. Das Startprotokoll nennt jede Station, die ihre Zeilen nicht hat.
+#
+# WENN DU DEN RUNDGANG AN EINEN RANG HAENGEN WILLST (Plan 9 sieht ihn fuer den Siedler
+#   vor), traegst du bei der Stufe eine Zeile ein:
+#     raenge.leiter.siedler.bedingungen.rundgang: 1
+#   Erst dann wirkt er auf den Aufstieg. Ohne Stationen ist diese Bedingung NICHT
+#   erfuellbar - darum steht sie ab Werk nicht in der Leiter.
+#
+# NUR BEIM START GELESEN: Stationen sind ORTE. Verschoebe ein Neuladen einen Bereich,
+#   haette ein Spieler eine Station gesehen, an der er nie war - dieselbe Entscheidung wie
+#   bei den Ladeneinheiten und den Toren der Welten.
+rundgang:
+  # Die Welt, in der die Stationen liegen. Sie muss im Abschnitt welten: stehen, sonst
+  # gilt keine Station.
+  #
+  # NUR BEIM START GELESEN.
+  welt: altfurt
+
+  # Je Station ein Block mit von und bis. Ab Werk keiner - siehe oben.
+  stationen: {}
+
+
 muenzhaus:
   # Ob ueberhaupt verkauft wird. Aus heisst: Kontostand und Verlauf der Goldmark bleiben
   # zu sehen, gekauft wird nichts. Dasselbe gilt fuer einen leeren Katalog - aber die

@@ -85,7 +85,12 @@ final class Wirtschaftsliste {
      */
     static final List<String> NUR_BEIM_START_WELTEN = List.of(
             Freistadtliste.PFAD_WELT, Inselliste.PFAD_WELT,
-            Ladenliste.PFAD_WELT, Wolkenliste.PFAD_WELT);
+            Ladenliste.PFAD_WELT, Wolkenliste.PFAD_WELT,
+            // Der Rundgang [21.11.2026]: Seine Stationen sind ORTE und werden nur beim
+            // Start gelesen. Verschoebe ein Neuladen einen Bereich, haette ein Spieler
+            // eine Station gesehen, an der er nie war - und eine andere, an der er
+            // stand, nicht. Dieselbe Entscheidung wie bei den vier daneben.
+            Rundgangsliste.PFAD_WELT);
 
     /** Wie viele Preisstufen die Rechenprobe im Protokoll nennt. */
     private static final int STUFEN_IM_BERICHT = 4;
@@ -254,6 +259,13 @@ final class Wirtschaftsliste {
         klagen.addAll(muenzhaus.klagen());
         bericht.addAll(muenzhaus.bericht());
 
+        // Die Anmeldung im Buergeramt [Schritt 13 Teil C]: ob sie verlangt wird und
+        // welche Fassung der Regeln gilt. Haengt an keinem anderen Leser - die Fassung
+        // ist eine Bezeichnung, die der Betreiber setzt, und keine gerechnete Zahl.
+        Anmeldeliste.Ergebnis anmeldung = Anmeldeliste.ausKonfiguration(wurzel);
+        klagen.addAll(anmeldung.klagen());
+        bericht.addAll(anmeldung.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -287,7 +299,8 @@ final class Wirtschaftsliste {
                 markt.werte(), messung.werte(), bonus.werte(), laeden.werte(),
                 handel.werte(), truhe.werte(), freistaedte.werte(),
                 inseln.werte(), angeln.werte(), wolken.werte(),
-                raenge.werte(), wechsel.werte(), muenzhaus.werte()), klagen,
+                raenge.werte(), wechsel.werte(), muenzhaus.werte(),
+                anmeldung.werte()), klagen,
                 bericht);
     }
 

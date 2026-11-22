@@ -71,7 +71,7 @@ class WirtschaftsstandTest {
                 Bonuswerte.VORGABE, Mietwerte.VORGABE, Shopwerte.VORGABE,
                 Truhenwerte.VORGABE, Freistadtwerte.VORGABE, Inselwerte.VORGABE,
                 Angelwerte.VORGABE, Wolkenwerte.VORGABE, Rangwerte.VORGABE,
-                Wechselwerte.VORGABE, Muenzwerte.VORGABE);
+                Wechselwerte.VORGABE, Muenzwerte.VORGABE, Anmeldewerte.VORGABE);
     }
 
     /**

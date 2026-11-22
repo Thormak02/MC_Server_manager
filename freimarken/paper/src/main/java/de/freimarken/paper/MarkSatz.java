@@ -521,6 +521,10 @@ enum MarkSatz implements Satz {
     MUENZHAUS_BEDINGUNG_GUTHABEN("mark.muenzhaus.bedingung.guthaben", Art.GEZAEHLT,
             "zahl"),
 
+    /** Siehe {@link #MUENZHAUS_BEDINGUNG_TAETIGE_STUNDEN} [21.11.2026]. */
+    MUENZHAUS_BEDINGUNG_RUNDGANG("mark.muenzhaus.bedingung.rundgang", Art.GEZAEHLT,
+            "zahl"),
+
     /**
      * Das Wort fuer einen Betrag in GOLDMARK - zum Beispiel {@code "{zahl} Goldmark"}.
      *
@@ -596,6 +600,7 @@ enum MarkSatz implements Satz {
             case PARZELLEN -> MUENZHAUS_BEDINGUNG_PARZELLEN;
             case BERUF -> MUENZHAUS_BEDINGUNG_BERUF;
             case GUTHABEN -> MUENZHAUS_BEDINGUNG_GUTHABEN;
+            case RUNDGANG -> MUENZHAUS_BEDINGUNG_RUNDGANG;
         };
     }
 }

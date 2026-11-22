@@ -51,7 +51,8 @@ final class Sprachschluessel {
             MarktSatz.class, BonusSatz.class, LadenSatz.class, MietSatz.class,
             ShopSatz.class, BlockSatz.class, TruheSatz.class, FreistadtSatz.class,
             WerderSatz.class, WolkeSatz.class, RangSatz.class,
-            MenueSatz.class, RegelnSatz.class, HilfeSatz.class);
+            MenueSatz.class, RegelnSatz.class, HilfeSatz.class,
+            AnmeldeSatz.class, RundgangSatz.class);
 
     /** Alle Saetze, aus ALLEN Bereichen - einmal gebaut, unveraenderlich. */
     private static final List<Satz> ALLE = sammle();
@@ -140,7 +141,13 @@ final class Sprachschluessel {
             return Aufgabenname.ausPfad(pfad);
         }
         // Die DRITTE Familie, seit es das Muenzhaus gibt [Schritt 12, Teil G].
-        return Muenzname.passt(pfad) ? Muenzname.ausPfad(pfad) : null;
+        if (Muenzname.passt(pfad)) {
+            return Muenzname.ausPfad(pfad);
+        }
+        // Die Stationen des Rundgangs [21.11.2026] - dieselbe offene Familie: Welche es
+        // gibt, steht in der config.yml, und der Betreiber MUSS je Station zwei Zeilen
+        // setzen koennen. Ohne diesen Zweig waere jede davon ein unbekannter Schluessel.
+        return Stationssatz.passt(pfad) ? Stationssatz.ausPfad(pfad) : null;
     }
 
     /**
@@ -156,7 +163,13 @@ final class Sprachschluessel {
      */
     static boolean gehoertZuFamilie(Satz satz) {
         return satz instanceof Berufsname || satz instanceof Aufgabenname
-                || satz instanceof Muenzname;
+                || satz instanceof Muenzname
+                // Die vierte offene Familie [21.11.2026]: die Stationen des Rundgangs.
+                // Ohne diese Zeile wuerfe der erste Schritt in ein Gebaeude, dessen
+                // Sprachzeile der Betreiber vergessen hat - mitten im Spiel, und
+                // mitgerissen waere auch jede richtig benannte Station. Genau das ist
+                // am 20.11.2026 beim Muenzhaus gemessen worden.
+                || satz instanceof Stationssatz;
     }
 
     /** Alle Pfade, die in der Datei stehen duerfen - mit {@code .eins}/{@code .viele}. */
@@ -398,6 +411,7 @@ final class Sprachschluessel {
             case KEIN_GELD -> ShopSatz.SHOP_KEIN_GELD;
             case SHOP_PLEITE -> ShopSatz.SHOP_PLEITE;
             case BUND_DECKEL -> ShopSatz.SHOP_BUND_DECKEL;
+            case NICHT_ANGEMELDET -> ShopSatz.SHOP_NICHT_ANGEMELDET;
             case GESTOERT -> ShopSatz.SHOP_HANDEL_GESTOERT;
             case KEIN_SHOP -> throw new IllegalArgumentException("Auf einen Klick"
                     + " ohne Shop wird geschwiegen - dafuer gibt es keinen Satz,"

@@ -289,7 +289,12 @@ class GrenzeTest {
     // keinen einzigen Aufrufer und zaehlt in Sprache.java mit. Wer sie eines Tages durch
     // ein eigenes sendActionBar ersetzt, wird von dieser Tafel gefragt, warum.
     private static final Set<String> SENDEN_ERLAUBT = new TreeSet<>(List.of(
-            "AnfragenBefehle.java", "Ankunftswache.java", "Aufwaermzeit.java",
+            "AnfragenBefehle.java",
+            // Das Anmeldeformular [21.11.2026]: EINE Sendestelle fuer den
+            // Chatweg - dieselben Zeilen, die ins Fenster gegangen waeren, plus
+            // den Hinweis, wie man ohne Fenster zustimmt.
+            "Anmeldeformular.java",
+            "Ankunftswache.java", "Aufwaermzeit.java",
             "BerufeBefehle.java",
             // Der Verfallslauf [Teil E5]: Er warnt den Stadtbesitzer beim Beitritt und
             // meldet ihm die Wiederbelebung. Eine Durchsage, die am Beitritt haengt,
@@ -328,6 +333,10 @@ class GrenzeTest {
             // kein Chat.
             "MenueBefehle.java",
             "Rangwache.java",
+            // Die Rundgangswache [21.11.2026]: EINE Sendestelle - was ein
+            // Spieler beim ERSTEN Betreten einer Station liest. Beim zweiten
+            // schweigt sie, und das ist der haeufigste Fall.
+            "Rundgangswache.java",
             // /rang [20.11.2026]: EINE Sendestelle fuer beide Zweige und jede Absage.
             "RangBefehle.java",
             "Reise.java", "RueckwegBefehle.java", "Schutzwache.java",
@@ -456,6 +465,7 @@ class GrenzeTest {
      */
     private static final Map<String, Integer> SENDESTELLEN = Map.ofEntries(
             Map.entry("AnfragenBefehle.java", 12),
+            Map.entry("Anmeldeformular.java", 1),
             Map.entry("Ankunftswache.java", 2),
             Map.entry("Aufwaermzeit.java", 2),
             // EINS, und das ist eine Entscheidung: Alle fuenf Zweige von /beruf laufen
@@ -518,6 +528,7 @@ class GrenzeTest {
             Map.entry("MenueBefehle.java", 1),
             Map.entry("RegelnBefehle.java", 1),
             Map.entry("Rangwache.java", 1),
+            Map.entry("Rundgangswache.java", 1),
             // /rang: beide Zweige, die Absage an die Konsole, die Stoerung und "keine
             // Raenge" gehen durch dasselbe private sende(). Eine Zwei hier heisst, dass
             // sich ein Zweig seinen eigenen Weg gebaut hat.
@@ -4353,6 +4364,187 @@ class GrenzeTest {
                 + " raeumt sie nicht weg. Serverprobe.niemandMehrDa() gehoert in ihr"
                 + " Vorher - sonst findet eine andere Probendatei spaeter den falschen"
                 + " Spieler unter einem Namen, den sie selbst vergeben hat.");
+    }
+
+    @Test
+    @DisplayName("31dk - die Rundgangswache wird angemeldet, und nur bei vorhandenen"
+            + " Stationen")
+    void rundgangswacheIstVerdrahtet() {
+        // OHNE DIESE ZEILEN ist der ganze Rundgang unsichtbar wirkungslos: Die Ablage
+        // bliebe leer, niemand saehe eine Station, und eine Rangstufe, die ihn verlangt,
+        // waere unerreichbar - ohne dass eine Probe etwas davon merkt. Dieselbe
+        // Fehlergestalt wie bei der Truhenwache (31an), der Rangwache (31cr), der
+        // Menuewache (31de) und der Anmeldewache (31di).
+        String plugin = plugintext();
+
+        assertTrue(plugin.contains("new Rundgang(rundgangsablage, rundgangsstationen,"
+                        + " uhr)"),
+                "der Rundgang wird nirgends gebaut - dann ist das Feld null, und der"
+                        + " Aufstiegslauf kann die Bedingung nicht messen");
+        assertTrue(plugin.contains("registerEvents(rundgangswache, this)"),
+                "die Rundgangswache wird nicht angemeldet - dann sieht niemand eine"
+                        + " Station, und der Rundgang ist nie abgeschlossen");
+
+        // UND NUR BEI VORHANDENEN STATIONEN: Ab Werk gibt es keine, und dann darf kein
+        // Zuhoerer an jedem Schritt haengen. Dieselbe Entscheidung wie bei der Torwache.
+        int schalter = plugin.indexOf("if (rundgangswache.hatStationen())");
+        int anmelden = plugin.indexOf("registerEvents(rundgangswache, this)");
+        assertTrue(schalter >= 0 && schalter < anmelden,
+                "die Anmeldung muss INNERHALB von if (rundgangswache.hatStationen())"
+                        + " stehen - sonst hoert sie jeden Schritt jedes Spielers ab,"
+                        + " ohne dass es eine Station gibt");
+
+        // UND DIE ABLAGE IN BEIDEN BETRIEBSARTEN. Fehlte sie in einem Zweig, waere
+        // rundgangsablage dort null und der erste Schritt in ein Gebaeude ein Absturz.
+        assertTrue(plugin.contains("rundgangsablage = new SpeicherRundgang()"),
+                "ohne Datenbank gibt es keine Rundgangsablage");
+        assertTrue(plugin.contains("rundgangsablage = new MariaRundgang(datenbank)"),
+                "mit Datenbank gibt es keine Rundgangsablage");
+
+        // UND DER RUNDGANG MUSS VOR DEM AUFSTIEGSLAUF STEHEN: Jener nimmt ihn als
+        // fuenfte Messquelle, und ein null dort waere ein Wurf beim Start.
+        assertTrue(plugin.indexOf("rundgang = new Rundgang(")
+                        < plugin.indexOf("aufstiegslauf = new Aufstiegslauf("),
+                "der Rundgang muss VOR dem Aufstiegslauf gebaut werden");
+    }
+
+    @Test
+    @DisplayName("31dl - die Startpruefung der Stationszeilen ist ueberhaupt GEBAUT")
+    void stationenOhneWortWerdenGenannt() {
+        // DREI STELLEN SAGEN DIESE PRUEFUNG ZU: Stationssatz ("beim Start wird gefragt,
+        // ob jede Station ihre zwei Zeilen hat"), der Kommentar der config.yml ("Das
+        // Startprotokoll nennt jede Station, die ihre Zeilen nicht hat") und die
+        // Rechenprobe des Lesers. Eine Zusage ohne Bau waere hier besonders teuer: Der
+        // Betreiber erfaehrt sonst erst von einem Spieler, dass in seinem Zunfthaus ein
+        // Pfad steht.
+        //
+        // NUR DIE EXISTENZ, nicht der Aufruf [21.11.2026]: Dass jede nenne*-Pruefung
+        // auch GERUFEN wird, haelt 31ab - generisch und fuer alle. Beides hier zu
+        // pruefen war ein doppelter Riegel, und zwei Pruefungen fuer denselben Fall
+        // machen sich unpruefbar (gemessen: Die Einspritzung "Aufruf entfernt" wurde von
+        // beiden gefangen). Was 31ab NICHT deckt, ist die fehlende Methode selbst: Dann
+        // findet sie dort niemand, und die Tafel ist gruen.
+        assertTrue(plugintext().contains("private void nenneStationenOhneWort()"),
+                "die zugesagte Startpruefung fehlt - drei Kommentare versprechen sie");
+    }
+
+    @Test
+    @DisplayName("31dn - die Anmeldung entsteht VOR dem Handel und VOR dem Aufstiegslauf")
+    void anmeldungStehtVorIhrenVerbrauchern() {
+        // GEMESSEN IM STARTLAUF vom 21.11.2026, und nur dort zu sehen: Die Zuweisung
+        // stand hinter richteShopsEin(). Shophandel bekam ein null, warf im
+        // Konstruktor - und Paper schaltete das ganze Plugin ab ("Error occurred while
+        // enabling Freimarken"). Alle 4786 Proben waren gruen: Jede baut den Handel
+        // selbst und gibt ihm, was er braucht. Die REIHENFOLGE im onEnable prueft kein
+        // Probenlauf, sondern ein Start - oder diese Tafel.
+        //
+        // Dieselbe Fehlergestalt wie bei der Rangwache und ihrer Ablage (31cr, "die
+        // Wache muss NACH der Ablage entstehen"), nur eine Stufe hoeher: Dort ging es um
+        // zwei Zeilen derselben Methode, hier um zwei Methoden des Starts.
+        String plugin = plugintext();
+
+        int anmeldung = plugin.indexOf("anmeldung = new Anmeldung(");
+        assertTrue(anmeldung >= 0, "die Anmeldung wird nirgends gebaut");
+        assertTrue(anmeldung < plugin.indexOf("richteShopsEin();"),
+                "die Anmeldung muss VOR richteShopsEin() stehen - jener baut den"
+                        + " Shophandel, und der verlangt sie im Konstruktor. Dahinter"
+                        + " bekommt er null, und Paper schaltet das Plugin ab.");
+        assertTrue(anmeldung < plugin.indexOf("regelnBefehle()"),
+                "die Anmeldung muss VOR regelnBefehle() stehen - jener Baum braucht sie"
+                        + " fuer die Weiche zwischen Lesefenster und Anmeldeformular");
+    }
+
+    @Test
+    @DisplayName("31dm - das Formular gibt den JA-Knopf als ERSTEN an confirmation")
+    void jaKnopfStehtVorn() {
+        // DIE EINE ZEILE, DIE KEINE PROBE SEHEN KANN. Die Reihenfolge der zwei Knoepfe
+        // ist an der NAHT geprueft (RegelnBefehlTest 9 sieht, was das Formular
+        // hereingibt) - aber Formularhand ist die einzige Klasse des Plugins ohne
+        // Zeugen: Die Dialog-API stirbt auf dem Probenklassenpfad im
+        // Klasseninitialisierer. Vertauscht man hier die Argumente, stimmt der Knopf
+        // "Spaeter" zu und "Ich nehme an" schliesst nur - ein Fenster, das das Gegenteil
+        // tut, und der ganze Lauf bleibt gruen.
+        //
+        // Gemessen in der Einspritzungsrunde vom 21.11.2026: Dieser Fall war der EINZIGE
+        // von dreissig, den nichts fing. Dieselbe Fehlergestalt wie bei Menuehand
+        // (31dg), nur dass der Anschluss hier eine ARGUMENTREIHENFOLGE ist.
+        String hand = Quellen.text(datei("Formularhand.java"));
+
+        assertTrue(hand.contains("DialogType.confirmation(ja, nein)"),
+                "der JA-Knopf muss der ERSTE sein: DialogType.confirmation(ja, nein)."
+                        + " Vertauscht stimmt der Spaeter-Knopf zu.");
+        // UND DIE TAT HAENGT AM JA-KNOPF, nicht am anderen: Ein commandTemplate am
+        // Nein-Knopf liesse das Schliessen zustimmen.
+        int jaKnopf = hand.indexOf("ActionButton ja = ");
+        int tat = hand.indexOf("DialogAction.commandTemplate(befehl)");
+        int neinKnopf = hand.indexOf("ActionButton nein = ");
+        assertTrue(jaKnopf >= 0 && tat > jaKnopf && tat < neinKnopf,
+                "DialogAction.commandTemplate muss am JA-Knopf stehen und vor dem"
+                        + " Nein-Knopf - sonst tippt das Schliessen den Befehl");
+    }
+
+    @Test
+    @DisplayName("31di - die Anmeldewache wird angemeldet, und nur bei eingeschalteter"
+            + " Anmeldung")
+    void anmeldewacheIstVerdrahtet() {
+        // OHNE DIESE ZEILE IST DIE GANZE ANMELDUNG UNSICHTBAR WIRKUNGSLOS - und zwar
+        // schlimmer als bei den anderen Wachen: Die Ablage bliebe leer, und weil der
+        // BUNDESMARKT an genau dieser Ablage haengt, saehe jeder Spieler dort eine
+        // Absage, die er nicht aufheben kann. Dieselbe Fehlergestalt wie bei der
+        // Truhenwache (31an), der Rangwache (31cr) und der Menuewache (31de).
+        String plugin = plugintext();
+
+        assertTrue(plugin.contains("new Anmeldung(anmeldeablage, wirtschaft, uhr)"),
+                "die Anmeldung wird nirgends gebaut - dann ist das Feld null, und der"
+                        + " erste Klick an einem Bundstand stuerzt ab");
+        assertTrue(plugin.contains("registerEvents(new Anmeldewache("),
+                "die Anmeldewache wird nicht angemeldet - dann kommt beim Beitritt kein"
+                        + " Formular, und niemand kann annehmen, waehrend der"
+                        + " Bundesmarkt zu bleibt");
+
+        // UND NUR BEI an(): Aus heisst wirklich aus - kein Zuhoerer am Beitritt, kein
+        // Lesen der Ablage. Dieselbe Entscheidung wie bei der Torwache (if hatTore()).
+        int schalter = plugin.indexOf("if (anmeldung.an())");
+        int anmelden = plugin.indexOf("registerEvents(new Anmeldewache(");
+        assertTrue(schalter >= 0 && schalter < anmelden,
+                "die Anmeldung der Wache muss INNERHALB von if (anmeldung.an()) stehen -"
+                        + " sonst liest sie bei jedem Beitritt eine Ablage, die niemand"
+                        + " braucht");
+
+        // UND DIE ABLAGE IN BEIDEN BETRIEBSARTEN. Fehlte sie in einem Zweig, waere
+        // anmeldeablage dort null und der erste Beitritt ein Absturz - auf genau dem
+        // Server, auf dem man eine neue Fassung ausprobiert.
+        assertTrue(plugin.contains("anmeldeablage = new SpeicherAnmeldungen()"),
+                "ohne Datenbank gibt es keine Anmeldeablage");
+        assertTrue(plugin.contains("anmeldeablage = new MariaAnmeldungen(datenbank)"),
+                "mit Datenbank gibt es keine Anmeldeablage");
+    }
+
+    @Test
+    @DisplayName("31dj - der Befehl des Annehmen-Knopfes ist ein Zweig, den es gibt")
+    void knopfbefehlIstEinZweig() {
+        // DER KNOPF TIPPT EINEN BEFEHL, und eine getippte Zeichenkette, die ins Leere
+        // zeigt, endet in Brigadiers englischem "Unknown or incomplete command" - mitten
+        // in der Zustimmung, und ohne dass eine Probe des Formulars es sehen koennte:
+        // Jene prueft, WAS der Knopf tippt, nicht ob es den Zweig gibt.
+        //
+        // Darum baut das Formular den Befehl aus den Konstanten des Befehls
+        // (ARGUMENT + " " + ANNEHMEN) statt ihn abzuschreiben, und diese Tafel haelt die
+        // andere Seite: dass der Baum genau diesen Zweig traegt.
+        String formular = Quellen.text(datei("Anmeldeformular.java"));
+        assertTrue(formular.contains("RegelnBefehle.ARGUMENT + \" \"\n            + RegelnBefehle.ANNEHMEN")
+                        || formular.contains("RegelnBefehle.ARGUMENT")
+                        && formular.contains("RegelnBefehle.ANNEHMEN"),
+                "der Befehl des Knopfes muss aus den Konstanten des Befehls gebaut"
+                        + " werden und nicht abgeschrieben sein");
+
+        String befehle = Quellen.text(datei("RegelnBefehle.java"));
+        assertTrue(befehle.contains("Commands.literal(ANNEHMEN)"),
+                "der Baum von /regeln traegt den Zweig ANNEHMEN nicht - dann zeigt der"
+                        + " Knopf des Formulars ins Leere");
+        assertTrue(befehle.contains(".executes(this::nimmAn)"),
+                "der Zweig ANNEHMEN hat kein executes - dann endet der Knopf in"
+                        + " Brigadiers englischer Meldung");
     }
 
     @Test

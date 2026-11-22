@@ -354,6 +354,15 @@ public final class Wirtschaftsstand {
         // oben. Genannt werden nur Posten, die in BEIDEN Katalogen stehen: Fuer einen
         // neuen Posten ist der Preis keine Aenderung, sondern sein erster Wert, und die
         // Menge nennt ihn schon.
+        // DIE ANMELDUNG [Schritt 13 Teil C]. Beide Zeilen gehoeren genannt, und die
+        // FASSUNG ist die wichtigere: Wer sie erhoeht, verlangt von allen eine neue
+        // Zustimmung - das ist die folgenreichste Aenderung, die ein Neuladen tragen
+        // kann, und sie waere ohne diese Zeile stumm. Wer sie VERSEHENTLICH erhoeht
+        // hat, liest es hier und kann sie zuruecknehmen, bevor jemand beitritt.
+        nenneJaNein(geaendert, Anmeldewerte.PFAD_AN,
+                alt.anmeldung().an(), neu.anmeldung().an());
+        nenneWort(geaendert, Anmeldewerte.PFAD_FASSUNG,
+                alt.anmeldung().fassung(), neu.anmeldung().fassung());
         nenneJaNein(geaendert, Muenzwerte.PFAD_AN,
                 alt.muenzhaus().an(), neu.muenzhaus().an());
         nenneMenge(geaendert, Muenzwerte.PFAD_KATALOG,

@@ -1220,6 +1220,102 @@ public final class Datenbank implements AutoCloseable {
               CONSTRAINT fk_goldbuchung_kasse FOREIGN KEY (spieler)
                   REFERENCES goldkassen (spieler) ON DELETE RESTRICT
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 34: die ANNAHME der Regeln - Schritt 13 Teil C, 21.11.2026.
+            //
+            // EINE Zeile je Spieler, und sie entsteht erst bei der ANNAHME. Wer nie
+            // angenommen hat, hat keine Zeile - und das ist jeder, der zum ersten Mal
+            // ankommt. Die Begruendung steht ausfuehrlich an Anmeldeablage; sie ist
+            // dieselbe wie bei raenge: Eine Zeile je Besucher waere eine Tabelle, die
+            // nur Platz braucht.
+            //
+            // DIE FASSUNG IST DER GRUND, WARUM HIER MEHR STEHT ALS EIN ZEITPUNKT. Plan
+            // 10.1 verlangt die Annahme von "Regeln UND Nutzungsbedingungen". Aendert
+            // der Betreiber die Regeln, ist eine Zustimmung von vorher keine Zustimmung
+            // zu den neuen - sie waere eine stille Halbheit, die aussieht wie ein
+            // Nachweis. Welche Fassung HEUTE gilt, steht in der config.yml
+            // (anmeldung.fassung); hier steht, was angenommen WURDE.
+            //
+            // KEIN VERLAUF, also PRIMARY KEY (spieler) und nicht (spieler, fassung): Auf
+            // die Frage "hat er die heutigen Regeln angenommen" muss es genau EINE
+            // Antwort geben. Wer den Verlauf aller Zustimmungen braucht - und bei
+            // Nutzungsbedingungen kann das sein -, bekommt eine zweite Tabelle wie das
+            // Blockbuch und nicht eine zweite Bedeutung fuer diese.
+            //
+            // fassung als VARCHAR(32) und nicht als DATE: Was der Betreiber
+            // hineinschreibt, ist seine Sache - ein Datum, eine Nummer oder beides. Die
+            // 32 sind dieselben wie Anmeldestand.HOECHSTE_FASSUNGSLAENGE; wer eine davon
+            // aendert, muss die andere mitnehmen, sonst scheitert die erste Annahme mit
+            // einer langen Fassung als Datenbankfehler mitten im Spiel.
+            //
+            // angenommen_am als DATETIME(3) in UTC, wie jede Zeitspalte dieses Schemas
+            // ausser den drei TAGesspalten. NOT NULL, weil eine Zustimmung ohne Datum
+            // kein Nachweis ist: Anmeldestand laesst sie gar nicht erst bauen, und die
+            // Spalte haelt dieselbe Zusage noch einmal.
+            //
+            // KEIN FREMDSCHLUESSEL auf kassen, wie bei raenge und berufe: Ein RESTRICT
+            // brachte die Annahme zum Scheitern, sobald eine Kontoeroeffnung einmal
+            // fehlgeschlagen ist; ein CASCADE loeschte den Nachweis stumm mit dem Konto.
+            // Und gerade dieser Nachweis darf nicht an einem Konto haengen - angenommen
+            // hat ein Mensch, nicht ein Guthaben.
+            //
+            // KEIN INDEX auf fassung, obwohl "wer hat die neuen Regeln noch nicht
+            // angenommen" eine naheliegende Frage ist: Sie hat heute keinen Leser. Er
+            // kommt mit dem ersten, als eigener Schritt.
+            """
+            CREATE TABLE IF NOT EXISTS anmeldungen (
+              spieler      CHAR(36)    NOT NULL,
+              fassung      VARCHAR(32) NOT NULL,
+              angenommen_am DATETIME(3) NOT NULL,
+              PRIMARY KEY (spieler)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 35: der RUNDGANG durch Altfurt - Schritt 13 Teil D, 21.11.2026.
+            //
+            // EINE Zeile je Spieler UND Station, also PRIMARY KEY (spieler, station) -
+            // und nicht eine Zeile je Spieler mit einer Zahl. Der Grund steht
+            // ausfuehrlich an Rundgangsablage: Eine Zahl saehe nicht, WELCHE Station
+            // gesehen wurde, und der Betreiber darf seinen Weg aendern. Nach dem
+            // Hinzufuegen einer Station waere der Rundgang mit einer Zahl weiter
+            // abgeschlossen, und ein Spieler haette eine Station nie gesehen, die zum
+            // Weg gehoert.
+            //
+            // DER HAUPTSCHLUESSEL IST DER RIEGEL gegen die doppelte Zeile: Geschrieben
+            // wird mit INSERT IGNORE, und die Zahl der geschriebenen Zeilen ist die
+            // Antwort auf "war es neu". An dieser Antwort haengt, ob der Spieler den
+            // Stationstext liest. Dasselbe Muster wie bei wolke_herausforderung
+            // (Schritt 30).
+            //
+            // station als VARCHAR(32) und nicht als ENUM: Welche Stationen es gibt,
+            // steht in der config.yml und ist frei benennbar - ein ENUM waere der Weg
+            // ein zweites Mal, und eine neue Station braeuchte einen Schemaschritt. Die
+            // 32 sind dieselben wie Rundgangsstation.HOECHSTE_SCHLUESSELLAENGE; wer eine
+            // davon aendert, muss die andere mitnehmen.
+            //
+            // gesehen_am als DATETIME(3) in UTC, wie jede Zeitspalte dieses Schemas
+            // ausser den drei TAGesspalten. Gelesen wird er heute von NIEMANDEM - er
+            // steht hier, weil eine Zeile ohne Zeitpunkt nichts kostet und ein Betreiber
+            // eines Tages nachsehen will, wann ein Spieler wo war. NOT NULL, damit es
+            // keine halbe Zeile gibt.
+            //
+            // KEIN FREMDSCHLUESSEL auf kassen, wie bei raenge, berufe und anmeldungen:
+            // Ein RESTRICT brachte den Rundgang zum Scheitern, sobald eine
+            // Kontoeroeffnung einmal fehlgeschlagen ist; ein CASCADE loeschte den
+            // Fortschritt stumm mit dem Konto.
+            //
+            // KEIN INDEX auf station, obwohl "wie viele haben das Zunfthaus gesehen"
+            // eine naheliegende Frage ist: Sie hat heute keinen Leser. Der
+            // Hauptschluessel beginnt mit spieler, und das ist die Richtung, in der
+            // gefragt wird.
+            """
+            CREATE TABLE IF NOT EXISTS rundgang (
+              spieler    CHAR(36)    NOT NULL,
+              station    VARCHAR(32) NOT NULL,
+              gesehen_am DATETIME(3) NOT NULL,
+              PRIMARY KEY (spieler, station)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -1500,6 +1596,20 @@ public final class Datenbank implements AutoCloseable {
             // nur ein falscher Stand: Der geteilte Vertrag faende bei "ein unbekannter
             // Spieler hat keinen Rang" einen vorgefundenen vor.
             anweisung.execute("DELETE FROM raenge");
+            // Die Annahmen haengen an keinem Fremdschluessel - mit Absicht, siehe
+            // den Schemaschritt -, ihre Stelle in dieser Liste ist also frei. Sie
+            // stehen hier, damit sie nicht uebersehen werden. Ohne diese Zeile
+            // wanderte eine Zustimmung von einer Probe in die naechste, und eine
+            // Probe ueber den ERSTEN Beitritt eines Spielers faende ihn schon
+            // angemeldet - das Formular kaeme nie, und die Probe waere gruen.
+            anweisung.execute("DELETE FROM anmeldungen");
+            // Der Rundgang haengt an keinem Fremdschluessel - mit Absicht, siehe den
+            // Schemaschritt -, seine Stelle in dieser Liste ist also frei. Er steht
+            // hier, damit er nicht uebersehen wird. Ohne diese Zeile wanderten gesehene
+            // Stationen von einer Probe in die naechste, und eine Probe ueber den ERSTEN
+            // Schritt in ein Gebaeude faende ihn schon gesehen - sie waere gruen, ohne
+            // etwas zu pruefen.
+            anweisung.execute("DELETE FROM rundgang");
             // Das Blockbuch haengt an keinem Fremdschluessel - mit Absicht, siehe den
             // Schemaschritt -, seine Stelle in dieser Liste ist also frei. Es steht hier,
             // damit es nicht uebersehen wird. Ohne diese Zeile wandern Protokollzeilen

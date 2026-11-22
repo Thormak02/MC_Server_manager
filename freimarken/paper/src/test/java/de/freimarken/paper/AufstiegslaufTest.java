@@ -11,7 +11,12 @@ import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Rangablage;
 import de.freimarken.kern.Rangstand;
+import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rangwerte;
+import de.freimarken.kern.Rundgang;
+import de.freimarken.kern.Rundgangsstation;
+import de.freimarken.kern.Rundgangsverzeichnis;
+import de.freimarken.kern.SpeicherRundgang;
 import de.freimarken.kern.SpeicherBerufe;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
@@ -236,7 +241,7 @@ class AufstiegslaufTest {
         };
 
         var lauf = new Aufstiegslauf(stand(leiter()), raenge, zeit, lager, berufe,
-                werfende, WELT, uhr(), stumm());
+                werfende, rundgangLeer(), WELT, uhr(), stumm());
 
         assertEquals("siedler", lauf.pruefe(anna).orElseThrow().nachher());
     }
@@ -377,7 +382,7 @@ class AufstiegslaufTest {
             }
         };
         var lauf = new Aufstiegslauf(stand(leiter()), launisch, zeit, lager, berufe,
-                kasse, WELT, uhr(), stumm());
+                kasse, rundgangLeer(), WELT, uhr(), stumm());
 
         var ergebnis = lauf.nachstufung();
 
@@ -410,7 +415,7 @@ class AufstiegslaufTest {
             }
         };
         var lauf = new Aufstiegslauf(stand(leiter()), raenge, tot, lager, berufe, kasse,
-                WELT, uhr(), stumm());
+                rundgangLeer(), WELT, uhr(), stumm());
 
         // Der Start darf daran nicht scheitern: Die Nachstufung ist eine Bequemlichkeit,
         // der Takt holt sie fuer jeden Anwesenden nach. Ein Wurf hier liesse den ganzen
@@ -426,36 +431,111 @@ class AufstiegslaufTest {
     void riegel() {
         var werte = stand(leiter());
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                null, raenge, zeit, lager, berufe, kasse, WELT, uhr(), stumm()));
+                null, raenge, zeit, lager, berufe, kasse, rundgangLeer(), WELT, uhr(),
+                stumm()));
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                werte, null, zeit, lager, berufe, kasse, WELT, uhr(), stumm()));
+                werte, null, zeit, lager, berufe, kasse, rundgangLeer(), WELT, uhr(),
+                stumm()));
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                werte, raenge, null, lager, berufe, kasse, WELT, uhr(), stumm()));
+                werte, raenge, null, lager, berufe, kasse, rundgangLeer(), WELT, uhr(),
+                stumm()));
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                werte, raenge, zeit, null, berufe, kasse, WELT, uhr(), stumm()));
+                werte, raenge, zeit, null, berufe, kasse, rundgangLeer(), WELT, uhr(),
+                stumm()));
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                werte, raenge, zeit, lager, null, kasse, WELT, uhr(), stumm()));
+                werte, raenge, zeit, lager, null, kasse, rundgangLeer(), WELT, uhr(),
+                stumm()));
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                werte, raenge, zeit, lager, berufe, null, WELT, uhr(), stumm()));
+                werte, raenge, zeit, lager, berufe, null, rundgangLeer(), WELT, uhr(),
+                stumm()));
+        // Ohne Rundgang koennte der Lauf die Bedingung RUNDGANG nie messen - und der
+        // erschoepfende Schalter in messe() verlangt eine Messquelle fuer JEDE Art.
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                werte, raenge, zeit, lager, berufe, kasse, null, uhr(), stumm()));
+                werte, raenge, zeit, lager, berufe, kasse, null, WELT, uhr(), stumm()));
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                werte, raenge, zeit, lager, berufe, kasse, "  ", uhr(), stumm()));
+                werte, raenge, zeit, lager, berufe, kasse, rundgangLeer(), null, uhr(),
+                stumm()));
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                werte, raenge, zeit, lager, berufe, kasse, WELT, null, stumm()));
+                werte, raenge, zeit, lager, berufe, kasse, rundgangLeer(), "  ", uhr(),
+                stumm()));
         assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
-                werte, raenge, zeit, lager, berufe, kasse, WELT, uhr(), null));
+                werte, raenge, zeit, lager, berufe, kasse, rundgangLeer(), WELT, null,
+                stumm()));
+        assertThrows(IllegalArgumentException.class, () -> new Aufstiegslauf(
+                werte, raenge, zeit, lager, berufe, kasse, rundgangLeer(), WELT, uhr(),
+                null));
+    }
+
+    @Test
+    @DisplayName("Die Bedingung RUNDGANG haelt auf, wer ihn nicht abgeschlossen hat")
+    void rundgangHaeltAuf() {
+        // Die sechste Bedingungsart [21.11.2026]. Geprueft wird in BEIDE Richtungen -
+        // ohne die zweite Haelfte waere auch eine Messung gruen, die immer 0 gibt (und
+        // damit jeden Aufstieg verhindert), oder eine, die immer 1 gibt.
+        var leiter = new Rangwerte(true, List.of(
+                new Rangwerte.Stufe("reisender", Map.of(), Map.of("parzellen", 1),
+                        List.of()),
+                new Rangwerte.Stufe("siedler", Map.of(Bedingungsart.RUNDGANG, 1L),
+                        Map.of("parzellen", 2), List.of())));
+        UUID anna = UUID.randomUUID();
+        var ablage = new SpeicherRundgang();
+        var station = new Rundgangsstation("buergeramt",
+                new Quader(10, -60, 10, 12, -58, 12));
+        var verzeichnis = Rundgangsverzeichnis.ausStationen(List.of(station));
+        var rundgang = new Rundgang(ablage, verzeichnis, uhr());
+
+        var lauf = new Aufstiegslauf(stand(leiter), raenge, zeit, lager, berufe, kasse,
+                rundgang, WELT, uhr(), stumm());
+
+        assertTrue(lauf.pruefe(anna).isEmpty(),
+                "ohne abgeschlossenen Rundgang steigt er nicht auf");
+
+        rundgang.betreten(anna, "buergeramt");
+
+        assertEquals("siedler", lauf.pruefe(anna).orElseThrow().nachher(),
+                "mit abgeschlossenem Rundgang steigt er auf");
+    }
+
+    @Test
+    @DisplayName("Ohne Stationen ist die Bedingung RUNDGANG nicht erfuellbar")
+    void ohneStationenNichtErfuellbar() {
+        // DER AUSGELIEFERTE ZUSTAND, und darum steht die Bedingung ab Werk nicht in der
+        // Leiter. Waere sie mit null Stationen erfuellt, verschenkte ein Betreiber die
+        // Stufe, ohne eine Zeile zu schreiben.
+        var leiter = new Rangwerte(true, List.of(
+                new Rangwerte.Stufe("reisender", Map.of(), Map.of("parzellen", 1),
+                        List.of()),
+                new Rangwerte.Stufe("siedler", Map.of(Bedingungsart.RUNDGANG, 1L),
+                        Map.of("parzellen", 2), List.of())));
+
+        UUID anna = UUID.randomUUID();
+        var lauf = new Aufstiegslauf(stand(leiter), raenge, zeit, lager, berufe, kasse,
+                rundgangLeer(), WELT, uhr(), stumm());
+
+        assertTrue(lauf.pruefe(anna).isEmpty());
     }
 
     // --- Hilfen ---------------------------------------------------------------
 
+    /**
+     * Ein Rundgang OHNE Stationen - der ausgelieferte Zustand.
+     *
+     * <p>Die meisten Proben hier messen etwas anderes; fuer sie ist der Rundgang nur ein
+     * Mitspieler, der nichts verlangt. Dass er ohne Stationen NICHT abgeschlossen ist,
+     * prueft {@code ohneStationenNichtErfuellbar} ausdruecklich.
+     */
+    private Rundgang rundgangLeer() {
+        return new Rundgang(new SpeicherRundgang(),
+                Rundgangsverzeichnis.ohneStationen(), uhr());
+    }
+
     private Aufstiegslauf lauf(Rangwerte werte) {
-        return new Aufstiegslauf(stand(werte), raenge, zeit, lager, berufe, kasse, WELT,
+        return new Aufstiegslauf(stand(werte), raenge, zeit, lager, berufe, kasse, rundgangLeer(), WELT,
                 uhr(), stumm());
     }
 
     private Aufstiegslauf lauf(Rangwerte werte, Spielzeitablage andere) {
-        return new Aufstiegslauf(stand(werte), raenge, andere, lager, berufe, kasse, WELT,
+        return new Aufstiegslauf(stand(werte), raenge, andere, lager, berufe, kasse, rundgangLeer(), WELT,
                 uhr(), stumm());
     }
 

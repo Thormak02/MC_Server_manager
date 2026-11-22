@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
+import de.freimarken.kern.Anmeldung;
 import org.bukkit.entity.Player;
 
 /**
@@ -45,11 +46,25 @@ final class RegelnBefehle {
     /** Wer die Regeln lesen darf - jeder. Angemeldet mit {@code default: true}. */
     static final String RECHT = "freimarken.regeln";
 
-    /** Der Name des Befehls - er steht woertlich in den Saetzen der Sprachdatei. */
-    private static final String ARGUMENT = "regeln";
+    /**
+     * Der Name des Befehls - er steht woertlich in den Saetzen der Sprachdatei.
+     *
+     * <p>Paketweit sichtbar, weil {@link Anmeldeformular} daraus den Befehl seines
+     * Knopfes baut. Zwei getippte Zeichenketten liefen auseinander, und der Knopf endete
+     * in Brigadiers englischer Meldung.
+     */
+    static final String ARGUMENT = "regeln";
 
     /** Der Zweig, der die Zeilen in den Chat holt statt in ein Fenster. */
     private static final String IM_CHAT = "chat";
+
+    /**
+     * Der Zweig, der die Regeln ANNIMMT - und der Weg ohne Fenster.
+     *
+     * <p>Paketweit sichtbar, aus demselben Grund wie {@link #ARGUMENT}: Der Knopf des
+     * Formulars tippt ihn.
+     */
+    static final String ANNEHMEN = "annehmen";
 
     /**
      * Was ein Formular zeigt - die Naht, siehe {@link Formularhand}.
@@ -63,13 +78,19 @@ final class RegelnBefehle {
 
     private final Formularzeiger zeiger;
     private final Sprache sprache;
+    private final Anmeldung anmeldung;
+    private final Anmeldeformular formular;
 
-    RegelnBefehle(Formularzeiger zeiger, Sprache sprache) {
-        if (zeiger == null || sprache == null) {
-            throw new IllegalArgumentException("/regeln braucht einen Zeiger und Sprache");
+    RegelnBefehle(Formularzeiger zeiger, Sprache sprache, Anmeldung anmeldung,
+            Anmeldeformular formular) {
+        if (zeiger == null || sprache == null || anmeldung == null || formular == null) {
+            throw new IllegalArgumentException("/regeln braucht einen Zeiger, Sprache,"
+                    + " die Anmeldung und ihr Formular");
         }
         this.zeiger = zeiger;
         this.sprache = sprache;
+        this.anmeldung = anmeldung;
+        this.formular = formular;
     }
 
     /**
@@ -84,7 +105,48 @@ final class RegelnBefehle {
                 .executes(zusammenhang -> zeige(zusammenhang, false))
                 .then(Commands.literal(IM_CHAT)
                         .executes(zusammenhang -> zeige(zusammenhang, true)))
+                .then(Commands.literal(ANNEHMEN)
+                        .executes(this::nimmAn))
                 .build();
+    }
+
+    /**
+     * {@code /regeln annehmen} - die Zustimmung, getippt oder geklickt.
+     *
+     * <p><b>Kein eigenes Recht und keine Spielerpflicht als {@code requires}</b>: Der
+     * Zweig haengt am Recht der Wurzel ({@code freimarken.regeln}, fuer jeden), und dass
+     * die Konsole nicht zustimmen kann, ist eine gelesene Absage und keine verborgene
+     * Tuer. Ein Betreiber, der den Zweig nicht findet, weil sein Knoten verborgen ist,
+     * sucht an der falschen Stelle.
+     *
+     * <p><b>Angenommen wird die GELTENDE Fassung</b>, und das entscheidet
+     * {@link Anmeldung#nimmAn} - nicht dieser Zweig. Ein Parameter dafuer waere eine
+     * Tuer, durch die jemand einer alten Fassung zustimmen koennte.
+     */
+    private int nimmAn(CommandContext<CommandSourceStack> zusammenhang) {
+        if (!(zusammenhang.getSource().getSender() instanceof Player wer)) {
+            // Die Konsole stimmt nichts zu: Eine Zustimmung ist die Erklaerung eines
+            // Menschen, und der Betreiber ist nicht jeder Spieler. Gelesen und nicht
+            // verborgen - siehe oben.
+            sende(zusammenhang.getSource().getSender(),
+                    sprache.bau(AnmeldeSatz.NUR_SPIELER, 1L, Einsatz.keine()));
+            return Command.SINGLE_SUCCESS;
+        }
+        if (!anmeldung.an()) {
+            // AUS heisst: Es gibt nichts anzunehmen. Ohne diese Zeile wuerfe
+            // Anmeldung.nimmAn - ein Wurf mitten im Befehl, und der Spieler lase eine
+            // rote englische Zeile fuer eine Lage, die der Betreiber eingestellt hat.
+            sende(wer, sprache.bau(AnmeldeSatz.NICHT_VERLANGT, 1L, Einsatz.keine()));
+            return Command.SINGLE_SUCCESS;
+        }
+        if (anmeldung.nimmAn(wer.getUniqueId())) {
+            sende(wer, sprache.bau(AnmeldeSatz.ANGENOMMEN, 1L, Einsatz.keine()));
+        } else {
+            // Er hatte genau diese Fassung schon. Ein eigener Satz und nicht derselbe:
+            // Eine zweite Begruessung sieht aus, als haette die erste nicht gewirkt.
+            sende(wer, sprache.bau(AnmeldeSatz.SCHON_ANGENOMMEN, 1L, Einsatz.keine()));
+        }
+        return Command.SINGLE_SUCCESS;
     }
 
     /**
@@ -97,6 +159,20 @@ final class RegelnBefehle {
      * Blockbuch - lesen will es der, der getippt hat.
      */
     private int zeige(CommandContext<CommandSourceStack> zusammenhang, boolean imChat) {
+        // WER NOCH NICHT ANGENOMMEN HAT, bekommt das Anmeldeformular statt des
+        // Lesefensters - dasselbe, das die Wache beim Beitritt zeigt, mit zwei Knoepfen.
+        // Die Entscheidung faellt an EINER Stelle (Anmeldung.verlangt), und zwar
+        // derselben, die auch der Bundesmarkt fragt. Auch im Chatzweig: Dort sind es
+        // dieselben Zeilen plus der Hinweis, wie man ohne Fenster zustimmt.
+        if (zusammenhang.getSource().getSender() instanceof Player wer
+                && anmeldung.verlangt(wer.getUniqueId())) {
+            if (imChat) {
+                sende(wer, formular.zeilen());
+            } else {
+                formular.zeige(wer);
+            }
+            return Command.SINGLE_SUCCESS;
+        }
         if (!imChat
                 && zusammenhang.getSource().getSender() instanceof Player wer
                 && zeiger.zeige(wer,

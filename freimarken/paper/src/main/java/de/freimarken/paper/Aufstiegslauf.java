@@ -5,6 +5,7 @@ import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Kasse;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Rangablage;
+import de.freimarken.kern.Rundgang;
 import de.freimarken.kern.Rangregel;
 import de.freimarken.kern.Rangstand;
 import de.freimarken.kern.Rangwerte;
@@ -121,21 +122,34 @@ final class Aufstiegslauf {
     private final String marktwelt;
 
     private final Clock uhr;
+    /**
+     * Die fuenfte Messquelle: der Rundgang durch Altfurt [Schritt 13 Teil D].
+     *
+     * <p>Als HALTER und nicht als Antwort, wie jede Messquelle hier: Gefragt wird im
+     * Augenblick der Messung. Ohne Stationen gibt er immer {@code false}, und eine
+     * Rangstufe, die ihn verlangt, ist dann nicht erreichbar - darum steht die Bedingung
+     * in der ausgelieferten Leiter nicht.
+     */
+    private final Rundgang rundgang;
+
     private final Logger protokoll;
 
     Aufstiegslauf(Wirtschaftsstand wirtschaft, Rangablage raenge,
                   Spielzeitablage spielzeit, BesitzLager lager, Berufsablage berufe,
-                  Kasse kasse, String marktwelt, Clock uhr, Logger protokoll) {
+                  Kasse kasse, Rundgang rundgang, String marktwelt, Clock uhr,
+                  Logger protokoll) {
         if (wirtschaft == null || raenge == null || spielzeit == null || lager == null
-                || berufe == null || kasse == null || uhr == null || protokoll == null) {
+                || berufe == null || kasse == null || rundgang == null || uhr == null
+                || protokoll == null) {
             throw new IllegalArgumentException("Der Aufstiegslauf braucht die Werte, die"
-                    + " Rangablage, alle vier Messquellen, eine Uhr und ein Protokoll");
+                    + " Rangablage, alle FUENF Messquellen, eine Uhr und ein Protokoll");
         }
         if (marktwelt == null || marktwelt.isBlank()) {
             throw new IllegalArgumentException("Ohne Weltschluessel ist \"eigene"
                     + " Parzellen\" nicht zu zaehlen - der Schluessel IST der Riegel");
         }
         this.wirtschaft = wirtschaft;
+        this.rundgang = rundgang;
         this.raenge = raenge;
         this.spielzeit = spielzeit;
         this.lager = lager;
@@ -302,6 +316,11 @@ final class Aufstiegslauf {
                 // sagen. Eine Kappung hier waere eine zweite Schranke fuer dieselbe Sache.
                 case BERUF -> (long) berufe.lies(wer).berufe().size();
                 case GUTHABEN -> kasse.guthaben(wer);
+                // 1 ODER 0, wie beim Beruf die Zahl der gehaltenen: Die Bedingungsart
+                // laesst als Wert nur die 1 zu, und hier ist die Wahrheit ohnehin eine
+                // Frage mit ja oder nein. Ohne Stationen ist die Antwort 0 - dann ist
+                // die Stufe nicht erreichbar, und das ist richtig.
+                case RUNDGANG -> rundgang.abgeschlossen(wer) ? 1L : 0L;
             });
         }
         return gemessen;

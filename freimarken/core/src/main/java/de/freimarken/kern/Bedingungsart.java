@@ -28,12 +28,14 @@ import java.util.Optional;
  * die nie erfuellt wird; der Spieler sucht dann einen Aufstieg, den es nicht geben kann.
  * Ein unbekannter Name in der Datei wird deshalb BEKLAGT und nicht geraten.
  *
- * <p><b>Was hier noch fehlt und mit Absicht fehlt:</b> Der Rundgang (Plan 9, Siedler) wird
- * erst mit Schritt 13 gebaut - eine Bedingung darauf waere heute eine, die niemand
- * erfuellen kann. Dasselbe gilt fuer "eigene Parzelle bebaut" (Plan 9, Buerger): Was
- * "bebaut" misst, steht im Plan nirgends, und eine geratene Zahl waere eine Huerde, die
- * der Betreiber nicht nachrechnen kann. Beide kommen als Zeile dazu, wenn es sie gibt -
- * {@link #ausSchluessel} nimmt sie dann ohne weitere Aenderung an.
+ * <p><b>Der RUNDGANG ist seit dem 21.11.2026 dabei</b> (Schritt 13 Teil D). Er ist die
+ * einzige Art, die nichts zaehlt, sondern eine Frage mit ja oder nein beantwortet - 1
+ * heisst "abgeschlossen", 0 heisst: keine Bedingung. Dieselbe Form wie {@link #BERUF}.
+ *
+ * <p><b>Was noch fehlt und mit Absicht fehlt:</b> "eigene Parzelle bebaut" (Plan 9,
+ * Buerger). Was "bebaut" misst, steht im Plan nirgends, und eine geratene Zahl waere eine
+ * Huerde, die der Betreiber nicht nachrechnen kann. Sie kommt als Zeile dazu, wenn es sie
+ * gibt - {@link #ausSchluessel} nimmt sie dann ohne weitere Aenderung an.
  */
 public enum Bedingungsart {
 
@@ -62,7 +64,21 @@ public enum Bedingungsart {
     BERUF("beruf", "gewaehlter Beruf", 1L),
 
     /** Mark auf dem Konto. */
-    GUTHABEN("guthaben", "Mark auf dem Konto", Freistadtwerte.HOECHSTER_BETRAG);
+    GUTHABEN("guthaben", "Mark auf dem Konto", Freistadtwerte.HOECHSTER_BETRAG),
+
+    /**
+     * Ob der Rundgang abgeschlossen ist - 1 heisst ja, 0 heisst: keine Bedingung.
+     *
+     * <p>Dieselbe Form wie {@link #BERUF}: eine Frage und keine Zahl. Die Hoechstzahl ist
+     * darum 1 - eine 2 waere "zweimal abgeschlossen" und hiesse nichts.
+     *
+     * <p><b>Ohne Stationen ist sie NICHT erfuellbar</b>, und das ist Absicht:
+     * {@code Rundgang.abgeschlossen} gibt dann {@code false}. Darum steht sie in der
+     * ausgelieferten Leiter auch nicht - wer Altfurt gebaut hat, traegt die Stationen
+     * UND diese Zeile ein. Stuende sie ab Werk da, waere der Siedlerrang auf einem
+     * frischen Server unerreichbar.
+     */
+    RUNDGANG("rundgang", "Rundgang abgeschlossen", 1L);
 
     private final String schluessel;
 
@@ -125,7 +141,8 @@ public enum Bedingungsart {
      */
     public boolean istGeld() {
         return switch (this) {
-            case TAETIGE_STUNDEN, ANWESENHEIT_STUNDEN, PARZELLEN, BERUF -> false;
+            case TAETIGE_STUNDEN, ANWESENHEIT_STUNDEN, PARZELLEN, BERUF, RUNDGANG
+                    -> false;
             case GUTHABEN -> true;
         };
     }

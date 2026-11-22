@@ -86,6 +86,8 @@ class SchemaTest {
         -1066266029, // Schritt 31 - Tabelle raenge
         704178029, // Schritt 32 - Tabelle goldkassen
         -816915537, // Schritt 33 - Tabelle goldbuchungen
+        -160592889, // Schritt 34 - Tabelle anmeldungen
+        -418319750, // Schritt 35 - Tabelle rundgang
     };
 
     private static String datenbanktext() {

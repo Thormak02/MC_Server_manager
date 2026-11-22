@@ -1,5 +1,7 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Anmeldung;
+import de.freimarken.kern.Anmeldung;
 import de.freimarken.kern.Buchungsgrund;
 import de.freimarken.kern.Bundankauf;
 import de.freimarken.kern.Handelsart;
@@ -141,6 +143,15 @@ final class Shophandel {
          * Maustaste wird es nicht besser.
          */
         BUND_DECKEL,
+
+        /**
+         * Er hat die Regeln noch nicht angenommen - Plan 10.1 [21.11.2026].
+         *
+         * <p>Nur am BUNDstand. Der Handel zwischen zwei Spielern bleibt offen;
+         * gesperrt ist, was der Bund selbst anbietet, und zwar bis zur Zustimmung im
+         * Buergeramt.
+         */
+        NICHT_ANGEMELDET,
         // DREI WEITERE BESCHEIDE STANDEN HIER einen halben Tag lang:
         // BUND_KAUFT_NICHT, BUND_ZWEI_RICHTUNGEN und BUND_UNEBEN. Sie gehoerten zur
         // Tafel bundesmarkt.ankauf, und die ist am 10.11.2026 gefallen - der Preis steht
@@ -286,17 +297,25 @@ final class Shophandel {
     private final Warenhand waren;
     private final Kasse kasse;
     private final Wirtschaftsstand wirtschaft;
+    private final Anmeldung anmeldung;
     private final Clock uhr;
     private final Logger protokoll;
 
     Shophandel(Shopbuch buch, Warenhand waren, Kasse kasse, Wirtschaftsstand wirtschaft,
-            Clock uhr, Logger protokoll) {
+            Anmeldung anmeldung, Clock uhr, Logger protokoll) {
+        if (anmeldung == null) {
+            throw new IllegalArgumentException("Ohne die Anmeldung gibt es keinen Handel"
+                    + " am Bundesmarkt: Plan 10.1 oeffnet ihn erst nach der Zustimmung,"
+                    + " und gefragt wird im AUGENBLICK des Klicks - ein gemerkter Wert"
+                    + " waere die Antwort von vorhin.");
+        }
         if (wirtschaft == null || uhr == null) {
             throw new IllegalArgumentException("Ohne Wirtschaftsstand und Uhr gibt es"
                     + " keinen Handel: Die Gebuehren, die Ankauftafel und der"
                     + " Tagesdeckel werden im AUGENBLICK des Handels gefragt, und der"
                     + " Deckel braucht dazu den heutigen Tag.");
         }
+        this.anmeldung = anmeldung;
         this.buch = buch;
         this.waren = waren;
         this.kasse = kasse;
@@ -345,6 +364,17 @@ final class Shophandel {
             return absage(art == Handelsart.KUNDE_KAUFT
                     ? Bescheid.VERKAUFT_NICHT
                     : Bescheid.KAUFT_NICHT_AN, art, shop);
+        }
+        // "ERST DANACH OEFFNET SICH DER BUNDESMARKT" - Plan 10.1 [21.11.2026]. Der
+        // Riegel steht HIER und nicht an der Tuer (Shopklick, Schutzwache): Dort
+        // entscheidet sich, ob der Klick dem Bauschutz entzogen wird, und ein Nein
+        // machte das fremde Schild wieder abbaubar. Hier fragen beide Maustasten, der
+        // Schleichklick und jeder Bundstand dieselbe Bedingung.
+        //
+        // NUR AM BUNDSTAND: Ein Spielershop ist der Handel zwischen zwei Buergern; den
+        // zu sperren, waere eine Entscheidung ueber das Geschaeft eines Dritten.
+        if (shop.demBund() && anmeldung.verlangt(kunde)) {
+            return absage(Bescheid.NICHT_ANGEMELDET, art, shop);
         }
         try {
             return pruefeUndHandle(kunde, shop, art, ganzerStapel);

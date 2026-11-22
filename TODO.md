@@ -709,6 +709,38 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 
 ## Schritt 13: Sprache, Farbwelt, Menues
 
+### Teil C: die Buergeramt-Anmeldung - 21.11.2026
+
+- GEBAUT: Wer die geltenden Regeln nicht angenommen hat, bekommt beim Beitritt ein FENSTER mit zwei Knoepfen - der erste tippt /regeln annehmen. Erst nach der Annahme handelt er am Bundesmarkt; alles andere kann er von Anfang an.
+- DIE FASSUNG ist die tragende Entscheidung, und sie stand nicht im Plan: Eine Annahme ohne Fassung waere bei der ersten Regelaenderung stillschweigend wertlos - der Nachweis in der Datenbank zeigte auf einen Text, den es nicht mehr gibt. Jetzt traegt jede Annahme die Fassung, die damals galt (anmeldung.fassung in der config.yml). Wer sie erhoeht, verlangt von allen eine neue Zustimmung; das Programm zaehlt sie NICHT selbst hoch, sonst waere jedes verbesserte Komma eine neue Pflicht fuer alle.
+- EINE Stelle beantwortet "muss er annehmen" (Anmeldung.verlangt) - gefragt von der Wache, von /regeln und vom Bundesmarkt. Drei Fassungen derselben Frage wichen eines Tages ab, und dann boete ein Weg etwas an, was ein anderer verweigert; genau das hat das Hauptmenue heute gekostet.
+- DIE SPERRE sitzt an EINER Stelle (Shophandel.handle) und nur am BUNDstand: Ein Spielershop ist der Handel zwischen zwei Buergern - den zu sperren waere eine Entscheidung ueber das Geschaeft eines Dritten.
+- ERSTER DIALOG DES PROJEKTS MIT EINER TAT: DialogType.confirmation mit zwei Knoepfen, der Ja-Knopf traegt DialogAction.commandTemplate. Beides im API-Jar nachgesehen und bis heute nirgends benutzt. Der Knopf TIPPT einen Befehl - er gewaehrt nichts selbst, sonst waere er eine Tuer ohne Rechtefrage.
+- /regeln annehmen ist auch der Weg fuer einen alten Client: showDialog sendet und fragt nicht, ein verworfenes Paket merkt der Server nie. Die Chatfassung nennt den Befehl darum ausdruecklich.
+- Tabelle anmeldungen (Schemaschritt 34): eine Zeile je Spieler, Fassung und Zeitpunkt, kein Fremdschluessel aufs Konto - angenommen hat ein Mensch, nicht ein Guthaben. Der Zeitpunkt der ERSTEN Zustimmung bleibt stehen; ein blindes Fortschreiben machte den Nachweis bei jedem Beitritt juenger, als er ist.
+- Proben: AnmeldeVertrag (10, fuer beide Fassungen), MariaAnmeldungenTest (6 mit rohem SQL), AnmeldungTest (7), AnmeldewacheTest (6), RegelnBefehlTest 8-15, drei Sperrproben in ShophandelTest. Tafeln 31di (Wache verdrahtet, nur bei an()) und 31dj (der Knopfbefehl ist ein Zweig, den es gibt).
+
+### Teil D: der Rundgang durch Altfurt - 21.11.2026
+
+- GEBAUT, mit LEERER Stationsliste - ENTSCHIEDEN: Die Gebaeude in Altfurt sind Handarbeit, und ein Bereich auf einem leeren Platz waere eine Station, die niemand findet. Sobald sie stehen, traegt der Betreiber je Station zwei Ecken in die config.yml ein; die Mechanik wartet schon.
+- WER EINE STATION BETRITT, liest beim ERSTEN Mal ihren Namen mit dem Fortschritt ("Station 2 von 6") und ihren eigenen Text. Beim zweiten Mal nichts - ein Stationstext bei jedem Schritt durch dieselbe Tuer waere eine Plage.
+- DIE REIHENFOLGE IST DER WEG, aber kein ZWANG: Jede Station zaehlt, sobald sie betreten wird. Ein erzwungener Weg muesste den Spieler abweisen, und Plan 10.2 verlangt "ein Ort, kein Textfenster" - ein Rundgang, der einen zurueckschickt, ist ein Textfenster mit anderen Mitteln.
+- EINE ZEILE JE SPIELER UND STATION (Schemaschritt 35), keine Zahl: Eine Zahl saehe nicht, WELCHE Station gesehen wurde - und der Betreiber darf seinen Weg aendern. Mit einer Zahl waere der Rundgang nach dem Hinzufuegen einer Station weiter abgeschlossen.
+- Eine ENTFERNTE Station zaehlt nicht mehr mit (die Zeile bleibt stehen, sie ist kein Fehler), eine NEUE macht den Rundgang fuer alle wieder offen. Beides ist richtig: Ein Weg mit einer neuen Station ist ein neuer Weg.
+- RUNDGANG IST DIE SECHSTE BEDINGUNGSART - ENTSCHIEDEN, denn Plan 9 verlangt sie fuer den Siedler. Gesetzt ist sie in der ausgelieferten Leiter NICHT: Ohne Stationen ist sie nicht erfuellbar, und eine Stufe, die niemand erreicht, waere schlimmer als keine. Wer Altfurt gebaut hat, traegt beides ein.
+- DIE DRITTE BEWEGUNGSWACHE des Projekts (nach Torwache und Aufwaermzeit) - mit hasExplicitlyChangedBlock als erster Zeile und nur angemeldet, wenn es Stationen gibt. Ab Werk hoert niemand zu, und kein Schritt kostet etwas.
+- Die Stationssaetze sind die VIERTE offene Satzfamilie (nach Beruf, Herausforderung, Katalogposten): Welche es gibt, bestimmt der Betreiber. Fehlt eine Zeile, bleibt die Station begehbar und zeigt ihren Pfad - und der START nennt sie. Jene Zusage stand in drei Kommentaren und ist jetzt gebaut (Tafel 31dl).
+- Ein Art.WORT darf KEINEN Farbtag tragen, und das hat der Lader meiner eigenen Probe gesagt: Ein eingesetzter Wert ist ein Blatt, ein Farbtag darin stuende woertlich im Chat. Die Farbe kommt aus der Zeile, die ihn einsetzt.
+- rundgang.welt gehoert zu den NICHT neuladbaren Welten - die Tafel 31cz hat es selbst gefunden. Stationen sind Orte: Verschoebe ein Neuladen einen Bereich, haette ein Spieler eine Station gesehen, an der er nie war.
+- Proben: RundgangVertrag (9, fuer beide Fassungen), MariaRundgangTest (6), RundgangTest (12), RundgangslisteTest (10), RundgangswacheTest (5), zwei neue in AufstiegslaufTest. Tafeln 31dk (Wache verdrahtet, nur bei Stationen, und VOR dem Aufstiegslauf) und 31dl (der Start nennt fehlende Stationszeilen).
+- EINSPRITZUNGSRUNDE (30 Faelle ueber Teil C und D, alle drei Module je Lauf): 29 auf Anhieb gefangen.
+- DER EINE REST war der lehrreiche: Vertauscht man die zwei Knoepfe in der Formularhand (confirmation(nein, ja)), stimmt "Spaeter" zu und "Ich nehme an" schliesst nur - und alle 2620 Proben bleiben gruen. Die Reihenfolge ist an der NAHT geprueft, aber die Hand ist die einzige Klasse ohne Zeugen. Tafel 31dm haelt jetzt beides: confirmation(ja, nein) woertlich UND dass die Tat am JA-Knopf steht.
+- FUND AN DER EIGENEN TAFEL: Fall 26 wurde DOPPELT gefangen - von meiner 31dl und von der vorhandenen 31ab ("jede Startpruefung wird auch gerufen"). Zwei Riegel fuer denselben Fall machen sich unpruefbar; 31dl haelt jetzt nur noch die EXISTENZ der Methode, und ein Paar von Einspritzungen beweist die Trennung.
+- FUND DES STARTLAUFS, und nur er konnte ihn finden: Die Anmeldung wurde zugewiesen, NACHDEM richteShopsEin() den Shophandel gebaut hatte. Jener verlangt sie im Konstruktor, bekam null - und Paper schaltete das GANZE PLUGIN ab. Alle 4786 Proben waren gruen, und zwar zu Recht: Jede baut den Handel selbst und gibt ihm, was er braucht; die Reihenfolge im onEnable prueft kein Probenlauf. Tafel 31dn haelt sie jetzt (wie 31dk den Rundgang vor dem Aufstiegslauf).
+- Proben 2567 -> 2622 (paper), 1747 -> 1768 (core), 382 -> 397 (daten) - zusammen 4787.
+- OFFEN, und zwar Handarbeit: die zehn Platzhalterbauten in Altfurt. Erst danach bekommt der Rundgang seine Stationen und die Siedlerstufe ihre Zeile.
+- OFFEN beim Spieltest: das Anmeldefenster mit zwei Knoepfen, ein Klick auf "Spaeter" und das Wiederkommen beim naechsten Beitritt, die Absage am Bundstand, /regeln annehmen auf einem alten Client - und der Rundgang selbst, sobald Altfurt steht.
+
 ### Teil A: die Farbwelt - 21.11.2026
 
 - ENTSCHIEDEN: flaechig im ganzen Chat, frei anpassbar, thematisch gruppiert - ACHT Rollen statt eines Feldes je Tag.
