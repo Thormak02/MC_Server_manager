@@ -56,6 +56,45 @@ def pytest_configure(config):
         "real_wake: dieser Test prueft request_wake selbst und bekommt deshalb den "
         "echten Weckpfad statt der Sicherheits-Attrappe",
     )
+    config.addinivalue_line(
+        "markers",
+        "echte_einrichtung: dieser Test will die Freimarken-Einrichtung wirklich "
+        "anstossen (Gradle-Bau und winget) und bekommt deshalb keine Attrappe",
+    )
+
+
+@pytest.fixture(autouse=True)
+def _nie_wirklich_einrichten(monkeypatch, request):
+    """Sicherheitsnetz: keine Probe darf die echte Freimarken-Einrichtung anstossen.
+
+    ``freimarken_einrichtung_service.starte`` oeffnet einen Faden, der ``:paper:jar``
+    ueber Gradle auf der Netzfreigabe baut (Frist 900 s) und ``winget install
+    MariaDB.Server`` ruft (Frist 1200 s). Angestossen wird er von jedem POST auf
+    /servers/create mit ``freimarken_enabled`` - und genau das tut eine Probe, die bloss
+    pruefen will, ob die Markierung bis an die Zeile kommt.
+
+    GEFUNDEN AM 22.11.2026, nachdem die Anschlusszeile in provisioning.py dazukam: Der
+    volle Probenlauf hat danach echte Gradle-Laeufe und eine winget-Installation
+    gestartet. Dieselbe Begruendung wie beim Netz gegen Serverstarts darunter - nur ist
+    der Schaden hier groesser, denn der Faden schreibt in dasselbe
+    ``freimarken/paper/build``, das ein paralleler Bau benutzt.
+
+    Wer den echten Weg pruefen will, markiert seine Probe mit
+    ``@pytest.mark.echte_einrichtung``.
+    """
+    if request.node.get_closest_marker("echte_einrichtung"):
+        return []
+
+    angestossen: list[int] = []
+
+    from app.services import freimarken_einrichtung_service
+
+    def nur_merken(server_id: int) -> bool:
+        angestossen.append(int(server_id))
+        return True
+
+    monkeypatch.setattr(freimarken_einrichtung_service, "starte", nur_merken)
+    return angestossen
 
 
 @pytest.fixture(autouse=True)

@@ -33,7 +33,13 @@ function Hinweis($text)  { Write-Host "    $text" -ForegroundColor Yellow }
 function Schlecht($text) { Write-Host "    $text" -ForegroundColor Red }
 
 $skriptOrdner  = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoWurzel    = Resolve-Path (Join-Path $skriptOrdner "..\..")
+# .ProviderPath und nicht die Standardform [gemessen 22.11.2026]: Bei einem UNC-Pfad gibt
+# Resolve-Path "Microsoft.PowerShell.Core\FileSystem::\\Rechner\Freigabe\..." zurueck.
+# New-Item und Test-Path verstehen das, [System.IO.File]::WriteAllText nicht - es wirft,
+# der Wurf landet im catch weiter unten, das Skript endet trotzdem mit Exit 0, und die
+# Kennwoerter stehen danach nirgends. Dann ist die Datenbank mit zwei Zufallskennwoertern
+# eingerichtet, die niemand kennt.
+$repoWurzel    = (Resolve-Path (Join-Path $skriptOrdner "..\..")).ProviderPath
 $zugangsOrdner = Join-Path $repoWurzel "data\freimarken"
 $zugangsDatei  = Join-Path $zugangsOrdner "datenbank.properties"
 
@@ -75,6 +81,59 @@ function NeuesPasswort([int]$laenge = 28) {
     -join ($rohdaten | ForEach-Object { $zeichen[$_ % $zeichen.Length] })
 }
 
+function AblegenZugangsdaten {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootPasswort,
+        [Parameter(Mandatory = $true)][string]$AppPasswort
+    )
+
+    $rechner = $env:COMPUTERNAME
+    $inhalt = @"
+# Zugangsdaten der Freimarken-Datenbank.
+# Erzeugt von freimarken/skripte/mariadb_einrichten.ps1 auf $rechner
+#
+# ACHTUNG: Dieser Ordner liegt unter data/ und ist in .gitignore - er gehoert NICHT
+# ins Repository. Wer diese Datei hat, hat die Datenbank.
+url=jdbc:mariadb://127.0.0.1:3306/freimarken
+url.netz=jdbc:mariadb://${rechner}:3306/freimarken
+benutzer=freimarken
+passwort=$AppPasswort
+
+# Nur fuer die Testlaeufe. Die Tests leeren vor jedem Test alle Tabellen, deshalb duerfen
+# sie das Spielschema nie anfassen. Datenbank.leereAlles() verweigert jedes Schema, dessen
+# Name nicht auf _test endet.
+url.test=jdbc:mariadb://127.0.0.1:3306/freimarken_test
+url.test.netz=jdbc:mariadb://${rechner}:3306/freimarken_test
+
+# Nur fuer Wartung. Das Plugin benutzt root nie.
+root.passwort=$RootPasswort
+"@
+
+    $ohneBom = New-Object System.Text.UTF8Encoding($false)
+    $geschrieben = $false
+    foreach ($ordner in @($zugangsOrdner, $ZweitAblage)) {
+        if ([string]::IsNullOrWhiteSpace($ordner)) { continue }
+        try {
+            New-Item -ItemType Directory -Force -Path $ordner | Out-Null
+            $ziel = Join-Path $ordner "datenbank.properties"
+            [System.IO.File]::WriteAllText($ziel, $inhalt, $ohneBom)
+            Gut "geschrieben: $ziel"
+            $geschrieben = $true
+        } catch {
+            Hinweis "Konnte nicht nach $ordner schreiben: $($_.Exception.Message)"
+        }
+    }
+
+    # LAUT SCHEITERN, wenn KEINE Ablage gelungen ist [Fund 22.11.2026]. Vorher landete
+    # jeder Fehlschlag als gelber Hinweis im catch, das Skript lief weiter und endete mit
+    # Exit 0 - der Manager meldete "MariaDB eingerichtet", und die Kennwoerter standen
+    # nirgends. Genau das ist die Sackgasse, aus der nur ein Zuruecksetzen von Hand
+    # herausfuehrt.
+    if (-not $geschrieben) {
+        throw "Die Zugangsdaten liessen sich in keinen der Ordner schreiben. Ohne sie ist die Datenbank nach der Einrichtung nicht erreichbar."
+    }
+}
+
 $rootPasswort = $null
 $appPasswort  = $null
 if (Test-Path $zugangsDatei) {
@@ -88,6 +147,21 @@ if (Test-Path $zugangsDatei) {
 }
 if (-not $rootPasswort) { $rootPasswort = NeuesPasswort }
 if (-not $appPasswort)  { $appPasswort  = NeuesPasswort }
+
+# --- 0. Kennwoerter ZUERST ablegen ---------------------------------------
+#
+# VOR der Installation und nicht am Ende [Fund 22.11.2026]. Das root-Kennwort geht gleich
+# darauf an den MSI-Installer. Wird dieses Skript dazwischen beendet - durch eine Frist
+# des Managers, durch das Ende des Managers oder durch Strg+C -, laeuft der Installer als
+# Waise weiter und legt den Dienst mit genau diesem Kennwort an. Stand es noch nirgends,
+# kennt es danach niemand: Der naechste Lauf sieht den Dienst, ueberspringt die
+# Installation, erzeugt ein NEUES Kennwort und kommt nicht mehr herein. Aus dieser
+# Sackgasse fuehrt nur ein Zuruecksetzen von MariaDB von Hand.
+#
+# Frueh abgelegt sind die Kennwoerter hoechstens einen Lauf zu frueh da - das ist
+# harmlos, denn sie gelten erst mit dem Dienst.
+Schritt "Zugangsdaten ablegen (vor der Installation)"
+AblegenZugangsdaten -RootPasswort $rootPasswort -AppPasswort $appPasswort
 
 # --- 1. Installieren ------------------------------------------------------
 Schritt "MariaDB installieren"
@@ -214,41 +288,13 @@ if ($iniDatei) {
 }
 
 # --- 5. Zugangsdaten ablegen ---------------------------------------------
-Schritt "Zugangsdaten ablegen"
-$rechner = $env:COMPUTERNAME
-$inhalt = @"
-# Zugangsdaten der Freimarken-Datenbank.
-# Erzeugt von freimarken/skripte/mariadb_einrichten.ps1 auf $rechner
 #
-# ACHTUNG: Dieser Ordner liegt unter data/ und ist in .gitignore - er gehoert NICHT
-# ins Repository. Wer diese Datei hat, hat die Datenbank.
-url=jdbc:mariadb://127.0.0.1:3306/freimarken
-url.netz=jdbc:mariadb://${rechner}:3306/freimarken
-benutzer=freimarken
-passwort=$appPasswort
-
-# Nur fuer die Testlaeufe. Die Tests leeren vor jedem Test alle Tabellen, deshalb duerfen
-# sie das Spielschema nie anfassen. Datenbank.leereAlles() verweigert jedes Schema, dessen
-# Name nicht auf _test endet.
-url.test=jdbc:mariadb://127.0.0.1:3306/freimarken_test
-url.test.netz=jdbc:mariadb://${rechner}:3306/freimarken_test
-
-# Nur fuer Wartung. Das Plugin benutzt root nie.
-root.passwort=$rootPasswort
-"@
-
-$ohneBom = New-Object System.Text.UTF8Encoding($false)
-foreach ($ordner in @($zugangsOrdner, $ZweitAblage)) {
-    if ([string]::IsNullOrWhiteSpace($ordner)) { continue }
-    try {
-        New-Item -ItemType Directory -Force -Path $ordner | Out-Null
-        $ziel = Join-Path $ordner "datenbank.properties"
-        [System.IO.File]::WriteAllText($ziel, $inhalt, $ohneBom)
-        Gut "geschrieben: $ziel"
-    } catch {
-        Hinweis "Konnte nicht nach $ordner schreiben: $($_.Exception.Message)"
-    }
-}
+# Zum ZWEITEN Mal: Der erste Lauf stand vor der Installation (Abschnitt 0), damit ein
+# Abbruch keine Datenbank mit einem Kennwort hinterlaesst, das niemand kennt. Hier wird
+# dieselbe Datei noch einmal geschrieben - unveraendert, aber jetzt steht die Einrichtung
+# fest.
+Schritt "Zugangsdaten ablegen"
+AblegenZugangsdaten -RootPasswort $rootPasswort -AppPasswort $appPasswort
 
 Write-Host "`nFertig." -ForegroundColor Green
 Write-Host "Verbindung aus dem Netz: jdbc:mariadb://${rechner}:3306/freimarken"

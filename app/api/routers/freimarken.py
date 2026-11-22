@@ -33,6 +33,7 @@ from app.models.user import User
 from app.services import (
     audit_service,
     freimarken_db_service,
+    freimarken_einrichtung_service,
     freimarken_mitglied_service,
     freimarken_service,
     freimarken_spieldaten_service,
@@ -247,6 +248,7 @@ def freimarken_seite(request: Request, server_id: int, seite: str,
     return templates.TemplateResponse(
         "freimarken_seite.html",
         build_context(request, current_user=current_user, server=server,
+                      einrichtung=freimarken_einrichtung_service.stand(server.id),
                       seiten=freimarken_service.seiten(), aktiv=seite,
                       inhalt=inhalt, lesefehler=fehler, zeilen=zeilen,
                       sprache=sprache, abschnitt=abschnitt,
@@ -259,6 +261,40 @@ def freimarken_seite(request: Request, server_id: int, seite: str,
                       darf_korrigieren=has_minimum_role(
                           current_user.role, UserRole.SUPER_ADMIN.value)),
     )
+
+
+@router.post("/freimarken/{server_id}/einrichten")
+def freimarken_einrichten(request: Request, server_id: int,
+                          db: Session = Depends(get_db)):
+    """Die Einrichtung (noch einmal) anstossen.
+
+    FOLGENLOS WIEDERHOLBAR, und darauf ist jeder Schritt gebaut: Der Bau ist Gradles
+    Sache (UP-TO-DATE), das Jar wird ueberschrieben, die config.yml NICHT (eine
+    vorhandene bleibt), die Datenbank wird uebersprungen, wenn sie antwortet, und die
+    Zugangsdaten werden auf dieselben Werte gesetzt. Darum braucht es hier keine
+    Rueckfrage.
+
+    Gedacht fuer den haeufigsten Fehlschlag: Die Datenbankeinrichtung braucht
+    Administratorrechte. Wer den Manager danach mit ihnen startet, soll es nachholen
+    koennen, ohne den Server neu anzulegen.
+    """
+    current_user, server = _fuer_korrektur(request, db, server_id)
+    if current_user is None or server is None:
+        return RedirectResponse(url="/login", status_code=303)
+
+    erste = freimarken_service.seiten()[0]["schluessel"]
+    ziel = "/freimarken/" + str(server_id) + "/" + erste
+
+    if not freimarken_einrichtung_service.starte(server.id):
+        push_flash(request, "Die Einrichtung laeuft schon.", "info")
+        return RedirectResponse(url=ziel, status_code=303)
+
+    audit_service.log_action(
+        db, action=freimarken_service.AKTION_EINRICHTUNG, user_id=current_user.id,
+        server_id=server.id, details="Einrichtung angestossen")
+    push_flash(request, "Die Einrichtung laeuft - der Fortschritt steht auf dieser "
+                        "Seite.", "success")
+    return RedirectResponse(url=ziel, status_code=303)
 
 
 def _sende(db, server, befehl: str, user_id: int, grund: str,

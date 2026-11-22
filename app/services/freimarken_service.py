@@ -172,11 +172,47 @@ def lies_datei(server: Server, relativ: str) -> str:
 
 
 def schreib_datei(server: Server, relativ: str, text: str) -> None:
+    """Eine Serverdatei ersetzen - ATOMAR, ueber eine Zwischendatei.
+
+    Hier stand ein nacktes ``open(ziel, "w")`` [Fund 22.11.2026]. Das kuerzt die
+    Zieldatei ZUERST auf 0 Byte und befuellt sie dann neu. Bei der config.yml sind das
+    157 KB und 3071 Zeilen, davon 2327 Erklaerungen - und es gibt keine Kopie davon.
+    Endet der Prozess zwischen Kuerzen und Befuellen (Dienstneustart, voller Datentraeger,
+    Aussetzer der Netzfreigabe, auf der die Serverordner liegen), sind alle
+    Betreibereinstellungen weg.
+
+    Besonders eng wird es im Einrichtungsfaden: Der laeuft mit ``daemon=True`` und
+    beginnt bis zu 35 Minuten nach dem Klick zu schreiben, und ein Daemon-Faden wird beim
+    Prozessende ohne Flush abgeschnitten.
+
+    Das Haus geht den sicheren Weg anderswo schon (``central_storage_service.snapshot_db``
+    und ``viaversion_service``): in eine Zwischendatei schreiben, dann ``os.replace``.
+    Jenes ist auf einem Datentraeger atomar - entweder steht die alte Datei da oder die
+    neue, nie eine halbe.
+    """
+    import os
+
     from app.services.file_service import validate_server_relative_path
 
     ziel = validate_server_relative_path(server, relativ)
-    with open(ziel, "w", encoding="utf-8", newline="") as offen:
-        offen.write(text)
+    # Die Zwischendatei liegt NEBEN dem Ziel, nicht im Temp-Ordner: os.replace ist nur
+    # innerhalb desselben Datentraegers atomar, und die Serverordner liegen auf einer
+    # anderen Ablage als das System.
+    zwischen = ziel.with_name(ziel.name + ".neu")
+    try:
+        with open(zwischen, "w", encoding="utf-8", newline="") as offen:
+            offen.write(text)
+            offen.flush()
+            os.fsync(offen.fileno())
+        os.replace(zwischen, ziel)
+    except BaseException:
+        # Auch bei einem KeyboardInterrupt: Eine liegengebliebene .neu-Datei neben der
+        # config.yml taucht sonst im Dateieditor auf und sieht aus wie ein zweiter Stand.
+        try:
+            zwischen.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 def hat_freimarken(server: Server) -> bool:
@@ -455,6 +491,7 @@ AKTION_TEXTE = "freimarken.texte"
 AKTION_BESITZ = "freimarken.besitz"
 AKTION_KONTO = "freimarken.konto"
 AKTION_MITGLIED = "freimarken.mitglied"
+AKTION_EINRICHTUNG = "freimarken.einrichtung"
 
 # Woran die Protokollzeile ihre beiden Haelften trennt. EINE Konstante, weil sie beim
 # Schreiben UND beim Lesen gebraucht wird: Stuende der Text an zwei Stellen, liesse eine

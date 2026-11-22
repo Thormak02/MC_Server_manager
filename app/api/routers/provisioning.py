@@ -215,18 +215,35 @@ def create_server_action(
         server_id=server.id,
         details=f"type={server.server_type} version={server.mc_version}",
     )
+    # EIN SATZ, zusammengesetzt. push_flash setzt request.session["_flash"], und es gibt
+    # genau EINEN Platz: Jeder weitere Aufruf ueberschreibt den vorherigen. Vorher stand
+    # hier erst die notes-Meldung und gleich darauf die Erfolgsmeldung - die Hinweise der
+    # Bereitstellung hat darum niemand je gelesen.
+    teile: list[str] = ["Server '" + server.name + "' wurde erstellt."]
     if notes:
-        push_flash(request, " | ".join(notes), "info")
-    push_flash(request, f"Server '{server.name}' wurde erstellt.", "success")
+        teile.append(" | ".join(notes))
+
     if server.freimarken_enabled:
-        # BEDINGT und nicht unbedingt: Fuer einen normalen Server ist die Serverseite
-        # weiter das richtige Ziel, und zwei Proben rechnen die Server-Id aus genau
-        # dieser Adresse (test_provisioning, test_runtime_defaults_and_start_commands).
-        # Ein Freimarken-Server soll dagegen nicht auf der Seite landen, aus der er
-        # heraussoll.
+        # DER FADEN LAEUFT WEITER, wenn diese Antwort schon beim Nutzer ist: Plugin bauen
+        # und MariaDB einrichten dauern Minuten, und eine Webanfrage, die so lange haengt,
+        # laeuft in jedes Zeitlimit. Der Fortschritt steht danach im Freimarken-Bereich -
+        # je Schritt eine Zeile.
+        from app.services import freimarken_einrichtung_service
         from app.services.freimarken_service import seiten as freimarken_seiten
 
+        freimarken_einrichtung_service.starte(server.id)
+        teile.append(
+            "Die Einrichtung laeuft jetzt: Plugin bauen, ablegen, config.yml, MariaDB, "
+            "Zugangsdaten. Das dauert einige Minuten - der Fortschritt steht auf dieser "
+            "Seite.")
+        push_flash(request, " ".join(teile), "success")
+        # Das Ziel ist BEDINGT: Fuer einen gewoehnlichen Server bleibt die Serverseite
+        # richtig, und zwei Proben rechnen die Server-Id aus genau dieser Adresse
+        # (test_provisioning, test_runtime_defaults_and_start_commands). Ein
+        # Freimarken-Server soll dagegen nicht auf der Seite landen, aus der er heraussoll.
         erste = freimarken_seiten()[0]["schluessel"]
         return RedirectResponse(url=f"/freimarken/{server.id}/{erste}",
                                 status_code=303)
+
+    push_flash(request, " ".join(teile), "success")
     return RedirectResponse(url=f"/servers/{server.id}", status_code=303)

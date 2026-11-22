@@ -5,6 +5,74 @@
 
 {% include "freimarken_nav.html" %}
 
+{#
+  DER EINRICHTUNGSFORTSCHRITT, und er steht GANZ OBEN: Solange er laeuft, ist alles
+  darunter noch leer - eine Seite, die zuerst "nicht lesbar" zeigt und den Grund erst
+  unten nennt, liest sich wie ein Fehler.
+
+  JE SCHRITT EINE ZEILE, nicht eine Zahl: "3 von 5" sagt nicht, welcher fehlt. Und
+  einrichtung.schritte LEER heisst nicht "fertig", sondern "noch nichts getan" - darum
+  wird laeuft und fertig getrennt gefragt.
+#}
+{#
+  DER ABSCHNITT ERSCHEINT AUCH OHNE STAND [Fund 22.11.2026]. Vorher hing er an
+  ``laeuft or schritte``, und beides kommt aus einem Zustand IM SPEICHER. Nach einem
+  Neustart des Managers ist der leer - also verschwand der Abschnitt samt Knopf genau
+  dann, wenn er gebraucht wird: Der dokumentierte Reparaturweg lautet "Manager als
+  Administrator neu starten und wiederholen".
+#}
+{% if server.freimarken_enabled and (einrichtung.laeuft or einrichtung.schritte
+                                     or darf_korrigieren) %}
+<section class="card">
+    <h2>
+        Einrichtung
+        {% if einrichtung.laeuft %}<span class="muted">laeuft...</span>{% endif %}
+    </h2>
+    {% if einrichtung.laeuft %}
+    <p class="muted">
+        Plugin bauen und MariaDB einrichten dauern einige Minuten. Diese Seite neu laden,
+        um den Stand zu sehen.
+    </p>
+    {% endif %}
+    {% if not einrichtung.schritte and not einrichtung.laeuft %}
+    <p class="muted">
+        Fuer diesen Server ist in dieser Sitzung des Managers keine Einrichtung
+        gelaufen. Der Stand liegt nur im Speicher und ist nach einem Neustart weg
+        &ndash; das heisst nicht, dass nichts eingerichtet ist. Ein Lauf schadet nie:
+        Eine vorhandene config.yml bleibt unangetastet, und die Datenbank wird
+        uebersprungen, wenn sie antwortet.
+    </p>
+    {% endif %}
+    <ul>
+        {% for schritt in einrichtung.schritte %}
+        <li>
+            <span class="status-dot status-dot-{{ 'online' if schritt.ok else 'offline' }}"
+                  aria-hidden="true"></span>
+            {{ schritt.text }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% if darf_korrigieren and not einrichtung.laeuft %}
+    {#
+      NICHT an ``fertig``: Jenes ist nach einem Neustart False, obwohl ein frueherer Lauf
+      laengst durch ist. Gefragt wird stattdessen, ob gerade einer LAEUFT - nur dann waere
+      ein zweiter Anstoss sinnlos, und die Route weist ihn ohnehin ab.
+    #}
+    <form method="post" action="/freimarken/{{ server.id }}/einrichten">
+        <button type="submit">
+            {% if einrichtung.schritte %}Einrichtung wiederholen{% else %}Einrichtung starten{% endif %}
+        </button>
+    </form>
+    <p class="muted">
+        Folgenlos wiederholbar: Eine vorhandene config.yml bleibt unangetastet, die
+        Datenbank wird uebersprungen, wenn sie antwortet. Haeufigster Fehlschlag sind
+        fehlende Administratorrechte fuer MariaDB &ndash; dann den Manager als
+        Administrator starten und hier wiederholen.
+    </p>
+    {% endif %}
+</section>
+{% endif %}
+
 {% if lesefehler %}
 <section class="card">
     <h2>Nicht lesbar</h2>
