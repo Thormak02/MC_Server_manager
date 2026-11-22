@@ -363,6 +363,34 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_BETREIBER_ABZUG("mark.verlauf.grund.betreiber-abzug", Art.WORT),
 
     /**
+     * Die drei Worte der Lotterie - Los, Markgewinn, Goldgewinn (Plan 14).
+     *
+     * <p>Das LOS steht auch mit 0 Mark im Buch, weil das erste am Tag gratis ist. Im
+     * Verlauf ist das eine Zeile ohne Betrag, und das Wort ist dort die ganze Auskunft:
+     * Ohne es saehe der Spieler eine 0 und wuesste nicht, wofuer.
+     *
+     * <p>Der GOLDgewinn steht hier und nicht in einer eigenen Aufzaehlung, obwohl er im
+     * Goldbuch landet - genau wie {@link #VERLAUF_GRUND_MUENZHAUS_KAUF}. Welche Einheit
+     * die Zahl daneben hat, sagt die Zeile und nicht das Wort.
+     */
+    VERLAUF_GRUND_LOS_GEZOGEN("mark.verlauf.grund.los-gezogen", Art.WORT),
+    VERLAUF_GRUND_LOS_ERSTATTET("mark.verlauf.grund.los-erstattet", Art.WORT),
+    VERLAUF_GRUND_LOTTERIE_GEWINN("mark.verlauf.grund.lotterie-gewinn", Art.WORT),
+    VERLAUF_GRUND_LOTTERIE_GOLDGEWINN("mark.verlauf.grund.lotterie-goldgewinn", Art.WORT),
+
+    /**
+     * Die drei Worte des Angelwettbewerbs - Startgeld, Preis, Erstattung (Plan 14).
+     *
+     * <p>Der PREIS und das STARTGELD stehen im Verlauf nebeneinander, und die Differenz
+     * ihrer Summen ist der Zuschuss des Betreibers. Darum tragen sie verschiedene Worte,
+     * auch wenn beide "Wettbewerb" nennen.
+     */
+    VERLAUF_GRUND_WETTBEWERB_START("mark.verlauf.grund.wettbewerb-start", Art.WORT),
+    VERLAUF_GRUND_WETTBEWERB_PREIS("mark.verlauf.grund.wettbewerb-preis", Art.WORT),
+    VERLAUF_GRUND_WETTBEWERB_ERSTATTET("mark.verlauf.grund.wettbewerb-erstattet",
+            Art.WORT),
+
+    /**
      * Die Tafel des Muenzhauses - der Kopf von {@code /mark muenzhaus} [Teil G].
      *
      * <p>Der ORT, den Plan 2.1 nennt: Kontostand, Verlauf, Wechseldeckel und der Katalog

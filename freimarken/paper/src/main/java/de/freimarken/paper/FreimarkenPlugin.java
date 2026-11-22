@@ -9,6 +9,8 @@ import de.freimarken.daten.Kassentabellen;
 import de.freimarken.daten.MariaRaenge;
 import de.freimarken.daten.MariaBlockbuch;
 import de.freimarken.daten.MariaBonus;
+import de.freimarken.daten.MariaLose;
+import de.freimarken.daten.MariaWettbewerb;
 import de.freimarken.daten.MariaGrundstuecke;
 import de.freimarken.daten.MariaKasse;
 import de.freimarken.daten.MariaLager;
@@ -36,6 +38,10 @@ import de.freimarken.kern.Biombuch;
 import de.freimarken.kern.Blockmarken;
 import de.freimarken.kern.Blockort;
 import de.freimarken.kern.Bonusablage;
+import de.freimarken.kern.Losablage;
+import de.freimarken.kern.Lotteriebuch;
+import de.freimarken.kern.Wettbewerbsablage;
+import de.freimarken.kern.Wettbewerbsbuch;
 import de.freimarken.kern.Bundankauf;
 import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Feldgrenze;
@@ -69,6 +75,8 @@ import de.freimarken.kern.SpeicherAnmeldungen;
 import de.freimarken.kern.SpeicherRundgang;
 import de.freimarken.kern.SpeicherRaenge;
 import de.freimarken.kern.SpeicherBonus;
+import de.freimarken.kern.SpeicherLose;
+import de.freimarken.kern.SpeicherWettbewerb;
 import de.freimarken.kern.SpeicherGrundstuecke;
 import de.freimarken.kern.SpeicherKasse;
 import de.freimarken.kern.SpeicherLager;
@@ -268,6 +276,45 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * Siehe {@link de.freimarken.kern.Bonusablage}.
      */
     private Bonusablage bonusablage;
+
+    /**
+     * Wie viele Lose ein Spieler heute gezogen hat - die einzige Stelle, die es weiss.
+     *
+     * <p>Anders als beim Tagesbonus liegt hier GELD: Das erste Los am Tag ist gratis und
+     * wird mit 0 Mark gebucht, aus dem Buchungsbuch ist die Zahl also nicht zu holen.
+     * Siehe {@link de.freimarken.kern.Losablage}.
+     */
+    private Losablage losablage;
+
+    /** Die Lotterie in Altfurt - sie haelt beide Kassen und die Losablage. */
+    private Lotteriebuch lotteriebuch;
+
+    /** {@code /lotterie} - haelt den Wuerfel, denn der gehoert nicht in den Kern. */
+    private LotterieBefehle lotterieBefehle;
+
+    /**
+     * Anmeldungen und Punkte des Angelwettbewerbs.
+     *
+     * <p>Wie bei der Losablage liegt hier GELD: Aus den eingezahlten Startgeldern wird
+     * der Topf gerechnet. Siehe {@link de.freimarken.kern.Wettbewerbsablage}.
+     */
+    private Wettbewerbsablage wettbewerbsablage;
+
+    /** Der Angelwettbewerb - Fenster, Punkte, Abrechnung. */
+    private Wettbewerbsbuch wettbewerbsbuch;
+
+    /**
+     * Die Wache, die Faenge zaehlt UND im Takt abrechnet.
+     *
+     * <p>Das Feld steht hier, weil die Spielzeitwache es als Mitfahrer braucht - und es
+     * muss VOR {@code richteSpielzeitEin()} gesetzt sein. Ein null dort ist ERLAUBT, und
+     * genau darum faellt ein vergessener Mitfahrer nicht auf: Er liefe nie, und kein
+     * Wettbewerb wuerde je abgerechnet.
+     */
+    private Wettbewerbswache wettbewerbswache;
+
+    /** {@code /wettbewerb} - Stand, Rangliste, anmelden. */
+    private WettbewerbBefehle wettbewerbBefehle;
     private Mietablage mietablage;
 
     /**
@@ -1023,6 +1070,35 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 (wer, gebraucht) -> aufstiegslauf == null
                         ? java.util.Map.of()
                         : aufstiegslauf.messeFuer(wer, gebraucht));
+        // DIE LOTTERIE [22.11.2026, Schritt 14]. Sie braucht beide Kassen: Das Los wird
+        // in Mark bezahlt, ein Goldgewinn landet auf dem Goldkonto - und das muessen
+        // zwei Kassen sein, weil pruefeWaehrung der Goldkasse fuer jeden Markgrund
+        // wirft.
+        //
+        // DER WUERFEL LIEGT HIER und nicht im Kern: Losregel bekommt ihren Wurf als
+        // Zahl, genau wie Fangregel von der Angelwache. Ein Zufall im Kern waere eine
+        // Probe, die manchmal gruen ist.
+        //
+        // Die UHR als Lambda auf das Feld, nicht die Uhr selbst: Welcher TAG ein
+        // Zeitpunkt ist, entscheidet Lotteriebuch.tagVon aus der eingestellten Zone -
+        // der Befehl liefert nur den Augenblick.
+        lotteriebuch = new Lotteriebuch(kasse, goldkasse, losablage, wirtschaft);
+        lotterieBefehle = new LotterieBefehle(lotteriebuch, sprache, uhr::instant,
+                new java.util.Random(), Vorratshand::fuer);
+        // DER ANGELWETTBEWERB [22.11.2026, Schritt 14]. Nur die MARKkasse: Preise und
+        // Startgeld sind Mark, und Goldmark hat hier nichts zu suchen - der Topf ist
+        // eine Umverteilung unter Spielern.
+        wettbewerbsbuch = new Wettbewerbsbuch(kasse, wettbewerbsablage, wirtschaft);
+        // DIE WACHE WIRD HIER GEBAUT und nicht in richteSpielzeitEin: Sie ist der
+        // Mitfahrer, den jener Takt braucht, und ein null dort ist ERLAUBT. Ein
+        // vergessenes Feld liefe nie und rechnete keinen Wettbewerb ab - ohne dass eine
+        // Probe oder eine Startmeldung es sagt.
+        wettbewerbswache = new Wettbewerbswache(wettbewerbsbuch, uhr, sprache,
+                Spielername::von, () -> getServer().getOnlinePlayers(),
+                wer -> getServer().getPlayer(wer), getLogger());
+        getServer().getPluginManager().registerEvents(wettbewerbswache, this);
+        wettbewerbBefehle = new WettbewerbBefehle(wettbewerbsbuch, sprache,
+                uhr::instant, Spielername::von);
         befehle = new ParzellenBefehle(buch, marktstadt, wirtschaft, getLogger(),
                 sprache,
                 // Das FELD wird beim Aufruf gelesen und nicht beim Bauen: Die Befehle
@@ -1476,7 +1552,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // dann gesetzt; die Reihenfolge sichert 31ai.
         spielzeitwache = new Spielzeitwache(this, buch, bonuswache, rangwache, mietwache,
                 blockraeumung, truhenlauf, besuchslauf, verfallslauf,
-                ladengebuehrlauf, wirtschaft, getLogger());
+                ladengebuehrlauf, wettbewerbswache,
+                wirtschaft, getLogger());
         getServer().getPluginManager().registerEvents(spielzeitwache, this);
         spielzeitwache.starte();
         // DIE NACHSTUFUNG, und zwar NACH starte(): Jener Aufruf oeffnet die Zeitmarken
@@ -1665,6 +1742,17 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // aussen. Eine Uhr hier waere eine zweite Quelle fuer die Tagesgrenze.
             spielzeit = new SpeicherSpielzeit();
             bonusablage = new SpeicherBonus();
+            // Braucht keine Uhr: Der Tag kommt bei jedem Aufruf von aussen herein.
+            // Dass diese Fassung beim Neustart alles vergisst, kostet hier GELD - jeder
+            // Spieler hat danach wieder sein gratis Los. Die Warnung darunter nennt es
+            // nicht eigens; fuer einen Server, auf dem Geld zaehlt, ist die
+            // MariaDB-Fassung ohnehin die einzige richtige.
+            losablage = new SpeicherLose();
+            // Braucht keine Uhr: Der Lauf kommt bei jedem Aufruf von aussen herein.
+            // Dass diese Fassung beim Neustart alles vergisst, kostet hier mehr als bei
+            // den anderen: Ein Neustart MITTEN IM FENSTER loescht Punkte UND
+            // Anmeldungen, und die Startgelder sind dann abgebucht und der Topf weg.
+            wettbewerbsablage = new SpeicherWettbewerb();
             // Braucht keine Uhr: Beginn und Ende kommen mit dem Vertrag herein.
             mietablage = new SpeicherMiete();
             // Braucht ebenfalls keine Uhr: Der Zeitpunkt kommt beim Einlegen herein.
@@ -1739,6 +1827,15 @@ public final class FreimarkenPlugin extends JavaPlugin {
             // doppelt. Gelesen wird nur auf Befehl, also auch nichts zu sparen.
             spielzeit = new MariaSpielzeit(datenbank);
             bonusablage = new MariaBonus(datenbank);
+            // KEIN Zwischenspeicher: Gezaehlt wird AUFSCHLAGEND, und ein
+            // zwischengespeicherter aufschlagender Schreibzug ist entweder verloren oder
+            // doppelt - dieselbe Begruendung wie bei der Spielzeit. Gelesen wird nur auf
+            // Befehl, also auch nichts zu sparen.
+            losablage = new MariaLose(datenbank);
+            // KEIN Zwischenspeicher: Die Punkte werden aufschlagend geschrieben, und ein
+            // zwischengespeicherter aufschlagender Schreibzug ist entweder verloren oder
+            // doppelt. Gelesen wird je Fang und einmal je Abrechnung - nichts zu sparen.
+            wettbewerbsablage = new MariaWettbewerb(datenbank);
             // KEIN Zwischenspeicher: Gelesen wird auf Befehl und - ab Teil C - einmal je
             // Tageslauf. Ein Zwischenspeicher haette hier nichts zu sparen und waere ein
             // zweiter Ort fuer die Frage, wem ein Laden gehoert.
@@ -2042,6 +2139,25 @@ public final class FreimarkenPlugin extends JavaPlugin {
             angemeldet.addAll(verzeichnis.register(new HilfeBefehle(sprache).hilfe(),
                     sprache.wort(BundSatz.BEFEHL_HILFE, Einsatz.keine()),
                     List.of()));
+            // /lotterie [22.11.2026, Schritt 14] mit /lottery als zweitem Namen -
+            // dieselbe Linie wie plot, balance, job und rank: Wer von einem
+            // englischsprachigen Server kommt, tippt ihn zuerst.
+            //
+            // Die Pruefung auf null faengt den Fall, dass der Start vorher abgebrochen
+            // ist. Ohne sie wuerfe die Anmeldung, und dann fehlten AUCH die Befehle
+            // darunter - ein Fehler in der Lotterie nahm die halbe Befehlsliste mit.
+            if (lotterieBefehle != null) {
+                angemeldet.addAll(verzeichnis.register(lotterieBefehle.lotterie(),
+                        sprache.wort(BundSatz.BEFEHL_LOTTERIE, Einsatz.keine()),
+                        List.of("lottery")));
+            }
+            // /wettbewerb [22.11.2026, Schritt 14] mit /contest als zweitem Namen -
+            // dieselbe Linie wie plot, balance, job, rank und lottery.
+            if (wettbewerbBefehle != null) {
+                angemeldet.addAll(verzeichnis.register(wettbewerbBefehle.wettbewerb(),
+                        sprache.wort(BundSatz.BEFEHL_WETTBEWERB, Einsatz.keine()),
+                        List.of("contest")));
+            }
             // /rank als zweiter Name, dieselbe Linie wie plot, balance und job: Wer von
             // einem englischsprachigen Server kommt, tippt ihn zuerst. Ein Spieler, der
             // "unbekannter Befehl" liest, sucht die Rangleiter nicht weiter.

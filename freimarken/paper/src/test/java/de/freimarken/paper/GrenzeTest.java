@@ -362,7 +362,16 @@ class GrenzeTest {
             // /freistadt - jeder Zweig geht durch sende().
             "WerderBefehle.java",
             // Schritt 11: /wolke - eine Sendestelle, dieselbe Bauart wie /werder.
-            "WolkeBefehle.java"));
+            "WolkeBefehle.java",
+            // Schritt 14: /lotterie - EINE Sendestelle, wie /werder und /wolke. Jeder
+            // Zweig geht durch sende(), auch die Absage an die Konsole.
+            "LotterieBefehle.java",
+            // Schritt 14: der Angelwettbewerb. ZWEI Dateien, und die zweite ist eine
+            // WACHE - die erste im Haus, die sendet. Sie muss es: Die Ansage, dass ein
+            // Fenster aufgeht, und die Siegerliste am Ende gehen an alle, und sie
+            // entstehen im Takt und nicht auf einen Befehl. Beide haben EINE
+            // Sendestelle.
+            "WettbewerbBefehle.java", "Wettbewerbswache.java"));
 
     /**
      * Wo ein Satz aus Text werden darf - zwei Dateien, und das ist der ganze Weg
@@ -563,7 +572,10 @@ class GrenzeTest {
             // Tippfehler.
             Map.entry("WarpBefehle.java", 7),
             Map.entry("WerderBefehle.java", 1),
-            Map.entry("WolkeBefehle.java", 1));
+            Map.entry("WolkeBefehle.java", 1),
+            Map.entry("LotterieBefehle.java", 1),
+            Map.entry("WettbewerbBefehle.java", 1),
+            Map.entry("Wettbewerbswache.java", 1));
 
     /**
      * Wie oft jede reine Zeilen-Methode von {@code ParzellenBefehle} AUFGERUFEN wird.
@@ -1158,6 +1170,8 @@ class GrenzeTest {
             "BEFEHL_MENU -> WORT",
             "BEFEHL_REGELN -> WORT",
             "BEFEHL_HILFE -> WORT",
+            "BEFEHL_LOTTERIE -> WORT",
+            "BEFEHL_WETTBEWERB -> WORT",
             "STAND_KOPF -> SATZ",
             "STAND_VERSION -> SATZ",
             "STAND_ABLAGE_FLUECHTIG -> SATZ",
@@ -3794,7 +3808,8 @@ class GrenzeTest {
         // Gelesen wird die STUFE als Wort und nicht ihre Zahl: Die Zahl stuende als
         // Erwartung in dieser Tafel, und Bukkit darf sie aendern.
         Map<String, String> stufen = new TreeMap<>();
-        for (String datei : List.of("Angelwache.java", "Verdienstwache.java")) {
+        for (String datei : List.of("Angelwache.java", "Verdienstwache.java",
+                "Wettbewerbswache.java")) {
             String quelle = Quellen.text(datei(datei));
             int zweig = quelle.indexOf("public void beimFischen(PlayerFishEvent");
             assertTrue(zweig > 0, datei + " hat keinen Zweig beimFischen mehr - dann"
@@ -3807,12 +3822,20 @@ class GrenzeTest {
         }
 
         assertEquals(Map.of("Angelwache.java", "HIGH",
-                        "Verdienstwache.java", "MONITOR"),
+                        "Verdienstwache.java", "MONITOR",
+                        // Schritt 14: die Wertung des Angelwettbewerbs. Auch MONITOR,
+                        // und aus demselben Grund wie die Zahlung: Sie liest das
+                        // Material des Stapels, der NACH dem Tausch im Netz liegt.
+                        // Zaehlte sie davor, waere ein Meeresherz ein Kabeljau - und
+                        // die 100 Punkte der Punktetabelle waeren Punkte, die niemand
+                        // je bekommt.
+                        "Wettbewerbswache.java", "MONITOR"),
                 stufen,
-                "HIGH laeuft VOR MONITOR - der Tausch zuerst, die Zahlung danach. Steht"
-                        + " hier etwas anderes, bezahlt die Lohntafel den Fang, den"
-                        + " Vanilla gewuerfelt hat, und die Angeltabelle ist fuer den"
-                        + " Verdienst nicht vorhanden");
+                "HIGH laeuft VOR MONITOR - der Tausch zuerst, die Zahlung und die"
+                        + " Wertung danach. Steht hier etwas anderes, bezahlt die"
+                        + " Lohntafel den Fang, den Vanilla gewuerfelt hat, und die"
+                        + " Angeltabelle ist fuer Verdienst und Wettbewerb nicht"
+                        + " vorhanden");
 
         // UND DIE ANMELDUNG. Eine Wache, die niemand am Server anmeldet, ist gebaut,
         // gruen geprueft und im Spiel ohne Wirkung - dieselbe Lage wie bei der
@@ -3821,6 +3844,16 @@ class GrenzeTest {
         assertTrue(plugin.contains("registerEvents(angelwache, this)"),
                 "die Angelwache wird nicht angemeldet - dann tauscht sie nie einen Fang,"
                         + " und kein Protokoll sagt es");
+        assertTrue(plugin.contains("registerEvents(wettbewerbswache, this)"),
+                "die Wettbewerbswache wird nicht angemeldet - dann zaehlt kein Fang,"
+                        + " jeder Lauf endet mit 0 Punkten, und kein Protokoll sagt es");
+        // UND SIE IST MITFAHRER DES TAKTS. Das Feld darf null sein, also faellt ein
+        // vergessener Aufruf nicht auf: Sie liefe nie, und kein Wettbewerb wuerde je
+        // abgerechnet - ohne Startmeldung und ohne Zeile im Protokoll.
+        assertTrue(Quellen.text(datei("Spielzeitwache.java"))
+                        .contains("wettbewerbswache.imTakt()"),
+                "die Wettbewerbswache ist kein Mitfahrer des Spielzeittakts - dann wird"
+                        + " kein Fenster angesagt und kein Lauf abgerechnet");
         int bau = plugin.indexOf("Angelwache.ueberBukkit(");
         assertTrue(bau > 0, "der Server baut die Wache nicht mehr ueber ueberBukkit -"
                 + " und nur dort steht, dass ein Fang EIN Stueck ist");

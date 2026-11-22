@@ -162,6 +162,20 @@ final class Spielzeitwache implements Listener {
     private final Verfallslauf verfallslauf;
 
     /**
+     * Der achte Mitfahrer: der Angelwettbewerb [Schritt 14, 22.11.2026].
+     *
+     * <p><b>Darf {@code null} sein</b>, wie die Laeufe darueber - und genau das ist die
+     * Gefahr: Ein vergessenes Feld liefe stumm nie, und kein Wettbewerb wuerde je
+     * abgerechnet. Es gibt keine Startmeldung dafuer und keine Zeile im Protokoll; man
+     * saehe es erst daran, dass abends niemand seinen Preis bekommt.
+     *
+     * <p>Sie tut ZWEI Dinge je Takt: Sie sagt an, wenn ein Fenster aufgeht, und sie
+     * rechnet ab, wenn eines zu ist. Beides ist ein billiger Vortest - der Takt schlaegt
+     * jede Minute.
+     */
+    private final Wettbewerbswache wettbewerbswache;
+
+    /**
      * Der siebte Mitfahrer: die taegliche Ladengebuehr [Teil E6].
      *
      * <p>EINMAL je Taktschlag, wie die Ladenmiete und der Verfall: Der Lauf geht ueber
@@ -190,6 +204,7 @@ final class Spielzeitwache implements Listener {
                    Blockraeumung blockraeumung,
                    Truhenlauf truhenlauf, Besuchslauf besuchslauf,
                    Verfallslauf verfallslauf, Ladengebuehrlauf ladengebuehrlauf,
+                   Wettbewerbswache wettbewerbswache,
                    Wirtschaftsstand wirtschaft, Logger protokoll) {
         if (rangwache == null) {
             // DIE EINE PRUEFUNG IN DIESEM KONSTRUKTOR, und sie steht hier, weil das
@@ -214,6 +229,7 @@ final class Spielzeitwache implements Listener {
         this.truhenlauf = truhenlauf;
         this.besuchslauf = besuchslauf;
         this.verfallslauf = verfallslauf;
+        this.wettbewerbswache = wettbewerbswache;
         this.ladengebuehrlauf = ladengebuehrlauf;
         this.wirtschaft = wirtschaft;
         this.protokoll = protokoll;
@@ -420,6 +436,23 @@ final class Spielzeitwache implements Listener {
             // ist 0, und das steht in der config.yml mit Begruendung.
             if (ladengebuehrlauf != null) {
                 ladengebuehrlauf.imTakt();
+            }
+            // UND DER ANGELWETTBEWERB, ganz am Ende [Schritt 14]. Zuletzt aus demselben
+            // Grund wie die Raeumungen davor: Sein Ausfall kostet nichts Dauerhaftes -
+            // der naechste Takt holt ihn nach, und eine Abrechnung eine Minute spaeter
+            // merkt niemand. Alles davor schreibt Zeit oder bucht Geld.
+            //
+            // NACH der Tagesgebuehr und nicht davor: Jene kann ein Konto leeren, und
+            // dann soll der Preis des Wettbewerbs auf dem geleerten Konto landen und
+            // nicht vorher - sonst zahlte ein Spieler seine Gebuehr aus dem Gewinn, den
+            // er in derselben Minute bekam. Beides ist zulaessig, aber eine Reihenfolge
+            // muss es sein, und diese ist die, die der Spieler erwartet.
+            //
+            // In DEMSELBEN try, aus demselben Grund wie alle davor: Eine Ausnahme von
+            // hier darf den Zeitgeber nicht beenden. Die Wache faengt ihre Fehler
+            // selbst; dies ist die zweite Schranke.
+            if (wettbewerbswache != null) {
+                wettbewerbswache.imTakt();
             }
         } catch (Throwable fehler) {
             protokoll.log(Level.SEVERE, "Der Spielzeittakt ist in einen Fehler gelaufen."

@@ -506,6 +506,70 @@ public final class Wirtschaftsstand {
         nenneZahl(geaendert, Punktwerte.PFAD_ABKLINGZEIT,
                 alt.wolken().punkte().abklingSekunden(),
                 neu.wolken().punkte().abklingSekunden());
+        // Die Lotterie in Altfurt (Plan 14): sechs Zahlen und die Gewinntabelle. Alles
+        // davon ist GELD - der Lospreis direkt, die Gewinne auf der anderen Seite. Eine
+        // stumm geaenderte Staffel liesse jeden Spieler ab morgen zu einem Preis ziehen,
+        // den niemand eingestellt hat; eine stumm geaenderte Tabelle verschoebe die
+        // Wahrscheinlichkeiten, und das merkt niemand, weil jeder Zug ohnehin anders
+        // ausgeht.
+        nenneJaNein(geaendert, Lotteriewerte.PFAD_AN,
+                alt.lotterie().an(), neu.lotterie().an());
+        nenneZahl(geaendert, Lotteriewerte.PFAD_FREIE_LOSE,
+                alt.lotterie().freieLoseJeTag(), neu.lotterie().freieLoseJeTag());
+        nenneZahl(geaendert, Lotteriewerte.PFAD_HOECHSTE_LOSE,
+                alt.lotterie().hoechsteLoseJeTag(), neu.lotterie().hoechsteLoseJeTag());
+        nenneZahl(geaendert, Lotteriewerte.PFAD_GRUNDPREIS,
+                alt.lotterie().grundpreis(), neu.lotterie().grundpreis());
+        nenneZahl(geaendert, Lotteriewerte.PFAD_STEIGERUNG,
+                alt.lotterie().steigerungProzent(), neu.lotterie().steigerungProzent());
+        nenneZahl(geaendert, Lotteriewerte.PFAD_HOECHSTPREIS,
+                alt.lotterie().hoechstpreis(), neu.lotterie().hoechstpreis());
+        nenneMenge(geaendert, Lotteriewerte.PFAD_GEWINNE,
+                new java.util.LinkedHashSet<>(alt.lotterie().schluessel()),
+                new java.util.LinkedHashSet<>(neu.lotterie().schluessel()));
+        for (Lotteriewerte.Gewinn gewinn : neu.lotterie().gewinne()) {
+            var vorher = alt.lotterie().gewinn(gewinn.schluessel());
+            if (vorher.isEmpty()) {
+                continue;
+            }
+            String wurzel = Lotteriewerte.PFAD_GEWINNE + "." + gewinn.schluessel() + ".";
+            nenneWort(geaendert, wurzel + Lotteriewerte.SCHLUESSEL_ART,
+                    vorher.get().art().name(), gewinn.art().name());
+            nenneZahl(geaendert, wurzel + Lotteriewerte.SCHLUESSEL_GEWICHT,
+                    vorher.get().gewicht(), gewinn.gewicht());
+            nenneZahl(geaendert, wurzel + Lotteriewerte.SCHLUESSEL_MENGE,
+                    vorher.get().menge(), gewinn.menge());
+            nenneWort(geaendert, wurzel + Lotteriewerte.SCHLUESSEL_GEGENSTAND,
+                    vorher.get().gegenstand(), gewinn.gegenstand());
+            nenneWort(geaendert, wurzel + Lotteriewerte.SCHLUESSEL_NAME,
+                    vorher.get().anzeigename(), gewinn.anzeigename());
+        }
+
+        // Der Angelwettbewerb (Plan 14): das Fenster, zwei Geldzahlen, die Verteilung
+        // und die Punkte. Das FENSTER ist dabei das Besondere - es ist die erste
+        // Uhrzeit dieses Projekts, und eine stumm geaenderte Beginnzeit heisst, dass
+        // Spieler eine Stunde lang an einem Teich auf einen Wettbewerb warten, der
+        // woanders schon lief.
+        nenneJaNein(geaendert, Wettbewerbswerte.PFAD_AN,
+                alt.wettbewerb().an(), neu.wettbewerb().an());
+        nenneWort(geaendert, Wettbewerbswerte.PFAD_BEGINN,
+                alt.wettbewerb().beginn().toString(), neu.wettbewerb().beginn().toString());
+        nenneZahl(geaendert, Wettbewerbswerte.PFAD_DAUER,
+                alt.wettbewerb().dauer().toMinutes(), neu.wettbewerb().dauer().toMinutes());
+        nenneMenge(geaendert, Wettbewerbswerte.PFAD_TAGE,
+                wochentage(alt.wettbewerb()), wochentage(neu.wettbewerb()));
+        nenneZahl(geaendert, Wettbewerbswerte.PFAD_STARTGELD,
+                alt.wettbewerb().startgeld(), neu.wettbewerb().startgeld());
+        nenneZahl(geaendert, Wettbewerbswerte.PFAD_ZUSCHUSS,
+                alt.wettbewerb().zuschuss(), neu.wettbewerb().zuschuss());
+        nenneWort(geaendert, Wettbewerbswerte.PFAD_VERTEILUNG,
+                alt.wettbewerb().verteilungProzent().toString(),
+                neu.wettbewerb().verteilungProzent().toString());
+        nenneZahl(geaendert, Wettbewerbswerte.PFAD_PUNKTE_JE_FANG,
+                alt.wettbewerb().punkteJeFang(), neu.wettbewerb().punkteJeFang());
+        nenneTabelle(geaendert, Wettbewerbswerte.PFAD_PUNKTE,
+                alt.wettbewerb().punkte(), neu.wettbewerb().punkte());
+
         if (!alt.rangWerbung().equals(neu.rangWerbung())) {
             geaendert.add(Wirtschaftswerte.PFAD_RANG_WERBUNG + ": \"" + alt.rangWerbung()
                     + "\" -> \"" + neu.rangWerbung() + "\"");
@@ -699,4 +763,23 @@ public final class Wirtschaftsstand {
             hinein.add(pfad + ": " + alt + " -> " + neu);
         }
     }
+
+    /**
+     * Die Wochentage eines Wettbewerbs als Textmenge - in der Reihenfolge der Woche.
+     *
+     * <p>Als TEXT und nicht als Menge von {@code DayOfWeek}: Die Zeile "alt -> neu"
+     * nennte sonst MONDAY, und der Betreiber tippt in seiner Datei "montag". Sortiert
+     * nach der Woche und nicht nach dem Alphabet - eine Liste, die mit Donnerstag
+     * anfaengt, liest niemand.
+     */
+    private static java.util.Set<String> wochentage(Wettbewerbswerte werte) {
+        java.util.Set<String> namen = new java.util.LinkedHashSet<>();
+        for (java.time.DayOfWeek tag : java.time.DayOfWeek.values()) {
+            if (werte.tage().contains(tag)) {
+                namen.add(tag.name().toLowerCase(java.util.Locale.ROOT));
+            }
+        }
+        return namen;
+    }
+
 }

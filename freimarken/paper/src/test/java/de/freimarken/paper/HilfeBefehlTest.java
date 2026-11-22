@@ -67,6 +67,9 @@ class HilfeBefehlTest {
                                 + "und eine nehmen",
                         "&#e3c57e/wolke&#6e7a82 - &#a5b4bfdie eigenen Wolkeninseln, eine "
                                 + "nehmen, heimreisen",
+                        "&#edf1f3Kleine Spiele in Altfurt",
+                        "&#e3c57e/lotterie&#6e7a82 - &#a5b4bfEin Los ziehen - das erste am Tag ist gratis",
+                        "&#e3c57e/wettbewerb&#6e7a82 - &#a5b4bfDer Angelwettbewerb - Stand, Rangliste, anmelden",
                         "&#edf1f3Der Bund",
                         "&#e3c57e/menu&#6e7a82 - &#a5b4bfDas Hauptmenue - jeder Befehl mit "
                                 + "einem Klick",
@@ -195,7 +198,7 @@ class HilfeBefehlTest {
                 + Hilfeplan.ALLE.eintraege().size();
 
         assertEquals(erwartet, ALLES.size());
-        assertEquals(28, ALLES.size());
+        assertEquals(31, ALLES.size());
     }
 
     @Test

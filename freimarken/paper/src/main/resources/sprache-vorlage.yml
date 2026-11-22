@@ -223,6 +223,20 @@ mark:
       #   den es nicht gab.
       betreiber-gutschrift: "Vom Betreiber gutgeschrieben"
       betreiber-abzug: "Vom Betreiber abgezogen"
+      # Plan 14: die Lotterie in Altfurt. Das LOS steht auch mit 0 Mark im Buch, weil
+      #   das erste am Tag gratis ist - dann ist dieses Wort die ganze Auskunft der
+      #   Zeile, und ohne es saehe der Spieler eine 0 und wuesste nicht, wofuer.
+      # Der GOLDgewinn landet im Goldbuch; welche Einheit die Zahl daneben hat, sagt
+      #   die Zeile und nicht das Wort - wie bei muenzhaus-kauf.
+      los-gezogen: "Los der Lotterie"
+      los-erstattet: "Gewinn nicht angekommen - erstattet"
+      lotterie-gewinn: "In der Lotterie gewonnen"
+      lotterie-goldgewinn: "In der Lotterie gewonnen"
+      # Plan 14: der Angelwettbewerb. Startgeld und Preis stehen im Verlauf
+      #   nebeneinander; die Differenz ihrer Summen ist der Zuschuss des Betreibers.
+      wettbewerb-start: "Startgeld fuer den Angelwettbewerb"
+      wettbewerb-preis: "Preis aus dem Angelwettbewerb"
+      wettbewerb-erstattet: "Anmeldung gescheitert - erstattet"
 
   # /MARK TAUSCHEN - die Wechselstube. Plan 2.1 nennt fuer das Muenzhaus "Kontostand,
   # Verlauf, Wechsel Mark - Goldmark, Wechseldeckel sichtbar"; das Haus selbst kommt
@@ -419,6 +433,11 @@ befehl:
     hilfe: "Alle Befehle, nach Bereichen geordnet"
     shop: "Deine Kistenshops auflisten und fuer andere freigeben"
     beruf: "Deinen Beruf waehlen, ansehen und aufgeben"
+    # 22.11.2026: die Lotterie. Die Zeile nennt das gratis Los - es ist der Grund,
+    #   den Befehl ueberhaupt zu tippen, und diese Beschreibung steht auf jedem Client
+    #   in der Befehlsliste.
+    lotterie: "Ein Los ziehen - das erste am Tag ist gratis"
+    wettbewerb: "Der Angelwettbewerb - Stand, Rangliste, anmelden"
 
 parzelle:
   # Das Wort fuer den Preis 0 - es wird in info.frei, info.frei-am-limit und
@@ -3058,6 +3077,9 @@ hilfe:
     reisen: "<betont>Reisen und Treffen</betont>"
     welten: "<betont>Eigene Welten</betont>"
     bund: "<betont>Der Bund</betont>"
+    # 22.11.2026: Schritt 14. Eine eigene Gruppe und kein Eintrag unter Geld - die
+    #   Lotterie ist kein Handel.
+    spiele: "<betont>Kleine Spiele in Altfurt</betont>"
   # {befehl} ohne Schraegstrich - der steht hier. {beschreibung} kommt aus
   #   befehl.beschreibung und traegt darum keine Farbe; gefaerbt wird sie hier.
   zeile: "<hinweis>/{befehl}</hinweis><gedaempft> - </gedaempft><fliesstext>{beschreibung}</fliesstext>"
@@ -3130,3 +3152,133 @@ muenzhaus:
     blumenkiste: "Blumenkiste"
     musikscheibe: "Musikscheibe"
     rathausglocke: "Rathausglocke"
+
+# DIE LOTTERIE IN ALTFURT - /lotterie [22.11.2026, Schritt 14].
+#
+# DAS ERSTE LOS AM TAG IST GRATIS, jedes weitere kostet mehr. Darum hat die Standzeile
+#   drei Formen: gratis, mit Preis, und "fuer heute ist Schluss". Eine einzige Zeile mit
+#   einem Preis von 0 waere es nicht geworden - "kostet 0 Mark" schreibt so niemand.
+#
+# DER NAME DES GEWINNS KOMMT AUS DER config.yml und steht NICHT hier. Was ein Gewinn
+#   heisst, gehoert zu seiner Beschreibung unter lotterie.gewinne.<name>.name - dort
+#   steht auch sein Gewicht und seine Menge. Dadurch braucht ein neuer Gewinn keine Zeile
+#   in dieser Datei. Er kommt unten als {gewinn} herein.
+#
+# JE GEWINNART EINE ZEILE: Mark ist ein Betrag, ein Gegenstand ist ein Ding, und
+#   Goldmark ist etwas, das man sonst kaufen muss. Die zwei unteren sind GEZAEHLT, haben
+#   also eins und viele - "1 Diamanten" waere falsch.
+lotterie:
+  # Die Ueberschrift von /lotterie. GENAU EINE Zeile.
+  kopf: "<kopf>Die Lotterie von Altfurt</kopf>"
+  # Steht anstelle des Preises, wenn das Los gratis war - sonst stuende dort "(Los: 0)".
+  #   KEIN Farbtag: Das Wort wird in andere Saetze eingesetzt, und ein Tag darin
+  #   ueberschriebe die Farbe der Zeile, in der es landet.
+  gratis-wort: "gratis"
+  stand:
+    # {gezogen} wie viele Lose heute schon gezogen sind, {hoechste} die Tagesgrenze.
+    gratis: "<bestaetigung>Dein naechstes Los ist gratis.</bestaetigung> <gedaempft>Heute gezogen: {gezogen} von {hoechste}.</gedaempft>"
+    # {preis} was das naechste Los kostet.
+    preis: "<fliesstext>Dein naechstes Los kostet <geld>{preis}</geld>.</fliesstext> <gedaempft>Heute gezogen: {gezogen} von {hoechste}.</gedaempft>"
+    genug: "<hinweis>Du hast heute alle {hoechste} Lose gezogen - morgen ist wieder eines gratis.</hinweis>"
+    # {staffel} rechnet das Programm aus deinen Zahlen: "1. gratis - 2. 500 - ...".
+    #   Die Zahlen darin sind NACKT - ohne Einheit und ohne Tausenderpunkt, denn sie
+    #   kommen aus dem Kern, und der kennt die Sprachdatei nicht. Darum nennt diese
+    #   Zeile die Einheit selbst: Bei fuenf Stufen waere "500 Mark - 1.000 Mark -
+    #   2.000 Mark" eine Wand, und der Betreiber soll die Staffel auf einen Blick sehen.
+    staffel: "<gedaempft>Die Staffel in Mark: {staffel}</gedaempft>"
+    hinweis: "<gedaempft>Ziehen mit /lotterie ziehen</gedaempft>"
+  gezogen:
+    # {gewinn} der Name aus der config.yml, {menge} der Betrag beziehungsweise die
+    #   Stueckzahl, {preis} was das Los gekostet hat - auch 0, denn das gratis Los ist
+    #   der Kern der ganzen Einrichtung.
+    # {menge} traegt seine EINHEIT schon: Sie kommt aus waehrung.betrag
+    #   beziehungsweise waehrung.goldmark - dort steht das Wort fuer einen Betrag, und
+    #   von dort kommt jeder Betrag, den ein Spieler liest. Darum steht hier kein "Mark".
+    mark: "<bestaetigung>{gewinn}:</bestaetigung> <geld>{menge}</geld> <gedaempft>(Los: {preis})</gedaempft>"
+    goldmark:
+      eins: "<bestaetigung>{gewinn}:</bestaetigung> <geld>{menge}</geld> <gedaempft>(Los: {preis})</gedaempft>"
+      viele: "<bestaetigung>{gewinn}:</bestaetigung> <geld>{menge}</geld> <gedaempft>(Los: {preis})</gedaempft>"
+    gegenstand:
+      eins: "<bestaetigung>Gewonnen: {gewinn}</bestaetigung> <gedaempft>(Los: {preis})</gedaempft>"
+      viele: "<bestaetigung>Gewonnen: {menge} x {gewinn}</bestaetigung> <gedaempft>(Los: {preis})</gedaempft>"
+  # {preis} was das Los kostet, {guthaben} was du hast. BEIDE Zahlen, damit es eine
+  #   Antwort ist und nicht nur ein Nein.
+  zu-wenig: "<warnung>Das naechste Los kostet {preis} - du hast {guthaben}.</warnung>"
+  heute-genug: "<hinweis>Du hast heute alle {hoechste} Lose gezogen - morgen ist wieder eines gratis.</hinweis>"
+  # {fehlt} wie viele Stueck NICHT hineinpassen. Gefragt wird VOR der Zahlung und VOR der
+  #   Zaehlung: Hier ist nichts abgebucht, und das Los ist NICHT verbraucht.
+  kein-platz:
+    eins: "<warnung>In deinem Rucksack fehlt Platz fuer 1 Stueck - dein Los ist nicht verbraucht.</warnung>"
+    viele: "<warnung>In deinem Rucksack fehlt Platz fuer {fehlt} Stueck - dein Los ist nicht verbraucht.</warnung>"
+  # Bezahlt, aber der Gewinn kam nicht an. Nach einer genauen Platzrechnung kann das
+  #   nicht eintreten - es ist also ein Fehler im Programm oder in der Welt. Der Spieler
+  #   soll lesen, dass sein Geld zurueck ist.
+  erstattet: "<warnung>Der Gewinn kam nicht an - deine {preis} sind zurueck.</warnung>"
+  # Eine Ablage oder eine Kasse hat geschwiegen. Es ist NICHTS passiert: kein Geld, kein
+  #   Gewinn, und das Los ist nicht gezaehlt.
+  gestoert: "<warnung>Die Lotterie antwortet gerade nicht - es ist nichts passiert.</warnung>"
+  aus: "<hinweis>In Altfurt wird gerade nicht gezogen.</hinweis>"
+  nur-spieler: "<warnung>Ein Los zieht ein Spieler. Von der Konsole geht das nicht.</warnung>"
+
+# DER ANGELWETTBEWERB IN ALTFURT - /wettbewerb [22.11.2026, Schritt 14].
+#
+# DAS FENSTER geht taeglich zur eingestellten Uhrzeit auf (ab Werk 18:00) und bleibt die
+#   eingestellte Dauer offen. Wer mitmachen will, meldet sich an und zahlt Startgeld; alle
+#   Startgelder plus dem Zuschuss des Betreibers bilden den TOPF, und der geht nach der
+#   eingestellten Verteilung an die Sieger.
+#
+# DIE ANSAGEN duerfen LEER bleiben. Dann erfaehrt man vom Wettbewerb nur ueber
+#   /wettbewerb - das ist eine denkbare Serverform und kein Versehen. Wer sie behaelt,
+#   hat eine Zeile im Chat, wenn das Fenster aufgeht, und eine Siegerliste am Ende.
+#
+# DIE SIEBEN WOCHENTAGE unten werden nur genannt, wenn der Wettbewerb NICHT taeglich
+#   laeuft. Bei allen sieben Tagen ist "um 18:00" die ganze Auskunft.
+wettbewerb:
+  # Die Ueberschrift von /wettbewerb. GENAU EINE Zeile.
+  kopf: "<kopf>Der Angelwettbewerb von Altfurt</kopf>"
+  # {bis} wann das Fenster zugeht (Ortszeit), {topf} was darin liegt, {teilnehmer} wie
+  #   viele dabei sind.
+  offen: "<bestaetigung>Der Wettbewerb laeuft bis {bis}.</bestaetigung> <fliesstext>Im Topf: <geld>{topf}</geld> von {teilnehmer} Teilnehmern.</fliesstext>"
+  # {beginn} wann der naechste aufgeht - nur die Uhrzeit, wenn taeglich; sonst mit Tagen.
+  geschlossen: "<hinweis>Gerade laeuft kein Wettbewerb. Der naechste beginnt um {beginn}.</hinweis>"
+  # {punkte} deine Punkte, {platz} dein Platz. GEZAEHLT - "1 Punkte" waere falsch.
+  eigener-stand:
+    eins: "<fliesstext>Du hast 1 Punkt und liegst auf Platz {platz}.</fliesstext>"
+    viele: "<fliesstext>Du hast {punkte} Punkte und liegst auf Platz {platz}.</fliesstext>"
+  # {startgeld} was die Teilnahme kostet.
+  mitmachen: "<gedaempft>Mitmachen mit /wettbewerb anmelden ({startgeld})</gedaempft>"
+  rangliste:
+    kopf: "<betont>Die Rangliste</betont>"
+    # {platz} die Zahl, {name} der Spieler, {punkte} seine Punkte. Die zwei Leerzeichen
+    #   am Anfang sind die EINRUECKUNG - sie stehen hier, damit du sie sehen kannst.
+    platz: "<fliesstext>  {platz}. {name} - {punkte}</fliesstext>"
+    leer: "<gedaempft>  Noch ist niemand dabei.</gedaempft>"
+  # {startgeld} was gezahlt wurde, {topf} was danach im Topf liegt.
+  angemeldet: "<bestaetigung>Du bist dabei - {startgeld} gezahlt.</bestaetigung> <fliesstext>Im Topf: <geld>{topf}</geld></fliesstext>"
+  schon-dabei: "<hinweis>Du bist schon angemeldet.</hinweis>"
+  kein-lauf: "<hinweis>Gerade laeuft kein Wettbewerb. Der naechste beginnt um {beginn}.</hinweis>"
+  # BEIDE Zahlen, damit es eine Antwort ist und nicht nur ein Nein.
+  zu-wenig: "<warnung>Das Startgeld ist {startgeld} - du hast {guthaben}.</warnung>"
+  aus: "<hinweis>In Altfurt wird gerade nicht gewertet.</hinweis>"
+  gestoert: "<warnung>Der Wettbewerb antwortet gerade nicht - es ist nichts passiert.</warnung>"
+  nur-spieler: "<warnung>Anmelden kann ein Spieler. Von der Konsole geht das nicht.</warnung>"
+  ansage:
+    # AN ALLE, wenn das Fenster aufgeht. Darf leer bleiben: beginn: ""
+    beginn: "<kopf>Der Angelwettbewerb hat begonnen!</kopf> <fliesstext>Bis {bis}, Startgeld {startgeld} - /wettbewerb anmelden</fliesstext>"
+    # AN ALLE am Ende. {teilnehmer} wie viele dabei waren, {topf} was verteilt wurde.
+    ende: "<kopf>Der Angelwettbewerb ist zu Ende.</kopf> <fliesstext>{teilnehmer} Teilnehmer, <geld>{topf}</geld> im Topf:</fliesstext>"
+    # Je Sieger eine Zeile. {preis} ist der Unterschied zur Rangliste oben.
+    sieger: "<fliesstext>  {platz}. {name} - {punkte} Punkte, <geld>{preis}</geld></fliesstext>"
+    niemand: "<gedaempft>Niemand war dabei.</gedaempft>"
+  # An den Sieger allein. Er liest sie auch dann, wenn die Ansagen oben leer sind.
+  gewonnen: "<bestaetigung>Platz {platz} im Angelwettbewerb mit {punkte} Punkten:</bestaetigung> <geld>{preis}</geld>"
+  # DIE SIEBEN WOCHENTAGE. Sie werden in {beginn} eingesetzt, wenn der Wettbewerb nicht
+  #   taeglich laeuft - KEIN Farbtag, er ueberschriebe die Farbe der Zeile.
+  tag:
+    montag: "Montag"
+    dienstag: "Dienstag"
+    mittwoch: "Mittwoch"
+    donnerstag: "Donnerstag"
+    freitag: "Freitag"
+    samstag: "Samstag"
+    sonntag: "Sonntag"

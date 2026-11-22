@@ -545,7 +545,84 @@ public enum Buchungsgrund {
      * im Buch nicht zu unterscheiden, und {@code /mark verlauf} koennte die Zeile nicht
      * benennen.
      */
-    BETREIBER_ABZUG("betreiber_abzug", Richtung.AUSGABE);
+    BETREIBER_ABZUG("betreiber_abzug", Richtung.AUSGABE),
+
+    /**
+     * Ein Los der Lotterie in Altfurt (Plan 14).
+     *
+     * <p>AUSGABE, auch wenn der Betrag 0 ist - dasselbe wie bei der ersten Parzelle, die
+     * ebenfalls gratis ist. Die Richtung gehoert an den Grund, siehe den Klassenkopf.
+     *
+     * <p><b>Diese Buchung ist NICHT die Wahrheit darueber, wie viele Lose heute schon
+     * gezogen wurden</b>, und darin unterscheidet sie sich von {@link #LADEN_LIZENZ} und
+     * {@link #TAGESBONUS}, die beide als Marke gelesen werden. Das gratis Los bucht 0
+     * Mark; {@link Kasse#summeSeit} bleibt danach 0, und "noch keines gezogen" waere von
+     * "das gratis Los ist weg" nicht zu unterscheiden. Auch die Summe hilft nicht: Zwei
+     * Lose zu je 500 Mark sehen aus wie eines zu 1000. Die Zahl steht deshalb in
+     * {@link Losablage} - sie ist die einzige Stelle, die sie hat.
+     */
+    LOS_GEZOGEN("los_gezogen", Richtung.AUSGABE),
+
+    /**
+     * Der Lospreis ist zurueck - der Gewinn kam nicht an.
+     *
+     * <p>Ein EIGENER Grund und nicht {@link #LOTTERIE_GEWINN} geborgt, wie bei
+     * {@link #MUENZHAUS_ERSTATTET}: Unter dem Gewinngrund saehe der Spieler in seinem
+     * Verlauf einen Gewinn, den er nie hatte - und im Wirtschaftsbericht waere die
+     * Lotterie als Senke um diesen Betrag zu klein.
+     */
+    LOS_ERSTATTET("los_erstattet", Richtung.EINNAHME),
+
+    /** Was ein Los in Mark ausgezahlt hat. */
+    LOTTERIE_GEWINN("lotterie_gewinn", Richtung.EINNAHME),
+
+    /**
+     * Was ein Los in Goldmark ausgezahlt hat.
+     *
+     * <p>Ein eigener Grund, weil er in ein anderes BUCH gehoert: Die Goldkasse fuehrt
+     * ihr eigenes, und {@code pruefeWaehrung} wirft dort fuer jeden Markgrund - auch beim
+     * Lesen. Ein gemeinsamer Grund fuer beide Waehrungen waere also nicht nur unscharf im
+     * Bericht, sondern ein Wurf mitten im Spiel.
+     *
+     * <p>Damit hat Goldmark eine DRITTE Quelle neben Kauf und Wechsel. Das ist eine
+     * Entscheidung des Betreibers vom 22.11.2026 und mit Absicht knapp gehalten: In der
+     * ausgelieferten Tabelle hat die Goldmark Gewicht 3 von 1000 und bringt drei Stueck.
+     * Wer sie gross macht, baut einen Weg um den Wechselkurs herum (Plan 9.2).
+     */
+    LOTTERIE_GOLDGEWINN("lotterie_goldgewinn", Richtung.EINNAHME),
+
+    /**
+     * Das Startgeld des Angelwettbewerbs (Plan 14).
+     *
+     * <p><b>Diese Buchung ist NICHT der Beleg dafuer, dass jemand angemeldet ist</b> -
+     * anders als {@link #LADEN_LIZENZ}, die genau das ist. Das Startgeld darf 0 sein,
+     * und dann waere die Summe aus {@link Kasse#summeSeit} nicht von "gar nicht
+     * angemeldet" zu unterscheiden. Die Anmeldung steht deshalb in
+     * {@link Wettbewerbsablage}, und dort liegt auch der Betrag, der WIRKLICH gezahlt
+     * wurde - aus ihm wird der Topf gerechnet und nicht aus der Zahl der Teilnehmer.
+     */
+    WETTBEWERB_START("wettbewerb_start", Richtung.AUSGABE),
+
+    /**
+     * Der Preis aus dem Topf des Angelwettbewerbs.
+     *
+     * <p>Der Topf sind die Startgelder plus der Zuschuss des Betreibers. Ab Werk ist der
+     * Zuschuss 0 - dann ist dieser Grund in der Summe genau so gross wie
+     * {@link #WETTBEWERB_START}, und der Wettbewerb ist im Wirtschaftsbericht eine
+     * Umverteilung und keine Quelle. Die Differenz zwischen beiden Gruenden IST der
+     * Zuschuss, und das ist die Zahl, die ein Betreiber im Bericht sehen will.
+     */
+    WETTBEWERB_PREIS("wettbewerb_preis", Richtung.EINNAHME),
+
+    /**
+     * Das Startgeld ist zurueck - die Anmeldung kam nicht zustande.
+     *
+     * <p>Ein EIGENER Grund und nicht {@link #WETTBEWERB_PREIS} geborgt, aus demselben
+     * Grund wie bei {@link #LOS_ERSTATTET}: Unter dem Preisgrund saehe der Spieler einen
+     * Gewinn, den er nie hatte - und im Wirtschaftsbericht waere die Differenz zwischen
+     * Startgeldern und Preisen nicht mehr der Zuschuss des Betreibers.
+     */
+    WETTBEWERB_ERSTATTET("wettbewerb_erstattet", Richtung.EINNAHME);
 
     /** Ob Geld zum Spieler hin oder von ihm weg fliesst. */
     public enum Richtung {
@@ -616,7 +693,8 @@ public enum Buchungsgrund {
     public Buch buch() {
         return switch (this) {
             case WECHSEL_GOLDMARK_HER, WECHSEL_GOLDMARK_WEG, WECHSEL_GOLDMARK_ZURUECK,
-                     MUENZHAUS_KAUF, MUENZHAUS_ERSTATTET -> Buch.GOLDMARK;
+                     MUENZHAUS_KAUF, MUENZHAUS_ERSTATTET,
+                     LOTTERIE_GOLDGEWINN -> Buch.GOLDMARK;
             case EROEFFNUNG -> Buch.JEDES;
             case BESTAND, PARZELLE_GEKAUFT, PARZELLE_ERSTATTET,
                      FREISTADT_GEGRUENDET, FREISTADT_ERSTATTET, GRUNDSTUECK_GEKAUFT,
@@ -630,8 +708,10 @@ public enum Buchungsgrund {
                      FREISTADT_LADENGEBUEHR, STADTKASSE_LADENGEBUEHR, WERDER_GEKAUFT,
                      WERDER_ERSTATTET, WOLKE_GENOMMEN, WOLKE_ERSTATTET, WOLKE_AUFGABE,
                      WOLKE_BIOM, WOLKE_BIOM_ERSTATTET, WECHSEL_MARK_WEG, WECHSEL_MARK_HER,
-                     WECHSEL_MARK_ZURUECK, BETREIBER_GUTSCHRIFT,
-                     BETREIBER_ABZUG -> Buch.MARK;
+                     WECHSEL_MARK_ZURUECK, BETREIBER_GUTSCHRIFT, BETREIBER_ABZUG,
+                     LOS_GEZOGEN, LOS_ERSTATTET, LOTTERIE_GEWINN,
+                     WETTBEWERB_START, WETTBEWERB_PREIS,
+                     WETTBEWERB_ERSTATTET -> Buch.MARK;
         };
     }
 

@@ -1316,6 +1316,132 @@ public final class Datenbank implements AutoCloseable {
               gesehen_am DATETIME(3) NOT NULL,
               PRIMARY KEY (spieler, station)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 36: die LOSE DER LOTTERIE - Schritt 14, 22.11.2026.
+            //
+            // EINE Zeile je Spieler UND Tag, also PRIMARY KEY (spieler, tag). Eine Zeile
+            // je Spieler mit einer Zahl genuegte nicht: Der Preis haengt daran, wie viele
+            // Lose HEUTE gezogen sind, und ohne den Tag im Schluessel muesste jemand die
+            // Zahl beim Tageswechsel zuruecksetzen - ein Lauf, den es nicht gibt und der
+            // auf einem Server, der ueber Mitternacht aus war, nie liefe.
+            //
+            // HIER LIEGT GELD, und das ist der Unterschied zu tagesbonus (Schritt 29).
+            // Dort steht die Wahrheit im Buchungsbuch, und ein Verlust der Zeile kostet
+            // nur eine Serie. Hier ist diese Zahl die EINZIGE Wahrheit darueber, was das
+            // naechste Los kostet: Das erste Los am Tag ist gratis und wird mit 0 Mark
+            // gebucht, aus einer Summe von 0 ist also "noch keines gezogen" nicht von
+            // "das gratis Los ist weg" zu unterscheiden. Ein Verlust dieser Zeile ist
+            // damit eine Geldquelle, und darum zaehlt Lotteriebuch ZUERST und zahlt
+            // danach.
+            //
+            // tag als DATE und nicht als DATETIME: Es ist einer der TAGesspalten dieses
+            // Schemas, die bewusst NICHT in UTC stehen (wie tagesbonus.letzter_tag und
+            // die zwei Tagesspalten davor). Welcher Tag gilt, entscheidet allein
+            // Tagesgrenze.tagVon aus der eingestellten Zone - kein CURDATE(), kein
+            // UTC_DATE(). Die Sitzung steht fest auf UTC, also nennte die Datenbank
+            // zwischen 00:00 und 01:00 Ortszeit noch den Vortag.
+            //
+            // GESCHRIEBEN WIRD AUFSCHLAGEND, mit ON DUPLICATE KEY UPDATE anzahl =
+            // anzahl + 1 - anders als bei tagesbonus, das setzt. Die Zahl ist eine
+            // ZAEHLUNG und kein Zustand: Zwei Server, die beide ein Los melden, meinen
+            // zwei Lose, und es sind zwei. Setzend verschluckte eines davon, und das
+            // verbilligt das naechste.
+            //
+            // anzahl als INT und nicht SMALLINT: 32.767 Lose an einem Tag sind bei der
+            // ausgelieferten Tagesgrenze von 20 unerreichbar, aber die Grenze ist eine
+            // EINSTELLUNG und darf 0 (unbegrenzt) sein. Ein ueberlaufender SMALLINT
+            // waere dann eine negative Zahl, und der Konstruktor von Losstand wuerfe
+            // mitten im Spiel.
+            //
+            // KEIN FREMDSCHLUESSEL auf kassen, wie bei raenge, berufe, anmeldungen und
+            // rundgang: Ein RESTRICT brachte die Lotterie zum Scheitern, sobald eine
+            // Kontoeroeffnung einmal fehlgeschlagen ist; ein CASCADE loeschte die
+            // Loszahl stumm mit dem Konto - und damit gaebe eine Kontoloeschung dem
+            // Spieler sein gratis Los zurueck.
+            //
+            // KEIN RAEUMLAUF fuer alte Tage, und das ist eine bewusste Luecke: Eine
+            // Zeile ist 44 Byte, und ein Server mit hundert taeglichen Spielern legt im
+            // Jahr vier Megabyte an. Wer sie loeschen will, kann das jederzeit von Hand
+            // tun - gelesen wird nur der heutige Tag. Ein Lauf, der alte Zeilen
+            // wegwirft, waere die erste Stelle dieses Schemas, die Daten loescht, und
+            // dafuer ist der Gewinn zu klein.
+            """
+            CREATE TABLE IF NOT EXISTS lotterie_lose (
+              spieler CHAR(36) NOT NULL,
+              tag     DATE     NOT NULL,
+              anzahl  INT      NOT NULL,
+              PRIMARY KEY (spieler, tag)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 37: die PUNKTE des Angelwettbewerbs - Schritt 14, 22.11.2026.
+            //
+            // EINE Zeile je Spieler UND Lauf. Der Lauf ist der Tag seines BEGINNS, auch
+            // wenn das Fenster bis in den naechsten Tag reicht - nur so haelt die
+            // Zuordnung ueber Mitternacht zusammen.
+            //
+            // DIE ZEILE IST DIE ANMELDUNG. Wer keine hat, sammelt keine Punkte; das ist
+            // der Riegel dagegen, dass einem Angler ungefragt Startgeld abgebucht wird,
+            // nur weil er im Fenster an einem Teich stand. Geschrieben wird mit INSERT
+            // IGNORE, und die Zahl der geschriebenen Zeilen ist die Antwort auf "war es
+            // neu" - an dieser Antwort haengt, ob abgebucht wird. Dasselbe Muster wie
+            // bei wolke_herausforderung (Schritt 30) und rundgang (Schritt 35).
+            //
+            // eingezahlt STEHT HIER MIT DRIN, und das ist die tragende Spalte: Der Topf
+            // ist die Summe dieser Betraege plus dem Zuschuss. Wer ihn aus "Teilnehmer
+            // mal Startgeld" rechnet, rechnet falsch, sobald der Betreiber das Startgeld
+            // mitten im Lauf aendert - /freimarken neuladen wirkt sofort.
+            //
+            // punkte als INT: Bei der ausgelieferten Tabelle bringt der teuerste Fang
+            // 100 Punkte, und ein Fenster ist eine Stunde lang. Ein SMALLINT reichte
+            // auch, aber die Punkte je Fang sind eine EINSTELLUNG und duerfen bis
+            // 1.000.000 gehen.
+            //
+            // KEIN FREMDSCHLUESSEL auf kassen, wie bei raenge, berufe, anmeldungen,
+            // rundgang und lotterie_lose: Ein RESTRICT brachte die Anmeldung zum
+            // Scheitern, sobald eine Kontoeroeffnung einmal fehlgeschlagen ist; ein
+            // CASCADE loeschte Punkte und Einzahlung stumm mit dem Konto - und dann
+            // zahlte der Topf mehr aus, als noch darin steht.
+            """
+            CREATE TABLE IF NOT EXISTS wettbewerb_punkte (
+              spieler    CHAR(36) NOT NULL,
+              lauf       DATE     NOT NULL,
+              punkte     INT      NOT NULL,
+              eingezahlt BIGINT   NOT NULL,
+              PRIMARY KEY (spieler, lauf)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """,
+
+            // Schritt 38: die ABGERECHNETEN Laeufe - Schritt 14, 22.11.2026.
+            //
+            // EINE Zeile je Lauf, und sie ist der wichtigste Riegel dieses ganzen
+            // Teils: Ohne ihn zahlte jeder weitere Takt der Spielzeitwache denselben
+            // Topf erneut aus - eine Geldquelle, die mit jedem Takt waechst, und zwar
+            // am Ende JEDES Wettbewerbs.
+            //
+            // Geschrieben wird mit INSERT IGNORE; die Zahl der geschriebenen Zeilen ist
+            // die Erlaubnis zum Auszahlen. Gemerkt wird ZUERST, dann gezahlt: Bricht es
+            // dazwischen ab, bleibt ein Topf unverteilt (ein Verlust fuer die Sieger);
+            // umgekehrt waere es eine Quelle.
+            //
+            // EINE EIGENE Tabelle und nicht eine Spalte an wettbewerb_punkte: Der
+            // Abschluss gehoert dem LAUF und nicht einem Spieler. Als Spalte muesste er
+            // bei jedem Teilnehmer gesetzt werden, und dann ginge die Frage "ist dieser
+            // Lauf abgerechnet" je Zeile anders aus.
+            //
+            // topf und teilnehmer stehen mit darin, obwohl sie heute niemand liest: Sie
+            // kosten acht beziehungsweise vier Byte je Lauf, und sie sind die einzige
+            // Spur eines Wettbewerbs, nachdem die Punkte geraeumt wurden. Ein Betreiber,
+            // der fragt "was lief letzten Freitag", hat sonst keine Antwort.
+            """
+            CREATE TABLE IF NOT EXISTS wettbewerb_lauf (
+              lauf          DATE        NOT NULL,
+              abgerechnet_am DATETIME(3) NOT NULL,
+              topf          BIGINT      NOT NULL,
+              teilnehmer    INT         NOT NULL,
+              PRIMARY KEY (lauf)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             """);
 
     /**
@@ -1624,6 +1750,23 @@ public final class Datenbank implements AutoCloseable {
             // in die naechste, und eine Probe ueber den ersten Griff eines Spielers
             // faende dort schon einen Deckel.
             anweisung.execute("DELETE FROM freie_truhe");
+            // Die Lose der Lotterie haengen an keinem Fremdschluessel - mit Absicht,
+            // siehe den Schemaschritt -, ihre Stelle in dieser Liste ist also frei. Sie
+            // stehen hier, damit sie nicht uebersehen werden. Ohne diese Zeile wandern
+            // Loszahlen von einer Probe in die naechste, und das trifft gerade die
+            // Proben der Lotterie: Am Preis haengt die Zahl, eine Probe ueber "das erste
+            // Los ist gratis" faende ein vorgefundenes vor und bekaeme den Grundpreis.
+            // Gruen waere sie damit nicht - aber eine, die den Grundpreis erwartet, waere
+            // es, und sie pruefte das Gegenteil von dem, was sie behauptet.
+            anweisung.execute("DELETE FROM lotterie_lose");
+            // Der Angelwettbewerb haengt an keinem Fremdschluessel - mit Absicht, siehe
+            // die Schemaschritte -, seine Stelle in dieser Liste ist also frei. Beide
+            // Tabellen stehen hier, damit sie nicht uebersehen werden. Die LAUF-Tabelle
+            // ist dabei die gefaehrlichere: Bliebe eine Zeile stehen, gilt derselbe Lauf
+            // in der naechsten Probe als abgerechnet - und eine Probe ueber die
+            // Auszahlung waere gruen, ohne einen einzigen Preis zu sehen.
+            anweisung.execute("DELETE FROM wettbewerb_punkte");
+            anweisung.execute("DELETE FROM wettbewerb_lauf");
             // DIE GOLDMARK, und zwar das Buch VOR den Konten: fk_goldbuchung_kasse steht
             // auf RESTRICT, genau wie bei der Mark. Beide Zeilen sind Pflicht - ohne sie
             // wandern Goldmarkstaende von einer Probe in die naechste, und weil "ein

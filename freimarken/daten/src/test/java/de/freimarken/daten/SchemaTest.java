@@ -88,6 +88,9 @@ class SchemaTest {
         -816915537, // Schritt 33 - Tabelle goldbuchungen
         -160592889, // Schritt 34 - Tabelle anmeldungen
         -418319750, // Schritt 35 - Tabelle rundgang
+        1227759879, // Schritt 36 - Tabelle lotterie_lose
+        -1991130253, // Schritt 37 - Tabelle wettbewerb_punkte
+        -812230402, // Schritt 38 - Tabelle wettbewerb_lauf
     };
 
     private static String datenbanktext() {

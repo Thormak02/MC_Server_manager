@@ -147,6 +147,11 @@ record Hilfeplan(List<Gruppe> gruppen) {
                             BundSatz.BEFEHL_FREISTADT),
                     new Eintrag("werder", WerderBefehle.RECHT, BundSatz.BEFEHL_WERDER),
                     new Eintrag("wolke", WolkeBefehle.RECHT, BundSatz.BEFEHL_WOLKE))),
+            new Gruppe(HilfeSatz.GRUPPE_SPIELE, List.of(
+                    new Eintrag("lotterie", LotterieBefehle.RECHT,
+                            BundSatz.BEFEHL_LOTTERIE),
+                    new Eintrag("wettbewerb", WettbewerbBefehle.RECHT,
+                            BundSatz.BEFEHL_WETTBEWERB))),
             new Gruppe(HilfeSatz.GRUPPE_BUND, List.of(
                     new Eintrag("menu", MenueBefehle.RECHT, BundSatz.BEFEHL_MENU),
                     new Eintrag("hilfe", HilfeBefehle.RECHT, BundSatz.BEFEHL_HILFE),

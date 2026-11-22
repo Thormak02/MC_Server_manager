@@ -38,6 +38,16 @@ enum HilfeSatz implements Satz {
     GRUPPE_BUND("hilfe.gruppe.bund", Art.SATZ),
 
     /**
+     * Die kleinen Spiele in Altfurt [22.11.2026, Schritt 14].
+     *
+     * <p>Eine EIGENE Gruppe und nicht ein Eintrag unter {@link #GRUPPE_GELD}: Die
+     * Lotterie kostet Geld und bringt Geld, aber sie ist kein Handel - neben dem
+     * Bundesmarkt stehend saehe sie aus wie ein Weg zu verdienen. Schritt 14 fuehrt
+     * drei Spiele, und die zwei anderen kommen dazu.
+     */
+    GRUPPE_SPIELE("hilfe.gruppe.spiele", Art.SATZ),
+
+    /**
      * Eine Zeile der Liste: der Befehl und was er tut.
      *
      * <p>{@code beschreibung} kommt aus {@code befehl.beschreibung.*} - und weil das ein

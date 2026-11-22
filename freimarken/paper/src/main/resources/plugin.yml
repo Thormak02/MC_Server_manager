@@ -52,6 +52,21 @@ permissions:
   freimarken.hilfe:
     description: Alle Befehle nach Bereichen lesen
     default: true
+  # Ein Los ziehen: /lotterie und /lotterie ziehen [22.11.2026, Schritt 14]. EIN Recht
+  # fuer Ansehen und Mitmachen, nicht zwei: Der Stand sagt nur, was ein Los kostet, und
+  # wer das nicht lesen darf, soll auch nicht ziehen - zwei Rechte waeren hier eine
+  # Unterscheidung ohne Fall. Fuer JEDEN, denn das erste Los am Tag ist gratis und
+  # damit die taegliche Gelegenheit, die niemanden etwas kostet.
+  freimarken.lotterie:
+    description: Ein Los der Lotterie in Altfurt ziehen
+    default: true
+  # Am Angelwettbewerb teilnehmen: /wettbewerb und /wettbewerb anmelden [22.11.2026,
+  # Schritt 14]. EIN Recht fuer Ansehen und Mitmachen, wie bei der Lotterie: Wer die
+  # Rangliste nicht lesen darf, soll auch nicht antreten. Fuer JEDEN - die Teilnahme
+  # kostet Startgeld, und wer es zahlt, soll mitspielen koennen.
+  freimarken.wettbewerb:
+    description: Am Angelwettbewerb in Altfurt teilnehmen
+    default: true
   # Den eigenen Rang nachsehen: /rang und /rang leiter [20.11.2026]. Fuer JEDEN -
   # darum default true. Ohne diese Anmeldung antwortet Bukkit mit der Vorgabe OP, und
   # der Befehl waere fuer einen gewoehnlichen Spieler verborgen UND verwehrt, waehrend

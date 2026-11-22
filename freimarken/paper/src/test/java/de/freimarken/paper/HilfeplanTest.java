@@ -186,6 +186,8 @@ class HilfeplanTest {
                         Map.entry("menu", MenueBefehle.RECHT),
                         Map.entry("hilfe", HilfeBefehle.RECHT),
                         Map.entry("regeln", RegelnBefehle.RECHT),
+                        Map.entry("lotterie", LotterieBefehle.RECHT),
+                        Map.entry("wettbewerb", WettbewerbBefehle.RECHT),
                         Map.entry("freimarken", Hilfeplan.JEDER))),
                 gebaut, "Ein Eintrag traegt ein anderes Recht als sein Befehl.");
     }

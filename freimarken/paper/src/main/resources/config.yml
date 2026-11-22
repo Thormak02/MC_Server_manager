@@ -119,6 +119,18 @@ wirtschaft:
     wechsel-hin: ""
     wechsel-zurueck: ""
     wechsel-tagesdeckel: ""
+    # Die zwei Geldzahlen der Lotterie (lotterie.*). Der Hoechstpreis braucht die
+    # Bestaetigung auch beim Senken: Von 250.000 auf 1.000 ist weit mehr als Faktor 2,
+    # und danach kostet das zwanzigste Los so viel wie das zweite - die Bremse gegen das
+    # Vielziehen ist dann aus, ohne dass eine Zeile es sagt.
+    lotterie-grundpreis: ""
+    lotterie-hoechstpreis: ""
+    # Die zwei Geldzahlen des Angelwettbewerbs (wettbewerb.*). Der ZUSCHUSS braucht die
+    # Bestaetigung besonders: Ab Werk ist er 0, und von 0 aus ist jede Zahl ein Sprung
+    # ueber das Doppelte. Das ist nicht im Weg, sondern richtig - ein Zuschuss ist NEUES
+    # Geld neben Verdienst und Tagesbonus, und der soll bewusst entstehen.
+    wettbewerb-startgeld: ""
+    wettbewerb-zuschuss: ""
 
 parzellen:
   # Wie viele Parzellen ein Spieler ohne besonderes Recht haben darf.
@@ -1842,6 +1854,268 @@ angeln:
     horn_coral_block: 6
     sponge: 4
     heart_of_the_sea: 1
+
+# DER ANGELWETTBEWERB IN ALTFURT (Plan 14, Schritt 14).
+#
+# TAEGLICH ZUR FESTEN UHRZEIT, und alles daran ist einstellbar - so hat es der Betreiber
+# am 22.11.2026 bestimmt. Ab Werk geht das Fenster um 18:00 Ortszeit auf und bleibt eine
+# Stunde offen, an jedem Tag der Woche.
+#
+# TOPF PLUS ZUSCHUSS: Wer mitmacht, zahlt Startgeld; alle Startgelder zusammen plus dem
+# Zuschuss des Betreibers sind der Topf. Ab Werk ist der Zuschuss 0 - dann ist der
+# Wettbewerb eine reine UMVERTEILUNG und keine Geldquelle, und die Summe, die hineingeht,
+# ist die Summe, die herauskommt. Jeder Zuschuss darueber ist neues Geld neben Verdienst
+# und Tagesbonus; im Wirtschaftsbericht ist er genau die Differenz zwischen den Gruenden
+# wettbewerb_preis und wettbewerb_start.
+#
+# ANMELDEN IST EINE EIGENE TAT (/wettbewerb anmelden) und kein Nebeneffekt des Angelns:
+# Wer im Fenster an einem Teich steht, soll nicht ungefragt Startgeld zahlen. Nur wer
+# angemeldet ist, sammelt Punkte.
+#
+# GEWERTET WIRD IN JEDER WELT, nicht nur in Hafenwerder. Wer in Altfurt, in einer
+# Freistadt oder auf seiner Wolkeninsel angelt, spielt mit.
+#
+# DIE ZEITZONE ist dieselbe wie bei der Tagesgrenze (zeit.zone, ab Werk Europe/Berlin).
+# Eine zweite Zone fuer das Fenster gibt es nicht.
+wettbewerb:
+  # Ob der Wettbewerb ueberhaupt laeuft. false heisst: kein Fenster geht auf.
+  an: true
+
+  # Wann das Fenster aufgeht, als ORTSZEIT.
+  #
+  # IN ANFUEHRUNGSZEICHEN, und das ist Pflicht: Ohne sie liest YAML den Doppelpunkt als
+  # Trenner und macht keine Uhrzeit daraus, sondern eine Abbildung. Der Leser beklagt das
+  # und nennt den Grund - aber einfacher ist es, die Zeichen stehenzulassen.
+  #
+  # Stunde:Minute, immer zweistellig: "18:00", "07:30", "23:45".
+  beginn: "18:00"
+
+  # Wie lange das Fenster offen bleibt, in Minuten. Erlaubt ist 1 bis 1440.
+  #
+  # Ein Fenster darf ueber Mitternacht reichen (beginn 23:30 und 60 Minuten enden um
+  # 00:30). Der Lauf gehoert dann zum Tag seines BEGINNS - nur so haelt die Zuordnung
+  # ueber Mitternacht zusammen. Der Startbericht rechnet dir das Ende vor.
+  dauer-minuten: 60
+
+  # An welchen Wochentagen. Ab Werk an allen sieben.
+  #
+  # Eine LEERE Liste ist erlaubt und bedeutet etwas: kein Wettbewerb, ohne den Schalter
+  # oben zu finden. Ein unbekannter Name faellt weg und wird beklagt.
+  tage: [montag, dienstag, mittwoch, donnerstag, freitag, samstag, sonntag]
+
+  # Was die Teilnahme kostet, in Mark. 0 heisst gratis - dann kommt der Topf allein aus
+  # dem Zuschuss, und der Wettbewerb ist eine Geldquelle.
+  #
+  # Aenderung braucht sprung-bestaetigt.wettbewerb-startgeld bei mehr als Faktor 2.
+  startgeld: 250
+
+  # Was der Betreiber je Lauf dazugibt, in Mark.
+  #
+  # AB WERK 0, und das ist Absicht: So ist der Wettbewerb eine Umverteilung. Jeder Wert
+  # darueber ist NEUES Geld - und weil von 0 aus jede Zahl ein Sprung ueber das Doppelte
+  # ist, braucht er sprung-bestaetigt.wettbewerb-zuschuss. Das ist nicht im Weg, sondern
+  # richtig: Eine neue Geldquelle soll bewusst entstehen.
+  zuschuss: 0
+
+  # Wie der Topf auf die Plaetze geht, in Prozent. Erster Eintrag ist der erste Platz.
+  #
+  # Die Summe darf 100 NICHT ueberschreiten. Weniger ist erlaubt: Was uebrigbleibt,
+  # bleibt bei denen, die eingezahlt haben, und ist damit eine Senke.
+  #
+  # Mehr Plaetze als Teilnehmer: Die ueberzaehligen Anteile fallen weg. Bei zwei
+  # Teilnehmern und [50, 30, 20] bleiben 20 Prozent im Topf.
+  #
+  # Eine kaputte Zahl kostet die GANZE Liste - anders als bei den Punkten unten: Die
+  # Plaetze haengen voneinander ab. Faellt der zweite weg, bekaeme der Dritte den Preis
+  # des Zweiten, und niemand haette es gelesen.
+  verteilung-prozent: [50, 30, 20]
+
+  # Was ein Fang wert ist, der in der Tabelle unten NICHT steht.
+  #
+  # Eine 0 ist erlaubt und heisst: nur die Faenge aus der Tabelle zaehlen. Stehen BEIDE
+  # auf nichts - 0 hier und eine leere Tabelle -, zaehlt kein Fang, und jeder Lauf endet
+  # ohne Punkte. Der Startbericht sagt es dir.
+  punkte-je-fang: 1
+
+  # DIE PUNKTETABELLE: Gegenstand und Punkte. Erlaubt ist 1 bis 1000000.
+  #
+  # EINE EIGENE Tabelle und nicht die Gewichte aus angeln.faenge: Die Angeltabelle darf
+  # leer sein (dann angelt Hafenwerder Vanilla), und Punkte sind eine andere Frage als
+  # Haeufigkeit - du sollst einen haeufigen Fang hoch bewerten koennen, wenn du willst.
+  #
+  # Was hier nicht steht, ist punkte-je-fang wert. Der Wettbewerb funktioniert also auch
+  # ohne jede Zeile hier.
+  #
+  # Eine kaputte Zeile faellt weg, die uebrigen gelten.
+  punkte:
+    heart_of_the_sea: 100
+    sponge: 25
+    nautilus_shell: 10
+    prismarine_crystals: 8
+    brain_coral_block: 8
+    horn_coral_block: 8
+    prismarine_shard: 5
+    sea_pickle: 5
+    tropical_fish: 3
+
+# DIE LOTTERIE IN ALTFURT (Plan 14, Schritt 14).
+#
+# DAS ERSTE LOS AM TAG IST GRATIS, jedes weitere kostet mehr. Das hat zwei Seiten: Wer
+# einmal am Tag sein Glueck versucht, zahlt nie etwas - die Lotterie ist damit fuer
+# jeden Spieler erreichbar, auch fuer den, der gerade nichts hat. Wer zwanzig Lose am
+# Tag zieht, zahlt fuer das zwanzigste ein Vermoegen. Das ist dieselbe Bremse wie bei
+# der Parzellenstaffel ganz oben und aus demselben Grund: Ohne sie waere die Lotterie
+# eine Geldmaschine fuer den, der am meisten hat, statt eine Abwechslung fuer alle.
+#
+# SIE MUSS EINE SENKE SEIN, nicht eine Quelle (Plan 9.3). Die Zahl, an der du das
+# siehst, steht im Startbericht: "Im Mittel <n> Mark je Los". Liegt sie ueber dem
+# Grundpreis, zahlt die Lotterie mehr aus, als sie einnimmt - dann laeuft die
+# Wirtschaft voll, und an keiner anderen Stelle faellt es auf.
+#
+# WIE VIELE LOSE JEMAND HEUTE GEZOGEN HAT, steht in der Datenbank und nicht im
+# Buchungsbuch. Das ist der Unterschied zum Tagesbonus: Das gratis Los wird mit 0 Mark
+# gebucht, und aus einer Summe von 0 ist "noch keines gezogen" nicht von "das gratis
+# Los ist weg" zu unterscheiden. Ohne Datenbank (speicher-Betrieb) hat darum nach jedem
+# Neustart jeder wieder sein gratis Los.
+lotterie:
+  # Ob die Lotterie ueberhaupt laeuft. false heisst: In Altfurt wird nicht gezogen -
+  # sofort, ohne die Tabelle anzufassen.
+  #
+  # true oder false, nicht ja oder nein: YAML kennt true/false (und yes/no/on/off), und
+  # ein "ja" ist dort ein WORT. Es wuerde beklagt und verworfen.
+  an: true
+
+  # Wie viele Lose am Tag GRATIS sind. 0 heisst: keines, jedes kostet.
+  #
+  # EINS, und das ist der Kern des ganzen Abschnitts: Es ist die taegliche Gelegenheit,
+  # die niemanden etwas kostet. Wer hier 0 eintraegt, macht aus der Lotterie ein
+  # Geschaeft fuer die, die schon Geld haben.
+  freie-lose-je-tag: 1
+
+  # Wie viele Lose am Tag HOECHSTENS gehen. 0 heisst unbegrenzt.
+  #
+  # Eine Grenze, obwohl der Preis schon bremst: Bei den Zahlen hier unten kostet das
+  # zwanzigste Los bereits den Hoechstpreis, und jedes weitere waere nur noch eine
+  # Zeile im Buchungsbuch. Die Grenze macht aus "sinnlos teuer" ein ehrliches "fuer
+  # heute ist Schluss".
+  #
+  # Sie darf nicht unter freie-lose-je-tag liegen - sonst waere ein Teil der gratis
+  # Lose nie zu ziehen, und niemand erfuehre, welcher. Der Leser klagt und senkt dann
+  # die Zahl der gratis Lose.
+  hoechste-lose-je-tag: 20
+
+  # Was das erste BEZAHLTE Los kostet, in Mark. Das gratis Los davor kostet nichts;
+  # diese Zahl gilt also fuer das zweite Los des Tages.
+  #
+  # Aenderung braucht sprung-bestaetigt.lotterie-grundpreis, wenn sie mehr als Faktor 2
+  # ist.
+  grundpreis: 500
+
+  # Wie der Preis je weiteres Los steigt, in Prozent. 200 ist die Verdopplung, 150 ein
+  # sanfterer Anstieg, 1000 ein brutaler. Erlaubt ist 100 bis 10000.
+  #
+  # 100 ist erlaubt und heisst: jedes Los kostet gleich viel. Unter 100 ist es nicht -
+  # dann wuerde jedes weitere Los BILLIGER, und die Bremse waere ein Mengenrabatt fuers
+  # Vielziehen.
+  #
+  # Die Staffel bei 500 und 200 Prozent: 1. gratis - 2. 500 - 3. 1000 - 4. 2000 -
+  # 5. 4000, und ab dem zehnten der Hoechstpreis. Der Startbericht rechnet sie vor.
+  steigerung-prozent: 200
+
+  # Der Deckel je Los, in Mark. Er klemmt in JEDER Rechenrunde und nicht erst am Ende -
+  # ohne ihn liefe die Verdopplung bei genug Losen ueber den Zahlenraum, und ein
+  # uebergelaufener Preis waere NEGATIV, also eine Gutschrift beim Kauf.
+  #
+  # Aenderung braucht sprung-bestaetigt.lotterie-hoechstpreis.
+  hoechstpreis: 250000
+
+  # DIE GEWINNTABELLE: je Zeile ein Gewinn mit Art, Gewicht und Menge. Je hoeher das
+  # Gewicht, je oefter der Gewinn; die Summe aller Gewichte ist der Nenner. Der
+  # Startbericht nennt jede Zeile in Promille - daran siehst du, was du eingestellt
+  # hast.
+  #
+  # DREI ARTEN:
+  #   mark       - Mark auf das Konto. menge ist der Betrag.
+  #   goldmark   - Goldmark auf das Goldkonto. menge ist die Anzahl.
+  #   gegenstand - ein Gegenstand in den Rucksack. menge ist die Stueckzahl (hoechstens
+  #                2304, ein voller Rucksack), gegenstand ist der nackte Name wie
+  #                diamond oder heart_of_the_sea, ohne minecraft: davor.
+  #
+  # KOSMETIK ist keine eigene Art, und das ist Absicht: Ein kosmetischer Gewinn ist ein
+  # gegenstand mit einem eigenen "name" - der Fischerhut unten ist ein Lederhelm, der so
+  # heisst. Damit entscheidet DIESE DATEI, was Kosmetik ist, und ein neuer kosmetischer
+  # Gewinn braucht keine Zeile Programm. "name" gibt es nur bei gegenstand; ein Betrag
+  # hat keinen Namen, auf dem er stehen koennte.
+  #
+  # GOLDMARK ist mit Gewicht 3 von 1000 und drei Stueck knapp gehalten. Sie ist damit
+  # die dritte Quelle fuer Goldmark neben Kauf und Wechsel - wer sie gross macht, baut
+  # einen Weg um den Wechselkurs herum (Plan 9.2).
+  #
+  # DIE NIETE IST EINE ZEILE und kein leeres Ergebnis: Ein gezogenes Los hat immer einen
+  # Gewinn. Wer nichts gewinnen soll, gewinnt nieten-trost - und das steht sichtbar hier
+  # statt versteckt im Programm.
+  #
+  # Eine kaputte Zeile wird beklagt und faellt weg, die uebrigen gelten. Eine LEERE
+  # Liste ist erlaubt und heisst: es wird nicht gezogen, ohne den Schalter oben zu
+  # finden.
+  gewinne:
+    nieten-trost:
+      art: mark
+      gewicht: 420
+      menge: 50
+    handvoll-mark:
+      art: mark
+      gewicht: 250
+      menge: 200
+    beutel-mark:
+      art: mark
+      gewicht: 120
+      menge: 750
+    kiste-mark:
+      art: mark
+      gewicht: 40
+      menge: 5000
+    eisenbarren:
+      art: gegenstand
+      gewicht: 60
+      menge: 8
+      gegenstand: iron_ingot
+    erfahrungsflasche:
+      art: gegenstand
+      gewicht: 40
+      menge: 6
+      gegenstand: experience_bottle
+    diamant:
+      art: gegenstand
+      gewicht: 25
+      menge: 2
+      gegenstand: diamond
+    fischerhut:
+      art: gegenstand
+      gewicht: 20
+      menge: 1
+      gegenstand: leather_helmet
+      name: Fischerhut von Altfurt
+    marktschuerze:
+      art: gegenstand
+      gewicht: 15
+      menge: 1
+      gegenstand: leather_chestplate
+      name: Marktschuerze von Altfurt
+    goldener-apfel:
+      art: gegenstand
+      gewicht: 5
+      menge: 1
+      gegenstand: enchanted_golden_apple
+    goldmark:
+      art: goldmark
+      gewicht: 3
+      menge: 3
+    meeresherz:
+      art: gegenstand
+      gewicht: 2
+      menge: 1
+      gegenstand: heart_of_the_sea
 
 # DIE SKYBLOCKINSELN VON WOLKENWERDER (Plan 4.1 und 6.2, Schritt 11).
 #

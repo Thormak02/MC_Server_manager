@@ -338,7 +338,7 @@ class VorlageTest {
                 // FENSTER steht und nicht im Chat - und der erste mit einem Satz, der
                 // ausdruecklich mehrzeilig sein darf.
                 "MenueSatz", "RegelnSatz", "HilfeSatz", "AnmeldeSatz",
-                "RundgangSatz"));
+                "RundgangSatz", "LotterieSatz", "WettbewerbSatz"));
         Set<String> gefuehrt = new LinkedHashSet<>();
         Sprachschluessel.bereiche().forEach(bereich ->
                 gefuehrt.add(bereich.getSimpleName()));
@@ -931,6 +931,9 @@ class VorlageTest {
             // Konsole, kein Spieler liest sie.
             "Ladengebuehrlauf.java -> \" Mark nicht zahlen, liess sich\"",
             "Ladengebuehrlauf.java -> \" Mark war nicht zu zahlen. Die Ware bleibt in\"",
+            "Lotterieliste.java -> \"Mark\"",
+            "Lotterieliste.java -> \"Mark\"",
+            "Lotterieliste.java -> \" Mark je Los (Gegenstaende und Goldmark nicht gerechnet). \"",
             "Marktliste.java -> \"Mark\"",
             // Teil B: Zwei Protokollzeilen des Mietbuchs - die Kaution, die nach dem
             // Loeschen des Vertrags nicht zurueckgezahlt werden konnte, und eine
@@ -1044,6 +1047,10 @@ class VorlageTest {
             "Wechselliste.java -> \"Mark\"",
             "Wechselliste.java -> \" in Mark zurueckwechseln. Achtung, hier heisst die 0"
                     + " etwas anderes\"",
+            "Wettbewerbsliste.java -> \"Mark\"",
+            "Wettbewerbsliste.java -> \"Mark\"",
+            "Wettbewerbswache.java -> \" Mark, \"",
+            "Wettbewerbswache.java -> \" Mark)\"",
             "Wirtschaftsliste.java -> \"Mark\"",
             "Wirtschaftsliste.java -> \"Mark je Feld\"",
             "Wirtschaftsliste.java -> \"Mark\"",

@@ -71,6 +71,21 @@ seiten:
       Spielzeit, Messstelle und die Hinweise im Chat. Hier steht nichts, was Geld bewegt.
     bloecke: [zeit, messstelle, hinweise]
 
+  - schluessel: spiele
+    name: Spiele
+    hinweis: >-
+      Die kleinen Spiele in Altfurt. Die Lotterie ist eine SENKE und keine Quelle: Der
+      Startbericht des Plugins nennt dafuer die eine Zahl, die zaehlt - "im Mittel <n>
+      Mark je Los". Liegt sie ueber dem Grundpreis, zahlt die Lotterie mehr aus, als sie
+      einnimmt. Das erste Los am Tag ist gratis; wie viele jemand heute gezogen hat,
+      steht in der Datenbank und nicht im Buchungsbuch.
+
+      Der Angelwettbewerb laeuft taeglich zur eingestellten Uhrzeit (ab Werk 18:00 fuer
+      eine Stunde). Die Uhrzeit MUSS in Anfuehrungszeichen stehen - ohne sie liest YAML
+      den Doppelpunkt als Trenner. Startgelder plus Zuschuss bilden den Topf; ab Werk
+      ist der Zuschuss 0, dann ist der Wettbewerb eine Umverteilung und keine Quelle.
+    bloecke: [lotterie, wettbewerb]
+
   - schluessel: texte
     name: Texte
     quelle: sprache
@@ -154,6 +169,10 @@ sprung:
   wechsel.mark-je-goldmark: wechsel-hin
   wechsel.mark-zurueck: wechsel-zurueck
   wechsel.tagesdeckel: wechsel-tagesdeckel
+  lotterie.grundpreis: lotterie-grundpreis
+  lotterie.hoechstpreis: lotterie-hoechstpreis
+  wettbewerb.startgeld: wettbewerb-startgeld
+  wettbewerb.zuschuss: wettbewerb-zuschuss
 
 # Klasse 3 nach Plan 12a.6: sichtbar, aber gesperrt - mit dem Satz, warum.
 # Diese Werte SEHEN aus wie Einstellungen, sind aber Struktur. Der Schluessel ist ein

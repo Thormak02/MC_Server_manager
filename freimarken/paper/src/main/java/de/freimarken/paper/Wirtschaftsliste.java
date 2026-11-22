@@ -266,6 +266,21 @@ final class Wirtschaftsliste {
         klagen.addAll(anmeldung.klagen());
         bericht.addAll(anmeldung.bericht());
 
+        // Die Lotterie in Altfurt (Plan 14): Lospreis, Tagesgrenze, Gewinntabelle. Haengt
+        // an keinem anderen Leser, aber ihre Rechenprobe nennt den mittleren Markgewinn -
+        // die einzige Zahl, an der zu sehen ist, ob die Lotterie eine Senke ist.
+        Lotterieliste.Ergebnis lotterie = Lotterieliste.ausKonfiguration(wurzel);
+        klagen.addAll(lotterie.klagen());
+        bericht.addAll(lotterie.bericht());
+
+        // Der Angelwettbewerb (Plan 14): Fenster, Startgeld, Verteilung, Punkte. Seine
+        // Rechenprobe nennt das ENDE des Fensters - aus "18:00" und "600 Minuten" das
+        // zu rechnen macht niemand im Kopf, und ein Fenster bis 4:00 des naechsten Tages
+        // sieht in der Datei aus wie eines von einer Stunde.
+        Wettbewerbsliste.Ergebnis wettbewerb = Wettbewerbsliste.ausKonfiguration(wurzel);
+        klagen.addAll(wettbewerb.klagen());
+        bericht.addAll(wettbewerb.bericht());
+
         Preisstaffel preise = new Preisstaffel(grundpreis, jeFeld);
         if (grundpreis == 0L) {
             bericht.add(Wirtschaftswerte.PFAD_GRUNDPREIS + " ist 0 - jede weitere Parzelle"
@@ -300,7 +315,7 @@ final class Wirtschaftsliste {
                 handel.werte(), truhe.werte(), freistaedte.werte(),
                 inseln.werte(), angeln.werte(), wolken.werte(),
                 raenge.werte(), wechsel.werte(), muenzhaus.werte(),
-                anmeldung.werte()), klagen,
+                anmeldung.werte(), lotterie.werte(), wettbewerb.werte()), klagen,
                 bericht);
     }
 
