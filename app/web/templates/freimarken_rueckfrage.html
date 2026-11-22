@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Grosse Aenderung bestaetigen</h1>
+<p class="muted">{{ server.name }} &middot; Freimarken &ndash; {{ inhalt.seite.name }}</p>
+
+<section class="card">
+    <h2>{{ spruenge|length }} Wert{% if spruenge|length != 1 %}e{% endif %} aendern sich um mehr als das Doppelte</h2>
+    <p>
+        Ein zu billiger Preis macht Mark, und die liegen binnen Minuten auf vielen Konten
+        &ndash; zurueckzuholen nur mit einer Ruecksicherung des ganzen Servers. Darum
+        diese Frage.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Einstellung</th>
+                <th>Bisher</th>
+                <th>Neu</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sprung in spruenge %}
+            <tr>
+                <td><code>{{ sprung.pfad }}</code></td>
+                <td>{{ sprung.alt }}</td>
+                <td><strong>{{ sprung.neu }}</strong></td>
+            </tr>
+            {% if sprung.bestandsschutz %}
+            <tr>
+                <td colspan="3" class="muted">
+                    <strong>Bestandsschutz:</strong> {{ sprung.bestandsschutz }}
+                </td>
+            </tr>
+            {% endif %}
+            {% if not sprung.schluessel %}
+            <tr>
+                <td colspan="3">
+                    <strong>Achtung:</strong> Fuer diesen Wert ist kein
+                    Bestaetigungsschluessel bekannt. Das Plugin wird die Aenderung beim
+                    naechsten Start verwerfen und die alte Zahl weiterverwenden.
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{% if andere %}
+<section class="card">
+    <h2>Ausserdem wird geaendert</h2>
+    <table>
+        <thead>
+            <tr><th>Einstellung</th><th>Bisher</th><th>Neu</th></tr>
+        </thead>
+        <tbody>
+            {% for eintrag in andere %}
+            <tr>
+                <td><code>{{ eintrag.pfad }}</code></td>
+                <td>{{ eintrag.alt }}</td>
+                <td>{{ eintrag.neu }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+<section class="card">
+    <form method="post" action="/freimarken/{{ server.id }}/{{ aktiv }}">
+        {# Alle Werte reisen unveraendert mit - auch die unveraenderten. Der Dienst
+           vergleicht selbst gegen die Datei und schreibt nur, was sich unterscheidet. #}
+        {% for pfad, wert in werte.items() %}
+        <input type="hidden" name="feld:{{ pfad }}" value="{{ wert }}">
+        {% endfor %}
+        <input type="hidden" name="grund" value="{{ grund }}">
+        <input type="hidden" name="sprung_bestaetigt" value="1">
+        <p>
+            Mit dem Speichern wird zugleich die Zeile unter
+            <code>wirtschaft.sprung-bestaetigt</code> gesetzt &ndash; ohne sie wuerde das
+            Plugin die neue Zahl verwerfen.
+        </p>
+        <button type="submit">Ja, so speichern</button>
+        <a class="button-like" href="/freimarken/{{ server.id }}/{{ aktiv }}">Abbrechen</a>
+    </form>
+</section>
+{% endblock %}

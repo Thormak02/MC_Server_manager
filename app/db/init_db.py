@@ -11,6 +11,9 @@ from app.models.ai_usage import AiUsage  # noqa: F401
 from app.models.app_setting import AppSetting  # noqa: F401
 from app.models.backup import Backup  # noqa: F401
 from app.models.file_usage import FileUsage  # noqa: F401
+from app.models.freimarken_mitgliedschaft import (  # noqa: F401
+    FreimarkenMitgliedschaft,
+)
 from app.models.global_access import GlobalAccessEntry  # noqa: F401
 from app.models.installed_content import InstalledContent  # noqa: F401
 from app.models.java_profile import JavaProfile  # noqa: F401

@@ -616,4 +616,96 @@ public final class Besitzbuch {
         lager.entfernen(parzelle.id());
         return new Entscheid(Bescheid.ERTEILT, 0L, gefunden);
     }
+
+    // --- Was der Betreiber darf -----------------------------------------------
+
+    /**
+     * Besitz auf einen anderen Spieler uebertragen - ohne Geld und ohne Zustimmung.
+     *
+     * <p><b>Der Betreiber greift nicht AN der Eigentuemerpruefung vorbei, er tritt an
+     * deren Stelle:</b> Als Handelnder wird der heutige Eigentuemer eingesetzt, und
+     * damit bleibt {@link #hindernis} vollstaendig in Kraft - die Unterscheidung
+     * zwischen "hier ist keine Parzelle" und "hier ist noch frei" ebenso wie die
+     * Verweigerung auf einem einzelnen Feld einer Gruppe. Eine eigene Kette von
+     * Pruefungen waere die zweite Wahrheit darueber, was an einer Stelle geht.
+     *
+     * <p><b>Die Rangobergrenze wird hier NICHT geprueft</b> [22.11.2026], und das hat
+     * zwei Gruende. Der eine ist technisch: Die Grenze eines Spielers steht in seinen
+     * RECHTEN, und die sind im Plugin nur fuer einen anwesenden Spieler lesbar
+     * ({@code Rangzahl.ausRecht} nimmt einen {@code Player}). Eine Pruefung hier liesse
+     * ein Uebertragen nur an gerade Anwesende zu - und eine Korrektur betrifft meist
+     * genau den, der nicht da ist. Ein Rueckfall auf die Vorgabe aus der
+     * {@code config.yml} waere schlimmer als keine Pruefung: Er wiese einen
+     * hochgestuften Spieler ab, als haette er seine Stufe nicht.
+     *
+     * <p>Der andere Grund ist der wichtigere: Die Grenze ist keine Zusicherung ueber die
+     * DATEN, sondern eine Schranke beim Selbst-Nehmen. Wird ein Rang herabgesetzt, haelt
+     * der Spieler weiterhin mehr Parzellen, als seine Stufe hergibt - das Plugin nimmt
+     * ihm keine weg. "Niemand haelt mehr als seine Stufe" gilt also ohnehin nicht, und
+     * eine Pruefung an dieser Stelle haette nichts geschuetzt, sondern nur die Korrektur
+     * verhindert. Was der Betreiber bekommt, ist die neue ZAHL - urteilen soll er selbst.
+     *
+     * <p>Ohne Rueckzahlung und ohne Kaufpreis: Es ist eine Korrektur, kein Handel. Der
+     * Kaufweg ist {@code Grundstuecksbuch.kaufe}, und er braucht ein Angebot.
+     */
+    public Entscheid betreiberUebertragen(String welt, int weltX, int weltZ, UUID anWen) {
+        if (anWen == null) {
+            throw new IllegalArgumentException("Ohne Empfaenger gibt es keine"
+                    + " Uebertragung");
+        }
+        Optional<Parzelle> gefunden = zustaendigerBesitz(welt, weltX, weltZ);
+        // ERLAUBT und nicht VERWEIGERN, und das ist ein Fund aus der Probe
+        // [22.11.2026]: zustaendigerBesitz gibt bei einer Gruppe immer das KIND zurueck,
+        // auch an der Ankerzelle. Mit VERWEIGERN waere ein zusammengelegtes Grundstueck
+        // ueber KEINEN Weg uebertragbar - und auftrennen kann nur sein Eigentuemer, der
+        // womoeglich gar nicht mehr da ist. Durchschreiben ist hier auch richtig: Ein
+        // Grundstueck zu uebertragen heisst, es ganz zu uebertragen, und
+        // eigentuemerSetzen trifft die Gruppe und jedes Kind in einem Zug.
+        //
+        // Beim FREIGEBEN bleibt es bei VERWEIGERN (siehe aufgeben): Dort wird geloescht,
+        // und ein einzelnes Feld durchgeschrieben loeschte das ganze Grundstueck.
+        Optional<Entscheid> stehtEntgegen = hindernis(gefunden,
+                gefunden.map(Parzelle::eigentuemer).orElse(null),
+                AufGruppe.ERLAUBT, weltX, weltZ);
+        if (stehtEntgegen.isPresent()) {
+            return stehtEntgegen.get();
+        }
+        Parzelle parzelle = gefunden.get();
+        if (parzelle.gehoert(anWen)) {
+            // SCHON_VERGEBEN und nicht ERTEILT: Ein "Erledigt." auf einen Wechsel, der
+            // keiner ist, liest der Betreiber als Beweis, dass der Name stimmte - und
+            // genau den hatte er womoeglich verwechselt.
+            return new Entscheid(Bescheid.SCHON_VERGEBEN, 0L, gefunden);
+        }
+        // schreibZiel und nicht id(): Bei einem Gruppenkind ist das die Gruppe, und
+        // von dort schreibt das Lager auf alle Kinder durch - dasselbe Umlenken wie bei
+        // mitbauerHinzufuegen.
+        lager.eigentuemerSetzen(schreibZiel(parzelle), anWen);
+        // KEIN zweites Lesen aus der Ablage [Fund 22.11.2026]: Die neue Zeile ist
+        // bekannt - es ist die alte mit dem neuen Besitzer, und genau das macht
+        // mitNeuemBesitzer. Ein finde() NACH dem Schreiben koennte werfen (Verbindung
+        // weg, Pool-Zeitueberschreitung), und dann waere der Wechsel vollzogen, die
+        // Antwort aber "die Ablage antwortet nicht - es ist NICHTS geaendert". Antwort
+        // und Protokoll saegen dann das Gegenteil des Geschehenen.
+        return new Entscheid(Bescheid.ERTEILT, 0L,
+                Optional.of(parzelle.mitNeuemBesitzer(anWen)));
+    }
+
+    /**
+     * Fremden Besitz freigeben - die Stelle wird wieder Bauland.
+     *
+     * <p>Dieselbe Tat wie {@link #aufgeben}, nur dass nicht der Eigentuemer sie ausloest.
+     * Darum ist es auch derselbe Weg: Der heutige Eigentuemer wird als Handelnder
+     * eingesetzt, und jede Pruefung von {@code aufgeben} gilt - einschliesslich der
+     * fehlenden Rueckzahlung, die dort begruendet ist.
+     *
+     * <p>Ist hier gar kein Besitz, bleibt der Eigentuemer {@code null}, und
+     * {@link #hindernis} antwortet als Erstes - die Unterscheidung zwischen "keine
+     * Parzelle" und "noch frei" steht damit weiter an genau einer Stelle.
+     */
+    public Entscheid betreiberFreigeben(String welt, int weltX, int weltZ) {
+        UUID eigentuemer = zustaendigerBesitz(welt, weltX, weltZ)
+                .map(Parzelle::eigentuemer).orElse(null);
+        return aufgeben(welt, eigentuemer, weltX, weltZ);
+    }
 }

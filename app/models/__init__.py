@@ -1,6 +1,7 @@
 from app.models.backup import Backup
 from app.models.app_setting import AppSetting
 from app.models.audit_log import AuditLog
+from app.models.freimarken_mitgliedschaft import FreimarkenMitgliedschaft
 from app.models.installed_content import InstalledContent
 from app.models.java_profile import JavaProfile
 from app.models.job_history import JobHistory
@@ -24,6 +25,7 @@ __all__ = [
     "ServerTemplate",
     "InstalledContent",
     "AppSetting",
+    "FreimarkenMitgliedschaft",
     "Backup",
     "RestoreHistory",
     "JobHistory",

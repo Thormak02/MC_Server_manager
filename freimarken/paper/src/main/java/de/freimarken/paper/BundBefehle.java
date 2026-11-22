@@ -56,6 +56,15 @@ final class BundBefehle {
     static final String RECHT_GELD = "freimarken.geld";
 
     /**
+     * Besitz umschreiben - ein eigenes Recht neben {@link #RECHT_GELD}.
+     *
+     * <p>Getrennt, weil es zwei verschiedene Schaeden sind: Eine falsche Buchung laesst
+     * sich mit einer Gegenbuchung heilen, ein freigegebener Besitz nicht - die Stelle
+     * ist wieder Bauland, und der Naechste nimmt sie.
+     */
+    static final String RECHT_BESITZ = "freimarken.besitz";
+
+    /**
      * Was die Standzeile nennt - vier einfache Werte, ohne Server und ohne Plugin.
      *
      * @param version     der Stand des Plugins
@@ -102,6 +111,29 @@ final class BundBefehle {
         void hilfe(Audience empfaenger);
     }
 
+    /**
+     * Der Zweig, der Besitz umschreibt: {@code /freimarken besitz ...}.
+     *
+     * <p>DREI Methoden und kein Sonderwert fuer "Angaben fehlen" - dieselbe Bauart wie
+     * {@link Geldzweig}, und aus demselben Grund: Ein {@code null} als Name waere ein
+     * Zeichen, das der Aufgerufene erraten muss.
+     *
+     * <p>{@code wer} ist der Name des Absenders und gehoert in das Protokoll, nicht in
+     * die Antwort. Bei Besitz ist das keine Formalie: Eine Parzelle, die ihren
+     * Eigentuemer ohne Zeile im Protokoll wechselt, ist von einem Diebstahl nicht zu
+     * unterscheiden.
+     */
+    interface Besitzzweig {
+
+        void uebertrage(Audience empfaenger, String wer, int parzelleX, int parzelleZ,
+                        String anName);
+
+        void gibFrei(Audience empfaenger, String wer, int parzelleX, int parzelleZ);
+
+        /** Die Benutzung - fuer jede unvollstaendige Form des Zweigs. */
+        void hilfe(Audience empfaenger);
+    }
+
     private final Sprache sprache;
     private final Stand stand;
     private final Wirtschaftsstand wirtschaft;
@@ -127,6 +159,7 @@ final class BundBefehle {
     private final Betreiberzweig messstelle;
     private final Versetzung versetzung;
     private final Geldzweig geld;
+    private final Besitzzweig besitz;
     private final int von;
     private final int bis;
 
@@ -145,7 +178,7 @@ final class BundBefehle {
                 Betreiberzweig welt,
                 Betreiberzweig vorgenerieren, Betreiberzweig neuladen,
                 Betreiberzweig messstelle, Versetzung versetzung, Geldzweig geld,
-                int von, int bis) {
+                Besitzzweig besitz, int von, int bis) {
         this.blockbuch = blockbuch;
         this.sprache = sprache;
         this.stand = stand;
@@ -157,6 +190,7 @@ final class BundBefehle {
         this.messstelle = messstelle;
         this.versetzung = versetzung;
         this.geld = geld;
+        this.besitz = besitz;
         this.von = von;
         this.bis = bis;
     }
@@ -237,6 +271,95 @@ final class BundBefehle {
                                                             "betrag"));
                                             return Command.SINGLE_SUCCESS;
                                         }))))
+                .then(Commands.literal("besitz")
+                        // EIGENES Recht, nicht freimarken.geld und nicht
+                        // freimarken.verwalten: Welten anlegen, Konten fuellen und
+                        // Besitz umschreiben sind drei Vollmachten. Wer eine braucht,
+                        // soll nicht die anderen zwei dazubekommen.
+                        .requires(quelle -> quelle.getSender()
+                                .hasPermission(RECHT_BESITZ))
+                        .executes(z -> {
+                            besitz.hilfe(z.getSource().getSender());
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.literal("uebertragen")
+                                .executes(z -> {
+                                    besitz.hilfe(z.getSource().getSender());
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                                .then(Commands.argument("x",
+                                                IntegerArgumentType.integer(von, bis))
+                                        .executes(z -> {
+                                            besitz.hilfe(z.getSource().getSender());
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                        .then(Commands.argument("z",
+                                                        IntegerArgumentType.integer(von,
+                                                                bis))
+                                                .executes(z -> {
+                                                    besitz.hilfe(
+                                                            z.getSource().getSender());
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                                .then(Commands.argument("spieler",
+                                                                StringArgumentType.word())
+                                                        .executes(z -> {
+                                                            besitz.uebertrage(
+                                                                    z.getSource()
+                                                                            .getSender(),
+                                                                    z.getSource()
+                                                                            .getSender()
+                                                                            .getName(),
+                                                                    IntegerArgumentType
+                                                                            .getInteger(z,
+                                                                                    "x"),
+                                                                    IntegerArgumentType
+                                                                            .getInteger(z,
+                                                                                    "z"),
+                                                                    StringArgumentType
+                                                                            .getString(z,
+                                                                                    "spieler"));
+                                                            return Command.SINGLE_SUCCESS;
+                                                        })))))
+                        // Freigeben verlangt BESTAETIGEN: Es loescht Besitz ohne
+                        // Rueckzahlung, und /parzelle aufgeben verlangt es aus demselben
+                        // Grund. Ein Tippfehler in der Nummer traefe sonst die Parzelle
+                        // eines Unbeteiligten.
+                        .then(Commands.literal("freigeben")
+                                .executes(z -> {
+                                    besitz.hilfe(z.getSource().getSender());
+                                    return Command.SINGLE_SUCCESS;
+                                })
+                                .then(Commands.argument("x",
+                                                IntegerArgumentType.integer(von, bis))
+                                        .executes(z -> {
+                                            besitz.hilfe(z.getSource().getSender());
+                                            return Command.SINGLE_SUCCESS;
+                                        })
+                                        .then(Commands.argument("z",
+                                                        IntegerArgumentType.integer(von,
+                                                                bis))
+                                                .executes(z -> {
+                                                    besitz.hilfe(
+                                                            z.getSource().getSender());
+                                                    return Command.SINGLE_SUCCESS;
+                                                })
+                                                .then(Commands.literal("bestaetigen")
+                                                        .executes(z -> {
+                                                            besitz.gibFrei(
+                                                                    z.getSource()
+                                                                            .getSender(),
+                                                                    z.getSource()
+                                                                            .getSender()
+                                                                            .getName(),
+                                                                    IntegerArgumentType
+                                                                            .getInteger(z,
+                                                                                    "x"),
+                                                                    IntegerArgumentType
+                                                                            .getInteger(z,
+                                                                                    "z"));
+                                                            return Command.SINGLE_SUCCESS;
+                                                        }))))))
                 .then(Commands.literal("parzelle")
                         .requires(darfVerwalten())
                         // Die Grenzen kommen aus der Stadt, nicht aus einer geratenen

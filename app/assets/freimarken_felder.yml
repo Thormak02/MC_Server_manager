@@ -1,0 +1,210 @@
+# Der Feldkatalog des Freimarken-Bereichs: welcher Abschnitt der config.yml auf welche
+# Seite gehoert, und was an einzelnen Feldern besonders ist.
+#
+# WARUM DIESE DATEI UND NICHT PYTHON-CODE
+# Die Einstellungen des Plugins sind Inhalt und keine Programmlogik. Wer einen Abschnitt
+# dazubaut, soll eine Zeile hier eintragen und keine Funktion aendern muessen.
+#
+# WAS HIER NICHT STEHT
+# Die FELDER selbst. Sie kommen aus der config.yml des jeweiligen Servers - Name, Wert,
+# Typ und die Kommentarzeilen darueber, die das Feld erklaeren. 2327 der 3071 Zeilen jener
+# Datei sind Kommentar; diese Erklaerungen hier abzuschreiben hiesse, sie zweimal zu
+# pflegen und beim ersten Mal falsch. Darum nennt der Katalog nur Abschnitte, und jedes
+# Feld eines eingetragenen Abschnitts erscheint von selbst. Baut das Plugin ein Feld dazu,
+# steht es ohne Zutun im Dashboard.
+#
+# WAS DIE PROBEN HALTEN  (tests/test_freimarken_katalog.py)
+#   - Jeder Abschnitt der ausgelieferten config.yml ist entweder einer Seite zugeordnet
+#     oder steht unter "nicht-im-dashboard" mit Begruendung. Ein neuer Abschnitt im Plugin
+#     macht die Probe rot - er kann nicht stumm durchfallen.
+#   - Jeder Schluessel unter wirtschaft.sprung-bestaetigt ist in "sprung" einem Wertpfad
+#     zugeordnet. Sonst schriebe das Dashboard eine Bestaetigung, die niemand liest.
+#   - Jeder Pfad, der hier genannt wird, kommt in der ausgelieferten config.yml vor.
+
+seiten:
+  - schluessel: wirtschaft
+    name: Wirtschaft
+    hinweis: >-
+      Preise, Gebuehren und das Startguthaben. Grundpreis und Zusammenlegung gelten fuer
+      NEUE Kaeufe; was schon gekauft ist, behaelt seinen Preis.
+    bloecke: [wirtschaft, parzellen, kasse, bundesmarkt, handel, blockbuch, freie-truhe]
+
+  - schluessel: waehrung
+    name: Waehrung
+    hinweis: >-
+      Die Goldmark und ihr Wechsel. Beide Kurse und der Tagesdeckel sind Geldwerte: eine
+      Aenderung um mehr als Faktor 2 braucht eine zweite Bestaetigung.
+    bloecke: [wechsel, muenzhaus]
+
+  - schluessel: raenge
+    name: Raenge
+    hinweis: >-
+      Die Rangleiter, ihre Bedingungen und was jede Stufe freischaltet. Dazu die Anmeldung
+      im Buergeramt und der Rundgang.
+    bloecke: [raenge, anmeldung, rundgang]
+
+  - schluessel: berufe
+    name: Berufe
+    hinweis: >-
+      Berufe, Loehne und Deckel. Die Lohntafel unter verdienst ist die laengste Liste des
+      Plugins - sie steht nach Beruf gruppiert.
+    bloecke: [berufe, verdienst, tagesbonus, angeln]
+
+  - schluessel: laeden
+    name: Laeden
+    hinweis: >-
+      Markthalle und Ladeneinheiten. Miete und Kaution haben Bestandsschutz: eine
+      Erhoehung gilt fuer neue Vertraege, laufende behalten ihren Satz bis zur
+      Verlaengerung.
+    bloecke: [laeden]
+
+  - schluessel: welten
+    name: Welten
+    hinweis: >-
+      Weltgrenzen, Freistaedte, Inseln und Wolkeninseln. Der ganze Abschnitt welten wird
+      NUR BEIM START gelesen, und eine Weltgrenze wird nie nach innen geschoben.
+    bloecke: [welten, freistaedte, inseln, wolken, reisen]
+
+  - schluessel: betrieb
+    name: Betrieb
+    hinweis: >-
+      Spielzeit, Messstelle und die Hinweise im Chat. Hier steht nichts, was Geld bewegt.
+    bloecke: [zeit, messstelle, hinweise]
+
+  - schluessel: texte
+    name: Texte
+    quelle: sprache
+    hinweis: >-
+      Die Sprachdatei: jedes Wort, jede Farbe und der Aufbau der Meldungen. Farben stehen
+      als Rolle da (betont, warnung, geld) und nicht als Wert - wer die Rolle aendert,
+      aendert sie ueberall.
+    bloecke: []
+
+  - schluessel: besitz
+    name: Besitz
+    quelle: spieldaten
+    hinweis: >-
+      Wem gehoert was: Parzellen, Grundstuecke, Hafenwerder-Inseln, Freistaedte,
+      Wolkeninseln. Gelesen aus der Datenbank des Plugins, nur zur Anzeige - geaendert
+      wird ueber /freimarken besitz an der Serverkonsole.
+    bloecke: []
+
+  - schluessel: konten
+    name: Konten
+    quelle: spieldaten
+    hinweis: >-
+      Mark und Goldmark je Spieler, mit dem Buchungsverlauf. Eine Korrektur laeuft als
+      Befehl an den laufenden Server und ist Sache des Super-Admins.
+    bloecke: []
+
+  - schluessel: mitglieder
+    name: Mitgliedschaften
+    quelle: mitglieder
+    hinweis: >-
+      Wer eine Mitgliedschaft hat, seit wann, bis wann und aus welcher Zahlung. Diese
+      Zeilen stehen im Manager, nicht im Plugin: Das Plugin spricht nie mit einem
+      Zahlungsanbieter, es liest nur das Recht freimarken.extra.<name>.<zahl>.
+    bloecke: []
+
+  - schluessel: protokoll
+    name: Protokoll
+    quelle: audit
+    hinweis: >-
+      Jede Aenderung, die ueber dieses Dashboard lief: wer, wann, von was auf was, warum.
+    bloecke: []
+
+# Abschnitte, die bewusst NICHT im Dashboard stehen. Der Grund wird dem Nutzer gezeigt -
+# eine gesperrte Einstellung mit Begruendung ist freundlicher als eine fehlende.
+nicht-im-dashboard:
+  datenbank: >-
+    Zugangsdaten. Sie stehen in plugins/Freimarken/config.yml unter datenbank und werden
+    nur beim Start gelesen; das Einrichtungsskript legt sie unter
+    data/freimarken/datenbank.properties ab. In eine Weboberflaeche gehoeren sie nicht:
+    Ein Kennwort, das eine Seite anzeigen kann, ist ein Kennwort, das in einem
+    Browserverlauf, einem Bildschirmfoto und einem Protokoll landet.
+
+# Welcher Geldwert welchen Schluessel unter wirtschaft.sprung-bestaetigt braucht.
+#
+# Das Plugin verwirft eine Aenderung um mehr als Faktor 2, solange dort nicht "alt -> neu"
+# steht - geprueft gegen die AUSGELIEFERTE Vorgabe, nicht gegen den laufenden Wert. Das
+# Dashboard baut diesen Riegel nicht nach, es bedient ihn: Es fragt ein zweites Mal und
+# schreibt dann beide Zeilen. Der Riegel bleibt an einer Stelle, naemlich im Plugin.
+#
+# Die Namen sind NICHT aus dem Pfad ableitbar (wechsel.mark-je-goldmark heisst dort
+# wechsel-hin), darum stehen sie hier. Geerntet am 22.11.2026 aus den Aufrufen von
+# Wirtschaftsliste.betrag; Wechselliste.java sagt ausdruecklich, dass die Schluessel am
+# Aufruf stehen und nicht im Helfer.
+sprung:
+  wirtschaft.parzelle.grundpreis: grundpreis
+  wirtschaft.parzelle.zusammenlegung-je-feld: zusammenlegung-je-feld
+  kasse.startguthaben: startguthaben
+  berufe.wechselgebuehr: wechselgebuehr
+  verdienst.tagesdeckel: tagesdeckel
+  bundesmarkt.tagesdeckel: markt-tagesdeckel
+  laeden.miete-je-tag: laden-miete
+  laeden.kaution: laden-kaution
+  laeden.lizenz: laden-lizenz
+  tagesbonus.grundbetrag: bonus-grundbetrag
+  tagesbonus.je-serientag: bonus-je-serientag
+  tagesbonus.hoechstbetrag: bonus-hoechstbetrag
+  freistaedte.gruendungspreis: freistadt-gruendung
+  inseln.preis: insel-kauf
+  wolken.preis: wolken-kauf
+  wolken.biomwechsel: wolken-biom
+  wechsel.mark-je-goldmark: wechsel-hin
+  wechsel.mark-zurueck: wechsel-zurueck
+  wechsel.tagesdeckel: wechsel-tagesdeckel
+
+# Klasse 3 nach Plan 12a.6: sichtbar, aber gesperrt - mit dem Satz, warum.
+# Diese Werte SEHEN aus wie Einstellungen, sind aber Struktur. Der Schluessel ist ein
+# Muster; * steht fuer genau einen Pfadabschnitt.
+gesperrt:
+  welten.*.art: >-
+    Die Art der Welt entscheidet, wie ihr Gelaende gerechnet wird. Eine bestehende Welt
+    behaelt ihre Umgebung; eine Aenderung hier gaebe kein neues Gelaende, sondern eine
+    Naht zwischen zwei Rechnungen - und gebaute Orte stuenden in der Luft oder im Stein.
+  welten.*.startwert: >-
+    Der Startwert erzeugt das Gelaende. Nachtraeglich geaendert, passt neu erzeugtes Land
+    nicht mehr an das vorhandene.
+  parzellen.hoechstzahl: >-
+    Die Hoechstzahl je Spieler steht an der Rangleiter (raenge.leiter.<stufe>.zahlen) und
+    wird von dort genommen. Dieser Wert gilt nur, solange die Raenge aus sind.
+  parzellen.gruppe-hoechstzahl: >-
+    Wie bei der Hoechstzahl: die Rangleiter fuehrt den geltenden Wert.
+
+# Die Zuschlaege, die eine Mitgliedschaft geben kann - Plan 12a.5, Bauschritt 16.
+#
+# Das Plugin kennt von einer Mitgliedschaft nur die WIRKUNG: ein Recht der Form
+# freimarken.extra.<name>.<zahl>, gelesen in Rangzahl.ausRecht. Die Namen sind Konstanten
+# im Plugin-Quelltext (RECHT_EXTRA_* in ParzellenBefehle, WerderBefehle, WolkeBefehle und
+# FreistadtBefehle), also keine Einstellung des Betreibers - aber auch nichts, was im
+# Programm des Managers stehen soll. Hier steht die Liste EINMAL, und eine Probe haelt sie
+# gegen den Quelltext des Plugins: Kommt dort eine sechste Art dazu, wird sie rot.
+#
+# Die ZAHL muss ueber 0 liegen. Ein Recht wie freimarken.extra.parzellen.-3 ist laut
+# RangzahlTest "ein Tippfehler, kein Entzug" - mitZuschlag rechnet mit Math.max(zahl, 0)
+# und tut bei einer negativen Zahl gar nichts. Eine Mitgliedschaft, die stumm nichts
+# bewirkt, ist schlimmer als eine abgewiesene Eingabe.
+zuschlaege:
+  parzellen: >-
+    Wie viele Parzellen der Spieler ueber seinen Rang hinaus halten darf.
+  gruppe: >-
+    Wie viele Felder ein einzelnes Grundstueck ueber den Rang hinaus haben darf.
+  inseln: >-
+    Wie viele Hafenwerder-Inseln ueber den Rang hinaus.
+  wolken: >-
+    Wie viele Wolkeninseln ueber den Rang hinaus.
+  freistaedte: >-
+    Wie viele Freistaedte ueber den Rang hinaus.
+
+# Klasse 2 nach Plan 12a.6: anpassbar, aber nur fuer neue Vertraege.
+bestandsschutz:
+  laeden.miete-je-tag: >-
+    Laufende Mietvertraege behalten ihren Satz bis zur Verlaengerung und sehen den neuen
+    vorher. Wird die Miete sofort fuer alle erhoeht, fuehlt sich jeder Ladenbesitzer
+    uebervorteilt - zu Recht.
+  laeden.kaution: >-
+    Gilt fuer neue Vertraege. Eine schon gezahlte Kaution wird in der Hoehe
+    zurueckgegeben, in der sie gezahlt wurde.
+  muenzhaus.katalog.*.preis: >-
+    Gilt fuer kuenftige Kaeufe. Was gekauft ist, bleibt gekauft.

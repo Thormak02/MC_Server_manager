@@ -493,7 +493,7 @@ class GrenzeTest {
             // Teil H: EINE Sendestelle - die Nachricht ueber den gezahlten Bonus.
             Map.entry("Bonuswache.java", 1),
             Map.entry("BundBefehle.java", 2),
-            Map.entry("FreimarkenPlugin.java", 44),
+            Map.entry("FreimarkenPlugin.java", 50),   // 44 + 6 fuer besitzzweig() [22.11.2026]
             // EINE Sendestelle, und das BLEIBT so, obwohl Teil B drei Taten dazugebracht
             // hat: Alle vier Zweige von /laden laufen durch dasselbe sende(). Eine Zwei
             // hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat - und der waere

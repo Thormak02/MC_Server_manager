@@ -1,0 +1,550 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Freimarken &ndash; {{ inhalt.seite.name }}</h1>
+<p class="muted">{{ server.name }} &middot; <code>plugins/Freimarken/config.yml</code></p>
+
+{% include "freimarken_nav.html" %}
+
+{% if lesefehler %}
+<section class="card">
+    <h2>Nicht lesbar</h2>
+    <p>{{ lesefehler }}</p>
+</section>
+{% endif %}
+
+{#
+  WO DIE SEITE BEI EINEM LESEFEHLER ENDET - und wo nicht [Fund 22.11.2026].
+
+  Bei den Einstellungen und den Texten endet sie hier: Was man nicht lesen kann, kann man
+  nicht aendern, und ein Formular mit leeren Feldern wuerde beim Speichern die Datei
+  ueberschreiben.
+
+  Bei den SPIELDATEN ist das falsch. Dort ist der Lesefehler die nicht erreichbare
+  Datenbank des Plugins - die Korrektur laeuft aber als Befehl an den laufenden Server und
+  nicht durch jene Datenbank. Hier stand die ganze Seite im else, und damit verschwand das
+  Korrekturformular genau dann, wenn jemand eingreifen will.
+#}
+{% if lesefehler and inhalt.seite.quelle != "spieldaten" %}
+{% else %}
+
+<section class="card">
+    <p>{{ inhalt.seite.hinweis }}</p>
+    {% if not darf_aendern %}
+    <p class="muted">
+        Du siehst die Einstellungen, kannst sie aber nicht aendern. Dafuer braucht es die
+        Rolle Admin und das Dateirecht fuer diesen Server.
+    </p>
+    {% endif %}
+</section>
+
+{% if inhalt.seite.quelle == "sprache" %}
+{% if not abschnitt %}
+<section class="card">
+    <p class="muted">
+        Die Sprachdatei liegt in <strong>zwei Dateien</strong>: Die Vorlage schreibt das
+        Plugin bei jedem Start neu und sie enthaelt alle Saetze &ndash; deine eigene
+        <code>sprache.yml</code> enthaelt nur, was du geaendert hast. Jeder Satz, der
+        nicht darin steht, kommt aus dem Plugin. Darum aendert sich hier nie etwas von
+        selbst, wenn das Plugin seine Saetze verbessert.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Abschnitt</th>
+                <th>Saetze</th>
+                <th>davon von dir</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for eintrag in sprache.abschnitte %}
+            <tr>
+                <td>
+                    <a href="/freimarken/{{ server.id }}/texte?abschnitt={{ eintrag.name }}">
+                        <code>{{ eintrag.name }}</code></a>
+                </td>
+                <td>{{ eintrag.saetze }}</td>
+                <td>{% if eintrag.eigene %}<strong>{{ eintrag.eigene }}</strong>{% else %}&ndash;{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% else %}
+
+<section class="card">
+    <p>
+        <a class="button-like" href="/freimarken/{{ server.id }}/texte">&larr; Alle Abschnitte</a>
+        <code>{{ abschnitt }}</code> &middot; {{ sprache.felder|length }} Saetze,
+        {{ sprache.eigene_gesamt }} davon von dir
+    </p>
+    <p class="muted">
+        Geschrieben wird in deine <code>sprache.yml</code>, nie in die Vorlage &ndash;
+        die entsteht bei jedem Start neu. Farben stehen als <em>Rolle</em> in den Saetzen
+        ({% for rolle in sprache.farbrollen %}<code>&lt;{{ rolle }}&gt;</code>{% if not loop.last %} {% endif %}{% endfor %}),
+        nicht als Wert: Wer eine Rolle umfaerbt, aendert sie ueberall.
+    </p>
+</section>
+
+<form method="post" action="/freimarken/{{ server.id }}/texte">
+    <input type="hidden" name="abschnitt" value="{{ abschnitt }}">
+    <section class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Satz</th>
+                    <th>Wortlaut</th>
+                    <th>Woher</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for feld in sprache.felder %}
+                <tr>
+                    <td>
+                        <code>{{ feld.name }}</code>
+                        {% if feld.platzhalter %}
+                        <div class="muted">
+                            {% for name in feld.platzhalter %}<code>{{ "{" }}{{ name }}{{ "}" }}</code> {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if darf_aendern %}
+                        <input type="text" name="feld:{{ feld.pfad }}" value="{{ feld.wert }}"
+                               style="width: 100%; min-width: 20rem">
+                        {% else %}
+                        <code>{{ feld.wert }}</code>
+                        {% endif %}
+                        {% if feld.erklaerung %}
+                        <details>
+                            <summary>Erklaerung aus der Vorlage</summary>
+                            <p class="muted">{% for zeile in feld.erklaerung %}{{ zeile }}<br>{% endfor %}</p>
+                        </details>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if feld.eigen %}
+                        <strong>von dir</strong>
+                        <details>
+                            <summary>ausgeliefert war</summary>
+                            <p class="muted"><code>{{ feld.vorgabe }}</code></p>
+                        </details>
+                        {% else %}
+                        <span class="muted">Plugin</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    {% if darf_aendern %}
+    <section class="card">
+        <h2>Speichern</h2>
+        <p class="muted">
+            Geschrieben wird nur, was du geaendert hast. Ein Satz, der noch nicht in deiner
+            Datei steht, wird angelegt. Wirksam mit <code>/freimarken neuladen</code>.
+        </p>
+        <label for="grund">Grund der Aenderung (steht im Protokoll)</label>
+        <input type="text" id="grund" name="grund" maxlength="500"
+               placeholder="z.B. Begruessung freundlicher formuliert">
+        <button type="submit">Speichern</button>
+    </section>
+    {% endif %}
+</form>
+
+{% if darf_aendern and sprache.eigene_gesamt %}
+<section class="card">
+    <h2>Zuruecknehmen</h2>
+    <p class="muted">
+        Entfernt deine Fassung aus der <code>sprache.yml</code>. Danach gilt wieder der
+        ausgelieferte Wortlaut &ndash; und zwar auch dann, wenn das Plugin ihn spaeter
+        verbessert.
+    </p>
+    {% for feld in sprache.felder if feld.eigen %}
+    <form method="post" action="/freimarken/{{ server.id }}/texte/zuruecknehmen"
+          class="inline-form">
+        <input type="hidden" name="pfad" value="{{ feld.pfad }}">
+        <input type="hidden" name="abschnitt" value="{{ abschnitt }}">
+        <code>{{ feld.name }}</code>
+        <button type="submit" class="ghost">Zuruecknehmen</button>
+    </form>
+    {% endfor %}
+</section>
+{% endif %}
+
+{% endif %}
+{% elif inhalt.seite.quelle == "audit" %}
+<section class="card">
+    {% if zeilen %}
+    <table>
+        <thead>
+            <tr>
+                <th>Wann</th>
+                <th>Wer</th>
+                <th>Was</th>
+                <th>Grund</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for zeile in zeilen %}
+            <tr>
+                <td style="white-space: nowrap">{{ zeile.zeit.strftime("%d.%m.%Y %H:%M") if zeile.zeit else "?" }}</td>
+                <td>{{ zeile.nutzer }}</td>
+                <td>
+                    {% for aenderung in zeile.aenderungen %}
+                    <div><code>{{ aenderung.pfad }}</code>:
+                        {{ aenderung.alt }} &rarr; <strong>{{ aenderung.neu }}</strong></div>
+                    {% endfor %}
+                    {% for rest in zeile.unlesbar %}
+                    {# Was sich nicht zerlegen liess, steht ganz da. Bei Geld und Besitz
+                       ist eine unleserliche Zeile besser als eine fehlende. #}
+                    <div class="muted">{{ rest }}</div>
+                    {% endfor %}
+                    {% if not zeile.aenderungen and not zeile.unlesbar %}
+                    <span class="muted">{{ zeile.roh }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ zeile.grund or "&mdash;"|safe }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <p class="muted">
+        Die {{ zeilen|length }} neuesten Aenderungen an diesem Server. Das vollstaendige
+        Protokoll des Managers &ndash; mit Anmeldungen, Dateizugriffen und
+        Sicherheitsereignissen &ndash; steht in den
+        <a href="/audit-logs">Audit Logs</a> und ist Super-Admin-Sache.
+    </p>
+    {% else %}
+    <h2>Noch nichts geaendert</h2>
+    <p>
+        Ueber dieses Dashboard wurde an diesem Server noch keine Einstellung geaendert.
+        Sobald es geschieht, steht hier wer, wann, von was auf was &ndash; und warum.
+    </p>
+    {% endif %}
+</section>
+{% elif inhalt.seite.quelle == "spieldaten" and spieldaten.art == "besitz" %}
+<section class="card">
+    <h2>Besitz</h2>
+    <p class="hint">
+        Gelesen aus der Datenbank des Plugins &ndash; nur zur Anzeige. Die Kennung ist
+        der Schluessel, unter dem das Plugin einen Spieler fuehrt; der Name daneben kommt
+        aus der <code>usercache.json</code> dieses Servers und ist der vom letzten
+        Login. Wer sich hier nie angemeldet hat, steht mit den ersten acht Zeichen seiner
+        Kennung.
+    </p>
+    {% if spieldaten.zeilen %}
+    <table class="table">
+        <thead>
+            <tr><th>Art</th><th>Welt</th><th>Stelle</th><th>Eigentuemer</th>
+                <th>Preis</th><th>Zustand</th><th>Name</th></tr>
+        </thead>
+        <tbody>
+            {% for zeile in spieldaten.zeilen %}
+            <tr>
+                <td>{{ zeile.art }}{% if zeile.gehoert_zu_gruppe %}
+                    <span class="hint">(in einem Grundstueck)</span>{% endif %}</td>
+                <td><code>{{ zeile.welt }}</code></td>
+                <td>{% if zeile.stelle %}{{ zeile.stelle }}{% else %}
+                    <span class="hint">keine Rasterzelle</span>{% endif %}</td>
+                <td title="{{ zeile.eigentuemer }}">{{ zeile.eigentuemer_name }}</td>
+                <td>{{ zeile.preis }}</td>
+                <td>{{ zeile.zustand }}</td>
+                <td>{{ zeile.name }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Auf diesem Server gehoert noch niemandem etwas.</p>
+    {% endif %}
+</section>
+
+{% if darf_korrigieren %}
+<section class="card">
+    <h2>Besitz berichtigen</h2>
+    <p class="hint">
+        Laeuft als Befehl an den laufenden Server, nicht in die Tabelle: Eine Zeile, die
+        der Manager selbst schriebe, stuende in keinem Buch. <strong>Die Antwort kommt
+        nicht zurueck</strong> &ndash; was aus dem Befehl geworden ist, steht in der
+        Serverkonsole hinter dem Wort <code>Ausgang</code>.
+    </p>
+    <p class="hint">
+        Beim Uebertragen fallen die Mitbauer des Vorbesitzers weg, seine
+        <strong>Kistenshops nicht</strong>: Sie haengen an der Schildkoordinate und sind
+        danach fuer beide verschlossen. Ein einzelnes Feld eines Grundstuecks laesst sich
+        nicht freigeben &ndash; das loeschte das ganze Grundstueck.
+    </p>
+    <form method="post" action="/freimarken/{{ server.id }}/besitz">
+        <label>Was
+            <select name="aktion">
+                <option value="uebertragen">uebertragen</option>
+                <option value="freigeben">freigeben</option>
+            </select>
+        </label>
+        <label>Parzelle x <input type="number" name="x" required></label>
+        <label>Parzelle z <input type="number" name="z" required></label>
+        <label>An wen (nur beim Uebertragen)
+            <input type="text" name="spieler" maxlength="32">
+        </label>
+        <label>Grund <input type="text" name="grund" maxlength="200"></label>
+        <button type="submit">Befehl senden</button>
+    </form>
+</section>
+{% endif %}
+
+{% elif inhalt.seite.quelle == "spieldaten" and spieldaten.art == "konten" %}
+<section class="card">
+    <h2>Konten</h2>
+    {% if spieldaten.zusammen %}
+    <p class="hint">
+        {{ spieldaten.zusammen.konten }} Markkonten,
+        {{ spieldaten.zusammen.goldkonten }} Goldmarkkonten, zusammen
+        {{ spieldaten.zusammen.mark_gesamt }} Mark. Eine leere Zelle bei Goldmark heisst
+        &bdquo;kein Goldkonto eroeffnet&ldquo; und ist nicht dasselbe wie eine 0.
+    </p>
+    {% endif %}
+    {% if spieldaten.zeilen %}
+    <table class="table">
+        <thead><tr><th>Wer</th><th>Mark</th><th>Goldmark</th></tr></thead>
+        <tbody>
+            {% for zeile in spieldaten.zeilen %}
+            <tr>
+                <td title="{{ zeile.kennung }}">{{ zeile.name }}</td>
+                <td>{% if zeile.mark is none %}&ndash;{% else %}{{ zeile.mark }}{% endif %}</td>
+                <td>{% if zeile.goldmark is none %}&ndash;{% else %}{{ zeile.goldmark }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Auf diesem Server hat noch niemand ein Konto.</p>
+    {% endif %}
+</section>
+
+{% if darf_korrigieren %}
+<section class="card">
+    <h2>Konto berichtigen</h2>
+    <p class="hint">
+        Laeuft als <code>/freimarken geld</code> an den laufenden Server. Ein Minus zieht
+        ab, hoechstens eine Milliarde. <strong>Die Antwort kommt nicht zurueck</strong>
+        &ndash; der Ausgang steht in der Serverkonsole hinter dem Wort
+        <code>Ausgang</code>, und die Buchung danach in <code>/mark verlauf</code> des
+        Spielers.
+    </p>
+    <p class="hint">
+        Goldmark laesst sich so nicht berichtigen: Die Buchungsgruende des Befehls
+        gehoeren zur Mark, und die Goldkasse weist einen fremden Grund ab.
+    </p>
+    <form method="post" action="/freimarken/{{ server.id }}/konten">
+        <label>Spieler <input type="text" name="spieler" maxlength="32" required></label>
+        <label>Betrag <input type="number" name="betrag" required></label>
+        <label>Grund <input type="text" name="grund" maxlength="200"></label>
+        <button type="submit">Befehl senden</button>
+    </form>
+</section>
+{% endif %}
+
+{% elif inhalt.seite.quelle == "mitglieder" %}
+<section class="card">
+    <h2>Mitgliedschaften</h2>
+    <p class="hint">
+        Diese Zeilen stehen im Manager, nicht im Plugin: Das Plugin spricht nie mit einem
+        Zahlungsanbieter. Es liest nur das Recht &ndash; und das vergibt die
+        Rechteverwaltung des Servers, nicht der Manager.
+    </p>
+    {% if mitglieder.zeilen %}
+    <table class="table">
+        <thead>
+            <tr><th>Wer</th><th>Zuschlag</th><th>Recht</th><th>Seit</th><th>Bis</th>
+                <th>Zahlung</th><th>Grund</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for zeile in mitglieder.zeilen %}
+            <tr{% if not zeile.laeuft %} class="muted"{% endif %}>
+                <td title="{{ zeile.kennung }}">{{ zeile.name }}</td>
+                <td>{{ zeile.zuschlag }} +{{ zeile.zahl }}</td>
+                <td><code>{{ zeile.recht }}</code></td>
+                <td>{{ zeile.seit.strftime("%d.%m.%Y") if zeile.seit else "" }}</td>
+                <td>{% if zeile.bis %}{{ zeile.bis.strftime("%d.%m.%Y") }}{% else %}
+                    <span class="hint">laeuft</span>{% endif %}</td>
+                <td>{{ zeile.herkunft }}{% if zeile.beleg %}
+                    <span class="hint">{{ zeile.beleg }}</span>{% endif %}</td>
+                <td>{{ zeile.grund }}</td>
+                <td>
+                    {% if darf_korrigieren and zeile.laeuft %}
+                    <form method="post"
+                          action="/freimarken/{{ server.id }}/mitglieder/beenden">
+                        <input type="hidden" name="eintrag" value="{{ zeile.id }}">
+                        <button type="submit">beenden</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>Noch keine Mitgliedschaft eingetragen.</p>
+    {% endif %}
+</section>
+
+{% if mitglieder.rechte %}
+<section class="card">
+    <h2>Rechte, die gesetzt sein muessen</h2>
+    <p class="hint">
+        Je Spieler und Zuschlag die <strong>groesste</strong> laufende Zahl &ndash; das
+        Plugin addiert sie einmal und nicht als Summe. Diese Zeilen gehoeren in die
+        Rechteverwaltung des Servers; der Manager setzt sie nicht.
+    </p>
+    <table class="table">
+        <thead><tr><th>Wer</th><th>Recht</th></tr></thead>
+        <tbody>
+            {% for zeile in mitglieder.rechte %}
+            <tr>
+                <td title="{{ zeile.kennung }}">{{ zeile.name }}</td>
+                <td><code>{{ zeile.recht }}</code></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if darf_korrigieren %}
+<section class="card">
+    <h2>Mitgliedschaft eintragen</h2>
+    <p class="hint">
+        Die <strong>Kennung</strong> ist Pflicht, der Name nur Beschriftung: Er aendert
+        sich bei einer Umbenennung, die Kennung nicht. Die Zahl muss ueber 0 liegen
+        &ndash; das Plugin rechnet mit <code>max(zahl, 0)</code>, eine 0 wuerde das Recht
+        vergeben und nichts bewirken.
+    </p>
+    <form method="post" action="/freimarken/{{ server.id }}/mitglieder">
+        <label>Kennung (UUID)
+            <input type="text" name="kennung" maxlength="36" required>
+        </label>
+        <label>Name <input type="text" name="name" maxlength="32"></label>
+        <label>Zuschlag
+            <select name="zuschlag">
+                {% for name, satz in mitglieder.zuschlaege.items() %}
+                <option value="{{ name }}" title="{{ satz }}">{{ name }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Zahl <input type="number" name="zahl" min="1" value="1" required></label>
+        <label>Herkunft der Zahlung
+            <input type="text" name="herkunft" maxlength="60" value="von Hand">
+        </label>
+        <label>Beleg <input type="text" name="beleg" maxlength="120"></label>
+        <label>Grund <input type="text" name="grund" maxlength="200"></label>
+        <button type="submit">Eintragen</button>
+    </form>
+</section>
+{% endif %}
+
+{% elif not inhalt.gruppen %}
+<section class="card">
+    <p>Auf dieser Seite steht kein einziger Wert aus der config.yml dieses Servers.</p>
+</section>
+{% else %}
+
+<form method="post" action="/freimarken/{{ server.id }}/{{ aktiv }}">
+    {% for gruppe in inhalt.gruppen %}
+    <section class="card">
+        <h2>{{ gruppe.block }}</h2>
+
+        {% if gruppe.nur_start %}
+        <p class="muted">
+            <strong>Nur beim Start gelesen.</strong>
+            <code>/freimarken neuladen</code> aendert hier nichts &ndash; eine Aenderung
+            wirkt erst beim naechsten Serverstart.
+        </p>
+        {% endif %}
+
+        {% if gruppe.kopf %}
+        <details>
+            <summary>Was dieser Abschnitt ist ({{ gruppe.kopf|length }} Zeilen aus der Datei)</summary>
+            <p class="muted">{% for zeile in gruppe.kopf %}{{ zeile }}<br>{% endfor %}</p>
+        </details>
+        {% endif %}
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Einstellung</th>
+                    <th>Wert</th>
+                    <th>Erklaerung</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for feld in gruppe.felder %}
+                <tr>
+                    <td><code>{{ feld.name }}</code></td>
+                    <td>
+                        {% if feld.gesperrt %}
+                        {# Sichtbar, aber gesperrt (Plan 12a.6 Klasse 3). disabled wird vom
+                           Browser nicht mitgesendet; der Dienst uebergeht das Feld
+                           zusaetzlich - die Sperre liegt dort, nicht hier. #}
+                        <input type="text" value="{{ feld.wert }}" disabled>
+                        {% elif feld.art == "bool" %}
+                        <select name="feld:{{ feld.pfad }}" {% if not darf_aendern %}disabled{% endif %}>
+                            <option value="true" {% if feld.wert == "true" %}selected{% endif %}>true</option>
+                            <option value="false" {% if feld.wert == "false" %}selected{% endif %}>false</option>
+                        </select>
+                        {% elif feld.art in ("int", "float") %}
+                        <input type="text" inputmode="decimal" name="feld:{{ feld.pfad }}"
+                               value="{{ feld.wert }}" {% if not darf_aendern %}disabled{% endif %}>
+                        {% else %}
+                        <input type="text" name="feld:{{ feld.pfad }}"
+                               value="{{ feld.wert }}" {% if not darf_aendern %}disabled{% endif %}>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if feld.gesperrt %}
+                        <p><strong>Nicht aenderbar.</strong> {{ feld.gesperrt }}</p>
+                        {% endif %}
+                        {% if feld.bestandsschutz %}
+                        <p><strong>Bestandsschutz.</strong> {{ feld.bestandsschutz }}</p>
+                        {% endif %}
+                        {% if feld.sprung %}
+                        <p class="muted">
+                            Geldwert: mehr als Faktor 2 Unterschied zur ausgelieferten
+                            Vorgabe braucht eine zweite Bestaetigung.
+                        </p>
+                        {% endif %}
+                        {% if feld.erklaerung %}
+                        <details>
+                            <summary>Erklaerung aus der Datei</summary>
+                            <p class="muted">{% for zeile in feld.erklaerung %}{{ zeile }}<br>{% endfor %}</p>
+                        </details>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endfor %}
+
+    {% if darf_aendern %}
+    <section class="card">
+        <h2>Speichern</h2>
+        <p class="muted">
+            Geschrieben wird nur, was du geaendert hast; Kommentare, Reihenfolge und
+            Zeilenenden der Datei bleiben unberuehrt. Wirksam wird es beim naechsten Start
+            oder mit <code>/freimarken neuladen</code> &ndash; ausser in den Abschnitten,
+            die oben als "nur beim Start gelesen" stehen.
+        </p>
+        <label for="grund">Grund der Aenderung (steht im Protokoll)</label>
+        <input type="text" id="grund" name="grund" maxlength="500"
+               placeholder="z.B. Parzellenpreis an die Spielerzahl angepasst">
+        <button type="submit">Speichern</button>
+    </section>
+    {% endif %}
+</form>
+
+{% endif %}
+{% endif %}
+{% endblock %}

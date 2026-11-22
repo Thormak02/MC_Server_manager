@@ -198,6 +198,38 @@ public final class SpeicherLager implements BesitzLager {
         schreibeMitbauer(id, mitbauer);
     }
 
+    @Override
+    public synchronized void eigentuemerSetzen(long id, UUID neuerEigentuemer) {
+        if (neuerEigentuemer == null) {
+            throw new IllegalArgumentException("Ohne neuen Eigentuemer gibt es keinen"
+                    + " Besitzwechsel");
+        }
+        Gruppe gruppe = gruppen.get(id);
+        if (gruppe != null) {
+            // Durchschreiben wie bei den Mitbauern: Die Gruppe und jedes ihrer Kinder
+            // bekommen denselben Eigentuemer, und alle verlieren ihre Mitbauer.
+            gruppen.put(id, new Gruppe(gruppe.id(), gruppe.welt(), neuerEigentuemer,
+                    Set.of(), gruppe.preis(), gruppe.erworbenAm()));
+            for (Parzelle kind : kinderVon(id)) {
+                schreibeBesitzer(kind.id(), neuerEigentuemer);
+            }
+            return;
+        }
+        schreibeBesitzer(id, neuerEigentuemer);
+    }
+
+    private void schreibeBesitzer(long id, UUID neuerEigentuemer) {
+        String schluessel = orteNachId.get(id);
+        if (schluessel == null) {
+            throw new IllegalStateException("Keine Parzelle mit der Nummer " + id);
+        }
+        Parzelle alt = nachOrt.get(schluessel);
+        // Der WANDLER und kein Nachbau - derselbe Grund wie bei schreibeMitbauer: Hier
+        // stand einmal ein neues Parzelle(...) von Hand, und es hat zweimal ein Feld
+        // verloren. mitNeuemBesitzer traegt jedes andere Feld durch.
+        nachOrt.put(schluessel, alt.mitNeuemBesitzer(neuerEigentuemer));
+    }
+
     private void schreibeMitbauer(long id, Set<UUID> mitbauer) {
         String schluessel = orteNachId.get(id);
         if (schluessel == null) {

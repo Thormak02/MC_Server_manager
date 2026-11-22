@@ -1662,10 +1662,26 @@ def start_server(
 
 
 def _send_server_message(server: Server, message: str) -> None:
-    if not message.strip():
+    """Eine Zeile in den Chat des Servers - GEGLAETTET, nicht abgewiesen.
+
+    Die Warnung kommt aus einem Formularfeld (``warning_message`` an
+    ``POST /servers/{id}/restart``) und aus einem Zeitplan-Job. Gesendet wird sie mit
+    ``initiated_by_user_id=None`` und damit unter ``system_fallback=True`` - der Manager
+    handelt aus sich heraus, und ``_darf_befehl`` prueft dann KEINE Rolle. Ein
+    Zeilenumbruch in dieser Warnung waere darum ein Befehl mit Konsolenrechten, den
+    niemand geprueft hat, und bei 300 Sekunden Vorlauf zehnmal je Neustart [Fund
+    22.11.2026].
+
+    GEGLAETTET und nicht abgewiesen: Eine Warnung ist eine Chatzeile und soll ankommen.
+    Wuerde ``send_console_command`` sie wegen des Umbruchs verweigern, bliebe die Warnung
+    stumm aus - und die Spieler stehen ohne Vorankuendigung im Neustart.
+    """
+    geglaettet = " ".join(str(message or "").split())
+    if not geglaettet:
         return
     with SessionLocal() as db:
-        send_console_command(db, server, f"say {message}", initiated_by_user_id=None)
+        send_console_command(db, server, f"say {geglaettet}",
+                             initiated_by_user_id=None)
 
 
 def _warn_checkpoints(delay_seconds: int) -> list[int]:
@@ -1799,6 +1815,39 @@ RECHTE_BEFEHLE = frozenset({"op", "deop", "pardon", "pardon-ip"})
 # Hinzufuegen und Nachsehen bleibt Moderatorenarbeit.
 WHITELIST_GESPERRT = frozenset({"off"})
 
+# Die beiden Stufen, die ein Befehl verlangen kann.
+STUFE_ADMIN = "admin"
+STUFE_SUPER_ADMIN = "super_admin"
+
+# Konsolenbefehle, die GELD oder BESITZ eines Spielers aendern - sie sind auch einem
+# ADMIN verwehrt. [22.11.2026]
+#
+# Warum eine zweite Stufe und nicht RECHTE_BEFEHLE: Dort steht, was Rechte vergibt oder
+# eine Sperre aufhebt, und das darf ein Admin. Plan 12a.4 stellt Geld- und
+# Besitzkorrekturen ausdruecklich auf Super-Admin, und der Grund ist der Schaden: Eine
+# Buchung aendert, was einem Spieler gehoert, und eine Freigabe nimmt es ihm weg.
+#
+# Gefunden wurde die Luecke am Weg dorthin: ``can_control_server`` genuegt schon mit
+# ``can_restart`` ODER ``can_console`` ODER ``can_manage``
+# (app/services/server_service.py). Ohne diese Liste war ein Neustart-Recht an einem
+# Freimarken-Server ein Gelddruckrecht.
+#
+# DAS KUERZEL STEHT MIT DABEI: Der Befehlsbaum ``/freimarken`` ist auch als ``/fm``
+# angemeldet (FreimarkenPlugin.java, register(..., List.of("fm"))). Eine Regel, die nur
+# "freimarken" nennt, waere mit ``/fm geld`` umgehbar - derselbe Grund, aus dem
+# ``pardon-ip`` neben ``pardon`` steht.
+#
+# WAS DIESE LISTE NICHT SIEHT: Der Hauptname des Befehls kommt aus der Sprachdatei des
+# Servers (``sprache.wort(BundSatz.BEFEHL_FREIMARKEN, ...)``). Wer ihn dort umbenennt,
+# steht nicht mehr darin. Das ist bewusst in Kauf genommen: Umbenennen kann nur, wer die
+# Serverdateien schreiben darf, und das ist dieselbe Vollmacht, gegen die hier nicht
+# geschuetzt wird. Dieselbe blinde Stelle hat ``braucht_admin`` bei einer
+# Datapack-Funktion.
+SUPER_ADMIN_ZWEIGE: dict[str, frozenset[str]] = {
+    "freimarken": frozenset({"geld", "besitz"}),
+    "fm": frozenset({"geld", "besitz"}),
+}
+
 
 # Dateien im Serverhauptordner, die Minecraft beim Start liest. Wer sie schreibt, tut
 # dasselbe wie mit dem Konsolenbefehl daneben - nur dauerhaft und ueber einen Neustart
@@ -1872,43 +1921,67 @@ def _befehl_wortfolge(command: str) -> list[str]:
     return [t.split(":")[-1].lower() for t in teile]
 
 
-def braucht_admin(command: str) -> str:
-    """Verlangt dieser Befehl Admin-Rechte? Rueckgabe: der Grund, sonst "".
+def stufe_fuer_befehl(command: str) -> tuple[str, str]:
+    """Welche Stufe dieser Befehl verlangt und warum. Rueckgabe: ("", "") heisst: keine.
 
     Geprueft wird das erste Wort UND die Stelle hinter ``run`` - damit
     ``execute as @a run op X`` nicht an der Sperre vorbeikommt. Was NICHT erkannt wird:
     ein Befehl, der ueber eine Datapack-Funktion ausgefuehrt wird (``function ns:tut_was``);
     dort steht der eigentliche Befehl in einer Datei und ist von hier aus nicht sichtbar.
+
+    Zwei Stufen an EINER Stelle: ``STUFE_ADMIN`` fuer alles, was Rechte vergibt oder eine
+    Sperre aufhebt, ``STUFE_SUPER_ADMIN`` fuer Geld und Besitz. Die staerkere gewinnt -
+    geprueft wird sie zuerst, damit ein Befehl, der in beide Listen geriete, nicht
+    versehentlich die schwaechere Antwort bekommt.
     """
     worte = _befehl_wortfolge(command)
     if not worte:
-        return ""
+        return "", ""
 
-    def _pruefe(wort: str, danach: str | None) -> str:
+    def _pruefe(wort: str, danach: str | None) -> tuple[str, str]:
+        zweige = SUPER_ADMIN_ZWEIGE.get(wort)
+        if zweige is not None and (danach or "") in zweige:
+            return STUFE_SUPER_ADMIN, (
+                f"'{wort} {danach}' aendert Geld oder Besitz eines Spielers und ist "
+                f"Sache des Super-Admins.")
         if wort in RECHTE_BEFEHLE:
-            return (f"'{wort}' vergibt Rechte oder hebt eine Sperre auf und ist "
-                    f"Admin-Sache.")
+            return STUFE_ADMIN, (
+                f"'{wort}' vergibt Rechte oder hebt eine Sperre auf und ist "
+                f"Admin-Sache.")
         if wort == "whitelist" and (danach or "") in WHITELIST_GESPERRT:
-            return ("'whitelist off' oeffnet den Server fuer alle und ist Admin-Sache.")
-        return ""
+            return STUFE_ADMIN, (
+                "'whitelist off' oeffnet den Server fuer alle und ist Admin-Sache.")
+        return "", ""
 
-    grund = _pruefe(worte[0], worte[1] if len(worte) > 1 else None)
-    if grund:
-        return grund
+    stufe, grund = _pruefe(worte[0], worte[1] if len(worte) > 1 else None)
+    if stufe:
+        return stufe, grund
 
     # Hinter "run" nur dann suchen, wenn der Befehl mit "execute" beginnt - das ist der
     # einzige, der einen weiteren Befehl ausfuehrt. Vorher wurde ueberall nach "run"
     # gesucht, und damit war eine Chatnachricht wie "say wer will run op werden?"
     # gesperrt, mit der irrefuehrenden Begruendung, sie vergebe Rechte.
     if worte[0] != "execute":
-        return ""
+        return "", ""
     for i, wort in enumerate(worte):
         if wort == "run" and i + 1 < len(worte):
-            grund = _pruefe(worte[i + 1],
-                            worte[i + 2] if i + 2 < len(worte) else None)
-            if grund:
-                return grund
-    return ""
+            stufe, grund = _pruefe(worte[i + 1],
+                                   worte[i + 2] if i + 2 < len(worte) else None)
+            if stufe:
+                return stufe, grund
+    return "", ""
+
+
+def braucht_admin(command: str) -> str:
+    """Verlangt dieser Befehl eine erhoehte Stufe? Rueckgabe: der Grund, sonst "".
+
+    Die Frage, die vier Aufrufer stellen - der Dateieditor, der KI-Agent, der Zeitplan
+    und die Dateiregel daneben -, und sie lautet "darf das nicht jeder". WELCHE Stufe es
+    ist, beantwortet stufe_fuer_befehl; die Durchsetzung steht in
+    ``_darf_befehl``. Ein Aufrufer, der nur warnen will, braucht den Unterschied nicht,
+    und ihn hier zu verlangen hiesse, vier Stellen gleichzeitig zu aendern.
+    """
+    return stufe_fuer_befehl(command)[1]
 
 
 def _darf_befehl(db: Session, user_id: int | None, command: str,
@@ -1927,22 +2000,25 @@ def _darf_befehl(db: Session, user_id: int | None, command: str,
       vorher dasselbe ``None`` war, war das Loch: ein Job mit ``op`` lief als "Manager
       selbst" und umging die Sperre vollstaendig.
     """
-    grund = braucht_admin(command)
-    if not grund:
+    stufe, grund = stufe_fuer_befehl(command)
+    if not stufe:
         return ""
+    wort = ("Super-Admin-Rechte" if stufe == STUFE_SUPER_ADMIN else "Admin-Rechte")
     if user_id is None:
         if system_fallback:
             return ""
-        return (f"Dafuer braucht es Admin-Rechte: {grund} Bei diesem Zeitplan-Job ist "
+        return (f"Dafuer braucht es {wort}: {grund} Bei diesem Zeitplan-Job ist "
                 f"nicht hinterlegt, wer ihn angelegt hat - bitte neu anlegen.")
     from app.core.constants import UserRole
     from app.models.user import User
 
     person = db.get(User, int(user_id))
     rolle = (getattr(person, "role", "") or "") if person else ""
-    if rolle in {UserRole.SUPER_ADMIN.value, UserRole.ADMIN.value}:
+    erlaubt = ({UserRole.SUPER_ADMIN.value} if stufe == STUFE_SUPER_ADMIN
+               else {UserRole.SUPER_ADMIN.value, UserRole.ADMIN.value})
+    if rolle in erlaubt:
         return ""
-    return f"Dafuer braucht es Admin-Rechte: {grund}"
+    return f"Dafuer braucht es {wort}: {grund}"
 
 
 def send_console_command(
@@ -1957,8 +2033,30 @@ def send_console_command(
     if not normalized:
         return False, "Leerer Befehl."
 
-    absage = _darf_befehl(db, initiated_by_user_id, normalized,
-                          system_fallback=system_fallback)
+    # EIN BEFEHL IST EINE ZEILE [Fund 22.11.2026].
+    #
+    # Weiter unten steht ``managed.process.stdin.write(normalized + "\n")``, und der
+    # Serverprozess liest seine Konsole ZEILENWEISE. Ein eingebetteter Umbruch ist damit
+    # ein zweiter Befehl - und den hat keine Pruefung gesehen: ``_befehl_wortfolge``
+    # zerlegt mit ``split()`` ueber jeden Leerraum und ``stufe_fuer_befehl`` beurteilt
+    # davon nur die ersten zwei Woerter. ``list\nop Spieler`` kam so an der Admin-Sperre
+    # vorbei, ``list\nfreimarken geld X 1000000`` an der Super-Admin-Stufe.
+    #
+    # Der Riegel steht HIER und nicht in der Zerlegung, und das ist die Stelle mit dem
+    # engsten Verbraucher: Wer die Zeile schreibt, entscheidet, was eine Zeile ist. Eine
+    # Zerlegung, die jede Zeile einzeln beurteilte, waere ein zweiter Riegel neben
+    # diesem - und sie liesse die zweite Zeile trotzdem durch, wenn sie fuer sich
+    # erlaubt waere. Ein Formular fuer EINEN Befehl soll keine zwei senden.
+    #
+    # Abgewiesen wird ueber denselben Weg wie eine fehlende Rolle, damit der Versuch im
+    # Buch steht: Wer das probiert, probiert es nicht aus Versehen.
+    if "\n" in normalized or "\r" in normalized:
+        absage = ("Ein Befehl ist eine Zeile. Diese Eingabe enthaelt einen "
+                  "Zeilenumbruch und damit einen zweiten Befehl - gesendet wird "
+                  "nichts.")
+    else:
+        absage = _darf_befehl(db, initiated_by_user_id, normalized,
+                              system_fallback=system_fallback)
     if absage:
         audit_service.log_action(
             db, action="server.console_command_denied",

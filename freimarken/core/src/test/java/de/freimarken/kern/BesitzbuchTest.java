@@ -368,6 +368,27 @@ class BesitzbuchTest {
                 "die Gebuehr muss abgebucht bleiben - die Gruppe steht ja");
     }
 
+    @Test
+    @DisplayName("Ein Lesefehler NACH dem Besitzwechsel macht ihn nicht ungueltig")
+    void besitzwechselGiltAuchOhneNachlesen() {
+        // Derselbe Zwilling wie bei der Gruppengebuehr: Das Schreiben gelingt, erst der
+        // Lesezugriff danach faellt aus. Hier stand ein lager.finde() hinter dem
+        // Schreiben, und ein Abriss in diesem Augenblick liess den Befehl melden "die
+        // Ablage antwortet nicht - es ist NICHTS geaendert" - obwohl die Parzelle
+        // dauerhaft gewechselt hatte. Antwort und Protokoll sagten das Gegenteil des
+        // Geschehenen [Fund 22.11.2026].
+        NachDemSchreibenLager lager = new NachDemSchreibenLager();
+        Besitzbuch buch = new Besitzbuch(Stadtgrenze.marktstadt(), lager, kasse, VORGABE);
+        buch.nehmen(WELT, anna, mitte(0), 32, VIELE);
+
+        var entscheid = buch.betreiberUebertragen(WELT, mitte(0), 32, bert);
+
+        assertEquals(ERTEILT, entscheid.bescheid(),
+                "der Wechsel ist festgeschrieben - also ERTEILT");
+        assertEquals(bert, entscheid.parzelle().orElseThrow().eigentuemer(),
+                "die neue Zeile kommt aus dem Wandler und nicht aus einem zweiten Lesen");
+    }
+
     // --- Schutz -----------------------------------------------------------------
 
     @Test
@@ -701,6 +722,11 @@ class BesitzbuchTest {
         }
 
         @Override
+        public void eigentuemerSetzen(long id, UUID neuerEigentuemer) {
+            echt.eigentuemerSetzen(id, neuerEigentuemer);
+        }
+
+        @Override
         public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
             // Geschrieben werden darf - aber nur auf die GRUPPE, nie auf das Kind.
             if (id != GRUPPE) {
@@ -796,6 +822,14 @@ class BesitzbuchTest {
         @Override
         public Parzelle anlegen(String welt, int x, int z, UUID eigentuemer, long preis) {
             return echt.anlegen(welt, x, z, eigentuemer, preis);
+        }
+
+        @Override
+        public void eigentuemerSetzen(long id, UUID neuerEigentuemer) {
+            echt.eigentuemerSetzen(id, neuerEigentuemer);
+            // Ab hier ist der Wechsel festgeschrieben - dieselbe Marke wie bei
+            // gruppeSetzen. Was jetzt noch liest, darf den Erfolg nicht umwerfen.
+            geschrieben = true;
         }
 
         @Override
@@ -918,6 +952,11 @@ class BesitzbuchTest {
             }
             schonEinmal = true;
             return echt.anlegen(welt, x, z, eigentuemer, preis);
+        }
+
+        @Override
+        public void eigentuemerSetzen(long id, UUID neuerEigentuemer) {
+            echt.eigentuemerSetzen(id, neuerEigentuemer);
         }
 
         @Override

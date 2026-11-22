@@ -241,6 +241,28 @@ public interface BesitzLager {
      */
     void zustandSetzen(long id, Zustand zustand);
 
+    /**
+     * Den Eigentuemer wechseln - und dabei die Mitbauer leeren.
+     *
+     * <p><b>Ein Vorgang und nicht zwei.</b> Der Aufrufer koennte den Eigentuemer setzen
+     * und danach {@link #mitbauerSetzen} mit einer leeren Liste rufen; bricht es
+     * zwischen beiden ab, bauen die Mitbauer des Vorbesitzers auf fremdem Grund weiter,
+     * und es faellt niemandem auf. Darum gehoert beides in diese eine Methode, deren
+     * Umsetzung in der Datenbank es in EINER Transaktion haelt.
+     *
+     * <p>Ist die Nummer eine GRUPPE, wird auf die Gruppe UND jedes ihrer Kinder
+     * geschrieben - das Durchschreiben aus Plan 6.1, wie bei {@link #mitbauerSetzen}.
+     * Alles oder nichts.
+     *
+     * <p>Die PRUEFUNG, ob der Wechsel erlaubt ist, steht nicht hier: Das Lager ist die
+     * Ablage. Wer fragt, ist {@code Besitzbuch.betreiberUebertragen}.
+     *
+     * @throws IllegalArgumentException wenn kein neuer Eigentuemer genannt ist - eine
+     *                                  Parzelle ohne Eigentuemer ist keine, und sie
+     *                                  waere ueber kein Befehl mehr erreichbar
+     */
+    void eigentuemerSetzen(long id, UUID neuerEigentuemer);
+
     /** Eine Parzelle freigeben. */
     void entfernen(long id);
 

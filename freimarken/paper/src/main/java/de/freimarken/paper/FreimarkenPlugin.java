@@ -2190,7 +2190,158 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 (empfaenger, wer) -> zeigeMessstelle(empfaenger),
                 this::bringeZurParzelle,
                 geldzweig(),
+                besitzzweig(),
                 grenze.von(), grenze.bis());
+    }
+
+    /**
+     * Der Zweig von {@code /freimarken besitz} - Regel in {@link Betreiberbesitz},
+     * Text hier.
+     *
+     * <p>Dieselbe Trennung wie bei {@link #geldzweig()}: Die Entscheidung steht in einer
+     * Klasse ohne Bukkit und ohne Text, hier steht nur, was der Betreiber liest.
+     *
+     * <p><b>Der bisherige Eigentuemer steht als KENNUNG in der Antwort und im
+     * Protokoll</b>, nicht als Name. Einen Namen gaebe es nur ueber einen zweiten Gang
+     * zum Spielerzwischenspeicher, und der kennt nur, wer sich auf diesem Server je
+     * angemeldet hat - bei einem Besitz aus einem Umzug steht dort nichts. Eine
+     * Protokollzeile mit einer leeren Stelle waere schlechter als eine mit der Kennung:
+     * Die Kennung ist der Schluessel, unter dem der Besitz tatsaechlich gefuehrt wird.
+     */
+    private BundBefehle.Besitzzweig besitzzweig() {
+        return new BundBefehle.Besitzzweig() {
+
+            @Override
+            public void uebertrage(Audience empfaenger, String wer, int parzelleX,
+                                   int parzelleZ, String anName) {
+                if (nichtBereit(empfaenger)) {
+                    return;
+                }
+                Betreiberbesitz.Ergebnis ergebnis;
+                try {
+                    ergebnis = Betreiberbesitz.uebertrage(buch,
+                            Spielername::kennungAuchAbwesend,
+                            marktstadt.key().asString(), parzelleX, parzelleZ, anName);
+                } catch (RuntimeException stoerung) {
+                    gescheitert(empfaenger, wer, "uebertragen", parzelleX, parzelleZ,
+                            stoerung);
+                    return;
+                }
+                getLogger().info("Besitz von Hand: " + wer + " uebertragen "
+                        + parzelleX + "/" + parzelleZ + " von "
+                        + (ergebnis.vorher() == null ? "niemand" : ergebnis.vorher())
+                        + " an " + anName + ", Ausgang " + ergebnis.ausgang() + ".");
+                empfaenger.sendMessage(antwort(ergebnis));
+            }
+
+            @Override
+            public void gibFrei(Audience empfaenger, String wer, int parzelleX,
+                                int parzelleZ) {
+                if (nichtBereit(empfaenger)) {
+                    return;
+                }
+                Betreiberbesitz.Ergebnis ergebnis;
+                try {
+                    ergebnis = Betreiberbesitz.gibFrei(buch,
+                            Spielername::kennungAuchAbwesend,
+                            marktstadt.key().asString(), parzelleX, parzelleZ);
+                } catch (RuntimeException stoerung) {
+                    gescheitert(empfaenger, wer, "freigeben", parzelleX, parzelleZ,
+                            stoerung);
+                    return;
+                }
+                getLogger().info("Besitz von Hand: " + wer + " freigegeben "
+                        + parzelleX + "/" + parzelleZ + ", bisher "
+                        + (ergebnis.vorher() == null ? "niemand" : ergebnis.vorher())
+                        + ", Ausgang " + ergebnis.ausgang() + ".");
+                empfaenger.sendMessage(antwort(ergebnis));
+            }
+
+            @Override
+            public void hilfe(Audience empfaenger) {
+                empfaenger.sendMessage(Component.text(
+                        "/freimarken besitz uebertragen <x> <z> <spieler> - ohne Geld"
+                                + " und ohne Zustimmung; die Mitbauer des Vorbesitzers"
+                                + " fallen weg, seine Kistenshops NICHT (sie haengen an"
+                                + " der Schildkoordinate und sind danach fuer beide"
+                                + " verschlossen).", NamedTextColor.GRAY));
+                empfaenger.sendMessage(Component.text(
+                        "/freimarken besitz freigeben <x> <z> bestaetigen - die Stelle"
+                                + " wird wieder Bauland, ohne Rueckzahlung.",
+                        NamedTextColor.GRAY));
+            }
+
+            /**
+             * Ohne Marktstadt gibt es keine Parzelle - und keine Zeile ins Leere.
+             *
+             * <p>Der Zweig ist von der KONSOLE erreichbar, und dort ist er womoeglich
+             * das erste, was nach einem Start passiert. {@code marktstadt} ist bis zum
+             * Laden der Welt {@code null}, und ohne diese Frage waere die Antwort eine
+             * NullPointerException im Serverprotokoll statt eines deutschen Satzes.
+             */
+            private boolean nichtBereit(Audience empfaenger) {
+                if (marktstadt != null && buch != null) {
+                    return false;
+                }
+                empfaenger.sendMessage(Component.text(
+                        "Die Marktstadt ist noch nicht geladen - es ist nichts"
+                                + " geaendert.", NamedTextColor.RED));
+                return true;
+            }
+
+            private void gescheitert(Audience empfaenger, String wer, String was,
+                                     int parzelleX, int parzelleZ,
+                                     RuntimeException stoerung) {
+                getLogger().log(Level.SEVERE, "Besitz von Hand GESCHEITERT: " + wer
+                        + " wollte " + parzelleX + "/" + parzelleZ + " " + was
+                        + " - die Ablage antwortet nicht.", stoerung);
+                empfaenger.sendMessage(Component.text("Die Ablage antwortet nicht - es"
+                        + " ist NICHTS geaendert. Der Grund steht im Serverprotokoll.",
+                        NamedTextColor.RED));
+            }
+
+            private Component antwort(Betreiberbesitz.Ergebnis ergebnis) {
+                String stelle = ergebnis.parzelleX() + "/" + ergebnis.parzelleZ();
+                return switch (ergebnis.ausgang()) {
+                    case UEBERTRAGEN -> Component.text("Parzelle " + stelle
+                            + " gehoerte " + (ergebnis.vorher() == null ? "niemandem"
+                                    : ergebnis.vorher())
+                            + " und gehoert jetzt " + ergebnis.spieler() + " ("
+                            + (ergebnis.haeltJetzt() == Betreiberbesitz.ZAHL_UNBEKANNT
+                                    ? "wie viele er damit haelt, war nicht mehr"
+                                            + " abzufragen"
+                                    : "er haelt damit " + ergebnis.haeltJetzt()
+                                            + " Parzellen")
+                            + "). Gehoerte die Stelle zu einem Grundstueck, ist es ganz"
+                            + " gewechselt. Die Rangobergrenze ist nicht geprueft"
+                            + " worden, und Kistenshops wechseln NICHT mit - ein Shop"
+                            + " des Vorbesitzers liegt danach auf fremdem Grund und ist"
+                            + " fuer beide verschlossen.", NamedTextColor.GOLD);
+                    case FREIGEGEBEN -> Component.text("Parzelle " + stelle + " ist"
+                            + " wieder Bauland - bisher gehoerte sie "
+                            + (ergebnis.vorher() == null ? "niemandem"
+                                    : ergebnis.vorher()) + ".", NamedTextColor.GOLD);
+                    case UNBEKANNTER_SPIELER -> Component.text("Den Namen "
+                            + ergebnis.spieler() + " kennt dieser Server nicht - es ist"
+                            + " nichts geaendert. Gross- und Kleinschreibung zaehlt.",
+                            NamedTextColor.RED);
+                    case KEIN_BESITZ -> Component.text("Bei " + stelle + " ist keine"
+                            + " Parzelle - Weg, Mauer oder vor der Stadt.",
+                            NamedTextColor.RED);
+                    case NOCH_FREI -> Component.text("Parzelle " + stelle + " gehoert"
+                            + " noch niemandem - es gibt nichts umzuschreiben.",
+                            NamedTextColor.GRAY);
+                    case TEIL_EINER_GRUPPE -> Component.text("Parzelle " + stelle
+                            + " gehoert zu einem Grundstueck - freigeben laesst sich"
+                            + " daraus kein einzelnes Feld, denn das loeschte das ganze"
+                            + " Grundstueck. Uebertragen geht, dann wechselt es ganz.",
+                            NamedTextColor.RED);
+                    case SCHON_EIGENTUEMER -> Component.text(ergebnis.spieler()
+                            + " ist schon Eigentuemer von " + stelle + " - es ist"
+                            + " nichts geaendert.", NamedTextColor.GRAY);
+                };
+            }
+        };
     }
 
     /**

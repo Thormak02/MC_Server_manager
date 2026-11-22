@@ -101,6 +101,11 @@ class ZwischenspeicherLagerTest {
         }
 
         @Override
+        public void eigentuemerSetzen(long id, UUID neuerEigentuemer) {
+            echt.eigentuemerSetzen(id, neuerEigentuemer);
+        }
+
+        @Override
         public void mitbauerSetzen(long id, Set<UUID> mitbauer) {
             echt.mitbauerSetzen(id, mitbauer);
         }
@@ -218,6 +223,18 @@ class ZwischenspeicherLagerTest {
 
         speicher.mitbauerSetzen(parzelle.id(), Set.of(bert));
         assertTrue(speicher.finde(WELT, 2, 2).orElseThrow().darfBauen(bert));
+
+        // UND DER BESITZWECHSEL [Fund 22.11.2026]. Das finde eine Zeile darueber ist
+        // dabei die tragende Zeile: Es fuellt die Karte. Die vier Vertragsproben zu
+        // eigentuemerSetzen rufen vorher nur Schreibwege, und die leeren schon selbst -
+        // dort blieb das Fehlen des leeren() darum unsichtbar.
+        //
+        // Im Betrieb liest darfBauen bei JEDEM gesetzten Block ueber diese Karte. Fehlt
+        // das Leeren, antwortet sie bis zu 30 Sekunden mit dem alten Eigentuemer: Der
+        // Vorbesitzer baut weiter, der neue wird auf seiner eigenen Parzelle abgewiesen,
+        // und /parzelle liste zeigt schon den Neuen.
+        speicher.eigentuemerSetzen(parzelle.id(), bert);
+        assertEquals(bert, speicher.finde(WELT, 2, 2).orElseThrow().eigentuemer());
 
         speicher.entfernen(parzelle.id());
         assertTrue(speicher.finde(WELT, 2, 2).isEmpty());

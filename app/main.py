@@ -13,6 +13,7 @@ from app.api.routers.console import router as console_router
 from app.api.routers.content import router as content_router
 from app.api.routers.dashboard import router as dashboard_router
 from app.api.routers.files import router as files_router
+from app.api.routers.freimarken import router as freimarken_router
 from app.api.routers.java_profiles import router as java_profiles_router
 from app.api.routers.modpacks import router as modpacks_router
 from app.api.routers.provisioning import router as provisioning_router
@@ -151,6 +152,7 @@ def create_app() -> FastAPI:
     app.include_router(content_router)
     app.include_router(dashboard_router)
     app.include_router(files_router)
+    app.include_router(freimarken_router)
     app.include_router(java_profiles_router)
     app.include_router(modpacks_router)
     app.include_router(provisioning_router)

@@ -47,27 +47,51 @@ def _ist_oeffentlich(pfad: str) -> bool:
     return any(p.match(pfad) for p in _OEFFENTLICH)
 
 
-def _erreichbarer_quelltext(fn) -> str:
-    """Quelltext der Funktion plus der Helfer, an die sie direkt delegiert.
+# Wie viele Ebenen die Helferkette verfolgt wird.
+#
+# EINE war zu wenig [Fund 22.11.2026]: Der Freimarken-Bereich haelt seine drei Tore in
+# _fuer_schreiben bzw. _fuer_korrektur, und jene rufen _require_stufe, das erst
+# get_current_user_from_session ruft. Die Tafel meldete darum sieben geschuetzte Routen
+# als ungeschuetzt. Gemessen wurde vor der Aenderung: Bei transitiver Verfolgung aendert
+# sich das Urteil fuer GENAU diese sieben und fuer keine andere der ueber hundert Routen -
+# die Tafel wird also nirgends schwaecher.
+#
+# Begrenzt, und zwar aus zwei Gruenden: Ein Kreis in der Kette hielte sonst nie an (der
+# Besuchsvermerk faengt ihn, die Grenze ist der zweite Riegel), und je mehr Quelltext
+# hereingezogen wird, desto mehr Gelegenheit fuer einen zufaelligen Treffer. Drei Ebenen
+# sind die tiefste Kette im Haus plus eine.
+_HELFERTIEFE = 4
+
+
+def _erreichbarer_quelltext(fn, tiefe: int = _HELFERTIEFE) -> str:
+    """Quelltext der Funktion plus der Helfer, an die sie - auch mittelbar - delegiert.
 
     Noetig, weil manche Route nur eine Zeile ist: `return _set_hub_running(...)`. Die
-    Pruefung steckt dann im Helfer, nicht in der Route selbst.
+    Pruefung steckt dann im Helfer, nicht in der Route selbst - und manchmal erst im
+    Helfer des Helfers.
     """
-    try:
-        quelle = inspect.getsource(fn)
-    except (OSError, TypeError):
-        return ""
-    modul = inspect.getmodule(fn)
-    if modul is None:
-        return quelle
-    for name in re.findall(r"\b(_[a-z_]+)\s*\(", quelle):
-        helfer = getattr(modul, name, None)
-        if callable(helfer) and helfer is not fn:
-            try:
-                quelle += "\n" + inspect.getsource(helfer)
-            except (OSError, TypeError):
-                pass
-    return quelle
+    gesehen: set = set()
+    teile: list[str] = []
+
+    def gehe(ziel, rest: int) -> None:
+        if rest <= 0 or ziel in gesehen:
+            return
+        gesehen.add(ziel)
+        try:
+            quelle = inspect.getsource(ziel)
+        except (OSError, TypeError):
+            return
+        teile.append(quelle)
+        modul = inspect.getmodule(ziel)
+        if modul is None:
+            return
+        for name in re.findall(r"\b(_[a-z_]+)\s*\(", quelle):
+            helfer = getattr(modul, name, None)
+            if callable(helfer):
+                gehe(helfer, rest - 1)
+
+    gehe(fn, tiefe)
+    return "\n".join(teile)
 
 
 def _routen():
@@ -147,3 +171,44 @@ def test_root_sends_anonymous_visitors_to_login(client):
     antwort = client.get("/", follow_redirects=False)
     assert antwort.status_code == 303
     assert antwort.headers["location"] == "/login"
+
+
+def test_die_suche_erkennt_eine_ungeschuetzte_kette():
+    """Die Gegenprobe zur transitiven Verfolgung.
+
+    Mehr Quelltext hereinzuziehen heisst mehr Gelegenheit fuer einen zufaelligen Treffer.
+    Darum wird hier gefragt, ob eine Kette OHNE Pruefung weiterhin als ungeschuetzt
+    erkannt wird - und ob eine Kette MIT Pruefung in der Tiefe erkannt wird. Ohne den
+    ersten Satz waere ein "finde immer einen Marker" gruen, ohne den zweiten ein
+    "finde nie einen".
+    """
+    from app.api.routers import freimarken as modul
+
+    # Die echte Kette des Bereichs: Route -> _fuer_korrektur -> _require_stufe ->
+    # get_current_user_from_session. Sie ist drei Ebenen tief.
+    geschuetzt = _erreichbarer_quelltext(modul.freimarken_konto_korrigieren)
+    assert any(m in geschuetzt for m in _AUTH_MARKER), \
+        "die Kette des Freimarken-Bereichs muss gefunden werden"
+
+    # Und eine Kette gleicher Tiefe ohne jede Pruefung darf NICHT als geschuetzt gelten.
+    assert not any(m in _erreichbarer_quelltext(_ohne_pruefung) for m in _AUTH_MARKER), \
+        "eine Kette ohne Pruefung darf nicht als geschuetzt gelten"
+
+    # Und die Begrenzung muss greifen: bei Tiefe 1 ist nur die Funktion selbst zu sehen.
+    assert not any(m in _erreichbarer_quelltext(modul.freimarken_konto_korrigieren,
+                                                tiefe=1)
+                   for m in _AUTH_MARKER), \
+        "bei Tiefe 1 darf die Kette NICHT gefunden werden - sonst zaehlt die Grenze nicht"
+
+
+def _zweite_ebene_ohne_pruefung() -> str:
+    return "hier steht keine Anmeldepruefung"
+
+
+def _erste_ebene_ohne_pruefung() -> str:
+    return _zweite_ebene_ohne_pruefung()
+
+
+def _ohne_pruefung() -> str:
+    """Eine Kette von drei Funktionen, in der keine die Anmeldung prueft."""
+    return _erste_ebene_ohne_pruefung()

@@ -87,6 +87,11 @@ public class Lagerattrappe implements BesitzLager {
     }
 
     @Override
+    public void eigentuemerSetzen(long id, UUID neuerEigentuemer) {
+        echtes.eigentuemerSetzen(id, neuerEigentuemer);
+    }
+
+    @Override
     public void buergerrechteSetzen(long id, Set<Tat> rechte) {
         echtes.buergerrechteSetzen(id, rechte);
     }

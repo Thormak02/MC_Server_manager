@@ -1,0 +1,13 @@
+{# Die Reiter des Freimarken-Bereichs. Die Liste kommt aus dem Feldkatalog, damit eine
+   neue Seite dort und nicht an zwei Stellen eingetragen wird. #}
+{% set current_path = request.url.path %}
+<section class="card">
+    <div class="inline-form server-nav">
+        {% for eintrag in seiten %}
+        {% set ziel = "/freimarken/" ~ server.id ~ "/" ~ eintrag.schluessel %}
+        <a class="button-like {% if current_path == ziel %}active{% endif %}"
+           href="{{ ziel }}"
+           {% if current_path == ziel %}aria-current="page"{% endif %}>{{ eintrag.name }}</a>
+        {% endfor %}
+    </div>
+</section>

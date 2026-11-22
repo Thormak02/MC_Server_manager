@@ -2602,7 +2602,8 @@ Die Unterscheidung bestimmt den ganzen Aufbau:
 ### 12a.2 Die drei Regeln der Anbindung
 
 1. **Stammdaten: der Manager schreibt, das Plugin liest.** Änderungen landen in der
-   Datenbank; das Plugin liest sie beim Start und auf `/freimarken neuladen`. Schläft der
+   ~~Datenbank~~ **Einstellungsdatei** ([berichtigt 22.11.2026](#12a7-warum-die-datei-und-nicht-die-tabelle));
+   das Plugin liest sie beim Start und auf `/freimarken neuladen`. Schläft der
    Server gerade, liegt die Änderung einfach da und greift beim nächsten Start — kein
    Sonderfall, kein Fehlerzustand.
 2. **Spieldaten: der Manager liest direkt, ändert aber nur über das Plugin.** Wer einen
@@ -2658,6 +2659,80 @@ Besitzkorrekturen nur Super-Admin — dieselbe Abstufung, die der Manager schon 
 Der **KI-Assistent** bekommt dafür Werkzeuge nach demselben Muster wie bei den
 VanillaTweaks-Paketen: lesend ohne Bestätigung, verändernd nur als Vorschlag mit
 Bestätigung, und der Satz im Dialog kommt vom Manager.
+
+### 12a.7 Warum die Datei und nicht die Tabelle [entschieden 22.11.2026]
+
+Dieser Abschnitt berichtigt [12a.2](#12a2-die-drei-regeln-der-anbindung) Regel 1. Er stand
+dort anders, weil er geschrieben wurde, bevor das Plugin existierte.
+
+**Gemessen am 22.11.2026**, als das Dashboard gebaut wurde:
+
+| | Regel 1 verlangte | so ist es gebaut |
+|---|---|---|
+| Stammdaten liegen | in der MariaDB | in `plugins/Freimarken/config.yml` — 3071 Zeilen, 549 Werte |
+| Die 21 Tabellen des Plugins halten | Stamm- und Spieldaten | **ausschließlich Spieldaten** |
+| Der Manager schreibt sie | über eine DB-Verbindung | über den vorhandenen YAML-Assistenten |
+
+Beide Seiten gehen also einen anderen Weg als den geplanten, und der gebaute ist der
+bessere: **Drei Viertel jener Datei sind Kommentar** — 2327 von 3071 Zeilen. Sie erklären
+jeden Wert, nennen seinen Bereich und sagen, was ein `/freimarken neuladen` erreicht und
+was erst ein Neustart. Das ist das Handbuch der Anlage, und es steht dort, wo man es
+braucht: beim Wert. In einer Tabelle hätte es keinen Ort.
+
+Der Manager kann diese Datei schreiben, **ohne die Kommentare zu verlieren**:
+`yaml_assistant_service` ersetzt nur den Textabschnitt des geänderten Wertes und lässt
+alles andere Zeichen für Zeichen stehen. Wer nichts ändert und speichert, bekommt eine
+byteweise identische Datei zurück.
+
+Die drei Regeln aus 12a.2 gelten unverändert — nur steht an der Stelle „Datenbank" jetzt
+„Datei". Insbesondere bleibt Regel 2 in Kraft: **Spieldaten** liegen in der MariaDB, und
+der Manager ändert sie nie direkt, sondern über den laufenden Server.
+
+Ein Nebeneffekt ist angenehm: Der Manager braucht für die Stammdaten **keine
+Zugangsdaten zur Plugin-Datenbank**. Das Kennwort steht an genau einer Stelle, in
+`datenbank.properties` beim Plugin, und muss nicht in einer zweiten Anwendung liegen.
+
+### 12a.8 Wie die drei Spieldaten-Seiten wirklich gebaut sind [entschieden 22.11.2026]
+
+[12a.4](#12a4-das-dashboard) nennt Besitz, Konten und Mitgliedschaften in einer Tabelle.
+Beim Bauen hat sich an vier Stellen etwas anderes ergeben, und das steht hier, damit der
+nächste Leser nicht aus der älteren Fassung baut.
+
+**1. Für Besitz gab es keinen Befehl — er ist heute gebaut.** Im ganzen Plugin gab es
+keinen Weg, Besitz auf einen anderen Spieler zu übertragen oder fremden Besitz
+freizugeben; der einzige Besitzerwechsel war `Grundstuecksbuch.kaufe`, und der braucht ein
+stehendes Angebot und Geld des Käufers. Neu ist `/freimarken besitz uebertragen <x> <z>
+<spieler>` und `freigeben <x> <z> bestaetigen` mit eigenem Recht `freimarken.besitz` —
+getrennt von `freimarken.geld`, weil eine falsche Buchung eine Gegenbuchung heilt und ein
+freigegebener Besitz nicht.
+
+**2. Die Rangobergrenze wird beim Übertragen nicht geprüft.** `Rangzahl.ausRecht` nimmt
+einen `Player`: Rechte sind nur für einen anwesenden Spieler lesbar, und eine Korrektur
+betrifft meist den, der nicht da ist. Dazu ist die Grenze keine Zusicherung über die Daten
+— nach einer Herabstufung hält ein Spieler ohnehin mehr, als seine Stufe hergibt. Die
+Antwort nennt stattdessen die neue Zahl.
+
+**3. Die Mitgliedschaftstabelle liegt schon im Manager**, obwohl
+[12a.5](#12a5-zahlungen-und-mitgliedschaften) sie erst für Bauschritt 16 vorsieht. Sie
+trägt wer, seit wann, bis wann, welche Zahlung und warum — je Server eine Zeile, denn der
+Zuschlag wirkt über ein Recht, und ein Recht wird auf einem Server vergeben. Der
+Zahlungsanbieter fehlt weiterhin; eingetragen wird von Hand. Das Plugin spricht wie geplant
+nie mit ihm, es liest nur `freimarken.extra.<name>.<zahl>`.
+
+**4. Der Manager vergibt das Recht nicht, er nennt es.** `/lp` wäre ein Konsolenbefehl an
+ein fremdes Plugin, dessen Form sich mit jeder Fassung ändert. Die Seite zeigt die
+Rechtezeile zum Kopieren — je Spieler und Zuschlag nur die **größte** laufende Zahl, denn
+`Rangzahl.hoechsteAus` addiert sie einmal und nicht als Summe.
+
+**Was dabei offen bleibt**, und zwar sichtbar in der Oberfläche benannt:
+
+| Offen | Was es heißt |
+|---|---|
+| Die Konsole antwortet nicht | `send_console_command` schreibt auf stdin und meldet „Befehl gesendet" — auch bei `UNBEKANNTER_SPIELER` oder `NICHT_GEDECKT`. Der Ausgang steht nur als Textzeile im Serverlog, hinter dem Wort `Ausgang`. Die Seite sagt „gesendet", nie „gebucht". |
+| Das Wer steht nur im Manager | Als Absender steht `CONSOLE` im Plugin-Protokoll. Regel 3 aus [12a.2](#12a2-die-drei-regeln-der-anbindung) fällt damit auf zwei Bücher: das Was ins Serverlog, das Wer und Warum ins Manager-Audit. |
+| Goldmark ist nicht korrigierbar | `Goldkasse.pruefeWaehrung` wirft bei einem Grund, der nicht zu `Buch.GOLDMARK` gehört, und `BETREIBER_GUTSCHRIFT`/`BETREIBER_ABZUG` gehören zu `Buch.MARK`. |
+| Kistenshops wechseln nicht mit | Die Tabelle `kistenshop` hängt an Welt und Schildkoordinate, nicht an der Parzelle. Nach einer Übertragung liegt der Shop des Vorbesitzers auf fremdem Grund und ist für **beide** verschlossen — `Schutzwache` weist den Alten ab, `Shopwache` den Neuen. Nur `freimarken.ueberall` kommt heran. |
+| Namen nur aus den Serverdateien | Die Plugin-Tabellen führen Spieler als `CHAR(36)`. Namen kommen aus `usercache.json` und den drei Zugangslisten; wer sich hier nie angemeldet hat, steht mit den ersten acht Zeichen seiner Kennung. Kein Netzaufruf im Anfragepfad — ein Namensaufruf blockiert fünf Sekunden ohne Sammelabfrage. |
 
 ### 12a.6 Was anpassbar ist — und was nicht
 
@@ -2947,13 +3022,13 @@ Jeder Schritt endet mit etwas, in dem man herumlaufen kann. Keine Fristen.
 | 5 | Besitz-Kern: Parzelle nehmen, Schutz, Mitbauer — **fertig 31.10.2026** | zwei Spieler, einer baut, der andere nicht — *Code steht: `Besitzbuch` mit allen Regeln (Preisstaffel, Obergrenze, Mitbauer, Aufgeben ohne Rückzahlung), `Schutzwache` mit einer Regel für alle 14 Schutzereignisse, `/parzelle` und `/mark`. 89 Tests grün, Startprobe auf einem echten Paper-26.3-Server durch. Danach eine adversariale Prüfung mit 41 Agenten: 9 bestätigte Befunde, alle behoben — darunter fehlender Schutz gegen Schaden an Rüstungsständern und Rahmeninhalt, Kisten-Loren, ein Besitzschutz, der bei Datenbankausfall nach außen offen scheiterte, und Tests, die das Spielschema leerten. Durchgang mit zwei Spielern am 31.10. gelaufen: Der Schutz greift auf fremdem Grund und sagt es in der Aktionsleiste, Mitbauer schaltet frei und wieder zu, die zweite Parzelle wurde fuer 25.000 Mark bezahlt, und Parzelle -1/0 beweist die negative Seite der Rasterrechnung. Jeder Schritt in der Datenbank gegengeprueft* |
 | 6 | ~~Zusammenlegen und Auftrennen mit Gebühr~~ **erledigt 01.11.2026** | ~~zwei Parzellen werden eine, der Weg verschwindet~~ — `/parzelle zusammenlegen <richtung>` und `/parzelle auftrennen [alles]`, Gebühr 10.000 je Feld der neuen Gruppe. Die Geometrie liegt im Kern (`Gruppenflaeche`), die Blocktabelle an einer Stelle (`Stadtboden`), die Weltarbeit hinter einem 4-Methoden-Griff (`Weltgriff`), damit sie ohne Server prüfbar ist. Vier Runden Fix-und-Nachweis mit je einem adversarialen Prüflauf: elf bestätigte Befunde, alle behoben, jeder mit Probe und Mutationsnachweis. Drei Spieltests am 1.11. bestanden — zuletzt das Quadrat mit 19 von 19 nachgemessenen Koordinaten. 231 Tests |
 | 7 | ~~Wirtschaft: Berufe, Bundesmarkt-Ankauf, Tagesbonus~~ **erledigt 07.11.2026** — in ACHT Teilen und nicht sieben: A Buchungsbuch und B Stammwerte (02.11.), C Spielzeit und Tagesgrenze (03.11.), D Berufe waehlen (06.11.), E Verdienen samt Blockmarken (06.11.), F Bundesmarkt-Ankauf, G Messstelle und H Tagesbonus (07.11.). Siehe [8.6](#86-das-buchungsbuch-erledigt-02112026), [8.7](#87-die-stammwerte-und-das-neuladen-erledigt-02112026), [8.8](#88-die-spielzeit-und-die-tagesgrenze-erledigt-03112026) und [9.1](#91-berufe-im-zunfthaus-entschieden) | ~~man kann Mark verdienen und ausgeben~~ — 154 Lohnsaetze mit drei Bremsen (Stufenminderung, harte Stundenmenge, Tagesdeckel), 56 Ankaufpreise am Bundesmarkt mit eigenem Deckel, eine Messstelle, die neben der Anwesenheit die TAETIGE Zeit zaehlt, und ein Tagesbonus mit Serie. 1.662 Proben; 117 Einspritzungen, alle gefangen. Spieltest am 07.11. bestanden: Kontostand 50.548 Mark, und die Summe aller Buchungen ergibt ihn genau |
-| 8 | Markthalle, Mietverträge, Abholfach, Freie Truhe | ein Laden läuft ab und wird sauber zurückgegeben |
-| 9 | Freistädte: gründen, Grundstücke vergeben, Bürger, Kasse | ein Spieler verkauft einem anderen ein Grundstück |
-| 10 | Hafenwerder mit eigener Angeltabelle | eine Insel lässt sich sichern, der Fang unterscheidet sich |
-| 11 | Wolkenwerder mit Skyblock-Mechaniken | Generator, Insel-Stufe, Herausforderungen laufen |
-| 12 | Ränge, Goldmark, Wechsel mit Wechseldeckel, Kosmetik | Reisender → Siedler steigt von selbst |
-| 12a | **Dashboard im Manager**: Wirtschaft, Währung, Ränge, Berufe, Texte | ein Preis lässt sich ändern, ohne das Plugin neu zu bauen |
-| 13 | Bürgeramt-Anmeldung, Rundgang, Menüs, Sprachdatei, Farbwelt | ein Neuling kommt ohne Hilfe zur ersten Parzelle |
+| 8 | ~~Markthalle, Mietverträge, Abholfach, Freie Truhe~~ **gebaut 08./09.11.2026** | ~~ein Laden läuft ab und wird sauber zurückgegeben~~ — Ladeneinheiten als Quader aus der `config.yml`, Mietvertrag mit Kaution und Lizenz, täglicher Lauf mit drei Ausfällen bis zur Räumung, Abholfach (der Inhalt wird NIE gelöscht), Ladenschutz, Kistenshops samt Handel und Zutritt. *Offen: der Spieltest zu zweit und die Freie Truhe im Gelände* |
+| 9 | ~~Freistädte: gründen, Grundstücke vergeben, Bürger, Kasse~~ **gebaut 11.11.2026** | ~~ein Spieler verkauft einem anderen ein Grundstück~~ — festes 256er-Raster auf flacher Welt ([entschieden 11.11.](#64-wie-eine-freistadt-im-gelände-liegt-entschieden-11112026), Chat schlägt Plan: jede Stadt gleich, 400.000 Mark für vergleichbare Fläche), Gründung, Grundstücke, Stadtbürger, Stadtkasse, Auflagen und Verfallsregel. *Offen: der ganze Verkaufsweg zu zweit* |
+| 10 | ~~Hafenwerder mit eigener Angeltabelle~~ **gebaut 18.11.2026** | ~~eine Insel lässt sich sichern, der Fang unterscheidet sich~~ — gebackene Inseln auf gerasteter Welt ([entschieden 18.11.](#41-die-zwei-inselwelten-entschieden)), Höchstzahl je Rang, Inselschutz, 9 Fänge mit Promillegewichten, und der Tausch sitzt VOR der Zahlung (die Lohntafel bezahlt den getauschten Fang). *Offen: der Spieltest im Wasser* |
+| 11 | ~~Wolkenwerder mit Skyblock-Mechaniken~~ **gebaut 18.11.2026** | ~~Generator, Insel-Stufe, Herausforderungen laufen~~ — Kobbelsteingenerator (15 % Erz bei Stufe 0 bis 40 % ab Stufe 13), 10 Herausforderungen je Insel EINMAL, Punktezählung chunkweise im Takt, 10 Biome zur Wahl. Die Insel-Stufe kommt aus BEIDEM: Blockscan für die Punktzahl, Herausforderungen für die Stufe am Generator. *Offen: der Spieltest auf der Insel* |
+| 12 | ~~Ränge, Goldmark, Wechsel mit Wechseldeckel, Kosmetik~~ **gebaut 19./20.11.2026** | ~~Reisender → Siedler steigt von selbst~~ — eigene Rangtabelle plus `PermissionAttachment` (nicht LuckPerms: der UUID-Umbau des Managers fasst `.db`/`.sqlite` bewusst nicht an, der Rang wäre still weg), fünf Bedingungsarten mit einer Messquelle je Art, Goldmark mit eigener Kasse und eigenem Buch, Wechselstube mit Tagesdeckel, Münzhaus mit Katalog. *Offen: der Spieltest über die Zeit* |
+| 12a | ~~**Dashboard im Manager**: Wirtschaft, Währung, Ränge, Berufe, Texte~~ **Teil A gebaut 22.11.2026** | ~~ein Preis lässt sich ändern, ohne das Plugin neu zu bauen~~ — erfüllt: sieben Einstellungsseiten über die `config.yml`, alle 549 Werte mit ihrer Erklärung aus der Datei, Rechte nach Rolle UND Dateirecht, Faktor-2-Rückfrage, gesperrte Felder mit Begründung, Protokoll mit Grund. Der Weg ist die Datei und nicht die Tabelle ([12a.7](#12a7-warum-die-datei-und-nicht-die-tabelle)). *Offen: Texte und Protokoll als eigene Seiten; Besitz, Konten und Mitgliedschaften — sie brauchen einen MariaDB-Treiber, den der Manager nicht hat* |
+| 13 | ~~Bürgeramt-Anmeldung, Rundgang, Menüs, Sprachdatei, Farbwelt~~ **gebaut 21.11.2026** in vier Teilen: A Farbwelt, B Menü/Regeln/Hilfe, C Bürgeramt-Anmeldung, D Rundgang | ~~ein Neuling kommt ohne Hilfe zur ersten Parzelle~~ — acht Farbrollen statt fester Farben (ein Satz nennt die Rolle, nie einen Wert), `/menu` mit elf Einträgen und Rechtefilter, `/regeln` als Fenster oder Chat, `/hilfe` mit zwanzig Befehlen in sechs Gruppen, die Annahme der Regeln als `confirmation` mit zwei Knöpfen und einer FASSUNG (wer sie ändert, lässt alle neu zustimmen), der Rundgang als Weg mit Stationen und als sechste Rangbedingung. 4.787 Proben. *Offen ist Handarbeit: die zehn Platzhalterbauten in Altfurt — erst danach bekommt der Rundgang seine Stationen (`rundgang.stationen`) und die Siedlerstufe ihre Zeile* |
 | 14 | Kleine Spiele in Altfurt | Parkour, Lotterie, Angelwettbewerb laufen |
 | 15 | Spielerhandel, Haustiere, Live-Karte, Event-Kalender | siehe [Anhang B](#anhang-b-übernommen-aus-dem-vorbild-entschieden) |
 | 16 | Mitgliedschaften: Zahlungsanbieter, Webhook, Ablaufprüfung | eine Mitgliedschaft läuft ab und entzieht sauber, ohne Besitz anzufassen |

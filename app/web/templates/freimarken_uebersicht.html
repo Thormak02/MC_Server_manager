@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Freimarken</h1>
+
+{% if server_liste %}
+<section class="card">
+    <p class="muted">
+        Server mit einer Freimarken-Konfiguration. Die Einstellungen gehoeren zum Server,
+        nicht zum Manager - darum erst die Wahl, dann die Seite.
+    </p>
+    <table>
+        <thead>
+            <tr>
+                <th>Server</th>
+                <th>Status</th>
+                <th>Einstellungen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for server in server_liste %}
+            <tr>
+                <td><a href="/servers/{{ server.id }}">{{ server.name }}</a></td>
+                <td>
+                    {% set ansicht = server_status_view(server) %}
+                    <span class="status-dot" style="background: {{ ansicht.color }}"></span>
+                    {{ ansicht.label }}
+                </td>
+                <td>
+                    {% for eintrag in seiten %}
+                    <a class="button-like"
+                       href="/freimarken/{{ server.id }}/{{ eintrag.schluessel }}">{{ eintrag.name }}</a>
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% else %}
+<section class="card">
+    <h2>Kein Server mit Freimarken</h2>
+    <p>
+        Auf keinem der Server, die du sehen darfst, liegt die Datei
+        <code>plugins/Freimarken/config.yml</code>. Sie entsteht beim ersten Start des
+        Plugins - danach erscheint der Server hier von selbst.
+    </p>
+</section>
+{% endif %}
+{% endblock %}

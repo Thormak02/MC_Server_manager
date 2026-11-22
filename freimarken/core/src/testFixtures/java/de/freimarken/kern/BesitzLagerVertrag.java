@@ -1108,6 +1108,121 @@ public abstract class BesitzLagerVertrag {
     }
 
     @Test
+    @DisplayName("Der Eigentuemer wechselt, und die Mitbauer sind weg")
+    void eigentuemerSetzen() {
+        BesitzLager lager = lager();
+        Parzelle parzelle = lager.anlegen(WELT, 11, 11, anna, 25_000L);
+        lager.mitbauerSetzen(parzelle.id(), Set.of(bert));
+
+        lager.eigentuemerSetzen(parzelle.id(), bert);
+
+        Parzelle danach = lager.finde(WELT, 11, 11).orElseThrow();
+        assertEquals(bert, danach.eigentuemer());
+        // Das Leeren ist der halbe Vertrag: Blieben die Mitbauer des Vorbesitzers
+        // stehen, erbte der neue Eigentuemer Fremde mit Baurecht - hier ist anna noch
+        // nicht einmal mehr Mitbauer, und bert als frueherer Mitbauer auch nicht.
+        assertTrue(danach.mitbauer().isEmpty());
+        assertFalse(danach.darfBauen(anna));
+        // Und die Zaehlung wandert mit, sonst traegt die Rangobergrenze ins Leere.
+        assertEquals(0, lager.anzahlVon(WELT, anna));
+        assertEquals(1, lager.anzahlVon(WELT, bert));
+    }
+
+    @Test
+    @DisplayName("Beim Besitzwechsel bleibt sonst alles stehen")
+    void eigentuemerSetzenAendertSonstNichts() {
+        BesitzLager lager = lager();
+        // EINE FREISTADT und keine Rasterparzelle [Fund 22.11.2026]: Hier stand
+        // anlegen(...), und das setzt JEDES Durchtragefeld auf seinen Vorgabewert - art
+        // PARZELLE, kein Elternteil, Zustand AKTIV, kein Name, keine Rechte, keine
+        // Kasse, keine Regeln, nie besucht. Die Probe verglich also Vorgabewerte mit
+        // sich selbst und blieb gruen, wenn mitNeuemBesitzer die Durchtragung verlor.
+        // Eine Freistadt traegt Name und Kasse von Anfang an, und die drei Setzer
+        // darunter bringen Zustand, Regeln und Buergerrechte auf Werte, die keine
+        // Vorgabe sind.
+        Parzelle stadt = lager.freistadtAnlegen(WELT, 2, 2, anna, 50_000L, "Altfurt");
+        lager.zustandSetzen(stadt.id(), Zustand.GEKUENDIGT);
+        lager.regelnSetzen(stadt.id(), "Hier gilt Hausrecht.");
+        lager.buergerrechteSetzen(stadt.id(), Set.of(Tat.BAUEN, Tat.BENUTZEN));
+        lager.besuchSetzen(stadt.id(), LocalDate.of(2026, 11, 20));
+        Parzelle vorher = lager.finde(WELT, stadt.x(), stadt.z()).orElseThrow();
+
+        lager.eigentuemerSetzen(stadt.id(), bert);
+        Parzelle danach = lager.finde(WELT, stadt.x(), stadt.z()).orElseThrow();
+
+        assertEquals(bert, danach.eigentuemer(), "der Wechsel selbst muss stattfinden");
+        assertEquals(vorher.id(), danach.id());
+        // Der PREIS bleibt der gezahlte: Er ist die Grundlage der Preisstaffel und der
+        // Erstattung. Haengte er am Eigentuemer, waere ein Besitzwechsel ein Weg, die
+        // Staffel zurueckzusetzen.
+        assertEquals(50_000L, danach.preis());
+        assertEquals(vorher.erworbenAm(), danach.erworbenAm());
+        assertEquals(vorher.art(), danach.art());
+        assertEquals(vorher.elternId(), danach.elternId());
+        // Diese fuenf sind der eigentliche Grund, warum es diese Pruefung gibt: Eine
+        // Fassung von mitNeuemBesitzer, die feste Werte einsetzt statt die alten
+        // durchzutragen, laesst die Stadt namenlos und ohne Kasse zurueck - und eine
+        // Freistadt ohne Namen WIRFT. Das ist genau der Feldverlust vom 11.11.2026.
+        assertEquals("Altfurt", danach.name());
+        assertEquals(vorher.kasse(), danach.kasse());
+        assertEquals("Hier gilt Hausrecht.", danach.regeln());
+        assertEquals(Set.of(Tat.BAUEN, Tat.BENUTZEN), danach.buergerrechte());
+        assertEquals(Zustand.GEKUENDIGT, danach.zustand());
+        assertEquals(LocalDate.of(2026, 11, 20), danach.besucht());
+    }
+
+    @Test
+    @DisplayName("Eine Nummer, die es nicht gibt, laesst sich nicht umschreiben")
+    void eigentuemerSetzenAufNichts() {
+        BesitzLager lager = lager();
+
+        // Die anderen vier Setzer dieses Vertrags werfen hier, und MariaLager hat es als
+        // einzige Setzmethode nicht geprueft [Fund 22.11.2026]: Sie committete und kehrte
+        // ohne Klage zurueck. Die Lage ist nicht theoretisch - der Zwischenspeicher haelt
+        // eine von Hand geloeschte Zeile bis zu 30 Sekunden, und genau dann meldete der
+        // Befehl Erfolg fuer nichts.
+        assertThrows(IllegalStateException.class,
+                () -> lager.eigentuemerSetzen(999_999L, bert));
+    }
+
+    @Test
+    @DisplayName("Der Eigentuemer einer Gruppe wechselt auf jedem einzelnen Feld")
+    void eigentuemerSetzenSchreibtDurch() {
+        BesitzLager lager = lager();
+        Parzelle eins = lager.anlegen(WELT, 3, 0, anna, 0L);
+        Parzelle zwei = lager.anlegen(WELT, 4, 0, anna, 0L);
+        long gruppe = lager.gruppeSetzen(Parzelle.KEIN_ELTERNTEIL, WELT, anna,
+                Set.of(bert), 20_000L, List.of(eins.id(), zwei.id()));
+
+        lager.eigentuemerSetzen(gruppe, bert);
+
+        // Das Durchschreiben aus Plan 6.1: Jede Zeile traegt ihren Eigentuemer
+        // vollstaendig, damit darfBauen am Kind eine Abfrage ohne Umweg bleibt. Eine
+        // Umsetzung, die nur die Gruppenzeile anfasst, laesst die Felder dem Alten -
+        // und der baut weiter, waehrend die Liste den Neuen zeigt.
+        Parzelle feldEins = lager.finde(WELT, 3, 0).orElseThrow();
+        Parzelle feldZwei = lager.finde(WELT, 4, 0).orElseThrow();
+        assertEquals(bert, feldEins.eigentuemer());
+        assertEquals(bert, feldZwei.eigentuemer());
+        assertFalse(feldEins.darfBauen(anna));
+        assertTrue(lager.kinderVon(gruppe).stream()
+                .allMatch(kind -> kind.mitbauer().isEmpty()));
+    }
+
+    @Test
+    @DisplayName("Ohne neuen Eigentuemer gibt es keinen Besitzwechsel")
+    void eigentuemerSetzenOhneEmpfaenger() {
+        BesitzLager lager = lager();
+        Parzelle parzelle = lager.anlegen(WELT, 13, 13, anna, 0L);
+
+        // Eine Parzelle ohne Eigentuemer waere ueber keinen Befehl mehr erreichbar:
+        // /parzelle info findet sie, aber niemand kann sie aufgeben oder uebernehmen.
+        assertThrows(IllegalArgumentException.class,
+                () -> lager.eigentuemerSetzen(parzelle.id(), null));
+        assertEquals(anna, lager.finde(WELT, 13, 13).orElseThrow().eigentuemer());
+    }
+
+    @Test
     @DisplayName("Eine unbekannte Nummer zu entfernen ist kein Fehler")
     void entfernenVonNichts() {
         lager().entfernen(999_999L);

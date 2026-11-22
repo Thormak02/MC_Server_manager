@@ -14,6 +14,21 @@ permissions:
   freimarken.bauen.ueberall:
     description: Baut und oeffnet auf jeder Parzelle, auch auf fremder
     default: op
+  # Besitz von Hand umschreiben: /freimarken besitz uebertragen <x> <z> <spieler>
+  # und /freimarken besitz freigeben <x> <z> bestaetigen.
+  #
+  # Getrennt von freimarken.geld, obwohl beide Betreibereingriffe sind: Eine falsche
+  # Buchung heilt eine Gegenbuchung, ein freigegebener Besitz nicht - die Stelle ist
+  # wieder Bauland, und der Naechste nimmt sie. Jeder Versuch steht im Serverprotokoll,
+  # mit Absender, Stelle, bisherigem und neuem Eigentuemer.
+  #
+  # Kistenshops wechseln NICHT mit: Die Tabelle kistenshop haengt an Welt und
+  # Schildkoordinate, nicht an der Parzelle. Ein Shop des Vorbesitzers liegt danach auf
+  # fremdem Grund und ist fuer beide verschlossen - die Antwort des Befehls sagt es.
+  freimarken.besitz:
+    description: "Besitz auf einen anderen Spieler uebertragen oder fremden Besitz freigeben"
+    default: op
+
   # Geld von Hand buchen: /freimarken geld <spieler> <betrag>, ein Minus zieht ab.
   # EIGENES Recht und nicht freimarken.verwalten: Jene Zweige zeigen etwas oder tauschen
   # Einstellwerte aus, dieser aendert eine BUCHUNG. Jeder Versuch steht im

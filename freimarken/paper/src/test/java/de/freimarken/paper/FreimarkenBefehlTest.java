@@ -92,6 +92,27 @@ class FreimarkenBefehlTest {
                         gerufen.add("geld-hilfe");
                     }
                 },
+                new BundBefehle.Besitzzweig() {
+                    @Override
+                    public void uebertrage(Audience empfaenger, String wer,
+                                           int parzelleX, int parzelleZ,
+                                           String anName) {
+                        gerufen.add("besitz-uebertragen:" + wer + ":" + parzelleX + "/"
+                                + parzelleZ + ":" + anName);
+                    }
+
+                    @Override
+                    public void gibFrei(Audience empfaenger, String wer, int parzelleX,
+                                        int parzelleZ) {
+                        gerufen.add("besitz-freigeben:" + wer + ":" + parzelleX + "/"
+                                + parzelleZ);
+                    }
+
+                    @Override
+                    public void hilfe(Audience empfaenger) {
+                        gerufen.add("besitz-hilfe");
+                    }
+                },
                 VON, BIS);
     }
 
@@ -277,6 +298,90 @@ class FreimarkenBefehlTest {
 
         assertThrows(CommandSyntaxException.class,
                 () -> baum.tippe("freimarken welt", nurGeld));
+        assertEquals(List.of(), gerufen);
+    }
+    @Test
+    @DisplayName("44m - /freimarken besitz uebertragen reicht Stelle und Name weiter")
+    void besitzUebertragen() throws CommandSyntaxException {
+        Spielerprobe mitRecht = spieler(123, BundBefehle.RECHT_BESITZ);
+
+        assertEquals(1, baum.tippe("freimarken besitz uebertragen -3 2 Anna",
+                mitRecht));
+
+        // VIER Angaben, zwei davon Zahlen und zwei davon Namen: Ein Tausch von x und z
+        // oder von Absender und Empfaenger uebersetzt fehlerfrei - und dann wechselt die
+        // falsche Parzelle den Besitzer oder der Betreiber bekommt sie selbst. Die
+        // Reihenfolge steht nur hier fest.
+        assertEquals(List.of("besitz-uebertragen:Cara:-3/2:Anna"), gerufen);
+    }
+
+    @Test
+    @DisplayName("44n - /freimarken besitz freigeben verlangt bestaetigen")
+    void besitzFreigebenVerlangtBestaetigung() throws CommandSyntaxException {
+        Spielerprobe mitRecht = spieler(124, BundBefehle.RECHT_BESITZ);
+
+        assertEquals(1, baum.tippe("freimarken besitz freigeben -3 2 bestaetigen",
+                mitRecht));
+        assertEquals(List.of("besitz-freigeben:Cara:-3/2"), gerufen);
+
+        // OHNE das Wort fuehrt dieselbe Zeile zur Benutzung und nicht zur Tat. Das ist
+        // die Sicherung: Freigeben loescht Besitz ohne Rueckzahlung, und ein Tippfehler
+        // in der Nummer traefe die Parzelle eines Unbeteiligten.
+        gerufen.clear();
+        assertEquals(1, baum.tippe("freimarken besitz freigeben -3 2", mitRecht));
+        assertEquals(List.of("besitz-hilfe"), gerufen);
+    }
+
+    @Test
+    @DisplayName("44o - jede unvollstaendige Form des Besitzzweigs zeigt die Benutzung")
+    void besitzUnvollstaendig() throws CommandSyntaxException {
+        Spielerprobe mitRecht = spieler(125, BundBefehle.RECHT_BESITZ);
+
+        // Fuenf Stellen, an denen die Angaben abbrechen koennen. Ohne eigenes .executes
+        // an JEDER endet es in Brigadiers englischem "Unknown or incomplete command".
+        assertEquals(1, baum.tippe("freimarken besitz", mitRecht));
+        assertEquals(1, baum.tippe("freimarken besitz uebertragen", mitRecht));
+        assertEquals(1, baum.tippe("freimarken besitz uebertragen -3", mitRecht));
+        assertEquals(1, baum.tippe("freimarken besitz uebertragen -3 2", mitRecht));
+        assertEquals(1, baum.tippe("freimarken besitz freigeben", mitRecht));
+        assertEquals(1, baum.tippe("freimarken besitz freigeben -3", mitRecht));
+
+        assertEquals(List.of("besitz-hilfe", "besitz-hilfe", "besitz-hilfe",
+                        "besitz-hilfe", "besitz-hilfe", "besitz-hilfe"),
+                gerufen);
+    }
+
+    @Test
+    @DisplayName("44p - eine Stelle jenseits der Stadt erreicht den Zweig nicht")
+    void besitzAusserhalbDerGrenzen() {
+        Spielerprobe mitRecht = spieler(126, BundBefehle.RECHT_BESITZ);
+
+        // Die Grenzen kommen aus der Stadt und stehen am Argument. Ohne sie reichte
+        // mitteX(10000) weit jenseits der Weltgrenze, und die Antwort waere eine
+        // Ausnahme statt eines Satzes.
+        assertThrows(CommandSyntaxException.class,
+                () -> baum.tippe("freimarken besitz uebertragen 99 2 Anna", mitRecht));
+        assertEquals(List.of(), gerufen);
+    }
+
+    @Test
+    @DisplayName("44q - freimarken.geld oeffnet den Besitzzweig NICHT, und umgekehrt")
+    void geldUndBesitzSindGetrennt() {
+        // DIE ZUSAGE DES EIGENEN RECHTS: Eine falsche Buchung heilt eine Gegenbuchung,
+        // ein freigegebener Besitz nicht. Ohne diese Probe waere der Unterschied nur
+        // ein Kommentar.
+        Spielerprobe nurGeld = spieler(127, BundBefehle.RECHT_GELD);
+
+        assertThrows(CommandSyntaxException.class,
+                () -> baum.tippe("freimarken besitz uebertragen -3 2 Anna", nurGeld));
+        assertEquals(List.of(), gerufen);
+
+        Spielerprobe nurBesitz = spieler(128, BundBefehle.RECHT_BESITZ);
+
+        assertThrows(CommandSyntaxException.class,
+                () -> baum.tippe("freimarken geld Anna 1", nurBesitz));
+        assertThrows(CommandSyntaxException.class,
+                () -> baum.tippe("freimarken welt", nurBesitz));
         assertEquals(List.of(), gerufen);
     }
 }

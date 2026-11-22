@@ -783,6 +783,66 @@ public final class MariaLager implements BesitzLager {
         }
     }
 
+    @Override
+    public void eigentuemerSetzen(long id, UUID neuerEigentuemer) {
+        if (neuerEigentuemer == null) {
+            throw new IllegalArgumentException("Ohne neuen Eigentuemer gibt es keinen"
+                    + " Besitzwechsel");
+        }
+        try {
+            Connection c = datenbank.verbindung();
+            boolean vorherAutomatisch = c.getAutoCommit();
+            c.setAutoCommit(false);
+            try {
+                // BEIDES in einer Transaktion - das ist der Grund, warum der Vertrag
+                // eine Methode dafuer hat und nicht zwei. Bricht es zwischen den beiden
+                // Anweisungen ab, haette die Parzelle einen neuen Eigentuemer und die
+                // Mitbauer des alten; die bauen dann auf fremdem Grund weiter, und es
+                // steht nirgends eine Zeile darueber.
+                schreibeEigentuemerDurch(c, id, neuerEigentuemer);
+                schreibeMitbauerDurch(c, id, Set.of());
+                c.commit();
+            } catch (SQLException fehler) {
+                zuruecknehmen(c, fehler);
+                throw fehler;
+            } finally {
+                zurueckAufAutomatik(c, vorherAutomatisch);
+            }
+        } catch (SQLException fehler) {
+            throw weiterreichen("Setzen des Eigentuemers", fehler);
+        }
+    }
+
+    /**
+     * Der Eigentuemer auf die Zeile UND auf jedes ihrer Kinder.
+     *
+     * <p>EINE Anweisung mit {@code id = ? OR eltern_id = ?} und nicht erst ein Lesen der
+     * Kinder: Zwischen dem Lesen und dem Schreiben koennte ein Kind hinzukommen, und das
+     * truege dann noch den alten Eigentuemer - bei einer Gruppe ohne Kinder trifft die
+     * Bedingung genau die eine Zeile, also braucht es keine Fallunterscheidung.
+     */
+    private void schreibeEigentuemerDurch(Connection c, long gruppeId, UUID eigentuemer)
+            throws SQLException {
+        try (PreparedStatement setzen = c.prepareStatement(
+                "UPDATE parzellen SET eigentuemer = ? WHERE id = ? OR eltern_id = ?")) {
+            setzen.setString(1, eigentuemer.toString());
+            setzen.setLong(2, gruppeId);
+            setzen.setLong(3, gruppeId);
+            // DAS DASEIN WIRD GEPRUEFT [Fund 22.11.2026], wie bei regelnSetzen,
+            // zustandSetzen, besuchSetzen und buergerrechteSetzen. Ohne diese Zeile war
+            // dies die EINZIGE Setzmethode der Klasse, die bei einer Nummer, die es
+            // nicht gibt, committet und ohne Klage zurueckkehrt - waehrend
+            // SpeicherLager an derselben Stelle wirft. Zwei Umsetzungen desselben
+            // Vertrags duerfen nicht verschieden antworten, und die Lage ist nicht
+            // theoretisch: Der Zwischenspeicher haelt eine geloeschte Zeile bis zu
+            // 30 Sekunden, und genau dann meldete der Befehl Erfolg fuer nichts.
+            if (setzen.executeUpdate() == 0) {
+                throw new IllegalStateException("Keine Parzelle mit der Nummer "
+                        + gruppeId);
+            }
+        }
+    }
+
     private void schreibeMitbauerDurch(Connection c, long gruppeId, Set<UUID> mitbauer)
             throws SQLException {
         List<Long> zeilen = new ArrayList<>();

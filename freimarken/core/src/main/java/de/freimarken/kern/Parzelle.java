@@ -340,6 +340,23 @@ public record Parzelle(
     }
 
     /**
+     * Dieselbe Zeile mit einem anderen Eigentuemer - und OHNE Mitbauer.
+     *
+     * <p><b>Zwei Felder in einem Wandler</b>, und das ist der Punkt: Der Besitz wechselt
+     * als EIN Vorgang. Die Mitbauer waren die Einladung des Vorbesitzers; blieben sie
+     * stehen, erbte der neue Eigentuemer Fremde mit Baurecht auf seinem Grund, ohne dass
+     * ihm das irgendwo gesagt wird. Wer sie behalten will, traegt sie danach selbst ein -
+     * das ist eine Tat mit einer Meldung, das Erben waere eine ohne.
+     *
+     * <p>Der Name sagt beides, damit niemand ihn fuer einen blossen Setzer haelt: Ein
+     * {@code mitEigentuemer}, das stumm auch die Mitbauer leert, waere eine Falle.
+     */
+    public Parzelle mitNeuemBesitzer(UUID anderer) {
+        return new Parzelle(id, welt, x, z, anderer, Set.of(), preis, erworbenAm,
+                art, elternId, zustand, name, buergerrechte, kasse, regeln, besucht);
+    }
+
+    /**
      * Dieselbe Zeile mit anderen Buergerrechten.
      *
      * <p>Ein Wandler und kein Setzer - die Zeile ist ein Record. Dass es ihn gibt, hat

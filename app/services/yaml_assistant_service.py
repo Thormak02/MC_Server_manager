@@ -62,7 +62,8 @@ def _pfad_label(pfad: list[Any]) -> str:
 
 
 def _sammle(knoten: Any, pfad: list[Any], text: str,
-            raus: list[dict], gesehen: set[int], doppelt: set[str]) -> None:
+            raus: list[dict], gesehen: set[int], doppelt: set[str],
+            grenze: int | None = MAX_FELDER) -> None:
     """Geht den Knotenbaum durch und merkt sich jeden einzeilig ersetzbaren Skalar."""
     # Was yaml.compose liefert, ist kein Baum, sondern ein Geflecht: ein Alias (*name)
     # gibt DENSELBEN Knoten zurueck, auf den der Anker zeigt. Diese Sperre stand erst beim
@@ -74,7 +75,7 @@ def _sammle(knoten: Any, pfad: list[Any], text: str,
     if id(knoten) in gesehen:
         return
     gesehen.add(id(knoten))
-    if len(raus) > MAX_FELDER:
+    if grenze is not None and len(raus) > grenze:
         return   # mehr zeigt die Oberflaeche ohnehin nicht an
 
     if isinstance(knoten, yaml.MappingNode):
@@ -94,12 +95,14 @@ def _sammle(knoten: Any, pfad: list[Any], text: str,
             if zaehler.get(name, 0) > 1:
                 doppelt.add(_pfad_label(pfad + [name]))
                 continue
-            _sammle(wert_knoten, pfad + [name], text, raus, gesehen, doppelt)
+            _sammle(wert_knoten, pfad + [name], text, raus, gesehen, doppelt,
+                    grenze=grenze)
         return
 
     if isinstance(knoten, yaml.SequenceNode):
         for index, eintrag in enumerate(knoten.value):
-            _sammle(eintrag, pfad + [index], text, raus, gesehen, doppelt)
+            _sammle(eintrag, pfad + [index], text, raus, gesehen, doppelt,
+                    grenze=grenze)
         return
 
     if not isinstance(knoten, yaml.ScalarNode) or not pfad:
@@ -132,6 +135,7 @@ def _sammle(knoten: Any, pfad: list[Any], text: str,
         "stil": knoten.style or "",
         "wert": wert,
         "roh": roh,
+        "zeile": knoten.start_mark.line,
     })
 
 
@@ -220,6 +224,25 @@ def baue(text: str) -> tuple[dict | None, str]:
         "assistant_yaml_meta": json.dumps(meta, ensure_ascii=False),
         "hinweis": " ".join(hinweise),
     }, ""
+
+
+def felder_nach_pfad(text: str) -> dict[str, dict]:
+    """Jeder einzeilig ersetzbare Skalar der Datei, nach seinem Punktpfad abgelegt.
+
+    Dasselbe, was der Assistent fuer sein Formular sammelt - nur nach Pfad statt nach
+    Reihenfolge, und ohne die Anzeigegrenze. Fuer Oberflaechen, die eine BESTIMMTE
+    Einstellung zeigen ("wirtschaft.startguthaben") und nicht die Datei von oben nach
+    unten.
+
+    Wirft dieselben Ausnahmen wie yaml.compose - anders als ``baue``, das beim blossen
+    Oeffnen einer beliebigen Datei laeuft und darum nichts werfen darf. Wer hier fragt,
+    hat eine Datei in der Hand, von der er weiss, dass sie sich oeffnen laesst.
+    """
+    wurzel = yaml.compose(text)
+    raus: list[dict] = []
+    if wurzel is not None:
+        _sammle(wurzel, [], text, raus, set(), set(), grenze=None)
+    return {eintrag["label"]: eintrag for eintrag in raus}
 
 
 # -------------------------------------------------------------------- Schreiben

@@ -186,6 +186,15 @@ public final class ZwischenspeicherLager implements BesitzLager {
     }
 
     @Override
+    public void eigentuemerSetzen(long id, UUID neuerEigentuemer) {
+        wahrheit.eigentuemerSetzen(id, neuerEigentuemer);
+        // LEEREN wie jeder Setzer hier: Die Karte liegt unter dem ORT, diese Methode
+        // kennt nur die Nummer. Ein Besitzwechsel von Hand faellt selten - ein
+        // Nachtragen waere der Weg, auf dem die Karte schief wird.
+        leeren();
+    }
+
+    @Override
     public void entfernen(long id) {
         wahrheit.entfernen(id);
         leeren();
