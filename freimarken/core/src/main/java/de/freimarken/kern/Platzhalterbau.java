@@ -25,7 +25,8 @@ import java.util.Locale;
  * Stellen gilt, laesst einen Betreiber einen Bau eintragen, der als Station abgewiesen
  * wird.
  */
-public record Platzhalterbau(String schluessel, Quader bereich, Richtung tuer) {
+public record Platzhalterbau(String schluessel, Quader bereich, Richtung tuer,
+                             Baustil stil, Dachart dach) {
 
     /** So lang darf ein Name hoechstens sein - wie bei {@link Rundgangsstation}. */
     public static final int HOECHSTE_SCHLUESSELLAENGE = 32;
@@ -50,6 +51,10 @@ public record Platzhalterbau(String schluessel, Quader bereich, Richtung tuer) {
         if (tuer == null) {
             throw new IllegalArgumentException("Ein Bau ohne Tuerseite ist ein Klotz: "
                     + schluessel);
+        }
+        if (stil == null || dach == null) {
+            throw new IllegalArgumentException("Ein Bau ohne Stil oder ohne Dachart hat"
+                    + " keine Baustoffe: " + schluessel);
         }
         schluessel = schluessel.trim().toLowerCase(Locale.ROOT);
         if (!schluessel.matches(MUSTER)) {
@@ -83,6 +88,32 @@ public record Platzhalterbau(String schluessel, Quader bereich, Richtung tuer) {
     /** Liegt diese Stelle im Bau? Beide Ecken eingeschlossen. */
     public boolean enthaelt(int x, int y, int z) {
         return bereich.enthaelt(x, y, z);
+    }
+
+    /**
+     * Wie breit die Seite ist, in der die Tuer steht - die FRONT.
+     *
+     * <p>Aus ihr rechnet {@link Bauplan} den Giebel: Ein Hansehaus steht giebelstaendig,
+     * und die Hoehe seines Giebels ist die halbe Front.
+     */
+    public int front() {
+        return switch (tuer) {
+            case NORD, SUED -> bereich.bisX() - bereich.vonX() + 1;
+            case OST, WEST -> bereich.bisZ() - bereich.vonZ() + 1;
+        };
+    }
+
+    /** Wie tief der Bau ist - von der Front nach hinten. */
+    public int tiefe() {
+        return switch (tuer) {
+            case NORD, SUED -> bereich.bisZ() - bereich.vonZ() + 1;
+            case OST, WEST -> bereich.bisX() - bereich.vonX() + 1;
+        };
+    }
+
+    /** Wie hoch er ist, Boden und First eingerechnet. */
+    public int hoehe() {
+        return bereich.bisY() - bereich.vonY() + 1;
     }
 
     /** Wie viele Bloecke der Bau umfasst - Luft eingerechnet. */

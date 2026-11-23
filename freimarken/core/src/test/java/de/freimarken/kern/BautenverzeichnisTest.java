@@ -16,7 +16,8 @@ class BautenverzeichnisTest {
 
     private static Platzhalterbau bau(String name, int x) {
         return new Platzhalterbau(name, new Quader(x, -61, 2, x + 8, -53, 10),
-                Richtung.NORD);
+                Richtung.NORD,
+                Baustil.BACKSTEIN, Dachart.ZIEGEL);
     }
 
     @Test

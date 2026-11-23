@@ -522,10 +522,27 @@ bauten:
     # genau wie der Rundgang es heute tut.
     schild: oak_wall_sign
 
-  # Je Bau ein Block mit von, bis und tuer. Die Tuerseite ist ein WORT - nord, ost, sued
-  # oder west -, und wo die Oeffnung in dieser Wand sitzt, rechnet das Programm aus der
-  # Mitte. Eine Koordinate hier waere eine zweite Wahrheit: Sie muesste mit dem Quader
-  # wandern.
+  # Je Bau ein Block mit von, bis, tuer, stil und dach. Die Tuerseite ist ein WORT - nord,
+  # ost, sued oder west -, und wo die Oeffnung in dieser Wand sitzt, rechnet das Programm
+  # aus der Mitte. Eine Koordinate hier waere eine zweite Wahrheit: Sie muesste mit dem
+  # Quader wandern.
+  #
+  # GIEBELSTAENDIG, und das ist der Baustil und keine Laune [23.11.2026]: Ein Hansehaus
+  # steht mit dem GIEBEL zur Gasse - schmal vorn, tief nach hinten, hoch. Die Tuerseite ist
+  # darum immer die SCHMALE Seite. Die eine Ausnahme ist das Bundesratshaus: Ein Rathaus
+  # ist traufstaendig, sein First laeuft parallel zur Gasse.
+  #
+  # STIL und DACH waehlen die Baustoffe. Die Farben kommen aus Abschnitt 2.2 des Plans, der
+  # ausdruecklich auch fuer offizielle Gebaeude gilt:
+  #   backstein  Bundesrot  - Backstein mit dunklen Balken, wie auf den Bildern des alten
+  #                           Lumia
+  #   fachwerk   -          - helles Gefach zwischen dunklen Balken
+  #   gold       Markgold   - warmer Sandstein mit Goldakzent, fuer das Muenzhaus
+  #   forst      Forstgruen - Schlammziegel und Gruenspan, fuer die Tore in die Natur
+  #   schiefer   Schiefer   - Tiefenschiefer und Tuff, der Grundton der Stadt
+  # Dach: ziegel (dunkle Dachtreppen) oder kupfer (oxidiertes Kupfer, das gruenspanige
+  #   Dach der norddeutschen Hanse). Ein unbekanntes Wort wird beklagt, und es gilt der
+  #   Wert ab Werk.
   #
   # Beide Ecken sind EINGESCHLOSSEN. Vertauschst du von und bis, wird sortiert statt
   # geklagt - das ist ein Tippfehler und keine Absicht. Hoechstens zwanzig Bauten,
@@ -534,53 +551,70 @@ bauten:
   #
   # NUR BEIM START GELESEN.
   haeuser:
-    # DIE VIER TORHAEUSER, vor der Wand. Jedes ist genau so breit wie sein Tor, damit
-    # zwischen zwei Haeusern ein Block Luft bleibt - die tragende Saeule der Wand. Die
-    # Tuer zeigt nach SUED, also auf die Wand und das Tor zu.
+    # DIE VIER TORTUERME, vor der Wand. Drei Bloecke breit bleibt es: Die Tore stehen
+    # vier auseinander, ein breiterer Turm beruehrte seinen Nachbarn. Dafuer tiefer
+    # und viel hoeher - ein Torturm ist schlank. Die Tuer zeigt nach SUED, also auf
+    # die Wand und ihr Tor zu.
     hafen-von-altfurt:
-      von: [66, -61, -5]
-      bis: [68, -54, -1]
+      von: [66, -61, -7]
+      bis: [68, -46, -1]
       tuer: sued
+      stil: schiefer
+      dach: kupfer
     forsttor:
-      von: [70, -61, -5]
-      bis: [72, -54, -1]
+      von: [70, -61, -7]
+      bis: [72, -46, -1]
       tuer: sued
+      stil: forst
+      dach: kupfer
     kornpforte:
-      von: [74, -61, -5]
-      bis: [76, -54, -1]
+      von: [74, -61, -7]
+      bis: [76, -46, -1]
       tuer: sued
-    # Ein TURM, darum hoeher als die drei anderen Torhaeuser.
+      stil: forst
+      dach: ziegel
+    # Der hoechste Bau der Stadt - zweiundzwanzig Ebenen.
     wolkenturm:
-      von: [86, -61, -5]
-      bis: [88, -50, -1]
+      von: [86, -61, -7]
+      bis: [88, -40, -1]
       tuer: sued
-
-    # DIE VIER HAEUSER AN DEN FLANKEN, hinter der Wand und neben der Mittelachse. Ihre
-    # Tueren zeigen zur Achse, damit ein Ankommender sie offen sieht: die westlichen nach
-    # OST, die oestlichen nach WEST.
+      stil: schiefer
+      dach: kupfer
+    # DIE VIER FLANKENHAEUSER, giebelstaendig: sieben breit zur Gasse, elf tief,
+    # vierzehn hoch. Zwischen je zweien bleibt eine Gasse von drei Bloecken. Ihre
+    # Tueren zeigen zur Mittelachse - die westlichen nach OST, die oestlichen nach WEST.
     buergeramt:
-      von: [50, -61, 2]
-      bis: [58, -53, 10]
+      von: [48, -61, 3]
+      bis: [58, -48, 9]
       tuer: ost
+      stil: backstein
+      dach: ziegel
     zunfthaus:
-      von: [50, -61, 14]
-      bis: [58, -53, 22]
+      von: [48, -61, 13]
+      bis: [58, -48, 19]
       tuer: ost
+      stil: fachwerk
+      dach: ziegel
     muenzhaus:
-      von: [86, -61, 2]
-      bis: [94, -53, 10]
+      von: [86, -61, 3]
+      bis: [96, -48, 9]
       tuer: west
+      stil: gold
+      dach: kupfer
     kaufmannskontor:
-      von: [86, -61, 14]
-      bis: [94, -53, 22]
+      von: [86, -61, 13]
+      bis: [96, -48, 19]
       tuer: west
-
-    # DAS BUNDESRATSHAUS schliesst die Achse ab - hinter dem Spawn, mittig auf ihr, und
-    # als groesstes Haus. Seine Tuer zeigt nach NORD, also zurueck zur Torreihe.
+      stil: backstein
+      dach: ziegel
+    # DAS RATHAUS ist traufstaendig und breit - sein First laeuft parallel zur Gasse.
+    # Es schliesst die Achse ab, hinter dem Spawn, mittig auf ihr.
     bundesratshaus:
       von: [64, -61, 26]
-      bis: [80, -51, 38]
+      bis: [80, -46, 38]
       tuer: nord
+      stil: backstein
+      dach: kupfer
 
 
 # DER RUNDGANG DURCH ALTFURT - Plan 10.2 [Schritt 13 Teil D, 21.11.2026].

@@ -164,7 +164,7 @@ final class Altfurtaufbau {
     /**
      * Ob dieser Bau schon steht - gefragt an EINEM Block.
      *
-     * <p>Gefragt wird die Wandecke eine Ebene ueber dem Boden und NICHT der Boden selbst:
+     * <p>Gefragt wird die SOCKELecke eine Ebene ueber dem Boden und NICHT der Boden selbst:
      * Altfurt ist eine Ebene, dort liegt auf Bodenhoehe ueberall schon etwas. Der Boden
      * koennte also nie zwischen "gebaut" und "unberuehrt" unterscheiden, die Wand sehr
      * wohl - ueber dem Boden einer Ebene ist Luft.
@@ -180,7 +180,7 @@ final class Altfurtaufbau {
         }
         Quader bereich = bau.bereich();
         return griff.bei(bereich.vonX(), bereich.vonY() + 1, bereich.vonZ())
-                == stoffe.wand();
+                == stoffe.block(bau.stil(), bau.dach(), Bauplan.Stueck.SOCKEL);
     }
 
     /**
@@ -206,7 +206,8 @@ final class Altfurtaufbau {
         for (int x = bereich.vonX(); x <= bereich.bisX(); x++) {
             for (int z = bereich.vonZ(); z <= bereich.bisZ(); z++) {
                 for (int y = bereich.vonY(); y <= bereich.bisY(); y++) {
-                    Material block = stoffe.block(Bauplan.stueckBei(bau, x, y, z));
+                    Material block = stoffe.block(bau.stil(), bau.dach(),
+                            Bauplan.stueckBei(bau, x, y, z));
                     griff.setze(x, y, z, block);
                     gesetzt++;
                 }

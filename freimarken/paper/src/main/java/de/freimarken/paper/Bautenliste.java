@@ -1,6 +1,8 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Baustil;
 import de.freimarken.kern.Bautenverzeichnis;
+import de.freimarken.kern.Dachart;
 import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Platzhalterbau;
 import de.freimarken.kern.Quader;
@@ -113,7 +115,7 @@ final class Bautenliste {
         String pfad = PFAD_HAEUSER + "." + name;
         ConfigurationSection zeilen = abschnitt.getConfigurationSection(name);
         if (zeilen == null) {
-            klagen.add(pfad + " ist kein Block mit von, bis und tuer ("
+            klagen.add(pfad + " ist kein Block mit von, bis, tuer, stil und dach ("
                     + Wirtschaftsliste.wieGetippt(abschnitt.get(name))
                     + ") - uebersprungen.");
             return null;
@@ -121,12 +123,16 @@ final class Bautenliste {
         int[] von = drei(zeilen, pfad, "von", klagen);
         int[] bis = drei(zeilen, pfad, "bis", klagen);
         Richtung tuer = tuer(zeilen, pfad, klagen);
-        if (von == null || bis == null || tuer == null) {
+        Baustil stil = stil(zeilen, pfad, klagen);
+        Dachart dach = dach(zeilen, pfad, klagen);
+        if (von == null || bis == null || tuer == null || stil == null
+                || dach == null) {
             return null;
         }
         try {
             return new Platzhalterbau(name,
-                    new Quader(von[0], von[1], von[2], bis[0], bis[1], bis[2]), tuer);
+                    new Quader(von[0], von[1], von[2], bis[0], bis[1], bis[2]),
+                    tuer, stil, dach);
         } catch (IllegalArgumentException fehler) {
             // Der Satz des Kerns ist schon in Worten, die ein Betreiber lesen kann -
             // zu kleiner Bau, unbrauchbarer Name, zu grosser Quader.
@@ -159,6 +165,48 @@ final class Bautenliste {
         klagen.add(pfad + ".tuer ist \"" + gelesen + "\" - das ist keine Seite. Erwartet"
                 + " wird eines der Worte " + worte() + ". Uebersprungen.");
         return null;
+    }
+
+    /**
+     * Der Baustil als Wort - backstein, fachwerk, gold, forst oder schiefer.
+     *
+     * <p>Ein WORT und keine Blockliste: Die Farben sind in Abschnitt 2.2 des Plans
+     * entschieden, und fuenf mal elf Bloecke in der Datei waeren fuenfundfuenfzig
+     * Gelegenheiten, eine Stadt uneinheitlich zu machen.
+     */
+    private static Baustil stil(ConfigurationSection zeilen, String pfad,
+            List<String> klagen) {
+        String gelesen = zeilen.getString("stil");
+        if (gelesen == null || gelesen.isBlank()) {
+            klagen.add(pfad + ".stil fehlt - der Bau wird uebersprungen. Erwartet wird"
+                    + " eines der Worte " + Baustil.worte() + ".");
+            return null;
+        }
+        Baustil stil = Baustil.ausWort(gelesen);
+        if (stil == null) {
+            klagen.add(pfad + ".stil ist \"" + gelesen + "\" - diesen Baustil gibt es"
+                    + " nicht. Erwartet wird eines der Worte " + Baustil.worte()
+                    + ". Uebersprungen.");
+        }
+        return stil;
+    }
+
+    /** Die Dachart als Wort - ziegel oder kupfer. */
+    private static Dachart dach(ConfigurationSection zeilen, String pfad,
+            List<String> klagen) {
+        String gelesen = zeilen.getString("dach");
+        if (gelesen == null || gelesen.isBlank()) {
+            klagen.add(pfad + ".dach fehlt - der Bau wird uebersprungen. Erwartet wird"
+                    + " eines der Worte " + Dachart.worte() + ".");
+            return null;
+        }
+        Dachart dach = Dachart.ausWort(gelesen);
+        if (dach == null) {
+            klagen.add(pfad + ".dach ist \"" + gelesen + "\" - diese Dachart gibt es"
+                    + " nicht. Erwartet wird eines der Worte " + Dachart.worte()
+                    + ". Uebersprungen.");
+        }
+        return dach;
     }
 
     /** Die erlaubten Worte, aus der Aufzaehlung und nicht abgeschrieben. */

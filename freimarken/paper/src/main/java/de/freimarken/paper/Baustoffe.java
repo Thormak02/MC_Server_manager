@@ -1,9 +1,12 @@
 package de.freimarken.paper;
 
+import de.freimarken.kern.Baustil;
 import de.freimarken.kern.Bauplan;
-import java.util.ArrayList;
+import de.freimarken.kern.Dachart;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 
@@ -11,45 +14,42 @@ import org.bukkit.configuration.ConfigurationSection;
  * Welcher Block zu welchem {@link Bauplan.Stueck} gehoert - die Tabelle im Plugin.
  *
  * <p>Dieselbe Trennung wie bei {@code Wolkenboden}: Die Geometrie steht im Kern und kennt
- * kein {@code Material}, die Tabelle steht hier. Dadurch ist die Regel ohne laufenden
+ * kein {@code Material}, die Tabelle steht hier. Dadurch ist die Form ohne laufenden
  * Server zu pruefen.
  *
- * <p><b>Die drei Bloecke stehen in der {@code config.yml}</b> und nicht im Programm: Ein
- * Platzhalter soll aussehen, wie der Betreiber ihn will, und ein anderer Baustoff ist
- * keine Zeile Java wert.
+ * <p><b>Fuenf Paletten, und ihre Farben sind entschieden</b>: Abschnitt 2.2 des Plans
+ * nennt vier Farben und sagt ausdruecklich, sie wiederholten sich "in Schildern, Menues,
+ * Rangfarben und offiziellen Gebaeuden". Bundesrot ist der Backstein, Markgold der
+ * Sandstein mit Goldakzent, Forstgruen der Gruenspan, Schiefer der Tiefenschiefer. Das
+ * Fachwerk ist die fuenfte und traegt keine Markenfarbe - es ist die Handwerkergasse.
  *
- * <p><b>TUER und LUFT sind beide {@link Material#AIR}</b>, und das ist kein Versehen: Der
- * {@code Weltgriff} setzt einen Block und keine Blockdaten - eine echte Tuer traegt eine
- * Richtung und eine Haelfte, und die kann diese Naht nicht schreiben. Die Oeffnung ist
- * darum ein Loch in der Wand. Dass sie im Plan ein eigenes Stueck ist und nicht einfach
- * Luft, hat seinen Grund: So steht im Bauplan, WO die Tuer ist, und wer spaeter eine
- * echte Tuer setzen will, muss sie nicht ein zweites Mal ausrechnen.
+ * <p><b>Der Blick kommt vom alten Lumia</b>, und zwar von seinen Bildern
+ * ({@code data/lumia-archiv/bilder}): Backsteinwand mit dunklen Balken, Glasfenster in
+ * Gruppen, dunkles Dach mit Ueberstand, Sockel und Kaimauer aus Steinziegel, Laternen an
+ * der Gasse. Modernisiert heisst: dieselbe Sprache mit den Bloecken von 26.3 - entrindete
+ * Staemme als Balken, Tiefenschiefer und Tuff als Sockel, Schlammziegel als warme Flaeche,
+ * oxidiertes Kupfer als Dach, Kupfergitter als Fenstergitter.
+ *
+ * <p><b>TUER und LUFT sind Luft</b>: Der {@code Weltgriff} setzt einen Block und keine
+ * Blockdaten - die echte Tuer setzt der {@code Feingriff} danach in dieselbe Oeffnung.
+ * Dass die Tuerstelle im Plan ein eigenes Stueck ist und nicht einfach Luft, hat seinen
+ * Grund: So steht im Bauplan, WO sie ist.
  *
  * <p>Gelesen wird mit {@link Material#getMaterial(String)} und NICHT mit
  * {@code matchMaterial} oder der Registry: Jene fragen den laufenden Server, und dieser
  * Leser laeuft auch in einer Probe.
  */
-record Baustoffe(Material boden, Material wand, Material dach, Material tuer,
-                 Material schild) {
+record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
+                 Map<Dachart, Material> daecher, Material tuer, Material schild) {
 
-    /** Der Abschnitt mit den drei Bloecken. */
+    /** Der Abschnitt, in dem der Betreiber einzelne Bloecke austauschen kann. */
     static final String PFAD = "bauten.baustoffe";
-
-    /** Boden ab Werk - heller als die Wand, damit ein Innenraum als Raum zu sehen ist. */
-    static final Material BODEN_AB_WERK = Material.SMOOTH_STONE;
-
-    /** Wand ab Werk. */
-    static final Material WAND_AB_WERK = Material.STONE_BRICKS;
-
-    /** Dach ab Werk. */
-    static final Material DACH_AB_WERK = Material.POLISHED_ANDESITE;
 
     /**
      * Die Tuer ab Werk.
      *
-     * <p>Eichenholz und kein Eisen: Eine Eisentuer braucht einen Hebel, und ein
-     * Platzhalter mit einer Tuer, die niemand aufbekommt, ist schlimmer als einer mit
-     * einem Loch in der Wand.
+     * <p>Eichenholz und kein Eisen: Eine Eisentuer braucht einen Hebel, und ein Haus mit
+     * einer Tuer, die niemand aufbekommt, ist schlimmer als eines mit einem Loch.
      */
     static final Material TUER_AB_WERK = Material.OAK_DOOR;
 
@@ -57,36 +57,111 @@ record Baustoffe(Material boden, Material wand, Material dach, Material tuer,
     static final Material SCHILD_AB_WERK = Material.OAK_WALL_SIGN;
 
     Baustoffe {
-        if (boden == null || wand == null || dach == null || tuer == null
-                || schild == null) {
+        if (paletten == null || daecher == null || tuer == null || schild == null) {
             throw new IllegalArgumentException("Ein Baustoff fehlt - ohne Block gibt es"
                     + " keinen Bau");
         }
+        for (Baustil stil : Baustil.values()) {
+            Map<Bauplan.Stueck, Material> palette = paletten.get(stil);
+            if (palette == null) {
+                throw new IllegalArgumentException("Dem Stil " + stil.wort() + " fehlt"
+                        + " seine Palette");
+            }
+            for (Bauplan.Stueck stueck : Bauplan.Stueck.values()) {
+                if (!palette.containsKey(stueck)) {
+                    throw new IllegalArgumentException("Dem Stil " + stil.wort()
+                            + " fehlt der Block fuer " + stueck + " - ein Stueck ohne"
+                            + " Block waere ein Loch in jeder Wand");
+                }
+            }
+        }
+        for (Dachart art : Dachart.values()) {
+            if (!daecher.containsKey(art)) {
+                throw new IllegalArgumentException("Der Dachart " + art.wort()
+                        + " fehlt ihr Block");
+            }
+        }
     }
 
-    /** Die Baustoffe ab Werk - gebraucht, wenn der Abschnitt fehlt. */
+    /** Die Tabelle ab Werk - alle fuenf Paletten und beide Daecher. */
     static Baustoffe abWerk() {
-        return new Baustoffe(BODEN_AB_WERK, WAND_AB_WERK, DACH_AB_WERK,
-                TUER_AB_WERK, SCHILD_AB_WERK);
+        Map<Baustil, Map<Bauplan.Stueck, Material>> paletten =
+                new EnumMap<>(Baustil.class);
+        // BUNDESROT: Backstein mit dunklen Balken - der Blick des alten Lumia.
+        paletten.put(Baustil.BACKSTEIN, palette(
+                Material.POLISHED_DEEPSLATE, Material.DEEPSLATE_BRICKS,
+                Material.STRIPPED_DARK_OAK_WOOD, Material.BRICKS, Material.GLASS_PANE));
+        // FACHWERK: helles Gefach zwischen dunklen Balken - die Handwerkergasse.
+        paletten.put(Baustil.FACHWERK, palette(
+                Material.COBBLESTONE, Material.STONE_BRICKS,
+                Material.STRIPPED_SPRUCE_WOOD, Material.CALCITE, Material.GLASS_PANE));
+        // MARKGOLD: warmer Sandstein mit Goldakzent, fuer das Muenzhaus.
+        paletten.put(Baustil.GOLD, palette(
+                Material.CUT_SANDSTONE, Material.SMOOTH_SANDSTONE,
+                Material.STRIPPED_DARK_OAK_WOOD, Material.SANDSTONE,
+                Material.GLASS_PANE));
+        // FORSTGRUEN: Schlammziegel und Gruenspan, fuer die Tore in die Natur.
+        paletten.put(Baustil.FORST, palette(
+                Material.POLISHED_TUFF, Material.TUFF_BRICKS,
+                Material.STRIPPED_SPRUCE_WOOD, Material.MUD_BRICKS,
+                Material.GLASS_PANE));
+        // SCHIEFER: Tiefenschiefer und Tuff - der Grundton der Stadt.
+        paletten.put(Baustil.SCHIEFER, palette(
+                Material.POLISHED_DEEPSLATE, Material.DEEPSLATE_TILES,
+                Material.STRIPPED_DARK_OAK_WOOD, Material.POLISHED_DEEPSLATE,
+                Material.GLASS_PANE));
+
+        Map<Dachart, Material> daecher = new EnumMap<>(Dachart.class);
+        daecher.put(Dachart.ZIEGEL, Material.DARK_OAK_STAIRS);
+        daecher.put(Dachart.KUPFER, Material.OXIDIZED_COPPER);
+        return new Baustoffe(paletten, daecher, TUER_AB_WERK, SCHILD_AB_WERK);
     }
 
     /**
-     * Liest {@code bauten.baustoffe}. Ein unbekannter Block wird beklagt, und der Wert ab
-     * Werk gilt - ein Platzhalter ohne Wand waere schlimmer als einer in der falschen
-     * Farbe.
+     * Eine Palette aus fuenf Bloecken - die uebrigen Stuecke folgen daraus.
+     *
+     * <p>Fuenf und nicht elf: Boden und Sockel sind derselbe Stein, Giebelstufe und First
+     * sind dasselbe Mauerwerk wie die Wand, Laterne ist immer eine Laterne, Tuer und Luft
+     * sind Luft. Elf Zeilen je Stil waeren sechs Gelegenheiten, zwei davon verschieden zu
+     * machen, ohne es zu merken.
+     */
+    private static Map<Bauplan.Stueck, Material> palette(Material sockel, Material mauer,
+            Material balken, Material gefach, Material fenster) {
+        Map<Bauplan.Stueck, Material> palette = new EnumMap<>(Bauplan.Stueck.class);
+        palette.put(Bauplan.Stueck.BODEN, sockel);
+        palette.put(Bauplan.Stueck.SOCKEL, sockel);
+        palette.put(Bauplan.Stueck.BALKEN, balken);
+        palette.put(Bauplan.Stueck.GEFACH, gefach);
+        palette.put(Bauplan.Stueck.FENSTER, fenster);
+        palette.put(Bauplan.Stueck.LATERNE, Material.LANTERN);
+        palette.put(Bauplan.Stueck.GIEBELSTUFE, mauer);
+        palette.put(Bauplan.Stueck.FIRST, mauer);
+        // Das DACH kommt aus der Dachart und nicht aus der Palette - hier steht der
+        // Rueckfall, falls je ein Stil ohne Dachart gefragt wird.
+        palette.put(Bauplan.Stueck.DACH, mauer);
+        palette.put(Bauplan.Stueck.TUER, Material.AIR);
+        palette.put(Bauplan.Stueck.LUFT, Material.AIR);
+        return palette;
+    }
+
+    /**
+     * Liest {@code bauten.baustoffe} - nur Tuer und Schild sind einstellbar.
+     *
+     * <p>Die fuenf Paletten stehen NICHT in der Datei: Das waeren fuenf mal elf Zeilen,
+     * also fuenfundfuenfzig Gelegenheiten, eine Stadt uneinheitlich zu machen - und
+     * Abschnitt 2.2 verlangt das Gegenteil. Wer eine Palette aendern will, aendert sie
+     * hier, und dann aendert sie sich fuer jedes Haus desselben Stils.
      */
     static Baustoffe ausKonfiguration(ConfigurationSection wurzel, List<String> klagen) {
+        Baustoffe werk = abWerk();
         if (wurzel == null) {
-            return abWerk();
+            return werk;
         }
         ConfigurationSection abschnitt = wurzel.getConfigurationSection(PFAD);
         if (abschnitt == null) {
-            return abWerk();
+            return werk;
         }
-        return new Baustoffe(
-                block(abschnitt, "boden", BODEN_AB_WERK, klagen),
-                block(abschnitt, "wand", WAND_AB_WERK, klagen),
-                block(abschnitt, "dach", DACH_AB_WERK, klagen),
+        return new Baustoffe(werk.paletten(), werk.daecher(),
                 block(abschnitt, "tuer", TUER_AB_WERK, klagen),
                 block(abschnitt, "schild", SCHILD_AB_WERK, klagen));
     }
@@ -108,24 +183,33 @@ record Baustoffe(Material boden, Material wand, Material dach, Material tuer,
         return gefunden;
     }
 
-    /** Der Block fuer dieses Stueck. */
-    Material block(Bauplan.Stueck stueck) {
-        return switch (stueck) {
-            case BODEN -> boden;
-            case WAND -> wand;
-            case DACH -> dach;
-            case TUER, LUFT -> Material.AIR;
-        };
+    /**
+     * Der Block fuer dieses Stueck in diesem Stil, mit dieser Dachart.
+     *
+     * <p>Die Dachart gewinnt fuer das DACH: Sie ist der Grund, warum es sie gibt.
+     */
+    Material block(Baustil stil, Dachart dach, Bauplan.Stueck stueck) {
+        if (stueck == Bauplan.Stueck.DACH) {
+            return daecher.get(dach);
+        }
+        return paletten.get(stil).get(stueck);
     }
 
     /** Die Zeile fuer den Startbericht - der Betreiber sieht, womit gebaut wird. */
     String bericht() {
-        List<String> worte = new ArrayList<>();
-        worte.add("Boden " + boden.name().toLowerCase(Locale.ROOT));
-        worte.add("Wand " + wand.name().toLowerCase(Locale.ROOT));
-        worte.add("Dach " + dach.name().toLowerCase(Locale.ROOT));
-        worte.add("Tuer " + tuer.name().toLowerCase(Locale.ROOT));
-        worte.add("Schild " + schild.name().toLowerCase(Locale.ROOT));
-        return String.join(", ", worte);
+        StringBuilder raus = new StringBuilder();
+        for (Baustil stil : Baustil.values()) {
+            if (raus.length() > 0) {
+                raus.append(", ");
+            }
+            raus.append(stil.wort()).append(" ")
+                    .append(paletten.get(stil).get(Bauplan.Stueck.GEFACH)
+                            .name().toLowerCase(Locale.ROOT));
+        }
+        for (Dachart art : Dachart.values()) {
+            raus.append(", Dach ").append(art.wort()).append(" ")
+                    .append(daecher.get(art).name().toLowerCase(Locale.ROOT));
+        }
+        return raus.toString();
     }
 }

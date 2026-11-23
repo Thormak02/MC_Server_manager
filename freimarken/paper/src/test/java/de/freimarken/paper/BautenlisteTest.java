@@ -76,7 +76,9 @@ class BautenlisteTest {
                 "    buergeramt:",
                 "      von: [50, -61, 2]",
                 "      bis: [58, -53, 10]",
-                "      tuer: ost");
+                "      tuer: ost",
+                "      stil: backstein",
+                "      dach: ziegel");
 
         assertEquals(List.of(), ergebnis.klagen(), ergebnis.klagen().toString());
         assertEquals("altfurt", ergebnis.welt());
@@ -109,7 +111,8 @@ class BautenlisteTest {
                 "bauten:", "  welt: altfurt", "  haeuser:",
                 "    haus:",
                 "      von: [50, -61, 2]",
-                "      bis: [58, -53, 10]");
+                "      bis: [58, -53, 10]",
+                "      stil: backstein", "      dach: ziegel");
 
         assertEquals(1, ergebnis.klagen().size(), ergebnis.klagen().toString());
         assertTrue(ergebnis.klagen().get(0).contains("bauten.haeuser.haus.tuer fehlt"),
@@ -131,7 +134,8 @@ class BautenlisteTest {
                 "    haus:",
                 "      von: [50, -61, 2]",
                 "      bis: [58, -53, 10]",
-                "      tuer: nordwest");
+                "      tuer: nordwest",
+                "      stil: backstein", "      dach: ziegel");
 
         assertEquals(1, ergebnis.klagen().size(), ergebnis.klagen().toString());
         assertTrue(ergebnis.klagen().get(0).contains("nordwest"),
@@ -145,20 +149,25 @@ class BautenlisteTest {
         // Die vier Maengel, die Zahlenzeile unterscheidet - je mit dem Satz, der dem
         // Betreiber sagt, was er getippt hat.
         var fehlt = lies("bauten:", "  welt: altfurt", "  haeuser:",
-                "    haus:", "      bis: [58, -53, 10]", "      tuer: ost");
+                "    haus:", "      bis: [58, -53, 10]", "      tuer: ost",
+                "      stil: backstein", "      dach: ziegel");
         assertTrue(fehlt.klagen().get(0).contains("von fehlt"), fehlt.klagen().toString());
         assertTrue(fehlt.klagen().get(0).contains("y=-61"),
                 "das Beispiel nennt die Hoehen Altfurts: " + fehlt.klagen().get(0));
 
         var zwei = lies("bauten:", "  welt: altfurt", "  haeuser:",
                 "    haus:", "      von: [50, -61]", "      bis: [58, -53, 10]",
-                "      tuer: ost");
+                "      tuer: ost",
+                "      stil: backstein",
+                "      dach: ziegel");
         assertTrue(zwei.klagen().get(0).contains("DREI Zahlen"), zwei.klagen().toString());
 
         // Ein Punkt trennt in YAML keine Tausender, sondern die Nachkommastellen.
         var komma = lies("bauten:", "  welt: altfurt", "  haeuser:",
                 "    haus:", "      von: [50.5, -61, 2]", "      bis: [58, -53, 10]",
-                "      tuer: ost");
+                "      tuer: ost",
+                "      stil: backstein",
+                "      dach: ziegel");
         assertTrue(komma.klagen().get(0).contains("keine ganze Zahl"),
                 komma.klagen().toString());
         assertTrue(komma.klagen().get(0).contains("Stelle 1"), komma.klagen().get(0));
@@ -167,7 +176,8 @@ class BautenlisteTest {
         // Pruefung stand bis zum 23.11.2026 nur bei den Toren.
         var weit = lies("bauten:", "  welt: altfurt", "  haeuser:",
                 "    haus:", "      von: [50, -61, 2]",
-                "      bis: [99999999, -53, 10]", "      tuer: ost");
+                "      bis: [99999999, -53, 10]", "      tuer: ost",
+                "      stil: backstein", "      dach: ziegel");
         assertTrue(weit.klagen().get(0).contains("jenseits der Weltkoordinaten"),
                 weit.klagen().toString());
     }
@@ -181,8 +191,10 @@ class BautenlisteTest {
                 "bauten:", "  welt: altfurt", "  haeuser:",
                 "    eins:",
                 "      von: [50, -61, 2]", "      bis: [58, -53, 10]", "      tuer: ost",
+                "      stil: backstein", "      dach: ziegel",
                 "    zwei:",
-                "      von: [56, -61, 8]", "      bis: [64, -53, 16]", "      tuer: ost");
+                "      von: [56, -61, 8]", "      bis: [64, -53, 16]", "      tuer: ost",
+                "      stil: backstein", "      dach: ziegel");
 
         assertEquals(1, ergebnis.klagen().size(), ergebnis.klagen().toString());
         assertTrue(ergebnis.klagen().get(0).contains("BEIDE"), ergebnis.klagen().get(0));
@@ -197,7 +209,8 @@ class BautenlisteTest {
         var ergebnis = lies(
                 "bauten:", "  welt: altfurt", "  haeuser:",
                 "    torhaus:",
-                "      von: [64, -61, -2]", "      bis: [70, -54, 2]", "      tuer: sued");
+                "      von: [64, -61, -2]", "      bis: [70, -54, 2]", "      tuer: sued",
+                "      stil: backstein", "      dach: ziegel");
 
         assertEquals(1, ergebnis.klagen().size(), ergebnis.klagen().toString());
         assertTrue(ergebnis.klagen().get(0).contains("mauerte den Durchgang zu"),
@@ -211,7 +224,9 @@ class BautenlisteTest {
                 "bauten:", "  welt: altfurt", "  haeuser:",
                 "    torhaus:",
                 "      von: [66, -61, -5]", "      bis: [68, -54, -1]",
-                "      tuer: sued");
+                "      tuer: sued",
+                "      stil: backstein",
+                "      dach: ziegel");
         assertEquals(List.of(), davor.klagen(), davor.klagen().toString());
         assertEquals(1, davor.verzeichnis().anzahl());
     }
@@ -223,7 +238,9 @@ class BautenlisteTest {
                 "bauten:", "  welt: altfurt", "  haeuser:",
                 "    weit:",
                 "      von: [5000, -61, 5000]", "      bis: [5008, -53, 5008]",
-                "      tuer: ost");
+                "      tuer: ost",
+                "      stil: backstein",
+                "      dach: ziegel");
 
         assertEquals(1, ergebnis.klagen().size(), ergebnis.klagen().toString());
         assertTrue(ergebnis.klagen().get(0).contains("Weltgrenze"),
@@ -237,7 +254,8 @@ class BautenlisteTest {
         var ergebnis = lies(
                 "bauten:", "  welt: nirgendwo", "  haeuser:",
                 "    haus:",
-                "      von: [50, -61, 2]", "      bis: [58, -53, 10]", "      tuer: ost");
+                "      von: [50, -61, 2]", "      bis: [58, -53, 10]", "      tuer: ost",
+                "      stil: backstein", "      dach: ziegel");
 
         assertEquals(1, ergebnis.klagen().size(), ergebnis.klagen().toString());
         assertTrue(ergebnis.klagen().get(0).contains("steht nicht in welten:"),
@@ -251,7 +269,8 @@ class BautenlisteTest {
         var ergebnis = lies(
                 "bauten:", "  welt: altfurt", "  haeuser:",
                 "    klotz:",
-                "      von: [50, -61, 2]", "      bis: [51, -60, 3]", "      tuer: ost");
+                "      von: [50, -61, 2]", "      bis: [51, -60, 3]", "      tuer: ost",
+                "      stil: backstein", "      dach: ziegel");
 
         assertEquals(1, ergebnis.klagen().size(), ergebnis.klagen().toString());
         assertTrue(ergebnis.klagen().get(0).contains("kein Inneres"),
