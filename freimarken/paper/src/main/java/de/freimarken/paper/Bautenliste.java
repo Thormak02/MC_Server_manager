@@ -132,13 +132,32 @@ final class Bautenliste {
         try {
             return new Platzhalterbau(name,
                     new Quader(von[0], von[1], von[2], bis[0], bis[1], bis[2]),
-                    tuer, stil, dach);
+                    tuer, stil, dach, vorlage(zeilen));
         } catch (IllegalArgumentException fehler) {
             // Der Satz des Kerns ist schon in Worten, die ein Betreiber lesen kann -
             // zu kleiner Bau, unbrauchbarer Name, zu grosser Quader.
             klagen.add(pfad + ": " + fehler.getMessage() + " Uebersprungen.");
             return null;
         }
+    }
+
+    /**
+     * Die Vorlage - der Name einer gemeinsamen Datei, oder {@code null}.
+     *
+     * <p><b>Die Zeile ist freiwillig</b>, und ihr Fehlen ist die Regel: Ohne sie setzt der
+     * Bau seine EIGENE gesicherte Datei, und die steht schon richtig in der Welt. Mit ihr
+     * setzt er eine Vorlage, die in der Normlage gebaut ist und gedreht wird - so steht
+     * ein Haustyp an mehreren Stellen, jeder mit seiner eigenen Tuerseite.
+     *
+     * <p>Keine Klage, wenn sie fehlt: Eine Zeile, deren Fehlen der Normalfall ist, darf
+     * das Protokoll nicht fuellen. Was NICHT als Name taugt, beklagt der Kern.
+     */
+    private static String vorlage(ConfigurationSection zeilen) {
+        String gelesen = zeilen.getString("vorlage");
+        if (gelesen == null || gelesen.isBlank()) {
+            return null;
+        }
+        return gelesen;
     }
 
     /**

@@ -544,6 +544,18 @@ bauten:
   #   Dach der norddeutschen Hanse). Ein unbekanntes Wort wird beklagt, und es gilt der
   #   Wert ab Werk.
   #
+  # VORLAGE (freiwillig, und ihr Fehlen ist die Regel): Ohne sie setzt ein Bau seine
+  # EIGENE Datei - bauten/<name>.nbt, geschrieben von /freimarken altfurt sichern. Die
+  # entstand aus genau diesem Quader und wird darum UNGEDREHT gesetzt.
+  # Mit "vorlage: <name>" setzt er stattdessen bauten/<name>.nbt, und die ist eine
+  # gemeinsame Vorlage: Sie muss mit der Tuer nach NORDEN gebaut sein und wird nach der
+  # Tuerseite dieses Baus gedreht. So steht ein Haustyp an mehreren Stellen, jeder mit
+  # seiner eigenen Tuerseite.
+  #   Am laufenden Server gemessen, warum das zwei Faelle sein muessen: Ein gesicherter
+  #   Quader von 11x14x7, nochmals gedreht, ist 7x14x11 - er passt nicht mehr in seinen
+  #   eigenen Quader, und das Haus wird stattdessen gerechnet.
+  # Erlaubt sind dieselben Zeichen wie in einem Namen, denn daraus wird ein Dateiname.
+  #
   # Beide Ecken sind EINGESCHLOSSEN. Vertauschst du von und bis, wird sortiert statt
   # geklagt - das ist ein Tippfehler und keine Absicht. Hoechstens zwanzig Bauten,
   # hoechstens 64 Bloecke je Kante (dieselbe Grenze wie bei einer Rundgangsstation, damit
@@ -615,6 +627,133 @@ bauten:
       tuer: nord
       stil: backstein
       dach: kupfer
+
+  # DIE GERECHNETE STADT ALTFURT [23.11.2026].
+  #
+  # Die Bauten oben sind Handarbeit: Jeder hat einen Namen, eine Aufgabe und seine
+  # Baustoffe. Eine STADT hat das nicht - sie hat Gassen, Plaetze und Haeuserzeilen, in
+  # denen ein Haus einfach nur ein Haus ist. Darum wird sie GERECHNET und nicht
+  # eingetragen: Zweihundert Quader von Hand waeren nicht nur Arbeit, sondern eine
+  # Fehlerquelle - du muesstest jeden gegen jeden anderen auf gemeinsame Bloecke pruefen,
+  # und zwei Bauten, die sich Bloecke teilen, werden BEIDE verworfen.
+  #
+  # WAS ENTSTEHT, von der Mitte des Marktes (72 / 13) nach aussen:
+  #
+  #       0 ..  12   der gepflasterte Marktplatz samt Markthallen
+  #      13 ..  25   der Kern - die Bauten oben, UNBERUEHRT
+  #      26 ..  30   die erste Ringgasse, fuenf breit
+  #      31 ..  41   eine Haeuserzeile, Tueren zur Ringgasse
+  #      42 ..  52   eine Haeuserzeile, Tueren zur naechsten Gasse
+  #      53 ..  57   die zweite Ringgasse
+  #      58 ..  68   eine Haeuserzeile
+  #      69 ..  79   eine Haeuserzeile
+  #      80 ..  84   die Gasse am Wehrgang
+  #      85 ..  87   die Stadtmauer, drei dick und sechs hoch
+  #
+  # Dazu vier Radialgassen auf den Achsen der Mitte - sie schneiden jede Zeile und
+  # durchstossen die Mauer. Ihr Durchstich IST das Stadttor.
+  #
+  # DIE ECKEN BLEIBEN FREI: Dort stiessen die Zeile der Nordseite und die der Westseite
+  # aufeinander. Statt sie zu verzahnen, bleibt die Ecke ein kleiner Platz.
+  #
+  # DIE MITTE IST GEMESSEN und nicht gewaehlt: Die Flankenhaeuser oben stehen bei x 48..58
+  # und x 86..96, die Torwand auf z 0, das Bundesratshaus ab z 26. Der freie Platz
+  # dazwischen ist x 59..85 und z 1..25 - seine Mitte ist 72 / 13. Wer die Bauten oben
+  # verschiebt, verschiebt die Stadt NICHT mit: Ihre Mitte steht im Programm, weil an ihr
+  # jeder Ring haengt.
+  #
+  # WAS DIE STADT NICHT ANFASST: die Bauten oben, die Ladeneinheiten und die Tore. Ihr
+  # Boden gehoert ihnen, das Pflaster laeuft darum herum. Der Startbericht nennt, wie
+  # viele Bloecke das waren - eine unerwartet grosse Zahl heisst, dass ein Quader im Weg
+  # liegt.
+  #
+  # NUR BEIM START GELESEN, wie alles an Altfurt.
+  stadt:
+    # Ob die Stadt ueberhaupt entsteht.
+    #
+    # false heisst: Es stehen nur die Bauten oben, und der Boden bleibt, wie der
+    # Weltgenerator ihn gemacht hat. Wer Altfurt von Hand bauen will, stellt das hier ab.
+    #
+    # GEBAUT WIRD NUR, WAS FEHLT: Das Pflaster wird an EINEM Block erkannt (der Mitte des
+    # Marktes), jedes Haus an seiner Wandecke eine Ebene ueber dem Boden. Ein Start, der
+    # jedes Mal zweihunderttausend Bloecke neu setzt, raeumte jede Einrichtung ab. Wer ein
+    # Haus neu setzen will, nimmt seine Wandecke weg; wer neu pflastern will, den Block in
+    # der Mitte des Marktes.
+    bauen: true
+    # Wie viele Quartiere um den Kern liegen - ein Quartier ist eine Gasse und zwei
+    # Zeilen, zusammen 27 Bloecke tief.
+    #
+    # Zwei ab Werk: Das sind rund 180 Haeuser und eine Kante von 175 Bloecken. Eins waere
+    # wieder nur ein Ring um einen Platz; zwei sind eine Stadt mit einer Gasse darin, die
+    # nicht am Rand liegt.
+    #
+    # HOECHSTENS ZEHN, und das ist gerechnet: Der aeussere Ring liegt auf 33 + 27 je
+    # Quartier, und die Mitte ist nicht der Nullpunkt, sondern 72 / 13. Bei zehn reicht
+    # die Stadt bis x 375 und damit 25 Bloecke an die Weltgrenze (kante: 800, also -400
+    # bis 400); bei elf laege die letzte Gasse jenseits davon. Eine groessere Zahl wird
+    # geklagt, und es gilt die Zwei.
+    #
+    # DIE STADT WAECHST SCHNELLER ALS DIE ZAHL, denn jeder Ring ist laenger als der
+    # vorige. Gemessen am 23.11.2026, Haeuser und Bloecke zusammen mit dem Pflaster:
+    #
+    #   1 Quartier    60 Haeuser      74 000 Bloecke    Kante 121
+    #   2 Quartiere  180 Haeuser     206 000 Bloecke    Kante 175
+    #   3 Quartiere  365 Haeuser     402 000 Bloecke    Kante 229
+    #   5 Quartiere  894 Haeuser     993 000 Bloecke    Kante 337
+    #  10 Quartiere 3347 Haeuser   3 657 000 Bloecke    Kante 607
+    #
+    # Rechne mit etwa einer Sekunde Bauzeit je zweihunderttausend Bloecke - EINMAL,
+    # beim ersten Start. Zehn Quartiere halten den Server also eine gute
+    # Viertelminute an; darum ist bei zehn Schluss, unabhaengig von der Weltgroesse.
+    #
+    # UND DIE WELTKANTE GILT AUSSERDEM: Passt die Stadt nicht in welten.<welt>.kante,
+    # wird je Quartier eine Klage geschrieben und eines weniger gebaut - hinter der
+    # Weltgrenze kommt niemand hin.
+    #
+    # EINE ZAHL ZU AENDERN WIRKT AUF EINER BESTEHENDEN WELT NUR HALB: Verkleinern
+    # laesst die alte Mauer mitten in der Stadt stehen (das Pflaster schreibt nur die
+    # Bodenebene und kann sie nicht abtragen) - der Start MELDET das mit dem Ring,
+    # auf dem sie steht. Vergroessern pflastert die neuen Baender nicht, solange der
+    # Block in der Mitte des Marktes liegt; nimm ihn weg, dann wird neu gepflastert.
+    quartiere: 2
+
+  # WOMIT DER BODEN ALTFURTS BELEGT WIRD - je Lage ein Block.
+  #
+  # Die Lagen sind die Baender der Tafel oben: markt, kern, ringgasse, radialgasse,
+  # eckplatz, zeile, mauer, aussen.
+  #
+  # WAS HIER FEHLT, BLEIBT BEIM WERK - du musst nicht die ganze Tafel abschreiben, um
+  # eine Gasse umzustellen. Ein unbekannter Blockname wird geklagt, und es gilt der
+  # Werkstoff: Ein Tippfehler, der ein graues Pflaster macht, sieht sonst aus wie eine
+  # Entscheidung.
+  #
+  # "aussen" GIBT ES NICHT als Schluessel, und ein Eintrag dort wird geklagt: Jenseits
+  # der Mauer wird nicht gepflastert. Das Pflaster geht genau den Umriss der Stadt ab,
+  # und dessen Weite IST der aeussere Ring - die Lage "aussen" beginnt erst dahinter
+  # und kommt im Pflasterlauf nie vor. Ein Schluessel, der gelesen wird, im
+  # Startbericht steht und doch keinen Block setzt, ist schlimmer als keiner.
+  #
+  # Die Werkstoffe und ihr Grund:
+  #   markt       polished_andesite    ein Marktplatz ist das einzige Stueck Boden einer
+  #                                    alten Stadt, das jemand bezahlt und gerichtet hat
+  #   kern        cobblestone          der gepflasterte Platz um die Bauten oben
+  #   ringgasse   cobblestone          Kopfstein
+  #   radialgasse cobblestone          dieselbe Gasse, nur quer
+  #   eckplatz    mossy_cobblestone    dort geht niemand, zwischen den Steinen waechst was
+  #   zeile       coarse_dirt          Hof hinter den Haeusern; karg und nicht Gras, weil
+  #                                    Gras sich ausbreitet und in die Gassen kriecht
+  #   mauer       deepslate_bricks     die Stadtmauer
+  #
+  # NUR BEIM START GELESEN.
+  pflaster:
+    markt: polished_andesite
+    kern: cobblestone
+    ringgasse: cobblestone
+    radialgasse: cobblestone
+    eckplatz: mossy_cobblestone
+    zeile: coarse_dirt
+    mauer: deepslate_bricks
+
 
 
 # DER RUNDGANG DURCH ALTFURT - Plan 10.2 [Schritt 13 Teil D, 21.11.2026].

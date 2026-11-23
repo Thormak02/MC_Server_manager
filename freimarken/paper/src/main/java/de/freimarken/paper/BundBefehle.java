@@ -10,6 +10,7 @@ import de.freimarken.kern.Preisstaffel;
 import de.freimarken.kern.Wirtschaftsstand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
+import java.util.List;
 import net.kyori.adventure.audience.Audience;
 import org.bukkit.permissions.Permissible;
 
@@ -135,6 +136,38 @@ final class BundBefehle {
         void hilfe(Audience empfaenger);
     }
 
+    /**
+     * Der Zweig, der Altfurt sichert: {@code /freimarken altfurt sichern}.
+     *
+     * <p>DREI Methoden, dieselbe Bauart wie {@link Geldzweig} und {@link Besitzzweig}:
+     * Tun, Namen nennen, Benutzung zeigen. Die Namen werden GEFRAGT und nicht
+     * hereingegeben, denn {@code /freimarken neuladen} kann sie aendern - eine Liste, die
+     * beim Anmelden des Befehls einmal kopiert wurde, zeigte danach die alte.
+     *
+     * <p>{@code wer} gehoert in das Protokoll: Sichern ueberschreibt Dateien, und wer eine
+     * Handarbeit verliert, soll in der Protokollzeile lesen koennen, wer sie ersetzt hat.
+     */
+    interface Altfurtzweig {
+
+        /**
+         * @param bau        der Name eines Baus, oder {@code null} fuer alle
+         * @param bestaetigt ob eine VORHANDENE Datei ueberschrieben werden darf
+         */
+        void sichere(Audience empfaenger, String wer, String bau, boolean bestaetigt);
+
+        /**
+         * Die Namen der Bauten, die mit diesem Anfang beginnen.
+         *
+         * <p>GEFILTERT hereingegeben und nicht hier gefiltert: Brigadier filtert
+         * {@code bauer.suggest} NICHT - wer alle Namen hineinlegt, sieht nach "zunf"
+         * weiter beide. Die Regel liegt im Kern ({@code Namensvorschlag}).
+         */
+        List<String> namen(String angefangen);
+
+        /** Die Benutzung - fuer jede unvollstaendige Form des Zweigs. */
+        void hilfe(Audience empfaenger);
+    }
+
     private final Sprache sprache;
     private final Stand stand;
     private final Wirtschaftsstand wirtschaft;
@@ -161,6 +194,7 @@ final class BundBefehle {
     private final Versetzung versetzung;
     private final Geldzweig geld;
     private final Besitzzweig besitz;
+    private final Altfurtzweig altfurt;
     private final int von;
     private final int bis;
 
@@ -179,7 +213,7 @@ final class BundBefehle {
                 Betreiberzweig welt,
                 Betreiberzweig vorgenerieren, Betreiberzweig neuladen,
                 Betreiberzweig messstelle, Versetzung versetzung, Geldzweig geld,
-                Besitzzweig besitz, int von, int bis) {
+                Besitzzweig besitz, Altfurtzweig altfurt, int von, int bis) {
         this.blockbuch = blockbuch;
         this.sprache = sprache;
         this.stand = stand;
@@ -192,6 +226,7 @@ final class BundBefehle {
         this.versetzung = versetzung;
         this.geld = geld;
         this.besitz = besitz;
+        this.altfurt = altfurt;
         this.von = von;
         this.bis = bis;
     }
@@ -242,6 +277,44 @@ final class BundBefehle {
                 .then(Commands.literal("messstelle")
                         .requires(darfVerwalten())
                         .executes(z -> rufe(z, messstelle)))
+                // ALTFURT SICHERN: Der Gegenweg zum Bauen. Was von Hand im Quader steht,
+                // wird in eine Datei geschrieben und beim naechsten Start gesetzt statt
+                // gerechnet.
+                //
+                // Kein eigener Befehl: Plan 11.1 fuehrt eine feste Liste, und
+                // /altfurt steht nicht darunter. Beim Verwalter, denn der Zweig
+                // SCHREIBT - in den Ordner des Plugins.
+                //
+                // Jede unvollstaendige Form hat ihr eigenes .executes: Sonst endet
+                // "/freimarken altfurt" in Brigadiers englischem "Unknown or incomplete
+                // command", und der Betreiber sucht den Fehler bei sich.
+                .then(Commands.literal("altfurt")
+                        .requires(darfVerwalten())
+                        .executes(z -> {
+                            altfurt.hilfe(z.getSource().getSender());
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.literal("sichern")
+                                .executes(z -> sichere(z, null, false))
+                                .then(Commands.argument("bau",
+                                                StringArgumentType.word())
+                                        .suggests((z, bauer) -> {
+                                            altfurt.namen(bauer.getRemaining())
+                                                    .forEach(bauer::suggest);
+                                            return bauer.buildFuture();
+                                        })
+                                        .executes(z -> sichere(z,
+                                                StringArgumentType.getString(z, "bau"),
+                                                false))
+                                        // BESTAETIGEN steht unter dem NAMEN und nicht
+                                        // daneben: "alle ueberschreiben" ist der einzige
+                                        // Schritt, den nichts heilt, und den soll
+                                        // niemand in einem Befehl haben. Wer eine
+                                        // vorhandene Datei ersetzen will, nennt sie.
+                                        .then(Commands.literal("bestaetigen")
+                                                .executes(z -> sichere(z,
+                                                        StringArgumentType.getString(z,
+                                                                "bau"), true))))))
                 // GELD VON HAND, und mit einem EIGENEN Recht: Die vier Zweige darueber
                 // zeigen etwas oder tauschen Einstellwerte aus; dieser aendert eine
                 // Buchung. Drei .executes, eines je unvollstaendiger Form - sonst endet
@@ -412,6 +485,14 @@ final class BundBefehle {
      */
     private static java.util.function.Predicate<CommandSourceStack> darfVerwalten() {
         return quelle -> quelle.getSender().hasPermission(RECHT_VERWALTEN);
+    }
+
+    /** Ruft den Altfurtzweig - alle Formen gehen durch diese eine Stelle. */
+    private int sichere(com.mojang.brigadier.context.CommandContext<CommandSourceStack> z,
+                        String bau, boolean bestaetigt) {
+        altfurt.sichere(z.getSource().getSender(), z.getSource().getSender().getName(),
+                bau, bestaetigt);
+        return Command.SINGLE_SUCCESS;
     }
 
     /** Ruft einen Betreiberzweig mit Empfaenger und Namen - die drei tun dasselbe. */

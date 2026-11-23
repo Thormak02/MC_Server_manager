@@ -25,6 +25,7 @@ import de.freimarken.kern.Anmeldung;
 import de.freimarken.kern.Rundgang;
 import de.freimarken.kern.Rundgangsablage;
 import de.freimarken.kern.Rundgangsverzeichnis;
+import de.freimarken.kern.Stadtplan;
 import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
@@ -690,6 +691,30 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Altfurtaufbau altfurtaufbau = new Altfurtaufbau(Baustoffe.abWerk());
 
     /**
+     * Der Plan der gerechneten Stadt - NUR BEIM START gelesen, {@code null} wenn
+     * {@code bauten.stadt.bauen: false}.
+     *
+     * <p>Der Plan RECHNET, er liest nicht: Zweihundert Haeuser von Hand in die
+     * {@code config.yml} zu tragen waere nicht nur Arbeit, sondern eine
+     * Fehlerquelle - der Betreiber muesste jeden Quader gegen jeden anderen auf
+     * gemeinsame Bloecke pruefen. Was er einstellt, ist die GROESSE.
+     */
+    private Stadtplan stadtplan;
+
+    /** Womit der Boden Altfurts belegt wird - NUR BEIM START gelesen. */
+    private Pflasterstoffe pflasterstoffe = Pflasterstoffe.abWerk();
+
+    /**
+     * Die Quader, um die das Pflaster herumlaeuft: eingetragene Bauten,
+     * Ladeneinheiten und Tore.
+     *
+     * <p><b>Beim Start gesammelt und nicht beim Pflastern geholt</b>: Dieselbe
+     * Liste entscheidet schon, dass kein Bau ein Tor zumauert - sie zweimal
+     * zusammenzustellen waeren zwei Wahrheiten darueber, was Handarbeit ist.
+     */
+    private List<Quader> unberuehrteQuader = List.of();
+
+    /**
      * Das Verzeichnis der Stationen - NUR BEIM START gelesen.
      *
      * <p>Ab Werk leer: Die Gebaeude in Altfurt sind Handarbeit. Ein eigenes Feld, weil
@@ -1041,6 +1066,23 @@ public final class FreimarkenPlugin extends JavaPlugin {
         List<String> stoffklagen = new ArrayList<>();
         altfurtaufbau = new Altfurtaufbau(
                 Baustoffe.ausKonfiguration(getConfig(), stoffklagen));
+        pflasterstoffe = Pflasterstoffe.ausKonfiguration(getConfig(), stoffklagen);
+        // DIE KANTE DER BAUTENWELT kommt herein - dieselbe Zahl, gegen die auch ein
+        // eingetragener Bau geprueft wird. Eine Stadt jenseits der Weltgrenze koennte
+        // niemand betreten.
+        Stadtliste stadt = Stadtliste.ausKonfiguration(getConfig(),
+                kanten.get(bautenwelt), stoffklagen);
+        stadtplan = stadt.plan();
+        getLogger().info(stadt.bericht());
+        // DIE UNBERUEHRTEN QUADER: dieselben Tore, die schon den Bauten im Weg
+        // stehen duerfen, dazu die eingetragenen Bauten und die Ladeneinheiten.
+        // Ihr Boden gehoert ihnen - das Pflaster laeuft darum herum.
+        List<Quader> unberuehrt = new ArrayList<>(torquader);
+        platzhalterbauten.alle().forEach(bau -> unberuehrt.add(bau.bereich()));
+        if (ladenwelt.equals(bautenwelt)) {
+            ladenverzeichnis.alle().forEach(einheit -> unberuehrt.add(einheit.bereich()));
+        }
+        unberuehrteQuader = List.copyOf(unberuehrt);
         stoffklagen.forEach(getLogger()::severe);
         marktstadt = gebaut.welten().get(MARKTSTADT);
         // Dieselbe Angabe, aus der die Welt entstand, entscheidet auch ueber ihre Grenze.
@@ -2354,7 +2396,138 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 this::bringeZurParzelle,
                 geldzweig(),
                 besitzzweig(),
+                altfurtzweig(),
                 grenze.von(), grenze.bis());
+    }
+
+    /**
+     * Der Zweig von {@code /freimarken altfurt sichern} - Regel in {@link Altfurtaufbau},
+     * Text hier.
+     *
+     * <p>Dieselbe Trennung wie bei {@link #geldzweig()} und {@link #besitzzweig()}: Was
+     * gesichert wird und was ohne Bestaetigung unangetastet bleibt, entscheidet
+     * {@code Altfurtaufbau.sichere} ueber die Naht - dort prueft es
+     * {@code AltfurtaufbauTest} ohne Server. Hier steht nur, was der Betreiber liest.
+     *
+     * <p>Die Namen werden bei JEDER Vervollstaendigung neu gefragt: {@code neuladen}
+     * tauscht das Verzeichnis aus, und eine beim Anmelden kopierte Liste zeigte danach
+     * die alten Namen.
+     */
+    private BundBefehle.Altfurtzweig altfurtzweig() {
+        return new BundBefehle.Altfurtzweig() {
+
+            @Override
+            public void sichere(Audience empfaenger, String wer, String bau,
+                                boolean bestaetigt) {
+                sichereAltfurt(empfaenger, wer, bau, bestaetigt);
+            }
+
+            @Override
+            public List<String> namen(String angefangen) {
+                return platzhalterbauten.vorschlaege(angefangen);
+            }
+
+            @Override
+            public void hilfe(Audience empfaenger) {
+                zeigeAltfurtHilfe(empfaenger);
+            }
+        };
+    }
+
+    /** Die Benutzung von {@code /freimarken altfurt} - fuer jede unvollstaendige Form. */
+    private void zeigeAltfurtHilfe(Audience empfaenger) {
+        empfaenger.sendMessage(Component.text("Altfurt sichern", NamedTextColor.GOLD));
+        empfaenger.sendMessage(Component.text("/freimarken altfurt sichern",
+                        NamedTextColor.YELLOW)
+                .append(Component.text(" - schreibt jeden Quader, der noch KEINE Datei"
+                        + " hat, nach plugins/Freimarken/" + Strukturgriff.ORDNER + "/."
+                        + " Beim naechsten Start wird er gesetzt statt gerechnet.",
+                        NamedTextColor.GRAY)));
+        empfaenger.sendMessage(Component.text("/freimarken altfurt sichern <bau>",
+                        NamedTextColor.YELLOW)
+                .append(Component.text(" - nur diesen einen.", NamedTextColor.GRAY)));
+        empfaenger.sendMessage(Component.text(
+                        "/freimarken altfurt sichern <bau> bestaetigen",
+                        NamedTextColor.YELLOW)
+                .append(Component.text(" - ueberschreibt eine VORHANDENE Datei. Das ist"
+                        + " der einzige Schritt hier, den nichts heilt: Ein gerechnetes"
+                        + " Haus kann neu gerechnet werden, eine ersetzte Handarbeit"
+                        + " nicht.", NamedTextColor.GRAY)));
+        if (platzhalterbauten.leer()) {
+            empfaenger.sendMessage(Component.text("In der config.yml steht kein"
+                    + " Abschnitt bauten: - es gibt nichts zu sichern.",
+                    NamedTextColor.RED));
+            return;
+        }
+        empfaenger.sendMessage(Component.text("Bauten in \"" + bautenwelt + "\": ",
+                        NamedTextColor.GRAY)
+                .append(Component.text(String.join(", ", platzhalterbauten.namen()),
+                        NamedTextColor.AQUA)));
+    }
+
+    /**
+     * Schreibt die Quader Altfurts in Strukturdateien und antwortet dem Betreiber.
+     *
+     * <p>Jeder Versuch steht im Serverprotokoll, mit Absender: Sichern ERSETZT Dateien,
+     * und wer eine Handarbeit verliert, soll nachlesen koennen, wer sie ersetzt hat.
+     */
+    private void sichereAltfurt(Audience empfaenger, String wer, String name,
+            boolean bestaetigt) {
+        if (platzhalterbauten.leer()) {
+            empfaenger.sendMessage(Component.text("In der config.yml steht kein Abschnitt"
+                    + " bauten: - es gibt nichts zu sichern.", NamedTextColor.RED));
+            return;
+        }
+        World welt = welten.get(bautenwelt);
+        if (welt == null) {
+            empfaenger.sendMessage(Component.text("Die Welt \"" + bautenwelt + "\" ist"
+                    + " nicht geladen - aus einer Welt, die nicht da ist, laesst sich"
+                    + " nichts sichern. Steht sie im Abschnitt welten:?",
+                    NamedTextColor.RED));
+            return;
+        }
+        Strukturgriff strukturen = new Strukturgriff.AufDerWelt(welt,
+                getServer().getStructureManager(),
+                new java.io.File(getDataFolder(), Strukturgriff.ORDNER));
+        Altfurtaufbau.Sicherung raus = altfurtaufbau.sichere(platzhalterbauten,
+                strukturen, name, bestaetigt);
+        getLogger().info("altfurt sichern von " + wer + ": gesichert "
+                + raus.gesichert() + ", schon da " + raus.schonDa() + ", Klagen "
+                + raus.klagen().size()
+                + (raus.unbekannt() == null ? "" : ", unbekannt " + raus.unbekannt()));
+
+        empfaenger.sendMessage(Component.text("Altfurt sichern", NamedTextColor.GOLD));
+        if (raus.unbekannt() != null) {
+            empfaenger.sendMessage(Component.text("\"" + raus.unbekannt() + "\" ist kein"
+                    + " Bau dieser Datei. Es gibt: ", NamedTextColor.RED)
+                    .append(Component.text(String.join(", ", platzhalterbauten.namen()),
+                            NamedTextColor.AQUA)));
+            return;
+        }
+        if (!raus.gesichert().isEmpty()) {
+            empfaenger.sendMessage(Component.text(raus.gesichert().size()
+                            + " gesichert: ", NamedTextColor.GREEN)
+                    .append(Component.text(String.join(", ", raus.gesichert()),
+                            NamedTextColor.AQUA))
+                    .append(Component.text(" - nach plugins/Freimarken/"
+                            + Strukturgriff.ORDNER + "/. Beim naechsten Start werden sie"
+                            + " GESETZT statt gerechnet.", NamedTextColor.GRAY)));
+        }
+        for (String name2 : raus.schonDa()) {
+            empfaenger.sendMessage(Component.text(name2, NamedTextColor.YELLOW)
+                    .append(Component.text(" hat schon eine Datei und bleibt"
+                            + " unangetastet. Ueberschreiben: ", NamedTextColor.GRAY))
+                    .append(Component.text("/freimarken altfurt sichern " + name2
+                            + " bestaetigen", NamedTextColor.YELLOW)));
+        }
+        for (String klage : raus.klagen()) {
+            empfaenger.sendMessage(Component.text(klage, NamedTextColor.RED));
+        }
+        if (raus.gesichert().isEmpty() && raus.klagen().isEmpty()
+                && raus.schonDa().isEmpty()) {
+            empfaenger.sendMessage(Component.text("Nichts zu sichern.",
+                    NamedTextColor.GRAY));
+        }
     }
 
     /**
@@ -3174,7 +3347,7 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * nicht geladen ist, soll starten - er hat dann nur kein Altfurt.
      */
     private void richteAltfurtEin() {
-        if (platzhalterbauten.leer()) {
+        if (platzhalterbauten.leer() && stadtplan == null) {
             return;
         }
         World welt = welten.get(bautenwelt);
@@ -3186,14 +3359,30 @@ public final class FreimarkenPlugin extends JavaPlugin {
         }
         Weltgriff griff = new Weltgriff.AufDerWelt(welt);
         Altfurtaufbau.Feingriff fein = new Altfurtaufbau.Feingriff.AufDerWelt(welt);
+        Strukturgriff strukturen = new Strukturgriff.AufDerWelt(welt,
+                getServer().getStructureManager(),
+                new java.io.File(getDataFolder(), Strukturgriff.ORDNER));
+        // DIE STADT ZUERST: Ihr Pflaster schreibt die Bodenebene, und ein Haus
+        // steht darauf. Wer erst die Haeuser setzte, schnitte ihnen mit dem
+        // Pflaster die unterste Ebene weg.
+        baueStadt(griff, fein, strukturen);
         List<String> gesetzteNamen = new ArrayList<>();
+        List<String> ausDatei = new ArrayList<>();
         long bloecke = 0L;
         for (Platzhalterbau bau : platzhalterbauten.alle()) {
             if (altfurtaufbau.stehtSchon(bau, griff)) {
                 continue;
             }
-            bloecke += altfurtaufbau.setze(bau, griff, fein, schildzeilen(bau));
+            Altfurtaufbau.Ergebnis ergebnis = altfurtaufbau.baue(bau, griff, fein,
+                    schildzeilen(bau), strukturen);
+            if (ergebnis.klage() != null) {
+                getLogger().severe(ergebnis.klage());
+            }
+            bloecke += ergebnis.bloecke();
             gesetzteNamen.add(bau.schluessel());
+            if (ergebnis.weg() == Altfurtaufbau.Weg.STRUKTUR) {
+                ausDatei.add(bau.schluessel());
+            }
         }
         if (gesetzteNamen.isEmpty()) {
             getLogger().info("Altfurt steht: " + platzhalterbauten.anzahl()
@@ -3204,7 +3393,158 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + platzhalterbauten.anzahl() + " Platzhalterbauten gesetzt ("
                 + String.join(", ", gesetzteNamen) + "), " + bloecke + " Bloecke - "
                 + altfurtaufbau.stoffe().bericht() + ". Wer eines neu setzen will, nimmt"
-                + " seine Wandecke eine Ebene ueber dem Boden weg.");
+                + " seine Wandecke eine Ebene ueber dem Boden weg."
+                + (ausDatei.isEmpty()
+                        ? " KEINES kam aus einer Datei - alle sind gerechnet. Wer eines"
+                                + " von Hand baut, sichert es mit /freimarken altfurt"
+                                + " sichern; danach wird es gesetzt statt gerechnet."
+                        : " Aus einer Datei gesetzt: " + String.join(", ", ausDatei)
+                                + "."));
+    }
+
+    /**
+     * Pflastert Altfurt und setzt die gerechneten Zeilenhaeuser [23.11.2026].
+     *
+     * <p><b>Das ist die Stadt</b>, um die es dem Betreiber ging: "es soll eine ganze
+     * stadt werden, mit strassen usw. also die haeuser auch verbinden, statt einfach
+     * nur hinzustellen." Strassen sind Boden, verbundene Haeuser sind Zeilen ohne
+     * Luecke - beides rechnet {@link Stadtplan}, beides setzt {@link Altfurtaufbau}.
+     *
+     * <p><b>Nur was FEHLT</b>, wie bei den eingetragenen Bauten: Das Pflaster wird an
+     * EINEM Block erkannt (der Mitte des Marktes), jedes Haus an seiner Wandecke.
+     * Ein Start, der jedes Mal zweihunderttausend Bloecke neu setzt, raeumte jede
+     * Einrichtung ab - und brauchte jedes Mal die Zeit dafuer.
+     *
+     * <p>Berichtet wird in EINER Zeile, und sie nennt Zahlen statt Namen:
+     * Zweihundert Hausnamen liest niemand.
+     */
+    private void baueStadt(Weltgriff griff, Altfurtaufbau.Feingriff fein,
+            Strukturgriff strukturen) {
+        if (stadtplan == null) {
+            return;
+        }
+        // EIN GERECHNETES HAUS, DAS HANDARBEIT TRIFFT, WIRD NICHT GESETZT.
+        // Stadtplan.KERN_RING haelt die Stadt von den neun Bauten fern, aber das ist
+        // eine Zusage ueber die config.yml, die niemand prueft: Wer einen zehnten
+        // Bau weiter draussen eintraegt oder eine Ladeneinheit dorthin legt, bekaeme
+        // ein Haus darueber. Lieber ein Loch in der Zeile als ein uebermauerter
+        // Laden - und die Meldung sagt es.
+        List<Platzhalterbau> zuBauen = new ArrayList<>();
+        List<String> imWeg = new ArrayList<>();
+        for (Platzhalterbau bau : stadtplan.haeuser()) {
+            boolean trifft = false;
+            for (Quader fest : unberuehrteQuader) {
+                if (bau.bereich().schneidet(fest)) {
+                    trifft = true;
+                    break;
+                }
+            }
+            if (trifft) {
+                imWeg.add(bau.schluessel());
+            } else {
+                zuBauen.add(bau);
+            }
+        }
+        if (!imWeg.isEmpty()) {
+            getLogger().severe(imWeg.size() + " gerechnete Zeilenhaeuser wurden NICHT"
+                    + " gesetzt, weil dort Handarbeit steht (eingetragener Bau,"
+                    + " Ladeneinheit oder Tor): " + String.join(", ", imWeg)
+                    + ". Alles innerhalb von Ring " + Stadtplan.KERN_RING + " um "
+                    + Stadtplan.MITTE_X + "/" + Stadtplan.MITTE_Z + " ist fuer"
+                    + " Handarbeit frei - was weiter draussen liegt, kostet ein"
+                    + " Haus.");
+        }
+        // DIE HAEUSER SCHUETZEN SICH SELBST GEGEN DAS PFLASTER: Das Pflaster schreibt
+        // die Bodenebene, und die unterste Hausebene IST der Fussboden. Beim ersten
+        // Bau faellt das nicht auf, weil die Haeuser danach kommen - wer aber neu
+        // pflastern laesst, bekaeme Erde in jedem Zimmer, und stehtSchon baut die
+        // Haeuser danach nicht neu.
+        List<Quader> schutz = new ArrayList<>(unberuehrteQuader);
+        zuBauen.forEach(bau -> schutz.add(bau.bereich()));
+        long bloecke = 0L;
+        String pflasterzeile = "schon gepflastert";
+        if (!altfurtaufbau.istGepflastert(stadtplan, pflasterstoffe, griff)) {
+            Altfurtaufbau.Pflasterung raus = altfurtaufbau.pflastere(stadtplan,
+                    pflasterstoffe, griff, schutz);
+            bloecke += raus.bloecke();
+            pflasterzeile = raus.bloecke() + " Bloecke Pflaster und Mauer, "
+                    + raus.uebersprungen() + " Bloecke um Haeuser und Handarbeit herum";
+        }
+        int gesetzt = 0;
+        int ausDatei = 0;
+        for (Platzhalterbau bau : zuBauen) {
+            if (altfurtaufbau.stehtSchon(bau, griff)) {
+                continue;
+            }
+            Altfurtaufbau.Ergebnis ergebnis = altfurtaufbau.baue(bau, griff, fein,
+                    List.of(), strukturen);
+            if (ergebnis.klage() != null) {
+                getLogger().severe(ergebnis.klage());
+            }
+            bloecke += ergebnis.bloecke();
+            gesetzt++;
+            if (ergebnis.weg() == Altfurtaufbau.Weg.STRUKTUR) {
+                ausDatei++;
+            }
+        }
+        meldeAltereStadt(griff);
+        if (gesetzt == 0 && bloecke == 0L) {
+            getLogger().info("Die Stadt steht: " + zuBauen.size()
+                    + " Zeilenhaeuser, nichts zu setzen.");
+            return;
+        }
+        getLogger().warning("Altfurt gebaut: " + pflasterzeile + ", " + gesetzt
+                + " von " + zuBauen.size() + " Zeilenhaeusern gesetzt"
+                + (ausDatei == 0 ? " (alle gerechnet)"
+                        : " (" + ausDatei + " aus einer Datei)")
+                + ", zusammen " + bloecke + " Bloecke. "
+                + pflasterstoffe.bericht() + ". Wer ein Haus neu setzen will, nimmt"
+                + " seine Wandecke eine Ebene ueber dem Boden weg; wer neu pflastern"
+                + " will, den Block in der Mitte des Marktes.");
+    }
+
+    /**
+     * Meldet eine AELTERE, GROESSERE Stadt, deren Mauer noch mitten in der heutigen
+     * steht [23.11.2026].
+     *
+     * <p><b>Eine Einstellung, die nur halb wirkt, muss es sagen</b>: Wer
+     * {@code bauten.stadt.quartiere} verkleinert, bekommt die neuen Baender nicht
+     * gepflastert (der Block in der Mitte des Marktes liegt schon) und die alte
+     * Mauer bleibt stehen - mitten in der Stadt, quer durch die Gassen. Das Pflaster
+     * koennte sie nicht abtragen: Es schreibt nur die Bodenebene, die Mauer steht
+     * fuenf Ebenen darueber. Also wird es GEMELDET, mit dem Ring, auf dem sie steht.
+     *
+     * <p>Gefragt wird nicht die ganze Flaeche, sondern je moegliche Groesse EIN
+     * Block: Die Mauer einer Stadt mit {@code q} Quartieren steht auf einem
+     * gerechneten Ring, und davon gibt es hoechstens
+     * {@link Stadtliste#HOECHSTENS_QUARTIERE} viele. Neun Blockabfragen statt
+     * dreihunderttausend.
+     */
+    private void meldeAltereStadt(Weltgriff griff) {
+        Material mauerstoff = pflasterstoffe.block(Stadtplan.Lage.MAUER);
+        if (mauerstoff == null) {
+            return;
+        }
+        List<String> gefunden = new ArrayList<>();
+        for (int q = stadtplan.quartiere() + 1; q <= Stadtliste.HOECHSTENS_QUARTIERE;
+                q++) {
+            Stadtplan groesser = new Stadtplan(q);
+            int ring = groesser.mauerVon();
+            // NEBEN der Achse: auf ihr liegt das Stadttor, und dort steht nie Mauer.
+            if (griff.bei(Stadtplan.MITTE_X + ring, Stadtplan.BODEN_Y + 2,
+                    Stadtplan.MITTE_Z + 8) == mauerstoff) {
+                gefunden.add(q + " Quartiere (Mauer auf Ring " + ring + ")");
+            }
+        }
+        if (gefunden.isEmpty()) {
+            return;
+        }
+        getLogger().severe("In Altfurt steht noch die Mauer einer GROESSEREN Stadt: "
+                + String.join(", ", gefunden) + ". Heute sind "
+                + stadtplan.quartiere() + " Quartiere eingestellt, die Mauer steht"
+                + " damit mitten in der Stadt. Das Pflaster kann sie nicht abtragen -"
+                + " es schreibt nur die Bodenebene. Trag die alte Zahl wieder ein"
+                + " oder raeume die Mauer ab.");
     }
 
     /**

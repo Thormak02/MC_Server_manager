@@ -20,13 +20,33 @@ import java.util.Locale;
  * die Oeffnung wird, rechnet {@link Bauplan} aus der Mitte. Eine Koordinate in der Datei
  * waere eine zweite Wahrheit - sie stuende neben dem Quader und muesste mit ihm wandern.
  *
+ * <p><b>Die {@code vorlage} unterscheidet zwei Lagen</b> [23.11.2026]: Fehlt sie, setzt
+ * der Bau seine EIGENE Datei - die entstand aus genau diesem Quader und steht damit schon
+ * richtig in der Welt. Steht sie, setzt er eine gemeinsame Vorlage, und die ist in der
+ * Normlage gebaut (Tuer nach {@link Bauplan#STRUKTUR_BLICKT}) und muss gedreht werden. Am
+ * laufenden Server gemessen, warum das keine Feinheit ist: Ein gesicherter Quader von
+ * 11x14x7, nochmals gedreht, ist 7x14x11 - er passt nicht mehr in seinen eigenen Quader,
+ * und das Haus wurde stattdessen gerechnet.
+ *
  * <p>Dieselbe Grenze wie bei einer Rundgangsstation ({@code 64 * 64 * 64}): Jeder dieser
  * Bauten soll eine Station werden koennen, und eine Grenze, die nur an einer der zwei
  * Stellen gilt, laesst einen Betreiber einen Bau eintragen, der als Station abgewiesen
  * wird.
  */
 public record Platzhalterbau(String schluessel, Quader bereich, Richtung tuer,
-                             Baustil stil, Dachart dach) {
+                             Baustil stil, Dachart dach, String vorlage) {
+
+    /**
+     * Ein Bau OHNE Vorlage - er setzt seine eigene gesicherte Datei.
+     *
+     * <p>Der haeufige Fall und darum der kuerzere Weg: Wer ein Haus in seinen Quader baut
+     * und {@code /freimarken altfurt sichern} ruft, bekommt eine Datei, die genau in
+     * diesen Quader gehoert.
+     */
+    public Platzhalterbau(String schluessel, Quader bereich, Richtung tuer,
+            Baustil stil, Dachart dach) {
+        this(schluessel, bereich, tuer, stil, dach, null);
+    }
 
     /** So lang darf ein Name hoechstens sein - wie bei {@link Rundgangsstation}. */
     public static final int HOECHSTE_SCHLUESSELLAENGE = 32;
@@ -77,6 +97,24 @@ public record Platzhalterbau(String schluessel, Quader bereich, Richtung tuer,
                     + kanteX + "x" + kanteY + "x" + kanteZ + " - unter "
                     + KLEINSTE_KANTE + " Bloecken je Kante hat er kein Inneres, und die"
                     + " Tuer fuehrte in die Wand dahinter.");
+        }
+        if (vorlage != null) {
+            vorlage = vorlage.trim().toLowerCase(Locale.ROOT);
+            if (vorlage.isEmpty()) {
+                // Ein LEERER Eintrag ist keine Vorlage, sondern eine vergessene Zeile -
+                // und er wuerde als Dateiname ".nbt" enden.
+                throw new IllegalArgumentException("Der Bau \"" + schluessel + "\" hat"
+                        + " eine leere vorlage: - entweder ein Name steht dort, oder die"
+                        + " Zeile gehoert weg.");
+            }
+            if (!vorlage.matches(MUSTER)
+                    || vorlage.length() > HOECHSTE_SCHLUESSELLAENGE) {
+                // Aus der Vorlage wird ein DATEINAME. Ein Punkt oder ein Schraegstrich
+                // darin fuehrte aus dem Ordner heraus.
+                throw new IllegalArgumentException("Die vorlage \"" + vorlage + "\" von"
+                        + " \"" + schluessel + "\" passt nicht zu " + MUSTER
+                        + " - aus ihr wird ein Dateiname.");
+            }
         }
         if (bereich.bloecke() > HOECHSTE_BLOECKE) {
             throw new IllegalArgumentException("Der Bau \"" + schluessel + "\" hat "

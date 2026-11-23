@@ -129,15 +129,7 @@ public final class Berufsverzeichnis {
 
     /** Die Berufe, die mit diesem Anfang beginnen - fuer die Vervollstaendigung. */
     public List<String> vorschlaege(String angefangen) {
-        String anfang = angefangen == null ? ""
-                : angefangen.trim().toLowerCase(Locale.ROOT);
-        List<String> gefunden = new ArrayList<>();
-        for (String schluessel : reihenfolge) {
-            if (schluessel.startsWith(anfang)) {
-                gefunden.add(schluessel);
-            }
-        }
-        return List.copyOf(gefunden);
+        return Namensvorschlag.zu(reihenfolge, angefangen);
     }
 
     /** Ob es diesen Beruf gibt und er ein Grundberuf ist. */

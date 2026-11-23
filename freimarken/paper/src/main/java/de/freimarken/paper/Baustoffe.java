@@ -40,7 +40,28 @@ import org.bukkit.configuration.ConfigurationSection;
  * Leser laeuft auch in einer Probe.
  */
 record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
-                 Map<Dachart, Material> daecher, Material tuer, Material schild) {
+                 Map<Dachart, Dachstoff> daecher, Material tuer, Material schild) {
+
+    /**
+     * Die zwei Bloecke einer Dachart - die schraege Treppe und der volle Block.
+     *
+     * <p><b>Zwei und nicht einer</b> [23.11.2026]: Ein steiles Dach steigt zwei Ebenen,
+     * bevor es sich einen Block einzieht. Zwei Treppen uebereinander liessen aussen die
+     * oberen Haelften offen - von der Gasse aus ein Zickzack statt einer Flaeche. Die
+     * untere Ebene jeder Stufe ist darum ein voller Block
+     * ({@link Bauplan.Stueck#DACHFUSS}), und der First ist es auch: Eine Treppe als
+     * First zeigte in eine der zwei Richtungen und saehe von der anderen Seite falsch
+     * aus.
+     */
+    record Dachstoff(Material treppe, Material voll) {
+
+        Dachstoff {
+            if (treppe == null || voll == null) {
+                throw new IllegalArgumentException("Eine Dachart braucht beide Bloecke -"
+                        + " die Treppe und den vollen");
+            }
+        }
+    }
 
     /** Der Abschnitt, in dem der Betreiber einzelne Bloecke austauschen kann. */
     static final String PFAD = "bauten.baustoffe";
@@ -111,9 +132,15 @@ record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
                 Material.STRIPPED_DARK_OAK_WOOD, Material.POLISHED_DEEPSLATE,
                 Material.GLASS_PANE));
 
-        Map<Dachart, Material> daecher = new EnumMap<>(Dachart.class);
-        daecher.put(Dachart.ZIEGEL, Material.DARK_OAK_STAIRS);
-        daecher.put(Dachart.KUPFER, Material.OXIDIZED_COPPER);
+        Map<Dachart, Dachstoff> daecher = new EnumMap<>(Dachart.class);
+        daecher.put(Dachart.ZIEGEL, new Dachstoff(Material.DARK_OAK_STAIRS,
+                Material.DARK_OAK_PLANKS));
+        // KEIN Grünspan-Treppenblock: OXIDIZED_COPPER_STAIRS gibt es nicht - im
+        // paper-api nachgesehen [23.11.2026], Kupfer hat nur Falltuer, Gitter und
+        // Stab. Die Treppe kommt darum vom GESCHNITTENEN Kupfer, das eine hat; der
+        // volle Block bleibt der glatte, damit die Flaeche nicht gemustert wirkt.
+        daecher.put(Dachart.KUPFER, new Dachstoff(Material.OXIDIZED_CUT_COPPER_STAIRS,
+                Material.OXIDIZED_COPPER));
         return new Baustoffe(paletten, daecher, TUER_AB_WERK, SCHILD_AB_WERK);
     }
 
@@ -136,9 +163,10 @@ record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
         palette.put(Bauplan.Stueck.LATERNE, Material.LANTERN);
         palette.put(Bauplan.Stueck.GIEBELSTUFE, mauer);
         palette.put(Bauplan.Stueck.FIRST, mauer);
-        // Das DACH kommt aus der Dachart und nicht aus der Palette - hier steht der
-        // Rueckfall, falls je ein Stil ohne Dachart gefragt wird.
+        // DACH, DACHFUSS und FIRST kommen aus der Dachart und nicht aus der Palette -
+        // hier steht der Rueckfall, falls je ein Stil ohne Dachart gefragt wird.
         palette.put(Bauplan.Stueck.DACH, mauer);
+        palette.put(Bauplan.Stueck.DACHFUSS, mauer);
         palette.put(Bauplan.Stueck.TUER, Material.AIR);
         palette.put(Bauplan.Stueck.LUFT, Material.AIR);
         return palette;
@@ -186,11 +214,27 @@ record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
     /**
      * Der Block fuer dieses Stueck in diesem Stil, mit dieser Dachart.
      *
-     * <p>Die Dachart gewinnt fuer das DACH: Sie ist der Grund, warum es sie gibt.
+     * <p>Die Dachart gewinnt fuer DACH, DACHFUSS und FIRST: Der First ist die Krone des
+     * Dachs und nicht das oberste Mauerwerk.
+     *
+     * <p><b>Dass der First dazugehoert, ist am laufenden Server gefunden worden</b>
+     * [23.11.2026]: Ein Bau mit einer Front von DREI Bloecken hat genau eine Giebelstufe,
+     * und die ist sofort der First - er hat also gar keine Dachflaeche. Solange der First
+     * aus der Palette kam, war {@code dach:} bei allen vier Tortuermen Altfurts eine
+     * Einstellung OHNE WIRKUNG, und keine Probe sah es: Alle prueften an einem Haus mit
+     * sieben Bloecken Front.
      */
     Material block(Baustil stil, Dachart dach, Bauplan.Stueck stueck) {
+        Dachstoff stoff = daecher.get(dach);
         if (stueck == Bauplan.Stueck.DACH) {
-            return daecher.get(dach);
+            return stoff.treppe();
+        }
+        // DACHFUSS und FIRST sind die VOLLEN Bloecke derselben Dachart: Der Fuss jeder
+        // Dachstufe traegt die Treppe darueber, und der First ist die eine Reihe, in der
+        // beide Dachseiten sich treffen - eine Treppe dort zeigte in eine Richtung und
+        // saehe von der anderen Seite falsch aus.
+        if (stueck == Bauplan.Stueck.DACHFUSS || stueck == Bauplan.Stueck.FIRST) {
+            return stoff.voll();
         }
         return paletten.get(stil).get(stueck);
     }
@@ -207,8 +251,11 @@ record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
                             .name().toLowerCase(Locale.ROOT));
         }
         for (Dachart art : Dachart.values()) {
+            Dachstoff stoff = daecher.get(art);
             raus.append(", Dach ").append(art.wort()).append(" ")
-                    .append(daecher.get(art).name().toLowerCase(Locale.ROOT));
+                    .append(stoff.treppe().name().toLowerCase(Locale.ROOT))
+                    .append(" auf ")
+                    .append(stoff.voll().name().toLowerCase(Locale.ROOT));
         }
         return raus.toString();
     }

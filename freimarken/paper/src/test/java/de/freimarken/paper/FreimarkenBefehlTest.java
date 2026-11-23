@@ -119,6 +119,32 @@ class FreimarkenBefehlTest {
                         gerufen.add("besitz-hilfe");
                     }
                 },
+                new BundBefehle.Altfurtzweig() {
+                    @Override
+                    public void sichere(Audience empfaenger, String wer, String bau,
+                                        boolean bestaetigt) {
+                        // NAME UND BESTAETIGUNG GEHOEREN IN DIE MITSCHRIFT: Ein Baum, der
+                        // alle drei Formen an denselben Zweig haengt und dabei immer
+                        // null und false hereingibt, waere ohne sie gruen - und dann
+                        // ueberschriebe "sichern" jede Handarbeit.
+                        gerufen.add("altfurt-sichern:" + wer + ":" + bau + ":"
+                                + bestaetigt);
+                    }
+
+                    @Override
+                    public List<String> namen(String angefangen) {
+                        // GEFILTERT wie das echte Verzeichnis: Brigadier filtert nicht
+                        // nach, und eine Attrappe, die alles herausgibt, verdeckte genau
+                        // diesen Fehler.
+                        return de.freimarken.kern.Namensvorschlag.zu(
+                                List.of("buergeramt", "zunfthaus"), angefangen);
+                    }
+
+                    @Override
+                    public void hilfe(Audience empfaenger) {
+                        gerufen.add("altfurt-hilfe");
+                    }
+                },
                 VON, BIS);
     }
 
@@ -237,7 +263,7 @@ class FreimarkenBefehlTest {
         Spielerprobe ohneRecht = spieler(118);
 
         for (String zweig : List.of("welt", "vorgenerieren", "neuladen",
-                "parzelle 0 0")) {
+                "parzelle 0 0", "altfurt", "altfurt sichern")) {
             assertThrows(CommandSyntaxException.class,
                     () -> baum.tippe("freimarken " + zweig, ohneRecht),
                     zweig + " haengt am Recht freimarken.verwalten");
@@ -434,4 +460,44 @@ class FreimarkenBefehlTest {
                 () -> baum.tippe("freimarken welt", nurBesitz));
         assertEquals(List.of(), gerufen);
     }
+
+    @Test
+    @DisplayName("44m - /freimarken altfurt: drei Formen, drei verschiedene Rufe")
+    void altfurtSichern() throws CommandSyntaxException {
+        Spielerprobe mitRecht = spieler(141, BundBefehle.RECHT_VERWALTEN);
+
+        // Das nackte Wort zeigt die Benutzung und sichert NICHTS. Ohne eigenes .executes
+        // endete es in Brigadiers englischem "Unknown or incomplete command".
+        assertEquals(1, baum.tippe("freimarken altfurt", mitRecht));
+        // Ohne Namen: alles, was noch keine Datei hat.
+        assertEquals(1, baum.tippe("freimarken altfurt sichern", mitRecht));
+        // Mit Namen: nur dieser, und OHNE Bestaetigung.
+        assertEquals(1, baum.tippe("freimarken altfurt sichern buergeramt", mitRecht));
+        // Erst das vierte Wort erlaubt das Ueberschreiben.
+        assertEquals(1, baum.tippe("freimarken altfurt sichern buergeramt bestaetigen",
+                mitRecht));
+
+        assertEquals(List.of("altfurt-hilfe",
+                        "altfurt-sichern:Cara:null:false",
+                        "altfurt-sichern:Cara:buergeramt:false",
+                        "altfurt-sichern:Cara:buergeramt:true"),
+                gerufen);
+    }
+
+    @Test
+    @DisplayName("44n - die Namen der Bauten werden vorgeschlagen")
+    void altfurtNamenVorgeschlagen() {
+        Spielerprobe mitRecht = spieler(142, BundBefehle.RECHT_VERWALTEN);
+
+        // GEFRAGT und nicht kopiert: /freimarken neuladen tauscht das Verzeichnis aus.
+        assertEquals(List.of("buergeramt", "zunfthaus"),
+                baum.vorschlaege("freimarken altfurt sichern ", mitRecht));
+        assertEquals(List.of("zunfthaus"),
+                baum.vorschlaege("freimarken altfurt sichern zunf", mitRecht));
+        assertEquals(List.of("bestaetigen"),
+                baum.vorschlaege("freimarken altfurt sichern buergeramt ", mitRecht),
+                "nach dem Namen steht nur noch das Bestaetigen");
+        assertEquals(List.of(), gerufen, "Vorschlaege sichern nichts");
+    }
+
 }

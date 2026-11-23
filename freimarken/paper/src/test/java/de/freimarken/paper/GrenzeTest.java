@@ -502,7 +502,11 @@ class GrenzeTest {
             // Teil H: EINE Sendestelle - die Nachricht ueber den gezahlten Bonus.
             Map.entry("Bonuswache.java", 1),
             Map.entry("BundBefehle.java", 2),
-            Map.entry("FreimarkenPlugin.java", 50),   // 44 + 6 fuer besitzzweig() [22.11.2026]
+            // 44 + 6 fuer besitzzweig() [22.11.2026] + 14 fuer den Altfurtzweig
+            // [23.11.2026]: 6 fuer die Benutzung von /freimarken altfurt und 8
+            // fuer die Antwort auf sichern - zwei Absagen, Kopf, unbekannter
+            // Name, Gesichertes, je ein Schon-da, je eine Klage, "nichts zu tun".
+            Map.entry("FreimarkenPlugin.java", 64),
             // EINE Sendestelle, und das BLEIBT so, obwohl Teil B drei Taten dazugebracht
             // hat: Alle vier Zweige von /laden laufen durch dasselbe sende(). Eine Zwei
             // hiesse, dass ein Zweig sich einen eigenen Weg gebaut hat - und der waere
@@ -4581,6 +4585,122 @@ class GrenzeTest {
     }
 
     @Test
+    @DisplayName("31dq - die gerechnete Stadt ist verdrahtet: Plan, Pflaster, Aufbau")
+    void dieStadtIstVerdrahtet() {
+        String plugin = Quellen.text(datei("FreimarkenPlugin.java"));
+
+        // DER PLAN WIRD GELESEN UND BENUTZT. Ein Plan, den niemand ruft, rechnet eine
+        // Stadt, die nicht entsteht.
+        assertTrue(plugin.contains("Stadtliste.ausKonfiguration(getConfig()"),
+                "die Stadt-Einstellungen muessen gelesen werden - sonst sind bauen und"
+                        + " quartiere Schluessel ohne Wirkung");
+        assertTrue(plugin.contains("stadtplan = stadt.plan()"),
+                "der gelesene Plan muss im Feld landen");
+        assertTrue(plugin.contains("Pflasterstoffe.ausKonfiguration(getConfig()"),
+                "das Pflaster muss gelesen werden - sonst ist bauten.pflaster ein"
+                        + " Abschnitt ohne Wirkung");
+        assertTrue(plugin.contains("baueStadt(griff, fein, strukturen)"),
+                "die Stadt muss beim Einrichten Altfurts gebaut werden - sonst ist der"
+                        + " ganze Rechenweg gebaut, gruen geprueft und unsichtbar");
+        assertTrue(plugin.contains("altfurtaufbau.pflastere(stadtplan"),
+                "das Pflaster muss gesetzt werden");
+        assertTrue(plugin.contains("altfurtaufbau.istGepflastert(stadtplan"),
+                "und nur, wenn noch nicht gepflastert ist - sonst setzt jeder Start"
+                        + " dreissigtausend Bloecke neu");
+
+        // DAS PFLASTER KOMMT VOR DEN HAEUSERN. Es schreibt die Bodenebene, und ein Haus
+        // steht darauf: Wer erst die Haeuser setzte, schnitte ihnen die unterste Ebene
+        // weg.
+        // GEMESSEN AN DER SETZENDEN SCHLEIFE und nicht an der ersten, die ueber
+        // haeuser() laeuft: Die erste FILTERT nur (welches Haus trifft Handarbeit)
+        // und muss sogar vor dem Pflaster stehen, denn ihr Ergebnis geht in die
+        // Schutzliste.
+        int pflaster = plugin.indexOf("altfurtaufbau.pflastere(stadtplan");
+        int haeuser = plugin.indexOf("for (Platzhalterbau bau : zuBauen)");
+        int filter = plugin.indexOf("for (Platzhalterbau bau : stadtplan.haeuser())");
+        assertTrue(pflaster > 0 && haeuser > 0 && filter > 0,
+                "alle drei Stellen muessen es geben");
+        assertTrue(pflaster < haeuser,
+                "das Pflaster muss VOR den Haeusern gesetzt werden");
+        assertTrue(filter < pflaster,
+                "und der Filter vor dem Pflaster - aus ihm kommt die Schutzliste");
+
+        // DIE UNBERUEHRTEN QUADER sind dieselben, die schon den Bauten im Weg stehen
+        // duerfen - dazu die Bauten selbst und die Ladeneinheiten. Eine zweite
+        // Zusammenstellung waeren zwei Wahrheiten darueber, was Handarbeit ist.
+        assertTrue(plugin.contains("new ArrayList<>(torquader)"),
+                "die Tore gehoeren zu den unberuehrten Quadern");
+        assertTrue(plugin.contains("platzhalterbauten.alle().forEach(bau ->"
+                        + " unberuehrt.add(bau.bereich()))"),
+                "die eingetragenen Bauten auch");
+        assertTrue(plugin.contains("ladenverzeichnis.alle().forEach(einheit ->"),
+                "und die Ladeneinheiten");
+        assertTrue(plugin.contains("unberuehrteQuader = List.copyOf(unberuehrt)"),
+                "und sie muessen im Feld landen");
+        assertTrue(plugin.contains("pflasterstoffe, griff, schutz"),
+                "das Pflastern muss die Schutzliste bekommen - ohne sie laeuft es"
+                        + " ueber die Handarbeit hinweg");
+        // UND DIE HAEUSER SIND DARIN: Das Pflaster schreibt die Bodenebene, und die
+        // unterste Hausebene IST der Fussboden. Ohne sie bekaeme jedes Zimmer beim
+        // Neu-Pflastern Erde, und stehtSchon baut es nicht neu.
+        assertTrue(plugin.contains("List<Quader> schutz = new ArrayList<>("
+                        + "unberuehrteQuader)")
+                        && plugin.contains("zuBauen.forEach(bau -> "
+                                + "schutz.add(bau.bereich()))"),
+                "die Hausquader muessen zur Schutzliste gehoeren");
+        // EIN HAUS, DAS HANDARBEIT TRIFFT, WIRD NICHT GESETZT.
+        assertTrue(plugin.contains("bau.bereich().schneidet(fest)")
+                        && plugin.contains("imWeg.add(bau.schluessel())"),
+                "ein gerechnetes Haus auf Handarbeit muss wegfallen und gemeldet"
+                        + " werden");
+        // UND EINE AELTERE, GROESSERE STADT MUSS SICH MELDEN.
+        assertTrue(plugin.contains("meldeAltereStadt(griff)"),
+                "eine Einstellung, die nur halb wirkt, muss es sagen");
+
+        // UND DER EINSTIEG HAENGT NICHT MEHR AN DEN EINGETRAGENEN BAUTEN ALLEIN: Eine
+        // leere haeuser-Liste mit eingeschalteter Stadt muss trotzdem bauen.
+        assertTrue(plugin.contains("platzhalterbauten.leer() && stadtplan == null"),
+                "ohne eingetragene Bauten, aber mit Stadt, wird gebaut");
+    }
+
+    @Test
+    @DisplayName("31dr - das Pflaster setzt keine Luft und laeuft nicht ueber Handarbeit")
+    void dasPflasterSetztKeineLuft() {
+        String aufbau = Quellen.text(datei("Altfurtaufbau.java"));
+        String stoffe = Quellen.text(datei("Pflasterstoffe.java"));
+
+        // KEIN EINTRAG FUER AUSSEN: Luft ist ein Block, und auf dem Boden einer Ebene
+        // LOESCHT sie ihn. Wer dann darueber laeuft, faellt ins Leere.
+        assertFalse(stoffe.contains("Lage.AUSSEN, Material."),
+                "AUSSEN darf ab Werk keinen Stoff haben - sonst wird jenseits der Mauer"
+                        + " gepflastert, und mit Luft geloescht");
+        // OHNE ODER: Der Zweig muss in Altfurtaufbau stehen, denn DORT wird gesetzt.
+        // Vorher erfuellte schon der Riegel im Pflasterstoffe-Konstruktor die
+        // Zusage, und der ueberspringt nichts.
+        assertTrue(aufbau.contains("if (boden == null)"),
+                "eine Lage ohne Stoff muss im Pflasterlauf uebersprungen werden");
+        assertTrue(stoffe.contains("Lage.AUSSEN")
+                        && stoffe.contains("keine Wirkung"),
+                "ein Eintrag fuer aussen muss geklagt werden - das Pflaster kommt"
+                        + " dort nie hin");
+
+        // DIE HANDARBEIT WIRD GEFRAGT, BEVOR gesetzt wird.
+        int frage = aufbau.indexOf("liegtIn(unberuehrt, x, y, z)");
+        int setzen = aufbau.indexOf("griff.setze(x, y, z, boden)");
+        assertTrue(frage > 0 && setzen > 0, "beide Stellen muessen es geben");
+        assertTrue(frage < setzen, "erst fragen, dann setzen");
+
+        // NUR DIE BODENEBENE, plus die Mauer: Wer ueber dem Boden pflasterte, loeschte
+        // ein Haus, das darauf steht.
+        assertTrue(aufbau.contains("Math.max(1, plan.mauerhoehe(x, z))"),
+                "die Hoehe kommt aus dem Plan - eine Zahl hier waere eine zweite"
+                        + " Wahrheit ueber die Mauer");
+        assertTrue(aufbau.contains("for (int y = Stadtplan.BODEN_Y;"
+                        + " y < Stadtplan.BODEN_Y + ebenen; y++)"),
+                "gepflastert wird ab der Bodenebene nach oben");
+    }
+
+    @Test
     @DisplayName("31dp - die Naht fuer Tuer und Schild ist verdrahtet und setzt ohne Physik")
     void feingriffIstVerdrahtet() {
         // DER EINE TEIL, DEN KEINE PROBE ERREICHT [23.11.2026]: Was
@@ -4594,18 +4714,70 @@ class GrenzeTest {
                 "richteAltfurtEin baut die echte Naht nicht - dann hat jedes Haus ein"
                         + " Loch in der Wand und kein Schild, und alle Proben bleiben"
                         + " gruen");
-        assertTrue(plugin.contains("altfurtaufbau.setze(bau, griff, fein,"),
+        assertTrue(plugin.contains("altfurtaufbau.baue(bau, griff, fein,"),
                 "die Naht wird gebaut und nicht weitergegeben");
+        // UND DIE DRITTE NAHT: Ohne sie waere jedes Haus gerechnet, und Handarbeit
+        // ueberlebte keinen Weltverlust.
+        assertTrue(plugin.contains("new Strukturgriff.AufDerWelt(welt,"),
+                "richteAltfurtEin baut die Strukturnaht nicht - dann gewinnt nie eine"
+                        + " gesicherte Datei, und jedes Haus bleibt gerechnet");
+        assertTrue(plugin.contains("getServer().getStructureManager()"),
+                "die Strukturnaht braucht Papers StructureManager - ein eigener"
+                        + " NBT-Leser waere eine zweite Wahrheit ueber ein Dateiformat,"
+                        + " das Mojang pflegt");
+
+        // UND DER VERSATZ BEI DREHUNG WIRD NICHT HINTER DER NAHT GERECHNET: Minecraft
+        // dreht um die gesetzte Stelle, die Ecke wandert also mit. Die vier Faelle sind
+        // am laufenden Server gemessen [23.11.2026] - aber eine Rechnung, die nur ein
+        // laufender Server ausfuehrt, kann keine Probe nachmessen. Sie liegt darum im
+        // Kern, wo BauplanTest die vier gemessenen Zahlenpaare festhaelt.
+        String strukturen = Quellen.text(datei("Strukturgriff.java"));
+        assertTrue(strukturen.contains("Bauplan.setzstelleX(bereich, grad,")
+                        && strukturen.contains("Bauplan.setzstelleZ(bereich, grad,"),
+                "der Versatz kommt nicht aus Bauplan.setzstelleX/Z - dann steht ein"
+                        + " gedrehtes Haus neben seinem Quader, und keine Probe sieht es");
+        assertFalse(strukturen.contains("bereich.vonX() +")
+                        || strukturen.contains("bereich.vonZ() +"),
+                "Strukturgriff rechnet den Versatz selbst - dort ist er unpruefbar;"
+                        + " hereingegeben wird nur die Groesse aus der Datei");
+
+        // DIE ZWEITE ECKE VON fill IST AUSSCHLIESSEND - am laufenden Server gemessen
+        // [23.11.2026]: Ohne das +1 kam ein Quader von 11x14x7 als Struktur von 10x13x6
+        // heraus, bei jeder Groesse genau eine Ebene zu wenig je Achse. Eine fehlende
+        // Ebene ist die halbe Wand eines Hauses, und gesehen wird es erst, wenn die
+        // Datei das naechste Mal gesetzt wird.
+        assertTrue(strukturen.contains("bereich.bisX() + 1")
+                        && strukturen.contains("bereich.bisY() + 1")
+                        && strukturen.contains("bereich.bisZ() + 1"),
+                "fill nimmt die Groesse als DIFFERENZ der beiden Stellen - ohne +1 je"
+                        + " Achse fehlt der gesicherten Datei eine ganze Ebene");
+
+        // UND WELCHE DATEI, DAS ENTSCHEIDET DER KERN: Eine eigene Datei steht in der
+        // Weltlage und dreht sich nicht, eine Vorlage steht in der Normlage. Wer den
+        // Namen aus der einen Regel und den Grad aus der anderen nimmt, baut ein
+        // verdrehtes Haus - am laufenden Server gesehen, als beides getrennt war.
+        String aufbau = Quellen.text(datei("Altfurtaufbau.java"));
+        assertTrue(aufbau.contains("Bauplan.Dateilage lage = Bauplan.dateilage(bau)")
+                        && aufbau.contains("strukturen.setze(lage.datei(),"
+                                + " bau.bereich(), lage.grad())"),
+                "Datei und Drehung muessen aus EINER Hand kommen (Bauplan.dateilage)");
+        assertFalse(aufbau.contains("Bauplan.drehungsgrade("),
+                "die blosse Zuordnung Richtung-zu-Grad darf hier nicht gerufen werden -"
+                        + " sie weiss nicht, ob dieser Bau sich ueberhaupt dreht");
 
         String hand = Quellen.text(datei("Altfurtaufbau.java"));
         // OHNE PHYSIK, beide Male. Mit Nachbarschaftsmeldungen fiele die Tuer, noch
         // waehrend die Wand daneben entsteht, und das Schild fiele von der Wand.
-        assertEquals(3,
+        assertEquals(6,
                 hand.split(java.util.regex.Pattern.quote("setBlockData("), -1)
                         .length - 1,
-                "drei Stellen setzen Blockdaten: die zwei Tuerhaelften und das Schild");
+                "sechs Stellen setzen Blockdaten: die zwei Tuerhaelften, das Schild, die"
+                        + " Dachtreppe, die Glasscheibe und der liegende Balken");
         assertFalse(hand.contains("setBlockData(unten)")
                         || hand.contains("setBlockData(oben)")
+                        || hand.contains("setBlockData(treppe)")
+                        || hand.contains("setBlockData(scheibe)")
+                        || hand.contains("setBlockData(balken)")
                         || hand.contains("setBlockData(wandschild)"),
                 "setBlockData OHNE das zweite Argument wendet Physik an - dann faellt die"
                         + " Tuer, noch waehrend die Wand daneben entsteht");
@@ -4617,6 +4789,25 @@ class GrenzeTest {
         assertTrue(hand.contains("Bisected.Half.BOTTOM")
                         && hand.contains("Bisected.Half.TOP"),
                 "eine halbe Tuer ist nichts, was Minecraft stehen laesst");
+
+        // DIE SCHEIBE WIRD NACH BEIDEN SEITEN VERBUNDEN: Eine Scheibe, die nur eine
+        // Seite gesetzt bekommt, endet mitten in der Fuge - und die Mitschrift in
+        // AltfurtaufbauTest sieht nur den RUF, nicht die zwei Seiten darin.
+        assertTrue(hand.contains("scheibe.setFace(blockseite(achse), true)")
+                        && hand.contains("scheibe.setFace(blockseite("
+                                + "Bauplan.gegenrichtung(achse)), true)"),
+                "beide Seiten der Wandachse muessen verbunden werden - sonst steht die"
+                        + " Glasscheibe als halber Pfosten im Wandfeld");
+        assertTrue(hand.contains("Bauplan.fensterachse(bau, x, y, z)")
+                        && hand.contains("fein.setzeFensterscheibe(x, y, z, achse,"
+                                + " block)"),
+                "die Scheibennaht muss beim Setzen gerufen werden - sonst ist sie gebaut,"
+                        + " gruen geprueft und wirkungslos");
+        assertTrue(hand.contains("Bauplan.balkenachse(bau, x, y, z)")
+                        && hand.contains("fein.setzeBalkenachse(x, y, z, liegend,"
+                                + " block)"),
+                "und die Balkennaht ebenso - ein liegender Balken mit axis=y sieht aus"
+                        + " wie ein gestapelter Pfosten");
 
         // UND DER SCHILDTEXT KOMMT AUS DER SATZFAMILIE DER STATION und nicht aus einer
         // fuenften: Die Bauten tragen dieselben Namen wie die Stationen.

@@ -109,6 +109,16 @@ public final class Bautenverzeichnis {
     }
 
     /**
+     * Die Namen, die mit diesem Anfang beginnen - fuer die Vervollstaendigung von
+     * {@code /freimarken altfurt sichern <bau>}.
+     *
+     * <p>Dieselbe Stelle wie bei den Warps und den Berufen ({@link Namensvorschlag}).
+     */
+    public List<String> vorschlaege(String angefangen) {
+        return Namensvorschlag.zu(namen(), angefangen);
+    }
+
+    /**
      * Wie viele Bloecke alle Bauten zusammen umfassen - Luft eingerechnet.
      *
      * <p>Die Zahl geht in den Startbericht. Sie ist die eine Angabe, an der ein Betreiber

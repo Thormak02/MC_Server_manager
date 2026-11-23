@@ -1,6 +1,5 @@
 package de.freimarken.kern;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -89,13 +88,6 @@ public final class Warpverzeichnis {
      * leerer Anfang schlaegt alles vor.
      */
     public List<String> vorschlaege(String angefangen) {
-        String klein = angefangen == null ? "" : angefangen.trim().toLowerCase(Locale.ROOT);
-        List<String> treffer = new ArrayList<>();
-        for (String welt : welten) {
-            if (welt.startsWith(klein)) {
-                treffer.add(welt);
-            }
-        }
-        return treffer;
+        return Namensvorschlag.zu(welten, angefangen);
     }
 }
