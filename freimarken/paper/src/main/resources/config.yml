@@ -446,6 +446,143 @@ anmeldung:
   # Nummer oder beides. Was darin steht, ist deine Sache; das Programm vergleicht nur.
   fassung: "2026-11-21"
 
+# DIE PLATZHALTERBAUTEN IN ALTFURT - Plan 2.1 [23.11.2026].
+#
+# ZEHN GEBAEUDE NENNT PLAN 2.1, und jedes hat eine Aufgabe im Spiel: Bundesratshaus,
+#   Buergeramt, Markthalle, Zunfthaus, Muenzhaus, Kaufmannskontor, Hafen von Altfurt,
+#   Kornpforte, Forsttor, Wolkenturm. Die Markthalle steht seit dem 11.11.2026; die
+#   uebrigen neun setzt das Programm, sobald sie hier eingetragen sind.
+#
+# WARUM DAS PROGRAMM BAUT UND NICHT DIE HAND: Bis zum 23.11.2026 war es Handarbeit, und
+#   das hatte zwei Loecher. Ein von Hand gesetztes Haus ueberlebt keinen Weltverlust, und
+#   keine Probe haelt, dass der Quader in dieser Datei zu dem passt, was wirklich steht.
+#   Jetzt ist der Quader die Wahrheit, und das Haus folgt ihm.
+#
+# GESETZT WIRD NUR, WAS FEHLT. Gefragt wird EIN Block: die Wandecke eine Ebene ueber dem
+#   Boden. Liegt dort der Wandstoff, gilt das Haus als stehend, und der Start fasst es
+#   nicht an - auch dann nicht, wenn jemand die Rueckwand abgetragen hat. Das ist die
+#   gewollte Richtung: Der Start soll nicht ueber die Einrichtung eines Betreibers
+#   hinwegbauen. Wer ein Haus NEU setzen will, nimmt diesen einen Block weg.
+#
+# DER GANZE QUADER WIRD GESCHRIEBEN, Luft eingerechnet. Dadurch sind Aufsetzen und
+#   Zuruecksetzen dieselbe Hand - wer nur die Schale setzte, hinterliesse beim zweiten Lauf,
+#   was vorher im Haus stand.
+#
+# ALTFURT IST EINE EBENE (welten.altfurt.art: flach): Der Boden liegt auf y=-61, der erste
+#   freie Block auf y=-60. Jeder Quader hier beginnt darum bei y=-61 - seine unterste
+#   Ebene ist der Fussboden des Hauses.
+#
+# WAS FREI BLEIBEN MUSS, und die eingetragenen Zahlen halten sich daran:
+#   * die Torwand bei z=0 von x=57 bis x=89 samt ihren acht Toren. Ein Bau, der ein Tor
+#     beruehrt, wird beim Lesen VERWORFEN - er mauerte den Durchgang zu.
+#   * die Mittelachse x=65..79 zwischen Torreihe und Spawn (72/-60/12): dort laeuft jeder
+#     Ankommende durch.
+#   * die drei Ladeneinheiten der Markthalle und die Luecke x=60..64, z=11..15 zwischen
+#     stand-1 und stand-2 (sie ist die Probe fuer den Ladenschutz).
+#   Darum stehen die vier TORHAEUSER VOR der Wand (z=-5..-1) und nicht dahinter: So
+#   beruehrt keines ein Tor, und die Achse bleibt frei, obwohl drei der vier Tore mitten
+#   in ihr liegen.
+#
+# ZWEI BAUTEN, DIE SICH BLOECKE TEILEN, WERDEN BEIDE VERWORFEN - wie bei den
+#   Ladeneinheiten, den Stationen und den Toren. Hier ist das noch teurer als dort: Der
+#   zweite risse ein Loch in die Wand des ersten, und welcher gewinnt, entschiede die
+#   Reihenfolge der Datei.
+#
+# AB WERK IST DIE LISTE GEFUELLT, anders als beim Rundgang. Der Unterschied: Eine Station
+#   auf einem leeren Platz waere eine Station, die niemand findet - ein Bau auf einem
+#   leeren Platz ist genau das, was dort fehlt.
+bauten:
+  # Die Welt, in der die Bauten stehen. Sie muss im Abschnitt welten: stehen, sonst gilt
+  # kein Bau.
+  #
+  # NUR BEIM START GELESEN.
+  welt: altfurt
+
+  # Woraus gebaut wird. Ein unbekannter Block wird beklagt, und der Wert ab Werk gilt -
+  # ein Platzhalter ohne Wand waere schlimmer als einer in der falschen Farbe. TUER und
+  # Innenraum sind Luft: Der Weltgriff setzt einen Block und keine Blockdaten, und eine
+  # echte Tuer traegt eine Richtung und eine Haelfte.
+  #
+  # NUR BEIM START GELESEN.
+  baustoffe:
+    boden: smooth_stone
+    wand: stone_bricks
+    dach: polished_andesite
+    # Die Tuer: Eichenholz und kein Eisen - eine Eisentuer braucht einen Hebel,
+    # und ein Platzhalter mit einer Tuer, die niemand aufbekommt, ist schlimmer
+    # als einer mit einem Loch in der Wand. Ist der Bau nur drei Bloecke
+    # hoch, bleibt die Oeffnung ein Loch: Eine Tuer braucht ZWEI Ebenen,
+    # und die zweite waere dort das Dach.
+    tuer: oak_door
+    # Das Namensschild. Es ist ein WANDschild und haengt INNEN ueber der Tuer -
+    # aussen laege es einen Block jenseits des Quaders und damit ausserhalb von
+    # allem, was gegen Tore, Ladeneinheiten und Nachbarbauten geprueft ist.
+    # Darauf steht der Name der Station aus der sprache.yml
+    # (rundgang.station.<name>.name) - fehlt die Zeile, steht dort ihr Pfad,
+    # genau wie der Rundgang es heute tut.
+    schild: oak_wall_sign
+
+  # Je Bau ein Block mit von, bis und tuer. Die Tuerseite ist ein WORT - nord, ost, sued
+  # oder west -, und wo die Oeffnung in dieser Wand sitzt, rechnet das Programm aus der
+  # Mitte. Eine Koordinate hier waere eine zweite Wahrheit: Sie muesste mit dem Quader
+  # wandern.
+  #
+  # Beide Ecken sind EINGESCHLOSSEN. Vertauschst du von und bis, wird sortiert statt
+  # geklagt - das ist ein Tippfehler und keine Absicht. Hoechstens zwanzig Bauten,
+  # hoechstens 64 Bloecke je Kante (dieselbe Grenze wie bei einer Rundgangsstation, damit
+  # jeder Bau eine werden kann), mindestens 3 - darunter hat ein Haus kein Inneres.
+  #
+  # NUR BEIM START GELESEN.
+  haeuser:
+    # DIE VIER TORHAEUSER, vor der Wand. Jedes ist genau so breit wie sein Tor, damit
+    # zwischen zwei Haeusern ein Block Luft bleibt - die tragende Saeule der Wand. Die
+    # Tuer zeigt nach SUED, also auf die Wand und das Tor zu.
+    hafen-von-altfurt:
+      von: [66, -61, -5]
+      bis: [68, -54, -1]
+      tuer: sued
+    forsttor:
+      von: [70, -61, -5]
+      bis: [72, -54, -1]
+      tuer: sued
+    kornpforte:
+      von: [74, -61, -5]
+      bis: [76, -54, -1]
+      tuer: sued
+    # Ein TURM, darum hoeher als die drei anderen Torhaeuser.
+    wolkenturm:
+      von: [86, -61, -5]
+      bis: [88, -50, -1]
+      tuer: sued
+
+    # DIE VIER HAEUSER AN DEN FLANKEN, hinter der Wand und neben der Mittelachse. Ihre
+    # Tueren zeigen zur Achse, damit ein Ankommender sie offen sieht: die westlichen nach
+    # OST, die oestlichen nach WEST.
+    buergeramt:
+      von: [50, -61, 2]
+      bis: [58, -53, 10]
+      tuer: ost
+    zunfthaus:
+      von: [50, -61, 14]
+      bis: [58, -53, 22]
+      tuer: ost
+    muenzhaus:
+      von: [86, -61, 2]
+      bis: [94, -53, 10]
+      tuer: west
+    kaufmannskontor:
+      von: [86, -61, 14]
+      bis: [94, -53, 22]
+      tuer: west
+
+    # DAS BUNDESRATSHAUS schliesst die Achse ab - hinter dem Spawn, mittig auf ihr, und
+    # als groesstes Haus. Seine Tuer zeigt nach NORD, also zurueck zur Torreihe.
+    bundesratshaus:
+      von: [64, -61, 26]
+      bis: [80, -51, 38]
+      tuer: nord
+
+
 # DER RUNDGANG DURCH ALTFURT - Plan 10.2 [Schritt 13 Teil D, 21.11.2026].
 #
 # EIN WEG MIT STATIONEN: Plan 10.2 nennt sechs - Buergeramt, Zunfthaus, Markthalle mit

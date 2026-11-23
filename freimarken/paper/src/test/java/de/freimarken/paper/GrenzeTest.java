@@ -4581,6 +4581,51 @@ class GrenzeTest {
     }
 
     @Test
+    @DisplayName("31dp - die Naht fuer Tuer und Schild ist verdrahtet und setzt ohne Physik")
+    void feingriffIstVerdrahtet() {
+        // DER EINE TEIL, DEN KEINE PROBE ERREICHT [23.11.2026]: Was
+        // Altfurtaufbau.Feingriff.AufDerWelt mit Bukkit tut, laeuft nur auf einem Server -
+        // createBlockData() geht ueber Bukkit.getServer(). AltfurtaufbauTest prueft darum
+        // gegen eine Mitschrift, und die sagt nichts darueber, ob die ECHTE Fassung je
+        // gerufen wird. Eine gebaute, gruen geprueefte Naht ohne Verdrahtung waere
+        // unsichtbar wirkungslos - dieselbe Gestalt wie bei 31an, 31au, 31cr und 31de.
+        String plugin = plugintext();
+        assertTrue(plugin.contains("new Altfurtaufbau.Feingriff.AufDerWelt(welt)"),
+                "richteAltfurtEin baut die echte Naht nicht - dann hat jedes Haus ein"
+                        + " Loch in der Wand und kein Schild, und alle Proben bleiben"
+                        + " gruen");
+        assertTrue(plugin.contains("altfurtaufbau.setze(bau, griff, fein,"),
+                "die Naht wird gebaut und nicht weitergegeben");
+
+        String hand = Quellen.text(datei("Altfurtaufbau.java"));
+        // OHNE PHYSIK, beide Male. Mit Nachbarschaftsmeldungen fiele die Tuer, noch
+        // waehrend die Wand daneben entsteht, und das Schild fiele von der Wand.
+        assertEquals(3,
+                hand.split(java.util.regex.Pattern.quote("setBlockData("), -1)
+                        .length - 1,
+                "drei Stellen setzen Blockdaten: die zwei Tuerhaelften und das Schild");
+        assertFalse(hand.contains("setBlockData(unten)")
+                        || hand.contains("setBlockData(oben)")
+                        || hand.contains("setBlockData(wandschild)"),
+                "setBlockData OHNE das zweite Argument wendet Physik an - dann faellt die"
+                        + " Tuer, noch waehrend die Wand daneben entsteht");
+        assertTrue(hand.contains("schild.update(true, false)"),
+                "das Schild braucht update(force, applyPhysics=false) - sonst steht der"
+                        + " Text nicht in der Welt, oder die Physik laesst es fallen");
+        // BEIDE Haelften, und zwar als EIGENE Blockdaten: setBlockData kopiert nicht
+        // zwingend, und eine geteilte Fassung haette am Ende zwei obere Haelften.
+        assertTrue(hand.contains("Bisected.Half.BOTTOM")
+                        && hand.contains("Bisected.Half.TOP"),
+                "eine halbe Tuer ist nichts, was Minecraft stehen laesst");
+
+        // UND DER SCHILDTEXT KOMMT AUS DER SATZFAMILIE DER STATION und nicht aus einer
+        // fuenften: Die Bauten tragen dieselben Namen wie die Stationen.
+        assertTrue(plugin.contains("new Stationssatz(bau.schluessel(),"),
+                "der Schildtext muss der Stationsname sein - zwei Satzfamilien fuer"
+                        + " denselben Namen waeren zwei Stellen, die auseinanderlaufen");
+    }
+
+    @Test
     @DisplayName("31do - die Hilfe des Geldzweigs nennt das Buch der Waehrung")
     void geldhilfeNenntDasRichtigeBuch() {
         // DER WORTLAUT IST VON AUSSEN NICHT PRUEFBAR: Die Hilfezeile entsteht in einer

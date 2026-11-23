@@ -749,7 +749,7 @@ Offen: ein Weltname MIT Umlaut fällt auf "world" zurück (die Positivliste ist 
 - FUND der Befehlsprobe: `LotterieBefehle` rief `Vorratshand.fuer` direkt - eine harte Bukkit-Bindung mitten im Befehl. `new ItemStack(Material)` braucht die Registry des Servers und WIRFT auf dem Probenklassenpfad; der Gegenstandsweg, also der haeufigste Gewinn, waere der eine ungepruefte Zweig geblieben. Jetzt wird die Naht hereingegeben, wie bei `ParzellenBefehle`.
 - FUND meines Einsetz-Skripts: Ein non-greedy `.*?` ueber Tafel-Eintraege griff von einem Haus-Eintrag mit leerem Bild ueber den naechsten hinweg und verschluckte eine Zeile. Gemessen 22 statt 23, der Treiber brach ab. Muster geschaerft statt Zahl angepasst.
 - Proben: `LotteriewerteTest` (28), `LosregelTest` (14), `LotteriebuchTest` (22), `SpeicherLoseTest`/`MariaLoseTest` ueber den geteilten `LosVertrag` (je 9, dazu 2 beziehungsweise 3 eigene), `LotterielisteTest` (18), `LotterieBefehlTest` (13). Die MariaDB-Proben liefen wirklich gegen das Testschema, nicht uebersprungen. Voller Lauf 4.818 -> 4.964, 0 Fehler; Manager 2.171, 0 Fehler.
-- OFFEN: der Ort in Altfurt. Ein Losschalter braucht einen Platz, und die zehn Platzhalterbauten stehen noch nicht (siehe Schritt 13). Der Befehl laeuft bis dahin von ueberall.
+- ~~OFFEN: der Ort in Altfurt. Ein Losschalter braucht einen Platz, und die zehn Platzhalterbauten stehen noch nicht.~~ 23.11.: Die Bauten sind eingetragen und werden beim Start gesetzt. Der Losschalter kann jetzt einen Platz bekommen - naheliegend das Kaufmannskontor (x 86..94, z 14..22). Der Befehl läuft weiter von überall, bis das entschieden ist.
 
 ### Teil B: der Angelwettbewerb - 22.11.2026
 
@@ -777,6 +777,35 @@ Offen: ein Weltname MIT Umlaut fällt auf "world" zurück (die Positivliste ist 
 - FUND der eigenen Gegenlese: `Wettbewerbsregel.alsText` rief NIEMAND ausser der Probe - auf Verdacht gebaut ("fuer den Bericht") und nirgends gelandet. Das Gegenstueck zu einer Zusage ohne Bau: Bau ohne Zusage. Entfernt.
 - FUND der eigenen Gegenlese, dahinter: Die Abrechnung verteilt GELD und hinterliess im Serverprotokoll keine Zeile - anders als Mietlauf, Verfallslauf und Ladengebuehrlauf, die alle protokollieren. Die Tabelle haelt Topf und Teilnehmerzahl, aber nicht, WER was bekam. Jetzt EINE Zeile je Abrechnung mit jedem Sieger, seinen Punkten und seinem Preis.
 - OFFEN: der Ort in Altfurt und ein Spieltest. Der Wettbewerb wertet in JEDER Welt - eine Beschraenkung waere eine Entscheidung ueber den Server, die der Betreiber nicht getroffen hat.
+
+### Teil C: Altfurt wird gebaut - 23.11.2026
+
+- ENTSCHIEDEN (Chat): Bauhand IM PLUGIN und nicht als Einmal-Skript. Ein von Hand gesetztes Haus überlebt keinen Weltverlust, und keine Probe hält, dass der Quader in der `config.yml` zu dem passt, was wirklich steht. Jetzt ist der Quader die Wahrheit, und das Haus folgt ihm.
+- NEUN BAUTEN, nicht zehn: Die Markthalle steht seit dem 11.11.2026. `bauten.haeuser` nennt die vier Torhäuser (Hafen, Forsttor, Kornpforte, Wolkenturm), die vier Flankenhäuser (Bürgeramt, Zunfthaus, Münzhaus, Kaufmannskontor) und das Bundesratshaus.
+- DIE TORHÄUSER STEHEN VOR DER WAND (z −5..−1), und das ist der tragende Zug: Drei der vier Tore liegen mitten in der Mittelachse x 65..79, die frei bleiben muss - dort läuft jeder Ankommende durch. Hinter der Wand hätte jedes Torhaus den Weg verbaut.
+- GESETZT WIRD NUR, WAS FEHLT. Gefragt wird EIN Block: die Wandecke eine Ebene über dem Boden - nicht der Boden, denn in einer Ebene liegt der überall. Ein Haus mit abgetragener Rückwand gilt als stehend; der Start soll nicht über die Einrichtung eines Betreibers hinwegbauen.
+- DER GANZE QUADER WIRD GESCHRIEBEN, Luft eingerechnet - wie bei `Wolkenaufbau`. Dadurch sind Aufsetzen und Zurücksetzen dieselbe Hand.
+- Die Geometrie steht im KERN (`Bauplan`, ohne Bukkit), die Blöcke im Plugin (`Baustoffe`, aus der `config.yml`). Dieselbe Trennung wie `Wolkenplan`/`Wolkenboden` - darum ist die Regel ohne laufenden Server prüfbar.
+- EIN BAU AUF EINEM TOR WIRD VERWORFEN, und diese Prüfung gibt es bei den Stationen nicht: Eine Station liest nur, ein Bau SETZT. Ein Quader über einem Tor mauerte den Durchgang zu.
+- GEMESSEN vor dem Bauen: alle neun Quader gegen die acht Tore, die Torwand, die drei Ladeneinheiten, die Mittelachse und die Ladenschutz-Lücke - 0 Kollisionen. Die Messung ist jetzt ein Riegel (`BautenlisteTest` 11 liest die AUSGELIEFERTE Datei).
+- Die vierte Abschrift der Zahlenprüfung ist nicht entstanden: `Zahlenzeile` hält sie an einer Stelle, und die 30-Millionen-Grenze (Paper stürzt beim Teleport darüber ab) gilt damit auch für Bauten, Ladeneinheiten und Stationen - vorher nur für Tore.
+- Proben: `BauplanTest` (5), `PlatzhalterbauTest` (7), `BautenverzeichnisTest` (7), `AltfurtaufbauTest` (11), `BautenlisteTest` (11), Tafel 31dp (die zweite Naht ist verdrahtet und setzt ohne Physik - das ist der eine Teil, den keine Probe erreicht). Vierzehn Gegenläufe, alle rot. core 1932 -> 1951, paper 2766 -> 2789.
+- FUND der eigenen Tafeln, zweimal: `GrenzeTest.keinDokublockOhneDeklaration` fing meinen Einschub zwischen fremder Doku und ihrer Deklaration (zum dritten Mal dieselbe Falle), und `jederWeltnameStehtInDerListe` verlangte `bauten.welt` in `NUR_BEIM_START_WELTEN`. Tafel 31da verlangt den Vermerk in GROSSBUCHSTABEN.
+- Offen: der Rundgang bekommt seine Stationen. Vorschlag, geprüft (keine Überschneidung, alle unter 64 je Achse, die drei Ladeneinheiten liegen in der Markthalle):
+
+```yaml
+  stationen:
+    buergeramt:   { von: [50, -61, 2],  bis: [58, -53, 10] }
+    zunfthaus:    { von: [50, -61, 14], bis: [58, -53, 22] }
+    markthalle:   { von: [59, -61, 4],  bis: [85, -53, 22] }
+    muenzhaus:    { von: [86, -61, 2],  bis: [94, -53, 10] }
+    bundesratshaus: { von: [64, -61, 26], bis: [80, -51, 38] }
+```
+
+- Offen: die sechste Station aus Plan 10.2 ist das Stadttor in die Marktstadt. Dort steht noch kein Bau - ein Torhaus vor dem Marktstadt-Tor (x 58..60) wäre der naheliegende zehnte.
+- ~~Offen: ein Platzhalter hat keine Schilder und keine Einrichtung - wer echte Türen und Schilder will, braucht eine zweite Naht neben `Weltgriff.setze`.~~ 23.11. GEBAUT: `Altfurtaufbau.Feingriff`, in der Gestalt von `Wolkenaufbau.Truhengriff` und aus demselben Grund - `Material.createBlockData()` geht über `Bukkit.getServer()` und wirft ohne Server. Die Tür wird mit BEIDEN Hälften gesetzt, ohne Physik; das Schild hängt INNEN über der Tür (außen läge es jenseits des Quaders und damit außerhalb jeder Kollisionsprüfung) und trägt den Stationsnamen aus der sprache.yml - keine fünfte offene Satzfamilie. Ein Bau von drei Blöcken Höhe bekommt keine Tür: Sie braucht zwei Ebenen, und die zweite wäre dort das Dach.
+- Offen: ein Platzhalter hat weiter keine EINRICHTUNG - keine Truhen, keine Werkbänke, keine Teleporter zu den Freistädten. Was in jedem Haus stehen soll, nennt Plan 2.1 je Gebäude; gebaut ist davon nichts.
+- Offen: die vier Abschriften der Zahlenprüfung (`Ladenliste.drei`, `Rundgangsliste.drei`, `Weltenliste.ecke`, `Truhenliste`) gehören auf `Zahlenzeile` gezogen. Die Worte bleiben je Rufer - sie stehen in Proben. Eigener Schritt, damit die Altfurt-Änderung lesbar bleibt.
 
 ## Schritt 12a: Dashboard im Manager
 
@@ -976,7 +1005,7 @@ Offen: ein Weltname MIT Umlaut fällt auf "world" zurück (die Positivliste ist 
 - FUND AN DER EIGENEN TAFEL: Fall 26 wurde DOPPELT gefangen - von meiner 31dl und von der vorhandenen 31ab ("jede Startpruefung wird auch gerufen"). Zwei Riegel fuer denselben Fall machen sich unpruefbar; 31dl haelt jetzt nur noch die EXISTENZ der Methode, und ein Paar von Einspritzungen beweist die Trennung.
 - FUND DES STARTLAUFS, und nur er konnte ihn finden: Die Anmeldung wurde zugewiesen, NACHDEM richteShopsEin() den Shophandel gebaut hatte. Jener verlangt sie im Konstruktor, bekam null - und Paper schaltete das GANZE PLUGIN ab. Alle 4786 Proben waren gruen, und zwar zu Recht: Jede baut den Handel selbst und gibt ihm, was er braucht; die Reihenfolge im onEnable prueft kein Probenlauf. Tafel 31dn haelt sie jetzt (wie 31dk den Rundgang vor dem Aufstiegslauf).
 - Proben 2567 -> 2622 (paper), 1747 -> 1768 (core), 382 -> 397 (daten) - zusammen 4787.
-- OFFEN, und zwar Handarbeit: die zehn Platzhalterbauten in Altfurt. Erst danach bekommt der Rundgang seine Stationen und die Siedlerstufe ihre Zeile.
+- ~~OFFEN, und zwar Handarbeit: die zehn Platzhalterbauten in Altfurt.~~ 23.11. GEBAUT, und nicht von Hand: Die neun fehlenden stehen als Quader in `bauten.haeuser`, und `Altfurtaufbau` setzt beim Start, was FEHLT (gefragt wird EIN Block je Bau - die Wandecke über dem Boden). Damit überlebt die Stadt einen Weltverlust. Nächster Schritt: die Stationen des Rundgangs aus denselben Zahlen eintragen (Vorschlag steht unter Schritt 14), dann die Siedlerstufe.
 - OFFEN beim Spieltest: das Anmeldefenster mit zwei Knoepfen, ein Klick auf "Spaeter" und das Wiederkommen beim naechsten Beitritt, die Absage am Bundstand, /regeln annehmen auf einem alten Client - und der Rundgang selbst, sobald Altfurt steht.
 
 ### Teil A: die Farbwelt - 21.11.2026

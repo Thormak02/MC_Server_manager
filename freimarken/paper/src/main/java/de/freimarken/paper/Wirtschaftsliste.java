@@ -90,7 +90,13 @@ final class Wirtschaftsliste {
             // Start gelesen. Verschoebe ein Neuladen einen Bereich, haette ein Spieler
             // eine Station gesehen, an der er nie war - und eine andere, an der er
             // stand, nicht. Dieselbe Entscheidung wie bei den vier daneben.
-            Rundgangsliste.PFAD_WELT);
+            Rundgangsliste.PFAD_WELT,
+            // Die Platzhalterbauten [23.11.2026]: Derselbe Grund, nur haerter.
+            // Ein Quader hier ist nicht nur ein gelesener Ort, sondern einer, an dem
+            // GESETZT wird. Verschoebe ein Neuladen ihn, stuende das Haus an der alten
+            // Stelle und das Programm rechnete mit der neuen - und der naechste Start
+            // setzte ein zweites daneben, ohne das erste abzuraeumen.
+            Bautenliste.PFAD_WELT);
 
     /** Wie viele Preisstufen die Rechenprobe im Protokoll nennt. */
     private static final int STUFEN_IM_BERICHT = 4;

@@ -29,6 +29,7 @@ import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
 import de.freimarken.kern.Berufswerte;
+import de.freimarken.kern.Bautenverzeichnis;
 import de.freimarken.kern.BesitzLager;
 import de.freimarken.kern.Besitzbuch;
 import de.freimarken.kern.Blockbuchablage;
@@ -64,6 +65,7 @@ import de.freimarken.kern.Mietablage;
 import de.freimarken.kern.Parzelle;
 import de.freimarken.kern.Punktebuch;
 import de.freimarken.kern.Preisstaffel;
+import de.freimarken.kern.Platzhalterbau;
 import de.freimarken.kern.Quader;
 import de.freimarken.kern.Rasterplan;
 import de.freimarken.kern.SpeicherAbholfach;
@@ -668,6 +670,26 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Rundgang rundgang;
 
     /**
+     * Die Platzhalterbauten Altfurts - NUR BEIM START gelesen [Plan 2.1, 23.11.2026].
+     *
+     * <p>Leer heisst: Es wird nichts gesetzt. Das ist erlaubt - wer Altfurt von Hand
+     * gebaut hat, traegt nichts ein.
+     */
+    private Bautenverzeichnis platzhalterbauten = Bautenverzeichnis.ohneBauten();
+
+    /** Die Welt, in der die Platzhalterbauten stehen. */
+    private String bautenwelt = "";
+
+    /**
+     * Die Hand, die sie setzt.
+     *
+     * <p>Erst im {@code onEnable} gebaut und nicht beim Laden der Klasse, anders als
+     * {@code wolkenaufbau}: Sie braucht die Baustoffe, und die stehen in der
+     * {@code config.yml}.
+     */
+    private Altfurtaufbau altfurtaufbau = new Altfurtaufbau(Baustoffe.abWerk());
+
+    /**
      * Das Verzeichnis der Stationen - NUR BEIM START gelesen.
      *
      * <p>Ab Werk leer: Die Gebaeude in Altfurt sind Handarbeit. Ein eigenes Feld, weil
@@ -998,6 +1020,28 @@ public final class FreimarkenPlugin extends JavaPlugin {
         stationen.bericht().forEach(getLogger()::info);
         rundgangswelt = stationen.welt();
         rundgangsstationen = stationen.verzeichnis();
+        // DIE PLATZHALTERBAUTEN [Plan 2.1]: hier und nicht an einer eigenen Stelle, aus
+        // demselben Grund wie der Rundgang - dieselben Kanten, dieselbe Welt. Dazu
+        // bekommt dieser Leser die Quader aller TORE: Ein Bau wird GESETZT, und einer
+        // ueber einem Tor mauerte den Durchgang zu. Die Tore kommen aus derselben Liste,
+        // aus der die Welten entstanden sind; ein zweites Lesen waere eine zweite
+        // Wahrheit.
+        List<Quader> torquader = new ArrayList<>();
+        liste.welten().forEach(angabe -> {
+            if (angabe.tor() != null) {
+                torquader.add(angabe.tor());
+            }
+        });
+        Bautenliste.Ergebnis bauten =
+                Bautenliste.ausKonfiguration(getConfig(), kanten, torquader);
+        bauten.klagen().forEach(getLogger()::severe);
+        bauten.bericht().forEach(getLogger()::info);
+        bautenwelt = bauten.welt();
+        platzhalterbauten = bauten.verzeichnis();
+        List<String> stoffklagen = new ArrayList<>();
+        altfurtaufbau = new Altfurtaufbau(
+                Baustoffe.ausKonfiguration(getConfig(), stoffklagen));
+        stoffklagen.forEach(getLogger()::severe);
         marktstadt = gebaut.welten().get(MARKTSTADT);
         // Dieselbe Angabe, aus der die Welt entstand, entscheidet auch ueber ihre Grenze.
         // Vorher las richteWeltgrenzeEin die Einstellung ein zweites Mal und ungefiltert
@@ -1234,6 +1278,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Die Reihenfolge steht fest, damit das Startprotokoll immer dieselbe Gestalt
         // hat - und sie steht VOR richteReisenEin, weil die Ankunftsplattform stehen
         // muss, bevor der Warpbefehl die Ankunftspunkte aller Welten prueft.
+        // VOR den Wolken, und das ist kein Geschmack: Beide setzen Bloecke in eine Welt,
+        // und wer das Protokoll liest, soll die zwei Haende beieinander finden.
+        richteAltfurtEin();
         richteWolkenEin();
         richteReisenEin(ankunftswelt);
         richteSpielzeitEin();
@@ -3109,6 +3156,73 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + " ist. Im offenen Meer baut NIEMAND, auch der Nachbar nicht: Es ist"
                 + " das oeffentliche Wasser des Archipels.");
         richteAngelnEin(welt);
+    }
+
+    /**
+     * Setzt die Platzhalterbauten Altfurts, soweit sie fehlen [Plan 2.1, 23.11.2026].
+     *
+     * <p><b>Nur was FEHLT</b>: Gefragt wird je Bau EIN Block - die Wandecke eine Ebene
+     * ueber dem Boden. Dieselbe Linie wie bei der Ankunftsplattform in Wolkenwerder, und
+     * aus demselben Grund: Ein Start, der jedes Mal alles neu setzt, raeumte die
+     * Einrichtung des Betreibers ab.
+     *
+     * <p>Berichtet wird in EINER Zeile und nicht je Haus: Neun Zeilen, von denen acht
+     * "steht schon" sagen, sind acht Zeilen, die niemand liest. Nur wenn wirklich gesetzt
+     * wurde, nennt die Meldung die Namen und die Blockzahl.
+     *
+     * <p>Fehlt die Welt, gibt es eine Klage und keinen Wurf: Ein Server, dessen Altfurt
+     * nicht geladen ist, soll starten - er hat dann nur kein Altfurt.
+     */
+    private void richteAltfurtEin() {
+        if (platzhalterbauten.leer()) {
+            return;
+        }
+        World welt = welten.get(bautenwelt);
+        if (welt == null) {
+            getLogger().severe("Die Platzhalterbauten liegen in \"" + bautenwelt
+                    + "\", und diese Welt ist nicht geladen - es wird nichts gesetzt."
+                    + " Steht sie im Abschnitt welten:?");
+            return;
+        }
+        Weltgriff griff = new Weltgriff.AufDerWelt(welt);
+        Altfurtaufbau.Feingriff fein = new Altfurtaufbau.Feingriff.AufDerWelt(welt);
+        List<String> gesetzteNamen = new ArrayList<>();
+        long bloecke = 0L;
+        for (Platzhalterbau bau : platzhalterbauten.alle()) {
+            if (altfurtaufbau.stehtSchon(bau, griff)) {
+                continue;
+            }
+            bloecke += altfurtaufbau.setze(bau, griff, fein, schildzeilen(bau));
+            gesetzteNamen.add(bau.schluessel());
+        }
+        if (gesetzteNamen.isEmpty()) {
+            getLogger().info("Altfurt steht: " + platzhalterbauten.anzahl()
+                    + " Platzhalterbauten, nichts zu setzen.");
+            return;
+        }
+        getLogger().warning("Altfurt gebaut: " + gesetzteNamen.size() + " von "
+                + platzhalterbauten.anzahl() + " Platzhalterbauten gesetzt ("
+                + String.join(", ", gesetzteNamen) + "), " + bloecke + " Bloecke - "
+                + altfurtaufbau.stoffe().bericht() + ". Wer eines neu setzen will, nimmt"
+                + " seine Wandecke eine Ebene ueber dem Boden weg.");
+    }
+
+    /**
+     * Was auf dem Namensschild eines Baus steht.
+     *
+     * <p><b>Derselbe Satz wie der Name der Rundgangsstation</b>
+     * ({@code rundgang.station.<name>.name}) und keine fuenfte offene Satzfamilie: Die
+     * Bauten tragen dieselben Namen wie die Stationen - der Betreiber traegt beides unter
+     * demselben Schluessel ein. Zwei Satzfamilien fuer denselben Namen waeren zwei
+     * Stellen, die auseinanderlaufen.
+     *
+     * <p>Fehlt die Zeile, steht auf dem Schild ihr PFAD - genau wie die Station es heute
+     * tut, und aus demselben Grund: Ein haesslicher Name ist der kleinere Schaden.
+     */
+    private List<String> schildzeilen(Platzhalterbau bau) {
+        return List.of(sprache.wort(
+                new Stationssatz(bau.schluessel(), Stationssatz.Teil.NAME),
+                Einsatz.keine()));
     }
 
     /**
