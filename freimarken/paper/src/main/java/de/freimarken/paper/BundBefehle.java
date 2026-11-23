@@ -105,10 +105,11 @@ final class BundBefehle {
      */
     interface Geldzweig {
 
-        void tue(Audience empfaenger, String wer, String spieler, long betrag);
+        void tue(Audience empfaenger, String wer, String spieler, long betrag,
+                 Betreibergeld.Waehrung waehrung);
 
         /** Die Benutzung - fuer jede unvollstaendige Form des Zweigs. */
-        void hilfe(Audience empfaenger);
+        void hilfe(Audience empfaenger, Betreibergeld.Waehrung waehrung);
     }
 
     /**
@@ -246,31 +247,13 @@ final class BundBefehle {
                 // Buchung. Drei .executes, eines je unvollstaendiger Form - sonst endet
                 // "/freimarken geld" in Brigadiers englischem "Unknown or incomplete
                 // command", und der Betreiber sucht den Fehler bei sich.
-                .then(Commands.literal("geld")
-                        .requires(quelle -> quelle.getSender()
-                                .hasPermission(RECHT_GELD))
-                        .executes(z -> {
-                            geld.hilfe(z.getSource().getSender());
-                            return Command.SINGLE_SUCCESS;
-                        })
-                        .then(Commands.argument("spieler", StringArgumentType.word())
-                                .executes(z -> {
-                                    geld.hilfe(z.getSource().getSender());
-                                    return Command.SINGLE_SUCCESS;
-                                })
-                                .then(Commands.argument("betrag",
-                                                LongArgumentType.longArg(
-                                                        -Betreibergeld.HOECHSTENS,
-                                                        Betreibergeld.HOECHSTENS))
-                                        .executes(z -> {
-                                            geld.tue(z.getSource().getSender(),
-                                                    z.getSource().getSender().getName(),
-                                                    StringArgumentType.getString(z,
-                                                            "spieler"),
-                                                    LongArgumentType.getLong(z,
-                                                            "betrag"));
-                                            return Command.SINGLE_SUCCESS;
-                                        }))))
+                .then(geldbaum(Betreibergeld.Waehrung.MARK, geld))
+                // EIN EIGENES LITERAL und kein Waehrungswort neben <spieler>: Ein Literal
+                // neben einem Wortargument konkurriert mit ihm und braucht eigene
+                // .executes, sonst antwortet Brigadier englisch - dieselbe Falle, die der
+                // Kommentar darueber schon nennt. So bleiben ausserdem der heutige
+                // Befehl, der Manager-Pfad und das Muskelgedaechtnis unveraendert.
+                .then(geldbaum(Betreibergeld.Waehrung.GOLDMARK, geld))
                 .then(Commands.literal("besitz")
                         // EIGENES Recht, nicht freimarken.geld und nicht
                         // freimarken.verwalten: Welten anlegen, Konten fuellen und
@@ -375,6 +358,49 @@ final class BundBefehle {
                                             return Command.SINGLE_SUCCESS;
                                         }))))
                 .build();
+    }
+
+    /**
+     * Der Geldzweig fuer eine Waehrung - EINMAL gebaut, zweimal angehaengt [23.11.2026].
+     *
+     * <p>Das Befehlswort und die Schranke kommen aus {@link Betreibergeld.Waehrung}: Es
+     * ist ein Paar, und wer es an zwei Stellen fuehrt, laesst es auseinanderlaufen.
+     *
+     * <p>Dasselbe Recht fuer beide Waehrungen: {@code RECHT_GELD} ist die Vollmacht
+     * "Konten fuellen". Die drei Rechte dieses Baums trennen Welten, Konten und Besitz -
+     * nicht Waehrungen. Ein zweites Recht fuer dieselbe Vollmacht waere ein zweiter Ort
+     * fuer dieselbe Regel.
+     *
+     * <p>Diese Methode SENDET nichts - sie baut nur den Baum. Was der Betreiber liest,
+     * kommt aus dem {@link Geldzweig}, und darum bleibt die Zahl der Sendestellen in
+     * dieser Klasse unveraendert.
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> geldbaum(
+            Betreibergeld.Waehrung waehrung, Geldzweig geld) {
+        return Commands.literal(waehrung.befehlswort())
+                .requires(quelle -> quelle.getSender()
+                        .hasPermission(RECHT_GELD))
+                .executes(z -> {
+                    geld.hilfe(z.getSource().getSender(), waehrung);
+                    return Command.SINGLE_SUCCESS;
+                })
+                .then(Commands.argument("spieler", StringArgumentType.word())
+                        .executes(z -> {
+                            geld.hilfe(z.getSource().getSender(), waehrung);
+                            return Command.SINGLE_SUCCESS;
+                        })
+                        .then(Commands.argument("betrag",
+                                        LongArgumentType.longArg(
+                                                -waehrung.hoechstens(),
+                                                waehrung.hoechstens()))
+                                .executes(z -> {
+                                    geld.tue(z.getSource().getSender(),
+                                            z.getSource().getSender().getName(),
+                                            StringArgumentType.getString(z, "spieler"),
+                                            LongArgumentType.getLong(z, "betrag"),
+                                            waehrung);
+                                    return Command.SINGLE_SUCCESS;
+                                })));
     }
 
     /**

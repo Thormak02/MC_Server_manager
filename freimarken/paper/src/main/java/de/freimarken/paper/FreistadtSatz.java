@@ -462,6 +462,21 @@ enum FreistadtSatz implements Satz {
             "tage"),
 
     /**
+     * Die Frist ist ABGELAUFEN, der Lauf hat sie aber noch nicht abgeraeumt - {@code stadt}.
+     *
+     * <p>Ein EIGENER Satz und nicht {@code warnung-spaet} mit 0 Tagen [23.11.2026]:
+     * {@code Verfallsregel.resttage} ist fuer {@code FAELLIG} immer 0, und ein
+     * {@code GEZAEHLT}-Satz nimmt bei 0 die Mehrzahlform - der Besitzer las "verfaellt in
+     * 0 Tagen!". Keine der beiden Formen von {@code warnung-spaet} meint diesen Fall; die
+     * ausgelieferte Datei sagt selbst, die Einzahlform stehe fuer den LETZTEN Tag.
+     *
+     * <p>{@code Art.SATZ} und kein {@code tage}: Es gibt hier keine Zahl, die stimmen
+     * koennte. Dringender als "jetzt" wird es nicht, und die {@code VERFALLEN}-Zeile waere
+     * eine Luege - die Stadt steht in diesem Augenblick noch auf {@code Zustand.AKTIV}.
+     */
+    VERFALL_FAELLIG("freistadt.verfall.faellig", Art.SATZ, "stadt"),
+
+    /**
      * Die Stadt IST verfallen - {@code stadt}.
      *
      * <p>Gelesen beim Beitritt, und zwar so lange, bis der Besitzer sie betritt. Kein

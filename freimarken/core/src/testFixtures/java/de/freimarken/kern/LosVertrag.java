@@ -2,6 +2,7 @@ package de.freimarken.kern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -31,6 +32,52 @@ public abstract class LosVertrag {
 
     /** Eine frische, leere Ablage. */
     protected abstract Losablage ablage();
+
+    /**
+     * Bringt die Zahl dieses Spielers an diesem Tag auf {@link Integer#MAX_VALUE}.
+     *
+     * <p>Der Vertrag kann diesen Zustand nicht selbst herstellen - zwei Milliarden Mal
+     * {@code zaehleEins} zu rufen ist kein Probenlauf. Wie er hergestellt wird, weiss nur
+     * die Umsetzung: die Karte setzt ihren Eintrag, die Datenbank schreibt ihre Zeile.
+     *
+     * <p>Ein ABSTRAKTER Haken und kein ueberschreibbarer mit Rueckfall: Ein Rueckfall, der
+     * den Fall ueberspringt, meldet gruen, und genau deshalb ist die Luecke zweiundzwanzig
+     * Tage unbemerkt geblieben.
+     */
+    protected abstract void saettige(Losablage ablage, UUID spieler, LocalDate tag);
+
+    @Test
+    @DisplayName("Bei Integer.MAX_VALUE laeuft die Zahl AN und wirft nicht")
+    void saettigungLaeuftAn() {
+        // DIE ZUSAGE STEHT AN DER SCHNITTSTELLE, also muss sie JEDE Umsetzung halten
+        // [23.11.2026]. Die Karte hielt sie (merge mit MAX_VALUE-Pruefung), die Datenbank
+        // nicht: "anzahl = anzahl + 1" auf INT endet im strict mode in "Out of range
+        // value" und wurde zu IllegalStateException - dem Wurf, den die Zusage
+        // ausdruecklich fuer schlechter erklaert als eine anlaufende Zahl.
+        //
+        // Erreichbar ist das nur ohne Tagesgrenze (lotterie.hoechste-lose-je-tag: 0, laut
+        // config.yml erlaubt). MIT dem Wurf brach Lotteriebuch an dieser Stelle ab und
+        // zog NICHT; mit der anlaufenden Zahl zieht es weiter, und der Preis bleibt auf
+        // der Stufe der groessten Zahl stehen. Das ist die Richtung, in der nichts
+        // kaputtgeht: ein Preis, der nicht mehr steigt, ist kein verlorenes Los.
+        Losablage ablage = ablage();
+        UUID anna = UUID.randomUUID();
+        saettige(ablage, anna, HEUTE);
+        assertEquals(Integer.MAX_VALUE, ablage.lies(anna, HEUTE).loseHeute(),
+                "die Vorbereitung selbst muss sitzen - sonst prueft der Satz nichts");
+
+        int nachher = ablage.zaehleEins(anna, HEUTE);
+
+        assertEquals(Integer.MAX_VALUE, nachher,
+                "die zurueckgegebene Zahl laeuft an und wird nicht negativ");
+        assertEquals(Integer.MAX_VALUE, ablage.lies(anna, HEUTE).loseHeute(),
+                "und in der Ablage steht sie auch so");
+        // UND SIE IST NICHT NEGATIV - die eigentliche Gefahr: Losstand wuerfe dann mitten
+        // im Zug. Eine eigene Zeile, weil ein Ueberlauf auf -2147483648 die zwei
+        // Zusicherungen oben zwar schon rot macht, der Grund aber hier benannt gehoert.
+        assertTrue(ablage.lies(anna, HEUTE).loseHeute() > 0,
+                "eine uebergelaufene Zahl waere negativ, und Losstand wuerfe");
+    }
 
     @Test
     @DisplayName("Ein unbekannter Spieler hat heute kein Los gezogen")

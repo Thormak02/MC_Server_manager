@@ -1751,11 +1751,23 @@ class BildGleichTest {
                         "&#d9564dDeine Freistadt annastadt verfaellt MORGEN!\n&#a5b4bfGeh hin,"
                                 + " oder vergib ein Grundstueck - ein Stadtbuerger"
                                 + " haelt sie dauerhaft."),
+                // DIESE ZEILE IST IM SPIEL NICHT MEHR ZU SEHEN [23.11.2026], und sie
+                // steht nur hier, weil die Tafel jede Zaehlform verlangt: Bis dahin gab
+                // Freistadttext den Stand FAELLIG an diesen Satz weiter, und resttage ist
+                // dort immer 0 - der Besitzer las genau das. Die FORM war nie falsch;
+                // falsch war, FAELLIG hineinzugeben. FAELLIG hat jetzt den Satz darunter.
                 new Zeile(FreistadtSatz.VERFALL_WARNUNG_SPAET, 0L,
                         Einsatz.von("stadt", "annastadt").mit("tage", 0L),
                         "&#d9564dDeine Freistadt annastadt verfaellt in 0 Tagen!\n&#a5b4bfGeh"
                                 + " hin, oder vergib ein Grundstueck - ein"
                                 + " Stadtbuerger haelt sie dauerhaft."),
+                // DER DRITTE ZUSTAND: Die Frist ist um, der taegliche Lauf hat die Stadt
+                // aber noch nicht abgeraeumt. Ungezaehlt - es gibt hier keine Zahl.
+                new Zeile(FreistadtSatz.VERFALL_FAELLIG, 1L,
+                        Einsatz.von("stadt", "annastadt"),
+                        "&#d9564dDeine Freistadt annastadt verfaellt JETZT!\n&#a5b4bfGeh sofort"
+                                + " hin, oder vergib ein Grundstueck - ein Stadtbuerger"
+                                + " haelt sie dauerhaft."),
                 // SAGT AUSDRUECKLICH, DASS NICHTS VERLOREN IST: Ohne diese Haelfte
                 // hielte ein Besitzer seine 400.000 Mark fuer verbrannt.
                 new Zeile(FreistadtSatz.VERFALL_VERFALLEN, 1L,

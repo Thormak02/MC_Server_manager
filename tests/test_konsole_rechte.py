@@ -238,6 +238,12 @@ def test_agent_erlaubt_moderatoren_normale_befehle(client, tmp_path):
     "minecraft:freimarken geld Thormak02 1",    # Namensraum-Praefix
     "fm geld Thormak02 1",                      # DAS KUERZEL - sonst ist die Regel offen
     "/fm geld Thormak02 1",
+    # GOLDGELD [23.11.2026]: derselbe Zweig in der groben Waehrung. Eine Goldmark ist
+    # achthundert Mark - ein Loch hier ist kein kleineres als bei "geld", sondern ein
+    # achthundertmal groesseres. Darum alle drei Wege: Befehl, Kuerzel, execute.
+    "freimarken goldgeld Thormak02 1",
+    "fm goldgeld Thormak02 1",
+    "execute as @a run freimarken goldgeld Thormak02 1",
     "freimarken besitz uebertragen 3 4 Thormak02",
     "freimarken besitz freigeben 3 4 bestaetigen",
     "fm besitz uebertragen 3 4 Thormak02",
@@ -265,6 +271,8 @@ def test_geld_und_besitz_brauchen_super_admin(befehl):
     "freimarken spielzeit Thormak02",
     "fm welt",
     "geld Thormak02 1",            # ohne den Befehlsbaum davor ist es kein Zweig
+    "goldgeld Thormak02 1",        # dasselbe fuer die Goldmark
+    "freimarken goldpreis 3",      # faengt ein "sperre alles mit gold darin"
     "besitz uebertragen 3 4 Anna",
     "say freimarken geld ist toll",
 ])

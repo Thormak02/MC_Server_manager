@@ -120,12 +120,26 @@ final class Freistadttext {
     /**
      * Die Zeilen zur Verfallswarnung beim Beitritt [Teil E5].
      *
-     * <p>Ein {@code switch} ohne {@code default} ueber den Stand, und er nennt auch die
-     * zwei Staende, die hier NICHT ankommen: {@code AKTIV} faengt der Aufrufer ab (wer
-     * nicht gewarnt wird, bekommt keine Zeile), und {@code FAELLIG} sieht ein Spieler
-     * nie - der taegliche Lauf macht daraus {@code VERFALLEN}, bevor jemand sich
-     * anmelden kann. Dass beide trotzdem dastehen, ist der Riegel: Ein sechster Stand
-     * bricht hier die Uebersetzung und nicht erst das Spielbild.
+     * <p>Ein {@code switch} ohne {@code default} ueber den Stand, und er nennt auch
+     * {@code AKTIV}, der hier NICHT ankommt: Den faengt der Aufrufer ab - wer nicht
+     * gewarnt wird, bekommt keine Zeile. Dass er trotzdem dasteht, ist der Riegel: Ein
+     * sechster Stand bricht hier die Uebersetzung und nicht erst das Spielbild.
+     *
+     * <p><b>{@code FAELLIG} KOMMT AN, und das ist gemessen</b> [23.11.2026]: Hier stand
+     * "FAELLIG sieht ein Spieler nie - der taegliche Lauf macht daraus VERFALLEN, bevor
+     * jemand sich anmelden kann", und das war falsch. Der erste Takt kommt eine ganze
+     * Taktlaenge nach dem Start ({@code Spielzeitwache.starte}), ab Werk 60 s und bis zu
+     * 600 s; und ohne Neustart raeumt der Lauf eine um 00:00 faellig gewordene Stadt
+     * erst im ersten Takt danach ab. Wer sich in diesem Fenster anmeldet, traf den Wurf -
+     * und weil {@code beimBeitritt} ihn fing, verlor er damit auch die Zeilen fuer seine
+     * UEBRIGEN Staedte.
+     *
+     * <p>{@code FAELLIG} hat darum einen EIGENEN Satz, und nicht die dringende Stufe mit
+     * 0 Resttagen [berichtigt 23.11.2026]: {@code resttage} ist fuer {@code FAELLIG}
+     * immer 0 ({@code Math.max(0, ...)}), und ein gezaehlter Satz nimmt bei 0 die
+     * Mehrzahlform - der Besitzer las "verfaellt in 0 Tagen!". Die {@code VERFALLEN}-Zeile
+     * waere die andere Luege: Die Stadt steht in diesem Augenblick noch auf
+     * {@code Zustand.AKTIV}, und wer liest "ist verfallen", geht nicht mehr hin.
      *
      * <p><b>Die ZAHL kommt herein und wird nicht hier gerechnet</b>: Die Frist ist eine
      * Rechnung aus Tag, Zone und Einstellung, und die steht in {@code Verfallsregel}.
@@ -136,14 +150,16 @@ final class Freistadttext {
         return switch (stand) {
             case WARNUNG_FRUEH -> sprache.bau(FreistadtSatz.VERFALL_WARNUNG_FRUEH,
                     resttage, Einsatz.von("stadt", stadt).mit("tage", resttage));
-            case WARNUNG_SPAET -> sprache.bau(FreistadtSatz.VERFALL_WARNUNG_SPAET,
-                    resttage, Einsatz.von("stadt", stadt).mit("tage", resttage));
+            case WARNUNG_SPAET -> sprache.bau(
+                    FreistadtSatz.VERFALL_WARNUNG_SPAET, resttage,
+                    Einsatz.von("stadt", stadt).mit("tage", resttage));
+            case FAELLIG -> sprache.bau(FreistadtSatz.VERFALL_FAELLIG, 1L,
+                    Einsatz.von("stadt", stadt));
             case VERFALLEN -> sprache.bau(FreistadtSatz.VERFALL_VERFALLEN, 1L,
                     Einsatz.von("stadt", stadt));
-            case AKTIV, FAELLIG -> throw new IllegalArgumentException("Fuer " + stand
-                    + " gibt es hier keine Zeile: AKTIV faengt der Aufrufer ab, und"
-                    + " FAELLIG sieht ein Spieler nie - der taegliche Lauf macht daraus"
-                    + " VERFALLEN, bevor sich jemand anmelden kann.");
+            case AKTIV -> throw new IllegalArgumentException("Fuer AKTIV gibt es hier"
+                    + " keine Zeile - der Aufrufer faengt ihn ab: Wer nicht gewarnt"
+                    + " wird, bekommt keine Zeile.");
         };
     }
 

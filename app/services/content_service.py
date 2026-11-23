@@ -285,18 +285,28 @@ def _spiget_headers() -> dict[str, str]:
 
 
 def _server_level_name(server: Server) -> str:
-    """Weltname aus server.properties (`level-name`), Default `world`."""
-    props = Path(server.base_path) / "server.properties"
-    try:
-        for line in props.read_text(encoding="utf-8", errors="ignore").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("level-name") and "=" in stripped:
-                value = stripped.split("=", 1)[1].strip()
-                if value:
-                    return _safe_file_name(value)
-    except OSError:
-        pass
-    return "world"
+    """Weltname aus server.properties (`level-name`), Default `world` - EIN Leser fuer alle.
+
+    ``_safe_file_name`` faellt hier weg, weil ``ist_sicherer_weltname`` im gemeinsamen
+    Leser strenger ist: Positivliste statt ``Path(x).name``, keine Windows-Geraetenamen,
+    kein abschliessender Punkt, hoechstens 64 Zeichen. (Fuer Dateinamen aus dem Netz bleibt
+    ``_safe_file_name`` dort, wo es hingehoert - es hat weiter neun Rufstellen, vier hier
+    und fuenf in ``vanillatweaks_service``. Gezaehlt am 23.11.2026; hier stand "fuenf".)
+
+    GEMESSEN am 23.11.2026: Der eigene Zerleger hier las ``level-name:lobby`` nicht (Javas
+    zweiter Trenner) und nahm bei doppeltem Schluessel den ersten statt des letzten
+    Eintrags. Der Scan suchte die Datapacks dann in einem Ordner, den es nicht gibt, und
+    die Liste blieb leer - ohne eine Zeile, die es sagt.
+
+    VERHALTENSAENDERUNG, die zu nennen ist: Ein Weltname MIT Umlaut faellt jetzt auch hier
+    auf "world" zurueck, weil die Positivliste ASCII ist. transfer_service und
+    backup_service tun das heute schon - ein solcher Server bekommt also schon jetzt ein
+    Welt-Backup ohne Welt. Die Liste zu weiten ist eine eigene Entscheidung mit eigener
+    Messung (legt Minecraft so einen Ordner an? Windows?) und steht in TODO.md.
+    """
+    from app.services.transfer_service import weltname_aus_ordner
+
+    return weltname_aus_ordner(Path(server.base_path))
 
 
 def _target_dir(server: Server, content_type: str) -> Path:

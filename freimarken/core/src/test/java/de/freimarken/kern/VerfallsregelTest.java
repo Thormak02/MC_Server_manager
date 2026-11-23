@@ -163,18 +163,6 @@ class VerfallsregelTest {
     }
 
     @Test
-    @DisplayName("Nur WARNUNG_FRUEH und WARNUNG_SPAET warnen")
-    void nurZweiStaendeWarnen() {
-        // Gefragt wird die Aufzaehlung selbst, mechanisch: Ein sechster Stand muss sich
-        // hier entscheiden, und eine Handliste merkte es nicht.
-        for (Verfallsregel.Stand stand : Verfallsregel.Stand.values()) {
-            boolean erwartet = stand == Verfallsregel.Stand.WARNUNG_FRUEH
-                    || stand == Verfallsregel.Stand.WARNUNG_SPAET;
-            assertEquals(erwartet, stand.warnt(), stand.name());
-        }
-    }
-
-    @Test
     @DisplayName("Verfallen koennen nur Freistaedte - und nie ohne Tag und Zone")
     void unbrauchbareFragenWerfen() {
         Parzelle parzelle = new Parzelle(1L, "freimarken:altfurt", 0, 0, anna, Set.of(),

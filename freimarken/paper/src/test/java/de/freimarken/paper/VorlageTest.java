@@ -907,8 +907,7 @@ class VorlageTest {
             // Mark steht darin als Name der anderen Waehrung, nicht als Einheit einer
             // Zahl. Die zweite erscheint nur bei geschlossenem Rueckweg; sie nennt
             // Goldmark und Mark, weil genau die Richtung gemeint ist.
-            "FreimarkenPlugin.java -> \". Zu bekommen ist sie allein durch Tausch aus"
-                    + " Mark\"",
+            "FreimarkenPlugin.java -> \". Zu bekommen ist sie durch Tausch aus Mark\"",
             // Teil C3: Die SEVERE-Zeile des verlorenen Erloeses. Sie geht in die
             // Konsole und an niemanden sonst - ihr Zweck ist, dass der Betreiber von
             // Hand gutschreiben kann, und dafuer muss die Einheit darin stehen.

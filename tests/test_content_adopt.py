@@ -445,6 +445,38 @@ def test_sync_discovers_datapacks_with_level_name(client, tmp_path):
     assert datapacks[0].provider_name == "local"
 
 
+def test_sync_discovers_datapacks_bei_javaschreibweise(client, tmp_path):
+    """Dieselbe Welt, aber mit Javas zweitem Trenner geschrieben.
+
+    ``level-name:meinewelt`` ist gueltiges Properties-Format, und der Minecraft-Server
+    liest daraus "meinewelt". Der eigene Zerleger hier las "world", suchte die Datapacks
+    in einem Ordner, den es nicht gibt, und gab eine leere Liste zurueck - ohne eine Zeile,
+    die es sagt. Nachbarprobe zu test_sync_discovers_datapacks_with_level_name, die
+    denselben Weg mit '=' schon haelt.
+    """
+    from app.db.session import SessionLocal
+    from app.models.installed_content import InstalledContent
+    from app.services import content_service as cs
+    from sqlalchemy import select
+
+    base = tmp_path / "srv2"
+    base.mkdir()
+    (base / "server.properties").write_bytes(b"level-name:meinewelt\n")
+    dp_dir = base / "meinewelt" / "datapacks"
+    dp_dir.mkdir(parents=True)
+    (dp_dir / "cooldatapack.zip").write_bytes(b"zip")
+
+    with SessionLocal() as db:
+        srv = _make_server(db, base, server_type="vanilla", mc="1.21.1")
+        cs._sync_local_content_entries(db, srv)
+        rows = list(db.scalars(
+            select(InstalledContent).where(InstalledContent.server_id == srv.id)))
+
+    datapacks = [r for r in rows if r.content_type == "datapack"]
+    assert len(datapacks) == 1
+    assert datapacks[0].file_name == "cooldatapack.zip"
+
+
 # --------------------------------------------------------------------------- #
 # VanillaTweaks-Erkennung + Update
 # --------------------------------------------------------------------------- #

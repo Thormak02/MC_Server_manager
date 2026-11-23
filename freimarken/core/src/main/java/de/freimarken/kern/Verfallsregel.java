@@ -51,11 +51,6 @@ public final class Verfallsregel {
          * Zwischenspeicher aller Parzellen.
          */
         VERFALLEN;
-
-        /** Ob dieser Stand den Besitzer gewarnt sehen will. */
-        public boolean warnt() {
-            return this == WARNUNG_FRUEH || this == WARNUNG_SPAET;
-        }
     }
 
     private Verfallsregel() {

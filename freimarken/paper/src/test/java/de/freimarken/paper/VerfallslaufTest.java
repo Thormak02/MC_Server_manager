@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -198,6 +199,83 @@ class VerfallslaufTest {
                         + spaet.chatBild());
         assertTrue(!frueh.chatBild().get(0).equals(spaet.chatBild().get(0)),
                 "und die erste Zeile ist eine andere");
+    }
+
+    @Test
+    @DisplayName("Eine FAELLIGE Stadt warnt - auch bevor der erste Takt lief")
+    void faelligeStadtWarntVorDemErstenTakt() {
+        // GEMESSEN am 23.11.2026, und vorher ein Wurf: Der erste Spielzeittakt kommt
+        // eine ganze Taktlaenge nach dem Start (ab Werk 60 s, einstellbar bis 600 s).
+        // In diesem Fenster ist imTakt nie gelaufen, die Stadt steht also noch auf
+        // FAELLIG - und beimBeitritt filtert nur AKTIV.
+        //
+        // KEIN lauf.imTakt() hier, und das ist der ganze Satz: Die Nachbarprobe
+        // verfalleneStadtMeldetSich ruft es ausdruecklich und prueft damit den Zustand
+        // DANACH. Genau dieser Aufruf hat den Fehler zweiundzwanzig Tage verdeckt.
+        Parzelle stadt = gegruendet("annastadt", ANNA);
+        lager.besuchSetzen(stadt.id(), heute().minusDays(400));
+        Spielerprobe anna = new Spielerprobe("Anna", ANNA);
+
+        lauf.beimBeitritt(beitritt(anna));
+
+        assertEquals(2, anna.chatBild().size(),
+                "die dringende Stufe mit ihren zwei Zeilen - vorher war es ein Wurf und"
+                        + " der Spieler las gar nichts: " + anna.chatBild());
+        assertTrue(anna.chatBild().get(0).contains("annastadt"),
+                anna.chatBild().get(0));
+        assertTrue(anna.chatBild().get(1).contains("Grundstueck"),
+                "und der Ausweg: " + anna.chatBild().get(1));
+
+        // DER WORTLAUT, NICHT NUR DER NAME [23.11.2026]: Bis hierher las FAELLIG die
+        // dringende Stufe mit resttage = 0 - und ein gezaehlter Satz nimmt bei 0 die
+        // MEHRZAHLform. Der Besitzer las "Deine Freistadt annastadt verfaellt in 0
+        // Tagen!", und die drei Zusicherungen oben waren dabei alle erfuellt. Keine der
+        // zwei ausgelieferten Formen von warnung-spaet meint diesen Fall; die Datei sagt
+        // selbst, die Einzahlform stehe fuer den LETZTEN Tag.
+        assertFalse(anna.chatBild().get(0).contains("0 Tagen"),
+                "FAELLIG hat keine Resttage - eine Zahl im Satz ist hier immer falsch: "
+                        + anna.chatBild().get(0));
+        // Und der eigene Satz kommt wirklich an. Ohne diese Haelfte waere die Zeile
+        // darueber auch erfuellt, wenn gar nichts mehr gesendet wuerde.
+        assertTrue(anna.chatBild().get(0).contains("JETZT"),
+                "der eigene Satz fuer FAELLIG kommt nicht an: " + anna.chatBild().get(0));
+
+        // DIE GEGENRICHTUNG, auf derselben Stadt: Die dringende Stufe behaelt ihre Zahl.
+        // Ohne sie waere die Probe auch gruen, wenn jemand {tage} ganz aus warnung-spaet
+        // herausnimmt - dann waere "0 Tagen" nirgends mehr zu finden.
+        lager.besuchSetzen(stadt.id(), heute().minusDays(360));
+        Spielerprobe spaeter = new Spielerprobe("Anna", ANNA);
+        lauf.beimBeitritt(beitritt(spaeter));
+
+        assertTrue(spaeter.chatBild().get(0).contains("5 Tagen"),
+                "die dringende Stufe muss ihre Resttage weiter nennen: "
+                        + spaeter.chatBild().get(0));
+    }
+
+    @Test
+    @DisplayName("Eine faellige Stadt verschluckt die Warnung der NAECHSTEN nicht")
+    void eineFaelligeStadtVerschlucktDieNaechsteNicht() {
+        // DIE GROESSERE HAELFTE DES SCHADENS, und eine Ein-Stadt-Probe findet sie nie:
+        // Der Wurf verliess die Schleife ueber ALLE Staedte des Spielers. Wer drei
+        // besass und eine faellige, verlor alle drei Warnungen - und im Protokoll stand
+        // "liess sich nicht bauen", also suchte der Betreiber in der Sprachdatei.
+        //
+        // Die Namen sind mit Absicht so gewaehlt, dass die FAELLIGE zuerst kommt:
+        // buch.staedte gibt nach Namen, und "aastadt" steht vor "bestadt". Mit der
+        // umgekehrten Reihenfolge waere diese Probe auch vor der Behebung gruen gewesen.
+        Parzelle faellig = gegruendet("aastadt", ANNA);
+        Parzelle gewarnt = gegruendet("bestadt", ANNA);
+        lager.besuchSetzen(faellig.id(), heute().minusDays(400));
+        lager.besuchSetzen(gewarnt.id(), heute().minusDays(350));
+        Spielerprobe anna = new Spielerprobe("Anna", ANNA);
+
+        lauf.beimBeitritt(beitritt(anna));
+
+        assertTrue(anna.chatBild().stream().anyMatch(z -> z.contains("aastadt")),
+                "die faellige Stadt warnt: " + anna.chatBild());
+        assertTrue(anna.chatBild().stream().anyMatch(z -> z.contains("bestadt")),
+                "UND die naechste auch - vorher nahm der Wurf der ersten sie mit: "
+                        + anna.chatBild());
     }
 
     @Test

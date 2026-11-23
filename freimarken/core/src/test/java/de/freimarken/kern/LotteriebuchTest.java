@@ -489,7 +489,6 @@ class LotteriebuchTest {
         assertEquals(0L, erste.preis(), "das erste ist gratis");
         assertEquals(3, erste.hoechsteLose());
         assertEquals(400L, erste.guthaben());
-        assertTrue(erste.koennteZiehen());
         assertEquals(0, welt.lose.lies(welt.anna, HEUTE).loseHeute(),
                 "die Auskunft darf nichts zaehlen");
 
@@ -498,7 +497,9 @@ class LotteriebuchTest {
         Lotteriebuch.Auskunft zweite = welt.buch.frage(welt.anna, MITTAGS);
         assertEquals(1, zweite.loseHeute());
         assertEquals(500L, zweite.preis());
-        assertFalse(zweite.koennteZiehen(), "400 Mark reichen nicht fuer 500");
+        assertEquals(400L, zweite.guthaben(),
+                "400 Mark reichen nicht fuer das zweite Los zu 500 - und die Absage"
+                        + " nennt beide Zahlen, sie faellt aber erst beim Zug");
     }
 
     @Test

@@ -1,6 +1,7 @@
 package de.freimarken.paper;
 
 import de.freimarken.kern.Buchungsgrund;
+import de.freimarken.kern.Goldkasse;
 import de.freimarken.kern.Kasse;
 import java.util.UUID;
 
@@ -36,6 +37,70 @@ final class Betreibergeld {
      * keine Summe im Buch zum Ueberlaufen bringen.
      */
     static final long HOECHSTENS = 1_000_000_000L;
+
+    /**
+     * Die groesste Zahl in GOLDMARK - viel kleiner als {@link #HOECHSTENS}.
+     *
+     * <p>Dieselbe Begruendung, andere Zahl: 1 Goldmark ist 800 Mark (Plan 8.1), also
+     * waere eine Milliarde Goldmark achthundert Milliarden Mark - keine Korrektur mehr,
+     * sondern ein Versehen mit drei Nullen zu viel. Die Markschranke hier zu uebernehmen
+     * waere der eigentliche Schaden gewesen, denn fuer diese Groesse ist nicht mehr
+     * gerechnet, ob eine Summe im Buch ueberlaufsicher bleibt.
+     */
+    static final long HOECHSTENS_GOLD = 1_000_000L;
+
+    /**
+     * Welches Konto berichtigt wird.
+     *
+     * <p>Das BEFEHLSWORT und die SCHRANKE stehen hier beim Namen und nicht beim
+     * Befehlsbaum: Es ist ein Paar, und wer das Wort an einer Stelle fuehrt und die Zahl
+     * an einer anderen, laesst sie auseinanderlaufen. Nimmt Brigadier eine Zahl nicht an,
+     * antwortet es englisch an eine Konsole, die ihre Antwort ohnehin nicht zurueckgibt.
+     *
+     * <p>Das ANZEIGEWORT ("Mark", "Goldmark") steht bewusst NICHT hier: Diese Klasse ist
+     * ohne Text gebaut, damit jede Lage in einer Probe ohne Server laeuft. Was der
+     * Betreiber liest, baut {@link FreimarkenPlugin}.
+     */
+    enum Waehrung {
+
+        MARK("geld", HOECHSTENS, "/mark verlauf"),
+        GOLDMARK("goldgeld", HOECHSTENS_GOLD, "/mark muenzhaus verlauf");
+
+        private final String befehlswort;
+        private final long hoechstens;
+        private final String verlaufsbefehl;
+
+        Waehrung(String befehlswort, long hoechstens, String verlaufsbefehl) {
+            this.befehlswort = befehlswort;
+            this.hoechstens = hoechstens;
+            this.verlaufsbefehl = verlaufsbefehl;
+        }
+
+        /** Das Wort hinter {@code /freimarken}, das der Betreiber tippt. */
+        String befehlswort() {
+            return befehlswort;
+        }
+
+        /** Die groesste Zahl, die der Befehl in dieser Waehrung annimmt. */
+        long hoechstens() {
+            return hoechstens;
+        }
+
+        /**
+         * Der Befehl, in dem die Buchung DANACH steht - der dritte Teil des Paars.
+         *
+         * <p>{@code /mark verlauf} zeigt ausschliesslich das MARKbuch
+         * ({@code ParzellenBefehle.verlaufZeilen} gibt {@code Buch.MARK} herein), das
+         * Goldbuch liest nur {@code /mark muenzhaus verlauf}. Die Hilfezeile nannte am
+         * 23.11.2026 fuer beide Waehrungen {@code /mark verlauf}: Der Betreiber bucht 40
+         * Goldmark zurueck, sieht im Markverlauf nichts davon und bucht noch einmal - die
+         * Lage, die diese Klasse weiter unten selbst als die teuerste des Zweigs nennt,
+         * nur zum achthundertfachen Wert.
+         */
+        String verlaufsbefehl() {
+            return verlaufsbefehl;
+        }
+    }
 
     /**
      * Was aus dem Versuch geworden ist - je Lage eine, und keine Lage ohne eine.
@@ -108,6 +173,42 @@ final class Betreibergeld {
      * zweite.
      */
     static Ergebnis buche(Kasse kasse, Namenssuche suche, String name, long betrag) {
+        return buche(kasse, suche, name, betrag, Buchungsgrund.BETREIBER_GUTSCHRIFT,
+                Buchungsgrund.BETREIBER_ABZUG);
+    }
+
+    /**
+     * Dasselbe fuer die GOLDMARK - und der PARAMETERTYP ist der Riegel [23.11.2026].
+     *
+     * <p><b>{@link Goldkasse} und nicht {@link Kasse}:</b> Die Markkasse hat
+     * ausdruecklich keinen Waehrungsriegel - die Goldkasse ist die einzige Tuer zum
+     * Goldbuch, und dort sitzt er. Ein Goldgrund koennte also nur dadurch im Markbuch
+     * landen, dass jemand hier die falsche Kasse hereingibt, und genau das weist der
+     * Uebersetzer mit dem engeren Typ ab. Das ist dieselbe Begruendung, aus der es die
+     * Klasse {@code Goldkasse} ueberhaupt gibt, und es ist die staerkste Form eines
+     * Riegels: Eine Laufzeitprobe dafuer laesst sich gar nicht schreiben. Ein zweiter
+     * Riegel zur Laufzeit waere der doppelte, der sich selbst unpruefbar macht.
+     *
+     * <p>Dies ist der erste Weg, auf dem Goldmark von aussen in das Buch kommt. Bis zum
+     * 23.11.2026 war eine verlorene Goldmark nur von Hand in der Datenbank zu ersetzen -
+     * genau der Weg, gegen den diese Klasse gebaut wurde.
+     */
+    static Ergebnis bucheGold(Goldkasse kasse, Namenssuche suche, String name,
+                              long betrag) {
+        return buche(kasse, suche, name, betrag, Buchungsgrund.BETREIBER_GOLDGUTSCHRIFT,
+                Buchungsgrund.BETREIBER_GOLDABZUG);
+    }
+
+    /**
+     * Die Regel, einmal - die zwei Tueren darueber geben nur die Gruende herein.
+     *
+     * <p>Die Gruende sind Parameter und kein Schalter ueber die Waehrung: So kann es
+     * keinen Zweig geben, der einen Grund vergisst, und die Reihenfolge der Fragen (Name,
+     * Betrag, Deckung) steht fuer beide Waehrungen an derselben Stelle.
+     */
+    private static Ergebnis buche(Kasse kasse, Namenssuche suche, String name,
+                                  long betrag, Buchungsgrund gutschrift,
+                                  Buchungsgrund abzugsgrund) {
         if (kasse == null || suche == null) {
             throw new IllegalArgumentException("Ohne Kasse und Namenssuche gibt es keine"
                     + " Buchung");
@@ -120,12 +221,12 @@ final class Betreibergeld {
             return new Ergebnis(Ausgang.NICHTS_ZU_BUCHEN, name, 0L, kasse.guthaben(wer));
         }
         if (betrag > 0L) {
-            kasse.gutschreiben(wer, betrag, Buchungsgrund.BETREIBER_GUTSCHRIFT);
+            kasse.gutschreiben(wer, betrag, gutschrift);
             return new Ergebnis(Ausgang.GUTGESCHRIEBEN, name, betrag,
                     kasse.guthaben(wer));
         }
         long abzug = -betrag;
-        if (!kasse.abbuchen(wer, abzug, Buchungsgrund.BETREIBER_ABZUG)) {
+        if (!kasse.abbuchen(wer, abzug, abzugsgrund)) {
             // Die Rueckgabe NICHT wegwerfen: false heisst "nicht gedeckt, nichts
             // passiert, keine Zeile". Wer sie ignoriert, meldet dem Betreiber Erfolg
             // fuer eine Buchung, die es nicht gibt.

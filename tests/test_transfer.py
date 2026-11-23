@@ -362,6 +362,182 @@ def test_umbau_ohne_dimensionen_laeuft_durch(tmp_path, client):
     assert ts._baue_stil_um(tmp_path, "world", ts.STIL_GEMEINSAM, ts.STIL_GETRENNT) == []
 
 
+# ------------------------------------------- Weltglobale Daten und die Weltgrenze
+
+PAPER_GLOBALORDNER = ("dimensions", "minecraft", "overworld", "data", "minecraft")
+# WOERTLICH und nicht aus ts.PAPER_WELTGLOBAL: Eine Probe, die ihre Erwartung aus der
+# gepruefeten Liste holt, ist gruen, egal was in der Liste steht.
+WANDERT = ("game_rules.dat", "scheduled_events.dat", "wandering_trader.dat",
+           "weather.dat", "world_gen_settings.dat")
+
+
+def _weltglobal_paper(welt: Path) -> None:
+    """Die weltweit gueltigen Dateien an Papers Platz legen - samt Weltgrenze."""
+    ordner = welt
+    for teil in PAPER_GLOBALORDNER:
+        ordner = ordner / teil
+    ordner.mkdir(parents=True, exist_ok=True)
+    for name in WANDERT + ("world_border.dat",):
+        (ordner / name).write_bytes(name.encode("ascii"))
+
+
+def _paper_ort(welt: Path) -> Path:
+    ordner = welt
+    for teil in PAPER_GLOBALORDNER:
+        ordner = ordner / teil
+    return ordner
+
+
+def test_paper_nach_vanilla_sortiert_die_weltglobalen_dateien_um(tmp_path, client):
+    from app.services import transfer_service as ts
+
+    _weltglobal_paper(tmp_path / "world")
+    meldungen = ts._sortiere_paper_weltglobal(tmp_path / "world", nach_vanilla=True)
+
+    vanilla = tmp_path / "world" / "data" / "minecraft"
+    paper = _paper_ort(tmp_path / "world")
+    for name in WANDERT:
+        assert (vanilla / name).read_bytes() == name.encode("ascii"), name
+        assert not (paper / name).exists(), name
+    assert any("umsortiert" in m for m in meldungen)
+
+
+def test_die_weltgrenze_liegt_danach_an_beiden_orten(tmp_path, client):
+    """KOPIERT und nicht verschoben - und das ist Absicht.
+
+    Belegt ist nur, wo PAPER die Grenze fuehrt. Wo ein Vanilla 26.1 sie LIEST, ist nicht
+    gemessen. Liest es sie ebenfalls je Dimension, zoege ein Verschieben sie aus dem
+    Ordner heraus, in dem sie gelesen wird - die Behebung richtete dann genau den Schaden
+    an, den sie verhindern soll. Eine Grenze an beiden Orten kann nicht verloren gehen.
+    """
+    from app.services import transfer_service as ts
+
+    _weltglobal_paper(tmp_path / "world")
+    meldungen = ts._sortiere_paper_weltglobal(tmp_path / "world", nach_vanilla=True)
+
+    grenze = "world_border.dat"
+    assert (tmp_path / "world" / "data" / "minecraft" / grenze).read_bytes() \
+        == grenze.encode("ascii")
+    assert (_paper_ort(tmp_path / "world") / grenze).read_bytes() == grenze.encode("ascii")
+    # Der Betreiber muss es lesen koennen, sonst sucht er die Datei zweimal.
+    assert any(grenze in m and "kopiert" in m for m in meldungen)
+
+
+def test_zwei_verschiedene_weltgrenzen_werden_gemeldet(tmp_path, client):
+    """Die Grenze liegt danach an beiden Orten - und die AELTERE kann spaeter gewinnen.
+
+    Der Riegel ``not grenze_nach.exists()`` ueberspringt beim naechsten Umsortieren genau
+    die Datei, die schon da ist. Wer auf dem Vanilla-Server ``/worldborder set 500``
+    setzt und die Welt spaeter zurueck zu Paper holt, findet in Papers Dimensionszweig die
+    alte Grenze wieder. Aufloesen laesst sich das erst mit der fehlenden Messung (wo ein
+    Vanilla 26.1 die Grenze LIEST); stumm bleiben darf es nicht.
+    """
+    from app.services import transfer_service as ts
+
+    welt = tmp_path / "world"
+    _weltglobal_paper(welt)
+    vanilla = welt / "data" / "minecraft"
+    vanilla.mkdir(parents=True)
+    (vanilla / ts.PAPER_WELTGRENZE).write_bytes(b"EINE-ANDERE-GRENZE")
+
+    meldungen = ts._sortiere_paper_weltglobal(welt, nach_vanilla=True)
+
+    assert any("ZWEI verschiedene" in m for m in meldungen), meldungen
+    # Und keine der beiden Fassungen wurde dabei angefasst - die Meldung ist ein Hinweis
+    # und kein Eingriff.
+    assert (vanilla / ts.PAPER_WELTGRENZE).read_bytes() == b"EINE-ANDERE-GRENZE"
+    assert (_paper_ort(welt) / ts.PAPER_WELTGRENZE).read_bytes() == b"world_border.dat"
+
+
+def test_zwei_gleiche_weltgrenzen_melden_nichts(tmp_path, client):
+    """DIE GEGENRICHTUNG: Eine Meldung, die immer kommt, lernt der Betreiber zu
+    uebersehen - und dann uebersieht er sie auch, wenn die Fassungen wirklich abweichen."""
+    from app.services import transfer_service as ts
+
+    welt = tmp_path / "world"
+    _weltglobal_paper(welt)
+    vanilla = welt / "data" / "minecraft"
+    vanilla.mkdir(parents=True)
+    (vanilla / ts.PAPER_WELTGRENZE).write_bytes(b"world_border.dat")   # dieselben Bytes
+
+    meldungen = ts._sortiere_paper_weltglobal(welt, nach_vanilla=True)
+
+    assert not any("ZWEI verschiedene" in m for m in meldungen), meldungen
+
+
+def test_umsortieren_ohne_weltglobale_dateien_meldet_nichts(tmp_path, client):
+    from app.services import transfer_service as ts
+
+    (tmp_path / "world").mkdir()
+    assert ts._sortiere_paper_weltglobal(tmp_path / "world", nach_vanilla=True) == []
+    # Kein leerer data/minecraft-Ordner: Vanilla legt ihn selbst an, wenn er ihn braucht.
+    assert not (tmp_path / "world" / "data").exists()
+
+
+def test_umsortieren_ueberschreibt_nichts_vorhandenes(tmp_path, client):
+    """Liegt am Ziel schon eine Datei, gewinnt sie - sonst waere der zweite Lauf eine
+    Ruecksetzung der Spielregeln auf einen aelteren Stand."""
+    from app.services import transfer_service as ts
+
+    _weltglobal_paper(tmp_path / "world")
+    vanilla = tmp_path / "world" / "data" / "minecraft"
+    vanilla.mkdir(parents=True)
+    (vanilla / "game_rules.dat").write_bytes(b"NEUER-STAND")
+    (vanilla / "world_border.dat").write_bytes(b"NEUE-GRENZE")
+
+    ts._sortiere_paper_weltglobal(tmp_path / "world", nach_vanilla=True)
+
+    assert (vanilla / "game_rules.dat").read_bytes() == b"NEUER-STAND"
+    assert (vanilla / "world_border.dat").read_bytes() == b"NEUE-GRENZE"
+
+
+def test_weltglobal_umsortieren_haengt_am_servertyp(tmp_path, client):
+    """Die EINE Stelle, an der die Bedingung steht - in beide Richtungen geprueft."""
+    from app.db.session import SessionLocal
+    from app.services import transfer_service as ts
+
+    with SessionLocal() as db:
+        paper = _server(db, tmp_path / "p", name="P", slug="p", typ="paper")
+        vanilla = _server(db, tmp_path / "v", name="V", slug="v", typ="vanilla",
+                          port=25600)
+        purpur = _server(db, tmp_path / "u", name="U", slug="u", typ="purpur", port=25601)
+        spigot = _server(db, tmp_path / "s", name="S", slug="s", typ="spigot", port=25602)
+
+        # Paper -> Vanilla: umsortieren.
+        _weltglobal_paper(tmp_path / "w1")
+        assert ts._sortiere_weltglobal_falls_noetig(paper, vanilla, tmp_path / "w1")
+        assert (tmp_path / "w1" / "data" / "minecraft" / "weather.dat").is_file()
+
+        # Paper -> Purpur ist innerhalb der Paper-Familie: nichts anfassen.
+        _weltglobal_paper(tmp_path / "w2")
+        assert ts._sortiere_weltglobal_falls_noetig(paper, purpur, tmp_path / "w2") == []
+        assert not (tmp_path / "w2" / "data").exists()
+
+        # Paper -> Spigot: Spigot hat sein eigenes Layout, dafuer ist der Stil-Umbau da.
+        _weltglobal_paper(tmp_path / "w3")
+        assert ts._sortiere_weltglobal_falls_noetig(paper, spigot, tmp_path / "w3") == []
+        assert not (tmp_path / "w3" / "data").exists()
+
+        # Vanilla -> Paper: die Gegenrichtung ist bewusst NICHT gerufen, weil ungemessen
+        # ist, ob Paper die Dateien in data/minecraft findet.
+        #
+        # DIE DATEIEN LIEGEN HIER AM VANILLA-PLATZ, und das ist der ganze Satz
+        # [berichtigt 23.11.2026]: Am Paper-Platz waere der QUELLORT der Gegenrichtung
+        # (data/minecraft) leer, sie gaebe auch dann [] zurueck, wenn sie gerufen WIRD -
+        # gemessen blieb ein Lauf mit verdrahteter Gegenrichtung komplett gruen. So
+        # dagegen traegt die Probe: Wer den wartenden Zweig morgen anschliesst, verschiebt
+        # diese Dateien nach dimensions/..., und beide Zusicherungen unten werden rot.
+        vanilla_platz = tmp_path / "w4" / "data" / "minecraft"
+        vanilla_platz.mkdir(parents=True)
+        for name in WANDERT:
+            (vanilla_platz / name).write_bytes(b"VANILLA-STAND")
+        assert ts._sortiere_weltglobal_falls_noetig(vanilla, paper, tmp_path / "w4") == []
+        assert not (tmp_path / "w4" / "dimensions").exists(), \
+            "die Gegenrichtung ist gebaut und wartet auf eine Messung - sie darf nicht"
+        for name in WANDERT:
+            assert (vanilla_platz / name).read_bytes() == b"VANILLA-STAND", name
+
+
 # ------------------------------------------------------------------ Filter
 
 def test_filter_laesst_laufzeitdateien_weg(client):
@@ -854,6 +1030,215 @@ def test_sichere_weltnamen_gehen_durch(client, wert):
     from app.services import transfer_service as ts
 
     assert ts.ist_sicherer_weltname(wert) is True
+
+
+# Bytes der Datei -> erwarteter Weltname. BEIDE Spalten von Hand hingeschrieben, keine aus
+# dem Gepruefen geholt. Erwartet wird, was der Minecraft-Server selbst liest.
+WELTNAME_FAELLE = [
+    (b"level-name=lobby\n", "lobby"),
+    (b"level-name = lobby\n", "lobby"),                 # Leerzeichen um den Trenner
+    # JAVAS DRITTES TRENNZEICHEN [23.11.2026]: Properties.load beendet den Schluessel auch
+    # am ersten ungefluchteten Leerzeichen oder Tabulator - OHNE jedes = oder :. Der
+    # Zerleger kannte nur die zwei und gab fuer diese Zeilen nichts zurueck; der Rueckfall
+    # war "world", also genau der Ordner, den deploy_lobby_world per shutil.rmtree
+    # ausraeumt, waehrend der Server in "lobby" spielt. Minecraft selbst schreibt immer
+    # "=", ein Mensch mit einem Editor nicht.
+    (b"level-name lobby\n", "lobby"),
+    (b"level-name\tlobby\n", "lobby"),
+    (b"level-name:lobby\n", "lobby"),                   # ':' ist Javas zweiter Trenner
+    (b"level-name=world\nlevel-name=lobby\n", "lobby"),  # Java nimmt den LETZTEN
+    (b"#level-name=aus\nlevel-name=lobby\n", "lobby"),   # Kommentar zaehlt nicht
+    (b"motd=Gr\xfc\xdfe\nlevel-name=lobby\n", "lobby"),  # Latin-1: ein Umlaut in der MOTD
+    (b"level-name=../woanders\n", "world"),             # Riegel: fuehrt aus dem Ordner
+    (b"level-name=C:welt\n", "world"),                   # laufwerksrelativ, ohne Schraegstrich
+    (b"level-name=CON\n", "world"),                      # Windows-Geraetename
+    (b"level-name=\n", "world"),                         # leerer Wert
+]
+
+
+def test_weltname_folgt_javas_regeln(tmp_path, client):
+    """ALLE DREI Einstiege, derselbe Satz Dateien, dieselbe Antwort.
+
+    Vor dem 23.11.2026 hatte jeder Verbraucher seinen eigenen Zerleger, und gemessen gaben
+    sie bei vier von fuenf Dateien drei verschiedene Antworten: ``lobby_service`` WARF bei
+    der Latin-1-Zeile und gab ``'../woanders'`` an ein ``shutil.rmtree`` weiter,
+    ``content_service`` las ``level-name:lobby`` nicht, und keiner nahm bei doppeltem
+    Schluessel den letzten Eintrag.
+    """
+    from app.db.session import SessionLocal
+    from app.services import content_service as cs
+    from app.services import lobby_service as ls
+    from app.services import transfer_service as ts
+
+    geprueft = 0
+    with SessionLocal() as db:
+        for nr, (rohdaten, erwartet) in enumerate(WELTNAME_FAELLE):
+            ordner = tmp_path / f"s{nr}"
+            srv = _server(db, ordner, name=f"S{nr}", slug=f"s{nr}", port=25600 + nr)
+            (ordner / "server.properties").write_bytes(rohdaten)
+            assert ts.weltname_aus_ordner(ordner) == erwartet, ("transfer", rohdaten)
+            assert ls._level_name(ordner) == erwartet, ("lobby", rohdaten)
+            assert cs._server_level_name(srv) == erwartet, ("content", rohdaten)
+            geprueft += 1
+
+    # GEZAEHLT: Ein uebersprungener Fall (continue, Vorfilter, ein leeres WELTNAME_FAELLE)
+    # meldete sonst gruen, ohne einen einzigen Vergleich gemacht zu haben.
+    assert geprueft == 12
+
+
+# Eigene Zeilenzerleger fuer key=value-Dateien, die es am 23.11.2026 noch gibt - je Datei
+# die Funktion, die ihre Zeilen SELBST trennt und ihr Trennzeichen '=' selbst mitbringt.
+# Sie lesen NICHT den Weltnamen (online-mode, max-players, server-port ...), haben aber
+# dasselbe Loch an einer anderen Stelle: errors="ignore" oder "replace", nur '=' als
+# Trenner, erster Treffer gewinnt, keine Entfluchtung, keine Fortsetzungszeile.
+#
+# Die Liste stand hier am 23.11.2026 zuerst mit ACHT Namen - weil das Muster das Literal
+# "server.properties" im Rumpf DERSELBEN Funktion verlangte. Vier der vierzehn bekommen
+# ihren Text oder Pfad als Parameter und nennen den Dateinamen nie; sie fehlten, und ein
+# neuer Zerleger in genau diesem Stil waere unbemerkt dazugekommen. Ein Eintrag liest
+# bewusst keine server.properties (_dump_properties SCHREIBT sie, mit demselben Trenner) -
+# er steht mit in der Liste, weil der Riegel die GESTALT faengt und nicht den Dateinamen.
+#
+# Die ZAHL und die NAMEN sind der Riegel: ein fuenfzehnter macht diese Probe rot, und wer
+# einen aufraeumt, muss ihn hier herausnehmen.
+EIGENE_PROPERTIES_ZERLEGER = {
+    ("ai_agent_service.py", "_tue_einstellung"),
+    ("ai_config_service.py", "_properties"),
+    ("ai_config_service.py", "_parse_inhalt"),             # bekommt den Text als Parameter
+    ("file_service.py", "_parse_properties"),              # bekommt den Text als Parameter
+    ("file_service.py", "_dump_properties"),               # schreibt, mit demselben Trenner
+    ("file_service.py", "get_assistant_payload"),
+    ("freimarken_einrichtung_service.py", "lies_zugangsdaten"),
+    ("hub_capture_service.py", "_read_property"),
+    ("modpack_service.py", "_read_server_pack_variables"),  # bekommt den Pfad als Parameter
+    ("process_service.py", "_read_max_players_from_server_properties"),
+    ("process_service.py", "_whitelist_wert"),             # bekommt den Pfad als Parameter
+    ("server_import_service.py", "detect_server_port"),
+    ("server_service.py", "cleanup_velocity_leftovers"),
+    ("transfer_service.py", "_kopiere_properties"),
+}
+
+
+def test_kein_neuer_eigener_properties_zerleger(client):
+    """Javas Regeln stehen in properties_service - wer sie nachbaut, baut sie anders.
+
+    Der Beleg steht im Quelltext selbst: ``server_service.read_server_property`` sagt,
+    warum es dort schon einmal behoben wurde ("ein eigener Zerleger, der am Prefix ``key=``
+    suchte und Fluchtzeichen stehen liess: ``motd = x`` mit Leerzeichen wurde nicht
+    gefunden, und die Backslashes wuchsen mit jedem Speichern"). Dieselbe Begruendung galt
+    fuer die drei Weltname-Leser, und sie gilt fuer die vierzehn, die noch stehen.
+
+    Gesucht wird die GESTALT, nicht der Dateiname: Trennt die Funktion Zeilen selbst UND
+    traegt sie eine Zeichenkette mit "=" - ihr eigenes Trennzeichen? Nach dem Dateinamen zu
+    fragen war die Luecke dieser Probe am 23.11.2026: Ein Zerleger, der seinen Text als
+    Parameter bekommt, nennt "server.properties" nie und war unsichtbar. Das "=" wird aus
+    den Zeichenketten des Rumpfes gelesen und nicht aus dem Rohtext, damit auch
+    ``prefix = f"{key}="`` + ``startswith(prefix)`` hineinfaellt - die Gestalt von
+    ``hub_capture_service._read_property``, die ein Muster auf ``split(`` uebersieht.
+
+    Geprueft wird gegen die ZAHL und die NAMEN, nicht gegen "nicht leer": Eine Liste, die
+    nur waechst, haelt nichts.
+    """
+    import ast
+
+    # Fuenf Gestalten sind am 23.11.2026 gemessen durch die erste Fassung dieses Musters
+    # geschluepft, und alle fuenf sind hier geschlossen: splitlines(keepends=True),
+    # split("\r\n"), readlines(), die Zeilen ueber das DATEIOBJEKT, das Trennzeichen aus
+    # einer Modulkonstante und chr(61) statt "=". Die Weitung kostet nichts - gemessen
+    # findet sie genau dieselben vierzehn Funktionen wie vorher, keinen Fehltreffer mehr.
+    trennt_zeilen = ("splitlines(", "split(chr(10))", 'split("' + chr(92) + 'n")',
+                     "split('" + chr(92) + "n')",
+                     'split("' + chr(92) + 'r' + chr(92) + 'n")', "readlines()")
+
+    def ist_oeffnen(knoten: ast.AST) -> bool:
+        """``open(...)`` oder ``<pfad>.open(...)``."""
+        if not isinstance(knoten, ast.Call):
+            return False
+        ziel = knoten.func
+        if isinstance(ziel, ast.Name) and ziel.id == "open":
+            return True
+        return isinstance(ziel, ast.Attribute) and ziel.attr == "open"
+
+    def ueber_dateiobjekt(knoten: ast.AST) -> bool:
+        """``for zeile in datei:`` - Zeilen OHNE jedes Trennmuster im Quelltext."""
+        namen: set[str] = set()
+        for k in ast.walk(knoten):
+            if isinstance(k, ast.withitem) and ist_oeffnen(k.context_expr) \
+                    and isinstance(k.optional_vars, ast.Name):
+                namen.add(k.optional_vars.id)
+            if isinstance(k, ast.Assign) and ist_oeffnen(k.value):
+                for ziel in k.targets:
+                    if isinstance(ziel, ast.Name):
+                        namen.add(ziel.id)
+        for k in ast.walk(knoten):
+            if not isinstance(k, (ast.For, ast.AsyncFor)):
+                continue
+            if ist_oeffnen(k.iter):
+                return True
+            if isinstance(k.iter, ast.Name) and k.iter.id in namen:
+                return True
+        return False
+
+    def trennernamen(baum: ast.Module) -> set[str]:
+        """Modulweite Namen, deren Wert ein "=" enthaelt - ein Trenner darf eine
+        Konstante sein, und dann sieht ihn keine Suche nach Zeichenketten im Rumpf."""
+        namen: set[str] = set()
+        for knoten in baum.body:
+            werte = []
+            if isinstance(knoten, ast.Assign):
+                werte = [(z, knoten.value) for z in knoten.targets]
+            elif isinstance(knoten, ast.AnnAssign) and knoten.value is not None:
+                werte = [(knoten.target, knoten.value)]
+            for ziel, wert in werte:
+                if isinstance(ziel, ast.Name) and isinstance(wert, ast.Constant) \
+                        and isinstance(wert.value, str) and "=" in wert.value:
+                    namen.add(ziel.id)
+        return namen
+
+    def hat_trennzeichen(knoten: ast.AST, quelle: str, namen: set[str]) -> bool:
+        """Ein "=" im QUELLTEXT - als Zeichenkette, als chr(61) oder als Konstante.
+
+        Dokubloecke zaehlen nicht mit: ``motd_zerlegen`` erzaehlt in seinem von Javas
+        Fluchtzeichen, und ``_upsert_server_property`` beschreibt den eigenen Zerleger, den
+        es ERSETZT hat - beide waeren sonst Fehltreffer, und ein Fehltreffer in dieser Liste
+        ist eine Erlaubnis.
+        """
+        doku = {id(k.value) for k in ast.walk(knoten)
+                if isinstance(k, ast.Expr) and isinstance(k.value, ast.Constant)
+                and isinstance(k.value.value, str)}
+        if any(isinstance(k, ast.Constant) and isinstance(k.value, str)
+               and "=" in k.value and id(k) not in doku for k in ast.walk(knoten)):
+            return True
+        if "chr(61)" in quelle:
+            return True
+        return any(isinstance(k, ast.Name) and k.id in namen for k in ast.walk(knoten))
+
+    gefunden: set[tuple[str, str]] = set()
+    for pfad in sorted((Path(__file__).resolve().parents[1] / "app").rglob("*.py")):
+        text = pfad.read_text(encoding="utf-8-sig")
+        baum = ast.parse(text)
+        namen = trennernamen(baum)
+        for knoten in ast.walk(baum):
+            if not isinstance(knoten, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            quelle = ast.get_source_segment(text, knoten) or ""
+            if not any(t in quelle for t in trennt_zeilen) \
+                    and not ueber_dateiobjekt(knoten):
+                continue
+            if hat_trennzeichen(knoten, quelle, namen):
+                gefunden.add((pfad.name, knoten.name))
+
+    assert len(gefunden) == 14, (f"Erwartet waren 14 eigene Zerleger, gefunden "
+                                 f"{len(gefunden)}: {sorted(gefunden)}. Stimmt das "
+                                 f"Muster noch?")
+    neu = gefunden - EIGENE_PROPERTIES_ZERLEGER
+    assert not neu, (f"Neuer eigener Zerleger fuer server.properties: {sorted(neu)}. "
+                     f"properties_service.lies_wert / server_service.read_server_property "
+                     f"nehmen.")
+    # Und die andere Richtung: Ist einer aufgeraeumt, gehoert er aus der Liste heraus -
+    # sonst waechst sie zu einer Erlaubnis fuer alles.
+    weg = EIGENE_PROPERTIES_ZERLEGER - gefunden
+    assert not weg, (f"Aufgeraeumt, aber noch in der Liste: {sorted(weg)}")
 
 
 def test_laufwerksrelativer_level_name_faellt_auf_world_zurueck(tmp_path, client):
@@ -2112,6 +2497,61 @@ def test_zusatzwelten_werden_umgebaut(tmp_path, client, monkeypatch):
     # Forge erwartet die Dimension IM Weltordner.
     assert (tmp_path / "z" / "creative" / "DIM-1" / "region" / "r.0.0.mca").is_file()
     assert not (tmp_path / "z" / "creative_nether").exists()
+
+
+def test_hauptwelt_bekommt_die_weltglobalen_dateien_umsortiert(tmp_path, client,
+                                                               monkeypatch):
+    """Der ANSCHLUSS fuer die Hauptwelt - die Regel allein genuegt nicht."""
+    from app.db.session import SessionLocal
+    from app.services import transfer_service as ts
+
+    _ohne_backup(monkeypatch, tmp_path)
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="paper",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Z", slug="z", typ="vanilla",
+                       version="26.2", port=25600)
+        _welt_gemeinsam(tmp_path / "q")
+        _weltglobal_paper(tmp_path / "q" / "world")
+        _welt_gemeinsam(tmp_path / "z")
+
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=True, run_async=False)
+
+    vanilla = tmp_path / "z" / "world" / "data" / "minecraft"
+    assert (vanilla / "game_rules.dat").read_bytes() == b"game_rules.dat"
+    assert (vanilla / "world_border.dat").read_bytes() == b"world_border.dat"
+
+
+def test_auch_zusatzwelten_bekommen_die_weltglobalen_dateien(tmp_path, client,
+                                                             monkeypatch):
+    """Der zweite Weg zur selben Tat - bis zum 23.11.2026 rief ihn niemand.
+
+    _uebernimm_zusatzwelten kopierte, baute den Stil um und liess die weltglobalen Daten
+    liegen. Eine Zusatzwelt verlor beim Wechsel zu Vanilla also Spielregeln, Wetter, den
+    Haendler-Zeitgeber, die Generator-Einstellungen und die Weltgrenze - ohne eine Zeile,
+    die es sagt.
+    """
+    from app.db.session import SessionLocal
+    from app.services import transfer_service as ts
+
+    _ohne_backup(monkeypatch, tmp_path)
+    with SessionLocal() as db:
+        quelle = _server(db, tmp_path / "q", name="Q", slug="q", typ="paper",
+                         version="26.2")
+        ziel = _server(db, tmp_path / "z", name="Z", slug="z", typ="vanilla",
+                       version="26.2", port=25600)
+        _welt_gemeinsam(tmp_path / "q")
+        _welt_gemeinsam(tmp_path / "q", name="creative")
+        _weltglobal_paper(tmp_path / "q" / "creative")
+        _welt_gemeinsam(tmp_path / "z")
+
+        ts.uebertrage(db, quelle=quelle, ziel=ziel, welt=True, zusatzwelten=True,
+                      run_async=False)
+
+    vanilla = tmp_path / "z" / "creative" / "data" / "minecraft"
+    for name in WANDERT:
+        assert (vanilla / name).read_bytes() == name.encode("ascii"), name
+    assert (vanilla / "world_border.dat").read_bytes() == b"world_border.dat"
 
 
 def test_ohne_haken_bleiben_zusatzwelten_zurueck(tmp_path, client, monkeypatch):

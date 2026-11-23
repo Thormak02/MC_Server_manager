@@ -157,18 +157,55 @@ class GoldkasseTest {
     }
 
     @Test
-    @DisplayName("Der Riegel laesst GOLDMARKGRUENDE durch - alle drei")
+    @DisplayName("Der Riegel laesst JEDEN Goldmarkgrund durch - auf allen drei Wegen")
     void goldmarkgruendeDurch() {
         // Die Gegenrichtung, und sie ist Pflicht: Ein Riegel, der ALLES abweist, waere
         // mit der Probe darueber genauso gruen.
+        //
+        // UEBER ALLE Gruende und nicht ueber eine Liste von Hand [23.11.2026]: Bis dahin
+        // nannte diese Probe drei Gruende beim Namen, waehrend das Goldbuch schon sechs
+        // hatte - ein neuer Grund lief an ihr vorbei. Jetzt laeuft jeder von selbst mit,
+        // und die ZAHL unten faengt den Fall, dass die Auswahl nichts mehr trifft.
         Goldkasse kasse = new Goldkasse(new SpeicherKasse(0L));
         UUID anna = UUID.randomUUID();
 
-        kasse.gutschreiben(anna, 5L, Buchungsgrund.WECHSEL_GOLDMARK_HER);
-        kasse.gutschreiben(anna, 1L, Buchungsgrund.WECHSEL_GOLDMARK_ZURUECK);
-        assertTrue(kasse.abbuchen(anna, 2L, Buchungsgrund.WECHSEL_GOLDMARK_WEG));
+        // Deckung fuer die Abzuege, mit einem Goldgrund gebucht.
+        kasse.gutschreiben(anna, 1_000L, Buchungsgrund.WECHSEL_GOLDMARK_HER);
+        long erwartet = 1_000L;
 
-        assertEquals(4L, kasse.guthaben(anna));
+        int geprueft = 0;
+        for (Buchungsgrund grund : Buchungsgrund.values()) {
+            if (grund.buch() != Buchungsgrund.Buch.GOLDMARK) {
+                continue;
+            }
+            // JE RICHTUNG DER PASSENDE WEG, und das ist nicht Bequemlichkeit: Buchung
+            // weist einen Betrag ab, der nicht zur Richtung des Grundes passt
+            // ("Der Betrag -1 passt nicht zu WECHSEL_GOLDMARK_HER (EINNAHME)"). Dass der
+            // Riegel der Goldkasse an ALLEN drei Wegen haengt, haelt die Probe darueber -
+            // sie wirft denselben Markgrund in alle drei.
+            if (grund.richtung() == Buchungsgrund.Richtung.EINNAHME) {
+                kasse.gutschreiben(anna, 2L, grund);
+                erwartet += 2L;
+            } else {
+                assertTrue(kasse.abbuchen(anna, 2L, grund), grund.name());
+                erwartet -= 2L;
+            }
+            // Der dritte Weg in den Riegel - er prueft auch beim LESEN.
+            kasse.summeSeit(anna, Instant.EPOCH, grund);
+            geprueft++;
+        }
+
+        assertEquals(8, geprueft, "gemessen am 23.11.2026: acht Gruende im Goldbuch."
+                + " Kommt einer dazu, ist das die Zeile, die es sagt");
+        assertEquals(erwartet, kasse.guthaben(anna),
+                "jede Buchung muss auch angekommen sein - sonst waere ein Riegel, der"
+                        + " wirft NACHDEM er weitergereicht hat, hier gruen");
+        // Die zwei Betreibergruende namentlich: Sie sind der Grund, aus dem es diese
+        // Runde gab, und ein Verschieben in das Markbuch waere sonst stumm.
+        assertEquals(Buchungsgrund.Buch.GOLDMARK,
+                Buchungsgrund.BETREIBER_GOLDGUTSCHRIFT.buch());
+        assertEquals(Buchungsgrund.Buch.GOLDMARK,
+                Buchungsgrund.BETREIBER_GOLDABZUG.buch());
     }
 
     @Test

@@ -354,17 +354,6 @@ public record Lotteriewerte(boolean an, int freieLoseJeTag, int hoechsteLoseJeTa
                 steigerungProzent, hoechstpreis, gewinne);
     }
 
-    /** Dieselben Werte mit einer anderen Gewinntabelle. */
-    public Lotteriewerte mitGewinnen(List<Gewinn> andere) {
-        return new Lotteriewerte(an, freieLoseJeTag, hoechsteLoseJeTag, grundpreis,
-                steigerungProzent, hoechstpreis, andere);
-    }
-
-    /** Dieselbe Lotterie mit einer anderen Staffel - fuer Proben und den Leser. */
-    public Lotteriewerte mitStaffel(int freie, int hoechste, long grund, int steigerung,
-                                    long deckel) {
-        return new Lotteriewerte(an, freie, hoechste, grund, steigerung, deckel, gewinne);
-    }
 
     /** Welche Art ein Gewinn ist - was ausgezahlt beziehungsweise geliefert wird. */
     public enum Art {

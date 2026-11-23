@@ -127,6 +127,23 @@ HUELLE_RESTE = frozenset({"level.dat", "level.dat_old", "uid.dat", "session.lock
 # Ereignisse auf Standard zurueck - lautlos.
 PAPER_WELTGLOBAL = ("game_rules.dat", "scheduled_events.dat", "wandering_trader.dat",
                     "weather.dat", "world_gen_settings.dat")
+
+# Die WELTGRENZE gehoert auch dazu, bekommt aber eine eigene Behandlung [23.11.2026].
+# Sie steht seit 26.1 NICHT mehr in der level.dat, sondern in world_border.dat; bei Paper
+# unter dimensions/<namensraum>/<welt>/data/minecraft/ (docs/citybuild_plan.md Abschnitt
+# 4.2, und FreimarkenPlugin sagt es noch einmal).
+#
+# KOPIERT statt verschoben, und das ist mit Absicht: Wo ein Vanilla-, Forge- oder
+# Fabric-Server 26.1 die Grenze LIEST, ist nicht gemessen - im ganzen Verzeichnisbaum
+# steht dazu nichts. Liest er sie ebenfalls je Dimension, zoege ein Verschieben sie aus
+# dem Ordner heraus, in dem sie gelesen wird: Die Behebung richtete dann genau den
+# Schaden an, den sie verhindern soll. Eine Grenze, die an BEIDEN Orten liegt, kann
+# nicht verloren gehen.
+#
+# Das ist eine Bruecke bis zur Messung und kein Vorbild fuer die fuenf darueber: Jene
+# wandern, weil fuer sie belegt ist, wo Vanilla sie erwartet. Zu messen ist ein
+# Testserver mit /worldborder set 1000, danach "find <welt> -name world_border.dat".
+PAPER_WELTGRENZE = "world_border.dat"
 PAPER_WELTGLOBAL_QUELLE = "dimensions/minecraft/overworld/data/minecraft"
 PAPER_WELTGLOBAL_ZIEL = "data/minecraft"
 
@@ -202,24 +219,37 @@ def level_name(server: Server) -> str:
 
 
 def weltname_aus_ordner(server_base) -> str:
-    """Derselbe Weltname, aber nur aus dem Ordnerpfad - ohne Server-Objekt.
+    """DER EINE Weltname-Leser des Managers - aus dem Ordnerpfad, ohne Server-Objekt.
 
     Der Backup-Service braucht ihn in dieser Form: ``_iter_backup_files`` bekommt nur einen
     Pfad. Hart verdrahtet war dort "world", womit ein Server mit ``level-name=lobby`` ein
     Welt-Backup OHNE Welt bekam - und das faellt erst auf, wenn man es braucht.
+
+    Gelesen wird ueber ``properties_service``, und zwar seit dem 23.11.2026. Davor hatte
+    jeder der drei Verbraucher seinen eigenen Zerleger, und GEMESSEN gaben sie bei vier
+    von fuenf Dateien drei verschiedene Antworten - nur ``properties_service`` stimmte mit
+    dem ueberein, was der Minecraft-Server selbst liest:
+
+      * ``level-name = lobby`` (Leerzeichen um den Trenner),
+      * ``level-name:lobby`` (``:`` ist Javas zweiter Trenner),
+      * zweimal ``level-name`` (Java nimmt den LETZTEN, alle drei nahmen den ersten),
+      * ein Umlaut irgendwo in der Datei: ``lobby_service`` WARF dort einen
+        UnicodeDecodeError bis in den Router.
+
+    Der Riegel ``ist_sicherer_weltname`` bleibt HIER - an der Stelle, die den Wert zum
+    Ordnernamen macht. Haengt man ihn an die Verbraucher, braucht ihn jeder einzeln, und
+    der vierte wird vergessen; ``deploy_lobby_world`` war genau dieser vergessene: Es
+    baute ``base / level_name`` und rief darauf ``shutil.rmtree``.
     """
+    from app.services import properties_service
+
     try:
-        pfad = Path(server_base) / "server.properties"
-        if pfad.is_file():
-            for roh in pfad.read_text(encoding="utf-8", errors="ignore").splitlines():
-                zeile = roh.strip()
-                if zeile.startswith("#") or not zeile.startswith("level-name="):
-                    continue
-                wert = zeile.split("=", 1)[1].strip()
-                return wert if ist_sicherer_weltname(wert) else "world"
+        wert = properties_service.lies_wert(
+            Path(server_base) / "server.properties", "level-name")
     except Exception:  # noqa: BLE001 - eine unlesbare Datei ist kein Grund zu scheitern
         return "world"
-    return "world"
+    wert = (wert or "").strip()
+    return wert if ist_sicherer_weltname(wert) else "world"
 
 
 # Positivliste statt Verbotsliste: Buchstaben, Ziffern, Leerzeichen, Punkt, Minus,
@@ -816,6 +846,34 @@ def _baue_stil_um(temp: Path, welt: str, von: str, nach: str) -> list[str]:
     return meldungen
 
 
+def _sortiere_weltglobal_falls_noetig(quelle: Server, ziel: Server,
+                                      welt_pfad: Path) -> list[str]:
+    """Umsortieren, wenn eine Welt zwischen Paper- und Vanilla-Familie wechselt.
+
+    DIE EINE STELLE, AN DER DIESE BEDINGUNG STEHT [23.11.2026]. Sie stand im Rumpf von
+    _uebernimm_welt und galt damit nur fuer die HAUPTWELT: _uebernimm_zusatzwelten
+    kopierte, baute den Stil um und rief die Umsortierung nie - gemessen an einem
+    einzigen Aufrufer. Eine Zusatzwelt verlor beim Typwechsel also Spielregeln, Wetter,
+    den Wandering-Trader-Timer und die Generator-Einstellungen, und keine Meldung sagte
+    es. Zweimal dieselbe Bedingung waere die Gelegenheit, dass beim naechsten Servertyp
+    nur einer der beiden Wege mitwandert.
+
+    Paper <-> Vanilla-Familie: beide nutzen ab 26.1 denselben Weltstil, legen die
+    weltglobalen Daten aber an verschiedenen Stellen ab. Der Stil-Umbau greift hier also
+    gar nicht - diese Dateien brauchen eine eigene Behandlung.
+    """
+    paper_familie = {"paper", "purpur", "folia"}
+    qt = (quelle.server_type or "").strip().lower()
+    zt = (ziel.server_type or "").strip().lower()
+    if qt in paper_familie and zt not in paper_familie and zt not in SPIGOT_LAYOUT_TYPEN:
+        return _sortiere_paper_weltglobal(welt_pfad, nach_vanilla=True)
+    # Die GEGENRICHTUNG bleibt bewusst ungerufen: Vanilla -> Paper laesst die Dateien in
+    # data/minecraft liegen, und ob Paper sie dort findet, ist so wenig gemessen wie der
+    # Leseort der Grenze. Der Zweig nach_vanilla=False ist gebaut und wartet auf diese
+    # Messung - ein ungemessener Verschiebeweg zweimal statt einmal waere kein Fortschritt.
+    return []
+
+
 def _sortiere_paper_weltglobal(welt: Path, nach_vanilla: bool) -> list[str]:
     """Die weltglobalen Dateien zwischen Papers und Vanillas Ablage umsortieren.
 
@@ -841,10 +899,36 @@ def _sortiere_paper_weltglobal(welt: Path, nach_vanilla: bool) -> list[str]:
             bewegt.append(name)
         except OSError:
             continue
+    # DIE GRENZE ZULETZT UND ALS KOPIE - siehe PAPER_WELTGRENZE. Sie steht nicht in der
+    # Liste darueber, damit niemand sie fuer eine der fuenf haelt, die wandern.
+    grenze_von = welt / von_rel / PAPER_WELTGRENZE
+    grenze_nach = welt / nach_rel / PAPER_WELTGRENZE
+    if grenze_von.is_file() and grenze_nach.is_file():
+        # BEIDE Orte tragen eine Grenze. Welche von beiden der Zielserver liest, ist die
+        # ungemessene Frage - und die aeltere kann die neuere ueberstimmen: Beim
+        # naechsten Umsortieren ueberspringt der Riegel unten genau die Datei, die schon
+        # da ist. Aufloesen laesst sich das erst mit der Messung; stumm bleiben darf es
+        # nicht, sonst springt eine Grenze ohne ein Wort auf einen alten Stand zurueck.
+        try:
+            gleich = grenze_nach.read_bytes() == grenze_von.read_bytes()
+        except OSError:
+            gleich = False
+        if not gleich:
+            bewegt.append(PAPER_WELTGRENZE + " (ZWEI verschiedene Fassungen - die am"
+                          + " Zielort bleibt stehen, die andere bleibt liegen;"
+                          + " Weltgrenze im Spiel pruefen)")
+    if grenze_von.is_file() and not grenze_nach.exists():
+        grenze_nach.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(grenze_von, grenze_nach)
+            bewegt.append(PAPER_WELTGRENZE + " (kopiert, Original bleibt)")
+        except OSError:
+            pass
     if not bewegt:
         return []
     return [f"Weltglobale Daten nach {nach_rel}/ umsortiert ({', '.join(bewegt)}) - "
-            f"Spielregeln, Wetter und Generator-Einstellungen bleiben damit erhalten."]
+            f"Spielregeln, Wetter, Generator-Einstellungen und die Weltgrenze bleiben "
+            f"damit erhalten."]
 
 
 def _uebernimm_welt_properties(quelle: Server, ziel: Server) -> list[str]:
@@ -1264,6 +1348,7 @@ def _uebernimm_zusatzwelten(quelle: Server, ziel: Server, *, spielerdaten: bool,
                 _robust_copy_tree(ordner, temp / ordner.name,
                                   skip=_welt_filter(spielerdaten))
             meldungen += _baue_stil_um(temp, name, quell_struktur, ziel_struktur)
+            meldungen += _sortiere_weltglobal_falls_noetig(quelle, ziel, temp / name)
             if spielerdaten:
                 meldungen += _passe_identitaet_an(
                     quelle, ziel, temp / name,
@@ -1744,14 +1829,7 @@ def _uebernimm_welt(quelle: Server, ziel: Server, *, spielerdaten: bool, stempel
         melde(84, "Welt wird auf die Struktur des Zielservers gebracht ...")
         meldungen += _baue_stil_um(temp, ziel_welt, quell_struktur, ziel_struktur)
 
-        # Paper <-> Vanilla-Familie: beide nutzen ab 26.1 denselben Weltstil, legen die
-        # weltglobalen Daten aber an verschiedenen Stellen ab. Der Stil-Umbau greift hier
-        # also gar nicht - diese Dateien brauchen eine eigene Behandlung.
-        qt = (quelle.server_type or "").strip().lower()
-        zt = (ziel.server_type or "").strip().lower()
-        paper_familie = {"paper", "purpur", "folia"}
-        if qt in paper_familie and zt not in paper_familie and zt not in SPIGOT_LAYOUT_TYPEN:
-            meldungen += _sortiere_paper_weltglobal(temp / ziel_welt, nach_vanilla=True)
+        meldungen += _sortiere_weltglobal_falls_noetig(quelle, ziel, temp / ziel_welt)
         behalten: list[str] = []
         if not spielerdaten:
             melde(86, "Spielerdaten des Zielservers werden uebernommen ...")

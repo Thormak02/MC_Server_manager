@@ -4581,6 +4581,41 @@ class GrenzeTest {
     }
 
     @Test
+    @DisplayName("31do - die Hilfe des Geldzweigs nennt das Buch der Waehrung")
+    void geldhilfeNenntDasRichtigeBuch() {
+        // DER WORTLAUT IST VON AUSSEN NICHT PRUEFBAR: Die Hilfezeile entsteht in einer
+        // anonymen Klasse in FreimarkenPlugin.geldzweig(), und die Attrappe in
+        // FreimarkenBefehlTest 44k schreibt nur "geld-hilfe:MARK" mit. Eine Zeile, die
+        // das falsche Buch nennt, bleibt dort gruen - und genau so stand sie am
+        // 23.11.2026 da: fuer BEIDE Waehrungen "/mark verlauf", obwohl dort nur
+        // Markzeilen ankommen.
+        String plugin = plugintext();
+        assertTrue(plugin.contains("waehrung.verlaufsbefehl()"),
+                "die Hilfezeile muss den Verlaufsbefehl der Waehrung lesen");
+        assertFalse(plugin.contains("steht danach in /mark verlauf"),
+                "die Hilfezeile schreibt den Befehl ab, statt ihn zu lesen - dann nennt"
+                        + " sie fuer Goldmark das Markbuch");
+
+        // UND DIE STARTZEILE NENNT BEIDE QUELLEN. Sie sagte bis zum 23.11.2026
+        // ausdruecklich "allein durch Tausch", waehrend dieselbe Runde die zweite Quelle
+        // gebaut hat. Wer sie liest, laesst einen Spieler 40.000 Mark tauschen, statt ihm
+        // 40 Goldmark gutzuschreiben - der Rueckweg kostet ihn zwanzig Prozent.
+        assertFalse(plugin.contains("allein durch Tausch"),
+                "die Startzeile nennt den Tausch als EINZIGE Quelle der Goldmark, es"
+                        + " gibt seit dem 23.11.2026 zwei");
+        assertTrue(plugin.contains("Zu bekommen ist sie durch Tausch aus Mark"),
+                "die Startzeile muss den Tausch nennen");
+        assertTrue(plugin.contains("(/freimarken goldgeld)"),
+                "die Startzeile muss die Buchung von Hand als zweite Quelle nennen");
+
+        // Und das Recht, an dem beide Waehrungen haengen, beschreibt sich als beides.
+        String rechte = ausgelieferte("plugin.yml");
+        assertTrue(rechte.contains("Mark ODER Goldmark"),
+                "die description von freimarken.geld nennt nur Mark - wer das Recht"
+                        + " verteilt, liest sie, und eine Goldmark ist achthundert Mark");
+    }
+
+    @Test
     @DisplayName("31de - die Menuewache wird angemeldet")
     void menuewacheIstVerdrahtet() {
         // DIE EINE ZEILE, AN DER DAS GANZE MENUEGERUEST HAENGT [21.11.2026]. Faellt sie

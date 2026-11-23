@@ -402,11 +402,20 @@
         Spielers.
     </p>
     <p class="hint">
-        Goldmark laesst sich so nicht berichtigen: Die Buchungsgruende des Befehls
-        gehoeren zur Mark, und die Goldkasse weist einen fremden Grund ab.
+        Goldmark geht ueber <code>/freimarken goldgeld</code> &ndash; dort ist die
+        Schranke eine <strong>Million</strong>, weil eine Goldmark achthundert Mark
+        wert ist. Ein Tippfehler zaehlt hier also achthundertfach. Eine Goldbuchung
+        steht NICHT in <code>/mark verlauf</code>, sondern in
+        <code>/mark muenzhaus verlauf</code> &ndash; das sind zwei Buecher.
     </p>
     <form method="post" action="/freimarken/{{ server.id }}/konten">
         <label>Spieler <input type="text" name="spieler" maxlength="32" required></label>
+        <label>Waehrung
+            <select name="waehrung">
+                <option value="mark">Mark</option>
+                <option value="goldmark">Goldmark (hoechstens eine Million)</option>
+            </select>
+        </label>
         <label>Betrag <input type="number" name="betrag" required></label>
         <label>Grund <input type="text" name="grund" maxlength="200"></label>
         <button type="submit">Befehl senden</button>

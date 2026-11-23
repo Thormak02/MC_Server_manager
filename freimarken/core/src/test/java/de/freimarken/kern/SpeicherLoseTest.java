@@ -2,6 +2,7 @@ package de.freimarken.kern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,6 +24,13 @@ class SpeicherLoseTest {
         @Override
         protected Losablage ablage() {
             return new SpeicherLose();
+        }
+
+        @Override
+        protected void saettige(Losablage ablage, UUID spieler, LocalDate tag) {
+            // Die Karte setzt ihren Eintrag - zwei Milliarden Mal zaehlen ist kein
+            // Probenlauf. Der Weg dorthin ist paketsichtbar und nur von hier erreichbar.
+            ((SpeicherLose) ablage).setzeFuerProbe(spieler, tag, Integer.MAX_VALUE);
         }
     }
 

@@ -333,12 +333,17 @@ def _sende(db, server, befehl: str, user_id: int, grund: str,
 @router.post("/freimarken/{server_id}/konten")
 async def freimarken_konto_korrigieren(request: Request, server_id: int,
                                        db: Session = Depends(get_db)):
-    """Mark gutschreiben oder abziehen - ueber /freimarken geld, nicht ueber die Tabelle.
+    """Geld gutschreiben oder abziehen - ueber das Plugin, nicht ueber die Tabelle.
 
     Plan 12a.2 Regel 2: Der Manager liest die Spieldaten direkt, aendert sie aber nur
     ueber das Plugin. Eine Zeile, die der Manager in ``kassen`` schriebe, stuende in
     keinem Buch und braeche die tragende Zusage der Kasse ("fuer ein eroeffnetes Konto
     ist die Summe aller Buchungen sein Stand").
+
+    Seit dem 23.11.2026 auch GOLDMARK, ueber ``/freimarken goldgeld``. Bis dahin gab es
+    im ganzen Haus keinen Weg, Goldmark auf ein Konto zu buchen: Wer 40 Goldmark verlor,
+    bekam auf ``/freimarken geld Anna 40`` vierzig MARK - zum Kurs des Plans ein
+    Achthundertstel, und die Antwortzeile war dabei richtig.
     """
     current_user, server = _fuer_korrektur(request, db, server_id)
     if current_user is None or server is None:
@@ -364,15 +369,27 @@ async def freimarken_konto_korrigieren(request: Request, server_id: int,
         push_flash(request, "Der Betrag muss eine ganze Zahl sein; ein Minus zieht ab.",
                    "error")
         return RedirectResponse(url=ziel, status_code=303)
-    # Dieselbe Schranke wie Betreibergeld.HOECHSTENS im Plugin. Sie steht hier, weil eine
-    # groessere Zahl den Zweig gar nicht erreicht: Das Argument ist ein LongArgumentType
-    # mit Grenzen, und darueber antwortet Brigadier englisch.
-    if abs(zahl) > 1_000_000_000:
-        push_flash(request, "Hoechstens eine Milliarde - darueber nimmt das Plugin den "
+    # Die WAEHRUNG entscheidet ueber Befehlswort UND Schranke - sie sind ein Paar
+    # (Betreibergeld.Waehrung im Plugin fuehrt es genauso). Die Goldschranke ist viel
+    # kleiner: Eine Million Goldmark sind achthundert Millionen Mark.
+    waehrung = str(form.get("waehrung") or "mark").strip().lower()
+    if waehrung not in ("mark", "goldmark"):
+        push_flash(request, "Waehrung ist mark oder goldmark.", "error")
+        return RedirectResponse(url=ziel, status_code=303)
+    if waehrung == "mark":
+        befehlswort, grenze, worte = "freimarken geld", 1_000_000_000, "eine Milliarde"
+    else:
+        befehlswort, grenze, worte = "freimarken goldgeld", 1_000_000, "eine Million"
+    # Dieselbe Schranke wie Betreibergeld.HOECHSTENS bzw. HOECHSTENS_GOLD im Plugin. Sie
+    # steht hier, weil eine groessere Zahl den Zweig gar nicht erreicht: Das Argument ist
+    # ein LongArgumentType mit Grenzen, und darueber antwortet Brigadier englisch - an
+    # eine Konsole, die ihre Antwort ohnehin nicht zurueckgibt.
+    if abs(zahl) > grenze:
+        push_flash(request, "Hoechstens " + worte + " - darueber nimmt das Plugin den "
                             "Befehl nicht an.", "error")
         return RedirectResponse(url=ziel, status_code=303)
 
-    ok, meldung = _sende(db, server, "freimarken geld " + spieler + " " + str(zahl),
+    ok, meldung = _sende(db, server, befehlswort + " " + spieler + " " + str(zahl),
                          current_user.id, grund, freimarken_service.AKTION_KONTO)
     push_flash(request, meldung, "success" if ok else "error")
     return RedirectResponse(url=ziel, status_code=303)

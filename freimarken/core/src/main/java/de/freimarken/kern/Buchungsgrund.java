@@ -548,6 +548,37 @@ public enum Buchungsgrund {
     BETREIBER_ABZUG("betreiber_abzug", Richtung.AUSGABE),
 
     /**
+     * Der Betreiber hat GOLDMARK gutgeschrieben - {@code /freimarken goldgeld} mit einer
+     * positiven Zahl [23.11.2026].
+     *
+     * <p><b>EIGENE Gruende und nicht {@link #BETREIBER_GUTSCHRIFT} auf {@link Buch#JEDES}
+     * gehoben:</b> {@code JEDES} sagt von sich selbst, es sei "richtig fuer das, was die
+     * Kasse selbst tut, und falsch fuer alles, was ein Aufrufer bucht" - und dieser Zweig
+     * ist ein Aufrufer. Mit einem Grund fuer beide Buecher waere eine Zeile ueber 1 Mark
+     * nicht mehr von einer ueber 1 Goldmark zu unterscheiden, sobald sie ihre Tabelle
+     * verlaesst; zum Kurs des Plans ist das der Faktor 800. Und es waere nicht
+     * nachholbar: Alte Zeilen im Goldbuch truegen fuer immer den Schluessel
+     * {@code betreiber_gutschrift}.
+     *
+     * <p>Dazu kaeme {@code JEDES} der einzige Riegel abhanden, den es gibt - die
+     * Goldkasse ist die EINZIGE Tuer zum Goldbuch, das Markbuch hat bewusst keinen. Mit
+     * {@code JEDES} passten die Betreibergruende in beide Buecher, und eine vertauschte
+     * Kasse fiele nirgends mehr auf. So ist die Verwechslung ein UEBERSETZUNGSFEHLER.
+     *
+     * <p>Und dies ist die erste Buchung, die Plan 8.1s zweite Goldmarkquelle - Echtgeld -
+     * ueberhaupt in das Buch bringt. Bis heute gab es nur den Tausch aus Mark.
+     */
+    BETREIBER_GOLDGUTSCHRIFT("betreiber_goldgutschrift", Richtung.EINNAHME),
+
+    /**
+     * Der Betreiber hat Goldmark abgezogen - siehe {@link #BETREIBER_GOLDGUTSCHRIFT}.
+     *
+     * <p>ZWEI Gruende und nicht einer mit Vorzeichen, aus demselben Grund wie bei der
+     * Mark: Die Richtung gehoert an den Grund.
+     */
+    BETREIBER_GOLDABZUG("betreiber_goldabzug", Richtung.AUSGABE),
+
+    /**
      * Ein Los der Lotterie in Altfurt (Plan 14).
      *
      * <p>AUSGABE, auch wenn der Betrag 0 ist - dasselbe wie bei der ersten Parzelle, die
@@ -693,8 +724,9 @@ public enum Buchungsgrund {
     public Buch buch() {
         return switch (this) {
             case WECHSEL_GOLDMARK_HER, WECHSEL_GOLDMARK_WEG, WECHSEL_GOLDMARK_ZURUECK,
-                     MUENZHAUS_KAUF, MUENZHAUS_ERSTATTET,
-                     LOTTERIE_GOLDGEWINN -> Buch.GOLDMARK;
+                     MUENZHAUS_KAUF, MUENZHAUS_ERSTATTET, LOTTERIE_GOLDGEWINN,
+                     BETREIBER_GOLDGUTSCHRIFT,
+                     BETREIBER_GOLDABZUG -> Buch.GOLDMARK;
             case EROEFFNUNG -> Buch.JEDES;
             case BESTAND, PARZELLE_GEKAUFT, PARZELLE_ERSTATTET,
                      FREISTADT_GEGRUENDET, FREISTADT_ERSTATTET, GRUNDSTUECK_GEKAUFT,

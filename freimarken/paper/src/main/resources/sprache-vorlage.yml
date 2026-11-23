@@ -223,6 +223,11 @@ mark:
       #   den es nicht gab.
       betreiber-gutschrift: "Vom Betreiber gutgeschrieben"
       betreiber-abzug: "Vom Betreiber abgezogen"
+      # Dieselben zwei Worte fuer die Goldmark - /freimarken goldgeld. Welche Einheit
+      #   die Zahl daneben hat, sagt die Zeile und nicht das Wort, genau wie bei
+      #   lotterie-gewinn und lotterie-goldgewinn darunter.
+      betreiber-goldgutschrift: "Vom Betreiber gutgeschrieben"
+      betreiber-goldabzug: "Vom Betreiber abgezogen"
       # Plan 14: die Lotterie in Altfurt. Das LOS steht auch mit 0 Mark im Buch, weil
       #   das erste am Tag gratis ist - dann ist dieses Wort die ganze Auskunft der
       #   Zeile, und ohne es saehe der Spieler eine 0 und wuesste nicht, wofuer.
@@ -1985,6 +1990,12 @@ freistadt:
     warnung-spaet:
       eins: "<warnung>Deine Freistadt {stadt} verfaellt MORGEN!</warnung>\n<fliesstext>Geh hin, oder vergib ein Grundstueck - ein Stadtbuerger haelt sie dauerhaft.</fliesstext>"
       viele: "<warnung>Deine Freistadt {stadt} verfaellt in {tage} Tagen!</warnung>\n<fliesstext>Geh hin, oder vergib ein Grundstueck - ein Stadtbuerger haelt sie dauerhaft.</fliesstext>"
+    # DER DRITTE ZUSTAND HAT SEINEN EIGENEN SATZ [23.11.2026]: Die Frist ist abgelaufen,
+    #   der taegliche Lauf hat die Stadt aber noch nicht abgeraeumt - wer sich in diesem
+    #   Fenster anmeldet, liest DIESE Zeile. UNGEZAEHLT, weil es hier keine Zahl gibt:
+    #   vorher lief der Fall in warnung-spaet mit 0 Resttagen, also in die Mehrzahlform,
+    #   und der Besitzer las "verfaellt in 0 Tagen!".
+    faellig: "<warnung>Deine Freistadt {stadt} verfaellt JETZT!</warnung>\n<fliesstext>Geh sofort hin, oder vergib ein Grundstueck - ein Stadtbuerger haelt sie dauerhaft.</fliesstext>"
     # SAGT AUSDRUECKLICH, DASS NICHTS VERLOREN IST: Ohne diese Haelfte hielte ein
     #   Besitzer seine 400.000 Mark fuer verbrannt und suchte den Betreiber.
     verfallen: "<warnung>Deine Freistadt {stadt} ist verfallen.</warnung>\n<fliesstext>Feld, Name und Guthaben hat sie noch - betritt sie, dann wacht sie wieder auf.</fliesstext>"

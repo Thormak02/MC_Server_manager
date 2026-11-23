@@ -704,43 +704,66 @@ def _find_world_root(asset: Path) -> Path | None:
 
 
 def _level_name(base: Path) -> str:
-    """level-name aus server.properties (Default 'world')."""
-    try:
-        for line in (base / "server.properties").read_text(encoding="utf-8").splitlines():
-            if line.startswith("level-name="):
-                return line.split("=", 1)[1].strip() or "world"
-    except OSError:
-        pass
-    return "world"
+    """level-name aus server.properties (Default 'world') - EIN Leser fuer alle.
+
+    Hier stand bis zum 23.11.2026 ein eigener Zerleger mit zwei Loechern:
+    ``read_text(encoding="utf-8")`` OHNE ``errors=``, und gefangen wurde nur ``OSError``.
+    Ein ``UnicodeDecodeError`` ist aber ein ``ValueError`` - eine Latin-1-Datei (ein Umlaut
+    in der MOTD genuegt, der Weltname darf reines ASCII sein) warf bis in den Router
+    ``POST /settings/lobby/deploy-world``, der kein ``try`` hat: HTTP 500 statt einer
+    Meldung, und der Betreiber erfaehrt nicht, dass es an einem Umlaut liegt.
+
+    Diese EINE Stelle zu heilen hat den Wurf nur verschoben: Auf demselben Weg liest
+    ``_apply_lobby_properties`` dieselbe Datei noch einmal, und zwar NACH ``rmtree`` und
+    ``copytree``. Der 500 kam danach mit getauschter Welt. Beide Leser gehen seit dem
+    23.11.2026 ueber ``properties_service`` - ein Riegel an einer von zwei Lesestellen ist
+    kein Riegel.
+
+    Das zweite Loch war schwerer: Es fehlte die Namenspruefung. ``deploy_lobby_world``
+    macht aus dem Wert ``world_dir = base / level_name`` und ruft darauf
+    ``shutil.rmtree`` - mit ``level-name=../woanders`` raeumte das einen Ordner NEBEN dem
+    Serverordner aus. Der Riegel sitzt im gemeinsamen Leser, also gilt er jetzt auch hier.
+    """
+    from app.services.transfer_service import weltname_aus_ordner
+
+    return weltname_aus_ordner(base)
 
 
-def _apply_lobby_properties(base: Path) -> None:
+LOBBY_EINSTELLUNGEN = {"gamemode": "adventure", "pvp": "false",
+                       "spawn-monsters": "false", "difficulty": "peaceful"}
+
+
+def _apply_lobby_properties(base: Path) -> list[str]:
     """Lobby-taugliche server.properties: Adventure (normale Spieler bauen nicht; Operatoren per
-    /gamemode creative), PvP aus, keine Monster/friedlich. Nur diese Keys werden gesetzt."""
+    /gamemode creative), PvP aus, keine Monster/friedlich. Nur diese Keys werden gesetzt.
+
+    Rueckgabe: die Warnungen, die beim Setzen angefallen sind - leer heisst, alle vier Keys
+    stehen. Der Aufrufer MUSS sie weitergeben: Eine Lobby, in der diese vier Keys nicht
+    stehen, laeuft in Survival mit PvP und Monstern, und das sieht man erst, wenn ein
+    Spieler darin abbaut.
+
+    Hier stand bis zum 23.11.2026 ein eigener Zerleger mit demselben Loch wie in
+    ``_level_name``: ``read_text(encoding="utf-8")`` ohne ``errors=``, gefangen nur
+    ``OSError``. Ein Umlaut in der MOTD (Latin-1, wie der Windows-Editor schreibt) warf also
+    einen ``UnicodeDecodeError`` - ein ``ValueError`` - durch ``deploy_lobby_world`` bis in
+    den Router. Dass ``_level_name`` am selben Tag geheilt wurde, machte es SCHLIMMER: Der
+    Wurf kam danach erst NACH ``shutil.rmtree`` und ``copytree``, also mit geloeschter alter
+    und hingelegter neuer Welt, ohne eine einzige Meldung an den Betreiber.
+
+    ``properties_service.schreibe_wert`` haelt dabei die Kodierung der Datei (es schreibt
+    mit ``encode(kodierung)`` zurueck) und kennt Javas Trennzeichen - ein
+    ``gamemode: survival`` mit Doppelpunkt fand der alte Zerleger nicht, und der Key stand
+    danach zweimal in der Datei.
+    """
+    from app.services import properties_service
+
     props = base / "server.properties"
-    updates = {"gamemode": "adventure", "pvp": "false",
-               "spawn-monsters": "false", "difficulty": "peaceful"}
-    try:
-        lines = props.read_text(encoding="utf-8").splitlines() if props.is_file() else []
-    except OSError:
-        lines = []
-    seen: set[str] = set()
-    out: list[str] = []
-    for line in lines:
-        if "=" in line and not line.lstrip().startswith("#"):
-            key = line.split("=", 1)[0].strip()
-            if key in updates:
-                out.append(f"{key}={updates[key]}")
-                seen.add(key)
-                continue
-        out.append(line)
-    for key, val in updates.items():
-        if key not in seen:
-            out.append(f"{key}={val}")
-    try:
-        props.write_text("\n".join(out) + "\n", encoding="utf-8")
-    except OSError:
-        pass
+    warnungen: list[str] = []
+    for schluessel, wert in LOBBY_EINSTELLUNGEN.items():
+        warnung = properties_service.schreibe_wert(props, schluessel, wert)
+        if warnung:
+            warnungen.append(warnung)
+    return warnungen
 
 
 def default_lobby_world_dir() -> str | None:
@@ -801,7 +824,16 @@ def deploy_lobby_world(db: Session, *, overwrite: bool = True) -> tuple[bool, st
     except (OSError, PermissionError) as exc:
         return False, f"Welt kopieren fehlgeschlagen - laeuft die Lobby noch? Bitte stoppen. ({exc})"
 
-    _apply_lobby_properties(base)
+    warnungen = _apply_lobby_properties(base)
+    if warnungen:
+        # Die Welt IST getauscht - das muss in der Meldung stehen, sonst sucht der Betreiber
+        # den Fehler vor dem Loeschen. Und die vier Keys stehen NICHT: eine Lobby in Survival
+        # mit PvP und Monstern faellt erst auf, wenn ein Spieler darin abbaut. Darum False:
+        # eine gruene Meldung ueber eine halb uebernommene Lobby liest niemand zu Ende.
+        return False, (f"Lobby-Welt nach '{level_name}' uebernommen, aber die "
+                       f"Lobby-Einstellungen stehen NICHT: " + " ".join(warnungen)
+                       + " Die Lobby laeuft sonst in Survival mit PvP und Monstern - "
+                       "bitte server.properties von Hand pruefen.")
     return True, (f"Lobby-Welt nach '{level_name}' uebernommen (Adventure + friedlich gesetzt). "
                   f"Lobby (neu) starten, damit sie geladen wird.")
 

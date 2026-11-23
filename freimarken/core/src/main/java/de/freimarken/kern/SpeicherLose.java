@@ -21,7 +21,10 @@ import java.util.UUID;
  *
  * <p>Alte Tage bleiben liegen und werden nie geraeumt: Diese Fassung lebt nur, solange
  * der Server laeuft, und in der Zeit sind es hoechstens so viele Zeilen wie Spieler mal
- * Tage. Die MariaDB-Fassung hat dafuer ihren eigenen Raeumlauf.
+ * Tage. Die MariaDB-Fassung raeumt sie NICHT - dort bleiben alte Tage dauerhaft stehen
+ * (eine Zeile je Spieler und Tag, in der sie ein Los gezogen hat). Hier stand bis zum
+ * 23.11.2026 "hat dafuer ihren eigenen Raeumlauf"; einen solchen Lauf gibt es nicht, und
+ * wer ihn sucht, sucht umsonst.
  *
  * <p>{@code synchronized} auf jeder Methode, wie {@link SpeicherKasse}: Die Zuhoerer und
  * Zeitgeber des Plugins laufen im Hauptfaden, die Vervollstaendigung von Befehlen aber
@@ -46,6 +49,20 @@ public final class SpeicherLose implements Losablage {
         // was die MariaDB-Fassung mit ihrem ON DUPLICATE KEY UPDATE zusagt.
         return zahlen.merge(schluessel(spieler, tag), 1,
                 (alt, eins) -> alt == Integer.MAX_VALUE ? alt : alt + eins);
+    }
+
+    /**
+     * Setzt die Zahl unmittelbar - NUR fuer die Saettigungsprobe des Vertrags.
+     *
+     * <p>Paketsichtbar und darum nur aus dem Kern selbst erreichbar, nicht aus dem Plugin.
+     * Es gibt keinen anderen Weg, den Zustand "zwei Milliarden Lose" herzustellen, und
+     * ohne ihn liesse sich die Zusage der Schnittstelle fuer diese Fassung nicht pruefen -
+     * eine Zusage, die nur eine von zwei Umsetzungen haelt, ist genau das, was am
+     * 23.11.2026 auffiel.
+     */
+    synchronized void setzeFuerProbe(UUID spieler, LocalDate tag, int anzahl) {
+        pruefe(spieler, tag);
+        zahlen.put(schluessel(spieler, tag), anzahl);
     }
 
     private static void pruefe(UUID spieler, LocalDate tag) {

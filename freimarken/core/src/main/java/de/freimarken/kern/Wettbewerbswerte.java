@@ -326,25 +326,6 @@ public record Wettbewerbswerte(boolean an, LocalTime beginn, Duration dauer,
                 verteilungProzent, punkteJeFang, punkte);
     }
 
-    /** Dieselben Werte mit anderem Fenster - fuer Proben und den Leser. */
-    public Wettbewerbswerte mitFenster(LocalTime anderer, Duration andereDauer,
-                                       Set<DayOfWeek> andereTage) {
-        return new Wettbewerbswerte(an, anderer, andereDauer, andereTage, startgeld,
-                zuschuss, verteilungProzent, punkteJeFang, punkte);
-    }
-
-    /** Dieselben Werte mit anderem Geld. */
-    public Wettbewerbswerte mitGeld(long anderesStartgeld, long andererZuschuss,
-                                    List<Integer> andereVerteilung) {
-        return new Wettbewerbswerte(an, beginn, dauer, tage, anderesStartgeld,
-                andererZuschuss, andereVerteilung, punkteJeFang, punkte);
-    }
-
-    /** Dieselben Werte mit anderer Punktetabelle. */
-    public Wettbewerbswerte mitPunkten(int jeFang, Map<String, Integer> andere) {
-        return new Wettbewerbswerte(an, beginn, dauer, tage, startgeld, zuschuss,
-                verteilungProzent, jeFang, andere);
-    }
 
     /**
      * Ein Lauf des Wettbewerbs - sein Tag und seine beiden Raender.

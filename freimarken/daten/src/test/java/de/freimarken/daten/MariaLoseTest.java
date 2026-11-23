@@ -66,6 +66,19 @@ class MariaLoseTest extends LosVertrag {
         return lose;
     }
 
+    @Override
+    protected void saettige(Losablage ablage, UUID spieler, LocalDate tag) {
+        // Die Zeile wird mit der Grenze ANGELEGT. Hochzaehlen ist kein Weg: Es waere
+        // genau der Aufruf, den der Vertrag danach prueft.
+        String sql = "INSERT INTO lotterie_lose (spieler, tag, anzahl) VALUES ('"
+                + spieler + "', '" + tag + "', " + Integer.MAX_VALUE + ")";
+        try (Statement anweisung = datenbank.verbindung().createStatement()) {
+            anweisung.executeUpdate(sql);
+        } catch (SQLException fehler) {
+            throw new IllegalStateException("Saettigung nicht vorbereitbar", fehler);
+        }
+    }
+
     @Test
     @DisplayName("Drei Zuege am selben Tag ergeben EINE Zeile mit anzahl 3")
     void dreiZuegeEineZeile() throws SQLException {

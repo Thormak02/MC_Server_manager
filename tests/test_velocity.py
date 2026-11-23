@@ -434,6 +434,188 @@ def test_deploy_lobby_world_missing_asset(monkeypatch, tmp_path):
     assert ok is False and "Keine Lobby-Welt" in msg
 
 
+def test_lobby_weltname_aus_latin1_datei_wirft_nicht(tmp_path):
+    """Ein Umlaut in der MOTD warf bis in den Router - HTTP 500 statt einer Meldung.
+
+    Der Weltname selbst ist reines ASCII: Geprueft wird die KODIERUNG, nicht die
+    Namenspruefung. Bis zum 23.11.2026 las ``_level_name`` mit
+    ``read_text(encoding="utf-8")`` ohne ``errors=`` und fing nur ``OSError`` - ein
+    ``UnicodeDecodeError`` ist aber ein ``ValueError`` und kam durch. Der Aufrufer
+    ``deploy_lobby_world`` hat an dieser Stelle kein ``try``, der Router
+    ``POST /settings/lobby/deploy-world`` auch nicht.
+    """
+    from app.services import lobby_service
+
+    (tmp_path / "server.properties").write_bytes(
+        b"motd=Gr\xfc\xdfe\nlevel-name=lobby\n")      # Latin-1, wie der Windows-Editor schreibt
+    assert lobby_service._level_name(tmp_path) == "lobby"
+
+
+class _AttrappenDb:
+    """Nur so viel Datenbank, wie ``deploy_lobby_world`` anfasst: EIN ``scalar``-Aufruf."""
+
+    def __init__(self, base: object) -> None:
+        self._lobby = base
+
+    def scalar(self, _anfrage: object) -> object:
+        return self._lobby
+
+
+def _lobby_zum_uebernehmen(tmp_path, monkeypatch, rohdaten: bytes):
+    """Asset-Welt, Serverordner mit ``server.properties`` und eine Attrappen-Lobby."""
+    import types
+
+    from app.services import lobby_service
+
+    asset = tmp_path / "asset"
+    (asset / "world").mkdir(parents=True)
+    (asset / "world" / "level.dat").write_bytes(b"nbt")
+    monkeypatch.setattr(lobby_service, "_LOBBY_WORLD_ASSET", asset)
+
+    base = tmp_path / "lobbyserver"
+    base.mkdir()
+    (base / "server.properties").write_bytes(rohdaten)
+    # Die alte Welt, die beim Uebernehmen weggeraeumt wird.
+    (base / "lobby").mkdir()
+    (base / "lobby" / "alt.txt").write_text("alte Welt", encoding="utf-8")
+    return base, _AttrappenDb(types.SimpleNamespace(base_path=str(base)))
+
+
+def test_lobby_uebernehmen_ueberlebt_eine_latin1_datei(tmp_path, monkeypatch):
+    """Der GANZE Weg, nicht nur der Weltname-Leser [23.11.2026].
+
+    Am 23.11.2026 bekam ``_level_name`` den gemeinsamen Leser - und damit war der Wurf
+    nicht weg, sondern VERSCHOBEN: ``_apply_lobby_properties`` las dieselbe Datei drei
+    Zeilen weiter noch einmal mit ``read_text(encoding="utf-8")`` und fing nur ``OSError``.
+    Vorher warf es VOR ``shutil.rmtree`` (die alte Welt blieb stehen), danach DANACH - mit
+    geloeschter alter Welt, hingelegter neuer Welt, nicht gesetzten Lobby-Keys und HTTP 500
+    statt einer Meldung. Die Probe prueft darum nicht "wirft nicht", sondern den Zustand
+    hinterher.
+    """
+    from app.services import lobby_service
+
+    # Latin-1, wie der Windows-Editor schreibt. Der Weltname selbst ist reines ASCII -
+    # geprueft wird die KODIERUNG.
+    base, db = _lobby_zum_uebernehmen(
+        tmp_path, monkeypatch,
+        b"motd=Gr\xfc\xdfe\nlevel-name=lobby\ngamemode=survival\n")
+
+    ok, meldung = lobby_service.deploy_lobby_world(db, overwrite=True)
+
+    assert ok is True, meldung
+    assert (base / "lobby" / "level.dat").is_file(), "die Welt muss uebernommen sein"
+    assert not (base / "lobby" / "alt.txt").exists(), "die alte Welt muss weg sein"
+    rohdaten = (base / "server.properties").read_bytes()
+    assert b"gamemode=adventure" in rohdaten, "die Lobby-Keys muessen stehen"
+    assert b"pvp=false" in rohdaten and b"difficulty=peaceful" in rohdaten
+    assert b"gamemode=survival" not in rohdaten
+    # Und die Kodierung der Datei bleibt, wie sie war: NICHT nach UTF-8 umgeschrieben.
+    assert b"Gr\xfc\xdfe" in rohdaten, "Latin-1 muss Latin-1 bleiben"
+
+
+def test_lobby_uebernehmen_findet_den_key_mit_doppelpunkt(tmp_path, monkeypatch):
+    """Javas zweites Trennzeichen - der alte Zerleger kannte nur '='.
+
+    Ohne diese Probe waere die Umstellung auf ``properties_service`` nur eine andere
+    Schreibweise derselben Sache. ``gamemode: survival`` fand der alte Zerleger nicht und
+    haengte ``gamemode=adventure`` dahinter - Java nimmt bei doppelten Schluesseln den
+    LETZTEN, die Lobby stand also auf Adventure, und wer die Datei las, sah zwei Zeilen.
+    """
+    from app.services import lobby_service
+
+    base, db = _lobby_zum_uebernehmen(
+        tmp_path, monkeypatch,
+        b"level-name=lobby\ngamemode: survival\npvp : true\nspawn-monsters true\n")
+
+    ok, meldung = lobby_service.deploy_lobby_world(db, overwrite=True)
+
+    assert ok is True, meldung
+    text = (base / "server.properties").read_text(encoding="utf-8")
+    assert text.count("gamemode") == 1, "der Key darf nicht zweimal in der Datei stehen"
+    assert text.count("pvp") == 1
+    assert "gamemode=adventure" in text and "survival" not in text
+    # Und Javas DRITTES Trennzeichen: ein Schluessel, der nur durch Zwischenraum von
+    # seinem Wert getrennt ist. Hier greifen die zwei Behebungen des 23.11.2026
+    # ineinander - der gemeinsame Leser findet ihn, der alte Zerleger haette ihn
+    # verdoppelt, und Java nimmt bei doppelten Schluesseln den letzten.
+    assert text.count("spawn-monsters") == 1
+    assert "spawn-monsters=false" in text
+
+
+def test_lobby_uebernehmen_setzt_die_keys_auch_bei_einer_fortsetzungszeile(
+        tmp_path, monkeypatch):
+    """Geprueft wird, was JAVA sieht - nicht, dass die Bytes irgendwo stehen.
+
+    Eine Zusicherung auf ``b"gamemode=adventure" in rohdaten`` bleibt gruen, wenn die
+    Bytes hinter einem haengenden Backslash stehen: Java liest sie dann als Teil der MOTD,
+    und es gibt gar keinen Schluessel ``gamemode``. Gemessen am 23.11.2026 mit echtem
+    ``java.util.Properties.load`` - die Lobby lief im Standard Survival, und normale
+    Spieler bauten sie ab, waehrend der Betreiber "Adventure + friedlich gesetzt" las.
+    """
+    from app.services import lobby_service, properties_service
+
+    backslash = chr(92)
+    # Eine umgebrochene MOTD, ein Kommentar mit Windows-Pfad (der frueher die Zeile
+    # darunter verschluckte) und ein Schluessel, der nur mit Zwischenraum getrennt ist.
+    umbruch = chr(10)
+    inhalt = ("# Welt liegt unter C:" + backslash + "spiele" + backslash + umbruch
+              + "level-name=lobby" + umbruch
+              + "motd=Willkommen in der " + backslash + umbruch
+              + "Lobby - viel Spass" + umbruch
+              + "pvp true" + umbruch)
+    base, db = _lobby_zum_uebernehmen(tmp_path, monkeypatch, inhalt.encode("utf-8"))
+
+    ok, meldung = lobby_service.deploy_lobby_world(db, overwrite=True)
+
+    assert ok is True, meldung
+    assert (base / "lobby" / "level.dat").is_file(), "der Kommentar frass den Weltnamen"
+    gelesen = properties_service.lies_alle(base / "server.properties")
+    for schluessel, wert in lobby_service.LOBBY_EINSTELLUNGEN.items():
+        assert gelesen.get(schluessel) == wert, (schluessel, gelesen)
+    # Und die fremde, umgebrochene MOTD steht noch so da, wie Java sie vorher las.
+    assert gelesen["motd"] == "Willkommen in der Lobby - viel Spass", gelesen
+
+
+def test_halb_uebernommene_lobby_sagt_es(tmp_path, monkeypatch):
+    """Eine Warnung aus dem Schreiber MUSS in der Meldung ankommen.
+
+    ``_apply_lobby_properties`` gibt seine Warnungen jetzt zurueck - ohne diese Probe waere
+    das eine gebaute, nie verdrahtete Regel: Der Betreiber saehe "uebernommen (Adventure +
+    friedlich gesetzt)", waehrend die Lobby in Survival mit PvP und Monstern laeuft.
+    """
+    from app.services import lobby_service, properties_service
+
+    base, db = _lobby_zum_uebernehmen(tmp_path, monkeypatch,
+                                      b"level-name=lobby\n")
+    monkeypatch.setattr(properties_service, "schreibe_wert",
+                        lambda *_a, **_k: "server.properties nicht schreibbar (Probe).")
+
+    ok, meldung = lobby_service.deploy_lobby_world(db, overwrite=True)
+
+    assert ok is False, "eine halb uebernommene Lobby darf nicht gruen gemeldet werden"
+    assert "nicht schreibbar (Probe)" in meldung, "die Warnung muss durchkommen"
+    assert "uebernommen" in meldung, "dass die Welt getauscht IST, muss dastehen"
+    assert "Survival" in meldung
+    assert (base / "lobby" / "level.dat").is_file()
+
+
+def test_lobby_weltname_mit_pfadanteil_wird_verworfen(tmp_path):
+    """Der Weltname der Lobby landet in einem ``shutil.rmtree``.
+
+    ``deploy_lobby_world`` baut ``world_dir = base / _level_name(base)`` und raeumt diesen
+    Ordner bei ``overwrite`` aus. Ohne Riegel ergab ``level-name=../woanders`` einen Ordner
+    NEBEN dem Serverordner - und geloescht haette es den. Derselbe Riegel haelt in
+    ``transfer_service`` schon (test_transfer.py::test_level_name_mit_pfadanteil_wird_verworfen);
+    er fehlte an der Stelle, die loescht.
+    """
+    from app.services import lobby_service
+
+    (tmp_path / "server.properties").write_text("level-name=../woanders\n",
+                                                encoding="utf-8")
+    assert lobby_service._level_name(tmp_path) == "world"
+    assert (tmp_path / lobby_service._level_name(tmp_path)).parent == tmp_path
+
+
 def test_config_version_kommt_aus_dem_jar(tmp_path):
     """Fest eingetragen lief sie zwangslaeufig auseinander.
 

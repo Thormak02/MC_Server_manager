@@ -398,10 +398,6 @@ public final class Wettbewerbsbuch {
                            Optional<Punktzeile> eigene, List<Punktzeile> rangliste,
                            long topf, long startgeld, long guthaben) {
 
-        /** Ob gerade ein Fenster offen ist. */
-        public boolean offen() {
-            return laeuft && lauf.isPresent();
-        }
 
         /** Ob dieser Spieler mitmacht. */
         public boolean dabei() {
@@ -451,9 +447,5 @@ public final class Wettbewerbsbuch {
             return new Entscheid(bescheid, 0L, 0, Optional.empty(), List.of(), 0L);
         }
 
-        /** Ob die Anmeldung durchgegangen ist. */
-        public boolean angemeldet() {
-            return bescheid == Bescheid.ANGEMELDET;
-        }
     }
 }

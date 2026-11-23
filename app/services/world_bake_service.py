@@ -4,7 +4,9 @@ Plattform servieren kann. Der Vanilla-Backend-Server (Paper 26.x) nutzt DIESELBE
 sie automatisch -> eine gemeinsame Lobby-Welt auf beiden Seiten (Option B, kein 26->1.21-Convert).
 
 Kern: Anvil speichert Block-Zustaende als NAMEN (``minecraft:oak_stairs`` + Properties), NICHT als
-versions-spezifische Zahlen-IDs. Wir lesen die Namen und mappen sie ueber die gebuendelte
+versions-spezifische Zahlen-IDs. Diesen Namen tragen die Paletteneintraege in VIER Formen - nackter
+String, leerer Schluessel, ``id``/``properties`` (ab 26.x) und ``Name``/``Properties`` (bis 1.21.x);
+gelesen werden sie an genau EINER Stelle, ``palette_entry``. Wir lesen die Namen und mappen sie ueber die gebuendelte
 1.21.1-Block-State-Registry (``assets/block_states_1_21_1.json``) auf die 1.21.1-Zahlen-IDs. So ist
 die Welt-Version egal (1.21.11, 26.x ...); Bloecke, die es in 1.21.1 nicht gibt, werden ersetzt.
 
@@ -197,9 +199,77 @@ def read_region(mca_path: str | Path) -> dict:
     return chunks
 
 
+# --- Paletteneintrag: Name + Properties (VIER gemessene Formen) ----------------
+_REPORTED_SHAPES: set[str] = set()
+
+
+def palette_entry(entry: object) -> tuple[str, dict | None, bool]:
+    """Name und Properties eines Paletteneintrags - in ALLEN vier Formen.
+
+    GEMESSEN am 18.11.2026 an einer frischen Welt aus Paper 26.3 (Chunk 5/0 von
+    freimarken:altfurt): EINE Sektion trug dort drei dieser Formen nebeneinander.
+
+      * ``"minecraft:bedrock"``                              nackter String
+      * ``{"": "minecraft:stone"}``                          Name unter dem LEEREN Schluessel
+      * ``{"id": "minecraft:kelp", "properties": {...}}``    ab 26.x, KLEIN geschrieben
+      * ``{"Name": "minecraft:stone", "Properties": {...}}`` bis 1.21.x
+
+    Wer nur ``Name`` liest, bekommt bei einer 26.x-Welt fuer JEDEN Block Luft (nicht den
+    Ersatzblock - die Vorgabe lautete ``minecraft:air``), und beim nackten String einen
+    AttributeError. Beides gemessen am 23.11.2026.
+
+    Properties werden in BEIDEN Schreibungen gelesen: ohne das kaeme
+    ``{"id": "minecraft:kelp", "properties": {"age": "21"}}`` als Kelp im Vorgabezustand
+    durch - 12781 gegen 12760. Jeder Treppenblock stuende falsch gedreht, jede Tuer falsch
+    herum, leise genug, dass es niemand als Fehler meldet.
+
+    Drittes Glied: ``False`` heisst FUENFTE Form - nicht ein unbekannter Block, sondern ein
+    unbekanntes Format. Der Aufrufer macht das laut; stumme Luft hat diesen Leser schon
+    einmal blind gemacht. Geworfen wird NICHT: ``bake_lobby_packets`` frisst jede Ausnahme
+    und macht daraus ``None``, und ``None`` spricht der Hub als fehlenden
+    ``/setworldspawn`` aus. Ein gelesener Wert mit einer gedruckten Zeile ueberlebt die
+    Fangstelle, ein Wurf nicht.
+
+    Die Reihenfolge ``id`` vor ``Name`` ist die, die am 18.11. an einer echten Welt
+    funktioniert hat; ``isinstance(wert, str)`` faengt ein ``id``, das eine Zahl ist.
+    """
+    if isinstance(entry, str):
+        return (entry, None, True) if entry else ("minecraft:air", None, False)
+    if isinstance(entry, dict):
+        for key in ("id", "Name", ""):
+            value = entry.get(key)
+            if isinstance(value, str) and value:
+                props = entry.get("properties")
+                if not isinstance(props, dict):
+                    props = entry.get("Properties")
+                return value, (props if isinstance(props, dict) else None), True
+    return "minecraft:air", None, False
+
+
+def _melde_unbekannte_form(entry: object) -> None:
+    """Eine unlesbare Palettenform EINMAL je Gestalt melden.
+
+    ``_palette_ids`` laeuft je Sektion: bei Radius 4 sind das 81 Chunks mal bis zu 24
+    Sektionen. Eine Zeile je Eintrag waere vierstellig und damit so unlesbar wie
+    Schweigen. Der Preis ist ein Prozesszustand - eine Probe muss ihn zuruecksetzen.
+    """
+    shape = (",".join(sorted(entry.keys())) if isinstance(entry, dict)
+             else type(entry).__name__)
+    if shape in _REPORTED_SHAPES:
+        return
+    _REPORTED_SHAPES.add(shape)
+    print(f"[bake] Paletteneintrag in unbekannter Form -> Luft: {entry!r}. "
+          f"Palettenformat geaendert? (world_bake_service.palette_entry)")
+
+
 def _palette_ids(palette: list) -> list[int]:
-    return [block_state_id(str(p.get("Name", "minecraft:air")), p.get("Properties"))
-            for p in palette]
+    ids: list[int] = []
+    for p in palette:
+        name, props, gelesen = palette_entry(p)
+        if not gelesen:
+            _melde_unbekannte_form(p)
+        ids.append(block_state_id(name, props))
+    return ids
 
 
 def chunk_section_blocks(chunk_nbt: dict) -> dict[int, list[int]]:
@@ -389,7 +459,12 @@ def bake_lobby_packets(world_dir: str | Path, *, radius: int, biome_id: int = 0)
             "center_chunk": (ccx, ccz),
             "chunk_count": len(packets),
         }
-    except Exception:  # noqa: BLE001 - defensiv: jeder Bake-Fehler -> Plattform-Fallback
+    except Exception as exc:  # noqa: BLE001 - jeder Bake-Fehler -> Plattform-Fallback
+        # Die Zeile ist der ganze Zweck dieses Zweiges: None wird beim Aufrufer zu
+        # "Kein /setworldspawn in der Lobby-Welt (oder keine Chunks)" - also zu einer
+        # Ursache, die der Betreiber nicht beheben kann, weil der Spawn gesetzt ist.
+        # Ohne diesen Druck sucht er an der falschen Stelle, so lange er sucht.
+        print(f"[bake] Lobby-Bake abgebrochen: {exc!r}")
         return None
 
 
@@ -436,7 +511,10 @@ def diagnose_lobby_bake(world_dir: str | Path, *, radius: int) -> dict:
                 names: set[str] = set()
                 for sec in ch.get("sections", []):
                     for e in ((sec.get("block_states") or {}).get("palette") or []):
-                        names.add(str(e.get("Name", "")).replace("minecraft:", ""))
+                        # DIESELBE Leseregel wie _palette_ids - sonst meldet die
+                        # Route, die den Rueckfall ERKLAEREN soll, selbst einen
+                        # AttributeError statt der Blocknamen.
+                        names.add(palette_entry(e)[0].replace("minecraft:", ""))
                 info["sample_names"] = sorted(names)[:12]
     except Exception as exc:  # noqa: BLE001
         info["error"] = repr(exc)

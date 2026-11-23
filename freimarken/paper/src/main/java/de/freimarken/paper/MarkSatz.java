@@ -363,6 +363,20 @@ enum MarkSatz implements Satz {
     VERLAUF_GRUND_BETREIBER_ABZUG("mark.verlauf.grund.betreiber-abzug", Art.WORT),
 
     /**
+     * Dieselben zwei Worte fuer die GOLDMARK [23.11.2026].
+     *
+     * <p>Der Pfad bleibt unter {@code mark.verlauf.grund.}, wie bei
+     * {@link #VERLAUF_GRUND_MUENZHAUS_KAUF}: {@link #grundpfad} bildet ihn aus dem
+     * AUFZAEHLUNGSNAMEN, und welche Einheit die Zahl daneben hat, sagt das Buch und nicht
+     * das Wort. Darum darf der Wortlaut derselbe sein wie bei der Mark - wie
+     * {@code lotterie-gewinn} und {@code lotterie-goldgewinn} es schon vormachen.
+     */
+    VERLAUF_GRUND_BETREIBER_GOLDGUTSCHRIFT(
+            "mark.verlauf.grund.betreiber-goldgutschrift", Art.WORT),
+    VERLAUF_GRUND_BETREIBER_GOLDABZUG("mark.verlauf.grund.betreiber-goldabzug",
+            Art.WORT),
+
+    /**
      * Die drei Worte der Lotterie - Los, Markgewinn, Goldgewinn (Plan 14).
      *
      * <p>Das LOS steht auch mit 0 Mark im Buch, weil das erste am Tag gratis ist. Im

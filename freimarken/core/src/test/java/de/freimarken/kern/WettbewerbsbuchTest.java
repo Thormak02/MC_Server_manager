@@ -398,7 +398,8 @@ class WettbewerbsbuchTest {
         Welt welt = new Welt(werte(250L, 0L), 1_000L);
 
         Wettbewerbsbuch.Auskunft ohne = welt.buch.frage(welt.anna, IM_FENSTER);
-        assertTrue(ohne.offen());
+        assertTrue(ohne.laeuft());
+        assertTrue(ohne.lauf().isPresent(), "das Fenster ist offen");
         assertFalse(ohne.dabei());
         assertEquals(1_000L, ohne.guthaben());
         assertEquals(250L, ohne.startgeld());

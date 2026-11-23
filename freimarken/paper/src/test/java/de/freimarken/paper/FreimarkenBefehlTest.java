@@ -83,13 +83,19 @@ class FreimarkenBefehlTest {
                 new BundBefehle.Geldzweig() {
                     @Override
                     public void tue(Audience empfaenger, String wer, String spieler,
-                                    long betrag) {
-                        gerufen.add("geld:" + wer + ":" + spieler + ":" + betrag);
+                                    long betrag, Betreibergeld.Waehrung waehrung) {
+                        // DIE WAEHRUNG GEHOERT IN DIE MITSCHRIFT [23.11.2026]: Ein Baum,
+                        // der beide Literale an denselben Zweig haengt und dabei immer
+                        // MARK hereingibt, waere ohne sie gruen - und das waere der
+                        // Fehler, um den es ging, nur eine Ebene hoeher.
+                        gerufen.add("geld:" + wer + ":" + spieler + ":" + betrag + ":"
+                                + waehrung);
                     }
 
                     @Override
-                    public void hilfe(Audience empfaenger) {
-                        gerufen.add("geld-hilfe");
+                    public void hilfe(Audience empfaenger,
+                                      Betreibergeld.Waehrung waehrung) {
+                        gerufen.add("geld-hilfe:" + waehrung);
                     }
                 },
                 new BundBefehle.Besitzzweig() {
@@ -264,7 +270,41 @@ class FreimarkenBefehlTest {
         // fehlerfrei - und dann bucht der Befehl auf das Konto des Betreibers und
         // schreibt den Spieler ins Protokoll. Das Minus steht mit Absicht da: Es geht
         // als Vorzeichen durch den Baum und nicht als eigener Zweig.
-        assertEquals(List.of("geld:Cara:Anna:-250"), gerufen);
+        assertEquals(List.of("geld:Cara:Anna:-250:MARK"), gerufen);
+    }
+
+    @Test
+    @DisplayName("44j-gold - goldgeld landet im SELBEN Zweig, aber mit der Goldmark")
+    void goldgeldGibtDieWaehrungMit() throws CommandSyntaxException {
+        // Bis zum 23.11.2026 gab es diesen Zweig nicht, und damit im ganzen Haus keinen
+        // Weg, Goldmark auf ein Konto zu buchen. Wer 40 Goldmark verlor, bekam auf
+        // "/freimarken geld Anna 40" vierzig MARK - ein Achthundertstel, und die
+        // Antwortzeile war dabei richtig.
+        Spielerprobe mitRecht = spieler(219, BundBefehle.RECHT_GELD);
+
+        assertEquals(1, baum.tippe("freimarken goldgeld Anna -250", mitRecht));
+
+        assertEquals(List.of("geld:Cara:Anna:-250:GOLDMARK"), gerufen);
+    }
+
+    @Test
+    @DisplayName("44j-schranke - die Goldmark hat ihre EIGENE, viel kleinere Grenze")
+    void goldgeldHatSeineEigeneSchranke() throws CommandSyntaxException {
+        // Das Paar aus Befehlswort und Schranke steht an EINER Stelle
+        // (Betreibergeld.Waehrung). Diese Probe ist der Beleg, dass es wirklich
+        // auseinandergehalten wird: Eine Million Goldmark sind achthundert Millionen
+        // Mark, eine Milliarde waeren achthundert Milliarden.
+        Spielerprobe mitRecht = spieler(220, BundBefehle.RECHT_GELD);
+
+        // In MARK geht die Zahl durch ...
+        assertEquals(1, baum.tippe("freimarken geld Anna 1000001", mitRecht));
+        // ... in GOLDMARK nicht. Brigadier weist sie am Argument ab, bevor der Zweig
+        // laeuft - darum der Wurf und nicht ein Ergebnis.
+        assertThrows(CommandSyntaxException.class,
+                () -> baum.tippe("freimarken goldgeld Anna 1000001", mitRecht));
+
+        assertEquals(List.of("geld:Cara:Anna:1000001:MARK"), gerufen,
+                "nur die Markbuchung darf angekommen sein");
     }
 
     @Test
@@ -276,8 +316,14 @@ class FreimarkenBefehlTest {
         // "Unknown or incomplete command" - und der Betreiber sucht den Fehler bei sich.
         assertEquals(1, baum.tippe("freimarken geld", mitRecht));
         assertEquals(1, baum.tippe("freimarken geld Anna", mitRecht));
+        // BEIDE Worte, denn beide Teilbaeume kommen aus demselben Helfer - eine Hilfe,
+        // die das falsche Wort nennt, schickt den Betreiber in den anderen Befehl.
+        assertEquals(1, baum.tippe("freimarken goldgeld", mitRecht));
+        assertEquals(1, baum.tippe("freimarken goldgeld Anna", mitRecht));
 
-        assertEquals(List.of("geld-hilfe", "geld-hilfe"), gerufen);
+        assertEquals(List.of("geld-hilfe:MARK", "geld-hilfe:MARK",
+                        "geld-hilfe:GOLDMARK", "geld-hilfe:GOLDMARK"),
+                gerufen);
     }
 
     @Test
@@ -290,6 +336,10 @@ class FreimarkenBefehlTest {
 
         assertThrows(CommandSyntaxException.class,
                 () -> baum.tippe("freimarken geld Anna 1", nurVerwalten));
+        // Und derselbe Riegel am Goldzweig: Er kommt aus demselben Helfer, aber eine
+        // zweite Tuer, die niemand prueft, ist kein Riegel.
+        assertThrows(CommandSyntaxException.class,
+                () -> baum.tippe("freimarken goldgeld Anna 1", nurVerwalten));
         assertEquals(List.of(), gerufen);
 
         // Und die Gegenrichtung: Das Geldrecht allein oeffnet die Verwaltungszweige

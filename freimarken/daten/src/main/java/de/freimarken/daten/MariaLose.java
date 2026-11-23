@@ -13,8 +13,10 @@ import java.util.UUID;
  *
  * <p>Haelt denselben {@code LosVertrag} wie die Fassung im Arbeitsspeicher.
  *
- * <p><b>Geschrieben wird AUFSCHLAGEND</b>, mit {@code ON DUPLICATE KEY UPDATE anzahl =
- * anzahl + 1}, und damit anders als bei {@link MariaBonus}. Der Grund steht in
+ * <p><b>Geschrieben wird AUFSCHLAGEND</b>, mit {@code ON DUPLICATE KEY UPDATE} - seit
+ * dem 23.11.2026 mit einem {@code IF} darin, das bei {@link Integer#MAX_VALUE} anlaeuft
+ * statt zu werfen (siehe {@code ZAEHLEN}) -, und damit anders als bei
+ * {@link MariaBonus}. Der Grund steht in
  * {@link Losablage}: Die Zahl ist eine ZAEHLUNG und kein Zustand. Zwei Server, die beide
  * ein Los melden, meinen zwei Lose - und es sind zwei. Setzend verschluckte eines davon,
  * und ein verschlucktes Los verbilligt das naechste.
@@ -38,9 +40,25 @@ public final class MariaLose implements Losablage {
     private static final String LESEN =
             "SELECT anzahl FROM lotterie_lose WHERE spieler = ? AND tag = ?";
 
+    /**
+     * Aufschlagend, und bei {@link Integer#MAX_VALUE} ANLAUFEND - nicht darueber.
+     *
+     * <p>Die Grenze steht als Javas Konstante in der Anweisung und nicht als Zahl: Es ist
+     * dieselbe Grenze, die {@code anzahl INT} hat und die {@link de.freimarken.kern.Losstand}
+     * nicht negativ sehen will, und eine abgeschriebene Zahl laeuft von der anderen weg.
+     *
+     * <p><b>Ohne das {@code IF} war die Zusage der Schnittstelle gebrochen</b>
+     * [23.11.2026]: {@code anzahl = anzahl + 1} auf einer INT-Spalte endet im strict mode
+     * in "Out of range value", und das wurde hier zu einer
+     * {@link IllegalStateException} - also genau zu dem Wurf, von dem
+     * {@link de.freimarken.kern.Losablage#zaehleEins} sagt, eine anlaufende Zahl sei
+     * in jedem Fall besser. Die Fassung im Arbeitsspeicher hielt es, diese nicht, und
+     * der Vertrag hatte fuer die Saettigung keinen Fall.
+     */
     private static final String ZAEHLEN =
             "INSERT INTO lotterie_lose (spieler, tag, anzahl) VALUES (?, ?, 1)"
-                    + " ON DUPLICATE KEY UPDATE anzahl = anzahl + 1";
+                    + " ON DUPLICATE KEY UPDATE anzahl ="
+                    + " IF(anzahl >= " + Integer.MAX_VALUE + ", anzahl, anzahl + 1)";
 
     private final Datenbank datenbank;
 

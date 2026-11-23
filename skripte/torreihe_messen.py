@@ -62,7 +62,7 @@ if str(_WURZEL) not in sys.path:
     sys.path.insert(0, str(_WURZEL))
 
 # read_nbt wird hier nicht gebraucht: read_region wendet es selbst auf jeden Chunk an.
-from app.services.world_bake_service import read_region  # noqa: E402  (nach sys.path)
+from app.services.world_bake_service import palette_entry, read_region  # noqa: E402
 
 
 # --- Blockkunde ----------------------------------------------------------------
@@ -152,30 +152,16 @@ def ist_tragend(name: str, zusatz: frozenset[str] = frozenset()) -> bool:
 def palettenname(eintrag: object) -> str:
     """Der Blockname eines Paletteneintrags - in ALLEN vier Formen, die vorkommen.
 
-    GEMESSEN am 18.11.2026 an einer frischen Welt aus Paper 26.3 (Chunk 5/0 von
-    freimarken:altfurt). Eine einzige Sektion traegt dort drei verschiedene Formen
-    nebeneinander, und das ist der Grund, warum diese Funktion ueberhaupt existiert:
+    Die Leseregel steht an EINER Stelle: ``world_bake_service.palette_entry``. Dort stehen
+    auch die vier Formen und der Messbeleg vom 18.11.2026. Hier bleibt nur der Name - beim
+    Messen zaehlt der Name, nicht der Zustand.
 
-    * ``"minecraft:bedrock"``                              - ein nackter String
-    * ``{"": "minecraft:stone"}``                           - ein Compound, dessen Name
-      unter dem LEEREN Schluessel steht (ein unbenannter NBT-String)
-    * ``{"id": "minecraft:kelp", "properties": {...}}``     - das Format ab 26.x:
-      KLEIN geschrieben, ``id`` statt ``Name``
-    * ``{"Name": "minecraft:stone", "Properties": {...}}``  - das Format bis 1.21.x
-
-    <b>Wer nur ``Name`` liest, bekommt bei einer 26.x-Welt fuer JEDEN Block denselben
-    Ersatzwert.</b> Genau daran ist der erste Lauf dieses Skriptes gescheitert, und genau
-    das tut ``world_bake_service.block_state_id`` heute noch (es liest ``Name`` und faellt
-    stumm auf eine Ersatz-ID zurueck) - dort steht es im TODO.
+    Dass die Regel im DIENST steht und nicht hier, hat denselben Grund wie bei
+    ``read_region`` (Modulkopf): Das Skript haengt am Dienst, nie umgekehrt. Bis zum
+    23.11.2026 war diese Funktion die einzige richtige Fassung, und der Bake-Dienst las
+    nur ``Name`` - sie sind auseinandergelaufen, und genau das war der Fehler.
     """
-    if isinstance(eintrag, str):
-        return eintrag
-    if isinstance(eintrag, dict):
-        for schluessel in ("id", "Name", ""):
-            wert = eintrag.get(schluessel)
-            if isinstance(wert, str) and wert:
-                return wert
-    return "minecraft:air"
+    return palette_entry(eintrag)[0]
 
 
 def sektion_namen(sektion: dict) -> list[str] | None:

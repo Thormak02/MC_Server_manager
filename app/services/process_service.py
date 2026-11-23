@@ -1843,9 +1843,13 @@ STUFE_SUPER_ADMIN = "super_admin"
 # Serverdateien schreiben darf, und das ist dieselbe Vollmacht, gegen die hier nicht
 # geschuetzt wird. Dieselbe blinde Stelle hat ``braucht_admin`` bei einer
 # Datapack-Funktion.
+#
+# "goldgeld" steht seit dem 23.11.2026 daneben, und es ist der wichtigere der beiden:
+# 1 Goldmark ist 800 Mark (Plan 8.1). Ein Zweig, der hier fehlt, ist kein kleineres Loch
+# als "geld", sondern ein achthundertmal groesseres.
 SUPER_ADMIN_ZWEIGE: dict[str, frozenset[str]] = {
-    "freimarken": frozenset({"geld", "besitz"}),
-    "fm": frozenset({"geld", "besitz"}),
+    "freimarken": frozenset({"geld", "goldgeld", "besitz"}),
+    "fm": frozenset({"geld", "goldgeld", "besitz"}),
 }
 
 

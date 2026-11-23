@@ -214,6 +214,86 @@ def test_eine_geldkorrektur_sendet_den_befehl(client, tmp_path, monkeypatch):
     assert gesendet == ["freimarken geld Anna -500"]
 
 
+def test_eine_goldkorrektur_sendet_goldgeld(client, tmp_path, monkeypatch):
+    """Die Waehrung entscheidet ueber das BEFEHLSWORT [23.11.2026].
+
+    Bis dahin gab es im ganzen Haus keinen Weg, Goldmark auf ein Konto zu buchen: Wer 40
+    Goldmark verlor, bekam auf dieses Formular vierzig MARK - zum Kurs des Plans ein
+    Achthundertstel, und die Meldung war dabei richtig.
+    """
+    gesendet = _faelsche_konsole(monkeypatch)
+    server_id = _aufbau(client, tmp_path, name="gold-senden", port=25692)
+
+    antwort = client.post("/freimarken/" + str(server_id) + "/konten",
+                          data={"spieler": "Anna", "betrag": "40",
+                                "waehrung": "goldmark", "grund": "Muenzhaus"},
+                          follow_redirects=False)
+
+    assert antwort.status_code == 303
+    assert gesendet == ["freimarken goldgeld Anna 40"]
+
+
+def test_ohne_waehrung_bleibt_es_die_mark(client, tmp_path, monkeypatch):
+    """Ein Formular ohne das Feld (ein alter Reiter, ein Skript) darf nicht in Goldmark
+    buchen - die Vorgabe ist die kleinere Waehrung."""
+    gesendet = _faelsche_konsole(monkeypatch)
+    server_id = _aufbau(client, tmp_path, name="gold-vorgabe", port=25693)
+
+    client.post("/freimarken/" + str(server_id) + "/konten",
+                data={"spieler": "Anna", "betrag": "40"}, follow_redirects=False)
+
+    assert gesendet == ["freimarken geld Anna 40"]
+
+
+def test_eine_erfundene_waehrung_wird_abgewiesen(client, tmp_path, monkeypatch):
+    gesendet = _faelsche_konsole(monkeypatch)
+    server_id = _aufbau(client, tmp_path, name="gold-erfunden", port=25694)
+
+    client.post("/freimarken/" + str(server_id) + "/konten",
+                data={"spieler": "Anna", "betrag": "40", "waehrung": "taler"},
+                follow_redirects=False)
+    seite = client.get("/freimarken/" + str(server_id) + "/konten").text
+
+    assert gesendet == [], "es darf nichts gesendet worden sein"
+    assert "mark oder goldmark" in seite
+
+
+def test_die_goldschranke_ist_eine_million(client, tmp_path, monkeypatch):
+    """Die Goldmark hat ihre EIGENE Schranke, und sie muss zu der des Plugins passen.
+
+    Dieselbe Zahl wie Betreibergeld.HOECHSTENS_GOLD. Waere hier die Markschranke
+    stehengeblieben, erreichte die Zahl den Zweig gar nicht: Brigadier weist sie am
+    Argument ab und antwortet englisch an eine Konsole, die ihre Antwort nicht
+    zurueckgibt - der Betreiber saehe "Gesendet" und nichts waere gebucht.
+    """
+    gesendet = _faelsche_konsole(monkeypatch)
+    server_id = _aufbau(client, tmp_path, name="gold-schranke", port=25695)
+
+    client.post("/freimarken/" + str(server_id) + "/konten",
+                data={"spieler": "Anna", "betrag": "1000001",
+                      "waehrung": "goldmark"}, follow_redirects=False)
+    seite = client.get("/freimarken/" + str(server_id) + "/konten").text
+
+    assert gesendet == [], "ueber einer Million darf nichts gesendet werden"
+    # "eine Million" ALLEIN ist keine Zusicherung [berichtigt 23.11.2026]: Der Satz steht
+    # dauerhaft in der Auswahlzeile des Formulars ("Goldmark (hoechstens eine Million)") -
+    # die Zeile war auch auf einer Seite OHNE jede Fehlermeldung erfuellt, und ebenso,
+    # wenn dort "Hoechstens eine Milliarde" stuende. Geprueft wird darum die MELDUNG.
+    assert "Hoechstens eine Million" in seite, (
+        "die Meldung muss die Goldschranke nennen - sonst sucht der Betreiber sie um den"
+        " Faktor tausend falsch")
+    # Kein "eine Milliarde" nicht - der Satz gehoert der Markschranke und steht dauerhaft
+    # im Hinweis des Formulars. Die Gegenrichtung steht unten: Dieselbe Zahl geht in Mark
+    # durch, und DAS unterscheidet die zwei Schranken.
+
+    # UND DIE GEGENRICHTUNG: In Mark geht dieselbe Zahl durch. Ohne sie waere die Probe
+    # auch gruen, wenn die Schranke fuer BEIDE Waehrungen auf eine Million faellt.
+    client.post("/freimarken/" + str(server_id) + "/konten",
+                data={"spieler": "Anna", "betrag": "1000001"}, follow_redirects=False)
+
+    assert gesendet == ["freimarken geld Anna 1000001"]
+
+
 def test_die_meldung_sagt_gesendet_und_nicht_gebucht(client, tmp_path, monkeypatch):
     """``send_console_command`` kennt den Ausgang nicht.
 
@@ -231,6 +311,18 @@ def test_die_meldung_sagt_gesendet_und_nicht_gebucht(client, tmp_path, monkeypat
     assert "Gesendet" in seite
     assert "Ausgang" in seite, "die Meldung muss sagen, wo der Ausgang zu lesen ist"
     assert "gebucht" not in seite
+    # Das Waehrungsfeld muss im Formular stehen, sonst ist der Goldweg gebaut und
+    # unerreichbar - und der alte Satz "Goldmark laesst sich so nicht berichtigen" waere
+    # eine Luege, die sich nur im Quelltext widerlegt.
+    assert 'name="waehrung"' in seite
+    assert "goldmark" in seite
+    assert "laesst sich so nicht berichtigen" not in seite
+    # UND DER HINWEIS NENNT DAS RICHTIGE BUCH [23.11.2026]: Die Seite sagte "die Buchung
+    # danach in /mark verlauf" fuer beide Waehrungen - dort kommen aber nur Markzeilen an.
+    # Derselbe falsche Satz stand in der Hilfezeile des Plugins; eine der zwei Stellen zu
+    # heilen haette die andere stehen gelassen, und wer die Seite benutzt, liest nur diese.
+    assert "/mark muenzhaus verlauf" in seite, (
+        "der Hinweis muss sagen, wo eine GOLDbuchung danach steht")
 
 
 def test_der_grund_landet_im_protokoll(client, tmp_path, monkeypatch):

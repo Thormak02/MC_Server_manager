@@ -46,6 +46,15 @@ public interface Losablage {
      * Lesen-Rechnen-Schreiben aus zwei Faeden verliert ein Los, und ein verlorenes Los
      * ist ein verbilligtes naechstes.
      *
+     * <p>Die Zahl laeuft bei {@link Integer#MAX_VALUE} AN und nicht darueber: Eine
+     * uebergelaufene waere NEGATIV, und der Konstruktor von {@link Losstand} wuerfe dann
+     * mitten im Spiel - bei einem Zug, der nichts kaputtmachen soll. Erreichbar ist das
+     * nur ohne Tagesgrenze in der Einstellungsdatei, aber eine Zahl, die anlaeuft, ist
+     * in jedem Fall besser als ein Wurf. (Der Satz stand bis zum 23.11.2026 an
+     * {@code Losstand.mitEinemMehr} - einem zweiten, NICHT aufschlagenden Weg zum
+     * Zaehlen, den niemand rief und der genau das Lesen-Rechnen-Schreiben anbot, das
+     * das erste Versprechen oben verbietet.)
+     *
      * @return wie viele Lose der Spieler an diesem Tag nun hat, mindestens 1
      * @throws IllegalStateException wenn nicht geschrieben werden konnte. Der Aufrufer
      *         bricht dann ab und zieht NICHT: Ein ungezaehltes Los ist ein zweites

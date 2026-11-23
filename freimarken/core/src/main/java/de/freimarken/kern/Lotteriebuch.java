@@ -284,11 +284,6 @@ public final class Lotteriebuch {
      */
     public record Auskunft(boolean laeuft, int loseHeute, int hoechsteLose, long preis,
                            boolean nochEines, long guthaben) {
-
-        /** Ob der Spieler jetzt ziehen koennte. */
-        public boolean koennteZiehen() {
-            return laeuft && nochEines && guthaben >= preis;
-        }
     }
 
     /**
@@ -341,9 +336,5 @@ public final class Lotteriebuch {
             return new Entscheid(bescheid, Optional.empty(), preis, loseHeute, 0);
         }
 
-        /** Ob das Los durchgegangen ist. */
-        public boolean gezogen() {
-            return bescheid == Bescheid.GEZOGEN;
-        }
     }
 }

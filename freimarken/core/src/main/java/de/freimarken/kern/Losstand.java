@@ -46,17 +46,4 @@ public record Losstand(UUID spieler, LocalDate tag, int loseHeute) {
     public static Losstand leer(UUID spieler, LocalDate tag) {
         return new Losstand(spieler, tag, 0);
     }
-
-    /**
-     * Derselbe Stand mit einem Los mehr.
-     *
-     * <p>Laeuft bei {@link Integer#MAX_VALUE} an und nicht darueber: Eine
-     * uebergelaufene Zahl waere NEGATIV, und der Konstruktor wuerfe dann mitten im
-     * Spiel. Erreichbar ist das nur ohne Tagesgrenze in der Einstellungsdatei, aber
-     * eine Zahl, die anlaeuft, ist in jedem Fall besser als ein Wurf.
-     */
-    public Losstand mitEinemMehr() {
-        return new Losstand(spieler, tag,
-                loseHeute == Integer.MAX_VALUE ? loseHeute : loseHeute + 1);
-    }
 }

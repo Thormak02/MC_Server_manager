@@ -33,8 +33,12 @@ permissions:
   # EIGENES Recht und nicht freimarken.verwalten: Jene Zweige zeigen etwas oder tauschen
   # Einstellwerte aus, dieser aendert eine BUCHUNG. Jeder Versuch steht im
   # Serverprotokoll, und die Buchung steht im Verlauf des Spielers.
+  #
+  # BEIDE Waehrungen haengen hier [23.11.2026]: /freimarken geld und /freimarken goldgeld
+  # (BundBefehle.geldbaum setzt fuer beide dasselbe requires). Das muss in der description
+  # stehen - wer das Recht verteilt, liest sie, und eine Goldmark ist achthundert Mark.
   freimarken.geld:
-    description: Einem Spieler Mark gutschreiben oder abziehen
+    description: Einem Spieler Mark ODER Goldmark gutschreiben oder abziehen
     default: op
   # Das Hauptmenue oeffnen: /menu [21.11.2026]. Fuer JEDEN - es zeigt nur die
   # Eintraege, deren Recht der Oeffner hat (Menuetafel.fuerRechte), und ein Klick fuehrt

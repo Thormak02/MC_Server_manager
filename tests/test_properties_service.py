@@ -43,6 +43,245 @@ def test_entfluchten_haelt_halbes_uXXXX_aus():
     assert P.entflucht(r"\u00a") == "u00a"
 
 
+def test_der_schluessel_endet_auch_am_zwischenraum():
+    """Javas drittes Trennzeichen - gefehlt bis zum 23.11.2026.
+
+    ``java.util.Properties.load`` beendet den Schluessel am ersten ungefluchteten ``=``,
+    ``:`` ODER Zwischenraum; danach wird Zwischenraum uebersprungen, dann HOECHSTENS EIN
+    ``=`` oder ``:``, dann wieder Zwischenraum. Der Modulkopf sagte "das erste = oder :",
+    und der Behebungstext in ``transfer_service`` stuetzt sich darauf, dass dieser Leser
+    mit dem uebereinstimmt, was der Server selbst liest.
+    """
+    from app.services.properties_service import zerlege_zeile
+
+    # Nur Zwischenraum als Trenner.
+    assert zerlege_zeile("level-name lobby") == ("level-name", "lobby")
+    assert zerlege_zeile("level-name" + chr(9) + "lobby") == ("level-name", "lobby")
+    # Der Seitenvorschub gehoert dazu - Javas load0 prueft GENAU Leerzeichen, Tabulator
+    # und Seitenvorschub. Er fehlte in der ersten Fassung dieser Behebung.
+    assert zerlege_zeile("level-name" + chr(12) + "lobby") == ("level-name", "lobby")
+    # Und der ZEILENtabulator gehoert NICHT dazu: Java beendet daran keinen Schluessel.
+    # Er steht in TRENNT_PYTHON_NICHT_JAVA, weil PYTHON dort eine Zeile trennt.
+    assert zerlege_zeile("a" + chr(11) + "b=c") == ("a" + chr(11) + "b", "c")
+    # Zwischenraum UND Trennzeichen, in jeder Mischung - alles einer Wert.
+    assert zerlege_zeile("level-name = lobby") == ("level-name", "lobby")
+    assert zerlege_zeile("level-name   :   lobby") == ("level-name", "lobby")
+    assert zerlege_zeile("level-name=lobby") == ("level-name", "lobby")
+    # HOECHSTENS EIN Trennzeichen wird verschluckt: Das zweite gehoert zum Wert.
+    assert zerlege_zeile("a == b") == ("a", "= b")
+    # Und der Zwischenraum, der den Schluessel beendet hat, macht den Rest zum Wert -
+    # auch wenn darin noch ein = steht. Das verwundert und ist genau Javas Regel.
+    assert zerlege_zeile("a b = c") == ("a", "b = c")
+    # Zwischenraum IM Wert bleibt, und der Wert behaelt sein Inneres unangetastet.
+    assert zerlege_zeile("motd=Hallo Welt") == ("motd", "Hallo Welt")
+    assert zerlege_zeile("motd = Hallo  Welt") == ("motd", "Hallo  Welt")
+    # Ein Schluessel ohne jeden Wert bleibt ein Schluessel mit leerem Wert.
+    assert zerlege_zeile("white-list") == ("white-list", "")
+    assert zerlege_zeile("white-list ") == ("white-list", "")
+    # Kommentar und Leerzeile bleiben, was sie waren.
+    assert zerlege_zeile("# level-name lobby") is None
+    assert zerlege_zeile("   ") is None
+
+
+def test_ein_gefluchteter_zwischenraum_beendet_den_schluessel_nicht():
+    """Ein geschuetztes Leerzeichen gehoert noch zum Schluessel.
+
+    Ohne diese Zusicherung waere die einfachste Behebung - an JEDEM Leerzeichen trennen -
+    gruen, und ein gefluchteter Schluessel zerfiele in zwei.
+    """
+    from app.services.properties_service import zerlege_zeile
+
+    backslash = chr(92)
+
+    assert zerlege_zeile("a" + backslash + " b=c") == ("a" + backslash + " b", "c")
+
+
+def test_ein_kommentar_setzt_nichts_fort(tmp_path):
+    """Javas load0 liest eine Kommentarzeile bis zum Ende der NATUERLICHEN Zeile.
+
+    Bis zum 23.11.2026 haengte ``_mit_fortsetzung`` jede Zeile mit ungeradem Backslash an
+    die naechste - auch einen Kommentar. Ein Windows-Pfad in einem Kommentar genuegte, und
+    die Zeile darunter war verschwunden. War das ``level-name=lobby``, fiel
+    ``weltname_aus_ordner`` auf "world" zurueck, und ``deploy_lobby_world`` raeumte mit
+    ``shutil.rmtree`` den FALSCHEN Ordner aus und meldete dabei gruen.
+
+    Die Erwartungen hier sind gemessen - mit ``java.util.Properties.load`` unter Java 25.
+    """
+    backslash = chr(92)
+    datei = tmp_path / "server.properties"
+    datei.write_text("# Welt liegt unter C:" + backslash + "minecraft" + backslash
+                     + "lobby" + backslash + chr(10)
+                     + "level-name=lobby" + chr(10)
+                     + "gamemode=survival" + chr(10), encoding="utf-8")
+
+    alle = P.lies_alle(datei)
+
+    assert alle == {"level-name": "lobby", "gamemode": "survival"}
+
+
+def test_eine_fortsetzung_mit_raute_ist_kein_kommentar(tmp_path):
+    """DIE GEGENRICHTUNG: Gefragt wird nur am ANFANG einer logischen Zeile.
+
+    Ohne sie waere die einfachste Behebung - jede Zeile mit '#' als Kommentar zu nehmen -
+    gruen, und eine Raute im umgebrochenen Wert zerriss die Datei.
+    """
+    backslash = chr(92)
+    datei = tmp_path / "server.properties"
+    datei.write_text("motd=Raute folgt " + backslash + chr(10)
+                     + "#eins zwei" + chr(10)
+                     + "level-name=lobby" + chr(10), encoding="utf-8")
+
+    alle = P.lies_alle(datei)
+
+    assert alle == {"motd": "Raute folgt #eins zwei", "level-name": "lobby"}
+
+
+def test_schreiben_laesst_eine_fremde_fortsetzung_in_ruhe(tmp_path):
+    """Eine Fortsetzungszeile ist kein Eintrag, sondern ein Stueck eines fremden Wertes.
+
+    Seit der Schluessel am ersten Zwischenraum endet (23.11.2026), war das ERSTE WORT
+    einer Fortsetzungszeile ihr Schluessel - und traf. Die Zeile wurde ersetzt, und der
+    haengende Backslash darueber verschluckte, was neu an ihrer Stelle stand: Gemessen mit
+    echtem Java kam ``difficulty`` gar nicht in der Datei an, und ``schreibe_wert`` gab
+    None zurueck, also "gesetzt".
+    """
+    backslash = chr(92)
+    datei = tmp_path / "server.properties"
+    datei.write_text("motd=Hardcore-Server, " + backslash + chr(10)
+                     + "difficulty hard und kein Respawn" + chr(10)
+                     + "online-mode=false" + chr(10), encoding="utf-8")
+
+    warnung = P.schreibe_wert(datei, "difficulty", "peaceful")
+
+    assert warnung is None, warnung
+    alle = P.lies_alle(datei)
+    assert alle["difficulty"] == "peaceful", alle
+    # Der fremde Wert bleibt, wie Java ihn vorher las - samt der Fortsetzung.
+    assert alle["motd"] == "Hardcore-Server, difficulty hard und kein Respawn"
+    assert alle["online-mode"] == "false"
+
+
+def test_schreiben_haengt_nicht_hinter_einen_offenen_backslash(tmp_path):
+    """Ein haengender Backslash am Dateiende verschluckt die angehaengte Zeile.
+
+    Java liest sie als Fortsetzung des Wertes darueber - aus ``motd=Willkommen`` plus
+    ``gamemode=adventure`` wurde ``motd=Willkommengamemode=adventure`` und KEIN gamemode.
+    Die Lobby lief damit im Standard Survival, und normale Spieler bauten sie ab.
+    """
+    backslash = chr(92)
+    datei = tmp_path / "server.properties"
+    datei.write_text("level-name=lobby" + chr(10)
+                     + "motd=Willkommen" + backslash + chr(10), encoding="utf-8")
+
+    warnung = P.schreibe_wert(datei, "gamemode", "adventure")
+
+    assert warnung is None, warnung
+    alle = P.lies_alle(datei)
+    assert alle["gamemode"] == "adventure", alle
+    assert alle["motd"] == "Willkommen", "der offene Backslash gehoerte zu niemandem"
+    assert alle["level-name"] == "lobby"
+
+
+def test_auch_mit_leerzeile_hinter_dem_offenen_backslash(tmp_path):
+    """Derselbe Fall mit einer Leerzeile dahinter - und er fiel als EINZIGER von acht.
+
+    Die Leerzeile schliesst den Block, der Block ist also nicht offen; sobald die
+    Leerzeile beim Anhaengen weggenommen wird, steht der Backslash wieder am Dateiende.
+    Gefragt werden muss darum NACH dem Wegnehmen.
+    """
+    backslash = chr(92)
+    datei = tmp_path / "server.properties"
+    datei.write_text("level-name=lobby" + chr(10)
+                     + "motd=Willkommen" + backslash + chr(10)
+                     + chr(10) + chr(10), encoding="utf-8")
+
+    warnung = P.schreibe_wert(datei, "gamemode", "adventure")
+
+    assert warnung is None, warnung
+    assert P.lies_alle(datei)["gamemode"] == "adventure"
+
+
+def test_doppelter_schluessel_mit_fortsetzung_faellt_ganz_weg(tmp_path):
+    """Beim Ersetzen faellt der GANZE Block weg, auch seine Fortsetzungszeilen.
+
+    Sie gehoerten zum alten Wert. Bliebe eine stehen, haengte sie sich an den neuen.
+    """
+    backslash = chr(92)
+    datei = tmp_path / "server.properties"
+    datei.write_text("gamemode=creative" + chr(10)
+                     + "gamemode=sur" + backslash + chr(10)
+                     + "vival" + chr(10)
+                     + "pvp=true" + chr(10), encoding="utf-8")
+
+    warnung = P.schreibe_wert(datei, "gamemode", "adventure")
+
+    assert warnung is None, warnung
+    alle = P.lies_alle(datei)
+    assert alle == {"gamemode": "adventure", "pvp": "true"}, alle
+    assert "vival" not in datei.read_text(encoding="utf-8")
+
+
+def test_ein_schreibfehler_allein_ist_keine_warnung(tmp_path, monkeypatch):
+    """Steht der richtige Wert schon da, ist er GESETZT - auch ohne Schreibzugriff.
+
+    Zweiter Deploy derselben Lobby, server.properties vom Betreiber schreibgeschuetzt und
+    inhaltlich schon richtig: Vorher gab es vier Warnungen, und deploy_lobby_world
+    behauptete daraufhin, die Lobby laufe in Survival mit PvP und Monstern - waehrend
+    genau diese Zeilen unveraendert in der Datei standen. Der Betreiber sucht dann einen
+    Fehler, den es nicht gibt.
+    """
+    import pathlib as _pathlib
+
+    datei = tmp_path / "server.properties"
+    datei.write_text("gamemode=adventure" + chr(10), encoding="utf-8")
+
+    def wirft(*_a, **_k):
+        raise OSError("schreibgeschuetzt (Probe)")
+
+    monkeypatch.setattr(_pathlib.Path, "write_bytes", wirft)
+
+    assert P.schreibe_wert(datei, "gamemode", "adventure") is None
+
+
+def test_ein_schreibfehler_MIT_falschem_wert_warnt_doch(tmp_path, monkeypatch):
+    """DIE GEGENRICHTUNG: Steht der Wert nicht da, muss der Schreibfehler gemeldet werden -
+    samt seinem Grund, damit der Betreiber weiss, dass es am Schreibschutz liegt."""
+    import pathlib as _pathlib
+
+    datei = tmp_path / "server.properties"
+    datei.write_text("gamemode=survival" + chr(10), encoding="utf-8")
+
+    def wirft(*_a, **_k):
+        raise OSError("schreibgeschuetzt (Probe)")
+
+    monkeypatch.setattr(_pathlib.Path, "write_bytes", wirft)
+
+    warnung = P.schreibe_wert(datei, "gamemode", "adventure")
+
+    assert warnung is not None
+    assert "schreibgeschuetzt (Probe)" in warnung, warnung
+    assert "nicht gesetzt" in warnung
+
+
+def test_die_nachkontrolle_warnt_wenn_der_wert_nicht_ankommt(tmp_path, monkeypatch):
+    """Die Nachkontrolle ist der Riegel gegen die NAECHSTE Gestalt dieses Fehlers.
+
+    Ohne sie meldete jeder Schreibweg, den eine Fortsetzungszeile kaputtmacht, stumm
+    Erfolg - vier gruene Aufrufe, und bei Java kam kein einziger Schluessel an, waehrend
+    der Betreiber "Adventure + friedlich gesetzt" las.
+    """
+    datei = tmp_path / "server.properties"
+    datei.write_text("level-name=lobby" + chr(10), encoding="utf-8")
+    # Ein Leser, der den Wert nicht sieht - gleich welche Gestalt der Fehler haette.
+    monkeypatch.setattr(P, "lies_alle", lambda _pfad: {"level-name": "lobby"})
+
+    warnung = P.schreibe_wert(datei, "gamemode", "adventure")
+
+    assert warnung is not None, "ein nicht angekommener Wert muss gemeldet werden"
+    assert "gamemode" in warnung
+    assert "von Hand" in warnung
+
+
 # ------------------------------------------------------------------ Fluchten
 
 @pytest.mark.parametrize("wert", [

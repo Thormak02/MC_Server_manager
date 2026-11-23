@@ -481,7 +481,19 @@ Offen: warum Velocity die "Connect"-Nachricht verwirft, ist ungeklaert; der Ruec
 
 ~~Zweite Anmeldung desselben Spielers: ersetzen oder abweisen (Netzwerk & Lobby, Vorgabe ersetzen).~~
 
-Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten, eine wirft bei Latin-1 - auf den einen Properties-Leser zusammenziehen.
+~~Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten, eine wirft bei Latin-1 - auf den einen Properties-Leser zusammenziehen.~~ 23.11. zusammengezogen: `lobby_service._level_name` und `content_service._server_level_name` rufen `weltname_aus_ordner`, und das liest über `properties_service`. Damit gilt auch der Riegel gegen `../woanders` - er fehlte an der Stelle, die löscht (`deploy_lobby_world` baut `base / level_name` und ruft darauf `shutil.rmtree`).
+
+Offen: vierzehn eigene Zeilenzerleger für `key=value`-Dateien stehen noch - ai_agent_service, ai_config_service (zwei), file_service (drei), freimarken_einrichtung_service, hub_capture_service, modpack_service, process_service (zwei), server_import_service, server_service, `transfer_service._kopiere_properties`. Eine Probe zählt sie; ein fünfzehnter wird rot. (Hier stand am 23.11. "acht": Das Muster verlangte den Dateinamen im Rumpf derselben Funktion und sah die vier nicht, die ihren Text als Parameter bekommen.)
+
+~~Offen: `_apply_lobby_properties` schreibt eine Latin-1-Datei als UTF-8 zurück und wechselt damit ihre Kodierung.~~ 23.11. berichtigt und behoben: Dazu kam es nie - das LESEN warf vorher (`read_text(encoding="utf-8")`, gefangen nur `OSError`, `UnicodeDecodeError` ist ein `ValueError`), und zwar bis in den Router. Weil `_level_name` am selben Tag geheilt wurde, kam der Wurf danach erst NACH `rmtree` + `copytree`: alte Welt weg, neue da, Lobby-Keys nicht gesetzt, HTTP 500 ohne Meldung. Jetzt geht auch dieser Leser über `properties_service`, und eine Warnung landet in der Meldung (`ok=False`, die Welt IST getauscht).
+
+Offen: `file_service._parse_properties` kennt Javas `:` nicht, und `_dump_properties` hängt unbekannte Zeilen HINTER die sortierten - eine `server.properties` mit `white-list:true` wird von `set_whitelist_enabled(False)` als `white-list=false` plus `white-list:true` zurückgeschrieben, und Java nimmt den letzten: Die Whitelist bleibt an, obwohl der Manager sie abgeschaltet meldet. Gemessen am 23.11.2026 beim Gegenlesen. Vier Rufer und ein Schreibweg - eigener Schritt.
+
+Offen: Die Zerleger-Tafel liest nur `app/**/*.py`. Ein eigener `key=value`-Leser in `skripte/` oder in einem Router fällt ihr nicht auf - die fünf Gestalten, die sie am 23.11. übersah (Dateiobjekt, `keepends`, Trenner als Konstante, `chr(61)`, `\r\n`), sind dagegen geschlossen und je mit einem roten Lauf belegt.
+
+Offen: Die Geldwort-Tafel (`VorlageTest` 10e) sieht nur `\bMark\b` und ist für "Goldmark" blind - ein neues Goldmark-Literal in einem Spielertext fällt nicht auf. Eine Schwestertafel braucht dieselbe sorgfältige Aufzählung wie die erste.
+
+Offen: ein Weltname MIT Umlaut fällt auf "world" zurück (die Positivliste ist ASCII) - einheitlich seit 23.11., vorher nur bei transfer und backup. Weiten braucht eine eigene Messung gegen Minecraft und Windows.
 
 ~~Der Assistent kann in Archive sehen: Jars, Datapack-Zips, Resource Packs. Nur fuer Admins.~~
 
@@ -496,7 +508,8 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - **Einmal auf dem Datenbankrechner skripte/mariadb_einrichten.bat erneut ausführen.** Es legt freimarken_test an; ohne das schlägt :daten:test absichtlich fehl. Vorhandene Passwörter bleiben unverändert.
 - ~~Weltgrenze einziehen, bevor zum ersten Mal echt gespielt wird.~~ 31.10.: Stadtgrenze 42 Parzellen je Achse (-21..20), WorldBorder 2.989 um -3,5/-3,5, Einstellung welten.marktstadt.kante. Wandert nur nach außen.
 - Marktstadt vorgenerieren, bevor echt gespielt wird: Mitte -3,5/-3,5, Radius 1.495, 35.344 Chunks, 36 Regionen im Feld - auf der Platte liegen mehr Dateien, die Dateizahl taugt nicht als Pruefung. Reihenfolge ist Pflicht - erst Grenze, dann vorgenerieren.
-- Manager: Sicherung/Umzug muss world_border.dat mitnehmen. Sie liegt NICHT in der level.dat, sondern in dimensions/<namensraum>/<welt>/data/minecraft/.
+- ~~Manager: Sicherung/Umzug muss world_border.dat mitnehmen. Sie liegt NICHT in der level.dat, sondern in dimensions/<namensraum>/<welt>/data/minecraft/.~~ 23.11.: Die Sicherung nahm sie schon mit (rglob ist rekursiv). Verloren ging sie nur beim Stil-Umbau Paper -> Vanilla - dort wird sie jetzt KOPIERT statt verschoben. Zusatzwelten wurden dabei gar nicht umsortiert und verloren auch Spielregeln, Wetter und Generator-Einstellungen; jetzt rufen beide Wege EINE Stelle.
+- Offen, zu messen: wo ein Vanilla/Forge/Fabric 26.1 die Weltgrenze LIEST - je Dimension oder in data/minecraft. Testserver, /worldborder set 1000, dann `find <welt> -name world_border.dat`. Bis dahin liegt sie an beiden Orten; die Kopie ist eine Bruecke, kein Vorbild fuer die fuenf anderen Dateien. Dieselbe Messung fehlt fuer die GEGENRICHTUNG: Der Zweig `nach_vanilla=False` ist gebaut und ungerufen, und eine Probe haelt das fest (Dateien am Vanilla-Platz bleiben liegen).
 - ~~Vor Schritt 6 entscheiden: Datenmodell aus §6.1?~~ 31.10. entschieden.
 - ~~Schritt 6, Teil A: Kern, Ablage, Schutz.~~ 31.10.
 - ~~Schritt 6, Teil B+C: Befehle und Weltarbeit.~~ 1.11.: /parzelle zusammenlegen <richtung>, /parzelle auftrennen, Recht freimarken.gruppe.<n>.
@@ -698,14 +711,18 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
   `"minecraft:bedrock"` (nackter String), `{"": "minecraft:stone"}` (Name unter dem LEEREN Schluessel)
   und `{"id": "minecraft:kelp", "properties": {"age": "21"}}` - also **id/properties klein** statt
   Name/Properties.
-- FOLGE fuer app/services/world_bake_service.py: `block_state_id` liest `p.get("Name")` und faellt bei
-  Fehlschlag STUMM auf eine Ersatz-ID zurueck (`_FALLBACK_ID`). Fuer eine 26.x-Welt heisst das: JEDER
-  Block wird zum Ersatzblock, und der Bake sieht aus wie eine Welt aus einem Material. Noch faellt es
-  nicht auf, weil die Lobby-Vorlage im Repo eine 1.21.1-Welt ist - die Zeile wartet auf die erste
-  gebackene 26.x-Welt.
-- skripte/torreihe_messen.py liest darum alle vier Formen (Funktion `palettenname`). Der Bake ist NICHT
-  mitgeaendert: Das ist ein anderer Bereich mit eigenen Proben, und eine stille Reparatur daran gehoert
-  nicht in einen Schritt ueber Tore.
+- ~~FOLGE fuer app/services/world_bake_service.py: JEDER Block wird zum Ersatzblock, und der Bake sieht
+  aus wie eine Welt aus einem Material.~~ 23.11. BEHOBEN, und zwei Korrekturen dazu - beide gemessen:
+  Ein Compound ohne `Name` wurde LUFT (0) und nicht der Ersatzblock, weil die Vorgabe `minecraft:air`
+  lautete; ein nackter String WARF einen AttributeError. Grundgestein liegt in jedem Chunk, also warf es
+  immer. Der Wurf wurde in `bake_lobby_packets` zu `None`, und `None` sprach der Hub als
+  "Kein /setworldspawn in der Lobby-Welt" aus - eine FALSCHE Ursache, die der Betreiber nicht beheben
+  kann. Jetzt liest `palette_entry` alle vier Formen an EINER Stelle; `_palette_ids`,
+  `diagnose_lobby_bake` und `torreihe_messen.palettenname` rufen sie. Der Bake-Abbruch druckt seinen
+  Grund.
+- ~~skripte/torreihe_messen.py liest darum alle vier Formen (Funktion `palettenname`). Der Bake ist NICHT
+  mitgeaendert.~~ 23.11.: `palettenname` ist ein Einzeiler auf `palette_entry`; die Regel steht im
+  Dienst, weil das Skript am Dienst haengt und nie umgekehrt.
 
 ## Schritt 14: Kleine Spiele in Altfurt
 
@@ -781,7 +798,7 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Proben 1892 -> 1951 (Katalog 18, Rechte 14, Schreiben 27). Voller Lauf gruen, keine fremde Probe beruehrt.
 - ~~OFFEN: Texte und Protokoll sind als Seiten angelegt, aber noch nicht gebaut.~~ 22.11. PROTOKOLL GEBAUT: wer, wann, von was auf was, warum - je Server und nur `freimarken.*`. Einspritzungen 6/6; der wichtigste Fall ist der Aktionsfilter, denn diese Seite ist ab Moderator offen und das allgemeine Audit-Log ist Super-Admin-Sache. Faellt der Filter, zeigte sie einem Moderator Anmeldungen und Dateizugriffe.
 - Der Trenner " | Grund: " steht als EINE Konstante da (Schreiben und Lesen brauchen ihn). Eine Quelltext-Zusage haelt, dass das Literal nur einmal vorkommt - sonst setzte eine Aenderung alle alten Zeilen stumm auf "kein Grund angegeben". Proben 1951 -> 1969.
-- OFFEN: die Texte-Seite (sprache.yml). Lage gemessen am 22.11., und sie ist anders als bei der config.yml:
+- ~~OFFEN: die Texte-Seite (sprache.yml).~~ 22.11. GEBAUT (Commit edf2fc0): `sprachabschnitte`/`sprachfelder` im Dienst, POST `/freimarken/{id}/texte` und `/texte/zuruecknehmen`, Anzeige im Zweig `quelle == "sprache"`; neue Schluessel werden FLACH angehaengt, vorhandene ersetzt. `tests/test_freimarken_texte.py` (24 Proben). Die Messung darunter bleibt stehen - sie ist der Grund fuer die gebaute Form:
   - ZWEIDATEIFORM: `sprache-vorlage.yml` wird bei JEDEM Start neu geschrieben (`saveResource(VORLAGE, true)`) - dort zu schreiben waere beim naechsten Start weg. Die Betreiberdatei `sprache.yml` wird LEER angelegt und enthaelt nur Ueberschreibungen; der Rueckfall gilt JE SCHLUESSEL.
   - FOLGE: Die Seite muss die Vorlage ANZEIGEN (778 Werte samt Erklaerung) und in die Betreiberdatei SCHREIBEN - und dort einen Schluessel ANLEGEN, den es noch nicht gibt. `yaml_assistant_service.schreibe` kann das nicht, es ersetzt nur vorhandene Werte.
   - GEMESSEN 22.11. an zwei Wegwerfservern (V25_sprachform.py): Ein FLACHER Schluessel `mark.verlauf.kopf: "..."` auf oberster Ebene wirkt. Startmeldung: "Sprache: 1 von 770 Saetzen kommen aus deiner sprache.yml" und "deine: mark.verlauf.kopf". Anhaengen genuegt also, ein Blockaufbau ist nicht noetig.
@@ -790,7 +807,7 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
   - Die Platzhalter prueft das Plugin schon (`Sprachliste.fehlendeNamen`/`fremdeNamen`) - also bedienen, nicht nachbauen. Der Manager braucht die erwarteten Namen nicht zu kennen: Es genuegt die Differenz zum ALTEN Wert ("dieser Satz hatte {spieler}, dein neuer nicht mehr").
   - Gemessen: 371 Werte tragen `{platzhalter}` (131 Namen), 624 tragen `<tag>`. Von den 24 Tagnamen sind 16 die acht FARBROLLEN, exakt paarig (339/339, 215/215, ...); die anderen 8 sind escapte Angabeplaetze in Befehlshinweisen (`\<name>`), keine Tags. Nur die Rollen sind paarig pruefbar.
   - Die Kommentare nennen die Platzhalter NICHT verlaesslich: 39 von 638 vollstaendig, 332 gar nicht. Als Quelle unbrauchbar.
-- OFFEN: MariaDB-Treiber und die drei Spieldaten-Seiten (Besitz, Konten, Mitgliedschaften). Der Manager hat KEINEN MySQL/MariaDB-Treiber in `requirements.txt`.
+- ~~OFFEN: MariaDB-Treiber und die drei Spieldaten-Seiten. Der Manager hat KEINEN MySQL/MariaDB-Treiber in `requirements.txt`.~~ 22.11. BEIDES GEBAUT: Treiber `pymysql==1.1.1` (requirements.txt) in Teil C, die drei Seiten in Teil D.
 
 ### Teil B: Zugangsdaten, Besitzbefehl, Geldschranke - 22.11.2026
 
@@ -828,7 +845,7 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - `rechtezeilen` nennt je Spieler und Zuschlag nur die GROESSTE Zahl: `Rangzahl.hoechsteAus` addiert sie einmal, zwei laufende Mitgliedschaften geben nicht die Summe.
 - DREI TAFELN LESEN DEN PLUGIN-QUELLTEXT statt sich selbst: die Artenliste gegen das ENUM in `Datenbank.java`, die fuenf Zuschlagsnamen gegen die `RECHT_EXTRA_*`-Konstanten, die Rechtevorsilbe gegen `ParzellenBefehle`. Kommt im Plugin eine sechste Art dazu, wird die Probe rot, die die Sache benennt.
 - Proben: `tests/test_freimarken_spieldaten.py` (41). Einspritzungen 17 Faelle, 16 gefangen - der eine Fehlschlag war MEINE Einspritzung (falsche Zeile), nachgeholt und gefangen.
-- OFFEN: Die Seiten selbst (Besitz, Konten, Mitgliedschaften) samt Router und Vorlagen. Die Dienste stehen und sind geprueft.
+- ~~OFFEN: Die Seiten selbst (Besitz, Konten, Mitgliedschaften) samt Router und Vorlagen.~~ 22.11. GEBAUT - siehe Teil D unten.
 
 #### Teil D: die drei Seiten - 22.11.2026
 
@@ -920,11 +937,13 @@ Offen: drei Lesefunktionen für den Weltnamen geben drei verschiedene Antworten,
 - Das Kuerzel `fm` steht mit in der Liste. Ohne es waere `/fm geld` der offene Weg - derselbe Grund, aus dem `pardon-ip` neben `pardon` steht.
 - OFFENE LUECKE, bewusst: Der Hauptname des Befehls kommt aus der Sprachdatei des Servers (`BundSatz.BEFEHL_FREIMARKEN`). Wer ihn dort umbenennt, steht nicht mehr in der Liste. Umbenennen kann nur, wer Serverdateien schreiben darf - dieselbe Vollmacht, gegen die hier nicht geschuetzt wird.
 - OFFEN: Die Konsole gibt NIE eine Antwort zurueck. `send_console_command` liefert hart `(True, "Befehl gesendet.")`, auch bei `UNBEKANNTER_SPIELER`, `NICHTS_ZU_BUCHEN` oder `NICHT_GEDECKT`. Eine Konten-Seite, die Erfolg meldet, meldet ihn also auch fuer eine nicht erfolgte Korrektur. Der Ausgang steht nur als Textzeile im Serverlog, hinter dem Wort `Ausgang `.
-- OFFEN: Als Absender steht `CONSOLE` im Plugin-Protokoll. Der Mensch am Dashboard steht nur im Manager-Audit (`server.console_command`); das WARUM steht nirgends. Plan 12a.2 Regel 3 ("wer, wann, was, warum") faellt damit auf zwei Buecher auseinander.
-- OFFEN: Goldmark laesst sich nicht korrigieren. `Goldkasse.pruefeWaehrung` WIRFT bei einem Grund, der nicht in `Buch.GOLDMARK` gehoert, und `BETREIBER_GUTSCHRIFT`/`BETREIBER_ABZUG` gehoeren in `Buch.MARK`.
+- OFFEN, nur noch halb: Als Absender steht `CONSOLE` im Plugin-Protokoll, der Mensch nur im Manager-Audit. Das WARUM steht aber nicht mehr nirgends - `_sende` schreibt Befehl, Grund und "gesendet: ja/nein" ins Audit. Plan 12a.2 Regel 3 faellt auf zwei Buecher auseinander, aber keines fehlt.
+- ~~OFFEN: Goldmark laesst sich nicht korrigieren.~~ 23.11. GEBAUT: `/freimarken goldgeld <spieler> <betrag>`, zwei neue Gruende (`betreiber_goldgutschrift`/`-goldabzug`) im Goldbuch, Schranke eine Million statt einer Milliarde. Der Riegel ist der PARAMETERTYP (`bucheGold(Goldkasse ...)`), nicht ein zweiter Wurf. Im Manager: Waehrungsfeld auf der Kontenseite und `goldgeld` in SUPER_ADMIN_ZWEIGE unter BEIDEN Schluesseln - ohne das Kuerzel `fm` waere es ein Gelddruckrecht zum 800fachen Wert. Nebenbefund zur alten Zeile: `pruefeWaehrung` warf nie, weil kein Aufrufer die Goldkasse hereingab - der Wurf war die Mauer, nicht der Fehler.
+- Offen: die Geldwort-Tafel (VorlageTest 10e) sieht nur `\bMark\b` und ist fuer "Goldmark" blind. Eine Schwestertafel braucht dieselbe Aufzaehlung der getroffenen Texte wie die erste.
+- Offen: `Muenzhaus` erstattet im catch, aber ein Wurf AUS der Erstattung ist nicht gefangen - dann ist die Goldmark weg. Der neue Befehl macht das Ersetzen moeglich; dass der Betreiber davon ERFAEHRT, tut er nicht. Es fehlt eine SEVERE-Zeile.
 
-- OFFEN, zu klaeren: Die Plugin-Tabellen fuehren Spieler nur als UUID (CHAR(36)); Namen stehen allein in der `usercache.json` des Servers. Eine Kontenseite mit UUIDs ist unbrauchbar.
-- OFFEN, zu klaeren: Plan 12a.2 Regel 2 verlangt Geld- und Besitzkorrekturen als KONSOLENBEFEHL. Ob das Plugin solche Befehle hat, ist noch nicht gemessen - falls nicht, sind die drei Seiten zunaechst nur lesend baubar.
+- ~~OFFEN, zu klaeren: Die Plugin-Tabellen fuehren Spieler nur als UUID (CHAR(36)); Namen stehen allein in der `usercache.json`.~~ 22.11. GELOEST in Teil C: `freimarken_spieldaten_service.namen` loest an EINER Stelle aus `usercache.json` und den drei Zugangslisten auf; `beschriftung` faellt auf die ersten acht Zeichen der Kennung zurueck.
+- ~~OFFEN, zu klaeren: Plan 12a.2 Regel 2 verlangt Geld- und Besitzkorrekturen als KONSOLENBEFEHL. Ob das Plugin solche Befehle hat, ist noch nicht gemessen.~~ 22.11. GEMESSEN: beide gibt es - `BundBefehle.java` `literal("geld")` und `literal("besitz")`. Die drei Seiten korrigieren darum schreibend (Teil D).
 
 ## Schritt 13: Sprache, Farbwelt, Menues
 

@@ -2480,14 +2480,22 @@ public final class FreimarkenPlugin extends JavaPlugin {
 
             @Override
             public void tue(Audience empfaenger, String wer, String spieler,
-                            long betrag) {
+                            long betrag, Betreibergeld.Waehrung waehrung) {
                 Betreibergeld.Ergebnis ergebnis;
                 try {
-                    ergebnis = Betreibergeld.buche(kasse,
-                            Spielername::kennungAuchAbwesend, spieler, betrag);
+                    // DIE EINZIGE Stelle im Haus, die beide Kassenfelder hat - darum
+                    // waehlt sie hier und nicht in Betreibergeld. Ein Schalter-AUSDRUCK
+                    // ohne default: Eine neue Waehrung wird vom Uebersetzer gefragt und
+                    // faellt nicht stumm auf die Mark.
+                    ergebnis = switch (waehrung) {
+                        case MARK -> Betreibergeld.buche(kasse,
+                                Spielername::kennungAuchAbwesend, spieler, betrag);
+                        case GOLDMARK -> Betreibergeld.bucheGold(goldkasse,
+                                Spielername::kennungAuchAbwesend, spieler, betrag);
+                    };
                 } catch (RuntimeException stoerung) {
                     getLogger().log(Level.SEVERE, "Geld von Hand GESCHEITERT: " + wer
-                            + " wollte " + mitMark(betrag) + " fuer " + spieler
+                            + " wollte " + mitGeld(waehrung, betrag) + " fuer " + spieler
                             + " buchen - die Kasse antwortet nicht.", stoerung);
                     empfaenger.sendMessage(Component.text("Die Kasse antwortet nicht -"
                             + " es ist NICHTS gebucht. Der Grund steht im"
@@ -2495,35 +2503,39 @@ public final class FreimarkenPlugin extends JavaPlugin {
                     return;
                 }
                 getLogger().info("Geld von Hand: " + wer + " -> " + spieler + ", "
-                        + mitMark(betrag) + ", Ausgang " + ergebnis.ausgang()
-                        + ", Stand danach " + mitMark(ergebnis.stand()) + ".");
+                        + mitGeld(waehrung, betrag) + ", Ausgang " + ergebnis.ausgang()
+                        + ", Stand danach " + mitGeld(waehrung, ergebnis.stand()) + ".");
                 empfaenger.sendMessage(switch (ergebnis.ausgang()) {
                     case GUTGESCHRIEBEN -> Component.text(ergebnis.spieler() + " hat "
-                            + mitMark(ergebnis.betrag()) + " bekommen - Stand jetzt "
-                            + mitMark(ergebnis.stand()) + ".", NamedTextColor.GOLD);
+                            + mitGeld(waehrung, ergebnis.betrag()) + " bekommen - Stand"
+                            + " jetzt " + mitGeld(waehrung, ergebnis.stand()) + ".",
+                            NamedTextColor.GOLD);
                     case ABGEZOGEN -> Component.text(ergebnis.spieler() + ": "
-                            + mitMark(ergebnis.betrag()) + " abgezogen - Stand jetzt "
-                            + mitMark(ergebnis.stand()) + ".", NamedTextColor.GOLD);
+                            + mitGeld(waehrung, ergebnis.betrag()) + " abgezogen - Stand"
+                            + " jetzt " + mitGeld(waehrung, ergebnis.stand()) + ".",
+                            NamedTextColor.GOLD);
                     case UNBEKANNTER_SPIELER -> Component.text("Den Namen "
                             + ergebnis.spieler() + " kennt dieser Server nicht - es ist"
                             + " nichts gebucht. Gross- und Kleinschreibung zaehlt.",
                             NamedTextColor.RED);
-                    case NICHTS_ZU_BUCHEN -> Component.text(mitMark(0L) + " ist keine"
-                            + " Korrektur - nichts gebucht. Ein Minus zieht ab.",
-                            NamedTextColor.GRAY);
+                    case NICHTS_ZU_BUCHEN -> Component.text(mitGeld(waehrung, 0L)
+                            + " ist keine Korrektur - nichts gebucht. Ein Minus zieht"
+                            + " ab.", NamedTextColor.GRAY);
                     case NICHT_GEDECKT -> Component.text(ergebnis.spieler() + " hat"
-                            + " keine " + mitMark(ergebnis.betrag()) + " (Stand "
-                            + mitMark(ergebnis.stand())
+                            + " keine " + mitGeld(waehrung, ergebnis.betrag())
+                            + " (Stand " + mitGeld(waehrung, ergebnis.stand())
                             + ") - es ist nichts gebucht.", NamedTextColor.RED);
                 });
             }
 
             @Override
-            public void hilfe(Audience empfaenger) {
+            public void hilfe(Audience empfaenger, Betreibergeld.Waehrung waehrung) {
                 empfaenger.sendMessage(Component.text(
-                        "/freimarken geld <spieler> <betrag> - ein Minus zieht ab,"
-                                + " hoechstens " + mitMark(Betreibergeld.HOECHSTENS)
-                                + ". Die Buchung steht danach in /mark verlauf.",
+                        "/freimarken " + waehrung.befehlswort() + " <spieler> <betrag>"
+                                + " - ein Minus zieht ab, hoechstens "
+                                + mitGeld(waehrung, waehrung.hoechstens())
+                                + ". Die Buchung steht danach in "
+                                + waehrung.verlaufsbefehl() + ".",
                         NamedTextColor.GRAY));
             }
         };
@@ -2539,8 +2551,11 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * aber sie brauchen das Wort elfmal. Ueber diesen Helfer steht es einmal da, und die
      * Tafel bleibt lesbar.
      */
-    private static String mitMark(long betrag) {
-        return betrag + " Mark";
+    private static String mitGeld(Betreibergeld.Waehrung waehrung, long betrag) {
+        return switch (waehrung) {
+            case MARK -> betrag + " Mark";
+            case GOLDMARK -> betrag + " Goldmark";
+        };
     }
 
     /**
@@ -3645,8 +3660,12 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * sehen.
      *
      * <p>Genannt wird auch, WOHER ein Guthaben kommen kann. Das ist die Frage, die ein
-     * Betreiber als erste stellt - seit Teil F lautet die Antwort: aus dem Tausch, und
-     * sonst nirgends.
+     * Betreiber als erste stellt - seit Teil F ist der Tausch der eine Weg, und seit dem
+     * 23.11.2026 kommt die Buchung von Hand dazu ({@code /freimarken goldgeld}, Plan 8.1s
+     * zweite Quelle: Echtgeld). Beide muessen hier stehen: Wer nur den Tausch liest,
+     * laesst einen Spieler 40.000 Mark tauschen, statt ihm 40 Goldmark gutzuschreiben -
+     * der Rueckweg kostet ihn zwanzig Prozent. Und wer das Goldbuch prueft, haelt eine
+     * Zeile {@code betreiber_goldgutschrift} sonst fuer einen Einbruch.
      *
      * <p><b>Die ZAHLEN des Tausches stehen hier nicht</b>, und das ist gemessen
      * [20.11.2026]: Sie stehen in der Rechenprobe des Lesers ({@code Wechselliste}),
@@ -3660,8 +3679,9 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + (fluechtig ? "FLUECHTIG, vergisst beim Neustart"
                         : "eigene Tabellen " + Kassentabellen.GOLDMARK.konten() + " und "
                                 + Kassentabellen.GOLDMARK.buch())
-                + ". Zu bekommen ist sie allein durch Tausch aus Mark"
-                + " (/mark tauschen), ausgegeben wird sie im Muenzhaus"
+                + ". Zu bekommen ist sie durch Tausch aus Mark"
+                + " (/mark tauschen) oder von Hand vom Betreiber"
+                + " (/freimarken goldgeld), ausgegeben wird sie im Muenzhaus"
                 + " (/mark muenzhaus).");
     }
 

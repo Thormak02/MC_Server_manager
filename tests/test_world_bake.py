@@ -115,6 +115,65 @@ def test_block_state_id_formula():
     assert wb.block_state_id("minecraft:definitely_not_a_block") == 1
 
 
+# --- Palettenformen (vier gemessene Gestalten) ----------------------------------
+def test_palette_entry_vier_formen():
+    """Alle vier Gestalten, die ein Paletteneintrag am 18.11.2026 in einer Paper-26.3-Welt
+    hatte - eine einzige Sektion trug drei davon nebeneinander.
+
+    Die Zahlen sind gemessen und NICHT aus palette_entry abgeleitet. Grundgestein steht
+    als erste Zeile, weil 79 weder 0 (Luft) noch 1 (Ersatzblock) ist: An dieser Zahl laesst
+    sich ein gelesener Name nicht mit einem Fehlschlag verwechseln.
+    """
+    assert wb._palette_ids(["minecraft:bedrock"]) == [79]
+    assert wb._palette_ids([{"": "minecraft:stone"}]) == [1]
+    assert wb._palette_ids([{"Name": "minecraft:stone"}]) == [1]
+    assert wb._palette_ids([{"id": "minecraft:oak_planks"}]) == [15]
+
+
+def test_palette_liest_properties_in_beiden_schreibungen():
+    """Ab 26.x heisst es ``properties`` KLEIN - und ohne das kaeme jeder Block im
+    Vorgabezustand durch: jede Treppe falsch gedreht, jede Tuer falsch herum, leise genug,
+    dass es niemand als Fehler meldet."""
+    assert wb._palette_ids(
+        [{"id": "minecraft:kelp", "properties": {"age": "21"}}]) == [12781]
+    assert wb._palette_ids(
+        [{"Name": "minecraft:kelp", "Properties": {"age": "21"}}]) == [12781]
+    # 12760 ist der Vorgabezustand von kelp. Ohne diese Zeile waere die Probe auch gruen,
+    # wenn die Properties ignoriert werden und jeder Zustand auf den Vorgabewert faellt.
+    assert wb._palette_ids([{"id": "minecraft:kelp"}]) == [12760]
+
+
+def test_palette_unbekannte_form_ist_laut(capsys):
+    """Eine FUENFTE Form ist kein unbekannter Block, sondern ein unbekanntes Format.
+
+    Geworfen wird nicht: ``bake_lobby_packets`` frisst jede Ausnahme und macht daraus
+    ``None``, und ``None`` spricht der Hub als fehlenden ``/setworldspawn`` aus. Ein
+    gelesener Wert mit einer gedruckten Zeile ueberlebt die Fangstelle, ein Wurf nicht.
+    """
+    wb._REPORTED_SHAPES.clear()   # Prozesszustand - sonst haengt die Probe an der
+    assert wb._palette_ids([{"foo": 1}]) == [0]      # Reihenfolge der Dateien
+    assert "unbekannter Form" in capsys.readouterr().out
+    # Zweiter Ruf derselben Gestalt: STUMM. _palette_ids laeuft je Sektion, bei Radius 4
+    # sind das 81 Chunks mal bis zu 24 Sektionen - eine Zeile je Eintrag waere vierstellig
+    # und damit so unlesbar wie Schweigen.
+    assert wb._palette_ids([{"foo": 2}]) == [0]
+    assert capsys.readouterr().out == ""
+
+
+def test_palette_leerer_string_zaehlt_auch_als_unbekannt(capsys):
+    wb._REPORTED_SHAPES.clear()
+    assert wb._palette_ids([""]) == [0]
+    assert "unbekannter Form" in capsys.readouterr().out
+
+
+def test_palette_id_als_zahl_faellt_nicht_darauf_herein(capsys):
+    """Traegt ein kuenftiges Format unter ``id`` eine Zahl, darf sie nicht als Name
+    durchgehen - ``Name`` daneben gewinnt dann."""
+    wb._REPORTED_SHAPES.clear()
+    assert wb._palette_ids([{"id": 7, "Name": "minecraft:bedrock"}]) == [79]
+    assert capsys.readouterr().out == ""
+
+
 # --- mc_play: Paletted Container ------------------------------------------------
 def test_paletted_block_states_modes():
     single = pl._paletted_block_states([7] * 4096)
@@ -197,10 +256,18 @@ def _decode_sections(blob: bytes, count: int = 24) -> tuple[list, int]:
     return secs, p
 
 
-def _synthetic_chunk(cx: int, cz: int) -> dict:
-    """Anvil-Chunk-NBT mit zwei Sektionen: single-valued (Stein) + Multi-Block (Stein/Eiche)."""
-    stone = {"Name": "minecraft:stone"}
-    oak = {"Name": "minecraft:oak_planks"}
+def _synthetic_chunk(cx: int, cz: int, *, form: str = "Name") -> dict:
+    """Anvil-Chunk-NBT mit zwei Sektionen: single-valued (Stein) + Multi-Block (Stein/Eiche).
+
+    ``form`` waehlt die Palettengestalt: ``"Name"`` ist das Format bis 1.21.x, ``"id"`` das
+    ab 26.x (klein geschrieben). Beide muessen dieselben Block-IDs ergeben.
+    """
+    if form == "id":
+        stone = {"id": "minecraft:stone"}
+        oak = {"id": "minecraft:oak_planks"}
+    else:
+        stone = {"Name": "minecraft:stone"}
+        oak = {"Name": "minecraft:oak_planks"}
     # Section Y=-4: komplett Stein (nur Palette, keine data -> single-valued)
     sec_low = {"Y": -4, "block_states": {"palette": [stone]}}
     # Section Y=0: 2er-Palette, data = 4 Bit/Block. Erste 2048 = index0 (Stein), Rest index1 (Eiche).
@@ -261,6 +328,31 @@ def test_chunk_packet_roundtrip():
     assert secs[0 - (-4)][0] == 4096
 
 
+def test_palette_nackter_string_wirft_nicht():
+    """Bis zum 23.11.2026 ein AttributeError - und Grundgestein liegt in JEDEM Chunk.
+
+    Der Wurf fiel tief in ``_palette_ids`` und wurde erst in ``bake_lobby_packets`` zu
+    ``None``; der Hub sprach das als "Kein /setworldspawn in der Lobby-Welt" aus. Der
+    Betreiber setzte einen Spawn, der gesetzt war.
+    """
+    sek = wb.chunk_section_blocks({"xPos": 0, "zPos": 0, "sections": [
+        {"Y": -4, "block_states": {"palette": ["minecraft:bedrock"]}}]})
+    assert sek == {-4: [79] * 4096}
+
+
+def test_chunk_section_blocks_liest_die_26x_palette():
+    """Gemessen rot vor der Behebung: Y=-4 fehlte ganz, Y=0 war vollstaendig Luft.
+
+    Geprueft wird NICHT "beide Gestalten sind gleich" - das waere auch gruen, wenn beide
+    ganz aus Luft bestehen. Geprueft werden die gemessenen IDs selbst.
+    """
+    for form in ("Name", "id"):
+        sek = wb.chunk_section_blocks(_synthetic_chunk(0, 0, form=form))
+        assert sorted(sek) == [-4, 0], form
+        assert set(sek[-4]) == {1}, form                  # Stein
+        assert sorted(set(sek[0])) == [1, 15], form       # Stein + Eichenbretter
+
+
 # --- Sicherheits-Fallback -------------------------------------------------------
 def test_bake_lobby_packets_no_spawn_returns_none(tmp_path: Path):
     wd = tmp_path / "world"
@@ -284,6 +376,46 @@ def test_diagnose_lobby_bake_no_spawn(tmp_path: Path):
 def test_diagnose_lobby_bake_missing_level_dat(tmp_path: Path):
     d = wb.diagnose_lobby_bake(tmp_path / "nope", radius=1)
     assert d["level_dat"] is False and d["error"] is None
+
+
+def test_diagnose_sample_names_liest_die_26x_palette(tmp_path: Path, monkeypatch):
+    """Der zweite Weg zur selben Tat - und der heiklere.
+
+    ``diagnose_lobby_bake`` soll den Rueckfall auf die Plattform ERKLAEREN. Mit einem
+    eigenen Palettenleser meldete die Route bei einer 26.x-Welt selbst einen
+    AttributeError statt der Blocknamen: Die Erklaerung brauchte eine Erklaerung.
+    """
+    wd = tmp_path / "world"
+    (wd / "region").mkdir(parents=True)
+    (wd / "level.dat").write_bytes(_level_dat_bytes((0, 64, 0)))
+    (wd / "region" / "r.0.0.mca").write_bytes(b"platzhalter")
+    monkeypatch.setattr(wb, "read_region",
+                        lambda _p: {(0, 0): _synthetic_chunk(0, 0, form="id")})
+
+    d = wb.diagnose_lobby_bake(wd, radius=0)
+
+    assert d["error"] is None
+    assert d["sample_names"] == ["oak_planks", "stone"]
+    assert d["chunks_baked"] == 1
+
+
+def test_bake_abbruch_nennt_seinen_grund(tmp_path: Path, monkeypatch, capsys):
+    """``None`` allein ist eine falsche Ursache.
+
+    Der Aufrufer spricht ``None`` als "Kein /setworldspawn in der Lobby-Welt (oder keine
+    Chunks)" aus - bei JEDEM Bake-Fehler. Die gedruckte Zeile ist der einzige Ort, an dem
+    die echte Ursache ueberhaupt steht.
+    """
+    wd = tmp_path / "world"
+    (wd / "region").mkdir(parents=True)
+    (wd / "level.dat").write_bytes(_level_dat_bytes((0, 64, 0)))
+
+    def _wirf(*_a, **_k):
+        raise RuntimeError("Region gesperrt")
+
+    monkeypatch.setattr(wb, "bake_area", _wirf)
+    assert wb.bake_lobby_packets(wd, radius=1) is None
+    assert "Region gesperrt" in capsys.readouterr().out
 
 
 def test_hub_world_status_not_running():
