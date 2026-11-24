@@ -46,18 +46,42 @@ public final class Bauplan {
     /**
      * Wie viele Ebenen das Dach steigt, bis es sich einen Block eingezogen hat.
      *
-     * <p><b>ZWEI, also steil</b> - und das ist an Vorbildern gemessen und keine Laune. Ein
-     * Dach mit der Neigung eins zu eins ist bei sieben Bloecken Front drei Ebenen hoch;
-     * ein norddeutscher Staffelgiebel ist doppelt so hoch wie breit angelegt, weil ein
-     * steiles Dach den Schnee abwirft und das Dachgeschoss nutzbar macht. Gemessen an
-     * Mojangs eigenen Haeusern: Dort ist das Dach MEHR als die halbe Bauhoehe
-     * ({@code plains_butcher_shop_1}: drei Ebenen Wand, vier Ebenen Dach).
+     * <p><b>EINS, also 45 Grad</b> [berichtigt 24.11.2026] - und das ist an ZWEI
+     * unabhaengigen Vorbildern nachgemessen.
      *
-     * <p>Passt ein so steiles Dach nicht in die Hoehe des Quaders, wird es flacher -
-     * siehe {@link #giebelstufen}. Flacher als eins zu eins wird es nie, denn dann waere
-     * es oben offen.
+     * <p><b>Vorher stand hier ZWEI, und die Begruendung trug die Zahl nicht.</b> Sie
+     * nannte als Messung {@code plains_butcher_shop_1} mit "drei Ebenen Wand, vier
+     * Ebenen Dach". Bei sieben Bloecken Front ist das ein Lauf von drei und ein Anstieg
+     * von vier, also eine Neigung von 1,33 - aber die Konstante ZWEI machte daraus
+     * sieben Dachebenen und damit 2,33. Die gemessene Zahl war richtig und ihre
+     * Uebersetzung falsch: Das Dach war damit fast doppelt so steil wie das Vorbild, auf
+     * das sich die Begruendung berief.
+     *
+     * <p><b>Die zweite Messung</b> [24.11.2026]: An einem fremden, gut gebauten
+     * Fachwerkhaus (Blueprint eines Strukturpakets, nur AUSGEMESSEN - die Datei wurde
+     * nicht uebernommen) laufen die Dachebenen in der Breite 9, 7, 5, 3, 1. Je Ebene
+     * zwei Bloecke enger, also einen je Seite: genau 45 Grad. Fuenf Dachebenen bei neun
+     * Bloecken Front, und das Dach ist 38 Prozent der Bauhoehe.
+     *
+     * <p>Mit EINS kommen beide Vorbilder genau heraus: Front 7 gibt vier Dachebenen
+     * (wie Mojangs Haus), Front 9 gibt fuenf (wie das Fachwerkhaus).
+     *
+     * <p>Ein steileres Dach waere kein Fehler der Geometrie, sondern eines des Bildes:
+     * Es macht aus einem Haus einen Turm mit Hut, und genau das hat der Betreiber an den
+     * alten Tortuermen beklagt - "zu hoch und zu duenn".
+     *
+     * <p>Passt das Dach nicht in die Hoehe des Quaders, wird es flacher - siehe
+     * {@link #giebelstufen}.
+     *
+     * <p><b>WER DIESE ZAHL ERHOEHT, MUSS EIN STUECK ZURUECKBRINGEN</b>: Bei 2:1
+     * zieht sich nicht jede Ebene ein, sondern jede zweite - und dann stehen zwei
+     * Treppen uebereinander und lassen die Aussenseite offen. Dafuer gab es bis zum
+     * 24.11.2026 das Stueck DACHFUSS, einen vollen Block unter jeder Treppe. Bei
+     * 45 Grad zieht sich JEDE Ebene um genau einen Block ein, der Fall kann nie
+     * auftreten, und ein Stueck, das nie vorkommt, ist eine Form, die nie gebaut
+     * wird - darum ist es entfallen.
      */
-    public static final int DACHNEIGUNG = 2;
+    public static final int DACHNEIGUNG = 1;
 
     /**
      * Wie viele Ebenen ueber dem Fussboden aus Stein sind - das Erdgeschoss.
@@ -89,17 +113,39 @@ public final class Bauplan {
         GIEBELSTUFE,
         /** Die Dachflaeche - die zwei langen Seiten ueber dem Dachansatz. Eine TREPPE. */
         DACH,
-        /**
-         * Die untere Ebene einer Dachstufe - ein VOLLER Block.
-         *
-         * <p>Bei einem steilen Dach steigt die Haut zwei Ebenen, bevor sie sich einen
-         * Block einzieht. Zwei Treppen uebereinander liessen aussen die oberen Haelften
-         * offen - von der Gasse aus ein Zickzack statt einer Flaeche. Darum ist die
-         * untere Ebene jeder Stufe voll und nur die obere eine Treppe.
-         */
-        DACHFUSS,
         /** Der First ganz oben. */
         FIRST,
+        /**
+         * Eine GESCHOSSDECKE - der Fussboden des Geschosses darueber.
+         *
+         * <p><b>Warum es sie gibt</b> [24.11.2026]: Die 265 Zeilenhaeuser Altfurts waren
+         * innen ein leerer Schacht von zwoelf bis zwanzig Ebenen. Von aussen unsichtbar;
+         * wer eine Tuer aufmachte, stand in einem Turm.
+         *
+         * <p>Sie liegt GENAU dort, wo auf der Fassade das liegende Band sitzt - siehe
+         * {@link #istLiegenderBalken}. Das Band war von Anfang an der Rahm ueber einem
+         * Geschoss; es war nur nie etwas dahinter. Eine zweite Hoehenrechnung gibt es
+         * darum nicht.
+         */
+        DECKE,
+        /**
+         * Eine Sprosse der Leiter im Treppenschacht.
+         *
+         * <p>Eine Leiter und keine Treppe: Eine Treppe braucht zwei Bloecke Grundflaeche
+         * je Ebene und eine Wendung, und bei einem Haus von fuenf Bloecken Breite bliebe
+         * daneben kein Zimmer. Die Leiter steht in einer Spalte, und die Decken lassen
+         * genau diese Spalte offen.
+         */
+        LEITER,
+        /**
+         * Ein Block des Schornsteins - gemauert, auch bei einem Fachwerkhaus.
+         *
+         * <p>Er gehoert zur SCHALE und nicht zu einem Nachtrag: Nur so wird jede Stelle
+         * des Quaders genau einmal beschrieben, und nur so ist das Setzen vollstaendig
+         * umkehrbar. Der erste Entwurf setzte ihn hinterher obendrauf - das rief drei
+         * Stellen zweimal und ragte aus dem Quader heraus.
+         */
+        SCHORNSTEIN,
         /** Luft. Sie wird MITGESETZT, damit Bauen und Zuruecksetzen dasselbe sind. */
         LUFT
     }
@@ -278,26 +324,190 @@ public final class Bauplan {
     }
 
     /**
+     * Jedes wievielte Haus einen Schornstein bekommt.
+     *
+     * <p><b>Warum es Schornsteine gibt</b> [24.11.2026]: Altfurt hat 265 Zeilenhaeuser,
+     * und ihre Daecher waren eine Folge gleicher Dreiecke. Ein Schornstein ist der
+     * billigste Zug, der eine Dachlandschaft gewachsen aussehen laesst - er bricht die
+     * Firstlinie, und zwar an jedem dritten Haus an anderer Stelle.
+     *
+     * <p>Jedes DRITTE und nicht jedes: Eine Reihe, in der jedes Haus einen traegt, ist
+     * wieder eine Reihe. In einer gewachsenen Stadt hat das Haus daneben eine kalte
+     * Kueche.
+     *
+     * <p><b>Etwa jedes dritte, nicht genau</b>: Gemessen am 24.11.2026 tragen 109 von
+     * 265 Altfurter Zeilenhaeusern einen Schornstein - also eher jedes zweieinhalbte.
+     * Die Streuung laeuft ueber die Hausecke, und die Hausecken liegen auf einem Raster;
+     * ein Rest modulo drei ist darauf nicht gleichverteilt. Das ist kein Mangel, sondern
+     * der Grund, warum hier eine gemessene Zahl steht und keine gerechnete.
+     */
+    public static final int SCHORNSTEIN_TAKT = 3;
+
+    /**
+     * Wie weit der Treppenschacht von der Hausecke entfernt liegt, in Bloecken.
+     *
+     * <p>Eins: Die Leiter braucht eine Wand im Ruecken, und die innerste Spalte neben
+     * der Ecke hat zwei davon. Weiter innen haengt sie an der Luft.
+     */
+    public static final int SCHACHT_AB_ECKE = 1;
+
+    /**
+     * Das kleinste Aussenmass, bei dem ein Haus einen Treppenschacht bekommt.
+     *
+     * <p>Fuenf: Davon gehen zwei Waende ab, es bleiben drei innere Spalten. Eine davon
+     * ist der Schacht, zwei bleiben Zimmer. Bei vier bliebe eine, bei drei keine.
+     */
+    public static final int SCHACHT_WENIGSTENS = 5;
+
+    /**
+     * Wie weit ein Schornstein hoechstens ueber die Dachflaeche ragt.
+     *
+     * <p><b>Ueber die FLAeCHE und nicht ueber den First</b> [24.11.2026]: Der erste
+     * Entwurf setzte den Schornstein AUF den First und zwei Ebenen darueber - also
+     * jenseits des Hausquaders. Das riss eine Zusage ein, die mehr wert ist als ein
+     * Schornstein: Ein Haus fasst nichts ausserhalb seines Quaders an. Erst dadurch ist
+     * das Setzen VOLLSTAeNDIG umkehrbar - wer ein Haus neu setzt, bekaeme sonst den
+     * Schornstein des alten dazu, wenn das neue keinen hat.
+     *
+     * <p>Jetzt steht er neben dem First, stoesst durch die Dachflaeche und reicht bis zur
+     * Firsthoehe. Bei einem Dach von 45 Grad liegt die Flaeche einen Block neben dem
+     * First genau eine Ebene tiefer - der Schornstein ragt also so weit heraus, wie er
+     * vom First entfernt steht. Das ist zugleich die haeufigste Stelle eines wirklichen
+     * Schornsteins: Er sitzt im Dach und nicht auf dem Grat.
+     */
+    public static final int SCHORNSTEIN_HOCH = 2;
+
+    /**
+     * Die kuerzeste Firstlaenge, die noch einen Schornstein traegt.
+     *
+     * <p>Drei: Der Schornstein steht nie auf dem aeussersten Firstblock - dort ist er
+     * die Spitze des Giebels und nicht ein Schornstein. Es braucht also einen Block
+     * Rand auf jeder Seite und einen fuer ihn selbst.
+     */
+    public static final int FIRST_WENIGSTENS = 3;
+
+    /**
+     * Der Schornstein dieses Baus - ein Quader von einem Block Grundflaeche, oder
+     * {@code null}.
+     *
+     * <p>Er steht NEBEN dem First, stoesst durch die Dachflaeche und reicht bis zur
+     * Firsthoehe - und bleibt damit ganz im Hausquader. Warum das wichtiger ist als ein
+     * hoeherer Schornstein, steht bei {@link #SCHORNSTEIN_HOCH}.
+     *
+     * <p><b>Die Stelle laengs des Firstes ist gestreut</b>, und zwar aus der Ecke des
+     * Hauses: Dieselbe Stadt entsteht beim zweiten Aufsetzen wieder. Gefragt wird
+     * {@link Stadtplan#mischung} mit VERTAUSCHTEN Achsen - mit denselben Argumenten wie
+     * die Frage, OB es einen Schornstein gibt, waere die Stelle an das Ob gekoppelt und
+     * jeder Schornstein staende an derselben relativen Stelle.
+     *
+     * <p><b>Ein schmales Dach traegt keinen</b>: Der Schornstein braucht einen Block
+     * Abstand zum First UND einen zur Traufe - an der Traufe sitzt er nicht im Dach,
+     * sondern haengt an der Wand. Bei einer Dachbreite von fuenf bleibt dafuer genau
+     * eine Stelle, darunter keine.
+     */
+    public static Quader schornstein(Platzhalterbau bau) {
+        if (bau == null) {
+            throw new IllegalArgumentException("Ohne Bau kein Schornstein");
+        }
+        Quader q = bau.bereich();
+        if (Stadtplan.mischung(q.vonX(), q.vonZ(), SCHORNSTEIN_TAKT) != 0) {
+            return null;
+        }
+        // WIE WEIT NEBEN DEM FIRST: so weit wie moeglich, aber nicht an die Traufe. Der
+        // Abstand IST die Hoehe, um die er heraussteht - bei 45 Grad faellt das Dach je
+        // Block um eine Ebene.
+        int abstand = Math.min(SCHORNSTEIN_HOCH, (dachbreite(bau) - 1) / 2 - 1);
+        if (abstand < 1) {
+            return null;
+        }
+        // DIE FALLENDE ACHSE ist die der dachbreite; der FIRST laeuft ueber die andere.
+        boolean frontIstX = bau.tuer() == Richtung.NORD || bau.tuer() == Richtung.SUED;
+        boolean fallendIstX = traufstaendig(bau) ? !frontIstX : frontIstX;
+        int firstVon = fallendIstX ? q.vonZ() : q.vonX();
+        int firstBis = fallendIstX ? q.bisZ() : q.bisX();
+        int laenge = firstBis - firstVon + 1;
+        if (laenge < FIRST_WENIGSTENS) {
+            return null;
+        }
+        int stelle = firstVon + 1
+                + Stadtplan.mischung(q.vonZ(), q.vonX(), laenge - 2);
+        int mitte = fallendIstX ? (q.vonX() + q.bisX()) / 2
+                : (q.vonZ() + q.bisZ()) / 2;
+        // AUF WELCHE SEITE des Firstes - sonst stehen alle Schornsteine der Zeile auf
+        // derselben Dachhaelfte.
+        int quer = mitte + (Stadtplan.mischung(q.bisX(), q.bisZ(), 2) == 0
+                ? abstand : -abstand);
+        int x = fallendIstX ? quer : stelle;
+        int z = fallendIstX ? stelle : quer;
+        // DER FIRST LIEGT AUF DER OBERKANTE DES QUADERS: dachansatz ist
+        // bisY - giebelstufen, und darueber liegen genau giebelstufen Ebenen Dach.
+        int first = q.bisY();
+        return new Quader(x, first - abstand, z, x, first, z);
+    }
+
+    /**
+     * Die Spanne, ueber die das Dach FAELLT - die kuerzere der beiden waagerechten.
+     *
+     * <p><b>Warum die kuerzere</b> [24.11.2026]: Ein Satteldach faellt immer ueber die
+     * kurze Seite, und sein First laeuft ueber die lange. Alles andere ergibt ein Dach,
+     * das hoeher ist als das Haus.
+     *
+     * <p><b>Vorher fiel das Dach immer ueber die FRONT</b>, also ueber die Tuerseite. Bei
+     * einem schmalen Buergerhaus ist das richtig - die Front IST die kurze Seite. Beim
+     * Bundesratshaus (33 breit, 11 tief, 16 hoch) war es falsch: Die halbe Front sind 16
+     * Bloecke, das Dach brauchte 17 Ebenen, und der Dachansatz landete auf y -63 - zwei
+     * Ebenen UNTER dem Boden. Das Haus hatte dadurch keine einzige Wand, keine Tuer und
+     * kein Fenster: ein Haufen Giebelstufen von 33 Bloecken Breite. Die
+     * {@code config.yml} sagt ueber dasselbe Haus "DAS RATHAUS ist traufstaendig und
+     * breit - sein First laeuft parallel zum Platz". Jetzt stimmt das auch.
+     */
+    public static int dachbreite(Platzhalterbau bau) {
+        return Math.min(bau.front(), bau.tiefe());
+    }
+
+    /**
+     * Ob der Bau TRAUFstaendig steht - die lange Seite zur Gasse, der First parallel
+     * dazu.
+     *
+     * <p>Das Gegenteil ist giebelstaendig: die Schmalseite zur Gasse, der Giebel zur
+     * Front. So steht ein Hansehaus in einer Zeile, und so stehen alle gerechneten
+     * Zeilenhaeuser - ihre Front ist 5, 7 oder 9 breit und ihre Tiefe 9 bis 11.
+     *
+     * <p>Bei GLEICHER Breite und Tiefe gilt giebelstaendig: Dann ist die Front die
+     * Seite, auf die es ankommt, denn dort ist die Tuer.
+     */
+    public static boolean traufstaendig(Platzhalterbau bau) {
+        return bau.front() > bau.tiefe();
+    }
+
+    /**
      * Wie viele Ebenen hoch der Giebel ist.
      *
-     * <p><b>Steil, soweit die Hoehe es zulaesst</b>: Gewuenscht ist die halbe Front mal
-     * {@link #DACHNEIGUNG}. Passt das nicht - ein breiter Bau wie das Bundesratshaus
-     * braeuchte sonst sechzehn Ebenen Dach -, wird das Dach flacher, aber nie flacher als
-     * eins zu eins: Darunter waere es oben offen, denn das Dach muss sich bis zum First
-     * schliessen.
+     * <p><b>45 Grad, soweit die Hoehe es zulaesst</b>: Gewuenscht ist die halbe
+     * {@link #dachbreite} mal {@link #DACHNEIGUNG}, plus die Firstreihe. Passt das nicht
+     * in den Quader, wird das Dach FLACHER - lieber ein flaches Dach als ein Haus ohne
+     * Wand.
      *
      * <p>Stehen bleiben muessen der Fussboden, das steinerne Erdgeschoss und mindestens
-     * eine Ebene darueber - ein Haus, das nur aus Dach besteht, ist ein Zelt.
+     * eine Ebene darueber - ein Haus, das nur aus Dach besteht, ist ein Zelt. Genau das
+     * war es bis zum 24.11.2026: Eine Untergrenze von {@code haelfte + 1} erzwang 45
+     * Grad auch dann, wenn der Quader sie nicht traegt, und beim Bundesratshaus rutschte
+     * der Dachansatz dadurch zwei Ebenen UNTER den Boden.
      */
     public static int giebelstufen(Platzhalterbau bau) {
-        int haelfte = (bau.front() - 1) / 2;
+        int haelfte = (dachbreite(bau) - 1) / 2;
         int hoechstens = bau.hoehe() - 1 - SOCKELEBENEN - 1;
         // Das PLUS EINS ist die Firstreihe: Die Einzuege brauchen je DACHNEIGUNG Ebenen,
         // und darauf sitzt die eine Reihe, in der sich beide Seiten treffen. Ohne sie
         // haette die unterste Dachstufe nur eine Ebene und alle anderen zwei - von der
         // Seite eine Treppe mit einer zu kurzen Stufe.
-        return Math.max(haelfte + 1,
-                Math.min(haelfte * DACHNEIGUNG + 1, hoechstens));
+        //
+        // DIE HOEHE DES QUADERS IST DIE HARTE GRENZE [berichtigt 24.11.2026]: Vorher
+        // stand hier max(haelfte + 1, ...) und erzwang mindestens 45 Grad, auch wenn der
+        // Quader das nicht traegt. Bei einem breiten, niedrigen Bau wurde das Dach damit
+        // hoeher als das Haus, und der Dachansatz rutschte unter den Boden - das Haus
+        // bestand dann ganz aus Dach. Lieber ein flacheres Dach als ein Haus ohne Wand.
+        return Math.max(1, Math.min(haelfte * DACHNEIGUNG + 1, hoechstens));
     }
 
     /**
@@ -310,7 +520,7 @@ public final class Bauplan {
      * @param ebene 0 ist der Dachansatz
      */
     public static int dacheinzug(Platzhalterbau bau, int ebene) {
-        int haelfte = (bau.front() - 1) / 2;
+        int haelfte = (dachbreite(bau) - 1) / 2;
         int stufen = giebelstufen(bau);
         if (ebene <= 1) {
             // Die erste Dachebene liegt noch OHNE Einzug auf der Wandkrone - sie ist die
@@ -566,6 +776,13 @@ public final class Bauplan {
         if (y == bereich.vonY()) {
             return Stueck.BODEN;
         }
+        // DER SCHORNSTEIN VOR DEM DACH: Er stoesst durch die Dachflaeche, seine Stellen
+        // waeren sonst Dachtreppe und Luft. Vor dem Boden steht er nicht - ein
+        // Schornstein, der den Fussboden ersetzt, waere ein Loch im Zimmer.
+        Quader schornstein = schornstein(bau);
+        if (schornstein != null && schornstein.enthaelt(x, y, z)) {
+            return Stueck.SCHORNSTEIN;
+        }
         if (y > dachansatz(bau)) {
             return imGiebel(bau, x, y, z);
         }
@@ -582,14 +799,19 @@ public final class Bauplan {
      */
     private static Stueck imGiebel(Platzhalterbau bau, int x, int y, int z) {
         int einzug = dacheinzug(bau, y - dachansatz(bau));
-        int quer = quer(bau, x, z);
-        int querVon = querVon(bau) + einzug;
-        int querBis = querBis(bau) - einzug;
+        // DIE FALLENDE ACHSE ist die kuerzere, und die andere traegt den First.
+        // Bei einem giebelstaendigen Haus faellt das Dach ueber die Front; bei einem
+        // traufstaendigen (breiter als tief) ueber die Tiefe.
+        boolean trauf = traufstaendig(bau);
+        int quer = trauf ? tief(bau, x, z) : quer(bau, x, z);
+        int querVon = (trauf ? tiefVon(bau) : querVon(bau)) + einzug;
+        int querBis = (trauf ? tiefBis(bau) : querBis(bau)) - einzug;
         if (quer < querVon || quer > querBis) {
             return Stueck.LUFT;
         }
-        boolean amGiebel = tief(bau, x, z) == tiefVon(bau)
-                || tief(bau, x, z) == tiefBis(bau);
+        boolean amGiebel = trauf
+                ? quer(bau, x, z) == querVon(bau) || quer(bau, x, z) == querBis(bau)
+                : tief(bau, x, z) == tiefVon(bau) || tief(bau, x, z) == tiefBis(bau);
         if (querVon == querBis) {
             // Oben ist EIN Block uebrig - und der ist First, auch an der Giebelwand: Ein
             // Firstbalken, der an zwei Stellen abbricht, saehe aus wie ein Loch.
@@ -599,11 +821,11 @@ public final class Bauplan {
             return Stueck.GIEBELSTUFE;
         }
         if (quer == querVon || quer == querBis) {
-            // Die obere Ebene einer Stufe wird die Treppe, die untere ein voller Block.
-            // Erkannt wird sie daran, dass die NAECHSTE Ebene sich weiter einzieht.
-            boolean obersteDerStufe =
-                    dacheinzug(bau, (y - dachansatz(bau)) + 1) > einzug;
-            return obersteDerStufe ? Stueck.DACH : Stueck.DACHFUSS;
+            // JEDE Dachebene ist eine Treppe: Bei 45 Grad zieht sich das Dach je
+            // Ebene um genau einen Block ein, also sitzt je Ebene und Seite genau
+            // eine Treppe. Ein Fuellblock darunter waere nur bei einem steileren
+            // Dach noetig - siehe DACHNEIGUNG.
+            return Stueck.DACH;
         }
         return Stueck.LUFT;
     }
@@ -620,7 +842,15 @@ public final class Bauplan {
         boolean aussen = x == bereich.vonX() || x == bereich.bisX()
                 || z == bereich.vonZ() || z == bereich.bisZ();
         if (!aussen) {
-            return Stueck.LUFT;
+            // IM TREPPENSCHACHT HAENGT DIE LEITER, und die Decken lassen ihn offen -
+            // sonst fuehrte die Leiter gegen einen Fussboden.
+            if (imSchacht(bau, x, z)) {
+                return Stueck.LEITER;
+            }
+            // DIE DECKE LIEGT, WO AUSSEN DAS BAND SITZT: eine Hoehenrechnung, zwei
+            // Seiten derselben Wand. Das oberste Band ist die Wandkrone am Dachansatz -
+            // dort liegt der Dachboden.
+            return istLiegenderBalken(bau, y) ? Stueck.DECKE : Stueck.LUFT;
         }
         if (istTuer(bau, x, y, z)) {
             return Stueck.TUER;
@@ -649,6 +879,54 @@ public final class Bauplan {
             return Stueck.BALKEN;
         }
         return Stueck.GEFACH;
+    }
+
+    /**
+     * Ob diese Spalte der Treppenschacht ist.
+     *
+     * <p>Eine Spalte, {@link #SCHACHT_AB_ECKE} Bloecke von der Ecke bei
+     * {@code vonX / vonZ} - dort hat die Leiter zwei Waende im Ruecken. Welche Ecke, ist
+     * NICHT gestreut: Ein Schacht, der je Haus anderswo liegt, ist beim Betreten eine
+     * Suche, und ein Haus ist kein Irrgarten.
+     *
+     * <p><b>Ein zu kleines Haus bekommt keinen</b>: Bei drei Bloecken Aussenmass ist die
+     * Spalte neben der Ecke die EINZIGE innere - eine Leiter darin fuellte das ganze
+     * Zimmer. Dann bleibt das Haus innen offen, und das ist die bessere von zwei
+     * schlechten Antworten.
+     */
+    public static boolean imSchacht(Platzhalterbau bau, int x, int z) {
+        if (bau == null) {
+            throw new IllegalArgumentException("Ohne Bau kein Schacht");
+        }
+        Quader bereich = bau.bereich();
+        if (bau.front() < SCHACHT_WENIGSTENS || bau.tiefe() < SCHACHT_WENIGSTENS) {
+            return false;
+        }
+        return x == bereich.vonX() + SCHACHT_AB_ECKE
+                && z == bereich.vonZ() + SCHACHT_AB_ECKE;
+    }
+
+    /**
+     * Wohin die Leiter an dieser Stelle zeigt - oder {@code null}, wenn dort keine ist.
+     *
+     * <p>Eine Leiter zeigt VON der Wand WEG, an der sie haengt: Ihr {@code facing} ist
+     * die Richtung, in die der Kletterer schaut. Der Schacht liegt an der Ecke
+     * {@code vonX / vonZ}, die Wand im Ruecken ist also die bei {@code vonX} - die
+     * Leiter zeigt nach OST.
+     *
+     * <p><b>Warum diese Frage ueberhaupt gestellt wird</b>: Der Weltgriff setzt einen
+     * Block OHNE Blockdaten. Eine Leiter bekommt dann die Vorgabe und haengt an der
+     * falschen Wand oder faellt ab - dieselbe Falle wie bei Dachtreppe, Glasscheibe und
+     * liegendem Balken.
+     */
+    public static Richtung leiterzeigt(Platzhalterbau bau, int x, int y, int z) {
+        if (bau == null) {
+            throw new IllegalArgumentException("Ohne Bau keine Leiter");
+        }
+        if (!bau.enthaelt(x, y, z) || stueckBei(bau, x, y, z) != Stueck.LEITER) {
+            return null;
+        }
+        return Richtung.OST;
     }
 
     /**

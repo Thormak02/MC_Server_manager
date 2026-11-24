@@ -278,7 +278,7 @@ class BautenlisteTest {
     }
 
     @Test
-    @DisplayName("11 - die AUSGELIEFERTE Datei: neun Bauten, keine Klage, nichts kollidiert")
+    @DisplayName("11 - die AUSGELIEFERTE Datei: sechs Bauten, keine Klage, nichts kollidiert")
     void dieAusgelieferteDatei() {
         // DIE WICHTIGSTE PROBE DIESER DATEI. Die neun Quader sind am 23.11.2026 gegen
         // jeden belegten Ort Altfurts geprueft worden - acht Tore, die Torwand, die drei
@@ -318,15 +318,34 @@ class BautenlisteTest {
                 "die ausgelieferte Datei darf keine einzige Klage erzeugen: "
                         + ergebnis.klagen());
         assertEquals("altfurt", ergebnis.welt());
-        assertEquals(9, ergebnis.verzeichnis().anzahl(),
-                "neun Platzhalterbauten - die Markthalle steht seit dem 11.11.2026: "
-                        + ergebnis.verzeichnis().namen());
-        assertEquals(List.of("hafen-von-altfurt", "forsttor", "kornpforte", "wolkenturm",
-                        "buergeramt", "zunfthaus", "muenzhaus", "kaufmannskontor",
-                        "bundesratshaus"),
+        assertEquals(6, ergebnis.verzeichnis().anzahl(),
+                "sechs Bauten - die vier Tortuerme sind am 23.11.2026 zu TORHAEUSERN"
+                        + " in der Stadtmauer geworden und stehen nicht mehr in dieser"
+                        + " Liste: " + ergebnis.verzeichnis().namen());
+        assertEquals(List.of("buergeramt", "zunfthaus", "muenzhaus", "kaufmannskontor",
+                        "bundesratshaus", "stadtkirche"),
                 ergebnis.verzeichnis().namen(),
-                "in der Reihenfolge der Datei - erst die Torhaeuser, dann die Flanken,"
-                        + " dann das Bundesratshaus");
+                "in der Reihenfolge der Datei - West und Ost, dann Rathaus und Kirche");
+        // UND JEDER RAHMT DEN PLATZ: Er liegt im Kernband, also zwischen dem Rand
+        // der Plaetze und der ersten Ringgasse. Ein Bau weiter innen stuende MITTEN
+        // auf dem Markt, einer weiter draussen kostete ein gerechnetes Zeilenhaus.
+        for (var bau : ergebnis.verzeichnis().alle()) {
+            int innen = Integer.MAX_VALUE;
+            int aussen = 0;
+            for (int x = bau.bereich().vonX(); x <= bau.bereich().bisX(); x++) {
+                for (int z = bau.bereich().vonZ(); z <= bau.bereich().bisZ(); z++) {
+                    innen = Math.min(innen, de.freimarken.kern.Stadtplan.ring(x, z));
+                    aussen = Math.max(aussen,
+                            de.freimarken.kern.Stadtplan.ring(x, z));
+                }
+            }
+            assertTrue(innen > de.freimarken.kern.Stadtplan.MARKT_RING,
+                    bau.schluessel() + " reicht bis Ring " + innen + " und steht damit"
+                            + " auf dem Platz");
+            assertTrue(aussen <= de.freimarken.kern.Stadtplan.KERN_RING,
+                    bau.schluessel() + " reicht bis Ring " + aussen + " und damit aus"
+                            + " dem Rahmen heraus");
+        }
 
         // UND GEGEN DIE LADENEINHEITEN: Sie stehen in einem anderen Abschnitt, also
         // prueft der Leser sie nicht - diese Probe tut es. Eine Markthalle, in die ein
@@ -344,6 +363,8 @@ class BautenlisteTest {
         // UND DIE MITTELACHSE bleibt frei: x 65..79 zwischen Torreihe und Spawn - dort
         // laeuft jeder Ankommende durch (config.yml nennt den Grund).
         var achse = new Quader(65, -61, 1, 79, -40, 22);
+        // (Der Ankunftsweg liegt heute mitten auf dem Marktplatz - die Bauten
+        // rahmen ihn, also bleibt er frei.)
         for (var bau : ergebnis.verzeichnis().alle()) {
             assertFalse(bau.bereich().schneidet(achse),
                     bau.schluessel() + " steht im Ankunftsweg: "

@@ -112,6 +112,12 @@ class AltfurtaufbauTest {
             rufe.add("balken " + schluessel(x, y, z) + " " + achse.wort() + " "
                     + art.name());
         }
+
+        @Override
+        public void setzeLeiter(int x, int y, int z, Richtung zeigt, Material art) {
+            rufe.add("leiter " + schluessel(x, y, z) + " " + zeigt.wort() + " "
+                    + art.name());
+        }
     }
 
     /**
@@ -120,12 +126,17 @@ class AltfurtaufbauTest {
      * <p>Seit das Dach seine Richtung bekommt, laufen auch die Treppen durch diese Naht -
      * ueber fuenfzig Rufe je Haus. Proben, die Tuer und Schild pruefen, wuerden darin
      * untergehen; die Dachtreppen haelt ihre eigene Probe.
+     *
+     * <p>Die LEITER kam am 24.11.2026 dazu, und zwar mit einem Ruf je Ebene des Hauses -
+     * bei einem zwanzig Ebenen hohen Haus sind das zwanzig. Sie gehoert aus demselben
+     * Grund heraus, und sie hat ihre eigene Probe.
      */
     private static List<String> ohneDach(Feinmitschrift fein) {
         return fein.rufe.stream()
                 .filter(zeile -> !zeile.startsWith("dach ")
                         && !zeile.startsWith("scheibe ")
-                        && !zeile.startsWith("balken "))
+                        && !zeile.startsWith("balken ")
+                        && !zeile.startsWith("leiter "))
                 .toList();
     }
 
@@ -198,15 +209,28 @@ class AltfurtaufbauTest {
         assertEquals(Material.LANTERN, welt.bei(58, -59, 4), "Laterne neben der Tuer");
         assertEquals(Material.AIR, welt.bei(58, -59, 6),
                 "die Tuerstelle bleibt Luft - die echte Tuer setzt die zweite Naht");
-        assertEquals(block(bau, Bauplan.Stueck.GIEBELSTUFE), welt.bei(58, -52, 4),
+        // DER DACHANSATZ IST -52 (die Wandkrone), die erste Dachebene -51. Mit der
+        // Neigung 45 Grad ist das Dach vier Ebenen hoch statt sieben.
+        assertEquals(block(bau, Bauplan.Stueck.GIEBELSTUFE), welt.bei(58, -51, 4),
                 "Treppengiebel an der FRONT");
-        assertEquals(Material.DARK_OAK_PLANKS, welt.bei(53, -54, 3),
-                "der volle Dachfuss - aus der Dachart");
-        assertEquals(Material.DARK_OAK_STAIRS, welt.bei(53, -53, 3),
-                "die Dachtreppe darueber - auch aus der Dachart");
+        assertEquals(Material.DARK_OAK_STAIRS, welt.bei(53, -51, 3),
+                "die Dachtreppe an der Traufe - aus der Dachart");
+        assertEquals(Material.DARK_OAK_STAIRS, welt.bei(53, -50, 4),
+                "und eine Ebene hoeher einen Block weiter innen");
         assertEquals(block(bau, Bauplan.Stueck.FIRST), welt.bei(53, -48, 6), "First");
-        assertEquals(Material.AIR, welt.bei(53, -57, 6), "das Innere ist Luft");
-        assertEquals(Material.AIR, welt.bei(53, -52, 6), "und der Dachboden auch");
+        // DAS INNERE IST NICHT MEHR EIN SCHACHT [24.11.2026]: Auf der Hoehe des
+        // liegenden Bandes liegt eine Geschossdecke, dazwischen ist Luft.
+        assertEquals(Material.AIR, welt.bei(53, -57, 6), "zwischen zwei Decken");
+        assertEquals(block(bau, Bauplan.Stueck.DECKE), welt.bei(53, -54, 6),
+                "die Decke ueber dem Erdgeschoss");
+        assertEquals(block(bau, Bauplan.Stueck.DECKE), welt.bei(53, -52, 6),
+                "und der Dachboden auf der Wandkrone");
+        // SIE LIEGT GENAU DORT, WO AUSSEN DAS BAND SITZT - eine Hoehenrechnung.
+        assertEquals(block(bau, Bauplan.Stueck.BALKEN), welt.bei(48, -52, 6),
+                "aussen auf derselben Hoehe die Wandkrone");
+        // UND DER TREPPENSCHACHT TRAEGT EINE LEITER, keine Decke.
+        assertEquals(Material.LADDER, welt.bei(49, -54, 4),
+                "die Leiter geht durch die Deckenhoehe hindurch");
     }
 
     @Test
@@ -302,18 +326,24 @@ class AltfurtaufbauTest {
         hand().setze(haus(Richtung.OST, Baustil.BACKSTEIN, Dachart.KUPFER), kupfer,
                 new Feinmitschrift(), NAME);
 
-        // Die TREPPE der Dachhaut liegt auf -53 (die obere Ebene der ersten Stufe),
-        // der volle DACHFUSS darunter auf -54.
-        assertEquals(Material.DARK_OAK_STAIRS, ziegel.bei(53, -53, 3));
-        assertEquals(Material.OXIDIZED_CUT_COPPER_STAIRS, kupfer.bei(53, -53, 3));
-        assertEquals(Material.DARK_OAK_PLANKS, ziegel.bei(53, -54, 3), "der Dachfuss");
-        assertEquals(Material.OXIDIZED_COPPER, kupfer.bei(53, -54, 3));
+        // Die TREPPE der Dachhaut liegt auf -51, der Traufebene; der FIRST ganz
+        // oben auf -48. Einen vollen Fussblock gibt es nicht mehr: Bei 45 Grad
+        // sitzt je Ebene und Seite genau eine Treppe.
+        assertEquals(Material.DARK_OAK_STAIRS, ziegel.bei(53, -51, 3));
+        assertEquals(Material.OXIDIZED_CUT_COPPER_STAIRS, kupfer.bei(53, -51, 3));
+        assertEquals(Material.DARK_OAK_PLANKS, ziegel.bei(53, -48, 6), "der First");
+        assertEquals(Material.OXIDIZED_COPPER, kupfer.bei(53, -48, 6));
         // UND NUR DAS DACH: Die Wand bleibt dieselbe. Ohne das waere eine Dachart, die
         // die halbe Palette austauscht, genauso gruen.
         assertEquals(ziegel.bei(51, -57, 3), kupfer.bei(51, -57, 3), "das Gefach bleibt");
-        assertEquals(ziegel.bei(58, -52, 4), kupfer.bei(58, -52, 4),
+        assertEquals(ziegel.bei(58, -51, 4), kupfer.bei(58, -51, 4),
                 "und der Treppengiebel auch");
-        assertNotEquals(ziegel.bei(53, -53, 3), kupfer.bei(53, -53, 3));
+        // UND DIE DACHHAUT UNTERSCHEIDET SICH WIRKLICH - sonst waere eine
+        // Dachart ohne Wirkung.
+        assertNotEquals(ziegel.bei(53, -51, 3), kupfer.bei(53, -51, 3),
+                "die Traufe");
+        assertNotEquals(ziegel.bei(53, -48, 6), kupfer.bei(53, -48, 6),
+                "und der First");
     }
 
     @Test
@@ -672,8 +702,9 @@ class AltfurtaufbauTest {
         // Dachseiten lag damit falsch herum.
         Platzhalterbau bau = haus();
         Feinmitschrift fein = new Feinmitschrift();
+        Kartengriff welt = new Kartengriff();
 
-        hand().setze(bau, new Kartengriff(), fein, NAME);
+        hand().setze(bau, welt, fein, NAME);
 
         List<String> dach = fein.rufe.stream().filter(z -> z.startsWith("dach ")).toList();
         // GEZAEHLT und nicht "nicht leer": Die Zahl folgt aus der Form - je Dachebene
@@ -688,9 +719,37 @@ class AltfurtaufbauTest {
         // Die Reihe laeuft NICHT ueber die ganze Tiefe: An beiden Enden steht die
         // Giebelwand, und die ragt beim Staffelgiebel ueber das Dach. Darum zwei Stellen
         // weniger je Reihe.
-        assertEquals(treppenebenen * 2 * (bau.tiefe() - 2), dach.size(),
-                "je Treppenebene zwei Reihen zwischen den Giebelwaenden: " + dach);
         assertTrue(treppenebenen >= 3, "ein Dach mit unter drei Treppenebenen ist flach");
+
+        // DER SCHORNSTEIN NIMMT GENAU EINE DACHSTELLE [24.11.2026]: Er stoesst durch die
+        // Dachflaeche; sein UNTERSTER Block sitzt darauf, die darueber standen vorher in
+        // der Luft ueber der Schraege. Die Eins wird nicht hingeschrieben, sondern
+        // BEWIESEN: Dasselbe Haus an einer Stelle ohne Schornstein liefert die
+        // Vergleichszahl. Ein erster Entwurf zog alle drei Schornsteinstellen ab und war
+        // um zwei daneben.
+        Quader schornstein = Bauplan.schornstein(bau);
+        assertNotNull(schornstein, "dieses Haus traegt einen Schornstein - sonst prueft"
+                + " diese Probe die Dachflaeche ohne ihn");
+        Platzhalterbau ohne = gleichOhneSchornstein(bau);
+        Feinmitschrift feinOhne = new Feinmitschrift();
+        hand().setze(ohne, new Kartengriff(), feinOhne, NAME);
+        long treppenOhne = feinOhne.rufe.stream()
+                .filter(zeile -> zeile.startsWith("dach ")).count();
+        assertEquals(treppenebenen * 2 * (bau.tiefe() - 2), treppenOhne,
+                "ohne Schornstein: je Treppenebene zwei Reihen zwischen den"
+                        + " Giebelwaenden");
+        assertEquals(treppenOhne - 1, dach.size(),
+                "der Schornstein nimmt GENAU eine Dachstelle: " + dach);
+
+        // UND ER STEHT WIRKLICH DORT: gemauert, nicht als Treppe.
+        assertEquals(Baustoffe.abWerk().block(bau.stil(), bau.dach(),
+                        Bauplan.Stueck.SCHORNSTEIN),
+                welt.bei(schornstein.vonX(), schornstein.bisY(), schornstein.vonZ()),
+                "der oberste Schornsteinblock");
+        assertEquals(Baustoffe.abWerk().block(bau.stil(), bau.dach(),
+                        Bauplan.Stueck.SCHORNSTEIN),
+                welt.bei(schornstein.vonX(), schornstein.vonY(), schornstein.vonZ()),
+                "und der unterste, der auf der Dachflaeche sitzt");
 
         // BEIDE Richtungen kommen vor - das ist der Kern der Sache.
         assertTrue(dach.stream().anyMatch(z -> z.contains(" sued ")), dach.toString());
@@ -803,11 +862,23 @@ class AltfurtaufbauTest {
         for (int x = umriss.vonX(); x <= umriss.bisX(); x++) {
             for (int z = umriss.vonZ(); z <= umriss.bisZ(); z++) {
                 Stadtplan.Lage lage = plan.lageBei(x, z);
-                if (stoffe.block(lage) == null) {
+                if (stoffe.mischung(lage).isEmpty()) {
                     continue;
                 }
                 if (lage != Stadtplan.Lage.MAUER) {
                     erwartet += 1;
+                    continue;
+                }
+                // DER TURM IST HOEHER [24.11.2026]: Gefragt wird imTurm - das ist die
+                // Regel, WO ein Turm steht, und die ist hier nicht das Gepruefte. Die
+                // HOEHE wird wieder selbst gerechnet, samt der Brustwehr an seinem Rand.
+                if (plan.imTurm(x, z)) {
+                    erwartet += Stadtplan.TURM_HOEHE - 1;
+                    boolean amRand = !plan.imTurm(x - 1, z) || !plan.imTurm(x + 1, z)
+                            || !plan.imTurm(x, z - 1) || !plan.imTurm(x, z + 1);
+                    if (amRand && Stadtplan.zinne(x, z)) {
+                        erwartet += 1;
+                    }
                     continue;
                 }
                 erwartet += Stadtplan.MAUER_HOEHE - 1;
@@ -823,28 +894,58 @@ class AltfurtaufbauTest {
 
         // JE LAGE DER RICHTIGE BODEN - an einer Stelle, die NEBEN der Achse liegt,
         // sonst gewinnt die Radialgasse.
-        assertEquals(stoffe.block(Stadtplan.Lage.MARKT),
+        assertEquals(stoffe.block(Stadtplan.Lage.MARKT, Stadtplan.MITTE_X,
+                        Stadtplan.MITTE_Z),
                 welt.bei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z),
                 "die Mitte des Marktes");
-        assertEquals(stoffe.block(Stadtplan.Lage.RINGGASSE),
-                welt.bei(Stadtplan.MITTE_X + 28, Stadtplan.BODEN_Y,
+        // DIE RINGE KOMMEN AUS DEM PLAN und stehen nicht als Zahlen hier: Mit den
+        // 81 x 81 Plaetzen sind sie am 23.11.2026 alle gewandert.
+        int gasse = plan.quartierAnfang(0) + 2;
+        int zeile = plan.zeileInnenVon(0) + 3;
+        int kern = Stadtplan.KERN_RING - 6;
+        assertEquals(stoffe.block(Stadtplan.Lage.RINGGASSE, Stadtplan.MITTE_X + gasse,
+                        Stadtplan.MITTE_Z + 8),
+                welt.bei(Stadtplan.MITTE_X + gasse, Stadtplan.BODEN_Y,
                         Stadtplan.MITTE_Z + 8), "die erste Ringgasse");
-        assertEquals(stoffe.block(Stadtplan.Lage.ZEILE),
-                welt.bei(Stadtplan.MITTE_X + 35, Stadtplan.BODEN_Y,
+        assertEquals(stoffe.block(Stadtplan.Lage.ZEILE, Stadtplan.MITTE_X + zeile,
+                        Stadtplan.MITTE_Z + 8),
+                welt.bei(Stadtplan.MITTE_X + zeile, Stadtplan.BODEN_Y,
                         Stadtplan.MITTE_Z + 8), "das Bauland der Zeile");
-        assertEquals(stoffe.block(Stadtplan.Lage.KERN),
-                welt.bei(Stadtplan.MITTE_X + 20, Stadtplan.BODEN_Y,
+        assertEquals(stoffe.block(Stadtplan.Lage.KERN, Stadtplan.MITTE_X + kern,
+                        Stadtplan.MITTE_Z + 8),
+                welt.bei(Stadtplan.MITTE_X + kern, Stadtplan.BODEN_Y,
                         Stadtplan.MITTE_Z + 8), "der Kern wird gepflastert");
+        // UND DIE LAGEN SIND WIRKLICH VERSCHIEDEN - sonst pruefte das drei Mal
+        // dasselbe.
+        assertEquals(Stadtplan.Lage.RINGGASSE,
+                plan.lageBei(Stadtplan.MITTE_X + gasse, Stadtplan.MITTE_Z + 8));
+        assertEquals(Stadtplan.Lage.ZEILE,
+                plan.lageBei(Stadtplan.MITTE_X + zeile, Stadtplan.MITTE_Z + 8));
+        assertEquals(Stadtplan.Lage.KERN,
+                plan.lageBei(Stadtplan.MITTE_X + kern, Stadtplan.MITTE_Z + 8));
+        // UND DAS PFLASTER IST GEMISCHT: Auf der Gasse liegt nicht ueberall
+        // derselbe Block - genau das war die Klage des Betreibers.
+        Set<Material> aufDerGasse = new HashSet<>();
+        for (int r = plan.quartierAnfang(0); r < plan.zeileInnenVon(0); r++) {
+            aufDerGasse.add(welt.bei(Stadtplan.MITTE_X + r, Stadtplan.BODEN_Y,
+                    Stadtplan.MITTE_Z + 8));
+            aufDerGasse.add(welt.bei(Stadtplan.MITTE_X + r, Stadtplan.BODEN_Y,
+                    Stadtplan.MITTE_Z + 9));
+        }
+        assertTrue(aufDerGasse.size() >= 3, "die Gasse ist gemischt: "
+                + aufDerGasse);
 
         // DIE MAUER STEHT, und zwar genau fuenf Ebenen hoch plus Zinne.
         int mauer = plan.mauerVon();
-        assertEquals(stoffe.block(Stadtplan.Lage.MAUER),
-                welt.bei(Stadtplan.MITTE_X + mauer, Stadtplan.BODEN_Y,
-                        Stadtplan.MITTE_Z + 8), "der Fuss der Mauer");
-        assertEquals(stoffe.block(Stadtplan.Lage.MAUER),
-                welt.bei(Stadtplan.MITTE_X + mauer,
-                        Stadtplan.BODEN_Y + Stadtplan.MAUER_HOEHE - 2,
-                        Stadtplan.MITTE_Z + 8), "ihre oberste geschlossene Ebene");
+        assertTrue(stoffe.mischung(Stadtplan.Lage.MAUER).contains(
+                        welt.bei(Stadtplan.MITTE_X + mauer, Stadtplan.BODEN_Y,
+                                Stadtplan.MITTE_Z + 8)),
+                "der Fuss der Mauer");
+        assertTrue(stoffe.mischung(Stadtplan.Lage.MAUER).contains(
+                        welt.bei(Stadtplan.MITTE_X + mauer,
+                                Stadtplan.BODEN_Y + Stadtplan.MAUER_HOEHE - 2,
+                                Stadtplan.MITTE_Z + 8)),
+                "ihre oberste geschlossene Ebene");
         assertEquals(Material.AIR, welt.bei(Stadtplan.MITTE_X + mauer,
                         Stadtplan.BODEN_Y + Stadtplan.MAUER_HOEHE - 1,
                         Stadtplan.MITTE_Z + 8),
@@ -878,7 +979,8 @@ class AltfurtaufbauTest {
         assertEquals(Material.AIR,
                 welt.bei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z),
                 "der Boden des Ladens ist unberuehrt");
-        assertEquals(stoffe.block(Stadtplan.Lage.MARKT),
+        assertEquals(stoffe.block(Stadtplan.Lage.MARKT, Stadtplan.MITTE_X + 3,
+                        Stadtplan.MITTE_Z),
                 welt.bei(Stadtplan.MITTE_X + 3, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z),
                 "einen Block weiter liegt Pflaster");
     }
@@ -930,11 +1032,11 @@ class AltfurtaufbauTest {
         // EINE TAFEL OHNE MARKT - so etwas kann die config.yml nicht erzeugen (ein
         // fehlender Schluessel gibt den Werkstoff), aber der Zweig im Pflasterlauf muss
         // halten: Wer dort Material.AIR setzte, LOESCHTE den Boden des Marktes.
-        Map<Stadtplan.Lage, Material> ohneMarkt =
+        Map<Stadtplan.Lage, List<Material>> ohneMarkt =
                 new java.util.EnumMap<>(Stadtplan.Lage.class);
-        Pflasterstoffe.abWerk().boden().forEach((lage, block) -> {
+        Pflasterstoffe.abWerk().boden().forEach((lage, mischung) -> {
             if (lage != Stadtplan.Lage.MARKT) {
-                ohneMarkt.put(lage, block);
+                ohneMarkt.put(lage, mischung);
             }
         });
         Pflasterstoffe loecherig = new Pflasterstoffe(ohneMarkt);
@@ -945,15 +1047,206 @@ class AltfurtaufbauTest {
         assertEquals(Material.AIR,
                 welt.bei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z),
                 "der Markt bleibt unberuehrt und wird NICHT geloescht");
-        assertEquals(loecherig.block(Stadtplan.Lage.RINGGASSE),
-                welt.bei(Stadtplan.MITTE_X + 28, Stadtplan.BODEN_Y,
+        int gasse = plan.quartierAnfang(0) + 2;
+        assertEquals(loecherig.block(Stadtplan.Lage.RINGGASSE,
+                        Stadtplan.MITTE_X + gasse, Stadtplan.MITTE_Z + 8),
+                welt.bei(Stadtplan.MITTE_X + gasse, Stadtplan.BODEN_Y,
                         Stadtplan.MITTE_Z + 8), "die Gasse liegt trotzdem");
         // Und die Zahl ist um die Marktflaeche kleiner.
         long mitMarkt = hand().pflastere(plan, Pflasterstoffe.abWerk(),
                 new Kartengriff(), List.of()).bloecke();
-        long marktflaeche = (2L * Stadtplan.MARKT_RING + 1) * (2L * Stadtplan.MARKT_RING + 1);
+        // DER MARKTPLATZ IST NUR EINER VON DREI PLAETZEN: 81 breit, aber nur
+        // MARKT_TIEFE tief - Kirchplatz, Rathausplatz und die Kanten haben ihre
+        // eigenen Mischungen und liegen weiter.
+        long marktflaeche = (2L * Stadtplan.MARKT_RING + 1) * Stadtplan.MARKT_TIEFE;
         assertEquals(mitMarkt - marktflaeche, raus.bloecke(),
                 "genau die Marktflaeche fehlt");
+    }
+
+
+    @Test
+    @DisplayName("Auf der Platzkante wachsen Baeume und stehen Brunnen")
+    void dasPlatzgruenSteht() {
+        Stadtplan plan = new Stadtplan(1);
+        Platzgruen gruen = Platzgruen.abWerk();
+        Kartengriff welt = new Kartengriff();
+
+        Altfurtaufbau.Platzkante raus =
+                hand().setzePlatzgruen(plan, gruen, welt, List.of());
+
+        // DIE ZAHL KOMMT AUS DEM PLAN und nicht aus dem Ergebnis: Gezaehlt werden die
+        // Standorte selbst, und das Ergebnis muss dieselbe Zahl nennen.
+        int baeume = 0;
+        int brunnen = 0;
+        for (int x = plan.umriss().vonX(); x <= plan.umriss().bisX(); x++) {
+            for (int z = plan.umriss().vonZ(); z <= plan.umriss().bisZ(); z++) {
+                switch (Stadtplan.kantenbauBei(x, z)) {
+                    case BAUM -> baeume++;
+                    case BRUNNEN -> brunnen++;
+                    default -> {
+                    }
+                }
+            }
+        }
+        assertTrue(baeume > 0 && brunnen > 0,
+                "der Plan nennt Standorte: " + baeume + " Baeume, " + brunnen
+                        + " Brunnen");
+        assertEquals(baeume, raus.baeume(), "so viele Baeume wie Standorte");
+        assertEquals(brunnen, raus.brunnen(), "so viele Brunnen wie Standorte");
+        assertTrue(raus.bloecke() > baeume * 10L,
+                "jeder Baum ist mehr als ein Pfahl: " + raus.bloecke() + " Bloecke");
+
+        // EIN BAUM: Stamm auf dem Boden, Laub darueber, und das Laub reicht KRONE_WEITE
+        // weit. Gesucht wird ein Standort, nicht einer vorgerechnet.
+        int[] stelle = ersterStandort(plan, Stadtplan.Kantenbau.BAUM);
+        int bx = stelle[0];
+        int bz = stelle[1];
+        assertTrue(gruen.stamm().contains(welt.bei(bx, Stadtplan.BODEN_Y + 1, bz)),
+                "der Stamm steht auf dem Boden");
+        assertTrue(gruen.stamm().contains(welt.bei(bx, Stadtplan.BODEN_Y + 2, bz)),
+                "und eine Ebene hoeher auch");
+        // DAS LAUB: An der weitesten Stelle der Krone, seitlich neben dem Stamm.
+        boolean laubGefunden = false;
+        for (int y = Stadtplan.BODEN_Y + 1; y <= Stadtplan.BODEN_Y + 15; y++) {
+            if (gruen.laub().contains(
+                    welt.bei(bx + Stadtplan.KRONE_WEITE, y, bz))) {
+                laubGefunden = true;
+                break;
+            }
+        }
+        assertTrue(laubGefunden, "das Laub reicht " + Stadtplan.KRONE_WEITE
+                + " Bloecke neben den Stamm");
+        // UND NICHT WEITER: Einen Block weiter ist Luft - sonst waere die Krone breiter
+        // als der Abstand der Standorte erlaubt.
+        for (int y = Stadtplan.BODEN_Y; y <= Stadtplan.BODEN_Y + 15; y++) {
+            assertEquals(Material.AIR,
+                    welt.bei(bx + Stadtplan.KRONE_WEITE + 1, y, bz),
+                    "neben der Krone ist Luft, bei y " + y);
+        }
+
+        // EIN BRUNNEN: Wasser in der Mitte, und die Fassung auf ALLEN VIER Seiten. Ohne
+        // sie liefe das Wasser ueber den Marktplatz.
+        int[] quelle = ersterStandort(plan, Stadtplan.Kantenbau.BRUNNEN);
+        int qx = quelle[0];
+        int qz = quelle[1];
+        int rand = Stadtplan.BODEN_Y + 1;
+        assertEquals(gruen.wasser(), welt.bei(qx, rand, qz), "das Wasser");
+        assertTrue(gruen.brunnenrand().contains(welt.bei(qx - 1, rand, qz)), "West");
+        assertTrue(gruen.brunnenrand().contains(welt.bei(qx + 1, rand, qz)), "Ost");
+        assertTrue(gruen.brunnenrand().contains(welt.bei(qx, rand, qz - 1)), "Nord");
+        assertTrue(gruen.brunnenrand().contains(welt.bei(qx, rand, qz + 1)), "Sued");
+        // UND EINE EBENE HOEHER AUCH - man sieht in den Brunnen hinein.
+        assertTrue(gruen.brunnenrand().contains(welt.bei(qx - 1, rand + 1, qz)),
+                "die zweite Ebene der Fassung");
+        assertEquals(Material.AIR, welt.bei(qx, rand + 1, qz),
+                "ueber dem Wasser ist offen");
+
+        // OHNE GRUEN WIRD NICHTS GESETZT - und es gibt auch keine Klage.
+        Kartengriff leer = new Kartengriff();
+        Altfurtaufbau.Platzkante nichts =
+                hand().setzePlatzgruen(plan, Platzgruen.ohneGruen(), leer, List.of());
+        assertEquals(0, nichts.baeume());
+        assertEquals(0, nichts.brunnen());
+        assertEquals(0L, nichts.bloecke());
+        assertEquals(Material.AIR, leer.bei(bx, Stadtplan.BODEN_Y + 1, bz),
+                "an der Baumstelle steht nichts");
+    }
+
+    @Test
+    @DisplayName("Das Platzgruen laesst die Handarbeit stehen")
+    void dasPlatzgruenWeichtDerHandarbeit() {
+        Stadtplan plan = new Stadtplan(1);
+        Platzgruen gruen = Platzgruen.abWerk();
+        int[] stelle = ersterStandort(plan, Stadtplan.Kantenbau.BAUM);
+
+        // EIN QUADER GENAU UEBER DEM STANDORT: Dort steht Handarbeit, also darf dort
+        // kein Baum wachsen. Ohne diese Zusage wuechse ein Baum durch das Dach eines
+        // von Hand gebauten Hauses.
+        Quader fest = new Quader(stelle[0] - 1, Stadtplan.BODEN_Y, stelle[1] - 1,
+                stelle[0] + 1, Stadtplan.BODEN_Y + 20, stelle[1] + 1);
+        Kartengriff welt = new Kartengriff();
+
+        Altfurtaufbau.Platzkante raus =
+                hand().setzePlatzgruen(plan, gruen, welt, List.of(fest));
+
+        for (int y = Stadtplan.BODEN_Y; y <= Stadtplan.BODEN_Y + 20; y++) {
+            assertEquals(Material.AIR, welt.bei(stelle[0], y, stelle[1]),
+                    "im Quader der Handarbeit steht nichts, bei y " + y);
+        }
+        // DIE ANDEREN STANDORTE WACHSEN TROTZDEM: Ein Quader haelt EINEN Baum auf, nicht
+        // alle.
+        assertTrue(raus.bloecke() > 0L, "anderswo wurde gesetzt: " + raus.bloecke());
+    }
+
+    /** Der erste Standort dieser Art auf der Platzkante - gesucht, nicht gerechnet. */
+    private static int[] ersterStandort(Stadtplan plan, Stadtplan.Kantenbau art) {
+        for (int x = plan.umriss().vonX(); x <= plan.umriss().bisX(); x++) {
+            for (int z = plan.umriss().vonZ(); z <= plan.umriss().bisZ(); z++) {
+                if (Stadtplan.kantenbauBei(x, z) == art) {
+                    return new int[] {x, z};
+                }
+            }
+        }
+        throw new AssertionError("kein Standort der Art " + art + " auf der Platzkante");
+    }
+
+
+    @Test
+    @DisplayName("Das Platzgruen wird nur EINMAL gesetzt")
+    void dasPlatzgruenWaechstNichtNach() {
+        Stadtplan plan = new Stadtplan(1);
+        Platzgruen gruen = Platzgruen.abWerk();
+        Kartengriff welt = new Kartengriff();
+
+        // AUF EINEM LEEREN PLATZ steht es noch nicht.
+        assertFalse(hand().stehtPlatzgruen(plan, gruen, welt),
+                "auf einem leeren Platz steht kein Baum");
+
+        hand().setzePlatzgruen(plan, gruen, welt, List.of());
+
+        // DANACH STEHT ES - und ein zweiter Start setzt nichts mehr. Ohne diesen Riegel
+        // waechst ein gefaellter Baum nach jedem Neustart wieder.
+        assertTrue(hand().stehtPlatzgruen(plan, gruen, welt),
+                "nach dem Setzen steht es");
+
+        // WER ES NEU SETZEN WILL, nimmt den Stamm am ersten Standort weg.
+        int[] stelle = ersterStandort(plan, Stadtplan.Kantenbau.BAUM);
+        int[] quelle = ersterStandort(plan, Stadtplan.Kantenbau.BRUNNEN);
+        // Welcher der beiden der ERSTE ist, entscheidet die Suchreihenfolge - gefragt
+        // wird darum der, den stehtPlatzgruen selbst zuerst findet.
+        int[] erster = stelle[0] < quelle[0]
+                || (stelle[0] == quelle[0] && stelle[1] < quelle[1]) ? stelle : quelle;
+        welt.setze(erster[0], Stadtplan.BODEN_Y + 1, erster[1], Material.AIR);
+        assertFalse(hand().stehtPlatzgruen(plan, gruen, welt),
+                "ohne den ersten Stamm steht es nicht mehr");
+
+        // UND OHNE GRUEN IN DER DATEI ist nichts zu setzen - also steht alles. Sonst
+        // liefe jeder Start ueber den ganzen Platz, um nichts zu tun.
+        assertTrue(hand().stehtPlatzgruen(plan, Platzgruen.ohneGruen(),
+                new Kartengriff()), "ohne Eintrag gibt es nichts zu setzen");
+    }
+
+
+    /**
+     * Derselbe Bau an einer Stelle, an der kein Schornstein steht.
+     *
+     * <p>Gesucht und nicht gerechnet: Verschoben wird in Schritten, bis
+     * {@link Bauplan#schornstein} nichts mehr liefert. Die Form bleibt gleich, also
+     * bleibt auch die Dachflaeche gleich - nur der Schornstein fehlt.
+     */
+    private static Platzhalterbau gleichOhneSchornstein(Platzhalterbau bau) {
+        Quader q = bau.bereich();
+        for (int schritt = 1; schritt <= 64; schritt++) {
+            Platzhalterbau versucht = new Platzhalterbau(bau.schluessel(),
+                    new Quader(q.vonX() + schritt, q.vonY(), q.vonZ(),
+                            q.bisX() + schritt, q.bisY(), q.bisZ()),
+                    bau.tuer(), bau.stil(), bau.dach());
+            if (Bauplan.schornstein(versucht) == null) {
+                return versucht;
+            }
+        }
+        throw new AssertionError("in 64 Schritten keine Stelle ohne Schornstein - dann"
+                + " traegt JEDES Haus einen, und SCHORNSTEIN_TAKT wirkt nicht");
     }
 
 }

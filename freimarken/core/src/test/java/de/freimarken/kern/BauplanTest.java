@@ -1,14 +1,19 @@
 package de.freimarken.kern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -42,37 +47,73 @@ class BauplanTest {
     }
 
     @Test
-    @DisplayName("Giebelstufen und Dachansatz folgen aus der FRONT")
+    @DisplayName("Giebelstufen und Dachansatz folgen aus der DACHBREITE")
     void giebelUndDachansatz() {
         Platzhalterbau bau = haus();
 
         assertEquals(7, bau.front(), "sieben breit zur Gasse");
         assertEquals(11, bau.tiefe(), "elf tief");
         assertEquals(14, bau.hoehe());
-        // STEIL: (7 - 1) / 2 = 3 Einzuege, je DACHNEIGUNG Ebenen, plus die Firstreihe.
+        // 45 GRAD: (7 - 1) / 2 = 3 Einzuege, je DACHNEIGUNG Ebenen, plus die
+        // Firstreihe. Das Dach faellt ueber die DACHBREITE, also die kuerzere der
+        // beiden waagerechten Spannen - hier ist das die Front.
+        assertEquals(7, Bauplan.dachbreite(bau), "die Front ist die kuerzere");
+        assertFalse(Bauplan.traufstaendig(bau), "also giebelstaendig");
         assertEquals(3 * Bauplan.DACHNEIGUNG + 1, Bauplan.giebelstufen(bau));
-        assertEquals(7, Bauplan.giebelstufen(bau));
-        assertEquals(-55, Bauplan.dachansatz(bau), "-48 minus sieben Ebenen Dach");
-        // Und das Dach ist etwa die halbe Bauhoehe - dieselbe Proportion wie bei den
-        // Vorbildern, an denen die Neigung gemessen ist.
-        assertTrue(Bauplan.giebelstufen(bau) * 2 >= bau.hoehe(),
-                "ein Hansehaus hat mehr Dach als Wand");
+        assertEquals(4, Bauplan.giebelstufen(bau));
+        assertEquals(-52, Bauplan.dachansatz(bau), "-48 minus vier Ebenen Dach");
+        // DAS DACH IST EIN DRITTEL DER BAUHOEHE, nicht mehr als die Haelfte
+        // [berichtigt 24.11.2026]. Vorher stand hier "ein Hansehaus hat mehr Dach
+        // als Wand" - das war aus der Konstante abgeschrieben und nicht gemessen.
+        // An einem fremden Fachwerkhaus ausgemessen: fuenf Dachebenen bei neun
+        // Bloecken Front und dreizehn Ebenen Bauhoehe, also 38 Prozent. An Mojangs
+        // plains_butcher_shop_1: vier Dachebenen bei sieben Bloecken Front.
+        assertTrue(Bauplan.giebelstufen(bau) * 4 >= bau.hoehe(),
+                "ein Viertel der Bauhoehe muss das Dach mindestens sein");
+        assertTrue(Bauplan.giebelstufen(bau) * 2 <= bau.hoehe(),
+                "aber nie mehr als die Haelfte - sonst ist es ein Turm mit Hut");
 
         // DIE PROBE AUF DIE REGEL, nicht auf die Zahl: Ein breiteres Haus hat mehr
         // Stufen. Ohne das waere die Rechnung auch mit einer festen 3 gruen.
         Platzhalterbau rathaus = new Platzhalterbau("bundesratshaus",
                 new Quader(64, -61, 26, 80, -46, 38), Richtung.NORD,
                 Baustil.BACKSTEIN, Dachart.KUPFER);
-        assertEquals(17, rathaus.front(), "traufstaendig und breit");
-        // HIER GREIFT DIE DECKELUNG: Steil waeren 8 * 2 + 1 = 17 Ebenen Dach, und das
-        // Haus ist nur 16 hoch. Es bleibt bei dem, was neben Boden, Sockel und einer
-        // Ebene Wand uebrig ist - aber nie weniger als die 8 Einzuege plus First, sonst
-        // waere das Dach oben offen.
-        assertEquals(16 - 1 - Bauplan.SOCKELEBENEN - 1, Bauplan.giebelstufen(rathaus));
-        assertEquals(11, Bauplan.giebelstufen(rathaus));
-        assertEquals(-57, Bauplan.dachansatz(rathaus));
-        assertEquals(8, Bauplan.dacheinzug(rathaus, Bauplan.giebelstufen(rathaus)),
+        assertEquals(17, rathaus.front(), "breit");
+        assertEquals(13, rathaus.tiefe(), "und weniger tief");
+        // TRAUFSTAENDIG, und das ist der Fund vom 24.11.2026: Vorher fiel das Dach
+        // immer ueber die FRONT. Bei diesem Haus waeren das 8 Einzuege und damit
+        // 9 Dachebenen bei 11 verfuegbaren - und mit der alten Untergrenze sogar 17,
+        // weshalb der Dachansatz unter den Boden rutschte und das Haus NUR aus
+        // Giebelstufen bestand: keine Wand, keine Tuer, kein Fenster. Jetzt faellt
+        // das Dach ueber die kuerzere Spanne, also ueber die Tiefe.
+        assertTrue(Bauplan.traufstaendig(rathaus), "breiter als tief");
+        assertEquals(13, Bauplan.dachbreite(rathaus), "die Tiefe faellt");
+        assertEquals(7, Bauplan.giebelstufen(rathaus), "(13 - 1) / 2 + 1");
+        assertEquals(-53, Bauplan.dachansatz(rathaus));
+        assertTrue(Bauplan.dachansatz(rathaus) > rathaus.bereich().vonY(),
+                "der Dachansatz muss IM Quader liegen - sonst ist das Haus nur Dach");
+        assertEquals(6, Bauplan.dacheinzug(rathaus, Bauplan.giebelstufen(rathaus)),
                 "die oberste Ebene traegt den First, also den vollen Einzug");
+        // UND BREITER HEISST MEHR STUFEN: dieselbe Hoehe, groessere Dachbreite.
+        Platzhalterbau breiter = new Platzhalterbau("breiter",
+                new Quader(0, -61, 0, 16, -46, 20), Richtung.NORD,
+                Baustil.BACKSTEIN, Dachart.KUPFER);
+        assertEquals(17, Bauplan.dachbreite(breiter), "jetzt faellt die Front");
+        assertTrue(Bauplan.giebelstufen(breiter) > Bauplan.giebelstufen(rathaus),
+                "breiteres Dach, mehr Stufen: " + Bauplan.giebelstufen(breiter)
+                        + " gegen " + Bauplan.giebelstufen(rathaus));
+
+        // DIE DECKELUNG greift bei einem Bau, der fuer seine Breite zu NIEDRIG ist:
+        // Neun breit braeuchte fuenf Dachebenen, acht Hoehe laesst nur drei.
+        Platzhalterbau niedrig = new Platzhalterbau("niedrig",
+                new Quader(0, -61, 0, 8, -54, 10), Richtung.NORD,
+                Baustil.BACKSTEIN, Dachart.ZIEGEL);
+        assertEquals(8, niedrig.hoehe(), "acht Ebenen");
+        assertEquals(8 - 1 - Bauplan.SOCKELEBENEN - 1, Bauplan.giebelstufen(niedrig),
+                "was neben Boden, Sockel und einer Ebene Wand uebrig bleibt");
+        assertEquals(3, Bauplan.giebelstufen(niedrig));
+        assertTrue(Bauplan.dachansatz(niedrig) > niedrig.bereich().vonY(),
+                "auch hier liegt der Dachansatz im Quader");
     }
 
     @Test
@@ -189,10 +230,9 @@ class BauplanTest {
         assertEquals(11, gezaehlt.get(Bauplan.Stueck.FIRST),
                 "der First laeuft ueber die ganze Tiefe");
         // Es gibt Fachwerk, Gefach, Fenster, Giebel und Dach - keines davon leer.
-        for (Bauplan.Stueck stueck : new Bauplan.Stueck[]{Bauplan.Stueck.BALKEN,
-                Bauplan.Stueck.GEFACH, Bauplan.Stueck.FENSTER,
-                Bauplan.Stueck.GIEBELSTUFE, Bauplan.Stueck.DACH,
-                Bauplan.Stueck.DACHFUSS, Bauplan.Stueck.LUFT}) {
+        // JEDES Stueck der Aufzaehlung kommt in diesem einen Haus vor - DACHFUSS
+        // ist am 24.11.2026 entfallen, weil es bei 45 Grad nie auftreten kann.
+        for (Bauplan.Stueck stueck : Bauplan.Stueck.values()) {
             assertTrue(gezaehlt.getOrDefault(stueck, 0) > 0,
                     stueck + " kommt gar nicht vor: " + gezaehlt);
         }
@@ -211,18 +251,32 @@ class BauplanTest {
         assertTrue(zoneBis >= zoneVon,
                 "ohne Fachwerkzone prueft das Folgende nichts: " + zoneVon + ".."
                         + zoneBis);
-        for (int x = 48; x <= 58; x++) {
-            for (int y = zoneVon; y <= zoneBis; y++) {
+        // OHNE DIE BAENDER [berichtigt 24.11.2026]: Mit dem flacheren Dach ist die
+        // Zone laenger geworden und enthaelt jetzt ein durchlaufendes Balkenband mitten
+        // darin - jedes Geschoss wird oben von einem abgeschlossen. Ein Band ist
+        // Konstruktion und kein Muster, genau wie die Wandkrone, die oben schon
+        // ausgenommen ist. Gezaehlt werden also nur die Ebenen OHNE Band; erkannt wird
+        // ein Band daran, dass auch ZWISCHEN den Staendern ein Balken liegt.
+        int gezaehlteEbenen = 0;
+        for (int y = zoneVon; y <= zoneBis; y++) {
+            if (Bauplan.stueckBei(bau, 51, y, 3) == Bauplan.Stueck.BALKEN) {
+                continue;
+            }
+            gezaehlteEbenen++;
+            for (int x = 48; x <= 58; x++) {
                 for (int z = 3; z <= 9; z++) {
                     inDerZone.merge(Bauplan.stueckBei(bau, x, y, z), 1, Integer::sum);
                 }
             }
         }
+        // GEZAEHLT, nicht angenommen: Ohne Ebenen prueft das Folgende nichts.
+        assertTrue(gezaehlteEbenen >= 3,
+                "so viele bandfreie Fachwerkebenen: " + gezaehlteEbenen);
         int balken = inDerZone.getOrDefault(Bauplan.Stueck.BALKEN, 0);
         int gefach = inDerZone.getOrDefault(Bauplan.Stueck.GEFACH, 0);
         int fenster = inDerZone.getOrDefault(Bauplan.Stueck.FENSTER, 0);
         assertTrue(gefach > balken * 2,
-                "Gefach " + gefach + " muss die Balken " + balken + " deutlich"
+                "Gefach " + gefach + " muss die Staender " + balken + " deutlich"
                         + " ueberwiegen - sonst ist die Wand ein Gitter");
         assertTrue(fenster * 4 < gefach,
                 "Fenster " + fenster + " gegen Gefach " + gefach + " - ein Fensterband"
@@ -238,23 +292,33 @@ class BauplanTest {
         // waere eine andere.
         Platzhalterbau bau = haus();
 
-        // Dachansatz -55. Die Traufe (-54) liegt noch ohne Einzug auf der Wandkrone,
-        // und erst die dritte Dachebene (-52) zieht sich einen Block ein.
+        // Dachansatz -52, und das ist die Wandkrone. Die erste Dachebene (-51) liegt
+        // noch ohne Einzug darauf - sie ist die Traufe -, und jede weitere zieht sich
+        // um genau einen Block ein: 45 Grad.
         assertEquals(0, Bauplan.dacheinzug(bau, 1), "die Traufe zieht sich nicht ein");
-        assertEquals(0, Bauplan.dacheinzug(bau, 2));
-        assertEquals(1, Bauplan.dacheinzug(bau, 3));
+        // UND DANN JEDE EBENE UM GENAU EINEN BLOCK - das IST 45 Grad. Vorher zog
+        // sich nur jede zweite Ebene ein; daraus entstand die Stufung eines
+        // doppelt so steilen Daches.
+        assertEquals(1, Bauplan.dacheinzug(bau, 2));
+        assertEquals(2, Bauplan.dacheinzug(bau, 3));
+        assertEquals(3, Bauplan.dacheinzug(bau, 4),
+                "oben der volle Einzug - (7 - 1) / 2");
 
-        assertEquals(Bauplan.Stueck.GIEBELSTUFE, Bauplan.stueckBei(bau, 58, -52, 4),
+        // Die erste Dachebene liegt auf -51, denn der Dachansatz (-52) traegt die
+        // Wandkrone.
+        assertEquals(Bauplan.Stueck.GIEBELSTUFE, Bauplan.stueckBei(bau, 58, -51, 4),
                 "die Front traegt die Stufe");
-        assertEquals(Bauplan.Stueck.GIEBELSTUFE, Bauplan.stueckBei(bau, 48, -52, 8),
+        assertEquals(Bauplan.Stueck.GIEBELSTUFE, Bauplan.stueckBei(bau, 48, -51, 8),
                 "die Rueckwand auch - ein Haus hat zwei Giebel");
-        assertEquals(Bauplan.Stueck.LUFT, Bauplan.stueckBei(bau, 58, -52, 3),
+        assertEquals(Bauplan.Stueck.LUFT, Bauplan.stueckBei(bau, 58, -50, 3),
                 "was eingezogen ist, ist Luft");
-        assertEquals(Bauplan.Stueck.DACHFUSS, Bauplan.stueckBei(bau, 53, -52, 4),
-                "dazwischen liegt die Dachhaut - unten ein voller Block");
-        assertEquals(Bauplan.Stueck.DACH, Bauplan.stueckBei(bau, 53, -51, 4),
-                "und darueber die Treppe: zwei Ebenen je Einzug");
-        assertEquals(Bauplan.Stueck.LUFT, Bauplan.stueckBei(bau, 53, -52, 6),
+        // DIE DACHHAUT: je Ebene und Seite GENAU EINE Treppe - bei 45 Grad zieht
+        // sich jede Ebene um einen Block ein, also gibt es keinen Fuellblock mehr.
+        assertEquals(Bauplan.Stueck.DACH, Bauplan.stueckBei(bau, 53, -51, 3),
+                "auf der Traufebene die Treppe an der Kante");
+        assertEquals(Bauplan.Stueck.DACH, Bauplan.stueckBei(bau, 53, -50, 4),
+                "eine Ebene hoeher einen Block weiter innen");
+        assertEquals(Bauplan.Stueck.LUFT, Bauplan.stueckBei(bau, 53, -51, 6),
                 "und darunter der Dachboden");
 
         // Oben: EIN Block, und der ist First - ueber die ganze Tiefe.
@@ -270,7 +334,7 @@ class BauplanTest {
             for (int y = -48; y >= -54 && !bedeckt; y--) {
                 Bauplan.Stueck stueck = Bauplan.stueckBei(bau, 53, y, z);
                 bedeckt = stueck == Bauplan.Stueck.DACH
-                        || stueck == Bauplan.Stueck.DACHFUSS
+                        || stueck == Bauplan.Stueck.GIEBELSTUFE
                         || stueck == Bauplan.Stueck.FIRST;
             }
             assertTrue(bedeckt, "ueber z " + z + " ist das Dach offen - es regnet hinein");
@@ -278,10 +342,10 @@ class BauplanTest {
 
         // UND DIE TREPPE ZEIGT BERGAUF, zum First: an der einen Traufe nach Sueden, an
         // der anderen nach Norden. Gemessen an Mojangs Daechern.
-        assertEquals(Richtung.SUED, Bauplan.dachzeigt(bau, 53, -53, 3));
-        assertEquals(Richtung.NORD, Bauplan.dachzeigt(bau, 53, -53, 9));
+        assertEquals(Richtung.SUED, Bauplan.dachzeigt(bau, 53, -51, 3));
+        assertEquals(Richtung.NORD, Bauplan.dachzeigt(bau, 53, -51, 9));
         assertNull(Bauplan.dachzeigt(bau, 53, -52, 4),
-                "ein voller Dachfuss hat keine Richtung");
+                "die Wandkrone traegt das Dach, ist aber keines");
         assertNull(Bauplan.dachzeigt(bau, 53, -48, 6), "und der First auch nicht");
         assertNull(Bauplan.dachzeigt(bau, 53, -60, 3), "und die Wand erst recht nicht");
     }
@@ -354,7 +418,7 @@ class BauplanTest {
 
         // Die vier Ecksaeulen - auf jeder FACHWERKebene. Im steinernen Erdgeschoss
         // (-60 bis -58) gibt es keine hoelzernen Ecken.
-        for (int y = -57; y <= -55; y++) {
+        for (int y = -57; y <= -53; y++) {
             assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, 48, y, 3),
                     "Ecke auf y " + y);
             assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, 58, y, 9),
@@ -364,7 +428,7 @@ class BauplanTest {
                 "die Ecke des Erdgeschosses ist STEIN - ein Sockel hat kein Fachwerk");
         // Die Wandkrone am Dachansatz traegt das oberste Band: Darauf sitzt das Dach.
         for (int x = 49; x <= 57; x++) {
-            assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, x, -55, 3),
+            assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, x, -52, 3),
                     "oberstes Band auf x " + x);
         }
         // Stehende Balken im Takt VIER, von der Ecke gezaehlt: an der Laengsseite also
@@ -400,7 +464,7 @@ class BauplanTest {
                 "daneben das Gefach - ein Block Rahmen auf jeder Seite");
         assertEquals(Bauplan.Stueck.GEFACH, Bauplan.stueckBei(bau, 50, -57, 3),
                 "und unter dem Fenster auch");
-        assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, 50, -55, 3),
+        assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(bau, 50, -52, 3),
                 "darueber die Wandkrone - sie gewinnt ueber das Fenster, denn sie traegt"
                         + " das Dach");
         // IM STEINERNEN ERDGESCHOSS auf Augenhoehe: eine Ebene, derselbe Takt. Ein
@@ -462,11 +526,12 @@ class BauplanTest {
         // First. Ein Turm mit nur einer Dachebene haette gar keine Dachflaeche gehabt -
         // genau das war der Fehler, der am laufenden Server gefunden wurde.
         assertEquals(1 * Bauplan.DACHNEIGUNG + 1, Bauplan.giebelstufen(turm));
-        assertEquals(-49, Bauplan.dachansatz(turm));
+        assertEquals(-48, Bauplan.dachansatz(turm), "-46 minus zwei Ebenen Dach");
         assertEquals(1, Bauplan.dacheinzug(turm, 3), "oben der volle Einzug");
 
-        // Unter dem First liegt eine echte Dachflaeche - zwei Ebenen auf jeder Seite.
-        assertEquals(Bauplan.Stueck.DACHFUSS, Bauplan.stueckBei(turm, 70, -48, -4));
+        // Unter dem First liegt eine echte Dachflaeche - je Seite eine Treppe.
+        assertEquals(Bauplan.Stueck.BALKEN, Bauplan.stueckBei(turm, 70, -48, -4),
+                "auf dem Dachansatz liegt die Wandkrone");
         assertEquals(Bauplan.Stueck.DACH, Bauplan.stueckBei(turm, 70, -47, -4));
         assertEquals(Richtung.OST, Bauplan.dachzeigt(turm, 70, -47, -4),
                 "die Westtraufe steigt nach Osten, zum First");
@@ -648,7 +713,7 @@ class BauplanTest {
         // Naht Gefach- und Balkenbloecke als Scheiben behandeln.
         assertNull(Bauplan.fensterachse(bau, 51, -56, 3), "Gefach");
         assertNull(Bauplan.fensterachse(bau, 48, -56, 3), "Eckpfosten");
-        assertNull(Bauplan.fensterachse(bau, 50, -55, 3), "Wandkrone");
+        assertNull(Bauplan.fensterachse(bau, 50, -52, 3), "Wandkrone");
         assertNull(Bauplan.fensterachse(bau, 50, -60, 3), "Sockel");
         assertNull(Bauplan.fensterachse(bau, 53, -61, 6), "Fussboden");
         assertNull(Bauplan.fensterachse(bau, 53, -48, 6), "First");
@@ -705,15 +770,15 @@ class BauplanTest {
 
         // Die Wandkrone am Dachansatz liegt: in der Nordwand entlang x, in der Westwand
         // entlang z.
-        assertEquals(Richtung.OST, Bauplan.balkenachse(bau, 52, -55, 3));
-        assertEquals(Richtung.OST, Bauplan.balkenachse(bau, 52, -55, 9));
-        assertEquals(Richtung.SUED, Bauplan.balkenachse(bau, 48, -55, 6));
-        assertEquals(Richtung.SUED, Bauplan.balkenachse(bau, 58, -55, 5));
+        assertEquals(Richtung.OST, Bauplan.balkenachse(bau, 52, -52, 3));
+        assertEquals(Richtung.OST, Bauplan.balkenachse(bau, 52, -52, 9));
+        assertEquals(Richtung.SUED, Bauplan.balkenachse(bau, 48, -52, 6));
+        assertEquals(Richtung.SUED, Bauplan.balkenachse(bau, 58, -52, 5));
 
         // DIE ECKE BLEIBT SENKRECHT: Dort laeuft der Eckpfosten durch, und ein liegender
         // Block in der Ecke zerschnitte ihn.
-        assertNull(Bauplan.balkenachse(bau, 48, -55, 3), "Ecke der Wandkrone");
-        assertNull(Bauplan.balkenachse(bau, 58, -55, 9), "und die gegenueber");
+        assertNull(Bauplan.balkenachse(bau, 48, -52, 3), "Ecke der Wandkrone");
+        assertNull(Bauplan.balkenachse(bau, 58, -52, 9), "und die gegenueber");
 
         // Stehende Balken: keine Achse, denn ihre Vorgabe ist schon richtig.
         assertNull(Bauplan.balkenachse(bau, 48, -57, 3), "Eckpfosten");
@@ -747,6 +812,229 @@ class BauplanTest {
                 }
             }
         }
+    }
+
+
+    @Test
+    @DisplayName("Jedes dritte Haus hat einen Schornstein - im Dach, nicht auf dem First")
+    void derSchornstein() {
+        // WARUM [24.11.2026]: Altfurt hat 265 Zeilenhaeuser, und ihre Daecher waren eine
+        // Folge gleicher Dreiecke. Ein Schornstein bricht die Firstlinie - der billigste
+        // Zug, der eine Dachlandschaft gewachsen aussehen laesst.
+
+        // 1. NICHT JEDES HAUS. Abgeschritten wird eine Reihe von Stellen; gezaehlt wird,
+        //    wie viele einen tragen.
+        int mit = 0;
+        int ohne = 0;
+        for (int x = 0; x < 60; x++) {
+            Platzhalterbau bau = new Platzhalterbau("probe", new Quader(x, -61, 0,
+                    x + 8, -45, 10), Richtung.NORD, Baustil.BACKSTEIN, Dachart.ZIEGEL);
+            if (Bauplan.schornstein(bau) == null) {
+                ohne++;
+            } else {
+                mit++;
+            }
+        }
+        assertEquals(60, mit + ohne, "sechzig Stellen abgeschritten");
+        assertTrue(mit > 0, "es gibt Schornsteine: " + mit);
+        assertTrue(ohne > mit, "aber die Mehrheit hat keinen: " + mit + " von 60");
+
+        // 2. ER LIEGT GANZ IM HAUSQUADER. Das ist die Zusage, die das Setzen umkehrbar
+        //    haelt: Wer ein Haus neu setzt, bekaeme sonst den Schornstein des alten dazu.
+        //    Der erste Entwurf setzte ihn AUF den First und zwei Ebenen darueber.
+        int geprueft = 0;
+        for (int x = 0; x < 60; x++) {
+            for (int tiefe : new int[] {9, 10, 11}) {
+                Platzhalterbau bau = new Platzhalterbau("probe", new Quader(x, -61, 0,
+                        x + 8, -45, tiefe - 1), Richtung.NORD, Baustil.BACKSTEIN,
+                        Dachart.ZIEGEL);
+                Quader schornstein = Bauplan.schornstein(bau);
+                if (schornstein == null) {
+                    continue;
+                }
+                assertTrue(bau.bereich().enthaelt(schornstein.vonX(), schornstein.vonY(),
+                                schornstein.vonZ()),
+                        "der Fuss liegt im Quader: " + schornstein.alsText());
+                assertTrue(bau.bereich().enthaelt(schornstein.bisX(), schornstein.bisY(),
+                                schornstein.bisZ()),
+                        "und die Krone auch: " + schornstein.alsText());
+                // EIN BLOCK GRUNDFLAeCHE.
+                assertEquals(schornstein.vonX(), schornstein.bisX(), "ein Block breit");
+                assertEquals(schornstein.vonZ(), schornstein.bisZ(), "ein Block tief");
+                // SEINE KRONE LIEGT AUF FIRSTHOEHE.
+                assertEquals(bau.bereich().bisY(), schornstein.bisY(),
+                        "die Krone auf Firsthoehe");
+                // UND SEIN FUSS UEBER DEM DACHANSATZ - er sitzt im Dach, nicht in der
+                // Wand.
+                assertTrue(schornstein.vonY() > Bauplan.dachansatz(bau),
+                        "der Fuss sitzt im Dach: " + schornstein.vonY() + " gegen "
+                                + Bauplan.dachansatz(bau));
+                geprueft++;
+            }
+        }
+        assertTrue(geprueft >= 20, "so viele Schornsteine geprueft: " + geprueft);
+
+        // 3. ER STEHT NEBEN DEM FIRST, nicht darauf und nicht an der Traufe.
+        Platzhalterbau breit = new Platzhalterbau("breit", new Quader(0, -61, 0,
+                8, -45, 10), Richtung.NORD, Baustil.BACKSTEIN, Dachart.ZIEGEL);
+        if (Bauplan.schornstein(breit) == null) {
+            breit = new Platzhalterbau("breit", new Quader(1, -61, 0,
+                    9, -45, 10), Richtung.NORD, Baustil.BACKSTEIN, Dachart.ZIEGEL);
+        }
+        assertNotNull(Bauplan.schornstein(breit), "eine Stelle mit Schornstein gefunden");
+        Quader sch = Bauplan.schornstein(breit);
+        // DIE FALLENDE ACHSE ist bei diesem Bau die FRONT (9 breit, 11 tief).
+        assertFalse(Bauplan.traufstaendig(breit), "giebelstaendig: tiefer als breit");
+        assertEquals(9, Bauplan.dachbreite(breit), "die Front faellt");
+        int mitte = (breit.bereich().vonX() + breit.bereich().bisX()) / 2;
+        int abstand = Math.abs(sch.vonX() - mitte);
+        assertTrue(abstand >= 1, "nicht auf dem First");
+        assertTrue(abstand <= (Bauplan.dachbreite(breit) - 1) / 2 - 1,
+                "und nicht an der Traufe: Abstand " + abstand);
+        // DER ABSTAND IST DIE HOEHE, um die er heraussteht - 45 Grad.
+        assertEquals(abstand, sch.bisY() - sch.vonY(),
+                "bei 45 Grad faellt das Dach je Block um eine Ebene");
+
+        // 4. EIN SCHMALES DACH TRAEGT KEINEN: Bei Dachbreite drei bleibt zwischen First
+        //    und Traufe keine Stelle.
+        for (int x = 0; x < 30; x++) {
+            Platzhalterbau schmal = new Platzhalterbau("schmal", new Quader(x, -61, 0,
+                    x + 2, -50, 8), Richtung.NORD, Baustil.BACKSTEIN, Dachart.ZIEGEL);
+            assertEquals(3, Bauplan.dachbreite(schmal), "drei breit");
+            assertNull(Bauplan.schornstein(schmal),
+                    "ein Dach von drei Bloecken traegt keinen Schornstein, bei x " + x);
+        }
+
+        // 5. BEIDE DACHSEITEN UND VERSCHIEDENE STELLEN LAENGS DES FIRSTES - sonst stehen
+        //    alle Schornsteine einer Zeile an derselben Stelle, und das Auge liest wieder
+        //    ein Raster.
+        Set<Integer> seiten = new HashSet<>();
+        Set<Integer> laengs = new HashSet<>();
+        for (int x = 0; x < 120; x++) {
+            Platzhalterbau bau = new Platzhalterbau("probe", new Quader(x, -61, 0,
+                    x + 8, -45, 10), Richtung.NORD, Baustil.BACKSTEIN, Dachart.ZIEGEL);
+            Quader einer = Bauplan.schornstein(bau);
+            if (einer == null) {
+                continue;
+            }
+            int m = (bau.bereich().vonX() + bau.bereich().bisX()) / 2;
+            seiten.add(Integer.signum(einer.vonX() - m));
+            laengs.add(einer.vonZ() - bau.bereich().vonZ());
+        }
+        assertEquals(2, seiten.size(),
+                "er steht auf BEIDEN Dachhaelften: " + seiten);
+        assertTrue(laengs.size() >= 3,
+                "und an verschiedenen Stellen laengs des Firstes: " + laengs);
+
+        // 6. OHNE BAU EINE KLAGE.
+        assertThrows(IllegalArgumentException.class, () -> Bauplan.schornstein(null));
+    }
+
+
+    @Test
+    @DisplayName("Das Haus hat Geschossdecken und einen Treppenschacht")
+    void dieGeschossdecken() {
+        // WARUM [24.11.2026]: Die 265 Zeilenhaeuser Altfurts waren innen ein leerer
+        // Schacht von zwoelf bis zwanzig Ebenen. Von aussen unsichtbar; wer eine Tuer
+        // aufmachte, stand in einem Turm.
+        // ZWANZIG EBENEN - das hoechste Mass der Stadt, damit mehrere Geschosse
+        // uebereinander liegen. Bei siebzehn bleiben nur zwei Decken, und dann prueft
+        // der Abstand zwischen ihnen nichts.
+        Platzhalterbau bau = new Platzhalterbau("probe",
+                new Quader(0, -61, 0, 8, -42, 10), Richtung.NORD,
+                Baustil.BACKSTEIN, Dachart.ZIEGEL);
+        assertEquals(20, bau.hoehe(), "zwanzig Ebenen");
+
+        // 1. DIE DECKE LIEGT, WO AUSSEN DAS BAND SITZT. Abgeschritten wird eine innere
+        //    Spalte von unten nach oben; auf jeder Hoehe muss Decke und Band
+        //    uebereinstimmen. Das ist die Zusage, die EINE Hoehenrechnung festhaelt -
+        //    eine zweite liefe irgendwann auseinander.
+        int innenX = 4;
+        int innenZ = 5;
+        int decken = 0;
+        int luft = 0;
+        for (int y = bau.bereich().vonY() + 1; y <= Bauplan.dachansatz(bau); y++) {
+            Bauplan.Stueck innen = Bauplan.stueckBei(bau, innenX, y, innenZ);
+            // DIE WAND AUF DERSELBEN HOEHE: der liegende Balken, also das Band.
+            Bauplan.Stueck wand = Bauplan.stueckBei(bau, bau.bereich().vonX(), y,
+                    innenZ);
+            if (innen == Bauplan.Stueck.DECKE) {
+                decken++;
+                assertEquals(Bauplan.Stueck.BALKEN, wand,
+                        "auf Hoehe " + y + " liegt innen eine Decke, aussen muss das"
+                                + " Band sitzen");
+            } else {
+                assertEquals(Bauplan.Stueck.LUFT, innen,
+                        "innen ist nur Decke oder Luft, auf Hoehe " + y);
+                luft++;
+            }
+        }
+        assertTrue(decken >= 3, "so viele Decken: " + decken);
+        assertTrue(luft > decken * 2, "zwischen den Decken ist Raum: " + luft
+                + " Ebenen Luft gegen " + decken + " Decken");
+
+        // 2. DER ABSTAND IST DIE GESCHOSSHOEHE - gemessen und nicht behauptet.
+        List<Integer> hoehen = new ArrayList<>();
+        for (int y = bau.bereich().vonY() + 1; y <= Bauplan.dachansatz(bau); y++) {
+            if (Bauplan.stueckBei(bau, innenX, y, innenZ) == Bauplan.Stueck.DECKE) {
+                hoehen.add(y);
+            }
+        }
+        // DER LETZTE ABSTAND IST KUERZER ERLAUBT: Die oberste Decke ist der Dachboden,
+        // und der sitzt auf der WANDKRONE - also dort, wo das Dach ansetzt, und nicht
+        // dort, wo der Geschosstakt hinkommt. Gemessen an diesem Haus: Decken auf -54,
+        // -50 und -47, also 4 und 3.
+        for (int i = 1; i < hoehen.size() - 1; i++) {
+            assertEquals(Bauplan.GESCHOSSHOEHE, hoehen.get(i) - hoehen.get(i - 1),
+                    "zwischen zwei Wohngeschossen liegt ein Geschoss");
+        }
+        int letzter = hoehen.get(hoehen.size() - 1) - hoehen.get(hoehen.size() - 2);
+        assertTrue(letzter >= 1 && letzter <= Bauplan.GESCHOSSHOEHE,
+                "das Dachgeschoss ist hoechstens ein Geschoss hoch: " + letzter);
+        // DIE OBERSTE IST DER DACHBODEN, auf der Wandkrone.
+        assertEquals(Bauplan.dachansatz(bau), hoehen.get(hoehen.size() - 1),
+                "die oberste Decke ist der Dachboden");
+
+        // 3. DER TREPPENSCHACHT GEHT DURCH ALLE DECKEN. Ohne das fuehrte die Leiter
+        //    gegen einen Fussboden.
+        assertTrue(Bauplan.imSchacht(bau, 1, 1), "der Schacht liegt neben der Ecke");
+        assertFalse(Bauplan.imSchacht(bau, innenX, innenZ), "und nicht im Zimmer");
+        int sprossen = 0;
+        for (int y = bau.bereich().vonY() + 1; y <= Bauplan.dachansatz(bau); y++) {
+            assertEquals(Bauplan.Stueck.LEITER, Bauplan.stueckBei(bau, 1, y, 1),
+                    "auf Hoehe " + y + " muss im Schacht eine Sprosse sein");
+            assertEquals(Richtung.OST, Bauplan.leiterzeigt(bau, 1, y, 1),
+                    "und sie zeigt von der Wand weg");
+            sprossen++;
+        }
+        assertEquals(luft + decken, sprossen,
+                "die Leiter reicht so weit wie das Innere hoch ist");
+
+        // 4. UNTEN BLEIBT DER FUSSBODEN: Eine Sprosse statt des Bodens waere ein Loch.
+        assertEquals(Bauplan.Stueck.BODEN,
+                Bauplan.stueckBei(bau, 1, bau.bereich().vonY(), 1),
+                "die unterste Ebene bleibt Fussboden");
+        // UND OBEN DAS DACH: Ueber dem Dachansatz hat der Giebel das Wort.
+        assertNull(Bauplan.leiterzeigt(bau, 1, Bauplan.dachansatz(bau) + 1, 1),
+                "ueber dem Dachansatz keine Leiter");
+
+        // 5. EIN ZU KLEINES HAUS BEKOMMT KEINEN SCHACHT: Bei drei Bloecken Aussenmass
+        //    waere die Spalte neben der Ecke die einzige innere.
+        Platzhalterbau winzig = new Platzhalterbau("winzig",
+                new Quader(0, -61, 0, 2, -50, 8), Richtung.NORD,
+                Baustil.BACKSTEIN, Dachart.ZIEGEL);
+        assertEquals(3, winzig.front(), "drei breit");
+        assertFalse(Bauplan.imSchacht(winzig, 1, 1),
+                "ein Haus von drei Bloecken Breite bekommt keinen Schacht");
+
+        // 6. OHNE BAU EINE KLAGE.
+        assertThrows(IllegalArgumentException.class, () -> Bauplan.imSchacht(null, 0, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> Bauplan.leiterzeigt(null, 0, 0, 0));
+        // UND AUSSERHALB DES BAUS keine Leiter, aber auch kein Wurf - gefragt wird von
+        // einer Schleife, die den Quader abschreitet, und die kommt nie daneben; eine
+        // Probe aber schon.
+        assertNull(Bauplan.leiterzeigt(bau, 100, -50, 100), "ausserhalb");
     }
 
 }

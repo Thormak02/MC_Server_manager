@@ -2,6 +2,8 @@ package de.freimarken.paper;
 
 import de.freimarken.kern.Chunkfeld;
 import de.freimarken.kern.Stadtplan;
+import de.freimarken.kern.Vorlage;
+import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.configuration.ConfigurationSection;
 
@@ -18,7 +20,7 @@ import org.bukkit.configuration.ConfigurationSection;
  * Quartier waere wieder ein Ring um einen Platz; zwei sind eine Stadt mit einer Gasse
  * darin, die nicht am Rand liegt.
  */
-record Stadtliste(boolean bauen, int quartiere) {
+record Stadtliste(boolean bauen, int quartiere, List<String> vorlagen) {
 
     /** Wo die Einstellungen stehen. */
     static final String PFAD = "bauten.stadt";
@@ -28,6 +30,9 @@ record Stadtliste(boolean bauen, int quartiere) {
 
     /** Der Schluessel der Quartierszahl. */
     static final String SCHLUESSEL_QUARTIERE = "quartiere";
+
+    /** Der Schluessel der Vorlagenliste. */
+    static final String SCHLUESSEL_VORLAGEN = "vorlagen";
 
     /** Ab Werk entsteht die Stadt mit zwei Quartieren. */
     static final boolean BAUEN_AB_WERK = true;
@@ -39,23 +44,25 @@ record Stadtliste(boolean bauen, int quartiere) {
      * Mehr Quartiere als das wird nicht gebaut - unabhaengig davon, wie gross die
      * Welt ist.
      *
-     * <p><b>GEMESSEN am 23.11.2026</b> und nicht gegriffen: Bei zehn Quartieren legt
-     * der Plan 3347 Haeuser und setzt mit dem Pflaster 3 657 026 Bloecke. Gemessen
-     * wurden 214 271 Bloecke in einer Sekunde; zehn Quartiere halten den Server
-     * also eine gute Viertelminute an. Das ist die Grenze des Zumutbaren, und sie
-     * hat nichts mit der Weltgroesse zu tun.
+     * <p><b>NEU GEMESSEN am 23.11.2026</b>, nachdem die Plaetze auf 81 x 81 wuchsen
+     * und der Kern zum Rahmen wurde: Bei NEUN Quartieren legt der Plan 3295 Haeuser
+     * und setzt mit dem Pflaster 3 598 001 Bloecke. Gemessen wurden rund 200 000
+     * Bloecke in einer Sekunde; neun Quartiere halten den Server also eine gute
+     * Viertelminute an. Das ist die Grenze des Zumutbaren.
      *
-     * <p>Die ZWEITE Grenze ist die Weltkante, und die kommt aus {@code welten:} -
-     * siehe {@link #ausKonfiguration}. Beide gelten, und sie klagen verschieden:
-     * Diese hier sagt "zu viel Arbeit", jene "kein Platz".
+     * <p>Und sie faellt mit der Weltgrenze zusammen: Neun Quartiere reichen bis
+     * x 374, zehn bis 401 - und Altfurt hat {@code kante: 800}, also bis 400. Die
+     * zweite Grenze kommt aus {@code welten:} und klagt anders: Diese hier sagt
+     * "zu viel Arbeit", jene "kein Platz".
      */
-    static final int HOECHSTENS_QUARTIERE = 10;
+    static final int HOECHSTENS_QUARTIERE = 9;
 
     Stadtliste {
         if (quartiere < 1) {
             throw new IllegalArgumentException(
                     "Eine Stadt braucht mindestens ein Quartier, nicht " + quartiere);
         }
+        vorlagen = vorlagen == null ? List.of() : List.copyOf(vorlagen);
     }
 
     /**
@@ -98,16 +105,18 @@ record Stadtliste(boolean bauen, int quartiere) {
                 wurzel == null ? null : wurzel.getConfigurationSection(PFAD);
         boolean bauen = BAUEN_AB_WERK;
         int quartiere = QUARTIERE_AB_WERK;
+        List<String> vorlagen = List.of();
         if (abschnitt != null) {
             bauen = abschnitt.getBoolean(SCHLUESSEL_BAUEN, BAUEN_AB_WERK);
             if (abschnitt.contains(SCHLUESSEL_QUARTIERE)) {
                 quartiere = geleseneZahl(abschnitt, klagen);
             }
+            vorlagen = geleseneVorlagen(abschnitt, klagen);
         }
         if (!bauen) {
             // Abgeschaltet: Ueber den Platz einer Stadt, die nicht entsteht, ist
             // nichts zu klagen.
-            return new Stadtliste(false, quartiere);
+            return new Stadtliste(false, quartiere, vorlagen);
         }
         // DIE WELTKANTE als zweite, eigene Grenze - mit eigener Klage.
         while (quartiere > 1 && !passtInDieWelt(quartiere, kante)) {
@@ -123,9 +132,39 @@ record Stadtliste(boolean bauen, int quartiere) {
                     + " Altfurt (Kante " + kante + ") - es wird keine Stadt gebaut."
                     + " Vergroessere welten.<welt>.kante oder stelle " + PFAD + "."
                     + SCHLUESSEL_BAUEN + ": false ein.");
-            return new Stadtliste(false, QUARTIERE_AB_WERK);
+            return new Stadtliste(false, QUARTIERE_AB_WERK, vorlagen);
         }
-        return new Stadtliste(bauen, quartiere);
+        return new Stadtliste(bauen, quartiere, vorlagen);
+    }
+
+    /**
+     * Die eingetragenen Vorlagennamen - geprueft auf die Form eines Dateinamens.
+     *
+     * <p>Geprueft wird hier nur der NAME, nicht die Datei: Ob es sie gibt und wie gross
+     * sie ist, weiss erst die Strukturverwaltung, und die braucht einen laufenden
+     * Server. Ein Name mit einem Schraegstrich oder einem Punkt darin fuehrte aus dem
+     * Ordner heraus - dieselbe Falle wie beim Weltnamen, und darum dieselbe Pruefung.
+     */
+    private static List<String> geleseneVorlagen(ConfigurationSection abschnitt,
+            List<String> klagen) {
+        List<String> raus = new ArrayList<>();
+        for (String name : abschnitt.getStringList(SCHLUESSEL_VORLAGEN)) {
+            String sauber = name == null ? "" : name.trim();
+            if (!sauber.matches(de.freimarken.kern.Platzhalterbau.MUSTER)) {
+                klagen.add(PFAD + "." + SCHLUESSEL_VORLAGEN + " nennt \"" + name
+                        + "\" - erlaubt sind Kleinbuchstaben, Ziffern, Bindestrich und"
+                        + " Unterstrich, denn daraus wird ein Dateiname. Uebersprungen.");
+                continue;
+            }
+            if (raus.contains(sauber)) {
+                klagen.add(PFAD + "." + SCHLUESSEL_VORLAGEN + " nennt \"" + sauber
+                        + "\" zweimal. Einmal genuegt - oefter gesetzt wird eine Vorlage"
+                        + " ohnehin.");
+                continue;
+            }
+            raus.add(sauber);
+        }
+        return raus;
     }
 
     /** Die eingetragene Zahl, geprueft gegen die Arbeitsgrenze. */
@@ -166,12 +205,23 @@ record Stadtliste(boolean bauen, int quartiere) {
 
     /** Die Einstellungen ab Werk. */
     static Stadtliste abWerk() {
-        return new Stadtliste(BAUEN_AB_WERK, QUARTIERE_AB_WERK);
+        return new Stadtliste(BAUEN_AB_WERK, QUARTIERE_AB_WERK, List.of());
     }
 
     /** Der Plan zu diesen Einstellungen, oder {@code null}, wenn nicht gebaut wird. */
     Stadtplan plan() {
-        return bauen ? new Stadtplan(quartiere) : null;
+        return plan(List.of());
+    }
+
+    /**
+     * Der Plan mit den Grundrissen der Vorlagen.
+     *
+     * <p>Die MASSE kommen von aussen herein und werden nicht hier geholt: Dieser
+     * Leser liest die {@code config.yml}, und die kennt nur Namen. Wie gross eine
+     * gespeicherte Struktur ist, weiss die Strukturverwaltung des Servers.
+     */
+    Stadtplan plan(List<Vorlage> masse) {
+        return bauen ? new Stadtplan(quartiere, masse) : null;
     }
 
     /** Die Zeile fuer den Startbericht. */
@@ -184,6 +234,8 @@ record Stadtliste(boolean bauen, int quartiere) {
         Stadtplan plan = new Stadtplan(quartiere);
         return "Altfurt wird gerechnet: " + quartiere + " Quartiere, Mauer auf Ring "
                 + plan.mauerVon() + ", Kante " + (2 * plan.aussenRing() + 1)
-                + " Bloecke, " + plan.haeuser().size() + " Zeilenhaeuser.";
+                + " Bloecke, " + plan.haeuser().size() + " Zeilenhaeuser. Vorlagen: "
+                + (vorlagen.isEmpty() ? "keine - die Haeuser werden gerechnet"
+                        : String.join(", ", vorlagen));
     }
 }

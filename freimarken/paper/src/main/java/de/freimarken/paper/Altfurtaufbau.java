@@ -17,6 +17,7 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.block.Sign;
 import org.bukkit.block.data.Bisected;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Directional;
 import org.bukkit.block.data.MultipleFacing;
 import org.bukkit.block.data.Orientable;
 import org.bukkit.block.data.type.Door;
@@ -114,6 +115,17 @@ final class Altfurtaufbau {
          */
         void setzeBalkenachse(int x, int y, int z, Richtung achse, Material art);
 
+        /**
+         * Setzt eine Leiter, die in diese Richtung ZEIGT.
+         *
+         * <p>Eine Leiter ohne Blockdaten haengt an der Vorgabeseite - also an der
+         * falschen Wand. Dieselbe Falle wie bei Dachtreppe, Glasscheibe und liegendem
+         * Balken, und darum derselbe Weg: eine eigene Naht.
+         *
+         * @param zeigt die Richtung, in die der Kletterer schaut - VON der Wand weg
+         */
+        void setzeLeiter(int x, int y, int z, Richtung zeigt, Material art);
+
         /** Der Griff auf die echte Welt. */
         record AufDerWelt(World welt) implements Feingriff {
 
@@ -209,6 +221,18 @@ final class Altfurtaufbau {
                 scheibe.setFace(blockseite(achse), true);
                 scheibe.setFace(blockseite(Bauplan.gegenrichtung(achse)), true);
                 welt.getBlockAt(x, y, z).setBlockData(scheibe, false);
+            }
+
+            @Override
+            public void setzeLeiter(int x, int y, int z, Richtung zeigt, Material art) {
+                BlockData daten = art.createBlockData();
+                if (!(daten instanceof Directional leiter)) {
+                    // Kein Wurf, dieselbe Linie wie bei der Tuer: Das Haus steht dann,
+                    // nur die Leiter nicht.
+                    return;
+                }
+                leiter.setFacing(blockseite(zeigt));
+                welt.getBlockAt(x, y, z).setBlockData(leiter, false);
             }
 
             @Override
@@ -309,7 +333,7 @@ final class Altfurtaufbau {
      * <p>Passt die Struktur nicht in den Quader, wird sie NICHT gesetzt: Ein Haus, das
      * ueber seinen Quader hinausragt, steht in der Nachbarwand oder im Ankunftsweg - und
      * genau dagegen ist jeder Quader geprueft. Stattdessen rechnet der Bauplan, und die
-     * Klage nennt beide Maße.
+     * Klage nennt beide MaÃŸe.
      */
     Ergebnis baue(Platzhalterbau bau, Weltgriff griff, Feingriff fein,
             List<String> zeilen, Strukturgriff strukturen) {
@@ -453,7 +477,9 @@ final class Altfurtaufbau {
         for (int x = umriss.vonX(); x <= umriss.bisX(); x++) {
             for (int z = umriss.vonZ(); z <= umriss.bisZ(); z++) {
                 Stadtplan.Lage lage = plan.lageBei(x, z);
-                Material boden = pflaster.block(lage);
+                // DIE STELLE GEHOERT ZUR FRAGE: Das Pflaster ist eine Mischung,
+                // und welcher ihrer Bloecke hier liegt, haengt an x und z.
+                Material boden = pflaster.block(lage, x, z);
                 if (boden == null) {
                     // Jenseits der Mauer: Dort hat der Weltgenerator gearbeitet.
                     continue;
@@ -473,6 +499,204 @@ final class Altfurtaufbau {
         return new Pflasterung(gesetzt, uebersprungen);
     }
 
+    /**
+     * Was auf der Platzkante gewachsen und gegraben wurde.
+     *
+     * @param baeume   wie viele Baeume stehen
+     * @param brunnen  wie viele Brunnen stehen
+     * @param bloecke  wie viele Bloecke dafuer gesetzt wurden
+     */
+    record Platzkante(int baeume, int brunnen, long bloecke) {
+    }
+
+    /**
+     * Ob das Gruen der Platzkante schon steht - gefragt am ERSTEN Standort.
+     *
+     * <p><b>Warum es diese Frage gibt</b> [24.11.2026]: Ohne sie setzt jeder Start die
+     * Baeume neu. Wer einen faellt, findet ihn nach dem naechsten Neustart wieder - und
+     * wer einen umpflanzt, findet zwei. Dieselbe Grenze wie bei
+     * {@link #istGepflastert} und {@link #stehtSchon}: Wer das Gruen neu setzen will,
+     * nimmt den Stamm am ersten Standort weg.
+     *
+     * <p><b>Gefragt wird die ganze MISCHUNG</b> und nicht ihr Block an dieser Stelle -
+     * aus demselben Grund wie beim Pflaster: Wer die Baumart umstellt, hat trotzdem eine
+     * bepflanzte Platzkante.
+     *
+     * <p>Der erste Standort wird GESUCHT und nicht gerechnet: Wo er liegt, haengt an der
+     * Streuung, und eine zweite Rechnung davon liefe irgendwann auseinander.
+     */
+    boolean stehtPlatzgruen(Stadtplan plan, Platzgruen gruen, Weltgriff griff) {
+        if (plan == null || gruen == null || griff == null) {
+            throw new IllegalArgumentException("Ohne Plan, Gruen und Welt gibt es keine"
+                    + " Antwort");
+        }
+        if (!gruen.stehtEtwas()) {
+            // NICHTS ZU SETZEN heisst: Es steht, was stehen soll. Sonst liefe jeder
+            // Start ueber den ganzen Platz, um nichts zu tun.
+            return true;
+        }
+        Quader umriss = plan.umriss();
+        for (int x = umriss.vonX(); x <= umriss.bisX(); x++) {
+            for (int z = umriss.vonZ(); z <= umriss.bisZ(); z++) {
+                Stadtplan.Kantenbau was = Stadtplan.kantenbauBei(x, z);
+                if (was == Stadtplan.Kantenbau.KEINER) {
+                    continue;
+                }
+                Material dort = griff.bei(x, Stadtplan.BODEN_Y + 1, z);
+                return was == Stadtplan.Kantenbau.BRUNNEN && gruen.brunnenMoeglich()
+                        ? dort == gruen.wasser()
+                        : gruen.stamm().contains(dort);
+            }
+        }
+        // KEIN STANDORT: Dann gibt es nichts zu setzen, und es steht alles.
+        return true;
+    }
+
+    /**
+     * Setzt die Baeume und Brunnen auf die Platzkante.
+     *
+     * <p><b>NACH dem Pflaster</b>: Der Stamm steht AUF dem Boden, und wer erst den Baum
+     * setzt und dann pflastert, pflastert ihm den Fuss weg. Die Standorte kommen aus
+     * {@link Stadtplan#kantenbauBei} - diese Klasse entscheidet nicht, WO etwas steht,
+     * sondern nur, WORAUS.
+     *
+     * <p><b>Ohne Physik, wie alles hier</b>: Ein Laubblock, der seine Nachbarn
+     * benachrichtigt, sucht einen Stamm in Reichweite und zerfaellt, wenn er ihn nicht
+     * findet - gesetzt wird von innen nach aussen, und waehrend des Setzens hat das Laub
+     * am Rand noch keinen. Mit {@code setze} faellt das weg.
+     *
+     * <p><b>Das Wasser ist ein Quellblock in einer Fassung</b>: Der Rand steht auf allen
+     * vier Seiten, also fliesst es nicht. Ohne Rand wuerde es sich ueber den ganzen
+     * Marktplatz ergiessen - darum setzt diese Methode einen Brunnen nur, wenn beides
+     * eingetragen ist, und sonst an seiner Stelle einen Baum.
+     */
+    Platzkante setzePlatzgruen(Stadtplan plan, Platzgruen gruen, Weltgriff griff,
+            List<Quader> unberuehrt) {
+        if (plan == null || gruen == null || griff == null || unberuehrt == null) {
+            throw new IllegalArgumentException("Ohne Plan, Gruen, Griff und Liste der"
+                    + " Handarbeit kann auf der Platzkante nichts wachsen");
+        }
+        if (!gruen.stehtEtwas()) {
+            return new Platzkante(0, 0, 0L);
+        }
+        int baeume = 0;
+        int brunnen = 0;
+        long bloecke = 0L;
+        Quader umriss = plan.umriss();
+        for (int x = umriss.vonX(); x <= umriss.bisX(); x++) {
+            for (int z = umriss.vonZ(); z <= umriss.bisZ(); z++) {
+                Stadtplan.Kantenbau was = Stadtplan.kantenbauBei(x, z);
+                if (was == Stadtplan.Kantenbau.KEINER) {
+                    continue;
+                }
+                // EIN BRUNNEN OHNE RAND WIRD EIN BAUM: Die Stelle bleibt besetzt, aber
+                // sie bleibt nicht leer. Ein Loch mitten in der Baumreihe sieht aus wie
+                // ein vergessener Standort.
+                if (was == Stadtplan.Kantenbau.BRUNNEN && gruen.brunnenMoeglich()) {
+                    bloecke += setzeBrunnen(gruen, griff, unberuehrt, x, z);
+                    brunnen++;
+                } else {
+                    bloecke += setzeBaum(gruen, griff, unberuehrt, x, z);
+                    baeume++;
+                }
+            }
+        }
+        return new Platzkante(baeume, brunnen, bloecke);
+    }
+
+    /**
+     * Ein Baum: ein Stamm und eine Laubkrone darum.
+     *
+     * <p>Die Krone ist keine Kugel, sondern vier Ebenen: zwei weite um die oberen
+     * Stammbloecke, eine engere darueber und ein Hut. Die Ecken der weiten Ebenen bleiben
+     * frei - ein voller Quader Laub sieht aus wie eine Kiste.
+     *
+     * <p>Die HOEHE streut um die eingetragene: Zwei gleich hohe Baeume nebeneinander
+     * verraten das Programm.
+     */
+    private long setzeBaum(Platzgruen gruen, Weltgriff griff, List<Quader> unberuehrt,
+            int x, int z) {
+        int hoehe = gruen.baumhoehe()
+                + Stadtplan.mischung(x, z, 3) - 1;
+        int fuss = Stadtplan.BODEN_Y + 1;
+        long gesetzt = 0L;
+        for (int ebene = 0; ebene < hoehe; ebene++) {
+            gesetzt += setzeWenn(griff, unberuehrt, x, fuss + ebene, z,
+                    waehle(gruen.stamm(), x, fuss + ebene, z));
+        }
+        int krone = fuss + hoehe - 2;
+        for (int ebene = 0; ebene < 4; ebene++) {
+            // DIE WEITE KOMMT AUS DEM KERN: Aus ihr folgt der Abstand der Standorte,
+            // und eine zweite Zahl hier liesse die Kronen verwachsen, sobald eine von
+            // beiden sich aendert.
+            int weite = switch (ebene) {
+                case 0, 1 -> Stadtplan.KRONE_WEITE;
+                case 2 -> Stadtplan.KRONE_WEITE - 1;
+                default -> 0;
+            };
+            for (int dx = -weite; dx <= weite; dx++) {
+                for (int dz = -weite; dz <= weite; dz++) {
+                    // DIE ECKEN DER WEITEN EBENEN BLEIBEN FREI.
+                    if (weite == Stadtplan.KRONE_WEITE
+                            && Math.abs(dx) == Stadtplan.KRONE_WEITE
+                            && Math.abs(dz) == Stadtplan.KRONE_WEITE) {
+                        continue;
+                    }
+                    // DER STAMM BLEIBT STAMM.
+                    if (dx == 0 && dz == 0 && ebene < 3) {
+                        continue;
+                    }
+                    int y = krone + ebene;
+                    gesetzt += setzeWenn(griff, unberuehrt, x + dx, y, z + dz,
+                            waehle(gruen.laub(), x + dx, y, z + dz));
+                }
+            }
+        }
+        return gesetzt;
+    }
+
+    /**
+     * Ein Brunnen: eine Fassung aus acht Randbloecken, zwei Ebenen hoch, mit Wasser
+     * darin.
+     *
+     * <p>Das Wasser liegt auf der UNTEREN Ebene, der Rand geht eine hoeher - so sieht man
+     * in den Brunnen hinein, statt auf eine Pfuetze. Die Fassung ist auf allen vier
+     * Seiten geschlossen; nur darum bleibt das Wasser, wo es ist.
+     */
+    private long setzeBrunnen(Platzgruen gruen, Weltgriff griff, List<Quader> unberuehrt,
+            int x, int z) {
+        int fuss = Stadtplan.BODEN_Y + 1;
+        long gesetzt = 0L;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0) {
+                    gesetzt += setzeWenn(griff, unberuehrt, x, fuss, z, gruen.wasser());
+                    continue;
+                }
+                for (int ebene = 0; ebene < 2; ebene++) {
+                    gesetzt += setzeWenn(griff, unberuehrt, x + dx, fuss + ebene, z + dz,
+                            waehle(gruen.brunnenrand(), x + dx, fuss + ebene, z + dz));
+                }
+            }
+        }
+        return gesetzt;
+    }
+
+    /** Setzt den Block, wenn dort keine Handarbeit steht - und sagt, ob er gesetzt wurde. */
+    private long setzeWenn(Weltgriff griff, List<Quader> unberuehrt, int x, int y, int z,
+            Material block) {
+        if (liegtIn(unberuehrt, x, y, z)) {
+            return 0L;
+        }
+        griff.setze(x, y, z, block);
+        return 1L;
+    }
+
+    /** Ein Block aus einer Mischung, fest aus der Stelle gewaehlt. */
+    private static Material waehle(List<Material> mischung, int x, int y, int z) {
+        return mischung.get(Stadtplan.mischung(x, z + y * 31, mischung.size()));
+    }
+
     /** Ob diese Stelle in einem der Quader liegt, die unberuehrt bleiben. */
     private static boolean liegtIn(List<Quader> quader, int x, int y, int z) {
         for (Quader einer : quader) {
@@ -489,14 +713,20 @@ final class Altfurtaufbau {
      * <p>Gefragt wird die MITTE des Marktes und nicht ein Rand: Der Rand liegt bei einem
      * anderen Quartierzuschnitt woanders, die Mitte liegt immer dort. Dieselbe Grenze wie
      * bei {@link #stehtSchon}: Wer neu pflastern will, nimmt diesen einen Block weg.
+     *
+     * <p><b>Gefragt wird die ganze MISCHUNG und nicht ihr Block an dieser Stelle</b>:
+     * Wer die Mischung des Marktes umstellt, hat trotzdem ein gepflastertes Altfurt -
+     * und wer von einer aelteren Fassung mit einem einzelnen Stoff kommt, soll nicht
+     * ploetzlich dreissigtausend Bloecke neu gesetzt bekommen, nur weil die Streuung
+     * an dieser einen Stelle jetzt einen anderen Block waehlt.
      */
     boolean istGepflastert(Stadtplan plan, Pflasterstoffe pflaster, Weltgriff griff) {
         if (plan == null || pflaster == null || griff == null) {
             throw new IllegalArgumentException("Ohne Plan, Pflaster und Welt gibt es"
                     + " keine Antwort");
         }
-        return griff.bei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z)
-                == pflaster.block(Stadtplan.Lage.MARKT);
+        return pflaster.mischung(Stadtplan.Lage.MARKT).contains(
+                griff.bei(Stadtplan.MITTE_X, Stadtplan.BODEN_Y, Stadtplan.MITTE_Z));
     }
 
     /**
@@ -541,6 +771,10 @@ final class Altfurtaufbau {
                     Richtung liegend = Bauplan.balkenachse(bau, x, y, z);
                     if (liegend != null) {
                         fein.setzeBalkenachse(x, y, z, liegend, block);
+                    }
+                    Richtung leiter = Bauplan.leiterzeigt(bau, x, y, z);
+                    if (leiter != null) {
+                        fein.setzeLeiter(x, y, z, leiter, block);
                     }
                 }
             }

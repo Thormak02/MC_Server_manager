@@ -90,15 +90,24 @@ class StadtlisteTest {
         assertEquals(Stadtliste.QUARTIERE_AB_WERK, zuGross.quartiere(),
                 "es gilt das Werk");
 
-        // UND DIE ARBEITSGRENZE IST NICHT DIE WELTGRENZE: Die erlaubte Hoechstzahl
-        // passt in die ausgelieferte Welt - sie ist also wirklich eine Grenze der
-        // ARBEIT (3347 Haeuser, 3,6 Millionen Bloecke) und nicht des Platzes.
+        // DIE ARBEITSGRENZE PASST GERADE NOCH IN DIE WELT, und das ist kein Zufall,
+        // sondern nachgerechnet: Neun Quartiere reichen bis x 374, zehn bis 401 -
+        // und die ausgelieferte Welt endet bei 400. Beide Grenzen fallen also
+        // zusammen; die eine sagt "zu viel Arbeit", die andere "kein Platz".
         assertTrue(Stadtliste.passtInDieWelt(Stadtliste.HOECHSTENS_QUARTIERE, KANTE),
                 "die Hoechstzahl passt in die ausgelieferte Welt");
+        assertFalse(
+                Stadtliste.passtInDieWelt(Stadtliste.HOECHSTENS_QUARTIERE + 1, KANTE),
+                "eine mehr passt nicht");
         Stadtplan gerade = new Stadtplan(Stadtliste.HOECHSTENS_QUARTIERE);
         assertTrue(gerade.umriss().bisX() < KANTE / 2, "x " + gerade.umriss().bisX());
-        assertTrue(gerade.haeuser().size() > 3000,
-                "und sie ist viel Arbeit: " + gerade.haeuser().size() + " Haeuser");
+        // UND SIE IST VIEL ARBEIT, gemessen an Altfurt und nicht an einer runden Zahl:
+        // Neun Quartiere sind ein Vielfaches von zwei. Eine feste 3000 stand hier bis
+        // zum 24.11.2026 und wurde rot, als die Hoefe zwischen die Haeuser kamen -
+        // obwohl die Aussage ("das ist zu viel Handarbeit") unberuehrt war.
+        assertTrue(gerade.haeuser().size() > 10 * Stadtplan.altfurt().haeuser().size(),
+                "und sie ist viel Arbeit: " + gerade.haeuser().size() + " Haeuser gegen "
+                        + Stadtplan.altfurt().haeuser().size() + " in Altfurt");
     }
 
     @Test
@@ -113,7 +122,8 @@ class StadtlisteTest {
         assertEquals(1, klagen.size(), klagen.toString());
         assertEquals(Stadtliste.QUARTIERE_AB_WERK, keins.quartiere());
         // Und von Hand laesst sich die Null auch nicht bauen.
-        assertThrows(IllegalArgumentException.class, () -> new Stadtliste(true, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Stadtliste(true, 0, List.of()));
     }
 
     @Test
@@ -171,9 +181,13 @@ class StadtlisteTest {
         YamlConfiguration datei = new YamlConfiguration();
         datei.set(Stadtliste.PFAD + "." + Stadtliste.SCHLUESSEL_QUARTIERE, 4);
 
-        // GERECHNET: Vier Quartiere reichen bis x 213. Eine Welt mit Kante 400 reicht
+        // GERECHNET: Vier Quartiere reichen bis x 241. Eine Welt mit Kante 400 reicht
         // von -200 bis 200 - es muessen also Quartiere wegfallen, bis es passt.
-        assertEquals(213, new Stadtplan(4).umriss().bisX(), "vier Quartiere reichen weit");
+        //
+        // 239 WAREN ES BIS ZUM 24.11.2026, als die Mauer Tuerme bekam: Sie treten
+        // TURM_VOR Bloecke vor die Mauerflucht, und der Umriss ist die Flaeche, die
+        // abgegangen wird - also waechst er mit.
+        assertEquals(241, new Stadtplan(4).umriss().bisX(), "vier Quartiere reichen weit");
         Stadtliste klein = Stadtliste.ausKonfiguration(datei, 400, klagen);
 
         assertTrue(klein.quartiere() < 4, "es wurde verkleinert: " + klein.quartiere());
@@ -189,8 +203,9 @@ class StadtlisteTest {
     @DisplayName("Passt nicht einmal ein Quartier, entsteht keine Stadt")
     void winzigeWelt() {
         List<String> klagen = new ArrayList<>();
-        // Ein Quartier reicht bis x 132. Eine Welt mit Kante 64 reicht von -32 bis 32.
-        assertEquals(132, new Stadtplan(1).umriss().bisX(), "ein Quartier reicht bis 132");
+        // Ein Quartier reicht bis x 160 - 158 waren es vor den Mauertuermen. Eine
+        // Welt mit Kante 64 reicht von -32 bis 32.
+        assertEquals(160, new Stadtplan(1).umriss().bisX(), "ein Quartier reicht bis 160");
 
         Stadtliste nichts = Stadtliste.ausKonfiguration(new YamlConfiguration(), 64,
                 klagen);
@@ -240,6 +255,57 @@ class StadtlisteTest {
         assertEquals(Stadtliste.QUARTIERE_AB_WERK, komma.quartiere());
         assertEquals(1, klagen.size(), klagen.toString());
         assertTrue(klagen.get(0).contains("2.9"), klagen.get(0));
+    }
+
+
+    @Test
+    @DisplayName("Die Vorlagennamen werden gelesen - und Unsinn darin geklagt")
+    void dieVorlagennamen() {
+        List<String> klagen = new ArrayList<>();
+        YamlConfiguration datei = new YamlConfiguration();
+        datei.set(Stadtliste.PFAD + "." + Stadtliste.SCHLUESSEL_VORLAGEN,
+                List.of("haus-schmal", "haus_breit", "haus-schmal", "../geheim",
+                        "Haus.nbt"));
+
+        Stadtliste liste = Stadtliste.ausKonfiguration(datei, KANTE, klagen);
+
+        // DIE BRAUCHBAREN bleiben, in der Reihenfolge der Datei.
+        assertEquals(List.of("haus-schmal", "haus_breit"), liste.vorlagen(),
+                "zwei brauchbare Namen");
+        // DREI KLAGEN: die Doppelung und die zwei unmoeglichen Namen. Ein Name mit
+        // Schraegstrich oder Punkt fuehrte aus dem Ordner heraus.
+        String alle = String.join(" | ", klagen);
+        assertEquals(3, klagen.size(), alle);
+        assertTrue(alle.contains("zweimal"), alle);
+        assertTrue(alle.contains("../geheim"), alle);
+        assertTrue(alle.contains("Haus.nbt"), alle);
+
+        // OHNE EINTRAG wird gerechnet, und das ist keine Klage.
+        List<String> stille = new ArrayList<>();
+        Stadtliste ohne = Stadtliste.ausKonfiguration(new YamlConfiguration(), KANTE,
+                stille);
+        assertEquals(List.of(), ohne.vorlagen());
+        assertEquals(List.of(), stille);
+        assertTrue(ohne.bericht().contains("keine"), ohne.bericht());
+    }
+
+    @Test
+    @DisplayName("Der Plan bekommt die Masse von aussen - der Leser kennt nur Namen")
+    void masseKommenVonAussen() {
+        List<String> klagen = new ArrayList<>();
+        YamlConfiguration datei = new YamlConfiguration();
+        datei.set(Stadtliste.PFAD + "." + Stadtliste.SCHLUESSEL_VORLAGEN,
+                List.of("haus-schmal"));
+        Stadtliste liste = Stadtliste.ausKonfiguration(datei, KANTE, klagen);
+
+        // OHNE MASSE wird gerechnet, obwohl ein Name steht - denn der Leser kann die
+        // Datei nicht messen. Das Plugin holt die Masse und gibt sie herein.
+        assertEquals(List.of(), liste.plan().vorlagen(),
+                "ohne Masse keine Vorlage im Plan");
+        var masse = List.of(new de.freimarken.kern.Vorlage("haus-schmal", 7, 14, 9));
+        assertEquals(masse, liste.plan(masse).vorlagen(), "mit Massen schon");
+        // Und die Stadt ist dieselbe Stadt - nur die Haeuser sind andere.
+        assertEquals(liste.plan().aussenRing(), liste.plan(masse).aussenRing());
     }
 
 }

@@ -4594,8 +4594,16 @@ class GrenzeTest {
         assertTrue(plugin.contains("Stadtliste.ausKonfiguration(getConfig()"),
                 "die Stadt-Einstellungen muessen gelesen werden - sonst sind bauen und"
                         + " quartiere Schluessel ohne Wirkung");
-        assertTrue(plugin.contains("stadtplan = stadt.plan()"),
-                "der gelesene Plan muss im Feld landen");
+        assertTrue(plugin.contains("stadtplan = stadt.plan(masseDerVorlagen("),
+                "der gelesene Plan muss im Feld landen - UND die Masse der Vorlagen"
+                        + " bekommen: Die config.yml kennt nur Namen, und ein Plan, der"
+                        + " die Masse raet, legt Parzellen, in die die Datei nicht"
+                        + " passt");
+        assertTrue(plugin.contains("strukturen.groesse(name)"),
+                "die Masse muessen aus der Strukturverwaltung kommen");
+        assertTrue(plugin.contains("Stadtplan.passtInEineZeile(vorlage)"),
+                "und eine zu tiefe Vorlage muss geklagt werden - mit DERSELBEN Regel,"
+                        + " nach der der Plan sie uebergeht");
         assertTrue(plugin.contains("Pflasterstoffe.ausKonfiguration(getConfig()"),
                 "das Pflaster muss gelesen werden - sonst ist bauten.pflaster ein"
                         + " Abschnitt ohne Wirkung");
@@ -4656,6 +4664,32 @@ class GrenzeTest {
         // UND EINE AELTERE, GROESSERE STADT MUSS SICH MELDEN.
         assertTrue(plugin.contains("meldeAltereStadt(griff)"),
                 "eine Einstellung, die nur halb wirkt, muss es sagen");
+        // UND EIN ERSCHEINUNGSPUNKT IM HAUS AUCH: Er liegt ab Werk bei 0/0, und
+        // das ist seit der Ringstadt das aeussere Haeuserband. nenneSchlechteAnkunft
+        // sieht es NICHT - das Innere eines Hauses ist ein Platz zum Stehen.
+        assertTrue(plugin.contains("meldeSpawnImHaus()"),
+                "ein Erscheinungspunkt im Haus muss gemeldet werden");
+        assertTrue(plugin.contains("altfurtFrisch.setSpawnLocation("),
+                "bei einer FRISCH angelegten Welt muss der Punkt auf den Markt"
+                        + " gesetzt werden");
+        assertTrue(plugin.contains("gebaut.neu().contains(bautenwelt)"),
+                "und nur dann - sonst ueberschriebe jeder Start ein"
+                        + " /setworldspawn des Betreibers");
+        // DIE TORHAEUSER WERDEN GESETZT UND IHRE NISCHEN NACHGERECHNET.
+        assertTrue(plugin.contains("baueTorhaeuser(griff, fein)"),
+                "die Torhaeuser muessen gesetzt werden - sonst ist die Mauer"
+                        + " geschlossen und die Portale stecken darin");
+        assertTrue(plugin.contains("pruefeNische(plan, seite, true, tor.links()")
+                        && plugin.contains("pruefeNische(plan, seite, false,"
+                                + " tor.rechts()"),
+                "beide Nischen jedes Torhauses muessen gegen welten:"
+                        + " nachgerechnet werden");
+        // UND DAS PFLASTER KOMMT VOR DEN TORHAEUSERN: Ein Torhaus ersetzt das
+        // Stueck Mauer, auf dem es steht. Umgekehrt waere sein Durchgang danach
+        // wieder zugemauert.
+        int torhaeuser = plugin.indexOf("baueTorhaeuser(griff, fein)");
+        assertTrue(torhaeuser > pflaster,
+                "die Torhaeuser muessen NACH dem Pflaster gesetzt werden");
 
         // UND DER EINSTIEG HAENGT NICHT MEHR AN DEN EINGETRAGENEN BAUTEN ALLEIN: Eine
         // leere haeuser-Liste mit eingeschalteter Stadt muss trotzdem bauen.
@@ -4768,16 +4802,18 @@ class GrenzeTest {
         String hand = Quellen.text(datei("Altfurtaufbau.java"));
         // OHNE PHYSIK, beide Male. Mit Nachbarschaftsmeldungen fiele die Tuer, noch
         // waehrend die Wand daneben entsteht, und das Schild fiele von der Wand.
-        assertEquals(6,
+        assertEquals(7,
                 hand.split(java.util.regex.Pattern.quote("setBlockData("), -1)
                         .length - 1,
-                "sechs Stellen setzen Blockdaten: die zwei Tuerhaelften, das Schild, die"
-                        + " Dachtreppe, die Glasscheibe und der liegende Balken");
+                "sieben Stellen setzen Blockdaten: die zwei Tuerhaelften, das Schild, die"
+                        + " Dachtreppe, die Glasscheibe, der liegende Balken und die"
+                        + " Leiter");
         assertFalse(hand.contains("setBlockData(unten)")
                         || hand.contains("setBlockData(oben)")
                         || hand.contains("setBlockData(treppe)")
                         || hand.contains("setBlockData(scheibe)")
                         || hand.contains("setBlockData(balken)")
+                        || hand.contains("setBlockData(leiter)")
                         || hand.contains("setBlockData(wandschild)"),
                 "setBlockData OHNE das zweite Argument wendet Physik an - dann faellt die"
                         + " Tuer, noch waehrend die Wand daneben entsteht");

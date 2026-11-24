@@ -563,70 +563,166 @@ bauten:
   #
   # NUR BEIM START GELESEN.
   haeuser:
-    # DIE VIER TORTUERME, vor der Wand. Drei Bloecke breit bleibt es: Die Tore stehen
-    # vier auseinander, ein breiterer Turm beruehrte seinen Nachbarn. Dafuer tiefer
-    # und viel hoeher - ein Torturm ist schlank. Die Tuer zeigt nach SUED, also auf
-    # die Wand und ihr Tor zu.
-    hafen-von-altfurt:
-      von: [66, -61, -7]
-      bis: [68, -46, -1]
-      tuer: sued
-      stil: schiefer
-      dach: kupfer
-    forsttor:
-      von: [70, -61, -7]
-      bis: [72, -46, -1]
-      tuer: sued
-      stil: forst
-      dach: kupfer
-    kornpforte:
-      von: [74, -61, -7]
-      bis: [76, -46, -1]
-      tuer: sued
-      stil: forst
-      dach: ziegel
-    # Der hoechste Bau der Stadt - zweiundzwanzig Ebenen.
-    wolkenturm:
-      von: [86, -61, -7]
-      bis: [88, -40, -1]
-      tuer: sued
-      stil: schiefer
-      dach: kupfer
-    # DIE VIER FLANKENHAEUSER, giebelstaendig: sieben breit zur Gasse, elf tief,
-    # vierzehn hoch. Zwischen je zweien bleibt eine Gasse von drei Bloecken. Ihre
-    # Tueren zeigen zur Mittelachse - die westlichen nach OST, die oestlichen nach WEST.
+    # DIE SECHS BAUTEN RAHMEN DIE PLAETZE [umgezogen 23.11.2026]. Vorher standen sie
+    # mitten auf einem Platz von 25 x 25; der Betreiber nannte ihn "zu klein und zu
+    # eng". Der Platz ist jetzt 81 x 81, und die Bauten bilden seine Kanten - sie
+    # liegen alle im Band von Ring 41 bis 51 um die Mitte 72 / 13.
+    #
+    # DIE VIER TORTUERME SIND KEINE HAEUSER MEHR: Sie stehen als TORHAEUSER in der
+    # Stadtmauer, mit den Weltportalen darin - siehe Abschnitt torhaeuser: weiter unten.
+    #
+    # WEST UND OST, giebelstaendig: elf breit zur Gasse, elf tief, vierzehn hoch. Ihre
+    # Tueren zeigen auf den Platz - die westlichen nach OST, die oestlichen nach WEST.
     buergeramt:
-      von: [48, -61, 3]
-      bis: [58, -48, 9]
+      von: [21, -61, -10]
+      bis: [31, -48, 0]
       tuer: ost
       stil: backstein
       dach: ziegel
     zunfthaus:
-      von: [48, -61, 13]
-      bis: [58, -48, 19]
+      von: [21, -61, 6]
+      bis: [31, -48, 16]
       tuer: ost
       stil: fachwerk
       dach: ziegel
     muenzhaus:
-      von: [86, -61, 3]
-      bis: [96, -48, 9]
+      von: [113, -61, -10]
+      bis: [123, -48, 0]
       tuer: west
       stil: gold
       dach: kupfer
     kaufmannskontor:
-      von: [86, -61, 13]
-      bis: [96, -48, 19]
+      von: [113, -61, 6]
+      bis: [123, -48, 16]
       tuer: west
       stil: backstein
       dach: ziegel
-    # DAS RATHAUS ist traufstaendig und breit - sein First laeuft parallel zur Gasse.
-    # Es schliesst die Achse ab, hinter dem Spawn, mittig auf ihr.
+    # DAS RATHAUS ist traufstaendig und breit - sein First laeuft parallel zum Platz.
+    # Es schliesst den Rathausplatz im Sueden ab, mittig auf der Achse.
     bundesratshaus:
-      von: [64, -61, 26]
-      bis: [80, -46, 38]
+      von: [56, -61, 54]
+      bis: [88, -46, 64]
       tuer: nord
       stil: backstein
       dach: kupfer
+    # DIE STADTKIRCHE schliesst den Kirchplatz im Norden ab. Schmal und HOCH -
+    # sechsundzwanzig Ebenen, der hoechste Bau der Stadt. Damit hat der Kirchplatz,
+    # was ihm den Namen gibt.
+    stadtkirche:
+      von: [66, -61, -38]
+      bis: [78, -36, -28]
+      tuer: sued
+      stil: schiefer
+      dach: kupfer
+
+  # DIE VIER TORHAEUSER IN DER STADTMAUER [23.11.2026].
+  #
+  # Je Seite der Stadt eines, mittig auf der Achse, im aeusseren Mauerring. 15 Bloecke
+  # breit, 9 tief, 11 hoch: zwei Tuerme von vier Bloecken, dazwischen ein Durchgang von
+  # sieben, darueber ein Giebeldach, und die Tuerme ragen mit ihrer Brustwehr darueber.
+  #
+  # DER DURCHGANG ENDET AN DER MAUER, und das ist der Sinn: Die Stadtmauer ist
+  # GESCHLOSSEN. Man geht in das Torhaus hinein, nicht hindurch - und findet darin links
+  # und rechts je eine Nische mit einem Portal in eine andere Welt. Hinter dem Portal
+  # steht eine Glasscheibe, dahinter das Diorama der Zielwelt: Man SIEHT, wohin man geht.
+  #
+  # KEINE KOORDINATEN HIER: Der Ort eines Torhauses folgt aus der Stadt. Was du
+  # einstellst, ist, WELCHE WELT hinter welcher Nische liegt. "links" ist die Nische auf
+  # der Seite des kleineren Laengsmasses - an Nord und Sued also die westliche, an Ost
+  # und West die noerdliche.
+  #
+  # DIE NISCHE IST DAS TOR: Ihr Quader muss mit welten.<welt>.tor uebereinstimmen. Der
+  # Start rechnet ihn nach und KLAGT mit den richtigen Zahlen, wenn er abweicht - die
+  # Datei bleibt die Wahrheit, du bekommst nur gesagt, was dort stehen muesste.
+  #
+  # NUR BEIM START GELESEN.
+  torhaeuser:
+    nord:
+      links: hochwald
+      rechts: kornmark
+    ost:
+      links: marktstadt
+      rechts: freistaedte
+    sued:
+      links: hafenwerder
+      rechts: wolkenwerder
+    west:
+      links: nether
+      rechts: end
+
+  # WAS HINTER EINEM PORTAL ZU SEHEN IST - je Welt eine Mischung von Bloecken.
+  #
+  # Drei mal drei Bloecke hinter einer Glasscheibe, eine Ebene tief. Das ist kein
+  # Landschaftsbau, sondern ein BLICK: Netherrack mit Magma und Glut sagt in drei
+  # Bloecken mehr als eine Tafel mit Aufschrift.
+  #
+  # Die Gewichtung steckt in der Liste, wie beim Pflaster: Wer einen Block dreimal
+  # eintraegt, bekommt ihn dreimal so oft.
+  #
+  # LAVA UND FEUER SIND ERLAUBT: Das Diorama ist von Mauerwerk und Glas vollstaendig
+  # eingeschlossen - nach aussen liegt noch eine Ebene Stein, damit nichts in die Gasse
+  # am Wehrgang laeuft. air wird GEKLAGT: Luft waere ein Loch in der Stadtmauer.
+  #
+  # Eine Welt ohne Eintrag bekommt Mauerwerk hinter ihrem Portal. Das ist kein Fehler.
+  #
+  # NUR BEIM START GELESEN.
+  dioramen:
+    marktstadt:
+      - stone_bricks
+      - stone_bricks
+      - cobblestone
+      - oak_planks
+      - bricks
+      - glass
+    freistaedte:
+      - grass_block
+      - grass_block
+      - oak_log
+      - stone_bricks
+      - cobblestone
+    hafenwerder:
+      - water
+      - water
+      - sand
+      - sand
+      - oak_log
+      - gravel
+    wolkenwerder:
+      - white_wool
+      - white_wool
+      - white_wool
+      - light_blue_wool
+      - quartz_block
+      - glass
+    hochwald:
+      - spruce_log
+      - spruce_leaves
+      - spruce_leaves
+      - podzol
+      - moss_block
+      - fern
+    kornmark:
+      - hay_block
+      - hay_block
+      - wheat
+      - farmland
+      - oak_fence
+      - dirt
+    nether:
+      - netherrack
+      - netherrack
+      - netherrack
+      - magma_block
+      - lava
+      - nether_bricks
+      - fire
+    end:
+      - end_stone
+      - end_stone
+      - end_stone
+      - obsidian
+      - purpur_block
+      - black_concrete
 
   # DIE GERECHNETE STADT ALTFURT [23.11.2026].
   #
@@ -639,19 +735,34 @@ bauten:
   #
   # WAS ENTSTEHT, von der Mitte des Marktes (72 / 13) nach aussen:
   #
-  #       0 ..  12   der gepflasterte Marktplatz samt Markthallen
-  #      13 ..  25   der Kern - die Bauten oben, UNBERUEHRT
-  #      26 ..  30   die erste Ringgasse, fuenf breit
-  #      31 ..  41   eine Haeuserzeile, Tueren zur Ringgasse
-  #      42 ..  52   eine Haeuserzeile, Tueren zur naechsten Gasse
-  #      53 ..  57   die zweite Ringgasse
-  #      58 ..  68   eine Haeuserzeile
-  #      69 ..  79   eine Haeuserzeile
-  #      80 ..  84   die Gasse am Wehrgang
-  #      85 ..  87   die Stadtmauer, drei dick und sechs hoch
+  #       0 ..  40   die drei Plaetze, zusammen 81 x 81 Bloecke
+  #      41 ..  51   der Kern - die Bauten oben RAHMEN die Plaetze, UNBERUEHRT
+  #      52 ..  56   die erste Ringgasse, fuenf breit
+  #      57 ..  67   eine Haeuserzeile, Tueren zur Ringgasse
+  #      68 ..  78   eine Haeuserzeile, Tueren zur naechsten Gasse
+  #      79 ..  83   die zweite Ringgasse
+  #      84 ..  94   eine Haeuserzeile
+  #      95 .. 105   eine Haeuserzeile
+  #     106 .. 110   die Gasse am Wehrgang
+  #     111 .. 113   die Stadtmauer, drei dick, sechs hoch und GESCHLOSSEN
+  #
+  # DIE PLAETZE, von Nord nach Sued:
+  #
+  #     -27 .. -10   Kirchplatz vor der Stadtkirche, 18 tief
+  #      -9 ..  -7   Platzkante: Baumreihe und Brunnen, 3 breit
+  #      -6 ..  26   der Marktplatz selbst, 33 tief - hier kommt man an
+  #      27 ..  29   Platzkante
+  #      30 ..  53   Rathausplatz vor dem Bundesratshaus, 24 tief
+  #
+  # Ein Platz von 81 x 81 ist als EINE Flaeche ein Feld und kein Platz - darum die
+  # Dreiteilung. Die Kanten sind keine Mauern, sondern Bepflanzung: Man geht
+  # hindurch, aber man sieht, dass der Platz hier aufhoert.
   #
   # Dazu vier Radialgassen auf den Achsen der Mitte - sie schneiden jede Zeile und
-  # durchstossen die Mauer. Ihr Durchstich IST das Stadttor.
+  # enden an einem TORHAUS. DIE MAUER IST GESCHLOSSEN: Die Portale in die anderen
+  # Welten stehen in den Torhaeusern, und ein Torhaus ist ein Bau aus der Liste
+  # haeuser: oben - es wird nach dem Pflaster gesetzt und ersetzt das Stueck Mauer,
+  # auf dem es steht.
   #
   # DIE ECKEN BLEIBEN FREI: Dort stiessen die Zeile der Nordseite und die der Westseite
   # aufeinander. Statt sie zu verzahnen, bleibt die Ecke ein kleiner Platz.
@@ -716,6 +827,38 @@ bauten:
     # auf dem sie steht. Vergroessern pflastert die neuen Baender nicht, solange der
     # Block in der Mitte des Marktes liegt; nimm ihn weg, dann wird neu gepflastert.
     quartiere: 2
+    # DIE VORLAGEN, aus denen die Zeilenhaeuser gesetzt werden.
+    #
+    # LEER heisst: Die Haeuser werden GERECHNET - Breite 5, 7 oder 9 zur Gasse, Tiefe 9
+    # bis 11, Hoehe 12 bis 16, Fachwerk ueber steinernem Erdgeschoss. Das ist die
+    # Rueckfallform, und sie bleibt es: Sie braucht keine Datei und sieht ueberall gleich
+    # gut (und gleich) aus.
+    #
+    # STEHT HIER EIN NAME, wird stattdessen die Datei bauten/<name>.nbt gesetzt - so oft,
+    # wie die Stadt sie braucht, gedreht nach der Tuerseite. Die Stadt legt die Parzellen
+    # dann GENAU nach den Massen der Dateien; sie erfindet keine mehr.
+    #
+    # SO KOMMST DU ZU EINER VORLAGE:
+    #   1. Bau das Haus irgendwo in Altfurt, mit der Tuer nach NORDEN (Normlage - gedreht
+    #      wird beim Setzen).
+    #   2. Trag seinen Quader unter haeuser: ein, mit einem Namen.
+    #   3. /freimarken altfurt sichern <name> - das schreibt bauten/<name>.nbt.
+    #   4. Trag den Namen hier ein. Den Eintrag unter haeuser: kannst du danach
+    #      herausnehmen; die Datei bleibt.
+    #
+    # WAS GEPRUEFT WIRD, je Name und mit eigener Klage:
+    #   - Gibt es die Datei? Fehlt sie, wird der Name uebersprungen.
+    #   - Ist sie hoechstens 11 Bloecke tief? Tiefer passt in kein Band.
+    #   - Ist sie tiefer als breit? Nur dann steht sie GIEBELSTAENDIG, also mit der
+    #     Schmalseite zur Gasse - so wie eine Hansezeile aussieht. Breitere werden
+    #     gesetzt, aber es wird gesagt.
+    #
+    # EINE FEHLENDE ODER KAPUTTE DATEI KOSTET KEIN HAUS: Dann rechnet der Bauplan fuer
+    # dieses eine Haus. Lieber ein gerechnetes Haus als ein Loch in der Zeile.
+    #
+    # Mehrere Namen sind BESSER als einer: Die Stadt verteilt sie fest ueber die
+    # Parzellen, und drei verschiedene Haeuser in einer Zeile sehen aus wie eine Stadt.
+    vorlagen: []
 
   # WOMIT DER BODEN ALTFURTS BELEGT WIRD - je Lage ein Block.
   #
@@ -733,26 +876,152 @@ bauten:
   # und kommt im Pflasterlauf nie vor. Ein Schluessel, der gelesen wird, im
   # Startbericht steht und doch keinen Block setzt, ist schlimmer als keiner.
   #
-  # Die Werkstoffe und ihr Grund:
-  #   markt       polished_andesite    ein Marktplatz ist das einzige Stueck Boden einer
-  #                                    alten Stadt, das jemand bezahlt und gerichtet hat
-  #   kern        cobblestone          der gepflasterte Platz um die Bauten oben
-  #   ringgasse   cobblestone          Kopfstein
-  #   radialgasse cobblestone          dieselbe Gasse, nur quer
-  #   eckplatz    mossy_cobblestone    dort geht niemand, zwischen den Steinen waechst was
-  #   zeile       coarse_dirt          Hof hinter den Haeusern; karg und nicht Gras, weil
-  #                                    Gras sich ausbreitet und in die Gassen kriecht
-  #   mauer       deepslate_bricks     die Stadtmauer
+  # JE LAGE EINE MISCHUNG, und das ist der Unterschied zwischen einem Weg und einer
+  # FLAECHE: Eine Gasse aus einem einzigen Block sieht aus wie ein Fussboden. Welcher
+  # Block einer Mischung an einer Stelle liegt, ist fest gerechnet - dieselbe Stelle
+  # bekommt nach jedem Neustart denselben Block.
+  #
+  # DIE GEWICHTUNG STECKT IN DER LISTE: Wer einen Block dreimal eintraegt, bekommt ihn
+  # dreimal so oft. Keine zweite Zahl, keine Prozente - du siehst in der Datei, was du
+  # meinst. Ein einzelner Wert statt einer Liste gilt weiter und heisst "nur dieser".
+  #
+  # DIE BLOECKE EINER MISCHUNG MUESSEN ZUSAMMENPASSEN: gleicher Grauwert, nur andere
+  # Koernung. Kopfstein mit Andesit und Kies ist ein Weg; Kopfstein mit Sandstein sind
+  # zwei Staedte in einer.
+  #
+  # air WIRD GEKLAGT UND NICHT GESETZT: Luft ist ein Block, und auf dem Boden einer
+  # Ebene LOESCHT sie ihn - wer dann darueber laeuft, faellt ins Leere. Ein unbekannter
+  # Blockname wird ebenfalls geklagt und FEHLT dann in der Mischung; bleibt davon nichts
+  # uebrig, gilt die Mischung ab Werk.
   #
   # NUR BEIM START GELESEN.
   pflaster:
-    markt: polished_andesite
-    kern: cobblestone
-    ringgasse: cobblestone
-    radialgasse: cobblestone
-    eckplatz: mossy_cobblestone
-    zeile: coarse_dirt
-    mauer: deepslate_bricks
+    # Der Kirchplatz - der aelteste der drei Plaetze. Ein Kirchhof wird nicht neu
+    # gepflastert, darum ist die Haelfte bemoost.
+    kirchplatz:
+      - stone_bricks
+      - stone_bricks
+      - mossy_stone_bricks
+      - mossy_stone_bricks
+      - cobblestone
+      - andesite
+    # Der Rathausplatz - der gerichtete. Hier zeigt die Stadt, was sie sich leisten
+    # kann.
+    rathausplatz:
+      - smooth_stone
+      - smooth_stone
+      - polished_andesite
+      - polished_andesite
+      - stone_bricks
+      - chiseled_stone_bricks
+    # Die Platzkante - Stein mit Erdinseln, in die Baeume und Brunnen kommen.
+    platzkante:
+      - cobblestone
+      - cobblestone
+      - andesite
+      - podzol
+      - podzol
+      - coarse_dirt
+    # Der Marktplatz - gerichtet und ueber Jahrhunderte geflickt.
+    markt:
+      - polished_andesite
+      - polished_andesite
+      - polished_andesite
+      - smooth_stone
+      - stone_bricks
+      - andesite
+    # Der Platz um die eingetragenen Bauten.
+    kern:
+      - cobblestone
+      - cobblestone
+      - cobblestone
+      - andesite
+      - stone
+      - mossy_cobblestone
+    # Die Ringgassen - ueberwiegend Kopfstein, dazwischen Andesit, Stein und Kies.
+    ringgasse:
+      - cobblestone
+      - cobblestone
+      - cobblestone
+      - cobblestone
+      - andesite
+      - stone
+      - gravel
+      - mossy_cobblestone
+    # Die Gassen von der Mitte nach aussen.
+    radialgasse:
+      - cobblestone
+      - cobblestone
+      - cobblestone
+      - stone
+      - andesite
+      - gravel
+    # Die Ecke eines Quartiers - dort geht niemand, zwischen den Steinen waechst etwas.
+    eckplatz:
+      - mossy_cobblestone
+      - mossy_cobblestone
+      - cobblestone
+      - gravel
+      - coarse_dirt
+    # Der Hof hinter den Haeusern. Karg und nicht Gras, weil Gras sich ausbreitet und in
+    # die Gassen kriecht.
+    zeile:
+      - coarse_dirt
+      - coarse_dirt
+      - coarse_dirt
+      - gravel
+      - cobblestone
+    # Die Stadtmauer - alter Stein mit Rissen und Flickstellen. Die TUERME sind aus
+    # derselben Mischung: Sie sind Mauerwerk, nur hoeher und vorgetreten.
+    mauer:
+      - deepslate_bricks
+      - deepslate_bricks
+      - deepslate_bricks
+      - deepslate_bricks
+      - cracked_deepslate_bricks
+      - cobbled_deepslate
+      - deepslate_tiles
+
+  # WORAUS DIE BAEUME UND BRUNNEN DER PLATZKANTE SIND [24.11.2026].
+  #
+  # Die Platzkante ist der drei Bloecke breite Streifen zwischen Kirchplatz und Markt und
+  # zwischen Markt und Rathausplatz. Bis zum 24.11.2026 versprach der Abschnitt
+  # pflaster.platzkante dort "Baeume und Brunnen" - und es stand nichts. Jetzt stehen sie.
+  #
+  # WO einer steht, rechnet das Programm: je neun Bloecke ein Standort, die Stelle darin
+  #   gestreut, und um die Mittelachse bleiben fuenf Bloecke frei - dort kommt an, wer die
+  #   Welt betritt, und dort geht er nach Norden und Sueden. Jeder vierte Standort ist ein
+  #   Brunnen. Was du einstellst, ist, WORAUS sie sind.
+  #
+  # stamm und laub sind MISCHUNGEN wie das Pflaster: Die Gewichtung kommt aus der
+  #   Wiederholung. Laub aus genau einem Block sieht aus wie eine gestrichene Kugel.
+  #
+  # FAELLT DER ABSCHNITT WEG, bleibt die Kante Pflaster - ohne Klage. Wer einen durchweg
+  #   steinernen Platz will, loescht ihn.
+  #
+  # NUR BEIM START GELESEN.
+  platzgruen:
+    stamm:
+      - oak_log
+    laub:
+      - oak_leaves
+      - oak_leaves
+      - azalea_leaves
+    # Der Brunnenrand - acht Bloecke Fassung, zwei Ebenen hoch. Sie ist auf allen vier
+    # Seiten geschlossen; nur darum bleibt das Wasser, wo es ist.
+    brunnenrand:
+      - cobblestone
+      - cobblestone
+      - mossy_cobblestone
+      - stone_bricks
+    # Das Wasser darin. Nur der ERSTE Eintrag wird genommen - einen Brunnen aus zwei
+    # Fluessigkeiten gibt es nicht.
+    brunnenwasser:
+      - water
+    # Wie hoch ein Baum wird, in Ebenen (3 bis 10). Die wirkliche Hoehe streut um diesen
+    # Wert einen Block nach oben und unten - zwei gleich hohe Baeume nebeneinander
+    # verraten das Programm.
+    baumhoehe: 5
 
 
 
@@ -3449,8 +3718,9 @@ welten:
     # das Tor eine unsichtbare Tuer - das Protokoll sagt beim Start, welche Tore noch
     # ohne Bauwerk sind.
     tor:
-      von: [58, -60, 0]
-      bis: [60, -58, 0]
+      # Osttorhaus, nordliche Nische - gerechnet von Torhausplan.
+      von: [178, -60, 9]
+      bis: [180, -58, 9]
     # Wunschkante der Weltgrenze in Bloecken; Plan Abschnitt 4 nennt 3.000.
     #
     # Gerechnet wird daraus ABGERUNDET auf ganze Rasterzellen (64 Parzelle + 7 Weg = 71)
@@ -3547,8 +3817,9 @@ welten:
     art: stadtfelder
     kante: 6000
     tor:
-      von: [62, -60, 0]
-      bis: [64, -58, 0]
+      # Osttorhaus, suedliche Nische - gerechnet von Torhausplan.
+      von: [178, -60, 17]
+      bis: [180, -58, 17]
 
   # Archipel mit eigenem Angelgut (Plan 4.1), eine Insel je Feld.
   hafenwerder:
@@ -3579,8 +3850,9 @@ welten:
     kante: 5000
     # Plan 2.1: "Hafen von Altfurt - Tor nach Hafenwerder".
     tor:
-      von: [66, -60, 0]
-      bis: [68, -58, 0]
+      # Suedtorhaus, westliche Nische - gerechnet von Torhausplan.
+      von: [68, -60, 119]
+      bis: [68, -58, 121]
 
   wolkenwerder:
     # WOLKEN [18.11.2026, Plan 4.1 und 6.2]: die Skyblockwelt. Leere mit einem Raster
@@ -3609,8 +3881,9 @@ welten:
     # endet bei x=89. Auf der Ebene braucht es dafuer keine Messung mehr -
     # gebaut werden muss die Oeffnung aber, wie die sieben anderen auch.
     tor:
-      von: [86, -60, 0]
-      bis: [88, -58, 0]
+      # Suedtorhaus, oestliche Nische - gerechnet von Torhausplan.
+      von: [76, -60, 119]
+      bis: [76, -58, 121]
 
   # Freibau; eine Sicherung kostet 5.000 Mark.
   hochwald:
@@ -3619,8 +3892,9 @@ welten:
     kante: 5000
     # Plan 2.1: "Forsttor - Tor zum Hochwald".
     tor:
-      von: [70, -60, 0]
-      bis: [72, -58, 0]
+      # Nordtorhaus, westliche Nische - gerechnet von Torhausplan.
+      von: [68, -60, -95]
+      bis: [68, -58, -93]
 
   # Farmwelt. Wird bei jeder neuen Minecraft-Version zurueckgesetzt und neu
   # vorgeneriert - deshalb haengt an ihr kein Besitz (Plan 4.2).
@@ -3630,8 +3904,9 @@ welten:
     kante: 2000
     # Plan 2.1: "Kornpforte - Tor nach Kornmark".
     tor:
-      von: [74, -60, 0]
-      bis: [76, -58, 0]
+      # Nordtorhaus, oestliche Nische - gerechnet von Torhausplan.
+      von: [76, -60, -95]
+      bis: [76, -58, -93]
 
   nether:
     art: gewoehnlich
@@ -3639,8 +3914,9 @@ welten:
     umgebung: nether
     kante: 2000
     tor:
-      von: [78, -60, 0]
-      bis: [80, -58, 0]
+      # Westtorhaus, nordliche Nische - gerechnet von Torhausplan.
+      von: [-36, -60, 9]
+      bis: [-34, -58, 9]
 
   # "end" und nicht "ende": Der Schluessel ist der Weltname, und den fuehrt Plan
   # Abschnitt 4 so. Weltnamen sind nach Plan 12a.6 nur lesbar - an ihnen haengen
@@ -3651,5 +3927,6 @@ welten:
     umgebung: ende
     kante: 2000
     tor:
-      von: [82, -60, 0]
-      bis: [84, -58, 0]
+      # Westtorhaus, suedliche Nische - gerechnet von Torhausplan.
+      von: [-36, -60, 17]
+      bis: [-34, -58, 17]

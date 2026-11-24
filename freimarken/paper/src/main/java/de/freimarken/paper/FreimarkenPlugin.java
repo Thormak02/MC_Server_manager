@@ -24,8 +24,11 @@ import de.freimarken.kern.Anmeldeablage;
 import de.freimarken.kern.Anmeldung;
 import de.freimarken.kern.Rundgang;
 import de.freimarken.kern.Rundgangsablage;
+import de.freimarken.kern.Richtung;
 import de.freimarken.kern.Rundgangsverzeichnis;
 import de.freimarken.kern.Stadtplan;
+import de.freimarken.kern.Torhausplan;
+import de.freimarken.kern.Vorlage;
 import de.freimarken.kern.Absteckbuch;
 import de.freimarken.kern.Berufsablage;
 import de.freimarken.kern.Berufsverzeichnis;
@@ -705,6 +708,17 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Pflasterstoffe pflasterstoffe = Pflasterstoffe.abWerk();
 
     /**
+     * Welche Welt hinter welcher Torhausnische liegt - NUR BEIM START gelesen.
+     *
+     * <p>Ab Werk leer, und dann wird kein Torhaus gesetzt: Ein Torhaus ohne Portale
+     * ist ein Durchgang, der an einer Wand endet.
+     */
+    private Torhausliste torhausliste = Torhausliste.ohneTore();
+
+    /** Woraus die Baeume und Brunnen der Platzkante sind. */
+    private Platzgruen platzgruen = Platzgruen.ohneGruen();
+
+    /**
      * Die Quader, um die das Pflaster herumlaeuft: eingetragene Bauten,
      * Ladeneinheiten und Tore.
      *
@@ -1072,8 +1086,16 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // niemand betreten.
         Stadtliste stadt = Stadtliste.ausKonfiguration(getConfig(),
                 kanten.get(bautenwelt), stoffklagen);
-        stadtplan = stadt.plan();
+        // DIE MASSE DER VORLAGEN kommen aus der Strukturverwaltung und nicht aus
+        // der Datei: Dort stehen nur Namen. Ein Plan, der die Masse raet, legt
+        // Parzellen, in die die Datei nicht passt - und dann rechnet der Bauplan,
+        // und der Betreiber sieht gerechnete Haeuser, obwohl er Vorlagen eingetragen
+        // hat.
+        stadtplan = stadt.plan(masseDerVorlagen(stadt.vorlagen(), stoffklagen));
         getLogger().info(stadt.bericht());
+        torhausliste = Torhausliste.ausKonfiguration(getConfig(), stoffklagen);
+        getLogger().info(torhausliste.bericht());
+        platzgruen = Platzgruen.ausKonfiguration(getConfig(), stoffklagen);
         // DIE UNBERUEHRTEN QUADER: dieselben Tore, die schon den Bauten im Weg
         // stehen duerfen, dazu die eingetragenen Bauten und die Ladeneinheiten.
         // Ihr Boden gehoert ihnen - das Pflaster laeuft darum herum.
@@ -1081,6 +1103,18 @@ public final class FreimarkenPlugin extends JavaPlugin {
         platzhalterbauten.alle().forEach(bau -> unberuehrt.add(bau.bereich()));
         if (ladenwelt.equals(bautenwelt)) {
             ladenverzeichnis.alle().forEach(einheit -> unberuehrt.add(einheit.bereich()));
+        }
+        // DIE TORHAEUSER GEHOEREN DAZU: Sie stehen im aeusseren Mauerring, und die
+        // aeussere Haeuserzeile reicht bis an denselben Ring. Ohne diesen Eintrag
+        // stellte der Rechenweg ein Zeilenhaus in ein Torhaus - und beide waeren
+        // verloren.
+        if (stadtplan != null) {
+            for (Richtung seite : Richtung.values()) {
+                if (torhausliste.tor(seite) != null) {
+                    unberuehrt.add(
+                            Torhausplan.inDerMauer(stadtplan, seite).bereich());
+                }
+            }
         }
         unberuehrteQuader = List.copyOf(unberuehrt);
         stoffklagen.forEach(getLogger()::severe);
@@ -1108,6 +1142,21 @@ public final class FreimarkenPlugin extends JavaPlugin {
             getLogger().info("Erscheinungspunkt der Marktstadt gesetzt: " + plan.mitteX(0)
                     + "/" + (Stadtboden.BODEN + 1) + "/" + plan.mitteZ(0)
                     + " - die Mitte von Parzelle 0/0.");
+        }
+        // UND DER ERSCHEINUNGSPUNKT ALTFURTS, aus demselben Grund nur bei einer
+        // frisch angelegten Welt [24.11.2026]: Ab Werk liegt er bei 0/0, und das
+        // ist seit der gerechneten Ringstadt mitten in einer Haeuserzeile - am
+        // Probeserver gemessen: 0/0 liegt auf Ring 72 und damit im INNEREN von
+        // haus-w0a-06. Wer die Welt betritt, stuende im Zimmer eines fremden
+        // Hauses, mit einer Tuer, die woanders ist. Die Mitte des Marktes ist der
+        // Ort, den die config.yml den Ankunftsort nennt.
+        World altfurtFrisch = welten.get(bautenwelt);
+        if (altfurtFrisch != null && gebaut.neu().contains(bautenwelt)) {
+            altfurtFrisch.setSpawnLocation(Stadtplan.MITTE_X,
+                    Stadtplan.BODEN_Y + 1, Stadtplan.MITTE_Z);
+            getLogger().info("Erscheinungspunkt von " + bautenwelt + " gesetzt: "
+                    + Stadtplan.MITTE_X + "/" + (Stadtplan.BODEN_Y + 1) + "/"
+                    + Stadtplan.MITTE_Z + " - die Mitte des Marktes.");
         }
 
         // Erst die Grenze, dann das Besitzbuch: Die Grenze entscheidet, welche
@@ -3470,6 +3519,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
             pflasterzeile = raus.bloecke() + " Bloecke Pflaster und Mauer, "
                     + raus.uebersprungen() + " Bloecke um Haeuser und Handarbeit herum";
         }
+        // DIE TORHAEUSER NACH DEM PFLASTER: Sie stehen IN der Mauer und ersetzen
+        // das Stueck, auf dem sie stehen. Vor dem Pflaster gesetzt, waere ihr
+        // Durchgang danach wieder zugemauert.
+        bloecke += baueTorhaeuser(griff, fein);
         int gesetzt = 0;
         int ausDatei = 0;
         for (Platzhalterbau bau : zuBauen) {
@@ -3487,7 +3540,20 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 ausDatei++;
             }
         }
+        // DAS GRUEN NACH DEN HAEUSERN: Es steht auf dem Pflaster, also muss das
+        // Pflaster liegen; und es steht auf der Platzkante, wo kein Haus steht - die
+        // Reihenfolge zu den Haeusern ist gleichgueltig. Nach ihnen steht es, weil die
+        // Handarbeitsquader dann vollstaendig sind.
+        String gruenzeile = "";
+        if (!altfurtaufbau.stehtPlatzgruen(stadtplan, platzgruen, griff)) {
+            Altfurtaufbau.Platzkante kante = altfurtaufbau.setzePlatzgruen(stadtplan,
+                    platzgruen, griff, schutz);
+            bloecke += kante.bloecke();
+            gruenzeile = ", auf der Platzkante " + kante.baeume() + " Baeume und "
+                    + kante.brunnen() + " Brunnen aus " + kante.bloecke() + " Bloecken";
+        }
         meldeAltereStadt(griff);
+        meldeSpawnImHaus();
         if (gesetzt == 0 && bloecke == 0L) {
             getLogger().info("Die Stadt steht: " + zuBauen.size()
                     + " Zeilenhaeuser, nichts zu setzen.");
@@ -3497,10 +3563,65 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + " von " + zuBauen.size() + " Zeilenhaeusern gesetzt"
                 + (ausDatei == 0 ? " (alle gerechnet)"
                         : " (" + ausDatei + " aus einer Datei)")
+                + gruenzeile
                 + ", zusammen " + bloecke + " Bloecke. "
                 + pflasterstoffe.bericht() + ". Wer ein Haus neu setzen will, nimmt"
                 + " seine Wandecke eine Ebene ueber dem Boden weg; wer neu pflastern"
                 + " will, den Block in der Mitte des Marktes.");
+    }
+
+    /**
+     * Meldet einen Erscheinungspunkt, der in einem Haus liegt [24.11.2026].
+     *
+     * <p><b>Warum {@code nenneSchlechteAnkunft} das nicht sieht</b>: Jene sucht einen
+     * Platz zum STEHEN - Boden darunter, Luft darueber, nichts Schaedliches. Das Innere
+     * eines gerechneten Hauses erfuellt alles davon: Es ist ein Zimmer. Nur hinaus kommt
+     * man nicht, denn die Tuer liegt woanders.
+     *
+     * <p>Darum diese Meldung. Sie wird gebraucht, weil der Erscheinungspunkt ab Werk bei
+     * 0/0 liegt und die Stadt um die Mitte 72/13 waechst: Mit zwei Quartieren liegt 0/0
+     * auf Ring 72 und damit im aeusseren Haeuserband. Auf einer frisch angelegten Welt
+     * setzt der Start den Punkt selbst auf den Markt; auf einer bestehenden darf er es
+     * NICHT, denn dort kann ein Betreiber ihn mit {@code /setworldspawn} gewaehlt haben.
+     * Also wird es gesagt, mit der Zeile zum Kopieren.
+     */
+    private void meldeSpawnImHaus() {
+        if (stadtplan == null) {
+            return;
+        }
+        World welt = welten.get(bautenwelt);
+        if (welt == null) {
+            return;
+        }
+        var spawn = welt.getSpawnLocation();
+        int x = spawn.getBlockX();
+        int y = spawn.getBlockY();
+        int z = spawn.getBlockZ();
+        for (Platzhalterbau bau : stadtplan.haeuser()) {
+            if (!bau.bereich().enthaelt(x, y, z)) {
+                continue;
+            }
+            getLogger().severe("Der Erscheinungspunkt von " + bautenwelt + " liegt bei "
+                    + x + "/" + y + "/" + z + " und damit IM HAUS " + bau.schluessel()
+                    + " (" + bau.bereich().alsText() + "). Innen ist Luft, man kann dort"
+                    + " stehen - aber nicht hinaus. Setz ihn auf den Markt:"
+                    + " /execute in " + welt.key().asString() + " run setworldspawn "
+                    + Stadtplan.MITTE_X + " " + (Stadtplan.BODEN_Y + 1) + " "
+                    + Stadtplan.MITTE_Z);
+            return;
+        }
+        for (Quader fest : unberuehrteQuader) {
+            if (!fest.enthaelt(x, y, z)) {
+                continue;
+            }
+            getLogger().severe("Der Erscheinungspunkt von " + bautenwelt + " liegt bei "
+                    + x + "/" + y + "/" + z + " und damit in einem eingetragenen Bau,"
+                    + " einer Ladeneinheit oder einem Tor (" + fest.alsText() + "). Setz"
+                    + " ihn auf den Markt: /execute in " + welt.key().asString()
+                    + " run setworldspawn " + Stadtplan.MITTE_X + " "
+                    + (Stadtplan.BODEN_Y + 1) + " " + Stadtplan.MITTE_Z);
+            return;
+        }
     }
 
     /**
@@ -3521,8 +3642,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
      * dreihunderttausend.
      */
     private void meldeAltereStadt(Weltgriff griff) {
-        Material mauerstoff = pflasterstoffe.block(Stadtplan.Lage.MAUER);
-        if (mauerstoff == null) {
+        // DIE GANZE MISCHUNG, nicht ihr Block an einer Stelle: Eine Mauer steht
+        // dort, wenn IRGENDEIN Stoff der Mauermischung liegt.
+        List<Material> mauerstoffe = pflasterstoffe.mischung(Stadtplan.Lage.MAUER);
+        if (mauerstoffe.isEmpty()) {
             return;
         }
         List<String> gefunden = new ArrayList<>();
@@ -3531,8 +3654,8 @@ public final class FreimarkenPlugin extends JavaPlugin {
             Stadtplan groesser = new Stadtplan(q);
             int ring = groesser.mauerVon();
             // NEBEN der Achse: auf ihr liegt das Stadttor, und dort steht nie Mauer.
-            if (griff.bei(Stadtplan.MITTE_X + ring, Stadtplan.BODEN_Y + 2,
-                    Stadtplan.MITTE_Z + 8) == mauerstoff) {
+            if (mauerstoffe.contains(griff.bei(Stadtplan.MITTE_X + ring,
+                    Stadtplan.BODEN_Y + 2, Stadtplan.MITTE_Z + 8))) {
                 gefunden.add(q + " Quartiere (Mauer auf Ring " + ring + ")");
             }
         }
@@ -3545,6 +3668,171 @@ public final class FreimarkenPlugin extends JavaPlugin {
                 + " damit mitten in der Stadt. Das Pflaster kann sie nicht abtragen -"
                 + " es schreibt nur die Bodenebene. Trag die alte Zahl wieder ein"
                 + " oder raeume die Mauer ab.");
+    }
+
+    /**
+     * Holt die Masse der eingetragenen Vorlagen aus der Strukturverwaltung.
+     *
+     * <p><b>Warum das hier steht und nicht im Leser</b>: Die {@code config.yml} kennt
+     * nur Namen. Wie gross eine gespeicherte Struktur ist, weiss nur der Server - und
+     * zwar erst, wenn die Welt geladen ist. Ein Leser, der das raet, legt Parzellen, in
+     * die die Datei nicht passt; dann rechnet der Bauplan, und der Betreiber sieht
+     * gerechnete Haeuser, obwohl er Vorlagen eingetragen hat.
+     *
+     * <p><b>Jede Vorlage, die NICHT taugt, wird einzeln geklagt</b> - mit dem Grund.
+     * Drei Faelle: Die Datei fehlt, sie ist tiefer als ein Band (dann passt sie in keine
+     * Zeile), oder sie ist traufstaendig (breiter als tief) - das ist erlaubt, sieht in
+     * einer Hansezeile aber anders aus, und darum wird es gesagt.
+     */
+    private List<Vorlage> masseDerVorlagen(List<String> namen, List<String> klagen) {
+        if (namen.isEmpty()) {
+            return List.of();
+        }
+        World welt = welten.get(bautenwelt);
+        if (welt == null) {
+            klagen.add(namen.size() + " Vorlagen sind eingetragen, aber die Welt \""
+                    + bautenwelt + "\" ist nicht geladen - ihre Masse sind nicht zu"
+                    + " erfahren. Es wird gerechnet.");
+            return List.of();
+        }
+        Strukturgriff strukturen = new Strukturgriff.AufDerWelt(welt,
+                getServer().getStructureManager(),
+                new java.io.File(getDataFolder(), Strukturgriff.ORDNER));
+        List<Vorlage> raus = new ArrayList<>();
+        for (String name : namen) {
+            int[] masse = strukturen.groesse(name);
+            if (masse == null) {
+                klagen.add("Die Vorlage \"" + name + "\" steht in "
+                        + Stadtliste.PFAD + "." + Stadtliste.SCHLUESSEL_VORLAGEN
+                        + ", aber es gibt keine Datei " + Strukturgriff.ORDNER + "/"
+                        + name + ".nbt. Bau das Haus und sichere es mit /freimarken"
+                        + " altfurt sichern, oder nimm den Namen heraus.");
+                continue;
+            }
+            Vorlage vorlage;
+            try {
+                vorlage = new Vorlage(name, masse[0], masse[1], masse[2]);
+            } catch (IllegalArgumentException zuKlein) {
+                klagen.add("Die Vorlage \"" + name + "\" ist unbrauchbar: "
+                        + zuKlein.getMessage());
+                continue;
+            }
+            if (!Stadtplan.passtInEineZeile(vorlage)) {
+                klagen.add("Die Vorlage " + vorlage.alsText() + " passt in keine"
+                        + " Haeuserzeile - ein Band ist " + Stadtplan.ZEILE_TIEFE
+                        + " Bloecke tief. Uebersprungen.");
+                continue;
+            }
+            if (!vorlage.giebelstaendig()) {
+                klagen.add("Die Vorlage " + vorlage.alsText() + " ist breiter als tief,"
+                        + " steht also TRAUFstaendig. Sie wird gesetzt, sieht in einer"
+                        + " Hansezeile aber anders aus als die giebelstaendigen"
+                        + " Nachbarn.");
+            }
+            raus.add(vorlage);
+        }
+        return List.copyOf(raus);
+    }
+
+    /**
+     * Setzt die vier Torhaeuser in die Stadtmauer [23.11.2026].
+     *
+     * <p><b>Das ist die Antwort auf zwei Saetze des Betreibers</b>: Die alten Tortuerme
+     * waren "zu hoch und zu duenn, das passt ueberhaupt nicht ins stadtbild", und die
+     * Stadtmauer soll geschlossen sein mit den Weltportalen darin. Ein Torhaus ist
+     * 15 breit und 11 hoch, sein Durchgang endet an der Mauer, und links und rechts darin
+     * steht je ein Portal mit dem Diorama seiner Zielwelt dahinter.
+     *
+     * <p><b>Nur was FEHLT</b>, wie bei allem in Altfurt: Erkannt wird ein Torhaus an der
+     * Ecke seines linken Turms. Wer es neu setzen will, nimmt diesen Block weg.
+     *
+     * <p>Die Nischen werden NACHGERECHNET und mit {@code welten.&lt;welt&gt;.tor}
+     * verglichen - die Datei bleibt die Wahrheit, aber eine Abweichung bedeutet ein
+     * Portal in einer Wand, und das muss gesagt werden.
+     *
+     * @return wie viele Bloecke gesetzt wurden
+     */
+    private long baueTorhaeuser(Weltgriff griff, Altfurtaufbau.Feingriff fein) {
+        if (stadtplan == null || torhausliste.leer()) {
+            return 0L;
+        }
+        Torhausaufbau hand = new Torhausaufbau(pflasterstoffe, altfurtaufbau.stoffe());
+        List<String> klagen = new ArrayList<>();
+        List<String> gesetzt = new ArrayList<>();
+        long bloecke = 0L;
+        int nischen = 0;
+        int dioramen = 0;
+        for (Richtung seite : Richtung.values()) {
+            Torhausliste.Tor tor = torhausliste.tor(seite);
+            if (tor == null) {
+                continue;
+            }
+            Torhausplan plan = Torhausplan.inDerMauer(stadtplan, seite);
+            pruefeNische(plan, seite, true, tor.links(), klagen);
+            pruefeNische(plan, seite, false, tor.rechts(), klagen);
+            if (hand.stehtSchon(plan, griff)) {
+                continue;
+            }
+            Torhausaufbau.Ergebnis raus = hand.setze(plan, griff, fein,
+                    torhausliste.diorama(tor.links()),
+                    torhausliste.diorama(tor.rechts()));
+            bloecke += raus.bloecke();
+            nischen += raus.nischen();
+            dioramen += raus.dioramen();
+            gesetzt.add(seite.wort());
+        }
+        klagen.forEach(getLogger()::severe);
+        if (gesetzt.isEmpty()) {
+            getLogger().info("Die Torhaeuser stehen - nichts zu setzen.");
+            return bloecke;
+        }
+        getLogger().warning("Torhaeuser gesetzt: " + String.join(", ", gesetzt) + " ("
+                + bloecke + " Bloecke, " + nischen + " Bloecke Portalnische, " + dioramen
+                + " Dioramen). Wer eines neu setzen will, nimmt die Ecke seines linken"
+                + " Turms eine Ebene ueber dem Boden weg.");
+        return bloecke;
+    }
+
+    /**
+     * Prueft, ob das Tor einer Welt wirklich in der Nische liegt, die fuer sie gebaut
+     * wird.
+     *
+     * <p><b>Eine Naht zwischen Datei und Rechnung</b>: Der Quader steht in
+     * {@code welten:}, die Nische rechnet {@code Torhausplan}. Stimmen sie nicht
+     * ueberein, steht das Portal in einer Wand - und der Spieler sieht ein Torhaus mit
+     * einer Nische, in der nichts passiert. Die Klage nennt die Zahlen, die in der Datei
+     * stehen muessten.
+     */
+    private void pruefeNische(Torhausplan plan, Richtung seite, boolean links,
+            String welt, List<String> klagen) {
+        if (welt == null) {
+            return;
+        }
+        Quader soll = plan.nische(links);
+        String wo = Torhausliste.PFAD + "." + seite.wort() + "."
+                + (links ? "links" : "rechts");
+        Weltangabe angabe = angaben.get(welt);
+        if (angabe == null) {
+            klagen.add(wo + " nennt die Welt \"" + welt + "\", und die steht nicht im"
+                    + " Abschnitt welten: - in dieser Nische passiert nichts.");
+            return;
+        }
+        if (angabe.tor() == null) {
+            klagen.add(wo + ": die Welt \"" + welt + "\" hat kein tor:. Trag bei"
+                    + " welten." + welt + ".tor ein: von [" + soll.vonX() + ", "
+                    + soll.vonY() + ", " + soll.vonZ() + "] bis [" + soll.bisX() + ", "
+                    + soll.bisY() + ", " + soll.bisZ() + "] - das ist die Nische, die"
+                    + " dort gebaut wird.");
+            return;
+        }
+        if (!angabe.tor().equals(soll)) {
+            klagen.add(wo + ": das Tor nach \"" + welt + "\" liegt bei "
+                    + angabe.tor().alsText() + ", die Nische des Torhauses aber bei "
+                    + soll.alsText() + ". Trag bei welten." + welt + ".tor ein: von ["
+                    + soll.vonX() + ", " + soll.vonY() + ", " + soll.vonZ() + "] bis ["
+                    + soll.bisX() + ", " + soll.bisY() + ", " + soll.bisZ() + "] -"
+                    + " sonst steht das Portal in einer Wand.");
+        }
     }
 
     /**

@@ -49,7 +49,7 @@ record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
      * bevor es sich einen Block einzieht. Zwei Treppen uebereinander liessen aussen die
      * oberen Haelften offen - von der Gasse aus ein Zickzack statt einer Flaeche. Die
      * untere Ebene jeder Stufe ist darum ein voller Block
-     * ({@link Bauplan.Stueck#DACHFUSS}), und der First ist es auch: Eine Treppe als
+     * und der First ist ein VOLLER Block: Eine Treppe als
      * First zeigte in eine der zwei Richtungen und saehe von der anderen Seite falsch
      * aus.
      */
@@ -147,10 +147,11 @@ record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
     /**
      * Eine Palette aus fuenf Bloecken - die uebrigen Stuecke folgen daraus.
      *
-     * <p>Fuenf und nicht elf: Boden und Sockel sind derselbe Stein, Giebelstufe und First
-     * sind dasselbe Mauerwerk wie die Wand, Laterne ist immer eine Laterne, Tuer und Luft
-     * sind Luft. Elf Zeilen je Stil waeren sechs Gelegenheiten, zwei davon verschieden zu
-     * machen, ohne es zu merken.
+     * <p>Fuenf und nicht vierzehn: Boden und Sockel sind derselbe Stein, Giebelstufe,
+     * First und Schornstein sind dasselbe Mauerwerk wie die Wand, Geschossdecke ist das
+     * Balkenholz, Laterne ist immer eine Laterne und Leiter immer eine Leiter, Tuer und
+     * Luft sind Luft. Vierzehn Zeilen je Stil waeren neun Gelegenheiten, zwei davon
+     * verschieden zu machen, ohne es zu merken.
      */
     private static Map<Bauplan.Stueck, Material> palette(Material sockel, Material mauer,
             Material balken, Material gefach, Material fenster) {
@@ -161,12 +162,22 @@ record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
         palette.put(Bauplan.Stueck.GEFACH, gefach);
         palette.put(Bauplan.Stueck.FENSTER, fenster);
         palette.put(Bauplan.Stueck.LATERNE, Material.LANTERN);
+        // DIE GESCHOSSDECKE AUS DEM BALKENHOLZ: Ein Fussboden ist aus demselben Holz
+        // wie das Gebaelk, das ihn traegt - in jedem Stil. Ein steinerner Boden ueber
+        // einem Wohngeschoss waere ein Gewoelbe, und das hat ein Buergerhaus nicht.
+        palette.put(Bauplan.Stueck.DECKE, balken);
+        // DIE LEITER IST IMMER EINE LEITER - wie die Laterne. Ein Stil, der statt ihrer
+        // etwas anderes setzte, haette keine Leiter, sondern ein Loch im Fussboden.
+        palette.put(Bauplan.Stueck.LEITER, Material.LADDER);
         palette.put(Bauplan.Stueck.GIEBELSTUFE, mauer);
         palette.put(Bauplan.Stueck.FIRST, mauer);
-        // DACH, DACHFUSS und FIRST kommen aus der Dachart und nicht aus der Palette -
+        // DER SCHORNSTEIN AUS DEM MAUERWERK: Er ist gemauert, in JEDEM Stil. Beim
+        // Fachwerkhaus waere das Gefach der weisse Putz, und ein weisser Schornstein
+        // sieht aus wie ein vergessener Block.
+        palette.put(Bauplan.Stueck.SCHORNSTEIN, mauer);
+        // DACH und FIRST kommen aus der Dachart und nicht aus der Palette -
         // hier steht der Rueckfall, falls je ein Stil ohne Dachart gefragt wird.
         palette.put(Bauplan.Stueck.DACH, mauer);
-        palette.put(Bauplan.Stueck.DACHFUSS, mauer);
         palette.put(Bauplan.Stueck.TUER, Material.AIR);
         palette.put(Bauplan.Stueck.LUFT, Material.AIR);
         return palette;
@@ -214,7 +225,7 @@ record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
     /**
      * Der Block fuer dieses Stueck in diesem Stil, mit dieser Dachart.
      *
-     * <p>Die Dachart gewinnt fuer DACH, DACHFUSS und FIRST: Der First ist die Krone des
+     * <p>Die Dachart gewinnt fuer DACH und FIRST: Der First ist die Krone des
      * Dachs und nicht das oberste Mauerwerk.
      *
      * <p><b>Dass der First dazugehoert, ist am laufenden Server gefunden worden</b>
@@ -229,11 +240,11 @@ record Baustoffe(Map<Baustil, Map<Bauplan.Stueck, Material>> paletten,
         if (stueck == Bauplan.Stueck.DACH) {
             return stoff.treppe();
         }
-        // DACHFUSS und FIRST sind die VOLLEN Bloecke derselben Dachart: Der Fuss jeder
+        // FIRST ist der VOLLE Block derselben Dachart: Die Krone jeder
         // Dachstufe traegt die Treppe darueber, und der First ist die eine Reihe, in der
         // beide Dachseiten sich treffen - eine Treppe dort zeigte in eine Richtung und
         // saehe von der anderen Seite falsch aus.
-        if (stueck == Bauplan.Stueck.DACHFUSS || stueck == Bauplan.Stueck.FIRST) {
+        if (stueck == Bauplan.Stueck.FIRST) {
             return stoff.voll();
         }
         return paletten.get(stil).get(stueck);
