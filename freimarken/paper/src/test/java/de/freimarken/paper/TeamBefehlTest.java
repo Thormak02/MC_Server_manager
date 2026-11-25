@@ -368,24 +368,29 @@ class TeamBefehlTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> new TeamBefehle(null, sprache, suche, namen, uhr, () -> BERLIN,
-                        stumm));
+                        wer -> { }, stumm));
         assertThrows(IllegalArgumentException.class,
                 () -> new TeamBefehle(buch, null, suche, namen, uhr, () -> BERLIN,
-                        stumm));
+                        wer -> { }, stumm));
         assertThrows(IllegalArgumentException.class,
                 () -> new TeamBefehle(buch, sprache, null, namen, uhr, () -> BERLIN,
-                        stumm));
+                        wer -> { }, stumm));
         assertThrows(IllegalArgumentException.class,
                 () -> new TeamBefehle(buch, sprache, suche, null, uhr, () -> BERLIN,
-                        stumm));
+                        wer -> { }, stumm));
         assertThrows(IllegalArgumentException.class,
                 () -> new TeamBefehle(buch, sprache, suche, namen, null, () -> BERLIN,
-                        stumm));
+                        wer -> { }, stumm));
         assertThrows(IllegalArgumentException.class,
-                () -> new TeamBefehle(buch, sprache, suche, namen, uhr, null, stumm));
+                () -> new TeamBefehle(buch, sprache, suche, namen, uhr, null, wer -> { }, stumm));
         assertThrows(IllegalArgumentException.class,
                 () -> new TeamBefehle(buch, sprache, suche, namen, uhr, () -> BERLIN,
-                        null));
+                        wer -> { }, null));
+        // Ohne die Rechtehand wirkte eine Rollenaenderung erst beim naechsten Takt -
+        // der Betreiber las GENOMMEN, und der Moderator bannte weiter.
+        assertThrows(IllegalArgumentException.class,
+                () -> new TeamBefehle(buch, sprache, suche, namen, uhr, () -> BERLIN,
+                        null, stumm));
     }
 
     /** Ein Server ohne Teamrollen - der Aus-Zustand, und er braucht keinen Schalter. */
@@ -413,10 +418,56 @@ class TeamBefehlTest {
         return baum.konsoleBild();
     }
 
+    @Test
+    @DisplayName("Eine Rollenaenderung setzt die Rechte SOFORT neu")
+    void rollenaenderungEntwaffnetSofort() throws CommandSyntaxException {
+        // DER FUND VOM 25.11.2026: Gesetzt wird das Anhaengsel allein in
+        // Rangwache.vergibNeu, und das laeuft beim Beitritt und im Spielzeittakt - ab
+        // Werk alle 60 Sekunden, erlaubt sind 600. Ein Verwalter entzog einem
+        // missbrauchenden Moderator die Rolle, las GENOMMEN und hielt ihn fuer
+        // entwaffnet, waehrend der in diesem Fenster weiter bannen konnte.
+        //
+        // BEIDE Richtungen: Wer eine Rolle bekommt, soll sie auch sofort haben - sonst
+        // tippt er den Befehl, liest eine Absage und meldet einen Fehler.
+        tippe("team gib Bert helfer");
+
+        assertEquals(List.of(BERT), entwaffnet,
+                "nach dem GEBEN werden die Rechte neu gesetzt");
+
+        entwaffnet.clear();
+        tippe("team nimm Bert helfer");
+
+        assertEquals(List.of(BERT), entwaffnet,
+                "und nach dem NEHMEN - sonst straft der entzogene Moderator weiter");
+    }
+
+    @Test
+    @DisplayName("Eine Rollenaenderung, die NICHTS aendert, setzt auch nichts neu")
+    void keineAenderungSetztNichts() throws CommandSyntaxException {
+        // Die Gegenrichtung: Ein Entziehen, das nichts entzieht (er hatte die Rolle
+        // nicht), soll die Rechte nicht anfassen. Sonst stuende in jedem Protokoll ein
+        // Neusetzen, das nichts bedeutet - und eine Probe, die immer gruen ist, haelt
+        // die Zusage darueber nicht.
+        tippe("team nimm Bert helfer");
+
+        assertTrue(entwaffnet.isEmpty(),
+                "ohne Aenderung wird nichts gesetzt: " + entwaffnet);
+    }
+
+    /**
+     * Wessen Rechte nach einer Rollenaenderung neu gesetzt wurden.
+     *
+     * <p>Die Mitschrift zur Rechtehand [25.11.2026]: Ohne sie wirkte /team gib und
+     * /team nimm erst beim naechsten Spielzeittakt - ab Werk eine Minute, erlaubt bis
+     * zehn. Der Betreiber las GENOMMEN und hielt den Moderator fuer entwaffnet.
+     */
+    private final List<UUID> entwaffnet = new java.util.ArrayList<>();
+
     private Befehlsprobe baum(Teamwerte rollen) {
         return new Befehlsprobe(List.of(new TeamBefehle(
                 new Teambuch(ablage, () -> rollen), sprache,
                 BEKANNT::get, TeamBefehlTest::nameVon, () -> MITTAGS, () -> BERLIN,
+                entwaffnet::add,
                 Logger.getLogger("TeamBefehlProbe-" + UUID.randomUUID())).team()));
     }
 

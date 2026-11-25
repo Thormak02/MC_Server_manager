@@ -152,18 +152,35 @@ public record Strafwerte(Map<Strafart, Long> hoechsteStunden,
                         + PFAD_STUMM_SPERRT_BEFEHLE + ". Er wuerde auf JEDEN Befehl"
                         + " passen oder auf keinen - beides ist kein Zustand");
             }
-            // Ohne Schraegstrich und klein: Was ein Betreiber tippt, ist "/msg" oder
-            // "msg", und was der Zuhoerer sieht, ist "/msg hans hallo". Die Form wird
-            // HIER vereinheitlicht und nicht beim Vergleichen - sonst vergleicht die
-            // eine Stelle anders als die andere.
+            // Ohne Schraegstrich, ohne Namensraum und klein: Was ein Betreiber
+            // tippt, ist "/msg", "msg" oder "cmi:r", und was der Zuhoerer sieht, ist
+            // "/msg hans hallo". Die Form wird HIER vereinheitlicht und nicht beim
+            // Vergleichen - sonst vergleicht die eine Stelle anders als die andere.
+            //
+            // DER NAMENSRAUM FAELLT WEG [behoben am 25.11.2026]: Vorher blieb der
+            // Doppelpunkt stehen, waehrend sperrtBefehl ihn beim GETIPPTEN
+            // abschneidet - ein Eintrag "cmi:r" traf damit in KEINER Gestalt, weder
+            // bei /cmi:r noch bei /r. Die Datei sagt zu, der Namensraum werde
+            // mitgefangen, der Startbericht zaehlte den toten Eintrag mit, und
+            // ungereimtheiten() sah ihn nicht: Der Moderator hielt den Spieler fuer
+            // still, und der fluesterte weiter.
+            //
+            // Die Sperre gilt dem BEFEHL und nicht dem Namensraum - "cmi:r" und "r"
+            // sind derselbe Befehl, nur anders angesprochen.
             String rein = name.trim().toLowerCase(Locale.ROOT);
             while (rein.startsWith("/")) {
                 rein = rein.substring(1);
             }
+            int doppelpunkt = rein.indexOf(':');
+            if (doppelpunkt >= 0) {
+                rein = rein.substring(doppelpunkt + 1);
+            }
             if (rein.isEmpty()) {
                 throw new IllegalArgumentException("Der Befehlsname \"" + name
                         + "\" in " + PFAD_STUMM_SPERRT_BEFEHLE + " besteht nur aus"
-                        + " Schraegstrichen");
+                        + " Schraegstrichen und Namensraum. Gesperrt wird der BEFEHL,"
+                        + " nicht der Namensraum - schreib \"msg\" und nicht"
+                        + " \"plugin:\".");
             }
             if (!namen.contains(rein)) {
                 namen.add(rein);

@@ -174,6 +174,33 @@ class StrafwerteTest {
     }
 
     @Test
+    @DisplayName("Ein Eintrag MIT Namensraum trifft - in beiden Gestalten")
+    void eintragMitNamensraumTrifft() {
+        // DER FUND VOM 25.11.2026: Der Konstruktor liess den Doppelpunkt stehen,
+        // waehrend sperrtBefehl ihn beim GETIPPTEN abschneidet - ein Eintrag "cmi:r"
+        // traf damit in KEINER Gestalt, weder bei /cmi:r noch bei /r. Die Datei sagt
+        // zu, der Namensraum werde mitgefangen; der Startbericht zaehlte den toten
+        // Eintrag mit, und der Moderator hielt den Spieler fuer still.
+        Strafwerte werte = Strafwerte.VORGABE.mitStummSperrtBefehle(
+                List.of("cmi:r", "/plugin:brief"));
+
+        assertEquals(List.of("r", "brief"), werte.stummSperrtBefehle(),
+                "der Namensraum faellt beim Eintragen weg - gesperrt wird der BEFEHL");
+        assertTrue(werte.sperrtBefehl("/cmi:r hallo"), "in der getippten Gestalt");
+        assertTrue(werte.sperrtBefehl("/r hallo"), "und ohne Namensraum");
+        assertTrue(werte.sperrtBefehl("/brief Hans"));
+        assertTrue(werte.sperrtBefehl("/plugin:brief Hans"));
+    }
+
+    @Test
+    @DisplayName("Ein Eintrag aus NUR Namensraum wirft")
+    void nurNamensraumWirft() {
+        // "plugin:" nennt keinen Befehl - er wuerde auf alles passen oder auf nichts.
+        assertThrows(IllegalArgumentException.class, () -> Strafwerte.VORGABE
+                .mitStummSperrtBefehle(List.of("plugin:")));
+    }
+
+    @Test
     @DisplayName("Eine LEERE Befehlsliste ist erlaubt und wird gemeldet")
     void leereListeIstErlaubtUndGemeldet() {
         Strafwerte werte = Strafwerte.VORGABE.mitStummSperrtBefehle(List.of());

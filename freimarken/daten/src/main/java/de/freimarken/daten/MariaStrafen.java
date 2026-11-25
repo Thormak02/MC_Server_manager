@@ -392,17 +392,42 @@ public final class MariaStrafen implements Strafablage {
                 Datenbank.utcKalender());
         Timestamp aufgehoben = ergebnis.getTimestamp("aufgehoben_am",
                 Datenbank.utcKalender());
-        return new Strafe(nummer,
-                UUID.fromString(ergebnis.getString("betroffener")),
-                art,
-                ergebnis.getString("grund"),
-                vonWem == null ? null : UUID.fromString(vonWem),
-                ergebnis.getTimestamp("verhaengt_am", Datenbank.utcKalender())
-                        .toInstant(),
-                ende == null ? null : ende.toInstant(),
-                aufgehoben == null ? null : aufgehoben.toInstant(),
-                aufheber == null ? null : UUID.fromString(aufheber),
-                ergebnis.getString("aufhebungsgrund"));
+        try {
+            return new Strafe(nummer,
+                    UUID.fromString(ergebnis.getString("betroffener")),
+                    art,
+                    ergebnis.getString("grund"),
+                    vonWem == null ? null : UUID.fromString(vonWem),
+                    ergebnis.getTimestamp("verhaengt_am", Datenbank.utcKalender())
+                            .toInstant(),
+                    ende == null ? null : ende.toInstant(),
+                    aufgehoben == null ? null : aufgehoben.toInstant(),
+                    aufheber == null ? null : UUID.fromString(aufheber),
+                    ergebnis.getString("aufhebungsgrund"));
+        } catch (IllegalArgumentException unbrauchbar) {
+            // DER GANZE KONSTRUKTOR und nicht nur die Art [behoben am 25.11.2026]:
+            // Die Spalten erlauben mehr als er. Der Grund ist VARCHAR(256) NOT NULL,
+            // seine MINDESTlaenge von drei Zeichen steht nur in Java; eine von Hand
+            // eingetragene Zeile mit grund = "ok" liess ihn werfen, und zwar als
+            // IllegalArgumentException. Die faengt niemand: geltendeAlle liest ALLE
+            // geltenden Banne, also riss diese eine Zeile die ganze oeffentliche
+            // Bannliste mit - und, schlimmer, den Wurf aus der Beitrittswache, die
+            // nur IllegalStateException faengt.
+            //
+            // Von Hand eingetragen wird oefter, als man denkt: /strafe trifft nur
+            // Spieler, die der Server schon einmal gesehen hat.
+            //
+            // Neu geworfen als IllegalStateException - das ist die Gattung, die die
+            // Schnittstelle fuer "nicht lesbar" zusagt, und nur sie fangen die
+            // Aufrufer. Mit der NUMMER darin, sonst durchsucht der Betreiber die
+            // ganze Tabelle.
+            throw new IllegalStateException("Die Strafe " + nummer + " laesst sich"
+                    + " nicht lesen: " + unbrauchbar.getMessage() + ". Die Zeile ist"
+                    + " wahrscheinlich von Hand eingetragen oder geaendert worden -"
+                    + " die Spalten erlauben mehr als das Programm (ein Grund braucht"
+                    + " mindestens " + Strafe.KUERZESTER_GRUND + " Zeichen, und ein"
+                    + " Rauswurf darf kein Ende in der Zukunft haben).", unbrauchbar);
+        }
     }
 
     private static void pruefe(UUID betroffener, Strafart art) {

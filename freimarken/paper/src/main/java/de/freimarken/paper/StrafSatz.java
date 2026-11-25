@@ -106,12 +106,35 @@ enum StrafSatz implements Satz {
      * nennen: Sonst haelt der Moderator es fuer einen Fehler, dass er eine Strafe
      * nicht aufheben darf, die er selbst sieht. Nach Plan 12c.2 ist das Absicht: Wer
      * nicht dauerhaft sperren darf, nimmt auch keinen dauerhaften Bann zurueck.
+     *
+     * <p>Er gilt fuer BEIDE Faelle - ohne Ende und laenger als die Hoechstdauer
+     * [erweitert am 25.11.2026]. Vorher fragte das Aufheben nur nach dem fehlenden
+     * Ende, und ein Moderator nahm den Zehn-Jahres-Bann eines Verwalters zurueck.
      */
     OHNE_RECHT_DAUERHAFT_AUFHEBEN("strafe.ohne-recht-dauerhaft-aufheben", Art.SATZ,
             "nummer"),
 
     /** Niemand straft sich selbst. */
     SELBST("strafe.selbst", Art.SATZ),
+
+    /**
+     * Niemand hebt seine EIGENE Strafe auf - ein eigener Satz.
+     *
+     * <p>Nicht {@link #SELBST}: Dort steht "bestrafen", und hier wollte er aufheben.
+     * Der Riegel dahinter war am 25.11.2026 ganz offen - ein stummgeschalteter
+     * Moderator mit dem Recht zum Aufheben las im eigenen Verlauf seine Nummer und war
+     * frei.
+     */
+    SELBST_AUFHEBEN("strafe.selbst-aufheben", Art.SATZ),
+
+    /**
+     * Die Strafe gegen ein Teammitglied hebt nur auf, wer das Teamrecht hat.
+     *
+     * <p>Mit der NUMMER und nicht mit dem Namen: Wer aufhebt, hat die Nummer getippt,
+     * nicht den Spieler - und der Name des Betroffenen gehoert in dieser Absage nicht
+     * noch einmal genannt.
+     */
+    OHNE_RECHT_TEAM_AUFHEBEN("strafe.ohne-recht-team-aufheben", Art.SATZ, "nummer"),
 
     /**
      * Der Grund ist zu kurz - mit der Mindestlaenge.

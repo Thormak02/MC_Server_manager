@@ -91,6 +91,27 @@ final class TeamBefehle {
         String nameVon(UUID wer);
     }
 
+    /**
+     * Die Rechte eines Spielers neu setzen - sofort nach einer Rollenaenderung.
+     *
+     * <p><b>Ohne diese Naht wirkt eine Rollenaenderung erst beim naechsten
+     * Spielzeittakt</b> [behoben am 25.11.2026]: Gesetzt wird das Anhaengsel allein in
+     * {@code Rangwache.vergibNeu}, und das laeuft beim Beitritt und im Takt - ab Werk
+     * alle 60 Sekunden, erlaubt sind 600. Ein Verwalter entzog einem missbrauchenden
+     * Moderator die Rolle, las GENOMMEN und hielt ihn fuer entwaffnet, waehrend der in
+     * diesem Fenster weiter bannen konnte. Die zwei Seiten derselben Aenderung wirkten
+     * zu verschiedenen Zeiten.
+     *
+     * <p>Sie gilt fuer BEIDE Richtungen: Wer eine Rolle BEKOMMT, soll sie auch sofort
+     * haben - sonst tippt er den Befehl, liest eine Absage und meldet einen Fehler.
+     *
+     * <p>Ist der Spieler nicht angemeldet, geschieht nichts, und das ist kein Fehler:
+     * Beim Beitritt setzt die {@code Rangwache} seine Rechte ohnehin neu.
+     */
+    interface Rechtehand {
+        void setzeNeu(UUID wer);
+    }
+
     /** Die Uhr - als Naht, damit eine Probe einen festen Zeitpunkt hereingeben kann. */
     interface Uhr {
         Instant jetzt();
@@ -111,14 +132,19 @@ final class TeamBefehle {
      */
     private final java.util.function.Supplier<ZoneId> zone;
 
+    private final Rechtehand rechtehand;
+
     private final Logger protokoll;
 
     TeamBefehle(Teambuch buch, Sprache sprache, Namenssuche suche, Namensgeber namen,
-                Uhr uhr, java.util.function.Supplier<ZoneId> zone, Logger protokoll) {
+                Uhr uhr, java.util.function.Supplier<ZoneId> zone,
+                Rechtehand rechtehand, Logger protokoll) {
         if (buch == null || sprache == null || suche == null || namen == null
-                || uhr == null || zone == null || protokoll == null) {
+                || uhr == null || zone == null || rechtehand == null
+                || protokoll == null) {
             throw new IllegalArgumentException("/team braucht das Teambuch, Sprache,"
-                    + " Namenssuche, Namensgeber, eine Uhr, die Zone und das Protokoll");
+                    + " Namenssuche, Namensgeber, eine Uhr, die Zone, die Rechtehand"
+                    + " und das Protokoll");
         }
         this.buch = buch;
         this.sprache = sprache;
@@ -126,6 +152,7 @@ final class TeamBefehle {
         this.namen = namen;
         this.uhr = uhr;
         this.zone = zone;
+        this.rechtehand = rechtehand;
         this.protokoll = protokoll;
     }
 
@@ -313,6 +340,12 @@ final class TeamBefehle {
         if (entscheid.geaendert()) {
             protokoll.info(wer.getName() + " hat " + name + " die Teamrolle \"" + rolle
                     + "\" " + (vergeben ? "gegeben" : "genommen") + ".");
+            // SOFORT und nicht erst beim naechsten Takt [behoben am 25.11.2026]: Die
+            // Antwort darunter sagt GENOMMEN, und der Betreiber haelt den Moderator
+            // fuer entwaffnet - vorher behielt der seine Rechte bis zum naechsten
+            // Taktschlag, ab Werk eine Minute und erlaubt bis zehn. In diesem Fenster
+            // konnte er weiter bannen.
+            rechtehand.setzeNeu(kennung);
         }
         sende(wer, meldung(entscheid, name, rolle));
         return Command.SINGLE_SUCCESS;

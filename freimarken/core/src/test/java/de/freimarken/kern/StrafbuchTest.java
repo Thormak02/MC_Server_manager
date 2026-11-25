@@ -56,12 +56,32 @@ class StrafbuchTest {
             NAMEN.rauswurf(), NAMEN.bann(), NAMEN.aufheben(), NAMEN.dauerhaft(),
             NAMEN.team());
 
-    private static Strafbuch buch() {
+    /**
+     * Wen die Teamfrage als Teammitglied meldet - je Probe gesetzt.
+     *
+     * <p>Die Frage steht seit dem 25.11.2026 im BUCH und nicht als Parameter an
+     * {@code verhaenge}: {@code hebeAuf} braucht sie genauso, kennt den Betroffenen
+     * aber erst nach dem Lesen. Genau darum fehlte der Riegel dort ganz.
+     */
+    private final java.util.Set<UUID> imTeam = new java.util.HashSet<>();
+
+    @org.junit.jupiter.api.BeforeEach
+    void frisch() {
+        imTeam.clear();
+    }
+
+    private Strafbuch buch() {
         return buch(Strafwerte.VORGABE);
     }
 
-    private static Strafbuch buch(Strafwerte werte) {
-        return new Strafbuch(new SpeicherStrafen(), () -> werte, NAMEN);
+    private Strafbuch buch(Strafwerte werte) {
+        return new Strafbuch(new SpeicherStrafen(), () -> werte, NAMEN,
+                imTeam::contains);
+    }
+
+    /** Eine Ablage und ein Buch, damit eine Probe die Strafe vorher legen kann. */
+    private Strafbuch buchMit(SpeicherStrafen ablage, Strafwerte werte) {
+        return new Strafbuch(ablage, () -> werte, NAMEN, imTeam::contains);
     }
 
     // ------------------------------------------------------------------ verhaengen
@@ -71,7 +91,7 @@ class StrafbuchTest {
     void moderatorBanntBefristet() {
         Strafbuch buch = buch();
 
-        Strafbuch.Entscheid entscheid = buch.verhaenge(BERT, false, Strafart.BANN,
+        Strafbuch.Entscheid entscheid = buch.verhaenge(BERT, Strafart.BANN,
                 "Grief in Altfurt", EINE_STUNDE, ANNA, MODERATOR, MITTAGS);
 
         assertEquals(Strafbuch.Bescheid.VERHAENGT, entscheid.bescheid());
@@ -93,11 +113,11 @@ class StrafbuchTest {
         for (Strafart art : Strafart.values()) {
             Strafdauer dauer = art.brauchtDauer() ? EINE_STUNDE : null;
             assertEquals(Strafbuch.Bescheid.OHNE_RECHT,
-                    buch.verhaenge(BERT, false, art, "Grund", dauer, ANNA,
+                    buch.verhaenge(BERT, art, "Grund", dauer, ANNA,
                             Set.of("freimarken.heim"), MITTAGS).bescheid(),
                     art + ": ohne das Artrecht geht es nicht");
             assertEquals(Strafbuch.Bescheid.VERHAENGT,
-                    buch.verhaenge(UUID.randomUUID(), false, art, "Grund", dauer, ANNA,
+                    buch.verhaenge(UUID.randomUUID(), art, "Grund", dauer, ANNA,
                             Set.of(NAMEN.fuer(art)), MITTAGS).bescheid(),
                     art + ": mit dem Artrecht geht es");
         }
@@ -109,9 +129,9 @@ class StrafbuchTest {
         Strafbuch buch = buch();
         Set<String> nurKick = Set.of(NAMEN.rauswurf());
 
-        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT,
                 Strafart.RAUSWURF, "Spam", null, ANNA, nurKick, MITTAGS).bescheid());
-        assertEquals(Strafbuch.Bescheid.OHNE_RECHT, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.OHNE_RECHT, buch.verhaenge(BERT,
                 Strafart.BANN, "Spam", EINE_STUNDE, ANNA, nurKick, MITTAGS).bescheid(),
                 "die Trennung aus Plan 12c.2 ist nur eine, wenn sie greift");
     }
@@ -122,10 +142,10 @@ class StrafbuchTest {
         Strafbuch buch = buch();
 
         assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT,
-                buch.verhaenge(BERT, false, Strafart.BANN, "fuer immer",
+                buch.verhaenge(BERT, Strafart.BANN, "fuer immer",
                         Strafdauer.UNBEGRENZT, ANNA, MODERATOR, MITTAGS).bescheid());
         assertEquals(Strafbuch.Bescheid.VERHAENGT,
-                buch.verhaenge(BERT, false, Strafart.BANN, "fuer immer",
+                buch.verhaenge(BERT, Strafart.BANN, "fuer immer",
                         Strafdauer.UNBEGRENZT, ANNA, VERWALTER, MITTAGS).bescheid(),
                 "der Verwalter darf es - sonst darf es niemand, und der Riegel waere"
                         + " ein Verbot");
@@ -141,14 +161,14 @@ class StrafbuchTest {
                 720L));
         Strafdauer zehnJahre = new Strafdauer(Duration.ofDays(3650L));
 
-        Strafbuch.Entscheid entscheid = buch.verhaenge(BERT, false, Strafart.BANN,
+        Strafbuch.Entscheid entscheid = buch.verhaenge(BERT, Strafart.BANN,
                 "zehn Jahre", zehnJahre, ANNA, MODERATOR, MITTAGS);
 
         assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT, entscheid.bescheid());
         assertEquals(720L, entscheid.grenzeStunden(),
                 "die Absage NENNT die Grenze - wer nur \"zu lang\" liest, tippt als"
                         + " naechstes dieselbe Zahl");
-        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT,
                 Strafart.BANN, "zehn Jahre", zehnJahre, ANNA, VERWALTER, MITTAGS)
                 .bescheid());
     }
@@ -163,12 +183,12 @@ class StrafbuchTest {
                 720L));
 
         assertEquals(Strafbuch.Bescheid.VERHAENGT,
-                buch.verhaenge(BERT, false, Strafart.BANN, "genau dreissig Tage",
+                buch.verhaenge(BERT, Strafart.BANN, "genau dreissig Tage",
                         new Strafdauer(Duration.ofHours(720L)), ANNA, MODERATOR,
                         MITTAGS).bescheid(),
                 "720 Stunden sind erlaubt, wenn 720 die Grenze ist");
         assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT,
-                buch.verhaenge(CLARA, false, Strafart.BANN, "eine Stunde zu lang",
+                buch.verhaenge(CLARA, Strafart.BANN, "eine Stunde zu lang",
                         new Strafdauer(Duration.ofHours(721L)), ANNA, MODERATOR,
                         MITTAGS).bescheid(),
                 "721 Stunden nicht");
@@ -186,10 +206,10 @@ class StrafbuchTest {
         Strafdauer zweiTage = new Strafdauer(Duration.ofDays(2L));
 
         assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT,
-                buch.verhaenge(BERT, false, Strafart.STUMM, "zwei Tage stumm",
+                buch.verhaenge(BERT, Strafart.STUMM, "zwei Tage stumm",
                         zweiTage, ANNA, MODERATOR, MITTAGS).bescheid());
         assertEquals(Strafbuch.Bescheid.VERHAENGT,
-                buch.verhaenge(BERT, false, Strafart.BANN, "zwei Tage gebannt",
+                buch.verhaenge(BERT, Strafart.BANN, "zwei Tage gebannt",
                         zweiTage, ANNA, MODERATOR, MITTAGS).bescheid());
     }
 
@@ -199,7 +219,7 @@ class StrafbuchTest {
         Strafbuch buch = buch(Strafwerte.VORGABE.mitHoechsteStunden(Strafart.BANN, 0L));
 
         assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT,
-                buch.verhaenge(BERT, false, Strafart.BANN, "eine Stunde", EINE_STUNDE,
+                buch.verhaenge(BERT, Strafart.BANN, "eine Stunde", EINE_STUNDE,
                         ANNA, MODERATOR, MITTAGS).bescheid(),
                 "eine 0 heisst: jeder Bann braucht das Recht fuer dauerhafte Strafen");
     }
@@ -211,8 +231,59 @@ class StrafbuchTest {
 
         // Ein Riegel, der auch den Rauswurf traefe, waere einer, den die Hoechstdauer
         // einer anderen Art zuschlaegt.
-        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT,
                 Strafart.RAUSWURF, "Spam", null, ANNA, MODERATOR, MITTAGS).bescheid());
+    }
+
+    @Test
+    @DisplayName("DIE ABSCHNEIDUNG: 720 Std. und 59 Min. gehen NICHT durch")
+    void abschneidungGehtNichtDurch() {
+        // DER FUND VOM 25.11.2026. Der Riegel fragte "stunden() > grenze", und
+        // Duration.toHours() SCHNEIDET AB: 43259 Minuten sind 720 Std. 59 Min., und
+        // toHours() gab 720 - "720 > 720" ist falsch, die Strafe kam durch und lief
+        // 59 Minuten laenger als die Hoechstdauer der Datei.
+        Strafbuch buch = buch(Strafwerte.VORGABE.mitHoechsteStunden(Strafart.BANN,
+                720L));
+
+        assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT,
+                buch.verhaenge(BERT, Strafart.BANN, "neunundfuenfzig zu viel",
+                        new Strafdauer(Duration.ofMinutes(43259L)), ANNA, MODERATOR,
+                        MITTAGS).bescheid(),
+                "720 Std. 59 Min. liegen ueber 720 Std.");
+        assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT,
+                buch.verhaenge(BERT, Strafart.BANN, "eine Sekunde zu viel",
+                        new Strafdauer(Duration.ofSeconds(2592001L)), ANNA, MODERATOR,
+                        MITTAGS).bescheid(),
+                "auch eine Sekunde darueber");
+        assertEquals(Strafbuch.Bescheid.VERHAENGT,
+                buch.verhaenge(BERT, Strafart.BANN, "genau 720 Std.",
+                        new Strafdauer(Duration.ofSeconds(2592000L)), ANNA, MODERATOR,
+                        MITTAGS).bescheid(),
+                "und genau 720 Std. gehen weiter durch");
+    }
+
+    @Test
+    @DisplayName("DIE 0 HAELT: sie sperrt auch Dauern unter einer Stunde")
+    void nullStundenSperrtAuchMinuten() {
+        // DER SCHWERE TEIL DESSELBEN FUNDES: Mit der Grenze 0 gab stunden() fuer
+        // jede Dauer unter einer Stunde eine 0, und "0 > 0" ist falsch. Die
+        // config.yml, der Startbericht UND die Absage sagen aber ausdruecklich zu,
+        // dass 0 heisst: Diese Art kann ein Moderator ohne das Recht GAR NICHT
+        // verhaengen.
+        Strafbuch buch = buch(Strafwerte.VORGABE.mitHoechsteStunden(Strafart.BANN, 0L));
+
+        for (long minuten : new long[] {1L, 30L, 59L}) {
+            assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT,
+                    buch.verhaenge(BERT, Strafart.BANN, "Grief",
+                            new Strafdauer(Duration.ofMinutes(minuten)), ANNA,
+                            MODERATOR, MITTAGS).bescheid(),
+                    minuten + " Minuten - eine 0 sperrt JEDE Dauer");
+        }
+        assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT,
+                buch.verhaenge(BERT, Strafart.BANN, "Grief",
+                        new Strafdauer(Duration.ofSeconds(1L)), ANNA, MODERATOR,
+                        MITTAGS).bescheid(),
+                "sogar eine Sekunde");
     }
 
     @Test
@@ -223,11 +294,13 @@ class StrafbuchTest {
         // Teil A - dieselbe Gefahr aus der anderen Richtung.
         Strafbuch buch = buch();
 
+        imTeam.add(BERT);
+
         assertEquals(Strafbuch.Bescheid.OHNE_RECHT_TEAM,
-                buch.verhaenge(BERT, true, Strafart.BANN, "Kollege im Streit",
+                buch.verhaenge(BERT, Strafart.BANN, "Kollege im Streit",
                         EINE_STUNDE, ANNA, MODERATOR, MITTAGS).bescheid());
         assertEquals(Strafbuch.Bescheid.VERHAENGT,
-                buch.verhaenge(BERT, true, Strafart.BANN, "Kollege im Streit",
+                buch.verhaenge(BERT, Strafart.BANN, "Kollege im Streit",
                         EINE_STUNDE, ANNA, VERWALTER, MITTAGS).bescheid(),
                 "ein Verwalter darf es - sonst waere ein Teammitglied unantastbar");
     }
@@ -240,9 +313,10 @@ class StrafbuchTest {
         // Ein Riegel, der nur den Bann schuetzt, laesst den Rauswurf offen - und ein
         // Moderator, der seinen Kollegen alle zehn Sekunden hinauswirft, braucht
         // keinen Bann.
+        imTeam.add(BERT);
         for (Strafart art : Strafart.values()) {
             assertEquals(Strafbuch.Bescheid.OHNE_RECHT_TEAM,
-                    buch.verhaenge(BERT, true, art, "Kollege",
+                    buch.verhaenge(BERT, art, "Kollege",
                             art.brauchtDauer() ? EINE_STUNDE : null, ANNA, MODERATOR,
                             MITTAGS).bescheid(),
                     art + ": auch diese Art braucht das Teamrecht");
@@ -256,8 +330,10 @@ class StrafbuchTest {
 
         // Wer gar nicht bannen darf, soll nicht lesen, dass ihm das Recht gegen
         // Teammitglieder fehlt - das klaenge, als fehlte ihm nur eines.
+        imTeam.add(BERT);
+
         assertEquals(Strafbuch.Bescheid.OHNE_RECHT,
-                buch.verhaenge(BERT, true, Strafart.BANN, "Kollege", EINE_STUNDE, ANNA,
+                buch.verhaenge(BERT, Strafart.BANN, "Kollege", EINE_STUNDE, ANNA,
                         Set.of("freimarken.heim"), MITTAGS).bescheid());
     }
 
@@ -266,7 +342,7 @@ class StrafbuchTest {
     void niemandStraftSichSelbst() {
         Strafbuch buch = buch();
 
-        assertEquals(Strafbuch.Bescheid.SELBST, buch.verhaenge(ANNA, false,
+        assertEquals(Strafbuch.Bescheid.SELBST, buch.verhaenge(ANNA,
                 Strafart.BANN, "aus Versehen", EINE_STUNDE, ANNA, VERWALTER, MITTAGS)
                 .bescheid());
     }
@@ -278,9 +354,9 @@ class StrafbuchTest {
         // soll das ohne Lesezugriff erfahren. Mit einer werfenden Ablage ist das
         // messbar - kaeme der Zugriff vorher, stuende hier GESTOERT.
         Strafbuch buch = new Strafbuch(new WerfendeAblage(), () -> Strafwerte.VORGABE,
-                NAMEN);
+                NAMEN, imTeam::contains);
 
-        assertEquals(Strafbuch.Bescheid.SELBST, buch.verhaenge(ANNA, false,
+        assertEquals(Strafbuch.Bescheid.SELBST, buch.verhaenge(ANNA,
                 Strafart.BANN, "aus Versehen", EINE_STUNDE, ANNA, VERWALTER, MITTAGS)
                 .bescheid());
     }
@@ -293,13 +369,13 @@ class StrafbuchTest {
         // Plan 12c.3 traegt darauf, und zwar ohne Ausnahme: Auch die Konsole erklaert,
         // was sie tut. Ein Schalter dafuer waere die Einstellung, mit der ein
         // Betreiber seine eigene Moderation in Willkuer verwandelt.
-        assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR, buch.verhaenge(BERT,
                 Strafart.BANN, "ab", EINE_STUNDE, ANNA, VERWALTER, MITTAGS).bescheid());
-        assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR, buch.verhaenge(BERT,
                 Strafart.BANN, "", EINE_STUNDE, ANNA, null, MITTAGS).bescheid());
-        assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR, buch.verhaenge(BERT,
                 Strafart.BANN, null, EINE_STUNDE, ANNA, VERWALTER, MITTAGS).bescheid());
-        assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR, buch.verhaenge(BERT,
                 Strafart.BANN, "Grief §cFAKE", EINE_STUNDE, ANNA, VERWALTER,
                 MITTAGS).bescheid());
     }
@@ -308,10 +384,10 @@ class StrafbuchTest {
     @DisplayName("Eine zweite Strafe derselben Art wird abgewiesen und NENNT die erste")
     void zweiteStrafeAbgewiesen() {
         Strafbuch buch = buch();
-        buch.verhaenge(BERT, false, Strafart.BANN, "erster Bann", EINE_STUNDE, ANNA,
+        buch.verhaenge(BERT, Strafart.BANN, "erster Bann", EINE_STUNDE, ANNA,
                 MODERATOR, MITTAGS);
 
-        Strafbuch.Entscheid zweiter = buch.verhaenge(BERT, false, Strafart.BANN,
+        Strafbuch.Entscheid zweiter = buch.verhaenge(BERT, Strafart.BANN,
                 "zweiter Bann", EINE_STUNDE, CLARA, MODERATOR, SPAETER);
 
         // Zwei geltende Banne machen die Frage "wann ist er wieder frei"
@@ -326,13 +402,13 @@ class StrafbuchTest {
     @DisplayName("Eine zweite Strafe einer ANDEREN Art geht durch")
     void andereArtGehtDurch() {
         Strafbuch buch = buch();
-        buch.verhaenge(BERT, false, Strafart.STUMM, "stumm", EINE_STUNDE, ANNA,
+        buch.verhaenge(BERT, Strafart.STUMM, "stumm", EINE_STUNDE, ANNA,
                 MODERATOR, MITTAGS);
 
         // Stumm und gebannt sind zwei Sachen. Ein Riegel, der die Arten nicht
         // trennte, verhinderte den Bann eines Stummgeschalteten - also genau den Fall,
         // in dem es ernst wird.
-        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT,
                 Strafart.BANN, "dann eben Bann", EINE_STUNDE, ANNA, MODERATOR, SPAETER)
                 .bescheid());
     }
@@ -341,12 +417,12 @@ class StrafbuchTest {
     @DisplayName("Ein zweiter RAUSWURF geht immer durch")
     void zweiterRauswurfGehtDurch() {
         Strafbuch buch = buch();
-        buch.verhaenge(BERT, false, Strafart.RAUSWURF, "erster", null, ANNA, MODERATOR,
+        buch.verhaenge(BERT, Strafart.RAUSWURF, "erster", null, ANNA, MODERATOR,
                 MITTAGS);
 
         // Ein Rauswurf gilt nie noch, also steht ihm nie einer entgegen. Ohne diese
         // Zusage liesse sich ein Spieler genau einmal hinauswerfen.
-        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT,
                 Strafart.RAUSWURF, "zweiter", null, ANNA, MODERATOR, SPAETER)
                 .bescheid());
         assertEquals(2, buch.zaehle(BERT, Strafart.RAUSWURF));
@@ -356,10 +432,10 @@ class StrafbuchTest {
     @DisplayName("Nach ABLAUF der ersten geht die zweite durch")
     void nachAblaufGehtDieZweite() {
         Strafbuch buch = buch();
-        buch.verhaenge(BERT, false, Strafart.BANN, "erster", EINE_STUNDE, ANNA,
+        buch.verhaenge(BERT, Strafart.BANN, "erster", EINE_STUNDE, ANNA,
                 MODERATOR, MITTAGS);
 
-        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT,
                 Strafart.BANN, "zweiter", EINE_STUNDE, ANNA, MODERATOR,
                 MITTAGS.plusSeconds(3601L)).bescheid());
     }
@@ -371,7 +447,9 @@ class StrafbuchTest {
 
         // null heisst die Konsole. Wer an ihr steht, hat Dateizugriff - ein Riegel
         // dort waere einer, den man mit einem Texteditor umgeht.
-        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT, true,
+        imTeam.add(BERT);
+
+        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT,
                 Strafart.BANN, "von der Konsole", Strafdauer.UNBEGRENZT, null, null,
                 MITTAGS).bescheid());
     }
@@ -383,7 +461,7 @@ class StrafbuchTest {
 
         for (Strafart art : Strafart.values()) {
             assertEquals(Strafbuch.Bescheid.OHNE_RECHT,
-                    buch.verhaenge(BERT, false, art, "Grund",
+                    buch.verhaenge(BERT, art, "Grund",
                             art.brauchtDauer() ? EINE_STUNDE : null, ANNA, Set.of(),
                             MITTAGS).bescheid(),
                     art + ": eine leere Menge ist ein Spieler ohne jedes Recht");
@@ -394,11 +472,11 @@ class StrafbuchTest {
     @DisplayName("Eine werfende Ablage gibt GESTOERT und keinen Wurf")
     void werfendeAblageGibtGestoert() {
         Strafbuch buch = new Strafbuch(new WerfendeAblage(), () -> Strafwerte.VORGABE,
-                NAMEN);
+                NAMEN, imTeam::contains);
 
         // Ein Wurf im Befehl ist eine rote englische Zeile fuer eine Lage, die der
         // Moderator versteht, sobald sie auf Deutsch dasteht.
-        assertEquals(Strafbuch.Bescheid.GESTOERT, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.GESTOERT, buch.verhaenge(BERT,
                 Strafart.BANN, "Grief", EINE_STUNDE, ANNA, VERWALTER, MITTAGS)
                 .bescheid());
         assertEquals(Strafbuch.Bescheid.GESTOERT, buch.hebeAuf(1L, ANNA, "Einspruch",
@@ -410,17 +488,17 @@ class StrafbuchTest {
     void fehlendeAngabenWerfen() {
         Strafbuch buch = buch();
 
-        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(null, false,
+        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(null,
                 Strafart.BANN, "Grund", EINE_STUNDE, ANNA, VERWALTER, MITTAGS));
-        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(BERT, false,
+        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(BERT,
                 null, "Grund", EINE_STUNDE, ANNA, VERWALTER, MITTAGS));
-        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(BERT, false,
+        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(BERT,
                 Strafart.BANN, "Grund", EINE_STUNDE, ANNA, VERWALTER, null));
-        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(BERT, false,
+        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(BERT,
                 Strafart.BANN, "Grund", null, ANNA, VERWALTER, MITTAGS),
                 "ein Bann ohne Dauer waere stillschweigend unbegrenzt - und genau das"
                         + " braucht ein Recht");
-        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(BERT, false,
+        assertThrows(IllegalArgumentException.class, () -> buch.verhaenge(BERT,
                 Strafart.RAUSWURF, "Grund", EINE_STUNDE, ANNA, VERWALTER, MITTAGS));
     }
 
@@ -430,7 +508,7 @@ class StrafbuchTest {
     @DisplayName("Ein Moderator hebt einen befristeten Bann auf")
     void moderatorHebtBefristetAuf() {
         Strafbuch buch = buch();
-        long nummer = buch.verhaenge(BERT, false, Strafart.BANN, "Grief", EINE_STUNDE,
+        long nummer = buch.verhaenge(BERT, Strafart.BANN, "Grief", EINE_STUNDE,
                 ANNA, MODERATOR, MITTAGS).strafe().orElseThrow().nummer();
 
         Strafbuch.Entscheid entscheid = buch.hebeAuf(nummer, CLARA,
@@ -450,7 +528,7 @@ class StrafbuchTest {
         // verhaengt hat - und die Unterscheidung aus Plan 12c.2 waere in der einen
         // Richtung gesichert und in der anderen offen.
         Strafbuch buch = buch();
-        long nummer = buch.verhaenge(BERT, false, Strafart.BANN, "fuer immer",
+        long nummer = buch.verhaenge(BERT, Strafart.BANN, "fuer immer",
                 Strafdauer.UNBEGRENZT, ANNA, VERWALTER, MITTAGS).strafe().orElseThrow()
                 .nummer();
 
@@ -466,7 +544,7 @@ class StrafbuchTest {
     @DisplayName("Ohne das Recht zum Aufheben geht nichts")
     void ohneAufhebenrechtGehtNichts() {
         Strafbuch buch = buch();
-        long nummer = buch.verhaenge(BERT, false, Strafart.BANN, "Grief", EINE_STUNDE,
+        long nummer = buch.verhaenge(BERT, Strafart.BANN, "Grief", EINE_STUNDE,
                 ANNA, MODERATOR, MITTAGS).strafe().orElseThrow().nummer();
 
         // Wer bannen darf, darf nicht von selbst entbannen: Ein Moderator, der seine
@@ -479,7 +557,7 @@ class StrafbuchTest {
     @DisplayName("Eine Aufhebung OHNE Grund wird abgewiesen")
     void aufhebungBrauchtGrund() {
         Strafbuch buch = buch();
-        long nummer = buch.verhaenge(BERT, false, Strafart.BANN, "Grief", EINE_STUNDE,
+        long nummer = buch.verhaenge(BERT, Strafart.BANN, "Grief", EINE_STUNDE,
                 ANNA, MODERATOR, MITTAGS).strafe().orElseThrow().nummer();
 
         assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR,
@@ -488,6 +566,78 @@ class StrafbuchTest {
                 buch.hebeAuf(nummer, CLARA, "ab", SPAETER, MODERATOR).bescheid());
         assertEquals(Strafbuch.Bescheid.GRUND_UNBRAUCHBAR,
                 buch.hebeAuf(nummer, CLARA, null, SPAETER, MODERATOR).bescheid());
+    }
+
+    @Test
+    @DisplayName("NIEMAND hebt seine EIGENE Strafe auf")
+    void niemandHebtSichSelbstAuf() {
+        // DER SCHWERSTE FUND VOM 25.11.2026. verhaenge hatte diesen Riegel, hebeAuf
+        // nicht: Ein stummgeschalteter Moderator mit dem Recht zum Aufheben tippte
+        // /strafe verlauf auf sich selbst, las seine Nummer, hob auf - und die
+        // Ansage sagte allen, er sei "wieder frei".
+        Strafbuch buch = buch();
+        long nummer = buch.verhaenge(BERT, Strafart.STUMM, "Beleidigung", EINE_STUNDE,
+                ANNA, VERWALTER, MITTAGS).strafe().orElseThrow().nummer();
+
+        Strafbuch.Entscheid entscheid = buch.hebeAuf(nummer, BERT, "finde ich hart",
+                SPAETER, MODERATOR);
+
+        assertEquals(Strafbuch.Bescheid.SELBST, entscheid.bescheid());
+        assertTrue(buch.geltende(BERT, Strafart.STUMM, SPAETER).isPresent(),
+                "die Strafe steht weiter");
+        // Und ein ANDERER darf es weiter - der Riegel trifft nur den Betroffenen.
+        assertEquals(Strafbuch.Bescheid.AUFGEHOBEN,
+                buch.hebeAuf(nummer, CLARA, "Einspruch angenommen", SPAETER,
+                        MODERATOR).bescheid());
+    }
+
+    @Test
+    @DisplayName("Die Strafe eines TEAMMITGLIEDS hebt nur das Team auf")
+    void teamstrafeHebtNurDasTeamAuf() {
+        // Sonst nimmt ein Moderator die Strafe zurueck, die ein Verwalter gegen einen
+        // Kollegen verhaengt hat - und der Verwalter koennte einen Moderator nur
+        // dauerhaft strafen, wenn es halten soll.
+        Strafbuch buch = buch();
+        imTeam.add(BERT);
+        long nummer = buch.verhaenge(BERT, Strafart.STUMM, "Beleidigung", EINE_STUNDE,
+                ANNA, VERWALTER, MITTAGS).strafe().orElseThrow().nummer();
+
+        assertEquals(Strafbuch.Bescheid.OHNE_RECHT_TEAM,
+                buch.hebeAuf(nummer, CLARA, "Kollegenhilfe", SPAETER, MODERATOR)
+                        .bescheid());
+        assertEquals(Strafbuch.Bescheid.AUFGEHOBEN,
+                buch.hebeAuf(nummer, CLARA, "Einspruch angenommen", SPAETER,
+                        VERWALTER).bescheid(),
+                "ein Verwalter darf es");
+    }
+
+    @Test
+    @DisplayName("DIESELBE Grenze beim Aufheben wie beim Verhaengen")
+    void dieselbeGrenzeBeimAufheben() {
+        // DER FUND: Das Aufheben fragte nur unbegrenzt(), das Verhaengen aber auch
+        // "laenger als die Hoechstdauer". Ein Moderator nahm damit den
+        // Zehn-Jahres-Bann eines Verwalters zurueck - die Unterscheidung aus Plan
+        // 12c.2 war in der einen Richtung gesichert und in der anderen offen.
+        Strafbuch buch = buch(Strafwerte.VORGABE.mitHoechsteStunden(Strafart.BANN,
+                720L));
+        long lang = buch.verhaenge(BERT, Strafart.BANN, "zehn Jahre",
+                new Strafdauer(Duration.ofDays(3650L)), ANNA, VERWALTER, MITTAGS)
+                .strafe().orElseThrow().nummer();
+        long kurz = buch.verhaenge(CLARA, Strafart.BANN, "eine Stunde", EINE_STUNDE,
+                ANNA, MODERATOR, MITTAGS).strafe().orElseThrow().nummer();
+
+        assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT,
+                buch.hebeAuf(lang, ANNA, "zu hart", SPAETER, MODERATOR).bescheid(),
+                "eine Strafe ueber der Hoechstdauer hebt nur auf, wer sie auch"
+                        + " verhaengen duerfte");
+        assertEquals(Strafbuch.Bescheid.AUFGEHOBEN,
+                buch.hebeAuf(kurz, ANNA, "Einspruch angenommen", SPAETER, MODERATOR)
+                        .bescheid(),
+                "eine kurze darf jeder aufheben, der aufheben darf");
+        assertEquals(Strafbuch.Bescheid.AUFGEHOBEN,
+                buch.hebeAuf(lang, ANNA, "Einspruch angenommen", SPAETER, VERWALTER)
+                        .bescheid(),
+                "und der Verwalter darf auch die lange");
     }
 
     @Test
@@ -502,7 +652,7 @@ class StrafbuchTest {
     @DisplayName("Ein RAUSWURF laesst sich nicht aufheben")
     void rauswurfNichtAufhebbar() {
         Strafbuch buch = buch();
-        long nummer = buch.verhaenge(BERT, false, Strafart.RAUSWURF, "Spam", null, ANNA,
+        long nummer = buch.verhaenge(BERT, Strafart.RAUSWURF, "Spam", null, ANNA,
                 MODERATOR, MITTAGS).strafe().orElseThrow().nummer();
 
         Strafbuch.Entscheid entscheid = buch.hebeAuf(nummer, CLARA, "unnoetig", SPAETER,
@@ -518,7 +668,7 @@ class StrafbuchTest {
     @DisplayName("Ein ZWEITES Aufheben gibt SCHON_AUFGEHOBEN und nennt den ersten Grund")
     void zweitesAufhebenAbgewiesen() {
         Strafbuch buch = buch();
-        long nummer = buch.verhaenge(BERT, false, Strafart.BANN, "Grief", EINE_STUNDE,
+        long nummer = buch.verhaenge(BERT, Strafart.BANN, "Grief", EINE_STUNDE,
                 ANNA, MODERATOR, MITTAGS).strafe().orElseThrow().nummer();
         buch.hebeAuf(nummer, ANNA, "erster Grund", SPAETER, MODERATOR);
 
@@ -545,7 +695,7 @@ class StrafbuchTest {
     @DisplayName("geltende fragt OHNE Rechte - eine Wache fragt, sie entscheidet nicht")
     void geltendeOhneRechte() {
         Strafbuch buch = buch();
-        buch.verhaenge(BERT, false, Strafart.BANN, "Grief", EINE_STUNDE, ANNA,
+        buch.verhaenge(BERT, Strafart.BANN, "Grief", EINE_STUNDE, ANNA,
                 MODERATOR, MITTAGS);
 
         // Die Wache fragt bei JEDEM Beitritt. Ein Riegel dort waere einer, der den
@@ -558,7 +708,7 @@ class StrafbuchTest {
     @DisplayName("geltende reicht eine Stoerung DURCH und verschluckt sie nicht")
     void geltendeReichtStoerungDurch() {
         Strafbuch buch = new Strafbuch(new WerfendeAblage(), () -> Strafwerte.VORGABE,
-                NAMEN);
+                NAMEN, imTeam::contains);
 
         // Die andere Richtung als bei verhaenge, und das ist Absicht: Wer nicht weiss,
         // ob ein Spieler gebannt ist, darf ihn nicht stillschweigend hereinlassen. Ein
@@ -572,7 +722,7 @@ class StrafbuchTest {
     void vorgeschichteHaeltSeitenlaenge() {
         Strafbuch buch = buch(Strafwerte.VORGABE.mitZeilenJeSeite(2));
         for (int lauf = 0; lauf < 5; lauf++) {
-            buch.verhaenge(BERT, false, Strafart.RAUSWURF, "Vorfall " + lauf, null,
+            buch.verhaenge(BERT, Strafart.RAUSWURF, "Vorfall " + lauf, null,
                     ANNA, MODERATOR, MITTAGS.plusSeconds(lauf * 60L));
         }
 
@@ -586,9 +736,9 @@ class StrafbuchTest {
     @DisplayName("Die Bannliste zeigt nur BANNE - keine Stummschaltungen")
     void bannlisteNurBanne() {
         Strafbuch buch = buch();
-        buch.verhaenge(BERT, false, Strafart.BANN, "gebannt", EINE_STUNDE, ANNA,
+        buch.verhaenge(BERT, Strafart.BANN, "gebannt", EINE_STUNDE, ANNA,
                 MODERATOR, MITTAGS);
-        buch.verhaenge(CLARA, false, Strafart.STUMM, "stumm", EINE_STUNDE, ANNA,
+        buch.verhaenge(CLARA, Strafart.STUMM, "stumm", EINE_STUNDE, ANNA,
                 MODERATOR, MITTAGS);
 
         List<Strafe> liste = buch.bannliste(SPAETER);
@@ -607,24 +757,25 @@ class StrafbuchTest {
         // Moderator darf, und dem, was ein Verwalter darf.
         Strafwerte[] stand = {Strafwerte.VORGABE.mitHoechsteStunden(Strafart.BANN,
                 720L)};
-        Strafbuch buch = new Strafbuch(new SpeicherStrafen(), () -> stand[0], NAMEN);
+        Strafbuch buch = new Strafbuch(new SpeicherStrafen(), () -> stand[0], NAMEN,
+                imTeam::contains);
         Strafdauer zweiTage = new Strafdauer(Duration.ofDays(2L));
 
-        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT, false,
+        assertEquals(Strafbuch.Bescheid.VERHAENGT, buch.verhaenge(BERT,
                 Strafart.BANN, "zwei Tage", zweiTage, ANNA, MODERATOR, MITTAGS)
                 .bescheid());
 
         stand[0] = Strafwerte.VORGABE.mitHoechsteStunden(Strafart.BANN, 24L);
 
-        assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT, buch.verhaenge(CLARA,
-                false, Strafart.BANN, "zwei Tage", zweiTage, ANNA, MODERATOR, MITTAGS)
+        assertEquals(Strafbuch.Bescheid.OHNE_RECHT_DAUERHAFT, buch.verhaenge(CLARA, Strafart.BANN, "zwei Tage", zweiTage, ANNA, MODERATOR, MITTAGS)
                 .bescheid());
     }
 
     @Test
     @DisplayName("Ein null-Lieferant gibt die Vorgabe und keinen Wurf")
     void nullLieferantGibtVorgabe() {
-        Strafbuch buch = new Strafbuch(new SpeicherStrafen(), () -> null, NAMEN);
+        Strafbuch buch = new Strafbuch(new SpeicherStrafen(), () -> null, NAMEN,
+                imTeam::contains);
 
         assertEquals(Strafwerte.VORGABE, buch.werte());
     }
@@ -633,11 +784,16 @@ class StrafbuchTest {
     @DisplayName("Ohne Ablage, Werte oder Rechtenamen gibt es kein Buch")
     void fehlendeBauteileWerfen() {
         assertThrows(IllegalArgumentException.class, () -> new Strafbuch(null,
-                () -> Strafwerte.VORGABE, NAMEN));
+                () -> Strafwerte.VORGABE, NAMEN, imTeam::contains));
         assertThrows(IllegalArgumentException.class, () -> new Strafbuch(
-                new SpeicherStrafen(), null, NAMEN));
+                new SpeicherStrafen(), null, NAMEN, imTeam::contains));
         assertThrows(IllegalArgumentException.class, () -> new Strafbuch(
-                new SpeicherStrafen(), () -> Strafwerte.VORGABE, null));
+                new SpeicherStrafen(), () -> Strafwerte.VORGABE, null,
+                imTeam::contains));
+        // Ohne die Teamfrage waere JEDES Teammitglied ungeschuetzt - und zwar in
+        // beide Richtungen, beim Strafen und beim Aufheben.
+        assertThrows(IllegalArgumentException.class, () -> new Strafbuch(
+                new SpeicherStrafen(), () -> Strafwerte.VORGABE, NAMEN, null));
     }
 
     @Test

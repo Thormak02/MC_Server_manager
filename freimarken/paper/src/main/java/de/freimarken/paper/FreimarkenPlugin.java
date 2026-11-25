@@ -699,6 +699,38 @@ public final class FreimarkenPlugin extends JavaPlugin {
     private Strafwache strafwache;
 
     /**
+     * Ob dieser Spieler im Team ist - die EINE Quelle fuer beide Riegel.
+     *
+     * <p><b>Die Frage geht an die TEAMABLAGE und nicht an Bukkit</b>: Der Betroffene
+     * kann offline sein, und offline hat niemand Rechte. Mit einer Rechtemenge als
+     * Grundlage waere jeder Abwesende ungeschuetzt - und das ist genau der Augenblick,
+     * in dem man einen Kollegen bannt.
+     *
+     * <p>Eine Stoerung gibt {@code true}: Wer nicht weiss, ob der Betroffene im Team
+     * ist, soll ihn nicht strafen und seine Strafe nicht aufheben. Von zwei Fehlern
+     * der, der sich zuruecknehmen laesst. Ist die Teamablage null - der Start ist
+     * vorher abgebrochen -, gilt dasselbe.
+     *
+     * <p>Sie steht als Methode und nicht zweimal als Lambda: {@code Strafbuch} fragt
+     * sie beim VERHAENGEN und beim AUFHEBEN, und zwei Fassungen waeren zwei, die eines
+     * Tages verschieden antworten.
+     */
+    private boolean imTeam(java.util.UUID wer) {
+        if (teamablage == null) {
+            return true;
+        }
+        try {
+            return !teamablage.lies(wer).zeilen().isEmpty();
+        } catch (IllegalStateException gestoert) {
+            getLogger().warning("Die Teamrollen von " + wer + " sind nicht lesbar: "
+                    + gestoert.getMessage() + ". Der Spieler wird behandelt, als waere"
+                    + " er im Team - eine Strafe gegen ihn und das Aufheben einer"
+                    + " brauchen dann " + StrafBefehle.RECHTE.team() + ".");
+            return true;
+        }
+    }
+
+    /**
      * Wo die Annahme der Regeln liegt - Plan 10.1 [Schritt 13 Teil C].
      *
      * <p>Kein Zwischenspeicher: Gelesen wird einmal je Beitritt und je Klick an einem
@@ -1775,8 +1807,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
         // Schalter haengt, waere die Stelle, an der ein Betreiber sein Bannsystem
         // abschaltet, ohne es zu merken.
         strafwache = new Strafwache(new Strafbuch(strafablage,
-                () -> wirtschaft.werte().strafen(), StrafBefehle.RECHTE), sprache,
-                () -> wirtschaft.werte().zeit().zone(), Spielername::von, getLogger());
+                () -> wirtschaft.werte().strafen(), StrafBefehle.RECHTE,
+                this::imTeam), sprache,
+                () -> wirtschaft.werte().zeit().zone(), Spielername::von,
+                uhr::instant, getLogger());
         getServer().getPluginManager().registerEvents(strafwache, this);
         // DIE WACHE nur bei eingeschalteter Anmeldung - dieselbe Entscheidung wie bei
         // der Torwache, die ohne Tore nicht angemeldet wird. Aus heisst dann wirklich
@@ -2334,7 +2368,23 @@ public final class FreimarkenPlugin extends JavaPlugin {
         return new TeamBefehle(new Teambuch(teamablage,
                 () -> wirtschaft.werte().team()), sprache,
                 Spielername::kennungAuchAbwesend, Spielername::von, uhr::instant,
-                () -> wirtschaft.werte().zeit().zone(), getLogger());
+                () -> wirtschaft.werte().zeit().zone(),
+                // DIE RECHTEHAND: Sie setzt die Rechte SOFORT neu, nicht erst beim
+                // naechsten Spielzeittakt. Vorher behielt ein Moderator, dem die Rolle
+                // entzogen wurde, seine Strafrechte bis zu zehn Minuten - waehrend die
+                // Antwort dem Verwalter GENOMMEN meldete.
+                //
+                // Ueber die Rangwache und nicht mit einem eigenen Anhaengsel: Bukkits
+                // PermissionAttachment wird ERSETZT und nicht ergaenzt, ein zweiter
+                // Setzer loeschte also die Rangrechte. Rangwache.vergibNeu vereint
+                // beide Quellen in einem Zug (Rechtebuendel).
+                wer -> {
+                    org.bukkit.entity.Player spieler = getServer().getPlayer(wer);
+                    if (spieler != null && rangwache != null) {
+                        rangwache.vergibNeu(spieler);
+                    }
+                },
+                getLogger());
     }
 
     /**
@@ -2422,22 +2472,10 @@ public final class FreimarkenPlugin extends JavaPlugin {
      */
     private StrafBefehle strafBefehle() {
         return new StrafBefehle(new Strafbuch(strafablage,
-                () -> wirtschaft.werte().strafen(), StrafBefehle.RECHTE), sprache,
+                () -> wirtschaft.werte().strafen(), StrafBefehle.RECHTE,
+                this::imTeam), sprache,
                 Spielername::kennungAuchAbwesend,
-                wer -> {
-                    if (teamablage == null) {
-                        return true;
-                    }
-                    try {
-                        return !teamablage.lies(wer).zeilen().isEmpty();
-                    } catch (IllegalStateException gestoert) {
-                        getLogger().warning("Die Teamrollen von " + wer + " sind nicht"
-                                + " lesbar: " + gestoert.getMessage() + ". Die Strafe"
-                                + " wird behandelt, als waere er im Team - sie braucht"
-                                + " dann " + StrafBefehle.RECHTE.team() + ".");
-                        return true;
-                    }
-                },
+                this::imTeam,
                 () -> {
                     List<net.kyori.adventure.audience.Audience> kreis =
                             new java.util.ArrayList<>(getServer().getOnlinePlayers());

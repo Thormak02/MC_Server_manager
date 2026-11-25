@@ -60,23 +60,43 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent;
  */
 final class Strafwache implements Listener {
 
+    /**
+     * Die Uhr - als Naht, damit eine Probe einen festen Zeitpunkt hereingeben kann.
+     *
+     * <p><b>Ein behobener Fehler [25.11.2026]:</b> Vorher rief diese Wache dreimal
+     * {@link Instant#now()}. Die Proben legen ihre Strafen auf einen festen Zeitpunkt
+     * mit kurzer Dauer - sie waren damit nur in einem Fenster von zehn Minuten am Tag
+     * gruen, beim ersten Lauf zufaellig und beim zweiten nicht mehr. Eine Probe, die
+     * von der Tageszeit abhaengt, ist keine.
+     *
+     * <p>Dieselbe Naht wie in {@link StrafBefehle} und {@code MeldungBefehle} - und
+     * damit kommen alle Zeiten dieses Teils aus EINER Uhr, so wie es die Ablagen
+     * verlangen.
+     */
+    interface Uhr {
+        Instant jetzt();
+    }
+
     private final Strafbuch buch;
     private final Sprache sprache;
     private final Supplier<ZoneId> zone;
     private final Meldetext.Namensgeber namen;
+    private final Uhr uhr;
     private final Logger protokoll;
 
     Strafwache(Strafbuch buch, Sprache sprache, Supplier<ZoneId> zone,
-               Meldetext.Namensgeber namen, Logger protokoll) {
+               Meldetext.Namensgeber namen, Uhr uhr, Logger protokoll) {
         if (buch == null || sprache == null || zone == null || namen == null
-                || protokoll == null) {
+                || uhr == null || protokoll == null) {
             throw new IllegalArgumentException("Die Strafwache braucht das Strafbuch,"
-                    + " Sprache, die Zone, den Namensgeber und das Protokoll");
+                    + " Sprache, die Zone, den Namensgeber, eine Uhr und das"
+                    + " Protokoll");
         }
         this.buch = buch;
         this.sprache = sprache;
         this.zone = zone;
         this.namen = namen;
+        this.uhr = uhr;
         this.protokoll = protokoll;
     }
 
@@ -132,7 +152,7 @@ final class Strafwache implements Listener {
         protokoll.info(name + " wurde an der Tuer abgewiesen - Strafe #"
                 + eine.nummer() + ", Grund: " + eine.grund());
         return Optional.of(Straftext.alsEine(Straftext.getroffen(sprache, eine,
-                Instant.now(), zone.get(),
+                uhr.jetzt(), zone.get(),
                 Straftext.werwort(sprache, eine.verhaengtVon(), namen))));
     }
 
@@ -182,7 +202,7 @@ final class Strafwache implements Listener {
             return List.of();
         }
         Strafe eine = stumm.get();
-        return Straftext.getroffen(sprache, eine, Instant.now(), zone.get(),
+        return Straftext.getroffen(sprache, eine, uhr.jetzt(), zone.get(),
                 Straftext.werwort(sprache, eine.verhaengtVon(), namen));
     }
 
@@ -233,7 +253,7 @@ final class Strafwache implements Listener {
             return Optional.empty();
         }
         return Optional.of(Straftext.befehlGesperrt(sprache, stumm.get(),
-                erstesWort(getippt), Instant.now()));
+                erstesWort(getippt), uhr.jetzt()));
     }
 
     /**
@@ -245,7 +265,7 @@ final class Strafwache implements Listener {
      */
     private Optional<Strafe> geltende(UUID wer, Strafart art, String name) {
         try {
-            return buch.geltende(wer, art, Instant.now());
+            return buch.geltende(wer, art, uhr.jetzt());
         } catch (IllegalStateException gestoert) {
             protokoll.warning("Die Strafen (" + art + ") von " + name
                     + " sind nicht lesbar: " + gestoert.getMessage()

@@ -311,6 +311,30 @@ class StrafBefehlTest {
         assertTrue(angesagt.isEmpty(), angesagt.toString());
     }
 
+    @Test
+    @DisplayName("16b - eine LEERE Ansage sendet NICHTS, nicht eine leere Zeile")
+    void leereAnsageSendetNichts() throws CommandSyntaxException {
+        // DER FUND VOM 25.11.2026: config.yml und Sprachvorlage nennen das Leeren des
+        // Wortlauts ausdruecklich als zweiten Abschaltweg - gefragt wurde es nicht.
+        // Sprache.teile haengt am Ende immer eine Zeile an, ein leerer Wortlaut ergibt
+        // also genau ein LEERES Component, und eineZeile wirft dabei nicht. Von da an
+        // bekam bei jeder Strafe jeder Anwesende eine leere Chatzeile statt keiner.
+        //
+        // Geprueft mit der Sprache aus einer Datei mit geleerten Ansagen - der Weg,
+        // den die Dateien beschreiben.
+        anwesend.add(CLARA);
+        sprache = Sprachprobe.mitZeilen(java.util.Map.of(
+                "strafe.ansage", "",
+                "strafe.ansage-ohne-dauer", "",
+                "strafe.ansage-aufhebung", ""));
+
+        tippe("strafe bann Bert 1h Grief in Altfurt");
+        tippe("strafe rauswurf Bert Spam");
+
+        assertTrue(angesagt.isEmpty(),
+                "ein geleerter Wortlaut heisst KEINE Zeile: " + angesagt);
+    }
+
     // ------------------------------------------------------------- aufheben
 
     @Test
@@ -546,14 +570,10 @@ class StrafBefehlTest {
      */
     private Befehlsprobe baum(Strafwerte werte, boolean teamGestoert) {
         StrafBefehle befehle = new StrafBefehle(
-                new Strafbuch(ablage, () -> werte, StrafBefehle.RECHTE), sprache,
+                new Strafbuch(ablage, () -> werte, StrafBefehle.RECHTE,
+                        wer -> teamGestoert || imTeam.contains(wer)), sprache,
                 StrafBefehlTest::kennungVon,
-                wer -> {
-                    if (teamGestoert) {
-                        return true;
-                    }
-                    return imTeam.contains(wer);
-                },
+                wer -> teamGestoert || imTeam.contains(wer),
                 () -> {
                     List<Audience> kreis = new ArrayList<>();
                     for (UUID wer : anwesend) {

@@ -3547,8 +3547,15 @@ strafe:
   # {nummer} die Strafe. Nach Plan 12c.2 Absicht: Wer nicht dauerhaft sperren
   #   darf, nimmt auch keinen dauerhaften Bann zurueck. Der Satz muss das SAGEN,
   #   sonst haelt der Moderator es fuer einen Fehler.
-  ohne-recht-dauerhaft-aufheben: "<warnung>Strafe {nummer} ist dauerhaft - sie aufzuheben kann ein Verwalter.</warnung>"
+  ohne-recht-dauerhaft-aufheben: "<warnung>Strafe {nummer} ist zu schwer fuer dich - sie aufzuheben kann ein Verwalter.</warnung>"
   selbst: "<warnung>Dich selbst kannst du nicht bestrafen.</warnung>"
+  # Beim AUFHEBEN: "bestrafen" waere dort falsch. Der Riegel dahinter war offen -
+  #   ein stummgeschalteter Moderator mit dem Recht zum Aufheben las im eigenen
+  #   Verlauf seine Nummer und war frei.
+  selbst-aufheben: "<warnung>Deine eigene Strafe kannst du nicht aufheben.</warnung>"
+  # {nummer} die Strafe. Mit der Nummer und nicht mit dem Namen: Wer aufhebt, hat
+  #   die Nummer getippt.
+  ohne-recht-team-aufheben: "<warnung>Strafe {nummer} trifft ein Teammitglied - sie aufzuheben kann ein Verwalter.</warnung>"
   # {mindestens} und {hoechstens} kommen aus dem Programm. DREI Saetze fuer drei
   #   Faelle: Der Moderator soll wissen, was er aendern muss - mitten im Vorfall.
   grund-zu-kurz:

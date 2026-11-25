@@ -1083,13 +1083,54 @@ Schritt 10.
     beziehungsweise `Player.getServer`). Darum stehen die drei Entscheidungen in eigenen
     Methoden, und **Tafel 31eb** haelt, dass die Ereigniszweige sie rufen und
     eingreifen - sonst waere der ganze Teil gruen und wirkungslos.
-- **5.923 Proben gruen** (Kern 2.286, Daten 520, Plugin 3.117), davon 36 neu gegen die
+- **5.937 Proben gruen** (Kern 2.294, Daten 521, Plugin 3.122), davon 37 neu gegen die
   echte Datenbank. Zwei Startlaeufe, `Done (11.687s)`; die Rechenprobe im Protokoll:
   *"Strafen: stumm bis 168 Std. (7 Tg.), bann bis 720 Std. (30 Tg.) ohne
   freimarken.strafen.dauerhaft; 7 Befehl(e) sperrt eine Stummschaltung mit; Bannliste
   oeffentlich, Ansage an."* Die ganze Kette an der Konsole durchgegangen: verhaengen,
   Bannliste, zweite Strafe abgewiesen mit Nummer, Verlauf, aufheben, Rauswurf nicht
   aufhebbar, `99999d` abgewiesen.
+- **Gegengelesen nach dem Bau, und das war noetig: NEUN echte Luecken.** Vier Leser
+  haben die Riegel gegen einen Angriff gelesen, je Fund hat ein Skeptiker versucht, ihn
+  zu widerlegen - 13 Funde, 9 blieben stehen. Alle neun sind behoben, jeder mit einer
+  eigenen Probe, und **jede dieser Proben ist durch eine Einspritzung geprueft**: Nimmt
+  man die Behebung zurueck, wird genau sie rot (8 von 8).
+  - **Der Bestrafte hob seine EIGENE Strafe auf** [hoch]. `verhaenge` hatte den
+    Selbstriegel, `hebeAuf` nicht: Ein stummgeschalteter Moderator mit dem Recht zum
+    Aufheben tippte `/strafe verlauf` auf sich selbst, las seine Nummer, hob auf - und
+    die Ansage sagte allen, er sei "wieder frei". Dasselbe gegen einen Kollegen.
+  - **Verhaengen und Aufheben rechneten mit zwei Begriffen von "dauerhaft"** [schwer]:
+    hinein *ohne Ende ODER laenger als die Hoechstdauer*, heraus nur *ohne Ende*. Ein
+    Moderator nahm damit den Zehn-Jahres-Bann eines Verwalters zurueck - waehrend der
+    Kommentar an der Stelle behauptete, genau diese Luecke sei geschlossen.
+  - **`Duration.toHours()` schneidet ab** [mittel]: Der Riegel fragte
+    `stunden() > grenze`, und `ofMinutes(59).toHours()` ist 0. Bei der Grenze 720 kam
+    eine Strafe von 720 Std. 59 Min. durch; bei der Grenze **0** - die laut Datei,
+    Startbericht und Absage JEDE Dauer sperrt - jede Strafe unter einer Stunde.
+    Dieselbe Falle hat das Projekt bei `Berufswerte.sperrfrist` schon einmal zugemauert.
+    Jetzt fragt der WERT (`laengerAls`), und es gibt keine Zahl mehr, mit der man sich
+    verrechnen koennte.
+  - **`/team nimm` entwaffnete nicht** [mittel]: Die Rechte wurden erst beim naechsten
+    Spielzeittakt neu gesetzt - ab Werk eine Minute, erlaubt zehn. Der Verwalter las
+    GENOMMEN und hielt den Moderator fuer entwaffnet, waehrend der weiter bannte. Jetzt
+    setzt eine Rechtehand sie sofort, in beide Richtungen.
+  - **Ein Listeneintrag mit Namensraum traf NIE** [mittel]: Der Eintrag behielt den
+    Doppelpunkt, der getippte Befehl verlor ihn - `cmi:r` traf weder `/cmi:r` noch `/r`.
+    Der Startbericht zaehlte den toten Eintrag mit.
+  - **Eine unlesbare Zeile riss die Beitrittswache mit** [mittel]: Die Spalten erlauben
+    mehr als der Konstruktor (ein Grund von Hand mit "ok"), und `ausZeile` fing nur die
+    unbekannte ART. Die Klage war eine `IllegalArgumentException`, und die faengt
+    niemand - also brach die oeffentliche Bannliste ab UND die Wache an der Tuer.
+  - **Der Fang um `Long.parseLong` schloss die Umrechnung nicht ein** [niedrig]:
+    `Duration.ofDays` wirft bei Ueberlauf, und der Wurf lief bis Brigadier -
+    `999999999999999d` gab eine rote englische Zeile statt der Absage.
+  - **Eine geleerte Ansage sendete eine LEERE Chatzeile** [leicht] an jeden Anwesenden,
+    bei jeder Strafe. Beide Dateien nennen das Leeren als zweiten Abschaltweg;
+    `MeldeBefehle` fragt es seit Teil C richtig, Teil B nicht.
+- **Dazu ein Fund im eigenen Probenlauf:** Die `Strafwache` rief `Instant.now()`, und
+  die Proben legen ihre Strafen auf einen festen Zeitpunkt mit kurzer Dauer - vier
+  Proben waren damit nur in einem Zehn-Minuten-Fenster am Tag gruen. Aufgefallen, weil
+  derselbe Lauf zwei Stunden spaeter rot war. Die Uhr ist jetzt eine Naht.
 - **Offen in 16a:** Teil D Einsehen ohne Baurecht, Teil E Protokoll im Manager. Dazu der
   **Spieltest zu zweit** - er braucht ein Konto OHNE Rechte, und genau das fehlt in
   diesem Projekt bei jedem bisherigen Spieltest. Fuer Teil B waere er der Nachweis, dass

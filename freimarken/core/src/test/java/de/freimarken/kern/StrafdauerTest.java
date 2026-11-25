@@ -44,7 +44,8 @@ class StrafdauerTest {
         assertTrue(ohne.unbegrenzt());
         assertTrue(ohne.endeAb(MITTAGS).isEmpty(),
                 "leer heisst hier: kein Ende, nicht unbekannt");
-        assertEquals(0L, ohne.stunden());
+        assertTrue(ohne.laengerAls(Long.MAX_VALUE),
+                "eine Strafe ohne Ende ist laenger als jede Zahl");
     }
 
     @Test
@@ -111,6 +112,28 @@ class StrafdauerTest {
     }
 
     @Test
+    @DisplayName("Ein Ueberlauf gibt leer und WIRFT nicht")
+    void ueberlaufGibtLeer() {
+        // DER FUND VOM 25.11.2026: Der Fang umschloss nur parseLong, der switch mit
+        // Duration.ofDays stand ausserhalb. Duration.ofDays rechnet mit
+        // Math.multiplyExact und wirft eine ArithmeticException ("long overflow"),
+        // BEVOR die Grenze darunter greift - der Wurf lief durch den Befehl hinaus zu
+        // Brigadier, und der Moderator las eine rote englische Zeile statt der Absage
+        // mit den Beispielen.
+        //
+        // Je EINHEIT geprueft: Nur "s" war gefahrlos, weil Duration.ofSeconds nicht
+        // multipliziert. Eine Probe mit nur einer Einheit haette den Fund nicht
+        // gehalten.
+        for (String wort : new String[] {
+                "999999999999999d", "9999999999999999h", "999999999999999999m",
+                "9223372036854775807d", "9223372036854775807h",
+                "9223372036854775807m", "9223372036854775807s"}) {
+            assertTrue(Strafdauer.ausWort(wort).isEmpty(),
+                    wort + " ist kein brauchbares Wort - und darf nicht werfen");
+        }
+    }
+
+    @Test
     @DisplayName("Der Konstruktor weist null, Minus und zu lange Dauern ab")
     void konstruktorWeistAb() {
         assertThrows(IllegalArgumentException.class,
@@ -127,7 +150,9 @@ class StrafdauerTest {
         Strafdauer stunde = Strafdauer.ausWort("1h").orElseThrow();
 
         assertEquals(Optional.of(MITTAGS.plusSeconds(3600L)), stunde.endeAb(MITTAGS));
-        assertEquals(1L, stunde.stunden());
+        assertFalse(stunde.laengerAls(1L), "eine Stunde ist nicht laenger"
+                + " als eine Stunde");
+        assertTrue(stunde.laengerAls(0L));
         assertFalse(stunde.unbegrenzt());
         assertThrows(IllegalArgumentException.class, () -> stunde.endeAb(null));
     }
@@ -137,9 +162,17 @@ class StrafdauerTest {
     void stundenRundenAb() {
         // Das ist fuer den Riegel die SICHERE Richtung: Wer 59 Minuten tippt, liegt
         // unter jeder Hoechstdauer. Aufrunden wuerde eine erlaubte Dauer verbieten.
-        assertEquals(0L, Strafdauer.ausWort("59m").orElseThrow().stunden());
-        assertEquals(1L, Strafdauer.ausWort("60m").orElseThrow().stunden());
-        assertEquals(24L, Strafdauer.ausWort("1d").orElseThrow().stunden());
+        // DER BEHOBENE FEHLER [25.11.2026]: Vorher gab es stunden(), und das war
+        // abschneidend - ofMinutes(59).toHours() ist 0. Der Riegel fragte
+        // "stunden() > grenze", und bei der Grenze 0 war damit jede Dauer unter einer
+        // Stunde erlaubt, obwohl die Datei zusagt, dass 0 alles sperrt.
+        assertTrue(Strafdauer.ausWort("59m").orElseThrow().laengerAls(0L),
+                "59 Minuten sind laenger als null Stunden - mit toHours() waren sie es"
+                        + " nicht");
+        assertFalse(Strafdauer.ausWort("59m").orElseThrow().laengerAls(1L));
+        assertFalse(Strafdauer.ausWort("60m").orElseThrow().laengerAls(1L));
+        assertTrue(Strafdauer.ausWort("61m").orElseThrow().laengerAls(1L));
+        assertFalse(Strafdauer.ausWort("1d").orElseThrow().laengerAls(24L));
     }
 
     @Test

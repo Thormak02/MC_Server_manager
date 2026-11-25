@@ -100,9 +100,34 @@ public record Strafdauer(Duration spanne) {
                 : Optional.of(verhaengtAm.plus(spanne));
     }
 
-    /** Wie viele Stunden - fuer den Riegel gegen die Hoechstdauer; 0 bei unbegrenzt. */
-    public long stunden() {
-        return spanne == null ? 0L : spanne.toHours();
+    /**
+     * Ob diese Dauer laenger ist als so viele Stunden - DIE FRAGE DES RIEGELS.
+     *
+     * <p><b>Eine Frage und keine Zahl</b>, und das ist ein behobener Fehler [25.11.2026]:
+     * Vorher gab es {@code stunden()}, und der Riegel fragte
+     * {@code stunden() > grenze}. {@code Duration.toHours()} SCHNEIDET AB -
+     * {@code ofMinutes(59).toHours()} ist 0 - und damit war bei einer Grenze von 0
+     * jede Dauer unter einer Stunde erlaubt, obwohl {@code config.yml}, Startbericht
+     * und Absage zusagen, dass 0 JEDE Dauer sperrt. Bei der Grenze 720 kam eine Strafe
+     * von 720 Stunden und 59 Minuten durch.
+     *
+     * <p>Dieselbe Falle hat dieses Projekt bei {@link Berufswerte} schon einmal
+     * zugemauert (dort wirft der Konstruktor, wenn die Sperrfrist keine ganze Stunde
+     * ist). Hier ist der Weg der andere: Die Frage wandert an den WERT, und gerechnet
+     * wird mit der ganzen Spanne. Damit kann die Abschneidung an keiner Aufrufstelle
+     * mehr auftauchen - es gibt keine Zahl mehr, mit der man sie falsch vergleichen
+     * koennte.
+     *
+     * <p>Eine UNBEGRENZTE Dauer ist laenger als jede Zahl, auch als
+     * {@link Long#MAX_VALUE}: Sie hat kein Ende.
+     *
+     * @param stunden die Grenze; 0 heisst, dass jede Dauer darueber liegt
+     */
+    public boolean laengerAls(long stunden) {
+        if (spanne == null) {
+            return true;
+        }
+        return spanne.compareTo(Duration.ofHours(stunden)) > 0;
     }
 
     /**
@@ -145,24 +170,32 @@ public record Strafdauer(Duration spanne) {
                 return Optional.empty();
             }
         }
-        long anzahl;
+        Duration spanne;
         try {
-            anzahl = Long.parseLong(zahl);
-        } catch (NumberFormatException zuGross) {
-            // Mehr Stellen, als in einen long passen. Die Grenze darunter faengt den
-            // Rest; hier faellt nur auf, was nicht einmal gelesen werden kann.
+            long anzahl = Long.parseLong(zahl);
+            if (anzahl <= 0L) {
+                return Optional.empty();
+            }
+            // DER FANG UMSCHLIESST AUCH DIE UMRECHNUNG [behoben am 25.11.2026]:
+            // Duration.ofDays rechnet mit Math.multiplyExact und wirft eine
+            // ArithmeticException ("long overflow"), BEVOR die Grenze darunter
+            // greift. Vorher stand der switch ausserhalb des Fangs, und
+            // "/strafe bann Bert 999999999999999d Grief" lief als Wurf durch den
+            // Befehl hinaus zu Brigadier - der Moderator las eine rote englische
+            // Zeile statt der Absage mit den Beispielen. Nur die Einheit s war
+            // gefahrlos.
+            spanne = switch (einheit) {
+                case 's' -> Duration.ofSeconds(anzahl);
+                case 'm' -> Duration.ofMinutes(anzahl);
+                case 'h' -> Duration.ofHours(anzahl);
+                case 'd' -> Duration.ofDays(anzahl);
+                default -> null;
+            };
+        } catch (NumberFormatException | ArithmeticException zuGross) {
+            // Mehr, als in einen long oder in eine Duration passt. Beides ist
+            // dasselbe fuer den Tippenden: kein brauchbares Wort.
             return Optional.empty();
         }
-        if (anzahl <= 0L) {
-            return Optional.empty();
-        }
-        Duration spanne = switch (einheit) {
-            case 's' -> Duration.ofSeconds(anzahl);
-            case 'm' -> Duration.ofMinutes(anzahl);
-            case 'h' -> Duration.ofHours(anzahl);
-            case 'd' -> Duration.ofDays(anzahl);
-            default -> null;
-        };
         if (spanne == null || spanne.toDays() > LAENGSTE_TAGE) {
             return Optional.empty();
         }

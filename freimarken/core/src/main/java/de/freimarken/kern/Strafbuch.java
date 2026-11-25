@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -144,8 +145,24 @@ public final class Strafbuch {
     /** Wie die Rechte heissen - siehe {@link Strafrechte}. */
     private final Strafrechte rechtenamen;
 
+    /**
+     * Ob ein Spieler im Team ist - als Frage und nicht als Wert je Aufruf.
+     *
+     * <p><b>Hier und nicht als Parameter von {@link #verhaenge}</b>, und das ist ein
+     * behobener Fehler [25.11.2026]: {@link #hebeAuf} braucht dieselbe Frage, kennt den
+     * Betroffenen aber erst NACH dem Lesen - als Parameter waere sie dort nicht zu
+     * stellen, und genau darum fehlte der Riegel beim Aufheben ganz. Eine Frage, die
+     * zwei Riegel brauchen, gehoert an EINE Stelle.
+     *
+     * <p>Die Antwort kommt von der TEAMABLAGE und nicht von Bukkit - der Betroffene kann
+     * offline sein, und offline hat niemand Rechte. Wirft sie, gilt der Spieler als im
+     * Team: Von zwei Fehlern der, der sich zuruecknehmen laesst. Das entscheidet der
+     * Aufrufer, nicht dieses Buch.
+     */
+    private final Predicate<UUID> imTeam;
+
     public Strafbuch(Strafablage ablage, Supplier<Strafwerte> werte,
-                     Strafrechte rechtenamen) {
+                     Strafrechte rechtenamen, Predicate<UUID> imTeam) {
         if (ablage == null || werte == null) {
             throw new IllegalArgumentException("Das Strafbuch braucht die Ablage und die"
                     + " Werte");
@@ -154,9 +171,15 @@ public final class Strafbuch {
             throw new IllegalArgumentException("Das Strafbuch braucht die Namen der"
                     + " Rechte. Ohne sie waere jeder Riegel stumm immer zu");
         }
+        if (imTeam == null) {
+            throw new IllegalArgumentException("Das Strafbuch braucht die Teamfrage."
+                    + " Ohne sie waere jedes Teammitglied ungeschuetzt - und zwar in"
+                    + " BEIDE Richtungen: beim Strafen und beim Aufheben.");
+        }
         this.ablage = ablage;
         this.werte = werte;
         this.rechtenamen = rechtenamen;
+        this.imTeam = imTeam;
     }
 
     /** Was gilt. */
@@ -184,8 +207,6 @@ public final class Strafbuch {
      * eines.
      *
      * @param betroffener       wen es trifft
-     * @param betroffenerImTeam ob er selbst im Team ist - fragt die Teamablage, NICHT
-     *                          Bukkit; siehe den Klassenkopf
      * @param art               was geschieht
      * @param grund             warum - Pflicht
      * @param dauer             wie lange; {@code null} genau dann, wenn die Art nicht
@@ -195,9 +216,9 @@ public final class Strafbuch {
      *                          alles
      * @param jetzt             der Zeitpunkt, UTC
      */
-    public Entscheid verhaenge(UUID betroffener, boolean betroffenerImTeam,
-                               Strafart art, String grund, Strafdauer dauer,
-                               UUID vonWem, Set<String> rechte, Instant jetzt) {
+    public Entscheid verhaenge(UUID betroffener, Strafart art, String grund,
+                               Strafdauer dauer, UUID vonWem, Set<String> rechte,
+                               Instant jetzt) {
         if (betroffener == null) {
             throw new IllegalArgumentException("Ohne Betroffenen gibt es keine Strafe");
         }
@@ -216,7 +237,7 @@ public final class Strafbuch {
         if (!darf(rechte, rechtenamen.fuer(art))) {
             return Entscheid.ohne(Bescheid.OHNE_RECHT);
         }
-        if (betroffenerImTeam && !darf(rechte, rechtenamen.team())) {
+        if (imTeam.test(betroffener) && !darf(rechte, rechtenamen.team())) {
             return Entscheid.ohne(Bescheid.OHNE_RECHT_TEAM);
         }
         Strafwerte gueltig = werte();
@@ -227,9 +248,16 @@ public final class Strafbuch {
                         + " Strafe");
             }
             long grenze = gueltig.hoechsteStundenFuer(art);
-            // BEIDE Faenger im selben Zweig: das fehlende Ende UND die zu lange Dauer.
+            // BEIDE Faenger in EINER Frage: das fehlende Ende UND die zu lange Dauer.
             // Wer nur das fehlende Ende prueft, hat einen Moderator, der 3650d tippt.
-            if (dauer.unbegrenzt() || dauer.stunden() > grenze) {
+            //
+            // laengerAls und nicht "stunden() > grenze" [behoben am 25.11.2026]:
+            // Duration.toHours() schneidet ab, und damit kam bei der Grenze 720 eine
+            // Dauer von 720 Stunden und 59 Minuten durch - bei der Grenze 0 sogar
+            // JEDE Dauer unter einer Stunde, obwohl die Datei zusagt, dass 0 alles
+            // sperrt. unbegrenzt() steckt jetzt in laengerAls: Eine Strafe ohne Ende
+            // ist laenger als jede Zahl.
+            if (dauer.laengerAls(grenze)) {
                 if (!darf(rechte, rechtenamen.dauerhaft())) {
                     return new Entscheid(Bescheid.OHNE_RECHT_DAUERHAFT,
                             Optional.empty(), grenze);
@@ -259,11 +287,26 @@ public final class Strafbuch {
     /**
      * Hebt eine Strafe auf - oder sagt, warum nicht.
      *
-     * <p><b>Eine unbegrenzte Strafe aufzuheben braucht dasselbe Recht wie sie zu
-     * verhaengen.</b> Sonst nimmt ein Moderator den dauerhaften Bann zurueck, den ein
-     * Verwalter verhaengt hat - und die Unterscheidung aus Plan 12c.2 waere in der einen
-     * Richtung gesichert und in der anderen offen. Eine BEFRISTETE Strafe darf jeder
-     * aufheben, der aufheben darf: Sie laeuft ohnehin ab.
+     * <p><b>Aufheben darf nur, wer die Strafe auch haette verhaengen duerfen</b> -
+     * dieselben drei Riegel, in derselben Reihenfolge. Das war am 25.11.2026 in DREI
+     * Richtungen offen, und jede davon hob die Zusage von Plan 12c.2 auf:
+     * <ul>
+     *   <li><b>Niemand hebt seine EIGENE Strafe auf.</b> Ein stummgeschalteter Moderator
+     *       mit dem Recht zum Aufheben tippte {@code /strafe verlauf} auf sich selbst,
+     *       las seine Nummer und war frei - und die Ansage sagte allen, er sei "wieder
+     *       frei". {@code verhaenge} hatte diesen Riegel, {@code hebeAuf} nicht.</li>
+     *   <li><b>Die Strafe eines Teammitglieds hebt nur auf, wer das Teamrecht hat.</b>
+     *       Sonst nimmt ein Moderator die Strafe zurueck, die ein Verwalter gegen einen
+     *       Kollegen verhaengt hat - und der Verwalter koennte einen Moderator nur
+     *       dauerhaft strafen, wenn es halten soll.</li>
+     *   <li><b>"Dauerhaft" heisst hier dasselbe wie dort</b>: ohne Ende ODER laenger als
+     *       die Hoechstdauer. Vorher fragte diese Stelle nur {@code unbegrenzt()}, und
+     *       ein Moderator nahm den Zehn-Jahres-Bann eines Verwalters zurueck - die
+     *       Unterscheidung war in der einen Richtung gesichert und in der anderen offen,
+     *       also genau das, was der Kommentar hier zu verhindern versprach.</li>
+     * </ul>
+     * Eine kurze, befristete Strafe darf weiter jeder aufheben, der aufheben darf: Sie
+     * laeuft ohnehin ab.
      *
      * @param grund warum - Pflicht, siehe {@link Strafe}
      */
@@ -290,9 +333,24 @@ public final class Strafbuch {
             if (eine.istAufgehoben()) {
                 return Entscheid.von(Bescheid.SCHON_AUFGEHOBEN, eine);
             }
-            if (eine.unbegrenzt() && !darf(rechte, rechtenamen.dauerhaft())) {
+            // DIE DREI RIEGEL, erst jetzt - sie brauchen die gelesene Strafe. Die
+            // Reihenfolge ist dieselbe wie in verhaenge: erst wer, dann gegen wen,
+            // dann wie schwer.
+            if (eine.betroffener().equals(wer)) {
+                return Entscheid.von(Bescheid.SELBST, eine);
+            }
+            if (imTeam.test(eine.betroffener())
+                    && !darf(rechte, rechtenamen.team())) {
+                return Entscheid.von(Bescheid.OHNE_RECHT_TEAM, eine);
+            }
+            // DIESELBE Frage wie beim Verhaengen, mit der VERHAENGTEN Dauer: ohne Ende
+            // ODER laenger als die Hoechstdauer der Art.
+            if (eine.dauer().laengerAls(
+                            werte().hoechsteStundenFuer(eine.art()))
+                    && !darf(rechte, rechtenamen.dauerhaft())) {
                 return new Entscheid(Bescheid.OHNE_RECHT_DAUERHAFT,
-                        Optional.of(eine), 0L);
+                        Optional.of(eine),
+                        werte().hoechsteStundenFuer(eine.art()));
             }
             Strafe frei = eine.aufgehoben(wer, grund, jetzt);
             if (!ablage.hebeAuf(frei)) {

@@ -314,11 +314,12 @@ final class StrafBefehle {
             dauer = gelesen.get();
         }
         String grund = StringArgumentType.getString(z, "grund");
-        // Die TEAMFRAGE vor dem Buch: Sie braucht einen Zugriff auf die Teamablage, und
-        // der Kern soll sie nicht selbst stellen - er kennt keine Ablage ausser seiner
-        // eigenen. Eine Stoerung gibt true, siehe Teamfrage.
-        boolean imTeam = team.imTeam(betroffener);
-        Strafbuch.Entscheid entscheid = buch.verhaenge(betroffener, imTeam, art, grund,
+        // Die TEAMFRAGE stellt das BUCH und nicht dieser Zweig [behoben am
+        // 25.11.2026]: Sie wurde ihm beim Bau mitgegeben, denn hebeAuf braucht sie
+        // genauso - und dort ist sie als Parameter nicht zu stellen, weil der
+        // Betroffene erst nach dem Lesen bekannt ist. Genau darum fehlte der Riegel
+        // beim Aufheben ganz.
+        Strafbuch.Entscheid entscheid = buch.verhaenge(betroffener, art, grund,
                 dauer, kennungVon(z), rechteVon(z), uhr.jetzt());
         if (entscheid.geaendert()) {
             Strafe eine = entscheid.strafe().orElseThrow();
@@ -382,9 +383,26 @@ final class StrafBefehle {
         return erreicht;
     }
 
-    /** Die oeffentliche Ansage - nur, wenn sie eingestellt ist. */
+    /**
+     * Die oeffentliche Ansage - nur, wenn sie eingestellt UND nicht leer ist.
+     *
+     * <p><b>ZWEI Wege, sie abzuschalten, und beide muessen hier gefragt werden</b>
+     * [behoben am 25.11.2026]: der Schalter {@code moderation.strafen.ansagen} und der
+     * geleerte Wortlaut. Die {@code config.yml} und die Sprachvorlage nennen das Leeren
+     * ausdruecklich als zweiten Weg - gefragt wurde es nicht, und von da an bekam bei
+     * JEDER Strafe jeder Anwesende eine LEERE Chatzeile statt keiner. {@code eineZeile}
+     * wirft dabei nicht: Ein leerer Wortlaut ergibt genau ein leeres Component.
+     *
+     * <p>{@code MeldeBefehle.sageAn} fragt es seit Teil C richtig - dieselbe Zeile, und
+     * sie fehlte hier.
+     */
     private void sageAn(Strafe eine, String name) {
         if (!buch.werte().ansagen()) {
+            return;
+        }
+        StrafSatz welcher = eine.art().brauchtDauer()
+                ? StrafSatz.ANSAGE : StrafSatz.ANSAGE_OHNE_DAUER;
+        if (sprache.leerGelassen(welcher)) {
             return;
         }
         Einsatz werte = Einsatz.von("spieler", name)
@@ -413,7 +431,8 @@ final class StrafBefehle {
             String name = namen.nameVon(eine.betroffener());
             protokoll.info(nameVon(z) + " hat die Strafe #" + nummer + " gegen " + name
                     + " aufgehoben. Grund: " + grund);
-            if (buch.werte().ansagen()) {
+            if (buch.werte().ansagen()
+                    && !sprache.leerGelassen(StrafSatz.ANSAGE_AUFHEBUNG)) {
                 Component zeile = sprache.eineZeile(StrafSatz.ANSAGE_AUFHEBUNG,
                         Einsatz.von("spieler", name)
                                 .mit("art", Straftext.artwort(sprache, eine.art()))
@@ -533,9 +552,16 @@ final class StrafBefehle {
                             Einsatz.von("art", Straftext.artwort(sprache, art))
                                     .mit("hoechstens", Straftext.dauerwort(sprache,
                                             grenzeAls(entscheid))));
-            case OHNE_RECHT_TEAM -> sprache.bau(StrafSatz.OHNE_RECHT_TEAM, 1L,
-                    Einsatz.von("spieler", name));
-            case SELBST -> sprache.bau(StrafSatz.SELBST, 1L, Einsatz.keine());
+            case OHNE_RECHT_TEAM -> art == null
+                    ? sprache.bau(StrafSatz.OHNE_RECHT_TEAM_AUFHEBEN, 1L,
+                            Einsatz.von("nummer", nummer))
+                    : sprache.bau(StrafSatz.OHNE_RECHT_TEAM, 1L,
+                            Einsatz.von("spieler", name));
+            // ART == NULL heisst wieder: der AUFHEBUNGS-Zweig. "Dich selbst kannst
+            // du nicht bestrafen" waere dort falsch - er wollte aufheben.
+            case SELBST -> art == null
+                    ? sprache.bau(StrafSatz.SELBST_AUFHEBEN, 1L, Einsatz.keine())
+                    : sprache.bau(StrafSatz.SELBST, 1L, Einsatz.keine());
             case GRUND_UNBRAUCHBAR -> grundabsage(grund);
             case SCHON_GESTRAFT -> {
                 Strafe eine = entscheid.strafe().orElseThrow();

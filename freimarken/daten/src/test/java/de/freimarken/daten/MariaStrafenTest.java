@@ -289,6 +289,41 @@ class MariaStrafenTest extends StrafVertrag {
     }
 
     @Test
+    @DisplayName("Eine UNLESBARE Zeile nennt die Nummer und reisst keine Liste mit")
+    void unlesbareZeileNenntDieNummer() throws SQLException {
+        UUID bert = UUID.randomUUID();
+        Strafe eine = strafen.lege(bert, Strafart.BANN, "Grief in Altfurt", null,
+                MITTAGS, EINE_STUNDE);
+        // Von Hand verdorben, und zwar auf eine Weise, die die SPALTE erlaubt: Der
+        // Grund ist VARCHAR(256) NOT NULL, seine MINDESTlaenge von drei Zeichen steht
+        // nur in Java. Von Hand eingetragen wird oefter, als man denkt - /strafe
+        // trifft nur Spieler, die der Server schon einmal gesehen hat.
+        try (var anweisung = datenbank.verbindung().prepareStatement(
+                "UPDATE strafen SET grund = 'ok' WHERE nummer = ?")) {
+            anweisung.setLong(1, eine.nummer());
+            assertEquals(1, anweisung.executeUpdate(), "die Vorbereitung");
+        }
+
+        // DER FUND VOM 25.11.2026: ausZeile fing nur die unbekannte ART. Die Klage des
+        // Konstruktors ist eine IllegalArgumentException, und die faengt NIEMAND - die
+        // Aufrufer fangen IllegalStateException. Folge: Diese eine Zeile riss die ganze
+        // oeffentliche Bannliste mit UND den Wurf aus der Beitrittswache.
+        IllegalStateException klage = assertThrows(IllegalStateException.class,
+                () -> strafen.lies(eine.nummer()));
+        assertTrue(klage.getMessage().contains(String.valueOf(eine.nummer())),
+                "die Klage nennt die Nummer: " + klage.getMessage());
+
+        // UND die Gattung muss stimmen, damit die Aufrufer sie fangen - auch in den
+        // Listen, die ueber mehrere Zeilen gehen.
+        assertThrows(IllegalStateException.class,
+                () -> strafen.geltendeAlle(Strafart.BANN, 10, SPAETER));
+        assertThrows(IllegalStateException.class,
+                () -> strafen.von(bert, 10));
+        assertThrows(IllegalStateException.class,
+                () -> strafen.geltende(bert, Strafart.BANN, SPAETER));
+    }
+
+    @Test
     @DisplayName("Eine Nummer, die es nicht gibt, wirft - und zwar NACH dem Versuch")
     void unbekannteNummerWirftBeimAufheben() {
         Strafe erfunden = new Strafe(999_999L, UUID.randomUUID(), Strafart.BANN,

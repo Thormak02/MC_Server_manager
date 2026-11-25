@@ -270,19 +270,23 @@ class StrafwacheTest {
     @DisplayName("16 - ohne Bauteile gibt es keine Wache")
     void fehlendeBauteileWerfen() {
         Strafbuch buch = new Strafbuch(ablage, () -> Strafwerte.VORGABE,
-                StrafBefehle.RECHTE);
+                StrafBefehle.RECHTE, wer -> false);
         Logger stumm = Logger.getLogger("StrafwacheProbe-" + UUID.randomUUID());
 
         assertThrows(IllegalArgumentException.class, () -> new Strafwache(null, sprache,
-                () -> ZONE, StrafwacheTest::nameVon, stumm));
+                () -> ZONE, StrafwacheTest::nameVon, () -> MITTAGS, stumm));
         assertThrows(IllegalArgumentException.class, () -> new Strafwache(buch, null,
-                () -> ZONE, StrafwacheTest::nameVon, stumm));
+                () -> ZONE, StrafwacheTest::nameVon, () -> MITTAGS, stumm));
         assertThrows(IllegalArgumentException.class, () -> new Strafwache(buch, sprache,
-                null, StrafwacheTest::nameVon, stumm));
+                null, StrafwacheTest::nameVon, () -> MITTAGS, stumm));
         assertThrows(IllegalArgumentException.class, () -> new Strafwache(buch, sprache,
-                () -> ZONE, null, stumm));
+                () -> ZONE, null, () -> MITTAGS, stumm));
         assertThrows(IllegalArgumentException.class, () -> new Strafwache(buch, sprache,
-                () -> ZONE, StrafwacheTest::nameVon, null));
+                () -> ZONE, StrafwacheTest::nameVon, () -> MITTAGS, null));
+        // Ohne die Uhr haengt jede Frage an der Tageszeit - und eine Probe, die von
+        // ihr abhaengt, ist keine.
+        assertThrows(IllegalArgumentException.class, () -> new Strafwache(buch, sprache,
+                () -> ZONE, StrafwacheTest::nameVon, null, stumm));
     }
 
     @Test
@@ -307,8 +311,13 @@ class StrafwacheTest {
     }
 
     private Strafwache wache(Strafwerte werte, Strafablage welche) {
+        // DIE UHR ALS NAHT: Vorher rief die Wache Instant#now, und diese Proben legen
+        // ihre Strafen auf MITTAGS mit kurzer Dauer - sie waren damit nur in einem
+        // Fenster von zehn Minuten am Tag gruen. Gefunden am 25.11.2026 dadurch, dass
+        // derselbe Lauf zwei Stunden spaeter rot war.
         return new Strafwache(new Strafbuch(welche, () -> werte,
-                StrafBefehle.RECHTE), sprache, () -> ZONE, StrafwacheTest::nameVon,
+                StrafBefehle.RECHTE, wer -> false), sprache, () -> ZONE,
+                StrafwacheTest::nameVon, () -> MITTAGS,
                 Logger.getLogger("StrafwacheProbe-" + UUID.randomUUID()));
     }
 
